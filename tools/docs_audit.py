@@ -49,9 +49,38 @@ TUNE_REF = re.compile(r"`(apex_[a-z0-9_]+)`")
 SURVEYS = {"docs/13-other-ais.md", "docs/14-bar-ai-landscape.md",
            "docs/02-ai-landscape.md", "docs/09-resources.md"}
 
-# Files owned by the game or the lobby, not by us.
+# Files owned by the game, the lobby or the ENGINE INSTALL, not by us. A path
+# under the Beyond-All-Reason install is supposed to be absent from this repo --
+# CLAUDE.md's "Local layout" table names several, and flagging them made the two
+# most-read files in the repo look rotten when they are correct.
 EXTERNAL_FILES = {"aiSimpleName.lua", "aiCustomData.lua", "parse_demo_file.py",
-                  "config/x.json", "gadgets.lua", "units.json"}
+                  "config/x.json", "gadgets.lua", "units.json",
+                  "launcher_cfg.json", "config.json", "interface_skirmish.lua",
+                  "springsettings.cfg"}
+
+# A doc that says a thing is GONE is not rotten -- it is the cure. Suppress a
+# reference whose own line reports the absence, or every correct obituary reads
+# as a stale claim. Verified 2026-08-31: 4 of the 5 findings in CLAUDE.md and
+# ISSUES.md were this class or the external-file class above, and an auditor
+# whose loudest hits are false gets ignored -- the as_scope lesson, same day.
+OBITUARY = re.compile(
+    "(?<![A-Za-z])(gone|deleted|removed|retired|no longer|does not exist"
+    "|zero definitions|used to|stale|dead|was killed|killed with|split into"
+    "|renamed|is now the|comment-only|no callers)(?![A-Za-z])", re.I)
+
+
+def _obituary(text, pos):
+    """True if the line containing offset `pos` reports the thing's absence."""
+    # The SENTENCE, not the line: this prose wraps at 79 columns, so "the
+    # `apex_solo_stock` tunable is gone" puts the name and its obituary on
+    # different lines. One line of lookahead covers the wrap.
+    start = text.rfind(chr(10), 0, pos) + 1
+    end = text.find(chr(10), pos)
+    if end < 0:
+        end = len(text)
+    nxt = text.find(chr(10), end + 1)
+    window = text[start:nxt if nxt >= 0 else len(text)]
+    return bool(OBITUARY.search(window))
 
 # Names that are engine/C++/stdlib, not ours -- absence proves nothing.
 EXTERNAL = {
@@ -115,6 +144,8 @@ def main():
                     or "/".join(tail[-2:]) in have
                     or ref in EXTERNAL_FILES or tail[-1] in EXTERNAL_FILES):
                 continue
+            if _obituary(text, m.start()):
+                continue
             findings.append((rel, "file", ref))
         for m in SYM_REF.finditer(text):
             ns, name = m.group(1), m.group(2)
@@ -123,6 +154,8 @@ def main():
                 continue
             seen.add(key)
             if name not in declared:
+                if _obituary(text, m.start()):
+                    continue
                 findings.append((rel, "symbol", key))
         for m in TUNE_REF.finditer(text):
             t = m.group(1)
@@ -130,6 +163,8 @@ def main():
                 continue
             seen.add(t)
             if t not in tunables:
+                if _obituary(text, m.start()):
+                    continue
                 findings.append((rel, "tunable", t))
 
     by_doc = {}

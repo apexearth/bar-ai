@@ -28,7 +28,7 @@ tech or energy price.
 - `ShieldedStakeAt(pos, reach)` — what a forward post intercepts BEYOND its own
   reach, on the true enemy bearing (not the cardinal `Base::gFwd`).
   **Credited only in proportion to the closure the post ADDS**:
-  `want_protect.as` computes `dClose = LineClosure(s, reach) − LineClosure(at, 0)`
+  `brain/market/protect_sense.as` computes `dClose = LineClosure(s, reach) − LineClosure(at, 0)`
   over 16 approach bearings on the ring at `extent + FoeReach()` (off-map
   bearings count as CLOSED — the edge is the wall), and prices
   `stake = FrontedStakeAt + ShieldedStakeAt × dClose`. Without the closure

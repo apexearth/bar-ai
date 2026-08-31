@@ -56,7 +56,7 @@ of each other, not alternatives:
 | Supplier | What it raises | Where the gap is read |
 |---|---|---|
 | build power (nano, cons) | rate metal converts to units | `ProposeNano` army branch |
-| static defence | `DefenceTarget` (`want_protect.as`) — added 2026-08-26; before that defence had NO target and ran to 175% of eco | the defence gain |
+| static defence | `DefenceTarget` (`brain/market/protect_target.as`) — added 2026-08-26; before that defence had NO target and ran to 175% of eco | the defence gain |
 | tech (T2/T3) | combat value per metal | `want_tech` `funded` |
 | economy (mex, energy) | metal/s there is to convert | `ArmyGapStream` (want_mex), as a COST |
 

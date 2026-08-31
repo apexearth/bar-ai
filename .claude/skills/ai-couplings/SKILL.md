@@ -68,7 +68,7 @@ because the hazard it multiplies is floored by a prior scaling with our OWN
 economy. Defence therefore tracked the economy at a fixed ratio: measured
 **175% of eco against stock BARb's 52%**, on a quarter of stock's income.
 
-`DefenceTarget` (`want_protect.as`) fixed it: def/eco **146% → 7%**, team eco
+`DefenceTarget` (`brain/market/protect_target.as`) fixed it: def/eco **146% → 7%**, team eco
 **108,448 → 207,842** in one 8v8. That is the largest single measured move in
 the project.
 
