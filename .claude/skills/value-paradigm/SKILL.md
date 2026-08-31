@@ -31,6 +31,10 @@ find which three or four terms actually carry it. See
 
 ## The objective: FASTEST PATH TO A TARGET STATE
 
+**`docs/23-the-plan.md` states this in two paragraphs and is the source. Read
+it first.** What follows is the operational detail — do not restate the intent
+here, or the two will drift apart.
+
 Read this before the pricing frame below, because the pricing exists to serve
 it and has repeatedly been mistaken for it.
 

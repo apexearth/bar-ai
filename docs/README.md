@@ -20,6 +20,7 @@ code wins** — say so and fix the doc rather than reasoning from it.
 
 | Doc | The question it answers |
 |---|---|
+| [23-the-plan.md](23-the-plan.md) | **What the AI is trying to do at all.** Two paragraphs. Read first. |
 | [01 — Local environment](01-local-environment.md) | What is installed on this machine, where the engine and game trees are, and why `BAR.sdd` is not what the game plays. |
 | [02 — AI landscape](02-ai-landscape.md) | Every way to put an AI into BAR (native C, CircuitAI, LuaAI), which are dead ends, and which to pick. |
 | [03 — BARb architecture](03-barb-architecture.md) | How config, script and DLL fit together; shortName vs version vs profile, and why a version-only variant silently plays as stock in multiplayer. |
