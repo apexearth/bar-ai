@@ -1,64 +1,69 @@
 # What apexearth wants from this AI
 
-## 2026-08-31 — THE OBJECTIVE IS TIME-TO-CAPABILITY, NOT RETURN-PER-METAL
+---
 
-His answer when asked how T2 affordability should be decided, and it is a
-statement about the whole market rather than about T2:
+## HOW THIS FILE WORKS  (read before adding to it)
 
-*"We're trying to move away from too many tunables... We're supposed to do
-things based on math. The math should read that if we continue to focus more on
-security and economy then we can double or triple our income before going to
-T2, then once we're at T2 we'll be able to afford the T2 units and scale our
-economy much faster. If you were to calculate out the ETA to getting your first
-fusion, then increasing your economy before getting T2 would show as the right
-choice. Also upgrading mexes once we get to T2 would also show as the proper
-choice to get that fusion faster. It is all math which can quantify this...
-You even need to consider how many constructors/nanos you should build in order
-to [be] 100% efficient. There is theoretically a 'perfect' play to get to your
-first fusion the fastest. Everything has a tradeoff of course. I've been trying
-to get the AI to create these algorithms."*
+This is a STANDING BRIEF of what apexearth wants and has not got yet. It is
+read by agents, not by him -- he does not have time to review it, which is
+exactly why it must stay short enough to be read cold.
 
-WHY THIS IS DIFFERENT FROM WHAT THE MARKET DOES TODAY
+Three rules, because it reached 1,090 lines and 54 entries by not having them:
 
-The market prices each Want by RETURN PER METAL and picks the best one now.
-That objective is greedy and cannot see compounding: it has no way to express
-"this choice is worse this minute and gets me to the goal sooner". So a T2 lab
-wins on capability while nothing charges it for the delay it imposes on
-everything else -- which is exactly the loss he watched.
+1. **An entry is DELETED when it is done, never marked done.** A fix that is
+   measured-confirmed lives in the code and in git history; leaving a
+   tombstone here is how the file grew. (Same lifecycle as `ISSUES.md`.)
+2. **One entry per thing he wants, not one per conversation.** If he says the
+   same thing again, EDIT the existing entry -- a repeat is evidence the entry
+   is still open, not a new entry.
+3. **His words, the measurement, and what blocks it. Nothing else.** No
+   restating, no session narrative, no plan. Those belong in the commit
+   message.
 
-The objective he is describing is TIME TO A CAPABILITY, minimised over plans:
+Anything already implemented and validated should be gone from here. If you
+find such an entry, delete it in the same commit as whatever you were doing.
 
-    t_direct(T)  = max( (T - bank) / income , T / buildPower )
-    t_via(X, T)  = t_build(X) + max( (T - bank') / (income + dI_X) ,
-                                      T / buildPower' )
-    choose argmin over the candidate next investments X
+## 2026-08-31 — THE OBJECTIVE: fastest path to a target state
 
-Investing first WINS whenever dI_X pays back inside the horizon, which is the
-arithmetic that makes "more mexes before T2" and "mex upgrades once at T2" come
-out right on their own -- no threshold, no tunable, and the same formula
-answers "how much build power" because buildPower < income means the plan is
-build-power-limited and the optimiser buys a constructor or nano instead.
+*"We're supposed to do things based on math... If you were to calculate out the
+ETA to getting your first fusion, then increasing your economy before getting
+T2 would show as the right choice... There is theoretically a 'perfect' play to
+get to your first fusion the fastest."* The target is a choice and composite --
+"a 10,000-metal army", or "5,000 army AND a fusion".
 
-This is a small search, not a planner: a one- or two-step lookahead over a
-handful of candidate investments, re-evaluated as state changes.
+Plus: *"a moho is in fact better than a fusion when we are poor on metal"*;
+*"if we upgrade [4 mexes] we increase our metal income by 300%"*; *"mexes are
+limited in supply. Once we're out of mex choices, we have to go to energy and
+conversion"*; and the survival ruling *"maintain an army and defense ratio
+based on our economy... while also finding the shortest path to a larger
+economy."*
 
-WHAT ALREADY EXISTS TO BUILD IT FROM
-  EcoPowerM(), FreeMetalFlow(), InFlightCap()/BPGap (build power vs income),
-  Catalog::gExtractsM / gMakeE (the dI of any investment), ValueOf's feedSec
-  (cost includes time, already), apex_payback_h as the horizon.
+**The full model, arithmetic and constraint live in the `value-paradigm`
+skill.** Not implemented. Do not restate it here.
 
-THE HARD PART, STATED HONESTLY: a pure minimise-time-to-fusion optimiser builds
-ZERO army and dies at minute 12. The objective has to be time-to-capability
-SUBJECT TO surviving, and the survival constraint is the part that is not
-simple arithmetic. His own words allow for it -- "everything has a tradeoff" --
-and this loss is the case where the tradeoff was got wrong in the other
-direction. Any first version must be measured on whether it still defends
-itself, not only on whether it reaches a fusion sooner.
+## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS
 
-NOT STARTED. This is a design pass, not an edit.
+*"We are doing things we cannot afford."* In his order:
 
+- **Fight orders used too freely** (4 min).
+- **The turret line falls BACKWARD** (9 min): *"as we lose turrets we seem to
+  make the next set of turrets behind a bit... with a lack of concentration on
+  turrets up ahead - they don't stand much of a chance."*
+- **We attack at under half their army**, repeatedly. *"Our Army hasn't been
+  able to grow at all - we keep sending them out to their deaths... If they
+  were smart they'd stand inside their turret defense."*
+- **T2 at ~15 m/s while the enemy never teched.** Army falls under 1/3 theirs.
+- **The first T2 con starts a FUSION as the attack lands.** *"At an income of
+  ~10m/s to build a 4300 metal fusion reactor... yeahhh you do the math."* The
+  commander keeps building it instead of defending; a T1 con starts a solar.
 
-## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS. "We are doing things we
+*"I would blame this loss entirely on switching to T2... Trying to go to T2 at
+a meager income of 15m/s is dumb."*
+
+His ranking: (1) T2/fusion affordability, (2) army suiciding instead of holding
+inside our own turret cover, (3) the backward turret drift, (4) fight orders.
+All four OPEN.
+
 ## cannot afford."
 
 His running commentary of a 1v1 he lost, in order. This is the most complete
@@ -110,54 +115,24 @@ NOT YET FIXED. Four distinct items, and he ranks them:
   4. Fight orders used too freely.
 
 
-## 2026-08-30 — ARMY COMPOSITION: three reports, one instrument, one dead end
+## 2026-08-30 — ARMY COMPOSITION: reach never arrives
 
-**1. "We need more range." MEASURED AND CONFIRMED — it is a delivery failure,
-not a target.** The composition target already asks for the LARGEST share in
-reach (`apex_line_reach` 0.35, against tank 0.28, mid 0.20, dps 0.17). What we
-actually hold, from the new `apex: linehold` line:
+*"We need more range!"* Mammoths and Sumos only; *"sumos will barely even reach
+the tzar tanks shooting at it, and the Mammoth is outnumbered."* And the squad
+frame: *"what does a mammoth need to be successful? radar, jammer, sheldons,
+Arbiters, maybe an AA, maybe a twitcher/rezbot."*
 
-    apex: linehold armyM=1806 tank=0.00/0.28 mid=0.55/0.20 reach=0.00/0.35 dps=0.45/0.17
+MEASURED: reach holds 0.04-0.07 of army metal against its own 0.35 target,
+across every attempt. FIVE pricing changes failed to move it (`apex_range_worth`,
+a ShieldShare unwind, a range-scaled hp exponent, a standoff-exposure discount,
+the tier fade); one of them took reach to 0.03 and tanks to 0.65. Allocating
+the draw to the owed class DID move it (0.06 -> 0.12) but deadlocked
+production -- see `apex_line_alloc`, off by default with the measurement beside
+it. A share cannot be produced by a nudge when the per-metal spread is ~12x.
 
-**Zero reach metal against a 35% target.** Corroborated independently by army
-metal per weapon range in a 30-minute 4v4: we hold 3.2x LESS than the enemy in
-the 500-700 band (31,967 vs 102,527) and 3.4x MORE in 300-500 (110,400 vs
-32,065). Their share at 500+ is 76%, ours 60%. Why the class never fills is the
-open question; the instrument now makes it askable.
-
-Note for whoever reads the older log: `apex: lineclass ... tank=51 mid=52
-reach=23 dps=25` is a count of unit TYPES per class, NOT a holding. It was
-misread as one within an hour of being consulted, which is why `linehold`
-exists.
-
-**2. "T1 rocket bots are worthless after T2." FIXED.** `OwnTierMul` fades a
-lower-tier unit's worth once a higher plant stands, but exempted anything under
-`apex_spam_cost` (150) -- which covered Rocko (120) and Hammer (130), the exact
-units he wants gone, while the fodder he wants KEPT is Grunt 42, Rascal 31,
-Pawn 54. There were two fodder bars for one idea (`apex_spam_cost` 150 and
-`apex_fodder_cost` 100), each read at exactly one site. Unified at 100, which
-draws the line exactly where his spec draws it and removes a tunable.
-
-**3. "Spiders are only useful for crossing mountains; on Comet Catcher they are
-near worthless." NOT IMPLEMENTABLE TODAY -- needs a binding.** The right term is
-map-conditional: a terrain premium is worth what the map's terrain actually
-demands, and on flat ground it is dead metal. Script can read only
-`aiTerrainMgr.GetLandPercent`, `IsWaterAVoid` and `SetAllyZoneRange` -- nothing
-about slope or per-movetype reachable area, so "how much ground can a spider
-reach that a tank cannot" cannot be computed. It needs a C++ binding (map
-roughness, or area size per movetype). Until then the only lever is the hand
-table `UnitWorthMod`, which already carries `armsptk` (Recluse) at 0.6 from his
-earlier report. Do NOT invent a constant for this.
-
-**4. The squad idea, unresolved.** His framing: build to COMPLETE a squad --
-"what does a mammoth need to be successful? radar, jammer, sheldons, Arbiters,
-maybe an AA, maybe a twitcher/rezbot" -- rather than to fill flat class ratios.
-In value terms that is a complement/coverage term: the marginal worth of a
-support unit rises with the UNSUPPORTED heavy metal already fielded, the same
-shape the AA cover model already uses against air seen. Not designed yet, and
-it should not be attempted until (1) is understood -- if reach cannot be
-delivered against a 35% target, a squad template will not be delivered either.
-
+Also his: T1 rocket bots are worthless after T2 (FIXED -- one fodder bar), and
+spiders are near-worthless on flat maps (NOT implementable: no elevation
+binding; `ai.GetPathLength` detour sampling is the available proxy).
 
 ## 2026-08-30 — THE FORTIFICATION DOCTRINE (unresolved; nothing implements it)
 
@@ -364,22 +339,6 @@ work is cheaper than being told the same thing a fourth time.
 When an entry is completed (landed + he has seen it work, or confirmed live),
 MOVE it to `feedback/<date>.md` — date of the original request. This file
 holds only unresolved asks and standing preferences.
-
-## DONE 2026-08-28 (validated on 6 games) — Lab-timing audit on reclaim-corrected income
-
-"Update the audit script so we ensure we make our labs at the appropriate
-times. Make sure we aren't tricked by reclaim events which temporarily
-boost our income. Work until fixed." Landed: `check_lab_timing` in
-audit.py (t2-under-its-own-bar / t2-too-late / gantry-host-too-poor /
-gantry-too-late / adv-plant-overlap), all on (dMetalProduced - dMReclaim)
-per stats window, every flag printing corrected-vs-raw. Validated: flags
-his 17:13 game (gantry 24.2m against team-211-with-fed-host by 14m, plant
-overlaps) and passes the fixed build (netinc-s24). AI side hardened too:
-dev_team_income publishes cumulative apexReclaimM; TrackIncome nets the
-reclaim rate before its EMA, so every income anchor (T2 gate, gantry
-budget/host floor, antinuke floor) is structural income; the gantry team
-budget reads the new TV_MINC_NET lane. Move to feedback/ archive once he
-confirms live.
 
 ## IN PROGRESS — Spend the overflow: keep looking, escalate the ladder (2026-08-28, night)
 
@@ -728,17 +687,6 @@ Four directives from one hosted-play night, all one campaign:
    latches turtle ("we are probably often going into turtle mode because we
    trade so poorly"). Fix the C++ squad merge first; the odds check is only as
    good as the squad it is computed for. Measure on fight1v1.py trade ratios.
-
-## One player builds no eco — fusion pipeline wedge (FIXED 2026-08-17, verify)
-
-2026-08-17, watching live, second game in a row: "blue is not making any
-fusions. I think there is a bug that makes 1 of our guys make no good eco."
-Real, reproduced in the same day's 4v4 telemetry (t3: 46-55 m/s income,
-asked=1, fusCount=0 for the last 10+ minutes). Mechanism: a reactor ask whose
-task died without ever producing a nanoframe never returned its
-`gFusionsAsked` count, wedging `ReactorPipelineOpen()` closed for the rest of
-the game. Fixed in `events.as` (`apex: reactor ask returned` log line).
-**UNRESOLVED until a watched game shows every player reaching fusions.**
 
 ## The Brain owns (nearly) all building — standing architecture goal
 
