@@ -86,6 +86,6 @@ Our own turrets are EXCLUDED from the basis, or defences justify defences.
 `apex_risk_floor` (0.15) · `apex_enemy_prior` (0.25) · `apex_siege_prior` (1.0) ·
 `apex_threat_r` (900) · `apex_threat_gradient` (1) · `apex_stake_horizon_s` (300) ·
 `apex_exposed_loss_s` (120) · `apex_eco_raid_tau` (180) · `apex_expose_r` (1200) ·
-`apex_def_trade` (2) · `apex_standoff_cover` (1) · `apex_def_net` (1) ·
+`apex_def_trade` (2) · `apex_standoff_cover` (1) ·
 `apex_stream_survival` (1) · `apex_space_rent` (1) · `apex_tech_survival` (1) ·
 `apex_eco_survival` (1)

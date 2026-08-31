@@ -39,7 +39,7 @@ iterating in-game, `pull` first or they are lost.
 
 ## Adding a new variant
 
-1. `cp -r ai/apex ai/<name>` (or copy `reference/barb-stable/game-side` for a
+1. `cp -r ai/Unstable ai/<name>` (or copy `reference/barb-stable/game-side` for a
    clean base).
 2. Edit `ai/<name>/engine-side/AIInfo.lua`:
    - `version` **must** equal the folder name — deploy hard-fails otherwise.

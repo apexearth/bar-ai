@@ -9,6 +9,23 @@ otherwise. Re-verify paths before relying on them — engine versions change.
 
 Refer to `BAR-GUIDE.md` to learn about game mechanics.
 
+## Read `docs/23-the-plan.md` first — it is what the AI is trying to do
+
+Two paragraphs, and the source of intent for everything below. Every decision
+is an answer to one question: **what is the fastest path to the state we are
+trying to reach?** The AI names a target — so much army, or that much army with
+a fusion behind it — and takes whichever move makes it arrive soonest, under
+one standing obligation: army and defence stay at their proper share of the
+economy we have built.
+
+The consequence that matters when reading the rest of this file: **order,
+numbers and limits are OUTPUTS.** Mexes before tech, upgrades after tech, a
+constructor rather than another building — all of it falls out of the
+arithmetic, so a threshold, a build order or a cap in this AI is a bug in the
+model wearing a fix's clothing. `value-paradigm` carries the operational
+detail; the plan carries the intent, and where a doc, a skill or a comment
+still argues from "above N metal/s", the plan wins and the doc is stale.
+
 ## Local layout
 
 | What | Path |
@@ -171,8 +188,20 @@ only the MODEL was stale, which is the kind of rot no checker finds. A
 cold-read agent that hit `ai-build-arbitration` first concluded the AI decides
 by ladder position, the opposite of how it works. Deleted rather than repaired
 because a deletion cannot be subtly wrong. Do not restore them; read
-`value-paradigm`, `docs/21-simplification.md` and `docs/22-macro-demand.md`,
-which carry the current model.
+`docs/23-the-plan.md`, `value-paradigm`, `docs/21-simplification.md` and
+`docs/22-macro-demand.md`, which carry the current model.
+
+**The thirteen `.claude/agents/*.md` domain owners were DELETED on 2026-08-31,
+for the same reason and one more.** They were written 2026-08-08 to 08-12 and
+taught the ordered `AiMakeTask` ladder, `Factory::ComputePhase`, income-tier
+tables in `factory.json`/`economy.json`, and `GANTRY_MAX` / `T3_METAL_INCOME
+= 100` as tuned settings — every one of which `docs/23-the-plan.md` names as a
+thing this AI does not do. Ten of them addressed paths that have not existed
+since the rename (`ai/apex/game-side/script/hard_aggressive/`). The extra
+reason is that the fleet-of-agents workflow they served was measured worse and
+scrapped (see "Delegate only when asked" below), so they were teaching a dead
+model to a dead workflow. Domain knowledge lives in the `ai-*` skills, which
+are maintained; do not recreate the agents.
 
 **A new tunable or mechanism is not finished until the dashboard shows it.**
 `tools/dashboard.py` is apexearth's interface to this AI — he does not run
@@ -200,6 +229,12 @@ fixed — base sprawl and never reclaiming old buildings, army not being positio
 on the front line, naval players going idle. Re-reading it costs a minute; being
 told the same thing again costs his session. Git history says what was done,
 `USER-FEEDBACK.md` says what was asked for.
+
+**`TODO.md` is the third and narrowest list**: named plays and unbuilt
+behaviours in his own words -- the tick-spam distraction, the surprise air-eco
+raid, the saved-up nuke salvo, rezbots eating what the squad kills. Nothing
+else records them. Same lifecycle as the other two: an entry is deleted when it
+is built and measured.
 
 ## Commands
 
@@ -259,8 +294,8 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
   silently changes which widgets load. The harness does this.
 - Custom AI versions are **not** in Chobby's `aiCustomData.lua`, so the lobby
   shows them uncurated. Any profile you want selectable must be declared in your
-  own `AIOptions.lua`; `ai/apex/engine-side/AIOptions.lua` declares the single
-  `standard` entry.
+  own `AIOptions.lua`; `ai/Unstable/engine-side/AIOptions.lua` declares the
+  single `standard` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
 ## The Brain drives the factories — `factory.json` is mostly NOT in the loop
@@ -592,10 +627,16 @@ answer in a constant. These are the ones that keep happening:
 - **Thresholds pulled out of the air.** A gate at "60 metal/s" is a claim about
   the game. Derive it, measure it, or ask -- and say which of the three it was.
 
+`docs/23-the-plan.md` now says why all four are the same mistake, and it is not
+a style preference: **order, numbers and limits are OUTPUTS of the ETA
+arithmetic.** A cap, a sequence or a bar is the model being overridden by hand
+by someone who has not checked whether the model already disagrees.
+
 What to do instead, in order of preference:
 
 1. **Derive it from the economy** -- income, bank, what the thing costs, what it
-   returns. That is the answer he gives every time he is asked.
+   returns, and how much sooner it makes the target arrive. That is the answer
+   he gives every time he is asked.
 2. **Ask.** One sentence: "should X be capped, or scale with income?" He answers
    these in seconds and the answer is usually "scale".
 3. **A named constant**, with the derivation in the commit message.

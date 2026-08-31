@@ -16,6 +16,29 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-08-31 — `policy.as` is a threshold file, and says so in its own header
+
+The docs were swept against `docs/23-the-plan.md` on 2026-08-31; the code was
+not, and this is the largest thing the sweep found. `policy.as` opens with "this
+file is it for eco THRESHOLDS -- the numbers that decide when energy is short,
+when a generator is obsolete, when a constructor is worth buying", and that is
+an accurate description of what it holds: `T2Energy`, `T2Metal`,
+`FusionMinEnergy`, `ReclaimSolarE`, `ReclaimGenE` and the rest, each a number
+that decides a WHETHER. The plan forbids exactly this shape.
+
+Not a call to delete it blind — centralising the numbers was itself a fix
+(apexearth 2026-08-21, "all of this sort of logic should exist within a central
+config of some sort"), and some entries here are physics rather than policy.
+What the sweep establishes is the direction: each `Policy::` accessor is either
+a quantity the ETA model should PRODUCE (cull it as that lands) or a measured
+constant of the game (keep it, and say which it is at the definition). Nobody
+has been through them one by one.
+
+Two are already dead prose. Five comments in `policy.as`, `tunables.as` and
+`factory/state.as` still cite `techlead.as RushReady` and
+`manager/factory/phase.as ComputePhase`, both deleted by the brain overhaul —
+`tools/docs_audit.py` does not read `.as` comments, so nothing catches them.
+
 ## 2026-08-31 — the T2 affordability FLOOR is gone; only a soft price remains
 
 apexearth, watching a 1v1 loss: we started T2 at ~15 metal/s, and a fusion at
@@ -40,13 +63,15 @@ bank is spendable now, the rest waits on income". The hard FLOOR became a SOFT
 PRICE, and the soft price does not bite. That is the same disease as
 `docs/21-simplification.md`: one term among many cannot order an outcome.
 
-So the fix is a ruling, not a patch: either restore a floor (a plant we cannot
-feed is not priced at all), or make the affordability term decisive rather than
-one multiplier among twelve. apexearth's standing answer to "cap or scale?" is
-derive it from the economy — but WHICH derivation (income x seconds, fraction of
-bank, "not while our army is below theirs") is his call, and the three dead
-tunables above are exactly what a restored rule would consume, so do not cull
-them until that ruling lands.
+The ruling has since landed, and it is neither of the two obvious patches.
+`docs/23-the-plan.md` (2026-08-31): a floor is forbidden, and so is a decisive
+affordability multiplier tuned by hand — **a plant we cannot feed loses because
+starting it lengthens the ETA to every target we might name**, and at 15 m/s
+with four un-upgraded mexes the cheap growth beneath T2 was not yet exhausted.
+So the fix is the ETA comparison itself, not a term added to the existing
+price. The three dead tunables above are what a *floor* would have consumed;
+under the plan nothing will consume them, and they can be culled when the ETA
+work lands rather than before.
 
 ALSO OPEN, from the same watched game and unranked here: army sent out to die
 instead of holding inside our own turret cover; the turret line drifting

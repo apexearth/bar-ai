@@ -25,7 +25,7 @@ reads them; functions are visible module-wide regardless).
 |---|---|---|
 | Air line lifecycle | `Armed()`, air lead election; basic plant → T1 air con → advanced plant chain | `air/election.as`, `air/wing.as` |
 | Which plant to build next | `FactoryToBuild` (strike) and `IntelPlantToBuild` (intel/mandatory air) | `air/wing.as` |
-| Advanced plant output | **T2 air constructors FIRST** — one per `apex_aca_per_income` (200, his "by ~200 metal you should definitely be having one") — then the T2 wing | facqueue |
+| Advanced plant output | **T2 air constructors FIRST**, then the T2 wing. His standing want is "by ~200 metal you should definitely be having one"; the `apex_aca_per_income` knob that encoded it as a rate is GONE, and air-con demand is priced through the market like any other build power — re-derive from `docs/23-the-plan.md` before restoring a per-income rule | facqueue |
 | Whether a plane flies at all | `HoldsUnit` | `air/update.as` |
 | Which planes a strike owns | the wave roster | `air/wave.as` |
 | Recycling stale T1 air | station recycle (adv standing vs basic count) | `air/station.as` |
@@ -100,7 +100,7 @@ ground parity and lets the commitment gate open.
 
 ## Tunables
 
-`apex_aca_per_income` (200) · `apex_flak_floor_income` (60) ·
+`apex_flak_floor_income` (60) ·
 `apex_flak_per` (60) · `apex_air_home_wave` · `apex_air_spread` ·
 `apex_air_recycle` · `apex_intercept_min_fighters` · `apex_intercept_min` ·
 `apex_bomb_defend_aa` · `apex_air_payoff` · `apex_air_aa_soak` ·

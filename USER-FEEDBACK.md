@@ -38,33 +38,10 @@ conversion"*; and the survival ruling *"maintain an army and defense ratio
 based on our economy... while also finding the shortest path to a larger
 economy."*
 
-**The full model, arithmetic and constraint live in the `value-paradigm`
-skill.** Not implemented. Do not restate it here.
+**The intent is `docs/23-the-plan.md`; the arithmetic and the constraint are in
+the `value-paradigm` skill.** Not implemented. Do not restate either here.
 
-## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS
-
-*"We are doing things we cannot afford."* In his order:
-
-- **Fight orders used too freely** (4 min).
-- **The turret line falls BACKWARD** (9 min): *"as we lose turrets we seem to
-  make the next set of turrets behind a bit... with a lack of concentration on
-  turrets up ahead - they don't stand much of a chance."*
-- **We attack at under half their army**, repeatedly. *"Our Army hasn't been
-  able to grow at all - we keep sending them out to their deaths... If they
-  were smart they'd stand inside their turret defense."*
-- **T2 at ~15 m/s while the enemy never teched.** Army falls under 1/3 theirs.
-- **The first T2 con starts a FUSION as the attack lands.** *"At an income of
-  ~10m/s to build a 4300 metal fusion reactor... yeahhh you do the math."* The
-  commander keeps building it instead of defending; a T1 con starts a solar.
-
-*"I would blame this loss entirely on switching to T2... Trying to go to T2 at
-a meager income of 15m/s is dumb."*
-
-His ranking: (1) T2/fusion affordability, (2) army suiciding instead of holding
-inside our own turret cover, (3) the backward turret drift, (4) fight orders.
-All four OPEN.
-
-## cannot afford."
+## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS: "We are doing things we cannot afford."
 
 His running commentary of a 1v1 he lost, in order. This is the most complete
 single diagnosis in this file; treat the ordering as causal, because he does.

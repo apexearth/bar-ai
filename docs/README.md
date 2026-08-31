@@ -5,13 +5,17 @@ Pick one. Do not read them all.
 Everything here is dated and provisional. `CLAUDE.md` is the working guide, the
 `.claude/skills/ai-*` skills own how the live AI actually decides things, and
 `ISSUES.md` is what is currently wrong. **When a doc and the code disagree, the
-code wins** — say so and fix the doc rather than reasoning from it.
+code wins** — say so and fix the doc rather than reasoning from it. **When a doc
+and [23 — The plan](23-the-plan.md) disagree about what the AI should be doing,
+the plan wins** — a doc that still argues from a threshold, a build order or a
+cap is describing an AI we are trying to stop being.
 
-## Start here for a domain
+## Start here
 
 | Doc | The question it answers |
 |---|---|
-| [10 — BAR game concepts](10-bar-game-concepts.md) | How does the game actually work — the two resources, the economic ladder and its real thresholds, why the commander decides games. **Read before diagnosing anything.** |
+| [23 — The plan](23-the-plan.md) | **What the AI is trying to do at all** — name a target state, take the fastest path to it, hold army and defence at their share of the economy. Two paragraphs. Read before anything else, including this table. |
+| [10 — BAR game concepts](10-bar-game-concepts.md) | How does the game actually work — the two resources, the economic ladder and why its rungs are reached by exhausting the cheaper growth rather than by crossing an income, why the commander decides games. **Read before diagnosing anything.** |
 | [21 — Simplification](21-simplification.md) | Why do changes here so often have no effect? Twelve multiplicative price terms, 404 tunables, and the instruments now in place to see which one carried a decision. |
 | [22 — Macro demand](22-macro-demand.md) | The root architectural finding: every market proposer takes a constructor, so the AI never asks "what does the base need". The inversion, and how far it has landed. |
 | [20 — Brain overhaul](20-brain-overhaul.md) | The 2026-08-22 mandate that killed all leaf build logic. Kept because it is the kill census `check.py` enforces, and the record of what was deliberately deleted. |
@@ -20,7 +24,6 @@ code wins** — say so and fix the doc rather than reasoning from it.
 
 | Doc | The question it answers |
 |---|---|
-| [23-the-plan.md](23-the-plan.md) | **What the AI is trying to do at all.** Two paragraphs. Read first. |
 | [01 — Local environment](01-local-environment.md) | What is installed on this machine, where the engine and game trees are, and why `BAR.sdd` is not what the game plays. |
 | [02 — AI landscape](02-ai-landscape.md) | Every way to put an AI into BAR (native C, CircuitAI, LuaAI), which are dead ends, and which to pick. |
 | [03 — BARb architecture](03-barb-architecture.md) | How config, script and DLL fit together; shortName vs version vs profile, and why a version-only variant silently plays as stock in multiplayer. |

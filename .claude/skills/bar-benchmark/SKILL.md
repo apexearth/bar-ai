@@ -36,7 +36,7 @@ the start script sets `dev_autoquit=1`, so it cannot affect normal play.
 ## Running matches
 
 ```bash
-python tools/run_match.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
 ```
 
@@ -47,7 +47,7 @@ Useful flags: `--windowed` (watch it live), `--dry-run` (print the start
 script and stop), `--speed`, `--engine`.
 
 ```bash
-python tools/run_tournament.py --a BARb:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report          # re-summarise the ledger
 ```
@@ -91,9 +91,12 @@ not a valid data point. Only `gameover` matches count toward a win rate; a
 change that pushes matches into `timelimit` instead has changed the game
 length distribution, which is itself a finding worth reporting, not hiding.
 
-Comparing `hard_aggressive` against `hard` compares two profiles, not two
-variants — to isolate your change, benchmark against **the same profile** in
-stock BARb.
+Comparing two profiles is not comparing two variants — to isolate your change,
+benchmark against the closest stock profile and change nothing else. (`Unstable`
+ships exactly one profile, `standard`; the stock easy/medium/hard/rush trees
+were deleted, so the stock side of the comparison is a `BARb:stable:<profile>`
+spec.) And note the shortName: a spec beginning `BARb:` runs STOCK, whatever
+version you name after it — ours is `Apex`.
 
 ## Telemetry fields that under-count
 

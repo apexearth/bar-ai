@@ -14,32 +14,45 @@ on fixed map spots, and from **reclaiming** wrecks and features.
 **converters**, which turn surplus energy into metal at roughly **60 energy per
 1 metal**. So 1000 energy/second ≈ 17 metal/second of conversion.
 
-## The economic ladder, and its real thresholds
+## The economic ladder, and why it has no thresholds
 
-1. **T1**: mexes, solars/wind. Income single digits to ~20 metal/s.
+This is the ORDER the arithmetic produces, not a sequence to code. Each rung is
+reached when the cheaper growth below it is **exhausted** — spots taken,
+upgrades done, or ground we cannot hold — at which point the next rung is
+simply the best remaining thing to buy. See `docs/23-the-plan.md`.
+
+1. **T1**: mexes, solars/wind.
 2. **T2 constructors** — this is the unlock, not the T2 factory itself. A T2 con
    upgrades a mex to a **Moho**, worth roughly **4x** the metal of a T1 mex.
-   *Upgrading every mex is the single biggest economic step in the game.*
+   *Upgrading every mex is the single biggest economic step in the game*, and it
+   is worth most exactly when income is small: +12 m/s onto 15 m/s is +80%, onto
+   300 m/s it is +4%.
 3. **Fusion**, once converters are already running and cheaper growth is gone.
    Fusion is a "wait for something good" investment — you can die while paying
    for it. **Advanced solar has much faster ROI** and is not a bad choice.
 4. **Advanced fusion (AFUS)**, one or two of them.
 5. **T3**, after those AFUS.
 
-   NO NUMBERS HERE ON PURPOSE. This list used to read "fusion at ~1000
-   energy/s" and "T3 only once over 100 metal/s". Deleted 2026-08-31 on
-   apexearth's ruling: they are exactly the numbers a gate would use, an agent
-   reads them as the bar to code against, and they contradict the objective in
-   `value-paradigm` — which is that a rung is reached when the cheaper growth
-   below it is EXHAUSTED, not when income crosses a line. The ETA model should
-   PRODUCE numbers like these, never be told them. Real costs, read from the pinned tree 2026-08-30: gantry `corgant`
-   **8,400**, `corshiva` 1,550, `corcat` 4,900, `armbanth` (Titan) 13,500,
-   `corjugg` (Behemoth) 20,000, `corkorg` (Juggernaut) **29,000**. At 40 metal/s
-   a Juggernaut is twelve minutes of a whole team's income, so T3 at benchmark
-   scale is two or three units, not an army. At the 250-400 metal/s a bonused
-   hosted game reaches, a gantry is ~20 seconds of income and the arithmetic
-   inverts completely — read the actual income before calling T3 affordable or
-   unaffordable.
+NO NUMBERS IN THAT LIST, ON PURPOSE. It used to read "fusion at ~1000 energy/s"
+and "T3 only once over 100 metal/s". Deleted 2026-08-31 on apexearth's ruling:
+they are exactly the numbers a gate would use, a cold reader takes them as the
+bar to code against, and they contradict the objective — a rung is reached by
+exhaustion, not by income crossing a line. The model should PRODUCE numbers
+like these, never be told them.
+
+## What T3 costs, which is a fact and not a threshold
+
+Real costs, read from the pinned tree 2026-08-30: gantry `corgant` **8,400**,
+`corshiva` 1,550, `corcat` 4,900, `armbanth` (Titan) 13,500, `corjugg`
+(Behemoth) 20,000, `corkorg` (Juggernaut) **29,000**.
+
+What makes T3 cheap or dear is the RATIO of that cost to the income, and
+whether cheaper growth is still on the board. At 40 metal/s a Juggernaut is
+twelve minutes of a whole team's income, so T3 at benchmark scale is two or
+three units, not an army. At the 250-400 metal/s a bonused hosted game reaches,
+a gantry is ~20 seconds of income and the arithmetic inverts completely — read
+the actual income before calling T3 affordable or unaffordable, and do not
+turn either reading into a bar.
 
 **Corollary**: if the AI is not upgrading mexes, nothing downstream works. Zero
 `t2Mex` is a bug, never a strategy characteristic.

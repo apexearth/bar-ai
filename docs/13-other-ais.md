@@ -236,11 +236,15 @@ MinimumMetalIncomeForNukeRush   50      MinimumEnergyIncomeForNukeRush  2000
 MetalIncomePerAntiNuke          80
 ```
 
-Note `MetalIncomePerGantry = 250`. That lands on the same number as our own
-"above ~250 m/s the affordability argument inverts" note in `CLAUDE.md`, reached
-independently. And the pattern `allowed = min(floor(mi/X), floor(ei/Y))`
-(`EconomyHelpers::AllowedGantryCountFromIncome` and four siblings) is a cleaner
-expression of "gate on economic power, not count" than anything we have.
+Note `MetalIncomePerGantry = 250`. `CLAUDE.md` carried a matching "above ~250
+m/s the affordability argument inverts" note until 2026-08-31, when it was
+deleted as a threshold masquerading as a fact — two projects arriving at the
+same number independently is interesting, but it is still a number the model
+should produce rather than be told (`docs/23-the-plan.md`). What survives as
+worth stealing is the SHAPE, not the constants: `allowed = min(floor(mi/X),
+floor(ei/Y))` (`EconomyHelpers::AllowedGantryCountFromIncome` and four
+siblings) scales with economic power instead of counting units — and even that
+is a per-instant cap, which our own objective replaces with an ETA comparison.
 
 The same file shows the cost of the approach: FRONT wants 40 metal/s for a T2
 lab, FRONT_TECH wants 17, TECH wants 18 with 1000 stored. Six roles × ~40

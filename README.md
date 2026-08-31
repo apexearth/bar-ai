@@ -69,8 +69,10 @@ current specs.
 **[docs/README.md](docs/README.md) is the index** — one line per doc saying what
 question it answers. Pick one from there rather than reading the set.
 
-Beyond `docs/`: **`ISSUES.md`** is the live list of what is wrong;
-**`USER-FEEDBACK.md`** is the standing brief of what's actually wanted;
+Beyond `docs/`: **`docs/23-the-plan.md`** is what the AI is trying to do, in two
+paragraphs, and is the thing to read first; **`ISSUES.md`** is the live list of
+what is wrong; **`USER-FEEDBACK.md`** is the standing brief of what's actually
+wanted; **`TODO.md`** is the sketchbook of named plays and unbuilt behaviours;
 **`CHANGES.md`** is frozen at 2026-08-28 and is history only — what changed and
 what was measured lives in the commit message now; **`CLAUDE.md`** is the working guide, including the
 silent failure modes worth knowing before trusting a result.

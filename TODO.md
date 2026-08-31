@@ -1,16 +1,19 @@
-# Issues
-- Constructors in late game seem to value creating mexes a lot when once we've got afus + advanced energy converts the mexes are no longer important. This seems to make it so that we aren't building enough defenses and shields and other important things because they're too busy trying to make mexes. Meanwhile they're just suiciding constantly if its a losing battle.
-- Very much need to create a team-wide defensive line against the enemies, including shields, jammers, T3 defense (lots) when the late game is reached. Late game is usually 25 minutes + into the game, but you can gauge late game based on if we have things like fusions or afus... thats when we'd expect to see some really big attacks coming in which considerable defenses would be needed to protect from. The way that AI attack logic works often leaves bases open to flanking attacks. So we still need to have some base defenses to protect our flanks.
-- If we are at 150 metal or more per second and do not have an experimental gantry then it should be a very high priority to create one. I watched game and for a very long time no gantries were being made - except for the first one. 
-- I didn't see mobile jammers being created by our AI and we were punished really hard by enemy long range units. We really lacked any of our own good long range capabilities combined with radar and jammer. I think we should download a good doc/guide describing all the units in the game (including the optional extra units which are sometimes enabled) to know what we should be making. Ideally if the AI could understand unit specs then we could just choose to make units based on the quality/stats of the units, rather than relying on a build config. With something like that we could just build balanced armies totally based on unit stats.
-- We tend to have a lot more energy excess than stable barb. Basically we don't make as many energy converters as they do proportionally to our energy generation.
-  - CAUSE FOUND (2026-08-02): the converter rule gates on `energy.income - energy.pull`, which is not the amount being wasted. Measured over 8 games, the eco lead binned 46.7% of all energy it produced while that expression read 72-216. Pull counts demand met from storage, so a base that is spilling shows almost no "spare". `isEnergyFull` (88% of storage) is the honest signal; switching the eco lead's block to it took its waste to 1.2% in a smoke game. The GENERIC converter rule still uses the old metric.
-- on super high income games the AI fills up its sectors with tons of metal storage, it can't possibly use all the resource it gets, we need a cap on metal storage
-- Once we have a fusion we can start reclaiming our wind. We don't need wind any more at that point.
-- NO TORPEDO BOMBERS, EVER. apexearth watched a game where one AI took the water and the other the ground, and it could not be finished: "no torpedo bombers were being made, so it just turned really slow to wrapping it up". They exist in all three factions and nothing in this repo references any of them — `armlance` (Cormorant, 400 metal, T2 air plant), `cortitan`, `legatorpbomber`, plus the seaplane platforms `armseap`/`corseap`. A ground army cannot touch what sits in the water, so a split map stalemates.
-- KILLING BLOW. Measured, 16 games on Quicksilver at a 50-minute cap: apex out-produced stock 1,183,263 metal to 261,349, out-T3'd it 142,309 to 4,053 and out-armied it 359,961 to 42,543 -- and ELEVEN OF SIXTEEN games still hit the time limit undecided (4-1 in the five that finished). Total dominance that does not convert. apexearth: "we are often winning but we're very slow to kill enemies ... we need some sort of switch which says ok now go for the killing blow" -- mass a huge army and send it all in, and attack from map edges more often.
-- Packing eco tightly has a real downside: it can all blow up at once. apexearth: "if you place too much of all this stuff exactly next to each other, it can all blow up at the same time ... usually, if I'm a little bit worried, I might create two separate areas." Not done yet, and deliberately so — the eco lead currently builds ONE band (turret rows + fusion lanes + converter block). A second, separate site is the fix if chain detonation ever shows up in a replay.
-- We shouldn't build too much T3 defence very early. Backline players are making T3 defence when they don't need it — it belongs where the fighting is, and later.
+# Strategies and behaviours he has asked for, not yet built
+
+This file is the third list, and the narrowest. `ISSUES.md` is what is wrong
+now; `USER-FEEDBACK.md` is the standing brief of what he wants; this is the
+sketchbook -- named plays and unbuilt behaviours in his own words, kept because
+nothing else records them.
+
+Same lifecycle as the other two: **an entry is DELETED when it is built and
+measured, never marked done.**
+
+Read `docs/23-the-plan.md` before coding anything here. Where one of these is
+phrased as a bar ("at 150 metal/s, build a gantry"), that is him reporting a
+symptom at the income he happened to be watching -- it is not a number to code.
+The AI reaches a play when the arithmetic says the play is the fastest path,
+and the earlier "# Issues" list in this file was deleted on 2026-08-31 for
+being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
@@ -68,39 +71,7 @@ confusion each one causes:
 Bugs found in the same pass are in CHANGES.md under "found while refactoring,
 NOT fixed" — they are deliberately still there.
 
-# Getting the 1v1 past parity (2026-08-10)
-
-The 1v1 is at 50% against `BARb:stable:hard` over 113 decided games, up from
-1/66. Everything that got it there was REMOVING apex's own work; nothing added
-today made it better than stock. What is left is the harder half.
-
-Measurement first, because it is what made the rest possible:
-
-- **45-60 minute caps, not 20.** At 20 minutes most games were undecided and the
-  win rate did not exist. Median decided length is 31-37 min.
-- **40 games per arm, and run the arms CONCURRENTLY.** The same build measured
-  8/20 and 3/17 an hour apart. At n=38 the 95% CI is still about +/-16 points,
-  so separating 50% from 75% needs roughly that sample and a matched control in
-  the same session.
-- `python tools/tl.py <run> [shortname]` prints the paired timeline -- it drops
-  any sample where one side has stopped reporting, which is what makes late-game
-  rows honest.
-
-Candidates, in the order the evidence supports:
-
-1. **Re-land the fighter-task behaviours one at a time.** They are on
-   `barbarian-apex` history before the revert. The standoff-and-orbit pair is
-   the one with a measured signature: turning it off by modoption scored 14-24
-   against a 10-28 control. Everything else in that revert is unmeasured in
-   either direction.
-2. **Re-derive apex's config deltas on the `hard` base.** The old ones were
-   tuned against `hard_aggressive` and are gone. The raider-share fix in
-   `factory.json` is the one with a stated cause behind it.
-3. **Re-measure 8v8.** Nothing about team play was measured today, and both the
-   config base and the fighter tasks moved under it.
-4. **`ApexActive()` is all-or-nothing.** It should become per-behaviour, so a
-   rule that is good in a 1v1 can run there while the pooling machinery does
-   not. Today it buys the floor and forbids the ceiling.
+# Unbuilt behaviours (2026-08-09)
 
 ## Rezbots follow the attack group and eat what it kills
 

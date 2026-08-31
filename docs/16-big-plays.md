@@ -14,6 +14,14 @@ This is a **different objective from winning**, and the ordinary measurements do
 not capture it. A steady drip of nukes and a win on attrition score the same as
 a salvo that deletes a base, and only one of them is worth playing against.
 
+It is not, however, a different KIND of objective. "Fifteen nukes, launched at
+once" is a target state, and `docs/23-the-plan.md` is how the AI reaches one:
+name it, then take the fastest path to it. That is also the answer to why the
+AI holds a stockpile it could be spending — a per-instant price will always
+launch the nuke it has, because it cannot see a state that only exists once
+fifteen of them are ready. Salvo behaviour is the plan's shape applied to the
+military half, not an exception to it.
+
 Note what it de-prioritises: in a game this long, mex count and the late economy
 stop mattering. Do not spend this stage of work on them.
 
