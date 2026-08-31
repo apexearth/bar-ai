@@ -59,7 +59,8 @@ const int GATE_SITE_OFFMAP = 24;
 const int GATE_SITE_THREAT = 25;
 const int GATE_SITE_STAKE  = 26;
 const int GATE_SITE_STOP   = 27;
-const int GATE_N           = 28;
+const int GATE_DEF_ROUTE   = 28;
+const int GATE_N           = 29;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -95,6 +96,7 @@ string GateName(int g)
 	if (g == GATE_SITE_THREAT) return "site.nothreat";
 	if (g == GATE_SITE_STAKE)  return "site.nostake";
 	if (g == GATE_SITE_STOP)   return "site.nostop";
+	if (g == GATE_DEF_ROUTE)   return "def.route";
 	return "g" + g;
 }
 
@@ -247,6 +249,51 @@ string DefWhyTerms(int d)
 // slow tick: it walks every owned def's build list.
 float gTeamTowerP = 0.f;
 int gTeamTowerAt = -1;
+
+// EVERY GROUND DEFENCE THE TEAM CAN MAKE, not just the asker's own list.
+//
+// apexearth 2026-08-30, after a day of pricing fixes failed to stop Agitators:
+// "you thinking only in terms of that one constructor instead of macro-thinking
+// about what defense you want. You let an inferior builder decide what IT
+// wants." The auction ranked `Catalog::BuildsOf(unit)`, so a T1 hand compared
+// an Agitator against a Guard and a Twin Guard and never against the Cerberus
+// the team can actually build -- and `apex: defwhy` showed the consequence
+// exactly: `priced=1 RUNNERUP none`, every discount applied, val 0.0000, and it
+// won because nothing else was in the list. No multiplier can lose an auction
+// of one.
+//
+// Same walk TeamBestTowerPower already does; it computed a discount from this
+// set instead of ranking over it.
+array<int> gTeamDefDef;
+int gTeamDefAt = -999999;
+
+const array<int>@ TeamDefenceDefs()
+{
+	if (ai.frame < gTeamDefAt)
+		return gTeamDefDef;
+	gTeamDefAt = ai.frame + 15 * SECOND;
+	gTeamDefDef.resize(0);
+	for (uint u = 1; u < gOwnCount.length(); ++u) {
+		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
+			|| !Catalog::gBuilder[int(u)])
+			continue;
+		const array<int>@ bl = Catalog::BuildsOf(int(u));
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int bd = bl[b];
+			if (!Catalog::gAvailable[bd] || Catalog::gMobile[bd]
+				|| Catalog::gFloater[bd] || Catalog::gSub[bd])
+				continue;
+			if (ProtClassOf(bd) != PROT_DEF)
+				continue;
+			bool seen = false;
+			for (uint q = 0; q < gTeamDefDef.length() && !seen; ++q)
+				seen = (gTeamDefDef[q] == bd);
+			if (!seen)
+				gTeamDefDef.insertLast(bd);
+		}
+	}
+	return gTeamDefDef;
+}
 
 float TeamBestTowerPower()
 {

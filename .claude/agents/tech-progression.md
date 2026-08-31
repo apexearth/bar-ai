@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
 You own progression: when the team techs, who techs, and what the phase says everyone
-should be buying. `docs/12-build-phases.md` is your design document and
+should be buying. `docs/20-brain-overhaul.md` is your design document and
 `docs/10-bar-game-concepts.md` is your economic model — read both.
 
 ## What you own

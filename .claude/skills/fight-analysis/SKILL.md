@@ -28,7 +28,7 @@ Two gadgets emit everything (installed by `deploy_ai.py gadgets`, enabled by
 ## The workflow
 
 1. **Run one game** (~45 s wall for 25 game-minutes):
-   `python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard --map "Comet Catcher" --minutes 30 --seed N`
+   `python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard --map "Comet Catcher" --minutes 30 --seed N`
 2. **Gate it** — before believing anything (each has produced a false
    conclusion before):
    - `grep -oiE "\(?[0-9]+, [0-9]+\) : ERR|Fix compilation errors" infolog.txt`

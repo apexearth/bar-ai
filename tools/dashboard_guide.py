@@ -54,6 +54,14 @@ PANELS = [
                    ("Reach", "TUNE_LINE_REACH", "outranges what walks in"),
                    ("DPS", "TUNE_LINE_DPS", "damage per metal, dies fast")],
         "extra": [
+            ("TUNE_LINE_ALLOC", "OFF, and measured. Picks the line class the team "
+             "owes the most metal and draws only within it, instead of nudging "
+             "every candidate by apex_line_bite. The allocation half works — reach "
+             "share 0.06 -> 0.12, the only thing that has ever moved it. The "
+             "stand-down half deadlocks: reach is owed on every election, so T1 "
+             "labs yield forever waiting on a plant that never pays. Army metal "
+             "544k -> 60k. Do not enable until yielding requires the debt to be "
+             "actively served, not merely servable"),
             ("TUNE_LINE_BITE", "favours a class further below its target share; "
              "0 turns the composition target off entirely"),
             ("TUNE_LINE_EDGE", "a unit must stand further above the field to "
@@ -109,8 +117,6 @@ PANELS = [
             ("TUNE_OWN_TIER_FADE", "fades lower-tier units once OUR OWN "
              "higher-tier line stands -- late game buys T3 and advanced air, "
              "not more T1. 0 keeps every tier at full price forever"),
-            ("TUNE_SPAM_COST", "units cheaper than this stay exempt from the "
-             "own-tier fade -- the spam that is still worth making late"),
             ("TUNE_SPEED_WORTH", "standing weight on speed"),
         ],
     },

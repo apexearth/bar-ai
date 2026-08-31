@@ -136,6 +136,52 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (wasted > over)
 			over = wasted;
 	}
+	// THE FORTIFICATION WANTS LATHE. apexearth 2026-08-30: "T1 cons around
+	// that frontline make the nano turrets. These are to help build faster,
+	// and to heal up these defenses when they come under attack. The result
+	// is a strong fortification that will survive."
+	//
+	// A nano was priced purely as build power, so the repair half of that was
+	// worth nothing anywhere in this AI. A lathe standing in the guns returns
+	// the tower metal it keeps alive, and the ground where that pays is the
+	// ground that has already been eating towers -- Military::FenceLostNear is
+	// a freshness-weighted count of our OWN guns lost near a point, so the
+	// demand appears where defences actually die and decays on its own when
+	// they stop dying. No count, no timer: a quiet wall prices zero.
+	float fortNeed = 0.f;
+	AIFloat3 fortPos;
+	{
+		// The reach this builder could actually stand a lathe with.
+		float nanoReach = 0.f;
+		const array<int>@ nb = Catalog::BuildsOf(int(unit.circuitDef.id));
+		for (uint ni = 0; ni < nb.length(); ++ni) {
+			const int nd = nb[ni];
+			if (!Catalog::gAvailable[nd] || Catalog::gMobile[nd])
+				continue;
+			if ((Catalog::gBuildPower[nd] <= 0.f)
+				|| (Catalog::gBuildsList[nd].length() > 0))
+				continue;
+			if (Catalog::gBuildDist[nd] > nanoReach)
+				nanoReach = Catalog::gBuildDist[nd];
+		}
+		AIFloat3 fwd;
+		if ((nanoReach > 1.f) && Military::ForwardMostFence(fwd) && OnMap(fwd)) {
+			const float fenceM = Military::FenceGunMetalNear(fwd, nanoReach);
+			const float lost = Military::FenceLostNear(fwd, nanoReach);
+			const float h = ai.GetTunable("apex_exposed_loss_s",
+					TUNE_EXPOSED_LOSS_S);
+			if ((fenceM > 1.f) && (lost > 0.f) && (h > 1.f)) {
+				// Metal per second of gun that this ground has been losing --
+				// the rate a lathe here is answering. Same currency as every
+				// other term above (FreeMetalFlow), so it competes rather
+				// than overrides.
+				fortNeed = fenceM * lost / h;
+				fortPos = fwd;
+			}
+		}
+	}
+	if (fortNeed > over)
+		over = fortNeed;
 	if (over <= 0.5f)
 		return w;
 	// The turret STANDS where the demand is. A nano bought to serve a line was
@@ -146,7 +192,11 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// of the game where a frame stops paying at completion, and the >= the
 	// other way sent every overflow-bought turret to a sink. An unset sinkPos
 	// is (-1,-1), so the zero-vs-zero case no longer reads as an on-map sink.
-	if ((armyNeed >= over) && OnMap(armyPos))
+	// The fortification takes the site whenever it priced the demand: a lathe
+	// bought to hold the wall is worth nothing at the eco farm.
+	if ((fortNeed >= over) && OnMap(fortPos))
+		site = fortPos;
+	else if ((armyNeed >= over) && OnMap(armyPos))
 		site = armyPos;
 	else if (haveLine && (lineNeed >= sinkNeed))
 		site = linePos;

@@ -103,7 +103,12 @@ Each of these cost real time on 2026-08-30 and each is fixable.
 
 ## The plan
 
-**Phase 1 — make decisions legible (no behaviour change).**
+**Phase 1 — make decisions legible (no behaviour change). LANDED 2026-08-30.**
+`apex: defwhy` (full price decomposition, winner AND runner-up,
+`market/protect_census.as`), `apex: defgates` / `apex: gatecensus`
+(seen/refused per gate, `seen=0` reported as `DEAD`), `apex: fightcensus`
+(live fighter tasks by `GetFightType()`), `apex: linehold` (owned metal per
+line class vs target).
 - One decomposition log per WINNING election: every term's value for the winner
   and the runner-up, so "why this one" is a grep.
 - A gate census: every gate counts `seen` and `refused` and reports at game end.
@@ -118,8 +123,10 @@ next change predictable.
 **Phase 3 — cull tunables.** Fold every never-overridden, single-read tunable
 into a named constant at its call site. Target: under 100 tunables.
 
-**Phase 4 — split files** back under 600 lines, after Phase 2 has removed what
-it is going to remove.
+**Phase 4 — split files** back under 600 lines. **Done for the worst offenders
+2026-08-30**: `want_protect.as` is now the `protect_*.as` parts,
+`builder/requests.as` the `requests/` parts, `military/territory.as` the
+`territory/` parts. Any reference to those three as single files is stale.
 
 **Phase 5 — tooling.** AngelScript compile check in `check.py`/deploy, line
 endings normalized, `ISSUES.md` pruned to what is actually open.

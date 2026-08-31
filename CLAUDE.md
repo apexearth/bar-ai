@@ -70,7 +70,7 @@ them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 
 - **shortName** → the AI's identity. **This is the only one multiplayer keeps.**
   `AI/Skirmish/<shortName>/<version>/`. Ours is `Apex`, so the harness spec
-  is `Apex:apex`, not `BARb:apex`. (It was `BARbApex` until 2026-08; nothing
+  is `Apex:Unstable`, not `BARb:Unstable`. (It was `BARbApex` until 2026-08; nothing
   validates a shortName, so an old command silently produces
   `unknown skirmish AI` and a variant that scores zero on everything.)
 - **AI version** → a variant within one shortName.
@@ -78,7 +78,7 @@ them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 - **profile** → a difficulty/playstyle within one version, chosen by the
   `profile` AI option declared in that version's `AIOptions.lua`.
   `config/<profile>/*.json` + `script/<profile>/*.as`.
-  **`apex` ships exactly one: `hard_aggressive`.** The stock easy/medium/hard/
+  **`Unstable` ships exactly one: `standard`.** The stock easy/medium/hard/
   rush trees were deleted — they carried none of this AI's work, so every change
   either had to be made four more times or silently did not exist there. Do not
   add a profile back without a reason that is not "difficulty".
@@ -99,7 +99,7 @@ from every `[AI]` block exactly as a hosted game does.
 
 Config lookup falls back: `config/<profile>/x.json` → `config/x.json`.
 Confirmed at runtime in an infolog:
-`Load script: LuaRules\Configs\Apex\apex\script\hard_aggressive\init.as`
+`Load script: LuaRules\Configs\Apex\Unstable\script\standard\init.as`
 
 Corresponding C++ (CircuitAI `util/FileSystem.h`):
 `"LuaRules/Configs/" + shortName + "/" + version + "/" + subdir + "/"`,
@@ -198,8 +198,8 @@ told the same thing again costs his session. Git history says what was done,
 python tools/dashboard.py                    # local web UI: browse runs, launch, deploy, tunables
 python tools/bar_env.py                      # show resolved paths
 python tools/deploy_ai.py status             # what is deployed, and is it in sync
-python tools/deploy_ai.py deploy apex        # repo -> live install
-python tools/deploy_ai.py pull apex          # live install -> repo (after in-place edits)
+python tools/deploy_ai.py deploy Unstable    # repo -> live install
+python tools/deploy_ai.py pull Unstable      # live install -> repo (after in-place edits)
 python tools/deploy_ai.py gadgets            # install dev gadgets into BAR.sdd
 python tools/deploy_ai.py patches            # apply game-patches/*.patch to BAR.sdd
 
@@ -211,15 +211,15 @@ python tools/unitdef.py legsy --builds       # what it builds
 python tools/unitdef.py "advanced ship"      # search display names
 python tools/unitdef.py --trees              # both game trees and their dates
 
-python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
-python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
 
 python tools/review.py <run> --control <run>  # THE way to judge a run; see below
 python tools/check.py                        # pre-deploy: bad JSON, dead unit names
 python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
-python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --maps "Comet Catcher" --games 10
 python tools/run_tournament.py --report
 
@@ -251,7 +251,7 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
 - Custom AI versions are **not** in Chobby's `aiCustomData.lua`, so the lobby
   shows them uncurated. Any profile you want selectable must be declared in your
   own `AIOptions.lua`; `ai/apex/engine-side/AIOptions.lua` declares the single
-  `hard_aggressive` entry.
+  `standard` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
 ## The Brain drives the factories — `factory.json` is mostly NOT in the loop
@@ -457,13 +457,13 @@ So:
   it cost.** The dig-in fortresses looked excellent on screen and were among the
   most expensive things here.
 
-See `docs/18-brain.md` for the design that addresses this directly --
+See `docs/20-brain-overhaul.md` for the design that addresses this directly --
 rules propose Wants and one arbiter ranks them, instead of the first rule in an
 ordered list winning. `docs/17-behaviour-config.md` traces every behaviour.json
-knob to the line that consumes it. `docs/12-build-phases.md` is the BUILD_PHASE
-design that addresses this
-directly: a single sense of what the AI is buying right now, that individual
-rules defer to instead of each firing whenever its own condition happens to hold.
+knob to the line that consumes it. `docs/21-simplification.md` and
+`docs/22-macro-demand.md` are the 2026-08-30 findings: a price built from twelve
+multiplicative terms cannot be steered by changing one of them, and a decision
+asked of a single constructor cannot express what the base needs.
 
 ## Delegate only when asked, and keep agents short-lived
 

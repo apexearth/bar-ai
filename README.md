@@ -20,7 +20,7 @@ The first two live inside the game archive and are hot-swappable. Start there.
 ```bash
 python tools/bar_env.py             # confirm it found your BAR install
 python tools/deploy_ai.py status    # what's deployed
-python tools/deploy_ai.py deploy apex
+python tools/deploy_ai.py deploy Unstable
 ```
 
 Then launch BAR normally — the variant shows up in the lobby AI list as
@@ -30,14 +30,14 @@ To benchmark it against stock BARb without opening the game:
 
 ```bash
 python tools/deploy_ai.py gadgets   # one-time: installs the autoquit/result gadget
-python tools/run_match.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
 ```
 
 A full match takes well under a minute of wall time. For statistics:
 
 ```bash
-python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```
@@ -45,9 +45,10 @@ python tools/run_tournament.py --report
 ## Layout
 
 ```
-ai/apex/            the AI variant — source of truth, deployed into the live install
-ai/ctl/             frozen control, for self-play A/B against apex
-ai/stk/             stock config + stock script on the apex DLL, to isolate DLL effects
+ai/Unstable/        the AI variant — source of truth, deployed into the live install
+ai/ord/             the pre-overhaul leaf-era tree, kept for A/B against the rebuild
+ai/ctl/             frozen control, for self-play A/B
+ai/stk/             stock config + stock script on our DLL, to isolate DLL effects
 reference/          pristine BARb stable, for diffing (read-only)
 game-patches/       changes to shared BAR files + dev gadgets
 tools/              deploy + headless match harness (Python 3.13, stdlib only)
@@ -57,33 +58,21 @@ tournaments/        batch output (gitignored)
 vendor/             upstream clones (gitignored)
 ```
 
-Each variant is a distinct **shortName** (`Apex`, `ApexCtl`, `ApexStk`), not a
-version of `BARb` — see docs/03 for why a version-only variant silently plays as
-stock in multiplayer.
+Each variant is a distinct **shortName** (`Apex`, `ApexOrd`, `ApexCtl`,
+`ApexStk`), not a version of `BARb` — see docs/03 for why a version-only variant
+silently plays as stock in multiplayer. The live variant is `Apex` / version
+`Unstable` / profile `standard`; `python tools/deploy_ai.py status` prints the
+current specs.
 
 ## Docs
 
-| | |
-|---|---|
-| [01 — Local environment](docs/01-local-environment.md) | what's installed here, and the prior `apex` work |
-| [02 — AI landscape](docs/02-ai-landscape.md) | every way to write AI for BAR, and which to pick |
-| [03 — BARb architecture](docs/03-barb-architecture.md) | how config, script and DLL fit together |
-| [04 — JSON config reference](docs/04-json-config-reference.md) | the config files, field by field |
-| [05 — AngelScript API](docs/05-angelscript-api.md) | hooks, globals, and how to extend them |
-| [06 — Building the DLL](docs/06-building-the-dll.md) | the C++ path, end to end |
-| [07 — Headless testing](docs/07-headless-testing.md) | start scripts, speed, debugging, replays |
-| [08 — ML and RL notes](docs/08-ml-and-rl.md) | what exists, what doesn't, what it would take |
-| [09 — Resources](docs/09-resources.md) | every URL worth keeping |
-| [10 — BAR game concepts](docs/10-bar-game-concepts.md) | the economy and tech model — read before diagnosing anything |
-| [11 — Dead unit references](docs/11-dead-unit-references.md) | unit names in stock config that no longer exist |
-| [12 — Build phases](docs/12-build-phases.md) | the BUILD_PHASE design, and the displacement problem it solves |
-| [13 — Other AIs](docs/13-other-ais.md) | the other custom BARb forks, and what they do |
-| [14 — BAR AI landscape](docs/14-bar-ai-landscape.md) | the wider ecosystem and where this work sits in it |
-| [15 — Tunables](docs/15-tunables.md) | the `apex_*` modoptions and how to A/B with them |
+**[docs/README.md](docs/README.md) is the index** — one line per doc saying what
+question it answers. Pick one from there rather than reading the set.
 
-Beyond `docs/`: **`CHANGES.md`** is what this AI does differently from stock and
-how well each change is measured; **`USER-FEEDBACK.md`** is the standing brief of
-what's actually wanted; **`CLAUDE.md`** is the working guide, including the
+Beyond `docs/`: **`ISSUES.md`** is the live list of what is wrong;
+**`USER-FEEDBACK.md`** is the standing brief of what's actually wanted;
+**`CHANGES.md`** is frozen at 2026-08-28 and is history only — what changed and
+what was measured lives in the commit message now; **`CLAUDE.md`** is the working guide, including the
 silent failure modes worth knowing before trusting a result.
 
 ## Conventions

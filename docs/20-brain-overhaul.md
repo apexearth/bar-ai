@@ -1,5 +1,15 @@
 # The Brain overhaul — kill all leaf build logic, rebuild through Wants
 
+> **Status: the kill (§1) and the validation (§4) are DONE; the renames (§6) are
+> DONE — the live variant is `Apex` / version `Unstable` / profile `standard`,
+> harness spec `Apex:Unstable:standard`. The rebuild (§7 step 6) is well past
+> step 0: `manager/brain/market/` now carries nineteen Want proposers. This
+> file is kept as **the mandate and the kill census** — `check.py` enforces §4.1
+> and cites this document by paragraph. For where the rebuild actually stands,
+> read `docs/21-simplification.md` and `docs/22-macro-demand.md`, and the
+> `ai-auction` / `value-paradigm` / `ai-factory-brain` skills for the live
+> design.
+
 apexearth, 2026-08-22, after days of leaf-gate whack-a-mole (pawns → vaders →
 bulls → amphibs → 10 cons, 3-of-6 tournament games wedging regardless of the
 last fix): "all the building, all the factory production, everything needs to

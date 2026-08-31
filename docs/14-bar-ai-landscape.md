@@ -248,7 +248,8 @@ Observations that are not in doc 02:
   native AI for BAR.** **[UNKNOWN]** rather than [VERIFIED] — this is an absence
   finding and absence is unreliable. But four independent searches
   (GitHub repo search, GitHub code-adjacent search, general web, forks of
-  CircuitAI) surfaced nothing. See [08 — ML and RL](08-ml-and-rl.md).
+  CircuitAI) surfaced nothing — there is no RL environment for Spring, Recoil or
+  BAR: no gym wrapper, no bridge, no published agent, no dataset, no bot ladder.
 - **Scripted build orders as a standalone approach do not exist in BAR.** The
   closest thing is `commander.as`-style opener definitions inside a BARb
   variant, and the `Simple*` Lua gadget's fixed build table.

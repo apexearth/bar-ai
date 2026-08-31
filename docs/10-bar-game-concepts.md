@@ -25,8 +25,14 @@ on fixed map spots, and from **reclaiming** wrecks and features.
    for it. **Advanced solar has much faster ROI** and is not a bad choice.
 4. **Advanced fusion (AFUS)**, one or two of them.
 5. **T3** only once you are usually **over 100 metal/s**, which is after those
-   AFUS. A Korgoth is ~11,000 metal; at 40 metal/s that is 275 seconds of a whole
-   team's income, so T3 at that scale is two or three units, not an army.
+   AFUS. Real costs, read from the pinned tree 2026-08-30: gantry `corgant`
+   **8,400**, `corshiva` 1,550, `corcat` 4,900, `armbanth` (Titan) 13,500,
+   `corjugg` (Behemoth) 20,000, `corkorg` (Juggernaut) **29,000**. At 40 metal/s
+   a Juggernaut is twelve minutes of a whole team's income, so T3 at benchmark
+   scale is two or three units, not an army. At the 250-400 metal/s a bonused
+   hosted game reaches, a gantry is ~20 seconds of income and the arithmetic
+   inverts completely — read the actual income before calling T3 affordable or
+   unaffordable.
 
 **Corollary**: if the AI is not upgrading mexes, nothing downstream works. Zero
 `t2Mex` is a bug, never a strategy characteristic.

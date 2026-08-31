@@ -293,6 +293,26 @@ void ComBigEInvalidate()
 	gBigEFrame = -1;
 }
 
+// The best energy OUTPUT among expensive-energy buildings currently rising.
+// Lives here rather than in Requests because gComDef is a global and market.as
+// is included after builder.as.
+float ComBigEnergyBestMakeE()
+{
+	float best = 0.f;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d))
+			continue;
+		if (!Requests::IsBigEnergy(ai.GetCircuitDef(d)))
+			continue;
+		if (Catalog::gMakeE[d] > best)
+			best = Catalog::gMakeE[d];
+	}
+	return best;
+}
+
 uint ComBigEnergyRising(uint &out room)
 {
 	if (gBigEFrame == ai.frame) {

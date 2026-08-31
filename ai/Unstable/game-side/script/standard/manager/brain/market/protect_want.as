@@ -61,8 +61,25 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		if (Gate(GATE_CORE, !OnMap(core)))
 			return w;
 	}
-	for (uint i = 0; i < builds.length(); ++i) {
-		const int d = builds[i];
+	// THE CANDIDATE LIST IS THE TEAM'S, NOT THE ASKER'S. Ground defence is
+	// ranked over every tower any of our builders can make, so an Agitator is
+	// compared against the Cerberus that will actually be built instead of
+	// against the two other T1 towers this particular hand happens to own.
+	// Every other class stays local: a radar or a jammer is answered by
+	// whoever is standing there, and there is no tier argument to lose.
+	array<int> cand = builds;
+	if (half == HALF_GROUND) {
+		const array<int>@ team = TeamDefenceDefs();
+		for (uint tq = 0; tq < team.length(); ++tq) {
+			bool have = false;
+			for (uint bq = 0; bq < cand.length() && !have; ++bq)
+				have = (cand[bq] == team[tq]);
+			if (!have)
+				cand.insertLast(team[tq]);
+		}
+	}
+	for (uint i = 0; i < cand.length(); ++i) {
+		const int d = cand[i];
 		if (Gate(GATE_AVAIL, !Catalog::gAvailable[d] || Catalog::gMobile[d]
 			|| Catalog::gFloater[d] || Catalog::gSub[d]))
 			continue;
@@ -234,15 +251,22 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			}
 			// apexearth 2026-08-30: a Gauntlet-class tower "competes heavily
 			// with our transition to T2 and is completely outclassed by the
-			// T2 it's expected to be fighting" -- so a T1 tower (one a T1
-			// hand can build, see Catalog::gT1Hand) loses nearly all its gain
-			// once THE ADVANCED LAB STANDS, not once an advanced builder does.
-			// The lab is the trigger because that is when the competition it
-			// loses starts; waiting for the con left every player without one
-			// buying light towers at full price, which is where the T1 share
-			// of defence metal came from. A discount rather than a veto: the
-			// asker's own catalog cannot hold the newer gun, and a real
-			// threat still outprices it.
+			// T2 it's expected to be fighting."
+			//
+			// A REFUSAL, NOT A DISCOUNT -- and the measurement is why. This was
+			// a 0.02 multiplier for a day, and Agitators kept appearing.
+			// `apex: defwhy` finally showed the reason: `priced=1`,
+			// `RUNNERUP none`. Every discount DID apply (xT1late 0.020,
+			// xWallEff 0.031, xTeamPow 0.139, driving val to 0.0000) and the
+			// Agitator won anyway, because it was the ONLY defence candidate
+			// that reached pricing -- the cheaper towers were dropped at
+			// site.nostop, their ground already covered, while a 1245-elmo gun
+			// still found open ground. No multiplier can lose an auction of
+			// one. So once the team fields a hand that can build a better gun,
+			// a T1 tower is not priced at all and the builder spends its time
+			// on something else (apexearth, twice, the second time: "We've
+			// gone over and proved how they are low-value defense... Fix it
+			// with priority").
 			if (T1Tower(d) && (Factory::gHaveT2 || T2DefHandsStanding())) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
@@ -435,6 +459,21 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				+ ((rd >= 0) ? DefWhyTerms(rd) : "none"));
 			gDefWhyWins = 0;
 		}
+	}
+	// ROUTE, DO NOT SUBSTITUTE. His ruling twice over -- 2026-08-27, "if our
+	// defence want is for T3 we should *not* be routing it through T1 cons. It
+	// should only get to the cons which could potentially fulfill it", and
+	// 2026-08-30, "why are you letting the little guy make the decision?".
+	// It was implemented as a discount (xTeamPow) both times, which cannot
+	// work: a discount still leaves the inferior tower as the asker's best
+	// answer, and it gets spent. So the hand that cannot build what the team
+	// decided on proposes NOTHING here and goes and does something else; the
+	// want waits for a hand that can fulfil it.
+	if ((w.def !is null) && (half == HALF_GROUND)
+		&& !unit.circuitDef.CanBuild(w.def)) {
+		Gate(GATE_DEF_ROUTE, true);
+		Want none;
+		return none;
 	}
 	return w;
 }

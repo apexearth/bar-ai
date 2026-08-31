@@ -64,7 +64,7 @@ below exists because skipping it produced a confident wrong answer in this repo.
 ## Failures that are SILENT — check these before believing anything
 
 - **Multiplayer silently runs stock BARb unless the variant has its own shortName.**
-  Ours is `Apex` (`ai/apex/engine-side/AIInfo.lua`), so the spec is `Apex:apex:...`.
+  Ours is `Apex` (`ai/Unstable/engine-side/AIInfo.lua`), so the spec is `Apex:Unstable:standard`.
   Reproduce the lobby's behaviour with `run_match.py --drop-ai-version`.
 - **Check the OPPONENT is alive before believing a win rate.** A `deploy_ai.py`
   stale-cleanup once deleted `BAR.sdd/luarules/configs/BARb/stable`, so stock BARb

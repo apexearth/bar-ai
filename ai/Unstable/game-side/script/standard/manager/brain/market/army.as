@@ -441,6 +441,7 @@ int LineClassOf(int di)
 // What we actually field, by class, as shares of army metal.
 array<float> gLineM(LC_N, 0.f);
 int gLineAt = 0;
+int gLineHoldAt = 0;
 void TrackLine()
 {
 	if (ai.frame < gLineAt)
@@ -454,6 +455,84 @@ void TrackLine()
 			continue;
 		gLineM[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gCostM[di];
 	}
+	// WHAT WE HOLD AGAINST WHAT WE ASKED FOR. The only line-class output was a
+	// one-shot census of how many DEFS fall in each class, which reads exactly
+	// like a holding and is not one -- it was misread as such within an hour of
+	// being consulted. This prints the owned metal per class beside its target
+	// share, so "are we short of reach" is a grep instead of an argument.
+	if (ai.frame >= gLineHoldAt) {
+		gLineHoldAt = ai.frame + 60 * SECOND;
+		float tot = 0.f;
+		for (int c = 0; c < LC_N; ++c)
+			tot += gLineM[c];
+		if (tot > 1.f) {
+			AiLog(Factory::T() + "apex: linehold t=" + ai.teamId
+				+ " armyM=" + int(tot)
+				+ " tank=" + formatFloat(gLineM[LC_TANK] / tot, "", 0, 2)
+					+ "/" + formatFloat(LineTarget(LC_TANK), "", 0, 2)
+				+ " mid=" + formatFloat(gLineM[LC_MID] / tot, "", 0, 2)
+					+ "/" + formatFloat(LineTarget(LC_MID), "", 0, 2)
+				+ " reach=" + formatFloat(gLineM[LC_REACH] / tot, "", 0, 2)
+					+ "/" + formatFloat(LineTarget(LC_REACH), "", 0, 2)
+				+ " dps=" + formatFloat(gLineM[LC_DPS] / tot, "", 0, 2)
+					+ "/" + formatFloat(LineTarget(LC_DPS), "", 0, 2)
+				+ " (have/target)");
+		}
+	}
+}
+
+// For the allocation log: naming the class is what makes that line readable.
+// CAN ANY PLANT WE OWN ACTUALLY PRODUCE THIS CLASS, and what does its cheapest
+// member cost? Measured 2026-08-30: the team is owed reach on essentially every
+// election and the asking factory is a T1 lab, which builds no reach-class unit
+// at all -- so it built a Pawn, the army grew, and the debt grew with it. The
+// share could never move. This is what lets the T1 lab STAND DOWN when a plant
+// that can serve the debt exists (apexearth: "If T2 is available then perhaps
+// the T1 lab does nothing. If T2 is not available then the T1 lab does the best
+// it can").
+array<float> gClassCheap(LC_N, -1.f);
+int gClassCheapAt = -999999;
+
+float ClassCheapestOwned(int cls)
+{
+	if ((cls < 0) || (cls >= LC_N))
+		return -1.f;
+	if (ai.frame < gClassCheapAt)
+		return gClassCheap[cls];
+	gClassCheapAt = ai.frame + 10 * SECOND;
+	for (int c = 0; c < LC_N; ++c)
+		gClassCheap[c] = -1.f;
+	for (uint u = 1; u < gOwnCount.length(); ++u) {
+		const int ui = int(u);
+		if ((gOwnCount[u] <= 0) || Catalog::gMobile[ui])
+			continue;
+		const array<int>@ bl = Catalog::BuildsOf(ui);
+		if (bl.length() == 0)
+			continue;
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int bd = bl[b];
+			if (!Catalog::gAvailable[bd] || !Catalog::gMobile[bd])
+				continue;
+			if (!LineCombat(bd))
+				continue;
+			const int lc = LineClassOf(bd);
+			if ((lc < 0) || (lc >= LC_N))
+				continue;
+			const float cm = Catalog::gCostM[bd];
+			if ((cm > 0.f) && ((gClassCheap[lc] < 0.f) || (cm < gClassCheap[lc])))
+				gClassCheap[lc] = cm;
+		}
+	}
+	return gClassCheap[cls];
+}
+
+string LineClassName(int cls)
+{
+	if (cls == LC_TANK)  return "tank";
+	if (cls == LC_MID)   return "mid";
+	if (cls == LC_REACH) return "reach";
+	if (cls == LC_DPS)   return "dps";
+	return "?";
 }
 
 float LineTarget(int cls)

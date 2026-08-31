@@ -2,72 +2,43 @@
 
 **There is no official schema.** CircuitAI's `doc/` has only `Profile.md`; the
 authority is the C++ parsers (`setup/SetupManager.cpp`, `module/*Manager.cpp`,
-`task/builder/BuildChain.cpp`, `setup/DefenceData.cpp`). Everything below was
-read off the shipped `hard` profile in `reference/barb-stable/game-side/config/`;
-field *meanings* are inferred from names, values and observed behaviour unless
-stated otherwise. Treat it as a map, not a spec — and check the parser before
-relying on an edge case.
+`task/builder/BuildChain.cpp`, `setup/DefenceData.cpp`). Treat this as a map, not
+a spec — and check the parser before relying on an edge case.
 
 The parser tolerates `//` comments and is lenient about trailing commas, so you
-can annotate your edits. The existing `apex` work does exactly that.
+can annotate your edits.
 
-Layering: `config/<profile>/x.json` is tried first, then `config/x.json`. A
-profile only needs the files it changes. Faction variants are sibling files:
-`*_leg.json` (Legion), `behaviour_extra_units.json`, `behaviour_scav_units.json`.
+Layering: `config/<profile>/x.json` is tried first, then `config/x.json`. Faction
+variants are sibling files: `*_leg.json` (Legion), `behaviour_extra_units.json`,
+`behaviour_scav_units.json`. Which of them load is decided in `init.as` — the
+`data.profile` array is the list of JSON basenames, so **adding your own config
+file means adding its name there**, and the load is logged (`Ignoring Legion`,
+`Ignoring Scav Units`, `Ignoring Extra Units`).
 
-## The seven files
+## Read this first: most of these files no longer decide anything
 
-| File | Root keys | Governs |
-|---|---|---|
-| `behaviour.json` | `quota`, `retreat`, `defence`, `behaviour` | per-unit roles/threat, retreat thresholds, squad quotas |
-| `factory.json` | `select`, `warn_probability`, `factory` | which factories to build and what they produce |
-| `economy.json` | `economy` | energy build order, mex handling, buildpower pacing |
-| `build_chain.json` | `porcupine`, `build_chain` | static defence sets and build prerequisites |
-| `response.json` | `response` | counter-composition: what to build against what |
-| `block_map.json` | `building` | base layout / footprint blocking |
-| `commander.json` | `commander` | commander loadout, name prefixes |
+The 2026-08-22 Brain overhaul (`docs/20-brain-overhaul.md`) moved every building
+and production decision into the Want market. apexearth's ruling, §6: *"No JSON
+build proportions. factory.json / response.json-style unit and factory
+proportion tables are dead — production choices are priced Wants, not config
+weights."*
 
-`behaviour.json` (42K) and `factory.json` (28K) are where the interesting knobs
-are.
+| File | Status |
+|---|---|
+| `behaviour.json` | **Live.** Per-unit `role`, `attribute`, `threat`, `power`, `build_speed`; plus the `quota`, `retreat` and `defence` roots. See `docs/17-behaviour-config.md`. |
+| `block_map.json` | **Live.** Building footprint blocking, used by placement. |
+| `commander.json` | **Live.** Commander loadout and name prefixes. |
+| `economy.json` | **Partly live.** Scalars the DLL reads (`cluster_range`, `mex_up`, `calc_mex`, `excess`, `buildpower`, `mex` → per-faction extractor names). The `energy` generator ladder is superseded by the energy Want's pricing. |
+| `build_chain.json` | **Mostly emptied on purpose.** The `porcupine` def lists survive as a def table; the ladder and `build_chain` hubs are empty because the DLL walks them on cluster events, **bypassing every script gate** — measured 2026-08-23 as 28 dragon claws on the eco specialist while the market's defence wants all refused. |
+| `factory.json` | **Weight tables dead.** The `select` block and the per-tier `unit` weight rows decide nothing while the facqueue drives a line, which is always. |
+| `response.json` | **Empty `{}`.** The whole counter-composition system is gone. |
 
-## factory.json — build composition
+So: if the AI is building the wrong thing, the answer is in
+`manager/brain/market/`, not in a weight. Attribute it to `Market::ConOrderFor`
+(production) or the defence want (`protect_*.as`) before touching any JSON. The
+`ai-factory-brain` and `ai-auction` skills are the entry points.
 
-This is the highest-leverage file and the one the existing `apex` variant tunes.
-
-```jsonc
-"armlab": {
-    "importance":     [1.0, 0.2],
-    "require_energy": false,
-    "income_tier":    [2, 25, 35, 50, 100],
-    "unit":           ["armck", "armpw", "armrectr", "armrock", "armham", ...],
-    "land": {
-        "tier0": [0.25, 0.70, 0.05, 0.00, 0.20, ...],
-        "tier1": [0.25, 0.70, 0.10, 0.00, 0.00, ...],
-        ...
-    },
-    "air":   { "tier0": [...], ... },
-    "water": { "tier0": [...], ... },
-    "caretaker": 6
-}
-```
-
-- **`unit`** is an ordered list; every `tierN` row is a parallel array of weights
-  positionally matching it. Add a unit → add a column to *every* row, or the
-  alignment silently shifts.
-- **`income_tier`** is the metal-income ladder. `[2, 25, 35, 50, 100]` means
-  `tier0` applies below income 2, `tier1` from 2, `tier2` from 25, and so on —
-  **N thresholds select among N+1 tier rows**. Extending the ladder is how the
-  `apex` variant added late-game behaviour: `[1,30,60,80]` → `[1,30,60,80,120,180]`
-  plus new `tier5`/`tier6` rows.
-- **`land` / `air` / `water`** select a weight table by map type, not by unit
-  domain.
-- Weights are relative within a row, not normalised.
-- **`caretaker`** — number of assist/nano structures to attach.
-- **`require_energy`** — gate construction on energy income.
-- **`select`** (file root) picks *which* factory to build: `air_map`, `offset`,
-  `speed`, `map`, `no_air`, `min_land`.
-
-## behaviour.json — unit roles and thresholds
+## behaviour.json — the one that still matters
 
 ```jsonc
 "armcom": {
@@ -81,86 +52,38 @@ This is the highest-leverage file and the one the existing `apex` variant tunes.
 }
 ```
 
-- **`role`** places the unit in the task system. Roles referenced across the
-  configs: `builder`, `assault`, `skirmish`, `raider`, `riot`, `scout`,
-  `artillery`, `anti_air`, `anti_sub`, `sub`, `anti_heavy`, `heavy`.
-- **`attribute`** is a tag set (`commander`, `base`, and the `T2`/`T3` tags that
+- **`role`** places the unit in the task system. Engine-side roles: `builder`,
+  `assault`, `skirmish`, `raider`, `riot`, `scout`, `artillery`, `anti_air`,
+  `anti_sub`, `sub`, `anti_heavy`, `heavy`, `bomber`, `support`, `mine`,
+  `transport`, `air`, `static`, `super`, `commander`. Script can add its own with
+  `AiAddRole(name, baseRole)` — see `docs/05-angelscript-api.md`.
+- **`attribute`** is a tag set (`commander`, `base`, and the `T2`/`T3` tags
   `main.as` assigns at runtime).
 - **`threat`** feeds the threat map — how dangerous this unit is considered
   against each domain, with `vs` overrides per enemy role.
+- **`power`** is the unit's contribution to a squad's power sum, which is what
+  every attack quota is denominated in.
 - **`retreat`** is the health fraction at which the unit disengages.
 
-Roots alongside it:
+The `quota`, `retreat` and `defence` roots are documented knob-by-knob in
+`docs/17-behaviour-config.md`.
 
-- **`retreat`** — global thresholds as `[low, high]` bands:
-  `builder [0.85, 1.0]`, `fighter [0.5, 1.0]`, `shield [0.25, 0.275]`.
-- **`defence`** — `infl_rad`, `base_rad`, `comm_rad`, `escort`.
-- **`quota`** — squad sizing and threat modifiers: `scout`, `raid`, `attack`,
-  `thr_mod`, `aa_threat`, `slack_mod`, `num_batch`, `anti_cap`.
+## The limit of config-only work
 
-## response.json — counter-composition
-
-```jsonc
-"assault": {
-    "vs":          ["static", "skirmish", "riot"],
-    "ratio":       [0.3, 0.4, 0.4],
-    "importance":  [5.0, 5.0, 5.0],
-    "max_percent": 0.8,
-    "eps_step":    0.075
-}
-```
-
-Read as: when the enemy fields `static`/`skirmish`/`riot`, respond with
-`assault` at these ratios and priorities, capped at 80% of the army.
-`_weight_` (0.1) and `_importance_mod_` scale the whole table.
-
-## economy.json
-
-```jsonc
-"energy": {
-    "land": {
-        "armsolar":  [12, 14, 0,   0,    0.03],
-        "armadvsol": [20, 30, 12,  220,  0.2 ],
-        "armfus":    [ 3,  4, 50,  900,  1.9 ]
-    }
-}
-```
-
-Per generator, a positional tuple. From the value patterns the fields read as
-`[min count, max count, income threshold, metal cost gate, weight]` — **inferred,
-not confirmed**; verify in `module/EconomyManager.cpp` before leaning on it.
-
-Scalars: `cluster_range` 1500, `mex_up` 4, `calc_mex` false, `goal_exec` 50.0,
-`build_mod` 1000.0, `eps_step` 0.2, `buildpower` 1.2, `excess` -1.0,
-`mex` → per-faction extractor unit names.
-
-## build_chain.json
-
-`porcupine` defines static-defence sets (`unit`, `land`, `water`, `prevent`,
-`amount`, `point_range`, `base`, `superweapon`, `default`). `build_chain`
-expresses prerequisite ordering.
-
-## Known limits of config-only work
-
-From BAR's own `config/easy/easy_ai_readme.txt`, which is the closest thing to
-design notes anywhere:
+From BAR's own `config/easy/easy_ai_readme.txt`, the closest thing to design
+notes anywhere:
 
 > *stalling/overflowing metal, e => difficult to achieve that with config cause
 > regulation of ressources is in the core program*
 
-That's the honest boundary. Resource regulation, task scheduling and threat
-evaluation are C++. Config sets the inputs; it can't change the algorithm.
-When you hit that wall, go to [AngelScript](05-angelscript-api.md).
+That was the honest boundary before the overhaul, and the overhaul moved the
+boundary further: resource regulation, task scheduling and threat evaluation are
+C++, and everything above them is now AngelScript rather than JSON.
 
 ## Working method
 
 1. `python tools/deploy_ai.py status` — confirm repo and live agree.
-2. Edit under `ai/<variant>/game-side/config/`.
-3. `python tools/deploy_ai.py deploy <variant>`.
-4. `python tools/run_tournament.py --a <variant> --b BARb:stable:hard --games 10`.
-5. Diff against the baseline to keep changes reviewable:
-   `diff -u reference/barb-stable/game-side/config/hard_aggressive/factory.json \
-        ai/apex/game-side/config/hard_aggressive/factory.json`
-
-One config change per benchmark run. BARb-vs-BARb outcomes are noisy — ten games
-with side swapping is a weak signal, not a verdict.
+2. Edit under `ai/Unstable/game-side/config/standard/`.
+3. `python tools/check.py` — catches bad JSON and dead unit names.
+4. `python tools/deploy_ai.py deploy Unstable`, and verify it succeeded before
+   running anything against it.

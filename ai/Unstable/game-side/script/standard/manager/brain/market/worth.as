@@ -176,7 +176,16 @@ float OwnTierMul(int d)
 	const float k = ai.GetTunable("apex_own_tier_fade", TUNE_OWN_TIER_FADE);
 	if (k <= 0.f)
 		return 1.f;
-	if (Catalog::gCostM[d] < ai.GetTunable("apex_spam_cost", TUNE_SPAM_COST))
+	// ONE FODDER BAR, not two. This read apex_spam_cost (150) while the
+	// military routing read apex_fodder_cost (100) for the same idea, and 150
+	// exempted exactly the units apexearth wants gone: "we're still making
+	// thugs, rocket bots, which at the T2 stage become super duper
+	// worthless... Grunts are still good because they are just fodder (rascal
+	// vehicle scouts too)." Rocko 120 and Hammer 130 sat under the old bar and
+	// so never faded; Grunt 42, Rascal 31 and Pawn 54 sit under the shared one
+	// and still do. His spec draws the line between those two groups, and
+	// unifying the bars is what puts it there.
+	if (Catalog::gCostM[d] < Military::FODDER_COST())
 		return 1.f;
 	const int above = TopOwnPlantTier() - DefTier(d);
 	if (above <= 0)
@@ -234,6 +243,43 @@ float UnitPPC(int d)
 	// as we have shield to buy it with.
 	v *= 1.f + (Catalog::gMaxRange[d] / gWMRng)
 			* ai.GetTunable("apex_range_worth", TUNE_RANGE_WORTH) * ShieldShare();
+	// STANDOFF SURVIVABILITY: hit points are only worth paying for by a unit
+	// that can actually be shot. apexearth 2026-08-30: "we outrange most of
+	// what can shoot back at us and we have the speed to stay far enough
+	// away... make HP matter less when range is higher."
+	//
+	// EXPOSURE is the share of the armed mobile field that can reach us, after
+	// allowing for the two ways of not being reached: outrunning what outranges
+	// us, or standing behind something that absorbs. PfOutrangedFrac is read
+	// off the game's own range distribution, so the pivot is where the units
+	// actually are and not a mean anybody chose.
+	//
+	// Applied in UnitPPC, NOT UnitCore. UnitCore normalises the line, so a
+	// change there moves the candidate and the yardstick together -- three
+	// attempts at this on 2026-08-30 did exactly that, and the last one took
+	// reach from 0.19 to 0.03 of the army while tanks went to 0.65, because
+	// scaling the hp EXPONENT by range hands the biggest bonus to whoever owns
+	// the most hit points, which is the short-range brawlers. This form can
+	// only ever DISCOUNT the hp term UnitCore already charged: at full exposure
+	// it changes nothing at all.
+	{
+		const float wHp = ai.GetTunable("apex_worth_hp", TUNE_WORTH_HP);
+		const float relHp = (gWMHp > 0.f) ? (Catalog::gHealth[d] / gWMHp) : 0.f;
+		if ((wHp != 0.f) && (relHp > 0.f)) {
+			float keep = ShieldShare();
+			const float cap = FoeSpeedCap();
+			if (cap > 1.f) {
+				const float sp = Catalog::gSpeed[d] / cap;
+				if (sp > keep)
+					keep = (sp > 1.f) ? 1.f : sp;
+			}
+			float safe = PfOutrangedFrac(d) * keep;
+			if (safe > 1.f)
+				safe = 1.f;
+			if (safe > 0.f)
+				v /= pow(relHp, wHp * safe);
+		}
+	}
 	v *= OutrangeMul(d);
 	v *= FoeTierMul(d);
 	v *= OwnTierMul(d);

@@ -111,7 +111,8 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// caller is not allowed to answer for itself (the same reason the factory
 	// fork test lives here). Wealth is the only exemption, and it must cover
 	// the new bill on top of every bill already rising.
-	if (Gate(G_BIGE, IsBigEnergy(want) && BigEnergyRising())) {
+	if (Gate(G_BIGE, IsBigEnergy(want) && BigEnergyRising()
+			&& !BigEnergyBetterThanRising(want))) {
 		// Hand the asker the best time-to-energy job instead of a hole in the
 		// ground: e/s per second of remaining build, so a half-done fusion beats
 		// a fresh afus (apexearth: "they should all focus their efforts on the

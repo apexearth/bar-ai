@@ -57,7 +57,7 @@ a red band with who diverged and at what frame. Installed to
 other on one machine. The host runs both AIs; the peer is a spectator that
 simulates from the net stream, which is what makes disagreement observable.
 
-    python tools/run_netmatch.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+    python tools/run_netmatch.py --a Apex:Unstable:standard --b BARb:stable:hard \
         --map "Flats and Forests v2.2" --per-side 4 --minutes 12 --seed 11
 
 About two minutes per run. Sequential only — two netmatches on one port collide,

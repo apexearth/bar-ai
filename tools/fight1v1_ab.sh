@@ -32,7 +32,7 @@ MINUTES="${FIGHT_MINUTES:-20}"
 SIDES="${FIGHT_SIDES:-Armada,Armada}"
 WD_ROOT="${FIGHT_WRITE_ROOT:-$PWD/matches/.wd}"
 # The deployed variant moved to Apex:Unstable:standard; the old
-# Apex:apex:hard_aggressive spec resolves to NO installed AI and scores zero
+# Apex:Unstable:standard spec resolves to NO installed AI and scores zero
 # silently (the unknown-skirmish-AI trap).
 SPEC_A="${FIGHT_SPEC_A:-Apex:Unstable:standard}"
 

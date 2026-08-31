@@ -13,29 +13,33 @@ something you want isn't exposed, check `barbarian` HEAD before assuming.
 
 ## File layout
 
-Per profile, in `game-side/script/<profile>/`:
+Per profile, in `game-side/script/<profile>/` — the live variant's profile is
+`standard`:
 
 ```
 init.as                 AiInit    — declares which JSON files to load
 main.as                 AiMain    — one-time setup;  AiUpdate — every 30 frames
+policy.as targets.as tunables.as perf.as
 manager/air.as          air factory, air lead election, wings
-manager/assist.as       assist bots
 manager/baseplan.as     where buildings go — grid, walkways, reserved spots
-manager/builder.as      construction task selection
-manager/crew.as         constructor crews
+manager/brain.as        the Want market: every build and production decision
+manager/builder.as      construction task selection (holds -> Decide -> idle)
+manager/catalog.as      per-def economics and the who-builds-what graph
 manager/economy.as      economy tick
-manager/factory.as      factory choice and unit recruitment
+manager/factory.as      factory senses; the facqueue executes production
 manager/frontline.as    influence map, territory, front/back line
+manager/lattice.as      the base lattice
 manager/military.as     combat task selection, defence
+manager/persona.as manager/role.as
 misc/commander.as       commander behaviour
 ```
 
 Stock ships only `builder`/`economy`/`factory`/`military`; the rest are ours.
 
 **Every `manager/<name>.as` above is a shim** — a table of contents that
-`#include`s the real code from a sibling `manager/<name>/` directory. `apex`
-has 69 `.as` files under `hard_aggressive/`. Edit the parts, not the shim,
-except to add a part (which means adding a line to the shim).
+`#include`s the real code from a sibling `manager/<name>/` directory. There are
+106 `.as` files under `script/standard/` (2026-08-30). Edit the parts, not the
+shim, except to add a part (which means adding a line to the shim).
 
 **The include order in a shim is load-bearing.** `CScriptBuilder` adds a section
 before walking that section's own includes, depth-first in listed order, so the
@@ -214,8 +218,8 @@ otherwise `return aiMilitaryMgr.DefaultMakeTask(unit);`.
   faster than launching the client.
 - `ai.frame` is in sim frames; `SECOND` = 30, `MINUTE` = 1800.
 - `@` is AngelScript's handle syntax; `!is null` is the null test.
-- Scripts are per-profile. Changing `hard_aggressive/main.as` does not affect
-  `hard`.
+- Scripts are per-profile. Changing `standard/main.as` does not affect any
+  other profile.
 - There is no hot reload for AngelScript — it loads at AI init, so a new match
   is required. That's what the headless harness is for.
 
@@ -257,16 +261,22 @@ makes dynamic behaviour possible without touching JSON. `quota.scout` maps to
    `military.as` and not in `main.as`. The global *property* `aiMilitaryMgr`
    does resolve there — only the type name fails. Tune anti-air in
    `response.json` unless you move the code into `military.as`.
-3. **There is no enemy unit enumeration.** `CEnemyManager` exposes only
-   `GetEnemyThreat(Type)`, `GetEnemyCost(Type)`, `mobileThreat` and
-   `maxAAThreat`. No positions, no unit list, no commander handle. So
-   "scout, find the enemy commander, snipe it" **cannot be written in
-   AngelScript** — target selection lives in C++.
+3. **There is no per-UNIT enemy enumeration** — but there is a per-GROUP one,
+   added by this repo's DLL. `aiEnemyMgr` exposes `GetEnemyGroupCount`,
+   `GetEnemyGroupPos`, `GetEnemyGroupCost`, `GetEnemyGroupRange`,
+   `GetEnemyCost`, `GetEnemyCostFresh`, `GetEnemyPos` and `mobileThreat`, which
+   is what the nuke director's target ranking and the territory model are built
+   on. There is still no unit list and no commander handle, so
+   "scout, find the enemy commander, snipe it" is not writable in AngelScript.
 
-   The one escape hatch: `ai.CallRules(string)`, `ai.CallUI(string)` and
-   `ai.GetGameRulesParam(...)` are exposed, so a game-side LuaRules gadget could
-   compute a target and hand it back through a rules param. That only works in a
-   game archive you control.
+   Two things to know about the group data: it is **LOS-slaved** (only units
+   currently in LOS are kept), and `GetEnemyPos()` returns ZeroVector while no
+   enemy group is known — never use it as a bearing pre-contact.
+
+   The escape hatch for anything else: `ai.CallRules(string)`, `ai.CallUI(string)`
+   and `ai.GetGameRulesParam(...)` are exposed, so a game-side LuaRules gadget
+   could compute a target and hand it back through a rules param. That only works
+   in a game archive you control.
 
 **Debugging loop.** A script that fails to compile logs
 `Script: Fix compilation errors!` and the AI then dies on its INIT event, which

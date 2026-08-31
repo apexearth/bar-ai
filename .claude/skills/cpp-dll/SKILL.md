@@ -42,7 +42,7 @@ about this layer — but respect its failure modes, which are silent or fatal.
      -e CCACHE_DIR=/build/cache "$IMG" bash -c "ninja -C /build/out BARb"
    ```
    Artifact: `vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll` (~205MB with DWARF).
-4. `python tools/deploy_ai.py deploy apex` — **read the output line**: it
+4. `python tools/deploy_ai.py deploy Unstable` — **read the output line**: it
    must say `SkirmishAI.dll (local build)`. `(repo copy)` means the stripped
    6.9MB fallback shipped and your C++ never ran.
 5. Smoke: one short `run_match.py` game, then gate it:

@@ -84,8 +84,17 @@ Env: `PRD_HTTP_SEARCH_URL=https://files-cdn.beyondallreason.dev/find`,
 ## Data
 
 - **`https://api.bar-rts.com`** — public, unauthenticated, undocumented,
-  rate-limited. Source of truth is [bar-db](https://github.com/beyond-all-reason/bar-db)
-  (`src/rest-api/routes/`). See [08 — ML and RL](08-ml-and-rl.md).
+  rate-limited (be polite). Source of truth is
+  [bar-db](https://github.com/beyond-all-reason/bar-db) (`src/rest-api/routes/`).
+  `GET /replays` takes `page`, `limit`, `preset` (`ffa|team|duel`),
+  `endedNormally`, `hasBots`, `reported`, `tsRange`, `players`, `maps`, `date`,
+  `durationRangeMins`, `computeTotalResults` (`totalResults` is `-1` unless you
+  set this). `GET /replays/:id` returns the modoptions dict,
+  `AllyTeams[].Players[]`, `AllyTeams[].AIs[]`, `winningTeam`, `durationMs` and
+  the engine/game versions — usable as a tabular dataset without downloading a
+  single replay blob. There is no download endpoint: take `fileName` from the
+  JSON and fetch it from the storage URL below, then parse with
+  [sdfz-demo-parser](https://github.com/beyond-all-reason/demo-parser).
 - [data-processing](https://github.com/beyond-all-reason/data-processing) — SQL
   pipelines over BAR data
 - Replay blobs: `https://storage.uk.cloud.ovh.net/v1/AUTH_10286efc0d334efd917d476d7183232e/BAR/demos/{fileName}`

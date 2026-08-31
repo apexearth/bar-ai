@@ -12,11 +12,11 @@ description: What gets BUILT from factories — the facqueue executor, the produ
 | Which units a line makes | `Market::ConOrderFor` — floors first (escort, any-con, ceiling-con), then a proportional value draw over the plant's products | `manager/brain/market/production.as` |
 | Line mechanics: adoption, Wait-hold, recruit abort, the order ledger, queue depth | `facqueue` | `manager/brain/facqueue.as` |
 | Con counts | `ConsNeedAny` (2.7 + inc/44) and `CeilingConsNeed` (base + inc/25), both floors, both in-flight aware | production.as |
-| Which plant to build / switch | C++ FactoryToBuild + `PlantApproved` backstops (T1-commit, income cap `FactoryTypeCap`) | `manager/factory/choose.as`, `switch.as`, `builder/sitesafety.as` |
-| T2 timing | `RushReady` (energy ≥ Policy::T2Energy 800, or 400 with a reactor) + `MayPursueT2`/`T2ArmyReady`; NO tech lead in 1v1 (his rule) | `manager/factory/techlead.as` |
-| T1-commit (duels, small maps) | `T1Commit` with plateau/enemy-T2/income releases | techlead.as |
-| Team roles (tech lead, eco lead) | `RefreshLead` election; eco lead holds the slot from frame 0 pre-designation | techlead.as, `mexhold.as` |
-| Adv-con sharing | `ShareAdvCon` (lead keeps AdvConsWanted/2, gifts one per teammate) | `manager/builder/share.as` |
+| Which plant to build / switch | C++ FactoryToBuild + `PlantApproved` backstops, income cap `FactoryTypeCap` | `manager/factory/choose.as`, `builder/sitesafety.as`, `builder/requests/take.as` |
+| T2 timing | `RushReady` (energy vs `Policy::T2Energy`) and `T2ArmyReady` | `manager/factory/state.as`, `policy.as`, `manager/military/posture.as` |
+| T1-commit (duels, small maps) | **GONE** — `T1Commit` no longer exists anywhere in the tree | — |
+| Team roles (tech lead, eco lead) | **GONE** — `RefreshLead`, `techlead.as` and `mexhold.as` no longer exist | — |
+| Adv-con sharing | **GONE** — `ShareAdvCon` and `builder/share.as` no longer exist | — |
 
 `QuotaFor` is GONE (the overhaul kill). Anything still describing per-line
 quotas or `quota:` log lines is describing code that no longer exists.

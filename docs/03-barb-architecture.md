@@ -26,9 +26,8 @@ option, which defaults to **true**.
 Confirmed in a real infolog from this machine:
 
 ```
-Skirmish AI <Apex-apex>: 1.6.24
-Skirmish AI <Apex-apex>: Load script: LuaRules\Configs\Apex\apex\script\hard_aggressive\init.as
-Skirmish AI <Apex-apex>: hard_aggressive AngelScript Rules!
+Skirmish AI <Apex-Unstable>: 1.6.24
+Skirmish AI <Apex-Unstable>: Load script: LuaRules\Configs\Apex\Unstable\script\standard\init.as
 ```
 
 So with `game_config` on, effectively 100% of the JSON and AngelScript come from
@@ -51,17 +50,21 @@ regression.)
 
 The variants in this repo, each a distinct shortName for that reason:
 
-| repo dir | shortName | version | what it is |
-|---|---|---|---|
-| `ai/apex` | `Apex` | `apex` | the AI under development |
-| `ai/ctl` | `ApexCtl` | `ctl` | frozen control, for self-play A/B |
-| `ai/stk` | `ApexStk` | `stk` | stock config + stock script on the apex DLL, to isolate DLL effects |
+| repo dir | shortName | version | profile | what it is |
+|---|---|---|---|---|
+| `ai/Unstable` | `Apex` | `Unstable` | `standard` | **the AI under development** |
+| `ai/ord` | `ApexOrd` | `ord` | `hard_aggressive` | the pre-overhaul leaf-era tree, kept for A/B against the rebuild |
+| `ai/ctl` | `ApexCtl` | `ctl` | `hard_aggressive` | frozen control, for self-play A/B |
+| `ai/stk` | `ApexStk` | `stk` | `easy` | stock config + stock script on our DLL, to isolate DLL effects |
+
+The harness spec for the live AI is **`Apex:Unstable:standard`**. `python
+tools/deploy_ai.py status` prints the current specs; trust it over any table.
 
 **AI version** — a variant within one shortName. Needs both halves:
 
 ```
-engine/<ver>/AI/Skirmish/Apex/apex/     AIInfo.lua (version='apex') + SkirmishAI.dll + config/ + script/
-BAR.sdd/luarules/configs/Apex/apex/     config/ + script/   (local iteration only)
+engine/<ver>/AI/Skirmish/Apex/Unstable/  AIInfo.lua (version='Unstable') + SkirmishAI.dll + config/ + script/
+BAR.sdd/luarules/configs/Apex/Unstable/  config/ + script/   (local iteration only)
 ```
 
 The engine-side `config/`+`script/` are what a hosted game actually loads: other
@@ -72,15 +75,15 @@ CircuitAI logs "Game-side config: missing!" and falls back to the AI data dir.
 `profile` AI option that version's `AIOptions.lua` declares:
 
 ```
-config/hard_aggressive/*.json
-script/hard_aggressive/{init,main}.as
-script/hard_aggressive/manager/{air,assist,baseplan,builder,crew,economy,
-                                factory,frontline,military}.as
-script/hard_aggressive/misc/commander.as
+config/standard/*.json
+script/standard/{init,main,policy,targets,tunables,perf}.as
+script/standard/manager/{air,baseplan,brain,builder,catalog,economy,factory,
+                         frontline,lattice,military,persona,role}.as
+script/standard/misc/commander.as
 ```
 
 Stock ships `easy`, `medium`, `hard`, `hard_aggressive` game-side, plus `dev`
-engine-side. **`apex` ships exactly one, `hard_aggressive`** — the other trees
+engine-side. **The live variant ships exactly one, `standard`** — the other trees
 were deleted because they carried none of this AI's work. Chobby overrides the
 visible list via `aiCustomData.lua` — which only knows about `BARb stable`. **A
 custom version is not in Chobby's config, so you must declare your own profiles
@@ -88,7 +91,8 @@ in your own `AIOptions.lua`** or the dropdown will show only whatever the
 engine-side file lists.
 
 Each `manager/<name>.as` is now a **shim** — an ordered `#include` list of the
-real code in the sibling `manager/<name>/` directory (69 `.as` files in all).
+real code in the sibling `manager/<name>/` directory (106 `.as` files under
+`script/standard/` as of 2026-08-30).
 The order is load-bearing; see the CLAUDE.md section "How the AngelScript is
 laid out" before moving anything. Both `AiMakeTask`s are rule pipelines:
 `builder/maketask.as` and `factory/maketask.as` are short ordered lists of
@@ -103,10 +107,14 @@ then the version root:
 config/<profile>/factory.json   →   config/factory.json
 ```
 
-So a profile *can* contain only the files it changes. **`apex` does not use this
-fallback**: the seven top-level `config/*.json` files were deleted as
-unreachable, and every config it loads sits in `config/hard_aggressive/`. The
-fallback is described here because stock relies on it, not because we do.
+So a profile *can* contain only the files it changes. **We do not use this
+fallback**: there are no top-level `config/*.json` files, and every config the
+variant loads sits in `config/standard/`. The fallback is described here because
+stock relies on it, not because we do.
+
+Most of what those files used to decide is now dead — `response.json` is an
+empty `{}` and `factory.json`'s weight tables are bypassed while the facqueue
+drives a line. See `docs/17-behaviour-config.md`.
 
 Faction
 variants are separate files rather than another directory level: `*_leg.json`
@@ -121,7 +129,7 @@ script's `[AI0][OPTIONS]` block.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `profile` | list | `hard` | which config/script subfolder to use |
+| `profile` | list | `standard` (ours) / `hard` (stock) | which config/script subfolder to use |
 | `game_config` | bool | `true` | load config from the game archive |
 | `cheating` | bool | `false` | global sight |
 | `comm_merge` | bool | `false` | merge nearby allied BARb commanders |
@@ -148,9 +156,9 @@ What `tools/deploy_ai.py deploy` automates:
 Verify without launching the game:
 
 ```bash
-"…/engine/recoil_2026.06.12/spring-headless.exe" --list-skirmish-ais
-# BARb   apex     C   0.1
-# BARb   stable   C   0.1
+"…/engine/<ver>/spring-headless.exe" --list-skirmish-ais
+# Apex   Unstable   C   0.1
+# BARb   stable     C   0.1
 ```
 
 or `python tools/unitsync.py ais`, which also shows the display names.

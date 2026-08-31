@@ -26,6 +26,18 @@ The reference scan is deliberately conservative: a name is reported only when it
 is KNOWN to be declared somewhere, so an unrecognised identifier (every engine
 binding) is ignored rather than guessed at.
 
+THE COST OF THAT, KNOWN AND ACCEPTED: a symbol declared NOWHERE looks exactly
+like an engine binding, so this tool reports 0 findings on a tree that does not
+compile. It happened on 2026-08-30 -- an undeclared `GATE_DEF_ROUTE`, read in
+two files, passed this check and reached a deploy. A pass that flags bare
+SCREAMING_SNAKE names nothing declares was tried and reverted: it produced 19
+false positives on a working tree (function-local consts, enum members used
+bare, and names inside comments), and a checker that cries wolf is worse than
+one with a known blind spot.
+
+SO: this tool does not replace `python tools/smoke.py`. Run the smoke after
+every deploy. The compile is the only thing that knows whether it compiles.
+
     python tools/as_scope.py                      # the Unstable variant
     python tools/as_scope.py ai/X/game-side/script/standard/main.as
 """

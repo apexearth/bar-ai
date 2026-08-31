@@ -12,7 +12,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-python tools/deploy_ai.py deploy apex
+python tools/deploy_ai.py deploy Unstable
 python tools/deploy_ai.py gadgets
 
 # 2v2 Pawn is the most sensitive configuration found: largest deficit per unit

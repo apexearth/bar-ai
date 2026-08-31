@@ -62,7 +62,7 @@ docker run --rm \
 Artifact: `vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll`
 
 Sizes tell you which one you have: the build output is **~205 MB** with full
-DWARF; the copy committed at `ai/apex/engine-side/SkirmishAI.dll` is **~6.9 MB**,
+DWARF; the copy committed at `ai/Unstable/engine-side/SkirmishAI.dll` is **~6.9 MB**,
 stripped by hand. Keep the unstripped one out of git.
 
 ### Deploy picks up the local build automatically

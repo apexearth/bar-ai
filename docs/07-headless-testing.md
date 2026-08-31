@@ -3,7 +3,9 @@
 The iteration loop. `tools/run_match.py` wraps all of this; this document exists
 so you can debug it or drive the engine by hand.
 
-Measured on this machine (`recoil_2026.06.12`, Comet Catcher Remake 1.8, BARb vs
+Measured on this machine (`recoil_2026.06.12`; the active engine is now
+`recoil_2026.07.04` -- `python tools/bar_env.py` resolves it. Comet Catcher
+Remake 1.8, BARb vs
 BARb): **a 27 game-minute match finished in 43.7 s wall — about 37× realtime.**
 Cold archive cache adds ~35 s to the first run; the harness keeps a persistent
 write dir at `matches/_engine` so you pay that once.
@@ -12,7 +14,7 @@ write dir at `matches/_engine` so you pay that once.
 
 ```powershell
 $BAR = "$env:LOCALAPPDATA\Programs\Beyond-All-Reason\data"
-$ENG = "$BAR\engine\recoil_2026.06.12"
+$ENG = "$BAR\engine\recoil_2026.07.04"
 
 & "$ENG\spring-headless.exe" --write-dir "$BAR" --config headless.cfg match.txt
 ```
@@ -63,8 +65,11 @@ BAR's own working example is `BAR.sdd/tools/headless_testing/`.
 
     [PLAYER0] { Name=BenchHost; Spectator=1; }
 
-    [AI0]  { Name=apex; ShortName=BARb; Version=apex; Team=0; Host=0;
-             [OPTIONS] { profile=hard_aggressive; } }
+    [AI0]  { Name=apex; ShortName=Apex; Version=Unstable; Team=0; Host=0;
+             [OPTIONS] { profile=standard; } }
+             // ShortName is OURS, not BARb. A variant shipped as a *version*
+             // of BARb loads stock BARb in every hosted game -- see CLAUDE.md,
+             // "Three axes". Reproduce that with run_match.py --drop-ai-version.
     [AI1]  { Name=stock; ShortName=BARb; Version=stable; Team=1; Host=0;
              [OPTIONS] { profile=hard; } }
 
@@ -231,7 +236,7 @@ landmine.
 ## Batch runs
 
 ```bash
-python tools/run_tournament.py --a Apex:apex:hard_aggressive --b BARb:stable:hard \
+python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --maps "Comet Catcher,Supreme Isthmus" --games 10
 python tools/run_tournament.py --report
 ```

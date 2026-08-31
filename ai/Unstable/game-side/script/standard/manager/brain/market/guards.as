@@ -48,14 +48,32 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 				/ ((expoR > 1.f) ? expoR : 1200.f);
 		if (expo < 0.5f)
 			continue;
-		bool has = false;
+		// ESCORT SCALES WITH HOW FAR FORWARD THE WORKER IS. apexearth
+		// 2026-08-30: "If we're too far forward an entire squad or two should
+		// be escorting us." One-per-worker was a registry, not a price: the
+		// loop below skipped any worker that already held a single grunt,
+		// which is the right answer at the base edge and the wrong one at the
+		// front, where the whole fortification is built.
+		//
+		// The demand is METAL, and it is what can actually reach the worker:
+		// the enemy value inside the same exposure radius the trigger above
+		// already uses, floored by the exposure itself so a forward worker is
+		// covered BEFORE contact rather than after it. Two comparisons, no
+		// threshold and no count -- at the base edge expo is ~0.5 and one
+		// escort satisfies it; deep forward against a real army it asks for a
+		// squad, which is exactly the ask.
+		float haveM = 0.f;
 		for (uint e = 0; e < gEscWorker.length(); ++e) {
-			if (gEscWorker[e] == wkr.id) {
-				has = true;
-				break;
-			}
+			if ((gEscWorker[e] == wkr.id) && (e < gEscDef.length()))
+				haveM += Catalog::gCostM[gEscDef[e]];
 		}
-		if (has)
+		const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
+		float needM = ai.GetEnemyCostAt(wkr.GetPos(ai.frame),
+				(expoR > 1.f) ? expoR : 1200.f);
+		const float floorM = expo * mineM;
+		if (floorM > needM)
+			needM = floorM;
+		if (haveM >= needM)
 			continue;
 		// Only a NEARBY unit takes the duty: a cross-map death march
 		// delivered 16 of 63 army losses as lone escorts (ladder autopsy).

@@ -22,6 +22,15 @@ bool IsBigEnergy(const CCircuitDef@ d)
 	const int id = int(d.id);
 	if (!Catalog::ValidId(id) || Catalog::gMobile[id])
 		return false;
+	// A REACTOR IS UNARMED. "Costs a lot and makes energy" also describes a
+	// Cerberus (corbhmth: 3100 metal, energymake 450, and a gun), so the
+	// serialization meant for reactors was refusing heavy turrets against
+	// fusions -- measured live, `bigE-held corbhmth` 53 times in one game,
+	// while apexearth watched a mid-map cluster go undefended. A power
+	// building has no weapon; that is the whole distinction and it needs no
+	// list and no threshold.
+	if (Catalog::gSurfT[id] > 0.f || Catalog::gAirT[id] > 0.f)
+		return false;
 	return (Catalog::gCostM[id] >= BIG_E_COST) && (Catalog::gMakeE[id] > 1.f);
 }
 
@@ -43,8 +52,33 @@ bool BigEnergyRising()
 	return Market::ComBigEnergyRising(room) > 0;
 }
 
+// THE SLOT BELONGS TO THE BEST REACTOR WANTED, NOT THE FIRST ASKER.
+//
+// One-at-a-time refused the LATER request, whoever it was, so a 370-metal
+// advanced solar routinely held the door shut against a 4,500-metal fusion:
+// measured live 2026-08-30, `bigE-held corfus` 99 times in one game, while
+// T1 cons executed coradvsol 391 times against 55 fusions (apexearth: "a lot
+// of T1 cons are taking up the request to make energy and they're making the
+// dramatically inferior advsol when fusions should get made instead").
+//
+// So a want may open a second site only if it produces STRICTLY MORE energy
+// than anything of its class already rising. That is a comparison, not a
+// threshold, and it cannot bring back the original bug -- seven advanced
+// solars all make 75 e/s, so no member of an equal-output group can ever
+// preempt another, and the ladder's depth bounds the overlap.
+bool BigEnergyBetterThanRising(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id))
+		return false;
+	return Catalog::gMakeE[id] > Market::ComBigEnergyBestMakeE();
+}
+
 int gBigEFold = 0;   // cross-def folds onto the standing reactor
 int gBigEHeld = 0;   // refusals: something big is rising and has room
+int gBigEPre  = 0;   // a strictly better rung opened its own site
 
 // -- the register ------------------------------------------------------------
 

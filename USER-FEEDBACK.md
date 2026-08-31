@@ -1,5 +1,104 @@
 # What apexearth wants from this AI
 
+## 2026-08-30 — ARMY COMPOSITION: three reports, one instrument, one dead end
+
+**1. "We need more range." MEASURED AND CONFIRMED — it is a delivery failure,
+not a target.** The composition target already asks for the LARGEST share in
+reach (`apex_line_reach` 0.35, against tank 0.28, mid 0.20, dps 0.17). What we
+actually hold, from the new `apex: linehold` line:
+
+    apex: linehold armyM=1806 tank=0.00/0.28 mid=0.55/0.20 reach=0.00/0.35 dps=0.45/0.17
+
+**Zero reach metal against a 35% target.** Corroborated independently by army
+metal per weapon range in a 30-minute 4v4: we hold 3.2x LESS than the enemy in
+the 500-700 band (31,967 vs 102,527) and 3.4x MORE in 300-500 (110,400 vs
+32,065). Their share at 500+ is 76%, ours 60%. Why the class never fills is the
+open question; the instrument now makes it askable.
+
+Note for whoever reads the older log: `apex: lineclass ... tank=51 mid=52
+reach=23 dps=25` is a count of unit TYPES per class, NOT a holding. It was
+misread as one within an hour of being consulted, which is why `linehold`
+exists.
+
+**2. "T1 rocket bots are worthless after T2." FIXED.** `OwnTierMul` fades a
+lower-tier unit's worth once a higher plant stands, but exempted anything under
+`apex_spam_cost` (150) -- which covered Rocko (120) and Hammer (130), the exact
+units he wants gone, while the fodder he wants KEPT is Grunt 42, Rascal 31,
+Pawn 54. There were two fodder bars for one idea (`apex_spam_cost` 150 and
+`apex_fodder_cost` 100), each read at exactly one site. Unified at 100, which
+draws the line exactly where his spec draws it and removes a tunable.
+
+**3. "Spiders are only useful for crossing mountains; on Comet Catcher they are
+near worthless." NOT IMPLEMENTABLE TODAY -- needs a binding.** The right term is
+map-conditional: a terrain premium is worth what the map's terrain actually
+demands, and on flat ground it is dead metal. Script can read only
+`aiTerrainMgr.GetLandPercent`, `IsWaterAVoid` and `SetAllyZoneRange` -- nothing
+about slope or per-movetype reachable area, so "how much ground can a spider
+reach that a tank cannot" cannot be computed. It needs a C++ binding (map
+roughness, or area size per movetype). Until then the only lever is the hand
+table `UnitWorthMod`, which already carries `armsptk` (Recluse) at 0.6 from his
+earlier report. Do NOT invent a constant for this.
+
+**4. The squad idea, unresolved.** His framing: build to COMPLETE a squad --
+"what does a mammoth need to be successful? radar, jammer, sheldons, Arbiters,
+maybe an AA, maybe a twitcher/rezbot" -- rather than to fill flat class ratios.
+In value terms that is a complement/coverage term: the marginal worth of a
+support unit rises with the UNSUPPORTED heavy metal already fielded, the same
+shape the AA cover model already uses against air seen. Not designed yet, and
+it should not be attempted until (1) is understood -- if reach cannot be
+delivered against a 35% target, a squad template will not be delivered either.
+
+
+## 2026-08-30 — THE FORTIFICATION DOCTRINE (unresolved; nothing implements it)
+
+His spec, verbatim in shape:
+
+1. **T2 constructors are defended HEAVILY while they work.**
+2. They build the strong **T2 defences, then a T3 defence**.
+3. Then **T2 radar and T2 jammer**.
+4. **T1 cons around that front line build NANO TURRETS** — both to build the
+   fortification faster and to **heal the defences when they come under
+   attack**.
+5. **Only after all that, AA flak.**
+
+The result he is describing is a fortification that survives, instead of the
+current pattern: expand well, spend everything on eco and a gantry, be dirt
+poor, and meet a thick army with nothing built.
+
+WHAT BLOCKS IT, measured 2026-08-30 in a game he watched:
+
+- **THE MASTER BLOCKER: defence prices to zero exactly where his doctrine
+  puts it.** Median defence-want value by threat at the site — 0-500: 0.0163;
+  500-2,000: 0.0001; **above 2,000: 0.0000**. `stopped` is the share of local
+  threat one tower newly stops, so against an army the denominator is huge and
+  any single turret is worth ~nothing. Every element of the doctrine sits on
+  contested ground, which is precisely where the price is zero. Nothing else
+  on this list matters until this is fixed. A watched example: a T2 con DID
+  want a Cerberus at the mid-map cluster and it priced `val=0.0000`
+  (`stopped=0.046`, `threat=6180`).
+- **Nano turrets carry no repair value and no front-line value.**
+  `want_nano.as` prices a nano purely as build power (BPGap,
+  UnservedLineSpend). Point 4 of his spec — heal the defences under attack —
+  is not modelled at all, and nothing prefers a nano AT the fortification.
+- **`apex_wall_efficient` penalises the heavy turret.** Added 2026-08-30 to
+  stop Agitators; it ranks wall-slot towers by cover per metal, so it cut the
+  3,100-metal Cerberus he wanted to `xWallEff=0.208`. Aimed at one thing, hit
+  another.
+- **The jammer overlap test uses 0.8x radius.** `GetJammerRadius=360`, so the
+  exclusion radius is 288 while the field is 360 — two jammers 300 apart both
+  pass and their coverage almost entirely overlaps. 50 built in one game;
+  spacing must be a MULTIPLE of the radius, not a fraction.
+- **Escorts are not going to the forward T2 con.** The fight census shows
+  `guard` is the largest pool by far (1,392 and 1,648 unit-samples in two
+  games, against `attack` 20 and 4) — so the army IS on guard duty, just not
+  on the constructor that is building the fortification.
+
+Read as VALUES rather than as a build order (the paradigm forbids a sequence):
+the ordering he describes should EMERGE from a T2 con at the front being a
+high-stake asset, a nano near a damaged tower being worth the repair it
+returns, and AA being worth less than the guns until the guns exist.
+
+
 ## RULING (2026-08-30): identical expensive builds are SERIAL — all hands on one
 
 Watching four fusions rise side by side: "if we were to build four fusions

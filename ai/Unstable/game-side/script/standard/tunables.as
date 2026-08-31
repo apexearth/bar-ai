@@ -1118,8 +1118,15 @@ const float TUNE_AIR_DOMINANCE_AA = 0.15f;
 //   counts as gone for the dominance waiver.
 const float TUNE_AIR_DOMINANCE_ARMY = 0.2f;
 // manager/air/wing.as [metal/s] -- Metal income at which the first air plant
-//   becomes mandatory for everyone (the air lead gets one earlier).
-const float TUNE_AIR_MANDATORY_INCOME = 60.f;
+//   becomes mandatory for a player who is NOT the air lead (the lead builds at
+//   apex_intel_air_income, 25). Raised 60 -> 200 on 2026-08-30: at 60 the whole
+//   team bought air while none of them could survive on the ground, and air is
+//   the first thing a single enemy flak truck deletes (apexearth, watching:
+//   "we don't need that air power at this point in the game... We need survival
+//   at this point and we certainly don't have it. If the enemy has 1 flak truck
+//   near our base then our air dies surprisingly fast. Hold off on making air
+//   if we're not the air player until we have ~200m/s+").
+const float TUNE_AIR_MANDATORY_INCOME = 200.f;
 // manager/air/station.as [toggle 0/1] -- Obsolete T1 fighters are recycled
 //   once T2 fighters produce; 0 keeps them.
 const float TUNE_AIR_RECYCLE = 1.f;
@@ -1372,6 +1379,20 @@ const float TUNE_LINE_RANGE_EXP = 1.f;
 const float TUNE_LINE_EDGE = 1.15f;
 // How hard a class below its target share is favoured. Proportional to the
 // shortfall; 0 disables the composition target entirely.
+// manager/brain/market/production.as [0/1] -- 1 = the factory draw runs among
+//   the LINE CLASS the team owes the most metal to, instead of over every
+//   candidate weighted by apex_line_bite. A share cannot be produced by a
+//   nudge: five pricing attempts left reach at 0.04-0.07 of a 0.35 target
+//   because the per-metal spread between classes is ~12x. 0 restores weighting.
+//   MEASURED 2026-08-30 AND OFF: at 1, on a matched seed against the same
+//   build, army metal collapsed 544,313 -> 60,324, kill/loss 0.81 -> 0.12,
+//   economy 1.65 -> 0.41, and 18,667 metal overflowed unspent. Reach share DID
+//   rise (0.06 -> 0.12) -- the allocation works, the STAND-DOWN deadlocks.
+//   Reach is owed on every election because it is never filled, so the T1 labs
+//   yield permanently waiting on a plant that "can serve" and never does.
+//   Yielding is only sound when the debt is actually BEING PAID, not when
+//   something that could pay it merely stands. Fix that before turning this on.
+const float TUNE_LINE_ALLOC = 0.f;
 const float TUNE_LINE_BITE = 1.5f;
 // How much ground-covered-per-metal is worth while the fleet is short of the
 // sites it must watch. Buys cheap fast bodies early and fades as they arrive;
@@ -1799,8 +1820,10 @@ const float TUNE_GANTRY_INSURE = 0.5f;
 // GANTRY_HOST_INC [metal/s] -- the proposing player's OWN income at which the
 //   gantry gain is whole; below it the gain scales by (own/anchor)^2. The team
 //   purse makes the case, the host's feed times it (apexearth, watching green
-//   start one at 50 m/s: "that is too early").
-const float TUNE_GANTRY_HOST_INC = 100.f;
+//   start one at 50 m/s: "that is too early"). Raised 100 -> 150 on his second
+//   call, 2026-08-30: "We should push back Gantry creation to 150m/s or later"
+//   -- watched while the base had no T2 defence and the enemy arrived thick.
+const float TUNE_GANTRY_HOST_INC = 150.f;
 // OFFENSE_DEF_FLOOR: the share of its gain an offensive super (silo, LRPC)
 //   keeps at ZERO standing defence; the rest scales in with the defence
 //   target's fill ("we consistently make Basilisk before T3 or even T2
@@ -2457,10 +2480,6 @@ const float TUNE_FOE_TIER_FADE = 1.f;
 //   should mostly only be putting our resources into T3 units and advanced
 //   air"). 0 disables.
 const float TUNE_OWN_TIER_FADE = 0.8f;
-// manager/brain/market/worth.as [metal] -- Units cheaper than this are SPAM
-//   and exempt from the own-tier fade (his ruling names spam as the late-game
-//   exception). Chosen, not derived: Pawn 54, Rascal 30, Flash ~110.
-const float TUNE_SPAM_COST = 150.f;
 // manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
 //   defence and army targets, as a share of a normal player's. Its threat is
 //   already near zero by position, so this only holds the tail down; it is a

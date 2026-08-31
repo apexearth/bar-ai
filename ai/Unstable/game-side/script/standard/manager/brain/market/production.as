@@ -164,6 +164,7 @@ array<int> gNextProdRankOf;
 // Every mobile radar we own and every mobile jammer, whatever def. The demand
 // is a pair per squad; counting per def multiplied it by however many sensor
 // types the labs happened to offer.
+int gNextAllocLog = 0;
 int gSupHaveAt = -1;
 float gSupRadarN = 0.f;
 float gSupJamN = 0.f;
@@ -914,6 +915,113 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {
 		gNoOrder = "no-candidate";
 		return null;
+	}
+	// MACRO DECIDES THE MIX, MICRO PICKS THE UNIT.
+	//
+	// The composition target was a NUDGE on each candidate's price
+	// (`apex_line_bite` x LineShortfall). Five separate attempts to make reach
+	// reach its share that way all failed -- apex_range_worth, a ShieldShare
+	// unwind, a range-scaled hp exponent, a standoff-exposure discount, and the
+	// tier fade -- and the metal-weighted reach share never left 0.04-0.07
+	// against a target of 0.35. It cannot work: the per-metal spread between a
+	// Sheldon (0.16 dps/metal) and a Termite (0.61) is about twelvefold, and a
+	// multiplier that also touches the competition can only buy more of
+	// everything.
+	//
+	// A SHARE IS PRODUCED BY ALLOCATING, NOT BY WEIGHTING. So the class the
+	// team owes the most metal to is chosen first, and the draw runs among that
+	// class's candidates. Same shape as the two changes that DID work today:
+	// the reactor slot going to the best member rather than the first asker,
+	// and the defence auction ranking the team's catalogue rather than one
+	// constructor's. Both worked by changing what is being chosen BETWEEN.
+	//
+	// Non-combat candidates (constructors, rez bots) are never filtered out --
+	// they are not part of the composition and starving them would stop the
+	// economy. And when no class is owed anything, or this factory builds none
+	// of the owed class, the whole list stands.
+	if (ai.GetTunable("apex_line_alloc", TUNE_LINE_ALLOC) > 0.f) {
+		TrackLine();
+		float lineTot = 0.f;
+		for (int lc = 0; lc < LC_N; ++lc)
+			lineTot += gLineM[lc];
+		int owedCls = -1;
+		float owedM = 0.f;
+		for (int lc2 = 0; lc2 < LC_N; ++lc2) {
+			const float owe = LineTarget(lc2) * lineTot - gLineM[lc2];
+			if (owe > owedM) {
+				owedM = owe;
+				owedCls = lc2;
+			}
+		}
+		if (owedCls >= 0) {
+			array<int> aDef;
+			array<float> aV;
+			array<float> aG;
+			float aSum = 0.f;
+			bool anyCombat = false;
+			for (uint ai2 = 0; ai2 < candDef.length(); ++ai2) {
+				const int cd = candDef[ai2];
+				const bool combat = LineCombat(cd);
+				if (combat && (LineClassOf(cd) != owedCls))
+					continue;
+				if (combat)
+					anyCombat = true;
+				aDef.insertLast(cd);
+				aV.insertLast(candV[ai2]);
+				aG.insertLast(candGain[ai2]);
+				aSum += candV[ai2];
+			}
+			// Only take the filtered list if it still offers a combat unit --
+			// otherwise this factory cannot serve the owed class and keeps its
+			// full list rather than being reduced to constructors.
+			// BOTH BRANCHES LOGGED. A line that only prints when the filter
+			// APPLIES cannot tell "never ran" from "ran and this factory
+			// cannot serve the owed class" -- the same blindness the gate
+			// census exists to remove, reintroduced here on the first try.
+			const bool applied = anyCombat && (aSum > 0.f);
+			// THE LAB THAT CANNOT SERVE THE DEBT STANDS DOWN -- but only if
+			// something else can serve it. apexearth's ruling, 2026-08-30: "If
+			// T2 is available then perhaps the T1 lab does nothing. If T2 is
+			// not available then the T1 lab does the best it can." Without the
+			// second half this idles the whole economy on a map where nobody
+			// has teched; with it, a T1 lab keeps working right up until the
+			// advanced plant that can pay the debt exists.
+			//
+			// The debt must be worth at least one purchasable unit of the owed
+			// class before anyone stands down -- an 18-metal shortfall is not a
+			// reason to idle a factory. That bar is the cheapest member our own
+			// plants can build, so it is read off the unit table rather than
+			// chosen.
+			bool yield = false;
+			if (!applied) {
+				const float cheapest = ClassCheapestOwned(owedCls);
+				yield = (cheapest > 0.f) && (owedM >= cheapest);
+			}
+			if (ai.frame >= gNextAllocLog) {
+				gNextAllocLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: linealloc t=" + ai.teamId
+					+ " fac=" + fac.circuitDef.GetName()
+					+ " owed=" + LineClassName(owedCls)
+					+ " byM=" + int(owedM)
+					+ " armyM=" + int(lineTot)
+					+ (applied
+						? (" APPLIED cand=" + candDef.length() + "->" + aDef.length())
+						: (yield
+							? (" YIELD (a plant that can serve it stands; cheapest="
+								+ int(ClassCheapestOwned(owedCls)) + ")")
+							: " CANNOT-SERVE, no plant can either -- best effort")));
+			}
+			if (yield) {
+				gNoOrder = "line-alloc-yield";
+				return null;
+			}
+			if (applied) {
+				candDef = aDef;
+				candV = aV;
+				candGain = aG;
+				sumV = aSum;
+			}
+		}
 	}
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503

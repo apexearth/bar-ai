@@ -67,7 +67,7 @@ Also yours:
   metal production **4.3x**, mex upgrades 11 → 2, army share 18.3% → 4.1%, head-to-head
   2-2 → 0-8. Tuning the constants afterwards moved metal the WRONG way. The problem was
   never the constants — it was that all twelve ran ahead of `DefaultMakeTask`.
-- `docs/12-build-phases.md`: **"if X then take a constructor" scales badly; "if X, and
+- `docs/20-brain-overhaul.md`: **"if X then take a constructor" scales badly; "if X, and
   we can spare one" does not.** With eight constructors a rule takes an eighth of build
   power; with one it takes ALL of it. An AI with one advanced constructor was watched
   building fusions and nothing else, forever, from two individually-correct rules.

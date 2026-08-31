@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 
 TAG="$1"; shift
 
-SUBJECT="${ARENA_SUBJECT:-Apex:apex:hard_aggressive}"
+SUBJECT="${ARENA_SUBJECT:-Apex:Unstable:standard}"
 OPPONENT="${ARENA_OPPONENT:-BARb:stable:hard}"
 
 common=(--map "${ARENA_MAP:-Comet Catcher Remake 1.8}"

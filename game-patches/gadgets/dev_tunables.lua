@@ -14,7 +14,7 @@
 --   python tools/run_match.py ... --modoption apex_orbit_rate=0
 --
 -- Every name in NAMES below, with its default and where it is read, is listed
--- in docs/15-tunables.md. Twelve are read by the DLL and three by AngelScript;
+-- in tools/dashboard_audit.py. Twelve are read by the DLL and three by AngelScript;
 -- a name missing from NAMES is silently ignored, so add both together.
 --------------------------------------------------------------------------------
 
@@ -151,7 +151,6 @@ local NAMES = {
 	"apex_mexup_boost",
 	"apex_foe_tier_fade",
 	"apex_own_tier_fade",
-	"apex_spam_cost",
 	"apex_stock_stall_abort",
 	"apex_stock_stall_wait",
 	"apex_def_ttd_h",
@@ -383,6 +382,7 @@ local NAMES = {
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
 	"apex_def_dps_linear",   -- protect_field.as: 1 = tower cover priced on linear surface DPS, 0 = the engine's sqrt(dps) threat (1)
+	"apex_line_alloc",       -- production.as: 1 = draw within the line class the team owes most metal (1)
 	"apex_wall_efficient",   -- want_protect.as: 1 = wall slots rank towers by cover per metal, not absolute power (1)
 	"apex_raider_massing",   -- hooks.as: 1 = raiders become line army at T2, 0 = they raid all game like stock (0)
 	"apex_spam_raiders",     -- hooks.as: 1 = cheap raiders spot as solo scouts after T2, 0 = they keep raiding (0)
