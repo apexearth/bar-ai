@@ -60,6 +60,33 @@ Everything he keeps asking for falls out of that and needs no rule:
 - **T2 at 15 m/s loses on its own arithmetic** -- it lengthens the ETA to every
   target -- with no threshold and no tunable anywhere.
 
+### What decides invest-first vs go-direct: dI/I, not dI per metal
+
+apexearth, 2026-08-31: *"Imagine all our metal income comes from our 4 mexes.
+If we upgrade them we increase our metal income by 300%. That is huge."*
+
+**The payback rate is scale-invariant. The ETA benefit is not.** A moho is
+0.0194 m/s per metal whether we own 4 mexes or 40 — but +12 m/s onto a 15 m/s
+economy is **+80%**, and onto a 300 m/s economy it is **+4%**. Same rate,
+entirely different effect on the time to reach anything.
+
+It falls out of the formula: the remaining term is `(T - bank)/(income + dI)`,
+so investing first shortens the ETA by `dI/(income + dI)` — a RATIO, not a
+rate. Which is why:
+
+- At 15 m/s with 4 mexes, upgrading them all is roughly a tripling. Nothing
+  else on the board competes, and the ETA to any target collapses. Going
+  straight for a 4,300-metal reactor here is close to the worst available play.
+- At 300 m/s the same upgrade moves the ETA by a few percent, the spots are
+  gone anyway, and the reactor is the only thing that still scales.
+
+So: **the rate ranks WHICH investment; the ratio `dI/I` decides WHETHER to
+invest before heading for the target at all.** The second question is the one
+the market never asks, and it is the whole of the 2026-08-31 loss — 4 mexes
+un-upgraded, income 15 m/s, and a T2 lab and then a fusion started anyway. The
+audit that day also measured advanced constructors ranking mex upgrade SECOND
+and building energy instead, 60 times in one game.
+
 ### The failure mode of a per-instant price
 
 A value compared **now** cannot express "worse this minute, sooner to the
