@@ -87,6 +87,30 @@ un-upgraded, income 15 m/s, and a T2 lab and then a fusion started anyway. The
 audit that day also measured advanced constructors ranking mex upgrade SECOND
 and building energy instead, 60 times in one game.
 
+### Exhaustion is what ends a regime — not a threshold
+
+apexearth, 2026-08-31: *"The complex case here is that mexes are limited in
+supply. Once we're out of mex choices, we have to go to energy and conversion
+to further expand the economy."*
+
+This is what makes the whole model close without a single number. Metal spots
+are FINITE, so the `dI/I` available from mex expansion and upgrades decays to
+zero as they are taken — and when it does, energy plus conversion is simply the
+best remaining `dI/I` on the board. **The switch to reactors is not a tech
+decision and not an income threshold. It is what is left when the cheaper
+growth is gone.**
+
+Which means "go T2 at 15 m/s" was never a badly chosen bar. It was the AI
+reaching for the expensive growth while the cheap growth was still sitting
+there un-taken: four un-upgraded mexes, a tripling available for ~2,500 metal,
+ignored in favour of a 4,300-metal reactor.
+
+"Out of mex choices" is broader than "no spots on the map": a spot we cannot
+reach, cannot hold, or would lose the constructor taking is not a choice
+either. That is where this objective meets the survival constraint below —
+contested ground shrinks the cheap-growth pool and legitimately brings the
+expensive growth forward.
+
 ### The failure mode of a per-instant price
 
 A value compared **now** cannot express "worse this minute, sooner to the
