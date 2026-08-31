@@ -54,7 +54,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsFillFrame = ai.frame;
 		gDsFillN = 0;
 	}
-	if (Gate(GATE_FILL_FRAME, gDsFillN >= 2))
+	// ONE FILL PER FRAME, not two. Each costs ~5.5 ms once the base is large,
+	// so two is an 11 ms frame from this source alone. The 4-second per-def
+	// cache means one-per-frame still refreshes every def many times over --
+	// spreading the same work across frames instead of stacking it, which is
+	// the standing rule (apexearth: "we should calculate how many frames happen
+	// in five seconds and spread out the processing unit by unit throughout the
+	// frames... We split out that operation over time").
+	if (Gate(GATE_FILL_FRAME, gDsFillN >= 1))
 		return;
 	++gDsFillN;
 	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;

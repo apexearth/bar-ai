@@ -292,6 +292,31 @@ const array<int>@ TeamDefenceDefs()
 				gTeamDefDef.insertLast(bd);
 		}
 	}
+	// PRUNED TO THE BENCHMARK. The auction does not need every tower the team
+	// owns in the candidate list -- it needs the BEST one, so an inferior local
+	// option can be seen losing to it. Carrying all 8-14 tripled the
+	// per-election site walk, and `want.protect` became the largest single
+	// spike left in the game (36.6 ms, measured Supreme Isthmus v2.1 minute 31).
+	// Keeping the best by cover per metal preserves the macro-demand result --
+	// the Agitator still loses to the Cerberus -- at a third of the work, and
+	// the asking unit's OWN options are unioned in by the caller regardless.
+	int bestD = -1;
+	float bestEff = 0.f;
+	for (uint q2 = 0; q2 < gTeamDefDef.length(); ++q2) {
+		const int td = gTeamDefDef[q2];
+		const float cm = Catalog::gCostM[td];
+		if (cm <= 1.f)
+			continue;
+		const float eff = PfTowerKill(td) / cm;
+		if (eff > bestEff) {
+			bestEff = eff;
+			bestD = td;
+		}
+	}
+	if (bestD >= 0) {
+		gTeamDefDef.resize(0);
+		gTeamDefDef.insertLast(bestD);
+	}
 	return gTeamDefDef;
 }
 

@@ -606,6 +606,45 @@ already exists, following a stated preference. The trigger is: *am I deciding
 what the AI is ALLOWED to do, rather than how to do what it was already meant to
 do?* If yes, ask.
 
+## The frame budget: spread work, never batch it
+
+This is game development and the sim frame is the hard constraint. apexearth,
+2026-08-31: *"If we have any operations which happen every five seconds or
+something along those lines, we need to make sure that we spread out that
+operation across every frame... if we have five hundred builders, and we want
+them to do a thing every five seconds, then we should calculate how many frames
+happen in five seconds and spread out the processing unit by unit throughout the
+frames. So we do not do a big operation in a single frame."*
+
+**A periodic operation over N things is N/frames of work per frame, not N work
+every period.** Lowering the FREQUENCY of a bulk pass does not fix a spike; it
+just makes the spike rarer. Slice it, keep a cursor, resume next frame.
+
+Three violations measured on 2026-08-31 (Supreme Isthmus v2.1, 1v1 cortex,
++100%, 32 min) and what they cost:
+
+- **`facqueue` filled a factory's whole queue window in one call** -- up to 16
+  `ConOrderFor` passes at 2.1 ms each, peaking at 8.9 ms. 16 x 8.9 = ~142 ms,
+  and the measured worst frame was 137.8 ms. Now time-sliced against
+  `BATCH_SLICE_US` (4 ms), resuming next election; the window is measured in
+  build SECONDS, so finishing a few frames later is invisible.
+- **`DefSiteFill`'s per-frame cap exempted uncached defs** -- `(gDsAt[d] > 0) &&
+  (gDsFillN >= 2)`, so a def that had never filled bypassed the throttle. Every
+  new candidate filled on the same frame at ~6 ms each. The exemption's stated
+  reason ("it could never enter at all") was false: elections run every frame.
+- **A bulk pass that got BIGGER without its throttle being revisited.** The
+  team-wide defence catalogue took the candidate list from ~3 defs to 8-14 and
+  tripled the per-election site walk. A throttle sized for the old N is not a
+  throttle.
+
+Result: worst frame 137.8 -> 34.1 ms, ms/frame at minute 31 9.60 -> 4.92,
+`want.protect` total 13,044 -> 4,260 ms, `hk.maketask.factory` max 101.4 -> 7.8.
+
+**So, before adding any periodic pass:** how many things does it touch, how does
+that grow with base size, and what is the per-frame slice? `apex_perf=1` plus
+`python tools/frametime.py <run>` gives `maxMs` per section -- a section whose
+`maxMs` is many times its `avgUs` is batching, and that is the bug.
+
 ## Instrument first. This is the rule that matters most.
 
 apexearth, 2026-08-30: *"I see it terribly often that you make changes which
