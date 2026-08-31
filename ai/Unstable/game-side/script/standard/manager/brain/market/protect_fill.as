@@ -36,14 +36,25 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	if (Gate(GATE_FILL_CACHE, (gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 4 * SECOND)))
 		return;
 	// A bound on WORK per frame, not on defence: one frame refreshes at most
-	// two def fills (the worst single builder call was 126ms, most of it
-	// here); a def that already has a cache serves it one election longer.
-	// A def with no cache yet always fills, or it could never enter at all.
+	// two def fills; a def that already has a cache serves it one election
+	// longer.
+	//
+	// THE CAP APPLIES TO UNCACHED DEFS TOO. It used to read
+	// `(gDsAt[d] > 0) && (gDsFillN >= 2)`, so a def that had NEVER been filled
+	// bypassed the throttle entirely -- the reasoning being that it "could
+	// never enter at all" otherwise. That is false: elections run every frame,
+	// so an uncached def gets its turn within a frame or two regardless. What
+	// the exemption actually bought was an unbounded frame. Measured on
+	// Supreme Isthmus v2.1, 1v1 cortex, +100%, minute 28: a 127.7 ms spike,
+	// with prot.loop averaging 6.3 ms PER FILL -- and the team-wide defence
+	// catalogue (2026-08-30) took the candidate list from ~3 defs to 8-14, so
+	// every one of the new defs filled on the same frame the first time it
+	// appeared. N x 6.3 ms, uncapped, in one sim frame.
 	if (gDsFillFrame != ai.frame) {
 		gDsFillFrame = ai.frame;
 		gDsFillN = 0;
 	}
-	if (Gate(GATE_FILL_FRAME, (gDsAt[d] > 0) && (gDsFillN >= 2)))
+	if (Gate(GATE_FILL_FRAME, gDsFillN >= 2))
 		return;
 	++gDsFillN;
 	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;

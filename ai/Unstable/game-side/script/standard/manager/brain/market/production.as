@@ -404,6 +404,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	int best = -1;
 	float bestV = 0.f;
 	float bestGain = 0.f;
+	const double _tProds = Perf::T0();
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -904,6 +905,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		candGain.insertLast(gain);
 		sumV += v;
 	}
+	Perf::Add("prod.cands", _tProds);
 	if (prankNow && (prank.length() > 0)) {
 		gNextProdRankOf[prankUid] = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: prodrank fac=" + fac.circuitDef.GetName()

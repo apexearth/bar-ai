@@ -1,5 +1,11 @@
 namespace Brain {
 
+// The per-election work slice for one factory line's batch, in microseconds.
+// 4 ms keeps the worst factory frame near the cost of a single order instead of
+// sixteen of them; the remaining slots are ordered by the next election, a
+// frame or two later, which the build-seconds window cannot notice.
+const int BATCH_SLICE_US = 4000;
+
 //------------------------------------------------------------------------------
 // THE PRODUCTION EXECUTOR. KILL PHASE (docs/20-brain-overhaul.md): the quota
 // machinery is gone; what remains is the line MECHANICS -- adoption, the
@@ -272,8 +278,23 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	const float window = LineWindow();
 	// The bound is a non-termination guard (a def with no build time), not a
 	// cap on production: LineSeconds grows with every slot and ends the loop.
+	// TIME-SLICED, NOT JUST BOUNDED BY SLOTS. Filling the whole window in one
+	// call is what a 137.8 ms sim frame looks like: measured on Supreme Isthmus
+	// v2.1, 1v1 cortex, +100%, minute 31 -- ConOrderFor averages 2.1 ms and
+	// peaks at 8.9 ms once the base is large, and sixteen of those land in the
+	// same frame. apexearth's standing rule is that no logic does much in ONE
+	// sim frame; a throttle has to slice, not merely fire less often.
+	//
+	// So the batch stops when it has spent its slice and picks up on the next
+	// election. Nothing is lost: the window is measured in build SECONDS, so
+	// finishing it two or three frames later is invisible to the plant, and the
+	// first slot is always ordered so a line can never starve on the budget.
+	const double _tBatch = ai.ClockUs();
 	for (int slot = 0; slot < 16; ++slot) {
 		if (LineSeconds(line, fac, true) >= window)
+			break;
+		if ((slot > 0)
+			&& ((ai.ClockUs() - _tBatch) > double(BATCH_SLICE_US)))
 			break;
 		CCircuitDef@ o = Market::ConOrderFor(fac, line, slot);
 		if (o is null)
