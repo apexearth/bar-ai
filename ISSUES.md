@@ -16,6 +16,51 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-08-31 — the T2 affordability FLOOR is gone; only a soft price remains
+
+apexearth, watching a 1v1 loss: we started T2 at ~15 metal/s, and a fusion at
+~10 metal/s (4,300 metal, roughly seven minutes of the entire economy). "I
+thought these issues were fixed" — they were, by machinery that no longer exists.
+
+VERIFIED, two ways, because absence is the least reliable finding here:
+
+- `RushReady` has ZERO definitions in the tree. Five references survive and all
+  five are comments (`factory/state.as:17`, `policy.as:31`, `tunables.as:158`,
+  `:165`, `:314`), pointing at a `techlead.as` function the brain overhaul
+  deleted.
+- `T2Energy()`, `T2EnergyFrom()`, `T2EnergyReactor()` and `T2Metal()` are still
+  defined in `policy.as` and are called from NOWHERE. So `apex_t2_energy`
+  (1200), `apex_t2_energy_from` (12) and `apex_t2_energy_reactor` (400) are
+  live knobs on the dashboard's Balance tab, adjustable, wired to nothing.
+
+WHAT IS *NOT* TRUE, and the distinction changes the fix: it is not that nothing
+expresses affordability. `want_tech.as` prices the advanced plant with real
+arithmetic — `aiEconomyMgr.metal.income` and ValueOf's `feedSec` term, "half the
+bank is spendable now, the rest waits on income". The hard FLOOR became a SOFT
+PRICE, and the soft price does not bite. That is the same disease as
+`docs/21-simplification.md`: one term among many cannot order an outcome.
+
+So the fix is a ruling, not a patch: either restore a floor (a plant we cannot
+feed is not priced at all), or make the affordability term decisive rather than
+one multiplier among twelve. apexearth's standing answer to "cap or scale?" is
+derive it from the economy — but WHICH derivation (income x seconds, fraction of
+bank, "not while our army is below theirs") is his call, and the three dead
+tunables above are exactly what a restored rule would consume, so do not cull
+them until that ruling lands.
+
+ALSO OPEN, from the same watched game and unranked here: army sent out to die
+instead of holding inside our own turret cover; the turret line drifting
+backward rather than concentrating forward; fight orders issued too freely.
+
+INSTRUMENT GAP, found while confirming the above: `tools/dashboard_audit.py`
+cannot see this class. Its `unread` test asks only whether SOME `GetTunable`
+call exists, and `policy.as` has one — so a knob read exclusively by an
+accessor that nothing calls passes the audit clean. An attempt to add the
+detection produced eleven false positives (`if (...)` parses as a function
+definition, and a one-line `float T2Energy() { ... }` body does not) and was
+reverted; doing it properly needs the real scope walk `tools/as_scope.py`
+already implements, not another regex.
+
 ## 2026-08-30 — defence pricing: reach is paid as AREA, damage rate was paid as sqrt
 
 apexearth: "you can get like 10x the DPS from HLT per mass compared to the
