@@ -90,7 +90,17 @@ a moho 1.6x) — a denominator artefact, not a fact about the game.
 
 - moho ~620 m for +12 m/s: payback 52 s, **0.0194 m/s per metal**
 - fusion ~4900 m for +14.3 m/s at the game's 70:1 conversion: payback 343 s,
-  **0.0029 per metal** — an order of magnitude behind a moho
+  **0.0029 per metal**
+
+  **DO NOT READ THAT AS "a fusion is ten times worse than a moho".** A rate
+  comparison makes them rivals; they are a SEQUENCE. The fusion is usually a
+  TARGET, and mohos are the fastest path to it — buying mohos first shortens
+  the ETA to the fusion, which is why the answer comes out as "economy, then
+  tech" without anyone writing that rule. The objective is fastest-path-to-a-
+  target-state, not best-rate-right-now; see the `value-paradigm` skill. Judging
+  these two by rate is what produced the 2026-08-31 loss (USER-FEEDBACK.md):
+  T2 at 15 m/s, priced on capability, with nothing charging it for the delay it
+  imposed on everything else.
 - cormakr converts 70 E→1 M/s for ONE metal; cormmkr 600 E→10.3 M/s for 370.
   T2's edge is space and toughness, not ratio.
 

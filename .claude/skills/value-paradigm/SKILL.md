@@ -1,6 +1,6 @@
 ---
 name: value-paradigm
-description: The core design frame for all AI decisions — every choice is a priced Want in one currency; cost includes time; nothing is gated, capped, or sequenced by hand. Load before designing ANY new behavior or diagnosing a wrong choice.
+description: The core design frame for all AI decisions — the AI picks a TARGET STATE and takes the fastest path to it (minimise ETA), and prices Wants in one currency to serve that; cost includes time; nothing is gated, capped, or sequenced by hand. Load before designing ANY new behavior or diagnosing a wrong choice.
 ---
 
 # The value paradigm — cost/value mentality and choice modeling
@@ -29,6 +29,59 @@ anything, log the decomposition of the winning choice and the runner-up, and
 find which three or four terms actually carry it. See
 `docs/21-simplification.md`.
 
+## The objective: FASTEST PATH TO A TARGET STATE
+
+Read this before the pricing frame below, because the pricing exists to serve
+it and has repeatedly been mistaken for it.
+
+apexearth, 2026-08-31, and he considers this how the AI was always meant to
+work: *"We're supposed to do things based on math... If you were to calculate
+out the ETA to getting your first fusion, then increasing your economy before
+getting T2 would show as the right choice. Also upgrading mexes once we get to
+T2 would also show as the proper choice to get that fusion faster... There is
+theoretically a 'perfect' play to get to your first fusion the fastest."*
+
+**The AI picks a TARGET STATE and takes the fastest path to it.** The target is
+itself a choice and it is composite -- "a 10,000-metal army", or "a 5,000-metal
+army AND a fusion" -- and different targets are different valid ways to play.
+
+    t_direct(T) = max( (T - bank)/income , T/buildPower )
+    t_via(X,T)  = t_build(X) + max( (T - bank')/(income + dI_X) ,
+                                     T/buildPower' )
+    choose argmin over candidate next investments X
+
+Everything he keeps asking for falls out of that and needs no rule:
+
+- **Economy before tech** wins whenever `dI_X` pays back inside the horizon.
+- **Mex upgrades after T2** win for the same reason, in the new income regime.
+- **How many constructors and nanos** is the SECOND term of the max: when
+  `buildPower < income` the plan is build-power-limited, so the answer is a
+  lathe, not another building. "100% efficiency" is not a separate rule.
+- **T2 at 15 m/s loses on its own arithmetic** -- it lengthens the ETA to every
+  target -- with no threshold and no tunable anywhere.
+
+### The failure mode of a per-instant price
+
+A value compared **now** cannot express "worse this minute, sooner to the
+goal". It is greedy, and greed cannot see compounding. That is not a small
+inaccuracy; it is the whole difference between the two models, and it is what
+lost the 1v1 he watched on 2026-08-31 (see USER-FEEDBACK.md): the T2 lab was
+priced on capability while nothing charged it for the delay it imposed on
+everything else.
+
+Concretely, `ai-eco-pricing` used to teach "fusion 0.0029 per metal -- an order
+of magnitude behind a moho". Under a rate comparison that is true and it is the
+wrong question: the fusion is a TARGET and mohos are the fastest path to it.
+Ranking them against each other frames as rivals what is actually a sequence.
+
+### The constraint that keeps it honest
+
+A pure minimise-time-to-fusion optimiser builds ZERO army and dies at minute
+12. The objective is time-to-target **subject to surviving**, and the survival
+constraint is the hard half -- it is not simple arithmetic and it is not
+solved. Any first implementation is judged on whether it still defends itself,
+not only on whether it reaches the target sooner.
+
 ## The frame
 
 Every decision the AI makes — what to build, what to produce, whether to
@@ -37,6 +90,9 @@ never a rule that fires. A behavior is expressed as a Want; a Want carries a
 value; one arbiter compares values and spends. If the AI does the wrong
 thing, its price for something is wrong — find the mispriced term, never add
 a gate.
+
+**But a price is a MEANS to the objective above, not the objective.** Where the
+two disagree, the ETA to the target is right and the price is wrong.
 
 ## One currency
 
