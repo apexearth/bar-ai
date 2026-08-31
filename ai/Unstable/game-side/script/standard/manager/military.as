@@ -14,6 +14,7 @@
 #include "military/superguard.as"   // T3 heavies hold the defence line
 #include "military/unblock.as"      // units walled in by our own buildings
 #include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
+#include "military/fightcensus.as"  // live fighter pools by fight type, once a game-minute
 #include "military/withdraw.as"   // pull a losing squad back under our guns
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence

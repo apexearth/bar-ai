@@ -805,7 +805,7 @@ void EcoStatusLog()
 // this basis while NEITHER counts toward ArmyValue. So a nano turret raised
 // the army target, the wider gap bought another nano, and the same widening
 // gap drove want_tech's `funded` discount toward zero -- which is the veto on
-// the T2 that would actually have closed it. coverage.as and want_protect.as
+// the T2 that would actually have closed it. coverage.as and protect_target.as
 // already read the economy this way; the army target did not.
 float EconAssetsM()
 {

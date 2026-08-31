@@ -258,6 +258,24 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
         f"It should appear in the lobby AI list as the name in AIInfo.lua.\n"
         f"Harness spec: {short}:{variant}"
     )
+    # An AngelScript compile error disables the whole variant and the match
+    # still finishes and reports a normal result, so a broken deploy and a
+    # working one look identical from here. Nothing offline compiles the
+    # script; smoke.py is the only proof, and it costs two minutes.
+    bar = "=" * 72
+    print(f"\n{bar}\n"
+          f"  NOT VALIDATED YET. Run this before any batch, watch game or claim:\n\n"
+          f"      python tools/smoke.py --ai {short}:{variant}:{_a_profile(src)}\n\n"
+          f"  It is the only thing that proves the AngelScript compiled. A\n"
+          f"  compile error disables the variant, plays near-stock, and still\n"
+          f"  reports a normal-looking result.\n{bar}")
+
+
+def _a_profile(src: Path) -> str:
+    """Any profile this variant ships, so the smoke line is runnable as printed."""
+    cfg = src / "game-side" / "config"
+    profs = sorted(d.name for d in cfg.iterdir() if d.is_dir()) if cfg.is_dir() else []
+    return profs[0] if profs else "standard"
 
 
 def _assert_version_matches(ai_info: Path, variant: str) -> None:

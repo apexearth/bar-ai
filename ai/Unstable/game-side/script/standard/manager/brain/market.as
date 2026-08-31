@@ -33,7 +33,14 @@
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
-#include "market/want_protect.as"   // insurance pricing and the protect Want
+// want_protect, split (order load-bearing -- see manager/builder.as):
+#include "market/protect_census.as"     // the gate census, the decomposition log, tower counters
+#include "market/protect_sense.as"      // edge/crowd/radar/jammer senses, closure, the class halves
+#include "market/protect_target.as"     // the mex floor, DefenceValue/DefenceTarget, TargetFill
+#include "market/protect_fill.as"       // DefSiteFill: every site's prevented loss, cached per def
+#include "market/protect_teeth.as"      // the choke-teeth Want
+#include "market/protect_senseprice.as" // radar/jam/shield/AA/targfac prices
+#include "market/protect_want.as"       // ProposeProtectHalf: the defence election itself
 #include "market/protect_wall.as"   // the wall: perimeter slots ground defence fills
 #include "market/want_super.as"     // the strategic Want: gantry, silo, anti-nuke, big guns
 #include "market/want_assist.as"    // the assist Want

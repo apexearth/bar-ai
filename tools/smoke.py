@@ -67,7 +67,13 @@ def main() -> int:
         print("SMOKE FAIL: the match produced no infolog")
         return 1
     text = log.read_text(errors="replace")
-    errs = re.findall(r"[A-Za-z_]+\.as \(\d+, \d+\) : ERR[^\n]{0,90}", text)
+    # NOT anchored on a filename. AngelScript treats warnings as errors and
+    # that failure prints as " (0, 0) : ERR : Warnings are treated as errors by
+    # the application" with no file at all -- a filename-anchored pattern reads
+    # a variant that never compiled as a clean run, which cost a full round of
+    # false "validated" reports on 2026-08-20.
+    errs = re.findall(r"[^\n]{0,40}\(?\d+, \d+\) : ERR[^\n]{0,90}"
+                      r"|Fix compilation errors[^\n]{0,60}", text)
     loaded = "Load script:" in text
     if errs:
         print(f"SMOKE FAIL: {len(errs)} AngelScript errors")

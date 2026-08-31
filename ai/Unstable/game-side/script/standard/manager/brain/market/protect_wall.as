@@ -26,7 +26,7 @@ namespace Market {
 //
 // The wall only offers PLACES. What a slot is worth -- stake behind it, the
 // wave arriving, cover shortfall, hazard -- is priced by the same auction
-// terms as every other candidate (want_protect.as, DefSiteFill).
+// terms as every other candidate (protect_fill.as, DefSiteFill).
 //------------------------------------------------------------------------------
 
 array<AIFloat3> gWallP;        // slot positions, perimeter order

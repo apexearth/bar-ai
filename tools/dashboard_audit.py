@@ -2,6 +2,19 @@
 
     python tools/dashboard_audit.py            # report
     python tools/dashboard_audit.py --accept   # waive the current backlog
+    python tools/dashboard_audit.py --stale    # tunables no run has ever swept
+
+`--stale` answers a different question, and it is the cull list for
+docs/21-simplification.md Phase 3. It cross-references every tunable declared in
+`tunables.as` against every `apex_*` modoption that appears in a recorded run's
+`script.txt`, and lists the ones that have never been overridden even once.
+
+A tunable nobody has ever swept is a named constant carrying four registration
+sites (tunables.as, dev_tunables.lua, dashboard_guide.py, the waiver here) and
+an experiment's clothing. It is also, per docs/21 root cause 1, one more
+multiplicative term in a product where no single term controls the outcome.
+`reads=1` marks the ones that fold back into a constant at their single call
+site with no argument about which caller wins.
 
 `tools/dashboard_guide.py` is a hand-written map from TUNE_ symbol to a plain
 sentence. Nothing keeps it in step with `tunables.as` on its own: a knob added
@@ -31,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -68,6 +82,68 @@ def audit():
         "total": len(live),
         "waived": len(waived & set(live)),
     }
+
+
+_MODOPT = re.compile(r"\b(apex_[a-z0-9_]+)\s*=")
+
+
+def swept() -> dict[str, int]:
+    """apex_* modoption -> how many recorded runs set it.
+
+    Both layouts: `matches/<run>/script.txt` and
+    `tournaments/<batch>/<game>/script.txt`. A modoption is only in a start
+    script because someone deliberately overrode it, so presence here IS the
+    record of a sweep."""
+    hits: dict[str, int] = {}
+    for pattern in ("matches/*/script.txt", "tournaments/*/*/script.txt"):
+        for p in REPO.glob(pattern):
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for name in set(_MODOPT.findall(text)):
+                hits[name] = hits.get(name, 0) + 1
+    return hits
+
+
+def stale():
+    """Declared tunables that no recorded run has ever overridden."""
+    import dashboard
+
+    runs = swept()
+    out = []
+    total = 0
+    for s in dashboard.parse_tunables():
+        rows = []
+        for e in s["entries"]:
+            if not e["tunable"]:
+                continue
+            total += 1
+            if e["tunable"] in runs:
+                continue
+            sites = [x for x in (e["reads"] or "").split(",") if x.strip()]
+            rows.append((e["tunable"], e["name"], len(sites)))
+        if rows:
+            out.append((s["title"], rows))
+    return out, total, runs
+
+
+def report_stale() -> int:
+    sections, total, runs = stale()
+    n = sum(len(r) for _, r in sections)
+    print(f"\nnever swept: {n} of {total} tunables have never appeared as an "
+          f"apex_* modoption in any recorded run")
+    print(f"({len(runs)} distinct tunables HAVE been overridden at least once)\n")
+    for title, rows in sections:
+        print(f"  {title}")
+        for tunable, sym, sites in sorted(rows):
+            mark = "  <- one call site, fold it into a constant" if sites == 1 else ""
+            print(f"    {tunable:<38} {sym:<32} reads={sites}{mark}")
+        print()
+    single = sum(1 for _, rows in sections for _, _, k in rows if k == 1)
+    print(f"{single} of those are read at exactly one call site -- "
+          f"docs/21-simplification.md Phase 3 takes these first.\n")
+    return 0
 
 
 def load_waiver() -> dict:
@@ -126,7 +202,11 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--accept", action="store_true",
                     help="record every currently-uncurated tunable as deliberate")
+    ap.add_argument("--stale", action="store_true",
+                    help="list tunables no recorded run has ever overridden")
     a = ap.parse_args()
+    if a.stale:
+        return report_stale()
     if a.accept:
         accept()
         return 0

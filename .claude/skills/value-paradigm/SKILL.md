@@ -9,6 +9,26 @@ Set by apexearth 2026-08-23, during the Brain rebuild design: "This is the
 right paradigm... It is an important frame of thought." It is the successor to
 the leaf-logic era and the reason that era was killed.
 
+## The failure mode of this frame: too many terms
+
+"Find the mispriced term" only works while a price has few terms. Measured
+2026-08-30, a defence price was a product of **twelve independent multipliers**
+(stake, hazard, stopped, time-to-defence, tier discount, wall efficiency,
+team-best-tower ratio, target fill, and inside the cover term: surface DPS,
+outrange share, durability, trade rate). With twelve, no single term controls
+the outcome: one term was changed by 4.6x and the choice did not move, because
+another moved 6.5x in the opposite direction. Matched seeds then disagree in
+sign, because a different term is extreme in each game.
+
+apexearth: *"I see it terribly often that you make changes which have little or
+no effect."* That is this, structurally.
+
+So the frame carries an obligation: **when a price grows past a handful of
+terms, the fix is to DELETE terms, not to add a better one.** Before repricing
+anything, log the decomposition of the winning choice and the runner-up, and
+find which three or four terms actually carry it. See
+`docs/21-simplification.md`.
+
 ## The frame
 
 Every decision the AI makes — what to build, what to produce, whether to

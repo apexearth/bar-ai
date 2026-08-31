@@ -37,13 +37,19 @@ bool WantsMassing(const CCircuitDef@ cdef)
 		return aiMilitaryMgr.GetGuardTaskNum() == 0;
 	if (role == RT::AA)
 		return false;
-	// Raiders raid EARLY, then fight as army: apexearth, watching 14m in --
-	// "all our raiders are still trying to fight like raiders, finding a way
-	// behind enemy lines... but there is no way around... we need to be
-	// trying to use them as an army." gHaveT2 is the codebase's early/late
-	// split; before it, raiding pays, after it the flanks are walled.
+	// RAIDERS RAID FOR THE WHOLE GAME, as stock BARb does (apexearth
+	// 2026-08-30: "we need to adapt our raider stance to be more like stable
+	// barbs raider usage. I believe we have clearly regressed there").
+	//
+	// This flipped to the massing pool at gHaveT2, on his earlier read that
+	// raiders were "finding a way behind enemy lines... but there is no way
+	// around". The measurement says the flip took the whole class: across 11
+	// matches the elected-fight-type ledger held ZERO raid tasks and zero
+	// attack tasks -- every raider became line army the moment our advanced
+	// lab stood. apex_raider_massing restores the old behaviour at 1.
 	if (role == RT::RAIDER)
-		return Factory::gHaveT2;
+		return Factory::gHaveT2
+			&& (ai.GetTunable("apex_raider_massing", TUNE_RAIDER_MASSING) > 0.f);
 	// Mobile artillery fights as the squads' back row: rows stand each def at
 	// its own weapon range, siege attr fears proximity, and the front rows ARE
 	// the allied vision a long gun needs (the whole family outranges its own
@@ -116,7 +122,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// unscouted metal cluster, so N of them spread over N clusters instead of
 		// walking the same lane. This also drops the quota.scout ceiling, since it
 		// does not route through DefaultMakeTask.
-		if (SpamPhase())
+		// SPOTTING IS FOR SCOUTS, NOT FOR RAIDERS. CScoutTask cannot group
+		// (it derives from IFighterTask, not ISquadTask, so nothing merges
+		// it) and each task claims its own unscouted metal cluster, which is
+		// map coverage rather than pressure. Routing the raider role through
+		// it after T2 is the second half of why we hold no raid tasks at all;
+		// stock never does this. Scout-role chaff still spreads out.
+		if (SpamPhase()
+			&& (!cdef.IsRoleAny(Unit::Role::RAIDER.mask)
+				|| (ai.GetTunable("apex_spam_raiders", TUNE_SPAM_RAIDERS) > 0.f)))
 			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::SCOUT));
 		// Before spam phase, raiders group before they go: routing straight to a
 		// RAID task per unit bypassed the pool (Defend(RAID, quota.raid.min)) that

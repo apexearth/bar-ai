@@ -144,7 +144,159 @@ float PfHorizon()
 // wave it is compared against: a tower's cover is the metal of light towers it
 // takes to kill as fast as it does.
 //------------------------------------------------------------------------------
-float gPfKillRef = -1.f;   // surface threat per metal of the faction's light tower
+// WHAT A TURRET OUTRANGES, as a share of everything that can walk at it.
+//
+// Range's value is not smooth. apexearth on why the Beamer is the T1.5 pick:
+// "It can outrange rocket bots, has great dps, and is still affordable" -- and
+// the margin is FIVE elmos (Beamer 480, Rocko/Storm 475), while the Sentry at
+// 430 loses to the same bot by 45. That is the difference between firing for
+// free and being fired on for free, and to an area term it is 18% of covered
+// ground. So the share of the attacker set a def outranges enters the kill
+// power directly, where a step in range makes a step in value.
+//
+// The attacker set is our OWN mobile non-builder armed defs -- the same
+// symmetric expectation PfAlphaPerMetal and PfAlphaRef already stand on,
+// because nothing enumerates enemy defs and their unit table is ours mirrored.
+array<float> gPfFoeRange;
+
+void PfFoeRangeBuild()
+{
+	if (gPfFoeRange.length() > 0)
+		return;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
+			continue;
+		if ((Catalog::gMaxRange[d] <= 1.f) || (Catalog::gPower[d] <= 0.f))
+			continue;
+		gPfFoeRange.insertLast(Catalog::gMaxRange[d]);
+	}
+	gPfFoeRange.sortAsc();
+	// The set is only as good as what Catalog holds, so it says so once:
+	// a diluted or tiny set makes the outrange term meaningless rather than
+	// wrong, and that is invisible from the price alone.
+	const uint n = gPfFoeRange.length();
+	if (n > 0) {
+		AiLog(Factory::T() + "apex: outrange set n=" + n
+			+ " p10=" + int(gPfFoeRange[n / 10])
+			+ " p50=" + int(gPfFoeRange[n / 2])
+			+ " p90=" + int(gPfFoeRange[(n * 9) / 10])
+			+ " hpPerM=" + formatFloat(PfHpPerMetal(), "", 0, 2));
+	}
+}
+
+float PfOutrangedFrac(int d)
+{
+	PfFoeRangeBuild();
+	const uint n = gPfFoeRange.length();
+	if (n == 0)
+		return 0.f;
+	const float r = Catalog::gMaxRange[d];
+	uint under = 0;
+	for (uint i = 0; i < n; ++i) {
+		if (gPfFoeRange[i] < r)
+			++under;
+		else
+			break;   // sorted
+	}
+	return float(under) / float(n);
+}
+
+// WHAT THE PRICE ACTUALLY USED, per def, stamped as it is computed.
+//
+// A decomposition log that recomputes its own terms can print a number the
+// auction never saw: the first version printed this branch's dps and reference
+// while the price had taken the engine-threat branch, so both read 0 and a zero
+// in a product of multipliers reads as "this term annihilated it". -1 means the
+// active branch did not use the term at all, and is printed as n/a.
+array<float> gPkDps;     // surface DPS, linear branch only
+array<float> gPkOutr;    // outrange lift, linear branch only
+array<float> gPkBase;    // the damage figure the branch divided by the reference
+array<float> gPkRef;     // ...and that reference
+array<float> gPkDur;     // durability weight, -1 when apex_def_alpha_w is off
+array<float> gPkTrade;
+array<float> gPkOut;     // the value returned
+array<int> gPkLin;       // 1 dps branch, 0 engine-threat branch, -1 never priced
+
+void PkEnsure(int d)
+{
+	uint n = uint(Catalog::gDefCount + 1);
+	if (uint(d) + 1 > n)
+		n = uint(d) + 1;
+	const uint had = gPkOut.length();
+	if (had >= n)
+		return;
+	gPkDps.resize(n);  gPkOutr.resize(n);  gPkBase.resize(n);
+	gPkRef.resize(n);  gPkDur.resize(n);   gPkTrade.resize(n);
+	gPkOut.resize(n);  gPkLin.resize(n);
+	for (uint q = had; q < n; ++q)
+		gPkLin[q] = -1;
+}
+
+// A turret's kill power BEFORE it is denominated in light-tower metal: damage
+// rate, lifted by the share of attackers it can hit first. Bounded at
+// (1 + apex_def_outrange) so a long gun with no damage cannot buy its way up
+// on reach alone -- which is the whole complaint against the Gauntlet.
+float PfKillRaw(int d)
+{
+	const float w = ai.GetTunable("apex_def_outrange", TUNE_DEF_OUTRANGE);
+	float m = PfSurfDps(d);
+	PkEnsure(d);
+	gPkDps[d] = m;
+	gPkOutr[d] = 1.f;
+	if (w > 0.f) {
+		gPkOutr[d] = 1.f + w * PfOutrangedFrac(d);
+		m *= gPkOutr[d];
+	}
+	return m;
+}
+
+// HIT POINTS PER METAL of what walks at us, so a damage rate can be converted
+// into the metal of attackers it destroys. Median over the same set, for the
+// same reason.
+float gPfHpPerM = -1.f;
+
+float PfHpPerMetal()
+{
+	if (gPfHpPerM >= 0.f)
+		return gPfHpPerM;
+	array<float> r;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
+			continue;
+		if ((Catalog::gHealth[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+			continue;
+		r.insertLast(Catalog::gHealth[d] / Catalog::gCostM[d]);
+	}
+	if (r.length() == 0) {
+		gPfHpPerM = 0.f;
+		return gPfHpPerM;
+	}
+	r.sortAsc();
+	gPfHpPerM = r[r.length() / 2];
+	return gPfHpPerM;
+}
+
+// THE METAL A TURRET CAN ACTUALLY KILL in the window an exposed asset is
+// expected to survive. A post's stake is everything inside its own reach
+// (PfStakeIn buckets at the candidate's range), so a 1220-elmo gun is credited
+// with 6.5x a 480-elmo gun's economy -- which would be right if it defended
+// all of it at once, and it shoots one thing at a time (apexearth: "So we
+// value range a bit too generously"). Damage rate over the horizon, converted
+// through the attacker set's hit points per metal, is that ceiling. Negative
+// means no ceiling.
+float PfKillCapM(int d)
+{
+	if (ai.GetTunable("apex_def_kill_cap", TUNE_DEF_KILL_CAP) <= 0.f)
+		return -1.f;
+	const float hpm = PfHpPerMetal();
+	const float h = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+	if ((hpm <= 0.f) || (h <= 1.f))
+		return -1.f;
+	return PfSurfDps(d) * h / hpm;
+}
+
+float gPfKillRef = -1.f;   // surface DPS per metal of the faction's light tower
+float gPfKillRefT = -1.f;  // ...and its surface THREAT per metal, for the A/B
 
 float PfKillRef()
 {
@@ -153,12 +305,30 @@ float PfKillRef()
 	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 	if (light !is null) {
 		const int ld = int(light.id);
-		if ((Catalog::gSurfT[ld] > 0.f) && (Catalog::gCostM[ld] > 0.f))
-			gPfKillRef = Catalog::gSurfT[ld] / Catalog::gCostM[ld];
+		const float dps = PfKillRaw(ld);
+		if ((dps > 0.f) && (Catalog::gCostM[ld] > 0.f))
+			gPfKillRef = dps / Catalog::gCostM[ld];
 	}
 	if (gPfKillRef <= 0.f)
-		gPfKillRef = 0.08f;   // the measured light-tower figure, if the def is missing
+		gPfKillRef = 2.8f;   // the measured light-tower figure, if the def is missing
 	return gPfKillRef;
+}
+
+// The engine-threat reference the linear term replaced, kept so
+// apex_def_dps_linear=0 restores the previous pricing exactly.
+float PfKillRefT()
+{
+	if (gPfKillRefT > 0.f)
+		return gPfKillRefT;
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	if (light !is null) {
+		const int ld = int(light.id);
+		if ((Catalog::gSurfT[ld] > 0.f) && (Catalog::gCostM[ld] > 0.f))
+			gPfKillRefT = Catalog::gSurfT[ld] / Catalog::gCostM[ld];
+	}
+	if (gPfKillRefT <= 0.f)
+		gPfKillRefT = 0.08f;
+	return gPfKillRefT;
 }
 
 //------------------------------------------------------------------------------
@@ -247,13 +417,64 @@ float PfHeavyRef()
 	return gPfAlphaHi;
 }
 
+// SURFACE DPS, recovered from the engine's own threat figure.
+//
+// CircuitDef.cpp:622 builds surfThreat as
+// sqrt(surfDps) * surfDmg^0.25 * THREAT_MOD * sqrt(health), so dividing that
+// back out by sqrt(health) and alpha^0.25 and squaring leaves surfDps times a
+// constant -- and the constant cancels against the light-tower reference this
+// is always divided by. Recovered rather than read off Catalog::gDps because
+// gDps counts every weapon: an AA turret would otherwise score as ground
+// cover, and surfT is the only field that knows what a gun can shoot.
+float PfSurfDps(int d)
+{
+	const float t = Catalog::gSurfT[d];
+	const float hp = Catalog::gHealth[d];
+	const float a = Catalog::gAlpha[d];
+	if ((t <= 0.f) || (hp <= 0.f) || (a <= 0.f))
+		return 0.f;
+	const float r = t / (sqrt(hp) * pow(a, 0.25f));
+	return r * r;
+}
+
 // Cover this def contributes at a point it reaches, in light-tower metal.
 float PfTowerKill(int d)
 {
-	const float ref = PfKillRef();
-	if (ref <= 0.f)
+	// DAMAGE RATE IS LINEAR HERE, unlike the engine's threat.
+	//
+	// Reach is already paid, and paid as area: PfStakeIn buckets our economy
+	// at the candidate's OWN range, so a long gun is credited with every asset
+	// the short one cannot reach. Hit points are paid twice -- sqrt(hp) inside
+	// surfThreat, and again in the durability term below. Rate of fire was the
+	// only term still under a square root, which is what let a gun with a
+	// twelfth of a Beamer's damage per metal outprice it on reach alone.
+	const bool lin = (ai.GetTunable("apex_def_dps_linear", TUNE_DEF_DPS_LINEAR) > 0.f);
+	// Ahead of the stamps below: PfKillRef prices the LIGHT TOWER through
+	// PfKillRaw, so when d is the light tower that call would otherwise leave
+	// this def's dps stamped from a branch the price did not take.
+	const float ref = lin ? PfKillRef() : PfKillRefT();
+	PkEnsure(d);
+	gPkLin[d] = lin ? 1 : 0;
+	gPkRef[d] = ref;
+	gPkDur[d] = -1.f;
+	gPkTrade[d] = -1.f;
+	if (ref <= 0.f) {
+		gPkDps[d] = -1.f;
+		gPkOutr[d] = -1.f;
+		gPkBase[d] = 0.f;
+		gPkOut[d] = 0.f;
 		return 0.f;
-	float m = Catalog::gSurfT[d] / ref;
+	}
+	float base = 0.f;
+	if (lin) {
+		base = PfKillRaw(d);   // stamps gPkDps / gPkOutr
+	} else {
+		base = Catalog::gSurfT[d];
+		gPkDps[d] = -1.f;
+		gPkOutr[d] = -1.f;
+	}
+	gPkBase[d] = base;
+	float m = base / ref;
 	// apex_def_alpha_w is a WEIGHT on the reference blow, not just a switch:
 	// it was only ever tested > 0, so the dashboard knob could turn durability
 	// off and could not tune it.
@@ -261,10 +482,14 @@ float PfTowerKill(int d)
 		const float w = ai.GetTunable("apex_def_alpha_w", TUNE_DEF_ALPHA_W);
 		const float a = PfAlphaRef() * w;
 		const float hp = Catalog::gHealth[d];
-		if ((w > 0.f) && (a > 0.f) && (hp > 0.f))
-			m *= hp / (hp + a);
+		if ((w > 0.f) && (a > 0.f) && (hp > 0.f)) {
+			gPkDur[d] = hp / (hp + a);
+			m *= gPkDur[d];
+		}
 	}
-	return m * ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	gPkTrade[d] = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	gPkOut[d] = m * gPkTrade[d];
+	return gPkOut[d];
 }
 
 //------------------------------------------------------------------------------

@@ -123,6 +123,11 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
 	{ double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
 	{ double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }
+	// The two instruments: which gates in the request chokepoint are ever
+	// reached, and what the live fighter pools actually are. Both self-rate to
+	// one line a game-minute, so the last one is the game-end census.
+	{ double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
+	{ double _t = Perf::T0(); Military::FightCensus(); Perf::Add("up.fightcensus", _t); }
 	Perf::TickSpeed();
 	Perf::Flush();
 }

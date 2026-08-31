@@ -2076,10 +2076,35 @@ const float TUNE_WALL_LINE_W = 2.f;
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.
 const float TUNE_GUARD_FORWARD = 0.5f;
-// manager/brain/market/want_protect.as [ratio] -- A T1 tower's gain once any
-//   standing advanced builder can produce ground defence; 1 prices tiers
-//   equally.
-const float TUNE_T1_DEF_LATE = 0.15f;
+// manager/brain/market/protect_field.as [ratio] -- How much a turret's kill
+//   power is lifted by the share of the attacker set it OUTRANGES. 1 means a
+//   def that outranges everything counts double; 0 removes the term. Range
+//   otherwise enters only as covered area, which cannot see that a Beamer
+//   (480) clears a rocket bot (475) and a Sentry (430) does not.
+// manager/brain/market/want_protect.as [0/1] -- 1 = a WALL slot, whose gain is
+//   the def-independent unmet-target pull, ranks candidate towers by cover per
+//   metal. Without it the only discriminator there is absolute power, which
+//   buys a T1 hand's most expensive tower for a rear slot with no threat.
+const float TUNE_WALL_EFFICIENT = 1.f;
+const float TUNE_DEF_OUTRANGE = 1.f;
+// manager/brain/market/protect_field.as [0/1] -- Cap a defence site's stake at
+//   the metal of attackers the candidate turret can actually destroy over
+//   apex_exposed_loss_s. Without it reach pays as AREA with no bound from rate
+//   of fire, which is most of why a long low-DPS gun outprices a short one.
+const float TUNE_DEF_KILL_CAP = 1.f;
+// manager/brain/market/protect_field.as [0/1] -- Price a turret's cover on its
+//   SURFACE DPS (linear) instead of the engine's sqrt(dps)-compressed threat.
+//   Reach is already paid as area by PfStakeIn and hit points twice over, so
+//   rate of fire was the only under-weighted term; 0 restores the old pricing
+//   for an A/B.
+const float TUNE_DEF_DPS_LINEAR = 1.f;
+// manager/brain/market/want_protect.as [ratio] -- A T1 tower's gain once our
+//   own advanced lab stands; 1 prices tiers equally. Sized to agree with the
+//   AI's own outclassing measure: where an advanced defence hand IS standing,
+//   TeamBestTowerPower already scales a Twin Guard by power 190/29000, and
+//   this is the same order for the players that have the lab but not yet the
+//   hand.
+const float TUNE_T1_DEF_LATE = 0.02f;
 // manager/brain/market/want_protect.as [fraction of radar radius] -- A gap
 //   must sit outside this share of every standing radar's reach before a new
 //   mast is blocked; lower = more overlapping radars, sturdier intel. Was a
@@ -2284,6 +2309,15 @@ const float TUNE_REZ_SCAN_S = 1.f;
 // manager/military/posture.as [toggle 0/1] -- Once T2 exists, cheap suicidal
 //   spam (ticks etc.) routes as spam -- forward always; 0 treats them as
 //   normal army.
+// manager/military/hooks.as [0/1] -- 1 = raiders join the massing pool once our
+//   advanced lab stands and fight as line army (the pre-2026-08-30 behaviour).
+//   0 = they keep raiding all game, as stock BARb does. Measured at 1: zero
+//   RAID and zero ATTACK task elections across 11 matches.
+const float TUNE_RAIDER_MASSING = 0.f;
+// manager/military/hooks.as [0/1] -- 1 = cheap RAIDER-role units are routed to
+//   solo scout tasks in spam phase, spreading over unscouted clusters. 0 keeps
+//   them raiding; scout-role chaff spreads either way. CScoutTask cannot group.
+const float TUNE_SPAM_RAIDERS = 0.f;
 const float TUNE_SPAM_SUICIDAL = 1.f;
 // manager/military/unblock.as [seconds] -- A stuck unit already asked for
 //   unblocking is not re-asked for this long.

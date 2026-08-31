@@ -395,6 +395,17 @@ GROUPS = [
                   "expires and the group goes anyway"),
                  ("TUNE_FODDER_COST", "more units count as fodder and are "
                   "sent immediately without waiting to mass"),
+                 ("TUNE_RAIDER_MASSING", "ON stops raiders raiding once our "
+                  "advanced lab stands — they join the massing pool and "
+                  "fight as line army. OFF is stock BARb's behaviour: raiders "
+                  "raid for the whole game, in packs capped by quota.raid.avg, "
+                  "hunting enemy constructors. Measured with it ON: ZERO raid "
+                  "tasks and zero attack tasks elected across 11 matches"),
+                 ("TUNE_SPAM_RAIDERS", "ON sends cheap raiders out as solo "
+                  "spotters after T2, one per unscouted metal cluster. That is "
+                  "map coverage, not pressure — a scout task cannot group "
+                  "with anything. OFF keeps them raiding; scout-role chaff "
+                  "spreads out either way"),
                  ("TUNE_ARTY_MASS", "ON puts mobile artillery (Hound, "
                   "Pillager, Catapult…) into the squads as the back row, "
                   "standing at its own weapon range behind the front's "
@@ -502,6 +513,34 @@ GROUPS = [
                   "raising it 3 -> 8 moved defence share only 0.071 -> 0.087 "
                   "and cut total metal built by a third — defence is NOT gated "
                   "by this. Find what is before turning it up"),
+                 ("TUNE_WALL_EFFICIENT", "ranks towers for a WALL slot by "
+                  "cover per metal. A wall slot's demand is the unmet-target "
+                  "pull, which is the same number for every tower — so "
+                  "without this the only thing separating them is absolute "
+                  "power, and a T1 constructor's most powerful option is the "
+                  "Agitator. Measured: 35 of them on rear wall slots at "
+                  "forward fraction -0.40 to -0.64"),
+                 ("TUNE_DEF_OUTRANGE", "how much a turret's kill power is "
+                  "lifted by the share of enemy units it OUTRANGES. This is "
+                  "the term that separates a Beamer from a Sentry: 480 elmos "
+                  "clears a rocket bot's 475, 430 does not, and covered area "
+                  "cannot see a 5-elmo step. 1 means a gun that outranges "
+                  "everything counts double; 0 removes it"),
+                 ("TUNE_DEF_KILL_CAP", "caps what a defence site is worth at "
+                  "the metal of attackers the turret can actually destroy in "
+                  "the exposure window. Without it, reach pays as AREA — a "
+                  "1220-elmo gun is credited with 6.5x a 480-elmo gun's "
+                  "economy, as though it defended all of it at once instead "
+                  "of shooting one thing at a time. 0 removes the ceiling"),
+                 ("TUNE_DEF_DPS_LINEAR", "prices a turret's cover on its "
+                  "surface DAMAGE PER SECOND directly, instead of the engine's "
+                  "sqrt(dps) threat. The other two terms are already generous "
+                  "— reach is paid as AREA (the stake bucket is the gun's own "
+                  "range, so 1220 elmos covers 6.5x what 480 does) and hit "
+                  "points are paid twice — so rate of fire was the only "
+                  "under-weighted one. Measured on the pinned tree: a Beamer "
+                  "does 12x a Gauntlet's damage per metal and that read as 3.7x. "
+                  "0 restores the old pricing"),
                  ("TUNE_DEF_TTD_H", "TIME TO DEFENCE. The window a turret has "
                   "to be standing in to earn its gain — it keeps only "
                   "H/(H+buildtime) of what it prevents. LOWER buys quicker "

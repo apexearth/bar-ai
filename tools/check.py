@@ -25,6 +25,13 @@ understood, and each is mechanically detectable in under a second.
   dashboard     a tunable added to the AI does not appear on the dashboard by
                 itself, and one renamed away leaves the guide pointing at
                 nothing. See tools/dashboard_audit.py.
+  scope         a local read outside its block, or a global initializer reading
+                a symbol the shim includes later. Both are `No matching symbol`,
+                which disables the WHOLE variant while the match still reports a
+                normal result. See tools/as_scope.py.
+
+This is not a compiler, and nothing here can be. `python tools/smoke.py` after
+every deploy is the only thing that proves the variant compiled.
 
 Exit status is 1 if anything at ERROR level failed, so this is usable as a
 pre-deploy gate.
@@ -489,6 +496,29 @@ def check_spend_census(script_root: Path, rep: Report) -> None:
                               f"(docs/20-brain-overhaul.md par.4.1) forbids this")
 
 
+def check_as_scope(script_root: Path, rep: Report) -> None:
+    """Scope and include-order errors, from every root the DLL compiles.
+
+    CircuitAI builds one module per root script (`init.as`, `main.as`), so each
+    root gets its own include walk and its own symbol table."""
+    if not script_root.is_dir():
+        return
+    try:
+        import as_scope
+    except Exception as e:                       # pragma: no cover
+        rep.note(f"as_scope unavailable: {e}")
+        return
+    for root in sorted(script_root.rglob("main.as")) + \
+            sorted(script_root.rglob("init.as")):
+        try:
+            _, findings = as_scope.analyse(root)
+        except Exception as e:
+            rep.warn(f"as_scope failed on {root.name}: {e}")
+            continue
+        for _kind, path, line, msg in findings:
+            rep.error(f"{path.relative_to(script_root.parent).as_posix()}:{line}: {msg}")
+
+
 def check_dashboard(rep: Report) -> None:
     """Is the dashboard still describing this AI? See tools/dashboard_audit.py --
     the guide is hand-written, so nothing keeps it in step on its own."""
@@ -515,6 +545,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     if cfg_root.is_dir():
         check_parity(cfg_root, rep)
     check_angelscript(script_root, rep)
+    check_as_scope(script_root, rep)
     check_lazy_caches(script_root, rep)
     check_spend_census(script_root, rep)
 

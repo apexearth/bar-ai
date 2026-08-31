@@ -33,6 +33,19 @@ dashboard rather than teaching a command.
 - **Deploy** — repo → live install, gadgets, patches.
 - **Tunables** — the *full reference*, all 300+. Dead knobs hidden by default.
 
+## Do not reach for a new tunable
+
+This skill's rule -- every tunable must be surfaced here -- is a TAX on creating
+one, not an invitation. Measured 2026-08-30: **404 tunables, 316 read at exactly
+one call site, 360 never overridden in a single recorded run.** Each costs four
+registration sites and a line of apexearth's attention on a page he actually
+reads.
+
+A tunable is justified only when you will sweep it in the same session and
+report the sweep. Otherwise write a named constant. `python
+tools/dashboard_audit.py --stale` lists the never-swept ones; culling from that
+list is always welcome.
+
 ## Two ways a value reaches a game, and they are different
 
 1. **Edit** — writes `tunables.as` / `targets.as` in the repo. Needs a

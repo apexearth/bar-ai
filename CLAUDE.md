@@ -130,13 +130,18 @@ Every `manager/<name>.as` is a SHIM: a table of contents that `#include`s the
 real code from `manager/<name>/`. Edit the parts, not the shim — except to add a
 part, which means adding a line to the shim.
 
-**The include order in a shim is load-bearing.** `CScriptBuilder` adds a section
-before walking that section's own includes, depth-first in listed order, so the
-shim's list is literally the order the compiler sees the declarations in.
-Functions are visible module-wide regardless of file; globals, consts and types
-are not, and must be declared before the line that reads them. Moving a function
-between parts is free. Moving a global earlier than its declaration is a
-`No matching symbol` that disables the whole variant.
+**The include order in a shim is load-bearing, but narrowly.** `CScriptBuilder`
+adds a section before walking that section's own includes, depth-first in listed
+order, so the shim's list is the order the compiler sees declarations in. What
+actually breaks is only a **global's INITIALIZER expression** reading a symbol
+declared in a later file. AngelScript registers every type and global across all
+sections before compiling any function, so functions, parameter types and
+ordinary reads inside function bodies are order-independent — this tree proves
+it and runs (`market/want_super.as` reads `Base::gAnchor` from a namespace
+included four lines later). An earlier checker that enforced the stricter rule
+produced 250 false positives here. `python tools/as_scope.py` reproduces the
+real walk and reports the two failures that do bite: a global initializer
+reading a later symbol, and a local read outside its declaring block.
 
 Both `AiMakeTask`s are pipelines: `builder/maketask.as` and
 `factory/maketask.as` are short ordered lists of named rules that live in the
@@ -249,28 +254,15 @@ Measured on this machine: a 27 game-minute match completes in ~44 s wall
   `hard_aggressive` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
-## The Brain drives the factories — factory.json is mostly NOT in the loop
+## The Brain drives the factories — `factory.json` is mostly NOT in the loop
 
-**Correction 2026-08-26: `QuotaFor` and `NextForMix` no longer exist.**
-`Market::ConOrderFor` (`brain/market/production.as`) is the only path to what
-a factory builds. `targets.as`'s `ROLE_*`, `DEF_*`, `COUNTER_MAX` and
-`SCOUT_PER_MEX` tables were read by nothing and were deleted 2026-08-26; the
-file now holds only the five `SPEND_*` curves. The section below is kept for its
-lesson (composition is decided by the Brain, not `factory.json`), but read
-`apex: decide ... -> produce:`, `apex: worth` and `apex: lineclass` rather than
-the quota lines it names.
-
-With `apex_fac_queue_brain` on (the default), `brain/facqueue.as` takes every
-factory line: it aborts recruit tasks, holds the line on a Wait task, and
-issues build orders itself from `QuotaFor`. **While a line is driven,
-`factory.json` tier tables and `response.json` decide nothing** except
-through `GetRoleDef`'s per-role weighted draw. Days were spent tuning
-factory.json weights to fix "only Hounds get built" (2026-08-14) when the
-composition was actually decided by `QuotaFor`'s floor/ratio logic — traced
-2026-08-15 via the `apex: facqueue ... quota:` log lines, which print each
-line's per-def have/want and are the FIRST thing to read for any
-"wrong units built" complaint. Attribute a composition problem to the
-quota before touching any config table.
+`Market::ConOrderFor` (`brain/market/production.as`) is the only path to what a
+factory builds. While the Brain drives a line, `factory.json` tier tables and
+`response.json` decide nothing. Days were spent tuning factory.json weights to
+fix "only Hounds get built" when the composition was decided elsewhere entirely.
+**Attribute a composition problem to the producing code before touching any
+config table** — read `apex: decide ... -> produce:`, `apex: worth` and
+`apex: lineclass`. Details: the `ai-factory-brain` skill.
 
 ## Failure modes that are SILENT — check for these before believing a result
 
@@ -413,37 +405,16 @@ evaluation, `prevent` semantics, `energy`/`wind` vocabulary) and the upstream
 bugs found alongside them — verified 2026-07-29 against `BuildChain.cpp`,
 `BuilderTask.cpp`, `BuilderManager.cpp`.
 
-## Why "mass T3" does not happen: arithmetic, not plumbing
+## T3 affordability is a statement about INCOME, not about the AI
 
-Gantry placement is fine — 79 requests across 20 games, median 23.9 min. Adding
-gantry caretakers changed nothing (T3 3,725 → 3,488), so build power is not the
-constraint either.
-
-**This section's conclusion holds only at benchmark scale. It does not hold in
-the games this AI is actually hosted in — re-check the income before applying
-it.**
-
-At benchmark scale: apexdef (the pre-merge variant, since folded into apex)
-produces ~110,000 metal across a 45-minute 4v4 —
-about 40 metal/second for the whole team. Against that, T3 is two or three units
-a game, and that is what gets fielded. Stock BARb fields none.
-
-**Stock fielding none is also benchmark-only.** In a +40% 40-minute 4v4, stock
-BARb put **146,850 metal** into T3 on one side, 126,150 of it on a single player.
-If a game runs long enough on a bonused economy, stock out-T3s us by default —
-which is what losing to "loads of T3" looks like from the inside.
-
-But the numbers above were partly wrong and the scale was unrepresentative. Real
-costs, read from the unit defs 2026-07-30: **corgant 8400, corshiva 1550,
-corcat 4900, armbanth 13500, corjugg 20000, corkorg 29000** — a Korgoth is 29k,
-not the ~11,000 previously claimed here. And hosted games run with a resource
-bonus (+40% is normal online) and go long: a player was observed live at **398
-metal/second**, where a gantry is 21 seconds of income and a Shiva is 4.
-
-So "the economy cannot pay for T3" is a statement about a 40 m/s benchmark, not
-about BAR. Before treating "no T3" as affordable-but-broken *or* as unaffordable,
-read the actual income. Above ~250 m/s the affordability argument inverts
-completely, which is why `T3Worthwhile()` drops its vetoes there.
+Real costs, read from the unit defs: **corgant 8400, corshiva 1550, corcat 4900,
+armbanth 13500, corjugg 20000, corkorg 29000**. At the 40 metal/s benchmark T3 is
+two or three units a game; in a hosted +40% game a player was observed at **398
+metal/second**, where a gantry is 21 seconds of income. Above ~250 m/s the
+affordability argument inverts completely, which is why `T3Worthwhile()` drops
+its vetoes there. **Read the actual income before calling T3 unaffordable or
+broken** — and note that stock BARb out-T3s us by default on a bonused economy
+(146,850 metal of T3 on one side of a +40% 40-minute 4v4).
 
 ## "The path fires" is not evidence that the change is good
 
@@ -494,72 +465,22 @@ design that addresses this
 directly: a single sense of what the AI is buying right now, that individual
 rules defer to instead of each firing whenever its own condition happens to hold.
 
-## Working as a fleet — delegate by default
+## Delegate only when asked, and keep agents short-lived
 
-Set 2026-08-12 by apexearth: the top-level session is an **organizer**. The
-domain agents in `.claude/agents/` carry the detail; top-level context stays
-slim so the loop stays fast.
+The fleet-of-agents workflow was tried and **measured worse**: single agents
+reached 345k, 337k and 328k tokens and drove usage UP, because continuing an
+agent replays its whole transcript. apexearth: *"You're wasting a lot of
+tokens/usage by doing it like this. Prefer to NOT have long running agents."*
 
-**Investigation is parallel and read-only. Implementation is serial and
-measured.** This is not a style preference. Twelve changes went in over one
-session, every one confirmed firing, and together they cut metal production
-4.3x — see "The path fires" above. A fleet of agents editing at once is that
-failure mode industrialized. The serialization is what makes the parallelism
-safe.
+So: work directly by default. Spawn agents when he asks for them, or for
+genuinely parallel work with **disjoint file ownership** — two agents editing
+one file is a merge conflict you will pay for twice. Give each a fresh, bounded
+task with the three facts it needs in the PROMPT; two or three exchanges is the
+ceiling. Investigation can be parallel; implementation is serial and measured.
 
-- **INVESTIGATE** — the default. Many agents at once, across different
-  domains. They read, grep, and run tools; they return a diagnosis and a
-  proposed patch. **They do not edit.**
-- **IMPLEMENT** — one agent, one approved diagnosis, then a measurement before
-  the next goes in.
-
-**What an agent must return.** Top-level context is the scarce resource, so
-the report is bounded and structured:
-
-1. **VERDICT** — one line. What is wrong, or "no bug found". A clean bill of
-   health is a real and useful answer; do not manufacture a finding.
-2. **EVIDENCE** — the specific line, log excerpt or measurement, cited
-   `file:line`. An absence needs the positive search that established it.
-3. **PATCH** — the exact change, or "none proposed".
-4. **COST** — what constructor time or build power this spends, and what it
-   displaces. "None" is valid but must be argued, not assumed.
-5. **CONFIDENCE** — and what observation would falsify it.
-
-No file dumps, no narration of the search. The point of delegating is that the
-organizer reads a conclusion, not a transcript.
-
-**Every agent runs on Opus**, declared in its own frontmatter so it does not
-silently follow the session model.
-
-**Keep agents SHORT-LIVED. Do not build up long-running ones.** Continuing an
-agent resumes it from its full transcript, so a fifth task costs the first four
-again. Measured 2026-08-12: single agents reached 345k, 337k and 328k tokens,
-and the 337k one was answering a question it could have taken fresh in a
-fraction of that. apexearth: *"You're wasting a lot of tokens/usage by doing it
-like this. Prefer to NOT have long running agents."*
-
-So: **spawn a fresh agent per task by default.** Continue an existing one only
-when the *unwritten* context genuinely matters — mid-implementation of a patch
-it just designed, or a correction to work it has in its hands right now. Two or
-three exchanges is the normal ceiling.
-
-That only works if findings live in the repo rather than in transcripts, which
-makes the next rule load-bearing rather than tidy:
-
-**Write the finding down before the agent ends.** The commit message for what
-changed and what was measured, `ISSUES.md` for what is wrong and not yet
-fixed. A finding left in a transcript is one you will pay to rediscover, and
-it forces the long-running-agent pattern that costs the tokens. When several
-agents run at once, the ORGANIZER lands the commits with each agent's
-one-paragraph summary in the message, not the agents themselves.
-
-Corollary for dispatch: put the distilled context in the PROMPT. A fresh agent
-given the three facts it needs outperforms a stale one carrying three hundred.
-
-**Never leave apexearth idle.** If he has said he is around, a windowed game
-runs the entire time the fleet and the smoke runs do — launch it *first*, then
-dispatch. Kill it and hand him a fresh one if a smoke run finishes early and
-shows an obvious problem; watching a known-broken build wastes his session.
+**Write the finding down before the agent ends** — commit message for what
+changed and what was measured, `ISSUES.md` for what is wrong and not yet fixed.
+A finding left in a transcript is one you will pay to rediscover.
 
 ## apexearth is faster than the benchmark — ask him first
 
@@ -662,15 +583,71 @@ What to do instead, in order of preference:
 
 1. **Derive it from the economy** -- income, bank, what the thing costs, what it
    returns. That is the answer he gives every time he is asked.
-2. **Make it a tunable with the measured default**, and say in the commit what
-   was measured. Then it is an experiment, not a decree.
-3. **Ask.** One sentence: "should X be capped, or scale with income?" He answers
+2. **Ask.** One sentence: "should X be capped, or scale with income?" He answers
    these in seconds and the answer is usually "scale".
+3. **A named constant**, with the derivation in the commit message.
+
+**A TUNABLE IS THE LAST RESORT, NOT THE SAFE MIDDLE.** This list used to offer
+"make it a tunable with the measured default" as option 2, and because it was
+the cheapest of the three it was chosen almost every time. Measured 2026-08-30:
+**404 tunables declared, 316 read at exactly one call site, and 360 never
+overridden in a single recorded run.** They are not experiments; they are
+constants wearing an experiment's clothing, and each costs four registration
+sites (`tunables.as`, `dev_tunables.lua`, `dashboard_guide.py`, the audit
+waiver) plus a line of apexearth's attention on the dashboard.
+
+Create a tunable ONLY when you are going to sweep it in this session and will
+report the sweep. Otherwise use a named constant. `python tools/dashboard_audit.py
+--stale` lists every tunable never overridden in a run; that list is a cull
+list, and folding one back into a constant is always a welcome change.
 
 Not every choice needs a question -- fixing a null deref, wiring a rule that
 already exists, following a stated preference. The trigger is: *am I deciding
 what the AI is ALLOWED to do, rather than how to do what it was already meant to
 do?* If yes, ask.
+
+## Instrument first. This is the rule that matters most.
+
+apexearth, 2026-08-30: *"I see it terribly often that you make changes which
+have little or no effect."* He was right. Four changes went in that day and
+every one failed to bite:
+
+- a tier discount that scaled EVERY member of the tier equally, so it could
+  never change which member was chosen;
+- a jammer spacing fix built on a dead-binding theory, when the binding was
+  alive (`GetJammerRadius=360`) -- counts rose on both seeds;
+- a defence repricing that helped one seed and hurt the other;
+- a serialization gate placed on a code path that carries no traffic
+  (`moho-pass: 0` -- mex upgrades never reach the Requests chokepoint).
+
+Each is the same mistake: **the code was changed before the path was proven to
+carry the decision.** The one diagnosis that survived came from reading the
+path first -- `apex: exec ... protect:armguard` plus `defplace ... wall=1
+gain=0.00` found the real mechanism in a single step.
+
+So, before changing a rule:
+
+1. **Prove it executes.** Find the log line, or add a counter, that says this
+   code ran in a real game. A gate nothing reaches is dead code.
+2. **Prove it decides.** Show that its output is what selects the outcome, not
+   one of eleven other multipliers. See `docs/21-simplification.md`.
+3. **Then change it** -- and if the instrument shows the decision did not move,
+   SAY SO. Shipping an inert edit is worse than shipping nothing, because it
+   spends his review and hides the real cause.
+
+### Three ways a measurement lies here, all of them paid for
+
+- **A sampled log is not a census.** `defrank` is rate-limited per builder-def
+  per 60s. It was read as a complete record and produced a wrong conclusion.
+  Say in the log line whether it is a sample.
+- **A metric that cannot distinguish the two states you care about is not
+  evidence.** "Zero RAID fight-type elections across 11 matches" was used to
+  prove we never raid. But stock enqueues raiders as `Defend(promote=RAID)` --
+  fight type DEFEND -- and the promotion happens in C++ without passing through
+  `AiMakeTask`, so the metric cannot separate the raid pool from the massing
+  pool. It was evidence of nothing.
+- **Two seeds cannot resolve a change.** Matched pairs disagreed in sign on the
+  same change the same day. If you have two runs, you have an anecdote.
 
 ## Conventions
 
@@ -680,7 +657,10 @@ do?* If yes, ask.
 - Keep `ai/<variant>/` as the source of truth. If you edit configs directly
   inside `BAR.sdd` while iterating, run `deploy_ai.py pull <variant>` afterwards
   or the work will be lost on the next deploy.
-- Line endings are LF (`.gitattributes`) so diffs against upstream stay readable.
+- Line endings are LF (`.gitattributes`) so diffs against upstream stay readable
+  -- but the WORKING TREE IS MIXED, and several `.as` files are CRLF. Three
+  `str.replace` anchors failed silently on this in one session. Read the exact
+  bytes before replacing, or use `tools/normalize_eol.py`.
 
 ### Comments — write far fewer than feels natural here
 

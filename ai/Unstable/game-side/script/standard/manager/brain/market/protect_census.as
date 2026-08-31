@@ -1,0 +1,388 @@
+namespace Market {
+CCircuitUnit@ gAssistTarget = null;
+
+// Which kind of ground the defence auction keeps choosing. Without this the
+// only way to tell a forward post from a tower at a mex is to read positions
+// out of the log by hand.
+int gDefSiteFront = 0;
+int gDefSiteAsset = 0;
+int gDefSiteRing = 0;
+int gDefSiteWall = 0;
+int gNextDefSiteLog = 0;
+int gNextDefFwdLog = 0;
+// EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
+// guessed (apexearth: "what is the connection causing this? We need to not
+// guess here").
+float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f;
+float gDbgShort0 = 0.f, gDbgShort1 = 0.f, gDbgThreat = 0.f, gDbgCover0 = 0.f;
+float gDbgCover1 = 0.f;
+int gNextDefPriceLog = 0;
+int gNextProtEnterLog = 0;
+float gDbgFrontBest = 0.f;
+float gDbgAssetBest = 0.f;
+float gDbgRingBest = 0.f;
+float gDbgWallBest = 0.f;
+int gDbgLineN = 0;
+
+//------------------------------------------------------------------------------
+// THE GATE CENSUS. Every early exit in the defence pricing path counts how often
+// it was REACHED and how often it REFUSED. A gate with seen=0 carries no traffic
+// at all -- it is dead code, and without this that is invisible: a gate was
+// added to such a path and nothing said so for two whole games. Reported
+// cumulatively, so the LAST defgates line in a log is the game-end census.
+//------------------------------------------------------------------------------
+const int GATE_ASSETS      = 0;
+const int GATE_CORE        = 1;
+const int GATE_AVAIL       = 2;
+const int GATE_CLASS       = 3;
+const int GATE_HALF        = 4;
+const int GATE_RADAR_GAP   = 5;
+const int GATE_RADAR_FRONT = 6;
+const int GATE_RADAR_HOT   = 7;
+const int GATE_JAM_COVER   = 8;
+const int GATE_JAM_ARTY    = 9;
+const int GATE_SHLD_ARTY   = 10;
+const int GATE_SHLD_FAR    = 11;
+const int GATE_SHLD_COVER  = 12;
+const int GATE_AA_NOAIR    = 13;
+const int GATE_AA_SAT      = 14;
+const int GATE_TF_ENOUGH   = 15;
+const int GATE_DEF_NOSITE  = 16;
+const int GATE_DEF_FILL    = 17;
+const int GATE_DEF_TEAM    = 18;
+const int GATE_ZERO_GAIN   = 19;
+const int GATE_SLOT_MARK   = 20;
+const int GATE_SLOT_DEAD   = 21;
+const int GATE_FILL_CACHE  = 22;
+const int GATE_FILL_FRAME  = 23;
+const int GATE_SITE_OFFMAP = 24;
+const int GATE_SITE_THREAT = 25;
+const int GATE_SITE_STAKE  = 26;
+const int GATE_SITE_STOP   = 27;
+const int GATE_N           = 28;
+
+array<int> gGateSeen;
+array<int> gGateRef;
+int gNextGateLog = 0;
+
+string GateName(int g)
+{
+	if (g == GATE_ASSETS)      return "assets";
+	if (g == GATE_CORE)        return "core.offmap";
+	if (g == GATE_AVAIL)       return "cand.avail";
+	if (g == GATE_CLASS)       return "cand.class";
+	if (g == GATE_HALF)        return "cand.half";
+	if (g == GATE_RADAR_GAP)   return "radar.nogap";
+	if (g == GATE_RADAR_FRONT) return "radar.pastfront";
+	if (g == GATE_RADAR_HOT)   return "radar.hot";
+	if (g == GATE_JAM_COVER)   return "jam.covered";
+	if (g == GATE_JAM_ARTY)    return "jam.noarty";
+	if (g == GATE_SHLD_ARTY)   return "shield.noarty";
+	if (g == GATE_SHLD_FAR)    return "shield.far";
+	if (g == GATE_SHLD_COVER)  return "shield.covered";
+	if (g == GATE_AA_NOAIR)    return "aa.noair";
+	if (g == GATE_AA_SAT)      return "aa.saturated";
+	if (g == GATE_TF_ENOUGH)   return "targfac.enough";
+	if (g == GATE_DEF_NOSITE)  return "def.nosite";
+	if (g == GATE_DEF_FILL)    return "def.targetfill";
+	if (g == GATE_DEF_TEAM)    return "def.teampower";
+	if (g == GATE_ZERO_GAIN)   return "def.zerogain";
+	if (g == GATE_SLOT_MARK)   return "slot.dangermark";
+	if (g == GATE_SLOT_DEAD)   return "slot.nopull";
+	if (g == GATE_FILL_CACHE)  return "fill.cached";
+	if (g == GATE_FILL_FRAME)  return "fill.framecap";
+	if (g == GATE_SITE_OFFMAP) return "site.offmap";
+	if (g == GATE_SITE_THREAT) return "site.nothreat";
+	if (g == GATE_SITE_STAKE)  return "site.nostake";
+	if (g == GATE_SITE_STOP)   return "site.nostop";
+	return "g" + g;
+}
+
+void GateInit()
+{
+	if (int(gGateSeen.length()) >= GATE_N)
+		return;
+	gGateSeen.resize(uint(GATE_N));
+	gGateRef.resize(uint(GATE_N));
+}
+
+bool Gate(int g, bool refuse)
+{
+	GateInit();
+	++gGateSeen[g];
+	if (refuse)
+		++gGateRef[g];
+	return refuse;
+}
+
+void LogDefGates()
+{
+	if (ai.frame < gNextGateLog)
+		return;
+	gNextGateLog = ai.frame + 60 * SECOND;
+	GateInit();
+	string live = "";
+	string dead = "";
+	for (int g = 0; g < GATE_N; ++g) {
+		if (gGateSeen[g] == 0) {
+			dead += " " + GateName(g);
+			continue;
+		}
+		live += " " + GateName(g) + "=" + gGateRef[g] + "/" + gGateSeen[g];
+	}
+	AiLog(Factory::T() + "apex: defgates CUMULATIVE t=" + ai.teamId
+		+ " (refused/seen; last line of the log is the game-end census)"
+		+ live + " | DEAD seen=0:" + ((dead == "") ? " none" : dead));
+}
+
+//------------------------------------------------------------------------------
+// THE DECOMPOSITION LOG. A tower's price is a product of a dozen independent
+// terms, so no single one controls the outcome and every change is a nudge whose
+// sign depends on which term happens to be extreme. These record each term
+// separately for the winner and the runner-up, so "which term decided it" is a
+// grep rather than a guess.
+//------------------------------------------------------------------------------
+array<float> gDwRaw;     // prevented metal/s at the chosen post, before multipliers
+array<float> gDwTtd;     // time-to-defence discount
+array<float> gDwT1;      // apex_t1_def_late tier discount
+array<float> gDwEff;     // wall-slot cover-per-metal efficiency
+array<float> gDwFill;    // TargetFill(have, target)
+array<float> gDwTeam;    // mine/team tower power
+array<float> gDwVal;     // the Want value that came out of ValueOf
+array<float> gDwStake;   // fill terms, as of that def's own last real fill
+array<float> gDwHz;
+array<float> gDwStop;
+array<float> gDwThreat;
+array<float> gDwCov0;
+array<float> gDwCov1;
+array<float> gDwKill;    // PfTowerKill(d)
+array<int> gDwSite;      // 0 asset, 1 front, 2 ring, 3 wall
+array<int> gWhyDef;      // the defs priced in the CURRENT election
+int gDefWhyWins = 0;
+int gNextDefWhyLog = 0;
+float gDbgStopped = 0.f;
+
+void DwEnsure(int d)
+{
+	uint n = uint(Catalog::gDefCount + 1);
+	if (uint(d) + 1 > n)
+		n = uint(d) + 1;
+	if (gDwRaw.length() >= n)
+		return;
+	gDwRaw.resize(n);   gDwTtd.resize(n);    gDwT1.resize(n);
+	gDwEff.resize(n);   gDwFill.resize(n);   gDwTeam.resize(n);
+	gDwVal.resize(n);   gDwStake.resize(n);  gDwHz.resize(n);
+	gDwStop.resize(n);  gDwThreat.resize(n); gDwCov0.resize(n);
+	gDwCov1.resize(n);  gDwKill.resize(n);   gDwSite.resize(n);
+}
+
+string DwSiteName(int k)
+{
+	if (k == 1) return "front";
+	if (k == 2) return "ring";
+	if (k == 3) return "wall";
+	return "asset";
+}
+
+// A term the active branch did not use is n/a, never 0: a zero in a product of
+// multipliers reads as "this one annihilated the price".
+string PkF(float v, uint p)
+{
+	if (v < 0.f)
+		return "n/a";
+	return formatFloat(v, "", 0, p);
+}
+
+// The terms inside PfTowerKill, READ BACK from what that function stamped as it
+// priced this def -- not recomputed here. PfTowerKill has two branches and only
+// one of them uses surface DPS and the outrange lift, so recomputing printed the
+// wrong branch's terms (and its own reference as 0, which the price can never
+// have divided by: it returns 0 outright when the reference is not positive).
+string PfKillWhy(int d)
+{
+	PkEnsure(d);
+	if (gPkLin[d] < 0)
+		return "never priced";
+	const bool lin = (gPkLin[d] > 0);
+	return "basis=" + (lin ? "dps " : "surfT ") + PkF(gPkBase[d], 2)
+		// SIX DECIMALS, NOT ONE. PfSurfDps recovers surfDps*THREAT_MOD^2 from
+		// the engine's threat figure, and THREAT_MOD is ~0.006, so a 400-dps
+		// Beamer reads 0.0145. The constant cancels against /ref so the price
+		// is right, but at one decimal both fields printed 0.0 and read as
+		// "this term annihilated the product".
+		+ " dps=" + PkF(gPkDps[d], 6)
+		+ " xOutr=" + PkF(gPkOutr[d], 3)
+		+ " /ref=" + PkF(gPkRef[d], 6)
+		+ " xDur=" + PkF(gPkDur[d], 3)
+		+ " xTrade=" + PkF(gPkTrade[d], 2)
+		+ " =pk" + PkF(gPkOut[d], 2);
+}
+
+string DefWhyTerms(int d)
+{
+	DwEnsure(d);
+	return Catalog::Def(d).GetName()
+		+ " val=" + formatFloat(gDwVal[d], "", 0, 4)
+		+ " raw=" + formatFloat(gDwRaw[d], "", 0, 3)
+		+ " [stake=" + formatFloat(gDwStake[d], "", 0, 0)
+		+ " hz=" + formatFloat(gDwHz[d], "", 0, 5)
+		+ " stopped=" + formatFloat(gDwStop[d], "", 0, 3)
+		+ " threat=" + formatFloat(gDwThreat[d], "", 0, 0)
+		+ " cover=" + formatFloat(gDwCov0[d], "", 0, 0)
+		+ "->" + formatFloat(gDwCov1[d], "", 0, 0) + "]"
+		+ " xTtd=" + formatFloat(gDwTtd[d], "", 0, 3)
+		+ " xT1late=" + formatFloat(gDwT1[d], "", 0, 3)
+		+ " xWallEff=" + formatFloat(gDwEff[d], "", 0, 3)
+		+ " xFill=" + formatFloat(gDwFill[d], "", 0, 3)
+		+ " xTeamPow=" + formatFloat(gDwTeam[d], "", 0, 3)
+		+ " kill=" + formatFloat(gDwKill[d], "", 0, 2)
+		+ " (" + PfKillWhy(d) + ")"
+		+ " costM=" + int(Catalog::gCostM[d])
+		+ " site=" + DwSiteName(gDwSite[d]);
+}
+// The defence auction's own ranking, so "why did we never build a Pulsar" is
+// read rather than argued: every turret this builder could place, with what
+// the market thinks it is worth.
+// The strongest ground turret any constructor WE OWN could place. Cached on a
+// slow tick: it walks every owned def's build list.
+float gTeamTowerP = 0.f;
+int gTeamTowerAt = -1;
+
+float TeamBestTowerPower()
+{
+	if (ai.frame < gTeamTowerAt)
+		return gTeamTowerP;
+	gTeamTowerAt = ai.frame + 15 * SECOND;
+	gTeamTowerP = 0.f;
+	for (uint u = 1; u < gOwnCount.length(); ++u) {
+		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
+			|| !Catalog::gBuilder[int(u)])
+			continue;
+		const array<int>@ bl = Catalog::BuildsOf(int(u));
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int bd = bl[b];
+			if (!Catalog::gAvailable[bd] || Catalog::gMobile[bd])
+				continue;
+			if (ProtClassOf(bd) != PROT_DEF)
+				continue;
+			CCircuitDef@ cd = Catalog::Def(bd);
+			if ((cd !is null) && (cd.power > gTeamTowerP))
+				gTeamTowerP = cd.power;
+		}
+	}
+	return gTeamTowerP;
+}
+
+array<int> gDefRankDef;
+array<float> gDefRankV;
+// Per BUILDER DEF, not one clock for the fleet: a single global throttle
+// samples whichever constructor happened to elect, and reads as "the advanced
+// constructor never proposes defence" when it simply was not sampled.
+array<int> gNextDefRankOf;
+// COMPLETED, not won. gDefSiteFront counts auction wins, and a re-election
+// counts again; a want whose builder dies or whose site is blocked never
+// becomes a standing gun. Placement is Military::OnBorder -- the same ray
+// model the front sites are drawn from, so won and built are comparable.
+int gFrontTowerBuilt = 0;
+int gFrontTowerLost = 0;
+int gBackTowerBuilt = 0;
+int gBackTowerLost = 0;
+float gFrontTowerM = 0.f;
+float gBackTowerM = 0.f;
+int gNextFrontTowerLog = 0;
+// ...and where it stood relative to the PERIMETER, which is the question the
+// front/back split cannot answer: a tower can be nowhere near the enemy and
+// still be on the outer edge of what we own.
+int gRimTowerBuilt = 0;
+int gCoreTowerBuilt = 0;
+float gRimDSum = 0.f;
+
+void NoteTowerBuilt(const AIFloat3& in at, float costM)
+{
+	{
+		// Judged against the WALL when it is on: the raw rim balloons with
+		// every far mex claim, and a tower standing exactly on the wall then
+		// reads hundreds of elmos "interior" (measured, first exercise game).
+		const bool vsWall = (ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				&& WallStands();
+		const float rd = vsWall ? WallRimDist(at) : PfRimDist(at);
+		gRimDSum += rd;
+		// Within half a light tower's reach of the rim counts as ON it.
+		if (rd > -Brain::LightTowerRange() * 0.5f)
+			++gRimTowerBuilt;
+		else
+			++gCoreTowerBuilt;
+	}
+	if (Military::OnBorder(at)) {
+		++gFrontTowerBuilt;
+		gFrontTowerM += costM;
+	} else {
+		++gBackTowerBuilt;
+		gBackTowerM += costM;
+	}
+}
+
+void NoteTowerLost(const AIFloat3& in at)
+{
+	if (Military::OnBorder(at))
+		++gFrontTowerLost;
+	else
+		++gBackTowerLost;
+}
+
+void LogFrontTowers()
+{
+	if (ai.frame < gNextFrontTowerLog)
+		return;
+	gNextFrontTowerLog = ai.frame + 30 * SECOND;
+	AiLog(Factory::T() + "apex: fronttowers built=" + gFrontTowerBuilt
+		+ " lost=" + gFrontTowerLost
+		+ " standing=" + (gFrontTowerBuilt - gFrontTowerLost)
+		+ " m=" + int(gFrontTowerM)
+		+ " backBuilt=" + gBackTowerBuilt
+		+ " backLost=" + gBackTowerLost
+		+ " backStanding=" + (gBackTowerBuilt - gBackTowerLost)
+		+ " backM=" + int(gBackTowerM)
+		+ " wonFront=" + gDefSiteFront
+		+ " wonAsset=" + gDefSiteAsset
+		+ " rim=" + gRimTowerBuilt
+		+ " core=" + gCoreTowerBuilt
+		+ " rimDAvg=" + int(gRimDSum
+			/ float((gRimTowerBuilt + gCoreTowerBuilt > 0)
+				? (gRimTowerBuilt + gCoreTowerBuilt) : 1))
+		+ " closure=" + formatFloat(
+			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				? WallClosureFrac() : ClosureFrac(), "", 0, 2)
+		+ " lineFill=" + formatFloat(
+			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				? WallLineFill() : -1.f, "", 0, 2));
+}
+
+void NoteDefSite(bool isFront, bool isRing, bool isWall)
+{
+	if (isWall)
+		++gDefSiteWall;
+	else if (isFront)
+		++gDefSiteFront;
+	else if (isRing)
+		++gDefSiteRing;
+	else
+		++gDefSiteAsset;
+	if (ai.frame < gNextDefSiteLog)
+		return;
+	gNextDefSiteLog = ai.frame + 60 * SECOND;
+	AiLog("apex: defsite front=" + gDefSiteFront + " asset=" + gDefSiteAsset
+		+ " ring=" + gDefSiteRing
+		+ " wall=" + gDefSiteWall
+		+ " lineSpots=" + gDbgLineN
+		+ " foeReach=" + formatFloat(Military::FoeReach(), "", 0, 0)
+		+ " bestFrontGain=" + formatFloat(gDbgFrontBest, "", 0, 2)
+		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2)
+		+ " bestRingGain=" + formatFloat(gDbgRingBest, "", 0, 2)
+		+ " bestWallGain=" + formatFloat(gDbgWallBest, "", 0, 2));
+	gDbgFrontBest = 0.f;
+	gDbgAssetBest = 0.f;
+	gDbgRingBest = 0.f;
+	gDbgWallBest = 0.f;
+}
+}  // namespace Market

@@ -382,6 +382,12 @@ local NAMES = {
 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
+	"apex_def_dps_linear",   -- protect_field.as: 1 = tower cover priced on linear surface DPS, 0 = the engine's sqrt(dps) threat (1)
+	"apex_wall_efficient",   -- want_protect.as: 1 = wall slots rank towers by cover per metal, not absolute power (1)
+	"apex_raider_massing",   -- hooks.as: 1 = raiders become line army at T2, 0 = they raid all game like stock (0)
+	"apex_spam_raiders",     -- hooks.as: 1 = cheap raiders spot as solo scouts after T2, 0 = they keep raiding (0)
+	"apex_def_outrange",     -- protect_field.as: kill power lifted by the share of attackers a tower outranges (1)
+	"apex_def_kill_cap",     -- protect_field.as: 1 = a defence site's stake is capped by what the tower can kill in the exposure window
 	"apex_radar_overlap",    -- want_protect.as: fraction of a standing radar's radius that blocks a new mast (0.45; was hardcoded 0.8)       -- want_protect.as: a T1 tower's gain multiplier once a standing T2 builder can make defence (0.15)
 	"apex_behemoth_threat",   -- main.as: threat multiplier on corjugg so everything keeps its distance (2)
 	"apex_charge_threat_mod", -- AttackTask.cpp: charge-path threat weight; bends the route around Behemoths only (0.1)
