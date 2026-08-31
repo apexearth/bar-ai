@@ -92,15 +92,25 @@ a moho 1.6x) — a denominator artefact, not a fact about the game.
 - fusion ~4900 m for +14.3 m/s at the game's 70:1 conversion: payback 343 s,
   **0.0029 per metal**
 
-  **DO NOT READ THAT AS "a fusion is ten times worse than a moho".** A rate
-  comparison makes them rivals; they are a SEQUENCE. The fusion is usually a
-  TARGET, and mohos are the fastest path to it — buying mohos first shortens
-  the ETA to the fusion, which is why the answer comes out as "economy, then
-  tech" without anyone writing that rule. The objective is fastest-path-to-a-
-  target-state, not best-rate-right-now; see the `value-paradigm` skill. Judging
-  these two by rate is what produced the 2026-08-31 loss (USER-FEEDBACK.md):
-  T2 at 15 m/s, priced on capability, with nothing charging it for the delay it
-  imposed on everything else.
+  **These numbers are RIGHT, and while we are poor on metal the moho really is
+  the better buy** (apexearth, 2026-08-31: "a moho is in fact better than a
+  fusion when we are poor on metal"). A 52-second payback against 343 is
+  exactly why, and the min-ETA objective in `value-paradigm` derives the same
+  answer — the fast-payback investment shortens the path to everything
+  downstream. Rate and ETA agree here; they are not competing models.
+
+  What the rate CANNOT do is stand as a permanent verdict. It is
+  regime-dependent: at 15 m/s the moho wins, and at 300 m/s with converters
+  fed and spots exhausted the fusion is the only thing left that scales. And
+  the two are not even the same resource — the fusion's +14.3 m/s is energy
+  converted at 70:1, which is worth nothing without converters and spare
+  energy, while a moho is metal directly.
+
+  So use the rate to pick the NEXT investment, and use the ETA to a named
+  target to decide WHICH target you are heading for and whether you can afford
+  to start it yet. The 2026-08-31 loss (USER-FEEDBACK.md) was the second
+  question going unasked: T2 at 15 m/s was priced on capability with nothing
+  charging it for the delay it imposed on everything else.
 - cormakr converts 70 E→1 M/s for ONE metal; cormmkr 600 E→10.3 M/s for 370.
   T2's edge is space and toughness, not ratio.
 

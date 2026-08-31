@@ -69,10 +69,16 @@ lost the 1v1 he watched on 2026-08-31 (see USER-FEEDBACK.md): the T2 lab was
 priced on capability while nothing charged it for the delay it imposed on
 everything else.
 
-Concretely, `ai-eco-pricing` used to teach "fusion 0.0029 per metal -- an order
-of magnitude behind a moho". Under a rate comparison that is true and it is the
-wrong question: the fusion is a TARGET and mohos are the fastest path to it.
-Ranking them against each other frames as rivals what is actually a sequence.
+Note carefully what this does NOT mean. `ai-eco-pricing`'s "moho 0.0194 vs
+fusion 0.0029 per metal" is CORRECT, and while we are poor on metal the moho
+really is the better buy -- rate and ETA agree, because the fast payback
+shortens the path to everything after it. The rate is not the enemy of this
+objective; it is how the objective is computed one step at a time.
+
+The gap is the question the rate cannot answer: WHICH target are we heading
+for, and can we afford to start it yet. A per-instant price ranks the options
+in front of it; it never asks whether beginning a 4,300-metal reactor at 10 m/s
+delays every other target past the point where we survive to use it.
 
 ### The constraint that keeps it honest
 
