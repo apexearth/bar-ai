@@ -52,61 +52,66 @@ statement about WHERE to look: an economy-vs-army fix has to reach the producing
 code, per CLAUDE.md's standing rule about attributing a composition problem
 before touching any config table.
 
-## 2026-08-31 — the ETA objective is UNPROVEN, and this benchmark cannot prove it
+## 2026-08-31 — the eco scoreboard: method, and what it has bought so far
 
-`manager/brain/market/eta.as` landed (skill: `eta-objective`), defaulted OFF
-(`apex_eta=0`) and shadow-logging. Two A/B batches were run against NullAI on
-Comet Catcher, `apex_eta=1` against `apex_eta=0` on the same build, 11-13
-matched seeds each. **Neither resolved anything, and the reason is the
-instrument, not the change.**
+A/B testing was ABANDONED here on apexearth's call: *"I also thought an A/B test
+was silly to do here. Benchmark against ourselves, iterate and improve."* The
+earlier attempt is why -- two batches of the identical configuration differed by
++9.3% and +13.3% mean `metalProduced` (sd ~20%, minute-18 CI excluding zero), so
+the benchmark reported a significant difference between a config and itself, and
+resolving a 10% effect would have needed ~60 pairs. **A 10-game eco A/B on this
+benchmark measures noise. Do not run one.**
 
-THE CONTROL THAT SETTLES IT. Two batches of the *identical* configuration
-(`apex_eta=0` both times, same seeds) differ by:
+RETRACTED from the first attempt, and do not cite it: "the ETA arm builds more
+army, +12.5% at minute 6, p=0.039". The identical-config control threw a p=0.039
+too, and there are 28 tests per comparison.
 
-    minute 14   metalProduced  mean +9.3%   sd of paired diff 19.6%
-    minute 18   metalProduced  mean +13.3%  sd 22.7%   95% CI +0.5% .. +26.2%
+THE METHOD INSTEAD. One scoreboard, 10 seeds, Apex vs `NullAI:0.1` (which does
+nothing at all), Comet Catcher Remake 1.8, `apex_eta=1`, medians at fixed game
+minutes. Only runs that actually REACHED a mark count toward it -- carrying a
+finished run's last sample forward reports an early win as a small economy.
 
-The minute-18 confidence interval **excludes zero**: the benchmark reports a
-significant difference between a configuration and itself. One metric in that
-control (`mBP` at minute 18) came out at **p = 0.039**. Same-config, same seeds.
+    SB1  economy-only          SB2  + spend the metal
+    min  income  mex  waste%   min  income   mex  waste%
+     10    15.8  6.0    46.6    10    18.2   6.5    18.2
+     20    53.6 27.0    18.6    20   131.1  54.5    19.1
+     30   211.2 64.0    11.7    30   233.1  66.0    13.0
 
-CONSEQUENCES, and the second one is a retraction:
+**2.4x the income at minute 20**, n=10 each, far outside the noise floor above.
 
-- **Required N for this benchmark, which nobody had measured**: ~60 pairs (120
-  games, ~1.5 h) to detect a 10% effect on `metalProduced` at 80% power; ~80
-  pairs at minute 18. A 10-13 pair batch is underpowered by roughly 5x. Any
-  eco A/B here smaller than that reports noise.
-- **RETRACTED: "the ETA arm builds more army, +12.5% at minute 6, p=0.039".**
-  That was the first batch's one significant result and a causal story was
-  built on it (that the merged draw ticket carried the ladder's pick value and
-  so shrank economy's draw odds). The identical-config control produces
-  p=0.039 findings too, and with 7 metrics x 4 checkpoints = 28 tests per
-  comparison, one is expected by chance. **The mechanism may still be real --
-  charging economy's draw odds out of the ladder's own pick is wrong on its own
-  logic and was fixed (`EtaEcoWeight`) -- but there is no measurement
-  supporting that it mattered, and it must not be cited as one.**
-- `FixedRNGSeed` pairs far more weakly than "matched seeds" suggests (CLAUDE.md
-  already says the DLL is multithreaded). Same seed is not the same game, so
-  pairing removes much less variance than assumed.
+WHAT EACH STEP WAS, so the next one is not re-derived:
 
-WHAT IS NOT IN DOUBT, because none of it is a delta: the control levels above
-(4 mexes at minute 10 vs a passive opponent), and two bugs found by reading code
-and instrument output rather than statistics --
+- **SB1 -- economy is the only target.** Two independent army drivers had to go,
+  and the second is the one that matters: `ArmyTarget()` falls back to a
+  SYMMETRIC PRIOR when no enemy is visible, so against an opponent that does
+  nothing we built army to match an imagined mirror of ourselves; and
+  `sinkGap = OverflowM() x fillS` **defines metal we fail to spend as army
+  demand**, which is why army ran at 1.58x its own target (7370 against 4666).
+  Army metal at minute 18: 5544 -> 324. Expressing "this player is for economy"
+  as a zero target is apexearth's own shape, quoted in `protect_target.as:15`.
+- **SB2 -- spend the metal, do not bank it.** `OverflowM()` only reports once the
+  bank is past 80% of storage, a LATE report of a fact available immediately:
+  measured, the bank pegged at its cap around minute 5 and the AI first admitted
+  it lacked hands at minute 6, having already binned 792 metal (apexearth:
+  *"Relying on storage is lazy - make sure spend the metal. (need more build
+  power)"*). Replaced by `SlackFrac()` -- smoothed `(income - pull)/income`, no
+  storage term -- which floors `feedRoom`, the forecast that had switched
+  constructor production off at ten builders while 46% of the metal was being
+  thrown away. A prediction must not veto production when a measurement refutes
+  it.
 
-1. A first move's power gain must come from the CATALOG, not from `w.gain`: a
-   market gain carries premiums and preferences, and feeding a factory's
-   *capability* gain in as metal/s had it reach the target in 83 s against a
-   mex's 280.
-2. The ladder returned "unreachable" (`base=1000000000`) once the economy grew,
-   because the target scales with the economy while each rung adds a fixed
-   amount -- so the step budget ran out and **the objective silently switched
-   itself off exactly when it mattered**. Fixed by batching every rung; a
-   25-minute probe now shows zero unreachable ladders.
+OPEN, both attributed and neither guessed:
 
-OPEN: run the ~60-80 pair batch, or lower the benchmark's variance first. The
-19.6% same-config spread at minute 14 is large enough to be worth diagnosing on
-its own -- games ending at different times (we kill the passive commander
-between minute 20 and 28) and early-factory timing are the two suspects.
+1. **Late-game waste is untouched.** 19.1% at minute 20 and 13.0% at minute 30 --
+   the same failure as the early game, at a larger scale. SB2 bought the opening
+   only.
+2. **The frame budget is now violated by the economy this created.** 1v1 watch,
+   `apex_perf=1`: worst spike **102 ms**, `hk.maketask.builder` 10,197 ms total,
+   and the top per-call offender is `want.mexup` at 4.0 ms average / **75.3 ms
+   worst**. That walk is O(spots x constructors) and this build reaches 98 mexes
+   and 232 builders where the old one reached 14 -- a throttle sized for an
+   economy a fifth the size, which is CLAUDE.md's "a bulk pass that got BIGGER
+   without its throttle being revisited", exactly.
 
 ## 2026-08-31 — `policy.as` is 17 knobs and ONE of them is connected
 

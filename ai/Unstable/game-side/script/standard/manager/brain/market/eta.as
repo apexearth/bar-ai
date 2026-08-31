@@ -261,6 +261,53 @@ bool EtaOn()
 	return ai.GetTunable("apex_eta", TUNE_ETA) > 0.f;
 }
 
+// THE TARGET NAMES ECONOMY AND NOTHING ELSE, so army is not a state the AI is
+// trying to reach and its demand is zero. This is not a cap or an exclusivity
+// rule -- it is what naming an economy-only target MEANS, and it is scaffolding:
+// when the target gains an army term (docs/23-the-plan.md's standing
+// obligation), this predicate goes away rather than being tuned.
+//
+// It exists because the first version did not do it, and the AI went on
+// spending 52.6% of its metal on army at minute 18 with economy declared as the
+// only target (apexearth: "if you're trying to do this eco thing and you keep
+// making army then obviously your implementation is incomplete").
+bool EcoOnly()
+{
+	return EtaOn();
+}
+
+// THE SHARE OF OUR INCOME NOTHING IS SPENDING.
+//
+// Storage-independent on purpose. OverflowM() only reports once the bank is
+// past 80% of storage, which is a LATE report of a fact available immediately
+// -- measured on the economy-only board, the bank pegged at its cap around
+// minute 5 and the AI first "noticed" it had too few hands at minute 6, having
+// already thrown away 792 metal (apexearth: "relying on storage is lazy --
+// make sure spend the metal. (need more build power)").
+//
+// income - pull is the same fact with no buffer in the way. Smoothed because
+// pull dips to nothing whenever the fleet is between jobs, so the raw tick
+// reads "wasting everything" several times a minute in a perfectly busy base.
+float gSlackEma = 0.f;
+int gSlackAt = -999999;
+float SlackFrac()
+{
+	if (ai.frame - gSlackAt >= SECOND) {
+		gSlackAt = ai.frame;
+		const float inc = aiEconomyMgr.metal.income;
+		float f = 0.f;
+		if (inc > 0.1f) {
+			const float slack = inc - aiEconomyMgr.metal.pull;
+			if (slack > 0.f)
+				f = slack / inc;
+		}
+		if (f > 1.f)
+			f = 1.f;
+		gSlackEma = 0.9f * gSlackEma + 0.1f * f;
+	}
+	return gSlackEma;
+}
+
 // WHAT THE ETA CAN HONESTLY PRICE. Economic power is extraction plus generation,
 // so those are the only first moves whose worth this objective can state. A
 // factory's return is army, a converter's and a store's return is already inside

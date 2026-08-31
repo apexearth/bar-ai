@@ -940,6 +940,8 @@ float AnswerShare()
 
 float ArmyTarget()
 {
+	if (EcoOnly())
+		return 0.f;
 	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
 	// as safe lost the first BARb game with three army units built. The
 	// enemy's economy mirrors ours from the same start, so expect their
@@ -959,6 +961,8 @@ float ArmyTarget()
 // The gantry want reads this one -- T3 is exactly what the eco role is FOR.
 float ArmyTargetFull()
 {
+	if (EcoOnly())
+		return 0.f;
 	const float ourTotal = EconAssetsM() + ArmyValue();
 	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
 	const float seen = Military::EnemyArmyCost() * AnswerShare();

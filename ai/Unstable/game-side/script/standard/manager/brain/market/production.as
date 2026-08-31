@@ -296,7 +296,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// buys nanos floors the gap, so a satisfied target never idles the lines
 	// while metal rots -- measured: lines at buf0s with 31% of a 44-minute
 	// game's metal overflowing.
-	{
+	// ...UNLESS THE TARGET IS ECONOMY, in which case metal we cannot spend is a
+	// shortage of HANDS, not of army -- which is the same thing the ladder's
+	// max() says when a step is build-bound rather than feed-bound. The
+	// constructor gain below already prices overflow capture, so the metal has
+	// somewhere to go.
+	if (!EcoOnly()) {
 		const float waste = OverflowM() * ((fillS > 1.f) ? fillS : 180.f);
 		if (waste > armyGap)
 			armyGap = waste;
@@ -362,6 +367,26 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			feedRoom = (hands - ownedHands) / hands;
 			if (feedRoom < 0.f)
 				feedRoom = 0.f;
+		}
+		// A PREDICTION THAT THE WASTE REFUTES. The line above forecasts how many
+		// lathes the income can keep fed and caps hands there. Overflow is the
+		// measurement that says the forecast is wrong: we are throwing metal
+		// away WITH the hands we have, so those hands cannot spend it whatever
+		// the formula predicts. Measured on the economy-only board -- bank
+		// pegged at the storage cap from minute 6, 46.6% of all metal produced
+		// wasted by minute 10, and feedRoom holding constructor production at
+		// exactly zero on ten builders.
+		//
+		// Floored at the share of income nothing is spending, so it is
+		// self-cancelling: the moment the metal is being spent the floor is zero
+		// again and the forecast governs. NOT gated on a full bank -- see
+		// SlackFrac. Only while the target is economy; elsewhere the unspent
+		// metal already has somewhere to go (the army sink above), which is what
+		// hid this.
+		if (EcoOnly()) {
+			const float slack = SlackFrac();
+			if (feedRoom < slack)
+				feedRoom = slack;
 		}
 	}
 	// T1 AIR ARMY ENDS AT T2 (apexearth: "We need to stop making T1 air army
@@ -562,7 +587,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
 			}
-			const float sinkGap = OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul;
+			const float sinkGap = EcoOnly() ? 0.f
+					: (OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
