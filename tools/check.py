@@ -612,6 +612,22 @@ def main() -> int:
         p.name for p in AI_DIR.iterdir() if (p / "game-side").is_dir()
     )
     failed = 0
+    # DOC ROT IS A CHECK, NOT A JUDGEMENT CALL. A doc naming a file or symbol
+    # that no longer exists was written for a tree that has changed, and it
+    # still reads as authoritative. A warning, never an error: a stale
+    # reference is a prompt to re-read, not a broken build.
+    try:
+        import subprocess
+        _da = Path(__file__).parent / 'docs_audit.py'
+        _r = subprocess.run([sys.executable, str(_da), '--quiet'],
+                            capture_output=True, text=True)
+        if _r.returncode == 1:
+            print('')
+            print('docs')
+            print('  warn    stale references -- run '
+                  '`python tools/docs_audit.py` for the list')
+    except Exception:
+        pass
     dash = Report()
     check_dashboard(dash)
     if dash.errors or dash.warnings or args.all:

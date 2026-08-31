@@ -1,0 +1,157 @@
+"""Do the docs still describe code that exists?
+
+The recurring failure here is not a doc that is badly written -- it is a doc
+that was TRUE and quietly stopped being true, while still reading as
+authoritative. apexearth, 2026-08-31: "it's very organic through a normal
+conversation that a specific case or situation is run into, and then the AI
+will modify some documents based on that one conversation... I'm too busy, and
+there's too much for me to look through here."
+
+So this checks the one thing about a doc that is mechanically decidable: when a
+doc names a FILE or a SYMBOL, does that file or symbol exist in the tree? It
+makes no judgement about whether the prose is right -- it only catches the
+claims that are checkably dead. That is enough to have caught every stale
+reference found by hand on 2026-08-31: RushReady, techlead.as, mexhold.as,
+builder/share.as, T1Commit, ShareAdvCon, AlwaysEco, docs/12, docs/18.
+
+    python tools/docs_audit.py            # report
+    python tools/docs_audit.py --quiet    # exit 1 on findings, no detail
+
+Deliberately NOT checked: whether a described behaviour matches the code. That
+needs judgement, and judgement is what keeps going wrong.
+"""
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+VARIANT = ROOT / "ai" / "Unstable" / "game-side" / "script" / "standard"
+
+# Where prose lives.
+PROSE = [ROOT / "CLAUDE.md", ROOT / "USER-FEEDBACK.md", ROOT / "ISSUES.md"]
+PROSE += sorted((ROOT / "docs").glob("*.md"))
+PROSE += sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
+PROSE += sorted((ROOT / ".claude" / "agents").glob("*.md"))
+
+# `backticked.as` or `backticked/path.as` -- a claim that a script file exists.
+FILE_REF = re.compile(r"`([A-Za-z0-9_./-]+\.(?:as|lua|py|json))`")
+# `SomeFunc()` or `Namespace::SomeFunc` -- a claim that a symbol exists.
+SYM_REF = re.compile(r"`(?:([A-Z][A-Za-z0-9_]*)::)?([A-Za-z_][A-Za-z0-9_]*)\(\)`")
+# `apex_foo` / TUNE_FOO -- tunables have their own auditor, but a doc naming a
+# dead one is the same class of rot.
+TUNE_REF = re.compile(r"`(apex_[a-z0-9_]+)`")
+
+# Docs that deliberately describe OTHER repositories -- their file references
+# are supposed to be absent from our tree, so scanning them is pure noise. An
+# auditor with a 40% false-positive rate gets ignored, which is worse than no
+# auditor (the as_scope undeclared-symbol pass was reverted the same day for
+# exactly this).
+SURVEYS = {"docs/13-other-ais.md", "docs/14-bar-ai-landscape.md",
+           "docs/02-ai-landscape.md", "docs/09-resources.md"}
+
+# Files owned by the game or the lobby, not by us.
+EXTERNAL_FILES = {"aiSimpleName.lua", "aiCustomData.lua", "parse_demo_file.py",
+                  "config/x.json", "gadgets.lua", "units.json"}
+
+# Names that are engine/C++/stdlib, not ours -- absence proves nothing.
+EXTERNAL = {
+    "GetTeamUnits", "GetGameFrame", "GetTeamInfo", "GetTeamList", "GetModOptions",
+    "GetUnitDefID", "SendMessage", "Echo", "GameFrame", "UnitFinished",
+    "UnitDestroyed", "UnitCreated", "main", "printf", "assert", "sqrt", "pow",
+    "min", "max", "abs", "floor", "ceil", "rand", "sort", "insert", "remove",
+}
+
+
+def script_text():
+    out = []
+    for p in VARIANT.rglob("*.as"):
+        try:
+            out.append(p.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            pass
+    return "\n".join(out)
+
+
+def main():
+    quiet = "--quiet" in sys.argv
+    if not VARIANT.is_dir():
+        print(f"variant tree not found: {VARIANT}")
+        return 1
+
+    code = script_text()
+    # Every symbol the AngelScript actually declares.
+    declared = set(re.findall(r"\b(?:void|bool|int|uint|float|double|string)\s+"
+                              r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", code))
+    declared |= set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", code))
+    tunables = set(re.findall(r'GetTunable\("([a-z_0-9]+)"', code))
+
+    # Every file that exists, by basename and by tail path.
+    have = set()
+    for p in ROOT.rglob("*"):
+        if p.is_file():
+            have.add(p.name)
+            have.add("/".join(p.parts[-2:]))
+            have.add("/".join(p.parts[-3:]))
+
+    findings = []
+    for doc in PROSE:
+        if not doc.is_file():
+            continue
+        try:
+            text = doc.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = doc.relative_to(ROOT).as_posix()
+        if rel in SURVEYS:
+            continue
+        seen = set()
+        for m in FILE_REF.finditer(text):
+            ref = m.group(1)
+            if ref in seen:
+                continue
+            seen.add(ref)
+            tail = ref.split("/")
+            if (ref in have or tail[-1] in have
+                    or "/".join(tail[-2:]) in have
+                    or ref in EXTERNAL_FILES or tail[-1] in EXTERNAL_FILES):
+                continue
+            findings.append((rel, "file", ref))
+        for m in SYM_REF.finditer(text):
+            ns, name = m.group(1), m.group(2)
+            key = f"{ns}::{name}" if ns else name
+            if key in seen or name in EXTERNAL:
+                continue
+            seen.add(key)
+            if name not in declared:
+                findings.append((rel, "symbol", key))
+        for m in TUNE_REF.finditer(text):
+            t = m.group(1)
+            if t in seen:
+                continue
+            seen.add(t)
+            if t not in tunables:
+                findings.append((rel, "tunable", t))
+
+    by_doc = {}
+    for rel, kind, ref in findings:
+        by_doc.setdefault(rel, []).append((kind, ref))
+
+    if not quiet:
+        for rel in sorted(by_doc, key=lambda r: -len(by_doc[r])):
+            items = by_doc[rel]
+            print(f"\n{rel}  ({len(items)} dead reference(s))")
+            for kind, ref in items[:12]:
+                print(f"    {kind:<8} {ref}")
+            if len(items) > 12:
+                print(f"    ... and {len(items) - 12} more")
+        print(f"\n{len(findings)} dead reference(s) across {len(by_doc)} file(s)"
+              f" of {len(PROSE)} scanned")
+        print("A dead reference is a claim about code that is no longer there.")
+        print("It does NOT mean the prose around it is wrong -- but it is the")
+        print("cheapest signal that the section was written for a tree that")
+        print("has since changed, and should be re-read before being trusted.")
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
