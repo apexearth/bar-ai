@@ -1,5 +1,63 @@
 # What apexearth wants from this AI
 
+## 2026-08-31 — THE OBJECTIVE IS TIME-TO-CAPABILITY, NOT RETURN-PER-METAL
+
+His answer when asked how T2 affordability should be decided, and it is a
+statement about the whole market rather than about T2:
+
+*"We're trying to move away from too many tunables... We're supposed to do
+things based on math. The math should read that if we continue to focus more on
+security and economy then we can double or triple our income before going to
+T2, then once we're at T2 we'll be able to afford the T2 units and scale our
+economy much faster. If you were to calculate out the ETA to getting your first
+fusion, then increasing your economy before getting T2 would show as the right
+choice. Also upgrading mexes once we get to T2 would also show as the proper
+choice to get that fusion faster. It is all math which can quantify this...
+You even need to consider how many constructors/nanos you should build in order
+to [be] 100% efficient. There is theoretically a 'perfect' play to get to your
+first fusion the fastest. Everything has a tradeoff of course. I've been trying
+to get the AI to create these algorithms."*
+
+WHY THIS IS DIFFERENT FROM WHAT THE MARKET DOES TODAY
+
+The market prices each Want by RETURN PER METAL and picks the best one now.
+That objective is greedy and cannot see compounding: it has no way to express
+"this choice is worse this minute and gets me to the goal sooner". So a T2 lab
+wins on capability while nothing charges it for the delay it imposes on
+everything else -- which is exactly the loss he watched.
+
+The objective he is describing is TIME TO A CAPABILITY, minimised over plans:
+
+    t_direct(T)  = max( (T - bank) / income , T / buildPower )
+    t_via(X, T)  = t_build(X) + max( (T - bank') / (income + dI_X) ,
+                                      T / buildPower' )
+    choose argmin over the candidate next investments X
+
+Investing first WINS whenever dI_X pays back inside the horizon, which is the
+arithmetic that makes "more mexes before T2" and "mex upgrades once at T2" come
+out right on their own -- no threshold, no tunable, and the same formula
+answers "how much build power" because buildPower < income means the plan is
+build-power-limited and the optimiser buys a constructor or nano instead.
+
+This is a small search, not a planner: a one- or two-step lookahead over a
+handful of candidate investments, re-evaluated as state changes.
+
+WHAT ALREADY EXISTS TO BUILD IT FROM
+  EcoPowerM(), FreeMetalFlow(), InFlightCap()/BPGap (build power vs income),
+  Catalog::gExtractsM / gMakeE (the dI of any investment), ValueOf's feedSec
+  (cost includes time, already), apex_payback_h as the horizon.
+
+THE HARD PART, STATED HONESTLY: a pure minimise-time-to-fusion optimiser builds
+ZERO army and dies at minute 12. The objective has to be time-to-capability
+SUBJECT TO surviving, and the survival constraint is the part that is not
+simple arithmetic. His own words allow for it -- "everything has a tradeoff" --
+and this loss is the case where the tradeoff was got wrong in the other
+direction. Any first version must be measured on whether it still defends
+itself, not only on whether it reaches a fusion sooner.
+
+NOT STARTED. This is a design pass, not an edit.
+
+
 ## 2026-08-31 — A WHOLE LOSS, WATCHED AT 1x, NO BONUS. "We are doing things we
 ## cannot afford."
 
