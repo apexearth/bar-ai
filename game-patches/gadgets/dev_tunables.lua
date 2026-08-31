@@ -394,6 +394,7 @@ local NAMES = {
 	"apex_retreat_threat_mod",-- RetreatTask.cpp: threat weight on a wounded unit's path home (4; attack squads use 2)
 	"apex_kite_foe_pad",      -- SquadTask.cpp: margin over the closing enemy's range that triggers the backstep (120)
 	"apex_extra_plant_army",  -- choose.as: fraction of the army budget target extras must see fed (0.85)
+	"apex_eta",               -- eta.as: 0 shadow-log the ETA ladder, 1 let it re-rank the economic categories
 	"apex_energy_headroom",   -- maketask.as: energy income target as multiple of current pull (1.35)
 	"apex_t2_energy_from",    -- maketask.as: metal income from which the T2 energy floor applies (12)
 	"apex_flank_pct",         -- AttackTask.cpp: percent of attack squads that route around a side (35)

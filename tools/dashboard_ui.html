@@ -699,6 +699,14 @@ function renderMatch(d) {
       <label class="f">&nbsp;<span class="dim" id="bw-note"></span></label>
     </div>
     <div class="legend" id="bw-legend" style="flex-wrap:wrap"></div>
+    <div class="legend" id="eta-legend"></div>
+    <canvas id="c-eta" width="1140" height="220"></canvas>
+    <div class="dim" style="font-size:12px;margin:4px 0 14px">The ETA objective
+      (eta.as): economic power against the target it is heading for, and the
+      cheap growth the board still owes us. <b>High "cheap" while the AI reaches
+      for expensive growth is the failure this layer exists to catch.</b>
+      "agree" is how often the ladder and the market's price pick the same
+      economy want &mdash; if it is always 100%, the layer is inert.</div>
     <canvas id="c-brain" width="1140" height="300"></canvas>
     <div class="dim" style="font-size:12px;margin-top:4px">Ticks under the axis
       are actual picks (a want that got a builder). The draw is
@@ -1050,6 +1058,28 @@ function drawBudget() {
   $("#bm-note").textContent = `${N} samples; at ${mins[l]}m income `
     + `${t.income[l].toFixed(1)} m/s, ${Math.round(t.spent[l]).toLocaleString()} metal committed`;
   drawRisk(t.risk);
+  drawEta(t.eta);
+}
+function drawEta(e) {
+  const cv = $("#c-eta"); if (!cv) return;
+  if (!e || !e.min || !e.min.length) {
+    frame(cv, 1, 1);
+    setHTML("#eta-legend", `<span class="dim">no \`apex: eta\` lines in this infolog</span>`);
+    return;
+  }
+  const hi = Math.max(1, ...e.target);
+  const f = frame(cv, Math.max(1, ...e.min), hi);
+  line(f, e.min, e.target, "#94a3ae", [4, 3], 1.2);
+  line(f, e.min, e.power, "#5fbf77", null, 1.8);
+  line(f, e.min, e.cheap, "#e0876c", null, 1.6);
+  const n = e.min.length, l = n - 1;
+  const agree = e.agree.reduce((a, b) => a + b, 0);
+  setHTML("#eta-legend",
+    `<span><i style="background:#5fbf77"></i>economic power ${e.power[l].toFixed(1)}</span>`
+    + `<span><i style="background:#94a3ae;opacity:.55"></i>target ${e.target[l].toFixed(1)}</span>`
+    + `<span><i style="background:#e0876c"></i>cheap growth left ${e.cheap[l].toFixed(2)} m/s</span>`
+    + `<span class="dim">ladder and price agree on ${Math.round(100 * agree / n)}% `
+    + `of ${n} samples; last pick ${esc(e.pick[l])}</span>`);
 }
 function drawRisk(r) {
   const cv = $("#c-risk"); if (!cv) return;

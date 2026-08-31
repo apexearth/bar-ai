@@ -99,6 +99,11 @@ const float TUNE_DUP_BANK = 1.f;
 //   range that counts as protected ground for generator placement.
 // policy.as -- Build energy while income < pull * this.
 const float TUNE_ENERGY_HEADROOM = 1.35f;
+// manager/brain/market/eta.as [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE.
+//   0 shadow-logs the ladder's pick beside the market's and changes nothing;
+//   1 lets the ETA re-rank wants WITHIN the four economic categories. Swept
+//   against an inactive opponent -- see the eta-objective skill.
+const float TUNE_ETA = 0.f;
 // manager/builder/mexguard.as [energy/s] -- panic solar panels only while
 //   energy income is below this; a bigger economy answers a stall with the
 //   ladder's fusion instead.

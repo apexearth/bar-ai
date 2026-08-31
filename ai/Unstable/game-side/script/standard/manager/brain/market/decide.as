@@ -327,6 +327,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++at;
 		ranked.insertAt(at, c);
 	}
+	// THE ETA LAYER. Shadow-logs always; re-ranks the economic categories only
+	// while apex_eta is on. Above the panics on purpose -- those are safety and
+	// keep their hoist; this only decides which economy want represents its
+	// category in the draw below.
+	{
+		const double _tEta = Perf::T0();
+		EtaLog(ranked, unit);
+		Perf::Add("dec.eta", _tEta);
+	}
 	// THEIR AIR WITH NOTHING THAT SHOOTS UP IS AN EMERGENCY, NOT A BID.
 	// apexearth: "when enemy starts bombing us and we have 0 AA I expect the
 	// very next thing we build to be AA" -- and, later, not to wait for the
@@ -542,6 +551,23 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (catBest[c] < 0)
 				catBest[c] = int(ri);
 		}
+		// ONE ECONOMIC QUESTION while the ETA is on: extraction, generation and
+		// build power are three ways of buying a bigger economy sooner, so the
+		// ladder answers them together and they hold ONE ticket between them
+		// instead of three. See eta.as; CAT_PRODUCE stays out of the merge.
+		array<float> catV(CAT_N, -1.f);   // >=0 overrides a ticket's weight
+		if (EtaOn()) {
+			const int pick = EtaEcoPick(ranked);
+			if (pick >= 0) {
+				for (int c = 0; c < CAT_N; ++c) {
+					if (EtaMergedCat(c))
+						catBest[c] = -1;
+				}
+				const int pc = CategoryOf(ranked[pick].kind);
+				catBest[pc] = pick;
+				catV[pc] = EtaEcoWeight(ranked);
+			}
+		}
 		// HOW SHARP THE DRAW IS. Weighting each ticket by its raw value means a
 		// want the market itself rates six times worse still wins one election
 		// in six -- measured: 34% of elections took a lower-valued want, and a
@@ -559,7 +585,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		for (int c = 0; c < CAT_N; ++c) {
 			if (catBest[c] < 0)
 				continue;
-			const float v = ranked[catBest[c]].value;
+			const float v = (catV[c] >= 0.f) ? catV[c]
+					: ranked[catBest[c]].value;
 			// A COMMITMENT IS NOT SAMPLED. The cost of drawing a worse option
 			// scales with what that option costs: a wrong 40-metal wind is
 			// noise, a wrong 9700-metal afus is the game (apexearth: "for these

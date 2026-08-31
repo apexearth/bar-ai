@@ -177,6 +177,23 @@ GROUPS = [
                  ("TUNE_E_WASTE_WORTH", "wasted energy hurts more, so a "
                   "converter beats a generator harder during overflow"),
              ]},
+            {"title": "The ETA objective (economy-only)",
+             "what": "Instead of asking which build returns the most right "
+                     "now, the AI names a target — four times the economic "
+                     "power it has — and asks which build reaches it soonest. "
+                     "Mexes before tech, upgrades after tech, and the switch "
+                     "to reactors when the ground runs out all fall out of "
+                     "that, with no ordering rule. Economy only so far: it "
+                     "cannot price a factory, army or defence.",
+             "reads": "brain/market/eta.as (skill: eta-objective)",
+             "knobs": [
+                 ("TUNE_ETA", "lets the target decide which economy want "
+                  "competes — extraction, generation and build power stop "
+                  "being three separate lottery tickets and become one "
+                  "question. Off still writes the `apex: eta` log line, so "
+                  "you can read what it WOULD have picked without changing "
+                  "anything"),
+             ]},
             {"title": "Metal expansion",
              "what": "Claiming spots and upgrading them. This is what every "
                      "new spending rule displaces, so watch mex counts after "

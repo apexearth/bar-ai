@@ -46,6 +46,7 @@
 #include "market/want_assist.as"    // the assist Want
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want
 #include "market/safety.as"        // commander self-preservation, ahead of the auction
+#include "market/eta.as"            // the economy-only ETA target and its ladder
 #include "market/decide.as"         // the arbiter: rank the Wants, pick one
 #include "market/execute.as"        // turning a won Want into a task
 #include "market/production.as"     // the production market: con orders, batch demand

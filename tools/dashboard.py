@@ -581,6 +581,13 @@ RISK_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: risk mex=(\d+) covered=(\d+) "
     r"meanShort=([-\d.]+) lostM=([-\d.]+)"
     r"(?:.*?home\[hazard=([-\d.]+)/ks short=([-\d.]+)\])?")
+# The ETA objective's own state (eta.as): where the economy stands against the
+# target it is heading for, how much cheap growth the board still owes us, and
+# whether the ladder and the market's price actually disagree.
+ETA_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: eta t=\d+ "
+    r"P=([-\d.]+) tgt=([-\d.]+) cheap=([-\d.]+) base=([-\d.]+) "
+    r"mkt=(\S+) eta=(\S+)")
 
 
 def brain_metrics(d):
@@ -608,6 +615,21 @@ def brain_metrics(d):
                     t["target"][c].append(float(m.group(4 + i * 2)))
                 t["income"].append(float(m.group(13)))
                 t["spent"].append(float(m.group(14)))
+            elif "apex: eta " in line:
+                m = ETA_RE.search(line)
+                if not m:
+                    continue
+                t = teams.setdefault(m.group(2), _brain_team())
+                e = t["eta"]
+                e["min"].append(float(m.group(1)))
+                e["power"].append(float(m.group(3)))
+                e["target"].append(float(m.group(4)))
+                e["cheap"].append(float(m.group(5)))
+                e["base"].append(float(m.group(6)))
+                mkt, pick = m.group(7), m.group(8).split("=")[0]
+                e["mkt"].append(mkt)
+                e["pick"].append(pick)
+                e["agree"].append(1 if mkt == pick else 0)
             elif "apex: risk " in line:
                 m = RISK_RE.search(line)
                 if not m:
@@ -628,7 +650,9 @@ def _brain_team():
             "have": {c: [] for c in BUDGET_CATS},
             "target": {c: [] for c in BUDGET_CATS},
             "risk": {k: [] for k in ("min", "mex", "covered", "shortfall",
-                                     "lostM", "homeHazard", "homeShort")}}
+                                     "lostM", "homeHazard", "homeShort")},
+            "eta": {k: [] for k in ("min", "power", "target", "cheap", "base",
+                                    "mkt", "pick", "agree")}}
 
 
 def match_detail(d):

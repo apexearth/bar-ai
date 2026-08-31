@@ -1,0 +1,421 @@
+namespace Market {
+//------------------------------------------------------------------------------
+// THE ETA OBJECTIVE, ECONOMY-ONLY (docs/23-the-plan.md, the `eta-objective`
+// skill).
+//
+// The market prices ONE STEP: gain per metal-second, compared now. A per-instant
+// price cannot say "worse this minute, sooner to the goal", which is the whole
+// difference between ranking options and reaching a target. This file names a
+// TARGET -- a level of economic power -- and answers the plan's question
+// instead: which first move reaches it soonest.
+//
+// The ladder is the entire model. Growth investments are sorted by PAYBACK, and
+// the ladder takes the shortest-payback growth still standing until the target
+// is reached. Mexes before tech, upgrades after tech, and the switch to reactors
+// once the ground is claimed are consequences of the pool EMPTYING; there is no
+// ordering rule, no threshold and no cap anywhere in this file.
+//------------------------------------------------------------------------------
+
+// Reach this multiple of today's economic power. A target has to be far enough
+// away that a long build's delay is felt and near enough that the ladder still
+// terminates: 4x is about one era of this game, an opening economy to a mid one.
+const float ETA_TARGET_MUL = 4.f;
+const int   ETA_MAX_STEPS = 64;
+const float ETA_BIG = 1.0e9f;
+// The generator tail is inexhaustible, so it is closed in geometric chunks
+// rather than one panel at a time -- each chunk grows the economy by this much.
+// (A closed form would want a logarithm, which this AngelScript has no binding
+// for.) At 4x the target this converges in about seven chunks.
+const float ETA_CHUNK = 0.25f;
+const int   ETA_INF_N = 1000000;
+
+// One rung of the growth ladder: a thing we could build, what it costs, what it
+// adds to economic power, and how many of them the map still has in it.
+class Pool {
+	array<int> def;
+	array<float> cost;
+	array<float> gain;
+	array<int> n;
+}
+
+Pool@ gPoolNow;
+Pool@ gPoolTech;
+int gPoolAt = -999999;
+
+float ConvRate()
+{
+	const float own = OwnConvCeil();
+	return (own > 0.f) ? own : BestConvRatio();
+}
+
+// Sorted insert by payback. Feed-bound steps have rate dI*P/cost, so ranking by
+// cost/dI is EXACT and P-independent while metal is the binding constraint --
+// which is what lets the ladder walk the pool in order instead of re-scanning it
+// at every step.
+void PoolInsert(Pool@ p, int d, float cost, float gain, int n)
+{
+	if ((p is null) || (cost <= 1.f) || (gain <= 0.0001f) || (n <= 0))
+		return;
+	const float pb = cost / gain;
+	uint at = 0;
+	while ((at < p.def.length()) && ((p.cost[at] / p.gain[at]) <= pb))
+		++at;
+	p.def.insertAt(at, d);
+	p.cost.insertAt(at, cost);
+	p.gain.insertAt(at, gain);
+	p.n.insertAt(at, n);
+}
+
+// anyTier ignores who can build it: that is the world AFTER an advanced plant,
+// and comparing the two pools is how "is T2 worth it yet" gets answered by
+// arithmetic instead of by a bar.
+int BestExtractDef(bool anyTier)
+{
+	int best = 0;
+	float bx = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
+			continue;
+		if (!anyTier && !CanBuildEver(d))
+			continue;
+		if (Catalog::gExtractsM[d] > bx) {
+			bx = Catalog::gExtractsM[d];
+			best = d;
+		}
+	}
+	return best;
+}
+
+int ClaimExtractDef(bool anyTier)
+{
+	int best = 0;
+	float bc = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
+			continue;
+		if (!anyTier && !CanBuildEver(d))
+			continue;
+		const float c = Catalog::gCostM[d];
+		if ((c > 1.f) && ((best == 0) || (c < bc))) {
+			bc = c;
+			best = d;
+		}
+	}
+	return best;
+}
+
+void PoolFill(Pool@ p, bool anyTier)
+{
+	if (p is null)
+		return;
+	p.def.resize(0);
+	p.cost.resize(0);
+	p.gain.resize(0);
+	p.n.resize(0);
+	const float rate = ConvRate();
+	const float im = IncomeMult();
+
+	// OPEN GROUND. Priced at the last probed spot yield; per-spot yields differ
+	// and this carries the average, which is the model's coarsest term.
+	CacheSpots();
+	const int open = int(gAllSpots.length()) - int(gLSpot.length());
+	const int claimDef = ClaimExtractDef(anyTier);
+	if ((open > 0) && (claimDef > 0))
+		PoolInsert(p, claimDef, Catalog::gCostM[claimDef], SpotM(), open);
+
+	// HELD GROUND: the upgrade each standing extractor still has left in it.
+	const int upDef = BestExtractDef(anyTier);
+	if (upDef > 0) {
+		for (uint i = 0; i < gLSpot.length(); ++i) {
+			if (gLExtract[i] <= 0.f)
+				continue;
+			const float dI = gLIncome[i] * im
+					* (Catalog::gExtractsM[upDef] - gLExtract[i]);
+			if (dI > 0.f)
+				PoolInsert(p, upDef, Catalog::gCostM[upDef], dI, 1);
+		}
+	}
+
+	// THE TAIL: generation, which nothing exhausts. Energy is carried at the
+	// conversion anchor, the same rate EcoPowerM values it at -- so a converter
+	// is power-neutral here by construction and is not a growth rung.
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
+			continue;
+		if (!anyTier && !CanBuildEver(d))
+			continue;
+		if (Catalog::gNeedGeo[d])
+			continue;   // vent-limited, so not a free tail
+		float dI = Catalog::gMakeM[d];
+		if (Catalog::gMakeE[d] > 0.f)
+			dI += Catalog::gMakeE[d] * rate;
+		if (dI <= 0.f)
+			continue;
+		PoolInsert(p, d, Catalog::gCostM[d], dI, ETA_INF_N);
+	}
+}
+
+void PoolRefresh()
+{
+	if ((gPoolNow !is null) && (ai.frame - gPoolAt < 5 * SECOND))
+		return;
+	gPoolAt = ai.frame;
+	if (gPoolNow is null) {
+		Pool a;
+		Pool b;
+		@gPoolNow = a;
+		@gPoolTech = b;
+	}
+	PoolFill(gPoolNow, false);
+	PoolFill(gPoolTech, true);
+}
+
+// METAL FEEDS THE LATHE: a step takes the longer of what the fleet can build and
+// what the economy can pay for. This is the plan's max() term, per rung.
+float StepSec(int d, float cost, float P, float bank, float bp)
+{
+	float bt = Catalog::BuildSecondsAt(d, bp);
+	if (bt < 0.1f)
+		bt = 0.1f;
+	float need = cost - bank;
+	if (need < 0.f)
+		need = 0.f;
+	const float feed = (P > 0.01f) ? (need / P) : ETA_BIG;
+	return (feed > bt) ? feed : bt;
+}
+
+float LadderRun(Pool@ p, float P, float bank, float bp, float target, int consumed)
+{
+	if (p is null)
+		return ETA_BIG;
+	array<int> n = p.n;   // the ladder eats this copy, not the cached pool
+	if (consumed > 0) {
+		for (uint c = 0; c < n.length(); ++c) {
+			if ((p.def[c] == consumed) && (n[c] > 0) && (n[c] < ETA_INF_N)) {
+				n[c] -= 1;
+				break;
+			}
+		}
+	}
+	float t = 0.f;
+	uint i = 0;
+	int steps = 0;
+	// RUNGS ARE TAKEN IN BATCHES, not one at a time. A step budget spent one
+	// solar or one claim at a time cannot reach a target that scales with the
+	// economy: measured at P=63.6 against a target of 254.4, the walk ran out of
+	// steps among the open claims and returned "unreachable", which silently
+	// switched the whole objective off exactly when the economy got big. Each
+	// batch is sized to grow the economy by ETA_CHUNK, so the work is bounded
+	// whatever the pool holds. Priced at the batch's STARTING power, which
+	// understates the speedup within a batch and so overestimates time -- the
+	// conservative direction.
+	while ((P < target) && (steps < ETA_MAX_STEPS)) {
+		while ((i < n.length()) && (n[i] <= 0))
+			++i;
+		if (i >= n.length())
+			return ETA_BIG;   // nothing left on the board that grows
+		const float g = p.gain[i];
+		float want = P * ETA_CHUNK;
+		if (P + want > target)
+			want = target - P;
+		int k = int(want / g) + 1;
+		if (k > n[i])
+			k = n[i];
+		t += float(k) * StepSec(p.def[i], p.cost[i], P, bank, bp);
+		bank = 0.f;
+		P += float(k) * g;
+		n[i] -= k;
+		++steps;
+	}
+	return (P >= target) ? t : ETA_BIG;
+}
+
+// Seconds to the target if we start by building def d (0 = follow the ladder as
+// it stands). addBP is how a lathe helps: it buys HANDS, not income, and shows
+// its value only where the ladder is build-bound rather than feed-bound.
+float EtaWith(int d, float gainM, float addBP, bool tech)
+{
+	PoolRefresh();
+	float P = EcoPowerM();
+	if (P < 0.5f)
+		P = 0.5f;
+	const float target = P * ETA_TARGET_MUL;
+	float bank = aiEconomyMgr.metal.current;
+	float bp = EffBP(0.f);
+	if (bp < 1.f)
+		bp = 1.f;
+	float t = 0.f;
+	if (d > 0) {
+		t = StepSec(d, Catalog::gCostM[d], P, bank, bp);
+		bank = 0.f;
+		if (gainM > 0.f)
+			P += gainM;
+		if (addBP > 0.f)
+			bp += addBP;
+	}
+	return t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, target, d);
+}
+
+bool EtaOn()
+{
+	return ai.GetTunable("apex_eta", TUNE_ETA) > 0.f;
+}
+
+// WHAT THE ETA CAN HONESTLY PRICE. Economic power is extraction plus generation,
+// so those are the only first moves whose worth this objective can state. A
+// factory's return is army, a converter's and a store's return is already inside
+// EcoPowerM's own valuation of energy, and assist adds no def at all -- all four
+// keep their market price rather than being ranked by a target that cannot see
+// what they are for.
+bool EtaRanks(Want@ w)
+{
+	if ((w is null) || (w.def is null))
+		return false;
+	return (w.kind == WK_MEX) || (w.kind == WK_MEXUP) || (w.kind == WK_ENERGY)
+			|| (w.kind == WK_GEO) || (w.kind == WK_NANO) || (w.kind == WK_TECH);
+}
+
+// The first move's contribution to ECONOMIC POWER, read from the catalog rather
+// than from the want's market gain. The two are not the same number: a market
+// gain carries scarcity premiums, survival discounts and stated preferences,
+// and feeding those into the ladder inflates the economy with income that will
+// never arrive (measured on the first probe -- a vehicle plant's capability gain
+// entered as metal/s and reached the target in 83s against a mex's 280).
+float DPowerOf(Want@ w, int d)
+{
+	if (w.kind == WK_MEX)
+		return (w.gain > 0.f) ? w.gain : SpotM();
+	if (w.kind == WK_MEXUP) {
+		const int li = LedgerFind(w.spotId);
+		if ((li >= 0) && (gLExtract[li] > 0.f))
+			return gLIncome[li] * IncomeMult()
+					* (Catalog::gExtractsM[d] - gLExtract[li]);
+		return 0.f;
+	}
+	float dI = Catalog::gMakeM[d];
+	if (Catalog::gMakeE[d] > 0.f)
+		dI += Catalog::gMakeE[d] * ConvRate();
+	return (dI > 0.f) ? dI : 0.f;
+}
+
+float EtaOfWant(Want@ w)
+{
+	if (!EtaRanks(w))
+		return ETA_BIG;
+	const int d = int(w.def.id);
+	if (w.kind == WK_NANO)
+		return EtaWith(d, 0.f, Catalog::gBuildPower[d], false);
+	if (w.kind == WK_TECH)
+		return EtaWith(d, 0.f, 0.f, true);
+	return EtaWith(d, DPowerOf(w, d), 0.f, false);
+}
+
+// ONE ECONOMIC QUESTION, ONE ANSWER. Extraction, generation and build power are
+// three ways of buying the same thing -- a bigger economy sooner -- so they are
+// one question and the ladder answers it. As four separate draw tickets they
+// were sampled four times against everything else, which is the same imbalance
+// the kinds-to-categories merge already fixed one level down.
+//
+// CAT_PRODUCE is deliberately NOT in the merge: a factory's return is army,
+// which this target does not name, so plants keep their own ticket and their
+// market ordering. Tech is priced and logged, but does not steer yet.
+bool EtaMergedCat(int c)
+{
+	return (c == CAT_METAL) || (c == CAT_ENERGY) || (c == CAT_BP);
+}
+
+// THE MERGED TICKET'S WEIGHT IS THE ECONOMY'S BEST MARKET VALUE, not the value
+// of whichever want the ladder chose. Taking the pick's own value made the ETA
+// quietly shrink how much economy competes against defence at all -- the ladder
+// often prefers a want the per-instant price rates lower, which is the entire
+// point of it, and charging the economy's draw odds for that turns a better
+// choice into fewer economy elections. What the ladder decides is WHICH want;
+// how loudly economy speaks is not its business.
+float EtaEcoWeight(array<Want@>@ ranked)
+{
+	if (ranked is null)
+		return -1.f;
+	float best = -1.f;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (!EtaMergedCat(CategoryOf(ranked[i].kind)))
+			continue;
+		if (ranked[i].value > best)
+			best = ranked[i].value;
+	}
+	return best;
+}
+
+// The index in `ranked` of the economy want that reaches the target soonest, or
+// -1 when nothing in the merged categories can be priced.
+int EtaEcoPick(array<Want@>@ ranked)
+{
+	if (ranked is null)
+		return -1;
+	int bestAt = -1;
+	float bestEta = ETA_BIG;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (!EtaMergedCat(CategoryOf(ranked[i].kind)) || !EtaRanks(ranked[i]))
+			continue;
+		const float e = EtaOfWant(ranked[i]);
+		if (e < bestEta) {
+			bestEta = e;
+			bestAt = int(i);
+		}
+	}
+	return bestAt;
+}
+
+// THE SHADOW READ. Runs whether or not the layer steers, so the two can be
+// compared on the same game: what the market's price put first, what the ETA
+// would have put first, and the two ETAs side by side.
+int gEtaLogAt = 0;
+void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
+{
+	if ((ranked is null) || (ranked.length() == 0) || (ai.frame < gEtaLogAt))
+		return;
+	gEtaLogAt = ai.frame + 15 * SECOND;
+	PoolRefresh();
+	const float P = EcoPowerM();
+	int bestAt = -1;
+	float bestEta = ETA_BIG;
+	// The market's best answer to the SAME question. `ranked` is value-sorted,
+	// so the first steerable want in it IS the market's pick; comparing against
+	// ranked[0] compared the two layers on different questions (it is often a
+	// turret, which this objective does not price at all).
+	int mktAt = -1;
+	string parts = "";
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (!EtaRanks(ranked[i]))
+			continue;
+		if ((mktAt < 0) && EtaMergedCat(CategoryOf(ranked[i].kind)))
+			mktAt = int(i);
+		const float e = EtaOfWant(ranked[i]);
+		if (e < bestEta) {
+			bestEta = e;
+			bestAt = int(i);
+		}
+		if (e < ETA_BIG) {
+			parts += " " + KindName(ranked[i].kind) + ":"
+				+ ranked[i].def.GetName() + "="
+				+ formatFloat(e, "", 0, 0);
+		}
+	}
+	// How much cheap growth the map still owes us -- the quantity that ends a
+	// regime in the plan, and the one a threshold used to stand in for.
+	const float cheap = ServableUpDemand() + OpenSpotStream();
+	AiLog(Factory::T() + "apex: eta t=" + ai.teamId
+		+ " P=" + formatFloat(P, "", 0, 1)
+		+ " tgt=" + formatFloat(P * ETA_TARGET_MUL, "", 0, 1)
+		+ " cheap=" + formatFloat(cheap, "", 0, 2)
+		+ " base=" + formatFloat(EtaWith(0, 0.f, 0.f, false), "", 0, 0)
+		+ " mkt=" + ((mktAt < 0) ? "-"
+			: (KindName(ranked[mktAt].kind) + ":"
+				+ ranked[mktAt].def.GetName()))
+		+ " eta=" + ((bestAt < 0) ? "-"
+			: (KindName(ranked[bestAt].kind) + ":"
+				+ ranked[bestAt].def.GetName()
+				+ "=" + formatFloat(bestEta, "", 0, 0)))
+		+ " |" + parts);
+}
+
+}  // namespace Market

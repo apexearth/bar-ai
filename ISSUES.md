@@ -16,6 +16,98 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-08-31 — vs an INACTIVE opponent we still barely expand, and army still outspends economy
+
+The first controlled economy measurement this repo has had. `NullAI:0.1` does
+nothing at all -- no army, no expansion, no pressure -- so every number below is
+this AI arguing with itself. Comet Catcher Remake 1.8, 30-minute cap, 13 seeds,
+medians at fixed game minutes (the games end early, at ~20-28 min, when we kill
+the passive commander, so end-of-game totals are not comparable and fixed
+minutes are).
+
+    min   mInc  produced   mEco    mBP  mArmy   mex   eInc
+      6   11.2      2700    615    220   2862   4.0    104
+     10   13.5      5666    965    480   4098   5.0    133
+     14   18.1      9672   1836   1010   5590   7.0    256
+     18   36.4     14916   3196   1630   7318  14.0    469
+
+- **4 mexes at minute 10, 7 at minute 14, on a map with ~20+ spots and nothing
+  contesting them.** This is apexearth's 2026-08-31 complaint ("4 un-upgraded
+  mexes, income 15 m/s") reproduced with no enemy on the board to blame.
+- **Army outspends economy from minute 10.** `mArmy` includes the ~2700-metal
+  commander, so real army is ~1400 at min 10 against 965 of economy, and ~4600
+  against 3196 at min 18. Against an opponent that cannot attack.
+- Economy is ~21% of all metal produced at every checkpoint.
+
+MECHANISM, partly identified and NOT yet fixed: most of that army metal never
+passes through the builder market at all. `Market::ConOrderFor`
+(`brain/market/production.as`) is the factory's own path, and the Brain drives
+it independently of the Want auction -- so anything that reweights the
+constructor market, the ETA objective included, structurally cannot move the
+army/economy split. Whatever holds army at this share against a dead opponent
+lives on the production side.
+
+Do NOT read this as "the market is broken and the factory is fine". It is a
+statement about WHERE to look: an economy-vs-army fix has to reach the producing
+code, per CLAUDE.md's standing rule about attributing a composition problem
+before touching any config table.
+
+## 2026-08-31 — the ETA objective is UNPROVEN, and this benchmark cannot prove it
+
+`manager/brain/market/eta.as` landed (skill: `eta-objective`), defaulted OFF
+(`apex_eta=0`) and shadow-logging. Two A/B batches were run against NullAI on
+Comet Catcher, `apex_eta=1` against `apex_eta=0` on the same build, 11-13
+matched seeds each. **Neither resolved anything, and the reason is the
+instrument, not the change.**
+
+THE CONTROL THAT SETTLES IT. Two batches of the *identical* configuration
+(`apex_eta=0` both times, same seeds) differ by:
+
+    minute 14   metalProduced  mean +9.3%   sd of paired diff 19.6%
+    minute 18   metalProduced  mean +13.3%  sd 22.7%   95% CI +0.5% .. +26.2%
+
+The minute-18 confidence interval **excludes zero**: the benchmark reports a
+significant difference between a configuration and itself. One metric in that
+control (`mBP` at minute 18) came out at **p = 0.039**. Same-config, same seeds.
+
+CONSEQUENCES, and the second one is a retraction:
+
+- **Required N for this benchmark, which nobody had measured**: ~60 pairs (120
+  games, ~1.5 h) to detect a 10% effect on `metalProduced` at 80% power; ~80
+  pairs at minute 18. A 10-13 pair batch is underpowered by roughly 5x. Any
+  eco A/B here smaller than that reports noise.
+- **RETRACTED: "the ETA arm builds more army, +12.5% at minute 6, p=0.039".**
+  That was the first batch's one significant result and a causal story was
+  built on it (that the merged draw ticket carried the ladder's pick value and
+  so shrank economy's draw odds). The identical-config control produces
+  p=0.039 findings too, and with 7 metrics x 4 checkpoints = 28 tests per
+  comparison, one is expected by chance. **The mechanism may still be real --
+  charging economy's draw odds out of the ladder's own pick is wrong on its own
+  logic and was fixed (`EtaEcoWeight`) -- but there is no measurement
+  supporting that it mattered, and it must not be cited as one.**
+- `FixedRNGSeed` pairs far more weakly than "matched seeds" suggests (CLAUDE.md
+  already says the DLL is multithreaded). Same seed is not the same game, so
+  pairing removes much less variance than assumed.
+
+WHAT IS NOT IN DOUBT, because none of it is a delta: the control levels above
+(4 mexes at minute 10 vs a passive opponent), and two bugs found by reading code
+and instrument output rather than statistics --
+
+1. A first move's power gain must come from the CATALOG, not from `w.gain`: a
+   market gain carries premiums and preferences, and feeding a factory's
+   *capability* gain in as metal/s had it reach the target in 83 s against a
+   mex's 280.
+2. The ladder returned "unreachable" (`base=1000000000`) once the economy grew,
+   because the target scales with the economy while each rung adds a fixed
+   amount -- so the step budget ran out and **the objective silently switched
+   itself off exactly when it mattered**. Fixed by batching every rung; a
+   25-minute probe now shows zero unreachable ladders.
+
+OPEN: run the ~60-80 pair batch, or lower the benchmark's variance first. The
+19.6% same-config spread at minute 14 is large enough to be worth diagnosing on
+its own -- games ending at different times (we kill the passive commander
+between minute 20 and 28) and early-factory timing are the two suspects.
+
 ## 2026-08-31 — `policy.as` is 17 knobs and ONE of them is connected
 
 The docs were swept against `docs/23-the-plan.md` on 2026-08-31 and this is what
