@@ -34,6 +34,16 @@ find which three or four terms actually carry it. See
 Read this before the pricing frame below, because the pricing exists to serve
 it and has repeatedly been mistaken for it.
 
+> **THIS SECTION IS DESIGN INTENT, NOT CURRENT BEHAVIOUR.** The market today is
+> greedy: it asks which Want returns the most per metal *right now*, and it
+> cannot express "this is worse this minute and reaches the target sooner".
+> Everything below describes what the ETA objective YIELDS, not what the AI
+> does. Where the two differ, `ISSUES.md` is the record -- as of 2026-08-31 the
+> T2 affordability floor is GONE (`RushReady` has zero definitions; the
+> `T2Energy`/`T2EnergyFrom`/`T2EnergyReactor` accessors have no callers) and
+> what remains is a soft price term that does not bite. Do not cite a bullet
+> from this section as evidence of how the AI behaves.
+
 apexearth, 2026-08-31, and he considers this how the AI was always meant to
 work: *"We're supposed to do things based on math... If you were to calculate
 out the ETA to getting your first fusion, then increasing your economy before
@@ -57,8 +67,10 @@ Everything he keeps asking for falls out of that and needs no rule:
 - **How many constructors and nanos** is the SECOND term of the max: when
   `buildPower < income` the plan is build-power-limited, so the answer is a
   lathe, not another building. "100% efficiency" is not a separate rule.
-- **T2 at 15 m/s loses on its own arithmetic** -- it lengthens the ETA to every
-  target -- with no threshold and no tunable anywhere.
+- **T2 at 15 m/s would lose on its own arithmetic** -- it lengthens the ETA to
+  every target -- with no threshold and no tunable anywhere. WOULD: the AI
+  started one at 15 m/s in the 2026-08-31 game. That is the gap this objective
+  is meant to close, not a description of it.
 
 ### What decides invest-first vs go-direct: dI/I, not dI per metal
 

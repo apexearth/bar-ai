@@ -1,6 +1,6 @@
 ---
 name: ai-build-arbitration
-description: How a builder gets its job — the AiMakeTask ladder order, Brain wants and budget, the Requests governor, and where a new rule may sit
+description: How a builder gets its job — the arbiter owns the choice (the old AiMakeTask ladder is gone), Brain wants and budget, the Requests governor, and where a new rule may sit
 ---
 
 # Build arbitration — who claims a constructor
@@ -8,18 +8,29 @@ description: How a builder gets its job — the AiMakeTask ladder order, Brain w
 The single scarcest resource is constructor time (see CLAUDE.md "The path
 fires"). Three layers decide every builder's job, in order.
 
-## Layer 1: the ladder (`manager/builder/maketask.as`)
+## Layer 1: the entry point (`manager/builder/maketask.as`)
 
-`MakeTaskInner` is an ORDERED list; the first rule to return a task wins.
-Current order (top → bottom): commander rules → hold/abandon safety → the
-energy lane → mex-upgrade lane → EcoFusion/converter (adv cons) →
-**Brain::Decide** (macro ranking; a deferral stops the ladder) → `AlwaysEco`
-floor → OptionalWork (phase-gated one-offs) → screens/vetoes on the ENGINE
-OFFER (`aiBuilderMgr.DefaultMakeTask`) — including the STORE veto and the mex
-walk cap — → scavenge → fallbacks.
+**THE LADDER IS GONE. `MakeTaskInner` no longer chooses what to build.** Read
+`manager/builder/maketask.as:51` — in full it is: rezzer flee → rezzer chain
+(rez bots only) → return any BUILDER task the unit already holds → **`Brain::
+Decide`**. Nothing else. No energy lane, no mex-upgrade lane, no EcoFusion or
+converter branch, no `AlwaysEco` floor, no OptionalWork, and no screens on
+`aiBuilderMgr.DefaultMakeTask` — the overhaul (docs/20-brain-overhaul.md) moved
+every one of those into the arbiter, and `check.py` now fails a build that calls
+`DefaultMakeTask` outside it at all.
 
-**Where a new rule goes in this list IS the design decision.** Anything above
-DefaultMakeTask displaces mex expansion. Rules that SPEND are never free.
+What survives of the old order is only SAFETY, and it creates no work: a rez bot
+flees, and a constructor already on a task keeps it.
+
+**So "where does my new rule go in the ladder" is the wrong question now** — it
+was the design decision and it is not one any more. A new behaviour is a Want
+with a price, ranked against every other Want in Layer 2. If a rule seems to
+need to run before the arbiter, that is a statement that its price is wrong.
+
+This section described the pre-overhaul ladder as current until 2026-08-31, and
+an agent reading it would have tried to insert a rule into a list that no longer
+exists. Verified against the tree that day: `MakeTaskInner` at
+`maketask.as:51`, and the military one at `military/hooks.as:78`.
 
 ## Layer 2: the Brain (`manager/brain.as`, `brain/budget.as`, `targets.as`)
 

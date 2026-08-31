@@ -13,7 +13,7 @@ description: What gets BUILT from factories — the facqueue executor, the produ
 | Line mechanics: adoption, Wait-hold, recruit abort, the order ledger, queue depth | `facqueue` | `manager/brain/facqueue.as` |
 | Con counts | `ConsNeedAny` (2.7 + inc/44) and `CeilingConsNeed` (base + inc/25), both floors, both in-flight aware | production.as |
 | Which plant to build / switch | C++ FactoryToBuild + `PlantApproved` backstops, income cap `FactoryTypeCap` | `manager/factory/choose.as`, `builder/sitesafety.as`, `builder/requests/take.as` |
-| T2 timing | `RushReady` (energy vs `Policy::T2Energy`) and `T2ArmyReady` | `manager/factory/state.as`, `policy.as`, `manager/military/posture.as` |
+| T2 timing | **NOTHING GATES IT.** `RushReady` has zero definitions (verified 2026-08-31; its five remaining references are all comments), and `Policy::T2Energy`/`T2EnergyFrom`/`T2EnergyReactor` have no callers, so `apex_t2_energy*` are dashboard knobs wired to nothing. The advanced plant is priced by `ProposeTech` alone -- see `ISSUES.md` 2026-08-31 | `manager/brain/market/want_tech.as` |
 | T1-commit (duels, small maps) | **GONE** — `T1Commit` no longer exists anywhere in the tree | — |
 | Team roles (tech lead, eco lead) | **GONE** — `RefreshLead`, `techlead.as` and `mexhold.as` no longer exist | — |
 | Adv-con sharing | **GONE** — `ShareAdvCon` and `builder/share.as` no longer exist | — |

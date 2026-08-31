@@ -113,7 +113,7 @@ The full statement and its three laws are in the `ai-military` skill
 
 - `apex: energy pipeline -- eInc N below forecast M` — the lane firing, with the live target
 - `apex: fusion-gate diag ...` — every fusion gate's state, once/period
-- `apex: always-eco -- nothing eco in flight` — the floor caught a gap
+- ~~`apex: always-eco -- nothing eco in flight`~~ — GONE with the floor (verified 2026-08-31: no AiLog in the tree emits it). Grepping for it finds nothing, which is not evidence the economy is idle.
 - `apex: fusion posted to the pool` — an incapable asker delegated it
 
 ## Key tunables
