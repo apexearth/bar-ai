@@ -120,7 +120,7 @@ bool MapHasWater()
 // free and this is asked per builder election, so it is cached; an off-map
 // result means no reachable water.
 AIFloat3 gWetPlantSite(-1.f, 0.f, -1.f);
-int gNextWetCheck = 0;
+int gNextWetCheck = 149;   // phase offset -- see AiUpdate lockstep note
 
 AIFloat3 WetPlantSite(CCircuitDef@ plant, const AIFloat3& in anchor)
 {

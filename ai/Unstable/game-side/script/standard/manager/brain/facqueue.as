@@ -343,7 +343,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 // Recruit orders nobody can ever start, swept up as they appear -- and the
 // slip channel: a recruit re-enqueued onto a DRIVEN line inside the GiveOrder
 // lag window would build units nobody ordered.
-int gNextSweep = 0;
+int gNextSweep = 181;   // phase offset -- see AiUpdate lockstep note
 
 void SweepDeadRecruits()
 {

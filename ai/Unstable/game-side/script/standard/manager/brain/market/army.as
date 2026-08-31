@@ -440,7 +440,7 @@ int LineClassOf(int di)
 
 // What we actually field, by class, as shares of army metal.
 array<float> gLineM(LC_N, 0.f);
-int gLineAt = 0;
+int gLineAt = 59;   // phase offset -- see AiUpdate lockstep note
 int gLineHoldAt = 0;
 void TrackLine()
 {
@@ -826,7 +826,7 @@ bool EcoRoleActive()
 // overflight flipped quiet mode for one refresh and bought dragon-claw
 // towers at 13m (audited flicker -- danger=0 at every 2-min sample).
 int gEcoDangerStreak = 0;
-int gEcoDangerTickAt = 0;
+int gEcoDangerTickAt = 41;   // phase offset -- see AiUpdate lockstep note
 bool gEcoDangerArmed = false;
 bool EcoDangerNear()
 {
@@ -1031,7 +1031,7 @@ float Utilization()
 // rez/repair fleet (apexearth: "we stay in the fight until death" + "rez
 // bots heal our troops -- they make a big difference" -- the two are one
 // design). Refreshed here as the fleet changes.
-int gNextRetreatRefresh = 0;
+int gNextRetreatRefresh = 73;   // phase offset -- see AiUpdate lockstep note
 void RetreatRefresh()
 {
 	if (ai.frame < gNextRetreatRefresh)

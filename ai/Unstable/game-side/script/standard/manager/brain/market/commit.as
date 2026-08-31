@@ -37,7 +37,7 @@ array<int>        gComAt;      // frame of last transition
 int gComDriftUnit = 0;     // unit vanished without its death event reaching us
 int gComDriftTask = 0;     // task vanished without its removal reaching us
 int gComDriftEngine = 0;   // ledger vs Def().count disagreement (log-only)
-int gComSweepNext = 0;
+int gComSweepNext = 199;   // phase offset -- see AiUpdate lockstep note
 int gComSummaryNext = 0;
 
 uint ComLen() { return gComDef.length(); }

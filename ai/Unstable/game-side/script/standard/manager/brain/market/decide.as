@@ -46,7 +46,7 @@ const int   MEMO_TTL = 45;   // frames (1.5s); a freshness bound, not policy
 // protect run at 4.4-16 min depending on the game; the commander's never
 // ran at all -- which is why the first mexes stood naked for the tick).
 const int   MEMO_STARVED = 450;   // 15s
-const uint  MEMO_N = 6;
+const uint  MEMO_N = 7;
 array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
 array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
 
@@ -76,6 +76,7 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	if (slot == 2) return ProposeNano(unit);
 	if (slot == 3) return ProposeSense(unit);
 	if (slot == 4) return ProposeReclaimObsolete(unit);
+	if (slot == 6) return ProposeMexUp(unit);
 	return ProposeProtect(unit);
 }
 
@@ -236,7 +237,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	{ double _t = Perf::T0(); wants.insertLast(ProposePlant(unit)); Perf::Add("want.plant", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeConvert(unit)); Perf::Add("want.convert", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(ProposeStore(unit)); Perf::Add("want.store", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeMexUp(unit)); Perf::Add("want.mexup", _t); }
+	// MEMOISED like the other heavy walks. Unmemoised it recomputed per
+	// BUILDER, and the cost is O(builders x mex spots): measured 2026-08-31 it
+	// grew from 1 ms per five-minute block at minute 5 to 1,467 at minute 25,
+	// with a 27.2 ms worst call -- the second-largest grower in the game, and
+	// the one apexearth described as "noticeably worse as the game progresses".
+	// The memo shares one answer per ASKING DEF for MEMO_TTL, which is exactly
+	// the sharing every other heavy proposer already had.
+	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(6, unit)); Perf::Add("want.mexup", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(1, unit)); Perf::Add("want.tech", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(2, unit)); Perf::Add("want.nano", _t); }
 	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(4, unit)); Perf::Add("want.reclobs", _t); }

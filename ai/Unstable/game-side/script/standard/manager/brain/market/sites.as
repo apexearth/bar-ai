@@ -163,7 +163,7 @@ AIFloat3 BigEnergySite()
 // coverage within 450 zeroes a site.
 AIFloat3 gInsPos;
 float gInsM = 0.f;
-int gInsAt = 0;
+int gInsAt = 127;   // phase offset -- see AiUpdate lockstep note
 void RefreshInsureCluster()
 {
 	if (ai.frame < gInsAt)

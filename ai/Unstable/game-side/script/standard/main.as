@@ -88,6 +88,17 @@ void AiMain()
 	}
 }
 
+// PERIODIC JOBS MUST NOT SHARE A PHASE. Every job below re-arms as
+// `ai.frame + N * SECOND`, so any two that first fire on the same AiUpdate stay
+// locked together for the whole game. Measured 2026-08-31 (Supreme Isthmus
+// v2.1, 1v1 cortex, +100%): slow frames landed at frame == 1 (mod 300) -- a
+// median gap of 302 frames, exactly 10 seconds, which is what apexearth saw as
+// "a noticeable pause in the game" on a 10-second beat. No single job was
+// expensive; a dozen 2-5 ms jobs firing on the same frame reached 176 ms.
+//
+// Their `gNext*` globals are therefore seeded with distinct primes rather than
+// 0. That is a phase offset, not a delay: it shifts only the first fire, and
+// the separation then persists forever.
 void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishAIId
 {
 	// Ahead of the ApexActive gate: a unit walled in by our own buildings is

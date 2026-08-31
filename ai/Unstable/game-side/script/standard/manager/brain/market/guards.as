@@ -6,7 +6,7 @@ namespace Market {
 // re-asked -- the engine stops re-electing once a builder is in range
 // (apexearth 2026-08-23: "interrupt that commander's action and switch to
 // make a basic solar").
-int gNextStallSweep = 0;
+int gNextStallSweep = 211;   // phase offset -- see AiUpdate lockstep note
 
 // Who the market sent to assist what. A guard on an IDLE factory is a
 // locked builder doing nothing while mexes sit open (apexearth 2026-08-23);

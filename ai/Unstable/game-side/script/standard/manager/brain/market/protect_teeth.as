@@ -35,7 +35,7 @@ bool T2DefHandsStanding()
 // derived (Catalog::WallDef), the gain is a preference priced like
 // apex_mexup_boost -- his ruling is the basis -- and each tooth is cheap
 // enough that the walk is the real cost.
-int gTeethNextScan = 0;
+int gTeethNextScan = 103;   // phase offset -- see AiUpdate lockstep note
 AIFloat3 gTeethPoint(-1.f, 0.f, -1.f);
 int gDEnds = 0;
 int gDLen = 0;

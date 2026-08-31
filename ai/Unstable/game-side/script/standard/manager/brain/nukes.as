@@ -118,7 +118,7 @@ int AntisCovering(const AIFloat3 &in pos)
 // nuke launchers the enemy has. Always assume 1 is needed") -- a hidden silo
 // is covered by the floor of one, a second seen silo asks for a second anti.
 int gFoeSiloN = 0;
-int gFoeSiloNext = 0;
+int gFoeSiloNext = 167;   // phase offset -- see AiUpdate lockstep note
 
 int EnemyNukeSilos()
 {

@@ -15,10 +15,10 @@ namespace Air {
 // corner is hit, and the flight time to any of them is shorter.
 //------------------------------------------------------------------------------
 
-int gNextStation = 0;
+int gNextStation = 7;   // phase offset -- see AiUpdate lockstep note
 int gNextStationLog = 0;
 int gRecycled = 0;
-int gNextRecycle = 0;
+int gNextRecycle = 23;   // phase offset -- see AiUpdate lockstep note
 int gNextRecycleLog = 0;
 
 // WHERE A FIGHTER STANDS. Our own guns are already placed where attacks come

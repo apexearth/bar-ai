@@ -209,7 +209,7 @@ float TargetFill(float have, float target)
 // (nukes.as EnemyNukeSilos). Not cached across frames beyond 10s: the
 // availability-derived range threshold inside IsSuperWeapon must not latch.
 int gFoeLrpcN = 0;
-int gFoeLrpcNext = 0;
+int gFoeLrpcNext = 89;   // phase offset -- see AiUpdate lockstep note
 float gFoeLrpcCost = 0.f;
 
 int EnemyLRPCs()
