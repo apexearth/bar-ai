@@ -118,7 +118,7 @@ local otherSpend = {}     -- team -> everything else (unarmed static, transports
 -- dividing a metal sum by a cost read from another tree, and every count in a
 -- report so far was derived that way.
 local builtCount = {}     -- team -> {unitName -> units finished}
--- Metal sunk into STATIC defence. It was invisible: armyValue() counts only
+-- Metal sunk into STATIC defence. It was invisible: the army tally counts only
 -- units with speed > 0, and the composition buckets are factories, constructors
 -- and army, so towers landed in mBuiltReal and nowhere else. apexearth: "the
 -- side effect is wasteful defense and then we have less army and are losing the
@@ -421,70 +421,55 @@ end
 
 -- Units held, and how many can build. The denominators that stop a dead player
 -- reading as a wedged one -- see cmdCount's comment.
-local function ownUnitCounts(teamID)
-	local units, builders = 0, 0
-	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
-		units = units + 1
-		local udid = Spring.GetUnitDefID(uid)
-		local ud = udid and UnitDefs[udid]
-		if ud ~= nil and ud.isBuilder then
-			builders = builders + 1
-		end
-	end
-	return units, builders
-end
-
--- Constructors held, split by tech. The tech lead deliberately converts the
--- team's pooled metal into build power, so this is the number that separates
--- "enough to finish the plant" from "metal that cannot be spent". Held rather
--- than built, to match the quantity RUSH_CON_CAP thinks it is capping.
--- Commanders excluded: not a production choice.
-local function builderCounts(teamID)
-	local t1, t2, metal = 0, 0, 0
+-- ONE WALK, not five. ownUnitCounts/builderCounts/armyValue/factoryQueueDepth
+-- and the armed/setTarget loop each called Spring.GetTeamUnits and re-resolved
+-- every UnitDef; at minute 30 that is five passes over ~450 units per team on a
+-- single frame. Each caller was used exactly once, from dump(), so they are one
+-- pass returning a record. Field semantics are unchanged -- see the notes on the
+-- originals in git history for why each counts what it counts.
+local function teamSnapshot(teamID)
+	local r = {
+		units = 0, builders = 0,            -- ownUnitCounts
+		conT1 = 0, conT2 = 0, conMetal = 0, -- builderCounts (commanders excluded)
+		army = 0, armyCheap = 0,            -- armyValue (mobile, armed, non-builder)
+		facs = 0, facOrders = 0,            -- factoryQueueDepth
+		armed = 0, targeted = 0,            -- CmdSetTarget landing rate
+	}
 	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 		local udid = Spring.GetUnitDefID(uid)
 		local ud = udid and UnitDefs[udid]
-		if ud ~= nil and ud.isBuilder and ud.speed and ud.speed > 0
-			and not (ud.customParams or {}).iscommander
-		then
-			metal = metal + (ud.metalCost or 0)
-			if techOf(ud) >= 2 then t2 = t2 + 1 else t1 = t1 + 1 end
+		r.units = r.units + 1
+		if ud ~= nil then
+			local mobile = (ud.speed or 0) > 0
+			if ud.isBuilder then
+				r.builders = r.builders + 1
+				if mobile and not (ud.customParams or {}).iscommander then
+					r.conMetal = r.conMetal + (ud.metalCost or 0)
+					if techOf(ud) >= 2 then r.conT2 = r.conT2 + 1
+					else r.conT1 = r.conT1 + 1 end
+				end
+			elseif mobile and #ud.weapons > 0 then
+				local c = ud.metalCost or 0
+				if c >= SPAM_COST then r.army = r.army + c
+				else r.armyCheap = r.armyCheap + c end
+			end
+			if ud.isFactory then
+				r.facs = r.facs + 1
+				local q = Spring.GetFactoryCommands(uid, -1)
+				if q then r.facOrders = r.facOrders + #q end
+			end
+			if ud.canAttack and (ud.maxWeaponRange or 0) > 0 then
+				r.armed = r.armed + 1
+				-- GetUnitRulesParam returns nil when unset, and tonumber(nil)
+				-- RAISES rather than returning nil -- which took the whole
+				-- export down on the first untargeted unit.
+				local raw = Spring.GetUnitRulesParam(uid, "targetID")
+				local t = raw ~= nil and tonumber(raw) or nil
+				if t ~= nil and t >= 0 then r.targeted = r.targeted + 1 end
+			end
 		end
 	end
-	return t1, t2, metal
-end
-
--- Standing army value: kills and losses say how trades went, but not whether
--- you actually had an army at the moment of the fight. Mobile, armed, non-chaff.
-local function armyValue(teamID)
-	local total, cheap = 0, 0
-	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
-		local udid = Spring.GetUnitDefID(uid)
-		local ud = udid and UnitDefs[udid]
-		if ud ~= nil and ud.speed and ud.speed > 0 and #ud.weapons > 0
-			and not ud.isBuilder then  -- commanders/decoys are builders, not army
-			local c = ud.metalCost or 0
-			if c >= SPAM_COST then total = total + c else cheap = cheap + c end
-		end
-	end
-	return total, cheap
-end
-
--- TEMPORARY DIAGNOSTIC: the real factory build queue, read synced. The AI-side
--- CCircuitUnit::CountQueued reads it through the skirmish callback and is under
--- suspicion of always answering 0; this is the independent number.
-local function factoryQueueDepth(teamID)
-	local facs, orders = 0, 0
-	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
-		local udid = Spring.GetUnitDefID(uid)
-		local ud = udid and UnitDefs[udid]
-		if ud ~= nil and ud.isFactory then
-			facs = facs + 1
-			local q = Spring.GetFactoryCommands(uid, -1)
-			if q then orders = orders + #q end
-		end
-	end
-	return facs, orders
+	return r
 end
 
 -- STALLING, which the cumulative counters cannot show. metalExcess says metal
@@ -666,23 +651,21 @@ local function dump(reason, onlyTeam, atFrame)
 				parts[#parts + 1] = "unitCount=" .. table.concat(counts, ",")
 			end
 
-			local av, ac = armyValue(teamID)
-			parts[#parts + 1] = string.format("armyReal=%.0f", av)
-			parts[#parts + 1] = string.format("armyCheap=%.0f", ac)
+			local snap = teamSnapshot(teamID)
+			parts[#parts + 1] = string.format("armyReal=%.0f", snap.army)
+			parts[#parts + 1] = string.format("armyCheap=%.0f", snap.armyCheap)
 
-			local c1, c2, cm = builderCounts(teamID)
-			parts[#parts + 1] = string.format("conT1=%d", c1)
-			parts[#parts + 1] = string.format("conT2=%d", c2)
-			parts[#parts + 1] = string.format("mCon=%.0f", cm)
+			parts[#parts + 1] = string.format("conT1=%d", snap.conT1)
+			parts[#parts + 1] = string.format("conT2=%d", snap.conT2)
+			parts[#parts + 1] = string.format("mCon=%.0f", snap.conMetal)
 
 			-- APM, plus the denominators that tell a wedged player from a dead
 			-- one. cmdWindow is zeroed here so the next sample measures only
 			-- its own interval.
-			local ou, ob = ownUnitCounts(teamID)
 			parts[#parts + 1] = string.format("cmds=%d", cmdCount[teamID] or 0)
 			parts[#parts + 1] = string.format("cmdsWin=%d", cmdWindow[teamID] or 0)
-			parts[#parts + 1] = string.format("ownUnits=%d", ou)
-			parts[#parts + 1] = string.format("ownBuilders=%d", ob)
+			parts[#parts + 1] = string.format("ownUnits=%d", snap.units)
+			parts[#parts + 1] = string.format("ownBuilders=%d", snap.builders)
 			parts[#parts + 1] = string.format("commIdle=%d", commIdle[teamID] or 0)
 			parts[#parts + 1] = string.format("commSamp=%d", commSamp[teamID] or 0)
 			parts[#parts + 1] = string.format("commBuild=%d", commBuild[teamID] or 0)
@@ -692,9 +675,8 @@ local function dump(reason, onlyTeam, atFrame)
 			parts[#parts + 1] = string.format("commStall=%d", commStall[teamID] or 0)
 			parts[#parts + 1] = string.format("commCloakFlips=%d", commCloakFlips[teamID] or 0)
 
-			local nf, nq = factoryQueueDepth(teamID)
-			parts[#parts + 1] = string.format("facCount=%d", nf)
-			parts[#parts + 1] = string.format("facQueued=%d", nq)
+			parts[#parts + 1] = string.format("facCount=%d", snap.facs)
+			parts[#parts + 1] = string.format("facQueued=%d", snap.facOrders)
 
 			-- The bank, and what is being asked of it. GetTeamStatsHistory is
 			-- cumulative only: it can say 40k energy was wasted and never that
@@ -725,23 +707,8 @@ local function dump(reason, onlyTeam, atFrame)
 			-- unit_target_on_the_move.lua (BAR's own) writes this rules param on
 			-- success, and rules params are not behind the AI_TEAM_IDS gate that
 			-- makes the resource callbacks read -1.
-			local armed, targeted = 0, 0
-			for _, uID in ipairs(Spring.GetTeamUnits(teamID) or {}) do
-				local ud = UnitDefs[Spring.GetUnitDefID(uID) or -1]
-				if ud ~= nil and ud.canAttack and (ud.maxWeaponRange or 0) > 0 then
-					armed = armed + 1
-					-- GetUnitRulesParam returns nil when unset, and tonumber(nil)
-					-- RAISES rather than returning nil -- which took the whole
-					-- export down on the first untargeted unit.
-					local raw = Spring.GetUnitRulesParam(uID, "targetID")
-					local t = raw ~= nil and tonumber(raw) or nil
-					if t ~= nil and t >= 0 then
-						targeted = targeted + 1
-					end
-				end
-			end
-			parts[#parts + 1] = string.format("armed=%d", armed)
-			parts[#parts + 1] = string.format("setTarget=%d", targeted)
+			parts[#parts + 1] = string.format("armed=%d", snap.armed)
+			parts[#parts + 1] = string.format("setTarget=%d", snap.targeted)
 
 			local cb = cheapBuilt[teamID]
 			if cb ~= nil then
