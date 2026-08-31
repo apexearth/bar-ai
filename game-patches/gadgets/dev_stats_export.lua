@@ -589,15 +589,17 @@ local function sampleCommIdle()
 	end
 end
 
-local function dump(reason)
+-- onlyTeam/atFrame drive the per-frame SLICE (see gadget:GameFrame). With both
+-- nil this behaves exactly as before, which is what GameOver/Shutdown want.
+local function dump(reason, onlyTeam, atFrame)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI then
+		if isAI and (onlyTeam == nil or teamID == onlyTeam) then
 			local parts = {
 				string.format("team=%d", teamID),
 				string.format("ally=%d", select(6, Spring.GetTeamInfo(teamID, false)) or 0),
 				"reason=" .. reason,
-				string.format("frame=%d", Spring.GetGameFrame()),
+				string.format("frame=%d", atFrame or Spring.GetGameFrame()),
 				string.format("spamCost=%d", SPAM_COST),
 				string.format("mLostReal=%.0f", lostReal[teamID] or 0),
 				string.format("mLostCheap=%.0f", lostCheap[teamID] or 0),
@@ -767,7 +769,7 @@ local function dump(reason)
 			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
 			Spring.Echo(string.format(
 				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d",
-				teamID, Spring.GetGameFrame(),
+				teamID, atFrame or Spring.GetGameFrame(),
 				facSamp[teamID] or 0, facBusy[teamID] or 0,
 				nanoSamp[teamID] or 0, nanoBusy[teamID] or 0))
 		end
@@ -780,10 +782,10 @@ end
 -- Static buildings only, and only their footprint-relevant facts: id, x, z and
 -- the def's footprint in build squares. That is enough to compute packing
 -- density, nearest-neighbour spacing and row/column alignment offline.
-local function dumpPositions()
+local function dumpPositions(onlyTeam, atFrame)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI then
+		if isAI and (onlyTeam == nil or teamID == onlyTeam) then
 			-- isBuilding alone excluded nano turrets (immobile UNITS, not
 			-- buildings, in Spring def terms) -- and the nanos-per-factory
 			-- audit needs them. Factories report canMove=true (they pass move
@@ -814,7 +816,7 @@ local function dumpPositions()
 			if #head > 0 then
 				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d %s",
 						teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
-						Spring.GetGameFrame(), #head, table.concat(head, ",")))
+						atFrame or Spring.GetGameFrame(), #head, table.concat(head, ",")))
 			end
 		end
 	end
@@ -895,6 +897,8 @@ local function dumpEFrames(reason)
 	end
 end
 
+local dumpQ, dumpQI, dumpQAt = {}, 1, 0
+
 function gadget:GameFrame(frame)
 	if frame >= nextEFrame then
 		nextEFrame = frame + EFRAME_SAMPLE
@@ -905,10 +909,34 @@ function gadget:GameFrame(frame)
 		sampleCommIdle()
 		sampleResources()
 	end
+	-- ONE TEAM-PHASE PER FRAME. Doing every team's stats line AND every team's
+	-- position line on one frame is what a 406 ms sim frame looked like:
+	-- measured Supreme Isthmus v2.1 1v1 at minute 30, the worst wall-clock
+	-- frames in the whole game landed on 32400/36000/.../54000 -- exactly this
+	-- dump -- while the AI's own AiFrame never exceeded 49 ms. The gadget, not
+	-- the AI. atFrame is frozen at the due frame so every line still reports the
+	-- frame the sample belongs to and nothing parsing it shifts.
 	if frame >= nextDump then
 		nextDump = frame + DUMP_INTERVAL
-		dump("periodic")
-		dumpPositions()
+		dumpQ = {}
+		for _, teamID in ipairs(Spring.GetTeamList()) do
+			local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
+			if isAI then
+				dumpQ[#dumpQ + 1] = { teamID, "stats" }
+				dumpQ[#dumpQ + 1] = { teamID, "pos" }
+			end
+		end
+		dumpQAt = frame
+		dumpQI = 1
+	end
+	if dumpQI <= #dumpQ then
+		local job = dumpQ[dumpQI]
+		dumpQI = dumpQI + 1
+		if job[2] == "stats" then
+			dump("periodic", job[1], dumpQAt)
+		else
+			dumpPositions(job[1], dumpQAt)
+		end
 	end
 end
 
