@@ -46,9 +46,10 @@ A hard gate is a price of infinity. A price the arbiter cannot read is a bug by
 construction: it elects the want, the executor refuses, the builder idles and
 re-elects, forever.
 
-`Role::DefenceAllowed()` gated ground defence at `Requests::Take` — downstream
-of `Brain::Decide`. The rear eco specialist put 2,491 of 2,933 decisions (85%)
-into a want that could never be built.
+`Role::DefenceAllowed()` — since DELETED, and the reason it is worth keeping in
+mind — gated ground defence at `Requests::Take`, downstream of `Brain::Decide`.
+The rear eco specialist put 2,491 of 2,933 decisions (85%) into a want that
+could never be built.
 
 **Worse, a veto can break an unrelated mechanism's exit condition.** The DEF
 PANIC in `decide.as` fires while we own zero ground defence and something is

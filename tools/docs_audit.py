@@ -70,17 +70,23 @@ OBITUARY = re.compile(
 
 
 def _obituary(text, pos):
-    """True if the line containing offset `pos` reports the thing's absence."""
-    # The SENTENCE, not the line: this prose wraps at 79 columns, so "the
-    # `apex_solo_stock` tunable is gone" puts the name and its obituary on
-    # different lines. One line of lookahead covers the wrap.
-    start = text.rfind(chr(10), 0, pos) + 1
-    end = text.find(chr(10), pos)
-    if end < 0:
-        end = len(text)
-    nxt = text.find(chr(10), end + 1)
-    window = text[start:nxt if nxt >= 0 else len(text)]
-    return bool(OBITUARY.search(window))
+    """True if the PARAGRAPH containing offset `pos` reports the thing's absence.
+
+    The paragraph, not the line or the sentence. A doc that kills four files at
+    once names them in a list and then says "none of those exist" several lines
+    below, which a one-line lookahead cannot see -- four such correct obituaries
+    were the checker's entire remaining output on 2026-08-31.
+
+    The trade-off, stated because it is real: a genuinely dead reference sharing
+    a paragraph with some OTHER thing's obituary is now suppressed. That is the
+    right way to be wrong here. This checker exists to be run often and believed,
+    and a false positive nobody can silence is what turned the last two
+    heuristics into noise people learned to skip.
+    """
+    start = text.rfind(chr(10) + chr(10), 0, pos)
+    start = 0 if start < 0 else start + 2
+    end = text.find(chr(10) + chr(10), pos)
+    return bool(OBITUARY.search(text[start:end if end >= 0 else len(text)]))
 
 # Names that are engine/C++/stdlib, not ours -- absence proves nothing.
 EXTERNAL = {
@@ -132,11 +138,26 @@ def main():
 
     # Every file that exists, by basename and by tail path.
     have = set()
+    # NOT repo-wide. `ai/ord`, `ai/ctl` and `ai/stk` are FROZEN pre-overhaul
+    # trees kept for A/B, so a doc citing a file the overhaul deleted --
+    # builder/nano.as, builder/statics.as, builder/mexguard.as -- resolved
+    # against its own ghost in ai/ord and reported clean. The checker was
+    # confirming stale docs against the stale code they describe.
+    #
+    # `vendor/` and `matches/` stay IN: vendor/bar is how a reference to a
+    # BAR game file (modoptions.lua, game_energy_conversion.lua) is
+    # confirmed, and matches/ is where result.json lives. Excluding them
+    # turned 20 correct references into findings.
+    SKIP_VARIANTS = {"ord", "ctl", "stk"}
     for p in ROOT.rglob("*"):
-        if p.is_file():
-            have.add(p.name)
-            have.add("/".join(p.parts[-2:]))
-            have.add("/".join(p.parts[-3:]))
+        if not p.is_file():
+            continue
+        rel = p.relative_to(ROOT).parts
+        if rel[0] == "ai" and len(rel) > 1 and rel[1] in SKIP_VARIANTS:
+            continue
+        have.add(p.name)
+        have.add("/".join(p.parts[-2:]))
+        have.add("/".join(p.parts[-3:]))
 
     findings = []
     for doc in PROSE:

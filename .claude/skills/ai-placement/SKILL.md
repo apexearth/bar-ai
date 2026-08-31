@@ -9,13 +9,13 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 
 | Decision | Owner | File |
 |---|---|---|
-| Base grid / bands (ECO band, rear "deep band") | `Base::Spot`, `BandSpot` (deep band = the BACK of the base on the home→enemy axis) | `manager/baseplan.as`, `builder/nano.as` |
-| Expensive builds near nanos ("nano gravity", his metaphor) | `NanoCluster` centroid consumed by: fusion direct path + pool-post, gantry, EcoNano big-build, converters | `builder/nano.as`, `fusion.as`, `statics.as` |
+| Base grid / bands (ECO band, rear "deep band") | `Base::Spot` (deep band = the BACK of the base on the home→enemy axis); axis, grid, reserve and state are its parts | `manager/baseplan/{spot,axis,grid,reserve,state}.as` |
+| Expensive builds near nanos ("nano gravity", his metaphor) | `BigEnergySite` / `RefreshInsureCluster` pick the cluster; `ProbedSite` proves it | `brain/market/sites.as` |
 | Advsol pack | Requests chokepoint: advanced solars are STRICTLY SERIAL whatever the bank (`apex_advsol_serial`) — a second asker folds onto the live site through `JoinFor` instead of opening another, and the pack rule keeps them adjacent | `builder/requests/governed.as` (`EffectiveCap`) |
-| Nano turret sites | `NanoSiteAt` (pack near factory, snap to nano grid, reserve) | `builder/nano.as` |
-| Reactor spacing | `SectionSafeSpot`/`ReactorBatchOK` (chain-blast sections; tighten-to-batch) | `builder/fusion.as` |
-| Defence allowed here? | `DefenceAllowedAt`: crowd cap → static-AA bypass → BaseRaided PANIC (budget suspended) → rear veto (fwd<0) → front share vs local share budgets | `military/defenceline.as` |
-| Mex guard tier & site | `MexGuardWanted` (forwardness-scaled count), `MexGuardTower` (income-tiered def) | `builder/mexguard.as` |
+| Nano turret sites | `ExecuteWant`'s `WK_NANO` branch: the hungriest working line (`NeediestLine`, the same arithmetic that BOUGHT the turret), else the biggest uncovered frame, else beside any factory | `brain/market/execute.as` |
+| Reactor spacing (chain-blast) | `FarmSlot`: a big generator's same-def cluster caps at HALF its standing fleet, never under 2, and clusters part by a blast-scale aisle rather than a walkway ("better if only half our economy blows up"). Foreign-def lattice spacing is untouched | `brain/market/sites.as` |
+| Defence allowed here? | `ExecuteWant`'s `WK_PROTECT`/`WK_SENSE`/`WK_AIRDEF` branch is THE chokepoint -- deliberately not the proposers, because three separate gain branches each carried their own veto and gating two still let claws through. Classified by the DEF's surface threat, never by spotId | `brain/market/execute.as` |
+| Mex guard tier & site | priced as ordinary protect wants over the mex's stake; no separate mex-guard rule survives the overhaul | `brain/market/protect_*.as` |
 | Site safety | `ThreatFor` = threat map (mostly dead) → LOS foes count → geometric PastFront fallback; `MexHeat` relaxes it for mexes | `builder/sitesafety.as` |
 | Which mex to claim | priced in the market: `ProposeMex` ranks spots, and the walk is charged as builder-time in `ValueOf`'s `tCost`, so a far mex is dearer than a near one by the travel term rather than by a distance cap | `brain/market/want_mex.as` |
 

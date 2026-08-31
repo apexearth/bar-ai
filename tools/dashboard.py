@@ -736,22 +736,52 @@ def known_ai_specs():
     return sorted(specs)
 
 
-def tunable_callsites():
+def _dead_spans():
+    """{path: [(line, line)]} for unreachable functions; {} if the walk fails.
+
+    A read inside a function nothing calls is not a read. Sixteen knobs in
+    `policy.as` sat on this page adjustable and wired to nothing because each
+    WAS read once -- by an accessor whose last caller went out with the brain
+    overhaul. The dashboard must not offer those.
+    """
+    try:
+        import as_scope
+        return as_scope.dead_line_spans(as_scope.default_root())
+    except Exception:
+        return {}   # never let a static-analysis failure break the page
+
+
+def tunable_callsites(live_only=False):
     """apex_<name> -> ["path/file.as:line", ...], read from the script tree.
-    tunables.as's own file annotations rot on every refactor; this does not."""
+    tunables.as's own file annotations rot on every refactor; this does not.
+
+    `live_only` drops sites inside unreachable functions -- see `_dead_spans`.
+    """
     base = REPO / "ai" / "Unstable" / "game-side" / "script"
+    dead = _dead_spans() if live_only else {}
     out = {}
-    for f in sorted(base.rglob("*.as")):
+    # THE C++ DLL READS TUNABLES TOO (`circuit->GetTunable`). Scanning only the
+    # script tree marked apex_porc_obsolete_ratio/_secs unread when both are
+    # live reads in DefenceData.cpp -- the same blind spot docs_audit had.
+    files = sorted(base.rglob("*.as"))
+    cpp = REPO / "cpp" / "src"
+    if cpp.is_dir():
+        files += sorted(cpp.rglob("*.cpp")) + sorted(cpp.rglob("*.h"))
+    for f in files:
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
         # tunables.as annotates paths relative to its own profile dir.
-        anchor = SCRIPT_DIR if SCRIPT_DIR in f.parents else base
+        anchor = (SCRIPT_DIR if SCRIPT_DIR in f.parents
+                  else base if base in f.parents else REPO)
         rel = str(f.relative_to(anchor)).replace(os.sep, "/")
+        spans = dead.get(str(f), ())
         for mo in re.finditer(r'GetTunable\(\s*"([a-z_0-9]+)"', text):
-            out.setdefault(mo.group(1), []).append(
-                "%s:%d" % (rel, text.count("\n", 0, mo.start()) + 1))
+            line = text.count("\n", 0, mo.start()) + 1
+            if any(a <= line <= b for a, b in spans):
+                continue
+            out.setdefault(mo.group(1), []).append("%s:%d" % (rel, line))
     return out
 
 
@@ -1008,6 +1038,9 @@ def parse_tunables():
     """tunables.as -> [{title, entries:[{name,tunable,value,unit,reads,desc,line}]}]"""
     lines = TUNABLES_AS.read_text(encoding="utf-8").split("\n")
     callsites = tunable_callsites()
+    # `unread` asks whether editing this knob can change the game, so it is
+    # judged on REACHABLE reads only; `reads` still shows every site.
+    livesites = tunable_callsites(live_only=True)
     sections, cur = [], None
     pending = []   # list of comment BLOCKS; only the last one is this const's
     i = 0
@@ -1053,7 +1086,7 @@ def parse_tunables():
                 "reads": ", ".join(sites) or reads,
                 "reads_stale": bool(sites) and bool(annotated)
                                and annotated != actual,
-                "unread": bool(tunable) and not sites,
+                "unread": bool(tunable) and not livesites.get(tunable),
                 "desc": " ".join(desc).strip(),
                 "file": str(TUNABLES_AS.relative_to(REPO)).replace(os.sep, "/"),
                 "line": i + 1,

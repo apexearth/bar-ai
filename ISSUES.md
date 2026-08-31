@@ -68,15 +68,46 @@ production line. The plan's answer is the comparison the floor replaces: which
 of these makes the target arrive sooner. Fixing `afford` is the change;
 deleting the floor is a consequence of it, not a change on its own.
 
-### Why nothing flagged it
+### Why nothing flagged it, and the 26-knob cull list it was hiding
 
-The INSTRUMENT GAP recorded under the T2 entry below, and this is the full
-census of what it hides. `unread` is `bool(tunable) and not sites`
-(`dashboard.py:1056`), and `sites` counts any `GetTunable("apex_x")` anywhere --
-including the one inside the dead accessor itself -- so every knob read only by
-an uncalled `Policy::` wrapper passes clean. A second layer compounds it:
-`dashboard_audit.py:75` only tests `curated` entries for `unread`, and all 16 of
-these are waived, so even a working `unread` would not have reached them.
+`unread` was `bool(tunable) and not sites` and `sites` counted any
+`GetTunable("apex_x")` anywhere -- including the one inside the dead accessor
+itself -- so every knob read only by an uncalled wrapper passed clean. A second
+layer compounded it: `dashboard_audit.py` tested `unread` on CURATED entries
+only, and all 16 policy.as knobs are waived.
+
+FIXED 2026-08-31. `tools/as_scope.py reachable()` is a fixpoint reachability
+walk seeded from the engine's own entry points (taken from
+`reference/barb-stable`, not from us); `python tools/as_scope.py --dead` prints
+it. A read inside an unreachable function is no longer counted, and waived
+knobs are checked too. It also found **91 unreachable functions tree-wide** --
+a cull list in its own right, and the same rot class as the accessors.
+
+That turns up **26 tunables nothing can read**, not 16 -- live modoptions on
+apexearth's dashboard wired to nothing:
+
+    ENERGY_HEADROOM E_PER_METAL FUSION_MIN_ENERGY RECLAIM_GEN_E RECLAIM_PAD
+    RECLAIM_SOLAR_E T2_METAL T2_ENERGY T2_ENERGY_FROM T2_ENERGY_REACTOR
+    CON_LOG_T1_A CON_LOG_T1_B CON_LOG_T2_A CON_LOG_T2_B GREED_CONS SIEGE
+    KILL_FLOOR RAID_MIN_EARLY SHIELD_INCOME SCOUT_BLIND_MULT E_STALL_BOOST
+    LINE_PULL NUKE_RISK WAVE_MEET BUDGET ALLY_COVER
+
+Verified per knob against `ai/Unstable`, `cpp/src`, `tools` and
+`game-patches`, because two rounds of this produced false positives: **the C++
+DLL reads tunables too** (`apex_porc_obsolete_ratio`/`_secs` are live reads in
+`DefenceData.cpp` and were briefly on this list -- `dashboard.py` now scans
+`cpp/src`), and `apex_siege` -- which IS gone -- looks read until you match
+exactly, when the hits turn out to be the live `apex_siege_prior`.
+
+NOT CULLED, because two are not mechanical and are apexearth's call:
+
+- `TUNE_CON_LOG_T1_A/B`, `T2_A/B` are drawn as a curve by
+  `dashboard_ui.html:1535-1537`. The UI rows go with them.
+- `apex_t2_metal` has a SECOND life as a hardcoded `T2_BAR = 30.0` in
+  `tools/audit.py:848`, which checks whether the AI went T2 above 30 m/s.
+  Under `docs/23-the-plan.md` that bar should not exist to be checked against
+  -- but deciding what the audit asks INSTEAD is a real question, not a
+  deletion.
 
 ## 2026-08-31 — the T2 affordability FLOOR is gone; only a soft price remains
 

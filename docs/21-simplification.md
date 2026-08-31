@@ -10,7 +10,7 @@ careless. This document is the diagnosis and the plan.
 |---|---|
 | AngelScript | 34,765 lines, 89 files |
 | `manager/brain/` | 17,529 lines — half the codebase |
-| `want_protect.as` | 2,122 lines (stated ceiling: ~600) |
+| `want_protect.as` | 2,122 lines (stated ceiling: ~600) — since split into the `protect_*.as` parts, see below |
 | `tunables.as` | 2,484 lines |
 | Tunables declared | 404 |
 | …read at exactly one call site | 316 |

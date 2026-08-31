@@ -3,7 +3,7 @@ name: ai-commander
 description: The commander — opening, caution vs fielded tech, flee triggers, the clean-until-dead trap
 ---
 
-# The commander (`manager/builder/rules_commander.as`, `commander-opening` domain)
+# The commander (`misc/commander.as`)
 
 Commanders decide BAR games (memory: survival predicts the winner). The
 commander is the main early builder AND the most valuable snipe target.

@@ -37,7 +37,10 @@ Three findings, all silent otherwise:
             dashboard drops it at runtime, so the knob is simply absent from the
             page that is supposed to explain it.
   dead      the guide offers a knob no GetTunable call reads. Editing it changes
-            nothing, and a guided page must not recommend it.
+            nothing, and a guided page must not recommend it. "Reads" means
+            REACHABLE reads: a GetTunable inside a function nothing calls is
+            not a read, which is how 16 knobs in policy.as stayed adjustable
+            and wired to nothing (tools/as_scope.py reachable()).
 """
 
 from __future__ import annotations
@@ -73,10 +76,15 @@ def audit():
     # reported so the file does not accumulate ghosts, but it is not a finding.
     stale = sorted(n for n in waived if n not in live)
     dead = sorted(n for n in curated if n in live and live[n]["unread"])
+    # A WAIVER SAYS "not on the guided page", NOT "exempt from existing". All
+    # 16 orphans in policy.as were waived, so checking only `curated` for dead
+    # reads reported the whole set clean.
+    dead_waived = sorted(n for n in waived if n in live and live[n]["unread"])
     return {
         "new": new,
         "missing": sorted(guide["missing"]),
         "dead": dead,
+        "dead_waived": dead_waived,
         "stale_waivers": stale,
         "curated": len(curated),
         "total": len(live),
@@ -191,6 +199,11 @@ def report(r, rep=None) -> int:
              f"{' …' if len(r['new']) > 8 else ''} -- add them to "
              f"tools/dashboard_guide.py, or run "
              f"`python tools/dashboard_audit.py --accept` to waive them")
+    if r["dead_waived"]:
+        warn(f"{len(r['dead_waived'])} waived tunable(s) no GetTunable call "
+             f"reaches: {', '.join(r['dead_waived'][:6])}"
+             f"{' …' if len(r['dead_waived']) > 6 else ''} -- a modoption that "
+             f"sets nothing; cull the declaration or restore its reader")
     if r["stale_waivers"]:
         warn(f"{len(r['stale_waivers'])} waived tunable(s) no longer exist: "
              f"{', '.join(r['stale_waivers'][:6])} -- --accept clears them")
@@ -214,7 +227,7 @@ def main() -> int:
     print(f"\ndashboard coverage: {r['curated']} curated, {r['waived']} waived, "
           f"of {r['total']} tunables")
     n = report(r)
-    if not n and not r["new"] and not r["stale_waivers"]:
+    if not n and not r["new"] and not r["stale_waivers"]             and not r["dead_waived"]:
         print("  ok      every tunable is either on the dashboard or waived")
     print()
     return 1 if n else 0

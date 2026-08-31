@@ -40,10 +40,18 @@ every deploy. The compile is the only thing that knows whether it compiles.
 
     python tools/as_scope.py                      # the Unstable variant
     python tools/as_scope.py ai/X/game-side/script/standard/main.as
+    python tools/as_scope.py --dead               # functions nothing calls
+
+`--dead` is the reachability walk `reachable()` performs, printed. A function
+no path reaches is dead code, and so is every `GetTunable` inside it -- which
+is how 16 knobs in `policy.as` stayed live modoptions on the dashboard, wired
+to nothing. `tools/dashboard_audit.py` consumes this; the list is also a cull
+list in its own right.
 """
 
 from __future__ import annotations
 
+import functools
 import re
 import sys
 from pathlib import Path
@@ -52,6 +60,8 @@ from pathlib import Path
 #
 # Line structure must survive so offsets still map to line numbers, so every
 # removed character is replaced by a space and every newline is kept.
+
+_ALL_FUNCS: dict = {}
 
 _TOKEN = re.compile(r"//|/\*|\"|'")
 
@@ -567,13 +577,131 @@ def _enclosing_ns(s: FileScan, off: int) -> set[str]:
     return out or {""}
 
 
+# The engine calls these; nothing in the script does. They are the roots of
+# every live path, so a reachability walk that does not seed them finds the
+# whole tree dead.
+# Taken from reference/barb-stable's own dev scripts, not from ours -- the
+# stock tree is what the engine's binding list is written against, so it is the
+# authoritative roster. Two of ours (AiUnitDestroyedBy, AiEnemyDestroyed) are
+# apex additions bound in our DLL.
+ENTRY_POINTS = {
+    "AiInit", "AiLoad", "AiSave", "AiMain", "AiUpdate", "AiUpdateEconomy",
+    "AiUnitAdded", "AiUnitRemoved", "AiUnitFinished", "AiUnitDestroyed",
+    "AiUnitDestroyedBy", "AiEnemyDestroyed", "AiMakeTask", "AiMakeDefence",
+    "AiGetFactoryToBuild", "AiIsSwitchAllowed", "AiIsSwitchTime",
+    "AiTaskAdded", "AiTaskAssigned", "AiTaskRemoved", "AiMessage",
+    "AiLuaMessage",
+}
+
+
+def reachable(root: Path):
+    """(reachable function names, {name: [(path, line)]} for the rest).
+
+    A function nothing calls is dead code, and so is every `GetTunable` read
+    inside it -- which is how 16 knobs in `policy.as` stayed on the dashboard,
+    adjustable, wired to nothing: each was read exactly once, by an accessor
+    that no longer had a caller. Counting GetTunable sites cannot see that; you
+    have to ask whether the site is reachable.
+
+    Fixpoint, not one pass: an accessor called only by another dead accessor is
+    dead too. Seeded from ENTRY_POINTS plus everything outside any function
+    body (global initializers run at load).
+
+    Deliberately conservative -- it reports a function only when NO reference
+    to its bare name survives anywhere reachable. Recursion, a call through a
+    funcdef handle, or a same-named overload all keep a function alive here,
+    because a false "this is dead" is far more expensive than a miss.
+    """
+    scans, _, dead = _walk(root)
+    return {n for n in _ALL_FUNCS.get(str(root), ()) if n not in dead}, dead
+
+
+@functools.lru_cache(maxsize=4)
+def _walk(root: Path):
+    """(scans, live names, dead name -> [(path, line)]). Cached: the dashboard
+    asks twice per page load and each walk parses ~110 files."""
+    scans = [FileScan(p, i) for i, p in enumerate(resolve_order(root))]
+
+    # name -> [(scan, start, end)] for every body, and the spans of all bodies
+    # per file, so "text outside any function" is what is left over.
+    bodies: dict[str, list] = {}
+    spans: dict[int, list[tuple[int, int]]] = {}
+    for s in scans:
+        for name, a, b, _ in s.bodies:
+            bodies.setdefault(name, []).append((s, a, b))
+            # A body span starts at `{`, so the SIGNATURE sits outside it. Cut
+            # back to the end of the previous statement or the enclosing brace,
+            # or every declaration seeds itself live and nothing is ever dead.
+            head = max(s.text.rfind(c, 0, a) for c in ";{}") + 1
+            spans.setdefault(s.index, []).append((head, b))
+
+    def refs_in(text: str) -> set:
+        return {m.group(2) for m in _IDENT.finditer(text)}
+
+    # Seed: every name mentioned at file scope (outside all bodies).
+    live = set(ENTRY_POINTS)
+    for s in scans:
+        cuts, prev, top = sorted(spans.get(s.index, [])), 0, []
+        for a, b in cuts:
+            top.append(s.text[prev:a])
+            prev = max(prev, b)
+        top.append(s.text[prev:])
+        live |= refs_in("\n".join(top))
+
+    # Closure: expand through the bodies of functions already known live.
+    seen, queue = set(), [n for n in live if n in bodies]
+    while queue:
+        name = queue.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        for s, a, b in bodies[name]:
+            for r in refs_in(s.text[a:b]):
+                if r not in live:
+                    live.add(r)
+                if r in bodies and r not in seen:
+                    queue.append(r)
+
+    dead = {}
+    for name, places in bodies.items():
+        if name in live:
+            continue
+        dead[name] = [(s.path, s.line(a)) for s, a, _ in places]
+    _ALL_FUNCS[str(root)] = set(bodies)
+    return scans, live, dead
+
+
+def dead_line_spans(root: Path) -> dict[str, list[tuple[int, int]]]:
+    """{absolute path: [(first line, last line)]} for every unreachable body.
+
+    So a caller holding a `file:line` -- `dashboard.py`'s tunable call sites,
+    say -- can ask whether that line is inside dead code without re-doing the
+    walk itself.
+    """
+    scans, _, dead = _walk(root)
+    out: dict[str, list[tuple[int, int]]] = {}
+    for s in scans:
+        for name, a, b, _ in s.bodies:
+            if name in dead:
+                out.setdefault(str(s.path), []).append((s.line(a), s.line(b)))
+    return out
+
+
 def default_root() -> Path:
     repo = Path(__file__).resolve().parent.parent
     return repo / "ai" / "Unstable" / "game-side" / "script" / "standard" / "main.as"
 
 
 def main() -> int:
-    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else default_root()
+    args = [a for a in sys.argv[1:] if a != "--dead"]
+    root = Path(args[0]).resolve() if args else default_root()
+    if "--dead" in sys.argv:
+        _, dead = reachable(root)
+        for name in sorted(dead):
+            where = ", ".join(f"{p.name}:{n}" for p, n in dead[name])
+            print(f"  {name:32} {where}")
+        print(f"{len(dead)} function(s) nothing reaches")
+        return 0
     order, findings = analyse(root)
     print(f"{root.name}: {len(order)} files in include order")
     for kind, path, line, msg in findings:

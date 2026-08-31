@@ -29,7 +29,7 @@ reads them; functions are visible module-wide regardless).
 | Whether a plane flies at all | `HoldsUnit` | `air/update.as` |
 | Which planes a strike owns | the wave roster | `air/wave.as` |
 | Recycling stale T1 air | station recycle (adv standing vs basic count) | `air/station.as` |
-| Static AA | `CheapAA` (count-compared vs `AAWantedNow`), `HeavyAAWant` (economy floor at 60 income + seen-based), flak pool-post for incapable askers | `builder/statics.as`, `military/airthreat.as` |
+| Static AA | `ProposeAirDef` prices a `WK_AIRDEF` want; the census and the heavy-AA ceiling are `HeavyAAWant` -- an income BAR (`apex_flak_floor_income`) plus one more per `apex_flak_per` of income beyond it, maxed against what air we have SEEN. That bar is a threshold `docs/23-the-plan.md` forbids; it is in the code today, see ISSUES.md | `brain/market/protect_want.as`, `military/airthreat.as` |
 | AA placement exemption | static AA bypasses the behind-base defence veto (air ignores the front line) | `military/defenceline.as` |
 | Mobile AA | excluded from massing (can't hit ground; died "for nothing" in pools); stock AA tasks | `military/hooks.as` |
 
