@@ -249,6 +249,34 @@ void RefreshBestCells()
 		if (ec > gBestEcell)
 			gBestEcell = ec;
 	}
+	// WHAT WE COULD BUILD, not only what we happen to own.
+	//
+	// This scanned STANDING converters, so the basic one could never be
+	// obsolete until an advanced one already stood -- and the basic one costs
+	// ONE METAL, so it won every value election and we kept building it.
+	// Measured (watch-ecorole, Comet Catcher 8v8 +100%, 30 min): 512 basic
+	// converters standing against 52 advanced ones. apexearth, watching: "I
+	// still see a lot of basic energy converters taking up space... they
+	// really do take up a lot of room", and the reclaim "feels a bit too
+	// late" at 26 minutes.
+	//
+	// The per-space arithmetic he is asking for is already the metric here and
+	// it is decisive: armmakr is 3x3 = 9 cells for 70 e/s (7.8 per cell),
+	// armmmkr 4x4 = 16 cells for 600 (37.5 per cell) -- 4.8x the throughput on
+	// the same ground. Reading availability instead of ownership is what lets
+	// that arithmetic fire the moment the better one unlocks, rather than one
+	// build too late.
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| (Catalog::gConvCapacity[d] <= 0.f))
+			continue;
+		const float mc = Catalog::gConvCapacity[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (mc > gBestMcell)
+			gBestMcell = mc;
+	}
+	// The owned fleet is still a floor: if the availability flag ever reads
+	// wrong, what is standing is ground truth and the old behaviour returns.
 	for (uint i = 0; i < gOwnConv.length(); ++i) {
 		if (gOwnConv[i] is null)
 			continue;
