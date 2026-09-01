@@ -52,6 +52,75 @@ statement about WHERE to look: an economy-vs-army fix has to reach the producing
 code, per CLAUDE.md's standing rule about attributing a composition problem
 before touching any config table.
 
+## 2026-08-31 — FRONT DEFENCE: the line is drawn along the TEAM's band, and the wall generator places 96% of everything
+
+apexearth, watching: "Our coastline defense is much more formidable than our
+frontline defense... we have almost no defenses really on our front line. We
+need to do a lot better there." And on the line itself: "the logic there sucks
+btw, if we have 1 scout in their territory all the sudden our line draws through
+the middle of them."
+
+Measured, `matches/watch-isthmus-trbl` (Supreme Isthmus v2.1, 8v8 mirror, +100%,
+26.6 min, correct trbl 0.45 boxes):
+
+| | |
+|---|---|
+| towers standing at 26 min | **22** |
+| wall closure (`tools/wall_check.py`) | **0.17** |
+| defence sites from the `wall` generator | **669 / 696** |
+| from the `front` generator | **27** |
+| from the `ring` generator | **0** |
+| sites chosen on the REAR half (`fwd < 0`) | **60%** |
+| median builder walk to a chosen site | 1195 elmos; 38% over 1500 |
+| `ring-diag` r/sep | mean 0.60, **max 0.98** |
+| `front-diag` lane crossing | mean 0.69, **max 1.15** |
+
+r/sep 0.98 and a lane crossing at 1.15 are a line drawn AT and PAST the enemy
+centroid.
+
+MECHANISM, and it is not the scout alone. `Military::RebuildRing` marches each
+ray outward while `ai.GetAllyInflAt(p)` clears a bar. That field is ally-WIDE
+and CircuitAI's `CInfluenceMap::AddMobileArmed` stamps every allied mobile
+armed unit's power over its threat range, so (a) a forward unit paints ground as
+ours, and (b) far worse in a team game, a ray running sideways ALONG the team's
+own band never leaves friendly influence and marches until the `march = sep`
+cap. The 0.98 figure is that cap being hit, not a battlefield. The file's own
+comment already names this failure and the sep cap is the band-aid for it.
+
+`frontline.as` fixed the same class of bug for the OTHER territory field in
+2026-08 -- "A structure cannot walk, so a structure is what owning ground
+means", `Front::StampHeld` -- and `RebuildRing` never got the same treatment.
+
+FIX IN FLIGHT (uncommitted until measured): the ray stops when the sample leaves
+our own sector, using `Front::Mine` -- the Voronoi split over teammate homes the
+perimeter already uses. Geometry says this cuts the sideways rays and keeps the
+forward ones: a mate's perpendicular bisector runs roughly parallel to the enemy
+bearing. In a 1v1, or before a mate has published a home, it answers true and
+costs nothing. `ring-diag` now reports `sector=N`, the count of rays it stopped.
+
+STILL OPEN after that: 96% of defence sites come from the wall generator, which
+follows the BUILDING rim, and our buildings sprawl rearward and coastward -- so
+60% of chosen sites are behind the base. That is the coastline-vs-frontline
+asymmetry he is describing. Whether the front generator loses on price or is
+never offered a reachable site is NOT yet established; `apex: defwhy` and the
+`bestIsFront/Ring/Wall` split in `DefSiteFill` are where to look. Do not
+reprice anything before that is known.
+
+## 2026-08-31 — NANO: the fortification site is priced and then thrown away
+
+`want_nano.as` prices a fortification lathe (`fortNeed`, from
+`Military::FenceLostNear` -- demand where our own guns are actually dying) and
+sets `w.pos` to that ground. `execute.as` then re-derives the site from scratch:
+neediest line, then metal sinks, then bare big frames, then "any factory", and
+only uses `w.pos` if we own no factory at all. So a nano bought to hold the wall
+is built beside a lab.
+
+This is why apexearth's split -- "defense oriented emplacements of nano turrets
+are better when they're spread out so they don't all get blown up at the same
+time" -- has no code path today: every executed nano is an assist turret. The
+packed lattice (`market/nanopack.as`, 2026-08-31) is correct for all of them
+until the fortification site is honoured; the spread answer has nothing to site.
+
 ## 2026-08-31 — NAVY: the T2 con is BUILT and then never elects; naval mex never happens
 
 apexearth: "What we lack: T2 navy lab & T2 navy con; upgrade navy mexes." Probed
