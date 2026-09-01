@@ -142,6 +142,7 @@ local NAMES = {
 	"apex_army_eco_s",
 	"apex_eco_target_base",
 	"apex_air_eco_base",
+	"apex_line_terrain",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",

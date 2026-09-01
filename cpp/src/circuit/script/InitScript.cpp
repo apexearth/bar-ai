@@ -498,6 +498,45 @@ static bool CCircuitAI_CanDefReach(CCircuitAI* circuit, CCircuitDef* cdef,
 
 // apex: how many of a given enemy def stand within radius of pos -- the
 // "count the antinukes covering this spot" primitive, generic on purpose.
+// apex: WHAT SHARE OF THE MAP THIS DEF CAN ACTUALLY TRAVERSE, 0-100.
+//
+// apexearth 2026-09-01, on choosing the ground line: "It depends on the map,
+// some maps are full of hills, others are flat. If we're on a mostly flat map
+// then we should be picking tanks... Reach and speed are what matter. Tanks can
+// be clunky when turning around, but on open flat ground turning around is
+// easy."
+//
+// This is the REACH half, and the engine has already done the work: CircuitAI
+// partitions the map per movement type at startup and records percentOfMap for
+// every connected area (terrain::SArea). areaLargest is the biggest region the
+// type can move around in, so a tank on broken ground reads far below a bot,
+// and on open flat ground the two converge -- which is right, because flatness
+// does not make tanks better, it stops making them worse.
+//
+// Preferred over sampling map heights (his other suggestion): max/min/avg
+// elevation is the wrong statistic -- a big smooth ramp has a huge range and
+// stops nothing, a field of small ridges has a small range and stops
+// everything -- and a slope grid would be us re-deriving, against a bar we
+// picked, what the pathfinder has already decided using the unit's own
+// movement class.
+static float CCircuitAI_DefMapCoverage(CCircuitAI* circuit, CCircuitDef* cdef)
+{
+	if (cdef == nullptr) {
+		return 0.f;
+	}
+	const int mtId = cdef->GetMobileId();
+	if (mtId < 0) {
+		return 100.f;   // immobile or flying: the whole map is available
+	}
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	terrain::SAreaData* areaData = terrainMgr->GetAreaData();
+	if ((areaData == nullptr) || (mtId >= (int)areaData->mobileType.size())) {
+		return 0.f;
+	}
+	const terrain::SArea* a = areaData->mobileType[mtId].areaLargest;
+	return (a != nullptr) ? a->percentOfMap : 0.f;
+}
+
 static int CCircuitAI_CountEnemyDefNear(CCircuitAI* circuit, int defId,
 		const AIFloat3& pos, float radius)
 {
@@ -1211,6 +1250,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetEnemyTeamSize() const", asMETHOD(CCircuitAI, GetEnemyTeamSize), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float DefMapCoverage(CCircuitDef@)", asFUNCTION(CCircuitAI_DefMapCoverage), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);

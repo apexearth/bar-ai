@@ -581,6 +581,10 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
+                 ("TUNE_LINE_TERRAIN", "weigh a production line by how much "
+                  "of the map its ARMY can move around in -- 1 on, 0 off. On a "
+                  "flat map every line reads the same and this changes nothing; "
+                  "on a hilly map the vehicle line is discounted against bots"),
                  ("TUNE_AIR_ECO_BASE", "the economy needed before the bomber "
                   "raid is worth mounting, in metal/s at no bonus -- the "
                   "handicap multiplies it, so 100 here is 200 m/s in a +100% "

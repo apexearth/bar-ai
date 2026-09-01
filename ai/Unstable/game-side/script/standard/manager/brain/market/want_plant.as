@@ -554,6 +554,89 @@ bool UnlocksProduct(int plantId)
 // left means no plant value at all.
 int gNextPlantParLog = 0;
 
+// HOW MUCH OF THE MAP THIS LINE'S ARMY CAN ACTUALLY MOVE AROUND IN, relative
+// to the best any line offers. 1.0 for whichever line the terrain suits; below
+// 1 for the one it punishes.
+//
+// apexearth 2026-09-01: "It depends on the map, some maps are full of hills,
+// others are flat. If we're on a mostly flat map then we should be picking
+// tanks... Reach and speed are what matter."
+//
+// Reach comes from ai.DefMapCoverage -- the engine's own per-movement-type
+// partition of the map, percentOfMap of the largest connected area. Speed is
+// already in the price through MobilityMult. Nothing here samples heights or
+// picks a slope bar: the pathfinder has already decided what each movement
+// class can cross, using the unit's own movement definition.
+//
+// Applied to the PRODUCTION half only. The constructor half already self-
+// corrects, because MeasureReach asks CanDefReach for the plant's own con --
+// what was missing is the combat units that have to reach the front.
+//
+// Cached: the terrain does not change, and this is asked once per plant def
+// per election.
+array<float> gLineCov;
+float gLineCovBest = -1.f;
+
+float LineCoverage(int plantDef)
+{
+	if (int(gLineCov.length()) <= Catalog::gDefCount)
+		gLineCov.resize(Catalog::gDefCount + 1);
+	if (gLineCov[plantDef] > 0.f)
+		return gLineCov[plantDef];
+	float best = 0.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantDef];
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int pd = prods[i];
+		if (!Catalog::gMobile[pd] || Catalog::gBuilder[pd]
+			|| (Catalog::gPower[pd] <= 1.f))
+			continue;
+		const float c = ai.DefMapCoverage(Catalog::Def(pd));
+		if (c > best)
+			best = c;
+	}
+	gLineCov[plantDef] = (best > 0.f) ? best : 1.f;
+	return gLineCov[plantDef];
+}
+
+int gLineCovLogAt = 0;
+float LineTerrainMul(int plantDef)
+{
+	if (ai.GetTunable("apex_line_terrain", TUNE_LINE_TERRAIN) <= 0.f)
+		return 1.f;
+	if (gLineCovBest < 0.f) {
+		gLineCovBest = 0.f;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+				|| (Catalog::gBuildsList[d].length() == 0))
+				continue;
+			const float c = LineCoverage(d);
+			if (c > gLineCovBest)
+				gLineCovBest = c;
+		}
+	}
+	if (gLineCovBest <= 0.f)
+		return 1.f;
+	const float m = LineCoverage(plantDef) / gLineCovBest;
+	// ONE CENSUS, not a rate-limited sample. A per-120s line shows whichever
+	// plant happened to ask and cannot answer the only question this measure
+	// exists for -- does the map discriminate between the lines at all.
+	if (gLineCovLogAt == 0) {
+		gLineCovLogAt = 1;
+		string row = "";
+		for (int d2 = 1; d2 <= Catalog::gDefCount; ++d2) {
+			if (!Catalog::gAvailable[d2] || Catalog::gMobile[d2]
+				|| (Catalog::gBuildsList[d2].length() == 0))
+				continue;
+			const float c2 = LineCoverage(d2);
+			row += " " + Catalog::Def(d2).GetName()
+					+ "=" + formatFloat(c2, "", 0, 1);
+		}
+		AiLog("apex: line-terrain t=" + ai.teamId
+			+ " best=" + formatFloat(gLineCovBest, "", 0, 1) + row);
+	}
+	return (m > 1.f) ? 1.f : m;
+}
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -717,7 +800,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
-		const float prodOwn = prodHalf * FoeTierPlantMul(d);
+		const float prodOwn = prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d);
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;

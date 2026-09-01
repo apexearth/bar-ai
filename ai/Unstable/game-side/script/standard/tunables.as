@@ -2433,6 +2433,13 @@ const float TUNE_ECO_TARGET_BASE = 250.f;
 // weak on ground"). This replaced an 11-minute TIMER, which could not tell a
 // rich game from a poor one.
 const float TUNE_AIR_ECO_BASE = 100.f;
+
+// Weigh a production line by how much of the map its ARMY can move around in
+// (ai.DefMapCoverage, the engine's own per-movement-type partition). 1 = on,
+// 0 = off, which is the control arm. On a flat map every line reads the same
+// and this changes nothing; on a hill map the vehicle line is discounted
+// against the bot line, which is apexearth's rule for picking the ground line.
+const float TUNE_LINE_TERRAIN = 1.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog
