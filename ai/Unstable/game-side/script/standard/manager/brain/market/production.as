@@ -298,10 +298,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		if (waste > armyGap)
 			armyGap = waste;
 	}
-	float roleMul = EcoRoleActive()
-			? ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL) : 1.f;
-	if ((roleMul < 1.f) && EcoDangerNear())
-		roleMul = 1.f;
+	// The eco role no longer DISCOUNTS army production -- it removes army from
+	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
+	// already zero here and a second multiplier would apply the same rule
+	// twice. What the role still changes is WHICH unit the late budget buys:
+	// the quality bias further down.
+	const float roleMul = 1.f;
 	// THE STAKE (apexearth 2026-08-23): "all the value we have built up will
 	// be lost if we have insufficient army." Under-matched, a unit's worth
 	// scales with EVERYTHING we own -- expected loss = total value x defeat

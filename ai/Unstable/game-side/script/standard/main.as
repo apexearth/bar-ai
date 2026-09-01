@@ -131,6 +131,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	{ double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
 	{ double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
+	Market::IncomeMultProbe();   // once, ~30s in: is the handicap binding real
 	{ double _t = Perf::T0(); Brain::Think(); Perf::Add("up.think", _t); }
 	{ double _t = Perf::T0(); Base::Update(); Perf::Add("up.base", _t); }
 	{ double _t = Perf::T0(); Lattice::Update(); Perf::Add("up.lattice", _t); }

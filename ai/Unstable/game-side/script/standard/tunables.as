@@ -1590,7 +1590,6 @@ const float TUNE_ECO_REAR_MARGIN = 1.15f;
 // normal -- applied to the army target AND the overflow sink, rez and
 // support branches. Near-zero: the freed spend compounds through the eco
 // ladder; 3% of a monster late economy is still a gantry stream.
-const float TUNE_ECO_ARMY_MUL = 0.03f;
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
@@ -1811,7 +1810,11 @@ const float TUNE_SCOUT_OVER_S = 45.f;
 // ECO_ROLE -- master switch for the rear-specialist election and everything
 //   behind it (army suppression, quality bias). OFF by his ruling
 //   2026-08-29: "it does *not* work"; 1 re-arms the experiment.
-const float TUNE_ECO_ROLE = 0.f;
+// RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. It was switched
+// off ("the eco role ... does *not* work") while it worked by crushing the rear
+// player's army and defence TARGETS with multipliers -- a role deciding
+// whether. It now names a different target instead; see EcoRoleTargetM.
+const float TUNE_ECO_ROLE = 1.f;
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse.
 //   At 100s the ~9.3k bill clears right at ~100 team metal/s, his stated
@@ -2407,6 +2410,14 @@ const float TUNE_DEF_ECO_S = 120.f;
 // residual at zero is escort and AA demand, which never consulted this target.
 // Personality moves it (Persona::WantMult); this is the neutral baseline.
 const float TUNE_ARMY_ECO_S = 66.f;
+
+// The economy the rear specialist names before it spends anything on war, in
+// metal/s of economic power AT NO BONUS -- EcoRoleTargetM multiplies by the
+// game's own handicap, so 250 here is 500 in a +100% game. Measured on Supreme
+// Isthmus 8v8 +100%, the median player passes 500 at minute 20 and 855 by
+// minute 25, which is apexearth's "no army and no defense until like 20
+// minutes" expressed as economy rather than a clock.
+const float TUNE_ECO_TARGET_BASE = 250.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog
@@ -2501,7 +2512,6 @@ const float TUNE_OWN_TIER_FADE = 0.8f;
 //   already near zero by position, so this only holds the tail down; it is a
 //   how-much, never a whether -- if something starts killing it, ThreatM at
 //   its home rises and the target rises with it.
-const float TUNE_ECO_DEF_MUL = 0.f;
 // manager/brain/market/coverage.as [metal per unit of ally influence] -- What a
 //   teammate holding this ground is worth as cover, in the same currency as
 //   our own towers. 0 restores the own-towers-only reading, in which a rear

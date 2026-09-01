@@ -163,10 +163,17 @@ float DefenceTarget()
 	// ProposeSuper already budgets against. Seconds of economic power, so it
 	// scales with income at every stage and needs no cap: at 40 metal/s it is
 	// a handful of light towers, at 400 it can carry a heavy gun.
+	// The rear specialist buys NEITHER army nor defence while it is still
+	// building the economy it named (apexearth 2026-08-31: "this means they
+	// make no army and no defense until like 20 minutes into the game").
+	// Returned before the per-mex floor below on purpose -- that floor is a
+	// defence target too, and leaving it standing would be defence by another
+	// name. EcoDangerNear restores everything the moment the ground is
+	// actually contested.
+	if (EcoRoleGrowing())
+		return 0.f;
 	const float hold = ai.GetTunable("apex_def_eco_s", TUNE_DEF_ECO_S);
 	float t = EcoPowerM() * ((hold > 0.f) ? hold : 30.f);
-	if (EcoRoleActive())
-		t *= ai.GetTunable("apex_eco_def_mul", TUNE_ECO_DEF_MUL);
 	// ...and the per-mex floor is a target too. The site loop will not buy a
 	// turret the global target says we already have enough of, so the two must
 	// agree about the floor or it never gets built -- and the floor applies to

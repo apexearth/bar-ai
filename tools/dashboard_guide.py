@@ -576,6 +576,12 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
+                 ("TUNE_ECO_TARGET_BASE", "the economy the REAR SPECIALIST "
+                  "builds before it spends anything on war, in metal/s at no "
+                  "bonus -- the game's own handicap multiplies it, so 250 here "
+                  "is 500 in a +100% game. Below it that player's target names "
+                  "no army and no defence at all; above it the role stops "
+                  "existing. RAISE for a longer greed phase"),
                  ("TUNE_ARMY_ECO_S", "seconds of total economic power we may "
                   "hold as ARMY -- the other half of the same split, on the "
                   "same basis as TUNE_DEF_ECO_S above, so the two numbers "

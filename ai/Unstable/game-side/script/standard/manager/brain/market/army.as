@@ -866,12 +866,71 @@ bool EcoFar(const AIFloat3& in p)
 }
 
 int gEcoStatusAt = 0;
+// WHAT THE REAR SPECIALIST IS TRYING TO REACH, in metal/s of economic power.
+//
+// apexearth 2026-08-31: "Can we get our eco player to care not about army until
+// ~500m/s and then start to make military?" -- and on the number itself: "It
+// has to depend on how much bonus we get maybe (?) But the point is we need to
+// be REALLY BIG."
+//
+// He is right that a flat 500 cannot travel. It was calibrated at +100%:
+// measured on Supreme Isthmus 8v8, the median player's economic power reaches
+// 485 at minute 20 and 855 by minute 25, so 500 IS his "about twenty minutes"
+// -- but with no bonus the same twenty minutes is roughly half that and the
+// crossover would never arrive. IncomeMult() is the handicap the game itself
+// publishes, the same helper that fixed extraction pricing's blind spot, so the
+// base is stated at no-bonus scale and the game scales it.
+//
+// This is a TARGET, not a threshold: below it the eco player's target state
+// names an economy and no war, so army and defence lose the auction on value
+// rather than being forbidden. Above it the role stops existing and the player
+// is ordinary. That is the difference from the multiplier version it replaces,
+// which decided WHETHER instead of how much and was switched off for it
+// (apexearth 2026-08-29: the eco role "does *not* work").
+float EcoRoleTargetM()
+{
+	return ai.GetTunable("apex_eco_target_base", TUNE_ECO_TARGET_BASE)
+			* IncomeMult();
+}
+
+// TRUE while the rear specialist is still building the economy it named --
+// which is when army and defence are not in its target at all.
+//
+// EcoDangerNear is the valve and it is not optional: without it the eco player
+// stands naked through the whole growth phase and dies to the first raid that
+// gets past the line, which is the failure mode that killed this role the first
+// time. Sustained enemy metal near home (30s) restores the ordinary targets.
+bool EcoRoleGrowing()
+{
+	return EcoRoleActive() && !EcoDangerNear()
+			&& (EcoPowerM() < EcoRoleTargetM());
+}
+
+// IS THE HANDICAP BINDING REAL? Logged once, raw, because this repo has been
+// burned by a binding that quietly returned nonsense for every team
+// (Game_getTeamResource*), and the crossover above now depends on this one.
+bool gIncomeMultLogged = false;
+void IncomeMultProbe()
+{
+	if (gIncomeMultLogged || (ai.frame < 30 * SECOND))
+		return;
+	gIncomeMultLogged = true;
+	AiLog("apex: income-mult t=" + ai.teamId
+		+ " raw=" + formatFloat(ai.GetGameRulesParam("ai_handicap_" + ai.teamId, -1.f), "", 0, 3)
+		+ " used=" + formatFloat(IncomeMult(), "", 0, 3)
+		+ " ecoTarget=" + int(EcoRoleTargetM())
+		+ " P=" + int(EcoPowerM()));
+}
+
 void EcoStatusLog()
 {
 	if (!gEcoRole || (ai.frame < gEcoStatusAt))
 		return;
 	gEcoStatusAt = ai.frame + 120 * SECOND;
 	AiLog("apex: eco-status team=" + ai.teamId
+			+ " growing=" + (EcoRoleGrowing() ? 1 : 0)
+			+ " P=" + int(EcoPowerM())
+			+ "/" + int(EcoRoleTargetM())
 			+ " danger=" + (EcoDangerNear() ? 1 : 0)
 			+ " foeNear=" + ai.GetEnemyCostAt(Builder::gHomePos,
 					ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
@@ -964,10 +1023,13 @@ float ArmyTarget()
 	// No `(hold > 0) ? hold : default` guard: GetTunable already returns the
 	// compiled default when nothing overrides it, so the guard only ever
 	// stopped a deliberate ZERO -- which is the control arm of the sweep.
+	// The rear specialist's target names an economy and no war until it has
+	// built one -- see EcoRoleGrowing. Not a suppression multiplier: the want
+	// is simply not part of the state this player is trying to reach.
+	if (EcoRoleGrowing())
+		return 0.f;
 	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-	const float t = EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
-	return EcoRoleActive()
-			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
+	return EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
 }
 
 // The target with NO role suppression: what the war actually asks for.
