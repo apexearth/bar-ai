@@ -789,7 +789,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const float perM = Catalog::gCostM[cvd];
 			if ((capD > 1.f) && (perM > 1.f)) {
 				const float spare = gESurplusEma - ConvCapInFlight();
-				int wantC = int(spare / capD);
+				// WHILE THE BANK IS PINNED, METAL IS THE ONLY REAL BOUND.
+				// The surplus EMA is built from `pull`, which is demand and
+				// understates the waste by an order of magnitude (see
+				// EnergyPinned) -- reading it here capped the burst at one.
+				// The energy a converter eats is energy we are demonstrably
+				// throwing away, so what it actually costs is 380 metal for
+				// 10.3 metal/s, and the bank is what says how many of those
+				// we can start. It self-limits twice over: the bank empties,
+				// and the pin breaks once enough capacity stands.
+				int wantC = EnergyPinned() ? ETA_INF_N : int(spare / capD);
 				const int afford = int(aiEconomyMgr.metal.current / perM);
 				if (wantC > afford)
 					wantC = afford;

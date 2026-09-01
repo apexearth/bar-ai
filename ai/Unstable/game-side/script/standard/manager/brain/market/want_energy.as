@@ -550,6 +550,28 @@ float OverflowM()
 	return over;
 }
 
+// THE BANK IS PINNED: we are producing more energy than we consume, right now,
+// whatever the surplus arithmetic says.
+//
+// `income - pull` measured 782-2,249 e/s in a game whose own excess counter
+// says ~31,000 e/s was thrown away (Red Comet 1v1 +100%: 46% and 56% of all
+// energy produced, wasted). Pull is DEMAND, and a fleet of 250 nano turrets
+// asks for energy it is not drawing -- so the difference understates the waste
+// by more than an order of magnitude, and the converter want priced a 600 e/s
+// machine against a 1,000 e/s surplus that one order exhausted. That is why
+// the fleet stalled at 11-13 while half the grid was lost.
+//
+// A full bank cannot be mistaken in the same way: it means the next converter
+// runs at its FULL capacity until it stops being full. And it is self-limiting
+// -- absorb enough and the pin breaks, and the ordinary surplus pricing takes
+// over again. No threshold on how much waste is too much, and no cap on the
+// fleet; the same shape SlackFrac uses on the metal side.
+bool EnergyPinned()
+{
+	const float st = aiEconomyMgr.energy.storage;
+	return (st > 1.f) && (aiEconomyMgr.energy.current >= 0.98f * st);
+}
+
 int gCwCalls = 0;      // ProposeConvert entries
 int gCwBank = 0;       // ...refused: the energy bank is not near full
 int gCwNoSurplus = 0;  // ...refused: nothing left after what is ordered
@@ -580,6 +602,7 @@ void ConvWhyLog()
 		+ " inflight=" + int(ConvCapInFlight())
 		+ " standing=" + int(StandingConvCap())
 		+ " bank%=" + int((st > 1.f) ? (100.f * aiEconomyMgr.energy.current / st) : -1.f)
+		+ " pinned=" + (EnergyPinned() ? 1 : 0)
 		+ " v=" + formatFloat(gCwVal, "", 0, 3));
 }
 
@@ -618,7 +641,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			? (gESurplusEma - ConvCapInFlight())
 			: (gESurplusEma - StandingConvCap());
 	gCwSurplus = eSurplus;
-	if (eSurplus <= 1.f) {
+	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
+	// wrong instrument there, so it does not get to veto.
+	const bool pinned = EnergyPinned();
+	if ((eSurplus <= 1.f) && !pinned) {
 		++gCwNoSurplus;
 		ConvWhyLog();
 		return w;
@@ -639,8 +665,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			++gCwObsolete;
 			continue;
 		}
-		const float chew = (eSurplus < Catalog::gConvCapacity[d])
-				? eSurplus : Catalog::gConvCapacity[d];
+		const float chew = pinned
+				? Catalog::gConvCapacity[d]
+				: ((eSurplus < Catalog::gConvCapacity[d])
+					? eSurplus : Catalog::gConvCapacity[d]);
 		Want c;
 		// THE SAME ECO-COMPOUNDING PREMIUM THE GENERATOR GETS. A generator is
 		// priced as though its energy were already metal and then multiplied by

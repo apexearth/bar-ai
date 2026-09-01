@@ -961,8 +961,11 @@ float AnswerShare()
 // scales with income at every stage, so it needs no cap and no ramp.
 float ArmyTarget()
 {
+	// No `(hold > 0) ? hold : default` guard: GetTunable already returns the
+	// compiled default when nothing overrides it, so the guard only ever
+	// stopped a deliberate ZERO -- which is the control arm of the sweep.
 	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-	const float t = EcoPowerM() * ((hold > 0.f) ? hold : 120.f);
+	const float t = EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
 	return EcoRoleActive()
 			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
 }
@@ -972,7 +975,7 @@ float ArmyTarget()
 float ArmyTargetFull()
 {
 	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-	return EcoPowerM() * ((hold > 0.f) ? hold : 120.f);
+	return EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
 }
 
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.

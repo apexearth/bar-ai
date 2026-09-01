@@ -2396,13 +2396,17 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   recalibration, still far under the pre-target 175%-of-eco runaway.
 const float TUNE_DEF_ECO_S = 120.f;
 // Seconds of economic power held as ARMY -- the other half of the standing
-// obligation, and deliberately the same 120 as TUNE_DEF_ECO_S above: apexearth
-// asked for "one target strategy - some even split of our priorities", and
-// equal seconds on the same basis is what an even split means once both are
-// measured in the same currency. Raise it to field more army for the same
-// economy; the two together are what the AI is willing to hold instead of
-// growing.
-const float TUNE_ARMY_ECO_S = 120.f;
+// obligation. CALIBRATED, not chosen: apexearth set the baseline as a share of
+// metal spend ("we should aim for 40% - I want to make sure we match it as the
+// baseline"), measured against stock BARb's own 39.9% median over 122 games.
+// Swept on Red Comet 1v1 +100%, seed 3, speed 8, one arm per value:
+//
+//     0s -> 3.7% army     40s -> 25.0%     80s -> 47.7%
+//
+// which is linear at ~0.57% of spend per second, so 40% falls at 66. The
+// residual at zero is escort and AA demand, which never consulted this target.
+// Personality moves it (Persona::WantMult); this is the neutral baseline.
+const float TUNE_ARMY_ECO_S = 66.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog

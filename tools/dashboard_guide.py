@@ -975,7 +975,9 @@ GOALS = [
                      "see of theirs, so it works the same while blind"},
         ],
         "watch": "python tools/composition.py — army as a share of our metal. "
-                 "Stock BARb runs 22–34%; under 15% is the symptom this fixes.",
+                 "Stock BARb runs a 39.9% median (measured over 122 games, "
+                 "2026-08-31); the baseline target is 40%, so under ~30% is "
+                 "the symptom this fixes.",
     },
     {
         "id": "mexdef",
