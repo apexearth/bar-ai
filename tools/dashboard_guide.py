@@ -278,6 +278,11 @@ GROUPS = [
              "knobs": [
                  ("TUNE_SITE_COST_PER_WORKER", "FEWER workers per site — one "
                   "more hand is only allowed per this much of the bill"),
+                 ("TUNE_SITE_BT_PER_WORKER", "the other arm of the same cap, "
+                  "sized by BUILD TIME instead of price, taken as a max so it "
+                  "only ever adds hands. LOWER it to put more constructors on "
+                  "slow builds -- the advanced converter is 35,000 buildtime "
+                  "for 380 metal and the price arm gave it 2 hands"),
                  ("TUNE_JOIN_MIN_M", "raises the cost a building must reach "
                   "before a second builder joins at all"),
                  ("TUNE_ASSIST_RELEASE", "peels surplus assisters off a site "

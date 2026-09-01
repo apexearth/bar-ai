@@ -276,10 +276,41 @@ bool SitesSaturated(const CCircuitDef@ want)
 // opener the only outlet, and metal rotting anyway. Wasted metal is
 // exactly the feed for more hands: every DRAIN of overflow funds one
 // more worker on any site.
+// ...and the crew is sized by the WORK, not only by the price.
+//
+// apexearth: "probably have plenty of constructors, but they're all joined and
+// working on fewer things." Measured (convlathe-s11, Comet Catcher 8v8 +100%):
+// a median of 126 builders a team against 28 live requests, joins outnumbering
+// new sites 2,192 to 286 -- and the advanced converter, the most buildtime-
+// dense building we make, holding a mean of 1.8 hands against a cap of 24.
+//
+// The cap was the reason. cost/300 asks how EXPENSIVE a site is, and build
+// time is what a pair of hands actually shortens:
+//
+//     armmmkr   380 metal ->  2 hands, for 35,000 buildtime
+//     armfus  4,300 metal -> 15 hands, for 70,000 buildtime
+//
+// Half the work, an eighth of the crew. Same category error the nano-sink test
+// made: the question is how much work is there, not how much did it cost.
+//
+// Taken as the MAX of the two arms so nothing loses crew -- this only raises
+// the cap where the work is denser than the price suggests. The divisor is set
+// so the reference building keeps the crew it has today (70,000 / 4,700 ~ 15,
+// the same 15 that 4,300/300 gives), which makes this a correction to the
+// buildtime-dense outliers rather than a re-tuning of every site.
 uint CostCrew(const CCircuitDef@ want)
 {
 	const float per = ai.GetTunable("apex_site_cost_per_worker", TUNE_SITE_COST_PER_WORKER);
 	uint n = (per > 0.f) ? uint(1.f + want.costM / per) : MIN_INFLIGHT;
+	const float perBt = ai.GetTunable("apex_site_bt_per_worker", TUNE_SITE_BT_PER_WORKER);
+	if ((perBt > 0.f) && (want !is null)) {
+		const int wd = int(want.id);
+		if (Catalog::ValidId(wd)) {
+			const uint nb = uint(1.f + Catalog::gBuildTime[wd] / perBt);
+			if (nb > n)
+				n = nb;
+		}
+	}
 	n += uint(Market::OverflowM()
 			/ ((ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) > 1.f)
 				? ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN) : 7.f));

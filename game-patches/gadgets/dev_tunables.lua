@@ -253,6 +253,7 @@ local NAMES = {
 	"apex_share_airdef",
 	"apex_siege",
 	"apex_site_cost_per_worker",
+	"apex_site_bt_per_worker",
 	"apex_spam_suicidal",
 	"apex_squad_retreat",
 	"apex_home_stand_ratio",

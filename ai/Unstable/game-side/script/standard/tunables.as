@@ -274,6 +274,13 @@ const float TUNE_GREED_CONS = 1.7f;
 //   one more per this much of the building's cost -- past that another pair of
 //   hands beats opening the next site less.
 const float TUNE_SITE_COST_PER_WORKER = 300.f;
+// Buildtime per worker -- the other arm of the site crew, taken as a MAX with
+// the cost arm so it only ever raises the cap. 4,700 is set from the reference
+// building rather than picked: a fusion is 70,000 buildtime and 4,300 metal, so
+// 70,000/4,700 gives the same ~15 hands its price already gave it. What moves
+// is the buildtime-dense outlier -- the advanced converter goes from 2 hands to
+// 8 for its 35,000 buildtime. Sweep it before trusting it.
+const float TUNE_SITE_BT_PER_WORKER = 4700.f;
 
 // ---------------------------------------------------------------------------
 // Expansion — mexes, upgrades, claims
