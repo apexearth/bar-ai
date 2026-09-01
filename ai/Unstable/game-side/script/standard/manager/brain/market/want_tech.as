@@ -119,6 +119,18 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			continue;   // not finished (or already being replaced)
 		if (DeathWalk(unit, gLPos[li]))
 			continue;   // a forward mex we hold can still be a lethal walk
+		// GROUND THE ENGINE HAS ALREADY REFUSED. An upgrade's position IS the
+		// spot -- unlike a plant or a generator it cannot be moved -- so a spot
+		// the reach-safe veto refuses can never be upgraded, and re-proposing
+		// it is a pure loop. Measured, SI 8v8 +100%, one 26-minute game: 2,989
+		// moho task-deaths, 2,660 of them why=unreach-safe, with a single team
+		// losing 1,199 at ONE position. That is also the churn behind
+		// want.mexup's frame cost (4.0 ms average, 75.3 ms worst call).
+		//
+		// The mark expires, so a spot that becomes reachable -- the front
+		// moves, a wreck clears -- returns to the ladder on its own.
+		if (NearBlocked(gLPos[li]))
+			continue;
 		float surv = -1.f;
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
@@ -244,7 +256,19 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
+		// A SUBMERGED plant has no placement model and is skipped. A FLOATING
+		// one is not: this is the only lane that buys an advanced plant, and
+		// excluding floaters is what made the T2 shipyard unreachable
+		// altogether -- the plant lane picks the CHEAPEST shipyard by
+		// construction (NavShipyardDef), so it only ever buys T1, and this
+		// lane refused to look at corasy at all. That blocked the whole chain
+		// apexearth asked for: advanced shipyard -> advanced construction sub
+		// -> naval advanced mex (armuwmme/coruwmme, 620m, the same price as a
+		// land moho). A floater still has to find water to stand in, which
+		// WetPlantSite already answers, and it still has to win on price.
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
+			continue;
+		if (Catalog::gFloater[d] && !MapHasWater())
 			continue;
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;
@@ -579,7 +603,17 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
-			w.pos = lands;
+			// ...but a FLOATING one cannot stand there at all -- it needs
+			// water within the same rear leash, which WetPlantSite already
+			// answers for the T1 shipyard.
+			if (Catalog::gFloater[d]) {
+				const AIFloat3 wet = WetPlantSite(Catalog::Def(d), lands);
+				if (!OnMap(wet))
+					continue;   // no reachable water: not a candidate here
+				w.pos = wet;
+			} else {
+				w.pos = lands;
+			}
 			// WHERE THE LAB ACTUALLY LANDS, and how deep that is toward the
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.

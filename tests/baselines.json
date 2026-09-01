@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "Floors, not targets. Read tests/README.md before editing.",
+    "Assert on deadlock signatures, zero-counts and floors across players.",
+    "Never on medians, win rates or tight income bands: this benchmark's",
+    "same-config spread is ~20% and a flaky check gets ignored."
+  ],
+  "update_margin": 0.5,
+  "scenarios": {
+    "eco-1v1": {
+      "what": "economy against an inactive opponent -- the eco scoreboard's own scenario",
+      "match": [
+        "--a", "Apex:Unstable:standard",
+        "--b", "NullAI:0.1",
+        "--map", "Comet Catcher Remake 1.8",
+        "--minutes", "20",
+        "--seed", "1",
+        "--modoption", "apex_eta=1"
+      ],
+      "checks": [
+        {"check": "ran_clean", "name": "no crash / no compile error"},
+        {"check": "no_deadlock", "name": "no task loops", "min_deaths": 8, "max_at_one_pos": 0.7},
+        {"check": "nonzero", "name": "claims mexes", "any_of": ["mex:"]},
+        {"check": "nonzero", "name": "builds energy", "any_of": ["energy:"]},
+        {"check": "min_across_teams", "name": "income floor", "stat": "mInc", "floor": 40},
+        {"check": "min_across_teams", "name": "mex floor", "stat": "mex", "floor": 12}
+      ]
+    },
+    "team-8v8": {
+      "what": "16 players, +100%, mirror -- where per-player deadlocks hide behind a healthy median",
+      "match": [
+        "--a", "Apex:Unstable:standard",
+        "--b", "Apex:Unstable:standard",
+        "--map", "Supreme Isthmus v2.1",
+        "--per-side", "8",
+        "--minutes", "22",
+        "--handicap", "100",
+        "--seed", "1",
+        "--modoption", "apex_eta=1"
+      ],
+      "checks": [
+        {"check": "ran_clean", "name": "no crash / no compile error"},
+        {"check": "no_deadlock", "name": "no task loops", "min_deaths": 8, "max_at_one_pos": 0.7},
+        {"check": "min_across_teams", "name": "worst player's energy", "stat": "eInc", "floor": 4000},
+        {"check": "min_across_teams", "name": "worst player's income", "stat": "mInc", "floor": 40},
+        {"check": "nonzero", "name": "builds sensors", "any_of": ["sense:"]},
+        {"check": "median_at_least", "name": "field energy has not collapsed", "stat": "eInc", "floor": 8000}
+      ]
+    }
+  }
+}

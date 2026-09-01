@@ -52,6 +52,43 @@ statement about WHERE to look: an economy-vs-army fix has to reach the producing
 code, per CLAUDE.md's standing rule about attributing a composition problem
 before touching any config table.
 
+## 2026-08-31 — NAVY: the T2 con is BUILT and then never elects; naval mex never happens
+
+apexearth: "What we lack: T2 navy lab & T2 navy con; upgrade navy mexes." Probed
+on Nine_Metal_Islands_V1, 4v4, +100%, 22 min. The chain is
+shipyard -> advanced shipyard -> advanced construction sub -> naval advanced mex
+(`armuwmme`/`coruwmme`, **620 metal, the same price as a land moho**), and every
+link exists in the pinned game.
+
+WHAT IS NOT THE PROBLEM, stated because a first reading of the code said it was:
+the T2 shipyard is NOT unreachable. Measured, `plant:armasy` executed once and
+`produce:armacsub` three times in one game -- the plant lane reaches it when a
+navy con elects. It is RARE (1 advanced shipyard against 20 T1 ones), and
+`want_tech.as` did skip every floater outright, which is now fixed -- but "never
+built" was wrong.
+
+THE ACTUAL GAP, and it is one step further down: **an advanced construction sub
+is produced and then never takes a job.** In a whole game `acsub` appears in
+three `apex: decide` lines and all three are a SHIPYARD deciding to produce one;
+not one is an acsub electing work. Consequently `uwmme` is elected **zero**
+times, while the AI's own `apex: upcons` line lists acsub among the constructors
+that can upgrade a mex -- so the catalog knows, and the market never asks.
+
+Next step is to find where a submerged builder falls out of the builder market:
+`gWorkers` registration, the `OnMap`/reach guards, or an execute path that has
+no water case. Do not "fix" the pricing before that is known -- the unit is not
+losing an auction, it is not entering one.
+
+ALSO OPEN, apexearth's ruling on how much navy to want: *"There are two sections
+of water on the map. We should try to control each of those. Too much presence
+would mean we lack ground forces - so we need a reasonable mix."* Today
+`NavalLead()` elects a SINGLE player by distance-to-water and gates on
+`OwnedWaterPlants() == 0` -- the exclusivity shape he has rejected before ("a
+role may change how OFTEN or how MUCH; it must not decide WHETHER"), and it
+cannot express per-water-body control at all: there is one `NAVDIST`, one cached
+`WetPlantSite`, one lead. Naval demand wants to be per water BODY, with the mix
+against ground falling out of the price rather than a cap.
+
 ## 2026-08-31 — the eco scoreboard: method, and what it has bought so far
 
 A/B testing was ABANDONED here on apexearth's call: *"I also thought an A/B test

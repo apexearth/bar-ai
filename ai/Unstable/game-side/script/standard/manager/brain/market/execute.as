@@ -258,12 +258,17 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return jt;
 		// Probed last: the C++ reach-safe veto marks refused ground, and a
 		// deterministic site would otherwise be re-elected into it forever.
-		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL,
-				ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
+		// A FLOATING plant keeps the water it was priced against -- the
+		// spot-clearance and exit-lane nudges walk the base axis and would
+		// put an advanced shipyard inland, the same exemption ProposePlant
+		// already makes for the T1 one.
+		const AIFloat3 tAt = Catalog::gFloater[int(w.def.id)]
+				? w.pos
+				: ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
 					OffFactoryExit(ClearExitLane(
-						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f))))),
-				256.f, SQUARE_SIZE * 16.f);
+						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))));
+		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
+				Task::Priority::NORMAL, tAt, 256.f, SQUARE_SIZE * 16.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
 		|| (w.kind == WK_AIRDEF)) {

@@ -32,9 +32,9 @@ const int   AIR_FIGHTERS   = 8;
 
 // Scale the strike size with our own economy: AIR_BOMBERS/AIR_FIGHTERS above
 // are the floor; a stronger economy affords, and profits more from, a bigger
-// strike.
+// strike. There is no ceiling: income bounds the strike on one side and their
+// AA sizes it on the other (see ScaledBombers).
 const float AIR_SCALE_INCOME = 30.f;   // extra metal/s per extra bomber above the floor
-const int   AIR_BOMBERS_MAX  = 30;
 
 // HOW PACKED THEIR BASE IS. Bombing pays in proportion to what one run can
 // reach, and a dense economy chains -- an AFUS going up takes its neighbours
