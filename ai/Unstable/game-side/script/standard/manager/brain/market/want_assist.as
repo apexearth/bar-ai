@@ -159,6 +159,7 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	w.tCost = (walkSec + occupiedSec) * Wage();
 	w.value = w.gain / (w.mCost + w.tCost);
 	@gAssistTarget = boss;
+	gAssistTargetId = (boss !is null) ? boss.id : -1;
 	return w;
 }
 

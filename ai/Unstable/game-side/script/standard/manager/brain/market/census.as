@@ -418,6 +418,11 @@ void NoteDead(CCircuitUnit@ unit)
 		return;
 	WorkerGone(unit.id);
 	EscortGone(unit.id);
+	GuardGone(unit.id);
+	if (gAssistTargetId == unit.id) {
+		@gAssistTarget = null;
+		gAssistTargetId = -1;
+	}
 	Lattice::NoteDead(unit.id);
 	LossNote(int(unit.circuitDef.id));
 	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {

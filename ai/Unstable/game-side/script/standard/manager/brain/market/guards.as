@@ -11,12 +11,46 @@ int gNextStallSweep = 211;   // phase offset -- see AiUpdate lockstep note
 // Who the market sent to assist what. A guard on an IDLE factory is a
 // locked builder doing nothing while mexes sit open (apexearth 2026-08-23);
 // the sweep releases them the moment the boss has no work.
+//
+// IDS BESIDE THE HANDLES, because CCircuitUnit is NOCOUNT: the engine does NOT
+// null a stored handle when it destroys the unit, so `b is null` cannot detect
+// a dead boss and GuardSweep's next line -- b.circuitDef.IsMobile() -- reads
+// freed memory. Measured 2026-08-31, watch-army40: the commander died at frame
+// 27571 and the AI took an access violation (0xc0000005) inside SkirmishAI.dll
+// at frame 27600, one AiUpdate later. Nothing pruned these two arrays; every
+// other handle store in the market is dropped by Market::NoteDead and this pair
+// was simply never added to it.
+//
+// It had never fired before because nothing had ever died: `COMMANDER LOST`
+// appears zero times in every run of this session before the army target was
+// switched on.
 array<CCircuitUnit@> gGuardUnit;
 array<CCircuitUnit@> gGuardBoss;
+array<Id> gGuardUId;
+array<Id> gGuardBId;
 void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 {
+	if ((u is null) || (boss is null))
+		return;
 	gGuardUnit.insertLast(u);
 	gGuardBoss.insertLast(boss);
+	gGuardUId.insertLast(u.id);
+	gGuardBId.insertLast(boss.id);
+}
+
+// Either party dying drops the pair -- before any sweep can dereference it.
+void GuardGone(Id id)
+{
+	for (uint i = 0; i < gGuardUId.length(); ) {
+		if ((gGuardUId[i] == id) || (gGuardBId[i] == id)) {
+			gGuardUnit.removeAt(i);
+			gGuardBoss.removeAt(i);
+			gGuardUId.removeAt(i);
+			gGuardBId.removeAt(i);
+			continue;
+		}
+		++i;
+	}
 }
 // Constructor escorts (apexearth 2026-08-23: "we need to escort our
 // constructors with at least 1 grunt or better"). The market knows which
@@ -282,6 +316,8 @@ void GuardSweep()
 		if (drop) {
 			gGuardUnit.removeAt(i);
 			gGuardBoss.removeAt(i);
+			gGuardUId.removeAt(i);
+			gGuardBId.removeAt(i);
 			continue;
 		}
 		++i;

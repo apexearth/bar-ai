@@ -1,5 +1,10 @@
 namespace Market {
+// The assist want's chosen boss. ITS ID IS KEPT BESIDE IT for the same reason
+// the guard ledger keeps ids (see GuardNote): CCircuitUnit is NOCOUNT, so this
+// handle is not nulled when the engine destroys the unit, and reading .id off
+// it to check whether it is still the right target is itself the crash.
 CCircuitUnit@ gAssistTarget = null;
+Id gAssistTargetId = -1;
 
 // Which kind of ground the defence auction keeps choosing. Without this the
 // only way to tell a forward post from a tower at a mex is to read positions

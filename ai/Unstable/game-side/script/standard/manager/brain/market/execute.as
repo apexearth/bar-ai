@@ -330,7 +330,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				Task::Priority::LOW, w.pos, 300.f, SQUARE_SIZE * 4.f);
 	}
 	if (w.kind == WK_ASSIST) {
-		if ((gAssistTarget is null) || (int(gAssistTarget.id) != w.spotId))
+		// The ID, never the handle, decides whether this is still the boss
+		// the want priced -- reading .id off a destroyed unit IS the crash
+		// this pattern causes (see gAssistTargetId).
+		if ((gAssistTarget is null) || (int(gAssistTargetId) != w.spotId))
 			return null;
 		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
 				gAssistTarget, false, 60 * SECOND));
