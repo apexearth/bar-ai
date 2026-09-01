@@ -334,6 +334,32 @@ float WallLineFill()
 	}
 	return (n > 0) ? (float(held) / float(n)) : -1.f;
 }
+// HOW WIDE THE LINE IS, in slots. lineFill alone cannot be read: values of
+// 0.00, 0.50 and 1.00 across a team say nothing about whether the line is 2
+// slots or 40, and the whole question ("we have almost no defenses really on
+// our front line") is a question about its width. The lateral walk stops at
+// the first slot nearer a teammate's home than ours, which in a packed team
+// box is close by, so this is the number that says whether each player's line
+// is a sliver.
+// Total wall slots, line and ring together -- the denominator lineSlots is a
+// share of.
+int PfWallSlotCount()
+{
+	WallPrep();
+	return int(gWallP.length());
+}
+
+int WallLineSlots()
+{
+	WallPrep();
+	int n = 0;
+	for (uint i = 0; i < gWallLine.length(); ++i) {
+		if (gWallLine[i])
+			++n;
+	}
+	return n;
+}
+
 float PfWallCover(uint i)  { return gWallCover[i]; }
 float PfWallHz(uint i)     { return gWallHz[i]; }
 float PfWallSiege(uint i)  { return gWallSiege[i]; }

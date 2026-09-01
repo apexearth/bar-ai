@@ -293,7 +293,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// max() says when a step is build-bound rather than feed-bound. The
 	// constructor gain below already prices overflow capture, so the metal has
 	// somewhere to go.
-	if (!EcoOnly()) {
+	if (!OverflowBuysHands()) {
 		const float waste = OverflowM() * ((fillS > 1.f) ? fillS : 180.f);
 		if (waste > armyGap)
 			armyGap = waste;
@@ -375,7 +375,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// SlackFrac. Only while the target is economy; elsewhere the unspent
 		// metal already has somewhere to go (the army sink above), which is what
 		// hid this.
-		if (EcoOnly()) {
+		if (OverflowBuysHands()) {
 			const float slack = SlackFrac();
 			if (feedRoom < slack)
 				feedRoom = slack;
@@ -596,7 +596,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
 			}
-			const float sinkGap = EcoOnly() ? 0.f
+			const float sinkGap = OverflowBuysHands() ? 0.f
 					: (OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {

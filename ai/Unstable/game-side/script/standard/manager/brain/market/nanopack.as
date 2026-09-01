@@ -1,6 +1,10 @@
 namespace Market {
 //------------------------------------------------------------------------------
-// WHERE A NANO STANDS -- and it is two different questions.
+// PACKING: the next free cell on a def's own lattice, next to what it serves.
+//
+// Used by two callers with the same problem -- a turret that must touch the
+// line it lathes, and a converter fleet that must open many sites at once
+// without each ask landing on the cell the last one took.
 //
 // apexearth 2026-08-31: "We tend to space our nano turrets too much. They use
 // too much room. Nanos can be placed right next to the back and sides of all
@@ -121,7 +125,7 @@ int AnchorDefAt(const AIFloat3& in at)
 // and asking this per site would re-scan the same rings once per turret -- the
 // bulk-work-in-one-frame shape the frame-budget rule forbids. The walk stops
 // as soon as it has `n`, so the common single-slot ask still ends on ring one.
-int NanoPackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
+int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 		array<AIFloat3>& out slots)
 {
 	slots.resize(0);
@@ -192,6 +196,18 @@ int NanoPackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 				p.z += float(j) * pitch;
 				if (!OnMap(p) || (p.distance2D(at) > reach))
 					continue;
+				// LEAVE THE WALKWAYS EMPTY. FarmSlot drops every slot whose
+				// footprint crowds a lane because a solid slab across the
+				// base's central corridor once walled the commander in --
+				// it held a task, could not move, and burned every retry.
+				// A packed block is exactly the shape that does that, so it
+				// asks the same question.
+				if (Base::Ready()) {
+					float pd = 0.f, pl = 0.f;
+					Base::Coords(p, pd, pl);
+					if (Base::LaneGap(pl) < (Base::LANE_HALF + pitch * 0.5f))
+						continue;
+				}
 				if (lane) {
 					// Ahead of the plant and within the width units roll
 					// through: that is the doorway, whatever ring it is on.
@@ -227,10 +243,10 @@ int NanoPackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 }
 
 // The single packed slot, or an off-map vector when nothing in reach is free.
-AIFloat3 NanoPackSlot(int nanoDef, const AIFloat3& in at, int anchorDef)
+AIFloat3 PackSlot(int nanoDef, const AIFloat3& in at, int anchorDef)
 {
 	array<AIFloat3> one;
-	if (NanoPackSlots(nanoDef, at, anchorDef, 1, one) > 0)
+	if (PackSlots(nanoDef, at, anchorDef, 1, one) > 0)
 		return one[0];
 	return AIFloat3(-1.f, 0.f, -1.f);
 }

@@ -576,8 +576,11 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
-                 ("TUNE_GUARD_RATE", "standing army wanted per metal of "
-                  "structures owned"),
+                 ("TUNE_ARMY_ECO_S", "seconds of total economic power we may "
+                  "hold as ARMY -- the other half of the same split, on the "
+                  "same basis as TUNE_DEF_ECO_S above, so the two numbers "
+                  "together read as the priority split. RAISE to field more "
+                  "army for the same economy"),
                  ("TUNE_FRAME_RISK", "charges every building for the chance it "
                   "is killed BEFORE it finishes, at the local hazard rate "
                   "across its own build time. Raise it and the AI stops "
@@ -965,11 +968,11 @@ GOALS = [
              "note": "the share of spend that becomes combat units"},
             {"ref": "TUNE_STANCE_AGGRO_ARMY", "dir": "up",
              "note": "how hard the army share rises when we are under pressure"},
-            {"ref": "TUNE_MATCH_RATIO", "dir": "up",
-             "note": "field more army per metal of enemy army actually seen"},
-            {"ref": "TUNE_ENEMY_PRIOR", "dir": "up",
-             "note": "assume a bigger enemy army before we have seen one — "
-                     "this is what drives army production while blind"},
+            {"ref": "TUNE_ARMY_ECO_S", "dir": "up",
+             "note": "START HERE. Seconds of economic power we mean to hold as "
+                     "army. This is the whole size of the standing army now — "
+                     "it is sized from OUR economy and never from what we can "
+                     "see of theirs, so it works the same while blind"},
         ],
         "watch": "python tools/composition.py — army as a share of our metal. "
                  "Stock BARb runs 22–34%; under 15% is the symptom this fixes.",

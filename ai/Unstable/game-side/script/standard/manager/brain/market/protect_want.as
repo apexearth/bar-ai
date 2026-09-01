@@ -246,8 +246,25 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// rear.
 			{
 				const float ttdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
+				// THE LATHE ALREADY STANDING ON THAT GROUND IS BUILD POWER.
+				//
+				// apexearth 2026-08-31: "we should like to make even more
+				// defenses when we have nanos nearby when we're closer to the
+				// enemy." This is that, and it needs no new multiplier: the
+				// discount above is the share of the threat window the turret
+				// will actually be STANDING for, and a site inside a nano ring
+				// finishes in a fraction of the time. Only the asking
+				// builder's own BP was counted, so a slot covered by six
+				// turrets priced exactly like bare ground.
+				//
+				// It aims itself at the front, which is why it answers the
+				// second half of his sentence too. The discount is
+				// ttdH/(ttdH+bSec), so it bites hardest where bSec is largest
+				// against the window -- the exposed forward ground where 94%
+				// of the Agitators we lost died unfinished. A rear slot whose
+				// discount is already near 1 has nothing to gain from it.
 				const float bSec = Catalog::BuildSecondsAt(d,
-						EffBP(Catalog::gBuildPower[uid]));
+						EffBP(Catalog::gBuildPower[uid]) + RingBPAt(bestAt));
 				if ((ttdH > 1.f) && (bSec > 0.f)) {
 					gDwTtd[d] = ttdH / (ttdH + bSec);
 					bestGain *= gDwTtd[d];

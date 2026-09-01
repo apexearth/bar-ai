@@ -110,6 +110,10 @@ const float RING_ALLY_FRAC  = 0.03f;
 const float RING_ALLY_FLOOR = 1.0f;
 const float RING_FOE_FRAC   = 0.10f;
 const float RING_FOE_FLOOR  = 1.0f;
+// How many rays stopped at a teammate's ground this rebuild -- the instrument
+// for the sector split, so "the line is ours alone" is readable rather than
+// assumed.
+int gRaySector = 0;
 float gRingAllyBar = RING_ALLY_FLOOR;
 float gRingFoeBar  = RING_FOE_FLOOR;
 
@@ -234,6 +238,7 @@ void RebuildRing(const AIFloat3& in home)
 	gRayHot.resize(0);
 	gRayWall.resize(0);
 	gRayMet.resize(0);
+	gRaySector = 0;
 	const float w = float(AiTerrainWidth());
 	const float h = float(AiTerrainHeight());
 	const float reach = sqrt(w * w + h * h) * 0.5f;   // half the map diagonal
@@ -331,6 +336,23 @@ void RebuildRing(const AIFloat3& in home)
 			const AIFloat3 p = home + dir * d;
 			if (!OnMap(p)) {
 				wall = true;
+				break;
+			}
+			// A TEAMMATE'S GROUND IS NOT OUR FRONT. GetAllyInflAt is ally-wide,
+			// so a bearing running along the team's own band never leaves
+			// friendly influence and marches until the enemy-centroid cap --
+			// measured on Supreme Isthmus 8v8 (watch-isthmus-trbl, 26 min):
+			// ring-diag r/sep max=0.98, front-diag max=1.15, i.e. a line drawn
+			// past the enemy (apexearth, watching: "our line draws through the
+			// middle of them"). The cap at `sep` was the band-aid for this and
+			// the numbers above are it being hit, not a battlefield.
+			//
+			// Front::Mine is the split the perimeter already uses: a cell
+			// belongs to the ally whose home is nearest it. In a 1v1, or
+			// before any mate has published a home, it answers true and this
+			// costs nothing.
+			if (!Front::Mine(p)) {
+				++gRaySector;
 				break;
 			}
 			// THEM FIRST, so a cell they hold can never be recorded as ours. This

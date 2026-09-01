@@ -550,6 +550,39 @@ float OverflowM()
 	return over;
 }
 
+int gCwCalls = 0;      // ProposeConvert entries
+int gCwBank = 0;       // ...refused: the energy bank is not near full
+int gCwNoSurplus = 0;  // ...refused: nothing left after what is ordered
+int gCwCand = 0;       // buildable converter defs seen
+int gCwObsolete = 0;   // ...dropped as edible by a better one
+int gCwNoDef = 0;      // reached the loop and priced nothing
+int gCwProposed = 0;   // a Want came out
+float gCwSurplus = 0.f;
+float gCwVal = 0.f;
+int gCwLogAt = 0;
+
+void ConvWhyLog()
+{
+	if (ai.frame < gCwLogAt)
+		return;
+	gCwLogAt = ai.frame + 30 * SECOND;
+	const float st = aiEconomyMgr.energy.storage;
+	AiLog("apex: convwhy t=" + ai.teamId
+		+ " calls=" + gCwCalls
+		+ " bankRefused=" + gCwBank
+		+ " noSurplus=" + gCwNoSurplus
+		+ " cand=" + gCwCand
+		+ " obsolete=" + gCwObsolete
+		+ " nodef=" + gCwNoDef
+		+ " proposed=" + gCwProposed
+		+ " surplus=" + int(gCwSurplus)
+		+ " ema=" + int(gESurplusEma)
+		+ " inflight=" + int(ConvCapInFlight())
+		+ " standing=" + int(StandingConvCap())
+		+ " bank%=" + int((st > 1.f) ? (100.f * aiEconomyMgr.energy.current / st) : -1.f)
+		+ " v=" + formatFloat(gCwVal, "", 0, 3));
+}
+
 // Converters: worth exactly the energy surplus they would chew, at their own
 // ratio. Pure catalog arithmetic, no model.
 Want@ ProposeConvert(CCircuitUnit@ unit)
@@ -562,9 +595,19 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// walk again (apexearth's call, twice). Overflow = the surplus the E bank
 	// cannot absorb.
 	const float eStore2 = aiEconomyMgr.energy.storage;
+	// WHY THERE IS NO CONVERTER. Measured 2026-08-31 on Red Comet 1v1 +100%:
+	// 46-56% of all energy thrown away, the bank pinned at 87-99% of storage
+	// for the whole game, and `energy/convert` winning ZERO elections while
+	// nanos won 1,709 -- so the parallel-site fix landed on a path that was
+	// carrying no traffic. Each early exit below is now countable rather than
+	// silent; the last line says which one is eating the want.
+	++gCwCalls;
 	if ((eStore2 > 1.f)
-		&& (aiEconomyMgr.energy.current < 0.85f * eStore2))
+		&& (aiEconomyMgr.energy.current < 0.85f * eStore2)) {
+		++gCwBank;
+		ConvWhyLog();
 		return w;
+	}
 	// Energy pull ALREADY carries what standing converters draw (see ConvCapE
 	// above), so the surplus EMA is net of them; subtracting their capacity a
 	// second time hid a saturated fleet's remaining waste entirely and is why
@@ -574,8 +617,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	const float eSurplus = realize
 			? (gESurplusEma - ConvCapInFlight())
 			: (gESurplusEma - StandingConvCap());
-	if (eSurplus <= 1.f)
+	gCwSurplus = eSurplus;
+	if (eSurplus <= 1.f) {
+		++gCwNoSurplus;
+		ConvWhyLog();
 		return w;
+	}
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 cSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -585,10 +632,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			continue;   // floaters need water; land-base v1 (see armfmkr churn)
 		if (Catalog::gConvCapacity[d] <= 0.f)
 			continue;
+		++gCwCand;
 		// Same law as the generator ladder: never build a converter the
 		// per-cell dwarf test already marks edible.
-		if (ConvObsoleteOnArrival(d))
+		if (ConvObsoleteOnArrival(d)) {
+			++gCwObsolete;
 			continue;
+		}
 		const float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
 		Want c;
@@ -628,6 +678,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			w.pos = cSite;
 		}
 	}
+	if (w.value > 0.f) {
+		++gCwProposed;
+		gCwVal = w.value;
+	} else {
+		++gCwNoDef;
+	}
+	ConvWhyLog();
 	return w;
 }
 

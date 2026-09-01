@@ -1924,7 +1924,6 @@ const float TUNE_STAKE_HORIZON_S = 300.f;
 const float TUNE_RISK_FLOOR = 0.15f;
 // GUARD_RATE: standing army value as a fraction of structure assets -- the
 // insurance floor that also covers census blindness.
-const float TUNE_GUARD_RATE = 0.2f;
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
 // value (symmetric start); the observed census replaces it once larger.
 const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)
@@ -2396,6 +2395,14 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   rear the death ledgers measured everywhere. 120 is the measured
 //   recalibration, still far under the pre-target 175%-of-eco runaway.
 const float TUNE_DEF_ECO_S = 120.f;
+// Seconds of economic power held as ARMY -- the other half of the standing
+// obligation, and deliberately the same 120 as TUNE_DEF_ECO_S above: apexearth
+// asked for "one target strategy - some even split of our priorities", and
+// equal seconds on the same basis is what an even split means once both are
+// measured in the same currency. Raise it to field more army for the same
+// economy; the two together are what the AI is willing to hold instead of
+// growing.
+const float TUNE_ARMY_ECO_S = 120.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog

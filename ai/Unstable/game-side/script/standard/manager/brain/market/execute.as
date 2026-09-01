@@ -501,13 +501,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// first one nothing has claimed, which is the definition of packing.
 		//
 		// The doorway is the only ground it refuses -- and only for a plant
-		// whose units roll (see NanoPackSlot).
+		// whose units roll (see PackSlots).
 		const int nAnchor = AnchorDefAt(OnMap(slot) ? slot : w.pos);
 		const float nPitch = Lattice::FootPitch(int(w.def.id));
 		array<AIFloat3> nPacked;
 		{
 			const double _tProbe = Perf::T0();
-			NanoPackSlots(int(w.def.id), OnMap(slot) ? slot : w.pos,
+			PackSlots(int(w.def.id), OnMap(slot) ? slot : w.pos,
 					nAnchor, 1, nPacked);
 			Perf::Add("exec.nanoprobe", _tProbe);
 		}
@@ -543,7 +543,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// 64 refused every cell a 48-elmo lattice offers next door -- packing
 		// and the cover test cannot both be right at the same radius. Half a
 		// pitch still folds two asks aimed at one cell, which is all it was
-		// ever for; NanoPackSlots is what keeps distinct asks off each other.
+		// ever for; PackSlots is what keeps distinct asks off each other.
 		const float nCover = (nPitch > 2.f) ? (nPitch * 0.5f) : 64.f;
 		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
 				Task::Priority::NORMAL, nSlot, nCover, 0.f,
@@ -607,7 +607,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						if (askK < 1)
 							askK = 1;
 						array<AIFloat3> packK;
-						NanoPackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
 						for (uint si2 = 0; si2 < packK.length(); ++si2) {
 							bool mk = false;
 							IUnitTask@ tk = Requests::Take(null, w.def,
@@ -645,6 +645,17 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// NOT overflowing and so guaranteed the answer was serialized.
 	bool par = (MCostScale() < 1.f)
 			|| ((w.kind == WK_ENERGY) && EnergyShortOfOrdered());
+	// ...and OVERFLOWING ENERGY opens them for the one building that exists to
+	// absorb it. The test above reads the METAL side only -- MCostScale is a
+	// metal stall -- so a converter, whose entire trigger is energy we are
+	// throwing away, was serialized to one site at a time exactly when twenty
+	// were wanted. Measured (watch-nanopack, Supreme Isthmus 8v8 +100%, 26
+	// min): 57.8% of all energy produced was thrown away, 80.7% on the worst
+	// team; 11-13 advanced converters standing a player against an overflow
+	// that needs 16 more of them; and every sampled `apex: request` line
+	// reading inFlight=1-2 against a cap of 32-111.
+	if ((w.kind == WK_CONVERT) && (gESurplusEma > 1.f))
+		par = true;
 	// GIANTS MULTIPLY ONLY ON A BANK THAT PAYS FOR ALL OF THEM (apexearth,
 	// watching a fusion and two AFUS rise beside 1-2 standing fusions: "it
 	// was bad scaling. We would have done better early on without that").
@@ -758,9 +769,62 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_CONVERT) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
-		return Requests::Take(unit, w.def, Task::BuildType::CONVERT,
-				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
-				crtd, par);
+		const AIFloat3 cAt = OnMap(slot) ? slot : w.pos;
+		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
+				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
+		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
+		// with the SURPLUS in place of the bank (apexearth, on the nanos: "the
+		// single build request could expand out into 2, 5, 10, 20, whatever we
+		// can afford"). The count is arithmetic, not a cap: energy we are
+		// failing to convert, divided by what one of these chews, bounded by
+		// the metal that pays for them. An advanced converter is 380 metal for
+		// 600 e/s at 0.01724 -- 10.3 metal/s, a 37-second payback -- so the
+		// bound that binds is nearly always the surplus.
+		//
+		// ConvCapInFlight is already subtracted, so what is ordered is not
+		// asked for twice.
+		if (cFirst !is null) {
+			const int cvd = int(w.def.id);
+			const float capD = Catalog::gConvCapacity[cvd];
+			const float perM = Catalog::gCostM[cvd];
+			if ((capD > 1.f) && (perM > 1.f)) {
+				const float spare = gESurplusEma - ConvCapInFlight();
+				int wantC = int(spare / capD);
+				const int afford = int(aiEconomyMgr.metal.current / perM);
+				if (wantC > afford)
+					wantC = afford;
+				// A WORK SLICE, NOT A CONVERTER CAP. Each Take is a ledger
+				// collision scan and the lattice walk has its own budget;
+				// executions recur many times a minute and ConvCapInFlight
+				// subtracts what stands, so the surplus still converts to the
+				// same fleet within seconds -- the work just stops landing
+				// inside one sim frame.
+				if (wantC > 12)
+					wantC = 12;
+				if (wantC > 1) {
+					const double _tC = Perf::T0();
+					array<AIFloat3> packC;
+					PackSlots(cvd, cAt, -1, wantC - 1, packC);
+					int cOpen = 0;
+					for (uint ci = 0; ci < packC.length(); ++ci) {
+						bool mkc = false;
+						Requests::Take(null, w.def, Task::BuildType::CONVERT,
+								Task::Priority::NORMAL, packC[ci], cell, 0.f,
+								mkc, true);
+						if (mkc)
+							++cOpen;
+					}
+					Perf::Add("exec.convbatch", _tC);
+					if (cOpen > 0)
+						AiLog("apex: conv batch t=" + ai.teamId
+							+ " +" + cOpen
+							+ " surplus=" + int(gESurplusEma)
+							+ " inflight=" + int(ConvCapInFlight())
+							+ " cap=" + int(capD));
+				}
+			}
+		}
+		return cFirst;
 	}
 	if (w.kind == WK_STORE) {
 		// Law 2, a tripwire: his ruling is "Stop making storage" and

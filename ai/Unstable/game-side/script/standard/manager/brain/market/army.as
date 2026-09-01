@@ -938,21 +938,31 @@ float AnswerShare()
 	return gAnswerShare;
 }
 
+// HOW MUCH ARMY WE MEAN TO HOLD -- a share of the economy we have built, and
+// nothing else.
+//
+// apexearth chose the basis outright (2026-08-31, asked what sets the army
+// share: "Own economy only"), and docs/23-the-plan.md states it as the standing
+// obligation the whole ETA objective runs under: "army and defence stay at
+// their proper share of the economy we have built."
+//
+// So the enemy-matching term is gone. It read
+// max(EnemyArmyCost * AnswerShare, ourTotal * enemy_prior) * match_ratio, which
+// made the size of our army a function of what we could SEE -- and this repo
+// has already paid for that shape once: a gate keyed on visible enemy strength
+// reads "safe" exactly when we are blind. A share of our own economy is
+// knowable every frame and needs no census, no prior and no answer share.
+//
+// SECONDS OF ECONOMIC POWER, which is the currency DefenceTarget has used
+// since 2026-08-27 and the reason to reuse it: with both halves of the standing
+// obligation measured the same way, "one target strategy, some even split of
+// our priorities" (his words) is expressible as the two holding equal seconds,
+// and the split is readable rather than buried in two different formulas. It
+// scales with income at every stage, so it needs no cap and no ramp.
 float ArmyTarget()
 {
-	if (EcoOnly())
-		return 0.f;
-	// The SYMMETRIC PRIOR: pre-contact the census is blind, and blind read
-	// as safe lost the first BARb game with three army units built. The
-	// enemy's economy mirrors ours from the same start, so expect their
-	// army to be a share of OUR total value until seen otherwise; the
-	// observed census takes over as it grows past the prior.
-	const float ourTotal = EconAssetsM() + ArmyValue();
-	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	const float seen = Military::EnemyArmyCost() * AnswerShare();
-	const float expectedEnemy = (seen > prior) ? seen : prior;
-	const float t = EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
-		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
+	const float t = EcoPowerM() * ((hold > 0.f) ? hold : 120.f);
 	return EcoRoleActive()
 			? (t * ai.GetTunable("apex_eco_army_mul", TUNE_ECO_ARMY_MUL)) : t;
 }
@@ -961,14 +971,8 @@ float ArmyTarget()
 // The gantry want reads this one -- T3 is exactly what the eco role is FOR.
 float ArmyTargetFull()
 {
-	if (EcoOnly())
-		return 0.f;
-	const float ourTotal = EconAssetsM() + ArmyValue();
-	const float prior = ourTotal * ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-	const float seen = Military::EnemyArmyCost() * AnswerShare();
-	const float expectedEnemy = (seen > prior) ? seen : prior;
-	return EconAssetsM() * ai.GetTunable("apex_guard_rate", TUNE_GUARD_RATE)
-		+ expectedEnemy * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
+	return EcoPowerM() * ((hold > 0.f) ? hold : 120.f);
 }
 
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.

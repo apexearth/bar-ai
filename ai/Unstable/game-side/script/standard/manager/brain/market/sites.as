@@ -224,11 +224,85 @@ AIFloat3 ClearOfSpots(const AIFloat3& in pos, float clear)
 // Where this def already stands or is already going, near the farm. Gathered
 // ONCE per placement: the island test runs per candidate slot, and
 // GetOwnUnitsOfDef walks every unit we own.
+// FUSION AND AFUS ARE ONE BUILDING FOR LAYOUT PURPOSES.
+//
+// apexearth 2026-08-31: "We should prefer to build our AFUS/fusion nearby each
+// other so they can take advantage of nearby nano turrets to build even
+// faster. If we can ensure the nanos are nice and tightly packed then the afus
+// can also be nice and tightly packed."
+//
+// The lattice's kinship was per-DEF, so an advanced fusion read a fusion as a
+// FOREIGN def: rule 4 refused every slot touching one, and the two tiers were
+// pushed apart by construction rather than by any spacing decision. Both tiers
+// also sized their cluster cap off their own count alone, so three fusions and
+// four AFUS became four clusters of two instead of one block a turret ring can
+// serve.
+//
+// The predicate is the one FarmSlot already uses for the blast-aisle rule --
+// cost or output that only a reactor reaches -- so there is no second
+// definition of "reactor" in this file. Advanced solar (350 metal, 75 e/s) and
+// geothermal (560, 300) are both outside it.
+bool BigEcoDef(int d)
+{
+	return Catalog::ValidId(d) && !Catalog::gMobile[d]
+			&& ((Catalog::gCostM[d] >= 2500.f)
+				|| (Catalog::gMakeE[d] >= 400.f));
+}
+
+// Same layout class: the same def, or two reactors.
+bool LayoutKin(int a, int b)
+{
+	return (a == b) || (BigEcoDef(a) && BigEcoDef(b));
+}
+
+// How many of this def's LAYOUT CLASS we have committed to, at any stage. The
+// cluster cap is a statement about how much of the economy one blast reaches,
+// and that is a property of the reactors, not of one tier of them.
+int LayoutKinCount(int defId)
+{
+	if (!BigEcoDef(defId))
+		return (uint(defId) < gOwnCount.length()) ? gOwnCount[defId] : 0;
+	int n = 0;
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (LayoutKin(defId, gComDef[i]))
+			++n;
+	}
+	return n;
+}
+
+// Ground held by a structure of a DIFFERENT layout class, nearest first.
+// Negative when nothing foreign stands anywhere near. Lattice::ForeignGap
+// answers the same question per def; this one knows the reactor class.
+float LayoutForeignGap(int defId, const AIFloat3& in p)
+{
+	if (!BigEcoDef(defId))
+		return Lattice::ForeignGap(defId, p);
+	float best = -1.f;
+	for (uint i = 0; i < Lattice::gSeen.length(); ++i) {
+		if (LayoutKin(defId, Lattice::gSeenDef[i]))
+			continue;
+		const float d = Lattice::gSeen[i].distance2D(p);
+		if ((best < 0.f) || (d < best))
+			best = d;
+	}
+	return best;
+}
+
 void KinNear(CCircuitDef@ def, array<AIFloat3>& out kin)
 {
 	kin.resize(0);
 	if (def is null)
 		return;
+	// The commitment ledger, not GetOwnUnitsOfDef: it is per-def, and the
+	// window that matters is exactly when two tiers decide together -- an
+	// ORDERED reactor has to be kin or the second one starts its own cluster.
+	if (BigEcoDef(int(def.id))) {
+		for (uint i = 0; i < ComLen(); ++i) {
+			if (LayoutKin(int(def.id), gComDef[i]) && OnMap(gComPos[i]))
+				kin.insertLast(gComPos[i]);
+		}
+		return;
+	}
 	array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(def, gFarmPos, 6000.f);
 	if (us !is null) {
 		for (uint i = 0; i < us.length(); ++i) {
@@ -321,8 +395,7 @@ AIFloat3 FarmSlot(int defId)
 		const bool bigEco = (Catalog::gCostM[defId] >= 2500.f)
 				|| (Catalog::gMakeE[defId] >= 400.f);
 		if (bigEco) {
-			const int own = (uint(defId) < gOwnCount.length())
-					? gOwnCount[defId] : 0;
+			const int own = LayoutKinCount(defId);
 			int half = (own + 1) / 2;
 			if (half < 2)
 				half = 2;
@@ -440,15 +513,16 @@ AIFloat3 FarmSlot(int defId)
 				}
 			}
 			// Rule 4: a slot touching a different def is not this def's ground,
-			// however well it suits the cluster.
-			const float foreignGap = Lattice::ForeignGap(defId, p);
+			// however well it suits the cluster -- except that the two reactor
+			// tiers are not different buildings here (see LayoutKin).
+			const float foreignGap = LayoutForeignGap(defId, p);
 			bool blocked = (foreignGap >= 0.f) && (foreignGap < touch);
 			for (uint qj = 0; (qj < claimed.length()) && !blocked; ++qj) {
 				const float d = claimed[qj].distance2D(p);
 				if (d < pitch)
 					blocked = true;   // already asked for, whoever asked
 				else if (d < touch) {
-					if (claimedDef[qj] != defId)
+					if (!LayoutKin(defId, claimedDef[qj]))
 						blocked = true;
 					else
 						++adj;   // an in-flight neighbour still grows a cluster

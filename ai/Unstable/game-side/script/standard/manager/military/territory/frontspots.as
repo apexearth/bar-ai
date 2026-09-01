@@ -90,7 +90,8 @@ void FrontDiag()
 		+ " min=" + formatFloat(((rMin < 0.f) ? 0.f : rMin) / axis, "", 0, 2)
 		+ " max=" + formatFloat(rMax / axis, "", 0, 2)
 		+ " safe/r=" + formatFloat(sSum / hn, "", 0, 2)
-		+ " bar=" + int(gRingAllyBar) + "/" + int(gRingFoeBar));
+		+ " bar=" + int(gRingAllyBar) + "/" + int(gRingFoeBar)
+		+ " sector=" + gRaySector);
 
 	GhostDiag();
 }

@@ -261,17 +261,19 @@ bool EtaOn()
 	return ai.GetTunable("apex_eta", TUNE_ETA) > 0.f;
 }
 
-// THE TARGET NAMES ECONOMY AND NOTHING ELSE, so army is not a state the AI is
-// trying to reach and its demand is zero. This is not a cap or an exclusivity
-// rule -- it is what naming an economy-only target MEANS, and it is scaffolding:
-// when the target gains an army term (docs/23-the-plan.md's standing
-// obligation), this predicate goes away rather than being tuned.
+// OVERFLOW BUYS HANDS, NOT ARMY.
 //
-// It exists because the first version did not do it, and the AI went on
-// spending 52.6% of its metal on army at minute 18 with economy declared as the
-// only target (apexearth: "if you're trying to do this eco thing and you keep
-// making army then obviously your implementation is incomplete").
-bool EcoOnly()
+// This used to be EcoOnly() and it used to zero ArmyTarget outright, because
+// the target named economy and nothing else. Army now has a target of its own
+// -- a share of the economy we have built, ArmyTarget in army.as -- so the
+// suppression is gone and what is left is the narrower statement that outlived
+// it: metal we are failing to spend is a shortage of BUILD POWER, not evidence
+// that we need soldiers. That is the same thing the ladder's max() says when a
+// step is build-bound rather than feed-bound, and it is why the three
+// production floors that dump overflow into units still ask.
+//
+// Army is bought against its target, at its price, like everything else.
+bool OverflowBuysHands()
 {
 	return EtaOn();
 }

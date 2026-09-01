@@ -601,7 +601,8 @@ float HazardWith(const AIFloat3& in pos, float cover)
 // economy (apexearth, watching: "we make far too many turrets around our base.
 // We stopped eco at around ~15-19m/s... our want for defense is outweighing
 // our interest in more eco, and we aren't making any T2"). The expectation is
-// apex_enemy_prior, the same share ArmyTarget sizes production against.
+// apex_enemy_prior -- the expected-enemy share the defence side prices
+// against. ArmyTarget no longer reads it: army is sized from our own economy.
 // Turrets are excluded from our own total, or defence becomes its own
 // justification and the loop runs away.
 float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)

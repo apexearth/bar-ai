@@ -427,7 +427,10 @@ void LogFrontTowers()
 				? WallClosureFrac() : ClosureFrac(), "", 0, 2)
 		+ " lineFill=" + formatFloat(
 			(ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
-				? WallLineFill() : -1.f, "", 0, 2));
+				? WallLineFill() : -1.f, "", 0, 2)
+		+ " lineSlots=" + ((ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
+				? WallLineSlots() : -1)
+		+ " wallSlots=" + PfWallSlotCount());
 }
 
 void NoteDefSite(bool isFront, bool isRing, bool isWall)
