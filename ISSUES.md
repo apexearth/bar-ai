@@ -52,6 +52,44 @@ statement about WHERE to look: an economy-vs-army fix has to reach the producing
 code, per CLAUDE.md's standing rule about attributing a composition problem
 before touching any config table.
 
+## 2026-08-31 — ENERGY: 46-58% of everything we generate is thrown away
+
+apexearth: "We have not nearly enough energy converters. Take a look at how much
+energy we waste."
+
+Measured, watch-nanopack (SI 8v8 +100%, 26 min): median **57.8%** of all energy
+produced wasted, 80.7% on the worst team, against 0.6% metal waste. Red Comet
+1v1 +100%: 45.9% and 55.8%. An `armmmkr` is 380 metal, chews 600 e/s at
+0.01724 -- 10.3 metal/s, a **37-second payback** -- and 11-13 stood per player
+against an overflow needing ~16 more.
+
+TWO WRONG DIAGNOSES BEFORE THE RIGHT ONE, both recorded so they are not retried:
+
+1. "The storage gate blocks it" -- no. The bank sat at 87-99% of storage all
+   game, so `current >= 0.85 * storage` passed throughout.
+2. "The parallel-site fix is the answer" -- the serialization is real
+   (`par` reads MCostScale, a METAL stall, so the one building whose trigger is
+   surplus ENERGY was serialized), but it was not what bound. `apex: conv batch`
+   fired ZERO times after the fix.
+
+THE ACTUAL CAUSE, from `apex: convwhy`: the want fires and proposes 196 times,
+nothing obsolete, nothing short of candidates -- and `ema=782` e/s in a game
+discarding ~31,000. `gESurplusEma` is `energy.income - energy.pull`, and **pull
+is DEMAND**: a fleet of 250 nano turrets asks for energy it is not drawing. So
+the surplus is understated by more than an order of magnitude, a 600 e/s machine
+is priced against a 1,000 e/s surplus, one order exhausts it, and the fleet
+stalls.
+
+FIX IN, NOT YET PROVEN: `EnergyPinned()` (bank >= 98% of storage) means
+production exceeds consumption whatever the EMA says, so the chew is the
+converter's full capacity and metal is the only bound on how many to start.
+Self-limiting -- the bank empties, and the pin breaks once enough stands.
+
+WHY IT IS NOT YET PROVEN: waste fell 51.7% -> 14.7% between the army sweep's 0s
+and 40s arms, but a bigger army means a smaller energy grid. That is confounded
+with the army change and separates nothing. The clean test is converters
+STANDING and `conv batch` firing at a fixed army setting.
+
 ## 2026-08-31 — FRONT DEFENCE: the line is drawn along the TEAM's band, and the wall generator places 96% of everything
 
 apexearth, watching: "Our coastline defense is much more formidable than our

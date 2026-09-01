@@ -360,6 +360,18 @@ share a shape: the thing didn't work, and nothing said so.
   confirm it is real data. Route around via a synced gadget publishing a game
   rules param (`Game_getRulesParamFloat` is not gated); see
   `game-patches/gadgets/dev_team_income.lua`.
+- **Deploying the AI is NOT deploying the gadget, and a modoption the gadget
+  does not publish is silently ignored.** `deploy_ai.py deploy <variant>` ships
+  `tunables.as`; only `deploy_ai.py gadgets` ships `dev_tunables.lua`, and that
+  gadget is the only thing that republishes `--modoption apex_*` as rules params.
+  Add a tunable to the repo's list, deploy the AI, and every arm of your sweep
+  runs the compiled default -- with no error anywhere. Measured 2026-08-31: a
+  four-arm sweep of `apex_army_eco_s` was reported as a curve, was four runs of
+  one configuration, and produced a confident "the target does not control army
+  share" that was withdrawn an hour later. **Verify the NAME is in the live
+  gadget** before believing a sweep:
+  `grep -c apex_yourname "$BAR_SDD/luarules/gadgets/dev_tunables.lua"`.
+
 - **`ai.GetBuilderThreatAt(pos)` will crash on an off-map position, and reads
   zero almost everywhere anyway.** `CThreatMap::GetBuilderThreatAt` bounds-checks
   with an `assert` — compiled out in release — then indexes `surfThreat`
