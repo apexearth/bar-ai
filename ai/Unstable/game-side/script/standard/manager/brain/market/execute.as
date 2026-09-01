@@ -487,41 +487,46 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			AiLog("apex: nano-to-line t=" + ai.teamId
 					+ " need=" + formatFloat(worst, "", 0, 1));
 		// THE SINK'S OWN CENTER IS OCCUPIED GROUND. Every branch above names
-		// the factory's or the frame's exact position, and the ask went out
-		// with zero shake -- so the engine could not place the turret and the
-		// task died unbuilt: measured 447 nano executions, FOUR frames ever
-		// created, zero finished, in one 37-minute game. Probe for the
-		// nearest legal cell inside assist reach instead -- cached on a 2s
-		// clock per sink cell, because FindBuildSiteNear is an engine search
-		// (same caution as WetPlantSite) and per-exec probing spiked one
-		// election to 271ms.
+		// the factory's or the frame's exact position, so the turret can
+		// never stand on it: measured 447 nano executions, FOUR frames ever
+		// created, zero finished, in one 37-minute game.
+		//
+		// PACKED, NOT SCATTERED (apexearth 2026-08-31: "We tend to space our
+		// nano turrets too much. They use too much room... nano turrets
+		// should prefer to be placed right next to each other"). The old
+		// answer put each asker on its own compass spoke 96-192 elmos out and
+		// then let an engine search wander 300 further, so a ring of turrets
+		// took several times the ground the same lathe needs. Now the walk
+		// starts at the cell TOUCHING the anchor's footprint and takes the
+		// first one nothing has claimed, which is the definition of packing.
+		//
+		// The doorway is the only ground it refuses -- and only for a plant
+		// whose units roll (see NanoPackSlot).
+		const int nAnchor = AnchorDefAt(OnMap(slot) ? slot : w.pos);
+		const float nPitch = Lattice::FootPitch(int(w.def.id));
+		array<AIFloat3> nPacked;
 		{
+			const double _tProbe = Perf::T0();
+			NanoPackSlots(int(w.def.id), OnMap(slot) ? slot : w.pos,
+					nAnchor, 1, nPacked);
+			Perf::Add("exec.nanoprobe", _tProbe);
+		}
+		if (nPacked.length() > 0) {
+			slot = nPacked[0];
+		} else {
+			// Every cell in reach is taken. The engine's own search is the
+			// fallback, cached as before -- an asker that finds no packed
+			// cell must still be able to place somewhere rather than idle.
 			const AIFloat3 raw = OnMap(slot) ? slot : w.pos;
-			// EACH ASKER PROBES ITS OWN BEARING. Every decider converges on
-			// the argmax site, the shared 2s cache handed them all the SAME
-			// legal cell, and every ask after the first died "covered" at it
-			// -- covered=304 vs new=274 in his 3v3 while 74k overflowed
-			// ("we have tons of room to build nanos and we aren't making
-			// them"). A per-asker radial origin spreads the ring around the
-			// line; the 64-elmo cover radius still stops true doubles, and
-			// the probe stays cached per bearing (exec.nanoprobe watches
-			// the cost).
-			const int spoke = int(unit.id) & 7;
-			const float angN = float(spoke) * 0.785398f;
-			const AIFloat3 rawN = raw
-					+ AIFloat3(cos(angN), 0.f, sin(angN))
-					* (96.f + 48.f * float(int(unit.id) % 3));
-			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1
-					+ (spoke + 1) * 16777216;
+			const int nk = (int(raw.x) >> 8) * 4096 + (int(raw.z) >> 8) + 1;
 			if ((nk != gNanoSiteKey)
 				|| (ai.frame - gNanoSiteAt >= 2 * SECOND))
 			{
 				gNanoSiteKey = nk;
 				gNanoSiteAt = ai.frame;
-				const double _tProbe = Perf::T0();
-				gNanoSite = ai.FindBuildSiteNear(w.def,
-						OnMap(rawN) ? rawN : raw, 300.f);
-				Perf::Add("exec.nanoprobe", _tProbe);
+				const double _tProbe2 = Perf::T0();
+				gNanoSite = ai.FindBuildSiteNear(w.def, raw, 300.f);
+				Perf::Add("exec.nanoprobe", _tProbe2);
 			}
 			if (OnMap(gNanoSite))
 				slot = gNanoSite;
@@ -533,8 +538,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// rectangular; the income-derived InFlight cap still bounds it.
 		bool made = false;
 		const AIFloat3 nSlot = OnMap(slot) ? slot : w.pos;
+		// COVER MUST BE NARROWER THAN THE PITCH. CoverFor treats any live
+		// request of the same def inside `radius` as the same job, so the flat
+		// 64 refused every cell a 48-elmo lattice offers next door -- packing
+		// and the cover test cannot both be right at the same radius. Half a
+		// pitch still folds two asks aimed at one cell, which is all it was
+		// ever for; NanoPackSlots is what keeps distinct asks off each other.
+		const float nCover = (nPitch > 2.f) ? (nPitch * 0.5f) : 64.f;
 		IUnitTask@ nFirst = Requests::Take(unit, w.def, Task::BuildType::NANO,
-				Task::Priority::NORMAL, nSlot, 64.f, 0.f,
+				Task::Priority::NORMAL, nSlot, nCover, 0.f,
 				made, true);
 		// HOW MANY, NOT WHETHER (apexearth: "the single build request could
 		// expand out into 2, 5, 10, 20, whatever we can afford" -- and, on
@@ -563,39 +575,50 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					wantN = 16;
 				if (wantN > 1) {
 					int opened = 0;
-					const int baseSpoke = int(unit.id) & 7;
 					// ACROSS EVERY LINE, NOT ONE RING (his watch at 46m: one
 					// cluster of 217 turrets, bare gantries, batch +1 with
 					// covered=662 and tooFar=77k -- the extras all aimed at
-					// one site whose 8 spokes fill instantly, at a ring step
-					// tighter than the cover radius). Round-robin over the
-					// standing factories, ring step wider than cover, so the
-					// bank turns into lathe AROUND the lines everywhere.
+					// one site whose 8 spokes fill instantly). Round-robin
+					// over the standing factories, each asked ONCE for the
+					// packed cells beside it: one lattice walk per line
+					// rather than one per turret, because a walk per turret
+					// re-scans the same rings and that is the bulk-in-one-
+					// frame shape the frame budget forbids.
 					const double _tBatch = Perf::T0();
 					const uint nFacs = Factory::gFacUnits.length();
-					for (int k = 1; k < wantN; ++k) {
+					int left = wantN - 1;
+					const uint lines = (nFacs > 0) ? nFacs : 1;
+					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
+						int anchorK = nAnchor;
 						if (nFacs > 0) {
-							CCircuitUnit@ fK = Factory::gFacUnits[uint(k) % nFacs];
-							if (fK !is null) {
-								const AIFloat3 fp = fK.GetPos(ai.frame);
-								if (OnMap(fp))
-									baseK = fp;
+							CCircuitUnit@ fK = Factory::gFacUnits[fi2];
+							if (fK is null)
+								continue;
+							const AIFloat3 fp = fK.GetPos(ai.frame);
+							if (!OnMap(fp))
+								continue;
+							baseK = fp;
+							anchorK = int(fK.circuitDef.id);
+						}
+						// Its share of what is left, so a rich bank spreads
+						// over the lines instead of filling the first.
+						int askK = left / int(lines - fi2);
+						if (askK < 1)
+							askK = 1;
+						array<AIFloat3> packK;
+						NanoPackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						for (uint si2 = 0; si2 < packK.length(); ++si2) {
+							bool mk = false;
+							IUnitTask@ tk = Requests::Take(null, w.def,
+									Task::BuildType::NANO,
+									Task::Priority::NORMAL,
+									packK[si2], nCover, 0.f, mk, true);
+							if (mk) {
+								++opened;
+								--left;
 							}
 						}
-						const float angK = float((baseSpoke + k) & 7)
-								* 0.785398f + 0.3926991f;
-						const AIFloat3 pk = baseK
-								+ AIFloat3(cos(angK), 0.f, sin(angK))
-								* (110.f + 80.f * float(k >> 3));
-						if (!OnMap(pk))
-							continue;
-						bool mk = false;
-						IUnitTask@ tk = Requests::Take(null, w.def,
-								Task::BuildType::NANO, Task::Priority::NORMAL,
-								pk, 64.f, float(SQUARE_SIZE) * 4.f, mk, true);
-						if (mk)
-							++opened;
 					}
 					Perf::Add("exec.nanobatch", _tBatch);
 					if (opened > 0)

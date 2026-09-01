@@ -29,6 +29,7 @@
 #include "market/want_plant.as"     // geothermal and factory-plant Wants
 #include "market/want_tech.as"      // mex upgrade and tech-plant Wants
 #include "market/sites.as"          // where a build goes: farm rows, spot clearance, eco sites
+#include "market/nanopack.as"       // where an ASSIST nano stands: the packed lattice
 #include "market/want_nano.as"      // the nano Want
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
