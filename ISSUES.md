@@ -98,13 +98,39 @@ forward ones: a mate's perpendicular bisector runs roughly parallel to the enemy
 bearing. In a 1v1, or before a mate has published a home, it answers true and
 costs nothing. `ring-diag` now reports `sector=N`, the count of rays it stopped.
 
-STILL OPEN after that: 96% of defence sites come from the wall generator, which
-follows the BUILDING rim, and our buildings sprawl rearward and coastward -- so
-60% of chosen sites are behind the base. That is the coastline-vs-frontline
-asymmetry he is describing. Whether the front generator loses on price or is
-never offered a reachable site is NOT yet established; `apex: defwhy` and the
-`bestIsFront/Ring/Wall` split in `DefSiteFill` are where to look. Do not
-reprice anything before that is known.
+STILL OPEN, and it is a SEPARATE bug from the ring -- the wall does not read
+gRayR at all, so the ring fix above will not touch it.
+
+The front generator is not losing an auction: `DefSiteFill` adds
+`Military::FrontBuildSpots` only under `if (!wallOn && ...)`, and the wall is on
+by default. Front-line spots, closure-ring bearings and asset centroids are all
+switched OFF when the wall is on, by design (2026-08-30, the wall paradigm).
+That is why front=27 and ring=0 -- nothing to reprice.
+
+The wall has its OWN front line (`gWallLine`, "slots along the perpendicular to
+the home->enemy axis"), and `apex: fronttowers` says what it is worth. Per
+player, same game:
+
+| player | front built / metal | back built / metal | lineFill | rimDAvg |
+|---|---|---|---|---|
+| a | 9 / 1,125 | 14 / 13,645 | 0.00 | 138 |
+| b | 0 / 0 | 28 / 36,500 | 0.50 | 86 |
+| c | 0 / 0 | 40 / 24,510 | 1.00 | 192 |
+| d | 1 / 90 | 11 / 4,215 | 0.50 | -88 |
+| e | 4 / 675 | 50 / 31,535 | 1.00 | 0 |
+| f | 0 / 0 | 45 / 35,440 | 1.00 | -138 |
+
+Front defence metal is 0-1,125 a player; back defence metal is 4,215-36,500.
+An order of magnitude, which is exactly the asymmetry he reports.
+
+The suspicious number is `lineFill=1.00 while front standing=0`. WallLineFill
+counts a line slot as held when `!gWallOpen[i]`, and WallEmitSlot sets open
+false when ANY standing tower reaches the slot -- so rear towers are closing
+the line by reach and the AI reads its front as finished. `rimDAvg` at 0 to
+-138 says the average tower sits ON or BEHIND the rim. Next step is to find
+whether the line's forward radius is collapsing onto the rim, or whether the
+reach test is simply the wrong question for a line slot. Instrument before
+repricing.
 
 ## 2026-08-31 — NANO: the fortification site is priced and then thrown away
 
