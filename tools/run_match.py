@@ -171,6 +171,39 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
     ])
 
 
+# PER-MAP START BOXES.
+#
+# A map is played on a particular axis and the AI's whole territory model
+# follows from it -- the front line, which ground is forward, which water is
+# reachable. The harness default (lr, thin strips) silently produced a Supreme
+# Isthmus played across its short axis instead of its diagonal for a whole
+# session of measurements, and every map-shaped conclusion drawn from those runs
+# had to be withdrawn (apexearth: "You are doing .45 trbl boxes for isthmus
+# right?" -- no, and "the starting positions will be wacky").
+#
+# Matched by lowercased substring against the RESOLVED map name, longest key
+# first, so "supreme isthmus" covers every version suffix. An explicit --boxes
+# or --box-size on the command line always wins.
+MAP_BOXES = {
+    # key (substring)        boxes,  size
+    "supreme isthmus":      ("trbl", 0.45),
+    "comet catcher":        ("lr",   0.0),
+    "red comet":            ("lr",   0.0),
+    "glitters":             ("tb",   0.0),
+    "nine_metal_islands":   ("trbl", 0.45),
+    "altair":               ("lr",   0.0),
+}
+
+
+def map_boxes(map_name):
+    """(boxes, box_size) for a resolved map name, or (None, None)."""
+    low = (map_name or "").lower()
+    for key in sorted(MAP_BOXES, key=len, reverse=True):
+        if key in low:
+            return MAP_BOXES[key]
+    return None, None
+
+
 def build_script(
     ais: list[AISpec],
     map_name: str,
@@ -400,6 +433,21 @@ def run(args) -> int:
 
     with UnitSync(env) as us:
         map_name = resolve_map(args.map, us)
+        # The map's own axis, unless the caller named one. argparse cannot tell
+        # "user typed the default" from "user typed nothing", so the defaults
+        # are sentinels (None / 0.0) and the table fills them in.
+        mb, mz = map_boxes(map_name)
+        if (mb is not None) and (args.boxes is None):
+            args.boxes = mb
+            print("boxes    %s (map default for %s)" % (mb, map_name))
+            # The size is PAIRED with the axis -- 0.45 is a corner box for trbl
+            # and a half-map strip for lr -- so it only rides along when the
+            # map's own axis is the one being used.
+            if (args.box_size <= 0.0) and (mz > 0.0):
+                args.box_size = mz
+                print("box-size %.2f (map default)" % mz)
+        if args.boxes is None:
+            args.boxes = "lr"
         games = us.games()
         if args.game:
             game_name = args.game
@@ -749,9 +797,10 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30, help="in-game minute cap")
     ap.add_argument("--timeout", type=int, help="wall-clock seconds before kill")
     ap.add_argument("--seed", type=int, help="RandomSeed for reproducibility")
-    ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default="lr",
-                    help="start-box axis: left/right or top/bottom. Glitters is tb, "
-                         "Comet Catcher is lr")
+    ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default=None,
+                    help="start-box axis. Default comes from MAP_BOXES for a known "
+                         "map (Supreme Isthmus is trbl, Glitters tb, Comet Catcher "
+                         "lr), else lr. Pass one to override.")
     ap.add_argument("--sides",
                     help="comma-separated faction per side, e.g. 'Cortex,Cortex' or "
                          "'random,Legion' ('random' draws per player from the seed). "
@@ -778,7 +827,9 @@ def main() -> int:
                     help="engine write dir; give concurrent runs separate ones "
                          "(default: matches/_engine)")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
-                    help="start-box size as a fraction of the map, e.g. 0.35; 0 = auto (0.38 for <=4 per side, 0.20 above)")
+                    help="start-box size as a fraction of the map, e.g. 0.35; 0 = the "
+                         "map default from MAP_BOXES (Isthmus 0.45), else auto "
+                         "(0.38 for <=4 per side, 0.20 above)")
     ap.add_argument("--handicap", type=int, default=None,
                     help="percent resource bonus for EVERY AI, e.g. 50. Engine key "
                          "Handicap -> SetAdvantage(pct/100) -> income multiplier, the "
