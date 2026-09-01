@@ -661,7 +661,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		++gCwCand;
 		// Same law as the generator ladder: never build a converter the
 		// per-cell dwarf test already marks edible.
-		if (ConvObsoleteOnArrival(d)) {
+		// Per HAND, not globally -- see ConvObsoleteFor. Most constructors
+		// can only build the basic one, and refusing it there converts
+		// nothing at all.
+		if (ConvObsoleteFor(unit, d)) {
 			++gCwObsolete;
 			continue;
 		}

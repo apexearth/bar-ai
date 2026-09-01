@@ -30,8 +30,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if ((st is null) || (st.buildDef is null))
 			continue;
 		const int bd = int(st.buildDef.id);
-		if ((Catalog::gCostM[bd] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
-			&& (Catalog::gMakeE[bd] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+		if (!NanoSinkWorthy(bd))
 			continue;
 		const AIFloat3 sp3 = st.GetBuildPos();
 		if (!OnMap(sp3))

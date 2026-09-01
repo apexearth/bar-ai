@@ -1091,6 +1091,64 @@ float NanoLatheReaching(const AIFloat3& in at)
 }
 
 // Raw build power [BP] from standing nanos whose reach covers this ground.
+// IS THIS SITE WORTH PARKING LATHE ON?
+//
+// It used to ask "is this EXPENSIVE" -- cost >= apex_nano_sink_m (1000) or
+// output >= apex_big_e (500). The advanced converter answers no to both: 380
+// metal, and it MAKES no energy, it eats it. So the one building that most
+// needs help never got any.
+//
+// apexearth: "That is because we aren't making the T2 advanced converters fast
+// enough. How can we make those quicker?" -- and the def says why. Buildtime
+// per metal, read off the pinned tree:
+//
+//     armmmkr  380m / 35,000bt = 92      armafus 9,700m / 312,500bt = 32
+//     armmoho  620m / 14,900bt = 24      armfus  4,300m /  70,000bt = 16
+//     armnanotc 210m / 5,300bt = 25      armalab 2,900m /  16,200bt =  5
+//
+// The advanced converter is the most buildtime-dense thing we build, by 3-6x.
+// 35,000 buildtime is minutes of one constructor's life for 380 metal, which
+// is exactly what a lathe fleet is for -- and metal cost cannot see it.
+//
+// So the third clause is BUILD TIME, and its bar is derived rather than picked:
+// a site is worth a turret's attention when it takes longer to build than the
+// turret itself does. Below that the helper costs more time than it saves.
+// The yardstick: how long the best turret we could stand takes to build.
+// Cached on a slow clock -- NanoSinkWorthy is called inside the per-site loops
+// and a full def scan per call is the bulk-work-in-one-frame shape the frame
+// budget forbids. What is available changes on tech, not on ticks.
+float gLatheBt = -1.f;
+int gLatheBtAt = -999999;
+float LatheBuildTime()
+{
+	if ((gLatheBt >= 0.f) && (ai.frame - gLatheBtAt < 30 * SECOND))
+		return gLatheBt;
+	gLatheBtAt = ai.frame;
+	gLatheBt = 0.f;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::gAvailable[i] || Catalog::gMobile[i]
+			|| (Catalog::gBuildPower[i] <= 0.f)
+			|| (Catalog::gBuildsList[i].length() > 0))
+			continue;
+		if (Catalog::gBuildTime[i] > gLatheBt)
+			gLatheBt = Catalog::gBuildTime[i];
+	}
+	return gLatheBt;
+}
+
+bool NanoSinkWorthy(int bd)
+{
+	if (!Catalog::ValidId(bd))
+		return false;
+	if ((Catalog::gCostM[bd] >= ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
+		|| (Catalog::gMakeE[bd] >= ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+		return true;
+	const float bt = Catalog::gBuildTime[bd];
+	if (bt <= 0.f)
+		return false;
+	return (LatheBuildTime() > 1.f) && (bt >= LatheBuildTime());
+}
+
 float RingBPAt(const AIFloat3& in at)
 {
 	float bp = 0.f;

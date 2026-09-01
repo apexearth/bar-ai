@@ -402,8 +402,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				// one a queued lab had asked for (measured: 13 of 14 sinks
 				// were armmex/armmakr).
 				const int bd3 = int(lt.buildDef.id);
-				if ((Catalog::gCostM[bd3] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
-					&& (Catalog::gMakeE[bd3] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+				if (!NanoSinkWorthy(bd3))
 					continue;
 				array<CCircuitUnit@>@ crew = lt.GetUnits();
 				if ((crew is null) || (crew.length() == 0))
@@ -463,8 +462,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				if ((lt2 is null) || (lt2.buildDef is null))
 					continue;
 				const int bd2 = int(lt2.buildDef.id);
-				if ((Catalog::gCostM[bd2] < ai.GetTunable("apex_nano_sink_m", TUNE_NANO_SINK_M))
-					&& (Catalog::gMakeE[bd2] < ai.GetTunable("apex_big_e", TUNE_BIG_E)))
+				if (!NanoSinkWorthy(bd2))
 					continue;
 				const AIFloat3 sp4 = lt2.GetBuildPos();
 				if (OnMap(sp4)) {

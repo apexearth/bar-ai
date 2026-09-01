@@ -297,6 +297,46 @@ bool GenObsoleteOnArrival(int d)
 			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * ec);
 }
 
+// EDIBLE ONLY IF THIS PAIR OF HANDS COULD HAVE BUILT THE BETTER ONE.
+//
+// The global test below asks whether a better converter exists anywhere. That
+// is the right question for RECLAIM -- a standing basic is worth eating once
+// an advanced one is possible -- and the WRONG question for a builder choosing
+// what to make, because most of our constructors can only build the basic one.
+// Measured (convfix-s11 against watch-ecorole, Comet Catcher 8v8 +100%, matched
+// seed): blocking the basic globally took basic converters 512 -> 0 and ground
+// 5,440 -> 688 cells, exactly as intended -- and total conversion throughput
+// 67,040 -> 25,800 e/s, energy waste 41.0% -> 65.6%, median metal produced
+// 171,362 -> 103,005. The basic was carrying 58% of our conversion despite
+// being 4.8x worse per cell, and nothing replaced it: `apex: convwhy` showed
+// nodef=483 of 519 calls, the proposer reaching its loop and pricing nothing,
+// with energy/convert elections falling 1,135 -> 11.
+//
+// The ground it wasted was cheaper than the energy we then threw away. So a
+// builder is only refused the basic when it could have made the better one
+// itself.
+bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
+{
+	if (!ConvObsoleteOnArrival(d))
+		return false;
+	if (unit is null)
+		return true;
+	const float mine = Catalog::gConvCapacity[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
+	for (uint i = 0; i < b.length(); ++i) {
+		const int o = b[i];
+		if ((o == d) || !Catalog::gAvailable[o] || Catalog::gMobile[o]
+			|| (Catalog::gConvCapacity[o] <= 0.f))
+			continue;
+		const float oc = Catalog::gConvCapacity[o]
+				/ float((Catalog::gAreaCells[o] > 0) ? Catalog::gAreaCells[o] : 1);
+		if (oc > mine)
+			return true;   // this hand can make a denser one: take that instead
+	}
+	return false;
+}
+
 bool ConvObsoleteOnArrival(int d)
 {
 	RefreshBestCells();
