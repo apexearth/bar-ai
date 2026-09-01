@@ -36,7 +36,7 @@ bool Armed()
 {
 	if (gAbort || !IsAirLead())
 		return false;
-	if (ai.frame < AIR_FROM)
+	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return false;
 	// The absolute AA ceiling is GONE (it stood the assassin down against 2.5k
 	// of AA in a game we had already won). AA is priced instead: it raises the

@@ -2425,6 +2425,14 @@ const float TUNE_ARMY_ECO_S = 66.f;
 // minute 25, which is apexearth's "no army and no defense until like 20
 // minutes" expressed as economy rather than a clock.
 const float TUNE_ECO_TARGET_BASE = 250.f;
+
+// Economic power, at NO-BONUS scale, before the bomber raid is worth mounting
+// at all -- the game's handicap multiplies it, so 100 here is apexearth's
+// "200 m/s" in a +100% game. Below it bombers price at zero and the metal goes
+// to the ground army instead ("we don't want to make air too early, it makes us
+// weak on ground"). This replaced an 11-minute TIMER, which could not tell a
+// rich game from a poor one.
+const float TUNE_AIR_ECO_BASE = 100.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog

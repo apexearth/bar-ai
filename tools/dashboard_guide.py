@@ -581,6 +581,11 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
+                 ("TUNE_AIR_ECO_BASE", "the economy needed before the bomber "
+                  "raid is worth mounting, in metal/s at no bonus -- the "
+                  "handicap multiplies it, so 100 here is 200 m/s in a +100% "
+                  "game. Below it bombers price at zero and the metal goes to "
+                  "the ground army. RAISE to delay air further"),
                  ("TUNE_ECO_TARGET_BASE", "the economy the REAR SPECIALIST "
                   "builds before it spends anything on war, in metal/s at no "
                   "bonus -- the game's own handicap multiplies it, so 250 here "

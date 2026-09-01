@@ -12,7 +12,23 @@ namespace Air {
 // lead, and an air plant competes with it. Kept short of the T1->T2 transition
 // itself, since that transition IS the pooling window this AI's team strategy
 // is built on.
-const int   AIR_FROM       = 11 * MINUTE;
+// THE AIR RAID OPENS ON AN ECONOMY, NOT A CLOCK.
+//
+// apexearth 2026-09-01: "bombers are for late game... when we have 200m/s or
+// more... not really an early game thing... we don't want to make air too
+// early, it makes us weak on ground."
+//
+// Measured over 122 games against BARb hard (2026-08-30 batteries, Cortex):
+// corshad (Whirlwind) was 21.9% of ALL our combat metal against BARb's 4.8% --
+// a fifth of the army in bombers -- while our anti-air ran 1.4% against their
+// 3.2% and our kill/loss ratio was 0.48 to their 0.93. We fielded the air force
+// AND skipped the answer to theirs.
+//
+// AIR_FROM was 11 game-minutes, a timer, which is the one thing this AI is not
+// allowed to gate progression on -- "late game" here always means economy size.
+// AirEcoReady() is the replacement; the frame constant is kept only as the
+// floor below which nothing has an economy worth reading.
+const int   AIR_FROM       = 4 * MINUTE;
 
 // The candidate's OWN metal income, out of reach of the 4v4 benchmark and
 // comfortable at hosted-game income. Kept low deliberately: waiting for a
@@ -304,6 +320,19 @@ void ObsInit()
 	}
 }
 
+// Is the economy big enough that air stops costing us the ground war?
+//
+// Stated at NO-BONUS scale and multiplied by the game's own handicap, the same
+// treatment EcoRoleTargetM gets and for the same reason he gave there: a flat
+// metal/s figure cannot travel between a bonused game and a plain one. His
+// "200 m/s" is read as a +100% game, so the base is 100.
+bool AirEcoReady()
+{
+	const float need = ai.GetTunable("apex_air_eco_base", TUNE_AIR_ECO_BASE)
+			* Market::IncomeMult();
+	return Market::EcoPowerM() >= need;
+}
+
 // The type that actually flew, so the outcome is attributed to it.
 bool IsBomberDef(int d)
 {
@@ -321,7 +350,7 @@ float StrikeGainFor(int d, float fillSec)
 {
 	if (!IsAirLead() || gAbort || !IsBomberDef(d))
 		return 0.f;
-	if (ai.frame < AIR_FROM)
+	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return 0.f;
 	// Priced against the force AT HOME, so a wave already out neither counts
 	// towards the next one nor stops it being built. Production used to stop
