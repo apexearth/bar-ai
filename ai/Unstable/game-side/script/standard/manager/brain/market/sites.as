@@ -709,6 +709,62 @@ array<int> gProbeDefs;
 array<AIFloat3> gProbePos;
 array<int> gProbeAt;
 
+// EVERY REFUSED SLOT, NOT JUST THE LAST ONE.
+//
+// CCircuitAI::NoteBuildBlocked keeps ONE position, overwritten by each refusal,
+// so a base with two bad slots ping-pongs between them: marking B forgets A,
+// the next election picks A, marking A forgets B. Measured on SI 8v8 -- after
+// the energy path started honouring the mark at all, team 4 went from 21 of 21
+// advanced fusions lost to 8 of 64, while team 2 still lost 21 of 22, now
+// across exactly TWO positions instead of one.
+//
+// The mark is polled and accumulated here instead. This is the same mechanism
+// with a memory, not a new policy: the C++ side still decides what is refused,
+// and script only stops forgetting. Entries expire so ground that becomes
+// reachable (a wreck cleared, a lane opened) is not banned for the game.
+const float BLOCK_NEAR = 250.f;    // matches the C++ mark's own granularity
+const int   BLOCK_TTL  = 3 * MINUTE;
+const uint  BLOCK_MAX  = 16;
+array<AIFloat3> gBlockPos;
+array<int> gBlockAt;
+
+void BlockPoll()
+{
+	AIFloat3 b(-1.f, 0.f, -1.f);
+	if (!ai.GetBlockedBuildPos(b) || !OnMap(b))
+		return;
+	for (uint i = 0; i < gBlockPos.length(); ++i) {
+		if (gBlockPos[i].distance2D(b) < BLOCK_NEAR) {
+			gBlockAt[i] = ai.frame;   // still being refused; keep it alive
+			return;
+		}
+	}
+	gBlockPos.insertLast(b);
+	gBlockAt.insertLast(ai.frame);
+	while (gBlockPos.length() > BLOCK_MAX) {
+		gBlockPos.removeAt(0);
+		gBlockAt.removeAt(0);
+	}
+}
+
+bool NearBlocked(const AIFloat3& in p)
+{
+	if (!OnMap(p))
+		return false;
+	BlockPoll();
+	for (uint i = 0; i < gBlockPos.length(); ) {
+		if (ai.frame - gBlockAt[i] > BLOCK_TTL) {
+			gBlockPos.removeAt(i);
+			gBlockAt.removeAt(i);
+			continue;
+		}
+		if (gBlockPos[i].distance2D(p) < BLOCK_NEAR)
+			return true;
+		++i;
+	}
+	return false;
+}
+
 AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in primary)
 {
 	if ((def is null) || !OnMap(primary))
@@ -717,12 +773,11 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 	// reach-safe veto -- the loop where a deterministic site was re-elected
 	// and aborted forever). A candidate near the mark is skipped, and a
 	// cached answer that has since been marked is re-probed, not served.
-	AIFloat3 blocked(-1.f, 0.f, -1.f);
-	const bool haveBlocked = ai.GetBlockedBuildPos(blocked) && OnMap(blocked);
+	BlockPoll();
 	const int did = int(def.id);
 	for (uint i = 0; i < gProbeDefs.length(); ++i) {
 		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND)) {
-			if (haveBlocked && (gProbePos[i].distance2D(blocked) < 250.f))
+			if (NearBlocked(gProbePos[i]))
 				break;
 			return gProbePos[i];
 		}
@@ -733,7 +788,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 	{
 		const AIFloat3 s = ai.FindBuildSiteNear(def, primary, seek);
 		if (OnMap(s) && (s.distance2D(primary) <= seek)
-			&& !(haveBlocked && (s.distance2D(blocked) < 250.f))) {
+			&& !NearBlocked(s)) {
 			found = s;
 			ok = true;
 		}
@@ -753,7 +808,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 				const AIFloat3 s2 = ai.FindBuildSiteNear(def, cand, seek);
 				if (!OnMap(s2) || (s2.distance2D(cand) > seek))
 					continue;
-				if (haveBlocked && (s2.distance2D(blocked) < 250.f))
+				if (NearBlocked(s2))
 					continue;
 				const float fwd = Military::ForwardFraction(s2);
 				if (fwd < bestFwd) {

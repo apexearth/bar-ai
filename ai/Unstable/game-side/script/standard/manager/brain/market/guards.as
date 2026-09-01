@@ -30,7 +30,6 @@ array<Id> gEscUnit;
 array<int> gEscDef;
 int gEscDiagAt = 0;
 int gEscOrderAt = 0;         // frame of the last escort order, all lines
-bool gEscortFloor = false;   // the order ConOrderFor just returned is an escort
 CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if ((mil is null) || !gFarmSet)
@@ -164,6 +163,31 @@ bool EscortWorthy(int di)
 // metal at risk, but a role weight is a share of a draw -- it can lose for
 // minutes while the con it would have saved dies. This is the floor: the line
 // orders one cheap escort now, ahead of the proportional draw.
+// WHAT AN ESCORT IS WORTH, as a rate, so it can be priced instead of decreed.
+//
+// apexearth's own math, already stated for EscortMetalAtRisk: "a con outside of
+// our home safe territory immediately has 0 value and making the cheap pawn
+// would add the pawns value + the constructor value back." So the gain of ONE
+// escort is the share of that write-off it prevents -- the exposed metal
+// divided among the workers still unescorted -- collected over the same fill
+// horizon every other army want amortizes against.
+//
+// This replaces a FLOOR that returned before the auction ran. The floor could
+// not be out-ranked by anything, however cheap the alternative or dear the
+// escort, which is the shape docs/23-the-plan.md forbids: "a choice that should
+// not happen is one whose ETA is worse", not one a rule forbids.
+float EscortGain(float fillS)
+{
+	const int need = EscortShortfall();
+	if (need <= 0)
+		return 0.f;
+	const float risk = EscortMetalAtRisk();
+	if (risk <= 0.f)
+		return 0.f;
+	const float horizon = (fillS > 1.f) ? fillS : 180.f;
+	return (risk / float(need)) / horizon;
+}
+
 CCircuitDef@ EscortOrderFor(CCircuitUnit@ fac)
 {
 	if ((fac is null) || (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f))

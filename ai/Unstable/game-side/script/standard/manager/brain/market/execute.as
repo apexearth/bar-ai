@@ -654,7 +654,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// (apexearth: "place those next to each other... fusions belong
 		// in the back of the map, furthest from the enemy"). The farm sits in
 		// the rear of the base axis, which is that ground.
-		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : BigEnergySite();
+		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : BigEnergySite();
+		// A DETERMINISTIC SLOT RE-ELECTED INTO REFUSED GROUND IS A DEADLOCK.
+		// FarmSlot is a pure function of the farm, so when the C++ reach-safe
+		// veto refuses that ground the next election computes the same answer
+		// and the task dies again. Tech, plant and super already probe for
+		// exactly this reason (see WK_TECH above); energy did not, and it is
+		// the one that builds the fusions. Measured, SI 8v8 +100%: teams 2 and
+		// 4 each lost 21 of 21 advanced fusions at ONE position with
+		// why=unreach-safe, and ended the game on 1.6k and 5.6k energy income
+		// against a field of 20-46k.
+		//
+		// Probed ONLY when the mark is near this slot, so the farm's packing --
+		// generators beside their own kind, in the rear -- is untouched in
+		// every other case.
+		if ((unit !is null) && NearBlocked(slot)) {
+			slot = ProbedSite(w.def,
+					Catalog::Def(int(unit.circuitDef.id)), slot);
+		}
 		{
 			// Cross-def: an elected advsol joins the fusion being built.
 			IUnitTask@ jt = JoinBigEnergy(unit, w.def);
