@@ -583,18 +583,28 @@ float LineCoverage(int plantDef)
 		gLineCov.resize(Catalog::gDefCount + 1);
 	if (gLineCov[plantDef] > 0.f)
 		return gLineCov[plantDef];
-	float best = 0.f;
+	// THE MEDIAN PRODUCT, NOT THE BEST ONE. Taking the max meant a single
+	// all-terrain product spoke for the whole line: measured on three maps,
+	// armalab read 100.0 everywhere while armavp read 73-95, which is not
+	// terrain truth, it is one outlier in the T2 bot lab's build list. The
+	// median is what the line will actually mass.
+	array<float> cov;
 	const array<int>@ prods = Catalog::gBuildsList[plantDef];
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int pd = prods[i];
 		if (!Catalog::gMobile[pd] || Catalog::gBuilder[pd]
 			|| (Catalog::gPower[pd] <= 1.f))
 			continue;
-		const float c = ai.DefMapCoverage(Catalog::Def(pd));
-		if (c > best)
-			best = c;
+		cov.insertLast(ai.DefMapCoverage(Catalog::Def(pd)));
 	}
-	gLineCov[plantDef] = (best > 0.f) ? best : 1.f;
+	if (cov.length() == 0) {
+		gLineCov[plantDef] = 1.f;
+		return 1.f;
+	}
+	cov.sortAsc();
+	gLineCov[plantDef] = cov[cov.length() / 2];
+	if (gLineCov[plantDef] <= 0.f)
+		gLineCov[plantDef] = 1.f;
 	return gLineCov[plantDef];
 }
 
