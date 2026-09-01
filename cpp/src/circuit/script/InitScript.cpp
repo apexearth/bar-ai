@@ -48,7 +48,49 @@ namespace circuit {
 
 using namespace springai;
 
-asITypeInfo* gUnitArrayType;  // cache
+// apex: THE ARRAY TYPE IS PER ENGINE, AND THIS USED TO BE ONE GLOBAL.
+//
+// Every CCircuitAI instance builds its own asIScriptEngine and its own
+// CInitScript, and the constructor did `gUnitArrayType = engine->
+// GetTypeInfoByDecl(...)` -- so in an 8v8 all sixteen instances overwrote one
+// pointer and fifteen of them then created arrays using a type that belongs to
+// somebody else's engine. Harmless-looking while every engine is alive; fatal
+// the moment one is destroyed, because the freed asCTypeInfo is still what the
+// survivors reach through.
+//
+// That is the crash apexearth hit twice on 2026-08-31, and the stack is exact:
+//
+//   handleEvent -> CCircuitAI::Update -> CInitScript::Update
+//     -> asCContext::Execute -> CallSystemFunction -> IUnitTask_GetUnits
+//       -> CScriptArray::Create -> Precache -> asCTypeInfo::GetUserData
+//         -> asCThreadReadWriteLock::AcquireShared()   [0xc0000005]
+//
+// It always followed a commander death by 22-29 frames -- one AiUpdate -- for
+// the obvious reason: losing the commander is what shuts an AI down and frees
+// its engine. It had never fired before because nothing had ever died
+// (COMMANDER LOST appears zero times in every earlier run of that session).
+//
+// Cached per ENGINE in the engine's own user data, so it cannot outlive the
+// engine it came from. Slot id is arbitrary but must stay unique.
+static const asPWORD UNIT_ARRAY_TYPE_UD = 0x415045;  // 'APE'
+
+static asITypeInfo* UnitArrayType()
+{
+	asIScriptContext* ctx = asGetActiveContext();
+	if (ctx == nullptr) {
+		return nullptr;
+	}
+	asIScriptEngine* engine = ctx->GetEngine();
+	if (engine == nullptr) {
+		return nullptr;
+	}
+	asITypeInfo* t = static_cast<asITypeInfo*>(engine->GetUserData(UNIT_ARRAY_TYPE_UD));
+	if (t == nullptr) {
+		t = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
+		engine->SetUserData(t, UNIT_ARRAY_TYPE_UD);
+	}
+	return t;
+}
 
 CInitScript::SInitInfo::SInitInfo(const SInitInfo& o)
 {
@@ -712,7 +754,11 @@ static CScriptArray* CCircuitAI_GetOwnUnitsOfDef(CCircuitAI* circuit, CCircuitDe
 		const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnUnitsOfDef(def, pos, radius);
-	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
+	asITypeInfo* at = UnitArrayType();
+	if (at == nullptr) {
+		return nullptr;   // engine gone or no active context: no array to make
+	}
+	CScriptArray* arr = CScriptArray::Create(at, found.size());
 	asUINT i = 0;
 	for (CCircuitUnit* unit : found) {
 		arr->SetValue(i++, &unit);
@@ -723,7 +769,11 @@ static CScriptArray* CCircuitAI_GetOwnUnitsOfDef(CCircuitAI* circuit, CCircuitDe
 static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnStructsNear(pos, radius);
-	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
+	asITypeInfo* at = UnitArrayType();
+	if (at == nullptr) {
+		return nullptr;   // engine gone or no active context: no array to make
+	}
+	CScriptArray* arr = CScriptArray::Create(at, found.size());
 	asUINT i = 0;
 	for (CCircuitUnit* unit : found) {
 		arr->SetValue(i++, &unit);
@@ -734,7 +784,11 @@ static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIF
 static CScriptArray* CCircuitAI_GetOwnDamagedNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnDamagedNear(pos, radius);
-	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, found.size());
+	asITypeInfo* at = UnitArrayType();
+	if (at == nullptr) {
+		return nullptr;   // engine gone or no active context: no array to make
+	}
+	CScriptArray* arr = CScriptArray::Create(at, found.size());
 	asUINT i = 0;
 	for (CCircuitUnit* unit : found) {
 		arr->SetValue(i++, &unit);
@@ -895,7 +949,11 @@ static CScriptArray* IUnitTask_GetUnits(IUnitTask* task)
 	// Without caching arrayType can be extracted by:
 //	asIScriptEngine* engine = asGetActiveContext()->GetEngine(); // Get engine from active context
 //	asITypeInfo* arrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
-	CScriptArray* arr = CScriptArray::Create(gUnitArrayType, task->GetAssignees().size());
+	asITypeInfo* at = UnitArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, task->GetAssignees().size());
 	asUINT i = 0;
 	for (CCircuitUnit* unit : task->GetAssignees()) {
 		arr->SetValue(i++, &unit);
@@ -1130,7 +1188,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "const AIFloat3& GetBuildPos() const", asFUNCTION(Task_GetBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitDef@ get_buildDef() const property", asFUNCTION(Task_GetBuildDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "CCircuitUnit@ get_target() const property", asFUNCTION(Task_GetTarget), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	gUnitArrayType = engine->GetTypeInfoByDecl("array<CCircuitUnit@>");
+	// apex: primed here so the first call is not the one that pays for the
+	// lookup; UnitArrayType() is what the bindings read (see above).
+	engine->SetUserData(engine->GetTypeInfoByDecl("array<CCircuitUnit@>"),
+			UNIT_ARRAY_TYPE_UD);
 	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asMETHOD(IUnitTask, RemoveAssignee), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
