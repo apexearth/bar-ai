@@ -693,6 +693,49 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// died at 15:00 building an LLT at a naked forward mex, medium anchor
 	// t000 -- the insurance priced the mex's risk and forgot the asker's).
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	// ONE GUN BEFORE HE LEAVES. apexearth, four times tonight and finally in
+	// one sentence: "If the com wants to walk away they should make an LLT
+	// first." The opening cluster's only builder is the commander, so the
+	// moment he takes a job elsewhere the lab, the solars and the first mexes
+	// stand with nothing covering them -- and the panic that follows is a game
+	// every time.
+	//
+	// The cover floor (PlantInReach, 2026-09-01) made the turret WORTH
+	// building; it did not make it worth building FIRST, and measured on this
+	// seed the lab went up at 0.75 min while the first LLT waited until 1.61.
+	//
+	// Narrow on purpose, and self-limiting: it fires only while we own NO
+	// ground defence at all, and the first tower ends it -- DefenceValue turns
+	// positive and ordinary pricing resumes. It is one turret, not a wall.
+	if (isComm && (DefenceValue() <= 0.f)) {
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if ((ranked[i].kind != WK_PROTECT) || (ranked[i].def is null))
+				continue;
+			if (Catalog::gSurfT[int(ranked[i].def.id)] <= 0.01f)
+				continue;   // must be a gun that shoots the ground
+			// WHY IT DID NOT GET BUILT. The rule fired six times from 0.89
+			// min and the LLT still did not land until 1.54 -- the DECISION
+			// was never the problem, something downstream refused to place
+			// it. Requests::Gate counts every refusal reason, so the deltas
+			// across this one call name the gate instead of a fourth guess.
+			const int g0New = Requests::gGateSeen[Requests::G_BADREQ];
+			const int g0Can = Requests::gGateSeen[Requests::G_CANBUILD];
+			const int g0Back = Requests::gGateSeen[Requests::G_BACKOFF];
+			IUnitTask@ g = ExecuteWant(unit, ranked[i]);
+			AiLog("apex: comm-first-gun t=" + ai.teamId
+				+ " " + ranked[i].def.GetName()
+				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
+				+ " placed=" + ((g !is null) ? 1 : 0)
+				+ " badreq=" + (Requests::gGateSeen[Requests::G_BADREQ] - g0New)
+				+ " canbuild=" + (Requests::gGateSeen[Requests::G_CANBUILD] - g0Can)
+				+ " backoff=" + (Requests::gGateSeen[Requests::G_BACKOFF] - g0Back)
+				+ " posOnMap=" + (OnMap(ranked[i].pos) ? 1 : 0)
+				+ " canDef=" + (unit.circuitDef.CanBuild(ranked[i].def) ? 1 : 0));
+			if (g !is null)
+				return g;
+			break;   // could not place it; fall through rather than idle
+		}
+	}
 	for (uint i = 0; i < ranked.length(); ++i) {
 		// FORWARD of the anchor is what kills commanders; the farm-distance
 		// radius also banned the rear-flank PLANT site and the commander --
