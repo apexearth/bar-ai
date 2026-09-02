@@ -402,7 +402,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				pullHere = true;
 			} else {
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
-				pullHere = (foeHere < Catalog::gCostM[d]);
+				// ...or ground our own army dominates: the same "theirs means
+				// stronger, not merely present" test the ring march uses.
+				// The choke line stands where both armies meet, so by enemy
+				// cost alone it was refused 63% of the time (slot.nopull
+				// 1823/2905) and never started; with the army holding the
+				// passage the guns come up under it.
+				pullHere = (foeHere < Catalog::gCostM[d])
+						|| (ai.GetAllyInflAt(s) > ai.GetEnemyInflAt(s) * 1.5f);
 			}
 		}
 		if (pullBase && !pullHere && (foeHere >= 0.f))

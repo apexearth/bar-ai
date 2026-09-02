@@ -223,6 +223,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					TUNE_EXPOSED_LOSS_S);
 			if (horizS <= 1.f)
 				horizS = TUNE_EXPOSED_LOSS_S;
+			float horizPay = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			if (horizPay <= 1.f)
+				horizPay = TUNE_PAYBACK_H;
 			if (PlantFramed()) {   // see the fill: no wall before a base
 				const float gapP = DefenceTarget() - DefenceValue();
 				if (gapP > 0.f)
@@ -259,9 +262,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						rentS = PfMetalPerCell() * PfCrowd()
 								* float((Catalog::gAreaCells[d] > 0)
 									? Catalog::gAreaCells[d] : 1);
-					// WHAT THE POST PREVENTS OVER THE EXPOSURE WINDOW, per
+					// WHAT THE POST PREVENTS OVER ITS PAYBACK HORIZON, per
 					// metal spent -- the walk shortens the window it stands
 					// for and bills the builder's time, nothing more.
+					//
+					// The horizon is the market's capital horizon
+					// (apex_payback_h, 900 s), not the 120 s exposure window:
+					// a tower is a standing asset, and against 120 s a
+					// 72-second walk to the map's choke (3,800 elmos on
+					// Aethermoor) left it 40% of its worth while a ring slot
+					// ten seconds away kept 92% -- so no tower ever stood
+					// on the choke (lineFill 0.00 for all four players).
 					//
 					// It was prev / (kCost + wSec*wage + prev*wSec): the
 					// walk charged at the site's own prevention rate. That
@@ -270,7 +281,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// score reduced to 1/walk and the nearest open slot won
 					// whatever it was worth -- the line lost to the rear
 					// ring on distance alone until the ring closed.
-					float standS = horizS - wSec;
+					float standS = horizPay - wSec;
 					if (standS < 0.f)
 						standS = 0.f;
 					const float score = prev * standS

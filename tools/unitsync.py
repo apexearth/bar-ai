@@ -67,6 +67,7 @@ class UnitSync:
         L.GetInfoType.argtypes, L.GetInfoType.restype = [ci], cs
         L.GetInfoValueString.argtypes, L.GetInfoValueString.restype = [ci], cs
         L.GetInfoValueInteger.argtypes, L.GetInfoValueInteger.restype = [ci], ci
+        L.GetInfoValueFloat.argtypes, L.GetInfoValueFloat.restype = [ci], ctypes.c_float
 
     # --- helpers --------------------------------------------------------
     @staticmethod
@@ -95,6 +96,33 @@ class UnitSync:
             (self._s(self.lib.GetMapName(i)), self._s(self.lib.GetMapFileName(i)))
             for i in range(self.lib.GetMapCount())
         ]
+
+    def map_starts(self, index: int) -> list[tuple[float, float]]:
+        """The map's own start positions, in elmos, in mapinfo order.
+
+        They arrive as alternating xPos/zPos FLOAT entries of the map's info
+        block (one pair per position), which is why map_size's integer-only
+        walk never showed them.
+        """
+        count = self.lib.GetMapInfoCount(index)
+        out, cur = [], {}
+        for i in range(count):
+            key = self._s(self.lib.GetInfoKey(i))
+            if key not in ("xPos", "zPos"):
+                continue
+            if self._s(self.lib.GetInfoType(i)) != "float":
+                continue
+            cur[key] = float(self.lib.GetInfoValueFloat(i))
+            if "xPos" in cur and "zPos" in cur:
+                out.append((cur["xPos"], cur["zPos"]))
+                cur = {}
+        return out
+
+    def map_index(self, display_name: str) -> int:
+        for i, (name, _fn) in enumerate(self.maps()):
+            if name == display_name:
+                return i
+        return -1
 
     def map_size(self, index: int) -> tuple[int, int]:
         """(width, height) in the 512-elmo units BAR quotes, e.g. (16, 12).

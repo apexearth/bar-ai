@@ -217,17 +217,42 @@ void WallPrep()
 				lineR = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
 			if (lineR < standoff)
 				lineR = standoff;
-			const AIFloat3 anchor = gPfMid + fd * lineR;
+			AIFloat3 anchor = gPfMid + fd * lineR;
+			// THE NARROWEST PASSAGE WINS (apexearth: "Ideally we hold a
+			// frontline at a narrower part of the map... holding that line
+			// is best"). With a choke on our lane the line stands on it and
+			// runs along its own cross-section, end to end plus a shoulder
+			// each side; the frontier-of-capped-mexes rule above is the
+			// stand-in for a lane with no choke. The choke is picked between
+			// home and their base, so it is inside the halfway bound.
+			AIFloat3 chokeAt;
+			AIFloat3 chokeAcross;
+			float chokeHalfW = 0.f;
+			const bool onChoke = ChokeLine(chokeAt, chokeAcross, chokeHalfW);
+			AIFloat3 lineLat(-fd.z, 0.f, fd.x);
+			float lineHalf = -1.f;   // < 0: run to the map edge or an ally lane
+			if (onChoke) {
+				anchor = chokeAt;
+				lineLat = chokeAcross;
+				// The line faces across its own run, toward them.
+				AIFloat3 nrm(-lineLat.z, 0.f, lineLat.x);
+				if ((nrm.x * fd.x + nrm.z * fd.z) < 0.f)
+					nrm = AIFloat3(-nrm.x, 0.f, -nrm.z);
+				fd = nrm;
+				lineHalf = chokeHalfW + pitch;
+			}
 			if (OnMap(anchor)) {
 				gWallLineOk = true;
 				gWallA = anchor;
 				gWallF = fd;
-				const AIFloat3 lat(-fd.z, 0.f, fd.x);
+				const AIFloat3 lat = lineLat;
 				WallEmitSlot(anchor, true, expFrac);
 				for (int sideK = -1; sideK <= 1; sideK += 2) {
 					for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
-						const AIFloat3 s = anchor
-								+ lat * (pitch * float(k * sideK));
+						const float latK = pitch * float(k * sideK);
+						if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
+							break;   // past the choke's shoulder
+						const AIFloat3 s = anchor + lat * latK;
 						if (!OnMap(s))
 							break;
 						bool allyLane = false;

@@ -16,6 +16,8 @@ bool ArmyBuildupHold()
 
 // The tower of ours that stands closest to the enemy: "the borders where all
 // our turrets are placed", read from the defence ledger rather than guessed at.
+bool gChokeHeld = false;
+
 bool ForwardMostFence(AIFloat3& out at)
 {
 	float best = 0.f;
@@ -482,10 +484,48 @@ void UpdateLanePos()
 	// guns, the enemy that follows a damaged unit walks into the turrets and the
 	// wreckage falls on our ground. A committed push (gKilling) is exempt: that
 	// is the one time being forward is the decision.
+	//
+	// THE CHOKE IS THE LINE, guns or no guns yet. apexearth 2026-09-02,
+	// watching the 4v4: "Ideally we hold a frontline at a narrower part of
+	// the map... holding that line is best." The wall's line stands on the
+	// map's choke (Market::ChokeLine), 3,000-4,000 elmos from home, and a
+	// tower there is refused by the danger gate while the enemy stands on it
+	// -- so the army holds the passage first, on our side of it, and the guns
+	// come up under the army. The choke therefore counts as our forward-most
+	// fence below; a bad trade still pulls the anchor back as ever.
+	AIFloat3 chokeHold;
+	bool chokeOk = false;
+	if (!TradeBad()) {
+		AIFloat3 cAt;
+		AIFloat3 cAcross;
+		float cHalf = 0.f;
+		if (Market::ChokeLine(cAt, cAcross, cHalf)) {
+			AIFloat3 back = Builder::gHomePos - cAt;
+			if (back.SqLength2D() > 1.f) {
+				back.SafeNormalize2D();
+				chokeHold = cAt + back * Brain::LightTowerRange();
+				chokeOk = OnMap(chokeHold);
+			}
+		}
+	}
+	if (chokeOk) {
+		lane = chokeHold;
+		if (!gChokeHeld) {
+			gChokeHeld = true;
+			AiLog(Factory::T() + "apex: army holds the choke at "
+				+ int(chokeHold.x) + "," + int(chokeHold.z));
+		}
+	} else if (gChokeHeld) {
+		gChokeHeld = false;
+	}
 	if (!gKilling && (ai.GetTunable("apex_lane_behind_guns", TUNE_LANE_BEHIND_GUNS) > 0.f)) {
 		AIFloat3 guns;
-		if (ForwardMostFence(guns) && OnMap(guns)
-			&& (ForwardFraction(lane) > ForwardFraction(guns)))
+		bool haveGuns = ForwardMostFence(guns) && OnMap(guns);
+		if (chokeOk && (!haveGuns || (ForwardFraction(chokeHold) > ForwardFraction(guns)))) {
+			guns = chokeHold;
+			haveGuns = true;
+		}
+		if (haveGuns && (ForwardFraction(lane) > ForwardFraction(guns)))
 		{
 			lane = guns;
 			if (!gBehindGuns) {

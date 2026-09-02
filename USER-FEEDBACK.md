@@ -88,9 +88,17 @@ WHAT IS ACTUALLY IN THE CODE (checked 2026-08-31):
 NOT YET FIXED. Four distinct items, and he ranks them:
   1. T2/fusion affordability at low income (he blames the loss on this alone).
   2. Army suiciding out instead of holding inside our own turret cover.
+     Said again 2026-09-02 after a watched 4v4 (Aethermoor Creek, +50%):
+     "We're still not good at fighting. Feels like our armies do not work
+     together well - we walk too close into enemy fire, we don't coordinate
+     to help each other out, enemy attacks in one massive blob."
   3. Turret line drifting BACKWARD instead of concentrating forward.
      (T1 half landed 2026-09-02, commit 82061f8, `tools/test_frontline.py`
      is the contract; the post-T2 line is still T1 and thins -- ISSUES.md.)
+     Same 4v4: "We were kinda making a front line. It was too close to our
+     own base though." The line stands at the furthest capped mex, bounded
+     by halfway; with few mexes it hugs the base. Whether it should stand at
+     halfway regardless is an open question to him.
   4. Fight orders used too freely.
 
 

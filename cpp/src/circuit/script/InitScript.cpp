@@ -417,6 +417,43 @@ static void CCircuitUnit_CmdPatrolTo(CCircuitUnit* unit, const AIFloat3& pos)
 // apex: enemy AIR value near a point, for the team interceptor pool -- each
 // player publishes this at home and fighters fly to the worst-hit ally.
 // Registry walk, called ~once per second per player.
+// apex: THE MAP'S OWN CHOKE POINTS, for the defence line. CircuitAI already
+// runs a BWEM-style analysis (map/GridAnalyzer) whose choke points carry a
+// centre and two ends -- the width and the orientation of the passage -- and
+// DefenceData reads them for its own defence points; nothing exposed them to
+// script, which had to guess at passability with build-site probes.
+static int CCircuitAI_GetChokeCount(CCircuitAI* circuit)
+{
+	return (int)circuit->GetTerrainManager()->GetTAChokePoints().size();
+}
+
+static AIFloat3 CCircuitAI_GetChokeCenter(CCircuitAI* circuit, int i)
+{
+	const auto& chokes = circuit->GetTerrainManager()->GetTAChokePoints();
+	if ((i < 0) || (i >= (int)chokes.size())) {
+		return -RgtVector;
+	}
+	return chokes[i]->GetCenter();
+}
+
+static AIFloat3 CCircuitAI_GetChokeEnd1(CCircuitAI* circuit, int i)
+{
+	const auto& chokes = circuit->GetTerrainManager()->GetTAChokePoints();
+	if ((i < 0) || (i >= (int)chokes.size())) {
+		return -RgtVector;
+	}
+	return chokes[i]->GetEnd1();
+}
+
+static AIFloat3 CCircuitAI_GetChokeEnd2(CCircuitAI* circuit, int i)
+{
+	const auto& chokes = circuit->GetTerrainManager()->GetTAChokePoints();
+	if ((i < 0) || (i >= (int)chokes.size())) {
+		return -RgtVector;
+	}
+	return chokes[i]->GetEnd2();
+}
+
 static float CCircuitAI_GetEnemyMaxMobileCostM(CCircuitAI* circuit)
 {
 	return circuit->GetEnemyManager()->GetEnemyMaxMobileCostM();
@@ -1459,6 +1496,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdPatrolTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdPatrolTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyAirCostNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetEnemyAirCostNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyMaxMobileCostM() const", asFUNCTION(CCircuitAI_GetEnemyMaxMobileCostM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokeCount() const", asFUNCTION(CCircuitAI_GetChokeCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetChokeCenter(int) const", asFUNCTION(CCircuitAI_GetChokeCenter), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetChokeEnd1(int) const", asFUNCTION(CCircuitAI_GetChokeEnd1), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetChokeEnd2(int) const", asFUNCTION(CCircuitAI_GetChokeEnd2), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// apex: for the commander D-gun raid want -- see CCircuitUnit_PushDGun's
 	// own comment for why script only needs to get close and push once.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

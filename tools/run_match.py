@@ -128,7 +128,8 @@ def _script_section(name: str, body: dict, indent: int = 1) -> str:
 
 
 def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
-                 handicap: int = 0, drop_version: bool = False) -> str:
+                 handicap: int = 0, drop_version: bool = False,
+                 start_pos: tuple | None = None) -> str:
     """One [AI]/[TEAM] pair (or a LuaAI [TEAM]) for the given ally team.
 
     `slot` is this player's index WITHIN its own ally (0, 1, 2... per side),
@@ -142,6 +143,9 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
         "Side": side,
         "Handicap": handicap,
     }
+    if start_pos is not None:
+        team["StartPosX"] = int(start_pos[0])
+        team["StartPosZ"] = int(start_pos[1])
     if ai.is_lua:
         # LuaAI is selected on the TEAM, not via an [AI] section.
         team["LuaAI"] = ai.short_name
@@ -204,6 +208,54 @@ def map_boxes(map_name):
     return None, None
 
 
+def spread_starts(rect: dict, per_side: int, boxes: str, starts, size):
+    """Start positions (elmos) for one ally's `per_side` players inside `rect`.
+
+    CircuitAI picks its own start with StartPosType=2 and every instance on a
+    side picks the same best metal cluster before any has registered occupying
+    it -- measured: four commanders within 100 elmos of each other on Comet
+    Catcher and on Aethermoor Creek, every wall line cut to a few slots by the
+    ally-lane rule. So team games hand out positions from the script: the
+    map's own start positions that fall inside the box, spread along the
+    box's lateral axis, and evenly interpolated points when the map has fewer
+    than the side needs.
+    """
+    w, h = size
+    if w <= 0 or h <= 0:
+        return []
+    l = rect.get("StartRectLeft", 0.0) * w
+    r = rect.get("StartRectRight", 1.0) * w
+    t = rect.get("StartRectTop", 0.0) * h
+    b = rect.get("StartRectBottom", 1.0) * h
+    lateral = (lambda p: p[1]) if boxes in ("lr",) else (lambda p: p[0]) if boxes == "tb" \
+        else (lambda p: p[0] - p[1])
+    inside = sorted((p for p in starts if l <= p[0] <= r and t <= p[1] <= b), key=lateral)
+    if len(inside) >= per_side:
+        # Evenly spaced picks along the lateral order.
+        idx = [round(i * (len(inside) - 1) / max(per_side - 1, 1)) for i in range(per_side)]
+        return [inside[i] for i in idx]
+    # Not enough: keep what the map has and fill along the lateral axis at
+    # the mean axial depth of the known positions (else the box's centre).
+    out = list(inside)
+    if boxes == "tb":
+        axial = sum(p[1] for p in inside) / len(inside) if inside else (t + b) / 2
+        lo, hi = l + 0.15 * (r - l), r - 0.15 * (r - l)
+        need = per_side - len(out)
+        cands = [(lo + (hi - lo) * (i + 0.5) / need, axial) for i in range(need)]
+    else:
+        axial = sum(p[0] for p in inside) / len(inside) if inside else (l + r) / 2
+        lo, hi = t + 0.15 * (b - t), b - 0.15 * (b - t)
+        need = per_side - len(out)
+        cands = [(axial, lo + (hi - lo) * (i + 0.5) / need) for i in range(need)]
+    # Push a filler away from a map position it would land on top of.
+    for c in cands:
+        if all(((c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2) ** 0.5 > 600 for p in out):
+            out.append(c)
+        else:
+            out.append((c[0], c[1] + 700 if c[1] + 700 <= b else c[1] - 700))
+    return out[:per_side]
+
+
 def build_script(
     ais: list[AISpec],
     map_name: str,
@@ -221,6 +273,8 @@ def build_script(
     handicap: int = 0,
     extra_modoptions: dict[str, str] | None = None,
     drop_ai_version: bool = False,
+    map_starts: list | None = None,
+    map_size: tuple = (0, 0),
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
 
@@ -235,7 +289,10 @@ def build_script(
     # Type 0 hands out the map's own start positions in team order, which on a
     # large map interleaves the two ally teams -- enemies spawn beside each other
     # and the match is not a real game.
-    body.append("\tStartPosType=2;")
+    # Team games: 3 = positions from this script (see spread_starts), because
+    # type 2 lets every CircuitAI on a side pick the same spot.
+    spread = (per_side > 1) and bool(map_starts) and (map_size[0] > 0)
+    body.append("\tStartPosType=%d;" % (3 if spread else 2))
     body.append("\tGameStartDelay=0;")
     body.append("\tIsHost=1;")
     body.append("\tHostIP=127.0.0.1;")
@@ -274,12 +331,9 @@ def build_script(
                for a in range(len(ais))]
     side_for = [s for team in side_of for s in team]   # flat, for the Legion gate below
 
-    team_id = 0
-    for ally, ai in enumerate(ais):
-        for slot in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot], handicap,
-                                     drop_ai_version))
-            team_id += 1
+    # Ally boxes first: a team game's start positions are drawn from them.
+    rects: list[dict] = []
+    for ally in range(len(ais)):
         box = {"NumAllies": 0}
         if len(ais) == 2:
             # Opposite halves with a gap between, so allies spawn together and
@@ -310,7 +364,18 @@ def build_script(
             else:
                 box.update({"StartRectTop": 0.0, "StartRectBottom": 1.0,
                             "StartRectLeft": near, "StartRectRight": far})
-        body.append(_script_section(f"ALLYTEAM{ally}", box))
+        rects.append(box)
+
+    team_id = 0
+    for ally, ai in enumerate(ais):
+        pos = spread_starts(rects[ally], per_side, boxes, map_starts or [], map_size)             if spread else []
+        for slot in range(per_side):
+            body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot], handicap,
+                                     drop_ai_version,
+                                     pos[slot] if slot < len(pos) else None))
+            team_id += 1
+    for ally in range(len(ais)):
+        body.append(_script_section(f"ALLYTEAM{ally}", rects[ally]))
 
     cap_frames = minutes * 60 * 30  # 30 sim frames per second
 
@@ -448,6 +513,10 @@ def run(args) -> int:
                 print("box-size %.2f (map default)" % mz)
         if args.boxes is None:
             args.boxes = "lr"
+        mi = us.map_index(map_name)
+        map_starts = us.map_starts(mi) if mi >= 0 else []
+        msz = us.map_size(mi) if mi >= 0 else (0, 0)
+        map_size_elmos = (msz[0] * 512, msz[1] * 512)
         games = us.games()
         if args.game:
             game_name = args.game
@@ -507,6 +576,7 @@ def run(args) -> int:
         per_side=args.per_side,
         sides=[x.strip() for x in args.sides.split(',')] if args.sides else None,
         boxes=args.boxes, box_size=args.box_size, handicap=args.handicap,
+        map_starts=map_starts, map_size=map_size_elmos,
         drop_ai_version=args.drop_ai_version,
         extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
     )
