@@ -11,6 +11,29 @@ float Wage()
 	return aiEconomyMgr.metal.income / float(workers < 1 ? 1 : workers);
 }
 
+// WHAT A SECOND OF THIS BUILDER'S WALK COSTS. apexearth 2026-09-02, watching
+// a commander build one tower at the front, walk 2,600 elmos back to guard a
+// mex and 2,600 back to the front: "I'd guess we're not treating walks as
+// expensive as they should be treated." Wage is the fleet's average earning
+// per hand; a walking builder forgoes its OWN output, which for a 300-BP
+// commander is three times a con's. The rate is what this lathe converts
+// per second when building the faction's light tower -- the same yardstick
+// the wall prices in -- and never below the wage it stood in for.
+float WalkRate(float builderBP)
+{
+	float r = Wage();
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	if ((light !is null) && (builderBP > 0.f)) {
+		const int ld = int(light.id);
+		if (Catalog::ValidId(ld) && (Catalog::gBuildTime[ld] > 1.f)) {
+			const float own = Catalog::gCostM[ld] * builderBP / Catalog::gBuildTime[ld];
+			if (own > r)
+				r = own;
+		}
+	}
+	return r;
+}
+
 // A builder's walk to a site, in seconds. Straight-line: no path cost query
 // reaches script (CircuitAI's QueryCostMap is unbound), so blocked ground
 // reads as free.
@@ -462,7 +485,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec, Catalog::gCostE[defId])
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
-	w.tCost = (walkSec + buildSec) * Wage() + displacedM;
+	w.tCost = walkSec * WalkRate(builderBP) + buildSec * Wage() + displacedM;
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time
 	// you'd make as metal income if you had built the closer one"). Wage above

@@ -193,6 +193,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			DefSiteFill(d, reach, adds, mexFloorWave, siteWave,
 					ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR));
 			const float wage = Wage();
+			const float walkRate = WalkRate(Catalog::gBuildPower[uid]);
 			const float walkW = ai.GetTunable("apex_def_site_walk",
 					TUNE_DEF_SITE_WALK);
 			const float uSpeed = Catalog::gSpeed[uid];
@@ -290,7 +291,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					if (standS < 0.f)
 						standS = 0.f;
 					const float score = prev * standS
-							/ (kCost + rentS + wSec * wage);
+							/ (kCost + rentS + wSec * walkRate);
 					if (score > bestScore) {
 						bestScore = score;
 						bestGain = prev;

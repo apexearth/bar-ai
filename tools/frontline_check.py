@@ -69,7 +69,9 @@ THRESHOLDS = {
     # THEN walls, and in these games the expansion runs to minute 12-16; the
     # line stood by 10-16 in every passing game and never by 14 in a third
     # of them.
-    "line_min": 16,          # by this minute...
+    # ...then 18 once walks were priced at the builder's own output (commit
+    # after 68c3b2e): the line forms two minutes later and the zigzags stop.
+    "line_min": 18,          # by this minute...
     "line_towers": 4,        # ...at least this many towers stand forward
     "line_width": 800.0,     # spanning at least this many elmos laterally
     "line_metal": 300.0,     # and worth at least this much metal (four LLTs)
