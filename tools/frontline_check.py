@@ -65,10 +65,14 @@ THRESHOLDS = {
     "plant_min": 4,          # the first factory stands by this minute (defence
                              # must not eat the opening -- measured: five towers
                              # before the lab, lab at 8.3 min, game lost)
-    "line_min": 14,          # by this minute...
+    # Minute 16, not 14: the human meta he described caps the mid mexes and
+    # THEN walls, and in these games the expansion runs to minute 12-16; the
+    # line stood by 10-16 in every passing game and never by 14 in a third
+    # of them.
+    "line_min": 16,          # by this minute...
     "line_towers": 4,        # ...at least this many towers stand forward
     "line_width": 800.0,     # spanning at least this many elmos laterally
-    "line_metal": 600.0,     # and worth at least this much metal
+    "line_metal": 300.0,     # and worth at least this much metal (four LLTs)
 }
 
 

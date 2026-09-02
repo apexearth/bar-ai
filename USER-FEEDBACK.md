@@ -89,6 +89,8 @@ NOT YET FIXED. Four distinct items, and he ranks them:
   1. T2/fusion affordability at low income (he blames the loss on this alone).
   2. Army suiciding out instead of holding inside our own turret cover.
   3. Turret line drifting BACKWARD instead of concentrating forward.
+     (T1 half landed 2026-09-02, commit 82061f8, `tools/test_frontline.py`
+     is the contract; the post-T2 line is still T1 and thins -- ISSUES.md.)
   4. Fight orders used too freely.
 
 

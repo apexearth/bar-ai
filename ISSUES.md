@@ -115,13 +115,24 @@ with more than two guns on it). Residue, each measured in the same batteries
   died to pawns at fwd 0.43 (fl-b s5, the only loss with a line standing).
   Exposure is charged to non-defence wants only; his own 2,700 metal is not
   in the price of a forward tower.
-- **The opening wedge on the (1460,2976) Comet Catcher start.** Twice (seed 2
-  and seed 6) a solar was drawn before the lab, landed 400 elmos from the
-  anchor, and the lab order then failed to place three times
-  (`task-die armlab fails=3 framed=0`), first factory at 8-18 min, game lost.
-  Not a defence bug -- `Requests::Take` searches 256 elmos around a probed
-  site -- but the defence rules that keyed on an ORDERED plant made it worse
-  and now wait for a frame (`PlantFramed`).
+- **THE OPENING WEDGE on the (1460,2976) Comet Catcher start -- the main
+  source of red test runs.** Six games of 38 (always seeds 2 and 6): the
+  commander stands IN RANGE of his own site and does not build, for minutes.
+  fl-j s2: solar requested at 1401 with the site at 2648,2344, commander at
+  2646,2335 from frame 1200 to 2700, `framed=0`; mex at 3008,1952 elected at
+  2953, commander at 2904,2071 (104 elmos away) from 5100 to 12000+, never
+  built; the solar task finally dies at 11930 with `fails=3`. Build orders
+  ARE issued (`ORDERS ... build=2` a minute) and metal/energy are full. The
+  same corner in every case (x 2450-3000, z 1750-2350), and two commanders
+  died there. Suspects, unverified: a crater rim that puts the site out of
+  3D build range while the path ends at the cliff, or the builder blocking
+  its own footprint (Spring's BuggerOff excludes the builder). It only
+  happens when the draw sends the commander to that corner before the lab;
+  in the other seeds the lab is drawn by frame 681 and cons cap that mex
+  later without trouble. `tools/test_frontline.py` reports it as the `plant`
+  metric (warn-only until fixed). The defence rules that used to key on an
+  ORDERED plant now wait for a frame (`PlantFramed`), which removes their
+  part in it.
 - **The e-stall hoist owned the opening.** Before the fix 36-80% of builder
   elections in the first eight minutes were `why=estall`, every one joining
   the same solar. Now one generator on the way ends the hoist, but the stall
