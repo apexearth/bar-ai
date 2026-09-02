@@ -276,7 +276,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	RiskFillSiege();
 	float fillBest = 0.f;
 	for (uint si = 0; si < sites.length(); ++si) {
-		const AIFloat3 s = sites[si];
+		AIFloat3 s = sites[si];
 		if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
 			continue;
 		const bool isAllyF = (si >= allyStart);
@@ -284,6 +284,27 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const bool isFront = ((si >= nAsset) && !isRing) || isAllyF;
 		const bool isGate = isFront && !isAllyF && (si < nAsset + nGates);
 		const bool isWall = wallOn && (si < nWall);
+		// AS CLOSE TO THE FRONT AS IS REASONABLY SAFE (apexearth 2026-09-02:
+		// "They're trying to walk straight into the fight to make the
+		// defensive turrets... If it's too dangerous then they should pull
+		// back or build further away"). A wall slot the enemy holds is not
+		// walked into: it steps back toward home a tower pitch at a time
+		// until the ground is quiet, and if nothing behind it is, it is not
+		// for sale this fill. The slot keeps its index -- open, line,
+		// adjacency all read as before -- only where the gun goes moves.
+		if (isWall && Builder::SiteHot(s)) {
+			AIFloat3 back = WallSlotLine(si)
+					? AIFloat3(-gWallF.x, 0.f, -gWallF.z) : (gPfMid - s);
+			if (back.SqLength2D() > 1.f) {
+				back.SafeNormalize2D();
+				const float pitchB = Brain::LightTowerRange()
+						* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
+				s = Builder::PullBack(s, back, pitchB, 3);
+			}
+			if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
+				continue;
+			++gDbgPulled;
+		}
 		// A mex's own gun is part of the standing holding the target asks
 		// for ("1 sentry turret guarding each of our mexes at least"), so
 		// its site takes the same demand pull an open wall slot does. One
@@ -401,15 +422,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (isWall && WallSlotAdjHeld(si)) {
 				pullHere = true;
 			} else {
+				// (This read `GetEnemyCostAt(s, 900) < costM[d]` -- a unit
+				// COUNT against 85 metal, so it refused nothing. The slot
+				// pull-back above is the danger test now; a wall slot that
+				// reached here is on quiet or dominated ground.)
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
-				// ...or ground our own army dominates: the same "theirs means
-				// stronger, not merely present" test the ring march uses.
-				// The choke line stands where both armies meet, so by enemy
-				// cost alone it was refused 63% of the time (slot.nopull
-				// 1823/2905) and never started; with the army holding the
-				// passage the guns come up under it.
-				pullHere = (foeHere < Catalog::gCostM[d])
-						|| (ai.GetAllyInflAt(s) > ai.GetEnemyInflAt(s) * 1.5f);
+				pullHere = isWall || !Builder::SiteHot(s);
 			}
 		}
 		if (pullBase && !pullHere && (foeHere >= 0.f))

@@ -266,6 +266,44 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	return PastFront(where) ? (CON_THREAT_VETO + 1.f) : 0.f;
 }
 
+// GROUND A CONSTRUCTOR SHOULD NOT WALK ONTO. apexearth 2026-09-02: "They're
+// trying to walk straight into the fight to make the defensive turrets. They
+// should just make the turrets as close as reasonably possible to the
+// frontline as they can. If it's too dangerous then they should pull back or
+// build further away."
+//
+// Two readings, both required, so a lone scout does not count (the hair
+// trigger ISSUES.md records): something of theirs is actually within reach
+// of the spot, AND their influence there beats ours -- ground our own army
+// dominates is ground a builder can work under cover, whoever else is on
+// it. The same "theirs means stronger, not merely present" test the ring
+// march and the wall's danger gate use.
+bool SiteHot(const AIFloat3& in where)
+{
+	if (!OnMap(where))
+		return false;
+	if (ai.GetEnemyCostAt(where, CON_FOE_RADIUS) < CON_FOE_COUNT)
+		return false;
+	return ai.GetEnemyInflAt(where) > ai.GetAllyInflAt(where);
+}
+
+// The nearest quiet ground behind a hot site, stepping `step` elmos along
+// `back` up to `steps` times; the site itself if it is quiet, off-map (-1)
+// if nothing behind it is either.
+AIFloat3 PullBack(const AIFloat3& in site, const AIFloat3& in back, float step, int steps)
+{
+	if (!SiteHot(site))
+		return site;
+	for (int k = 1; k <= steps; ++k) {
+		const AIFloat3 p = site + back * (step * float(k));
+		if (!OnMap(p))
+			break;
+		if (!SiteHot(p))
+			return p;
+	}
+	return AIFloat3(-1.f, 0.f, -1.f);
+}
+
 // A resurrect pays out only on completion, so a bot driven off one has nothing
 // to show for the time; reclaim credits metal continuously and can be abandoned
 // part-done. On ground we may not get to keep, take the one that banks as it
