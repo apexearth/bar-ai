@@ -479,8 +479,39 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			Want@ cw = ranked[ri];
 			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
 				continue;
-			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
-				continue;
+			// THE SITE COMES TO THE STRUCTURE, not the other way round.
+			//
+			// This required the ranked want to ALREADY be sited at a mex --
+			// and it almost never is, because every defence site in this AI
+			// comes from the wall generator, which sites by base geometry (the
+			// building rim) and not by "what did we just build that is now
+			// naked". Measured this morning: 96% of sites from the wall, front
+			// generator 27 of 696, ring 0. So the queue jump had nothing to
+			// promote and mexes kept dying (apexearth, watching: "blue made two
+			// mexes which got killed... it's just about not making towers near
+			// the mexes you make. in early game why is that so impossible?").
+			//
+			// Same repair the opening lab got and verified: keep the want, move
+			// its POSITION to the uncovered thing this builder is standing at.
+			// Still bounded -- ground defence only, the structure must be
+			// within the tower's own reach of the builder, still under its
+			// floor, and still affordable.
+			AIFloat3 tgt = cw.pos;
+			if (!SiteIsMex(tgt) || (uAt.distance2D(tgt) > near)) {
+				float bd = -1.f;
+				for (uint mi = 0; mi < gLPos.length(); ++mi) {
+					if (gLExtract[mi] <= 0.f)
+						continue;
+					const float dd = uAt.distance2D(gLPos[mi]);
+					if ((dd <= near) && ((bd < 0.f) || (dd < bd))) {
+						bd = dd;
+						tgt = gLPos[mi];
+					}
+				}
+				if (bd < 0.f)
+					continue;   // nothing of ours in reach that wants cover
+				cw.pos = tgt;
+			}
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			const float floorHere = floorWave * MexFloorFactor(cw.pos);
