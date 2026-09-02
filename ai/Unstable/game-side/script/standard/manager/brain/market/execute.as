@@ -800,7 +800,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				// we can start. It self-limits twice over: the bank empties,
 				// and the pin breaks once enough capacity stands.
 				int wantC = EnergyPinned() ? ETA_INF_N : int(spare / capD);
-				const int afford = int(aiEconomyMgr.metal.current / perM);
+				// AFFORDABLE AGAINST INCOME, NOT THE INSTANTANEOUS BANK.
+				//
+				// This read metal.current / price, and we now deliberately run
+				// a near-empty bank ("relying on storage is lazy -- make sure
+				// spend the metal"), so afford was 0 or 1 and the burst never
+				// fired once: measured, `conv batch` 0 times in a whole game
+				// while armmmkr held a mean of 1.8 in flight against a cap of
+				// 24, and 46-58% of all energy produced was thrown away.
+				//
+				// A converter is 380 metal returning 10.3 metal/s -- a
+				// 37-second payback -- so the honest question is not "is it in
+				// the bank" but "can this economy carry it", which is the same
+				// seconds-of-economic-power test the defence dominance rule
+				// uses. apexearth, on exactly this shape: "once we can afford
+				// it we need to build them."
+				const float affordM = EcoPowerM()
+						* ai.GetTunable("apex_conv_afford_s", TUNE_CONV_AFFORD_S);
+				const int afford = int(affordM / perM);
 				if (wantC > afford)
 					wantC = afford;
 				// A WORK SLICE, NOT A CONVERTER CAP. Each Take is a ledger

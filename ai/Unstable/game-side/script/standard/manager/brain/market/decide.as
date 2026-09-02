@@ -718,6 +718,47 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// was never the problem, something downstream refused to place
 			// it. Requests::Gate counts every refusal reason, so the deltas
 			// across this one call name the gate instead of a fourth guess.
+			// AT THE PLANT, NOT ON THE WALL RIM. Measured: the gun was sited
+			// at 2465,3623 while the lab stood at 2112,4624 -- a kilometre in
+			// front of the thing it was meant to cover, so the base stayed
+			// naked and the commander walked out of position to build it. The
+			// wall generator is the only site source with traffic and at
+			// minute one the building rim runs through the forward mexes.
+			//
+			// The first gun's job is this plant. Site it beside the nearest
+			// one to the commander, a step toward the enemy so it covers the
+			// approach rather than hiding behind the building.
+			{
+				const AIFloat3 here = unit.GetPos(ai.frame);
+				AIFloat3 best;
+				float bestD = -1.f;
+				for (uint pi = 0; pi < ComLen(); ++pi) {
+					const int pd = gComDef[pi];
+					if (!Catalog::ValidId(pd) || Catalog::gMobile[pd]
+						|| (Catalog::gBuildsList[pd].length() == 0)
+						|| (Catalog::gBuildPower[pd] <= 0.f))
+						continue;
+					if (!OnMap(gComPos[pi]))
+						continue;
+					const float dd = here.distance2D(gComPos[pi]);
+					if ((bestD < 0.f) || (dd < bestD)) {
+						bestD = dd;
+						best = gComPos[pi];
+					}
+				}
+				if (bestD >= 0.f) {
+					AIFloat3 at = best;
+					if (Base::Ready()) {
+						AIFloat3 f = Base::gFwd;
+						if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
+						at.x += f.x * 220.f;
+						at.z += f.z * 220.f;
+					}
+					if (OnMap(at))
+						ranked[i].pos = ProbedSite(ranked[i].def,
+								Catalog::Def(int(unit.circuitDef.id)), at);
+				}
+			}
 			const int g0New = Requests::gGateSeen[Requests::G_BADREQ];
 			const int g0Can = Requests::gGateSeen[Requests::G_CANBUILD];
 			const int g0Back = Requests::gGateSeen[Requests::G_BACKOFF];

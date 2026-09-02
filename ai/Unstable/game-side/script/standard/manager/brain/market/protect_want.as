@@ -15,6 +15,66 @@ bool T1Tower(int d)
 	return false;
 }
 
+// A DEFENCE SLOT HOLDS ONE BUILDING, SO THE QUESTION IS NOT VALUE PER METAL.
+//
+// apexearth 2026-09-01, watching 15 Gauntlets die to Juggernauts: "Even on
+// paper gauntlet isn't that good because you very quickly end up with a single
+// building that covers more range and more than triples the DPS (a pulsar!) So
+// why build something that so quickly becomes outdated?... idk how to turn that
+// into a mathematical result."
+//
+// This is the turn. Per-metal ranking is correct when you buy QUANTITY; a wall
+// slot is a PLACE, and a place holds exactly one gun. Measured, the per-metal
+// rule is monotonically decreasing in price -- kill rises 207 -> 445 (2.15x)
+// across armllt -> armguard while cost rises 85 -> 1250 (14.7x) -- so it buys
+// the cheapest thing on the shelf every time, and the game bore that out: 83
+// light towers and 27 beamers against one Pulsar.
+//
+// The player's rule is DOMINANCE, not efficiency: a Gauntlet reaches 1,220 for
+// 105 dps and a Pulsar reaches 1,400 for 1,091, so the Gauntlet is beaten on
+// both axes at once and its metal is stranded the moment the better gun is
+// affordable. Same shape as ConvObsoleteOnArrival, which already refuses a
+// converter a denser one dwarfs.
+//
+// AFFORDABILITY IS THE WHOLE GUARD. Without it a Pulsar we cannot pay for
+// would make every tower obsolete and we would build nothing at all -- so the
+// dominating gun must be one this economy can actually buy, which is exactly
+// his "once we can afford it we need to build them". Below that, the Gauntlet
+// is not outdated, it is what we can have.
+bool DefAffordable(int d)
+{
+	const float s = ai.GetTunable("apex_def_afford_s", TUNE_DEF_AFFORD_S);
+	return Catalog::gCostM[d] <= EcoPowerM() * ((s > 1.f) ? s : 30.f);
+}
+
+bool DefObsoleteOnArrival(CCircuitUnit@ unit, int d)
+{
+	if (ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) <= 0.f)
+		return false;
+	if (unit is null)
+		return false;
+	const float myR = Catalog::gMaxRange[d];
+	const float myK = PfTowerKill(d);
+	if ((myR <= 0.f) || (myK <= 0.f))
+		return false;
+	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
+	for (uint i = 0; i < b.length(); ++i) {
+		const int o = b[i];
+		if ((o == d) || Catalog::gMobile[o] || !Catalog::gAvailable[o]
+			|| (ProtClassOf(o) != PROT_DEF))
+			continue;
+		if (!DefAffordable(o))
+			continue;   // cannot have it yet: d is not outdated, it is the answer
+		// Beaten on BOTH axes -- reach and killing power. Either alone is a
+		// trade-off; both together is obsolescence.
+		if ((Catalog::gMaxRange[o] >= myR) && (PfTowerKill(o) > myK))
+			return true;
+	}
+	return false;
+}
+
+bool gWallEffDiag = false;
+
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
@@ -288,6 +348,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// between two towers that both reached pricing (apexearth, twice,
 			// the second time: "We've gone over and proved how they are
 			// low-value defense... Fix it with priority").
+			// Dominated on reach AND killing power by something we can
+			// afford right now: its metal is stranded on arrival.
+			if (DefObsoleteOnArrival(unit, d)) {
+				gDwT1[d] = 0.f;
+				continue;
+			}
 			if (T1Tower(d) && (Factory::gHaveT2 || T2DefHandsStanding())) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
@@ -321,6 +387,31 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				if ((bestEff > 0.f) && (eff < bestEff)) {
 					gDwEff[d] = eff / bestEff;
 					bestGain *= gDwEff[d];
+				}
+				// WHICH TOWER DOES THIS RULE ACTUALLY PICK, AND WHY.
+				// apexearth, watching: "I wanna scream at teal here for making
+				// 15 god damn Gauntlet turrets... 5 pulsars would save our
+				// asses right now." The numbers say he is right -- Gauntlet
+				// 105 dps for 1,250 metal against Pulsar 1,091 for 3,500, so
+				// 3.7x the damage per metal -- and this ranking is what stands
+				// between them. One census of every candidate the builder can
+				// make, so the term that decides is a fact and not a theory.
+				if (!gWallEffDiag) {
+					gWallEffDiag = true;
+					for (uint bq2 = 0; bq2 < builds.length(); ++bq2) {
+						const int bd2 = builds[bq2];
+						if (Catalog::gMobile[bd2] || !Catalog::gAvailable[bd2]
+							|| (ProtClassOf(bd2) != PROT_DEF)
+							|| (Catalog::gCostM[bd2] <= 1.f))
+							continue;
+						AiLog("apex: wall-eff t=" + ai.teamId
+							+ " " + Catalog::Def(bd2).GetName()
+							+ " m=" + int(Catalog::gCostM[bd2])
+							+ " hp=" + int(Catalog::gHealth[bd2])
+							+ " surfDps=" + formatFloat(PfSurfDps(bd2), "", 0, 1)
+							+ " kill=" + formatFloat(PfTowerKill(bd2), "", 0, 3)
+							+ " eff=" + formatFloat(PfTowerKill(bd2) / Catalog::gCostM[bd2], "", 0, 5));
+					}
 				}
 			}
 

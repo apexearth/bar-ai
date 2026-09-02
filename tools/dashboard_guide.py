@@ -589,6 +589,15 @@ GROUPS = [
                   "of the map its ARMY can move around in -- 1 on, 0 off. On a "
                   "flat map every line reads the same and this changes nothing; "
                   "on a hilly map the vehicle line is discounted against bots"),
+                 ("TUNE_DEF_DOMINANCE", "refuse a tower that a gun we can "
+                  "AFFORD RIGHT NOW beats on both reach and killing power -- a "
+                  "defence slot holds one building, so a beaten tower is "
+                  "stranded metal, not a cheaper option. 0 restores pure "
+                  "value-per-metal ranking"),
+                 ("TUNE_DEF_AFFORD_S", "seconds of economic power a defence "
+                  "building may cost and still count as affordable. This is the "
+                  "guard on the rule above: raise it and bigger guns count as "
+                  "reachable sooner, lower it and we settle for what is cheap"),
                  ("TUNE_AIR_ECO_BASE", "the economy needed before the bomber "
                   "raid is worth mounting, in metal/s at no bonus -- the "
                   "handicap multiplies it, so 100 here is 200 m/s in a +100% "

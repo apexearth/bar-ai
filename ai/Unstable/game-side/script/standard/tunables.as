@@ -2457,6 +2457,24 @@ const float TUNE_SCREEN_GAP = 200.f;
 // bot lab is still allowed, it just prices below the first vehicle plant.
 // 0 restores the old behaviour, where every player reasons alone.
 const float TUNE_TEAM_LINE = 1.f;
+
+// A defence slot holds ONE building, so a tower beaten on BOTH reach and
+// killing power by a gun we can afford right now is not a cheaper option, it is
+// stranded metal (apexearth: "why build something that so quickly becomes
+// outdated?"). 1 = on, 0 = off, which is the control arm.
+const float TUNE_DEF_DOMINANCE = 1.f;
+// Seconds of total economic power a defence building may cost and still count
+// as affordable -- the guard that stops a Pulsar we cannot pay for making every
+// tower obsolete and leaving us with nothing. At 40 m/s this admits ~1,200
+// metal; at 300 m/s it admits a Pulsar.
+const float TUNE_DEF_AFFORD_S = 30.f;
+
+// Seconds of economic power the converter burst may commit at once. The bank is
+// the wrong bound -- we deliberately run it near empty, so metal.current/price
+// was 0 or 1 and the burst never fired while half the grid was wasted. A
+// converter pays back in 37 seconds, so 30 seconds of economic power is a bill
+// the economy carries comfortably.
+const float TUNE_CONV_AFFORD_S = 30.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog
