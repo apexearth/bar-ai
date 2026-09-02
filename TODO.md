@@ -17,6 +17,47 @@ being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
+## Abuse the BARb AI the way humans do -- the standing doctrine
+
+apexearth 2026-09-01, offered as frame of mind rather than a spec:
+
+  "I want to see this AI abuse the Barb AI the same we humans do :-P
+   - make them attack us when they're more powerful
+   - eat their wrecks
+   - keep making more military
+   - don't waste it
+   - grow
+   - overwhelm the enemy
+   - use cheeky strategies/squads like i mentioned
+   - stand at enemy border and siege them long range
+   - let them come at our army while we stand still and defend, using rezbots,
+     twitchers, etc to heal our tanks."
+
+These are one doctrine, not eight wishes, and it is the answer to the number
+that matters: 122 games against BARb hard, zero wins, army trade 0.48 against
+their 0.93. Every item is a way of NOT walking into their guns.
+
+  hold, do not charge   they attack us; we fight on our ground at our range
+  heal in place         rezbots and twitchers repair the screen mid-fight, so
+                        the same metal fights several times
+  eat the wrecks        their dead army funds ours; the battlefield is the
+                        richest reclaim on the map and it is where we already
+                        are
+  never idle production the line keeps running while the ball holds
+  siege the border      the anchored range ladder, parked at their edge
+
+WHAT ALREADY EXISTS: the screen standoff (2026-09-01), squad rows by range,
+rezbot rules (rules_rezzer.as, including the fallen-commander rescue), and
+reclaim wants. WHAT IS MISSING: the POSTURE that ties them together -- a
+deliberate "hold and let them come" mode distinct from attack, with the healers
+inside the ball rather than following it, and battlefield reclaim treated as a
+first-class income stream after a won fight rather than as idle-time work.
+
+Note the tension to resolve rather than ignore: "make them attack us when
+they're more powerful" is a bait, and this AI currently has no way to express
+"I am deliberately not attacking because their coming to me is worth more than
+my going to them."
+
 ## Two squad doctrines: the siege screen, and the deep raid
 
 apexearth 2026-09-01, on what a short-range unit should do in a squad that has
