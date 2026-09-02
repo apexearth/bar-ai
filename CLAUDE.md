@@ -587,6 +587,15 @@ skipping it produced a confident wrong answer at least once).
 - **Kill the waiter with the run.** Twice now, killing a tournament has left
   `until ...; sleep; done` shells polling forever for a file that will never be
   written. Stop the background task, not just the processes.
+- **`pgrep` DOES NOT EXIST in this Git Bash, and a wait loop that uses it exits
+  INSTANTLY.** `pgrep -f foo` returns 127 (command not found), so
+  `until <done> || ! pgrep -f foo; do sleep; done` has a condition that is
+  immediately TRUE -- the wait never waits, and whatever is read next is stale.
+  Cost 2026-09-01: a battery run reported as "still running" twice from a log
+  that had stopped updating, while the run had in fact finished (apexearth:
+  "I don't think your shells are doing anything"). Wait on an ARTIFACT
+  (`until [ -f out/result.json ]`, a line count) or check processes with
+  PowerShell `Get-Process`; never on `pgrep`.
 - **`pkill -f` silently does nothing on Windows.** Use
   `powershell -NoProfile -Command "Get-Process python,spring-headless -ErrorAction SilentlyContinue | Stop-Process -Force"`,
   then verify the count is zero.
