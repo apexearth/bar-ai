@@ -143,6 +143,7 @@ local NAMES = {
 	"apex_eco_target_base",
 	"apex_air_eco_base",
 	"apex_line_terrain",
+	"apex_screen_gap",
 	"apex_dup_bp_subst",
 	"apex_replant_discount",
 	"apex_replant_window_s",

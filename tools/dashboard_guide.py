@@ -581,6 +581,10 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
+                 ("TUNE_SCREEN_GAP", "how far IN FRONT of the squad's longest "
+                  "row a short-range row holds, elmos. Short units stop walking "
+                  "to their own reach and stand as a shield for the guns "
+                  "instead. 0 restores stand-at-your-own-range"),
                  ("TUNE_LINE_TERRAIN", "weigh a production line by how much "
                   "of the map its ARMY can move around in -- 1 on, 0 off. On a "
                   "flat map every line reads the same and this changes nothing; "

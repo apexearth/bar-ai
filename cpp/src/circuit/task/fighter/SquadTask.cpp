@@ -1071,9 +1071,38 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// squad's longest row on the same enemy-away axis (apexearth:
 		// "Jammer/Radar units should always angle themselves behind their
 		// squad relative to the direction of the enemy").
+		// apex: THE SCREEN. A short-range row in a squad whose damage comes
+		// from a longer row is not there to shoot -- it is there to be stood
+		// in front of. apexearth 2026-09-01: "the tanks should just stand
+		// around in front of the sheldons. They'll take hits if they have to,
+		// but they won't walk up to enemies to shoot at them... If they walk
+		// closer they'll take a lot more damage. They are there as a shield...
+		// The squad should seek to remain at max range."
+		//
+		// "Stand at your own range" walks an Incisor to 230 and a Thug to 380,
+		// which is exactly the walk that gets them killed while the Sheldons
+		// behind them at 850 lose their screen. So an armed row that is NOT
+		// the carry row holds a screen line just in front of the carry row
+		// instead of at its own reach.
+		//
+		// This is the escort rule with the sign flipped -- a weaponless sensor
+		// holds BEHIND the longest row (below), a screen holds just in FRONT
+		// of it -- and it is clamped with max() so it can only ever ADD
+		// standoff, never pull a row closer than it would have gone anyway.
+		// A squad with no longer-ranged row has no carry to screen for and is
+		// left exactly as it was.
+		float screenRange = kv.first;
+		{
+			const float gap = manager->GetCircuit()->GetTunable("apex_screen_gap", 200.f);
+			if ((gap > 0.f) && (kv.first > (float)SQUARE_SIZE)
+				&& (highestRange > kv.first + gap))
+			{
+				screenRange = std::max(kv.first, highestRange - gap);
+			}
+		}
 		const float rowRange = (kv.first <= (float)SQUARE_SIZE)
 				? (highestRange + manager->GetCircuit()->GetTunable("apex_escort_standoff", 240.f))
-				: kv.first;
+				: screenRange;
 		// apex: AN ADVANCING WALL VOIDS THE STANDOFF. Against a static that
 		// outranges the row, the safety standoff parks us beyond ITS reach --
 		// where we deal zero damage -- and a porc-creep simply builds its next

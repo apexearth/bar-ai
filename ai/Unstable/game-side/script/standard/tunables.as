@@ -2440,6 +2440,14 @@ const float TUNE_AIR_ECO_BASE = 100.f;
 // and this changes nothing; on a hill map the vehicle line is discounted
 // against the bot line, which is apexearth's rule for picking the ground line.
 const float TUNE_LINE_TERRAIN = 1.f;
+
+// How far IN FRONT of the squad's longest row a short-range row holds, elmos.
+// apexearth 2026-09-01: "the tanks should just stand around in front of the
+// sheldons... they won't walk up to enemies to shoot at them. They are there as
+// a shield." The screen line is highestRange - this; clamped so it can only add
+// standoff, never pull a row closer than its own reach. 0 restores "stand at
+// your own range" for every armed row, which is the control arm.
+const float TUNE_SCREEN_GAP = 200.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog

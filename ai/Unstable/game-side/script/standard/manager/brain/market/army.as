@@ -440,6 +440,7 @@ int LineClassOf(int di)
 
 // What we actually field, by class, as shares of army metal.
 array<float> gLineM(LC_N, 0.f);
+array<float> gLineHp(LC_N, 0.f);   // the same holding in HIT POINTS -- see ShieldShare
 int gLineAt = 59;   // phase offset -- see AiUpdate lockstep note
 int gLineHoldAt = 0;
 void TrackLine()
@@ -447,13 +448,16 @@ void TrackLine()
 	if (ai.frame < gLineAt)
 		return;
 	gLineAt = ai.frame + 5 * SECOND;
-	for (int c = 0; c < LC_N; ++c)
+	for (int c = 0; c < LC_N; ++c) {
 		gLineM[c] = 0.f;
+		gLineHp[c] = 0.f;
+	}
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !LineCombat(di))
 			continue;
 		gLineM[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gCostM[di];
+		gLineHp[LineClassOf(di)] += float(gOwnCount[d]) * Catalog::gHealth[di];
 	}
 	// WHAT WE HOLD AGAINST WHAT WE ASKED FOR. The only line-class output was a
 	// one-shot census of how many DEFS fall in each class, which reads exactly
@@ -709,15 +713,29 @@ float PlantLineWorth(int d)
 
 // Share of the line that can absorb for the rest -- what makes a fragile
 // long-range unit worth its range at all.
+// WHAT IS STANDING IN FRONT, MEASURED IN HIT POINTS, NOT IN METAL.
+//
+// This was (tankMetal + midMetal) / totalMetal, and metal share is the wrong
+// currency for "is there something to hide behind". apexearth's own siege ball
+// -- 1 Mammoth, 10 Sheldons, 5 Arbiters -- is 2,200 of 9,300 metal, so the old
+// measure scored it 0.24 and priced its reach units at a quarter strength,
+// while a homogeneous Thug ball scores ~1.0 and reads fully shielded. Both
+// readings are backwards: two Thugs at the same range protect nothing from each
+// other, and one 15,600hp Mammoth screens fifteen units costing four times its
+// price. In hit points that same ball reads 0.56.
+//
+// Hit points are what absorbs, so hit points are the unit of account. The class
+// split is unchanged -- TANK and MID are the rows that stand in front, REACH
+// and DPS are what they are standing in front OF.
 float ShieldShare()
 {
 	TrackLine();
 	float tot = 0.f;
 	for (int c = 0; c < LC_N; ++c)
-		tot += gLineM[c];
+		tot += gLineHp[c];
 	if (tot <= 1.f)
 		return 0.f;
-	return (gLineM[LC_TANK] + gLineM[LC_MID]) / tot;
+	return (gLineHp[LC_TANK] + gLineHp[LC_MID]) / tot;
 }
 
 // THE REAR SPECIALIST (apexearth 2026-08-23): in a big team game one
