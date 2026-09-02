@@ -286,7 +286,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// Exposure-scaled both ways -- see MexFloorFactor above.
 		const float mexFloorHere = (mexFloorWave > 0.f)
 				? (mexFloorWave * MexFloorFactor(s)) : 0.f;
-		const bool floored = !isFront && MexInReach(s, reach)
+		// ...and a PLANT takes the same floor as a mex -- see PlantInReach.
+		// A slot beside the opening lab had no mex in range, so it priced
+		// against a wave of zero and no LLT was ever worth building before
+		// the first raid arrived.
+		const bool floored = !isFront
+				&& (MexInReach(s, reach) || PlantInReach(s, reach))
 				&& (mexFloorHere > threat);
 		if (floored)
 			threat = mexFloorHere;

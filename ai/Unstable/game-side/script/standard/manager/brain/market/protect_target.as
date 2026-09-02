@@ -127,6 +127,40 @@ bool MexInReach(const AIFloat3& in pos, float r)
 	return false;
 }
 
+// A PRODUCTION LINE IS WORTH COVERING BEFORE ANYTHING HAS SHOT AT IT.
+//
+// apexearth, three times tonight and again just now: "they don't make a turret
+// before walking away from the first things that they've made and it becomes an
+// issue every game. A panic to defend themselves because they didn't make a
+// single LLT."
+//
+// The mechanism is the one apex_mex_cover_floor already exists to answer, one
+// building over: every defence site is priced on MEASURED threat, and at minute
+// two there is no measured threat, so every candidate is gated out at
+// GATE_SITE_THREAT and nothing is ever worth building -- until the raid
+// arrives, which is exactly too late. The mex floor fixes that for extractors
+// and only for extractors: the floor is applied where MexInReach(s) is true, so
+// a slot beside the lab, with no mex in range, still prices against a wave of
+// zero.
+//
+// A lab is worth several mexes and is the thing whose loss ends the game, so it
+// takes the same floor. Same wave, same exposure scaling -- this widens what
+// counts as worth covering, it does not invent a second mechanism.
+bool PlantInReach(const AIFloat3& in pos, float r)
+{
+	for (uint i = 0; i < ComLen(); ++i) {
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;   // not a plant
+		if (Catalog::gBuildPower[d] <= 0.f)
+			continue;   // a plant, not a turret with a build list
+		if (OnMap(gComPos[i]) && (gComPos[i].distance2D(pos) < r))
+			return true;
+	}
+	return false;
+}
+
 // Static ground defence we own, in metal.
 float DefenceValue()
 {
@@ -192,6 +226,20 @@ float DefenceTarget()
 		for (uint i = 0; i < gLPos.length(); ++i) {
 			if (gLExtract[i] > 0.f)
 				fsum += MexFloorFactor(gLPos[i]);
+		}
+		// PLANTS COUNT TOO, or the two halves disagree. The site loop now
+		// floors a slot beside a plant (PlantInReach), and this global
+		// allowance is what licenses that spend -- the comment above says it:
+		// the site loop will not buy a turret the global target says we
+		// already have enough of, so both must count the same things.
+		for (uint i = 0; i < ComLen(); ++i) {
+			const int d = gComDef[i];
+			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+				|| (Catalog::gBuildsList[d].length() == 0)
+				|| (Catalog::gBuildPower[d] <= 0.f))
+				continue;
+			if (OnMap(gComPos[i]))
+				fsum += MexFloorFactor(gComPos[i]);
 		}
 		gMexFloorSum = MexCoverFloorM() * fsum;
 	}
