@@ -127,9 +127,12 @@ WHAT IS MISSING:
   3. Radar and jammer as squad MEMBERS rather than base structures -- the play
      needs both moving with the ball.
   4. Anchor fragility: "when the mammoth dies the whole squad breaks down fast."
-     A one-anchor formation is a single point of failure and the model should
-     see that -- either anchor redundancy, or the anchor's survivability priced
-     as the thing the whole squad's value rests on.
+     His answer, asked directly: "just add more mammoths to the squad :-P" --
+     so this needs no special mechanism, only the right quantity. The anchor
+     requirement is absorbing HP against what is incoming, so it scales with
+     the squad: a bigger ball wants MORE anchors, not a tougher one, and the
+     redundancy falls out of the same arithmetic. Do not build a
+     single-point-of-failure rule for it.
 
 
 ## Surprise Air Eco attack! (special temporary strategy to swap to in the middle of a game)
