@@ -2219,11 +2219,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 		if (it != types.end()) {
 			switch (it->second) {
 				case IFighterTask::FightType::RAID: {
-					const std::set<IFighterTask*>& guards = GetTasks(IFighterTask::FightType::GUARD);
-					for (IFighterTask* t : guards) {
-						if (t->CanAssignTo(unit)) {
-							task = t;
-							break;
+					// apex: A RAIDER'S FIRST JOB IS TO RAID. This scanned GUARD
+					// tasks FIRST and joined any that would take the unit, so
+					// with guard duty available a raid pool never formed at
+					// all: measured 2026-09-01, guard peaked at 19 tasks while
+					// raid peaked at ONE task holding 260 metal, in a game
+					// apexearth watched us take none of the openings the enemy
+					// took every time ("We 100% have opportunities. The enemy
+					// takes the opportunities - we never do").
+					//
+					// The raid pool is offered the unit first; guard duty still
+					// gets it when no raid can be formed, which is the case the
+					// original order was protecting.
+					const bool raidFirst = circuit->GetTunable("apex_raid_first", 1.f) > 0.f;
+					if (raidFirst) {
+						task = Enqueue(TaskF::Defend(IFighterTask::FightType::RAID, raid.min));
+					}
+					if (task == nullptr) {
+						const std::set<IFighterTask*>& guards = GetTasks(IFighterTask::FightType::GUARD);
+						for (IFighterTask* t : guards) {
+							if (t->CanAssignTo(unit)) {
+								task = t;
+								break;
+							}
 						}
 					}
 					if (task == nullptr) {
@@ -2248,7 +2266,53 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 						}
 					}
 					if (task == nullptr) {
-						const float power = std::max(minAttackers, enemyMgr->GetPreMaxGroupThreat());
+						// apex: A BAR WE CANNOT REACH IS NOT CAUTION, IT IS
+						// PARALYSIS. This was max(minAttackers,
+						// GetPreMaxGroupThreat()) -- the influence of the
+						// enemy's single LARGEST group -- so a defence pool
+						// could only ever promote to ATTACK by matching their
+						// biggest blob. Measured 2026-09-01 (4v4 vs BARb hard,
+						// Comet Catcher): their largest group reached 48 units
+						// and 39,257 army against our whole army of 1,786, and
+						// the AI created ZERO attack tasks in twenty minutes
+						// while building 60,547 metal of army. It is also
+						// self-locking: the mayReinforce escape in DefendTask
+						// needs an ATTACK task to already exist, and none can
+						// exist until someone clears the full bar.
+						//
+						// apexearth: "If we see a large enemy army at one
+						// place, then we know where their army is. we can
+						// defend against that army at home, and take 1/3rd of
+						// our army to kill the enemy base." That is the right
+						// question -- is there something we can beat -- and it
+						// is not answered by their largest concentration. So
+						// the bar is also capped by a share of OUR OWN army: a
+						// pool holding that share is a real force and goes,
+						// whatever they have massed elsewhere.
+						// IN THE SAME CURRENCY. The first version of this cap
+						// used GetArmyCost(), which is METAL, against
+						// GetPreMaxGroupThreat(), which is INFLUENCE -- so the
+						// cap never bit and attack stayed at 0 tasks on the
+						// re-run. attackPower on a fighter task is summed from
+						// GetPower(), the same quantity the enemy groups are
+						// measured in, so our own army's power is the sum over
+						// our fighter pools.
+						float ourPower = 0.f;
+						for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK,
+						                                   IFighterTask::FightType::DEFEND,
+						                                   IFighterTask::FightType::RAID,
+						                                   IFighterTask::FightType::GUARD}) {
+							for (IFighterTask* t : GetTasks(ft)) {
+								ourPower += t->GetAttackPower();
+							}
+						}
+						const float ourShare = ourPower
+								* circuit->GetTunable("apex_attack_share", 0.34f);
+						float power = enemyMgr->GetPreMaxGroupThreat();
+						if ((ourShare > 0.f) && (ourShare < power)) {
+							power = ourShare;
+						}
+						power = std::max(minAttackers, power);
 						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
 					}
 				} break;

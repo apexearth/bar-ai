@@ -163,15 +163,20 @@ float DefenceTarget()
 	// ProposeSuper already budgets against. Seconds of economic power, so it
 	// scales with income at every stage and needs no cap: at 40 metal/s it is
 	// a handful of light towers, at 400 it can carry a heavy gun.
-	// The rear specialist buys NEITHER army nor defence while it is still
-	// building the economy it named (apexearth 2026-08-31: "this means they
-	// make no army and no defense until like 20 minutes into the game").
-	// Returned before the per-mex floor below on purpose -- that floor is a
-	// defence target too, and leaving it standing would be defence by another
-	// name. EcoDangerNear restores everything the moment the ground is
-	// actually contested.
-	if (EcoRoleGrowing())
-		return 0.f;
+	// THE REAR SPECIALIST STILL BUILDS DEFENCE. This returned 0 while the role
+	// was growing, on an over-literal reading of "no army and no defense until
+	// like 20 minutes into the game" -- and watching it play, he corrected it:
+	// "If we were to have an eco player on a map like this they certainly
+	// would need to be making defense."
+	//
+	// It was also self-defeating. The eco player cannot reach the economy that
+	// ends the role if it is being eaten on the way there, and measured on
+	// Comet Catcher 4v4 that is exactly what happened: zero defence metal at
+	// minutes 6, 12 and 18, economy peaking at 127 of the 500 it needed, then
+	// falling. Army is what the role gives up; the towers that keep its
+	// economy alive are not negotiable.
+	//
+	// (ArmyTarget still returns 0 while growing -- that half stands.)
 	const float hold = ai.GetTunable("apex_def_eco_s", TUNE_DEF_ECO_S);
 	float t = EcoPowerM() * ((hold > 0.f) ? hold : 30.f);
 	// ...and the per-mex floor is a target too. The site loop will not buy a

@@ -647,6 +647,84 @@ float LineTerrainMul(int plantDef)
 	return (m > 1.f) ? 1.f : m;
 }
 
+// WHAT THE TEAM ALREADY FIELDS.
+//
+// apexearth, watching a 4v4 on Comet Catcher 2026-09-01: "I'm still seeing us
+// start with 4 bot labs on comet catcher. Enemy seems to have done 2 bot labs,
+// 1 vehicle, and 1 air."
+//
+// Four players, one map, one valuation, no coordination -- so all four compute
+// the same answer and all four build it. The duplicate-line rule right below
+// this reads ComLen(), OUR OWN commitment ledger, so it cannot see a teammate's
+// lab at all; the only team-aware thing in the whole plant want is the naval
+// lead's distance. BARb ends up with 2 bots, a vehicle and an air plant and so
+// has answers we do not.
+//
+// A teammate's line is NOT a duplicate of mine -- their build power does not
+// claim my ground and their cons do not serve my sites. What it does cover is
+// the PRODUCTION half: the unit types that line fields exist on the team
+// whether I built it or not. So this discounts prodOwn only, exactly where
+// FoeTierPlantMul and LineTerrainMul already apply, and leaves conHalf whole.
+//
+// Not exclusivity: nothing forbids a fourth bot lab. It simply prices below the
+// first vehicle plant once three teammates already field bots, which is the
+// difference between a rule and a value.
+int gTeamPlantAt = -999999;
+array<int> gTeamPlantN;
+
+void TeamPlantRefresh()
+{
+	if (ai.frame - gTeamPlantAt < 10 * SECOND)
+		return;
+	gTeamPlantAt = ai.frame;
+	if (int(gTeamPlantN.length()) <= Catalog::gDefCount)
+		gTeamPlantN.resize(Catalog::gDefCount + 1);
+	for (int i = 0; i <= Catalog::gDefCount; ++i)
+		gTeamPlantN[i] = 0;
+	// Publish what WE hold, so every mate can read it.
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		const int cd = gComDef[ci];
+		if (Catalog::gBuildsList[cd].length() == 0)
+			continue;
+		if ((gComState[ci] != CS_FINISHED)
+			&& ((gComTask[ci] is null)
+				|| (Requests::Workers(gComTask[ci]) == 0)))
+			continue;
+		ai.PublishTeamValue("plant" + cd, 1.f);
+	}
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		int n = 0;
+		for (uint m = 0; m < mates.length(); ++m) {
+			const int t = int(mates[m]);
+			if (t == ai.teamId)
+				continue;   // our own copies are the duplicate rule's job
+			if (ai.ReadTeamValue(t, "plant" + d, 0.f) > 0.5f)
+				++n;
+		}
+		gTeamPlantN[d] = n;
+	}
+}
+
+// The production half's discount for a line the team already fields. 1.0 when
+// nobody has it; falling as mates take it up, never to zero -- a fourth copy
+// still produces, it is just no longer the team's best use of the metal.
+float TeamLineMul(int d)
+{
+	if (ai.GetTunable("apex_team_line", TUNE_TEAM_LINE) <= 0.f)
+		return 1.f;
+	TeamPlantRefresh();
+	if (int(gTeamPlantN.length()) <= d)
+		return 1.f;
+	const float w = ai.GetTunable("apex_team_line", TUNE_TEAM_LINE);
+	return 1.f / (1.f + w * float(gTeamPlantN[d]));
+}
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -810,7 +888,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
-		const float prodOwn = prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d);
+		const float prodOwn = prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d)
+				* TeamLineMul(d);
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;

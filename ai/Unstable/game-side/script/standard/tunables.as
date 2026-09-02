@@ -2448,6 +2448,15 @@ const float TUNE_LINE_TERRAIN = 1.f;
 // standoff, never pull a row closer than its own reach. 0 restores "stand at
 // your own range" for every armed row, which is the control arm.
 const float TUNE_SCREEN_GAP = 200.f;
+
+// How hard a production line is discounted when TEAMMATES already field it.
+// The production half is divided by (1 + this * matesWithIt), so at 1.0 the
+// second team copy is worth half and the third a third. apexearth, watching a
+// 4v4: "I'm still seeing us start with 4 bot labs on comet catcher. Enemy seems
+// to have done 2 bot labs, 1 vehicle, and 1 air." Not exclusivity -- a fourth
+// bot lab is still allowed, it just prices below the first vehicle plant.
+// 0 restores the old behaviour, where every player reasons alone.
+const float TUNE_TEAM_LINE = 1.f;
 // manager/brain/market/want_energy.as, price.as [toggle 0/1] -- Count the
 //   energy draw of work already ORDERED into the pull that prices energy.
 //   Not a magnitude: the quantity added is arithmetic off the catalog

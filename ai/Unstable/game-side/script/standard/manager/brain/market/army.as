@@ -809,14 +809,22 @@ bool EcoRoleActive()
 	const float mine = mx * mx + mz * mz;
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
 	gEcoRole = (mine >= d1) && (dmed > 1.f) && (mine >= dmed * margin * margin);
-	// LINE-ABREAST STARTS ELECT NOBODY under the margin, and a big team with
-	// no rear economist is every player playing front-line (measured
-	// 2026-08-28: eco=1 in 0 of 92 samples across an entire 4v4, and again
-	// on Supreme Isthmus 8v8). With four or more allies the rear-most takes
-	// the role regardless of margin -- someone is always hindmost, and a
-	// team that size can spare its most protected seat.
-	if (!gEcoRole && (hx.length() >= 4) && (mine >= d1) && (dmed > 1.f))
-		gEcoRole = true;
+	// THE OVERRIDE IS GONE. It read: with four or more allies the rear-most
+	// takes the role REGARDLESS OF MARGIN, on the reasoning that someone is
+	// always hindmost. That is true and it is not a reason -- on a
+	// line-abreast start nobody is meaningfully safer, and the margin test
+	// above had already said so correctly.
+	//
+	// Measured 2026-09-01, Comet Catcher 4v4 vs BARb hard: team 3 elected as
+	// the rear specialist on a map where no seat is protected, held
+	// growing=1 for the entire game (its economy peaked at 127 against the
+	// 500 crossover and then fell as it was eaten), and spent ZERO metal on
+	// defence at minute 6, 12 and 18. apexearth, watching: "Some maps... like
+	// this one... especially when it is a 4v4... we shouldn't have an eco
+	// player."
+	//
+	// So the margin decides, always. A team with no genuinely protected seat
+	// elects nobody, which is the right answer for a line-abreast start.
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
 		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
