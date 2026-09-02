@@ -707,6 +707,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// Narrow on purpose, and self-limiting: it fires only while we own NO
 	// ground defence at all, and the first tower ends it -- DefenceValue turns
 	// positive and ordinary pricing resumes. It is one turret, not a wall.
+	// AND HE DOES NOT LEAVE UNTIL IT IS THERE. apexearth: "just refuse to
+	// leave our stuff unguarded". Choosing the gun first was not enough on its
+	// own -- he still walked off to the next mex while the order sat unbuilt --
+	// so while the opening cluster has no gun, work OUTSIDE it is not on the
+	// menu at all. The moment one tower stands, DefenceValue turns positive and
+	// this whole branch stops existing.
 	if (isComm && (DefenceValue() <= 0.f)) {
 		for (uint i = 0; i < ranked.length(); ++i) {
 			if ((ranked[i].kind != WK_PROTECT) || (ranked[i].def is null))
