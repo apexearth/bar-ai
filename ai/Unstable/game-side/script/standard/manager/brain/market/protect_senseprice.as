@@ -9,9 +9,31 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 {
 	at = core;
 	gain = 0.f;
+	// THE HELD LINE GETS ITS EYES, ITS JAMMER AND ITS AA FIRST (his doctrine:
+	// "T2 radar and T2 jammer... only after all that, AA flak", and after the
+	// 4v4 whose line stood ten minutes without any: "One thing we didn't do
+	// well that game was making Jammers/radar up front, and anti air"). One
+	// of each per line section, sited a pitch behind the guns, only on quiet
+	// ground; the base's own logic below is untouched once the line has them.
+	AIFloat3 lineAt;
+	int lineN = 0;
+	// ...and only ground our army plainly owns: the choke flickers hot and
+	// cold as the fight moves, and siting on "quiet this second" sent
+	// builders 3,000 elmos to let go on arrival (67 let-gos, 113 AA orders
+	// at the front for 4 standing, in one 20-minute 4v4).
+	const bool lineUp = WallLineHeld(lineAt, lineN, 2)
+			&& !Builder::SiteHot(lineAt)
+			&& (ai.GetAllyInflAt(lineAt) > ai.GetEnemyInflAt(lineAt) * 2.f);
 	if (cls == PROT_RADAR) {
 		AIFloat3 gapAt;
 		float unseenFrac = 0.f;
+		if (lineUp && (Catalog::gRadarR[d] > 1.f)
+			&& !ProtCovered(PROT_RADAR, lineAt, Catalog::gRadarR[d] * 0.6f))
+		{
+			at = lineAt;
+			gain = (gProtM + ArmyValue()) * rate;
+			return gain > 0.f;
+		}
 		if (Gate(GATE_RADAR_GAP,
 				!RadarGap(unit.GetPos(ai.frame), gapAt, unseenFrac)))
 			return false;
@@ -49,6 +71,14 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		const float jr = JamSpacing(d);
 		AIFloat3 jat = core;
 		bool found = false;
+		// The line is a tower concentration whatever their artillery is
+		// doing: a jammer there hides the guns from the radar their attack
+		// is aimed by, and it is the second thing his fortification lists.
+		if (lineUp && !ProtCovered(PROT_JAM, lineAt, jr)) {
+			at = lineAt;
+			gain = gProtM * rate * 0.8f;
+			return gain > 0.f;
+		}
 		for (uint jd = 0; jd < gProtPos[PROT_DEF].length() && !found; ++jd) {
 			int nearDef = 0;
 			for (uint jk = 0; jk < gProtPos[PROT_DEF].length(); ++jk) {
@@ -117,6 +147,11 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			AIFloat3 aat;
 			if (RimGapSite(PROT_AA, aat))
 				at = aat;
+			// ...and the held line before the rim, once air has been seen
+			// (the gate below), while nothing that shoots up covers it.
+			if (lineUp && (Catalog::gMaxRange[d] > 1.f)
+				&& !ProtCovered(PROT_AA, lineAt, Catalog::gMaxRange[d] * 0.8f))
+				at = lineAt;
 		}
 		// AS SOON AS WE HAVE SEEN ANY (apexearth: "just make the AA if
 		// we've seen enemy air... it doesn't have to be a ton"). Sized off

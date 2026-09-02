@@ -402,6 +402,34 @@ int WallLineSlots()
 	return n;
 }
 
+// THE HELD LINE, for what fortifies it. apexearth 2026-09-02, after a 4v4
+// whose line stood for ten minutes: "One thing we didn't do well that game
+// was making Jammers/radar up front, and anti air." The centroid of the
+// line slots a standing tower covers, one pitch back toward home so the
+// sensor stands behind the guns; `n` is how many slots are held. False
+// while fewer than `minHeld` are.
+bool WallLineHeld(AIFloat3& out at, int& out n, int minHeld)
+{
+	WallPrep();
+	n = 0;
+	if (!gWallLineOk)
+		return false;
+	float sx = 0.f, sz = 0.f;
+	for (uint i = 0; i < gWallLine.length(); ++i) {
+		if (!gWallLine[i] || gWallOpen[i])
+			continue;
+		sx += gWallP[i].x;
+		sz += gWallP[i].z;
+		++n;
+	}
+	if (n < minHeld)
+		return false;
+	const float pitch = Brain::LightTowerRange()
+			* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
+	at = AIFloat3(sx / float(n), 0.f, sz / float(n)) - gWallF * pitch;
+	return OnMap(at);
+}
+
 // Where the line's anchor stands on the home->enemy axis; -9 without a line.
 float WallLineFwd()
 {
