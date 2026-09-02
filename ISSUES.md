@@ -90,85 +90,50 @@ and 40s arms, but a bigger army means a smaller energy grid. That is confounded
 with the army change and separates nothing. The clean test is converters
 STANDING and `conv batch` firing at a fixed army setting.
 
-## 2026-08-31 — FRONT DEFENCE: the line is drawn along the TEAM's band, and the wall generator places 96% of everything
+## 2026-09-02 — FRONT DEFENCE: the line now forms in 1v1; what is still open
 
-apexearth, watching: "Our coastline defense is much more formidable than our
-frontline defense... we have almost no defenses really on our front line. We
-need to do a lot better there." And on the line itself: "the logic there sucks
-btw, if we have 1 scout in their territory all the sudden our line draws through
-the middle of them."
+The 2026-08-31 entry ("the line is drawn along the TEAM's band, and the wall
+generator places 96% of everything") is closed by the 2026-09-02 commit that
+carries the mechanisms and the numbers; `python tools/test_frontline.py` is
+the regression contract (a gun per mex by minute 8, a line of >= 4 towers
+>= 800 wide between us and them by minute 14, a factory by minute 4, no mex
+with more than two guns on it). Residue, each measured in the same batteries
+(Comet Catcher 1v1 vs BARb hard, +50%, 20 min):
 
-Measured, `matches/watch-isthmus-trbl` (Supreme Isthmus v2.1, 8v8 mirror, +100%,
-26.6 min, correct trbl 0.45 boxes):
-
-| | |
-|---|---|
-| towers standing at 26 min | **22** |
-| wall closure (`tools/wall_check.py`) | **0.17** |
-| defence sites from the `wall` generator | **669 / 696** |
-| from the `front` generator | **27** |
-| from the `ring` generator | **0** |
-| sites chosen on the REAR half (`fwd < 0`) | **60%** |
-| median builder walk to a chosen site | 1195 elmos; 38% over 1500 |
-| `ring-diag` r/sep | mean 0.60, **max 0.98** |
-| `front-diag` lane crossing | mean 0.69, **max 1.15** |
-
-r/sep 0.98 and a lane crossing at 1.15 are a line drawn AT and PAST the enemy
-centroid.
-
-MECHANISM, and it is not the scout alone. `Military::RebuildRing` marches each
-ray outward while `ai.GetAllyInflAt(p)` clears a bar. That field is ally-WIDE
-and CircuitAI's `CInfluenceMap::AddMobileArmed` stamps every allied mobile
-armed unit's power over its threat range, so (a) a forward unit paints ground as
-ours, and (b) far worse in a team game, a ray running sideways ALONG the team's
-own band never leaves friendly influence and marches until the `march = sep`
-cap. The 0.98 figure is that cap being hit, not a battlefield. The file's own
-comment already names this failure and the sep cap is the band-aid for it.
-
-`frontline.as` fixed the same class of bug for the OTHER territory field in
-2026-08 -- "A structure cannot walk, so a structure is what owning ground
-means", `Front::StampHeld` -- and `RebuildRing` never got the same treatment.
-
-FIX IN FLIGHT (uncommitted until measured): the ray stops when the sample leaves
-our own sector, using `Front::Mine` -- the Voronoi split over teammate homes the
-perimeter already uses. Geometry says this cuts the sideways rays and keeps the
-forward ones: a mate's perpendicular bisector runs roughly parallel to the enemy
-bearing. In a 1v1, or before a mate has published a home, it answers true and
-costs nothing. `ring-diag` now reports `sector=N`, the count of rays it stopped.
-
-STILL OPEN, and it is a SEPARATE bug from the ring -- the wall does not read
-gRayR at all, so the ring fix above will not touch it.
-
-The front generator is not losing an auction: `DefSiteFill` adds
-`Military::FrontBuildSpots` only under `if (!wallOn && ...)`, and the wall is on
-by default. Front-line spots, closure-ring bearings and asset centroids are all
-switched OFF when the wall is on, by design (2026-08-30, the wall paradigm).
-That is why front=27 and ring=0 -- nothing to reprice.
-
-The wall has its OWN front line (`gWallLine`, "slots along the perpendicular to
-the home->enemy axis"), and `apex: fronttowers` says what it is worth. Per
-player, same game:
-
-| player | front built / metal | back built / metal | lineFill | rimDAvg |
-|---|---|---|---|---|
-| a | 9 / 1,125 | 14 / 13,645 | 0.00 | 138 |
-| b | 0 / 0 | 28 / 36,500 | 0.50 | 86 |
-| c | 0 / 0 | 40 / 24,510 | 1.00 | 192 |
-| d | 1 / 90 | 11 / 4,215 | 0.50 | -88 |
-| e | 4 / 675 | 50 / 31,535 | 1.00 | 0 |
-| f | 0 / 0 | 45 / 35,440 | 1.00 | -138 |
-
-Front defence metal is 0-1,125 a player; back defence metal is 4,215-36,500.
-An order of magnitude, which is exactly the asymmetry he reports.
-
-The suspicious number is `lineFill=1.00 while front standing=0`. WallLineFill
-counts a line slot as held when `!gWallOpen[i]`, and WallEmitSlot sets open
-false when ANY standing tower reaches the slot -- so rear towers are closing
-the line by reach and the AI reads its front as finished. `rimDAvg` at 0 to
--138 says the average tower sits ON or BEHIND the rim. Next step is to find
-whether the line's forward radius is collapsing onto the rim, or whether the
-reach test is simply the wrong question for a line slot. Instrument before
-repricing.
+- **The line is T1 and stays T1.** After T2 the T1 hands stop buying defence
+  (`xT1late=0.020` x `xTeamPow=0.035` on an LLT once a Pulsar is the team's
+  best) and the T2 con prices its own gun through `xWallEff=0.141`, so
+  defence held 870 of a 16,988 target at minute 18 (`apex: targets`) and
+  towers were lost faster than replaced (8 standing at 18 min from 10 at 16).
+  His fortification doctrine (T2 con builds T2 guns, nanos heal them) has no
+  path while both discounts stand; the dominance rule already drops dominated
+  towers, so the per-metal `apex_wall_efficient` discount is now a second
+  penalty on the only candidate left.
+- **The commander walks to the line and dies there.** `Decide` exempts wall
+  work from the 400-elmo forward limit on his ruling that commanders are good
+  early wall makers; with the line at fwd 0.3-0.45 he walked 2,000 elmos and
+  died to pawns at fwd 0.43 (fl-b s5, the only loss with a line standing).
+  Exposure is charged to non-defence wants only; his own 2,700 metal is not
+  in the price of a forward tower.
+- **The opening wedge on the (1460,2976) Comet Catcher start.** Twice (seed 2
+  and seed 6) a solar was drawn before the lab, landed 400 elmos from the
+  anchor, and the lab order then failed to place three times
+  (`task-die armlab fails=3 framed=0`), first factory at 8-18 min, game lost.
+  Not a defence bug -- `Requests::Take` searches 256 elmos around a probed
+  site -- but the defence rules that keyed on an ORDERED plant made it worse
+  and now wait for a frame (`PlantFramed`).
+- **The e-stall hoist owned the opening.** Before the fix 36-80% of builder
+  elections in the first eight minutes were `why=estall`, every one joining
+  the same solar. Now one generator on the way ends the hoist, but the stall
+  itself is the ENERGY entry above: the lab eats the metal, solars starve.
+- **Nanos outbid guns early.** `buildpower/nano` wins at v=50-54 against
+  defence at 20-40 through minutes 2-8 (three nanos by minute 8 = seven
+  LLTs); `apex: budget` reads bp=0.67-0.95 against its 0.16 target. Not
+  touched here.
+- **Team games are unmeasured.** Every battery above is a 1v1; `FoeRef` uses
+  the mirror of the team's homes, which is right for lr/tb boxes and wrong
+  for a corner start. Run `test_frontline.py` on a 4v4 before believing it
+  there.
 
 ## 2026-08-31 — NANO: the fortification site is priced and then thrown away
 

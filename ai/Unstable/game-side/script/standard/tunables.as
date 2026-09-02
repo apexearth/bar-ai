@@ -891,11 +891,12 @@ const float TUNE_DEF_SITE_WALK = 1.f;
 //   mex beside it still loses the roll about half the time -- which is what
 //   "we don't immediately make the light tower" looks like from the outside
 //   (apexearth, twice). This lets ONE want skip the lottery: a ground-defence
-//   want standing on a mex of ours that is still under apex_mex_cover_floor,
-//   proposed by a builder already inside the tower's own reach of it. The same
+//   want sited at a mex of ours that has no gun ordered or standing, proposed
+//   by a builder already inside the tower's own reach of it. The same
 //   queue-jump apex_super_push and the defence-panic path already use.
 //   Deliberately narrow: it cannot fire away from a mex, cannot fire once the
-//   mex has its floor, and cannot fire for a builder that would have to walk.
+//   mex has its first gun, and cannot fire for a builder that would have to
+//   walk -- one light tower per extractor at most.
 const float TUNE_COVER_PUSH = 1.f;
 // manager/brain/facqueue.as [metal] -- One torpedo unit wanted per this much
 //   seen enemy submarine value (plus one).

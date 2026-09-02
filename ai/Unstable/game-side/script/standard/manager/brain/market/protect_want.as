@@ -206,6 +206,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			bool bestIsFront = false;
 			bool bestIsRing = false;
 			bool bestIsWall = false;
+			bool bestIsLine = false;
 			// THE ASKER'S OWN GUNS ARE TOLERANCE (his ruling: commanders are
 			// good early wall makers because they can defend themselves). A
 			// negative cached prev is a wall slot the danger gate refused,
@@ -215,12 +216,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			const float uGuardM = (PfKillRef() > 0.f)
 					? (Catalog::gSurfT[uid] / PfKillRef()) : 0.f;
 			float wallPullP = 0.f;
-			{
-				const float horizP = ai.GetTunable("apex_exposed_loss_s",
-						TUNE_EXPOSED_LOSS_S);
+			// The exposure window every site's prevention rate is scored
+			// over (and the pull is amortised over); a walk longer than it
+			// is a post that stands for none of it.
+			float horizS = ai.GetTunable("apex_exposed_loss_s",
+					TUNE_EXPOSED_LOSS_S);
+			if (horizS <= 1.f)
+				horizS = TUNE_EXPOSED_LOSS_S;
+			if (PlantFramed()) {   // see the fill: no wall before a base
 				const float gapP = DefenceTarget() - DefenceValue();
-				if ((horizP > 1.f) && (gapP > 0.f))
-					wallPullP = gapP / horizP;
+				if (gapP > 0.f)
+					wallPullP = gapP / horizS;
 			}
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
@@ -253,8 +259,22 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						rentS = PfMetalPerCell() * PfCrowd()
 								* float((Catalog::gAreaCells[d] > 0)
 									? Catalog::gAreaCells[d] : 1);
-					const float score = prev
-							/ (kCost + rentS + wSec * wage + prev * wSec);
+					// WHAT THE POST PREVENTS OVER THE EXPOSURE WINDOW, per
+					// metal spent -- the walk shortens the window it stands
+					// for and bills the builder's time, nothing more.
+					//
+					// It was prev / (kCost + wSec*wage + prev*wSec): the
+					// walk charged at the site's own prevention rate. That
+					// is 1/(payback + walk), and a pull-priced slot pays
+					// back in a second or two, so among wall slots the
+					// score reduced to 1/walk and the nearest open slot won
+					// whatever it was worth -- the line lost to the rear
+					// ring on distance alone until the ring closed.
+					float standS = horizS - wSec;
+					if (standS < 0.f)
+						standS = 0.f;
+					const float score = prev * standS
+							/ (kCost + rentS + wSec * wage);
 					if (score > bestScore) {
 						bestScore = score;
 						bestGain = prev;
@@ -262,6 +282,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestIsFront = gDsFront[d][si];
 						bestIsRing = gDsRing[d][si];
 						bestIsWall = gDsWall[d][si];
+						bestIsLine = bestIsWall && WallSlotLine(si);
 					}
 				}
 			}
@@ -456,6 +477,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " front=" + (bestIsFront ? 1 : 0)
 					+ " ring=" + (bestIsRing ? 1 : 0)
 					+ " wall=" + (bestIsWall ? 1 : 0)
+					+ " line=" + (bestIsLine ? 1 : 0)
 					// Distance to the nearest map wall, and the share of the
 					// approach that is real map there. The wall used to PAY.
 					+ " edgeD=" + int(EdgeDist(bestAt))
@@ -497,7 +519,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		const float speed = Catalog::gSpeed[uid];
 		const float walkSec = (speed > 1.f)
 				? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
-		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c,
+				cls != PROT_DEF);
 		if (rankNow && (cls == PROT_DEF) && (gDefRankDef.length() > 0))
 			gDefRankV[gDefRankV.length() - 1] = c.value;
 		if (cls == PROT_DEF) {

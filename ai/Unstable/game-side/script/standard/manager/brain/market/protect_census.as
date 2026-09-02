@@ -435,6 +435,7 @@ void LogFrontTowers()
 				? WallLineFill() : -1.f, "", 0, 2)
 		+ " lineSlots=" + ((ai.GetTunable("apex_wall", TUNE_WALL) > 0.f)
 				? WallLineSlots() : -1)
+		+ " lineFwd=" + formatFloat(WallLineFwd(), "", 0, 2)
 		+ " wallSlots=" + PfWallSlotCount());
 }
 

@@ -328,6 +328,7 @@ void RebuildRing(const AIFloat3& in home)
 		float edge = 0.f;        // last sample that was still ours
 		float safe = 0.f;
 		bool met = false;        // did the ray break on THEM, or just run out
+		float metAt = 0.f;       // ...and at what distance
 		bool wall = false;       // did it run out of map
 		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
@@ -351,17 +352,30 @@ void RebuildRing(const AIFloat3& in home)
 			// belongs to the ally whose home is nearest it. In a 1v1, or
 			// before any mate has published a home, it answers true and this
 			// costs nothing.
-			if (!Front::Mine(p)) {
-				++gRaySector;
-				break;
-			}
+			// (The sector split that used to live here is gone. It stopped a
+			// ray the moment it crossed into a teammate's half, which emptied
+			// the ring on a line-abreast team -- rays=0/24 -- and it was never
+			// shown to help. Reverted 2026-09-02.)
 			// THEM FIRST, so a cell they hold can never be recorded as ours. This
 			// is also what keeps the line out of the battle itself: where both
 			// fields are up, the last ground a builder can be sent to is the cell
 			// BEFORE the one they are standing in.
-			if (ai.GetEnemyInflAt(p) >= gRingFoeBar) {
+			// THEIRS MEANS THEY ARE STRONGER HERE, NOT MERELY PRESENT.
+			//
+			// The bar is 10% of their peak influence, and enemy influence
+			// bleeds over a unit's whole threat range -- so one scout within a
+			// thousand elmos trips it, and every forward ray broke at its FIRST
+			// sample. Measured: r/sep 0.03, a "front line" ninety elmos from
+			// our own centre, which is why front defence had nowhere to stand
+			// (apexearth: "I just want to see us make a frontline of turrets").
+			//
+			// Ground where our own influence still dominates is ours whoever is
+			// standing on it. The ray stops where theirs actually wins.
+			const float foeHere = ai.GetEnemyInflAt(p);
+			if ((foeHere >= gRingFoeBar) && (foeHere > ai.GetAllyInflAt(p))) {
 				met = true;
-				break;   // THIS is a front: somebody is standing there
+				metAt = d;   // remember WHERE, so a first-sample contact is
+				break;       // still a bearing we hold, not a discarded ray
 			}
 			if (ai.GetAllyInflAt(p) < gRingAllyBar)
 				break;   // our territory ended at the previous sample
@@ -375,6 +389,58 @@ void RebuildRing(const AIFloat3& in home)
 		// position against gRayR on its own bearing WITHOUT consulting gRayHot, so
 		// a 0 here would make every position in that sector read "on the border" --
 		// this is the same sentinel the rear arc above already uses.
+		// A RAY THAT MEETS THEM AT THE FIRST SAMPLE IS THE MOST FRONT-LINE
+		// BEARING THERE IS, AND WE WERE THROWING IT AWAY.
+		//
+		// `edge` is only recorded AFTER the enemy test passes, so a bearing
+		// where their influence reaches within one step of our own centre
+		// breaks with edge = 0, takes the `reach` sentinel, and reads hot =
+		// false. Measured tonight on Comet Catcher 4v4: ring-diag rays=0/24
+		// with contested=12 -- twelve rays met the enemy, twelve were rear
+		// arc, and NOT ONE was left hot, so FrontBuildSpots had nothing to
+		// offer and front-line defence was impossible however many other
+		// gates were opened. The ring emptied itself exactly when the enemy
+		// got close, which is precisely when the front line matters.
+		//
+		// Contact is not the absence of a front, it IS the front. A met ray
+		// holds ground up to where we met them; with no clear sample behind
+		// that, half the contact distance is the honest answer -- far enough
+		// to be ours, short of where they are standing.
+		if (met && (edge <= 0.f) && (metAt > 0.f))
+			edge = metAt * 0.5f;
+		// AND NEVER PAST THE GROUND WE ACTUALLY HOLD. Stopping only where the
+		// enemy DOMINATES fixed the ring collapsing to our doorstep (r/sep
+		// 0.03) and immediately overshot the other way -- ally influence is
+		// team-wide, so a ray kept finding friendly ground almost all the way
+		// to them: r/sep mean 0.86, max 0.99, a "front line" drawn on their
+		// side of the map. Neither reading is a front.
+		//
+		// Our territory ends where our BUILDINGS end -- the same rule
+		// Front::StampHeld settled on for the other territory field ("a
+		// structure cannot walk, so a structure is what owning ground means").
+		// The ray may reach one hold-radius past the furthest thing we own on
+		// its bearing, and no further.
+		{
+			float own = 0.f;
+			for (uint hi = 0; hi < Market::ComLen(); ++hi) {
+				const int hd = Market::gComDef[hi];
+				if (!Catalog::ValidId(hd) || Catalog::gMobile[hd]
+					|| !OnMap(Market::gComPos[hi]))
+					continue;
+				const AIFloat3 rel = Market::gComPos[hi] - home;
+				const float along = rel.x * dir.x + rel.z * dir.z;
+				if (along <= 0.f)
+					continue;   // behind us on this bearing
+				const float lat = rel.x * dir.z - rel.z * dir.x;
+				if ((lat > 900.f) || (lat < -900.f))
+					continue;   // not on this bearing's corridor
+				if (along > own)
+					own = along;
+			}
+			const float cap = own + Front::HoldRadius();
+			if ((own > 0.f) && (edge > cap))
+				edge = cap;
+		}
 		gRayR.insertLast((edge > 0.f) ? edge : reach);
 		gRaySafe.insertLast(safe);
 		gRayHot.insertLast(edge > 0.f);

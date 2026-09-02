@@ -737,7 +737,9 @@ int PfSlotFor(float pitch)
 	// the shifted point, so threat/cover/stake describe where the gun really
 	// stands.
 	const float fwdFrac = ai.GetTunable("apex_guard_forward", TUNE_GUARD_FORWARD);
-	const AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
+	AIFloat3 foeAt;
+	if (!FoeRef(foeAt))
+		foeAt = AIFloat3(-1.f, 0.f, -1.f);
 	for (uint k = 0; k < sw.length(); ++k) {
 		if (sw[k] <= 1.f)
 			continue;

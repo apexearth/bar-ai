@@ -170,8 +170,8 @@ void WallPrep()
 	// on the enemy bearing, running along the perpendicular until the map
 	// edge (a wall already) or an ally's lane (a slot closer to their home
 	// than ours is theirs to hold -- their line continues ours).
-	const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
-	if (OnMap(foeP)) {
+	AIFloat3 foeP;
+	if (FoeRef(foeP)) {
 		AIFloat3 fd = foeP - gPfMid;
 		const float foeD = sqrt(fd.SqLength2D());
 		if (foeD > 1.f) {
@@ -197,9 +197,26 @@ void WallPrep()
 			if (mexFwd + standoff > lineR)
 				lineR = float(int(mexFwd / WALL_QUANT)) * WALL_QUANT
 						+ standoff;
-			const float halfD = foeD * 0.5f;
+			// Halfway is measured from HOME, not from the base centroid: the
+			// centroid walks forward with every capped mex, so a cap taken
+			// from it put the line at 0.65 of the start separation -- their
+			// half of the map (measured: lineFwd=0.65, 42 wins for mex
+			// guards and none for the line, a commander dead at 0.43).
+			float halfD = foeD * 0.5f;
+			if (Builder::gHomeSet) {
+				const AIFloat3 hrel = gPfMid - Builder::gHomePos;
+				const AIFloat3 frel = foeP - Builder::gHomePos;
+				const float midAhead = (frel.x * fd.x + frel.z * fd.z) * 0.5f
+						- (hrel.x * fd.x + hrel.z * fd.z);
+				if (midAhead < halfD)
+					halfD = midAhead;
+			}
+			if (halfD < standoff)
+				halfD = standoff;
 			if (lineR > halfD)
 				lineR = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
+			if (lineR < standoff)
+				lineR = standoff;
 			const AIFloat3 anchor = gPfMid + fd * lineR;
 			if (OnMap(anchor)) {
 				gWallLineOk = true;
@@ -358,6 +375,13 @@ int WallLineSlots()
 			++n;
 	}
 	return n;
+}
+
+// Where the line's anchor stands on the home->enemy axis; -9 without a line.
+float WallLineFwd()
+{
+	WallPrep();
+	return gWallLineOk ? Military::ForwardFraction(gWallA) : -9.f;
 }
 
 float PfWallCover(uint i)  { return gWallCover[i]; }

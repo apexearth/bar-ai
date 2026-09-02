@@ -770,7 +770,12 @@ bool EcoRoleActive()
 	if (!Builder::gHomeSet)
 		return false;
 	array<Id>@ mates = ai.GetTeamIds();
-	if ((mates is null) || (mates.length() < 4))
+	// NOT IN A 4v4. apexearth 2026-09-02: "In a 4v4 we just don't want to have
+	// a player in the eco role." A four-player team has no seat far enough
+	// from the fighting to be worth giving up its army and defence -- the
+	// margin test below says the same thing on a line-abreast start, and this
+	// says it for the team size regardless of how the start is shaped.
+	if ((mates is null) || (mates.length() <= 4))
 		return false;
 	array<float> hx, hz;
 	float cx = 0.f, cz = 0.f;

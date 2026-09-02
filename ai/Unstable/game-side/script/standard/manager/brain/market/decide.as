@@ -49,6 +49,13 @@ const int   MEMO_STARVED = 450;   // 15s
 const uint  MEMO_N = 7;
 array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
 array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
+// A starved copy that was ALREADY deferred once recomputes next time whatever
+// the budget says. The stack calls the slots in one fixed order, so the two
+// starved recomputes a frame always went to the same two slots, and a def
+// that decides rarely -- the commander, every minute or two -- never got past
+// them: his protect copy stayed the frame-25 empty answer until another
+// builder's execution evicted it.
+array<array<bool>@> gMemoDeferred;
 
 Want@ WantCopy(Want@ s)
 {
@@ -98,11 +105,14 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	if (gMemoAt.length() == 0) {
 		gMemoAt.resize(MEMO_N);
 		gMemoW.resize(MEMO_N);
+		gMemoDeferred.resize(MEMO_N);
 		for (uint s = 0; s < MEMO_N; ++s) {
 			array<int> a(uint(Catalog::gDefCount + 1), -30000);
 			array<Want@> ws(uint(Catalog::gDefCount + 1));
+			array<bool> df(uint(Catalog::gDefCount + 1), false);
 			@gMemoAt[s] = a;
 			@gMemoW[s] = ws;
+			@gMemoDeferred[s] = df;
 		}
 	}
 	const int ud = int(unit.circuitDef.id);
@@ -119,11 +129,13 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	}
 	if ((gMemoAt[slot][ud] > -30000) && (gMemoFreshN >= 2)) {
 		// Past the normal budget: only a STARVED copy may still recompute,
-		// and at most two of those a frame -- see MEMO_STARVED above.
-		if ((ai.frame - gMemoAt[slot][ud] <= MEMO_STARVED)
-			|| (gMemoStarvN >= 2))
-		{
+		// and at most two of those a frame -- see MEMO_STARVED above --
+		// unless it was starved AND deferred the last time it was asked.
+		const bool starved = ai.frame - gMemoAt[slot][ud] > MEMO_STARVED;
+		if (!starved || ((gMemoStarvN >= 2) && !gMemoDeferred[slot][ud])) {
 			Perf::Note("memo.defer");
+			if (starved)
+				gMemoDeferred[slot][ud] = true;
 			return WantCopy(gMemoW[slot][ud]);
 		}
 		++gMemoStarvN;
@@ -132,6 +144,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	Perf::Note("memo.miss");
 	Want@ fresh = MemoSlotCall(slot, unit);
 	gMemoAt[slot][ud] = ai.frame;
+	gMemoDeferred[slot][ud] = false;
 	@gMemoW[slot][ud] = fresh;
 	return WantCopy(fresh);
 }
@@ -166,6 +179,26 @@ void MemoEvictKind(int k)
 				at[d] = -30000;
 		}
 	}
+}
+
+// A plant with a frame on the ground or standing. An ORDER is not one: the
+// order can still fail to place, and rules that key on it pull the commander
+// off the very lab they are waiting for.
+bool PlantFramed()
+{
+	if (Factory::gT1FacUnit !is null)
+		return true;
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (gComState[ci] == CS_ORDERED)
+			continue;
+		const int d = gComDef[ci];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0)
+			|| (Catalog::gBuildPower[d] <= 0.f))
+			continue;
+		return true;
+	}
+	return false;
 }
 
 IUnitTask@ Decide(CCircuitUnit@ unit)
@@ -343,6 +376,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// want skips the lottery rather than taking a proportional share of it.
 	// It stops the instant the first tower stands.
 	bool aaPanic = false;
+	// What put ranked[0] there -- logged on the decide line, because a hoist
+	// and a draw look identical from outside and were read as a broken draw.
+	string why = "draw";
 	if (aaEmerg) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_AIRDEF)
@@ -353,6 +389,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.insertAt(0, aa);
 			}
 			aaPanic = true;
+			why = "aa";
 			if (ai.frame >= gNextAaPanicLog) {
 				gNextAaPanicLog = ai.frame + 15 * SECOND;
 				AiLog("apex: AA PANIC -- seen "
@@ -400,6 +437,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.insertAt(0, dw);
 			}
 			aaPanic = true;   // reuse the skip-the-lottery flag
+			why = "defpanic";
 			if (ai.frame >= gNextDefPanicLog) {
 				gNextDefPanicLog = ai.frame + 15 * SECOND;
 				AiLog("apex: DEF PANIC -- losing "
@@ -420,7 +458,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// a row while the stall kept re-interrupting him (the tower is not an
 	// ENERGY task, so it was never exempt). Mid-HARD-stall the energy want
 	// takes the election outright; the roulette resumes when the bank does.
-	if (!aaPanic && HardEStall()) {
+	//
+	// ONE SOLAR ANSWERS "MAKE A BASIC SOLAR". With a generator already on
+	// the way the question is answered, and hoisting every further builder
+	// onto the same site adds hands to a job that is waiting on metal, not
+	// on lathes: measured, 14 of 17 opening elections were this hoist, all of
+	// them joining one solar, while three mexes stood without a gun. Energy
+	// keeps its ticket in the draw below like anything else.
+	if (!aaPanic && HardEStall() && (EMakeInFlight() <= 0.f)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
 				continue;
@@ -430,6 +475,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.insertAt(0, ew);
 			}
 			aaPanic = true;   // reuse the skip-the-lottery flag
+			why = "estall";
 			break;
 		}
 	}
@@ -452,6 +498,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.insertAt(0, sw);
 			}
 			superPush = true;
+			why = "super";
 			AiLog("apex: super-push t=" + ai.teamId + " "
 				+ SuperName(ranked[0].spotId) + ":"
 				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
@@ -468,7 +515,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// forward in general -- it closes exactly the gap between building a thing
 	// and protecting it.
 	bool coverPush = false;
-	if (!aaPanic && !superPush
+	// ...ONCE A PLANT EXISTS. Before the lab the jump put a light tower
+	// ahead of the factory (mex, mex, mex, tower, solar, lab -- and in one
+	// game tower after tower with no factory in 17 minutes). His order:
+	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
+	// the commander's first-gun rule below covers the lab the moment it is
+	// ordered.
+	if (!aaPanic && !superPush && PlantFramed()
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f))
 	{
 		const float floorWave = MexCoverFloorM()
@@ -479,39 +532,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			Want@ cw = ranked[ri];
 			if ((cw.kind != WK_PROTECT) || (cw.spotId != PROT_DEF))
 				continue;
-			// THE SITE COMES TO THE STRUCTURE, not the other way round.
+			// REVERTED. Retargeting the want to the nearest mex in reach was
+			// mine tonight and it was never shown to help -- mex coverage went
+			// 83% to 85%, inside the run-to-run spread -- while it demonstrably
+			// hurt: the same mex is the nearest one on every election, so the
+			// jump kept firing at it and the commander stacked SIX turrets on
+			// one extractor (apexearth, watching: "he makes like 6 mexes this
+			// game... finally he decides to defend one and he makes 6 turrets").
 			//
-			// This required the ranked want to ALREADY be sited at a mex --
-			// and it almost never is, because every defence site in this AI
-			// comes from the wall generator, which sites by base geometry (the
-			// building rim) and not by "what did we just build that is now
-			// naked". Measured this morning: 96% of sites from the wall, front
-			// generator 27 of 696, ring 0. So the queue jump had nothing to
-			// promote and mexes kept dying (apexearth, watching: "blue made two
-			// mexes which got killed... it's just about not making towers near
-			// the mexes you make. in early game why is that so impossible?").
-			//
-			// Same repair the opening lab got and verified: keep the want, move
-			// its POSITION to the uncovered thing this builder is standing at.
-			// Still bounded -- ground defence only, the structure must be
-			// within the tower's own reach of the builder, still under its
-			// floor, and still affordable.
-			AIFloat3 tgt = cw.pos;
-			if (!SiteIsMex(tgt) || (uAt.distance2D(tgt) > near)) {
-				float bd = -1.f;
-				for (uint mi = 0; mi < gLPos.length(); ++mi) {
-					if (gLExtract[mi] <= 0.f)
-						continue;
-					const float dd = uAt.distance2D(gLPos[mi]);
-					if ((dd <= near) && ((bd < 0.f) || (dd < bd))) {
-						bd = dd;
-						tgt = gLPos[mi];
-					}
-				}
-				if (bd < 0.f)
-					continue;   // nothing of ours in reach that wants cover
-				cw.pos = tgt;
-			}
+			// The queue jump goes back to what it was: it promotes a defence
+			// want that is ALREADY sited at a mex, and does not invent one.
+			// That leaves the real problem where it belongs -- the wall
+			// generator does not offer sites at the things we build -- instead
+			// of papering over it with a rule that spends without a bound.
+			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
+				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			const float floorHere = floorWave * MexFloorFactor(cw.pos);
@@ -542,16 +577,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);
 			}
-			// HOISTED, NOT EXEMPTED. This used to set coverPush and skip the
-			// draw outright, which turned every finished mex into a tower: 96
-			// pushes in one game and all 99 early ground-defence decisions were
-			// armllt, while metal took 28 of 265 (apexearth, watching: "we
-			// don't care enough about capturing mexes early on... the obvious
-			// accelerator would be to just capture more mexes, they only cost
-			// 30 metal"). A ~100-metal tower on every 30-metal claim halves the
-			// expansion rate. Putting it at rank 0 still makes it ground
-			// defence's argmax -- and its zero walk is a real price advantage
-			// the draw already reads -- but metal keeps its ticket.
+			// EXEMPT FROM THE DRAW AGAIN, for the FIRST gun only. The jump
+			// was cut back to a hoist when it bought a tower on every claim
+			// (96 pushes in one game, metal 28 of 265 elections) -- but that
+			// was the cover floor asking for more guns while cover stayed
+			// under it. A site is now offered only while its mex has NO gun
+			// ordered or standing (MexUnguardedInReach), so the most this can
+			// buy is one light tower per extractor, which is the ask
+			// (apexearth 2026-09-02: "1 sentry turret guarding each of our
+			// mexes at least"). Left to the draw, that gun lost to the next
+			// mex about half the time and mexes stood naked past minute six.
+			// The affordability bar above still holds it back at opening
+			// income.
+			why = "cover";
+			coverPush = true;
 			AiLog("apex: cover-push t=" + ai.teamId + " "
 				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
@@ -665,6 +704,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						Want@ drawn = ranked[ri];
 						ranked.removeAt(uint(ri));
 						ranked.insertAt(0, drawn);
+						why = "draw";   // the hoist above did not survive the draw
 					}
 					break;
 				}
@@ -715,6 +755,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		+ " (gain=" + formatFloat(top.gain, "", 0, 2)
 		+ " m=" + formatFloat(top.mCost, "", 0, 0)
 		+ " t=" + formatFloat(top.tCost, "", 0, 0) + ")"
+		+ " why=" + why
 		+ ((next is null) ? " over nothing"
 			: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
 				+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
@@ -775,6 +816,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						|| (Catalog::gBuildsList[pd].length() == 0)
 						|| (Catalog::gBuildPower[pd] <= 0.f))
 						continue;
+					// A plant that is only ORDERED is not there to guard, and
+					// the gun would take him off it: measured, the lab's
+					// order sat unplaced, the rule pulled him to a tower at
+					// minute three, and the lab died unframed at minute eight.
+					if (gComState[pi] == CS_ORDERED)
+						continue;
 					if (!OnMap(gComPos[pi]))
 						continue;
 					const float dd = here.distance2D(gComPos[pi]);
@@ -783,18 +830,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						best = gComPos[pi];
 					}
 				}
-				if (bestD >= 0.f) {
-					AIFloat3 at = best;
-					if (Base::Ready()) {
-						AIFloat3 f = Base::gFwd;
-						if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
-						at.x += f.x * 220.f;
-						at.z += f.z * 220.f;
-					}
-					if (OnMap(at))
-						ranked[i].pos = ProbedSite(ranked[i].def,
-								Catalog::Def(int(unit.circuitDef.id)), at);
+				// No plant yet means nothing to leave: the gun is not
+				// forced ahead of the lab, and the auction prices it as
+				// usual.
+				if (bestD < 0.f)
+					break;
+				AIFloat3 at = best;
+				if (Base::Ready()) {
+					AIFloat3 f = Base::gFwd;
+					if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
+					at.x += f.x * 220.f;
+					at.z += f.z * 220.f;
 				}
+				if (OnMap(at))
+					ranked[i].pos = ProbedSite(ranked[i].def,
+							Catalog::Def(int(unit.circuitDef.id)), at);
 			}
 			const int g0New = Requests::gGateSeen[Requests::G_BADREQ];
 			const int g0Can = Requests::gGateSeen[Requests::G_CANBUILD];

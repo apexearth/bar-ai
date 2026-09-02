@@ -79,6 +79,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		nWall = PfWallSlots(sites);
 	else
 		PfGuardSites(reach, sites);
+	// ...plus the ground beside every mex still without a gun. Rear sites,
+	// so they take the mex floor and the stream stake like any asset site;
+	// see MexGuardSites.
+	const uint mexG0 = sites.length();
+	MexGuardSites(sites, reach);
 	const uint nAsset = sites.length();
 	// THE DOORWAYS FIRST. apexearth 2026-08-29: "defend chokepoints ahead of
 	// where the mexes are... prevent the enemy from getting in there." Every
@@ -104,7 +109,22 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			sites.insertLast(site);
 		}
 	}
-	if (!wallOn && (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f)) {
+	// THE FRONT LINE IS OFFERED WHETHER OR NOT THE WALL IS ON.
+	//
+	// This read `!wallOn`, and the wall is on by default -- so front-line sites
+	// were switched off entirely, and every measurement all session showed it:
+	// 96% of defence sites came from the wall generator, the front generator
+	// won 27 of 696, the ring won 0, and `front-towers` read "front sites won
+	// 0x, 0 built, 0 standing" across a whole game. The wall follows the
+	// BUILDING RIM, so with the front generator silent the only slots on offer
+	// are wherever our buildings happen to be -- which is why 60% of chosen
+	// sites land BEHIND the base and none of them face the enemy.
+	//
+	// apexearth, having asked for this repeatedly: "you never make any good
+	// frontline defense, it never happens... frontline, frontline, frontline."
+	// The wall keeps the rear and the flanks; the front generator supplies the
+	// ground between us and them, and the auction prices both as it always has.
+	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
 		array<AIFloat3> line;
 		if (Military::FrontBuildSpots(line)) {
 			// BUILT A STEP BEHIND THE EDGE (his ruling: "both" -- setback
@@ -178,8 +198,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		bool behind = false;
 		for (uint sb = 0; !behind && (sb < gClAllyShield.length()); ++sb)
 			behind = gClAllyShield[sb];
-		AIFloat3 foeAt = aiEnemyMgr.GetEnemyPos();
-		if (behind && OnMap(foeAt) && (gShieldMates !is null)) {
+		AIFloat3 foeAt;
+		if (behind && FoeRef(foeAt) && (gShieldMates !is null)) {
 			int mate = -1;
 			float best = -1.f;
 			AIFloat3 mh;
@@ -236,8 +256,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// over the exposure horizon. Only open slots -- a slot a standing tower
 	// already covers earns nothing from the pull, so the ring completes one
 	// tower per slot and then deepens only where real threat prices it.
+	//
+	// ...AND NOT BEFORE THERE IS A BASE TO WALL. The pull is demand for a
+	// wall standing before anything arrives; before the first factory has a
+	// frame on the ground there is no base behind it, and at minute one it
+	// priced a light tower at 2.4x the lab (target 1,538 around 150 metal of
+	// mexes) -- measured, five towers in a row before the lab, lab at 8.3
+	// min, game lost. Evidence pricing and the per-mex floor still run.
 	float wallPull = 0.f;
-	if (wallOn) {
+	if (wallOn && PlantFramed()) {
 		const float horizW = ai.GetTunable("apex_exposed_loss_s",
 				TUNE_EXPOSED_LOSS_S);
 		const float gapM = DefenceTarget() - DefenceValue();
@@ -257,6 +284,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const bool isFront = ((si >= nAsset) && !isRing) || isAllyF;
 		const bool isGate = isFront && !isAllyF && (si < nAsset + nGates);
 		const bool isWall = wallOn && (si < nWall);
+		// A mex's own gun is part of the standing holding the target asks
+		// for ("1 sentry turret guarding each of our mexes at least"), so
+		// its site takes the same demand pull an open wall slot does. One
+		// gun: the site is only offered while the mex has none.
+		const bool isMexG = (si >= mexG0) && (si < nAsset);
 		// Only the asset prefix is in the field's slot cache; gates, front
 		// spots and ring sites read their senses live. Wall slots have their
 		// own stamp cache -- with the wall on, PfGuardSites never ran and
@@ -286,12 +318,20 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// Exposure-scaled both ways -- see MexFloorFactor above.
 		const float mexFloorHere = (mexFloorWave > 0.f)
 				? (mexFloorWave * MexFloorFactor(s)) : 0.f;
-		// ...and a PLANT takes the same floor as a mex -- see PlantInReach.
-		// A slot beside the opening lab had no mex in range, so it priced
-		// against a wave of zero and no LLT was ever worth building before
-		// the first raid arrived.
-		const bool floored = !isFront
-				&& (MexInReach(s, reach) || PlantInReach(s, reach))
+		// PLANTS NO LONGER CARRY A STANDING FLOOR. Giving every plant a
+		// mex-equivalent floor was mine, and it spammed the base: plants
+		// multiply, the floor is permanent, and the global allowance grew with
+		// them -- 20-26 towers a team by minute 10, in the base, where nothing
+		// is attacking (apexearth: "we make a retarded number of turrets around
+		// our base now... 1 mex doesn't need 10 sentry turrets around it").
+		//
+		// The opening lab is covered by the commander's first-gun rule
+		// instead, which is self-limiting to exactly ONE tower and ends the
+		// moment it stands.
+		// The floor buys a mex its FIRST gun and then stops -- see
+		// MexUnguardedInReach. A mex that already has one competes for more on
+		// price like anything else; it no longer gets a standing subsidy.
+		const bool floored = !isFront && MexUnguardedInReach(s, reach)
 				&& (mexFloorHere > threat);
 		if (floored)
 			threat = mexFloorHere;
@@ -353,11 +393,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// themselves"). The mark lives in the per-def cache; the tolerance
 		// is the asker's, applied outside it, so a con never inherits a
 		// commander's courage from a shared fill.
-		const bool pullBase = isWall && (wallPull > 0.f) && WallSlotOpen(si);
+		const bool pullBase = (wallPull > 0.f)
+				&& ((isWall && WallSlotOpen(si)) || isMexG);
 		float foeHere = -1.f;
 		bool pullHere = false;
 		if (pullBase) {
-			if (WallSlotAdjHeld(si)) {
+			if (isWall && WallSlotAdjHeld(si)) {
 				pullHere = true;
 			} else {
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
@@ -379,8 +420,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		{
 			const float dClose = wallOn ? WallAdds(s, reach)
 					: ClosureAdds(s, reach);
-			AIFloat3 outDir = isFront
-					? (aiEnemyMgr.GetEnemyPos() - s) : (s - gPfMid);
+			AIFloat3 foeO;
+			AIFloat3 outDir = (isFront && FoeRef(foeO))
+					? (foeO - s) : (s - gPfMid);
 			if (isFront || gPfRimOk)
 				stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
 		}
@@ -454,7 +496,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// no-evidence floor.
 		if (pullHere && (wallPull > 0.f)) {
 			float dirW = 1.f;
-			const AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
+			AIFloat3 foeP;
+			const bool foePOk = FoeRef(foeP);
 			// Line slots ARE the front -- full pull along their whole
 			// lateral run, which is what makes the towers a line across the
 			// lane instead of an arc hugging the base. And MORE than full
@@ -463,12 +506,20 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// to extend the whole way") makes an extending section worth
 			// more than a redundant deepening -- at flat urge the line sat
 			// at fill 0.33 when a 44-minute game timed out.
-			if (WallSlotLine(si)) {
+			// A mex's first gun ranks with the line, whatever its bearing:
+			// the two are the same obligation ("1 sentry turret guarding
+			// each of our mexes at least" beside "frontline, frontline,
+			// frontline"), and at equal pull the walk decides -- the hand
+			// that just capped the mex guards it, the rest extend the line.
+			// At 1.0 against the line's 2.0 the mex site lost even to the
+			// builder standing on it (measured: guard share 0.2-0.67 at
+			// minute six across six games, every placement a line slot).
+			if (isMexG || WallSlotLine(si)) {
 				const float lw = ai.GetTunable("apex_wall_line_w",
 						TUNE_WALL_LINE_W);
 				if (lw > 1.f)
 					dirW = lw;
-			} else if (OnMap(foeP)) {
+			} else if (foePOk) {
 				AIFloat3 toS = s - gPfMid;
 				AIFloat3 toF = foeP - gPfMid;
 				const float lS = sqrt(toS.SqLength2D());

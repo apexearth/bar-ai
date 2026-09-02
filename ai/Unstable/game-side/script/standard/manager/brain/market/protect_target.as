@@ -118,6 +118,134 @@ bool SiteIsMex(const AIFloat3& in pos)
 // Would a post here cover a standing mex? The per-mex floor is a claim about
 // mexes, and a guard site is the value-weighted centre of a cluster rather
 // than the extractor itself, so the floor asks about reach and not identity.
+// ONE TURRET PER MEX, NOT A COVER QUOTA.
+//
+// apexearth 2026-09-02: "I want to see 1 sentry turret guarding each of our
+// mexes at least. I don't want to see us making tons of turrets around mexes in
+// the back of the map."
+//
+// The floor is a THREAT floor, so a site keeps pricing above zero until enough
+// COVER accumulates -- and "enough" is measured in cover, never in turrets.
+// Measured at 10 minutes: teams holding 15 turrets for 4 and 7 mexes, up to
+// FOUR on a single extractor, while other mexes stood naked. This asks the
+// question he actually asked: does a mex in reach still have NO gun of its own?
+bool MexUnguardedInReach(const AIFloat3& in pos, float r)
+{
+	// THE NEAREST MEX, NOT ANY MEX. Asking "is some mex in reach unguarded"
+	// keeps the floor switched on for every site in a cluster as long as ONE
+	// extractor anywhere nearby lacks a gun -- so the subsidy lands again and
+	// again on whichever site the auction likes best, which is the one already
+	// guarded. Measured after the first attempt: up to FIVE turrets on one mex
+	// and three to five stacked extractors a team, worse than before the fix.
+	//
+	// A site defends the mex it is closest to. That is the one whose guard
+	// status decides whether this site is buying a first gun or a fourth.
+	int near = -1;
+	float bestD = -1.f;
+	for (uint i = 0; i < gLPos.length(); ++i) {
+		if (gLExtract[i] <= 0.f)
+			continue;
+		const float d = gLPos[i].distance2D(pos);
+		if (d >= r)
+			continue;
+		if ((bestD < 0.f) || (d < bestD)) {
+			bestD = d;
+			near = int(i);
+		}
+	}
+	if (near < 0)
+		return false;
+	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t) {
+		if (gProtPos[PROT_DEF][t].distance2D(gLPos[near]) < r)
+			return false;   // its gun already stands
+	}
+	// A GUN ORDERED IS A GUN. gProtPos holds FINISHED towers only, and a light
+	// tower takes long enough to build that half a dozen more get ordered at
+	// the same mex before the first one stands -- which is exactly the stack
+	// he is looking at (five on one extractor). Every duplicate-purchase bug in
+	// this AI's history has been a want priced inside that window, and the
+	// commitment ledger is the answer to all of them: it holds ordered, framed
+	// and finished alike.
+	for (uint c = 0; c < ComLen(); ++c) {
+		const int cd = gComDef[c];
+		if (!Catalog::ValidId(cd) || Catalog::gMobile[cd]
+			|| (ProtClassOf(cd) != PROT_DEF) || !OnMap(gComPos[c]))
+			continue;
+		if (gComPos[c].distance2D(gLPos[near]) < r)
+			return false;   // one is already on its way
+	}
+	return true;
+}
+
+// WHERE THE ENEMY'S BASE IS, for defence geometry: the mirror of the team's
+// homes about the map centre -- the symmetric-start prior Base::Frame and
+// GradAt already stand on.
+//
+// Not the live centroid: aiEnemyMgr.GetEnemyPos() answers (0,0,0) until
+// something has been seen, and that IS on-map, so the wall's line and the
+// pull's facing were aimed at the map corner for the whole opening (measured:
+// lineFwd -0.46 at minute 8, every tower behind the base). And not the
+// remembered centroid either: Front::FoeMid is the memory of every cell their
+// influence has touched, raids into our own base included, so the line's
+// perpendicular swung with the last fight and its lateral slots landed from
+// fwd -0.26 to 0.79 in one game. Their base does not move; the line should
+// not either.
+bool FoeRef(AIFloat3& out at)
+{
+	if (!Builder::gHomeSet)
+		return false;
+	float cx = Builder::gHomePos.x;
+	float cz = Builder::gHomePos.z;
+	float n = 1.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i) {
+		if (int(mates[i]) == ai.teamId)
+			continue;
+		const float mx = ai.ReadTeamValue(int(mates[i]), "homex", -1.f);
+		const float mz = ai.ReadTeamValue(int(mates[i]), "homez", -1.f);
+		if ((mx < 0.f) || (mz < 0.f))
+			continue;
+		cx += mx;
+		cz += mz;
+		n += 1.f;
+	}
+	at = AIFloat3(float(AiTerrainWidth()) - cx / n, 0.f,
+			float(AiTerrainHeight()) - cz / n);
+	if (OnMap(at) && (at.distance2D(Builder::gHomePos) > 1.f))
+		return true;
+	at = aiEnemyMgr.GetEnemyPos();
+	return OnMap(at) && ((at.x > 1.f) || (at.z > 1.f));
+}
+
+// ONE CANDIDATE SITE AT EACH MEX THAT HAS NO GUN. The wall offers slots on the
+// building rim, so a mex's own ground was never for sale: the floor had
+// nothing to price and the cover-push nothing to promote (measured: 0 and 2
+// pushes in two 20-minute games, guard share 0.2-0.5 at minute six). The site
+// sits a step toward the enemy so the gun covers the approach; a mex whose
+// gun already stands or is ordered offers nothing, so this ends by itself.
+void MexGuardSites(array<AIFloat3>& inout sites, float reach)
+{
+	AIFloat3 foe;
+	const bool foeOk = FoeRef(foe);
+	for (uint i = 0; i < gLPos.length(); ++i) {
+		if ((gLExtract[i] <= 0.f) || !OnMap(gLPos[i]))
+			continue;
+		if (!MexUnguardedInReach(gLPos[i], reach))
+			continue;
+		AIFloat3 s = gLPos[i];
+		if (foeOk) {
+			AIFloat3 dir = foe - gLPos[i];
+			if (dir.SqLength2D() > 1.f) {
+				dir.SafeNormalize2D();
+				const AIFloat3 s2 = gLPos[i] + dir * 150.f;
+				if (OnMap(s2))
+					s = s2;
+			}
+		}
+		sites.insertLast(s);
+	}
+}
+
 bool MexInReach(const AIFloat3& in pos, float r)
 {
 	for (uint i = 0; i < gLPos.length(); ++i) {
@@ -226,20 +354,6 @@ float DefenceTarget()
 		for (uint i = 0; i < gLPos.length(); ++i) {
 			if (gLExtract[i] > 0.f)
 				fsum += MexFloorFactor(gLPos[i]);
-		}
-		// PLANTS COUNT TOO, or the two halves disagree. The site loop now
-		// floors a slot beside a plant (PlantInReach), and this global
-		// allowance is what licenses that spend -- the comment above says it:
-		// the site loop will not buy a turret the global target says we
-		// already have enough of, so both must count the same things.
-		for (uint i = 0; i < ComLen(); ++i) {
-			const int d = gComDef[i];
-			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
-				|| (Catalog::gBuildsList[d].length() == 0)
-				|| (Catalog::gBuildPower[d] <= 0.f))
-				continue;
-			if (OnMap(gComPos[i]))
-				fsum += MexFloorFactor(gComPos[i]);
 		}
 		gMexFloorSum = MexCoverFloorM() * fsum;
 	}

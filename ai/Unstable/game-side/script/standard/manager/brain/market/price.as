@@ -355,7 +355,15 @@ float MCostScale()
 }
 
 
-float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
+// `lateStart`: whether the walk also delays a STREAM worth `gain` a second
+// (an extractor's income, a generator's E). A defence want's gain is the
+// demand pull -- a target gap amortised over the exposure window, not a flow
+// that starts when the gun stands -- and the site election has already
+// priced its walk against that window; charging it again here at the pull
+// rate put a line slot's tCost at 600-900 against a mex's 100-300 and priced
+// the front out of every draw.
+float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
+		bool lateStart = true)
 {
 	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
 	// METAL FEEDS THE LATHE (apexearth: a fusion started before the mohos
@@ -462,7 +470,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w)
 	// which is the far larger number for anything that yields a rate. Scales
 	// with the gain, so it decides extractor siting and is noise for a nano --
 	// no per-kind distance rule anywhere.
-	w.tCost += gain * walkSec;
+	if (lateStart)
+		w.tCost += gain * walkSec;
 	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
 	// you're making an AFUS you can afford military better and protect
 	// yourself. You're giving yourself options... you can put a little bit
