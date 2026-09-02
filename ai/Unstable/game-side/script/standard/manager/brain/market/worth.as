@@ -17,17 +17,87 @@ namespace Market {
 // LineMeans, same rule).
 float gWMDps = -1.f, gWMAlpha = 0.f, gWMHp = 0.f, gWMRng = 0.f, gWMAoe = 0.f, gWMCost = 0.f;
 
+// NOTHING WE CANNOT BUILD BELONGS IN THE YARDSTICK.
+//
+// apexearth: "Well the defs shouldn't show things we can't even use, right???"
+// -- and he is right. gAvailable is `maxThisUnit > 0`, which is the GAME's
+// permission, not ours: critters and Scavenger units pass it while no factory
+// we could ever own produces them. Measured, the worth ranking's top twelve
+// held critter_penguinking (20,000 metal), corblackhy (21,000), corprince and
+// two drones, and the means every real unit is normalised against were
+// dps=256.4 and hp=7,741 -- inflated by units that are not in the game we
+// play, which shifts every score in the model.
+//
+// Producible is the honest test: something builds it. A critter is spawned by
+// the map and a drone by its parent unit, so neither appears in any
+// buildoptions list.
+// gBuiltBy alone was not enough: it drops critters and drones (nothing lists
+// them) but keeps SCAVENGER units, which have their own factories in the def
+// tree and so are "built by something" -- corblackhy at 21,000 metal still
+// ranked 5th, and the range mean was still being set by guns we will never
+// own. The honest test is reachability from OUR OWN commander: breadth-first
+// over buildoptions, so a def counts only if a chain of things we can build
+// leads to it.
+array<bool> gOurTree;
+bool gOurTreeOk = false;
+
+void BuildOurTree()
+{
+	if (gOurTreeOk)
+		return;
+	gOurTree.resize(Catalog::gDefCount + 1);
+	for (int i = 0; i <= Catalog::gDefCount; ++i)
+		gOurTree[i] = false;
+	array<int> queue;
+	// Seed: everything we actually own right now. The commander is there from
+	// frame 0, and anything gifted or captured legitimately joins the tree.
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] > 0) && !gOurTree[int(d)]) {
+			gOurTree[int(d)] = true;
+			queue.insertLast(int(d));
+		}
+	}
+	if (queue.length() == 0)
+		return;   // nothing owned yet: ask again next call
+	for (uint qi = 0; qi < queue.length(); ++qi) {
+		const array<int>@ b = Catalog::gBuildsList[queue[qi]];
+		for (uint i = 0; i < b.length(); ++i) {
+			const int nd = b[i];
+			if (!gOurTree[nd] && Catalog::gAvailable[nd]) {
+				gOurTree[nd] = true;
+				queue.insertLast(nd);
+			}
+		}
+	}
+	gOurTreeOk = true;
+}
+
+bool Producible(int di)
+{
+	BuildOurTree();
+	if (!gOurTreeOk)
+		return Catalog::gBuiltBy[di].length() > 0;   // pre-seed fallback
+	return gOurTree[di];
+}
+
 bool WorthScorable(int di)
 {
 	return Catalog::gMobile[di] && !Catalog::gBuilder[di]
 		&& (Catalog::gPower[di] > 1.f) && (Catalog::gCostM[di] > 0.f)
-		&& (Catalog::gHealth[di] > 0.f) && !Catalog::gKamikaze[di];
+		&& (Catalog::gHealth[di] > 0.f) && !Catalog::gKamikaze[di]
+		&& Producible(di);
 }
 
 void WorthMeans()
 {
 	if (gWMDps > 0.f)
 		return;
+	// Not before the build tree is known, or the means latch on the fallback.
+	BuildOurTree();
+	if (!gOurTreeOk) {
+		gWMDps = -1.f;
+		return;
+	}
 	float dp = 0.f, al = 0.f, hp = 0.f, rr = 0.f, ao = 0.f, cm = 0.f;
 	int n = 0;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {

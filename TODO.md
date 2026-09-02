@@ -17,6 +17,65 @@ being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
+## The anchored range ladder -- one Mammoth, everyone guards it
+
+apexearth 2026-09-01: "I can take 1 mammoth, 1 radar, jammer, 10 sheldons, 5
+arbiters... and have everyone guard the mammoth, and then give the mammoth a
+fight order towards the enemy base. This army can literally take out the entire
+enemy base."
+
+And why it works, in his words: "It just happens that the mammoth range keeps it
+far enough away from enemies that usually only the mammoth is seen. The rest of
+the army behind it stays hidden but can still shoot at enemies up front. The
+jammer keeps them off radar. The radar gives LOS/radar. Arbiters give the extra
+anti-building damage. It really works. If the AI doesn't actually form a squad
+like this then its much less valuable. And when the mammoth dies well the whole
+squad breaks down fast."
+
+THE NUMBERS (pinned tree):
+
+    corsumo  Mammoth  2,200m  15,600hp  spd 22.5  range   650
+    cormort  Sheldon    410m     940hp  spd 50.4  range   850
+    corhrk   Arbiter    600m     610hp  spd 54    range 1,210
+
+One Mammoth + 10 Sheldons + 5 Arbiters = 9,300 metal, 76% of it long-range,
+anchored on one 15,600hp body.
+
+THE MECHANISM IS A RANGE LADDER, and it is computable. Each rank stands behind
+the one in front and still reaches the enemy, because its range is LONGER than
+the anchor's: 650 < 850 < 1210. Only the anchor is inside the enemy's range, so
+only the anchor is shot at. A reach unit is protected when an anchor with a
+SHORTER range and enough hit points stands in front of it -- not when the army
+happens to contain a given metal fraction of "meat".
+
+That is the correction this play forces on ShieldShare(), which is currently
+(tankM + midM) / totalM. His ball scores 0.24 on that and would have its reach
+units priced at a quarter strength, while a homogeneous Thug ball scores ~1.0
+and is rated fully shielded -- yet two Thugs at the same range protect nothing
+from each other, and one Mammoth protects fifteen units costing four times its
+price. Metal share is the wrong currency; the right test is "is there an anchor
+in front of me, with a shorter range and enough HP to absorb what is incoming".
+
+WHAT IS ALREADY THERE: squads pace to lowestSpeed (SetPath(pPath, lowestSpeed)
+in AttackTask/AntiAir/AntiHeavy), so the engine does NOT refuse to mix a 22.5
+Mammoth with 50-speed Sheldons. The composition is reachable; we simply never
+build it, and never form it.
+
+WHAT IS MISSING:
+  1. The range-ladder valuation above (reach is worth what the anchor in front
+     of it buys, measured in range order and absorbing HP, not metal share).
+  2. The FORMATION: everyone guards the anchor, the anchor gets the fight order.
+     Travelling at lowestSpeed is not the same as guarding -- guarding is what
+     keeps the ladder in range order instead of letting the fast units drift
+     ahead of the anchor and get shot.
+  3. Radar and jammer as squad MEMBERS rather than base structures -- the play
+     needs both moving with the ball.
+  4. Anchor fragility: "when the mammoth dies the whole squad breaks down fast."
+     A one-anchor formation is a single point of failure and the model should
+     see that -- either anchor redundancy, or the anchor's survivability priced
+     as the thing the whole squad's value rests on.
+
+
 ## Surprise Air Eco attack! (special temporary strategy to swap to in the middle of a game)
 
 Surprise the enemy by building up a force of 20+ fighters and 20+ bombers (T2), or T3 Dragons, invade enemy territory by ***avoiding*** enemy army (go around them, don't retreat!!!!) and attack constructors, economy, and keep going until dead. This is a suicide attack strategy for the units involved and the goal is to inflict maximum damage on their economy and build power.
