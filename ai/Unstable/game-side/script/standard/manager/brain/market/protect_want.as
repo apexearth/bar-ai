@@ -223,9 +223,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					TUNE_EXPOSED_LOSS_S);
 			if (horizS <= 1.f)
 				horizS = TUNE_EXPOSED_LOSS_S;
-			float horizPay = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			float horizPay = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 			if (horizPay <= 1.f)
-				horizPay = TUNE_PAYBACK_H;
+				horizPay = 300.f;
 			if (PlantFramed()) {   // see the fill: no wall before a base
 				const float gapP = DefenceTarget() - DefenceValue();
 				if (gapP > 0.f)
@@ -266,13 +266,18 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// metal spent -- the walk shortens the window it stands
 					// for and bills the builder's time, nothing more.
 					//
-					// The horizon is the market's capital horizon
-					// (apex_payback_h, 900 s), not the 120 s exposure window:
-					// a tower is a standing asset, and against 120 s a
-					// 72-second walk to the map's choke (3,800 elmos on
-					// Aethermoor) left it 40% of its worth while a ring slot
-					// ten seconds away kept 92% -- so no tower ever stood
-					// on the choke (lineFill 0.00 for all four players).
+					// The horizon is the amortisation window the mex stream
+					// is capitalised over (apex_reclaim_amort, 300 s), not
+					// the 120 s exposure window and not the 900 s payback
+					// horizon. Against 120 s a 72-second walk to the map's
+					// choke (3,800 elmos on Aethermoor) left a slot 40% of
+					// its worth while a ring slot ten seconds away kept 92%,
+					// and no tower ever stood on the choke; against 900 s
+					// the walk stopped mattering at all and opening cons
+					// walked 1,500 elmos to line slots past the mex they
+					// were standing on (guard 4/8 at minute 8, three
+					// openings with one tower). At 300 s the choke keeps
+					// three quarters and the mex underfoot still wins.
 					//
 					// It was prev / (kCost + wSec*wage + prev*wSec): the
 					// walk charged at the site's own prevention rate. That

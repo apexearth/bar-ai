@@ -92,6 +92,12 @@ NOT YET FIXED. Four distinct items, and he ranks them:
      "We're still not good at fighting. Feels like our armies do not work
      together well - we walk too close into enemy fire, we don't coordinate
      to help each other out, enemy attacks in one massive blob."
+     MEASURED (watch-4v4c, Aethermoor, +50%, lost at 36 min): at minute 20
+     our four players had lost 39,600 metal and killed 9,700 -- army K/D
+     0.20 against BARb hard's 2.60 -- on 0.43 of their metal produced. The
+     choke line was elected 114 times and never held because the army in
+     front of it lost every exchange. This, not the wall, is what decides
+     the team games now.
   3. Turret line drifting BACKWARD instead of concentrating forward.
      (T1 half landed 2026-09-02, commit 82061f8, `tools/test_frontline.py`
      is the contract; the post-T2 line is still T1 and thins -- ISSUES.md.)
