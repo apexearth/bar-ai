@@ -17,6 +17,62 @@ being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
+## Two squad doctrines: the siege screen, and the deep raid
+
+apexearth 2026-09-01, on what a short-range unit should do in a squad that has
+artillery behind it:
+
+  "the tanks should just stand around in front of the sheldons. They'll take
+  hits if they have to, but they won't walk up to enemies to shoot at them.
+  They're just protecting the ranged units. If they walk closer they'll take a
+  lot more damage. They are there as a shield. This is how all our units should
+  behave when in a squad with ranged units. The squad should seek to remain at
+  max range, tanks should try not to get hit but still protect their ranged
+  units. It's a bit of a siege mentality really."
+
+  "But that's not the only option we have. We can also just YOLO attack deep
+  into the enemy. The goal can be to just blast through the front line and make
+  it into unguarded economy in the backlines and then run around dealing free
+  damage."
+
+### A. SIEGE SCREEN -- and the change is one line's worth of intent
+
+CSquadTask already groups the squad into ROWS BY RANGE and holds each row at
+its own range (`rowRange = kv.first`), with one exception already carved out on
+his earlier ruling: a weaponless escort (radar/jammer) keys row 0 and holds at
+`highestRange + apex_escort_standoff`, BEHIND the squad, because "stand at your
+own range" told a sensor to stand on the target.
+
+The screen is the same exception with the sign flipped. A short-range row in a
+squad whose damage comes from a longer row should NOT hold at its own range --
+holding at 230 (Incisor) or 380 (Thug) is what walks it into the enemy. It
+should hold just in FRONT of the carry row, i.e. derived from the carry range,
+and fight only what comes to it:
+
+    escort (no weapon):  hold at  highestRange + standoff     [exists]
+    carry  (longest):    hold at  ownRange                    [exists]
+    screen (shorter):    hold at  carryRange - screenGap      [MISSING]
+
+So the squad as a whole sits at the carry row's range, which is his "the squad
+should seek to remain at max range", and the screen is between the enemy and
+the guns rather than out ahead of them.
+
+Consequence for pricing, not just movement: a short-range unit in a mixed squad
+is being bought as a SHIELD, so what it is worth there is absorbing HP and body
+size, not its own dps -- which is the range-ladder valuation in the entry below.
+
+### B. DEEP RAID -- blast through and eat the backline
+
+A different task, not a tuning of the first: break the front line, get into
+unguarded economy, and stay mobile dealing free damage. CRaidTask exists and
+already logs its route shape (`apex: raid path walked/direct/detour`), so the
+machinery is partly there; what is missing is the DECISION to spend a squad
+this way rather than on the front, and the target choice once through.
+
+Both are C++ (task/fighter/SquadTask.cpp, RaidTask.cpp). He knows: "These
+changes would require some updates to our C++ code. We should keep working on
+this though as fixing our military composition is very important."
+
 ## The anchored range ladder -- one Mammoth, everyone guards it
 
 apexearth 2026-09-01: "I can take 1 mammoth, 1 radar, jammer, 10 sheldons, 5
