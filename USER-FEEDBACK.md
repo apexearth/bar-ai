@@ -92,6 +92,14 @@ NOT YET FIXED. Four distinct items, and he ranks them:
      "We're still not good at fighting. Feels like our armies do not work
      together well - we walk too close into enemy fire, we don't coordinate
      to help each other out, enemy attacks in one massive blob."
+     Then, watching the next one (watch-4v4d, same map, lost ~34 min): "That
+     was a pretty good front line this game. We lost sadly, didn't scale
+     quite well enough... but the line held for a while." Measured: the four
+     lines stood from minute 10-12 to 20-24 (up to 4,350 wide); at minute 20
+     our four had 107k built to their 145k, and three of ours had 3.4-3.7k
+     in economy against their 4.9-12.2k -- the advanced cons spent 268 of
+     396 decisions on defence/protect and 14 on mex upgrades. Trade at 20
+     min: 35k lost, 9.5k killed.
      MEASURED (watch-4v4c, Aethermoor, +50%, lost at 36 min): at minute 20
      our four players had lost 39,600 metal and killed 9,700 -- army K/D
      0.20 against BARb hard's 2.60 -- on 0.43 of their metal produced. The
