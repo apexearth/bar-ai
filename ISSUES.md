@@ -143,8 +143,12 @@ with more than two guns on it). Residue, each measured in the same batteries
   touched here.
 - **Team games are unmeasured.** Every battery above is a 1v1; `FoeRef` uses
   the mirror of the team's homes, which is right for lr/tb boxes and wrong
-  for a corner start. Run `test_frontline.py` on a 4v4 before believing it
-  there.
+  for a corner start. A `--per-side 4` run on Comet Catcher is NOT a
+  measurement: the auto start box puts all four players within 100 elmos
+  of each other (starts 1268-1364, 2784-2880), every line is cut to 1-6
+  slots by the ally-lane rule and lineFwd reads ~0 (fl-4v4: guard 7/8,
+  line 2/8). Use his 4v4 map (Aethermoor Creek 1.0, battery.py) before
+  believing any team-game number.
 
 ## 2026-08-31 — NANO: the fortification site is priced and then thrown away
 
