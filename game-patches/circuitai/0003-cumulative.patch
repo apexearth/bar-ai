@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea933..4c044b9 100644
+index aeea933..09589d7 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -1150,8 +1150,43 @@ index aeea933..4c044b9 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
+@@ -1644,6 +2649,20 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+ 	return true;
+ }
+ 
++void CCircuitAI::NoteSniperOrder(SniperOrder kind)
++{
++	++sniperOrders[static_cast<int>(kind)];
++	if (lastFrame < sniperOrderNextLog) {
++		return;
++	}
++	sniperOrderNextLog = lastFrame + FRAMES_PER_SEC * 30;
++	LOG("apex: sniper-orders t=%i f=%i move=%i settarget=%i fight=%i attack=%i",
++			teamId, lastFrame, sniperOrders[0], sniperOrders[1], sniperOrders[2], sniperOrders[3]);
++	for (int& n : sniperOrders) {
++		n = 0;
++	}
++}
++
+ void CCircuitAI::UpdateActions()
+ {
+ 	if (actionIterator >= actionUnits.size()) {
+@@ -1751,6 +2770,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+ 	for (CCircuitDef& cdef : GetCircuitDefs()) {
+ 		cdef.Init(this);
+ 	}
++	std::string snipers;
++	for (const CCircuitDef& cdef : GetCircuitDefs()) {
++		if (cdef.IsSniper()) {
++			snipers += " " + std::string(cdef.GetDef()->GetName());
++		}
++	}
++	LOG("apex: sniper-class t=%i:%s", teamId, snipers.c_str());
+ }
+ 
+ void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f40..ee7b209 100644
+index b4f4f40..797854d 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,6 +16,7 @@
@@ -1421,7 +1456,18 @@ index b4f4f40..ee7b209 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -317,6 +533,19 @@ private:
+@@ -268,6 +484,10 @@ public:
+ 	CGameAttribute* GetGameAttribute() const { return gameAttribute.get(); }
+ 	const std::shared_ptr<CScheduler>& GetScheduler() { return scheduler; }
+ 	int GetLastFrame()    const { return lastFrame; }
++	// apex: census of engine orders sent to sniper-class units, by kind,
++	// logged every 30s so the move-only rule for that class is measurable.
++	enum class SniperOrder: char {MOVE = 0, SET_TARGET, FIGHT, ATTACK, _SIZE_};
++	void NoteSniperOrder(SniperOrder kind);
+ 	int GetSkirmishAIId() const { return skirmishAIId; }
+ 	int GetTeamId()       const { return teamId; }
+ 	int GetAllyTeamId()   const { return allyTeamId; }
+@@ -317,6 +537,21 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -1438,6 +1484,8 @@ index b4f4f40..ee7b209 100644
 +	uint64_t perfActUs = 0;
 +	int squadDiagNextLog = 0;
 +	int ghostPurgeNext = 0;
++	int sniperOrders[4] = {0, 0, 0, 0};
++	int sniperOrderNextLog = 0;
  	int skirmishAIId;
  	int teamId;
  	int allyTeamId;
@@ -7901,7 +7949,7 @@ index fcca1a0..52013b4 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  		)
 diff --git a/src/circuit/task/fighter/ArtilleryTask.cpp b/src/circuit/task/fighter/ArtilleryTask.cpp
-index c3f5e98..e02338a 100644
+index c3f5e98..9204fb5 100644
 --- a/src/circuit/task/fighter/ArtilleryTask.cpp
 +++ b/src/circuit/task/fighter/ArtilleryTask.cpp
 @@ -51,7 +51,7 @@ void CArtilleryTask::AssignTo(CCircuitUnit* unit)
@@ -7913,7 +7961,7 @@ index c3f5e98..e02338a 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -106,7 +106,9 @@ void CArtilleryTask::Execute(CCircuitUnit* unit)
+@@ -106,8 +106,16 @@ void CArtilleryTask::Execute(CCircuitUnit* unit)
  	CEnemyInfo* bestTarget = FindTarget(unit, pos);
  
  	if (bestTarget != nullptr) {
@@ -7922,9 +7970,16 @@ index c3f5e98..e02338a 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  
++		if (unit->GetCircuitDef()->IsSniper()) {
++			// Move to own range + set-target; the raw engine attack below
++			// bypasses the CCircuitUnit sniper rule.
++			unit->Attack(bestTarget, false, frame + FRAMES_PER_SEC * 60);
++			return;
++		}
  		TRY_UNIT(circuit, unit,
  			if (!circuit->IsCheating()) {
-@@ -274,13 +276,21 @@ void CArtilleryTask::ApplyTargetPath(const CQueryPathMulti* query)
+ 				unit->GetUnit()->Attack(bestTarget->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+@@ -274,13 +282,21 @@ void CArtilleryTask::ApplyTargetPath(const CQueryPathMulti* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -7947,7 +8002,7 @@ index c3f5e98..e02338a 100644
  		}
  	} else {
  		FallbackSafePos(unit);
-@@ -314,10 +324,18 @@ void CArtilleryTask::ApplySafePos(const CQueryPathMulti* query)
+@@ -314,10 +330,18 @@ void CArtilleryTask::ApplySafePos(const CQueryPathMulti* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -7967,7 +8022,7 @@ index c3f5e98..e02338a 100644
  	} else {
  		Fallback(unit, proceed);
  	}
-@@ -333,11 +351,10 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
+@@ -333,11 +357,10 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
  	const int frame = circuit->GetLastFrame();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  
@@ -11344,7 +11399,7 @@ index b4b43c1..d2e258e 100644
  		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
  	)
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b65..37bfffd 100644
+index 0d59b65..5469ca3 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -11911,7 +11966,7 @@ index 0d59b65..37bfffd 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -413,56 +809,802 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -413,56 +809,805 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  
  	const int targetTile = manager->GetCircuit()->GetInflMap()->Pos2Index(tPos);
  	const float alpha = std::atan2(dir.z, dir.x);
@@ -12690,9 +12745,12 @@ index 0d59b65..37bfffd 100644
 +						&& !rowColossus && !kiteFoeStatic
 +						&& (kiteFoeRange > 0.f)
 +						&& (kv.first < kiteFoeRange + 60.f);
-+				if (rowBrawls) {
++				// A sniper always takes its row's hold position (move + set-target
++				// inside Attack); the plain-attack branches would walk it in.
++				const bool sniper = unit->GetCircuitDef()->IsSniper();
++				if (rowBrawls && !sniper) {
 +					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
-+				} else if (staticCantReply
++				} else if (staticCantReply && !sniper
 +					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
 +				{
 +					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
@@ -12724,7 +12782,7 @@ index 0d59b65..37bfffd 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1620,9 @@ void ISquadTask::Log()
+@@ -478,7 +1623,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
@@ -13781,10 +13839,10 @@ index a1ac882..8ecc216 100644
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a..db4287a 100644
+index cd0b54a..42b933b 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
-@@ -165,6 +165,13 @@ public:
+@@ -165,6 +165,27 @@ public:
  	bool IsRoleSuper()    const { return role & RoleMask::SUPER; }
  	bool IsRoleComm()     const { return role & RoleMask::COMM; }
  
@@ -13794,11 +13852,25 @@ index cd0b54a..db4287a 100644
 +	// none of them and every charge path was dead.
 +	bool IsCharger()      const { return (role & (RoleMask::HEAVY | RoleMask::SUPER))
 +			&& (attr & AttrMask::MELEE); }
++	// apex: THE SNIPER CLASS, from the def's own shape rather than a name
++	// list: a land mobile whose surface gun reaches far and whose body is
++	// thin both in absolute HP and in HP per metal. CCircuitUnit turns every
++	// fight/attack order for such a unit into move + set-target, since a
++	// fight or attack order halts it under fire (CMobileCAI::ExecuteFight /
++	// ExecuteObjectAttack StopMove on bearing).
++	static constexpr float SNIPER_MIN_RANGE = 800.f;
++	static constexpr float SNIPER_MAX_HP = 800.f;
++	static constexpr float SNIPER_MAX_HP_PER_METAL = 1.2f;
++	bool IsSniper()       const { return IsMobile() && !IsAbleToFly() && !IsFloater()
++			&& !IsSubmarine() && IsAttacker() && !IsRoleBuilder()
++			&& (GetMaxRange(RangeType::LAND) >= SNIPER_MIN_RANGE)
++			&& (health <= SNIPER_MAX_HP)
++			&& (health <= costM * SNIPER_MAX_HP_PER_METAL); }
 +
  	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
  	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }
  	bool IsAttrNoJump()   const { return attr & AttrMask::NO_JUMP; }
-@@ -239,6 +246,11 @@ public:
+@@ -239,6 +260,11 @@ public:
  	float GetSurfDmg(RoleT type) const { return surfThrDmg * thrDmgMod[type]; }  // enemy
  	float GetWaterDmg(RoleT type) const { return waterThrDmg * thrDmgMod[type]; }  // enemy
  	float GetAoe() const { return aoe; }
@@ -13810,7 +13882,7 @@ index cd0b54a..db4287a 100644
  	float GetPower() const { return power; }
  	float GetDefThreat() const { return defThreat; }
  	void SetRange(float range);
-@@ -277,6 +289,9 @@ public:
+@@ -277,6 +303,9 @@ public:
  
  	bool IsAttacker()  const { return isAttacker; }
  	bool IsAlwaysHit() const { return isAlwaysHit; }
@@ -13820,7 +13892,7 @@ index cd0b54a..db4287a 100644
  	bool HasSurfToAir()   const { return hasSurfToAir; }
  	bool HasSurfToLand()  const { return hasSurfToLand; }
  	bool HasSurfToWater() const { return hasSurfToWater; }
-@@ -326,6 +341,12 @@ public:
+@@ -326,6 +355,12 @@ public:
  	bool IsAssist() const { return isAssist; }
  	void SetIsRadar(bool value) { isRadar = value; }
  	bool IsRadar() const { return isRadar; }
@@ -13833,7 +13905,7 @@ index cd0b54a..db4287a 100644
  	void SetIsSonar(bool value) { isSonar = value ; }
  	bool IsSonar() const { return isSonar; }
  	void SetIsDecoy(bool value) { isDecoy = value; }
-@@ -339,6 +360,13 @@ public:
+@@ -339,6 +374,13 @@ public:
  	float GetSpeed()        const { return speed; }
  	float GetLosRadius()    const { return losRadius; }
  	float GetSonarRadius()  const { return sonarRadius; }
@@ -13847,7 +13919,7 @@ index cd0b54a..db4287a 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +375,39 @@ public:
+@@ -347,6 +389,39 @@ public:
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
  	float GetBuildTime()    const { return buildTime; }
@@ -13887,7 +13959,7 @@ index cd0b54a..db4287a 100644
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -411,6 +472,8 @@ private:
+@@ -411,6 +486,8 @@ private:
  	float waterThrDmg, waterThrMod;  // underwater enemy damage
  	ThrDmgArray thrDmgMod;  // mod by role
  	float aoe;  // radius
@@ -13896,7 +13968,7 @@ index cd0b54a..db4287a 100644
  	float power;  // ally max threat
  	float defThreat;  // enemy max threat
  	float minRange;
-@@ -435,6 +498,7 @@ private:
+@@ -435,6 +512,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -13904,7 +13976,7 @@ index cd0b54a..db4287a 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +542,7 @@ private:
+@@ -478,6 +556,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -13912,7 +13984,7 @@ index cd0b54a..db4287a 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +553,32 @@ private:
+@@ -488,11 +567,32 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -13946,7 +14018,7 @@ index cd0b54a..db4287a 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be..e733d5f 100644
+index 2f597be..0f42ad5 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -14053,12 +14125,13 @@ index 2f597be..e733d5f 100644
  }
  
  /*
-@@ -285,11 +343,19 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -285,11 +343,20 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
  
  void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
  {
 +	NoteAct("mov", timeout);
  	assert(utils::is_in_map(pos));
++	NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::MOVE));
  	unit->MoveTo(pos, options, timeout);
  //	unit->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
  }
@@ -14073,15 +14146,58 @@ index 2f597be..e733d5f 100644
  void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  {
  //	assert(utils::is_in_map(pos));
-@@ -298,6 +364,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
+@@ -298,6 +365,14 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
  
  void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
  {
++	// A sniper never fight-walks: CMobileCAI::ExecuteFight stops it on the
++	// first thing a weapon bears on. Every travel/regroup/fallback path funnels
++	// through here, so the swap covers all of them.
++	if (circuitDef->IsSniper()) {
++		CmdMoveTo(pos, options, timeout);
++		return;
++	}
 +	NoteAct("fgt", timeout);
  	assert(utils::is_in_map(pos));
  	unit->Fight(pos, options, timeout);
  }
-@@ -328,7 +395,21 @@ void CCircuitUnit::CmdStop(short options, int timeout)
+@@ -310,10 +385,35 @@ void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
+ 
+ void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeout)
+ {
++	if (circuitDef->IsSniper()) {
++		CmdMoveTo(SniperHoldPos(pos), options, timeout);
++		return;
++	}
+ 	assert(utils::is_in_map(pos));
+ 	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
+ }
+ 
++AIFloat3 CCircuitUnit::SniperHoldPos(const AIFloat3& tPos)
++{
++	const int frame = (manager != nullptr) ? manager->GetCircuit()->GetLastFrame() : 0;
++	const AIFloat3& cur = GetPos(frame);
++	AIFloat3 dir = cur - tPos;
++	if (dir.SqLength2D() < 1.f) {
++		dir = AIFloat3(1.f, 0.f, 0.f);
++	}
++	dir.SafeNormalize2D();
++	AIFloat3 hold = tPos + dir * (circuitDef->GetMaxRange(CCircuitDef::RangeType::LAND) * 0.9f);
++	CTerrainManager::CorrectPosition(hold);
++	return hold;
++}
++
++void CCircuitUnit::NoteSniperOrder(int kind) const
++{
++	if ((manager != nullptr) && circuitDef->IsSniper()) {
++		manager->GetCircuit()->NoteSniperOrder(static_cast<CCircuitAI::SniperOrder>(kind));
++	}
++}
++
+ void CCircuitUnit::CmdWantedSpeed(float speed)
+ {
+ //	unit->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
+@@ -328,7 +428,22 @@ void CCircuitUnit::CmdStop(short options, int timeout)
  
  void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
  {
@@ -14100,19 +14216,38 @@ index 2f597be..e733d5f 100644
 +	if (enemy == nullptr) {
 +		return;
 +	}
++	NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::SET_TARGET));
 +	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -474,6 +555,7 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,7 +589,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
 +	NoteAct("atk", timeout);
  	target = enemy;
++	// A sniper holds at its own range and names the target; an attack order
++	// would walk it in and StopMove it under fire (CMobileCAI::ExecuteObjectAttack).
++	if (circuitDef->IsSniper()) {
++		TRY_UNIT(manager->GetCircuit(), this,
++			CmdMoveTo(SniperHoldPos(enemy->GetPos()), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
++			CmdSetTarget(target);
++		)
++		return;
++	}
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
-@@ -508,23 +590,63 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+ 		if (circuitDef->IsAttrMelee()) {
+@@ -497,6 +622,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+ 			if (isGround) {  // los-cheat related
+ 				CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+ 			} else {
++				NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::ATTACK));
+ 				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+ 			}
+ 		}
+@@ -508,23 +634,67 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -14144,9 +14279,12 @@ index 2f597be..e733d5f 100644
 +	// own los without standing inside enemy fire, so it holds the ring at the
 +	// last known position and waits for allied vision instead of chasing.
 +	const bool longGun = circuitDef->GetMaxRange() > circuitDef->GetLosRadius();
-+	const bool prefer = (manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
++	// A sniper takes move + set-target unconditionally, cloaked target included:
++	// the attack-ground fallback is an order that halts it under fire.
++	const bool prefer = circuitDef->IsSniper()
++			|| ((manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
 +			&& !isGround && !circuitDef->IsAttrMelee()
-+			&& (isStatic || enemy->IsInRadarOrLOS() || longGun);
++			&& (isStatic || enemy->IsInRadarOrLOS() || longGun));
  	TRY_UNIT(manager->GetCircuit(), this,
 -		if (circuitDef->IsAttrMelee()) {
 -			if (IsJumpReady()) {
@@ -14181,6 +14319,7 @@ index 2f597be..e733d5f 100644
 +				// uses a fight command"). The queued ATTACK already closes
 +				// distance if the blip is genuinely out of reach, which was
 +				// the fight order's whole job.
++				NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::ATTACK));
 +				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 +			}
  		}
@@ -14189,7 +14328,7 @@ index 2f597be..e733d5f 100644
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bc..f2d32f8 100644
+index cfe59bc..be07c47 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -14246,7 +14385,18 @@ index cfe59bc..f2d32f8 100644
  	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
-@@ -207,7 +238,12 @@ private:
+@@ -138,6 +169,10 @@ public:
+ 	void CmdWantedSpeed(float speed = NO_SPEED_LIMIT);
+ 	void CmdStop(short options = 0, int timeout = INT_MAX);
+ 	void CmdSetTarget(CEnemyInfo* enemy);
++	// Where a sniper stands to fire on tPos: its own surface range back along
++	// its current bearing, so a fight/attack order can be replaced by a move.
++	springai::AIFloat3 SniperHoldPos(const springai::AIFloat3& tPos);
++	void NoteSniperOrder(int kind) const;
+ 	void CmdCloak(bool state);
+ 	void CmdFireAtRadar(bool state);
+ 	void CmdFindPad(int timeout = INT_MAX);
+@@ -207,7 +242,12 @@ private:
  
  	int moveFails;
  	int failFrame;

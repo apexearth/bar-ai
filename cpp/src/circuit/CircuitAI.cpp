@@ -2649,6 +2649,20 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
 	return true;
 }
 
+void CCircuitAI::NoteSniperOrder(SniperOrder kind)
+{
+	++sniperOrders[static_cast<int>(kind)];
+	if (lastFrame < sniperOrderNextLog) {
+		return;
+	}
+	sniperOrderNextLog = lastFrame + FRAMES_PER_SEC * 30;
+	LOG("apex: sniper-orders t=%i f=%i move=%i settarget=%i fight=%i attack=%i",
+			teamId, lastFrame, sniperOrders[0], sniperOrders[1], sniperOrders[2], sniperOrders[3]);
+	for (int& n : sniperOrders) {
+		n = 0;
+	}
+}
+
 void CCircuitAI::UpdateActions()
 {
 	if (actionIterator >= actionUnits.size()) {
@@ -2756,6 +2770,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
 	for (CCircuitDef& cdef : GetCircuitDefs()) {
 		cdef.Init(this);
 	}
+	std::string snipers;
+	for (const CCircuitDef& cdef : GetCircuitDefs()) {
+		if (cdef.IsSniper()) {
+			snipers += " " + std::string(cdef.GetDef()->GetName());
+		}
+	}
+	LOG("apex: sniper-class t=%i:%s", teamId, snipers.c_str());
 }
 
 void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)

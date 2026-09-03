@@ -1574,9 +1574,12 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						&& !rowColossus && !kiteFoeStatic
 						&& (kiteFoeRange > 0.f)
 						&& (kv.first < kiteFoeRange + 60.f);
-				if (rowBrawls) {
+				// A sniper always takes its row's hold position (move + set-target
+				// inside Attack); the plain-attack branches would walk it in.
+				const bool sniper = unit->GetCircuitDef()->IsSniper();
+				if (rowBrawls && !sniper) {
 					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
-				} else if (staticCantReply
+				} else if (staticCantReply && !sniper
 					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
 				{
 					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);

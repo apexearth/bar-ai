@@ -171,6 +171,20 @@ public:
 	// none of them and every charge path was dead.
 	bool IsCharger()      const { return (role & (RoleMask::HEAVY | RoleMask::SUPER))
 			&& (attr & AttrMask::MELEE); }
+	// apex: THE SNIPER CLASS, from the def's own shape rather than a name
+	// list: a land mobile whose surface gun reaches far and whose body is
+	// thin both in absolute HP and in HP per metal. CCircuitUnit turns every
+	// fight/attack order for such a unit into move + set-target, since a
+	// fight or attack order halts it under fire (CMobileCAI::ExecuteFight /
+	// ExecuteObjectAttack StopMove on bearing).
+	static constexpr float SNIPER_MIN_RANGE = 800.f;
+	static constexpr float SNIPER_MAX_HP = 800.f;
+	static constexpr float SNIPER_MAX_HP_PER_METAL = 1.2f;
+	bool IsSniper()       const { return IsMobile() && !IsAbleToFly() && !IsFloater()
+			&& !IsSubmarine() && IsAttacker() && !IsRoleBuilder()
+			&& (GetMaxRange(RangeType::LAND) >= SNIPER_MIN_RANGE)
+			&& (health <= SNIPER_MAX_HP)
+			&& (health <= costM * SNIPER_MAX_HP_PER_METAL); }
 
 	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
 	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }

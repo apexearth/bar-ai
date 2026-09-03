@@ -169,6 +169,10 @@ public:
 	void CmdWantedSpeed(float speed = NO_SPEED_LIMIT);
 	void CmdStop(short options = 0, int timeout = INT_MAX);
 	void CmdSetTarget(CEnemyInfo* enemy);
+	// Where a sniper stands to fire on tPos: its own surface range back along
+	// its current bearing, so a fight/attack order can be replaced by a move.
+	springai::AIFloat3 SniperHoldPos(const springai::AIFloat3& tPos);
+	void NoteSniperOrder(int kind) const;
 	void CmdCloak(bool state);
 	void CmdFireAtRadar(bool state);
 	void CmdFindPad(int timeout = INT_MAX);
