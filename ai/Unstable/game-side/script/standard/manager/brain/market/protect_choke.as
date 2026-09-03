@@ -119,7 +119,17 @@ void ChokeUpdate()
 
 // The line's anchor and run: the choke's centre, its cross-section direction
 // (end1 -> end2), and its half-width. False while no choke sits on our lane.
+// The line's anchor and run: the choke's centre, its cross-section direction
+// (end1 -> end2), and its half-width. The wall steps the anchor back from
+// here to the nearest safe ground (protect_wall.as), so this is the target,
+// not necessarily where the guns stand.
 bool ChokeLine(AIFloat3& out at, AIFloat3& out across, float& out halfW)
+{
+	return ChokeTarget(at, across, halfW);
+}
+
+// The choke itself, held or not: where the army goes to take it.
+bool ChokeTarget(AIFloat3& out at, AIFloat3& out across, float& out halfW)
 {
 	if (!gChokeOk)
 		return false;

@@ -493,19 +493,21 @@ void UpdateLanePos()
 	// -- so the army holds the passage first, on our side of it, and the guns
 	// come up under the army. The choke therefore counts as our forward-most
 	// fence below; a bad trade still pulls the anchor back as ever.
+	// The line itself, not the raw choke: the wall's anchor is the choke
+	// stepped back to the nearest safe ground, and that is where the guns
+	// and the nanos stand (apexearth: "we can fight within range of our nano
+	// turrets and then get healed while we fight"). The army holds the line;
+	// as it wins ground the line steps up and the army with it.
 	AIFloat3 chokeHold;
 	bool chokeOk = false;
 	if (!TradeBad()) {
 		AIFloat3 cAt;
 		AIFloat3 cAcross;
 		float cHalf = 0.f;
-		if (Market::ChokeLine(cAt, cAcross, cHalf)) {
-			AIFloat3 back = Builder::gHomePos - cAt;
-			if (back.SqLength2D() > 1.f) {
-				back.SafeNormalize2D();
-				chokeHold = cAt + back * Brain::LightTowerRange();
-				chokeOk = OnMap(chokeHold);
-			}
+		if (Market::ChokeTarget(cAt, cAcross, cHalf)
+			&& Market::WallLineAnchor(chokeHold))
+		{
+			chokeOk = OnMap(chokeHold);
 		}
 	}
 	if (chokeOk) {

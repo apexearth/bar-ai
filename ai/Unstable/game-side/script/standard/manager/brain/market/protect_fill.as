@@ -263,6 +263,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// priced a light tower at 2.4x the lab (target 1,538 around 150 metal of
 	// mexes) -- measured, five towers in a row before the lab, lab at 8.3
 	// min, game lost. Evidence pricing and the per-mex floor still run.
+	// Does the line still have an open slot? Read once per fill.
+	const bool lineOpen = wallOn && (WallLineFill() >= 0.f) && (WallLineFill() < 1.f);
 	float wallPull = 0.f;
 	if (wallOn && PlantFramed()) {
 		const float horizW = ai.GetTunable("apex_exposed_loss_s",
@@ -558,6 +560,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 					if (rear < 0.f) rear = 0.f;
 					if (rear > 1.f) rear = 1.f;
 					dirW = rear + (1.f - rear) * w01;
+					// THE LINE FIRST, THE RING WHEN THE LINE STANDS. Spread
+					// over thirty ring slots the demand bought one tower per
+					// slot everywhere and a thin line nowhere (apexearth:
+					// "It needs to be really strong to succeed"). While the
+					// line has an open slot a ring slot takes only the rear
+					// minimum -- his flexible-angle floor -- and the whole
+					// pull lands where the enemy will come.
+					if (lineOpen)
+						dirW = rear;
 				}
 			}
 			if (prevented < wallPull * dirW)

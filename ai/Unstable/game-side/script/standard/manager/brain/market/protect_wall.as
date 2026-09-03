@@ -50,6 +50,7 @@ AIFloat3        gWallA;        // the line's anchor point
 AIFloat3        gWallF;        // unit home->enemy direction
 int             gWallAt = -999999;
 const int  WALL_MAX_SLOTS = 64;
+const int  WALL_LINE_ROWS = 2;
 const float WALL_QUANT = 256.f;
 
 void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
@@ -232,38 +233,84 @@ void WallPrep()
 			AIFloat3 lineLat(-fd.z, 0.f, fd.x);
 			float lineHalf = -1.f;   // < 0: run to the map edge or an ally lane
 			if (onChoke) {
-				anchor = chokeAt;
 				lineLat = chokeAcross;
 				// The line faces across its own run, toward them.
 				AIFloat3 nrm(-lineLat.z, 0.f, lineLat.x);
 				if ((nrm.x * fd.x + nrm.z * fd.z) < 0.f)
 					nrm = AIFloat3(-nrm.x, 0.f, -nrm.z);
 				fd = nrm;
+				// OUR MOUTH OF THE PASSAGE, NOT ITS MIDDLE. The choke's
+				// centre is the map's centre on Aethermoor, contested
+				// equally from both ends (apexearth, watching: "the logic
+				// of the front line on this particular map... seemed to
+				// want to make our guys just build directly in the center
+				// of the map"). The guns stand a tower's reach back on our
+				// side, so the passage itself is in their range and whoever
+				// comes through it walks into them.
+				anchor = chokeAt - fd * lightR;
 				lineHalf = chokeHalfW + pitch;
+				// AS CLOSE TO THE CHOKE AS IS SAFE (apexearth: "Build
+				// defenses as close as is safe, no point half-building
+				// something only to lose it"). From our mouth of the passage
+				// the anchor steps back toward home a pitch at a time until
+				// it stands on ground that is not hot and that our influence
+				// holds; as the army pushes forward the line follows it up,
+				// and while the passage is theirs the line is wherever ours
+				// ends -- never the passage itself, never only the base.
+				{
+					const AIFloat3 homeP = Builder::gHomeSet
+							? Builder::gHomePos : gPfMid;
+					const AIFloat3 relA = anchor - homeP;
+					const float span = relA.x * fd.x + relA.z * fd.z;
+					int steps = int(span / pitch) - 1;
+					if (steps > 12)
+						steps = 12;
+					for (int st = 0; st < steps; ++st) {
+						const bool safe = OnMap(anchor)
+								&& !Builder::SiteHot(anchor)
+								&& (ai.GetAllyInflAt(anchor) >= ai.GetEnemyInflAt(anchor));
+						if (safe)
+							break;
+						anchor -= fd * pitch;
+					}
+				}
 			}
 			if (OnMap(anchor)) {
 				gWallLineOk = true;
 				gWallA = anchor;
 				gWallF = fd;
 				const AIFloat3 lat = lineLat;
-				WallEmitSlot(anchor, true, expFrac);
-				for (int sideK = -1; sideK <= 1; sideK += 2) {
-					for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
-						const float latK = pitch * float(k * sideK);
-						if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
-							break;   // past the choke's shoulder
-						const AIFloat3 s = anchor + lat * latK;
-						if (!OnMap(s))
-							break;
-						bool allyLane = false;
-						const float dUs = s.distance2D(gPfMid);
-						for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
-							if (s.distance2D(AIFloat3(hx[m], 0.f, hz2[m])) < dUs)
-								allyLane = true;
+				// TWO ROWS DEEP (apexearth: "if you're not gonna build all
+				// the stuff and you just half ass it, then it's never gonna
+				// work... It needs to be really strong to succeed"). One
+				// tower per slot was the whole line; the second row, a
+				// pitch behind the first, doubles it and puts the guns in
+				// each other's cover.
+				for (int row = 0; row < WALL_LINE_ROWS; ++row) {
+					const AIFloat3 rowA = anchor - fd * (pitch * float(row));
+					if (!OnMap(rowA))
+						break;
+					WallEmitSlot(rowA, true, expFrac);
+					for (int sideK = -1; sideK <= 1; sideK += 2) {
+						for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
+							const float latK = pitch * float(k * sideK);
+							if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
+								break;   // past the choke's shoulder
+							const AIFloat3 s = rowA + lat * latK;
+							if (!OnMap(s))
+								break;
+							bool allyLane = false;
+							const float dUs = s.distance2D(gPfMid);
+							for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
+								if (s.distance2D(AIFloat3(hx[m], 0.f, hz2[m])) < dUs)
+									allyLane = true;
+							}
+							if (allyLane)
+								break;
+							WallEmitSlot(s, true, expFrac);
+							if (int(gWallP.length()) >= WALL_MAX_SLOTS)
+								break;
 						}
-						if (allyLane)
-							break;
-						WallEmitSlot(s, true, expFrac);
 						if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 							break;
 					}
@@ -427,6 +474,16 @@ bool WallLineHeld(AIFloat3& out at, int& out n, int minHeld)
 	const float pitch = Brain::LightTowerRange()
 			* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
 	at = AIFloat3(sx / float(n), 0.f, sz / float(n)) - gWallF * pitch;
+	return OnMap(at);
+}
+
+// The line's anchor point itself, for the army to stand on.
+bool WallLineAnchor(AIFloat3& out at)
+{
+	WallPrep();
+	if (!gWallLineOk)
+		return false;
+	at = gWallA;
 	return OnMap(at);
 }
 

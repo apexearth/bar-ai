@@ -375,7 +375,34 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// sited by the same arithmetic that bought it.
 		float worst = 0.f;
 		bool lineSited = false;
+		// THE HELD FRONT LINE FIRST (apexearth: "make nano turrets up there.
+		// If we're fighting enemies, we can fight within range of our nano
+		// turrets and then get healed while we fight"; his fortification
+		// doctrine's fourth point). A pitch behind the guns, one per
+		// section -- while none stands within its own reach of the line's
+		// centre and the ground is plainly ours.
 		{
+			AIFloat3 fl;
+			int fn = 0;
+			const float bd = Catalog::gBuildDist[int(w.def.id)];
+			if (WallLineHeld(fl, fn, 2) && (bd > 1.f)
+				&& !Builder::SiteHot(fl)
+				&& (ai.GetAllyInflAt(fl) > ai.GetEnemyInflAt(fl) * 2.f))
+			{
+				bool have = false;
+				for (uint ci = 0; ci < ComLen() && !have; ++ci) {
+					if ((gComDef[ci] == int(w.def.id)) && OnMap(gComPos[ci])
+						&& (gComPos[ci].distance2D(fl) < bd))
+						have = true;
+				}
+				if (!have) {
+					slot = fl;
+					sited = true;
+					lineSited = true;
+				}
+			}
+		}
+		if (!sited) {
 			AIFloat3 lp;
 			const float ln = NeediestLine(lp);
 			if ((ln > 0.f) && OnMap(lp)) {

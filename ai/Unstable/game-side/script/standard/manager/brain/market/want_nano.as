@@ -179,6 +179,53 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			}
 		}
 	}
+	// THE HELD LINE WANTS ITS LATHE BEFORE IT STARTS DYING (apexearth
+	// 2026-09-02: "make nano turrets up there. If we're fighting enemies, we
+	// can fight within range of our nano turrets and then get healed while
+	// we fight"). Worth the gun metal standing on the line times the hazard
+	// there -- what a lathe keeps alive per second -- while no nano stands
+	// within its reach of the line and the ground is plainly ours.
+	{
+		AIFloat3 fl;
+		int fn = 0;
+		float nanoReach2 = 0.f;
+		int nanoDef = -1;
+		const array<int>@ nb2 = Catalog::BuildsOf(int(unit.circuitDef.id));
+		for (uint ni = 0; ni < nb2.length(); ++ni) {
+			const int nd = nb2[ni];
+			if (!Catalog::gAvailable[nd] || Catalog::gMobile[nd]
+				|| (Catalog::gBuildPower[nd] <= 0.f)
+				|| (Catalog::gBuildsList[nd].length() > 0))
+				continue;
+			if (Catalog::gBuildDist[nd] > nanoReach2) {
+				nanoReach2 = Catalog::gBuildDist[nd];
+				nanoDef = nd;
+			}
+		}
+		if ((nanoDef >= 0) && WallLineHeld(fl, fn, 2)
+			&& !Builder::SiteHot(fl)
+			&& (ai.GetAllyInflAt(fl) > ai.GetEnemyInflAt(fl) * 2.f))
+		{
+			bool have = false;
+			for (uint ci = 0; ci < ComLen() && !have; ++ci) {
+				if ((Catalog::gBuildPower[gComDef[ci]] > 0.f)
+					&& !Catalog::gMobile[gComDef[ci]]
+					&& (Catalog::gBuildsList[gComDef[ci]].length() == 0)
+					&& OnMap(gComPos[ci])
+					&& (gComPos[ci].distance2D(fl) < nanoReach2))
+					have = true;
+			}
+			if (!have) {
+				const float gunsM = Military::FenceGunMetalNear(fl, nanoReach2);
+				const float hz = HazardWith(fl, CoverAt(fl));
+				const float lineNano = gunsM * hz;
+				if (lineNano > fortNeed) {
+					fortNeed = lineNano;
+					fortPos = fl;
+				}
+			}
+		}
+	}
 	if (fortNeed > over)
 		over = fortNeed;
 	if (over <= 0.5f)

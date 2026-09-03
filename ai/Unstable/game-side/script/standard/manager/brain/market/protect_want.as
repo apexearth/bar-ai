@@ -406,7 +406,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// a T1 con making defenses anyways... teal is about to have 7 of
 			// them"). On a slot priced by pull rather than by threat, rank by
 			// cover per metal -- the currency the rest of this auction uses.
-			if (bestIsWall && (ai.GetTunable("apex_wall_efficient",
+			// ...NOT ON THE LINE. A line slot holds the strongest gun this
+			// economy affords -- the dominance rule above has already
+			// dropped what a better affordable gun outclasses -- because a
+			// line of the cheapest tower per metal is the half-built line
+			// he is watching fail ("It needs to be really strong to
+			// succeed"). The per-metal ranking stays for the ring.
+			if (bestIsWall && !bestIsLine && (ai.GetTunable("apex_wall_efficient",
 					TUNE_WALL_EFFICIENT) > 0.f) && (Catalog::gCostM[d] > 1.f)) {
 				const float eff = PfTowerKill(d) / Catalog::gCostM[d];
 				float bestEff = 0.f;
