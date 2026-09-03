@@ -883,10 +883,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// up the lane to wall at the frontier). The wall is the edge of
 			// held ground; it and his own guns are what the flat 400 was
 			// standing in for.
+			// ...AND NOT AT ALL ONCE HE IS CAUTIOUS. CommanderSafety sends a
+			// cautious commander home from any ground past apex_comm_fwd_cap,
+			// and this exemption kept sending him back up to the wall, so he
+			// walked the lane end to end (apexearth, watching: "the commander
+			// walked all the way up to mid he then still walked all the way
+			// back home without second guessing it"). The two rules agree
+			// now: forward wall work is for the commander that may stand
+			// forward.
 			if (fwdDist > 400.f) {
 				const bool wallWork = (ranked[i].kind == WK_PROTECT)
 						&& WallStands()
-						&& (WallRimDist(ranked[i].pos) <= 64.f);
+						&& (WallRimDist(ranked[i].pos) <= 64.f)
+						&& !CommCaution(unit);
 				if (!wallWork)
 					continue;
 			}

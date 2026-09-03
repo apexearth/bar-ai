@@ -718,8 +718,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if (jt !is null)
 				return jt;
 		}
+		// OFF THE METAL SPOTS, whatever the generator costs and wherever the
+		// slot came from. The clearance used to run on w.pos for big
+		// generators only, while the site actually requested was `slot` --
+		// a farm lattice cell, untouched -- so a solar could sit on an
+		// extractor spot (apexearth, watching a 4v4 with starts on the
+		// map's own positions, which lie on mex clusters: "2 mexes with
+		// solar panels on them"). The spot's footprint plus the solar's.
 		if (Catalog::gCostM[int(w.def.id)] > 500.f)
 			w.pos = ClearOfSpots(w.pos, 150.f);
+		if (OnMap(slot))
+			slot = ClearOfSpots(slot, 120.f);
+		else
+			w.pos = ClearOfSpots(w.pos, 120.f);
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);
@@ -750,7 +761,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			CCircuitDef@ adef = Catalog::Def(ad);
 			if (adef is null)
 				continue;
-			const AIFloat3 aslot = gFarmSet ? FarmSlot(ad) : BigEnergySite();
+			AIFloat3 aslot = gFarmSet ? FarmSlot(ad) : BigEnergySite();
+			if (OnMap(aslot))
+				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;
 			IUnitTask@ at = Requests::Take(unit, adef, Task::BuildType::ENERGY,
 					Task::Priority::NORMAL, OnMap(aslot) ? aslot : w.pos,
@@ -770,7 +783,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if (w.kind == WK_CONVERT) {
 		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
-		const AIFloat3 cAt = OnMap(slot) ? slot : w.pos;
+		const AIFloat3 cAt = ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f);
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
 				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
 		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
