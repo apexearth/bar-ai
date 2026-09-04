@@ -50,11 +50,14 @@ and the term pulls back to them on its own.
 
 ## The budget
 
-`ArmyTarget()` = `gAssetsM*apex_guard_rate + expectedEnemy*apex_match_ratio`,
-where `expectedEnemy = max(seen census, (gAssetsM + ArmyValue()) *
-apex_enemy_prior)` — a **symmetric prior**: pre-contact the census is blind,
-and blind read as safe lost a game with three army units built.
-`ArmyTargetFull()` is the same without eco-role suppression.
+`ArmyTarget()` = `EcoPowerM() * apex_army_eco_s` — seconds of our own total
+economic power held as standing army, the same currency `DefenceTarget` uses,
+so the two halves of the standing obligation are readable as two numbers of
+seconds. It is sized from what we have BUILT, not from what we can see: the
+earlier census-and-prior form read "safe" exactly when we were blind.
+`apex_enemy_prior` survives on the defence side only (`coverage.as`,
+`protect_*.as`). `ArmyTargetFull()` is the same without the eco-role zero
+(the rear specialist's target names an economy and no war until it has one).
 
 ## The role gap — how a unit's role earns its weight
 
@@ -119,7 +122,7 @@ would then refuse.
 `apex_line_tank/mid/reach/dps` (0.30/0.25/0.25/0.20) · `apex_line_edge` (1.15) ·
 `apex_line_bite` (1.5) · `apex_range_worth` (2) · `apex_speed_worth` (0.5) ·
 `apex_cover_worth` (1.5) · `apex_los_worth` (1) · `apex_enemy_prior` (0.25) ·
-`apex_guard_rate` (0.15) · `apex_match_ratio` (1.2) · `apex_army_fill_s` (180) · `apex_expose_r` · `apex_escort_max_cost` ·
+`apex_army_eco_s` (66) · `apex_army_fill_s` (180) · `apex_expose_r` · `apex_escort_max_cost` ·
 `apex_escort_speed` · `apex_con_escort`
 
 ## Log lines

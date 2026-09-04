@@ -176,6 +176,12 @@ GROUPS = [
                   "fewer are built"),
                  ("TUNE_E_WASTE_WORTH", "wasted energy hurts more, so a "
                   "converter beats a generator harder during overflow"),
+                 ("TUNE_CONV_AFFORD_S", "seconds of economic power the "
+                  "converter burst may commit at once. The bank is the wrong "
+                  "bound because we run it near empty on purpose; a converter "
+                  "pays back in ~37 s, so 30 s of power is a bill the economy "
+                  "carries. Lower it and a wasting grid is answered one "
+                  "converter at a time"),
              ]},
             {"title": "The ETA objective (economy-only)",
              "what": "Instead of asking which build returns the most right "
@@ -323,6 +329,12 @@ GROUPS = [
                   "the line's best option before it is issued"),
                  ("TUNE_PLANT_INCOME_PER", "each production line is credited "
                   "with more income, so more plants are wanted"),
+                 ("TUNE_TEAM_LINE", "a plant the TEAM already owns is worth "
+                  "less to a second player: the second copy of a line is worth "
+                  "half, the third a third, so four allies open bot, vehicle "
+                  "and air rather than four bot labs. Not exclusivity -- a "
+                  "fourth bot lab is allowed, it just prices below the first "
+                  "vehicle plant. 0 makes every player reason alone"),
              ]},
             {"title": "Teching up",
              "what": "T2 is an economic decision, not a clock. One player is "
