@@ -1,0 +1,1303 @@
+# Tunable rationale
+
+Why a default is what it is: the measurements, the A/Bs that failed, and the rulings
+behind them. This is the long form that used to sit in `tunables.as`, which now
+carries one line per knob -- CLAUDE.md puts findings in the commit message or
+`ISSUES.md`, not in the source, but a negative result attached to a specific
+default is worth more where you can grep for the symbol.
+
+Keyed by `TUNE_` name. `grep -A20 'TUNE_YOURKNOB' docs/27-tunable-rationale.md`.
+
+Generated from the tunables.as annotations as they stood 2026-09-05; edit here
+from now on, and keep the one-liner in `tunables.as` in step.
+
+## Economy — energy, fusion, converters, reclaim
+
+### `TUNE_ETA` = 0.f
+
+THE ECONOMY-ONLY ETA OBJECTIVE. 0 shadow-logs the ladder's pick beside the
+market's and changes nothing; 1 lets the ETA re-rank wants WITHIN the four
+economic categories. Swept against an inactive opponent -- see the
+eta-objective skill.
+
+### `TUNE_T2_METAL` = 30.f
+
+Metal income required before committing to T2 (techlead.as RushReady, and the
+rear plant-siting rule reads the same knob). apexearth 2026-08-21: "30 m/s is a
+good number". The T2 decision is this pair: apex_t2_metal AND apex_t2_energy.
+
+
+## Constructors, build power, nanos
+
+### `TUNE_CON_LOG_T1_A` = 4.6f
+
+T1 constructor curve slope: cons wanted = A x ln(income) + B. At A=4.6/B=-6.55
+that is ~4 cons at 10 m/s, ~14 at 100. The dashboard edits this as anchor
+points.
+
+### `TUNE_SITE_BT_PER_WORKER` = 4700.f
+
+Buildtime per worker -- the other arm of the site crew, taken as a MAX with the
+cost arm so it only ever raises the cap. 4,700 is set from the reference
+building rather than picked: a fusion is 70,000 buildtime and 4,300 metal, so
+70,000/4,700 gives the same ~15 hands its price already gave it. What moves is
+the buildtime-dense outlier -- the advanced converter goes from 2 hands to 8
+for its 35,000 buildtime. Sweep it before trusting it.
+
+
+## Expansion — mexes, upgrades, claims
+
+
+## Build phases (manager/factory/phase.as ComputePhase)
+
+
+## Factories, tech, quotas
+
+### `TUNE_FAC_QUEUE` = 1.5f
+
+How deep the facqueue keeps each driven line, as a multiple of the line's
+re-election gap, measured in that line's own build seconds. Below 1 the plant
+is idle by construction; the margin over 1 covers the order lag, which is a
+window of its own at benchmark speed.
+
+### `TUNE_KILL_QUOTA` = 300.f
+
+Attack quota set while the killing blow is on -- concentrate the push, do not
+disperse. Skipped for the eco lead, whose army is deliberately tiny.
+
+
+## Military — stance, engagement, squads
+
+### `TUNE_RECALL_HOME_FWD` = 0.5f
+
+Only squads this far past our own territory (ForwardFraction) are recalled --
+units already fighting near home need no order, they are already where they are
+needed. Matches the threshold sentinel.as already uses to call the same thing a
+CONCERN.
+
+### `TUNE_FIGHT_ABORT` = 0.f
+
+Abort a losing ATTACK/RAID task outright so the squad re-pools together.
+Measured 1W-11L vs 4W-10L with it on (winrate6): the ledger reads "losing"
+transiently in bloody fights and mid-commitment aborts throw engaged units
+away. Experiment arm, default off.
+
+### `TUNE_FODDER_COST` = 100.f
+
+units at or under this cost are fodder: exempt from massing, always sent
+forward (their job is vision and pulled fire). Cost AND role, so cheap
+AA/bombers are not swept in.
+
+### `TUNE_KILL_OFF_FRAC` = 0.35f
+
+The blow disarms below KILL_EDGE times this. Wide enough to survive the push's
+own measurement dip (retreating units read zero power); 0.6 flapped 15x in one
+game.
+
+### `TUNE_KILL_FROM` = 900.f
+
+killing blow: earliest the normal (non-T1-commit) gate may arm. A clock, not an
+economy reading, and the only one left in the blow -- it exists so a fog-driven
+army estimate in the opening cannot commit the whole army. Tunable so the cost
+of holding it can be measured against a faster finish.
+
+### `TUNE_SEEN_HALFLIFE` = 300.f
+
+half-life of gSeenPeak, the largest enemy massing threat ever seen at once. It
+is the denominator of the killing blow and the massing floor, so how fast it
+forgets decides how long a destroyed enemy army keeps holding us back from
+committing. MEASURED 2026-08-22: 180s (the 3-minute figure the old comment
+claimed) was WORSE -- two paired 50-minute runs against medium, 16 and 8 games,
+both lost win rate and army trade against the effectively-frozen peak. Kept
+near-frozen as the default; the frame-based decay below is the correctness fix,
+not a behaviour change.
+
+### `TUNE_BUDGET_LIVE` = 0.f
+
+evaluate the SPEND_* target curves against live income (1) or against the
+frame-0 column (0). GetTunable caches its default on first call, so passing a
+live curve as the default froze every share at income 0 -- and SPEND_ARMY's
+income-0 column is 0.0, which is why the ARMY budget row read zero in every
+game ever played. Default 0 reproduces that measured behaviour; see budget.as
+for the runs.
+
+### `TUNE_PUSH_TEAM_RATIO` = 1.6f
+
+team army advantage that STARTS the all-in push. Deliberately above the
+per-squad engage margin: this spends the whole army at once. Held while above
+apex_push_keep.
+
+### `TUNE_STATIC_DEFENSE_WEIGHT` = 0.5f
+
+how much enemy STATIC defence counts in the massing decision, per metal. Half
+weight: a turret cannot retreat or redeploy; full weight would let a porc base
+pin the quota forever.
+
+### `TUNE_T2_HOLD_BOOST` = 1.60f
+
+engage bias while an advanced plant is under construction; above 1 is cautious.
+Raises only the bar to START a fight -- fights already joined and defence are
+untouched.
+
+
+## Defence, towers, AA, insurance
+
+### `TUNE_MEX_COVER_FLOOR` = 0.5f
+
+MINIMUM PROTECTION PER MEX. Every site the defence auction considers is priced
+against the wave that has actually arrived there, and a mex nothing has
+attacked yet reads a wave of zero -- so it was skipped outright, and the
+economy stayed naked until something came for it. This is the wave a standing
+mex is assumed to have to meet whatever we have seen, measured in the faction's
+own light towers so it scales across factions and tiers rather than being a
+metal number. It is a FLOOR and nothing more: once a mex has this much cover
+the shortfall is zero and the next turret there prices itself out, and a mex
+under real threat is still sized by the threat. 0 restores the
+observed-threat-only behaviour, which is how the A/B is run. Halved 2026-08-29
+under his concentration ruling ("Move 8 spread out defenses from mexes into
+less choke points which overwhelm the attack") -- the freed budget flows to the
+gate depth floor under the same DefenceTarget.
+
+### `TUNE_LEAK_SCREEN_M` = 800.f
+
+Fielded army value at which the mobile screen, not per-mex towers, takes over
+answering leaks. Below it every standing mex carries the FULL cover floor
+whatever its bearing (the first mexes sit behind the centroid and read
+forwardness zero). ~8 ticks' worth; an estimate, not a measurement.
+
+### `TUNE_GATE_DEPTH` = 2.f
+
+A choke-gate site's threat floor as a multiple of the arriving wave: the gate
+keeps deepening until its cover OVERWHELMS the push, not merely matches it
+("Have an unusual amount of tower at some spots. Try to deeply cover those
+choke points").
+
+### `TUNE_TEETH` = 0.f
+
+The teeth line: one wall piece per election across the strongest defended
+gate's span, a step enemy-ward of the doorway ("slow them down with some walls
+outside"). OFF at his request 2026-08-29 ("the implementation is terrible") --
+the knob stays so a better implementation can be A/B'd.
+
+### `TUNE_TEETH_GAIN` = 40.f
+
+What one tooth's share of breaking a push is worth, on the auction's own value
+scale: winning wants carry v>=3 and a tooth's costs price near 70, so 2 gave
+v=0.03 and lost every election in 24 games; 200 overshot to v~20 and had the
+COMMANDER placing teeth at 1.8m over a mex claim. 40 lands a tooth at v~4: it
+wins idle nearby hands and loses to real economy.
+
+### `TUNE_DEF_SITE_WALK` = 1.f
+
+HOW HARD A BUILDER PREFERS THE GROUND IT IS ALREADY STANDING ON. The defence
+auction picks a site, then ValueOf charges the walk to it -- so the choice
+never saw the cost of getting there, and a constructor that had just finished a
+mex was sent across the base to a site worth marginally more (apexearth: "units
+making mex and then not immediately making the light tower to cover it"). This
+weights the walk inside the site ranking, in the same two terms the price uses:
+the builder's idle seconds and the income the tower forgoes by starting late. 1
+ranks sites exactly as they will be priced; 0 restores the old distance-blind
+choice, which is how the A/B is run; above 1 makes defence more local still.
+
+### `TUNE_COVER_PUSH` = 1.f
+
+COVER WHAT YOU JUST BUILT. The category draw is proportional, not argmax, so a
+tower worth twice the mex beside it still loses the roll about half the time --
+which is what "we don't immediately make the light tower" looks like from the
+outside (apexearth, twice). This lets ONE want skip the lottery: a
+ground-defence want sited at a mex of ours that has no gun ordered or standing,
+proposed by a builder already inside the tower's own reach of it. The same
+queue-jump apex_super_push and the defence-panic path already use. Deliberately
+narrow: it cannot fire away from a mex, cannot fire once the mex has its first
+gun, and cannot fire for a builder that would have to walk -- one light tower
+per extractor at most.
+
+### `TUNE_DEFEND_LEASH` = 0.55f
+
+A DEFEND-task unit farther forward than this (on losing ground) is recalled
+first -- it is in the wrong place by the task's own meaning. 0.35 was tried
+against the midfield-grind deaths and lost MORE (ceded the corridor's mexes).
+
+### `TUNE_HOLD_COMMITTED` = 1.f
+
+apex_hold_committed: units standing on ground the enemy's guns cover are never
+given solo pull-out orders -- the split (half fights, half runs) loses the
+fight twice. 0 restores per-unit withdrawal everywhere.
+
+
+## Nukes (manager/brain/nukes.as) -- restored 2026-08-24 with the pre-kill
+
+
+## Air eco-assassination (manager/air/state.as)
+
+### `TUNE_AIR_CLUSTER_R` = 900.f
+
+Radius around the enemy centroid sampled for how packed their base is. One
+cluster, the reach of a single bombing run.
+
+### `TUNE_AIR_AA_SOAK` = 0.05f
+
+Wing HEALTH is what absorbs AA, so a 16,700 hp Dragon soaks 25x what a 670 hp
+Thunder does. Sets both the throughput curve and how fast the required strike
+grows with their AA; it is what makes "50 or 100 from different angles" the
+answer to a wall instead of standing down. At 0.05, ~20 Dragons clear 8k of AA
+at ~0.7 throughput while light bombers need ~67 to reach half through 2.5k --
+and the payoff test then declines that as the suicide it is.
+
+### `TUNE_AIR_AA_SPLIT` = 1.f
+
+The strike sizes against the enemy AA census divided by their base count
+(mirrored from our own team size): a raid overflies ONE base and static AA
+cannot concentrate. 0 sizes against the whole map's AA, which read want=125
+bombers and held a 50-bomber wing at home forever.
+
+### `TUNE_AIR_SETTLE_S` = 90.f
+
+How long after a strike launches before it is scored. Long enough for the wing
+to reach, bomb and be shot at.
+
+
+## Commander
+
+### `TUNE_COMM_HEAVY_FRAC` = 0.5f
+
+Fielded enemy HEAVY+SUPER mass at this fraction of the commander's value makes
+him cautious. Scaled to his cost so it tracks the game, not a number.
+
+### `TUNE_COMM_FLEE_INFLUENCE` = 0.01f
+
+Enemy influence at his tile (or on the ring, while cautious) above which he
+leaves. Uses the influence map, never ai.GetBuilderThreatAt, which reads clean
+until he is dead.
+
+
+## Air
+
+### `TUNE_AIR_DOMINANCE_AA` = 0.15f
+
+Enemy AA under this fraction of our own team army counts as DOMINATED: the
+assassin's absolute AA ceiling waives and a standing abort un-latches, so a
+beaten enemy's leftover flak cannot veto the one weapon that targets the win
+condition. 0 keeps the ceiling only.
+
+### `TUNE_AIR_MANDATORY_INCOME` = 200.f
+
+Metal income at which the first air plant becomes mandatory for a player who is
+NOT the air lead (the lead builds at apex_intel_air_income, 25). Raised 60 ->
+200 on 2026-08-30: at 60 the whole team bought air while none of them could
+survive on the ground, and air is the first thing a single enemy flak truck
+deletes (apexearth, watching: "we don't need that air power at this point in
+the game... We need survival at this point and we certainly don't have it. If
+the enemy has 1 flak truck near our base then our air dies surprisingly fast.
+Hold off on making air if we're not the air player until we have ~200m/s+").
+
+
+## Nukes and superweapons
+
+### `TUNE_BRAIN_NUKE` = 1.f
+
+The sentinel: the brain checks its own concepts every 45s and logs a verdict
+per check ("apex: thought <name> CONCERN ..."); observer-first, each
+enforcement earned separately. logistics, target ranking); 0 leaves silos to
+stock behaviour.
+
+
+## Scouting, intel, ghosts
+
+### `TUNE_ESCORT_SQUAD_VALUE` = 2000.f
+
+squad metal value above which it is owed a sensor escort. apexearth 2026-08-20:
+"any squad worth over 2000 metal".
+
+
+## Base layout and placement
+
+### `TUNE_FRONT_BAND_FRAC` = 0.35f
+
+Width of the front band as a fraction of the territory radius (floored at one
+influence-grid cell). The arc it keeps is acos(1 - frac) each side of the enemy
+bearing: 1.0 was +/-90 degrees -- HALF the perimeter read as front, every game
+(band=R in every frontline log line), which is a "front" through the middle of
+the base. 0.35 is a +/-49 degree arc.
+
+
+## Diagnostics and switches
+
+### `TUNE_CATALOG_DUMP` = 0.f
+
+Dump every available def's catalog row at init (one log line per def, parsed by
+tools/check_catalog.py). Off by default: it is ~1000 lines of infolog that only
+a verification run reads.
+
+### `TUNE_PLANT_PIPE` = 2.0f
+
+PLANT_PIPE: the constructor pipeline's return in spot-streams. Early cons each
+carry a full open-spot stream and compound; 0.5 measured lab 1 at 5.1m (too
+late, apexearth 2026-08-23: "try building the first lab a bit sooner"); 2.0
+targets the ~2m human timing. Labs 2+ are gated by PLANT_INCOME_PER, not this.
+
+### `TUNE_TECH_SURVIVAL` = 1.f
+
+Discount a tech want's deferred gain by the risk borne over its pipeline. 0
+disables it, which is how the A/B control is run.
+
+### `TUNE_ECO_SURVIVAL` = 1.f
+
+The same survival discount on the ENERGY want, so a long-payback generator
+(afus, fusion) is priced on the base it needs to still be standing. Cheap fast
+generators are untouched by construction. 0 disables it.
+
+### `TUNE_SIEGE_PRIOR` = 1.f
+
+The siege prior: what share of our OWN total economy we assume the enemy has
+converted into army and may be walking at us right now, seen or not. 1.0 = they
+had our start and our minutes and spent it all on units. Used only by the
+survival discount on long builds, never to size production.
+
+### `TUNE_LINE_TANK` = 0.28f
+
+ARMY COMPOSITION TARGET, shares of army metal (apexearth 2026-08-24:
+30/25/25/20; re-ruled 2026-08-29 to 28/20/35/17 -- "build up these guys
+[snipers/hounds/arty] in unit numbers so our army can grow very powerful",
+"Rocket bots, artillery... they get free shots sometimes so we should leverage
+that"). tank = health per metal, reach = weapon range, dps = damage per metal,
+mid = nothing clearly dominant. Classes are read off unit data against the
+game's own mobile combat units; see army.as.
+
+### `TUNE_LINE_ADAPT` = 0.f
+
+How hard the enemy's observed STATIC share of fielded metal bends the reach
+target up (renormalized). MEASURED WORSE at 1.0 (winrate14: 0W-11L, trade 0.372
+vs 0.53-0.65 refs) -- reach at ~48% left no screen and corridors deny it
+standoff room. Experiment arm, default off; his adapting-composition ruling
+stands as direction, this term's shape or scale is wrong.
+
+### `TUNE_MEX_EXPOSE` = 1.5f
+
+The per-mex defence floor grows with the spot's forward fraction: floor * (1 +
+fwd * this). His ruling: "the closer our mex is to the enemy and furthest from
+our army, the stronger the defenses should be."
+
+### `TUNE_WORTH_COST` = 1.f
+
+COST IS A CHOICE OF LANCHESTER LAW. The caller divides by cost once more, so
+the total power of cost is 1 + this: at 1 that is cost^2, the LINEAR law where
+bodies trade one for one and cheap chaff wins the draw; at 0 it is cost^1, the
+SQUARE law where a massed army fires at once and quality wins superlinearly.
+Tzar-and-Banisher armies are the square-law case; 0.5 is the middle. 1 is what
+this AI has always priced under.
+
+### `TUNE_WORTH_DIAG` = 0.f
+
+1 = print the exponents and field means once; 2 = also dump the ranked field.
+Costs no games to learn what an arm actually prefers.
+
+### `TUNE_AIM_MISS` = 1.f
+
+What a weapon's reach is worth when it CANNOT hit a moving target -- a slow
+un-tracked rocket. 1 = the reach counts in full, as it always has; 0.5 would
+say half of it only ever lands on buildings. The DLL's own IsAlwaysHit does the
+detecting (see EffRange in market/worth.as); this is what it costs.
+
+### `TUNE_LINE_MEDIAN` = 1.f
+
+Judge each class axis against the field MEDIAN rather than its mean. 0 = as it
+always was; see LineRef in market/army.as for why the mean cannot work.
+
+### `TUNE_LINE_ABS` = 1.f
+
+Read the tank and dps axes PER BODY rather than per metal (see LineAbs in
+market/army.as). 0 = as it always was, which made a Thud tankier than a Tzar.
+
+### `TUNE_LINE_RANGE_EXP` = 1.f
+
+Exponent on the range axis of the class argmax. 1 = as it always was.
+
+### `TUNE_LINE_ALLOC` = 0.f
+
+1 = the factory draw runs among the LINE CLASS the team owes the most metal to,
+instead of over every candidate weighted by apex_line_bite. A share cannot be
+produced by a nudge: five pricing attempts left reach at 0.04-0.07 of a 0.35
+target because the per-metal spread between classes is ~12x. 0 restores
+weighting. MEASURED 2026-08-30 AND OFF: at 1, on a matched seed against the
+same build, army metal collapsed 544,313 -> 60,324, kill/loss 0.81 -> 0.12,
+economy 1.65 -> 0.41, and 18,667 metal overflowed unspent. Reach share DID rise
+(0.06 -> 0.12) -- the allocation works, the STAND-DOWN deadlocks. Reach is owed
+on every election because it is never filled, so the T1 labs yield permanently
+waiting on a plant that "can serve" and never does. Yielding is only sound when
+the debt is actually BEING PAID, not when something that could pay it merely
+stands. Fix that before turning this on.
+
+### `TUNE_COVER_WORTH` = 1.5f
+
+How much ground-covered-per-metal is worth while the fleet is short of the
+sites it must watch. Buys cheap fast bodies early and fades as they arrive; 0
+disables the coverage term.
+
+### `TUNE_STREAM_SURVIVAL` = 1.f
+
+Discount a mex/upgrade's income stream by the share of it we expect to still be
+collecting over the stake horizon. A tower within reach of the spot raises it
+directly, so cover makes the next claim beside it worth more. 0 disables, which
+is how the A/B control is run.
+
+### `TUNE_SPACE_RENT` = 2.f
+
+Rent a building pays for standing on DEFENDED ground: covering turrets' metal
+spread over the area they cover, per cell of footprint. Makes dense beat
+sprawling inside the perimeter and costs nothing outside it. 0 disables.
+
+### `TUNE_PAYBACK_H` = 900.f
+
+A gain is credited only for the share of this horizon it will actually be
+collecting, so a build that delivers nothing for most of it is discounted
+against the small compounding steps that deliver now. Scales itself with build
+power: more lathes shorten buildSec and restore the big build's value. 0
+disables, which is how the A/B control is run.
+
+### `TUNE_LOCKUP` = 0.5f
+
+the option cost of tying capital up in an unfinished frame, as a multiple of
+(cost x duration / payback horizon). apexearth's "little bit extra of a penalty
+on top of time". 0 disables.
+
+### `TUNE_COMMIT_SHARP` = 12.f
+
+How much sharper the category draw gets for a COMMITMENT -- added to
+apex_draw_sharp in proportion to the candidate's cost as a share of what the
+economy can produce over the payback horizon. Large values make an expensive
+want effectively winner-takes-all while cheap wants keep their sampling.
+
+### `TUNE_FARM_ROW_W` = 320.f
+
+elmos one farm row runs before the next stacks behind it. Halved from 640 on
+apexearth's watched report that the winds sat too far out on both sides: the
+same slots in a narrower row form a block instead of a line, so the next slot
+is adjacent to the last.
+
+### `TUNE_FRONT_LINE` = 1.f
+
+Offer the spaced front posts (Military::FrontBuildSpots) to the defence auction
+alongside mexes and big structures. 0 disables, for the A/B.
+
+### `TUNE_STANDOFF_COVER` = 1.f
+
+Measure turret coverage on the ring the enemy can SHOOT FROM (their observed
+weapon range), taking the weakest bearing, instead of asking only whether a
+turret reaches the target itself. 0 restores the old test.
+
+### `TUNE_COMM_FIGHT` = 1.f
+
+Let the commander fight while he still outclasses the field. CommCaution is the
+"heavies are out" sense, so this only ever fires before that. 0 = the old
+flee-only commander.
+
+### `TUNE_TECH_PIPE` = 2.0f
+
+TECH_PIPE: discount on a tech plant's unlock demand. The pipeline DELAY is
+priced by PipeLatencyMult -- a second 0.5 here double-counted it and, stacked
+with the funded discount, priced the T2 lab ~100x under a nano (measured 8v8:
+zero tech decides in 12 min, all eight players).
+
+### `TUNE_E_BILL_SHARE` = 1.f
+
+E_BILL_SHARE [toggle 0/1] -- WHILE E-STALLED, price a build's ENERGY bill by
+the share of energy INCOME its own drain eats, instead of by how long the build
+runs. Inert with energy in hand: outside a stall the bill competes with nothing
+(apexearth: "it only matters when we're e-stalling"). costE/buildSec against
+income: an advanced solar's 5,000 E is 63 E/s, most of a 100 E/s economy and a
+sixth of a 400 E/s one, so the same building is unaffordable at the first and
+cheap at the second (apexearth: "an advanced solar is hardly affordable at
+100e/s income. And it costs a lot of energy to make. So income restrictions
+must apply"). The scarcity premium is still zero while the economy is healthy,
+so this only bites in a stall. 0 restores the build-length decay
+(apex_e_response), which was blind to income and priced a 5,000 E bill at the
+conversion floor.
+
+### `TUNE_STALL_SOLAR_E` = 300.f
+
+STALL_SOLAR_E [energy/second] -- while HARD e-stalled below this income, the
+energy want is restricted to generators that cost NO energy to build, i.e. the
+basic solar (apexearth: "if we are e-stalling and we have less than 300 energy
+per second, MAKE A BASIC SOLAR"). His number, stated as a rule, not derived: an
+advanced solar's 5,000 E bill and wind's 175 are both paid out of an economy
+that has none. 0 disables the rule and leaves the ladder to the auction.
+
+### `TUNE_E_HEADROOM` = 1.75f
+
+E_HEADROOM: energy income target as a multiple of trending pull -- the standing
+reserve that keeps the bank from ever being raced to zero. 1.25 still
+under-supplied in watched games ("definite pattern now").
+
+### `TUNE_ESCORT_SPEED` = 1.f
+
+ESCORT_SPEED: an escort must CATCH a raider or be a riot unit (apexearth: "we
+want fast or tough units on escort, rocket bots die in a 1v1 vs a pawn/grunt").
+A multiple of the ground field's own mean speed, so 1.0 means "above average",
+and no number here is about a particular unit. Lower it to let slower units
+guard.
+
+### `TUNE_MEX_GROWTH` = 8.f
+
+A spot is worth what it RAISES us by, not what it yields (apexearth: "when a
+mex would double our income it is very important... if it boosts our income
+only 1% then its not too important"). At 8: doubling x9, +10% x1.8, +1% x1.08
+-- 3 gave x4 / x1.3 / x1.03, too flat to express that ordering.
+
+### `TUNE_INFERIOR_DISCOUNT` = 1.f
+
+Discount a generator by how much better a one any constructor we own could
+build instead, so a worker restricted to the inferior option prefers to spend
+its build power on the better one. 0 restores flat per-def pricing.
+
+### `TUNE_E_REALIZE` = 1.f
+
+E_REALIZE [toggle 0/1]: the overflow-aware half of the energy market --
+generation priced by the share of it anything would actually use (real demand
+at E_HEADROOM plus standing converter capacity), the converter want reading the
+true remaining waste, and the same eco-compounding premium on both halves of
+the generator/converter pair. 0 restores pricing every E/s at the conversion
+floor whether or not a converter exists to realize it, and is the control arm.
+
+### `TUNE_E_WASTE_WORTH` = 0.25f
+
+So an overflow makes a generator LOSE to the converter that realizes it, and
+never makes it unbuildable (apexearth 2026-08-26; his standing ruling is that
+the generator ladder never pauses on waste). Default chosen, not derived --
+measure it.
+
+### `TUNE_THREAT_GRADIENT` = 1.f
+
+Spatial threat prior: 0 at our start box, 1 at theirs. 0 disables it and threat
+goes spatially flat, which is the control arm.
+
+### `TUNE_SCREEN_WORTH` = 0.2f
+
+SCREEN_WORTH: the scout/screen axis in production.as -- sight and dash per
+metal, read INSTEAD OF combat worth when it is the larger of the two, so a unit
+that is a hopeless soldier can still be a good screen. 0 disables it. 0.2 is
+calibrated, not derived: it puts a Tick modestly ahead of a Pawn at a
+half-covered patrol shortfall while the Pawn still wins on combat.
+
+### `TUNE_MEDIC_FRAC` = 0.12f
+
+MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
+(apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC: a legacy
+TUNE_MEDIC_SHARE with other semantics survives at the bottom.
+
+### `TUNE_WATER_FIRST` = 1.0f
+
+WATER_FIRST: MODEL. What land-locked metal is worth ON TOP of its own stream
+while the water is still uncontested -- the denial half of taking it first
+("the earlier you get into the water the more likely you are to own it"). 1.0
+prices denial equal to the gain; decays with the enemy's navy.
+
+### `TUNE_AA_URGENCY` = 1.f
+
+AA_URGENCY: multiplier on the insurance rate for anti-air. CHOSEN, matching the
+shield branch's x4 -- air arrives faster than ground and a bombing run is over
+before a reactive build finishes, so it is priced above ordinary insurance.
+Divided by the towers already standing, so it self-limits. 4 was compensating
+for a value that came out ~50x too small (an insurance rate on min(their air,
+our base)); with AA priced like a ground turret the multiplier is 1 and the
+knob still scales it.
+
+### `TUNE_AA_COVER_FRAC` = 0.5f
+
+AA metal we are aiming to have standing per metal of enemy air we have seen
+(apexearth: "if the enemy rolls up with 100k metal worth of air... then I'd
+hope we add at least 50k of AA"). This is what makes the AA want price itself
+out: once cover reaches the target the next tower stops nothing. 0.5 reproduces
+the old apex_def_trade=2 saturation point, now named.
+
+### `TUNE_ECO_AA_MULT` = 1.5f
+
+ECO_AA_MULT: the share of the air census the rear eco specialist answers,
+relative to an even split. It holds the team's economy, builds no ground
+defence and keeps no army at home, so it draws more of the air that gets
+through than its headcount share (apexearth: "~50% more anti air than your
+average player").
+
+### `TUNE_GIFT_ARMY` = 0.f
+
+GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF (apexearth
+2026-08-24: "we are doing the share logic to send units to teammates. We should
+disable that by default. It only is appropriate on certain maps"). Handing an
+army away is only right where the map makes one player's front the whole team's
+front; everywhere else it disarms us.
+
+### `TUNE_T2_CON_BASE` = 1.f
+
+T2_CON_BASE / T2_CON_PER_M: how many cons able to build the game's best
+extractor we always want standing -- BASE plus one per PER_M of metal income
+(apexearth 2026-08-23: "1 T2 con + 1 per 25 metal ... at 100 metal per second
+we should have at least 5"). Under that count a factory line orders one
+outright instead of pricing it against the army draw, which it loses whenever
+the army gap is open -- which is nearly always.
+
+### `TUNE_CON_BASE` = 2.7f
+
+constructors of ANY TIER the line orders before the draw, the plain "how many
+hands" floor. The block above is narrower than its name suggests: it counts
+only cons that reach BestExtract(), which scans every available def and so
+means the MOHO, so no T1 con and no commander ever satisfied it. 2.7 + inc/44
+is apexearth's own two points: 3 at 12 metal/s, 5 at 100. A floor, not a cap.
+
+### `TUNE_RECLAIM_REZ_BIAS` = 3.f
+
+How much more a reclaim is worth in the hands of a dedicated reclaimer (rezbot:
+builds nothing, so it has no expansion to be pulled off) than in the hands of a
+constructor that could be claiming open ground instead. A PREFERENCE, applied
+both ways around 1: the con still reclaims when its list holds nothing better,
+and the penalty lifts entirely once no metal spot is open. 1 disables.
+
+### `TUNE_NANO_SITE_SHARE` = 1.f
+
+How much of the metal nothing is spending one build site may claim as nano
+demand. Replaced a bare 35 m/s clamp that two turrets saturated at any income,
+which is why factories and gantries stood on 2-5 nanos while an enemy gantry
+ran 38. Demand still nets off the crew and the turrets already there, so the
+count self-limits.
+
+### `TUNE_MEX_TRIES` = 10.f
+
+Ranked metal spots offered to the engine per election before extraction gives
+up for that tick. Was a bare 3: a builder whose three best spots were all
+claimed proposed no mex want at all, which reads as "no ground left". A bound
+on WORK (one engine probe each), never on how far we may expand.
+
+### `TUNE_ROOM_WORTH` = 1.f
+
+What the ROOM under an obsolete building is worth, as a multiple of (base fill
+x metal per build cell x the building's own cells). SpaceRentM prices ground by
+the turret cover over it and reads ~0 in a lightly defended base, so nothing
+charged a wind farm for the space it occupied. 0 disables scarcity pricing.
+
+### `TUNE_INSURE_RATE` = 0.0003f
+
+INSURE_RATE: protection value per metal of covered assets, per second -- the
+one modeled risk quantity for eyes and turrets. 0.00005 prices a radar at ~v5
+on a 100k base.
+
+### `TUNE_NUKE_RISK` = 0.0005f
+
+NUKE_RISK: the anti-nuke's own rate; higher, because an uncovered nuke is total
+loss. Timing emerges from assets x rate.
+
+
+## Strategic structures -- manager/brain/market/want_super.as
+
+### `TUNE_SUPER_WANT` = 1.f
+
+SUPER_WANT: master switch for the strategic want (gantry, nuke silo, anti-nuke,
+long-range gun). 0 disables it.
+
+### `TUNE_SUPER_PUSH` = 1.f
+
+SUPER_PUSH: 1 = an affordable strategic want skips the category lottery rather
+than taking a proportional share of it. Off, these are priced normally and
+drawn about once a game.
+
+### `TUNE_SUPER_AFFORD_S` = 60.f
+
+SUPER_AFFORD_S [seconds] -- the whole affordability test: the bill (metal plus
+energy at the conversion floor) must be smaller than what the economy makes in
+this many seconds. 60 puts the anti-nuke at ~36 metal/s, the long-range gun at
+~90 and the gantry and silo at ~160 -- his "at 200 m/s we should eagerly build
+one".
+
+### `TUNE_SUPER_PER_INCOME` = 150.f
+
+SUPER_PER_INCOME [metal/s] -- income per additional anti-nuke; the offensive
+classes (silo, long-range gun) space at twice this. Never a cap: the count
+rises with the economy, which is his "at least 1 usually, more if we want to be
+safer".
+
+### `TUNE_SUPER_SHARE` = 0.25f
+
+SUPER_SHARE: the slice of total economic power the strategic market may claim
+as a want's gain. Scaled by how much budget is left after the bill.
+
+### `TUNE_SUPER_FLIGHT_PER` = 140.f
+
+SUPER_FLIGHT_PER [metal/s of overflow] -- one strategic frame may stand
+half-built per this much structural overflow, on top of the base one. The
+single-frame focus law is for an economy that must choose; one throwing metal
+away has already chosen.
+
+### `TUNE_BLAST_AISLE` = 500.f
+
+BLAST_AISLE [elmos] -- gap between a BIG generator's own clusters, so one death
+explosion cannot chain the whole farm ("better if only half our economy blows
+up"). Chosen, not derived from the defs' blast radii.
+
+### `TUNE_CON_FEED_HEADROOM` = 1.5f
+
+CON_FEED_HEADROOM -- how many hands the production draw may price toward, as a
+multiple of income/apex_request_drain (the hands income keeps fed). A new con's
+gain scales with the room left under that line; at 1.5 a 52 m/s economy stops
+paying for its eleventh builder ("I have a hunch we make too many
+constructors").
+
+### `TUNE_UNIT_AFFORD_S` = 120.f
+
+UNIT_AFFORD_S [seconds of income] -- a mobile unit's bid fades as its cost
+approaches this much income, dying at the full bill (mass first, T3 from
+surplus -- the supers' 60s affordability bar applied to units). His call
+2026-08-29 ("we need more Titans or Thors so we can push"): 60 -> 120, so a
+Thor bids from 75 m/s and a Titan from 112 instead of 150/225, while mass still
+out-prices them at any income that can't spare the bill.
+
+### `TUNE_SCOUT_OVER_S` = 45.f
+
+SCOUT_OVER_S [seconds] -- one idle cheap air scout is sent across the enemy
+position this often ("I don't see any scouts flying over their base"). 0
+disables the overflight and stock mex-cluster scouting is all that remains.
+
+### `TUNE_ECO_ROLE` = 1.f
+
+RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. It was switched
+off ("the eco role ... does *not* work") while it worked by crushing the rear
+player's army and defence TARGETS with multipliers -- a role deciding whether.
+It now names a different target instead; see EcoRoleTargetM.
+
+### `TUNE_GANTRY_AFFORD_S` = 100.f
+
+GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
+income: one shared line the whole team's nanos man, so one team purse. At 100s
+the ~9.3k bill clears right at ~100 team metal/s, his stated mark ("we can have
+a gantry at like 100 m/s").
+
+### `TUNE_GANTRY_HOST_INC` = 150.f
+
+GANTRY_HOST_INC [metal/s] -- the proposing player's OWN income at which the
+gantry gain is whole; below it the gain scales by (own/anchor)^2. The team
+purse makes the case, the host's feed times it (apexearth, watching green start
+one at 50 m/s: "that is too early"). Raised 100 -> 150 on his second call,
+2026-08-30: "We should push back Gantry creation to 150m/s or later" -- watched
+while the base had no T2 defence and the enemy arrived thick.
+
+### `TUNE_OFFENSE_DEF_FLOOR` = 0.1f
+
+OFFENSE_DEF_FLOOR: the share of its gain an offensive super (silo, LRPC) keeps
+at ZERO standing defence; the rest scales in with the defence target's fill
+("we consistently make Basilisk before T3 or even T2 defense"). 1 disables the
+coupling.
+
+### `TUNE_EXPOSED_LOSS_S` = 120.f
+
+EXPOSED_LOSS_S: seconds over which a fully exposed, unguarded asset is expected
+to be lost against a real opponent -- his "almost guaranteed". 300 priced
+sentries below the NEXT mex claim, so every spot was claimed naked and died to
+BARb inside the window; 120 flips to claim-then-guard.
+
+### `TUNE_FRAME_RISK` = 0.0f
+
+DEFAULT 0 -- the mechanism is wired but priced out. At 1.0 it suppressed
+building outright rather than reordering it: total metal built fell 38.6k ->
+17.6k and the head-to-head went 3-21 to 0-30 over 54 paired games. The charge
+is a full standing expected-loss multiplied by buildSec/120, which for a
+several-hundred-second structure exceeds its whole gain. Re-enable only with a
+hazard field that is not saturated everywhere (see the front-geometry entry in
+ISSUES.md).
+
+### `TUNE_DEF_TRADE` = 3.f
+
+DEF_TRADE: metal of enemy wave a standing turret is expected to stop, per metal
+of its own cost. The exchange rate that puts coverage and threat in one
+currency so a shortfall can be subtracted.
+
+### `TUNE_DEF_TTD_H` = 120.f
+
+A defence is discounted by H/(H+buildSec), so a slow turret keeps only the
+share of the threat window it will actually cover. Defaults to the same 120 s
+EXPOSED_LOSS_S uses -- a turret that takes as long to build as the asset it
+guards takes to die is worth half of one that lands instantly. LOWER means
+sharper pressure toward quick defences (a Guard at 2500 buildtime over an
+Agitator at 17400); 0 restores the old behaviour, where build time reached the
+price only through the builder's wage.
+
+### `TUNE_PROTECT_FIELD_S` = 2.f
+
+How often the protection field is rebuilt, in game seconds. It walks every team
+unit once and every defence price reads it, so this is the knob between a stale
+stake and a stalled sim -- want.protect was measured at 9.2 ms per call and
+growing before the field existed.
+
+### `TUNE_STALL_ANSWER_S` = 1.f
+
+How often the energy-stall answer re-asks which worker should drop what it is
+doing. Split from the 5-second housekeeping tick it used to share: a stall
+costs income every second it holds, so the answer wants the fast cadence, while
+the retreat table and the guard sweep do not. The scan stops at the first
+worker whose top want is energy (commander first), so a faster tick costs less
+per call rather than more.
+
+### `TUNE_STALL_ANSWER_MAX_E` = 400.f
+
+Energy income above which the stall answer stops asking at all. apexearth's
+number: past this the economy is big enough that an energy stall is a transient
+in the pull rather than something worth pulling a constructor off its task for.
+0 disables the gate and asks at every income.
+
+### `TUNE_UNPROT_DISCOUNT` = 0.20f
+
+WHAT A BUILDING IS WORTH WHILE NOTHING GUARDS IT (apexearth: "give buildings a
+~20% reduced value when they are unprotected. And the more powerful we create
+defense around those buildings the more they become worth"). The share of a
+structure's worth that is withheld over ground our cover does not beat the
+local wave on, and that a turret covering it gives back.
+
+### `TUNE_DEF_ALPHA_W` = 1.f
+
+A TURRET ONLY SHOOTS WHILE IT IS ALIVE. Weights each turret's cover by
+hp/(hp+alpha) against the punch of the biggest mobile unit the enemy fields,
+derived through our own unit table. Near 1 for everything while they field
+raiders; it is what separates a 1,670-hp Twin Guard from a 9,400-hp Bulwark
+once they field something that erases the former in one pass. 0 disables it.
+
+### `TUNE_ECO_RAID_TAU` = 180.f
+
+ECO_RAID_TAU: seconds of memory in the structure-loss field. Matches the death
+ledger's BLEED_TAU so both risk senses forget at the same speed.
+
+### `TUNE_THREAT_R` = 900.f
+
+THREAT_R: radius the enemy-mass prior is sampled over. DeathWalk's own corridor
+sample, reused rather than re-invented.
+
+### `TUNE_STAKE_HORIZON_S` = 300.f
+
+STAKE_HORIZON_S: seconds of a mex's stream that count as the stake standing on
+it. What makes a producing mex worth more to lose than its build cost.
+
+### `TUNE_RISK_FLOOR` = 0.15f
+
+RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
+insures something before the first loss teaches us. His "combination of enemy
+aggression and how well defended we are" -- this is the floor half.
+
+### `TUNE_ALLY_SHARE` = 1.f
+
+ALLY_SHARE: 1 = scale the SEEN census in ArmyTarget by our income share of the
+team (the census is side-wide; the answer is split by the roster). 0 = every
+player answers the whole enemy team (the pre-2026-08-28 form).
+
+### `TUNE_REZ_UTIL` = 0.25f
+
+Share of a rez bot's work rate it actually delivers (the rest is walking
+between wrecks). The fleet saturates when have x buildPower x this covers the
+recoverable stream; an ESTIMATE, not a measurement -- raise it to field fewer
+bots.
+
+### `TUNE_RETREAT_FLOOR` = 0.08f
+
+RETREAT_FLOOR: the HP fraction where the cheapest unit starts to flee. 0.08 was
+set against stock's 0.6 (93% of combat metal died retreating); his 2026-08-28
+report is the other rail ("units retreat on a very low HP %" -- a sliver-HP
+flee dies anyway). Raise only with a deaths.py died-retreating measurement
+beside it.
+
+### `TUNE_DRAW_DEFZONE` = 0.f
+
+Draw the defense zone on the map: the inner ring is the C++ base-defence range
+(the army fights at any odds inside it), the outer ring the incoming-push alarm
+radius. Off by default because it ships; the harness opts in with
+apex_draw_defzone=1.
+
+### `TUNE_DRAW_LANE` = 0.f
+
+Draw the army's staging anchor and, when apex_medic_setback is set, the medic
+station behind it plus the step between them. Off by default because this
+ships.
+
+### `TUNE_DRAW_HEAL` = 0.f
+
+Ping the heal post: the exact point CRetreatTask sends wounded units to (front
++ apex_retreat_behind toward home). A ping rather than a line because there is
+only one of them.
+
+
+## Everything else
+
+### `TUNE_AID_RESPOND` = 1000.f
+
+AID_RESPOND [metal lost at an ally's hotspot] -- above this the staging lane
+moves to that fight (clamped to contested ground). 0 disables the response and
+leaves the hotspot publish-only, as it was.
+
+### `TUNE_WAVE_CONC` = 1.f
+
+A defence site prices against the enemy's whole fielded army (capped by the
+stake behind the site), not a per-site share of it: their mass all takes one
+approach, and the rate term already says how often. This is what lets a
+Pulsar-class gun out-bid a carpet of cheap towers once the enemy fields real
+weight.
+
+### `TUNE_WALL` = 1.f
+
+Ground defence sites are slots along the WALL: the rim of our own buildings
+plus a standoff, sampled at tower pitch so filled slots form a contiguous line
+that grows with the base. Replaces the asset-cluster, front-line and
+closure-ring candidates (gates and the ally-front post stay); 0 restores the
+old set.
+
+### `TUNE_WALL_REACH` = 2.5f
+
+Cap on how far one bearing's buildings can drag the wall, as a multiple of the
+worth-weighted RMS radius of everything we own. A lone far mex stays outside
+the wall; a real expansion moves the RMS and the wall follows.
+
+### `TUNE_WALL_REAR` = 0.08f
+
+Share of the wall pull a slot DIRECTLY BEHIND the base keeps (enemy-facing
+slots get the full pull, tapering by bearing). Low is the concentration
+doctrine (apexearth 2026-08-30: "if we just focus on defending our frontline we
+don't have to build so many defenses all around our backline") -- the sealed
+LINE is what protects the rear, and a real rear threat still buys towers
+through the evidence terms. 1 makes the pull uniform.
+
+### `TUNE_WALL_LINE_W` = 2.f
+
+The front LINE's pull relative to the ring: his completeness ruling (a wall the
+enemy can walk around is useless) makes an extending section worth more than a
+redundant deepening. 1 prices line and ring equally.
+
+### `TUNE_WALL_EFFICIENT` = 1.f
+
+1 = a WALL slot, whose gain is the def-independent unmet-target pull, ranks
+candidate towers by cover per metal. Without it the only discriminator there is
+absolute power, which buys a T1 hand's most expensive tower for a rear slot
+with no threat.
+
+### `TUNE_DEF_KILL_CAP` = 1.f
+
+Cap a defence site's stake at the metal of attackers the candidate turret can
+actually destroy over apex_exposed_loss_s. Without it reach pays as AREA with
+no bound from rate of fire, which is most of why a long low-DPS gun outprices a
+short one.
+
+### `TUNE_DEF_DPS_LINEAR` = 1.f
+
+Price a turret's cover on its SURFACE DPS (linear) instead of the engine's
+sqrt(dps)-compressed threat. Reach is already paid as area by PfStakeIn and hit
+points twice over, so rate of fire was the only under-weighted term; 0 restores
+the old pricing for an A/B.
+
+### `TUNE_T1_DEF_LATE` = 0.02f
+
+A T1 tower's gain once our own advanced lab stands; 1 prices tiers equally.
+Sized to agree with the AI's own outclassing measure: where an advanced defence
+hand IS standing, TeamBestTowerPower already scales a Twin Guard by power
+190/29000, and this is the same order for the players that have the lab but not
+yet the hand.
+
+### `TUNE_RADAR_OVERLAP` = 0.45f
+
+A gap must sit outside this share of every standing radar's reach before a new
+mast is blocked; lower = more overlapping radars, sturdier intel. Was a
+hardcoded 0.8 (no redundancy; one death = a dark zone mid-fight).
+
+### `TUNE_FRONT_REAR_ARC` = 0.f
+
+NOTHING BEHIND US IS FRONT. 1 is the ESCAPE HATCH -- the full ring, for a
+genuinely surrounded base. It shipped as the default, so the rear exclusion the
+ring scan was written around had never once run: measured rays=24/24 with the
+enemy on one bearing, which is the ring closing on itself that its own comment
+warns of.
+
+### `TUNE_PERSONA` = -1.f
+
+Force a specific personality kind for every instance (-1 = roll normally). For
+A/Bs.
+
+### `TUNE_ASSIST_RELEASE` = 1.f
+
+Assisters beyond a site's ETA-derived worker count fall back into the auction
+instead of being held to completion. 0 restores the glue.
+
+### `TUNE_NANO_FED_S` = 15.f
+
+NANO_FED_S [seconds] -- a join is refused when standing-nano lathe alone clears
+the site's remaining bill within the joiner's walk plus this many seconds; the
+freed constructor founds a new frame instead (a nano can assist a frame but
+never place one). Sized to the walk-and-found time of the next ring spoke. 0
+disables the gate.
+
+### `TUNE_DRAW_SHARP` = 2.f
+
+how sharply the category draw follows value. Odds go as (value/leader)^this: 1
+is the old straight-proportional draw, 2 makes a six-fold value gap one
+election in thirty-six, large approaches argmax. Never a threshold, so nothing
+starves outright.
+
+### `TUNE_MEDIC_SHARE` = 0.4f
+
+share of the rez fleet that serves as battlefield medics: they stay with the
+army's staging anchor, repair the wounded during fights and reclaim the
+aftermath there. The rest work the corpse geometry as before. 0 disables
+medics.
+
+### `TUNE_MEDIC_SETBACK` = 0.f
+
+how far BEHIND the lane a medic holds station. The lane is where the army is
+fighting; a medic parked on it is in the fight. 0 keeps the old on-the-lane
+behaviour.
+
+### `TUNE_REZ_FLEE_S` = 20.f
+
+how long one hit keeps a rez bot retreating. A rez bot cannot dig in, only
+leave, but the hold was 90s: one stray shell parked it for a minute and a half.
+Lower works sooner and eats more chip damage; the threat vetoes still refuse
+hot work on the way back.
+
+### `TUNE_REZ_SCAN_S` = 1.f
+
+spacing on ONE bot's own wreck and resurrect scans. Was a single team-wide
+clock, so with several bots idle most of them lost the race every period and
+stood still. Lower is more responsive and costs one feature query per bot per
+period.
+
+### `TUNE_RAIDER_MASSING` = 0.f
+
+1 = raiders join the massing pool once our advanced lab stands and fight as
+line army (the pre-2026-08-30 behaviour). 0 = they keep raiding all game, as
+stock BARb does. Measured at 1: zero RAID and zero ATTACK task elections across
+11 matches.
+
+### `TUNE_SPAM_RAIDERS` = 0.f
+
+1 = cheap RAIDER-role units are routed to solo scout tasks in spam phase,
+spreading over unscouted clusters. 0 keeps them raiding; scout-role chaff
+spreads either way. CScoutTask cannot group.
+
+### `TUNE_SLOT_TRIES` = 12.f
+
+Lattice slots offered to the engine before a placement gives up on growing a
+cluster and seeds a new one. A bound on WORK per placement: each try is one
+FindBuildSiteNear.
+
+### `TUNE_AISLE_GROW` = 1.f
+
+A GROW slot must keep the cluster aisle to a foreign def, not just avoid
+touching it. Rule 3 parted clusters by an aisle on the SEED only, so growth
+filled the street back in and sealed units into the pocket. Trades against
+sprawl: a cluster that cannot grow toward its neighbour seeds another one
+further out.
+
+### `TUNE_CLUSTER_N` = 16.f
+
+How many of one def stand together before the next starts a fresh cluster
+elsewhere, so the whole economy is not in one spot. 16 is a 4x4 block; the
+aisle between clusters is derived from the widest unit we field, not tuned
+here.
+
+### `TUNE_FARM_ROWS` = 28.f
+
+Rows of lattice the farm scan walks rearward before giving up. A bound on WORK
+per placement, not on the base.
+
+### `TUNE_RECLAIM_BLOCKER` = 0.f
+
+Reclaim one of our own economy buildings that is standing in a lattice slot C++
+could not place on. DEFAULT OFF: measured 2026-08-25, 8 paired seeds, it cost
+more constructor time than the ground was worth -- metal built median 17,978
+with it off against 12,417 with it on, eco 5,436 against 3,869, and even the
+tiling it exists to improve fell (47% touching to 39%). The pricing and the C++
+blocked-slot signal stay for a cheaper retry: the want has to compete against a
+mex, and clearing ground is not worth a mex.
+
+### `TUNE_DEF_ECO_S` = 120.f
+
+HOW MUCH STATIC DEFENCE WE MAY OWN, as seconds of total economic power
+(EcoPowerM, metal/s incl. realizable energy). The whole basis of DefenceTarget:
+at 40 metal/s this is ~1,200 metal, a handful of light towers; at 400 it is
+~12,000, enough to carry a Pulsar. Replaced (expected wave - our own army) /
+trade, which collapsed the target to a mex floor exactly as the army grew. 30
+was chosen to clear one heavy gun at hosted-game income and starved the low
+end: at benchmark's ~25 m/s it budgeted 750 metal of defence for a whole game
+while stock stood 11,700-17,800 in the same matches -- the naked rear the death
+ledgers measured everywhere. 120 is the measured recalibration, still far under
+the pre-target 175%-of-eco runaway.
+
+### `TUNE_DEF_OFF` = 0.f
+
+THE NO-TURRET TEST (docs/24-how-units-fight.md): 1 proposes no ground or AA
+turret at all, so radar and units are the whole defence. Override it on a
+launch (tools/test_earlyfight.py does); the default stays 0.
+
+### `TUNE_ECO_TARGET_BASE` = 250.f
+
+The economy the rear specialist names before it spends anything on war, in
+metal/s of economic power AT NO BONUS -- EcoRoleTargetM multiplies by the
+game's own handicap, so 250 here is 500 in a +100% game. Measured on Supreme
+Isthmus 8v8 +100%, the median player passes 500 at minute 20 and 855 by minute
+25, which is apexearth's "no army and no defense until like 20 minutes"
+expressed as economy rather than a clock.
+
+### `TUNE_AIR_ECO_BASE` = 100.f
+
+Economic power, at NO-BONUS scale, before the bomber raid is worth mounting at
+all -- the game's handicap multiplies it, so 100 here is apexearth's "200 m/s"
+in a +100% game. Below it bombers price at zero and the metal goes to the
+ground army instead ("we don't want to make air too early, it makes us weak on
+ground"). This replaced an 11-minute TIMER, which could not tell a rich game
+from a poor one.
+
+### `TUNE_LINE_TERRAIN` = 1.f
+
+Weigh a production line by how much of the map its ARMY can move around in
+(ai.DefMapCoverage, the engine's own per-movement-type partition). 1 = on, 0 =
+off, which is the control arm. On a flat map every line reads the same and this
+changes nothing; on a hill map the vehicle line is discounted against the bot
+line, which is apexearth's rule for picking the ground line.
+
+### `TUNE_SCREEN_GAP` = 200.f
+
+How far IN FRONT of the squad's longest row a short-range row holds, elmos.
+apexearth 2026-09-01: "the tanks should just stand around in front of the
+sheldons... they won't walk up to enemies to shoot at them. They are there as a
+shield." The screen line is highestRange - this; clamped so it can only add
+standoff, never pull a row closer than its own reach. 0 restores "stand at your
+own range" for every armed row, which is the control arm.
+
+### `TUNE_TEAM_LINE` = 1.f
+
+The production half is divided by (1 + this * matesWithIt), so at 1.0 the
+second team copy is worth half and the third a third. apexearth, watching a
+4v4: "I'm still seeing us start with 4 bot labs on comet catcher. Enemy seems
+to have done 2 bot labs, 1 vehicle, and 1 air." Not exclusivity -- a fourth bot
+lab is still allowed, it just prices below the first vehicle plant. 0 restores
+the old behaviour, where every player reasons alone.
+
+### `TUNE_DEF_DOMINANCE` = 1.f
+
+A defence slot holds ONE building, so a tower beaten on BOTH reach and killing
+power by a gun we can afford right now is not a cheaper option, it is stranded
+metal (apexearth: "why build something that so quickly becomes outdated?"). 1 =
+on, 0 = off, which is the control arm.
+
+### `TUNE_DEF_AFFORD_S` = 30.f
+
+Seconds of total economic power a defence building may cost and still count as
+affordable -- the guard that stops a Pulsar we cannot pay for making every
+tower obsolete and leaving us with nothing. At 40 m/s this admits ~1,200 metal;
+at 300 m/s it admits a Pulsar.
+
+### `TUNE_CONV_AFFORD_S` = 30.f
+
+Seconds of economic power the converter burst may commit at once. The bank is
+the wrong bound -- we deliberately run it near empty, so metal.current/price
+was 0 or 1 and the burst never fired while half the grid was wasted. A
+converter pays back in 37 seconds, so 30 seconds of economic power is a bill
+the economy carries comfortably.
+
+### `TUNE_E_COMMITTED` = 1.f
+
+Count the energy draw of work already ORDERED into the pull that prices energy.
+Not a magnitude: the quantity added is arithmetic off the catalog (remaining E
+cost over remaining build seconds), exactly as ConvCapInFlight already does for
+converter capacity. 0 is the control arm, pricing on realized pull alone --
+which is where the first energy decision lands 73 seconds and one full stall
+after pull passed income.
+
+### `TUNE_E_PARALLEL` = 0.f
+
+Let a STALL open parallel energy sites, not only an overflowing bank. Energy
+asks fold onto one standing request unless the bank spills, and during a stall
+it never does -- so a 300/s deficit was answered 35/s at a time, serially.
+Opens exactly while ordered generation still fails to cover the shortfall.
+MEASURED AND DEFAULTED OFF. Three paired 20-minute Carrot Mountains seeds: with
+it on, metal built 25,500 -> 19,555 and mexes 42 -> 33, for a stall reduction
+of 444 -> 352. It buys the smaller stall by splitting build power across
+several frames at once -- which is the same thing this AI penalises a second
+lab for, and against apexearth's own rule to "focus as much build power as we
+can on just the one building". The serialized fold is not the bug; it is that
+focus rule working.
+
+### `TUNE_PLANT_INFLIGHT` = 1.f
+
+Discount a plant want by the plants of ANOTHER domain already under
+construction. reachKin is per domain, so bot -> vehicle -> air rotated freely:
+each new class priced as though nothing were in flight, and the same income
+split across three frames finishes none of them.
+
+### `TUNE_COVER_PUSH_S` = 10.f
+
+The mex-cover QUEUE JUMP only fires once the tower costs less than this many
+seconds of total economic power. The jump overrides the auction outright
+(measured: an LLT priced 0.03 built ahead of a mex priced 88.17), so at opening
+income it buys sentries before there is a base. 10s means a 90-metal light
+tower waits until roughly 9 metal/s of economic power -- past the first mexes
+and the first lab, which is the order apexearth asked for -- while a
+1,250-metal Gauntlet has to wait for 125. Below the bar the tower still
+competes on price like anything else.
+
+### `TUNE_MEXUP_BOOST` = 1.f
+
+What a mex UPGRADE'S extra metal stream is worth, over its honest arithmetic.
+2.79 is the measured median ratio by which energy was beating mex upgrades head
+to head when an upgrade ranked second (394 such losses in one 60-minute game),
+so at this value the two are level at the median rather than extraction always
+losing. 1 is the arithmetic with no thumb on it.  MEASURED AT 2.79 AND LEFT AT
+1. Paired 60-minute Carrot Mountains games: the boost does exactly what it
+claims -- mex upgrades go from 7% of advanced-con decisions to 33% and become
+the most-chosen want -- and the OUTCOME is worse. Upgrades actually standing
+fell 94 -> 69, mexes held 243 -> 182, metal built 863k -> 358k, income 1001 ->
+377. It displaces the energy that pays for expansion, so there are fewer mexes
+left to upgrade. One game per arm on a bench that does not reproduce, so treat
+the direction and not the size -- but nothing here supports shipping it above 1
+(apexearth's own rule: validate outcomes, not log lines).
+
+### `TUNE_DUP_BP_SUBST` = 1.f
+
+Price a DUPLICATE line's throughput against the cheaper way to buy the same
+build power. An advanced lab is 300 workertime for 2900 metal and a
+construction turret 200 for 210, so the turret is nine times the build power
+per metal (apexearth: "the right choice is to add more nanos to the lab instead
+of making another lab"). Applied only while a line is actually short of hands,
+which is his "unless you ran out of room" clause. The one bad game that got
+this defaulted off predates nano frames actually completing -- with nanos never
+finishing, this discount removed the only build-power purchase that ever
+completed. 0 is the control arm.
+
+### `TUNE_REPLANT_DISCOUNT` = 0.15f
+
+What a plant def we RECLAIMED ON PURPOSE prices at while the window below runs.
+14 of 15 T2 bot labs in one 1v1 died to our own reclaim and were re-bought; a
+retirement the market can immediately reverse decides nothing. 1 disables.
+
+### `TUNE_REPLANT_WINDOW_S` = 600.f
+
+How long the retirement memory above holds. Chosen, not derived -- long enough
+to outlive the walk-and-rebuild cycle it exists to break (~90s), short enough
+that a genuinely needed line returns inside a game phase.
+
+### `TUNE_FOE_TIER_FADE` = 1.f
+
+How fast a unit's -- and a plant's PRODUCTION -- value fades as the share of
+identified enemy metal above its own tier rises. Priced as 1/(1 + this *
+shareAbove): at 1 an enemy fielding nothing but a higher tier halves what a
+lower-tier unit or line is worth. Never zero, because a fielded T1 still
+shoots; 0 is the control arm. Chosen, not derived -- measure it.
+
+### `TUNE_OWN_TIER_FADE` = 0.8f
+
+The same fade against OUR OWN fielded tier: once a T2 lab or gantry stands,
+lower-tier units lose 1/(1+this*tiersBelow) of their worth ("in late game,
+aside from spam we should mostly only be putting our resources into T3 units
+and advanced air"). 0 disables.
+
+### `TUNE_ALLY_COVER` = 400.f
+
+What a teammate holding this ground is worth as cover, in the same currency as
+our own towers. 0 restores the own-towers-only reading, in which a rear player
+behind four allies prices as the most dangerous ground on the map.
+
+### `TUNE_DEF_PRIOR_SHARE` = 0.35f
+
+Share of the SYMMETRIC enemy expectation that the defence target assumes could
+arrive at our own base before anything has been seen. Without it the target is
+zero until something actually arrives, which is a strategy of having no
+defence.
+

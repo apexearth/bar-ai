@@ -46,6 +46,7 @@ cap is describing an AI we are trying to stop being.
 |---|---|
 | [25 — Silent failures](25-silent-failures.md) | The eighteen ways something here fails without saying so, keyed **S1–S18** by CLAUDE.md's router: the mechanism, the date it was measured, and the wrong conclusion it produced. Also the three findings that set the method — "the path fires" is not evidence, instrument first, and the frame budget. |
 | [26 — Working rules](26-working-rules.md) | How to work in this repo: the policy line you must not cross alone (caps, exclusivity, thresholds, tunables), harness and Windows process traps, comment discipline, delegation, and apexearth's own workflow. |
+| [27 — Tunable rationale](27-tunable-rationale.md) | Why each default is the number it is, keyed by `TUNE_` name: the measurement, the A/B that failed, the ruling. The long form that `tunables.as` used to carry inline; the file itself now runs one line per knob. |
 | [07 — Headless testing](07-headless-testing.md) | How to drive the engine by hand — start script fields, speed, flags — and why ten games resolves nothing. |
 | [16 — Big plays](16-big-plays.md) | Why the late game should produce moments; the silo/anti-nuke cadence arithmetic that sets the salvo size, and how to judge a "moment" when win rate cannot. |
 

@@ -96,7 +96,8 @@ conclusion each one produced.
 | **touch builders / crews** | `ai-builder-crew` · **S14** `AiMakeTask` is a RE-ELECTION, so enqueuing in a rule orphans all but the first |
 | **read a unit's cost or buildoptions** | `tools/unitdef.py`. **S10** never glob for a unit file · **S11** the two game trees disagree |
 | **add a gate, target, prior or role rule** | `ai-couplings` — then reread "Ask before inventing policy" |
-| **add a tunable or a want kind** | `dashboard-ui` — it is not finished until the dashboard shows it |
+| **add a tunable or a want kind** | `dashboard-ui` — it is not finished until the dashboard shows it. One line in `tunables.as`; the reasoning goes in `docs/27-tunable-rationale.md` |
+| **change a default, or ask why it is what it is** | `docs/27-tunable-rationale.md` — keyed by `TUNE_` name. Several defaults are measured-and-left-off; the A/B is recorded there |
 | **count factories, tasks or in-flight builds** | `async-sim-orders` · **S13** an order is not applied when issued, and the lag scales with sim speed |
 | **write AngelScript** | `docs/05-angelscript-api.md` · **S4** no forward declarations · **S5** a unit can only build what its own def lists · `tools/as_scope.py` |
 | **edit any `.as` file** | **S18** an anchor that does not match does nothing, quietly. Assert it exists |
