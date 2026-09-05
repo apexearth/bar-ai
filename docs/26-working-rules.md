@@ -192,7 +192,10 @@ finding left in a transcript is one you will pay to rediscover.
 - Line endings are LF (`.gitattributes`) so diffs against upstream stay readable.
   `ai/Unstable/` is fully LF as of 2026-09-04; `cpp/`, `changes/` and some root
   `.md` files still contain CR. Check before anchoring an edit there, or use
-  `tools/normalize_eol.py`.
+  `tools/normalize_eol.py`. A script that rewrites a file must use
+  `Path.write_bytes` — on Windows `write_text` silently translates `\n` to
+  `\r\n`, and the working tree then shows every line of the file as changed
+  until `.gitattributes` normalises it at commit.
 - Files are kept under ~600 lines deliberately: above that, work degenerates into
   grep-an-anchor-and-blind-replace, and an anchor that does not match fails
   silently (**S18**). That has eaten edits here at least five times.

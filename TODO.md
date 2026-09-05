@@ -227,7 +227,7 @@ confusion each one causes:
   down to the rate limit and the message shape.
 - Constants are `#define` in headers rather than `constexpr` in the class.
 
-Bugs found in the same pass are in CHANGES.md under "found while refactoring,
+Bugs found in the same pass are in changes/CHANGES.md under "found while refactoring,
 NOT fixed" — they are deliberately still there.
 
 # Unbuilt behaviours (2026-08-09)

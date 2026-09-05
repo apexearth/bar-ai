@@ -154,7 +154,7 @@ realtime) warm.
   else records them.
 
 An entry is deleted when it is built and measured — not marked FIXED forever.
-**`CHANGES.md` is FROZEN** (2026-08-27): history only, do not read it for current
+**`changes/CHANGES.md` is FROZEN** (2026-08-27): history only, do not read it for current
 behaviour and do not append.
 
 ## Layout, in one place

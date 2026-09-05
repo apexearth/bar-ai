@@ -85,7 +85,7 @@ null; the native factory recruit (response.json) and the Watchdog factory
 recovery are cut; DefaultMakeDefence/DefaultMakeSensors/MakeBaseDefence are
 inert; ExecuteChain (build_chain hubs) is inert. Bindings stay registered.
 Executors kept: EnqueueMexAt/EnqueueGeoAt, TaskB/TaskS enqueues, nano
-assist, repair-on-damage, facqueue line mechanics. See CHANGES.md 2026-08-23.
+assist, repair-on-damage, facqueue line mechanics. See changes/CHANGES.md 2026-08-23.
 
 ## 2. KEEP — senses, execution plumbing, unit thoughts
 
