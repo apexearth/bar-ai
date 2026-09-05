@@ -32,71 +32,13 @@
 // ---------------------------------------------------------------------------
 // Economy — energy, fusion, converters, reclaim
 // ---------------------------------------------------------------------------
-// manager/builder/fusion.as [energy/s] -- no advanced solar below this energy
-//   income.
-// manager/builder/requests.as [elmos] -- BEHIND THE BASE, NOT WHEREVER THE
-//   ASKER STOOD.
-// manager/builder/mexguard.as [metal] -- Generators at least this expensive
-//   count as advanced-solar class and pack shoulder-to-shoulder next to the
-//   last one instead of scattering on the band.
-// manager/builder/mexguard.as [elmos] -- Search radius around the standing
-//   pack for the next advanced solar's site.
 // manager/builder/requests.as [toggle 0/1] -- ADVANCED SOLARS ARE STRICTLY
 //   SERIAL, whatever the bank.
 const float TUNE_ADVSOL_SERIAL = 0.f;   // leaf-era decree off: the wealth cap (dup_bank) bounds parallels; serial refusals churned 8.6k decides at 500 m/s
-// manager/builder/fusion.as [energy/s] -- Advanced solars stop once energy
-//   income reaches this and T2 stands; past that point the next buy is the
-//   fusion, not another panel.
-// manager/builder/mexguard.as [toggle 0/1] -- Keep one energy build always
-//   underway: with none in flight, claim a builder for the next generator. 0
-//   disables the rule.
-// manager/builder/mexguard.as [metal/s] -- One parallel always-eco build per
-//   this much metal income (minimum one): the floor under energy scaling,
-//   above which the deficit forecast opens more.
-// manager/builder/obsolete.as [metal/s] -- Metal income at which the economy
-//   counts as big for the cleanup rules (reclaiming obsolete buildings); also
-//   treated as big whenever the game is lagging.
-// manager/builder/mexguard.as [energy/s] -- Energy drain a new converter is
-//   assumed to add; one is only placed while spare energy clears this plus the
-//   reserve.
-// manager/brain.as [ratio] -- Discount on the converter Want while no energy
-//   is actually being wasted -- a converter with nothing spare to eat produces
-//   nothing.
-// manager/builder/converter.as -- TILE, don't spiral: FindBuildSiteNear
-//   returns any legal site, which stepped the pack diagonally with half-cell
-//   offsets...
-// manager/builder/converter.as -- apexearth: "5% chance to place one in a new
-//   spot...
-// manager/builder/converter.as [elmos] -- How tight a new converter packs next
-//   to the latest one (95% adjacent, 5% fresh spot).
-// manager/builder/converter.as [energy/s] -- One additional converter allowed
-//   per this much spare energy income.
-// manager/builder/mexguard.as [energy/s] -- Spare energy kept in hand above a
-//   new converter's assumed drain before placing it.
-// manager/brain.as -- The election TIME budget in maketask.as is the governor
-//   now; this count is only a runaway backstop, set far above normal bursts.
 // manager/builder/requests.as [ratio] -- Duplicate in-flight orders of the
 //   same building the bank justifies: one extra copy per (its cost x this) of
 //   banked metal.
 const float TUNE_DUP_BANK = 1.f;
-// manager/brain.as [ratio] -- Floor on the economy-overspend deferral:
-//   reactor-class buys are slowed by at most this factor, never stopped.
-// manager/brain.as [metal] -- Only economy buys at least this expensive defer
-//   while the eco share overruns its target; mexes, mex upgrades and cheap
-//   generators are exempt.
-// manager/factory/mexhold.as [toggle 0/1] -- The eco lead keeps farming even
-//   while an ally is dying (aid flows as EcoAid metal instead); 0 restores
-//   standing the role down.
-// manager/builder/maketask.as [ratio] -- Economy lanes yield their builders
-//   once actual eco spend exceeds its target share by this factor; they resume
-//   when back under.
-// manager/builder/mexguard.as [toggle 0/1] -- Any constructor may answer the
-//   home-energy rule; 0 restores it to the HOME crew only.
-// manager/builder/mexguard.as [toggle 0/1] -- Prefer planting generators
-//   inside a defence turret's reach when one is near; 0 always uses the
-//   ordinary layout.
-// manager/builder/mexguard.as [ratio] -- Fraction of the covering turret's
-//   range that counts as protected ground for generator placement.
 // policy.as -- Build energy while income < pull * this.
 const float TUNE_ENERGY_HEADROOM = 1.35f;
 // manager/brain/market/eta.as [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE.
@@ -104,47 +46,14 @@ const float TUNE_ENERGY_HEADROOM = 1.35f;
 //   1 lets the ETA re-rank wants WITHIN the four economic categories. Swept
 //   against an inactive opponent -- see the eta-objective skill.
 const float TUNE_ETA = 0.f;
-// manager/builder/mexguard.as [energy/s] -- panic solar panels only while
-//   energy income is below this; a bigger economy answers a stall with the
-//   ladder's fusion instead.
-// manager/builder/maketask.as [toggle 0/1] -- Allow the engine's ENERGY-
-//   storage offers; 0 refuses them outright (metal storage untouched) --
-//   storage is rarely right without a superweapon to charge.
 // policy.as [metal or metal/s] -- Energy per metal: the grid target follows
 //   METAL income (energy.pull is throttled demand and self-reports "fine"
 //   while starving...
 const float TUNE_E_PER_METAL = 20.f;
-// manager/builder/fusion.as [count] -- T2 mexes that license the first fusion
-//   as the alternative to the income bar; after the first reactor neither bar
-//   applies.
-// manager/builder/fusion.as [metal/s] -- Metal income below which the first
-//   fusion is refused unless the moho count clears it.
 // policy.as [metal or metal/s] -- A fusion costs ~21,000 ENERGY to construct:
 //   starting one on a small grid drains it -- the lathe plus a producing T2
 //   lab stalls...
 const float TUNE_FUSION_MIN_ENERGY = 1000.f;
-// manager/builder/mexguard.as [metal/s] -- From this income a wasteful grid is
-//   answered with a fusion rather than another small generator.
-// manager/factory/factorydefs.as [energy/s] -- one gantry allowed per this
-//   much energy income. A building gantry draws 460-620 energy/s on its own,
-//   and the metal-income rungs above say nothing about that...
-// manager/builder/mexguard.as [energy/s] -- Energy income before geothermal
-//   counts as affordable: the 13,000-energy build price drains a small
-//   economy (commanders never take the geo job -- level-1/2 cannot build it).
-// Energy horizon for EcoAffordableE (ecomath.as): seconds of energy income a
-// build's costE may claim. 52 makes a 13,000-E geo clear at 250 e/s -- the
-// bar apexearth stated -- so the derived gate reproduces his number and then
-// scales with def cost and grid size instead of being pinned to either.
-// manager/builder/statics.as [ratio] -- Share of energy income that may go to
-//   jammer upkeep; sets how many jammers the grid supports.
-// manager/brain/nukes.as [seconds] -- How long a defensive volley waits for
-//   its silos to pool enough stockpile before the volley lapses.
-// manager/brain/nukes.as [count] -- Extra missiles a volley budgets per
-//   SIGHTED antinuke covering the target (the first missile is eaten).
-// manager/brain/nukes.as [metal] -- A defensive volley adds one missile per
-//   this much enemy army value spread beyond the first blast (at most 3
-//   extra).
-// manager/builder/opening.as -- THE OPENING SEQUENCE: 1.
 // policy.as [energy/s] -- energy income below which winds and advanced
 //   solars are never reclaimed (apexearth: ">2000 reclaim wind and advanced
 //   solar"); wind's cliff additionally scales down on bad-wind maps.
@@ -155,17 +64,11 @@ const float TUNE_RECLAIM_PAD = 1.5f;
 // policy.as -- Income cliffs below which a generator tier is never eaten
 //   (apexearth 2026-08-15: solars ~500, wind/advsol ~2000, wind scaled...
 const float TUNE_RECLAIM_SOLAR_E = 500.f;
-// manager/brain/facqueue.as [metal/s] -- One T1 core combat unit wanted per
-//   this much metal income (scaled up under army pressure).
-// manager/brain/facqueue.as [metal/s] -- One T2 core combat unit wanted per
-//   this much metal income (scaled up under army pressure).
 // policy.as [metal/s] -- Metal income required before committing to T2
 //   (techlead.as RushReady, and the rear plant-siting rule reads the same
 //   knob). apexearth 2026-08-21: "30 m/s is a good number". The T2 decision
 //   is this pair: apex_t2_metal AND apex_t2_energy.
 const float TUNE_T2_METAL = 30.f;
-// manager/factory/techlead.as [toggle 0/1] -- The T2 commit's losing-ground/
-//   contested safety veto; 0 techs through pressure (the choke-map escape).
 // policy.as [energy/s] -- Energy income required before starting T2
 //   (techlead.as RushReady), and the lower bar once a reactor already stands.
 const float TUNE_T2_ENERGY = 1200.f;
@@ -180,43 +83,9 @@ const float TUNE_T2_ENERGY_REACTOR = 400.f;
 // ---------------------------------------------------------------------------
 // Constructors, build power, nanos
 // ---------------------------------------------------------------------------
-// manager/brain.as [seconds] -- Assumed arrival window of an enemy nuke
-//   volley; antinukes wanted = one interceptor per reload that fits in this
-//   window, per enemy silo.
-// manager/assist.as [ratio] -- The factory line asks for more hands while
-//   actual army spend is under its target share times this -- the shortfall is
-//   the signal, not spare metal.
-// manager/assist.as [seconds] -- One fallback-assist offer per bot per this
-//   many seconds; between offers the bot waits instead of re-running the
-//   election ladder.
-// manager/assist.as [toggle 0/1] -- Constructors may stack on the factory line
-//   to speed army production; 0 disables line assist entirely.
-// manager/assist.as [ratio] -- Lathes allowed on a factory line: the economy-
-//   scaled guard stack times this -- the line is the one lead whose speed is
-//   directly army production.
-// manager/assist.as [ratio] -- At most this share of the constructor pool may
-//   be factory helpers at once, so the line cannot take every builder.
-// manager/builder/nano.as [toggle 0/1] -- A factory asking for hands may get a
-//   permanent nano turret instead of a walking guard; 0 always sends the
-//   constructor.
-// manager/builder/obsolete.as [metal/s] -- One mobile assist bot allowed per
-//   this much metal income (plus 2); turrets are the preferred build- power
-//   sink.
-// manager/assist.as [ratio] -- Spare income (income minus pull) above this
-//   fraction of income also counts as the line wanting help.
-// manager/builder/nano.as [ratio] -- Nano-turret burst on a deep bank: one
-//   extra turret queued per this many turret- costs of banked metal.
 // manager/military/massing.as [toggle 0/1] -- The conservative stance (hold
 //   rather than attack while behind) is allowed; 0 removes it.
 const float TUNE_CONSERVATIVE_HOLD = 1.f;
-// manager/builder/share.as [ratio] -- Floor on the constructor-want deferral
-//   while build power overruns its share and army is under its own: slowed to
-//   at most this factor, never zero.
-// manager/builder/share.as [ratio] -- Constructor want multiplier while the
-//   metal bank is empty -- an empty bank is not a build-power shortage.
-// manager/brain/facqueue.as [ratio] -- Constructor cap multiplier while the
-//   metal surplus is real (bank full AND the grid healthy) -- more hands to
-//   spend it.
 // policy.as [curve] -- T1 constructor curve slope: cons wanted = A x
 //   ln(income) + B. At A=4.6/B=-6.55 that is ~4 cons at 10 m/s, ~14 at 100.
 //   The dashboard edits this as anchor points.
@@ -230,46 +99,12 @@ const float TUNE_CON_LOG_T2_A = 6.0f;
 // policy.as [curve] -- T2 constructor curve intercept -- see
 //   apex_con_log_t2_a.
 const float TUNE_CON_LOG_T2_B = -16.0f;
-// manager/brain/facqueue.as -- apexearth: a floor of 3 T1 cons; beyond that,
-//   more only on surplus metal, and never while the enemy army outweighs ours
-//   -- an...
 // manager/military/massing.as [ratio] -- Outmassed reads true while enemy
 //   massing threat exceeds our team army value times this; being outmassed
 //   suspends cheap-constructor growth.
 const float TUNE_CON_OUTMASSED = 1.f;
-// manager/builder/share.as -- The curve answers "how many could we support",
-//   not "how many have work".
 // policy.as -- A PASSIVE read of the enemy licenses a bigger builder fleet.
 const float TUNE_GREED_CONS = 1.7f;
-// manager/assist.as [metal/s] -- Shadow constructors one lead builder may
-//   hold: one more per this much metal income, never a flat cap.
-// manager/assist.as [toggle 0/1] -- Idle non-commander builders fall back to
-//   assisting nearby work; 0 leaves them to the engine's own offers.
-// manager/assist.as [elmos] -- THE TERMINAL RUNG SEARCHES WIDE: a walk beats
-//   standing idle for the rest of the game, which is what 2,434 idle-still
-//   samples...
-// manager/builder/obsolete.as [seconds] -- A fresh nano turret is exempt from
-//   the useless-cluster reclaim check for this long, so a cluster still being
-//   seeded is not eaten.
-// manager/builder/nano.as -- NOT the 24-elmo footprint: the engine grid
-//   (Pos2BuildPos) only lets an odd-footprint centre sit every 16 elmos, so a
-//   24 pitch...
-// manager/builder/nano.as [metal/s] -- No nano turrets below this metal
-//   income; below it they measured as taking metal from the expansion that
-//   would pay for more of them.
-// manager/builder/nano.as [elmos] -- Search radius around the existing block's
-//   centre for the next nano turret's site.
-// manager/builder/nano.as [metal] -- A structure must cost at least this much
-//   to count as the big build that justifies siting a nano next to it.
-// manager/builder/nano.as [elmos] -- With another turret within this range, a
-//   new nano snaps to its cardinal neighbour slot at footprint pitch so blocks
-//   form a perfect grid.
-// manager/builder/nano.as [metal] -- Reachable non-turret structure value that
-//   must stand within a nano's reach before one is built -- by value, not
-//   existence.
-// manager/builder/statics.as [fraction 0-1] -- A nano cluster at least this
-//   far forward (base->enemy) attracts pulsars built at lathe speed beside it;
-//   rear clusters fall through to front-line siting.
 // manager/builder/requests.as [metal] -- Workers allowed on one build site:
 //   one more per this much of the building's cost -- past that another pair of
 //   hands beats opening the next site less.
@@ -285,37 +120,6 @@ const float TUNE_SITE_BT_PER_WORKER = 4700.f;
 // ---------------------------------------------------------------------------
 // Expansion — mexes, upgrades, claims
 // ---------------------------------------------------------------------------
-// manager/builder/mexwork.as [elmos] -- Radius around home in which T1 mexes
-//   count as home mexes still awaiting their Moho upgrade.
-// manager/brain.as [metal/s] -- Below this income a pending mex upgrade
-//   outranks every other advanced-constructor want; past it the ranking
-//   decides (one upgrade still always runs).
-// manager/builder/rules_optional.as [elmos] -- Mex chaining only applies to
-//   builders at least this far from home; near home the normal ladder is fine.
-// manager/builder/rules_optional.as [elmos] -- A just-finished mex chains
-//   straight into the next open spot only within this range -- a far spot is a
-//   new decision.
-// manager/brain.as [seconds] -- After finding no reachable open mex spot, the
-//   mex want stays quiet for this long before scanning again.
-// manager/builder/rules_commander.as [toggle 0/1] -- The commander plants
-//   most of the early mexes; MexGuard (inside the !isComm block below) does
-//   not cover it, so this handles ANY...
-// manager/brain.as [ratio] -- Mex want multiplier at a drained bank (under 5%
-//   of storage) -- a drained bank is the strongest case for more income.
-// manager/brain.as [threat] -- Enemy threat a mex spot may carry and still be
-//   claimed -- the same bar a constructor is already allowed to walk to work
-//   at.
-// manager/builder/maketask.as [elmos] -- A mex offer farther than this is
-//   swapped for a nearer open spot at election time; the far spot returns to
-//   the pool for whoever is close.
-// manager/builder/opening.as [elmos] -- Bounds the post-opening factory-
-//   rebuild mex fallback in rules_commander.as (a mex must be genuinely close
-//   to be worth taking...
-// manager/builder/rules_offer.as [toggle 0/1] -- Take the engine's own mex
-//   offer before any optional want gets a turn; 0 restores the old ordering.
-// manager/builder/rules_hold.as [toggle 0/1] -- A builder walking past an
-//   unclaimed mex spot swings through it first when the detour is short; 0
-//   disables.
 
 // ---------------------------------------------------------------------------
 // Build phases (manager/factory/phase.as ComputePhase)
@@ -326,25 +130,10 @@ const float TUNE_SITE_BT_PER_WORKER = 4700.f;
 // (RushReady / owning an advanced plant / a gantry), not by these numbers.
 // The army-vs-economy RATIO is a separate system -- see targets.as.
 // ---------------------------------------------------------------------------
-// manager/factory/phase.as [metal/s] -- phase 1 "expand": the economy exists
-// manager/factory/phase.as [metal/s] -- phase 2 "build up": ~four T1 mexes
-// manager/factory/phase.as [metal/s] -- phase 5 "pre-T3" without a fusion yet
 
 // ---------------------------------------------------------------------------
 // Factories, tech, quotas
 // ---------------------------------------------------------------------------
-// manager/air/factory.as [metal/s] -- One T2 air constructor recruited per
-//   this much metal income -- a count that scales, never a cap (air cons have
-//   no ground hitbox to crowd the base).
-// manager/brain.as [metal] -- Enemy T3/heavy value that doubles the weight of
-//   our counters (bombers, pulsars, own titans) in the ranking; more enemy T3
-//   keeps scaling it.
-// manager/builder/mexguard.as [metal/s] -- Metal income from which heavy-
-//   defence picks include the T2 popup (Gauntlet/Viper class) -- shot density
-//   spread over several guns, not one alpha target.
-// manager/builder/mexguard.as [metal/s] -- Metal income from which the big
-//   guns (Doomsday class) enter the heavy-defence pick, each still requiring
-//   its popup escort first.
 // manager/air/wing.as [ratio] -- The advanced air plant waits until army spend
 //   reaches this fraction of its target share -- a luxury while the army is
 //   starved, unless the enemy actually flies.
@@ -359,112 +148,10 @@ const float TUNE_FAC_QUEUE = 1.5f;
 //   line (quota-based orders, factory.json bypassed); 0 returns the lines to
 //   stock CircuitAI.
 const float TUNE_FAC_QUEUE_BRAIN = 1.f;
-// manager/builder/statics.as [metal/s] -- No front-line pulsar fortresses
-//   below this metal income.
-// manager/builder/statics.as [metal/s] -- One front-line pulsar wanted per
-//   this much metal income (plus one).
 // manager/military/posture.as [power] -- Attack quota set while the killing
 //   blow is on -- concentrate the push, do not disperse. Skipped for the eco
 //   lead, whose army is deliberately tiny.
 const float TUNE_KILL_QUOTA = 300.f;
-// manager/brain/mix.as [ratio] -- Scales how far the SEEN enemy composition
-//   pulls our role mix toward its counters; 0 keeps the targets.as table
-//   fixed.
-// manager/brain/facqueue.as [toggle 0/1] -- The facqueue includes scouts in
-//   its per-line quota when a scout is worth it; 0 removes scouts from the
-//   quota.
-// manager/factory/choose.as [curve] -- T1 plant-count curve intercept: plants
-//   wanted = A + B x ln(income), floor 1.
-// manager/factory/choose.as [curve] -- T1 plant-count curve slope -- see
-//   apex_plants_t1_a.
-// manager/factory/choose.as [curve] -- T2 plant-count curve intercept: plants
-//   wanted = A + B x ln(income), floor 1. At -5.8/1.737 the second T2 line
-//   clears at ~90 m/s, the third at ~160.
-// manager/factory/choose.as [curve] -- T2 plant-count curve slope -- see
-//   apex_plants_t2_a.
-// manager/factory/choose.as -- 100, was 150: apexearth 2026-08-15, on losing
-//   long 8v8s with a T3 deficit (751k vs 1.3M fielded): "we're probably
-//   losing just...
-// manager/factory/choose.as -- A PHANTOM DIES FAST.
-// manager/factory/choose.as [seconds] -- A plant request expires after this
-//   long un-started (its builder likely died) so the tech path is not dammed
-//   forever.
-// manager/brain/facqueue.as [ratio] -- Per-def quota multiplier for the Legion
-//   Goblin (below 1 = fewer than the role share would give).
-// manager/brain/facqueue.as [ratio] -- Per-def quota multiplier for the Legion
-//   Lobber (above 1 = more than the role share would give).
-// manager/brain/facqueue.as [metal] -- Cost normalizer for core-unit quotas:
-//   wants are metal shares, so a unit's count target is (core wanted x this /
-//   its cost).
-// manager/brain/facqueue.as -- The cut PHASES IN with the T2 army actually
-//   fielded, not the plant standing: apexearth, watching the transition --
-//   "we end up...
-// manager/brain/facqueue.as [ratio] -- Weight every T1 combat want keeps once
-//   a gantry stands. Not zero on purpose: T1 chaff screens the slow T3 era.
-// manager/brain/facqueue.as [ratio] -- Weight every T2 combat want keeps once
-//   a gantry stands.
-// manager/brain/facqueue.as [ratio 0..1] -- Army mix the designated tech/eco
-//   lead's lines keep, per tier. 0 = the lead plays TECH like a human: no
-//   army, its own and the slung metal all go to economy (apexearth
-//   2026-08-22). Team games only; air lines exempt.
-// manager/military/defenceline.as + builder/requests.as [toggle] -- May the
-//   eco/tech role holder build defence? 0 = none (his call: it sits safely
-//   in the back); sensors are exempt.
-// manager/builder/share.as [count] -- Adv cons the lead keeps for itself
-//   while teammates still lack theirs. 1 = deliver the paid-for cons first.
-// manager/builder/share.as [income multiplier] -- At or above this handicap
-//   multiplier (1.5 = +50) the lead gifts NO cons: bonused teammates afford
-//   their own, and the lead's build power is its scaling.
-// manager/factory/choose.as + builder/requests.as [count] -- Fusions the eco
-//   role must own before it may rebuild a T1 plant (his call: eat both T1
-//   labs at the T2 plant, recreate one only after the second fusion).
-// manager/brain/facqueue.as [metal/s per con] -- Pre-T2 the eco role's con
-//   want is one per this much steady income (7 = one lathe's pull), so con
-//   bodies never outrun the metal that feeds them.
-// manager/factory/techlead.as [e/s] -- Energy bar for the eco role's T2
-//   commit. Below the follower bar (600): the critical path to 2-fusions-by-10
-//   is lab-done -> adv con -> 4300-metal build (~3.1m measured). 450 was
-//   tried and measured WORSE (tech 8.4m vs 6.8/7.0 at 600, seed-47): a lab
-//   started on a thinner grid E-stalls the mohos that follow it. 600 stands.
-// manager/role.as [fraction] -- The build-power controller's target:
-//   standing lathe (metal/s) tracks income x this. Slightly above 1 so the
-//   bank drains instead of pooling. The controller's ONLY policy numbers
-//   are this and the trim slack -- everything else is unit physics.
-// manager/role.as [fraction] -- BP above target x this is excess; the
-//   land-con retirement sweep keys on it (post-fusion-2 stage).
-// manager/role.as [fraction] -- The role's fusion bar as a fraction of
-//   apex_fusion_prefer_income. 0.6 x 50 = 30 m/s steady: the reactor starts
-//   while a fighting player would still be buying army.
-// manager/builder/rules_hold.as [count] -- Extra same-def builds SHIFT-queued
-//   behind a started cheap ENERGY/CONVERT build. DEFAULT OFF: measured
-//   2026-08-22 (seed-37 paired, 3 on-runs vs 1 off-control), the off-control
-//   out-ecoed every on-run (46.1k vs 32.4-40.3k) -- ring-picked sites and
-//   election holds cost more than the think-gaps saved. The binding and rule
-//   stay for a placement-aware retry.
-// manager/builder/rules_hold.as [metal] -- Only defs at or under this cost
-//   chain (wind 43, solar 155, advsol 350, converter 380).
-// manager/factory/techlead.as [toggle 0/1] -- Default ON since 2026-08-20:
-//   paired same-seed A/Bs on Altair (trade 0.31->0.52) and Comet Catcher
-//   (0.43->0.76, produced...
-// manager/factory/techlead.as [map units] -- T1-commit (skip T2, end the game
-//   at T1) only arms on 1v1 duels on maps up to this area (Comet Catcher is
-//   192, Prismatic 256).
-// manager/factory/techlead.as [metal/s] -- An economy at this income did not
-//   end the game at T1 -- the T1 commit expires and normal teching resumes.
-// manager/factory/choose.as [count] -- Land plants the T1 commit may hold
-//   before the freed metal belongs to units, not more plants (air labs never
-//   join a commit).
-// manager/brain/facqueue.as [count] -- Floor on T1 core combat units counted
-//   as protected, whatever the income.
-// manager/brain/facqueue.as [ratio] -- Weight T1 core wants keep once T2
-//   exists -- late Thug-class T1 is expensive and not worthwhile; the trimmed
-//   metal flows to T2 army and rezbots.
-// manager/factory/techlead.as [ratio] -- The T1 commit reads its economy as
-//   plateaued when income has not grown past peak times this within the
-//   plateau window.
-// manager/factory/techlead.as [seconds] -- How long income may sit below the
-//   growth bar before the T1 commit converts to normal teching -- the trigger
-//   is the economy's own derivative, not a clock.
 // manager/military/killingblow.as [ratio] -- During a T1 commit, all-in push
 //   once our army is this multiple of the enemy's massed value (wide
 //   hysteresis so fog wobble cannot flap it).
@@ -472,39 +159,14 @@ const float TUNE_T1_PUSH_EDGE = 1.2f;
 // manager/military/killingblow.as -- WIDE hysteresis, or it is not "all or
 //   nothing".
 const float TUNE_T1_PUSH_OFF = 0.5f;
-// manager/factory/techlead.as [metal] -- Seeing a mobile enemy unit at least
-//   this expensive (T2-class; never the commander) releases the T1 commit.
 // manager/military/posture.as [toggle 0/1] -- Hold the aggressive posture
 //   while still short of the T1 army the advanced plant is gated on; closes
 //   itself once T2 exists.
 const float TUNE_T2_ARMY_HOLD = 1.f;
-// manager/factory/techlead.as [ratio] -- T1 army value required before the
-//   advanced plant, as a multiple of metal income (per-instance persona bias
-//   so allies do not all tech at once).
-// manager/brain/facqueue.as [count] -- Floor on T2 core combat units counted
-//   as protected, whatever the income.
-// manager/builder/rules_optional.as [toggle 0/1] -- Site the first advanced
-//   plant at the protected rear of the base; 0 leaves siting to the ordinary
-//   search.
-// manager/builder/rules_optional.as [elmos] -- How far behind the base centre
-//   the rear-sited advanced plant stands.
-// manager/factory/choose.as [seconds] -- A T2 transition with no nanoframe
-//   standing re-orders its plant after this long -- one re-order per window.
-// manager/factory/factorydefs.as [metal or metal/s] -- T3 is this variant's
-//   declared win condition -- hold cheaply, out-eco behind the wall, then
-//   finish with T3.
-// manager/factory/factorydefs.as -- Metal income above which the gTurtle and
-//   army-ratio vetoes stop applying, so a gantry gets placed even while we
-//   are losing --...
 
 // ---------------------------------------------------------------------------
 // Military — stance, engagement, squads
 // ---------------------------------------------------------------------------
-// manager/brain.as [ratio] -- While outfielded, army wants scale by our/their
-//   army ratio, floored here so a massacre cannot zero army production.
-// manager/brain/facqueue.as [ratio] -- Core-army wants multiply by this while
-//   we are losing ground or the base is contested; relaxes the moment the
-//   pressure clears.
 // manager/builder/converter.as [influence] -- Enemy influence at our own base
 //   above which the base counts as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
@@ -512,11 +174,6 @@ const float TUNE_BASE_ATTACK_INFL = 10.f;
 //   on their ground) raises the engage caution -- multiplies the same margin
 //   personality uses.
 const float TUNE_BLEED_ENGAGE = 2.f;
-// manager/builder/rules_commander.as [ratio] -- With enemy T2 seen, the
-//   commander hides once enemy massed threat reaches this multiple of our
-//   army.
-// manager/builder/events.as [elmos] -- Minimum gap kept between allied
-//   commanders; a nearer ally commander steers ours away.
 // manager/military/massing.as [ratio] -- How much enemy STATIC defence counts
 //   when deciding to leave home (0 = ignore porc when judging their mobile
 //   mass; it still counts fully for attacking into it).
@@ -571,9 +228,6 @@ const float TUNE_MASS_VS_ARMY = 1.f;
 // manager/military/massing.as [ratio] -- While ahead, the massing bar also
 //   rises to this fraction of per-ally enemy mobile threat.
 const float TUNE_MASS_VS_ENEMY = 0.5f;
-// manager/builder/statics.as [ratio] -- Defences answering an incoming push
-//   are sized to this fraction of the incoming metal (guns trade up, so a
-//   fraction is parity).
 // manager/military/basedefence.as [elmos/s] -- How fast an enemy group must be
 //   closing on the base to count as an incoming push.
 const float TUNE_INCOMING_CLOSING = 150.f;
@@ -595,8 +249,6 @@ const float TUNE_PUSH_KEEP = 1.25f;
 // manager/military/basedefence.as [elmos] -- Radius around the base within
 //   which enemy groups are evaluated as a possible incoming push.
 const float TUNE_INCOMING_NOTICE_R = 4500.f;
-// manager/builder/statics.as [elmos] -- Farthest forward of home that push-
-//   answer defences may stand (halfway to the attacker, capped here).
 // manager/military/posture.as -- RAID_MIN_EARLY=45 was "hold them home" made
 //   permanent: ~2,600 metal of raiders had to pool before ONE raid could
 //   leave pre-T2,...
@@ -605,19 +257,13 @@ const float TUNE_RAID_PACK = 8.f;
 //   pack power is the base plus income times this, so packs form instead of
 //   never reaching a fixed bar.
 const float TUNE_RAID_PER_INCOME = 0.2f;
-// manager/builder/fusion.as [elmos] -- Chain reach between reactors: a spot
-//   within this of standing reactors counts as part of the same chain.
 // manager/military/posture.as [seconds] -- EXPERIMENT, default off. A no-
 //   retreat bar at units cheaper than this many seconds of income measured
 //   army K/D 0.33 to 0.11 (retreat is also disengage-and- repair).
 const float TUNE_RETREAT_COST_SECS = 0.f;
-// manager/builder/statics.as [ratio] -- Energy income must cover a shield
-//   dome's regen draw times this before one is built.
 // manager/builder/defcap.as [toggle 0/1] -- Use the explicit siege latch for
 //   dig-in decisions; 0 falls back to BaseContested.
 const float TUNE_SIEGE = 0.f;
-// manager/brain.as [exponent] -- Softness of the siege-reach penalty curve on
-//   distant builds while besieged (higher = sharper falloff).
 // manager/military/stance.as [toggle 0/1] -- Stance (aggressive/passive) moves
 //   the budget shares; 0 lets stance read but never act, for isolation A/Bs.
 const float TUNE_STANCE = 1.f;
@@ -729,9 +375,6 @@ const float TUNE_LOSING_FLOOR = 250.f;
 //   arm, default off.
 const float TUNE_FIGHT_ABORT = 0.f;
 
-// COMBAT BEHAVIOUR -- promoted from hardcoded constants 2026-08-21 so the
-// engagement maths is tunable. Same defaults as the constants they replace.
-//
 // manager/military/roles.as [ratio] -- metal-vs-metal army ratio (ours/theirs)
 //   at which the massed pool starts attacking; 1.0 is true parity, below it we
 //   attack while slightly behind.
@@ -740,14 +383,6 @@ const float TUNE_ATTACK_EDGE = 0.95f;
 //   fodder: exempt from massing, always sent forward (their job is vision and
 //   pulled fire). Cost AND role, so cheap AA/bombers are not swept in.
 const float TUNE_FODDER_COST = 100.f;
-// manager/brain/facqueue.as [metal/s] -- One standing spam unit (tick/scout
-//   car class) wanted per this much metal income, post-T2: the constant
-//   cheap-eyes stream that takes fire instead of the army.
-// manager/brain/facqueue.as [metal] -- One mobile artillery wanted per this
-//   much SEEN enemy static metal: the wall itself sizes the battery that
-//   answers it. 0 disables the wall-arty demand.
-// Seen enemy static metal above which the front fence escalates to the
-// Punisher tier (armguard/corpun/legcluster). 0 disables the escalation.
 // manager/military/massing.as [ratio] -- killing blow: once OUR TEAM's army
 //   value is this multiple of theirs, attack continuously and release any
 //   turtle -- even a partial commitment outnumbers everything they field.
@@ -807,12 +442,6 @@ const float TUNE_RAID_MIN_EARLY = 45.f;
 // manager/military/basedefence.as [seconds] -- how long a raid stays "current"
 //   in the raid-pressure memory; a raid is current, not history.
 const float TUNE_RAID_TAU = 60.f;
-// manager/military/roles.as [power] -- attack quota to hold while the team's
-//   T2 rush window is open: defend and stall, not do-nothing (400 would mean
-//   never attack).
-// manager/military/roles.as [power] -- attack quota for the rest of the game
-//   once the rush window is over; set above any realistic standing army so the
-//   engage test (the odds), not the quota, decides.
 // manager/military/roles.as [ratio] -- how much enemy STATIC defence counts in
 //   the massing decision, per metal. Half weight: a turret cannot retreat or
 //   redeploy; full weight would let a porc base pin the quota forever.
@@ -825,12 +454,6 @@ const float TUNE_T2_HOLD_BOOST = 1.60f;
 // ---------------------------------------------------------------------------
 // Defence, towers, AA, insurance
 // ---------------------------------------------------------------------------
-// manager/builder/statics.as [ratio] -- AA top-up sized to the enemy's air:
-//   extra AA guns = seen enemy air value times this, divided by the gun's
-//   cost.
-// manager/military/defenceline.as [ratio] -- How fast the defence allowance
-//   grows per unit of enemy/our army ratio beyond the trigger -- outfielded
-//   means more guns.
 // policy.as [metal or metal/s] -- Antinukes and shield domes are INSURANCE:
 //   real once the threat class exists, premature at eco-opening scale
 //   (apexearth...
@@ -898,23 +521,10 @@ const float TUNE_DEF_SITE_WALK = 1.f;
 //   mex has its first gun, and cannot fire for a builder that would have to
 //   walk -- one light tower per extractor at most.
 const float TUNE_COVER_PUSH = 1.f;
-// manager/brain/facqueue.as [metal] -- One torpedo unit wanted per this much
-//   seen enemy submarine value (plus one).
-// manager/brain/nukes.as [elmos] -- Radius an antinuke counts as covering
-//   (2500 is the interceptor coverage radius in this game tree).
-// manager/brain.as [count] -- Extra antinukes held beyond the computed need
-//   once an enemy silo has actually been seen.
-// manager/brain.as [seconds] -- Interceptor reload time (the def's value,
-//   carried as a tunable because reload is not bound to script); antinukes
-//   wanted derives from it.
 // manager/air/update.as [metal] -- Bombers join home-base defence only while
 //   seen enemy AA value is below this -- against flak trucks they would just
 //   die.
 const float TUNE_BOMB_DEFEND_AA = 1000.f;
-// manager/brain.as [toggle 0/1] -- Front-line guns prefer chokepoints, placed
-//   a step behind the choke so they shoot into it; 0 uses the plain line.
-// manager/builder/rules_commander.as [ratio] -- The commander turns cautious
-//   once seen enemy heavy/super value reaches this fraction of his own cost.
 // manager/military/hooks.as [toggle 0/1] -- Chargers (beeline supers) defend
 //   home instead of striking while the base is being hit; 0 lets them keep
 //   charging.
@@ -929,24 +539,10 @@ const float TUNE_DEFEND_LEASH = 0.55f;
 //   never given solo pull-out orders -- the split (half fights, half runs)
 //   loses the fight twice. 0 restores per-unit withdrawal everywhere.
 const float TUNE_HOLD_COMMITTED = 1.f;
-// manager/builder/statics.as [seconds] -- Front towers pick the dearest gun
-//   costing at most this many seconds of metal income; the basic tower stays
-//   the unconditional floor.
-// manager/brain.as [metal] -- Normalizer for assets-behind in tower placement
-//   value: a tower guarding this much structure value doubles its score.
-// manager/brain.as [ratio] -- Weight of recently lost towers near a spot in
-//   its placement value -- ground that eats towers argues for a stronger
-//   answer.
-// manager/military/defenceline.as [toggle 0/1] -- Being attacked raises the
-//   budget; it does not remove it -- returning true outright while contested
-//   switched the gate off...
 // manager/brain.as [ratio] -- A tower's counted reach is capped at the light
 //   tower's range times this, so one big gun cannot claim the whole line is
 //   covered.
 const float TUNE_DEF_REACH_CAP = 6.0f;
-// manager/builder/defcap.as [ratio] -- Share of builders allowed on defence
-//   work at once; 1 disables the cap.
-// manager/military/defenceline.as -- apexearth's number, not a derived one.
 // manager/military/hooks.as [seconds] -- How long a lost fence tower stays
 //   fresh in the loss memory; positions that keep eating towers score higher
 //   for replacements.
@@ -957,32 +553,10 @@ const float TUNE_FLAK_FLOOR_INCOME = 60.f;
 // manager/military/airthreat.as [metal/s] -- One further baseline flak per
 //   this much income beyond the floor bar.
 const float TUNE_FLAK_PER = 60.f;
-// manager/builder/statics.as [metal/s] -- From this income flak is sited on
-//   the border/front line; below it base placement remains the answer.
 // manager/military/posture.as [fraction 0-1] -- While trading badly, the
 //   army's staging anchor pulls back to this fraction of the way from home
 //   toward the enemy.
 const float TUNE_LANE_DEFENSIVE = 0.15f;
-// manager/military/defenceline.as [ratio] -- In team games the designated tech
-//   lead scales its defence allowance by this (its allies hold the line);
-//   never applies in 1v1.
-// manager/military/defenceline.as [ratio] -- Share of the defence allowance
-//   reserved for LOCAL guards (mex guards, dig-ins) as opposed to holding the
-// manager/military/defenceline.as [ratio] -- Multiplier on the front-line
-//   defence budget share; the choke-map experiment lever (the computed share
-//   is ~3.6% of spend at pressure 1 while stock wins chokes at ~25%).
-// manager/brain.as [ratio] -- Thickening value scale once the front line is
-//   fully covered: the fence want keeps buying DEPTH at the least-covered
-//   stretch while the defence budget is under target, at this fraction of a
-//   bare-line tower's value. 0 restores coverage-only fencing.
-//   front line.
-// manager/brain/nukes.as [count] -- Offensive targets are assumed to hide at
-//   least this many antinukes once the game is old enough -- an unseen anti is
-//   still an anti.
-// manager/brain/nukes.as [ratio] -- Score multiplier for DEFENSIVE nuke
-//   targets (enemy groups on our ground) over offensive ones.
-// manager/brain/nukes.as [fraction 0-1] -- Defensive targets closer to home
-//   than this forward-fraction are skipped -- do not nuke our own base.
 // manager/builder/mexguard.as [ratio] -- A guard tower is obsolete once the
 //   top gun costs more than this times the tower and is affordable -- big guns
 //   cover that ground instead.
@@ -991,36 +565,9 @@ const float TUNE_PORC_OBSOLETE_RATIO = 7.f;
 //   for the porc-obsolete test when it costs at most this many seconds of
 //   income.
 const float TUNE_PORC_OBSOLETE_SECS = 20.f;
-// manager/brain.as [ratio] -- Pulsar want multiplier while the enemy fields T3
-//   and we have no gantry producing an answer.
-// manager/builder/statics.as [count] -- Pulsars per block: guns pack shoulder-
-//   to-shoulder until a block reaches this size, then the next block starts
-//   elsewhere.
-// manager/builder/statics.as [fraction 0-1] -- Only blocks at least this far
-//   forward attract more guns -- T3 defence behind our own factories is left
-//   alone.
-// manager/builder/statics.as [elmos] -- Radius that counts as inside an
-//   existing pulsar block.
-// manager/builder/statics.as [count] -- Concurrent pulsar builds allowed while
-//   the metal bank is full (the throttle the base cap normally applies lifts).
-// manager/brain.as [ratio] -- Pulsar want multiplier at a full metal bank --
-//   the surplus is what the line of guns is for.
-// manager/builder/statics.as [metal/s] -- One pulsar allowed per this much
-//   metal income (plus one) -- income- derived, not a flat number.
-// manager/builder/statics.as [metal/s] -- One additional in-flight shield dome
-//   allowed per this much income -- at LRPC-era income the pace, not the
-//   count, was the bottleneck.
 // policy.as [metal/s] -- Metal income before shield domes are insurance worth
 //   buying (a seen threat still overrides).
 const float TUNE_SHIELD_INCOME = 50.f;
-// manager/builder/statics.as [seconds] -- Shield domes afforded: one plus
-//   income times this over the dome's cost.
-// manager/builder/statics.as [seconds] -- How long a lost dome stays fresh;
-//   recent losses raise the shield want.
-// manager/brain.as -- Same divided sizing as ShieldCover -- the per-gun
-//   multiplier overpriced this ~3x (one dome answers every gun in reach).
-// manager/brain.as [value] -- Base ranking value of a shield dome want, scaled
-//   up by enemy LRPCs and recent dome losses.
 // manager/military/unblock.as [toggle 0/1] -- Stuck units get an unblock nudge
 //   (reclaim/move of what pins them); 0 disables.
 const float TUNE_UNBLOCK = 1.f;
@@ -1112,12 +659,6 @@ const float TUNE_COMM_FLEE_HP = 0.85f;
 // manager/air/wing.as [metal/s] -- One advanced air plant wanted per this much
 //   metal income (the per-def curve still bounds it).
 const float TUNE_ADV_AIR_INCOME = 150.f;
-// manager/brain/facqueue.as [elmos] -- Cap on air scouts: two plus the map's
-//   diagonal length divided by this -- bigger maps justify more eyes.
-// manager/brain/facqueue.as [metal/s] -- One air scout wanted per this much
-//   metal income (plus one); doubled while nothing fresh is seen.
-// Scouts as a share of the standing fighter+bomber fleet (apexearth: "5% or
-// less of our air").
 // manager/air/update.as [toggle 0/1] -- Non-lead players hold their aircraft
 //   at the plant until the wave releases them together; 0 sends them out as
 //   built.
@@ -1150,21 +691,6 @@ const float TUNE_AIR_SPREAD = 1.f;
 //   station is left alone -- re-ordering every pass keeps it permanently in
 //   transit.
 const float TUNE_AIR_STATION_NEAR = 400.f;
-// manager/brain/facqueue.as [metal/s] -- One bomber wanted per this much metal
-//   income (plus one).
-// manager/brain/facqueue.as [metal/s] -- One fighter wanted per this much
-//   metal income (plus one); raised to the per-other-aircraft floor below
-//   whenever that is larger.
-// manager/brain/facqueue.as [ratio] -- UNUSED as of 2026-08-21: superseded by
-//   TUNE_FIGHTER_PER_OTHER, which floors on the whole non-fighter fleet
-//   (bombers + scouts) instead of bombers alone. Left declared so a live
-//   tunable read of the old name does not error; no code path reads it.
-// manager/brain/facqueue.as [ratio] -- Fighter floor: this many fighters per
-//   standing non-fighter aircraft (bombers + scouts). apexearth 2026-08-21:
-//   "at least 1 fighter for every other aircraft we have -- fighters must be
-//   >= 50% of the air fleet." Takes over from the income term once the fleet
-//   is large enough to need it; 1.0 means fighters can reach parity with
-//   everything else combined.
 // manager/air/wing.as [metal/s] -- The elected air lead builds its first air
 //   plant from this income -- earlier than everyone else, for the team's eyes.
 const float TUNE_INTEL_AIR_INCOME = 25.f;
@@ -1179,36 +705,11 @@ const float TUNE_ONESHOT_BOMBER_SCALE = 0.4f;
 // ---------------------------------------------------------------------------
 // Nukes and superweapons
 // ---------------------------------------------------------------------------
-// manager/brain/nukes.as [toggle 0/1] -- The nuke director runs (multi-volley
 // manager/brain/sentinel.as [toggle 0/1] -- The sentinel: the brain checks
 //   its own concepts every 45s and logs a verdict per check ("apex: thought
 //   <name> CONCERN ..."); observer-first, each enforcement earned separately.
 //   logistics, target ranking); 0 leaves silos to stock behaviour.
 const float TUNE_BRAIN_NUKE = 1.f;
-// manager/brain/nukes.as [influence] -- A defensive volley is called off once
-//   net influence at the target reaches this -- our own army has closed to
-//   that ground.
-// manager/brain/nukes.as [minutes] -- Game age from which unseen antinukes are
-//   assumed at offensive targets.
-// manager/brain/nukes.as [metal] -- Assumed worth of the enemy base at our
-//   mirrored start position, used as the standing offensive target before
-//   anything better is sighted.
-// manager/brain/nukes.as [metal] -- A defensive strike onto ground our own
-//   army holds is only allowed against an enemy force worth at least this --
-//   past it, losing some of our units to the blast beats losing the base.
-// manager/brain/nukes.as -- 10k floor (apexearth: "filter the metal to target
-//   areas of 10k metal or more if possible") -- with no qualifying target
-//   the...
-// manager/brain/nukes.as [metal or metal/s] -- A defensive strike pays once
-//   the army is worth several missiles.
-// manager/brain/nukes.as [ratio] -- A defensive strike pays once the target
-//   army is worth this many missiles.
-// manager/brain/nukes.as -- The repeat-strike dampener: halved per prior
-//   volley on this ground.
-// manager/brain/nukes.as [elmos] -- A point within this of an active volley's
-//   target counts as already served -- no second volley onto the same ground.
-// manager/brain/nukes.as [elmos] -- Lateral step between missiles of one
-//   volley, so a salvo blankets the army instead of stacking on one point.
 
 // ---------------------------------------------------------------------------
 // Scouting, intel, ghosts
@@ -1219,8 +720,6 @@ const float TUNE_AFLOAT_SEEN = 500.f;
 // manager/military/territory.as [ratio] -- Weight of stale (ghost) enemy
 //   sightings against fresh ones in the territory model.
 const float TUNE_GHOST_WEIGHT = 0.5f;
-// manager/builder/statics.as [count] -- Candidate points tried on the
-//   territory ring when picking the least- covered spot for the next jammer.
 // manager/military/stance.as [ratio] -- Scout wants multiply by this while the
 //   stance reads UNKNOWN -- silence is a scouting demand, not safety.
 const float TUNE_SCOUT_BLIND_MULT = 2.f;
@@ -1241,8 +740,6 @@ const float TUNE_ESCORT_SQUAD_VALUE = 2000.f;
 // ---------------------------------------------------------------------------
 // Base layout and placement
 // ---------------------------------------------------------------------------
-// manager/brain.as [elmos] -- How far behind a chokepoint the choke gun
-//   stands, so it shoots into the gap instead of standing in it.
 // manager/military/territory.as -- Against the ring's radius on THIS
 //   position's bearing.
 const float TUNE_FRONT_BAND = 0.18f;
@@ -1253,8 +750,6 @@ const float TUNE_FRONT_BAND = 0.18f;
 //   log line), which is a "front" through the middle of the base. 0.35 is a
 //   +/-49 degree arc.
 const float TUNE_FRONT_BAND_FRAC = 0.35f;
-// manager/brain.as [ratio] -- Site-search radius for a front tower as a
-//   fraction of its counted reach (min 400 elmos).
 // manager/military/posture.as [elmos] -- Step size of the staging anchor's
 //   walk back toward home while the ground ahead is lost.
 const float TUNE_LANE_BACK_STEP = 300.f;
@@ -1284,9 +779,6 @@ const float TUNE_PING = 0.f;
 //   default: it is ~1000 lines of infolog that only a verification run reads.
 const float TUNE_CATALOG_DUMP = 0.f;
 
-// market.as MODEL terms (value-paradigm skill: one named quantity each).
-// SPOT_M: metal/s a T1 spot yields at extraction 0.001 -- the one number the
-// script cannot read per-spot yet; typical BAR land spots sit near 2.0.
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
 // PLANT_PIPE: the constructor pipeline's return in spot-streams. Early cons
@@ -1352,10 +844,6 @@ const float TUNE_CONSOLIDATE_R = 2000.f;
 //   meet the tracked pack's metal or the defender consolidates; 1 = meet
 //   them at even strength or from behind the guns.
 const float TUNE_CONSOLIDATE_EDGE = 1.f;
-// WHAT A COMBAT UNIT IS WORTH -- the exponent on each golden metric
-// (apexearth 2026-08-25: "RANGE, DAMAGE, HP... perhaps we can try a variety of
-// algorithms"). Read in manager/brain/market/worth.as; each metric is
-// normalised by the game field's own mean, so these are scale-free.
 // The defaults below reproduce the previous gCombat/costM ranking EXACTLY --
 // dps * sqrt(alpha) * hp / cost is what power^2/cost expands to -- so the
 // first deploy is a no-op and every later setting is a clean A/B against it.
@@ -1390,8 +878,6 @@ const float TUNE_LINE_RANGE_EXP = 1.f;
 // How far above the field's REFERENCE an axis must stand for a unit to count as
 // that class rather than as middle.
 const float TUNE_LINE_EDGE = 1.15f;
-// How hard a class below its target share is favoured. Proportional to the
-// shortfall; 0 disables the composition target entirely.
 // manager/brain/market/production.as [0/1] -- 1 = the factory draw runs among
 //   the LINE CLASS the team owes the most metal to, instead of over every
 //   candidate weighted by apex_line_bite. A share cannot be produced by a
@@ -1420,7 +906,6 @@ const float TUNE_STREAM_SURVIVAL = 1.f;
 // metal spread over the area they cover, per cell of footprint. Makes dense
 // beat sprawling inside the perimeter and costs nothing outside it. 0 disables.
 const float TUNE_SPACE_RENT = 2.f;
-// manager/brain/market/price.as -- seconds over which a purchase must earn.
 // A gain is credited only for the share of this horizon it will actually be
 // collecting, so a build that delivers nothing for most of it is discounted
 // against the small compounding steps that deliver now. Scales itself with
@@ -1441,7 +926,6 @@ const float TUNE_COMMIT_SHARP = 12.f;
 // winds sat too far out on both sides: the same slots in a narrower row form
 // a block instead of a line, so the next slot is adjacent to the last.
 const float TUNE_FARM_ROW_W = 320.f;
-// Seconds over which committed-but-unbuilt work counts as build-power demand.
 // Matches the bank clause's horizon in BPGap; 0 disables the term.
 const float TUNE_BP_BACKLOG_S = 60.f;
 // Offer the spaced front posts (Military::FrontBuildSpots) to the defence
@@ -1485,14 +969,11 @@ const float TUNE_E_BILL_SHARE = 1.f;
 //   of an economy that has none. 0 disables the rule and leaves the ladder to
 //   the auction.
 const float TUNE_STALL_SOLAR_E = 300.f;
-// CONV_HORIZON: seconds of operation a converter is assumed to amortize its
-// own metal, energy and build time over, when netting the energy floor price.
 // CHOSEN, not derived. Short on purpose (apexearth: "it pays off eventually
 // and that's fine -- by the time this stuff matters less we're on to fusions
 // and afus"): a long window credits the converter with a payback the economy
 // has already outgrown, which reads back as energy being worth more than it is.
 const float TUNE_CONV_HORIZON = 300.f;
-// SPACE_M: metal-equivalent price of one 16-elmo build cell of ground.
 // MODEL (flat until base-crowding senses drive it): what makes dense energy
 // beat a field of solars at equal payback.
 const float TUNE_SPACE_M = 1.0f;
@@ -1500,11 +981,6 @@ const float TUNE_SPACE_M = 1.0f;
 // above 1 so the bank drains instead of pooling) -- the closed loop's one
 // constant, a headroom fraction, never a count.
 const float TUNE_BP_HEADROOM = 1.0f;
-// 1.5 was set because 1.15 "lacked build power" in watch after watch. Against
-// BARb in the same games it bought 29.5% of our metal as build power to their
-// 17.8%, and 18.5% to their 9.9% in the first ten minutes; 1.0 moved mex 14->17
-// (12 games each). apexearth: "the bp budget may be too high and we need more
-// eco budget, but even in that eco budget we need more mex budget."
 // ASSIST_SHARE: fraction of the standing lathe fleet expected to fold onto
 // a priced build (Requests::Take joins same-def askers).
 const float TUNE_ASSIST_SHARE = 0.5f;
@@ -1538,15 +1014,11 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 // "above average", and no number here is about a particular unit. Lower it to
 // let slower units guard.
 const float TUNE_ESCORT_SPEED = 1.f;
-// MEX_GROWTH: weight of a spot's RELATIVE income boost (gain/income) on
-// top of its absolute stream -- growth is worth more to the poor.
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when
 // a mex would double our income it is very important... if it boosts our
 // income only 1% then its not too important"). At 8: doubling x9, +10% x1.8,
 // +1% x1.08 -- 3 gave x4 / x1.3 / x1.03, too flat to express that ordering.
 const float TUNE_MEX_GROWTH = 8.f;
-// The same compounding premium for ENERGY, measured against energy income.
-// It had none at all, which is why eco stagnated while mex was boosted.
 // manager/brain/market/want_energy.as [toggle 0/1] -- Discount a generator by
 //   how much better a one any constructor we own could build instead, so a
 //   worker restricted to the inferior option prefers to spend its build power
@@ -1561,10 +1033,6 @@ const float TUNE_ENERGY_GROWTH = 8.f;
 // at the conversion floor whether or not a converter exists to realize it,
 // and is the control arm.
 const float TUNE_E_REALIZE = 1.f;
-// E_WASTE_WORTH: the share of its price that generation KEEPS once nothing
-// would use its output. Not zero -- energy in the wasted band is worth the
-// conversion floor the moment a converter follows, and that converter's cost
-// is already inside the floor; what is missing is only the wait and the risk.
 // So an overflow makes a generator LOSE to the converter that realizes it, and
 // never makes it unbuildable (apexearth 2026-08-26; his standing ruling is
 // that the generator ladder never pauses on waste). Default chosen, not
@@ -1576,7 +1044,6 @@ const float TUNE_THREAT_GRADIENT = 1.f;
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach =
 // free damage before the answer), on top of the reactive outranging term.
 const float TUNE_RANGE_WORTH = 2.f;
-// Speed and sight as intrinsic unit value, same shape as range above.
 // LOS matters beyond the unit: every danger sense we have reads zero while
 // blind, and EnemyArmyCost logged 0 for entire games (2026-08-24).
 const float TUNE_SPEED_WORTH = 0.5f;
@@ -1594,10 +1061,6 @@ const float TUNE_MEDIC_FRAC = 0.12f;
 // ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
 // rear-most home must be to count as "obviously" rear (distance ratio).
 const float TUNE_ECO_REAR_MARGIN = 1.15f;
-// ECO_ARMY_MUL: the rear specialist's military production as a fraction of
-// normal -- applied to the army target AND the overflow sink, rez and
-// support branches. Near-zero: the freed spend compounds through the eco
-// ladder; 3% of a monster late economy is still a gantry stream.
 // ECO_SAFE_R: front distance beyond which the rear specialist skips ground
 // defense entirely -- past any raid's reach, insurance is dead money.
 const float TUNE_ECO_SAFE_R = 2500.f;
@@ -1815,9 +1278,6 @@ const float TUNE_DEF_SETBACK = 250.f;
 //   base"). 0 disables the overflight and stock mex-cluster scouting is all
 //   that remains.
 const float TUNE_SCOUT_OVER_S = 45.f;
-// ECO_ROLE -- master switch for the rear-specialist election and everything
-//   behind it (army suppression, quality bias). OFF by his ruling
-//   2026-08-29: "it does *not* work"; 1 re-arms the experiment.
 // RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. It was switched
 // off ("the eco role ... does *not* work") while it worked by crushing the rear
 // player's army and defence TARGETS with multipliers -- a role deciding
@@ -1860,11 +1320,6 @@ const float TUNE_EXPOSE_R = 1200.f;
 // 300 priced sentries below the NEXT mex claim, so every spot was claimed
 // naked and died to BARb inside the window; 120 flips to claim-then-guard.
 const float TUNE_EXPOSED_LOSS_S = 120.f;
-// FRAME_RISK: weight on the loss expected DURING a build, charged at the same
-// hazard rate as a standing asset but across the build's own duration. 1.0 is
-// "a nanoframe is exactly as likely to be lost per second as the finished
-// thing"; higher says a defenceless frame is worse than that. This is the only
-// term that separates a slow expensive structure from a fast cheap one.
 // DEFAULT 0 -- the mechanism is wired but priced out. At 1.0 it suppressed
 // building outright rather than reordering it: total metal built fell 38.6k ->
 // 17.6k and the head-to-head went 3-21 to 0-30 over 54 paired games. The charge
@@ -1877,7 +1332,6 @@ const float TUNE_FRAME_RISK = 0.0f;
 // metal of its own cost. The exchange rate that puts coverage and threat in
 // one currency so a shortfall can be subtracted.
 const float TUNE_DEF_TRADE = 3.f;
-// DEF_TTD_H: the window a turret has to be STANDING in to be worth its gain.
 // A defence is discounted by H/(H+buildSec), so a slow turret keeps only the
 // share of the threat window it will actually cover. Defaults to the same 120 s
 // EXPOSED_LOSS_S uses -- a turret that takes as long to build as the asset it
@@ -1933,8 +1387,6 @@ const float TUNE_STAKE_HORIZON_S = 300.f;
 // insures something before the first loss teaches us. His "combination of
 // enemy aggression and how well defended we are" -- this is the floor half.
 const float TUNE_RISK_FLOOR = 0.15f;
-// GUARD_RATE: standing army value as a fraction of structure assets -- the
-// insurance floor that also covers census blindness.
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
 // value (symmetric start); the observed census replaces it once larger.
 const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)
@@ -1989,17 +1441,10 @@ const float TUNE_DRAW_FRONT = 1.f;
 //   inside it), the outer ring the incoming-push alarm radius. Off by
 //   default because it ships; the harness opts in with apex_draw_defzone=1.
 const float TUNE_DRAW_DEFZONE = 0.f;
-// manager/frontline/draw_diag.as [toggle 0/1] -- Draw one line per claimed mex
-//   task, constructor to spot: shows a con walking past a near extractor to a
-//   far one. Off by default because this ships.
 // manager/frontline/draw_diag.as [toggle 0/1] -- Draw the army's staging anchor
 //   and, when apex_medic_setback is set, the medic station behind it plus the
 //   step between them. Off by default because this ships.
 const float TUNE_DRAW_LANE = 0.f;
-// manager/frontline/draw_diag.as [toggle 0/1] -- Cross every extractor past the
-//   mid fraction toward the enemy, larger past the forward fraction: the same
-//   FrontT classification the guard count and guard tier both read. Off by
-//   default because this ships.
 // manager/frontline/draw_diag.as [toggle 0/1] -- Ping the heal post: the exact
 //   point CRetreatTask sends wounded units to (front + apex_retreat_behind
 //   toward home). A ping rather than a line because there is only one of them.
@@ -2022,10 +1467,6 @@ const float TUNE_AFLOAT_STREAK = 3.f;
 // manager/military/territory.as [metal] -- Seen enemy submarine value that
 //   reads as the enemy afloat immediately, whatever the land fraction.
 const float TUNE_AFLOAT_SUB_COST = 400.f;
-// manager/military/defenceline.as [ratio] -- Enemy/our army ratio at which the
-//   outfielded defence boost starts.
-// manager/military/defenceline.as [ratio] -- Cap on the outfielded defence
-//   boost.
 // manager/military/defenceline.as [seconds] -- Only ally tower losses fresher
 //   than this summon defence aid.
 const float TUNE_AID_FRESH = 60.f;
@@ -2049,9 +1490,6 @@ const float TUNE_ARTY_MASS = 1.f;
 //   squads respect it; our own read stronger too (they are chargers and ignore
 //   the margin anyway).
 const float TUNE_BEHEMOTH_THREAT = 2.f;
-// manager/builder/mexguard.as [ratio] -- Each big gun requires this many
-//   popups standing per (big guns + 1) -- a ratio between the tiers, not a cap
-//   on either.
 // manager/military/deathledger.as [ratio] -- Cap on the forward-bleed engage
 //   caution.
 const float TUNE_BLEED_CAP = 1.6f;
@@ -2114,11 +1552,6 @@ const float TUNE_WALL_LINE_W = 2.f;
 //   guard sites stand this far enemy-ward of the asset centroid, between the
 //   buildings and the approach; 0 sites the gun amid the buildings.
 const float TUNE_GUARD_FORWARD = 0.5f;
-// manager/brain/market/protect_field.as [ratio] -- How much a turret's kill
-//   power is lifted by the share of the attacker set it OUTRANGES. 1 means a
-//   def that outranges everything counts double; 0 removes the term. Range
-//   otherwise enters only as covered area, which cannot see that a Beamer
-//   (480) clears a rocket bot (475) and a Sentry (430) does not.
 // manager/brain/market/want_protect.as [0/1] -- 1 = a WALL slot, whose gain is
 //   the def-independent unmet-target pull, ranks candidate towers by cover per
 //   metal. Without it the only discriminator there is absolute power, which
@@ -2148,12 +1581,6 @@ const float TUNE_T1_DEF_LATE = 0.02f;
 //   mast is blocked; lower = more overlapping radars, sturdier intel. Was a
 //   hardcoded 0.8 (no redundancy; one death = a dark zone mid-fight).
 const float TUNE_RADAR_OVERLAP = 0.45f;
-// manager/builder/obsolete.as -- A perf bound, not policy: each pick walks
-//   full unit lists, and an unbounded sweep burned 277-475ms single frames
-//   (seed 200,...
-// manager/builder/obsolete.as [metal/s] -- Obsolete-reclaim picks per pass:
-//   one plus income divided by this (a perf bound -- each pick walks full unit
-//   lists).
 // manager/frontline.as [toggle 0/1] -- The base-defence ring follows the
 //   BUILT base (farthest finished rear structure plus the pad) instead of
 //   the frozen map-diagonal formula; 0 keeps the static C++ ring.
@@ -2161,28 +1588,13 @@ const float TUNE_DEFZONE_DYNAMIC = 1.f;
 // manager/frontline.as [elmos] -- Padding added to the built extent when the
 //   dynamic ring is applied (roughly two T1 tower ranges of approach ground).
 const float TUNE_DEFZONE_PAD = 400.f;
-// manager/builder/maketask.as [milliseconds] -- Election-time budget per
-//   frame; past it further builder elections defer to the next frame (lag
-//   guard).
 // manager/brain.as [metal/s] -- Above this income the front-defence want is
 //   recomputed every 5s instead of every 1s -- rich games have more fence to
 //   walk.
 const float TUNE_ELECT_RICH_INCOME = 150.f;
-// manager/crew.as [ratio] -- A builder joins the FRONT crew when its distance
-//   to the line is under this times its distance to home; below 1 it must be
-//   CLEARLY forward.
-// manager/brain.as -- Before any factory exists there is exactly one builder
-//   in the game -- the commander -- so this gate stops the opening builder...
 // manager/military/territory.as [ratio] -- Minimum forward reach of a
 //   territory ray for it to yield a front spot.
 const float TUNE_FRONT_MIN_REACH = 0.5f;
-// manager/brain.as [toggle 0/1] -- PRIORITY IS WHAT DECIDES WHETHER ANYONE IS
-//   EVER SENT.
-// manager/brain.as -- OVERLAP, DON'T JUST TOUCH.
-// manager/builder/mexguard.as [toggle 0/1] -- ON by default -- apexearth: "I
-//   never see us making the scorpion style defense turrets...
-// manager/brain.as [elmos] -- How far from the builder the front-defence want
-//   will look for fence work.
 // manager/military/territory.as [toggle 0/1] -- NOTHING BEHIND US IS FRONT.
 //   1 is the ESCAPE HATCH -- the full ring, for a genuinely surrounded base.
 //   It shipped as the default, so the rear exclusion the ring scan was written
@@ -2195,27 +1607,9 @@ const float TUNE_FRONT_SAFE_EDGE = 1.f;
 // manager/military/territory.as [fraction 0-1] -- How far back from the
 //   influence edge the front line is drawn.
 const float TUNE_FRONT_SETBACK = 0.12f;
-// manager/brain.as [ratio] -- Gantry want multiplier while the enemy fields T3
-//   and we have no gantry producing -- the answer to titans is our own.
-// manager/builder/maketask.as [seconds] -- A builder holding a guard task is
-//   exempt from re-election for this long, so guards actually guard instead of
-//   churning.
-// manager/builder/rules_hold.as [toggle 0/1] -- Keep working a threatened
-//   front-line build instead of abandoning it (the fence gun defends itself);
-//   0 abandons on threat.
 // manager/military/posture.as [toggle 0/1] -- A HOLD MUST NEVER STOP US
 //   DEFENDING OUR OWN GROUND.
 const float TUNE_HOLD_RELEASE = 1.f;
-// manager/builder/maketask.as [seconds] -- Base idle-election backoff per
-//   strike: a builder that keeps electing nothing waits strikes x this before
-//   asking again.
-// manager/builder/maketask.as [count] -- Cap on the idle-backoff strike
-//   counter.
-// manager/builder/maketask.as [seconds] -- An idle builder gets a homeward
-//   patrol leg (crossing the base's work) at most once per this interval.
-// manager/brain.as [metal/s] -- Income the Want values were calibrated at;
-//   wants scale by ref/income so a rich economy is not overexcited by small
-//   absolute gains.
 // manager/air/update.as [metal] -- Minimum enemy air value over an ally's home
 //   before the team intercept flies.
 const float TUNE_INTERCEPT_MIN = 500.f;
@@ -2228,61 +1622,12 @@ const float TUNE_LAG_SPEED = 0.98f;
 // perf.as [severity] -- How much lag severity rises per slow-speed sample;
 //   higher cuts kick in at severity 1, 2 and 3.
 const float TUNE_LAG_STEP = 0.34f;
-// manager/factory/switch.as [toggle 0/1] -- Spare unspent income may grant an
-//   extra factory line; 0 disables the spare-metal branch.
-// manager/factory/switch.as [ratio] -- Spare income above this fraction of
-//   income counts as feeding another line.
-// manager/builder/mexguard.as [count] -- Dragon's teeth placed around a
-//   cloaked maw (popup trap) to hide its footprint.
-// manager/brain/mix.as [toggle 0/1] -- The composition mixer adjusts factory
-//   role draws toward counters; 0 leaves the plain quota.
-// manager/builder/obsolete.as [seconds] -- A structure already asked for
-//   reclaim is not re-asked for this long.
-// manager/builder/opening.as -- FAILSAFE, deliberately redundant with
-//   everything above: this gate holds the single most important unlock in the
-//   game, and it...
-// manager/builder/opening.as [toggle 0/1] -- The scripted opening yields to
-//   economy repair whenever factory or mex readings collapse; 0 runs the
-//   opening unconditionally.
-// manager/builder/opening.as [metal/s] -- Metal income below which the opening
-//   still counts as needing economy.
-// manager/builder/obsolete.as [fraction 0-1] -- A tower is outgrown when a
-//   much bigger gun stands at least this much farther forward -- the line
-//   moved past it.
-// manager/builder/obsolete.as [ratio] -- The bigger gun must cost at least
-//   this times the tower for the outgrown test.
-// manager/brain/facqueue.as [ratio] -- Overflow production (build past quota
-//   rather than waste) starts once the bank passes this fraction of storage.
 // manager/persona.as [index] -- Force a specific personality kind for every
 //   instance (-1 = roll normally). For A/Bs.
 const float TUNE_PERSONA = -1.f;
-// manager/builder/rules_optional.as [toggle 0/1] -- Reactors site at the
-//   protected rear of the base; 0 leaves siting to the ordinary search.
-// manager/builder/rules_optional.as [elmos] -- How far behind the base centre
-//   the rear reactor spot sits.
-// manager/builder/fusion.as [toggle 0/1] -- Outstanding bound.
-// manager/builder/fusion.as [elmos] -- Search radius for chaining a new
-//   reactor tight against the existing batch.
 // manager/builder/requests.as [metal/s] -- In-flight build requests allowed
 //   per this much metal income (min 2) -- the governor on parallel sites.
 const float TUNE_REQUEST_DRAIN = 7.0f;
-// manager/factory/airsupport.as [ratio] -- Rezbots wanted per unit of steady
-//   income (or per visible wreck value, whichever asks for more).
-// Fraction of the rez want held as a FLOOR on the bot-lab line (the rest
-// stays a ratio entry). 0 restores pure-ratio; 1 is the old conveyor bug.
-// Knee of the sublinear rez curve: want = slope*knee*ln(1+income/knee).
-// One ENERGY and one METAL constructor dedicate per this many enlisted
-// T1/adv cons. 0 disables dedicated roles. Was 3, which locked 2/3 of the
-// fleet into the two eco roles -- measured live (85 cons: energy=33
-// metal=26, 24 free) while the brain's other wants starved for electors;
-// apexearth: "we need enough remaining cons to be able to choose the
-// various other buildings we want to make."
-// Advanced-con dedication ratio: one ENERGY and one METAL dedicate per this
-// many enlisted advanced cons. Was 2 (every adv con dedicated); 3 leaves a
-// third of them free for the adv-only wants (gantry, pulsar, silo).
-// Hard share ceiling: ENERGY+METAL together may hold at most this fraction
-// of a tier's cons, whatever the per-N ratios say (apexearth: "not more
-// than 50% of our total con count", split per tier).
 // Assisters beyond a site's ETA-derived worker count fall back into the
 // auction instead of being held to completion. 0 restores the glue.
 const float TUNE_ASSIST_RELEASE = 1.f;
@@ -2301,23 +1646,6 @@ const float TUNE_NANO_FED_S = 15.f;
 // draw, 2 makes a six-fold value gap one election in thirty-six, large
 // approaches argmax. Never a threshold, so nothing starves outright.
 const float TUNE_DRAW_SHARP = 2.f;
-// manager/brain/facqueue.as [metal/s] -- One T1 air constructor wanted per
-// this much metal income (plus one), on the air line's floor.
-// manager/factory/choose.as [metal/s] -- Steady income past which the
-// extra-plant discipline (afus+pulsar+army-fed) stops vetoing additional
-// T2 plants of any kind.
-// Roulette dominance cap: one want may score at most this multiple of all
-// other wants combined (1.5 => at most ~60% of the draw). 0 disables.
-// Balance multipliers on the mex/mexup auction values (apexearth: "we might
-// need to turn up mex and mexup"), and how many upgrades the always-running
-// lane keeps in flight.
-// apexearth's normal numbers: one gantry per this much steady income; three
-// pinpointers once income clears the late-game bar; pulsar value grows by
-// income/norm.
-// Seconds of steady income that let an extra advanced plant bypass the
-// afus/pulsar/army milestones outright -- at 500 m/s a 900-metal lab is 2s.
-// Workers a big eco build deserves: 1 + costM/this (BigBuildWorkersWanted).
-// Cost floor for the big-build assist scan.
 // manager/builder/rules_rezzer.as [ratio] -- share of the rez fleet that
 //   serves as battlefield medics: they stay with the army's staging anchor,
 //   repair the wounded during fights and reclaim the aftermath there. The
@@ -2340,13 +1668,6 @@ const float TUNE_REZ_FLEE_S = 20.f;
 //   idle most of them lost the race every period and stood still. Lower is
 //   more responsive and costs one feature query per bot per period.
 const float TUNE_REZ_SCAN_S = 1.f;
-// manager/builder/mexguard.as [toggle 0/1] -- a mex past MEX_GUARD_FWD_FRAC of
-//   the way to the enemy gets a heavy gun rather than the light/mid sentry.
-//   The tier then scales with exposure the same way the guard COUNT already
-//   does. 0 keeps the light/mid-only cap.
-// manager/military/posture.as [toggle 0/1] -- Once T2 exists, cheap suicidal
-//   spam (ticks etc.) routes as spam -- forward always; 0 treats them as
-//   normal army.
 // manager/military/hooks.as [0/1] -- 1 = raiders join the massing pool once our
 //   advanced lab stands and fight as line army (the pre-2026-08-30 behaviour).
 //   0 = they keep raiding all game, as stock BARb does. Measured at 1: zero
@@ -2360,13 +1681,6 @@ const float TUNE_SPAM_SUICIDAL = 1.f;
 // manager/military/unblock.as [seconds] -- A stuck unit already asked for
 //   unblocking is not re-asked for this long.
 const float TUNE_STUCK_RETRY = 120.f;
-// manager/builder/rules_offer.as [toggle 0/1] -- Default OFF: the refusal
-//   this addresses is not the binding one -- see IBuilderTask::FindBuildSite.
-// manager/brain.as [metal] -- Diminishing-returns normalizer: a Want's value
-//   divides by (1 + invested/this), so sunk metal argues against more of the
-//   same.
-// manager/builder/mexguard.as [metal/s] -- From this income dragon's-teeth
-//   walls are obsolete: stop building them and start reclaiming them.
 // manager/brain/market/sites.as [count] -- Lattice slots offered to the engine
 //   before a placement gives up on growing a cluster and seeds a new one. A
 //   bound on WORK per placement: each try is one FindBuildSiteNear.
@@ -2411,16 +1725,6 @@ const float TUNE_DEF_ECO_S = 120.f;
 //   so radar and units are the whole defence. Override it on a launch
 //   (tools/test_earlyfight.py does); the default stays 0.
 const float TUNE_DEF_OFF = 0.f;
-// Seconds of economic power held as ARMY -- the other half of the standing
-// obligation. CALIBRATED, not chosen: apexearth set the baseline as a share of
-// metal spend ("we should aim for 40% - I want to make sure we match it as the
-// baseline"), measured against stock BARb's own 39.9% median over 122 games.
-// Swept on Red Comet 1v1 +100%, seed 3, speed 8, one arm per value:
-//
-//     0s -> 3.7% army     40s -> 25.0%     80s -> 47.7%
-//
-// which is linear at ~0.57% of spend per second, so 40% falls at 66. The
-// residual at zero is escort and AA demand, which never consulted this target.
 // Personality moves it (Persona::WantMult); this is the neutral baseline.
 const float TUNE_ARMY_ECO_S = 66.f;
 
@@ -2455,7 +1759,6 @@ const float TUNE_LINE_TERRAIN = 1.f;
 // your own range" for every armed row, which is the control arm.
 const float TUNE_SCREEN_GAP = 200.f;
 
-// How hard a production line is discounted when TEAMMATES already field it.
 // The production half is divided by (1 + this * matesWithIt), so at 1.0 the
 // second team copy is worth half and the third a third. apexearth, watching a
 // 4v4: "I'm still seeing us start with 4 bot labs on comet catcher. Enemy seems
@@ -2570,11 +1873,6 @@ const float TUNE_FOE_TIER_FADE = 1.f;
 //   should mostly only be putting our resources into T3 units and advanced
 //   air"). 0 disables.
 const float TUNE_OWN_TIER_FADE = 0.8f;
-// manager/brain/market/want_protect.as [ratio] -- The rear eco specialist's
-//   defence and army targets, as a share of a normal player's. Its threat is
-//   already near zero by position, so this only holds the tail down; it is a
-//   how-much, never a whether -- if something starts killing it, ThreatM at
-//   its home rises and the target rises with it.
 // manager/brain/market/coverage.as [metal per unit of ally influence] -- What a
 //   teammate holding this ground is worth as cover, in the same currency as
 //   our own towers. 0 restores the own-towers-only reading, in which a rear
