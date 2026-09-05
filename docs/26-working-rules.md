@@ -202,9 +202,31 @@ finding left in a transcript is one you will pay to rediscover.
 
 ### Comments — write far fewer than feels natural here
 
-The long "tried X, measured Y, reverted" blocks already in `factory.as` are
-load-bearing: they stop a failed experiment being retried. That is not licence to
-add more of them. Four rules, each from a real mistake:
+**This rule has been in force since 2026-08-14 and did not work.** By 2026-09-05
+the live tree held 13,368 comment lines, 54% of its bytes, and `tunables.as`
+alone carried 2,122 lines of annotation for 425 constants — 276 blocks of it
+describing knobs that no longer existed. A rule fires when someone remembers it.
+Three things have to be true instead, and only the first is a rule:
+
+1. **The rule**, below.
+2. **A destination.** Archaeology lands in code because at the moment of writing
+   there is nowhere better that a future reader will actually find. A commit
+   message is invisible from the call site, so the finding gets re-derived and
+   re-written. `docs/27-tunable-rationale.md` is the pattern: keyed by the
+   symbol, so `grep TUNE_YOURKNOB docs/` answers "why is it this number, and
+   what has already been tried" without the prose living in the source.
+3. **A check.** `python tools/comment_audit.py` reads the diff — not the tree,
+   so the backlog never drowns the signal — and asks two questions of what you
+   are about to commit: is this a run report (a date, a seed, a win/loss, a
+   metal total), and is this block over ten lines. Neither is an error. Run it
+   before committing a change that touched comments.
+
+A negative result IS worth keeping — the long "tried X, measured Y, reverted"
+reasoning stops a failed experiment being retried, and several defaults in
+`docs/27` are measured-and-left-off for exactly that reason. Keep it. Put it
+where it is keyed to the symbol rather than wrapped around the code.
+
+Four rules, each from a real mistake:
 
 - **A code comment is not a session transcript.** apexearth, 2026-08-14, after a
   comment quoted his own complaint verbatim, listed a measured number, and

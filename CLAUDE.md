@@ -101,6 +101,7 @@ conclusion each one produced.
 | **count factories, tasks or in-flight builds** | `async-sim-orders` · **S13** an order is not applied when issued, and the lag scales with sim speed |
 | **write AngelScript** | `docs/05-angelscript-api.md` · **S4** no forward declarations · **S5** a unit can only build what its own def lists · `tools/as_scope.py` |
 | **edit any `.as` file** | **S18** an anchor that does not match does nothing, quietly. Assert it exists |
+| **commit a change that touched comments** | `comment_audit.py` — a run report belongs in the commit message, a negative result in `docs/27` keyed by symbol. The rule alone failed for three weeks; this is the check |
 | **touch C++** | `cpp-dll` skill, `docs/06-building-the-dll.md` |
 | **build on an engine binding** | **S7** callbacks can be silently dead — log the raw return once · **S9** `GetBuilderThreatAt` crashes off-map and reads zero anyway |
 | **create or rename a variant** | **S1** without its own shortName it loads stock BARb in every multiplayer game · `docs/03-barb-architecture.md` |
@@ -123,6 +124,8 @@ python tools/trace.py latest --filter=decide    # apex: lines for one tag, minut
 python tools/diagnose.py <run>                  # 3 lines when clean
 python tools/check.py 2>&1 | tail -15           # 126 lines unpiped -- always tail it
 python tools/as_scope.py                        # 2 lines
+python tools/comment_audit.py                   # run reports + essays in YOUR diff
+python tools/context_size.py --since            # what the repo costs to read
 python tools/unitdef.py <unit> [--builders|--builds|--trees]   # 8 lines
 python tools/deploy_ai.py status|deploy Unstable|pull Unstable|gadgets|patches
 python tools/dashboard.py                       # his UI: runs, launch, deploy, tunables
