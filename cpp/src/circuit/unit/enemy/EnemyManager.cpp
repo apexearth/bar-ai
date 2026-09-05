@@ -495,6 +495,24 @@ float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float ra
 // apex: the longest weapon range among a group's known members. The danger a
 // standing group poses depends on what it can SHELL, not where it walks --
 // artillery reaches ~1500 and must read dangerous from that far out.
+int CEnemyManager::GetEnemyGroupUnitCount(int i) const
+{
+	return ((i >= 0) && (i < (int)enemyGroups.size())) ? (int)enemyGroups[i].units.size() : 0;
+}
+
+CCircuitDef::Id CEnemyManager::GetEnemyGroupUnitDef(int i, int k) const
+{
+	if ((i < 0) || (i >= (int)enemyGroups.size())) {
+		return 0;
+	}
+	const std::vector<ICoreUnit::Id>& us = enemyGroups[i].units;
+	if ((k < 0) || (k >= (int)us.size())) {
+		return 0;
+	}
+	CEnemyInfo* e = circuit->GetEnemyInfo(us[k]);
+	return ((e != nullptr) && (e->GetCircuitDef() != nullptr)) ? e->GetCircuitDef()->GetId() : 0;
+}
+
 float CEnemyManager::GetEnemyGroupRange(int idx) const
 {
 	if ((idx < 0) || (idx >= (int)enemyGroups.size())) {
@@ -781,6 +799,7 @@ void CEnemyManager::KMeansIteration()
 				if (!enemy.IsFake()) {
 					eg.units.push_back(enemy.id);
 				}
+				eg.vel = std::max(eg.vel, sqrtf(enemy.vel.SqLength2D()) * FRAMES_PER_SEC);
 
 				if (enemy.cdef != nullptr) {
 					eg.roleCosts[enemy.cdef->GetMainRole()] += enemy.cost;

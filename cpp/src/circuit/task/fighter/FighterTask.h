@@ -109,6 +109,7 @@ protected:
 	void SetTarget(CEnemyInfo* enemy);
 	void Attack(CCircuitUnit* unit, const int frame);
 	void AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int frame);
+	springai::AIFloat3 LeadPos(CCircuitUnit* unit, CEnemyInfo* enemy, int frame) const;
 	springai::AIFloat3 SafeStandoff(CCircuitUnit* unit, const springai::AIFloat3& want,
 			const springai::AIFloat3& tPos, const int frame) const;
 

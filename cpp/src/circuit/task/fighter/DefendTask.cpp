@@ -177,9 +177,20 @@ void CDefendTask::Update()
 		// were individually weaker than the bar could never combine to reach it
 		// and stood in base for the rest of the game, while anything already over
 		// the bar promoted and left alone.
+		// The guards read a shortfall at a post under attack: the pool stays
+		// (apexearth: "our base was being hit but new units ran away from
+		// protecting it to fight on the frontline").
+		const bool guardShort = (leashShort > 0.f)
+				&& (circuitAI->GetLastFrame() < leashAt + FRAMES_PER_SEC * 15);
+		if (guardShort && (circuitAI->GetLastFrame() >= lastHoldLog + FRAMES_PER_SEC * 30)) {
+			lastHoldLog = circuitAI->GetLastFrame();
+			circuitAI->LOG("apex: defend-hold short=%.0f n=%d pw=%.0f/%.0f",
+					leashShort, (int)units.size(), attackPower, maxPower);
+		}
 		const bool held = (onFront && (attackPower < maxPower * FRONT_HOLD_POWER))
 				|| (circuitAI->GetLastFrame() < noPromoteUntil)
-				|| IsDispatched(circuitAI->GetLastFrame());
+				|| IsDispatched(circuitAI->GetLastFrame())
+				|| guardShort;
 		// The any-attack-exists shortcut fed solos: each promotion CREATES an
 		// attack task, so after the first real squad -- alive or already dead --
 		// every fresh 1-unit pool saw "an attack exists" and left alone, a
@@ -868,6 +879,8 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 		sent += threatMap->GetUnitPower(c.second);
 		++sentN;
 	}
+	leashShort = (sent < need) ? (need - sent) : 0.f;
+	leashAt = frame;
 	for (CCircuitUnit* unit : leashed) {
 		AIFloat3 post;
 		float reach = 0.f;

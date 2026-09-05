@@ -608,6 +608,31 @@ AIFloat3 IFighterTask::SafeStandoff(CCircuitUnit* unit, const AIFloat3& want,
 	return pos;
 }
 
+// Where a moving target will be when we get there (apexearth: "we tend to
+// chase directly towards the enemy instead of in the direction they're
+// heading"). Capped so a far target is not led off the map.
+static constexpr float STATIC_STANDOFF_SLACK = 20.f;  // elmos past a static target's reach
+
+AIFloat3 IFighterTask::LeadPos(CCircuitUnit* unit, CEnemyInfo* enemy, const int frame) const
+{
+	static constexpr float LEAD_MAX_SEC = 6.f;
+	AIFloat3 tPos = enemy->GetPos();
+	CCircuitDef* edef = enemy->GetCircuitDef();
+	if ((edef == nullptr) || !edef->IsMobile()) {
+		return tPos;
+	}
+	const AIFloat3& vel = enemy->GetVel();  // elmos per frame
+	const float spdF = unit->GetCircuitDef()->GetSpeed() / FRAMES_PER_SEC;
+	if ((spdF < 0.01f) || (vel.SqLength2D() < 0.01f)) {
+		return tPos;
+	}
+	float leadF = unit->GetPos(frame).distance2D(tPos) / spdF;
+	leadF = std::min(leadF, FRAMES_PER_SEC * LEAD_MAX_SEC);
+	tPos += vel * leadF;
+	CTerrainManager::CorrectPosition(tPos);
+	return tPos;
+}
+
 void IFighterTask::AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int frame)
 {
 	assert((unit->GetTravelAct() != nullptr) && (enemy != nullptr));
@@ -620,7 +645,7 @@ void IFighterTask::AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int 
 	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
-	const AIFloat3& tPos = enemy->GetPos();
+	const AIFloat3 tPos = LeadPos(unit, enemy, frame);
 	const int targetTile = circuit->GetInflMap()->Pos2Index(tPos);
 	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 3);
 	attackFrame = isRepeatAttack ? frame : attackFrame;
@@ -665,7 +690,15 @@ void IFighterTask::AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int 
 			&& (edef->GetMaxRange() > cdef->GetMaxRange());
 	float range = (outranged ? edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN : cdef->GetMaxRange()) * rangeMod;
 	if (!outranged && (edef != nullptr)) {
-		range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
+		if (isStatic) {
+			// Outside ITS reach, inside ours: 0.9x of a 475 rocket stood at 427
+			// against a 435 turret (apexearth: "died to a T1 turret which it
+			// outranges"), and the old 1.15x margin put it past its own gun.
+			range = std::min(std::max(range, edef->GetMaxRange() + STATIC_STANDOFF_SLACK),
+					cdef->GetMaxRange() * 0.98f);
+		} else {
+			range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
+		}
 	}
 	if (!seesTarget) {
 		range = std::min(range, cdef->GetLosRadius() * rangeMod);

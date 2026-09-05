@@ -2385,6 +2385,90 @@ springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, fl
 // whether a constructor gets sent at all, so a commander corpse skewing that
 // total high would still walk a con onto it even if GetBestWreckPos itself
 // never targets it directly.
+springai::AIFloat3 CCircuitAI::GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost)
+{
+	springai::AIFloat3 best(-RgtVector);
+	if ((callback == nullptr) || (radius <= 0.f)) {
+		return best;
+	}
+	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
+	if (metal == nullptr) {
+		return best;
+	}
+	float bestCost = minCost;
+	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
+	for (springai::Feature* f : feats) {
+		if (f == nullptr) {
+			continue;
+		}
+		if (IsCommanderWreck(f) || !callback->Feature_IsResurrectable(f->GetFeatureId())) {
+			delete f;
+			continue;
+		}
+		springai::FeatureDef* fd = f->GetDef();
+		if (fd != nullptr) {
+			float v = fd->GetContainedResource(metal);
+			const std::string name = fd->GetName();
+			const size_t at = name.rfind("_dead");
+			if (at != std::string::npos) {
+				CCircuitDef* ud = GetCircuitDef(name.substr(0, at).c_str());
+				if (ud != nullptr) {
+					v = std::max(v, ud->GetCostM());
+				}
+			}
+			if (v > bestCost) {
+				bestCost = v;
+				best = f->GetPosition();
+			}
+			delete fd;
+		}
+		delete f;
+	}
+	delete metal;
+	return best;
+}
+
+float CCircuitAI::GetFieldWorkAt(const springai::AIFloat3& pos, float radius)
+{
+	if ((callback == nullptr) || (radius <= 0.f)) {
+		return .0f;
+	}
+	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
+	if (metal == nullptr) {
+		return .0f;
+	}
+	float total = .0f;
+	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
+	for (springai::Feature* f : feats) {
+		if (f == nullptr) {
+			continue;
+		}
+		if (IsCommanderWreck(f)) {
+			delete f;
+			continue;
+		}
+		springai::FeatureDef* fd = f->GetDef();
+		if (fd != nullptr) {
+			float v = fd->GetContainedResource(metal) * f->GetReclaimLeft();
+			if (callback->Feature_IsResurrectable(f->GetFeatureId())) {
+				const std::string name = fd->GetName();
+				const size_t at = name.rfind("_dead");
+				if (at != std::string::npos) {
+					CCircuitDef* ud = GetCircuitDef(name.substr(0, at).c_str());
+					if (ud != nullptr) {
+						v = std::max(v, ud->GetCostM());
+					}
+				}
+			}
+			total += v;
+			delete fd;
+		}
+		delete f;
+	}
+	delete metal;
+	return total;
+}
+
 float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius)
 {
 	if ((callback == nullptr) || (radius <= 0.f)) {

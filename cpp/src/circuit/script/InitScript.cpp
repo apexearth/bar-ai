@@ -618,6 +618,22 @@ static float CEnemyManager_GetEnemyGroupRange(CEnemyManager* mgr, int i)
 	return mgr->GetEnemyGroupRange(i);
 }
 
+static int CEnemyManager_GetEnemyGroupUnitCount(CEnemyManager* mgr, int i)
+{
+	return mgr->GetEnemyGroupUnitCount(i);
+}
+
+static int CEnemyManager_GetEnemyGroupUnitDef(CEnemyManager* mgr, int i, int k)
+{
+	return (int)mgr->GetEnemyGroupUnitDef(i, k);
+}
+
+static float CEnemyManager_GetEnemyGroupVel(CEnemyManager* mgr, int i)
+{
+	const auto& groups = mgr->GetEnemyGroups();
+	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].vel : 0.f;
+}
+
 // apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
 // target when energy allows -- apexearth's request). CmdCloak already exists
 // on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
@@ -775,9 +791,36 @@ static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos,
 	return circuit->GetEnemyCostAt(pos, radius);
 }
 
+static float CCircuitAI_GetFieldWorkAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
+{
+	return circuit->GetFieldWorkAt(pos, radius);
+}
+
+// Metal of missing hit points over our mobile units: what a repairer has to do.
+static float CCircuitAI_GetOwnRepairM(CCircuitAI* circuit)
+{
+	float m = 0.f;
+	for (const auto& kv : circuit->GetTeamUnits()) {
+		CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMobile()) {
+			continue;
+		}
+		const float hp = u->GetHealthPercent();
+		if (hp < 0.99f) {
+			m += (1.f - hp) * u->GetCircuitDef()->GetCostM();
+		}
+	}
+	return m;
+}
+
 static float CCircuitAI_GetWreckValueAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	return circuit->GetWreckValueAt(pos, radius);
+}
+
+static AIFloat3 CCircuitAI_GetBestRezPos(CCircuitAI* circuit, const AIFloat3& pos, float radius, float minCost)
+{
+	return circuit->GetBestRezPos(pos, radius, minCost);
 }
 
 static AIFloat3 CCircuitAI_GetBestWreckPos(CCircuitAI* circuit, const AIFloat3& pos, float radius, float minMetal)
@@ -1323,7 +1366,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestWreckPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestWreckPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetBestRezPos(const AIFloat3& in, float, float) const", asFUNCTION(CCircuitAI_GetBestRezPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetWreckValueAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetWreckValueAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFieldWorkAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetFieldWorkAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetOwnRepairM() const", asFUNCTION(CCircuitAI_GetOwnRepairM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GetBlockedBuildPos(AIFloat3& out)", asFUNCTION(CCircuitAI_GetBlockedBuildPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetEngageBoost(float)", asMETHOD(CCircuitAI, SetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetCommitted(bool)", asMETHOD(CCircuitAI, SetCommitted), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1681,6 +1727,9 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupPos(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupCost(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupRange(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupRange), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupVel(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupVel), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitCount(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitDef(int, int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
 
 	CThreatMap* thrMap = circuit->GetThreatMap();

@@ -770,7 +770,11 @@ void ISquadTask::Attack(const int frame)
 
 void ISquadTask::Attack(const int frame, const bool isGround)
 {
-	const AIFloat3& tPos = GetTarget()->GetPos();
+	const AIFloat3 tPos = LeadPos(leader, GetTarget(), frame);
+	CCircuitDef* tdef = GetTarget()->GetCircuitDef();
+	const bool tStatic = (tdef != nullptr) && !tdef->IsMobile();
+	const float tRange = (tdef != nullptr) ? tdef->GetMaxRange() : 0.f;
+	static constexpr float STATIC_SLACK = 20.f;
 	// apexearth: "keeping our units close to their maximum range against
 	// enemies, and to almost always stay moving. standing still leads to
 	// death much quicker." Previously 3s: a squad reaches its computed
@@ -1419,6 +1423,11 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					if (unit->GetHealthPercent() > unit->GetCircuitDef()->GetRetreat()) {
 						r = std::min(r, kv.first * 0.98f);
 					}
+				}
+				// A static we outrange is met from outside ITS reach (apexearth:
+				// "died to a T1 turret which it outranges").
+				if (tStatic && (kv.first > tRange + STATIC_SLACK)) {
+					r = std::min(std::max(r, tRange + STATIC_SLACK), kv.first * 0.98f);
 				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);

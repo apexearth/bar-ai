@@ -32,7 +32,7 @@ public:
 	using EnemyFakes = std::set<CEnemyFake*>;
 	struct SEnemyGroup {
 		explicit SEnemyGroup(const springai::AIFloat3& p)
-			: pos(p), cost(0.f), influence(0.f), vagueMetric(1.f)
+			: pos(p), cost(0.f), influence(0.f), vagueMetric(1.f), vel(0.f)
 		{
 			roleCosts.fill(0.f);
 		}
@@ -42,6 +42,7 @@ public:
 		float cost;
 		float influence;  // thr_mod applied
 		float vagueMetric;
+		float vel;  // fastest member, elmos per second
 	};
 
 	CEnemyManager(CCircuitAI* circuit);
@@ -77,6 +78,8 @@ public:
 	float GetEnemyMaxMobileCostM() const;
 	// apex: longest weapon range in a group -- danger radius depends on it.
 	float GetEnemyGroupRange(int idx) const;
+	int GetEnemyGroupUnitCount(int i) const;
+	CCircuitDef::Id GetEnemyGroupUnitDef(int i, int k) const;  // 0 when unknown
 private:
 	void DyingEnemy(CEnemyUnit* enemy);
 	void DeleteEnemyUnit(CEnemyUnit* data);

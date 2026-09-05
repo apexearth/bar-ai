@@ -81,6 +81,9 @@ private:
 	// the rest stay on or return to their posts.
 	void LeashPosts(const springai::AIFloat3& tgtPos);
 	int lastLeashLog = -999999;
+	float leashShort = 0.f;   // need - sent at the last leash, 0 when met
+	int leashAt = -999999;
+	int lastHoldLog = -999999;
 	std::map<int, std::pair<springai::AIFloat3, int>> postSent;   // unit id -> post ordered, frame
 	int lastPostLog = -999999;
 	int dispatchUntil = 0;

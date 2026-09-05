@@ -19,6 +19,7 @@
 #include "terrain/path/QueryPathSingle.h"
 #include "terrain/path/QueryCostMap.h"
 #include "terrain/TerrainManager.h"
+#include "unit/CircuitUnit.h"
 #include "unit/action/DGunAction.h"
 #include "unit/action/MoveAction.h"
 #include "unit/action/FightAction.h"
@@ -453,6 +454,36 @@ void CRetreatTask::Update()
 			comHoldLogAt = frame;
 			circuit->LOG("apex: com-retreat-hold t=%i hp=%.2f infl=%.1f pw=%.1f",
 					circuit->GetTeamId(), healthPerc, inflHere, comPower);
+		}
+		// A retreat whose haven sits inside the enemy's influence is a stand-
+		// still (seed 18: 40 s at the base edge, hp 0.91 -> dead to a
+		// Banisher). Held there, he keeps walking to the lowest influence
+		// around him instead.
+		if (cdef->IsRoleComm() && (inflHere >= safeInfl)
+			&& (frame >= comEvadeAt + FRAMES_PER_SEC * 5))
+		{
+			comEvadeAt = frame;
+			static constexpr float STEP = 400.f;
+			const AIFloat3 here = unit->GetPos(frame);
+			AIFloat3 best = here;
+			float bestInfl = inflHere;
+			for (int k = 0; k < 8; ++k) {
+				const float a = k * 0.7853981634f;
+				AIFloat3 p(here.x + cosf(a) * STEP, here.y, here.z + sinf(a) * STEP);
+				CTerrainManager::CorrectPosition(p);
+				const float v = circuit->GetInflMap()->GetEnemyInflAt(p);
+				if (v < bestInfl) {
+					bestInfl = v;
+					best = p;
+				}
+			}
+			if (bestInfl < inflHere * 0.8f) {
+				TRY_UNIT(circuit, unit,
+					unit->CmdMoveTo(best, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 10);
+				)
+				circuit->LOG("apex: com-evade t=%i infl=%.1f -> %.1f at=%.0f,%.0f",
+						circuit->GetTeamId(), inflHere, bestInfl, best.x, best.z);
+			}
 		}
 		if (isRepaired && !unit->IsDisarmed(frame) && !cdef->IsRoleComm()) {
 			Recovered(unit);

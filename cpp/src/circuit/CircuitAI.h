@@ -195,6 +195,8 @@ public:
 	float ReadTeamValue(int otherTeamId, const std::string& key, float defVal) const;
 	springai::AIFloat3 GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal);
 	float GetWreckValueAt(const springai::AIFloat3& pos, float radius);
+	float GetFieldWorkAt(const springai::AIFloat3& pos, float radius);
+	springai::AIFloat3 GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost);  // resurrectable wreck worth the most as a unit  // rez bot work: a resurrectable wreck at its unit's cost, else its reclaim metal
 	bool IsCommanderWreck(springai::Feature* f);
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
