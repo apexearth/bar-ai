@@ -28,10 +28,8 @@ namespace Market {
 // marginal term below is a DIFFERENCE of this function against itself, so the
 // proposed turret enters as a hypothetical member of gProtPos -- same ring,
 // same weakest-bearing rule, same trade. Adding its cost to a ring reading
-// instead compared a metal figure against a coverage figure: the candidate was
-// credited in full at the site while the towers already standing were judged
-// on a ring almost nothing reaches, so the field never saturated and the Nth
-// turret priced exactly like the first (measured: cover=0 at protM=3450).
+// compares a metal figure against a coverage figure, and the field never
+// saturates: the Nth turret prices exactly like the first.
 const int COVER_RAYS = 6;
 
 // COVER IS KILLING POWER, NOT A PRICE TAG. Summing costM made every turret in
@@ -126,11 +124,9 @@ float StakeAt(const AIFloat3& in pos, float r)
 // post is bought to protect. Beyond `reach` only -- nearer value is already
 // counted by StakeAt, and adding both would count it twice.
 // ...along an EXPLICIT bearing. A front post faces the enemy; a perimeter post
-// faces outward from the middle of our own footprint, which is not the same
-// direction and on a flank is nowhere near it. Without the second form only
-// front posts could ever collect the credit, so the price's argmax sat at the
-// centroid of the base by construction and a rim post was worth its own disc
-// and nothing more.
+// faces outward from the middle of our own footprint, which on a flank is
+// nowhere near the same direction. With only the first form the argmax sits at
+// the base centroid by construction and a rim post is worth its own disc.
 float ShieldedStakeAlong(const AIFloat3& in pos, float reach,
 		const AIFloat3& in dirIn)
 {
@@ -168,21 +164,14 @@ float ShieldedStakeAt(const AIFloat3& in pos, float reach)
 	return ShieldedStakeAlong(pos, reach, foe - pos);
 }
 
-// STAKE A POST ACTUALLY DEFENDS.
-//
-// Plain distance: everything of ours inside this post's weapon range. Two
-// earlier shapes were both wrong. A SIDE test ("is the post between this asset
-// and the enemy") reads correctly for a distant intercepting post but zeroes a
-// tower standing inside the base -- half the base is in front of any home
-// tower, so home defence priced to nothing and raiders walked in. Subtracting
-// the attacker's standoff here was worse still: it demanded a post deny EVERY
-// firing position, which at 450 reach against 300 standoff means 150 elmos, so
-// almost nothing qualified and defence fell to 1.9% of our metal. Standoff is
-// CoverAt's question -- charging it twice is double counting.
-//
-// Distance alone is honest and does the work the side test was reaching for: a
-// tower at the back of the base simply cannot reach a mex 800 elmos forward.
-// ShieldedStakeAt then adds what a FORWARD post intercepts beyond its own
+// STAKE A POST ACTUALLY DEFENDS: plain distance, everything of ours inside
+// this post's weapon range. Distance alone is honest -- a tower at the back of
+// the base cannot reach a mex 800 elmos forward -- and the two sharper-looking
+// forms are both wrong. A SIDE test ("is the post between this asset and the
+// enemy") zeroes any home tower, since half the base is in front of it.
+// Subtracting the attacker's standoff demands a post deny EVERY firing
+// position; standoff is CoverAt's question and charging it twice double
+// counts. ShieldedStakeAt adds what a FORWARD post intercepts beyond its own
 // range, which is what makes the line worth building at all.
 float FrontedStakeAt(const AIFloat3& in pos, float reach)
 {
@@ -195,12 +184,10 @@ float FrontedStakeAt(const AIFloat3& in pos, float reach)
 //
 // CoverAt sums OUR OWN towers and nothing else, so a rear player standing
 // behind four teammates reads as completely unprotected -- the safest ground
-// on the map, priced as the most dangerous. That number is a multiplier in
-// three places at once (StreamSurvival discounts every eco build by it,
-// TechSurvival discounts the T2 lab by it, and the defence want sizes itself
-// off it), so one wrong reading suppresses economy, tech and sensible
-// defence together -- and the answer it drives us to, more turrets of our
-// own, is the one thing the rear player should not be buying.
+// on the map, priced as the most dangerous. That number multiplies
+// StreamSurvival, TechSurvival and the defence want's own size, so one wrong
+// reading suppresses economy, tech and sensible defence together, and drives
+// us to the one thing a rear player should not buy: more turrets of our own.
 //
 // apexearth: "we don't want to build this eco on unprotected ground. Sounds
 // like the same eco role armytarget/defensetarget stuff needs to be
@@ -377,18 +364,13 @@ float ExposureAt(const AIFloat3& in pos)
 //------------------------------------------------------------------------------
 // THE PART OF A RISK READING THAT DOES NOT DEPEND ON WHERE YOU ASK.
 //
-// Threat, hazard and the siege prior each mix a local term (what is seen at
-// pos, what stands there, what has died there) with side-wide aggregates --
-// their raiding force, their army, ours, the enemy bearing. The aggregates
-// were recomputed per call, and the protect market asks all three at every
-// candidate site of every defence def of every builder election. ArmyValue
-// alone walks the whole def table.
-//
-// RiskFill() reads the aggregates into these globals; the *At/*With forms take
-// them from there. A caller with one position still pays exactly what it paid
-// before -- the wrappers below fill unconditionally, so nothing is ever read a
-// frame stale -- while a loop over sites fills once and keeps the arithmetic
-// identical.
+// Threat, hazard and the siege prior each mix a local term with side-wide
+// aggregates, and the protect market asks all three at every candidate site of
+// every defence def of every builder election -- ArmyValue alone walks the
+// whole def table. RiskFill() reads the aggregates into these globals; the
+// *At/*With forms take them from there. The wrappers below fill
+// unconditionally, so a single-position caller is never a frame stale, while a
+// loop over sites fills once and keeps the arithmetic identical.
 //------------------------------------------------------------------------------
 float gRkThreatR = 0.f;
 float gRkTau = 180.f;
@@ -602,16 +584,13 @@ float HazardWith(const AIFloat3& in pos, float cover)
 // actually defends this ground.
 // TWO DIFFERENT QUESTIONS, TWO DIFFERENT PRIORS. Whether a long bet has time
 // to pay is a worst-case question -- assume they spent everything on army. How
-// much defence to BUY is an expectation, and buying against the worst case is
-// a feedback loop: bigger economy -> more assumed enemy army -> more turrets
-// -> economy stalls, settling only once cover roughly equals our whole
-// economy (apexearth, watching: "we make far too many turrets around our base.
-// We stopped eco at around ~15-19m/s... our want for defense is outweighing
-// our interest in more eco, and we aren't making any T2"). The expectation is
-// apex_enemy_prior -- the expected-enemy share the defence side prices
-// against. ArmyTarget no longer reads it: army is sized from our own economy.
-// Turrets are excluded from our own total, or defence becomes its own
-// justification and the loop runs away.
+// much defence to BUY is an expectation, because buying against the worst case
+// is a feedback loop: bigger economy -> more assumed enemy army -> more
+// turrets -> economy stalls (apexearth: "we make far too many turrets around
+// our base... our want for defense is outweighing our interest in more eco").
+// The expectation is apex_enemy_prior. ArmyTarget no longer reads it -- army
+// is sized from our own economy -- and turrets are excluded from our own
+// total, or defence becomes its own justification and the loop runs away.
 float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 {
 	const float prior = (gRkEconM + gRkArmyV) * priorFrac;
@@ -688,18 +667,17 @@ float SiegeExpect(const AIFloat3& in pos)
 // I see we make stuff and walk away from it without guarding it at all... a mex
 // should have almost NO VALUE! until it is protected by a tower."
 //
-// The mex wants price the income a spot yields as though we keep it. The only
-// risk charge anywhere was ExpectedLossAt in decide.as, and that bills the
-// BUILDING's 620 metal -- never the income we stop collecting when it dies,
-// which over any real horizon is the larger number by far. So an unheld
-// forward spot and a towered one behind our own line priced within a few
-// percent of each other.
+// The mex wants price a spot's income as though we keep it, and the only risk
+// charge, ExpectedLossAt in decide.as, bills the BUILDING's 620 metal -- never
+// the income we stop collecting when it dies, the larger number over any real
+// horizon. Without this an unheld forward spot and a towered one behind our
+// line price within a few percent of each other.
 //
 // The share of a stream we expect to actually collect, over the horizon the
 // stake is already counted across. ShortfallAt is what our guns fail to stop,
-// so a tower within reach of the spot RAISES this directly -- which is the
-// coupling he is asking for: cover makes the next claim beside it worth more,
-// and expansion clusters behind the line instead of scattering.
+// so a tower within reach RAISES this directly -- the coupling he asks for:
+// cover makes the next claim beside it worth more, and expansion clusters
+// behind the line instead of scattering.
 // Memoized on a 256-elmo grid with a 3s clock: three field sweeps per call,
 // and the mexup proposer asks per held spot per election.
 array<float> gSsVal(64, 1.f);

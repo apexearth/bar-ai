@@ -23,11 +23,10 @@ int gNextFeedLog = 0;
 // as a small army, the same rule air already applies to unseen AA.
 // Rolling peak of RECENTLY-SEEN fighting cost -- apexearth: "if we have
 // seen 100 thugs in/out of fog over 90s but we've only ever seen at max 10
-// at one time... the enemy army is probably sized around ~10." Distinct
-// ids cycling through fog never double-count (verified in the registry),
-// so the case this catches is distinct units DYING unseen while the raw
-// count remembers them. The peak decays so a real army briefly hidden does not
-// evaporate, but a peak from a fight we already won stops being evidence.
+// at one time... the enemy army is probably sized around ~10." Distinct ids
+// cycling through fog never double-count, so what this catches is units DYING
+// unseen while the raw count remembers them. The peak decays: a real army
+// briefly hidden does not evaporate, a peak from a fight we won stops counting.
 float gSeenPeak = 0.f;
 int gSeenPeakFrame = 0;
 
@@ -219,11 +218,9 @@ float MassWant()
 	//
 	// The floor is tunable and calibrated by LogUnitPower() below: quota.attack
 	// is a POWER sum (CFighterTask: attackPower += cdef->GetPower()), not a
-	// unit count or metal value, so it cannot be derived directly from a metal
-	// figure.
-	// ON by default since 2026-08-16: with it off every group committed at the
-	// floor (~20% of our army) whatever the enemy massed, which is the "they
-	// kill our smaller masses one by one" report, made twice.
+	// unit count or metal value, so it cannot be derived from a metal figure.
+	// ON by default: off, every group commits at the floor whatever the enemy
+	// massed -- the "they kill our smaller masses one by one" report, twice.
 	if (ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f)
 		return MassFloor();
 
