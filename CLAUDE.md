@@ -4,27 +4,113 @@ AI development for **Beyond All Reason** (BAR), the RTS on the **Recoil** engine
 (a fork of Spring RTS). This repo is the source of truth for a custom AI; the
 live game install is a deploy target.
 
-Everything below was verified on this machine on 2026-08-09 unless marked
-otherwise. Re-verify paths before relying on them — engine versions change.
+Paths verified on this machine 2026-08-09 unless marked otherwise. Re-verify
+before relying on them — engine versions change. `BAR-GUIDE.md` covers game
+mechanics.
 
-Refer to `BAR-GUIDE.md` to learn about game mechanics.
+## Context discipline — read this first, it is measured
+
+Measured 2026-09-04 over the last 20 sessions in this repo: **2.05M tokens of
+conversation content, of which Bash accounted for 1.77M (86%)** — 3,860 calls,
+535k tokens of *command text sent* and 1,236k tokens of *output returned*. No
+single dump was the problem; the average call was 138 tokens in and 323 out. The
+cost is **volume**. `Read` over the same span was 87k tokens across 57 calls.
+
+So the lever is fewer, tighter shell calls — not shorter files.
+
+- **The Bash cwd persists between calls. Stop re-`cd`ing.** 1,128 of 3,860 calls
+  opened with `cd /c/Users/apexe/WebstormProjects/bar-ai`; the tool already
+  starts there. Use repo-relative paths.
+- **Batch independent probes into one call.** Three greps that don't depend on
+  each other are one call with three `echo`-labelled sections, not three round
+  trips. Each round trip costs a full assistant turn on top of its output.
+- **Ask for the answer, not the corpus.** `grep -c`, `grep -o | sort | uniq -c`,
+  `| head -20`, `wc -l` — a count settles most questions and a 400-line paste
+  settles none of them better. Never `cat` a file over ~200 lines; `sed -n
+  'A,Bp'` the part you need.
+- **Use `Edit`, not a shell heredoc, to change a file.** The old
+  `python - <<'PYEOF' ... io.open(newline='') ...` pattern cost 300-800 tokens of
+  command text per edit and was written to survive CRLF. **As of 2026-09-04 every
+  tracked file under `ai/Unstable/` is LF**, so `Edit` works there directly. CR
+  still exists in `cpp/`, `changes/` and some root `.md` — check those before
+  anchoring (`tools/normalize_eol.py` reports and fixes). The old hazard note
+  survives as S18.
+- **Search `ai/Unstable/`, not `ai/`.** `ai/ord`, `ai/ctl` and `ai/stk` are
+  frozen measurement fixtures (see "This repo"), not live code, and they inflate
+  a repo-wide grep — `AiMakeTask` hits 56 files across `ai/`, 16 under
+  `Unstable`. Same for `vendor/`, `matches/`, `tournaments/`, `changes/` and
+  `CHANGES.md`: exclude them unless they are the subject.
+- **Grep before you Read.** These files are large by design (`tunables.as` is
+  161KB, `army.as` 52KB). Locate the line, then `sed -n` a window around it.
+- **Don't re-derive what a tool already prints.** `unitdef.py`, `review.py`,
+  `composition.py`, `audit.py`, `frametime.py` and `dashboard_audit.py` exist so
+  that a question is one call. Reaching past them into raw infologs is how a
+  1,000-token answer becomes a 20,000-token one.
+- **A long-running command belongs in the background, and its log belongs
+  tailed.** `nohup python -u ... > log 2>&1 &`, then `tail -5 log` — not a
+  foreground run whose whole output lands in context.
+- **Write findings down before the context ends** — commit message for what
+  changed and what was measured, `ISSUES.md` for what is wrong and not yet fixed.
+  A finding left in a transcript is one you will pay to rediscover.
+
+### Where the 1.77M actually went, and the recipe that replaces it
+
+Four habits accounted for most of it. Each already has a tool; the cost was
+re-deriving a shell pipeline instead of calling it.
+
+| habit | cost / 20 sessions | do this instead |
+|---|---|---|
+| inline `python - <<'PY'` to edit a file | **356k** (302k of it command text) | `Edit`. `ai/Unstable/` is all LF — the CRLF reason is gone |
+| ad-hoc `grep`/`sed` over `*.as` | **478k** | load the owning `ai-*` skill; then `grep -n` for one symbol and `sed -n` a window |
+| hand-rolled infolog greps | **270k** | `trace.py`, `review.py`, `diagnose.py` (below) |
+| `cat` of a whole file | **148k** | `grep -n` then `sed -n 'A,Bp'` |
+
+**Canonical commands — verified 2026-09-04, with their output size. Do not
+re-derive these.**
+
+```bash
+python tools/review.py <run>                 # 45 lines. Gate 1 IS the compile-error
+                                             # + crash + "did it run" check. One call
+                                             # replaces the 4-6 greps that were used
+                                             # 84 times in 20 sessions.
+python tools/trace.py latest --filter=decide # the apex: lines for one tag, minute-stamped.
+                                             # Tags seen most: decide, defplace, fronttowers,
+                                             # targets, posts, eta, defprice, defsite.
+                                             # `latest` resolves the newest matches/ run,
+                                             # so no `ls -td matches/2026* | head -1`.
+python tools/diagnose.py <run>               # 3 lines when clean. What went wrong,
+                                             # without being told what to look for.
+python tools/check.py 2>&1 | tail -15        # 126 lines unpiped -- always tail it.
+python tools/as_scope.py                     # 2 lines. AngelScript scope check.
+python tools/unitdef.py <unit>               # 8 lines. NEVER glob for a unit file (S10).
+python tools/deploy_ai.py status              # 22 lines.
+```
+
+Only when a tool genuinely cannot answer it should you open the infolog by hand —
+and then check its mtime first (**S15**).
 
 ## Read `docs/23-the-plan.md` first — it is what the AI is trying to do
 
-Two paragraphs, and the source of intent for everything below. Every decision
-is an answer to one question: **what is the fastest path to the state we are
-trying to reach?** The AI names a target — so much army, or that much army with
-a fusion behind it — and takes whichever move makes it arrive soonest, under
-one standing obligation: army and defence stay at their proper share of the
-economy we have built.
+Two paragraphs, and the source of intent for everything below. Every decision is
+an answer to one question: **what is the fastest path to the state we are trying
+to reach?** The AI names a target — so much army, or that much army with a fusion
+behind it — and takes whichever move makes it arrive soonest, under one standing
+obligation: army and defence stay at their proper share of the economy we have
+built.
 
-The consequence that matters when reading the rest of this file: **order,
-numbers and limits are OUTPUTS.** Mexes before tech, upgrades after tech, a
-constructor rather than another building — all of it falls out of the
-arithmetic, so a threshold, a build order or a cap in this AI is a bug in the
-model wearing a fix's clothing. `value-paradigm` carries the operational
-detail; the plan carries the intent, and where a doc, a skill or a comment
-still argues from "above N metal/s", the plan wins and the doc is stale.
+The consequence that matters when reading the rest of this file: **order, numbers
+and limits are OUTPUTS.** Mexes before tech, upgrades after tech, a constructor
+rather than another building — all of it falls out of the arithmetic, so a
+threshold, a build order or a cap in this AI is a bug in the model wearing a
+fix's clothing. `value-paradigm` carries the operational detail; the plan carries
+the intent, and where a doc, a skill or a comment still argues from "above N
+metal/s", the plan wins and the doc is stale.
+
+**`docs/24-how-units-fight.md` is the combat counterpart**: apexearth's
+directives for how the army fights, and ONLY his — a session may add to it from
+something he said, never from its own ideas. Read it before touching any C++
+fighter task or `manager/military/`; where code disagrees with it, the code is
+stale.
 
 ## Local layout
 
@@ -39,30 +125,27 @@ still argues from "above N metal/s", the plan wins and the doc is stale.
 | Game-side AI config | `BAR.sdd\luarules\configs\<shortName>\<version>\{config,script}` |
 
 `tools/bar_env.py` resolves all of this at runtime. Never hardcode these paths in
-new code — import `bar_env` instead. Override with `BAR_ROOT` / `BAR_DATA` /
-`BAR_ENGINE` / `BAR_GAME_SDD` env vars.
+new code — import `bar_env`. Override with `BAR_ROOT` / `BAR_DATA` /
+`BAR_ENGINE` / `BAR_GAME_SDD`.
 
-**There are two game trees and they are different versions.** `BAR.sdd` is
-pinned at 2025-11-28 and is what every match runs against — it is also the only
-one the dev gadgets can live in, and those gadgets produce *all* telemetry
-(`aaT1`, `metalProduced`, `top`, and the game-over winner). `vendor/bar` tracks
-upstream `master`. Never answer a unit question by picking one: run
-`tools/unitdef.py`, which reads both and shouts when they disagree —
-`legadvshipyard` exists upstream and not in the game we test, and `corasy` costs
-3100 here against 2800 upstream.
+**There are two game trees and they are different versions.** `BAR.sdd` is pinned
+at 2025-11-28 and is what every match runs against — it is also the only one the
+dev gadgets can live in, and those gadgets produce *all* telemetry (`aaT1`,
+`metalProduced`, `top`, and the game-over winner). `vendor/bar` tracks upstream
+`master`. Never answer a unit question by picking one: run `tools/unitdef.py`,
+which reads both and shouts when they disagree — `legadvshipyard` exists upstream
+and not in the game we test, and `corasy` costs 3100 here against 2800 upstream.
 
 **The game itself does not use `BAR.sdd`.** Chobby plays the rapid-downloaded
 `.sdp` packages in `data/packages`/`data/pool`; `BAR.sdd` is an extra entry the
-engine picks up by scanning `data/games/`, used only by this harness. That is
-why it sat eight months stale without anyone noticing, and why deleting it would
-cost the telemetry rather than break the game.
+engine picks up by scanning `data/games/`, used only by this harness. That is why
+it sat eight months stale without anyone noticing, and why deleting it would cost
+the telemetry rather than break the game.
 
 **Read `docs/10-bar-game-concepts.md` before diagnosing anything.** Reasoning
 about this AI from telemetry without the game model has repeatedly produced
-confident nonsense — T3 treated as affordable at 40 metal/s, a broken run
-reported as a "scaling" property, a D-gun's effect on our own buildings not
-understood. The economic thresholds there are real numbers from someone who
-plays the game.
+confident nonsense. The economic thresholds there are real numbers from someone
+who plays the game.
 
 ## The three layers you can work at
 
@@ -72,13 +155,14 @@ submodule `AI/Skirmish/BARb`, compiled into `SkirmishAI.dll` and shipped inside
 the engine archive.
 
 1. **JSON config** — `config/*.json`. Build ratios, income tiers, unit roles,
-   response tables. No build step. Where the existing `apex` work lives.
+   response tables. No build step.
 2. **AngelScript** — `script/**/*.as`. Real decision logic: `AiMakeTask`,
-   `AiMakeDefence`, `AiMain`, and a per-30-frame `AiUpdate` hook, over
-   `ai`, `aiEconomyMgr`, `aiMilitaryMgr`, `aiFactoryMgr`, `aiBuilderMgr`,
-   `aiEnemyMgr`, `aiTerrainMgr`. ~405 bindings. No build step.
+   `AiMakeDefence`, `AiMain`, and a per-30-frame `AiUpdate` hook, over `ai`,
+   `aiEconomyMgr`, `aiMilitaryMgr`, `aiFactoryMgr`, `aiBuilderMgr`, `aiEnemyMgr`,
+   `aiTerrainMgr`. ~405 bindings. No build step.
 3. **C++** — CircuitAI's core. New task types, new map analysis, new bindings.
-   Needs a cross-compile toolchain; see `docs/06-building-the-dll.md`.
+   Needs a cross-compile toolchain; see `docs/06-building-the-dll.md` and the
+   `cpp-dll` skill.
 
 Layers 1 and 2 both live in the **game archive** and are hot-swappable. Prefer
 them. Reach for C++ only when you need a mechanism that doesn't exist yet.
@@ -86,41 +170,29 @@ them. Reach for C++ only when you need a mechanism that doesn't exist yet.
 ## Three axes — do not confuse them
 
 - **shortName** → the AI's identity. **This is the only one multiplayer keeps.**
-  `AI/Skirmish/<shortName>/<version>/`. Ours is `Apex`, so the harness spec
-  is `Apex:Unstable`, not `BARb:Unstable`. (It was `BARbApex` until 2026-08; nothing
-  validates a shortName, so an old command silently produces
-  `unknown skirmish AI` and a variant that scores zero on everything.)
-- **AI version** → a variant within one shortName.
-  `AIInfo.lua`'s `version` value must equal the folder name.
+  `AI/Skirmish/<shortName>/<version>/`. Ours is `Apex`, so the harness spec is
+  `Apex:Unstable`, not `BARb:Unstable`. (It was `BARbApex` until 2026-08; nothing
+  validates a shortName, so an old command silently produces `unknown skirmish
+  AI`.)
+- **AI version** → a variant within one shortName. `AIInfo.lua`'s `version` value
+  must equal the folder name.
 - **profile** → a difficulty/playstyle within one version, chosen by the
-  `profile` AI option declared in that version's `AIOptions.lua`.
-  `config/<profile>/*.json` + `script/<profile>/*.as`.
-  **`Unstable` ships exactly one: `standard`.** The stock easy/medium/hard/
-  rush trees were deleted — they carried none of this AI's work, so every change
-  either had to be made four more times or silently did not exist there. Do not
-  add a profile back without a reason that is not "difficulty".
+  `profile` AI option in that version's `AIOptions.lua`. `config/<profile>/*.json`
+  + `script/<profile>/*.as`. **`Unstable` ships exactly one: `standard`.** The
+  stock easy/medium/hard/rush trees were deleted — they carried none of this AI's
+  work, so every change either had to be made four more times or silently did not
+  exist there. Do not add a profile back without a reason that is not
+  "difficulty".
 
-**A variant must never be just a version of `BARb`.** The lobby protocol's
-`ADDBOT` carries a single `aiLib` field and no version — Chobby's `AddAi` sends
-`concat("ADDBOT", aiName, battleStatus, teamColor, aiLib)` and `_OnAddBot` sets
-only `status.aiLib`. So a hosted game's start script has **`Version` empty**, and
-`AILibraryManager::FittingSkirmishAIKeys` filters on version only "if one is
-specified i.e. non-empty"; `ResolveSkirmishAIKey` then takes the highest by
-`VersionCompare`, and `"apex" < "stable"`. A version-only variant therefore loads
-**stock BARb in every multiplayer game**, with no error anywhere. Single-player
-is not affected: `interface_skirmish.lua` writes the script locally and does pass
-`Version = data.aiVersion`, which is why this only ever showed up when hosting.
+**A variant must never be just a version of `BARb`** — it would load stock BARb
+in every multiplayer game with no error anywhere. Mechanism and repro: **S1** in
+`docs/25-silent-failures.md`.
 
-Reproduce it locally with `run_match.py --drop-ai-version`, which omits `Version`
-from every `[AI]` block exactly as a hosted game does.
-
-Config lookup falls back: `config/<profile>/x.json` → `config/x.json`.
-Confirmed at runtime in an infolog:
-`Load script: LuaRules\Configs\Apex\Unstable\script\standard\init.as`
-
-Corresponding C++ (CircuitAI `util/FileSystem.h`):
-`"LuaRules/Configs/" + shortName + "/" + version + "/" + subdir + "/"`,
-gated on the `game_config` AI option (default **true**).
+Config lookup falls back: `config/<profile>/x.json` → `config/x.json`. Confirmed
+at runtime: `Load script: LuaRules\Configs\Apex\Unstable\script\standard\init.as`.
+Corresponding C++ (CircuitAI `util/FileSystem.h`): `"LuaRules/Configs/" +
+shortName + "/" + version + "/" + subdir + "/"`, gated on the `game_config` AI
+option (default **true**).
 
 ## This repo
 
@@ -135,11 +207,14 @@ matches/                    harness output, gitignored
 vendor/                     upstream clones (circuitai, engine, bar), gitignored
 ```
 
+`ai/Unstable` is the live AI. **`ai/ord`, `ai/ctl` and `ai/stk` are frozen
+measurement fixtures** — the pre-overhaul leaf-era tree, a self-play control, and
+stock-config-on-our-DLL. Do not edit them, do not fix them, and exclude them from
+searches; `tools/docs_audit.py` already skips them.
+
 Deploy derives the engine-side folder from the engine's own `BARb/stable` on
 every run, so the bundled `SkirmishAI.dll` always matches the installed engine.
-This is what makes the variant survive BAR engine updates — the previous
-hand-copied approach broke on each one (the `apex` variant existed only in
-`recoil_2025.06.11` and had been dead ever since).
+This is what makes the variant survive BAR engine updates.
 
 ### How the AngelScript is laid out
 
@@ -149,92 +224,69 @@ part, which means adding a line to the shim.
 
 **The include order in a shim is load-bearing, but narrowly.** `CScriptBuilder`
 adds a section before walking that section's own includes, depth-first in listed
-order, so the shim's list is the order the compiler sees declarations in. What
-actually breaks is only a **global's INITIALIZER expression** reading a symbol
-declared in a later file. AngelScript registers every type and global across all
-sections before compiling any function, so functions, parameter types and
-ordinary reads inside function bodies are order-independent — this tree proves
-it and runs (`market/want_super.as` reads `Base::gAnchor` from a namespace
+order. What actually breaks is only a **global's INITIALIZER expression** reading
+a symbol declared in a later file. AngelScript registers every type and global
+across all sections before compiling any function, so functions, parameter types
+and ordinary reads inside function bodies are order-independent — this tree
+proves it and runs (`market/want_super.as` reads `Base::gAnchor` from a namespace
 included four lines later). An earlier checker that enforced the stricter rule
-produced 250 false positives here. `python tools/as_scope.py` reproduces the
-real walk and reports the two failures that do bite: a global initializer
-reading a later symbol, and a local read outside its declaring block.
+produced 250 false positives. `python tools/as_scope.py` reproduces the real walk
+and reports the two failures that do bite: a global initializer reading a later
+symbol, and a local read outside its declaring block.
 
-Both `AiMakeTask`s are pipelines: `builder/maketask.as` and
-`factory/maketask.as` are short ordered lists of named rules that live in the
-sibling `rules_*.as`. A rule returns null to pass. **Where a new rule goes in
-that list is the design decision** — see the 2026-08-01 composition finding
-below.
+Both `AiMakeTask`s are pipelines: `builder/maketask.as` and `factory/maketask.as`
+are short ordered lists of named rules that live in the sibling `rules_*.as`. A
+rule returns null to pass. **Where a new rule goes in that list is the design
+decision** — see "The path fires" below.
 
 `script/side.as` holds `SideDef3`/`SideName3`, outside every namespace, which is
 how an Armada/Cortex/Legion triple gets resolved. Use it rather than writing
 another `if (side == "cortex")` chain.
 
 Files are kept under ~600 lines deliberately: above that, work degenerates into
-grep-an-anchor-and-blind-replace, and a `str.replace` anchor that does not match
-fails silently. That has eaten edits here at least five times.
+grep-an-anchor-and-blind-replace, and an anchor that does not match fails
+silently. That has eaten edits here at least five times.
 
-**Component ownership lives in the `ai-*` skills**: `ai-military`,
-`ai-placement`, `ai-nukes`, `ai-commander`, `ai-air`. Each answers: what owns
-which decision, the decision chain, the log lines that expose it, and its
-tunables.
+**Component ownership lives in the `ai-*` skills**: `ai-military`, `ai-placement`,
+`ai-nukes`, `ai-commander`, `ai-air`, `ai-auction`, `ai-eco-pricing`,
+`ai-risk-model`, `ai-army-composition`, `ai-builder-crew`, `ai-couplings`. Each
+answers: what owns which decision, the decision chain, the log lines that expose
+it, and its tunables. **Load the skill instead of reading the source tree** —
+that is what they are for, and it is the cheapest path to a correct answer.
 
-**`ai-economy`, `ai-build-arbitration`, `ai-factory-brain` and `barb-tuning`
-were DELETED on 2026-08-31.** They described the pre-overhaul AI — ordered
-first-match ladders, the `AlwaysEco` floor, `RushReady` T2 gates, JSON build
-ratios — all of which `docs/20-brain-overhaul.md` records as killed. Every
-file they cited still exists, so `tools/docs_audit.py` could not catch them;
-only the MODEL was stale, which is the kind of rot no checker finds. A
-cold-read agent that hit `ai-build-arbitration` first concluded the AI decides
-by ladder position, the opposite of how it works. Deleted rather than repaired
-because a deletion cannot be subtly wrong. Do not restore them; read
-`docs/23-the-plan.md`, `value-paradigm`, `docs/21-simplification.md` and
-`docs/22-macro-demand.md`, which carry the current model.
-
-**The thirteen `.claude/agents/*.md` domain owners were DELETED on 2026-08-31,
-for the same reason and one more.** They were written 2026-08-08 to 08-12 and
-taught the ordered `AiMakeTask` ladder, `Factory::ComputePhase`, income-tier
-tables in `factory.json`/`economy.json`, and `GANTRY_MAX` / `T3_METAL_INCOME
-= 100` as tuned settings — every one of which `docs/23-the-plan.md` names as a
-thing this AI does not do. Ten of them addressed paths that have not existed
-since the rename (`ai/apex/game-side/script/hard_aggressive/`). The extra
-reason is that the fleet-of-agents workflow they served was measured worse and
-scrapped (see "Delegate only when asked" below), so they were teaching a dead
-model to a dead workflow. Domain knowledge lives in the `ai-*` skills, which
-are maintained; do not recreate the agents.
+Four skills and thirteen agent files were deleted 2026-08-31 for teaching a model
+this AI no longer uses. Do not restore them; the reasons are in
+`docs/25-silent-failures.md`. Current model: `docs/23-the-plan.md`,
+`value-paradigm`, `docs/21-simplification.md`, `docs/22-macro-demand.md`.
 
 **A new tunable or mechanism is not finished until the dashboard shows it.**
-`tools/dashboard.py` is apexearth's interface to this AI — he does not run
-the CLI tools — so a knob that exists only in `tunables.as` is a knob he
-cannot reach, and a modoption missing from `dev_tunables.lua` is silently
-ignored in game. Load the **`dashboard-ui`** skill before adding one.
-`check.py` runs `tools/dashboard_audit.py`, which reports any tunable the
-guided view has never seen, any it names that no longer exists, and any it
-offers that nothing reads.
+`tools/dashboard.py` is apexearth's interface to this AI — he does not run the
+CLI tools — so a knob that exists only in `tunables.as` is a knob he cannot
+reach, and a modoption missing from `dev_tunables.lua` is silently ignored in
+game. Load the **`dashboard-ui`** skill before adding one. `check.py` runs
+`tools/dashboard_audit.py`, which reports any tunable the guided view has never
+seen, any it names that no longer exists, and any it offers that nothing reads.
 
-**`CHANGES.md` is FROZEN (apexearth 2026-08-27: "stop putting changes in
-CHANGES.md... you can instead look at git history").** What changed and what
-was measured goes in the COMMIT MESSAGE, next to the diff it justifies; open
-or unresolved findings go in `ISSUES.md`. The frozen file remains as history
-for everything before 2026-08-28.
+### The four lists, and what goes in each
 
-**`ISSUES.md` is the live list of what is wrong** — each entry with the
-evidence for it and, where known, the mechanism in our own code. Add to it
-rather than re-deriving the same complaint next session.
+- **Commit message** — what changed and what was measured, next to the diff.
+- **`ISSUES.md`** — what is wrong, with evidence, and not yet fixed. Add here
+  rather than re-deriving the same complaint next session.
+- **`USER-FEEDBACK.md`** — the standing brief of what apexearth actually wants,
+  with unresolved items marked. **Read it before starting work.** Several entries
+  have been raised three or four times without being fixed — base sprawl, never
+  reclaiming old buildings, army not on the front line, naval players idle.
+  Git history says what was done; this says what was asked for.
+- **`TODO.md`** — named plays and unbuilt behaviours in his own words: the
+  tick-spam distraction, the surprise air-eco raid, the saved-up nuke salvo,
+  rezbots eating what the squad kills. Nothing else records them.
 
-**Read `USER-FEEDBACK.md` before starting work.** It is the standing brief of
-what apexearth actually wants, in one place, with the still-unresolved items
-marked. Several entries there have been raised three or four times without being
-fixed — base sprawl and never reclaiming old buildings, army not being positioned
-on the front line, naval players going idle. Re-reading it costs a minute; being
-told the same thing again costs his session. Git history says what was done,
-`USER-FEEDBACK.md` says what was asked for.
+An entry is deleted when it is built and measured — not marked FIXED forever.
 
-**`TODO.md` is the third and narrowest list**: named plays and unbuilt
-behaviours in his own words -- the tick-spam distraction, the surprise air-eco
-raid, the saved-up nuke salvo, rezbots eating what the squad kills. Nothing
-else records them. Same lifecycle as the other two: an entry is deleted when it
-is built and measured.
+**`CHANGES.md` is FROZEN** (apexearth 2026-08-27: "stop putting changes in
+CHANGES.md... you can instead look at git history"). It remains as history for
+everything before 2026-08-28. Do not read it for current behaviour and do not
+append to it.
 
 ## Commands
 
@@ -248,54 +300,113 @@ python tools/deploy_ai.py gadgets            # install dev gadgets into BAR.sdd
 python tools/deploy_ai.py patches            # apply game-patches/*.patch to BAR.sdd
 
 python tools/unitsync.py maps comet          # resolve map display names
-python tools/unitsync.py ais                 # what the engine sees
-
 python tools/unitdef.py corasy --builders    # cost, display name, who can build it
 python tools/unitdef.py legsy --builds       # what it builds
-python tools/unitdef.py "advanced ship"      # search display names
 python tools/unitdef.py --trees              # both game trees and their dates
 
 python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1
-python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
-    --map "Comet Catcher" --per-side 8 --watch   # windowed, real time, watchable
+python tools/run_match.py ... --per-side 8 --watch   # windowed, real time, watchable
 
-python tools/review.py <run> --control <run>  # THE way to judge a run; see below
-python tools/check.py                        # pre-deploy: bad JSON, dead unit names
-python tools/trace_flow.py <match-or-run-dir> # did the pooling strategy actually work
+python tools/review.py <run> --control <run>  # THE way to judge a run
+python tools/battery.py                       # the regression instrument after a behaviour session
+python tools/test_raid.py                     # early defence: scripted raids, no turrets, pass/fail
+python tools/test_earlyfight.py --baseline <set>
+python tools/test_frontline.py                # the line + per-mex guns contract
+python tools/check.py                         # pre-deploy: bad JSON, dead unit names, audits
+python tools/composition.py <tournament>      # where the metal actually went
+python tools/frametime.py <run>               # per-section maxMs; needs apex_perf=1
+python tools/tl.py tournaments/<run>          # paired timeline by game minute
+python tools/fight1v1.py <run-dir>            # army trade efficiency, in metal
+python tools/trace_flow.py <run>              # did the pooling strategy actually work
 python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --maps "Comet Catcher" --games 10
 python tools/run_tournament.py --report
-
-python tools/composition.py <tournament>     # where the metal actually went
-python tools/tl.py tournaments/<run>         # paired timeline by game minute
-python tools/fight1v1.py <run-dir>           # army trade efficiency, in metal
 ```
 
-Batch output lands in `tournaments/<stamp>-<slug>/`, not `matches/`.
+Batch output lands in `tournaments/<stamp>-<slug>/`, not `matches/`. A 27
+game-minute match completes in ~44 s wall (~37× realtime) with a warm archive
+cache; a cold cache adds ~35 s.
 
-Measured on this machine: a 27 game-minute match completes in ~44 s wall
-(~37× realtime) with a warm archive cache; a cold cache adds ~35 s.
+`python tools/review.py <run> --control <run>` runs the full checklist and
+withholds a verdict when a gate fails — see the `bar-benchmark` skill for the
+nine-step breakdown and why each step is there.
 
-## Gotchas that cost time
+## Failure modes that are SILENT — the checklist
 
-- **`MinSpeed`, not `MaxSpeed`, is what speeds up a headless run.**
+Every one of these produced a confident, wrong conclusion here. They share a
+shape: **the thing didn't work, and nothing said so.** One line each; the
+mechanism, the date and the wrong conclusion are in
+**`docs/25-silent-failures.md`**, keyed by these IDs. Read an entry before acting
+on the hazard it names.
+
+- **S1** A variant without its own shortName loads stock BARb in every
+  multiplayer game. Test with `run_match.py --drop-ai-version`.
+- **S2** `ApexActive()` used to latch false in a solo 1v1 and fall through to
+  stock — removed 2026-08-14, now always `true`. Confirm apex ran with
+  `grep "apex:" infolog.txt`.
+- **S3** An AngelScript compile error disables the variant and the match still
+  reports a normal result. **Always** grep after a run:
+  `grep -oiE "\(?[0-9]+, [0-9]+\) : ERR|Fix compilation errors" infolog.txt` —
+  and **never anchor on a filename**, because the warnings-as-errors failure
+  prints with no file.
+- **S4** AngelScript has no forward declarations; `CCircuitDef@ Foo();` parses as
+  a global property. Just call the function.
+- **S5** Asking a unit to build something no constructor of ours can build is a
+  silent no-op. Build options are per-unit — check the unit's `.lua` def.
+- **S6** `aiMilitaryMgr.quota.attack` caps units SENT to attack, not units BUILT.
+- **S7** Engine callbacks can be dead — every `Game_getTeamResource*` read -1.
+  Log a binding's raw return once before building logic on it. Route around via a
+  synced gadget publishing a rules param.
+- **S8** `deploy_ai.py deploy` does NOT ship the gadget; a modoption
+  `dev_tunables.lua` does not publish is silently ignored, so every arm of a
+  sweep runs the default. Verify: `grep -c apex_yourname
+  "$BAR_SDD/luarules/gadgets/dev_tunables.lua"`.
+- **S9** `ai.GetBuilderThreatAt(pos)` crashes on an off-map position and reads
+  zero 97% of the time. Guard with `OnMap()`; do not build a trigger on it.
+- **S10** Never answer a unit question from a filename search. Use
+  `tools/unitdef.py`.
+- **S11** "This unit does not exist" is always a claim about ONE tree. The pinned
+  `BAR.sdd` and upstream `vendor/bar` disagree.
+- **S12** A duplicate `RegisterObjectMethod` kills the AI at init;
+  `result.json` says `crashed: true` with empty stats. Grep
+  `asALREADY_REGISTERED`.
+- **S13** An order is not applied when issued, and the lag scales with sim speed.
+  Count what was SENT; use the read only to confirm. See `async-sim-orders`.
+- **S14** `AiMakeTask` is a RE-ELECTION, called on every task update. A rule that
+  `Enqueue`s before returning enqueues once per update and orphans all but the
+  first.
+- **S15** A watch game's infolog reaches the match dir only at game END. Check
+  mtime before reading one line of `matches/_engine*/infolog.txt`.
+- **S16** `result.json`'s `teams[].team` is the SPEC index, not a game team —
+  anchoring on it inverts every side-swapped game.
+- **S17** Aggregate over the right unit. A team strategy that treats one player
+  differently cannot be judged by a team-wide average.
+- **S18** `str.replace`/`sed` anchors that don't match do nothing, quietly.
+  Assert the anchor exists first. `ai/Unstable/` is all LF as of 2026-09-04;
+  `cpp/`, `changes/` and some root `.md` still have CR.
+
+## Other gotchas that cost time
+
+- **`MinSpeed`, not `MaxSpeed`, speeds up a headless run.**
   `GameServer::UserSpeedChange` clamps the starting speed into
-  `[MinSpeed, MaxSpeed]`, so raising only `MaxSpeed` changes nothing.
+  `[MinSpeed, MaxSpeed]`.
 - **`GameType=Beyond All Reason $VERSION;`** — `$VERSION` is *literal*. CI
   substitutes it when packing for rapid; a raw `.sdd` checkout never does. That
-  same string is also what flips BAR's internal dev mode on
-  (`luarules/gadgets.lua` greps `Game.gameVersion` for it).
-- **`FixedRNGSeed`**, not `RandomSeed`.
+  same string is what flips BAR's internal dev mode on (`luarules/gadgets.lua`
+  greps `Game.gameVersion` for it).
+- **`FixedRNGSeed`**, not `RandomSeed` — and it does **not** make runs
+  reproducible; the DLL is multithreaded (first-T2 at 5.2, 6.9, 9.1, 9.8 min on
+  one seed). Never read a single-run delta as an effect.
 - **Map names in start scripts are display names** ("Comet Catcher Remake 1.8"),
-  not filenames. Use `tools/unitsync.py` rather than guessing.
-- **On Windows the AI binary is `SkirmishAI.dll`** — the `lib` prefix is Linux only.
-- Delete `<writedir>/LuaUI/Config` between headless runs; stale widget config
-  silently changes which widgets load. The harness does this.
+  not filenames. Use `tools/unitsync.py`.
+- **On Windows the AI binary is `SkirmishAI.dll`** — the `lib` prefix is Linux
+  only.
+- Delete `<writedir>/LuaUI/Config` between headless runs. The harness does this.
 - Custom AI versions are **not** in Chobby's `aiCustomData.lua`, so the lobby
   shows them uncurated. Any profile you want selectable must be declared in your
-  own `AIOptions.lua`; `ai/Unstable/engine-side/AIOptions.lua` declares the
-  single `standard` entry.
+  own `AIOptions.lua`; `ai/Unstable/engine-side/AIOptions.lua` declares the single
+  `standard` entry.
 - Engine dirs are wiped on BAR update. Re-run `deploy_ai.py deploy` afterwards.
 
 ## The Brain drives the factories — `factory.json` is mostly NOT in the loop
@@ -308,320 +419,79 @@ fix "only Hounds get built" when the composition was decided elsewhere entirely.
 config table** — read `apex: decide ... -> produce:`, `apex: worth` and
 `apex: lineclass`.
 
-## Failure modes that are SILENT — check for these before believing a result
-
-Every one of these has produced a confident, wrong conclusion in this repo. They
-share a shape: the thing didn't work, and nothing said so.
-
-- **In multiplayer the engine silently runs stock BARb unless the variant has its
-  own shortName.** The lobby drops the AI version, and empty-version resolution
-  picks the highest by `VersionCompare` — `stable` beats `apex`. Nothing logs a
-  problem; the AI simply plays like stock. See "Three axes" above, and test with
-  `run_match.py --drop-ai-version`.
-- **A plain 1v1 (no allies) used to silently run stock, on purpose — REMOVED
-  2026-08-14.** `world.as`'s `ApexActive()` used to latch false whenever the
-  AI's own ally team had no teammates (`mates.length() <= 1`), which caused
-  `Builder::MakeTaskInner` and five other call sites to fall through to stock
-  CircuitAI logic for the whole game — measured 2026-08-14 as zero `apex:` log
-  lines over 4628 frames in a watched 1v1. apexearth judged that measurement
-  stale against everything fixed since and had the gate removed outright:
-  `ApexActive()` now unconditionally returns `true`, the `apex_solo_stock`
-  tunable is gone, and apex runs its own logic in every game regardless of
-  ally count. Confirm apex is running with `grep "apex:" infolog.txt`.
-- **An AngelScript compile error disables the whole variant, and the match still
-  runs.** It plays as near-stock and reports a normal result. A 12-minute "the
-  rush never fires" investigation was really a one-line syntax error. **Always**
-  grep the infolog after a run:
-  `grep -oiE "\(?[0-9]+, [0-9]+\) : ERR|Fix compilation errors" infolog.txt`
-  **Do NOT anchor the pattern on a filename.** AngelScript treats WARNINGS as
-  errors, and that failure prints as ` (0, 0) : ERR : Warnings are treated as
-  errors by the application` with no file — a filename-anchored grep reads a
-  variant that never compiled as a clean run. Cost a full round of false
-  "validated" reports 2026-08-20 (a `uint`/`int` compare in maketask.as).
-- **AngelScript has no forward declarations.** `CCircuitDef@ Foo();` parses as a
-  *global property* and yields `Name conflict`. The module sees all its own
-  functions regardless of order — just call it. (Globals and types *do* need to
-  be declared before use.)
-- **Asking a unit to build something no constructor of ours can build is a
-  no-op.** Forcing `coravp` while owning only a bot lab produced 33 dropped
-  requests and zero errors. Constructor build options are per-unit: `corck`
-  builds only `coralab`, `corcv` only `coravp`. Check the unit's `.lua` def.
-- **`aiMilitaryMgr.quota.attack` caps units SENT to attack, not units BUILT.**
-  Setting it to suppress army production does nothing; the factory keeps going.
-- **Engine callbacks can be silently dead.** Every `Game_getTeamResource*` call
-  was measured returning -1 for all teams, including the AI's own. **The
-  mechanism previously recorded here is wrong**: it said `AI_TEAM_IDS` in
-  `rts/ExternalAI/SSkirmishAICallbackImpl.cpp` is "declared `= {{-1}}` and never
-  assigned", but in `recoil_2026.07.04` it *is* assigned, at line 5535
-  (`AI_TEAM_IDS[ai->GetSkirmishAIID()] = ai->GetTeamId()`), and the -1 comes out
-  of `aiGetTeamResource`'s `AlliedTeams` gate. The observation has not been
-  re-measured on this engine — treat both the reading and the explanation as
-  unverified. Before building logic on a binding, log its raw return once and
-  confirm it is real data. Route around via a synced gadget publishing a game
-  rules param (`Game_getRulesParamFloat` is not gated); see
-  `game-patches/gadgets/dev_team_income.lua`.
-- **Deploying the AI is NOT deploying the gadget, and a modoption the gadget
-  does not publish is silently ignored.** `deploy_ai.py deploy <variant>` ships
-  `tunables.as`; only `deploy_ai.py gadgets` ships `dev_tunables.lua`, and that
-  gadget is the only thing that republishes `--modoption apex_*` as rules params.
-  Add a tunable to the repo's list, deploy the AI, and every arm of your sweep
-  runs the compiled default -- with no error anywhere. Measured 2026-08-31: a
-  four-arm sweep of `apex_army_eco_s` was reported as a curve, was four runs of
-  one configuration, and produced a confident "the target does not control army
-  share" that was withdrawn an hour later. **Verify the NAME is in the live
-  gadget** before believing a sweep:
-  `grep -c apex_yourname "$BAR_SDD/luarules/gadgets/dev_tunables.lua"`.
-
-- **`ai.GetBuilderThreatAt(pos)` will crash on an off-map position, and reads
-  zero almost everywhere anyway.** `CThreatMap::GetBuilderThreatAt` bounds-checks
-  with an `assert` — compiled out in release — then indexes `surfThreat`
-  unchecked. Sampling a ring of radius 1500 around a base near the map edge read
-  off-map memory and killed the engine at frame 3 (0xc0000005). **Guard every
-  position with `OnMap()`** (`script/world.as`) — `AiTerrainWidth()`/`AiTerrainHeight()`
-  are bound, and `OnMap` already exists for exactly this. Even so,
-  the value is 3% nonzero across ten games, which is why the old commander
-  retreat never fired — do not build a trigger on it.
-- **Never answer a unit question from a filename search.** Use
-  `tools/unitdef.py`. A `glob legasy.lua` returning nothing was read as "Legion
-  has no advanced shipyard" and written into a code comment as fact; Legion's
-  advanced shipyard is `corasy`, which `legnavyconship`/`legcs`/`legch` list in
-  `buildoptions`. Unit defs sit in arbitrary faction subdirectories, display
-  names live in `language/en/units.json`, and what a faction can *build* is
-  neither — it is the buildoptions of its constructors. One search answers none
-  of those three questions.
-- **"This unit does not exist" is always a claim about ONE tree.** `BAR.sdd` is
-  pinned at 2025-11-28 and `vendor/bar` tracks master, so absence in one proves
-  nothing about the other — `legadvshipyard` is upstream-only. `tools/unitdef.py`
-  reads both and labels every answer with its source; a unit found only upstream
-  gets a loud "do not use it in AI code", because the AI runs against the pinned
-  tree.
-- **`str.replace` anchors that don't match do nothing, quietly.** This has eaten
-  edits at least five times. Always `assert old in s` before replacing, and note
-  that these Lua/AngelScript files are **tab-indented** — a space-indented anchor
-  will never match.
-- **A DUPLICATE `RegisterObjectMethod` kills the AI at init, and the match still
-  reports a normal-looking failure.** Registering a binding that already exists
-  returns `asALREADY_REGISTERED (-13)`, the `ASSERT` fires, and the AI never
-  initialises — the engine runs to completion, `result.json` says
-  `crashed: true` with an EMPTY stats array, and the only real evidence is one
-  line in the infolog: `Failed in call to function 'RegisterObjectMethod'`. Grep
-  `asALREADY_REGISTERED` before blaming logic. Measured 2026-08-12: `SetRetreat`
-  was bound 14 lines below where a second copy was added, and the "surface
-  listing" that said it was missing had been truncated with `head -30` — absence
-  again, from an incomplete search.
-- **An order we issue is NOT applied when we issue it, and reading the unit back
-  in the same tick returns the state before it.** `CAICallback::GiveOrder`
-  (`rts/ExternalAI/AICallback.cpp:369`) never touches the unit — it does
-  `clientNet->Send(SendAICommand(...))`, and the command lands when that message
-  is consumed. **The lag scales with sim speed**: measured 2026-08-12, a factory
-  read `CountQueued == 0` for 45 consecutive `AiUpdate`s at the benchmark's
-  default speed cap (~37x realtime) and then took all 56 queued orders in one
-  tick; at `--speed 3` the same code read 2-9 throughout. Any loop of the form
-  "read what the unit has, top it up" will issue one order per tick for the whole
-  lag window. Keep a count of what was SENT and use the read only to confirm it.
-  This is also a benchmark trap: a headless run at max speed can exercise a
-  completely different code path from the game apexearth watches.
-- **`AiMakeTask` is a RE-ELECTION, not a request for new work.**
-  `IBuilderTask::Reevaluate` (`task/builder/BuilderTask.cpp:447`) calls
-  `manager->MakeTask(unit)` on every task update for every builder not yet in
-  build range, and only reassigns if the answer has a *different* build type. So
-  any rule that `Enqueue`s before returning enqueues **once per update**, and
-  every enqueue after the first is an orphan nobody will ever work. Measured:
-  15 front-defence tasks in 3 minutes, `picked=0/15`. Return an existing task, or
-  remember the one already placed for that builder.
-
-- **A watch game's infolog reaches the match dir only at game END; mid-game
-  reads of `matches/_engine*/infolog.txt` can be DAYS stale.** Analyzing a
-  live game via the engine dir produced a full false diagnosis 2026-08-21 (a
-  "dead facqueue" CRITICAL retracted hours later -- the log was from Aug 10).
-  Check the file's mtime against the game being discussed before reading ONE
-  line of it.
-
-- **`result.json`'s `teams[].team` is the SPEC index ('a'=0, 'b'=1), not a game
-  team.** In a per-side game spec b's players are teams N..2N-1, so anchoring a
-  side split on `ally_of[teams[apex].team]` reads the ENEMY's side whenever Apex
-  is spec b -- every side-swapped tournament game. This inverted a full 6-game
-  tournament read 2026-08-21 into a false "we out-scale stock 2x" (the reported
-  dominance was stock's own scaling); the corrected medians said the opposite.
-  Each spec's players share the allyteam equal to its spec index -- anchor on
-  that. `tools/scaling.py` does it right now; check any new tool against a
-  side-swapped game before believing it.
-
-- **Aggregate over the right unit.** The T2 rush was reported as "not firing"
-  from a median first-T2 of 14.9 min. That was the median across ALL FOUR
-  players, dominated by followers who tech late by design. The rusher's own time
-  — `min(techStart)` per side — was 6.3 min, under 10 in 20 of 20 games. A team
-  strategy that deliberately treats one player differently cannot be judged by a
-  team-wide average.
-
 ## build_chain.json evaluates in ways the config does not suggest
 
-Hubs fire on parent completion, conditions are sampled once and never
-re-checked, and `prevent` caps preventive defence. The `land` ladder is
-deliberately EMPTY and `AiMakeDefence` only calls `NoteSite`, so this file
-spends nothing on ground defence — the market owns it. Verified 2026-07-29
-against `BuildChain.cpp`, `BuilderTask.cpp`, `BuilderManager.cpp`.
+Hubs fire on parent completion, conditions are sampled once and never re-checked,
+and `prevent` caps preventive defence. The `land` ladder is deliberately EMPTY
+and `AiMakeDefence` only calls `NoteSite`, so this file spends nothing on ground
+defence — the market owns it. Verified 2026-07-29 against `BuildChain.cpp`,
+`BuilderTask.cpp`, `BuilderManager.cpp`.
 
 ## T3 affordability is a statement about INCOME, not about the AI
 
-Real costs, read from the unit defs: **corgant 8400, corshiva 1550, corcat 4900,
+Real costs from the unit defs: **corgant 8400, corshiva 1550, corcat 4900,
 armbanth 13500, corjugg 20000, corkorg 29000**. At the 40 metal/s benchmark T3 is
 two or three units a game; in a hosted +40% game a player was observed at **398
 metal/second**, where a gantry is 21 seconds of income — so the same unit is
-unaffordable in one game and trivial in another. (A "~250 m/s" inversion bar
-used to be stated here; deleted 2026-08-31 as a threshold masquerading as a
-fact. What inverts the argument is the RATIO of the cost to the income and
-whether cheaper growth is still available, not a line on the income axis --
-see `value-paradigm`.) **Read the actual income before calling T3 unaffordable
-or broken** — and note that stock BARb out-T3s us by default on a bonused economy
-(146,850 metal of T3 on one side of a +40% 40-minute 4v4).
+unaffordable in one game and trivial in another. What inverts the argument is the
+RATIO of cost to income and whether cheaper growth is still available, not a line
+on the income axis. **Read the actual income before calling T3 unaffordable or
+broken** — and note that stock BARb out-T3s us by default on a bonused economy.
 
 ## "The path fires" is not evidence that the change is good
 
-Firing proves a change is *wired up*. It says nothing about what it **displaced**,
-and in this AI almost everything worth adding displaces something.
-
-Measured 2026-08-01, four 8-game tournaments, same map, seeds, settings and DLL:
-
-| | session start | after twelve changes |
-|---|---|---|
-| head to head | 2-2 | **0-8** |
-| metal produced | 140,940 | **32,648** |
-| mex upgrades | 11 | **2** |
-| army share | 18.3% | 4.1% |
-
-Twelve changes went in over one session. **Every one was confirmed firing** — that
-was the acceptance test — and each looked reasonable alone: dig-in towers when a
-constructor keeps getting shot, flak when the enemy flies, a converter when
-energy is wasted, the next fusion before it is needed. Together they cut metal
-production by 4.3x, because every one of them spends **constructor time**, and
-constructor time is the economy. They all run ahead of `DefaultMakeTask`, which
-is where mex upgrades live, so the AI answered every threat and never grew.
-
-Tuning the constants afterwards moved metal 39,233 -> 32,648, i.e. the wrong way.
-The problem was never the constants.
+Firing proves a change is *wired up*. It says nothing about what it
+**displaced**, and here almost everything worth adding displaces something.
+Twelve individually-reasonable, individually-confirmed-firing changes in one
+session took head-to-head from 2-2 to **0-8** and metal produced from 140,940 to
+**32,648**, because every one spent constructor time and constructor time is the
+economy. Tuning the constants afterwards moved it the wrong way. Full table and
+the list of twelve: `docs/25-silent-failures.md`.
 
 So:
 
 - **Judge a behaviour change on composition, not on its log line.**
-  `python tools/composition.py <tournament>` reports where the metal actually
-  went. `mex upgrades 2 vs 8` is the same answer in every game; who won 8 games
-  is a coin flip.
+  `python tools/composition.py <tournament>` reports where the metal went.
+  `mex upgrades 2 vs 8` is the same answer in every game; who won 8 games is a
+  coin flip.
 - **One behaviour change at a time**, with composition after each. A batch tells
   you the batch is bad and nothing about which member.
 - **Separate rules that SPEND from fixes that STOP something.** Removing a
-  deadlock, a stampede or a tower built permanently switched off costs no build
-  power and is near-free to re-apply. A new rule that enqueues work is never
-  free, however cheap the unit.
+  deadlock, a stampede or a permanently-on tower costs no build power and is
+  near-free to re-apply. A new rule that enqueues work is never free, however
+  cheap the unit.
 - **Watching a replay tells you a behaviour looks smart. It cannot tell you what
-  it cost.** The dig-in fortresses looked excellent on screen and were among the
-  most expensive things here.
+  it cost.**
 
-See `docs/20-brain-overhaul.md` for the design that addresses this directly --
-rules propose Wants and one arbiter ranks them, instead of the first rule in an
-ordered list winning. `docs/17-behaviour-config.md` traces every behaviour.json
-knob to the line that consumes it. `docs/21-simplification.md` and
-`docs/22-macro-demand.md` are the 2026-08-30 findings: a price built from twelve
-multiplicative terms cannot be steered by changing one of them, and a decision
-asked of a single constructor cannot express what the base needs.
+See `docs/20-brain-overhaul.md` for the design that addresses this — rules
+propose Wants and one arbiter ranks them, instead of the first rule in an ordered
+list winning. `docs/17-behaviour-config.md` traces every behaviour.json knob to
+the line that consumes it. `docs/21-simplification.md` and
+`docs/22-macro-demand.md`: a price built from twelve multiplicative terms cannot
+be steered by changing one of them, and a decision asked of a single constructor
+cannot express what the base needs.
 
-## Delegate only when asked, and keep agents short-lived
+## Instrument first. This is the rule that matters most.
 
-The fleet-of-agents workflow was tried and **measured worse**: single agents
-reached 345k, 337k and 328k tokens and drove usage UP, because continuing an
-agent replays its whole transcript. apexearth: *"You're wasting a lot of
-tokens/usage by doing it like this. Prefer to NOT have long running agents."*
+apexearth, 2026-08-30: *"I see it terribly often that you make changes which have
+little or no effect."* He was right — four changes that day, every one inert. The
+list, and the three ways a measurement lies here, are in
+`docs/25-silent-failures.md`.
 
-So: work directly by default. Spawn agents when he asks for them, or for
-genuinely parallel work with **disjoint file ownership** — two agents editing
-one file is a merge conflict you will pay for twice. Give each a fresh, bounded
-task with the three facts it needs in the PROMPT; two or three exchanges is the
-ceiling. Investigation can be parallel; implementation is serial and measured.
+Before changing a rule:
 
-**Write the finding down before the agent ends** — commit message for what
-changed and what was measured, `ISSUES.md` for what is wrong and not yet fixed.
-A finding left in a transcript is one you will pay to rediscover.
+1. **Prove it executes.** Find the log line, or add a counter, that says this
+   code ran in a real game. A gate nothing reaches is dead code.
+2. **Prove it decides.** Show that its output is what selects the outcome, not
+   one of eleven other multipliers.
+3. **Then change it** — and if the instrument shows the decision did not move,
+   SAY SO. Shipping an inert edit is worse than shipping nothing, because it
+   spends his review and hides the real cause.
 
-## apexearth is faster than the benchmark — ask him first
-
-His standing requests live in `USER-FEEDBACK.md`; this section is only about
-the workflow.
-
-A watched game returns useful feedback in about **five minutes**. A tournament
-with a matched control takes **twenty to thirty**, and on the standard benchmark
-it frequently cannot answer the question at all: per-team income there is
-4-9 metal/s against 12-41 in a hosted game, so anything gated on income never
-fires, and win rate has swung 60% -> 10% on an unchanged AI.
-
-So the default order is:
-
-1. **Deploy and hand him a windowed run** (`--watch --speed 5`). Do this FIRST,
-   before any measuring, so he is watching while other work continues.
-2. Act on what he reports. Every diagnosis that has actually landed this project
-   came from him watching: "two v six battles", "Commando as the first unit out
-   of the T2 lab", "cons at the front making mexes", "that's a 4v4 map".
-3. Use a tournament to **confirm** a mechanism he has already identified, or to
-   catch a regression. Not to go looking for one.
-
-Corollary: never leave him idle while a control runs. Launch the watch run, then
-do the slow measuring alongside it.
-
-## Judging a run
-
-`python tools/review.py <run> --control <run>` runs the full checklist and
-withholds a verdict when a gate fails — see the `bar-benchmark` skill for the
-nine-step breakdown and why each step is there (every one exists because
-skipping it produced a confident wrong answer at least once).
-
-## Harness discipline
-
-- **Never run two matches on one engine write-dir.** Both engines write the
-  same `infolog.txt` and config tree; measured 2026-08-15, a watch game beside
-  a long soak run broke the watch game's AI outright and filled the soak's log
-  with interleaved binary garbage. `run_match.py` now pidfile-guards
-  `matches/_engine` and auto-suffixes a busy dir, but a hand-launched engine
-  bypasses that -- check `engine.pid` first.
-- **Never edit a file a running tournament uses.** Editing `run_match.py`
-  mid-run killed 17 matches with an `AttributeError`. The repo `ai/<variant>/`
-  tree is safe to edit while running; deploying is what swaps live files.
-- **Kill the waiter with the run.** Twice now, killing a tournament has left
-  `until ...; sleep; done` shells polling forever for a file that will never be
-  written. Stop the background task, not just the processes.
-- **`pgrep` DOES NOT EXIST in this Git Bash, and a wait loop that uses it exits
-  INSTANTLY.** `pgrep -f foo` returns 127 (command not found), so
-  `until <done> || ! pgrep -f foo; do sleep; done` has a condition that is
-  immediately TRUE -- the wait never waits, and whatever is read next is stale.
-  Cost 2026-09-01: a battery run reported as "still running" twice from a log
-  that had stopped updating, while the run had in fact finished (apexearth:
-  "I don't think your shells are doing anything"). Wait on an ARTIFACT
-  (`until [ -f out/result.json ]`, a line count) or check processes with
-  PowerShell `Get-Process`; never on `pgrep`.
-- **`pkill -f` silently does nothing on Windows.** Use
-  `powershell -NoProfile -Command "Get-Process python,spring-headless -ErrorAction SilentlyContinue | Stop-Process -Force"`,
-  then verify the count is zero.
-- **Run Python with `-u` when redirecting to a log.** Without it the log stays
-  empty for the whole run and looks exactly like a dead process.
-- **Tournament output lands in `tournaments/<stamp>-<name>/`, not `matches/`.**
-- **Deploy in the foreground, then background the run.** Deploy → background
-  run → keep coding is the sanctioned workflow (apexearth 2026-08-27: "It
-  should be ok to deploy, run a background run to see how that change went,
-  and continue to work on the code in the meantime"). The one rule inside it:
-  the deploy's success must be VERIFIED before the run leans on it — a
-  backgrounded `deploy && run &` hides a failed deploy, the run proceeds
-  against a half-written AI folder, and `FetchSkirmishAILibrary: unknown
-  skirmish AI` reads in telemetry as a catastrophic regression that is not
-  one. Deploy and check the output (or `deploy_ai.py status`), THEN launch
-  the run in the background.
-- **Deploying while BAR is open fails with `WinError 5`** and leaves the AI
-  folder half-written (`FetchSkirmishAILibrary: unknown skirmish AI`). Check for
-  `spring.exe` / `Beyond-All-Reason.exe` first, and redeploy after closing.
-- **`FixedRNGSeed` does not make runs reproducible.** The AI DLL is
-  multithreaded: the same seed produced first-T2 at 5.2, 6.9, 9.1 and 9.8
-  minutes. Never read a single-run delta as an effect.
-- **Confirm the AI under test is actually the one running**, via
-  `Load script: LuaRules\Configs\BARb\<variant>\...` in the infolog. A replay
-  cannot tell you this — in a replay AIs are "remote", `AiLog` output does not
-  appear at all, and `Spring.GetAIInfo` reports `SYNCED_NOSHORTNAME`.
+Three standing cautions: a **sampled log is not a census** (say so in the line);
+a **metric that cannot distinguish the two states you care about is not
+evidence**; **two seeds cannot resolve a change** — if you have two runs, you
+have an anecdote.
 
 ## Ask before inventing policy
 
@@ -630,53 +500,43 @@ scale with the economy: *"damn you have me worried about whatever other bad idea
 you may randomly add. You should update claude.md so you ask more questions
 before just making decisions like that."*
 
-The failure is not being wrong once. It is deciding a POLICY question -- what the
-AI is allowed to do -- as if it were an implementation detail, and burying the
-answer in a constant. These are the ones that keep happening:
+The failure is not being wrong once. It is deciding a POLICY question — what the
+AI is allowed to do — as if it were an implementation detail, and burying the
+answer in a constant. These four keep happening:
 
-- **Hard caps and ceilings.** "At most 4 of these." He has now said twice that
-  nothing should have a hard cap; everything scales with economy and progression.
-  If something is being built too often, the fix is its VALUE relative to
-  alternatives, not a number that forbids the eleventh one.
-- **Exclusivity.** "Only the eco lead may build reactors", "only the tech lead
-  may go T2". This one shipped for weeks and made a solo player never build a
-  reactor at all. A role may change how OFTEN or how MUCH; it must not decide
-  WHETHER.
+- **Hard caps and ceilings.** He has said twice that nothing should have a hard
+  cap; everything scales with economy and progression. If something is built too
+  often, fix its VALUE relative to alternatives, not the eleventh one.
+- **Exclusivity.** "Only the eco lead may build reactors." This shipped for weeks
+  and made a solo player never build a reactor at all. A role may change how
+  OFTEN or how MUCH; it must not decide WHETHER.
 - **Turning a behaviour off** to fix a symptom, rather than finding what starves
   it. Front-line nanos got defaulted off after one arm; he wanted them on and
   tuned.
 - **Thresholds pulled out of the air.** A gate at "60 metal/s" is a claim about
-  the game. Derive it, measure it, or ask -- and say which of the three it was.
+  the game. Derive it, measure it, or ask — and say which of the three it was.
 
-`docs/23-the-plan.md` now says why all four are the same mistake, and it is not
-a style preference: **order, numbers and limits are OUTPUTS of the ETA
-arithmetic.** A cap, a sequence or a bar is the model being overridden by hand
-by someone who has not checked whether the model already disagrees.
+`docs/23-the-plan.md` says why all four are the same mistake: **order, numbers
+and limits are OUTPUTS of the ETA arithmetic.**
 
 What to do instead, in order of preference:
 
-1. **Derive it from the economy** -- income, bank, what the thing costs, what it
-   returns, and how much sooner it makes the target arrive. That is the answer
-   he gives every time he is asked.
+1. **Derive it from the economy** — income, bank, what the thing costs, what it
+   returns, and how much sooner it makes the target arrive. That is the answer he
+   gives every time he is asked.
 2. **Ask.** One sentence: "should X be capped, or scale with income?" He answers
-   these in seconds and the answer is usually "scale".
+   in seconds and the answer is usually "scale".
 3. **A named constant**, with the derivation in the commit message.
 
-**A TUNABLE IS THE LAST RESORT, NOT THE SAFE MIDDLE.** This list used to offer
-"make it a tunable with the measured default" as option 2, and because it was
-the cheapest of the three it was chosen almost every time. Measured 2026-08-30:
-**404 tunables declared, 316 read at exactly one call site, and 360 never
-overridden in a single recorded run.** They are not experiments; they are
-constants wearing an experiment's clothing, and each costs four registration
-sites (`tunables.as`, `dev_tunables.lua`, `dashboard_guide.py`, the audit
-waiver) plus a line of apexearth's attention on the dashboard.
+**A TUNABLE IS THE LAST RESORT, NOT THE SAFE MIDDLE.** It used to be listed as
+option 2, and being cheapest it was chosen almost every time: measured 2026-08-30,
+**404 declared, 316 read at exactly one call site, 360 never overridden in a
+single recorded run.** Each costs four registration sites plus a line of
+apexearth's attention. Create one ONLY if you will sweep it this session and
+report the sweep; otherwise use a named constant. `python tools/dashboard_audit.py
+--stale` is a cull list, and folding one back into a constant is always welcome.
 
-Create a tunable ONLY when you are going to sweep it in this session and will
-report the sweep. Otherwise use a named constant. `python tools/dashboard_audit.py
---stale` lists every tunable never overridden in a run; that list is a cull
-list, and folding one back into a constant is always a welcome change.
-
-Not every choice needs a question -- fixing a null deref, wiring a rule that
+Not every choice needs a question — fixing a null deref, wiring a rule that
 already exists, following a stated preference. The trigger is: *am I deciding
 what the AI is ALLOWED to do, rather than how to do what it was already meant to
 do?* If yes, ask.
@@ -693,134 +553,132 @@ frames. So we do not do a big operation in a single frame."*
 
 **A periodic operation over N things is N/frames of work per frame, not N work
 every period.** Lowering the FREQUENCY of a bulk pass does not fix a spike; it
-just makes the spike rarer. Slice it, keep a cursor, resume next frame.
+makes the spike rarer. Slice it, keep a cursor, resume next frame.
 
-Three violations measured on 2026-08-31 (Supreme Isthmus v2.1, 1v1 cortex,
-+100%, 32 min) and what they cost:
+Before adding any periodic pass: how many things does it touch, how does that
+grow with base size, and what is the per-frame slice? `apex_perf=1` plus `python
+tools/frametime.py <run>` gives `maxMs` per section — **a section whose `maxMs` is
+many times its `avgUs` is batching, and that is the bug.** Three measured
+violations and what fixing them bought (worst frame 137.8 → 34.1 ms) are in
+`docs/25-silent-failures.md`.
 
-- **`facqueue` filled a factory's whole queue window in one call** -- up to 16
-  `ConOrderFor` passes at 2.1 ms each, peaking at 8.9 ms. 16 x 8.9 = ~142 ms,
-  and the measured worst frame was 137.8 ms. Now time-sliced against
-  `BATCH_SLICE_US` (4 ms), resuming next election; the window is measured in
-  build SECONDS, so finishing a few frames later is invisible.
-- **`DefSiteFill`'s per-frame cap exempted uncached defs** -- `(gDsAt[d] > 0) &&
-  (gDsFillN >= 2)`, so a def that had never filled bypassed the throttle. Every
-  new candidate filled on the same frame at ~6 ms each. The exemption's stated
-  reason ("it could never enter at all") was false: elections run every frame.
-- **A bulk pass that got BIGGER without its throttle being revisited.** The
-  team-wide defence catalogue took the candidate list from ~3 defs to 8-14 and
-  tripled the per-election site walk. A throttle sized for the old N is not a
-  throttle.
+## Delegate only when asked, and keep agents short-lived
 
-Result: worst frame 137.8 -> 34.1 ms, ms/frame at minute 31 9.60 -> 4.92,
-`want.protect` total 13,044 -> 4,260 ms, `hk.maketask.factory` max 101.4 -> 7.8.
+The fleet-of-agents workflow was tried and **measured worse**: single agents
+reached 345k, 337k and 328k tokens and drove usage UP, because continuing an
+agent replays its whole transcript. apexearth: *"You're wasting a lot of
+tokens/usage by doing it like this. Prefer to NOT have long running agents."*
 
-**So, before adding any periodic pass:** how many things does it touch, how does
-that grow with base size, and what is the per-frame slice? `apex_perf=1` plus
-`python tools/frametime.py <run>` gives `maxMs` per section -- a section whose
-`maxMs` is many times its `avgUs` is batching, and that is the bug.
+Work directly by default. Spawn agents when he asks, or for genuinely parallel
+work with **disjoint file ownership** — two agents editing one file is a merge
+conflict you will pay for twice. Give each a fresh, bounded task with the three
+facts it needs in the PROMPT; two or three exchanges is the ceiling.
+Investigation can be parallel; implementation is serial and measured.
 
-## Instrument first. This is the rule that matters most.
+The one case where an agent *saves* context: a broad search whose file dumps you
+do not need, where you only want the conclusion. Bound it to that.
 
-apexearth, 2026-08-30: *"I see it terribly often that you make changes which
-have little or no effect."* He was right. Four changes went in that day and
-every one failed to bite:
+## apexearth is faster than the benchmark — ask him first
 
-- a tier discount that scaled EVERY member of the tier equally, so it could
-  never change which member was chosen;
-- a jammer spacing fix built on a dead-binding theory, when the binding was
-  alive (`GetJammerRadius=360`) -- counts rose on both seeds;
-- a defence repricing that helped one seed and hurt the other;
-- a serialization gate placed on a code path that carries no traffic
-  (`moho-pass: 0` -- mex upgrades never reach the Requests chokepoint).
+His standing requests live in `USER-FEEDBACK.md`; this is only about workflow.
 
-Each is the same mistake: **the code was changed before the path was proven to
-carry the decision.** The one diagnosis that survived came from reading the
-path first -- `apex: exec ... protect:armguard` plus `defplace ... wall=1
-gain=0.00` found the real mechanism in a single step.
+A watched game returns useful feedback in about **five minutes**. A tournament
+with a matched control takes **twenty to thirty**, and on the standard benchmark
+it frequently cannot answer the question at all: per-team income there is
+4-9 metal/s against 12-41 in a hosted game, so anything gated on income never
+fires, and win rate has swung 60% → 10% on an unchanged AI.
 
-So, before changing a rule:
+So the default order is:
 
-1. **Prove it executes.** Find the log line, or add a counter, that says this
-   code ran in a real game. A gate nothing reaches is dead code.
-2. **Prove it decides.** Show that its output is what selects the outcome, not
-   one of eleven other multipliers. See `docs/21-simplification.md`.
-3. **Then change it** -- and if the instrument shows the decision did not move,
-   SAY SO. Shipping an inert edit is worse than shipping nothing, because it
-   spends his review and hides the real cause.
+1. **Deploy and hand him a windowed run** (`--watch --speed 5`) — but only when
+   he has asked for one, or the work plainly needs his eyes. Do it FIRST, before
+   any measuring, so he is watching while other work continues.
+2. Act on what he reports. Every diagnosis that has actually landed came from him
+   watching: "two v six battles", "Commando as the first unit out of the T2 lab",
+   "cons at the front making mexes", "that's a 4v4 map".
+3. Use a tournament to **confirm** a mechanism he has already identified, or to
+   catch a regression. Not to go looking for one.
 
-### Three ways a measurement lies here, all of them paid for
+Corollary: never leave him idle while a control runs. Launch the watch run, then
+do the slow measuring alongside it.
 
-- **A sampled log is not a census.** `defrank` is rate-limited per builder-def
-  per 60s. It was read as a complete record and produced a wrong conclusion.
-  Say in the log line whether it is a sample.
-- **A metric that cannot distinguish the two states you care about is not
-  evidence.** "Zero RAID fight-type elections across 11 matches" was used to
-  prove we never raid. But stock enqueues raiders as `Defend(promote=RAID)` --
-  fight type DEFEND -- and the promotion happens in C++ without passing through
-  `AiMakeTask`, so the metric cannot separate the raid pool from the massing
-  pool. It was evidence of nothing.
-- **Two seeds cannot resolve a change.** Matched pairs disagreed in sign on the
-  same change the same day. If you have two runs, you have an anecdote.
+## Harness discipline
+
+- **Never run two matches on one engine write-dir.** Both engines write the same
+  `infolog.txt` and config tree; measured 2026-08-15, a watch game beside a soak
+  run broke the watch game's AI outright. `run_match.py` pidfile-guards
+  `matches/_engine` and auto-suffixes a busy dir, but a hand-launched engine
+  bypasses that — check `engine.pid` first.
+- **Never edit a file a running tournament uses.** Editing `run_match.py` mid-run
+  killed 17 matches with an `AttributeError`. The repo `ai/<variant>/` tree is
+  safe to edit while running; deploying is what swaps live files.
+- **Kill the waiter with the run.** Killing a tournament has twice left
+  `until ...; sleep; done` shells polling forever. Stop the background task, not
+  just the processes.
+- **`pgrep` DOES NOT EXIST in this Git Bash, and a wait loop that uses it exits
+  INSTANTLY.** `pgrep -f foo` returns 127, so `until <done> || ! pgrep -f foo`
+  has a condition that is immediately TRUE — the wait never waits and whatever
+  is read next is stale. Wait on an ARTIFACT (`until [ -f out/result.json ]`) or
+  check processes with PowerShell `Get-Process`.
+- **`pkill -f` silently does nothing on Windows.** Use `powershell -NoProfile
+  -Command "Get-Process python,spring-headless -ErrorAction SilentlyContinue |
+  Stop-Process -Force"`, then verify the count is zero.
+- **Run Python with `-u` when redirecting to a log.** Without it the log stays
+  empty for the whole run and looks exactly like a dead process.
+- **Deploy in the foreground, then background the run.** Deploy → background run
+  → keep coding is sanctioned (apexearth 2026-08-27). The one rule inside it: the
+  deploy's success must be VERIFIED before the run leans on it — a backgrounded
+  `deploy && run &` hides a failed deploy and `FetchSkirmishAILibrary: unknown
+  skirmish AI` reads in telemetry as a catastrophic regression that is not one.
+- **Deploying while BAR is open fails with `WinError 5`** and leaves the AI folder
+  half-written. Check for `spring.exe` / `Beyond-All-Reason.exe` first. A running
+  game that blocks a deploy may be killed.
+- **Confirm the AI under test is actually running**, via `Load script:
+  LuaRules\Configs\Apex\<variant>\...` in the infolog. A replay cannot tell you
+  this — in a replay AIs are "remote", `AiLog` output does not appear, and
+  `Spring.GetAIInfo` reports `SYNCED_NOSHORTNAME`.
 
 ## Conventions
 
 - Python 3.13, standard library only. No new dependencies without a reason.
 - Tools import `bar_env`; they never hardcode install paths.
 - Treat `reference/barb-stable/` as read-only — it's the diff baseline.
-- Keep `ai/<variant>/` as the source of truth. If you edit configs directly
-  inside `BAR.sdd` while iterating, run `deploy_ai.py pull <variant>` afterwards
-  or the work will be lost on the next deploy.
-- Line endings are LF (`.gitattributes`) so diffs against upstream stay readable
-  -- but the WORKING TREE IS MIXED, and several `.as` files are CRLF. Three
-  `str.replace` anchors failed silently on this in one session. Read the exact
-  bytes before replacing, or use `tools/normalize_eol.py`.
+- Keep `ai/<variant>/` as the source of truth. If you edit configs directly inside
+  `BAR.sdd` while iterating, run `deploy_ai.py pull <variant>` afterwards or the
+  work is lost on the next deploy.
+- Line endings are LF (`.gitattributes`). `ai/Unstable/` is fully LF as of
+  2026-09-04; `cpp/`, `changes/` and some root `.md` still contain CR. Check
+  before anchoring an edit there, or use `tools/normalize_eol.py`.
 
 ### Comments — write far fewer than feels natural here
 
 The long "tried X, measured Y, reverted" blocks already in `factory.as` are
-load-bearing: they stop a failed experiment being retried. That is not licence
-to add more of them. Four rules, each from a real mistake:
+load-bearing: they stop a failed experiment being retried. That is not licence to
+add more. Four rules, each from a real mistake:
 
-- **A code comment is not a session transcript.** apexearth, 2026-08-14, after
-  a comment quoted his own complaint verbatim, listed a measured number, and
-  narrated the fix history: "quit flooding our comments with events of our
-  work, just state a concise 'why' and let that be it." One line: what this
-  code does that looks wrong otherwise, and the reason. Not what was reported,
-  not what was measured, not the session's timeline — those go in the commit
-  message (see the next rule) or nowhere.
-- **Never state a cause you did not measure.** A spacing fix was annotated "that
-  is how a cap of 6 produced 15-20 constructors" — the cap holding at ≤6 had
-  been measured; the claim about the overshoot never was. If it was reasoning,
-  say so or leave it out. Wrong comments are worse than none.
-- **Don't inline the commit message.** What was tried, what it scored, why it
-  was reverted goes in the commit message. A comment earns its place by explaining a
-  mechanism that is not visible in the code — a NOCOUNT handle, a jsoncpp
-  parsing quirk, an engine gate that returns before the check you are reading.
-- **Change the code, change the comment.** A declaration still read "cleared on
-  a handover" after the clearing was removed. Re-read every comment attached to
-  a line you touch.
-- **Never write a finding into a comment. Findings go in the commit message
-  or `ISSUES.md`.** A
-  comment saying "Legion has legsy but no advanced shipyard" was written from a
-  single failed `glob legasy.lua`. It was false — Legion builds `corasy`, listed
-  in `legnavyconship`/`legcs`/`legch` buildoptions — and it sat in the code
-  asserting the opposite as fact. This is the recurring failure: a conclusion
-  drawn once, frozen in a comment, and then believed by the next reader
-  (including the next session) long after it stopped being true. Measurements,
-  unit costs, timings, "X never happens", "Y does not exist" are all findings.
-  They belong in the commit message — dated, next to the diff — or in
-  `ISSUES.md` while unresolved, or in nothing at all.
+- **A code comment is not a session transcript.** apexearth, 2026-08-14: "quit
+  flooding our comments with events of our work, just state a concise 'why' and
+  let that be it." One line: what this code does that looks wrong otherwise, and
+  the reason.
+- **Never state a cause you did not measure.** If it was reasoning, say so or
+  leave it out. Wrong comments are worse than none.
+- **Don't inline the commit message.** What was tried, what it scored, why it was
+  reverted goes in the commit message.
+- **Change the code, change the comment.** Re-read every comment attached to a
+  line you touch.
+- **Never write a finding into a comment.** Measurements, unit costs, timings,
+  "X never happens", "Y does not exist" are all findings — they belong in the
+  commit message, or `ISSUES.md` while unresolved, or nowhere. A comment saying
+  "Legion has legsy but no advanced shipyard" was written from a single failed
+  glob, was false, and sat in the code asserting it as fact.
 
-  What may stay in a comment is a **mechanism you can see in the code being
-  read** — an engine gate that returns early, an index that is shared between
-  two files, a parser quirk. Not evidence for a decision; the reason a line
-  cannot be deleted.
+  What may stay is a **mechanism you can see in the code being read** — an engine
+  gate that returns early, an index shared between two files, a parser quirk. Not
+  evidence for a decision; the reason a line cannot be deleted.
 
-  Corollary: **absence is the least reliable finding of all.** Not finding a
-  file, a unit or a call proves the search failed, not that the thing is
-  missing. Never record "does not exist" anywhere on one search — check who
-  builds it, who references it, and the game's own name tables first.
+  Corollary: **absence is the least reliable finding of all.** Not finding a file,
+  a unit or a call proves the search failed, not that the thing is missing. Never
+  record "does not exist" on one search.
 
 Default to none. Three lines is a lot; ten needs a reason.
 
@@ -831,5 +689,4 @@ Split by layer: game-side configs → `beyond-all-reason/Beyond-All-Reason`
 `rlcevg/CircuitAI` branch `barbarian`.
 
 BAR's `AI_POLICY.md` requires **explicit disclosure of AI-assisted code in the
-PR**, and human verification of it. Undisclosed use gets the PR closed. This
-applies to work done in this repo with Claude.
+PR**, and human verification of it. Undisclosed use gets the PR closed.
