@@ -79,12 +79,12 @@ and two at once halve the sim speed.
 
 ## Bisecting
 
-Cut along one axis at a time. The variants under `ai/` are frozen snapshots and
-make good controls (`ord`, `ctl`, `stk`).
+Cut along one axis at a time. A control variant is a `git checkout <old-sha> --
+ai/Unstable` into a fresh dir with its own shortName, not a tree kept in the repo.
 
 1. **Stock vs stock** first. If `BARb:stable` desyncs too, it is upstream and
    not ours to fix.
-2. **A frozen variant vs stock.** Clean means the cause is newer than it.
+2. **An older snapshot vs stock.** Clean means the cause is newer than it.
 3. **Split C++ from game-side** with a hybrid: copy the deployed variant folder
    in `<engine>/AI/Skirmish/`, swap in the other DLL, and edit `AIInfo.lua`'s
    `shortName`/`version` to a new name. Old scripts against a new DLL compile

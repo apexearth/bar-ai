@@ -138,22 +138,11 @@ def main():
 
     # Every file that exists, by basename and by tail path.
     have = set()
-    # NOT repo-wide. `ai/ord`, `ai/ctl` and `ai/stk` are FROZEN pre-overhaul
-    # trees kept for A/B, so a doc citing a file the overhaul deleted --
-    # builder/nano.as, builder/statics.as, builder/mexguard.as -- resolved
-    # against its own ghost in ai/ord and reported clean. The checker was
-    # confirming stale docs against the stale code they describe.
-    #
-    # `vendor/` and `matches/` stay IN: vendor/bar is how a reference to a
-    # BAR game file (modoptions.lua, game_energy_conversion.lua) is
-    # confirmed, and matches/ is where result.json lives. Excluding them
-    # turned 20 correct references into findings.
-    SKIP_VARIANTS = {"ord", "ctl", "stk"}
+    # `vendor/` and `matches/` stay IN: vendor/bar is how a reference to a BAR
+    # game file is confirmed, and matches/ is where result.json lives.
+    # Excluding them turned 20 correct references into findings.
     for p in ROOT.rglob("*"):
         if not p.is_file():
-            continue
-        rel = p.relative_to(ROOT).parts
-        if rel[0] == "ai" and len(rel) > 1 and rel[1] in SKIP_VARIANTS:
             continue
         have.add(p.name)
         have.add("/".join(p.parts[-2:]))

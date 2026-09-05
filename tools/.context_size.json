@@ -1,0 +1,101 @@
+{
+ "areas": {
+  "skills": {
+   "files": 22,
+   "total": 2551,
+   "code": 2551,
+   "com": 0,
+   "bytes": 133956,
+   "combytes": 0
+  },
+  "rootmd": {
+   "files": 7,
+   "total": 5721,
+   "code": 5721,
+   "com": 0,
+   "bytes": 343874,
+   "combytes": 0
+  },
+  "other": {
+   "files": 10,
+   "total": 770,
+   "code": 666,
+   "com": 68,
+   "bytes": 29202,
+   "combytes": 2156
+  },
+  "live-json": {
+   "files": 14,
+   "total": 4642,
+   "code": 4642,
+   "com": 0,
+   "bytes": 144428,
+   "combytes": 0
+  },
+  "live-as": {
+   "files": 116,
+   "total": 40097,
+   "code": 24909,
+   "com": 13382,
+   "bytes": 1653630,
+   "combytes": 900678
+  },
+  "frozen": {
+   "files": 225,
+   "total": 61633,
+   "code": 49289,
+   "com": 10198,
+   "bytes": 2171526,
+   "combytes": 651227
+  },
+  "history": {
+   "files": 17,
+   "total": 11565,
+   "code": 11565,
+   "com": 0,
+   "bytes": 667213,
+   "combytes": 0
+  },
+  "cpp": {
+   "files": 91,
+   "total": 40589,
+   "code": 30308,
+   "com": 6124,
+   "bytes": 1465062,
+   "combytes": 377030
+  },
+  "docs": {
+   "files": 23,
+   "total": 4705,
+   "code": 4705,
+   "com": 0,
+   "bytes": 238951,
+   "combytes": 0
+  },
+  "patches": {
+   "files": 12,
+   "total": 4182,
+   "code": 3227,
+   "com": 738,
+   "bytes": 158458,
+   "combytes": 47969
+  },
+  "reference": {
+   "files": 120,
+   "total": 28661,
+   "code": 27647,
+   "com": 504,
+   "bytes": 829744,
+   "combytes": 14455
+  },
+  "tools": {
+   "files": 82,
+   "total": 20191,
+   "code": 14933,
+   "com": 3307,
+   "bytes": 871803,
+   "combytes": 78231
+  }
+ },
+ "stamp": "c25319d"
+}

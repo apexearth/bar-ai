@@ -46,9 +46,6 @@ python tools/run_tournament.py --report
 
 ```
 ai/Unstable/        the AI variant — source of truth, deployed into the live install
-ai/ord/             the pre-overhaul leaf-era tree, kept for A/B against the rebuild
-ai/ctl/             frozen control, for self-play A/B
-ai/stk/             stock config + stock script on our DLL, to isolate DLL effects
 reference/          pristine BARb stable, for diffing (read-only)
 game-patches/       changes to shared BAR files + dev gadgets
 tools/              deploy + headless match harness (Python 3.13, stdlib only)
@@ -58,9 +55,9 @@ tournaments/        batch output (gitignored)
 vendor/             upstream clones (gitignored)
 ```
 
-Each variant is a distinct **shortName** (`Apex`, `ApexOrd`, `ApexCtl`,
-`ApexStk`), not a version of `BARb` — see docs/03 for why a version-only variant
-silently plays as stock in multiplayer. The live variant is `Apex` / version
+Each variant is a distinct **shortName**, not a version of `BARb` — see docs/03
+for why a version-only variant silently plays as stock in multiplayer. The live
+variant is `Apex` / version
 `Unstable` / profile `standard`; `python tools/deploy_ai.py status` prints the
 current specs.
 

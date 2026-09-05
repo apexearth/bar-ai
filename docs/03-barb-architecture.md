@@ -48,14 +48,13 @@ command yields `FetchSkirmishAILibrary: unknown skirmish AI` and a side that
 scores zero on every metric, which reads exactly like a catastrophic
 regression.)
 
-The variants in this repo, each a distinct shortName for that reason:
+The variants in this repo, each a distinct shortName for that reason. The
+frozen A/B fixtures (`ApexOrd`, `ApexCtl`, `ApexStk`) were deleted 2026-09-05
+after a month unused; `git log -- ai/ord` restores one if a control is wanted:
 
 | repo dir | shortName | version | profile | what it is |
 |---|---|---|---|---|
 | `ai/Unstable` | `Apex` | `Unstable` | `standard` | **the AI under development** |
-| `ai/ord` | `ApexOrd` | `ord` | `hard_aggressive` | the pre-overhaul leaf-era tree, kept for A/B against the rebuild |
-| `ai/ctl` | `ApexCtl` | `ctl` | `hard_aggressive` | frozen control, for self-play A/B |
-| `ai/stk` | `ApexStk` | `stk` | `easy` | stock config + stock script on our DLL, to isolate DLL effects |
 
 The harness spec for the live AI is **`Apex:Unstable:standard`**. `python
 tools/deploy_ai.py status` prints the current specs; trust it over any table.

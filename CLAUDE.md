@@ -73,8 +73,8 @@ average call was 138 tok in / 323 out, so the cost is **volume**, not big dumps.
 - The Bash **cwd persists** — 1,128 of 3,860 calls opened with a redundant `cd`.
 - **Batch independent probes into one call**; each round trip costs a turn.
 - **Ask for the answer, not the corpus**: `grep -c`, `| sort | uniq -c`, `| head`.
-- **Search `ai/Unstable/`, not `ai/`** — `ord`/`ctl`/`stk` are frozen fixtures and
-  inflate a repo-wide grep 3x. Same for `vendor/`, `matches/`, `changes/`.
+- **Exclude `vendor/`, `matches/`, `changes/`, `reference/`** from any repo-wide
+  search; they are upstream or history, never the answer.
 - **Load the owning skill instead of reading the source tree.** That is what they
   are for and it is the cheapest path to a correct answer.
 
@@ -161,7 +161,6 @@ behaviour and do not append.
 | | |
 |---|---|
 | live AI | `ai/Unstable/{engine-side,game-side}` — the only tree you edit |
-| frozen fixtures | `ai/{ord,ctl,stk}` — measurement controls; do not edit, exclude from searches |
 | three layers | JSON config → AngelScript → C++. The first two are hot-swappable; prefer them |
 | shims | every `manager/<name>.as` is a table of contents `#include`ing `manager/<name>/`. Edit the parts |
 | paths, engine, game trees | `python tools/bar_env.py` · `docs/01-local-environment.md` |
