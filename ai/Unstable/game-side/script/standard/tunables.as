@@ -1202,8 +1202,8 @@ const float TUNE_ECO_DANGER_M = 250.f;
 //   this fraction of its own -- it expands sideways/back, never forward.
 const float TUNE_ECO_REACH_FRAC = 0.7f;
 
-// ECO_ARMY_MIN_M: quiet-rear army floor -- the cheapest gantry-tier assault
-//   (corshiva 1550, defs 2026-07-30); below it, army money is ladder money.
+// ECO_ARMY_MIN_M: quiet-rear army floor -- the cheapest gantry-tier assault;
+// below it, army money is ladder money.
 const float TUNE_ECO_ARMY_MIN_M = 1500.f;
 
 // RECLAIM_AMORT: seconds a one-shot reclaim refund is spread over when it

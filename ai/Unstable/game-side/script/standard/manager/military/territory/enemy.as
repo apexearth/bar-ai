@@ -15,13 +15,12 @@ float EnemyCostOf(int role)
 	float fresh = aiEnemyMgr.GetEnemyCostFresh(role);
 	if (fresh > raw)
 		fresh = raw;
-	// Half-weighted: measured live (Greenhaven rematch, 2026-08-15) the raw sum
-	// read the enemy army at 3x OURS while apexearth watched us dominate --
-	// the ghost share was ~2/3 of the total and only ever ratchets up, so
-	// every posture gate (massing, attack odds, the killing blow) leaned
-	// defensive off units that mostly no longer existed. A mobile unit unseen
-	// for the whole freshness window is more likely dead or elsewhere than
-	// waiting where we saw it.
+	// Half-weighted: measured live the raw sum read the enemy army at 3x OURS
+	// while apexearth watched us dominate -- the ghost share was ~2/3 of the
+	// total and only ever ratchets up, so every posture gate (massing, attack
+	// odds, the killing blow) leaned defensive off units that mostly no longer
+	// existed. A mobile unit unseen for the whole freshness window is more
+	// likely dead or elsewhere than waiting where we saw it.
 	return fresh + (raw - fresh) * ai.GetTunable("apex_ghost_weight", TUNE_GHOST_WEIGHT);
 }
 

@@ -118,9 +118,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	// (Normalising the TTD discount against the quickest buildable turret --
 	// so defence as a category paid nothing and only the ordering inside it
 	// moved -- was tried and REVERTED: it raised defence's share of spend but
-	// bought MORE of the slow turret, not less (Agitator 24% -> 38% of defence
-	// metal, quick turrets 57% -> 46%, over 54 games each). The absolute
-	// discount below is what actually moves the mix.)
+	// bought MORE of the slow turret, not less. The absolute discount below is
+	// what actually moves the mix.)
 	AIFloat3 core = gFarmPos;
 	if (!gFarmSet) {
 		core = Base::gAnchorSet ? Base::gAnchor : Builder::gHomePos;

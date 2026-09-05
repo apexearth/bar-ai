@@ -192,8 +192,7 @@ void SuperCensus()
 	for (uint c = 0; c < gSuperHave.length(); ++c)
 		gSuperHave[c] = 0;
 	// One source: standing, half-built, orphaned frame and outstanding order
-	// are all rows of the commitment ledger (flipped 2026-08-27, shadow
-	// clean across the proving games).
+	// are all rows of the commitment ledger.
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		const int sc = SuperClassOf(gComDef[ci]);
 		if (sc < 0)

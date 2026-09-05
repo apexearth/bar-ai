@@ -44,12 +44,12 @@ bool KillingBlow()
 	if (ai.frame < int(ai.GetTunable("apex_kill_from", TUNE_KILL_FROM)) * SECOND)
 		return false;
 	// OurArmyNow, not TeamArmyCost: armyCost read ~40% of the field telemetry
-	// (see massing.as). And KILL_FLOOR=20000 was an absolute no benchmark-scale
-	// economy ever reaches -- the blow could not fire at all below ~100 m/s
-	// income (zero firings across every 2026-08-20 game). Both guards it stood
-	// for are kept, economy-derived: the fog guard commits only past the most
-	// army they have ever shown at once, and the size guard is one real attack
-	// group at the massing system's own floor, in metal.
+	// (see massing.as). And KILL_FLOOR=20000 was an absolute no
+	// benchmark-scale economy ever reaches -- the blow could not fire at all
+	// below ~100 m/s income. Both guards it stood for are kept,
+	// economy-derived: the fog guard commits only past the most army they have
+	// ever shown at once, and the size guard is one real attack group at the
+	// massing system's own floor, in metal.
 	const float ours = OurArmyNow();
 	float theirs = EnemyFieldCost();
 	if (gSeenPeak > theirs)

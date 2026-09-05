@@ -330,7 +330,7 @@ bool RimGapSite(int cls, AIFloat3& out at)
 bool ProtAnyComing(int cls)
 {
 	// One source: the commitment ledger holds standing, framed and ordered
-	// alike (flipped 2026-08-27, shadow clean across the proving games).
+	// alike.
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		if (ProtClassOf(gComDef[ci]) == cls)
 			return true;

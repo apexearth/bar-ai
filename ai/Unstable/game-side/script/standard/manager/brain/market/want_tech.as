@@ -228,8 +228,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	if (demand <= 0.5f)
 		return w;
 	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
-	// price (watched, 8v8: a team overflowing with no T2 -- any live plant
-	// request blanket-blocked tech).
+	// price.
 	const int uid = int(unit.circuitDef.id);
 	const float ownCeil = OwnedCeil();
 	// Best mobility among owned ceiling-reaching cons: a plant whose con
@@ -489,7 +488,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			}
 			if (!ownFlyingBuilder && unlocksFlyer) {
 				// The quiet rear's wings are a full-demand want, not a
-				// mobility-delta sliver (seed 23: no air lab in 15 min).
+				// mobility-delta sliver.
 				techGain = EcoQuiet() ? (demand * pipe)
 						: (demand * pipe * (prodMob / ownMob - 1.f)
 							/ float(1 + liveKin));
@@ -561,9 +560,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			continue;
 		// Overflowing metal escalates a justified tech want: the lab's
 		// pipeline (mohos, fusion-building cons) is the spender the current
-		// fleet lacks. Without this, 40-metal winds out-valued the 3300
-		// tech bill at argmax for five straight minutes of full storage
-		// (seed 23: T2 at 10.9m; seed 11's 3.3m was E-saturation luck).
+		// fleet lacks. Without this, 40-metal winds out-valued the 3300 tech
+		// bill at argmax for five straight minutes of full storage.
 		techGain += OverflowM() * pipe;
 		if (ai.GetTunable("apex_techcand_diag", 0.f) > 0.f) {
 			AiLog("apex: techcand " + Catalog::Def(d).GetName()

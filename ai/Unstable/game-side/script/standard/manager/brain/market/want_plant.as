@@ -1,11 +1,8 @@
 namespace Market {
-// A RETIREMENT IS A DECISION, NOT A VACANCY. Reclaiming a structure and
-// re-buying the same def minutes later is the market arguing with itself
-// (14 of 15 T2 bot labs in one 1v1 died to our own reclaim; the next game
-// did it to Ambushers and converters); a def we chose to retire keeps a
-// discount for a window so the retirement can mean something. Noted at
-// reclaim EXECUTION, and only for the OBSOLETE proposer's wants -- eating a
-// wall that pens a unit says nothing about wanting the def again.
+// A RETIREMENT IS A DECISION, NOT A VACANCY: a def we retire keeps a discount
+// for a window, so the market cannot re-buy what it just reclaimed. Set at
+// reclaim EXECUTION and only for the OBSOLETE proposer -- eating a wall that
+// pens a unit says nothing about wanting the def again.
 array<int> gDefRetiredAt;
 void NoteDefRetired(int d)
 {
@@ -71,15 +68,10 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	return w;
 }
 
-// A plant's future output discounts by its own LATENCY (temporal
-// consistency, same law as EPriceAt): the pipeline delivers its first con
-// at lab-build + con-build seconds, and value that far out is worth
-// horizon/(horizon+latency) of value now. This is what makes the natural
-// opening (mex, mex, solar, THEN lab) emerge without a scripted order --
-// at frame zero the lab's 70s latency halves it below the immediate mex.
-// Seconds from deciding on a plant to its first constructor existing: the
-// plant itself, then the cheapest builder it makes. Both the latency discount
-// and the survival discount are built from this one number.
+// A plant's output discounts by its own LATENCY (same law as EPriceAt):
+// horizon/(horizon+latency), where latency is lab-build + con-build. This is
+// what makes the natural opening (mex, mex, solar, THEN lab) emerge with no
+// scripted order -- at frame zero the lab's 70s halves it below the mex.
 float PipeLatencySec(int plantId, float askerBP)
 {
 	const float labSec = Catalog::BuildSecondsAt(plantId, EffBP(askerBP));
@@ -143,16 +135,11 @@ const int PC_WATER = 2;
 
 // -- The naval election ------------------------------------------------------
 //
-// apexearth 2026-08-28: "commanders walking all over the place to make hover
-// factories on the water... I mentioned we needed to make navies in the past
-// and that turned into us making hovers - oops - not what I meant... We
-// really just [need] 1 or 2 teams to make some navy in the game... Ensure
-// our economies remain strong." So: the water mandate is HELD, like the air
-// lead -- the one or two teams whose shore is closest build REAL shipyards;
-// everyone else never proposes a water plant and never marches a commander
-// to the beach. Deterministic from the blackboard (same data, same answer,
-// the AnswerShare pattern): each team publishes its distance to a usable
-// shipyard site; the closest quota holds the mandate.
+// apexearth 2026-08-28: "1 or 2 teams to make some navy in the game", REAL
+// shipyards and not hovers. So the water mandate is HELD like the air lead:
+// the closest-shore teams build, everyone else never proposes a water plant
+// and never marches a commander to the beach. Deterministic from the
+// blackboard (AnswerShare): each team publishes its distance, closest holds.
 
 const string TV_NAVDIST = "navdist";
 
@@ -203,10 +190,8 @@ void NavalPublish()
 	if ((sd > 0) && MapHasWater() && Builder::gHomeSet
 		// A shore that keeps killing the order is not a usable shore: while
 		// the shipyard sits in abort-backoff this team reads itself
-		// ineligible and the mandate ROTATES to the next-closest -- measured
-		// (SI 8v8 15m probe): the elected team executed 9 shipyard orders
-		// against a same-frame-rejecting site and built none while holding
-		// the mandate the whole game.
+		// ineligible and the mandate ROTATES to the next-closest. Without
+		// this the elected team holds the mandate all game and builds none.
 		&& !Builder::AbortBackoff(sd))
 	{
 		const AIFloat3 wet = WetPlantSite(Catalog::Def(sd), Builder::gHomePos);
@@ -264,14 +249,10 @@ int PlantClass(int plantId)
 	return PC_LAND;
 }
 
-// A plant's expansion stream is only the spots ITS OWN constructors can walk
-// to. A shipyard's cons reach the water spots and nothing else, so on a map
-// whose metal is ashore its expansion term collapses and the land line wins;
-// where the metal is in the water it is the land line that is worth little.
-// LAND-LOCKED is the sharper of the two: ground this plant's cons reach and
-// the ASKER cannot. Where water splits a map that is the half of the economy
-// no land line will ever touch, whatever the water share of the map says.
-// Sector-area lookups, cached on a slow tick.
+// A plant's expansion stream is only the spots ITS OWN constructors reach, so
+// a shipyard collapses on a dry map and the land line collapses on a wet one.
+// LAND-LOCKED is the sharper reading: ground this plant's cons reach and the
+// ASKER cannot -- the half of the economy no land line will ever touch.
 array<float> gPlantReach;    // share of open spots this plant's cons reach
 array<float> gPlantLocked;   // ...and the share the asker cannot reach at all
 array<int> gPlantOpenReach;  // count reached, so water can see its own ground
@@ -349,25 +330,17 @@ int OwnedWaterPlants()
 	return n;
 }
 
-// A plant's TIER, in the only currency that separates a T1 lab from its
-// advanced version: the best extractor its own constructors can reach.
-// A plant's own tier, from its attribute rather than from its extraction reach
-// -- the enemy comparison is about what the LINE fields, not what its
-// constructors dig.
-// A SECOND LINE IS THE DEAR WAY TO BUY THROUGHPUT.
+// A plant's TIER, in the only currency separating a T1 lab from its advanced
+// version: the best extractor its own constructors can reach. The enemy
+// comparison instead uses the plant's own attribute -- that is about what the
+// LINE fields, not what its constructors dig.
 //
-// apexearth 2026-08-27: "2900 metal buys 300bp and the ability to build T2
-// units. 1 nano turret adds 200bp to that factory for just ~200 metal. So the
+// A SECOND LINE IS THE DEAR WAY TO BUY THROUGHPUT (apexearth 2026-08-27: "the
 // right choice is to add more nanos to the lab instead of making another lab.
-// You'd only want a second lab if you ran out of room to make nanos."
-//
-// Read off the defs rather than his numbers: an advanced lab is 300 workertime
-// for 2900 metal, a construction turret 200 for 210 -- 0.103 against 0.952 BP
-// per metal, so the turret is NINE TIMES the build power for the same spend.
-// A duplicate line's production half is exactly that purchase, and it was
-// priced as if the cheaper way to buy it did not exist. Returned as the ratio
-// between the two, so nothing is forbidden and no number is chosen: the second
-// lab wins whenever the substitute genuinely is not available.
+// You'd only want a second lab if you ran out of room to make nanos"). Read
+// off the defs, not his numbers: a construction turret is ~9x the BP per
+// metal of an advanced lab. Returned as the RATIO between the two, so nothing
+// is forbidden -- the second lab wins when the substitute is unavailable.
 int gNextPlantDupLog = 0;
 
 float DupBpSubstMul(int d)
@@ -396,8 +369,7 @@ float DupBpSubstMul(int d)
 // THE WEALTH WAIVER. The copy ban and the one-advanced-plant-at-a-time
 // serialization both argue "the cheaper substitute exists"; structural
 // overflow above the drain of a whole extra line is that argument already
-// falsified (watched 2v2: 189 nanos standing, 46% of 1.27M metal thrown
-// away, no second line permitted anywhere).
+// falsified.
 bool WealthWaiver()
 {
 	const float bar = ai.GetTunable("apex_copy_overflow_m", TUNE_COPY_OVERFLOW_M);
@@ -554,26 +526,14 @@ bool UnlocksProduct(int plantId)
 // left means no plant value at all.
 int gNextPlantParLog = 0;
 
-// HOW MUCH OF THE MAP THIS LINE'S ARMY CAN ACTUALLY MOVE AROUND IN, relative
-// to the best any line offers. 1.0 for whichever line the terrain suits; below
-// 1 for the one it punishes.
+// HOW MUCH OF THE MAP THIS LINE'S ARMY CAN MOVE AROUND IN, relative to the
+// best any line offers (apexearth 2026-09-01: "If we're on a mostly flat map
+// then we should be picking tanks... Reach and speed are what matter").
 //
-// apexearth 2026-09-01: "It depends on the map, some maps are full of hills,
-// others are flat. If we're on a mostly flat map then we should be picking
-// tanks... Reach and speed are what matter."
-//
-// Reach comes from ai.DefMapCoverage -- the engine's own per-movement-type
-// partition of the map, percentOfMap of the largest connected area. Speed is
-// already in the price through MobilityMult. Nothing here samples heights or
-// picks a slope bar: the pathfinder has already decided what each movement
-// class can cross, using the unit's own movement definition.
-//
-// Applied to the PRODUCTION half only. The constructor half already self-
-// corrects, because MeasureReach asks CanDefReach for the plant's own con --
-// what was missing is the combat units that have to reach the front.
-//
-// Cached: the terrain does not change, and this is asked once per plant def
-// per election.
+// Reach is ai.DefMapCoverage -- the engine's own per-movement-type partition,
+// so nothing here samples heights or picks a slope bar. Speed is already in
+// the price through MobilityMult. PRODUCTION half only: the constructor half
+// self-corrects through MeasureReach's CanDefReach.
 array<float> gLineCov;
 float gLineCovBest = -1.f;
 
@@ -981,28 +941,19 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				subMul = myReach / bestOwn;
 		}
 		// ...and the throughput half of a COPY is ALWAYS priced against the
-		// cheaper way to buy the same build power (his arithmetic: 300 BP for
-		// 2,900 vs 200 BP for 210). Whether that throughput is NEEDED is the
-		// demand terms' question (pipeTerm, prodOwn); this price used to be
-		// gated on a momentary NeediestLine read, so every flicker to zero
-		// let a copy price at full gain -- backwards, since no line short of
-		// hands means the copy has even less to do. A plant that UNLOCKS
-		// products no nano can deliver keeps the old rule -- substituted only
-		// while an existing line is short of hands (feed the starving line
-		// before founding a new domain) -- because nanos on a T1 lab cannot
-		// make what a first T2 lab would. DupBpSubstMul already returns 1
-		// when no nano def exists to substitute, the one case a second line
-		// is the only way to buy throughput.
+		// nano substitute, never gated on a momentary NeediestLine read: a
+		// line short of hands makes the copy LESS useful, not more. A plant
+		// that UNLOCKS products no nano can deliver keeps the old rule --
+		// substituted only while an existing line is short of hands -- and
+		// DupBpSubstMul returns 1 when no nano def exists to substitute.
 		const bool isCopy = (reachKin > 0) && !UnlocksProduct(d);
 		// HIS RULING (2026-08-27): a copy of a lab we already run is
 		// INELIGIBLE, not discounted -- "the want ... should come out as 0
 		// ... we forward our want over to the nano." A zero never enters the
 		// ranking, so neither the roulette's residual ticket nor the
 		// executor's same-frame fall-through can buy it. The kin must be
-		// FINISHED or have hands on it: an unmanned order or frame is manned
-		// BY this def's own want (the fold/adoption path), so zeroing on it
-		// strangles the very build it defers to -- measured seed 8, both
-		// opening factories ordered and then unreachable for 11 minutes.
+		// FINISHED or have hands on it: an unmanned order is manned BY this
+		// def's own want, so zeroing on it strangles the build it defers to.
 		// The other escape is a substitute that cannot exist
 		// (DupBpSubstMul == 1).
 		bool dupUsable = false;
@@ -1035,28 +986,18 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		}
 		// A DIFFERENT LAB IS NOT A COPY. The divisor counted every same-reach
 		// plant of the domain, so a T2 vehicle lab was halved by a standing T2
-		// bot lab despite fielding entirely different units -- and a SECOND T2
-		// bot lab, which fields nothing new, was halved by exactly the same
-		// amount. Nothing preferred the variety; which one got built was a coin
-		// flip. apexearth 2026-08-27: a second lab of a type we already run is
-		// the bad buy ("1 lab = 300 build power, 1 nano = 200... you can back 1
-		// lab with 14 nanos... a second T2 lab gives you 600 total" -- a fifth
-		// of the production for the same metal), while a lab that opens new
-		// units "would be OK". So only a plant that fields nothing new pays the
-		// parallel-capacity divisor; the BP-substitution price below is what
-		// keeps the real duplicate honest.
+		// bot lab that fields entirely different units -- by the same amount
+		// as a second bot lab, which fields nothing new. Nothing preferred the
+		// variety. His ruling: a second lab of a type we run is the bad buy,
+		// one that opens new units "would be OK". So only a plant that fields
+		// nothing new pays the parallel-capacity divisor; the BP-substitution
+		// price below keeps the real duplicate honest.
 		const int dupKin = isCopy ? reachKin : 0;
 		// BUILD POWER IS THE HALF THE NANO ACTUALLY REPLACES, and it was the
-		// half left undiscounted: dupSubst only touched production, while
-		// pipeTerm (BPGap) went in at full price. So a duplicate lab was the
-		// market's answer to a build-power shortfall -- and with nano demand
-		// clamped at 35 m/s there was no other answer available, which is how
-		// five T2 bot labs stand with four nanos between them (apexearth
-		// 2026-08-27, and his arithmetic: "1 lab = 300 build power, 1 nano =
-		// 200... you can back 1 lab with 14 nanos for a total of 3100 build
-		// power. To spend about the same metal on a second T2 lab would give
-		// you 600" -- a fifth of the throughput). A COPY's expansion half is
-		// substituted too: the cons claim the ground, not the plant, and
+		// half left undiscounted: dupSubst only touched production while
+		// pipeTerm (BPGap) went in at full price, so a duplicate lab was the
+		// market's answer to a build-power shortfall. A COPY's expansion half
+		// is substituted too -- the cons claim the ground, not the plant, and
 		// nanos on the standing kin deliver the same cons cheaper. A new
 		// capability keeps its expansion at full value.
 		const float conSub = pipeTerm * subMul * dupSubst

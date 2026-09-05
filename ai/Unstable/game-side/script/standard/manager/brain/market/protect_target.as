@@ -219,10 +219,9 @@ bool FoeRef(AIFloat3& out at)
 
 // ONE CANDIDATE SITE AT EACH MEX THAT HAS NO GUN. The wall offers slots on the
 // building rim, so a mex's own ground was never for sale: the floor had
-// nothing to price and the cover-push nothing to promote (measured: 0 and 2
-// pushes in two 20-minute games, guard share 0.2-0.5 at minute six). The site
-// sits a step toward the enemy so the gun covers the approach; a mex whose
-// gun already stands or is ordered offers nothing, so this ends by itself.
+// nothing to price and the cover-push nothing to promote. The site sits a step
+// toward the enemy so the gun covers the approach; a mex whose gun already
+// stands or is ordered offers nothing, so this ends by itself.
 void MexGuardSites(array<AIFloat3>& inout sites, float reach)
 {
 	AIFloat3 foe;

@@ -363,15 +363,14 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
 	// SURPLUS CONS (apexearth: "made too many t1 cons... we should reclaim
-	// them"): the quiet rear with no claimable safe ground and no BP
-	// deficit turns constructor metal back into ladder money. Only a con a
-	// standing factory could re-make (never the commander), cheapest
-	// first; BPGap turning positive stops the next one -- self-balancing.
-	// ...and only once the SUCCESSOR fleet exists: reclaiming the claim
-	// fleet before any ceiling con stands starved the ladder that was
-	// supposed to replace it (seed 23: cons cut to the floor by 10m, T2
-	// lab at 12.3m). Same law as generator reclaim -- obsolescence is
-	// RELATIVE efficiency, and nothing is obsolete before its better.
+	// them"): the quiet rear with no claimable safe ground and no BP deficit
+	// turns constructor metal back into ladder money. Only a con a standing
+	// factory could re-make (never the commander), cheapest first; BPGap
+	// turning positive stops the next one -- self-balancing....and only once
+	// the SUCCESSOR fleet exists: reclaiming the claim fleet before any
+	// ceiling con stands starved the ladder that was supposed to replace it.
+	// Same law as generator reclaim -- obsolescence is RELATIVE efficiency,
+	// and nothing is obsolete before its better.
 	if (EcoQuiet() && !gMexOpen && (BPGap() <= 0.f) && (ServingCons() > 0)) {
 		// Only a LESSER con spends its time on this: a ceiling con
 		// reclaiming T1s traded scaling time for tidying (watched --

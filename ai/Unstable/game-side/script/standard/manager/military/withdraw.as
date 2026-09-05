@@ -200,13 +200,11 @@ bool LosingFightHere(const AIFloat3& in p, float& out lost, float& out killed)
 }
 
 // The influence test above LAGS: influence is built from standing presence, so
-// at the contact line it reads ~0 until our units are already dying (measured
-// 2026-08-20: a 9-unit squad fed itself to a commander over 36 seconds and the
-// first withdraw order came after the fifth death). This is the leading
-// version of the same question: the threat map already knows what is standing
-// there, so compare it against what WE have standing nearby -- our combat
-// units plus our own towers -- and call the spot lost when they outgun us by
-// the margin. Threat-map values and GetSurfThreat are the same scale.
+// at the contact line it reads ~0 until our units are already dying. This is
+// the leading version of the same question: the threat map already knows what
+// is standing there, so compare it against what WE have standing nearby -- our
+// combat units plus our own towers -- and call the spot lost when they outgun
+// us by the margin. Threat-map values and GetSurfThreat are the same scale.
 bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 	const array<AIFloat3>@ allyPos, const array<float>@ allyPow, float& out oddsFor)
 {
@@ -350,8 +348,7 @@ void UpdateWithdraw()
 			+ " foeAir=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::AIR), "", 0, 0)
 			// The aggression gate's two inputs and the enemy side's static
 			// term, so a "we never attack" game can be attributed to the
-			// reading rather than to the posture rules (measured 2026-08-20:
-			// gate said 9000 vs 3853 while the field was 6125 vs 7410).
+			// reading rather than to the posture rules.
 			+ " ourCost=" + formatFloat(aiMilitaryMgr.armyCost, "", 0, 0)
 			+ " foeMass=" + formatFloat(EnemyMassingThreat(), "", 0, 0)
 			+ " foeStatic=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::STATIC), "", 0, 0));
@@ -390,8 +387,7 @@ void UpdateWithdraw()
 		}
 		const AIFloat3 p = allyPos[j];
 		// THE DEFEND LEASH. Every suicide poke this project has reconstructed
-		// is a DEFEND-pool member that waded to the enemy base (deaths at
-		// fwd 0.8-0.93 with fhist=[f2...], battles.py 2026-08-20): CDefendTask
+		// is a DEFEND-pool member that waded to the enemy base: CDefendTask
 		// chases whatever threatened us with no notion of how far it has
 		// walked. A defend unit standing on THEIR influence past the front is
 		// in the wrong place by the task's own meaning, whatever the local

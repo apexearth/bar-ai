@@ -124,10 +124,10 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	return null;
 }
 // Escorts ORDERED but not yet standing beside anyone. An escort queued behind
-// a busy line took 77 seconds to arrive (measured, smoke seed 1), so a
-// time-decayed order ledger expires and the floor re-orders. The sent-ledger
-// alone is the answer: it holds every order until the unit is finished, so
-// adding CountQueued to it would count the same escort twice.
+// a busy line took 77 seconds to arrive, so a time-decayed order ledger
+// expires and the floor re-orders. The sent-ledger alone is the answer: it
+// holds every order until the unit is finished, so adding CountQueued to it
+// would count the same escort twice.
 int EscortInFlight(CCircuitDef@ d)
 {
 	if (d is null)

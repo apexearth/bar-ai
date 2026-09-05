@@ -436,16 +436,16 @@ void UpdateNukes()
 
 	// Volley size scales with the shield, not a flat number: an undefended
 	// base eats the first missile; each antinuke costs apex_nuke_per_anti
-	// extra missiles to saturate. Fire only when the pool covers it.
-	// A defensive volley is additionally sized to the ARMY's worth: one blast
+	// extra missiles to saturate. Fire only when the pool covers it. A
+	// defensive volley is additionally sized to the ARMY's worth: one blast
 	// covers a clump, and each further missile pays only if there is another
 	// apex_nuke_value_per of army spread beyond it -- "an optimum # of nukes",
-	// derived from value per missile rather than a flat count.
-	// Sized against SIGHTED interceptors only. The assumed anti keeps shaping
-	// the RANKING above, but a salvo bar of 1+8 against an anti nobody has
-	// ever seen held 7 missiles in their silos for 17 minutes while catapults
-	// closed (his game, 2026-08-21). If an unseen anti eats part of a lean
-	// volley, the re-sight rules price the ground correctly next time.
+	// derived from value per missile rather than a flat count. Sized against
+	// SIGHTED interceptors only. The assumed anti keeps shaping the RANKING
+	// above, but a salvo bar of 1+8 against an anti nobody has ever seen held
+	// 7 missiles in their silos for 17 minutes while catapults closed. If an
+	// unseen anti eats part of a lean volley, the re-sight rules price the
+	// ground correctly next time.
 	int needed = 1 + AntisCovering(bestPos)
 			* int(ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI));
 	if (bestDef) {

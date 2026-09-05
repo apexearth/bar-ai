@@ -193,11 +193,9 @@ int ComCountOf(int defId, int mask)
 	return n;
 }
 
-// Unfinished rows count only with hands on them: an unmanned order or frame
-// is a held placeholder (the async-sim-orders law) whose manning path IS the
-// def's own want -- counting it as satisfied strangles that path (measured
-// seed 8: both opening factories ordered, zeroed as their own copies, and
-// unreachable for 11 minutes).
+// Unfinished rows count only with hands on them: an unmanned order or frame is
+// a held placeholder (the async-sim-orders law) whose manning path IS the
+// def's own want -- counting it as satisfied strangles that path.
 int ComCountManned(int defId, int mask)
 {
 	int n = 0;
@@ -286,14 +284,13 @@ float ComProgress(uint i)
 // EVERY BIG REACTOR THE LEDGER SAYS IS RISING -- and how many of them could
 // still take another pair of hands. The founding gate used to ask gLive, which
 // holds TASKS: a frame whose request died is invisible there, and so were the
-// ones a nano was quietly finishing. Both are sites, and a gate that cannot see
-// them founds another beside them (measured 2026-08-30: peak 7 advanced solars
-// at once with the gLive-based test in place). The ledger is the register that
-// survives the task, so the gate asks it instead.
-// Cached per frame: the founding gate asks this on every big-energy request
-// and the scan walks the whole ledger. Invalidated by hand whenever a
-// big-energy request is registered or forgotten, so a second ask in the SAME
-// frame cannot be answered from a snapshot taken before the first one landed.
+// ones a nano was quietly finishing. Both are sites, and a gate that cannot
+// see them founds another beside them. The ledger is the register that
+// survives the task, so the gate asks it instead. Cached per frame: the
+// founding gate asks this on every big-energy request and the scan walks the
+// whole ledger. Invalidated by hand whenever a big-energy request is
+// registered or forgotten, so a second ask in the SAME frame cannot be
+// answered from a snapshot taken before the first one landed.
 int gBigEFrame = -1;
 uint gBigEN = 0;
 uint gBigERoom = 0;

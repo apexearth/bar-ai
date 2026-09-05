@@ -144,24 +144,21 @@ float EnemyGroupPower()
 	return top * 0.017f;   // Grunt-class power per metal, LogUnitPower
 }
 
-// ARE WE THE AGGRESSOR? apexearth 2026-08-19: "we can't be throwing [army] away
-// to a superior force unless we know confidently we're putting most of our
-// resources into army and *should* have a stronger army than our opponent. If
-// we know we're being conservative then we shouldn't ever attack them if
-// they're being aggressive."
-//
-// Two readings, both ours and both already measured: what share of our own
-// metal has gone into army against what we intended to spend there, and what
-// they field against what we field. Below our own army target while they
-// out-field us means we chose economy and they chose offence -- the one case
-// where walking out is giving away the only army we bought.
-// MOBILE against MOBILE, shared by every "may the army leave home" gate.
-// EnemyMassingThreat carries 0.5x their STATIC defence, and by mid-game more
-// than half the figure was towers (census 2026-08-20: foeMass 3032 with
-// foeStatic 3493) -- towers cannot walk at us, so counting them here held the
-// army home against an enemy we outfielded. Static still counts fully in
-// MassWant: walking INTO porc needs mass; refusing to leave home because
-// porc exists does not.
+// ARE WE THE AGGRESSOR? apexearth 2026-08-19: "we can't be throwing [army]
+// away to a superior force unless we know confidently we're putting most of
+// our resources into army and *should* have a stronger army than our opponent.
+// If we know we're being conservative then we shouldn't ever attack them if
+// they're being aggressive." Two readings, both ours and both already
+// measured: what share of our own metal has gone into army against what we
+// intended to spend there, and what they field against what we field. Below
+// our own army target while they out-field us means we chose economy and they
+// chose offence -- the one case where walking out is giving away the only army
+// we bought. MOBILE against MOBILE, shared by every "may the army leave home"
+// gate. EnemyMassingThreat carries 0.5x their STATIC defence, and by mid-game
+// more than half the figure was towers -- towers cannot walk at us, so
+// counting them here held the army home against an enemy we outfielded. Static
+// still counts fully in MassWant: walking INTO porc needs mass; refusing to
+// leave home because porc exists does not.
 float FoeMobileMassing()
 {
 	return EnemyMassingThreat()
@@ -169,8 +166,8 @@ float FoeMobileMassing()
 			* STATIC_DEFENSE_WEIGHT() * aiEnemyMgr.GetEnemyCost(RT::STATIC);
 }
 
-// TeamArmyCost read ~40% of the field telemetry (2026-08-20: 2054 against
-// armyReal 5500); the withdraw register's live cost is the honest floor.
+// TeamArmyCost read ~40% of the field telemetry; the withdraw register's live
+// cost is the honest floor.
 float OurArmyNow()
 {
 	const float ours = TeamArmyCost();
@@ -232,11 +229,11 @@ float MassWant()
 
 	const float ours = TeamArmyCost();
 	// MOBILE against MOBILE. EnemyMassingThreat carries 0.5x their STATIC, and
-	// by mid-game that is most of the figure (census 2026-08-24: foeMass 9795
-	// with foeStatic 8210) -- so their porcupine raised OUR bar to leave home,
-	// which is backwards. Whether to walk out is a question about what can walk
-	// at us; static still counts in full where the question is what we are
-	// walking INTO, which is target selection, not this.
+	// by mid-game that is most of the figure -- so their porcupine raised OUR
+	// bar to leave home, which is backwards. Whether to walk out is a question
+	// about what can walk at us; static still counts in full where the
+	// question is what we are walking INTO, which is target selection, not
+	// this.
 	float theirs = FoeMobileMassing();
 	// Pre-T2 the enemy model is mostly unscouted ground, and GetEnemyCost only
 	// counts what has entered LOS -- "ahead" in the opening is usually
@@ -377,15 +374,14 @@ void UpdateMassing()
 	// interpolated want can sit just under MASS_HOLD_RATIO and never touch
 	// MASS_CAP, so a deadline keyed on the cap would never fire.
 	const float floorNow = MassFloor();
-	// THE DEADLINE MUST NOT FIRE INTO AN ARMY WE CANNOT FIGHT.
-	//
-	// It exists so a hold cannot last forever "so the ratio can change". At the
-	// ratios actually measured (183:1 in the 4v4 of 2026-08-19) the ratio cannot
-	// change -- it fired 55 times in one game and each firing was a group handed
-	// to them. Holding forever is strictly better than feeding; the outmatched
-	// branch already releases by itself as the pool rebuilds toward parity.
-	// See FoeMobileMassing/OurArmyNow: mobile against mobile, honest self-count.
-	// A MAP-WIDE COMPARISON IS NOT THE FIGHT IN FRONT OF US. Both terms are
+	// THE DEADLINE MUST NOT FIRE INTO AN ARMY WE CANNOT FIGHT. It exists so a
+	// hold cannot last forever "so the ratio can change". At the ratios
+	// actually measured the ratio cannot change -- it fired 55 times in one
+	// game and each firing was a group handed to them. Holding forever is
+	// strictly better than feeding; the outmatched branch already releases by
+	// itself as the pool rebuilds toward parity. See
+	// FoeMobileMassing/OurArmyNow: mobile against mobile, honest self-count. A
+	// MAP-WIDE COMPARISON IS NOT THE FIGHT IN FRONT OF US. Both terms are
 	// side-wide sums, so a group standing on a weakly-held enemy base reads
 	// "outmatched" from armies on the far side of the map and circles instead
 	// of taking it (apexearth 2026-08-21: "we just had the ability to take out

@@ -166,9 +166,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
 	// to sit below the branches that return early, so mex, mexup, tech, nano,
-	// sense and protect never reached it -- their orphans (armrad 48, armmex
-	// 43, armmoho 35, armnanotc 24 in one game) rotted while fresh sites
-	// opened beside them.
+	// sense and protect never reached it -- their orphans rotted while fresh
+	// sites opened beside them.
 	if ((w.def !is null) && !w.def.IsMobile()
 		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST))
 	{

@@ -247,11 +247,10 @@ float OpenFraction(const AIFloat3& in at, float reach)
 	return float(open) / float(OPEN_RAYS);
 }
 
-// Memo: the spot list for one (spacing, reach) pair on the same 30-frame
-// stamp RebuildFront already uses. Decide re-asks this several times a
-// second per player and the fill loop was a top term in the 44-66% AI frame
-// share measured live (frametime.py, MP 2026-08-18); the front does not
-// move inside a stamp.
+// Memo: the spot list for one (spacing, reach) pair on the same 30-frame stamp
+// RebuildFront already uses. Decide re-asks this several times a second per
+// player and the fill loop was a top term in the 44-66% AI frame share
+// measured live; the front does not move inside a stamp.
 array<AIFloat3> gSpotsMemo;
 bool  gSpotsMemoOk = false;
 int   gSpotsMemoStamp = -1;

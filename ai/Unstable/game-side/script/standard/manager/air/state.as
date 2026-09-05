@@ -11,23 +11,18 @@ namespace Air {
 // Mid-game only: before this the whole team is pooling metal behind the tech
 // lead, and an air plant competes with it. Kept short of the T1->T2 transition
 // itself, since that transition IS the pooling window this AI's team strategy
-// is built on.
-// THE AIR RAID OPENS ON AN ECONOMY, NOT A CLOCK.
-//
-// apexearth 2026-09-01: "bombers are for late game... when we have 200m/s or
-// more... not really an early game thing... we don't want to make air too
-// early, it makes us weak on ground."
-//
-// Measured over 122 games against BARb hard (2026-08-30 batteries, Cortex):
-// corshad (Whirlwind) was 21.9% of ALL our combat metal against BARb's 4.8% --
-// a fifth of the army in bombers -- while our anti-air ran 1.4% against their
-// 3.2% and our kill/loss ratio was 0.48 to their 0.93. We fielded the air force
-// AND skipped the answer to theirs.
-//
-// AIR_FROM was 11 game-minutes, a timer, which is the one thing this AI is not
-// allowed to gate progression on -- "late game" here always means economy size.
-// AirEcoReady() is the replacement; the frame constant is kept only as the
-// floor below which nothing has an economy worth reading.
+// is built on. THE AIR RAID OPENS ON AN ECONOMY, NOT A CLOCK. apexearth
+// 2026-09-01: "bombers are for late game... when we have 200m/s or more... not
+// really an early game thing... we don't want to make air too early, it makes
+// us weak on ground." Measured over 122 games against BARb hard: corshad
+// (Whirlwind) was 21.9% of ALL our combat metal against BARb's 4.8% -- a fifth
+// of the army in bombers -- while our anti-air ran 1.4% against their 3.2% and
+// our kill/loss ratio was 0.48 to their 0.93. We fielded the air force AND
+// skipped the answer to theirs. AIR_FROM was 11 game-minutes, a timer, which
+// is the one thing this AI is not allowed to gate progression on -- "late
+// game" here always means economy size. AirEcoReady() is the replacement; the
+// frame constant is kept only as the floor below which nothing has an economy
+// worth reading.
 const int   AIR_FROM       = 4 * MINUTE;
 
 // The candidate's OWN metal income, out of reach of the 4v4 benchmark and

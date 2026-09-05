@@ -130,16 +130,14 @@ const float JOIN_MIN_COST = 200.f;
 // walk buys nothing -- the site finishes, or gets close enough that one more
 // constructor is negligible, before it could arrive. apexearth, watching
 // 2026-08-14: "our units are willing to walk long distances to build a
-// building which would be built by the time they get there."
-//
-// APPROXIMATE, not exact, for two reasons: CCircuitDef exposes no move-speed
-// binding to script (grep of InitScript.cpp confirmed, 2026-08-14), so travel
-// time uses one flat assumed speed rather than the joining unit's own -- a
-// fast vehicle con may be turned away from a join that would in fact still be
-// worth it, while a slow bot con is the case this actually protects. And the
-// site's current build power is read as DRAIN per worker already assigned
-// (the same per-constructor pull InFlightCap uses elsewhere), not the site's
-// true buildSpeed, which script cannot read either.
+// building which would be built by the time they get there." APPROXIMATE, not
+// exact, for two reasons: CCircuitDef exposes no move-speed binding to script,
+// so travel time uses one flat assumed speed rather than the joining unit's
+// own -- a fast vehicle con may be turned away from a join that would in fact
+// still be worth it, while a slow bot con is the case this actually protects.
+// And the site's current build power is read as DRAIN per worker already
+// assigned (the same per-constructor pull InFlightCap uses elsewhere), not the
+// site's true buildSpeed, which script cannot read either.
 const float ASSUMED_CON_SPEED = 40.f;  // elmos/s; armck/corck are 36, armcv/corcv 54 (unit defs, 2026-08-14)
 
 bool WorthJoining(float dist, float progress, float costM, uint busy,
