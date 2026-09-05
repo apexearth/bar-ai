@@ -8,7 +8,7 @@
 		"behaviour": {
 			"legcom": {
 				"role": ["builder"],
-				"attribute": ["commander"],
+				"attribute": ["commander", "dg_cost"],
 				"build_speed": 10.0,
 				"threat": {"air": 0.3, "surf": 1.0, "water": 0.1, "default": 1.0,
 					"vs": {"artillery": 0.5, "assault": 0.8}

@@ -70,6 +70,37 @@ void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 	gWallLine.insertLast(line);
 }
 
+// One row of line slots: the row's anchor, then outward each side a pitch at
+// a time until the map edge, an ally's lane or the choke's shoulder. False
+// once the slot table is full.
+bool WallEmitRow(const AIFloat3& in rowA, const AIFloat3& in lat, float pitch,
+		float lineHalf, const array<float>& in hx, const array<float>& in hz,
+		float expFrac)
+{
+	WallEmitSlot(rowA, true, expFrac);
+	for (int sideK = -1; sideK <= 1; sideK += 2) {
+		for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
+			if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
+				break;   // past the choke's shoulder
+			const AIFloat3 s = rowA + lat * (pitch * float(k * sideK));
+			if (!OnMap(s))
+				break;
+			bool allyLane = false;
+			const float dUs = s.distance2D(gPfMid);
+			for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
+				if (s.distance2D(AIFloat3(hx[m], 0.f, hz[m])) < dUs)
+					allyLane = true;
+			}
+			if (allyLane)
+				break;
+			WallEmitSlot(s, true, expFrac);
+			if (int(gWallP.length()) >= WALL_MAX_SLOTS)
+				return false;
+		}
+	}
+	return int(gWallP.length()) < WALL_MAX_SLOTS;
+}
+
 void WallPrep()
 {
 	PfRebuild();
@@ -229,7 +260,7 @@ void WallPrep()
 			AIFloat3 chokeAt;
 			AIFloat3 chokeAcross;
 			float chokeHalfW = 0.f;
-			const bool onChoke = ChokeLine(chokeAt, chokeAcross, chokeHalfW);
+			const bool onChoke = ChokeTarget(chokeAt, chokeAcross, chokeHalfW);
 			AIFloat3 lineLat(-fd.z, 0.f, fd.x);
 			float lineHalf = -1.f;   // < 0: run to the map edge or an ally lane
 			if (onChoke) {
@@ -262,9 +293,7 @@ void WallPrep()
 							? Builder::gHomePos : gPfMid;
 					const AIFloat3 relA = anchor - homeP;
 					const float span = relA.x * fd.x + relA.z * fd.z;
-					int steps = int(span / pitch) - 1;
-					if (steps > 12)
-						steps = 12;
+					const int steps = int(span / pitch) - 1;
 					for (int st = 0; st < steps; ++st) {
 						const bool safe = OnMap(anchor)
 								&& !Builder::SiteHot(anchor)
@@ -279,7 +308,6 @@ void WallPrep()
 				gWallLineOk = true;
 				gWallA = anchor;
 				gWallF = fd;
-				const AIFloat3 lat = lineLat;
 				// TWO ROWS DEEP (apexearth: "if you're not gonna build all
 				// the stuff and you just half ass it, then it's never gonna
 				// work... It needs to be really strong to succeed"). One
@@ -288,33 +316,8 @@ void WallPrep()
 				// each other's cover.
 				for (int row = 0; row < WALL_LINE_ROWS; ++row) {
 					const AIFloat3 rowA = anchor - fd * (pitch * float(row));
-					if (!OnMap(rowA))
-						break;
-					WallEmitSlot(rowA, true, expFrac);
-					for (int sideK = -1; sideK <= 1; sideK += 2) {
-						for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
-							const float latK = pitch * float(k * sideK);
-							if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
-								break;   // past the choke's shoulder
-							const AIFloat3 s = rowA + lat * latK;
-							if (!OnMap(s))
-								break;
-							bool allyLane = false;
-							const float dUs = s.distance2D(gPfMid);
-							for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
-								if (s.distance2D(AIFloat3(hx[m], 0.f, hz2[m])) < dUs)
-									allyLane = true;
-							}
-							if (allyLane)
-								break;
-							WallEmitSlot(s, true, expFrac);
-							if (int(gWallP.length()) >= WALL_MAX_SLOTS)
-								break;
-						}
-						if (int(gWallP.length()) >= WALL_MAX_SLOTS)
-							break;
-					}
-					if (int(gWallP.length()) >= WALL_MAX_SLOTS)
+					if (!OnMap(rowA) || !WallEmitRow(rowA, lineLat, pitch,
+							lineHalf, hx, hz2, expFrac))
 						break;
 				}
 			}
@@ -475,6 +478,17 @@ bool WallLineHeld(AIFloat3& out at, int& out n, int minHeld)
 			* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
 	at = AIFloat3(sx / float(n), 0.f, sz / float(n)) - gWallF * pitch;
 	return OnMap(at);
+}
+
+// The held line on ground plainly ours: two slots held, not hot, and our
+// influence at twice theirs. What fortifies the line (sensors, AA, a lathe)
+// sites here -- the choke flickers hot and cold as the fight moves, and
+// "quiet this second" sent builders 3,000 elmos to let go on arrival.
+bool WallLineQuiet(AIFloat3& out at, int& out n)
+{
+	return WallLineHeld(at, n, 2)
+			&& !Builder::SiteHot(at)
+			&& (ai.GetAllyInflAt(at) > ai.GetEnemyInflAt(at) * 2.f);
 }
 
 // The line's anchor point itself, for the army to stand on.

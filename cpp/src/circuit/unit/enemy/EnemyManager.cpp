@@ -32,6 +32,39 @@ namespace circuit {
 using namespace springai;
 using namespace terrain;
 
+AIFloat3 CEnemyManager::GetEnemyStructPos() const
+{
+	AIFloat3 sum(0.f, 0.f, 0.f);
+	float cost = 0.f;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		const CEnemyInfo* e = kv.second;
+		const CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || cdef->IsMobile() || (e->GetCost() <= 0.f)) {
+			continue;
+		}
+		sum += e->GetPos() * e->GetCost();
+		cost += e->GetCost();
+	}
+	if (cost <= 0.f) {
+		return AIFloat3(-1.f, -1.f, -1.f);
+	}
+	return sum / cost;
+}
+
+float CEnemyManager::GetEnemyStructCost() const
+{
+	float cost = 0.f;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		const CEnemyInfo* e = kv.second;
+		const CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || cdef->IsMobile()) {
+			continue;
+		}
+		cost += e->GetCost();
+	}
+	return cost;
+}
+
 CEnemyManager::CEnemyManager(CCircuitAI* circuit)
 		: circuit(circuit)
 		, enemyIterator(0)

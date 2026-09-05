@@ -282,6 +282,23 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float mobileCeil = OwnedMobileCeil();
 	LossDecay();
 	float armyGap = ArmyTarget() - ArmyValue() - ArmyInFlightM();
+	// COVERAGE IS ARMY DEMAND: the light units the base still needs so a
+	// guard stands by every building (military/guardposts.as, his "units
+	// are cover" ruling). Not a share of income -- what the base's own
+	// spread asks for, and it grows with the base, never with a clock.
+	float coverShare = 0.f;   // how much of the gap is coverage, 0..1
+	{
+		const float coverGap = Military::CoverNeedM() - ArmyInFlightM();
+		if (coverGap > armyGap)
+			armyGap = coverGap;
+		// COVER IS THE FIRST CLAIM ON THE LAB. A proportional share let a
+		// big army target drown the coverage need under the role prior
+		// (watched: 13 Pawns to 40 Rocko/Hammer with 30 Pawns of cover
+		// unmet all game); apexearth: "the first units out of the factory
+		// are the light ones... we still need a lot more light units".
+		if ((armyGap > 1.f) && (coverGap > 0.f))
+			coverShare = 1.f;
+	}
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	// METAL WE FAIL TO SPEND IS ARMY DEMAND (his standing law: the economy
 	// is for spending; waste is free army). The same overflow signal that
@@ -685,6 +702,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// metal there is -- and it fades as the fleet fills.
 			ppc *= 1.f + ai.GetTunable("apex_cover_worth", TUNE_COVER_WORTH)
 					* CoverPerMetal(d) * PatrolShort();
+			// THE COVERAGE SHARE OF THE GAP IS PRICED BY COVER, NOT BY COMBAT
+			// (apexearth: "quantify the value of grunts when it comes to
+			// defending a base from raiders. It is the speed that they have...
+			// being able to cover more of the base structures"). Ground
+			// covered per metal is speed over cost; the share of the gap that
+			// is coverage is priced on that axis outright, the rest as before.
+			if (coverShare > 0.f)
+				ppc *= pow(CoverPerMetal(d), coverShare);
 			// EYES (apexearth: "we tend to lack scouts... need some kind of
 			// value requirement on raider style units and scouts"). Sight is
 			// what every other sense in this AI is built on -- the danger
@@ -777,6 +802,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			if (roleW < 0.05f)
 				roleW = 0.05f;   // never exactly zero: portfolio floor
+			// The coverage share of the gap is not a composition question: a
+			// guard by every building is asked for by the base, whatever
+			// role share the army's mix would give that unit.
+			roleW = coverShare + (1.f - coverShare) * roleW;
 			float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
 					* (ppc / linePPC) * roleW * stakeMul
 					/ (1.f + have * 0.05f) * eFeedA;

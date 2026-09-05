@@ -139,6 +139,7 @@ local NAMES = {
 	"apex_def_reach_cap",
 	"apex_def_site_walk",
 	"apex_def_eco_s",
+	"apex_def_off",
 	"apex_army_eco_s",
 	"apex_eco_target_base",
 	"apex_air_eco_base",
@@ -302,6 +303,9 @@ local NAMES = {
 	"apex_defend_muster",
 	"apex_defend_solo_deep",
 	"apex_defend_post",
+	"apex_intercept",
+	"apex_guard_posts",      -- DefendTask.cpp: idle pool members stand at script-assigned posts (1)
+	"apex_dgun_log",         -- DGunAction.cpp: sampled trace of the D-gun gates (0)
 	"apex_defend_home_odds",
 	"apex_defend_towers",
 	"apex_home_muster",

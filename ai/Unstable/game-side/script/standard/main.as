@@ -141,6 +141,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// one line a game-minute, so the last one is the game-end census.
 	{ double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
 	{ double _t = Perf::T0(); Military::FightCensus(); Perf::Add("up.fightcensus", _t); }
+	{ double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
 	Perf::TickSpeed();
 	Perf::Flush();
 }

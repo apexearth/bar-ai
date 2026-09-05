@@ -386,7 +386,7 @@ float MCostScale()
 // rate put a line slot's tCost at 600-900 against a mex's 100-300 and priced
 // the front out of every draw.
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
-		bool lateStart = true)
+		bool lateStart = true, float riskM = 0.f)
 {
 	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
 	// METAL FEEDS THE LATHE (apexearth: a fusion started before the mohos
@@ -485,7 +485,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec, Catalog::gCostE[defId])
 			+ float(Catalog::gAreaCells[defId])
 				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
-	w.tCost = walkSec * WalkRate(builderBP) + buildSec * Wage() + displacedM;
+	w.tCost = walkSec * WalkRate(builderBP) + buildSec * Wage() + displacedM
+			+ riskM;   // the builder's expected loss on the trip, see TripRisk
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time
 	// you'd make as metal income if you had built the closer one"). Wage above

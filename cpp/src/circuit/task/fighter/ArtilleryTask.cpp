@@ -110,15 +110,9 @@ void CArtilleryTask::Execute(CCircuitUnit* unit)
 			unit->GetTravelAct()->StateWait();
 		}
 
-		if (unit->GetCircuitDef()->IsSniper()) {
-			// Move to own range + set-target; the raw engine attack below
-			// bypasses the CCircuitUnit sniper rule.
-			unit->Attack(bestTarget, false, frame + FRAMES_PER_SEC * 60);
-			return;
-		}
 		TRY_UNIT(circuit, unit,
 			if (!circuit->IsCheating()) {
-				unit->GetUnit()->Attack(bestTarget->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+				unit->CmdAttack(bestTarget, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 			} else {
 				unit->CmdAttackGround(bestTarget->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 			}

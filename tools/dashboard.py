@@ -51,6 +51,8 @@ ANALYSIS_TOOLS = {
     "arena": ("arena.py", False),
     "wall": ("wall_check.py", False),
     "wallmap": ("wall_map.py", False),
+    "earlyfight": ("test_earlyfight.py", False),
+    "raid": ("test_raid.py", False),
 }
 
 DEPLOY_ACTIONS = {

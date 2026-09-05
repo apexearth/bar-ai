@@ -113,6 +113,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
+	// The no-turret test (docs/24): radar and units are the whole defence.
+	const bool defOff = ai.GetTunable("apex_def_off", TUNE_DEF_OFF) > 0.f;
 	// (Normalising the TTD discount against the quickest buildable turret --
 	// so defence as a category paid nothing and only the ordering inside it
 	// moved -- was tried and REVERTED: it raised defence's share of spend but
@@ -151,6 +153,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		if (Gate(GATE_CLASS, cls < 0))
 			continue;
 		if (Gate(GATE_HALF, HalfOfClass(cls) != half))
+			continue;
+		if (defOff && ((cls == PROT_DEF) || (cls == PROT_AA)))
 			continue;
 		// Recorded HERE, before any gate: a candidate that never reaches the
 		// price is exactly the one worth seeing, and a list built at the end

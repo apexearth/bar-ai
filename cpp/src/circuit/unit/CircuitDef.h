@@ -185,6 +185,8 @@ public:
 			&& (GetMaxRange(RangeType::LAND) >= SNIPER_MIN_RANGE)
 			&& (health <= SNIPER_MAX_HP)
 			&& (health <= costM * SNIPER_MAX_HP_PER_METAL); }
+	// The engine order kinds CCircuitAI's sniper census counts.
+	enum class SniperOrder: char {MOVE = 0, SET_TARGET, FIGHT, ATTACK, _SIZE_};
 
 	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
 	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }

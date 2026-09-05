@@ -18,6 +18,7 @@
 #include "unit/action/DGunAction.h"
 #include "unit/action/TravelAction.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/enemy/EnemyManager.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 #include "Log.h"
@@ -538,7 +539,78 @@ void IFighterTask::SetTarget(CEnemyInfo* enemy)
 
 void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 {
-	assert((unit->GetTravelAct() != nullptr) && (GetTarget() != nullptr));
+	AttackEnemy(unit, GetTarget(), frame);
+}
+
+// A standoff point is pushed out of the reach of every visible enemy this
+// unit outranges, not only its target's (apexearth: "units like that should
+// always want to keep a safe distance"). Enemies it does not outrange are
+// the odds election's business; artillery is met, not kept from (docs/24).
+AIFloat3 IFighterTask::SafeStandoff(CCircuitUnit* unit, const AIFloat3& want,
+		const AIFloat3& tPos, const int frame) const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if ((circuit->GetTunable("apex_standoff", 1.f) <= 0.f) || cdef->IsAbleToFly()) {
+		return want;
+	}
+	const float myRange = cdef->GetMaxRange();
+	static constexpr float GROUP_SCAN = 1500.f;
+	AIFloat3 pos = want;
+	bool moved = false;
+	for (int pass = 0; pass < 2; ++pass) {
+		bool passMoved = false;
+		for (const CEnemyManager::SEnemyGroup& g : circuit->GetEnemyManager()->GetEnemyGroups()) {
+			if (g.pos.SqDistance2D(pos) > SQUARE(GROUP_SCAN)) {
+				continue;
+			}
+			for (const ICoreUnit::Id eId : g.units) {
+				CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+				if ((e == nullptr) || e->IsHidden() || !e->IsInRadarOrLOS()) {
+					continue;
+				}
+				CCircuitDef* ed = e->GetCircuitDef();
+				if ((ed == nullptr) || !ed->IsAttacker() || ed->IsAbleToFly() || ed->IsRoleArty()) {
+					continue;
+				}
+				const float eRange = ed->GetMaxRange();
+				if (myRange <= eRange * 1.15f) {
+					continue;  // same bar as KeepRange: no range edge, not ours to kite
+				}
+				const float keep = eRange * OUTRANGED_SAFETY_MARGIN;
+				const AIFloat3& ePos = e->GetPos();
+				if (pos.SqDistance2D(ePos) >= SQUARE(keep)) {
+					continue;
+				}
+				AIFloat3 dir = pos - ePos;
+				dir.y = 0.f;
+				if (dir.SqLength2D() < 1.f) {
+					dir = pos - tPos;
+					dir.y = 0.f;
+					if (dir.SqLength2D() < 1.f) {
+						continue;
+					}
+				}
+				dir.SafeNormalize2D();
+				pos = ePos + dir * keep;
+				passMoved = true;
+			}
+		}
+		if (!passMoved) {
+			break;
+		}
+		moved = true;
+	}
+	if (moved) {
+		CTerrainManager::CorrectPosition(pos);
+		unit->NoteAct("SAFE", frame);
+	}
+	return pos;
+}
+
+void IFighterTask::AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int frame)
+{
+	assert((unit->GetTravelAct() != nullptr) && (enemy != nullptr));
 
 	if (unit->Blocker() != nullptr) {
 		return;  // Do not interrupt current action
@@ -548,13 +620,13 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
-	const AIFloat3& tPos = GetTarget()->GetPos();
+	const AIFloat3& tPos = enemy->GetPos();
 	const int targetTile = circuit->GetInflMap()->Pos2Index(tPos);
 	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 3);
 	attackFrame = isRepeatAttack ? frame : attackFrame;
 
 	if (!isRepeatAttack
-		&& (unit->GetTarget() == GetTarget())
+		&& (unit->GetTarget() == enemy)
 		&& (unit->GetTargetTile() == targetTile))
 	{
 		return;
@@ -563,12 +635,12 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	AIFloat3 dir = unit->GetPos(frame) - tPos;
 	if (cdef->IsPlane() || (std::fabs(dir.y) > cdef->GetMaxRange() * 0.5f)) {
-		unit->Attack(GetTarget(), GetTarget()->GetUnit()->IsCloaked(), frame + FRAMES_PER_SEC * 60);
+		unit->Attack(enemy, enemy->GetUnit()->IsCloaked(), frame + FRAMES_PER_SEC * 60);
 		return;
 	}
 	dir.Normalize2D();
 
-	CCircuitDef* edef = GetTarget()->GetCircuitDef();
+	CCircuitDef* edef = enemy->GetCircuitDef();
 	const bool isStatic = (edef != nullptr) && !edef->IsMobile();
 
 	// Same fix as ISquadTask::AssignTo/RemoveAssignee (SquadTask.cpp): a
@@ -582,13 +654,15 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	// in radar or LOS there is nothing left to walk towards.
 	const float rangeMod = circuit->GetTunable("apex_range_mod", STANDOFF_RANGE_MOD);
 	const bool seesTarget = (circuit->GetTunable("apex_los_standoff", 1.f) > 0.f)
-			&& !isStatic && GetTarget()->IsInRadarOrLOS();
+			&& !isStatic && enemy->IsInRadarOrLOS();
 	// Same gap ISquadTask::Attack had before the 2026-08-14 outrange-margin fix
 	// (SquadTask.cpp), but wider here: this path had no reference to the
 	// target's own range AT ALL, so a lone/scout unit facing anything within
 	// (or above) its own weapon range -- not just the 90-100% band -- shrunk
 	// straight past its target's reach with nothing to stop it.
-	const bool outranged = (edef != nullptr) && (edef->GetMaxRange() > cdef->GetMaxRange());
+	// Artillery is met at our own range, never kept from at theirs (docs/24).
+	const bool outranged = (edef != nullptr) && !edef->IsRoleArty()
+			&& (edef->GetMaxRange() > cdef->GetMaxRange());
 	float range = (outranged ? edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN : cdef->GetMaxRange()) * rangeMod;
 	if (!outranged && (edef != nullptr)) {
 		range = std::max(range, edef->GetMaxRange() * OUTRANGED_SAFETY_MARGIN);
@@ -598,7 +672,8 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	}
 	AIFloat3 newPos(tPos.x + range * dir.x, tPos.y, tPos.z + range * dir.z);
 	CTerrainManager::CorrectPosition(newPos);
-	unit->Attack(newPos, GetTarget(), targetTile, GetTarget()->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
+	newPos = SafeStandoff(unit, newPos, tPos, frame);
+	unit->Attack(newPos, enemy, targetTile, enemy->GetUnit()->IsCloaked(), isStatic, frame + FRAMES_PER_SEC * 60);
 }
 
 #ifdef DEBUG_VIS

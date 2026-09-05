@@ -204,6 +204,10 @@ bool CCircuitUnit::IsForceUpdate(int frame)
 
 void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
 {
+	if (circuitDef->HasDGun() && (dgun != nullptr)) {
+		dgunHoldUntil = timeout;
+		dgunHoldReload = dgun->GetReloadFrame();
+	}
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->HasDGun()) {
 			if (target->GetUnit()->IsCloaked()) {  // los-cheat related
@@ -251,9 +255,28 @@ bool CCircuitUnit::IsWeaponReady(int frame)
 	return isWeaponReady;
 }
 
+bool CCircuitUnit::IsDGunHeld(int frame) const
+{
+	if ((frame >= dgunHoldUntil) || (dgun == nullptr)) {
+		return false;
+	}
+	// The shot went off: the reload frame moved on.
+	return dgun->GetReloadFrame() <= dgunHoldReload;
+}
+
+float CCircuitUnit::GetDGunCostE() const
+{
+	return (dgunDef != nullptr) ? dgunDef->GetCostE() : 0.f;
+}
+
+int CCircuitUnit::GetDGunReloadFrame() const
+{
+	return (dgun != nullptr) ? dgun->GetReloadFrame() : 0;
+}
+
 bool CCircuitUnit::IsDGunReady(int frame, float energy)
 {
-	return (dgun->GetReloadFrame() <= frame) && (dgunDef->GetCostE() < energy)
+	return (dgun->GetReloadFrame() <= frame) && (dgunDef->GetCostE() <= energy)
 		&& (!dgunDef->IsStockpile() || (unit->GetStockpile() > 0));
 }
 
@@ -343,9 +366,12 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 
 void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	NoteAct("mov", timeout);
 	assert(utils::is_in_map(pos));
-	NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::MOVE));
+	NoteSniperOrder(CCircuitDef::SniperOrder::MOVE);
 	unit->MoveTo(pos, options, timeout);
 //	unit->ExecuteCustomCommand(CMD_RAW_MOVE, {pos.x, pos.y, pos.z}, options, timeout);
 }
@@ -359,12 +385,18 @@ void CCircuitUnit::CmdRepeat(bool repeat, short options, int timeout)
 
 void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 //	assert(utils::is_in_map(pos));
 //	unit->ExecuteCustomCommand(CMD_JUMP, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
 void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	// A sniper never fight-walks: CMobileCAI::ExecuteFight stops it on the
 	// first thing a weapon bears on. Every travel/regroup/fallback path funnels
 	// through here, so the swap covers all of them.
@@ -374,17 +406,24 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
 	}
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
+	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
 	unit->Fight(pos, options, timeout);
 }
 
 void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	assert(utils::is_in_map(pos));
 	unit->PatrolTo(pos, options, timeout);
 }
 
 void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	if (circuitDef->IsSniper()) {
 		CmdMoveTo(SniperHoldPos(pos), options, timeout);
 		return;
@@ -407,11 +446,26 @@ AIFloat3 CCircuitUnit::SniperHoldPos(const AIFloat3& tPos)
 	return hold;
 }
 
-void CCircuitUnit::NoteSniperOrder(int kind) const
+void CCircuitUnit::NoteSniperOrder(CCircuitDef::SniperOrder kind) const
 {
 	if ((manager != nullptr) && circuitDef->IsSniper()) {
-		manager->GetCircuit()->NoteSniperOrder(static_cast<CCircuitAI::SniperOrder>(kind));
+		manager->GetCircuit()->NoteSniperOrder(kind);
 	}
+}
+
+void CCircuitUnit::CmdAttack(CEnemyInfo* enemy, short options, int timeout)
+{
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
+	// An attack order walks a sniper in and StopMoves it under fire
+	// (CMobileCAI::ExecuteObjectAttack); it holds at its own range instead.
+	if (circuitDef->IsSniper()) {
+		CmdMoveTo(SniperHoldPos(enemy->GetPos()), options, timeout);
+		return;
+	}
+	NoteSniperOrder(CCircuitDef::SniperOrder::ATTACK);
+	unit->Attack(enemy->GetUnit(), options, timeout);
 }
 
 void CCircuitUnit::CmdWantedSpeed(float speed)
@@ -423,6 +477,9 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
 
 void CCircuitUnit::CmdStop(short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->Stop(options, timeout);
 }
 
@@ -442,7 +499,7 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 	if (enemy == nullptr) {
 		return;
 	}
-	NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::SET_TARGET));
+	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
 	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
 }
 
@@ -530,34 +587,52 @@ bool CCircuitUnit::IsWaiting() const
 
 void CCircuitUnit::CmdRepair(CAllyUnit* target, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->Repair(target->GetUnit(), options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
 void CCircuitUnit::CmdBuild(CCircuitDef* buildDef, const AIFloat3& buildPos, int facing, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->Build(buildDef->GetDef(), buildPos, facing, options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
 void CCircuitUnit::CmdReclaimEnemy(CEnemyInfo* enemy, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->ReclaimUnit(enemy->GetUnit(), options, timeout);
 }
 
 void CCircuitUnit::CmdReclaimUnit(CAllyUnit* toReclaim, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->ReclaimUnit(toReclaim->GetUnit(), options, timeout);
 	taskState = ETaskState::EXECUTE;
 }
 
 void CCircuitUnit::CmdReclaimInArea(const AIFloat3& pos, float radius, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->ReclaimInArea(pos, radius, options, timeout);
 }
 
 void CCircuitUnit::CmdResurrectInArea(const AIFloat3& pos, float radius, short options, int timeout)
 {
+	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
 	unit->ResurrectInArea(pos, radius, options, timeout);
 }
 
@@ -591,11 +666,11 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 {
 	NoteAct("atk", timeout);
 	target = enemy;
-	// A sniper holds at its own range and names the target; an attack order
-	// would walk it in and StopMove it under fire (CMobileCAI::ExecuteObjectAttack).
+	// A sniper takes only the hold move and the target: the queued fight
+	// order below would walk it in.
 	if (circuitDef->IsSniper()) {
 		TRY_UNIT(manager->GetCircuit(), this,
-			CmdMoveTo(SniperHoldPos(enemy->GetPos()), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+			CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			CmdSetTarget(target);
 		)
 		return;
@@ -608,22 +683,21 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 				if (isGround) {  // los-cheat related
 					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				} else {
-					unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+					CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				}
 			} else {
 				CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 				if (isGround) {  // los-cheat related
 					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				} else {
-					unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+					CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				}
 			}
 		} else {
 			if (isGround) {  // los-cheat related
 				CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			} else {
-				NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::ATTACK));
-				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+				CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			}
 		}
 		CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
@@ -691,8 +765,7 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 				// uses a fight command"). The queued ATTACK already closes
 				// distance if the blip is genuinely out of reach, which was
 				// the fight order's whole job.
-				NoteSniperOrder(static_cast<int>(CCircuitAI::SniperOrder::ATTACK));
-				unit->Attack(enemy->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+				CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 			}
 		}
 		CmdWantedSpeed(NO_SPEED_LIMIT);

@@ -38,6 +38,7 @@
 #include "terrain/path/PathFinder.h"
 #include "terrain/path/QueryPathMulti.h"
 #include "unit/enemy/EnemyUnit.h"
+#include <algorithm>
 #include "CircuitAI.h"
 #include "util/GameAttribute.h"
 #include "util/Utils.h"
@@ -596,6 +597,7 @@ void CMilitaryManager::Init()
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateIdle, this), interval, offset + 0);
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1);
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2);
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::DispatchRaids, this), FRAMES_PER_SEC * 2, offset + 3);
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
@@ -1754,7 +1756,7 @@ void CMilitaryManager::UpdateDefenceTasks()
 	const bool hasFallback = GetGuardAnchor(fallback);
 	const int frame = circuit->GetLastFrame();
 	for (CDefendTask* dt : defTasks) {
-		if (dt->GetTarget() == nullptr) {
+		if ((dt->GetTarget() == nullptr) && !dt->IsDispatched(frame)) {
 			CCircuitUnit* leader = dt->GetLeader();
 			const AIFloat3& from = (leader != nullptr) ? dt->GetLeaderPos(frame) : dt->GetPosition();
 			if (leader != nullptr) {
@@ -1930,6 +1932,348 @@ void CMilitaryManager::UpdateDefenceTasks()
 			MakeDefence(index);
 			return;
 		}
+	}
+}
+
+// apex: THE RAID DISPATCHER. apexearth: "We should look at the trajectory of
+// enemy units (if we can) and intercept them. The goal should be to intercept
+// them before they get to our buildings"; "if 5 raiders attack us, we have 10
+// units". Every pass, each enemy group whose course crosses our buildings
+// inside DISPATCH_HORIZON_S takes the nearest home-guard units until they
+// hold DISPATCH_COVER times its worth, soonest arrival first. Those units are
+// moved into one CDefendTask per group, which stands at the building on the
+// group's course and engages once it is the group's worth itself. A pool
+// keeps its group between passes and is released when the group is gone.
+// Inbound units are read one by one and clustered here, and the guard is
+// every squad standing at home, whatever pool it sits in.
+// This is an allocation, not an election: a pool that merged before the raid
+// is split here, and a lone unit is not sent at a clump.
+static constexpr float DISPATCH_HORIZON_S = 30.f;
+static constexpr float DISPATCH_COVER = 2.f;
+static constexpr float DISPATCH_STICK_R = 700.f;
+static constexpr float DISPATCH_CLUSTER_R = 450.f;   // inbound units this close are one raid
+static constexpr float DISPATCH_NOTICE = 2.f;        // x base range: a raider this near home is inbound unless leaving
+static constexpr int DISPATCH_TTL = FRAMES_PER_SEC * 6;
+
+void CMilitaryManager::SetGuardPost(CCircuitUnit* unit, const AIFloat3& pos, float reach)
+{
+	if (unit != nullptr) {
+		guardPosts[unit->GetId()] = {pos, reach};
+	}
+}
+
+bool CMilitaryManager::GetGuardPost(const CCircuitUnit* unit, AIFloat3& outPos, float& outReach) const
+{
+	if (unit == nullptr) {
+		return false;
+	}
+	auto it = guardPosts.find(unit->GetId());
+	if (it == guardPosts.end()) {
+		return false;
+	}
+	outPos = it->second.pos;
+	outReach = it->second.reach;
+	return true;
+}
+
+void CMilitaryManager::DispatchRaids()
+{
+	// OFF by default: three measured cuts (2026-09-04) fired and left level-5
+	// buildings lost inside noise while level 1 lost 13-15 buildings per 32
+	// waves against 0. See ISSUES.md; the switch stays for the next cut.
+	if (circuit->GetTunable("apex_intercept", 0.f) <= 0.f) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+	const float baseR = GetBaseDefRange() * 1.25f;
+	CInfluenceMap* inflMap = circuit->GetInflMap();
+
+	// Inbound enemies, one by one: k-means groups put their centre between
+	// raiders coming from different angles, so the raid is clustered here from
+	// the units themselves.
+	struct SInbound {
+		AIFloat3 pos;
+		AIFloat3 aim;
+		float infl;
+		int eta;
+	};
+	std::vector<SInbound> in;
+	int still = 0, nearN = 0, tracked = 0;
+	// Forget contacts not seen for a while.
+	for (auto it = raidTrack.begin(); it != raidTrack.end();) {
+		if (frame - it->second.frame > FRAMES_PER_SEC * 20) {
+			it = raidTrack.erase(it);
+		} else {
+			++it;
+		}
+	}
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		if (e->IsHidden()) {
+			continue;
+		}
+		CCircuitDef* ed = e->GetCircuitDef();
+		if ((ed != nullptr) && (!ed->IsMobile() || !ed->IsAttacker())) {
+			continue;
+		}
+		const float infl = (ed != nullptr) ? ed->GetPower() : e->GetInfluence();
+		if (infl <= .0f) {
+			continue;
+		}
+		const AIFloat3& ePos = e->GetPos();
+		if (!circuit->IsPosOnMap(ePos)) {
+			continue;
+		}
+		SInbound s;
+		s.pos = ePos;
+		s.aim = ePos;
+		s.infl = infl;
+		s.eta = -1;
+		// Velocity: the engine's, else the contact's own track (radar blips
+		// read zero), else none.
+		AIFloat3 v = e->GetVel();
+		bool moving = (v.x * v.x + v.z * v.z) > 1e-4f;
+		auto tr = raidTrack.find(e->GetId());
+		if (!moving && (tr != raidTrack.end()) && (frame - tr->second.frame >= FRAMES_PER_SEC / 2)) {
+			const float dt = (float)(frame - tr->second.frame);
+			v = AIFloat3((ePos.x - tr->second.pos.x) / dt, .0f, (ePos.z - tr->second.pos.z) / dt);
+			moving = (v.x * v.x + v.z * v.z) > 1e-4f;
+			if (moving) {
+				++tracked;
+			}
+		}
+		if ((tr == raidTrack.end()) || (frame - tr->second.frame >= FRAMES_PER_SEC / 2)) {
+			raidTrack[e->GetId()] = {ePos, frame};
+		}
+		if (!moving) {
+			++still;
+		}
+		const float dBase = basePos.distance2D(ePos);
+		// Where its course first crosses ground our buildings hold: that is
+		// the building it is going for, inside the ring or out.
+		bool crossed = false;
+		if (moving) {
+			for (int k = 1; k <= 6; ++k) {
+				const float dt = FRAMES_PER_SEC * DISPATCH_HORIZON_S * k / 6.f;
+				AIFloat3 pp(ePos.x + v.x * dt, ePos.y, ePos.z + v.z * dt);
+				CTerrainManager::CorrectPosition(pp);
+				if (inflMap->GetAllyDefendInflAt(pp) > INFL_EPS) {
+					s.eta = (int)dt;
+					s.aim = pp;
+					crossed = true;
+					break;
+				}
+			}
+		}
+		if (dBase < baseR) {
+			s.eta = 0;
+			if (!crossed) {
+				// No course to read: it is going for the nearest of ours.
+				CCircuitUnit* nearest = nullptr;
+				float bestSq = SQUARE(1500.f);
+				for (CCircuitUnit* st : circuit->GetOwnStructsNear(ePos, 1500.f)) {
+					const float sq = st->GetPos(frame).SqDistance2D(ePos);
+					if (sq < bestSq) {
+						bestSq = sq;
+						nearest = st;
+					}
+				}
+				if (nearest != nullptr) {
+					s.aim = nearest->GetPos(frame);
+				}
+			}
+		}
+		if ((s.eta < 0) && (dBase < baseR * DISPATCH_NOTICE)) {
+			// Near home and not walking away: inbound, ETA by the straight
+			// line. Radar contacts with no velocity reading land here too.
+			const float closing = moving
+					? -(v.x * (ePos.x - basePos.x) + v.z * (ePos.z - basePos.z)) / std::max(dBase, 1.f)
+					: .0f;
+			if (closing >= -0.05f) {
+				const float speed = (ed != nullptr) ? std::max(ed->GetSpeed(), 1.f) : 60.f;
+				s.eta = (int)((dBase - baseR) / speed * FRAMES_PER_SEC);
+				++nearN;
+			}
+		}
+		if (s.eta >= 0) {
+			in.push_back(s);
+		}
+	}
+	if (in.empty()) {
+		return;   // dispatches expire on their own (DISPATCH_TTL)
+	}
+
+	struct SRaid {
+		AIFloat3 pos;
+		AIFloat3 aim;
+		float infl;
+		int eta;
+		int n;
+		float got;
+		CDefendTask* host;
+		std::vector<CCircuitUnit*> units;
+	};
+	std::vector<SRaid> raids;
+	for (const SInbound& s : in) {
+		SRaid* into = nullptr;
+		for (SRaid& r : raids) {
+			if (r.pos.SqDistance2D(s.pos) < SQUARE(DISPATCH_CLUSTER_R)) {
+				into = &r;
+				break;
+			}
+		}
+		if (into == nullptr) {
+			raids.push_back({s.pos, s.aim, s.infl, s.eta, 1, .0f, nullptr, {}});
+			continue;
+		}
+		// Running centroid; the earliest arrival names the building.
+		into->pos.x = (into->pos.x * into->n + s.pos.x) / (into->n + 1);
+		into->pos.z = (into->pos.z * into->n + s.pos.z) / (into->n + 1);
+		into->infl += s.infl;
+		if (s.eta < into->eta) {
+			into->eta = s.eta;
+			into->aim = s.aim;
+		}
+		++into->n;
+	}
+	std::sort(raids.begin(), raids.end(), [](const SRaid& a, const SRaid& b) {
+		return a.eta < b.eta;
+	});
+
+	// The home guard: every unit in a DEFEND pool, plus any squad standing at
+	// home -- the units the pin or the factory produced are in ATTACK or RALLY
+	// pools as often as in DEFEND ones.
+	struct SGuard {
+		CCircuitUnit* unit;
+		CDefendTask* task;   // null unless a DEFEND pool
+		float power;
+		AIFloat3 pos;
+		bool taken;
+	};
+	std::vector<SGuard> guard;
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::DEFEND)) {
+		CDefendTask* dt = static_cast<CDefendTask*>(t);
+		for (CCircuitUnit* u : dt->GetAssignees()) {
+			guard.push_back({u, dt, u->GetCircuitDef()->GetPower(), u->GetPos(frame), false});
+		}
+	}
+	// RAID and SCOUT too: measured, 13 of 18 army units sat in RAID pools
+	// during a level-5 raid and the dispatcher saw a guard of 4.
+	for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK, IFighterTask::FightType::RALLY,
+	                                   IFighterTask::FightType::RAID, IFighterTask::FightType::SCOUT}) {
+		for (IFighterTask* t : GetTasks(ft)) {
+			for (CCircuitUnit* u : t->GetAssignees()) {
+				const AIFloat3& up = u->GetPos(frame);
+				if (basePos.SqDistance2D(up) <= SQUARE(baseR * 1.5f)) {
+					guard.push_back({u, nullptr, u->GetCircuitDef()->GetPower(), up, false});
+				}
+			}
+		}
+	}
+	if (guard.empty()) {
+		return;
+	}
+	// A unit already dispatched to a group stays with it -- up to the need,
+	// so a pool that outgrew its group frees the rest for the others.
+	for (SRaid& r : raids) {
+		const float need = r.infl * DISPATCH_COVER;
+		for (SGuard& g : guard) {
+			if (r.got >= need) {
+				break;
+			}
+			if (!g.taken && (g.task != nullptr) && g.task->IsDispatched(frame)
+				&& (g.task->GetDispatchPos().SqDistance2D(r.pos) < SQUARE(DISPATCH_STICK_R)))
+			{
+				g.taken = true;
+				r.units.push_back(g.unit);
+				r.got += g.power;
+				if (r.host == nullptr) {
+					r.host = g.task;
+				}
+			}
+		}
+	}
+	// Then the nearest free units, until the group is covered at 2:1.
+	for (SRaid& r : raids) {
+		const float need = r.infl * DISPATCH_COVER;
+		if (r.got >= need) {
+			continue;
+		}
+		std::vector<int> free;
+		for (unsigned i = 0; i < guard.size(); ++i) {
+			if (!guard[i].taken) {
+				free.push_back((int)i);
+			}
+		}
+		const AIFloat3 aim = r.aim;
+		std::sort(free.begin(), free.end(), [&guard, &aim](int a, int b) {
+			return guard[a].pos.SqDistance2D(aim) < guard[b].pos.SqDistance2D(aim);
+		});
+		for (int i : free) {
+			if (r.got >= need) {
+				break;
+			}
+			guard[i].taken = true;
+			r.units.push_back(guard[i].unit);
+			r.got += guard[i].power;
+		}
+	}
+	// One pool per group. The host is the DEFEND pool holding most of the
+	// group's units, unless another group took it first; then a new pool.
+	std::set<CDefendTask*> hosts;
+	for (SRaid& r : raids) {
+		if (r.units.empty()) {
+			continue;
+		}
+		if ((r.host == nullptr) || (hosts.find(r.host) != hosts.end())) {
+			std::map<CDefendTask*, int> count;
+			for (const SGuard& g : guard) {
+				if (g.taken && (g.task != nullptr) && (hosts.find(g.task) == hosts.end())
+					&& (std::find(r.units.begin(), r.units.end(), g.unit) != r.units.end()))
+				{
+					++count[g.task];
+				}
+			}
+			r.host = nullptr;
+			int best = 0;
+			for (const auto& kv : count) {
+				if (kv.second > best) {
+					best = kv.second;
+					r.host = kv.first;
+				}
+			}
+		}
+		if (r.host == nullptr) {
+			r.host = static_cast<CDefendTask*>(Enqueue(TaskF::Defend(
+					IFighterTask::FightType::ATTACK, IFighterTask::FightType::ATTACK,
+					r.infl * DISPATCH_COVER)));
+		}
+		hosts.insert(r.host);
+	}
+	// Moves last: AssignTask can abort an emptied pool, so no task pointer
+	// read above may follow one.
+	int moved = 0, sent = 0, pools = 0;
+	for (SRaid& r : raids) {
+		if (r.units.empty() || (r.host == nullptr)) {
+			continue;
+		}
+		r.host->Dispatch(r.pos, r.aim, r.infl, frame + DISPATCH_TTL);
+		for (CCircuitUnit* u : r.units) {
+			if (u->GetTask() != r.host) {
+				AssignTask(u, r.host);
+				++moved;
+			}
+		}
+		sent += (int)r.units.size();
+		++pools;
+	}
+	if (frame >= dispatchLogFrame + FRAMES_PER_SEC * 5) {
+		dispatchLogFrame = frame;
+		const SRaid& f = raids.front();
+		circuit->LOG("apex: dispatch raids=%d inbound=%d still=%d tracked=%d near=%d baseR=%.0f guard=%d sent=%d moved=%d pools=%d first: n=%d infl=%.1f eta=%ds need=%.1f got=%.1f aim=(%.0f,%.0f)",
+				(int)raids.size(), (int)in.size(), still, tracked, nearN, baseR, (int)guard.size(), sent, moved, pools,
+				f.n, f.infl, f.eta / FRAMES_PER_SEC, f.infl * DISPATCH_COVER, f.got, f.aim.x, f.aim.z);
 	}
 }
 

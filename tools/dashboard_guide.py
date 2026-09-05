@@ -591,6 +591,11 @@ GROUPS = [
                   "hold in static defence -- the whole size of the standing "
                   "holding. RAISE for a turtle that can carry a Pulsar, LOWER "
                   "to spend the metal on army instead"),
+                 ("TUNE_DEF_OFF", "1 builds NO turrets at all, ground or AA: "
+                  "radar, jammers and units are the whole defence. This is the "
+                  "no-turret fighting test from docs/24 -- override it on a "
+                  "launch (tools/test_earlyfight.py does), do not edit the "
+                  "default"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "
                   "guess the defence target assumes before contact"),
                  ("TUNE_SCREEN_GAP", "how far IN FRONT of the squad's longest "

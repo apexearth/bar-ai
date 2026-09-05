@@ -148,6 +148,13 @@ public:
 	bool IsDisarmed(int frame);
 	bool IsWeaponReady(int frame);
 	bool IsDGunReady(int frame, float energy);
+	float GetDGunCostE() const;
+	int GetDGunReloadFrame() const;
+	// A D-gun order stands until the shot is fired or its window passes: any
+	// other order in that window would replace it in the engine's queue (measured:
+	// every manual-fire order was followed by a move and a stop in the same
+	// frame, and no shot ever landed).
+	bool IsDGunHeld(int frame) const;
 	bool IsShieldCharged(float percent);
 	bool IsJumpReady();
 	bool IsJumping();
@@ -169,10 +176,13 @@ public:
 	void CmdWantedSpeed(float speed = NO_SPEED_LIMIT);
 	void CmdStop(short options = 0, int timeout = INT_MAX);
 	void CmdSetTarget(CEnemyInfo* enemy);
+	// The one engine attack order; callers set the target themselves. A sniper
+	// gets a move to SniperHoldPos instead.
+	void CmdAttack(CEnemyInfo* enemy, short options = 0, int timeout = INT_MAX);
 	// Where a sniper stands to fire on tPos: its own surface range back along
 	// its current bearing, so a fight/attack order can be replaced by a move.
 	springai::AIFloat3 SniperHoldPos(const springai::AIFloat3& tPos);
-	void NoteSniperOrder(int kind) const;
+	void NoteSniperOrder(CCircuitDef::SniperOrder kind) const;
 	void CmdCloak(bool state);
 	void CmdFireAtRadar(bool state);
 	void CmdFindPad(int timeout = INT_MAX);
@@ -268,6 +278,8 @@ private:
 	springai::Command* command;  // current top command
 	CWeaponDef* dgunDef;
 	springai::Weapon* dgun;
+	int dgunHoldUntil = 0;
+	int dgunHoldReload = 0;
 	springai::Weapon* weapon;  // main weapon
 	springai::Weapon* shield;
 

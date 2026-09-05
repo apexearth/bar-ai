@@ -49,9 +49,13 @@ Our own turrets are EXCLUDED from the basis, or defences justify defences.
 
 ## Survival discounts and rent
 
-- `StreamSurvival(pos)` — `1/(1+risk·T)` on a mex/upgrade's income stream,
-  `risk = max(HazardAt, SiegeRisk) × ShortfallAt`, `T = apex_stake_horizon_s`.
-  A tower in reach raises it, so expansion clusters behind the line.
+- `StreamRisk(pos)` — `max(HazardAt, SiegeRisk) × ShortfallAt`, cached 3 s.
+  `StreamSurvivalOver(pos, T)` = `1/(1+risk·T)`. `StreamSurvival(pos)` uses
+  `T = apex_stake_horizon_s` (300 s) and prices tech SITES; a mex pays it
+  over its own delivery time (walk + build) since 2026-09-05, the horizon
+  energy pays in `TechSurvival` — the fixed 300 s halved every home mex
+  against the solar beside it. Cover includes posted guards
+  (`Military::UnitCoverAt`), so a tower OR a posted unit in reach raises it.
 - `TechSurvival(defId, askerBP)` (`want_tech.as:12`) — `1/(1+risk·T)`,
   `T = PipeLatencySec + (costM − bank/2)/income`. Blind (`!Front::FoeKnown()`)
   forces shortfall to 1. Applied to tech and, via `apex_eco_survival`, to

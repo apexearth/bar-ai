@@ -379,27 +379,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// If we're fighting enemies, we can fight within range of our nano
 		// turrets and then get healed while we fight"; his fortification
 		// doctrine's fourth point). A pitch behind the guns, one per
-		// section -- while none stands within its own reach of the line's
-		// centre and the ground is plainly ours.
+		// section -- while no lathe stands or is ordered within this one's
+		// reach of the line's centre and the ground is plainly ours.
 		{
 			AIFloat3 fl;
 			int fn = 0;
 			const float bd = Catalog::gBuildDist[int(w.def.id)];
-			if (WallLineHeld(fl, fn, 2) && (bd > 1.f)
-				&& !Builder::SiteHot(fl)
-				&& (ai.GetAllyInflAt(fl) > ai.GetEnemyInflAt(fl) * 2.f))
-			{
-				bool have = false;
-				for (uint ci = 0; ci < ComLen() && !have; ++ci) {
-					if ((gComDef[ci] == int(w.def.id)) && OnMap(gComPos[ci])
-						&& (gComPos[ci].distance2D(fl) < bd))
-						have = true;
-				}
-				if (!have) {
-					slot = fl;
-					sited = true;
-					lineSited = true;
-				}
+			if ((bd > 1.f) && WallLineQuiet(fl, fn) && !ComLatheNear(fl, bd)) {
+				slot = fl;
+				sited = true;
+				lineSited = true;
 			}
 		}
 		if (!sited) {
@@ -746,18 +735,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				return jt;
 		}
 		// OFF THE METAL SPOTS, whatever the generator costs and wherever the
-		// slot came from. The clearance used to run on w.pos for big
-		// generators only, while the site actually requested was `slot` --
-		// a farm lattice cell, untouched -- so a solar could sit on an
-		// extractor spot (apexearth, watching a 4v4 with starts on the
-		// map's own positions, which lie on mex clusters: "2 mexes with
-		// solar panels on them"). The spot's footprint plus the solar's.
-		if (Catalog::gCostM[int(w.def.id)] > 500.f)
-			w.pos = ClearOfSpots(w.pos, 150.f);
+		// slot came from: the spot's footprint plus the generator's. w.pos is
+		// cleared as well because the stall ladder below falls back to it.
+		const float clr = (Catalog::gCostM[int(w.def.id)] > 500.f) ? 150.f : 120.f;
+		w.pos = ClearOfSpots(w.pos, clr);
 		if (OnMap(slot))
-			slot = ClearOfSpots(slot, 120.f);
-		else
-			w.pos = ClearOfSpots(w.pos, 120.f);
+			slot = ClearOfSpots(slot, clr);
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);

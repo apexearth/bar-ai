@@ -21,6 +21,7 @@ int gDefClaimAt = -30000;
 // that ranked but could not be turned into a task.
 array<int> gExecFail(32, 0);
 int gExecNone = 0;
+int gComFwdLogAt = -999999;   // see the commander forward skip in the exec loop
 int gNextExecLog = 0;
 
 //------------------------------------------------------------------------------
@@ -870,21 +871,29 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// early game's only builder -- never made a factory (watched, and it
 		// poisoned a 20-game medium anchor). Behind the anchor is safe by
 		// the grid's own construction.
-		if (isComm && Base::gAnchorSet && Base::gAxisSet) {
+		// Extraction is exempt: a mex spot is priced with the walker's own
+		// expected loss (TripRisk, 2700 metal of commander at stake), and
+		// this line refused him every 2.5 spot toward the enemy on a map
+		// where those are the nearest -- he walked past one to build a
+		// converter at home (apexearth, watched).
+		if (isComm && Base::gAnchorSet && Base::gAxisSet
+			&& (ranked[i].kind != WK_MEX) && (ranked[i].kind != WK_MEXUP)) {
 			const AIFloat3 rel = ranked[i].pos - Base::gAnchor;
 			const float fwdDist = rel.x * Base::gFwd.x + rel.z * Base::gFwd.z;
-			// 400: the base-front turret post sits at anchor+150 and the old
-			// 150 cutoff banned the commander from it -- mDefence read 0.0
-			// for a whole game (apexearth: "in early game he can provide a
-			// good defense"). Beyond 400 is the con-and-escort frontier, the
-			// wall included: an exemption once let him walk the lane to wall
-			// at the frontier, and with the line on the map's choke that was
-			// a 3,500-elmo trip each way for the base's only 300-BP lathe.
-			// apexearth 2026-09-02, watching: "the walk into the middle by our
-			// commanders is killing the economy. And they don't really commit
-			// on it anyways... why bother at that point." He builds at home.
-			if (fwdDist > 400.f)
+			// 400: the base-front turret post sits at anchor+150, and a 150
+			// cutoff banned the commander from it. Beyond 400 is the
+			// con-and-escort frontier, the wall included: the walk to a
+			// mid-map line is not worth the base's only lathe.
+			if (fwdDist > 400.f) {
+				if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
+					gComFwdLogAt = ai.frame;
+					AiLog("apex: com-fwd skip t=" + ai.teamId + " "
+						+ KindName(ranked[i].kind) + " at="
+						+ int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
+						+ " fwd=" + int(fwdDist) + " (sampled 30s)");
+				}
 				continue;
+			}
 		}
 		const double _tExec = Perf::T0();
 		IUnitTask@ t = ExecuteWant(unit, ranked[i]);

@@ -2406,6 +2406,11 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   rear the death ledgers measured everywhere. 120 is the measured
 //   recalibration, still far under the pre-target 175%-of-eco runaway.
 const float TUNE_DEF_ECO_S = 120.f;
+// manager/brain/market/protect_want.as [toggle 0/1] -- THE NO-TURRET TEST
+//   (docs/24-how-units-fight.md): 1 proposes no ground or AA turret at all,
+//   so radar and units are the whole defence. Override it on a launch
+//   (tools/test_earlyfight.py does); the default stays 0.
+const float TUNE_DEF_OFF = 0.f;
 // Seconds of economic power held as ARMY -- the other half of the standing
 // obligation. CALIBRATED, not chosen: apexearth set the baseline as a share of
 // metal spend ("we should aim for 40% - I want to make sure we match it as the

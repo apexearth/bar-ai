@@ -486,8 +486,7 @@ public:
 	int GetLastFrame()    const { return lastFrame; }
 	// apex: census of engine orders sent to sniper-class units, by kind,
 	// logged every 30s so the move-only rule for that class is measurable.
-	enum class SniperOrder: char {MOVE = 0, SET_TARGET, FIGHT, ATTACK, _SIZE_};
-	void NoteSniperOrder(SniperOrder kind);
+	void NoteSniperOrder(CCircuitDef::SniperOrder kind);
 	int GetSkirmishAIId() const { return skirmishAIId; }
 	int GetTeamId()       const { return teamId; }
 	int GetAllyTeamId()   const { return allyTeamId; }
@@ -550,7 +549,7 @@ private:
 	uint64_t perfActUs = 0;
 	int squadDiagNextLog = 0;
 	int ghostPurgeNext = 0;
-	int sniperOrders[4] = {0, 0, 0, 0};
+	std::array<int, static_cast<int>(CCircuitDef::SniperOrder::_SIZE_)> sniperOrders{};
 	int sniperOrderNextLog = 0;
 	int skirmishAIId;
 	int teamId;

@@ -109,6 +109,19 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return aiMilitaryMgr.Enqueue(TaskF::Guard(vip));
 		}
 	}
+	// COVER UNITS HOLD. What the base bought for coverage (guardposts.as)
+	// joins a pool that never promotes to attack and never raids, so the
+	// posts can spread it over the buildings; the raid and scout pools are
+	// invisible to them (apexearth: "keep our units spread out enough to
+	// react quickly").
+	if ((Military::CoverNeedM() > 0.f) && !cdef.IsAbleToFly()
+		&& Market::LineCombat(int(cdef.id))
+		&& (Market::CoverPerMetal(int(cdef.id)) >= 1.f))
+	{
+		NotePostureDef(cdef, false);
+		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+				Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+	}
 	if (IsFodder(cdef)) {
 		// The set of defs the spam posture applies to, discovered rather than
 		// listed. See NoteFodderDef.

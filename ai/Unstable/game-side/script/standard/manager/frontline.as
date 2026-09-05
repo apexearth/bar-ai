@@ -753,19 +753,24 @@ uint GateChokes(array<AIFloat3>& out gates)
 	return gates.length();
 }
 
-// The durable "where the enemy lives" anchor for geometric site tests.
-// aiEnemyMgr.GetEnemyPos() is the k-means centroid of enemy PRESENCE: the
-// moment their army pushes into our half it walks home with them, the
-// home->enemy axis collapses, and every projection test measured against it
-// (PastFront's claim veto above all) reads the whole map as enemy-side --
-// measured: mexdiag pastFront=225 rejections a sweep, 4-6 of 80 spots held,
-// income 50 vs 192. gFoeMid is influence-derived but structure-dominated and
-// held 4,410 steady through the same games while their army camped in our
-// base. Function accessor so include order cannot break a global read.
+// The durable "where the enemy lives" anchor for geometric site tests: the
+// centre of their known STRUCTURES, and until one has been seen the mirror
+// of our own start. Not presence (GetEnemyPos walks home with their army)
+// and not the sighting memory (gFoeMid: the first enemy ever seen is a raid
+// inside our base, and the anchor landed on its corpses and stayed there,
+// refusing every mex spot beyond them). Function accessor so include order
+// cannot break a global read.
 AIFloat3 FoeAnchor()
 {
-	if (gFoeKnown && OnMap(gFoeMid))
-		return gFoeMid;
+	if (aiEnemyMgr.GetEnemyStructCost() > 0.f) {
+		const AIFloat3 s = aiEnemyMgr.GetEnemyStructPos();
+		if (OnMap(s))
+			return s;
+	}
+	if (Builder::gHomeSet) {
+		return AIFloat3(float(AiTerrainWidth()) - Builder::gHomePos.x, 0.f,
+				float(AiTerrainHeight()) - Builder::gHomePos.z);
+	}
 	return aiEnemyMgr.GetEnemyPos();
 }
 

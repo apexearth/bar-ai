@@ -175,6 +175,14 @@ public:
 	void DiceBigGun();
 	float ClampMobileCostRatio() const;
 	void UpdateDefenceTasks();
+	void DispatchRaids();
+	// Guard posts, assigned by script (military/guardposts.as): where a home
+	// unit stands while its pool has nothing to fight, instead of the one
+	// defence stand every pool member was sent to.
+	// A unit's post and how far from it the unit answers a target (0: any).
+	void SetGuardPost(CCircuitUnit* unit, const springai::AIFloat3& pos, float reach);
+	void ClearGuardPosts() { guardPosts.clear(); }
+	bool GetGuardPost(const CCircuitUnit* unit, springai::AIFloat3& outPos, float& outReach) const;
 	void UpdateDefence();
 	void MakeBaseDefence(const springai::AIFloat3& pos);
 
@@ -256,6 +264,19 @@ private:
 	CDefenceData* defence;
 	unsigned int defenceIdx;
 	int splitFrame = 0;                  // cooldown for the breach split; see UpdateDefenceTasks
+	int dispatchLogFrame = 0;            // see DispatchRaids
+	// Last seen position per enemy, for a velocity the engine does not give
+	// on radar-only contacts (GetVel reads zero there). See DispatchRaids.
+	struct STrack {
+		springai::AIFloat3 pos;
+		int frame;
+	};
+	std::map<int, STrack> raidTrack;   // key: ICoreUnit::Id
+	struct SGuardPost {
+		springai::AIFloat3 pos;
+		float reach;
+	};
+	std::map<int, SGuardPost> guardPosts;   // key: ICoreUnit::Id, see SetGuardPost
 	std::map<CCircuitUnit*, int> porcToPoint;  // unit: defPointId
 
 	// Every FINISHED static defence we own, whoever placed it: the FENCE

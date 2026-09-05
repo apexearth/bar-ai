@@ -1422,6 +1422,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);
+				newPos = SafeStandoff(unit, newPos, tPos, frame);
 				// The kite step overrides the ring slot: distance to the closing
 				// enemy is restored to this row's own standoff, along the line
 				// away from it. The threat veto below still applies.
@@ -1574,8 +1575,8 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						&& !rowColossus && !kiteFoeStatic
 						&& (kiteFoeRange > 0.f)
 						&& (kv.first < kiteFoeRange + 60.f);
-				// A sniper always takes its row's hold position (move + set-target
-				// inside Attack); the plain-attack branches would walk it in.
+				// A sniper always takes its row's hold position: the plain-attack
+				// branches would hold it on its own bearing instead (CmdAttack).
 				const bool sniper = unit->GetCircuitDef()->IsSniper();
 				if (rowBrawls && !sniper) {
 					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);

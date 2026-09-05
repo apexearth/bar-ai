@@ -1038,3 +1038,35 @@ Stated as direction, not immediate work:
 - Water and mixed-map support, including building water units properly.
 - Multiplayer is the real target: host-side only, no archive changes, no synced
   Lua.
+
+## OPEN (2026-09-05): a dead mex is not rebuilt quickly
+
+*"When the enemy kills our mexes we don't seem in a rush to rebuild them. We
+go for minutes leaving those mexes dead."* and, the same night after the trip
+risk model shipped: *"it still seems to be that once our mex dies we have some
+rule preventing us from quickly recreating it. I'm quite confident of this
+based on what I've been seeing."*
+
+Measured (`tools/rebuild_lag.py`, 1v1 vs BARb hard, no turrets, seed 15):
+12 deaths, lags 0.0-8.5 min, quartiles 0.2/0.6/3.5, 5 over two minutes, 1
+never. Mechanism: `StreamSurvival` prices a spot by the loss memory
+(`LossRateAt`, tau 180 s) times the cover shortfall, and cover read ZERO
+with no turrets because posted units were not cover in the risk model.
+Six 6-game sets on 2026-09-05 (ISSUES.md, night entry): units now count as
+cover and the mex pays survival over its own delivery time like energy, so a
+home rebuild prices at surv 0.92 and v 4.3 instead of 0.5 and 2.3 -- but
+never-rebuilt stayed at 3-15 of 24-43 and the median lag at 0.4-1.2 min in
+every arm. Not shown fixed. What is left is structural: the per-category
+draw gives a v=4 mex one ticket in three, and every con is busy 20-60 s.
+Blocked on: his call whether a just-died mex should PREEMPT the draw (that
+is a rule, not a price).
+
+## OPEN (2026-09-05): the factory is not supported; army count loses games
+
+*"This time we've pretty much died due to lack of army count and we were full
+on metal - so we're just not supporting the factory enough."*
+
+Measured (seed 15): bank 100% from 6.5 min, one lab, one nano until 10.4
+min; the lab busy 80% of samples yet 32 orders in 9 min, one per ~11 s --
+the lab's own 150 BP, so the nano was not lathing the line. Instrument added:
+`[BARAI_DUTY] facPow= nanoOnFac=`. Blocked on: reading it.

@@ -2649,7 +2649,7 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
 	return true;
 }
 
-void CCircuitAI::NoteSniperOrder(SniperOrder kind)
+void CCircuitAI::NoteSniperOrder(CCircuitDef::SniperOrder kind)
 {
 	++sniperOrders[static_cast<int>(kind)];
 	if (lastFrame < sniperOrderNextLog) {

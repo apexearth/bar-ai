@@ -16,6 +16,143 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-04 — EARLY FIGHT TEST: the first five minutes contain no fights on the harness
+
+`tools/test_earlyfight.py` is the loop for docs/24's no-turret test: Apex with
+`apex_def_off=1` (verified: `mDefence=0` in all 14 games, `[BARAI_TUNABLE]
+apex_def_off=1` in the infolog) against stock BARb hard, 1v1, Geyser Plains BAR
+v1.2.1, handicap 50, Armada both sides. The gadget now emits `[BARAI_DMG]`
+(damage split mobile/static both ways, constructor interruptions, constructor
+deaths) and the tool judges at a fixed minute and at the end.
+
+The five-minute window he named is EMPTY here. Eight 8-minute games, medians at
+5 min: 0 enemy units killed, 0 lost, 0 damage on buildings, 0 constructor
+interruptions; stock has 1-2 units in the field at 8 min. First contact on this
+map is at 8-12 min. Six 15-minute games judged at 10 min have data but only in
+4 of 6 games; end-of-game medians (no turrets on our side): damage efficiency
+1.09, metal K/D 0.98, buildings receive 1618 vs deal 320, 4.5 constructor
+interruptions and 3 constructors lost per game, 2 of 6 won inside 15 min.
+
+So the test that judges the early window is `tools/test_raid.py`:
+`dev_raid.lua` spawns waves for a NullAI holder team on stock's side (run_match
+`--extra-ai NullAI:0.1@1`) at fixed minutes, aimed at our buildings' live
+centroid, and the tool scores each wave -- wiped or not, seconds to wipe, its
+nearest approach, our metal lost to the raiders against the wave's cost,
+building damage and constructor interruptions meanwhile. Validated on one
+seed (2026-09-04): a 2-Pawn wave at minute 2 killed a mex and two
+constructors with only the commander home; a 5-unit wave at 3.5 died to the
+commander and Pawns. Thresholds in the tool are calibrated on the first
+baseline set and catch regression from that state, not distance from ideal.
+`tools/test_earlyfight.py` stays as the natural-play set (15 min, judge at 10).
+Squad spread at engage reads 25-112 elmo (a ball) in every game with an engage.
+
+Measured on the unchanged AI, 8 games per level, 11-minute games, waves at
+minutes 3/5/7/9 (`--level`; medians per wave):
+
+    level  raid shape                                  kd   wipe s  closest  lost/wave
+      1    one clump, from the enemy, at the centre   2.0     26      275      104
+      2    one clump, random bearing, at a mex        0.9     50      518      307
+      3    two groups, two bearings, 8 s apart, edge  1.2     41      473      210
+      4    three bigger groups, 10 s apart, at cons   0.9     76      342      397  (4 of 30 waves never wiped)
+      5 with our army PINNED at 2x the raiders (`--ratio 2`, his early-game
+        framing: 3-8 mexes, wind, a T1 lab, twice their raiders):
+           placed at the base centre                  1.1     33      360      359  1 building killed per wave; 54 over 32 waves
+           spread beside the buildings                1.4     41      448      351  1 building killed per wave; 53 over 32 waves
+        Even at 2:1 only 2-5 of our 10-30 units are at the first contact; the
+        army clears the five groups one at a time and a mex or wind dies
+        first in every game. The AI's own army at those minutes was about
+        HALF the pin (4.5 vs 10 at min 3, 9.5 vs 20 at min 5).
+      5    FIVE groups at once, five bearings, each at
+           a mex or solar (his stated shape)          1.1     48      250      380  3 buildings killed per wave;
+                                                                                    108 buildings over 32 waves; no game lost 0
+
+Response, from the gadget: raiders show on radar/LOS 5-8 s after spawning
+(~1400 elmo out); first hit 2.5-6 s after sighting; 2-4 of our mobile units
+near the wave at first contact, peak 5-7 of an army of 7-9 (70% of the army
+ends up near the wave because the wave walks to where the army stands).
+MECHANISM: nothing dispatches on a sighting. `basedefence.as` UpdateApproach
+needs an enemy group >= 800 metal (danger) or >= 2500 (push) -- a 108-476
+metal raid never trips it, 0 firings in 24 games; the RAIDED sensor fires
+only after a building dies and feeds turret siting and consolidation, not a
+sortie. What answers is the C++ DefendTask post: re-elects a target inside
+post range + 500 elmo at 1.2x odds, and units auto-fire. No squad sizing for
+a raid exists anywhere. Wave one (min 3, commander alone) gets inside 50
+elmo in 30-40% of games; it is reported, not gated.
+
+INTERCEPT, first cut (2026-09-04, C++ CDefendTask, `apex_intercept`, OFF by
+default): an enemy whose 30-second course crosses our buildings' influence is
+electable from anywhere, the pool aims at the meeting point, a raider already
+covered by 2x its worth in other pools is skipped, pools neither merge nor
+promote while one is inbound. It FIRED (10 `apex: intercept` lines per short
+game) and DID NOT MOVE THE OUTCOME: level 5 pinned, buildings lost per 32
+waves 59 (off, same DLL) vs 50 (on) vs 54 (old DLL); units at first contact
+fell 3.5 -> 2. Level 1 got WORSE: 13 buildings lost over 32 waves against 0,
+wave K/D gate 7/8 -- lone Pawns ran at a 5-raider clump because the odds gate
+counts every squad within 3000 elmo as allies. Two things the election alone
+cannot do: SPLIT a pool that merged before the raid (a 12-unit pool still
+walks as one at one raider), and hold an under-sized pool back until it has
+2x the GROUP it is going for. The next cut is an allocation, not an election:
+partition the home guard across inbound groups by worth, moving units between
+tasks (AssignTask), and let pools merge only toward the group they are short
+for.
+
+THE DISPATCHER (2026-09-04, `CMilitaryManager::DispatchRaids`, same switch,
+OFF by default). Every 2 s: visible mobile armed enemies near home are read
+one by one, clustered at 450 elmo into raids, sorted by arrival, and each
+raid takes the nearest fighters at home (DEFEND, ATTACK, RALLY, RAID and
+SCOUT pools) until they hold 2x its worth; one CDefendTask per raid, moved
+into with AssignTask, standing at the building on the raid's course, engaging
+once it carries the raid's worth itself, no merge or promote while dispatched.
+Three cuts, 8 games each, level 5 pinned buildings lost per 32 waves: before
+54, switch off 48, v2 54, v3 45 -- noise. Level 1: v2 13, v3 15, against 0,
+and v3 failed the closest gate 5/8. Sizing worked (got >= need in nearly
+every line; `short` almost never); what did not was TIME: most dispatches
+read eta=0, i.e. the raider was already inside the base ring when first
+allocated, because `CEnemyInfo::GetVel()` is ZERO for a radar-only contact
+(`still` was 40-60% of inbound contacts), so the trajectory branch never
+fires before LOS. "Look at the trajectory" needs a velocity the AI does not
+have from the engine for radar blips; the next cut derives it from the
+contact's own position history over the last 2-4 s (the approach tracker in
+basedefence.as already does exactly that for groups). Until then a dispatcher
+can only allocate after the raid is at the buildings, which is what level 5
+measures.
+
+v4 added the position-history velocity (still contacts fell from 40-60% to
+~10% of inbound) and aimed inside-ring contacts at the nearest own structure:
+level 5 pinned 55 buildings per 32 waves, level 1 16. Still nothing. And the
+ring itself explains the ETA: base range 1222 x 1.25 = 1527 elmo, the raid
+spawns ~1500 out, so every contact is "inside" at first sight and the
+trajectory branch is moot on this harness. POST-MORTEM of the building deaths
+(ARMY snapshot before each death): our nearest mobile unit was a median
+237-337 elmo from the building that died, with 9-11 of ours within 1000 elmo
+and only 21-28% of deaths with none within 500. The army IS there. A mex or
+wind dies in the ~10 s a Pawn needs while our two nearest units walk 300 elmo
+and elect it -- a race lost by seconds, not a positioning failure. Allocation
+cannot fix that; what can is reaction latency (2 s dispatch cadence, the
+defend task's 16-update election, the async path query before a move) and
+meeting the raid outside the buildings, which needs the raid seen earlier
+than 1500 elmo out.
+
+THE TIME-RACE TEST: same level 5 pinned, raids spawned at 0.9 of the way to
+the enemy (~2250 elmo, ~30 s walk) instead of 0.6. Dispatcher ON 35 buildings
+per 32 waves, OFF 61 (seeds 1-8). Given time, the dispatcher halves the
+losses; at 1500 elmo the race is over before allocation matters. Second pair
+on seeds 9-16: ON 48, OFF 51. Combined 83 vs 112 over 64 waves each, with
+per-game spreads that overlap (ON 2-8 per game, OFF 1-12): the first pair's
+gap was mostly noise, and the honest reading is a weak effect at best. The
+dispatcher stays in the code behind `apex_intercept=1`, default OFF. What the
+five measured cuts established: allocation and sizing were never the gap
+(need met in nearly every dispatch); the loss is a ten-second race between a
+raider at a building and two of ours 300 elmo away, and that is decided by
+reaction latency and by fighting, which no dispatcher touches.
+
+Base spread at the waves: 7-12 buildings, RMS 450 elmo from centroid, the
+farthest building/mex at 800-1000 elmo.
+
+`closest` is a high-variance metric: waves 2-4 per-game minima ran 177+,
+112+ and 23+ across three identical sets. The gate is 50 elmo on waves 2-4
+only; do not tighten it without more games.
+
 ## 2026-08-31 — vs an INACTIVE opponent we still barely expand, and army still outspends economy
 
 The first controlled economy measurement this repo has had. `NullAI:0.1` does
@@ -964,6 +1101,401 @@ static reclaim task exists but aborts on IsMetalFull(), and at his +100%
 regime the bank is pinned full, so it aborts always. The C++ fix is the
 same either way: drop/gate the metal-full abort (space reclaim matters
 most exactly when full) or bind CmdReclaimUnit.
+
+## 2026-09-04 (night) — what he saw in the fair raid game, and the mechanisms
+
+Watched level 5 (five groups from five bearings, raiders sized to half our
+army's metal, no turrets, passive opponent), seed 4, 12 minutes: 28 buildings
+lost over four waves; wave 3 had a raider alive at game end. His reports and
+what the logs say about each:
+
+- **"The first units out of the factory are rocket bots and thugs."** The
+  price model already puts the Pawn first by a wide margin: at 1.5 min
+  `prodrank` read armpw=2127 vs armham=497, armrock=448, armwar=165 (value
+  per metal). The proportional draw hands the 34% of non-Pawn value to the
+  first two slots often: census over 79 raid games, both first orders Pawns
+  in 43, a Rocko/Thug/Warrior among the first two in ~35. The draw, not the
+  price, is what decides the opening. The Flea reads `gap0` (its role has no
+  target early) and is never a candidate. OPEN: how the opening draw should
+  be sharpened is a policy question for him.
+- **"Almost 5 minutes in and no radar."** Across 109 level-5 games the first
+  radar finished at a median 8.5 min (min 1.9, max 10.9); 243 radar orders
+  were executed and 99 radars finished. Radar's gain is
+  `(assets + army) * apex_insure_rate(0.0003) * unseenFrac` -- at 2.8 min
+  gain=0.45 for 111 metal against a mex's gain=15.9 for 72, so per metal it
+  bids at about 2% of a mex and is elected only by draw luck; and the sites
+  it is elected to sit on the base edge where the raiders kill it (two of
+  three radars in the watched game died to Pawns within a minute of
+  finishing). OPEN: the first radar's price. The insurance rate is a number
+  pulled out of the air; his directive is that vision is the precondition of
+  every reaction.
+- **"Squads don't separate; the whole army chases."** `commit` (peak of our
+  units within 600 elmo of a raider / army) reads a median 0.90-1.00 across
+  every level-5 set: at some point during each wave essentially the whole
+  army is beside a raider. The mechanism is in C++: every new DEFEND-pool
+  member is sent to `GetDefenceStand()`, which with no towers is the base
+  centre with a 256-elmo jitter (`CDefendTask::Start`), and the pool elects
+  one target for all of its units. The gadget now logs `armyRms` (army
+  spread from the base centroid) at each wave so a fix can be measured.
+  OPEN: the posting design -- greedy k-centre over the base's buildings
+  (each idle guard stands at the building whose nearest guard is farthest)
+  minimises the worst reaction walk without a cap or a number; needs his
+  sign-off and is C++.
+- **"The commander should spam D-guns while he has power."** `CDGunAction`
+  fires whenever the D-gun is reloaded, its energy cost is under 90% of the
+  bank, a target is in radar/LOS within range (1.1x D-gun range or LOS for
+  fighter tasks; D-gun range with a paid walk-in for builder tasks), passes
+  the trajectory ray, and -- unless the def carries `dg_cost` -- has
+  influence above THREAT_MIN. The combat log now counts `dg` (D-gun hits)
+  and `dgm` (metal killed by the D-gun) per team, and `test_raid.py` reports
+  both per wave. Fair baseline, 8 games: 0 D-gun hits while the commander
+  killed 4-13 raiders a game with his laser. The energy gate was moved from
+  90% of the bank to the whole bank (a commander stores exactly the 500 the
+  shot costs) -- INERT: still 0 hits in 8 games. The gate trace
+  (`apex_dgun_log=1`) then showed the action choosing a target and issuing
+  the order 50+ times a set with energy 800-1250 in the bank, and the
+  combat log's `mfo` counter showed 6-33 manual-fire orders per game
+  REACHING the engine -- yet no manual-fire weapon ever dealt damage in
+  any game (`[BARAI_DGUNWD]` never echoed). The `[BARAI_MF]`/`[BARAI_MFNEXT]`
+  trace found the mechanism: every D-gun order was followed IN THE SAME
+  FRAME by a move (cmd 10) and a stop (cmd 2) on the commander, which
+  replace it in the engine's queue before the shot. Fix in the DLL:
+  `CCircuitUnit::IsDGunHeld` -- after a manual-fire order every
+  queue-replacing helper (move, fight, stop, build, repair, reclaim...) is
+  skipped until the shot fires (reload frame advances) or the order's
+  window passes. Also: commanders now carry `dg_cost` (D-gun by target
+  cost, no minimum-threat filter) and the walk-in worth bar defaults to 0
+  (his "spam d-guns" ruling), read back via `apex_dgun_close_worth`.
+  With the hold in: STILL 0 hits (8 games). The queue trace explains it:
+  at the harness's full speed every manual-fire order arrived at the engine
+  targeting a unit that was ALREADY DEAD (`dist=-1`, queue empty a frame
+  later) -- the order lag that scales with sim speed (CLAUDE.md) is longer
+  than a raider lives under the commander's laser, and the same-frame
+  bursts of 3-11 orders are several frames' worth landing together. At
+  `--speed 3` the order does enter the queue (`queue=105`) against a live
+  target. Whether the shot then FIRES is what `dgp` (D-gun projectiles
+  created, new in `[BARAI_DMG]`) measures. At `--speed 3`, 9-minute games:
+  walk-in bar 0 (new default) fired 5/4/2 D-guns on 7/6/8 orders; walk-in
+  bar 1 (the old rule) fired 2/4 on 2/4 orders in the two games that
+  logged. So the D-gun fires at 3x either way and the hold lets every
+  queued order fire; the zero walk-in bar roughly doubles the orders.
+  Three games an arm -- an anecdote. The full-speed raid test is BLIND to
+  the D-gun by construction.
+- **Guard posts, measured.** `military/guardposts.as` +
+  `CDefendTask::FallbackPosts` (switch `apex_guard_posts`, default 1).
+  Buildings lost per 8-game level-5 set, raiders at half our army: posts
+  ON 70 and 69 (two sets) against OFF 91, 76 and 98 (three sets, same or
+  older DLL). Late-wave army spread from the base centroid 891 with posts
+  vs 1116-1670 without: the pool stays at the buildings instead of
+  trailing off after a chase. Directional, one-in-four-ish; not yet
+  beyond the noise of two arms. The pools do merge with posts on (walk
+  lines show pools of 1-5). Next: a 16-game paired A/B before believing
+  the 25%.
+- **Coverage as army demand** (his "we still need a lot more light
+  units" and "quantify the value of grunts... the speed"): the post model
+  keeps virtually posting the fastest-per-metal unit our lab makes until
+  the base is covered; the count is `CoverNeedM()`, floored into
+  `armyGap`, and `PatrolShort()` reads the uncovered share. Measured, 8
+  games: combat orders 140 -> 174, Pawns 73 -> 88 (share unchanged at
+  ~51%), buildings lost 55 -> 67. NOTE the harness sizes raiders to HALF
+  OUR ARMY, so more army cannot reduce losses in this test by mass -- it
+  measures positioning and reaction only; a fixed-size raid arm is the
+  test for "does more army help". The reach reads ~320 elmo (a wind dies
+  in ~3.6 s under a Flea-class gun), so the need early is 17-32 Pawns.
+  Second cut: the coverage share of the gap priced by cover-per-metal
+  (speed/cost): Pawns 132 of 210 combat orders (63%, from 51%), six of
+  eight games open Pawn-Pawn, buildings lost 69 (raiders scale with us,
+  so unchanged as expected). The remaining dilution is the role prior
+  (`roleW` 0.35-0.46 for the Pawn once raiders hold a sixth of the army);
+  third cut lets the coverage share bypass it: Pawns 150 of 207 (72%),
+  openings Pawn-Pawn-Pawn in six of eight, buildings lost 52 (the lowest
+  of ten fair sets: 98, 76, 88, 92, 70, 69, 91, 67, 69, 52), economy
+  unchanged (built 4900 vs 5248 in the DLL-only arm, mex 6 vs 5, metal
+  lost 840 vs 1225). Still one 8-game set per cut.
+
+Harness changes the same night: the opponent is a passive NullAI (stock's
+own raids were arriving at ~4 min and being counted against the scripted
+waves, so every earlier level-5 number carries that confound); the army
+pin is gone and `dev_raid_ratio` now sizes the raiders from our army
+(metal / ratio, roster proportions, one per group minimum); a relative
+`--write-dir` is made absolute (the engine resolved it against its own exe
+folder and the first watch game's log vanished into the install).
+
+- **"When the enemy kills our mexes we don't seem in a rush to rebuild
+  them... maybe they refuse to build there because of some sort of threat
+  memory?"** Yes, and the memory is the FRONT ANCHOR, not the threat map.
+  `Front::Scan` accumulates `gFoeSeen` per grid cell (+1 per scan the cell
+  reads enemy influence, x0.995 per scan otherwise -- a ~23 game-minute
+  half-life at the 10 s rescan), and `gFoeMid` is the `gFoeSeen`-weighted
+  centroid. `FoeAnchor()` returns `gFoeMid` once anything has been seen, and
+  `PastFrontFrac(spot, MEX_FAR_FRAC=0.92)` in `PickSpot`/`ProposeMex`
+  projects every mex spot onto the home->gFoeMid axis. Before first contact
+  no enemy has been seen, the anchor is the engine's centroid and the axis
+  spans the map (watch seed 6: `span=1797`, `0past+5own/30 cand=25`). The
+  first raid is the first enemy influence ever seen, INSIDE our base, so the
+  anchor lands on the raiders' corpses: `foeMid=1880,2624` at 3.2 min, ~200
+  elmo from the mex it killed at 2432,2736 (the real enemy start is
+  3221,1952), the axis shrinks to `span=1198-1400`, and 20-21 of 30 spots
+  read past the front (`pastFront=211` then `875` per minute, `cand=1-6`).
+  That mex was never rebuilt in 11 minutes; the two at 2048,3904/2144,4000
+  waited 47-58 s and the one at 1520,3872 151 s. Same shape in the fair-base
+  set (seed 1: span 1797 -> 730-948, 16-23 of 30 spots refused after wave
+  1). `NoteDead` does drop the dead mex from the ledger correctly, so the
+  spot is offered; the geometry veto is what refuses it. The anchor's
+  comment says it is "structure-dominated" -- true once their base has been
+  seen, which in a raid harness (NullAI has no structures) is never, and in
+  a real game not until we scout; until then the anchor IS the last raid.
+  Not fixed. Candidate: weight `gFoeSeen` by what was seen (a structure is
+  territory, a passing raider is not), or fall back to the map's mirror /
+  start positions until a structure has been seen.
+
+- **"Do we in general feel like further from the base is more dangerous?"**
+  Not in a graded way. Distance reaches the mex price through three
+  things, and none of them is a slope. (1) Two BINARY vetoes on the
+  home->foe axis: `PastFrontFrac` at 0.92 for mexes, `PastFront` at 0.72
+  for other sites; inside the line every spot is equally safe. (2)
+  `StreamSurvival`, the only graded term, is floored: hazard =
+  max(loss-implied, gradient x foe/(foe+our army+cover), `apex_risk_floor`
+  0.15), and with foe = 0.25 x our army the gradient term peaks at 0.20 AT
+  THEIR START, so the price at home (survival 0.727) and at their door
+  (0.667) differ by 8%; the watch game logged `hazard=1.25/ks` (exactly the
+  floor) at home and at the worst mex in every sample. Against a real army
+  the term reaches ~0.5 at their start, so the nearest ~30% of the axis is
+  still flat. Either way it discounts the STREAM, never the constructor.
+  (3) The constructor's own life is priced nowhere: `ValueOf` charges walk
+  seconds at a wage and nothing for the chance the walker dies, and the one
+  walk-risk term, `DeathWalk`, compares the con's METAL cost against
+  `ai.GetEnemyCostAt`, which returns a unit COUNT (CircuitAI.cpp:2426), so
+  it fired 0 times across every tournament run tonight (`deathWalk=0` in 8
+  of 8 sets; `pastFront` 2k-23k per set). `mexdiag depthMax=1.00` in every
+  set: a constructor took a spot at the enemy's own start. His directive:
+  "I don't want us to be scared all the time but we need to understand
+  that the further out we go the more likely our constructor is to die."
+  Not built. Shape: P(con dies on this trip) rising with depth along the
+  axis, charged as conCost x P against the want, with the two vetoes
+  folded into it. And his second directive, same conversation: "The more
+  army we have relative to our overall mass the safer we should feel." So
+  the scale of the fear is our army's share of everything we own (army /
+  (army + assets)), not our army against theirs: the existing hazard term
+  reads foe/(foe+our army), which is the other ratio and reads 0.2 flat
+  when the enemy is unscouted. BUILT 2026-09-04 late: `TripRisk` = depth
+  x (1 - army/(army+assets)) prices every mex spot (stream x (1-P), con
+  cost x P charged) and the two mex vetoes are gone; the anchor is
+  `aiEnemyMgr.GetEnemyStructPos()` (new binding: cost-weighted centre of
+  known enemy structures) else the mirror of home. Raid set L5: refused
+  spots per sweep 22 -> 5, never-rebuilt dead mexes 9 -> 4 (anchor), rebuild
+  lag median 76 -> 35 s but never-rebuilt back to 9 (trip risk: with no
+  army the share is 0 and a depth-0.6 spot loses 60% of its value). The
+  mirror of HOME is a poor pre-contact anchor on an asymmetric map (this
+  map: mirror 1900 elmo from their real base); the enemy start BOX centre
+  is the honest one and needs a binding (CSetupData has the boxes).
+
+- **"Still one of the bigger issues we have is not making the early
+  radar - its cheap and we should make it... bumping up the importance of
+  radar/vision."** Mechanism: radar gain was (assets+army) x
+  `apex_insure_rate` 0.0003 x unseenFrac = ~0.3 against a mex at 3-4 in
+  minute three; first radar median 7.8-9.8 min across the night's sets.
+  First reprice (warning = extra reach for posted guards, gain = hazard x
+  asset metal newly covered) measured INERT: eyes 0-80 metal, because a
+  posted Pawn is 54 metal of cover. Second reprice: the light-unit metal
+  the warning makes unnecessary (virtual posting with and without warning)
+  over `apex_army_fill_s`. The warning is (best radar range - unit sight)
+  / fastest foe speed = ~10 s; a Pawn's reach without it is ~4-6 s of
+  building life, so it doubles every guard's reach.
+
+- **"We're still not spreading out well. Maybe because this round we made
+  hardly any pawns"** (watch seed 8, the first radar reprice deployed,
+  radar at 3.6 min). CAUSE, read from the live log: the guard-post cover
+  model let one guard's metal count against EVERY asset within reach
+  (metal covers metal, per asset), and a standing radar doubled that reach
+  -- need went 54 Pawns (4.2m) -> 8 (7.2m) -> 0 (8.2m), coverShare hit 0,
+  the role prior came back and the lab drew 20 Rocko / 14 Hammer / 8 Pawn
+  (40 Pawn the game before). Fixed the same hour: required cover at an
+  asset is `max(ThreatM(pos), worth)` -- the WAVE that arrives there --
+  and uncovered worth is worth x shortfall share, the turret price's own
+  arithmetic (`ShortWith`). Threat per asset refreshed every 10 s
+  (`gPostReq`). `req=` on the posts line. reqcover set: radar in 8/8 games,
+  first at 2.8 min median (was 7.8-9.8) -- the radar reprice bites; Pawn
+  share 0.52 (was 0.58-0.61), buildings lost 78, built 5335 (highest of
+  the night's sets). Watch seed 9 on that build: radar at 1.6 min, 13 Pawn
+  vs 22 Rocko + 18 Hammer with need=30 Pawns unmet all game -- the
+  coverage share of the army gap was PROPORTIONAL and the economy's army
+  target drowned it. Changed to: cover is the first claim on the lab while
+  any is unmet (coverShare=1). And the census at minute 12 showed 13 units
+  in an ATTACK task promoted out of the pool, 4 Pawns in a stock RAID pool
+  in another game: units bought for cover were leaving or invisible to the
+  posts. Cover-worthy units (CoverPerMetal >= 1, ground, line combat) now
+  join a MELEE-promoting Defend pool while cover is short. coverfirst set:
+  posted units (2nd half) 4 -> 7 per game, end census raid pool 0, Pawn
+  share 0.58 (need was only ~8 Pawns in these games, and in-flight army
+  covers a gap that small), radar 8/8 at 3.2 min, metal lost to raiders
+  12,972 (lowest of the night's six sets), built 5530 (highest), buildings
+  lost 73 (noise band). Not yet measured against BARb.
+
+- **"Sometimes these enemies spawn right on top of us."** `dev_raid.lua`
+  spawned at 0.6 of the base->enemy distance along a random bearing and
+  CLAMPED to the map edge, so a bearing toward the near edge put the group
+  ~900 elmo out, inside radar (2100). Now each spawn walks outward along
+  its bearing until `Spring.IsPosInLos/IsPosInRadar` for the target's ally
+  team are both false; a bearing that hits the edge still watched is
+  redrawn. Check game: 10/10 groups `seen=0`, 1300-1800 elmo out.
+
+- **First real 1v1 with no towers (BARb hard, Geyser Plains, seed 11):
+  lost at 9.1 min.** Radar at 0.9 min (the reprice works against a real
+  opponent too). BARb's first raid (10 Pawns, 3 Fleas, 3 Hammers) landed at
+  3.5 min against 4-6 units of ours; four constructors dead by 5.2 min, two
+  of them at HOME (fwd -0.37, -0.04), the lab at 5.3. apexearth, watching:
+  "lost our entire lab in this one because our army was too busy chasing 1
+  enemy pawn across the map... that's one of the core things we talked
+  about - not overcommitting to a chase, appropriately sizing the group we
+  send after raiders." MECHANISM: the cover units all sit in ONE defend
+  pool, `CDefendTask` sends every member at its elected target, and the
+  posts only apply when there is NO target (`FallbackPosts` is gated on
+  `!isTargetsFound`). BUILT: `CDefendTask::LeashPosts` -- after the pool's
+  attack/path order, members whose post is farther than its reach from the
+  target are sent back to the post; of the rest, the nearest go until their
+  power reaches 1.5x the threat at the target (RESPONSE_MARGIN, the margin a
+  winning fight needs), and the remainder hold their posts. Reach rides in
+  the post binding (`SetGuardPost(unit, pos, reach)`). Log `apex: leash n=
+  sent= held= unposted= need= sent_pw=`. Leash set: only 3 of 8 games ran
+  (drive full; 8.1 GB of replays and 46 GB of old runs deleted on his
+  say-so); in those 3 the leash fired 12-19 times a game, buildings lost
+  21 / metal lost 2894 over 3 games (per-game ~7 / ~960 against ~9 / ~1600
+  in the earlier sets) -- directional only. 1v1 seed 12 with the leash:
+  lost again at 9.1 min; lab died 7.4 min (was 5.3), constructors dead at
+  5.2, 5.9, 7.4, 8.4, commander 9.0. Army 10 vs their 15 at 4 min, 8 vs
+  26 at 6 min: the lab dies and the army never grows. apexearth: "our
+  entire army grouped up into one blob at one spot most of the time. We
+  don't make enough of the quick units still" (Pawn was 21 of 31 lab
+  orders; the count is small because the lab is dead by 7 min). Leash log
+  says why the blob: BARb's raid group reads threat ~36 and every post's
+  reach (600-1000 with radar warning) covers the whole base, so all 9 are
+  both in reach and needed (`sent=8 held=1 need=36`). The sizing is right
+  for that wave; the spread only exists between waves.
+
+- **"Our commander took a long walk, past a 2.5 metal mex spot, to make a
+  converter."** MECHANISM: the exec loop in `decide.as` skips, for the
+  commander, any want more than 400 elmo forward of the base anchor --
+  silently, no log, no counter (the 2026-09-02 "commander builds at home"
+  rule, written for the wall). On Geyser Plains the nearest 2.5 spots lie
+  toward the enemy, so every decided mex fell through to the next-ranked
+  want, a converter at home (`exec ... pick=1..3` on 5 of his 30
+  executions; `decide -> metal/mex v=32` then `exec convert:armmakr
+  pick=1`). FIXED: WK_MEX/WK_MEXUP exempt (TripRisk prices the walk with
+  his 2700 metal at stake), other kinds still gated, skip logged as
+  `apex: com-fwd skip` (sampled 30 s). leash2 set (leash + this fix):
+  buildings lost 101, waves cleared 0.91, metal lost 16,075 -- the WORST of
+  the night's sets. Two mechanisms: (a) the pool has ONE target, so held
+  guards stood at posts while one of the other four groups killed the
+  building beside them, and the sized group could not finish its wave; (b)
+  the commander now claims forward mexes at 0.7/1.8 min instead of energy,
+  and the first radar slid 3.3 -> 7.0 min (5/8 games). Fix for (a) built:
+  every posted guard first answers the nearest visible mobile contact
+  within its own post's reach (`local=` on the leash line); the pool
+  target and the sizing apply only to guards with nothing local. (b) is the
+  price doing what it says: a 2.5 mex at depth 0.3 beats a radar; open.
+- **Guards held while the base burned (1v1 seed 13, lost 13.0 min, commander
+  dead 12.9).** Every `apex: leash` line read `held=8 sent=0 need=2`: a guard
+  whose post was beyond its own reach of the fight was held outright, so a
+  one-Pawn attack on the base drew no answer from eight mex guards. His
+  words (docs/24): "the mex guards don't move to help the main base... It
+  is really bad that they don't respond to nearby parts of our base being
+  attacked." Fix built 23:42: reach ORDERS the answer (in-reach guards
+  first, then by distance) and `need` = 1.5x threat decides how many go;
+  the rest stay. Same build carries the per-post local target.
+- **"Dry hump our most valuable mex."** Posting put every guard of an asset
+  ON the asset (`SetGuardPost(unit, gPfPos[bi], ...)`), a pile that takes
+  flanking damage. Fix: `Military::WallPost` -- the k-th guard of an asset
+  stands forward of it toward `Front::FoeAnchor()` by half its gun range
+  (cap 160 elmo) and beside the others at 96 elmo, alternating sides. Raid
+  set `wall` (level 5) is the read; compare bldLost/metal lost against
+  coverfirst 73/12972 and leash2 101/16075.
+  READ: wall set 30 waves, bldLost 63, metal lost 11482, cleared 1.00,
+  radar 3.1 min -- lowest metal lost of every set so far (cover-role
+  baseline 61/15667). 1v1 seed 14 with it: "this one looks much better",
+  lost 17.3 min (lab 14.2).
+- **Hounds walked into T1 tanks (seed 14, 12.9-13.0 min, 3 x 285 metal).**
+  His words in docs/24. Hound range 650 outranges every T1 tank; the
+  standoff only ever measured the TARGET's range, so a standoff point
+  relative to one enemy sat inside another's reach, and the leash's local
+  order was a raw `CmdAttack`. Fix built 00:04: `IFighterTask::SafeStandoff`
+  pushes every standoff point (single-unit path, squad rows, leash local)
+  out of `range x 1.1` of every visible non-arty enemy the unit outranges
+  by 1.15x (KeepRange's bar); enemies it does not outrange stay the odds
+  election's business. Logged as act `SAFE` in `unit-destroyed acts=`.
+- **Artillery shelling us is not answered (seed 14, corwolv).** Wolverine
+  range 710 sits outside `atUs` (highestRange+500) for a Pawn pool, so it
+  is refused as small fry unless inbound. Fix built: an outranging
+  attacker whose gun reaches the post or any of our structures
+  (`GetOwnStructsNear`, only evaluated for outranging attackers) is `atUs`
+  and electable; the single-unit standoff no longer backs off from
+  `IsRoleArty` targets (the squad rows already did not). Read: does the
+  DEFEND pool elect a corwolv; deaths of corwolv in `unit-destroyed`.
+- **Commander idle for the last ten minutes (seed 14).** Last decide 7.1
+  min (a forward mex via the com-fwd exemption), `con-retreat hp=0.60
+  walk=2751` at 7.5, then no decide, no floor line, only D-guns until the
+  end: it sat in `CRetreatTask`, which releases a commander only when
+  enemy influence at its feet reads ZERO (the 2026-08 fix for the
+  flee-influence flap), and a raided base never reads zero. Fix built:
+  the commander's bar is its own power (`GetUnitPower`, the influence
+  currency) instead of zero; log `apex: com-retreat-hold hp= infl= pw=`
+  every 30 s while held. Open: the com-fwd exemption let the commander
+  claim a mex 2751 elmo out; the risk term should be pricing that.
+- **Dead mex rebuild, measured (`tools/rebuild_lag.py`, 6-game sets vs BARb
+  hard, no turrets, Geyser Plains, 20 min; deaths in the last 2 min
+  excluded).** Before (wall+standoff build): 37 deaths, 9 NEVER re-ordered,
+  lag quartiles 0.2/0.7/1.4 min, 6 over two minutes. After posted units count
+  as cover in the risk model (`Military::UnitCoverAt` in `CoverWith`):
+  32 deaths, 3 never, 0.2/0.6/1.6, 7 over two. Never-rebuilt fell; the lag
+  did not. The `apex: rebuild` line says why: at home spots with the raid
+  cleared, `threat=700-1500` came from the loss memory (`LossRateAt x tau`
+  as implied threat, and as hazard p=m/stake), so surv=0.32-0.45 and the
+  mex priced v=2-4 under energy at 4-9. Next arm deployed (`mexeyes`): the
+  memory speaks only where no radar sees the spot (`ThreatAt`, `HazardWith`
+  gated on `RadarSees`). Results before 1W/3L/2 timeouts, after 1W/2L/3T --
+  noise.
+- **Factory support, instrumented.** `[BARAI_DUTY] facPow= nanoOnFac=`:
+  after set, our lab busy 79% of samples at 0.76 of full power when busy,
+  nanos lathing the line 42% of samples; BARb 64% / 47%. Labs 1-2 a side,
+  nanos 2-7 us vs 1-7 them. Seed 15's "full on metal, no army" had an
+  e-stall 4.5-6.0 min and a bank at 100% from 6.5; no nano was even
+  PROPOSED 4.6-10.4 min (17 converters, 16 radars, 7 mexes won the draw).
+  `apex: nanowant` (feed/line/lathe/sink/army/waste/over/bank, 10 s) now
+  logs what the want saw; read it in the mexeyes set.
+  mexeyes set (memory gated on radar): 43 deaths, 15 NEVER, 0.3/0.9/3.1,
+  9 over two, 0W/4L/2T -- worse on every axis; REVERTED. Its rebuild lines
+  still read threat 1500-3400 at unseen mid-map spots and surv 0.41-0.47 at
+  home spots with threat under 250, so survival there is the presence and
+  floor terms, not the memory. The priced cost is the bigger lever: a
+  50-metal mex carried m=26..587 (median 171); `apex: rebuild` now prints
+  m as (M+E+A) and t as (walk+build+risk+late). Read the mexcost set.
+  mexcost set (cover fix + breakdown, 49 rebuild prices): surv med 0.5
+  (q1 0.4), m med 256 = M50 + E med 30 (q3 135, max 472) + A16 (a mex pays
+  16 metal of space for a spot nothing else can use), t med 503 = walk 252
+  + build 23 + con-risk 40 (max 1178) + late 65; v med 2.3. The half-value
+  is the hazard field's presence term (foe mass against our army, at home
+  depth), which ONLY mex and tech gains pay -- a converter beside the dead
+  mex pays none of it. Lag 0.2/0.4/1.5, never 8/24, 1W/4L/1T. Next arm
+  (`mexsurv`): mex gain x (1 - TripRisk) only; StreamSurvival logged, not
+  charged.
+  mexsurv read: rebuild v med 2.3 -> 4.4, mex wins 136 -> 160 of ~300
+  decides, 2W/1L/3T (best of the night) -- but lag 0.7/1.2/2.5, never
+  11/36: the lag instrument did NOT move with the price. Five 6-game sets
+  put "never" at 9-35% and the median lag at 0.4-1.2 min with no ordering
+  by arm; at n=6 this instrument cannot resolve a change of that size.
+  Final arm (`mexsym`): the mex pays survival over its own delivery time
+  (walk + build), the horizon energy already pays (`TechSurvival`), via
+  `StreamSurvivalOver`; the 300 s `StreamSurvival` stays for tech siting.
+  mexsym read: surv med 0.92 (was 0.5), v med 4.3, never 6/43, lag
+  0.3/0.8/1.8, 0W/3L/3T. Six sets, all arms: never 3-15 of 24-43, median
+  lag 0.4-1.2 min, no ordering by arm. VERDICT: the price inconsistencies
+  are fixed and stay (units as cover; delivery-time survival horizon); the
+  rebuild LAG is not shown to move by this instrument at n=6. What still
+  sets it is structural: the per-category draw gives a v=4 mex about one
+  ticket in three against energy/sense/buildpower bests, and 2-5 cons each
+  busy 20-60 s per task, so a dead spot waits one or two elections. A
+  "rebuild what just died" preemption is a POLICY question for apexearth
+  (it is a rule, not a price); ask before adding one.
 
 ## 2026-08-28 — the +100% spend bottleneck (his Titan complaint, half-closed)
 

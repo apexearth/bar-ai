@@ -1,4 +1,5 @@
 namespace Market {
+int gNextNanoWantLog = 0;
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -155,12 +156,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		const array<int>@ nb = Catalog::BuildsOf(int(unit.circuitDef.id));
 		for (uint ni = 0; ni < nb.length(); ++ni) {
 			const int nd = nb[ni];
-			if (!Catalog::gAvailable[nd] || Catalog::gMobile[nd])
-				continue;
-			if ((Catalog::gBuildPower[nd] <= 0.f)
-				|| (Catalog::gBuildsList[nd].length() > 0))
-				continue;
-			if (Catalog::gBuildDist[nd] > nanoReach)
+			if (Catalog::gAvailable[nd] && IsLatheDef(nd)
+				&& (Catalog::gBuildDist[nd] > nanoReach))
 				nanoReach = Catalog::gBuildDist[nd];
 		}
 		AIFloat3 fwd;
@@ -178,56 +175,46 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 				fortPos = fwd;
 			}
 		}
-	}
-	// THE HELD LINE WANTS ITS LATHE BEFORE IT STARTS DYING (apexearth
-	// 2026-09-02: "make nano turrets up there. If we're fighting enemies, we
-	// can fight within range of our nano turrets and then get healed while
-	// we fight"). Worth the gun metal standing on the line times the hazard
-	// there -- what a lathe keeps alive per second -- while no nano stands
-	// within its reach of the line and the ground is plainly ours.
-	{
+		// THE HELD LINE WANTS ITS LATHE BEFORE IT STARTS DYING (apexearth
+		// 2026-09-02: "make nano turrets up there. If we're fighting enemies,
+		// we can fight within range of our nano turrets and then get healed
+		// while we fight"). Worth the gun metal standing on the line times
+		// the hazard there -- what a lathe keeps alive per second -- while no
+		// lathe stands or is ordered within reach of it.
 		AIFloat3 fl;
 		int fn = 0;
-		float nanoReach2 = 0.f;
-		int nanoDef = -1;
-		const array<int>@ nb2 = Catalog::BuildsOf(int(unit.circuitDef.id));
-		for (uint ni = 0; ni < nb2.length(); ++ni) {
-			const int nd = nb2[ni];
-			if (!Catalog::gAvailable[nd] || Catalog::gMobile[nd]
-				|| (Catalog::gBuildPower[nd] <= 0.f)
-				|| (Catalog::gBuildsList[nd].length() > 0))
-				continue;
-			if (Catalog::gBuildDist[nd] > nanoReach2) {
-				nanoReach2 = Catalog::gBuildDist[nd];
-				nanoDef = nd;
-			}
-		}
-		if ((nanoDef >= 0) && WallLineHeld(fl, fn, 2)
-			&& !Builder::SiteHot(fl)
-			&& (ai.GetAllyInflAt(fl) > ai.GetEnemyInflAt(fl) * 2.f))
+		if ((nanoReach > 1.f) && WallLineQuiet(fl, fn)
+			&& !ComLatheNear(fl, nanoReach))
 		{
-			bool have = false;
-			for (uint ci = 0; ci < ComLen() && !have; ++ci) {
-				if ((Catalog::gBuildPower[gComDef[ci]] > 0.f)
-					&& !Catalog::gMobile[gComDef[ci]]
-					&& (Catalog::gBuildsList[gComDef[ci]].length() == 0)
-					&& OnMap(gComPos[ci])
-					&& (gComPos[ci].distance2D(fl) < nanoReach2))
-					have = true;
-			}
-			if (!have) {
-				const float gunsM = Military::FenceGunMetalNear(fl, nanoReach2);
-				const float hz = HazardWith(fl, CoverAt(fl));
-				const float lineNano = gunsM * hz;
-				if (lineNano > fortNeed) {
-					fortNeed = lineNano;
-					fortPos = fl;
-				}
+			const float lineNano = Military::FenceGunMetalNear(fl, nanoReach)
+					* HazardWith(fl, CoverAt(fl));
+			if (lineNano > fortNeed) {
+				fortNeed = lineNano;
+				fortPos = fl;
 			}
 		}
 	}
 	if (fortNeed > over)
 		over = fortNeed;
+	// What the nano want saw, whether or not it bids (sampled 10 s): the
+	// line's free flow against what it eats is the whole "not supporting
+	// the factory" question.
+	if (ai.frame >= gNextNanoWantLog) {
+		gNextNanoWantLog = ai.frame + 10 * SECOND;
+		AIFloat3 lp0;
+		float lathe0 = 0.f;
+		AnyLineSite(lp0, lathe0);
+		AiLog(Factory::T() + "apex: nanowant " + unit.circuitDef.GetName()
+			+ " feed=" + formatFloat(FreeMetalFlow(), "", 0, 1)
+			+ " line=" + formatFloat(lineNeed, "", 0, 1)
+			+ " lathe=" + formatFloat(lathe0, "", 0, 1)
+			+ " sink=" + formatFloat(sinkNeed, "", 0, 1)
+			+ " army=" + formatFloat(armyNeed, "", 0, 1)
+			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
+			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
+			+ " over=" + formatFloat(over, "", 0, 1)
+			+ " bank=" + int(aiEconomyMgr.metal.current) + "/" + int(aiEconomyMgr.metal.storage));
+	}
 	if (over <= 0.5f)
 		return w;
 	// The turret STANDS where the demand is. A nano bought to serve a line was

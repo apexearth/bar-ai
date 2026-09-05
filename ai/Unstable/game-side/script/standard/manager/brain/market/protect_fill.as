@@ -264,7 +264,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// mexes) -- measured, five towers in a row before the lab, lab at 8.3
 	// min, game lost. Evidence pricing and the per-mex floor still run.
 	// Does the line still have an open slot? Read once per fill.
-	const bool lineOpen = wallOn && (WallLineFill() >= 0.f) && (WallLineFill() < 1.f);
+	const float lineFill = wallOn ? WallLineFill() : -1.f;
+	const bool lineOpen = (lineFill >= 0.f) && (lineFill < 1.f);
 	float wallPull = 0.f;
 	if (wallOn && PlantFramed()) {
 		const float horizW = ai.GetTunable("apex_exposed_loss_s",

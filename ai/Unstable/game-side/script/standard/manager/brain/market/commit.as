@@ -238,6 +238,16 @@ int ComNearest(int defId, const AIFloat3 &in pos, float reach, int mask)
 	return best;
 }
 
+// Any lathe in the ledger, ordered or standing, within `reach` of `pos`.
+bool ComLatheNear(const AIFloat3& in pos, float reach)
+{
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (IsLatheDef(gComDef[i]) && (pos.distance2D(gComPos[i]) < reach))
+			return true;
+	}
+	return false;
+}
+
 float ComLeftM(uint i)
 {
 	if (i >= gComDef.length())

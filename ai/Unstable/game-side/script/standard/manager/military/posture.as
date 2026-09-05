@@ -488,7 +488,7 @@ void UpdateLanePos()
 	// THE CHOKE IS THE LINE, guns or no guns yet. apexearth 2026-09-02,
 	// watching the 4v4: "Ideally we hold a frontline at a narrower part of
 	// the map... holding that line is best." The wall's line stands on the
-	// map's choke (Market::ChokeLine), 3,000-4,000 elmos from home, and a
+	// map's choke (Market::ChokeTarget), 3,000-4,000 elmos from home, and a
 	// tower there is refused by the danger gate while the enemy stands on it
 	// -- so the army holds the passage first, on our side of it, and the guns
 	// come up under the army. The choke therefore counts as our forward-most
@@ -499,17 +499,8 @@ void UpdateLanePos()
 	// turrets and then get healed while we fight"). The army holds the line;
 	// as it wins ground the line steps up and the army with it.
 	AIFloat3 chokeHold;
-	bool chokeOk = false;
-	if (!TradeBad()) {
-		AIFloat3 cAt;
-		AIFloat3 cAcross;
-		float cHalf = 0.f;
-		if (Market::ChokeTarget(cAt, cAcross, cHalf)
-			&& Market::WallLineAnchor(chokeHold))
-		{
-			chokeOk = OnMap(chokeHold);
-		}
-	}
+	const bool chokeOk = !TradeBad() && Market::ChokeOnLane()
+			&& Market::WallLineAnchor(chokeHold);
 	if (chokeOk) {
 		lane = chokeHold;
 		if (!gChokeHeld) {

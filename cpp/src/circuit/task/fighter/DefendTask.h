@@ -37,6 +37,13 @@ public:
 	// maxPower by construction, so without the hold the split would dissolve
 	// before it arrived.
 	void HoldPromote(int untilFrame) { noPromoteUntil = untilFrame; }
+	// Raid dispatch (CMilitaryManager::DispatchRaids): this pool answers the
+	// enemy group at `groupPos`, stands at `aim` -- the building on the group's
+	// course -- and engages once it holds the group's worth in power itself.
+	void Dispatch(const springai::AIFloat3& groupPos, const springai::AIFloat3& aim,
+			float infl, int untilFrame);
+	bool IsDispatched(int frame) const { return frame < dispatchUntil; }
+	const springai::AIFloat3& GetDispatchPos() const { return dispatchPos; }
 
 protected:
 	float GetMaxPower() const { return maxPower; }
@@ -65,6 +72,21 @@ private:
 	// FindTarget refused an enemy at home (or on top of us) on odds this
 	// pass; the no-target fallback musters at base instead of the front.
 	bool refusedHomeOdds = false;
+	void FallbackHoldPos();
+	// Each member walks to its own guard post (CMilitaryManager::GetGuardPost)
+	// instead of the pool sharing one stand; false when nobody has one.
+	bool FallbackPosts();
+	// Size the answer to a target: members within their post's reach go,
+	// nearest first, until their power beats the threat there with a margin;
+	// the rest stay on or return to their posts.
+	void LeashPosts(const springai::AIFloat3& tgtPos);
+	int lastLeashLog = -999999;
+	std::map<int, std::pair<springai::AIFloat3, int>> postSent;   // unit id -> post ordered, frame
+	int lastPostLog = -999999;
+	int dispatchUntil = 0;
+	springai::AIFloat3 dispatchPos;
+	float dispatchInfl = 0.f;
+	int lastInterceptLog = 0;
 };
 
 } // namespace circuit

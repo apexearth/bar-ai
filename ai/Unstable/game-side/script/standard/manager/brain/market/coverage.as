@@ -50,13 +50,18 @@ float CoverPointM(const AIFloat3& in at, float trade,
 float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 		float extraReach, float extraM)
 {
+	// Posted guards cover a spot the same as turrets (apexearth: "a unit
+	// protecting a building also should be counting as cover"); without
+	// them a no-turret base read cover=0 everywhere and every dead mex spot
+	// was priced as uncovered for as long as the loss memory lasted.
+	const float unitCover = Military::UnitCoverAt(pos);
 	if ((gProtPos[PROT_DEF].length() == 0) && (extraReach <= 0.f))
-		return 0.f;
+		return unitCover;
 	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 	const float standoff = (ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f)
 			? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
-		return CoverPointM(pos, trade, extraAt, extraReach, extraM);
+		return CoverPointM(pos, trade, extraAt, extraReach, extraM) + unitCover;
 	float worst = -1.f;
 	for (int b = 0; b < COVER_RAYS; ++b) {
 		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
@@ -67,8 +72,8 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 		if ((worst < 0.f) || (m < worst))
 			worst = m;
 	}
-	return (worst < 0.f)
-			? CoverPointM(pos, trade, extraAt, extraReach, extraM) : worst;
+	return ((worst < 0.f)
+			? CoverPointM(pos, trade, extraAt, extraReach, extraM) : worst) + unitCover;
 }
 
 // WHAT ONE MORE TURRET AT `pos` WOULD ADD TO THE COVER READ AT `pos`.
@@ -452,7 +457,9 @@ void RiskFill()
 		return;
 	}
 	const AIFloat3 home = Builder::gHomePos;
-	AIFloat3 foeP = aiEnemyMgr.GetEnemyPos();
+	// Their structures, else the mirrored start -- the same anchor the
+	// past-front tests use, so depth and the vetoes agree on the axis.
+	AIFloat3 foeP = Front::FoeAnchor();
 	if (!OnMap(foeP)) {
 		foeP = AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
 				float(AiTerrainHeight()) - home.z);
@@ -622,6 +629,31 @@ float ThreatGradient(const AIFloat3& in pos)
 	return GradAt(pos);
 }
 
+// THE CHANCE A CONSTRUCTOR DIES ON A TRIP TO pos (apexearth: "the further
+// out we go the more likely our constructor is to die... the more army we
+// have relative to our overall mass the safer we should feel"): depth toward
+// them, scaled by the share of everything we own that is NOT army. A spot at
+// their start with no army is a dead con; the same spot with an army as big
+// as the base is a coin flip. No line anywhere -- this replaces the
+// past-front veto on mex claims.
+float TripShare()
+{
+	const float army = ArmyValue();
+	const float mass = army + gAssetsM;
+	return (mass > 1.f) ? (army / mass) : 0.f;
+}
+
+float TripRiskWith(const AIFloat3& in pos, float share)
+{
+	RiskFill();
+	return GradAt(pos) * (1.f - share);
+}
+
+float TripRisk(const AIFloat3& in pos)
+{
+	return TripRiskWith(pos, TripShare());
+}
+
 float ThreatM(const AIFloat3& in pos)
 {
 	RiskFill();
@@ -673,12 +705,12 @@ float SiegeExpect(const AIFloat3& in pos)
 array<float> gSsVal(64, 1.f);
 array<int> gSsAt(64, 0);
 array<int> gSsKey(64, 0);
-float StreamSurvival(const AIFloat3& in pos)
+// The per-second risk a stream at `pos` runs (hazard or siege, times the
+// cover shortfall); cached 3 s per 256-elmo cell.
+float StreamRisk(const AIFloat3& in pos)
 {
-	if (ai.GetTunable("apex_stream_survival", TUNE_STREAM_SURVIVAL) <= 0.f)
-		return 1.f;
 	if (!OnMap(pos))
-		return 1.f;
+		return 0.f;
 	const int key = (int(pos.x) >> 8) * 4096 + (int(pos.z) >> 8) + 1;
 	const uint slot = uint(key) & 63;
 	if ((gSsKey[slot] == key) && (ai.frame - gSsAt[slot] < 3 * SECOND))
@@ -694,15 +726,27 @@ float StreamSurvival(const AIFloat3& in pos)
 			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP;
 	if (siege > risk)
 		risk = siege;
-	float r = 1.f;
-	if (risk > 0.f) {
-		const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-		r = 1.f / (1.f + risk * ((T > 1.f) ? T : 300.f));
-	}
 	gSsKey[slot] = key;
 	gSsAt[slot] = ai.frame;
-	gSsVal[slot] = r;
-	return r;
+	gSsVal[slot] = risk;
+	return risk;
+}
+
+// Survival of a stream at `pos` over `T` seconds: 1/(1 + risk x T).
+float StreamSurvivalOver(const AIFloat3& in pos, float T)
+{
+	if (ai.GetTunable("apex_stream_survival", TUNE_STREAM_SURVIVAL) <= 0.f)
+		return 1.f;
+	const float risk = StreamRisk(pos);
+	if ((risk <= 0.f) || (T <= 0.f))
+		return 1.f;
+	return 1.f / (1.f + risk * T);
+}
+
+float StreamSurvival(const AIFloat3& in pos)
+{
+	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	return StreamSurvivalOver(pos, (T > 1.f) ? T : 300.f);
 }
 
 // DEFENDED GROUND IS A SCARCE RESOURCE. A turret protects an AREA, and the same

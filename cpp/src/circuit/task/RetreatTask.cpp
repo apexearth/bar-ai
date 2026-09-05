@@ -440,13 +440,27 @@ void CRetreatTask::Update()
 		// secondary contributor). Falls through to the branch below instead,
 		// which already gates the commander on real influence
 		// (GetEnemyInflAt < INFL_EPS), not just HP.
+		// The commander's bar is what it can fight off alone, not zero: a
+		// raided base never reads zero, and a healed commander sat in
+		// retreat for ten minutes while it burned (watched 2026-09-05,
+		// apexearth: "commander ai seems to break at some point after
+		// losing some stuff"). Enemy influence and unit power are the same
+		// currency (CInfluenceMap::AddStaticArmed writes GetPower()).
+		const float comPower = cdef->IsRoleComm() ? circuit->GetThreatMap()->GetUnitPower(unit) : 0.f;
+		const float safeInfl = std::max(INFL_EPS, comPower);
+		const float inflHere = circuit->GetInflMap()->GetEnemyInflAt(unit->GetPos(frame));
+		if (cdef->IsRoleComm() && (frame >= comHoldLogAt + FRAMES_PER_SEC * 30)) {
+			comHoldLogAt = frame;
+			circuit->LOG("apex: com-retreat-hold t=%i hp=%.2f infl=%.1f pw=%.1f",
+					circuit->GetTeamId(), healthPerc, inflHere, comPower);
+		}
 		if (isRepaired && !unit->IsDisarmed(frame) && !cdef->IsRoleComm()) {
 			Recovered(unit);
 		} else if (unit->IsForceUpdate(frame) || isExecute) {
 			Start(unit);
 		} else if ((circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
 			&& (!cdef->IsRoleComm() || (healthPerc >= cdef->GetRetreat()))
-			&& (circuit->GetInflMap()->GetEnemyInflAt(unit->GetPos(frame)) < INFL_EPS))
+			&& (inflHere < safeInfl))
 		{
 			Recovered(unit);
 		}

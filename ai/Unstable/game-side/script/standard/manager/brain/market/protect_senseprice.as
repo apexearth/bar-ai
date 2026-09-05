@@ -17,13 +17,8 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 	// ground; the base's own logic below is untouched once the line has them.
 	AIFloat3 lineAt;
 	int lineN = 0;
-	// ...and only ground our army plainly owns: the choke flickers hot and
-	// cold as the fight moves, and siting on "quiet this second" sent
-	// builders 3,000 elmos to let go on arrival (67 let-gos, 113 AA orders
-	// at the front for 4 standing, in one 20-minute 4v4).
-	const bool lineUp = WallLineHeld(lineAt, lineN, 2)
-			&& !Builder::SiteHot(lineAt)
-			&& (ai.GetAllyInflAt(lineAt) > ai.GetEnemyInflAt(lineAt) * 2.f);
+	// ...and only ground our army plainly owns.
+	const bool lineUp = WallLineQuiet(lineAt, lineN);
 	if (cls == PROT_RADAR) {
 		AIFloat3 gapAt;
 		float unseenFrac = 0.f;
@@ -54,6 +49,19 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// still unwatched, so coverage follows the front instead of one
 		// tower sitting at home for the whole game.
 		gain = (gAssetsM + ArmyValue()) * rate * unseenFrac;
+		// THE WARNING IS COVER. A guard reaches what it can get to before
+		// the building dies, and radar warning extends that reach for every
+		// guard at once, so the base needs fewer light units to be covered.
+		// The metal of units the mast makes unnecessary, over the army's
+		// fill horizon, is its gain -- the same currency ArmyGapStream uses
+		// (apexearth: "we need vision and speed in order to properly defend
+		// ourselves"; "it's cheap and we should make it").
+		{
+			float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+			if (fill <= 1.f)
+				fill = 180.f;
+			gain += Military::EyesSavedM() / fill * unseenFrac;
+		}
 	} else if (cls == PROT_JAM) {
 		// Tower concentrations want jamming first (apexearth): find a
 		// cluster of >=3 defenses with no jammer in reach.

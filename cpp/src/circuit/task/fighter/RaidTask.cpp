@@ -280,7 +280,7 @@ void CRaidTask::Update()
 					}
 
 					TRY_UNIT(circuit, unit,
-						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+						unit->CmdAttack(GetTarget(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 						unit->CmdSetTarget(GetTarget());
 					)
 				}

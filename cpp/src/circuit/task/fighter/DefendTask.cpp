@@ -11,6 +11,7 @@
 #include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
+#include "terrain/TerrainData.h"
 #include "terrain/path/PathFinder.h"
 #include "terrain/path/QueryPathSingle.h"
 #include "terrain/path/QueryPathMulti.h"
@@ -28,6 +29,7 @@
 #include "OOAICallback.h"
 #include "AISCommands.h"
 #include "Drawer.h"
+#include "Log.h"
 
 namespace circuit {
 
@@ -176,7 +178,8 @@ void CDefendTask::Update()
 		// and stood in base for the rest of the game, while anything already over
 		// the bar promoted and left alone.
 		const bool held = (onFront && (attackPower < maxPower * FRONT_HOLD_POWER))
-				|| (circuitAI->GetLastFrame() < noPromoteUntil);
+				|| (circuitAI->GetLastFrame() < noPromoteUntil)
+				|| IsDispatched(circuitAI->GetLastFrame());
 		// The any-attack-exists shortcut fed solos: each promotion CREATES an
 		// attack task, so after the first real squad -- alive or already dead --
 		// every fresh 1-unit pool saw "an attack exists" and left alone, a
@@ -210,7 +213,8 @@ void CDefendTask::Update()
 	/*
 	 * Merge tasks if possible
 	 */
-	ISquadTask* task = GetMergeTask();
+	// A dispatched pool is the size the dispatcher made it.
+	ISquadTask* task = IsDispatched(manager->GetCircuit()->GetLastFrame()) ? nullptr : GetMergeTask();
 	if (task != nullptr) {
 		task->Merge(this);
 		units.clear();
@@ -251,6 +255,7 @@ void CDefendTask::Update()
 			IntentPing(startPos, utils::string_format("DEF fight n=%d", (int)units.size()));
 			state = State::ENGAGE;
 			Attack(frame);
+			LeashPosts((GetTarget() != nullptr) ? GetTarget()->GetPos() : position);
 			return;
 		}
 	}
@@ -259,6 +264,15 @@ void CDefendTask::Update()
 		return;
 	}
 
+	if (!isTargetsFound && IsDispatched(frame)) {
+		// Short of the group's worth, or the group is not yet in reach: stand
+		// at the building on its course, not at a front post or the centre.
+		FallbackHoldPos();
+		return;
+	}
+	if (!isTargetsFound && FallbackPosts()) {
+		return;
+	}
 	if (!isTargetsFound) {  // enemyPositions.empty()
 		// apex: A HOME FIGHT REFUSED ON ODDS MUSTERS AT HOME. The front-post
 		// fallback walked a refusing pool AWAY from the base being killed --
@@ -343,6 +357,50 @@ void CDefendTask::Merge(ISquadTask* task)
 	}
 }
 
+// apex: INTERCEPT, the pool's half. CMilitaryManager::DispatchRaids sizes a
+// pool for one inbound group and stands it at the building on the group's
+// course; here the pool elects only that group's units, aims at where the
+// courses meet, and holds until it carries the group's worth itself -- a
+// lone unit does not run at a clump because the rest of the guard is
+// somewhere within 3000 elmo. (The election-only cut without the dispatcher
+// fired and moved nothing, 2026-09-04.)
+static constexpr float INTERCEPT_HORIZON_S = 30.f;
+static constexpr float DISPATCH_GROUP_R = 900.f;
+
+// Where the enemy's course meets a pursuer of `speed` (elmos/s) from `from`;
+// the enemy's own position when no meeting inside the horizon exists.
+static AIFloat3 InterceptPoint(const AIFloat3& ePos, const AIFloat3& eVel,
+		const AIFloat3& from, float speed)
+{
+	const float s = speed / FRAMES_PER_SEC;   // elmos per frame, like eVel
+	const float dx = ePos.x - from.x, dz = ePos.z - from.z;
+	const float a = eVel.x * eVel.x + eVel.z * eVel.z - s * s;
+	const float b = 2.f * (dx * eVel.x + dz * eVel.z);
+	const float cc = dx * dx + dz * dz;
+	float t = -1.f;
+	if (std::fabs(a) < 1e-4f) {
+		if (b < -1e-4f) {
+			t = -cc / b;
+		}
+	} else {
+		const float disc = b * b - 4.f * a * cc;
+		if (disc >= 0.f) {
+			const float sq = std::sqrt(disc);
+			t = (-b - sq) / (2.f * a);
+			if (t < 0.f) {
+				t = (-b + sq) / (2.f * a);
+			}
+		}
+	}
+	const float horizon = INTERCEPT_HORIZON_S * FRAMES_PER_SEC;
+	if ((t < 0.f) || (t > horizon)) {
+		return ePos;
+	}
+	AIFloat3 aim(ePos.x + eVel.x * t, ePos.y, ePos.z + eVel.z * t);
+	CTerrainData::CorrectPosition(aim);
+	return aim;
+}
+
 bool CDefendTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
@@ -409,6 +467,9 @@ bool CDefendTask::FindTarget()
 			}
 		}
 	}
+	const bool dispatched = IsDispatched(circuit->GetLastFrame());
+	const bool strongEnough = !dispatched || (attackPower * GetHealthScale() >= dispatchInfl);
+	int inboundN = 0, refusedShort = 0;
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
@@ -417,12 +478,43 @@ bool CDefendTask::FindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
+		// The dispatched group's units, and where to meet each one.
+		bool inbound = false;
+		AIFloat3 aim = ePos;
+		if (dispatched && (dispatchPos.SqDistance2D(ePos) < SQUARE(DISPATCH_GROUP_R))) {
+			CCircuitDef* eDef0 = enemy->GetCircuitDef();
+			if ((eDef0 == nullptr) || eDef0->IsMobile()) {
+				inbound = true;
+				++inboundN;
+				const AIFloat3& eVel = enemy->GetVel();
+				if ((eVel.x * eVel.x + eVel.z * eVel.z) > 1e-4f) {
+					aim = InterceptPoint(ePos, eVel, pos, lowestSpeed);
+					if (!terrainMgr->CanMoveToPos(area, aim)) {
+						aim = ePos;
+					}
+				}
+			}
+		}
 		// A DEFENCE SQUAD MUST FIGHT WHAT IS ON TOP OF IT. GetAllyDefendInflAt is
 		// written only by our BUILDINGS -- CInfluenceMap::AddStaticArmed and
 		// AddUnarmed; AddMobileArmed feeds drawAllyInfl and never this one -- so a
 		// squad held away from the base is blind to whatever is shooting it.
 		// `atUs` is the same reach Update() uses to decide ENGAGE.
-		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f));
+		// What can shell the post is ON the post (apexearth: "we should be
+		// more willing to meet artillery and kill them"): an enemy whose gun
+		// reaches our ground or our buildings is elected like one standing
+		// on it, so it is never refused as small fry. Only outranging
+		// attackers pay the structure scan.
+		bool reachesUs = false;
+		{
+			CCircuitDef* eDefR = enemy->GetCircuitDef();
+			if ((eDefR != nullptr) && eDefR->IsAttacker() && (eDefR->GetMaxRange() > highestRange)) {
+				const float eR = eDefR->GetMaxRange() + 100.f;
+				reachesUs = (position.SqDistance2D(ePos) < SQUARE(eR))
+						|| !circuit->GetOwnStructsNear(ePos, eR).empty();
+			}
+		}
+		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f)) || reachesUs;
 		// apex: DEFENCE IS A POST, NOT A PURSUIT. Election is measured from
 		// the ASSIGNED position only -- the first cut of this kept atUs
 		// (proximity to the squad) as a self-defense clause, and it was the
@@ -432,9 +524,13 @@ bool CDefendTask::FindTarget()
 		// 2026-08-21). Units still auto-fire at whatever enters weapon range;
 		// the TASK never re-targets off its own advanced ground.
 		const bool postMode = circuit->GetTunable("apex_defend_post", 1.f) > 0.f;
-		const bool electable = postMode
+		const bool electable = inbound || reachesUs || (postMode
 			? (position.SqDistance2D(ePos) < SQUARE(highestRange + 500.f))
-			: atUs;
+			: atUs);
+		if (inbound && !atUs && !strongEnough) {
+			++refusedShort;   // hold at the building until the pool is its group's worth
+			continue;
+		}
 		if ((!electable && (inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS))
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
@@ -503,7 +599,7 @@ bool CDefendTask::FindTarget()
 		// are less than half their strength unless we need to defend the home
 		// base" -- so the ratio is 0.5, the home ring is exempt, and anything
 		// already in contact (atUs) is always fought.
-		const bool atHome = sqEBDist < sqBaseRange;
+		const bool atHome = (sqEBDist < sqBaseRange) || inbound;
 		if (!atUs && !atHome && (eThreat < attackPower
 				* circuit->GetTunable("apex_chase_min_ratio", 0.5f)))
 		{
@@ -518,7 +614,7 @@ bool CDefendTask::FindTarget()
 		// still fights whatever is on top of it (atUs) or inside the ring;
 		// travelling deep needs company. apex_defend_solo_deep=1 restores
 		// the old behavior.
-		if (!atUs && (units.size() <= 1)
+		if (!atUs && !inbound && (units.size() <= 1)
 			&& (circuit->GetTunable("apex_defend_solo_deep", 0.f) <= 0.f))
 		{
 			const AIFloat3& basePos2 = circuit->GetSetupManager()->GetBasePos();
@@ -584,16 +680,25 @@ bool CDefendTask::FindTarget()
 			}
 		}
 
-		float sqDist = pos.SqDistance2D(ePos);
+		float sqDist = pos.SqDistance2D(aim);
 		if (minSqDist > sqDist) {
 			minSqDist = sqDist;
 			bestTarget = enemy;
 			// eThreat bucketed to hundreds: a raw float in the message would
 			// defeat IntentPing's dedupe on every jitter of the influence map.
-			tgtWhy = utils::string_format("%s e=%d", atUs ? "atUs" : "post",
+			tgtWhy = utils::string_format("%s e=%d", atUs ? "atUs" : (inbound ? "icpt" : "post"),
 					((int)eThreat / 100) * 100);
 		}
-		enemyPositions.push_back(ePos);
+		enemyPositions.push_back(aim);
+	}
+	if (dispatched) {
+		const int frame = circuit->GetLastFrame();
+		if (frame >= lastInterceptLog + FRAMES_PER_SEC * 10) {
+			lastInterceptLog = frame;
+			circuit->LOG("apex: dispatch-pool n=%d group=%d short=%d target=%s power=%.0f need=%.0f",
+					(int)units.size(), inboundN, refusedShort,
+					(bestTarget != nullptr) ? "yes" : "no", attackPower, dispatchInfl);
+		}
 	}
 
 	if (bestTarget != nullptr) {
@@ -612,6 +717,7 @@ bool CDefendTask::FindTarget()
 		// Ranked by how misleading the silent version was when watched: a
 		// vanished target beats "we refused a fight" beats "nothing there".
 		noTgtWhy = prevHidden ? "tgt hid"
+				: (refusedShort > 0) ? "short"
 				: (refusedOdds > 0) ? "outgunned"
 				: (refusedSmall > 0) ? "small fry"
 				: (refusedSolo > 0) ? "solo"
@@ -666,8 +772,123 @@ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
 							tgtWhy.c_str()));
 		}
 		ActivePath(lowestSpeed);
+		LeashPosts(pPath->posPath.back());
 	} else {
 		Fallback();
+	}
+}
+
+void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_guard_posts", 1.f) <= 0.f) {
+		return;
+	}
+	// apexearth: "not overcommitting to a chase, appropriately sizing the
+	// group we send after raiders" -- one Pawn crossing the map took the
+	// whole cover pool with it and the lab died behind them.
+	const int frame = circuit->GetLastFrame();
+	CMilitaryManager* mil = circuit->GetMilitaryManager();
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	// What must be beaten there, with the margin a winning fight needs.
+	static constexpr float RESPONSE_MARGIN = 1.5f;
+	static constexpr float FAR_RANK = 1e9f;   // sorts out-of-reach guards after in-reach ones (float keeps ~60 sq-elmo steps here)
+	float need = threatMap->GetThreatAt(tgtPos);
+	if (GetTarget() != nullptr) {
+		need = std::max(need, threatMap->GetThreatAt(GetTarget()->GetPos()));
+	}
+	need = std::max(need, 1.f) * RESPONSE_MARGIN;
+	std::vector<std::pair<float, CCircuitUnit*>> cands;   // sq distance to target
+	std::vector<CCircuitUnit*> leashed;
+	int unposted = 0, local = 0;
+	// The enemies a post can answer: every visible mobile contact. The pool
+	// has ONE target; five groups from five bearings are answered by the
+	// guards whose posts each of them comes within reach of.
+	std::vector<CEnemyInfo*> foes;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		if (!e->IsInRadarOrLOS()
+			|| (e->GetCircuitDef() == nullptr) || !e->GetCircuitDef()->IsMobile())
+		{
+			continue;
+		}
+		foes.push_back(e);
+	}
+	for (CCircuitUnit* unit : units) {
+		AIFloat3 post;
+		float reach = 0.f;
+		if (!mil->GetGuardPost(unit, post, reach)) {
+			++unposted;
+			continue;   // no post: goes with the pool
+		}
+		if (reach > 0.f) {
+			// A contact inside this post's reach is this guard's own fight.
+			CEnemyInfo* nearest = nullptr;   // not `near`: a windef.h macro
+			float nearSq = SQUARE(reach);
+			for (CEnemyInfo* e : foes) {
+				const float sq = post.SqDistance2D(e->GetPos());
+				if (sq < nearSq) {
+					nearSq = sq;
+					nearest = e;
+				}
+			}
+			if (nearest != nullptr) {
+				++local;
+				// Through the standoff, not a raw attack order: a raw order
+				// walked Hounds into T1 tanks (watched 2026-09-05).
+				if (unit->GetTravelAct() != nullptr) {
+					AttackEnemy(unit, nearest, frame);
+				} else {
+					TRY_UNIT(circuit, unit,
+						unit->CmdAttack(nearest, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+					)
+				}
+				continue;
+			}
+		}
+		// Reach orders the answer, it does not veto it (apexearth: "the mex
+		// guards don't move to help the main base... really bad"): guards
+		// whose post is within reach of the fight go first, the rest follow
+		// by distance until the fight is sized. Those not needed stay.
+		const bool far_ = (reach > 0.f) && (post.SqDistance2D(tgtPos) > SQUARE(reach));
+		const float d = unit->GetPos(frame).SqDistance2D(tgtPos);
+		cands.emplace_back(far_ ? (d + FAR_RANK) : d, unit);
+	}
+	std::sort(cands.begin(), cands.end(),
+			[](const std::pair<float, CCircuitUnit*>& a, const std::pair<float, CCircuitUnit*>& b) {
+				return a.first < b.first;
+			});
+	float sent = 0.f;
+	int sentN = 0;
+	for (const auto& c : cands) {
+		if (sent >= need) {
+			leashed.push_back(c.second);
+			continue;
+		}
+		sent += threatMap->GetUnitPower(c.second);
+		++sentN;
+	}
+	for (CCircuitUnit* unit : leashed) {
+		AIFloat3 post;
+		float reach = 0.f;
+		mil->GetGuardPost(unit, post, reach);
+		if (unit->GetPos(frame).SqDistance2D(post) < SQUARE(DEFAULT_SLACK)) {
+			TRY_UNIT(circuit, unit,
+				unit->CmdStop();
+			)
+			continue;
+		}
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateWait();
+		}
+		TRY_UNIT(circuit, unit,
+			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+		)
+	}
+	if ((!leashed.empty() || (local > 0)) && (frame >= lastLeashLog + FRAMES_PER_SEC * 10)) {
+		lastLeashLog = frame;
+		circuit->LOG("apex: leash n=%d sent=%d held=%d local=%d unposted=%d need=%.0f sent_pw=%.0f foes=%d",
+				(int)units.size(), sentN, (int)leashed.size(), local, unposted, need, sent, (int)foes.size());
 	}
 }
 
@@ -750,6 +971,79 @@ void CDefendTask::ApplyBasePos(const CQueryPathSingle* query)
 	} else {
 		Fallback();
 	}
+}
+
+void CDefendTask::Dispatch(const AIFloat3& groupPos, const AIFloat3& aim, float infl, int untilFrame)
+{
+	dispatchPos = groupPos;
+	dispatchInfl = infl;
+	dispatchUntil = untilFrame;
+	position = aim;
+	noPromoteUntil = std::max(noPromoteUntil, untilFrame);
+}
+
+bool CDefendTask::FallbackPosts()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (circuit->GetTunable("apex_guard_posts", 1.f) <= 0.f) {
+		return false;
+	}
+	const int frame = circuit->GetLastFrame();
+	CMilitaryManager* mil = circuit->GetMilitaryManager();
+	int posted = 0, moved = 0;
+	for (CCircuitUnit* unit : units) {
+		AIFloat3 post;
+		float reach = 0.f;
+		if (!mil->GetGuardPost(unit, post, reach)) {
+			continue;
+		}
+		++posted;
+		if (unit->GetPos(frame).SqDistance2D(post) < SQUARE(DEFAULT_SLACK)) {
+			continue;
+		}
+		// One order per post: the same post is not re-sent for five seconds.
+		auto it = postSent.find(unit->GetId());
+		if ((it != postSent.end()) && (it->second.first.SqDistance2D(post) < SQUARE(50.f))
+			&& (frame < it->second.second + FRAMES_PER_SEC * 5))
+		{
+			continue;
+		}
+		postSent[unit->GetId()] = std::make_pair(post, frame);
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateWait();
+		}
+		TRY_UNIT(circuit, unit,
+			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+		)
+		++moved;
+	}
+	if (posted == 0) {
+		return false;
+	}
+	if ((moved > 0) && (frame >= lastPostLog + FRAMES_PER_SEC * 10)) {
+		lastPostLog = frame;
+		circuit->LOG("apex: posts-walk n=%d posted=%d moved=%d", (int)units.size(), posted, moved);
+	}
+	return true;
+}
+
+void CDefendTask::FallbackHoldPos()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	IntentPing(leader->GetPos(circuit->GetLastFrame()),
+			utils::string_format("DEF n=%d hold: %s", (int)units.size(), noTgtWhy.c_str()));
+	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
+	const float pathRange = DEFAULT_SLACK * 4;
+
+	CPathFinder* pathfinder = circuit->GetPathfinder();
+	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
+			leader, circuit->GetThreatMap(),
+			startPos, position, pathRange);
+	pathQueries[leader] = query;
+
+	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+		this->ApplyBasePos(static_cast<const CQueryPathSingle*>(query));
+	});
 }
 
 void CDefendTask::Fallback()

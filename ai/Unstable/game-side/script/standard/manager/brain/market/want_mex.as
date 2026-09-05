@@ -301,12 +301,14 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 // we are not making enough mexes. If we aren't capturing half the map worth of
 // mexes in a 1v1 then we're losing the game." Each refusal is counted at its
 // own gate so the answer is read, not guessed.
-int gMexNoOpen = 0, gMexPastFront = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
-// Last single sweep (see PickSpot): total spots, on our ledger, refused
-// pastFront, surviving candidates, and the home->FoeAnchor span in elmos.
+int gMexNoOpen = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
+// Last single sweep (see PickSpot): total spots, on our ledger, at a trip
+// risk of half or worse, surviving candidates, and the home->FoeAnchor span.
 int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0;
 float gSwSpan = 0.f;
 int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
+float gMexRiskSum = 0.f;   // TripRisk over priced proposals, for mexdiag
+int gNextRebuildLog = 0;
 int gMexDeep = 0;
 void MexDiag()
 {
@@ -331,15 +333,17 @@ void MexDiag()
 		+ " depthAvg=" + formatFloat(gAvg, "", 0, 2)
 		+ " depthMax=" + formatFloat(gMax, "", 0, 2)
 		+ " | noOpen=" + gMexNoOpen + " claimed=" + gMexClaimed
-		+ " pastFront=" + gMexPastFront + " deathWalk=" + gMexDeathWalk
+		+ " deathWalk=" + gMexDeathWalk
 		+ " ecoFar=" + gMexEcoFar + " ecoQuiet=" + gMexEcoQuiet
 		+ " deep=" + gMexDeep
 		+ " priced=" + gMexPriced
-		+ " | sweep " + gSwPast + "past+" + gSwLedger + "own/" + gSwTotal
+		+ " riskAvg=" + formatFloat((gMexPriced > 0) ? (gMexRiskSum / float(gMexPriced)) : 0.f, "", 0, 2)
+		+ " share=" + formatFloat(TripShare(), "", 0, 2)
+		+ " | sweep " + gSwPast + "risky+" + gSwLedger + "own/" + gSwTotal
 		+ " cand=" + gSwCand + " span=" + int(gSwSpan));
-	gMexNoOpen = 0; gMexPastFront = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
+	gMexNoOpen = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
-	gMexDeep = 0;
+	gMexDeep = 0; gMexRiskSum = 0.f;
 }
 
 // THE REFERENCE POINT IS THE DECISION. FindOpenMexSpot answers with ONE spot
@@ -368,28 +372,18 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	CacheSpots();
 	array<int> cand;
 	array<float> score;
-	// The two vetoes below ask the same question of every spot on the map, and
-	// everything in them except the spot itself is fixed for the sweep: the
-	// enemy bearing, our home, the role and the leash. Read once -- on an 8v8
-	// map this loop runs over a hundred spots per election per builder.
-	const bool foeKnown = Front::FoeKnown();
-	// FoeAnchor, NOT aiEnemyMgr.GetEnemyPos(): the centroid walks home with a
-	// raid, the axis collapses, and this sweep reads the whole map as
-	// enemy-side (frontline.as:757 -- the same bug PastFrontFrac was already
-	// cured of; this copy was missed).
+	// Everything but the spot is fixed for the sweep -- the army share, the
+	// role and the leash. Read once: on an 8v8 map this loop runs over a
+	// hundred spots per election per builder.
 	const AIFloat3 foeAt = Front::FoeAnchor();
 	const float fex = foeAt.x - Builder::gHomePos.x;
 	const float fez = foeAt.z - Builder::gHomePos.z;
-	const float fspan = fex * fex + fez * fez;
-	const bool pastOn = foeKnown && Builder::gHomeSet && (fspan >= 1.f);
+	const float share = TripShare();
 	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
-	// One sweep's composition, kept for mexdiag: the interval counters
-	// aggregate every sweep since the last print and cannot distinguish "the
-	// axis collapsed and the whole map reads enemy-side" from "the enemy
-	// half is legitimately refused". These can.
+	// One sweep's composition, kept for mexdiag.
 	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0;
-	gSwSpan = sqrt(fspan);
+	gSwSpan = sqrt(fex * fex + fez * fez);
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		++gSwTotal;
 		if (LedgerFind(int(si)) >= 0) {
@@ -402,31 +396,19 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		const float inc = aiEconomyMgr.GetMexSpotIncome(int(si)) * IncomeMult();
 		if (inc <= 0.f)
 			continue;
-		// Geometry-only vetoes are applied here so a refused spot does not
-		// consume one of the engine probes below; DeathWalk stays on the
-		// chosen spot, where its enemy-cost samples are paid for once.
-		// A MEX IS WORTH CONTESTING FURTHER OUT THAN A BUILDING IS. PastFront
-		// applies the CONSTRUCTOR bar (CON_FAR_FRAC 0.72) while sitesafety.as
-		// already carries MEX_FAR_FRAC (0.92) written for exactly this and used
-		// only by MexHeat. On a 90-spot map the strict bar refused 1,976 spot
-		// evaluations in one 60s window and we held FOUR of ninety
-		// (apexearth's Supreme Isthmus game). The spot is still priced for
-		// risk after this -- StreamSurvival and the exposure charge both bite.
-		if (pastOn
-			&& ((((sp.x - Builder::gHomePos.x) * fex
-				+ (sp.z - Builder::gHomePos.z) * fez) / fspan)
-				> Builder::MEX_FAR_FRAC)) {
-			++gMexPastFront;
-			++gSwPast;
-			continue;
-		}
+		// The rear-specialist leash is geometry and applied here so a refused
+		// spot does not consume an engine probe; the trip risk is a PRICE, not
+		// a veto, and ranks the spot below a safer one of equal yield.
 		if (ecoOn && (sp.distance2D(Builder::gHomePos) > ecoLeash)) {
 			++gMexEcoFar;
 			continue;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
+		const float risk = TripRiskWith(sp, share);
+		if (risk >= 0.5f)
+			++gSwPast;
 		cand.insertLast(int(si));
-		score.insertLast(inc / (walk + 1.f));
+		score.insertLast(inc * (1.f - risk) / (walk + 1.f));
 	}
 	gSwCand = int(cand.length());
 	const int tries = MexTries();
@@ -471,15 +453,6 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		return w;
 	}
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
-	// SUPER RISKY GROUND IS NOT A BUILD OPTION (apexearth): a spot past the
-	// front is a con's death walk whatever it pays -- and refusing it also
-	// stops the market hiring more cons for ground nobody can hold.
-	if (Front::FoeKnown()
-		&& Builder::PastFrontFrac(pos, Builder::MEX_FAR_FRAC)) {
-		++gMexPastFront;
-		gMexOpen = false;
-		return w;
-	}
 	// Deadly for THIS walker; the spot itself stays open for a safer angle,
 	// so gMexOpen is not cleared.
 	if (DeathWalk(unit, pos)) {
@@ -506,6 +479,11 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		}
 	}
 	++gMexPriced;
+	// The walker may not arrive: the stream is worth its survival share and
+	// the trip costs the con's expected loss (TripRisk, coverage.as).
+	const float risk = TripRisk(pos);
+	gMexRiskSum += risk;
+	const float conRiskM = Catalog::gCostM[uid] * risk;
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot) * IncomeMult();
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);
@@ -534,8 +512,36 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		}
 		// Only what we expect to still be collecting: an unguarded spot keeps
 		// its income for as long as it lives, and no longer.
-		gain *= StreamSurvival(pos);
-		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		// Survival over the mex's own delivery time, the horizon energy
+		// pays (TechSurvival), not a fixed 300 s: the longer horizon priced
+		// a home mex at half of a solar standing beside it. The trip risk
+		// is his distance-and-army-share model (docs/24 era directives).
+		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid])));
+		gain *= surv * (1.f - risk);
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
+		// A spot with a recent loss near it is a rebuild: say what it is
+		// priced at and why (sampled 10 s).
+		if ((LossRateAt(pos) > 0.f) && (ai.frame >= gNextRebuildLog)) {
+			gNextRebuildLog = ai.frame + 10 * SECOND;
+			AiLog(Factory::T() + "apex: rebuild " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " spot=" + int(pos.x) + "," + int(pos.z)
+				+ " inc=" + formatFloat(spotIncome * Catalog::gExtractsM[d], "", 0, 2)
+				+ " surv=" + formatFloat(surv, "", 0, 2)
+				+ " cover=" + formatFloat(CoverAt(pos), "", 0, 0)
+				+ " threat=" + formatFloat(ThreatAt(pos), "", 0, 0)
+				+ " risk=" + formatFloat(risk, "", 0, 2)
+				+ " walk=" + formatFloat(walkSec, "", 0, 0)
+				+ " m=" + formatFloat(c.mCost, "", 0, 0)
+				+ "(M" + formatFloat(Catalog::gCostM[d] * MCostScale(), "", 0, 0)
+				+ "+E" + formatFloat(Catalog::gCostE[d] * EPriceCostAt(c.buildSec, Catalog::gCostE[d]), "", 0, 0)
+				+ "+A" + Catalog::gAreaCells[d] + ")"
+				+ " t=" + formatFloat(c.tCost, "", 0, 0)
+				+ "(walk" + formatFloat(walkSec * WalkRate(Catalog::gBuildPower[uid]), "", 0, 0)
+				+ "+build" + formatFloat(c.buildSec * Wage(), "", 0, 0)
+				+ "+risk" + formatFloat(conRiskM, "", 0, 0)
+				+ "+late" + formatFloat(gain * walkSec, "", 0, 0) + ")"
+				+ " v=" + formatFloat(c.value * 1000.f, "", 0, 2));
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_MEX;

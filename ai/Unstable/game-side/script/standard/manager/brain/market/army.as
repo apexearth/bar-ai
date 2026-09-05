@@ -647,8 +647,12 @@ float PatrolShort()
 	const float need = sites * FoeSpeedCap();
 	if (need <= 0.f)
 		return 0.f;
-	const float miss = 1.f - have / need;
-	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+	float miss = 1.f - have / need;
+	miss = (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+	// The posted guard's own reading of the same shortfall: the share of the
+	// base's worth no unit or turret covers (military/guardposts.as).
+	const float cover = Military::CoverShort();
+	return (cover > miss) ? cover : miss;
 }
 
 // Ground a unit can cover per metal spent, against the field's own mean.

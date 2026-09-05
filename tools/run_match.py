@@ -275,6 +275,7 @@ def build_script(
     drop_ai_version: bool = False,
     map_starts: list | None = None,
     map_size: tuple = (0, 0),
+    extras: list | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
 
@@ -374,6 +375,12 @@ def build_script(
                                      drop_ai_version,
                                      pos[slot] if slot < len(pos) else None))
             team_id += 1
+    # Extra teams ride on an existing ally after the real players: a NullAI
+    # holder for gadget-driven units (dev_raid.lua), never a side of its own.
+    for k, (spec, ally) in enumerate(extras or []):
+        body.append(_ai_and_team(spec, team_id, ally, per_side + k,
+                                 side_of[ally][0], 0, drop_ai_version, None))
+        team_id += 1
     for ally in range(len(ais)):
         body.append(_script_section(f"ALLYTEAM{ally}", rects[ally]))
 
@@ -490,6 +497,12 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
 def run(args) -> int:
     env = bar_env.load(args.engine)
     ais = [AISpec.parse(s) for s in args.ai]
+    extras = []
+    for text in args.extra_ai:
+        spec, _, ally = text.partition('@')
+        if not ally.isdigit() or int(ally) >= len(ais):
+            raise SystemExit(f"--extra-ai wants SPEC@ALLY with ALLY < {len(ais)}: {text!r}")
+        extras.append((AISpec.parse(spec), int(ally)))
     if len(ais) < 2:
         raise SystemExit("need at least two --a/--b/--ai entries")
 
@@ -544,6 +557,10 @@ def run(args) -> int:
         slug = "_vs_".join(a.label() for a in ais)[:60]
         outdir = MATCHES / f"{stamp}-{slug}"
     write_dir = Path(args.write_dir) if args.write_dir else ENGINE_WRITE_DIR
+    if not write_dir.is_absolute():
+        # The engine resolves a relative --write-dir against its own exe
+        # folder, not our cwd, and the infolog vanishes into the install.
+        write_dir = REPO / write_dir
 
     outdir.mkdir(parents=True, exist_ok=True)
     write_dir.mkdir(parents=True, exist_ok=True)
@@ -579,6 +596,7 @@ def run(args) -> int:
         map_starts=map_starts, map_size=map_size_elmos,
         drop_ai_version=args.drop_ai_version,
         extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
+        extras=extras,
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -719,6 +737,11 @@ def run(args) -> int:
             {"team": i, "spec": a.label(), "shortName": a.short_name,
              "version": a.version, "profile": a.profile, "lua": a.is_lua}
             for i, a in enumerate(ais)
+        ] + [
+            {"team": len(ais) * args.per_side + k, "spec": spec.label(),
+             "shortName": spec.short_name, "version": spec.version,
+             "profile": spec.profile, "lua": spec.is_lua, "extra": True, "ally": ally}
+            for k, (spec, ally) in enumerate(extras)
         ],
         "result": {
             "winners": result.winners,
@@ -916,6 +939,11 @@ def main() -> int:
                          "matters for reproducing a hosted game is "
                          "ai_incomemultiplier=1.5 -- benchmarks run at 1.0, and "
                          "several behaviours only misfire on a bonused economy")
+    ap.add_argument("--extra-ai", dest="extra_ai", action="append", default=[],
+                    metavar="SPEC@ALLY",
+                    help="an extra team on an existing ally, after the real players "
+                         "(e.g. NullAI:0.1@1 to hold dev_raid.lua's raiders on side b); "
+                         "its team id is sides*per_side + its index")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
     if args.speed == 0:
