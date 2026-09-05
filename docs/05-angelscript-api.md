@@ -41,18 +41,28 @@ Stock ships only `builder`/`economy`/`factory`/`military`; the rest are ours.
 106 `.as` files under `script/standard/` (2026-08-30). Edit the parts, not the
 shim, except to add a part (which means adding a line to the shim).
 
-**The include order in a shim is load-bearing.** `CScriptBuilder` adds a section
-before walking that section's own includes, depth-first in listed order, so the
-shim's list is literally the order the compiler sees declarations in. Functions
-are visible module-wide regardless of file; globals, consts and types are not,
-and must be declared before the line that reads them. Moving a function between
-parts is free; moving a global earlier than its declaration is a
-`No matching symbol` that disables the whole variant.
+**The include order in a shim is load-bearing, but narrowly.** `CScriptBuilder`
+adds a section before walking that section's own includes, depth-first in listed
+order, so the shim's list is the order the compiler sees declarations in.
+
+What actually breaks is only a **global's INITIALIZER expression** reading a
+symbol declared in a later file. AngelScript registers every type and global
+across all sections before compiling any function, so functions, parameter types
+and ordinary reads inside function bodies are order-independent — this tree
+proves it and runs (`market/want_super.as` reads `Base::gAnchor` from a namespace
+included four lines later).
+
+An earlier checker that enforced the stricter "every global must be declared
+before the line that reads it" rule produced 250 false positives here. `python
+tools/as_scope.py` reproduces the real walk and reports the two failures that do
+bite: a global initializer reading a later symbol, and a local read outside its
+declaring block.
 
 Both `AiMakeTask`s are **rule pipelines**: `builder/maketask.as` and
 `factory/maketask.as` are short ordered lists of named rules that live in the
 sibling `rules_*.as` files. A rule returns null to pass. Where a new rule goes
-in that list is the design decision — see CLAUDE.md's composition finding.
+in that list is the design decision — see the 2026-08-01 composition finding in
+`docs/25-silent-failures.md`.
 
 Shared, one level up (`script/`): `common.as`, `define.as` (constants: `SECOND`
 = 30, `MINUTE`, `SQUARE_SIZE` = 8, `NEAR_ZERO`), `unit.as` (role and attribute

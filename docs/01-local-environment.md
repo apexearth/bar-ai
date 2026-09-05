@@ -6,6 +6,11 @@ launcher replaces the engine directory on update.
 
 ## Install
 
+**Never hardcode any path below.** `tools/bar_env.py` resolves all of them at
+runtime — import it. `python tools/bar_env.py` prints what it resolved. Override
+with the `BAR_ROOT`, `BAR_DATA`, `BAR_ENGINE` and `BAR_GAME_SDD` environment
+variables.
+
 The launcher is an Electron app; the game data sits in a `data` subfolder that
 serves as Spring's **write dir**.
 
