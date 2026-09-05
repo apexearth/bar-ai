@@ -113,8 +113,7 @@ float LightTowerCostM()
 
 // (THE HEAVY-GUN CLASS IS GONE. It priced a ground turret on AFFORDABILITY --
 // (budget-bill)/budget -- which falls as cost rises, so the cheapest member of
-// the class won every ticket: measured over 54 games, Persecutor took the
-// heavy-gun want 8 times and Bulwark never once. With cover now read as killing
+// the class won every ticket and the dearest never once. With cover now read as killing
 // power rather than as a price tag, the turret auction in protect_want.as can
 // reach a T3 gun on its own merits, and it does so without a class target or a
 // one-frame-at-a-time gate standing in the way.)

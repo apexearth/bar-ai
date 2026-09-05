@@ -59,16 +59,9 @@ float ShareOverride(const string &in name)
 }
 
 // The curve, read live -- or reproducing the cached frame-0 reading the bug
-// produced, which is what every measured game to date actually played.
-//
-// TURNING THIS ON IS AN UNTUNED CHANGE, NOT JUST A FIX. The numbers in
-// targets.as were authored against a system that never read them past column 0,
-// so they have never been exercised. Measured 2026-08-22 over three paired
-// 50-minute runs against medium (40 games per side): live curves went 23W-8L-9D
-// against 20W-10L-10D, inside the noise floor, with win times mixed and metal
-// rate 21% lower (12.2k/min against 15.6k). No win-speed benefit was shown, so
-// the default stays on the behaviour that was measured. Re-tuning SPEND_* with
-// the curves live is the campaign this needs.
+// produced, which is what every game to date actually played. Turning it on is
+// an UNTUNED CHANGE, not just a fix: the targets.as numbers have never been
+// exercised past column 0. The A/B is in docs/27 under TUNE_BUDGET_LIVE.
 float CurveAt(const array<float>& in curve)
 {
 	if (ai.GetTunable("apex_budget_live", TUNE_BUDGET_LIVE) > 0.f)
@@ -110,7 +103,7 @@ float TargetShare(Cat c)
 
 // An energy maker is ECONOMY whichever manager reports it: corsolar arrives here
 // as UseAs::FENCE and was counted as defence. Decide from the unit, not the
-// attribute. See CHANGES.md 2026-08-12.
+// attribute.
 bool IsEnergyBuilding(const CCircuitDef@ d)
 {
 	return (d !is null) && !d.IsMobile() && (aiEconomyMgr.GetEnergyMake(d) > 1.f);

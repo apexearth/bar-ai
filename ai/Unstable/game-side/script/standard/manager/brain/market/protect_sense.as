@@ -360,8 +360,8 @@ float JamSpacing(int d)
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
 	// ONE ALREADY COMING COVERS THIS GROUND, whoever remembers it: standing,
-	// half-built, orphaned frame and outstanding order are all one ledger
-	// (flipped 2026-08-27). The OnMap guard skips orders not yet sited.
+	// half-built, orphaned frame and outstanding order are all one ledger.
+	// The OnMap guard skips orders not yet sited.
 	bool old = false;
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		if (ProtClassOf(gComDef[ci]) != cls)

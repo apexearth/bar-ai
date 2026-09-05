@@ -778,8 +778,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			continue;
 		// The water mandate is held, ships-only, and never the commander's
 		// errand -- see the naval election above. The backoff kills the
-		// elect-order-abort churn (34 dead shipyard orders in one 10-minute
-		// game) for every def alike.
+		// elect-order-abort churn for every def alike.
 		if (Builder::AbortBackoff(d))
 			continue;
 		if (dClass == PC_WATER) {
@@ -869,9 +868,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// assigned, so the walk window (no frame yet, engine count 0) still
 		// counts -- that was the second-copy hole. An UNMANNED order or
 		// frame does not: its manning path is this def's own want (the fold
-		// dedups the site), and counting it priced the resume as a
-		// duplicate -- measured seed 8, both opening factories unreachable
-		// for 11 minutes.
+		// dedups the site), and counting it prices the resume as a duplicate
+		// -- which strands the opening factories it was meant to protect.
 		int reachKin = 0;
 		for (uint ci = 0; ci < ComLen(); ++ci) {
 			const int rd = gComDef[ci];

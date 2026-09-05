@@ -56,8 +56,8 @@ const int CAT_BP = 3;
 const int CAT_DEFENCE = 4;
 const int CAT_RECLAIM = 5;
 // SEEING is not SHOOTING. Radar, jammers and targeting shared one ticket with
-// ground defence and lost the argmax inside it every single time: measured
-// across twelve 4v4 games, this AI built ZERO sensors of any kind. A turret's
+// ground defence and lost the argmax inside it every time, so the AI built no
+// sensors of any kind at all. A turret's
 // gain is the loss it prevents outright, which is always larger than an
 // insurance rate on the same assets -- so the two never belonged in one
 // question (his own rule, first applied to energy).

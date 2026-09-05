@@ -56,9 +56,8 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// cannot build the def gets null BEFORE any task is enqueued, so the rule
 	// falls through to its next option instead of leaving an orphan task and a
 	// wasted election. GuardBuildCapability still backstops the pipeline's
-	// return, but by then Take had already enqueued -- measured (8v8 Glitters
-	// 20260815-065302): 975 armck->armfus, 777 ->armmoho, 594 comm->advsol per
-	// game, all guard-nulled after the orphan already existed.
+	// return, but by then Take has already enqueued, so the guard nulls a
+	// request whose orphan task exists.
 	if (Gate(G_CANBUILD, (unit !is null) && !unit.circuitDef.CanBuild(want)))
 		return null;
 	// A def dying fast on repeat is held HERE, the door every lane walks

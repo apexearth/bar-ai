@@ -44,12 +44,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// bypassed the throttle entirely -- the reasoning being that it "could
 	// never enter at all" otherwise. That is false: elections run every frame,
 	// so an uncached def gets its turn within a frame or two regardless. What
-	// the exemption actually bought was an unbounded frame. Measured on
-	// Supreme Isthmus v2.1, 1v1 cortex, +100%, minute 28: a 127.7 ms spike,
-	// with prot.loop averaging 6.3 ms PER FILL -- and the team-wide defence
-	// catalogue (2026-08-30) took the candidate list from ~3 defs to 8-14, so
-	// every one of the new defs filled on the same frame the first time it
-	// appeared. N x 6.3 ms, uncapped, in one sim frame.
+	// the exemption actually bought was an unbounded frame: the team-wide
+	// defence catalogue took the candidate list from ~3 defs to 8-14, and
+	// every new def filled on the frame it first appeared. N fills at several
+	// ms each, uncapped, in one sim frame.
 	if (gDsFillFrame != ai.frame) {
 		gDsFillFrame = ai.frame;
 		gDsFillN = 0;

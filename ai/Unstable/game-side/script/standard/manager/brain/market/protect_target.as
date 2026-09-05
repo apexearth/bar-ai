@@ -183,13 +183,12 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 //
 // Not the live centroid: aiEnemyMgr.GetEnemyPos() answers (0,0,0) until
 // something has been seen, and that IS on-map, so the wall's line and the
-// pull's facing were aimed at the map corner for the whole opening (measured:
-// lineFwd -0.46 at minute 8, every tower behind the base). And not the
-// remembered centroid either: Front::FoeMid is the memory of every cell their
-// influence has touched, raids into our own base included, so the line's
-// perpendicular swung with the last fight and its lateral slots landed from
-// fwd -0.26 to 0.79 in one game. Their base does not move; the line should
-// not either.
+// pull's facing were aimed at the map corner for the whole opening, and every
+// tower stood behind the base. And not the remembered centroid either:
+// Front::FoeMid is the memory of every cell their influence has touched, raids
+// into our own base included, so the line's perpendicular swings with the last
+// fight and its lateral slots wander. Their base does not move; the line
+// should not either.
 bool FoeRef(AIFloat3& out at)
 {
 	if (!Builder::gHomeSet)

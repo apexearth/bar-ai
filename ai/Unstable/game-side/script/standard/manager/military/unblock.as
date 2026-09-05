@@ -237,8 +237,8 @@ void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	// A parked super obeys the first order and is cleared.
 	// NOR the commander. It stands in the middle of the base by design, with our
 	// buildings packed around it, and CircuitAI re-tasks it every few seconds --
-	// so the move order is overridden and it reads as penned. Measured: two of
-	// two clearing orders in a 12-minute game were commanders, both wrong.
+	// so the move order is overridden and it reads as penned. Left in, it is
+	// the commander that every clearing order picks, and always wrongly.
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
 	const AIFloat3 dir = ThinnestDir(at);

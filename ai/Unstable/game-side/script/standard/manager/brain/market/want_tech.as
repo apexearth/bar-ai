@@ -122,10 +122,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		// GROUND THE ENGINE HAS ALREADY REFUSED. An upgrade's position IS the
 		// spot -- unlike a plant or a generator it cannot be moved -- so a spot
 		// the reach-safe veto refuses can never be upgraded, and re-proposing
-		// it is a pure loop. Measured, SI 8v8 +100%, one 26-minute game: 2,989
-		// moho task-deaths, 2,660 of them why=unreach-safe, with a single team
-		// losing 1,199 at ONE position. That is also the churn behind
-		// want.mexup's frame cost (4.0 ms average, 75.3 ms worst call).
+		// it is a pure loop -- thousands of moho task-deaths at one position,
+		// and the churn behind want.mexup's frame cost.
 		//
 		// The mark expires, so a spot that becomes reachable -- the front
 		// moves, a wreck clears -- returns to the ladder on its own.

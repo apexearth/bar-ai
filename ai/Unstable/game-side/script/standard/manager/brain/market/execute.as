@@ -665,11 +665,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// absorb it. The test above reads the METAL side only -- MCostScale is a
 	// metal stall -- so a converter, whose entire trigger is energy we are
 	// throwing away, was serialized to one site at a time exactly when twenty
-	// were wanted. Measured (watch-nanopack, Supreme Isthmus 8v8 +100%, 26
-	// min): 57.8% of all energy produced was thrown away, 80.7% on the worst
-	// team; 11-13 advanced converters standing a player against an overflow
-	// that needs 16 more of them; and every sampled `apex: request` line
-	// reading inFlight=1-2 against a cap of 32-111.
+	// were wanted.
 	if ((w.kind == WK_CONVERT) && (gESurplusEma > 1.f))
 		par = true;
 	// GIANTS MULTIPLY ONLY ON A BANK THAT PAYS FOR ALL OF THEM (apexearth,
@@ -715,10 +711,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// veto refuses that ground the next election computes the same answer
 		// and the task dies again. Tech, plant and super already probe for
 		// exactly this reason (see WK_TECH above); energy did not, and it is
-		// the one that builds the fusions. Measured, SI 8v8 +100%: teams 2 and
-		// 4 each lost 21 of 21 advanced fusions at ONE position with
-		// why=unreach-safe, and ended the game on 1.6k and 5.6k energy income
-		// against a field of 20-46k.
+		// the one that builds the fusions -- a team can lose every advanced
+		// fusion it orders at one position with why=unreach-safe.
 		//
 		// Probed ONLY when the mark is near this slot, so the farm's packing --
 		// generators beside their own kind, in the rear -- is untouched in

@@ -304,8 +304,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	}
 	// AN ELECTION THAT ORDERS NOTHING IS IDLE FACTORY TIME. Logged with the
 	// market's own reason, rate-limited per line, because the gap between
-	// orders is otherwise invisible -- measured 2026-08-25 at 1 to 9 silent
-	// elections between orders on a single lab.
+	// orders is otherwise invisible.
 	if ((batch.length() == 0) && (fac.CountQueued(null) == 0)
 		&& (ai.frame >= gFQIdleLog))
 	{

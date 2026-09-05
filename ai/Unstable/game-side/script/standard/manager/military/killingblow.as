@@ -28,10 +28,9 @@ bool KillingBlow()
 		if (gSeenPeak > theirsT1)
 			theirsT1 = gSeenPeak;
 		const float edge = ai.GetTunable("apex_t1_push_edge", TUNE_T1_PUSH_EDGE);
-		// WIDE hysteresis, or it is not "all or nothing". At on=1.2x/off=0.72x
-		// the fog-driven enemy estimate wobbled the blow ON and off 15 times
-		// in one 35-minute draw (zero pushes actually broken -- every one was
-		// CALLED OFF), while we led economy and army throughout. Armed, the
+		// WIDE hysteresis, or it is not "all or nothing". Narrow it and the
+		// fog-driven enemy estimate wobbles the blow on and off all game, and
+		// every push is called off rather than broken. Armed, the
 		// commit holds until a genuine reversal: their read at twice ours.
 		const float offEdge = ai.GetTunable("apex_t1_push_off", TUNE_T1_PUSH_OFF);
 		if ((oursT1 >= MassFloor() / 0.017f)

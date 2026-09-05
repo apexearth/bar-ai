@@ -240,10 +240,8 @@ int  gLeadCheckedAt = -1000;
 int  gCommitFrame  = -1;
 // The wing size promised when the strike was committed to (and again when a
 // run ends), frozen so the go-anyway bar has a fixed number to be half of.
-// Measured live (37-min 1v1, ~1700 m/s): ScaledBombers tracked income and
-// their growing AA to 93 while 30 bombers stood at home, so every release
-// gate that compared against the LIVE want chased a treadmill and the whole
-// air arm sat out the game.
+// ScaledBombers tracks income and their growing AA, so a release gate that
+// compares against the LIVE want chases a treadmill and the wing never flies.
 int  gCommitBombers = 0;
 // HIS CADENCE (2026-08-29): "Maybe an attack every random between 5 and 10
 // minutes for air attacks? We don't want to be too boring." The massing

@@ -420,9 +420,9 @@ void Update()
 		} else if (Bombers() > 0) {
 			// The wing can stand without this player ever ASKING for a
 			// plant -- the market builds air plants on its own law, so
-			// FactoryToBuild() reads null and nothing started the clock:
-			// watched, bar=-1 at 32 min with 17 bombers held and 8 plants
-			// standing. A standing bomber commits the deadline.
+			// FactoryToBuild() reads null and nothing starts the clock, and
+			// the wing is held forever. A standing bomber commits the
+			// deadline.
 			gCommitFrame = ai.frame;
 			gCommitBombers = ScaledBombers();
 			RollDeadline();

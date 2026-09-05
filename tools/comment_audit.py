@@ -48,8 +48,13 @@ RUN_REPORT = re.compile(
     | \b(?:in|over)\s+(?:one|two|three|four|five|six|ten|\d+)\s+
       (?:paired\s+)?(?:\d+v\d+|\d+[- ]minute|games?|runs?)\b
     """)
-# A date attached to his words is provenance for a directive, not a run report.
-QUOTE = re.compile(r"apexearth|HIS RULING|his ruling")
+# A date attached to HIS words is provenance for a directive, not a run report.
+# Case matters here only in that it must not: the same attribution is written
+# "HIS RULING", "His ruling" and "his prior" in different files, and a guard
+# that misses one flags the directive it was meant to protect.
+QUOTE = re.compile(
+    r"(?i)\bapexearth\b|\bhis (?:ruling|cadence|prior|ask|words|complaint|call)\b"
+    r"|\bhe (?:asked|ruled|said|wants)\b")
 
 COMMENT = re.compile(r"^\s*(?://|#)")
 SRC = (".as", ".py", ".cpp", ".h", ".lua")

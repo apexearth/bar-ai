@@ -335,10 +335,9 @@ void NoteFodderDef(const CCircuitDef@ cdef)
 	NotePostureDef(cdef, true);
 }
 
-// Measured 2026-08-17 (6x 20m 1v1): a cost-vs-income no-retreat bar at 12s
-// cut army K/D 0.33 -> 0.11 -- retreat is also disengage-and-repair, and
-// units denied it press losing fights at half HP. Default 0 keeps this off;
-// the tunable remains for experiments.
+// A cost-vs-income no-retreat bar measured WORSE: retreat is also
+// disengage-and-repair, and units denied it press losing fights at half HP.
+// Default 0 keeps this off; the tunable remains for experiments.
 void ApplyRetreatPosture()
 {
 	const float secs = ai.GetTunable("apex_retreat_cost_secs", TUNE_RETREAT_COST_SECS);
@@ -412,8 +411,8 @@ void UpdateLanePos()
 	// (LossArmyMult) is buying the army; this is where it stands. Releases by
 	// itself as the ledger drains or the trade recovers.
 	// A muster state was tried here (anchor waits at the line until the army
-	// is half the enemy's per-player threat) and REVERTED same day: measured
-	// over 6 games it collapsed production 1.8x -> 1.08x and went 0-3 -- the
+	// is half the enemy's per-player threat) and REVERTED: it collapsed
+	// production and lost every game -- the
 	// hold ceded the map, the ceded map shrank the army, and the bar became a
 	// ratchet. Standing forward is what protects the income that pays for the
 	// army; only ground the enemy actually holds (the net-influence walk
@@ -732,9 +731,8 @@ void UpdatePosture()
 		gPostureUntil = ai.frame + TURTLE_MIN_HOLD;
 		// NOT gAttackBase. That is the stock 15, captured before anything
 		// touched it, and the turtle block runs AFTER UpdateMassing in
-		// UpdatePosture -- so every resume slammed the commit size back to
-		// stock and the next group left at stock size. Measured 15 hold/resume
-		// cycles in one game, i.e. fifteen small groups walking out.
+		// UpdatePosture -- so every resume slams the commit size back to stock
+		// and the next group leaves at stock size, one small group per cycle.
 		aiMilitaryMgr.quota.attack = MassWant();
 		AiLog(Factory::T() + "apexturtle: RESUME frame=" + ai.frame + " army=" + army
 			+ " (held from " + gArmyAtHold + ")");

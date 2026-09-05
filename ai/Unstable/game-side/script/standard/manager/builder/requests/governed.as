@@ -121,7 +121,7 @@ const float ASSIGNED_BIAS = 400.f;
 // Below this cost, walking across the base to help is worse than building your
 // own -- solar is 155, wind 43, a construction turret 210, a T1 lab 500. It
 // bounds JOINING only. Whether a second request may EXIST is a different
-// question and is asked at every cost: measured 2026-08-13, armsolar piled six
+// question and is asked at every cost -- without that, cheap defs pile
 // duplicates onto one tile.
 const float JOIN_MIN_COST = 200.f;
 

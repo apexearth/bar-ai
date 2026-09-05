@@ -194,9 +194,8 @@ bool ConservativeStance()
 	const float floorSeen = ours * ai.GetTunable("apex_unseen_hold", TUNE_UNSEEN_HOLD);
 	// A low reading is fog ONLY if they have ever shown an army that size:
 	// gSeenPeak is the most massing threat we ever saw at once (slow decay).
-	// Without this, being 2x ahead was indistinguishable from being blind and
-	// the hold tightened exactly as we pulled ahead (measured 2026-08-20:
-	// "outmatched 2198 vs 4567" -- held while outfielding them two to one).
+	// Without this, being 2x ahead is indistinguishable from being blind and
+	// the hold tightens exactly as we pull ahead.
 	if ((theirs < floorSeen) && (gSeenPeak > floorSeen))
 		return true;
 	return (theirs > ours) && (ours >= 0.f);
@@ -324,9 +323,8 @@ float MassFloor()
 	//
 	// A share of OUR standing army is a death spiral once we are losing: the
 	// army dies, the floor falls, smaller groups leave, they die faster, the
-	// floor falls further. Measured in the 4v4 of 2026-08-19: army 570 against
-	// 104,580, floor collapsed to 5 (one or two units), our squads n=0 against
-	// their 11 averaging 8.4. Nothing in the loop pushed back.
+	// floor falls further -- all the way to one or two units, with nothing in
+	// the loop pushing back.
 	//
 	// So the floor is also bounded below by what we would actually MEET -- the
 	// biggest enemy group we can see, at the same power-per-metal the rest of

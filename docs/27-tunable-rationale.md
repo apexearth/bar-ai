@@ -118,8 +118,16 @@ evaluate the SPEND_* target curves against live income (1) or against the
 frame-0 column (0). GetTunable caches its default on first call, so passing a
 live curve as the default froze every share at income 0 -- and SPEND_ARMY's
 income-0 column is 0.0, which is why the ARMY budget row read zero in every
-game ever played. Default 0 reproduces that measured behaviour; see budget.as
-for the runs.
+game ever played. Default 0 reproduces that measured behaviour.
+
+Turning it on is an UNTUNED CHANGE, not just a fix: the numbers in `targets.as`
+were authored against a system that never read them past column 0, so they have
+never been exercised. Measured 2026-08-22 over three paired 50-minute runs
+against medium (40 games per side): live curves went 23W-8L-9D against
+20W-10L-10D — inside the noise floor, win times mixed, and metal rate 21% lower
+(12.2k/min against 15.6k). No win-speed benefit was shown, so the default stays
+on the behaviour that was measured. Re-tuning `SPEND_*` with the curves live is
+the campaign this needs before flipping it.
 
 ### `TUNE_PUSH_TEAM_RATIO` = 1.6f
 

@@ -200,9 +200,8 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
 		// front untouched, and wreck queries are LOS-gated (a corpse field
-		// nobody stands in reads empty), so the battlefield accumulated
-		// thousands of features that the engine then pays for every frame --
-		// measured live (8v8, min 34->55): engine sim 15->28ms/frame, the
+		// nobody stands in reads empty), so the battlefield accumulates
+		// thousands of features the engine pays for every frame -- the
 		// late-game slowdown itself. Successive sweeps rotate across the
 		// front stretches; a stretch with no KNOWN wreck is swept blind --
 		// the bot's own arrival provides the vision and the area reclaim

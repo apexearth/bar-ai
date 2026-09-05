@@ -55,11 +55,10 @@ int gNextGoneLog = 0;
 int gAbortLog = 0;
 
 // INSTANT-ABORT BACKOFF. A def whose task dies unfinished several times in
-// quick succession is stuck in an elect-order-abort loop -- measured on
-// Supreme Isthmus 8v8: a shipyard elected, ordered, and killed by the DLL's
-// site check THE SAME FRAME, 34 times in 10 minutes, burning the vehicle
-// con's walk each round. Three fast deaths hold that def's proposals for
-// two minutes; a finished build clears the streak.
+// quick succession is stuck in an elect-order-abort loop: elected, ordered and
+// killed by the DLL's site check the same frame, burning the con's walk each
+// round. Three fast deaths hold that def's proposals for two minutes; a
+// finished build clears the streak.
 array<int> gAbortStreak;
 array<int> gAbortAt;
 
@@ -128,8 +127,7 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 					dMan = ws[0].GetPos(ai.frame).distance2D(task.GetBuildPos());
 			}
 			// d==0 (no buildDef: reclaim/repair) has no Def to name --
-			// Catalog::Def(0) is null and .GetName() on it is the script
-			// exception that stormed his 2026-08-28 crashed game.
+			// Catalog::Def(0) is null and .GetName() on it throws.
 			if ((d > 0) && (gAbortLog < 30)) {
 				++gAbortLog;
 				AiLog("apex: abort t=" + ai.teamId + " "

@@ -199,10 +199,10 @@ bool PushIncoming()
 // Every escalation that was supposed to answer an invasion -- the defence-share
 // panic clause, the doubled front budget, the exemption that lets a tower go
 // behind the territory centre -- hung on Military::BaseContested(), which asks
-// whether the enemy holds NET INFLUENCE over our start position. Measured over
-// four runs it reads 0% of samples in three of them and never above 9%: an
-// enemy can walk in, kill a T2 lab and leave without it ever being true, because
-// our own buildings dominate the influence there. Structure deaths are not
+// whether the enemy holds NET INFLUENCE over our start position -- which is
+// almost never true, because our own buildings dominate the influence there.
+// An enemy can walk in, kill a T2 lab and leave without it ever firing.
+// Structure deaths are not
 // inferred; AiUnitDestroyed already carries the position and the cost of every
 // one, and nothing consumed them.
 //

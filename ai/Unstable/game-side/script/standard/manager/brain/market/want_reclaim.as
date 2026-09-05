@@ -46,8 +46,8 @@ array<Id> gReclaimTgt;
 array<Id> gReclaimBy;
 array<int> gReclaimUntil;
 // The victim's handle and its ground, for the nano pile-on below. The pos is
-// stored at claim time so nothing ever calls GetPos on a stored handle -- a
-// deferred-dead unit read is the access-violation class fixed 2026-08-28.
+// stored at claim time so nothing ever calls GetPos on a stored handle:
+// reading a deferred-dead unit is an access violation.
 array<CCircuitUnit@> gReclaimHand;
 array<AIFloat3> gReclaimPos;
 
@@ -167,9 +167,8 @@ float ReclaimHandMul(CCircuitUnit@ unit)
 		return 1.f;
 	// NOBODY IS DISPLACED BEFORE THEIR REPLACEMENT EXISTS -- the same law the
 	// generator, lab and con retirements here already follow. Penalising the
-	// constructor while we own no rezbot hands the work to nothing: measured
-	// 2026-08-27, reclaim decisions went 31 -> 0 in a game that produced zero
-	// rezbots, so obsolete solars and duplicate plants stood untouched.
+	// constructor while we own no rezbot hands the work to nothing, and
+	// obsolete solars and duplicate plants then stand untouched.
 	if (!OwnAnyRezzer())
 		return 1.f;
 	// Only a hand that could be claiming ground instead pays the penalty.
@@ -202,9 +201,7 @@ float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 {
 	// A JUST-BUILT STRUCTURE IS NEVER OBSOLETE -- same law the con path
 	// already applies via apex_reclaim_age_s, at the window the rebuy
-	// discount runs for. Without it the market ate 149 reclaim assignments
-	// into one vehicle plant and 75 into a gantry it had built minutes
-	// before, in one 40-minute game.
+	// discount runs for. Without it the market eats the plant it just built.
 	{
 		const int born = BuiltFrameOf(tgt);
 		const float win = ai.GetTunable("apex_replant_window_s",
@@ -303,18 +300,11 @@ bool GenObsoleteOnArrival(int d)
 // is the right question for RECLAIM -- a standing basic is worth eating once
 // an advanced one is possible -- and the WRONG question for a builder choosing
 // what to make, because most of our constructors can only build the basic one.
-// Measured (convfix-s11 against watch-ecorole, Comet Catcher 8v8 +100%, matched
-// seed): blocking the basic globally took basic converters 512 -> 0 and ground
-// 5,440 -> 688 cells, exactly as intended -- and total conversion throughput
-// 67,040 -> 25,800 e/s, energy waste 41.0% -> 65.6%, median metal produced
-// 171,362 -> 103,005. The basic was carrying 58% of our conversion despite
-// being 4.8x worse per cell, and nothing replaced it: `apex: convwhy` showed
-// nodef=483 of 519 calls, the proposer reaching its loop and pricing nothing,
-// with energy/convert elections falling 1,135 -> 11.
-//
-// The ground it wasted was cheaper than the energy we then threw away. So a
-// builder is only refused the basic when it could have made the better one
-// itself.
+// Blocking the basic globally does clear the ground it wastes, and costs most
+// of our conversion throughput doing it, because nothing replaces what those
+// hands can no longer make. The ground was cheaper than the energy then thrown
+// away, so a builder is refused the basic only when it could have made the
+// better one itself.
 bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
 {
 	if (!ConvObsoleteOnArrival(d))
@@ -466,9 +456,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	const float ePM = EPriceFloor();
 	const float wageR = Wage();
 	// Converters are an elastic sink, not demand -- they are sized against
-	// income by construction, so counting their chew as pull made a structural
-	// surplus read as fully spent: measured over a 43-minute game, eFree sat at
-	// -435, +3 and -1463 E/s while energy EXCESS reached 1,084,434.
+	// income by construction, so counting their chew as pull makes a
+	// structural surplus read as fully spent while excess energy piles up.
 	const float eFree = aiEconomyMgr.energy.income
 			- (aiEconomyMgr.energy.pull - ConvUseE());
 	CCircuitUnit@ best = null;
@@ -502,11 +491,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 		if (ownBestEcell < ratio * ec)
 			continue;   // not dwarfed: still pulling its weight per cell
-		// PRICED, not ranked by E-per-cell. An argmin on that metric put the
+		// PRICED, not ranked by E-per-cell. An argmin on that metric puts the
 		// worst generator we own permanently in front: a solar reads 0.80 and
-		// an advanced solar 4.69, so while one T1 panel stood the advanced
-		// solar could never even be the candidate. Measured over a 43-minute
-		// game: 24 reclaim decisions, every one armsolar, zero armadvsol.
+		// an advanced solar 4.69, so while one T1 panel stands the advanced
+		// solar can never even be the candidate.
 		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
 				* ReachVictimMul(unit, g.GetPos(ai.frame));
 		if (v > bestValue) {
@@ -772,8 +760,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			}
 			// A COPY BOUGHT FOR OVERFLOW IS KEPT FOR OVERFLOW. The wealth
 			// waiver licenses duplicate lines, and this law then read the
-			// copy as an extra and ate it -- the market re-bought it and the
-			// audit counted armshltx rebuilt 7x in one game. A pure duplicate
+			// copy as an extra and ate it -- so the market re-bought it, and
+			// the pair cycled all game. A pure duplicate
 			// (no deeper successor) retires only in a SQUEEZED economy: bank
 			// under half and income not covering pull. A tier successor still
 			// retires its predecessor whatever the bank says.

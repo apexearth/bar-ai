@@ -390,9 +390,9 @@ void UpdateNukes()
 	// THE MIRRORED BASE, always a candidate. Group targeting is LOS-slaved
 	// (hostileDatas keeps only units currently in LOS), so the enemy MAIN BASE
 	// -- the ground we scout least -- can never win the ranking, and every
-	// warhead chases whatever mex field our raiders happen to be looking at.
-	// Measured live 2026-08-21: 6+ nukes at 14k field clusters, none at a
-	// main base with no antinuke. In a boxed game the enemy production base
+	// warhead chases whatever mex field our raiders happen to be looking at,
+	// and none at all reaches a main base with no antinuke. In a boxed game
+	// the enemy production base
 	// sits at our own start mirrored across the map; it enters the ranking at
 	// a standing value and the same assume/decay rules as any base ground.
 	{

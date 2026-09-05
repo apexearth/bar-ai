@@ -449,9 +449,8 @@ void UpdateWithdraw()
 		}
 		// A LOST FIGHT ENDS AS A TASK, NOT AS A CROWD OF ORDERS. The per-unit
 		// pull-back measurably fails: the W order is one-shot and the task
-		// re-asserts every tick, so units died in place ping-ponging or
-		// walking the wrong way (wdeaths: 43% in place, 34% wrong-way,
-		// median 15s from order to death at FULL hp). Aborting the task is
+		// re-asserts every tick, so units die in place ping-ponging or
+		// walking the wrong way, at full hp. Aborting the task is
 		// the C++ attack-break's own shape -- every member re-elects at once,
 		// pools at home behind the massing bar, and leaves together with the
 		// next real group. ATTACK/RAID only: a home DEFEND pool must keep

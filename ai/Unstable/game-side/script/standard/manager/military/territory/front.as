@@ -395,9 +395,8 @@ void RebuildRing(const AIFloat3& in home)
 		// `edge` is only recorded AFTER the enemy test passes, so a bearing
 		// where their influence reaches within one step of our own centre
 		// breaks with edge = 0, takes the `reach` sentinel, and reads hot =
-		// false. Measured tonight on Comet Catcher 4v4: ring-diag rays=0/24
-		// with contested=12 -- twelve rays met the enemy, twelve were rear
-		// arc, and NOT ONE was left hot, so FrontBuildSpots had nothing to
+		// false. Every ray can meet the enemy and not one be left hot, so
+		// FrontBuildSpots has nothing to
 		// offer and front-line defence was impossible however many other
 		// gates were opened. The ring emptied itself exactly when the enemy
 		// got close, which is precisely when the front line matters.

@@ -507,10 +507,8 @@ const float TUNE_GATE_DEPTH = 2.f;
 const float TUNE_TEETH = 0.f;
 
 // [gain] -- What one tooth's share of breaking a push is worth, on the
-//   auction's own value scale: winning wants carry v>=3 and a tooth's costs
-//   price near 70, so 2 gave v=0.03 and lost every election in 24 games; 200
-//   overshot to v~20 and had the COMMANDER placing teeth at 1.8m over a mex
-//   claim. See docs/27.
+//   auction's own value scale. Calibrated between losing every election and
+//   outbidding a mex claim; see docs/27.
 const float TUNE_TEETH_GAIN = 40.f;
 
 // [ratio] -- HOW HARD A BUILDER PREFERS THE GROUND IT IS ALREADY STANDING ON.
@@ -1067,7 +1065,7 @@ const float TUNE_THREAT_GRADIENT = 1.f;
 const float TUNE_RANGE_WORTH = 2.f;
 
 // LOS matters beyond the unit: every danger sense we have reads zero while
-//   blind, and EnemyArmyCost logged 0 for entire games (2026-08-24).
+//   blind, and EnemyArmyCost can read 0 for a whole game.
 const float TUNE_SPEED_WORTH = 0.5f;
 
 const float TUNE_LOS_WORTH = 1.f;
