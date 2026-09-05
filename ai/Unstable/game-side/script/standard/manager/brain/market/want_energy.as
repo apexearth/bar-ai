@@ -285,6 +285,48 @@ float EDrainInFlight()
 	return e;
 }
 
+// The energy the LINES will pull once they run, that the pull does not
+// show yet: a factory in flight, or standing with nothing queued, draws
+// nothing today and its full production drain the moment it works. Priced
+// in before the stall (apexearth: "make energy earlier, that'll save us
+// metal in the long run" -- the stall rule then buys 155-metal solars where
+// 40-metal winds would have done). E per buildtime of the dearest mobile
+// product, the same product LineDensity reads for metal.
+float ProductDrainE(int facId)
+{
+	float dens = 0.f;
+	float best = 0.f;
+	const array<int>@ pr = Catalog::BuildsOf(facId);
+	for (uint q = 0; q < pr.length(); ++q) {
+		if (!Catalog::gMobile[pr[q]] || (Catalog::gCostM[pr[q]] <= best))
+			continue;
+		best = Catalog::gCostM[pr[q]];
+		if (Catalog::gBuildTime[pr[q]] > 1.f)
+			dens = Catalog::gCostE[pr[q]] / Catalog::gBuildTime[pr[q]];
+	}
+	return Catalog::gBuildPower[facId] * dens;
+}
+
+float LineDrainE()
+{
+	float e = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null) || LineWorking(f))
+			continue;   // working: its draw is already in the pull
+		e += ProductDrainE(int(f.circuitDef.id));
+	}
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		if (Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		e += ProductDrainE(d);
+	}
+	return e;
+}
+
 // Best metal-per-energy any converter we could actually build reaches.
 float gBestConvRatio = -1.f;
 float BestConvRatio()
@@ -668,10 +710,17 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			++gCwObsolete;
 			continue;
 		}
-		const float chew = pinned
-				? Catalog::gConvCapacity[d]
-				: ((eSurplus < Catalog::gConvCapacity[d])
-					? eSurplus : Catalog::gConvCapacity[d]);
+		// A full bank prices the NEXT converter at full capacity -- and the
+		// ones already ordered are that next converter.
+		float chew = (eSurplus < Catalog::gConvCapacity[d])
+				? eSurplus : Catalog::gConvCapacity[d];
+		if (pinned) {
+			const float open = Catalog::gConvCapacity[d] - ConvCapInFlight();
+			if (open > chew)
+				chew = open;
+		}
+		if (chew < 0.f)
+			chew = 0.f;
 		Want c;
 		// THE SAME ECO-COMPOUNDING PREMIUM THE GENERATOR GETS. A generator is
 		// priced as though its energy were already metal and then multiplied by

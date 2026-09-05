@@ -783,6 +783,8 @@ void CEnemyManager::KMeansIteration()
 		std::fill(eg.roleCosts.begin(), eg.roleCosts.end(), 0.f);
 		eg.cost = 0.f;
 		eg.influence = 0.f;
+		eg.vel = 0.f;  // was never reset: a group kept its fastest-ever member
+		eg.velVec = springai::AIFloat3(0.f, 0.f, 0.f);
 	}
 
 	{
@@ -799,7 +801,11 @@ void CEnemyManager::KMeansIteration()
 				if (!enemy.IsFake()) {
 					eg.units.push_back(enemy.id);
 				}
-				eg.vel = std::max(eg.vel, sqrtf(enemy.vel.SqLength2D()) * FRAMES_PER_SEC);
+				const float v = sqrtf(enemy.vel.SqLength2D()) * FRAMES_PER_SEC;
+				if (v > eg.vel) {
+					eg.vel = v;
+					eg.velVec = enemy.vel * FRAMES_PER_SEC;
+				}
 
 				if (enemy.cdef != nullptr) {
 					eg.roleCosts[enemy.cdef->GetMainRole()] += enemy.cost;

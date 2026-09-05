@@ -302,6 +302,53 @@ float AdvArmyValue()
 // our army; the class each candidate belongs to is a fact about the unit.
 const int LC_TANK = 0, LC_MID = 1, LC_REACH = 2, LC_DPS = 3, LC_N = 4;
 
+// REZ WORK ON THE FIELD (apexearth: "rezbots gain value when: there is
+// valuable reclaim available; there are units that need repairing; there
+// are units available to resurrect"). Read from the field every 10 s:
+// missing hp of our mobiles in metal, plus wrecks around home and the lane
+// (a resurrectable one at its unit's cost, the rest at reclaim metal).
+float gRezWork = 0.f, gRezRepair = 0.f, gRezField = 0.f;
+int gRezWorkAt = -999999;
+float RezWorkM()
+{
+	if (ai.frame < gRezWorkAt + 10 * SECOND)
+		return gRezWork;
+	gRezWorkAt = ai.frame;
+	gRezRepair = ai.GetOwnRepairM();
+	gRezField = 0.f;
+	const float r = 2000.f;
+	if (Builder::gHomeSet)
+		gRezField += ai.GetFieldWorkAt(Builder::gHomePos, r);
+	if (OnMap(Military::gLaneAt)
+		&& (!Builder::gHomeSet || (Military::gLaneAt.distance2D(Builder::gHomePos) > r)))
+		gRezField += ai.GetFieldWorkAt(Military::gLaneAt, r);
+	gRezWork = gRezRepair + gRezField;
+	return gRezWork;
+}
+
+// Metal one point of build power restores per second, on the army we own
+// (falls back to the whole catalog before the first unit stands).
+float LineMetalPerEffort()
+{
+	float m = 0.f, e = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !LineCombat(di) || (Catalog::gBuildTime[di] <= 0.f))
+			continue;
+		m += float(gOwnCount[d]) * Catalog::gCostM[di];
+		e += float(gOwnCount[d]) * Catalog::gBuildTime[di];
+	}
+	if (e <= 0.f) {
+		for (int d2 = 1; d2 <= Catalog::gDefCount; ++d2) {
+			if (!Catalog::gAvailable[d2] || !LineCombat(d2) || (Catalog::gBuildTime[d2] <= 0.f))
+				continue;
+			m += Catalog::gCostM[d2];
+			e += Catalog::gBuildTime[d2];
+		}
+	}
+	return (e > 0.f) ? (m / e) : 0.f;
+}
+
 bool LineCombat(int di)
 {
 	return Catalog::gMobile[di] && !Catalog::gBuilder[di]
@@ -1180,6 +1227,107 @@ void RetreatRefresh()
 int gNextStallDry = 0;
 bool gStallHadAnswer = false;
 
+// AN INTERRUPT IS A LOAN, NOT A WRITE-OFF (apexearth: "the commander making a
+// few mexes, then a factory, running out of E, making a solar, and then
+// deciding to make an LLT instead of going back to the factory"). Abort() ends
+// the request, so the frame he left is in the orphan ledger and NOTHING binds
+// him to it: ExecuteWant's finish-before-founding block only ever looks for an
+// orphan of the def the market JUST picked, and the market never picks the
+// plant again -- the ledger already reads one as committed. So the debt is
+// carried on the borrower: what he abandoned, by frame id, paid back at his
+// next free election.
+//
+// Ids, not handles, for the same reason the orphan ledger uses them: a frame
+// that dies between the interrupt and the payment must not leave a dangling
+// CCircuitUnit@ behind.
+array<Id> gDebtWho;     // the builder the stall interrupted
+array<Id> gDebtFrame;   // the frame it left standing
+int gDebtPaid = 0;
+int gDebtDropped = 0;
+
+void DebtDrop(uint i)
+{
+	gDebtWho.removeAt(i);
+	gDebtFrame.removeAt(i);
+}
+
+void DebtNote(CCircuitUnit@ u, IUnitTask@ t)
+{
+	if ((u is null) || (t is null))
+		return;
+	CCircuitUnit@ frame = t.target;
+	if ((frame is null) || (frame.circuitDef is null)
+		|| frame.circuitDef.IsMobile())
+		return;   // nothing standing to come back to
+	for (uint i = 0; i < gDebtWho.length(); ++i) {
+		if (gDebtWho[i] == u.id) {
+			// He was already carrying one and has now been taken off a second
+			// frame: owe the newer one, which is the one he was on.
+			gDebtFrame[i] = frame.id;
+			return;
+		}
+	}
+	gDebtWho.insertLast(u.id);
+	gDebtFrame.insertLast(frame.id);
+}
+
+// The frame this unit owes, or null -- the LEDGER half. It settles rows (a
+// frame stops being a debt for four different reasons: finished, killed,
+// re-requested, adopted by somebody else, and ComOrphanById answers all four
+// at once) but never spends: the enqueue that pays it lives in execute.as,
+// where the spend census keeps every task-creating call site.
+CCircuitUnit@ StallDebtFrame(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return null;
+	for (uint i = 0; i < gDebtWho.length(); ++i) {
+		if (gDebtWho[i] != unit.id)
+			continue;
+		const Id fid = gDebtFrame[i];
+		CCircuitUnit@ frame = ai.GetTeamUnit(fid);
+		if ((frame is null) || (frame.circuitDef is null)
+			|| !ComOrphanById(fid))
+		{
+			++gDebtDropped;
+			DebtDrop(i);
+			return null;
+		}
+		// NOT WHILE THE STALL HE WAS BORROWED FOR IS STILL ON. Paying back into
+		// a live stall is the round trip twice: he would walk to the frame, be
+		// interrupted off it again, and walk back. The stall clearing is what
+		// makes the debt payable, and until then the frame is still in the
+		// ledger for anyone whose own election lands on it.
+		if (HardEStall())
+			return null;
+		if (Builder::ThreatFor(unit, frame.GetPos(ai.frame))
+			> Builder::CON_THREAT_VETO)
+		{
+			++gDebtDropped;
+			DebtDrop(i);   // abandoned because the ground went hot; still is
+			return null;
+		}
+		return frame;
+	}
+	return null;
+}
+
+// The borrower has been handed its frame back: clear the row.
+void StallDebtSettle(CCircuitUnit@ unit)
+{
+	if (unit is null)
+		return;
+	for (uint i = 0; i < gDebtWho.length(); ++i) {
+		if (gDebtWho[i] == unit.id) {
+			++gDebtPaid;
+			DebtDrop(i);
+			return;
+		}
+	}
+}
+
+int DebtPaid() { return gDebtPaid; }
+int DebtDropped() { return gDebtDropped; }
+
 void StallWatch()
 {
 	if (ai.frame >= gNextStallSweep) {
@@ -1299,6 +1447,35 @@ void StallWatch()
 					continue;
 			}
 		}
+		// THE SECOND PASS IS NOT FREE EITHER, and it was priced as if it were.
+		// Pass 0's law is "what he has left to pay is smaller than the walk the
+		// answer demands"; the same law in metal is what pass 1 never asked. A
+		// commander 96% through a lab has 21 metal left and the solar he leaves
+		// for costs 155, so abandoning is the SLOWER path to both buildings AND
+		// it drops a frame with nothing bound to it (measured over 336 logs:
+		// 605 interrupts abandoned real progress, 53 of them past 90% --
+		// apexearth, watching the opening: "we will build 90% of a building and
+		// then choose to do something else... a commander on the botlab").
+		//
+		// A DEFERRAL, NOT A VETO. What this refuses to abandon is by
+		// construction cheaper to finish than the answer is to build, so the
+		// stall waits LESS than the interrupt would have cost it, and he is a
+		// free pass-0 candidate the moment the frame tops out. Repair and
+		// reclaim hold no frame of their own (no buildDef) and stay freely
+		// interruptible.
+		if ((pass == 1) && (t.buildDef !is null)) {
+			float done1 = Requests::Progress(t);
+			if (done1 < 0.f)
+				done1 = 0.f;
+			else if (done1 > 1.f)
+				done1 = 1.f;
+			// Raw metal both sides: this is "which order finishes both sooner",
+			// not a market valuation, so the want's priced mCost (displacement,
+			// premiums) is the wrong side of the comparison.
+			const float ansM = (e.def !is null) ? e.def.costM : e.mCost;
+			if ((1.f - done1) * t.buildDef.costM <= ansM)
+				continue;
+		}
 		Want@ mx = ProposeMex(u);
 		if ((mx !is null) && (mx.value > e.value))
 			continue;
@@ -1321,6 +1498,7 @@ void StallWatch()
 			+ " progress=" + formatFloat(Requests::Progress(p.task), "", 0, 2)
 			+ " (" + (i + 1) + "/" + picks.length() + ")"
 			+ " leaves its build to answer the energy stall");
+		DebtNote(p, p.task);   // before Abort(): the task is what holds the frame
 		p.task.Abort();
 	}
 }

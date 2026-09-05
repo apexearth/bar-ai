@@ -162,6 +162,45 @@ bool AdoptWorthDetour(CCircuitUnit@ unit, Want@ w, const AIFloat3 &in at,
 	return extraSec * Wage() <= d0 * ((w.def is null) ? 0.f : w.def.costM);
 }
 
+// PAYING BACK THE STALL INTERRUPT (army.as carries the ledger; this is the
+// only half that spends). The frame this unit abandoned is standing with
+// nothing bound to it, and the finish-before-founding block below cannot reach
+// it: that one only ever looks for an orphan of the def the market JUST
+// picked, and the market does not pick the plant again -- the ledger reads it
+// as committed, so the next election buys an LLT beside him instead
+// (apexearth: "makes a solar, and then decides to make an LLT instead of going
+// back to the factory").
+//
+// A Guard on the frame, not a build task: a build order needs a free square
+// and the frame is standing on the only one that matters -- the same shape
+// Take() and the adoption block use. Held for as long as the frame has left to
+// run at one pair of hands.
+IUnitTask@ StallDebtPay(CCircuitUnit@ unit)
+{
+	CCircuitUnit@ frame = StallDebtFrame(unit);
+	if ((frame is null) || (frame.circuitDef is null))
+		return null;
+	float done = frame.GetHealthPercent();
+	if (done < 0.f)
+		done = 0.f;
+	else if (done > 1.f)
+		done = 1.f;
+	const float left = frame.circuitDef.costM * (1.f - done);
+	const int hold = int(left / Requests::DRAIN) + 10;
+	IUnitTask@ res = aiBuilderMgr.Enqueue(TaskB::Guard(
+			Task::Priority::NORMAL, frame, false, hold * SECOND));
+	if (res is null)
+		return null;   // the row stands: he owes it at the next election too
+	StallDebtSettle(unit);
+	const AIFloat3 fp = frame.GetPos(ai.frame);
+	AiLog(Factory::T() + "apex: stall-debt paid " + unit.circuitDef.GetName()
+		+ " #" + unit.id + " -> " + frame.circuitDef.GetName()
+		+ " done=" + formatFloat(done, "", 0, 2)
+		+ " at=" + int(fp.x) + "," + int(fp.z)
+		+ " (paid=" + DebtPaid() + " dropped=" + DebtDropped() + ")");
+	return res;
+}
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used

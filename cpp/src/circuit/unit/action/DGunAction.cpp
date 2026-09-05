@@ -149,6 +149,17 @@ void CDGunAction::Update(CCircuitAI* circuit)
 				++nRay;
 				continue;
 			}
+			// The shot does not stop at the target: it runs to full range.
+			// Nothing of ours may stand in the rest of the ray.
+			const float rest = range - rayRange;
+			if (rest > 1.f) {
+				const AIFloat3 past = enemy->GetPos() + dir * 48.f;
+				ICoreUnit::Id behind = circuit->GetDrawer()->TraceRay(past, dir, rest, unit->GetUnit(), 0);
+				if ((behind != -1) && (behind != enemy->GetId()) && (circuit->GetFriendlyUnit(behind) != nullptr)) {
+					++nRay;
+					continue;
+				}
+			}
 		}
 
 		const float defScore = notByCost ? edef->GetPower() : edef->GetCostM();

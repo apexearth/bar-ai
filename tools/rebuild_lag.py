@@ -18,7 +18,7 @@ import sys
 
 MEX = ("armmex", "cormex", "legmex", "armamex", "coramex", "armmoho", "cormoho", "legmoho")
 DEATH = re.compile(r"apex: unit-destroyed (\w+) .*?frame=(\d+) at=(\d+),(\d+)")
-EXEC = re.compile(r"\[f=0*(\d+)\].*apex: exec t=(\d+) (\w+) #\d+ mex:\S* pick=(\d+) at=(\d+),(\d+)")
+EXEC = re.compile(r"\[f=0*(\d+)\].*apex: exec t=(\d+) (\w+) #\d+ mex:\S* pick=(\d+)(?: redraw=\d+)? at=(\d+),(\d+)")
 REBUILD = re.compile(r"apex: rebuild \w+ #\d+ spot=(\d+),(\d+) (.*)")
 ARMY = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d) n=(\d+)")
 RESULT = re.compile(r"\[BARAI_RESULT\] reason=\S+ frame=(\d+) winners=(\S*)")

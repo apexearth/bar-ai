@@ -526,8 +526,13 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				const float sink = OverflowM() * pipe;
 				const float fillS3 = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 				const float gapF = ArmyTargetFull() - ArmyValue();
-				const float gapStream = (gapF > 0.f)
-						? (gapF / ((fillS3 > 1.f) ? fillS3 : 60.f)) * pipe : 0.f;
+				// The lab adds only the flow the economy can feed it: while the
+				// front is eating the army the spare is nil and the gap is the
+				// lines' (apexearth: "a T2 lab while losing... never").
+				float gapRate = (gapF > 0.f) ? gapF / ((fillS3 > 1.f) ? fillS3 : 60.f) : 0.f;
+				if (gapRate > SpareMetalRate())
+					gapRate = SpareMetalRate();
+				const float gapStream = gapRate * pipe;
 				// Unlock-only. Overflow is a poor reason to buy a production
 				// LINE -- nanos, converters and storage are already wants for
 				// exactly that, and they do not commit us to a unit mix. A

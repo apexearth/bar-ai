@@ -1292,10 +1292,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 	}
 
 	if (unit->IsMoveFailed(lastFrame)) {
+		// ROAM unsticks a fighter; on a builder it was permanent, and a
+		// roaming commander is the one that chases "into the sunset".
+		const bool roam = !unit->GetCircuitDef()->IsBuilder();
 		TRY_UNIT(this, unit,
 			unit->CmdStop();
-			unit->CmdSetMoveState(CCircuitDef::MoveType::ROAM);
+			if (roam) {
+				unit->CmdSetMoveState(CCircuitDef::MoveType::ROAM);
+			}
 		)
+		if (unit->GetCircuitDef()->IsRoleComm()) {
+			LOG("apex: move-failed commander #%d roam=%d", unit->GetId(), roam ? 1 : 0);
+		}
 //		Garbage(unit, "stuck");
 		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
 	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
@@ -1911,6 +1919,42 @@ int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
 // the position is outside the base entirely. Everything that must sit on a
 // specific piece of ground (a metal spot, a geo vent, a tower on the front) is
 // excluded by the CALLER on build type; this only knows about geometry.
+// Distance from an offset on either base axis to the nearest walkway centre.
+static inline float LaneGapAt(float u, float pitch)
+{
+	return std::fabs(u - std::round(u / pitch) * pitch);
+}
+
+// The first cell clear of the walkway, on the side the offset already sits.
+static inline float PushOutOfLane(float u, float cell, float pitch, float half)
+{
+	const float centre = std::round(u / pitch) * pitch;
+	const float gap = std::fabs(u - centre);
+	if (gap >= half) {
+		return u;
+	}
+	const float push = std::ceil((half - gap) / cell) * cell;
+	return u + ((u >= centre) ? push : -push);
+}
+
+bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
+{
+	if ((gridLanePitch <= .0f) || (gridLaneHalf <= .0f)
+		|| !utils::is_valid(gridAnchor) || !utils::is_valid(pos))
+	{
+		return false;
+	}
+	const float dx = pos.x - gridAnchor.x;
+	const float dz = pos.z - gridAnchor.z;
+	if ((dx * dx + dz * dz) > (gridRange * gridRange)) {
+		return false;  // not in the base; the streets are a base layout, not a map one
+	}
+	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
+	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
+	return (LaneGapAt(lat, gridLanePitch) < gridLaneHalf)
+		|| (LaneGapAt(depth, gridLanePitch) < gridLaneHalf);
+}
+
 bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 		CCircuitDef* def, int facing) const
 {
@@ -1945,18 +1989,16 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 		if (cellDepth < gridCell) cellDepth = gridCell;
 	}
 	float sLat = std::round(lat / cellLat) * cellLat;
-	const float sDepth = std::round(depth / cellDepth) * cellDepth;
+	float sDepth = std::round(depth / cellDepth) * cellDepth;
 
-	// Walkways are defined on the lateral axis, so a snapped column that lands in
-	// one is pushed sideways to the first cell clear of it. Without this the grid
-	// packs the corridors shut, which is the self-walling it exists to prevent.
+	// Walkways run on BOTH axes, so a snapped cell that lands in one is pushed
+	// clear of it. Without this the grid packs the corridors shut, which is the
+	// self-walling it exists to prevent. Lateral lanes alone leave slabs the
+	// full depth of the base with no way across; the cross-streets cut those
+	// into blocks.
 	if (gridLanePitch > .0f) {
-		const float laneCentre = std::round(sLat / gridLanePitch) * gridLanePitch;
-		const float gap = std::fabs(sLat - laneCentre);
-		if (gap < gridLaneHalf) {
-			const float push = std::ceil((gridLaneHalf - gap) / cellLat) * cellLat;
-			sLat += (sLat >= laneCentre) ? push : -push;
-		}
+		sLat = PushOutOfLane(sLat, cellLat, gridLanePitch, gridLaneHalf);
+		sDepth = PushOutOfLane(sDepth, cellDepth, gridLanePitch, gridLaneHalf);
 	}
 
 	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
@@ -2518,6 +2560,44 @@ float CCircuitAI::GetEnemyCostAt(const springai::AIFloat3& pos, float radius) co
 		delete u;
 	}
 	return count;
+}
+
+// HOW CLOSE THE NEAREST ENEMY IS TO BEING ABLE TO SHOOT THIS SPOT.
+// apexearth 2026-09-06, on rez bots: "they should back away when enemy units
+// are close to being within range of the rezbots". The margin is his own
+// latency bar turned into distance -- whatever ground the enemy covers while we
+// notice and start walking is ground we have to be clear of already, so the
+// envelope is its weapon reach plus `reactS` seconds of its own speed.
+//
+// Unarmed and flying enemies are skipped: a scout is not a reason to abandon a
+// corpse, and no ground bot outruns a gunship, so treating either as pressure
+// only costs work.
+float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
+		springai::AIFloat3* foeOut) const
+{
+	float worst = std::numeric_limits<float>::max();
+	for (const auto& kv : enemyInfos) {
+		CEnemyInfo* e = kv.second;
+		if ((e == nullptr) || e->IsHidden()) {
+			continue;
+		}
+		CCircuitDef* edef = e->GetCircuitDef();
+		if ((edef == nullptr) || edef->IsAbleToFly()) {
+			continue;
+		}
+		const float reach = edef->GetMaxRange();
+		if (reach <= 0.f) {
+			continue;
+		}
+		const float slack = pos.distance2D(e->GetPos()) - (reach + edef->GetSpeed() * reactS);
+		if (slack < worst) {
+			worst = slack;
+			if (foeOut != nullptr) {
+				*foeOut = e->GetPos();
+			}
+		}
+	}
+	return worst;
 }
 
 // Threat at a position, from the engine-maintained threat map.

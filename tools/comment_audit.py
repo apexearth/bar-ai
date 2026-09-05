@@ -59,6 +59,25 @@ QUOTE = re.compile(
 COMMENT = re.compile(r"^\s*(?://|#)")
 SRC = (".as", ".py", ".cpp", ".h", ".lua")
 
+# PROSE FILES get the same question, because the same habit fills them.
+# apexearth 2026-09-05, on a docs/27 entry: "It's so black and white... This is
+# a good example of comments/content being added to our docs, blowing up our
+# context, and causing baggage we carry down the road."
+PROSE = ("docs/", "ISSUES.md", "USER-FEEDBACK.md", "TODO.md", "CLAUDE.md",
+         "BAR-GUIDE.md", "README.md")
+
+# A rule stated without its exception is baggage: the next session obeys it
+# where it does not apply, or deletes it and loses the finding with it. The
+# condition is usually one clause -- "when the worker is safe" -- and stating it
+# costs less than the confusion of leaving it out.
+ABSOLUTE = re.compile(
+    "(?x) (?<![A-Za-z]) (?: NEVER | ALWAYS ) (?![A-Za-z])"
+    " | (?i: (?<![A-Za-z]) must [ ]+ never (?![A-Za-z]) )")
+
+# Lines one prose file may gain before the diff is asked to justify them.
+# Context is the budget: every line here is re-read by every session after.
+PROSE_BUDGET = 25
+
 
 def added_lines(since):
     """[(path, lineno, text)] for lines this diff ADDS."""
@@ -77,6 +96,25 @@ def added_lines(since):
             if path and path.endswith(SRC):
                 yield path, ln, line[1:]
             ln += 1
+
+
+def prose_added(since):
+    """{path: [(lineno, text)]} for PROSE lines this diff adds."""
+    cmd = ["git", "diff", "-U0"] + ([since] if since else [])
+    out = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                         errors="replace").stdout
+    got, path, ln = {}, None, 0
+    for line in out.splitlines():
+        if line.startswith("+++ b/"):
+            path = line[6:]
+        elif line.startswith("@@"):
+            m = re.search(r"\+(\d+)", line)
+            ln = int(m.group(1)) if m else 0
+        elif line.startswith("+") and not line.startswith("+++"):
+            if path and path.startswith(PROSE) and line[1:].strip():
+                got.setdefault(path, []).append((ln, line[1:]))
+            ln += 1
+    return got
 
 
 def all_lines():
@@ -163,15 +201,34 @@ def main():
         if len(essays) > 40:
             print("  ... and %d more" % (len(essays) - 40))
         print()
-    if not reports and not essays:
-        print("clean: no run reports, no blocks over %d lines in %s"
-              % (a.max_block, scope))
+    prose = {} if a.all else prose_added(a.since)
+    fat = {f: v for f, v in prose.items() if len(v) > PROSE_BUDGET}
+    absolutes = [(f, ln, t) for f, v in prose.items() for ln, t in v
+                 if ABSOLUTE.search(t)]
+    if fat:
+        print("PROSE ADDED in %s -- docs are context every future session pays"
+              " for; keep the rule, drop the transcript:" % scope)
+        for f, v in sorted(fat.items(), key=lambda e: -len(e[1])):
+            print("  %-42s +%d lines" % (f, len(v)))
+        print()
+    if absolutes:
+        print("ABSOLUTES in added prose -- state the condition, not the ban"
+              " (apexearth: \"It's so black and white\"):")
+        for f, ln, t in absolutes[:20]:
+            print("  %s:%d" % (f, ln))
+            print("      %s" % (t.strip()[:110]))
+        print()
+
+    if not reports and not essays and not fat and not absolutes:
+        print("clean: no run reports, no blocks over %d lines, no prose bloat"
+              " in %s" % (a.max_block, scope))
         return 0
 
-    print("%d run report(s), %d oversized block(s). Neither is an error --"
-          % (len(reports), len(essays)))
-    print("both are the question: does this belong next to the code, or in the")
-    print("commit that made it true?")
+    print("%d run report(s), %d oversized block(s), %d fat prose file(s),"
+          " %d absolute(s)." % (len(reports), len(essays), len(fat),
+                                len(absolutes)))
+    print("None is an error. Each is the question: does this belong here, or in")
+    print("the commit that made it true?")
     return 1 if a.strict else 0
 
 

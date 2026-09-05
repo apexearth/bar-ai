@@ -68,6 +68,24 @@ disperse. Skipped for the eco lead, whose army is deliberately tiny.
 
 ## Military — stance, engagement, squads
 
+### `TUNE_RAID_ASK` = 1.f
+
+The raid is asked for, not waited for (apexearth 2026-09-05). 0 leaves only the
+stock pool, which needs raiders to trickle in and merge before `quota.raid.min`;
+13 reached it in one 16-minute game and no raid formed. At 1, `military/raid.as`
+scores enemy-side metal spots as prize over the influence guarding them, sizes a
+pack at that guard times `apex_local_edge`, and pulls units so they re-elect onto
+it. `CRaidTask` still picks the actual target.
+
+Taking a constructor's escort is fine when the worker is safe and costly when it
+is not; pulling them regardless moved metal built 10,732 -> 7,963 while raids
+doubled. Gated on the worker's own cover instead, six seeds: raids 4.0 -> 10.8
+min/game (up in 6 of 6), losses -18%, metal built +4%, kills +3%. The behaviour
+is reliable; the outcome gain is not established — a three-seed read of the same
+change said kills +62% and did not survive six.
+
+Do not call `Market::CacheSpots()` from this pass -- docs/25 S20.
+
 ### `TUNE_RECALL_HOME_FWD` = 0.5f
 
 Only squads this far past our own territory (ForwardFraction) are recalled --
@@ -1066,6 +1084,19 @@ clock, so with several bots idle most of them lost the race every period and
 stood still. Lower is more responsive and costs one feature query per bot per
 period.
 
+### `TUNE_REZ_REACT_S` = 1.f
+
+how much of the enemy's own walking counts as being in range already. A rez bot
+backs away while the nearest enemy is still this many seconds short of its
+firing envelope (its weapon reach plus speed x this), and refuses work inside
+that envelope. Not picked: it is apexearth's own latency bar -- "delays of more
+than a second are unacceptable" (2026-09-06) -- turned into distance, since the
+ground the enemy covers while we notice and start moving is ground we have to be
+clear of already. Read by both the DLL's guard (BuilderManager's UpdateRezGuard,
+six times a second) and every rez election (`ReachSlack`, sitesafety.as), so the
+reflex and the election cannot disagree. Higher = a wider no-go ring and fewer
+corpses eaten; 0 = back away only once the shooting can already reach.
+
 ### `TUNE_RAIDER_MASSING` = 0.f
 
 1 = raiders join the massing pool once our advanced lab stands and fight as
@@ -1168,6 +1199,39 @@ sheldons... they won't walk up to enemies to shoot at them. They are there as a
 shield." The screen line is highestRange - this; clamped so it can only add
 standoff, never pull a row closer than its own reach. 0 restores "stand at your
 own range" for every armed row, which is the control arm.
+
+**96 MEASURED WORSE, THREE WAYS, AND WAS REVERTED (2026-09-05.)** apexearth:
+"Ensure that our tankier units in squads don't dive too deep into enemy lines...
+Rely on rocketbots to shoot from long range." This number IS the dive depth, so
+one formation rank (`SQUAD_FILE_SPACING`, 96) should have been the shallower,
+safer screen. Four 24-game arms, Apex vs BARb hard, Comet Catcher / Callisto /
+Glacier Pass, 25 min, identical DLL with the arm selected by modoption:
+
+| arm | metal K/D | built | produced | T2 |
+|---|---|---|---|---|
+| **200 (kept)** | **0.414** | 24,932 | 25,858 | 3,840 |
+| 96, every short row | 0.357 | 21,564 | 23,718 | 0 |
+| 96, rows at/above squad-average hp | 0.393 | 22,064 | 25,050 | 3,135 |
+| 96, rows out-tanking the carry | 0.321 | 27,174 | 26,120 | 4,690 |
+
+The mechanism, from the `apex: screen` line added the same day: the rows that
+actually screen are chaff, not tanks. corak (Grunt, 280 hp, our most-built unit
+at 1,029 a tournament) and corfav (FAV, 90 hp) held the line, and at 96 they sit
+outside their own 215/180 reach -- a DPS block told to stop shooting. Both
+tankiness gates failed to exclude them (Grunt still screened 456 and 325 times),
+so a working selector is an open problem, not a tuning one.
+
+The last arm is the interesting one: best economy of all four (built 27,174, T2
+4,690, both above the control) and the worst trade, because losses rose 207k ->
+271k for flat kills. Standing the screen shallower buys build time and pays for
+it in army.
+
+What was kept from that session: three clamps in `ISquadTask::Attack` that
+dragged a screen row forward to its own weapon range regardless of the line --
+the coward "rear but still firing" cap, the static-we-outrange ceiling (which
+fires against every unarmed target, so every mex and solar), and the
+`staticCantReply` plain attack, which hands the unit to the engine to close on
+its own. Those are in the 0.414 control arm.
 
 ### `TUNE_TEAM_LINE` = 1.f
 
@@ -1309,3 +1373,57 @@ arrive at our own base before anything has been seen. Without it the target is
 zero until something actually arrives, which is a strategy of having no
 defence.
 
+
+### `TUNE_COMM_FWD_CAP` = 0.25f
+
+Forward fraction (0 home, 1 enemy) beyond which the commander is run home
+under caution, and since 2026-09-05 also the bound on where an election may
+send him: a job whose site is past it is refused before the axis test, which
+alone let a radar 1300 elmos sideways of the anchor through (fwd -267 by the
+axis, 0.82 by the map) and lost him. Commander minutes forward per 6-game
+set: 10-11 before, 0 after. Not tuned; 0.25 is the caution value.
+
+### `LatheHeart` / `FarmSlot` origin (no tunable)
+
+Where an expensive building is founded relative to the build power we already
+own. Instrumented 2026-09-05 with `apex: sink-site` (logged in
+`Requests::Register` for every def `NanoSinkWorthy` accepts): over 35 game
+minutes vs BARb hard, seed 1, **13 of 15** such builds — both fusions, the
+AFUS, the advanced converter, four T2 lab requests, the antinuke, the
+annihilators — were founded with `ringbp=0`, on ground no standing turret
+reached. The nearest turret was 42 to 725 elmos beyond its own reach. Only the
+air plant (`ringbp=800`) and one lab (`ringbp=200`) were inside a ring, and
+both are factories, which is where `ExecuteWant`'s `WK_NANO` branch sends
+turrets in the first place.
+
+Mechanism: `gFarmPos` is planned once, before any turret exists
+(`EcoSiteFor`), and `FarmSlot`'s scan is a corridor one cluster wide and
+`apex_farm_rows` (28) deep running *backward* from it. The turrets meanwhile
+pack at the factories, which that corridor never crosses. Measured positions:
+farm 1968,2976; turrets at 2368,2976 / 1616,2568 / 1424,2448; fusions at
+1120,2792 and 1024,2792; AFUS at 640,3168.
+
+Fix: for `BigEcoDef` only, `FarmSlot` scans from `LatheHeart()` — the standing
+turret with the most build power reaching it — instead of `gFarmPos`. Only the
+window moves; slots still come off `Base::gAnchor`'s lattice, so the phase C++
+snaps to and every layout rule (kin, cluster cap, blast aisle, walkways, spot
+clearance) is untouched.
+
+**Negative result, measured:** gating this on `NanoSinkWorthy` instead of
+`BigEcoDef` is a regression. That predicate's third clause is build time, and
+the advanced solar (7,950) clears a construction turret's (5,300), so the
+advsol pack — strictly serial, and the spine of the energy ladder — had its
+window moved too. Seed 1, same map: advanced solars built 10 → 5, fusions and
+AFUS 12 → 0, none ever priced, and the game was lost at 23.5 min against a
+35-min baseline. Do not widen the predicate without re-measuring the ladder.
+
+**Not yet measured:** the narrowed version has no clean A/B. Another session
+was editing `baseplan/*`, `nanopack.as` and this same file and redeploying
+between runs (silent failure S19), so every post-change run is unattributable.
+The `apex: sink-site` line is the instrument to judge it with: it should show
+`ringbp>0` on `armfus`/`armafus`.
+
+**Still uncovered:** `WK_TECH`, `WK_PLANT` and `WK_SUPER` site from the
+proposer's own `w.pos`, not through `FarmSlot`, so T2 labs, gantries, silos
+and antinukes are unaffected by this. The lab was measured 42 elmos outside a
+turret's reach.

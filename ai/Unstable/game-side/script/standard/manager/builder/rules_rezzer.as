@@ -10,12 +10,104 @@ array<float> gConHp;
 array<int>   gConHitUntil;
 array<int>   gConNextRepair;
 array<int>   gConNextWreck;
+// The front sweep gets its OWN clock. It shared gConNextWreck with the eat and
+// resurrect rules below it and consumed that clock on every scan, found or not
+// -- so a sweep that came back empty (the common case while the front veto was
+// refusing the whole line) locked the resurrect rule out of the same election.
+// rez=0 for whole games, with the bot idle.
+array<int>   gConNextSweep;
 
 // How long one hit keeps a rez bot in flight, and how far apart its own wreck
 // scans sit. Both were fixed numbers, and both read as idling on screen.
 int RezFleeWindow()
 {
 	return int(ai.GetTunable("apex_rez_flee_s", TUNE_REZ_FLEE_S)) * SECOND;
+}
+
+// "They should always angle themselves BEHIND our units in combat. Never
+// stand in front of them where they're likely to become collateral damage"
+// (apexearth, seed 20). A work site is behind the line when it is no
+// further toward the enemy than our units' lane; with no lane there is
+// nothing to be in front of.
+int gRzFrontVeto = 0;
+// Where our combat units actually stand: the forward-most tenth of them,
+// so one runaway raider is not the line. The lane point read 0.1-0.3 of
+// the way to the enemy while the wrecks lay at 0.6-1.0 (rez-inst set).
+int gArmyFrontAt = -1;
+float gArmyFrontFf = -1.f;
+AIFloat3 gArmyFrontPos(-1.f, 0.f, -1.f);
+float ArmyFront(AIFloat3 &out pos)
+{
+	if (ai.frame - gArmyFrontAt >= 5 * SECOND) {
+		gArmyFrontAt = ai.frame;
+		array<float> ffs;
+		array<AIFloat3> at;
+		const AIFloat3 centre = Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f);
+		for (uint d = 1; d < Market::gOwnCount.length(); ++d) {
+			if ((Market::gOwnCount[d] <= 0) || !Catalog::gMobile[d] || Catalog::gBuilder[d]
+				|| (Catalog::gPower[d] <= 1.f) || Catalog::gFlyer[d])
+				continue;
+			array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(int(d)), centre, 30000.f);
+			if (us is null)
+				continue;
+			for (uint k = 0; k < us.length(); ++k) {
+				if (us[k] is null)
+					continue;
+				const AIFloat3 p = us[k].GetPos(ai.frame);
+				if (!OnMap(p))
+					continue;
+				ffs.insertLast(Military::ForwardFraction(p));
+				at.insertLast(p);
+			}
+		}
+		gArmyFrontFf = -1.f;
+		if (ffs.length() > 0) {
+			const uint want = uint(float(ffs.length() - 1) * 0.9f);
+			for (uint i = 0; i < ffs.length(); ++i) {
+				uint rank = 0;
+				for (uint j = 0; j < ffs.length(); ++j)
+					if ((ffs[j] < ffs[i]) || ((ffs[j] == ffs[i]) && (j < i)))
+						++rank;
+				if (rank == want) {
+					gArmyFrontFf = ffs[i];
+					gArmyFrontPos = at[i];
+					break;
+				}
+			}
+		}
+	}
+	pos = gArmyFrontPos;
+	return gArmyFrontFf;
+}
+bool BehindLine(const AIFloat3 &in site)
+{
+	AIFloat3 fp;
+	const float front = ArmyFront(fp);
+	if (front < 0.f)
+		return true;
+	const float ff = Military::ForwardFraction(site);
+	if (ff <= front)
+		return true;
+	// In front of our units -- but he named it IN COMBAT: "never stand in
+	// front of them where they're likely to become collateral damage".
+	// Ahead of the line with nothing able to shoot the spot there is no
+	// fight to be in front of, and the corpse field is ahead of the line by
+	// definition.
+	if (!InEnemyReach(site))
+		return true;
+	gRzVetoFfSum += ff;
+	return false;
+}
+
+// The one question every rez rule asks of ground it is about to send a bot to:
+// is it behind our units, and can anything shoot it? The second half is the
+// same envelope the DLL's guard walks bots out of six times a second, so the
+// election and the reflex cannot disagree and pull the bot back and forth.
+bool RezSiteOk(const AIFloat3 &in site)
+{
+	if (InEnemyReach(site))
+		return false;
+	return BehindLine(site);
 }
 
 int RezScanPeriod()
@@ -36,6 +128,7 @@ int ConSlot(CCircuitUnit@ unit)
 	gConHitUntil.insertLast(0);
 	gConNextRepair.insertLast(0);
 	gConNextWreck.insertLast(0);
+	gConNextSweep.insertLast(0);
 	return int(gConSlotId.length()) - 1;
 }
 
@@ -100,19 +193,21 @@ bool MedicBot(CCircuitUnit@ unit)
 int gNextMedicLog = 0;
 int gNextRezLog = 0;
 
-IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
+// WHERE A REZ BOT WAITS. apexearth 2026-08-22: "medic bots also need to stay
+// safe and not die"; 2026-09-06: "in combat they should stand behind allied
+// units away from enemies". Behind the forward-most of our own combat units by
+// the bot's own build reach -- it still touches the line, and nothing has to
+// walk through it to get there.
+bool RezStationPos(CCircuitUnit@ unit, AIFloat3 &out at)
 {
-	if (!IsRezzer(unit) || !MedicBot(unit))
-		return null;
-	AIFloat3 lane = Military::LanePos();
+	AIFloat3 lane;
+	if (ArmyFront(lane) < 0.f)
+		lane = Military::LanePos();
 	if (!OnMap(lane) || (lane.SqLength2D() < 1.f))
-		return null;
-	// apexearth 2026-08-22: "medic bots also need to stay safe and not die."
-	// The lane is the army's staging anchor -- i.e. where the shooting is. Hold
-	// station this far BEHIND it, toward home, so the wounded step back to the
-	// medic instead of the medic standing in the fight. Still inside apex_medic_r
-	// of the line, so the repair reach is unchanged.
-	const float setback = ai.GetTunable("apex_medic_setback", TUNE_MEDIC_SETBACK);
+		return false;
+	float setback = ai.GetTunable("apex_medic_setback", TUNE_MEDIC_SETBACK);
+	if (setback <= 0.f)
+		setback = Catalog::gBuildDist[int(unit.circuitDef.id)];
 	if ((setback > 0.f) && Builder::gHomeSet) {
 		AIFloat3 toHome = Builder::gHomePos - lane;
 		const float len = sqrt(toHome.SqLength2D());
@@ -122,6 +217,17 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 				lane = back;
 		}
 	}
+	at = lane;
+	return true;
+}
+
+IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
+{
+	if (!IsRezzer(unit) || !MedicBot(unit))
+		return null;
+	AIFloat3 lane;
+	if (!RezStationPos(unit, lane))
+		return null;
 	const int slot = ConSlot(unit);
 	if (ai.frame < gConNextRepair[slot])
 		return null;
@@ -141,6 +247,10 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 			CCircuitUnit@ u = hurt[i];
 			if ((u is null) || (u is unit) || !u.circuitDef.IsMobile())
 				continue;
+			if (!RezSiteOk(u.GetPos(ai.frame))) {
+				++gRzFrontVeto;
+				continue;
+			}
 			const float d = here.distance2D(u.GetPos(ai.frame));
 			if (d < bestDist) {
 				bestDist = d;
@@ -168,7 +278,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	// 2200-elmo reach, which would walk the medic off the army it serves.
 	const AIFloat3 spoil = ai.GetBestWreckPos(here, reach, WRECK_MIN);
 	if ((spoil.x >= 0.f) && (spoil.distance2D(lane) <= reach)
-		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO))
+		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(spoil))
 	{
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::NORMAL, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -194,9 +304,9 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	if (!IsRezzer(unit))
 		return null;
 	const int slot = ConSlot(unit);
-	if (ai.frame >= gConNextWreck[slot]
+	if (ai.frame >= gConNextSweep[slot]
 			&& (Military::LosingGround() || (ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
-		gConNextWreck[slot] = ai.frame + RezScanPeriod();
+		gConNextSweep[slot] = ai.frame + RezScanPeriod();
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
 		// front untouched, and wreck queries are LOS-gated (a corpse field
@@ -219,6 +329,10 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 				AIFloat3 spoil = ai.GetBestWreckPos(stretch, WRECK_SEARCH, WRECK_MIN);
 				if (spoil.x < 0.f)
 					spoil = stretch;
+				if (!RezSiteOk(spoil)) {
+				++gRzFrontVeto;
+					continue;
+				}
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 				if (harvest !is null) {
@@ -235,7 +349,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
 			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
-			if (spoil.x >= 0.f) {
+			if ((spoil.x >= 0.f) && RezSiteOk(spoil)) {
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 				if (harvest !is null)
@@ -310,6 +424,10 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 		const float dist = here.distance2D(u.GetPos(ai.frame));
 		if (dist >= bestDist)
 			continue;
+		if (!RezSiteOk(u.GetPos(ai.frame))) {
+			++gRzFrontVeto;
+			continue;
+		}
 		bestDist = dist;
 		@best = u;
 	}
@@ -355,7 +473,7 @@ IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 				ai.ReadTeamValue(t, "comwz", -1.f));
 		if (!OnMap(at))
 			continue;
-		if (ThreatFor(unit, at) > CON_THREAT_VETO)
+		if ((ThreatFor(unit, at) > CON_THREAT_VETO) || !RezSiteOk(at))
 			continue;
 		IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 				Task::Priority::HIGH, at, 100.f, 120 * SECOND, WRECK_RADIUS));
@@ -398,9 +516,15 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 	if (!(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
-		const AIFloat3 rich = ai.GetBestWreckPos(unit.GetPos(ai.frame),
-				WRECK_SEARCH, ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M));
-		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO)) {
+		// Resurrect pays whenever the unit is worth more standing than as
+		// scrap and the army is short (apexearth: "plenty of resurrection
+		// ability here too but I only seem to see them reclaim"); the 900-
+		// metal bar left every T1 wreck to the reclaim beam.
+		const bool rezPays = (Market::ArmyTarget() > Market::ArmyValue())
+				&& !aiEconomyMgr.isEnergyStalling;
+		const AIFloat3 rich = ai.GetBestRezPos(unit.GetPos(ai.frame), WRECK_SEARCH,
+				rezPays ? WRECK_MIN : ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M));
+		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezSiteOk(rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
 			if (rr !is null) {
@@ -424,7 +548,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// ground is 60 seconds of standing still with nothing to show.
 		const AIFloat3 body = ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
 		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
-			&& (ThreatFor(unit, body) <= CON_THREAT_VETO))
+			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezSiteOk(body))
 		{
 			IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
 					body, 100.f, 60 * SECOND, WRECK_RADIUS));
@@ -448,14 +572,28 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	IUnitTask@ scrap = IdleFeatureReclaim(unit, false);
 	if (scrap !is null)
 		return scrap;
-	if (ThreatFor(unit, unit.GetPos(ai.frame)) > CON_THREAT_VETO)
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if ((ThreatFor(unit, here) > CON_THREAT_VETO) || InEnemyReach(here))
 		return Retreat(unit);
+	// NOTHING TO DO IS NOT A REASON TO STAND HERE. The worst bot in the
+	// rez-front set went 89-215 s without a job, waiting wherever its last one
+	// ended; the corpses and the wounded both appear at the line. Wait behind
+	// our own units instead -- the area reclaim is the move order, and it eats
+	// whatever it finds on the way.
+	AIFloat3 station;
+	if (RezStationPos(unit, station) && !InEnemyReach(station)
+		&& (here.distance2D(station) > ai.GetTunable("apex_medic_r", TUNE_MEDIC_R)))
+	{
+		IUnitTask@ walk = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+				Task::Priority::LOW, station, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+		if (walk !is null)
+			return walk;
+	}
 	// GEOMETRY, NOT THE THREAT READ. ThreatFor is the documented mostly-zero
 	// sensor, so "standing around dangerous areas" (apexearth, watching,
-	// 2026-08-29) read safe to it. An idle rezzer costs nothing to stand
-	// somewhere safe by construction: forward of rear-crew ground with no
-	// job, it retires to the haven and waits for the next corpse there.
-	if (Military::ForwardFraction(unit.GetPos(ai.frame))
+	// 2026-08-29) read safe to it. Forward of rear-crew ground with no job and
+	// no station to hold, it retires to the haven.
+	if (Military::ForwardFraction(here)
 		> ai.GetTunable("apex_rezzer_fwd", TUNE_REZZER_FWD))
 	{
 		return Retreat(unit);

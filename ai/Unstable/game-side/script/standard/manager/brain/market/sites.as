@@ -373,6 +373,23 @@ void ClusterSizes(const array<AIFloat3>& in kin, float link, array<int>& out siz
 // old code handed out a row/column intent and let the task's own 1600-elmo
 // search settle it, which is what turned a blocked slot into a building across
 // the base and lost the lattice phase for everything after it.
+// THE DENSEST STANDING LATHE: the turret with the most build power reaching
+// it, which is the heart of whichever cluster is thickest. Invalid when no
+// nano stands at all.
+AIFloat3 LatheHeart()
+{
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestBP = 0.f;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const float bp = RingBPAt(gOwnNanoPos[i]);
+		if (bp > bestBP) {
+			bestBP = bp;
+			best = gOwnNanoPos[i];
+		}
+	}
+	return best;
+}
+
 AIFloat3 FarmSlot(int defId)
 {
 	CCircuitDef@ def = Catalog::Def(defId);
@@ -431,8 +448,25 @@ AIFloat3 FarmSlot(int defId)
 		claimedDef.insertLast((qt.buildDef is null) ? 0 : int(qt.buildDef.id));
 	}
 
+	// A REACTOR IS SITED FROM THE DENSEST TURRET, not from the farm centre
+	// (apexearth 2026-09-05: build an AFUS "nearby existing construction
+	// turrets to take advantage of the build power we have there"). The farm
+	// centre is planned before any turret exists and these rows then march
+	// backward from it, while the turrets pack at the factories. Only the
+	// window moves: slots still come off Base::gAnchor's lattice, so every
+	// layout rule below decides exactly as before.
+	//
+	// BigEcoDef, not NanoSinkWorthy: the wider predicate sweeps in the advanced
+	// solar, whose pack is serial and carries the energy ladder. See
+	// docs/27-tunable-rationale.md, keyed on LatheHeart.
+	AIFloat3 origin = gFarmPos;
+	if (BigEcoDef(defId)) {
+		const AIFloat3 heart = LatheHeart();
+		if (OnMap(heart))
+			origin = heart;
+	}
 	float depth0 = 0.f, lat0 = 0.f;
-	Base::Coords(gFarmPos, depth0, lat0);
+	Base::Coords(origin, depth0, lat0);
 	depth0 = Lattice::Snap(depth0, pitch);
 	lat0 = Lattice::Snap(lat0, pitch);
 	// AT LEAST ONE CLUSTER WIDE, whatever the footprint. apex_farm_row_w is an
@@ -484,7 +518,8 @@ AIFloat3 FarmSlot(int defId)
 			{
 				float pd = 0.f, pl = 0.f;
 				Base::Coords(p, pd, pl);
-				if (Base::LaneGap(pl) < (Base::LANE_HALF + pitch * 0.5f))
+				const float lh = Base::LaneHalf() + pitch * 0.5f;
+				if ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))
 					continue;
 			}
 			// Rule 1/2: how many kin this slot would touch, how many it would
@@ -560,7 +595,7 @@ AIFloat3 FarmSlot(int defId)
 				continue;
 			// Nearest such ground to the farm centre, so a new cluster opens
 			// beside the base rather than out in the map.
-			const float d0 = p.distance2D(gFarmPos);
+			const float d0 = p.distance2D(origin);
 			if ((seedScore < 0.f) || (d0 < seedScore)) {
 				seedScore = d0;
 				seedAt = p;
@@ -601,7 +636,7 @@ AIFloat3 FarmSlot(int defId)
 			return site;
 		}
 	}
-	return gFarmPos - Base::gFwd * gFarmDepth;
+	return origin - Base::gFwd * gFarmDepth;
 }
 
 // Factory ground: the REAR FLANK of the farm block (apexearth: T2 labs
@@ -920,7 +955,9 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 
 AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 {
-	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet) {
+	// The farm latches only once the anchor is final: before the lab the
+	// anchor tracks the centroid of what stands (Base::Frame).
+	if (!gFarmSet && Base::gAnchorSet && Base::gAxisSet && Base::gAnchorFinal) {
 		// Within nano reach of the anchor: the block must serve the lab AND
 		// the eco builds beside it (apexearth: nanos "not even within range
 		// of the T1 lab they would support").
@@ -936,7 +973,17 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 				+ " (rear of base axis, r=" + formatFloat(NanoRange(), "", 0, 0) + ")");
 		}
 	}
-	return gFarmSet ? gFarmPos : unit.GetPos(ai.frame);
+	if (gFarmSet)
+		return gFarmPos;
+	if (Base::gAnchorSet && Base::gAxisSet) {
+		float back = ai.GetTunable("apex_farm_back", TUNE_FARM_BACK);
+		if (back > NanoRange() * 0.8f)
+			back = NanoRange() * 0.8f;
+		const AIFloat3 spot = Base::gAnchor - Base::gFwd * back;
+		if (OnMap(spot))
+			return spot;
+	}
+	return unit.GetPos(ai.frame);
 }
 
 // Nano turrets: standing build power, priced by the BP gap it fills. A nano
@@ -1147,6 +1194,22 @@ bool NanoSinkWorthy(int bd)
 	if (bt <= 0.f)
 		return false;
 	return (LatheBuildTime() > 1.f) && (bt >= LatheBuildTime());
+}
+
+// How far this ground sits OUTSIDE the nearest standing nano's circle:
+// negative when a turret already covers it, and NO_NANO when none stands.
+// Signed, so the sentinel cannot be read as "covered".
+const float NO_NANO = 1.0e6f;
+float NanoGap(const AIFloat3& in at)
+{
+	float gap = NO_NANO;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		const float d = at.distance2D(gOwnNanoPos[i]) - r;
+		if (d < gap)
+			gap = d;
+	}
+	return gap;
 }
 
 float RingBPAt(const AIFloat3& in at)

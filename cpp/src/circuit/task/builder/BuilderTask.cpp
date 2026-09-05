@@ -38,6 +38,23 @@ namespace circuit {
 
 using namespace springai;
 
+// A site the script chose and the lattice must not move: an extractor sits on
+// its spot or not at all, and a turret, a factory or a pylon was placed for
+// where it is. Everything else is farm and belongs on the grid.
+static inline bool IsFixedSite(IBuilderTask::BuildType buildType)
+{
+	return (buildType == IBuilderTask::BuildType::MEX)
+		|| (buildType == IBuilderTask::BuildType::MEXUP)
+		|| (buildType == IBuilderTask::BuildType::GEO)
+		|| (buildType == IBuilderTask::BuildType::GEOUP)
+		|| (buildType == IBuilderTask::BuildType::DEFENCE)
+		|| (buildType == IBuilderTask::BuildType::BUNKER)
+		|| (buildType == IBuilderTask::BuildType::BIG_GUN)
+		|| (buildType == IBuilderTask::BuildType::PYLON)
+		|| (buildType == IBuilderTask::BuildType::FACTORY)
+		|| (buildType == IBuilderTask::BuildType::TERRAFORM);
+}
+
 IBuilderTask::BuildName IBuilderTask::buildNames = {
 	{"factory", IBuilderTask::BuildType::FACTORY},
 	{"nano",    IBuilderTask::BuildType::NANO},
@@ -305,11 +322,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	// opposite reason -- packing labs into the lattice is what leaves no room to
 	// tech up, and the point of the lattice is to keep that room free for them.
 	AIFloat3 pos;
-	const bool isFixed = (buildType == BuildType::MEX) || (buildType == BuildType::MEXUP)
-			|| (buildType == BuildType::GEO) || (buildType == BuildType::GEOUP)
-			|| (buildType == BuildType::DEFENCE) || (buildType == BuildType::BUNKER)
-			|| (buildType == BuildType::BIG_GUN) || (buildType == BuildType::PYLON)
-			|| (buildType == BuildType::FACTORY) || (buildType == BuildType::TERRAFORM);
+	const bool isFixed = IsFixedSite(buildType);
 	// Facing first (FindBuildSite recomputes it identically): the parity snap
 	// needs it because the engine swaps xsize/zsize for east/west.
 	FindFacing(position);
@@ -922,7 +935,24 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 	if ((buildType == BuildType::DEFENCE) && (buildDef != nullptr)) {
 		threatBar = std::max(THREAT_MIN, buildDef->GetPower());
 	}
-	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder, threatBar](const AIFloat3& p) {
+	// THE STREETS ARE A RULE HERE, NOT ONLY AT THE SNAP.
+	//
+	// SnapToBaseGrid pushes a placement out of a walkway, and then this search
+	// runs -- at 3200 elmos whenever the slot it snapped to was taken, which in
+	// a filling base is most of the time. Every one of those searches was free
+	// to settle in a corridor, so the lanes held early and quietly closed as the
+	// base packed. Measured over 657 matches: 414 units walled in by our own
+	// buildings, and the wall was the eco farm (solar 133, wind 98, converter 58,
+	// nano 69) rather than anything on the line.
+	//
+	// A FIXED task is exempt: a mex sits on its spot or not at all, and refusing
+	// the spot loses the mex rather than moving it.
+	CCircuitAI* circuit = manager->GetCircuit();
+	const bool keepLanes = !IsFixedSite(buildType);
+	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder, threatBar, circuit, keepLanes](const AIFloat3& p) {
+		if (keepLanes && circuit->IsInBaseLane(p)) {
+			return false;
+		}
 		return terrainMgr->CanReachAtSafe(builder, p,
 				builder->GetCircuitDef()->GetBuildDistance(), threatBar);
 	};

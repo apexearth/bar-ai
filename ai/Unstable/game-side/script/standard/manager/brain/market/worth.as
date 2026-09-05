@@ -304,6 +304,106 @@ float UnitCore(int d)
 // ...and with the per-election terms the candidate is judged on. The line
 // normalizer uses UnitCore, the candidate uses this, which is what lets the
 // ratio exceed 1 -- the same asymmetry the raw gCombat/linePPC pair had.
+// WHAT A BODY IS WORTH IN A FIGHT, no metal in it (apexearth: "value himself
+// based on what we perceive his power to be from his hp, range, dps, speed...
+// and we should value enemies like this too, not based on metal"). The same
+// metrics and exponents as UnitCore, minus the cost divisor, times the
+// production line's speed term. 1.0 is the game's average mobile combat unit.
+float UnitStrength(int d)
+{
+	WorthMeans();
+	if (gWMDps <= 0.f)
+		return Catalog::gCombat[d];
+	float v = 1.f;
+	const float wDps = ai.GetTunable("apex_worth_dps", TUNE_WORTH_DPS);
+	const float wAlpha = ai.GetTunable("apex_worth_alpha", TUNE_WORTH_ALPHA);
+	const float wHp = ai.GetTunable("apex_worth_hp", TUNE_WORTH_HP);
+	const float wRng = ai.GetTunable("apex_worth_range", TUNE_WORTH_RANGE);
+	const float wAoe = ai.GetTunable("apex_worth_aoe", TUNE_WORTH_AOE);
+	if (wDps != 0.f)
+		v *= pow(Catalog::gDps[d] / gWMDps, wDps);
+	if (wAlpha != 0.f)
+		v *= pow(Catalog::gAlpha[d] / gWMAlpha, wAlpha);
+	if (wHp != 0.f)
+		v *= pow(Catalog::gHealth[d] / gWMHp, wHp);
+	if (wRng != 0.f)
+		v *= pow(Catalog::gMaxRange[d] / gWMRng, wRng);
+	if ((wAoe != 0.f) && (gWMAoe > 0.f))
+		v *= pow(1.f + Catalog::gAoe[d] / gWMAoe, wAoe);
+	v *= 1.f + (Catalog::gSpeed[d] / FoeSpeedCap())
+			* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+	return v * PowerMod(d);
+}
+
+// An enemy group's strength: its visible members, each by UnitStrength.
+float EnemyGroupStrength(int gi)
+{
+	float s = 0.f;
+	const int n = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+	for (int k = 0; k < n; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+		if ((d > 0) && (d <= Catalog::gDefCount) && Catalog::gMobile[d]
+			&& (Catalog::gPower[d] > 1.f))
+			s += UnitStrength(d);
+	}
+	return s;
+}
+
+// Strength per metal on each side, so a metal comparison becomes a strength
+// one (apexearth: "compare strength"). A side with nothing fielded reads
+// as the other side's quality, and both empty leaves the metal ratio alone.
+int gQualAt = -1;
+float gFoeQual = 0.f;
+float gOurQual = 0.f;
+bool QualityDef(int d)
+{
+	return (d > 0) && (d <= Catalog::gDefCount) && Catalog::gMobile[d]
+		&& !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f)
+		&& (Catalog::gCostM[d] > 0.f);
+}
+void UpdateQuality()
+{
+	if (ai.frame - gQualAt < 5 * SECOND)
+		return;
+	gQualAt = ai.frame;
+	float oS = 0.f, oM = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !QualityDef(int(d)))
+			continue;
+		oS += float(gOwnCount[d]) * UnitStrength(int(d));
+		oM += float(gOwnCount[d]) * Catalog::gCostM[d];
+	}
+	float fS = 0.f, fM = 0.f;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int gi = 0; gi < nG; ++gi) {
+		const int n = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+		for (int k = 0; k < n; ++k) {
+			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+			if (!QualityDef(d))
+				continue;
+			fS += UnitStrength(d);
+			fM += Catalog::gCostM[d];
+		}
+	}
+	gOurQual = (oM > 0.f) ? oS / oM : 0.f;
+	gFoeQual = (fM > 0.f) ? fS / fM : 0.f;
+	if (gOurQual <= 0.f)
+		gOurQual = (gFoeQual > 0.f) ? gFoeQual : 1.f;
+	if (gFoeQual <= 0.f)
+		gFoeQual = gOurQual;
+}
+float FoeQualityM() { UpdateQuality(); return gFoeQual; }
+float OurQualityM() { UpdateQuality(); return gOurQual; }
+// theirs/ours as strength, from the two metal totals.
+float StrRatio(float theirsM, float oursM)
+{
+	if (theirsM <= 0.f)
+		return 0.f;
+	if (oursM <= 1.f)
+		return 1e6f;
+	return (theirsM * FoeQualityM()) / (oursM * OurQualityM());
+}
+
 float UnitPPC(int d)
 {
 	float v = UnitCore(d) * WorthModOf(d);

@@ -16,6 +16,118 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-05 — Utilization() is blind to factories, so an idle gantry does not discount the next one
+
+apexearth: *"we have a lot of gantries which are idle yet we will continue to
+create more gantries. Why bother making a gantry if we're not using the ones we
+already have?"*
+
+`Utilization()` (`market/army.as:1172`) is the term written to stop exactly
+this — its own comment reads *"capability nobody uses is not capability"* — and
+it iterates `gWorkers`, the mobile-BUILDER list (`market/guards.as:353`). It
+counts constructors holding a task. **It never looks at a factory.** It scales
+`apex_plant_pipe` in `want_plant.as:758` and the BP gain in
+`production.as:280`, so a base with four idle gantries prices the fifth exactly
+as it would with four busy ones.
+
+The other half of the same loop, still standing: in `want_plant.as` the
+supported-line count reads `structInc = income + OverflowM()` (`:716`) and
+`prodTerm` is capped by `SpareMetalRate() = gMSpareEma + OverflowM()` (`:748`).
+Both are "metal nothing is spending" — which idle production is what CREATES.
+The less the lines build, the more affordable another line looks.
+
+The army-demand half of this was fixed 2026-09-05 (`RichArmyGapM`, production.as
+— free flow instead of the storage-gated overflow), which is upstream of it: a
+line that has army to build is not idle, so the blind term stops being reachable
+in the common case. It is still wrong, and it is still the term that would catch
+a line idle for any OTHER reason. Not yet measured, so not yet changed.
+
+## 2026-09-05 — the STALL interrupt abandons builds at ANY progress, commander first
+
+apexearth: *"Sometimes we will build 90% of a building and then choose to do
+something else... I've seen it happen with a commander on the botlab in the
+beginning of a game."* Third time this shape has been raised — the comment in
+`requests/register.as:317` already quotes him on it (*"when we e-stall we think
+to do something else... instead of choosing to finish the original lab
+afterwards we just start making a new one"*).
+
+**Mechanism, pinned.** `market/army.as` StallDry → `p.task.Abort()`. The picker
+runs two passes over the workers (commander inserted at the FRONT of the
+candidate list, `army.as:1277`):
+
+- pass 0 refuses anyone with `Requests::Progress(t) > 0.01` — walkers only, the
+  free interrupt. Correct.
+- **pass 1 has no progress term at all.** If every candidate is mid-build it
+  takes one anyway, and 96%-done is as takeable as 2%-done.
+
+`Abort()` kills the request while the builder is still standing on it, so the
+task dies `crew=1 fails=0 framed=1 why=?` (no death note — that combination in
+the `task-die` histogram IS this rung) and the frame is handed to the orphan
+ledger. Nothing walks the interrupted builder back afterwards; he re-elects from
+scratch and the market sites the next thing wherever it likes.
+
+**Measured**, `grep "STALL interrupt" matches/*/infolog.txt`: 4,986 interrupts
+across 336 match logs; **605 abandon a build with real progress (≥0.10), 53 of
+those at ≥0.90**. The commander is 1,869 of the 4,986 — armcom 1,156, corcom
+713 — because he is deliberately ordered first. What gets abandoned with
+progress on it: armnanotc 94 (armck), armllt 47 (armcom), armmex 26 (armcom),
+armvp 12 + corvp 10 + armalab 10 + armlab 5 (the plant cases he watched).
+Current build still does it: 66 interrupts in
+`matches/20260905-203045-…-BARb-stable-hard`, 7 of them with progress.
+
+**His exact report, reproduced**, `matches/20260830-063145-…-BARb-stable-hard`:
+
+```
+f=2550 STALL interrupt -- armcom #30690 progress=0.96 (1/1)
+f=2550 task-die t=0 armlab bt=0 at=688,1872 fails=0 crew=1 framed=1 why=?
+f=2550 frame-orphan armlab at=688,1872 done=0.96
+f=2577 exec t=0 armcom #30690 energy:armsolar pick=0 at=384,1658   (304 away)
+f=3001 exec t=0 armcom #30690 mex:armmex   pick=0 at=1376,1136     (further still)
+```
+
+A lab four seconds from finishing, dropped for a solar. (That one survived —
+the engine build order outlived the task and it completed at f=2571 — which is
+luck, not design; t0 was still the last of eight teams to field a lab.)
+
+**Not yet decided (his call, per docs/26):** what the pass-1 interrupt should
+cost. Options, none of them a flat threshold: charge the interrupt the metal
+already sunk in the frame (`Progress × costM`) against the stall it answers, so
+a 96% lab is unaffordable and a 5% one is cheap; or keep the interrupt and make
+the interrupted builder's NEXT election re-adopt its own orphan
+(`PendAnyOfDef` exists and already answers "the same def wherever it stands" —
+nothing calls it on the return trip). The instrument is already in place: the
+`STALL interrupt … progress=` line and the paired `frame-orphan … done=`.
+
+**Instrument gap while we are here:** the `task-die` line has no progress field,
+so the abandonment rate can only be read by pairing it against `frame-orphan` on
+frame+def+position. One `prog=%.2f` on that line would make it a one-grep
+question.
+
+## 2026-09-05 — army_mix.py and expected_units.py still cannot see units under 120 metal
+
+`dev_stats_export.lua:44-47` sets `SPAM_COST = 120` and at :359-364 diverts every
+def cheaper than that into `cheapBuilt=`, out of `builtReal`, `allBuilt=` and
+`top=`. `top=` is additionally only the top FOUR defs per player-game
+(:631-639), so pooling it across games over-weights whatever placed in each
+game's top four.
+
+`tools/composition.py` was fixed on 2026-09-05 to pool `allBuilt` + `cheapBuilt`
+and to report `unitCount=`. Two tools still read the truncated or partial fields:
+
+- `tools/army_mix.py:43-47` reads ONLY `top=` -- the top-4, cheap units missing.
+- `tools/expected_units.py:117` reads ONLY `allBuilt=`, so its "did we build the
+  units we expect" check cannot see a cheap def at all, which is exactly the
+  question that tool exists to answer.
+
+What the blindness cost, before the composition.py fix: `corstorm` (Aggravator,
+the Cortex T1 rocket bot) is 110 metal and `armrock` (Rocketeer, Armada's) is
+120, so the same unit class was visible for one faction and invisible for the
+other. This produced a wrong finding in this repo on 2026-09-05 -- "Cortex builds
+no rocket bots, so the tanky row has no carry to screen for" -- when corstorm was
+outspending the Thug 4.6:1 and winning 129 produce elections to 53. Any past
+conclusion of the form "Apex's army is all Thugs" drawn from these three tools is
+suspect.
+
 ## 2026-09-04 — EARLY FIGHT TEST: the first five minutes contain no fights on the harness
 
 `tools/test_earlyfight.py` is the loop for docs/24's no-turret test: Apex with
@@ -635,10 +747,27 @@ at all, and the same T2 flip is what turns the whole raider class into line
 army. This also re-loses his 2026-08-20 "tit for tat" ruling, which is quoted
 in UpdateRaidCaution's own comment.
 
-Not yet fixed: the redesign is a policy question (does a raider stay a raider
-once we are on T2, and does raid pack size scale with income rather than
-flipping on a tier flag?) and needs his answer before anything is priced.
+**2026-09-05 — RULED, and the numbered list above is stale.** apexearth, asked
+whether a raider stops being a raider on T2: *"Even marauders are raiders and
+most people play them as raiders, skirting their way around the front lines to
+attack enemies behind"* — Marauder (`armmar`) is T3, named as the extreme case.
+No tier converts the class, and the route is part of it. `docs/24` carries it.
+Diverters 1 and 2 are already off by default (`TUNE_RAIDER_MASSING = 0`,
+`TUNE_SPAM_RAIDERS = 0`, both since 2026-08-30) — check the tunables before
+repeating them, as this entry was once quoted forward without doing so.
 
+A third diverter was real and is fixed: the cover branch in `AiMakeTask` claimed
+the raider class permanently, because `gPostReq` floored each asset's cover need
+at its own worth and so demanded the whole base's worth in guards. It is
+`Market::ThreatM(pos)` now.
+
+What remains is the pool, not the routing. The `apex: elect` branch census shows
+13 raiders reaching `Defend(RAID, raid.min)` in one game with zero raids formed:
+`Enqueue` builds a fresh one-unit `CDefendTask` per unit, packs form only via
+`GetMergeTask()`, and a 2.5-power Pawn against an 18-power bar never gets there.
+`military/raid.as` (`apex_raid_ask`) works around it from the script side by
+assembling packs directly. The pool itself is still wrong, and separating raid
+from massing pools in the census needs `GetPromote()` bound — a DLL change.
 
 ## 2026-08-30 — parallel expensive energy: FIXED, two residues open
 
@@ -1102,6 +1231,36 @@ regime the bank is pinned full, so it aborts always. The C++ fix is the
 same either way: drop/gate the metal-full abort (space reclaim matters
 most exactly when full) or bind CmdReclaimUnit.
 
+## 2026-09-05 (morning) — what he saw in the first watched game on the committed build
+
+Seed 16, lost 17.5 min, lab 13.7, commander 17.4. His words and the mechanism:
+
+- **"The commander always seems to make his lab in the same spot, even when
+  it's really far from the last mex he makes."** Plants stand at the base
+  anchor = the commander's START position, the only candidate; the lab want
+  paid the walk back (t=2534) and still won. His ruling: *"the base anchor
+  should depend on where our buildings are placed. So if we made 3 mexes
+  then our anchorpoint is between them all."* Built: before the lab stands
+  `Base::gAnchor` tracks the centroid of `Market::gPfPos`; the farm latches
+  only once the anchor is final. Smoke: lab at 557,6626 beside mexes at
+  504,7176 / 552,6872.
+- **"Wind on this map is 5-25... we should be making more wind but I still
+  see mostly solar."** The game chose 8 wind / 6 solar; every solar carried
+  `why=estall` -- his own hard-stall ruling (basic solar under 300 E/s).
+  His answer: *"make energy earlier, that'll save us metal in the long
+  run."* Built: `LineDrainE()` -- the production draw of factories in
+  flight or standing idle, which the pull does not show yet -- is added to
+  the energy spot price (`ECostSpot`), so the price rises before the lab's
+  first unit stalls us; `apex: energy ... lineE=` shows it.
+- **Commander deaths decide the losses (17 of 36 last night, 16 inside the
+  retreat task).** Seed 16: the com-fwd MEX exemption (added 09-04) sent
+  him to a 0.45-value spot 1900 elmo out at 12.9; hurt at 14.5, then a
+  3-minute retreat loop along the map edge (rear haven with no lab alive),
+  caught at 17.4. The exemption is removed; his "commander stays home"
+  ruling stands (spots inside 400 forward remain his). The retreat-path
+  loop itself is still open: `GetRearHaven` pushes the haven 900 elmo away
+  from the enemy centroid and the target flips as that centroid moves.
+
 ## 2026-09-04 (night) — what he saw in the fair raid game, and the mechanisms
 
 Watched level 5 (five groups from five bearings, raiders sized to half our
@@ -1509,3 +1668,191 @@ income-supported count). Next lever: scale LineWindow with the overflow, or
 let plant demand read the overflow the same way. Measure on metal-wasted at
 +100%, 35 min. Related singles: our gantry hit 21.1m (seed 14) vs 30.2m in
 his game after the super-lane copy law — directional, one seed each.
+
+### Second watched game (seed 17, lost at 16 min) and what was changed for it
+
+His words are in docs/24 and USER-FEEDBACK. Mechanisms found, each in the log:
+
+- **No rezbots, ever.** `armrectr` is a builder to the catalog, so it priced
+  in the builder branch on the loss pool alone in build-power units, then
+  paid the con discounts, and was dropped silently at gain <= 0.5. Never in
+  `prodrank`. Now priced after the loop as army: restore rate =
+  min(unmet stream, BP x line metal-per-effort x util) with the stream =
+  own AND enemy wrecks (`AiEnemyDestroyed byUs` feeds the pool) / horizon +
+  medic share, on the line's mean quality (`apex: rezwant`).
+- **New units left the base under attack.** The DEFEND pool promotes to an
+  ATTACK at quota whatever the guards read; at 8.5-11.4 min `leash` read
+  need 38-58 vs sent_pw 29-35 while the pool left. Now a pool whose last
+  leash read a shortfall does not promote (`apex: defend-hold`).
+- **Chase to where the target is.** Every attack point was the enemy's
+  current position; `LeadPos` leads by its velocity over our closing time,
+  capped at 6 s, in both the lone and the squad path.
+- **Commander distracted by pawns.** The engage rule walked him to any
+  group under his cost that beat his wage; a pawn group moving faster than
+  him was re-elected every tick. The trip is now the catch at closing speed
+  (`GetEnemyGroupVel`) and the fight is judged by `UnitStrength`
+  (hp/dps/alpha/range/speed, no metal) against the group's visible members.
+- **T2 lab while losing the front (OPEN).** `tech:armalab` drawn at 8.5 and
+  11.4 min with `funded` 0.62-0.94 and the guards short; the lab died at
+  14.5 min. The tech price carries `fundedMul` only; the plan's obligation
+  is not in the con market. Not changed -- it is the "army in the target"
+  half of the ETA objective.
+- **Engaging with every army made (OPEN).** `apex: mass want=` 29-60 power
+  at 4-10 min (12-24 pawns) and `squadsize` own avg 3-5.5 vs enemy 3-6.
+  Not measured further.
+- **Expansion (OPEN).** analyze_stats prints no mex timeline for this run;
+  no instrument read yet.
+
+Control on the energy change alone (`ctl-energy`, 6 games): 1W 1L 4T; wind
+317 vs solar 182 (previous sets 275/241 and 190/213); `lineE>0` in 39
+samples. Direction only at n=6.
+
+### Seed 18 (third watched game), on the six-change build
+
+- **Rez price was in the wrong branch.** armrectr has no build list, so
+  `Catalog::gBuilder` is false and it prices in the NON-builder block; the
+  builder-branch price never ran (inert, said so). Two rezbots were drawn
+  by the old block once enemy wrecks fed the pool (v=102 vs pawn 15006).
+  Rescaled: gain = armyGap/fillS x pMedic, pMedic = restore x fillS / cost
+  x line mean quality. Undeployed at the time of writing.
+- **Commander "braindead".** Trail: fought forward (z=2360) at 14.1 min,
+  RetreatTask from there; reached 821,3541 at 15.3 min with hp 0.91;
+  `com-retreat-hold` infl 36-78 vs pw 6.3-6.6 the whole way, so the task
+  never released; stood 40 s; Banisher at 1005,3195 took him 0.91 -> 0.27
+  in 12 s, dead 16.1 min. A retreat whose haven is inside the enemy's
+  influence is a stand-still. Open: the retreat destination must be judged
+  by reach (who can hit it) not influence, or the held commander must
+  evade the nearest outranging attacker (SafeStandoff on the retreat point).
+- **`defend-hold` fires constantly** (24 lines by 10 min, pools of 1-12
+  held at short 2-56). Whether this turtles the army is unmeasured; the
+  leash reads a shortfall whenever any enemy stands near a post.
+- **Rocket bot died to a T1 turret it outranges** (his words, docs/24).
+  Not traced yet: deaths.py on watch-1v1-barb8.
+
+Measured (`six-changes`, 6 games, same map/handicap, vs `ctl-energy`): W4 L0
+T2 against W1 L1 T4. Rezbots per game 2-20 (2-4 by 12 min) vs 0-5 on the
+old block; the fleet saturates where `rezwant restore=0` (t000: have=9
+against stream 21, cap 2.5 each). `defend-hold` 1-21 lines per game; army
+count at 14 min median 39 vs 26. `com-evade` never fired and no commander
+died (control: 1). n=6, direction only; the seed-18 Banisher case is not
+reproduced by the harness.
+
+### Seed 19 (fourth watched game), on the rezbot/defend/lead/commander build
+
+Lost heavily (K/D 0.19 vs 3.86, quit at 17.7 min). What the log said:
+
+- **Commander "chasing into the sunset".** `commander engaging` fired 0
+  times; the D-gun action issues no move orders. His trail is far mex and
+  radar jobs 1,500-2,000 elmo north (472,2424 / 232,1976 / 456,2120), each
+  `pick=1`: the drawn want (a converter, refused by the duplicate governor)
+  fell through to the next ranked want, and the `com-fwd skip` reads only
+  the east-pointing axis. 12 of his 29 jobs were fall-throughs. Changed: a
+  refused or skipped drawn want redraws among the rest (`redraw=` on the
+  exec line) instead of walking down the value order. OPEN: a far spot
+  sideways of the axis still passes the skip; a home radius is his call.
+- **Rezbots only reclaim, and die doing it.** 22 built, 20 died in reclaim
+  tasks at fwd ~1.0. `PreferReclaim()` returned true until a T2 lab stood
+  and resurrect only looked at wrecks of 900+ metal, so no T1 wreck was
+  ever resurrected. Changed: pre-T2 clause removed; resurrect any wreck by
+  the cost of the unit it returns (`GetBestRezPos`) while the army is below
+  target and energy is not stalling. OPEN: standing idle between scans is
+  not measured; dying at the front is not addressed.
+- **Buildings not remade.** 14 mex deaths, 5 never re-ordered, median lag
+  2.0 min; two were moho frames killed mid-build (rebuild_lag counts them).
+  Tried: a mex want at a spot with a recent loss hoisted to the front of
+  the draw (`why=rebuild`), a RULE on his fifth report. REVERTED the same
+  day on mechanism, not on score: the hoist skipped the price, took a v=2
+  mex at surv 0.78 / threat 1277 over a v=13 generator, sent the commander
+  out to rebuild (decide `corcom ... why=rebuild over energy`), and the
+  same spot (240,1983) was rebuilt and lost three times in one game. The
+  6-game sets cannot order it: the identical control code went W4 L0 T2
+  and then W0 L2 T4 with mex deaths 12 and 40 -- the hoist arms (W0 L1 T5,
+  W1 L1 T4) sit inside that spread. Rebuild lag median 0.3-0.7 in every
+  arm. OPEN: the starve-out he watched is real; the fix is not a rule that
+  ignores where the loss happened.
+- The T2 lab-while-losing, piecemeal engagement and expansion items above
+  remain untouched.
+
+## 2026-09-05 pm: strength, the T2 lab, the commander's minutes
+
+- **UnitStrength scale.** Means are taken over every producible mobile def
+  including T3, so a pawn reads 0.0046, the commander 0.0307, a Bantha 823.
+  Only ratios mean anything; any code comparing it to a threshold or a
+  metal number is wrong. The commander's raw dps was 111,297 (D-gun) until
+  manual-fire weapons were excluded; by construction UnitStrength ~
+  power^2 / means, so the exclusion changed PowerMod (0.00 -> 0.12) and
+  not his value. His ~6.5 pawns is the DLL's own power for him.
+- **Commander eviction loop (fixed).** With no turrets a raided base has
+  influence 5-60 at his tile; the flee gate at 0.01 evicted him every
+  election (t005 strength-hold: 11 and 15 empty elections in two minutes,
+  each a 20 s patrol home). Now strength-gated. He still leaves when the
+  field near him is bigger (t001 com-strength3: near str 0.17 vs 0.011,
+  15x him, died evading inside a base with no defence). 1-2 commander
+  deaths per 6-game set is the baseline under apex_def_off=1 in every arm
+  today, including the ones before the change.
+- **Commander sideways jobs (fixed).** `com-fwd skip` used the axis
+  projection only; a radar at (2369,2488) read fwd -267 by the axis and
+  0.82 by ForwardFraction. In the smoke the axis also read a home mex as
+  fwd 1098 at ff 0.05, so the axis is wrong in both directions early; the
+  forward fraction is the reliable one of the two.
+- **T2 lab timing.** 24 games: lab at 8.3-15.3 min in 19, none in 5; at the
+  decide, enemyArmy 0 and bleed 1.00 in all but one. The spare-metal cap on
+  the gap stream cannot be judged from these -- no game bought a lab while
+  bleeding. The seed 17 case (8.9 min, gain 23.5, active fighting) is the
+  one to reproduce: a watch game with `apex_techcand_diag=1`.
+- **FoeMobileMassing goes negative** (`enemyArmy=-134` in t002
+  strength-hold) when the static share subtracted exceeds the mobile cost.
+  Harmless in StrRatio (returns 0) but the mass ratio prints -0.06.
+- **Empty elections vs bounces.** `com-time none=` was counting Decide's
+  2 s rate gate (a task that died young re-entering); those are now
+  `bounce=` (0-59 per game, 37-59 when the base is raided). True empty
+  elections: 0 in 12 games since.
+
+## 2026-09-05 seed 20 watch: starvation, rezbots, the T2 lab
+
+- **Pinned converters ignored in-flight capacity (fixed).** `EnergyPinned`
+  (bank >= 98%) priced each converter at full capacity; with 670 e/s already
+  ordered and the EMA surplus at -69..-374 e/s the pin never broke until
+  they were built. `convwhy` showed it; the T2 converter want read 19.9
+  m/s and the assist want (metal cost 1) inherited it. 41 of 82 con jobs
+  at 16-20 min were assist. Now `chew = max(surplus - inflight, capacity -
+  inflight)` when pinned. Next set: inflight 0-70 in every game.
+- **D-gun collateral.** The ray check traced only to the target; the shot
+  runs to full range. Seed 20 lost 9 converters, 5 winds, 4 nanos and 2
+  cons to our own commander. A second trace from 48 elmos past the target
+  now refuses the shot if it hits anything of ours. After: own-commander
+  kills of our units 1-18 per game (atkteam = us, atk = our commander def),
+  so either splash, moving targets, or the death blast remain. Not closed.
+- **Assist want at metal cost 1.** `want_assist.as` prices a con's time
+  only; its gain is the boss job's gain times seconds saved over the
+  payback horizon. With a sane boss gain it is fine; with an inflated one it
+  swallows every con. Watch `assist=` in the late job mix.
+- **T2 lab roulette.** Sharpshooter ranked first once and top-four
+  throughout the last 8 min of seed 20 and was drawn 0 of 22 times; the
+  production draw has no commitment sharpening. His call.
+- **test_frontline `line` fails on the current build, and it is not the rez
+  work.** 2026-09-06: 2/8, 1/8 and 3/8 games pass across three 8-game sets,
+  with the rez reflex on and off (`apex_rez_react_s` default flipped) --
+  same failure either way. `guard` swung 4-7/8 across the same sets, i.e.
+  noise. Whatever moved the tower line moved before this session.
+- **Rezbots refused more than they take.** rez-reflex sets (2026-09-06):
+  with the enemy-reach envelope on, `frontVeto` 526 and `none` 129 per game
+  against 27 and 63 with it off. Deaths fell 8.2 -> 1.4 per game, so the
+  trade is paying, but a bot refused near the fighting with nothing safe
+  behind it still stands. Next read: what the refused sites were worth.
+- **Rez fleet still short early.** 2.7 bots at 12 min (his bar: 4-5), same
+  as before the reflex. `RezWorkM` pricing, not behaviour.
+- **The reach envelope is LOS-gated.** `CCircuitAI::GetEnemyReachSlack`
+  skips hidden enemies, so the back-away reads "clear" exactly when we
+  cannot see. Same family as every visible-strength gate.
+- **Rezbot elections.** rez-behind set: `none` (chain refused everything)
+  300-1400 per game, `gate` 560-1060, `frontVeto` 1600-6700, resurrect 0,
+  eat 0-14, worst no-job stretch 89-193 s. Every empty election found the
+  bot holding a non-patrol task (`noneHeld=0/0/N`) -- decode pending
+  (`heldBt=` in the next instrument). The lane point is behind most wrecks,
+  so BehindLine against the lane refuses nearly all work; the reference
+  must be our units' front. Instrument prints `ffLane`, `ffFront`,
+  `ffVetoAvg` from the rez-inst set on.
+- **Never re-ordered in a collapsing base.** conv-pin t000: lab died 15.3
+  min, 10 mex deaths 14-17 min all NEVER -- the base was overrun (no
+  turrets); the instrument counts them, the pricing did not refuse them.

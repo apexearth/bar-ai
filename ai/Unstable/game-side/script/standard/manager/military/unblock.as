@@ -300,6 +300,7 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 // builder in reach) may be re-asked later rather than never.
 array<int> gStuckAsked;
 array<int> gStuckAskedFrame;
+int gStuckOffered = 0;   // units offered to the market as unreachable
 
 bool StuckAskedFor(Id id)
 {
@@ -335,6 +336,7 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 		{
 			gStuckAsked.insertLast(int(unit.id));
 			gStuckAskedFrame.insertLast(ai.frame);
+			++gStuckOffered;
 			NotePenVerdict(unit.id, 0);
 			AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
 				+ " #" + unit.id + " terrain-penned -> offered to the market");
@@ -358,9 +360,27 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 	return true;
 }
 
+// THE COUNTER, because "it fires" was all this could say before. An unblock
+// order and a stuck-reclaim are both rare by design, so the number that matters
+// is how many units are STANDING penned right now -- the layout is what decides
+// that, and a layout change is judged on this line, not on a win rate.
+int gPenDiagAt = 211;   // phase offset -- see AiUpdate lockstep note
+
+void PenDiag()
+{
+	if (ai.frame < gPenDiagAt)
+		return;
+	gPenDiagAt = ai.frame + 60 * SECOND;
+	AiLog(Factory::T() + "apex: pendiag watched=" + gPenId.length()
+		+ " testing=" + gTestId.length() + " verdicts=" + gPenVictim.length()
+		+ " | penned=" + gPennedSeen + " ate-wall=" + gUnblockOrders
+		+ " offered-unit=" + gStuckOffered);
+}
+
 void UpdateUnblock()
 {
 	SweepPenVerdicts();
+	PenDiag();
 	if (!UnblockOn() || (gPenId.length() == 0))
 		return;
 

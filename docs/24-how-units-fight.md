@@ -119,6 +119,13 @@ this file wins and the other is stale.
   not actually form a squad like this it is much less valuable. When the
   Mammoth dies the squad breaks down fast; the answer is more Mammoths, in
   proportion to the squad.
+- **The screen does not need to deal damage.** apexearth 2026-09-05: "Ensure
+  that our tankier units in squads don't dive too deep into enemy lines. Their
+  job is to protect the longer range units in their squad. We don't really need
+  them to be dishing out the damage, they'll do damage when enemies get too
+  close. Rely on rocketbots to shoot from long range." Standing at its own
+  weapon range is a dive: the screen holds a rank in front of the guns even
+  when that is outside its own reach.
 - **Radar and jammer units always angle themselves behind their squad
   relative to the direction of the enemy**, towards the back of the squad.
   Sheldons with a radar and a jammer are very good; Sheldons moved as a
@@ -473,3 +480,79 @@ apexearth, 2026-09-05, watching a no-turret 1v1 against BARb:
 - Same game: "I just saw our hounds walk right up next to enemy t1 tanks and
   get obliterated. That was very bad logic right there. Units like that
   should always want to keep a safe distance."
+
+## Second no-turret game, 2026-09-05 (seed 17, lost at 16 minutes)
+
+apexearth, watching:
+
+- "Enemy pawns are able to distract our commander for minutes and that's
+  really not good."
+- "We also tend to chase directly towards the enemy instead of in the
+  direction they're heading."
+- "Seems like some of our guys might be pulled away for attacking or
+  something, our base was being hit but new units ran away from protecting it
+  to fight on the frontline for some reason."
+- "We're fighting a lot and doing pretty good at it but we don't expand quite
+  so well. So we lose the long game. Something to help our fights be more
+  resilient would be rezbots. We aren't making nearly enough rezbots in the
+  early game (0 in fact where enemy has 6, is resurrecting and healing, and we
+  lose those fights because of it)."
+- "We made a T2 lab while losing active frontline fighting which we could
+  obviously read/see - we never should be doing something like that."
+- "Actively engaging in fights with every army we make instead of saving up
+  our army."
+- Same game: "A commander should value himself based on what we perceive his
+  power to be from his hp, range, dps, speed... and we should value enemies
+  like this too, not based on metal." And: "We already calculate a power like
+  that somewhere, reuse that."
+- Third game (seed 18): "Just saw a rocket bot die to a T1 turret which it
+  outranges. We shouldn't have been standing that close to something we
+  outrange." · "I see 1 rezbot, we need like 4 or 5 at this point (~12m into
+  the game)." · "Our commander looks totally braindead sometimes still. Some
+  bad logic somewhere."
+- Same game, on pricing them: "Rezbots gain value when: there is valuable
+  reclaim available; there are units that need repairing; there are units
+  available to resurrect."
+- Fourth game (seed 19): "Our commander still chases enemies a LOT which
+  causes him to be long-term distracted and not useful. Enemies won't even
+  have a trajectory towards our buildings and he chases them 'into the
+  sunset'."
+- After the sets (2026-09-05): "Compare strength, work on that T2 lab while
+  losing, if we're bleeding army we should try to mass more. Ensure the
+  commander's time isn't wasted. Like I said - if enemy is running away,
+  fine - let them."
+- Seed 20 watch (2026-09-05): "The issue I see a lot is our rezbots idling
+  between actions. It takes them a long time occasionally to decide what
+  they want to do. I think you should analyze what they're doing because it
+  is very wasteful. Also they should always angle themselves BEHIND our
+  units in combat. Never stand in front of them where they're likely to
+  become collateral damage."
+- Same watch: "If an enemy comes at us with a high dps unit that outranges
+  us we need to make a longer range unit to fight back against it at our
+  T2 lab."
+- 2026-09-06, on rez bots: "They need to be productive and have good
+  survival instinct. In combat they should stand behind allied units away
+  from enemies. They should back away when enemy units are close to being
+  within range of the rezbots. They need to be quick to react. Delays of
+  more than a second are unacceptable."
+
+## Self-play watch, 2026-09-05
+
+apexearth, watching two copies of this AI play each other:
+
+- "It is really telling how passive our AI is - they haven't attacked each
+  other a single time in 13m. They've also not scouted or tried to harass
+  each other at all."
+- "I see us defending our buildings all around our base, and that is nice to
+  see, but our base has depth and we spread our army out around both the front
+  AND back of our base. If the enemy attacks they'll be coming at the front of
+  our base, not the back of our base... so we need to draw lines of our units
+  towards the frontline."
+- "I don't see why higher level knowledge can't choose to do a raid. If we know
+  that there are some pretty undefended areas we should be able to ask for a
+  raid, and pull units from wherever seems appropriate in order to make a raid
+  happen."
+- "Even marauders are raiders and most people play them as raiders, skirting
+  their way around the front lines to attack enemies behind." (`armmar` is a
+  gantry unit -- T3.) So no tier converts a raider into line army, and the
+  route is part of the ruling: around the line, not through it.

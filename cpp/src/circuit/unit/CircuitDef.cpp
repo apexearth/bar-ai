@@ -420,6 +420,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	float bestWpRange = std::numeric_limits<float>::max();
 	float airDps = .0f;
 	float airDmg = .0f;
+	float fireDps = .0f;  // weapons that fire on their own: a D-gun is a command, not a rate
+	float fireDmg = .0f;
 	float surfDps = .0f;
 	float surfDmg = .0f;
 	float waterDps = .0f;
@@ -555,15 +557,27 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
 				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
 			};
+			float aD = .0f, aP = .0f, sD = .0f, sP = .0f, wD = .0f, wP = .0f;
 			if ((weaponCat & circuit->GetAirCategory()) && isAirWeapon) {
-				adjustDamage(armor.airTypes, airDmg, airDps);
+				adjustDamage(armor.airTypes, aD, aP);
 			}
 			if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon) {
-				adjustDamage(armor.surfTypes, surfDmg, surfDps);
+				adjustDamage(armor.surfTypes, sD, sP);
 			}
 			if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
-				adjustDamage(armor.waterTypes, waterDmg, waterDps);
+				adjustDamage(armor.waterTypes, wD, wP);
 			}
+			airDmg += aD; airDps += aP;
+			surfDmg += sD; surfDps += sP;
+			waterDmg += wD; waterDps += wP;
+			if (!wd->IsManualFire()) {
+				fireDps += std::max(std::max(aP, sP), wP);
+				fireDmg += std::max(std::max(aD, sD), wD);
+			}
+		}
+		if (!wd->IsManualFire()) {
+			fireDps += dps;
+			fireDmg += dmg;
 		}
 		airDmg += dmg;
 		airDps += dps;
@@ -727,8 +741,10 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// Captured here, after the mobile-bomb substitution above, so the identity
 	// power == sqrt(rawDps)*rawDmg^0.25*THREAT_MOD*sqrt(hp+shield) holds by
 	// construction for any def whose power is not later modded.
-	rawDps = dps;
-	rawDmg = dmg;
+	// The script values a unit by these; the commander's 111k D-gun "dps"
+	// made him read as six pawns once the power mod divided it back out.
+	rawDps = (fireDps > .1f) ? std::min(dps, fireDps) : dps;
+	rawDmg = (fireDps > .1f) ? std::min(dmg, fireDmg) : dmg;
 	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
 	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
 	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;

@@ -26,6 +26,11 @@ const int ANCHOR_DEADLINE = 3 * MINUTE;
 // different pitches still leave their gaps in the same places and line up into
 // an actual corridor. The lane at lateral 0 is the axis itself.
 //
+// Lanes run on BOTH axes. Lateral-only lanes stripe the base: the ground between
+// two of them is a slab 576 wide and the whole band deep, and a unit inside one
+// has no way out that is not the full length of the base. Crossing them makes
+// the base blocks-and-streets, which is the layout that cannot seal a pocket.
+//
 // BUILD_CELL is the invariant every band pitch must satisfy: the engine places
 // building centers on a 16-elmo lattice (Pos2BuildPos), so a pitch that is not
 // a whole multiple of it rounds alternately down and up and neighbours meant to
@@ -37,7 +42,9 @@ const float BUILD_CELL = 16.f;    // SQUARE_SIZE * 2; the engine's build square
 const float CELL       = 72.f;
 const float GRID_CELL  = 16.f;    // the engine's build square; the pitch published to C++
 const float LANE_PITCH = 720.f;   // spacing between walkways, in world offset
-const float LANE_HALF  = 72.f;    // half-width of a walkway
+// FLOOR on the half-width of a walkway, not the width: that is LaneHalf(), in
+// grid.as, and it is derived from the widest hull we field.
+const float LANE_HALF_MIN = 72.f;
 // Lateral slack on Inside(). Kept separate from LANE_PITCH, which used to also
 // serve as this bound and rejected ground the base needed. Effectively
 // unbounded: depth still bounds the band, and GRID_RANGE still bounds the grid

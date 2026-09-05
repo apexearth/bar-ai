@@ -29,27 +29,156 @@ int gNextLetGoLog = 0;
 
 // A fallen commander outranks every other rez job -- flee alone comes
 // first (a dead rez bot rescues nobody).
+// What each rez election came to, per minute (apexearth, seed 20: "rezbots
+// idling between actions... analyze what they're doing"). A null here
+// hands the bot to the DLL, which parks it on a 10 s patrol.
+float ArmyFrontFfLog()
+{
+	AIFloat3 p;
+	return ArmyFront(p);
+}
+float FrontFf()
+{
+	AIFloat3 fp;
+	if (!Military::FrontLinePos(fp))
+		return -1.f;
+	return Military::ForwardFraction(fp);
+}
+string HeldBtStr()
+{
+	string s = "";
+	for (int k = 0; k < 32; ++k)
+		if (gRzHeldBt[k] > 0)
+			s += k + ":" + gRzHeldBt[k] + ",";
+	return s;
+}
+const int RZ_RULES = 8;
+array<int> gRzRule(RZ_RULES, 0);   // rescue medic salvage eat rez repair idle none
+int gRzGate = 0;
+// Elections held while something could already shoot the bot where it stands:
+// the DLL's guard is walking it out at the same moment (BuilderManager's
+// UpdateRezGuard), and this says how much of the fleet's time that is.
+int gRzPressed = 0;
+int gRzHeldPatrol = 0;
+int gRzHeldOther = 0;
+int gRzNoTask = 0;
+int gRzBots = 0;
+int gNextRzTimeLog = 0;
+array<int> gRzLastJobAt;
+float gRzWorstS = 0.f;
+int gRzWorstId = -1;
+float gRzVetoFfSum = 0.f;
+array<int> gRzHeldBt(32, 0);
 IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 {
 	IUnitTask@ t = RezzerComRescue(unit);
-	if (t !is null)
-		return t;
-	@t = RezzerMedic(unit);
-	if (t !is null)
-		return t;
-	@t = RezzerFrontSalvage(unit);
-	if (t !is null)
-		return t;
-	@t = RezzerEatCorpse(unit);
-	if (t !is null)
-		return t;
-	@t = RezzerRezOrEat(unit);
-	if (t !is null)
-		return t;
-	@t = RezzerRepairNearby(unit);
-	if (t !is null)
-		return t;
-	return RezzerIdle(unit);
+	int why = 0;
+	if (t is null) { @t = RezzerMedic(unit); why = 1; }
+	if (t is null) { @t = RezzerFrontSalvage(unit); why = 2; }
+	if (t is null) { @t = RezzerEatCorpse(unit); why = 3; }
+	if (t is null) { @t = RezzerRezOrEat(unit); why = 4; }
+	if (t is null) { @t = RezzerRepairNearby(unit); why = 5; }
+	if (t is null) { @t = RezzerIdle(unit); why = 6; }
+	if (t is null)
+		why = 7;
+	++gRzRule[why];
+	if (InEnemyReach(unit.GetPos(ai.frame)))
+		++gRzPressed;
+	const int slot = ConSlot(unit);
+	while (int(gRzLastJobAt.length()) <= slot)
+		gRzLastJobAt.insertLast(ai.frame);
+	if (t !is null) {
+		gRzLastJobAt[slot] = ai.frame;
+	} else {
+		IUnitTask@ held = unit.task;
+		if (held is null)
+			++gRzNoTask;
+		else if ((held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::PATROL))
+			++gRzHeldPatrol;
+		else {
+			++gRzHeldOther;
+			// A non-builder task used to be counted as one bucket, 31, so every
+			// empty election read the same and said nothing about what the bot
+			// was actually holding. Idle (2) and retreat (4) are different
+			// problems: one is standing around, the other is leaving.
+			const int bt = (held.GetType() == Task::Type::BUILDER)
+					? int(held.GetBuildType()) : (24 + int(held.GetType()));
+			if ((bt >= 0) && (bt < 32))
+				++gRzHeldBt[bt];
+		}
+		const float since = float(ai.frame - gRzLastJobAt[slot]) / float(SECOND);
+		if (since > gRzWorstS) {
+			gRzWorstS = since;
+			gRzWorstId = int(unit.id);
+		}
+	}
+	if (ai.frame >= gNextRzTimeLog) {
+		gNextRzTimeLog = ai.frame + 60 * SECOND;
+		int bots = 0;
+		for (uint d = 1; d < Market::gOwnCount.length(); ++d)
+			if ((Market::gOwnCount[d] > 0) && Catalog::gRezzer[d])
+				bots += Market::gOwnCount[d];
+		AiLog(Factory::T() + "apex: rez-time bots=" + bots
+			+ " rescue=" + gRzRule[0] + " medic=" + gRzRule[1] + " salvage=" + gRzRule[2]
+			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " repair=" + gRzRule[5]
+			+ " idleRule=" + gRzRule[6] + " none=" + gRzRule[7]
+			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto
+			+ " pressed=" + gRzPressed
+			+ " noneHeld=" + gRzNoTask + "/" + gRzHeldPatrol + "/" + gRzHeldOther
+			+ " worst=#" + gRzWorstId + " " + formatFloat(gRzWorstS, "", 0, 0) + "s"
+			+ " ffLane=" + formatFloat(Military::ForwardFraction(Military::LanePos()), "", 0, 2)
+			+ " ffFront=" + formatFloat(FrontFf(), "", 0, 2)
+			+ " ffArmy=" + formatFloat(ArmyFrontFfLog(), "", 0, 2)
+			+ " ffVetoAvg=" + formatFloat((gRzFrontVeto > 0) ? gRzVetoFfSum / float(gRzFrontVeto) : 0.f, "", 0, 2)
+			+ " heldBt=" + HeldBtStr());
+		for (int k = 0; k < RZ_RULES; ++k)
+			gRzRule[k] = 0;
+		gRzGate = 0;
+		gRzPressed = 0;
+		gRzFrontVeto = 0;
+		gRzNoTask = 0;
+		gRzHeldPatrol = 0;
+		gRzHeldOther = 0;
+		gRzWorstS = 0.f;
+		gRzWorstId = -1;
+		gRzVetoFfSum = 0.f;
+		for (int k = 0; k < 32; ++k)
+			gRzHeldBt[k] = 0;
+	}
+	return t;
+}
+
+// Where the commander's elections go, per minute (apexearth: "ensure the
+// commander's time isn't wasted"). Exec lines say what he built; nothing
+// said how often he was handed nothing.
+int gComJobs = 0;
+int gComNull = 0;
+int gComRet = 0;
+int gComBounce = 0;
+int gNextComTimeLog = 0;
+void NoteCommDecide(CCircuitUnit@ unit, IUnitTask@ dec)
+{
+	if (dec is null) {
+		if (gComBounce > 0)
+			return;   // counted by Decide's rate gate, not an empty election
+		++gComNull;
+	}
+	else if (dec.GetType() == Task::Type::RETREAT)
+		++gComRet;
+	else
+		++gComJobs;
+	if (ai.frame >= gNextComTimeLog) {
+		gNextComTimeLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: com-time jobs=" + gComJobs + " none=" + gComNull
+			+ " retreat=" + gComRet + " bounce=" + gComBounce
+			+ " hp=" + int(unit.GetHealthPercent() * 100.f)
+			+ " fwd=" + formatFloat(Military::ForwardFraction(unit.GetPos(ai.frame)), "", 0, 2));
+		gComJobs = 0;
+		gComNull = 0;
+		gComRet = 0;
+		gComBounce = 0;
+	}
 }
 
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
@@ -62,9 +191,18 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	if (IsRezzer(unit)) {
+		// Twice a second, and not at all while something can shoot it.
+		// apexearth 2026-09-06: "they need to be quick to react. Delays of
+		// more than a second are unacceptable" -- a 2 s gate on the election
+		// IS a delay of more than a second, and it was refusing 8-160
+		// elections a minute while the bots stood idle (rez-front set).
 		if ((int(unit.id) >= 0) && (int(unit.id) < int(gRzDecideAt.length()))) {
-			if (ai.frame - gRzDecideAt[int(unit.id)] < 2 * SECOND)
+			if ((ai.frame - gRzDecideAt[int(unit.id)] < SECOND / 2)
+				&& !InEnemyReach(unit.GetPos(ai.frame)))
+			{
+				++gRzGate;
 				return null;
+			}
 			gRzDecideAt[int(unit.id)] = ai.frame;
 		}
 		const double _tRz = Perf::T0();
@@ -120,6 +258,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	const double _tD = ai.ClockUs();
 	IUnitTask@ dec = Brain::Decide(unit);
 	Market::ElecSpend(ai.ClockUs() - _tD);
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		NoteCommDecide(unit, dec);
 	return dec;
 }
 

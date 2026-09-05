@@ -93,7 +93,7 @@ float ArmyStandingRatio()
 	if (theirs <= 1.f)
 		return 1.f;
 	const float ours = TeamArmyCost();
-	const float ratio = ours / theirs;
+	const float ratio = 1.f / Market::StrRatio(theirs, ours);
 	return (ratio > 1.f) ? 1.f : ratio;
 }
 
@@ -107,8 +107,8 @@ bool Outmassed()
 	const float theirs = EnemyMassingThreat();
 	if (theirs <= 1.f)
 		return false;
-	return theirs > TeamArmyCost()
-			* ai.GetTunable("apex_con_outmassed", TUNE_CON_OUTMASSED);
+	return Market::StrRatio(theirs, TeamArmyCost())
+			> ai.GetTunable("apex_con_outmassed", TUNE_CON_OUTMASSED);
 }
 
 // The size a group commits at, from the armies on the field.
@@ -198,7 +198,7 @@ bool ConservativeStance()
 	// the hold tightens exactly as we pull ahead.
 	if ((theirs < floorSeen) && (gSeenPeak > floorSeen))
 		return true;
-	return (theirs > ours) && (ours >= 0.f);
+	return (Market::StrRatio(theirs, ours) > 1.f) && (ours >= 0.f);
 }
 
 float MassWant()
@@ -252,7 +252,7 @@ float MassWant()
 	float capNow = floorNow * ai.GetTunable("apex_mass_cap_mult", TUNE_MASS_CAP_MULT);
 	if (capNow < MASS_CAP())
 		capNow = MASS_CAP();
-	const float ratio = theirs / ours;
+	const float ratio = Market::StrRatio(theirs, ours);
 	// OUTMATCHED IS ABOUT THEM, NOT US. Floor and cap both scale with OUR
 	// army, so losing a big fight collapsed the hold bar exactly when it
 	// should be highest, and the survivors trickled out into the army that
@@ -402,14 +402,14 @@ void UpdateMassing()
 			}
 			const float oursNow = OurArmyNow();
 			localEdge = (oursNow > 1.f)
-				&& (oursNow > foeHere
-					* ai.GetTunable("apex_local_edge", TUNE_LOCAL_EDGE));
+				&& (Market::StrRatio(foeHere, oursNow)
+					* ai.GetTunable("apex_local_edge", TUNE_LOCAL_EDGE) < 1.f);
 		}
 	}
 	const bool feeding = !localEdge
 			&& (ConservativeStance()
-				|| (FoeMobileMassing() > OurArmyNow()
-					* ai.GetTunable("apex_mass_no_commit_ratio", TUNE_MASS_NO_COMMIT_RATIO)));
+				|| (Market::StrRatio(FoeMobileMassing(), OurArmyNow())
+					> ai.GetTunable("apex_mass_no_commit_ratio", TUNE_MASS_NO_COMMIT_RATIO)));
 	if (feeding && (gHoldSince >= 0) && (ai.frame >= gNextFeedLog)) {
 		gNextFeedLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: hold deadline suppressed -- outmatched "
@@ -434,13 +434,29 @@ void UpdateMassing()
 		gHoldSince = -1;
 	}
 
+	// A GROUP CANNOT BE BIGGER THAN THE ARMY THAT SUPPLIES IT. capNow is
+	// floored at a flat MASS_CAP, so the interpolation lands past 100% of our
+	// army for any enemy reading over ATTACK_EDGE and no pool can ever promote;
+	// the hold deadline cannot break it either, committing at a fraction of the
+	// same unreachable want. Not below the floor, though: our whole army may BE
+	// one Pawn, and a ceiling alone would walk it out alone.
+	const float ourPower = aiMilitaryMgr.armyCost * 0.017f;
+	if ((ourPower > floorNow) && (want > ourPower))
+		want = ourPower;
+
 	if (ai.frame >= gNextMassLog) {
 		gNextMassLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
 			+ " floor=" + formatFloat(floorNow, "", 0, 0)
+			// The ceiling below: a want above this is a group we cannot field.
+			+ " own=" + formatFloat(aiMilitaryMgr.armyCost * 0.017f, "", 0, 0)
 			+ " army=" + formatFloat(ours, "", 0, 0)
 			+ " enemyArmy=" + formatFloat(theirs, "", 0, 0)
-			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2));
+			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2)
+			+ " str=" + formatFloat((ours > 0.f) ? Market::StrRatio(theirs, ours) : 0.f, "", 0, 2)
+			+ " q=" + formatFloat(Market::FoeQualityM() * 1000.f, "", 0, 3)
+			+ "/" + formatFloat(Market::OurQualityM() * 1000.f, "", 0, 3)
+			+ " bleed=" + formatFloat(BleedCaution(), "", 0, 2));
 		// HOW BIG "HOME GROUND" IS: CAttackTask's isHome waives the odds check
 		// wherever net influence >= INFL_SAFE (2.0). Walk the home->enemy axis
 		// and log where that isoline actually ends, against the full distance,
@@ -511,4 +527,14 @@ void LogUnitPower()
 			msg += " " + names[i] + "=" + formatFloat(d.power, "", 0, 1);
 	}
 	AiLog(msg);
+	array<string> sn = {"armcom", "corcom", "armpw", "corak", "armrock", "armwar", "armzeus", "armbanth"};
+	string ms = "apex: unit strength --";
+	for (uint i = 0; i < sn.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(sn[i]);
+		if (d !is null)
+			ms += " " + sn[i] + "=" + formatFloat(Market::UnitStrength(int(d.id)), "", 0, 4)
+				+ "(pm" + formatFloat(Market::PowerMod(int(d.id)), "", 0, 2)
+				+ " dps" + int(Catalog::gDps[int(d.id)]) + " hp" + int(Catalog::gHealth[int(d.id)]) + ")";
+	}
+	AiLog(ms);
 }

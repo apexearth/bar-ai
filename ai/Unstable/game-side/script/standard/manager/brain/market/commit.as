@@ -365,6 +365,18 @@ uint ComOrphanCount(int defId)
 	return n;
 }
 
+// Is this one frame still standing orphaned? The stall-interrupt debt asks by
+// unit id, not by def: what it owes is the frame IT left, and any other frame
+// of the same def is somebody else's job.
+bool ComOrphanById(Id frameId)
+{
+	for (uint i = 0; i < gComId.length(); ++i) {
+		if ((gComId[i] == frameId) && ComIsOrphan(i))
+			return true;
+	}
+	return false;
+}
+
 // The orphaned frame of `defId` nearest `from` (reach < 0 = anywhere),
 // resolved to the live unit; a row whose unit is gone is ComSweep's business.
 CCircuitUnit@ ComOrphanUnit(int defId, const AIFloat3 &in from, float reach)

@@ -271,6 +271,12 @@ const float TUNE_RAID_PACK = 8.f;
 //   income times this, so packs form instead of never reaching a fixed bar.
 const float TUNE_RAID_PER_INCOME = 0.2f;
 
+// RAID_ASK [0/1] -- 1 = the raid director ASKS for a raid: it finds enemy
+//   ground nothing is holding, sizes a pack against what does hold it, and
+//   pulls units out of their current tasks to make it. 0 = the stock pool
+//   only, which waits for raiders to trickle in and merge. See docs/27.
+const float TUNE_RAID_ASK = 1.f;
+
 // [seconds] -- EXPERIMENT, default off. A no-retreat bar at units cheaper
 //   than this many seconds of income measured army K/D 0.33 to 0.11 (retreat is
 //   also disengage-and-repair).
@@ -1680,6 +1686,11 @@ const float TUNE_REZ_FLEE_S = 20.f;
 //   docs/27.
 const float TUNE_REZ_SCAN_S = 1.f;
 
+// [seconds] -- how much of the enemy's own walking counts as being in range
+//   already: a rez bot backs away while the nearest enemy is still this long
+//   short of its firing envelope, and refuses work inside it. See docs/27.
+const float TUNE_REZ_REACT_S = 1.f;
+
 // [0/1] -- 1 = raiders join the massing pool once our advanced lab stands and
 //   fight as line army (the pre-2026-08-30 behaviour). See docs/27.
 const float TUNE_RAIDER_MASSING = 0.f;
@@ -1742,7 +1753,7 @@ const float TUNE_AIR_ECO_BASE = 100.f;
 const float TUNE_LINE_TERRAIN = 1.f;
 
 // How far IN FRONT of the squad's longest row a short-range row holds, elmos.
-//   See docs/27.
+//   This number is the dive depth; 96 measured worse three ways. See docs/27.
 const float TUNE_SCREEN_GAP = 200.f;
 
 // The production half is divided by (1 + this * matesWithIt), so at 1.0 the

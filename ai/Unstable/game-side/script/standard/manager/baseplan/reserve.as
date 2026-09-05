@@ -173,7 +173,7 @@ bool InLaneAt(const AIFloat3& in p)
 		return false;
 	float depth, lat;
 	Coords(p, depth, lat);
-	return LaneGap(lat) < LANE_HALF;
+	return (LaneGap(lat) < LaneHalf()) || (LaneGap(depth) < LaneHalf());
 }
 
 }  // namespace Base

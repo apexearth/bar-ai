@@ -87,7 +87,7 @@ conclusion each one produced.
 | About to… | Read first |
 |---|---|
 | **judge any run** | `review.py <run>` — gate 1 IS the compile/crash/did-it-run check. `bar-benchmark` skill |
-| **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit |
+| **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit · **S19** the deployed script can change mid-sweep — classify each game from its own log |
 | **run a sweep of a tunable** | **S8** — deploying the AI does NOT deploy the gadget; unpublished modoptions run the default with no error |
 | **launch or kill a run** | `docs/26-working-rules.md` — one match per write-dir, `pgrep`/`pkill` are dead here, `-u` when logging |
 | **touch army / fighting** | `docs/24-how-units-fight.md` first, then `ai-military`, `ai-army-composition` |

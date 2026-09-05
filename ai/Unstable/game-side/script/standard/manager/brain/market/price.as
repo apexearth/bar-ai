@@ -209,7 +209,7 @@ float EPrice()
 float ECostSpot()
 {
 	const float eInc = aiEconomyMgr.energy.income;
-	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight();
+	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;

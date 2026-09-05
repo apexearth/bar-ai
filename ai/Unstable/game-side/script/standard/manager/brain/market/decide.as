@@ -202,6 +202,115 @@ bool PlantFramed()
 	return false;
 }
 
+// The per-category draw, on a ranked list: the best want of each category
+// holds a ticket proportional to its value; the drawn one is hoisted to
+// ranked[0]. `salt` varies the roll for a redraw within the same frame.
+bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt)
+{
+	bool didDraw = false;
+	array<int> catBest(CAT_N, -1);   // index into ranked, or -1
+	for (uint ri = 0; ri < ranked.length(); ++ri) {
+		const int c = CategoryOf(ranked[ri].kind);
+		if (c < 0)
+			continue;
+		// ranked is sorted by value descending, so the FIRST want seen
+		// for a category is that category's argmax -- this is the
+		// "highest value energy" pick, made once per election.
+		if (catBest[c] < 0)
+			catBest[c] = int(ri);
+	}
+	// ONE ECONOMIC QUESTION while the ETA is on: extraction, generation and
+	// build power are three ways of buying a bigger economy sooner, so the
+	// ladder answers them together and they hold ONE ticket between them
+	// instead of three. See eta.as; CAT_PRODUCE stays out of the merge.
+	array<float> catV(CAT_N, -1.f);   // >=0 overrides a ticket's weight
+	if (EtaOn()) {
+		const int pick = EtaEcoPick(ranked);
+		if (pick >= 0) {
+			for (int c = 0; c < CAT_N; ++c) {
+				if (EtaMergedCat(c))
+					catBest[c] = -1;
+			}
+			const int pc = CategoryOf(ranked[pick].kind);
+			catBest[pc] = pick;
+			catV[pc] = EtaEcoWeight(ranked);
+		}
+	}
+	// HOW SHARP THE DRAW IS. Weighting each ticket by its raw value means a
+	// want the market itself rates six times worse still wins one election
+	// in six -- measured: 34% of elections took a lower-valued want, and a
+	// mex valued 594 lost to a wind generator valued 99 (apexearth: "is it
+	// a random 'luck of the draw' sort of event in that moment?"). Odds are
+	// taken on the value RATIO to the leader raised to a power, so the
+	// exponent alone moves between proportional (1, the old behaviour) and
+	// argmax (large) without a threshold anywhere: at 2 a six-fold gap is
+	// one election in thirty-six, which keeps a never-first category from
+	// starving without letting it outbid arithmetic.
+	const float lead = ranked[0].value;
+	const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
+	array<float> wt(CAT_N, 0.f);
+	float sumV2 = 0.f;
+	for (int c = 0; c < CAT_N; ++c) {
+		if (catBest[c] < 0)
+			continue;
+		const float v = (catV[c] >= 0.f) ? catV[c]
+				: ranked[catBest[c]].value;
+		// A COMMITMENT IS NOT SAMPLED. The cost of drawing a worse option
+		// scales with what that option costs: a wrong 40-metal wind is
+		// noise, a wrong 9700-metal afus is the game (apexearth: "for these
+		// things that are so impactful I feel like we need to go with
+		// winner takes all. There is only one right choice here"). Measured
+		// the same session: EVERY afus bought was a draw override, priced
+		// BELOW the runner-up each time -- 6.30 against 11.58, 8.53 against
+		// 13.29 -- so the pricing was right and the lottery bought it
+		// anyway at ~30% weight.
+		//
+		// So the exponent rises with how big a bite this candidate takes
+		// out of what the economy can produce over the payback horizon.
+		// Continuous and threshold-free: cheap wants keep their sampling,
+		// and a want that would consume the whole horizon's output is
+		// effectively argmax.
+		float sh = sharp;
+		{
+			const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			const float cap = EcoPowerM() * ((H > 1.f) ? H : 900.f);
+			if ((cap > 1.f) && (ranked[catBest[c]].def !is null)) {
+				float bite = ranked[catBest[c]].def.costM / cap;
+				if (bite > 1.f)
+					bite = 1.f;
+				sh += bite * ai.GetTunable("apex_commit_sharp",
+						TUNE_COMMIT_SHARP);
+			}
+		}
+		float t = v;
+		if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
+			t = lead * pow(v / lead, sh);
+		wt[c] = t;
+		sumV2 += t;
+	}
+	if (sumV2 > 0.f) {
+		uint h2 = uint(ai.frame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
+		h2 ^= (h2 >> 13);
+		float roll2 = float(h2 % 10000) / 10000.f * sumV2;
+		for (int c = 0; c < CAT_N; ++c) {
+			if (catBest[c] < 0)
+				continue;
+			roll2 -= wt[c];
+			if (roll2 <= 0.f) {
+				const int ri = catBest[c];
+				if (ri > 0) {
+					Want@ drawn = ranked[ri];
+					ranked.removeAt(uint(ri));
+					ranked.insertAt(0, drawn);
+					didDraw = true;   // the hoist above did not survive the draw
+				}
+				break;
+			}
+		}
+	}
+	return didDraw;
+}
+
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
@@ -210,8 +319,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// unit caps the global decide rate without touching legit elections
 	// (a successful decide holds its task far longer than this).
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
-		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND)
+		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND) {
+			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+				++Builder::gComBounce;   // a task that died within 2 s of being handed out
 			return null;
+		}
 		gLastDecideAt[int(unit.id)] = ai.frame;
 	}
 	{ double _t = Perf::T0(); WorkerSeen(unit); Perf::Add("dec.worker", _t); }
@@ -252,6 +364,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// is ever called, so maketask.as's hold -- at ANY progress -- is the live
 	// rule. The aaEmerg claim above stays: it serializes which FREE builder
 	// answers the panic.)
+
+	// GO BACK FOR WHAT THE STALL MADE YOU DROP. The one thing maketask.as's
+	// hold cannot cover: the stall interrupt ABORTED the task, so there is no
+	// held task to return and this unit arrives here free, with a frame of its
+	// own standing somewhere. Nothing else asks -- the market re-prices every
+	// want from scratch and the plant it left already reads as committed, so
+	// the next election buys an LLT beside him instead (apexearth: "instead of
+	// going back to the factory"). Below the safety rungs, and below the AA
+	// panic, which is an interrupt in its own right.
+	if (!aaEmerg) {
+		const double _tDb = Perf::T0();
+		IUnitTask@ debt = StallDebtPay(unit);
+		Perf::Add("dec.stalldebt", _tDb);
+		if (debt !is null)
+			return debt;
+	}
 
 	// The frame's election budget -- see ELEC_FRAME_US above. Checked after
 	// the safety paths, before the stack.
@@ -610,108 +738,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// draw four times per election against extraction's two, which is how
 	// 672 wind turbines were bought against 1 moho upgrade (measured). One
 	// question, one ticket, weighted by that question's best answer.
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush) {
-		array<int> catBest(CAT_N, -1);   // index into ranked, or -1
-		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			const int c = CategoryOf(ranked[ri].kind);
-			if (c < 0)
-				continue;
-			// ranked is sorted by value descending, so the FIRST want seen
-			// for a category is that category's argmax -- this is the
-			// "highest value energy" pick, made once per election.
-			if (catBest[c] < 0)
-				catBest[c] = int(ri);
-		}
-		// ONE ECONOMIC QUESTION while the ETA is on: extraction, generation and
-		// build power are three ways of buying a bigger economy sooner, so the
-		// ladder answers them together and they hold ONE ticket between them
-		// instead of three. See eta.as; CAT_PRODUCE stays out of the merge.
-		array<float> catV(CAT_N, -1.f);   // >=0 overrides a ticket's weight
-		if (EtaOn()) {
-			const int pick = EtaEcoPick(ranked);
-			if (pick >= 0) {
-				for (int c = 0; c < CAT_N; ++c) {
-					if (EtaMergedCat(c))
-						catBest[c] = -1;
-				}
-				const int pc = CategoryOf(ranked[pick].kind);
-				catBest[pc] = pick;
-				catV[pc] = EtaEcoWeight(ranked);
-			}
-		}
-		// HOW SHARP THE DRAW IS. Weighting each ticket by its raw value means a
-		// want the market itself rates six times worse still wins one election
-		// in six -- measured: 34% of elections took a lower-valued want, and a
-		// mex valued 594 lost to a wind generator valued 99 (apexearth: "is it
-		// a random 'luck of the draw' sort of event in that moment?"). Odds are
-		// taken on the value RATIO to the leader raised to a power, so the
-		// exponent alone moves between proportional (1, the old behaviour) and
-		// argmax (large) without a threshold anywhere: at 2 a six-fold gap is
-		// one election in thirty-six, which keeps a never-first category from
-		// starving without letting it outbid arithmetic.
-		const float lead = ranked[0].value;
-		const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
-		array<float> wt(CAT_N, 0.f);
-		float sumV2 = 0.f;
-		for (int c = 0; c < CAT_N; ++c) {
-			if (catBest[c] < 0)
-				continue;
-			const float v = (catV[c] >= 0.f) ? catV[c]
-					: ranked[catBest[c]].value;
-			// A COMMITMENT IS NOT SAMPLED. The cost of drawing a worse option
-			// scales with what that option costs: a wrong 40-metal wind is
-			// noise, a wrong 9700-metal afus is the game (apexearth: "for these
-			// things that are so impactful I feel like we need to go with
-			// winner takes all. There is only one right choice here"). Measured
-			// the same session: EVERY afus bought was a draw override, priced
-			// BELOW the runner-up each time -- 6.30 against 11.58, 8.53 against
-			// 13.29 -- so the pricing was right and the lottery bought it
-			// anyway at ~30% weight.
-			//
-			// So the exponent rises with how big a bite this candidate takes
-			// out of what the economy can produce over the payback horizon.
-			// Continuous and threshold-free: cheap wants keep their sampling,
-			// and a want that would consume the whole horizon's output is
-			// effectively argmax.
-			float sh = sharp;
-			{
-				const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-				const float cap = EcoPowerM() * ((H > 1.f) ? H : 900.f);
-				if ((cap > 1.f) && (ranked[catBest[c]].def !is null)) {
-					float bite = ranked[catBest[c]].def.costM / cap;
-					if (bite > 1.f)
-						bite = 1.f;
-					sh += bite * ai.GetTunable("apex_commit_sharp",
-							TUNE_COMMIT_SHARP);
-				}
-			}
-			float t = v;
-			if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
-				t = lead * pow(v / lead, sh);
-			wt[c] = t;
-			sumV2 += t;
-		}
-		if (sumV2 > 0.f) {
-			uint h2 = uint(ai.frame) * 2654435761 + uint(unit.id) * 40503;
-			h2 ^= (h2 >> 13);
-			float roll2 = float(h2 % 10000) / 10000.f * sumV2;
-			for (int c = 0; c < CAT_N; ++c) {
-				if (catBest[c] < 0)
-					continue;
-				roll2 -= wt[c];
-				if (roll2 <= 0.f) {
-					const int ri = catBest[c];
-					if (ri > 0) {
-						Want@ drawn = ranked[ri];
-						ranked.removeAt(uint(ri));
-						ranked.insertAt(0, drawn);
-						why = "draw";   // the hoist above did not survive the draw
-					}
-					break;
-				}
-			}
-		}
-	}
+	// Rebuild is a price, not a rule: no hoist of the spot that just died.
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush)
+		if (CategoryDraw(unit, ranked, 0))
+			why = "draw";
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
@@ -866,39 +896,47 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	for (uint i = 0; i < ranked.length(); ++i) {
+		bool refused = false;
 		// FORWARD of the anchor is what kills commanders; the farm-distance
 		// radius also banned the rear-flank PLANT site and the commander --
 		// early game's only builder -- never made a factory (watched, and it
 		// poisoned a 20-game medium anchor). Behind the anchor is safe by
 		// the grid's own construction.
-		// Extraction is exempt: a mex spot is priced with the walker's own
-		// expected loss (TripRisk, 2700 metal of commander at stake), and
-		// this line refused him every 2.5 spot toward the enemy on a map
-		// where those are the nearest -- he walked past one to build a
-		// converter at home (apexearth, watched).
-		if (isComm && Base::gAnchorSet && Base::gAxisSet
-			&& (ranked[i].kind != WK_MEX) && (ranked[i].kind != WK_MEXUP)) {
+		// Extraction is NOT exempt (it was for one day: the trip-risk price
+		// let a 0.45-value mex 1900 elmo out win a draw, and that walk killed
+		// the commander at 17.4 min, watched 2026-09-05). His ruling stands:
+		// the commander stays home; spots inside 400 forward are still his.
+		if (isComm && Base::gAnchorSet && Base::gAxisSet) {
 			const AIFloat3 rel = ranked[i].pos - Base::gAnchor;
 			const float fwdDist = rel.x * Base::gFwd.x + rel.z * Base::gFwd.z;
 			// 400: the base-front turret post sits at anchor+150, and a 150
 			// cutoff banned the commander from it. Beyond 400 is the
 			// con-and-escort frontier, the wall included: the walk to a
 			// mid-map line is not worth the base's only lathe.
-			if (fwdDist > 400.f) {
+			// The axis test alone let a radar 1300 elmos SIDEWAYS of the anchor
+			// through (fwd -267 by the axis, 0.8 of the way to the enemy by the
+			// map) and he died there. The cap the caution rule runs him home at
+			// bounds where a job may send him.
+			const float ff = Military::ForwardFraction(ranked[i].pos);
+			if ((fwdDist > 400.f)
+				|| (ff > ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP))) {
 				if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
 					gComFwdLogAt = ai.frame;
 					AiLog("apex: com-fwd skip t=" + ai.teamId + " "
 						+ KindName(ranked[i].kind) + " at="
 						+ int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
-						+ " fwd=" + int(fwdDist) + " (sampled 30s)");
+						+ " fwd=" + int(fwdDist) + " ff=" + formatFloat(ff, "", 0, 2) + " (sampled 30s)");
 				}
-				continue;
+				refused = true;
 			}
 		}
-		const double _tExec = Perf::T0();
-		IUnitTask@ t = ExecuteWant(unit, ranked[i]);
-		Perf::Add("exec.want", _tExec);
-		Perf::Add("exec.k" + KindName(ranked[i].kind), _tExec);
+		IUnitTask@ t = null;
+		if (!refused) {
+			const double _tExec = Perf::T0();
+			@t = ExecuteWant(unit, ranked[i]);
+			Perf::Add("exec.want", _tExec);
+			Perf::Add("exec.k" + KindName(ranked[i].kind), _tExec);
+		}
 		if (t !is null) {
 			// The execution just changed the counts that priced this kind --
 			// every cached answer of it is stale now, whoever asked.
@@ -917,7 +955,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
 			return t;
 		}
-		if (uint(ranked[i].kind) < gExecFail.length())
+		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))
 			++gExecFail[ranked[i].kind];
 	}
 	// EVERY RANKED WANT REFUSED. The decide line above names what ranked

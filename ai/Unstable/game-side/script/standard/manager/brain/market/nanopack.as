@@ -205,7 +205,8 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 				if (Base::Ready()) {
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
-					if (Base::LaneGap(pl) < (Base::LANE_HALF + pitch * 0.5f))
+					const float lh = Base::LaneHalf() + pitch * 0.5f;
+					if ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))
 						continue;
 				}
 				if (lane) {

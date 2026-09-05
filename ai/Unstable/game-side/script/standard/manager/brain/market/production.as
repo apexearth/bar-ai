@@ -157,6 +157,7 @@ string gNoOrder = "";
 // factory def per minute: every mobile combat candidate with its draw
 // weight (v x1000, decide's convention) or the reason it never entered.
 array<int> gNextProdRankOf;
+int gNextRezLog = 0;
 
 // `slot` is the position in the line's batch: the facqueue asks repeatedly
 // until the queue is deep enough, and every ask is priced against a ledger
@@ -223,6 +224,28 @@ void SupportCensus()
 	}
 }
 
+// ARMY DEMAND FROM METAL NOTHING ELSE IS SPENDING (apexearth 2026-09-05: "if
+// we're crazy rich and aren't empty on metal then we should just keep making
+// army. The objective is to win!"). FreeMetalFlow, not OverflowM: the latter
+// reports nothing until the bank passes 80% of storage, and the bank never got
+// there because the constructors were spending the same free metal on more
+// plants -- so a satisfied target idled every line, gantries included, while
+// the auction kept buying lines to stand idle beside them.
+float RichArmyGapM()
+{
+	// gMSpareEma, not the raw tick and not FreeMetalFlow. The raw income-pull
+	// "calls a fully committed economy idle one tick and starving the next"
+	// (want_energy.as:501), and FreeMetalFlow adds the bank as a 60s drawdown,
+	// so a 600-metal bank read as free metal at minute 3 and this floor fired
+	// through the whole opening. Both were measured: battery trade mean 0.495
+	// control -> 0.446 freeflow -> 0.568 raw-tick, con retreats up on two maps
+	// in both. The smoothed spare is the same fact without either error.
+	TrackIncome();
+	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return gMSpareEma * ((fillS > 1.f) ? fillS : 180.f);
+}
+
+
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
@@ -264,7 +287,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const int ceilNeed = CeilingConsNeed();
 	if ((ceilNeed <= 0) && !gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
 		&& (ArmyTarget() - ArmyValue() - ArmyInFlightM() <= 0.5f)
-		&& (OverflowM() <= 0.5f))
+		&& (RichArmyGapM() <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -301,17 +324,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	// METAL WE FAIL TO SPEND IS ARMY DEMAND (his standing law: the economy
-	// is for spending; waste is free army). The same overflow signal that
-	// buys nanos floors the gap, so a satisfied target never idles the lines
-	// while metal rots -- measured: lines at buf0s with 31% of a 44-minute
-	// game's metal overflowing.
+	// is for spending; waste is free army) -- see RichArmyGapM for why the
+	// signal is free flow and not the storage-gated overflow.
 	// ...UNLESS THE TARGET IS ECONOMY, in which case metal we cannot spend is a
 	// shortage of HANDS, not of army -- which is the same thing the ladder's
 	// max() says when a step is build-bound rather than feed-bound. The
 	// constructor gain below already prices overflow capture, so the metal has
 	// somewhere to go.
 	if (!OverflowBuysHands()) {
-		const float waste = OverflowM() * ((fillS > 1.f) ? fillS : 180.f);
+		const float waste = RichArmyGapM();
 		if (waste > armyGap)
 			armyGap = waste;
 	}
@@ -326,6 +347,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// scales with EVERYTHING we own -- expected loss = total value x defeat
 	// probability -- tapering to normal at parity. One modeled weight.
 	float stakeMul = 1.f;
+	int rezDef = -1, rezHave = 0;
+	float rezRestore = 0.f, rezStream = 0.f, rezCap = 0.f;
+	float pLineSum = 0.f;
+	int pLineN = 0;
 	{
 		const float aT0 = ArmyTarget();
 		if ((aT0 > 1.f) && (armyGap > 0.f)) {
@@ -580,27 +605,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// utilization share (walking, spread wrecks), and a new bot is
 			// worth only the remainder, capped by its own rate -- the fleet
 			// sizes itself to the work and stops.
+			// Priced after the loop, on the line's own scale (see rezwant);
+			// a raw m/s here was 1/1000th of a pawn's ticket.
 			if (Catalog::gRezzer[d]) {
-				const int haveRz = (int(d) < int(gOwnCount.length()))
-						? gOwnCount[d] : 0;
-				const float medic = ArmyValue()
-						* ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC) / 60.f;
-				const float streamRz = gLossPool
-						/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
-						+ medic;
-				const float perBot = Catalog::gBuildPower[d]
+				rezDef = d;
+				rezHave = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
+				rezCap = Catalog::gBuildPower[d] * LineMetalPerEffort()
 						* ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
-				float unmet = streamRz - float(haveRz) * perBot;
-				if (unmet > perBot)
-					unmet = perBot;
-				const float gainRz = ((unmet > 0.f) ? unmet : 0.f) * roleMul;
-				if (gainRz > 0.05f) {
-					const float vRz = gainRz / Catalog::gCostM[d];
-					candDef.insertLast(d);
-					candV.insertLast(vRz);
-					candGain.insertLast(gainRz);
-					sumV += vRz;
-				}
+				rezStream = RezWorkM() / ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
+				float unmet = rezStream - float(rezHave) * rezCap;
+				if (unmet > rezCap)
+					unmet = rezCap;
+				rezRestore = ((unmet > 0.f) ? unmet : 0.f) * roleMul;
 				continue;
 			}
 		// Until T3-grade units, the quiet rear builds NO army (apexearth);
@@ -616,7 +632,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 			const float sinkGap = OverflowBuysHands() ? 0.f
-					: (OverflowM() * ((fillS > 1.f) ? fillS : 60.f) * roleMul);
+					: (RichArmyGapM() * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
@@ -830,6 +846,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
 			sumV += vA;
+			pLineSum += ppc / linePPC;
+			++pLineN;
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName()
 					+ "=" + formatFloat(vA * 1000.f, "", 0, 2)
@@ -970,6 +988,37 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		candV.insertLast(v);
 		candGain.insertLast(gain);
 		sumV += v;
+	}
+	if (rezDef >= 0) {
+		const float pLine = (pLineN > 0) ? (pLineSum / float(pLineN)) : 1.f;
+		const float hM = (fillS > 1.f) ? fillS : 60.f;
+		const float pMedic = rezRestore * hM / Catalog::gCostM[rezDef] * pLine;
+		const float gainM = ((armyGap > 0.f) ? armyGap : 0.f) / hM * pMedic * stakeMul;
+		const float vM = gainM / Catalog::gCostM[rezDef];
+		if (gainM > 0.01f) {
+			candDef.insertLast(rezDef);
+			candV.insertLast(vM);
+			candGain.insertLast(gainM);
+			sumV += vM;
+		}
+		if (prankNow)
+			prank += " " + Catalog::Def(rezDef).GetName() + "="
+				+ formatFloat(vM * 1000.f, "", 0, 2) + "(rez g"
+				+ formatFloat(gainM, "", 0, 2) + ")";
+		if (ai.frame >= gNextRezLog) {
+			gNextRezLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: rezwant t=" + ai.teamId
+				+ " stream=" + formatFloat(rezStream, "", 0, 2)
+				+ " cap=" + formatFloat(rezCap, "", 0, 2)
+				+ " have=" + rezHave
+				+ " restore=" + formatFloat(rezRestore, "", 0, 2)
+				+ " pLine=" + formatFloat(pLine, "", 0, 1)
+				+ " pMedic=" + formatFloat(pMedic, "", 0, 1)
+				+ " gap=" + int(armyGap)
+				+ " repair=" + int(gRezRepair) + " field=" + int(gRezField)
+				+ " v=" + formatFloat(vM * 1000.f, "", 0, 2)
+				+ " sumV=" + formatFloat(sumV * 1000.f, "", 0, 0));
+		}
 	}
 	Perf::Add("prod.cands", _tProds);
 	if (prankNow && (prank.length() > 0)) {

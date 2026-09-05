@@ -169,6 +169,10 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// sending a constructor to it.
 	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
 		return null;
+	if (IsRezzer(unit) && !RezSiteOk(wreck)) {
+		++gRzFrontVeto;
+		return null;
+	}
 	// THE SWEEP EATS TREES. The area command vacuums every feature in the
 	// circle, and on a tree-heavy map a con sent for one metal rock then
 	// chews energy features while the bank is capped -- apexearth, watching
@@ -276,8 +280,8 @@ bool PreferReclaim()
 	// default. gComm is null only for the real gap between death and rebuild.
 	if (gComm is null)
 		return false;
-	if (!Factory::gHaveT2)
-		return true;
+	// (The pre-T2 reclaim default is gone: RezzerRezOrEat judges resurrect
+	// by the unit it returns against the army gap -- apexearth, docs/24.)
 	// Behind on the field, the completion risk is the whole argument: a resurrect
 	// credits nothing until it finishes, so a bot pushed off one has spent the
 	// time for no metal, while reclaim banks continuously and survives being

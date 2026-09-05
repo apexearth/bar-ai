@@ -348,6 +348,21 @@ private:
 
 	void Watchdog();
 
+	// THE REZ BOTS' REFLEX. Every rule a rez bot has runs at election time, and a
+	// bot already on a task is never re-elected -- so until it was shot, nothing
+	// looked at what was walking towards it. apexearth 2026-09-06: "they should
+	// back away when enemy units are close to being within range... delays of
+	// more than a second are unacceptable." This runs on its own short job
+	// instead, off the election path entirely.
+	void UpdateRezGuard();
+
+	std::set<CCircuitUnit*> rezzers;              // the rez bots, as UseAs::REZZER routes them
+	std::map<ICoreUnit::Id, int> rezEvadeAt;      // last back-away order, per bot
+	int rezGuardLogAt = 0;
+	unsigned int rezGuardPressed = 0;
+	unsigned int rezGuardMoves = 0;
+	float rezGuardWorst = 0.f;
+
 	Handlers2 createdHandler;
 	Handlers1 finishedHandler;
 	Handlers1 idleHandler;

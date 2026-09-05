@@ -10,7 +10,8 @@ Reads a tournament directory (or any tree of result.json), takes each player's
 final stats row, and reports per side:
 
   * where the metal went, as a share of everything built
-  * the units that ate the most metal, pooled across games
+  * the units that ate the most metal, pooled across games -- EVERY def, cheap
+    ones included; see top_units() for the faction-sized hole that fixed
   * economy reach -- mex upgrades, advanced constructors, energy thrown away
 
 Usage:
@@ -61,7 +62,7 @@ BUCKETS = [
 
 REACH = [
     ("metal produced", "metalProduced"),
-    ("metal built", "mBuiltReal"),
+    ("metal built", "_mBuiltAll"),
     ("T1 spend", "mT1"),
     ("T2 spend", "mT2"),
     ("T3 spend", "mT3"),
@@ -123,20 +124,76 @@ def load(root: Path):
             merged["_died"] = (row.get("armyReal", 0) == 0
                                and row.get("conT1", 0) == 0
                                and row.get("mBuiltReal", 0) > 0)
+            # EVERYTHING BUILT, not just the defs over spamCost. mBuiltReal is
+            # the exporter's >= 120-metal total, so using it as the share
+            # denominator silently drops Grunts, Ticks, Pawns and the Cortex
+            # rocket bot out of "what did we spend on" -- and then reports
+            # "army (cheap)" as a share of a total that does not contain it.
+            # apexearth: "Those are still valid numbers of the army."
+            merged["_cheapM"] = sum(
+                float(p.partition(":")[2] or 0)
+                for p in str(row.get("cheapBuilt", "")).split(",") if ":" in p)
+            merged["_mBuiltAll"] = row.get("mBuiltReal", 0) + merged["_cheapM"]
             per_spec[spec].append(merged)
     return per_spec, games
 
 
-def top_units(rows: list[dict]) -> collections.Counter:
-    """Pool the per-player `top` strings: 'armnanotc:2940,armavp:2900,...'."""
-    c: collections.Counter = collections.Counter()
+def _pool(rows: list[dict], key: str, into: collections.Counter) -> None:
+    """Add one 'name:metal,name:metal,...' field of every row into a counter."""
     for r in rows:
-        for part in str(r.get("top", "")).split(","):
+        for part in str(r.get(key, "")).split(","):
             if ":" not in part:
                 continue
             name, _, val = part.partition(":")
             try:
-                c[name.strip()] += float(val)
+                into[name.strip()] += float(val)
+            except ValueError:
+                pass
+
+
+def top_units(rows: list[dict]) -> tuple[collections.Counter, set[str]]:
+    """Pool every def a side spent metal on. Returns (metal per def, cheap names).
+
+    THREE fields, because one of them alone is a lie in two different ways.
+    `top=` is the top FOUR defs per player-game, so pooling it across games
+    over-weights whatever happened to place in each game's top four. And the
+    exporter splits by cost: `dev_stats_export.lua` diverts every def under
+    `spamCost` (120 metal) into `cheapBuilt=` and out of `allBuilt=`/`top=`
+    entirely.
+
+    That split deleted a whole faction's main combat unit from this report.
+    corstorm (Aggravator, the Cortex T1 rocket bot) is 110 metal and armrock
+    (Rocketeer, the Armada one) is 120 -- so the same unit class was visible for
+    one faction and invisible for the other, and on 2026-09-05 this table was
+    read as "Cortex builds no rocket bots" when corstorm was outspending the
+    Thug 4.6:1 and winning 129 produce elections to 53.
+    """
+    c: collections.Counter = collections.Counter()
+    # allBuilt is the complete >= spamCost list; top is its truncated top-4 and
+    # is only the fallback for runs recorded before allBuilt existed.
+    _pool(rows, "allBuilt" if any(r.get("allBuilt") for r in rows) else "top", c)
+    cheap: collections.Counter = collections.Counter()
+    _pool(rows, "cheapBuilt", cheap)
+    c.update(cheap)
+    return c, set(cheap)
+
+
+def unit_counts(rows: list[dict]) -> collections.Counter:
+    """Pool `unitCount=` -- how MANY of each def were made, chaff included.
+
+    apexearth: "Why don't we want to see how many grunts and ticks we make and
+    stuff like that? Those are still valid numbers of the army." Metal alone
+    answers a different question: 40 Ticks and one Sheldon are the same number
+    of metal and nothing like the same army.
+    """
+    c: collections.Counter = collections.Counter()
+    for r in rows:
+        for part in str(r.get("unitCount", "")).split(","):
+            if ":" not in part:
+                continue
+            name, _, val = part.partition(":")
+            try:
+                c[name.strip()] += int(float(val))
             except ValueError:
                 pass
     return c
@@ -170,13 +227,14 @@ def main() -> int:
     print()
 
     w = 22
-    print("WHERE THE METAL WENT (PEAK army/cons over cumulative built)")
+    print("WHERE THE METAL WENT (PEAK army/cons over cumulative built,"
+          " cheap units included)")
     print("  " + "category".ljust(w) + "".join(s[:26].rjust(28) for s in specs))
     for label, key in BUCKETS:
         cells = []
         for s in specs:
             rows = per_spec[s]
-            built = sum(r.get("mBuiltReal", 0) for r in rows) or 1
+            built = sum(r.get("_mBuiltAll", 0) for r in rows) or 1
             share = sum(r.get(key, 0) for r in rows) / built
             cells.append(f"{share*100:26.1f}%")
         print("  " + label.ljust(w) + "".join(cells))
@@ -191,12 +249,23 @@ def main() -> int:
             cells.append(f"{mean:27,.0f} ")
         print("  " + label.ljust(w) + "".join(cells))
 
+    print("\nUNITS MADE (total across all games; every def, chaff included)")
     for s in specs:
-        c = top_units(per_spec[s])
+        n = unit_counts(per_spec[s])
+        line = ", ".join(f"{k} {v:,}" for k, v in n.most_common(16))
+        print(f"  {s[:30]}: {line if line else '(no unitCount= in these runs)'}")
+
+    for s in specs:
+        c, cheap = top_units(per_spec[s])
         total = sum(c.values()) or 1
+        spam = next((r.get("spamCost") for r in per_spec[s] if r.get("spamCost")), 0)
         print(f"\nTOP METAL SINKS -- {s}")
-        for name, val in c.most_common(12):
-            print(f"  {name:<18} {val:10,.0f}  {val/total*100:5.1f}%")
+        for name, val in c.most_common(14):
+            mark = " *" if name in cheap else ""
+            print(f"  {name:<18} {val:10,.0f}  {val/total*100:5.1f}%{mark}")
+        if cheap:
+            print(f"  * under spamCost {spam:,.0f} metal -- counted as"
+                  " 'army (cheap)' above, not in mBuiltReal")
     return 0
 
 

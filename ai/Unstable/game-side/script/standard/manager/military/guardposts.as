@@ -60,13 +60,20 @@ int   gPostNeedDef = -1;
 float gPostUncoveredEyes = 0.f;
 float gPostNeedEyesM = 0.f;
 float gPostWarnS = 0.f;
-// What must be beaten AT each asset: the wave that arrives there, never
-// less than the asset itself. A guard is in one fight at a time, so its
-// metal counts against the wave at every asset it can reach, not against
-// the asset's price -- the same cover-versus-threat the turret price uses.
+// What must be beaten AT each asset: the wave that arrives there, and ONLY
+// that. Floored at the asset's own worth as well, cover demand summed to the
+// whole base's worth -- several times our army, so never met, and with no
+// direction in it. ThreatM carries the home->enemy gradient, so a forward
+// asset asks for more cover than one behind us.
 // Threat is an engine sweep per asset; refreshed on a slower clock.
 array<float> gPostReq;
 int gPostReqAt = -999999;
+// What the last posting left behind, so the cover-need estimate can run on the
+// tick the posting pass skips rather than piling onto the same sim frame.
+array<float> gPostCov;
+array<float> gPostCovEyes;
+array<bool>  gPostSeen;
+int gPostNeedAt = -999999;
 
 // Light-unit metal that radar warning would save.
 float EyesSavedM()
@@ -208,6 +215,32 @@ float Exposed(uint i, float cov)
 	return (sh > 0.f) ? Market::gPfWorth[i] * sh : 0.f;
 }
 
+// Mean position of a set of points on the home->enemy axis. Telemetry only.
+float MeanForward(const array<AIFloat3>@ ps)
+{
+	if ((ps is null) || (ps.length() == 0))
+		return 0.f;
+	float s = 0.f;
+	for (uint i = 0; i < ps.length(); ++i)
+		s += ForwardFraction(ps[i]);
+	return s / float(ps.length());
+}
+
+// The same axis, weighted by each asset's cover requirement: where the DEMAND
+// for guards sits, as against where the assets sit. Above the plain mean means
+// the front of the base is asking for the guards. Telemetry only.
+float ReqForward()
+{
+	if (gPostReq.length() != Market::gPfPos.length())
+		return 0.f;
+	float s = 0.f, w = 0.f;
+	for (uint i = 0; i < gPostReq.length(); ++i) {
+		s += gPostReq[i] * ForwardFraction(Market::gPfPos[i]);
+		w += gPostReq[i];
+	}
+	return (w > 0.f) ? (s / w) : 0.f;
+}
+
 // Light units it takes to cover what `cov` leaves uncovered; cov is
 // consumed. Assets with radar warning (`seen`) take the wider reach.
 int VirtualPost(array<float>@ cov, array<bool>@ seen,
@@ -215,30 +248,73 @@ int VirtualPost(array<float>@ cov, array<bool>@ seen,
 {
 	const uint n = cov.length();
 	int count = 0;
+	// Applying a placement, re-totalling what is left and finding the next
+	// worst asset all read the same cov[i]: one walk of n, not three.
+	int bi = -1;
+	float bw = 0.f;
+	for (uint i = 0; i < n; ++i) {
+		const float u = Exposed(i, cov[i]);
+		if (u > bw) {
+			bw = u;
+			bi = int(i);
+		}
+	}
 	while ((left > gPostTotal * 0.05f) && (count < 60)) {
-		int bi = -1;
-		float bw = 0.f;
+		if (bi < 0)
+			break;
+		const uint at = uint(bi);
+		bi = -1;
+		bw = 0.f;
+		left = 0.f;
 		for (uint i = 0; i < n; ++i) {
+			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[at]);
+			const float vr = seen[i] ? vrE : vr0;
+			if (dd < vr)
+				cov[i] += vm * (1.f - dd / vr);
 			const float u = Exposed(i, cov[i]);
+			left += u;
 			if (u > bw) {
 				bw = u;
 				bi = int(i);
 			}
 		}
-		if (bi < 0)
-			break;
-		for (uint i = 0; i < n; ++i) {
-			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[bi]);
-			const float vr = seen[i] ? vrE : vr0;
-			if (dd < vr)
-				cov[i] += vm * (1.f - dd / vr);
-		}
 		++count;
-		left = 0.f;
-		for (uint i = 0; i < n; ++i)
-			left += Exposed(i, cov[i]);
 	}
 	return count;
+}
+
+// Virtual posting: keep placing the light unit at the worst-covered asset
+// until the base is covered, and count what that took -- twice, as things
+// stand and with radar warning everywhere, so the difference prices a radar.
+// It reads the snapshot the last posting left, off that posting's own tick
+// and on gPostReq's slower clock: light-unit demand and the radar price are
+// what consume it, and neither moves inside two seconds.
+void UpdateCoverNeed()
+{
+	const uint n = gPostCov.length();
+	if ((n == 0) || (gPostCovEyes.length() != n) || (gPostSeen.length() != n))
+		return;
+	// The field is rebuilt from the auction too; a snapshot that no longer
+	// indexes the same assets is not one to post over.
+	if ((Market::gPfPos.length() != n) || (gPostReq.length() != n))
+		return;
+	if ((ai.frame - gPostNeedAt) < 10 * SECOND)
+		return;
+	gPostNeedAt = ai.frame;
+	gPostNeedN = 0;
+	gPostNeedM = 0.f;
+	gPostNeedEyesM = 0.f;
+	if (gPostNeedDef <= 0)
+		return;
+	const double _tN = Perf::T0();
+	const float vr0 = PostReach(gPostNeedDef);
+	const float vrE = PostReach(gPostNeedDef, gPostWarnS);
+	const float vm = Catalog::gCostM[gPostNeedDef];
+	gPostNeedN = VirtualPost(@gPostCov, @gPostSeen, vr0, vrE, vm, gPostUncovered);
+	gPostNeedM = float(gPostNeedN) * vm;
+	array<bool> all(n, true);
+	gPostNeedEyesM = float(VirtualPost(@gPostCovEyes, @all, vr0, vrE, vm, gPostUncoveredEyes)) * vm;
+	Perf::Add("prot.need", _tN);
 }
 
 void UpdateGuardPosts()
@@ -247,8 +323,12 @@ void UpdateGuardPosts()
 		return;
 	const float everyS = ai.GetTunable("apex_protect_field_s", TUNE_PROTECT_FIELD_S);
 	const int every = int(((everyS > 0.1f) ? everyS : 2.f) * 30.f);
-	if ((ai.frame - gPostAt) < every)
+	if ((ai.frame - gPostAt) < every) {
+		// AiUpdate runs twice as often as the posting does, so the estimate
+		// rides the spare tick and the two never land on one frame.
+		UpdateCoverNeed();
 		return;
+	}
 	gPostAt = ai.frame;
 	if (!Builder::gHomeSet)
 		return;
@@ -262,9 +342,11 @@ void UpdateGuardPosts()
 	if (n == 0)
 		return;
 
-	// The pools' members.
+	// The pools' members. Positions are read ONCE: nothing moves during the
+	// pass, and the nearest-free-unit scan below asks u^2/2 times.
 	array<CCircuitUnit@> us;
 	array<int> ud;
+	array<AIFloat3> upos;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		if ((gSquads[i] is null) || (gSquads[i].GetFightType() != int(Task::FightType::DEFEND)))
 			continue;
@@ -276,6 +358,7 @@ void UpdateGuardPosts()
 				continue;
 			us.insertLast(on[j]);
 			ud.insertLast(int(on[j].circuitDef.id));
+			upos.insertLast(on[j].GetPos(ai.frame));
 		}
 	}
 	gPostUnits = int(us.length());
@@ -298,12 +381,13 @@ void UpdateGuardPosts()
 		covEyes[i] = cov[i];
 		seen[i] = Market::RadarSees(Market::gPfPos[i]);
 		gPostTotal += Market::gPfWorth[i];
-		if (reqNow) {
-			const float thr = Market::ThreatM(Market::gPfPos[i]);
-			gPostReq[i] = (thr > Market::gPfWorth[i]) ? thr : Market::gPfWorth[i];
-		}
+		if (reqNow)
+			gPostReq[i] = Market::ThreatM(Market::gPfPos[i]);
 	}
-	gPostWarnS = EyesWarningS(CoverUnitDef());
+	// Wanted once, read twice: it sets the warning a radar buys that guard,
+	// and it is the unit the cover-need estimate posts.
+	gPostNeedDef = CoverUnitDef();
+	gPostWarnS = EyesWarningS(gPostNeedDef);
 	array<bool> used(us.length(), false);
 	// Posts form a wall, not a dot (apexearth: "spreading ourselves out as a
 	// wall so... we don't receive a lot of flanking damage and instead get
@@ -314,16 +398,19 @@ void UpdateGuardPosts()
 	const float WALL_GAP = 96.f;      // elmo between neighbours in the wall
 	const float WALL_FWD_MAX = 160.f; // elmo forward of the asset, at most
 	float reach = 0.f;
-	for (uint k = 0; k < us.length(); ++k) {
-		int bi = -1;
-		float bw = -1.f;
-		for (uint i = 0; i < n; ++i) {
-			const float u = Exposed(i, cov[i]);
-			if (u > bw) {
-				bw = u;
-				bi = int(i);
-			}
+	// The worst-covered asset, carried between guards by the cover-apply pass
+	// at the bottom of the loop instead of rescanned at the top: same argmax
+	// over the same cov, one walk of n per guard instead of two.
+	int bi = -1;
+	float bw = -1.f;
+	for (uint i = 0; i < n; ++i) {
+		const float u = Exposed(i, cov[i]);
+		if (u > bw) {
+			bw = u;
+			bi = int(i);
 		}
+	}
+	for (uint k = 0; k < us.length(); ++k) {
 		if (bi < 0)
 			break;
 		int bu = -1;
@@ -331,7 +418,7 @@ void UpdateGuardPosts()
 		for (uint j = 0; j < us.length(); ++j) {
 			if (used[j])
 				continue;
-			const float dd = us[j].GetPos(ai.frame).distance2D(Market::gPfPos[bi]);
+			const float dd = upos[j].distance2D(Market::gPfPos[bi]);
 			if ((bu < 0) || (dd < bd)) {
 				bd = dd;
 				bu = int(j);
@@ -340,26 +427,34 @@ void UpdateGuardPosts()
 		if (bu < 0)
 			break;
 		used[bu] = true;
+		const uint at = uint(bi);
 		const float r0 = PostReach(ud[bu]);
 		const float rE = PostReach(ud[bu], gPostWarnS);
 		// The post's reach is also how far from it the unit answers a target
 		// (CDefendTask::LeashPosts): a guard does not leave what it covers
 		// for a fight it cannot get back from.
-		const AIFloat3 postAt = WallPost(Market::gPfPos[bi], foe, us[bu].circuitDef.GetMaxRange(), onAsset[bi], WALL_GAP, WALL_FWD_MAX);
-		aiMilitaryMgr.SetGuardPost(us[bu], postAt, seen[bi] ? rE : r0);
-		++onAsset[bi];
+		const AIFloat3 postAt = WallPost(Market::gPfPos[at], foe, us[bu].circuitDef.GetMaxRange(), onAsset[at], WALL_GAP, WALL_FWD_MAX);
+		aiMilitaryMgr.SetGuardPost(us[bu], postAt, seen[at] ? rE : r0);
+		++onAsset[at];
 		gPostUPos.insertLast(postAt);
 		gPostUM.insertLast(Catalog::gCostM[ud[bu]]);
-		gPostUReach.insertLast(seen[bi] ? rE : r0);
+		gPostUReach.insertLast(seen[at] ? rE : r0);
 		reach = r0;
 		const float m = Catalog::gCostM[ud[bu]];
+		bi = -1;
+		bw = -1.f;
 		for (uint i = 0; i < n; ++i) {
-			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[bi]);
+			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[at]);
 			const float r = seen[i] ? rE : r0;
 			if (dd < r)
 				cov[i] += m * (1.f - dd / r);
 			if (dd < rE)
 				covEyes[i] += m * (1.f - dd / rE);
+			const float u = Exposed(i, cov[i]);
+			if (u > bw) {
+				bw = u;
+				bi = int(i);
+			}
 		}
 	}
 	gPostUncovered = 0.f;
@@ -372,23 +467,10 @@ void UpdateGuardPosts()
 	}
 	reqMean /= float(n);
 
-	// Virtual posting: keep placing the light unit at the worst-covered asset
-	// until the base is covered, and count what that took. Same greedy, same
-	// reach, so the count is what the real posting would use. Run twice:
-	// as things stand, and with radar warning everywhere.
-	gPostNeedN = 0;
-	gPostNeedM = 0.f;
-	gPostNeedEyesM = 0.f;
-	gPostNeedDef = CoverUnitDef();
-	if (gPostNeedDef > 0) {
-		const float vr0 = PostReach(gPostNeedDef);
-		const float vrE = PostReach(gPostNeedDef, gPostWarnS);
-		const float vm = Catalog::gCostM[gPostNeedDef];
-		gPostNeedN = VirtualPost(@cov, @seen, vr0, vrE, vm, gPostUncovered);
-		gPostNeedM = float(gPostNeedN) * vm;
-		array<bool> all(n, true);
-		gPostNeedEyesM = float(VirtualPost(@covEyes, @all, vr0, vrE, vm, gPostUncoveredEyes)) * vm;
-	}
+	// The virtual posting reads these, on the tick this pass does not use.
+	gPostCov = cov;
+	gPostCovEyes = covEyes;
+	gPostSeen = seen;
 
 	if (ai.frame >= gPostLogAt + 30 * SECOND) {
 		gPostLogAt = ai.frame;
@@ -399,7 +481,14 @@ void UpdateGuardPosts()
 			+ " need=" + gPostNeedN + "x" + ((gPostNeedDef > 0) ? Catalog::Def(gPostNeedDef).GetName() : "-")
 			+ "=" + int(gPostNeedM)
 			+ " eyes=" + int(EyesSavedM()) + "/warn=" + formatFloat(gPostWarnS, "", 0, 1) + "s"
-			+ " req=" + int(reqMean));
+			+ " req=" + int(reqMean)
+			// Where the guards actually stand on the home->enemy axis, against
+			// where the assets are: the wall leans forward only if the first
+			// number is the larger one (apexearth: "we spread ourselves out
+			// around both the front AND back of our base").
+			+ " fwd=" + formatFloat(MeanForward(gPostUPos), "", 0, 2)
+			+ "/" + formatFloat(MeanForward(Market::gPfPos), "", 0, 2)
+			+ " reqfwd=" + formatFloat(ReqForward(), "", 0, 2));
 	}
 }
 

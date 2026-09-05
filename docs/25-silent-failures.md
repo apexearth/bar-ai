@@ -210,6 +210,34 @@ tool works there directly. `cpp/`, `changes/` and a handful of root `.md` files
 still contain CR — check before anchoring in those. `tools/normalize_eol.py`
 reports and fixes.
 
+## S19 — The deployed script can change under a running sweep
+
+An A/B run by editing the deployed tree had two of five control games silently
+run the treatment; something re-synced that tree mid-sweep. Classify every game
+from its OWN log — here the control formula forced `req == uncovered/assets`
+exactly — never from the file you edited.
+
+## S20 — A latch-once cache is a decision about WHEN
+
+`Market::CacheSpots()` fills a global on first call and latches. A new periodic
+pass called it, moving when the map's spot list was taken from `want_mex`'s
+first ask to frame 1. No error, right length, metal built 8,775 → 3,150. Read
+such a global if its owner has filled it; never trigger the fill from a new
+caller.
+
+Its status line fired only where it found something, so "no line" could not tell
+*nothing to do* from *never reached*. A status line must fire on every path,
+including the one where the feature declines to act.
+
+## S21 — `pathlib.read_text()/write_text()` on Windows silently transcodes
+
+They default to the locale encoding (cp1252 here), so a round-trip through them
+rewrites every non-ASCII character in a UTF-8 file. Used to edit four docs this
+session; it put an invalid byte in `dashboard_guide.py` and, on a second pass,
+rewrote 52 bytes of `docs/25` that the edit never touched. `git diff --stat`
+showing far more changed lines than you wrote is the tell. Use the `Edit` tool,
+or pass `encoding="utf-8"` explicitly.
+
 ---
 
 # The 2026-08-01 composition finding — "the path fires" is not evidence

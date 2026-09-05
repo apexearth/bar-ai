@@ -10,6 +10,8 @@ namespace Market {
 const float COM_RETREAT_HEALTH = 0.85f;
 
 int gNextCommCautionLog = 0;
+int gCommHoldId = -1;
+int gNextCommHoldLog = 0;
 int gNextCommFleeLog = 0;
 int gNextCommHpLog = 0;
 int gNextCommFightLog = 0;
@@ -42,7 +44,10 @@ bool CommCaution(CCircuitUnit@ unit)
 			+ aiEnemyMgr.GetEnemyCost(RT::SUPER);
 	if (heavies >= mine * ai.GetTunable("apex_comm_heavy_frac", TUNE_COMM_HEAVY_FRAC))
 		return true;
-	return Military::FoeMobileMassing()
+	// Their metal at his own strength-per-metal: a field of heavier-than-mean
+	// units reads bigger than its bill, a field of scouts smaller.
+	const float commQ = UnitStrength(int(unit.circuitDef.id)) / mine;
+	return Military::FoeMobileMassing() * FoeQualityM() / ((commQ > 0.f) ? commQ : 1.f)
 			>= mine * ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT);
 }
 
@@ -83,6 +88,15 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	const bool caution = CommCaution(unit);
+	// "If enemy is running away, fine - let them" (apexearth). Hold position
+	// shoots whatever reaches him and never walks after anything; maneuvre
+	// let the engine chase to leash+range from his last order, and a
+	// move-failed builder used to be switched to roam for the whole game.
+	if (int(unit.id) != gCommHoldId) {
+		unit.SetMoveState(0);
+		gCommHoldId = int(unit.id);
+		AiLog("apex: commander hold-position t=" + ai.teamId);
+	}
 
 	// HE IS A BADASS, SO LET HIM BE ONE. This file only ever taught the
 	// commander to run (apexearth, twice: "does our commander only have flee
@@ -97,7 +111,9 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	if (!caution && (ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f)
 		&& (unit.GetHealthPercent() >= COM_RETREAT_HEALTH))
 	{
-		const float mine = unit.circuitDef.costM;
+		// His strength at his current hp, against theirs -- not metal against
+		// metal (apexearth, docs/24). The kill is still WORTH metal below.
+		const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
 		const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
 		// The enemy groups themselves, not the PUSH sensor: that one wants a
 		// closing formation of real size and never fired once in a 1v1 (0
@@ -107,6 +123,9 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		bool fresh = false;
 		float bestD = -1.f;
 		float bestCost = 0.f;
+		float bestVel = 0.f;
+		float bestApp = 0.f;
+		float bestStr = 0.f;
 		const int nG = aiEnemyMgr.GetEnemyGroupCount();
 		for (int gi = 0; gi < nG; ++gi) {
 			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
@@ -122,12 +141,23 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			// defend at their base and nothing to chase toward.
 			if (StakeAt(gp, r) <= 0.f)
 				continue;
-			if (aiEnemyMgr.GetEnemyGroupCost(gi) > mine)
+			const float gStr = EnemyGroupStrength(gi);
+			if (gStr > mine)
+				continue;
+			// Coming at us, or leaving: a group walking away is let go.
+			const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
+			AIFloat3 toMe = here - gp;
+			toMe.SafeNormalize2D();
+			const float app = vv.x * toMe.x + vv.z * toMe.z;
+			if (app < -1.f)
 				continue;
 			const float dd = here.distance2D(gp);
 			if ((bestD < 0.f) || (dd < bestD)) {
 				bestD = dd;
 				bestCost = aiEnemyMgr.GetEnemyGroupCost(gi);
+				bestVel = aiEnemyMgr.GetEnemyGroupVel(gi);
+				bestApp = app;
+				bestStr = gStr;
 				foeAt = gp;
 				fresh = true;
 			}
@@ -143,14 +173,20 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			// (measured: 6 engagements, every one against "1 metal"). No new
 			// constant: Wage() is the market's own price for his time.
 			const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-			const float tripS = (spd > 1.f) ? (2.f * bestD / spd) : 60.f;
+			// The trip is the CATCH at closing speed plus the walk back; a group
+			// moving as fast as he does is never caught (apexearth: "enemy pawns
+			// are able to distract our commander for minutes").
+			const float closing = spd + bestApp;
+			const float tripS = ((spd > 1.f) && (closing > 1.f))
+					? (bestD / closing + bestD / spd) : 1e9f;
 			const float worthIt = Wage() * tripS;
-			if ((theirs > worthIt) && (theirs <= mine)) {
+			if ((theirs > worthIt) && (bestStr <= mine)) {
 				if (ai.frame >= gNextCommFightLog) {
 					gNextCommFightLog = ai.frame + 15 * SECOND;
 					AiLog("apex: commander engaging -- "
 						+ formatFloat(theirs, "", 0, 0) + " metal raiding our ground,"
-						+ " he is worth " + formatFloat(mine, "", 0, 0));
+						+ " str " + formatFloat(bestStr, "", 0, 2) + " vs his " + formatFloat(mine, "", 0, 2)
+						+ " approaching " + formatFloat(bestApp, "", 0, 0) + "/s at " + int(bestD));
 				}
 				unit.CmdMoveTo(foeAt);
 				return null;
@@ -189,14 +225,37 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		// Fleeing only helps when the ground fled TO is safer. With home just
 		// as hot, "retreating" defends nothing -- fall through and keep working;
 		// the wants' own site-safety vetoes steer the work off hot ground.
-		if ((hereInfl > fleeInfl)
+		// Compare strength (apexearth): what is actually near him against what
+		// he is at this hp. A field he outguns is one he holds, not one he
+		// hides from for 20 s at a time; influence with no seen mobile source
+		// (a creeping turret, a unit under the fog) still moves him.
+		float nearStr = 0.f;
+		const float mineNow = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
+		if (hereInfl > fleeInfl) {
+			const float fr = ai.GetTunable("apex_comm_flee_ring", TUNE_COMM_FLEE_RING);
+			const int nG2 = aiEnemyMgr.GetEnemyGroupCount();
+			for (int g2 = 0; g2 < nG2; ++g2) {
+				const AIFloat3 gp2 = aiEnemyMgr.GetEnemyGroupPos(g2);
+				if (OnMap(gp2) && (gp2.distance2D(here) <= fr))
+					nearStr += EnemyGroupStrength(g2);
+			}
+		}
+		const bool outgunned = (nearStr <= 0.f) || (nearStr > mineNow);
+		if ((hereInfl > fleeInfl) && !outgunned && (ai.frame >= gNextCommHoldLog)) {
+			gNextCommHoldLog = ai.frame + 15 * SECOND;
+			AiLog("apex: commander holding, enemy influence " + formatFloat(hereInfl, "", 0, 2)
+				+ ", near str " + formatFloat(nearStr, "", 0, 4) + " vs his " + formatFloat(mineNow, "", 0, 4));
+		}
+		if ((hereInfl > fleeInfl) && outgunned
 			&& (ai.GetEnemyInflAt(Builder::gHomePos) < hereInfl * 0.5f))
 		{
 			if (ai.frame >= gNextCommFleeLog) {
 				gNextCommFleeLog = ai.frame + 15 * SECOND;
 				AiLog("apex: commander leaving, enemy influence "
 					+ formatFloat(hereInfl, "", 0, 2) + " > "
-					+ formatFloat(fleeInfl, "", 0, 2));
+					+ formatFloat(fleeInfl, "", 0, 2) + ", near str "
+					+ formatFloat(nearStr, "", 0, 4) + " vs his "
+					+ formatFloat(mineNow, "", 0, 4));
 			}
 			IUnitTask@ bail = Builder::Retreat(unit);
 			if (bail !is null)

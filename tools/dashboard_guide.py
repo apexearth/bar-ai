@@ -246,6 +246,10 @@ GROUPS = [
                  ("TUNE_REZ_SCAN_S", "how often ONE bot looks for its next "
                   "wreck; lower is more responsive, at one feature query per "
                   "bot per period"),
+                 ("TUNE_REZ_REACT_S", "how much of the enemy's own walking "
+                  "counts as being in range already — a rez bot backs away "
+                  "while the nearest enemy is still this many seconds short "
+                  "of firing on it, and refuses work inside that ring"),
                  ("TUNE_REZ_RICH_M", "a corpse at least this rich is "
                   "resurrected even while the eat-everything doctrine runs — "
                   "lower resurrects more of the battlefield instead of "
@@ -435,6 +439,13 @@ GROUPS = [
                   "expires and the group goes anyway"),
                  ("TUNE_FODDER_COST", "more units count as fodder and are "
                   "sent immediately without waiting to mass"),
+                 ("TUNE_RAID_ASK", "ON lets higher-level knowledge ASK for a "
+                  "raid: it finds enemy ground nothing is guarding, sizes a "
+                  "pack against what does guard it, and pulls units out of "
+                  "their current pools to make it happen. OFF leaves only the "
+                  "stock pool, which waits for raiders to trickle in and merge "
+                  "-- measured, 13 raiders reached that pool in one 16-minute "
+                  "game and no raid ever formed"),
                  ("TUNE_RAIDER_MASSING", "ON stops raiders raiding once our "
                   "advanced lab stands — they join the massing pool and "
                   "fight as line army. OFF is stock BARb's behaviour: raiders "

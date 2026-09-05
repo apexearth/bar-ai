@@ -2,7 +2,8 @@ namespace Base {
 
 float Abs(float v) { return (v < 0.f) ? -v : v; }
 
-// Distance from a lateral offset to the nearest walkway centre.
+// Distance from an offset -- lateral or depth, the lanes cross -- to the nearest
+// walkway centre.
 float LaneGap(float u)
 {
 	const float k = u / LANE_PITCH;
@@ -10,9 +11,21 @@ float LaneGap(float u)
 	return Abs(u - float(n) * LANE_PITCH);
 }
 
+// Half-width of a walkway. A street exists so the biggest thing we field can
+// walk down it, which is the question Lattice::AisleW already answers for the
+// ground between two clusters -- so it is that number, not a second one. The
+// fixed 72 this replaces gave a 144-elmo street to a 128-elmo hull: one hull
+// wide, which is by AisleW's own reasoning a lane the pathfinder refuses under
+// any crowding.
+float LaneHalf()
+{
+	const float h = Lattice::AisleW() * .5f;
+	return (h > LANE_HALF_MIN) ? h : LANE_HALF_MIN;
+}
+
 bool InLane(float u, float half)
 {
-	return LaneGap(u) < (LANE_HALF + half);
+	return LaneGap(u) < (LaneHalf() + half);
 }
 
 // Lateral offsets a structure of this kind may occupy, ordered outward from the
@@ -43,6 +56,12 @@ void BuildOrder(int kind, array<int>@ ord, array<float>@ cols)
 	const float rowPitch = BAND_ROW[kind];
 	for (int r = 0; r < rows; ++r) {
 		const float depth = float(r) * rowPitch;
+		// Rows are dropped for a cross-street exactly as columns are for a
+		// walkway. Without this the slot is still offered and C++ pushes it out
+		// of the lane onto its neighbour's ground, which is the sprawl the
+		// lattice exists to stop.
+		if (InLane(BAND_BACK[kind] + depth, BAND_HALF[kind]))
+			continue;
 		for (uint c = 0; c < cols.length(); ++c) {
 			const float lat = cols[c];
 			ord.insertLast(r * 1000 + int(c));

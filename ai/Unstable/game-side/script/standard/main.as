@@ -140,7 +140,8 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// reached, and what the live fighter pools actually are. Both self-rate to
 	// one line a game-minute, so the last one is the game-end census.
 	{ double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
-	{ double _t = Perf::T0(); Military::FightCensus(); Perf::Add("up.fightcensus", _t); }
+	{ double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
+	{ double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Perf::Add("up.fightcensus", _t); }
 	{ double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
 	Perf::TickSpeed();
 	Perf::Flush();
@@ -327,6 +328,8 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
 	Military::NoteLocalDeath(pos, edef.costM, false);
+	if (byUs)
+		Market::LossNote(int(edef.id));   // their wreck is rez work too
 	Perf::Add("hk.enemydead", hkT);
 }
 

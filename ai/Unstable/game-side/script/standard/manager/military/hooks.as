@@ -75,6 +75,38 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	return elected;
 }
 
+// WHICH BRANCH TOOK THE UNIT. "We hold no raid tasks" cannot say whether the
+// raiders were never built, or were built and claimed by escort or cover duty
+// on the way past -- and those are opposite fixes. Counted at the election,
+// which is the only place the unit and the branch are both known.
+array<string> gElectTag;
+array<int>    gElectN;
+int gNextElectLog = 0;
+
+IUnitTask@ NoteElect(const string tag, IUnitTask@ task)
+{
+	for (uint i = 0; i < gElectTag.length(); ++i) {
+		if (gElectTag[i] == tag) {
+			++gElectN[i];
+			return task;
+		}
+	}
+	gElectTag.insertLast(tag);
+	gElectN.insertLast(1);
+	return task;
+}
+
+void ElectCensus()
+{
+	if (ai.frame < gNextElectLog)
+		return;
+	gNextElectLog = ai.frame + 60 * SECOND;
+	string msg = "apex: elect";
+	for (uint i = 0; i < gElectTag.length(); ++i)
+		msg += " " + gElectTag[i] + "=" + gElectN[i];
+	AiLog(Factory::T() + msg);
+}
+
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 
@@ -93,6 +125,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
+	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
+	// below -- it was taken off one of them on purpose. See raid.as.
+	if (RaidClaimed(int(unit.id))) {
+		DropRaidClaim(int(unit.id));
+		IUnitTask@ pack = RaidTaskFor();
+		if (pack !is null)
+			return NoteElect("raid.pull", pack);
+	}
 	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
 	// constructor without an escort claims one guard (Market keeps the
 	// one-per-worker registry).
@@ -106,7 +146,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (vip !is null) {
 			AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
 				+ " escorts " + vip.circuitDef.GetName() + " #" + vip.id);
-			return aiMilitaryMgr.Enqueue(TaskF::Guard(vip));
+			return NoteElect("escort", aiMilitaryMgr.Enqueue(TaskF::Guard(vip)));
 		}
 	}
 	// COVER UNITS HOLD. What the base bought for coverage (guardposts.as)
@@ -119,8 +159,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		&& (Market::CoverPerMetal(int(cdef.id)) >= 1.f))
 	{
 		NotePostureDef(cdef, false);
-		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
-				Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+		return NoteElect("cover", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+				Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 	}
 	if (IsFodder(cdef)) {
 		// The set of defs the spam posture applies to, discovered rather than
@@ -144,13 +184,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (SpamPhase()
 			&& (!cdef.IsRoleAny(Unit::Role::RAIDER.mask)
 				|| (ai.GetTunable("apex_spam_raiders", TUNE_SPAM_RAIDERS) > 0.f)))
-			return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::SCOUT));
+			return NoteElect("spamscout", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::SCOUT)));
 		// Before spam phase, raiders group before they go: routing straight to a
 		// RAID task per unit bypassed the pool (Defend(RAID, quota.raid.min)) that
 		// holds them until they add up to that power and promotes them together,
 		// so they trickled out alone instead of massing into a raid pack.
 		// UpdateRaidCaution raises the promotion floor further while still on T1.
-		return aiMilitaryMgr.DefaultMakeTask(unit);
+		return NoteElect("fodder.stock", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
 	// T3 CHARGERS GO FOR THE BASE. In the massing pool they inherited the
 	// group's target logic and spent the game trading with army -- apexearth
@@ -168,13 +208,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
 		}
 		AiLog(Factory::T() + "apex: " + cdef.GetName() + " charges the enemy base");
-		return aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK));
+		return NoteElect("charger", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));
 	}
 	// Before the massing pool: a super that reaches WantsMassing is excluded
 	// there by role and falls through to DefaultMakeTask, which sends it out
 	// alone. See superguard.as.
 	if (WantsSuperGuard(cdef) && !SuperReleased())
-		return SuperGuardTask(unit);
+		return NoteElect("superguard", SuperGuardTask(unit));
 	if (WantsMassing(cdef)) {
 		// Registered so ApplyRetreatPosture can weigh its cost against income.
 		NotePostureDef(cdef, false);
@@ -212,13 +252,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			&& (Builder::BaseUnderAttack() || BaseContested() || BaseRaided()
 				|| ConservativeStance()))
 		{
-			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
-					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+			return NoteElect("mass.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
-		return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
-				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack));
+		return NoteElect("mass.attack", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack)));
 	}
-	return aiMilitaryMgr.DefaultMakeTask(unit);
+	return NoteElect("stock", aiMilitaryMgr.DefaultMakeTask(unit));
 }
 
 // WHAT A COMBAT UNIT WAS DOING BEFORE IT RETREATED.
@@ -555,7 +595,9 @@ void AiUnitRemoved(CCircuitUnit@ unit, Unit::UseAs usage)
 
 void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 {
-	if (usage == Unit::UseAs::COMBAT)
+	// SUPER is registered by UnitAddedInner, so it has to be forgotten here too
+	// or the register keeps an id that only the null sweep will ever clear.
+	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER))
 		ForgetPenned(unit.id);
 	if (usage != Unit::UseAs::FENCE)
 		return;

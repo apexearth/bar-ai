@@ -322,6 +322,7 @@ local NAMES = {
 	"apex_medic_r",
 	"apex_rez_flee_s",
 	"apex_rez_scan_s",
+	"apex_rez_react_s",
 	"apex_t2_metal",
 	"apex_reclaim_energy_dist",
 	-- Economy-first targeting and group sizing (2026-08-09). The first three of

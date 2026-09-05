@@ -1095,14 +1095,31 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// standoff, never pull a row closer than it would have gone anyway.
 		// A squad with no longer-ranged row has no carry to screen for and is
 		// left exactly as it was.
+		//
+		// 200, not one rank: shortening the gap was measured worse three times
+		// over, see docs/27 `TUNE_SCREEN_GAP`.
 		float screenRange = kv.first;
+		const float screenGap = manager->GetCircuit()->GetTunable("apex_screen_gap", 200.f);
+		if ((screenGap > 0.f) && (kv.first > (float)SQUARE_SIZE)
+			&& (highestRange > kv.first + screenGap))
 		{
-			const float gap = manager->GetCircuit()->GetTunable("apex_screen_gap", 200.f);
-			if ((gap > 0.f) && (kv.first > (float)SQUARE_SIZE)
-				&& (highestRange > kv.first + gap))
-			{
-				screenRange = std::max(kv.first, highestRange - gap);
-			}
+			screenRange = std::max(kv.first, highestRange - screenGap);
+		}
+		// Three clamps below pull a unit in to its own weapon range; for a
+		// screen that is the dive, so each exempts one.
+		const bool isScreenRow = (screenRange > kv.first);
+		const float screenFloor = isScreenRow ? (screenRange * rangeMod) : 0.f;
+		// A held screen and a dived one look identical outside a replay.
+		// Rate-limited per process.
+		static int sLastScreenDiagFrame = -1000000;
+		if (isScreenRow && (rowDef != nullptr)
+			&& (manager->GetCircuit()->GetLastFrame() >= sLastScreenDiagFrame + FRAMES_PER_SEC * 5))
+		{
+			sLastScreenDiagFrame = manager->GetCircuit()->GetLastFrame();
+			manager->GetCircuit()->GetLog()->DoLog(utils::string_format(
+				std::string("apex: screen row=%s own=%.0f carry=%.0f line=%.0f n=%d"),
+				rowDef->GetDef()->GetName(), kv.first, highestRange, screenFloor,
+				(int)kv.second.size()).c_str());
 		}
 		const float rowRange = (kv.first <= (float)SQUARE_SIZE)
 				? (highestRange + manager->GetCircuit()->GetTunable("apex_escort_standoff", 240.f))
@@ -1420,14 +1437,23 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					// margin, not by silence. A sliver coward (at or under
 					// its own retreat bar) keeps the full out-of-range
 					// screen: at 8-15% hp survival outweighs its DPS.
-					if (unit->GetHealthPercent() > unit->GetCircuitDef()->GetRetreat()) {
+					// Not a screen: it already stands outside its own reach,
+					// so the cap would drag the wounded shield forward.
+					if (!isScreenRow
+						&& (unit->GetHealthPercent() > unit->GetCircuitDef()->GetRetreat()))
+					{
 						r = std::min(r, kv.first * 0.98f);
 					}
 				}
 				// A static we outrange is met from outside ITS reach (apexearth:
 				// "died to a T1 turret which it outranges").
+				// The ceiling keeps us shooting, but not for a screen: an
+				// unarmed target (tRange 0) marched it off its line alone.
 				if (tStatic && (kv.first > tRange + STATIC_SLACK)) {
-					r = std::min(std::max(r, tRange + STATIC_SLACK), kv.first * 0.98f);
+					r = std::max(r, tRange + STATIC_SLACK);
+					if (!isScreenRow) {
+						r = std::min(r, kv.first * 0.98f);
+					}
 				}
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CTerrainManager::CorrectPosition(newPos);
@@ -1568,7 +1594,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// orbit restored -- standing still was the whole regression).
 				// GetThreatAt sums every armed enemy covering the spot, so the
 				// plain attack applies only where standing is actually free.
-				const bool staticCantReply = isStatic && (edef != nullptr)
+				// Not a screen: the engine closes to exact weapon range, and
+				// the threat test above was taken at the line, not there.
+				const bool staticCantReply = isStatic && !isScreenRow && (edef != nullptr)
 						&& (!edef->IsAttacker() || (edef->GetMaxRange() * 1.05f < r))
 						&& (threatMap->GetThreatAt(unit, newPos) <= THREAT_MIN);
 				// apex: MICRO ONLY WHAT HAS A RANGE EDGE. The no-control arena
@@ -1581,7 +1609,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				// attack, auto-targeting); rows that outrange something keep
 				// the standoff machinery, which is their whole value.
 				const bool rowBrawls = (manager->GetCircuit()->GetTunable("apex_brawl_pass", 0.f) > 0.f)
-						&& !rowColossus && !kiteFoeStatic
+						&& !rowColossus && !isScreenRow && !kiteFoeStatic
 						&& (kiteFoeRange > 0.f)
 						&& (kv.first < kiteFoeRange + 60.f);
 				// A sniper always takes its row's hold position: the plain-attack

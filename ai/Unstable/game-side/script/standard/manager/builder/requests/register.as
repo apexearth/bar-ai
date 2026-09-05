@@ -202,6 +202,18 @@ void Register(IUnitTask@ task)
 	gLive.insertLast(task);
 	if (IsBigEnergy(task.buildDef))
 		Market::ComBigEInvalidate();
+	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
+	// Want's pos, which the executor's own siting then overrides, so nothing
+	// reported whether a build worth parking lathe on ended up inside the
+	// lathe we already own.
+	if (Market::NanoSinkWorthy(int(task.buildDef.id))) {
+		const AIFloat3 sp = task.GetBuildPos();
+		if (OnMap(sp))
+			AiLog("apex: sink-site " + task.buildDef.GetName()
+				+ " at=" + int(sp.x) + "," + int(sp.z)
+				+ " ringbp=" + int(Market::RingBPAt(sp))
+				+ " gap=" + int(Market::NanoGap(sp)));
+	}
 }
 
 // Live FACTORY tasks by the synchronous registry -- unlike the builder

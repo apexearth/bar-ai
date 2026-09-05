@@ -32,7 +32,7 @@ public:
 	using EnemyFakes = std::set<CEnemyFake*>;
 	struct SEnemyGroup {
 		explicit SEnemyGroup(const springai::AIFloat3& p)
-			: pos(p), cost(0.f), influence(0.f), vagueMetric(1.f), vel(0.f)
+			: pos(p), cost(0.f), influence(0.f), vagueMetric(1.f), vel(0.f), velVec(0.f, 0.f, 0.f)
 		{
 			roleCosts.fill(0.f);
 		}
@@ -43,6 +43,7 @@ public:
 		float influence;  // thr_mod applied
 		float vagueMetric;
 		float vel;  // fastest member, elmos per second
+		springai::AIFloat3 velVec;  // that member's velocity, elmos per second
 	};
 
 	CEnemyManager(CCircuitAI* circuit);

@@ -304,6 +304,27 @@ AIFloat3 PullBack(const AIFloat3& in site, const AIFloat3& in back, float step, 
 	return AIFloat3(-1.f, 0.f, -1.f);
 }
 
+// HOW FAR THE NEAREST ENEMY STILL HAS TO WALK BEFORE IT CAN SHOOT HERE.
+// Negative means it already can. The DLL's rez guard (BuilderManager's
+// UpdateRezGuard) walks bots out of exactly this envelope six times a second;
+// an election that ignored it would hand the bot straight back in, so every
+// rez rule asks the same question of the ground it is about to send one to.
+//
+// This is not the threat map: ThreatFor reads zero almost everywhere and falls
+// back to a 1-D front projection (see its own comment). This is the enemies we
+// can actually see, each with its own weapon reach and speed.
+float ReachSlack(const AIFloat3 &in where)
+{
+	if (!OnMap(where))
+		return 1.0e6f;
+	return ai.EnemyReachSlack(where, ai.GetTunable("apex_rez_react_s", TUNE_REZ_REACT_S));
+}
+
+bool InEnemyReach(const AIFloat3 &in where)
+{
+	return ReachSlack(where) < 0.f;
+}
+
 // A resurrect pays out only on completion, so a bot driven off one has nothing
 // to show for the time; reclaim credits metal continuously and can be abandoned
 // part-done. On ground we may not get to keep, take the one that banks as it

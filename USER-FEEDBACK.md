@@ -23,6 +23,31 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-05 — SELF-PLAY: "how passive our AI is"
+
+*"They haven't attacked each other a single time in 13m. They've also not
+scouted or tried to harass each other at all."* And: *"our base has depth and we
+spread our army out around both the front AND back of our base... we need to
+draw lines of our units towards the frontline."* And, on raids: *"I don't see
+why higher level knowledge can't choose to do a raid... pull units from wherever
+seems appropriate in order to make a raid happen."*
+
+Three causes found and closed; measured 5-6 seeds, self-play, one map:
+cover demand was the whole base's worth (so the raider class was conscripted
+forever, with no direction in it) — `gPostReq` is `ThreatM` now; `quota.attack`
+exceeded our whole army so no pool could promote — clamped to `armyCost*0.017`;
+and raids are now ASKED for (`military/raid.as`). Metal killed 62 -> 707, with 4
+of 5 control games ending with zero metal killed by either side. Scout tasks 0
+-> ~15 min/game. Raids 4.0 -> 10.8 min/game.
+
+STILL OPEN, and both are his calls:
+- **The route.** "Skirting around the front lines" is doctrine in `docs/24`, but
+  `CRaidTask::FindTarget` picks the target and no binding can hand it one. C++.
+- **Scouts.** `quota.scout: 2` in `behaviour.json` caps scouting at two tasks
+  whatever the map or however blind we are — a flat number of the kind the plan
+  forbids. Derive it from unscouted ground, or raise it?
+- Also still true: first factory past 4 minutes, so no military until minute 6.
+
 ## 2026-08-31 — THE OBJECTIVE: fastest path to a target state
 
 *"We're supposed to do things based on math... If you were to calculate out the
@@ -1070,3 +1095,230 @@ Measured (seed 15): bank 100% from 6.5 min, one lab, one nano until 10.4
 min; the lab busy 80% of samples yet 32 orders in 9 min, one per ~11 s --
 the lab's own 150 BP, so the nano was not lathing the line. Instrument added:
 `[BARAI_DUTY] facPow= nanoOnFac=`. Blocked on: reading it.
+
+## OPEN (2026-09-05, seed 17): a T2 lab while the front was being lost
+
+*"We made a T2 lab while losing active frontline fighting which we could
+obviously read/see - we never should be doing something like that."*
+
+Measured: `tech:armalab` drawn at 8.5 min (v=5.21 over convert 4.86) and
+again at 11.4 min (v=7.91 over energy 6.24) while `apex: leash` read
+need=38-58 against sent_pw=29-35 and `tech-diag funded=` 0.62-0.94. The
+lab finished and died at 14.5 min (2900 metal). The tech price is
+UpDemand + ConvUpDemand + outclass and carries no army-share term; the
+plan's standing obligation (docs/23) is not in that market.
+
+## OPEN (2026-09-05, seed 17): no early rezbots
+
+*"We aren't making nearly enough rezbots in the early game (0 in fact where
+enemy has 6, is resurrecting and healing, and we lose those fights because
+of it)."*
+
+Measured: 0 `produce:armrectr` in 59 lab orders; `apex: prodrank` never
+lists armrectr. It is a builder to the catalog, so it prices in the builder
+branch on the loss pool alone (no medic term, that lives in the non-builder
+branch it never reaches) and is dropped silently at gain <= 0.5.
+
+## OPEN (2026-09-05, seed 17): expansion, army commitment, commander
+
+*"We're fighting a lot and doing pretty good at it but we don't expand quite
+so well. So we lose the long game."* · *"Actively engaging in fights with
+every army we make instead of saving up our army."* · *"Enemy pawns are able
+to distract our commander for minutes."* · *"Our base was being hit but new
+units ran away from protecting it to fight on the frontline."* Directives in
+docs/24; not yet measured.
+
+Seed 18, 12 min in, with the first rescaled price live: *"I see 1 rezbot, we
+need like 4 or 5 at this point (~12m into the game)."* Mechanism found in
+that game: armrectr is a NON-builder to the catalog (no build list), so the
+first pricing pass (builder branch) was inert; the live price was the old
+non-builder block, a raw m/s stream against gap-rate x quality army gains,
+one ticket in a thousand. Rescaled 2026-09-05 (rezwant: gap rate x medic
+quality); measure produce:armrectr per game by 12 min against his 4-5.
+Then his pricing rule: *"rezbots gain value when: there is valuable reclaim
+available; there are units that need repairing; there are units available
+to resurrect."* Built as `RezWorkM()` (own missing hp in metal + field
+wrecks at resurrect or reclaim value); six-changes set: 2-4 rezbots by
+12 min, 2-20 by game end, sized to the work.
+
+## OPEN (2026-09-05, seed 19): the commander walks to far jobs
+
+*"Our commander still chases enemies a LOT which causes him to be long-term
+distracted and not useful. Enemies won't even have a trajectory towards our
+buildings and he chases them 'into the sunset'."*
+
+Measured (seed 19, live): `commander engaging` 0 times; the D-gun action
+issues no move orders. His trail is mex and radar jobs 1,500-2,000 elmo
+north of the base (472,2424 / 232,1976 / 456,2120), each `pick=1`: the
+drawn want (a converter at 736,3968) failed to execute and the next ranked
+want was taken instead, and the `com-fwd skip` reads only the axis
+(fwd=1,0 east), so a far spot sideways passes. Enemies met on those walks
+are fought where they stand.
+
+Seed 19: *"I still see our rezbots standing around doing nothing far more
+than they should... There is plenty of resurrection ability here too but I
+only seem to see them reclaim."* Mechanism: `PreferReclaim()` returned true
+until a T2 factory stood, and the resurrect path only considered wrecks of
+900+ metal (`apex_rez_rich_m`), so no T1 wreck was ever resurrected. Both
+rules were a previous session's, not his. Replaced 2026-09-05: resurrect
+when the army is below target and energy is not stalling, any resurrectable
+wreck by the cost of the unit it returns (`GetBestRezPos`); reclaim when the
+bank is genuinely empty or ground is being lost. Idle-standing not yet
+measured: 20 of 22 rezbots died at the front (fwd ~1.0) in reclaim tasks.
+
+*"We're going to lose because enemy kills our buildings and we don't remake
+them so we just starve to death..."* (the fifth time). Seed 19: 14 mex
+deaths, 5 never re-ordered, median lag 2.0 min. A mex want at a spot with a
+recent loss was hoisted to the front of the draw (`why=rebuild`) -- a RULE,
+flagged as one. REVERTED the same day on what the decide lines showed: it
+took a contested mex over a generator worth six times more, the commander
+walked out to rebuild, and one spot was rebuilt and lost three times. The
+6-game score could not order it (the control replicated W4-0-2 then
+W0-2-4). UNRESOLVED -- the starve-out is real; the rule was not the fix.
+
+*"Compare strength, work on that T2 lab while losing, if we're bleeding army
+we should try to mass more. Ensure the commander's time isn't wasted. Like I
+said - if enemy is running away, fine - let them."* (2026-09-05, after the
+rez/rebuild sets.) Built the same day, each with its instrument:
+
+- **Compare strength.** The massing law, `Outmassed`, `ConservativeStance`,
+  the local-edge read and `CommCaution` now compare strength, via
+  `Market::StrRatio` (each side's metal times its strength-per-metal). The
+  `apex: mass` line prints `ratio=` (metal) beside `str=`. Measured: str
+  runs above ratio in most games (BARb's mix is heavier per metal than our
+  pawns), and flipped a hold decision in 3 of 30 lines. TRAP found on the
+  way: the commander's raw dps counted his D-gun (111k), so by strength he
+  was six pawns and the strength engage rule from the morning never fired
+  in 12 games; manual-fire weapons are now excluded (CircuitDef.cpp). His
+  strength is still ~6.5 pawns because the DLL's own power for him is what
+  it is; `apex: unit strength --` prints the numbers at 30 s.
+- **T2 lab while losing.** The lab's army-gap stream is capped by spare
+  metal (`want_tech.as`), as the plant price already was. Measured over 24
+  games: labs still land at 8-13 min, every one with no enemy seen and
+  bleed 1.00 at the decide -- those are not "while losing". OPEN: no game
+  in the sets bought one while bleeding, so the cap is untested against
+  the case he watched (seed 17, 8.9 min, gain 23.5).
+- **Bleeding -> mass more.** Already the law (`BleedCaution`, 1 + 2 x net
+  forward loss / income, cap 1.6); it now prints on the mass line and read
+  1.14-1.47 in every game with forward losses. Nothing changed.
+- **Commander's time.** `apex: com-time` per minute: jobs, empty
+  elections, retreats, bounced re-elections, hp, forward fraction. Found
+  and fixed: (1) the flee gate left at ANY influence (0.01) and handed him a
+  20 s patrol home 11-15 times a minute in a raided base -- it now compares
+  the strength near him with his own and holds when he outguns it
+  (`commander holding` / `leaving ... near str`); (2) the forward job skip
+  measured only along the base axis, so a radar 1300 elmos sideways at 0.8
+  of the way to the enemy went through and he died there -- jobs beyond
+  `apex_comm_fwd_cap` by forward fraction are refused too. Commander minutes
+  spent forward: 10-11 of ~85 per set before, 0 of 76 after.
+- **Running away: let them.** He holds position (engine move state 0: he
+  shoots what reaches him, never walks after anything; maneuvre chased to
+  leash + range, and a move-failed builder used to be switched to roam for
+  the rest of the game -- the "into the sunset" walk). The engage rule now
+  reads the group's velocity vector and skips anything moving away.
+
+*"The issue I see a lot is our rezbots idling between actions. It takes them
+a long time occasionally to decide what they want to do... analyze what
+they're doing because it is very wasteful. Also they should always angle
+themselves BEHIND our units in combat. Never stand in front of them where
+they're likely to become collateral damage."* (seed 20, 2026-09-05)
+
+`apex: rez-time` (maketask.as) now prints per minute what every rez
+election came to: which rule handed the job, how many elections came back
+empty, how many hit the 2 s gate, how many sites the behind-the-line rule
+refused, and the longest stretch a bot went without a job. First 6-game
+read (rez-behind set): empty elections 300-1400 per game against 10-150
+jobs from any rule, resurrect 0, the worst bot 90-190 s without a job. An
+empty election hands the bot to the DLL, which parks it on a patrol -- that
+is the standing around. The behind-the-line rule as first built used the
+army lane point as "our units" and refused 1600-6700 sites per game, so it
+made the idling worse. The instrument then showed the lane point at
+0.1-0.3 of the way to the enemy while the refused wrecks lay at
+0.6-1.0, so the reference is now where our combat units actually stand
+(the forward-most tenth of them, `ArmyFront`), and the medic rule
+stations bots behind that unit by their own build reach. rez-front set:
+resurrect 0 -> 10-31 per game, medic 0-35 -> 19-88, empty elections
+300-1400 -> 0-305, worst no-job stretch 89-215 s -> 35-189 s. What
+remains idle is a bot with nothing behind the front and no damaged unit
+near it; and 15 rezbots still died at 0.5-1.0 forward in one game,
+following the army it now stands behind. OPEN.
+
+*"We also are still extremely slow to rebuild mexes and we once again pretty
+much starve to death because of it."* (sixth time, seed 20.) This time the
+mechanism was read from the con elections at 16-20 min: 41 of 82 jobs were
+`assist` and most of the rest converters, against 10 mexes. The energy bank
+was full (pinned), which priced every converter at full capacity -- with
+670 e/s of converters ALREADY in flight against a negative surplus. The T2
+converter want read 19.9 m/s, the assist want inherited it at a metal cost
+of 1, and the cons piled on while 7 dead mexes at v=4-8 were never
+re-ordered. Fixed: a pinned bank prices only the capacity not already in
+flight (`want_energy.as`); in-flight converters were 0-70 e/s in the next
+set against 670. On top of that our own commander's D-gun had killed 9
+converters, 5 winds and 4 nanos behind the raiders it shot (seed 20) -- the
+ray check stopped at the target; it now checks the rest of the ray for
+anything of ours. Own-commander kills of our units are still 8-18 in some
+games afterwards, so that is not closed.
+
+*"If an enemy comes at us with a high dps unit that outranges us we need to
+make a longer range unit to fight back against it at our T2 lab."* Seed 20:
+the enemy fielded Banishers and Golems; the T2 lab's ranking had the
+Sharpshooter first at 17.5 min (1010 vs the amphibious tank's 890, the
+outrange multiplier is inside its power-per-cost) and second to fourth
+before -- and the lab drew amph 9, fido 6, fast 4, sniper 0 in 22 orders.
+The production draw is a plain proportional roulette; the con market's
+"a commitment is not sampled" sharpening does not apply to it. OPEN, his
+call: sharpen the production draw the same way, or leave it proportional.
+
+## OPEN (2026-09-06): the rez bots' reflex
+
+*"Examine how our rezbots behave and look for ways to increase their
+efficiency. They need to be productive and have good survival instinct. In
+combat they should stand behind allied units away from enemies. They should
+back away when enemy units are close to being within range of the rezbots.
+They need to be quick to react. Delays of more than a second are
+unacceptable."*
+
+Mechanism found first: **a rez bot on a task was never asked anything
+again.** Every rule it has runs in `AiMakeTask`, and `AiMakeTask` is only
+called for a bot the idle task owns -- so the flee rule could not see an
+enemy walking up to a working bot at all, it waited to be shot. On top of
+that the election itself was gated to one decision per 2 s, which is his bar
+twice over.
+
+Built: a reflex in the DLL (`CBuilderManager::UpdateRezGuard`) on its own
+5-frame job, off the election path. It backs a bot away while the nearest
+enemy is still `apex_rez_react_s` (1 s) of its own walking short of firing
+range -- his latency bar turned into distance -- picks the direction out of
+that envelope with the least enemy influence (i.e. behind our own units),
+and drops the bot's task, because a builder task re-issues its own path move
+every second and would walk it straight back in. The election reads the same
+envelope (`EnemyReachSlack`), so reflex and election cannot disagree.
+
+Alongside it, three things that were making them idle: the 2 s election gate
+(now 0.5 s, and bypassed entirely while something can shoot the bot); the
+front sweep consuming the same scan clock as the resurrect rule whether or
+not it found anything (own clock now); and the behind-the-line veto, which
+refused a site for being ahead of our units even with no enemy within reach
+of it -- it now refuses only what something can actually shoot, which is
+what "in front of them IN COMBAT" means. An idle bot with nothing to do now
+walks to a station behind our forward-most units instead of standing where
+its last job ended.
+
+Measured, 6 games each on Geyser Plains, same seeds, reflex ON vs OFF
+(`apex_rez_react_s=-1e5`) on the same binary: **rez bot deaths 8.2 -> 1.4
+per game**, metal spent on rez bots 8.3% -> 5.6% of the build for a
+similar standing fleet. Against the pre-change set: worst no-job stretch
+189 s -> 50 s, mean 20.3 -> 7.2 s, gated elections 817 -> 61 per game.
+Head to head 2-2 over the 12 ON games against 0-3 over the 6 OFF ones;
+economy differences between arms are inside the run-to-run spread (BARb's
+own metal moved 11.7-15.5k across arms).
+
+STILL OPEN, both measured in the same sets:
+- the early fleet is still short of the 4-5 he asked for at 12 min (2.7 ON,
+  3.7 OFF, 3.0 before -- all noise around 3). That is `RezWorkM` pricing,
+  not behaviour.
+- empty elections doubled with the envelope on, 63 -> 129 per game: a bot
+  refused work near the fighting and with nothing safe behind it still has
+  nothing to do. The station walk absorbs some of it, not all.
+- the envelope reads only enemies we can SEE, so it is blind exactly when we
+  are blind.

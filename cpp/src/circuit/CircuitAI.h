@@ -248,6 +248,11 @@ public:
 			float cell, float lanePitch, float laneHalf, float range);
 	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos,
 			CCircuitDef* def = nullptr, int facing = UNIT_NO_FACING) const;
+	// Is this ground one of the published walkways? The snap alone only keeps a
+	// street clear while the slot it snapped to is free; a base whose slots are
+	// all taken falls back to a 3200-elmo site search that lands wherever it
+	// likes, and that base is the one that seals its own units in.
+	bool IsInBaseLane(const springai::AIFloat3& pos) const;
 	// Cardinal facing along the published axis for a position inside the base,
 	// or UNIT_NO_FACING when the grid does not apply. Factories use it so their
 	// exit apron opens onto the road to the front instead of the map centre.
@@ -303,6 +308,12 @@ public:
 	// the only oracle here that can see one.
 	float GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to);
 	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
+	// How close the nearest enemy is to being able to shoot this spot: the
+	// smallest (distance - its weapon reach - `reactS` seconds of its own
+	// walking) over every enemy we can see. Negative means something already
+	// covers the spot. `foeOut`, when given, receives that enemy's position.
+	float GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
+			springai::AIFloat3* foeOut = nullptr) const;
 	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
 	void Garbage(CCircuitUnit* unit, const char* reason);

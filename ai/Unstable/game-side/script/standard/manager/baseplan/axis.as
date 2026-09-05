@@ -45,6 +45,23 @@ bool Frame()
 		// Promote once from the commander's start to the factory; moving the anchor
 		// after anything is standing would slide every row out from under it.
 		gAnchor = Factory::gT1FacUnit.GetPos(ai.frame);
+	} else if (!gAnchorFinal) {
+		// Before the lab stands the anchor is the middle of what we have built
+		// (apexearth: "the base anchor should depend on where our buildings
+		// are placed. So if we made 3 mexes then our anchorpoint is between
+		// them all"), so the lab lands among the mexes, not at the start.
+		Market::PfRebuild();
+		const uint n = Market::gPfPos.length();
+		if (n > 0) {
+			float cx = 0.f, cz = 0.f;
+			for (uint i = 0; i < n; ++i) {
+				cx += Market::gPfPos[i].x;
+				cz += Market::gPfPos[i].z;
+			}
+			const AIFloat3 c(cx / float(n), 0.f, cz / float(n));
+			if (OnMap(c))
+				gAnchor = c;
+		}
 	}
 	if (!gAnchorFinal
 			&& ((Factory::gT1FacUnit !is null) || (ai.frame >= ANCHOR_DEADLINE)))
@@ -161,9 +178,9 @@ bool Frame()
 	// grid that moves puts everything already standing off it.
 	if (!gPublished && gAnchorFinal) {
 		gPublished = true;
-		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LANE_HALF, GRID_RANGE);
+		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LaneHalf(), GRID_RANGE);
 		AiLog("apex: base grid published cell=" + int(GRID_CELL)
-			+ " lane=" + int(LANE_PITCH) + "/" + int(LANE_HALF)
+			+ " lane=" + int(LANE_PITCH) + "/" + int(LaneHalf())
 			+ " range=" + int(GRID_RANGE));
 	}
 	return true;

@@ -634,6 +634,12 @@ static float CEnemyManager_GetEnemyGroupVel(CEnemyManager* mgr, int i)
 	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].vel : 0.f;
 }
 
+static AIFloat3 CEnemyManager_GetEnemyGroupVelVec(CEnemyManager* mgr, int i)
+{
+	const auto& groups = mgr->GetEnemyGroups();
+	return ((i >= 0) && (i < (int)groups.size())) ? groups[i].velVec : AIFloat3(0.f, 0.f, 0.f);
+}
+
 // apex: for a script-driven D-gun raid (commander cloaks in and D-guns a
 // target when energy allows -- apexearth's request). CmdCloak already exists
 // on CCircuitUnit (used natively by RetreatTask's own cloak-on-retreat
@@ -789,6 +795,13 @@ static float CCircuitAI_GetBuilderThreatAt(CCircuitAI* circuit, const AIFloat3& 
 static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	return circuit->GetEnemyCostAt(pos, radius);
+}
+
+// The same envelope the rez-bot guard walks bots out of (BuilderManager's
+// UpdateRezGuard), so an election refuses the ground the reflex is leaving.
+static float CCircuitAI_EnemyReachSlack(CCircuitAI* circuit, const AIFloat3& pos, float reactS)
+{
+	return circuit->GetEnemyReachSlack(pos, reactS, nullptr);
 }
 
 static float CCircuitAI_GetFieldWorkAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
@@ -1395,6 +1408,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float EnemyReachSlack(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_EnemyReachSlack), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
@@ -1728,6 +1742,7 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupCost(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupRange(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupRange), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupVel(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupVel), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupVelVec(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupVelVec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitCount(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitDef(int, int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
