@@ -15,6 +15,7 @@ cap is describing an AI we are trying to stop being.
 | Doc | The question it answers |
 |---|---|
 | [23 — The plan](23-the-plan.md) | **What the AI is trying to do at all** — name a target state, take the fastest path to it, hold army and defence at their share of the economy. Two paragraphs. Read before anything else, including this table. |
+| [24 — How units fight](24-how-units-fight.md) | **How the army is to fight**, in apexearth's own directives only: the no-turret five-minute test and its metrics, the scout-call-regroup-strike play, hunting with fast units, and the verified flanking-damage mechanic. Read before touching any C++ fighter task or `manager/military/`. |
 | [10 — BAR game concepts](10-bar-game-concepts.md) | How does the game actually work — the two resources, the economic ladder and why its rungs are reached by exhausting the cheaper growth rather than by crossing an income, why the commander decides games. **Read before diagnosing anything.** |
 | [21 — Simplification](21-simplification.md) | Why do changes here so often have no effect? Twelve multiplicative price terms, 404 tunables, and the instruments now in place to see which one carried a decision. |
 | [22 — Macro demand](22-macro-demand.md) | The root architectural finding: every market proposer takes a constructor, so the AI never asks "what does the base need". The inversion, and how far it has landed. |
@@ -43,6 +44,8 @@ cap is describing an AI we are trying to stop being.
 
 | Doc | The question it answers |
 |---|---|
+| [25 — Silent failures](25-silent-failures.md) | The eighteen ways something here fails without saying so, keyed **S1–S18** by CLAUDE.md's router: the mechanism, the date it was measured, and the wrong conclusion it produced. Also the three findings that set the method — "the path fires" is not evidence, instrument first, and the frame budget. |
+| [26 — Working rules](26-working-rules.md) | How to work in this repo: the policy line you must not cross alone (caps, exclusivity, thresholds, tunables), harness and Windows process traps, comment discipline, delegation, and apexearth's own workflow. |
 | [07 — Headless testing](07-headless-testing.md) | How to drive the engine by hand — start script fields, speed, flags — and why ten games resolves nothing. |
 | [16 — Big plays](16-big-plays.md) | Why the late game should produce moments; the silo/anti-nuke cadence arithmetic that sets the salvo size, and how to judge a "moment" when win rate cannot. |
 
