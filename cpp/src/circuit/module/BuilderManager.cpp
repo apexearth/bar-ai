@@ -1022,60 +1022,6 @@ IUnitTask* CBuilderManager::DefaultMakeTask(CCircuitUnit* unit)
 	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
 	// A builder the Brain has no task for idles visibly.
 	return nullptr;
-	const int frame = circuit->GetLastFrame();
-	const AIFloat3& pos = unit->GetPos(frame);
-
-	const CCircuitDef* cdef = unit->GetCircuitDef();
-	constexpr float POWER_MOD = 1.5f;
-	if ((cdef->GetPower() > THREAT_MIN)
-		&& (circuit->GetMilitaryManager()->FindBCombatTarget(unit, pos, POWER_MOD, true) != nullptr))
-	{
-		return Enqueue(TaskB::Combat(POWER_MOD));
-	}
-
-	const auto it = costQueries.find(unit);
-	std::shared_ptr<IPathQuery> query = (it == costQueries.end()) ? nullptr : it->second;
-	if ((query != nullptr) && (query->GetState() != IPathQuery::State::READY)) {  // not ready
-		return nullptr;
-	}
-
-	CPathFinder* pathfinder = circuit->GetPathfinder();
-	std::shared_ptr<IPathQuery> q = pathfinder->CreateCostMapQuery(unit, circuit->GetThreatMap(),
-			/*unit->IsAttrBase() ? circuit->GetSetupManager()->GetBasePos() : */pos, cdef->GetPower());
-	costQueries[unit] = q;
-	pathfinder->RunQuery(circuit->GetScheduler().get(), q);
-
-	if (query == nullptr) {
-		return Enqueue(TaskB::Wait(FRAMES_PER_SEC));  // 1st run
-	}
-
-	std::shared_ptr<CQueryCostMap> pQuery = std::static_pointer_cast<CQueryCostMap>(query);
-	circuit->GetEconomyManager()->IsEnergyStalling();  // Only for UpdateEconomy
-
-	if (cdef->IsRoleComm() && (circuit->GetFactoryManager()->GetFactoryCount() > 0)) {  // hide commander?
-		CEnemyManager* enemyMgr = circuit->GetEnemyManager();
-		const CSetupManager::SCommInfo::SHide* hide = circuit->GetSetupManager()->GetHide(cdef);
-		if (hide != nullptr) {
-			if ((frame < hide->frame) || (GetWorkerCount() <= 2)) {
-				return (hide->sqPeaceTaskRad < 0.f)
-						? MakeBuilderTask(unit, pQuery.get())
-						: MakeCommPeaceTask(unit, pQuery.get(), hide->sqPeaceTaskRad);
-			}
-//			if ((enemyMgr->GetMobileThreat() / circuit->GetAllyTeam()->GetAliveSize() >= hide->threat)
-			if ((circuit->GetInflMap()->GetEnemyInflAt(pos) >= hide->threat)
-				|| ((hide->isAir) && (enemyMgr->GetEnemyCost(ROLE_TYPE(AIR)) > 1.f)))
-			{
-				return MakeCommDangerTask(unit, pQuery.get(), hide->sqDangerTaskRad);
-			}
-			return (hide->sqPeaceTaskRad < 0.f)
-					? MakeBuilderTask(unit, pQuery.get())
-					: MakeCommPeaceTask(unit, pQuery.get(), hide->sqPeaceTaskRad);
-		}
-	}
-
-	return unit->IsAttrBase()
-			? MakeEnergizerTask(unit, pQuery.get())
-			: MakeBuilderTask(unit, pQuery.get());
 }
 
 IBuilderTask* CBuilderManager::MakeEnergizerTask(CCircuitUnit* unit, const CQueryCostMap* query)

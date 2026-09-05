@@ -1180,11 +1180,6 @@ CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position,
 {
 	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.
 	return nullptr;
-	CCircuitDef* facDef = factoryData->GetFactoryToBuild(circuit, position, isStart, isReset);
-	if ((facDef == nullptr) && utils::is_valid(position)) {
-		facDef = factoryData->GetFactoryToBuild(circuit, -RgtVector, isStart, isReset);
-	}
-	return facDef;
 }
 
 void CFactoryManager::EnableFactory(CCircuitUnit* unit)
