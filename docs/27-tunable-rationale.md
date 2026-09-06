@@ -935,12 +935,28 @@ ALLY_SHARE: 1 = scale the SEEN census in ArmyTarget by our income share of the
 team (the census is side-wide; the answer is split by the roster). 0 = every
 player answers the whole enemy team (the pre-2026-08-28 form).
 
+### `TUNE_REZ_HORIZON` = 120.f
+
+Seconds over which the army's repair backlog (`GetOwnRepairM`) is read as a
+rate. NEGATIVE RESULT, 2026-09-06: suspected of being the same stock-over-a-
+hand-picked-horizon bug the wreck half was, and measured not to be. On the
+60-minute 16-AI game `20260906-105022`, `repairPs` cross-checked against the
+gadget's `damageReceived` derivative gives 0.09-0.25 metal per HP of damage
+taken, no trend across the game -- i.e. the backlog sits in quasi-steady state
+with a residence time near this horizon, so backlog/120 IS the arrival rate of
+repair work. `repairPs` and the measured-rate `wreckPs` also grow at the same
+speed over the game (10.1x vs 11.5x, minute 12 to 54), where the deleted
+`gRezField` grew 90x against a 15x arrival rate. Cutting this half would take
+the early fleet from 3.5 to ~2 bots at minute 12 and from 5.8 to ~1.8 at
+minute 24, below the 4-5 apexearth asked for. Left alone.
+
 ### `TUNE_REZ_UTIL` = 0.25f
 
 Share of a rez bot's work rate it actually delivers (the rest is walking
 between wrecks). The fleet saturates when have x buildPower x this covers the
 recoverable stream; an ESTIMATE, not a measurement -- raise it to field fewer
-bots.
+bots. It is the one term that scales the whole fleet 1:1 and the only one still
+unmeasured; see ISSUES.md 2026-09-06 for what the fleet actually returns.
 
 ### `TUNE_RETREAT_FLOOR` = 0.08f
 

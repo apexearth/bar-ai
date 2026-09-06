@@ -16,6 +16,32 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-06 — THE REZ FLEET IS SIZED TO A STREAM IT DOES NOT CONVERT
+
+Both halves of the demand are honest rates now (docs/27 `TUNE_REZ_HORIZON`
+carries the measurement that cleared the repair half) and the servo works: on
+the 60-minute 16-AI game `20260906-105022` the fleet tracks `stream/cap` all
+game (have 12.3 vs 10.9 at minute 36, 35.4 vs 33.3 at 54). Nothing measures
+whether the fleet CONVERTS the stream, and it does not.
+
+Per AI at minute 54: 35.4 bots, nominal capacity 83 metal/s. Realised, from the
+stats gadget: `mReclaim` 1,455 metal over 54 minutes = **0.45 metal/s**,
+`mRezSpend` 702 for the whole game. `apex: rez-time` per AI per minute: rez
+2.5, medic 36, repair 21, salvage 26, against idleRule 78, none 19 and
+**frontVeto 692** -- and two of the three `gRzFrontVeto` sites are on DAMAGED
+UNITS, so the veto suppresses the repair half as hard as the wreck half. The
+slope is fine (halving the fleet across 7331b1d, same map and seed, cost 42% of
+the reclaim: 2,524 -> 1,455); the level is not.
+
+`unmet = stream - have x cap` has no term reading realised output, so a fleet
+converting 0.5% of what it is sized for still reads as under-supplied -- and
+lowering `TUNE_REZ_UTIL`, the estimate that scales the fleet 1:1, would demand
+MORE bots. Cost: 542 of the 5,921 units at minute 58 (**9.2%**) for 2.0% of the
+metal, the largest units-per-metal line item left; 1,221 of 6,239 before
+7331b1d. The fix is apexearth's call: scope the stream to ground the rez rules
+permit, divide the repair demand among all repair-capable build power, or teach
+the price that the engine charges per unit.
+
 ## 2026-09-05 — ENGINE COST WE CAUSE: 52k move orders/min, and two mechanisms behind them
 
 Not our frame time — the engine's, which is 30.93 ms of the 37.56 ms frame at

@@ -525,7 +525,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float tEcoArmyMinM = ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M);
 	const float tEcoConKeep = ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP);
 	const float tRezUtil = ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
-	const float tRezHorizon = ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
 	const float tSquadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
 	const float tIntelRate = ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE);
 	const float tWaterPct = ai.GetTunable("apex_water_pct", TUNE_WATER_PCT);
@@ -1021,15 +1020,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
 		const float mob = MobilityMult(d);
-		// Rez bots: the loss pool is recoverable value on the field; a new
-		// bot is worth the UNSERVED remainder of that stream, capped by its
-		// own work rate -- the same saturation the non-builder branch uses
-		// (the per-bot divisor never reached zero and the fleet grew to 256).
+		// A rezzer that also BUILDS lands here instead of the non-builder
+		// branch above, and must price off the same stream and the same
+		// per-bot rate: build power is not metal/s, so it can be neither
+		// subtracted from a metal/s stream nor added to `gain`.
 		if (Catalog::gRezzer[d]) {
 			const int haveRez = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
-			const float perBotB = Catalog::gBuildPower[d] * tRezUtil;
-			float unmetB = gLossPool / tRezHorizon
-					- float(haveRez) * perBotB;
+			const float perBotB = Catalog::gBuildPower[d] * LineMetalPerEffort()
+					* tRezUtil;
+			float unmetB = RezRateM() - float(haveRez) * perBotB;
 			if (unmetB > perBotB)
 				unmetB = perBotB;
 			if (unmetB > 0.f)
