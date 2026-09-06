@@ -280,6 +280,13 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 			Market::NoteTowerLost(at);
 	}
 	const string hist = Builder::TakeHistFor(int(unit.id));
+	// WHAT THE SAFETY SENSOR SAID WHERE THE UNIT ACTUALLY DIED. Every "is this
+	// position safe" test in the AI reads the threat map, and nothing has ever
+	// checked it against ground truth. A death spot reading 0 means the test
+	// that should have refused the move could not have refused it.
+	// OnMap first: GetUnitThreatAt off-map is the crash in docs/25 S9.
+	const float deathThr = (OnMap(at) && (cdef !is null))
+			? ai.GetUnitThreatAt(unit, at) : -1.f;
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")
 		+ " acts=" + unit.GetActTrace()
 		+ " id=" + unit.id + " frame=" + ai.frame
@@ -287,6 +294,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		+ " curTask=t" + tt + "b" + bt + "f" + ft
 		+ " cost=" + int((cdef !is null) ? cdef.costM : 0.f)
 		+ " fwd=" + formatFloat(Military::ForwardFraction(at), "", 0, 2)
+		+ " thr=" + formatFloat(deathThr, "", 0, 2)
 		+ " built=" + (WasFinished(int(unit.id)) ? 1 : 0)
 		+ " mob=" + (((cdef !is null) && cdef.IsMobile()) ? 1 : 0)
 		+ " hist=[" + hist + "]"
