@@ -1942,11 +1942,3 @@ Seen 1x in a 60-minute 16-AI run at 00:59 and 4x in another at 07:06, and absent
 from four runs in between, so it is state-dependent, not a compile or a
 regression from the performance work. An exception aborts that election, so it
 is a behaviour bug: the reclaim silently does not happen.
-
-## 2026-09-06 — the repo's stripped SkirmishAI.dll goes stale on every C++ touch
-
-`deploy_ai.py` prefers `vendor/engine/build-amd64-windows/.../SkirmishAI.dll`
-whenever it exists, so local work is unaffected — but `ai/Unstable/engine-side/
-SkirmishAI.dll` is what a clone without a built vendor/ tree gets, and it is now
-older than `cpp/`. The file's own comment records this trap twice already. It
-needs restripping from the current build.
