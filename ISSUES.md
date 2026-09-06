@@ -1942,3 +1942,29 @@ Seen 1x in a 60-minute 16-AI run at 00:59 and 4x in another at 07:06, and absent
 from four runs in between, so it is state-dependent, not a compile or a
 regression from the performance work. An exception aborts that election, so it
 is a behaviour bug: the reclaim silently does not happen.
+
+## 2026-09-06 — 16 AIs hold 1x to ~5,600 units; the AI builds 7,000 by minute 59
+
+The envelope, measured on a 5800X3D (8C/16T), 8v8 Supreme Isthmus v2.1, seed 1,
+apex_perf=0, gate 1 clean. `python tools/frametime.py <run>` prints the verdict.
+
+  min 51   32.47 ms/frame   5,492 units   ai 19.3%   holds 1x
+  min 52   35.43 ms/frame   5,869 units   ai 18.7%   BREAKS
+  min 59   47.71 ms/frame   6,998 units   ai 18.1%
+
+1x is 33.33 ms. With the AI at ~18-19% of the frame, sixteen of them hold 1x to
+about **5,600 units**. Zero the AI entirely and the engine alone crosses 33.33
+at about **6,400**. The game reaches 7,000 by minute 59, so the last several
+minutes are over budget on simulation cost, not on AI cost.
+
+Every AI-side category is now measured and none of them closes it: the frame
+callback is 9.07 ms across all sixteen (0.567 per AI, against a 0.417 target);
+the worker pool is 3.27 ms of CPU per frame and mostly parallel; event handlers
+are 18-33 ms per AI per game-minute; the set-target gadget tax is 0.03%; and
+order suppression covers 4.7% of re-paths and is not behaviour-safe.
+
+So the open question is not "make the AI faster" -- it is whether the AI should
+be fielding 7,000 units at minute 59 at all. That is the same question as his
+basemap ruling in TODO.md: defend territory rather than a plethora of buildings,
+and balance mobility against concentrated power. A smaller, better army is the
+performance fix as well as the design one.
