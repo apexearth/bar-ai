@@ -652,3 +652,51 @@ an answer about the wrong units. Investigate before proposing doctrine.
 **On shields:** remember an enemy LRPC after the sighting, but let it fade if
 nothing has shelled us -- not a permanent latch (which is what enemy AIR gets),
 because a plasma cannon can be killed.
+
+**On attacking with more than one group** -- asked whether the army should merge
+into one squad before it may attack, judge each target locally, or always keep a
+share out, he rejected the framing:
+
+> "We shouldn't need to be one big squad in order to attack, we should be able
+> to coordinate and coordinate attacks with multiple groups."
+
+So the promote test is wrong in its UNIT, not its spirit. Today a DEFEND pool
+may leave only when it alone matches `PreMaxGroupThreat` -- the enemy's
+second-largest group -- and the army is scattered across many pools (measured
+2026-09-06, 8v8: 42% of pools held one or two units, pools sat at 0.32 of their
+bar, 3% ever reached it, and 218 of 240 census samples had NO attack task in
+existence at all). Groups stay separate; the ODDS are judged on what commits
+together, not on each pool alone.
+
+The same measurement shows the bar moves the wrong way: it is set by enemy
+strength, so the more we are losing the higher it climbs and the more passive we
+become -- which is the "we never do anything back" he keeps reporting.
+
+**On conflicting orders** -- watching a sniper walk to its death again:
+
+> "I think we have some very core bugs in our unit control that you are
+> completely unaware of. I often see units have move orders over great
+> distances... I wonder a lot if we have units receiving move/fight/attack/
+> settarget tasks from a wide variety of logic centers causing our units to be
+> given conflicting orders constantly."
+
+He is right, and the existing `apex: order-src` census proves it: 16 call sites
+issue movement, ~4,400 orders a minute over ~276 units, and in one minute the
+standoff ring alone re-sent 367 of its 662 orders inside 3 seconds with 260 of
+them moving the goal more than 128 elmos. Escort re-sent 73 of 74. Every one of
+regroup's 24 repeats was a long jump.
+
+The consequence is that fixing the CONTENT of a decision can be inert: the
+standoff clamp in `FighterTask.cpp` was corrected 2026-09-05 and snipers still
+close, because a unit re-ordered every three seconds never reaches any standoff
+position. **Check order survival before crediting a movement fix.**
+`apex_order_trace=1` + `tools/orders.py` is the instrument.
+
+> "The sniper died because he received a long range move order telling him to go
+> to around the map midpoint. There were NO friendlies there - only enemies."
+
+Map-midpoint destinations have two known sources worth ruling out first:
+`IFighterTask::RoamPos` falls back to a uniform random point over the whole map
+(mean = map centre) whenever `HasFrontPos()` is false, and `GetEnemyPos()` is
+the MEAN of the enemy cluster centroids -- with enemies on two flanks that
+average is a spot where neither of them is.

@@ -372,6 +372,21 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 // guard CMobileCAI::ExecuteMove puts in front of SetGoal -- is exact float
 // equality on goalPos; a destination off by a fraction of an elmo re-paths.
 // Candidates are counted either way and dropped only under apex_order_dedupe.
+// apex: names for CCircuitUnit::OrdSrc, in enum order. Kept beside the enum
+// rather than at the log site so the census and the per-unit trace cannot
+// disagree about which call site an index means.
+const char* CCircuitUnit::OrdSrcName(int src)
+{
+	static const char* names[] = {"other", "ring", "travel", "dodge",
+			"standoff", "post", "retreat", "build", "scout", "settgt",
+			"attack", "patrol", "engage", "regroup", "escort", "sniper",
+			"manual", "script", "fightwalk", "combat", "guard", "rally"};
+	static_assert(sizeof(names) / sizeof(names[0])
+			== static_cast<size_t>(CCircuitUnit::OrdSrc::_SIZE),
+			"OrdSrcName is out of step with OrdSrc");
+	return ((src >= 0) && (src < static_cast<int>(OrdSrc::_SIZE))) ? names[src] : "?";
+}
+
 bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout,
 		OrdSrc src)
 {
@@ -399,6 +414,40 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
 	}
 	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress, static_cast<int>(src));
+	// apex: PER-UNIT ORDER TRACE. The census says HOW MUCH churn there is and
+	// WHICH call site made it, then throws away who it happened to -- so a unit
+	// being pulled between two logic centres is invisible in the aggregate.
+	// apexearth 2026-09-06: "imagine if you can just grep a unit's command
+	// history and see the source of those commands". `jump` is the distance
+	// from the last order OF THE SAME KIND and `gap` the frames since it, so a
+	// contradiction reads as a large jump at a small gap. Off by default: this
+	// is one line per order, and the census counts ~4k a minute.
+	if (circuit->GetTunable("apex_order_trace", 0.f) > 0.f) {
+		static const char* kindName[static_cast<int>(OrdKind::_SIZE)] = {
+				"move", "fight", "patrol", "attack", "target"};
+		const IUnitTask* task = GetTask();
+		float jump = -1.f;
+		if (s.frame > 0) {
+			const float dx = pos.x - s.x;
+			const float dz = pos.z - s.z;
+			jump = sqrtf(dx * dx + dz * dz);
+		}
+		// q=1 is a SHIFT order: APPENDED to the unit's queue, not a
+		// replacement. Without it a queued path waypoint is indistinguishable
+		// from a centre overriding the order, and MoveAction deliberately
+		// queues a lookahead waypoint every step -- 1,528 of them in one 20
+		// minute game, which read as contradictions until this was logged.
+		circuit->LOG("apex: ord t=%i u=%i %s f=%i src=%s kind=%s to=%.0f,%.0f"
+				" tgt=%i jump=%.0f gap=%i task=%i/%i dup=%i q=%i",
+				circuit->GetTeamId(), (int)GetId(),
+				(circuitDef != nullptr) ? circuitDef->GetDef()->GetName() : "?",
+				frame, OrdSrcName(static_cast<int>(src)),
+				kindName[static_cast<int>(kind)], pos.x, pos.z, id, jump,
+				(s.frame > 0) ? (frame - s.frame) : -1,
+				(task != nullptr) ? static_cast<int>(task->GetType()) : -1,
+				GetTaskFrame(), suppress ? 1 : 0,
+				((options & UNIT_COMMAND_OPTION_SHIFT_KEY) != 0) ? 1 : 0);
+	}
 	// Counted whether or not it is dropped, so one run with the switch OFF says
 	// exactly what turning it on would buy. Default off: the engine's own move
 	// state is provably unchanged (above), but the dropped order also skips the

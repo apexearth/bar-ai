@@ -2231,3 +2231,43 @@ Two instrument results worth keeping:
 UNEXERCISED, therefore still unvalidated: the shield work (no enemy LRPC
 appeared in ANY of the 16 games; zero shields elected in either arm) and, in
 these runs, the fusion pricing and the escort change.
+
+## Order thrash: 16 logic centres move the same units (2026-09-06)
+
+`apex: order-src`, one minute of a 1v1, ~276 units of ours:
+
+    ring=662/367/260  build=1135/818/18  post=679/295/126  travel=786/32/25
+    attack=180/71/0   escort=74/73/62    regroup=42/24/24  standoff=23/12/9
+
+sent / re-sent within 3s / re-sent with the goal moved >128 elmos. ~4,400 orders
+a minute is one per unit every 3.8s; for combat units alone it is every 3s.
+Escort contradicts itself 99% of the time, regroup on every single repeat.
+
+Consequence: a fix to the CONTENT of a movement decision can be measurably
+correct and behaviourally inert. The `FighterTask.cpp` standoff clamp was fixed
+2026-09-05 (verified: 21,541 engagements, worst margin -8 elmos) and apexearth
+still watches snipers walk into mammoths, because a unit re-ordered every three
+seconds never arrives at any standoff position.
+
+Instrument added: `apex_order_trace=1` writes one line per order with its call
+site, and `tools/orders.py` reconstructs a single unit's control lifecycle
+(`--unit N`), ranks the worst-controlled units, and reports which pairs of
+centres hand units back and forth (`--pairs`). NOT YET RUN -- the first job is
+to point it at a game and find who sends a lone sniper to the map midpoint.
+
+## The attack bar is per-pool, so we never attack (2026-09-06)
+
+A DEFEND pool promotes to ATTACK only when it alone reaches
+`max(minAttackers, GetPreMaxGroupThreat())` -- the enemy's second-largest group
+-- rewritten onto every pool every 5s by `CMilitaryManager::UpdateDefenceTasks`,
+which discards whatever `quota.attack` the whole AngelScript posture layer
+computed (measured: quota 25-60, rewritten to a mean of 146).
+
+Measured over an 8v8: 42% of pools held 1-2 units, pools sat at 0.32 of their
+bar, only 3% of 507 readings reached it, 218 of 240 census samples had zero
+attack tasks in existence, and the army spent 1.6% of its time attacking against
+63% defending. The bar is set by enemy strength, so losing raises it.
+
+apexearth's ruling 2026-09-06: "We shouldn't need to be one big squad in order to
+attack, we should be able to coordinate attacks with multiple groups." So the
+odds are judged on what commits together; the pools stay separate. NOT YET BUILT.

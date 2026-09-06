@@ -675,6 +675,7 @@ const float TUNE_COMM_MASS_MULT = 2.f;
 //   this fraction of the way to the enemy; standing there is the mistake, not
 //   the contact after it.
 const float TUNE_COMM_FWD_CAP = 0.25f;
+const float TUNE_STUCK_SECS = 30.f;   // build task held, still, no progress -> re-elect
 
 // [influence] -- Enemy influence at his tile (or on the ring, while cautious)
 //   above which he leaves. See docs/27.

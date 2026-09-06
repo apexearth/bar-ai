@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..c97bf0a2 100644
+index aeea9339..56073b8b 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -199,7 +199,7 @@ index aeea9339..c97bf0a2 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +932,272 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +932,268 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -357,18 +357,14 @@ index aeea9339..c97bf0a2 100644
 +		// every rule aimed at order volume is a guess. Order matches
 +		// CCircuitUnit::OrdSrc.
 +		{
-+			static const char* srcName[ORD_SRC_N] = {"other", "ring", "travel",
-+					"dodge", "standoff", "post", "retreat", "build", "scout",
-+					"settgt", "attack", "patrol", "engage", "regroup", "escort",
-+					"sniper", "manual", "script", "fightwalk", "combat", "guard",
-+					"rally"};
 +			std::string line;
 +			char buf[96];
 +			for (int i = 0; i < ORD_SRC_N; ++i) {
 +				if (ordSrc[i][0] == 0) {
 +					continue;
 +				}
-+				snprintf(buf, sizeof(buf), " %s=%u/%u/%u", srcName[i],
++				snprintf(buf, sizeof(buf), " %s=%u/%u/%u",
++						CCircuitUnit::OrdSrcName(i),
 +						ordSrc[i][0], ordSrc[i][1], ordSrc[i][2]);
 +				line += buf;
 +			}
@@ -472,7 +468,7 @@ index aeea9339..c97bf0a2 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,10 +1474,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,10 +1470,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -492,7 +488,7 @@ index aeea9339..c97bf0a2 100644
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
  	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
-@@ -1147,6 +1498,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1494,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -500,7 +496,7 @@ index aeea9339..c97bf0a2 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1518,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1514,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -540,7 +536,7 @@ index aeea9339..c97bf0a2 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1661,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1657,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -548,7 +544,7 @@ index aeea9339..c97bf0a2 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1837,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1833,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -563,7 +559,7 @@ index aeea9339..c97bf0a2 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +1856,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +1852,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -573,7 +569,7 @@ index aeea9339..c97bf0a2 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1867,1208 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1863,1208 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1783,7 +1779,7 @@ index aeea9339..c97bf0a2 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3227,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3223,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -1831,7 +1827,7 @@ index aeea9339..c97bf0a2 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3375,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3371,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -4549,10 +4545,10 @@ index 2925da70..07894731 100644
  	struct SConvertExt {
  		float energyUse;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a9..19b926b6 100644
+index dda9b5a9..29bc3945 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
-@@ -713,12 +713,12 @@ void CFactoryManager::Init()
+@@ -713,12 +713,15 @@ void CFactoryManager::Init()
  		CScheduler* scheduler = circuit->GetScheduler().get();
  		const int interval = 4;
  		const int offset = circuit->GetSkirmishAIId() % interval;
@@ -4560,6 +4556,9 @@ index dda9b5a9..19b926b6 100644
 -		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2);
 +		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), interval, offset + 0, "facIdle");
 +		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2, "facUpd");
++
++		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::PullNanoOffBuilding, this),
++								FRAMES_PER_SEC, offset + 3, "nanoPull");
  
  		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Watchdog, this),
  								FRAMES_PER_SEC * 60,
@@ -4568,7 +4567,7 @@ index dda9b5a9..19b926b6 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -816,7 +816,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
+@@ -816,7 +819,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
  {
  	CRecruitTask* task = new CRecruitTask(this, ti.priority, ti.buildDef, ti.position, ti.type, ti.radius);
  	factoryTasks.push_back(task);
@@ -4577,7 +4576,7 @@ index dda9b5a9..19b926b6 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -845,7 +845,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
+@@ -845,7 +848,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
  		} break;
  	}
  
@@ -4586,7 +4585,7 @@ index dda9b5a9..19b926b6 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -1178,11 +1178,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
+@@ -1178,11 +1181,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
  
  CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position, bool isStart, bool isReset)
  {
@@ -4600,7 +4599,7 @@ index dda9b5a9..19b926b6 100644
  }
  
  void CFactoryManager::EnableFactory(CCircuitUnit* unit)
-@@ -1317,13 +1314,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
+@@ -1317,13 +1317,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
  					}
  				}
  			}
@@ -4615,7 +4614,7 @@ index dda9b5a9..19b926b6 100644
  		}
  	};
  
-@@ -1431,6 +1422,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
+@@ -1431,6 +1425,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
  		}
  	}
  
@@ -4626,7 +4625,46 @@ index dda9b5a9..19b926b6 100644
  	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
  
  	IUnitTask* task = UpdateBuildPower(unit, isActive);
-@@ -1513,8 +1508,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1461,6 +1459,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+ 	bool isMetalEmpty = economyMgr->IsMetalEmpty();
+ 	CAllyUnit* repairTarget = nullptr;
+ 	CAllyUnit* buildTarget = nullptr;
++	bool haveMobile = false;   // a factory's own output has claimed this turret
+ 	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
+ 	float radius = unit->GetCircuitDef()->GetBuildDistance();
+ 
+@@ -1483,7 +1482,21 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+ 			CCircuitDef* cdef = cand->GetCircuitDef();
+ 			const float maxHealth = u->GetMaxHealth();
+ 			const float buildTime = cdef->GetBuildTime() * (maxHealth - u->GetHealth()) / maxHealth;
+-			if (buildTime >= curCost) {
++			// FACTORY OUTPUT OUTRANKS A BUILDING OUTRIGHT (apexearth: "Buildings
++			// which take a long time to create often capture nanoattention for a
++			// lot longer and can make it so a factory loses a lot of its output
++			// for a significant amount of time. Therefore, I do not feel bad
++			// about pulling nanos off of buildings"). Selection was purely
++			// least-remaining-buildTime and only the PRIORITY below told mobile
++			// from static apart -- so a half-done building won on being nearer
++			// to finished, and the Repair task then held the turret for the rest
++			// of that build. Among mobiles the least-remaining race is unchanged.
++			const bool candMobile = cdef->IsMobile();
++			if (haveMobile && !candMobile) {
++				continue;
++			}
++			const bool firstMobile = candMobile && !haveMobile;
++			if (!firstMobile && (buildTime >= curCost)) {
+ 				continue;
+ 			}
+ 			if (IsHighPriority(cand) ||
+@@ -1493,6 +1506,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+ 			{
+ 				curCost = buildTime;
+ 				buildTarget = cand;
++				haveMobile = candMobile;
+ 			}
+ 		} else if ((repairTarget == nullptr) && (u->GetHealth() < u->GetMaxHealth())) {
+ 			repairTarget = cand;
+@@ -1513,8 +1527,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  		// Repair task
  		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
  	}
@@ -4640,7 +4678,110 @@ index dda9b5a9..19b926b6 100644
  		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
  			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
  		}
-@@ -1706,7 +1704,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1545,6 +1562,102 @@ void CFactoryManager::Watchdog()
+ 	}
+ }
+ 
++// A NANO ALREADY LOCKED TO A BUILDING NEVER RECONSIDERS. CreateAssistTask now
++// prefers factory output when it CHOOSES, but a Repair task on a half-built
++// structure runs to completion -- and apexearth's whole point is that the slow
++// ones are the expensive ones: "Buildings which take a long time to create often
++// capture nanoattention for a lot longer and can make it so a factory loses a
++// lot of its output for a significant amount of time."
++//
++// ONE TURRET PER TICK, round-robin. The range scan is a GetFriendlyUnitsIn per
++// nano; doing the whole fleet on one frame is the batching this AI keeps being
++// bitten by, and a nano freed a few seconds later is no worse off.
++void CFactoryManager::PullNanoOffBuilding()
++{
++	// THE FUNNEL IS LOGGED, NOT JUST THE OUTCOME. The first two versions of
++	// this pass were silently dead (wrong task Type), and a zero pull count
++	// alone cannot say WHICH precondition refused. Every stage counts.
++	if (assists.empty()) {
++		return;
++	}
++	const int frame = circuit->GetLastFrame();
++	if (frame >= nanoPullLogAt) {
++		nanoPullLogAt = frame + FRAMES_PER_SEC * 30;
++		circuit->LOG("apex: nanopull turrets=%d seen=%d repair=%d static=%d"
++				" hasOutput=%d pulled=%d",
++				(int)assists.size(), nanoSeen, nanoOnRepair, nanoOnStatic,
++				nanoHasOut, nanoPulled);
++	}
++
++	// EVERY REGISTERED TURRET, EVERY SECOND. The first cut walked one nano per
++	// call and hung off the 60-SECOND watchdog, so it examined one turret a
++	// minute -- it fired, and it was throttled to irrelevance. `assists` holds a
++	// handful (measured: 1-3), so the whole sweep is cheaper than the round-robin
++	// bookkeeping was.
++	for (auto& kv : assists) {
++		CCircuitUnit* nano = kv.first;
++	if ((nano == nullptr) || nano->IsDead() || (nano->GetCircuitDef() == nullptr)) {
++		continue;
++	}
++	++nanoSeen;
++	IUnitTask* held = nano->GetTask();
++	// A NANO'S REPAIR TASK IS Type::FACTORY, NOT Type::BUILDER (CSRepairTask
++	// passes Type::FACTORY to IRepairTask). Testing for BUILDER here returned
++	// early every time and the whole pass was dead. Type::FACTORY also covers
++	// CRecruitTask, so the BuildType below discriminates.
++	if ((held == nullptr) || (held->GetType() != IUnitTask::Type::FACTORY)) {
++		continue;
++	}
++	IBuilderTask* bt = static_cast<IBuilderTask*>(held);
++	if (bt->GetBuildType() != IBuilderTask::BuildType::REPAIR) {
++		continue;
++	}
++	++nanoOnRepair;
++	// Only a task serving a STATIC target is worth interrupting: it is already
++	// on factory output otherwise.
++	CCircuitUnit* tgt = bt->GetTarget();
++	if ((tgt == nullptr) || (tgt->GetCircuitDef() == nullptr)
++		|| tgt->GetCircuitDef()->IsMobile())
++	{
++		continue;
++	}
++	++nanoOnStatic;
++	// ...and only when there is somewhere better to go, or the re-election
++	// hands it straight back and the pair of us thrash.
++	if (!HasFactoryOutputInRange(nano)) {
++		continue;
++	}
++	++nanoHasOut;
++	++nanoPulled;
++	held->RemoveAssignee(nano);   // to IdleTask; CreateAssistTask re-runs next frame
++	break;   // one task mutated per pass; the rest are re-read next second
++	}
++}
++
++// Is a factory's own output -- a MOBILE unit under construction -- inside this
++// turret's build reach? Exactly apexearth's definition of near: "however many
++// nanos can actually reach the unit that is trying to be built."
++bool CFactoryManager::HasFactoryOutputInRange(CCircuitUnit* nano)
++{
++	const AIFloat3& pos = nano->GetPos(circuit->GetLastFrame());
++	const float radius = nano->GetCircuitDef()->GetBuildDistance();
++	circuit->UpdateFriendlyUnits();
++	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius * 0.9f);
++	bool found = false;
++	for (Unit* u : units) {
++		auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
++		if ((cand == nullptr) || (cand == nano) || (cand->GetCircuitDef() == nullptr)) {
++			continue;
++		}
++		if (u->IsBeingBuilt() && cand->GetCircuitDef()->IsMobile()) {
++			found = true;
++			break;
++		}
++	}
++	utils::free(units);
++	return found;
++}
++
+ void CFactoryManager::SetLastRequiredDef(CCircuitDef::Id facId, CCircuitDef* cdef,
+ 		const std::vector<float>& probs, bool isResp)
+ {
+@@ -1706,7 +1819,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -4677,7 +4818,7 @@ index dda9b5a9..19b926b6 100644
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
-@@ -1717,7 +1743,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+@@ -1717,7 +1858,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
  	tierDbg = 0;
  #endif
  	auto facIt = tiers.begin();
@@ -4686,6 +4827,26 @@ index dda9b5a9..19b926b6 100644
  		while (facIt != tiers.end()) {
  			if (metalIncome < facDef.incomes[facIt->first]) {
  				break;
+diff --git a/src/circuit/module/FactoryManager.h b/src/circuit/module/FactoryManager.h
+index e56339eb..0b351eb3 100644
+--- a/src/circuit/module/FactoryManager.h
++++ b/src/circuit/module/FactoryManager.h
+@@ -214,6 +214,15 @@ private:
+ 
+ 	void Watchdog();
+ 
++	// Release one nano turret per tick from a building when a factory it can
++	// reach is producing (apexearth 2026-09-06); see the definitions.
++	void PullNanoOffBuilding();
++	bool HasFactoryOutputInRange(CCircuitUnit* nano);
++	// (round-robin index removed: the whole assist set is swept each pass)
++	int nanoPulled = 0;
++	int nanoPullLogAt = 0;
++	int nanoSeen = 0, nanoOnRepair = 0, nanoOnStatic = 0, nanoHasOut = 0;
++
+ 	Handlers2 createdHandler;
+ 	Handlers1 finishedHandler;
+ 	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
 index a44c20b0..fb093a2d 100644
 --- a/src/circuit/module/MilitaryManager.cpp
@@ -17661,7 +17822,7 @@ index 5eebb710..d41d22b1 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..708e88d9 100644
+index a1ac882a..742ea613 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -18229,7 +18390,7 @@ index cd0b54a9..7109310a 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be4..ff9c05b9 100644
+index 2f597be4..2128856a 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -18386,7 +18547,7 @@ index 2f597be4..ff9c05b9 100644
  }
  
  /*
-@@ -283,37 +364,177 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -283,37 +364,226 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
  	unit->ExecuteCustomCommand(CMD_REMOVE, params, options);
  }
  
@@ -18399,9 +18560,24 @@ index 2f597be4..ff9c05b9 100644
 +// guard CMobileCAI::ExecuteMove puts in front of SetGoal -- is exact float
 +// equality on goalPos; a destination off by a fraction of an elmo re-paths.
 +// Candidates are counted either way and dropped only under apex_order_dedupe.
++// apex: names for CCircuitUnit::OrdSrc, in enum order. Kept beside the enum
++// rather than at the log site so the census and the per-unit trace cannot
++// disagree about which call site an index means.
++const char* CCircuitUnit::OrdSrcName(int src)
++{
++	static const char* names[] = {"other", "ring", "travel", "dodge",
++			"standoff", "post", "retreat", "build", "scout", "settgt",
++			"attack", "patrol", "engage", "regroup", "escort", "sniper",
++			"manual", "script", "fightwalk", "combat", "guard", "rally"};
++	static_assert(sizeof(names) / sizeof(names[0])
++			== static_cast<size_t>(CCircuitUnit::OrdSrc::_SIZE),
++			"OrdSrcName is out of step with OrdSrc");
++	return ((src >= 0) && (src < static_cast<int>(OrdSrc::_SIZE))) ? names[src] : "?";
++}
++
 +bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout,
 +		OrdSrc src)
- {
++{
 +	if (manager == nullptr) {
 +		return false;
 +	}
@@ -18426,6 +18602,40 @@ index 2f597be4..ff9c05b9 100644
 +				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
 +	}
 +	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress, static_cast<int>(src));
++	// apex: PER-UNIT ORDER TRACE. The census says HOW MUCH churn there is and
++	// WHICH call site made it, then throws away who it happened to -- so a unit
++	// being pulled between two logic centres is invisible in the aggregate.
++	// apexearth 2026-09-06: "imagine if you can just grep a unit's command
++	// history and see the source of those commands". `jump` is the distance
++	// from the last order OF THE SAME KIND and `gap` the frames since it, so a
++	// contradiction reads as a large jump at a small gap. Off by default: this
++	// is one line per order, and the census counts ~4k a minute.
++	if (circuit->GetTunable("apex_order_trace", 0.f) > 0.f) {
++		static const char* kindName[static_cast<int>(OrdKind::_SIZE)] = {
++				"move", "fight", "patrol", "attack", "target"};
++		const IUnitTask* task = GetTask();
++		float jump = -1.f;
++		if (s.frame > 0) {
++			const float dx = pos.x - s.x;
++			const float dz = pos.z - s.z;
++			jump = sqrtf(dx * dx + dz * dz);
++		}
++		// q=1 is a SHIFT order: APPENDED to the unit's queue, not a
++		// replacement. Without it a queued path waypoint is indistinguishable
++		// from a centre overriding the order, and MoveAction deliberately
++		// queues a lookahead waypoint every step -- 1,528 of them in one 20
++		// minute game, which read as contradictions until this was logged.
++		circuit->LOG("apex: ord t=%i u=%i %s f=%i src=%s kind=%s to=%.0f,%.0f"
++				" tgt=%i jump=%.0f gap=%i task=%i/%i dup=%i q=%i",
++				circuit->GetTeamId(), (int)GetId(),
++				(circuitDef != nullptr) ? circuitDef->GetDef()->GetName() : "?",
++				frame, OrdSrcName(static_cast<int>(src)),
++				kindName[static_cast<int>(kind)], pos.x, pos.z, id, jump,
++				(s.frame > 0) ? (frame - s.frame) : -1,
++				(task != nullptr) ? static_cast<int>(task->GetType()) : -1,
++				GetTaskFrame(), suppress ? 1 : 0,
++				((options & UNIT_COMMAND_OPTION_SHIFT_KEY) != 0) ? 1 : 0);
++	}
 +	// Counted whether or not it is dropped, so one run with the switch OFF says
 +	// exactly what turning it on would buy. Default off: the engine's own move
 +	// state is provably unchanged (above), but the dropped order also skips the
@@ -18449,7 +18659,7 @@ index 2f597be4..ff9c05b9 100644
 +}
 +
 +void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout, OrdSrc src)
-+{
+ {
 +	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 +		return;
 +	}
@@ -18566,7 +18776,7 @@ index 2f597be4..ff9c05b9 100644
  void CCircuitUnit::CmdWantedSpeed(float speed)
  {
  //	unit->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
-@@ -323,12 +544,57 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
+@@ -323,12 +593,57 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
  
  void CCircuitUnit::CmdStop(short options, int timeout)
  {
@@ -18625,7 +18835,7 @@ index 2f597be4..ff9c05b9 100644
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -415,34 +681,52 @@ bool CCircuitUnit::IsWaiting() const
+@@ -415,34 +730,52 @@ bool CCircuitUnit::IsWaiting() const
  
  void CCircuitUnit::CmdRepair(CAllyUnit* target, short options, int timeout)
  {
@@ -18678,7 +18888,7 @@ index 2f597be4..ff9c05b9 100644
  	unit->ResurrectInArea(pos, radius, options, timeout);
  }
  
-@@ -474,7 +758,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,7 +807,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
@@ -18696,7 +18906,7 @@ index 2f597be4..ff9c05b9 100644
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
  		if (circuitDef->IsAttrMelee()) {
-@@ -483,24 +777,24 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -483,24 +826,24 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  				if (isGround) {  // los-cheat related
  					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
  				} else {
@@ -18726,7 +18936,7 @@ index 2f597be4..ff9c05b9 100644
  		CmdWantedSpeed(NO_SPEED_LIMIT);
  		CmdSetTarget(target);
  	)
-@@ -508,23 +802,66 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +851,66 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -18806,7 +19016,7 @@ index 2f597be4..ff9c05b9 100644
  		CmdWantedSpeed(NO_SPEED_LIMIT);
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
-@@ -553,7 +890,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
+@@ -553,7 +939,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
  {
  //	const AIFloat3& pos = utils::get_radial_pos(groupPos, SQUARE_SIZE * 8);
  	TRY_UNIT(manager->GetCircuit(), this,
@@ -18816,7 +19026,7 @@ index 2f597be4..ff9c05b9 100644
  //		CmdPatrolTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
  	)
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bcc..fecb67a6 100644
+index cfe59bcc..bf4761dd 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -18832,7 +19042,7 @@ index cfe59bcc..fecb67a6 100644
  	void PushDGunAct(CDGunAction* action);
  	CDGunAction* GetDGunAct() const { return dgunAct; }
  	void PushTravelAct(ITravelAction* action);
-@@ -107,8 +113,51 @@ public:
+@@ -107,8 +113,55 @@ public:
  	void SetIsDead() { isDead = true; }
  	bool IsDead() const { return isDead; }
  
@@ -18869,6 +19079,10 @@ index cfe59bcc..fecb67a6 100644
 +		SNIPER, MANUAL, SCRIPT, FWALK, COMBAT, GUARD, RALLY, _SIZE };
 +	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
 +			OrdSrc src = OrdSrc::OTHER);
++	// One source of truth for the call-site names: the order census in
++	// CircuitAI and the per-unit trace in NoteOrder both read it, so a new
++	// OrdSrc cannot be named in one place and left numeric in the other.
++	static const char* OrdSrcName(int src);
 +
  	void SetDamagedFrame(int frame) { damagedFrame = frame; }
  	int GetDamagedFrame() const { return damagedFrame; }
@@ -18884,7 +19098,7 @@ index cfe59bcc..fecb67a6 100644
  
  	bool HasDGun() const { return dgun != nullptr; }
  	bool HasWeapon() const { return weapon != nullptr; }
-@@ -118,6 +167,13 @@ public:
+@@ -118,6 +171,13 @@ public:
  	bool IsDisarmed(int frame);
  	bool IsWeaponReady(int frame);
  	bool IsDGunReady(int frame, float energy);
@@ -18898,7 +19112,7 @@ index cfe59bcc..fecb67a6 100644
  	bool IsShieldCharged(float percent);
  	bool IsJumpReady();
  	bool IsJumping();
-@@ -130,14 +186,24 @@ public:
+@@ -130,14 +190,24 @@ public:
  	float GetHealthPercent();
  
  	void CmdRemove(std::vector<float>&& params, short options = 0);
@@ -18925,7 +19139,7 @@ index cfe59bcc..fecb67a6 100644
  	void CmdCloak(bool state);
  	void CmdFireAtRadar(bool state);
  	void CmdFindPad(int timeout = INT_MAX);
-@@ -184,6 +250,9 @@ public:
+@@ -184,6 +254,9 @@ public:
  
  	void ClearTarget() { target = nullptr; }
  	CEnemyInfo* GetTarget() const { return target; }
@@ -18935,7 +19149,7 @@ index cfe59bcc..fecb67a6 100644
  	int GetTargetTile() const { return targetTile; }
  
  	void AddAttribute(CCircuitDef::AttrType type) { attr |= CCircuitDef::GetMask(static_cast<CCircuitDef::AttrT>(type)); }
-@@ -207,7 +276,24 @@ private:
+@@ -207,7 +280,24 @@ private:
  
  	int moveFails;
  	int failFrame;
@@ -18960,7 +19174,7 @@ index cfe59bcc..fecb67a6 100644
  	int execFrame;  // TODO: Replace by CExecuteAction?
  	int disarmFrame;
  	int ammoFrame;
-@@ -228,10 +314,13 @@ private:
+@@ -228,10 +318,13 @@ private:
  	springai::Command* command;  // current top command
  	CWeaponDef* dgunDef;
  	springai::Weapon* dgun;

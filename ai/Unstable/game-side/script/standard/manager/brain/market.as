@@ -33,6 +33,7 @@
 #include "market/want_nano.as"      // the nano Want
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
+#include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
 // want_protect, split (order load-bearing -- see manager/builder.as):
 #include "market/protect_census.as"     // the gate census, the decomposition log, tower counters

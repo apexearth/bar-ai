@@ -1086,18 +1086,14 @@ int CCircuitAI::Update(int frame)
 		// every rule aimed at order volume is a guess. Order matches
 		// CCircuitUnit::OrdSrc.
 		{
-			static const char* srcName[ORD_SRC_N] = {"other", "ring", "travel",
-					"dodge", "standoff", "post", "retreat", "build", "scout",
-					"settgt", "attack", "patrol", "engage", "regroup", "escort",
-					"sniper", "manual", "script", "fightwalk", "combat", "guard",
-					"rally"};
 			std::string line;
 			char buf[96];
 			for (int i = 0; i < ORD_SRC_N; ++i) {
 				if (ordSrc[i][0] == 0) {
 					continue;
 				}
-				snprintf(buf, sizeof(buf), " %s=%u/%u/%u", srcName[i],
+				snprintf(buf, sizeof(buf), " %s=%u/%u/%u",
+						CCircuitUnit::OrdSrcName(i),
 						ordSrc[i][0], ordSrc[i][1], ordSrc[i][2]);
 				line += buf;
 			}

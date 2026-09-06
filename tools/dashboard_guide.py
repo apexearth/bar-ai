@@ -856,6 +856,13 @@ GROUPS = [
                  ("TUNE_COMM_FLEE_HP", "he flees at a higher health — safer, "
                   "less work done"),
              ]},
+            {"title": "Stuck builds",
+             "reads": "manager/brain/market/stuck.as",
+             "knobs": [
+                 ("TUNE_STUCK_SECS", "seconds a builder may hold a build task "
+                  "while standing still with no progress before it is "
+                  "re-elected; 0 turns the watchdog off"),
+             ]},
         ],
     },
     {

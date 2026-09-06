@@ -522,6 +522,7 @@ local NAMES = {
 	-- this unit is already executing. Counted either way in `apex: orders`, so
 	-- a run with it off says what turning it on would buy (0).
 	"apex_order_dedupe",
+	"apex_order_trace",
 	-- SquadTask.cpp: 1 = the arc-end DISTANCE tiebreak stops reversing a row's
 	-- slot assignment once it has picked a side; a real threat asymmetry still
 	-- re-decides. Counted either way in `apex: order-src` (arcflip=churn/held).

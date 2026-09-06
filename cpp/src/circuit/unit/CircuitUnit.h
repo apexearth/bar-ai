@@ -146,6 +146,10 @@ public:
 		SNIPER, MANUAL, SCRIPT, FWALK, COMBAT, GUARD, RALLY, _SIZE };
 	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
 			OrdSrc src = OrdSrc::OTHER);
+	// One source of truth for the call-site names: the order census in
+	// CircuitAI and the per-unit trace in NoteOrder both read it, so a new
+	// OrdSrc cannot be named in one place and left numeric in the other.
+	static const char* OrdSrcName(int src);
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
