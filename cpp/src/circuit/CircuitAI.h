@@ -150,6 +150,9 @@ private:
 	void UnregisterTeamUnit(CCircuitUnit* unit);
 	void DeleteTeamUnit(CCircuitUnit* unit);
 public:
+	// apex: enrol/release in the set-target holder census. See tgtHeld.
+	void TgtHoldAdd(CCircuitUnit* unit) { tgtHeld.insert(unit); }
+	void TgtHoldDel(CCircuitUnit* unit) { tgtHeld.erase(unit); }
 	void GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId);
 	// apex: send metal/energy to an allied team. The engine command has always
 	// existed (COMMAND_SEND_RESOURCES) and CircuitAI already uses it when
@@ -621,13 +624,18 @@ private:
 	// holder's target every 5 frames (weapon TryTarget per weapon under
 	// CallAsTeam, SetUnitTarget, four SetUnitRulesParam). That cost scales
 	// with HOLDERS, not with our send rate, and it is billed to the engine.
-	// The gadget writes unitRulesParam "targetID", so a holder is countable
-	// from here. One unit per frame, cursor walked by id: a whole-team sweep
-	// once a minute would be the batching this file exists to find.
+	// Two independent counts, because either alone can be doubted. `tgtHeld` is
+	// ours: every unit we sent a set-target to and have not stopped, so it is an
+	// UPPER bound -- the gadget also drops a holder by itself when the target
+	// dies (n%5 checkTarget) or leaves radar+los (n%15 removeUnseenTarget), and
+	// we do not see those. The sampled half reads the gadget's own
+	// unitRulesParam "targetID", one unit per frame with the cursor walked by
+	// id, and is the lower-side check on it.
+	std::set<CCircuitUnit*> tgtHeld;
 	ICoreUnit::Id tgtCursor = -1;
 	unsigned tgtSamp = 0;   // units probed this minute
 	unsigned tgtHold = 0;   // ...of which the gadget still holds a target for
-	unsigned tgtStale = 0;  // ...holding, while we have stopped aiming it
+	unsigned tgtRel = 0;    // ...of which it holds none but once did (param == -1)
 	bool tgtRawLogged = false;  // S7: prove the callback is not silently dead
 	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.
 	std::vector<SFeatDefInfo> featDefInfo;

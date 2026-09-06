@@ -239,6 +239,9 @@ public:
 
 	void ClearTarget() { target = nullptr; }
 	CEnemyInfo* GetTarget() const { return target; }
+	// apex: what we last set-targeted, by id -- census only, see CCircuitAI::tgtHeld.
+	Id GetTgtHeldId() const { return tgtHeldId; }
+	void SetTgtHeldId(Id id) { tgtHeldId = id; }
 	int GetTargetTile() const { return targetTile; }
 
 	void AddAttribute(CCircuitDef::AttrType type) { attr |= CCircuitDef::GetMask(static_cast<CCircuitDef::AttrT>(type)); }
@@ -306,6 +309,7 @@ private:
 	springai::Weapon* shield;
 
 	CEnemyInfo* target;
+	Id tgtHeldId = -1;
 	int targetTile;
 
 	CCircuitDef::AttrM attr;

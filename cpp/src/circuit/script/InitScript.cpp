@@ -369,9 +369,20 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
 	circuit->GiveUnits(std::move(units), newTeamId);
 }
 
+// apex: guarded like CmdReclaimUnit below, and for the same reason. Unguarded,
+// a unit that died between the script's null-check and this call let the
+// springai exception escape into AngelScript, which aborted the whole calling
+// function -- so execute.as's condemned-unit branch lost the Reclaim enqueue
+// that follows the move (4 aborts in one hour-long run).
 static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 {
-	unit->CmdMoveTo(pos);
+	if ((unit == nullptr) || unit->IsDead()) {
+		return;
+	}
+	try {
+		unit->CmdMoveTo(pos);
+	} catch (const std::exception&) {
+	}
 }
 
 // apex: point a lathe (nano or constructor) at ONE unit to reclaim -- the

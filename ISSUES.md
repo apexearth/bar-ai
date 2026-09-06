@@ -1943,15 +1943,10 @@ from four runs in between, so it is state-dependent, not a compile or a
 regression from the performance work. An exception aborts that election, so it
 is a behaviour bug: the reclaim silently does not happen.
 
-## 2026-09-06 — the target-hold census reads -2; the set-target tax is still unpriced
+## 2026-09-06 — the repo's stripped SkirmishAI.dll goes stale on every C++ touch
 
-`apex: tgthold` probes the `targetID` unitRulesParam that
-`unit_target_on_the_move.lua` writes, to count how many units hold a target —
-the number the whole set-target question turns on. It returns
-`raw targetID=-2.0`, the sentinel meaning the param never reads (S7). Every
-`hold=` figure it printed is void, not small.
-
-So the tax stays bracketed at 0.95-3.2 ms/frame (3-10% of a 32.7 ms engine
-frame) on an assumed 3,168 holders. Counting holders on OUR side — units we
-issued CmdSetTarget to and have not cancelled — needs no engine param and would
-close it.
+`deploy_ai.py` prefers `vendor/engine/build-amd64-windows/.../SkirmishAI.dll`
+whenever it exists, so local work is unaffected — but `ai/Unstable/engine-side/
+SkirmishAI.dll` is what a clone without a built vendor/ tree gets, and it is now
+older than `cpp/`. The file's own comment records this trap twice already. It
+needs restripping from the current build.

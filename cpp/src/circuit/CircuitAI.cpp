@@ -822,6 +822,7 @@ int CCircuitAI::Release(int reason)
 	mapManager = nullptr;
 
 	DrainDeferredReleases();  // before the unit dtors below release into it again
+	tgtHeld.clear();  // pure observation; must not outlive what it points at
 	for (CCircuitUnit* unit : actionUnits) {
 		if (unit->IsDead()) {  // instance is not in teamUnits
 			delete unit;
@@ -993,17 +994,21 @@ int CCircuitAI::Update(int frame)
 		CCircuitUnit* probe = it->second;
 		if ((probe != nullptr) && !probe->IsDead() && (probe->GetUnit() != nullptr)) {
 			const float tid = probe->GetUnit()->GetRulesParamFloat("targetID", -2.f);
-			if (!tgtRawLogged) {
+			// S7 done on a unit we KNOW we enrolled. The first version of this
+			// log fired at frame 0 on the commander, before any set-target had
+			// ever been sent, read the -2 default and was taken to mean the
+			// param is dead -- it is not, and every hold= it printed was real.
+			if (!tgtRawLogged && (tgtHeld.find(probe) != tgtHeld.end())) {
 				tgtRawLogged = true;
-				LOG("apex: tgthold t=%i raw targetID=%.1f (-2 means the param never reads)",
+				LOG("apex: tgthold t=%i raw targetID=%.1f on an enrolled unit"
+						" (-2 = param absent, -1 = released, >=0 = held)",
 						teamId, tid);
 			}
 			++tgtSamp;
 			if (tid >= 0.f) {
 				++tgtHold;
-				if (probe->GetTarget() == nullptr) {
-					++tgtStale;
-				}
+			} else if (tid > -1.5f) {
+				++tgtRel;
 			}
 		}
 	}
@@ -1064,15 +1069,41 @@ int CCircuitAI::Update(int frame)
 				ordRep[1][0] + ordRep[1][1] + ordRep[1][2] + ordRep[1][3] + ordRep[1][4],
 				ordRep[3][0] + ordRep[3][1] + ordRep[3][2] + ordRep[3][3] + ordRep[3][4],
 				ordRep[4][0]);
-		// apex: holders ~= units * hold/samp. That is the multiplier on the
-		// gadget's 5-frame sweep, and the only term in the set-target tax that
-		// our send rate does NOT set. stale = holding while we aim nothing:
-		// pure waste, swept six times a second for a target we abandoned.
-		LOG("apex: tgthold t=%i samp=%u hold=%u stale=%u units=%u",
-				teamId, tgtSamp, tgtHold, tgtStale, (unsigned)teamUnits.size());
+		// apex: mirror the gadget's own un-enrolments before counting, or `own`
+		// only ever grows: it drops a dead target (n%5 checkTarget) and, for
+		// anything but a building, one gone from radar+los (n%15
+		// removeUnseenTarget, alwaysSeen = isBuilding). dead must stay 0.
+		unsigned ownStale = 0, ownDead = 0, ownGone = 0;
+		for (auto it = tgtHeld.begin(); it != tgtHeld.end(); ) {
+			CCircuitUnit* u = *it;
+			if (u->IsDead()) {
+				++ownDead;
+				it = tgtHeld.erase(it);
+				continue;
+			}
+			CEnemyInfo* e = GetEnemyInfo(u->GetTgtHeldId());
+			const CCircuitDef* edef = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+			if ((e == nullptr)
+				|| ((edef != nullptr) && edef->IsMobile() && !e->IsInRadarOrLOS()))
+			{
+				++ownGone;
+				it = tgtHeld.erase(it);
+				continue;
+			}
+			if (u->GetTarget() == nullptr) {
+				++ownStale;
+			}
+			++it;
+		}
+		LOG("apex: tgthold t=%i own=%u stale=%u dead=%u gone=%u | samp=%u hold=%u rel=%u"
+				" est=%.1f units=%u",
+				teamId, (unsigned)tgtHeld.size(), ownStale, ownDead, ownGone,
+				tgtSamp, tgtHold, tgtRel,
+				(tgtSamp > 0) ? float(tgtHold) / tgtSamp * teamUnits.size() : 0.f,
+				(unsigned)teamUnits.size());
 		tgtSamp = 0;
 		tgtHold = 0;
-		tgtStale = 0;
+		tgtRel = 0;
 		for (int k = 0; k < 5; ++k) {
 			ordSent[k] = 0;
 			ordSup[k] = 0;
@@ -1766,6 +1797,7 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
 	auto slot = teamUnits.emplace(unitId, unit);
 	if (!slot.second) {  // re-register: the old instance leaves the indices first
 		IndexTeamUnit(slot.first->second, false);
+		tgtHeld.erase(slot.first->second);
 		slot.first->second = unit;
 	}
 	IndexTeamUnit(unit, true);
@@ -1783,6 +1815,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
 {
 	IndexTeamUnit(unit, false);
 	teamUnits.erase(unit->GetId());
+	tgtHeld.erase(unit);  // the gadget's UnitDestroyed does the same on its side
 	unit->GetCircuitDef()->Dec();
 
 	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
@@ -1791,6 +1824,7 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
 void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
 {
 	garbage.erase(unit);
+	tgtHeld.erase(unit);  // last chance before the instance is deleted
 	deadUnits.insert(unit);  // deferred to Release(); see deadUnits decl
 }
 

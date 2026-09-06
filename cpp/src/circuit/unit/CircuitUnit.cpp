@@ -547,6 +547,11 @@ void CCircuitUnit::CmdStop(short options, int timeout)
 		return;
 	}
 	unit->Stop(options, timeout);
+	// CMD_STOP is one of unit_target_on_the_move's own removal paths (we never
+	// pass ctrl, so ignoreStop is false and it drops the holder outright).
+	if (manager != nullptr) {
+		manager->GetCircuit()->TgtHoldDel(this);
+	}
 }
 
 void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
@@ -568,6 +573,13 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
 	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX);
 	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
+	// The gadget enrols only what its own validUnits table admits
+	// (canAttack and maxWeaponRange > 0); counting the rest would inflate the
+	// census with units it never sweeps.
+	if ((manager != nullptr) && (circuitDef != nullptr) && (circuitDef->GetMaxRange() > 0.f)) {
+		tgtHeldId = enemy->GetId();
+		manager->GetCircuit()->TgtHoldAdd(this);
+	}
 }
 
 void CCircuitUnit::CmdCloak(bool state)
