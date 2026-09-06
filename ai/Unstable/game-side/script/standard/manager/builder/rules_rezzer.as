@@ -75,6 +75,12 @@ int gRzOkHurt = 0;
 int gRzVetoHurt = 0;
 int gRzOkGround = 0;
 int gRzVetoGround = 0;
+// Did the cover branch of RezSiteOk decide anything? It is the whole of this
+// change and it rests on an engine map nothing in the script had read before,
+// so a run where cover=0/N means the map is empty to us and the rule is inert,
+// not that the ground was hostile.
+int gRzSiteCalls = 0;
+int gRzOkCover = 0;
 // Where our combat units actually stand: the forward-most tenth of them,
 // so one runaway raider is not the line. The lane point read 0.1-0.3 of
 // the way to the enemy while the wrecks lay at 0.6-1.0 (rez-inst set).
@@ -155,44 +161,42 @@ float ArmyFront(AIFloat3 &out pos)
 	pos = gArmyFrontPos;
 	return gArmyFrontFf;
 }
-bool BehindLine(const AIFloat3 &in site, bool reachClear = false)
+// COVER, NOT A NO-GO MAP. This asked !InEnemyReach(site), refusing every spot
+// an enemy weapon covers -- the ground docs/24 sends the bot to ("heal units
+// while they fight", "eat their wrecks"), since a unit that is fighting is
+// inside enemy reach by definition. The question is his other one: "stand
+// behind allied units away from enemies." Only ARMED allies paint allyInfl
+// (AddUnarmed writes the defend layer only), each fading out at its own weapon
+// range, so ours >= theirs is "our guns hold this spot" -- the map and the
+// sentence UpdateRezGuard already steers its evade fan by. ours == 0 is no
+// cover at all and the old bar still decides it. The exclusion stays on the
+// BOT, in RezzerIdle and that guard, which is where he put it.
+bool RezSiteOk(const AIFloat3 &in site)
 {
-	// NOTHING CAN SHOOT IT, SO THERE IS NOTHING TO BE IN FRONT OF. Every branch
-	// below then answers true (see the note under the forward test), so with the
-	// reach already read as clear this is a decided answer, not a skipped test --
-	// and it saves the army percentile scan, a ForwardFraction and a second
-	// whole-enemy-set sweep on the hot path. RezSiteOk is the only caller and it
-	// always arrives here having just read the reach; ffVetoAvg logged 0.00 in
-	// all 459 rez-time lines of the 60-minute 8v8, which is that in the log.
-	if (reachClear)
+	++gRzSiteCalls;
+	const float ours = ai.GetAllyInflAt(site);
+	if ((ours > 0.f) && (ours >= ai.GetEnemyInflAt(site))) {
+		++gRzOkCover;
 		return true;
-	AIFloat3 fp;
-	const float front = ArmyFront(fp);
-	if (front < 0.f)
-		return true;
-	const float ff = Military::ForwardFraction(site);
-	if (ff <= front)
-		return true;
-	// In front of our units -- but he named it IN COMBAT: "never stand in
-	// front of them where they're likely to become collateral damage".
-	// Ahead of the line with nothing able to shoot the spot there is no
-	// fight to be in front of, and the corpse field is ahead of the line by
-	// definition.
+	}
 	if (!InEnemyReach(site))
 		return true;
-	gRzVetoFfSum += ff;
+	// Kept live now that something can actually reach this line: how far toward
+	// the enemy the refusals sit. It read 0.00 for whole games because the test
+	// that fed it was short-circuited before it could run.
+	gRzVetoFfSum += Military::ForwardFraction(site);
 	return false;
 }
 
-// The one question every rez rule asks of ground it is about to send a bot to:
-// is it behind our units, and can anything shoot it? The second half is the
-// same envelope the DLL's guard walks bots out of six times a second, so the
-// election and the reflex cannot disagree and pull the bot back and forth.
-bool RezSiteOk(const AIFloat3 &in site)
+// Ground a bot must STAND STILL on for a minute -- the narrower permission in
+// "if they feel safe they should prefer to resurrect" (apexearth). A resurrect
+// pays out only on completion, so a bot driven off one banks nothing, where a
+// reclaim credits as it goes and RezzerRezOrEat falls through to it. Contested
+// cover is enough to work on, not enough to bet a whole timeout on. The
+// commander rescue keeps RezSiteOk: him back on his feet outranks the minute.
+bool RezRezSiteOk(const AIFloat3 &in site)
 {
-	if (InEnemyReach(site))
-		return false;
-	return BehindLine(site, true);
+	return !InEnemyReach(site);
 }
 
 int RezScanPeriod()
@@ -664,7 +668,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 			floorM = gRzRichM;
 		}
 		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH, floorM);
-		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezSiteOk(rich)) {
+		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
 			if (rr !is null) {
@@ -694,7 +698,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// ground is 60 seconds of standing still with nothing to show.
 		const AIFloat3 body = BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
 		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
-			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezSiteOk(body))
+			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezRezSiteOk(body))
 		{
 			IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
 					body, 100.f, 60 * SECOND, WRECK_RADIUS));

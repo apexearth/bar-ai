@@ -2099,3 +2099,29 @@ doctrine is not doing what he expects, or the units are being told and the
 engine is refusing. Related: ~22% of our fight/attack orders never reach
 AllowCommand at all (AI 1,034,609 sent vs 804,251 seen), most likely CmdAttack
 on an enemy the engine will not accept a unit-target order for.
+
+## 2026-09-06 — one nuke silo puts the WHOLE MAP inside `InEnemyReach`
+
+`CCircuitAI::RebuildReachCache` takes `edef->GetMaxRange()` for every visible
+non-flying enemy, and a silo's own weapon range is map-scale. From the frame the
+first one is seen, `GetEnemyReachSlack` returns a large negative everywhere, so
+`InEnemyReach(anywhere) == true` for the rest of the game.
+
+Measured, `matches/20260906-105022-*` (60 min, 16 AIs, seed 1), worst slack per
+minute across all rez bots: -100 to -600 elmos (ordinary weapon overlap) until
+minute 47, then **-66,469 at minute 48** and map-scale for most minutes after.
+`apex: rez-guard` totals 326,875 pressed / 107,740 forced walk-outs over the
+game, t3 alone 100,739 / 31,943.
+
+What it breaks, all on the same predicate:
+- `RezzerIdle` (`rules_rezzer.as`) — `InEnemyReach(here)` is true wherever the
+  bot stands, so every idle rez bot returns `Retreat(unit)` forever, and the
+  station walk below it (`!InEnemyReach(station)`) can never fire.
+- `CBuilderManager::UpdateRezGuard` — every rez bot gets an evade order and has
+  its builder task dropped 6/s for the last twelve minutes.
+- `RezRezSiteOk` — no resurrect anywhere after minute 48.
+
+The fix is in `RebuildReachCache`, not in the callers: a weapon that cannot
+plausibly shoot a walking rez bot is not "reach". It needs a DLL rebuild and its
+own measurement, so it was deliberately left out of the `RezSiteOk` cover change
+of the same date rather than confounding it.

@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <map>
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -605,6 +606,10 @@ private:
 	unsigned perfFeatCalls = 0;
 	uint64_t perfReachSweep = 0;  // enemies visited by GetEnemyReachSlack
 	unsigned perfReachCalls = 0;
+	// ...and what it ANSWERED, because a wrong envelope costs nothing to walk.
+	float perfReachWorst = std::numeric_limits<float>::max();
+	float perfReachMax = 0.f;
+	CCircuitDef* perfReachMaxDef = nullptr;
 	uint64_t perfOwnSweep = 0;    // own units visited by GetOwn*Near/OfDef
 	unsigned perfOwnCalls = 0;
 	// ...split four ways, because "own" named a helper family, not a helper, and

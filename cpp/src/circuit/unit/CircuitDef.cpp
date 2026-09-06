@@ -181,6 +181,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 {
 	thrDmgMod.fill(1.f);
 	maxRange.fill(.0f);
+	autoRange.fill(.0f);
 	threatRange.fill(0);
 
 	id = def->GetUnitDefId();
@@ -431,6 +432,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	// bar is "can hit an aircraft", which condemns a Tzar and blesses a Luger.
 	float longestLandRange = .0f;
 	bool longestLandDumb = false;
+	int intercept = 0;  // S7: the raw GetInterceptor, logged once per def below
 	CWeaponDef* bestDGunDef = nullptr;
 	CWeaponDef* bestWpDef = nullptr;
 	WeaponMount* bestDGunMnt = nullptr;
@@ -587,11 +589,20 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		waterDps += dps;
 
 		minRange = std::min(minRange, range);
+		// apex: a weapon that only answers a fire COMMAND (D-gun, nuke, Juno) or
+		// that only hits projectiles (antinuke) never shoots a unit walking past,
+		// so its range is not reach. @see GetAutoRange.
+		intercept |= wd->GetInterceptor();
+		const bool isAutoFire = !wd->IsManualFire() && (wd->GetInterceptor() == 0);
 		if ((weaponCat & circuit->GetAirCategory()) && isAirWeapon) {
 			float& mr = maxRange[static_cast<RangeT>(RangeType::AIR)];
 			mr = std::max(mr, range);
 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
 				maxRangeType = RangeType::AIR;
+			}
+			if (isAutoFire) {
+				float& ar = autoRange[static_cast<RangeT>(RangeType::AIR)];
+				ar = std::max(ar, range);
 			}
 		}
 		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > longestLandRange)) {
@@ -604,10 +615,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 					|| (wt == "TorpedoLauncher")) && !wd->IsTracks();
 		}
 		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon) {
+			const float landRange = (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range;  // 1.25 - gunship height hax
 			float& mr = maxRange[static_cast<RangeT>(RangeType::LAND)];
-			mr = std::max(mr, (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range);  // 1.25 - gunship height hax
+			mr = std::max(mr, landRange);
 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
 				maxRangeType = RangeType::LAND;
+			}
+			if (isAutoFire) {
+				float& ar = autoRange[static_cast<RangeT>(RangeType::LAND)];
+				ar = std::max(ar, landRange);
 			}
 		}
 		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
@@ -615,6 +631,10 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			mr = std::max(mr, range);
 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
 				maxRangeType = RangeType::WATER;
+			}
+			if (isAutoFire) {
+				float& ar = autoRange[static_cast<RangeT>(RangeType::WATER)];
+				ar = std::max(ar, range);
 			}
 		}
 
@@ -685,6 +705,14 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	}
 
 	isDumbFire = longestLandDumb;
+
+	// apex/S7: one line for every def whose longest weapon is not reach. Proves
+	// IsManualFire/GetInterceptor read live values, and names the defs that used
+	// to project a map-wide no-go zone through GetEnemyReachSlack.
+	if (GetMaxRange() > GetAutoRange()) {
+		circuit->LOG("apex: reach %s maxRange=%.0f autoRange=%.0f interceptor=%i",
+				def->GetName(), GetMaxRange(), GetAutoRange(), intercept);
+	}
 
 	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
 	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
@@ -891,6 +919,7 @@ void CCircuitDef::SetRange(float range)
 	maxRangeType = RangeType::AIR;
 	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
 		maxRange[rt] = range;
+		autoRange[rt] = range;
 	}
 }
 
@@ -899,6 +928,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
 	// TODO: Asserts >= 0?
 	minRange = std::min(minRange, range);
 	maxRange[static_cast<RangeT>(type)] = range;
+	autoRange[static_cast<RangeT>(type)] = range;
 	if (range > maxRange[static_cast<RangeT>(maxRangeType)]) {
 		maxRangeType = type;
 	}

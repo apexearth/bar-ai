@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..e79854ee 100644
+index aeea9339..c97bf0a2 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -199,7 +199,7 @@ index aeea9339..e79854ee 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +932,260 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +932,272 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -315,6 +315,18 @@ index aeea9339..e79854ee 100644
 +				(unsigned long long)perfReachSweep, perfReachCalls,
 +				(unsigned long long)perfOwnSweep, perfOwnCalls,
 +				(unsigned long long)perfEcostSweep, perfEcostCalls);
++		// apex: the reach envelope itself, not its cost. worst is the deepest
++		// inside-an-enemy's-reach any caller was told it stood this minute, and
++		// maxReach the largest envelope in the cache: a strategic launcher
++		// leaking into it reads map-scale in both.
++		LOG("apex: perf reach worst=%.0f maxReach=%.0f def=%s n=%u",
++				(perfReachWorst < std::numeric_limits<float>::max()) ? perfReachWorst : 0.f,
++				perfReachMax,
++				(perfReachMaxDef != nullptr) ? perfReachMaxDef->GetDef()->GetName() : "-",
++				(unsigned)reachCache.size());
++		perfReachWorst = std::numeric_limits<float>::max();
++		perfReachMax = 0.f;
++		perfReachMaxDef = nullptr;
 +		perfFeatSweep = 0; perfFeatCalls = 0;
 +		perfReachSweep = 0; perfReachCalls = 0;
 +		perfOwnSweep = 0; perfOwnCalls = 0;
@@ -460,7 +472,7 @@ index aeea9339..e79854ee 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,10 +1462,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,10 +1474,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -480,7 +492,7 @@ index aeea9339..e79854ee 100644
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
  	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
-@@ -1147,6 +1486,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1498,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -488,7 +500,7 @@ index aeea9339..e79854ee 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1506,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1518,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -528,7 +540,7 @@ index aeea9339..e79854ee 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1649,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1661,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -536,7 +548,7 @@ index aeea9339..e79854ee 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1825,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1837,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -551,7 +563,7 @@ index aeea9339..e79854ee 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +1844,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +1856,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -561,7 +573,7 @@ index aeea9339..e79854ee 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1855,1199 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1867,1208 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1563,9 +1575,15 @@ index aeea9339..e79854ee 100644
 +		if ((edef == nullptr) || edef->IsAbleToFly()) {
 +			continue;
 +		}
-+		const float reach = edef->GetMaxRange();
++		// Not GetMaxRange: that is the max over EVERY weapon, so a nuke silo
++		// enters the cache with 72000 of "reach" and vetoes the whole map.
++		const float reach = edef->GetAutoRange();
 +		if (reach <= 0.f) {
 +			continue;
++		}
++		if (reach > perfReachMax) {
++			perfReachMax = reach;
++			perfReachMaxDef = edef;
 +		}
 +		const springai::AIFloat3& p = e->GetPos();
 +		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(),
@@ -1701,6 +1719,9 @@ index aeea9339..e79854ee 100644
 +	if ((foeOut != nullptr) && (best != nullptr)) {
 +		*foeOut = springai::AIFloat3(best->x, 0.f, best->z);
 +	}
++	if (best != nullptr) {
++		perfReachWorst = std::min(perfReachWorst, worst);
++	}
 +	return worst;
 +}
 +
@@ -1762,7 +1783,7 @@ index aeea9339..e79854ee 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3206,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3227,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -1810,7 +1831,7 @@ index aeea9339..e79854ee 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3354,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3375,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -1825,18 +1846,19 @@ index aeea9339..e79854ee 100644
  
  void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f403..d811138f 100644
+index b4f4f403..32b1013a 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
-@@ -16,6 +16,7 @@
+@@ -16,6 +16,8 @@
  #include <memory>
  #include <unordered_map>
  #include <map>
 +#include <algorithm>
++#include <limits>
  #include <set>
  #include <vector>
  
-@@ -64,6 +65,7 @@ class CScheduler;
+@@ -64,6 +66,7 @@ class CScheduler;
  class IModule;
  class CCircuitUnit;
  class CEnemyInfo;
@@ -1844,7 +1866,7 @@ index b4f4f403..d811138f 100644
  class COOAICallback;
  class CEngine;
  class CMap;
-@@ -148,7 +150,188 @@ private:
+@@ -148,7 +151,188 @@ private:
  	void UnregisterTeamUnit(CCircuitUnit* unit);
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
@@ -2033,7 +2055,7 @@ index b4f4f403..d811138f 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -161,6 +344,8 @@ public:
+@@ -161,6 +345,8 @@ public:
  
  	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
  private:
@@ -2042,7 +2064,7 @@ index b4f4f403..d811138f 100644
  	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
  	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
  	void UnregisterEnemyInfo(CEnemyInfo* enemy);
-@@ -175,12 +360,30 @@ public:
+@@ -175,12 +361,30 @@ public:
  	bool UnitControl(CCircuitUnit* unit, bool isEnable);
  	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
  
@@ -2074,7 +2096,7 @@ index b4f4f403..d811138f 100644
  	EnemyInfos enemyInfos;  // owner
  	CAllyTeam* allyTeam;
  	bool isAllyTeamInit;
-@@ -189,6 +392,24 @@ private:
+@@ -189,6 +393,24 @@ private:
  	unsigned int actionIterator;
  
  	std::set<CCircuitUnit*> garbage;
@@ -2099,7 +2121,7 @@ index b4f4f403..d811138f 100644
  // <<< Units ---- END
  
  // >>> AIOptions.lua ---- BEGIN
-@@ -205,6 +426,41 @@ private:
+@@ -205,6 +427,41 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -2141,7 +2163,7 @@ index b4f4f403..d811138f 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -268,6 +524,15 @@ public:
+@@ -268,6 +525,15 @@ public:
  	CGameAttribute* GetGameAttribute() const { return gameAttribute.get(); }
  	const std::shared_ptr<CScheduler>& GetScheduler() { return scheduler; }
  	int GetLastFrame()    const { return lastFrame; }
@@ -2157,7 +2179,7 @@ index b4f4f403..d811138f 100644
  	int GetSkirmishAIId() const { return skirmishAIId; }
  	int GetTeamId()       const { return teamId; }
  	int GetAllyTeamId()   const { return allyTeamId; }
-@@ -317,6 +582,97 @@ private:
+@@ -317,6 +583,101 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -2184,6 +2206,10 @@ index b4f4f403..d811138f 100644
 +	unsigned perfFeatCalls = 0;
 +	uint64_t perfReachSweep = 0;  // enemies visited by GetEnemyReachSlack
 +	unsigned perfReachCalls = 0;
++	// ...and what it ANSWERED, because a wrong envelope costs nothing to walk.
++	float perfReachWorst = std::numeric_limits<float>::max();
++	float perfReachMax = 0.f;
++	CCircuitDef* perfReachMaxDef = nullptr;
 +	uint64_t perfOwnSweep = 0;    // own units visited by GetOwn*Near/OfDef
 +	unsigned perfOwnCalls = 0;
 +	// ...split four ways, because "own" named a helper family, not a helper, and
@@ -17540,7 +17566,7 @@ index 5eebb710..d41d22b1 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..5b9657a3 100644
+index a1ac882a..eafbbfca 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -17575,7 +17601,15 @@ index a1ac882a..5b9657a3 100644
  		, isSonar(false)
  		, isDecoy(false)
  		, isOnSlow(false)
-@@ -201,6 +205,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -177,6 +181,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ {
+ 	thrDmgMod.fill(1.f);
+ 	maxRange.fill(.0f);
++	autoRange.fill(.0f);
+ 	threatRange.fill(0);
+ 
+ 	id = def->GetUnitDefId();
+@@ -201,6 +206,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	speed        = def->GetSpeed();  // elmos per second
  	losRadius    = def->GetLosRadius();
  	sonarRadius  = def->GetSonarRadius();
@@ -17584,7 +17618,7 @@ index a1ac882a..5b9657a3 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +246,65 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -240,9 +247,65 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -17652,7 +17686,7 @@ index a1ac882a..5b9657a3 100644
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +314,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +315,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -17676,7 +17710,7 @@ index a1ac882a..5b9657a3 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +380,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +381,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  
@@ -17696,7 +17730,7 @@ index a1ac882a..5b9657a3 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
-@@ -330,10 +420,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -330,10 +421,18 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	float bestWpRange = std::numeric_limits<float>::max();
  	float airDps = .0f;
  	float airDmg = .0f;
@@ -17711,10 +17745,11 @@ index a1ac882a..5b9657a3 100644
 +	// bar is "can hit an aircraft", which condemns a Tzar and blesses a Luger.
 +	float longestLandRange = .0f;
 +	bool longestLandDumb = false;
++	int intercept = 0;  // S7: the raw GetInterceptor, logged once per def below
  	CWeaponDef* bestDGunDef = nullptr;
  	CWeaponDef* bestWpDef = nullptr;
  	WeaponMount* bestDGunMnt = nullptr;
-@@ -460,15 +557,27 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,15 +559,27 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -17745,10 +17780,26 @@ index a1ac882a..5b9657a3 100644
  		}
  		airDmg += dmg;
  		airDps += dps;
-@@ -485,6 +594,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -478,19 +589,42 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		waterDps += dps;
+ 
+ 		minRange = std::min(minRange, range);
++		// apex: a weapon that only answers a fire COMMAND (D-gun, nuke, Juno) or
++		// that only hits projectiles (antinuke) never shoots a unit walking past,
++		// so its range is not reach. @see GetAutoRange.
++		intercept |= wd->GetInterceptor();
++		const bool isAutoFire = !wd->IsManualFire() && (wd->GetInterceptor() == 0);
+ 		if ((weaponCat & circuit->GetAirCategory()) && isAirWeapon) {
+ 			float& mr = maxRange[static_cast<RangeT>(RangeType::AIR)];
+ 			mr = std::max(mr, range);
+ 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::AIR;
  			}
- 		}
++			if (isAutoFire) {
++				float& ar = autoRange[static_cast<RangeT>(RangeType::AIR)];
++				ar = std::max(ar, range);
++			}
++		}
 +		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > longestLandRange)) {
 +			longestLandRange = range;
 +			// An unguided rocket flies where it was pointed; a cannon shell is
@@ -17757,20 +17808,51 @@ index a1ac882a..5b9657a3 100644
 +			// reach against buildings.
 +			longestLandDumb = ((wt == "MissileLauncher") || (wt == "StarburstLauncher")
 +					|| (wt == "TorpedoLauncher")) && !wd->IsTracks();
-+		}
+ 		}
  		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon) {
++			const float landRange = (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range;  // 1.25 - gunship height hax
  			float& mr = maxRange[static_cast<RangeT>(RangeType::LAND)];
- 			mr = std::max(mr, (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range);  // 1.25 - gunship height hax
-@@ -566,6 +684,8 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+-			mr = std::max(mr, (isAbleToFly && (wt == "Cannon")) ? range * 1.25f : range);  // 1.25 - gunship height hax
++			mr = std::max(mr, landRange);
+ 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
+ 				maxRangeType = RangeType::LAND;
+ 			}
++			if (isAutoFire) {
++				float& ar = autoRange[static_cast<RangeT>(RangeType::LAND)];
++				ar = std::max(ar, landRange);
++			}
+ 		}
+ 		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
+ 			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
+@@ -498,6 +632,10 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
+ 				maxRangeType = RangeType::WATER;
+ 			}
++			if (isAutoFire) {
++				float& ar = autoRange[static_cast<RangeT>(RangeType::WATER)];
++				ar = std::max(ar, range);
++			}
+ 		}
+ 
+ 		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
+@@ -566,6 +704,16 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
 +	isDumbFire = longestLandDumb;
 +
++	// apex/S7: one line for every def whose longest weapon is not reach. Proves
++	// IsManualFire/GetInterceptor read live values, and names the defs that used
++	// to project a map-wide no-go zone through GetEnemyReachSlack.
++	if (GetMaxRange() > GetAutoRange()) {
++		circuit->LOG("apex: reach %s maxRange=%.0f autoRange=%.0f interceptor=%i",
++				def->GetName(), GetMaxRange(), GetAutoRange(), intercept);
++	}
++
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +738,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +766,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -17784,11 +17866,35 @@ index a1ac882a..5b9657a3 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
+@@ -764,6 +919,7 @@ void CCircuitDef::SetRange(float range)
+ 	maxRangeType = RangeType::AIR;
+ 	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
+ 		maxRange[rt] = range;
++		autoRange[rt] = range;
+ 	}
+ }
+ 
+@@ -772,6 +928,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+ 	// TODO: Asserts >= 0?
+ 	minRange = std::min(minRange, range);
+ 	maxRange[static_cast<RangeT>(type)] = range;
++	autoRange[static_cast<RangeT>(type)] = range;
+ 	if (range > maxRange[static_cast<RangeT>(maxRangeType)]) {
+ 		maxRangeType = type;
+ 	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a9..d90db85e 100644
+index cd0b54a9..7109310a 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
-@@ -165,6 +165,29 @@ public:
+@@ -15,6 +15,7 @@
+ 
+ #include <unordered_set>
+ #include <array>
++#include <algorithm>
+ 
+ namespace springai {
+ 	class WeaponMount;
+@@ -165,6 +166,29 @@ public:
  	bool IsRoleSuper()    const { return role & RoleMask::SUPER; }
  	bool IsRoleComm()     const { return role & RoleMask::COMM; }
  
@@ -17818,7 +17924,7 @@ index cd0b54a9..d90db85e 100644
  	bool IsAttrMelee()    const { return attr & AttrMask::MELEE; }
  	bool IsAttrBoost()    const { return attr & AttrMask::BOOST; }
  	bool IsAttrNoJump()   const { return attr & AttrMask::NO_JUMP; }
-@@ -239,6 +262,11 @@ public:
+@@ -239,6 +263,11 @@ public:
  	float GetSurfDmg(RoleT type) const { return surfThrDmg * thrDmgMod[type]; }  // enemy
  	float GetWaterDmg(RoleT type) const { return waterThrDmg * thrDmgMod[type]; }  // enemy
  	float GetAoe() const { return aoe; }
@@ -17830,7 +17936,22 @@ index cd0b54a9..d90db85e 100644
  	float GetPower() const { return power; }
  	float GetDefThreat() const { return defThreat; }
  	void SetRange(float range);
-@@ -277,6 +305,9 @@ public:
+@@ -246,6 +275,14 @@ public:
+ 	float GetMinRange() const { return minRange; }
+ 	float GetMaxRange(RangeType type) const { return maxRange[static_cast<RangeT>(type)]; }
+ 	float GetMaxRange() const { return maxRange[static_cast<RangeT>(maxRangeType)]; }
++	// apex: "can this shoot a unit standing there", which GetMaxRange does not
++	// answer -- it is the max over EVERY weapon, so a nuke silo reads 72000 and
++	// an antinuke (a projectile-only interceptor) reads the same.
++	float GetAutoRange() const {
++		return std::max(std::max(autoRange[static_cast<RangeT>(RangeType::AIR)],
++								 autoRange[static_cast<RangeT>(RangeType::LAND)]),
++						autoRange[static_cast<RangeT>(RangeType::WATER)]);
++	}
+ 	int GetThreatRange(ThreatType type) const { return threatRange[static_cast<ThreatT>(type)]; }
+ 	float GetShieldRadius() const { return shieldRadius; }
+ 	float GetMaxShield() const { return maxShield; }
+@@ -277,6 +314,9 @@ public:
  
  	bool IsAttacker()  const { return isAttacker; }
  	bool IsAlwaysHit() const { return isAlwaysHit; }
@@ -17840,7 +17961,7 @@ index cd0b54a9..d90db85e 100644
  	bool HasSurfToAir()   const { return hasSurfToAir; }
  	bool HasSurfToLand()  const { return hasSurfToLand; }
  	bool HasSurfToWater() const { return hasSurfToWater; }
-@@ -326,6 +357,12 @@ public:
+@@ -326,6 +366,12 @@ public:
  	bool IsAssist() const { return isAssist; }
  	void SetIsRadar(bool value) { isRadar = value; }
  	bool IsRadar() const { return isRadar; }
@@ -17853,7 +17974,7 @@ index cd0b54a9..d90db85e 100644
  	void SetIsSonar(bool value) { isSonar = value ; }
  	bool IsSonar() const { return isSonar; }
  	void SetIsDecoy(bool value) { isDecoy = value; }
-@@ -339,6 +376,13 @@ public:
+@@ -339,6 +385,13 @@ public:
  	float GetSpeed()        const { return speed; }
  	float GetLosRadius()    const { return losRadius; }
  	float GetSonarRadius()  const { return sonarRadius; }
@@ -17867,7 +17988,7 @@ index cd0b54a9..d90db85e 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +391,39 @@ public:
+@@ -347,6 +400,39 @@ public:
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
  	float GetBuildTime()    const { return buildTime; }
@@ -17907,7 +18028,7 @@ index cd0b54a9..d90db85e 100644
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -411,6 +488,8 @@ private:
+@@ -411,11 +497,15 @@ private:
  	float waterThrDmg, waterThrMod;  // underwater enemy damage
  	ThrDmgArray thrDmgMod;  // mod by role
  	float aoe;  // radius
@@ -17916,7 +18037,14 @@ index cd0b54a9..d90db85e 100644
  	float power;  // ally max threat
  	float defThreat;  // enemy max threat
  	float minRange;
-@@ -435,6 +514,7 @@ private:
+ 	RangeType maxRangeType;
+ 	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> maxRange;
++	// apex: maxRange counting only weapons that fire at a unit on their own.
++	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> autoRange;
+ 	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
+ 	float shieldRadius;
+ 	float maxShield;
+@@ -435,6 +525,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -17924,7 +18052,7 @@ index cd0b54a9..d90db85e 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +558,7 @@ private:
+@@ -478,6 +569,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -17932,7 +18060,7 @@ index cd0b54a9..d90db85e 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +569,32 @@ private:
+@@ -488,11 +580,32 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;

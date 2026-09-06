@@ -15,6 +15,7 @@
 
 #include <unordered_set>
 #include <array>
+#include <algorithm>
 
 namespace springai {
 	class WeaponMount;
@@ -274,6 +275,14 @@ public:
 	float GetMinRange() const { return minRange; }
 	float GetMaxRange(RangeType type) const { return maxRange[static_cast<RangeT>(type)]; }
 	float GetMaxRange() const { return maxRange[static_cast<RangeT>(maxRangeType)]; }
+	// apex: "can this shoot a unit standing there", which GetMaxRange does not
+	// answer -- it is the max over EVERY weapon, so a nuke silo reads 72000 and
+	// an antinuke (a projectile-only interceptor) reads the same.
+	float GetAutoRange() const {
+		return std::max(std::max(autoRange[static_cast<RangeT>(RangeType::AIR)],
+								 autoRange[static_cast<RangeT>(RangeType::LAND)]),
+						autoRange[static_cast<RangeT>(RangeType::WATER)]);
+	}
 	int GetThreatRange(ThreatType type) const { return threatRange[static_cast<ThreatT>(type)]; }
 	float GetShieldRadius() const { return shieldRadius; }
 	float GetMaxShield() const { return maxShield; }
@@ -495,6 +504,8 @@ private:
 	float minRange;
 	RangeType maxRangeType;
 	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> maxRange;
+	// apex: maxRange counting only weapons that fire at a unit on their own.
+	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> autoRange;
 	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
 	float shieldRadius;
 	float maxShield;

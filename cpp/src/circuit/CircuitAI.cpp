@@ -1044,6 +1044,18 @@ int CCircuitAI::Update(int frame)
 				(unsigned long long)perfReachSweep, perfReachCalls,
 				(unsigned long long)perfOwnSweep, perfOwnCalls,
 				(unsigned long long)perfEcostSweep, perfEcostCalls);
+		// apex: the reach envelope itself, not its cost. worst is the deepest
+		// inside-an-enemy's-reach any caller was told it stood this minute, and
+		// maxReach the largest envelope in the cache: a strategic launcher
+		// leaking into it reads map-scale in both.
+		LOG("apex: perf reach worst=%.0f maxReach=%.0f def=%s n=%u",
+				(perfReachWorst < std::numeric_limits<float>::max()) ? perfReachWorst : 0.f,
+				perfReachMax,
+				(perfReachMaxDef != nullptr) ? perfReachMaxDef->GetDef()->GetName() : "-",
+				(unsigned)reachCache.size());
+		perfReachWorst = std::numeric_limits<float>::max();
+		perfReachMax = 0.f;
+		perfReachMaxDef = nullptr;
 		perfFeatSweep = 0; perfFeatCalls = 0;
 		perfReachSweep = 0; perfReachCalls = 0;
 		perfOwnSweep = 0; perfOwnCalls = 0;
@@ -2852,9 +2864,15 @@ void CCircuitAI::RebuildReachCache()
 		if ((edef == nullptr) || edef->IsAbleToFly()) {
 			continue;
 		}
-		const float reach = edef->GetMaxRange();
+		// Not GetMaxRange: that is the max over EVERY weapon, so a nuke silo
+		// enters the cache with 72000 of "reach" and vetoes the whole map.
+		const float reach = edef->GetAutoRange();
 		if (reach <= 0.f) {
 			continue;
+		}
+		if (reach > perfReachMax) {
+			perfReachMax = reach;
+			perfReachMaxDef = edef;
 		}
 		const springai::AIFloat3& p = e->GetPos();
 		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(),
@@ -2989,6 +3007,9 @@ float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS
 	}
 	if ((foeOut != nullptr) && (best != nullptr)) {
 		*foeOut = springai::AIFloat3(best->x, 0.f, best->z);
+	}
+	if (best != nullptr) {
+		perfReachWorst = std::min(perfReachWorst, worst);
 	}
 	return worst;
 }

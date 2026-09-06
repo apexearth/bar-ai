@@ -132,6 +132,10 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto
 			+ " hurtOk=" + gRzOkHurt + "/" + (gRzOkHurt + gRzVetoHurt)
 			+ " groundOk=" + gRzOkGround + "/" + (gRzOkGround + gRzVetoGround)
+			// Whether the cover branch of RezSiteOk is deciding anything at all.
+			// cover=0/N means GetAllyInflAt reads empty to us and the siting
+			// rule has silently fallen back to the old exclusion zone.
+			+ " cover=" + gRzOkCover + "/" + gRzSiteCalls
 			+ " pressed=" + gRzPressed
 			+ " noneHeld=" + gRzNoTask + "/" + gRzHeldPatrol + "/" + gRzHeldOther
 			+ " worst=#" + gRzWorstId + " " + formatFloat(gRzWorstS, "", 0, 0) + "s"
@@ -149,6 +153,8 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 		gRzVetoHurt = 0;
 		gRzOkGround = 0;
 		gRzVetoGround = 0;
+		gRzSiteCalls = 0;
+		gRzOkCover = 0;
 		gRzNoTask = 0;
 		gRzHeldPatrol = 0;
 		gRzHeldOther = 0;
