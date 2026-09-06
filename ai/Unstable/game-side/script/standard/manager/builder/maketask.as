@@ -130,6 +130,8 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " repair=" + gRzRule[5]
 			+ " idleRule=" + gRzRule[6] + " none=" + gRzRule[7]
 			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto
+			+ " hurtOk=" + gRzOkHurt + "/" + (gRzOkHurt + gRzVetoHurt)
+			+ " groundOk=" + gRzOkGround + "/" + (gRzOkGround + gRzVetoGround)
 			+ " pressed=" + gRzPressed
 			+ " noneHeld=" + gRzNoTask + "/" + gRzHeldPatrol + "/" + gRzHeldOther
 			+ " worst=#" + gRzWorstId + " " + formatFloat(gRzWorstS, "", 0, 0) + "s"
@@ -143,6 +145,10 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 		gRzGate = 0;
 		gRzPressed = 0;
 		gRzFrontVeto = 0;
+		gRzOkHurt = 0;
+		gRzVetoHurt = 0;
+		gRzOkGround = 0;
+		gRzVetoGround = 0;
 		gRzNoTask = 0;
 		gRzHeldPatrol = 0;
 		gRzHeldOther = 0;

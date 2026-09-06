@@ -237,9 +237,13 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// sending a constructor to it.
 	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
 		return null;
-	if (IsRezzer(unit) && !RezSiteOk(wreck)) {
-		++gRzFrontVeto;
-		return null;
+	if (IsRezzer(unit)) {
+		if (!RezSiteOk(wreck)) {
+			++gRzFrontVeto;
+			++gRzVetoGround;
+			return null;
+		}
+		++gRzOkGround;
 	}
 	// THE SWEEP EATS TREES. The area command vacuums every feature in the
 	// circle, and on a tree-heavy map a con sent for one metal rock then

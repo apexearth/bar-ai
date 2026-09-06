@@ -42,6 +42,35 @@ metal, the largest units-per-metal line item left; 1,221 of 6,239 before
 permit, divide the repair demand among all repair-capable build power, or teach
 the price that the engine charges per unit.
 
+The first of those three is RULED OUT on arithmetic. `have* = stream/cap`, and
+`cap` does not depend on reachability, so discounting the repair half by any
+fraction below 1 shrinks the fleet in EVERY minute: the repair half is 36% of
+the stream at minute 12 and 40% at 54. The crude accept share
+`(medic+repair)/(medic+repair+frontVeto)` is 1.00 until minute 9 and 0.03-0.10
+from minute 10 on, so the discount bites hardest across minutes 12-24 -- where
+apexearth asked for "4 or 5" and the curve gives 3.0 and 5.4. It would take
+minute 12 to ~1.5 bots and minute 24 to ~3.2 for ~3.5% of unit count, and add
+no realised metal, since the work it stops counting is work the fleet never
+did. Scoping the demand honestly is a statement that the VETO is wrong.
+
+`RezSiteOk` is `!InEnemyReach(site)` and nothing else (`BehindLine(site, true)`
+returns true on its first line): refuse any ground an enemy weapon covers,
+which is the whole battlefield. `docs/24-how-units-fight.md` asks the opposite
+-- rezbots "repair the screen mid-fight", "eat their wrecks... the battlefield
+is the richest reclaim on the map" -- and the survival rule he gave is
+POSITIONAL: stand behind allied units, "back away when enemy units are close to
+being within range". His file outranks the code, and the DLL guard agrees the
+fleet lives inside that envelope (`apex: rez-guard`: 56,633 pressed, 17,970
+forced walk-outs).
+
+There are FOUR `gRzFrontVeto` sites, not three -- `rules_rezzer.as` medic,
+salvage and repair, plus `reclaim.as` `EnqueueWreckReclaim` -- two on damaged
+units and two on ground, lumped into one counter, so the repair stream's own
+share was not measurable. `hurtOk=`/`groundOk=` on `apex: rez-time` now carry
+accepted/tested per stream, biased optimistic (a candidate beaten on distance
+is never tested, and those are the farther, more forward ones). One 16-AI hour
+turns the bound above into a census.
+
 ## 2026-09-05 — ENGINE COST WE CAUSE: 52k move orders/min, and two mechanisms behind them
 
 Not our frame time — the engine's, which is 30.93 ms of the 37.56 ms frame at

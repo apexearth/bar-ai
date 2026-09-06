@@ -68,6 +68,13 @@ int RezFleeWindow()
 // further toward the enemy than our units' lane; with no lane there is
 // nothing to be in front of.
 int gRzFrontVeto = 0;
+// The same refusals split by WHAT was refused and counted against what got
+// through, because the rez demand prices damaged units and wrecks as separate
+// streams and one lumped veto total cannot say which stream is unreachable.
+int gRzOkHurt = 0;
+int gRzVetoHurt = 0;
+int gRzOkGround = 0;
+int gRzVetoGround = 0;
 // Where our combat units actually stand: the forward-most tenth of them,
 // so one runaway raider is not the line. The lane point read 0.1-0.3 of
 // the way to the enemy while the wrecks lay at 0.6-1.0 (rez-inst set).
@@ -356,8 +363,10 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 				continue;
 			if (!RezSiteOk(at)) {
 				++gRzFrontVeto;
+				++gRzVetoHurt;
 				continue;
 			}
+			++gRzOkHurt;
 			bestDist = d;
 			@best = u;
 		}
@@ -434,9 +443,11 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 				if (spoil.x < 0.f)
 					spoil = stretch;
 				if (!RezSiteOk(spoil)) {
-				++gRzFrontVeto;
+					++gRzFrontVeto;
+					++gRzVetoGround;
 					continue;
 				}
+				++gRzOkGround;
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 				if (harvest !is null) {
@@ -533,8 +544,10 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 			continue;
 		if (!RezSiteOk(at)) {
 			++gRzFrontVeto;
+			++gRzVetoHurt;
 			continue;
 		}
+		++gRzOkHurt;
 		bestDist = dist;
 		@best = u;
 	}
