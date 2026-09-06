@@ -1667,7 +1667,15 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				} else if (staticCantReply && !sniper
 					&& (manager->GetCircuit()->GetTunable("apex_static_plain_attack", 1.f) > 0.f))
 				{
-					unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
+					// THE ROW'S OWN SLOT, not the target's feet. This overload
+					// has no position, so CmdFightTo went to enemy->GetPos() --
+					// ONE identical coordinate for every unit in the row, which
+					// is apexearth's "fight orders to single spots on the map
+					// (causing a blob of bunched up units)". The branch itself
+					// survives (its 2-14 / 5-10 A/B is recorded above); it just
+					// arrives on the arc instead of on top of the turret, and a
+					// static that cannot reply dies just as dead from standoff.
+					unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
 				} else {
 					unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
 				}

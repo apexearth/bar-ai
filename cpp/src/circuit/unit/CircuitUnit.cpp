@@ -571,6 +571,20 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 	if (enemy == nullptr) {
 		return;
 	}
+	// OUT OF REACH IS NOT A TARGET (apexearth: "set target commands against
+	// enemy units which are far out of range"). 5,622 of these went out in one
+	// 38-minute game; unit_target_on_the_move.lua discards any it cannot reach,
+	// so most were already inert -- but they showed on his screen and they lie
+	// to every consumer of tgtHeldId. ISquadTask::Attack re-issues each
+	// apex_standoff_s, so the target reapplies the moment we are in reach. The
+	// bar is this unit's OWN max weapon range, not the squad leader's.
+	if ((circuitDef != nullptr) && (circuitDef->GetMaxRange() > 0.f)) {
+		const AIFloat3& ePos = enemy->GetPos();
+		const AIFloat3& mPos = GetPos(manager != nullptr ? manager->GetCircuit()->GetLastFrame() : 0);
+		if (ePos.SqDistance2D(mPos) > SQUARE(circuitDef->GetMaxRange())) {
+			return;
+		}
+	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
 	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX, OrdSrc::SETTGT);
 	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});

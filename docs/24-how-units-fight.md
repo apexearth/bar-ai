@@ -575,3 +575,80 @@ only. A riot unit is bought to hold a place; nothing in it chases, and pricing
 it as the whole answer to raiders leaves the base with no interceptor. The
 mobile half is a fast cheap unit -- Pawn or Grunt -- and it is a separate
 demand, not the same one.
+
+## Range discipline, blobbing and target sanity (2026-09-06)
+
+Watching the 38-minute Comet Catcher loss, in his own words:
+
+- "our artillery walked into an enemy tower and died (3 of them). I've seen a
+  lot of our units 1 by 1 walk into some tower ranges dying."
+- "I saw a sniper walk up close to a mammoth (where did our distance keeping go
+  on our ranged units? did we regress or has it never worked well?)"
+- "We need to respond to incoming LRPC fire with shields."
+- "We should be doing more raids, not sure I see this happen..."
+- "I see squads of our armies being given fight orders to single spots on the
+  map (causing a blob of bunched up units) and then being given set target
+  commands against enemy units which are far out of range."
+- "Our targetting logic also sets some units to attack enemy aircraft which they
+  are ill-equipped to hit."
+
+Four rulings are implied and they are his, not ours:
+
+- **A long-ranged unit's standoff is its OWN weapon range, not the squad's.**
+  A sniper that closes to a Mammoth has been given someone else's ring.
+- **Arriving one at a time inside a tower's range is the failure**, not the
+  losing trade -- he is describing a trickle, so the fault is the destination
+  and the arrival, not the fight.
+- **A fight order to a single point is wrong on its face.** A squad is a
+  frontage, not a coordinate; the blob is the order's shape showing through.
+- **Never hand a unit a target it cannot hit** -- out of range, or in the air
+  when the weapon cannot reach air. He read both off the screen, so both are
+  visible to a watcher and neither needs a measurement to justify.
+
+"We survived until the late game and that was good."
+
+## Range, routes and turret zones (2026-09-06, answering four questions)
+
+Asked directly, after the 38-minute Comet Catcher loss:
+
+**On walking through enemy turret coverage:**
+
+> "If we're going to go through a turret zone we should do so with the intent on
+> killing it. Otherwise should walk around it - and if we're unexpectedly
+> getting shot at we should route further away."
+
+Three obligations, and note the third is a REACTION, not a plan: entering a
+turret's reach is a decision to kill that turret; any other route goes around;
+and taking unexpected fire is itself the signal to widen the route. Nothing in
+the code reacts to being shot at today -- only the destination is ever checked,
+never the path, and `travelAct->StateWait()` parks the threat-aware traveller
+for the whole engagement.
+
+**On long-range units:**
+
+> "Snipers, artillery, those types of units... they should always try to stay at
+> maximum range. Theres no need to get any closer as that would only put them in
+> greater danger. If they don't have vision/protection they shouldn't move
+> forward."
+
+MAXIMUM RANGE IS THE STANDOFF, always -- not a floor to be clamped down from.
+The second sentence is the ruling that was being violated: a blind long-range
+unit must NOT advance to acquire. `FighterTask.cpp` did the exact opposite,
+pulling an unsighted gun IN to its own sight radius (armart 710 -> 328, inside
+a 435-range LLT).
+
+**On guards answering contacts alone** -- he declined the question and named a
+better one:
+
+> "I wonder if sometimes we're treating the frontline like this, as part of our
+> base... Maybe we're sending guards out on the frontline which would be quite
+> silly. I'm unsure what to answer here because something seems off."
+
+So the question "should a guard answer alone" is the WRONG question until we
+know whether guards are being sent to the front at all. A guard belongs at a
+post; if the post set includes front positions, every answer about grouping is
+an answer about the wrong units. Investigate before proposing doctrine.
+
+**On shields:** remember an enemy LRPC after the sighting, but let it fade if
+nothing has shelled us -- not a permanent latch (which is what enemy AIR gets),
+because a plasma cannon can be killed.

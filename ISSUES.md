@@ -2125,3 +2125,64 @@ The fix is in `RebuildReachCache`, not in the callers: a weapon that cannot
 plausibly shoot a walking rez bot is not "reach". It needs a DLL rebuild and its
 own measurement, so it was deliberately left out of the `RezSiteOk` cover change
 of the same date rather than confounding it.
+
+## 2026-09-06 — the guard leash walks single units to mid-map, with no odds test
+
+apexearth, watching: "I wonder if sometimes we're treating the frontline like
+this, as part of our base... Maybe we're sending guards out on the frontline
+which would be quite silly."
+
+He is right that guards die on the front and wrong about why. Posts are NOT on
+the frontline: `guardposts.as:707` anchors each post to an asset via `WallPost`,
+pushed toward the enemy by at most `WALL_FWD_MAX = 160` elmo. Measured over
+`matches/20260906-183021-*` (38 min): front at fwd 0.23 (median of 226), posts
+at fwd 0.06 (median of 76 passes), and virtually every defender IS a posted
+guard (`unposted=20` across ~5,900 unit-samples).
+
+But defend deaths land at **fwd 0.39 median, 0.61 p75, 0.84 p90** -- 160 of 322
+beyond fwd 0.4, where only 24 of 289 of our finished buildings (8%) ever stood.
+`fight:defend` is 77,234 metal / 300 units, 35% of ALL losses and the largest
+bucket. The structure comparison is conservative: buildings that die skew to our
+most forward ones, so the real asset cloud is even more homeward.
+
+Two mechanisms, both in `CDefendTask::LeashPosts` (`DefendTask.cpp:792`):
+
+- **`local` (DefendTask.cpp:836-857) has no odds test at all.** One guard
+  attacks the nearest visible mobile enemy within `reach` and `continue`s out
+  before `need` is computed. `reach` = `PostReach` (`guardposts.as:251`) =
+  `speed * (assetLifetime + radarWarning)`, **clamped to 1500 elmo**, and it hit
+  that ceiling in 40 of 76 passes -- on this map, Δfwd 0.36-0.59. Fired in 312
+  of 359 passes, 1,928 unit-engagements; the `need` at those moments was median
+  66, p90 259, max 3,312. In 48 passes the pool was ONE unit and it went anyway.
+  The derivation is the bug: `reach` answers "could this guard get back before
+  its asset dies", then is reused as "this guard may pick this fight alone",
+  which it never established.
+- **The leash releases entirely when the fight is too big** (`:861-864`, "Reach
+  orders the answer, it does not veto it"): out-of-reach guards get `FAR_RANK`
+  but stay eligible. In **172 of 359 passes (48%) `held=0` and `sent_pw < need`**
+  -- the whole pool went out and still fell short. 510 unit-dispatches.
+
+NOT FIXED: both need a number that is apexearth's, not ours -- what ratio lets
+one guard take a contact alone, how far from its post `local` may reach (as
+opposed to the dispatch ordering), and whether the release in branch 2 should
+have a floor. He was asked on 2026-09-06 and declined the framing.
+
+Not new: `DefendTask.cpp:326` already records "73% of combat metal on DEFEND at
+fwd ~0.7" from an earlier watched game. `apex_defend_muster` / `apex_home_muster`
+were the mitigations and have not closed it.
+
+## 2026-09-06 — the squad arc is capped in ANGLE, so frontage shrinks with range
+
+`SquadTask.cpp:1203-1224`, `ARC_SPAN 0.9f`:
+`maxDelta = (M_PI * apex_arc_span) / row.size()`. Total arc LENGTH available to
+a row is `range * pi * 0.9 ~= range * 2.83` however many units are in it. A Pawn
+row (range 180, x0.9 standoff ~162) gets ~458 elmos of frontage; a Pawn's
+footprint is ~30. Past ~15 Pawns the row is shoulder to shoulder and one
+artillery shell covers it. The comment above the line reasons about the ANGLE
+being a half circle; splash damage cares about elmos.
+
+Measured same game: `apex: squadsize own n=4 avg=19.8 max=57`,
+`fightcensus defend=5/90/39700` -- 90 units in 5 tasks, one of 57.
+
+NOT FIXED: converting the cap from angle to frontage needs a minimum
+separation in elmos, which is a doctrine number and his call.

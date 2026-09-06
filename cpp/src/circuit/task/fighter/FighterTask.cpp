@@ -23,6 +23,8 @@
 #include "util/Utils.h"
 #include "Log.h"
 
+#include <cstring>  // std::strncpy for the standoff telemetry's name copies
+
 namespace circuit {
 
 // Retreat-source telemetry: four rounds of retreat-bleed fixes moved nothing
@@ -35,6 +37,52 @@ struct SRetreatSrc {
 	int lastLog = -1000000;
 };
 static SRetreatSrc sRetreatSrc;
+
+// STANDOFF TELEMETRY. Nothing anywhere logged the radius a unit was actually
+// sent to, so "artillery walked into a tower" could be proven as a path that
+// FIRED and never as a distance that was CHOSEN -- which is the whole of
+// docs/25. One line per 30s: the worst (smallest margin) engagement seen in
+// the window, so a single bad clamp cannot hide behind an average.
+struct SStandoff {
+	int n = 0, blind = 0, vsStatic = 0, inside = 0;
+	float worstMargin = 1e6f;
+	// COPIES, not the wrapper's pointer: UnitDef::GetName() hands back a
+	// const char* into wrapper-owned storage, and this outlives 30s of frames.
+	char worstOwn[64] = "-";
+	char worstFoe[64] = "-";
+	float worstRange = 0.f, worstOwnMax = 0.f, worstFoeMax = 0.f;
+	int lastLog = -1000000;
+};
+
+static void StandoffCopyName(char* dst, size_t cap, const char* src)
+{
+	if (src == nullptr) {
+		dst[0] = '-';
+		dst[1] = '\0';
+		return;
+	}
+	std::strncpy(dst, src, cap - 1);
+	dst[cap - 1] = '\0';
+}
+static SStandoff sStandoff;
+
+static void LogStandoff(CCircuitAI* circuit)
+{
+	if (circuit->GetLastFrame() < sStandoff.lastLog + FRAMES_PER_SEC * 30) {
+		return;
+	}
+	sStandoff.lastLog = circuit->GetLastFrame();
+	circuit->LOG("apex: standoff n=%d blind=%d vsStatic=%d inside=%d"
+			" worst=%s r=%.0f own=%.0f vs %s foe=%.0f margin=%.0f",
+			sStandoff.n, sStandoff.blind, sStandoff.vsStatic, sStandoff.inside,
+			sStandoff.worstOwn, sStandoff.worstRange, sStandoff.worstOwnMax,
+			sStandoff.worstFoe, sStandoff.worstFoeMax, sStandoff.worstMargin);
+	sStandoff.n = sStandoff.blind = sStandoff.vsStatic = sStandoff.inside = 0;
+	sStandoff.worstMargin = 1e6f;
+	StandoffCopyName(sStandoff.worstOwn, sizeof(sStandoff.worstOwn), nullptr);
+	StandoffCopyName(sStandoff.worstFoe, sizeof(sStandoff.worstFoe), nullptr);
+	sStandoff.worstRange = sStandoff.worstOwnMax = sStandoff.worstFoeMax = 0.f;
+}
 
 static void LogRetreatSrc(CCircuitAI* circuit)
 {
@@ -701,7 +749,35 @@ void IFighterTask::AttackEnemy(CCircuitUnit* unit, CEnemyInfo* enemy, const int 
 		}
 	}
 	if (!seesTarget) {
-		range = std::min(range, cdef->GetLosRadius() * rangeMod);
+		// A FLOOR, NEVER A CEILING (apexearth: "snipers, artillery... should
+		// always try to stay at maximum range... If they don't have
+		// vision/protection they shouldn't move forward"). As a std::min this
+		// DISCARDED the static-standoff floor set two lines above and walked a
+		// blind gun in to its own sight radius. Byte-for-byte the shape the
+		// squad path already carries; only this single-unit copy stayed
+		// inverted.
+		range = std::max(range, std::min(cdef->GetMaxRange(), cdef->GetLosRadius()) * rangeMod);
+	}
+	// margin: how far outside the target's own reach we chose to stand. It goes
+	// NEGATIVE exactly when we ordered a unit inside the thing shooting at it.
+	{
+		const float foeMax = (edef != nullptr) ? edef->GetMaxRange() : 0.f;
+		const float margin = range - foeMax;
+		++sStandoff.n;
+		if (!seesTarget) ++sStandoff.blind;
+		if (isStatic) ++sStandoff.vsStatic;
+		if (margin < 0.f) ++sStandoff.inside;
+		if ((edef != nullptr) && (margin < sStandoff.worstMargin)) {
+			sStandoff.worstMargin = margin;
+			StandoffCopyName(sStandoff.worstOwn, sizeof(sStandoff.worstOwn),
+					cdef->GetDef()->GetName());
+			StandoffCopyName(sStandoff.worstFoe, sizeof(sStandoff.worstFoe),
+					edef->GetDef()->GetName());
+			sStandoff.worstRange = range;
+			sStandoff.worstOwnMax = cdef->GetMaxRange();
+			sStandoff.worstFoeMax = foeMax;
+		}
+		LogStandoff(circuit);
 	}
 	AIFloat3 newPos(tPos.x + range * dir.x, tPos.y, tPos.z + range * dir.z);
 	CTerrainManager::CorrectPosition(newPos);

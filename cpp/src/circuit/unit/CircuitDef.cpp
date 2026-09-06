@@ -508,7 +508,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			dps += extraDmg * wd->GetSalvoSize() / reloadTime * scale;
 		}
 
-		int weaponCat = mount->GetOnlyTargetCategory();
+		// BAR SAYS "DO NOT SHOOT AT AIR" WITH badtargetcategory, not by leaving
+		// VTOL out of onlytargetcategory: armpw declares onlytargetcategory
+		// "NOTSUB" (which CONTAINS VTOL) and badtargetcategory "VTOL". Reading
+		// only the first made a 180-range cannon bot surface-to-air, and the
+		// squad's air filter tests the LEADER's def -- so one Pawn in front
+		// pointed the whole row at a bomber it cannot reach.
+		int weaponCat = mount->GetOnlyTargetCategory() & ~mount->GetBadTargetCategory();
 		targetCategory |= weaponCat;
 
 		const float wdAoe = wd->GetAreaOfEffect();
@@ -519,11 +525,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 //		it = customParams.find("truerange");
 		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
 
-		isAlwaysHit |= ((wt == "Cannon") || (wt == "DGun") || (wt == "EmgCannon") || (wt == "Flame") ||
-				(wt == "LaserCannon") || (wt == "AircraftBomb")) && (projectileSpeed * FRAMES_PER_SEC >= .8f * range);  // Cannons with fast projectiles
-		isAlwaysHit |= (wt == "BeamLaser") || (wt == "LightningCannon") || (wt == "Rifle") ||  // Instant-hit
-				(((wt == "MissileLauncher") || (wt == "StarburstLauncher") || ((wt == "TorpedoLauncher") && wd->IsSubMissile())) && wd->IsTracks());  // Missiles
-		const bool isAirWeapon = isAlwaysHit && (range > 150.f);
+		// PER WEAPON, resolving the FIXME on the member: isAlwaysHit accumulates
+		// with |= across the whole loop, so once ANY weapon was instant-hit every
+		// LATER weapon over 150 range counted as an air weapon whatever its own
+		// type or projectile speed. The member keeps its old meaning (ThreatMap
+		// reads it as "this def has an always-hit weapon"); only the air test
+		// below becomes per-weapon, which is what it always claimed to be.
+		const bool wAlwaysHit =
+				((((wt == "Cannon") || (wt == "DGun") || (wt == "EmgCannon") || (wt == "Flame") ||
+				(wt == "LaserCannon") || (wt == "AircraftBomb")) && (projectileSpeed * FRAMES_PER_SEC >= .8f * range))  // Cannons with fast projectiles
+				|| (wt == "BeamLaser") || (wt == "LightningCannon") || (wt == "Rifle")  // Instant-hit
+				|| (((wt == "MissileLauncher") || (wt == "StarburstLauncher") || ((wt == "TorpedoLauncher") && wd->IsSubMissile())) && wd->IsTracks()));  // Missiles
+		isAlwaysHit |= wAlwaysHit;
+		const bool isAirWeapon = wAlwaysHit && (range > 150.f);
 		canSurfTargetAir |= isAirWeapon;
 
 		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
