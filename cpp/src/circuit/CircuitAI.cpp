@@ -1024,6 +1024,27 @@ int CCircuitAI::Update(int frame)
 		perfOwnDefSweep = 0; perfOwnDefCalls = 0;
 		perfOwnStrSweep = 0; perfOwnStrCalls = 0;
 		perfOwnDmgSweep = 0; perfOwnDmgCalls = 0;
+		// apex: what we cost the ENGINE, not ourselves -- every order it has to
+		// insert, run AllowCommand over, and (when the point moved at all)
+		// re-path. rep* is the same unit being told the same thing inside 3s.
+		// dupable = moves a re-send provably could not change; DROPPED only when
+		// apex_order_dedupe is on, counted either way, so the number is what
+		// turning it on would buy rather than what it bought.
+		LOG("apex: orders t=%i move=%u fight=%u patrol=%u attack=%u target=%u dupable=%u",
+				teamId, ordSent[0], ordSent[1], ordSent[2], ordSent[3], ordSent[4], ordSup[0]);
+		LOG("apex: order-rep t=%i move same=%u lt8=%u lt32=%u lt128=%u far=%u"
+				" | fight=%u attack=%u target=%u",
+				teamId, ordRep[0][0], ordRep[0][1], ordRep[0][2], ordRep[0][3], ordRep[0][4],
+				ordRep[1][0] + ordRep[1][1] + ordRep[1][2] + ordRep[1][3] + ordRep[1][4],
+				ordRep[3][0] + ordRep[3][1] + ordRep[3][2] + ordRep[3][3] + ordRep[3][4],
+				ordRep[4][0]);
+		for (int k = 0; k < 5; ++k) {
+			ordSent[k] = 0;
+			ordSup[k] = 0;
+			for (int b = 0; b < 5; ++b) {
+				ordRep[k][b] = 0;
+			}
+		}
 		scheduler->LogJobPerf(this);
 		perfAllyUs = 0;
 		perfJobsUs = 0;
@@ -3096,6 +3117,18 @@ void CCircuitAI::NoteSniperOrder(CCircuitDef::SniperOrder kind)
 			teamId, lastFrame, sniperOrders[0], sniperOrders[1], sniperOrders[2], sniperOrders[3]);
 	for (int& n : sniperOrders) {
 		n = 0;
+	}
+}
+
+void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed)
+{
+	if (suppressed) {
+		++ordSup[kind];
+	} else {
+		++ordSent[kind];
+	}
+	if (bucket >= 0) {
+		++ordRep[kind][bucket];
 	}
 }
 

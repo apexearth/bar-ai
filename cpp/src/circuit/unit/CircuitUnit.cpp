@@ -364,9 +364,68 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 	unit->ExecuteCustomCommand(CMD_REMOVE, params, options);
 }
 
+// Records the order, and marks it a suppression candidate when re-sending it
+// provably changes nothing: bit-identical to the last order of its kind, sent
+// with nothing else in between, and not shortening or letting the command's
+// window lapse (the refresh point is half the command's OWN timeout).
+// Bit-identical is the bar because CGroundMoveType::IsMovingTowards -- the
+// guard CMobileCAI::ExecuteMove puts in front of SetGoal -- is exact float
+// equality on goalPos; a destination off by a fraction of an elmo re-paths.
+// Candidates are counted either way and dropped only under apex_order_dedupe.
+bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout)
+{
+	if (manager == nullptr) {
+		return false;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	SOrdShadow& s = ordLast[static_cast<int>(kind)];
+	const int gap = frame - s.frame;
+
+	int bucket = -1;
+	bool suppress = false;
+	// Only while the previous one is plausibly still running: every re-issue
+	// loop in this AI ticks at 1s, so 3s covers them and excludes a new journey.
+	if ((gap >= 0) && (gap <= FRAMES_PER_SEC * 3) && (s.opts == options) && (s.id == id)) {
+		const float dx = pos.x - s.x;
+		const float dz = pos.z - s.z;
+		const float sq = dx * dx + dz * dz;
+		bucket = (sq <= 0.f) ? 0
+				: (sq < SQUARE(float(SQUARE_SIZE))) ? 1
+				: (sq < SQUARE(float(SQUARE_SIZE * 4))) ? 2
+				: (sq < SQUARE(float(SQUARE_SIZE * 16))) ? 3 : 4;
+		suppress = (bucket == 0) && (s.seq == ordSeq) && (timeout >= s.timeout)
+				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
+	}
+	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress);
+	// Counted whether or not it is dropped, so one run with the switch OFF says
+	// exactly what turning it on would buy. Default off: the engine's own move
+	// state is provably unchanged (above), but the dropped order also skips the
+	// extra UnitIdle the engine raises when it finishes a move the unit has
+	// already arrived at, and that event stream is not proven identical.
+	if (suppress) {
+		suppress = circuit->GetTunable("apex_order_dedupe", 0.f) > 0.f;
+	}
+
+	if (!suppress) {  // a suppressed order leaves the standing one in place
+		s.x = pos.x;
+		s.z = pos.z;
+		s.id = id;
+		s.opts = options;
+		s.frame = frame;
+		s.timeout = timeout;
+		++ordSeq;
+		s.seq = ordSeq;
+	}
+	return suppress;
+}
+
 void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
+		return;
+	}
+	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout)) {
 		return;
 	}
 	NoteAct("mov", timeout);
@@ -407,6 +466,7 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
+	NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout);
 	unit->Fight(pos, options, timeout);
 }
 
@@ -416,6 +476,7 @@ void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
 		return;
 	}
 	assert(utils::is_in_map(pos));
+	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout);
 	unit->PatrolTo(pos, options, timeout);
 }
 
@@ -429,6 +490,7 @@ void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeo
 		return;
 	}
 	assert(utils::is_in_map(pos));
+	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout);
 	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
@@ -465,6 +527,10 @@ void CCircuitUnit::CmdAttack(CEnemyInfo* enemy, short options, int timeout)
 		return;
 	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::ATTACK);
+	// Zero position on purpose: an attack order names a UNIT, so the enemy id
+	// alone decides whether this repeats the last one. The ground variant above
+	// names a point, and there the distance buckets are the measurement.
+	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout);
 	unit->Attack(enemy->GetUnit(), options, timeout);
 }
 
@@ -500,6 +566,7 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 		return;
 	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
+	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX);
 	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
 }
 

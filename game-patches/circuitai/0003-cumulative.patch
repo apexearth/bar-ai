@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..e136ca7e 100644
+index aeea9339..8ef5c8bc 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -47,7 +47,33 @@ index aeea9339..e136ca7e 100644
  
  namespace circuit {
  
-@@ -378,6 +389,11 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+@@ -207,6 +218,25 @@ void CCircuitAI::MobileSlave(int newTeamId)
+ 
+ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+ {
++	// apex: every engine event that ISN'T EVENT_UPDATE runs outside AiFrame's
++	// clock, so UnitCreated/Damaged/Destroyed and EnemyEnterLOS were being
++	// counted as engine time by every frame budget we have taken. Nanoseconds,
++	// because a single handler rounds to zero microseconds; RAII, because
++	// EVENT_INIT returns from inside the switch.
++	struct SEvtClock {
++		CCircuitAI* self;
++		bool on;
++		std::chrono::steady_clock::time_point t0;
++		~SEvtClock() {
++			if (!on) {
++				return;
++			}
++			self->perfEvtNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
++					std::chrono::steady_clock::now() - t0).count();
++			++self->perfEvtCalls;
++		}
++	} evtClock{this, topic != EVENT_UPDATE, std::chrono::steady_clock::now()};
++
+ 	int ret = ERROR_UNKNOWN;
+ 
+ 	switch (topic) {
+@@ -378,6 +408,11 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
  			struct SEnemyDestroyedEvent* evt = (struct SEnemyDestroyedEvent*)data;
  			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
  			if (enemy != nullptr) {
@@ -59,7 +85,7 @@ index aeea9339..e136ca7e 100644
  				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
  				ret = 0;
  			} else {
-@@ -602,6 +618,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -602,6 +637,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  //		return ERROR_INIT;
  //	}
  
@@ -77,7 +103,7 @@ index aeea9339..e136ca7e 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -700,7 +727,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -700,7 +746,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  				}
  #endif
  			});
@@ -86,7 +112,7 @@ index aeea9339..e136ca7e 100644
  #if 0
  		} else if (allyTeam->GetAliveSize() > 2) {
  			// FIXME: Follower AI shares all its mobile non-builder-role units to Leader AI.
-@@ -714,7 +741,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -714,7 +760,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  					scheduler->RemoveJob(mergeTask);
  				}
  			});
@@ -95,7 +121,7 @@ index aeea9339..e136ca7e 100644
  #endif
  		}
  	}
-@@ -775,6 +802,7 @@ int CCircuitAI::Release(int reason)
+@@ -775,6 +821,7 @@ int CCircuitAI::Release(int reason)
  	enemyManager = nullptr;
  	mapManager = nullptr;
  
@@ -103,7 +129,7 @@ index aeea9339..e136ca7e 100644
  	for (CCircuitUnit* unit : actionUnits) {
  		if (unit->IsDead()) {  // instance is not in teamUnits
  			delete unit;
-@@ -785,7 +813,14 @@ int CCircuitAI::Release(int reason)
+@@ -785,7 +832,14 @@ int CCircuitAI::Release(int reason)
  		delete kv.second;
  	}
  	teamUnits.clear();
@@ -118,7 +144,7 @@ index aeea9339..e136ca7e 100644
  	for (auto& kv : enemyInfos) {
  		delete kv.second;
  	}
-@@ -807,9 +842,24 @@ int CCircuitAI::Release(int reason)
+@@ -807,9 +861,24 @@ int CCircuitAI::Release(int reason)
  	return 0;  // signaling: OK
  }
  
@@ -143,7 +169,7 @@ index aeea9339..e136ca7e 100644
  	lastFrame = frame;
  	if (isResigned) {
  		Release(RELEASE_RESIGN);
-@@ -832,16 +882,28 @@ int CCircuitAI::Update(int frame)
+@@ -832,16 +901,28 @@ int CCircuitAI::Update(int frame)
  		}
  	}
  
@@ -172,7 +198,7 @@ index aeea9339..e136ca7e 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +912,139 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +931,164 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -242,10 +268,14 @@ index aeea9339..e136ca7e 100644
 +				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
 +				perfFrameMaxUs / 1000.f);
 +		const uint64_t perfAccounted = perfAllyUs + perfJobsUs + perfActUs + perfScrUs;
-+		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f scrMs=%.1f otherMs=%.1f",
++		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f scrMs=%.1f otherMs=%.1f"
++				" evtMs=%.1f/%u",
 +				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
 +				perfScrUs / 1000.f,
-+				(perfFrameUs > perfAccounted) ? (perfFrameUs - perfAccounted) / 1000.f : 0.f);
++				(perfFrameUs > perfAccounted) ? (perfFrameUs - perfAccounted) / 1000.f : 0.f,
++				perfEvtNs / 1000000.f, perfEvtCalls);
++		perfEvtNs = 0;
++		perfEvtCalls = 0;
 +		// apex: how much WORK the O(n) helpers did, not how long they took --
 +		// a visited count that grows faster than the unit count names the
 +		// quadratic helper without a clock in the hot loop.
@@ -265,6 +295,27 @@ index aeea9339..e136ca7e 100644
 +		perfOwnDefSweep = 0; perfOwnDefCalls = 0;
 +		perfOwnStrSweep = 0; perfOwnStrCalls = 0;
 +		perfOwnDmgSweep = 0; perfOwnDmgCalls = 0;
++		// apex: what we cost the ENGINE, not ourselves -- every order it has to
++		// insert, run AllowCommand over, and (when the point moved at all)
++		// re-path. rep* is the same unit being told the same thing inside 3s.
++		// dupable = moves a re-send provably could not change; DROPPED only when
++		// apex_order_dedupe is on, counted either way, so the number is what
++		// turning it on would buy rather than what it bought.
++		LOG("apex: orders t=%i move=%u fight=%u patrol=%u attack=%u target=%u dupable=%u",
++				teamId, ordSent[0], ordSent[1], ordSent[2], ordSent[3], ordSent[4], ordSup[0]);
++		LOG("apex: order-rep t=%i move same=%u lt8=%u lt32=%u lt128=%u far=%u"
++				" | fight=%u attack=%u target=%u",
++				teamId, ordRep[0][0], ordRep[0][1], ordRep[0][2], ordRep[0][3], ordRep[0][4],
++				ordRep[1][0] + ordRep[1][1] + ordRep[1][2] + ordRep[1][3] + ordRep[1][4],
++				ordRep[3][0] + ordRep[3][1] + ordRep[3][2] + ordRep[3][3] + ordRep[3][4],
++				ordRep[4][0]);
++		for (int k = 0; k < 5; ++k) {
++			ordSent[k] = 0;
++			ordSup[k] = 0;
++			for (int b = 0; b < 5; ++b) {
++				ordRep[k][b] = 0;
++			}
++		}
 +		scheduler->LogJobPerf(this);
 +		perfAllyUs = 0;
 +		perfJobsUs = 0;
@@ -312,7 +363,7 @@ index aeea9339..e136ca7e 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,10 +1321,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,10 +1365,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -332,7 +383,7 @@ index aeea9339..e136ca7e 100644
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
  	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
-@@ -1147,6 +1345,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1389,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -340,7 +391,7 @@ index aeea9339..e136ca7e 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1365,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1409,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -380,7 +431,7 @@ index aeea9339..e136ca7e 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1508,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1552,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -388,7 +439,7 @@ index aeea9339..e136ca7e 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1684,12 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1728,12 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -402,7 +453,7 @@ index aeea9339..e136ca7e 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,6 +1702,7 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,6 +1746,7 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -410,7 +461,7 @@ index aeea9339..e136ca7e 100644
  	teamUnits.erase(unit->GetId());
  	unit->GetCircuitDef()->Dec();
  
-@@ -1485,7 +1712,1087 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1756,1198 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1392,6 +1443,8 @@ index aeea9339..e136ca7e 100644
 +// this once per rez bot six times a second while site safety runs it per
 +// candidate site. Approximate, not exact: an enemy registered part way through
 +// a frame is seen by the callers after it rather than before.
++static constexpr size_t REACH_LEAF = 8;  // below this the tree costs more than the scan
++
 +void CCircuitAI::RebuildReachCache()
 +{
 +	if (reachCacheFrame == lastFrame) {
@@ -1414,7 +1467,110 @@ index aeea9339..e136ca7e 100644
 +			continue;
 +		}
 +		const springai::AIFloat3& p = e->GetPos();
-+		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed()});
++		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(),
++				(uint32_t)reachCache.size()});
++	}
++	reachNodes.clear();
++	if (reachCache.size() > REACH_LEAF) {
++		reachNodes.reserve(reachCache.size() / 2 + 2);  // leaves hold >= 4, so <= n/2 nodes
++		BuildReachTree(0, (int32_t)reachCache.size());
++	}
++}
++
++// apex: median-split BVH over the cache, rebuilt with it, because the flattened
++// cache still cost a pass over EVERY enemy per call and `perf sweep reach` was
++// the largest counter in the log.
++//
++// A node carries its box plus the largest reach and speed below it, so
++// `boxMinDist - (maxReach + maxSpeed * reactS)` is a lower bound on every slack
++// inside and a subtree that cannot beat the running best is skipped whole.
++// Answers stay IDENTICAL, not approximate: the bound prunes only what it proves
++// cannot win, and each enemy keeps its unsorted index so an exact tie returns
++// the same enemy the linear scan did.
++int32_t CCircuitAI::BuildReachTree(int32_t first, int32_t count)
++{
++	const int32_t self = (int32_t)reachNodes.size();
++	reachNodes.emplace_back();
++	float minx = std::numeric_limits<float>::max();
++	float minz = minx;
++	float maxx = -minx;
++	float maxz = -minx;
++	float maxReach = 0.f;
++	float maxSpeed = 0.f;
++	for (int32_t i = first; i < first + count; ++i) {
++		const SReachEnemy& e = reachCache[i];
++		minx = std::min(minx, e.x);  maxx = std::max(maxx, e.x);
++		minz = std::min(minz, e.z);  maxz = std::max(maxz, e.z);
++		maxReach = std::max(maxReach, e.reach);
++		maxSpeed = std::max(maxSpeed, e.speed);
++	}
++	{
++		SReachNode& nd = reachNodes[self];
++		nd.minx = minx;  nd.minz = minz;  nd.maxx = maxx;  nd.maxz = maxz;
++		nd.maxReach = maxReach;  nd.maxSpeed = maxSpeed;
++		nd.first = first;  nd.count = count;  nd.right = -1;
++	}
++	if (count <= (int32_t)REACH_LEAF) {
++		return self;
++	}
++	const int32_t half = count / 2;
++	const auto mid = reachCache.begin() + first + half;
++	if ((maxx - minx) >= (maxz - minz)) {
++		std::nth_element(reachCache.begin() + first, mid, reachCache.begin() + first + count,
++				[](const SReachEnemy& a, const SReachEnemy& b) { return a.x < b.x; });
++	} else {
++		std::nth_element(reachCache.begin() + first, mid, reachCache.begin() + first + count,
++				[](const SReachEnemy& a, const SReachEnemy& b) { return a.z < b.z; });
++	}
++	BuildReachTree(first, half);  // lands at self + 1
++	const int32_t r = BuildReachTree(first + half, count - half);
++	reachNodes[self].count = 0;
++	reachNodes[self].right = r;
++	return self;
++}
++
++float CCircuitAI::ReachNodeMinDist(int32_t ni, float px, float pz) const
++{
++	const SReachNode& nd = reachNodes[ni];
++	const float dx = std::max(0.f, std::max(nd.minx - px, px - nd.maxx));
++	const float dz = std::max(0.f, std::max(nd.minz - pz, pz - nd.maxz));
++	return sqrtf(dx * dx + dz * dz);
++}
++
++void CCircuitAI::ReachQuery(int32_t ni, float px, float pz, float reactS, float minDist,
++		float& worst, uint32_t& bestIdx, const SReachEnemy*& best)
++{
++	const SReachNode& nd = reachNodes[ni];
++	// Strict: an equal bound may still hide a tie with a lower index, and the
++	// tie-break is what keeps the answer bit-identical to the old scan.
++	if (minDist - (nd.maxReach + nd.maxSpeed * reactS) > worst) {
++		return;
++	}
++	if (nd.count > 0) {
++		perfReachSweep += nd.count;
++		for (int32_t i = nd.first; i < nd.first + nd.count; ++i) {
++			const SReachEnemy& e = reachCache[i];
++			const float dx = px - e.x;
++			const float dz = pz - e.z;
++			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
++			if ((slack < worst) || ((slack == worst) && (e.idx < bestIdx))) {
++				worst = slack;
++				bestIdx = e.idx;
++				best = &e;
++			}
++		}
++		return;
++	}
++	const int32_t l = ni + 1;
++	const int32_t r = nd.right;
++	const float dl = ReachNodeMinDist(l, px, pz);
++	const float dr = ReachNodeMinDist(r, px, pz);
++	if (dl <= dr) {
++		ReachQuery(l, px, pz, reactS, dl, worst, bestIdx, best);
++		ReachQuery(r, px, pz, reactS, dr, worst, bestIdx, best);
++	} else {
++		ReachQuery(r, px, pz, reactS, dr, worst, bestIdx, best);
++		ReachQuery(l, px, pz, reactS, dl, worst, bestIdx, best);
 +	}
 +}
 +
@@ -1422,18 +1578,24 @@ index aeea9339..e136ca7e 100644
 +		springai::AIFloat3* foeOut)
 +{
 +	RebuildReachCache();
-+	perfReachSweep += reachCache.size();
 +	++perfReachCalls;
 +	float worst = std::numeric_limits<float>::max();
++	uint32_t bestIdx = std::numeric_limits<uint32_t>::max();
 +	const SReachEnemy* best = nullptr;
-+	for (const SReachEnemy& e : reachCache) {
-+		const float dx = pos.x - e.x;
-+		const float dz = pos.z - e.z;
-+		const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
-+		if (slack < worst) {
-+			worst = slack;
-+			best = &e;
++	if (reachNodes.empty()) {  // too few to pay for the tree
++		perfReachSweep += reachCache.size();
++		for (const SReachEnemy& e : reachCache) {
++			const float dx = pos.x - e.x;
++			const float dz = pos.z - e.z;
++			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
++			if (slack < worst) {
++				worst = slack;
++				best = &e;
++			}
 +		}
++	} else {
++		ReachQuery(0, pos.x, pos.z, reactS, ReachNodeMinDist(0, pos.x, pos.z),
++				worst, bestIdx, best);
 +	}
 +	if ((foeOut != nullptr) && (best != nullptr)) {
 +		*foeOut = springai::AIFloat3(best->x, 0.f, best->z);
@@ -1499,7 +1661,7 @@ index aeea9339..e136ca7e 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +2951,20 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3106,32 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -1517,10 +1679,22 @@ index aeea9339..e136ca7e 100644
 +	}
 +}
 +
++void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed)
++{
++	if (suppressed) {
++		++ordSup[kind];
++	} else {
++		++ordSent[kind];
++	}
++	if (bucket >= 0) {
++		++ordRep[kind][bucket];
++	}
++}
++
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3072,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3239,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -1535,7 +1709,7 @@ index aeea9339..e136ca7e 100644
  
  void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f403..c7c92337 100644
+index b4f4f403..b430c053 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,6 +16,7 @@
@@ -1847,17 +2021,20 @@ index b4f4f403..c7c92337 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -268,6 +521,9 @@ public:
+@@ -268,6 +521,12 @@ public:
  	CGameAttribute* GetGameAttribute() const { return gameAttribute.get(); }
  	const std::shared_ptr<CScheduler>& GetScheduler() { return scheduler; }
  	int GetLastFrame()    const { return lastFrame; }
 +	// apex: census of engine orders sent to sniper-class units, by kind,
 +	// logged every 30s so the move-only rule for that class is measurable.
 +	void NoteSniperOrder(CCircuitDef::SniperOrder kind);
++	// apex: census of every engine order this AI sends, by kind, with the ones
++	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
++	void NoteOrder(int kind, int bucket, bool suppressed);
  	int GetSkirmishAIId() const { return skirmishAIId; }
  	int GetTeamId()       const { return teamId; }
  	int GetAllyTeamId()   const { return allyTeamId; }
-@@ -317,6 +573,47 @@ private:
+@@ -317,6 +576,71 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -1873,6 +2050,10 @@ index b4f4f403..c7c92337 100644
 +	uint64_t perfJobsUs = 0;
 +	uint64_t perfActUs = 0;
 +	uint64_t perfScrUs = 0;   // script->Update(): AngelScript, not unattributed C++
++	// apex: the engine events, which run OUTSIDE AiFrame -- not part of the
++	// split's total, and until now counted as engine time. See HandleGameEvent.
++	uint64_t perfEvtNs = 0;
++	unsigned perfEvtCalls = 0;
 +	// apex: a census, not a clock -- how many elements the O(n) helpers walked
 +	// this minute. Increments only, so measuring costs nothing; a helper whose
 +	// visited count grows faster than the unit count is the quadratic one.
@@ -1889,14 +2070,34 @@ index b4f4f403..c7c92337 100644
 +	uint64_t perfOwnDmgSweep = 0;    unsigned perfOwnDmgCalls = 0;
 +	mutable uint64_t perfEcostSweep = 0;  // enemies visited by GetEnemyCostAt
 +	mutable unsigned perfEcostCalls = 0;
++	// apex: orders sent, orders dropped as provable no-ops, and the repeats
++	// bucketed by how far the commanded point moved: [0] bit-identical,
++	// [1] < SQUARE_SIZE (the goal radius our move orders carry), [2] < 4,
++	// [3] < 16 squares, [4] further. Everything past [0] re-paths.
++	unsigned ordSent[5] = {0, 0, 0, 0, 0};
++	unsigned ordSup[5] = {0, 0, 0, 0, 0};
++	unsigned ordRep[5][5] = {{0}};
 +	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.
 +	std::vector<SFeatDefInfo> featDefInfo;
 +	int metalResId = -1;
 +	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
 +	struct SReachEnemy {
 +		float x, z, reach, speed;
++		uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
 +	};
 +	std::vector<SReachEnemy> reachCache;
++	// apex: bounding-volume tree over reachCache, rebuilt with it. See BuildReachTree.
++	struct SReachNode {
++		float minx, minz, maxx, maxz;
++		float maxReach, maxSpeed;  // envelope bound for everything below
++		int32_t first, count;      // count > 0: leaf range; count == 0: inner node
++		int32_t right;             // inner: right child; the left child is self + 1
++	};
++	std::vector<SReachNode> reachNodes;
++	int32_t BuildReachTree(int32_t first, int32_t count);
++	float ReachNodeMinDist(int32_t ni, float px, float pz) const;
++	void ReachQuery(int32_t ni, float px, float pz, float reactS, float minDist,
++			float& worst, uint32_t& bestIdx, const SReachEnemy*& best);
 +	int reachCacheFrame = -1;
 +	int squadDiagNextLog = 0;
 +	int ghostPurgeNext = 0;
@@ -16966,7 +17167,7 @@ index cd0b54a9..d90db85e 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be4..5a9067f9 100644
+index 2f597be4..21546b3a 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -17114,11 +17315,72 @@ index 2f597be4..5a9067f9 100644
  }
  
  /*
-@@ -285,35 +366,108 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -283,37 +364,176 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+ 	unit->ExecuteCustomCommand(CMD_REMOVE, params, options);
+ }
  
++// Records the order, and marks it a suppression candidate when re-sending it
++// provably changes nothing: bit-identical to the last order of its kind, sent
++// with nothing else in between, and not shortening or letting the command's
++// window lapse (the refresh point is half the command's OWN timeout).
++// Bit-identical is the bar because CGroundMoveType::IsMovingTowards -- the
++// guard CMobileCAI::ExecuteMove puts in front of SetGoal -- is exact float
++// equality on goalPos; a destination off by a fraction of an elmo re-paths.
++// Candidates are counted either way and dropped only under apex_order_dedupe.
++bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout)
++{
++	if (manager == nullptr) {
++		return false;
++	}
++	CCircuitAI* circuit = manager->GetCircuit();
++	const int frame = circuit->GetLastFrame();
++	SOrdShadow& s = ordLast[static_cast<int>(kind)];
++	const int gap = frame - s.frame;
++
++	int bucket = -1;
++	bool suppress = false;
++	// Only while the previous one is plausibly still running: every re-issue
++	// loop in this AI ticks at 1s, so 3s covers them and excludes a new journey.
++	if ((gap >= 0) && (gap <= FRAMES_PER_SEC * 3) && (s.opts == options) && (s.id == id)) {
++		const float dx = pos.x - s.x;
++		const float dz = pos.z - s.z;
++		const float sq = dx * dx + dz * dz;
++		bucket = (sq <= 0.f) ? 0
++				: (sq < SQUARE(float(SQUARE_SIZE))) ? 1
++				: (sq < SQUARE(float(SQUARE_SIZE * 4))) ? 2
++				: (sq < SQUARE(float(SQUARE_SIZE * 16))) ? 3 : 4;
++		suppress = (bucket == 0) && (s.seq == ordSeq) && (timeout >= s.timeout)
++				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
++	}
++	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress);
++	// Counted whether or not it is dropped, so one run with the switch OFF says
++	// exactly what turning it on would buy. Default off: the engine's own move
++	// state is provably unchanged (above), but the dropped order also skips the
++	// extra UnitIdle the engine raises when it finishes a move the unit has
++	// already arrived at, and that event stream is not proven identical.
++	if (suppress) {
++		suppress = circuit->GetTunable("apex_order_dedupe", 0.f) > 0.f;
++	}
++
++	if (!suppress) {  // a suppressed order leaves the standing one in place
++		s.x = pos.x;
++		s.z = pos.z;
++		s.id = id;
++		s.opts = options;
++		s.frame = frame;
++		s.timeout = timeout;
++		++ordSeq;
++		s.seq = ordSeq;
++	}
++	return suppress;
++}
++
  void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
  {
 +	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
++		return;
++	}
++	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout)) {
 +		return;
 +	}
 +	NoteAct("mov", timeout);
@@ -17159,6 +17421,7 @@ index 2f597be4..5a9067f9 100644
 +	NoteAct("fgt", timeout);
  	assert(utils::is_in_map(pos));
 +	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
++	NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout);
  	unit->Fight(pos, options, timeout);
  }
  
@@ -17168,6 +17431,7 @@ index 2f597be4..5a9067f9 100644
 +		return;
 +	}
  	assert(utils::is_in_map(pos));
++	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout);
  	unit->PatrolTo(pos, options, timeout);
  }
  
@@ -17181,6 +17445,7 @@ index 2f597be4..5a9067f9 100644
 +		return;
 +	}
  	assert(utils::is_in_map(pos));
++	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout);
  	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
  }
  
@@ -17217,13 +17482,17 @@ index 2f597be4..5a9067f9 100644
 +		return;
 +	}
 +	NoteSniperOrder(CCircuitDef::SniperOrder::ATTACK);
++	// Zero position on purpose: an attack order names a UNIT, so the enemy id
++	// alone decides whether this repeats the last one. The ground variant above
++	// names a point, and there the distance buckets are the measurement.
++	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout);
 +	unit->Attack(enemy->GetUnit(), options, timeout);
 +}
 +
  void CCircuitUnit::CmdWantedSpeed(float speed)
  {
  //	unit->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
-@@ -323,12 +477,30 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
+@@ -323,12 +543,31 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
  
  void CCircuitUnit::CmdStop(short options, int timeout)
  {
@@ -17251,11 +17520,12 @@ index 2f597be4..5a9067f9 100644
 +		return;
 +	}
 +	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
++	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX);
 +	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -415,34 +587,52 @@ bool CCircuitUnit::IsWaiting() const
+@@ -415,34 +654,52 @@ bool CCircuitUnit::IsWaiting() const
  
  void CCircuitUnit::CmdRepair(CAllyUnit* target, short options, int timeout)
  {
@@ -17308,7 +17578,7 @@ index 2f597be4..5a9067f9 100644
  	unit->ResurrectInArea(pos, radius, options, timeout);
  }
  
-@@ -474,7 +664,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,7 +731,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
@@ -17326,7 +17596,7 @@ index 2f597be4..5a9067f9 100644
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
  		if (circuitDef->IsAttrMelee()) {
-@@ -483,21 +683,21 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -483,21 +750,21 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  				if (isGround) {  // los-cheat related
  					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
  				} else {
@@ -17351,7 +17621,7 @@ index 2f597be4..5a9067f9 100644
  			}
  		}
  		CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
-@@ -508,23 +708,66 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -508,23 +775,66 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  
  void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
  {
@@ -17431,7 +17701,7 @@ index 2f597be4..5a9067f9 100644
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bcc..5af62717 100644
+index cfe59bcc..51b3b9ed 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -17447,7 +17717,7 @@ index cfe59bcc..5af62717 100644
  	void PushDGunAct(CDGunAction* action);
  	CDGunAction* GetDGunAct() const { return dgunAct; }
  	void PushTravelAct(ITravelAction* action);
-@@ -107,8 +113,32 @@ public:
+@@ -107,8 +113,42 @@ public:
  	void SetIsDead() { isDead = true; }
  	bool IsDead() const { return isDead; }
  
@@ -17466,6 +17736,16 @@ index cfe59bcc..5af62717 100644
 +		}
 +		return out;
 +	}
++	// apex: ORDER CENSUS. Every engine order this AI sends leaves through one of
++	// the Cmd* below, and every one of them costs the ENGINE a command insert, a
++	// Lua AllowCommand pass and (for a move whose goal actually changed) a fresh
++	// path request -- cost that is billed to the engine, not to our own frame
++	// time. NoteOrder records what was last sent to this unit so a re-send of
++	// the same thing can be counted, and returns true when the re-send is a
++	// provable no-op AND apex_order_dedupe is on; CmdMoveTo then drops it.
++	enum class OrdKind: int { MOVE = 0, FIGHT, PATROL, ATTACK, TARGET, _SIZE };
++	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout);
++
  	void SetDamagedFrame(int frame) { damagedFrame = frame; }
  	int GetDamagedFrame() const { return damagedFrame; }
 +	void SetDamagedDir(const springai::AIFloat3& dir) { damagedDir = dir; }
@@ -17480,7 +17760,7 @@ index cfe59bcc..5af62717 100644
  
  	bool HasDGun() const { return dgun != nullptr; }
  	bool HasWeapon() const { return weapon != nullptr; }
-@@ -118,6 +148,13 @@ public:
+@@ -118,6 +158,13 @@ public:
  	bool IsDisarmed(int frame);
  	bool IsWeaponReady(int frame);
  	bool IsDGunReady(int frame, float energy);
@@ -17494,7 +17774,7 @@ index cfe59bcc..5af62717 100644
  	bool IsShieldCharged(float percent);
  	bool IsJumpReady();
  	bool IsJumping();
-@@ -131,6 +168,7 @@ public:
+@@ -131,6 +178,7 @@ public:
  
  	void CmdRemove(std::vector<float>&& params, short options = 0);
  	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
@@ -17502,7 +17782,7 @@ index cfe59bcc..5af62717 100644
  	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
  	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
-@@ -138,6 +176,13 @@ public:
+@@ -138,6 +186,13 @@ public:
  	void CmdWantedSpeed(float speed = NO_SPEED_LIMIT);
  	void CmdStop(short options = 0, int timeout = INT_MAX);
  	void CmdSetTarget(CEnemyInfo* enemy);
@@ -17516,12 +17796,24 @@ index cfe59bcc..5af62717 100644
  	void CmdCloak(bool state);
  	void CmdFireAtRadar(bool state);
  	void CmdFindPad(int timeout = INT_MAX);
-@@ -207,7 +252,12 @@ private:
+@@ -207,7 +262,24 @@ private:
  
  	int moveFails;
  	int failFrame;
 +	std::string actRing[10];
 +	int actHead = 0;
++	// apex: the last order of each kind sent to this unit. See NoteOrder.
++	struct SOrdShadow {
++		float x = -1e9f;
++		float z = -1e9f;
++		int id = -1;
++		int frame = -1000000;  // when it was sent
++		int timeout = 0;       // the frame the engine drops it
++		unsigned seq = 0;      // ordSeq when it was sent
++		short opts = 0;
++	};
++	SOrdShadow ordLast[static_cast<int>(OrdKind::_SIZE)];
++	unsigned ordSeq = 0;  // orders of any kind sent to this unit
  	int damagedFrame;
 +	int electFrame;
 +	springai::AIFloat3 damagedDir;
@@ -17529,7 +17821,7 @@ index cfe59bcc..5af62717 100644
  	int execFrame;  // TODO: Replace by CExecuteAction?
  	int disarmFrame;
  	int ammoFrame;
-@@ -228,6 +278,8 @@ private:
+@@ -228,6 +300,8 @@ private:
  	springai::Command* command;  // current top command
  	CWeaponDef* dgunDef;
  	springai::Weapon* dgun;

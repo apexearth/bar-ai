@@ -9,7 +9,8 @@
 --
 -- One line per team per game-minute:
 --   ORDERS team=3 min=12 total=843 move=120 fight=85 build=310 repair=190
---          reclaim=60 guard=40 stop=18 other=20
+--          reclaim=60 guard=40 stop=18 other=20 oth34923=18 oth45=2
+-- othNNN is the raw command id behind "other", biggest first.
 -- Parsed by tools/orders.py.
 --------------------------------------------------------------------------------
 
@@ -59,12 +60,17 @@ function gadget:AllowCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams,
 		cmdOptions, cmdTag, playerID, fromSynced, fromLua)
 	local t = counts[unitTeam]
 	if not t then
-		t = { total = 0 }
+		t = { total = 0, oth = {} }
 		counts[unitTeam] = t
 	end
 	t.total = t.total + 1
 	local b = bucket(cmdID)
 	t[b] = (t[b] or 0) + 1
+	-- "other" was the second-largest bucket and named nothing. Keep the raw ids
+	-- so the line says WHICH command it is (34923 is set-target, and so on).
+	if b == "other" then
+		t.oth[cmdID] = (t.oth[cmdID] or 0) + 1
+	end
 	return true
 end
 
@@ -85,6 +91,14 @@ function gadget:GameFrame(f)
 				if t[k] then
 					parts[#parts + 1] = k .. "=" .. t[k]
 				end
+			end
+			local ids = {}
+			for id, n in pairs(t.oth) do
+				ids[#ids + 1] = { id = id, n = n }
+			end
+			table.sort(ids, function(a, b) return a.n > b.n end)
+			for i = 1, math.min(6, #ids) do
+				parts[#parts + 1] = "oth" .. ids[i].id .. "=" .. ids[i].n
 			end
 			Spring.Echo(table.concat(parts, " "))
 		end

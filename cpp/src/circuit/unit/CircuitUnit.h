@@ -128,6 +128,16 @@ public:
 		}
 		return out;
 	}
+	// apex: ORDER CENSUS. Every engine order this AI sends leaves through one of
+	// the Cmd* below, and every one of them costs the ENGINE a command insert, a
+	// Lua AllowCommand pass and (for a move whose goal actually changed) a fresh
+	// path request -- cost that is billed to the engine, not to our own frame
+	// time. NoteOrder records what was last sent to this unit so a re-send of
+	// the same thing can be counted, and returns true when the re-send is a
+	// provable no-op AND apex_order_dedupe is on; CmdMoveTo then drops it.
+	enum class OrdKind: int { MOVE = 0, FIGHT, PATROL, ATTACK, TARGET, _SIZE };
+	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout);
+
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
 	void SetDamagedDir(const springai::AIFloat3& dir) { damagedDir = dir; }
@@ -254,6 +264,18 @@ private:
 	int failFrame;
 	std::string actRing[10];
 	int actHead = 0;
+	// apex: the last order of each kind sent to this unit. See NoteOrder.
+	struct SOrdShadow {
+		float x = -1e9f;
+		float z = -1e9f;
+		int id = -1;
+		int frame = -1000000;  // when it was sent
+		int timeout = 0;       // the frame the engine drops it
+		unsigned seq = 0;      // ordSeq when it was sent
+		short opts = 0;
+	};
+	SOrdShadow ordLast[static_cast<int>(OrdKind::_SIZE)];
+	unsigned ordSeq = 0;  // orders of any kind sent to this unit
 	int damagedFrame;
 	int electFrame;
 	springai::AIFloat3 damagedDir;

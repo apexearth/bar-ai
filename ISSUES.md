@@ -16,6 +16,51 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-05 — ENGINE COST WE CAUSE: 52k move orders/min, and two mechanisms behind them
+
+Not our frame time — the engine's, which is 30.93 ms of the 37.56 ms frame at
+minute 59 of a 16-AI hour. Read off `dev_order_counter.lua`, summed over 16 AIs:
+min 59 total 92,990/min = **51.7 orders per sim frame**, move 52,255, fight
+19,628, other 13,827, patrol 3,273. Builders are NOT in it (build+repair+reclaim
++guard+stop together are 4,007). Static reading of the emitters, no run yet:
+
+**1. Every re-issued move whose point moved at all costs a full path request.**
+`CMobileCAI::ExecuteMove` guards `SetGoal` with
+`!moveType->IsMovingTowards(cmdPos, GetGoalRadius(0), false)`, and
+`CGroundMoveType::IsMovingTowards` is `goalPos == pos * XZVector && goalRadius
+== radius` — **exact float equality**. So a bit-identical repeat is already free
+in the engine, and anything else runs `StartMoving` → `ReRequestPath(true)`.
+`ISquadTask::Attack` recomputes a standoff point per engaged unit **every second**
+(`isRepeatAttack = frame >= attackFrame + FRAMES_PER_SEC * 1`, shortened from 3s)
+from `LeadPos` + an orbit angle + a threat veto — a point that is different every
+time by construction. That is one path request per engaged unit per second,
+16 AIs wide. `IFighterTask::DodgeFire`/`KeepRange` add a second one per unit under
+fire, on their own 1 s cooldown, and the two overwrite each other.
+The `apex: orders` / `apex: order-rep` census now in `CircuitAI.cpp` measures the
+size of this: `move same/lt8/lt32/lt128/far`. Everything past `same` re-paths.
+
+**2. `CmdSetTarget` enrols the unit in a synced Lua loop that never stops.**
+`unit_target_on_the_move.lua` blocks the command (never reaches `CCommandAI`) and
+keeps the unit in `unitTargets` until the target dies or leaves radar+LOS. Every
+5 frames — 6×/second — it walks that whole table and runs `setTarget`, which calls
+`spGetUnitWeaponTryTarget` per weapon plus `SetUnitTarget` plus four
+`SetUnitRulesParam`, all synced. This cost scales with the number of units HOLDING
+a target, not with our order rate, so at ~5,700 units it is a standing per-frame
+tax that `apex_prefer_target=1` created. It is also very likely most of
+`other=13,827/min` (each repeat rebuilds the gadget's table and sends an
+unsynced message). `dev_order_counter.lua` now prints `othNNN=` raw ids so the
+next run names it instead of guessing.
+
+**3. fight went 2,798 → 26,368 between min 30 and 50 while units grew ~2x.** The
+likely mechanism is a BRANCH change, not a superlinear loop: `ISquadTask::Attack`
+sends 1 move + 1 set-target on the standoff branch, but 2 fight orders + 1
+set-target on the `rowBrawls` / `staticCantReply` plain-attack branches, and mid-
+game is when squads start pressing static defence. The census splits FIGHT from
+ATTACK, which confirms or kills this in one run.
+
+None of the three is measured yet. The instrument shipped 2026-09-05; a 16-AI
+hour with it is what settles the sizes.
+
 ## 2026-09-05 — Utilization() is blind to factories, so an idle gantry does not discount the next one
 
 apexearth: *"we have a lot of gantries which are idle yet we will continue to

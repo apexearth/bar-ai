@@ -524,6 +524,9 @@ public:
 	// apex: census of engine orders sent to sniper-class units, by kind,
 	// logged every 30s so the move-only rule for that class is measurable.
 	void NoteSniperOrder(CCircuitDef::SniperOrder kind);
+	// apex: census of every engine order this AI sends, by kind, with the ones
+	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
+	void NoteOrder(int kind, int bucket, bool suppressed);
 	int GetSkirmishAIId() const { return skirmishAIId; }
 	int GetTeamId()       const { return teamId; }
 	int GetAllyTeamId()   const { return allyTeamId; }
@@ -605,6 +608,13 @@ private:
 	uint64_t perfOwnDmgSweep = 0;    unsigned perfOwnDmgCalls = 0;
 	mutable uint64_t perfEcostSweep = 0;  // enemies visited by GetEnemyCostAt
 	mutable unsigned perfEcostCalls = 0;
+	// apex: orders sent, orders dropped as provable no-ops, and the repeats
+	// bucketed by how far the commanded point moved: [0] bit-identical,
+	// [1] < SQUARE_SIZE (the goal radius our move orders carry), [2] < 4,
+	// [3] < 16 squares, [4] further. Everything past [0] re-paths.
+	unsigned ordSent[5] = {0, 0, 0, 0, 0};
+	unsigned ordSup[5] = {0, 0, 0, 0, 0};
+	unsigned ordRep[5][5] = {{0}};
 	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.
 	std::vector<SFeatDefInfo> featDefInfo;
 	int metalResId = -1;

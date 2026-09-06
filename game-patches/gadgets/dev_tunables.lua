@@ -514,6 +514,10 @@ local NAMES = {
 	"apex_line_range_exp",
 	"apex_line_median",
 	"apex_aim_miss",
+	-- CircuitUnit.cpp: 1 = drop a move order that is bit-identical to the one
+	-- this unit is already executing. Counted either way in `apex: orders`, so
+	-- a run with it off says what turning it on would buy (0).
+	"apex_order_dedupe",
 }
 
 local pending = {}
