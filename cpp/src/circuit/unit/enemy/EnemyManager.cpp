@@ -51,6 +51,36 @@ AIFloat3 CEnemyManager::GetEnemyStructPos() const
 	return sum / cost;
 }
 
+// REMEMBERED ENEMY STRUCTURE METAL NEAR A POSITION. The raid director wanted
+// this and had no way to ask: it scored spots with CCircuitAI::GetEnemyCostAt,
+// whose script-side comment says "enemy metal standing on it" but which returns
+// a COUNT OF CURRENTLY-VISIBLE UNITS. We ran zero scout tasks in the measured
+// game, so that count was zero everywhere and all 58 raid asks refused with
+// "no enemy ground seen" -- while this very registry held 57,777 metal of their
+// buildings the whole time. Same sweep and same filter as the two aggregates
+// above; only the radius test is new. GetEnemyCostAt is left alone -- ten other
+// callers use it as "how many enemies are on top of me", which is what it is.
+float CEnemyManager::GetEnemyStructCostAt(const springai::AIFloat3& pos, float radius) const
+{
+	if (radius <= 0.f) {
+		return 0.f;
+	}
+	const float sqRadius = radius * radius;
+	float cost = 0.f;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		const CEnemyInfo* e = kv.second;
+		const CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || cdef->IsMobile()) {
+			continue;
+		}
+		if (e->GetPos().SqDistance2D(pos) > sqRadius) {
+			continue;
+		}
+		cost += e->GetCost();
+	}
+	return cost;
+}
+
 float CEnemyManager::GetEnemyStructCost() const
 {
 	float cost = 0.f;

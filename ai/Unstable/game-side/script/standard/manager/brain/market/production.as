@@ -671,7 +671,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					candV.insertLast(vE);
 					candGain.insertLast(gainE);
 					sumV += vE;
-					continue;
+					if (prankNow)
+						prank += " " + Catalog::Def(d).GetName()
+							+ ":esc(v" + formatFloat(vE, "", 0, 3) + ")";
+					// NO `continue`. This bid used to END the def's evaluation,
+					// so a cheap fast unit left the army market entirely and --
+					// unlike :cut, :eco and :gap0 -- said nothing on its way
+					// out. EscortWorthy is cheap-and-fast, which is also the
+					// definition of a raider, so this branch was silently
+					// settling a question the market exists to settle. Both bids
+					// stand as candidates now: a def wanted for two jobs has two
+					// demands, and the draw weighs them.
 				}
 			}
 		}

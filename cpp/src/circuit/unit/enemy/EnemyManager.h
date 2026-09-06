@@ -119,6 +119,7 @@ public:
 	// through is not where they live); (-1,-1,-1) when none is known.
 	springai::AIFloat3 GetEnemyStructPos() const;
 	float GetEnemyStructCost() const;
+	float GetEnemyStructCostAt(const springai::AIFloat3& pos, float radius) const;
 	float GetMinGroupThreat() const { return enemyGroups[minThreatGroupIdx].influence; }
 	float GetPreMaxGroupThreat() const { return enemyGroups[preMaxThreatGroupIdx].influence; }
 	float GetMaxGroupThreat() const { return enemyGroups[maxThreatGroupIdx].influence; }

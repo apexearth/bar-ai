@@ -793,6 +793,11 @@ static float CEnemyManager_GetEnemyStructCost(CEnemyManager* mgr)
 	return mgr->GetEnemyStructCost();
 }
 
+static float CEnemyManager_GetEnemyStructCostAt(CEnemyManager* mgr, const AIFloat3& pos, float radius)
+{
+	return mgr->GetEnemyStructCostAt(pos, radius);
+}
+
 static float CCircuitAI_GetUnitThreatAt(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos)
 {
 	return circuit->GetUnitThreatAt(unit, pos);
@@ -1748,6 +1753,7 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyPos() const", asFUNCTION(CEnemyManager_GetEnemyPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyStructPos() const", asFUNCTION(CEnemyManager_GetEnemyStructPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyStructCost() const", asFUNCTION(CEnemyManager_GetEnemyStructCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyStructCostAt(const AIFloat3 &in, float) const", asFUNCTION(CEnemyManager_GetEnemyStructCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupCount() const", asFUNCTION(CEnemyManager_GetEnemyGroupCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupPos(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyGroupCost(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

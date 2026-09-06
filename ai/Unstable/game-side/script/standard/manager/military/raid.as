@@ -85,6 +85,8 @@ float TaskPower(IUnitTask@ t)
 // that would shoot at us there; the best spot is the most metal per unit of
 // guard. Returns false when nothing of theirs has been seen at any of them,
 // which is the honest reading before contact.
+bool gRaidPrizeLogged = false;
+
 bool RaidTarget(AIFloat3& out at, float& out guard)
 {
 	// NEVER CacheSpots() from here. It latches on first call, and calling it
@@ -109,7 +111,28 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 			continue;
 		if (sp.distance2D(foe) >= sp.distance2D(Builder::gHomePos))
 			continue;   // our half: not a raid
-		const float prize = ai.GetEnemyCostAt(sp, r);
+		// REMEMBERED METAL, NOT WHAT WE CAN SEE RIGHT NOW. This read
+		// GetEnemyCostAt, which despite the comment above returns a COUNT OF
+		// VISIBLE ENEMY UNITS -- so a spot only scored while two of their units
+		// happened to be standing on it in our line of sight. We ran zero scout
+		// tasks in the measured game, so it was zero everywhere and all 58 asks
+		// refused ("no enemy ground seen") while their base sat in our own
+		// registry at 57,777 metal. Structures are also the right prize: a raid
+		// is for their economy, not for meeting their army on their ground.
+		const float prize = aiEnemyMgr.GetEnemyStructCostAt(sp, r);
+		// S7 -- log the first call that could POSSIBLY be informative, not the
+		// first call full stop: at frame 150 nothing of theirs has been seen,
+		// so a raw 0 there proves only that the binding is callable. Waits for
+		// the registry to hold enemy structures at all, then reports what this
+		// spot read against the whole-map total.
+		if (!gRaidPrizeLogged) {
+			const float tot = aiEnemyMgr.GetEnemyStructCost();
+			if (tot > 0.f) {
+				gRaidPrizeLogged = true;
+				AiLog("apex: raid-prize S7 raw GetEnemyStructCostAt=" + prize
+					+ " structTotal=" + tot + " r=" + r);
+			}
+		}
 		if (prize <= 1.f)
 			continue;
 		const float g = ai.GetEnemyInflAt(sp);
