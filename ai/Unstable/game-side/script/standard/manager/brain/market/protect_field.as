@@ -665,9 +665,9 @@ void PfRebuild()
 			gPfTotal += Catalog::gCostM[d];
 		}
 	}
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f)
-			continue;
+	const array<int>@ mexRows = MexRows();
+	for (uint q = 0; q < mexRows.length(); ++q) {
+		const uint i = uint(mexRows[q]);
 		const float w = gLIncome[i] * IncomeMult() * gLExtract[i] * h;
 		gPfNPos.insertLast(gLPos[i]);
 		gPfNWorth.insertLast(w);
@@ -1028,6 +1028,136 @@ bool PfCoveredAt(const AIFloat3& in at)
 		}
 	}
 	return false;
+}
+
+// THE WORST BEARING OF A STANDOFF RING, IN ONE TRAVERSAL.
+//
+// CoverWith reads cover at each point of a ring around a site and keeps the
+// smallest -- COVER_RAYS separate walks of the tower index for six sums over
+// the same towers. Every ring point is within `standoff` of the centre, so one
+// window of (standoff + the longest reach) holds every tower that can reach any
+// of them, and each tower then runs the same per-ray compare and adds the same
+// kill it did before. False when no ring point is on the map, which is the
+// caller's signal to fall back to the point reading.
+array<float>    gPfCrSum;
+array<AIFloat3> gPfCrP;
+array<bool>     gPfCrOn;
+
+bool PfCoverRing(const AIFloat3& in at, float standoff,
+		const array<float>& in rcos, const array<float>& in rsin,
+		const AIFloat3& in extraAt, float extraReach, float extraKill,
+		float& out worst)
+{
+	worst = -1.f;
+	const uint nr = rcos.length();
+	if (nr == 0)
+		return false;
+	PfRebuild();
+	if (gPfCrSum.length() != nr) {
+		gPfCrSum.resize(nr);
+		gPfCrOn.resize(nr);
+	}
+	gPfCrP.resize(0);
+	bool any = false;
+	for (uint b = 0; b < nr; ++b) {
+		gPfCrP.insertLast(at + AIFloat3(rcos[b], 0.f, rsin[b]) * standoff);
+		gPfCrSum[b] = 0.f;
+		gPfCrOn[b] = OnMap(gPfCrP[b]);
+		if (gPfCrOn[b])
+			any = true;
+	}
+	if (!any)
+		return false;
+	if (gPfTGNX > 0) {
+		const float win = standoff + gPfTGMaxR;
+		const int qx0 = PfCellLo(at.x, win, gPfTGX0, gPfTGCell, gPfTGNX);
+		const int qx1 = PfCellHi(at.x, win, gPfTGX0, gPfTGCell, gPfTGNX);
+		const int qz0 = PfCellLo(at.z, win, gPfTGZ0, gPfTGCell, gPfTGNZ);
+		const int qz1 = PfCellHi(at.z, win, gPfTGZ0, gPfTGCell, gPfTGNZ);
+		for (int cz = qz0; cz <= qz1; ++cz) {
+			const int row = cz * gPfTGNX;
+			const float bz0 = gPfTGZ0 + float(cz) * gPfTGCell;
+			float dz = 0.f;
+			if (at.z < bz0)
+				dz = bz0 - at.z;
+			else if (at.z > bz0 + gPfTGCell)
+				dz = at.z - (bz0 + gPfTGCell);
+			for (int cx = qx0; cx <= qx1; ++cx) {
+				const int c = row + cx;
+				if (gPfTGReach[uint(c)] <= 0.f)
+					continue;
+				const float rr = gPfTGReach[uint(c)] + standoff;
+				const float bx0 = gPfTGX0 + float(cx) * gPfTGCell;
+				float dx = 0.f;
+				if (at.x < bx0)
+					dx = bx0 - at.x;
+				else if (at.x > bx0 + gPfTGCell)
+					dx = at.x - (bx0 + gPfTGCell);
+				if (dx * dx + dz * dz > rr * rr)
+					continue;   // nothing in this cell reaches any ring point
+				const int e = gPfTGStart[uint(c + 1)];
+				for (int k = gPfTGStart[uint(c)]; k < e; ++k) {
+					const uint i = uint(gPfTGItem[uint(k)]);
+					const float tr = gPfTwReach[i];
+					const float tk = gPfTwKill[i];
+					for (uint b = 0; b < nr; ++b) {
+						if (gPfCrOn[b]
+							&& (gPfTwPos[i].distance2D(gPfCrP[b]) <= tr))
+							gPfCrSum[b] += tk;
+					}
+				}
+			}
+		}
+	}
+	for (uint b = 0; b < nr; ++b) {
+		if (!gPfCrOn[b])
+			continue;
+		if ((extraReach > 0.f)
+			&& (extraAt.distance2D(gPfCrP[b]) <= extraReach))
+			gPfCrSum[b] += extraKill;
+		if ((worst < 0.f) || (gPfCrSum[b] < worst))
+			worst = gPfCrSum[b];
+	}
+	return true;
+}
+
+// COVER AT EVERY ASSET AT ONCE, FROM THE TOWERS OUT.
+//
+// The guard posting asks PfCoverPoint per asset -- one walk of the tower index
+// per asset, for a reading that is a SUM over towers. Measured late in a 16-AI
+// hour: 60 assets against 8-12 standing turrets, so the loop runs the long way
+// round. Each tower's own disc is one bucket query on the asset grid, and every
+// asset in it runs the identical `distance2D <= reach` test and adds the
+// identical kill, so the answer is the same array.
+void PfCoverField(array<float>& inout cov)
+{
+	PfRebuild();
+	const uint n = gPfPos.length();
+	cov.resize(n);
+	for (uint i = 0; i < n; ++i)
+		cov[i] = 0.f;
+	if ((gPfGNX <= 0) || (n == 0))
+		return;
+	for (uint t = 0; t < gPfTwPos.length(); ++t) {
+		const float r = gPfTwReach[t];
+		if (r <= 0.f)
+			continue;
+		const AIFloat3 tp = gPfTwPos[t];
+		const float kill = gPfTwKill[t];
+		const int cx0 = PfCellLo(tp.x, r, gPfGX0, gPfGCell, gPfGNX);
+		const int cx1 = PfCellHi(tp.x, r, gPfGX0, gPfGCell, gPfGNX);
+		const int cz0 = PfCellLo(tp.z, r, gPfGZ0, gPfGCell, gPfGNZ);
+		const int cz1 = PfCellHi(tp.z, r, gPfGZ0, gPfGCell, gPfGNZ);
+		for (int cz = cz0; cz <= cz1; ++cz) {
+			const int row = cz * gPfGNX;
+			const int e = gPfGStart[uint(row + cx1 + 1)];
+			for (int k = gPfGStart[uint(row + cx0)]; k < e; ++k) {
+				const uint i = uint(gPfGItem[uint(k)]);
+				if (gPfPos[i].distance2D(tp) <= r)
+					cov[i] += kill;
+			}
+		}
+	}
 }
 
 // THE TWO STAKE READINGS A SITE NEEDS, IN ONE TRAVERSAL.

@@ -164,6 +164,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	float hTtdH = 0.f;
 	bool  hDomOn = false;
 	bool  hEffOn = false;
+	float hLineW = 1.f;     // read inside the slot loop, same for every slot
 	float hBestEff = -1.f;  // the wall-efficiency benchmark, built on first ask
 	if (isGround) {
 		hTrade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
@@ -197,6 +198,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hTtdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
 		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
+		hLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
 	}
 	for (uint i = 0; i < cand.length(); ++i) {
 		const int d = cand[i];
@@ -289,9 +291,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 								(-prev >= Catalog::gCostM[d] + hUGuardM)
 								|| (wallPullP <= 0.f)))
 							continue;
-						prev = wallPullP * (WallSlotLine(si)
-								? ai.GetTunable("apex_wall_line_w",
-										TUNE_WALL_LINE_W) : 1.f);
+						prev = wallPullP
+								* (WallSlotLine(si) ? hLineW : 1.f);
 					}
 					if (Gate(GATE_SLOT_DEAD, prev <= 0.f))
 						continue;

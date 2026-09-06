@@ -342,6 +342,25 @@ int RezCount()
 // (economy.as), so REZ_METAL_FLOOR's 0.10 is well below either.
 const float REZ_METAL_FLOOR = 0.10f;   // reclaim below this share of storage
 
+// BEHIND ON THE FIELD, ASKED ONCE A FRAME. Military::LosingGround is six
+// EnemyCostOf calls, and each of those is two engine reads plus a tunable
+// lookup by name; one rez election asks it up to four times -- the salvage
+// gate, PreferReclaim from both the eat and the rez rule, and RezBotExposed.
+// Same law as FoesNear and ReachSlack in sitesafety.as: the enemy cost tables
+// are written from engine callbacks, and nothing script does inside a frame
+// moves one.
+bool gRzLosing = false;
+int  gRzLosingAt = -1;
+
+bool LosingNow()
+{
+	if (gRzLosingAt != ai.frame) {
+		gRzLosingAt = ai.frame;
+		gRzLosing = Military::LosingGround();
+	}
+	return gRzLosing;
+}
+
 bool PreferReclaim()
 {
 	// No commander: rez ahead of everything else, including the pre-T2
@@ -355,7 +374,7 @@ bool PreferReclaim()
 	// time for no metal, while reclaim banks continuously and survives being
 	// interrupted. Same reasoning as RezSpotHot, on the team's position instead
 	// of this bot's tile.
-	if (Military::LosingGround())
+	if (LosingNow())
 		return true;
 	return aiEconomyMgr.metal.current
 	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;

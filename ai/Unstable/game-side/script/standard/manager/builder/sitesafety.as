@@ -364,6 +364,12 @@ array<float> gRsZ;
 array<float> gRsV;
 int  gRsFrame = -1;
 uint gRsNext = 0;
+// Latched: GetTunable is frozen for the game on its first read (CircuitAI.cpp
+// caches per name), and this one was paid on every cache MISS -- a std::string
+// built from the literal and a map walk, on the one path that already grows
+// with both the bot count and the enemy count.
+bool  gRsReactSet = false;
+float gRsReactS = 0.f;
 
 float ReachSlack(const AIFloat3 &in where)
 {
@@ -380,8 +386,11 @@ float ReachSlack(const AIFloat3 &in where)
 		if ((gRsX[i] == where.x) && (gRsZ[i] == where.z))
 			return gRsV[i];
 	}
-	const float v = ai.EnemyReachSlack(where,
-			ai.GetTunable("apex_rez_react_s", TUNE_REZ_REACT_S));
+	if (!gRsReactSet) {
+		gRsReactSet = true;
+		gRsReactS = ai.GetTunable("apex_rez_react_s", TUNE_REZ_REACT_S);
+	}
+	const float v = ai.EnemyReachSlack(where, gRsReactS);
 	if (gRsX.length() < SLACK_SLOTS) {
 		gRsX.insertLast(where.x);
 		gRsZ.insertLast(where.z);
@@ -426,7 +435,7 @@ const float REZ_EXPOSED_FRAC = 0.55f;
 
 bool RezBotExposed(CCircuitUnit@ unit)
 {
-	return Military::LosingGround() && PastFrontFrac(unit.GetPos(ai.frame), REZ_EXPOSED_FRAC);
+	return LosingNow() && PastFrontFrac(unit.GetPos(ai.frame), REZ_EXPOSED_FRAC);
 }
 
 // Empty means "not a build this rule covers". Defence, bunkers and big guns
@@ -470,16 +479,21 @@ void LogConVeto(CCircuitUnit@ unit, const string& in what,
 // rarely comes near our base even during a raid). Read by the military stance,
 // posture and withdraw layers.
 const float BASE_DANGER_DIST = 2200.f;
+// Latched, same law as gRsReactS above: frozen on first read, and the stance,
+// posture and withdraw layers all ask this every update.
+bool  gBaseInflSet = false;
+float gBaseInflBar = 0.f;
 
 bool BaseUnderAttack()
 {
 	if (!gHomeSet)
 		return false;
-	if (ai.GetEnemyInflAt(gHomePos)
-		> ai.GetTunable("apex_base_attack_infl", TUNE_BASE_ATTACK_INFL))
-	{
-		return true;
+	if (!gBaseInflSet) {
+		gBaseInflSet = true;
+		gBaseInflBar = ai.GetTunable("apex_base_attack_infl", TUNE_BASE_ATTACK_INFL);
 	}
+	if (ai.GetEnemyInflAt(gHomePos) > gBaseInflBar)
+		return true;
 	return gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) < BASE_DANGER_DIST;
 }
 

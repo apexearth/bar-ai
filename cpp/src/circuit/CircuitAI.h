@@ -585,6 +585,10 @@ private:
 	uint64_t perfJobsUs = 0;
 	uint64_t perfActUs = 0;
 	uint64_t perfScrUs = 0;   // script->Update(): AngelScript, not unattributed C++
+	// apex: the engine events, which run OUTSIDE AiFrame -- not part of the
+	// split's total, and until now counted as engine time. See HandleGameEvent.
+	uint64_t perfEvtNs = 0;
+	unsigned perfEvtCalls = 0;
 	// apex: a census, not a clock -- how many elements the O(n) helpers walked
 	// this minute. Increments only, so measuring costs nothing; a helper whose
 	// visited count grows faster than the unit count is the quadratic one.
@@ -607,8 +611,21 @@ private:
 	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
 	struct SReachEnemy {
 		float x, z, reach, speed;
+		uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
 	};
 	std::vector<SReachEnemy> reachCache;
+	// apex: bounding-volume tree over reachCache, rebuilt with it. See BuildReachTree.
+	struct SReachNode {
+		float minx, minz, maxx, maxz;
+		float maxReach, maxSpeed;  // envelope bound for everything below
+		int32_t first, count;      // count > 0: leaf range; count == 0: inner node
+		int32_t right;             // inner: right child; the left child is self + 1
+	};
+	std::vector<SReachNode> reachNodes;
+	int32_t BuildReachTree(int32_t first, int32_t count);
+	float ReachNodeMinDist(int32_t ni, float px, float pz) const;
+	void ReachQuery(int32_t ni, float px, float pz, float reactS, float minDist,
+			float& worst, uint32_t& bestIdx, const SReachEnemy*& best);
 	int reachCacheFrame = -1;
 	int squadDiagNextLog = 0;
 	int ghostPurgeNext = 0;

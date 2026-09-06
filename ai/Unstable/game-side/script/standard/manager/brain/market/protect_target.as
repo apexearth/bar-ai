@@ -17,6 +17,33 @@ namespace Market {
 // rise again on their own if something does.
 //------------------------------------------------------------------------------
 
+// THE ROWS THAT ACTUALLY EXTRACT. gLPos is the whole claim ledger -- measured
+// 113 rows late in a 16-AI hour, 255 at the top -- and every mex question below
+// is about the one to four of them standing. Each walked all 113 to find them,
+// once per candidate site of every fill. gLStamp moves when a row is added or
+// dropped and gOwnStamp when a mex finishes or dies (NoteFinished writes
+// gLExtract between the two), so the pair covers every transition of the set.
+array<int> gMexRow;
+int gMexRowL = -1;
+int gMexRowO = -1;
+
+const array<int>@ MexRows()
+{
+	if ((gMexRowL != gLStamp) || (gMexRowO != gOwnStamp)) {
+		gMexRowL = gLStamp;
+		gMexRowO = gOwnStamp;
+		gMexRow.resize(0);
+		uint nr = gLExtract.length();
+		if (gLPos.length() < nr)
+			nr = gLPos.length();   // every reader indexes gLPos with these
+		for (uint i = 0; i < nr; ++i) {
+			if (gLExtract[i] > 0.f)
+				gMexRow.insertLast(int(i));
+		}
+	}
+	return gMexRow;
+}
+
 // MINIMUM PROTECTION PER MEX, in turret metal.
 //
 // The rest of this file prices defence against what it can SEE arriving. That
@@ -98,8 +125,10 @@ float MexStreamM(const AIFloat3& in s, float reach)
 	const float hz = (hzS > 1.f) ? hzS : 300.f;
 	const float mult = IncomeMult();   // one handicap, not one per spot
 	float m = 0.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(s) < reach))
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		const uint i = uint(rows[q]);
+		if (gLPos[i].distance2D(s) < reach)
 			m += gLIncome[i] * mult * gLExtract[i] * hz;
 	}
 	return m;
@@ -109,20 +138,16 @@ float MexStreamM(const AIFloat3& in s, float reach)
 // extraction and is not one.
 int OwnMexCount()
 {
-	int n = 0;
-	for (uint i = 0; i < gLExtract.length(); ++i) {
-		if (gLExtract[i] > 0.f)
-			++n;
-	}
-	return n;
+	return int(MexRows().length());
 }
 
 // Is this position one of our standing mexes? Diagnostics only: it is how
 // "did it cover the spot it was standing on" is read off a log.
 bool SiteIsMex(const AIFloat3& in pos)
 {
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(pos) < 200.f))
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		if (gLPos[uint(rows[q])].distance2D(pos) < 200.f)
 			return true;
 	}
 	return false;
@@ -155,9 +180,9 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 	// status decides whether this site is buying a first gun or a fourth.
 	int near = -1;
 	float bestD = -1.f;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f)
-			continue;
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		const uint i = uint(rows[q]);
 		const float d = gLPos[i].distance2D(pos);
 		if (d >= r)
 			continue;
@@ -260,8 +285,10 @@ void MexGuardSites(array<AIFloat3>& inout sites, float reach)
 {
 	AIFloat3 foe;
 	const bool foeOk = FoeRef(foe);
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] <= 0.f) || !OnMap(gLPos[i]))
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		const uint i = uint(rows[q]);
+		if (!OnMap(gLPos[i]))
 			continue;
 		if (!MexUnguardedInReach(gLPos[i], reach))
 			continue;
@@ -281,8 +308,9 @@ void MexGuardSites(array<AIFloat3>& inout sites, float reach)
 
 bool MexInReach(const AIFloat3& in pos, float r)
 {
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(pos) < r))
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		if (gLPos[uint(rows[q])].distance2D(pos) < r)
 			return true;
 	}
 	return false;
@@ -404,10 +432,9 @@ float DefenceTarget()
 	if (ai.frame >= gMexFloorSumAt + 5 * SECOND) {
 		gMexFloorSumAt = ai.frame;
 		float fsum = 0.f;
-		for (uint i = 0; i < gLPos.length(); ++i) {
-			if (gLExtract[i] > 0.f)
-				fsum += MexFloorFactor(gLPos[i]);
-		}
+		const array<int>@ rows = MexRows();
+		for (uint q = 0; q < rows.length(); ++q)
+			fsum += MexFloorFactor(gLPos[uint(rows[q])]);
 		gMexFloorSum = MexCoverFloorM() * fsum;
 	}
 	if (gMexFloorSum > t)

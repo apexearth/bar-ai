@@ -95,17 +95,12 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 		return CoverPointM(pos, trade, extraAt, extraReach, extraM) + unitCover;
 	CoverRaysPrep();
 	float worst = -1.f;
-	for (int b = 0; b < COVER_RAYS; ++b) {
-		const AIFloat3 fp = pos
-				+ AIFloat3(gCrCos[uint(b)], 0.f, gCrSin[uint(b)]) * standoff;
-		if (!OnMap(fp))
-			continue;   // they cannot stand off the map to shoot from there
-		const float m = CoverPointM(fp, trade, extraAt, extraReach, extraM);
-		if ((worst < 0.f) || (m < worst))
-			worst = m;
-	}
-	return ((worst < 0.f)
-			? CoverPointM(pos, trade, extraAt, extraReach, extraM) : worst) + unitCover;
+	// One traversal over the union of the ring, not one per bearing; a ring
+	// entirely off the map falls back to the point, as it always did.
+	if (PfCoverRing(pos, standoff, gCrCos, gCrSin,
+			extraAt, extraReach, extraM, worst))
+		return worst + unitCover;
+	return CoverPointM(pos, trade, extraAt, extraReach, extraM) + unitCover;
 }
 
 // WHAT ONE MORE TURRET AT `pos` WOULD ADD TO THE COVER READ AT `pos`.
@@ -855,9 +850,9 @@ void RiskDiag()
 	float coveredM = 0.f;
 	float shortSum = 0.f;
 	int standing = 0;
-	for (uint i = 0; i < gLPos.length(); ++i) {
-		if (gLExtract[i] <= 0.f)
-			continue;
+	const array<int>@ mexRows = MexRows();
+	for (uint q = 0; q < mexRows.length(); ++q) {
+		const uint i = uint(mexRows[q]);
 		++standing;
 		// Covered means a turret reaches it, NOT merely that we see no
 		// threat -- conflating the two reported a naked base as safe.

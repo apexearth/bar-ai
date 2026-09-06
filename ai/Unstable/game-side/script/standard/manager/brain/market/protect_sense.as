@@ -75,10 +75,9 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 				pts.insertLast(line[i]);
 		}
 	}
-	for (uint li = 0; li < gLPos.length(); ++li) {
-		if (gLExtract[li] > 0.f)
-			pts.insertLast(gLPos[li]);
-	}
+	const array<int>@ mexRows = MexRows();
+	for (uint q = 0; q < mexRows.length(); ++q)
+		pts.insertLast(gLPos[uint(mexRows[q])]);
 	if (pts.length() == 0)
 		return false;
 	int unseen = 0;

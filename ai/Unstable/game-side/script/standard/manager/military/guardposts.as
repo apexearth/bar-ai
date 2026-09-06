@@ -126,8 +126,14 @@ float CoverNeedM()
 
 // The light unit coverage is bought in: of what our standing factories make,
 // the most ground covered per metal -- speed over cost.
+// The walk is a function of WHICH defs we own and the fixed catalog, so it
+// rides gOwnSetStamp; a miss is never latched.
+int   gCudDef = -1;
+int   gCudStamp = -1;
 int CoverUnitDef()
 {
+	if ((gCudStamp == Market::gOwnSetStamp) && (gCudDef > 0))
+		return gCudDef;
 	int best = -1;
 	float bestV = 0.f;
 	for (uint f = 1; f < Market::gOwnCount.length(); ++f) {
@@ -147,24 +153,34 @@ int CoverUnitDef()
 			}
 		}
 	}
+	gCudDef = best;
+	gCudStamp = (best > 0) ? Market::gOwnSetStamp : -1;
 	return best;
 }
 
 // Seconds of warning a radar gives a guard over its own eyes: the best mast
 // our builders can place, less the unit's sight, at the fastest foe's speed.
+// The mast walk rides the same owned-set token; a zero is never latched.
+float gEwRadarR = 0.f;
+int   gEwStamp = -1;
 float EyesWarningS(int guardDef)
 {
-	float radarR = 0.f;
-	for (uint b = 1; b < Market::gOwnCount.length(); ++b) {
-		const int bd = int(b);
-		if ((Market::gOwnCount[b] <= 0) || !Catalog::gMobile[bd] || !Catalog::gBuilder[bd])
-			continue;
-		const array<int>@ bl = Catalog::gBuildsList[bd];
-		for (uint q = 0; q < bl.length(); ++q) {
-			const int o = bl[q];
-			if (Catalog::gAvailable[o] && !Catalog::gMobile[o] && (Catalog::gRadarR[o] > radarR))
-				radarR = Catalog::gRadarR[o];
+	float radarR = gEwRadarR;
+	if ((gEwStamp != Market::gOwnSetStamp) || (radarR <= 0.f)) {
+		radarR = 0.f;
+		for (uint b = 1; b < Market::gOwnCount.length(); ++b) {
+			const int bd = int(b);
+			if ((Market::gOwnCount[b] <= 0) || !Catalog::gMobile[bd] || !Catalog::gBuilder[bd])
+				continue;
+			const array<int>@ bl = Catalog::gBuildsList[bd];
+			for (uint q = 0; q < bl.length(); ++q) {
+				const int o = bl[q];
+				if (Catalog::gAvailable[o] && !Catalog::gMobile[o] && (Catalog::gRadarR[o] > radarR))
+					radarR = Catalog::gRadarR[o];
+			}
 		}
+		gEwRadarR = radarR;
+		gEwStamp = (radarR > 0.f) ? Market::gOwnSetStamp : -1;
 	}
 	const float los = (guardDef > 0) ? Catalog::gLosR[guardDef] : 450.f;
 	const float gap = radarR - ((los > 1.f) ? los : 450.f);
@@ -179,41 +195,55 @@ float EyesWarningS(int guardDef)
 // guard, so it is taken once a posting pass rather than inside PostReach:
 // two walks of every def in the game, and PostReach is asked twice per guard.
 float gPostLifeS = 0.f;   // <= 0: we own no economy building yet
+// Two def-table walks a posting pass, for two numbers that move on their own
+// events: the mean hit points only when a unit is gained or lost, and the
+// raider's damage rate only when a faster foe is first seen (FoeSpeedCap
+// latches on its own). Both walks were re-run every two seconds regardless.
+float gPostLifeHp = 0.f;
+int   gPostLifeOwn = -1;
+float gPostRaidDps = 0.f;
+float gPostRaidFast = -1.f;
 
 void RefreshPostLife()
 {
-	float hp = 0.f, n = 0.f;
-	for (uint k = 1; k < Market::gOwnCount.length(); ++k) {
-		const int kd = int(k);
-		if ((Market::gOwnCount[k] <= 0) || Catalog::gMobile[kd] || (Catalog::gHealth[kd] <= 1.f))
-			continue;
-		if ((Catalog::gExtractsM[kd] <= 0.f) && (Catalog::gMakeE[kd] <= 1.f))
-			continue;
-		hp += float(Market::gOwnCount[k]) * Catalog::gHealth[kd];
-		n += float(Market::gOwnCount[k]);
+	if (gPostLifeOwn != Market::gOwnStamp) {
+		gPostLifeOwn = Market::gOwnStamp;
+		float hp = 0.f, n = 0.f;
+		for (uint k = 1; k < Market::gOwnCount.length(); ++k) {
+			const int kd = int(k);
+			if ((Market::gOwnCount[k] <= 0) || Catalog::gMobile[kd] || (Catalog::gHealth[kd] <= 1.f))
+				continue;
+			if ((Catalog::gExtractsM[kd] <= 0.f) && (Catalog::gMakeE[kd] <= 1.f))
+				continue;
+			hp += float(Market::gOwnCount[k]) * Catalog::gHealth[kd];
+			n += float(Market::gOwnCount[k]);
+		}
+		gPostLifeHp = (n < 1.f) ? 0.f : (hp / n);
 	}
-	if (n < 1.f) {
+	if (gPostLifeHp <= 0.f) {
 		gPostLifeS = 0.f;
 		return;
 	}
-	hp /= n;
-	float dps = 0.f;
 	const float fastest = Market::FoeSpeedCap() - 0.1f;
-	// The two SELECTIVE tests first. LineCombat is six array reads behind a
-	// call and it was answering for every def in the game before speed and dps
-	// -- which between them reject nearly all of them -- had been looked at.
-	// Same set accepted, same maximum: the running max only grows, so skipping
-	// a def whose dps cannot beat it is the old `> dps` guard moved earlier.
-	for (int k = 1; k <= Catalog::gDefCount; ++k) {
-		if ((Catalog::gSpeed[k] < fastest) || (Catalog::gDps[k] <= dps))
-			continue;
-		if (!Catalog::gAvailable[k] || Catalog::gFlyer[k] || !Market::LineCombat(k))
-			continue;
-		dps = Catalog::gDps[k];
+	if (gPostRaidFast != fastest) {
+		gPostRaidFast = fastest;
+		float dps = 0.f;
+		// The two SELECTIVE tests first. LineCombat is six array reads behind a
+		// call and it was answering for every def in the game before speed and
+		// dps -- which between them reject nearly all of them -- had been looked
+		// at. Same set accepted, same maximum: the running max only grows, so
+		// skipping a def whose dps cannot beat it is the old `> dps` guard moved
+		// earlier.
+		for (int k = 1; k <= Catalog::gDefCount; ++k) {
+			if ((Catalog::gSpeed[k] < fastest) || (Catalog::gDps[k] <= dps))
+				continue;
+			if (!Catalog::gAvailable[k] || Catalog::gFlyer[k] || !Market::LineCombat(k))
+				continue;
+			dps = Catalog::gDps[k];
+		}
+		gPostRaidDps = (dps < 1.f) ? 20.f : dps;
 	}
-	if (dps < 1.f)
-		dps = 20.f;
-	gPostLifeS = hp / dps;
+	gPostLifeS = gPostLifeHp / gPostRaidDps;
 }
 
 // What a unit reaches before a raider kills one of those buildings: its speed
@@ -508,26 +538,31 @@ void UpdateGuardPosts()
 	gPostReqX.resize(n);
 	gPostReqZ.resize(n);
 	gPostReqStamp = Market::gPfStamp;
-	const bool covOk = (gPostCovCache.length() == n)
+	// PfCommit lets an asset be nudged under an unchanged key, so the points
+	// are checked as well as the two revisions -- and a single mismatch
+	// refills the whole array, which is one traversal per TOWER rather than
+	// the per-asset query it replaces.
+	bool covOk = (gPostCovCache.length() == n)
 			&& (gPostCovStamp == Market::gPfStamp)
 			&& (gPostCovTwRev == Market::gPfTwRev);
+	for (uint i = 0; covOk && (i < n); ++i) {
+		covOk = (gPostCovAtX[i] == Market::gPfPos[i].x)
+				&& (gPostCovAtZ[i] == Market::gPfPos[i].z);
+	}
 	if (!covOk) {
-		gPostCovCache.resize(n);
+		Market::PfCoverField(gPostCovCache);
 		gPostCovAtX.resize(n);
 		gPostCovAtZ.resize(n);
+		for (uint i = 0; i < n; ++i) {
+			gPostCovAtX[i] = Market::gPfPos[i].x;
+			gPostCovAtZ[i] = Market::gPfPos[i].z;
+		}
 	}
 	for (uint i = 0; i < n; ++i) {
 		const AIFloat3 ap = Market::gPfPos[i];
 		px[i] = ap.x;
 		pz[i] = ap.z;
-		if (covOk && (gPostCovAtX[i] == ap.x) && (gPostCovAtZ[i] == ap.z)) {
-			cov[i] = gPostCovCache[i];
-		} else {
-			cov[i] = Market::PfCoverPoint(ap, ap, 0.f, 0.f);
-			gPostCovCache[i] = cov[i];
-			gPostCovAtX[i] = ap.x;
-			gPostCovAtZ[i] = ap.z;
-		}
+		cov[i] = gPostCovCache[i];
 		covEyes[i] = cov[i];
 		seen[i] = Market::RadarSees(ap);
 		wm[i] = Market::gPfWorth[i];

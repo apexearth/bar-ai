@@ -17,11 +17,49 @@ array<int>   gConNextWreck;
 // rez=0 for whole games, with the bot idle.
 array<int>   gConNextSweep;
 
+// LATCHED. GetTunable is frozen for the game on its first read (CircuitAI
+// caches per name), and every one of these is a std::string built from the
+// literal plus a map walk. This chain asked for seven of them on EVERY
+// election of EVERY rez bot -- MedicBot, RezStationPos, RezScanPeriod three
+// times over, the rich-corpse floor and two in the idle rule.
+bool  gRzTuneSet = false;
+float gRzFleeS = 0.f;
+float gRzMedicShare = 0.f;
+float gRzMedicSetback = 0.f;
+float gRzMedicR = 0.f;
+int   gRzScanFrames = 0;
+float gRzRichM = 0.f;
+float gRzFwdBar = 0.f;
+
+void RzTuneFill()
+{
+	if (gRzTuneSet)
+		return;
+	gRzTuneSet = true;
+	gRzFleeS = ai.GetTunable("apex_rez_flee_s", TUNE_REZ_FLEE_S);
+	gRzMedicShare = ai.GetTunable("apex_medic_share", TUNE_MEDIC_SHARE);
+	gRzMedicSetback = ai.GetTunable("apex_medic_setback", TUNE_MEDIC_SETBACK);
+	gRzMedicR = ai.GetTunable("apex_medic_r", TUNE_MEDIC_R);
+	const int s = int(ai.GetTunable("apex_rez_scan_s", TUNE_REZ_SCAN_S) + 0.5f);
+	gRzScanFrames = (s <= 0) ? 1 : (s * SECOND);
+	gRzRichM = ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M);
+	gRzFwdBar = ai.GetTunable("apex_rezzer_fwd", TUNE_REZZER_FWD);
+}
+
+// How far a medic works from its station. Read by the medic rule and again by
+// the idle rule's station test.
+float MedicReach()
+{
+	RzTuneFill();
+	return gRzMedicR;
+}
+
 // How long one hit keeps a rez bot in flight, and how far apart its own wreck
 // scans sit. Both were fixed numbers, and both read as idling on screen.
 int RezFleeWindow()
 {
-	return int(ai.GetTunable("apex_rez_flee_s", TUNE_REZ_FLEE_S)) * SECOND;
+	RzTuneFill();
+	return int(gRzFleeS) * SECOND;
 }
 
 // "They should always angle themselves BEHIND our units in combat. Never
@@ -36,16 +74,35 @@ int gRzFrontVeto = 0;
 int gArmyFrontAt = -1;
 float gArmyFrontFf = -1.f;
 AIFloat3 gArmyFrontPos(-1.f, 0.f, -1.f);
+// The defs this walk can ever care about. The filter is pure catalog -- mobile,
+// not a builder, armed, not a flyer -- and the catalog is written once at Init
+// and never again, so re-testing all 580 def ids on every rebuild reached the
+// ~40 that can match the long way round. Ascending def id, which is the order
+// the walk already ran in, so ffs/at keep their exact previous ordering and the
+// percentile picks the same element.
+array<int> gArmyDefs;
+bool gArmyDefsSet = false;
+
 float ArmyFront(AIFloat3 &out pos)
 {
 	if (ai.frame - gArmyFrontAt >= 5 * SECOND) {
 		gArmyFrontAt = ai.frame;
+		if (!gArmyDefsSet && (Catalog::gMobile.length() > 1)) {
+			gArmyDefsSet = true;
+			for (uint d = 1; d < Catalog::gMobile.length(); ++d) {
+				if (!Catalog::gMobile[d] || Catalog::gBuilder[d]
+					|| (Catalog::gPower[d] <= 1.f) || Catalog::gFlyer[d])
+					continue;
+				gArmyDefs.insertLast(int(d));
+			}
+		}
 		array<float> ffs;
 		array<AIFloat3> at;
 		const AIFloat3 centre = Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f);
-		for (uint d = 1; d < Market::gOwnCount.length(); ++d) {
-			if ((Market::gOwnCount[d] <= 0) || !Catalog::gMobile[d] || Catalog::gBuilder[d]
-				|| (Catalog::gPower[d] <= 1.f) || Catalog::gFlyer[d])
+		const uint own = Market::gOwnCount.length();
+		for (uint q = 0; q < gArmyDefs.length(); ++q) {
+			const uint d = uint(gArmyDefs[q]);
+			if ((d >= own) || (Market::gOwnCount[d] <= 0))
 				continue;
 			array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(int(d)), centre, 30000.f);
 			if (us is null)
@@ -133,8 +190,8 @@ bool RezSiteOk(const AIFloat3 &in site)
 
 int RezScanPeriod()
 {
-	const int s = int(ai.GetTunable("apex_rez_scan_s", TUNE_REZ_SCAN_S) + 0.5f);
-	return (s <= 0) ? 1 : (s * SECOND);
+	RzTuneFill();
+	return gRzScanFrames;
 }
 
 // Slot by unit id. gConSlotId never shrinks -- every rez bot the game ever
@@ -219,7 +276,8 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 // so a medic under fire leaves like any other rez bot.
 bool MedicBot(CCircuitUnit@ unit)
 {
-	const float share = ai.GetTunable("apex_medic_share", TUNE_MEDIC_SHARE);
+	RzTuneFill();
+	const float share = gRzMedicShare;
 	if (share <= 0.f)
 		return false;
 	return float(int(unit.id) % 100) < share * 100.f;
@@ -240,7 +298,8 @@ bool RezStationPos(CCircuitUnit@ unit, AIFloat3 &out at)
 		lane = Military::LanePos();
 	if (!OnMap(lane) || (lane.SqLength2D() < 1.f))
 		return false;
-	float setback = ai.GetTunable("apex_medic_setback", TUNE_MEDIC_SETBACK);
+	RzTuneFill();
+	float setback = gRzMedicSetback;
 	if (setback <= 0.f)
 		setback = Catalog::gBuildDist[int(unit.circuitDef.id)];
 	if ((setback > 0.f) && Builder::gHomeSet) {
@@ -271,7 +330,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	if (ThreatFor(unit, lane) > CON_THREAT_VETO)
 		return null;
 	gConNextRepair[slot] = ai.frame + REZ_WRECK_PERIOD;
-	const float reach = ai.GetTunable("apex_medic_r", TUNE_MEDIC_R);
+	const float reach = MedicReach();
 	// The wounded near the fight come first, wherever the medic stands now.
 	array<CCircuitUnit@>@ hurt = ai.GetOwnDamagedNear(lane, reach);
 	if (hurt !is null) {
@@ -280,17 +339,27 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 		const AIFloat3 here = unit.GetPos(ai.frame);
 		for (uint i = 0; i < hurt.length(); ++i) {
 			CCircuitUnit@ u = hurt[i];
-			if ((u is null) || (u is unit) || !u.circuitDef.IsMobile())
+			if ((u is null) || (u is unit))
 				continue;
-			if (!RezSiteOk(u.GetPos(ai.frame))) {
+			// DISTANCE FIRST. Only the nearest survivor is ever taken, and every
+			// test here is a pure predicate, so a candidate already beaten on
+			// distance cannot change the answer whatever else is true of it --
+			// while RezSiteOk is a walk of every enemy we can see and was being
+			// paid for all of them. Same winner, one sweep per running minimum
+			// instead of one per casualty. (gRzFrontVeto therefore counts only
+			// the vetoes that still decided something.)
+			const AIFloat3 at = u.GetPos(ai.frame);
+			const float d = here.distance2D(at);
+			if (d >= bestDist)
+				continue;
+			if (!u.circuitDef.IsMobile())
+				continue;
+			if (!RezSiteOk(at)) {
 				++gRzFrontVeto;
 				continue;
 			}
-			const float d = here.distance2D(u.GetPos(ai.frame));
-			if (d < bestDist) {
-				bestDist = d;
-				@best = u;
-			}
+			bestDist = d;
+			@best = u;
 		}
 		if (best !is null) {
 			if (ai.frame >= gNextMedicLog) {
@@ -340,7 +409,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		return null;
 	const int slot = ConSlot(unit);
 	if (ai.frame >= gConNextSweep[slot]
-			&& (Military::LosingGround() || (BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
+			&& (LosingNow() || (BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
 		gConNextSweep[slot] = ai.frame + RezScanPeriod();
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
@@ -456,10 +525,13 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 		CCircuitUnit@ u = hurt[i];
 		if ((u is null) || (u is unit))
 			continue;
-		const float dist = here.distance2D(u.GetPos(ai.frame));
+		// One GetPos, not three: it was read for the distance, again for the
+		// site test, and a third time below for the winner.
+		const AIFloat3 at = u.GetPos(ai.frame);
+		const float dist = here.distance2D(at);
 		if (dist >= bestDist)
 			continue;
-		if (!RezSiteOk(u.GetPos(ai.frame))) {
+		if (!RezSiteOk(at)) {
 			++gRzFrontVeto;
 			continue;
 		}
@@ -492,15 +564,29 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 const int COM_WRECK_FRESH_S = 240;
 int gNextComRezLog = 0;
 
+// Our ally team's roster, read once. CAllyTeam takes its team ids in its
+// constructor and never writes them again, while ai.GetTeamIds() looks the
+// element type up BY NAME through the script engine and allocates a fresh
+// script array every call. This is the FIRST rung of seven and runs on every
+// election of every rez bot, so that was one type-name lookup and one array
+// allocation per election, all game, for a list that cannot change.
+array<int> gComRezMates;
+bool gComRezMatesSet = false;
+
 IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit))
 		return null;
-	array<Id>@ mates = ai.GetTeamIds();
-	if (mates is null)
-		return null;
-	for (uint i = 0; i < mates.length(); ++i) {
-		const int t = int(mates[i]);
+	if (!gComRezMatesSet) {
+		array<Id>@ mates = ai.GetTeamIds();
+		if (mates is null)
+			return null;
+		gComRezMatesSet = true;
+		for (uint i = 0; i < mates.length(); ++i)
+			gComRezMates.insertLast(int(mates[i]));
+	}
+	for (uint i = 0; i < gComRezMates.length(); ++i) {
+		const int t = gComRezMates[i];
 		const float wf = ai.ReadTeamValue(t, "comwf", -1.f);
 		if ((wf < 0.f) || (ai.frame > int(wf) + COM_WRECK_FRESH_S * SECOND))
 			continue;
@@ -532,6 +618,8 @@ IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 // they feel safe they should prefer to resurrect"). And only where the bot can
 // afford the time: an interrupted resurrect returns nothing at all, where a
 // reclaim banks metal continuously as it goes.
+CCircuitDef@ gRzAfus = null;
+
 IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit))
@@ -557,8 +645,12 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// metal bar left every T1 wreck to the reclaim beam.
 		const bool rezPays = (Market::ArmyTarget() > Market::ArmyValue())
 				&& !aiEconomyMgr.isEnergyStalling;
-		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH,
-				rezPays ? WRECK_MIN : ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M));
+		float floorM = WRECK_MIN;
+		if (!rezPays) {
+			RzTuneFill();
+			floorM = gRzRichM;
+		}
+		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH, floorM);
 		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezSiteOk(rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
@@ -577,7 +669,13 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		&& !(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
 		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
-		CCircuitDef@ afus = SideDef3("armafus", "corafus", "legafus");
+		// Latched, the same law as Brain::LightTowerRange: SideDef3 is a side-name
+		// read plus a def lookup BY NAME, the answer is constant once the def
+		// table is up, and .count stays live off the handle. Never latched off a
+		// null def -- that is "the table is not up yet".
+		if (gRzAfus is null)
+			@gRzAfus = SideDef3("armafus", "corafus", "legafus");
+		CCircuitDef@ afus = gRzAfus;
 		// Centred on a corpse we can actually see, not on the bot's own feet.
 		// A resurrect pays out only on completion, so an area order over empty
 		// ground is 60 seconds of standing still with nothing to show.
@@ -617,7 +715,7 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	// whatever it finds on the way.
 	AIFloat3 station;
 	if (RezStationPos(unit, station) && !InEnemyReach(station)
-		&& (here.distance2D(station) > ai.GetTunable("apex_medic_r", TUNE_MEDIC_R)))
+		&& (here.distance2D(station) > MedicReach()))
 	{
 		IUnitTask@ walk = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::LOW, station, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -628,11 +726,9 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	// sensor, so "standing around dangerous areas" (apexearth, watching,
 	// 2026-08-29) read safe to it. Forward of rear-crew ground with no job and
 	// no station to hold, it retires to the haven.
-	if (Military::ForwardFraction(here)
-		> ai.GetTunable("apex_rezzer_fwd", TUNE_REZZER_FWD))
-	{
+	RzTuneFill();
+	if (Military::ForwardFraction(here) > gRzFwdBar)
 		return Retreat(unit);
-	}
 	return null;
 }
 

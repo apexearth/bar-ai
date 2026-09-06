@@ -218,6 +218,25 @@ void CCircuitAI::MobileSlave(int newTeamId)
 
 int CCircuitAI::HandleGameEvent(int topic, const void* data)
 {
+	// apex: every engine event that ISN'T EVENT_UPDATE runs outside AiFrame's
+	// clock, so UnitCreated/Damaged/Destroyed and EnemyEnterLOS were being
+	// counted as engine time by every frame budget we have taken. Nanoseconds,
+	// because a single handler rounds to zero microseconds; RAII, because
+	// EVENT_INIT returns from inside the switch.
+	struct SEvtClock {
+		CCircuitAI* self;
+		bool on;
+		std::chrono::steady_clock::time_point t0;
+		~SEvtClock() {
+			if (!on) {
+				return;
+			}
+			self->perfEvtNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+					std::chrono::steady_clock::now() - t0).count();
+			++self->perfEvtCalls;
+		}
+	} evtClock{this, topic != EVENT_UPDATE, std::chrono::steady_clock::now()};
+
 	int ret = ERROR_UNKNOWN;
 
 	switch (topic) {
@@ -978,10 +997,14 @@ int CCircuitAI::Update(int frame)
 				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
 				perfFrameMaxUs / 1000.f);
 		const uint64_t perfAccounted = perfAllyUs + perfJobsUs + perfActUs + perfScrUs;
-		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f scrMs=%.1f otherMs=%.1f",
+		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f scrMs=%.1f otherMs=%.1f"
+				" evtMs=%.1f/%u",
 				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
 				perfScrUs / 1000.f,
-				(perfFrameUs > perfAccounted) ? (perfFrameUs - perfAccounted) / 1000.f : 0.f);
+				(perfFrameUs > perfAccounted) ? (perfFrameUs - perfAccounted) / 1000.f : 0.f,
+				perfEvtNs / 1000000.f, perfEvtCalls);
+		perfEvtNs = 0;
+		perfEvtCalls = 0;
 		// apex: how much WORK the O(n) helpers did, not how long they took --
 		// a visited count that grows faster than the unit count names the
 		// quadratic helper without a clock in the hot loop.
@@ -2689,6 +2712,8 @@ int CCircuitAI::GetMetalResId()
 // this once per rez bot six times a second while site safety runs it per
 // candidate site. Approximate, not exact: an enemy registered part way through
 // a frame is seen by the callers after it rather than before.
+static constexpr size_t REACH_LEAF = 8;  // below this the tree costs more than the scan
+
 void CCircuitAI::RebuildReachCache()
 {
 	if (reachCacheFrame == lastFrame) {
@@ -2711,7 +2736,110 @@ void CCircuitAI::RebuildReachCache()
 			continue;
 		}
 		const springai::AIFloat3& p = e->GetPos();
-		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed()});
+		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(),
+				(uint32_t)reachCache.size()});
+	}
+	reachNodes.clear();
+	if (reachCache.size() > REACH_LEAF) {
+		reachNodes.reserve(reachCache.size() / 2 + 2);  // leaves hold >= 4, so <= n/2 nodes
+		BuildReachTree(0, (int32_t)reachCache.size());
+	}
+}
+
+// apex: median-split BVH over the cache, rebuilt with it, because the flattened
+// cache still cost a pass over EVERY enemy per call and `perf sweep reach` was
+// the largest counter in the log.
+//
+// A node carries its box plus the largest reach and speed below it, so
+// `boxMinDist - (maxReach + maxSpeed * reactS)` is a lower bound on every slack
+// inside and a subtree that cannot beat the running best is skipped whole.
+// Answers stay IDENTICAL, not approximate: the bound prunes only what it proves
+// cannot win, and each enemy keeps its unsorted index so an exact tie returns
+// the same enemy the linear scan did.
+int32_t CCircuitAI::BuildReachTree(int32_t first, int32_t count)
+{
+	const int32_t self = (int32_t)reachNodes.size();
+	reachNodes.emplace_back();
+	float minx = std::numeric_limits<float>::max();
+	float minz = minx;
+	float maxx = -minx;
+	float maxz = -minx;
+	float maxReach = 0.f;
+	float maxSpeed = 0.f;
+	for (int32_t i = first; i < first + count; ++i) {
+		const SReachEnemy& e = reachCache[i];
+		minx = std::min(minx, e.x);  maxx = std::max(maxx, e.x);
+		minz = std::min(minz, e.z);  maxz = std::max(maxz, e.z);
+		maxReach = std::max(maxReach, e.reach);
+		maxSpeed = std::max(maxSpeed, e.speed);
+	}
+	{
+		SReachNode& nd = reachNodes[self];
+		nd.minx = minx;  nd.minz = minz;  nd.maxx = maxx;  nd.maxz = maxz;
+		nd.maxReach = maxReach;  nd.maxSpeed = maxSpeed;
+		nd.first = first;  nd.count = count;  nd.right = -1;
+	}
+	if (count <= (int32_t)REACH_LEAF) {
+		return self;
+	}
+	const int32_t half = count / 2;
+	const auto mid = reachCache.begin() + first + half;
+	if ((maxx - minx) >= (maxz - minz)) {
+		std::nth_element(reachCache.begin() + first, mid, reachCache.begin() + first + count,
+				[](const SReachEnemy& a, const SReachEnemy& b) { return a.x < b.x; });
+	} else {
+		std::nth_element(reachCache.begin() + first, mid, reachCache.begin() + first + count,
+				[](const SReachEnemy& a, const SReachEnemy& b) { return a.z < b.z; });
+	}
+	BuildReachTree(first, half);  // lands at self + 1
+	const int32_t r = BuildReachTree(first + half, count - half);
+	reachNodes[self].count = 0;
+	reachNodes[self].right = r;
+	return self;
+}
+
+float CCircuitAI::ReachNodeMinDist(int32_t ni, float px, float pz) const
+{
+	const SReachNode& nd = reachNodes[ni];
+	const float dx = std::max(0.f, std::max(nd.minx - px, px - nd.maxx));
+	const float dz = std::max(0.f, std::max(nd.minz - pz, pz - nd.maxz));
+	return sqrtf(dx * dx + dz * dz);
+}
+
+void CCircuitAI::ReachQuery(int32_t ni, float px, float pz, float reactS, float minDist,
+		float& worst, uint32_t& bestIdx, const SReachEnemy*& best)
+{
+	const SReachNode& nd = reachNodes[ni];
+	// Strict: an equal bound may still hide a tie with a lower index, and the
+	// tie-break is what keeps the answer bit-identical to the old scan.
+	if (minDist - (nd.maxReach + nd.maxSpeed * reactS) > worst) {
+		return;
+	}
+	if (nd.count > 0) {
+		perfReachSweep += nd.count;
+		for (int32_t i = nd.first; i < nd.first + nd.count; ++i) {
+			const SReachEnemy& e = reachCache[i];
+			const float dx = px - e.x;
+			const float dz = pz - e.z;
+			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
+			if ((slack < worst) || ((slack == worst) && (e.idx < bestIdx))) {
+				worst = slack;
+				bestIdx = e.idx;
+				best = &e;
+			}
+		}
+		return;
+	}
+	const int32_t l = ni + 1;
+	const int32_t r = nd.right;
+	const float dl = ReachNodeMinDist(l, px, pz);
+	const float dr = ReachNodeMinDist(r, px, pz);
+	if (dl <= dr) {
+		ReachQuery(l, px, pz, reactS, dl, worst, bestIdx, best);
+		ReachQuery(r, px, pz, reactS, dr, worst, bestIdx, best);
+	} else {
+		ReachQuery(r, px, pz, reactS, dr, worst, bestIdx, best);
+		ReachQuery(l, px, pz, reactS, dl, worst, bestIdx, best);
 	}
 }
 
@@ -2719,18 +2847,24 @@ float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS
 		springai::AIFloat3* foeOut)
 {
 	RebuildReachCache();
-	perfReachSweep += reachCache.size();
 	++perfReachCalls;
 	float worst = std::numeric_limits<float>::max();
+	uint32_t bestIdx = std::numeric_limits<uint32_t>::max();
 	const SReachEnemy* best = nullptr;
-	for (const SReachEnemy& e : reachCache) {
-		const float dx = pos.x - e.x;
-		const float dz = pos.z - e.z;
-		const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
-		if (slack < worst) {
-			worst = slack;
-			best = &e;
+	if (reachNodes.empty()) {  // too few to pay for the tree
+		perfReachSweep += reachCache.size();
+		for (const SReachEnemy& e : reachCache) {
+			const float dx = pos.x - e.x;
+			const float dz = pos.z - e.z;
+			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
+			if (slack < worst) {
+				worst = slack;
+				best = &e;
+			}
 		}
+	} else {
+		ReachQuery(0, pos.x, pos.z, reactS, ReachNodeMinDist(0, pos.x, pos.z),
+				worst, bestIdx, best);
 	}
 	if ((foeOut != nullptr) && (best != nullptr)) {
 		*foeOut = springai::AIFloat3(best->x, 0.f, best->z);
