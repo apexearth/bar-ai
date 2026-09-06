@@ -2186,3 +2186,48 @@ Measured same game: `apex: squadsize own n=4 avg=19.8 max=57`,
 
 NOT FIXED: converting the cap from angle to frontage needs a minimum
 separation in elmos, which is a doctrine number and his call.
+
+## 2026-09-06 — the A/B says today's nine fixes changed no outcome; the real gap is composition
+
+Paired 8+8 on Comet Catcher vs BARb:stable:hard, 40-minute cap, treatment
+`tournaments/20260906-123343-fixes-on` against its own parent build
+`tournaments/20260906-123756-fixes-off`.
+
+**Both arms 0-8.** Survival time is the same (mean 25.9 vs 25.6 min), so nothing
+here is a game-length artefact. Metal produced: ours 47,908 vs 35,302, theirs
+82,216 vs 65,685 -- our SHARE moved 0.537 -> 0.583, +8% relative, which is
+inside the +/-15% this repo already calls noise at this sample size.
+
+What the composition table says, and it is the same in BOTH arms:
+
+    category            Apex(on/off)      BARb(on/off)
+    static defence      2.2% / 2.3%       23.9% / 24.3%
+    army (real)        10.0% / 9.7%       22.8% / 17.2%
+    factories           7.8% / 10.8%      6.5% / 7.3%
+    constructors        7.4% / 6.9%       9.5% / 10.2%
+
+We put ~10% of metal into army and ~2% into static defence; BARb puts ~23% into
+army and ~24% into defence -- an order of magnitude more porc. That ratio is
+unchanged by every fix landed today, and it is the thing losing the games. None
+of the nine changes addressed it because none of them was about how much army
+and defence we buy, only about how the units we do buy behave.
+
+Two instrument results worth keeping:
+
+- STANDOFF (new telemetry, treatment arm only): 21,541 engagements over 8 games,
+  worst margin **-8 elmos**, 3,010 (14%) marginally inside a target's reach --
+  all consistent with being outranged, none with being ORDERED inside. The old
+  code's arithmetic predicts armart 710 -> 328 against a 435 turret (-107) and
+  armsnipe 900 -> 410 against 480 (-70); nothing of that magnitude occurs. There
+  is no baseline instrument, so this is "the predicted failure is absent", not a
+  before/after.
+- RAIDS -- CORRECTION TO THE 2026-09-06 CLAIM. "The raid director never fired
+  once" was true of ONE watched game (58/58 refused). Over 8 BASELINE games it
+  produced 4 real targets in 365 asks; fixed, 6 in 176. Refusal 98.9% -> 96.6%.
+  The prize fix is directionally right and nearly irrelevant at this rate: the
+  binding it now reads is only as good as what we have scouted, and we still run
+  essentially no scouts.
+
+UNEXERCISED, therefore still unvalidated: the shield work (no enemy LRPC
+appeared in ANY of the 16 games; zero shields elected in either arm) and, in
+these runs, the fusion pricing and the escort change.
