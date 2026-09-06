@@ -24,12 +24,30 @@ void Think()
 // weapon whatever it is for (an anti-nuke interceptor reports 72,000 elmos),
 // so consumers of a tower's range go through here. Kept as a sense: the
 // military defence-line geometry reads it.
+// Latched: SideDef3 is a side-name read plus a def lookup BY NAME, and the
+// answer is constant once the def table is up. Never latched off a null def --
+// that is "the table is not up yet", the same law as BestConvRatio.
+float gLightR = 0.f;
+
+bool LightTowerReady()
+{
+	return gLightR > 0.f;
+}
+
 float LightTowerRange()
 {
+	if (gLightR > 0.f)
+		return gLightR;
 	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
-	const float r = (light is null) ? 0.f : light.GetMaxRange();
-	return (r > 1.f) ? r : 430.f;   // armllt/leglht 430, corllt 435
+	if (light is null)
+		return 430.f;
+	const float r = light.GetMaxRange();
+	gLightR = (r > 1.f) ? r : 430.f;   // armllt/leglht 430, corllt 435
+	return gLightR;
 }
+
+bool gReachCapSet = false;
+float gReachCap = 0.f;
 
 float TowerReach(const CCircuitDef@ tower)
 {
@@ -38,8 +56,11 @@ float TowerReach(const CCircuitDef@ tower)
 	const float r = tower.GetMaxRange();
 	if (r <= 0.f)
 		return 0.f;
-	const float cap = LightTowerRange()
-			* ai.GetTunable("apex_def_reach_cap", TUNE_DEF_REACH_CAP);
+	if (!gReachCapSet) {
+		gReachCapSet = true;
+		gReachCap = ai.GetTunable("apex_def_reach_cap", TUNE_DEF_REACH_CAP);
+	}
+	const float cap = LightTowerRange() * gReachCap;
 	return (r > cap) ? cap : r;
 }
 

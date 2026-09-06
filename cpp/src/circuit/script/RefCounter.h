@@ -46,8 +46,6 @@ public:
 	// VirtualAlloc'd page; delete decommits but never releases the address
 	// range, so ANY use-after-free faults at the guilty instruction instead
 	// of corrupting whoever reused the heap block (observed: Lua GC).
-	static void* operator new(std::size_t sz);
-	static void operator delete(void* p);
 
 private:
 	std::atomic<int> refCount;

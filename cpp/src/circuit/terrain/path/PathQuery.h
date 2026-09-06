@@ -23,8 +23,6 @@ public:
 
 	// CRASH DIAGNOSTIC (temporary): guard-page allocation; delete decommits
 	// but keeps the address reserved. Defined in the matching .cpp.
-	static void* operator new(std::size_t sz);
-	static void operator delete(void* p);
 
 protected:
 	IPathQuery(const CPathFinder& pathfinder, int id, Type type);

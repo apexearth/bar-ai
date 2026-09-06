@@ -677,12 +677,12 @@ void CEconomyManager::Init()
 		const float maxTravel = 7 + rand() % (10 - 7 + 1);  // seconds
 		const int interval = allyTeam->GetSize() * FRAMES_PER_SEC;
 		startFactory = CScheduler::GameJob(&CEconomyManager::StartFactoryJob, this, maxTravel);
-		scheduler->RunJobEvery(startFactory, 1, circuit->GetSkirmishAIId() + 0 + 5 * FRAMES_PER_SEC);
+		scheduler->RunJobEvery(startFactory, 1, circuit->GetSkirmishAIId() + 0 + 5 * FRAMES_PER_SEC, "ecoStartFac");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CEconomyManager::UpdateStorageTasks, this),
-								interval, circuit->GetSkirmishAIId() + 1 + interval / 2 + 30 * FRAMES_PER_SEC);
+								interval, circuit->GetSkirmishAIId() + 1 + interval / 2 + 30 * FRAMES_PER_SEC, "ecoStore");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CEconomyManager::UpdateEconomy, this),
-								TEAM_SLOWUPDATE_RATE, circuit->GetSkirmishAIId());
+								TEAM_SLOWUPDATE_RATE, circuit->GetSkirmishAIId(), "ecoUpd");
 	};
 
 	circuit->GetSetupManager()->ExecOnFindStart(subinit);
@@ -1607,7 +1607,7 @@ void CEconomyManager::StartFactoryJob(const float seconds)
 	const int interval = circuit->GetAllyTeam()->GetSize() * FRAMES_PER_SEC;
 	auto update = static_cast<IBuilderTask* (CEconomyManager::*)(void)>(&CEconomyManager::UpdateFactoryTasks);
 	scheduler->RunJobEvery(CScheduler::GameJob(update, this),
-							interval, circuit->GetSkirmishAIId() + 0 + 10 * interval);
+							interval, circuit->GetSkirmishAIId() + 0 + 10 * interval, "ecoFac");
 }
 
 CBFactoryTask* CEconomyManager::PickNextFactory(const AIFloat3& position, bool isStart)
@@ -1640,7 +1640,7 @@ void CEconomyManager::AddMorphee(CCircuitUnit* unit)
 	morphees.insert(unit);
 	if (morph == nullptr) {
 		morph = CScheduler::GameJob(&CEconomyManager::UpdateMorph, this);
-		circuit->GetScheduler()->RunJobEvery(morph, FRAMES_PER_SEC * 10);
+		circuit->GetScheduler()->RunJobEvery(morph, FRAMES_PER_SEC * 10, 0, "morph");
 	}
 }
 

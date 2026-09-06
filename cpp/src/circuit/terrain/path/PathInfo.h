@@ -23,8 +23,6 @@ public:
 
 	// CRASH DIAGNOSTIC (temporary): guard-page allocation; delete decommits
 	// but keeps the address reserved. Defined in the matching .cpp.
-	static void* operator new(std::size_t sz);
-	static void operator delete(void* p);
 
 	void Clear() { posPath.clear(); path.clear(); }  // FIXME: stop TravelAction
 	void PushPos(const springai::AIFloat3& pos, CPathFinder* pathfinder);

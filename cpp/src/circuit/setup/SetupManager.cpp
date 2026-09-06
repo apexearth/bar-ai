@@ -63,7 +63,7 @@ CSetupManager::CSetupManager(CCircuitAI* circuit, CSetupData* setupData)
 	}
 
 	findStart = CScheduler::GameJob(&CSetupManager::FindStart, this);
-	circuit->GetScheduler()->RunJobEvery(findStart, 1);
+	circuit->GetScheduler()->RunJobEvery(findStart, 1, 0, "findStart");
 }
 
 CSetupManager::~CSetupManager()

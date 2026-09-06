@@ -20,38 +20,6 @@ namespace circuit {
 using namespace springai;
 using namespace terrain;
 
-void* ICoreUnit::operator new(std::size_t sz)
-{
-	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	if (p == nullptr) {
-		throw std::bad_alloc();
-	}
-	return p;
-}
-
-void ICoreUnit::operator delete(void* p)
-{
-	if (p != nullptr) {
-		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: address never reused
-	}
-}
-
-void* CEnemyInfo::operator new(std::size_t sz)
-{
-	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	if (p == nullptr) {
-		throw std::bad_alloc();
-	}
-	return p;
-}
-
-void CEnemyInfo::operator delete(void* p)
-{
-	if (p != nullptr) {
-		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: address never reused
-	}
-}
-
 float SEnemyData::GetDefDamage() const
 {
 	if (cdef == nullptr) {  // unknown enemy is a threat

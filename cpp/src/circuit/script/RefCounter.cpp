@@ -12,22 +12,6 @@
 
 namespace circuit {
 
-void* IRefCounter::operator new(std::size_t sz)
-{
-	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	if (p == nullptr) {
-		throw std::bad_alloc();
-	}
-	return p;
-}
-
-void IRefCounter::operator delete(void* p)
-{
-	if (p != nullptr) {
-		VirtualFree(p, 0, MEM_DECOMMIT);  // keep reserved: the address must never be reused
-	}
-}
-
 IRefCounter::IRefCounter()
 		: refCount(1)
 {

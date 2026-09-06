@@ -30,6 +30,11 @@ namespace Market {
 //------------------------------------------------------------------------------
 
 array<AIFloat3> gWallP;        // slot positions, perimeter order
+// The same points as flat floats. WallAdds is asked once per candidate site of
+// every fill and walks all of them; at 64 slots and ~70 sites that is ~4,500
+// distance2D method calls a fill, for a compare that is two subtractions.
+array<float>    gWallX;
+array<float>    gWallZ;
 array<float>    gWallThreat;   // position-only senses, cached on the field stamp
 array<float>    gWallCover;
 array<float>    gWallHz;
@@ -60,6 +65,8 @@ void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 	const bool open = !PfCoveredAt(s);   // same test, off the tower index
 	const float cv = CoverAt(s);
 	gWallP.insertLast(s);
+	gWallX.insertLast(s.x);
+	gWallZ.insertLast(s.z);
 	gWallThreat.insertLast(ThreatAt(s));
 	gWallCover.insertLast(cv);
 	gWallHz.insertLast(HazardWith(s, cv));
@@ -106,6 +113,8 @@ void WallPrep()
 		return;
 	gWallAt = gPfAt;
 	gWallP.resize(0);
+	gWallX.resize(0);
+	gWallZ.resize(0);
 	gWallThreat.resize(0);
 	gWallCover.resize(0);
 	gWallHz.resize(0);
@@ -392,11 +401,14 @@ void WallAdjPrep()
 			held.insertLast(j);
 	}
 	const float rr = gWallAdjPitch * 1.6f;
+	const float rr2 = rr * rr;
 	for (uint i = 0; i < n; ++i) {
 		bool adj = false;
 		for (uint k = 0; !adj && (k < held.length()); ++k) {
 			const uint j = held[k];
-			if ((i != j) && (gWallP[i].distance2D(gWallP[j]) <= rr))
+			const float dx = gWallX[i] - gWallX[j];
+			const float dz = gWallZ[i] - gWallZ[j];
+			if ((i != j) && ((dx * dx + dz * dz) <= rr2))
 				adj = true;
 		}
 		gWallAdj[i] = adj;
@@ -602,9 +614,12 @@ bool WallAheadHeld(const AIFloat3& in p)
 	// The wall ahead of a tower is its NEAREST slot -- line or ring, the
 	// section it belonged to. Held means a standing tower covers that slot.
 	uint ni = 0;
-	float nd = 1e12f;
-	for (uint i = 0; i < gWallP.length(); ++i) {
-		const float dd = p.distance2D(gWallP[i]);
+	float nd = 1e30f;
+	// Squared distance: same argmin, without a square root per slot.
+	for (uint i = 0; i < gWallX.length(); ++i) {
+		const float dx = p.x - gWallX[i];
+		const float dz = p.z - gWallZ[i];
+		const float dd = dx * dx + dz * dz;
 		if (dd < nd) {
 			nd = dd;
 			ni = i;
@@ -623,8 +638,11 @@ float WallAdds(const AIFloat3& in at, float reach)
 		return 0.f;
 	int inReach = 0;
 	int open = 0;
-	for (uint i = 0; i < gWallP.length(); ++i) {
-		if (at.distance2D(gWallP[i]) > reach)
+	const float r2 = reach * reach;
+	for (uint i = 0; i < gWallX.length(); ++i) {
+		const float dx = at.x - gWallX[i];
+		const float dz = at.z - gWallZ[i];
+		if ((dx * dx + dz * dz) > r2)
 			continue;
 		++inReach;
 		if (gWallOpen[i])

@@ -594,14 +594,14 @@ void CMilitaryManager::Init()
 		CScheduler* scheduler = circuit->GetScheduler().get();
 		const int interval = 4;
 		const int offset = circuit->GetSkirmishAIId() % interval;
-		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateIdle, this), interval, offset + 0);
-		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1);
-		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2);
-		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::DispatchRaids, this), FRAMES_PER_SEC * 2, offset + 3);
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateIdle, this), interval, offset + 0, "milIdle");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1, "milUpd");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::DispatchRaids, this), FRAMES_PER_SEC * 2, offset + 3, "milRaid");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
-								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 12);
+								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 12, "wdog");
 	};
 
 	circuit->GetSetupManager()->ExecOnFindStart(subinit);
@@ -1618,7 +1618,9 @@ void CMilitaryManager::UpdateDefenceTasks()
 				// army to it." The guns already standing at the breach count
 				// against the demand, same radius as the enemy measure.
 				float standing = .0f;
-				for (CCircuitUnit* s : circuit->GetOwnStructsNear(spots[i].pos, 800.f)) {
+				static std::vector<CCircuitUnit*> nearStructs;  // NOTE: micro-opt, one sweep per hot spot
+				circuit->GetOwnStructsNear(spots[i].pos, 800.f, nearStructs);
+				for (CCircuitUnit* s : nearStructs) {
 					CCircuitDef* sdef = s->GetCircuitDef();
 					if (sdef->IsAttacker() && !sdef->IsRoleAA()) {
 						standing += sdef->GetPower();
@@ -1842,7 +1844,9 @@ void CMilitaryManager::DispatchRaids()
 				// No course to read: it is going for the nearest of ours.
 				CCircuitUnit* nearest = nullptr;
 				float bestSq = SQUARE(1500.f);
-				for (CCircuitUnit* st : circuit->GetOwnStructsNear(ePos, 1500.f)) {
+				static std::vector<CCircuitUnit*> nearStructs;  // NOTE: micro-opt, one sweep per inbound enemy
+				circuit->GetOwnStructsNear(ePos, 1500.f, nearStructs);
+				for (CCircuitUnit* st : nearStructs) {
 					const float sq = st->GetPos(frame).SqDistance2D(ePos);
 					if (sq < bestSq) {
 						bestSq = sq;

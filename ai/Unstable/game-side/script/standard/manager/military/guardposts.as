@@ -26,6 +26,11 @@ int   gPostUnits = 0;
 // spot can be priced with the units that cover it (units are cover, the
 // same as turrets -- see UnitCoverAt).
 array<AIFloat3> gPostUPos;
+// The same posts as flat floats: CoverWith asks UnitCoverAt for every candidate
+// site of every defence fill and for every asset of every posting pass, and each
+// ask was a distance2D method call per posted guard.
+array<float> gPostUX;
+array<float> gPostUZ;
 array<float> gPostUM;
 array<float> gPostUReach;
 
@@ -34,13 +39,15 @@ array<float> gPostUReach;
 float UnitCoverAt(const AIFloat3& in pos)
 {
 	float m = 0.f;
-	for (uint i = 0; i < gPostUPos.length(); ++i) {
+	for (uint i = 0; i < gPostUX.length(); ++i) {
 		const float r = gPostUReach[i];
 		if (r <= 1.f)
 			continue;
-		const float d = gPostUPos[i].distance2D(pos);
-		if (d < r)
-			m += gPostUM[i] * (1.f - d / r);
+		const float dx = gPostUX[i] - pos.x;
+		const float dz = gPostUZ[i] - pos.z;
+		const float d2 = dx * dx + dz * dz;
+		if (d2 < r * r)
+			m += gPostUM[i] * (1.f - sqrt(d2) / r);
 	}
 	return m;
 }
@@ -192,11 +199,17 @@ void RefreshPostLife()
 	hp /= n;
 	float dps = 0.f;
 	const float fastest = Market::FoeSpeedCap() - 0.1f;
+	// The two SELECTIVE tests first. LineCombat is six array reads behind a
+	// call and it was answering for every def in the game before speed and dps
+	// -- which between them reject nearly all of them -- had been looked at.
+	// Same set accepted, same maximum: the running max only grows, so skipping
+	// a def whose dps cannot beat it is the old `> dps` guard moved earlier.
 	for (int k = 1; k <= Catalog::gDefCount; ++k) {
-		if (!Catalog::gAvailable[k] || !Market::LineCombat(k) || Catalog::gFlyer[k])
+		if ((Catalog::gSpeed[k] < fastest) || (Catalog::gDps[k] <= dps))
 			continue;
-		if ((Catalog::gSpeed[k] >= fastest) && (Catalog::gDps[k] > dps))
-			dps = Catalog::gDps[k];
+		if (!Catalog::gAvailable[k] || Catalog::gFlyer[k] || !Market::LineCombat(k))
+			continue;
+		dps = Catalog::gDps[k];
 	}
 	if (dps < 1.f)
 		dps = 20.f;
@@ -415,6 +428,8 @@ void UpdateGuardPosts()
 	const uint n = Market::gPfPos.length();
 	aiMilitaryMgr.ClearGuardPosts();
 	gPostUPos.resize(0);
+	gPostUX.resize(0);
+	gPostUZ.resize(0);
 	gPostUM.resize(0);
 	gPostUReach.resize(0);
 	gPostAssets = int(n);
@@ -601,6 +616,8 @@ void UpdateGuardPosts()
 		aiMilitaryMgr.SetGuardPost(us[bu], postAt, seen[at] ? rE : r0);
 		++onAsset[at];
 		gPostUPos.insertLast(postAt);
+		gPostUX.insertLast(postAt.x);
+		gPostUZ.insertLast(postAt.z);
 		gPostUM.insertLast(Catalog::gCostM[ud[bu]]);
 		gPostUReach.insertLast(seen[at] ? rE : r0);
 		reach = r0;

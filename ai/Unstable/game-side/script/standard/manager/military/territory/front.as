@@ -87,6 +87,14 @@ bool gAnyMet = false;
 // what the radius is quantised to, and at 14 samples over half the map diagonal
 // that was 366 elmos on a 16x12 map.
 const int RING_SAMPLES = 28;
+// THE RING'S TWO PASSES READ THE SAME CELLS. Pass 1 exists only to find the two
+// peaks, and it walks exactly the samples pass 2 marches -- so the influence
+// map was asked for every one of them twice a rebuild. Pass 1 keeps what it
+// read here and pass 2 indexes it: same numbers, half the engine reads. Pass 2
+// can never want a sample pass 1 did not take, because both guard on the same
+// `d > march` and OnMap tests before reading.
+array<float> gRingSA;   // ally influence at ray r, sample i-1
+array<float> gRingSF;   // ...and enemy influence
 // TWO FIELDS, TWO BARS -- never their difference.
 //
 // GetNetInflAt is allyInfl - enemyInfl, both refilled to INFL_BASE = 0 every
@@ -166,6 +174,11 @@ void RebuildFront()
 	gFrontFwd = fwd;
 	gFrontSide = side;
 
+	// Same bar for every lane and every sample, and GetTunable is frozen for the
+	// game once read -- inside the loop it was a string lookup 13 x 14 times a
+	// rebuild for a constant. RebuildRing already reads it once for the same
+	// reason.
+	const float laneBar = ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR);
 	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
 		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
 		float found = -1.f;
@@ -186,7 +199,7 @@ void RebuildFront()
 			// `GetBuilderThreatAt(pos) > THREAT_MIN` (1.0, util/Defines.h), and
 			// the accessor has already subtracted THREAT_BASE, so testing `> 0`
 			// instead put the safe edge one step from the base in every lane.
-			if (ai.GetBuilderThreatAt(p) <= ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR))
+			if (ai.GetBuilderThreatAt(p) <= laneBar)
 				safe = t;
 			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
 			// enemy, so ground neither side has been near reads exactly 0, and
@@ -279,12 +292,17 @@ void RebuildRing(const AIFloat3& in home)
 	// the engine at frame 3.
 	float maxAlly = 0.f;
 	float maxFoe = 0.f;
+	if (gRingSA.length() != uint(FRONT_RAYS * RING_SAMPLES)) {
+		gRingSA.resize(uint(FRONT_RAYS * RING_SAMPLES));
+		gRingSF.resize(uint(FRONT_RAYS * RING_SAMPLES));
+	}
 	for (int r = 0; r < FRONT_RAYS; ++r) {
 		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
 		if (!rearToo && haveBearing
 			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
 			continue;
+		const int rowS = r * RING_SAMPLES;
 		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
 			if (d > march)
@@ -294,6 +312,8 @@ void RebuildRing(const AIFloat3& in home)
 				break;
 			const float a = ai.GetAllyInflAt(p);
 			const float f = ai.GetEnemyInflAt(p);
+			gRingSA[uint(rowS + i - 1)] = a;
+			gRingSF[uint(rowS + i - 1)] = f;
 			if (a > maxAlly) maxAlly = a;
 			if (f > maxFoe) maxFoe = f;
 		}
@@ -330,6 +350,7 @@ void RebuildRing(const AIFloat3& in home)
 		bool met = false;        // did the ray break on THEM, or just run out
 		float metAt = 0.f;       // ...and at what distance
 		bool wall = false;       // did it run out of map
+		const int rowS = r * RING_SAMPLES;
 		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
 			if (d > march)
@@ -371,13 +392,14 @@ void RebuildRing(const AIFloat3& in home)
 			//
 			// Ground where our own influence still dominates is ours whoever is
 			// standing on it. The ray stops where theirs actually wins.
-			const float foeHere = ai.GetEnemyInflAt(p);
-			if ((foeHere >= gRingFoeBar) && (foeHere > ai.GetAllyInflAt(p))) {
+			const float foeHere = gRingSF[uint(rowS + i - 1)];
+			const float allyHere = gRingSA[uint(rowS + i - 1)];
+			if ((foeHere >= gRingFoeBar) && (foeHere > allyHere)) {
 				met = true;
 				metAt = d;   // remember WHERE, so a first-sample contact is
 				break;       // still a bearing we hold, not a discarded ray
 			}
-			if (ai.GetAllyInflAt(p) < gRingAllyBar)
+			if (allyHere < gRingAllyBar)
 				break;   // our territory ended at the previous sample
 			edge = d;
 			// Only inside our own ground: past the radius the answer is not used,

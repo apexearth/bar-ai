@@ -30,6 +30,7 @@
 #include "Team.h"
 #include "Log.h"
 
+#include <algorithm>
 #include <chrono>
 
 namespace circuit {
@@ -169,28 +170,60 @@ void CAllyTeam::UpdateFriendlyUnits()
 	}
 
 	const auto tFr0 = std::chrono::steady_clock::now();
-	for (auto& kv : friendlyUnits) {
-		delete kv.second;
-	}
-	friendlyUnits.clear();
 	COOAICallback* clb = circuit->GetCallback();
-	const std::vector<Unit*>& units = clb->GetFriendlyUnits();
-	for (Unit* u : units) {
-		int unitId = u->GetUnitId();
-		CCircuitDef::Id unitDefId = clb->Unit_GetDefId(unitId);
-		CAllyUnit* unit = new CAllyUnit(unitId, u, circuit->GetCircuitDef(unitDefId));
-		friendlyUnits[unitId] = unit;
+	// apex: diff the map by unit id instead of tearing it down. The rebuild
+	// cost three heap round trips per unit per pass (WrappUnit, CAllyUnit, map
+	// node) and the map was re-grown from empty every time, so it scaled with
+	// the whole army rather than with what changed.
+	friendlyIds = clb->GetFriendlyUnitIds();
+	std::sort(friendlyIds.begin(), friendlyIds.end());
+	friendlyIds.erase(std::unique(friendlyIds.begin(), friendlyIds.end()), friendlyIds.end());
+
+	auto it = friendlyUnits.begin();
+	size_t i = 0;
+	while ((it != friendlyUnits.end()) && (i < friendlyIds.size())) {
+		if (it->first < friendlyIds[i]) {  // gone since the last pass
+			delete it->second;
+			it = friendlyUnits.erase(it);
+			++perfFrDel;
+		} else if (it->first > friendlyIds[i]) {  // never seen
+			const ICoreUnit::Id unitId = friendlyIds[i++];
+			const CCircuitDef::Id unitDefId = clb->Unit_GetDefId(unitId);
+			friendlyUnits.emplace_hint(it, unitId,
+					new CAllyUnit(unitId, clb->WrapUnit(unitId), circuit->GetCircuitDef(unitDefId)));
+			++perfFrAdd;
+		} else {  // same unit: the def is still re-read, a morph changes it
+			const CCircuitDef::Id unitDefId = clb->Unit_GetDefId(it->first);
+			it->second->SetAllyCircuitDef(circuit->GetCircuitDef(unitDefId));
+			++it;
+			++i;
+		}
 	}
+	while (it != friendlyUnits.end()) {
+		delete it->second;
+		it = friendlyUnits.erase(it);
+		++perfFrDel;
+	}
+	for (; i < friendlyIds.size(); ++i) {
+		const ICoreUnit::Id unitId = friendlyIds[i];
+		const CCircuitDef::Id unitDefId = clb->Unit_GetDefId(unitId);
+		friendlyUnits.emplace_hint(friendlyUnits.end(), unitId,
+				new CAllyUnit(unitId, clb->WrapUnit(unitId), circuit->GetCircuitDef(unitDefId)));
+		++perfFrAdd;
+	}
+
 	lastUpdate = circuit->GetLastFrame();
 	perfFrUs += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - tFr0).count();
 	++perfFrCalls;
 	if (lastUpdate >= perfFrNextLog) {
 		perfFrNextLog = lastUpdate + 1800;
-		circuit->LOG("apex: perf friendly calls=%u totalMs=%.1f units=%i",
-				perfFrCalls, perfFrUs / 1000.f, (int)friendlyUnits.size());
+		circuit->LOG("apex: perf friendly calls=%u totalMs=%.1f units=%i add=%u del=%u",
+				perfFrCalls, perfFrUs / 1000.f, (int)friendlyUnits.size(), perfFrAdd, perfFrDel);
 		perfFrUs = 0;
 		perfFrCalls = 0;
+		perfFrAdd = 0;
+		perfFrDel = 0;
 	}
 }
 

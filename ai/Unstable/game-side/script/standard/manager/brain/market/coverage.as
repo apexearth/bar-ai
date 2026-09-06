@@ -62,6 +62,22 @@ void CoverRaysPrep()
 	}
 }
 
+// Latched: GetTunable is frozen for the game on first read, and these two are
+// read once per candidate site of every defence fill (CoverWith) and again for
+// the same site by CoverAddsAt.
+bool  gCwTuneSet = false;
+float gCwTradeV = 0.f;
+bool  gCwStandoffOn = false;
+
+void CwTuneFill()
+{
+	if (gCwTuneSet)
+		return;
+	gCwTuneSet = true;
+	gCwTradeV = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	gCwStandoffOn = ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f;
+}
+
 float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 		float extraReach, float extraM)
 {
@@ -72,9 +88,9 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 	const float unitCover = Military::UnitCoverAt(pos);
 	if ((gProtPos[PROT_DEF].length() == 0) && (extraReach <= 0.f))
 		return unitCover;
-	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
-	const float standoff = (ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f)
-			? Military::FoeReach() : 0.f;
+	CwTuneFill();
+	const float trade = gCwTradeV;
+	const float standoff = gCwStandoffOn ? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
 		return CoverPointM(pos, trade, extraAt, extraReach, extraM) + unitCover;
 	CoverRaysPrep();
@@ -102,8 +118,8 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 // the most expensive thing in the market.
 float CoverAddsAt(const AIFloat3& in pos, float reach, float adds)
 {
-	const float standoff = (ai.GetTunable("apex_standoff_cover", TUNE_STANDOFF_COVER) > 0.f)
-			? Military::FoeReach() : 0.f;
+	CwTuneFill();
+	const float standoff = gCwStandoffOn ? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
 		return adds;   // the point path: the turret stands on the point it covers
 	CoverRaysPrep();
@@ -292,7 +308,36 @@ const int LOSS_MAX = 24;
 const float LOSS_MERGE_R = 600.f;
 array<AIFloat3> gLossPos;
 array<float> gLossM;
+// The same points as flat floats. LossRateAt is asked twice for every site the
+// protect fill prices (ThreatAt and HazardWith each ask), once per asset in the
+// guard-post pass, and per mex claim -- and every one of those was 24 distance2D
+// method calls over an array of AIFloat3. The compare is unchanged; only what it
+// reads is.
+array<float> gLossX;
+array<float> gLossZ;
 int gLossLast = 0;
+// GetTunable is frozen for the game on first read (CircuitAI.cpp), so latching
+// it here is exact, not approximate.
+bool  gLossTauSet = false;
+float gLossTauV = 180.f;
+
+float LossTau()
+{
+	if (!gLossTauSet) {
+		gLossTauSet = true;
+		const float t = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+		gLossTauV = (t > 1.f) ? t : 180.f;
+	}
+	return gLossTauV;
+}
+
+// ONE POINT, ONE FRAME, ONE ANSWER. ThreatAt and HazardWith are asked about the
+// same site in the same frame and each walked the field; the field only moves
+// when NoteEcoLoss fires or the frame advances, and both of those drop the memo.
+int   gLrAt = -1;
+float gLrX = 0.f;
+float gLrZ = 0.f;
+float gLrV = 0.f;
 
 void DecayLossField()
 {
@@ -300,8 +345,8 @@ void DecayLossField()
 	if (step <= 0)
 		return;
 	gLossLast = ai.frame;
-	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
-	float k = 1.f - (float(step) / 30.f) / ((tau > 1.f) ? tau : 180.f);
+	const float tau = LossTau();
+	float k = 1.f - (float(step) / 30.f) / tau;
 	if (k < 0.f)
 		k = 0.f;
 	for (uint i = 0; i < gLossM.length(); ++i)
@@ -316,6 +361,7 @@ void NoteEcoLoss(const AIFloat3& in at, float costM)
 	if ((costM <= 0.f) || !OnMap(at))
 		return;
 	DecayLossField();
+	gLrAt = -1;   // the field is about to move: the frame memo below is void
 	for (uint i = 0; i < gLossPos.length(); ++i) {
 		if (gLossPos[i].distance2D(at) < LOSS_MERGE_R) {
 			gLossM[i] += costM;
@@ -332,9 +378,13 @@ void NoteEcoLoss(const AIFloat3& in at, float costM)
 			return;
 		gLossPos.removeAt(worst);
 		gLossM.removeAt(worst);
+		gLossX.removeAt(worst);
+		gLossZ.removeAt(worst);
 	}
 	gLossPos.insertLast(at);
 	gLossM.insertLast(costM);
+	gLossX.insertLast(at.x);
+	gLossZ.insertLast(at.z);
 }
 
 // Metal per second of our own structures currently dying near pos. The ledger
@@ -342,13 +392,23 @@ void NoteEcoLoss(const AIFloat3& in at, float costM)
 float LossRateAt(const AIFloat3& in pos)
 {
 	DecayLossField();
-	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	if ((gLrAt == ai.frame) && (gLrX == pos.x) && (gLrZ == pos.z))
+		return gLrV;
+	const float rr = LOSS_MERGE_R * 2.f;
+	const float rr2 = rr * rr;
 	float m = 0.f;
-	for (uint i = 0; i < gLossPos.length(); ++i) {
-		if (gLossPos[i].distance2D(pos) < LOSS_MERGE_R * 2.f)
+	for (uint i = 0; i < gLossX.length(); ++i) {
+		const float dx = gLossX[i] - pos.x;
+		const float dz = gLossZ[i] - pos.z;
+		if ((dx * dx + dz * dz) < rr2)
 			m += gLossM[i];
 	}
-	return m / ((tau > 1.f) ? tau : 180.f);
+	const float v = m / LossTau();
+	gLrAt = ai.frame;
+	gLrX = pos.x;
+	gLrZ = pos.z;
+	gLrV = v;
+	return v;
 }
 
 //------------------------------------------------------------------------------

@@ -23,6 +23,14 @@ PERF = re.compile(r"perf Ai(?:MakeTask|Update) calls=\d+ totalMs=([\d.]+)")
 AIFR = re.compile(r"perf AiFrame calls=\d+ totalMs=([\d.]+) avgUs=[\d.]+ maxMs=([\d.]+)")
 # apex: perf sec <name> calls=N totalMs=X maxMs=Y -- script self-profiled sections.
 SEC = re.compile(r"perf sec (\S+) calls=(\d+) totalMs=([\d.]+) maxMs=([\d.]+)")
+# apex: perf jobs (ms/calls/maxMs) <name>=ms/calls/maxMs ... -- the C++ scheduler
+# jobs, which are ~87% of aiMs at hour scale. Named "job:<name>" so they land in
+# the same tables as the script sections; the two halves are directly comparable.
+JOBS = re.compile(r"perf jobs \(ms/calls/maxMs\)(.*)$")
+JOB = re.compile(r"(\S+)=([\d.]+)/(\d+)/([\d.]+)")
+# apex: perf sweep <helper>=elements/calls -- how much WORK the O(n) helpers did.
+SWEEP = re.compile(r"perf sweep (.*)$")
+SWEEPONE = re.compile(r"(\w+)=(\d+)/(\d+)")
 
 BUCKET = 1800  # frames per game-minute
 
@@ -50,6 +58,7 @@ def analyze(path):
     secs = {}    # name -> [ms, calls, maxMs], whole run
     perframe = {}  # frame -> AiFrame lines on it, = AIs in the game
     secb = {}    # name -> bucket -> ms, for the growth table
+    sweeps = {}  # helper -> bucket -> [elements visited, calls]
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             m = LINE.search(line)
@@ -90,6 +99,24 @@ def analyze(path):
                 secb.setdefault(sm_.group(1), {})
                 secb[sm_.group(1)][b] = (secb[sm_.group(1)].get(b, 0.0)
                                          + float(sm_.group(3)))
+                continue
+            jm = JOBS.search(line)
+            if jm:
+                for name, ms, calls, mx in JOB.findall(jm.group(1)):
+                    key = "job:" + name
+                    e = secs.setdefault(key, [0.0, 0, 0.0])
+                    e[0] += float(ms)
+                    e[1] += int(calls)
+                    e[2] = max(e[2], float(mx))
+                    secb.setdefault(key, {})
+                    secb[key][b] = secb[key].get(b, 0.0) + float(ms)
+                continue
+            wm = SWEEP.search(line)
+            if wm:
+                for name, elems, calls in SWEEPONE.findall(wm.group(1)):
+                    e = sweeps.setdefault(name, {})
+                    e[b] = [e.get(b, [0, 0])[0] + int(elems),
+                            e.get(b, [0, 0])[1] + int(calls)]
                 continue
             pm = PERF.search(line)
             if pm:
@@ -134,8 +161,21 @@ def analyze(path):
               f" -- {'within' if over <= 1.0 else f'{over:.1f}x over'}"
               f" the 20% share (<= {share / 16.0:.3f} ms per AI per frame)")
 
+    if sweeps:
+        # Elements walked, not time. A helper whose visited count climbs faster
+        # than the unit count is the quadratic one, whatever its clock says.
+        bs = sorted({b for h in sweeps.values() for b in h})
+        show = [b for b in bs if b % 10 == 0] + bs[-1:]
+        print(f"\n  O(n) helper census, elements visited / calls per minute:")
+        print("  " + f"{'min':>4}" + "".join(f"{n:>22}" for n in sorted(sweeps)))
+        for b in sorted(set(show)):
+            row = "".join(
+                f"{sweeps[n].get(b, [0, 0])[0]:>14,}/{sweeps[n].get(b, [0, 0])[1]:<7,}"
+                for n in sorted(sweeps))
+            print(f"  {b:>4}{row}")
+
     if secs:
-        print(f"\n  script sections, whole run (all players summed):")
+        print(f"\n  sections, whole run (all players summed; job: = C++ scheduler):")
         print(f"  {'section':<16} {'totalMs':>9} {'calls':>8} {'avgUs':>7} {'maxMs':>7}")
         for name, (ms, calls, mx) in sorted(secs.items(), key=lambda kv: -kv[1][0]):
             avg = (ms * 1000.0 / calls) if calls else 0.0

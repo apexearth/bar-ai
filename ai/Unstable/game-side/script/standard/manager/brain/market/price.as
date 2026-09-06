@@ -19,19 +19,30 @@ float Wage()
 // commander is three times a con's. The rate is what this lathe converts
 // per second when building the faction's light tower -- the same yardstick
 // the wall prices in -- and never below the wage it stood in for.
+// The yardstick is metal per BP-second on the light tower, which is constant --
+// latched, because SideDef3 is a def lookup BY NAME and this is priced into
+// every Want's tCost. Zero until the def table answers, and never latched off
+// a miss (the same law as BestConvRatio).
+float gWalkTowerM = 0.f;
+float gWalkTowerBT = 0.f;
+
 float WalkRate(float builderBP)
 {
 	float r = Wage();
-	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
-	if ((light !is null) && (builderBP > 0.f)) {
+	if (builderBP <= 0.f)
+		return r;
+	if (gWalkTowerBT <= 1.f) {
+		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+		if (light is null)
+			return r;
 		const int ld = int(light.id);
-		if (Catalog::ValidId(ld) && (Catalog::gBuildTime[ld] > 1.f)) {
-			const float own = Catalog::gCostM[ld] * builderBP / Catalog::gBuildTime[ld];
-			if (own > r)
-				r = own;
-		}
+		if (!Catalog::ValidId(ld) || (Catalog::gBuildTime[ld] <= 1.f))
+			return r;
+		gWalkTowerM = Catalog::gCostM[ld];
+		gWalkTowerBT = Catalog::gBuildTime[ld];
 	}
-	return r;
+	const float own = gWalkTowerM * builderBP / gWalkTowerBT;
+	return (own > r) ? own : r;
 }
 
 // A builder's walk to a site, in seconds. Straight-line: no path cost query

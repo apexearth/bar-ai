@@ -522,7 +522,7 @@ bool CDefendTask::FindTarget()
 			if ((eDefR != nullptr) && eDefR->IsAttacker() && (eDefR->GetMaxRange() > highestRange)) {
 				const float eR = eDefR->GetMaxRange() + 100.f;
 				reachesUs = (position.SqDistance2D(ePos) < SQUARE(eR))
-						|| !circuit->GetOwnStructsNear(ePos, eR).empty();
+						|| circuit->HasOwnStructNear(ePos, eR);
 			}
 		}
 		const bool atUs = (pos.SqDistance2D(ePos) < SQUARE(highestRange + 500.f)) || reachesUs;

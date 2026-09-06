@@ -22,6 +22,9 @@ float DefCrowdM(const AIFloat3& in pos, float r)
 	return m;
 }
 
+bool  gRadarOverlapSet = false;
+float gRadarOverlapV = 0.f;
+
 // Does a STANDING radar already watch this ground? Judged by that radar's own
 // range -- asking it about the CANDIDATE's range is why a 60-metal armrad at
 // the farm permanently blocked the 3500-range armarad, and why we finished
@@ -38,7 +41,13 @@ bool RadarSees(const AIFloat3& in pos)
 	// of stock's ~15k standing; trades 0.2). Stock stands 26 T1 radars to
 	// our 13. The overlap fraction buys depth: a gap must sit outside this
 	// share of every standing radar's reach before a new mast is blocked.
-	const float overlap = ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
+	// Latched: GetTunable is frozen on first read for the whole game, and this
+	// is asked once per asset per posting pass and once per radar-gap candidate.
+	if (!gRadarOverlapSet) {
+		gRadarOverlapSet = true;
+		gRadarOverlapV = ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
+	}
+	const float overlap = gRadarOverlapV;
 	for (uint i = 0; i < gProtPos[PROT_RADAR].length(); ++i) {
 		const int rd = gProtDefId[PROT_RADAR][i];
 		const float rr = Catalog::gRadarR[rd];

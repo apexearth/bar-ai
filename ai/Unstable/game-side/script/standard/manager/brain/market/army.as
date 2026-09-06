@@ -24,17 +24,40 @@ float RoleCommitted(int role)
 	return v;
 }
 
-float RoleValue(int role)
+// One walk answers EVERY role. RoleValue was asked once per combat role per
+// election and walked the whole def table each time; the walk is a function of
+// gOwnCount and the static catalog, so one pass per ownership change serves all
+// of them. gOwnStamp moves whenever any count does, which is exactly when this
+// answer can move.
+array<float> gRoleGross;
+int gRoleGrossStamp = -1;
+
+void RoleGrossRefresh()
 {
-	float v = 0.f;
+	if (gRoleGrossStamp == gOwnStamp)
+		return;
+	gRoleGrossStamp = gOwnStamp;
+	for (uint i = 0; i < gRoleGross.length(); ++i)
+		gRoleGross[i] = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f))
 			continue;
-		if (Catalog::gRole[int(d)] == role)
-			v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
+		const int r = Catalog::gRole[int(d)];
+		if (r < 0)
+			continue;
+		if (int(gRoleGross.length()) <= r)
+			gRoleGross.resize(uint(r + 1));
+		gRoleGross[r] += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
+}
+
+float RoleValue(int role)
+{
+	RoleGrossRefresh();
+	float v = ((role >= 0) && (role < int(gRoleGross.length())))
+			? gRoleGross[role] : 0.f;
 	// ESCORTS ARE NOT COVERAGE. Pairing a raider to a worker zeroed the escort
 	// term in RoleTarget while leaving that same raider counted here, so the
 	// role gap closed at exactly the moment the free army emptied -- measured
@@ -53,27 +76,49 @@ float RoleValue(int role)
 // general line. A uniform baseline keeps a portfolio before contact.
 // Exposed workers without an escort -- each is standing demand for one
 // cheap raider (apexearth: "a *need* is cheap escorts for cons").
-int EscortShortfall()
+// ONE WALK, TWO READINGS. The count and the metal ran the same filter over the
+// same worker list -- a GetPos and a distance per worker each -- and the
+// election asks for both, twice over (EscortGain re-asks). Frame-scoped, so a
+// worker that takes or drops a task mid-frame is read as it stood at the first
+// ask of that frame: at most 1/30 s stale, and positions are already read at
+// ai.frame.
+int gExpoAt = -999999;
+int gExpoN = 0;
+float gExpoM = 0.f;
+
+void ExposeRefresh()
 {
+	if (gExpoAt == ai.frame)
+		return;
+	gExpoAt = ai.frame;
+	gExpoN = 0;
+	gExpoM = 0.f;
 	if (!gFarmSet)
-		return 0;
+		return;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
-	int n = 0;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
 		if ((wkr is null) || (wkr.task is null))
 			continue;
-		if (Catalog::gFlyer[int(wkr.circuitDef.id)])
+		const int wd = int(wkr.circuitDef.id);
+		if (Catalog::gFlyer[wd])
 			continue;
 		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 			continue;   // the commander is his own escort
 		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
 				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
 			continue;
-		if (!EscortedWorker(wkr.id))
-			++n;
+		if (EscortedWorker(wkr.id))
+			continue;
+		++gExpoN;
+		gExpoM += Catalog::gCostM[wd];
 	}
-	return n;
+}
+
+int EscortShortfall()
+{
+	ExposeRefresh();
+	return gExpoN;
 }
 
 // THE METAL STANDING UNESCORTED OUTSIDE SAFE GROUND, and the share of our
@@ -86,32 +131,28 @@ int EscortShortfall()
 // should be priced as the write-off it is.
 float EscortMetalAtRisk()
 {
-	if (!gFarmSet)
-		return 0.f;
-	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
-	float m = 0.f;
-	for (uint i = 0; i < gWorkers.length(); ++i) {
-		CCircuitUnit@ wkr = gWorkers[i];
-		if ((wkr is null) || (wkr.task is null))
-			continue;
-		const int wd = int(wkr.circuitDef.id);
-		if (Catalog::gFlyer[wd])
-			continue;
-		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-			continue;
-		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
-				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
-			continue;
-		if (!EscortedWorker(wkr.id))
-			m += Catalog::gCostM[wd];
-	}
-	return m;
+	ExposeRefresh();
+	return gExpoM;
 }
 
 // 1.0 when every worker is home or escorted, falling toward 0 as more of our
 // build power walks out alone. Multiplies what a NEW constructor is worth:
 // buying more of something that dies unattended is buying less than it costs.
+int gBpProtAt = -999999;
+float gBpProt = 1.f;
+
 float BPProtectedFrac()
+{
+	if (gBpProtAt == ai.frame)
+		return gBpProt;
+	gBpProtAt = ai.frame;
+	gBpProt = BPProtectedFracNow();
+	return gBpProt;
+}
+
+// Frame-scoped through the wrapper above: a third walk of the worker list, on
+// top of the two ExposeRefresh already folded into one.
+float BPProtectedFracNow()
 {
 	float safe = 0.f;
 	float risk = EscortMetalAtRisk();
@@ -187,8 +228,18 @@ float LineSpend()
 	return s / float(lines);
 }
 
+// The most-asked walk in the market: the mex, nano, plant, tech, protect and
+// rezzer paths all read it, want_tech five times in one proposal. A function of
+// gOwnCount and the static catalog, so gOwnStamp -- which moves on every count
+// change and nothing else -- is an exact key.
+float gArmyVal = 0.f;
+int gArmyValStamp = -1;
+
 float ArmyValue()
 {
+	if (gArmyValStamp == gOwnStamp)
+		return gArmyVal;
+	gArmyValStamp = gOwnStamp;
 	float v = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
@@ -198,6 +249,7 @@ float ArmyValue()
 			continue;
 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
+	gArmyVal = v;
 	return v;
 }
 
@@ -255,8 +307,14 @@ int DefTier(int d)
 // The share of the fielded army that is T2 or better -- what mobile support
 // is bought against (apexearth: support units only for squads that hold T2
 // or greater).
+float gAdvArmyVal = 0.f;
+int gAdvArmyStamp = -1;
+
 float AdvArmyValue()
 {
+	if (gAdvArmyStamp == gOwnStamp)
+		return gAdvArmyVal;
+	gAdvArmyStamp = gOwnStamp;
 	float v = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
@@ -268,6 +326,7 @@ float AdvArmyValue()
 			continue;
 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
+	gAdvArmyVal = v;
 	return v;
 }
 
@@ -351,9 +410,19 @@ bool LineCombat(int di)
 // Tzar (4.7). What survives focus fire and splash is the body, not the ratio,
 // which is what the four classes are describing (apexearth: "HP and a little
 // bit of range"). Both halves read this, so they cannot disagree.
+bool gLineAbsSet = false;
+bool gLineAbsV = false;
+
 bool LineAbs()
 {
-	return ai.GetTunable("apex_line_abs", TUNE_LINE_ABS) > 0.f;
+	// Latched: GetTunable caches its first answer in the DLL for the whole
+	// game, so a tunable cannot move and re-reading it is pure call cost --
+	// and this is read twice per LineClassOf, per candidate, per election.
+	if (!gLineAbsSet) {
+		gLineAbsSet = true;
+		gLineAbsV = ai.GetTunable("apex_line_abs", TUNE_LINE_ABS) > 0.f;
+	}
+	return gLineAbsV;
 }
 
 float LineHpAxis(int d)
@@ -401,6 +470,13 @@ float LineRef(array<float>@ v)
 bool gLineDiagWant = false;
 bool gLineDiagDone = false;
 
+// THE CLASS A DEF IS, memoised per def id. Once the refs above latch, LineMeans
+// returns on its first line forever, so the class is a pure function of the def
+// and of tunables the DLL freezes at first read -- and it is asked once or
+// twice per candidate per election, plus once per owned def per TrackLine.
+// Stored as class+1, so 0 is "not computed"; dropped when the refs are taken.
+array<int> gLineClass;
+
 float gLMeanHpm = -1.f, gLMeanDpm = 0.f, gLMeanR = 0.f, gLMeanSpc = 0.f;
 void LineMeans()
 {
@@ -425,6 +501,7 @@ void LineMeans()
 	gLMeanDpm = LineRef(dpV);
 	gLMeanR = LineRef(rrV);
 	gLMeanSpc = LineRef(spV);
+	gLineClass.resize(0);   // the refs the per-def class table was taken against
 	gLineDiagWant = true;
 }
 
@@ -457,6 +534,8 @@ int LineClassOf(int di)
 	LineMeans();
 	if ((gLMeanHpm <= 0.f) || !LineCombat(di))
 		return LC_MID;
+	if ((di >= 0) && (di < int(gLineClass.length())) && (gLineClass[di] != 0))
+		return gLineClass[di] - 1;
 	const float hpR = LineHpAxis(di) / gLMeanHpm;
 	const float dpR = (gLMeanDpm > 0.f) ? (LineDpsAxis(di) / gLMeanDpm) : 0.f;
 	// Range damped by an exponent so "a little bit of range" is expressible:
@@ -471,7 +550,13 @@ int LineClassOf(int di)
 	if (rR > best) { best = rR; cls = LC_REACH; }
 	if (dpR > best) { best = dpR; cls = LC_DPS; }
 	const float edge = ai.GetTunable("apex_line_edge", TUNE_LINE_EDGE);
-	return (best >= edge) ? cls : LC_MID;
+	const int lc = (best >= edge) ? cls : LC_MID;
+	if ((di >= 1) && (di <= Catalog::gDefCount)) {
+		if (int(gLineClass.length()) <= Catalog::gDefCount)
+			gLineClass.resize(uint(Catalog::gDefCount + 1));
+		gLineClass[di] = lc + 1;
+	}
+	return lc;
 }
 
 // What we actually field, by class, as shares of army metal.
@@ -575,12 +660,39 @@ string LineClassName(int cls)
 	return "?";
 }
 
+// The four base shares are tunables and the DLL freezes a tunable at its first
+// read, so they are taken once. The adapted answer is taken once per frame:
+// LineShortfall asks LineTarget once per class per candidate, which was five
+// GetTunable calls and an enemy census per product on every line's election.
+// Frame-scoped, so an enemy sighting lands on the next frame at the latest.
+bool gLtSet = false;
+float gLtTank = 0.f, gLtMid = 0.f, gLtReach = 0.f, gLtDps = 0.f, gLtAdapt = 0.f;
+array<float> gLtOut(LC_N, 0.25f);
+int gLtAt = -999999;
+
 float LineTarget(int cls)
 {
-	float tank = ai.GetTunable("apex_line_tank", TUNE_LINE_TANK);
-	float mid = ai.GetTunable("apex_line_mid", TUNE_LINE_MID);
-	float reach = ai.GetTunable("apex_line_reach", TUNE_LINE_REACH);
-	float dps = ai.GetTunable("apex_line_dps", TUNE_LINE_DPS);
+	if (gLtAt != ai.frame) {
+		gLtAt = ai.frame;
+		LineTargetRefresh();
+	}
+	return ((cls >= 0) && (cls < LC_N)) ? gLtOut[cls] : gLtOut[LC_DPS];
+}
+
+void LineTargetRefresh()
+{
+	if (!gLtSet) {
+		gLtSet = true;
+		gLtTank = ai.GetTunable("apex_line_tank", TUNE_LINE_TANK);
+		gLtMid = ai.GetTunable("apex_line_mid", TUNE_LINE_MID);
+		gLtReach = ai.GetTunable("apex_line_reach", TUNE_LINE_REACH);
+		gLtDps = ai.GetTunable("apex_line_dps", TUNE_LINE_DPS);
+		gLtAdapt = ai.GetTunable("apex_line_adapt", TUNE_LINE_ADAPT);
+	}
+	float tank = gLtTank;
+	float mid = gLtMid;
+	float reach = gLtReach;
+	float dps = gLtDps;
 	// COMPOSITION ADAPTS TO WHAT THEY FIELD (apexearth 2026-08-29: "Im ok
 	// with composition adapting to the needs in the game"). The shares above
 	// are the BASE; the enemy's observed STATIC share of fielded metal bends
@@ -588,7 +700,7 @@ float LineTarget(int cls)
 	// their metal stands still, the more of ours should outrange it.
 	// Renormalized, so a tilt is never a cap on any other class. More terms
 	// follow this shape as they earn their measurements.
-	const float adapt = ai.GetTunable("apex_line_adapt", TUNE_LINE_ADAPT);
+	const float adapt = gLtAdapt;
 	if (adapt > 0.f) {
 		const float fs = aiEnemyMgr.GetEnemyCost(RT::STATIC);
 		const float fm = Military::EnemyArmyCost();
@@ -596,14 +708,15 @@ float LineTarget(int cls)
 			reach *= 1.f + adapt * (fs / (fs + fm));
 	}
 	const float tot = tank + mid + reach + dps;
-	float v = dps;
-	if (cls == LC_TANK)
-		v = tank;
-	else if (cls == LC_MID)
-		v = mid;
-	else if (cls == LC_REACH)
-		v = reach;
-	return (tot > 0.f) ? (v / tot) : 0.25f;
+	if (tot > 0.f) {
+		gLtOut[LC_TANK] = tank / tot;
+		gLtOut[LC_MID] = mid / tot;
+		gLtOut[LC_REACH] = reach / tot;
+		gLtOut[LC_DPS] = dps / tot;
+	} else {
+		for (int c = 0; c < LC_N; ++c)
+			gLtOut[c] = 0.25f;
+	}
 }
 
 // How far below its target a class is, 0..1. Proportional, never a veto
@@ -661,25 +774,40 @@ float FoeSpeedCap()
 // is the ground speed we field. Falls to zero as the fleet fills, so it buys
 // bodies while we are thin and stops on its own -- and it is a want, never a
 // cap on anything bigger.
+// Both def-table walks are functions of gOwnCount and the static catalog, so
+// one pass per ownership change answers them; the spot ledger and the posted
+// guards' own reading stay live.
+float gPatSites = 0.f, gPatHave = 0.f;
+int gPatStamp = -1;
+
+void PatrolCensus()
+{
+	if (gPatStamp == gOwnStamp)
+		return;
+	gPatStamp = gOwnStamp;
+	gPatSites = 0.f;
+	gPatHave = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if (gOwnCount[d] <= 0)
+			continue;
+		if (Catalog::gMobile[di]) {
+			if (LineCombat(di) && !Catalog::gFlyer[di])
+				gPatHave += float(gOwnCount[d]) * Catalog::gSpeed[di];
+			continue;
+		}
+		if ((Catalog::gMakeE[di] > 1.f) || (Catalog::gBuildsList[di].length() > 0))
+			gPatSites += float(gOwnCount[d]);
+	}
+}
+
 float PatrolShort()
 {
-	float sites = float(gLSpot.length());
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		const int di = int(d);
-		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di])
-			continue;
-		if ((Catalog::gMakeE[di] > 1.f) || (Catalog::gBuildsList[di].length() > 0))
-			sites += float(gOwnCount[d]);
-	}
+	PatrolCensus();
+	const float sites = float(gLSpot.length()) + gPatSites;
 	if (sites < 1.f)
 		return 0.f;
-	float have = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		const int di = int(d);
-		if ((gOwnCount[d] <= 0) || !LineCombat(di) || Catalog::gFlyer[di])
-			continue;
-		have += float(gOwnCount[d]) * Catalog::gSpeed[di];
-	}
+	const float have = gPatHave;
 	const float need = sites * FoeSpeedCap();
 	if (need <= 0.f)
 		return 0.f;
@@ -1099,16 +1227,34 @@ float ArmyTarget()
 	// is simply not part of the state this player is trying to reach.
 	if (EcoRoleGrowing())
 		return 0.f;
-	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-	return EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
+	return ArmyTargetFull();
 }
 
 // The target with NO role suppression: what the war actually asks for.
 // The gantry want reads this one -- T3 is exactly what the eco role is FOR.
+// EcoPowerM reads income, the conversion ceiling and the pull tracker; all three
+// are constant across a sim frame, and ownership is the other input, so
+// (frame, gOwnStamp) is an exact key. ArmyTarget is asked twice in one tech
+// proposal and once per rezzer election, and this is what both of them cost.
+bool gArmyHoldSet = false;
+float gArmyHold = 0.f;
+float gArmyTgtFull = 0.f;
+int gArmyTgtAt = -999999;
+int gArmyTgtStamp = -1;
+
 float ArmyTargetFull()
 {
-	const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-	return EcoPowerM() * ((hold > 0.f) ? hold : 0.f);
+	if ((gArmyTgtAt == ai.frame) && (gArmyTgtStamp == gOwnStamp))
+		return gArmyTgtFull;
+	gArmyTgtAt = ai.frame;
+	gArmyTgtStamp = gOwnStamp;
+	if (!gArmyHoldSet) {
+		gArmyHoldSet = true;
+		const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
+		gArmyHold = (hold > 0.f) ? hold : 0.f;
+	}
+	gArmyTgtFull = EcoPowerM() * gArmyHold;
+	return gArmyTgtFull;
 }
 
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.

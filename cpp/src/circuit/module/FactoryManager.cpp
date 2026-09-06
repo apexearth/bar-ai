@@ -713,12 +713,12 @@ void CFactoryManager::Init()
 		CScheduler* scheduler = circuit->GetScheduler().get();
 		const int interval = 4;
 		const int offset = circuit->GetSkirmishAIId() % interval;
-		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), interval, offset + 0);
-		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2);
+		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), interval, offset + 0, "facIdle");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2, "facUpd");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
-								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 11);
+								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 11, "wdog");
 	};
 
 	circuit->GetSetupManager()->ExecOnFindStart(subinit);

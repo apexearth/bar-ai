@@ -468,15 +468,15 @@ void CBuilderManager::Init()
 		CScheduler* scheduler = circuit->GetScheduler().get();
 		const int interval = 8;
 		const int offset = circuit->GetSkirmishAIId() % interval;
-		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateIdle, this), interval, offset + 0);
-		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::Update, this), 1/*interval*/, offset + 1);
+		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateIdle, this), interval, offset + 0, "bldIdle");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::Update, this), 1/*interval*/, offset + 1, "bldUpd");
 		// Six times a second: his bar is one second, and a reflex that samples
 		// at the bar is already late by the time it fires.
-		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateRezGuard, this), 5, offset + 2);
+		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateRezGuard, this), 5, offset + 2, "rezGuard");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
-								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 10);
+								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 10, "wdog");
 	};
 
 	circuit->GetSetupManager()->ExecOnFindStart(subinit);

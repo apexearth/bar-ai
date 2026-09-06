@@ -727,7 +727,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
 				}
 #endif
 			});
-			scheduler->RunJobEvery(mergeTask, FRAMES_PER_SEC, FRAMES_PER_SEC * 10);
+			scheduler->RunJobEvery(mergeTask, FRAMES_PER_SEC, FRAMES_PER_SEC * 10, "merge");
 #if 0
 		} else if (allyTeam->GetAliveSize() > 2) {
 			// FIXME: Follower AI shares all its mobile non-builder-role units to Leader AI.
@@ -741,7 +741,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
 					scheduler->RemoveJob(mergeTask);
 				}
 			});
-			scheduler->RunJobEvery(mergeTask, FRAMES_PER_SEC, FRAMES_PER_SEC * 10);
+			scheduler->RunJobEvery(mergeTask, FRAMES_PER_SEC, FRAMES_PER_SEC * 10, "merge");
 #endif
 		}
 	}
@@ -974,6 +974,19 @@ int CCircuitAI::Update(int frame)
 				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
 				(perfFrameUs > perfAllyUs + perfJobsUs + perfActUs)
 					? (perfFrameUs - perfAllyUs - perfJobsUs - perfActUs) / 1000.f : 0.f);
+		// apex: how much WORK the O(n) helpers did, not how long they took --
+		// a visited count that grows faster than the unit count names the
+		// quadratic helper without a clock in the hot loop.
+		LOG("apex: perf sweep feat=%llu/%u reach=%llu/%u own=%llu/%u ecost=%llu/%u",
+				(unsigned long long)perfFeatSweep, perfFeatCalls,
+				(unsigned long long)perfReachSweep, perfReachCalls,
+				(unsigned long long)perfOwnSweep, perfOwnCalls,
+				(unsigned long long)perfEcostSweep, perfEcostCalls);
+		perfFeatSweep = 0; perfFeatCalls = 0;
+		perfReachSweep = 0; perfReachCalls = 0;
+		perfOwnSweep = 0; perfOwnCalls = 0;
+		perfEcostSweep = 0; perfEcostCalls = 0;
+		scheduler->LogJobPerf(this);
 		perfAllyUs = 0;
 		perfJobsUs = 0;
 		perfActUs = 0;
@@ -2049,15 +2062,19 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnUnitsOfDef(CCircuitDef* def, const 
 	}
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
+	perfOwnSweep += teamUnits.size();
+	++perfOwnCalls;
 	for (auto& kv : teamUnits) {
 		CCircuitUnit* u = kv.second;
 		if ((u == nullptr) || (u->GetCircuitDef() != def)) {
 			continue;
 		}
-		if (u->GetUnit()->IsBeingBuilt()) {
+		// Distance before IsBeingBuilt: the position is cached per frame, the
+		// engine's answer is not, and most of the team is out of radius.
+		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
 			continue;
 		}
-		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
+		if (u->GetUnit()->IsBeingBuilt()) {
 			continue;
 		}
 		out.push_back(u);
@@ -2068,8 +2085,17 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnUnitsOfDef(CCircuitDef* def, const 
 std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat3& pos, float radius)
 {
 	std::vector<CCircuitUnit*> out;
+	GetOwnStructsNear(pos, radius, out);
+	return out;
+}
+
+void CCircuitAI::GetOwnStructsNear(const springai::AIFloat3& pos, float radius, std::vector<CCircuitUnit*>& out)
+{
+	out.clear();
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
+	perfOwnSweep += teamUnits.size();
+	++perfOwnCalls;
 	for (auto& kv : teamUnits) {
 		CCircuitUnit* u = kv.second;
 		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
@@ -2078,15 +2104,39 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnStructsNear(const springai::AIFloat
 		if (u->GetCircuitDef()->IsMobile()) {
 			continue;
 		}
+		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
+			continue;
+		}
 		if (u->GetUnit()->IsBeingBuilt()) {
+			continue;
+		}
+		out.push_back(u);
+	}
+}
+
+bool CCircuitAI::HasOwnStructNear(const springai::AIFloat3& pos, float radius)
+{
+	const float sqRadius = radius * radius;
+	const int frame = GetLastFrame();
+	++perfOwnCalls;
+	for (auto& kv : teamUnits) {
+		++perfOwnSweep;  // counts what was visited: this one stops early
+		CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
+			continue;
+		}
+		if (u->GetCircuitDef()->IsMobile()) {
 			continue;
 		}
 		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
 			continue;
 		}
-		out.push_back(u);
+		if (u->GetUnit()->IsBeingBuilt()) {
+			continue;
+		}
+		return true;
 	}
-	return out;
+	return false;
 }
 
 std::vector<CCircuitUnit*> CCircuitAI::GetOwnDamagedNear(const springai::AIFloat3& pos, float radius)
@@ -2094,15 +2144,21 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnDamagedNear(const springai::AIFloat
 	std::vector<CCircuitUnit*> out;
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
+	perfOwnSweep += teamUnits.size();
+	++perfOwnCalls;
 	for (auto& kv : teamUnits) {
 		CCircuitUnit* u = kv.second;
 		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMobile()) {
 			continue;
 		}
-		if (u->GetUnit()->IsBeingBuilt() || (u->GetHealthPercent() >= 1.f)) {
+		// Distance first: health percent is four engine round trips per unit
+		// (health, max health, capture progress) and this is called per medic
+		// and per repair election, so the team was being asked its condition
+		// thousands of times a second to answer a question about one radius.
+		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
 			continue;
 		}
-		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
+		if (u->GetUnit()->IsBeingBuilt() || (u->GetHealthPercent() >= 1.f)) {
 			continue;
 		}
 		out.push_back(u);
@@ -2360,56 +2416,81 @@ bool CCircuitAI::GetAttackHotspot(springai::AIFloat3& outPos, float& outWeight)
 	return true;
 }
 
-bool CCircuitAI::IsCommanderWreck(springai::Feature* f)
+// apex: what a feature def is worth, resolved once per FEATURE DEF and kept.
+// Contained metal and the "<unit>_dead" -> unit cost lookup are properties of
+// the def, not of the corpse, but the sweeps below used to re-ask the engine
+// (and re-parse the name, and re-hash the def map) for every corpse on every
+// pass. Wrecks are what grows in a long game, so this was the cost that grew
+// fastest.
+const CCircuitAI::SFeatDefInfo& CCircuitAI::GetFeatDefInfo(int featureDefId)
 {
-	if (f == nullptr) {
+	static const SFeatDefInfo empty = {0.f, -1.f};
+	if (featureDefId < 0) {
+		return empty;
+	}
+	if ((size_t)featureDefId >= featDefInfo.size()) {
+		featDefInfo.resize(featureDefId + 64, {-1.f, -1.f});
+	}
+	SFeatDefInfo& info = featDefInfo[featureDefId];
+	if (info.metal < 0.f) {
+		info.metal = callback->FeatureDef_GetContainedResource(featureDefId, metalResId);
+		info.rezCostM = -1.f;
+		const char* raw = callback->FeatureDef_GetName(featureDefId);
+		if (raw != nullptr) {
+			const std::string name(raw);
+			const size_t at = name.rfind("_dead");
+			if (at != std::string::npos) {
+				CCircuitDef* ud = GetCircuitDef(name.substr(0, at).c_str());
+				if (ud != nullptr) {
+					info.rezCostM = ud->GetCostM();
+				}
+			}
+		}
+	}
+	return info;
+}
+
+// A commander corpse is identified by what it resurrects into. Kept per
+// FEATURE (not per def): the resurrect def is a property of the corpse.
+bool CCircuitAI::IsCommanderWreckId(int rezDefId)
+{
+	if (rezDefId < 0) {
 		return false;
 	}
-	springai::UnitDef* rezDef = f->GetResurrectDef();
-	if (rezDef == nullptr) {
-		return false;
-	}
-	const int id = rezDef->GetUnitDefId();
-	delete rezDef;
-	CCircuitDef* cdef = GetCircuitDefSafe(id);
+	CCircuitDef* cdef = GetCircuitDefSafe(rezDefId);
 	return (cdef != nullptr) && cdef->IsRoleComm();
 }
 
 springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal)
 {
 	springai::AIFloat3 best(-RgtVector);
-	if ((callback == nullptr) || (radius <= 0.f)) {
-		return best;
-	}
-	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
-	if (metal == nullptr) {
+	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
 		return best;
 	}
 
 	float bestMetal = minMetal;
-	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
-	for (springai::Feature* f : feats) {
-		if (f == nullptr) {
+	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
+	const int* fIds = callback->GetFeatureIdBuf();
+	perfFeatSweep += nFeats;
+	++perfFeatCalls;
+	for (int i = 0; i < nFeats; ++i) {
+		const int fId = fIds[i];
+		if (IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
 			continue;
 		}
-		if (IsCommanderWreck(f)) {
-			delete f;
+		const int fDefId = callback->Feature_GetDefId(fId);
+		if (fDefId < 0) {
 			continue;
 		}
-		springai::FeatureDef* fd = f->GetDef();
-		if (fd != nullptr) {
-			// Reclaim left is a fraction of the def's contained metal; a wreck
-			// someone else is already half way through is worth less to us.
-			const float value = fd->GetContainedResource(metal) * f->GetReclaimLeft();
-			if (value > bestMetal) {
-				bestMetal = value;
-				best = f->GetPosition();
-			}
-			delete fd;
+		// Reclaim left is a fraction of the def's contained metal; a wreck
+		// someone else is already half way through is worth less to us.
+		const float value = GetFeatDefInfo(fDefId).metal
+				* callback->Feature_GetReclaimLeft(fId);
+		if (value > bestMetal) {
+			bestMetal = value;
+			best = callback->Feature_GetPosition(fId);
 		}
-		delete f;
 	}
-	delete metal;
 	return best;
 }
 
@@ -2419,125 +2500,87 @@ springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, fl
 // question after a repelled push: a dozen dead T1s is several hundred metal and
 // not one of them is individually large. apexearth: "often its a dozen t1 that
 // just died... still its a lot of metal we should be eating".
-// Same Feature::GetDef ownership rule as above -- that def IS ours to delete,
-// unlike Unit::GetDef. See GetBestWreckPos's comment for why this resolves the
-// metal resource locally instead of using the CCircuitAI::metalRes member,
-// and its comment on IsCommanderWreck for why a commander corpse is excluded
-// here too -- this feeds the "how rich is this field" total that gates
-// whether a constructor gets sent at all, so a commander corpse skewing that
-// total high would still walk a con onto it even if GetBestWreckPos itself
-// never targets it directly.
+// A commander corpse is excluded here too -- this feeds the "how rich is this
+// field" total that gates whether a constructor gets sent at all, so a
+// commander corpse skewing that total high would still walk a con onto it even
+// if GetBestWreckPos itself never targets it directly.
 springai::AIFloat3 CCircuitAI::GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost)
 {
 	springai::AIFloat3 best(-RgtVector);
-	if ((callback == nullptr) || (radius <= 0.f)) {
-		return best;
-	}
-	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
-	if (metal == nullptr) {
+	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
 		return best;
 	}
 	float bestCost = minCost;
-	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
-	for (springai::Feature* f : feats) {
-		if (f == nullptr) {
+	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
+	const int* fIds = callback->GetFeatureIdBuf();
+	perfFeatSweep += nFeats;
+	++perfFeatCalls;
+	for (int i = 0; i < nFeats; ++i) {
+		const int fId = fIds[i];
+		// One resurrect-def read answers both questions the old code asked the
+		// engine separately: is this a commander corpse, and is it rezzable.
+		const int rezDefId = callback->Feature_GetResurrectDefId(fId);
+		if ((rezDefId < 0) || IsCommanderWreckId(rezDefId)) {
 			continue;
 		}
-		if (IsCommanderWreck(f) || !callback->Feature_IsResurrectable(f->GetFeatureId())) {
-			delete f;
+		const int fDefId = callback->Feature_GetDefId(fId);
+		if (fDefId < 0) {
 			continue;
 		}
-		springai::FeatureDef* fd = f->GetDef();
-		if (fd != nullptr) {
-			float v = fd->GetContainedResource(metal);
-			const std::string name = fd->GetName();
-			const size_t at = name.rfind("_dead");
-			if (at != std::string::npos) {
-				CCircuitDef* ud = GetCircuitDef(name.substr(0, at).c_str());
-				if (ud != nullptr) {
-					v = std::max(v, ud->GetCostM());
-				}
-			}
-			if (v > bestCost) {
-				bestCost = v;
-				best = f->GetPosition();
-			}
-			delete fd;
+		const SFeatDefInfo& info = GetFeatDefInfo(fDefId);
+		const float v = std::max(info.metal, info.rezCostM);
+		if (v > bestCost) {
+			bestCost = v;
+			best = callback->Feature_GetPosition(fId);
 		}
-		delete f;
 	}
-	delete metal;
 	return best;
 }
 
 float CCircuitAI::GetFieldWorkAt(const springai::AIFloat3& pos, float radius)
 {
-	if ((callback == nullptr) || (radius <= 0.f)) {
-		return .0f;
-	}
-	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
-	if (metal == nullptr) {
+	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
 		return .0f;
 	}
 	float total = .0f;
-	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
-	for (springai::Feature* f : feats) {
-		if (f == nullptr) {
+	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
+	const int* fIds = callback->GetFeatureIdBuf();
+	perfFeatSweep += nFeats;
+	++perfFeatCalls;
+	for (int i = 0; i < nFeats; ++i) {
+		const int fId = fIds[i];
+		const int rezDefId = callback->Feature_GetResurrectDefId(fId);
+		if (IsCommanderWreckId(rezDefId)) {
 			continue;
 		}
-		if (IsCommanderWreck(f)) {
-			delete f;
-			continue;
+		const SFeatDefInfo& info = GetFeatDefInfo(callback->Feature_GetDefId(fId));
+		float v = info.metal * callback->Feature_GetReclaimLeft(fId);
+		if (rezDefId >= 0) {
+			v = std::max(v, info.rezCostM);
 		}
-		springai::FeatureDef* fd = f->GetDef();
-		if (fd != nullptr) {
-			float v = fd->GetContainedResource(metal) * f->GetReclaimLeft();
-			if (callback->Feature_IsResurrectable(f->GetFeatureId())) {
-				const std::string name = fd->GetName();
-				const size_t at = name.rfind("_dead");
-				if (at != std::string::npos) {
-					CCircuitDef* ud = GetCircuitDef(name.substr(0, at).c_str());
-					if (ud != nullptr) {
-						v = std::max(v, ud->GetCostM());
-					}
-				}
-			}
-			total += v;
-			delete fd;
-		}
-		delete f;
+		total += v;
 	}
-	delete metal;
 	return total;
 }
 
 float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius)
 {
-	if ((callback == nullptr) || (radius <= 0.f)) {
-		return .0f;
-	}
-	springai::Resource* metal = callback->GetResourceByName(RES_NAME_METAL);
-	if (metal == nullptr) {
+	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
 		return .0f;
 	}
 	float total = .0f;
-	const std::vector<springai::Feature*> feats = callback->GetFeaturesIn(pos, radius, false);
-	for (springai::Feature* f : feats) {
-		if (f == nullptr) {
+	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
+	const int* fIds = callback->GetFeatureIdBuf();
+	perfFeatSweep += nFeats;
+	++perfFeatCalls;
+	for (int i = 0; i < nFeats; ++i) {
+		const int fId = fIds[i];
+		if (IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
 			continue;
 		}
-		if (IsCommanderWreck(f)) {
-			delete f;
-			continue;
-		}
-		springai::FeatureDef* fd = f->GetDef();
-		if (fd != nullptr) {
-			total += fd->GetContainedResource(metal) * f->GetReclaimLeft();
-			delete fd;
-		}
-		delete f;
+		total += GetFeatDefInfo(callback->Feature_GetDefId(fId)).metal
+				* callback->Feature_GetReclaimLeft(fId);
 	}
-	delete metal;
 	return total;
 }
 
@@ -2554,12 +2597,14 @@ float CCircuitAI::GetEnemyCostAt(const springai::AIFloat3& pos, float radius) co
 	if ((callback == nullptr) || (radius <= 0.f)) {
 		return 0.f;
 	}
-	const std::vector<springai::Unit*> foes = callback->GetEnemyUnitsIn(pos, radius, false);
-	const float count = float(foes.size());
-	for (springai::Unit* u : foes) {
-		delete u;
-	}
-	return count;
+	// apex: the count is what the engine returns when handed no output buffer,
+	// so the wrapper Unit that used to be newed and deleted per enemy here --
+	// on a call the commander makes every time it re-reads its own danger --
+	// bought nothing.
+	const int count = callback->CountEnemyUnitsIn(pos, radius, false);
+	perfEcostSweep += count;
+	++perfEcostCalls;
+	return float(count);
 }
 
 // HOW CLOSE THE NEAREST ENEMY IS TO BEING ABLE TO SHOOT THIS SPOT.
@@ -2572,10 +2617,32 @@ float CCircuitAI::GetEnemyCostAt(const springai::AIFloat3& pos, float radius) co
 // Unarmed and flying enemies are skipped: a scout is not a reason to abandon a
 // corpse, and no ground bot outruns a gunship, so treating either as pressure
 // only costs work.
-float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
-		springai::AIFloat3* foeOut) const
+int CCircuitAI::GetMetalResId()
 {
-	float worst = std::numeric_limits<float>::max();
+	if ((metalResId < 0) && (callback != nullptr)) {
+		springai::Resource* r = callback->GetResourceByName(RES_NAME_METAL);
+		if (r != nullptr) {
+			metalResId = r->GetResourceId();
+			delete r;
+		}
+	}
+	return metalResId;
+}
+
+// apex: the enemy set flattened once per frame. Every caller used to walk the
+// enemyInfos hash map and chase four pointers per enemy (node -> CEnemyInfo ->
+// SEnemyData -> CCircuitDef) to read two floats, and the rez guard alone runs
+// this once per rez bot six times a second while site safety runs it per
+// candidate site. Approximate, not exact: an enemy registered part way through
+// a frame is seen by the callers after it rather than before.
+void CCircuitAI::RebuildReachCache()
+{
+	if (reachCacheFrame == lastFrame) {
+		return;
+	}
+	reachCacheFrame = lastFrame;
+	reachCache.clear();
+	reachCache.reserve(enemyInfos.size());
 	for (const auto& kv : enemyInfos) {
 		CEnemyInfo* e = kv.second;
 		if ((e == nullptr) || e->IsHidden()) {
@@ -2589,13 +2656,30 @@ float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS
 		if (reach <= 0.f) {
 			continue;
 		}
-		const float slack = pos.distance2D(e->GetPos()) - (reach + edef->GetSpeed() * reactS);
+		const springai::AIFloat3& p = e->GetPos();
+		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed()});
+	}
+}
+
+float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
+		springai::AIFloat3* foeOut)
+{
+	RebuildReachCache();
+	perfReachSweep += reachCache.size();
+	++perfReachCalls;
+	float worst = std::numeric_limits<float>::max();
+	const SReachEnemy* best = nullptr;
+	for (const SReachEnemy& e : reachCache) {
+		const float dx = pos.x - e.x;
+		const float dz = pos.z - e.z;
+		const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
 		if (slack < worst) {
 			worst = slack;
-			if (foeOut != nullptr) {
-				*foeOut = e->GetPos();
-			}
+			best = &e;
 		}
+	}
+	if ((foeOut != nullptr) && (best != nullptr)) {
+		*foeOut = springai::AIFloat3(best->x, 0.f, best->z);
 	}
 	return worst;
 }

@@ -29,8 +29,6 @@ public:
 	// ICoreUnit/IRefCounter -- actions are raw-deleted (ClearAct/dtors) while
 	// dgunAct/travelAct-style raw pointers can outlive them. Defined in
 	// Action.cpp.
-	static void* operator new(std::size_t sz);
-	static void operator delete(void* p);
 
 	virtual void Update(CCircuitAI* circuit) = 0;
 	virtual void OnStart();

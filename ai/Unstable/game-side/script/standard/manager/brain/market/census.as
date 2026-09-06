@@ -291,7 +291,16 @@ bool IsLatheDef(int defId)
 			&& (Catalog::gBuildsList[defId].length() == 0);
 }
 
-int ProtClassOf(int defId)
+// PURE IN THE DEF ID, so it is answered from a table. Every input is a static
+// catalog column plus IsSuperWeapon's light-tower reach, which latches with the
+// def table -- and this is asked once per standing structure per protect pass,
+// once per candidate in the protect market, and on every finish and death.
+// Stored as class+2 so 0 means "not computed" and -1 (not protection) fits.
+// Nothing is written before the light tower is readable: until then
+// IsSuperWeapon compares against the 430 fallback, which is not the answer.
+array<int> gProtClass;
+
+int ProtClassCompute(int defId)
 {
 	if (Catalog::gShield[defId] && !Catalog::gMobile[defId]) return PROT_SHIELD;
 	if (Catalog::gAntiNuke[defId]) return PROT_ANTINUKE;
@@ -320,6 +329,28 @@ int ProtClassOf(int defId)
 			return PROT_AA;
 	}
 	return -1;
+}
+
+int ProtClassOf(int defId)
+{
+	if ((defId >= 0) && (defId < int(gProtClass.length()))
+		&& (gProtClass[defId] != 0))
+	{
+		return gProtClass[defId] - 2;
+	}
+	// The memo's own instrument: once the table is warm this counter stops
+	// climbing, and every ProtClassOf above it is a single array read.
+	Perf::Note("prot.class.miss");
+	const int c = ProtClassCompute(defId);
+	// Asked here too: LightTowerRange is what LATCHES the reach IsSuperWeapon
+	// compares against, and a def that exits early above never reaches it.
+	const bool ready = (Brain::LightTowerRange() > 0.f) && Brain::LightTowerReady();
+	if ((defId >= 1) && (defId <= Catalog::gDefCount) && ready) {
+		if (int(gProtClass.length()) <= Catalog::gDefCount)
+			gProtClass.resize(Catalog::gDefCount + 1);
+		gProtClass[defId] = c + 2;
+	}
+	return c;
 }
 
 // When each of our STRUCTURES finished, by unit id -- the age gate that stops

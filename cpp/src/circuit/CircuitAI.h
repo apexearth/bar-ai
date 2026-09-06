@@ -197,7 +197,14 @@ public:
 	float GetWreckValueAt(const springai::AIFloat3& pos, float radius);
 	float GetFieldWorkAt(const springai::AIFloat3& pos, float radius);
 	springai::AIFloat3 GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost);  // resurrectable wreck worth the most as a unit  // rez bot work: a resurrectable wreck at its unit's cost, else its reclaim metal
-	bool IsCommanderWreck(springai::Feature* f);
+	// apex: per-featureDef constants, resolved once. See GetFeatDefInfo.
+	struct SFeatDefInfo {
+		float metal;      // FeatureDef contained metal; < 0 means "not resolved yet"
+		float rezCostM;   // the unit this corpse rezzes into, by cost; < 0 if none
+	};
+	const SFeatDefInfo& GetFeatDefInfo(int featureDefId);
+	bool IsCommanderWreckId(int rezDefId);
+	int GetMetalResId();
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
 	// WHERE we are losing units, cost-weighted and decaying. The AI had no
@@ -295,6 +302,11 @@ public:
 	// cannot answer "what of ours is standing in the way" -- it only answers it
 	// for the factions someone remembered to list.
 	std::vector<CCircuitUnit*> GetOwnStructsNear(const springai::AIFloat3& pos, float radius);
+	// apex: same sweep, caller-owned buffer -- the by-value form heap-allocates
+	// a vector per call and both military callers run it inside a loop.
+	void GetOwnStructsNear(const springai::AIFloat3& pos, float radius, std::vector<CCircuitUnit*>& out);
+	// apex: the existence question, without building the list to ask it.
+	bool HasOwnStructNear(const springai::AIFloat3& pos, float radius);
 	// Our own damaged MOBILE units near pos, whatever their def. BuilderManager
 	// never registers a damagedHandler for ordinary combat unit defs (only for
 	// builders/rez-bots themselves and for static structures), so nothing ever
@@ -313,7 +325,8 @@ public:
 	// walking) over every enemy we can see. Negative means something already
 	// covers the spot. `foeOut`, when given, receives that enemy's position.
 	float GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
-			springai::AIFloat3* foeOut = nullptr) const;
+			springai::AIFloat3* foeOut = nullptr);
+	void RebuildReachCache();
 	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
 	void Garbage(CCircuitUnit* unit, const char* reason);
@@ -560,6 +573,26 @@ private:
 	uint64_t perfAllyUs = 0;
 	uint64_t perfJobsUs = 0;
 	uint64_t perfActUs = 0;
+	// apex: a census, not a clock -- how many elements the O(n) helpers walked
+	// this minute. Increments only, so measuring costs nothing; a helper whose
+	// visited count grows faster than the unit count is the quadratic one.
+	uint64_t perfFeatSweep = 0;   // features visited by the four wreck sweeps
+	unsigned perfFeatCalls = 0;
+	uint64_t perfReachSweep = 0;  // enemies visited by GetEnemyReachSlack
+	unsigned perfReachCalls = 0;
+	uint64_t perfOwnSweep = 0;    // own units visited by GetOwn*Near/OfDef
+	unsigned perfOwnCalls = 0;
+	mutable uint64_t perfEcostSweep = 0;  // enemies visited by GetEnemyCostAt
+	mutable unsigned perfEcostCalls = 0;
+	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.
+	std::vector<SFeatDefInfo> featDefInfo;
+	int metalResId = -1;
+	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
+	struct SReachEnemy {
+		float x, z, reach, speed;
+	};
+	std::vector<SReachEnemy> reachCache;
+	int reachCacheFrame = -1;
 	int squadDiagNextLog = 0;
 	int ghostPurgeNext = 0;
 	std::array<int, static_cast<int>(CCircuitDef::SniperOrder::_SIZE_)> sniperOrders{};

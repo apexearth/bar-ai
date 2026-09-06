@@ -1032,16 +1032,24 @@ void CAttackTask::FindTarget()
 				continue;
 			}
 
-			const float elevation = map->GetElevationAt(ePos.x, ePos.z);
-			const bool IsInWater = cdef->IsPredictInWater(elevation);
 			CCircuitDef* edef = enemy->GetCircuitDef();
+			// apex: the category rejects are arithmetic on defs we already hold;
+			// GetElevationAt is an engine round trip, and every squad re-scores
+			// every enemy. Rejecting first leaves the same survivors -- elevation
+			// has no side effects -- while skipping the call for the rest.
 			if (edef != nullptr) {
 				if (((edef->GetCategory() & canTargetCat) == 0)
 					|| ((edef->GetCategory() & noChaseCat) != 0)
 					|| (isAntiStatic && edef->IsMobile())
-					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()  // NOTE: groups are created by leader, ignore flags could be different
-					|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
+					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())  // NOTE: groups are created by leader, ignore flags could be different
 				{
+					continue;
+				}
+			}
+			const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+			const bool IsInWater = cdef->IsPredictInWater(elevation);
+			if (edef != nullptr) {
+				if (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())) {  // notAA
 					continue;
 				}
 				if (edef->IsInWater(elevation, ePos.y)) {

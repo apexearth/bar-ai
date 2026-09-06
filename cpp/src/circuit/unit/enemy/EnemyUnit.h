@@ -216,12 +216,6 @@ public:
 	CEnemyInfo(CEnemyUnit* data);
 	virtual ~CEnemyInfo();
 
-	// CRASH DIAGNOSTIC (temporary): same guard-page treatment as ICoreUnit --
-	// fighter tasks cache CEnemyInfo* and it is raw-deleted on enemy death.
-	// Defined in EnemyUnit.cpp.
-	static void* operator new(std::size_t sz);
-	static void operator delete(void* p);
-
 	void BindTask(IFighterTask* task) { tasks.insert(task); }
 	void UnbindTask(IFighterTask* task) { tasks.erase(task); }
 	const std::set<IFighterTask*>& GetTasks() const { return tasks; }

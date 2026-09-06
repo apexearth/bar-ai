@@ -12,22 +12,6 @@
 
 namespace circuit {
 
-void* IPathQuery::operator new(std::size_t sz)
-{
-	void* p = VirtualAlloc(nullptr, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	if (p == nullptr) {
-		throw std::bad_alloc();
-	}
-	return p;
-}
-
-void IPathQuery::operator delete(void* p)
-{
-	if (p != nullptr) {
-		VirtualFree(p, 0, MEM_DECOMMIT);
-	}
-}
-
 
 IPathQuery::IPathQuery(const CPathFinder& pathfinder, int id, Type type)
 		: pathfinder(pathfinder)

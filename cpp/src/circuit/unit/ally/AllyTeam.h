@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <map>
+#include <vector>
 #include <unordered_set>
 #include <cstdint>
 
@@ -126,6 +127,9 @@ private:
 	uint64_t perfFrUs = 0;
 	unsigned perfFrCalls = 0;
 	int perfFrNextLog = 0;
+	unsigned perfFrAdd = 0;
+	unsigned perfFrDel = 0;
+	std::vector<int> friendlyIds;  // scratch for the diff, capacity kept
 	std::shared_ptr<IMainJob> releaseTask;
 	TeamIds teamIds;
 	utils::CRegion startBox;
