@@ -982,6 +982,32 @@ int CCircuitAI::Update(int frame)
 				nE, (nE > 0) ? float(uE) / nE : 0.f, mE);
 	}
 
+	// apex: one holder probe per frame (see tgtCursor in the header). upper_bound
+	// rather than a kept iterator: teamUnits is mutated by death every frame.
+	if (!teamUnits.empty()) {
+		auto it = teamUnits.upper_bound(tgtCursor);
+		if (it == teamUnits.end()) {
+			it = teamUnits.begin();
+		}
+		tgtCursor = it->first;
+		CCircuitUnit* probe = it->second;
+		if ((probe != nullptr) && !probe->IsDead() && (probe->GetUnit() != nullptr)) {
+			const float tid = probe->GetUnit()->GetRulesParamFloat("targetID", -2.f);
+			if (!tgtRawLogged) {
+				tgtRawLogged = true;
+				LOG("apex: tgthold t=%i raw targetID=%.1f (-2 means the param never reads)",
+						teamId, tid);
+			}
+			++tgtSamp;
+			if (tid >= 0.f) {
+				++tgtHold;
+				if (probe->GetTarget() == nullptr) {
+					++tgtStale;
+				}
+			}
+		}
+	}
+
 	const uint64_t perfUs = std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - perfT0).count();
 	perfFrameUs += perfUs;
@@ -1038,6 +1064,15 @@ int CCircuitAI::Update(int frame)
 				ordRep[1][0] + ordRep[1][1] + ordRep[1][2] + ordRep[1][3] + ordRep[1][4],
 				ordRep[3][0] + ordRep[3][1] + ordRep[3][2] + ordRep[3][3] + ordRep[3][4],
 				ordRep[4][0]);
+		// apex: holders ~= units * hold/samp. That is the multiplier on the
+		// gadget's 5-frame sweep, and the only term in the set-target tax that
+		// our send rate does NOT set. stale = holding while we aim nothing:
+		// pure waste, swept six times a second for a target we abandoned.
+		LOG("apex: tgthold t=%i samp=%u hold=%u stale=%u units=%u",
+				teamId, tgtSamp, tgtHold, tgtStale, (unsigned)teamUnits.size());
+		tgtSamp = 0;
+		tgtHold = 0;
+		tgtStale = 0;
 		for (int k = 0; k < 5; ++k) {
 			ordSent[k] = 0;
 			ordSup[k] = 0;

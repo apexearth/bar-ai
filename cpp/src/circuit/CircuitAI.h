@@ -615,6 +615,20 @@ private:
 	unsigned ordSent[5] = {0, 0, 0, 0, 0};
 	unsigned ordSup[5] = {0, 0, 0, 0, 0};
 	unsigned ordRep[5][5] = {{0}};
+	// apex: SET-TARGET HOLDER CENSUS. unit_target_on_the_move.lua blocks
+	// CMD_UNIT_SET_TARGET in AllowCommand, so the order looks free -- but it
+	// enrols the unit, and the gadget's GameFrame then re-applies every
+	// holder's target every 5 frames (weapon TryTarget per weapon under
+	// CallAsTeam, SetUnitTarget, four SetUnitRulesParam). That cost scales
+	// with HOLDERS, not with our send rate, and it is billed to the engine.
+	// The gadget writes unitRulesParam "targetID", so a holder is countable
+	// from here. One unit per frame, cursor walked by id: a whole-team sweep
+	// once a minute would be the batching this file exists to find.
+	ICoreUnit::Id tgtCursor = -1;
+	unsigned tgtSamp = 0;   // units probed this minute
+	unsigned tgtHold = 0;   // ...of which the gadget still holds a target for
+	unsigned tgtStale = 0;  // ...holding, while we have stopped aiming it
+	bool tgtRawLogged = false;  // S7: prove the callback is not silently dead
 	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.
 	std::vector<SFeatDefInfo> featDefInfo;
 	int metalResId = -1;

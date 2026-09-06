@@ -1929,3 +1929,29 @@ candidate for a decided answer), and the behaviour is byte-identical because the
 branch never fired. What the rule SHOULD do is open: the lane point is behind
 most wrecks, so a front reference taken from our own units, not the lane, is the
 likely fix. Not a performance item any more — a behaviour one.
+
+## 2026-09-06 — ExecuteWant:404 throws from the engine on a reclaim target, intermittently
+
+`manager/brain/market/execute.as:404`, `tgt.CmdMoveTo(unit.GetPos(ai.frame))` on
+the condemned-unit branch of WK_RECLAIM. `tgt` is null-checked at :399 and its
+def is read at :403, so the throw is inside the binding — the likeliest cause is
+the target dying between the check and the order, which the async command model
+makes ordinary (S13).
+
+Seen 1x in a 60-minute 16-AI run at 00:59 and 4x in another at 07:06, and absent
+from four runs in between, so it is state-dependent, not a compile or a
+regression from the performance work. An exception aborts that election, so it
+is a behaviour bug: the reclaim silently does not happen.
+
+## 2026-09-06 — the target-hold census reads -2; the set-target tax is still unpriced
+
+`apex: tgthold` probes the `targetID` unitRulesParam that
+`unit_target_on_the_move.lua` writes, to count how many units hold a target —
+the number the whole set-target question turns on. It returns
+`raw targetID=-2.0`, the sentinel meaning the param never reads (S7). Every
+`hold=` figure it printed is void, not small.
+
+So the tax stays bracketed at 0.95-3.2 ms/frame (3-10% of a 32.7 ms engine
+frame) on an assumed 3,168 holders. Counting holders on OUR side — units we
+issued CmdSetTarget to and have not cancelled — needs no engine param and would
+close it.
