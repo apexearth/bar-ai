@@ -231,10 +231,23 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			if (horizPay <= 1.f)
 				horizPay = 300.f;
 			if (PlantFramed()) {   // see the fill: no wall before a base
-				const float gapP = DefenceTarget() - DefenceValue();
+				// Bounded at one building, for the reason DefSiteFill is:
+				// a slot holds one gun, so it answers one gun's worth of
+				// the shortfall and no more.
+				float gapP = DefenceTarget() - DefenceValue();
+				if (gapP > Catalog::gCostM[d])
+					gapP = Catalog::gCostM[d];
 				if (gapP > 0.f)
 					wallPullP = gapP / horizS;
 			}
+			// Ground rent's two side-wide terms, read once for the sweep
+			// instead of once per slot: neither depends on the slot, and
+			// PfCrowd re-derives the base's area from the rim every call.
+			const bool wallUp = WallStands();
+			const float rentPerCell = wallUp
+					? (PfMetalPerCell() * PfCrowd()) : 0.f;
+			const float rentCells = float((Catalog::gAreaCells[d] > 0)
+					? Catalog::gAreaCells[d] : 1);
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
 				for (uint si = 0; si < prevs.length(); ++si) {
@@ -262,10 +275,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// puts on ground. Free on the wall, the line and the
 					// open flanks -- an empty base charges nothing.
 					float rentS = 0.f;
-					if (WallStands() && (WallRimDist(s) < 0.f))
-						rentS = PfMetalPerCell() * PfCrowd()
-								* float((Catalog::gAreaCells[d] > 0)
-									? Catalog::gAreaCells[d] : 1);
+					if (wallUp && (WallRimDist(s) < 0.f))
+						rentS = rentPerCell * rentCells;
 					// WHAT THE POST PREVENTS OVER ITS PAYBACK HORIZON, per
 					// metal spent -- the walk shortens the window it stands
 					// for and bills the builder's time, nothing more.

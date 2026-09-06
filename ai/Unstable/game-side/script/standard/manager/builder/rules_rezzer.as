@@ -63,16 +63,28 @@ float ArmyFront(AIFloat3 &out pos)
 		gArmyFrontFf = -1.f;
 		if (ffs.length() > 0) {
 			const uint want = uint(float(ffs.length() - 1) * 0.9f);
+			// The 90th-percentile unit, by SORT rather than by ranking each
+			// element against every other: the pairwise rank was O(army^2) and
+			// the army is the fastest-growing n we have. Same element -- rank is
+			// stable ascending order, so it is the want-th value with the
+			// want-below-it count of equal values ahead of it.
+			array<float> sorted = ffs;
+			sorted.sortAsc();
+			const float v = sorted[want];
+			uint below = 0;
+			for (uint j = 0; j < ffs.length(); ++j)
+				if (ffs[j] < v)
+					++below;
+			uint seen = 0;
 			for (uint i = 0; i < ffs.length(); ++i) {
-				uint rank = 0;
-				for (uint j = 0; j < ffs.length(); ++j)
-					if ((ffs[j] < ffs[i]) || ((ffs[j] == ffs[i]) && (j < i)))
-						++rank;
-				if (rank == want) {
+				if (ffs[i] != v)
+					continue;
+				if (below + seen == want) {
 					gArmyFrontFf = ffs[i];
 					gArmyFrontPos = at[i];
 					break;
 				}
+				++seen;
 			}
 		}
 	}
@@ -116,12 +128,23 @@ int RezScanPeriod()
 	return (s <= 0) ? 1 : (s * SECOND);
 }
 
+// Slot by unit id. gConSlotId never shrinks -- every rez bot the game ever
+// builds keeps its row -- so the linear search was O(elections x cons-ever),
+// and both of those grow all game. Same Spring 32k id cap as gRzDecideAt; an
+// id past it falls back to the walk and behaves exactly as before.
+array<int> gConSlotOf(32001, -1);
 int ConSlot(CCircuitUnit@ unit)
 {
 	const int id = int(unit.id);
+	const bool indexed = (id >= 0) && (id < int(gConSlotOf.length()));
+	if (indexed && (gConSlotOf[id] >= 0))
+		return gConSlotOf[id];
 	for (uint i = 0; i < gConSlotId.length(); ++i) {
-		if (gConSlotId[i] == id)
+		if (gConSlotId[i] == id) {
+			if (indexed)
+				gConSlotOf[id] = int(i);
 			return int(i);
+		}
 	}
 	gConSlotId.insertLast(id);
 	gConHp.insertLast(unit.GetHealthPercent());
@@ -129,7 +152,10 @@ int ConSlot(CCircuitUnit@ unit)
 	gConNextRepair.insertLast(0);
 	gConNextWreck.insertLast(0);
 	gConNextSweep.insertLast(0);
-	return int(gConSlotId.length()) - 1;
+	const int slot = int(gConSlotId.length()) - 1;
+	if (indexed)
+		gConSlotOf[id] = slot;
+	return slot;
 }
 
 // Refresh the bot's hit window from its health delta.

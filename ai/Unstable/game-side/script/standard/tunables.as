@@ -42,10 +42,13 @@ const float TUNE_DUP_BANK = 1.f;
 // Build energy while income < pull * this.
 const float TUNE_ENERGY_HEADROOM = 1.35f;
 
-// [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE. 0 shadow-logs the ladder's
-//   pick beside the market's and changes nothing; 1 lets the ETA re-rank wants
-//   WITHIN the four economic categories. See docs/27.
+// [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the
+//   ETA re-rank wants WITHIN the four economic categories. See docs/27.
 const float TUNE_ETA = 0.f;
+
+// [toggle 0/1] -- The `apex: eta` shadow log with the ETA layer OFF. One line
+//   costs a full ladder simulation per ranked want; on when apex_eta is.
+const float TUNE_ETA_LOG = 0.f;
 
 // [metal or metal/s] -- Energy per metal: the grid target follows METAL income
 //   (energy.pull is throttled demand and self-reports "fine" while starving...
@@ -796,9 +799,20 @@ const float TUNE_LANE_STICKY = 900.f;
 // ---------------------------------------------------------------------------
 // Diagnostics and switches
 // ---------------------------------------------------------------------------
+// [frames] -- Ceiling on a memoised proposer answer. Validity is the stamps of
+//   its inputs; this bounds only the per-frame prices no stamp can reach.
+//   45 = what the clock alone used to be. See docs/27.
+const float TUNE_MEMO_TTL = 45.f;
+
+// [microseconds] -- What one sim frame may spend assembling builder elections.
+//   The election is sliced against this between proposers, so it bounds the
+//   frame it is checked on. Lower = smaller hitch, slower orders. See docs/27.
+const float TUNE_ELEC_FRAME_US = 8000.f;
+
 // [toggle 0/1] -- The perf governor (lag-severity measures and its production
-//   cuts) is active; read once at startup.
-const float TUNE_PERF = 1.f;
+//   cuts) is active; read once at startup. Off by default -- the harness passes
+//   apex_perf=1.
+const float TUNE_PERF = 0.f;
 
 // [toggle 0/1] -- WHY THE ARMY IS THERE, ON THE MAP: this is the anchor
 //   FillFrontPos picks the regroup cluster from, so it is the single most...
@@ -807,6 +821,10 @@ const float TUNE_PING = 0.f;
 // [toggle 0/1] -- Dump every available def's catalog row at init (one log line
 //   per def, parsed by tools/check_catalog.py). See docs/27.
 const float TUNE_CATALOG_DUMP = 0.f;
+
+// [toggle 0/1] -- The `apex: decide` and `apex: exec` lines, one per election
+//   and per execution. On: every harness tool parses them. See docs/27.
+const float TUNE_DECIDE_LOG = 1.f;
 
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;

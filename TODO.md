@@ -347,3 +347,22 @@ price of contested ground and is the existing lever; whether it produces a rim
 route or just a slower one has not been looked at.
 
 Not built. Unmeasured.
+
+## A basemap: defend territory, not a plethora of buildings
+
+apexearth 2026-09-05, on being asked whether the defence target should stay
+1.82x the army target:
+
+  "Just like we have a threatmap we need a basemap or something like that.
+   Instead of coding towards a whole plethora of buildings we can instead code
+   towards what we consider our base or friendly territory which we want to
+   defend. Should reduce the complexity I'd say. If we use our army to defend
+   structures then we don't need as much defense - and if we make more defense
+   on our structures then we don't need as much army there. It should be a
+   balance between the two - and a choice - mobility vs concentrated power."
+
+He did NOT answer the TUNE_DEF_ECO_S 120 vs TUNE_ARMY_ECO_S 66 question; he
+rejected its framing. Two separate targets arguing over the same ground is the
+complexity he is pointing at. The replacement is one territory to hold, and
+defence vs army as two ways of buying the same hold -- substitutes in one
+balance, priced against each other, not two independent obligations.

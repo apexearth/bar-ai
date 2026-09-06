@@ -433,8 +433,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				// upgrades nobody could have done. OpenSpotStream already
 				// bounds itself this way.
 				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f))
-					displacedM = (ServableUpDemand() + OpenSpotStream())
-							* dur * share;
+					displacedM = DisplacedStreamM() * dur * share;
 			}
 			if (feedSec > buildSec) {
 				buildSec = feedSec;

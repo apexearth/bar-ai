@@ -93,6 +93,34 @@ float OpenSpotStream()
 	return reach * SpotM();
 }
 
+// THE DISPLACEMENT CHARGE, ONCE PER FRAME INSTEAD OF ONCE PER CANDIDATE.
+// ValueOf prices every candidate def of every want through this sum, and both
+// halves are full walks of the def table (949 slots) and the spot ledger -- so
+// ProposeMexUp, which calls ValueOf once per held spot per extractor def, paid
+// them held-spots x extractors times over. Both are functions of the owned
+// counts, the ledger, the handicap and the last probed yield; every one of
+// those either bumps a stamp here or cannot move without the frame moving.
+int gDsFrame = -30000;
+int gDsOwn = -1;
+int gDsLedger = -1;
+float gDsSpotM = -1.f;
+float gDsVal = 0.f;
+float DisplacedStreamM()
+{
+	CacheSpots();
+	if ((gDsFrame == ai.frame) && (gDsOwn == gOwnStamp)
+		&& (gDsLedger == int(gLSpot.length())) && (gDsSpotM == gLastSpotM))
+	{
+		return gDsVal;
+	}
+	gDsFrame = ai.frame;
+	gDsOwn = gOwnStamp;
+	gDsLedger = int(gLSpot.length());
+	gDsSpotM = gLastSpotM;
+	gDsVal = ServableUpDemand() + OpenSpotStream();
+	return gDsVal;
+}
+
 // TWO HALF-BUILT FUSIONS ARE WORSE THAN ONE FINISHED: an expensive def
 // already in progress takes the next asker as a JOINER -- doubling build
 // speed on the standing frame -- instead of opening a parallel copy

@@ -405,8 +405,18 @@ float ConvRatioReach(const array<int>@ builds)
 }
 
 // The best ratio anything we already own can place.
+// Same reason as BPCapacity: EcoPowerM runs this per candidate through every
+// growth premium in the market, and it is a 949-slot walk with a build-options
+// walk inside it.
+int gOccFrame = -30000;
+int gOccOwn = -1;
+float gOccVal = 0.f;
 float OwnConvCeil()
 {
+	if ((gOccFrame == ai.frame) && (gOccOwn == gOwnStamp))
+		return gOccVal;
+	gOccFrame = ai.frame;
+	gOccOwn = gOwnStamp;
 	float best = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		const int di = int(d);
@@ -416,6 +426,7 @@ float OwnConvCeil()
 		if (r > best)
 			best = r;
 	}
+	gOccVal = best;
 	return best;
 }
 
@@ -439,8 +450,19 @@ float ConvUpDemand()
 // when parked BP is the problem -- capacity is the honest measure
 // (measured: 18 assist bots bought against overflow their own idleness
 // sustained).
+// ONCE PER FRAME, NOT ONCE PER CANDIDATE. EffBP calls this, ValueOf calls
+// EffBP, and every want prices every candidate def through ValueOf -- so this
+// 949-slot walk (with a GetTunable inside it) ran hundreds of times a frame
+// during a mexup proposal. Its inputs are the owned counts and the catalog.
+int gBpCapFrame = -30000;
+int gBpCapOwn = -1;
+float gBpCapVal = 0.f;
 float BPCapacity()
 {
+	if ((gBpCapFrame == ai.frame) && (gBpCapOwn == gOwnStamp))
+		return gBpCapVal;
+	gBpCapFrame = ai.frame;
+	gBpCapOwn = gOwnStamp;
 	float cap = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if (gOwnCount[d] <= 0)
@@ -457,6 +479,7 @@ float BPCapacity()
 			unitCap *= ai.GetTunable("apex_mobile_bp_eff", TUNE_MOBILE_BP_EFF);
 		cap += unitCap;
 	}
+	gBpCapVal = cap;
 	return cap;
 }
 

@@ -33,6 +33,10 @@ const float NP_HALFCELL = 8.f;
 // from the same rings with one more turret standing.
 const int NP_MAX_CELLS = 96;
 
+// The occupied ground of ONE walk, bucketed. Global so a walk reuses the last
+// one's arrays instead of allocating per election.
+Grid::Cells gNPOcc;
+
 // Nothing this plant produces rolls: every mobile thing it builds flies, so it
 // has no doorway and every side of it is packable.
 bool AirPlant(int defId)
@@ -63,7 +67,12 @@ void NearGround(const AIFloat3& in at, float span,
 	hx.resize(0);
 	hz.resize(0);
 	const float sq = span * span;
-	for (uint i = 0; i < ComLen(); ++i) {
+	// The ledger's bucket index, not the ledger: this ran once per PackSlots and
+	// the batch runs one PackSlots per factory line, so the walk was
+	// (lines) x (rows) every nano execution.
+	ComNear(at, span);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
 		const int d = gComDef[i];
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || !OnMap(gComPos[i]))
 			continue;
@@ -99,8 +108,13 @@ int AnchorDefAt(const AIFloat3& in at)
 	if (!OnMap(at))
 		return -1;
 	int best = -1;
+	int bestI = -1;
 	float bestD = 0.f;
-	for (uint i = 0; i < ComLen(); ++i) {
+	// The reach is the CANDIDATE's own footprint, so the query has to be the
+	// largest footprint in the ledger; the test below is unchanged.
+	ComNear(at, ComMaxHalf() + 16.f);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
 		const int d = gComDef[i];
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || !OnMap(gComPos[i]))
 			continue;
@@ -111,9 +125,14 @@ int AnchorDefAt(const AIFloat3& in at)
 				? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL + 16.f;
 		if (dist > own)
 			continue;
-		if ((best < 0) || (dist < bestD)) {
+		// The row index breaks a tie, because the walk this replaces took the
+		// earliest row and the bucket order is not ledger order.
+		if ((best < 0) || (dist < bestD)
+			|| ((dist == bestD) && (int(i) < bestI)))
+		{
 			best = d;
 			bestD = dist;
+			bestI = int(i);
 		}
 	}
 	return best;
@@ -179,7 +198,32 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 	array<AIFloat3> op;
 	array<float> ohx;
 	array<float> ohz;
-	NearGround(at, reach + pitch * 2.f, op, ohx, ohz);
+	const float span = reach + pitch * 2.f;
+	NearGround(at, span, op, ohx, ohz);
+
+	// THE OCCUPANCY TEST, BUCKETED. It ran once per candidate cell against every
+	// occupied footprint in the span, so a packed base paid (cells) x
+	// (buildings in reach) per walk and the walk runs once per factory line.
+	// The query box is the widest overlap any entry can have, so a footprint the
+	// full scan would have found cannot fall outside it -- and a slot handed out
+	// during the walk goes into the same grid, keeping the ids aligned with op.
+	float qr = 0.f;
+	for (uint k = 0; k < op.length(); ++k) {
+		const float rx = nhx + ohx[k];
+		const float rz = nhz + ohz[k];
+		if (rx > qr) qr = rx;
+		if (rz > qr) qr = rz;
+	}
+	{   // the slots this walk hands out are entries too
+		const float sx = nhx + nhx;
+		const float sz = nhz + nhz;
+		if (sx > qr) qr = sx;
+		if (sz > qr) qr = sz;
+	}
+	gNPOcc.Begin(qr, at.x - span - qr, at.z - span - qr,
+			at.x + span + qr, at.z + span + qr);
+	for (uint k = 0; k < op.length(); ++k)
+		gNPOcc.Add(op[k].x, op[k].z);
 
 	int budget = NP_MAX_CELLS;
 	for (int ring = ring0; ring <= ringN; ++ring) {
@@ -220,7 +264,9 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 						continue;
 				}
 				bool taken = false;
-				for (uint k = 0; k < op.length(); ++k) {
+				gNPOcc.Query(p.x, p.z, qr);
+				for (uint q = 0; q < gNPOcc.hit.length(); ++q) {
+					const uint k = uint(gNPOcc.hit[q]);
 					if ((abs(p.x - op[k].x) < (nhx + ohx[k]))
 						&& (abs(p.z - op[k].z) < (nhz + ohz[k])))
 					{
@@ -235,6 +281,7 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 				op.insertLast(p);
 				ohx.insertLast(nhx);
 				ohz.insertLast(nhz);
+				gNPOcc.Add(p.x, p.z);
 				if (int(slots.length()) >= n)
 					return int(slots.length());
 			}

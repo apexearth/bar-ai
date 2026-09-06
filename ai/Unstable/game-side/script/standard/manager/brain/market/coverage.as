@@ -130,25 +130,13 @@ float StakeAt(const AIFloat3& in pos, float r)
 float ShieldedStakeAlong(const AIFloat3& in pos, float reach,
 		const AIFloat3& in dirIn)
 {
-	if (reach < 1.f)
-		return 0.f;
-	AIFloat3 dir = dirIn;
-	if (dir.SqLength2D() < NEAR_ZERO)
-		return 0.f;
-	dir.SafeNormalize2D();
-	const AIFloat3 across(-dir.z, 0.f, dir.x);
-	PfRebuild();
-	float m = 0.f;
-	for (uint i = 0; i < gPfPos.length(); ++i) {
-		const AIFloat3 rel = gPfPos[i] - pos;
-		if ((rel.x * dir.x + rel.z * dir.z) > 0.f)
-			continue;   // in front of the post: it shields nothing there
-		const float lat = abs(rel.x * across.x + rel.z * across.z);
-		if ((lat > reach) || (gPfPos[i].distance2D(pos) < reach))
-			continue;   // nearer than reach is FrontedStakeAt's to count
-		m += gPfWorth[i];
-	}
-	return m;
+	// Same corridor test, same assets; PfStakeShield walks the bucket index
+	// instead of every asset we own, and hands the fill both this and the
+	// in-reach stake out of one traversal.
+	float inReach = 0.f;
+	float beyond = 0.f;
+	PfStakeShield(pos, reach, dirIn, true, inReach, beyond);
+	return beyond;
 }
 
 // The enemy-facing form, unchanged for every existing caller. The TRUE enemy

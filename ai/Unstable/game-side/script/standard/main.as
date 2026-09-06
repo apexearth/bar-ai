@@ -2,6 +2,7 @@
 #include "../side.as"
 #include "../world.as"
 #include "perf.as"
+#include "manager/grid.as"     // the bucket grid every "what is near here" walk asks
 #include "manager/catalog.as"  // def economics + who-builds-what, read once at init
 #include "manager/lattice.as"  // the base lattice + its chain-explosion model
 #include "targets.as"          // EVERY build ratio, in one file

@@ -37,6 +37,8 @@ array<float>    gWallSiege;
 array<bool>     gWallOpen;     // no standing tower of ours covers this slot
 array<bool>     gWallLine;     // slot belongs to the FRONT LINE, not the ring
 array<bool>     gWallAdj;      // a neighbouring slot is already held
+int             gWallAdjAt = -999999;   // ...built on first ask per wall stamp
+float           gWallAdjPitch = 0.f;
 array<float>    gWallR;        // the wall's radius per rim bearing
 bool            gWallROk = false;
 // THE FRONT LINE (apexearth, watching a 2v2: "I'm expecting a clear line of
@@ -55,11 +57,7 @@ const float WALL_QUANT = 256.f;
 
 void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 {
-	bool open = true;
-	for (uint i = 0; open && (i < gPfTwPos.length()); ++i) {
-		if (gPfTwPos[i].distance2D(s) <= gPfTwReach[i])
-			open = false;
-	}
+	const bool open = !PfCoveredAt(s);   // same test, off the tower index
 	const float cv = CoverAt(s);
 	gWallP.insertLast(s);
 	gWallThreat.insertLast(ThreatAt(s));
@@ -367,22 +365,42 @@ void WallPrep()
 		if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 			break;
 	}
-	// Adjacency, for the creep: a slot whose neighbour is already HELD may
-	// rise under that tower's fire even where the enemy stands -- extension
-	// requires the previous section standing, not quiet ground.
-	gWallAdj.resize(gWallP.length());
-	for (uint i = 0; i < gWallP.length(); ++i) {
+	// The adjacency pass that used to stand here is now built on demand --
+	// see WallAdjPrep. It is every slot against every slot, and nothing has
+	// asked it a question since the pull stopped consulting it.
+	gWallAdjPitch = pitch;
+	gWallAdjAt = -999999;
+	Perf::Add("prot.wall", _tWall);
+}
+
+// Adjacency, for the creep: a slot whose neighbour is already HELD may rise
+// under that tower's fire even where the enemy stands. Built on first ask per
+// wall stamp and against HELD slots only -- it was every slot against every
+// slot in WallPrep, for a reading DefSiteFill can no longer reach. Kept
+// because the creep is his ruling; rewiring the pull to it is his decision.
+void WallAdjPrep()
+{
+	WallPrep();
+	if (gWallAdjAt == gWallAt)
+		return;
+	gWallAdjAt = gWallAt;
+	const uint n = gWallP.length();
+	gWallAdj.resize(n);
+	array<uint> held;
+	for (uint j = 0; j < n; ++j) {
+		if (!gWallOpen[j])
+			held.insertLast(j);
+	}
+	const float rr = gWallAdjPitch * 1.6f;
+	for (uint i = 0; i < n; ++i) {
 		bool adj = false;
-		for (uint j = 0; !adj && (j < gWallP.length()); ++j) {
-			if ((i != j) && !gWallOpen[j]
-				&& (gWallP[i].distance2D(gWallP[j]) <= pitch * 1.6f))
-			{
+		for (uint k = 0; !adj && (k < held.length()); ++k) {
+			const uint j = held[k];
+			if ((i != j) && (gWallP[i].distance2D(gWallP[j]) <= rr))
 				adj = true;
-			}
 		}
 		gWallAdj[i] = adj;
 	}
-	Perf::Add("prot.wall", _tWall);
 }
 
 uint PfWallSlots(array<AIFloat3>& out sites)
@@ -405,6 +423,7 @@ bool WallSlotLine(uint i)
 
 bool WallSlotAdjHeld(uint i)
 {
+	WallAdjPrep();
 	return (i < gWallAdj.length()) && gWallAdj[i];
 }
 

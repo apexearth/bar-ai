@@ -12,6 +12,12 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	if (unit is null)
 		return null;
 	const double _mt = Perf::T0();
+	// EVERY BUILDER UPDATE PAYS INTO THE PENDING ELECTIONS, not just the ones
+	// that reach the auction. 9,200 of 15,891 calls measured here return early
+	// holding a task or on the rez gate; without this those frames do nothing
+	// for the half-built sets, and an election's step rate collapses to how
+	// often the engine hands that ONE builder back (Market::ElecPump).
+	Market::ElecPump();
 	IUnitTask@ _r = MakeTaskInner(unit);
 	Perf::Add("hk.maketask.builder", _mt);
 	return _r;
@@ -162,6 +168,8 @@ void NoteCommDecide(CCircuitUnit@ unit, IUnitTask@ dec)
 	if (dec is null) {
 		if (gComBounce > 0)
 			return;   // counted by Decide's rate gate, not an empty election
+		if (Market::ElecPending(unit))
+			return;   // mid-slice, not an empty election
 		++gComNull;
 	}
 	else if (dec.GetType() == Task::Type::RETREAT)
@@ -252,12 +260,17 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	}
 
 	// The arbiter. Empty market during the kill phase: Decide returns null
-	// and the constructor idles. The wall time of the whole election feeds
-	// the frame budget (Market::ELEC_FRAME_US) from out here, so every
-	// return path inside counts without instrumenting each one.
+	// and the constructor idles.
+	//
+	// THE ELECTION CHARGES ITSELF AS IT SPENDS, and this settles only the
+	// remainder -- the prologue above, the safety rungs, the execution. Charging
+	// the whole call out here was the bug it replaces: the budget was tested at
+	// the DOOR of an election that then ran to completion, so a 28.5 ms election
+	// was never bounded by an 8 ms slice and the frame it landed on carried all
+	// of it. Every return path still counts, and nothing counts twice.
 	const double _tD = ai.ClockUs();
 	IUnitTask@ dec = Brain::Decide(unit);
-	Market::ElecSpend(ai.ClockUs() - _tD);
+	Market::ElecSpendRest(ai.ClockUs() - _tD);
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		NoteCommDecide(unit, dec);
 	return dec;

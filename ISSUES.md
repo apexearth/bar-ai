@@ -1856,3 +1856,30 @@ Lost heavily (K/D 0.19 vs 3.86, quit at 17.7 min). What the log said:
 - **Never re-ordered in a collapsing base.** conv-pin t000: lab died 15.3
   min, 10 mex deaths 14-17 min all NEVER -- the base was overrun (no
   turrets); the instrument counts them, the pricing did not refuse them.
+
+## 2026-09-05 — gPostReq is index-parallel to gPfPos but refreshed 5x slower, so threat sticks to the wrong assets
+
+`manager/military/guardposts.as:400-401` refreshes `gPostReq` (one `ThreatM` ->
+`ai.GetEnemyCostAt` engine sweep per asset) every 10 s, but `PfRebuild` rebuilds
+`gPfPos` from scratch every 2 s in engine-determined order. One building
+finishing or dying shifts every subsequent index, so a threat value stays
+attached to the wrong asset for up to 10 s. The existing `gPostReq.length() != n`
+guard catches a length change, not a reorder — and a finish plus a death in the
+same window leaves the length identical.
+
+Consequence: guard posts, and the defence sites priced off `UnitCoverAt`, are
+placed against another building's threat. Fix is to key the value by position
+rather than by index. Found while profiling, not yet measured for impact.
+
+## 2026-09-05 — the DLL committed in ae9f21d predates the C++ in the same commit
+
+`ai/Unstable/engine-side/SkirmishAI.dll` was built 13:11. `cpp/src/circuit/CircuitAI.cpp`,
+`CircuitAI.h` and `task/builder/BuilderTask.cpp` were last edited 14:54-14:55,
+after that build. So the binary in the repo does not contain the C++ changes
+committed alongside it, and anything measured against the shipped DLL is
+measuring different code from what `cpp/` describes.
+
+This is the S3 family — a variant that is quietly not what the source says. It
+does not affect AngelScript work (game-side is hot-swappable), but any C++
+result attributed to ae9f21d is unproven until the DLL is rebuilt from that
+tree and the two are shipped together.

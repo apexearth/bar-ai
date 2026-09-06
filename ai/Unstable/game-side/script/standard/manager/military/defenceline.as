@@ -95,33 +95,51 @@ uint OwnStaticAA()
 	return n;
 }
 
-// What this player has put into the front line, in metal: every standing tower
-// out there plus the ones already ordered. An order has claimed the constructor
-// time it will cost whether or not it ever finishes, which is the whole reason
-// the count-based budget could not bind (see Builder::OutstandingFrontTasks).
-float OwnFrontMetal()
+// The front-line count and the front-line metal are the same classification of
+// the same array, and OnBorder/NearFront only move when the front does -- so
+// classify each tower once per front rebuild, not twice a second.
+int gFenceFrontStamp = -30000;
+int gFenceFrontLen = -1;
+uint gFenceFrontN = 0;
+float gFenceFrontM = 0.f;
+
+void FenceFrontRefresh()
 {
+	RebuildFront();
+	if ((gFenceFrontStamp == gFrontStamp) && (gFenceFrontLen == int(gFencePos.length())))
+		return;
+	gFenceFrontStamp = gFrontStamp;
+	gFenceFrontLen = int(gFencePos.length());
+	uint n = 0;
 	float m = 0.f;
 	for (uint i = 0; i < gFencePos.length(); ++i) {
 		if (!OnBorder(gFencePos[i]) && !NearFront(gFencePos[i]))
 			continue;
+		++n;
 		if (i >= gFenceDef.length())
 			continue;
 		const CCircuitDef@ d = gFenceDef[i];
 		if (d !is null)
 			m += d.costM;
 	}
-	return m;
+	gFenceFrontN = n;
+	gFenceFrontM = m;
+}
+
+// What this player has put into the front line, in metal: every standing tower
+// out there plus the ones already ordered. An order has claimed the constructor
+// time it will cost whether or not it ever finishes, which is the whole reason
+// the count-based budget could not bind (see Builder::OutstandingFrontTasks).
+float OwnFrontMetal()
+{
+	FenceFrontRefresh();
+	return gFenceFrontM;
 }
 
 void PublishDefence()
 {
-	uint front = 0;
-	for (uint i = 0; i < gFencePos.length(); ++i) {
-		if (OnBorder(gFencePos[i]) || NearFront(gFencePos[i]))
-			++front;
-	}
-	ai.PublishTeamValue(TV_FFENCE, float(front));
+	FenceFrontRefresh();
+	ai.PublishTeamValue(TV_FFENCE, float(gFenceFrontN));
 	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 	ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
 	ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());

@@ -24,6 +24,17 @@ int gExecNone = 0;
 int gComFwdLogAt = -999999;   // see the commander forward skip in the exec loop
 int gNextExecLog = 0;
 
+// The decide and exec lines are one ~20-term concatenation per election and per
+// execution, built whether or not anyone reads the infolog. On by default --
+// review.py, trace.py, rebuild_lag.py and audit.py all parse them.
+int gDecideLogOn = -1;
+bool DecideLogOn()
+{
+	if (gDecideLogOn < 0)
+		gDecideLogOn = (ai.GetTunable("apex_decide_log", TUNE_DECIDE_LOG) > 0.f) ? 1 : 0;
+	return gDecideLogOn > 0;
+}
+
 //------------------------------------------------------------------------------
 // THE ELECTION MEMO. A proposer's answer is the WORLD (site auctions, target
 // scans, ladder rankings -- slow) plus the ASKER (walk time, eligibility --
@@ -39,7 +50,19 @@ int gNextExecLog = 0;
 // is always a COPY: Decide mutates gain/value in place (retire discount,
 // exposure charge), and a shared object would compound those per election.
 //------------------------------------------------------------------------------
-const int   MEMO_TTL = 45;   // frames (1.5s); a freshness bound, not policy
+// THE CEILING, NOT THE VALIDITY TEST. Validity is MemoKey below -- the stamps of
+// the data the answer was computed from. This only bounds the half no stamp can
+// reach: every cached value runs through ValueOf, whose income, pull, bank, wage
+// and build-power terms move EVERY frame (price.as:388-533), so a copy is always
+// mispriced by however old it is. Default 45 is what the clock alone used to be,
+// which makes this the throughput knob and its default behaviour-preserving.
+int gMemoTtl = -1;
+int MemoTtl()
+{
+	if (gMemoTtl < 0)
+		gMemoTtl = int(ai.GetTunable("apex_memo_ttl", TUNE_MEMO_TTL));
+	return (gMemoTtl > 1) ? gMemoTtl : 1;
+}
 // A copy this old ALWAYS recomputes, on its own bounded budget. The stack
 // calls the memo slots in one fixed order, so energy+tech drained the whole
 // 2-per-frame budget on every election and protect served its frame-25
@@ -57,6 +80,42 @@ array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
 // them: his protect copy stayed the frame-25 empty answer until another
 // builder's execution evicted it.
 array<array<bool>@> gMemoDeferred;
+// An eviction invalidates one KIND, so the memo carries the reverse index: per
+// kind, the cells holding an answer of that kind. Walking MEMO_N x every def
+// instead was ~3.1M iterations a game.
+array<array<int>@> gMemoKindCells;   // kind -> packed slot*stride + askerDef
+array<array<int>@> gMemoKindPos;     // per cell: its index in that kind's list
+int gMemoStride = 0;
+// The stamps of what each slot reads, so an entry dies when its inputs move
+// rather than when a timer runs out. NOT COVERED, and named because it cannot
+// be fixed from here: six of the seven slots read the commitment ledger or
+// Requests::gLive and NOTHING stamps either, so an order by another builder
+// moves an input this key cannot see. MemoEvictKind covers the executed kind
+// only. See docs/27, apex_memo_ttl.
+array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
+
+// FOUR OF THE SEVEN PICK THEIR SITE FROM THE ASKER'S OWN POSITION -- protect and
+// sense take the nearest gap or slot, obsolete-reclaim the nearest victim, mexup
+// the nearest spot -- so one answer per def was one builder's site handed to
+// every other builder of its kind, which is the rule in this header ("only
+// proposers whose site is world-anchored may sit here") broken in four places.
+// The asker's cell joins their key: builders standing together still share, and
+// a builder across the base gets its own answer. The cell is the light tower's
+// reach, this tree's unit for "the same piece of ground".
+float gMemoCell = 0.f;
+int MemoKey(int slot, CCircuitUnit@ unit)
+{
+	int k = gOwnSetStamp;
+	if ((slot == 3) || (slot == 4) || (slot == 5))
+		k = k * 31 + gPfAt * 7 + Military::gFrontStamp;
+	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6)) {
+		if (gMemoCell <= 1.f)
+			gMemoCell = Brain::LightTowerRange();
+		const AIFloat3 p = unit.GetPos(ai.frame);
+		k = k * 31 + int(p.x / gMemoCell) * 4093 + int(p.z / gMemoCell);
+	}
+	return k;
+}
 
 Want@ WantCopy(Want@ s)
 {
@@ -88,6 +147,49 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	return ProposeProtect(unit);
 }
 
+// The reverse index is maintained on the one line that writes a cached answer:
+// unlink the cell from the kind it used to hold, then link it to the new one.
+// Swap-remove, so both halves are O(1).
+void MemoUnlink(int slot, int ud)
+{
+	Want@ old = gMemoW[slot][ud];
+	if (old is null)
+		return;
+	const int k = old.kind;
+	if ((k < 0) || (uint(k) >= gMemoKindCells.length()) || (gMemoKindCells[k] is null))
+		return;
+	array<int>@ cells = gMemoKindCells[k];
+	const int at = gMemoKindPos[slot][ud];
+	if ((at < 0) || (uint(at) >= cells.length()))
+		return;
+	const int last = int(cells.length()) - 1;
+	if (at != last) {
+		const int moved = cells[last];
+		cells[at] = moved;
+		gMemoKindPos[moved / gMemoStride][moved % gMemoStride] = at;
+	}
+	cells.removeLast();
+	gMemoKindPos[slot][ud] = -1;
+}
+
+void MemoLink(int slot, int ud, Want@ w)
+{
+	gMemoKindPos[slot][ud] = -1;
+	if (w is null)
+		return;
+	const int k = w.kind;
+	if (k < 0)
+		return;
+	if (gMemoKindCells.length() <= uint(k))
+		gMemoKindCells.resize(uint(k) + 1);
+	if (gMemoKindCells[k] is null) {
+		array<int> a;
+		@gMemoKindCells[k] = a;
+	}
+	gMemoKindPos[slot][ud] = int(gMemoKindCells[k].length());
+	gMemoKindCells[k].insertLast(slot * gMemoStride + ud);
+}
+
 // ONE MORE SERVING OF A STALE ANSWER BEATS TWO HEAVY REFRESHES IN ONE FRAME
 // (his rule: "we don't want to ever do too much in any one frame... we
 // should be distributing operations across multiple frames"). At most two
@@ -107,19 +209,30 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoAt.resize(MEMO_N);
 		gMemoW.resize(MEMO_N);
 		gMemoDeferred.resize(MEMO_N);
+		gMemoKindPos.resize(MEMO_N);
+		gMemoKey.resize(MEMO_N);
+		gMemoStride = Catalog::gDefCount + 1;
 		for (uint s = 0; s < MEMO_N; ++s) {
 			array<int> a(uint(Catalog::gDefCount + 1), -30000);
 			array<Want@> ws(uint(Catalog::gDefCount + 1));
 			array<bool> df(uint(Catalog::gDefCount + 1), false);
+			array<int> kp(uint(Catalog::gDefCount + 1), -1);
+			array<int> mk(uint(Catalog::gDefCount + 1), 0);
 			@gMemoAt[s] = a;
 			@gMemoW[s] = ws;
 			@gMemoDeferred[s] = df;
+			@gMemoKindPos[s] = kp;
+			@gMemoKey[s] = mk;
 		}
 	}
 	const int ud = int(unit.circuitDef.id);
 	if ((ud < 1) || (ud > Catalog::gDefCount))
 		return MemoSlotCall(slot, unit);
-	if (ai.frame - gMemoAt[slot][ud] < MEMO_TTL) {
+	// Valid while nothing it was computed from has moved AND inside the ceiling
+	// the per-frame prices need.
+	const int key = MemoKey(slot, unit);
+	if ((gMemoKey[slot][ud] == key)
+		&& (ai.frame - gMemoAt[slot][ud] < MemoTtl())) {
 		Perf::Note("memo.hit");
 		return WantCopy(gMemoW[slot][ud]);
 	}
@@ -145,40 +258,305 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	Perf::Note("memo.miss");
 	Want@ fresh = MemoSlotCall(slot, unit);
 	gMemoAt[slot][ud] = ai.frame;
+	gMemoKey[slot][ud] = key;
 	gMemoDeferred[slot][ud] = false;
+	MemoUnlink(slot, ud);
 	@gMemoW[slot][ud] = fresh;
+	MemoLink(slot, ud, fresh);
 	return WantCopy(fresh);
 }
 
-// THE FRAME'S ELECTION BUDGET. An election is deferrable work -- a builder
-// told "not now" re-asks on its next idle update -- but the sim frame it
-// lands on is not: several full stacks plus their executions landing in one
-// frame IS the 30-146ms hitch he can feel at 5x speed (the task scheduler
-// batches updates, so they cluster). Past the slice, further elections wait.
-// Safety (CommanderSafety, the AA panic claim) sits above the check in
-// Decide and is never deferred. Spend is fed by the caller (maketask.as)
-// so every return path counts without instrumenting each one.
+// THE FRAME'S ELECTION SLICE. Spend is charged AS IT HAPPENS and tested between
+// proposers, which is the only way it can bound the frame it is checked on: the
+// old budget was tested at the door of the whole election and charged after it
+// returned, so it stopped the next builder and never this one. Everything else
+// here follows from that -- the set is assembled a few steps at a time and
+// Decide holds the builder at null until it is whole.
+// The trade, the numbers and how to move it: docs/27, apex_elec_frame_us.
 int gElecFrame = -1;
 double gElecSpentUs = 0.0;
-const double ELEC_FRAME_US = 8000.0;   // a work slice, not policy
+double gElecCallUs = 0.0;   // of that, what THIS call has already charged itself
+double gElecBudgetUs = -1.0;
+bool gElecFinishing = false;
+
+// 18 proposers, then the finish: rank, price the exposure, hoist the panics,
+// draw, execute. The finish is a step of its own because it is the other half
+// of the frame cost, and a frame with nothing left to spend must be able to
+// hold it over exactly the way it holds a proposer over.
+const int ELEC_STEPS = 19;
+// Each step's own measured cost. A step is opened only when what it is EXPECTED
+// to cost still fits the slice -- checking after the fact leaves the frame
+// carrying the overshoot, which is the bug this replaces.
+array<double> gStepEma(uint(ELEC_STEPS), 0.0);
+
+double ElecFrameUs()
+{
+	if (gElecBudgetUs < 0.0)
+		gElecBudgetUs = double(ai.GetTunable("apex_elec_frame_us",
+				TUNE_ELEC_FRAME_US));
+	return gElecBudgetUs;
+}
+
+void ElecFrameRoll()
+{
+	if (gElecFrame != ai.frame) {
+		gElecFrame = ai.frame;
+		gElecSpentUs = 0.0;
+	}
+}
 
 void ElecSpend(double us)
 {
+	ElecFrameRoll();
 	if (us > 0.0)
 		gElecSpentUs += us;
+}
+
+// What the caller (maketask.as) owes on top of what the election charged itself:
+// the prologue, the safety rungs and the finish stage. Every return path still
+// counts without instrumenting each one, and nothing is counted twice.
+void ElecSpendRest(double totalUs)
+{
+	double rest = totalUs - gElecCallUs;
+	if (rest < 0.0)
+		rest = 0.0;
+	if (gElecFinishing) {
+		// The finish is not timed on its own -- it has a dozen return paths --
+		// so its estimate is this call's whole remainder. That over-counts the
+		// prologue into it, which errs toward holding the finish over.
+		gElecFinishing = false;
+		const uint fs = uint(ELEC_STEPS) - 1;
+		gStepEma[fs] = (gStepEma[fs] <= 0.0) ? rest
+				: (gStepEma[fs] * 0.8 + rest * 0.2);
+	}
+	gElecCallUs = 0.0;
+	ElecSpend(rest);
+}
+
+bool ElecAfford(int step)
+{
+	ElecFrameRoll();
+	if (gElecSpentUs <= 0.0)
+		return true;   // a step dearer than the whole slice must still run once
+	return gElecSpentUs + gStepEma[uint(step)] <= ElecFrameUs();
+}
+
+void ElecCharge(int step, double us)
+{
+	if (us < 0.0)
+		us = 0.0;
+	gStepEma[uint(step)] = (gStepEma[uint(step)] <= 0.0) ? us
+			: (gStepEma[uint(step)] * 0.8 + us * 0.2);
+	gElecCallUs += us;
+	ElecSpend(us);
+}
+
+// One partly-assembled want set. Keyed by unit id and validated by def: a slot
+// whose owner died and whose id the engine handed to a different unit reads as
+// a different def and is thrown away rather than finished for the wrong builder.
+class Elec {
+	int defId = -1;
+	int askedAt = -30000;   // last ask; nobody asks for a dead builder's slot
+	int startFrame = 0;     // when this set opened -- its age, and the draw's clock
+	int step = 0;           // the next step to run
+	array<Want@> wants;
+	// THE STACK IS NOT ORDER-FREE ACROSS BUILDERS. ProposeMex writes two
+	// namespace values that the plant and the three reclaim proposers read back
+	// in the same election -- whether any mex spot is open TO THIS ASKER
+	// (want_mex.as:450 -> want_plant.as:832, want_reclaim.as:166) and what the
+	// best spot yields (want_mex.as:554 -> SpotM() -> want_plant.as:761). Within
+	// one builder the slice keeps the order; BETWEEN builders it could drop
+	// another asker's probe in between, so the set carries its own copy.
+	bool sMexOpen = false;
+	float sSpotM = -1.f;
+}
+array<Elec@> gElecOf(32001);   // per-unit-id, Spring ids cap at 32k
+// A builder that STOPS ASKING has taken a task elsewhere or died, and its
+// half-built set answers a world that has moved on. The engine gives an idle
+// builder one AiMakeTask per pass of its idle set, and a pass is at most
+// TEAM_SLOWUPDATE_RATE (15) runs of CBuilderManager::UpdateIdle, which runs
+// every 8 frames -- so silence for twice that is abandonment, not a pause.
+// Only silence resets a set: being held back by the budget must not, or a
+// saturated frame would restart the very elections it is starving.
+const int ELEC_LAPSE = 2 * 15 * 8;   // frames
+
+// THE PENDING SETS, OLDEST FIRST. FIFO is the whole aging rule: the slice goes
+// to the election that has waited longest, and one that wins finishes and
+// leaves, so nothing is jumped and nothing starves. Only unit IDS live here --
+// CCircuitUnit is NOCOUNT and must never be stored (commit.as) -- and
+// ai.GetTeamUnit is this tree's aliveness test for them.
+array<int> gElecQ;
+int gElecWorstWait = 0;
+int gElecPartial = 0;
+int gElecDone = 0;
+int gElecDropped = 0;
+int gNextElecLog = 0;
+
+// The eighteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
+// That order is load-bearing, not cosmetic: ProposeMex's probe feeds the plant
+// and the three reclaim proposers (see class Elec). Slicing preserves it, so a
+// set assembled over five frames is priced the same way one assembled in one is.
+Want@ ProposeStep(int step, CCircuitUnit@ unit)
+{
+	const double _t = Perf::T0();
+	Want@ w = null;
+	if (step == 0)       { @w = ProposeMex(unit);             Perf::Add("want.mex", _t); }
+	else if (step == 1)  { @w = MemoPropose(0, unit);         Perf::Add("want.energy", _t); }
+	else if (step == 2)  { @w = ProposeGeo(unit);             Perf::Add("want.geo", _t); }
+	else if (step == 3)  { @w = ProposePlant(unit);           Perf::Add("want.plant", _t); }
+	else if (step == 4)  { @w = ProposeConvert(unit);         Perf::Add("want.convert", _t); }
+	else if (step == 5)  { @w = ProposeStore(unit);           Perf::Add("want.store", _t); }
+	// Memoised: unmemoised this one is O(builders x mex spots) and grows all game.
+	else if (step == 6)  { @w = MemoPropose(6, unit);         Perf::Add("want.mexup", _t); }
+	else if (step == 7)  { @w = MemoPropose(1, unit);         Perf::Add("want.tech", _t); }
+	else if (step == 8)  { @w = MemoPropose(2, unit);         Perf::Add("want.nano", _t); }
+	else if (step == 9)  { @w = MemoPropose(4, unit);         Perf::Add("want.reclobs", _t); }
+	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
+	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
+	else if (step == 12) { @w = ProposeAssist(unit);          Perf::Add("want.assist", _t); }
+	else if (step == 13) { @w = MemoPropose(5, unit);         Perf::Add("want.protect", _t); }
+	else if (step == 14) { @w = ProposeTeeth(unit);           Perf::Add("want.teeth", _t); }
+	else if (step == 15) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
+	else if (step == 16) { @w = ProposeAirDef(unit);          Perf::Add("want.airdef", _t); }
+	else                 { @w = ProposeSuper(unit);           Perf::Add("want.super", _t); }
+	return w;
+}
+
+bool ElecIdOk(CCircuitUnit@ unit)
+{
+	const int uid = int(unit.id);
+	return (uid >= 0) && (uid < int(gElecOf.length()));
+}
+
+// A set this builder has already opened and not yet finished. Read at the door
+// of Decide: a resumption must not be turned away by the re-election rate gate.
+bool ElecPending(CCircuitUnit@ unit)
+{
+	if (!ElecIdOk(unit))
+		return false;
+	Elec@ st = gElecOf[int(unit.id)];
+	return (st !is null) && (st.defId == int(unit.circuitDef.id))
+			&& (st.step < ELEC_STEPS - 1)
+			&& (ai.frame - st.askedAt <= ELEC_LAPSE);
+}
+
+Elec@ ElecOpen(CCircuitUnit@ unit)
+{
+	const int uid = int(unit.id);
+	Elec@ st = gElecOf[uid];
+	if ((st !is null) && ((st.defId != int(unit.circuitDef.id))
+			|| (ai.frame - st.askedAt > ELEC_LAPSE)))
+		@st = null;   // recycled onto another unit, or abandoned -- see ELEC_LAPSE
+	if (st is null) {
+		Elec fresh;
+		fresh.defId = int(unit.circuitDef.id);
+		fresh.startFrame = ai.frame;
+		@st = fresh;
+		@gElecOf[uid] = st;
+		gElecQ.insertLast(uid);
+	}
+	st.askedAt = ai.frame;
+	return st;
+}
+
+void ElecDrop(int uid)
+{
+	if ((uid >= 0) && (uid < int(gElecOf.length())))
+		@gElecOf[uid] = null;
+	for (uint i = 0; i < gElecQ.length(); ++i) {
+		if (gElecQ[i] == uid) {
+			gElecQ.removeAt(i);
+			return;
+		}
+	}
+}
+
+// Run steps until the set is whole or the frame's slice runs out. The restore
+// at the top is the cross-builder ordering fix -- see class Elec.
+bool ElecSteps(CCircuitUnit@ unit, Elec@ st)
+{
+	if (st.step > 0) {
+		gMexOpen = st.sMexOpen;
+		gLastSpotM = st.sSpotM;
+	}
+	while (st.step < ELEC_STEPS - 1) {
+		if (!ElecAfford(st.step))
+			return false;
+		const double t0 = ai.ClockUs();
+		st.wants.insertLast(ProposeStep(st.step, unit));
+		ElecCharge(st.step, ai.ClockUs() - t0);
+		++st.step;
+		st.sMexOpen = gMexOpen;
+		st.sSpotM = gLastSpotM;
+	}
+	return true;
+}
+
+// THE STEPS DO NOT WAIT FOR THEIR OWN BUILDER TO BE HANDED BACK. The engine
+// revisits an idle builder once per pass of its idle set, so tying the step rate
+// to that made an election take (idle builders) x (slices) passes -- ten seconds
+// with ten of them waiting. A half-built set is state we own, so every builder
+// update pumps the queue instead, INCLUDING the ones that return early holding a
+// task. The engine's hook now only starts and finishes an election.
+void ElecPump()
+{
+	ElecFrameRoll();
+	uint i = 0;
+	while (i < gElecQ.length()) {
+		if (gElecSpentUs > ElecFrameUs())
+			return;
+		const int uid = gElecQ[i];
+		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length())))
+				? gElecOf[uid] : null;
+		CCircuitUnit@ u = (st is null) ? null : ai.GetTeamUnit(uid);
+		// Dead, recycled onto another unit, silent past ELEC_LAPSE, or put on a
+		// build by the engine since it opened: none of those is still electing,
+		// and finishing the set would hand a job to a unit that has one.
+		bool gone = (st is null) || (u is null)
+				|| (st.defId != int(u.circuitDef.id))
+				|| (ai.frame - st.askedAt > ELEC_LAPSE);
+		if (!gone) {
+			IUnitTask@ held = u.task;
+			gone = (held !is null) && (held.GetType() == Task::Type::BUILDER);
+		}
+		if (gone) {
+			++gElecDropped;
+			if ((uid >= 0) && (uid < int(gElecOf.length())))
+				@gElecOf[uid] = null;
+			gElecQ.removeAt(i);
+			continue;
+		}
+		if (!ElecSteps(u, st))
+			return;   // the slice ran out inside this set; it keeps its place
+		++i;          // whole: it waits for its own update to finish and leave
+	}
+}
+
+void ElecLog()
+{
+	if (ai.frame < gNextElecLog)
+		return;
+	gNextElecLog = ai.frame + 60 * SECOND;
+	AiLog("apex: elec-slice done=" + gElecDone + " partial=" + gElecPartial
+		+ " dropped=" + gElecDropped + " queued=" + gElecQ.length()
+		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
+		+ " sliceUs=" + int(ElecFrameUs()));
+	gElecDone = 0;
+	gElecPartial = 0;
+	gElecDropped = 0;
+	gElecWorstWait = 0;
 }
 
 // An executed want of kind K evicts every cached answer of that kind, for
 // every asker class -- see the memo's header comment.
 void MemoEvictKind(int k)
 {
-	for (uint s = 0; s < gMemoAt.length(); ++s) {
-		array<Want@>@ ws = gMemoW[s];
-		array<int>@ at = gMemoAt[s];
-		for (uint d = 0; d < ws.length(); ++d) {
-			if ((ws[d] !is null) && (ws[d].kind == k))
-				at[d] = -30000;
-		}
+	if ((k < 0) || (uint(k) >= gMemoKindCells.length()) || (gMemoKindCells[k] is null))
+		return;
+	array<int>@ cells = gMemoKindCells[k];
+	for (uint i = 0; i < cells.length(); ++i) {
+		const int cell = cells[i];
+		gMemoAt[cell / gMemoStride][cell % gMemoStride] = -30000;
 	}
 }
 
@@ -205,7 +583,10 @@ bool PlantFramed()
 // The per-category draw, on a ranked list: the best want of each category
 // holds a ticket proportional to its value; the drawn one is hoisted to
 // ranked[0]. `salt` varies the roll for a redraw within the same frame.
-bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt)
+// `atFrame` is the frame the ELECTION OPENED, not the frame it finished on, so
+// a set assembled over several frames rolls the same number an atomic one would
+// have rolled. Without that the slice changes the draw for no reason.
+bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
 {
 	bool didDraw = false;
 	array<int> catBest(CAT_N, -1);   // index into ranked, or -1
@@ -289,7 +670,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt)
 		sumV2 += t;
 	}
 	if (sumV2 > 0.f) {
-		uint h2 = uint(ai.frame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
+		uint h2 = uint(atFrame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
 		h2 ^= (h2 >> 13);
 		float roll2 = float(h2 % 10000) / 10000.f * sumV2;
 		for (int c = 0; c < CAT_N; ++c) {
@@ -315,10 +696,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
 		return null;
+	gElecCallUs = 0.0;
 	// A unit whose task keeps dying young re-enters every frame; 2s per
 	// unit caps the global decide rate without touching legit elections
 	// (a successful decide holds its task far longer than this).
-	if ((int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
+	// A builder that is part-way through assembling its want set is EXEMPT: the
+	// gate is there to cap re-elections, and applying it to a resumption would
+	// stretch every sliced election by two seconds a step -- "delays of more
+	// than a second are unacceptable" (apexearth, maketask.as).
+	if (!ElecPending(unit)
+		&& (int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
 		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND) {
 			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 				++Builder::gComBounce;   // a task that died within 2 s of being handed out
@@ -381,43 +768,37 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			return debt;
 	}
 
-	// The frame's election budget -- see ELEC_FRAME_US above. Checked after
-	// the safety paths, before the stack.
-	if (gElecFrame != ai.frame) {
-		gElecFrame = ai.frame;
-		gElecSpentUs = 0.0;
+	// THE SLICED ELECTION -- see the budget header above. The set is assembled a
+	// few proposers at a time and Decide holds the builder at null until it is
+	// whole; the finish below then runs atomically on the completed set. A
+	// builder with no id we can key on (there is no such thing, but the array
+	// is bounded) assembles in one call, exactly as the stack used to.
+	ElecLog();
+	int elecAt = ai.frame;
+	array<Want@>@ wants;
+	if (!ElecIdOk(unit)) {
+		array<Want@> whole;
+		for (int s = 0; s < ELEC_STEPS - 1; ++s)
+			whole.insertLast(ProposeStep(s, unit));
+		@wants = whole;
+	} else {
+		Elec@ st = ElecOpen(unit);
+		ElecPump();   // oldest first, and this set is in the queue
+		if ((st.step < ELEC_STEPS - 1) || !ElecAfford(ELEC_STEPS - 1)) {
+			++gElecPartial;
+			Perf::Note("dec.partial");
+			return null;
+		}
+		gMexOpen = st.sMexOpen;    // the finish prices against SpotM() too
+		gLastSpotM = st.sSpotM;
+		@wants = st.wants;
+		elecAt = st.startFrame;
+		if (ai.frame - elecAt > gElecWorstWait)
+			gElecWorstWait = ai.frame - elecAt;   // the number to read: assembly latency
+		ElecDrop(int(unit.id));
+		++gElecDone;
 	}
-	if (gElecSpentUs > ELEC_FRAME_US) {
-		Perf::Note("dec.deferred");
-		return null;
-	}
-
-	array<Want@> wants;
-	{ double _t = Perf::T0(); wants.insertLast(ProposeMex(unit)); Perf::Add("want.mex", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(0, unit)); Perf::Add("want.energy", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeGeo(unit)); Perf::Add("want.geo", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposePlant(unit)); Perf::Add("want.plant", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeConvert(unit)); Perf::Add("want.convert", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeStore(unit)); Perf::Add("want.store", _t); }
-	// MEMOISED like the other heavy walks. Unmemoised it recomputed per
-	// BUILDER, and the cost is O(builders x mex spots): measured 2026-08-31 it
-	// grew from 1 ms per five-minute block at minute 5 to 1,467 at minute 25,
-	// with a 27.2 ms worst call -- the second-largest grower in the game, and
-	// the one apexearth described as "noticeably worse as the game progresses".
-	// The memo shares one answer per ASKING DEF for MEMO_TTL, which is exactly
-	// the sharing every other heavy proposer already had.
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(6, unit)); Perf::Add("want.mexup", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(1, unit)); Perf::Add("want.tech", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(2, unit)); Perf::Add("want.nano", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(4, unit)); Perf::Add("want.reclobs", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimBlocker(unit)); Perf::Add("want.reclblk", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeReclaimPenned(unit)); Perf::Add("want.reclpen", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeAssist(unit)); Perf::Add("want.assist", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(5, unit)); Perf::Add("want.protect", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeTeeth(unit)); Perf::Add("want.teeth", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(MemoPropose(3, unit)); Perf::Add("want.sense", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeAirDef(unit)); Perf::Add("want.airdef", _t); }
-	{ double _t = Perf::T0(); wants.insertLast(ProposeSuper(unit)); Perf::Add("want.super", _t); }
+	gElecFinishing = true;   // maketask.as charges the finish through ElecSpendRest
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by
 	// the rate at which the thing is expected to be destroyed where it would
 	// stand, so an expensive structure on uninsured ground prices itself down
@@ -740,7 +1121,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// question, one ticket, weighted by that question's best answer.
 	// Rebuild is a price, not a rule: no hoist of the spot that just died.
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush)
-		if (CategoryDraw(unit, ranked, 0))
+		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
@@ -779,17 +1160,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
 			: (0.9f * gWantEmaV + 0.1f * top.value);
-	AiLog("apex: decide t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
-		+ " -> " + CatName(CategoryOf(top.kind))
-		+ "/" + KindName(top.kind) + ":" + ((top.def is null) ? "-" : top.def.GetName())
-		+ " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
-		+ " (gain=" + formatFloat(top.gain, "", 0, 2)
-		+ " m=" + formatFloat(top.mCost, "", 0, 0)
-		+ " t=" + formatFloat(top.tCost, "", 0, 0) + ")"
-		+ " why=" + why
-		+ ((next is null) ? " over nothing"
-			: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
-				+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
+	if (DecideLogOn())
+		AiLog("apex: decide t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+			+ " -> " + CatName(CategoryOf(top.kind))
+			+ "/" + KindName(top.kind) + ":" + ((top.def is null) ? "-" : top.def.GetName())
+			+ " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
+			+ " (gain=" + formatFloat(top.gain, "", 0, 2)
+			+ " m=" + formatFloat(top.mCost, "", 0, 0)
+			+ " t=" + formatFloat(top.tCost, "", 0, 0) + ")"
+			+ " why=" + why
+			+ ((next is null) ? " over nothing"
+				: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
+					+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
 
 	// THE COMMANDER NEVER TAKES EXPOSED WORK: his death is the game, so a
 	// want's exposure is a cost HE pays at game-loss scale (measured: com
@@ -948,11 +1330,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a
 			// fallthrough past the drawn winner.
-			AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
-				+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"
-				+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
-				+ " pick=" + i
-				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+			if (DecideLogOn())
+				AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
+					+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"
+					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
+					+ " pick=" + i
+					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
 			return t;
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))

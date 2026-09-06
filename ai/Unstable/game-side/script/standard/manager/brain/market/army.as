@@ -70,14 +70,7 @@ int EscortShortfall()
 		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
 				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
 			continue;
-		bool has = false;
-		for (uint e = 0; e < gEscWorker.length(); ++e) {
-			if (gEscWorker[e] == wkr.id) {
-				has = true;
-				break;
-			}
-		}
-		if (!has)
+		if (!EscortedWorker(wkr.id))
 			++n;
 	}
 	return n;
@@ -109,11 +102,7 @@ float EscortMetalAtRisk()
 		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
 				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
 			continue;
-		bool has = false;
-		for (uint e = 0; e < gEscWorker.length(); ++e) {
-			if (gEscWorker[e] == wkr.id) { has = true; break; }
-		}
-		if (!has)
+		if (!EscortedWorker(wkr.id))
 			m += Catalog::gCostM[wd];
 	}
 	return m;

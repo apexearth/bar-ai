@@ -45,6 +45,9 @@ local NAMES = {
 	"apex_bomb_eco_h",       -- BombTask.cpp: seconds of a generator's energy stream added to its bomb value (300)
 	"apex_build_threat_bar",
 	"apex_catalog_dump",
+	"apex_decide_log",
+	"apex_elec_frame_us",
+	"apex_eta_log",
 	"apex_protect_field_s",
 	"apex_stall_answer_s",
 	"apex_stall_answer_max_e",

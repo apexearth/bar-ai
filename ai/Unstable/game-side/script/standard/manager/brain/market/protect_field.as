@@ -37,6 +37,17 @@ float           gPfTotal = 0.f;
 float           gPfCells = 0.f;
 int             gPfAt = -999999;
 
+// WHICH ASSET A SLOT IS, so a cache may be keyed to the asset and not to a
+// position in an array. The field is refilled from an engine query every two
+// seconds, and the engine decides the order -- so index i meant a different
+// building from one pass to the next, and every index-parallel cache
+// downstream was silently attached to the wrong asset (ISSUES.md, gPostReq).
+// gPfKey is the unit id for a structure and -(ledger index + 1) for an
+// extractor slot; gPfStamp changes ONLY when the SET of keys changes, so a
+// downstream cache that stored the stamp knows its indices still line up.
+array<int> gPfKey;
+int        gPfStamp = 0;
+
 // Towers, flattened out of gProtPos[PROT_DEF] with their reach and kill power
 // resolved once instead of per candidate site per def per builder.
 array<AIFloat3> gPfTwPos;
@@ -493,6 +504,112 @@ float PfTowerKill(int d)
 }
 
 //------------------------------------------------------------------------------
+// THE KEY TABLE. key -> slot in the pass currently being gathered, so the
+// commit below can ask "did this asset have a slot last time" in O(1) instead
+// of searching. Written per pass and validated by the pass number rather than
+// cleared, so a dead unit id never has to be hunted down.
+//------------------------------------------------------------------------------
+int gPfPassN = 0;
+array<int> gPfIdSeen;    // pass this unit id was written in...
+array<int> gPfIdSlot;    // ...and the slot it took
+array<int> gPfMexSeen;   // the same, for ledger extractor slots
+array<int> gPfMexSlot;
+
+void PfKeyPut(int key, int slot)
+{
+	if (key >= 0) {
+		if (int(gPfIdSeen.length()) <= key) {
+			gPfIdSeen.resize(uint(key + 256));
+			gPfIdSlot.resize(uint(key + 256));
+		}
+		gPfIdSeen[uint(key)] = gPfPassN;
+		gPfIdSlot[uint(key)] = slot;
+		return;
+	}
+	const int m = -key - 1;
+	if (int(gPfMexSeen.length()) <= m) {
+		gPfMexSeen.resize(uint(m + 64));
+		gPfMexSlot.resize(uint(m + 64));
+	}
+	gPfMexSeen[uint(m)] = gPfPassN;
+	gPfMexSlot[uint(m)] = slot;
+}
+
+int PfKeyGet(int key)
+{
+	if (key >= 0) {
+		if (int(gPfIdSeen.length()) <= key)
+			return -1;
+		return (gPfIdSeen[uint(key)] == gPfPassN) ? gPfIdSlot[uint(key)] : -1;
+	}
+	const int m = -key - 1;
+	if ((m < 0) || (int(gPfMexSeen.length()) <= m))
+		return -1;
+	return (gPfMexSeen[uint(m)] == gPfPassN) ? gPfMexSlot[uint(m)] : -1;
+}
+
+// The pass just gathered, in whatever order the engine handed it over.
+array<AIFloat3> gPfNPos;
+array<float>    gPfNWorth;
+array<bool>     gPfNIsMex;
+array<int>      gPfNKey;
+
+// LAND THE PASS WITHOUT SHUFFLING THE ASSETS THAT DID NOT MOVE.
+//
+// Every surviving key keeps the slot it already had and newcomers go on the
+// end, so gPfStamp changes only when a building actually finished or died.
+// The set and the per-asset values are exactly what the pass gathered -- this
+// decides ORDER, nothing else -- and a downstream cache that stored the stamp
+// now knows whether its index-parallel arrays still describe the same assets.
+void PfCommit()
+{
+	const uint nN = gPfNKey.length();
+	++gPfPassN;
+	for (uint j = 0; j < nN; ++j)
+		PfKeyPut(gPfNKey[j], int(j));
+	bool same = (nN == gPfKey.length());
+	for (uint i = 0; same && (i < nN); ++i)
+		same = (gPfKey[i] == gPfNKey[i]);
+	if (same) {
+		// Same assets in the same places. A mex's worth is a live income and
+		// a unit can be nudged, so the VALUES still land; the indices do not
+		// move and the stamp does not change.
+		gPfPos = gPfNPos;
+		gPfWorth = gPfNWorth;
+		gPfIsMex = gPfNIsMex;
+		return;
+	}
+	array<bool> taken(nN, false);
+	array<AIFloat3> oPos;
+	array<float> oWorth;
+	array<bool> oIsMex;
+	array<int> oKey;
+	for (uint i = 0; i < gPfKey.length(); ++i) {
+		const int j = PfKeyGet(gPfKey[i]);
+		if ((j < 0) || taken[uint(j)])
+			continue;   // that asset is gone
+		taken[uint(j)] = true;
+		oPos.insertLast(gPfNPos[uint(j)]);
+		oWorth.insertLast(gPfNWorth[uint(j)]);
+		oIsMex.insertLast(gPfNIsMex[uint(j)]);
+		oKey.insertLast(gPfNKey[uint(j)]);
+	}
+	for (uint j = 0; j < nN; ++j) {
+		if (taken[j])
+			continue;
+		oPos.insertLast(gPfNPos[j]);
+		oWorth.insertLast(gPfNWorth[j]);
+		oIsMex.insertLast(gPfNIsMex[j]);
+		oKey.insertLast(gPfNKey[j]);
+	}
+	gPfPos = oPos;
+	gPfWorth = oWorth;
+	gPfIsMex = oIsMex;
+	gPfKey = oKey;
+	++gPfStamp;
+}
+
+//------------------------------------------------------------------------------
 // THE REBUILD. Bounded by game time, not by callers: the defence price is asked
 // once per builder election and the walk over every team unit is the single
 // most expensive thing in the market (measured: want.protect at 9.2 ms per call
@@ -507,9 +624,10 @@ void PfRebuild()
 	gPfAt = ai.frame;
 	const double _tPf = Perf::T0();
 
-	gPfPos.resize(0);
-	gPfWorth.resize(0);
-	gPfIsMex.resize(0);
+	gPfNPos.resize(0);
+	gPfNWorth.resize(0);
+	gPfNIsMex.resize(0);
+	gPfNKey.resize(0);
 	gPfTotal = 0.f;
 	gPfCells = 0.f;
 	const float h = PfHorizon();
@@ -535,9 +653,10 @@ void PfRebuild()
 			const AIFloat3 p = u.GetPos(ai.frame);
 			if (!OnMap(p))
 				continue;
-			gPfPos.insertLast(p);
-			gPfWorth.insertLast(Catalog::gCostM[d]);
-			gPfIsMex.insertLast(false);
+			gPfNPos.insertLast(p);
+			gPfNWorth.insertLast(Catalog::gCostM[d]);
+			gPfNIsMex.insertLast(false);
+			gPfNKey.insertLast(int(u.id));
 			gPfTotal += Catalog::gCostM[d];
 		}
 	}
@@ -545,11 +664,13 @@ void PfRebuild()
 		if (gLExtract[i] <= 0.f)
 			continue;
 		const float w = gLIncome[i] * IncomeMult() * gLExtract[i] * h;
-		gPfPos.insertLast(gLPos[i]);
-		gPfWorth.insertLast(w);
-		gPfIsMex.insertLast(true);
+		gPfNPos.insertLast(gLPos[i]);
+		gPfNWorth.insertLast(w);
+		gPfNIsMex.insertLast(true);
+		gPfNKey.insertLast(-int(i) - 1);
 		gPfTotal += w;
 	}
+	PfCommit();
 
 	// The rim, over the assets just gathered. One extra O(n) pass.
 	gPfRimOk = false;
@@ -599,7 +720,183 @@ void PfRebuild()
 		gPfTwReach.insertLast(r);
 		gPfTwKill.insertLast(PfTowerKill(d));
 	}
+	PfGridBuild();
+	PfTowerGridBuild();
 	Perf::Add("prot.field", _tPf);
+}
+
+//------------------------------------------------------------------------------
+// THE BUCKET INDEX over the two fields above. Every stake and cover reading is
+// "what of ours is within r of this point", so a query walks the cells its own
+// radius touches instead of everything we own.
+//
+// The answer is unchanged, not approximated: a cell is skipped only when no
+// point inside it can satisfy the test, and every asset in a cell that IS
+// walked runs the same compare it ran before.
+//------------------------------------------------------------------------------
+const float PF_CELL = 512.f;    // ~half apex_threat_r, the radius asked most
+const int   PF_CELL_MAX = 256;  // ...coarsened past this, so a base spread
+                                // across the map never costs more in empty
+                                // cells than the walk it replaced
+array<int> gPfGStart;          // CSR: first item of cell c, cells+1 long
+array<int> gPfGItem;           // asset indices, grouped by cell
+float      gPfGX0 = 0.f;
+float      gPfGZ0 = 0.f;
+float      gPfGCell = PF_CELL;
+int        gPfGNX = 0;
+int        gPfGNZ = 0;
+
+// The cell size that keeps a grid over this extent under PF_CELL_MAX cells.
+float PfCellSize(float w, float h)
+{
+	float c = PF_CELL;
+	for (int k = 0; k < 8; ++k) {
+		const int nx = int(w / c) + 1;
+		const int nz = int(h / c) + 1;
+		if (nx * nz <= PF_CELL_MAX)
+			break;
+		c *= 2.f;
+	}
+	return c;
+}
+
+array<int>   gPfTGStart;
+array<int>   gPfTGItem;
+array<float> gPfTGReach;       // the LONGEST reach in each cell: a cell whose
+                               // farthest gun cannot reach the point is skipped
+float        gPfTGX0 = 0.f;
+float        gPfTGZ0 = 0.f;
+float        gPfTGCell = PF_CELL;
+float        gPfTGMaxR = 0.f;  // longest reach anywhere: the query's own window
+int          gPfTGNX = 0;
+int          gPfTGNZ = 0;
+
+void PfGridBuild()
+{
+	gPfGStart.resize(0);
+	gPfGItem.resize(0);
+	gPfGNX = 0;
+	gPfGNZ = 0;
+	const uint n = gPfPos.length();
+	if (n == 0)
+		return;
+	float x0 = gPfPos[0].x, x1 = gPfPos[0].x;
+	float z0 = gPfPos[0].z, z1 = gPfPos[0].z;
+	for (uint i = 1; i < n; ++i) {
+		if (gPfPos[i].x < x0) x0 = gPfPos[i].x;
+		if (gPfPos[i].x > x1) x1 = gPfPos[i].x;
+		if (gPfPos[i].z < z0) z0 = gPfPos[i].z;
+		if (gPfPos[i].z > z1) z1 = gPfPos[i].z;
+	}
+	gPfGX0 = x0;
+	gPfGZ0 = z0;
+	gPfGCell = PfCellSize(x1 - x0, z1 - z0);
+	gPfGNX = int((x1 - x0) / gPfGCell) + 1;
+	gPfGNZ = int((z1 - z0) / gPfGCell) + 1;
+	const int nc = gPfGNX * gPfGNZ;
+	gPfGStart.resize(uint(nc + 1));
+	for (uint c = 0; c < gPfGStart.length(); ++c)
+		gPfGStart[c] = 0;
+	array<int> cellOf(n, 0);
+	for (uint i = 0; i < n; ++i) {
+		int cx = int((gPfPos[i].x - x0) / gPfGCell);
+		int cz = int((gPfPos[i].z - z0) / gPfGCell);
+		if (cx < 0) cx = 0;
+		if (cx >= gPfGNX) cx = gPfGNX - 1;
+		if (cz < 0) cz = 0;
+		if (cz >= gPfGNZ) cz = gPfGNZ - 1;
+		const int c = cz * gPfGNX + cx;
+		cellOf[i] = c;
+		++gPfGStart[uint(c + 1)];
+	}
+	for (int c = 0; c < nc; ++c)
+		gPfGStart[uint(c + 1)] += gPfGStart[uint(c)];
+	gPfGItem.resize(n);
+	array<int> fill(uint(nc), 0);
+	for (uint i = 0; i < n; ++i) {
+		const int c = cellOf[i];
+		gPfGItem[uint(gPfGStart[uint(c)] + fill[uint(c)])] = int(i);
+		++fill[uint(c)];
+	}
+}
+
+void PfTowerGridBuild()
+{
+	gPfTGStart.resize(0);
+	gPfTGItem.resize(0);
+	gPfTGReach.resize(0);
+	gPfTGMaxR = 0.f;
+	gPfTGNX = 0;
+	gPfTGNZ = 0;
+	const uint n = gPfTwPos.length();
+	if (n == 0)
+		return;
+	float x0 = gPfTwPos[0].x, x1 = gPfTwPos[0].x;
+	float z0 = gPfTwPos[0].z, z1 = gPfTwPos[0].z;
+	for (uint i = 1; i < n; ++i) {
+		if (gPfTwPos[i].x < x0) x0 = gPfTwPos[i].x;
+		if (gPfTwPos[i].x > x1) x1 = gPfTwPos[i].x;
+		if (gPfTwPos[i].z < z0) z0 = gPfTwPos[i].z;
+		if (gPfTwPos[i].z > z1) z1 = gPfTwPos[i].z;
+	}
+	gPfTGX0 = x0;
+	gPfTGZ0 = z0;
+	gPfTGCell = PfCellSize(x1 - x0, z1 - z0);
+	gPfTGNX = int((x1 - x0) / gPfTGCell) + 1;
+	gPfTGNZ = int((z1 - z0) / gPfTGCell) + 1;
+	const int nc = gPfTGNX * gPfTGNZ;
+	gPfTGStart.resize(uint(nc + 1));
+	for (uint c = 0; c < gPfTGStart.length(); ++c)
+		gPfTGStart[c] = 0;
+	gPfTGReach.resize(uint(nc));
+	for (uint c = 0; c < gPfTGReach.length(); ++c)
+		gPfTGReach[c] = 0.f;
+	array<int> cellOf(n, 0);
+	for (uint i = 0; i < n; ++i) {
+		int cx = int((gPfTwPos[i].x - x0) / gPfTGCell);
+		int cz = int((gPfTwPos[i].z - z0) / gPfTGCell);
+		if (cx < 0) cx = 0;
+		if (cx >= gPfTGNX) cx = gPfTGNX - 1;
+		if (cz < 0) cz = 0;
+		if (cz >= gPfTGNZ) cz = gPfTGNZ - 1;
+		const int c = cz * gPfTGNX + cx;
+		cellOf[i] = c;
+		++gPfTGStart[uint(c + 1)];
+		if (gPfTwReach[i] > gPfTGReach[uint(c)])
+			gPfTGReach[uint(c)] = gPfTwReach[i];
+		if (gPfTwReach[i] > gPfTGMaxR)
+			gPfTGMaxR = gPfTwReach[i];
+	}
+	for (int c = 0; c < nc; ++c)
+		gPfTGStart[uint(c + 1)] += gPfTGStart[uint(c)];
+	gPfTGItem.resize(n);
+	array<int> fill(uint(nc), 0);
+	for (uint i = 0; i < n; ++i) {
+		const int c = cellOf[i];
+		gPfTGItem[uint(gPfTGStart[uint(c)] + fill[uint(c)])] = int(i);
+		++fill[uint(c)];
+	}
+}
+
+// Cell range covering [v - r, v + r] on one axis, clamped into the grid. The
+// upper clamp keeps a cell that may still hold something rather than dropping
+// it, so the range is always a superset of the cells the disc can touch.
+int PfCellLo(float v, float r, float o, float cell, int n)
+{
+	const float f = (v - r - o) / cell;
+	if (f <= 0.f)
+		return 0;
+	const int c = int(f);
+	return (c > n - 1) ? (n - 1) : c;
+}
+
+int PfCellHi(float v, float r, float o, float cell, int n)
+{
+	const float f = (v + r - o) / cell;
+	if (f < 0.f)
+		return -1;   // the whole grid lies past v + r on this axis
+	const int c = int(f);
+	return (c > n - 1) ? (n - 1) : c;
 }
 
 // Everything of ours inside r of pos, in metal. The stake, over every building
@@ -608,9 +905,20 @@ float PfStakeAt(const AIFloat3& in pos, float r)
 {
 	PfRebuild();
 	float m = 0.f;
-	for (uint i = 0; i < gPfPos.length(); ++i) {
-		if (gPfPos[i].distance2D(pos) < r)
-			m += gPfWorth[i];
+	if (gPfGNX <= 0)
+		return m;
+	const int cx0 = PfCellLo(pos.x, r, gPfGX0, gPfGCell, gPfGNX);
+	const int cx1 = PfCellHi(pos.x, r, gPfGX0, gPfGCell, gPfGNX);
+	const int cz0 = PfCellLo(pos.z, r, gPfGZ0, gPfGCell, gPfGNZ);
+	const int cz1 = PfCellHi(pos.z, r, gPfGZ0, gPfGCell, gPfGNZ);
+	for (int cz = cz0; cz <= cz1; ++cz) {
+		const int row = cz * gPfGNX;
+		const int e = gPfGStart[uint(row + cx1 + 1)];
+		for (int k = gPfGStart[uint(row + cx0)]; k < e; ++k) {
+			const uint i = uint(gPfGItem[uint(k)]);
+			if (gPfPos[i].distance2D(pos) < r)
+				m += gPfWorth[i];
+		}
 	}
 	return m;
 }
@@ -621,13 +929,165 @@ float PfCoverPoint(const AIFloat3& in at, const AIFloat3& in extraAt,
 		float extraReach, float extraKill)
 {
 	float m = 0.f;
-	for (uint i = 0; i < gPfTwPos.length(); ++i) {
-		if (gPfTwPos[i].distance2D(at) <= gPfTwReach[i])
-			m += gPfTwKill[i];
+	if (gPfTGNX > 0) {
+		const int qx0 = PfCellLo(at.x, gPfTGMaxR, gPfTGX0, gPfTGCell, gPfTGNX);
+		const int qx1 = PfCellHi(at.x, gPfTGMaxR, gPfTGX0, gPfTGCell, gPfTGNX);
+		const int qz0 = PfCellLo(at.z, gPfTGMaxR, gPfTGZ0, gPfTGCell, gPfTGNZ);
+		const int qz1 = PfCellHi(at.z, gPfTGMaxR, gPfTGZ0, gPfTGCell, gPfTGNZ);
+		for (int cz = qz0; cz <= qz1; ++cz) {
+			const int row = cz * gPfTGNX;
+			// A cell's own longest gun bounds what it can contribute, so the
+			// row scan below skips whole cells the point is out of reach of.
+			const float bz0 = gPfTGZ0 + float(cz) * gPfTGCell;
+			float dz = 0.f;
+			if (at.z < bz0)
+				dz = bz0 - at.z;
+			else if (at.z > bz0 + gPfTGCell)
+				dz = at.z - (bz0 + gPfTGCell);
+			for (int cx = qx0; cx <= qx1; ++cx) {
+				const int c = row + cx;
+				const float rr = gPfTGReach[uint(c)];
+				if (rr <= 0.f)
+					continue;
+				const float bx0 = gPfTGX0 + float(cx) * gPfTGCell;
+				float dx = 0.f;
+				if (at.x < bx0)
+					dx = bx0 - at.x;
+				else if (at.x > bx0 + gPfTGCell)
+					dx = at.x - (bx0 + gPfTGCell);
+				if (dx * dx + dz * dz > rr * rr)
+					continue;   // nothing in this cell reaches the point
+				const int e = gPfTGStart[uint(c + 1)];
+				for (int k = gPfTGStart[uint(c)]; k < e; ++k) {
+					const uint i = uint(gPfTGItem[uint(k)]);
+					if (gPfTwPos[i].distance2D(at) <= gPfTwReach[i])
+						m += gPfTwKill[i];
+				}
+			}
+		}
 	}
 	if ((extraReach > 0.f) && (extraAt.distance2D(at) <= extraReach))
 		m += extraKill;
 	return m;
+}
+
+// Does anything of ours already cover this point? The wall's open test, which
+// asked the same question of every tower one at a time per slot.
+bool PfCoveredAt(const AIFloat3& in at)
+{
+	if (gPfTGNX <= 0)
+		return false;
+	const int qx0 = PfCellLo(at.x, gPfTGMaxR, gPfTGX0, gPfTGCell, gPfTGNX);
+	const int qx1 = PfCellHi(at.x, gPfTGMaxR, gPfTGX0, gPfTGCell, gPfTGNX);
+	const int qz0 = PfCellLo(at.z, gPfTGMaxR, gPfTGZ0, gPfTGCell, gPfTGNZ);
+	const int qz1 = PfCellHi(at.z, gPfTGMaxR, gPfTGZ0, gPfTGCell, gPfTGNZ);
+	for (int cz = qz0; cz <= qz1; ++cz) {
+		const int row = cz * gPfTGNX;
+		const float bz0 = gPfTGZ0 + float(cz) * gPfTGCell;
+		float dz = 0.f;
+		if (at.z < bz0)
+			dz = bz0 - at.z;
+		else if (at.z > bz0 + gPfTGCell)
+			dz = at.z - (bz0 + gPfTGCell);
+		for (int cx = qx0; cx <= qx1; ++cx) {
+			const int c = row + cx;
+			const float rr = gPfTGReach[uint(c)];
+			if (rr <= 0.f)
+				continue;
+			const float bx0 = gPfTGX0 + float(cx) * gPfTGCell;
+			float dx = 0.f;
+			if (at.x < bx0)
+				dx = bx0 - at.x;
+			else if (at.x > bx0 + gPfTGCell)
+				dx = at.x - (bx0 + gPfTGCell);
+			if (dx * dx + dz * dz > rr * rr)
+				continue;
+			const int e = gPfTGStart[uint(c + 1)];
+			for (int k = gPfTGStart[uint(c)]; k < e; ++k) {
+				const uint i = uint(gPfTGItem[uint(k)]);
+				if (gPfTwPos[i].distance2D(at) <= gPfTwReach[i])
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
+// THE TWO STAKE READINGS A SITE NEEDS, IN ONE TRAVERSAL.
+//
+// A candidate is priced on what stands inside the gun's reach AND on what the
+// gun shields beyond it, and the two tests share the one expensive term: the
+// distance from the site to the asset. Asked separately they walked the field
+// twice and computed that distance twice; the answers are complementary on it
+// -- inside `reach` is the first, outside is the second -- so one pass gives
+// both. Each asset still runs the identical test it ran in FrontedStakeAt and
+// ShieldedStakeAlong; only the traversal is shared.
+void PfStakeShield(const AIFloat3& in pos, float reach, const AIFloat3& in dirIn,
+		bool wantShield, float& out sReach, float& out sShield)
+{
+	PfRebuild();
+	sReach = 0.f;
+	sShield = 0.f;
+	if (gPfGNX <= 0)
+		return;
+	AIFloat3 dir = dirIn;
+	bool shield = wantShield && (reach >= 1.f)
+			&& (dir.SqLength2D() >= NEAR_ZERO);
+	if (shield)
+		dir.SafeNormalize2D();
+	const AIFloat3 across(-dir.z, 0.f, dir.x);
+	// The disc's own cell window; the shielded corridor runs backwards out of
+	// it to the edge of the field, so when it is wanted the whole grid is in
+	// play and the per-cell rejects below do the pruning instead.
+	const int dx0 = PfCellLo(pos.x, reach, gPfGX0, gPfGCell, gPfGNX);
+	const int dx1 = PfCellHi(pos.x, reach, gPfGX0, gPfGCell, gPfGNX);
+	const int dz0 = PfCellLo(pos.z, reach, gPfGZ0, gPfGCell, gPfGNZ);
+	const int dz1 = PfCellHi(pos.z, reach, gPfGZ0, gPfGCell, gPfGNZ);
+	const int cx0 = shield ? 0 : dx0;
+	const int cx1 = shield ? (gPfGNX - 1) : dx1;
+	const int cz0 = shield ? 0 : dz0;
+	const int cz1 = shield ? (gPfGNZ - 1) : dz1;
+	// A cell lies inside a circle of this radius about its own centre, so a
+	// cell whose centre is more than that outside the corridor cannot hold a
+	// point inside it. Conservative in both tests, which is what keeps the
+	// answer identical to the walk.
+	const float cellR = gPfGCell * 0.70711f;
+	for (int cz = cz0; cz <= cz1; ++cz) {
+		const int row = cz * gPfGNX;
+		const bool zIn = (cz >= dz0) && (cz <= dz1);
+		const float rzC = gPfGZ0 + (float(cz) + 0.5f) * gPfGCell - pos.z;
+		const float aRow = rzC * dir.z;
+		const float lRow = rzC * across.z;
+		for (int cx = cx0; cx <= cx1; ++cx) {
+			const bool inDisc = zIn && (cx >= dx0) && (cx <= dx1);
+			bool inCorr = false;
+			if (shield) {
+				const float rxC = gPfGX0 + (float(cx) + 0.5f) * gPfGCell - pos.x;
+				const float a = aRow + rxC * dir.x;
+				const float l = lRow + rxC * across.x;
+				inCorr = (a - cellR <= 0.f) && (abs(l) - cellR <= reach);
+			}
+			if (!inDisc && !inCorr)
+				continue;
+			const int c = row + cx;
+			const int e = gPfGStart[uint(c + 1)];
+			for (int k = gPfGStart[uint(c)]; k < e; ++k) {
+				const uint i = uint(gPfGItem[uint(k)]);
+				const float d = gPfPos[i].distance2D(pos);
+				if (inDisc && (d < reach))
+					sReach += gPfWorth[i];
+				if (!inCorr || (d < reach))
+					continue;
+				const float rx = gPfPos[i].x - pos.x;
+				const float rz = gPfPos[i].z - pos.z;
+				if ((rx * dir.x + rz * dir.z) > 0.f)
+					continue;   // in front of the post: it shields nothing
+				if (abs(rx * across.x + rz * across.z) > reach)
+					continue;
+				sShield += gPfWorth[i];
+			}
+		}
+	}
 }
 
 //------------------------------------------------------------------------------

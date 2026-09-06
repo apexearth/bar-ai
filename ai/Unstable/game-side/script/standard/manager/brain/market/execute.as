@@ -33,7 +33,11 @@ AIFloat3 ClearExitLane(const AIFloat3& in pos)
 	AIFloat3 p = pos;
 	for (uint tries = 0; tries < 3; ++tries) {
 		bool blocked = false;
-		for (uint i = 0; i < ComLen(); ++i) {
+		// The lane is 220 ahead by 100 wide, so nothing outside a 242-elmo box
+		// can be in it -- the ledger walk was reading the whole base to find it.
+		ComNear(p, 242.f);
+		for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+			const uint i = uint(gComGrid.hit[q]);
 			const int d = gComDef[i];
 			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
 				|| !OnMap(gComPos[i]))
@@ -73,7 +77,9 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 	AIFloat3 p = pos;
 	for (uint tries = 0; tries < 3; ++tries) {
 		bool inLane = false;
-		for (uint i = 0; i < ComLen(); ++i) {
+		ComNear(p, 242.f);   // same 220x100 lane box as ClearExitLane
+		for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+			const uint i = uint(gComGrid.hit[q]);
 			const int d = gComDef[i];
 			if (!Catalog::ValidId(d) || Catalog::gMobile[d]
 				|| (Catalog::gBuildsList[d].length() == 0)
@@ -106,15 +112,24 @@ AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
 		AIFloat3 at;
 		// Ledger COMING plant rows (flipped 2026-08-27): an orphaned factory
 		// frame blocks its ground exactly as an ordered one does.
-		for (uint i = 0; i < ComLen(); ++i) {
+		// Lowest row wins, because the walk this replaces took the first match
+		// in ledger order and the bucket order is not that order.
+		int firstRow = -1;
+		ComNear(p, 512.f);
+		for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+			const uint i = uint(gComGrid.hit[q]);
 			if ((gComState[i] == CS_FINISHED)
 				|| (Catalog::gBuildsList[gComDef[i]].length() == 0))
 				continue;
-			if (OnMap(gComPos[i]) && (p.distance2D(gComPos[i]) < 512.f)) {
-				at = gComPos[i];
-				near = true;
-				break;
+			if (OnMap(gComPos[i]) && (p.distance2D(gComPos[i]) < 512.f)
+				&& ((firstRow < 0) || (int(i) < firstRow)))
+			{
+				firstRow = int(i);
 			}
+		}
+		if (firstRow >= 0) {
+			at = gComPos[uint(firstRow)];
+			near = true;
 		}
 		if (!near)
 			return p;

@@ -420,6 +420,11 @@ int EtaEcoPick(array<Want@>@ ranked)
 int gEtaLogAt = 0;
 void EtaLog(array<Want@>@ ranked, CCircuitUnit@ unit)
 {
+	// The shadow read compares two layers. With the ETA layer off
+	// (apex_eta=0) there is nothing to compare against, and the ladder run
+	// is ~15 ms of simulation per log line.
+	if (!EtaOn() && (ai.GetTunable("apex_eta_log", TUNE_ETA_LOG) <= 0.f))
+		return;
 	if ((ranked is null) || (ranked.length() == 0) || (ai.frame < gEtaLogAt))
 		return;
 	gEtaLogAt = ai.frame + 15 * SECOND;

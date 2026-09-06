@@ -264,13 +264,20 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// Does the line still have an open slot? Read once per fill.
 	const float lineFill = wallOn ? WallLineFill() : -1.f;
 	const bool lineOpen = (lineFill >= 0.f) && (lineFill < 1.f);
+	// THE UNMET OBLIGATION IS A STOCK, NOT A RATE. Dividing it by
+	// apex_exposed_loss_s made a gain a bare metal/s -- and since
+	// DefenceTarget is EcoPowerM x apex_def_eco_s, with both constants at
+	// 120 the seconds CANCEL and the floor became our whole economic power
+	// on every open slot, growing with the economy so TargetFill never
+	// closed. Carried as a stock and multiplied by the site's own hazard
+	// below, it is the same stake x hz x stopped every other term here uses.
+	const float horizW = ai.GetTunable("apex_exposed_loss_s",
+			TUNE_EXPOSED_LOSS_S);
 	float wallPull = 0.f;
 	if (wallOn && PlantFramed()) {
-		const float horizW = ai.GetTunable("apex_exposed_loss_s",
-				TUNE_EXPOSED_LOSS_S);
 		const float gapM = DefenceTarget() - DefenceValue();
-		if ((horizW > 1.f) && (gapM > 0.f))
-			wallPull = gapM / horizW;
+		if (gapM > 0.f)
+			wallPull = gapM;
 	}
 	ClosurePrep();
 	RiskFill();
@@ -311,11 +318,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// its site takes the same demand pull an open wall slot does. One
 		// gun: the site is only offered while the mex has none.
 		const bool isMexG = (si >= mexG0) && (si < nAsset);
-		// Only the asset prefix is in the field's slot cache; gates, front
-		// spots and ring sites read their senses live. Wall slots have their
-		// own stamp cache -- with the wall on, PfGuardSites never ran and
-		// gPfSlot is stale, so PfSite* must not be indexed at all.
-		const bool cached = !wallOn && (si < nAsset);
+		// Only the GUARD-SITE prefix is in the field's slot cache; the mex
+		// guard sites appended after it are not, and gates, front spots and
+		// ring sites read their senses live. Wall slots have their own stamp
+		// cache -- with the wall on, PfGuardSites never ran and gPfSlot is
+		// stale, so PfSite* must not be indexed at all.
+		//
+		// This read `si < nAsset`, which INCLUDES the mex guard sites: with
+		// apex_wall off and one unguarded mex, PfSiteThreat indexed past the
+		// end of the slot arrays and the script died on the spot.
+		const bool cached = !wallOn && (si < mexG0);
 		xA[si] = s.x;
 		zA[si] = s.z;
 		frontA[si] = isFront;
@@ -353,8 +365,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// The floor buys a mex its FIRST gun and then stops -- see
 		// MexUnguardedInReach. A mex that already has one competes for more on
 		// price like anything else; it no longer gets a standing subsidy.
-		const bool floored = !isFront && MexUnguardedInReach(s, reach)
-				&& (mexFloorHere > threat);
+		// The cheap test first: the unguarded walk reads every metal spot,
+		// every standing tower and every ordered one, and only decides
+		// something where the floor would actually beat measured threat.
+		const bool floored = !isFront && (mexFloorHere > threat)
+				&& MexUnguardedInReach(s, reach);
 		if (floored)
 			threat = mexFloorHere;
 		if ((siteWave > 0.f) && (gPfTotal > 1.f)) {
@@ -394,20 +409,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// below -- see the wallPull comment above the loop. Threat is floored
 		// to 1 first so the shortfall arithmetic stays finite.
 		//
-		// NOT ON GROUND THE ENEMY IS STANDING ON -- UNLESS THE WALL IS
-		// ALREADY BESIDE IT, OR THE BUILDER CAN FIGHT. The pull is
-		// no-evidence demand; ungated, line slots deep in the contested
-		// midfield fed frames to the enemy army one at a time (7 built, 7
-		// lost, walks past 1,100). But gated on quiet alone the line only
-		// extends where nothing is happening, and his ruling is
-		// completeness: "a wall of towers is useless if the enemy can just
-		// walk around it. So it needs to extend the whole way." The creep is
-		// the resolution: a slot NEXT TO A HELD SECTION may rise under that
-		// tower's fire whatever the ground reads, so the line extends
-		// section by section from the base to the map edge or the ally's
-		// lane, never by lone frames in an open field.
+		// A WALL SLOT ALWAYS TAKES THE PULL. The danger test for one is the
+		// pull-back above, which walks the slot home until the ground is
+		// quiet; the adjacency creep this branch was written for (a slot
+		// beside a HELD section may rise under that tower's fire) has never
+		// been reachable here, because a wall slot passes unconditionally.
+		// WallSlotAdjHeld still answers it if the pull is ever rewired.
 		//
-		// A slot refused ONLY by this danger gate is not dead -- it is
+		// A mex site refused ONLY by this danger gate is not dead -- it is
 		// marked with the enemy cost that refused it (negative prevA), and
 		// the per-builder election lifts the mark when THAT builder's own
 		// guns cover the difference (apexearth 2026-08-30: "Commanders are
@@ -420,16 +429,21 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float foeHere = -1.f;
 		bool pullHere = false;
 		if (pullBase) {
-			if (isWall && WallSlotAdjHeld(si)) {
+			// (This read `GetEnemyCostAt(s, 900) < costM[d]` -- a unit
+			// COUNT against 85 metal, so it refused nothing. The slot
+			// pull-back above is the danger test now; a wall slot that
+			// reached here is on quiet or dominated ground.)
+			//
+			// A WALL SLOT TAKES THE PULL WHATEVER IS THERE, so only a mex
+			// site can ever read foeHere -- and only when the ground under
+			// it is hot. Asked unconditionally it was an engine query per
+			// slot per fill for a number the branch below could not use.
+			if (isWall)
 				pullHere = true;
-			} else {
-				// (This read `GetEnemyCostAt(s, 900) < costM[d]` -- a unit
-				// COUNT against 85 metal, so it refused nothing. The slot
-				// pull-back above is the danger test now; a wall slot that
-				// reached here is on quiet or dominated ground.)
+			else if (Builder::SiteHot(s))
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
-				pullHere = isWall || !Builder::SiteHot(s);
-			}
+			else
+				pullHere = true;
 		}
 		if (pullBase && !pullHere && (foeHere >= 0.f))
 			prevA[si] = -foeHere;   // overwritten if evidence prices it below
@@ -437,20 +451,27 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			threat = 1.f;
 		if (Gate(GATE_SITE_THREAT, (threat <= 1.f) && !pullHere))
 			continue;
+		// BOTH STAKE READINGS OUT OF ONE TRAVERSAL. What stands inside the
+		// gun's reach and what it shields beyond that reach are the two sides
+		// of the same distance compare, and this loop asked for them as two
+		// separate walks over every asset we own.
+		AIFloat3 foeO;
+		const AIFloat3 outDir = (isFront && FoeRef(foeO))
+				? (foeO - s) : (s - gPfMid);
+		const bool wantShield = isFront || gPfRimOk;
+		float sInReach = 0.f;
+		float sBeyond = 0.f;
+		PfStakeShield(s, reach, outDir, wantShield, sInReach, sBeyond);
 		float stake = (cached && (reach >= 64.f))
-				? PfSiteStake(si) : FrontedStakeAt(s, reach);
+				? PfSiteStake(si) : sInReach;
 		// The stream the tower keeps flowing -- see MexStreamM above. Rear
 		// sites only: a front site's stake is the fight, not the farm.
 		if (!isFront)
 			stake += MexStreamM(s, reach);
-		{
+		if (wantShield) {
 			const float dClose = wallOn ? WallAdds(s, reach)
 					: ClosureAdds(s, reach);
-			AIFloat3 foeO;
-			AIFloat3 outDir = (isFront && FoeRef(foeO))
-					? (foeO - s) : (s - gPfMid);
-			if (isFront || gPfRimOk)
-				stake += ShieldedStakeAlong(s, reach, outDir) * dClose;
+			stake += sBeyond * dClose;
 		}
 		// The ally-front post guards the ALLY'S holdings: our own stake
 		// reads ~zero at their door, so the site is staked by what the
@@ -570,8 +591,21 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 						dirW = rear;
 				}
 			}
-			if (prevented < wallPull * dirW)
-				prevented = wallPull * dirW;
+			// ONE SLOT HOLDS ONE BUILDING, so the shortfall this slot can
+			// answer is that building's cost.
+			float slotGap = wallPull;
+			if (slotGap > Catalog::gCostM[d])
+				slotGap = Catalog::gCostM[d];
+			// A STOCK OVER THE EXPOSURE WINDOW, NOT A HAZARD ROLL. The gap is
+			// metal we owe the wall; prevented is metal/s, so the conversion is
+			// the window every other rate here is scored over. Multiplying by hz
+			// as well double-counted and sent rear slots to zero -- static
+			// defence fell 9.6% -> 0.7% of spend and trade with it. The cap at
+			// one building is what stops the runaway; the division never was.
+			const float pullPrev = (horizW > 1.f)
+					? (slotGap / horizW) * dirW : slotGap * dirW;
+			if (prevented < pullPrev)
+				prevented = pullPrev;
 		}
 		prevented *= Military::OpenFraction(s, reach);
 		{

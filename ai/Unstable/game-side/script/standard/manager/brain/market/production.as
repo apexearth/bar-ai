@@ -7,17 +7,38 @@ namespace Market {
 // A "T2 con" in play terms: a constructor whose build list reaches the best
 // extractor the game offers. Tracks the CEILING rather than a tier name, so
 // it moves with the game rather than with a hardcoded def.
+// Memoised on the ceiling itself: the answer is a function of BestExtract()
+// and the static build tree, and prod.cands asks it once per owned def per
+// CANDIDATE def. BestExtract latches once positive (it never caches a zero),
+// so the table is rebuilt at most once.
+array<int> gRcAns;
+float gRcCeil = -1.f;
 bool ReachesCeiling(int defId)
 {
 	const float ceilM = BestExtract();
 	if (ceilM <= 0.f)
 		return false;
+	if (gRcCeil != ceilM) {
+		gRcCeil = ceilM;
+		gRcAns.resize(0);
+		gRcAns.resize(Catalog::gDefCount + 1);
+		for (uint k = 0; k < gRcAns.length(); ++k)
+			gRcAns[k] = -1;
+	}
+	const bool memo = (defId >= 0) && (defId < int(gRcAns.length()));
+	if (memo && (gRcAns[defId] >= 0))
+		return gRcAns[defId] > 0;
+	bool hit = false;
 	const array<int>@ b = Catalog::gBuildsList[defId];
 	for (uint q = 0; q < b.length(); ++q) {
-		if (Catalog::gExtractsM[b[q]] >= ceilM)
-			return true;
+		if (Catalog::gExtractsM[b[q]] >= ceilM) {
+			hit = true;
+			break;
+		}
 	}
-	return false;
+	if (memo)
+		gRcAns[defId] = hit ? 1 : 0;
+	return hit;
 }
 
 // THE COMMANDER IS NOT A CONSTRUCTOR FOR THIS PURPOSE. It is mobile, it is a
@@ -29,8 +50,18 @@ bool ReachesCeiling(int defId)
 // minutes"). It also has its own job -- the opening, and it cannot be replaced
 // if it dies working -- so counting it as one of the crew both hides the
 // shortfall and puts it in the crowd.
+// Once per frame per ownership change, not once per candidate def: prod.cands
+// calls this inside its candidate loop, and the walk carries a Catalog::Def
+// engine call for every one of the 949 slots.
+int gCcoFrame = -30000;
+int gCcoOwn = -1;
+int gCcoVal = 0;
 int CeilingConsOwned()
 {
+	if ((gCcoFrame == ai.frame) && (gCcoOwn == gOwnStamp))
+		return gCcoVal;
+	gCcoFrame = ai.frame;
+	gCcoOwn = gOwnStamp;
 	int n = 0;
 	for (uint c = 1; c < gOwnCount.length(); ++c) {
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
@@ -40,6 +71,7 @@ int CeilingConsOwned()
 		if (ReachesCeiling(int(c)))
 			n += gOwnCount[c];
 	}
+	gCcoVal = n;
 	return n;
 }
 
@@ -466,6 +498,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	float bestV = 0.f;
 	float bestGain = 0.f;
 	const double _tProds = Perf::T0();
+	// Two fleet counts the candidate loop below used to re-walk the whole def
+	// table for, once per candidate. Negative means "not taken yet".
+	int landT1 = -1;
+	float claimers = -1.f;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -903,12 +939,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// hit 24 at 15m on the bank term).
 		if (EcoQuiet() && !Catalog::gFlyer[d]
 			&& (reach < BestExtract())) {
-			int landT1 = 0;
-			for (uint lc = 1; lc < gOwnCount.length(); ++lc) {
-				if ((gOwnCount[lc] > 0) && Catalog::gMobile[int(lc)]
-					&& Catalog::gBuilder[int(lc)] && !Catalog::gFlyer[int(lc)]) {
-					if (!ReachesCeiling(int(lc)))
-						landT1 += gOwnCount[lc];
+			// Nothing in this walk depends on the candidate `d`, and it sat
+			// inside the candidate loop -- 949 slots per candidate. Taken at
+			// most once per pass, on first use, so the count is the same.
+			if (landT1 < 0) {
+				landT1 = 0;
+				for (uint lc = 1; lc < gOwnCount.length(); ++lc) {
+					if ((gOwnCount[lc] > 0) && Catalog::gMobile[int(lc)]
+						&& Catalog::gBuilder[int(lc)] && !Catalog::gFlyer[int(lc)]) {
+						if (!ReachesCeiling(int(lc)))
+							landT1 += gOwnCount[lc];
+					}
 				}
 			}
 			if (float(landT1) >= ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP) + 2.f)
@@ -954,11 +995,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// demand law, fourth application.
 			CacheSpots();
 			const float open = float(int(gAllSpots.length()) - int(gLSpot.length()));
-			float claimers = 0.f;
-			for (uint cd2 = 1; cd2 < gOwnCount.length(); ++cd2) {
-				if ((gOwnCount[cd2] > 0) && Catalog::gMobile[int(cd2)]
-					&& Catalog::gBuilder[int(cd2)])
-					claimers += float(gOwnCount[cd2]);
+			// Loop-invariant: the claimer fleet does not depend on which unit
+			// the line is pricing. Taken once per pass on first use.
+			if (claimers < 0.f) {
+				claimers = 0.f;
+				for (uint cd2 = 1; cd2 < gOwnCount.length(); ++cd2) {
+					if ((gOwnCount[cd2] > 0) && Catalog::gMobile[int(cd2)]
+						&& Catalog::gBuilder[int(cd2)])
+						claimers += float(gOwnCount[cd2]);
+				}
 			}
 			float share = (open > 0.f) ? (open / (claimers + 1.f)) : 0.f;
 			if (share > 1.f)

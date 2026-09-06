@@ -15,10 +15,18 @@ from now on, and keep the one-liner in `tunables.as` in step.
 
 ### `TUNE_ETA` = 0.f
 
-THE ECONOMY-ONLY ETA OBJECTIVE. 0 shadow-logs the ladder's pick beside the
-market's and changes nothing; 1 lets the ETA re-rank wants WITHIN the four
-economic categories. Swept against an inactive opponent -- see the
-eta-objective skill.
+THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the ETA re-rank wants
+WITHIN the four economic categories. Swept against an inactive opponent -- see
+the eta-objective skill.
+
+### `TUNE_ETA_LOG` = 0.f
+
+The `apex: eta` shadow line while `apex_eta` is 0. Off because the layer it
+compares against is off: EtaLog runs a full LadderRun economy simulation per
+ranked want to write one line, measured at 3,448 ms (5.0% of all script time) in
+a 27-minute game, and with apex_eta=0 nothing consumes the comparison. Set it to
+1 to read what the ETA layer WOULD pick without letting it steer; apex_eta=1
+enables the line by itself.
 
 ### `TUNE_T2_METAL` = 30.f
 
@@ -354,6 +362,24 @@ the base. 0.35 is a +/-49 degree arc.
 Dump every available def's catalog row at init (one log line per def, parsed by
 tools/check_catalog.py). Off by default: it is ~1000 lines of infolog that only
 a verification run reads.
+
+### `TUNE_DECIDE_LOG` = 1.f
+
+The `apex: decide` and `apex: exec` lines. ON by default and it stays on for
+every benchmark run: review.py, trace.py, rebuild_lag.py and audit.py all parse
+them, and a run without them cannot be judged. It exists because the cost is not
+free — AngelScript evaluates the argument eagerly, so each election builds a
+~20-term concatenation with six formatFloat calls and each AiLog takes a mutex
+and a formatted file write, ~2,600 times in a 27-minute game. Set it to 0 for a
+live multiplayer game where nobody is going to read the log.
+
+### `TUNE_PERF` = 0.f
+
+One switch over the per-section profiler (`frametime.py`'s `apex: perf sec`
+lines) and the lag governor's production cuts. Default 0 on apexearth's ruling,
+"Default to 0, harness passes it explicitly" — so a live game stops paying two
+`ClockUs` calls and a dictionary lookup per section for a log nobody opens. If
+`frametime.py` reports nothing for a run, this is why.
 
 ### `TUNE_PLANT_PIPE` = 2.0f
 
@@ -1056,6 +1082,28 @@ how sharply the category draw follows value. Odds go as (value/leader)^this: 1
 is the old straight-proportional draw, 2 makes a six-fold value gap one
 election in thirty-six, large approaches argmax. Never a threshold, so nothing
 starves outright.
+
+### `TUNE_MEMO_TTL` = 45.f
+
+Frames a memoised proposer answer may be served for. VALIDITY is `MemoKey` — the
+stamps of what the answer was computed from; this is only the ceiling on the half
+no stamp reaches, `ValueOf`'s income, pull, bank, wage and build-power terms,
+which move every frame. 45 is what the clock alone used to be, so the default
+changes nothing. It is the throughput knob: measured 2026-09-05 the memo hit 593
+/ missed 3,135 / deferred 1,760 (11%), because 45 frames is shorter than the 2 s
+per-unit re-election gate, so an entry always expired before the next builder of
+that def asked. Raising it buys recomputes with price staleness — a behaviour
+call, so sweep it against `composition.py`.
+
+### `TUNE_ELEC_FRAME_US` = 8000.f
+
+Microseconds one sim frame may spend assembling builder elections. `decide.as`
+cuts the 18-proposer stack against it between steps, opening a step only when
+its own measured cost still fits, so it bounds the frame it is checked on — the
+old door check could not (`hk.maketask.builder` maxMs 122.9 in one call). The
+trade is latency: a builder waits `ceil(election / this)` slices, pumped from
+every builder update. Above a whole election (~28.5 ms) nothing is sliced. Not
+swept; read `apex: elec-slice` worstWaitS against that maxMs before moving it.
 
 ### `TUNE_MEDIC_SHARE` = 0.4f
 

@@ -133,7 +133,8 @@ python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1     # add --per-side 8 --watch to watch
 python tools/battery.py                         # the regression instrument after a behaviour session
 python tools/composition.py <tournament>        # where the metal actually went
-python tools/frametime.py <run>                 # per-section maxMs; needs apex_perf=1
+python tools/frametime.py <run>                 # per-section maxMs + the 16-AI verdict.
+                                                # apex_perf=1; the harness passes it now
 python tools/test_raid.py | test_earlyfight.py | test_frontline.py
 python tools/run_tournament.py --a … --b … --maps … --games 10   # then --report
 ```

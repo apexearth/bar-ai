@@ -1129,7 +1129,11 @@ bool AnyLineSite(AIFloat3& out at, float& out lathe)
 float NanoLatheReaching(const AIFloat3& in at)
 {
 	float lathe = 0.f;
-	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+	// Nothing further out than the longest reach can cover this ground, so the
+	// walk over every turret was reading a base to answer about a square.
+	NanoNear(at, NanoMaxReach());
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
 		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
 		if (at.distance2D(gOwnNanoPos[i]) < r)
 			lathe += NANO_ABSORB;
@@ -1215,7 +1219,9 @@ float NanoGap(const AIFloat3& in at)
 float RingBPAt(const AIFloat3& in at)
 {
 	float bp = 0.f;
-	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+	NanoNear(at, NanoMaxReach());
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
 		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
 		if (at.distance2D(gOwnNanoPos[i]) < r)
 			bp += (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;

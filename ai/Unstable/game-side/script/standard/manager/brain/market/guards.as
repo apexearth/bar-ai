@@ -62,8 +62,62 @@ array<Id> gEscUnit;
 // The escort's def, kept beside the pairing so the army model can tell what is
 // standing from what is committed -- there is no unit-by-id lookup bound.
 array<int> gEscDef;
+// ESCORT METAL PER WORKER, kept as the pairing changes rather than re-summed.
+// The sum ran once per exposed worker on EVERY military election, so its cost
+// was (workers) x (pairs) and both fleets grow all game. Same 32k id table as
+// the enemy-cost memo above; an id outside it falls back to the walk, which is
+// the same answer.
+array<float> gEscHaveM(32001, 0.f);
+array<int> gEscHaveN(32001, 0);
+
+bool EscIdOk(Id id)
+{
+	return (int(id) >= 0) && (int(id) < int(gEscHaveN.length()));
+}
+
+float EscortMetalOn(Id wid)
+{
+	if (EscIdOk(wid))
+		return gEscHaveM[int(wid)];
+	float m = 0.f;
+	for (uint e = 0; e < gEscWorker.length(); ++e) {
+		if ((gEscWorker[e] == wid) && (e < gEscDef.length()))
+			m += Catalog::gCostM[gEscDef[e]];
+	}
+	return m;
+}
+
+bool EscortedWorker(Id wid)
+{
+	if (EscIdOk(wid))
+		return gEscHaveN[int(wid)] > 0;
+	for (uint e = 0; e < gEscWorker.length(); ++e) {
+		if (gEscWorker[e] == wid)
+			return true;
+	}
+	return false;
+}
+
 int gEscDiagAt = 0;
 int gEscOrderAt = 0;         // frame of the last escort order, all lines
+// GetEnemyCostAt is an engine sweep of the enemy registry, and EscortNeeded ran
+// one per exposed worker on EVERY military election -- several elections land
+// in the same frame, where neither the registry nor the worker's position can
+// have moved. Same Spring 32k id cap as the other id-keyed tables.
+array<int> gEnMFrame(32001, -30000);
+array<float> gEnMVal(32001, 0.f);
+float WorkerEnemyM(CCircuitUnit@ wkr, float r)
+{
+	const int id = int(wkr.id);
+	if ((id < 0) || (id >= int(gEnMFrame.length())))
+		return ai.GetEnemyCostAt(wkr.GetPos(ai.frame), r);
+	if (gEnMFrame[id] == ai.frame)
+		return gEnMVal[id];
+	gEnMFrame[id] = ai.frame;
+	gEnMVal[id] = ai.GetEnemyCostAt(wkr.GetPos(ai.frame), r);
+	return gEnMVal[id];
+}
+
 CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if ((mil is null) || !gFarmSet)
@@ -95,14 +149,9 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		// threshold and no count -- at the base edge expo is ~0.5 and one
 		// escort satisfies it; deep forward against a real army it asks for a
 		// squad, which is exactly the ask.
-		float haveM = 0.f;
-		for (uint e = 0; e < gEscWorker.length(); ++e) {
-			if ((gEscWorker[e] == wkr.id) && (e < gEscDef.length()))
-				haveM += Catalog::gCostM[gEscDef[e]];
-		}
+		const float haveM = EscortMetalOn(wkr.id);
 		const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
-		float needM = ai.GetEnemyCostAt(wkr.GetPos(ai.frame),
-				(expoR > 1.f) ? expoR : 1200.f);
+		float needM = WorkerEnemyM(wkr, (expoR > 1.f) ? expoR : 1200.f);
 		const float floorM = expo * mineM;
 		if (floorM > needM)
 			needM = floorM;
@@ -119,6 +168,10 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		gEscWorker.insertLast(wkr.id);
 		gEscUnit.insertLast(mil.id);
 		gEscDef.insertLast(int(mil.circuitDef.id));
+		if (EscIdOk(wkr.id)) {
+			gEscHaveM[int(wkr.id)] += Catalog::gCostM[int(mil.circuitDef.id)];
+			++gEscHaveN[int(wkr.id)];
+		}
 		return wkr;
 	}
 	return null;
@@ -282,6 +335,15 @@ void EscortGone(Id id)
 {
 	for (uint e = 0; e < gEscWorker.length(); ) {
 		if ((gEscWorker[e] == id) || (gEscUnit[e] == id)) {
+			const Id w = gEscWorker[e];
+			if (EscIdOk(w) && (e < gEscDef.length())) {
+				gEscHaveM[int(w)] -= Catalog::gCostM[gEscDef[e]];
+				if (gEscHaveM[int(w)] < 0.f)
+					gEscHaveM[int(w)] = 0.f;
+				--gEscHaveN[int(w)];
+				if (gEscHaveN[int(w)] < 0)
+					gEscHaveN[int(w)] = 0;
+			}
 			gEscWorker.removeAt(e);
 			gEscUnit.removeAt(e);
 			gEscDef.removeAt(e);

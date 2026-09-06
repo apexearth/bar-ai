@@ -410,6 +410,12 @@ def build_script(
         # events and army snapshots, for tools/battles.py fight reconstruction.
         "dev_combatlog": 1,
         "dev_maxgameminutes": minutes,
+        # The AI's own per-section profiler (perf.as). TUNE_PERF ships at 0 so
+        # live games do not pay ~250k instrumented scope closes; every measured
+        # run turns it on here, which is what tools/frametime.py reads. Published
+        # in game-patches/gadgets/dev_tunables.lua -- WITHOUT THAT GADGET DEPLOYED
+        # this key is ignored silently and frametime.py sees no perf lines (S8).
+        "apex_perf": 1,
         # THE PER-PLAYER UNIT LIMIT, AND WE HAVE TO STATE IT.
         #
         # BAR's modoptions.lua declares "maxunits" with def=2000 ("Max Units Per

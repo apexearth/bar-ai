@@ -1,13 +1,22 @@
 namespace Market {
 array<int> gOwnCount;   // finished units we own, by def id
+// Bumped on every change; gOwnSetStamp only when a def crosses zero. The
+// derived walks below are functions of one or the other plus the static
+// catalog, so a stamp match means the answer cannot have moved.
+int gOwnStamp = 0;
+int gOwnSetStamp = 0;
 void OwnAdd(int defId, int delta)
 {
 	if (gOwnCount.length() == 0)
 		gOwnCount.resize(Catalog::gDefCount + 1);
 	if ((defId >= 1) && (defId < int(gOwnCount.length()))) {
+		const bool had = (gOwnCount[defId] > 0);
 		gOwnCount[defId] += delta;
 		if (gOwnCount[defId] < 0)
 			gOwnCount[defId] = 0;
+		++gOwnStamp;
+		if (had != (gOwnCount[defId] > 0))
+			++gOwnSetStamp;
 	}
 }
 
@@ -110,71 +119,92 @@ float OwnedBestMobileCostM()
 	return gBestMob;
 }
 
-float OwnedCeil()
+// The three ceilings below and CanBuildEver read only WHICH defs we own, never
+// how many, so one refresh per ownership-set change serves every caller.
+int gCeilStamp = -1;
+float gOwnedCeil = 0.f;
+float gOwnedProdCeil = 1.f;
+float gOwnedMobCeil = 0.f;
+array<bool> gCanBuild;
+void RefreshOwnedSet()
 {
-	float ceil = 0.f;
+	if (gCeilStamp == gOwnSetStamp)
+		return;
+	gCeilStamp = gOwnSetStamp;
+	if (int(gCanBuild.length()) <= Catalog::gDefCount)
+		gCanBuild.resize(Catalog::gDefCount + 1);
+	for (uint k = 0; k < gCanBuild.length(); ++k)
+		gCanBuild[k] = false;
+	gOwnedCeil = 0.f;
+	gOwnedMobCeil = 0.f;
+	float prodCeil = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if (gOwnCount[d] <= 0)
 			continue;
 		const array<int>@ builds = Catalog::gBuildsList[int(d)];
 		if (Catalog::gMobile[int(d)]) {
 			for (uint i = 0; i < builds.length(); ++i) {
-				if (Catalog::gExtractsM[builds[i]] > ceil)
-					ceil = Catalog::gExtractsM[builds[i]];
-			}
-		} else {
-			// A standing factory reaches what its producible builders reach.
-			for (uint i = 0; i < builds.length(); ++i) {
-				const int pd = builds[i];
-				if (!Catalog::gMobile[pd] || !Catalog::gBuilder[pd])
-					continue;
-				const array<int>@ pb = Catalog::gBuildsList[pd];
-				for (uint q = 0; q < pb.length(); ++q) {
-					if (Catalog::gExtractsM[pb[q]] > ceil)
-						ceil = Catalog::gExtractsM[pb[q]];
-				}
-			}
-		}
-	}
-	return ceil;
-}
-
-// Can anything we own put this def on the ground -- directly, or through a
-// standing factory's constructors? Same walk as OwnedCeil, asked about one
-// def: a price anchored on a unit nobody can build is not a price.
-bool CanBuildEver(int defId)
-{
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		if (gOwnCount[d] <= 0)
-			continue;
-		const array<int>@ builds = Catalog::gBuildsList[int(d)];
-		if (Catalog::gMobile[int(d)]) {
-			for (uint i = 0; i < builds.length(); ++i) {
-				if (builds[i] == defId)
-					return true;
+				const int b = builds[i];
+				if ((b >= 0) && (b < int(gCanBuild.length())))
+					gCanBuild[b] = true;
+				if (Catalog::gExtractsM[b] > gOwnedCeil)
+					gOwnedCeil = Catalog::gExtractsM[b];
+				if (Catalog::gExtractsM[b] > gOwnedMobCeil)
+					gOwnedMobCeil = Catalog::gExtractsM[b];
 			}
 			continue;
 		}
+		// A standing factory reaches what its producible builders reach.
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int pd = builds[i];
+			if (Catalog::gMobile[pd] && (Catalog::gCostM[pd] > prodCeil))
+				prodCeil = Catalog::gCostM[pd];
 			if (!Catalog::gMobile[pd] || !Catalog::gBuilder[pd])
 				continue;
 			const array<int>@ pb = Catalog::gBuildsList[pd];
 			for (uint q = 0; q < pb.length(); ++q) {
-				if (pb[q] == defId)
-					return true;
+				const int b2 = pb[q];
+				if ((b2 >= 0) && (b2 < int(gCanBuild.length())))
+					gCanBuild[b2] = true;
+				if (Catalog::gExtractsM[b2] > gOwnedCeil)
+					gOwnedCeil = Catalog::gExtractsM[b2];
 			}
 		}
 	}
-	return false;
+	gOwnedProdCeil = (prodCeil > 1.f) ? prodCeil : 1.f;
+}
+
+float OwnedCeil()
+{
+	RefreshOwnedSet();
+	return gOwnedCeil;
+}
+
+// Can anything we own put this def on the ground -- directly, or through a
+// standing factory's constructors? A price anchored on a unit nobody can build
+// is not a price. Asked once per candidate def inside catalog-wide loops
+// (eta's PoolFill, EPriceFloor), so it is a table lookup, not a walk.
+bool CanBuildEver(int defId)
+{
+	RefreshOwnedSet();
+	return ((defId >= 0) && (defId < int(gCanBuild.length()))) && gCanBuild[defId];
 }
 
 // Mobile builders we own whose reach hits the game's extraction ceiling --
-// the fleet already serving upgrade demand.
+// the fleet already serving upgrade demand. Counts, not just the owned set, so
+// it rides gOwnStamp.
+int gServingStamp = -1;
+int gServingCons = 0;
 int ServingCons()
 {
-	int nServing = 0;
 	const float ceilX = BestExtract();
+	// NEVER LATCH A ZERO CEILING: BestExtract latches only once positive, and
+	// at ceilX == 0 every build option passes, so a cache taken then reads
+	// every mobile builder as serving for the rest of that stamp.
+	if ((gServingStamp == gOwnStamp) && (ceilX > 0.f))
+		return gServingCons;
+	gServingStamp = (ceilX > 0.f) ? gOwnStamp : -1;
+	int nServing = 0;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)] || !Catalog::gBuilder[int(d)])
 			continue;
@@ -186,38 +216,21 @@ int ServingCons()
 			}
 		}
 	}
+	gServingCons = nServing;
 	return nServing;
 }
 
 // The costliest mobile unit our standing factories can produce.
 float OwnedProdCostCeil()
 {
-	float ceil = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)])
-			continue;
-		const array<int>@ pb = Catalog::gBuildsList[int(d)];
-		for (uint q = 0; q < pb.length(); ++q) {
-			if (Catalog::gMobile[pb[q]] && (Catalog::gCostM[pb[q]] > ceil))
-				ceil = Catalog::gCostM[pb[q]];
-		}
-	}
-	return (ceil > 1.f) ? ceil : 1.f;
+	RefreshOwnedSet();
+	return gOwnedProdCeil;
 }
 
 float OwnedMobileCeil()
 {
-	float ceil = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
-		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
-			continue;
-		const array<int>@ builds = Catalog::gBuildsList[int(d)];
-		for (uint i = 0; i < builds.length(); ++i) {
-			if (Catalog::gExtractsM[builds[i]] > ceil)
-				ceil = Catalog::gExtractsM[builds[i]];
-		}
-	}
-	return ceil;
+	RefreshOwnedSet();
+	return gOwnedMobCeil;
 }
 
 // Own standing generators, for the obsolete-reclaim want. NOCOUNT handles:
@@ -374,6 +387,70 @@ array<Id> gOwnNanoIds;
 array<float> gOwnNanoReach;
 array<float> gOwnNanoBP;
 
+// THE TURRET CENSUS, BUCKETED. NanoLatheReaching and RingBPAt walked every
+// standing turret, and Requests::Take asks NanoFed once per live request, so
+// their cost was (asks) x (turrets) -- and apexearth has watched a single
+// cluster of 217. Same discipline as the commitment ledger: a death removes by
+// index and shifts everything after it, so the grid is thrown away and the next
+// query rebuilds it; a new turret appends, which shifts nothing and goes in
+// directly. A turret never moves, so nothing else can invalidate it.
+Grid::Cells gNanoGrid;
+bool gNanoGridDirty = true;
+uint gNanoGridN = 0;
+float gNanoGridMaxReach = 0.f;
+
+void NanoGridDrop()
+{
+	gNanoGridDirty = true;
+}
+
+void NanoGridBuild()
+{
+	if (!gNanoGridDirty && (gNanoGridN == gOwnNanoPos.length()))
+		return;
+	gNanoGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	gNanoGridMaxReach = 0.f;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		gNanoGrid.Add(gOwnNanoPos[i].x, gOwnNanoPos[i].z);
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if (r > gNanoGridMaxReach)
+			gNanoGridMaxReach = r;
+	}
+	gNanoGridN = gOwnNanoPos.length();
+	gNanoGridDirty = false;
+}
+
+void NanoGridAppend()
+{
+	if (gNanoGridDirty || (gNanoGridN + 1 != gOwnNanoPos.length())) {
+		gNanoGridDirty = true;
+		return;
+	}
+	const uint i = gNanoGridN;
+	gNanoGrid.Add(gOwnNanoPos[i].x, gOwnNanoPos[i].z);
+	const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+	if (r > gNanoGridMaxReach)
+		gNanoGridMaxReach = r;
+	gNanoGridN = gOwnNanoPos.length();
+}
+
+// The longest build reach any standing turret has. Through the build, because a
+// stale-LOW reach is a query that misses a turret the walk would have found.
+float NanoMaxReach()
+{
+	NanoGridBuild();
+	return gNanoGridMaxReach;
+}
+
+// Turrets within the box of half-extent `r` around `at`, left in gNanoGrid.hit
+// as indices into gOwnNanoPos. A superset; the caller's own reach test decides.
+void NanoNear(const AIFloat3 &in at, float r)
+{
+	NanoGridBuild();
+	gNanoGrid.Query(at.x, at.z, r);
+}
+
 void NoteFarm(CCircuitUnit@ unit)
 {
 	if (unit is null)
@@ -405,6 +482,7 @@ void NoteFarm(CCircuitUnit@ unit)
 	gOwnNanoIds.insertLast(unit.id);
 	gOwnNanoReach.insertLast(Catalog::gBuildDist[d]);
 	gOwnNanoBP.insertLast(Catalog::gBuildPower[d]);
+	NanoGridAppend();
 	if (gFarmSet)
 		return;
 	gFarmPos = unit.GetPos(ai.frame);
@@ -474,6 +552,7 @@ void NoteDead(CCircuitUnit@ unit)
 				gOwnNanoReach.removeAt(nn);
 			if (nn < gOwnNanoBP.length())
 				gOwnNanoBP.removeAt(nn);
+			NanoGridDrop();
 			break;
 		}
 	}
@@ -504,6 +583,7 @@ void NoteDead(CCircuitUnit@ unit)
 	gLIncome.removeAt(i);
 	gLExtract.removeAt(i);
 	gLClaimAt.removeAt(i);
+	++gLStamp;   // rows shifted: LedgerFind's spot->row table must be rebuilt
 }
 
 

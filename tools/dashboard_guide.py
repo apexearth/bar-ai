@@ -196,9 +196,12 @@ GROUPS = [
                  ("TUNE_ETA", "lets the target decide which economy want "
                   "competes — extraction, generation and build power stop "
                   "being three separate lottery tickets and become one "
-                  "question. Off still writes the `apex: eta` log line, so "
-                  "you can read what it WOULD have picked without changing "
-                  "anything"),
+                  "question"),
+                 ("TUNE_ETA_LOG", "writes the `apex: eta` shadow line while "
+                  "the layer is off, so you can read what it WOULD have "
+                  "picked without changing anything. Each line is a full "
+                  "ladder simulation per ranked want (~15 ms), so it is off "
+                  "unless you are reading the comparison"),
              ]},
             {"title": "Metal expansion",
              "what": "Claiming spots and upgrading them. This is what every "
@@ -923,6 +926,30 @@ GROUPS = [
                  ("TUNE_SPACE_RENT", "rewards building on ground our turrets "
                   "already cover — denser bases"),
              ]},
+            {"title": "What one frame may spend on it",
+             "what": "An election is eighteen proposers and an execution, and "
+                     "the worst one measured 122.9 ms in a single call — a "
+                     "visible hitch at 5x speed. It is now assembled a few "
+                     "proposers at a time against a per-frame slice, so this "
+                     "is the trade between how big the hitch can get and how "
+                     "long a builder waits for its orders.",
+             "reads": "brain/market/decide.as",
+             "knobs": [
+                 ("TUNE_MEMO_TTL", "frames a memoised proposer answer may be "
+                  "served for. Seven of the eighteen proposers cache their "
+                  "answer per asking-def; what makes an entry valid is the "
+                  "stamps of the data it was computed from, and this only "
+                  "caps the pricing, which moves every frame and no stamp "
+                  "can bound. Higher is fewer recomputes and staler prices — "
+                  "watch memo.hit/miss/defer in frametime.py and the want.* "
+                  "totalMs against what the AI actually builds"),
+                 ("TUNE_ELEC_FRAME_US", "microseconds one sim frame may spend "
+                  "assembling builder elections. Lower spreads each election "
+                  "over more frames: smaller hitch, slower orders. Raise it "
+                  "past the cost of a whole election and nothing is sliced at "
+                  "all. Watch `apex: elec-slice` for the worst wait, and "
+                  "frametime.py's hk.maketask.builder maxMs for the hitch"),
+             ]},
         ],
     },
     {
@@ -979,7 +1006,14 @@ GROUPS = [
                  ("TUNE_WORTH_DIAG", "1 prints the pricing exponents once; "
                   "2 also dumps the whole ranked field"),
                  ("TUNE_CATALOG_DUMP", "dump every available unit def at init"),
-                 ("TUNE_PERF", "the perf governor's production cuts under lag"),
+                 ("TUNE_PERF", "the perf governor's production cuts under lag, "
+                  "and the per-section profiler behind frametime.py. Off by "
+                  "default — the benchmark harness passes apex_perf=1, so a "
+                  "live game does not pay for a profiler nobody reads"),
+                 ("TUNE_DECIDE_LOG", "the `apex: decide` and `apex: exec` "
+                  "lines. On, because every harness tool reads them; turn it "
+                  "off for a live game and the election stops building a "
+                  "20-term string and taking the log mutex per builder"),
              ]},
         ],
     },

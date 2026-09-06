@@ -43,6 +43,10 @@ float MexCoverFloorM()
 // untouched -- a mex anything real approaches still buys its guard through
 // the auction. Shared by the site loop AND the cover-push queue-jump, so
 // the jump cannot keep buying what the auction's floor no longer asks for.
+int   gMexEarlyAt = -999999;   // the screen term is per frame, not per site
+float gMexEarly = 0.f;
+bool  gMexEarlyOk = false;
+
 float MexFloorFactor(const AIFloat3& in pos)
 {
 	float fwd = Military::ForwardFraction(pos);
@@ -63,13 +67,20 @@ float MexFloorFactor(const AIFloat3& in pos)
 	// Until our fielded army reaches the leak screen, every standing mex
 	// carries the full floor whatever its bearing; the term fades as the
 	// army takes over the job.
-	const float screen = ai.GetTunable("apex_leak_screen_m",
-			TUNE_LEAK_SCREEN_M);
-	if (screen > 1.f) {
-		float early = 1.f - ArmyValue() / screen;
-		if (early > f)
-			f = early;
+	//
+	// The screen term does not depend on `pos`, and ArmyValue walks the whole
+	// def table -- so the site loop paid a table walk per candidate site per
+	// def per builder for one number. Held on the frame, the same way RiskFill
+	// holds the side-wide half of every risk reading.
+	if (gMexEarlyAt != ai.frame) {
+		gMexEarlyAt = ai.frame;
+		const float screen = ai.GetTunable("apex_leak_screen_m",
+				TUNE_LEAK_SCREEN_M);
+		gMexEarlyOk = (screen > 1.f);
+		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
 	}
+	if (gMexEarlyOk && (gMexEarly > f))
+		f = gMexEarly;
 	return f;
 }
 
@@ -189,7 +200,7 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 // into our own base included, so the line's perpendicular swings with the last
 // fight and its lateral slots wander. Their base does not move; the line
 // should not either.
-bool FoeRef(AIFloat3& out at)
+bool FoeRefRaw(AIFloat3& out at)
 {
 	if (!Builder::gHomeSet)
 		return false;
@@ -214,6 +225,24 @@ bool FoeRef(AIFloat3& out at)
 		return true;
 	at = aiEnemyMgr.GetEnemyPos();
 	return OnMap(at) && ((at.x > 1.f) || (at.z > 1.f));
+}
+
+// THEIR BASE DOES NOT MOVE INSIDE A FRAME. Every read above is an engine call
+// -- the team id list, then a published value per teammate -- and the defence
+// loop asks this once per candidate site, so a 16-player game paid fifteen
+// cross-team reads per slot per def per builder for one fixed point.
+int      gFoeRefAt = -999999;
+bool     gFoeRefOk = false;
+AIFloat3 gFoeRefP;
+
+bool FoeRef(AIFloat3& out at)
+{
+	if (gFoeRefAt != ai.frame) {
+		gFoeRefAt = ai.frame;
+		gFoeRefOk = FoeRefRaw(gFoeRefP);
+	}
+	at = gFoeRefP;
+	return gFoeRefOk;
 }
 
 // ONE CANDIDATE SITE AT EACH MEX THAT HAS NO GUN. The wall offers slots on the

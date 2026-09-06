@@ -42,6 +42,91 @@ int gComSummaryNext = 0;
 
 uint ComLen() { return gComDef.length(); }
 
+// THE LEDGER'S SPATIAL INDEX, so a "what of ours is near here" ask costs its own
+// neighbourhood rather than the whole ledger.
+//
+// REBUILD-ON-CHANGE, NOT AN INDEX THAT ROTS: ComDrop uses removeAt, so a removal
+// shifts every row after it and any stored row index is wrong from that instant.
+// The grid is therefore thrown away whenever a row moves, and the next query
+// rebuilds it before answering -- the same O(rows) walk it replaces, amortised
+// over every query until the next mutation. An APPEND shifts nothing and goes
+// straight in, which is what keeps the nano burst (Take, task added, Take again,
+// sixteen times in one execution) from rebuilding sixteen times.
+Grid::Cells gComGrid;
+bool gComGridDirty = true;
+uint gComGridN = 0;
+// The largest footprint half-extent in the ledger, for the callers whose reach
+// is the CANDIDATE's own size (AnchorDefAt). Only ever grows between rebuilds,
+// so a stale value is too large, which costs candidates and never answers.
+float gComGridMaxHalf = 0.f;
+
+float ComHalfOf(int d)
+{
+	if (!Catalog::ValidId(d))
+		return 0.f;
+	const float hx = float(Catalog::gFootX[d]) * 8.f;
+	const float hz = float(Catalog::gFootZ[d]) * 8.f;
+	return (hx > hz) ? hx : hz;
+}
+
+void ComGridDrop()
+{
+	gComGridDirty = true;
+}
+
+void ComGridAppend()
+{
+	// Only valid for a row appended at the very end of a current grid; anything
+	// else falls back to the rebuild.
+	if (gComGridDirty || (gComGridN + 1 != gComDef.length())) {
+		gComGridDirty = true;
+		return;
+	}
+	const uint i = gComGridN;
+	gComGrid.Add(gComPos[i].x, gComPos[i].z);
+	const float h = ComHalfOf(gComDef[i]);
+	if (h > gComGridMaxHalf)
+		gComGridMaxHalf = h;
+	gComGridN = gComDef.length();
+}
+
+void ComGridBuild()
+{
+	if (!gComGridDirty && (gComGridN == gComDef.length()))
+		return;
+	// One bucket per 256 elmos of map: a base-sized query touches a handful of
+	// them, and the whole grid is a few hundred ints to clear.
+	gComGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	gComGridMaxHalf = 0.f;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		gComGrid.Add(gComPos[i].x, gComPos[i].z);
+		const float h = ComHalfOf(gComDef[i]);
+		if (h > gComGridMaxHalf)
+			gComGridMaxHalf = h;
+	}
+	gComGridN = gComDef.length();
+	gComGridDirty = false;
+}
+
+// The largest footprint half-extent any row carries. Through the build, because
+// an append that fell back to the rebuild has not folded its own row in yet, and
+// a stale-LOW reach is a query that misses.
+float ComMaxHalf()
+{
+	ComGridBuild();
+	return gComGridMaxHalf;
+}
+
+// Candidate ROWS whose position lies in the box of half-extent `r` around `at`,
+// left in gComGrid.hit. A superset of any circle of radius r: the caller applies
+// its own test, exactly as it did over the whole ledger.
+void ComNear(const AIFloat3 &in at, float r)
+{
+	ComGridBuild();
+	gComGrid.Query(at.x, at.z, r);
+}
+
 int ComFindTask(IUnitTask@ t)
 {
 	if (t is null)
@@ -72,6 +157,7 @@ void ComDrop(uint i)
 	gComPos.removeAt(i);
 	gComTask.removeAt(i);
 	gComAt.removeAt(i);
+	ComGridDrop();
 }
 
 // Promote a row to FRAMED on the frame unit `uid`. If another row already
@@ -90,6 +176,7 @@ int ComBindFrame(uint i, Id uid, const AIFloat3 &in where)
 	}
 	gComId[i] = uid;
 	gComPos[i] = where;
+	ComGridDrop();   // a row that MOVED invalidates its bucket
 	if (gComState[i] == CS_ORDERED) {
 		gComState[i] = CS_FRAMED;
 		gComAt[i] = ai.frame;
@@ -112,6 +199,7 @@ void ComTaskAdded(IUnitTask@ task)
 	gComPos.insertLast(task.GetBuildPos());
 	gComTask.insertLast(task);
 	gComAt.insertLast(ai.frame);
+	ComGridAppend();
 }
 
 void ComTaskRemoved(IUnitTask@ task, bool done)
@@ -166,6 +254,7 @@ void ComUnitFinished(CCircuitUnit@ unit)
 		IUnitTask@ none = null;
 		gComTask.insertLast(none);
 		gComAt.insertLast(ai.frame);
+		ComGridAppend();
 		return;
 	}
 	i = ComBindFrame(uint(i), unit.id, at);
@@ -239,7 +328,10 @@ int ComNearest(int defId, const AIFloat3 &in pos, float reach, int mask)
 // Any lathe in the ledger, ordered or standing, within `reach` of `pos`.
 bool ComLatheNear(const AIFloat3& in pos, float reach)
 {
-	for (uint i = 0; i < gComDef.length(); ++i) {
+	// Any match will do, so bucket order costs nothing here.
+	ComNear(pos, reach);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
 		if (IsLatheDef(gComDef[i]) && (pos.distance2D(gComPos[i]) < reach))
 			return true;
 	}
@@ -383,6 +475,31 @@ CCircuitUnit@ ComOrphanUnit(int defId, const AIFloat3 &in from, float reach)
 {
 	CCircuitUnit@ best = null;
 	float bestD = (reach < 0.f) ? 1.0e9f : reach;
+	// Requests::Take asks this through PendNear on EVERY request, so the walk
+	// was (requests) x (ledger rows). A bounded ask goes through the index; an
+	// unbounded one (PendAnyOfDef, or an off-map `from`, which prices every row
+	// at zero distance) has no box and stays a walk.
+	if ((reach >= 0.f) && OnMap(from)) {
+		int bestRow = -1;
+		ComNear(from, reach);
+		for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+			const uint i = uint(gComGrid.hit[q]);
+			if ((gComDef[i] != defId) || !ComIsOrphan(i))
+				continue;
+			const float dd = from.distance2D(gComPos[i]);
+			// The walk let an equal distance replace the incumbent, so the
+			// LAST such row won it; bucket order is not ledger order.
+			if ((dd > bestD) || ((dd == bestD) && (int(i) < bestRow)))
+				continue;
+			CCircuitUnit@ u = ai.GetTeamUnit(gComId[i]);
+			if (u is null)
+				continue;
+			@best = u;
+			bestD = dd;
+			bestRow = int(i);
+		}
+		return best;
+	}
 	for (uint i = 0; i < gComDef.length(); ++i) {
 		if ((gComDef[i] != defId) || !ComIsOrphan(i))
 			continue;

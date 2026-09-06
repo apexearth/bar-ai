@@ -11,6 +11,7 @@ namespace Perf {
 bool gInit = false;
 bool gOn = false;
 array<string> gNames;
+dictionary gIndex;  // name -> gNames slot; Add() runs on every scope close
 array<double> gTotalUs;
 array<double> gMaxUs;
 array<uint> gCalls;
@@ -36,18 +37,16 @@ void Add(const string &in name, double t0)
 		return;
 	const double us = ai.ClockUs() - t0;
 	int idx = -1;
-	for (uint i = 0; i < gNames.length(); ++i) {
-		if (gNames[i] == name) {
-			idx = int(i);
-			break;
-		}
-	}
-	if (idx < 0) {
+	int64 slot = 0;
+	if (gIndex.get(name, slot)) {
+		idx = int(slot);
+	} else {
 		gNames.insertLast(name);
 		gTotalUs.insertLast(0.0);
 		gMaxUs.insertLast(0.0);
 		gCalls.insertLast(0);
 		idx = int(gNames.length()) - 1;
+		gIndex.set(name, int64(idx));
 	}
 	gTotalUs[idx] += us;
 	gCalls[idx] += 1;

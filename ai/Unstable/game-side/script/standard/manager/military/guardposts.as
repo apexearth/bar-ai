@@ -144,10 +144,13 @@ float EyesWarningS(int guardDef)
 	return gap / ((fs > 1.f) ? fs : 100.f);
 }
 
-// What a unit reaches before a raider kills one of our economy buildings --
-// the mexes and generators the raids come for: its speed times their average
-// life under the fastest enemy's gun, plus any warning seconds it gets.
-float PostReach(int d, float warnS = 0.f)
+// How long one of our economy buildings -- the mexes and generators the raids
+// come for -- lives under the fastest enemy's gun. Nothing in it varies per
+// guard, so it is taken once a posting pass rather than inside PostReach:
+// two walks of every def in the game, and PostReach is asked twice per guard.
+float gPostLifeS = 0.f;   // <= 0: we own no economy building yet
+
+void RefreshPostLife()
 {
 	float hp = 0.f, n = 0.f;
 	for (uint k = 1; k < Market::gOwnCount.length(); ++k) {
@@ -159,19 +162,31 @@ float PostReach(int d, float warnS = 0.f)
 		hp += float(Market::gOwnCount[k]) * Catalog::gHealth[kd];
 		n += float(Market::gOwnCount[k]);
 	}
-	if (n < 1.f)
-		return 400.f;
+	if (n < 1.f) {
+		gPostLifeS = 0.f;
+		return;
+	}
 	hp /= n;
 	float dps = 0.f;
+	const float fastest = Market::FoeSpeedCap() - 0.1f;
 	for (int k = 1; k <= Catalog::gDefCount; ++k) {
 		if (!Catalog::gAvailable[k] || !Market::LineCombat(k) || Catalog::gFlyer[k])
 			continue;
-		if ((Catalog::gSpeed[k] >= Market::FoeSpeedCap() - 0.1f) && (Catalog::gDps[k] > dps))
+		if ((Catalog::gSpeed[k] >= fastest) && (Catalog::gDps[k] > dps))
 			dps = Catalog::gDps[k];
 	}
 	if (dps < 1.f)
 		dps = 20.f;
-	const float r = Catalog::gSpeed[d] * (hp / dps + warnS);
+	gPostLifeS = hp / dps;
+}
+
+// What a unit reaches before a raider kills one of those buildings: its speed
+// times their life, plus any warning seconds it gets.
+float PostReach(int d, float warnS = 0.f)
+{
+	if (gPostLifeS <= 0.f)
+		return 400.f;
+	const float r = Catalog::gSpeed[d] * (gPostLifeS + warnS);
 	return (r < 150.f) ? 150.f : ((r > 1500.f) ? 1500.f : r);
 }
 
@@ -330,6 +345,7 @@ void UpdateGuardPosts()
 		return;
 	}
 	gPostAt = ai.frame;
+	RefreshPostLife();
 	if (!Builder::gHomeSet)
 		return;
 	Market::PfRebuild();
@@ -388,7 +404,13 @@ void UpdateGuardPosts()
 	// and it is the unit the cover-need estimate posts.
 	gPostNeedDef = CoverUnitDef();
 	gPostWarnS = EyesWarningS(gPostNeedDef);
-	array<bool> used(us.length(), false);
+	// Guards not yet posted, compacted into freeIdx[0, nFree): the chosen one is
+	// swapped off the end, so the nearest-free scan below shrinks with each
+	// assignment instead of re-walking the whole pool every time.
+	array<uint> freeIdx(us.length());
+	for (uint j = 0; j < us.length(); ++j)
+		freeIdx[j] = j;
+	uint nFree = us.length();
 	// Posts form a wall, not a dot (apexearth: "spreading ourselves out as a
 	// wall so... we don't receive a lot of flanking damage and instead get
 	// flanking damage on them"): the k-th guard on an asset stands forward
@@ -411,22 +433,20 @@ void UpdateGuardPosts()
 		}
 	}
 	for (uint k = 0; k < us.length(); ++k) {
-		if (bi < 0)
+		if ((bi < 0) || (nFree == 0))
 			break;
-		int bu = -1;
-		float bd = 0.f;
-		for (uint j = 0; j < us.length(); ++j) {
-			if (used[j])
-				continue;
-			const float dd = upos[j].distance2D(Market::gPfPos[bi]);
-			if ((bu < 0) || (dd < bd)) {
+		uint bp = 0;
+		float bd = upos[freeIdx[0]].distance2D(Market::gPfPos[bi]);
+		for (uint j = 1; j < nFree; ++j) {
+			const float dd = upos[freeIdx[j]].distance2D(Market::gPfPos[bi]);
+			if (dd < bd) {
 				bd = dd;
-				bu = int(j);
+				bp = j;
 			}
 		}
-		if (bu < 0)
-			break;
-		used[bu] = true;
+		const uint bu = freeIdx[bp];
+		--nFree;
+		freeIdx[bp] = freeIdx[nFree];
 		const uint at = uint(bi);
 		const float r0 = PostReach(ud[bu]);
 		const float rE = PostReach(ud[bu], gPostWarnS);

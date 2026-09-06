@@ -80,8 +80,30 @@ array<AIFloat3> gLPos;
 array<float> gLIncome;    // the spot's raw income (extraction 1.0)
 array<float> gLExtract;   // standing extraction; 0 until a mex FINISHES here
 array<int> gLClaimAt;     // frame of the claim; unfinished claims expire
+// SPOT ID -> ROW, rebuilt only when the claimed set changes. PickSpot asks this
+// once per MAP spot per election, so the walk made the mex sweep
+// mapSpots x heldSpots -- both of which grow. CacheSpots reads at most 1024
+// spots, so anything past the table falls back to the walk unchanged.
+int gLStamp = 0;
+int gLIdxStamp = -1;
+array<int> gLIdx;
 int LedgerFind(int spotId)
 {
+	if (gLIdxStamp != gLStamp) {
+		gLIdxStamp = gLStamp;
+		if (gLIdx.length() < 1024)
+			gLIdx.resize(1024);
+		for (uint k = 0; k < gLIdx.length(); ++k)
+			gLIdx[k] = -1;
+		for (uint i = 0; i < gLSpot.length(); ++i) {
+			const int s = gLSpot[i];
+			// First row wins, as the walk did.
+			if ((s >= 0) && (s < int(gLIdx.length())) && (gLIdx[s] < 0))
+				gLIdx[s] = int(i);
+		}
+	}
+	if ((spotId >= 0) && (spotId < int(gLIdx.length())))
+		return gLIdx[spotId];
 	for (uint i = 0; i < gLSpot.length(); ++i) {
 		if (gLSpot[i] == spotId)
 			return int(i);
@@ -97,6 +119,7 @@ void LedgerClaim(int spotId, const AIFloat3& in pos, float income)
 	gLIncome.insertLast(income);
 	gLExtract.insertLast(0.f);
 	gLClaimAt.insertLast(ai.frame);
+	++gLStamp;
 }
 // A claim that never finished releases its spot for re-proposal; without
 // this, an aborted mex task left its ledger entry blocking the spot (and
@@ -110,6 +133,7 @@ void LedgerSweep()
 			gLIncome.removeAt(i);
 			gLExtract.removeAt(i);
 			gLClaimAt.removeAt(i);
+			++gLStamp;
 			continue;
 		}
 		++i;
