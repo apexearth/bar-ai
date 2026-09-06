@@ -82,7 +82,7 @@ void CSupportTask::Start(CCircuitUnit* unit)
 	pos = utils::is_valid(freePos) ? freePos : pos;
 
 	TRY_UNIT(circuit, unit,
-		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
 	)
 	state = State::DISENGAGE;  // Wait
@@ -213,7 +213,7 @@ void CSupportTask::ApplyPath(const CQueryPathMulti* query)
 //		manager->DoneTask(this);  // NOTE: RemoveAssignee will abort task
 	} else {
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(endPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdFightTo(endPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 		)
 		state = State::ROAM;  // Not wait
 	}

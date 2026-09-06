@@ -139,9 +139,11 @@ public:
 	// WHICH CALL SITE sent it. The kind/distance census says how much churn
 	// there is, never where it comes from, so every rule aimed at it has been
 	// a guess. Defaulted, so an unlabelled site lands in OTHER rather than
-	// being mis-attributed.
+	// being mis-attributed -- every site is now named, so a nonzero `other` in
+	// the order-src line means a NEW one was added without a tag.
 	enum class OrdSrc: int { OTHER = 0, RING, TRAVEL, DODGE, STANDOFF, POST,
-		RETREAT, BUILD, SCOUT, _SIZE };
+		RETREAT, BUILD, SCOUT, SETTGT, ATTACK, PATROL, ENGAGE, REGROUP, ESCORT,
+		SNIPER, MANUAL, SCRIPT, FWALK, COMBAT, GUARD, RALLY, _SIZE };
 	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
 			OrdSrc src = OrdSrc::OTHER);
 

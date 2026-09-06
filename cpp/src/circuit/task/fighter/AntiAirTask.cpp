@@ -177,7 +177,7 @@ void CAntiAirTask::Update()
 					unit->GetTravelAct()->StateWait();
 				}
 				TRY_UNIT(circuit, unit,
-					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
 				)
 			}
 		}
@@ -539,7 +539,7 @@ void CAntiAirTask::Fallback()
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 		)
 	}
 }

@@ -380,7 +380,7 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 		return;
 	}
 	try {
-		unit->CmdMoveTo(pos);
+		unit->CmdMoveTo(pos, 0, INT_MAX, CCircuitUnit::OrdSrc::SCRIPT);
 	} catch (const std::exception&) {
 	}
 }

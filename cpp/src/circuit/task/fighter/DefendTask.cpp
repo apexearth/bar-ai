@@ -144,7 +144,7 @@ void CDefendTask::Start(CCircuitUnit* unit)
 	// not wade (apexearth: "using a fight order was incorrect. We need to be
 	// using move commands along with set target").
 	TRY_UNIT(circuit, unit,
-		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
 	)
 }
@@ -353,7 +353,7 @@ void CDefendTask::Merge(ISquadTask* task)
 		// apex: rookies RUN to the group instead of fight-walking -- the
 		// fight order made every merge a stream of solo engagements en route.
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+			unit->CmdFightTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
 		)
 	}
 	units.insert(rookies.begin(), rookies.end());
@@ -1069,7 +1069,7 @@ void CDefendTask::Fallback()
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 			unit->CmdWantedSpeed(lowestSpeed);
 		)
 	}

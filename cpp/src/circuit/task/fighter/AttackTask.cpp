@@ -395,7 +395,7 @@ void CAttackTask::Start(CCircuitUnit* unit)
 		if (here.SqDistance2D(leaderPos) > SQUARE(JOIN_RALLY_DIST)) {
 			TRY_UNIT(circuit, unit,
 				unit->CmdFightTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
-						frame + FRAMES_PER_SEC * 60);
+						frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::REGROUP);
 			)
 			return;
 		}
@@ -1564,7 +1564,7 @@ void CAttackTask::Fallback()
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
 			unit->CmdWantedSpeed(lowestSpeed);
 		)
 	}

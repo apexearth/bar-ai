@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..949a453d 100644
+index aeea9339..e79854ee 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -199,7 +199,7 @@ index aeea9339..949a453d 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +932,257 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +932,260 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -346,7 +346,10 @@ index aeea9339..949a453d 100644
 +		// CCircuitUnit::OrdSrc.
 +		{
 +			static const char* srcName[ORD_SRC_N] = {"other", "ring", "travel",
-+					"dodge", "standoff", "post", "retreat", "build", "scout"};
++					"dodge", "standoff", "post", "retreat", "build", "scout",
++					"settgt", "attack", "patrol", "engage", "regroup", "escort",
++					"sniper", "manual", "script", "fightwalk", "combat", "guard",
++					"rally"};
 +			std::string line;
 +			char buf[96];
 +			for (int i = 0; i < ORD_SRC_N; ++i) {
@@ -457,7 +460,7 @@ index aeea9339..949a453d 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,10 +1459,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,10 +1462,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -477,7 +480,7 @@ index aeea9339..949a453d 100644
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
  	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
-@@ -1147,6 +1483,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1486,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -485,7 +488,7 @@ index aeea9339..949a453d 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1503,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1506,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -525,7 +528,7 @@ index aeea9339..949a453d 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1646,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1649,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -533,7 +536,7 @@ index aeea9339..949a453d 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1822,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1825,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -548,7 +551,7 @@ index aeea9339..949a453d 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +1841,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +1844,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -558,7 +561,7 @@ index aeea9339..949a453d 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1852,1199 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1855,1199 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1759,7 +1762,7 @@ index aeea9339..949a453d 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3203,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3206,47 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -1807,7 +1810,7 @@ index aeea9339..949a453d 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3351,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3354,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -1822,7 +1825,7 @@ index aeea9339..949a453d 100644
  
  void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f403..06c93e0b 100644
+index b4f4f403..d811138f 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,6 +16,7 @@
@@ -2200,7 +2203,7 @@ index b4f4f403..06c93e0b 100644
 +	// apex: the same census split by CALL SITE (CCircuitUnit::OrdSrc), because
 +	// the kind/distance one cannot say which loop is generating the churn.
 +	// [0] sent, [1] re-sends within 3s, [2] the far ones among those.
-+	static constexpr int ORD_SRC_N = 9;
++	static constexpr int ORD_SRC_N = 22;
 +	unsigned ordSrc[ORD_SRC_N][3] = {{0}};
 +	unsigned arcFlip[2] = {0, 0};   // [0] side changed, [1] a sticky side held it
 +	unsigned arcFlipU[2] = {0, 0};  // units re-slotted by those
@@ -6923,7 +6926,7 @@ index 193efa90..91d88bae 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..e47fe1be 100644
+index 2839b72e..4f266695 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -7160,7 +7163,7 @@ index 2839b72e..e47fe1be 100644
 +		return;
 +	}
 +	try {
-+		unit->CmdMoveTo(pos);
++		unit->CmdMoveTo(pos, 0, INT_MAX, CCircuitUnit::OrdSrc::SCRIPT);
 +	} catch (const std::exception&) {
 +	}
 +}
@@ -10506,6 +10509,19 @@ index 13ced8d9..fac51883 100644
  
  	std::set<CCircuitUnit*> traveled;
  	std::set<CCircuitUnit*> executors;
+diff --git a/src/circuit/task/builder/CombatTask.cpp b/src/circuit/task/builder/CombatTask.cpp
+index 9e6cec42..b35c05c7 100644
+--- a/src/circuit/task/builder/CombatTask.cpp
++++ b/src/circuit/task/builder/CombatTask.cpp
+@@ -85,7 +85,7 @@ void CCombatTask::Execute(CCircuitUnit* unit)
+ 		AIFloat3 leadPos = position + lead;
+ 		CTerrainManager::CorrectPosition(leadPos);
+ 		TRY_UNIT(circuit, unit,
+-			unit->CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::COMBAT);
+ 		)
+ 	}
+ }
 diff --git a/src/circuit/task/builder/FactoryTask.cpp b/src/circuit/task/builder/FactoryTask.cpp
 index 9c2a9cb4..b12ef57a 100644
 --- a/src/circuit/task/builder/FactoryTask.cpp
@@ -10530,6 +10546,19 @@ index 9c2a9cb4..b12ef57a 100644
  }
  
  #define SERIALIZE(stream, func)	\
+diff --git a/src/circuit/task/builder/GuardTask.cpp b/src/circuit/task/builder/GuardTask.cpp
+index a8950289..7f181348 100644
+--- a/src/circuit/task/builder/GuardTask.cpp
++++ b/src/circuit/task/builder/GuardTask.cpp
+@@ -106,7 +106,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
+ 			if ((unit->GetCircuitDef()->GetBuildDistance() > 80.f) && (vipPos.SqDistance2D(unitPos) < SQUARE(48.f))) {
+ 				AIFloat3 pos = vipPos + (unitPos - vipPos).Normalize2D() * 64.f;
+ 				CTerrainManager::CorrectPosition(pos);
+-				unit->CmdMoveTo(pos, options | UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++				unit->CmdMoveTo(pos, options | UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::GUARD);
+ 				options = UNIT_COMMAND_OPTION_SHIFT_KEY;
+ 			}
+ 			unit->GetUnit()->Guard(vip->GetUnit(), options);
 diff --git a/src/circuit/task/builder/MexTask.cpp b/src/circuit/task/builder/MexTask.cpp
 index e49a5b3f..1c7eed07 100644
 --- a/src/circuit/task/builder/MexTask.cpp
@@ -10690,7 +10719,7 @@ index d9c44e83..1c788141 100644
  
  		IUnitTask* task = repTarget->GetTask();
 diff --git a/src/circuit/task/fighter/AntiAirTask.cpp b/src/circuit/task/fighter/AntiAirTask.cpp
-index fac55c7d..ec30096c 100644
+index fac55c7d..4dd22d0e 100644
 --- a/src/circuit/task/fighter/AntiAirTask.cpp
 +++ b/src/circuit/task/fighter/AntiAirTask.cpp
 @@ -5,6 +5,7 @@
@@ -10785,7 +10814,7 @@ index fac55c7d..ec30096c 100644
  	}
  }
  
-@@ -138,7 +173,9 @@ void CAntiAirTask::Update()
+@@ -138,9 +173,11 @@ void CAntiAirTask::Update()
  			CCircuitAI* circuit = manager->GetCircuit();
  			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
  			for (CCircuitUnit* unit : units) {
@@ -10794,8 +10823,11 @@ index fac55c7d..ec30096c 100644
 +					unit->GetTravelAct()->StateWait();
 +				}
  				TRY_UNIT(circuit, unit,
- 					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+-					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
  				)
+ 			}
+ 		}
 @@ -205,12 +242,13 @@ void CAntiAirTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -10924,7 +10956,7 @@ index fac55c7d..ec30096c 100644
  			unit->Guard(commander, frame + FRAMES_PER_SEC * 60);
  		}
  		return;
-@@ -449,7 +535,9 @@ void CAntiAirTask::Fallback()
+@@ -449,9 +535,11 @@ void CAntiAirTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -10933,10 +10965,13 @@ index fac55c7d..ec30096c 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  		)
+ 	}
+ }
 diff --git a/src/circuit/task/fighter/AntiHeavyTask.cpp b/src/circuit/task/fighter/AntiHeavyTask.cpp
-index fcca1a02..52013b4c 100644
+index fcca1a02..b14bc03c 100644
 --- a/src/circuit/task/fighter/AntiHeavyTask.cpp
 +++ b/src/circuit/task/fighter/AntiHeavyTask.cpp
 @@ -77,7 +77,7 @@ void CAntiHeavyTask::AssignTo(CCircuitUnit* unit)
@@ -10959,7 +10994,7 @@ index fcca1a02..52013b4c 100644
  	}
  }
  
-@@ -150,7 +152,9 @@ void CAntiHeavyTask::Update()
+@@ -150,9 +152,11 @@ void CAntiHeavyTask::Update()
  			CCircuitAI* circuit = manager->GetCircuit();
  			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
  			for (CCircuitUnit* unit : units) {
@@ -10968,8 +11003,11 @@ index fcca1a02..52013b4c 100644
 +					unit->GetTravelAct()->StateWait();
 +				}
  				TRY_UNIT(circuit, unit,
- 					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+-					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
  				)
+ 			}
+ 		}
 @@ -203,7 +207,9 @@ void CAntiHeavyTask::Update()
  			if (unit->GetDGunAct() != nullptr) {
  				unit->GetDGunAct()->StateActivate();
@@ -11020,7 +11058,7 @@ index fcca1a02..52013b4c 100644
  			unit->Guard(commander, frame + FRAMES_PER_SEC * 60);
  		}
  		return;
-@@ -496,7 +505,9 @@ void CAntiHeavyTask::FallbackCommPos()
+@@ -496,9 +505,11 @@ void CAntiHeavyTask::FallbackCommPos()
  
  	position = circuit->GetSetupManager()->GetBasePos();
  	for (CCircuitUnit* unit : units) {
@@ -11029,10 +11067,13 @@ index fcca1a02..52013b4c 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  		)
+ 	}
+ }
 diff --git a/src/circuit/task/fighter/ArtilleryTask.cpp b/src/circuit/task/fighter/ArtilleryTask.cpp
-index c3f5e98b..5c0c1921 100644
+index c3f5e98b..c9573aa0 100644
 --- a/src/circuit/task/fighter/ArtilleryTask.cpp
 +++ b/src/circuit/task/fighter/ArtilleryTask.cpp
 @@ -51,7 +51,7 @@ void CArtilleryTask::AssignTo(CCircuitUnit* unit)
@@ -11103,7 +11144,7 @@ index c3f5e98b..5c0c1921 100644
  	} else {
  		Fallback(unit, proceed);
  	}
-@@ -333,11 +351,10 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
+@@ -333,13 +351,12 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
  	const int frame = circuit->GetLastFrame();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  
@@ -11117,10 +11158,13 @@ index c3f5e98b..5c0c1921 100644
 +		unit->GetTravelAct()->StateWait();
 +	}
  	TRY_UNIT(circuit, unit,
- 		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++		unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  	)
+ }
+ 
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4d..66344a49 100644
+index cd063e4d..8100d2a4 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -7,6 +7,7 @@
@@ -11465,7 +11509,7 @@ index cd063e4d..66344a49 100644
 +		if (here.SqDistance2D(leaderPos) > SQUARE(JOIN_RALLY_DIST)) {
 +			TRY_UNIT(circuit, unit,
 +				unit->CmdFightTo(leaderPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY,
-+						frame + FRAMES_PER_SEC * 60);
++						frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::REGROUP);
 +			)
 +			return;
 +		}
@@ -12535,7 +12579,7 @@ index cd063e4d..66344a49 100644
  	const float pathRange = DEFAULT_SLACK * 4;
  
  	CPathFinder* pathfinder = circuit->GetPathfinder();
-@@ -421,7 +1560,9 @@ void CAttackTask::Fallback()
+@@ -421,9 +1560,11 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12544,8 +12588,11 @@ index cd063e4d..66344a49 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  			unit->CmdWantedSpeed(lowestSpeed);
+ 		)
+ 	}
 diff --git a/src/circuit/task/fighter/AttackTask.h b/src/circuit/task/fighter/AttackTask.h
 index 8585fc29..7e2ce067 100644
 --- a/src/circuit/task/fighter/AttackTask.h
@@ -12619,7 +12666,7 @@ index 8585fc29..7e2ce067 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd88..41c48c10 100644
+index 9e6bfd88..40b5bf10 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,7 @@
@@ -12685,7 +12732,7 @@ index 9e6bfd88..41c48c10 100644
  	}
  }
  
-@@ -133,7 +146,9 @@ void CBombTask::Update()
+@@ -133,9 +146,11 @@ void CBombTask::Update()
  			CCircuitAI* circuit = manager->GetCircuit();
  			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
  			for (CCircuitUnit* unit : units) {
@@ -12694,8 +12741,11 @@ index 9e6bfd88..41c48c10 100644
 +					unit->GetTravelAct()->StateWait();
 +				}
  				TRY_UNIT(circuit, unit,
- 					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
+-					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++					unit->CmdFightTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
  				)
+ 			}
+ 		}
 @@ -200,10 +215,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
  	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
@@ -12835,7 +12885,7 @@ index 9e6bfd88..41c48c10 100644
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
-@@ -388,7 +484,9 @@ void CBombTask::Fallback()
+@@ -388,9 +484,11 @@ void CBombTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -12844,10 +12894,13 @@ index 9e6bfd88..41c48c10 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  			unit->CmdWantedSpeed(lowestSpeed);
+ 		)
+ 	}
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf8..a4c66f8a 100644
+index bfc3caf8..a3f67cc5 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
 @@ -11,6 +11,7 @@
@@ -12921,7 +12974,7 @@ index bfc3caf8..a4c66f8a 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -85,12 +116,33 @@ void CDefendTask::Start(CCircuitUnit* unit)
+@@ -85,14 +116,35 @@ void CDefendTask::Start(CCircuitUnit* unit)
  {
  	CCircuitAI* circuit = manager->GetCircuit();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
@@ -12954,8 +13007,11 @@ index bfc3caf8..a4c66f8a 100644
 +	// not wade (apexearth: "using a fight order was incorrect. We need to be
 +	// using move commands along with set target").
  	TRY_UNIT(circuit, unit,
- 		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
+-		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
++		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
+ 	)
+ }
 @@ -106,11 +158,63 @@ void CDefendTask::Update()
  	 */
  	if (updCount % 32 == 1) {
@@ -13108,7 +13164,7 @@ index bfc3caf8..a4c66f8a 100644
 +		// fight order made every merge a stream of solo engagements en route.
  		TRY_UNIT(circuit, unit,
 -			unit->CmdFightTo(leadPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
-+			unit->CmdFightTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame);
++			unit->CmdFightTo(musterPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame, CCircuitUnit::OrdSrc::REGROUP);
  		)
  	}
  	units.insert(rookies.begin(), rookies.end());
@@ -13656,7 +13712,7 @@ index bfc3caf8..a4c66f8a 100644
  	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
  	const AIFloat3& endPos = setupMgr->GetBasePos();
  	const float pathRange = DEFAULT_SLACK * 4;
-@@ -395,13 +986,88 @@ void CDefendTask::ApplyBasePos(const CQueryPathSingle* query)
+@@ -395,15 +986,90 @@ void CDefendTask::ApplyBasePos(const CQueryPathSingle* query)
  	}
  }
  
@@ -13744,8 +13800,11 @@ index bfc3caf8..a4c66f8a 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  			unit->CmdWantedSpeed(lowestSpeed);
+ 		)
+ 	}
 diff --git a/src/circuit/task/fighter/DefendTask.h b/src/circuit/task/fighter/DefendTask.h
 index 90c3b71b..45f55402 100644
 --- a/src/circuit/task/fighter/DefendTask.h
@@ -14575,7 +14634,7 @@ index e1d90c4f..f4692940 100644
  	FightType fightType;
  	springai::AIFloat3 position;  // attack/scout position
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af06982..5bb8b2cf 100644
+index 9af06982..a19cf61a 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -9,7 +9,9 @@
@@ -14999,7 +15058,7 @@ index 9af06982..5bb8b2cf 100644
  void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
  {
  	pPath = query->GetPathInfo();
-@@ -447,7 +705,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
+@@ -447,9 +705,11 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -15008,8 +15067,11 @@ index 9af06982..5bb8b2cf 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
  		)
+ 	}
+ }
 diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
 index ec833e6d..2959783e 100644
 --- a/src/circuit/task/fighter/RaidTask.h
@@ -15031,6 +15093,19 @@ index ec833e6d..2959783e 100644
  };
  
  } // namespace circuit
+diff --git a/src/circuit/task/fighter/RallyTask.cpp b/src/circuit/task/fighter/RallyTask.cpp
+index 191de259..e62b26d9 100644
+--- a/src/circuit/task/fighter/RallyTask.cpp
++++ b/src/circuit/task/fighter/RallyTask.cpp
+@@ -62,7 +62,7 @@ void CRallyTask::Start(CCircuitUnit* unit)
+ 		AIFloat3 pos = utils::is_valid(freePos) ? freePos : position;
+ 
+ 		TRY_UNIT(circuit, unit,
+-			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
++			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::RALLY);
+ 			unit->CmdWantedSpeed(NO_SPEED_LIMIT);
+ 		)
+ 		return;
 diff --git a/src/circuit/task/fighter/ScoutTask.cpp b/src/circuit/task/fighter/ScoutTask.cpp
 index b4b43c12..2a182d77 100644
 --- a/src/circuit/task/fighter/ScoutTask.cpp
@@ -16730,7 +16805,7 @@ index a058d598..c7735c5a 100644
  	void Attack(const int frame);
  	void Attack(const int frame, const bool isGround);
 diff --git a/src/circuit/task/fighter/SupportTask.cpp b/src/circuit/task/fighter/SupportTask.cpp
-index 8a50bc20..1616caf0 100644
+index 8a50bc20..c59d6f8f 100644
 --- a/src/circuit/task/fighter/SupportTask.cpp
 +++ b/src/circuit/task/fighter/SupportTask.cpp
 @@ -22,6 +22,32 @@ namespace circuit {
@@ -16766,7 +16841,16 @@ index 8a50bc20..1616caf0 100644
  CSupportTask::CSupportTask(ITaskModule* mgr)
  		: IFighterTask(mgr, FightType::SUPPORT, 1.f)
  {
-@@ -152,15 +178,37 @@ void CSupportTask::ApplyPath(const CQueryPathMulti* query)
+@@ -56,7 +82,7 @@ void CSupportTask::Start(CCircuitUnit* unit)
+ 	pos = utils::is_valid(freePos) ? freePos : pos;
+ 
+ 	TRY_UNIT(circuit, unit,
+-		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60);
++		unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, circuit->GetLastFrame() + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
+ 		unit->CmdWantedSpeed(NO_SPEED_LIMIT);
+ 	)
+ 	state = State::DISENGAGE;  // Wait
+@@ -152,20 +178,42 @@ void CSupportTask::ApplyPath(const CQueryPathMulti* query)
  	const AIFloat3& startPos = unit->GetPos(frame);
  	const AIFloat3& endPos = pPath->posPath.back();
  	if (startPos.SqDistance2D(endPos) < SQUARE(1000.f)) {
@@ -16806,6 +16890,12 @@ index 8a50bc20..1616caf0 100644
  		manager->AssignTask(unit, task);
  //		manager->DoneTask(this);  // NOTE: RemoveAssignee will abort task
  	} else {
+ 		TRY_UNIT(circuit, unit,
+-			unit->CmdFightTo(endPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(endPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
+ 		)
+ 		state = State::ROAM;  // Not wait
+ 	}
 diff --git a/src/circuit/task/static/ReclaimTask.cpp b/src/circuit/task/static/ReclaimTask.cpp
 index 6408f28f..509088ff 100644
 --- a/src/circuit/task/static/ReclaimTask.cpp
@@ -17876,7 +17966,7 @@ index cd0b54a9..d90db85e 100644
  	float cloakCost;
  	float buildTime;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be4..42f48c4d 100644
+index 2f597be4..8fdd89ec 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -17972,6 +18062,15 @@ index 2f597be4..42f48c4d 100644
  	TRY_UNIT(manager->GetCircuit(), this,
  		if (circuitDef->HasDGun()) {
  			if (target->GetUnit()->IsCloaked()) {  // los-cheat related
+@@ -172,7 +221,7 @@ void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
+ 			} else {
+ 				AIFloat3 leadPos = target->GetPos() + target->GetVel() * FRAMES_PER_SEC * 2;
+ 				CTerrainManager::CorrectPosition(leadPos);
+-				CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_ALT_KEY, timeout);
++				CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_ALT_KEY, timeout, OrdSrc::MANUAL);
+ 				CmdManualFire(UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // Krow
+ 			}
+ 		}
 @@ -206,9 +255,28 @@ bool CCircuitUnit::IsWeaponReady(int frame)
  	return isWeaponReady;
  }
@@ -18143,7 +18242,7 @@ index 2f597be4..42f48c4d 100644
 +		return;
 +	}
  	assert(utils::is_in_map(pos));
-+	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout);
++	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL);
  	unit->PatrolTo(pos, options, timeout);
  }
  
@@ -18153,11 +18252,11 @@ index 2f597be4..42f48c4d 100644
 +		return;
 +	}
 +	if (circuitDef->IsSniper()) {
-+		CmdMoveTo(SniperHoldPos(pos), options, timeout);
++		CmdMoveTo(SniperHoldPos(pos), options, timeout, OrdSrc::SNIPER);
 +		return;
 +	}
  	assert(utils::is_in_map(pos));
-+	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout);
++	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout, OrdSrc::ATTACK);
  	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
  }
  
@@ -18190,14 +18289,14 @@ index 2f597be4..42f48c4d 100644
 +	// An attack order walks a sniper in and StopMoves it under fire
 +	// (CMobileCAI::ExecuteObjectAttack); it holds at its own range instead.
 +	if (circuitDef->IsSniper()) {
-+		CmdMoveTo(SniperHoldPos(enemy->GetPos()), options, timeout);
++		CmdMoveTo(SniperHoldPos(enemy->GetPos()), options, timeout, OrdSrc::SNIPER);
 +		return;
 +	}
 +	NoteSniperOrder(CCircuitDef::SniperOrder::ATTACK);
 +	// Zero position on purpose: an attack order names a UNIT, so the enemy id
 +	// alone decides whether this repeats the last one. The ground variant above
 +	// names a point, and there the distance buckets are the measurement.
-+	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout);
++	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout, OrdSrc::ATTACK);
 +	unit->Attack(enemy->GetUnit(), options, timeout);
 +}
 +
@@ -18237,7 +18336,7 @@ index 2f597be4..42f48c4d 100644
 +		return;
 +	}
 +	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
-+	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX);
++	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX, OrdSrc::SETTGT);
 +	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
 +	// The gadget enrols only what its own validUnits table admits
 +	// (canAttack and maxWeaponRange > 0); counting the rest would inflate the
@@ -18430,8 +18529,17 @@ index 2f597be4..42f48c4d 100644
  		CmdWantedSpeed(NO_SPEED_LIMIT);
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
+@@ -553,7 +876,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
+ {
+ //	const AIFloat3& pos = utils::get_radial_pos(groupPos, SQUARE_SIZE * 8);
+ 	TRY_UNIT(manager->GetCircuit(), this,
+-		CmdMoveTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
++		CmdMoveTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, OrdSrc::REGROUP);
+ 		CmdWantedSpeed(NO_SPEED_LIMIT);
+ //		CmdPatrolTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+ 	)
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bcc..36981424 100644
+index cfe59bcc..fecb67a6 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -18447,7 +18555,7 @@ index cfe59bcc..36981424 100644
  	void PushDGunAct(CDGunAction* action);
  	CDGunAction* GetDGunAct() const { return dgunAct; }
  	void PushTravelAct(ITravelAction* action);
-@@ -107,8 +113,49 @@ public:
+@@ -107,8 +113,51 @@ public:
  	void SetIsDead() { isDead = true; }
  	bool IsDead() const { return isDead; }
  
@@ -18477,9 +18585,11 @@ index cfe59bcc..36981424 100644
 +	// WHICH CALL SITE sent it. The kind/distance census says how much churn
 +	// there is, never where it comes from, so every rule aimed at it has been
 +	// a guess. Defaulted, so an unlabelled site lands in OTHER rather than
-+	// being mis-attributed.
++	// being mis-attributed -- every site is now named, so a nonzero `other` in
++	// the order-src line means a NEW one was added without a tag.
 +	enum class OrdSrc: int { OTHER = 0, RING, TRAVEL, DODGE, STANDOFF, POST,
-+		RETREAT, BUILD, SCOUT, _SIZE };
++		RETREAT, BUILD, SCOUT, SETTGT, ATTACK, PATROL, ENGAGE, REGROUP, ESCORT,
++		SNIPER, MANUAL, SCRIPT, FWALK, COMBAT, GUARD, RALLY, _SIZE };
 +	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
 +			OrdSrc src = OrdSrc::OTHER);
 +
@@ -18497,7 +18607,7 @@ index cfe59bcc..36981424 100644
  
  	bool HasDGun() const { return dgun != nullptr; }
  	bool HasWeapon() const { return weapon != nullptr; }
-@@ -118,6 +165,13 @@ public:
+@@ -118,6 +167,13 @@ public:
  	bool IsDisarmed(int frame);
  	bool IsWeaponReady(int frame);
  	bool IsDGunReady(int frame, float energy);
@@ -18511,7 +18621,7 @@ index cfe59bcc..36981424 100644
  	bool IsShieldCharged(float percent);
  	bool IsJumpReady();
  	bool IsJumping();
-@@ -130,14 +184,24 @@ public:
+@@ -130,14 +186,24 @@ public:
  	float GetHealthPercent();
  
  	void CmdRemove(std::vector<float>&& params, short options = 0);
@@ -18538,7 +18648,7 @@ index cfe59bcc..36981424 100644
  	void CmdCloak(bool state);
  	void CmdFireAtRadar(bool state);
  	void CmdFindPad(int timeout = INT_MAX);
-@@ -184,6 +248,9 @@ public:
+@@ -184,6 +250,9 @@ public:
  
  	void ClearTarget() { target = nullptr; }
  	CEnemyInfo* GetTarget() const { return target; }
@@ -18548,7 +18658,7 @@ index cfe59bcc..36981424 100644
  	int GetTargetTile() const { return targetTile; }
  
  	void AddAttribute(CCircuitDef::AttrType type) { attr |= CCircuitDef::GetMask(static_cast<CCircuitDef::AttrT>(type)); }
-@@ -207,7 +274,24 @@ private:
+@@ -207,7 +276,24 @@ private:
  
  	int moveFails;
  	int failFrame;
@@ -18573,7 +18683,7 @@ index cfe59bcc..36981424 100644
  	int execFrame;  // TODO: Replace by CExecuteAction?
  	int disarmFrame;
  	int ammoFrame;
-@@ -228,10 +312,13 @@ private:
+@@ -228,10 +314,13 @@ private:
  	springai::Command* command;  // current top command
  	CWeaponDef* dgunDef;
  	springai::Weapon* dgun;
@@ -18829,6 +18939,41 @@ index 4a6cad0a..12975a7b 100644
  };
  
  } // namespace circuit
+diff --git a/src/circuit/unit/action/FightAction.cpp b/src/circuit/unit/action/FightAction.cpp
+index 0f1640eb..edfacf94 100644
+--- a/src/circuit/unit/action/FightAction.cpp
++++ b/src/circuit/unit/action/FightAction.cpp
+@@ -47,7 +47,7 @@ void CFightAction::Update(CCircuitAI* circuit)
+ 	switch (pathMaxIndex) {
+ 		case -2:  // arrived
+ 			TRY_UNIT(circuit, unit,
+-				unit->CmdFightTo(pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
++				unit->CmdFightTo(pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
+ 			)
+ 			return;
+ 		case -1: return;  // continue with current waypoints
+@@ -74,18 +74,18 @@ void CFightAction::Update(CCircuitAI* circuit)
+ 			}
+ 			if (isBadJump) {
+ 				const AIFloat3& pos = pPath->posPath[step];
+-				unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60);
++				unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
+ 			}
+ 		} else {
+ 			const AIFloat3& pos = pPath->posPath[step];
+-			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::FWALK);
+ 		}
+ 		unit->CmdWantedSpeed(stepSpeed);
+ 
+ 		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
+ 			step = std::min(step + increment, pathMaxIndex);
+ 			const AIFloat3& pos = pPath->posPath[step];
+-			unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
++			unit->CmdFightTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i, CCircuitUnit::OrdSrc::FWALK);
+ 		}
+ 	)
+ }
 diff --git a/src/circuit/unit/action/MoveAction.cpp b/src/circuit/unit/action/MoveAction.cpp
 index a01329c3..7270a09a 100644
 --- a/src/circuit/unit/action/MoveAction.cpp
@@ -18907,7 +19052,7 @@ index a01329c3..7270a09a 100644
  	)
  }
 diff --git a/src/circuit/unit/action/SupportAction.cpp b/src/circuit/unit/action/SupportAction.cpp
-index 5285093c..12ecaadb 100644
+index 5285093c..a2d6aaba 100644
 --- a/src/circuit/unit/action/SupportAction.cpp
 +++ b/src/circuit/unit/action/SupportAction.cpp
 @@ -8,22 +8,53 @@
@@ -19032,6 +19177,15 @@ index 5285093c..12ecaadb 100644
  	if (pos.SqDistance2D(unit->GetPos(frame)) < SQUARE(SQUARE_SIZE * 8)) {
  		return;  // stop pushing
  	}
+@@ -49,7 +136,7 @@ void CSupportAction::Update(CCircuitAI* circuit)
+ 		if (unit->GetCircuitDef()->IsAttrMelee()) {
+ 			unit->GetUnit()->Guard(leader->GetUnit());
+ 		} else {
+-			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			unit->CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ESCORT);
+ 		}
+ 	)
+ }
 diff --git a/src/circuit/unit/action/SupportAction.h b/src/circuit/unit/action/SupportAction.h
 index 799ca696..755ad4cc 100644
 --- a/src/circuit/unit/action/SupportAction.h

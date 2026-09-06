@@ -2024,3 +2024,23 @@ be fielding 7,000 units at minute 59 at all. That is the same question as his
 basemap ruling in TODO.md: defend territory rather than a plethora of buildings,
 and balance mobility against concentrated power. A smaller, better army is the
 performance fix as well as the design one.
+
+## 2026-09-06 — we send 1.36M set-targets a game and almost none stick
+
+`apex: tgthold t=0 own=78 ... samp=1800 hold=25 rel=375 est=5.3 units=385`.
+About 1.2% of sampled own units hold a set-target at any instant; 22.6% held one
+and were released. Over a 60-minute 16-AI game the AI issues 1,357,207
+CmdSetTarget — 31% of its entire order volume, and 61% of what the order census
+could not otherwise account for.
+
+Costs nothing: the intercepting gadget is layer 0 and blocks the command before
+it reaches the engine's command system (id 34923 appears zero times in
+dev_order_counter's log all game), and the per-holder sweep is 0.03% of a frame.
+So this is not a performance issue.
+
+It is a BEHAVIOUR question: apexearth's doctrine is "move within range and use
+set target", and the instrument says the targets are not landing. Either the
+doctrine is not doing what he expects, or the units are being told and the
+engine is refusing. Related: ~22% of our fight/attack orders never reach
+AllowCommand at all (AI 1,034,609 sent vs 804,251 seen), most likely CmdAttack
+on an enemy the engine will not accept a unit-target order for.

@@ -221,7 +221,7 @@ void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
 			} else {
 				AIFloat3 leadPos = target->GetPos() + target->GetVel() * FRAMES_PER_SEC * 2;
 				CTerrainManager::CorrectPosition(leadPos);
-				CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_ALT_KEY, timeout);
+				CmdMoveTo(leadPos, UNIT_COMMAND_OPTION_ALT_KEY, timeout, OrdSrc::MANUAL);
 				CmdManualFire(UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // Krow
 			}
 		}
@@ -477,7 +477,7 @@ void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
 		return;
 	}
 	assert(utils::is_in_map(pos));
-	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout);
+	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL);
 	unit->PatrolTo(pos, options, timeout);
 }
 
@@ -487,11 +487,11 @@ void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeo
 		return;
 	}
 	if (circuitDef->IsSniper()) {
-		CmdMoveTo(SniperHoldPos(pos), options, timeout);
+		CmdMoveTo(SniperHoldPos(pos), options, timeout, OrdSrc::SNIPER);
 		return;
 	}
 	assert(utils::is_in_map(pos));
-	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout);
+	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout, OrdSrc::ATTACK);
 	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
@@ -524,14 +524,14 @@ void CCircuitUnit::CmdAttack(CEnemyInfo* enemy, short options, int timeout)
 	// An attack order walks a sniper in and StopMoves it under fire
 	// (CMobileCAI::ExecuteObjectAttack); it holds at its own range instead.
 	if (circuitDef->IsSniper()) {
-		CmdMoveTo(SniperHoldPos(enemy->GetPos()), options, timeout);
+		CmdMoveTo(SniperHoldPos(enemy->GetPos()), options, timeout, OrdSrc::SNIPER);
 		return;
 	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::ATTACK);
 	// Zero position on purpose: an attack order names a UNIT, so the enemy id
 	// alone decides whether this repeats the last one. The ground variant above
 	// names a point, and there the distance buckets are the measurement.
-	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout);
+	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout, OrdSrc::ATTACK);
 	unit->Attack(enemy->GetUnit(), options, timeout);
 }
 
@@ -572,7 +572,7 @@ void CCircuitUnit::CmdSetTarget(CEnemyInfo* enemy)
 		return;
 	}
 	NoteSniperOrder(CCircuitDef::SniperOrder::SET_TARGET);
-	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX);
+	NoteOrder(OrdKind::TARGET, 0, ZeroVector, enemy->GetId(), INT_MAX, OrdSrc::SETTGT);
 	unit->ExecuteCustomCommand(CMD_UNIT_SET_TARGET, {(float)enemy->GetId()});
 	// The gadget enrols only what its own validUnits table admits
 	// (canAttack and maxWeaponRange > 0); counting the rest would inflate the
@@ -876,7 +876,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
 {
 //	const AIFloat3& pos = utils::get_radial_pos(groupPos, SQUARE_SIZE * 8);
 	TRY_UNIT(manager->GetCircuit(), this,
-		CmdMoveTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+		CmdMoveTo(groupPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, OrdSrc::REGROUP);
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 //		CmdPatrolTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 	)

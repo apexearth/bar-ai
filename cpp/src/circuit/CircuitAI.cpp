@@ -1075,7 +1075,10 @@ int CCircuitAI::Update(int frame)
 		// CCircuitUnit::OrdSrc.
 		{
 			static const char* srcName[ORD_SRC_N] = {"other", "ring", "travel",
-					"dodge", "standoff", "post", "retreat", "build", "scout"};
+					"dodge", "standoff", "post", "retreat", "build", "scout",
+					"settgt", "attack", "patrol", "engage", "regroup", "escort",
+					"sniper", "manual", "script", "fightwalk", "combat", "guard",
+					"rally"};
 			std::string line;
 			char buf[96];
 			for (int i = 0; i < ORD_SRC_N; ++i) {

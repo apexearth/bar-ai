@@ -624,7 +624,7 @@ private:
 	// apex: the same census split by CALL SITE (CCircuitUnit::OrdSrc), because
 	// the kind/distance one cannot say which loop is generating the churn.
 	// [0] sent, [1] re-sends within 3s, [2] the far ones among those.
-	static constexpr int ORD_SRC_N = 9;
+	static constexpr int ORD_SRC_N = 22;
 	unsigned ordSrc[ORD_SRC_N][3] = {{0}};
 	unsigned arcFlip[2] = {0, 0};   // [0] side changed, [1] a sticky side held it
 	unsigned arcFlipU[2] = {0, 0};  // units re-slotted by those
