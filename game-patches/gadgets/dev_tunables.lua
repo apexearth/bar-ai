@@ -522,6 +522,10 @@ local NAMES = {
 	-- slot assignment once it has picked a side; a real threat asymmetry still
 	-- re-decides. Counted either way in `apex: order-src` (arcflip=churn/held).
 	"apex_arc_sticky",
+	-- SquadTask.cpp: seconds between standoff-ring re-issues (1 = shipped).
+	-- Every re-issue is a forced engine re-path; this prices that against
+	-- ms/frame. See docs/27-tunable-rationale.md.
+	"apex_standoff_s",
 }
 
 local pending = {}

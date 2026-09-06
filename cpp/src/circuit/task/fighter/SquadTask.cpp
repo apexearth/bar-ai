@@ -783,7 +783,12 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	// though the target is very likely drifting the whole time. Shortened
 	// to 1s so position re-evaluates roughly 3x more often, without going
 	// so low it fights the engine's own per-frame unit AI or spams orders.
-	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 1);
+	// Knob only so the cadence can be priced against the engine's pathfinder:
+	// every re-issue moves the ring point, so it is a forced ReRequestPath.
+	// 1.0 is the shipped behaviour; 0 re-issues every frame.
+	const float standoffS = manager->GetCircuit()->GetTunable("apex_standoff_s", 1.f);
+	const int standoffGap = (standoffS > 0.f) ? int(FRAMES_PER_SEC * standoffS) : 0;
+	const bool isRepeatAttack = (frame >= attackFrame + standoffGap);
 	attackFrame = isRepeatAttack ? frame : attackFrame;
 
 	// One direction per task, derived from its identity rather than randomly, so

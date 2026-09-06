@@ -173,6 +173,42 @@ engage bias while an advanced plant is under construction; above 1 is cautious.
 Raises only the bar to START a fight -- fights already joined and defence are
 untouched.
 
+### `apex_standoff_s` = 1.0 (C++ only; no `TUNE_` const)
+
+Seconds between re-issues of the standoff ring in `ISquadTask::Attack`
+(`cpp/src/circuit/task/fighter/SquadTask.cpp`). There is no AngelScript const:
+the DLL reads it through `CCircuitAI::GetTunable`, i.e. the modoption
+republished by `dev_tunables.lua`, and falls back to the compiled 1.0 in every
+game that does not set it. The Tunables tab discovers it from the source and
+offers it as an override only.
+
+**1.0 is exactly today's behaviour** -- it replaces a hardcoded
+`FRAMES_PER_SEC * 1` and `int(30.f * 1.f)` is 30.
+
+It exists to PRICE the ring against the engine's pathfinder, and for nothing
+else. The ring point is `LeadPos` plus an orbit angle plus a fragility scale, so
+it is a different destination every re-issue by construction, and
+`CGroundMoveType::IsMovingTowards` compares goalPos by exact float equality --
+so each re-issue is a forced `ReRequestPath`. 885k of an hour's orders land in
+the `order-src` ring `far` bucket and their share of the engine's ~35 ms/frame
+at minute 59 has never been measured. The engine binary is a pinned release, so
+an A/B on this knob at a matched unit count is the only way in.
+
+**Raising the default is apexearth's call, not a session's.**
+`docs/24-how-units-fight.md`: "Almost always stay moving. Standing still leads
+to death much quicker... Units may circle around the enemies they are shooting."
+A larger value buys frames by standing units still between steps, which is the
+one thing that file forbids.
+
+Two mechanical notes for whoever runs the A/B. The orbit angle is
+`ORBIT_RATE * (frame / FRAMES_PER_SEC)`, a function of absolute game time, so
+raising this does not slow the orbit -- it makes it a coarser polygon at the
+same average angular rate, and past roughly 2-3 s each step is a chord across
+the ring rather than a strafe along it. And the re-issue is not gated on this
+alone: `isRepeatAttack || unit->GetTarget() != GetTarget() || unit->GetTargetTile() != targetTile`,
+so a target crossing an influence-map tile (`ConvertStoP * 4`, ~128-256 elmos)
+still re-issues immediately at any cadence.
+
 
 ## Defence, towers, AA, insurance
 

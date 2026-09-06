@@ -15198,7 +15198,7 @@ index b4b43c12..2a182d77 100644
  }
  
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b650..42e6c834 100644
+index 0d59b650..47a6a6c4 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
 @@ -6,18 +6,23 @@
@@ -15728,7 +15728,7 @@ index 0d59b650..42e6c834 100644
  }
  
  NSMicroPather::HitFunc ISquadTask::GetHitTest() const
-@@ -389,10 +770,27 @@ void ISquadTask::Attack(const int frame)
+@@ -389,10 +770,32 @@ void ISquadTask::Attack(const int frame)
  
  void ISquadTask::Attack(const int frame, const bool isGround)
  {
@@ -15747,7 +15747,12 @@ index 0d59b650..42e6c834 100644
 +	// though the target is very likely drifting the whole time. Shortened
 +	// to 1s so position re-evaluates roughly 3x more often, without going
 +	// so low it fights the engine's own per-frame unit AI or spams orders.
-+	const bool isRepeatAttack = (frame >= attackFrame + FRAMES_PER_SEC * 1);
++	// Knob only so the cadence can be priced against the engine's pathfinder:
++	// every re-issue moves the ring point, so it is a forced ReRequestPath.
++	// 1.0 is the shipped behaviour; 0 re-issues every frame.
++	const float standoffS = manager->GetCircuit()->GetTunable("apex_standoff_s", 1.f);
++	const int standoffGap = (standoffS > 0.f) ? int(FRAMES_PER_SEC * standoffS) : 0;
++	const bool isRepeatAttack = (frame >= attackFrame + standoffGap);
  	attackFrame = isRepeatAttack ? frame : attackFrame;
  
 +	// One direction per task, derived from its identity rather than randomly, so
@@ -15758,7 +15763,7 @@ index 0d59b650..42e6c834 100644
  	auto it = rangeUnits.begin()->second.begin();
  	std::advance(it, rangeUnits.begin()->second.size() / 2);  // TODO: Optimize
  	AIFloat3 dir = (*it)->GetPos(frame) - tPos;
-@@ -403,7 +801,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -403,7 +806,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  				if (unit->Blocker() != nullptr) {
  					continue;  // Do not interrupt current action
  				}
@@ -15769,7 +15774,7 @@ index 0d59b650..42e6c834 100644
  
  				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
  			}
-@@ -413,56 +813,881 @@ void ISquadTask::Attack(const int frame, const bool isGround)
+@@ -413,56 +818,881 @@ void ISquadTask::Attack(const int frame, const bool isGround)
  
  	const int targetTile = manager->GetCircuit()->GetInflMap()->Pos2Index(tPos);
  	const float alpha = std::atan2(dir.z, dir.x);
@@ -16661,7 +16666,7 @@ index 0d59b650..42e6c834 100644
  			}
  
  			beta += delta;
-@@ -478,7 +1703,9 @@ void ISquadTask::Log()
+@@ -478,7 +1708,9 @@ void ISquadTask::Log()
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
