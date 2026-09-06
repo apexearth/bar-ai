@@ -770,7 +770,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// its guns, not its waterline; the x0 keeps zeroing only the
 			// dedicated crossers, whose mobility premium drags their
 			// per-metal worth below it.
-			if (Catalog::gAmphib[d] && (UnitCore(d) < 1.f)) {
+			// AA IS NOT A DEDICATED CROSSER. Its core worth sits below the
+			// field reference because UnitCore weighs dps the mean is
+			// ground-dominated by, and an AA unit's guns only answer air --
+			// so the x0 above caught the ONLY two mobile AA bots we own
+			// (armjeth, armaak) on every dry map, all game, however much air
+			// was overhead. Measured: `armjeth:amph` / `armaak:amph` on every
+			// prodrank line of a 25-minute game that lost energy and mexes to
+			// bombers. The rule keeps zeroing crossers; it stops zeroing the
+			// answer to the thing crossing overhead.
+			const CCircuitDef@ amphDef = Catalog::Def(d);
+			const bool amphIsAA = (amphDef !is null)
+					&& amphDef.IsRoleAny(Unit::Role::AA.mask);
+			if (Catalog::gAmphib[d] && !amphIsAA && (UnitCore(d) < 1.f)) {
 				if (amphBan < 0) {
 					float lp = aiTerrainMgr.GetLandPercent();
 					if (lp <= 1.5f)

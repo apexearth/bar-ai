@@ -674,7 +674,17 @@ float BPGap()
 	float blTerm = 0.f;
 	if (bl > 1.f)
 		blTerm = rawBl / bl;
-	gap += blTerm;
+	// A FLOOR, NOT AN ADDEND. Added to the income clause the backlog was
+	// swallowed whole: nameplate BPCapacity runs 4-6x actual income, so `net`
+	// sits at -120 to -200 and no positive term survives it. Measured 196 of
+	// 225 logged bpgap minutes at gap=0.0 -- and a constructor's whole
+	// build-power gain is BPGap()*util (production.as), so hands were worth
+	// nothing to buy while 6,020 metal of ordered work stood unbuilt and the
+	// bank read 0%. Unfinished work is its own evidence and does not need the
+	// income clause's permission. Still self-limiting: the backlog closes as
+	// the hands arrive.
+	if (gap < blTerm)
+		gap = blTerm;
 	const float gapM = (gap > 0.f) ? gap : 0.f;
 	// EVERY CLAUSE SEPARATELY, once a minute. The three clauses are in the same
 	// currency and nothing printed which of them carries the number, so a gap

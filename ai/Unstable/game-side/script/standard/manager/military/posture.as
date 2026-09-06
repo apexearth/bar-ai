@@ -305,6 +305,7 @@ bool gRaiderSuicidal = false;
 array<CCircuitDef@> gPostureDef;
 array<float>        gPostureRetreat;  // parallel: the value config gave each def
 array<bool>         gPostureFodder;   // parallel: registered via IsFodder
+array<bool>         gPostureWasZero;  // parallel: last frame's zeroed state
 uint gRetreatZeroed = 999;            // last no-retreat count, so the log fires on change
 
 // The one predicate. Routing (hooks.as) and posture must never disagree about
@@ -328,6 +329,7 @@ void NotePostureDef(const CCircuitDef@ cdef, bool fodder)
 	gPostureDef.insertLast(d);
 	gPostureRetreat.insertLast(d.GetRetreat());
 	gPostureFodder.insertLast(fodder);
+	gPostureWasZero.insertLast(false);
 }
 
 void NoteFodderDef(const CCircuitDef@ cdef)
@@ -346,9 +348,21 @@ void ApplyRetreatPosture()
 	for (uint i = 0; i < gPostureDef.length(); ++i) {
 		const bool zero = (gPostureFodder[i] && gRaiderSuicidal)
 			|| (gPostureDef[i].costM < bar);
-		gPostureDef[i].SetRetreat(zero ? 0.f : gPostureRetreat[i]);
-		if (zero)
+		// WRITE ON THE EDGE, NOT EVERY FRAME. gPostureRetreat is a snapshot
+		// taken once at registration -- before any rezbot existed -- and this
+		// runs every frame, so it overwrote RetreatRefresh's value on the frame
+		// after each 15 s recompute. The heal bonus (worth up to +0.25 once
+		// medics are fielded) therefore never reached the engine at all: a Pawn
+		// that should pull out at 0.35 fought to 0.098. Restore the snapshot
+		// only when leaving the zeroed state; otherwise leave the live value
+		// alone, which is the whole point of recomputing it.
+		if (zero) {
+			gPostureDef[i].SetRetreat(0.f);
 			++zeroed;
+		} else if (gPostureWasZero[i]) {
+			gPostureDef[i].SetRetreat(gPostureRetreat[i]);
+		}
+		gPostureWasZero[i] = zero;
 	}
 	if (zeroed != gRetreatZeroed) {
 		gRetreatZeroed = zeroed;
