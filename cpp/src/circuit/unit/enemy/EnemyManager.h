@@ -14,6 +14,8 @@
 #include "util/MaskHandler.h"
 
 #include <limits>
+#include <atomic>
+#include <cstdint>
 
 namespace terrain {
 	struct SArea;
@@ -63,6 +65,13 @@ public:
 	void PrepareUpdate();
 	void EnqueueUpdate();
 	bool IsUpdating() const { return isUpdating; }
+
+	// apex: KMeansIteration is O(enemies * k) on a worker, k = min(32, 1+sqrt(n)),
+	// and nothing measured it. Relaxed atomics: a worker writes, the main thread
+	// clears; the counters feed no decision.
+	std::atomic<uint64_t> perfKmeansOps{0};
+	std::atomic<uint32_t> perfKmeansEnemies{0};
+	std::atomic<uint32_t> perfKmeansK{0};
 
 	bool UnitInLOS(CEnemyUnit* data);
 	bool UnitInLOS(CEnemyUnit* data, CCircuitDef::Id unitDefId);

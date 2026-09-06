@@ -11,6 +11,8 @@
 #include "unit/enemy/EnemyUnit.h"
 
 #include <vector>
+#include <atomic>
+#include <cstdint>
 #ifdef DEBUG_VIS
 #include <stdint.h>
 #endif
@@ -46,6 +48,20 @@ public:
 	float GetInfluenceAt(const springai::AIFloat3& position) const;
 
 	int Pos2Index(const springai::AIFloat3& pos) const;
+
+	// apex: Update() paints the enemy half on a worker; Apply() paints the ALLY
+	// half of the whole ally team on the main thread inside job:finish. Split
+	// so the two halves can be compared before moving either. Relaxed atomics:
+	// the halves never run concurrently (isUpdating serialises them) but the
+	// main thread clears what a worker wrote, and no ordering is required.
+	std::atomic<uint64_t> perfEnemyCells{0};
+	std::atomic<uint64_t> perfAllyCells{0};
+	std::atomic<uint64_t> perfFills{0};
+	std::atomic<uint64_t> perfApplyUs{0};
+	std::atomic<uint32_t> perfEnemies{0};
+	std::atomic<uint32_t> perfFriendlies{0};
+	std::atomic<uint32_t> perfApplies{0};
+	int GetMapSize() const { return mapSize; }
 
 private:
 	struct SInfluenceData {

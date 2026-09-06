@@ -18,6 +18,9 @@
 #include "util/Profiler.h"
 #include "json/json.h"
 
+#include <algorithm>
+#include <chrono>
+
 #include "spring/SpringCallback.h"
 #include "Lua.h"   // CallRules, for the always-compiled widget streaming
 
@@ -97,7 +100,7 @@ void CInfluenceMap::EnqueueUpdate()
 	CCircuitAI* circuit = manager->GetCircuit();
 	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
 	rangeScale = circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
-	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CInfluenceMap::Update, this, enemyMgr));
+	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CInfluenceMap::Update, this, enemyMgr), "inflMap");
 }
 
 void CInfluenceMap::Prepare(SInfluenceData& inflData)
@@ -106,6 +109,7 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
 	std::fill(inflData.allyInfl.begin(), inflData.allyInfl.end(), INFL_BASE);
 	std::fill(inflData.allyDefendInfl.begin(), inflData.allyDefendInfl.end(), INFL_BASE);
 	std::fill(inflData.influence.begin(), inflData.influence.end(), INFL_BASE);
+	perfFills.fetch_add(4 * mapSize, std::memory_order_relaxed);
 //	std::fill(inflData.tension.begin(), inflData.tension.end(), INFL_BASE);
 //	std::fill(inflData.vulnerability.begin(), inflData.vulnerability.end(), INFL_BASE);
 //	std::fill(inflData.featureInfl.begin(), inflData.featureInfl.end(), INFL_BASE);
@@ -125,6 +129,7 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
 
 	Prepare(*GetNextInflData());
 
+	perfEnemies.fetch_add(enemyMgr->GetHostileDatas().size(), std::memory_order_relaxed);
 	for (const SEnemyData& e : enemyMgr->GetHostileDatas()) {
 		AddEnemy(e);
 	}
@@ -134,9 +139,12 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
 
 void CInfluenceMap::Apply()
 {
+	const auto perfT0 = std::chrono::steady_clock::now();
 	CCircuitAI* circuit = manager->GetCircuit();
 	circuit->UpdateFriendlyUnits();  // FIXME: update or ignore units with -RgtVector position
 	const CAllyTeam::AllyUnits& units = circuit->GetFriendlyUnits();
+	perfFriendlies.fetch_add(units.size(), std::memory_order_relaxed);
+	perfApplies.fetch_add(1, std::memory_order_relaxed);
 	for (auto& kv : units) {
 		CAllyUnit* u = kv.second;
 		if (u->GetCircuitDef()->IsAttacker()) {
@@ -152,6 +160,7 @@ void CInfluenceMap::Apply()
 	for (int i = 0; i < mapSize; ++i) {
 		drawInfluence[i] = drawAllyInfl[i] - drawEnemyInfl[i];
 	}
+	perfAllyCells.fetch_add(mapSize, std::memory_order_relaxed);
 //	for (int i = 0; i < mapSize; ++i) {
 //		drawTension[i] = drawAllyInfl[i] + drawEnemyInfl[i];
 //	}
@@ -176,6 +185,9 @@ void CInfluenceMap::Apply()
 
 	SwapBuffers();
 	isUpdating = false;
+
+	perfApplyUs.fetch_add(std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - perfT0).count(), std::memory_order_relaxed);
 
 	FrameMarkEnd(profiler.GetInflUpdateName(manager->GetCircuit()->GetSkirmishAIId()));
 
@@ -282,6 +294,8 @@ void CInfluenceMap::AddMobileArmed(CAllyUnit* u)
 	const int endX   = std::min(int(posx + range    ),  width);
 	const int beginZ = std::max(int(posz - range + 1),       0);
 	const int endZ   = std::min(int(posz + range    ), height);
+	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
+			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
 
 	for (int z = beginZ; z < endZ; ++z) {
 		const int dzSq = SQUARE(posz - z);
@@ -313,6 +327,8 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
 	const int endX   = std::min(int(posx + range    ),  width);
 	const int beginZ = std::max(int(posz - range + 1),       0);
 	const int endZ   = std::min(int(posz + range    ), height);
+	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
+			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
 
 	for (int z = beginZ; z < endZ; ++z) {
 		const int dzSq = SQUARE(posz - z);
@@ -345,6 +361,8 @@ void CInfluenceMap::AddUnarmed(CAllyUnit* u)
 	const int endX   = std::min(int(posx + range    ),  width);
 	const int beginZ = std::max(int(posz - range + 1),       0);
 	const int endZ   = std::min(int(posz + range    ), height);
+	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
+			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
 
 	for (int z = beginZ; z < endZ; ++z) {
 		const int dzSq = SQUARE(posz - z);
@@ -382,6 +400,8 @@ void CInfluenceMap::AddEnemy(const SEnemyData& e)
 	const int endX   = std::min(int(posx + range    ),  width);
 	const int beginZ = std::max(int(posz - range + 1),       0);
 	const int endZ   = std::min(int(posz + range    ), height);
+	perfEnemyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
+			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
 
 	for (int z = beginZ; z < endZ; ++z) {
 		const int dzSq = SQUARE(posz - z);

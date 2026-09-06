@@ -1112,6 +1112,8 @@ int CCircuitAI::Update(int frame)
 			}
 		}
 		scheduler->LogJobPerf(this);
+		scheduler->LogWorkPerf(this);
+		GetAllyTeam()->LogMapPerf(this);
 		perfAllyUs = 0;
 		perfJobsUs = 0;
 		perfActUs = 0;

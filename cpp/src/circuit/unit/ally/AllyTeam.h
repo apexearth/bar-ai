@@ -94,6 +94,11 @@ public:
 	void UpdateInLOS(CEnemyUnit* data, CCircuitDef::Id unitDefId);
 
 	void Update(CCircuitAI* ai);
+
+	// apex: the ThreatMap/InfluenceMap/EnemyManager rebuild is per ALLY TEAM,
+	// not per AI -- only the leader enqueues it -- so only the leader may log
+	// and clear the counters, or seven AIs print zeros over the eighth.
+	void LogMapPerf(CCircuitAI* ai);
 	void EnqueueUpdate();
 
 	CEnemyUnit* GetEnemyOrFakeIn(const springai::AIFloat3& startPos, const springai::AIFloat3& dir, float length,

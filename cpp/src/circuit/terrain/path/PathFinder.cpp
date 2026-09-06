@@ -559,7 +559,7 @@ void CPathFinder::RunPathSingle(CScheduler* scheduler, const std::shared_ptr<IPa
 
 		this->MakePath(query, micropathers[threadNum]);
 		return finish;
-	}));
+	}), "pathOne");
 }
 
 void CPathFinder::RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
@@ -583,7 +583,7 @@ void CPathFinder::RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPat
 
 		this->FindBestPath(query, micropathers[threadNum]);
 		return finish;
-	}));
+	}), "pathMulti");
 }
 
 void CPathFinder::RunPathWide(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
@@ -607,7 +607,7 @@ void CPathFinder::RunPathWide(CScheduler* scheduler, const std::shared_ptr<IPath
 
 		this->MakePathWide(query, micropathers[threadNum]);
 		return finish;
-	}));
+	}), "pathWide");
 }
 
 void CPathFinder::RunCostMap(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
@@ -625,7 +625,7 @@ void CPathFinder::RunCostMap(CScheduler* scheduler, const std::shared_ptr<IPathQ
 
 		this->MakeCostMap(query, micropathers[threadNum]);
 		return finish;
-	}));
+	}), "costMap");
 }
 
 void CPathFinder::MakePath(IPathQuery* query, NSMicroPather::CMicroPather* micropather)

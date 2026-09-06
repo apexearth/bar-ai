@@ -2001,7 +2001,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
 			}
 			script->ReturnContext(ctx);
 		});
-	}));
+	}), "asExec");
 }
 
 } // namespace circuit

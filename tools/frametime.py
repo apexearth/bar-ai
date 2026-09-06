@@ -31,6 +31,18 @@ JOB = re.compile(r"(\S+)=([\d.]+)/(\d+)/([\d.]+)")
 # apex: perf sweep <helper>=elements/calls -- how much WORK the O(n) helpers did.
 SWEEP = re.compile(r"perf sweep (.*)$")
 SWEEPONE = re.compile(r"(\w+)=(\d+)/(\d+)")
+# apex: perf work -- the SHARED worker pool (ThreatMap/InfluenceMap/EnemyManager
+# rebuilds and every path query). None of it is in aiMs, so until this line
+# existed it was billed to "the engine". wait= is queue latency: with 16 AIs on
+# 2-8 threads a saturated pool shows there long before the per-job cost moves.
+WORK = re.compile(r"perf work \(ms/calls/maxMs/waitMs/maxWaitMs\)"
+                  r" qavg=([\d.]+) qmax=(\d+)(.*)$")
+WORKONE = re.compile(r"(\S+)=([\d.]+)/(\d+)/([\d.]+)/w([\d.]+)/wmax([\d.]+)")
+# apex: perf map -- element counts for the per-ALLY-TEAM map rebuild. Only the
+# team leader logs, so an 8v8 prints two lines a minute, not sixteen.
+MAPL = re.compile(r"perf map t=\d+ (.*)$")
+MAPONE = re.compile(r"(\w+)=(\d+)(?![\d./])")
+MAPAPPLY = re.compile(r"applyMs=([\d.]+)/(\d+)")
 
 BUCKET = 1800  # frames per game-minute
 
@@ -58,6 +70,10 @@ def analyze(path):
     secs = {}    # name -> [ms, calls, maxMs], whole run
     perframe = {}  # frame -> AiFrame lines on it, = AIs in the game
     secb = {}    # name -> bucket -> ms, for the growth table
+    work = {}    # name -> bucket -> [ms, calls, waitMs], shared worker pool
+    workmx = {}  # name -> [maxMs, maxWaitMs]
+    wq = {}      # bucket -> [qavg sum, samples, qmax]
+    mapc = {}    # counter -> bucket -> value, map-rebuild elements
     sweeps = {}  # helper -> bucket -> [elements visited, calls]
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -111,6 +127,32 @@ def analyze(path):
                     secb.setdefault(key, {})
                     secb[key][b] = secb[key].get(b, 0.0) + float(ms)
                 continue
+            km = WORK.search(line)
+            if km:
+                q = wq.setdefault(b, [0.0, 0, 0])
+                q[0] += float(km.group(1))
+                q[1] += 1
+                q[2] = max(q[2], int(km.group(2)))
+                for name, ms, calls, mx, wms, wmx in WORKONE.findall(km.group(3)):
+                    key = "work:" + name
+                    e = work.setdefault(key, {})
+                    cur = e.get(b, [0.0, 0, 0.0])
+                    e[b] = [cur[0] + float(ms), cur[1] + int(calls),
+                            cur[2] + float(wms)]
+                    m = workmx.setdefault(key, [0.0, 0.0])
+                    m[0] = max(m[0], float(mx))
+                    m[1] = max(m[1], float(wmx))
+                continue
+            mm = MAPL.search(line)
+            if mm:
+                am = MAPAPPLY.search(mm.group(1))
+                if am:
+                    d = mapc.setdefault("applyMs", {})
+                    d[b] = d.get(b, 0.0) + float(am.group(1))
+                for name, val in MAPONE.findall(mm.group(1)):
+                    d = mapc.setdefault(name, {})
+                    d[b] = d.get(b, 0) + int(val)
+                continue
             wm = SWEEP.search(line)
             if wm:
                 for name, elems, calls in SWEEPONE.findall(wm.group(1)):
@@ -160,6 +202,51 @@ def analyze(path):
         print(f"    verdict            {'PASS' if proj <= share else 'FAIL'}"
               f" -- {'within' if over <= 1.0 else f'{over:.1f}x over'}"
               f" the 20% share (<= {share / 16.0:.3f} ms per AI per frame)")
+
+    # THE WORKER POOL. Every AI in the process shares min(hw-1, 8) threads, and
+    # none of this is in aiMs -- on a saturated box it comes straight out of the
+    # engine's main sim thread. cores = CPU-seconds burned per wall second.
+    if work:
+        print("\n  worker pool (shared by ALL AIs, not counted in aiMs):")
+        print(f"  {'name':<14} {'totalMs':>9} {'calls':>9} {'avgUs':>7}"
+              f" {'maxMs':>7} {'waitMs':>9} {'maxWaitMs':>9}")
+        tot = {}
+        for name, h in sorted(work.items(),
+                              key=lambda kv: -sum(v[0] for v in kv[1].values())):
+            ms = sum(v[0] for v in h.values())
+            calls = sum(v[1] for v in h.values())
+            wms = sum(v[2] for v in h.values())
+            for b, v in h.items():
+                tot[b] = tot.get(b, 0.0) + v[0]
+            avg = (ms * 1000.0 / calls) if calls else 0.0
+            print(f"  {name:<14} {ms:>9.0f} {calls:>9} {avg:>7.0f}"
+                  f" {workmx[name][0]:>7.1f} {wms:>9.0f} {workmx[name][1]:>9.1f}")
+        peakb = max(tot, key=lambda b: tot[b])
+        # BUCKET is a FRAME count, not seconds. Wall time for the bucket is
+        # frames x ms/frame; CPU-per-frame is the honest figure, because the
+        # pool is shared and only partly parallel against the sim thread.
+        w0, f0 = first[peakb]
+        w1, f1 = last[peakb]
+        wall_s = max(1e-6, w1 - w0)
+        cores = tot[peakb] / (wall_s * 1000.0)
+        per_frame = tot[peakb] / float(BUCKET)
+        print(f"\n  worst game-minute (min {peakb}): {tot[peakb]:.0f} ms of CPU"
+              f" over {wall_s:.0f}s wall = {cores:.2f} cores")
+        print(f"    = {per_frame:.2f} ms of CPU per frame,"
+              f" ALL AIs, on the worker pool")
+        q = wq.get(peakb)
+        if q and q[1]:
+            print(f"    queue depth at pop: avg {q[0] / q[1]:.1f}, max {q[2]}")
+
+    if mapc:
+        bs = sorted({b for h in mapc.values() for b in h})
+        show = [b for b in bs if b % 10 == 0] + bs[-1:]
+        cols = sorted(mapc)
+        print("\n  map rebuild elements per minute (all ally teams summed):")
+        print("  " + f"{'min':>4}" + "".join(f"{n:>16}" for n in cols))
+        for b in sorted(set(show)):
+            row = "".join(f"{mapc[n].get(b, 0):>16,}" for n in cols)
+            print(f"  {b:>4}{row}")
 
     if sweeps:
         # Elements walked, not time. A helper whose visited count climbs faster

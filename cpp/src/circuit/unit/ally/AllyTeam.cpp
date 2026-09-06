@@ -9,6 +9,8 @@
 #include "unit/FactoryData.h"
 #include "map/MapManager.h"
 #include "map/ThreatMap.h"
+#include "map/InfluenceMap.h"
+#include "unit/enemy/EnemyManager.h"
 #include "resource/MetalManager.h"
 #include "resource/EnergyManager.h"
 #include "resource/EnergyGrid.h"
@@ -355,6 +357,44 @@ void CAllyTeam::Update(CCircuitAI* ai)
 	} else {
 		enemyManager->UpdateEnemyDatas(quadField);
 	}
+}
+
+void CAllyTeam::LogMapPerf(CCircuitAI* ai)
+{
+	if (circuit != ai) {  // one line per ally team, from the AI that enqueues
+		return;
+	}
+	CThreatMap* tm = mapManager->GetThreatMap();
+	CInfluenceMap* im = mapManager->GetInflMap();
+	const uint64_t thrCells = tm->perfCells.exchange(0, std::memory_order_relaxed);
+	const uint64_t thrFills = tm->perfFills.exchange(0, std::memory_order_relaxed);
+	const uint32_t thrPaints = tm->perfPaints.exchange(0, std::memory_order_relaxed);
+	const uint32_t thrAir = tm->perfAirDraws.exchange(0, std::memory_order_relaxed);
+	const uint32_t thrAmph = tm->perfAmphDraws.exchange(0, std::memory_order_relaxed);
+	const uint32_t thrCloak = tm->perfDecloak.exchange(0, std::memory_order_relaxed);
+	const uint64_t iEnemyCells = im->perfEnemyCells.exchange(0, std::memory_order_relaxed);
+	const uint64_t iAllyCells = im->perfAllyCells.exchange(0, std::memory_order_relaxed);
+	const uint64_t iFills = im->perfFills.exchange(0, std::memory_order_relaxed);
+	const uint64_t iApplyUs = im->perfApplyUs.exchange(0, std::memory_order_relaxed);
+	const uint32_t iEnemies = im->perfEnemies.exchange(0, std::memory_order_relaxed);
+	const uint32_t iFriendlies = im->perfFriendlies.exchange(0, std::memory_order_relaxed);
+	const uint32_t iApplies = im->perfApplies.exchange(0, std::memory_order_relaxed);
+	const uint64_t kOps = enemyManager->perfKmeansOps.exchange(0, std::memory_order_relaxed);
+	const uint32_t kEnemies = enemyManager->perfKmeansEnemies.exchange(0, std::memory_order_relaxed);
+	const uint32_t kK = enemyManager->perfKmeansK.load(std::memory_order_relaxed);
+
+	ai->LOG("apex: perf map t=%i roles=%u mapSize=%i | thr thrCells=%llu thrFills=%llu paints=%u"
+			" air=%u amph=%u cloak=%u",
+			ai->GetTeamId(), (unsigned)tm->GetRoleCount(), tm->GetMapSize(),
+			(unsigned long long)thrCells, (unsigned long long)thrFills, thrPaints,
+			thrAir, thrAmph, thrCloak);
+	ai->LOG("apex: perf map t=%i | infl enemyCells=%llu allyCells=%llu iFills=%llu"
+			" enemies=%u friendly=%u applyMs=%.1f/%u | kmeans ops=%llu n=%u k=%u",
+			ai->GetTeamId(),
+			(unsigned long long)iEnemyCells, (unsigned long long)iAllyCells,
+			(unsigned long long)iFills, iEnemies, iFriendlies,
+			iApplyUs / 1000.f, iApplies,
+			(unsigned long long)kOps, kEnemies, kK);
 }
 
 void CAllyTeam::EnqueueUpdate()

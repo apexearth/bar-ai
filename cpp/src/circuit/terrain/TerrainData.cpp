@@ -709,7 +709,7 @@ void CTerrainData::EnqueueUpdate()
 	map->GetHeightMap(GetNextAreaData()->heightMap);
 	map->GetSlopeMap(slopeMap);
 
-	scheduler->RunPriorityJob(CScheduler::WorkJob(&CTerrainData::UpdateAreas, this));
+	scheduler->RunPriorityJob(CScheduler::WorkJob(&CTerrainData::UpdateAreas, this), "areas");
 }
 
 std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()

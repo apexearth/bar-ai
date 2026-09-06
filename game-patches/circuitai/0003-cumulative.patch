@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..2083a522 100644
+index aeea9339..d44d9a59 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,18 @@
@@ -199,7 +199,7 @@ index aeea9339..2083a522 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +932,229 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +932,231 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -383,6 +383,8 @@ index aeea9339..2083a522 100644
 +			}
 +		}
 +		scheduler->LogJobPerf(this);
++		scheduler->LogWorkPerf(this);
++		GetAllyTeam()->LogMapPerf(this);
 +		perfAllyUs = 0;
 +		perfJobsUs = 0;
 +		perfActUs = 0;
@@ -429,7 +431,7 @@ index aeea9339..2083a522 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,10 +1431,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,10 +1433,18 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -449,7 +451,7 @@ index aeea9339..2083a522 100644
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
  	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
-@@ -1147,6 +1455,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1457,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -457,7 +459,7 @@ index aeea9339..2083a522 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1475,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1477,35 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -497,7 +499,7 @@ index aeea9339..2083a522 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1288,6 +1618,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1620,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -505,7 +507,7 @@ index aeea9339..2083a522 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1794,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1796,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -520,7 +522,7 @@ index aeea9339..2083a522 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +1813,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +1815,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -530,7 +532,7 @@ index aeea9339..2083a522 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1824,1199 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1826,1199 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1731,7 +1733,7 @@ index aeea9339..2083a522 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3175,32 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3177,32 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -1764,7 +1766,7 @@ index aeea9339..2083a522 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3308,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3310,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -2200,26 +2202,117 @@ index b4f4f403..b30544aa 100644
  	int teamId;
  	int allyTeamId;
 diff --git a/src/circuit/map/InfluenceMap.cpp b/src/circuit/map/InfluenceMap.cpp
-index 0af7275b..84d81c6c 100644
+index 0af7275b..9338c048 100644
 --- a/src/circuit/map/InfluenceMap.cpp
 +++ b/src/circuit/map/InfluenceMap.cpp
-@@ -19,6 +19,7 @@
+@@ -18,7 +18,11 @@
+ #include "util/Profiler.h"
  #include "json/json.h"
  
++#include <algorithm>
++#include <chrono>
++
  #include "spring/SpringCallback.h"
 +#include "Lua.h"   // CallRules, for the always-compiled widget streaming
  
  //#include "Cheats.h"
  #include "Feature.h"
-@@ -178,6 +179,7 @@ void CInfluenceMap::Apply()
+@@ -96,7 +100,7 @@ void CInfluenceMap::EnqueueUpdate()
+ 	CCircuitAI* circuit = manager->GetCircuit();
+ 	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
+ 	rangeScale = circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
+-	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CInfluenceMap::Update, this, enemyMgr));
++	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CInfluenceMap::Update, this, enemyMgr), "inflMap");
+ }
  
+ void CInfluenceMap::Prepare(SInfluenceData& inflData)
+@@ -105,6 +109,7 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
+ 	std::fill(inflData.allyInfl.begin(), inflData.allyInfl.end(), INFL_BASE);
+ 	std::fill(inflData.allyDefendInfl.begin(), inflData.allyDefendInfl.end(), INFL_BASE);
+ 	std::fill(inflData.influence.begin(), inflData.influence.end(), INFL_BASE);
++	perfFills.fetch_add(4 * mapSize, std::memory_order_relaxed);
+ //	std::fill(inflData.tension.begin(), inflData.tension.end(), INFL_BASE);
+ //	std::fill(inflData.vulnerability.begin(), inflData.vulnerability.end(), INFL_BASE);
+ //	std::fill(inflData.featureInfl.begin(), inflData.featureInfl.end(), INFL_BASE);
+@@ -124,6 +129,7 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
+ 
+ 	Prepare(*GetNextInflData());
+ 
++	perfEnemies.fetch_add(enemyMgr->GetHostileDatas().size(), std::memory_order_relaxed);
+ 	for (const SEnemyData& e : enemyMgr->GetHostileDatas()) {
+ 		AddEnemy(e);
+ 	}
+@@ -133,9 +139,12 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
+ 
+ void CInfluenceMap::Apply()
+ {
++	const auto perfT0 = std::chrono::steady_clock::now();
+ 	CCircuitAI* circuit = manager->GetCircuit();
+ 	circuit->UpdateFriendlyUnits();  // FIXME: update or ignore units with -RgtVector position
+ 	const CAllyTeam::AllyUnits& units = circuit->GetFriendlyUnits();
++	perfFriendlies.fetch_add(units.size(), std::memory_order_relaxed);
++	perfApplies.fetch_add(1, std::memory_order_relaxed);
+ 	for (auto& kv : units) {
+ 		CAllyUnit* u = kv.second;
+ 		if (u->GetCircuitDef()->IsAttacker()) {
+@@ -151,6 +160,7 @@ void CInfluenceMap::Apply()
+ 	for (int i = 0; i < mapSize; ++i) {
+ 		drawInfluence[i] = drawAllyInfl[i] - drawEnemyInfl[i];
+ 	}
++	perfAllyCells.fetch_add(mapSize, std::memory_order_relaxed);
+ //	for (int i = 0; i < mapSize; ++i) {
+ //		drawTension[i] = drawAllyInfl[i] + drawEnemyInfl[i];
+ //	}
+@@ -176,8 +186,12 @@ void CInfluenceMap::Apply()
+ 	SwapBuffers();
+ 	isUpdating = false;
+ 
++	perfApplyUs.fetch_add(std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now() - perfT0).count(), std::memory_order_relaxed);
++
  	FrameMarkEnd(profiler.GetInflUpdateName(manager->GetCircuit()->GetSkirmishAIId()));
  
 +	UpdateWidgetVis();
  #ifdef DEBUG_VIS
  	UpdateVis();
  #endif
-@@ -440,6 +442,53 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
+@@ -280,6 +294,8 @@ void CInfluenceMap::AddMobileArmed(CAllyUnit* u)
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),       0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -311,6 +327,8 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),       0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -343,6 +361,8 @@ void CInfluenceMap::AddUnarmed(CAllyUnit* u)
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),       0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfAllyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -380,6 +400,8 @@ void CInfluenceMap::AddEnemy(const SEnemyData& e)
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),       0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfEnemyCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -440,6 +462,53 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
  	z = (int)pos.z / squareSize;
  }
  
@@ -2273,7 +2366,7 @@ index 0af7275b..84d81c6c 100644
  #ifdef DEBUG_VIS
  #define ENEMY(x, i, v) {	\
  	x[i * 3 + 0] = .10f * v;  /*R*/	\
-@@ -455,14 +504,6 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
+@@ -455,14 +524,6 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
  void CInfluenceMap::UpdateVis()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -2288,7 +2381,7 @@ index 0af7275b..84d81c6c 100644
  	if (sdlWindows.empty()) {
  		return;
  	}
-@@ -558,37 +599,7 @@ void CInfluenceMap::ToggleSDLVis()
+@@ -558,37 +619,7 @@ void CInfluenceMap::ToggleSDLVis()
  	}
  }
  
@@ -2303,7 +2396,7 @@ index 0af7275b..84d81c6c 100644
 -		cmd = utils::int_to_string(squareSize, "ai_thr_size:%i");
 -		cmd += utils::float_to_string(INFL_BASE, " %f");
 -		circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
--
+ 
 -		UpdateVis();
 -	}
 -}
@@ -2313,7 +2406,7 @@ index 0af7275b..84d81c6c 100644
 -	CCircuitAI* circuit = manager->GetCircuit();
 -	std::string cmd("ai_thr_print:");
 -	std::string result = circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
- 
+-
 -	isWidgetPrinting = (result == "1");
 -	if (isWidgetPrinting) {
 -		cmd = utils::int_to_string(squareSize, "ai_thr_size:%i");
@@ -2327,10 +2420,40 @@ index 0af7275b..84d81c6c 100644
  void CInfluenceMap::SetMaxThreat(float maxThreat)
  {
 diff --git a/src/circuit/map/InfluenceMap.h b/src/circuit/map/InfluenceMap.h
-index 54e3ac74..f3aac150 100644
+index 54e3ac74..1acfa2a1 100644
 --- a/src/circuit/map/InfluenceMap.h
 +++ b/src/circuit/map/InfluenceMap.h
-@@ -106,16 +106,25 @@ private:
+@@ -11,6 +11,8 @@
+ #include "unit/enemy/EnemyUnit.h"
+ 
+ #include <vector>
++#include <atomic>
++#include <cstdint>
+ #ifdef DEBUG_VIS
+ #include <stdint.h>
+ #endif
+@@ -47,6 +49,20 @@ public:
+ 
+ 	int Pos2Index(const springai::AIFloat3& pos) const;
+ 
++	// apex: Update() paints the enemy half on a worker; Apply() paints the ALLY
++	// half of the whole ally team on the main thread inside job:finish. Split
++	// so the two halves can be compared before moving either. Relaxed atomics:
++	// the halves never run concurrently (isUpdating serialises them) but the
++	// main thread clears what a worker wrote, and no ordering is required.
++	std::atomic<uint64_t> perfEnemyCells{0};
++	std::atomic<uint64_t> perfAllyCells{0};
++	std::atomic<uint64_t> perfFills{0};
++	std::atomic<uint64_t> perfApplyUs{0};
++	std::atomic<uint32_t> perfEnemies{0};
++	std::atomic<uint32_t> perfFriendlies{0};
++	std::atomic<uint32_t> perfApplies{0};
++	int GetMapSize() const { return mapSize; }
++
+ private:
+ 	struct SInfluenceData {
+ 		FloatVec enemyInfl;
+@@ -106,16 +122,25 @@ private:
  	float rangeScale = 1.f;  // thread var
  	float defRadius = 0.f;
  
@@ -2360,6 +2483,159 @@ index 54e3ac74..f3aac150 100644
  	void SetMaxThreat(float maxThreat);
  #endif
  };
+diff --git a/src/circuit/map/ThreatMap.cpp b/src/circuit/map/ThreatMap.cpp
+index 8efe2468..75a6d169 100644
+--- a/src/circuit/map/ThreatMap.cpp
++++ b/src/circuit/map/ThreatMap.cpp
+@@ -19,6 +19,7 @@
+ 
+ //#undef NDEBUG
+ #include <cassert>
++#include <algorithm>
+ 
+ namespace circuit {
+ 
+@@ -155,7 +156,7 @@ void CThreatMap::EnqueueUpdate()
+ 	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
+ 	CScheduler* scheduler = circuit->GetScheduler().get();
+ 	rangeScale = circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
+-	scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::Update, this, enemyMgr, scheduler));
++	scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::Update, this, enemyMgr, scheduler), "thrMap");
+ }
+ 
+ void CThreatMap::SetEnemyUnitRange(CEnemyUnit* e) const
+@@ -386,6 +387,9 @@ void CThreatMap::AddEnemyAir(const float threat, float* drawAirThreat,
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),      0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
++	perfPaints.fetch_add(1, std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -427,6 +431,9 @@ void CThreatMap::AddEnemyAmphConst(const float threatSurf, const float threatWat
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),      0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
++	perfPaints.fetch_add(1, std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -477,6 +484,9 @@ void CThreatMap::AddEnemyAmphGradient(const float threatSurf, const float threat
+ 	const int endX   = std::min(int(posx + range    ),  width);
+ 	const int beginZ = std::max(int(posz - range + 1),      0);
+ 	const int endZ   = std::min(int(posz + range    ), height);
++	perfCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
++	perfPaints.fetch_add(1, std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -529,6 +539,9 @@ void CThreatMap::AddDecloaker(float* drawCloakThreat, const SEnemyData& e)
+ 	const int endX   = std::min(int(posx + rangeCloak    ),  width);
+ 	const int beginZ = std::max(int(posz - rangeCloak + 1),      0);
+ 	const int endZ   = std::min(int(posz + rangeCloak    ), height);
++	perfCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
++	perfPaints.fetch_add(1, std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int dzSq = SQUARE(posz - z);
+@@ -559,6 +572,9 @@ void CThreatMap::AddShield(float* drawShieldArray, const SEnemyData& e)
+ 	const int endX   = std::min(int(posx + rangeShield    ),  width);
+ 	const int beginZ = std::max(int(posz - rangeShield + 1),      0);
+ 	const int endZ   = std::min(int(posz + rangeShield    ), height);
++	perfCells.fetch_add(uint64_t(std::max(0, endX - beginX))
++			* std::max(0, endZ - beginZ), std::memory_order_relaxed);
++	perfPaints.fetch_add(1, std::memory_order_relaxed);
+ 
+ 	for (int z = beginZ; z < endZ; ++z) {
+ 		const int rrz = rangeShieldSq - SQUARE(posz - z);
+@@ -607,6 +623,7 @@ std::shared_ptr<IMainJob> CThreatMap::AirDrawer(CCircuitDef::RoleT role)
+ 	SThreatData& threatData = *GetNextThreatData();
+ 	SRoleThreat& roleThreat = threatData.roleThreats[role];
+ 	std::fill(roleThreat.airThreat.begin(), roleThreat.airThreat.end(), THREAT_BASE);
++	perfFills.fetch_add(mapSize, std::memory_order_relaxed);
+ 	float* drawAirThreat = roleThreat.airThreat.data();
+ 
+ 	for (const SEnemyData* e : airDraws) {
+@@ -630,6 +647,7 @@ std::shared_ptr<IMainJob> CThreatMap::AmphDrawer(CCircuitDef::RoleT role)
+ 	std::fill(roleThreat.surfThreat.begin(), roleThreat.surfThreat.end(), THREAT_BASE);
+ 	std::fill(roleThreat.amphThreat.begin(), roleThreat.amphThreat.end(), THREAT_BASE);
+ 	std::fill(roleThreat.swimThreat.begin(), roleThreat.swimThreat.end(), THREAT_BASE);
++	perfFills.fetch_add(3 * mapSize, std::memory_order_relaxed);
+ 	float* drawSurfThreat = roleThreat.surfThreat.data();
+ 	float* drawAmphThreat = roleThreat.amphThreat.data();
+ 	float* drawSwimThreat = roleThreat.swimThreat.data();
+@@ -664,19 +682,29 @@ std::shared_ptr<IMainJob> CThreatMap::Update(CEnemyManager* enemyMgr, CScheduler
+ 		AddEnemyUnit(const_cast<SEnemyData&>(e));
+ 	}
+ 
++	perfAirDraws.fetch_add(airDraws.size(), std::memory_order_relaxed);
++	perfAmphDraws.fetch_add(amphDraws.size(), std::memory_order_relaxed);
++
+ 	SThreatData& threatData = *GetNextThreatData();
+ 	numThreadDraws = 1 + 2 * threatData.roleThreats.size();
+ 	for (auto& kv : threatData.roleThreats) {
+-		scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::AirDrawer, this, kv.first));
+-		scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::AmphDrawer, this, kv.first));
++		scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::AirDrawer, this, kv.first), "thrAir");
++		scheduler->RunPriorityJob(CScheduler::WorkJob(&CThreatMap::AmphDrawer, this, kv.first), "thrAmph");
+ 	}
+ 
+ 	std::fill(threatData.cloakThreat.begin(), threatData.cloakThreat.end(), THREAT_BASE);
+ 	std::fill(threatData.shield.begin(), threatData.shield.end(), 0.f);
++	perfFills.fetch_add(2 * mapSize, std::memory_order_relaxed);
+ 	float* drawCloakThreat = threatData.cloakThreat.data();
+ 	float* drawShieldArray = threatData.shield.data();
+ 
+-	for (const std::vector<SEnemyData>& datas : {enemyMgr->GetHostileDatas(), enemyMgr->GetPeaceDatas()}) {
++	// apex: {a, b} builds an initializer_list<vector>, i.e. a full COPY of both
++	// enemy vectors every rebuild. Pointers are the same iteration, no copy.
++	const std::vector<SEnemyData>* datasets[2] = {
++			&enemyMgr->GetHostileDatas(), &enemyMgr->GetPeaceDatas()};
++	for (const std::vector<SEnemyData>* datasPtr : datasets) {
++		const std::vector<SEnemyData>& datas = *datasPtr;
++		perfDecloak.fetch_add(datas.size(), std::memory_order_relaxed);
+ 		for (const SEnemyData& e : datas) {
+ 			AddDecloaker(drawCloakThreat, e);
+ 			// FIXME: for shield.getInterceptType() > 1
+diff --git a/src/circuit/map/ThreatMap.h b/src/circuit/map/ThreatMap.h
+index 0d94321d..823588c4 100644
+--- a/src/circuit/map/ThreatMap.h
++++ b/src/circuit/map/ThreatMap.h
+@@ -12,6 +12,8 @@
+ #include "unit/enemy/EnemyUnit.h"
+ 
+ #include <map>
++#include <atomic>
++#include <cstdint>
+ #include <vector>
+ 
+ namespace circuit {
+@@ -60,6 +62,19 @@ public:
+ 	int GetSquareSize() const { return squareSize; }
+ 	int GetMapSize() const { return mapSize; }
+ 
++	// apex: the rebuild runs on the shared worker pool, so none of it appears in
++	// aiMs. cells = inner-loop iterations of every paint (the bbox, which is
++	// what the loop actually walks); fills = mapSize resets. Relaxed atomics:
++	// 2*roles drawer jobs paint the same object concurrently, and these counters
++	// feed no decision, so no ordering is required and none is implied.
++	std::atomic<uint64_t> perfCells{0};
++	std::atomic<uint64_t> perfFills{0};
++	std::atomic<uint32_t> perfPaints{0};
++	std::atomic<uint32_t> perfAirDraws{0};
++	std::atomic<uint32_t> perfAmphDraws{0};
++	std::atomic<uint32_t> perfDecloak{0};
++	size_t GetRoleCount() const { return threatData0.roleThreats.size(); }
++
+ private:
+ 	void ApplyRange(CCircuitDef* cdef);
+ 
 diff --git a/src/circuit/module/BuilderManager.cpp b/src/circuit/module/BuilderManager.cpp
 index a62be4f3..74488f97 100644
 --- a/src/circuit/module/BuilderManager.cpp
@@ -6129,7 +6405,7 @@ index ff81f9f2..ffb4d925 100644
  	int GetSpotToBuild(const springai::AIFloat3& pos, CMetalData::PointPredicate& predicate);
  	int GetSpotToUpgrade(const springai::AIFloat3& pos, CMetalData::PointPredicate& predicate);
 diff --git a/src/circuit/scheduler/Scheduler.cpp b/src/circuit/scheduler/Scheduler.cpp
-index ce0094b6..786e392d 100644
+index ce0094b6..a1850e30 100644
 --- a/src/circuit/scheduler/Scheduler.cpp
 +++ b/src/circuit/scheduler/Scheduler.cpp
 @@ -6,12 +6,19 @@
@@ -6192,10 +6468,11 @@ index ce0094b6..786e392d 100644
  
  	// Update task queues
  	if (!removeTasks.empty()) {
-@@ -168,6 +188,38 @@ void CScheduler::ProcessJobs(int frame)
+@@ -168,14 +188,92 @@ void CScheduler::ProcessJobs(int frame)
  	isProcessing = false;
  }
  
+-void CScheduler::RunParallelJob(const std::shared_ptr<IThreadJob>& task)
 +void CScheduler::AccountJob(const char* name, uint64_t us)
 +{
 +	for (SJobPerf& e : jobPerf) {
@@ -6228,18 +6505,100 @@ index ce0094b6..786e392d 100644
 +	jobPerf.clear();
 +}
 +
- void CScheduler::RunParallelJob(const std::shared_ptr<IThreadJob>& task)
++void CScheduler::AccountWorkJob(const char* name, uint64_t us, uint64_t waitUs, size_t qDepth)
++{
++	std::lock_guard<spring::mutex> lock(workPerfMutex);
++	workQueueSum += qDepth;
++	workQueueMax = std::max(workQueueMax, (unsigned)qDepth);
++	for (SWorkPerf& e : workPerf) {
++		if (e.name == name) {  // static literals: pointer identity is enough
++			e.us += us;
++			e.waitUs += waitUs;
++			++e.calls;
++			e.maxUs = std::max(e.maxUs, us);
++			e.maxWaitUs = std::max(e.maxWaitUs, waitUs);
++			return;
++		}
++	}
++	workPerf.push_back({name, us, waitUs, 1, us, waitUs});
++}
++
++void CScheduler::LogWorkPerf(CCircuitAI* circuit)
++{
++	std::vector<SWorkPerf> snap;
++	uint64_t qSum;
++	unsigned qMax, qCalls = 0;
++	{
++		std::lock_guard<spring::mutex> lock(workPerfMutex);
++		snap.swap(workPerf);
++		qSum = workQueueSum;
++		qMax = workQueueMax;
++		workQueueSum = 0;
++		workQueueMax = 0;
++	}
++	std::sort(snap.begin(), snap.end(), [](const SWorkPerf& a, const SWorkPerf& b) {
++		return a.us > b.us;
++	});
++	std::string line;
++	char buf[192];
++	for (const SWorkPerf& e : snap) {
++		qCalls += e.calls;
++		snprintf(buf, sizeof(buf), " %s=%.1f/%u/%.1f/w%.1f/wmax%.1f", e.name, e.us / 1000.f,
++				e.calls, e.maxUs / 1000.f, e.waitUs / 1000.f, e.maxWaitUs / 1000.f);
++		line += buf;
++	}
++	circuit->LOG("apex: perf work (ms/calls/maxMs/waitMs/maxWaitMs) qavg=%.1f qmax=%u%s",
++			(qCalls > 0) ? float(qSum) / qCalls : 0.f, qMax, line.c_str());
++}
++
++void CScheduler::RunParallelJob(const std::shared_ptr<IThreadJob>& task, const char* name)
  {
- 	gWorkTasks.PushBack({self, task});
+-	gWorkTasks.PushBack({self, task});
++	gWorkTasks.PushBack({self, task, name});
+ }
+ 
+-void CScheduler::RunPriorityJob(const std::shared_ptr<IThreadJob>& task)
++void CScheduler::RunPriorityJob(const std::shared_ptr<IThreadJob>& task, const char* name)
+ {
+-	gWorkTasks.PushFront({self, task});
++	gWorkTasks.PushFront({self, task, name});
+ }
+ 
+ void CScheduler::RemoveJob(const std::shared_ptr<IMainJob>& task)
+@@ -213,7 +311,8 @@ void CScheduler::WorkerThread(int num)
+ 			gProceedCV.wait(lock, [pauseId] { return pauseId != gWorkerPauseId; });
+ 		}
+ 
+-		TracyPlot("AI Jobs", (int64_t)gWorkTasks.Size());
++		const size_t qDepth = gWorkTasks.Size();
++		TracyPlot("AI Jobs", (int64_t)qDepth);
+ 		WorkTask container = gWorkTasks.Pop();
+ 
+ 		std::shared_ptr<CScheduler> scheduler = container.scheduler.lock();
+@@ -223,7 +322,13 @@ void CScheduler::WorkerThread(int num)
+ 
+ 		if (scheduler->isRunning.load()) {
+ 
++			const auto t0 = std::chrono::steady_clock::now();
+ 			std::shared_ptr<IMainJob> onComplete = container.task->Run(num);
++			const auto t1 = std::chrono::steady_clock::now();
++			scheduler->AccountWorkJob((container.name != nullptr) ? container.name : "anon",
++					std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count(),
++					std::chrono::duration_cast<std::chrono::microseconds>(t0 - container.pushed).count(),
++					qDepth);
+ 			if (onComplete != nullptr) {
+ 				scheduler->finishTasks.PushBack(onComplete);
+ 			}
 diff --git a/src/circuit/scheduler/Scheduler.h b/src/circuit/scheduler/Scheduler.h
-index 00dae056..2b2619de 100644
+index 00dae056..8dab7e91 100644
 --- a/src/circuit/scheduler/Scheduler.h
 +++ b/src/circuit/scheduler/Scheduler.h
-@@ -14,9 +14,13 @@
+@@ -14,9 +14,14 @@
  
  #include <memory>
  #include <list>
 +#include <vector>
++#include <chrono>
 +#include <cstdint>
  
  namespace circuit {
@@ -6249,7 +6608,7 @@ index 00dae056..2b2619de 100644
  class CScheduler {
  public:
  	CScheduler();
-@@ -67,7 +71,11 @@ public:
+@@ -67,7 +72,11 @@ public:
  	/*
  	 * Add task at specified interval
  	 */
@@ -6262,7 +6621,22 @@ index 00dae056..2b2619de 100644
  		repeatTasks.push_back({task, frameInterval, lastFrame - frameInterval + frameOffset});
  	}
  
-@@ -112,6 +120,21 @@ public:
+@@ -79,12 +88,12 @@ public:
+ 	/*
+ 	 * Run concurrent task, finalize on success at main thread
+ 	 */
+-	void RunParallelJob(const std::shared_ptr<IThreadJob>& task);
++	void RunParallelJob(const std::shared_ptr<IThreadJob>& task, const char* name = nullptr);
+ 
+ 	/*
+ 	 * Same as RunParallelTask but pushes task in front of the queue
+ 	 */
+-	void RunPriorityJob(const std::shared_ptr<IThreadJob>& task);
++	void RunPriorityJob(const std::shared_ptr<IThreadJob>& task, const char* name = nullptr);
+ 
+ 	/*
+ 	 * Remove scheduled task from queue
+@@ -112,6 +121,42 @@ public:
  
  	static int GetMaxWorkThreads()/* const*/ { return gMaxWorkThreads; }
  
@@ -6270,6 +6644,13 @@ index 00dae056..2b2619de 100644
 +	// spent on. jobsMs was ~87% of the whole AI frame at hour scale and had no
 +	// breakdown at all; without this the C++ half is one opaque bucket.
 +	void LogJobPerf(CCircuitAI* circuit);
++
++	// apex: the worker pool is shared by every AI in the process and nothing
++	// measured it -- ThreatMap/InfluenceMap/EnemyManager rebuilds and every
++	// path query land there, so they were billed to "the engine" in aiMs.
++	// wait= is queue latency, which with 16 AIs on 2-8 threads is the number
++	// that says whether the pool is saturated.
++	void LogWorkPerf(CCircuitAI* circuit);
 +
 +private:
 +	struct SJobPerf {
@@ -6281,9 +6662,40 @@ index 00dae056..2b2619de 100644
 +	std::vector<SJobPerf> jobPerf;
 +	void AccountJob(const char* name, uint64_t us);
 +
++	struct SWorkPerf {
++		const char* name;
++		uint64_t us;
++		uint64_t waitUs;
++		unsigned calls;
++		uint64_t maxUs;
++		uint64_t maxWaitUs;
++	};
++	std::vector<SWorkPerf> workPerf;
++	spring::mutex workPerfMutex;   // workers write, main thread reads and clears
++	uint64_t workQueueSum = 0;
++	unsigned workQueueMax = 0;
++	void AccountWorkJob(const char* name, uint64_t us, uint64_t waitUs, size_t qDepth);
++
  private:
  	std::weak_ptr<CScheduler> self;
  	int lastFrame;
+@@ -144,10 +189,14 @@ private:
+ 	std::vector<std::shared_ptr<IMainJob>> removeTasks;
+ 
+ 	struct WorkTask {
+-		WorkTask(const std::weak_ptr<CScheduler>& scheduler, const std::shared_ptr<IThreadJob>& task)
+-			: scheduler(scheduler), task(task) {}
++		WorkTask(const std::weak_ptr<CScheduler>& scheduler, const std::shared_ptr<IThreadJob>& task,
++				const char* name = nullptr)
++			: scheduler(scheduler), task(task), name(name)
++			, pushed(std::chrono::steady_clock::now()) {}
+ 		std::weak_ptr<CScheduler> scheduler;
+ 		std::shared_ptr<IThreadJob> task;
++		const char* name;
++		std::chrono::steady_clock::time_point pushed;
+ 	};
+ 	static CMultiQueue<WorkTask> gWorkTasks;
+ 
 diff --git a/src/circuit/scheduler/SchedulerJob.h b/src/circuit/scheduler/SchedulerJob.h
 index 28880adf..69bc6324 100644
 --- a/src/circuit/scheduler/SchedulerJob.h
@@ -6460,7 +6872,7 @@ index 193efa90..91d88bae 100644
  
  CEconomyScript::~CEconomyScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..53ea0a65 100644
+index 2839b72e..e47fe1be 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,14 @@
@@ -7722,6 +8134,15 @@ index 2839b72e..53ea0a65 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
+@@ -902,7 +2001,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+ 			}
+ 			script->ReturnContext(ctx);
+ 		});
+-	}));
++	}), "asExec");
+ }
+ 
+ } // namespace circuit
 diff --git a/src/circuit/script/InitScript.h b/src/circuit/script/InitScript.h
 index fe8097b2..7b201a4a 100644
 --- a/src/circuit/script/InitScript.h
@@ -16514,7 +16935,7 @@ index e19de07e..971d3c65 100644
  		cmd += utils::int_to_string(unit->GetId()) + "/" + utils::int_to_string(targetPos.x) + "/" + utils::int_to_string(targetPos.z);
  		circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
 diff --git a/src/circuit/terrain/TerrainData.cpp b/src/circuit/terrain/TerrainData.cpp
-index 8e35f245..e88ed22d 100644
+index 8e35f245..a7b63ab9 100644
 --- a/src/circuit/terrain/TerrainData.cpp
 +++ b/src/circuit/terrain/TerrainData.cpp
 @@ -530,7 +530,7 @@ void CTerrainData::Init(CCircuitAI* circuit)
@@ -16535,8 +16956,17 @@ index 8e35f245..e88ed22d 100644
  			scheduler->RunOnRelease(CScheduler::GameJob(&CTerrainData::DelegateAuthority, this, circuit));
  			break;
  		}
+@@ -709,7 +709,7 @@ void CTerrainData::EnqueueUpdate()
+ 	map->GetHeightMap(GetNextAreaData()->heightMap);
+ 	map->GetSlopeMap(slopeMap);
+ 
+-	scheduler->RunPriorityJob(CScheduler::WorkJob(&CTerrainData::UpdateAreas, this));
++	scheduler->RunPriorityJob(CScheduler::WorkJob(&CTerrainData::UpdateAreas, this), "areas");
+ }
+ 
+ std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/path/PathFinder.cpp b/src/circuit/terrain/path/PathFinder.cpp
-index aef6e1ed..a38e883b 100644
+index aef6e1ed..f6f37296 100644
 --- a/src/circuit/terrain/path/PathFinder.cpp
 +++ b/src/circuit/terrain/path/PathFinder.cpp
 @@ -264,12 +264,13 @@ AIFloat3 CPathFinder::PathIndex2Pos(int index) const
@@ -16648,6 +17078,42 @@ index aef6e1ed..a38e883b 100644
  
  	query->Init(moveArray, threatArray, std::move(moveFun), std::move(threatFun), unit);
  }
+@@ -557,7 +559,7 @@ void CPathFinder::RunPathSingle(CScheduler* scheduler, const std::shared_ptr<IPa
+ 
+ 		this->MakePath(query, micropathers[threadNum]);
+ 		return finish;
+-	}));
++	}), "pathOne");
+ }
+ 
+ void CPathFinder::RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
+@@ -581,7 +583,7 @@ void CPathFinder::RunPathMulti(CScheduler* scheduler, const std::shared_ptr<IPat
+ 
+ 		this->FindBestPath(query, micropathers[threadNum]);
+ 		return finish;
+-	}));
++	}), "pathMulti");
+ }
+ 
+ void CPathFinder::RunPathWide(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
+@@ -605,7 +607,7 @@ void CPathFinder::RunPathWide(CScheduler* scheduler, const std::shared_ptr<IPath
+ 
+ 		this->MakePathWide(query, micropathers[threadNum]);
+ 		return finish;
+-	}));
++	}), "pathWide");
+ }
+ 
+ void CPathFinder::RunCostMap(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete)
+@@ -623,7 +625,7 @@ void CPathFinder::RunCostMap(CScheduler* scheduler, const std::shared_ptr<IPathQ
+ 
+ 		this->MakeCostMap(query, micropathers[threadNum]);
+ 		return finish;
+-	}));
++	}), "costMap");
+ }
+ 
+ void CPathFinder::MakePath(IPathQuery* query, NSMicroPather::CMicroPather* micropather)
 diff --git a/src/circuit/terrain/path/PathFinder.h b/src/circuit/terrain/path/PathFinder.h
 index 023f0299..5f725bcb 100644
 --- a/src/circuit/terrain/path/PathFinder.h
@@ -18461,10 +18927,19 @@ index 63cd9245..f6230d1a 100644
  	int pathIterator;
  	int increment;
 diff --git a/src/circuit/unit/ally/AllyTeam.cpp b/src/circuit/unit/ally/AllyTeam.cpp
-index 48ff00bb..80485457 100644
+index 48ff00bb..f90db35e 100644
 --- a/src/circuit/unit/ally/AllyTeam.cpp
 +++ b/src/circuit/unit/ally/AllyTeam.cpp
-@@ -28,6 +28,10 @@
+@@ -9,6 +9,8 @@
+ #include "unit/FactoryData.h"
+ #include "map/MapManager.h"
+ #include "map/ThreatMap.h"
++#include "map/InfluenceMap.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "resource/MetalManager.h"
+ #include "resource/EnergyManager.h"
+ #include "resource/EnergyGrid.h"
+@@ -28,6 +30,10 @@
  
  #include "AIFloat3.h"
  #include "Team.h"
@@ -18475,7 +18950,7 @@ index 48ff00bb..80485457 100644
  
  namespace circuit {
  
-@@ -140,9 +144,10 @@ void CAllyTeam::Release()
+@@ -140,9 +146,10 @@ void CAllyTeam::Release()
  	quadField.Kill();
  }
  
@@ -18487,7 +18962,7 @@ index 48ff00bb..80485457 100644
  	UpdateFriendlyUnits();
  }
  
-@@ -153,23 +158,73 @@ void CAllyTeam::UpdateFriendlyUnits()
+@@ -153,23 +160,73 @@ void CAllyTeam::UpdateFriendlyUnits()
  	// Options:
  	//   1) save CCircuitDef::Id instead of pointer. But u->GetCircuitDef() is too spread out to fix it now.
  	//   2) Move friendlyUnits from CAllyTeam level to CCircuitAI (and eat more memory and cpu on updates for each ai instance).
@@ -18572,8 +19047,53 @@ index 48ff00bb..80485457 100644
  }
  
  CAllyUnit* CAllyTeam::GetFriendlyUnit(ICoreUnit::Id unitId) const
+@@ -302,6 +359,44 @@ void CAllyTeam::Update(CCircuitAI* ai)
+ 	}
+ }
+ 
++void CAllyTeam::LogMapPerf(CCircuitAI* ai)
++{
++	if (circuit != ai) {  // one line per ally team, from the AI that enqueues
++		return;
++	}
++	CThreatMap* tm = mapManager->GetThreatMap();
++	CInfluenceMap* im = mapManager->GetInflMap();
++	const uint64_t thrCells = tm->perfCells.exchange(0, std::memory_order_relaxed);
++	const uint64_t thrFills = tm->perfFills.exchange(0, std::memory_order_relaxed);
++	const uint32_t thrPaints = tm->perfPaints.exchange(0, std::memory_order_relaxed);
++	const uint32_t thrAir = tm->perfAirDraws.exchange(0, std::memory_order_relaxed);
++	const uint32_t thrAmph = tm->perfAmphDraws.exchange(0, std::memory_order_relaxed);
++	const uint32_t thrCloak = tm->perfDecloak.exchange(0, std::memory_order_relaxed);
++	const uint64_t iEnemyCells = im->perfEnemyCells.exchange(0, std::memory_order_relaxed);
++	const uint64_t iAllyCells = im->perfAllyCells.exchange(0, std::memory_order_relaxed);
++	const uint64_t iFills = im->perfFills.exchange(0, std::memory_order_relaxed);
++	const uint64_t iApplyUs = im->perfApplyUs.exchange(0, std::memory_order_relaxed);
++	const uint32_t iEnemies = im->perfEnemies.exchange(0, std::memory_order_relaxed);
++	const uint32_t iFriendlies = im->perfFriendlies.exchange(0, std::memory_order_relaxed);
++	const uint32_t iApplies = im->perfApplies.exchange(0, std::memory_order_relaxed);
++	const uint64_t kOps = enemyManager->perfKmeansOps.exchange(0, std::memory_order_relaxed);
++	const uint32_t kEnemies = enemyManager->perfKmeansEnemies.exchange(0, std::memory_order_relaxed);
++	const uint32_t kK = enemyManager->perfKmeansK.load(std::memory_order_relaxed);
++
++	ai->LOG("apex: perf map t=%i roles=%u mapSize=%i | thr thrCells=%llu thrFills=%llu paints=%u"
++			" air=%u amph=%u cloak=%u",
++			ai->GetTeamId(), (unsigned)tm->GetRoleCount(), tm->GetMapSize(),
++			(unsigned long long)thrCells, (unsigned long long)thrFills, thrPaints,
++			thrAir, thrAmph, thrCloak);
++	ai->LOG("apex: perf map t=%i | infl enemyCells=%llu allyCells=%llu iFills=%llu"
++			" enemies=%u friendly=%u applyMs=%.1f/%u | kmeans ops=%llu n=%u k=%u",
++			ai->GetTeamId(),
++			(unsigned long long)iEnemyCells, (unsigned long long)iAllyCells,
++			(unsigned long long)iFills, iEnemies, iFriendlies,
++			iApplyUs / 1000.f, iApplies,
++			(unsigned long long)kOps, kEnemies, kK);
++}
++
+ void CAllyTeam::EnqueueUpdate()
+ {
+ 	if (enemyManager->IsUpdating() || mapManager->IsUpdating()) {
 diff --git a/src/circuit/unit/ally/AllyTeam.h b/src/circuit/unit/ally/AllyTeam.h
-index 5d4f29e3..1a3b7d0e 100644
+index 5d4f29e3..4e55519a 100644
 --- a/src/circuit/unit/ally/AllyTeam.h
 +++ b/src/circuit/unit/ally/AllyTeam.h
 @@ -14,7 +14,9 @@
@@ -18586,7 +19106,19 @@ index 5d4f29e3..1a3b7d0e 100644
  
  namespace springai {
  	class AIFloat3;
-@@ -119,6 +121,15 @@ private:
+@@ -92,6 +94,11 @@ public:
+ 	void UpdateInLOS(CEnemyUnit* data, CCircuitDef::Id unitDefId);
+ 
+ 	void Update(CCircuitAI* ai);
++
++	// apex: the ThreatMap/InfluenceMap/EnemyManager rebuild is per ALLY TEAM,
++	// not per AI -- only the leader enqueues it -- so only the leader may log
++	// and clear the counters, or seven AIs print zeros over the eighth.
++	void LogMapPerf(CCircuitAI* ai);
+ 	void EnqueueUpdate();
+ 
+ 	CEnemyUnit* GetEnemyOrFakeIn(const springai::AIFloat3& startPos, const springai::AIFloat3& dir, float length,
+@@ -119,6 +126,15 @@ private:
  	void ApplyAuthority(CCircuitAI* newOwner);
  
  	CCircuitAI* circuit;  // authority
@@ -18617,7 +19149,7 @@ index 68077b53..047c3694 100644
  	const springai::AIFloat3& GetPos(int frame);
  	const springai::AIFloat3& GetLastPos() const { return position; }
 diff --git a/src/circuit/unit/enemy/EnemyManager.cpp b/src/circuit/unit/enemy/EnemyManager.cpp
-index 091a710f..341fecfe 100644
+index 091a710f..dc28bc65 100644
 --- a/src/circuit/unit/enemy/EnemyManager.cpp
 +++ b/src/circuit/unit/enemy/EnemyManager.cpp
 @@ -32,6 +32,39 @@ namespace circuit {
@@ -18694,6 +19226,15 @@ index 091a710f..341fecfe 100644
  		if (enemy->IsInRadarOrLOS()) {
  			const AIFloat3& pos = enemy->GetUnit()->GetPos();
  			if (CTerrainData::IsNotInBounds(pos)) {  // NOTE: Unit id validation. No EnemyDestroyed sometimes apparently
+@@ -233,7 +286,7 @@ void CEnemyManager::EnqueueUpdate()
+ //	}
+ 	isUpdating = true;
+ 
+-	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CEnemyManager::Update, this));
++	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CEnemyManager::Update, this), "enemyMgr");
+ }
+ 
+ bool CEnemyManager::UnitInLOS(CEnemyUnit* data)
 @@ -359,8 +412,158 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
  	DyingEnemy(enemy);
  }
@@ -18899,10 +19440,9 @@ index 091a710f..341fecfe 100644
 +			mobThr  = std::max(mobThr  - threat * initThrMod.inMobile, 0.f);
 +			mobCost = std::max(mobCost - cost, 0.f);
 +		}
- 	}
- }
- 
--void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
++	}
++}
++
 +// staticThreat has no fresh counterpart -- a turret we saw once is still there.
 +void CEnemyManager::ModStatic(const CEnemyUnit* e, int sign)
 +{
@@ -18910,11 +19450,12 @@ index 091a710f..341fecfe 100644
 +	assert(cdef != nullptr);
 +	if (cdef->IsMobile()) {
 +		return;
-+	}
+ 	}
 +	const float d = cdef->GetDefThreat() * initThrMod.inStatic;
 +	staticThreat = (sign > 0) ? (staticThreat + d) : std::max(staticThreat - d, 0.f);
-+}
-+
+ }
+ 
+-void CEnemyManager::DelEnemyCost(const CEnemyUnit* e)
 +void CEnemyManager::ModFresh(const CEnemyUnit* e, int sign)
  {
  	if (e->IsIgnore()) {
@@ -18989,7 +19530,31 @@ index 091a710f..341fecfe 100644
  }
  
  void CEnemyManager::UpdateAreaUsers(CCircuitAI* ai)
-@@ -526,6 +783,8 @@ void CEnemyManager::KMeansIteration()
+@@ -476,6 +733,10 @@ void CEnemyManager::KMeansIteration()
+ 	const auto enemySize = hostileDatas.size() + peaceDatas.size();
+ 	int newK = std::min(KMEANS_BASE_MAX_K, 1 + (int)sqrtf(enemySize));
+ 
++	perfKmeansOps.fetch_add(uint64_t(enemySize) * newK, std::memory_order_relaxed);
++	perfKmeansEnemies.fetch_add(enemySize, std::memory_order_relaxed);
++	perfKmeansK.store(newK, std::memory_order_relaxed);
++
+ 	// change the number of means according to newK
+ 	assert(newK > 0/* && enemyGoups.size() > 0*/);
+ 	// add a new means, just use one of the positions
+@@ -491,7 +752,11 @@ void CEnemyManager::KMeansIteration()
+ 
+ 	{
+ 		int i = 0;
+-		for (const std::vector<SEnemyData>& datas : {hostileDatas, peaceDatas}) {
++		// apex: {a, b} builds an initializer_list<vector>, i.e. a full COPY of
++		// both enemy vectors. Pointers are the same iteration, no copy.
++		const std::vector<SEnemyData>* datasets[2] = {&hostileDatas, &peaceDatas};
++		for (const std::vector<SEnemyData>* datasPtr : datasets) {
++			const std::vector<SEnemyData>& datas = *datasPtr;
+ 			for (const SEnemyData& enemy : datas) {
+ 				float closestDistance = std::numeric_limits<float>::max();
+ 				int closestIndex = -1;
+@@ -526,11 +791,17 @@ void CEnemyManager::KMeansIteration()
  		std::fill(eg.roleCosts.begin(), eg.roleCosts.end(), 0.f);
  		eg.cost = 0.f;
  		eg.influence = 0.f;
@@ -18998,7 +19563,17 @@ index 091a710f..341fecfe 100644
  	}
  
  	{
-@@ -542,6 +801,11 @@ void CEnemyManager::KMeansIteration()
+ 		int i = 0;
+-		for (const std::vector<SEnemyData>& datas : {hostileDatas, peaceDatas}) {
++		// apex: {a, b} builds an initializer_list<vector>, i.e. a full COPY of
++		// both enemy vectors. Pointers are the same iteration, no copy.
++		const std::vector<SEnemyData>* datasets[2] = {&hostileDatas, &peaceDatas};
++		for (const std::vector<SEnemyData>* datasPtr : datasets) {
++			const std::vector<SEnemyData>& datas = *datasPtr;
+ 			for (const SEnemyData& enemy : datas) {
+ 				int meanIndex = unitsClosestMeanID[i++];
+ 				SEnemyGroup& eg = newMeans[meanIndex];
+@@ -542,6 +813,11 @@ void CEnemyManager::KMeansIteration()
  				if (!enemy.IsFake()) {
  					eg.units.push_back(enemy.id);
  				}
@@ -19011,10 +19586,19 @@ index 091a710f..341fecfe 100644
  				if (enemy.cdef != nullptr) {
  					eg.roleCosts[enemy.cdef->GetMainRole()] += enemy.cost;
 diff --git a/src/circuit/unit/enemy/EnemyManager.h b/src/circuit/unit/enemy/EnemyManager.h
-index 5ccf63a5..336f7c68 100644
+index 5ccf63a5..d4080fab 100644
 --- a/src/circuit/unit/enemy/EnemyManager.h
 +++ b/src/circuit/unit/enemy/EnemyManager.h
-@@ -32,7 +32,7 @@ public:
+@@ -14,6 +14,8 @@
+ #include "util/MaskHandler.h"
+ 
+ #include <limits>
++#include <atomic>
++#include <cstdint>
+ 
+ namespace terrain {
+ 	struct SArea;
+@@ -32,7 +34,7 @@ public:
  	using EnemyFakes = std::set<CEnemyFake*>;
  	struct SEnemyGroup {
  		explicit SEnemyGroup(const springai::AIFloat3& p)
@@ -19023,7 +19607,7 @@ index 5ccf63a5..336f7c68 100644
  		{
  			roleCosts.fill(0.f);
  		}
-@@ -42,6 +42,8 @@ public:
+@@ -42,6 +44,8 @@ public:
  		float cost;
  		float influence;  // thr_mod applied
  		float vagueMetric;
@@ -19032,7 +19616,21 @@ index 5ccf63a5..336f7c68 100644
  	};
  
  	CEnemyManager(CCircuitAI* circuit);
-@@ -72,6 +74,13 @@ public:
+@@ -62,6 +66,13 @@ public:
+ 	void EnqueueUpdate();
+ 	bool IsUpdating() const { return isUpdating; }
+ 
++	// apex: KMeansIteration is O(enemies * k) on a worker, k = min(32, 1+sqrt(n)),
++	// and nothing measured it. Relaxed atomics: a worker writes, the main thread
++	// clears; the counters feed no decision.
++	std::atomic<uint64_t> perfKmeansOps{0};
++	std::atomic<uint32_t> perfKmeansEnemies{0};
++	std::atomic<uint32_t> perfKmeansK{0};
++
+ 	bool UnitInLOS(CEnemyUnit* data);
+ 	bool UnitInLOS(CEnemyUnit* data, CCircuitDef::Id unitDefId);
+ 	std::pair<CEnemyUnit*, bool> RegisterEnemyUnit(ICoreUnit::Id unitId, bool isInLOS);
+@@ -72,6 +83,13 @@ public:
  
  	void UnregisterEnemyUnit(CEnemyUnit* data);
  	void DyingEnemy(CEnemyUnit* enemy, int frame);
@@ -19046,7 +19644,7 @@ index 5ccf63a5..336f7c68 100644
  private:
  	void DyingEnemy(CEnemyUnit* enemy);
  	void DeleteEnemyUnit(CEnemyUnit* data);
-@@ -83,8 +92,13 @@ public:
+@@ -83,8 +101,13 @@ public:
  	float GetEnemyThreat(CCircuitDef::RoleT type) const {
  		return enemyInfos[type].threat;
  	}
@@ -19062,7 +19660,7 @@ index 5ccf63a5..336f7c68 100644
  	float GetMobileThreat() const { return mobileThreat; }
  	float GetStaticThreat() const { return staticThreat; }
  	float GetEnemyThreat() const { return mobileThreat + staticThreat; }
-@@ -92,6 +106,10 @@ public:
+@@ -92,6 +115,10 @@ public:
  
  	const std::vector<SEnemyGroup>& GetEnemyGroups() const { return enemyGroups; }
  	const springai::AIFloat3& GetEnemyPos() const { return enemyPos; }
@@ -19073,7 +19671,7 @@ index 5ccf63a5..336f7c68 100644
  	float GetMinGroupThreat() const { return enemyGroups[minThreatGroupIdx].influence; }
  	float GetPreMaxGroupThreat() const { return enemyGroups[preMaxThreatGroupIdx].influence; }
  	float GetMaxGroupThreat() const { return enemyGroups[maxThreatGroupIdx].influence; }
-@@ -103,6 +121,14 @@ public:
+@@ -103,6 +130,14 @@ public:
  
  	void ReadConfig();
  private:
@@ -19088,7 +19686,7 @@ index 5ccf63a5..336f7c68 100644
  	void KMeansIteration();
  
  	struct SGroupData {
-@@ -152,12 +178,15 @@ private:
+@@ -152,12 +187,15 @@ private:
  		float inStatic;
  	} initThrMod;
  	float maxAAThreat = 0.f;

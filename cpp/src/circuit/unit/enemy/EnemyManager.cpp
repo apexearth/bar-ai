@@ -286,7 +286,7 @@ void CEnemyManager::EnqueueUpdate()
 //	}
 	isUpdating = true;
 
-	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CEnemyManager::Update, this));
+	circuit->GetScheduler()->RunPriorityJob(CScheduler::WorkJob(&CEnemyManager::Update, this), "enemyMgr");
 }
 
 bool CEnemyManager::UnitInLOS(CEnemyUnit* data)
@@ -733,6 +733,10 @@ void CEnemyManager::KMeansIteration()
 	const auto enemySize = hostileDatas.size() + peaceDatas.size();
 	int newK = std::min(KMEANS_BASE_MAX_K, 1 + (int)sqrtf(enemySize));
 
+	perfKmeansOps.fetch_add(uint64_t(enemySize) * newK, std::memory_order_relaxed);
+	perfKmeansEnemies.fetch_add(enemySize, std::memory_order_relaxed);
+	perfKmeansK.store(newK, std::memory_order_relaxed);
+
 	// change the number of means according to newK
 	assert(newK > 0/* && enemyGoups.size() > 0*/);
 	// add a new means, just use one of the positions
@@ -748,7 +752,11 @@ void CEnemyManager::KMeansIteration()
 
 	{
 		int i = 0;
-		for (const std::vector<SEnemyData>& datas : {hostileDatas, peaceDatas}) {
+		// apex: {a, b} builds an initializer_list<vector>, i.e. a full COPY of
+		// both enemy vectors. Pointers are the same iteration, no copy.
+		const std::vector<SEnemyData>* datasets[2] = {&hostileDatas, &peaceDatas};
+		for (const std::vector<SEnemyData>* datasPtr : datasets) {
+			const std::vector<SEnemyData>& datas = *datasPtr;
 			for (const SEnemyData& enemy : datas) {
 				float closestDistance = std::numeric_limits<float>::max();
 				int closestIndex = -1;
@@ -789,7 +797,11 @@ void CEnemyManager::KMeansIteration()
 
 	{
 		int i = 0;
-		for (const std::vector<SEnemyData>& datas : {hostileDatas, peaceDatas}) {
+		// apex: {a, b} builds an initializer_list<vector>, i.e. a full COPY of
+		// both enemy vectors. Pointers are the same iteration, no copy.
+		const std::vector<SEnemyData>* datasets[2] = {&hostileDatas, &peaceDatas};
+		for (const std::vector<SEnemyData>* datasPtr : datasets) {
+			const std::vector<SEnemyData>& datas = *datasPtr;
 			for (const SEnemyData& enemy : datas) {
 				int meanIndex = unitsClosestMeanID[i++];
 				SEnemyGroup& eg = newMeans[meanIndex];
