@@ -600,6 +600,7 @@ float SpareMetalRate()
 float gBacklogVal = 0.f;
 int   gBacklogFrame = -1;
 int   gBacklogStamp = -1;
+int   gBacklogRows = 0;   // unfinished rows behind gBacklogVal, for the bpgap line
 
 float BacklogM()
 {
@@ -608,6 +609,7 @@ float BacklogM()
 	// Ledger COMING rows (flipped 2026-08-27): the orphaned-frame mass is
 	// backlog too -- it is exactly the committed work gLive forgot.
 	float m = 0.f;
+	int rows = 0;
 	for (uint i = 0; i < ComLen(); ++i) {
 		if (gComState[i] == CS_FINISHED)
 			continue;
@@ -615,10 +617,12 @@ float BacklogM()
 		if (left <= 0.f)
 			continue;
 		m += Catalog::gCostM[gComDef[i]] * left;
+		++rows;
 	}
 	gBacklogFrame = ai.frame;
 	gBacklogStamp = gComStamp;
 	gBacklogVal = m;
+	gBacklogRows = rows;
 	return m;
 }
 
@@ -631,22 +635,29 @@ float StructuralIncomeEma()
 	return (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
 }
 
+int gBpGapLogAt = 0;
+
 float BPGap()
 {
 	TrackIncome();
 	const float head = ai.GetTunable("apex_bp_headroom", TUNE_BP_HEADROOM);
 	const float ahead = ai.GetTunable("apex_bp_lookahead", TUNE_BP_LOOKAHEAD);
-	const float futureInc = EcoPowerM()
+	const float ecoP = EcoPowerM();
+	const float futureInc = ecoP
 			+ ((gIncGrowth > 0.f) ? gIncGrowth * ahead : 0.f);
-	float gap = futureInc * ((head > 0.f) ? head : 1.15f) - BPCapacity();
+	const float tgt = futureInc * ((head > 0.f) ? head : 1.15f);
+	const float cap = BPCapacity();
+	float gap = tgt - cap;
 	// A bank climbing past half storage is deferred spend the standing
 	// lathe already failed to serve (measured: 9.4k banked at 234 m/s
 	// income with ~30 nanos - the income target alone reads "satisfied"
 	// exactly when the backlog is worst).
 	const float bank = aiEconomyMgr.metal.current;
 	const float st2 = aiEconomyMgr.metal.storage;
+	float bankTerm = 0.f;
 	if ((st2 > 1.f) && (bank > 0.5f * st2))
-		gap += (bank - 0.5f * st2) / 60.f;
+		bankTerm = (bank - 0.5f * st2) / 60.f;
+	gap += bankTerm;
 	// AND THE WORK ALREADY ORDERED. Income headroom alone cannot see a queue:
 	// order fifteen turrets and this number does not move, so the turrets come
 	// out of expansion's hands instead of buying their own (apexearth: "we'll
@@ -656,9 +667,36 @@ float BPGap()
 	// backlog is work nothing built. Self-limiting: BPCapacity is subtracted
 	// above, so the gap closes as the hands arrive.
 	const float bl = ai.GetTunable("apex_bp_backlog_s", TUNE_BP_BACKLOG_S);
+	const bool logNow = (ai.frame >= gBpGapLogAt);
+	// The ledger walk stays off the path in the control arm; the log still
+	// needs the raw number, so it is asked for on the logging frame only.
+	const float rawBl = ((bl > 1.f) || logNow) ? BacklogM() : 0.f;
+	float blTerm = 0.f;
 	if (bl > 1.f)
-		gap += BacklogM() / bl;
-	return (gap > 0.f) ? gap : 0.f;
+		blTerm = rawBl / bl;
+	gap += blTerm;
+	const float gapM = (gap > 0.f) ? gap : 0.f;
+	// EVERY CLAUSE SEPARATELY, once a minute. The three clauses are in the same
+	// currency and nothing printed which of them carries the number, so a gap
+	// that never closes could not be told from one that closes and reopens --
+	// `net` is the income clause after capacity, and it is the only one that
+	// can go negative.
+	if (logNow) {
+		gBpGapLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: bpgap gap=" + formatFloat(gapM, "", 0, 1)
+			+ " tgt=" + formatFloat(tgt, "", 0, 1)
+			+ " eco=" + formatFloat(ecoP, "", 0, 1)
+			+ " grow=" + formatFloat(futureInc - ecoP, "", 0, 1)
+			+ " cap=" + formatFloat(cap, "", 0, 1)
+			+ " net=" + formatFloat(tgt - cap, "", 0, 1)
+			+ " bank=" + formatFloat(bankTerm, "", 0, 1)
+			+ " blog=" + formatFloat(blTerm, "", 0, 1)
+			+ " rawM=" + int(rawBl)
+			+ " rows=" + gBacklogRows
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " bank%=" + int((st2 > 1.f) ? (100.f * bank / st2) : -1.f));
+	}
+	return gapM;
 }
 
 // Metal income nothing is spending: the arithmetic case for more build
