@@ -48,7 +48,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	switch (pathMaxIndex) {
 		case -2:  // arrived
 			TRY_UNIT(circuit, unit,
-				unit->CmdMoveTo(pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
+				unit->CmdMoveTo(pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
 			)
 			return;
 		case -1: return;  // continue with current waypoints
@@ -98,18 +98,18 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			}
 			if (isBadJump) {
 				const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
-				unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60);
+				unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
 			}
 		} else {
 			const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
-			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
+			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
 		}
 		unit->CmdWantedSpeed(stepSpeed);
 
 		for (int i = 2; (step < pathMaxIndex) && (i < 3); ++i) {
 			step = std::min(step + increment, pathMaxIndex);
 			const AIFloat3 pos = offsetPos(pPath->posPath[step], step);
-			unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
+			unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i, CCircuitUnit::OrdSrc::TRAVEL);
 		}
 	)
 }

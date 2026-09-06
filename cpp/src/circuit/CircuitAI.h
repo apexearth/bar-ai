@@ -529,7 +529,10 @@ public:
 	void NoteSniperOrder(CCircuitDef::SniperOrder kind);
 	// apex: census of every engine order this AI sends, by kind, with the ones
 	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
-	void NoteOrder(int kind, int bucket, bool suppressed);
+	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
+	// apex: the arc-side tiebreak that a sticky side would have held. Counted
+	// with apex_arc_sticky OFF too, so one run says what turning it on buys.
+	void NoteArcFlip(bool held, unsigned units);
 	int GetSkirmishAIId() const { return skirmishAIId; }
 	int GetTeamId()       const { return teamId; }
 	int GetAllyTeamId()   const { return allyTeamId; }
@@ -618,6 +621,13 @@ private:
 	unsigned ordSent[5] = {0, 0, 0, 0, 0};
 	unsigned ordSup[5] = {0, 0, 0, 0, 0};
 	unsigned ordRep[5][5] = {{0}};
+	// apex: the same census split by CALL SITE (CCircuitUnit::OrdSrc), because
+	// the kind/distance one cannot say which loop is generating the churn.
+	// [0] sent, [1] re-sends within 3s, [2] the far ones among those.
+	static constexpr int ORD_SRC_N = 9;
+	unsigned ordSrc[ORD_SRC_N][3] = {{0}};
+	unsigned arcFlip[2] = {0, 0};   // [0] side changed, [1] a sticky side held it
+	unsigned arcFlipU[2] = {0, 0};  // units re-slotted by those
 	// apex: SET-TARGET HOLDER CENSUS. unit_target_on_the_move.lua blocks
 	// CMD_UNIT_SET_TARGET in AllowCommand, so the order looks free -- but it
 	// enrols the unit, and the gadget's GameFrame then re-applies every

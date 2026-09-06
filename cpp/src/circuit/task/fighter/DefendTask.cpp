@@ -895,7 +895,7 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::POST);
 		)
 	}
 	if ((!leashed.empty() || (local > 0)) && (frame >= lastLeashLog + FRAMES_PER_SEC * 10)) {
@@ -1026,7 +1026,7 @@ bool CDefendTask::FallbackPosts()
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			unit->CmdMoveTo(post, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::POST);
 		)
 		++moved;
 	}

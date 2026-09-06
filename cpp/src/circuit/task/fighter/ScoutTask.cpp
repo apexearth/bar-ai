@@ -353,7 +353,7 @@ void CScoutTask::ApplyScoutPath(const CQueryPathSingle* query)
 		unit->GetTravelAct()->StateWait();
 	}
 	TRY_UNIT(circuit, unit,
-		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
+		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::SCOUT);
 	)
 }
 

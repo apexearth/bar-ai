@@ -1714,7 +1714,7 @@ void CBuilderManager::UpdateRezGuard()
 			held->Release();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(dest, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 3);
+			unit->CmdMoveTo(dest, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 3, CCircuitUnit::OrdSrc::BUILD);
 		)
 		++rezGuardMoves;
 	}

@@ -1069,6 +1069,27 @@ int CCircuitAI::Update(int frame)
 				ordRep[1][0] + ordRep[1][1] + ordRep[1][2] + ordRep[1][3] + ordRep[1][4],
 				ordRep[3][0] + ordRep[3][1] + ordRep[3][2] + ordRep[3][3] + ordRep[3][4],
 				ordRep[4][0]);
+		// apex: WHICH LOOP SENT THEM. sent/repeat-within-3s/far-repeat per call
+		// site -- the attribution the kind census cannot give, and without which
+		// every rule aimed at order volume is a guess. Order matches
+		// CCircuitUnit::OrdSrc.
+		{
+			static const char* srcName[ORD_SRC_N] = {"other", "ring", "travel",
+					"dodge", "standoff", "post", "retreat", "build", "scout"};
+			std::string line;
+			char buf[96];
+			for (int i = 0; i < ORD_SRC_N; ++i) {
+				if (ordSrc[i][0] == 0) {
+					continue;
+				}
+				snprintf(buf, sizeof(buf), " %s=%u/%u/%u", srcName[i],
+						ordSrc[i][0], ordSrc[i][1], ordSrc[i][2]);
+				line += buf;
+			}
+			LOG("apex: order-src t=%i (sent/rep/far) arcflip=%u/%u units=%u/%u%s",
+					teamId, arcFlip[0], arcFlip[1], arcFlipU[0], arcFlipU[1],
+					line.c_str());
+		}
 		// apex: mirror the gadget's own un-enrolments before counting, or `own`
 		// only ever grows: it drops a dead target (n%5 checkTarget) and, for
 		// anything but a building, one gone from radar+los (n%15
@@ -1111,6 +1132,11 @@ int CCircuitAI::Update(int frame)
 				ordRep[k][b] = 0;
 			}
 		}
+		for (int k = 0; k < ORD_SRC_N; ++k) {
+			ordSrc[k][0] = ordSrc[k][1] = ordSrc[k][2] = 0;
+		}
+		arcFlip[0] = arcFlip[1] = 0;
+		arcFlipU[0] = arcFlipU[1] = 0;
 		scheduler->LogJobPerf(this);
 		scheduler->LogWorkPerf(this);
 		GetAllyTeam()->LogMapPerf(this);
@@ -3191,7 +3217,7 @@ void CCircuitAI::NoteSniperOrder(CCircuitDef::SniperOrder kind)
 	}
 }
 
-void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed)
+void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed, int src)
 {
 	if (suppressed) {
 		++ordSup[kind];
@@ -3201,6 +3227,21 @@ void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed)
 	if (bucket >= 0) {
 		++ordRep[kind][bucket];
 	}
+	if ((src >= 0) && (src < ORD_SRC_N)) {
+		++ordSrc[src][0];
+		if (bucket >= 0) {
+			++ordSrc[src][1];
+			if (bucket == 4) {
+				++ordSrc[src][2];
+			}
+		}
+	}
+}
+
+void CCircuitAI::NoteArcFlip(bool held, unsigned units)
+{
+	++arcFlip[held ? 1 : 0];
+	arcFlipU[held ? 1 : 0] += units;
 }
 
 void CCircuitAI::UpdateActions()

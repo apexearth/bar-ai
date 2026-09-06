@@ -696,7 +696,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 				TRY_UNIT(circuit, unit,
 					AIFloat3 awayPos = utils::get_radial_pos(pos, 64.f);
 					CTerrainManager::CorrectPosition(awayPos);
-					unit->CmdMoveTo(awayPos, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
+					unit->CmdMoveTo(awayPos, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::BUILD);
 				)
 			}
 			return true;

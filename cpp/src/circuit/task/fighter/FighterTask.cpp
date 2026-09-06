@@ -405,7 +405,7 @@ void IFighterTask::DodgeFire(CCircuitUnit* unit, CEnemyInfo* attacker)
 	AIFloat3 dst = pos + perp * dist;
 	CTerrainManager::CorrectPosition(dst);
 	unit->NoteAct("DODGE", frame);
-	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
+	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2, CCircuitUnit::OrdSrc::DODGE);
 	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC * circuit->GetTunable("apex_dodge_cd", 1.f)));
 	IntentPing(dst, "DODGE");
 }
@@ -457,7 +457,7 @@ bool IFighterTask::KeepRange(CCircuitUnit* unit, CEnemyInfo* attacker)
 	AIFloat3 dst = ePos + dir * hold + perp * (cdef->GetSpeed() * 0.3f);
 	CTerrainManager::CorrectPosition(dst);
 	unit->NoteAct("STAND", frame);
-	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2);
+	unit->CmdMoveTo(dst, 0, frame + FRAMES_PER_SEC * 2, CCircuitUnit::OrdSrc::STANDOFF);
 	unit->SetDodgeFrame(frame + (int)(FRAMES_PER_SEC
 			* circuit->GetTunable("apex_dodge_cd", 1.f)));
 	IntentPing(dst, "STANDOFF");

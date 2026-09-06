@@ -61,6 +61,62 @@ ATTACK, which confirms or kills this in one run.
 None of the three is measured yet. The instrument shipped 2026-09-05; a 16-AI
 hour with it is what settles the sizes.
 
+## 2026-09-06 — the move census cannot name the loop, and the arc tiebreak reverses whole rows
+
+Four 16-AI hours on Supreme Isthmus v2.1, seed 1, all 976 `order-rep` lines
+(16 teams x 61 min) summed:
+
+| run | move | reps | same | lt8 | lt32 | lt128 | far |
+|---|---|---|---|---|---|---|---|
+| 06:23 | 1,638,177 | 979,421 | 20,276 | 44,922 | 182,152 | 214,701 | 517,370 |
+| 07:06 | 1,137,674 | 442,782 | 17,063 | 10,940 | 33,852 | 48,572 | 332,355 |
+| 07:54 | 1,124,169 | 503,898 | 31,470 | 7,918 | 28,623 | 51,415 | 384,472 |
+| 08:50 | 1,064,897 | 465,995 | 53,654 | 9,443 | 29,169 | 43,472 | 330,257 |
+
+Move volume fell 35% across the session under other work; `far` is now 71% of
+repeats. `dev_order_counter` agrees on the total (move=1,123,923 at 08:50), so
+the AI is essentially the only source of move commands.
+
+**The census cannot attribute any of it.** `NoteOrder` buckets a repeat only when
+`opts` and `id` match the previous order of that kind, so two sources alternating
+on one unit register as no repeat at all: `CMoveAction::Update` alternates RMB and
+RMB|SHIFT and therefore contributes ZERO to the histogram, and `DodgeFire`/
+`KeepRange` (opts 0) alternating with the squad ring (opts RMB) likewise. Every
+rule aimed at the number has been a guess. `apex: order-src` (2026-09-06) splits
+sent / repeat-within-3s / far-repeat by call site — ring, travel, dodge, standoff,
+post, retreat, build, scout — and one 16-AI hour names the loop.
+
+**The arc-end tiebreak reverses a row's whole slot assignment.**
+`ISquadTask::Attack` picks between two mirrored ring ends and, when it picks the
+second, does `delta = -delta; beta = -beta`. That maps unit i from angle
+`alpha + d*(i - n/2)` to `alpha + d*(n/2 - i)` — its mirror about alpha. At the
+arc cap (`maxDelta = 0.9*PI/n`) a four-unit row's outer units swap across ~2.8 rad,
+a chord of ~1,200 elmos at r=600: n `far` move orders and n units walking past
+each other for a formation that occupies the same arc either way. It is decided
+against `testPos`, the row's first unit, which is orbiting, while `newPos1`/
+`newPos2` are built from `alpha + beta` with **neither the orbit term nor
+`wrapAlpha`** — so the comparison reverses on its own as the ring precesses, with
+nothing tactical changed, and the threat sample that picks the "safer angle" is
+taken at two points no unit is going to. The stated intent in that code is
+already "so a squad does not zigzag between two near-identical tiles".
+`apex_arc_sticky` (default 0) holds the row's chosen side against the DISTANCE
+tiebreak only — a threat asymmetry still re-decides — and `arcflip=churn/held` in
+`apex: order-src` counts it with the switch off. The `newPos1`/`newPos2` phase
+mismatch is NOT fixed: fixing it changes which side squads approach from.
+
+**Do not suppress the orbit re-issue.** `ORBIT_RATE` 0.18 rad/s is 108 elmo/s of
+slot travel at r=600 and 153 at r=850 — faster than a Sheldon walks, so the ring
+is a heading, not a destination. Holding the order would leave the unit standing
+at its slot, against `docs/24` ("almost always stay moving", "circle around the
+enemies they are shooting"). The cadence is not the bug and neither is the orbit.
+
+**`work:areas` is not the problem.** `CTerrainData::UpdateAreas`, 6 calls/min
+(one per 10 s, whole process, not per AI), 35.9 ms avg / 39.7 ms max — but
+`waitMs 0.0 / maxWaitMs 0.0`: it never queues and nothing waits on it. Its
+main-thread partner `CTerrainData::EnqueueUpdate` (the heightmap + slopemap copy)
+is `terrain=7.7/6/1.3` — 1.3 ms every 10 s. 0.34% of one core, off the main
+thread. Leave it alone.
+
 ## 2026-09-05 — Utilization() is blind to factories, so an idle gantry does not discount the next one
 
 apexearth: *"we have a lot of gantries which are idle yet we will continue to

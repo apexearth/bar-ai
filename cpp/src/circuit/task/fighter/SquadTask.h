@@ -108,6 +108,14 @@ protected:
 	int finishId = 0;
 	int wrapSide = 0;
 	int wrapLogFrame = -1000000;
+	// apex: which of the two mirrored arc ends each row approaches from, kept
+	// per row index (bit set = the mirrored end) with a second mask saying the
+	// row has decided at all. Sticky, so the distance TIEBREAK cannot reverse
+	// the row's whole slot assignment every second; threat still re-decides.
+	// Cleared with the target, which is what the choice is about.
+	unsigned arcFlipMask = 0;
+	unsigned arcSetMask = 0;
+	int arcTargetId = -1;
 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
 public:
 	virtual ~ISquadTask();

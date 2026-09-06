@@ -136,7 +136,14 @@ public:
 	// the same thing can be counted, and returns true when the re-send is a
 	// provable no-op AND apex_order_dedupe is on; CmdMoveTo then drops it.
 	enum class OrdKind: int { MOVE = 0, FIGHT, PATROL, ATTACK, TARGET, _SIZE };
-	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout);
+	// WHICH CALL SITE sent it. The kind/distance census says how much churn
+	// there is, never where it comes from, so every rule aimed at it has been
+	// a guess. Defaulted, so an unlabelled site lands in OTHER rather than
+	// being mis-attributed.
+	enum class OrdSrc: int { OTHER = 0, RING, TRAVEL, DODGE, STANDOFF, POST,
+		RETREAT, BUILD, SCOUT, _SIZE };
+	bool NoteOrder(OrdKind kind, short options, const springai::AIFloat3& pos, int id, int timeout,
+			OrdSrc src = OrdSrc::OTHER);
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
@@ -177,10 +184,12 @@ public:
 	float GetHealthPercent();
 
 	void CmdRemove(std::vector<float>&& params, short options = 0);
-	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
+	void CmdMoveTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX,
+			OrdSrc src = OrdSrc::OTHER);
 	void CmdRepeat(bool repeat, short options = 0, int timeout = INT_MAX);
 	void CmdJumpTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
-	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
+	void CmdFightTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX,
+			OrdSrc src = OrdSrc::OTHER);
 	void CmdPatrolTo(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
 	void CmdAttackGround(const springai::AIFloat3& pos, short options = 0, int timeout = INT_MAX);
 	void CmdWantedSpeed(float speed = NO_SPEED_LIMIT);

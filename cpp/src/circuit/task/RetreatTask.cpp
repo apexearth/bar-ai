@@ -479,7 +479,7 @@ void CRetreatTask::Update()
 			}
 			if (bestInfl < inflHere * 0.8f) {
 				TRY_UNIT(circuit, unit,
-					unit->CmdMoveTo(best, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 10);
+					unit->CmdMoveTo(best, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 10, CCircuitUnit::OrdSrc::RETREAT);
 				)
 				circuit->LOG("apex: com-evade t=%i infl=%.1f -> %.1f at=%.0f,%.0f",
 						circuit->GetTeamId(), inflHere, bestInfl, best.x, best.z);
@@ -579,7 +579,7 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
 	if (unitPos.SqDistance2D(haven) > SQUARE(maxDist)) {
 		// TODO: push MoveAction into unit? to avoid enemy fire
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(haven, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 1);
+			unit->CmdMoveTo(haven, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 1, CCircuitUnit::OrdSrc::RETREAT);
 		)
 		// TODO: Add fail counter?
 	} else {

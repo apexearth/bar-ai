@@ -239,10 +239,10 @@ bool CBMexTask::CheckLandBlock(CCircuitUnit* unit)
 		AIFloat3 dir = (buildPos - pos).Normalize2D();
 		const float step = unit->GetCircuitDef()->GetBuildDistance() / 4;
 		TRY_UNIT(circuit, unit,
-			unit->CmdMoveTo(pos + dir * step);
+			unit->CmdMoveTo(pos + dir * step, 0, INT_MAX, CCircuitUnit::OrdSrc::BUILD);
 			for (int i = 2; i < 4; ++i) {
 				AIFloat3 newPos = pos + dir * (step * i);
-				unit->CmdMoveTo(newPos, UNIT_COMMAND_OPTION_SHIFT_KEY);
+				unit->CmdMoveTo(newPos, UNIT_COMMAND_OPTION_SHIFT_KEY, INT_MAX, CCircuitUnit::OrdSrc::BUILD);
 			}
 			unit->CmdBuild(buildDef, buildPos, facing, UNIT_COMMAND_OPTION_SHIFT_KEY, frame + FRAMES_PER_SEC * 60);
 		);

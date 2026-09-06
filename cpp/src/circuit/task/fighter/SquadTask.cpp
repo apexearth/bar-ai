@@ -1247,9 +1247,51 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		// picks the safer angle more decisively than a Mammoth on the same pair
 		// of candidate spots.
 		const float threatSpread = std::max(threat1, threat2) * (0.1f / fragility);
-		const bool flipForSafety = (std::fabs(threat1 - threat2) > threatSpread) && (threat2 < threat1);
-		const bool flipForDistance = (std::fabs(threat1 - threat2) <= threatSpread)
+		const bool safetyDecides = (std::fabs(threat1 - threat2) > threatSpread);
+		const bool flipForSafety = safetyDecides && (threat2 < threat1);
+		bool flipForDistance = !safetyDecides
 				&& (testPos.SqDistance2D(newPos1) > testPos.SqDistance2D(newPos2));
+		// apex: the sign flip MIRRORS the row's whole slot assignment about
+		// alpha, so every unit is re-sent across the arc -- and the reference
+		// it is decided against (this row's first unit) orbits while
+		// newPos1/newPos2 do not, so it reverses on its own with nothing
+		// tactical changed. Sticky only where the code was already indifferent:
+		// a threat asymmetry (safetyDecides) still re-decides.
+		const bool arcSticky = manager->GetCircuit()->GetTunable("apex_arc_sticky", 0.f) > 0.f;
+		const int tgtId = (GetTarget() != nullptr) ? (int)GetTarget()->GetId() : -1;
+		if (tgtId != arcTargetId) {
+			arcTargetId = tgtId;
+			arcFlipMask = 0;
+			arcSetMask = 0;
+		}
+		const unsigned arcBit = 1u << (unsigned)std::min(row, 31);
+		if (safetyDecides) {
+			arcSetMask |= arcBit;
+			if (flipForSafety) {
+				arcFlipMask |= arcBit;
+			} else {
+				arcFlipMask &= ~arcBit;
+			}
+		} else if (arcSetMask & arcBit) {
+			const bool held = ((arcFlipMask & arcBit) != 0);
+			if (held != flipForDistance) {
+				manager->GetCircuit()->NoteArcFlip(arcSticky, (unsigned)kv.second.size());
+			}
+			if (arcSticky) {
+				flipForDistance = held;
+			} else {
+				if (flipForDistance) {
+					arcFlipMask |= arcBit;
+				} else {
+					arcFlipMask &= ~arcBit;
+				}
+			}
+		} else {
+			arcSetMask |= arcBit;
+			if (flipForDistance) {
+				arcFlipMask |= arcBit;
+			}
+		}
 		if (flipForSafety || flipForDistance) {
 			delta = -delta;
 			beta = -beta;

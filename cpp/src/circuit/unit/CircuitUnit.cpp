@@ -372,7 +372,8 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 // guard CMobileCAI::ExecuteMove puts in front of SetGoal -- is exact float
 // equality on goalPos; a destination off by a fraction of an elmo re-paths.
 // Candidates are counted either way and dropped only under apex_order_dedupe.
-bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout)
+bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, int id, int timeout,
+		OrdSrc src)
 {
 	if (manager == nullptr) {
 		return false;
@@ -397,7 +398,7 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 		suppress = (bucket == 0) && (s.seq == ordSeq) && (timeout >= s.timeout)
 				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
 	}
-	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress);
+	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress, static_cast<int>(src));
 	// Counted whether or not it is dropped, so one run with the switch OFF says
 	// exactly what turning it on would buy. Default off: the engine's own move
 	// state is provably unchanged (above), but the dropped order also skips the
@@ -420,12 +421,12 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 	return suppress;
 }
 
-void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout)
+void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout, OrdSrc src)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
-	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout)) {
+	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout, src)) {
 		return;
 	}
 	NoteAct("mov", timeout);
@@ -451,7 +452,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
 //	unit->ExecuteCustomCommand(CMD_JUMP, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
-void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
+void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout, OrdSrc src)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
@@ -460,13 +461,13 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout)
 	// first thing a weapon bears on. Every travel/regroup/fallback path funnels
 	// through here, so the swap covers all of them.
 	if (circuitDef->IsSniper()) {
-		CmdMoveTo(pos, options, timeout);
+		CmdMoveTo(pos, options, timeout, src);
 		return;
 	}
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
-	NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout);
+	NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout, src);
 	unit->Fight(pos, options, timeout);
 }
 
@@ -765,7 +766,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 					CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				}
 			} else {
-				CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+				CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, OrdSrc::RING);
 				if (isGround) {  // los-cheat related
 					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
 				} else {
@@ -779,7 +780,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 				CmdAttack(enemy, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			}
 		}
-		CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
+		CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);  // los-cheat related
 		CmdWantedSpeed(NO_SPEED_LIMIT);
 		CmdSetTarget(target);
 	)
@@ -824,14 +825,14 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->IsAttrMelee() && IsJumpReady()) {
 			CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
-			CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
+			CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);
 		} else {
-			CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+			CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout, OrdSrc::RING);
 		}
 		if (!prefer) {
 			if (isGround) {  // los-cheat related
 				CmdAttackGround(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
-				CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // los-cheat related
+				CmdFightTo(enemy->GetPos(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);  // los-cheat related
 			} else {
 				// NO queued CmdFightTo here: a fight order re-acquires the
 				// closest enemy and stops all movement the moment a weapon
