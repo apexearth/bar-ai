@@ -20,6 +20,8 @@ float gPrEHeadroom = 0.f;
 float gPrELookahead = 0.f;
 bool  gPrERealizeOn = false;
 float gPrEWasteWorth = 0.f;
+bool  gPrMRealizeOn = false;
+float gPrMWasteWorth = 0.f;
 void PrTuneFill()
 {
 	if (gPrTuneSet)
@@ -35,6 +37,8 @@ void PrTuneFill()
 	gPrELookahead = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 	gPrERealizeOn = ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f;
 	gPrEWasteWorth = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
+	gPrMRealizeOn = ai.GetTunable("apex_m_realize", TUNE_M_REALIZE) > 0.f;
+	gPrMWasteWorth = ai.GetTunable("apex_m_waste_worth", TUNE_M_WASTE_WORTH);
 }
 
 // The wage of one builder-second: the metal flow each working builder carries.
@@ -134,6 +138,30 @@ void TrackEPull()
 	const float dem = aiEconomyMgr.energy.pull - ConvUseE();
 	const float d0 = (dem > 0.f) ? dem : 0.f;
 	gEDemandPk = (d0 > gEDemandPk) ? d0 : (0.97f * gEDemandPk + 0.03f * d0);
+}
+
+// The metal twin of the block above. Nothing is excluded from the demand here:
+// a converter is a metal SOURCE, not a draw on it.
+float gMPullPrev = -1.f;
+int gMPullPrevAt = 0;
+float gMPullGrowth = 0.f;
+float gMDemandPk = 0.f;
+void TrackMPull()
+{
+	if (ai.frame < gMPullPrevAt + 5 * SECOND)
+		return;
+	const float pull = aiEconomyMgr.metal.pull;
+	if (gMPullPrev >= 0.f) {
+		const float dt = float(ai.frame - gMPullPrevAt) / float(SECOND);
+		const float g = (pull - gMPullPrev) / ((dt > 1.f) ? dt : 1.f);
+		gMPullGrowth = 0.7f * gMPullGrowth + 0.3f * g;
+	}
+	gMPullPrev = pull;
+	gMPullPrevAt = ai.frame;
+	// Rises instantly, decays slowly -- the same temporal-consistency law the
+	// energy side needed: metal pull dips to nothing between jobs.
+	const float md0 = (pull > 0.f) ? pull : 0.f;
+	gMDemandPk = (md0 > gMDemandPk) ? md0 : (0.97f * gMDemandPk + 0.03f * md0);
 }
 
 // A conversion ratio is not a price until a converter stands (apexearth:
@@ -381,6 +409,74 @@ float ERealizeShare(float addE, float buildSec)
 			: ((room < addE) ? (room / addE) : 1.f);
 	if (share < floorShare)
 		share = floorShare;
+	return share;
+}
+
+// The metal twin of ERealizeShare: extraction priced by the share of its metal
+// we could actually spend. Energy has always had to prove something would
+// absorb it and extraction never did, so a mex held full price while the bank
+// spilled. Orthogonal to apex_mexup_boost, which still decides extraction
+// against energy whenever the metal can be spent at all. The horizon knobs are
+// the energy side's on purpose -- a lookahead is a property of the question,
+// not of the resource. See docs/27.
+int gMRealLogAt = 0;
+float MRealizeShare(float addM, float buildSec)
+{
+	PrTuneFill();
+	if (addM <= 0.f)
+		return 1.f;
+	if (!gPrMRealizeOn)
+		return 1.f;
+	// NO INCOME, NO WASTE. At frame zero the bank is FULL from the starting
+	// grant with income and pull both nothing, so the arithmetic below reads
+	// "we cannot spend a thing" and discounts the opening mex to the floor --
+	// measured, share=0.250 on the first sample of a fresh game. A resource
+	// that is not flowing yet cannot be spilling; the peak-held demand covers
+	// every later lull on its own.
+	if (aiEconomyMgr.metal.income <= 0.f)
+		return 1.f;
+	TrackMPull();
+	float demand = aiEconomyMgr.metal.pull;
+	if (demand < gMDemandPk)
+		demand = gMDemandPk;
+	if (demand < 0.f)
+		demand = 0.f;
+	if (gMPullGrowth > 0.f) {
+		const float look = gPrELookahead;
+		demand += gMPullGrowth * ((buildSec < look) ? buildSec : look);
+	}
+	// A bank that is not full is a real use, exactly as on the energy side --
+	// and at frame zero it is the only consumer there is.
+	float fill = 0.f;
+	{
+		const float look = gPrELookahead;
+		const float bankRoom = aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current;
+		if ((bankRoom > 0.f) && (look > 1.f))
+			fill = bankRoom / look;
+	}
+	const float target = demand * gPrEHeadroom + fill;
+	// NEVER ZERO, for the reason the energy floor is not zero: demand grows, and
+	// a spot claimed now is still ours when it does. The band loses the wait,
+	// not the metal.
+	const float floorShare = gPrMWasteWorth;
+	const float room = target - aiEconomyMgr.metal.income;
+	float share = (room <= 0.f) ? 0.f
+			: ((room < addM) ? (room / addM) : 1.f);
+	if (share < floorShare)
+		share = floorShare;
+	if (ai.frame >= gMRealLogAt) {
+		gMRealLogAt = ai.frame + 30 * SECOND;
+		const float mst = aiEconomyMgr.metal.storage;
+		AiLog("apex: mrealize t=" + ai.teamId
+			+ " share=" + formatFloat(share, "", 0, 3)
+			+ " addM=" + formatFloat(addM, "", 0, 2)
+			+ " mInc=" + int(aiEconomyMgr.metal.income)
+			+ " mPull=" + int(aiEconomyMgr.metal.pull)
+			+ " pk=" + int(gMDemandPk)
+			+ " growth=" + formatFloat(gMPullGrowth, "", 0, 2)
+			+ " target=" + int(target)
+			+ " bank%=" + int((mst > 1.f) ? (100.f * aiEconomyMgr.metal.current / mst) : -1.f));
+	}
 	return share;
 }
 

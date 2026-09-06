@@ -556,3 +556,22 @@ apexearth, watching two copies of this AI play each other:
   their way around the front lines to attack enemies behind." (`armmar` is a
   gantry unit -- T3.) So no tier converts a raider into line army, and the
   route is part of the ruling: around the line, not through it.
+
+## Riot holds a post; fast units do the chasing (2026-09-06)
+
+Watching a game lost to raiders loose in the base -- "enemy grunts running all
+around our base and we have nobody who can chase them down and stop them... we
+get killed by grunts slowly":
+
+- "The trouble with those riot units is that they need to stand guard post at a
+  specific place. They're not fast. So we need to have fast units like pawns or
+  grunts."
+- On the army being one blob: "Certainly sounds like an issue if we just have
+  one large squad." (Measured that game: `apex: squadsize own n=1 avg=8.0 |
+  enemy n=9 avg=2.9`.)
+
+So the counter chain's RIOT-answers-RAIDER (`market/army.as`) is the POST half
+only. A riot unit is bought to hold a place; nothing in it chases, and pricing
+it as the whole answer to raiders leaves the base with no interceptor. The
+mobile half is a fast cheap unit -- Pawn or Grunt -- and it is a separate
+demand, not the same one.

@@ -56,7 +56,8 @@ local isStatic, isConstructor = {}, {}
 local INTERRUPT_GAP = 30 * 10
 local dmg = {}                 -- team -> table of counters
 local conLastHit = {}          -- unitID -> frame of last enemy hit
-local DMG_KEYS = { "dm", "ds", "rm", "rs", "rfs", "bi", "bib", "bd", "bdmg", "dg", "dgm", "mfo", "dgp" }
+local DMG_KEYS = { "dm", "ds", "rm", "rs", "rfs", "bi", "bib", "bd", "bdmg", "dg", "dgm", "mfo", "dgp",
+	"ffdg", "ffdgm", "ffdgk" }
 local isDGunWeapon = {}        -- weaponDefID -> the D-gun (type DGun), watched for projectiles
 for wdid = 0, #WeaponDefs do
 	local wd = WeaponDefs[wdid]
@@ -68,6 +69,8 @@ end
 local manualEchoed = false     -- the D-gun weapon's name, echoed once when first seen
 local isManual = {}            -- weaponDefID -> manual fire (the D-gun)
 local lastManual = {}          -- unitID -> its last hit was a D-gun
+local lastManualFF = {}        -- unitID -> that D-gun was OURS (kept apart so a
+                               -- later enemy kill is not credited as a D-gun)
 
 local function dmgOf(team)
 	local t = dmg[team]
@@ -176,6 +179,16 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 		dmgOf(attackerTeam).dgm = dmgOf(attackerTeam).dgm + cost
 	end
 	lastManual[unitID] = nil
+	-- Killed by our OWN D-gun. Distinct from the reclaim and death-blast
+	-- attributions that made every previous own-kill count wrong: this one
+	-- required a manual-fire damage event from our own team first.
+	local ffKill = 0
+	if lastManualFF[unitID] and attackerTeam ~= nil and attackerTeam == unitTeam then
+		local t = dmgOf(unitTeam)
+		t.ffdgk = t.ffdgk + 1
+		ffKill = 1
+	end
+	lastManualFF[unitID] = nil
 	if isConstructor[unitDefID] then
 		dmgOf(unitTeam).bd = dmgOf(unitTeam).bd + 1
 	end
@@ -202,16 +215,32 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 		end
 	end
 	Spring.Echo(string.format(
-		"[BARAI_DEATH] frame=%d team=%d unit=%s cost=%d x=%d z=%d vx=%.1f vz=%.1f built=%d mob=%d atkteam=%d atk=%s atkx=%d atkz=%d st=%d",
+		"[BARAI_DEATH] frame=%d team=%d unit=%s cost=%d x=%d z=%d vx=%.1f vz=%.1f built=%d mob=%d atkteam=%d atk=%s atkx=%d atkz=%d st=%d ffdg=%d",
 		Spring.GetGameFrame(), unitTeam, (ud and ud.name) or "?", cost, x, z,
 		vx or 0, vz or 0, built, mobileArmed[unitDefID] and 1 or 0,
-		attackerTeam or -1, atkName, ax, az, isStatic[unitDefID] and 1 or 0))
+		attackerTeam or -1, atkName, ax, az, isStatic[unitDefID] and 1 or 0, ffKill))
 end
 
 function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 		weaponDefID, projectileID, attackerID, attackerDefID, attackerTeam)
 	if paralyzer or damage == nil or damage <= 0 then
 		return
+	end
+	-- OUR OWN D-GUN, WHICH NOTHING MEASURED: the same-team return below is
+	-- what hid it, so every earlier count of "commander killed our units" was
+	-- reclaims and the death blast instead. The D-gun does not stop at its
+	-- target, so ours standing in the beam are hit by design.
+	if attackerTeam ~= nil and attackerTeam == unitTeam and aiTeam[unitTeam]
+		and weaponDefID ~= nil and isDGunWeapon[weaponDefID] then
+		local t = dmgOf(unitTeam)
+		t.ffdg = t.ffdg + 1
+		local h, mh = Spring.GetUnitHealth(unitID)
+		if mh ~= nil and mh > 0 then
+			local d = damage
+			if h ~= nil and d > h then d = h end   -- overkill is not metal lost
+			t.ffdgm = t.ffdgm + defFacts(unitDefID) * d / mh
+		end
+		lastManualFF[unitID] = true
 	end
 	if attackerTeam == nil or attackerTeam == unitTeam then
 		return   -- own D-gun, crashes, decay: not the fight
@@ -287,9 +316,10 @@ local function snapshot(frame)
 		local t = dmgOf(teamID)
 		local eCur, eStore = Spring.GetTeamResources(teamID, "energy")
 		Spring.Echo(string.format(
-			"[BARAI_DMG] frame=%d team=%d dm=%d ds=%d rm=%d rs=%d rfs=%d bi=%d bib=%d bd=%d bdmg=%d dg=%d dgm=%d mfo=%d dgp=%d e=%d es=%d",
+			"[BARAI_DMG] frame=%d team=%d dm=%d ds=%d rm=%d rs=%d rfs=%d bi=%d bib=%d bd=%d bdmg=%d dg=%d dgm=%d mfo=%d dgp=%d e=%d es=%d ffdg=%d ffdgm=%d ffdgk=%d",
 			frame, teamID, t.dm, t.ds, t.rm, t.rs, t.rfs, t.bi, t.bib, t.bd, t.bdmg, t.dg, t.dgm, t.mfo, t.dgp,
-			math.floor(eCur or 0), math.floor(eStore or 0)))
+			math.floor(eCur or 0), math.floor(eStore or 0),
+			t.ffdg, math.floor(t.ffdgm), t.ffdgk))
 	end
 	for teamID in pairs(aiTeam) do
 		local out = {}

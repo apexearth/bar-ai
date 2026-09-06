@@ -8,6 +8,8 @@
 #include "unit/action/DGunAction.h"
 #include "unit/enemy/EnemyUnit.h"
 #include "unit/CircuitUnit.h"
+#include "unit/CircuitWDef.h"
+#include "unit/ally/AllyUnit.h"
 #include "module/EconomyManager.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
@@ -17,6 +19,9 @@
 
 #include "Drawer.h"
 #include "Log.h"
+
+#include <cmath>
+#include <vector>
 
 namespace circuit {
 
@@ -73,14 +78,70 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	// and walked to. Opt-in per task (mayClose).
 	const float closeMult = mayClose
 			? std::max(1.f, circuit->GetTunable("apex_dgun_close_mult", 2.f)) : 1.f;
-	auto& enemies = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range * closeMult);
+	// A COPY, NOT THE REFERENCE. GetEnemyUnitIdsIn and GetFriendlyUnitIdsIn
+	// both return the callback's single `unitIds` member (SpringCallback.cpp),
+	// so the friendly sweep below would resize the vector this loop is walking.
+	const std::vector<int> enemies = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range * closeMult);
 	if (enemies.empty()) {
 		return;
 	}
-	int nHid = 0, nWeak = 0, nCat = 0, nRay = 0, nFar = 0;
+	int nHid = 0, nWeak = 0, nCat = 0, nRay = 0, nFar = 0, nFF = 0;
 
 	CMap* map = circuit->GetMap();
 	CCircuitDef* cdef = unit->GetCircuitDef();
+
+	// THE BEAM IS A CORRIDOR, NOT A LINE. The D-gun is noexplode: it does not
+	// stop at the target, it runs to the WEAPON's own range damaging a disc of
+	// GetAoe() the whole way, and avoidfriendly is false so the engine will not
+	// spare us. The old check traced a zero-width ray to the target, which saw
+	// neither the width nor most of the travel.
+	CWeaponDef* dgDef = cdef->GetDGunDef();
+	const float wRange = (dgDef != nullptr) ? dgDef->GetRange() : range;
+	const float wAoe = (dgDef != nullptr) ? dgDef->GetAoe() : 0.f;
+	const bool ffOn = (circuit->GetTunable("apex_dgun_ff", 1.f) > 0.f)
+			&& (dgDef != nullptr) && (wAoe > 0.f) && (wRange > 1.f);
+	// One sweep per update, positions cached: the friendly set does not vary
+	// with which enemy is being scored, and a callback per candidate is both
+	// the buffer hazard above and needless cost.
+	std::vector<float> ffX, ffZ;
+	if (ffOn) {
+		const float qR = range * closeMult + wRange + wAoe;
+		const std::vector<int> mine = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, qR);
+		ffX.reserve(mine.size());
+		ffZ.reserve(mine.size());
+		for (int fId : mine) {
+			if (fId == unit->GetId()) {
+				continue;
+			}
+			CAllyUnit* f = circuit->GetFriendlyUnit(fId);
+			if (f == nullptr) {
+				continue;
+			}
+			const AIFloat3& fp = f->GetPos(frame);
+			ffX.push_back(fp.x);
+			ffZ.push_back(fp.z);
+		}
+	}
+	// True when firing from `fx,fz` along the unit 2D heading `dx,dz` would put
+	// one of ours inside the beam's disc anywhere along its travel.
+	auto beamHitsOwn = [&](float fx, float fz, float dx, float dz, float len) {
+		const float aoe2 = wAoe * wAoe;
+		for (size_t i = 0; i < ffX.size(); ++i) {
+			const float rx = ffX[i] - fx;
+			const float rz = ffZ[i] - fz;
+			const float t = rx * dx + rz * dz;
+			if ((t < 0.f) || (t > len)) {
+				continue;   // beside the muzzle or past the end of travel
+			}
+			const float px = rx - dx * t;
+			const float pz = rz - dz * t;
+			if (px * px + pz * pz <= aoe2) {
+				return true;
+			}
+		}
+		return false;
+	};
+
 	const int canTargetCat = cdef->GetTargetCategoryDGun();
 	const bool isRoleComm = cdef->IsRoleComm();
 	const bool IsInWater = cdef->IsInWater(map->GetElevationAt(pos.x, pos.z), pos.y);
@@ -136,8 +197,12 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			++nFar;
 			continue;
 		}
-		// The ray is only meaningful from where the shot would be taken; a
-		// walk-in changes the geometry, so it is checked in range only.
+		// The terrain ray still applies, and only in range: a shot into a
+		// hillside is wasted whatever else is true. The old second trace --
+		// for what stands BEHIND the target -- is gone: it read an
+		// uninitialised out-param as a unit id on any clean ray (the C bridge
+		// only writes it on a hit in LOS), and it looked along a line the
+		// beam is far wider than. The corridor test below replaces it.
 		if (isLowTraj && inRange) {
 			AIFloat3 dir = enemy->GetPos() - pos;
 			float rayRange = dir.LengthNormalize();
@@ -149,14 +214,22 @@ void CDGunAction::Update(CCircuitAI* circuit)
 				++nRay;
 				continue;
 			}
-			// The shot does not stop at the target: it runs to full range.
-			// Nothing of ours may stand in the rest of the ray.
-			const float rest = range - rayRange;
-			if (rest > 1.f) {
-				const AIFloat3 past = enemy->GetPos() + dir * 48.f;
-				ICoreUnit::Id behind = circuit->GetDrawer()->TraceRay(past, dir, rest, unit->GetUnit(), 0);
-				if ((behind != -1) && (behind != enemy->GetId()) && (circuit->GetFriendlyUnit(behind) != nullptr)) {
-					++nRay;
+		}
+		// OURS IN THE BEAM -- checked in range AND on the walk-in, which had no
+		// check of any kind. The walk is scored from where the shot would
+		// actually be taken: the point on the approach at which the target
+		// first enters weapon range.
+		if (ffOn) {
+			const float ex = ePos.x - pos.x;
+			const float ez = ePos.z - pos.z;
+			const float d2 = ex * ex + ez * ez;
+			if (d2 > 1.f) {
+				const float d = std::sqrt(d2);
+				const float dx = ex / d;
+				const float dz = ez / d;
+				const float back = (d > wRange) ? (d - wRange) : 0.f;
+				if (beamHitsOwn(pos.x + dx * back, pos.z + dz * back, dx, dz, wRange)) {
+					++nFF;
 					continue;
 				}
 			}
@@ -183,9 +256,10 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	}
 	if (trace) {
 		logFrame = frame;
-		circuit->LOG("apex: dgun %s e=%.0f cost=%.0f range=%.0f enemies=%d hid=%d weak=%d cat=%d far=%d ray=%d fire=%d",
-				unit->GetCircuitDef()->GetDef()->GetName(), eCur, unit->GetDGunCostE(), range, (int)enemies.size(),
-				nHid, nWeak, nCat, nFar, nRay, (bestTarget != nullptr) ? 1 : 0);
+		circuit->LOG("apex: dgun %s e=%.0f cost=%.0f range=%.0f wrange=%.0f aoe=%.0f enemies=%d hid=%d weak=%d cat=%d far=%d ray=%d ff=%d own=%d fire=%d",
+				unit->GetCircuitDef()->GetDef()->GetName(), eCur, unit->GetDGunCostE(), range, wRange, wAoe,
+				(int)enemies.size(), nHid, nWeak, nCat, nFar, nRay, nFF, (int)ffX.size(),
+				(bestTarget != nullptr) ? 1 : 0);
 	}
 	if (bestTarget != nullptr) {
 		unit->ManualFire(bestTarget, timeout);

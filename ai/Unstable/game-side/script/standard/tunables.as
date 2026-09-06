@@ -1081,6 +1081,15 @@ const float TUNE_E_REALIZE = 1.f;
 //   that the generator ladder never pauses on waste). See docs/27.
 const float TUNE_E_WASTE_WORTH = 0.25f;
 
+// M_REALIZE [toggle 0/1]: the metal twin of E_REALIZE -- extraction priced by
+//   the share of its metal we could actually spend. DEFAULT OFF: inert where it
+//   was measured and its premise is unproven. See docs/27.
+const float TUNE_M_REALIZE = 0.f;
+
+// The unspendable band keeps this share, because demand grows and the spot is
+//   still ours when it does -- the same reason E_WASTE_WORTH is not zero.
+const float TUNE_M_WASTE_WORTH = 0.25f;
+
 // Spatial threat prior: 0 at our start box, 1 at theirs. See docs/27.
 const float TUNE_THREAT_GRADIENT = 1.f;
 

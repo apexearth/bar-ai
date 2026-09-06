@@ -654,6 +654,56 @@ never makes it unbuildable (apexearth 2026-08-26; his standing ruling is that
 the generator ladder never pauses on waste). Default chosen, not derived --
 measure it.
 
+### `TUNE_M_REALIZE` = 0.f  (measured, left off)
+
+**OFF, and here is the A/B.** 18 games per arm, Comet/Callisto/Glacier, 25 min
+vs BARb hard, `apex_m_realize` 0 against 1. The term is INERT where it was
+measured: of 389 `apex: mrealize` samples in the ON arm, **377 returned
+share=1.000** and 12 hit the floor. In a handicap-0 game metal demand sits above
+income, so there is nothing to discount. The arms' composition differed
+(metal 29,734 -> 25,266, mexes 242 -> 220, 3 of 12 games wiped out) and that is
+**run-to-run variance on an unchanged decision**, which is the more useful
+result: swings of that size are noise in an 18-game battery.
+
+The premise is also unproven. The overflow it answers was measured in a `--watch`
+game at +50% resources, and apexearth's objection stands: end-state totals are
+downstream of losing (dead builders cannot spend, so metal piles up and spills).
+The waste may be a symptom rather than a cause. Turning it on needs a paired A/B
+at +50%, the regime that actually reproduces the condition.
+
+
+
+M_REALIZE [toggle 0/1]: the metal twin of `E_REALIZE`. Extraction is priced by
+the share of its metal we could actually spend — measured demand (peak-held
+metal pull, grown over the build's own delivery time) at `E_HEADROOM`, plus the
+room left in the bank over `E_LOOKAHEAD`. 0 restores full price for every
+metal/s whether or not anything can spend it, and is the control arm.
+
+WHY IT EXISTS. Energy has had to prove something would absorb it since
+`E_REALIZE`; extraction never did. Measured 2026-09-06, Comet Catcher 1v1 vs
+BARb hard, 15.3 min: **23.5% of all metal produced thrown away**, metal bank
+pinned at 2100/2100, spend only 61% of income, while energy pull equalled energy
+income and 17.6% of samples were energy-stalled. BARb was the mirror image —
+2.25x our energy, 20.7% of it wasted, 3.5% metal wasted, spending 118% of metal
+income. The market was buying the resource we were binning in preference to the
+one throttling every build: mex won 46 elections and beat energy in 16 of the 28
+that energy lost.
+
+It does NOT replace `MEXUP_BOOST`: that preference still decides extraction
+against energy whenever the metal can be spent at all. The horizon knobs are
+deliberately shared with the energy side — a lookahead and a headroom are
+properties of the question, not of the resource.
+
+Serves apexearth's 2026-09-06 ruling: *"The constant goal we should always have
+is to scale our economy. Grow grow grow."*
+
+### `TUNE_M_WASTE_WORTH` = 0.25f
+
+What a spot is still worth once its metal would only overflow. Never 0, for the
+reason `E_WASTE_WORTH` is not 0: demand grows, and a spot claimed now is still
+ours when it does — the band loses the wait, not the metal. Set to the energy
+side's value rather than derived; measure it.
+
 ### `TUNE_THREAT_GRADIENT` = 1.f
 
 Spatial threat prior: 0 at our start box, 1 at theirs. 0 disables it and threat

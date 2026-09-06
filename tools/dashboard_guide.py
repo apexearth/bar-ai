@@ -215,6 +215,14 @@ GROUPS = [
                   "to hold; 0 values every spot as if it were safe forever"),
                  ("TUNE_STAKE_HORIZON_S", "counts more of a spot's future "
                   "income as worth defending now"),
+                 ("TUNE_M_REALIZE", "[toggle] prices a mex by the share of "
+                  "its metal we could actually SPEND. Off, a spot keeps full "
+                  "value while the bank sits full and spills — which is how "
+                  "we came to bin 23.5% of our metal while energy-starved"),
+                 ("TUNE_M_WASTE_WORTH", "what a spot is still worth once its "
+                  "metal would only overflow. Never 0: demand grows and the "
+                  "spot is still ours when it does. Raise it and extraction "
+                  "keeps outbidding energy through an overflow"),
              ]},
             {"title": "Reclaim",
              "what": "Eating our own obsolete buildings and the map's wrecks.",

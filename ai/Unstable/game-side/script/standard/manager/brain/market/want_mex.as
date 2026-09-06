@@ -547,6 +547,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// at 200 m/s is noise. The multiplier decays with wealth, so
 		// expansion prioritizes itself exactly while we are behind.
 		float gain = spotIncome * Catalog::gExtractsM[d];
+		// The metal/s actually added, before any premium -- what the realize
+		// share has to be asked about (see MRealizeShare in price.as).
+		const float rawAddM = gain;
 		// Share of TOTAL economic power, the same denominator the energy
 		// premium uses -- see want_energy.as.
 		gain *= 1.f + mxGrowK * gain / ((mxPower > gain) ? mxPower : gain);
@@ -558,6 +561,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// is his distance-and-army-share model (docs/24 era directives).
 		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		gain *= surv * (1.f - risk);
+		// Metal we cannot spend scales nothing, so it is not priced as though
+		// it did -- the twin of the share energy has always had to prove.
+		gain *= MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
 		// A spot with a recent loss near it is a rebuild: say what it is
 		// priced at and why (sampled 10 s).

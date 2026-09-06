@@ -118,6 +118,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	// and every extractor; both sat in the inner loop.
 	const float incMulU = IncomeMult();
 	const float upBoost = ai.GetTunable("apex_mexup_boost", TUNE_MEXUP_BOOST);
+	// Hoisted for the same reason as everything else here: it does not vary
+	// with the spot or the extractor being priced.
+	const float upBP = EffBP(Catalog::gBuildPower[uid]);
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		if (gLExtract[li] <= 0.f)
 			continue;   // not finished (or already being replaced)
@@ -142,6 +145,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				continue;
 			float delta = gLIncome[li] * incMulU
 					* (Catalog::gExtractsM[d] - gLExtract[li]);
+			// See want_mex.as: the raw metal/s, before any premium.
+			const float rawUpM = delta;
 			{
 				// Share of TOTAL economic power, the same denominator the
 				// energy premium uses -- see want_energy.as.
@@ -171,6 +176,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			// derived law: the honest alternative is that energy is overpriced
 			// against extraction, which nobody has established.
 			delta *= upBoost;
+			// An upgrade is extraction too: same share, or the discount on
+			// plain mexes would simply be arbitraged into mohos.
+			delta *= MRealizeShare(rawUpM, walkSecU + Catalog::BuildSecondsAt(d, upBP));
 			Want c;
 			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c);
 			if (c.value > w.value) {

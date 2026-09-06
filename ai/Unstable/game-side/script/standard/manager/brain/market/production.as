@@ -1087,8 +1087,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// the minimums, so zero here starves nothing essential.
 		if (!Catalog::gRezzer[d])
 			gain *= feedRoom;
-		if (gain <= 0.5f)
+		if (gain <= 0.5f) {
+			// A cut candidate leaves no trace otherwise -- it is absent from
+			// prodrank, so "we stopped making pawns" reads as a lost election
+			// rather than a unit that was never offered.
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName()
+					+ ":cut(g" + formatFloat(gain, "", 0, 3) + ")";
 			continue;
+		}
 		const float v = gain / Catalog::gCostM[d];
 		candDef.insertLast(d);
 		candV.insertLast(v);
