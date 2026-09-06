@@ -45,6 +45,23 @@ float CoverPointM(const AIFloat3& in at, float trade,
 	return PfCoverPoint(at, extraAt, extraReach, extraM);
 }
 
+// The standoff ring's bearings are the same COVER_RAYS for the whole game, and
+// every site of every fill re-derived their sines and cosines.
+array<float> gCrCos;
+array<float> gCrSin;
+void CoverRaysPrep()
+{
+	if (gCrCos.length() > 0)
+		return;
+	gCrCos.resize(uint(COVER_RAYS));
+	gCrSin.resize(uint(COVER_RAYS));
+	for (int b = 0; b < COVER_RAYS; ++b) {
+		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
+		gCrCos[uint(b)] = cos(ang);
+		gCrSin[uint(b)] = sin(ang);
+	}
+}
+
 float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 		float extraReach, float extraM)
 {
@@ -60,10 +77,11 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 			? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
 		return CoverPointM(pos, trade, extraAt, extraReach, extraM) + unitCover;
+	CoverRaysPrep();
 	float worst = -1.f;
 	for (int b = 0; b < COVER_RAYS; ++b) {
-		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
-		const AIFloat3 fp = pos + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff;
+		const AIFloat3 fp = pos
+				+ AIFloat3(gCrCos[uint(b)], 0.f, gCrSin[uint(b)]) * standoff;
 		if (!OnMap(fp))
 			continue;   // they cannot stand off the map to shoot from there
 		const float m = CoverPointM(fp, trade, extraAt, extraReach, extraM);
@@ -88,9 +106,10 @@ float CoverAddsAt(const AIFloat3& in pos, float reach, float adds)
 			? Military::FoeReach() : 0.f;
 	if (standoff <= 1.f)
 		return adds;   // the point path: the turret stands on the point it covers
+	CoverRaysPrep();
 	for (int b = 0; b < COVER_RAYS; ++b) {
-		const float ang = 6.2831853f * float(b) / float(COVER_RAYS);
-		const AIFloat3 fp = pos + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff;
+		const AIFloat3 fp = pos
+				+ AIFloat3(gCrCos[uint(b)], 0.f, gCrSin[uint(b)]) * standoff;
 		if (OnMap(fp))
 			return (standoff <= reach) ? adds : 0.f;
 	}

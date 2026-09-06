@@ -78,7 +78,14 @@ float gFarmDepth = 0.f;
 // Every metal spot on the map, cached on first use -- planned placements
 // must never stand on one (watched: buildings over mexes).
 array<AIFloat3> gAllSpots;
+// The MAP's raw income for each spot. CEconomyManager::GetMexSpotIncome reads a
+// fixed entry of the metal manager's spot table, so it is the same number all
+// game -- and PickSpot asked the engine for it once per map spot per election.
+array<float> gAllSpotInc;
 bool gSpotsCached = false;
+// The spot list is fixed for the game, and FarmSlot asks this question once per
+// candidate slot -- so the walk was (slots) x (every mex on the map).
+Grid::Cells gSpotGrid;
 void CacheSpots()
 {
 	if (gSpotsCached)
@@ -89,13 +96,19 @@ void CacheSpots()
 		if (sp.x < 0.f)
 			break;
 		gAllSpots.insertLast(sp);
+		gAllSpotInc.insertLast(aiEconomyMgr.GetMexSpotIncome(i));
 	}
+	gSpotGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint i = 0; i < gAllSpots.length(); ++i)
+		gSpotGrid.Add(gAllSpots[i].x, gAllSpots[i].z);
 }
 bool NearSpotR(const AIFloat3& in p, float r)
 {
 	CacheSpots();
-	for (uint i = 0; i < gAllSpots.length(); ++i) {
-		if (p.distance2D(gAllSpots[i]) < r)
+	gSpotGrid.Query(p.x, p.z, r);
+	for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+		if (p.distance2D(gAllSpots[uint(gSpotGrid.hit[q])]) < r)
 			return true;
 	}
 	return false;
@@ -270,16 +283,38 @@ int LayoutKinCount(int defId)
 	return n;
 }
 
-// Ground held by a structure of a DIFFERENT layout class, nearest first.
-// Negative when nothing foreign stands anywhere near. Lattice::ForeignGap
-// answers the same question per def; this one knows the reactor class.
-float LayoutForeignGap(int defId, const AIFloat3& in p)
+// The structure register, indexed. Rebuilt only when the register itself
+// changes, which is a placement or a death -- not once per asker.
+Grid::Cells gSeenGrid;
+int gSeenGridStamp = -1;
+void SeenGridSync()
 {
-	if (!BigEcoDef(defId))
-		return Lattice::ForeignGap(defId, p);
+	if (gSeenGridStamp == Lattice::gSeenStamp)
+		return;
+	gSeenGridStamp = Lattice::gSeenStamp;
+	gSeenGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint i = 0; i < Lattice::gSeen.length(); ++i)
+		gSeenGrid.Add(Lattice::gSeen[i].x, Lattice::gSeen[i].z);
+}
+
+// Ground held by a structure of a DIFFERENT layout class, nearest first.
+// Negative when nothing foreign stands within `within`; the layout only ever
+// compares this against the touch and aisle radii, so a structure further out
+// than that is indistinguishable from none and the index can skip it -- the
+// walk was (candidate slots) x (every structure we own), and the second term
+// grows all game.
+float LayoutForeignGap(int defId, const AIFloat3& in p, float within)
+{
+	SeenGridSync();
+	gSeenGrid.Query(p.x, p.z, within);
+	const bool big = BigEcoDef(defId);
 	float best = -1.f;
-	for (uint i = 0; i < Lattice::gSeen.length(); ++i) {
-		if (LayoutKin(defId, Lattice::gSeenDef[i]))
+	for (uint q = 0; q < gSeenGrid.hit.length(); ++q) {
+		const uint i = uint(gSeenGrid.hit[q]);
+		// Rule 4 is per-def; the reactor tiers are one building for layout.
+		if (big ? LayoutKin(defId, Lattice::gSeenDef[i])
+				: (Lattice::gSeenDef[i] == defId))
 			continue;
 		const float d = Lattice::gSeen[i].distance2D(p);
 		if ((best < 0.f) || (d < best))
@@ -329,26 +364,28 @@ void ClusterSizes(const array<AIFloat3>& in kin, float link, array<int>& out siz
 	const uint n = kin.length();
 	array<int> grp(n, -1);
 	array<int> count;
+	array<uint> pend;
 	int groups = 0;
 	for (uint i = 0; i < n; ++i) {
 		if (grp[i] >= 0)
 			continue;
-		// Flood from i: anything touching the growing set joins it.
+		// Flood from i: anything touching the growing set joins it. Each member
+		// is expanded ONCE, off a pending list -- the re-sweep-until-nothing-
+		// grew form this replaces rescanned the whole set per member, O(kin^3),
+		// and kin is every reactor we have committed to.
 		grp[i] = groups;
 		count.insertLast(1);
-		bool grew = true;
-		while (grew) {
-			grew = false;
-			for (uint a = 0; a < n; ++a) {
-				if (grp[a] != groups)
+		pend.resize(0);
+		pend.insertLast(i);
+		while (pend.length() > 0) {
+			const uint a = pend[pend.length() - 1];
+			pend.removeLast();
+			for (uint b = 0; b < n; ++b) {
+				if ((grp[b] >= 0) || (kin[a].distance2D(kin[b]) > link))
 					continue;
-				for (uint b = 0; b < n; ++b) {
-					if ((grp[b] >= 0) || (kin[a].distance2D(kin[b]) > link))
-						continue;
-					grp[b] = groups;
-					++count[groups];
-					grew = true;
-				}
+				grp[b] = groups;
+				++count[groups];
+				pend.insertLast(b);
 			}
 		}
 		++groups;
@@ -389,6 +426,11 @@ AIFloat3 LatheHeart()
 	}
 	return best;
 }
+
+// Rebuilt per FarmSlot call from that call's own kin and claim sets; kept at
+// file scope so Begin reuses the buckets instead of allocating a table a call.
+Grid::Cells gFarmKinGrid;
+Grid::Cells gFarmClaimGrid;
 
 AIFloat3 FarmSlot(int defId)
 {
@@ -447,6 +489,22 @@ AIFloat3 FarmSlot(int defId)
 		claimed.insertLast(qp);
 		claimedDef.insertLast((qt.buildDef is null) ? 0 : int(qt.buildDef.id));
 	}
+
+	// The slot scan below asks "what is beside here" once per candidate, and
+	// unindexed each ask walked every kin, every live request and every
+	// structure we own -- (slots) x (three sets that all grow all game). Each
+	// query radius is the widest distance the rules below can still tell apart,
+	// so the answers are the same ones the walks gave.
+	const float kinR = (link > sameAisle) ? link : sameAisle;
+	const float foreignR = (touch > aisle) ? touch : aisle;
+	gFarmKinGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint gk = 0; gk < kin.length(); ++gk)
+		gFarmKinGrid.Add(kin[gk].x, kin[gk].z);
+	gFarmClaimGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint gq = 0; gq < claimed.length(); ++gq)
+		gFarmClaimGrid.Add(claimed[gq].x, claimed[gq].z);
 
 	// A REACTOR IS SITED FROM THE DENSEST TURRET, not from the farm centre
 	// (apexearth 2026-09-05: build an AFUS "nearby existing construction
@@ -535,7 +593,9 @@ AIFloat3 FarmSlot(int defId)
 			int near = 0;
 			bool full = false;
 			float kinGap = -1.f;
-			for (uint k = 0; k < kin.length(); ++k) {
+			gFarmKinGrid.Query(p.x, p.z, kinR);
+			for (uint kq = 0; kq < gFarmKinGrid.hit.length(); ++kq) {
+				const uint k = uint(gFarmKinGrid.hit[kq]);
 				const float d = kin[k].distance2D(p);
 				if ((kinGap < 0.f) || (d < kinGap))
 					kinGap = d;
@@ -550,9 +610,11 @@ AIFloat3 FarmSlot(int defId)
 			// Rule 4: a slot touching a different def is not this def's ground,
 			// however well it suits the cluster -- except that the two reactor
 			// tiers are not different buildings here (see LayoutKin).
-			const float foreignGap = LayoutForeignGap(defId, p);
+			const float foreignGap = LayoutForeignGap(defId, p, foreignR);
 			bool blocked = (foreignGap >= 0.f) && (foreignGap < touch);
-			for (uint qj = 0; (qj < claimed.length()) && !blocked; ++qj) {
+			gFarmClaimGrid.Query(p.x, p.z, touch);
+			for (uint qq = 0; (qq < gFarmClaimGrid.hit.length()) && !blocked; ++qq) {
+				const uint qj = uint(gFarmClaimGrid.hit[qq]);
 				const float d = claimed[qj].distance2D(p);
 				if (d < pitch)
 					blocked = true;   // already asked for, whoever asked

@@ -91,8 +91,17 @@ float ArmyFront(AIFloat3 &out pos)
 	pos = gArmyFrontPos;
 	return gArmyFrontFf;
 }
-bool BehindLine(const AIFloat3 &in site)
+bool BehindLine(const AIFloat3 &in site, bool reachClear = false)
 {
+	// NOTHING CAN SHOOT IT, SO THERE IS NOTHING TO BE IN FRONT OF. Every branch
+	// below then answers true (see the note under the forward test), so with the
+	// reach already read as clear this is a decided answer, not a skipped test --
+	// and it saves the army percentile scan, a ForwardFraction and a second
+	// whole-enemy-set sweep on the hot path. RezSiteOk is the only caller and it
+	// always arrives here having just read the reach; ffVetoAvg logged 0.00 in
+	// all 459 rez-time lines of the 60-minute 8v8, which is that in the log.
+	if (reachClear)
+		return true;
 	AIFloat3 fp;
 	const float front = ArmyFront(fp);
 	if (front < 0.f)
@@ -119,7 +128,7 @@ bool RezSiteOk(const AIFloat3 &in site)
 {
 	if (InEnemyReach(site))
 		return false;
-	return BehindLine(site);
+	return BehindLine(site, true);
 }
 
 int RezScanPeriod()
@@ -302,7 +311,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	// every rule below is gated on being behind, exposed, or short of metal.
 	// Bounded to the station radius rather than EnqueueWreckReclaim's own
 	// 2200-elmo reach, which would walk the medic off the army it serves.
-	const AIFloat3 spoil = ai.GetBestWreckPos(here, reach, WRECK_MIN);
+	const AIFloat3 spoil = BestWreckAt(here, reach, WRECK_MIN);
 	if ((spoil.x >= 0.f) && (spoil.distance2D(lane) <= reach)
 		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(spoil))
 	{
@@ -331,7 +340,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		return null;
 	const int slot = ConSlot(unit);
 	if (ai.frame >= gConNextSweep[slot]
-			&& (Military::LosingGround() || (ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
+			&& (Military::LosingGround() || (BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
 		gConNextSweep[slot] = ai.frame + RezScanPeriod();
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
@@ -352,7 +361,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 				++gRezSweepIdx;
 				if (ThreatFor(unit, stretch) > CON_THREAT_VETO)
 					continue;
-				AIFloat3 spoil = ai.GetBestWreckPos(stretch, WRECK_SEARCH, WRECK_MIN);
+				AIFloat3 spoil = BestWreckAt(stretch, WRECK_SEARCH, WRECK_MIN);
 				if (spoil.x < 0.f)
 					spoil = stretch;
 				if (!RezSiteOk(spoil)) {
@@ -374,7 +383,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		}
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
-			const AIFloat3 spoil = ai.GetBestWreckPos(front, WRECK_SEARCH, WRECK_MIN);
+			const AIFloat3 spoil = BestWreckAt(front, WRECK_SEARCH, WRECK_MIN);
 			if ((spoil.x >= 0.f) && RezSiteOk(spoil)) {
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -548,7 +557,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// metal bar left every T1 wreck to the reclaim beam.
 		const bool rezPays = (Market::ArmyTarget() > Market::ArmyValue())
 				&& !aiEconomyMgr.isEnergyStalling;
-		const AIFloat3 rich = ai.GetBestRezPos(unit.GetPos(ai.frame), WRECK_SEARCH,
+		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH,
 				rezPays ? WRECK_MIN : ai.GetTunable("apex_rez_rich_m", TUNE_REZ_RICH_M));
 		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezSiteOk(rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
@@ -572,7 +581,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// Centred on a corpse we can actually see, not on the bot's own feet.
 		// A resurrect pays out only on completion, so an area order over empty
 		// ground is 60 seconds of standing still with nothing to show.
-		const AIFloat3 body = ai.GetBestWreckPos(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
+		const AIFloat3 body = BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
 		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
 			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezSiteOk(body))
 		{

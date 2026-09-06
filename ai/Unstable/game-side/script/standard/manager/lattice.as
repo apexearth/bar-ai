@@ -119,25 +119,16 @@ void Init()
 array<AIFloat3> gSeen;
 array<int> gSeenDef;
 array<Id> gSeenId;
+// Bumped at every insert and every removal, so a reader that indexes this
+// register knows when its index is stale. A length compare cannot: an add and
+// a death in the same frame leave the length where it was.
+int gSeenStamp = 0;
 int gFlush = 0;
 int gApart = 0;
 int gIsle = 0;
 
-// Ground between p and the nearest structure that is NOT this def. Rule 4:
-// "prefer not to build units of differing types right next to each other".
-// Negative when nothing foreign stands anywhere near.
-float ForeignGap(int defId, const AIFloat3& in p)
-{
-	float best = -1.f;
-	for (uint i = 0; i < gSeen.length(); ++i) {
-		if (gSeenDef[i] == defId)
-			continue;
-		const float d = gSeen[i].distance2D(p);
-		if ((best < 0.f) || (d < best))
-			best = d;
-	}
-	return best;
-}
+// Rule 4 -- "prefer not to build units of differing types right next to each
+// other" -- is answered by Market::LayoutForeignGap off this register's index.
 
 void NoteDead(Id id)
 {
@@ -146,6 +137,7 @@ void NoteDead(Id id)
 			gSeen.removeAt(i);
 			gSeenDef.removeAt(i);
 			gSeenId.removeAt(i);
+			++gSeenStamp;
 			return;
 		}
 	}
@@ -161,6 +153,7 @@ void NotePlaced(int defId, const AIFloat3& in p, Id id)
 	gSeen.insertLast(p);
 	gSeenDef.insertLast(defId);
 	gSeenId.insertLast(id);
+	++gSeenStamp;
 	// ONLY WHAT THE FARM PLACES IS SCORED. Towers and radar are sited by
 	// coverage and are meant to be apart; scoring them reports the map's own
 	// spacing as a layout failure. The tiling report is about the economy block.

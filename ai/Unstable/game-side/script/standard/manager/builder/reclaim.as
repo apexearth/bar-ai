@@ -30,6 +30,74 @@ const float WRECK_RICH    = 400.f;   // total reclaimable within WRECK_RICH_R
 const float WRECK_RICH_R  = 1400.f;
 const float WRECK_RADIUS  = 320.f;   // sweep the cluster, not one corpse
 const int   WRECK_TIMEOUT = 1 * MINUTE;
+
+// THE SAME FEATURE SWEEP, ASKED THREE AND FOUR TIMES IN ONE ELECTION -- the
+// salvage gate, the corpse-eat rule, the rez-or-eat rule and its own
+// EnqueueWreckReclaim tail all ask it of the bot's own tile with identical
+// arguments, and each one is a GetFeaturesIn plus a GetDef round trip per
+// feature over ground whose feature count grows all game. Answered once per
+// (frame, position, radius, floor); nothing in script consumes a feature, so
+// within a frame the sweep cannot give a different answer.
+const uint FEAT_SLOTS = 10;
+array<float> gFsX;
+array<float> gFsZ;
+array<float> gFsR;
+array<float> gFsM;
+array<int>   gFsKind;   // 0 wreck, 1 resurrectable
+array<AIFloat3> gFsV;
+int  gFsFrame = -1;
+uint gFsNext = 0;
+
+AIFloat3 FeatQuery(int kind, const AIFloat3 &in from, float radius, float floorM)
+{
+	if (gFsFrame != ai.frame) {
+		gFsFrame = ai.frame;
+		gFsX.resize(0);
+		gFsZ.resize(0);
+		gFsR.resize(0);
+		gFsM.resize(0);
+		gFsKind.resize(0);
+		gFsV.resize(0);
+		gFsNext = 0;
+	}
+	for (uint i = 0; i < gFsX.length(); ++i) {
+		if ((gFsKind[i] == kind) && (gFsX[i] == from.x) && (gFsZ[i] == from.z)
+			&& (gFsR[i] == radius) && (gFsM[i] == floorM))
+		{
+			return gFsV[i];
+		}
+	}
+	const AIFloat3 v = (kind == 0)
+			? ai.GetBestWreckPos(from, radius, floorM)
+			: ai.GetBestRezPos(from, radius, floorM);
+	if (gFsX.length() < FEAT_SLOTS) {
+		gFsX.insertLast(from.x);
+		gFsZ.insertLast(from.z);
+		gFsR.insertLast(radius);
+		gFsM.insertLast(floorM);
+		gFsKind.insertLast(kind);
+		gFsV.insertLast(v);
+	} else {
+		gFsX[gFsNext] = from.x;
+		gFsZ[gFsNext] = from.z;
+		gFsR[gFsNext] = radius;
+		gFsM[gFsNext] = floorM;
+		gFsKind[gFsNext] = kind;
+		gFsV[gFsNext] = v;
+		gFsNext = (gFsNext + 1) % FEAT_SLOTS;
+	}
+	return v;
+}
+
+AIFloat3 BestWreckAt(const AIFloat3 &in from, float radius, float floorM)
+{
+	return FeatQuery(0, from, radius, floorM);
+}
+
+AIFloat3 BestRezAt(const AIFloat3 &in from, float radius, float floorM)
+{
+	return FeatQuery(1, from, radius, floorM);
+}
 int gNextMetalEmptyDiag = 0;  // temporary diagnostic, see ScavengeWrecks
 // Spacing on the safe-mex grab. Short: an unclaimed spot is income we are not
 // earning, and the check itself is one lookup.
@@ -161,7 +229,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 		float minMetal = WRECK_MIN)
 {
 	const AIFloat3 pos = unit.GetPos(ai.frame);
-	const AIFloat3 wreck = ai.GetBestWreckPos(pos, WRECK_SEARCH, minMetal);
+	const AIFloat3 wreck = BestWreckAt(pos, WRECK_SEARCH, minMetal);
 	if (wreck.x < 0.f)
 		return null;   // nothing worth the trip
 	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:

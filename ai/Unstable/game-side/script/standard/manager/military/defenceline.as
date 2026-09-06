@@ -136,19 +136,32 @@ float OwnFrontMetal()
 	return gFenceFrontM;
 }
 
+// post.pubdef is 2.5% of all script time in an hour-long sixteen-AI game and it
+// runs once a second with a ~250us floor from minute three -- a floor that does
+// not grow with the base, so it is one of these calls and not the walk. Split
+// so the next run says which; the sections cost a timestamp each.
 void PublishDefence()
 {
-	FenceFrontRefresh();
-	ai.PublishTeamValue(TV_FFENCE, float(gFenceFrontN));
-	ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
-	ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
-	ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());
-	Market::NavalPublish();
-	ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
-	ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);
-	ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
-	ai.PublishTeamValue(TV_AIDF, float(ai.frame));
+	{ double _t = Perf::T0(); FenceFrontRefresh(); Perf::Add("pubdef.fence", _t); }
+	{
+		double _t = Perf::T0();
+		ai.PublishTeamValue(TV_FFENCE, float(gFenceFrontN));
+		ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+		ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
+		ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());
+		Perf::Add("pubdef.write", _t);
+	}
+	{ double _t = Perf::T0(); Market::NavalPublish(); Perf::Add("pubdef.naval", _t); }
+	{
+		double _t = Perf::T0();
+		ai.PublishTeamValue(TV_FMETAL, OwnFrontMetal());
+		ai.PublishTeamValue(TV_MSPEND, Brain::gSpentTotal);
+		ai.PublishTeamValue(TV_AA, float(OwnStaticAA()));
+		ai.PublishTeamValue(TV_AIDF, float(ai.frame));
+		Perf::Add("pubdef.write2", _t);
+	}
 
+	const double _tHot = Perf::T0();
 	AIFloat3 hot;
 	float hotW = 0.f;
 	if (ai.GetAttackHotspot(hot, hotW) && OnMap(hot)) {
@@ -158,6 +171,7 @@ void PublishDefence()
 	} else {
 		ai.PublishTeamValue(TV_AIDW, 0.f);
 	}
+	Perf::Add("pubdef.hotspot", _tHot);
 }
 
 

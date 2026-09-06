@@ -6,10 +6,19 @@
 // CThreatMap indexes its arrays straight from the position and range-checks only
 // under assert; the bound is a strict less-than against the terrain extent.
 // -RgtVector, the engine's "no position", fails the first test.
+// The terrain extent does not change after the map loads, and this is the most
+// called function in the script -- every loop over positions ends in it. Two
+// registered engine calls per test is two calls per position tested.
+float gMapW = 0.f;
+float gMapH = 0.f;
+
 bool OnMap(const AIFloat3& in p)
 {
-	return (p.x >= 0.f) && (p.z >= 0.f)
-		&& (p.x < float(AiTerrainWidth())) && (p.z < float(AiTerrainHeight()));
+	if (gMapW <= 0.f) {
+		gMapW = float(AiTerrainWidth());
+		gMapH = float(AiTerrainHeight());
+	}
+	return (p.x >= 0.f) && (p.z >= 0.f) && (p.x < gMapW) && (p.z < gMapH);
 }
 
 // Does apex's own game-side behaviour run at all? Always yes -- apex ran its

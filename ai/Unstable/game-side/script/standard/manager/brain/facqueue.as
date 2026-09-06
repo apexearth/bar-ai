@@ -132,9 +132,11 @@ float LineBuildPower(CCircuitUnit@ fac)
 // the moment it finished and stayed empty until the next election (apexearth,
 // watched: "we are idle until we queue the next unit"). What must never run
 // out is the work standing BEHIND the head.
-float LineSeconds(int line, CCircuitUnit@ fac, bool skipHead)
+// Split so the batch loop can take the line's lathe ONCE: LineBuildPower asks
+// the engine for the plant's position and sweeps the nano grid around it, and
+// the loop below re-took it for all sixteen slots.
+float LineSecondsBp(int line, float bp, bool skipHead)
 {
-	const float bp = LineBuildPower(fac);
 	if (bp <= 0.f)
 		return 1e9f;
 	float sec = 0.f;
@@ -149,6 +151,11 @@ float LineSeconds(int line, CCircuitUnit@ fac, bool skipHead)
 		sec += Catalog::BuildSecondsAt(int(gFQPendDef[i].id), bp);
 	}
 	return sec;
+}
+
+float LineSeconds(int line, CCircuitUnit@ fac, bool skipHead)
+{
+	return LineSecondsBp(line, LineBuildPower(fac), skipHead);
 }
 
 // How deep a line is kept, in seconds of work. Anything under the re-election
@@ -259,11 +266,13 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// A DROUGHT, not a stale read, is what retires an order the engine never
 	// took: nothing visible on the line, nothing finished off it, and nothing
 	// sent to it for a minute. NoteProduced is the honest retirement.
-	if ((PendCount(line, null) > 0) && (fac.CountQueued(null) == 0)
+	int pend = PendCount(line, null);   // one walk of the ledger, not three
+	if ((pend > 0) && (fac.CountQueued(null) == 0)
 		&& (ai.frame - gFQEvt[line] > 60 * SECOND))
 	{
-		gFQLost += PendCount(line, null);
-		PendDrop(line, PendCount(line, null));
+		gFQLost += pend;
+		PendDrop(line, pend);
+		pend = 0;
 	}
 
 	// KEEP THE LINE FED. One order per election idled the plant for the whole
@@ -274,7 +283,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// that already holds the slots before it -- so a floor satisfied by slot 0
 	// does not repeat, and the mix is the market's, not a ratio table's.
 	array<CCircuitDef@> batch;
-	const int outstanding = PendCount(line, null);
+	const int outstanding = pend;
 	const float window = LineWindow();
 	// The bound is a non-termination guard (a def with no build time), not a
 	// cap on production: LineSeconds grows with every slot and ends the loop.
@@ -290,8 +299,15 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// finishing it two or three frames later is invisible to the plant, and the
 	// first slot is always ordered so a line can never starve on the budget.
 	const double _tBatch = ai.ClockUs();
+	// The queue depth is walked ONCE and then carried: every slot appends to the
+	// tail of a FIFO, so the new order's own build seconds are the whole change
+	// -- except for the first entry on an empty line, which becomes the head
+	// skipHead drops.
+	const float lineBp = LineBuildPower(fac);
+	int lineHave = pend;
+	float lineSec = LineSecondsBp(line, lineBp, true);
 	for (int slot = 0; slot < 16; ++slot) {
-		if (LineSeconds(line, fac, true) >= window)
+		if (lineSec >= window)
 			break;
 		if ((slot > 0)
 			&& ((ai.ClockUs() - _tBatch) > double(BATCH_SLICE_US)))
@@ -301,6 +317,9 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			break;
 		batch.insertLast(o);
 		PendAdd(line, o);
+		if (lineHave > 0)
+			lineSec += Catalog::BuildSecondsAt(int(o.id), lineBp);
+		++lineHave;
 	}
 	// AN ELECTION THAT ORDERS NOTHING IS IDLE FACTORY TIME. Logged with the
 	// market's own reason, rate-limited per line, because the gap between

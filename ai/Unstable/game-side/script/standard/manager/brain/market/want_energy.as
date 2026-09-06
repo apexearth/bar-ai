@@ -230,8 +230,19 @@ float ConvCapInFlight()
 // ENERGY WE HAVE ALREADY ORDERED AND WILL SOON MAKE. The mirror of the drain
 // above, and the number that says whether the answer to a stall is big enough
 // yet.
+// A WHOLE-LEDGER SUM HAS NO RADIUS, so the index cannot help it; what it has is
+// gComStamp. Every asker in one election reads the same ledger, so the second
+// walk onward is the first walk's answer -- and the stamp, not the frame alone,
+// is what makes that safe: a task added mid-frame moves it. The rest of what
+// this reads (def catalogue) is fixed for the game.
+float gEMakeVal = 0.f;
+int   gEMakeFrame = -1;
+int   gEMakeStamp = -1;
+
 float EMakeInFlight()
 {
+	if ((gEMakeFrame == ai.frame) && (gEMakeStamp == gComStamp))
+		return gEMakeVal;
 	// Ledger COMING rows (flipped 2026-08-27): an orphaned generator frame
 	// is energy on the way exactly as an ordered one is -- nanos finish it.
 	float e = 0.f;
@@ -239,6 +250,9 @@ float EMakeInFlight()
 		if (gComState[i] != CS_FINISHED)
 			e += Catalog::gMakeE[gComDef[i]];
 	}
+	gEMakeFrame = ai.frame;
+	gEMakeStamp = gComStamp;
+	gEMakeVal = e;
 	return e;
 }
 
@@ -260,10 +274,18 @@ bool EnergyShortOfOrdered()
 	return (need - eInc) > EMakeInFlight();
 }
 
+// Same memo, same reason. Build progress and EffBP are both settled for the
+// frame, so the stamp is the only thing that can move under it.
+float gEDrainVal = 0.f;
+int   gEDrainFrame = -1;
+int   gEDrainStamp = -1;
+
 float EDrainInFlight()
 {
 	if (ai.GetTunable("apex_e_committed", TUNE_E_COMMITTED) <= 0.f)
 		return 0.f;
+	if ((gEDrainFrame == ai.frame) && (gEDrainStamp == gComStamp))
+		return gEDrainVal;
 	// Ledger COMING rows (flipped 2026-08-27): orphaned frames carry their
 	// remaining E bill exactly as live requests do.
 	float e = 0.f;
@@ -282,6 +304,9 @@ float EDrainInFlight()
 		if (sec > 1.f)
 			e += Catalog::gCostE[d] * left / sec;
 	}
+	gEDrainFrame = ai.frame;
+	gEDrainStamp = gComStamp;
+	gEDrainVal = e;
 	return e;
 }
 
@@ -307,6 +332,13 @@ float ProductDrainE(int facId)
 	return Catalog::gBuildPower[facId] * dens;
 }
 
+// ONLY THE LEDGER HALF IS MEMOED. LineWorking reads the factory's pending
+// queue, and the executor enqueues INSIDE a frame, so a frame-keyed answer for
+// the standing lines would be one order out of date.
+float gLineDrainComVal = 0.f;
+int   gLineDrainComFrame = -1;
+int   gLineDrainComStamp = -1;
+
 float LineDrainE()
 {
 	float e = 0.f;
@@ -316,15 +348,21 @@ float LineDrainE()
 			continue;   // working: its draw is already in the pull
 		e += ProductDrainE(int(f.circuitDef.id));
 	}
+	if ((gLineDrainComFrame == ai.frame) && (gLineDrainComStamp == gComStamp))
+		return e + gLineDrainComVal;
+	float c = 0.f;
 	for (uint i = 0; i < ComLen(); ++i) {
 		if (gComState[i] == CS_FINISHED)
 			continue;
 		const int d = gComDef[i];
 		if (Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0))
 			continue;
-		e += ProductDrainE(d);
+		c += ProductDrainE(d);
 	}
-	return e;
+	gLineDrainComFrame = ai.frame;
+	gLineDrainComStamp = gComStamp;
+	gLineDrainComVal = c;
+	return e + c;
 }
 
 // Best metal-per-energy any converter we could actually build reaches.
@@ -545,8 +583,14 @@ float SpareMetalRate()
 // WORK WE HAVE COMMITTED TO AND NOT BUILT, in metal. Live requests priced at
 // what is left of them, so a queue of unstarted frames reads as demand for
 // hands rather than as nothing at all.
+float gBacklogVal = 0.f;
+int   gBacklogFrame = -1;
+int   gBacklogStamp = -1;
+
 float BacklogM()
 {
+	if ((gBacklogFrame == ai.frame) && (gBacklogStamp == gComStamp))
+		return gBacklogVal;
 	// Ledger COMING rows (flipped 2026-08-27): the orphaned-frame mass is
 	// backlog too -- it is exactly the committed work gLive forgot.
 	float m = 0.f;
@@ -558,6 +602,9 @@ float BacklogM()
 			continue;
 		m += Catalog::gCostM[gComDef[i]] * left;
 	}
+	gBacklogFrame = ai.frame;
+	gBacklogStamp = gComStamp;
+	gBacklogVal = m;
 	return m;
 }
 

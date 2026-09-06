@@ -118,17 +118,35 @@ float LightTowerCostM()
 // reach a T3 gun on its own merits, and it does so without a class target or a
 // one-frame-at-a-time gate standing in the way.)
 
+// Memoised on the def, because everything under the availability test is
+// STATIC catalog data plus Brain::LightTowerRange, which looks its tower up by
+// name on every call -- and this is asked of every build option of every
+// builder, every election, plus once per ledger row in SuperCensus. Only a
+// def already AVAILABLE is cached: availability is frame-dependent and a "no"
+// taken before the tree unlocks must never latch (the BestExtract rule).
+array<int> gScoAns;
 int SuperClassOf(int d)
 {
 	if (!Catalog::gAvailable[d])
 		return -1;
+	const bool memo = (d >= 0) && (d <= Catalog::gDefCount);
+	if (memo && (int(gScoAns.length()) <= Catalog::gDefCount)) {
+		gScoAns.resize(Catalog::gDefCount + 1);
+		for (uint k = 0; k < gScoAns.length(); ++k)
+			gScoAns[k] = -2;
+	}
+	if (memo && (gScoAns[d] != -2))
+		return gScoAns[d];
+	int r = -1;
 	if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d])
-		return SC_ANTINUKE;
-	if (IsSuperWeapon(d))
-		return Catalog::gStock[d] ? SC_SILO : SC_LRPC;
-	if (IsGantryDef(d))
-		return SC_GANTRY;
-	return -1;
+		r = SC_ANTINUKE;
+	else if (IsSuperWeapon(d))
+		r = Catalog::gStock[d] ? SC_SILO : SC_LRPC;
+	else if (IsGantryDef(d))
+		r = SC_GANTRY;
+	if (memo)
+		gScoAns[d] = r;
+	return r;
 }
 
 // The whole bill in metal: its own metal plus its energy at the conversion
@@ -355,6 +373,13 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		if (sc < 0)
 			continue;
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
+			continue;
+		// AFFORDABILITY IS TWO ARRAY READS; the tests under it walk the live
+		// register and the whole commitment ledger. Same test as the one
+		// below, taken first for every class whose budget IS the plain one --
+		// the gantry's team purse is computed further down and keeps its
+		// place.
+		if ((sc != SC_GANTRY) && (SuperBill(d) >= budget))
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;

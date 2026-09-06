@@ -409,6 +409,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const float share = TripShare();
 	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	const float incMul = IncomeMult();
 	// One sweep's composition, kept for mexdiag.
 	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0;
 	gSwSpan = sqrt(fex * fex + fez * fez);
@@ -421,7 +422,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		const AIFloat3 sp = gAllSpots[si];
 		if (!OnMap(sp))
 			continue;
-		const float inc = aiEconomyMgr.GetMexSpotIncome(int(si)) * IncomeMult();
+		const float inc = gAllSpotInc[si] * incMul;
 		if (inc <= 0.f)
 			continue;
 		// The rear-specialist leash is geometry and applied here so a refused

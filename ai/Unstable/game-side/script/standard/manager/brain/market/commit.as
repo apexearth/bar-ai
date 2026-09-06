@@ -42,6 +42,15 @@ int gComSummaryNext = 0;
 
 uint ComLen() { return gComDef.length(); }
 
+// THE LEDGER'S REVISION, for the aggregates no index can help: a whole-ledger
+// sum has no radius, so the only cheap exact answer is the last one, and this is
+// what says it still holds. Bumped by every write to a row -- insert, drop, and
+// the state/task/position transitions in between -- so a memo keyed on
+// (frame, stamp) cannot survive a change the way a frame-only memo would.
+// EVERY writer of gComDef/gComState/gComId/gComPos/gComTask/gComAt is in this
+// file; the readers elsewhere never assign.
+int gComStamp = 0;
+
 // THE LEDGER'S SPATIAL INDEX, so a "what of ours is near here" ask costs its own
 // neighbourhood rather than the whole ledger.
 //
@@ -158,6 +167,7 @@ void ComDrop(uint i)
 	gComTask.removeAt(i);
 	gComAt.removeAt(i);
 	ComGridDrop();
+	++gComStamp;
 }
 
 // Promote a row to FRAMED on the frame unit `uid`. If another row already
@@ -177,6 +187,7 @@ int ComBindFrame(uint i, Id uid, const AIFloat3 &in where)
 	gComId[i] = uid;
 	gComPos[i] = where;
 	ComGridDrop();   // a row that MOVED invalidates its bucket
+	++gComStamp;
 	if (gComState[i] == CS_ORDERED) {
 		gComState[i] = CS_FRAMED;
 		gComAt[i] = ai.frame;
@@ -200,6 +211,7 @@ void ComTaskAdded(IUnitTask@ task)
 	gComTask.insertLast(task);
 	gComAt.insertLast(ai.frame);
 	ComGridAppend();
+	++gComStamp;
 }
 
 void ComTaskRemoved(IUnitTask@ task, bool done)
@@ -217,6 +229,7 @@ void ComTaskRemoved(IUnitTask@ task, bool done)
 		i = ComBindFrame(uint(i), tgt.id, tgt.GetPos(ai.frame));
 	}
 	@gComTask[i] = null;
+	++gComStamp;
 	// done: the finish event sets/has set FINISHED by id. !done with no frame:
 	// nothing stands, the commitment is gone.
 	if (!done && (gComState[i] != CS_FINISHED) && (int(gComId[i]) < 0))
@@ -255,12 +268,14 @@ void ComUnitFinished(CCircuitUnit@ unit)
 		gComTask.insertLast(none);
 		gComAt.insertLast(ai.frame);
 		ComGridAppend();
+		++gComStamp;
 		return;
 	}
 	i = ComBindFrame(uint(i), unit.id, at);
 	gComState[i] = CS_FINISHED;
 	@gComTask[i] = null;
 	gComAt[i] = ai.frame;
+	++gComStamp;
 }
 
 void ComUnitDead(CCircuitUnit@ unit)

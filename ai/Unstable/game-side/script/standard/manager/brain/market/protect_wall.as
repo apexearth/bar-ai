@@ -503,11 +503,24 @@ bool WallLineHeld(AIFloat3& out at, int& out n, int minHeld)
 // influence at twice theirs. What fortifies the line (sensors, AA, a lathe)
 // sites here -- the choke flickers hot and cold as the fight moves, and
 // "quiet this second" sent builders 3,000 elmos to let go on arrival.
+// Three engine reads and a walk over the line's slots, for an answer with no
+// arguments: SenseGainOf asks it once per CANDIDATE, so every radar, jammer,
+// shield and AA tower in the list re-derived the same frame's answer.
+int      gWlqAt = -999999;
+bool     gWlqOk = false;
+AIFloat3 gWlqPos;
+int      gWlqN = 0;
 bool WallLineQuiet(AIFloat3& out at, int& out n)
 {
-	return WallLineHeld(at, n, 2)
-			&& !Builder::SiteHot(at)
-			&& (ai.GetAllyInflAt(at) > ai.GetEnemyInflAt(at) * 2.f);
+	if (gWlqAt != ai.frame) {
+		gWlqAt = ai.frame;
+		gWlqOk = WallLineHeld(gWlqPos, gWlqN, 2)
+				&& !Builder::SiteHot(gWlqPos)
+				&& (ai.GetAllyInflAt(gWlqPos) > ai.GetEnemyInflAt(gWlqPos) * 2.f);
+	}
+	at = gWlqPos;
+	n = gWlqN;
+	return gWlqOk;
 }
 
 // The line's anchor point itself, for the army to stand on.

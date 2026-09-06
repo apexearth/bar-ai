@@ -46,16 +46,24 @@ float MexCoverFloorM()
 int   gMexEarlyAt = -999999;   // the screen term is per frame, not per site
 float gMexEarly = 0.f;
 bool  gMexEarlyOk = false;
+float gMexExpose = 0.f;        // ...and so is the exposure weight
 
 float MexFloorFactor(const AIFloat3& in pos)
 {
+	if (gMexEarlyAt != ai.frame) {
+		gMexEarlyAt = ai.frame;
+		gMexExpose = ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE);
+		const float screen = ai.GetTunable("apex_leak_screen_m",
+				TUNE_LEAK_SCREEN_M);
+		gMexEarlyOk = (screen > 1.f);
+		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
+	}
 	float fwd = Military::ForwardFraction(pos);
 	if (fwd < 0.f)
 		fwd = 0.f;
 	if (fwd > 1.f)
 		fwd = 1.f;
-	float f = fwd * (1.f + fwd
-			* ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE));
+	float f = fwd * (1.f + fwd * gMexExpose);
 	// EARLY, EVERY MEX IS THE FRONTIER. The forwardness scaling is a
 	// late-game truth -- rear ground is safe because the army screens it.
 	// With no army fielded there is no screen, and the first mexes sit AT
@@ -71,14 +79,7 @@ float MexFloorFactor(const AIFloat3& in pos)
 	// The screen term does not depend on `pos`, and ArmyValue walks the whole
 	// def table -- so the site loop paid a table walk per candidate site per
 	// def per builder for one number. Held on the frame, the same way RiskFill
-	// holds the side-wide half of every risk reading.
-	if (gMexEarlyAt != ai.frame) {
-		gMexEarlyAt = ai.frame;
-		const float screen = ai.GetTunable("apex_leak_screen_m",
-				TUNE_LEAK_SCREEN_M);
-		gMexEarlyOk = (screen > 1.f);
-		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
-	}
+	// holds the side-wide half of every risk reading. Read at the top.
 	if (gMexEarlyOk && (gMexEarly > f))
 		f = gMexEarly;
 	return f;
@@ -95,10 +96,11 @@ float MexStreamM(const AIFloat3& in s, float reach)
 {
 	const float hzS = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float hz = (hzS > 1.f) ? hzS : 300.f;
+	const float mult = IncomeMult();   // one handicap, not one per spot
 	float m = 0.f;
 	for (uint i = 0; i < gLPos.length(); ++i) {
 		if ((gLExtract[i] > 0.f) && (gLPos[i].distance2D(s) < reach))
-			m += gLIncome[i] * IncomeMult() * gLExtract[i] * hz;
+			m += gLIncome[i] * mult * gLExtract[i] * hz;
 	}
 	return m;
 }
@@ -177,7 +179,11 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 	// this AI's history has been a want priced inside that window, and the
 	// commitment ledger is the answer to all of them: it holds ordered, framed
 	// and finished alike.
-	for (uint c = 0; c < ComLen(); ++c) {
+	// Any match ends it, so bucket order costs nothing; the same test runs on
+	// the rows the box hands back.
+	ComNear(gLPos[near], r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint c = uint(gComGrid.hit[q]);
 		const int cd = gComDef[c];
 		if (!Catalog::ValidId(cd) || Catalog::gMobile[cd]
 			|| (ProtClassOf(cd) != PROT_DEF) || !OnMap(gComPos[c]))
@@ -303,7 +309,10 @@ bool MexInReach(const AIFloat3& in pos, float r)
 // counts as worth covering, it does not invent a second mechanism.
 bool PlantInReach(const AIFloat3& in pos, float r)
 {
-	for (uint i = 0; i < ComLen(); ++i) {
+	// Any match ends it, so bucket order costs nothing.
+	ComNear(pos, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
 		const int d = gComDef[i];
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
 			|| (Catalog::gBuildsList[d].length() == 0))
@@ -316,12 +325,21 @@ bool PlantInReach(const AIFloat3& in pos, float r)
 	return false;
 }
 
-// Static ground defence we own, in metal.
+// Static ground defence we own, in metal. Memoised on the frame: the census it
+// sums only moves on a unit event, and the protect market asks it several
+// times per candidate per election, once per tower we own each time.
+float gDefValM = 0.f;
+int   gDefValAt = -999999;
+
 float DefenceValue()
 {
+	if (gDefValAt == ai.frame)
+		return gDefValM;
+	gDefValAt = ai.frame;
 	float m = 0.f;
 	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i)
 		m += Catalog::gCostM[gProtDefId[PROT_DEF][i]];
+	gDefValM = m;
 	return m;
 }
 
@@ -331,9 +349,17 @@ float DefenceValue()
 // turrets, which is the whole of the rear specialist's case.
 float gMexFloorSum = 0.f;
 int gMexFloorSumAt = -999999;
+// Memoised on the frame for the same reason DefenceValue is: EcoPowerM walks
+// the def table and this is asked once per defence candidate.
+float gDefTgtM = 0.f;
+int   gDefTgtAt = -999999;
 
 float DefenceTarget()
 {
+	if (gDefTgtAt == ai.frame)
+		return gDefTgtM;
+	gDefTgtAt = ai.frame;
+	gDefTgtM = 0.f;
 	if (!Builder::gHomeSet)
 		return 0.f;
 	// HOW MUCH DEFENCE WE MAY OWN IS AN ECONOMIC QUESTION. Where a post goes
@@ -386,7 +412,8 @@ float DefenceTarget()
 	}
 	if (gMexFloorSum > t)
 		t = gMexFloorSum;
-	return (t > 0.f) ? t : 0.f;
+	gDefTgtM = (t > 0.f) ? t : 0.f;
+	return gDefTgtM;
 }
 
 // How much of each target is still unmet, as a fraction. The want's gain is

@@ -23,30 +23,33 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// A worker raising a FACTORY outranks everything -- one con on the T2
 	// plant was the measured bottleneck (apexearth: "we are more efficient
 	// when we assist building some things").
-	for (uint bf = 0; (boss is null) && (bf < gWorkers.length()); ++bf) {
-		CCircuitUnit@ wf = gWorkers[bf];
-		if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
-			continue;
-		if (EcoFar(wf.GetPos(ai.frame)))
-			continue;
-		if ((wf.task.GetType() == Task::Type::BUILDER)
-			&& (int(wf.task.GetBuildType()) == int(Task::BuildType::FACTORY))) {
-			@boss = wf;
-			break;
+	// ONE PASS, not two. The factory walk and the nano walk below it ran the
+	// same three filters over the same list in the same order, and the second
+	// only ran when the first found nothing -- so whenever no factory is being
+	// raised (the common case) the whole worker fleet was walked twice, with a
+	// GetPos and a leash test each time. The factory still wins outright and the
+	// nano is still the fallback, and each is the same element its own walk
+	// returned: first in gWorkers order, same filters.
+	if (boss is null) {
+		CCircuitUnit@ firstNano = null;
+		for (uint bf = 0; bf < gWorkers.length(); ++bf) {
+			CCircuitUnit@ wf = gWorkers[bf];
+			if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
+				continue;
+			if (EcoFar(wf.GetPos(ai.frame)))
+				continue;
+			if (wf.task.GetType() != Task::Type::BUILDER)
+				continue;
+			const int bt = int(wf.task.GetBuildType());
+			if (bt == int(Task::BuildType::FACTORY)) {
+				@boss = wf;
+				break;
+			}
+			if ((bt == int(Task::BuildType::NANO)) && (firstNano is null))
+				@firstNano = wf;
 		}
-	}
-	for (uint bi = 0; (boss is null) && (bi < gWorkers.length()); ++bi) {
-		CCircuitUnit@ wb = gWorkers[bi];
-		if ((wb is null) || (wb.task is null) || (wb.id == unit.id))
-			continue;
-		if (EcoFar(wb.GetPos(ai.frame)))
-			continue;
-		if (wb.task.GetType() != Task::Type::BUILDER)
-			continue;
-		if (int(wb.task.GetBuildType()) == int(Task::BuildType::NANO)) {
-			@boss = wb;
-			break;
-		}
+		if (boss is null)
+			@boss = firstNano;
 	}
 	if (boss is null)
 		@boss = NextServingCon();

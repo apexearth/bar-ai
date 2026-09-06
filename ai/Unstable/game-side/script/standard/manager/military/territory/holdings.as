@@ -236,38 +236,66 @@ int gFwdSpanAt = 0;
 //
 // Direction comes from the REMEMBERED enemy centre instead, and the denominator
 // from the deepest separation we have seen, so an incursion cannot move either.
+// The axis itself -- everything in the answer except `pos` -- held for the
+// frame it was measured on. A dozen callers ask several times an update and
+// two of them ask once per asset and once per guard, and each ask was a walk
+// of every cluster we hold plus two tunable lookups and an engine query. The
+// decay below is already stated in frames, so a frame is the unit this is
+// allowed to change on; the held-cluster count is in the key because the
+// centroid moves when we take or lose one.
+int gFwdAxisAt = -999999;
+int gFwdAxisSites = -1;
+bool gFwdAxisOk = false;
+AIFloat3 gFwdAxisHome;
+float gFwdAxisDx = 0.f;
+float gFwdAxisDz = 0.f;
+float gFwdAxisDen = 0.f;
+
 float ForwardFraction(const AIFloat3& in pos)
 {
 	if (!Builder::gHomeSet)
 		return 0.f;
-	const bool stable = ai.GetTunable("apex_fwd_stable", TUNE_FWD_STABLE) > 0.f;
-	const AIFloat3 home = TerritoryCentre();
-	AIFloat3 e;
-	if (!stable || !Front::FoeMid(e))
-		e = aiEnemyMgr.GetEnemyPos();
-	if (!OnMap(e))
-		return 0.f;
-	const float dx = e.x - home.x;
-	const float dz = e.z - home.z;
-	const float sq = dx * dx + dz * dz;
-	if (sq < NEAR_ZERO)
-		return 0.f;
-	const float span = sqrt(sq);
-	float ref = span;
-	if (stable) {
-		// Decayed by frame, not by call: this is read from a dozen places and
-		// several times an update, so a per-call decay would run at a rate set
-		// by how often other code happened to ask.
-		const float hl = ai.GetTunable("apex_fwd_span_halflife", TUNE_FWD_SPAN_HALFLIFE);
-		const int dt = ai.frame - gFwdSpanAt;
-		if ((hl > 0.f) && (dt > 0))
-			gFwdSpan *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
-		gFwdSpanAt = ai.frame;
-		if (span > gFwdSpan)
-			gFwdSpan = span;
-		ref = gFwdSpan;
+	if ((gFwdAxisAt != ai.frame) || (gFwdAxisSites != int(gSitePos.length()))) {
+		gFwdAxisAt = ai.frame;
+		gFwdAxisSites = int(gSitePos.length());
+		gFwdAxisOk = false;
+		const bool stable = ai.GetTunable("apex_fwd_stable", TUNE_FWD_STABLE) > 0.f;
+		const AIFloat3 home = TerritoryCentre();
+		AIFloat3 e;
+		if (!stable || !Front::FoeMid(e))
+			e = aiEnemyMgr.GetEnemyPos();
+		if (OnMap(e)) {
+			const float dx = e.x - home.x;
+			const float dz = e.z - home.z;
+			const float sq = dx * dx + dz * dz;
+			if (sq >= NEAR_ZERO) {
+				const float span = sqrt(sq);
+				float ref = span;
+				if (stable) {
+					// Decayed by frame, not by call: this is read from a dozen
+					// places and several times an update, so a per-call decay
+					// would run at a rate set by how often other code asked.
+					const float hl = ai.GetTunable("apex_fwd_span_halflife", TUNE_FWD_SPAN_HALFLIFE);
+					const int dt = ai.frame - gFwdSpanAt;
+					if ((hl > 0.f) && (dt > 0))
+						gFwdSpan *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
+					gFwdSpanAt = ai.frame;
+					if (span > gFwdSpan)
+						gFwdSpan = span;
+					ref = gFwdSpan;
+				}
+				gFwdAxisHome = home;
+				gFwdAxisDx = dx;
+				gFwdAxisDz = dz;
+				gFwdAxisDen = span * ref;
+				gFwdAxisOk = true;
+			}
+		}
 	}
-	return ((pos.x - home.x) * dx + (pos.z - home.z) * dz) / (span * ref);
+	if (!gFwdAxisOk)
+		return 0.f;
+	return ((pos.x - gFwdAxisHome.x) * gFwdAxisDx
+			+ (pos.z - gFwdAxisHome.z) * gFwdAxisDz) / gFwdAxisDen;
 }
 
 }  // namespace Military

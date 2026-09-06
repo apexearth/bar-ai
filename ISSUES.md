@@ -1857,20 +1857,6 @@ Lost heavily (K/D 0.19 vs 3.86, quit at 17.7 min). What the log said:
   min, 10 mex deaths 14-17 min all NEVER -- the base was overrun (no
   turrets); the instrument counts them, the pricing did not refuse them.
 
-## 2026-09-05 — gPostReq is index-parallel to gPfPos but refreshed 5x slower, so threat sticks to the wrong assets
-
-`manager/military/guardposts.as:400-401` refreshes `gPostReq` (one `ThreatM` ->
-`ai.GetEnemyCostAt` engine sweep per asset) every 10 s, but `PfRebuild` rebuilds
-`gPfPos` from scratch every 2 s in engine-determined order. One building
-finishing or dying shifts every subsequent index, so a threat value stays
-attached to the wrong asset for up to 10 s. The existing `gPostReq.length() != n`
-guard catches a length change, not a reorder — and a finish plus a death in the
-same window leaves the length identical.
-
-Consequence: guard posts, and the defence sites priced off `UnitCoverAt`, are
-placed against another building's threat. Fix is to key the value by position
-rather than by index. Found while profiling, not yet measured for impact.
-
 ## 2026-09-05 — the DLL committed in ae9f21d predates the C++ in the same commit
 
 `ai/Unstable/engine-side/SkirmishAI.dll` was built 13:11. `cpp/src/circuit/CircuitAI.cpp`,
@@ -1883,3 +1869,18 @@ This is the S3 family — a variant that is quietly not what the source says. It
 does not affect AngelScript work (game-side is hot-swappable), but any C++
 result attributed to ae9f21d is unproven until the DLL is rebuilt from that
 tree and the two are shipped together.
+
+## 2026-09-06 — BehindLine has never once vetoed a rez site
+
+`ffVetoAvg=0.00` in all 459 `rez-time` lines of a 60-minute 16-AI game. The rule
+— apexearth's "never stand in front of our units where they're likely to become
+collateral damage" — is unreachable: `RezSiteOk` rejects on `InEnemyReach` first,
+which already implies the reach is clear, so `BehindLine`'s only veto branch can
+never be taken. `RezSiteOk` is, in effect, just `!InEnemyReach(site)`.
+
+Found while profiling; the call was removed as a loop-invariant (it cost an
+`ArmyFront` + `ForwardFraction` + a second whole-enemy-set `EnemyReachSlack` per
+candidate for a decided answer), and the behaviour is byte-identical because the
+branch never fired. What the rule SHOULD do is open: the lane point is behind
+most wrecks, so a front reference taken from our own units, not the lane, is the
+likely fix. Not a performance item any more — a behaviour one.

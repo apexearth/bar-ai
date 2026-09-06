@@ -217,6 +217,45 @@ const float CON_FOE_RADIUS = 600.f;
 const float CON_FOE_COUNT  = 1.f;
 int gNextFoeDiag = 0;
 
+// GetEnemyCostAt is a GetEnemyUnitsIn round trip that allocates a handle per
+// enemy in the radius, and the rezzer chain asks it of the bot's own tile three
+// times in one election (RezSpotHot, then twice inside RezzerRezOrEat) before
+// any candidate site is even considered. Answered once per (frame, position):
+// the enemy set the sweep reads cannot change inside one election.
+const uint FOE_SLOTS = 10;
+array<float> gFnX;
+array<float> gFnZ;
+array<float> gFnV;
+int  gFnFrame = -1;
+uint gFnNext = 0;
+
+float FoesNear(const AIFloat3& in where)
+{
+	if (gFnFrame != ai.frame) {
+		gFnFrame = ai.frame;
+		gFnX.resize(0);
+		gFnZ.resize(0);
+		gFnV.resize(0);
+		gFnNext = 0;
+	}
+	for (uint i = 0; i < gFnX.length(); ++i) {
+		if ((gFnX[i] == where.x) && (gFnZ[i] == where.z))
+			return gFnV[i];
+	}
+	const float v = ai.GetEnemyCostAt(where, CON_FOE_RADIUS);
+	if (gFnX.length() < FOE_SLOTS) {
+		gFnX.insertLast(where.x);
+		gFnZ.insertLast(where.z);
+		gFnV.insertLast(v);
+	} else {
+		gFnX[gFnNext] = where.x;
+		gFnZ[gFnNext] = where.z;
+		gFnV[gFnNext] = v;
+		gFnNext = (gFnNext + 1) % FOE_SLOTS;
+	}
+	return v;
+}
+
 // Site-search radius for script-placed static defence.
 //
 // Every DEFENCE task in this file passed SQUARE_SIZE*2 or *4 -- 16 or 32 elmos
@@ -246,7 +285,7 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 	// name (CircuitAI.cpp). It is LOS-gated, which is acceptable precisely
 	// here: the danger this is meant to catch is close enough to see. OnMap is
 	// already checked above, which is the guard the threat-map crash needed.
-	const float foes = ai.GetEnemyCostAt(where, CON_FOE_RADIUS);
+	const float foes = FoesNear(where);
 	// Only the hot case is worth a line; "no enemies near this site" is the
 	// overwhelming majority and says nothing.
 	if ((foes > 0.f) && (ai.frame >= gNextFoeDiag)) {
@@ -282,7 +321,7 @@ bool SiteHot(const AIFloat3& in where)
 {
 	if (!OnMap(where))
 		return false;
-	if (ai.GetEnemyCostAt(where, CON_FOE_RADIUS) < CON_FOE_COUNT)
+	if (FoesNear(where) < CON_FOE_COUNT)
 		return false;
 	return ai.GetEnemyInflAt(where) > ai.GetAllyInflAt(where);
 }
@@ -313,11 +352,47 @@ AIFloat3 PullBack(const AIFloat3& in site, const AIFloat3& in back, float step, 
 // This is not the threat map: ThreatFor reads zero almost everywhere and falls
 // back to a 1-D front projection (see its own comment). This is the enemies we
 // can actually see, each with its own weapon reach and speed.
+// EnemyReachSlack walks every enemy we know of, and the enemy set is the other
+// thing that grows all game. One rezzer election asks it of the bot's own tile
+// from the decide gate and again from the chain's own pressed counter, and then
+// of every candidate site it considers -- twice each, until RezSiteOk stopped
+// asking the second time. Answered once per (frame, position), which is the
+// same answer the sweep gives: nothing inside one election moves an enemy.
+const uint SLACK_SLOTS = 12;
+array<float> gRsX;
+array<float> gRsZ;
+array<float> gRsV;
+int  gRsFrame = -1;
+uint gRsNext = 0;
+
 float ReachSlack(const AIFloat3 &in where)
 {
 	if (!OnMap(where))
 		return 1.0e6f;
-	return ai.EnemyReachSlack(where, ai.GetTunable("apex_rez_react_s", TUNE_REZ_REACT_S));
+	if (gRsFrame != ai.frame) {
+		gRsFrame = ai.frame;
+		gRsX.resize(0);
+		gRsZ.resize(0);
+		gRsV.resize(0);
+		gRsNext = 0;
+	}
+	for (uint i = 0; i < gRsX.length(); ++i) {
+		if ((gRsX[i] == where.x) && (gRsZ[i] == where.z))
+			return gRsV[i];
+	}
+	const float v = ai.EnemyReachSlack(where,
+			ai.GetTunable("apex_rez_react_s", TUNE_REZ_REACT_S));
+	if (gRsX.length() < SLACK_SLOTS) {
+		gRsX.insertLast(where.x);
+		gRsZ.insertLast(where.z);
+		gRsV.insertLast(v);
+	} else {
+		gRsX[gRsNext] = where.x;
+		gRsZ[gRsNext] = where.z;
+		gRsV[gRsNext] = v;
+		gRsNext = (gRsNext + 1) % SLACK_SLOTS;
+	}
+	return v;
 }
 
 bool InEnemyReach(const AIFloat3 &in where)

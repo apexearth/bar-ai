@@ -286,19 +286,53 @@ float ClosureAdds(const AIFloat3& in extraAt, float extraReach)
 // so the ring fills itself out one gap at a time and widens as the base does.
 // No radius and no count: the geometry is the rim, and the auction decides how
 // many are worth buying.
+// The answer takes no argument but the class: it is the rim against what we
+// already own of that class, so it is the same for every candidate and every
+// builder on the frame. SenseGainOf asked it once per AA def per election --
+// PF_RAYS sines and cosines and a nearest-scan over every standing battery
+// each time -- and the bearings are fixed for the whole game.
+array<float>    gRgsCos;
+array<float>    gRgsSin;
+array<int>      gRgsAt;
+array<AIFloat3> gRgsPos;
+array<bool>     gRgsOk;
+
 bool RimGapSite(int cls, AIFloat3& out at)
 {
 	PfRebuild();
-	if (!gPfRimOk)
+	if (!gPfRimOk || (cls < 0))
 		return false;
+	if (int(gRgsAt.length()) <= cls) {
+		const uint had = gRgsAt.length();
+		gRgsAt.resize(uint(cls + 1));
+		gRgsPos.resize(uint(cls + 1));
+		gRgsOk.resize(uint(cls + 1));
+		for (uint q0 = had; q0 < gRgsAt.length(); ++q0)
+			gRgsAt[q0] = -999999;
+	}
+	if (gRgsAt[uint(cls)] == ai.frame) {
+		if (!gRgsOk[uint(cls)])
+			return false;
+		at = gRgsPos[uint(cls)];
+		return true;
+	}
+	gRgsAt[uint(cls)] = ai.frame;
+	if (gRgsCos.length() == 0) {
+		gRgsCos.resize(uint(PF_RAYS));
+		gRgsSin.resize(uint(PF_RAYS));
+		for (int b0 = 0; b0 < PF_RAYS; ++b0) {
+			const float ang = (6.2831853f / float(PF_RAYS)) * (float(b0) + 0.5f);
+			gRgsCos[uint(b0)] = cos(ang);
+			gRgsSin[uint(b0)] = sin(ang);
+		}
+	}
 	float bestD = -1.f;
 	AIFloat3 best;
 	bool found = false;
 	for (int b = 0; b < PF_RAYS; ++b) {
-		const float ang = (6.2831853f / float(PF_RAYS)) * (float(b) + 0.5f);
-		const AIFloat3 dir(cos(ang), 0.f, sin(ang));
-		const AIFloat3 p = gPfMid + dir * gPfRimR[b];
-		const AIFloat3 q(p.x, 0.f, p.z);
+		const float rr = gPfRimR[b];
+		const AIFloat3 q(gPfMid.x + gRgsCos[uint(b)] * rr, 0.f,
+				gPfMid.z + gRgsSin[uint(b)] * rr);
 		if (!OnMap(q))
 			continue;
 		float near = 1e9f;
@@ -313,8 +347,11 @@ bool RimGapSite(int cls, AIFloat3& out at)
 			found = true;
 		}
 	}
-	if (found)
+	gRgsOk[uint(cls)] = found;
+	if (found) {
+		gRgsPos[uint(cls)] = best;
 		at = best;
+	}
 	return found;
 }
 
@@ -362,8 +399,11 @@ bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 	// ONE ALREADY COMING COVERS THIS GROUND, whoever remembers it: standing,
 	// half-built, orphaned frame and outstanding order are all one ledger.
 	// The OnMap guard skips orders not yet sited.
+	// Any match ends it, so bucket order costs nothing.
 	bool old = false;
-	for (uint ci = 0; ci < ComLen(); ++ci) {
+	ComNear(pos, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint ci = uint(gComGrid.hit[q]);
 		if (ProtClassOf(gComDef[ci]) != cls)
 			continue;
 		if (OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < r)) {

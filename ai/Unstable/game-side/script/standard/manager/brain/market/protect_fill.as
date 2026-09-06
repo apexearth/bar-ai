@@ -282,6 +282,19 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	ClosurePrep();
 	RiskFill();
 	RiskFillSiege();
+	// Site-invariant, so read once per fill and not once per site. Each of
+	// these was a string built and a lookup done ~300 times a pass, several
+	// hundred passes a game-minute across sixteen players; the values are the
+	// same for every site in the walk.
+	const float tuneWallPitch = ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
+	const float tuneGateDepth = ai.GetTunable("apex_gate_depth", TUNE_GATE_DEPTH);
+	const float tuneWaveConc = ai.GetTunable("apex_wave_conc", TUNE_WAVE_CONC);
+	const float tuneWallLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
+	const float tuneWallRear = ai.GetTunable("apex_wall_rear", TUNE_WALL_REAR);
+	const float tuneUnprot = ai.GetTunable("apex_unprot_discount", TUNE_UNPROT_DISCOUNT);
+	// This def's kill ceiling: two tunable lookups and a surface-DPS walk for
+	// a number that is a property of the DEF, asked once per site.
+	const float capM = PfKillCapM(d);
 	float fillBest = 0.f;
 	for (uint si = 0; si < sites.length(); ++si) {
 		AIFloat3 s = sites[si];
@@ -306,7 +319,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (back.SqLength2D() > 1.f) {
 				back.SafeNormalize2D();
 				const float pitchB = Brain::LightTowerRange()
-						* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
+						* tuneWallPitch;
 				s = Builder::PullBack(s, back, pitchB, 3);
 			}
 			if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
@@ -345,7 +358,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// against stock's concentrated 1.04).
 		if (isGate) {
 			const float gateFloor = siteWave
-					* ai.GetTunable("apex_gate_depth", TUNE_GATE_DEPTH);
+					* tuneGateDepth;
 			if (gateFloor > threat)
 				threat = gateFloor;
 		}
@@ -397,7 +410,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// massive economy). The wave a site must beat is their fielded
 			// army, capped by the stake actually behind this site -- the
 			// same cap the heaviest-single-attacker floor above uses.
-			if (ai.GetTunable("apex_wave_conc", TUNE_WAVE_CONC) > 0.f) {
+			if (tuneWaveConc > 0.f) {
 				float conc = gRkHost;
 				if (conc > sStake)
 					conc = sStake;
@@ -513,8 +526,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// rate floors at once per exposure window. Any cover at all returns
 		// the slot to the measured rates.
 		if (floored && (cover0 <= 0.f)) {
-			const float lossS = ai.GetTunable("apex_exposed_loss_s",
-					TUNE_EXPOSED_LOSS_S);
+			const float lossS = horizW;   // same tunable, read once above
 			if ((lossS > 1.f) && (hz < 1.f / lossS))
 				hz = 1.f / lossS;
 		}
@@ -526,11 +538,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// damage rate actually destroys over the exposure window. Ceiling,
 		// not a scaling -- a tower well inside its own capacity is untouched.
 		float stakeK = stake;
-		{
-			const float capM = PfKillCapM(d);
-			if ((capM > 0.f) && (stakeK > capM))
-				stakeK = capM;
-		}
+		if ((capM > 0.f) && (stakeK > capM))
+			stakeK = capM;
 		float prevented = stakeK * hz * stopped;
 		// THE PULL FACES THE ENEMY. Uniform, it grew the wall by walk
 		// distance -- toward builder convenience, not the war (measured over
@@ -562,8 +571,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// builder standing on it (measured: guard share 0.2-0.67 at
 			// minute six across six games, every placement a line slot).
 			if (isMexG || WallSlotLine(si)) {
-				const float lw = ai.GetTunable("apex_wall_line_w",
-						TUNE_WALL_LINE_W);
+				const float lw = tuneWallLineW;
 				if (lw > 1.f)
 					dirW = lw;
 			} else if (foePOk) {
@@ -575,8 +583,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 					const float cosA = (toS.x * toF.x + toS.z * toF.z)
 							/ (lS * lF);
 					const float w01 = 0.5f + 0.5f * cosA;
-					float rear = ai.GetTunable("apex_wall_rear",
-							TUNE_WALL_REAR);
+					float rear = tuneWallRear;
 					if (rear < 0.f) rear = 0.f;
 					if (rear > 1.f) rear = 1.f;
 					dirW = rear + (1.f - rear) * w01;
@@ -609,8 +616,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		}
 		prevented *= Military::OpenFraction(s, reach);
 		{
-			const float k = ai.GetTunable("apex_unprot_discount",
-					TUNE_UNPROT_DISCOUNT);
+			const float k = tuneUnprot;
 			if (k > 0.f) {
 				const float f0 = (cover0 < threat)
 						? (cover0 / threat) : 1.f;

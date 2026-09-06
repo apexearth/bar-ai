@@ -317,9 +317,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// The T2-con floor outranks the all-quiet gate: "at least 2" is not
 	// contingent on there being other demand.
 	const int ceilNeed = CeilingConsNeed();
-	if ((ceilNeed <= 0) && !gMexOpen && (UpDemand() <= 0.5f) && (BPGap() <= 0.5f)
-		&& (ArmyTarget() - ArmyValue() - ArmyInFlightM() <= 0.5f)
-		&& (RichArmyGapM() <= 0.5f))
+	// The all-quiet gate and the block below asked the same six questions, and
+	// each is a walk of the whole def table -- so every one ran twice per order.
+	const float upD = UpDemand();
+	const float bpGap = BPGap();
+	const float armyT0 = ArmyTarget();
+	const float armyVal0 = ArmyValue();
+	const float armyFlight0 = ArmyInFlightM();
+	const float armyHave = armyVal0 + armyFlight0;
+	const bool ovfHands = OverflowBuysHands();
+	const float richGap = RichArmyGapM();
+	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
+		&& (armyT0 - armyHave <= 0.5f)
+		&& (richGap <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -332,18 +342,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// plus its worth as mobile build power (overflow capture at its drain);
 	// plus the open-spot stream if ground remains to claim.
 	const float util = Utilization();
-	const float over = BPGap() * util;
-	const float upD = UpDemand();
+	const float over = bpGap * util;
 	const float mobileCeil = OwnedMobileCeil();
 	LossDecay();
-	float armyGap = ArmyTarget() - ArmyValue() - ArmyInFlightM();
+	float armyGap = armyT0 - armyHave;
 	// COVERAGE IS ARMY DEMAND: the light units the base still needs so a
 	// guard stands by every building (military/guardposts.as, his "units
 	// are cover" ruling). Not a share of income -- what the base's own
 	// spread asks for, and it grows with the base, never with a clock.
 	float coverShare = 0.f;   // how much of the gap is coverage, 0..1
 	{
-		const float coverGap = Military::CoverNeedM() - ArmyInFlightM();
+		const float coverGap = Military::CoverNeedM() - armyFlight0;
 		if (coverGap > armyGap)
 			armyGap = coverGap;
 		// COVER IS THE FIRST CLAIM ON THE LAB. A proportional share let a
@@ -363,11 +372,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// max() says when a step is build-bound rather than feed-bound. The
 	// constructor gain below already prices overflow capture, so the metal has
 	// somewhere to go.
-	if (!OverflowBuysHands()) {
-		const float waste = RichArmyGapM();
-		if (waste > armyGap)
-			armyGap = waste;
-	}
+	if (!ovfHands && (richGap > armyGap))
+		armyGap = richGap;
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
 	// already zero here and a second multiplier would apply the same rule
@@ -384,7 +390,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	float pLineSum = 0.f;
 	int pLineN = 0;
 	{
-		const float aT0 = ArmyTarget();
+		const float aT0 = armyT0;
 		if ((aT0 > 1.f) && (armyGap > 0.f)) {
 			// Towers lighten the stake, but only LOCALLY (apexearth): static
 			// defense standing in the core counts toward the army at an
@@ -406,7 +412,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const float effGapS = (lightened > 0.f) ? lightened : 0.f;
 			const float deficit = effGapS / aT0;
 			stakeMul = 1.f + deficit
-					* ((gAssetsM + ArmyValue()) / aT0)
+					* ((gAssetsM + armyVal0) / aT0)
 					* ai.GetTunable("apex_stake_weight", TUNE_STAKE_WEIGHT);
 			if (stakeMul > 8.f)
 				stakeMul = 8.f;
@@ -451,7 +457,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// SlackFrac. Only while the target is economy; elsewhere the unspent
 		// metal already has somewhere to go (the army sink above), which is what
 		// hid this.
-		if (OverflowBuysHands()) {
+		if (ovfHands) {
 			const float slack = SlackFrac();
 			if (feedRoom < slack)
 				feedRoom = slack;
@@ -502,6 +508,52 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// table for, once per candidate. Negative means "not taken yet".
 	int landT1 = -1;
 	float claimers = -1.f;
+	// EVERYTHING BELOW IS THE SAME ANSWER FOR EVERY CANDIDATE. PatrolShort
+	// alone walks the whole def table twice and was called twice per
+	// candidate; RoleTarget/RoleValue walk it once each per candidate.
+	const float tPatrolShort = PatrolShort();
+	const float tFoeSpeed = FoeSpeedCap();
+	const bool ecoRoleOn = EcoRoleActive();
+	const bool ecoQuietOn = EcoQuiet();
+	const float bestExt = BestExtract();
+	const float incA = aiEconomyMgr.metal.income;
+	const float tLineBite = ai.GetTunable("apex_line_bite", TUNE_LINE_BITE);
+	const float tSpeedWorth = ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+	const float tCoverWorth = ai.GetTunable("apex_cover_worth", TUNE_COVER_WORTH);
+	const float tLosWorth = ai.GetTunable("apex_los_worth", TUNE_LOS_WORTH);
+	const float tScreenWorth = ai.GetTunable("apex_screen_worth", TUNE_SCREEN_WORTH);
+	const float tEcoArmyMinM = ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M);
+	const float tEcoConKeep = ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP);
+	const float tRezUtil = ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
+	const float tRezHorizon = ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
+	const float tSquadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
+	const float tIntelRate = ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE);
+	const float tWaterPct = ai.GetTunable("apex_water_pct", TUNE_WATER_PCT);
+	const float uBudget = incA * ai.GetTunable("apex_unit_afford_s", TUNE_UNIT_AFFORD_S);
+	// The energy-feed throttle reads two economy scalars and nothing about the
+	// candidate at all.
+	float eFeedA = 1.f;
+	{
+		const float eI = aiEconomyMgr.energy.income;
+		const float eP = aiEconomyMgr.energy.pull;
+		if ((eP > 1.f) && (eI < eP))
+			eFeedA = eI / eP;
+	}
+	// Lazily taken, because the branch that needs each one may never be
+	// reached: negative (or -2 for the int) means "not taken yet".
+	int escShort = -2;
+	float escGain = -1.f;
+	float supSquads = -1.f;
+	float supAdvArmy = -1.f;
+	float floatVal = -1.f;
+	int amphBan = -1;
+	int consNeedA = -1;
+	float bpProt = -1.f;
+	// RoleTarget and RoleValue are per ROLE, and a line offers far more
+	// candidates than roles. Linear over at most a handful of entries.
+	array<int> rcRole;
+	array<float> rcTgt;
+	array<float> rcVal;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -529,9 +581,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// each targeting the same fifteen "squads" is a hundred and twenty
 			// units, which is what he counted. EscortSquadCount is the live
 			// number of groups CSupportTask will actually attach one to.
-			const float squadM = ai.GetTunable("apex_squad_m", TUNE_SQUAD_M);
-			const float squads = float(int(Military::EscortSquadCount()));
-			float need = AdvArmyValue() / ((squadM > 1.f) ? squadM : 2000.f);
+			const float squadM = tSquadM;
+			if (supSquads < 0.f) {
+				supSquads = float(int(Military::EscortSquadCount()));
+				supAdvArmy = AdvArmyValue();
+			}
+			const float squads = supSquads;
+			float need = supAdvArmy / ((squadM > 1.f) ? squadM : 2000.f);
 			if (squads < need)
 				need = squads;
 			if ((need < 1.f) && (squads >= 1.f))
@@ -547,7 +603,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ " R=" + gSupRadarN + "/J=" + gSupJamN
 					+ " need=" + formatFloat(need, "", 0, 2)
 					+ " squads=" + int(squads)
-					+ " adv=" + formatFloat(AdvArmyValue(), "", 0, 0));
+					+ " adv=" + formatFloat(supAdvArmy, "", 0, 0));
 			}
 			if (need <= 0.f)
 				continue;
@@ -570,8 +626,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					? (Catalog::gJamR[d] / SupRef(true))
 					: (Catalog::gRadarR[d] / SupRef(false));
 			const float gainS = (uncov > 0.f)
-					? (uncov * squadM
-						* ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE)
+					? (uncov * squadM * tIntelRate
 						/ 60.f * roleMul * capW)
 					: 0.f;
 			if (gainS > 0.f) {
@@ -604,17 +659,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// not decreed -- see EscortGain. Eligibility stays the military hook's
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
-		if (!Catalog::gBuilder[d] && EscortWorthy(d)
-			&& (EscortShortfall() - EscortInFlight(Catalog::Def(d)) > 0))
-		{
-			const float gainE = EscortGain(fillS) * roleMul;
-			if (gainE > 0.f) {
-				const float vE = gainE / Catalog::gCostM[d];
-				candDef.insertLast(d);
-				candV.insertLast(vE);
-				candGain.insertLast(gainE);
-				sumV += vE;
-				continue;
+		if (!Catalog::gBuilder[d] && EscortWorthy(d)) {
+			if (escShort < -1)
+				escShort = EscortShortfall();
+			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
+				if (escGain < 0.f)
+					escGain = EscortGain(fillS);
+				const float gainE = escGain * roleMul;
+				if (gainE > 0.f) {
+					const float vE = gainE / Catalog::gCostM[d];
+					candDef.insertLast(d);
+					candV.insertLast(vE);
+					candGain.insertLast(gainE);
+					sumV += vE;
+					continue;
+				}
 			}
 		}
 		// ARMY: fill the gap, best power-per-cost first, diminishing per
@@ -647,8 +706,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				rezDef = d;
 				rezHave = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
 				rezCap = Catalog::gBuildPower[d] * LineMetalPerEffort()
-						* ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
-				rezStream = RezWorkM() / ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
+						* tRezUtil;
+				rezStream = RezWorkM() / tRezHorizon;
 				float unmet = rezStream - float(rezHave) * rezCap;
 				if (unmet > rezCap)
 					unmet = rezCap;
@@ -662,13 +721,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// the air-con fleet, sized by the AA target below.
 			const bool airGuard = Catalog::gFlyer[d] && (Catalog::gAirT[d] > 0.f);
 			if ((roleMul < 1.f) && !airGuard && (Catalog::gCostM[d]
-					< ai.GetTunable("apex_eco_army_min_m", TUNE_ECO_ARMY_MIN_M))) {
+					< tEcoArmyMinM)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
 			}
-			const float sinkGap = OverflowBuysHands() ? 0.f
-					: (RichArmyGapM() * roleMul);
+			const float sinkGap = ovfHands ? 0.f : (richGap * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
@@ -691,9 +749,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// enemy census, so seen SUB value is the readable floor -- an
 			// undercount, never zero when the threat is real).
 			if ((Catalog::gSurfT[d] <= 0.01f) && (Catalog::gAirT[d] <= 0.01f)) {
-				const float floatVal = Military::EnemyAfloat()
-						? (Military::EnemyCostOf(Unit::Role::SUB.type)
-							* AnswerShare()) : 0.f;
+				if (floatVal < 0.f)
+					floatVal = Military::EnemyAfloat()
+							? (Military::EnemyCostOf(Unit::Role::SUB.type)
+								* AnswerShare()) : 0.f;
 				if (floatVal <= 1.f) {
 					if (prankNow)
 						prank += " " + Catalog::Def(d).GetName() + ":h2o";
@@ -713,11 +772,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// dedicated crossers, whose mobility premium drags their
 			// per-metal worth below it.
 			if (Catalog::gAmphib[d] && (UnitCore(d) < 1.f)) {
-				float lp = aiTerrainMgr.GetLandPercent();
-				if (lp <= 1.5f)
-					lp *= 100.f;   // scale-proof: fraction or percent
-				if (aiTerrainMgr.IsWaterAVoid()
-					|| (lp > 100.f - ai.GetTunable("apex_water_pct", TUNE_WATER_PCT))) {
+				if (amphBan < 0) {
+					float lp = aiTerrainMgr.GetLandPercent();
+					if (lp <= 1.5f)
+						lp *= 100.f;   // scale-proof: fraction or percent
+					amphBan = (aiTerrainMgr.IsWaterAVoid()
+							|| (lp > 100.f - tWaterPct)) ? 1 : 0;
+				}
+				if (amphBan > 0) {
 					if (prankNow)
 						prank += " " + Catalog::Def(d).GetName() + ":amph";
 					continue;
@@ -726,7 +788,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.
-			if (EcoRoleActive()) {
+			if (ecoRoleOn) {
 				float qual = Catalog::gCostM[d] / 1000.f;
 				if (qual < 0.1f)
 					qual = 0.1f;
@@ -737,8 +799,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// AND THE STANDING COMPOSITION TARGET: tank / middle / reach / dps
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
-			ppc *= 1.f + ai.GetTunable("apex_line_bite", TUNE_LINE_BITE)
-					* LineShortfall(LineClassOf(d));
+			ppc *= 1.f + tLineBite * LineShortfall(LineClassOf(d));
 			// SPEED IS VALUE (apexearth: "they're fast, we need to properly
 			// value speed"). A fast unit reaches the fight, catches raiders,
 			// and disengages -- none of which shows up in combat-per-metal.
@@ -746,14 +807,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// Measured against the fastest ground unit the GAME offers, not a
 			// flat 100 elmos/s: the bar is what may be raiding us, and we
 			// assume they built the fastest thing they could (apexearth).
-			ppc *= 1.f + (Catalog::gSpeed[d] / FoeSpeedCap())
-					* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+			ppc *= 1.f + (Catalog::gSpeed[d] / tFoeSpeed) * tSpeedWorth;
 			// AND COVERAGE: ground patrolled per metal, worth something only
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per
 			// metal there is -- and it fades as the fleet fills.
-			ppc *= 1.f + ai.GetTunable("apex_cover_worth", TUNE_COVER_WORTH)
-					* CoverPerMetal(d) * PatrolShort();
+			ppc *= 1.f + tCoverWorth * CoverPerMetal(d) * tPatrolShort;
 			// THE COVERAGE SHARE OF THE GAP IS PRICED BY COVER, NOT BY COMBAT
 			// (apexearth: "quantify the value of grunts when it comes to
 			// defending a base from raiders. It is the speed that they have...
@@ -768,8 +827,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// model, the army target and the commander's engage test all read
 			// zero while we are blind (EnemyArmyCost logged 0 for entire
 			// games). A unit's LOS is therefore worth something on its own.
-			ppc *= 1.f + (Catalog::gLosR[d] / 1000.f)
-					* ai.GetTunable("apex_los_worth", TUNE_LOS_WORTH);
+			ppc *= 1.f + (Catalog::gLosR[d] / 1000.f) * tLosWorth;
 			// A SCOUT IS NOT A BAD SOLDIER. UnitCore prices dps and hp against
 			// cost, and on that yardstick a Tick -- 60 hp, 50 dps, 21 metal --
 			// scores far below a Pawn, a gap no speed or sight multiplier on
@@ -784,13 +842,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			{
 				WorthMeans();
 				const float mineM = Catalog::gCostM[d];
-				const float kS = ai.GetTunable("apex_screen_worth", TUNE_SCREEN_WORTH);
+				const float kS = tScreenWorth;
 				if ((kS > 0.f) && (mineM > 1.f) && (gWMCost > 1.f)
 					&& !Catalog::gFlyer[d])
 				{
-					const float dash = 1.f + Catalog::gSpeed[d] / FoeSpeedCap();
+					const float dash = 1.f + Catalog::gSpeed[d] / tFoeSpeed;
 					const float screen = kS * (Catalog::gLosR[d] / 1000.f)
-							* dash * PatrolShort() / (mineM / gWMCost);
+							* dash * tPatrolShort / (mineM / gWMCost);
 					if (screen > ppc)
 						ppc = screen;
 				}
@@ -801,13 +859,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// we are trying to fill the army gap in. Self-cancelling: as
 			// income grows the same unit costs fewer seconds and the discount
 			// fades, so this is an economy term, never a clock.
-			{
-				const float incA = aiEconomyMgr.metal.income;
-				if (incA > 0.1f) {
-					const float fieldSec = Catalog::gCostM[d] / incA;
-					const float hA = (fillS > 1.f) ? fillS : 60.f;
-					ppc *= hA / (hA + fieldSec);
-				}
+			if (incA > 0.1f) {
+				const float fieldSec = Catalog::gCostM[d] / incA;
+				const float hA = (fillS > 1.f) ? fillS : 60.f;
+				ppc *= hA / (hA + fieldSec);
 			}
 			// MASS FIRST, T3 FROM SURPLUS (his ruling, after 267,850 metal
 			// of T3 lost a massing war at 254 m/s): a unit's bid fades as
@@ -817,8 +872,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// income that shrugs it off. No tier table: cost is the tier.
 			float affM = 1.f;
 			{
-				const float uBudget = aiEconomyMgr.metal.income
-						* ai.GetTunable("apex_unit_afford_s", TUNE_UNIT_AFFORD_S);
 				const float uBill = Catalog::gCostM[d];
 				if ((uBudget > 1.f) && (uBill >= uBudget)) {
 					if (prankNow)
@@ -835,22 +888,30 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The gap is a STREAM the line fills; clamping the gain to one
 			// unit's cost made a Pawn bid 0.6 against any gap size and army
 			// never outbid a constructor (two straight BARb losses).
-			float eFeedA = 1.f;
-			{
-				const float eI = aiEconomyMgr.energy.income;
-				const float eP = aiEconomyMgr.energy.pull;
-				if ((eP > 1.f) && (eI < eP))
-					eFeedA = eI / eP;
-				// (the metal-feed throttle is gone: a zero bank spending its
-				// whole income is PERFECT efficiency, not danger -- apexearth:
-				// "'out of metal' is simply failing to spend... we need to
-				// spend more." Builds at an empty bank slow to income speed
-				// by the engine's own physics, which is the correct state.)
-			}
+			// (eFeedA is hoisted above the loop: the metal-feed throttle is
+			// gone, so nothing left in it reads the candidate. A zero bank
+			// spending its whole income is PERFECT efficiency, not danger --
+			// apexearth: "'out of metal' is simply failing to spend... we need
+			// to spend more." Builds at an empty bank slow to income speed by
+			// the engine's own physics, which is the correct state.)
 			// This unit's role fills its own NEED gap; a saturated role's
 			// units price to the floor whatever their power-per-cost.
-			const float rTarget = RoleTarget(Catalog::gRole[d], ArmyTarget());
-			const float rGap = rTarget - RoleValue(Catalog::gRole[d]);
+			const int rIdx = Catalog::gRole[d];
+			int rSlot = -1;
+			for (uint rq = 0; rq < rcRole.length(); ++rq) {
+				if (rcRole[rq] == rIdx) {
+					rSlot = int(rq);
+					break;
+				}
+			}
+			if (rSlot < 0) {
+				rSlot = int(rcRole.length());
+				rcRole.insertLast(rIdx);
+				rcTgt.insertLast(RoleTarget(rIdx, armyT0));
+				rcVal.insertLast(RoleValue(rIdx));
+			}
+			const float rTarget = rcTgt[rSlot];
+			const float rGap = rTarget - rcVal[rSlot];
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			if (roleW < 0.05f)
 				roleW = 0.05f;   // never exactly zero: portfolio floor
@@ -915,10 +976,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// same reason the T2 one is: a con priced against army loses whenever
 		// the army gap is open, and the symmetric prior keeps it open by
 		// construction. Any tier counts -- this asks for hands, not reach.
-		if (ConsNeedAny() > 0) {
+		if (consNeedA < 0)
+			consNeedA = ConsNeedAny();
+		if (consNeedA > 0) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
-				+ " (con floor need=" + ConsNeedAny()
+				+ " (con floor need=" + consNeedA
 				+ " have=" + ConsOwnedAny()
 				+ " inflight=" + ConsInFlightAny()
 				+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1) + ")");
@@ -937,8 +1000,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// attrition): the bank-driven BP gap must buy nanos and air cons,
 		// not a walking crowd the reclaimer eats back (watched churn; conT1
 		// hit 24 at 15m on the bank term).
-		if (EcoQuiet() && !Catalog::gFlyer[d]
-			&& (reach < BestExtract())) {
+		if (ecoQuietOn && !Catalog::gFlyer[d] && (reach < bestExt)) {
 			// Nothing in this walk depends on the candidate `d`, and it sat
 			// inside the candidate loop -- 949 slots per candidate. Taken at
 			// most once per pass, on first use, so the count is the same.
@@ -952,7 +1014,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					}
 				}
 			}
-			if (float(landT1) >= ai.GetTunable("apex_eco_con_keep", TUNE_ECO_CON_KEEP) + 2.f)
+			if (float(landT1) >= tEcoConKeep + 2.f)
 				continue;
 		}
 		// >= the game ceiling, not > our own: requiring the next con to
@@ -965,17 +1027,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// (the per-bot divisor never reached zero and the fleet grew to 256).
 		if (Catalog::gRezzer[d]) {
 			const int haveRez = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
-			const float perBotB = Catalog::gBuildPower[d]
-					* ai.GetTunable("apex_rez_util", TUNE_REZ_UTIL);
-			float unmetB = gLossPool
-					/ ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON)
+			const float perBotB = Catalog::gBuildPower[d] * tRezUtil;
+			float unmetB = gLossPool / tRezHorizon
 					- float(haveRez) * perBotB;
 			if (unmetB > perBotB)
 				unmetB = perBotB;
 			if (unmetB > 0.f)
 				gain += unmetB;
 		}
-		if ((upD > 0.5f) && (reach >= BestExtract())) {
+		if ((upD > 0.5f) && (reach >= bestExt)) {
 			// The upgrade stream divides among cons who can REACH it -- a
 			// T1 fleet cannot moho anything, so the first T2 con serves
 			// the whole 4x stream alone and prices like it (apexearth,
@@ -1020,7 +1080,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// itself the moment escorts exist -- and the escort want is priced on
 		// the same metal (EscortMetalAtRisk), so the two trade against each
 		// other honestly instead of both being flat.
-		gain *= BPProtectedFrac();
+		if (bpProt < 0.f)
+			bpProt = BPProtectedFrac();
+		gain *= bpProt;
 		// Rez bots eat the field, not the feed; every other builder pays
 		// the closed-loop room. The tier floors above already guarantee
 		// the minimums, so zero here starves nothing essential.

@@ -161,13 +161,26 @@ void NoteLocalDeath(const AIFloat3& in at, float costM, bool ours)
 	if (!OnMap(at) || (costM <= 0.f))
 		return;
 	const int keep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
-	for (int i = int(gTradeFrame.length()) - 1; i >= 0; --i) {
-		if (ai.frame - gTradeFrame[i] > keep) {
-			gTradeAt.removeAt(i);
-			gTradeM.removeAt(i);
-			gTradeOurs.removeAt(i);
-			gTradeFrame.removeAt(i);
+	// Entries are appended in frame order, so the expired ones are always a
+	// PREFIX: find how long it is and drop it in one shift. Walking the whole
+	// ledger per death and calling removeAt (an O(n) shift of its own) made
+	// every death cost the deaths of the last fifteen seconds -- the one part
+	// of a death hook that grew with how hard the game was being fought.
+	uint drop = 0;
+	while ((drop < gTradeFrame.length()) && (ai.frame - gTradeFrame[drop] > keep))
+		++drop;
+	if (drop > 0) {
+		const uint kept = gTradeFrame.length() - drop;
+		for (uint i = 0; i < kept; ++i) {
+			gTradeAt[i] = gTradeAt[i + drop];
+			gTradeM[i] = gTradeM[i + drop];
+			gTradeOurs[i] = gTradeOurs[i + drop];
+			gTradeFrame[i] = gTradeFrame[i + drop];
 		}
+		gTradeAt.resize(kept);
+		gTradeM.resize(kept);
+		gTradeOurs.resize(kept);
+		gTradeFrame.resize(kept);
 	}
 	gTradeAt.insertLast(at);
 	gTradeM.insertLast(costM);

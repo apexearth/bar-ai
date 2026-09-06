@@ -66,14 +66,37 @@ float gPostWarnS = 0.f;
 // direction in it. ThreatM carries the home->enemy gradient, so a forward
 // asset asks for more cover than one behind us.
 // Threat is an engine sweep per asset; refreshed on a slower clock.
+//
+// INDEX-PARALLEL TO Market::gPfPos, AND THAT FIELD REORDERS. A length check is
+// not enough: one building finishing and another dying inside the same ten
+// seconds leaves the length identical and every later row shifted, so a threat
+// stayed attached to the wrong asset. Market::gPfStamp changes exactly when the
+// SET of assets does, so it is stored with the sweep and any reader that indexes
+// gPfPos with these rows checks it first.
 array<float> gPostReq;
 int gPostReqAt = -999999;
+int gPostReqStamp = -1;
+// The asset each value is about, and the ground it was measured over.
+array<int>   gPostReqKey;
+array<float> gPostReqX;
+array<float> gPostReqZ;
 // What the last posting left behind, so the cover-need estimate can run on the
 // tick the posting pass skips rather than piling onto the same sim frame.
 array<float> gPostCov;
 array<float> gPostCovEyes;
 array<bool>  gPostSeen;
 int gPostNeedAt = -999999;
+
+// STANDING COVER PER ASSET, which is a reading of the turrets and of nothing
+// else: it moves when a tower is built or dies, not every two seconds. Held
+// against both revisions that decide it -- gPfStamp for the row->asset mapping,
+// gPfTwRev for the towers themselves -- plus the point each entry was measured
+// at, because PfCommit lets a value move under an unchanged key.
+array<float> gPostCovCache;
+array<float> gPostCovAtX;
+array<float> gPostCovAtZ;
+int gPostCovStamp = -1;
+int gPostCovTwRev = -1;
 
 // Light-unit metal that radar warning would save.
 float EyesSavedM()
@@ -246,7 +269,8 @@ float MeanForward(const array<AIFloat3>@ ps)
 // the front of the base is asking for the guards. Telemetry only.
 float ReqForward()
 {
-	if (gPostReq.length() != Market::gPfPos.length())
+	if ((gPostReq.length() != Market::gPfPos.length())
+		|| (gPostReqStamp != Market::gPfStamp))
 		return 0.f;
 	float s = 0.f, w = 0.f;
 	for (uint i = 0; i < gPostReq.length(); ++i) {
@@ -263,33 +287,70 @@ int VirtualPost(array<float>@ cov, array<bool>@ seen,
 {
 	const uint n = cov.length();
 	int count = 0;
+	// The same flat copies UpdateGuardPosts takes, for the same reason: this
+	// walks n up to 120 times a pass and the loop body was two AIFloat3 array
+	// reads, a distance2D call and a call to Exposed per asset.
+	array<float> px(n);
+	array<float> pz(n);
+	array<float> wm(n);
+	array<float> rqv(n);
+	array<float> expo(n);
 	// Applying a placement, re-totalling what is left and finding the next
 	// worst asset all read the same cov[i]: one walk of n, not three.
 	int bi = -1;
 	float bw = 0.f;
 	for (uint i = 0; i < n; ++i) {
-		const float u = Exposed(i, cov[i]);
+		const AIFloat3 ap = Market::gPfPos[i];
+		px[i] = ap.x;
+		pz[i] = ap.z;
+		wm[i] = Market::gPfWorth[i];
+		const float rq2 = gPostReq[i];
+		rqv[i] = rq2;
+		float u = 0.f;
+		if (rq2 > 1.f) {
+			const float sh = (rq2 - cov[i]) / rq2;
+			if (sh > 0.f)
+				u = wm[i] * sh;
+		}
+		expo[i] = u;
 		if (u > bw) {
 			bw = u;
 			bi = int(i);
 		}
 	}
+	const float vrMax = (vrE > vr0) ? vrE : vr0;
+	const float vrMax2 = vrMax * vrMax;
 	while ((left > gPostTotal * 0.05f) && (count < 60)) {
 		if (bi < 0)
 			break;
 		const uint at = uint(bi);
+		const float ax = px[at];
+		const float az = pz[at];
 		bi = -1;
 		bw = 0.f;
 		left = 0.f;
 		for (uint i = 0; i < n; ++i) {
-			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[at]);
-			const float vr = seen[i] ? vrE : vr0;
-			if (dd < vr)
-				cov[i] += vm * (1.f - dd / vr);
-			const float u = Exposed(i, cov[i]);
-			left += u;
-			if (u > bw) {
-				bw = u;
+			const float ddx = px[i] - ax;
+			const float ddz = pz[i] - az;
+			const float d2 = ddx * ddx + ddz * ddz;
+			if (d2 < vrMax2) {
+				const float dd = sqrt(d2);
+				const float vr = seen[i] ? vrE : vr0;
+				if (dd < vr)
+					cov[i] += vm * (1.f - dd / vr);
+				const float rq2 = rqv[i];
+				float u = 0.f;
+				if (rq2 > 1.f) {
+					const float sh = (rq2 - cov[i]) / rq2;
+					if (sh > 0.f)
+						u = wm[i] * sh;
+				}
+				expo[i] = u;
+			}
+			const float e = expo[i];
+			left += e;
+			if (e > bw) {
+				bw = e;
 				bi = int(i);
 			}
 		}
@@ -310,8 +371,10 @@ void UpdateCoverNeed()
 	if ((n == 0) || (gPostCovEyes.length() != n) || (gPostSeen.length() != n))
 		return;
 	// The field is rebuilt from the auction too; a snapshot that no longer
-	// indexes the same assets is not one to post over.
-	if ((Market::gPfPos.length() != n) || (gPostReq.length() != n))
+	// indexes the same assets is not one to post over -- and a length that
+	// happens to match is not the same set of assets.
+	if ((Market::gPfPos.length() != n) || (gPostReq.length() != n)
+		|| (gPostReqStamp != Market::gPfStamp))
 		return;
 	if ((ai.frame - gPostNeedAt) < 10 * SECOND)
 		return;
@@ -358,11 +421,13 @@ void UpdateGuardPosts()
 	if (n == 0)
 		return;
 
-	// The pools' members. Positions are read ONCE: nothing moves during the
-	// pass, and the nearest-free-unit scan below asks u^2/2 times.
+	// The pools' members. Positions are read ONCE, into two float arrays rather
+	// than AIFloat3 objects: nothing moves during the pass, and the
+	// nearest-free-unit scan below asks u^2/2 times.
 	array<CCircuitUnit@> us;
 	array<int> ud;
-	array<AIFloat3> upos;
+	array<float> ux;
+	array<float> uz;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		if ((gSquads[i] is null) || (gSquads[i].GetFightType() != int(Task::FightType::DEFEND)))
 			continue;
@@ -374,7 +439,9 @@ void UpdateGuardPosts()
 				continue;
 			us.insertLast(on[j]);
 			ud.insertLast(int(on[j].circuitDef.id));
-			upos.insertLast(on[j].GetPos(ai.frame));
+			const AIFloat3 up = on[j].GetPos(ai.frame);
+			ux.insertLast(up.x);
+			uz.insertLast(up.z);
 		}
 	}
 	gPostUnits = int(us.length());
@@ -386,20 +453,78 @@ void UpdateGuardPosts()
 	array<float> cov(n);
 	array<float> covEyes(n);
 	array<bool> seen(n);
+	// The posting loop below is O(guards x assets) -- 168 x 277 at minute 59 of
+	// a sixteen-AI game -- and every term of it used to reach through a
+	// namespace-global array of AIFloat3 and call distance2D. Flat float copies
+	// of the three fields that loop reads, taken once per pass, so the inner
+	// term is array reads and arithmetic. The arithmetic is unchanged.
+	array<float> px(n);
+	array<float> pz(n);
+	array<float> wm(n);
+	array<float> rqv(n);
 	gPostTotal = 0.f;
-	const bool reqNow = (gPostReq.length() != n) || (ai.frame - gPostReqAt >= 10 * SECOND);
-	if (reqNow) {
-		gPostReq.resize(n);
+	// A REORDER IS AS STALE AS AN EXPIRY -- AND IS NOT A REASON TO SWEEP AGAIN.
+	// The clock alone kept each threat for ten seconds against a field rebuilt
+	// every two, so a value sat on the wrong asset; throwing the array away
+	// instead would cost a full engine sweep per building finished. PfCommit
+	// keeps survivors in their old relative order with newcomers on the end, so
+	// one walk of both gPfKey lists carries every value forward, checked against
+	// the point it was measured over -- ThreatM is a function of position alone.
+	const bool reqAge = (ai.frame - gPostReqAt >= 10 * SECOND);
+	array<float> rq(n, -1.f);
+	if (!reqAge) {
+		uint p = 0;
+		const uint on = gPostReq.length();
+		for (uint i = 0; i < n; ++i) {
+			while ((p < on) && (gPostReqKey[p] != Market::gPfKey[i]))
+				++p;
+			if (p >= on)
+				break;   // the rest are newcomers: they sit after every survivor
+			if ((gPostReqX[p] == Market::gPfPos[i].x)
+				&& (gPostReqZ[p] == Market::gPfPos[i].z))
+				rq[i] = gPostReq[p];
+			++p;
+		}
+	} else {
 		gPostReqAt = ai.frame;
 	}
-	for (uint i = 0; i < n; ++i) {
-		cov[i] = Market::PfCoverPoint(Market::gPfPos[i], Market::gPfPos[i], 0.f, 0.f);
-		covEyes[i] = cov[i];
-		seen[i] = Market::RadarSees(Market::gPfPos[i]);
-		gPostTotal += Market::gPfWorth[i];
-		if (reqNow)
-			gPostReq[i] = Market::ThreatM(Market::gPfPos[i]);
+	gPostReq = rq;
+	gPostReqKey = Market::gPfKey;
+	gPostReqX.resize(n);
+	gPostReqZ.resize(n);
+	gPostReqStamp = Market::gPfStamp;
+	const bool covOk = (gPostCovCache.length() == n)
+			&& (gPostCovStamp == Market::gPfStamp)
+			&& (gPostCovTwRev == Market::gPfTwRev);
+	if (!covOk) {
+		gPostCovCache.resize(n);
+		gPostCovAtX.resize(n);
+		gPostCovAtZ.resize(n);
 	}
+	for (uint i = 0; i < n; ++i) {
+		const AIFloat3 ap = Market::gPfPos[i];
+		px[i] = ap.x;
+		pz[i] = ap.z;
+		if (covOk && (gPostCovAtX[i] == ap.x) && (gPostCovAtZ[i] == ap.z)) {
+			cov[i] = gPostCovCache[i];
+		} else {
+			cov[i] = Market::PfCoverPoint(ap, ap, 0.f, 0.f);
+			gPostCovCache[i] = cov[i];
+			gPostCovAtX[i] = ap.x;
+			gPostCovAtZ[i] = ap.z;
+		}
+		covEyes[i] = cov[i];
+		seen[i] = Market::RadarSees(ap);
+		wm[i] = Market::gPfWorth[i];
+		gPostTotal += wm[i];
+		if (gPostReq[i] < 0.f)
+			gPostReq[i] = Market::ThreatM(ap);
+		rqv[i] = gPostReq[i];
+		gPostReqX[i] = ap.x;
+		gPostReqZ[i] = ap.z;
+	}
+	gPostCovStamp = Market::gPfStamp;
+	gPostCovTwRev = Market::gPfTwRev;
 	// Wanted once, read twice: it sets the warning a radar buys that guard,
 	// and it is the unit the cover-need estimate posts.
 	gPostNeedDef = CoverUnitDef();
@@ -425,8 +550,19 @@ void UpdateGuardPosts()
 	// over the same cov, one walk of n per guard instead of two.
 	int bi = -1;
 	float bw = -1.f;
+	// Exposed() inlined here and in the guard loop below: the same expression on
+	// the same values, off the flat copies, so the argmax costs array reads
+	// instead of a script call that indexes two namespace globals per asset.
+	array<float> expo(n);
 	for (uint i = 0; i < n; ++i) {
-		const float u = Exposed(i, cov[i]);
+		const float rq2 = rqv[i];
+		float u = 0.f;
+		if (rq2 > 1.f) {
+			const float sh = (rq2 - cov[i]) / rq2;
+			if (sh > 0.f)
+				u = wm[i] * sh;
+		}
+		expo[i] = u;
 		if (u > bw) {
 			bw = u;
 			bi = int(i);
@@ -435,10 +571,18 @@ void UpdateGuardPosts()
 	for (uint k = 0; k < us.length(); ++k) {
 		if ((bi < 0) || (nFree == 0))
 			break;
+		const float bx = px[bi];
+		const float bz = pz[bi];
 		uint bp = 0;
-		float bd = upos[freeIdx[0]].distance2D(Market::gPfPos[bi]);
+		// Squared distance: same argmin, and it drops u^2/2 square roots.
+		float dxf = ux[freeIdx[0]] - bx;
+		float dzf = uz[freeIdx[0]] - bz;
+		float bd = dxf * dxf + dzf * dzf;
 		for (uint j = 1; j < nFree; ++j) {
-			const float dd = upos[freeIdx[j]].distance2D(Market::gPfPos[bi]);
+			const uint c = freeIdx[j];
+			dxf = ux[c] - bx;
+			dzf = uz[c] - bz;
+			const float dd = dxf * dxf + dzf * dzf;
 			if (dd < bd) {
 				bd = dd;
 				bp = j;
@@ -461,18 +605,36 @@ void UpdateGuardPosts()
 		gPostUReach.insertLast(seen[at] ? rE : r0);
 		reach = r0;
 		const float m = Catalog::gCostM[ud[bu]];
+		const float ax = px[at];
+		const float az = pz[at];
+		// Nothing past the wider of the two reaches changes, so its exposure is
+		// the value this loop left last time and only the argmax has to see it.
+		const float rMax = (rE > r0) ? rE : r0;
+		const float rMax2 = rMax * rMax;
 		bi = -1;
 		bw = -1.f;
 		for (uint i = 0; i < n; ++i) {
-			const float dd = Market::gPfPos[i].distance2D(Market::gPfPos[at]);
-			const float r = seen[i] ? rE : r0;
-			if (dd < r)
-				cov[i] += m * (1.f - dd / r);
-			if (dd < rE)
-				covEyes[i] += m * (1.f - dd / rE);
-			const float u = Exposed(i, cov[i]);
-			if (u > bw) {
-				bw = u;
+			const float ddx = px[i] - ax;
+			const float ddz = pz[i] - az;
+			const float d2 = ddx * ddx + ddz * ddz;
+			if (d2 < rMax2) {
+				const float dd = sqrt(d2);
+				const float r = seen[i] ? rE : r0;
+				if (dd < r)
+					cov[i] += m * (1.f - dd / r);
+				if (dd < rE)
+					covEyes[i] += m * (1.f - dd / rE);
+				const float rq2 = rqv[i];
+				float u = 0.f;
+				if (rq2 > 1.f) {
+					const float sh = (rq2 - cov[i]) / rq2;
+					if (sh > 0.f)
+						u = wm[i] * sh;
+				}
+				expo[i] = u;
+			}
+			if (expo[i] > bw) {
+				bw = expo[i];
 				bi = int(i);
 			}
 		}
@@ -481,9 +643,9 @@ void UpdateGuardPosts()
 	gPostUncoveredEyes = 0.f;
 	float reqMean = 0.f;
 	for (uint i = 0; i < n; ++i) {
-		gPostUncovered += Exposed(i, cov[i]);
+		gPostUncovered += expo[i];   // the loop above kept this current
 		gPostUncoveredEyes += Exposed(i, covEyes[i]);
-		reqMean += gPostReq[i];
+		reqMean += rqv[i];
 	}
 	reqMean /= float(n);
 

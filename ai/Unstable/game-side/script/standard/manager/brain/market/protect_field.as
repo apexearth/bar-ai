@@ -53,6 +53,11 @@ int        gPfStamp = 0;
 array<AIFloat3> gPfTwPos;
 array<float>    gPfTwReach;
 array<float>    gPfTwKill;
+// WHAT A COVER READING DEPENDS ON. gPfStamp cannot serve as the validity token
+// for a cached PfCoverPoint: defence is excluded from gPfPos above, so a turret
+// finishing or dying never moves it. This does -- it changes exactly when the
+// three arrays above do, and they are read-only between rebuilds.
+int gPfTwRev = 0;
 
 //------------------------------------------------------------------------------
 // THE RIM: the star-shaped hull of our own buildings.
@@ -708,18 +713,30 @@ void PfRebuild()
 		}
 	}
 
-	gPfTwPos.resize(0);
-	gPfTwReach.resize(0);
-	gPfTwKill.resize(0);
+	// Gathered aside and compared, so gPfTwRev moves only when the towers
+	// PfCoverPoint reads actually change.
+	array<AIFloat3> tPos;
+	array<float> tReach;
+	array<float> tKill;
 	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
 		const int d = gProtDefId[PROT_DEF][i];
 		const float r = Catalog::gMaxRange[d];
 		if (r <= 1.f)
 			continue;
-		gPfTwPos.insertLast(gProtPos[PROT_DEF][i]);
-		gPfTwReach.insertLast(r);
-		gPfTwKill.insertLast(PfTowerKill(d));
+		tPos.insertLast(gProtPos[PROT_DEF][i]);
+		tReach.insertLast(r);
+		tKill.insertLast(PfTowerKill(d));
 	}
+	bool twSame = (tPos.length() == gPfTwPos.length());
+	for (uint i = 0; twSame && (i < tPos.length()); ++i) {
+		twSame = (tPos[i].x == gPfTwPos[i].x) && (tPos[i].z == gPfTwPos[i].z)
+			&& (tReach[i] == gPfTwReach[i]) && (tKill[i] == gPfTwKill[i]);
+	}
+	gPfTwPos = tPos;
+	gPfTwReach = tReach;
+	gPfTwKill = tKill;
+	if (!twSame)
+		++gPfTwRev;
 	PfGridBuild();
 	PfTowerGridBuild();
 	Perf::Add("prot.field", _tPf);

@@ -85,16 +85,27 @@ float JobGain(IUnitTask@ t)
 int gJobSeen = 0, gJobUnpriced = 0, gJobFar = 0, gJobFull = 0,
 	gJobLate = 0, gJobCant = 0, gJobHot = 0;
 
-IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool nearOnly, bool requireFeed)
+// BOTH RUNGS OUT OF ONE WALK. "Near only" is a FILTER on the same candidate
+// set scored the same way, so the near answer is just the best candidate that
+// also passed it -- and the caller asked for near, then for any, walking the
+// whole live list, the sweep, the crew bounds and the threat probe twice, and
+// four times per idle election once BestJobBoss ran its own pair. The near
+// winner is left here; the return is the any-distance winner.
+IUnitTask@ gJobNearBest;
+IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 {
 	JobSweep();
 	Requests::SweepDead();
 	gJobSeen = 0; gJobUnpriced = 0; gJobFar = 0; gJobFull = 0;
 	gJobLate = 0; gJobCant = 0; gJobHot = 0;
+	@gJobNearBest = null;
+	float nearScore = 0.f;
 	IUnitTask@ best = null;
 	float bestScore = 0.f;
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	// EcoFar's first two terms do not read the site; taken once.
+	const bool leashed = EcoQuiet() && Builder::gHomeSet;
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ cand = Requests::gLive[i];
 		if ((cand is null) || cand.IsDead()
@@ -112,10 +123,9 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool nearOnly, bool requireFeed)
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
-		if (nearOnly && EcoFar(where)) {
+		const bool far = leashed && EcoFar(where);
+		if (far)
 			++gJobFar;
-			continue;
-		}
 		const float progress = Requests::Progress(cand);
 		// Starting a building needs the build option; adding a lathe to a
 		// nanoframe that already stands does not.
@@ -150,6 +160,10 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool nearOnly, bool requireFeed)
 		}
 		const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
 		const float score = val / (float(busy) + 1.f) / (1.f + walkSec / 60.f);
+		if (!far && (score > nearScore)) {
+			nearScore = score;
+			@gJobNearBest = cand;
+		}
 		if (score > bestScore) {
 			bestScore = score;
 			@best = cand;
@@ -168,9 +182,8 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool nearOnly, bool requireFeed)
 CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 {
 	@gBossJob = null;
-	IUnitTask@ job = BestLiveJob(unit, true, false);
-	if (job is null)
-		@job = BestLiveJob(unit, false, false);
+	IUnitTask@ any = BestLiveJob(unit, false);
+	IUnitTask@ job = (gJobNearBest !is null) ? gJobNearBest : any;
 	if (job is null)
 		return null;
 	@gBossJob = job;
@@ -193,13 +206,14 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 	CCircuitUnit@ nano = null;
 	CCircuitUnit@ fac = null;
 	CCircuitUnit@ any = null;
+	const bool leashed = nearOnly && EcoQuiet() && Builder::gHomeSet;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ w = gWorkers[i];
 		if ((w is null) || (w.id == unit.id) || (w.task is null))
 			continue;
 		if (w.task.GetType() != Task::Type::BUILDER)
 			continue;
-		if (nearOnly && EcoFar(w.GetPos(ai.frame)))
+		if (leashed && EcoFar(w.GetPos(ai.frame)))
 			continue;
 		const int bt = int(w.task.GetBuildType());
 		if (bt == int(Task::BuildType::NANO)) {
@@ -228,7 +242,7 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 		CCircuitUnit@ f = Brain::gFQFac[i];
 		if (f is null)
 			continue;
-		if (nearOnly && EcoFar(f.GetPos(ai.frame)))
+		if (leashed && EcoFar(f.GetPos(ai.frame)))
 			continue;
 		if (f.CountQueued(null) > 0)
 			return f;
@@ -247,9 +261,10 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 	// is counted on the site, so the crew bounds see it and the next idle
 	// con ranks the same site as one hand busier.
 	{
-		IUnitTask@ job = BestLiveJob(unit, true, true);
+		IUnitTask@ any = BestLiveJob(unit, true);
+		IUnitTask@ job = gJobNearBest;
 		if ((job is null) && !isComm)
-			@job = BestLiveJob(unit, false, true);
+			@job = any;
 		if (job !is null) {
 			if (logIt) {
 				gNextFloorLog = ai.frame + 30 * SECOND;

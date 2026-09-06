@@ -228,6 +228,8 @@ float EdgeSpacing(const AIFloat3& in at, float spacing, float reach)
 // map is closed, the edge is the wall. Same geometry, read with the sign that
 // matches the question.
 const int OPEN_RAYS = 8;
+array<float> gOpenCos;
+array<float> gOpenSin;
 float OpenFraction(const AIFloat3& in at, float reach)
 {
 	// The attacker's own standoff is the radius it can stand at, the same
@@ -238,10 +240,22 @@ float OpenFraction(const AIFloat3& in at, float reach)
 		standoff = reach;
 	if (standoff < 1.f)
 		return 1.f;
+	// The ring bearings are the same eight every time. The fill loop asks this
+	// once per candidate site -- ~300 a pass -- so the table saves 4,800 sin/cos
+	// calls and 7,200 vector temporaries per fill. Same bearings, same test.
+	if (gOpenCos.length() == 0) {
+		gOpenCos.resize(uint(OPEN_RAYS));
+		gOpenSin.resize(uint(OPEN_RAYS));
+		for (int b = 0; b < OPEN_RAYS; ++b) {
+			const float ang = 6.2831853f * float(b) / float(OPEN_RAYS);
+			gOpenCos[uint(b)] = cos(ang);
+			gOpenSin[uint(b)] = sin(ang);
+		}
+	}
 	int open = 0;
 	for (int b = 0; b < OPEN_RAYS; ++b) {
-		const float ang = 6.2831853f * float(b) / float(OPEN_RAYS);
-		if (OnMap(at + AIFloat3(cos(ang), 0.f, sin(ang)) * standoff))
+		if (OnMap(AIFloat3(at.x + gOpenCos[uint(b)] * standoff, at.y,
+				at.z + gOpenSin[uint(b)] * standoff)))
 			++open;
 	}
 	return float(open) / float(OPEN_RAYS);

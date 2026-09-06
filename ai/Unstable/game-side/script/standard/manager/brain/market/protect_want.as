@@ -41,29 +41,22 @@ bool T1Tower(int d)
 // dominating gun must be one this economy can actually buy, which is exactly
 // his "once we can afford it we need to build them". Below that, the Gauntlet
 // is not outdated, it is what we can have.
-bool DefAffordable(int d)
+// `affordM` is EcoPowerM() x apex_def_afford_s, read once per election by the
+// caller: it is the same number for every candidate and every build option.
+bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 {
-	const float s = ai.GetTunable("apex_def_afford_s", TUNE_DEF_AFFORD_S);
-	return Catalog::gCostM[d] <= EcoPowerM() * ((s > 1.f) ? s : 30.f);
-}
-
-bool DefObsoleteOnArrival(CCircuitUnit@ unit, int d)
-{
-	if (ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) <= 0.f)
-		return false;
-	if (unit is null)
+	if (b is null)
 		return false;
 	const float myR = Catalog::gMaxRange[d];
 	const float myK = PfTowerKill(d);
 	if ((myR <= 0.f) || (myK <= 0.f))
 		return false;
-	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
 	for (uint i = 0; i < b.length(); ++i) {
 		const int o = b[i];
 		if ((o == d) || Catalog::gMobile[o] || !Catalog::gAvailable[o]
 			|| (ProtClassOf(o) != PROT_DEF))
 			continue;
-		if (!DefAffordable(o))
+		if (Catalog::gCostM[o] > affordM)
 			continue;   // cannot have it yet: d is not outdated, it is the answer
 		// Beaten on BOTH axes -- reach and killing power. Either alone is a
 		// trade-off; both together is obsolescence.
@@ -143,6 +136,68 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				cand.insertLast(team[tq]);
 		}
 	}
+	// EVERYTHING BELOW THAT DOES NOT DEPEND ON THE CANDIDATE, READ ONCE.
+	// Five towers reach the ground branch in a normal election, and each of
+	// these re-derived a side-wide aggregate for an answer identical across
+	// all five: DefenceValue walks every standing turret, EcoPowerM and
+	// ArmyTargetFull the def table, PfCrowd the rim's PF_RAYS wedges.
+	const bool isGround = (half == HALF_GROUND);
+	const float hUSpeed = Catalog::gSpeed[uid];
+	const AIFloat3 hUPos = unit.GetPos(ai.frame);
+	float hTrade = 0.f;
+	float hMexFloorWave = 0.f;
+	float hSiteWave = 0.f;
+	float hEnemyPrior = 0.f;
+	float hWage = 0.f;
+	float hWalkRate = 0.f;
+	float hWalkW = 0.f;
+	float hUGuardM = 0.f;
+	float hHorizS = 0.f;
+	float hHorizPay = 0.f;
+	float hGap = -1.f;      // unmet defence target, or <0 for "no wall pull"
+	bool  hWallUp = false;
+	float hRentPerCell = 0.f;
+	float hFill = 0.f;
+	float hEffBP = 0.f;
+	float hTeamPow = 0.f;
+	float hAffordM = 0.f;
+	float hTtdH = 0.f;
+	bool  hDomOn = false;
+	bool  hEffOn = false;
+	float hBestEff = -1.f;  // the wall-efficiency benchmark, built on first ask
+	if (isGround) {
+		hTrade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+		hMexFloorWave = MexCoverFloorM() * hTrade;
+		hSiteWave = ArmyTargetFull()
+				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
+				* TeamExposure();
+		hEnemyPrior = ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+		hWage = Wage();
+		hWalkRate = WalkRate(Catalog::gBuildPower[uid]);
+		hWalkW = ai.GetTunable("apex_def_site_walk", TUNE_DEF_SITE_WALK);
+		hUGuardM = (PfKillRef() > 0.f)
+				? (Catalog::gSurfT[uid] / PfKillRef()) : 0.f;
+		hHorizS = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+		if (hHorizS <= 1.f)
+			hHorizS = TUNE_EXPOSED_LOSS_S;
+		hHorizPay = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+		if (hHorizPay <= 1.f)
+			hHorizPay = 300.f;
+		const float dHave = DefenceValue();
+		const float dWant = DefenceTarget();
+		if (PlantFramed())   // see the fill: no wall before a base
+			hGap = dWant - dHave;
+		hWallUp = WallStands();
+		hRentPerCell = hWallUp ? (PfMetalPerCell() * PfCrowd()) : 0.f;
+		hFill = TargetFill(dHave, dWant);
+		hEffBP = EffBP(Catalog::gBuildPower[uid]);
+		hTeamPow = TeamBestTowerPower();
+		const float affS = ai.GetTunable("apex_def_afford_s", TUNE_DEF_AFFORD_S);
+		hAffordM = EcoPowerM() * ((affS > 1.f) ? affS : 30.f);
+		hTtdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
+		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
+		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
+	}
 	for (uint i = 0; i < cand.length(); ++i) {
 		const int d = cand[i];
 		if (Gate(GATE_AVAIL, !Catalog::gAvailable[d] || Catalog::gMobile[d]
@@ -176,11 +231,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// also what retired the quiet-rear veto: a rear nothing can
 			// reach has no threat, so it buys no towers without being
 			// forbidden to.
-			const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 			const float reach = (Catalog::gMaxRange[d] > 1.f)
 					? Catalog::gMaxRange[d] : 500.f;
 			const float adds = PfTowerKill(d);
-			const float mexFloorWave = MexCoverFloorM() * trade;
 			// THE WAVE A POST MUST BEAT IS THE ONE THAT ARRIVES TOGETHER, not
 			// the reading at this instant. Under that floor one cheap tower
 			// saturates the shortfall -- measured, `short=1.00->0.00` off a
@@ -190,20 +243,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// in the list. Same symmetric expectation DefenceTarget already
 			// floors on, apportioned by the share of our worth standing in
 			// this post's reach: near zero early, and it grows with the army.
-			const float siteWave = ArmyTargetFull()
-					* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
-					* TeamExposure();
-			DefSiteFill(d, reach, adds, mexFloorWave, siteWave,
-					ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR));
-			const float wage = Wage();
-			const float walkRate = WalkRate(Catalog::gBuildPower[uid]);
-			const float walkW = ai.GetTunable("apex_def_site_walk",
-					TUNE_DEF_SITE_WALK);
-			const float uSpeed = Catalog::gSpeed[uid];
-			const AIFloat3 uPos = unit.GetPos(ai.frame);
+			DefSiteFill(d, reach, adds, hMexFloorWave, hSiteWave, hEnemyPrior);
 			const float kCost = Catalog::gCostM[d]
-					+ Catalog::BuildSecondsAt(d,
-							EffBP(Catalog::gBuildPower[uid])) * wage;
+					+ Catalog::BuildSecondsAt(d, hEffBP) * hWage;
 			AIFloat3 bestAt = at;
 			float bestGain = 0.f;
 			float bestScore = 0.f;
@@ -217,44 +259,34 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// holding the enemy cost that refused it; this builder may take
 			// it if its kill power -- in the same light-tower-metal currency
 			// cover uses -- covers the difference. Zero for an unarmed con.
-			const float uGuardM = (PfKillRef() > 0.f)
-					? (Catalog::gSurfT[uid] / PfKillRef()) : 0.f;
 			float wallPullP = 0.f;
-			// The exposure window every site's prevention rate is scored
-			// over (and the pull is amortised over); a walk longer than it
-			// is a post that stands for none of it.
-			float horizS = ai.GetTunable("apex_exposed_loss_s",
-					TUNE_EXPOSED_LOSS_S);
-			if (horizS <= 1.f)
-				horizS = TUNE_EXPOSED_LOSS_S;
-			float horizPay = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
-			if (horizPay <= 1.f)
-				horizPay = 300.f;
-			if (PlantFramed()) {   // see the fill: no wall before a base
+			if (hGap > 0.f) {
 				// Bounded at one building, for the reason DefSiteFill is:
 				// a slot holds one gun, so it answers one gun's worth of
 				// the shortfall and no more.
-				float gapP = DefenceTarget() - DefenceValue();
+				float gapP = hGap;
 				if (gapP > Catalog::gCostM[d])
 					gapP = Catalog::gCostM[d];
 				if (gapP > 0.f)
-					wallPullP = gapP / horizS;
+					wallPullP = gapP / hHorizS;
 			}
-			// Ground rent's two side-wide terms, read once for the sweep
-			// instead of once per slot: neither depends on the slot, and
-			// PfCrowd re-derives the base's area from the rim every call.
-			const bool wallUp = WallStands();
-			const float rentPerCell = wallUp
-					? (PfMetalPerCell() * PfCrowd()) : 0.f;
 			const float rentCells = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
 			const array<float>@ prevs = gDsPrev[d];
 			if (prevs !is null) {
+				// The five site arrays are handles into a per-def cache;
+				// indexing gDsX[d][si] resolved the outer array on every
+				// read of every slot.
+				const array<float>@ dsX = gDsX[d];
+				const array<float>@ dsZ = gDsZ[d];
+				const array<bool>@ dsFront = gDsFront[d];
+				const array<bool>@ dsRing = gDsRing[d];
+				const array<bool>@ dsWall = gDsWall[d];
 				for (uint si = 0; si < prevs.length(); ++si) {
 					float prev = prevs[si];
 					if (prev < 0.f) {
 						if (Gate(GATE_SLOT_MARK,
-								(-prev >= Catalog::gCostM[d] + uGuardM)
+								(-prev >= Catalog::gCostM[d] + hUGuardM)
 								|| (wallPullP <= 0.f)))
 							continue;
 						prev = wallPullP * (WallSlotLine(si)
@@ -263,9 +295,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					}
 					if (Gate(GATE_SLOT_DEAD, prev <= 0.f))
 						continue;
-					const AIFloat3 s = AIFloat3(gDsX[d][si], 0.f, gDsZ[d][si]);
-					const float wSec = ((uSpeed > 1.f)
-							? (uPos.distance2D(s) / uSpeed) : 60.f) * walkW;
+					const AIFloat3 s = AIFloat3(dsX[si], 0.f, dsZ[si]);
+					const float wSec = ((hUSpeed > 1.f)
+							? (hUPos.distance2D(s) / hUSpeed) : 60.f) * hWalkW;
 					// AN INTERIOR TOWER PAYS FOR ITS GROUND (apexearth:
 					// "we fill our bases up with tons of turrets... while
 					// they're there we have no room to build a lot of
@@ -275,8 +307,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// puts on ground. Free on the wall, the line and the
 					// open flanks -- an empty base charges nothing.
 					float rentS = 0.f;
-					if (wallUp && (WallRimDist(s) < 0.f))
-						rentS = rentPerCell * rentCells;
+					if (hWallUp && (WallRimDist(s) < 0.f))
+						rentS = hRentPerCell * rentCells;
 					// WHAT THE POST PREVENTS OVER ITS PAYBACK HORIZON, per
 					// metal spent -- the walk shortens the window it stands
 					// for and bills the builder's time, nothing more.
@@ -301,18 +333,18 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					// score reduced to 1/walk and the nearest open slot won
 					// whatever it was worth -- the line lost to the rear
 					// ring on distance alone until the ring closed.
-					float standS = horizPay - wSec;
+					float standS = hHorizPay - wSec;
 					if (standS < 0.f)
 						standS = 0.f;
 					const float score = prev * standS
-							/ (kCost + rentS + wSec * walkRate);
+							/ (kCost + rentS + wSec * hWalkRate);
 					if (score > bestScore) {
 						bestScore = score;
 						bestGain = prev;
 						bestAt = s;
-						bestIsFront = gDsFront[d][si];
-						bestIsRing = gDsRing[d][si];
-						bestIsWall = gDsWall[d][si];
+						bestIsFront = dsFront[si];
+						bestIsRing = dsRing[si];
+						bestIsWall = dsWall[si];
 						bestIsLine = bestIsWall && WallSlotLine(si);
 					}
 				}
@@ -357,7 +389,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// separates the two if the front wants sharper pressure than the
 			// rear.
 			{
-				const float ttdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 				// THE LATHE ALREADY STANDING ON THAT GROUND IS BUILD POWER.
 				//
 				// apexearth 2026-08-31: "we should like to make even more
@@ -376,9 +407,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				// of the Agitators we lost died unfinished. A rear slot whose
 				// discount is already near 1 has nothing to gain from it.
 				const float bSec = Catalog::BuildSecondsAt(d,
-						EffBP(Catalog::gBuildPower[uid]) + RingBPAt(bestAt));
-				if ((ttdH > 1.f) && (bSec > 0.f)) {
-					gDwTtd[d] = ttdH / (ttdH + bSec);
+						hEffBP + RingBPAt(bestAt));
+				if ((hTtdH > 1.f) && (bSec > 0.f)) {
+					gDwTtd[d] = hTtdH / (hTtdH + bSec);
 					bestGain *= gDwTtd[d];
 				}
 			}
@@ -402,7 +433,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// low-value defense... Fix it with priority").
 			// Dominated on reach AND killing power by something we can
 			// afford right now: its metal is stranded on arrival.
-			if (DefObsoleteOnArrival(unit, d)) {
+			if (hDomOn && DefObsoleteOnArrival(builds, d, hAffordM)) {
 				gDwT1[d] = 0.f;
 				continue;
 			}
@@ -426,24 +457,28 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// line of the cheapest tower per metal is the half-built line
 			// he is watching fail ("It needs to be really strong to
 			// succeed"). The per-metal ranking stays for the ring.
-			if (bestIsWall && !bestIsLine && (ai.GetTunable("apex_wall_efficient",
-					TUNE_WALL_EFFICIENT) > 0.f) && (Catalog::gCostM[d] > 1.f)) {
+			if (bestIsWall && !bestIsLine && hEffOn
+				&& (Catalog::gCostM[d] > 1.f)) {
 				const float eff = PfTowerKill(d) / Catalog::gCostM[d];
-				float bestEff = 0.f;
-				for (uint bq = 0; bq < builds.length(); ++bq) {
-					const int bd = builds[bq];
-					if (Catalog::gMobile[bd] || !Catalog::gAvailable[bd]
-						|| (ProtClassOf(bd) != PROT_DEF)
-						|| (Catalog::gCostM[bd] <= 1.f))
-					{
-						continue;
+				// The benchmark is over the ASKER's build list, so it is the
+				// same number for every candidate; built on the first ask.
+				if (hBestEff < 0.f) {
+					hBestEff = 0.f;
+					for (uint bq = 0; bq < builds.length(); ++bq) {
+						const int bd = builds[bq];
+						if (Catalog::gMobile[bd] || !Catalog::gAvailable[bd]
+							|| (ProtClassOf(bd) != PROT_DEF)
+							|| (Catalog::gCostM[bd] <= 1.f))
+						{
+							continue;
+						}
+						const float be = PfTowerKill(bd) / Catalog::gCostM[bd];
+						if (be > hBestEff)
+							hBestEff = be;
 					}
-					const float be = PfTowerKill(bd) / Catalog::gCostM[bd];
-					if (be > bestEff)
-						bestEff = be;
 				}
-				if ((bestEff > 0.f) && (eff < bestEff)) {
-					gDwEff[d] = eff / bestEff;
+				if ((hBestEff > 0.f) && (eff < hBestEff)) {
+					gDwEff[d] = eff / hBestEff;
 					bestGain *= gDwEff[d];
 				}
 				// WHICH TOWER DOES THIS RULE ACTUALLY PICK, AND WHY.
@@ -473,7 +508,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				}
 			}
 
-			gDwFill[d] = TargetFill(DefenceValue(), DefenceTarget());
+			gDwFill[d] = hFill;
 			gain = bestGain * gDwFill[d];
 			if (Gate(GATE_DEF_FILL, gain <= 0.f))
 				continue;
@@ -541,7 +576,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		// game, and any faction/con that already holds the best option.
 		if (cls == PROT_DEF) {
 			const float mine = Catalog::Def(d).power;
-			const float team = TeamBestTowerPower();
+			const float team = hTeamPow;
 			if ((team > 0.f) && (mine > 0.f) && (team > mine)) {
 				DwEnsure(d);
 				gDwTeam[d] = mine / team;
@@ -553,9 +588,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		if (Gate(GATE_ZERO_GAIN, gain <= 0.f))
 			continue;
 		Want c;
-		const float speed = Catalog::gSpeed[uid];
-		const float walkSec = (speed > 1.f)
-				? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
+		const float walkSec = (hUSpeed > 1.f)
+				? (hUPos.distance2D(at) / hUSpeed) : 60.f;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c,
 				cls != PROT_DEF);
 		if (rankNow && (cls == PROT_DEF) && (gDefRankDef.length() > 0))
