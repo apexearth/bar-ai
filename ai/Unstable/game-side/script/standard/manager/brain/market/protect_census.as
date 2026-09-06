@@ -66,7 +66,8 @@ const int GATE_SITE_THREAT = 25;
 const int GATE_SITE_STAKE  = 26;
 const int GATE_SITE_STOP   = 27;
 const int GATE_DEF_ROUTE   = 28;
-const int GATE_N           = 29;
+const int GATE_SHLD_SAT    = 29;   // appended: renumbering would move every counter
+const int GATE_N           = 30;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -87,6 +88,7 @@ string GateName(int g)
 	if (g == GATE_SHLD_ARTY)   return "shield.noarty";
 	if (g == GATE_SHLD_FAR)    return "shield.far";
 	if (g == GATE_SHLD_COVER)  return "shield.covered";
+	if (g == GATE_SHLD_SAT)    return "shield.saturated";
 	if (g == GATE_AA_NOAIR)    return "aa.noair";
 	if (g == GATE_AA_SAT)      return "aa.saturated";
 	if (g == GATE_TF_ENOUGH)   return "targfac.enough";

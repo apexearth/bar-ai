@@ -130,10 +130,14 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// its presence looks like (apexearth: "if enemy has LRPC we
 		// need to build shields"). Its seen mass joins the basis and
 		// waives the nearness gate.
-		const int lrpc = EnemyLRPCs();
+		// LrpcStake, not gFoeLrpcCost: the raw census is live visibility and
+		// flickers to zero whenever we lose eyes on their base, which is
+		// almost always. See LrpcStake in protect_target.as.
+		const float lrpcS = LrpcStake();
+		const int lrpc = (lrpcS > 0.f) ? 1 : 0;
 		const float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
 				+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f
-				+ gFoeLrpcCost;
+				+ lrpcS;
 		if (Gate(GATE_SHLD_ARTY, artyS < 200.f))
 			return false;
 		// ...and only when a threat is actually NEAR: a global arty
@@ -147,7 +151,44 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			return false;
 		if (Gate(GATE_SHLD_COVER, ProtCovered(PROT_SHIELD, core, 400.f)))
 			return false;
-		gain = ((artyS < gAssetsM) ? artyS : gAssetsM) * rate * 4.f;
+		// THE SAME THREE TERMS AS AA BELOW: what is at risk, how often it is
+		// being hit, and the share THIS dome newly blanks. What stood here
+		// was an insurance rate with a x4 fudge -- the shape AA was rewritten
+		// away from, and it lost every auction for the same reason.
+		// Saturation is arithmetic: each dome raises cover, which lowers both
+		// the arrival rate and the next dome's share, so no cap is needed.
+		float shFrac = ai.GetTunable("apex_shield_cover_frac", TUNE_SHIELD_COVER_FRAC);
+		if (shFrac < 0.01f)
+			shFrac = 0.01f;
+		const float shTrade = 1.f / shFrac;
+		float shCover = 0.f;
+		for (uint si = 0; si < gProtDefId[PROT_SHIELD].length(); ++si)
+			shCover += Catalog::gCostM[gProtDefId[PROT_SHIELD][si]] * shTrade;
+		const float shAdds = Catalog::gCostM[d] * shTrade;
+		float sShort0 = (artyS - shCover) / artyS;
+		if (sShort0 < 0.f)
+			sShort0 = 0.f;
+		float sShort1 = (artyS - (shCover + shAdds)) / artyS;
+		if (sShort1 < 0.f)
+			sShort1 = 0.f;
+		const float stoppedS = sShort0 - sShort1;
+		if (Gate(GATE_SHLD_SAT, stoppedS <= 0.f))
+			return false;
+		// Turrets are excluded from the stake for the same reason AA and
+		// SiegeRiskAt exclude them: defence must not be its own reason.
+		float econS = gAssetsM - gProtM;
+		if (econS < 0.f)
+			econS = 0.f;
+		const float horizS = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+		const float anchorS = 1.f / ((horizS > 1.f) ? horizS : 120.f);
+		const float shHz = anchorS * (artyS / (artyS + shCover))
+				* ai.GetTunable("apex_shield_urgency", TUNE_SHIELD_URGENCY);
+		const float gainS = econS * shHz * stoppedS;
+		// Measured bombardment losses are a FLOOR, not the whole price --
+		// they are what plasma has already cost us, which arrives after the
+		// mex is dead. Exactly AA's use of AirLossRate.
+		const float measuredS = Military::PlasmaLossRate() * stoppedS;
+		gain = (measuredS > gainS) ? measuredS : gainS;
 	} else if (cls == PROT_AA) {
 		// On the perimeter, not the anchor: AA set no position at all, so
 		// every battery landed on the start position.

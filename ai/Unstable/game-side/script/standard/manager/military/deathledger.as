@@ -27,6 +27,14 @@ float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
 float gDeadToStatic = 0.f;
 float gDeadToAir    = 0.f;
 float gDeadToMobile = 0.f;
+// WHAT BOMBARDMENT IS ACTUALLY COSTING US. The air twin of this drives AA's
+// measured floor; the plasma side had no ledger at all, so "are we being
+// shelled" -- which is what decides whether a remembered LRPC still matters
+// (apexearth 2026-09-06: "remember it, fade if nothing shells us") -- could not
+// be asked. Fed from STRUCTURE deaths as well as army: an LRPC's whole point is
+// that it kills buildings, and the army-only filter discarded exactly its
+// victims.
+float gDeadToPlasma = 0.f;
 // WHAT TIER THEY ARE FIELDING. The only enemy DEFS script ever holds are the
 // ones the two death hooks hand us -- there is no per-def enemy enumeration
 // binding, only role-aggregated cost -- so this is contact-attested and reads
@@ -97,6 +105,31 @@ void NoteDeathSource(float costM, const CCircuitDef@ attackerDef)
 float AirLossRate()
 {
 	return gDeadToAir / BLEED_TAU;
+}
+
+// ANYTHING OF OURS KILLED BY A STATIC LONG-RANGE GUN, structures included.
+// Called before the army filters, so it sees the mexes and generators an LRPC
+// exists to remove.
+void NotePlasmaLoss(float costM, const CCircuitDef@ attackerDef)
+{
+	if ((attackerDef is null) || (costM <= 0.f))
+		return;
+	if (attackerDef.IsMobile())
+		return;
+	// The same derived set EnemyLRPCs counts -- a non-stockpile superweapon of
+	// any faction -- so the ledger and the sighting census can never disagree
+	// about what "shelled us" means.
+	const int ad = int(attackerDef.id);
+	if (!Market::IsSuperWeapon(ad) || Catalog::gStock[ad])
+		return;
+	gDeadToPlasma += costM;
+}
+
+// Metal per second we are CURRENTLY losing to bombardment. Same currency as
+// AirLossRate: the ledger decays over BLEED_TAU, so ledger/TAU is a rate.
+float PlasmaLossRate()
+{
+	return gDeadToPlasma / BLEED_TAU;
 }
 
 // Metal per second of NEW WRECK appearing on ground we fight over: our combat
@@ -205,6 +238,7 @@ void UpdateDeathLedger()
 	gDeadToStatic *= k;
 	gDeadToAir *= k;
 	gDeadToMobile *= k;
+	gDeadToPlasma *= k;
 	for (uint fi = 0; fi < gFoeTierM.length(); ++fi)
 		gFoeTierM[fi] *= k;
 	if ((ai.frame >= gNextBleedLog) && (gBleedFwd + gBleedHome + gKillFwd > 50.f)) {

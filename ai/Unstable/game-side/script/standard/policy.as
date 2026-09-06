@@ -80,6 +80,5 @@ float GreedCons() { return ai.GetTunable("apex_greed_cons", TUNE_GREED_CONS); }
 // always overrides the antinuke bar -- being poor does not make the warhead
 // cheaper.
 float AntinukeIncome() { return ai.GetTunable("apex_antinuke_income", TUNE_ANTINUKE_INCOME); }
-float ShieldIncome()   { return ai.GetTunable("apex_shield_income", TUNE_SHIELD_INCOME); }
 
 }  // namespace Policy

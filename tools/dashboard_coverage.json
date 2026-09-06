@@ -2,6 +2,8 @@
   "_why": "Tunables deliberately NOT on the dashboard's Balance tab. Anything absent from both this list and dashboard_guide.py is reported by tools/dashboard_audit.py, so a knob added to the AI gets the question asked once rather than never.",
   "uncurated": [
     "TUNE_AA_COVER_FRAC",
+    "TUNE_SHIELD_COVER_FRAC",
+    "TUNE_SHIELD_URGENCY",
     "TUNE_ADVSOL_SERIAL",
     "TUNE_AFLOAT_LAND_PCT",
     "TUNE_AFLOAT_NEAR",
@@ -157,7 +159,6 @@
     "TUNE_SCREEN_WORTH",
     "TUNE_SEEN_CAP_MULT",
     "TUNE_SEEN_HALFLIFE",
-    "TUNE_SHIELD_INCOME",
     "TUNE_SIEGE",
     "TUNE_SPACE_M",
     "TUNE_SPAM_SUICIDAL",

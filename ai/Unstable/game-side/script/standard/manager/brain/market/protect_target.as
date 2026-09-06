@@ -498,6 +498,41 @@ int EnemyLRPCs()
 	return n;
 }
 
+// REMEMBERED, THEN FADED (apexearth 2026-09-06: "remember it, fade if nothing
+// shells us"). EnemyLRPCs counts what CountEnemyDefNear can SEE, and an LRPC
+// sits deep in their base where we almost never have eyes, so the raw census
+// flickers to zero and the shield gates refuse. Air gets a permanent latch;
+// a plasma cannon must not, because it is static and can be killed. Decay uses
+// the loss ledger's own BLEED_TAU rather than a new horizon.
+float gLrpcEverCost = 0.f;
+int   gLrpcHoldAt = -1;
+
+float LrpcStake()
+{
+	if (EnemyLRPCs() > 0) {
+		if (gFoeLrpcCost > gLrpcEverCost)
+			gLrpcEverCost = gFoeLrpcCost;
+		gLrpcHoldAt = ai.frame;
+		return gLrpcEverCost;
+	}
+	if (gLrpcEverCost <= 0.f)
+		return 0.f;
+	if (Military::PlasmaLossRate() > 0.f) {
+		gLrpcHoldAt = ai.frame;
+		return gLrpcEverCost;
+	}
+	if (gLrpcHoldAt < 0)
+		gLrpcHoldAt = ai.frame;
+	const float since = float(ai.frame - gLrpcHoldAt) / float(SECOND);
+	float k = 1.f - (since / Military::BLEED_TAU);
+	if (k <= 0.f) {
+		gLrpcEverCost = 0.f;
+		gLrpcHoldAt = -1;
+		return 0.f;
+	}
+	return gLrpcEverCost * k;
+}
+
 int gNextTargetLog = 0;
 void TargetLog()
 {

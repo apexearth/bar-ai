@@ -577,9 +577,14 @@ const float TUNE_PORC_OBSOLETE_RATIO = 7.f;
 //   when it costs at most this many seconds of income.
 const float TUNE_PORC_OBSOLETE_SECS = 20.f;
 
-// [metal/s] -- Metal income before shield domes are insurance worth buying (a
-//   seen threat still overrides).
-const float TUNE_SHIELD_INCOME = 50.f;
+// Shield metal we aim to have standing per metal of enemy bombardment -- the
+//   plasma twin of AA_COVER_FRAC, and the term that stops dome-stacking without
+//   a cap or a count. See docs/27.
+const float TUNE_SHIELD_COVER_FRAC = 0.5f;
+
+// SHIELD_URGENCY: multiplier on the bombardment arrival rate, the plasma twin
+//   of AA_URGENCY. Replaces an undocumented literal x4. See docs/27.
+const float TUNE_SHIELD_URGENCY = 1.f;
 
 // [toggle 0/1] -- Stuck units get an unblock nudge (reclaim/move of what pins
 //   them); 0 disables.

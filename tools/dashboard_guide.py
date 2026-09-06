@@ -785,6 +785,17 @@ GROUPS = [
                  ("TUNE_FLAK_PER", "one further baseline flak per this much "
                   "income"),
              ]},
+            {"title": "Shields",
+             "what": "Shield domes are bought against bombardment actually "
+                     "seen or actually landing -- an enemy LRPC is remembered "
+                     "after the sighting and fades if nothing shells us.",
+             "reads": "protect_senseprice.as, protect_target.as",
+             "knobs": [
+                 ("TUNE_SHIELD_COVER_FRAC", "more shield metal per metal of "
+                  "enemy bombardment; this is what stops dome-stacking"),
+                 ("TUNE_SHIELD_URGENCY", "bombardment is treated as arriving "
+                  "more often"),
+             ]},
         ],
     },
     {

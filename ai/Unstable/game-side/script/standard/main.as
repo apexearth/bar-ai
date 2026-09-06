@@ -312,7 +312,15 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	// behind the filters that ask what WE lost.
 	Military::NoteFoeDef(attackerDef.costM, attackerDef);
 	const CCircuitDef@ cdef = unit.circuitDef;
-	if ((cdef is null) || !cdef.IsMobile() || !WasFinished(int(unit.id)))
+	if (cdef is null)
+		return;
+	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
+	// BUILDINGS, and the mobile-only filter below threw away precisely its
+	// victims -- so the one signal that says "we are being shelled" was
+	// unreachable and shields could not be told to fade or to hold.
+	if (WasFinished(int(unit.id)))
+		Military::NotePlasmaLoss(cdef.costM, attackerDef);
+	if (!cdef.IsMobile() || !WasFinished(int(unit.id)))
 		return;
 	if (!Military::WantsMassing(cdef) && !Military::IsFodder(cdef))
 		return;

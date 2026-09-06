@@ -1577,3 +1577,36 @@ The `apex: sink-site` line is the instrument to judge it with: it should show
 proposer's own `w.pos`, not through `FarmSlot`, so T2 labs, gantries, silos
 and antinukes are unaffected by this. The lab was measured 42 elmos outside a
 turret's reach.
+
+## TUNE_SHIELD_COVER_FRAC = 0.5, TUNE_SHIELD_URGENCY = 1.0 (2026-09-06)
+
+Both are the plasma twins of the AA pair, and they carry AA's values because
+they are the same two terms in the same formula, not because 0.5 and 1.0 were
+chosen for shields. Neither is a new policy: what they REPLACE was
+`* rate * 4.f` -- an insurance rate on min(their arty, our base) with an
+undocumented literal x4 bolted on, which is byte for byte the form AA was
+rewritten away from for failing in exactly this way.
+
+Measured before the change, one 38-minute game in which the enemy fielded a
+4,600 metal `corint`: the shield want reached a nonzero gain 11 times, priced
+at v ~0.9-1.3 against radar's 2.88-8.54, and lost all 11. The sense half picks
+by argmax (`protect_want.as`), not by the category roulette, so it never even
+drew. Shields built: zero. `armgate` has never been built in any recorded game.
+
+COVER_FRAC is the term that makes the want self-limiting -- each dome raises
+shield cover, which lowers both the arrival rate and the next dome's share --
+so it answers his older complaint ("too many shields while theres still no
+threat very close") with arithmetic instead of a cap. URGENCY is the honest
+home for what the x4 was pretending to be.
+
+NOT YET MEASURED. These land together with the LrpcStake latch, without which
+the want was gated off almost all the time regardless of price, so no A/B of
+the price alone is possible on the old build. First A/B still owed.
+
+## TUNE_SHIELD_INCOME -- DELETED (2026-09-06)
+
+`Policy::ShieldIncome()` was defined, published as a modoption, listed in
+dashboard coverage, and **called by nothing**. The 50 metal/s bar it declared
+had never once applied. Deleted rather than wired: the shield want now prices
+against measured bombardment and remembered LRPC stake, which is a better
+answer than an income gate to the same question.
