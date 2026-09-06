@@ -323,7 +323,16 @@ uint CostCrew(const CCircuitDef@ want)
 // bill covered, only the cost-derived crew bounds the site.
 bool BankCovers(const CCircuitDef@ want)
 {
-	return (want !is null) && (aiEconomyMgr.metal.current >= want.costM);
+	// ...AND EVERYTHING ELSE IT HAS ALREADY BEEN PROMISED TO. This asked whether
+	// one bank could pay for ONE building and then licensed the site's whole
+	// cost-derived crew -- 15 hands on a fusion -- with no regard for the other
+	// claims standing against the same metal. That is why PeelSurplus had
+	// nothing to peel while three cons ground on a reactor with an empty bank:
+	// three is a fifth of quota. If this want is itself already ordered its cost
+	// sits inside MOrderedM, which only makes the test stricter -- and it
+	// relaxes again the moment the row is framed and drawing.
+	return (want !is null)
+			&& ((aiEconomyMgr.metal.current - Market::MOrderedM()) >= want.costM);
 }
 
 uint SiteWorkerCap(const CCircuitDef@ want)

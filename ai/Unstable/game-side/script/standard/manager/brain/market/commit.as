@@ -42,6 +42,30 @@ int gComSummaryNext = 0;
 
 uint ComLen() { return gComDef.length(); }
 
+// METAL ALREADY PROMISED, BUT NOT YET DRAWING. A commitment does not remove
+// metal from the bank -- the lathe draws it over the whole build -- so every
+// claimant reading metal.current sees the SAME pile and spends it independently.
+// ORDERED rows ONLY: a FRAMED row's lathe is pulling, and that draw is already
+// inside metal.pull, which every caller here tests separately.
+float gMOrdVal = 0.f;
+int   gMOrdFrame = -1;
+int   gMOrdStamp = -1;
+
+float MOrderedM()
+{
+	if ((gMOrdFrame == ai.frame) && (gMOrdStamp == gComStamp))
+		return gMOrdVal;
+	float m = 0.f;
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] == CS_ORDERED)
+			m += Catalog::gCostM[gComDef[i]];
+	}
+	gMOrdFrame = ai.frame;
+	gMOrdStamp = gComStamp;
+	gMOrdVal = m;
+	return m;
+}
+
 // THE LEDGER'S REVISION, for the aggregates no index can help: a whole-ledger
 // sum has no radius, so the only cheap exact answer is the last one, and this is
 // what says it still holds. Bumped by every write to a row -- insert, drop, and

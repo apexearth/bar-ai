@@ -523,7 +523,13 @@ float MCostScale()
 	// A high bank is the integral of underpricing: forgiveness ramps in
 	// from HALF-full (watched: 3,700 banked while outnumbered -- "we
 	// certainly could afford it").
-	const float frac = aiEconomyMgr.metal.current / st;
+	// NET OF WHAT IS ALREADY PROMISED. Read raw, the same full bank was handed
+	// to every claimant in the same instant and each one discounted itself
+	// against metal the others had already spoken for (see Market::MOrderedM).
+	float bank = aiEconomyMgr.metal.current - MOrderedM();
+	if (bank < 0.f)
+		bank = 0.f;
+	const float frac = bank / st;
 	if (frac <= 0.35f)
 		return 1.f;
 	const float f = (frac - 0.35f) / 0.45f;
