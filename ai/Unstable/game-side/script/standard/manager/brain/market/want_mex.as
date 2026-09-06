@@ -95,7 +95,7 @@ float OpenSpotStream()
 
 // THE DISPLACEMENT CHARGE, ONCE PER FRAME INSTEAD OF ONCE PER CANDIDATE.
 // ValueOf prices every candidate def of every want through this sum, and both
-// halves are full walks of the def table (949 slots) and the spot ledger -- so
+// halves are full walks of the def table (580 slots) and the spot ledger -- so
 // ProposeMexUp, which calls ValueOf once per held spot per extractor def, paid
 // them held-spots x extractors times over. Both are functions of the owned
 // counts, the ledger, the handicap and the last probed yield; every one of
@@ -390,16 +390,24 @@ void MexDiag()
 // one diag window that is a routine outcome, and it reads as "no ground left"
 // rather than "we did not look far enough". A bound on WORK (each try is one
 // FindOpenMexSpot probe), not on how much we may expand.
+int gMexTries = -1;
 int MexTries()
 {
-	const int n = int(ai.GetTunable("apex_mex_tries", TUNE_MEX_TRIES));
-	return (n < 1) ? 1 : n;
+	if (gMexTries < 0) {
+		const int n = int(ai.GetTunable("apex_mex_tries", TUNE_MEX_TRIES));
+		gMexTries = (n < 1) ? 1 : n;
+	}
+	return gMexTries;
 }
+// The sweep's working set, kept between calls. Ninety insertLast into two
+// freshly-constructed arrays, every election, was the sweep's own overhead.
+array<int> gPsCand;
+array<float> gPsScore;
 int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 {
 	CacheSpots();
-	array<int> cand;
-	array<float> score;
+	gPsCand.resize(0);
+	gPsScore.resize(0);
 	// Everything but the spot is fixed for the sweep -- the army share, the
 	// role and the leash. Read once: on an 8v8 map this loop runs over a
 	// hundred spots per election per builder.
@@ -413,9 +421,11 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	// One sweep's composition, kept for mexdiag.
 	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0;
 	gSwSpan = sqrt(fex * fex + fez * fez);
+	const array<int>@ lidx = LedgerIdx();
+	const int lidxN = int(lidx.length());
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		++gSwTotal;
-		if (LedgerFind(int(si)) >= 0) {
+		if ((int(si) < lidxN) ? (lidx[si] >= 0) : (LedgerFind(int(si)) >= 0)) {
 			++gSwLedger;
 			continue;
 		}
@@ -436,24 +446,24 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		const float risk = TripRiskWith(sp, share);
 		if (risk >= 0.5f)
 			++gSwPast;
-		cand.insertLast(int(si));
-		score.insertLast(inc * (1.f - risk) / (walk + 1.f));
+		gPsCand.insertLast(int(si));
+		gPsScore.insertLast(inc * (1.f - risk) / (walk + 1.f));
 	}
-	gSwCand = int(cand.length());
+	gSwCand = int(gPsCand.length());
 	const int tries = MexTries();
 	for (int k = 0; k < tries; ++k) {
 		int bi = -1;
 		float bs = 0.f;
-		for (uint i = 0; i < score.length(); ++i) {
-			if (score[i] > bs) {
-				bs = score[i];
+		for (uint i = 0; i < gPsScore.length(); ++i) {
+			if (gPsScore[i] > bs) {
+				bs = gPsScore[i];
 				bi = int(i);
 			}
 		}
 		if (bi < 0)
 			break;
-		const int sid = cand[bi];
-		score[bi] = -1.f;
+		const int sid = gPsCand[bi];
+		gPsScore[bi] = -1.f;
 		// Threat ceiling is generous on purpose: a contested spot is priced,
 		// not hidden (the leaf era's FindOpenMexSpot went silent exactly under
 		// attack).
@@ -522,6 +532,11 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	// def (a same-yield mex at 4.7x the cost lost the nomination it used to
 	// win on raw extraction -- measured: armamex over armmex).
 	const array<int>@ builds = Catalog::BuildsOf(uid);
+	// The economy and this builder's effective lathe do not vary with which
+	// extractor is being priced; both were re-derived per rung.
+	const float mxPower = EcoPowerM();
+	const float mxGrowK = ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH);
+	const float mxBP = EffBP(Catalog::gBuildPower[uid]);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= 0.f))
@@ -532,20 +547,16 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// at 200 m/s is noise. The multiplier decays with wealth, so
 		// expansion prioritizes itself exactly while we are behind.
 		float gain = spotIncome * Catalog::gExtractsM[d];
-		{
-			// Share of TOTAL economic power, the same denominator the energy
-			// premium uses -- see want_energy.as.
-			const float inc0 = EcoPowerM();
-			gain *= 1.f + ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH)
-					* gain / ((inc0 > gain) ? inc0 : gain);
-		}
+		// Share of TOTAL economic power, the same denominator the energy
+		// premium uses -- see want_energy.as.
+		gain *= 1.f + mxGrowK * gain / ((mxPower > gain) ? mxPower : gain);
 		// Only what we expect to still be collecting: an unguarded spot keeps
 		// its income for as long as it lives, and no longer.
 		// Survival over the mex's own delivery time, the horizon energy
 		// pays (TechSurvival), not a fixed 300 s: the longer horizon priced
 		// a home mex at half of a solar standing beside it. The trip risk
 		// is his distance-and-army-share model (docs/24 era directives).
-		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid])));
+		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		gain *= surv * (1.f - risk);
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
 		// A spot with a recent loss near it is a rebuild: say what it is

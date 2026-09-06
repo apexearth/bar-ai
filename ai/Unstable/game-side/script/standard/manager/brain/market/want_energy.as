@@ -44,6 +44,22 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			}
 		}
 	}
+	// NOTHING IN THIS BLOCK VARIES WITH THE RUNG. Every one of them was re-asked
+	// for each generator in the ladder: two of them walk the def table, one
+	// walks every standing turret, and the tunables build a string and hit a map.
+	const float genBP = EffBP(Catalog::gBuildPower[uid]);
+	const float genRatio = BestConvRatio();
+	const float genPower = EcoPowerM();
+	const float genGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
+	const bool  genSurvOn = ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f;
+	const bool  genInferiorOn = ai.GetTunable("apex_inferior_discount",
+			TUNE_INFERIOR_DISCOUNT) > 0.f;
+	const float genBestEPerM = genInferiorOn ? OwnedBestEPerM() : 0.f;
+	// SpaceRentM is perCell x cells x k, so one cell's worth answers every
+	// footprint -- it walked the whole defence field per rung for the same number.
+	const float genRentCell = SpaceRentM(eSite, 1);
+	const float genCrowdCell = PfCrowd() * PfMetalPerCell()
+			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -66,7 +82,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (Catalog::gNeedGeo[d])
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
-		const float bSec = Catalog::BuildSecondsAt(d, EffBP(Catalog::gBuildPower[uid]));
+		const float bSec = Catalog::BuildSecondsAt(d, genBP);
 		float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
 		// ECO COMPOUNDS, AND ENERGY IS ECO (apexearth: "we are not properly
 		// multiplying the benefits of a strong eco... the more we boost eco the
@@ -83,10 +99,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// what share of TOTAL economic power does this add -- with energy
 		// carried at what a converter would actually pay for it.
 		{
-			const float mkM = Catalog::gMakeE[d] * BestConvRatio();
-			const float base = EcoPowerM();
-			gain *= 1.f + ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH)
-					* mkM / ((base > mkM) ? base : ((mkM > 0.f) ? mkM : 1.f));
+			const float mkM = Catalog::gMakeE[d] * genRatio;
+			gain *= 1.f + genGrowK
+					* mkM / ((genPower > mkM) ? genPower : ((mkM > 0.f) ? mkM : 1.f));
 		}
 		// A DEFERRED PURCHASE IS WORTH ONLY WHAT SURVIVES TO PAY IT BACK. An
 		// afus is minutes of building and more of payback, and if the base
@@ -98,7 +113,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// Scales with the build's own latency, so cheap fast generators are
 		// untouched and only the long bets are discounted; and with measured
 		// hazard, so it lifts by itself once the base is actually covered.
-		if (ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f)
+		if (genSurvOn)
 			gain *= TechSurvival(d, Catalog::gBuildPower[uid]);
 		// INFERIOR WORK IS WORTH LESS, IT IS NOT FORBIDDEN. The same build
 		// power spent through a constructor that CAN build the better
@@ -107,12 +122,11 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// the ratio is 1, so the opening is untouched, and a worker whose only
 		// option is the inferior one still takes it when nothing else competes
 		// -- it just loses to assisting the better build first.
-		if (ai.GetTunable("apex_inferior_discount", TUNE_INFERIOR_DISCOUNT) > 0.f) {
-			const float best = OwnedBestEPerM();
+		if (genInferiorOn) {
 			const float mine = (Catalog::gCostM[d] > 0.f)
 					? (Catalog::gMakeE[d] / Catalog::gCostM[d]) : 0.f;
-			if ((best > mine) && (mine > 0.f))
-				gain *= mine / best;
+			if ((genBestEPerM > mine) && (mine > 0.f))
+				gain *= mine / genBestEPerM;
 		}
 		// AND ONLY THE PART OF IT ANYTHING WOULD USE. Generation on top of an
 		// already-wasted band makes no metal until a converter chews it, so its
@@ -132,9 +146,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		{
 			const float cellsE = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
-			const float rent = SpaceRentM(eSite, Catalog::gAreaCells[d])
-					+ PfCrowd() * PfMetalPerCell() * cellsE
-						* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+			const float rent = ((Catalog::gAreaCells[d] > 0)
+						? (genRentCell * float(Catalog::gAreaCells[d])) : 0.f)
+					+ genCrowdCell * cellsE;
 			if (rent > 0.f) {
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
@@ -444,7 +458,7 @@ float ConvRatioReach(const array<int>@ builds)
 
 // The best ratio anything we already own can place.
 // Same reason as BPCapacity: EcoPowerM runs this per candidate through every
-// growth premium in the market, and it is a 949-slot walk with a build-options
+// growth premium in the market, and it is a 580-slot walk with a build-options
 // walk inside it.
 int gOccFrame = -30000;
 int gOccOwn = -1;
@@ -490,7 +504,7 @@ float ConvUpDemand()
 // sustained).
 // ONCE PER FRAME, NOT ONCE PER CANDIDATE. EffBP calls this, ValueOf calls
 // EffBP, and every want prices every candidate def through ValueOf -- so this
-// 949-slot walk (with a GetTunable inside it) ran hundreds of times a frame
+// 580-slot walk (with a GetTunable inside it) ran hundreds of times a frame
 // during a mexup proposal. Its inputs are the owned counts and the catalog.
 int gBpCapFrame = -30000;
 int gBpCapOwn = -1;
@@ -764,6 +778,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 cSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
+	// Invariant across the rungs -- see the same hoist in the generator ladder.
+	const float cvPower = EcoPowerM();
+	const float cvGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
+	const float cvRentCell = SpaceRentM(cSite, 1);
+	const float cvCrowdCell = PfCrowd() * PfMetalPerCell()
+			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -799,9 +819,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// pair could never be bought in the order that realizes it.
 		float cGain = chew * Catalog::gConvRatio[d];
 		if (realize) {
-			const float base = EcoPowerM();
-			cGain *= 1.f + ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH)
-					* cGain / ((base > cGain) ? base : ((cGain > 0.f) ? cGain : 1.f));
+			cGain *= 1.f + cvGrowK
+					* cGain / ((cvPower > cGain) ? cvPower : ((cGain > 0.f) ? cGain : 1.f));
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c);
@@ -813,9 +832,9 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		{
 			const float cellsC = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
-			const float rent = SpaceRentM(cSite, Catalog::gAreaCells[d])
-					+ PfCrowd() * PfMetalPerCell() * cellsC
-						* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+			const float rent = ((Catalog::gAreaCells[d] > 0)
+						? (cvRentCell * float(Catalog::gAreaCells[d])) : 0.f)
+					+ cvCrowdCell * cellsC;
 			if (rent > 0.f) {
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;

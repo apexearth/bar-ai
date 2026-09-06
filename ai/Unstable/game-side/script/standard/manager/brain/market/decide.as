@@ -2,6 +2,14 @@ namespace Market {
 //------------------------------------------------------------------------------
 // The arbiter's builder side. Called only from Brain::Decide.
 //------------------------------------------------------------------------------
+// PERF NESTING. Perf::Add is a flat accumulator, so the ONLY summable children
+// of hk.maketask.builder are:
+//   bld.flee + bld.rezzer + want.* + dec.* + exec.want + residual
+// The rest are views or grandchildren: xk.<kind> is exec.want's own interval
+// under a second name, xw.* is inside ExecuteWant, memo.* is a zero-duration
+// Note. want.* is charged from BOTH ElecPump calls (maketask's prologue and
+// Decide's); dec.* and exec.want are Decide's alone.
+//------------------------------------------------------------------------------
 
 int gNextIdleLog = 0;
 int gNextAuctionDiag = 0;
@@ -629,6 +637,11 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	// starving without letting it outbid arithmetic.
 	const float lead = ranked[0].value;
 	const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
+	// The horizon's whole output and the commitment exponent do not vary with
+	// the category; both were re-read for each of the nine.
+	const float payH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	const float bitCap = EcoPowerM() * ((payH > 1.f) ? payH : 900.f);
+	const float commitSh = ai.GetTunable("apex_commit_sharp", TUNE_COMMIT_SHARP);
 	array<float> wt(CAT_N, 0.f);
 	float sumV2 = 0.f;
 	for (int c = 0; c < CAT_N; ++c) {
@@ -652,16 +665,11 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 		// and a want that would consume the whole horizon's output is
 		// effectively argmax.
 		float sh = sharp;
-		{
-			const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-			const float cap = EcoPowerM() * ((H > 1.f) ? H : 900.f);
-			if ((cap > 1.f) && (ranked[catBest[c]].def !is null)) {
-				float bite = ranked[catBest[c]].def.costM / cap;
-				if (bite > 1.f)
-					bite = 1.f;
-				sh += bite * ai.GetTunable("apex_commit_sharp",
-						TUNE_COMMIT_SHARP);
-			}
+		if ((bitCap > 1.f) && (ranked[catBest[c]].def !is null)) {
+			float bite = ranked[catBest[c]].def.costM / bitCap;
+			if (bite > 1.f)
+				bite = 1.f;
+			sh += bite * commitSh;
 		}
 		float t = v;
 		if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
@@ -820,6 +828,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// the whole difference between a 450m HLT and a 1300m Agitator, and
 	// nothing priced it: measured over 54 games, 94% of the Agitators we lost
 	// and 100% of the fusions died unfinished, 27% of all metal we ever lost.
+	const double _tExpose = Perf::T0();
 	const float lossH = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
 	const float frameK = ai.GetTunable("apex_frame_risk", TUNE_FRAME_RISK);
 	for (uint i = 0; i < wants.length(); ++i) {
@@ -857,9 +866,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		c.gain -= charge;
 		c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 	}
+	Perf::Add("dec.expose", _tExpose);
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
 	// a builder never idles while a positive want remains executable.
+	const double _tRank = Perf::T0();
 	array<Want@> ranked;
 	for (uint i = 0; i < wants.length(); ++i) {
 		Want@ c = wants[i];
@@ -870,6 +881,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++at;
 		ranked.insertAt(at, c);
 	}
+	Perf::Add("dec.rank", _tRank);
 	// THE ETA LAYER. Shadow-logs always; re-ranks the economic categories only
 	// while apex_eta is on. Above the panics on purpose -- those are safety and
 	// keep their hoist; this only decides which economy want represents its
@@ -885,6 +897,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// bombing: seeing their air is the trigger. While it holds, the airdef
 	// want skips the lottery rather than taking a proportional share of it.
 	// It stops the instant the first tower stands.
+	const double _tPanic = Perf::T0();
 	bool aaPanic = false;
 	// What put ranked[0] there -- logged on the decide line, because a hoist
 	// and a draw look identical from outside and were read as a broken draw.
@@ -922,9 +935,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// re-election and each new task killed the last -- 117 armguard tasks, 115
 	// same-frame aborts, 2 built, in one watched 8v8.
 	bool defClaimOk = true;
-	if (!aaPanic && !ProtAnyComing(PROT_DEF)
-		&& (LossRateAt(Builder::gHomePos) > 0.f))
-	{
+	// One read for both halves: the claim and the hoist below asked the
+	// identical question, and LossRateAt is a risk-field read, not a field
+	// access -- it was taken twice per election, three times when it fired.
+	float homeLoss = 0.f;
+	bool defEmerg = false;
+	if (!aaPanic && !ProtAnyComing(PROT_DEF)) {
+		homeLoss = LossRateAt(Builder::gHomePos);
+		defEmerg = homeLoss > 0.f;
+	}
+	if (defEmerg) {
 		const bool dStale = (ai.frame - gDefClaimAt) > 20 * SECOND;
 		if ((gDefClaim == int(unit.id)) || (gDefClaim < 0) || dStale) {
 			gDefClaim = int(unit.id);
@@ -935,9 +955,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	} else {
 		gDefClaim = -1;
 	}
-	if (!aaPanic && defClaimOk && !ProtAnyComing(PROT_DEF)
-		&& (LossRateAt(Builder::gHomePos) > 0.f))
-	{
+	if (defEmerg && defClaimOk) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_PROTECT)
 				continue;
@@ -951,7 +969,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (ai.frame >= gNextDefPanicLog) {
 				gNextDefPanicLog = ai.frame + 15 * SECOND;
 				AiLog("apex: DEF PANIC -- losing "
-					+ formatFloat(LossRateAt(Builder::gHomePos), "", 0, 2)
+					+ formatFloat(homeLoss, "", 0, 2)
 					+ " m/s at home with zero defence standing; "
 					+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 					+ " jumps the queue");
@@ -1031,12 +1049,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
 	// the commander's first-gun rule below covers the lab the moment it is
 	// ordered.
-	if (!aaPanic && !superPush && PlantFramed()
-		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f))
+	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
+	// it is asked first.
+	if (!aaPanic && !superPush
+		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
+		&& PlantFramed())
 	{
 		const float floorWave = MexCoverFloorM()
 				* ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 		const float near = Brain::LightTowerRange();
+		const float pushAff = ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
+		const float pushCap = EcoPowerM() * pushAff;
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			Want@ cw = ranked[ri];
@@ -1060,7 +1083,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			const float floorHere = floorWave * MexFloorFactor(cw.pos);
-			if ((floorHere <= 1.f) || (CoverAt(cw.pos) >= floorHere))
+			if (floorHere <= 1.f)
+				continue;
+			const float coverHere = CoverAt(cw.pos);
+			if (coverHere >= floorHere)
 				continue;
 			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
 			// "turrets aren't bad to have but usually thats made after we have
@@ -1077,12 +1103,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// until that bill is small enough to be worth overriding the
 			// auction for; below it the tower still competes on price like
 			// anything else, so nothing is forbidden.
-			if (cw.def !is null) {
-				const float aff = ai.GetTunable("apex_cover_push_s",
-						TUNE_COVER_PUSH_S);
-				if (Catalog::gCostM[int(cw.def.id)] > EcoPowerM() * aff)
-					continue;
-			}
+			if ((cw.def !is null)
+				&& (Catalog::gCostM[int(cw.def.id)] > pushCap))
+				continue;
 			if (ri > 0) {
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);
@@ -1105,7 +1128,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
 				+ " walk=" + int(uAt.distance2D(ranked[0].pos))
-				+ " cover=" + int(CoverAt(ranked[0].pos))
+				+ " cover=" + int(coverHere)
 				+ "/" + int(floorWave));
 			break;
 		}
@@ -1120,9 +1143,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// 672 wind turbines were bought against 1 moho upgrade (measured). One
 	// question, one ticket, weighted by that question's best answer.
 	// Rebuild is a price, not a rule: no hoist of the spot that just died.
+	Perf::Add("dec.panic", _tPanic);
+	const double _tDraw = Perf::T0();
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
+	Perf::Add("dec.draw", _tDraw);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
@@ -1160,6 +1186,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
 			: (0.9f * gWantEmaV + 0.1f * top.value);
+	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
+	// like everything else; nothing said what they cost.
+	const double _tLog = Perf::T0();
 	if (DecideLogOn())
 		AiLog("apex: decide t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
 			+ " -> " + CatName(CategoryOf(top.kind))
@@ -1172,6 +1201,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			+ ((next is null) ? " over nothing"
 				: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
 					+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
+	Perf::Add("dec.log", _tLog);
 
 	// THE COMMANDER NEVER TAKES EXPOSED WORK: his death is the game, so a
 	// want's exposure is a cost HE pays at game-loss scale (measured: com
@@ -1317,7 +1347,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			const double _tExec = Perf::T0();
 			@t = ExecuteWant(unit, ranked[i]);
 			Perf::Add("exec.want", _tExec);
-			Perf::Add("exec.k" + KindName(ranked[i].kind), _tExec);
+			// The name is built whether or not anyone is profiling, and the
+			// concat plus KindName ran on every execution at apex_perf=0.
+			if (Perf::On())
+				Perf::Add("xk." + KindName(ranked[i].kind), _tExec);
 		}
 		if (t !is null) {
 			// The execution just changed the counts that priced this kind --

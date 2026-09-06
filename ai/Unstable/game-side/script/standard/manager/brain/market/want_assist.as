@@ -32,21 +32,29 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// returned: first in gWorkers order, same filters.
 	if (boss is null) {
 		CCircuitUnit@ firstNano = null;
+		// THE LEASH IS ASKED LAST. Only a FACTORY or a NANO worker can win here,
+		// and the two are a handful of the fleet -- but the leash test came
+		// first, so every one of the thirty-odd workers paid a GetPos and an
+		// EcoFar to be rejected on its build type a line later. Same filters,
+		// same order of decision: a far worker is still skipped.
 		for (uint bf = 0; bf < gWorkers.length(); ++bf) {
 			CCircuitUnit@ wf = gWorkers[bf];
 			if ((wf is null) || (wf.task is null) || (wf.id == unit.id))
 				continue;
-			if (EcoFar(wf.GetPos(ai.frame)))
-				continue;
 			if (wf.task.GetType() != Task::Type::BUILDER)
 				continue;
 			const int bt = int(wf.task.GetBuildType());
-			if (bt == int(Task::BuildType::FACTORY)) {
+			const bool isFac = (bt == int(Task::BuildType::FACTORY));
+			const bool isNano = (bt == int(Task::BuildType::NANO));
+			if (!isFac && !(isNano && (firstNano is null)))
+				continue;
+			if (EcoFar(wf.GetPos(ai.frame)))
+				continue;
+			if (isFac) {
 				@boss = wf;
 				break;
 			}
-			if ((bt == int(Task::BuildType::NANO)) && (firstNano is null))
-				@firstNano = wf;
+			@firstNano = wf;
 		}
 		if (boss is null)
 			@boss = firstNano;

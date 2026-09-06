@@ -87,7 +87,10 @@ array<int> gLClaimAt;     // frame of the claim; unfinished claims expire
 int gLStamp = 0;
 int gLIdxStamp = -1;
 array<int> gLIdx;
-int LedgerFind(int spotId)
+// The table LedgerFind reads, refreshed under the stamp. Handed out whole to
+// PickSpot, which asked LedgerFind once per MAP spot -- ninety script calls an
+// election for ninety array reads.
+const array<int>@ LedgerIdx()
 {
 	if (gLIdxStamp != gLStamp) {
 		gLIdxStamp = gLStamp;
@@ -102,6 +105,11 @@ int LedgerFind(int spotId)
 				gLIdx[s] = int(i);
 		}
 	}
+	return gLIdx;
+}
+int LedgerFind(int spotId)
+{
+	LedgerIdx();
 	if ((spotId >= 0) && (spotId < int(gLIdx.length())))
 		return gLIdx[spotId];
 	for (uint i = 0; i < gLSpot.length(); ++i) {

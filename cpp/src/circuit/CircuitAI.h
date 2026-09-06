@@ -370,6 +370,17 @@ private:
 	void UpdateActions();
 
 	Units teamUnits;  // owner
+	// Indices over teamUnits, so the "our units near here" helpers stop walking
+	// the whole team once per call. INVALIDATION CONTRACT: teamUnits is mutated
+	// in exactly three places -- RegisterTeamUnit, UnregisterTeamUnit and the
+	// Release() clear -- and all three maintain these. A unit's CCircuitDef is
+	// fixed at construction (CCircuitUnit has no SetCircuitDef), so nothing ever
+	// migrates buckets. Each vector is kept sorted by unit id, which is the order
+	// a std::map walk produced, so callers see the same sequence they always did.
+	std::map<int, std::vector<CCircuitUnit*>> unitsByDef;  // def id -> units
+	std::vector<CCircuitUnit*> teamStatics;  // !IsMobile(), the only ones GetOwnStructsNear can return
+	std::vector<CCircuitUnit*> teamMobiles;  // IsMobile(), likewise for GetOwnDamagedNear
+	void IndexTeamUnit(CCircuitUnit* unit, bool isAdd);
 	EnemyInfos enemyInfos;  // owner
 	CAllyTeam* allyTeam;
 	bool isAllyTeamInit;
@@ -573,6 +584,7 @@ private:
 	uint64_t perfAllyUs = 0;
 	uint64_t perfJobsUs = 0;
 	uint64_t perfActUs = 0;
+	uint64_t perfScrUs = 0;   // script->Update(): AngelScript, not unattributed C++
 	// apex: a census, not a clock -- how many elements the O(n) helpers walked
 	// this minute. Increments only, so measuring costs nothing; a helper whose
 	// visited count grows faster than the unit count is the quadratic one.
@@ -582,6 +594,11 @@ private:
 	unsigned perfReachCalls = 0;
 	uint64_t perfOwnSweep = 0;    // own units visited by GetOwn*Near/OfDef
 	unsigned perfOwnCalls = 0;
+	// ...split four ways, because "own" named a helper family, not a helper, and
+	// the next session needs to know which of them is the one that costs.
+	uint64_t perfOwnDefSweep = 0;    unsigned perfOwnDefCalls = 0;
+	uint64_t perfOwnStrSweep = 0;    unsigned perfOwnStrCalls = 0;
+	uint64_t perfOwnDmgSweep = 0;    unsigned perfOwnDmgCalls = 0;
 	mutable uint64_t perfEcostSweep = 0;  // enemies visited by GetEnemyCostAt
 	mutable unsigned perfEcostCalls = 0;
 	// apex: featureDef -> its constants, filled on first sight. See GetFeatDefInfo.

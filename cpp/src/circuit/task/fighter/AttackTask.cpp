@@ -929,13 +929,7 @@ void CAttackTask::FindTarget()
 	// ally in support range of us, standing on a group, or already attacking
 	// it counts toward the odds, and a co-targeted group is preferred so
 	// co-located squads converge on ONE fight.
-	struct SAllySquad {
-		springai::AIFloat3 pos;
-		springai::AIFloat3 tpos;
-		float power;
-		bool hasTarget;
-	};
-	std::vector<SAllySquad> allySquads;
+	allySquads.clear();
 	const float supportR = circuit->GetTunable("apex_support_radius", ASSIGN_RADIUS);
 	const float allyConverge = circuit->GetTunable("apex_ally_converge", 2.f);
 	if (circuit->GetTunable("apex_ally_aggregate", 1.f) > 0.f) {
@@ -957,6 +951,9 @@ void CAttackTask::FindTarget()
 				CEnemyInfo* otS = otherS->GetTarget();
 				ally.hasTarget = (otS != nullptr);
 				ally.tpos = ally.hasTarget ? otS->GetPos() : ally.pos;
+				// "At our shoulder" does not depend on the target being scored,
+				// so answer it once instead of per enemy per group.
+				ally.nearMe = (ally.pos.SqDistance2D(pos) < SQUARE(NEARBY_ENEMY_DIST));
 				allySquads.push_back(ally);
 			}
 		}
@@ -1021,11 +1018,40 @@ void CAttackTask::FindTarget()
 			continue;
 		}
 
+		// Resolve the group's members ONCE. The id->CEnemyInfo* lookup is a tree
+		// walk and the pass below needs the positions twice, so doing it here
+		// costs nothing extra and pays for the spread measurement.
+		groupEnemies.clear();
+		float sqSpread = .0f;
 		for (const ICoreUnit::Id eId : group.units) {
-			CEnemyInfo* enemy = circuit->GetEnemyInfo(eId);
-			if ((enemy == nullptr) || enemy->IsHidden()/* || (enemy->GetTasks().size() > 2)*/) {
+			CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+			if ((e == nullptr) || e->IsHidden()/* || (e->GetTasks().size() > 2)*/) {
 				continue;
 			}
+			groupEnemies.push_back(e);
+			sqSpread = std::max(sqSpread, e->GetPos().SqDistance2D(group.pos));
+		}
+		// localInfl below sums every enemy group standing within NEARBY_ENEMY_DIST
+		// of the target, and it ran per enemy per group: O(enemies x groups) per
+		// squad pass, which is the dominant term in this task's update. Every
+		// member of this group sits within sqrt(sqSpread) of its centre, so only a
+		// group within NEARBY_ENEMY_DIST + that of the centre can possibly reach
+		// one of them. Prune to that superset once here; the exact per-enemy test
+		// still runs, in ascending group index, so the float sum is unchanged.
+		{
+			// +1 elmo of slack: the bound is a triangle inequality through a
+			// sqrt, and a group sitting exactly on it must not be rounded out.
+			const float candR = NEARBY_ENEMY_DIST + std::sqrt(sqSpread) + 1.f;
+			const float sqCandR = candR * candR;
+			inflCand.clear();
+			for (unsigned j = 0; j < groups.size(); ++j) {
+				if (groups[j].pos.SqDistance2D(group.pos) < sqCandR) {
+					inflCand.push_back(j);
+				}
+			}
+		}
+
+		for (CEnemyInfo* enemy : groupEnemies) {
 			const AIFloat3& ePos = enemy->GetPos();
 			const AIFloat3& eVel = enemy->GetVel();
 			if ((eVel.SqLength2D() >= maxSpeed)/* && (eVel.dot2D(pos - ePos) < 0)*/) {  // speed and direction
@@ -1113,27 +1139,6 @@ void CAttackTask::FindTarget()
 					prio *= UNCATCHABLE_PENALTY;
 				}
 			}
-			// A group's own influence says nothing about what is standing NEXT to it.
-			// Measured over two 8v8 games: 90% of engagement decisions targeted a
-			// group with zero influence -- undefended economy -- so the strength
-			// test never ran, and the squad walked into whatever army happened to
-			// be nearby. apexearth: "We realize we're in danger too late on our
-			// units... we head in ... panic... turn around... die."
-			// The threat map covers each armed enemy's weapon range, so it sees the
-			// army beside the target that group.influence cannot.
-			// Guarded on > 0: if this layer ever reads dead, behaviour is unchanged
-			// rather than broken.
-			// NOT the threat map: CThreatMap::GetThreatAt read 0 at 14 of 15 target
-			// positions when logged, the same dead layer as GetBuilderThreatAt.
-			// Enemy GROUP influence is real data -- it is what the strength test
-			// above uses -- so sum every armed group standing near this target
-			// instead. That is the army beside the undefended mex.
-			float localInfl = .0f;
-			for (const CEnemyManager::SEnemyGroup& g : groups) {
-				if (g.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST)) {
-					localInfl += g.influence;
-				}
-			}
 			// THE DIVE: inside their base, a fat unarmed structure outranks
 			// everything whether it is guarded or not -- see DIVE_ECO_PRIORITY.
 			// A colossus dives from ANYWHERE: its whole trip is the dive.
@@ -1155,6 +1160,25 @@ void CAttackTask::FindTarget()
 			if ((groupWeak || wornOut) && !isDive) {
 				++skippedWeak;
 				continue;  // on their ground under-strength or worn: fat eco only
+			}
+			// A group's own influence says nothing about what is standing NEXT to it.
+			// Measured over two 8v8 games: 90% of engagement decisions targeted a
+			// group with zero influence -- undefended economy -- so the strength
+			// test never ran, and the squad walked into whatever army happened to
+			// be nearby. apexearth: "We realize we're in danger too late on our
+			// units... we head in ... panic... turn around... die."
+			// NOT the threat map: CThreatMap::GetThreatAt read 0 at 14 of 15 target
+			// positions when logged, the same dead layer as GetBuilderThreatAt.
+			// Enemy GROUP influence is real data -- it is what the strength test
+			// above uses -- so sum every armed group standing near this target
+			// instead. That is the army beside the undefended mex.
+			// inflCand is that sum's candidate set, pruned once per group above.
+			float localInfl = .0f;
+			for (const unsigned j : inflCand) {
+				const CEnemyManager::SEnemyGroup& g = groups[j];
+				if (g.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST)) {
+					localInfl += g.influence;
+				}
 			}
 			// localInfl is already the army standing beside this target. It was
 			// only ever used to REFUSE a target; nothing used it to prefer a safe
@@ -1215,8 +1239,10 @@ void CAttackTask::FindTarget()
 				// walking the other way -- phantom support, died alone
 				// (apexearth: "only a small portion attacks, the rest walk
 				// away").
-				if ((ally.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))
-					|| (ally.pos.SqDistance2D(pos) < SQUARE(NEARBY_ENEMY_DIST))
+				// nearMe first: it is the one clause that does not depend on the
+				// enemy being scored, so a shouldered ally costs no distance at all.
+				if (ally.nearMe
+					|| (ally.pos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))
 					|| (ally.hasTarget && (ally.tpos.SqDistance2D(ePos) < SQUARE(NEARBY_ENEMY_DIST))))
 				{
 					allyPower += ally.power;

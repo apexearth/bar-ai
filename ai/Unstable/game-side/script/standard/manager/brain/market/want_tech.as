@@ -114,6 +114,10 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	float inc1 = 0.f;
 	bool  incOk = false;
 	const float growK = ai.GetTunable("apex_mex_growth", TUNE_MEX_GROWTH);
+	// The handicap and the preference multiplier are the same for every spot
+	// and every extractor; both sat in the inner loop.
+	const float incMulU = IncomeMult();
+	const float upBoost = ai.GetTunable("apex_mexup_boost", TUNE_MEXUP_BOOST);
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		if (gLExtract[li] <= 0.f)
 			continue;   // not finished (or already being replaced)
@@ -130,11 +134,13 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		if (NearBlocked(gLPos[li]))
 			continue;
 		float surv = -1.f;
+		const float walkSecU = (speed > 1.f)
+				? (here.distance2D(gLPos[li]) / speed) : 60.f;
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
 				continue;
-			float delta = gLIncome[li] * IncomeMult()
+			float delta = gLIncome[li] * incMulU
 					* (Catalog::gExtractsM[d] - gLExtract[li]);
 			{
 				// Share of TOTAL economic power, the same denominator the
@@ -164,11 +170,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			// liked. It is a PREFERENCE expressed as a multiplier, not a
 			// derived law: the honest alternative is that energy is overpriced
 			// against extraction, which nobody has established.
-			delta *= ai.GetTunable("apex_mexup_boost", TUNE_MEXUP_BOOST);
-			const float walkSec = (speed > 1.f)
-					? (here.distance2D(gLPos[li]) / speed) : 60.f;
+			delta *= upBoost;
 			Want c;
-			ValueOf(d, delta, walkSec, Catalog::gBuildPower[uid], c);
+			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c);
 			if (c.value > w.value) {
 				w = c;
 				w.kind = WK_MEXUP;

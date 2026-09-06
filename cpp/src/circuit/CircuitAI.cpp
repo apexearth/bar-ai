@@ -813,6 +813,9 @@ int CCircuitAI::Release(int reason)
 		delete kv.second;
 	}
 	teamUnits.clear();
+	unitsByDef.clear();
+	teamStatics.clear();
+	teamMobiles.clear();
 	garbage.clear();
 	for (CCircuitUnit* unit : deadUnits) {
 		delete unit;
@@ -887,6 +890,9 @@ int CCircuitAI::Update(int frame)
 	scheduler->ProcessJobs(frame);
 	perfJobsUs += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - tJobs0).count();
+	// Timed separately: this is AngelScript, and outside every bucket it was
+	// landing in `other`, which reads as unattributed C++ and is not.
+	const auto tScr0 = std::chrono::steady_clock::now();
 	if (frame % TEAM_SLOWUPDATE_RATE == skirmishAIId) {
 		// NOTE: Probably should be last in ProcessJobs queue, after all income updates if it was in the same frame.
 		//       Hence it is not:
@@ -894,6 +900,7 @@ int CCircuitAI::Update(int frame)
 		script->Update();
 	}
 	const auto tAct0 = std::chrono::steady_clock::now();
+	perfScrUs += std::chrono::duration_cast<std::chrono::microseconds>(tAct0 - tScr0).count();
 	UpdateActions();
 	perfActUs += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - tAct0).count();
@@ -970,10 +977,11 @@ int CCircuitAI::Update(int frame)
 				perfFrameCalls, perfFrameUs / 1000.f,
 				(perfFrameCalls > 0) ? float(perfFrameUs) / float(perfFrameCalls) : 0.f,
 				perfFrameMaxUs / 1000.f);
-		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f otherMs=%.1f",
+		const uint64_t perfAccounted = perfAllyUs + perfJobsUs + perfActUs + perfScrUs;
+		LOG("apex: perf split allyMs=%.1f jobsMs=%.1f actMs=%.1f scrMs=%.1f otherMs=%.1f",
 				perfAllyUs / 1000.f, perfJobsUs / 1000.f, perfActUs / 1000.f,
-				(perfFrameUs > perfAllyUs + perfJobsUs + perfActUs)
-					? (perfFrameUs - perfAllyUs - perfJobsUs - perfActUs) / 1000.f : 0.f);
+				perfScrUs / 1000.f,
+				(perfFrameUs > perfAccounted) ? (perfFrameUs - perfAccounted) / 1000.f : 0.f);
 		// apex: how much WORK the O(n) helpers did, not how long they took --
 		// a visited count that grows faster than the unit count names the
 		// quadratic helper without a clock in the hot loop.
@@ -986,10 +994,18 @@ int CCircuitAI::Update(int frame)
 		perfReachSweep = 0; perfReachCalls = 0;
 		perfOwnSweep = 0; perfOwnCalls = 0;
 		perfEcostSweep = 0; perfEcostCalls = 0;
+		LOG("apex: perf sweep ownDef=%llu/%u ownStruct=%llu/%u ownDmg=%llu/%u",
+				(unsigned long long)perfOwnDefSweep, perfOwnDefCalls,
+				(unsigned long long)perfOwnStrSweep, perfOwnStrCalls,
+				(unsigned long long)perfOwnDmgSweep, perfOwnDmgCalls);
+		perfOwnDefSweep = 0; perfOwnDefCalls = 0;
+		perfOwnStrSweep = 0; perfOwnStrCalls = 0;
+		perfOwnDmgSweep = 0; perfOwnDmgCalls = 0;
 		scheduler->LogJobPerf(this);
 		perfAllyUs = 0;
 		perfJobsUs = 0;
 		perfActUs = 0;
+		perfScrUs = 0;
 		perfFrameUs = 0;
 		perfFrameMaxUs = 0;
 		perfFrameCalls = 0;
@@ -1668,7 +1684,12 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
 	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
 	unit->SetArea(area);
 
-	teamUnits[unitId] = unit;
+	auto slot = teamUnits.emplace(unitId, unit);
+	if (!slot.second) {  // re-register: the old instance leaves the indices first
+		IndexTeamUnit(slot.first->second, false);
+		slot.first->second = unit;
+	}
+	IndexTeamUnit(unit, true);
 	cdef->Inc();
 
 	// FIXME: Sometimes area where factory is placed is not suitable for its units.
@@ -1681,6 +1702,7 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
 
 void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
 {
+	IndexTeamUnit(unit, false);
 	teamUnits.erase(unit->GetId());
 	unit->GetCircuitDef()->Dec();
 
@@ -1772,9 +1794,12 @@ float CCircuitAI::GetDefBuildProgress(CCircuitDef* def) const
 		return -1.f;
 	}
 	float best = -1.f;
-	for (const auto& kv : teamUnits) {
-		CCircuitUnit* u = kv.second;
-		if ((u == nullptr) || (u->GetCircuitDef() != def)) {
+	auto bucket = unitsByDef.find(def->GetId());
+	if (bucket == unitsByDef.end()) {
+		return best;
+	}
+	for (CCircuitUnit* u : bucket->second) {
+		if (u->GetCircuitDef() != def) {
 			continue;
 		}
 		const float p = u->GetUnit()->GetBuildProgress();
@@ -2049,6 +2074,36 @@ bool CCircuitAI::GetBlockedBuildPos(springai::AIFloat3& outPos)
 	return true;
 }
 
+// Keep the teamUnits indices in step. Sorted-by-id insert/erase, because a
+// std::map walk hands callers ascending ids and some of them stop at the first
+// hit -- a different order there is a different unit, not a faster answer.
+void CCircuitAI::IndexTeamUnit(CCircuitUnit* unit, bool isAdd)
+{
+	if (unit == nullptr) {
+		return;
+	}
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	const ICoreUnit::Id id = unit->GetId();
+	auto byId = [](CCircuitUnit* a, ICoreUnit::Id b) { return a->GetId() < b; };
+	auto touch = [&](std::vector<CCircuitUnit*>& vec) {
+		auto it = std::lower_bound(vec.begin(), vec.end(), id, byId);
+		if (isAdd) {
+			if ((it == vec.end()) || ((*it)->GetId() != id)) {
+				vec.insert(it, unit);
+			}
+		} else if ((it != vec.end()) && (*it == unit)) {
+			// By pointer, not by id: a re-registered id owns a different
+			// instance, and dropping that one would leave the index short of
+			// a unit teamUnits still holds.
+			vec.erase(it);
+		}
+	};
+	if (cdef != nullptr) {
+		touch(unitsByDef[cdef->GetId()]);
+		touch(cdef->IsMobile() ? teamMobiles : teamStatics);
+	}
+}
+
 // Our own live units of one def near a position. Deliberately NOT filtered by
 // what is "obsolete" -- that is the caller's judgement, and keeping it out of
 // here is what stops this becoming a second place where policy hides.
@@ -2062,11 +2117,22 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnUnitsOfDef(CCircuitDef* def, const 
 	}
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
-	perfOwnSweep += teamUnits.size();
+	auto bucket = unitsByDef.find(def->GetId());
+	if (bucket == unitsByDef.end()) {
+		++perfOwnCalls;
+		++perfOwnDefCalls;
+		return out;
+	}
+	// The def filter was the whole point of the walk, so index by it instead of
+	// re-deriving it: same units, same ascending-id order, without touching the
+	// other several hundred.
+	const std::vector<CCircuitUnit*>& mine = bucket->second;
+	perfOwnSweep += mine.size();
 	++perfOwnCalls;
-	for (auto& kv : teamUnits) {
-		CCircuitUnit* u = kv.second;
-		if ((u == nullptr) || (u->GetCircuitDef() != def)) {
+	perfOwnDefSweep += mine.size();
+	++perfOwnDefCalls;
+	for (CCircuitUnit* u : mine) {
+		if (u->GetCircuitDef() != def) {  // same id, foreign instance: the old test, kept
 			continue;
 		}
 		// Distance before IsBeingBuilt: the position is cached per frame, the
@@ -2094,16 +2160,11 @@ void CCircuitAI::GetOwnStructsNear(const springai::AIFloat3& pos, float radius, 
 	out.clear();
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
-	perfOwnSweep += teamUnits.size();
+	perfOwnSweep += teamStatics.size();
 	++perfOwnCalls;
-	for (auto& kv : teamUnits) {
-		CCircuitUnit* u = kv.second;
-		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
-			continue;
-		}
-		if (u->GetCircuitDef()->IsMobile()) {
-			continue;
-		}
+	perfOwnStrSweep += teamStatics.size();
+	++perfOwnStrCalls;
+	for (CCircuitUnit* u : teamStatics) {
 		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
 			continue;
 		}
@@ -2119,15 +2180,10 @@ bool CCircuitAI::HasOwnStructNear(const springai::AIFloat3& pos, float radius)
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
 	++perfOwnCalls;
-	for (auto& kv : teamUnits) {
+	++perfOwnStrCalls;
+	for (CCircuitUnit* u : teamStatics) {
 		++perfOwnSweep;  // counts what was visited: this one stops early
-		CCircuitUnit* u = kv.second;
-		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
-			continue;
-		}
-		if (u->GetCircuitDef()->IsMobile()) {
-			continue;
-		}
+		++perfOwnStrSweep;
 		if ((radius > 0.f) && (u->GetPos(frame).SqDistance2D(pos) > sqRadius)) {
 			continue;
 		}
@@ -2144,13 +2200,11 @@ std::vector<CCircuitUnit*> CCircuitAI::GetOwnDamagedNear(const springai::AIFloat
 	std::vector<CCircuitUnit*> out;
 	const float sqRadius = radius * radius;
 	const int frame = GetLastFrame();
-	perfOwnSweep += teamUnits.size();
+	perfOwnSweep += teamMobiles.size();
 	++perfOwnCalls;
-	for (auto& kv : teamUnits) {
-		CCircuitUnit* u = kv.second;
-		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || !u->GetCircuitDef()->IsMobile()) {
-			continue;
-		}
+	perfOwnDmgSweep += teamMobiles.size();
+	++perfOwnDmgCalls;
+	for (CCircuitUnit* u : teamMobiles) {
 		// Distance first: health percent is four engine round trips per unit
 		// (health, max health, capture progress) and this is called per medic
 		// and per repair election, so the team was being asked its condition

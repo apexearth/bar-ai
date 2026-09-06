@@ -227,13 +227,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	{
 		const double _tOr = Perf::T0();
 		IUnitTask@ orph0 = Requests::OrphanOf(w.def);
-		Perf::Add("exec.orph", _tOr);
+		Perf::Add("xw.orph", _tOr);
 		if ((orph0 !is null) && AdoptWorthDetour(unit, w,
 				orph0.GetBuildPos(), Requests::Progress(orph0)))
 			return orph0;
 		const double _tPe = Perf::T0();
 		CCircuitUnit@ pf0 = Requests::PendAnyOfDef(w.def, unit.GetPos(ai.frame));
-		Perf::Add("exec.pend", _tPe);
+		Perf::Add("xw.pend", _tPe);
 		if ((pf0 !is null)
 			&& (Builder::ThreatFor(unit, pf0.GetPos(ai.frame))
 				<= Builder::CON_THREAT_VETO)
@@ -462,6 +462,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const float mSt = aiEconomyMgr.metal.storage;
 		if ((mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
 				* ai.GetTunable("apex_nano_sink_bank", TUNE_NANO_SINK_BANK))) {
+			// Same hoist as the want side: one free-flow read for the walk.
+			const float skFeed = FreeMetalFlow()
+					* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
+			const float skH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 			for (uint li = 0; li < Requests::gLive.length(); ++li) {
 				IUnitTask@ lt = Requests::gLive[li];
 				if ((lt is null) || (lt.buildDef is null))
@@ -495,19 +499,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				// eat the free flow earns nothing from another turret.
 				// Priced in the want side's currency (site_share) -- unshared
 				// feed here let a sink outbid the line that won the want.
-				const float feed2 = FreeMetalFlow()
-						* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
-				float u2 = feed2 - drain - ringEat2;
+				float u2 = skFeed - drain - ringEat2;
 				// Same remaining-life scale as the want side (see
 				// want_nano.as): a frame's stream dies at completion, a
 				// line's does not.
 				{
 					const float eat2 = drain + ringEat2;
 					const float oneNano2 = 200.f * sdens2;
-					const float H2 = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 					float life2 = Catalog::gCostM[bd3]
 							/ ((eat2 > oneNano2) ? eat2 : oneNano2);
-					float sh2 = life2 / ((H2 > 1.f) ? H2 : 900.f);
+					float sh2 = life2 / ((skH > 1.f) ? skH : 900.f);
 					if (sh2 < 1.f)
 						u2 *= sh2;
 				}
@@ -579,7 +580,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const double _tProbe = Perf::T0();
 			PackSlots(int(w.def.id), OnMap(slot) ? slot : w.pos,
 					nAnchor, 1, nPacked);
-			Perf::Add("exec.nanoprobe", _tProbe);
+			Perf::Add("xw.nanoprobe", _tProbe);
 		}
 		if (nPacked.length() > 0) {
 			slot = nPacked[0];
@@ -596,7 +597,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				gNanoSiteAt = ai.frame;
 				const double _tProbe2 = Perf::T0();
 				gNanoSite = ai.FindBuildSiteNear(w.def, raw, 300.f);
-				Perf::Add("exec.nanoprobe", _tProbe2);
+				Perf::Add("xw.nanoprobe", _tProbe2);
 			}
 			if (OnMap(gNanoSite))
 				slot = gNanoSite;
@@ -690,7 +691,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							}
 						}
 					}
-					Perf::Add("exec.nanobatch", _tBatch);
+					Perf::Add("xw.nanobatch", _tBatch);
 					if (opened > 0)
 						AiLog("apex: nano batch t=" + ai.teamId
 							+ " +" + opened
@@ -911,7 +912,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						if (mkc)
 							++cOpen;
 					}
-					Perf::Add("exec.convbatch", _tC);
+					Perf::Add("xw.convbatch", _tC);
 					if (cOpen > 0)
 						AiLog("apex: conv batch t=" + ai.teamId
 							+ " +" + cOpen

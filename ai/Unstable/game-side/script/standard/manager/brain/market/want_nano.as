@@ -26,6 +26,11 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	bool haveLine = (lineNeed > 0.f) && OnMap(linePos);
 	AIFloat3 sinkPos = AIFloat3(-1.f, 0.f, -1.f);
 	float sinkNeed = 0.f;
+	// The free flow and the two shares are the same question for every site --
+	// they were re-asked once per live request.
+	const float snFree = FreeMetalFlow()
+			* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
+	const float snH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	for (uint si = 0; si < Requests::gLive.length(); ++si) {
 		IUnitTask@ st = Requests::gLive[si];
 		if ((st is null) || (st.buildDef is null))
@@ -67,9 +72,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// "they're going to kick our ass"). Spare metal flow is the honest
 		// bound and it already scales with the economy and the bank, so the
 		// turret count rises with income on its own and needs no ceiling.
-		const float free3 = FreeMetalFlow()
-				* ai.GetTunable("apex_nano_site_share", TUNE_NANO_SITE_SHARE);
-		float need = free3 - crew3 - ringEat;
+		float need = snFree - crew3 - ringEat;
 		// A FRAME'S STREAM DIES AT COMPLETION where a line's runs forever, so
 		// the sink's need is scaled by its remaining life over the payback
 		// horizon: cost over what the crew already eats. A bare afus reads
@@ -80,10 +83,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		{
 			const float eat = crew3 + ringEat;
 			const float oneNano = 200.f * sdens;
-			const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 			float life = Catalog::gCostM[bd]
 					/ ((eat > oneNano) ? eat : oneNano);
-			float sh = life / ((H > 1.f) ? H : 900.f);
+			float sh = life / ((snH > 1.f) ? snH : 900.f);
 			if (sh < 1.f)
 				need *= sh;
 		}

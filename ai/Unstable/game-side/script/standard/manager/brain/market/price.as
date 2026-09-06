@@ -3,6 +3,40 @@ namespace Market {
 // The currency's two live prices.
 //------------------------------------------------------------------------------
 
+// LATCHED, NOT CACHED. CCircuitAI::GetTunable freezes a value on first read and
+// never re-reads it, so holding it here is the SAME number -- no staleness
+// trade. Every one of these sits on the per-candidate path: ValueOf prices each
+// def of each want through them, so the string and the keyed lookup were paid
+// once per candidate per election. Same latch coverage.as already applies to
+// its own two (CwTuneFill).
+bool  gPrTuneSet = false;
+float gPrSpaceM = 0.f;
+float gPrPaybackH = 0.f;
+float gPrLockup = 0.f;
+float gPrAssistShare = 0.f;
+float gPrEResponse = 0.f;
+bool  gPrEBillOn = false;
+float gPrEHeadroom = 0.f;
+float gPrELookahead = 0.f;
+bool  gPrERealizeOn = false;
+float gPrEWasteWorth = 0.f;
+void PrTuneFill()
+{
+	if (gPrTuneSet)
+		return;
+	gPrTuneSet = true;
+	gPrSpaceM = ai.GetTunable("apex_space_m", TUNE_SPACE_M);
+	gPrPaybackH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	gPrLockup = ai.GetTunable("apex_lockup", TUNE_LOCKUP);
+	gPrAssistShare = ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
+	gPrEResponse = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
+	gPrEBillOn = ai.GetTunable("apex_e_bill_share", TUNE_E_BILL_SHARE) > 0.f;
+	gPrEHeadroom = ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	gPrELookahead = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+	gPrERealizeOn = ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f;
+	gPrEWasteWorth = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
+}
+
 // The wage of one builder-second: the metal flow each working builder carries.
 // A choice that occupies a builder longer forgoes more of this.
 float Wage()
@@ -26,23 +60,29 @@ float Wage()
 float gWalkTowerM = 0.f;
 float gWalkTowerBT = 0.f;
 
-float WalkRate(float builderBP)
+// Wage is an engine worker-count query plus two economy reads, and ValueOf
+// wanted it twice on one line -- here and again for the build's own seconds.
+float WalkRateWith(float builderBP, float wage)
 {
-	float r = Wage();
 	if (builderBP <= 0.f)
-		return r;
+		return wage;
 	if (gWalkTowerBT <= 1.f) {
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 		if (light is null)
-			return r;
+			return wage;
 		const int ld = int(light.id);
 		if (!Catalog::ValidId(ld) || (Catalog::gBuildTime[ld] <= 1.f))
-			return r;
+			return wage;
 		gWalkTowerM = Catalog::gCostM[ld];
 		gWalkTowerBT = Catalog::gBuildTime[ld];
 	}
 	const float own = gWalkTowerM * builderBP / gWalkTowerBT;
-	return (own > r) ? own : r;
+	return (own > wage) ? own : wage;
+}
+
+float WalkRate(float builderBP)
+{
+	return WalkRateWith(builderBP, Wage());
 }
 
 // A builder's walk to a site, in seconds. Straight-line: no path cost query
@@ -171,6 +211,7 @@ float EPriceFloor()
 // only the conversion floor.
 float EPrice()
 {
+	PrTuneFill();
 	// GAIN side, anchored on the game's own exchange rate (apexearth
 	// 2026-08-23: "you have the metal conversion rates from the buildings
 	// currently available, that should be how energy income is priced").
@@ -187,12 +228,12 @@ float EPrice()
 	// had already happened.
 	float ePull = aiEconomyMgr.energy.pull + EDrainInFlight();
 	if (gEPullGrowth > 0.f)
-		ePull += gEPullGrowth * ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+		ePull += gEPullGrowth * gPrELookahead;
 	// Supply LEADS demand (apexearth 2026-08-23: "we shouldn't even let
 	// ourselves get to the point where we've run out of E"): the target is
 	// income at headroom over trending pull, so a standing premium exists
 	// while income merely MATCHES pull, and the bank never gets raced.
-	ePull *= ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	ePull *= gPrEHeadroom;
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
@@ -219,6 +260,7 @@ float EPrice()
 // balance that makes new E supply valuable makes spending E cheap.
 float ECostSpot()
 {
+	PrTuneFill();
 	const float eInc = aiEconomyMgr.energy.income;
 	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
@@ -246,6 +288,7 @@ float ECostSpot()
 // when we have extra of something like energy").
 float EPriceCostAt(float buildSec, float costE)
 {
+	PrTuneFill();
 	if (aiEconomyMgr.isEnergyFull
 		&& (aiEconomyMgr.energy.income > aiEconomyMgr.energy.pull))
 	{
@@ -266,14 +309,14 @@ float EPriceCostAt(float buildSec, float costE)
 	// e-stalling"): with energy in hand, what a build's E bill competes with is
 	// nothing, and the build-length decay is the right price for it.
 	float k;
-	if ((ai.GetTunable("apex_e_bill_share", TUNE_E_BILL_SHARE) > 0.f)
+	if (gPrEBillOn
 		&& HardEStall() && (costE > 0.f) && (buildSec > 1.f))
 	{
 		const float eInc = aiEconomyMgr.energy.income;
 		const float drain = costE / buildSec;
 		k = (eInc > 0.01f) ? (drain / eInc) : 1.f;
 	} else {
-		const float resp = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
+		const float resp = gPrEResponse;
 		k = ((resp > 1.f) ? resp : 45.f) / ((buildSec > 1.f) ? buildSec : 1.f);
 	}
 	if (k > 1.f)
@@ -294,9 +337,10 @@ float EPriceCostAt(float buildSec, float costE)
 // moment capacity or real demand rises, so nothing is forbidden.
 float ERealizeShare(float addE, float buildSec)
 {
+	PrTuneFill();
 	if (addE <= 0.f)
 		return 1.f;
-	if (ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) <= 0.f)
+	if (!gPrERealizeOn)
 		return 1.f;
 	TrackEPull();
 	float demand = aiEconomyMgr.energy.pull - ConvUseE();
@@ -307,7 +351,7 @@ float ERealizeShare(float addE, float buildSec)
 	// Anticipation, over the build's own delivery time but never further out
 	// than the price's own lookahead -- the pull EMA is not a forecast.
 	if (gEPullGrowth > 0.f) {
-		const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+		const float look = gPrELookahead;
 		demand += gEPullGrowth * ((buildSec < look) ? buildSec : look);
 	}
 	// A BANK THAT IS NOT FULL IS A REAL USE. Energy going into storage is not
@@ -316,12 +360,12 @@ float ERealizeShare(float addE, float buildSec)
 	// so it dries up exactly as the bank fills.
 	float fill = 0.f;
 	{
-		const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+		const float look = gPrELookahead;
 		const float bankRoom = aiEconomyMgr.energy.storage - aiEconomyMgr.energy.current;
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
-	const float target = demand * ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
+	const float target = demand * gPrEHeadroom
 			+ ConvCapE() + fill;
 	// NEVER ZERO. Energy in the wasted band is not worthless -- it is worth the
 	// conversion floor as soon as a converter follows, and the floor price
@@ -331,7 +375,7 @@ float ERealizeShare(float addE, float buildSec)
 	// (apexearth: "we still should care about energy, so not zero - but we want
 	// converters to be above the energy want"). Generation is never switched
 	// off by an overflow, which is the standing ruling.
-	const float floorShare = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
+	const float floorShare = gPrEWasteWorth;
 	const float room = target - aiEconomyMgr.energy.income;
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addE) ? (room / addE) : 1.f);
@@ -342,9 +386,10 @@ float ERealizeShare(float addE, float buildSec)
 
 float EPriceAt(float buildSec)
 {
+	PrTuneFill();
 	const float fl = EPriceFloor();
 	const float spot = EPrice();
-	const float resp = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
+	const float resp = gPrEResponse;
 	float k = ((resp > 1.f) ? resp : 45.f) / ((buildSec > 1.f) ? buildSec : 1.f);
 	if (k > 1.f)
 		k = 1.f;
@@ -362,8 +407,9 @@ float EPriceAt(float buildSec)
 // (apexearth 2026-08-23). MODEL: the share that assists.
 float EffBP(float builderBP)
 {
+	PrTuneFill();
 	const float fleet = BPCapacity() * (80.f / 7.f);   // back to workertime units
-	const float share = ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
+	const float share = gPrAssistShare;
 	if (fleet <= builderBP)
 		return builderBP;
 	return builderBP + (fleet - builderBP) * share;
@@ -494,8 +540,10 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	w.mCost = Catalog::gCostM[defId] * MCostScale()
 			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec, Catalog::gCostE[defId])
 			+ float(Catalog::gAreaCells[defId])
-				* ai.GetTunable("apex_space_m", TUNE_SPACE_M);
-	w.tCost = walkSec * WalkRate(builderBP) + buildSec * Wage() + displacedM
+				* gPrSpaceM;
+	const float wageNow = Wage();
+	w.tCost = walkSec * WalkRateWith(builderBP, wageNow) + buildSec * wageNow
+			+ displacedM
 			+ riskM;   // the builder's expected loss on the trip, see TripRisk
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time
@@ -519,8 +567,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// pays ~17; an afus at 9700 and 1097 pays thousands. Nothing is forbidden:
 	// the same afus at high build power is short and pays little.
 	{
-		const float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-		const float k = ai.GetTunable("apex_lockup", TUNE_LOCKUP);
+		const float H = gPrPaybackH;
+		const float k = gPrLockup;
 		if ((H > 1.f) && (k > 0.f))
 			w.tCost += Catalog::gCostM[defId] * (buildSec / H) * k;
 	}

@@ -378,6 +378,24 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		CCircuitUnit@ rc = null;
 		int rcDef = -1;
 		int landCons = 0;
+		// WHAT OUR LINES CAN RE-MAKE, ASKED ONCE. The test below is a property
+		// of the con's DEF, not of the con, and it was re-derived per worker:
+		// workers x factories x buildoptions of string-free but real array work
+		// every election. One pass over the lines answers it for all of them.
+		array<bool> remakeable(uint(Catalog::gDefCount + 1), false);
+		for (uint fi0 = 0; lesser && (fi0 < Factory::gFacUnits.length()); ++fi0) {
+			if (Factory::gFacUnits[fi0] is null)
+				continue;
+			const array<int>@ fb0 = Catalog::BuildsOf(
+					int(Factory::gFacUnits[fi0].circuitDef.id));
+			for (uint q0 = 0; q0 < fb0.length(); ++q0) {
+				const int fd0 = fb0[q0];
+				if ((fd0 >= 0) && (fd0 <= Catalog::gDefCount))
+					remakeable[uint(fd0)] = true;
+			}
+		}
+		const int reclaimAgeF = int(ai.GetTunable("apex_reclaim_age_s",
+				TUNE_RECLAIM_AGE_S)) * SECOND;
 		for (uint wi = 0; lesser && (wi < gWorkers.length()); ++wi) {
 			CCircuitUnit@ wu = gWorkers[wi];
 			if ((wu is null) || (wu is unit))
@@ -391,23 +409,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				continue;
 			if (ReclaimClaimed(wu.id, unit.id))
 				continue;
-			if ((wi < gWorkerBorn.length()) && (ai.frame - gWorkerBorn[wi]
-					< int(ai.GetTunable("apex_reclaim_age_s", TUNE_RECLAIM_AGE_S)) * SECOND))
+			if ((wi < gWorkerBorn.length())
+				&& (ai.frame - gWorkerBorn[wi] < reclaimAgeF))
 				continue;
-			bool remake = false;
-			for (uint fi = 0; fi < Factory::gFacUnits.length() && !remake; ++fi) {
-				if (Factory::gFacUnits[fi] is null)
-					continue;
-				const array<int>@ fb = Catalog::BuildsOf(
-						int(Factory::gFacUnits[fi].circuitDef.id));
-				for (uint q = 0; q < fb.length(); ++q) {
-					if (fb[q] == wd) {
-						remake = true;
-						break;
-					}
-				}
-			}
-			if (!remake)
+			if ((wd < 0) || (wd > Catalog::gDefCount) || !remakeable[uint(wd)])
 				continue;
 			++landCons;
 			if ((rcDef < 0) || (Catalog::gCostM[wd] < Catalog::gCostM[rcDef])) {

@@ -12,6 +12,8 @@
 
 namespace circuit {
 
+class CEnemyInfo;
+
 class CAttackTask: public ISquadTask {
 public:
 	CAttackTask(ITaskModule* mgr, float minPower, float powerMod);
@@ -36,6 +38,19 @@ private:
 	void FallbackBasePos();
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
+
+	// FindTarget scratch, kept on the task so the hot pass allocates nothing.
+	// Rebuilt from scratch every call; nothing here survives between passes.
+	struct SAllySquad {
+		springai::AIFloat3 pos;
+		springai::AIFloat3 tpos;
+		float power;
+		bool hasTarget;
+		bool nearMe;   // within apex_support_radius of US: constant for the pass
+	};
+	std::vector<SAllySquad> allySquads;
+	std::vector<CEnemyInfo*> groupEnemies;   // one group's members, resolved once
+	std::vector<unsigned> inflCand;          // groups that can reach this group's members
 
 	float minPower;
 	int lastDetourLog = -1000000;

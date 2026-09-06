@@ -767,6 +767,14 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const float prodHalf = prodTerm * pipe;
 	if (stream + pipeTerm + prodHalf <= 0.05f)
 		return w;
+	// None of these varies with the candidate plant; the two flags and the
+	// denial premium were re-read per rung, and the fallback anchor -- a base
+	// interior probe -- was re-derived for every rung whose own site was unset.
+	const float waterFirstK = ai.GetTunable("apex_water_first", TUNE_WATER_FIRST);
+	const bool inflOn = ai.GetTunable("apex_plant_inflight", TUNE_PLANT_INFLIGHT) > 0.f;
+	const bool substOn = ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f;
+	AIFloat3 homeAnchor;
+	bool homeAnchorSet = false;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
@@ -834,8 +842,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// first is also the enemy not taking it. Water only -- a shipyard's
 		// ships hold the ground they claim, where air cons hold nothing.
 		const float first = (dClass == PC_WATER)
-				? ai.GetTunable("apex_water_first", TUNE_WATER_FIRST)
-					* WaterUncontested()
+				? waterFirstK * WaterUncontested()
 				: 0.f;
 		const float expTerm = anyOpen
 				? stream * (gPlantReach[d] + gPlantLocked[d] * first) : 0.f;
@@ -895,8 +902,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// genuinely wanted air line still wins once it is worth twice a
 		// half-built ground one.
 		int liveOther = 0;
-		const bool inflOn =
-				(ai.GetTunable("apex_plant_inflight", TUNE_PLANT_INFLIGHT) > 0.f);
 		for (uint fo = 0; inflOn && (fo < Requests::gLive.length()); ++fo) {
 			IUnitTask@ ot = Requests::gLive[fo];
 			if ((ot is null) || ot.IsDead() || (ot.buildDef is null))
@@ -977,7 +982,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// (No finished-factory guard: a copy of a lab still in its nanoframe
 		// is the earliest and cheapest moment to refuse the duplicate.)
 		float dupSubst = 1.f;
-		if (ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f) {
+		if (substOn) {
 			AIFloat3 nlp;
 			if (isCopy || (NeediestLine(nlp) > 0.f))
 				dupSubst = DupBpSubstMul(d);
@@ -1035,8 +1040,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// Plants stand at the base anchor -- the middle of what we own;
 		// a floating one stands at the water it was priced against. Priced
 		// against the walk THERE, not from where the asker happens to stand.
-		const AIFloat3 lands = OnMap(site) ? site
-				: InteriorSite(EcoSiteFor(unit), Catalog::Def(int(unit.circuitDef.id)));
+		if (!OnMap(site) && !homeAnchorSet) {
+			homeAnchorSet = true;
+			homeAnchor = InteriorSite(EcoSiteFor(unit),
+					Catalog::Def(int(unit.circuitDef.id)));
+		}
+		const AIFloat3 lands = OnMap(site) ? site : homeAnchor;
 		Want c;
 		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
