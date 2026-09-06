@@ -1426,8 +1426,8 @@ const float TUNE_ALLY_SHARE = 1.f;
 // ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
 const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the Wait throttle, not the price; with the line continuous, 180 shares honestly
 
-// REZ_HORIZON: seconds to recover the field's wreck pool; rez production
-//   scales with losses and diminishes per bot.
+// REZ_HORIZON: seconds over which the army's REPAIR backlog is closed. New
+//   wrecks are a measured rate (Military::WreckRateM) and need no horizon.
 const float TUNE_REZ_HORIZON = 120.f;
 
 // [ratio] -- Share of a rez bot's work rate it actually delivers (the rest is

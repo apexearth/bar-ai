@@ -99,6 +99,17 @@ float AirLossRate()
 	return gDeadToAir / BLEED_TAU;
 }
 
+// Metal per second of NEW WRECK appearing on ground we fight over: our combat
+// dead plus the enemy our own units killed, both already carried by the same
+// decaying ledger, so ledger/TAU is the rate. This is rez-bot demand -- what
+// the fleet is asked to serve per second -- as opposed to the pile standing on
+// the field, which is a stock and grows all game whether or not anyone can
+// reach it (market/army.as).
+float WreckRateM()
+{
+	return (gLossAll + gKillAll) / BLEED_TAU;
+}
+
 // NET deep-forward burn as a fraction of metal income: losses minus what we
 // killed out there. A bloody push that pays for itself must not read as a
 // bleed. Ledger holds roughly BLEED_TAU seconds, so ledger/TAU is metal/s.

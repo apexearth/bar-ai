@@ -707,7 +707,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				rezHave = (int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0;
 				rezCap = Catalog::gBuildPower[d] * LineMetalPerEffort()
 						* tRezUtil;
-				rezStream = RezWorkM() / tRezHorizon;
+				rezStream = RezRateM();
 				float unmet = rezStream - float(rezHave) * rezCap;
 				if (unmet > rezCap)
 					unmet = rezCap;
@@ -1122,7 +1122,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " pLine=" + formatFloat(pLine, "", 0, 1)
 				+ " pMedic=" + formatFloat(pMedic, "", 0, 1)
 				+ " gap=" + int(armyGap)
-				+ " repair=" + int(gRezRepair) + " field=" + int(gRezField)
+				+ " repairPs=" + formatFloat(gRezRepairRate, "", 0, 2)
+				+ " wreckPs=" + formatFloat(gRezWreckRate, "", 0, 2)
 				+ " v=" + formatFloat(vM * 1000.f, "", 0, 2)
 				+ " sumV=" + formatFloat(sumV * 1000.f, "", 0, 0));
 		}

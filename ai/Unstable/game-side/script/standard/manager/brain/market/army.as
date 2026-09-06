@@ -350,28 +350,26 @@ float AdvArmyValue()
 // our army; the class each candidate belongs to is a fact about the unit.
 const int LC_TANK = 0, LC_MID = 1, LC_REACH = 2, LC_DPS = 3, LC_N = 4;
 
-// REZ WORK ON THE FIELD (apexearth: "rezbots gain value when: there is
-// valuable reclaim available; there are units that need repairing; there
-// are units available to resurrect"). Read from the field every 10 s:
-// missing hp of our mobiles in metal, plus wrecks around home and the lane
-// (a resurrectable one at its unit's cost, the rest at reclaim metal).
-float gRezWork = 0.f, gRezRepair = 0.f, gRezField = 0.f;
+// REZ DEMAND IS A RATE, NOT THE PILE (apexearth: "rezbots gain value when:
+// there is valuable reclaim available; there are units that need repairing;
+// there are units available to resurrect"). Sizing the fleet to clear the
+// standing wreck value around home and the lane tracked a STOCK that grows
+// with the battlefield -- and the lane half cannot drain at all, since the rez
+// rules front-veto that ground. What the fleet can serve is what ARRIVES per
+// second: new wrecks off the same decaying ledger AirLossRate reads, plus the
+// repair backlog, which our own bots do close and so keeps a clearing horizon.
+float gRezRate = 0.f, gRezRepairRate = 0.f, gRezWreckRate = 0.f;
 int gRezWorkAt = -999999;
-float RezWorkM()
+float RezRateM()
 {
 	if (ai.frame < gRezWorkAt + 10 * SECOND)
-		return gRezWork;
+		return gRezRate;
 	gRezWorkAt = ai.frame;
-	gRezRepair = ai.GetOwnRepairM();
-	gRezField = 0.f;
-	const float r = 2000.f;
-	if (Builder::gHomeSet)
-		gRezField += ai.GetFieldWorkAt(Builder::gHomePos, r);
-	if (OnMap(Military::gLaneAt)
-		&& (!Builder::gHomeSet || (Military::gLaneAt.distance2D(Builder::gHomePos) > r)))
-		gRezField += ai.GetFieldWorkAt(Military::gLaneAt, r);
-	gRezWork = gRezRepair + gRezField;
-	return gRezWork;
+	const float h = ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
+	gRezRepairRate = ai.GetOwnRepairM() / ((h > 1.f) ? h : 120.f);
+	gRezWreckRate = Military::WreckRateM();
+	gRezRate = gRezRepairRate + gRezWreckRate;
+	return gRezRate;
 }
 
 // Metal one point of build power restores per second, on the army we own
