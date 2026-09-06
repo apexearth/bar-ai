@@ -716,6 +716,9 @@ void CFactoryManager::Init()
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), interval, offset + 0, "facIdle");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2, "facUpd");
 
+		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::PullNanoOffBuilding, this),
+								FRAMES_PER_SEC, offset + 3, "nanoPull");
+
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
 								circuit->GetSkirmishAIId() * WATCHDOG_COUNT + 11, "wdog");
@@ -1456,6 +1459,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 	bool isMetalEmpty = economyMgr->IsMetalEmpty();
 	CAllyUnit* repairTarget = nullptr;
 	CAllyUnit* buildTarget = nullptr;
+	bool haveMobile = false;   // a factory's own output has claimed this turret
 	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
 	float radius = unit->GetCircuitDef()->GetBuildDistance();
 
@@ -1478,7 +1482,21 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 			CCircuitDef* cdef = cand->GetCircuitDef();
 			const float maxHealth = u->GetMaxHealth();
 			const float buildTime = cdef->GetBuildTime() * (maxHealth - u->GetHealth()) / maxHealth;
-			if (buildTime >= curCost) {
+			// FACTORY OUTPUT OUTRANKS A BUILDING OUTRIGHT (apexearth: "Buildings
+			// which take a long time to create often capture nanoattention for a
+			// lot longer and can make it so a factory loses a lot of its output
+			// for a significant amount of time. Therefore, I do not feel bad
+			// about pulling nanos off of buildings"). Selection was purely
+			// least-remaining-buildTime and only the PRIORITY below told mobile
+			// from static apart -- so a half-done building won on being nearer
+			// to finished, and the Repair task then held the turret for the rest
+			// of that build. Among mobiles the least-remaining race is unchanged.
+			const bool candMobile = cdef->IsMobile();
+			if (haveMobile && !candMobile) {
+				continue;
+			}
+			const bool firstMobile = candMobile && !haveMobile;
+			if (!firstMobile && (buildTime >= curCost)) {
 				continue;
 			}
 			if (IsHighPriority(cand) ||
@@ -1488,6 +1506,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 			{
 				curCost = buildTime;
 				buildTarget = cand;
+				haveMobile = candMobile;
 			}
 		} else if ((repairTarget == nullptr) && (u->GetHealth() < u->GetMaxHealth())) {
 			repairTarget = cand;
@@ -1541,6 +1560,102 @@ void CFactoryManager::Watchdog()
 	for (auto& kv : assists) {
 		checkIdler(kv.first);
 	}
+}
+
+// A NANO ALREADY LOCKED TO A BUILDING NEVER RECONSIDERS. CreateAssistTask now
+// prefers factory output when it CHOOSES, but a Repair task on a half-built
+// structure runs to completion -- and apexearth's whole point is that the slow
+// ones are the expensive ones: "Buildings which take a long time to create often
+// capture nanoattention for a lot longer and can make it so a factory loses a
+// lot of its output for a significant amount of time."
+//
+// ONE TURRET PER TICK, round-robin. The range scan is a GetFriendlyUnitsIn per
+// nano; doing the whole fleet on one frame is the batching this AI keeps being
+// bitten by, and a nano freed a few seconds later is no worse off.
+void CFactoryManager::PullNanoOffBuilding()
+{
+	// THE FUNNEL IS LOGGED, NOT JUST THE OUTCOME. The first two versions of
+	// this pass were silently dead (wrong task Type), and a zero pull count
+	// alone cannot say WHICH precondition refused. Every stage counts.
+	if (assists.empty()) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	if (frame >= nanoPullLogAt) {
+		nanoPullLogAt = frame + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: nanopull turrets=%d seen=%d repair=%d static=%d"
+				" hasOutput=%d pulled=%d",
+				(int)assists.size(), nanoSeen, nanoOnRepair, nanoOnStatic,
+				nanoHasOut, nanoPulled);
+	}
+
+	// EVERY REGISTERED TURRET, EVERY SECOND. The first cut walked one nano per
+	// call and hung off the 60-SECOND watchdog, so it examined one turret a
+	// minute -- it fired, and it was throttled to irrelevance. `assists` holds a
+	// handful (measured: 1-3), so the whole sweep is cheaper than the round-robin
+	// bookkeeping was.
+	for (auto& kv : assists) {
+		CCircuitUnit* nano = kv.first;
+	if ((nano == nullptr) || nano->IsDead() || (nano->GetCircuitDef() == nullptr)) {
+		continue;
+	}
+	++nanoSeen;
+	IUnitTask* held = nano->GetTask();
+	// A NANO'S REPAIR TASK IS Type::FACTORY, NOT Type::BUILDER (CSRepairTask
+	// passes Type::FACTORY to IRepairTask). Testing for BUILDER here returned
+	// early every time and the whole pass was dead. Type::FACTORY also covers
+	// CRecruitTask, so the BuildType below discriminates.
+	if ((held == nullptr) || (held->GetType() != IUnitTask::Type::FACTORY)) {
+		continue;
+	}
+	IBuilderTask* bt = static_cast<IBuilderTask*>(held);
+	if (bt->GetBuildType() != IBuilderTask::BuildType::REPAIR) {
+		continue;
+	}
+	++nanoOnRepair;
+	// Only a task serving a STATIC target is worth interrupting: it is already
+	// on factory output otherwise.
+	CCircuitUnit* tgt = bt->GetTarget();
+	if ((tgt == nullptr) || (tgt->GetCircuitDef() == nullptr)
+		|| tgt->GetCircuitDef()->IsMobile())
+	{
+		continue;
+	}
+	++nanoOnStatic;
+	// ...and only when there is somewhere better to go, or the re-election
+	// hands it straight back and the pair of us thrash.
+	if (!HasFactoryOutputInRange(nano)) {
+		continue;
+	}
+	++nanoHasOut;
+	++nanoPulled;
+	held->RemoveAssignee(nano);   // to IdleTask; CreateAssistTask re-runs next frame
+	break;   // one task mutated per pass; the rest are re-read next second
+	}
+}
+
+// Is a factory's own output -- a MOBILE unit under construction -- inside this
+// turret's build reach? Exactly apexearth's definition of near: "however many
+// nanos can actually reach the unit that is trying to be built."
+bool CFactoryManager::HasFactoryOutputInRange(CCircuitUnit* nano)
+{
+	const AIFloat3& pos = nano->GetPos(circuit->GetLastFrame());
+	const float radius = nano->GetCircuitDef()->GetBuildDistance();
+	circuit->UpdateFriendlyUnits();
+	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius * 0.9f);
+	bool found = false;
+	for (Unit* u : units) {
+		auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+		if ((cand == nullptr) || (cand == nano) || (cand->GetCircuitDef() == nullptr)) {
+			continue;
+		}
+		if (u->IsBeingBuilt() && cand->GetCircuitDef()->IsMobile()) {
+			found = true;
+			break;
+		}
+	}
+	utils::free(units);
+	return found;
 }
 
 void CFactoryManager::SetLastRequiredDef(CCircuitDef::Id facId, CCircuitDef* cdef,

@@ -103,3 +103,56 @@ proven and the instrument already exists:
    ranking is genuinely team-wide, all three are redundant by construction.
 
 Only after defence proves the shape should army composition and energy follow.
+
+## Two rulings from 2026-09-06 (apexearth), written down because they were not
+
+### The answer to an energy stall is a solar. Not a bigger generator.
+
+Asked whether a ~164 e/s stall should be answered by one big generator with many
+builders on it, he rejected the framing:
+
+> "It's only an early game issue usually and the right answer is almost always to
+> just make a solar. Should already be written down. Solars cost no energy so the
+> energy shortage isn't an issue to make them."
+
+The last sentence is the reason and it is the part no code comment states: a
+solar is the answer BECAUSE its own construction costs no energy, so it is the
+one generator a stall cannot make unaffordable. Do not "size the answer to the
+deficit" -- that was proposed and refused. He believed this was already
+documented; it was not, anywhere. It is now.
+
+Note this does NOT settle his separate complaint that "only one of our builders
+will stop to make energy" -- `decide.as`'s hoist fires only while
+`EMakeInFlight() <= 0`, so the second builder is never hoisted. That is still
+open, and `TUNE_E_PARALLEL` is the measured-off knob next to it (docs/27):
+parallel sites lost 25,500 -> 19,555 metal. More builders on MORE SOLARS is what
+he is asking for; more builders on ONE solar was separately measured bad
+(14 of 17 opening elections hoisted onto a single solar while three mexes stood
+without a gun). Neither prior experiment is quite the thing he asked for.
+
+### A factory should be able to pull nearby nano turrets onto itself
+
+> "Perhaps we can also let factories reach out and control nearby nano turrets to
+> get support when they need it. Sometimes nanos may be nearby but they get stuck
+> helping to create a building."
+
+The mechanism he is describing is real and has the same root as the builder
+re-election problem: `PeelSurplus` explicitly exempts static assisters -- its own
+comment says "Only sites with a standing nanoframe: walkers already re-elect on
+their own" -- so a nano turret assigned to help a building has no path back to
+the factory until that building finishes. The factory is the thing that knows it
+is short of lathe; nothing lets it ask.
+
+**How far, and may it interrupt** (apexearth, same day, answering both):
+
+> "Buildings which take a long time to create often capture nanoattention for a
+> lot longer and can make it so a factory loses a lot of its output for a
+> significant amount of time. Therefore, I do not feel bad about pulling nanos
+> off of buildings. nearby should be however many nanos can actually reach the
+> unit that is trying to be built."
+
+So: interrupting a half-built building is EXPLICITLY allowed, and the reach is
+not a tunable radius -- it is the physical one, every nano whose own build range
+covers the unit the factory is producing. The rule he is stating is that a slow
+building silently converts into lost factory output for its whole duration, and
+that trade is worse than the delay to the building.
