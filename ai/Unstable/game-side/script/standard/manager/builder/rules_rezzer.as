@@ -174,11 +174,12 @@ float ArmyFront(AIFloat3 &out pos)
 bool RezSiteOk(const AIFloat3 &in site)
 {
 	++gRzSiteCalls;
-	const float ours = ai.GetAllyInflAt(site);
-	if ((ours > 0.f) && (ours >= ai.GetEnemyInflAt(site))) {
-		++gRzOkCover;
-		return true;
-	}
+	// THE COVER BRANCH IS REVERTED, ON THE BATTERY. Letting a bot take work
+	// wherever our influence merely matched theirs -- docs/24's "heal units
+	// while they fight" read literally -- collapsed army from 11.7% to 5.6% of
+	// spend over 18 games while metal produced fell 37,432 -> 33,975. His
+	// doctrine stands; this reading of it does not, and the veto is not what
+	// makes the fleet idle (the rate fix below it is).
 	if (!InEnemyReach(site))
 		return true;
 	// Kept live now that something can actually reach this line: how far toward
