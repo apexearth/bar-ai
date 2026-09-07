@@ -77,7 +77,8 @@ FIGHT = {"engage", "attack", "combat", "sniper"}
 ORD = re.compile(
     r"apex: ord t=(?P<t>\d+) u=(?P<u>\d+) (?P<def>\S+) f=(?P<f>\d+) "
     r"src=(?P<src>\w+) kind=(?P<kind>\w+) to=(?P<x>-?[\d.]+),(?P<z>-?[\d.]+) "
-    r"tgt=(?P<tgt>-?\d+) jump=(?P<jump>-?[\d.]+) gap=(?P<gap>-?\d+)")
+    r"tgt=(?P<tgt>-?\d+) jump=(?P<jump>-?[\d.]+) gap=(?P<gap>-?\d+) "
+    r"task=\S+ dup=(?P<dup>\d+) q=(?P<q>\d+)")
 SQUAD = re.compile(r"squadsize own n=(\d+) avg=([\d.]+) max=(\d+) \| "
                    r"enemy n=(\d+) avg=([\d.]+) max=(\d+)")
 CENSUS = re.compile(r"fightcensus .*?defend=(\d+)/(\d+)/(\d+).*?attack=(\d+)/(\d+)/(\d+)")
@@ -146,6 +147,15 @@ def scan(paths, team="0") -> Result:
                 else:
                     r.other[src] += 1
                 f, jump = int(m.group("f")), float(m.group("jump"))
+                # q=1 is a SHIFT order: APPENDED to the queue, not a
+                # replacement. CCircuitUnit::Attack queues a fight order to the
+                # target position after every attack as a LOS workaround, and
+                # MoveAction queues a lookahead waypoint every step. Counting
+                # those as countermands inflated `ring` into the top offender in
+                # every arm and was pure artefact -- the same warning is written
+                # at the trace's own call site.
+                if m.group("q") == "1":
+                    continue
                 prev = last.get(u)
                 if (prev and prev[0] != src and jump >= JUMP
                         and 0 <= f - prev[1] <= GAP):

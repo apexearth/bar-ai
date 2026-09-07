@@ -917,3 +917,28 @@ the army draw; the support branch (`production.as:570`) builds its own Want and
 `continue`s, and that Want loses wherever it competes. Note also that `need` is
 capped by `EscortSquadCount()`, which read **1** against an advanced army of
 9,852 metal -- so even fully served we would buy one.
+
+## Gunships read the enemy's AA (2026-09-08)
+
+> "Gunships can fight units but if enemy has lots of AA then our gunships
+> should try acting more like bombers - targetting enemy economy"
+
+Asked whether Hornet (`armblade`, Rapid Assault Gunship) and Archaic Dragon
+(`corcrw`, Flying Fortress) should bomb or fight, he gave neither answer: the
+role is **a function of the enemy's anti-air**, not a tag.
+
+Both static answers currently in the tree are therefore wrong. Ours routes them
+to `BOMB` unconditionally (`hooks.as:134`, `Air::IsBomberDef`) on the argument
+that "a released bomber bombs whatever its config role says" -- so they bomb
+even against an empty sky where they could be killing army. Stock has no BOMB
+entry for role `heavy` and drops them into the GROUND massing pool, so they
+trade with tanks even when the sky is full of flak.
+
+The rule is a gradient, not a branch: as enemy AA rises, a gunship's expected
+value against units falls (it dies on approach) while its value against
+undefended economy holds. The AA census already exists -- `airthreat.as` reads
+enemy air and AA, and `apexaa:` logs `airRaw/seen/heavy` -- so this is
+derivable from what we measure, with no threshold to invent.
+
+Note for the revert: neither the apex line nor the stock default implements
+this, so this is a REBUILD, not a KEEP. It is the only air item that is.

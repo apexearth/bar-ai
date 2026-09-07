@@ -49,7 +49,7 @@ void CScoutTask::AssignTo(CCircuitUnit* unit)
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
+	if (cdef->IsAttrSiege()) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -277,18 +277,10 @@ void CScoutTask::ApplyTargetPath(const CQueryPathMulti* query, bool isUpdating)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
-	// The query completed AFTER the unit's actions were cleared (task switch
-	// or death): GetTravelAct() is null and SetPath through it crashed three
-	// identical tournament games (2026-08-15). The path is simply unwanted.
-	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
-		return;
-	}
 
 	if (!pPath->posPath.empty()) {
 		position = pPath->posPath.back();
-		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->SetPath(pPath);
-		}
+		unit->GetTravelAct()->SetPath(pPath);
 	} else {
 		FallbackScout(unit, isUpdating);
 	}
@@ -332,28 +324,18 @@ void CScoutTask::ApplyScoutPath(const CQueryPathSingle* query)
 {
 	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
 	CCircuitUnit* unit = query->GetUnit();
-	// The query completed AFTER the unit's actions were cleared (task switch
-	// or death): GetTravelAct() is null and SetPath through it crashed three
-	// identical tournament games (2026-08-15). The path is simply unwanted.
-	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
-		return;
-	}
 
 	if (pPath->path.size() > 2) {
 //		position = path.back();
-		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->SetPath(pPath);
-		}
+		unit->GetTravelAct()->SetPath(pPath);
 		return;
 	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
-	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-		unit->GetTravelAct()->StateWait();
-	}
+	unit->GetTravelAct()->StateWait();
 	TRY_UNIT(circuit, unit,
-		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::SCOUT);
+		unit->CmdMoveTo(position, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
 	)
 }
 

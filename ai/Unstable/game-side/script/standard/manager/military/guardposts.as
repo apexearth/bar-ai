@@ -456,7 +456,6 @@ void UpdateGuardPosts()
 		return;
 	Market::PfRebuild();
 	const uint n = Market::gPfPos.length();
-	aiMilitaryMgr.ClearGuardPosts();
 	gPostUPos.resize(0);
 	gPostUX.resize(0);
 	gPostUZ.resize(0);
@@ -473,7 +472,14 @@ void UpdateGuardPosts()
 	array<int> ud;
 	array<float> ux;
 	array<float> uz;
-	for (uint i = 0; i < gSquads.length(); ++i) {
+	// PER-BUILDING GUARD POSTS ARE CUT (apexearth, 2026-09-08). They were the
+	// largest single source of "go stand somewhere" orders -- park orders
+	// outnumbered fight orders 10 to 1 -- and CMilitaryManager::SetGuardPost no
+	// longer exists. What survives here is the COVER ACCOUNTING the economy and
+	// placement layers read (CoverShort, CoverNeedM, UnitCoverAt, EyesSavedM):
+	// with no unit posted, that cover is now turrets only, which is the honest
+	// answer. A unit we do not station somewhere is not cover.
+	for (uint i = 0; (i < gSquads.length()) && false; ++i) {
 		if ((gSquads[i] is null) || (gSquads[i].GetFightType() != int(Task::FightType::DEFEND)))
 			continue;
 		array<CCircuitUnit@>@ on = gSquads[i].GetUnits();
@@ -648,7 +654,6 @@ void UpdateGuardPosts()
 		// (CDefendTask::LeashPosts): a guard does not leave what it covers
 		// for a fight it cannot get back from.
 		const AIFloat3 postAt = WallPost(Market::gPfPos[at], foe, us[bu].circuitDef.GetMaxRange(), onAsset[at], WALL_GAP, WALL_FWD_MAX);
-		aiMilitaryMgr.SetGuardPost(us[bu], postAt, seen[at] ? rE : r0);
 		++onAsset[at];
 		gPostUPos.insertLast(postAt);
 		gPostUX.insertLast(postAt.x);

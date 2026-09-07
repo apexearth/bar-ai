@@ -325,6 +325,13 @@ local NAMES = {
 	"apex_support_radius",
 	"apex_ally_converge",
 	"apex_defend_aid",     -- DefendTask.cpp: a guard pool elects the fight an ally is already in (1)
+	-- Army splitting: read in the fight C++ but never published, so S8 applied --
+	-- they ran their defaults with no error and could not be switched off.
+	"apex_army_split",
+	"apex_split_cd",
+	"apex_split_hold",
+	"apex_split_margin",
+	"apex_split_min_dist",
 	"apex_wall_commit",
 	"apex_static_plain_attack",
 	"apex_medic_share",

@@ -188,14 +188,6 @@ public:
 	unsigned mergeSkip[3] = {0, 0, 0};
 	unsigned mergeRan = 0;
 	int guardSumLogAt = 0;
-	void DispatchRaids();
-	// Guard posts, assigned by script (military/guardposts.as): where a home
-	// unit stands while its pool has nothing to fight, instead of the one
-	// defence stand every pool member was sent to.
-	// A unit's post and how far from it the unit answers a target (0: any).
-	void SetGuardPost(CCircuitUnit* unit, const springai::AIFloat3& pos, float reach);
-	void ClearGuardPosts() { guardPosts.clear(); }
-	bool GetGuardPost(const CCircuitUnit* unit, springai::AIFloat3& outPos, float& outReach) const;
 	void UpdateDefence();
 	void MakeBaseDefence(const springai::AIFloat3& pos);
 

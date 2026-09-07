@@ -31,16 +31,9 @@ private:
 	bool FindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackRaid();
-	springai::AIFloat3 FindOnwardSpot() const;
 	void ApplyRaidPath(const CQueryPathSingle* query);
 
 	float maxPower;
-	int lastDetourLog = -1000000;
-	int lastFlankLog = -1000000;
-	int lastPressLog = -1000000;
-	springai::AIFloat3 flankPos;
-	bool flankSet = false;
-	bool flankDone = false;
 };
 
 } // namespace circuit

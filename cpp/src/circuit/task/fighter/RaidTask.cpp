@@ -9,9 +9,7 @@
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
-#include "resource/MetalManager.h"
 #include "setup/SetupManager.h"
-#include "unit/enemy/EnemyManager.h"
 #include "terrain/TerrainManager.h"
 #include "terrain/path/PathFinder.h"
 #include "terrain/path/QueryPathSingle.h"
@@ -26,101 +24,11 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
-#include "Log.h"
-
-#include <limits>
 
 namespace circuit {
 
 using namespace springai;
 using namespace terrain;
-
-// Raids are where this AI's aggression actually lives, so this is the constant
-// that decides whether it goes round or straight up the middle. maxThreat is
-// only a ceiling; the per-tile cost is what shapes the route, and it was a flat
-// 2x threat for every query in the AI -- a builder walking to a mex valued
-// danger exactly as an army walking to the enemy base. apexearth: "AI prefers to
-// attack through center, and usually humans will kill AI by attacking around the
-// edges slowly over time."
-static constexpr float RAID_THREAT_MOD = 4.f;
-// Higher than the targeted mod: with a target chosen we accept some risk to
-// reach it, but while merely looking for one there is no reason to be anywhere
-// costly. This is what turns "wander toward the enemy" into "work the flank".
-static constexpr float RAID_ROAM_THREAT_MOD = 8.f;
-// Distance discount for the target a raid party already chose. Squared where it
-// is used, because the comparison is on squared distance.
-static constexpr float RAID_TARGET_STICKY = 1.4f;
-
-// Going round, rather than hoping a cost function discovers it.
-//
-// Weighting threat in the path cost was tried first and measured: 138 raid paths
-// came back with walked/direct between 1.00 and 1.08, i.e. straight lines. The
-// threat map is near-zero except right beside enemy units, so there is no
-// gradient across the middle to climb and distance always wins. A flank has to be
-// asked for explicitly.
-//
-// Pick a waypoint pushed sideways off the straight line, on whichever side is
-// quieter, then raid the real targets once it is reached.
-static constexpr float FLANK_MIN_DIST = 2000.f;  // shorter raids go straight
-static constexpr float FLANK_OFFSET   = 1800.f;  // how far off the line to swing
-static constexpr float FLANK_MARGIN   = 400.f;   // stay off the very edge
-static constexpr float FLANK_REACHED  = 700.f;
-
-// PRESS ON, rather than going back for orders.
-//
-// A raid party that has eaten the mexes it could see has no target left, and
-// FindTarget only knows about enemies already in CCircuitAI::GetEnemyInfos --
-// the next mex field, one screen further on, has never been in LOS and does not
-// exist as far as the raid is concerned. The only fallback was
-// CMilitaryManager::GetScoutPosition, which scores clusters that are unclaimed
-// AND below THREAT_MIN, i.e. the quiet ground; failing that, a uniformly random
-// map position. Both of those are, on average, behind the party.
-// apexearth: "after we do an attack raid on enemy mexes we often just turn
-// around and walk home to do nothing... in reality we could usually go further
-// to take out many more mexes."
-//
-// "Onward" is measured against the enemy CENTROID, not our own base: that is the
-// direction that keeps arriving at their economy whichever flank the party came
-// in on, and it needs no map-side special case. The threat test per spot is what
-// stops this walking a raid into the enemy army -- an undefended spot is worth
-// approaching blind, a defended one is not.
-static constexpr float PRESS_STEP    = 400.f;   // ground that must be gained to count as onward
-static constexpr float PRESS_MAX_LEG = 4000.f;  // one hop, not a march across the map
-
-static AIFloat3 ChooseFlankPos(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& to)
-{
-	if (from.distance2D(to) < FLANK_MIN_DIST) {
-		return -RgtVector;
-	}
-	AIFloat3 dir = to - from;
-	dir.y = 0.f;
-	if (dir.SqLength2D() < 1.f) {
-		return -RgtVector;
-	}
-	dir.Normalize2D();
-	const AIFloat3 perp(-dir.z, 0.f, dir.x);
-	const AIFloat3 mid = (from + to) * 0.5f;
-
-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	const float w = terrainMgr->GetTerrainWidth();
-	const float h = terrainMgr->GetTerrainHeight();
-	CThreatMap* threatMap = circuit->GetThreatMap();
-
-	AIFloat3 best = -RgtVector;
-	float bestThreat = std::numeric_limits<float>::max();
-	for (int side = -1; side <= 1; side += 2) {
-		AIFloat3 cand = mid + perp * (FLANK_OFFSET * float(side));
-		cand.x = std::max(FLANK_MARGIN, std::min(w - FLANK_MARGIN, cand.x));
-		cand.z = std::max(FLANK_MARGIN, std::min(h - FLANK_MARGIN, cand.z));
-		cand.y = circuit->GetMap()->GetElevationAt(cand.x, cand.z);
-		const float threat = threatMap->GetThreatAt(cand);
-		if (threat < bestThreat) {
-			bestThreat = threat;
-			best = cand;
-		}
-	}
-	return best;
-}
 
 CRaidTask::CRaidTask(ITaskModule* mgr, float maxPower, float powerMod)
 		: ISquadTask(mgr, FightType::RAID, powerMod)
@@ -162,7 +70,7 @@ void CRaidTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	if (cdef->IsAttrSiege() && (manager->GetCircuit()->GetTunable("apex_siege_fight", 1.f) > 0.f)) {
+	if (cdef->IsAttrSiege()) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);
@@ -189,9 +97,7 @@ void CRaidTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->SetPath(pPath, lowestSpeed);
-		}
+		unit->GetTravelAct()->SetPath(pPath);
 	}
 }
 
@@ -220,9 +126,7 @@ void CRaidTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-					unit->GetTravelAct()->StateWait();
-				}
+				unit->GetTravelAct()->StateWait();
 				unit->Gather(groupPos, frame);
 			}
 		}
@@ -234,7 +138,7 @@ void CRaidTask::Update()
 	bool isExecute = (updCount % 2 == 0) && (frame >= lastTouched + FRAMES_PER_SEC);
 	if (!isExecute) {
 		for (CCircuitUnit* unit : units) {
-			isExecute |= unit->IsForceUpdate(frame, CCircuitUnit::Wake::RECONSIDER);
+			isExecute |= unit->IsForceUpdate(frame);
 		}
 		if (!isExecute) {
 			if (wasRegroup && !pPath->posPath.empty()) {
@@ -261,9 +165,7 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-						unit->GetTravelAct()->StateWait();
-					}
+					unit->GetTravelAct()->StateWait();
 
 					const AIFloat3& pos = GetTarget()->GetPos();
 					TRY_UNIT(circuit, unit,
@@ -275,12 +177,10 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-						unit->GetTravelAct()->StateWait();
-					}
+					unit->GetTravelAct()->StateWait();
 
 					TRY_UNIT(circuit, unit,
-						unit->CmdAttack(GetTarget(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 						unit->CmdSetTarget(GetTarget());
 					)
 				}
@@ -306,42 +206,11 @@ void CRaidTask::Update()
 	const AIFloat3& startPos = leader->GetPos(frame);
 	const float pathRange = std::max(std::min(cdef->GetMaxRange(), cdef->GetLosRadius()), (float)threatMap->GetSquareSize());
 
-	const F3Vec& realTargets = !urgentPositions.empty() ? urgentPositions : enemyPositions;
-	F3Vec flankTargets;
-	const F3Vec* targets = &realTargets;
-	if (!flankDone && !realTargets.empty()) {
-		if (!flankSet) {
-			flankPos = ChooseFlankPos(circuit, startPos, realTargets.front());
-			flankSet = true;
-			if (!utils::is_valid(flankPos)) {
-				flankDone = true;  // too close to be worth going round
-			}
-		}
-		if (!flankDone) {
-			if (startPos.SqDistance2D(flankPos) < SQUARE(FLANK_REACHED)) {
-				flankDone = true;  // out on the flank; turn in
-			} else {
-				flankTargets.push_back(flankPos);
-				targets = &flankTargets;
-				// The detour ratio cannot show this: the leg TO the waypoint is
-				// itself a straight path, so walked/direct stays ~1.0 while the
-				// journey as a whole goes round. Log the decision instead.
-				if (circuit->GetLastFrame() >= lastFlankLog + FRAMES_PER_SEC * 20) {
-					lastFlankLog = circuit->GetLastFrame();
-					const AIFloat3& tgt = realTargets.front();
-					circuit->LOG("apex: raid flank via (%.0f,%.0f) instead of straight to (%.0f,%.0f), lateral=%.0f",
-							flankPos.x, flankPos.z, tgt.x, tgt.z, startPos.distance2D(flankPos));
-				}
-			}
-		}
-	}
-
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
 			leader, threatMap,
-			startPos, pathRange, *targets, GetHitTest(), true,
-			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale(),
-			false, RAID_THREAT_MOD);
+			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
+			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -366,35 +235,10 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
 	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-		// Roam mex line to mex line, not to a random map point: after a kill
-		// the nearest metal spot on enemy-influenced ground is the next stop.
-		// The random point remains the fallback when no such spot is known.
-		int best = -1;
-		if (circuit->GetTunable("apex_raid_mexline", 1.f) > 0.f) {
-			CMetalManager* metalMgr = circuit->GetMetalManager();
-			CInfluenceMap* inflMap = circuit->GetInflMap();
-			const AIFloat3& lp = leader->GetPos(circuit->GetLastFrame());
-			const CMetalData::Metals& spots = metalMgr->GetSpots();
-			float bestSq = std::numeric_limits<float>::max();
-			for (unsigned i = 0; i < spots.size(); ++i) {
-				const AIFloat3& sp = spots[i].position;
-				const float sq = sp.SqDistance2D(lp);
-				if (sq < SQUARE(maxDist)) {
-					continue;  // the ground we just cleared
-				}
-				if ((sq >= bestSq) || (inflMap->GetEnemyInflAt(sp) <= 0.f)) {
-					continue;
-				}
-				best = (int)i;
-				bestSq = sq;
-			}
-			if (best >= 0) {
-				position = terrainMgr->GetMovePosition(leader->GetArea(), spots[best].position);
-			}
-		}
-		if (best < 0) {
-			position = RoamPos(leader);
-		}
+		float x = rand() % terrainMgr->GetTerrainWidth();
+		float z = rand() % terrainMgr->GetTerrainHeight();
+		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
+		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
 	}
 
 	if (units.find(unit) != units.end()) {
@@ -415,17 +259,12 @@ bool CRaidTask::FindTarget()
 	const bool isAntiStatic = cdef->IsAttrAntiStat();
 	const bool hadTarget = GetTarget() != nullptr;
 	const float maxSpeed = SQUARE(highestSpeed * 0.8f / FRAMES_PER_SEC);
-	const float maxPower = attackPower * powerMod * GetHealthScale() * (hadTarget ? 1.f / 0.75f : 1.f);
+	const float maxPower = attackPower * powerMod * (hadTarget ? 1.f / 0.75f : 1.f);
 	const float weaponRange = cdef->GetMaxRange() * 0.9f;
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
 	const float range = std::max(leader->GetUnit()->GetMaxRange(), cdef->GetLosRadius()) + 200.f;
-	// A RAID PARTY COULD ONLY EVER PICK A TARGET ALREADY IN ITS FACE. minSqDist
-	// starts at the leader's own weapon-or-sight radius +200 and only shrinks, so
-	// nothing further away can win the comparison -- in a raid task, whose job is
-	// to travel to undefended things. Measured: 97% of passes chose nothing.
-	const float reach = circuit->GetTunable("apex_raid_reach", 1.f);
-	float minSqDist = SQUARE(range * reach);
+	float minSqDist = SQUARE(range);
 	float maxThreat = 0.f;
 	float minPower = maxPower;
 
@@ -434,21 +273,6 @@ bool CRaidTask::FindTarget()
 	const float sqBaseRange = SQUARE(baseRange);
 	const bool isDefender = basePos.SqDistance2D(pos) < sqBaseRange;
 
-	// BEFORE the clear below, or the stickiness further down compares against a
-	// target this function has already thrown away: `enemy == GetTarget()` was
-	// testing against nullptr and could never be true, so RAID_TARGET_STICKY
-	// never once applied. AttackTask captures prevTarget the same way.
-	CEnemyInfo* prevTarget = GetTarget();  // compared only, never dereferenced
-	// S7: prove the branch RUNS before believing any sweep of the constant. An
-	// 8x stickiness moved nothing measurable, which looks exactly like a term
-	// that never applies -- as the pre-fix form provably never did.
-	static int sHad = 0, sNone = 0, sFired = 0, sLogAt = 0;
-	// One counter per `continue` in the candidate loop. 92% of passes end with no
-	// target at all; the aggregate cannot say which gate refused them.
-	static int gSeen=0, gHidden=0, gUrgent=0, gPower=0, gFlee=0, gCat=0, gWater=0,
-			gHigh=0, gDeep=0, gPass=0, gNoBest=0, gPasses=0;
-	++gPasses;
-	if (prevTarget != nullptr) { ++sHad; } else { ++sNone; }
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
 	CEnemyInfo* worstTarget = nullptr;
@@ -457,10 +281,9 @@ bool CRaidTask::FindTarget()
 	threatMap->SetThreatType(leader);
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
-		++gSeen;
 		CEnemyInfo* enemy = kv.second;
 		if (enemy->IsHidden() || (enemy->GetTasks().size() > 1)) {
-			++gHidden; continue;
+			continue;
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
@@ -468,7 +291,7 @@ bool CRaidTask::FindTarget()
 		if ((!isEnemyUrgent && !urgentPositions.empty())
 			|| !terrainMgr->CanMobileReachAt(area, ePos, highestRange))
 		{
-			++gUrgent; continue;
+			continue;
 		}
 
 		const float sqEBDist = basePos.SqDistance2D(ePos);
@@ -480,11 +303,11 @@ bool CRaidTask::FindTarget()
 		}
 		const float power = threatMap->GetThreatAt(ePos);
 		if (checkPower <= power) {
-			++gPower; continue;
+			continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
 		if ((eVel.SqLength2D() >= checkSpeed) && (eVel.dot2D(pos - ePos) < 0)) {
-			++gFlee; continue;
+			continue;
 		}
 
 		int targetCat;
@@ -526,21 +349,6 @@ bool CRaidTask::FindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
-		// Same commitment the attack squads now get. This picks weakest-and-
-		// nearest off the CURRENT geometry every pass, so a raid party changed
-		// its mind as it moved and ended up oscillating between two structures
-		// instead of killing either. Flattering the incumbent's distance keeps
-		// it committed unless something is genuinely closer.
-		// apexearth: "it can't make up its mind and just runs in circles."
-		// Tunable so the two arms differ by a modoption rather than a rebuild:
-		// 1.0 restores no-commitment, which is what the broken form was doing.
-		if (enemy == prevTarget) {
-			const float sticky = circuit->GetTunable("apex_raid_sticky", RAID_TARGET_STICKY);
-			++sFired;
-			if (sticky > 1.f) {
-				sqDist /= SQUARE(sticky);
-			}
-		}
 		if ((minPower > power) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {
 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
@@ -567,18 +375,10 @@ bool CRaidTask::FindTarget()
 			enemyPositions.push_back(ePos);
 		}
 	}
-	if (bestTarget == nullptr) { ++gNoBest; }
 	if (bestTarget == nullptr) {
 		bestTarget = worstTarget;
 	}
 
-	if (circuit->GetLastFrame() >= sLogAt) {
-		sLogAt = circuit->GetLastFrame() + FRAMES_PER_SEC * 30;
-		circuit->LOG("apex: raidgate passes=%i cand=%i hidden=%i unreach=%i power=%i"
-				" fleeing=%i noBest=%i | hadPrev=%i noPrev=%i applied=%i",
-				gPasses, gSeen, gHidden, gUrgent, gPower, gFlee, gNoBest,
-				sHad, sNone, sFired);
-	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		return true;
@@ -592,32 +392,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
 {
 	pPath = query->GetPathInfo();
 
-	if (pPath->posPath.empty() && !flankDone) {
-		flankDone = true;  // cannot reach the flank point; go straight rather than stall
-	}
 	if (!pPath->posPath.empty()) {
-		// walked/direct near 1.0 is a charge up the middle; well above 1.0 is a
-		// flank. Without this the route shape is invisible in a log.
-		CCircuitAI* circuit = manager->GetCircuit();
-		if (circuit->GetLastFrame() >= lastDetourLog + FRAMES_PER_SEC * 20) {
-			lastDetourLog = circuit->GetLastFrame();
-			float walked = 0.f;
-			for (size_t i = 1; i < pPath->posPath.size(); ++i) {
-				walked += pPath->posPath[i - 1].distance2D(pPath->posPath[i]);
-			}
-			const float direct = pPath->posPath.front().distance2D(pPath->posPath.back());
-			if (direct > 1.f) {
-				circuit->LOG("apex: raid path walked=%.0f direct=%.0f detour=%.2f",
-						walked, direct, walked / direct);
-			}
-		}
-		if (leader != nullptr) {
-			CEnemyInfo* tgt = GetTarget();
-			const char* tname = ((tgt != nullptr) && (tgt->GetCircuitDef() != nullptr))
-					? tgt->GetCircuitDef()->GetDef()->GetName() : "spot";
-			IntentPing(leader->GetLastPos(),
-					utils::string_format("RAID n=%d > %s", (int)units.size(), tname));
-		}
 		position = pPath->posPath.back();
 		ActivePath();
 	} else {
@@ -632,99 +407,31 @@ void CRaidTask::FallbackRaid()
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& threatPos = leader->GetTravelAct()->IsActive() ? position : pos;
-	const char* why = "roam";
-	if (attackPower * powerMod * GetHealthScale() <= threatMap->GetThreatAt(leader, threatPos)) {
+	if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;
 		} else {
 			position = nextPos;
-			why = "outgunned";
-		}
-	} else {
-		// Nothing in front of us is beating us, so there is no reason to be
-		// heading anywhere but further in.
-		const AIFloat3 onward = FindOnwardSpot();
-		if (utils::is_valid(onward)) {
-			if (!utils::is_equal_pos(onward, position)
-				&& (circuit->GetLastFrame() >= lastPressLog + FRAMES_PER_SEC * 20))
-			{
-				lastPressLog = circuit->GetLastFrame();
-				circuit->LOG("apex: raid presses on to (%.0f,%.0f), %.0f further in",
-						onward.x, onward.z, pos.distance2D(onward));
-			}
-			position = onward;
-			why = "press on";
 		}
 	}
 
 	if (!utils::is_valid(position)) {
-		position = RoamPos(leader);
+		float x = rand() % terrainMgr->GetTerrainWidth();
+		float z = rand() % terrainMgr->GetTerrainHeight();
+		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
+		position = terrainMgr->GetMovePosition(leader->GetArea(), position);
 	}
-	IntentPing(pos, utils::string_format("RAID n=%d %s", (int)units.size(), why));
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
-	// RAID THE EDGES. This is the ROAMING query -- how a raid party moves when it
-	// has no target yet -- and it passed no threatMod, so it took the default of
-	// 1.0 and routed straight through the middle, into the enemy army, while the
-	// TARGETED query twenty lines up has used RAID_THREAT_MOD = 4 all along. Half
-	// the raid's movement avoided threat and half walked into it.
-	// With RAID_ROAM_THREAT_MOD the quiet ground is cheap and the contested
-	// centre is expensive, so a raid party works its way round the outside on its
-	// own -- no waypoint list, no map-edge special case, just a cost function
-	// that makes the flank the shortest path.
-	// apexearth: "I want to see us doing cheeky moves like running the edge of
-	// the map and popping enemy energy converters."
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, threatMap,
-			pos, position, pathfinder->GetSquareSize(),
-			nullptr, std::numeric_limits<float>::max(), false, RAID_ROAM_THREAT_MOD);
+			pos, position, pathfinder->GetSquareSize());
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
 		this->ApplyRaidPath(static_cast<const CQueryPathSingle*>(query));
 	});
-}
-
-springai::AIFloat3 CRaidTask::FindOnwardSpot() const
-{
-	CCircuitAI* circuit = manager->GetCircuit();
-	const AIFloat3& foe = circuit->GetEnemyManager()->GetEnemyPos();
-	if (!utils::is_valid(foe)) {
-		return -RgtVector;  // nothing seen yet; no direction to press in
-	}
-	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
-	const float ourDist = pos.distance2D(foe);
-	if (ourDist <= PRESS_STEP) {
-		return -RgtVector;  // already on top of them
-	}
-
-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	CThreatMap* threatMap = circuit->GetThreatMap();
-	threatMap->SetThreatType(leader);
-	const float power = attackPower * powerMod * GetHealthScale();
-	SArea* area = leader->GetArea();
-
-	const CMetalData::Metals& spots = circuit->GetMetalManager()->GetSpots();
-	AIFloat3 best = -RgtVector;
-	float bestSqDist = SQUARE(PRESS_MAX_LEG);
-	for (const CMetalData::SMetal& spot : spots) {
-		if (foe.distance2D(spot.position) > ourDist - PRESS_STEP) {
-			continue;  // no deeper than we already stand
-		}
-		const float sqDist = pos.SqDistance2D(spot.position);
-		if (sqDist >= bestSqDist) {
-			continue;
-		}
-		if (!terrainMgr->CanMoveToPos(area, spot.position)
-			|| (threatMap->GetThreatAt(spot.position) >= power))
-		{
-			continue;
-		}
-		bestSqDist = sqDist;
-		best = spot.position;
-	}
-	return best;
 }
 
 void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
@@ -740,11 +447,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->StateWait();
-		}
+		unit->GetTravelAct()->StateWait();
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::ENGAGE);
+			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)
 	}
 }

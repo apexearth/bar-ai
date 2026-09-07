@@ -55,9 +55,18 @@ CAntiAirTask::CAntiAirTask(ITaskModule* mgr, float powerMod)
 		: ISquadTask(mgr, FightType::AA, powerMod)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	float x = rand() % circuit->GetTerrainManager()->GetTerrainWidth();
-	float z = rand() % circuit->GetTerrainManager()->GetTerrainHeight();
-	position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
+	// A SEED POSITION MUST NOT BE ABLE TO KILL THE ENGINE. The width and height
+	// here are AIFloat3::maxxpos/maxzpos, statics the wrapper fills in at init
+	// and shares across every AI in the process -- read them as zero and the
+	// modulo itself faults, and the raw CMap::GetElevationAt below indexes the
+	// height map with no check of its own (the GetBuilderThreatAt lesson).
+	// Reproduced live 2026-09-07: 8v8 on Special Hotstepper, access violation
+	// in this constructor at frame 12306, with every AI behaviour switched off.
+	const int w = circuit->GetTerrainManager()->GetTerrainWidth();
+	const int h = circuit->GetTerrainManager()->GetTerrainHeight();
+	const float x = (w > 0) ? float(rand() % w) : 0.f;
+	const float z = (h > 0) ? float(rand() % h) : 0.f;
+	position = AIFloat3(x, circuit->GetElevationAt(AIFloat3(x, 0.f, z)), z);
 }
 
 CAntiAirTask::~CAntiAirTask()
