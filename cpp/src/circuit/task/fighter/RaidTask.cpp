@@ -429,6 +429,11 @@ bool CRaidTask::FindTarget()
 	const float sqBaseRange = SQUARE(baseRange);
 	const bool isDefender = basePos.SqDistance2D(pos) < sqBaseRange;
 
+	// BEFORE the clear below, or the stickiness further down compares against a
+	// target this function has already thrown away: `enemy == GetTarget()` was
+	// testing against nullptr and could never be true, so RAID_TARGET_STICKY
+	// never once applied. AttackTask captures prevTarget the same way.
+	CEnemyInfo* prevTarget = GetTarget();  // compared only, never dereferenced
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
 	CEnemyInfo* worstTarget = nullptr;
@@ -511,8 +516,13 @@ bool CRaidTask::FindTarget()
 		// instead of killing either. Flattering the incumbent's distance keeps
 		// it committed unless something is genuinely closer.
 		// apexearth: "it can't make up its mind and just runs in circles."
-		if (enemy == GetTarget()) {
-			sqDist /= SQUARE(RAID_TARGET_STICKY);
+		// Tunable so the two arms differ by a modoption rather than a rebuild:
+		// 1.0 restores no-commitment, which is what the broken form was doing.
+		if (enemy == prevTarget) {
+			const float sticky = circuit->GetTunable("apex_raid_sticky", RAID_TARGET_STICKY);
+			if (sticky > 1.f) {
+				sqDist /= SQUARE(sticky);
+			}
 		}
 		if ((minPower > power) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {

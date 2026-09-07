@@ -523,6 +523,9 @@ local NAMES = {
 	-- a run with it off says what turning it on would buy (0).
 	"apex_order_dedupe",
 	"apex_order_trace",
+	-- RaidTask: how much a raid party flatters its CURRENT target's distance.
+	-- 1.0 = no commitment (what the nulled-out form was effectively doing).
+	"apex_raid_sticky",
 	-- The order arbiter: a centre ranked below the one whose decision the unit
 	-- is still carrying out may not overwrite it. 0 restores last-writer-wins.
 	"apex_order_arbiter",
