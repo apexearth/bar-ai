@@ -2271,3 +2271,29 @@ attack tasks in existence, and the army spent 1.6% of its time attacking against
 apexearth's ruling 2026-09-06: "We shouldn't need to be one big squad in order to
 attack, we should be able to coordinate attacks with multiple groups." So the
 odds are judged on what commits together; the pools stay separate. NOT YET BUILT.
+
+## Half of all defence builds die before they become a nanoframe (2026-09-07)
+
+12 games, Comet Catcher 1v1 vs BARb:stable:hard, 25 min:
+
+| arm | defence auction wins | died before framing | lost |
+|---|---|---|---|
+| teampow=all (old) | 67 | 33 | 49% |
+| teampow=affordable | 73 | 39 | 53% |
+
+`apex: task-gone` in one game: **`armllt done=2 abort=8`**. The `apex: abort`
+lines carry `workers=1 builderToSite=398` -- a builder was assigned and walking
+when the task was removed.
+
+This is why loosening the team-power discount raised defence WINS (11% -> 23%
+of decisions in the single-game check, 67 -> 73 across the batch) and did NOT
+raise defence STANDING: `defHave` 368 -> 251, `defPeak` 452 -> 459, flat. The
+price was never the binding constraint. **Defence loses on the walk, not in the
+auction.**
+
+Same shape as the squad-destination flapping fixed the same day: a decision is
+re-taken while it is still being carried out. S14 says `AiMakeTask` is a
+RE-ELECTION, so a builder walking to a tower site is re-elected onto whatever
+prices best at that instant -- and a tower site is always further away than the
+mex next door. Not yet confirmed as the mechanism; the abort's caller has not
+been traced.

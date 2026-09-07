@@ -1651,3 +1651,33 @@ worth answering is why a raid task has no target 92% of the time, since a
 raider without a target falls through to `RoamPos` — the ±`apex_roam_r` scatter
 around the front, or a uniform pick over the whole map when no front is
 published, whose mean is the map centre.
+
+## `apex_unit_cover` (default 1) — his escort-loop hypothesis, MEASURED NEGATIVE
+
+apexearth 2026-09-07: *"I wonder if we need the turret because the ground is
+unsafe, but then because a con comes over with an escort, the escort adds safety
+and then defense no longer perceived as necessary?"*
+
+`CoverWith` adds `Military::UnitCoverAt` to the same total as turrets, so the
+loop is available in the code. This weight removes the mobile half. 6 seeds per
+arm, Comet Catcher 1v1 vs BARb:stable:hard, 25 min:
+
+| apex_unit_cover | defence wins | died pre-frame | lost | defHave | defPeak | built | share | K/D |
+|---|---|---|---|---|---|---|---|---|
+| 1 (his ruling) | 63 | 34 | **54%** | 414 | 517 | 22,975 | 0.437 | 0.15 |
+| 0 | 58 | 31 | **53%** | 708 | 768 | 11,929 | 0.400 | 0.24 |
+
+**The abort rate does not move: 54% -> 53%.** Removing every scrap of mobile
+cover from the pricing changes nothing about how often a defence build dies
+before it is framed. Whatever aborts these tasks, it is not an escort arriving
+and closing the shortfall.
+
+What the arm DOES show is that mobile cover really is suppressing defence
+demand -- `defHave` 414 -> 708 and `defPeak` 517 -> 768 with it off, ~70% more
+defence standing. So the mechanism he described exists; it is simply not the
+abort cause. Economy fell hard in the same arm (22,975 -> 11,929 built) but
+builtSD is 9,731-13,409 and defPeak per game ranges 0-2,080, so at n=6 that
+half is not resolvable.
+
+**Leave it at 1** -- his ruling that a unit protecting a building counts as
+cover stands, and the arm that contradicts it bought no fewer aborts.

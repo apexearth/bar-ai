@@ -202,20 +202,32 @@ int EscortInFlight(CCircuitDef@ d)
 // average on one axis or the other. A Rocketeer is neither, and its role tag
 // is `assault`, which is why a SKIRM/ARTY filter never caught it.
 float gEscMeanSpd = -1.f;
+// The same field's mean POWER. apexearth 2026-09-07: "we are using rascals as
+// escorts and they really suck at it. Need incisors if you want a good enough
+// vehicle escort." The two tests below ask whether an escort can CATCH what
+// comes for a worker or SURVIVE it -- neither asks whether it can KILL it, so
+// a Rascal (26 metal, Light Scout Vehicle) qualifies on speed alone and then
+// loses the fight it caught. Measured before it is enforced: see the
+// `escort-field` census.
+float gEscMeanPow = -1.f;
 void EscortMeans()
 {
 	if (gEscMeanSpd > 0.f)
 		return;   // frame-dependent availability: never cache a mean over nothing
 	float sp = 0.f;
+	float pw = 0.f;
 	int n = 0;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])
 			continue;
 		sp += Catalog::gSpeed[d];
+		pw += Catalog::gPower[d];
 		++n;
 	}
 	gEscMeanSpd = (n > 0) ? (sp / float(n)) : -1.f;
+	gEscMeanPow = (n > 0) ? (pw / float(n)) : -1.f;
 }
+
 
 bool EscortWorthy(int di)
 {
@@ -242,6 +254,37 @@ bool EscortWorthy(int di)
 	// raiders -- a health bar cannot express this, because the tanky cheap
 	// bot at T1 IS the rocket bot (Rocketeer 720hp against a Pawn's 370).
 	return cd.IsRoleAny(Unit::Role::RIOT.mask);
+}
+
+// WHAT THE ESCORT FILTER IS ACTUALLY CHOOSING FROM, once, in full. A bar set
+// from a mean is only as good as the field it averages, and the field is not
+// knowable from the source -- it depends on which factory is standing. Printed
+// before anything is enforced so the bar can be read off real data instead of
+// guessed (docs/25: the silent no-op is this repo's only real bug class).
+bool gEscFieldLogged = false;
+void EscortFieldCensus()
+{
+	if (gEscFieldLogged)
+		return;
+	EscortMeans();
+	if (gEscMeanSpd <= 0.f)
+		return;
+	gEscFieldLogged = true;
+	AiLog("apex: escort-field t=" + ai.teamId
+		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 1)
+		+ " powBar=" + formatFloat(gEscMeanPow, "", 0, 1));
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !LineCombat(d) || Catalog::gFlyer[d])
+			continue;
+		CCircuitDef@ cd = Catalog::Def(d);
+		AiLog("apex: escort-cand t=" + ai.teamId
+			+ " " + ((cd is null) ? ("def" + d) : cd.GetName())
+			+ " cost=" + formatFloat(Catalog::gCostM[d], "", 0, 0)
+			+ " spd=" + formatFloat(Catalog::gSpeed[d], "", 0, 1)
+			+ " pow=" + formatFloat(Catalog::gPower[d], "", 0, 1)
+			+ " hp=" + formatFloat(Catalog::gHealth[d], "", 0, 0)
+			+ " worthy=" + (EscortWorthy(d) ? 1 : 0));
+	}
 }
 
 // A CONSTRUCTOR STANDING WITHOUT A GUARD IS DEMAND FOR ONE, NOT A BID

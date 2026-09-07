@@ -658,6 +658,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// not decreed -- see EscortGain. Eligibility stays the military hook's
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
+		Market::EscortFieldCensus();
 		if (!Catalog::gBuilder[d] && EscortWorthy(d)) {
 			if (escShort < -1)
 				escShort = EscortShortfall();

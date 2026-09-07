@@ -130,10 +130,27 @@ void TaskRemovedInner(IUnitTask@ task, bool done)
 			// Catalog::Def(0) is null and .GetName() on it throws.
 			if ((d > 0) && (gAbortLog < 30)) {
 				++gAbortLog;
+				// DID THE REASON FOR THE BUILD EVAPORATE WHILE WE WALKED TO IT?
+				// apexearth 2026-09-07: "I wonder if we need the turret because
+				// the ground is unsafe, but then because a con comes over with
+				// an escort, the escort adds safety and then defense no longer
+				// perceived as necessary?" CoverWith counts posted units as
+				// cover exactly like turrets, so a guard arriving near the site
+				// raises cover, closes the shortfall, and zeroes the very want
+				// that sent the builder. Printing the unit share of cover AT
+				// THE ABORTED SITE is what separates that from an ordinary
+				// re-election.
+				float abCov = -1.f, abUnit = -1.f;
+				if (OnMap(task.GetBuildPos())) {
+					abCov = Market::CoverAt(task.GetBuildPos());
+					abUnit = Military::UnitCoverAt(task.GetBuildPos());
+				}
 				AiLog("apex: abort t=" + ai.teamId + " "
 					+ Catalog::Def(d).GetName() + " workers=" + nw
 					+ " siteFromHome=" + int(dHome)
-					+ " builderToSite=" + int(dMan));
+					+ " builderToSite=" + int(dMan)
+					+ " cover=" + formatFloat(abCov, "", 0, 0)
+					+ " unitCover=" + formatFloat(abUnit, "", 0, 0));
 			}
 
 		}

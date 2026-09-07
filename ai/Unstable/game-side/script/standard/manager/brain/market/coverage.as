@@ -85,7 +85,16 @@ float CoverWith(const AIFloat3& in pos, const AIFloat3& in extraAt,
 	// protecting a building also should be counting as cover"); without
 	// them a no-turret base read cover=0 everywhere and every dead mex spot
 	// was priced as uncovered for as long as the loss memory lasted.
-	const float unitCover = Military::UnitCoverAt(pos);
+	// MOBILE COVER CANCELS A PERMANENT WANT. apexearth 2026-09-07: "I wonder
+	// if we need the turret because the ground is unsafe, but then because a
+	// con comes over with an escort, the escort adds safety and then defense
+	// no longer perceived as necessary?" A posted guard counts here exactly
+	// like a turret -- his own earlier ruling -- but a guard walks away and a
+	// turret does not, so cover that will not be there tomorrow can still zero
+	// today's shortfall and abort the build mid-walk. 1 = his ruling as it
+	// stands; 0 measures the loop by removing the mobile half.
+	const float unitCover = Military::UnitCoverAt(pos)
+			* ai.GetTunable("apex_unit_cover", 1.f);
 	if ((gProtPos[PROT_DEF].length() == 0) && (extraReach <= 0.f))
 		return unitCover;
 	CwTuneFill();

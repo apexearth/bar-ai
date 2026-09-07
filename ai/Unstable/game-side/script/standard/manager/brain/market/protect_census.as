@@ -353,6 +353,69 @@ float TeamBestTowerPower()
 	return gTeamTowerP;
 }
 
+// THE BEST TOWER WE COULD ACTUALLY BUY, not the best one that exists.
+//
+// TeamBestTowerPower above is the strongest static defence ANY of our builders
+// can make. Scaling a light tower's gain by how far short of it it falls was
+// meant as deferral -- "don't spend the budget on light towers before the heavy
+// gun is ever asked for". But the heavy gun is usually unaffordable, and the
+// discount does not know that: measured 2026-09-07, one 12-minute game, the
+// WINNING defence candidate carried xTeamPow=0.352 all game while defHave sat
+// at 85 metal against a defTarget of 3,356. The deferral never converted into a
+// heavy gun; it just deleted two thirds of the defence price, every ask, and
+// static defence finished at 1.0% of our metal against BARb's 7.1%
+// (apexearth: "can you turn our defense building up some?").
+//
+// A tower we cannot buy is not an alternative to one we can. Ranking against
+// what is affordable NOW leaves the deferral intact exactly when it is real --
+// the heavy gun is in reach and the light one would waste the window -- and
+// removes it when it is imaginary. DefObsoleteOnArrival already hard-drops a
+// candidate that something affordable outclasses, so this is the same
+// affordability the file already reasons in.
+array<float> gTeamTowerCost;
+array<float> gTeamTowerPow;
+int gTeamLadderAt = -999999;
+
+void TeamTowerLadder()
+{
+	if (ai.frame < gTeamLadderAt)
+		return;
+	gTeamLadderAt = ai.frame + 15 * SECOND;
+	gTeamTowerCost.resize(0);
+	gTeamTowerPow.resize(0);
+	for (uint u = 1; u < gOwnCount.length(); ++u) {
+		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
+			|| !Catalog::gBuilder[int(u)])
+			continue;
+		const array<int>@ bl = Catalog::BuildsOf(int(u));
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int bd = bl[b];
+			if (!Catalog::gAvailable[bd] || Catalog::gMobile[bd])
+				continue;
+			if (ProtClassOf(bd) != PROT_DEF)
+				continue;
+			CCircuitDef@ cd = Catalog::Def(bd);
+			if (cd is null)
+				continue;
+			gTeamTowerCost.insertLast(Catalog::gCostM[bd]);
+			gTeamTowerPow.insertLast(cd.power);
+		}
+	}
+}
+
+float TeamBestTowerPowerAffordable(float affordM)
+{
+	TeamTowerLadder();
+	float best = 0.f;
+	for (uint i = 0; i < gTeamTowerPow.length(); ++i) {
+		if ((affordM > 0.f) && (gTeamTowerCost[i] > affordM))
+			continue;
+		if (gTeamTowerPow[i] > best)
+			best = gTeamTowerPow[i];
+	}
+	return best;
+}
+
 array<int> gDefRankDef;
 array<float> gDefRankV;
 // Per BUILDER DEF, not one clock for the fleet: a single global throttle

@@ -160,6 +160,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	float hFill = 0.f;
 	float hEffBP = 0.f;
 	float hTeamPow = 0.f;
+	float hTeamPowAll = 0.f;
 	float hAffordM = 0.f;
 	float hTtdH = 0.f;
 	bool  hDomOn = false;
@@ -192,9 +193,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hRentPerCell = hWallUp ? (PfMetalPerCell() * PfCrowd()) : 0.f;
 		hFill = TargetFill(dHave, dWant);
 		hEffBP = EffBP(Catalog::gBuildPower[uid]);
-		hTeamPow = TeamBestTowerPower();
 		const float affS = ai.GetTunable("apex_def_afford_s", TUNE_DEF_AFFORD_S);
 		hAffordM = EcoPowerM() * ((affS > 1.f) ? affS : 30.f);
+		// Rank against the best tower we could BUY, not the best that exists --
+		// see TeamBestTowerPowerAffordable. 0 restores the old behaviour for
+		// the A/B; both numbers are printed in `apex: defwhy`.
+		hTeamPowAll = TeamBestTowerPower();
+		hTeamPow = (ai.GetTunable("apex_def_teampow_afford", 1.f) > 0.f)
+				? TeamBestTowerPowerAffordable(hAffordM)
+				: hTeamPowAll;
+		if (hTeamPow <= 0.f)
+			hTeamPow = hTeamPowAll;   // nothing affordable yet: unchanged
 		hTtdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
 		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
@@ -522,6 +531,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " threat=" + formatFloat(gDbgThreat, "", 0, 0)
 					+ " cover=" + formatFloat(gDbgCover0, "", 0, 0)
 					+ "->" + formatFloat(gDbgCover1, "", 0, 0)
+					// How much of the cover at the chosen site is MOBILE. A
+					// turret bought because units happened to be standing there
+					// is a turret whose reason walks away.
+					+ " unitCover=" + formatFloat(Military::UnitCoverAt(bestAt), "", 0, 0)
 					+ " short=" + formatFloat(gDbgShort0, "", 0, 2)
 					+ "->" + formatFloat(gDbgShort1, "", 0, 2)
 					+ " hz=" + formatFloat(gDbgHz, "", 0, 5)
