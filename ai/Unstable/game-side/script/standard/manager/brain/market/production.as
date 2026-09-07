@@ -935,8 +935,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const float rTarget = rcTgt[rSlot];
 			const float rGap = rTarget - rcVal[rSlot];
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
-			if (roleW < 0.05f)
-				roleW = 0.05f;   // never exactly zero: portfolio floor
+			// THE PORTFOLIO FLOOR MUST NOT REVIVE A ROLE THAT IS WORTH NOTHING.
+			// It keeps a never-first role from starving, which is right for the
+			// combat roles that all carry a baseline share. AA does not: it is a
+			// pure counter and RoleTarget refuses it a baseline outright ("it has
+			// no value without enemy air"). Floored anyway, a target of exactly
+			// zero came back as 0.05 and the draw bought it -- measured
+			// 2026-09-07: enemyAirFresh=0 all game, AA target 0, and 1,500 metal
+			// of Crashers held, 30% of the army (apexearth, watching: "we've made
+			// 23 AA units and have seen 0 enemy air"). A role the model asks for
+			// none of gets none.
+			if ((rTarget > 1.f) || (ai.GetTunable("apex_role_floor_zero", 1.f) <= 0.f)) {
+				if (roleW < 0.05f)
+					roleW = 0.05f;   // never exactly zero: portfolio floor
+			}
 			// The coverage share of the gap is not a composition question: a
 			// guard by every building is asked for by the base, whatever
 			// role share the army's mix would give that unit.

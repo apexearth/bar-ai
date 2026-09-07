@@ -74,6 +74,16 @@ void FightCensus()
 	}
 	AiLog(Factory::T() + "apex: fightcensus tasks/units/metal" + line
 		+ " | live=" + gSquads.length() + " empty=" + empty + " unknown=" + odd);
+	// The raw hook traffic beside it: "live=0 calls=0" is a dead callback,
+	// "live=0 calls=900 fighter=0" is a type test that never matches, and
+	// "live=0 fighter=900" would mean the register is being emptied.
+	string bt = "";
+	for (uint t = 0; t < gTaskAddByType.length(); ++t)
+		bt += " t" + t + "=" + gTaskAddByType[t];
+	AiLog("apex: taskadd calls=" + gTaskAddCalls + " null=" + gTaskAddNull
+		+ " fighter=" + gTaskAddFighter + " byType" + bt
+		+ " | del=" + gTaskDelCalls + " hit=" + gTaskDelHit
+		+ " miss=" + gTaskDelMiss + " peak=" + gSquadsPeak);
 }
 
 }  // namespace Military

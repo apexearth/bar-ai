@@ -1681,3 +1681,29 @@ half is not resolvable.
 
 **Leave it at 1** -- his ruling that a unit protecting a building counts as
 cover stands, and the arm that contradicts it bought no fewer aborts.
+
+## `apex_inbase_path` (default 0) — the anomaly was real, the fix bought nothing
+
+A builder skips pathfinding when it and its site are both inside
+`baseDefRange` (`terrainDiagonal * 0.3`, measured 1,120 elmos). `apex: pathskip`
+showed that **69% of the time it fired, the builder was NOT within build range**
+— `inRange=29 farInBase=66`, worst 1,952 elmos against a 112 build range. Those
+builders are handed no path and no move at all, which looked like a complete
+explanation for the stuck-builder population (`progress=0.00`, `toSite`
+500-1,175, and zero move failures because no move was ever ordered).
+
+6 seeds per arm, Comet Catcher 1v1 vs BARb:stable:hard, 25 min:
+
+| apex_inbase_path | farInBase/game | stuck/game | task deaths | defHave | mex held | built | share | K/D |
+|---|---|---|---|---|---|---|---|---|
+| 0 (shortcut) | 119.3 | 21.0 | 54.2 | 831 | 30.5 | 18,503 | 0.516 | 0.39 |
+| 1 (always path) | **0.0** | **19.7** | 50.3 | 402 | 22.3 | 17,494 | 0.463 | 0.53 |
+
+**The mechanism was eliminated outright and the stuck builders stayed.** 21.0 ->
+19.7 is nothing next to 119 -> 0. So the pathless builders were not the parked
+ones, and the theory was wrong. Mexes held fell 30.5 -> 22.3 and defHave 831 ->
+402, with builtSD 10,257 and two collapsed games (3,320 and 6,860 built), so
+running A* on every in-base hop looks actively worse rather than neutral.
+
+Defaulted OFF. The `apex: pathskip` census stays: the anomaly is real and worth
+knowing about, it is simply not what parks builders.

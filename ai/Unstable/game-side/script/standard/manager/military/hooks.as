@@ -377,10 +377,28 @@ void AiTaskAdded(IUnitTask@ task)
 	Perf::Add("hk.taskadd.mil", _t);
 }
 
+// S7: THIS CALLBACK MAY BE DEAD. The fight census built on gSquads reports
+// live=0 for a whole game -- every type zero, every count zero -- which is
+// either an army that fields no squads or a hook nobody calls. Those look
+// identical in the census, so count the raw arrivals and what type they were.
+int gTaskAddCalls = 0;
+int gTaskAddFighter = 0;
+int gTaskAddNull = 0;
+array<int> gTaskAddByType(8, 0);
+
 void TaskAddedInner(IUnitTask@ task)
 {
-	if ((task is null) || (task.GetType() != Task::Type::FIGHTER))
+	++gTaskAddCalls;
+	if (task is null) {
+		++gTaskAddNull;
 		return;
+	}
+	const int ty = int(task.GetType());
+	if ((ty >= 0) && (ty < int(gTaskAddByType.length())))
+		++gTaskAddByType[ty];
+	if (task.GetType() != Task::Type::FIGHTER)
+		return;
+	++gTaskAddFighter;
 	gSquads.insertLast(task);
 }
 
@@ -391,14 +409,27 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 	Perf::Add("hk.taskdel.mil", _t);
 }
 
+// 292 fighter tasks were inserted and the register still reads length 0, so
+// either every one of them is removed as fast as it arrives or something else
+// empties it. Count the removals that MATCH against the ones that do not.
+int gTaskDelCalls = 0;
+int gTaskDelHit = 0;
+int gTaskDelMiss = 0;
+int gSquadsPeak = 0;
+
 void TaskRemovedInner(IUnitTask@ task, bool done)
 {
+	++gTaskDelCalls;
+	if (int(gSquads.length()) > gSquadsPeak)
+		gSquadsPeak = int(gSquads.length());
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		if (gSquads[i] is task) {
 			gSquads.removeAt(i);
+			++gTaskDelHit;
 			return;
 		}
 	}
+	++gTaskDelMiss;
 }
 
 // Groups with units actually in them. An empty fighter task is a request nobody

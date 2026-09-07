@@ -98,9 +98,16 @@ void UpdateStuckBuilds()
 		if (float(ai.frame - gStuckSince[i]) < secs * float(SECOND))
 			continue;
 		++gStuckFreed;
+		// HOW FAR FROM THE SITE IT STOPPED. A parked builder at ~0 is standing
+		// ON the site refusing to place; a parked builder far from it stopped
+		// short. Those are different bugs and the abort hides both.
+		const AIFloat3 bp = t.GetBuildPos();
+		const float dSite = OnMap(bp) ? p.distance2D(bp) : -1.f;
 		AiLog("apex: stuck -- " + u.circuitDef.GetName() + " #" + u.id
 			+ " held " + t.buildDef.GetName()
 			+ " progress=" + formatFloat(done, "", 0, 2)
+			+ " toSite=" + formatFloat(dSite, "", 0, 0)
+			+ " buildDist=" + formatFloat(Catalog::gBuildDist[int(u.circuitDef.id)], "", 0, 0)
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z) + " -- re-electing");
 		freed.insertLast(u);

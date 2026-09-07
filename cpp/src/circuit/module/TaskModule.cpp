@@ -11,6 +11,7 @@
 #include "task/IdleTask.h"
 #include "task/PlayerTask.h"
 #include "task/RetreatTask.h"
+#include "task/builder/BuilderTask.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Profiler.h"
@@ -199,6 +200,10 @@ void ITaskModule::Update()
 			int frame = task->GetLastTouched();
 			int timeout = task->GetTimeout();
 			if ((frame != -1) && (timeout > 0) && (lastFrame - frame >= timeout)) {
+				// The generic timeout, named like every other abort route.
+				if (task->GetType() == IUnitTask::Type::BUILDER) {
+					static_cast<IBuilderTask*>(task)->SetDeathNote("timeout");
+				}
 				AbortTask(task);
 			} else {
 				task->Update();

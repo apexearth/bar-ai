@@ -558,6 +558,7 @@ int CBuilderManager::UnitFinished(CCircuitUnit* unit)
 	}
 	auto itcl = reclaimUnits.find(unit);
 	if ((itcl != reclaimUnits.end()) && (itcl->second != nullptr)) {
+		itcl->second->SetDeathNote("reclaim-done");
 		AbortTask(itcl->second);
 	}
 

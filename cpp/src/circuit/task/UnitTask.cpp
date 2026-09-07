@@ -7,6 +7,7 @@
 
 #include "task/UnitTask.h"
 #include "task/IdleTask.h"
+#include "task/builder/BuilderTask.h"
 #include "module/TaskModule.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
@@ -14,7 +15,10 @@
 #include "unit/CircuitUnit.h"
 #include "unit/action/AntiCapAction.h"
 #include "CircuitAI.h"
+#include "Log.h"
 #include "util/Utils.h"
+
+#include <map>
 
 #include "Drawer.h"
 
@@ -289,10 +293,53 @@ void IUnitTask::Cancel()
 {
 }
 
+// THE RANDOM STUMBLE, COUNTED. A failed move sends the unit to a random point
+// 256 elmos away, and the traced builders that never reach their sites are all
+// carrying orders of exactly that shape. Whether that is the whole story turns
+// on how OFTEN this fires and whether it fires REPEATEDLY on the same unit:
+// once is a nudge past an obstacle, forty times is a unit walking in circles
+// until its task is aborted. Counted before it is changed.
+static std::map<int, int> sMfPerUnit;
+static unsigned sMfFires = 0;
+static int sMfLogAt = 0;
+
 void IUnitTask::OnUnitMoveFailed(CCircuitUnit* unit)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
+
+	++sMfFires;
+	const int n = ++sMfPerUnit[(int)unit->GetId()];
+	if (frame >= sMfLogAt) {
+		sMfLogAt = frame + FRAMES_PER_SEC * 60;
+		int worst = 0, worstId = -1, repeaters = 0;
+		for (const auto& kv : sMfPerUnit) {
+			if (kv.second > 1) { ++repeaters; }
+			if (kv.second > worst) { worst = kv.second; worstId = kv.first; }
+		}
+		circuit->LOG("apex: movefail t=%i fires=%u units=%i repeaters=%i worst=%i(u%i)",
+				circuit->GetTeamId(), sMfFires, (int)sMfPerUnit.size(),
+				repeaters, worst, worstId);
+	}
+	// The individual case, rate-limited by repeat count so the log shows the
+	// shape without one unit flooding it: how far it still is from the job it
+	// cannot reach.
+	if ((n == 5) || (n == 25) || (n == 100)) {
+		IUnitTask* t = unit->GetTask();
+		float toSite = -1.f;
+		if ((t != nullptr) && (t->GetType() == IUnitTask::Type::BUILDER)) {
+			const AIFloat3& bp = static_cast<IBuilderTask*>(t)->GetPosition();
+			if (utils::is_valid(bp)) {
+				toSite = unit->GetPos(frame).distance2D(bp);
+			}
+		}
+		circuit->LOG("apex: movefail-unit t=%i u=%i %s n=%i toSite=%.0f",
+				circuit->GetTeamId(), (int)unit->GetId(),
+				(unit->GetCircuitDef() != nullptr)
+						? unit->GetCircuitDef()->GetDef()->GetName() : "?",
+				n, toSite);
+	}
+
 	AIFloat3 pos = utils::get_radial_pos(unit->GetPos(frame), SQUARE_SIZE * 32);
 	CTerrainManager::CorrectPosition(pos);
 	TRY_UNIT(circuit, unit,

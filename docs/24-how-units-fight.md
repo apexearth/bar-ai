@@ -768,3 +768,24 @@ come from the field's own mean the way the speed bar already does -- not from a
 unit name. `apex: escort-field` / `escort-cand` print the whole candidate field
 with cost, speed, power and the pass flag, so the bar is read off real data
 before it is enforced.
+
+## Raiding is not optional, and defending only is losing slowly (2026-09-07)
+
+> "I didn't see us raid a single time. Everyone is too busy escorting or
+> guarding structures."
+
+> "We want the enemy chasing us all over the map on THEIR side of the map. If
+> we're only defending then we're accepting all the damage."
+
+Two statements of one doctrine. A unit standing on our ground trades at best
+evenly; a unit on their ground makes them spend to answer it, and everything
+they spend answering is not spent on us. **Pressure on their half is a form of
+defence**, and the cheapest one -- so an army that is entirely committed to
+escort and guard duty has not chosen safety, it has chosen to absorb every
+attack at full price.
+
+Escort and guard demand is our-anchored and never satisfied (a worker is
+exposed whenever it is outside the safe radius), so left alone it can consume
+the whole army. Whatever else changes, some share of the army must be on their
+side of the map, and that share is not the leftovers after every guard slot is
+filled.

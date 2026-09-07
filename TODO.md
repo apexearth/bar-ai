@@ -366,3 +366,15 @@ rejected its framing. Two separate targets arguing over the same ground is the
 complexity he is pointing at. The replacement is one territory to hold, and
 defence vs army as two ways of buying the same hold -- substitutes in one
 balance, priced against each other, not two independent obligations.
+
+## Dedicated energy builders (apexearth 2026-09-07)
+
+> "Too low on energy. Maybe we need to dedicate certain units to focus just on
+> energy so that the job is properly focused on."
+
+Not a priority tweak -- an ASSIGNMENT. Today every constructor re-elects over
+the whole market each time, so energy is one want among many for all of them
+and no one owns it. His proposal is that some constructors hold energy as their
+job, so the work is continuous rather than whoever happens to draw it.
+
+Open: how many, chosen how, and whether they are released when energy is ahead.

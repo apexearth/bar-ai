@@ -795,10 +795,47 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 
 	const AIFloat3& startPos = unit->GetPos(circuit->GetLastFrame());
 
-	if ((startPos.SqDistance2D(endPos) < SQUARE(range))
-		|| ((circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
-			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))))
-	{
+	// NO PATH IS COMPUTED FOR AN IN-BASE BUILD. That is right when the builder
+	// is at the site and wrong when it is 700 elmos away with a 145 build
+	// range -- it is told nothing and stands there until the stuck watchdog
+	// aborts the task. baseDefRange is terrainDiagonal * 0.3, so most of the
+	// map can qualify. Counted before anything is changed: `inRange` is the
+	// legitimate case, `farInBase` is the suspect one, and their ratio is the
+	// whole question.
+	const bool inRange = startPos.SqDistance2D(endPos) < SQUARE(range);
+	const bool bothInBase =
+			(circuit->GetSetupManager()->GetBasePos().SqDistance2D(startPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()))
+			&& (circuit->GetSetupManager()->GetBasePos().SqDistance2D(endPos) < SQUARE(circuit->GetMilitaryManager()->GetBaseDefRange()));
+	// A BUILDER IS ONLY EXCUSED FROM PATHING WHEN IT CAN ALREADY REACH THE JOB.
+	// The in-base shortcut excused it whenever builder AND site were inside
+	// baseDefRange -- a 1,120-elmo radius, so a 2,240-elmo disc -- and 69% of
+	// the time it fired the builder was NOT in build range: measured
+	// inRange=29 farInBase=66, worst 1,952 elmos against a 112 build range.
+	// Those builders are handed no path, no move, and nothing to do; they
+	// stand where they are until the stuck watchdog aborts the task at 30s.
+	// Every stuck builder measured sat 500-1,175 elmos from its site with
+	// progress 0.00 and no move failure, because no move was ever ordered.
+	// Pathing every in-base build was measured and bought nothing; the pathless
+	// builders are not the parked ones. Off by default, table in docs/27.
+	const bool skipPath = inRange || (bothInBase
+			&& (circuit->GetTunable("apex_inbase_path", 0.f) <= 0.f));
+	if (skipPath) {
+		static unsigned sInRange = 0, sFarInBase = 0, sFarWorst = 0;
+		static int sPathSkipLogAt = 0;
+		if (inRange) {
+			++sInRange;
+		} else {
+			++sFarInBase;
+			const unsigned d = (unsigned)sqrtf(startPos.SqDistance2D(endPos));
+			if (d > sFarWorst) { sFarWorst = d; }
+		}
+		const int f = circuit->GetLastFrame();
+		if (f >= sPathSkipLogAt) {
+			sPathSkipLogAt = f + FRAMES_PER_SEC * 60;
+			circuit->LOG("apex: pathskip t=%i inRange=%u farInBase=%u worst=%u range=%.0f baseR=%.0f",
+					circuit->GetTeamId(), sInRange, sFarInBase, sFarWorst, range,
+					circuit->GetMilitaryManager()->GetBaseDefRange());
+		}
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 			unit->GetTravelAct()->StateFinish();
 		}

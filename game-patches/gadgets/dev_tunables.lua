@@ -562,6 +562,20 @@ local NAMES = {
 	-- 0 removes it, to measure whether an arriving escort is what cancels the
 	-- tower the builder was already walking to.
 	"apex_unit_cover",
+	-- stuck.as: seconds of no movement AND no progress before the watchdog
+	-- aborts a builder's task. 0 disables it. Never published until now, so
+	-- every earlier "sweep" of it silently ran the 30s default (S8).
+	"apex_stuck_secs",
+	-- BuilderTask.cpp: 1 = a builder only skips pathing when it can already
+	-- reach the site. 0 restores the in-base shortcut, which excused pathing
+	-- for any build inside a 1,120-elmo radius and left builders standing up
+	-- to 1,952 elmos from a job with a 112 build range.
+	"apex_inbase_path",
+	-- production.as: 1 = the 0.05 portfolio floor on a role's weight is NOT
+	-- applied to a role whose target is zero. AA is a pure counter and is
+	-- refused a baseline share by RoleTarget; the floor put it back, and the
+	-- draw bought 1,500 metal of AA against an empty sky. 0 restores the floor.
+	"apex_role_floor_zero",
 }
 
 local pending = {}

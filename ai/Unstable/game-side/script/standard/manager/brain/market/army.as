@@ -1255,6 +1255,35 @@ float ArmyTargetFull()
 	return gArmyTgtFull;
 }
 
+// WHAT THE ARMY MODEL WANTS, PER ROLE, AND WHAT IT ALREADY HAS. Nothing logged
+// this, so "15 AA units and 1,875 metal against zero enemy air" (apexearth,
+// watched 2026-09-07) could not be traced to a target at all. AA is a pure
+// counter -- its target is enemy air cost -- so if it reads above zero with an
+// empty sky, the counter is the bug; if it reads zero and the units exist
+// anyway, something outside this model is buying them.
+int gNextRoleLog = 0;
+void RoleCensus()
+{
+	if (ai.frame < gNextRoleLog)
+		return;
+	gNextRoleLog = ai.frame + 30 * SECOND;
+	const float full = ArmyTargetFull();
+	string ln = "apex: rolemix armyTgt=" + int(full)
+		+ " enemyAirFresh=" + int(aiEnemyMgr.GetEnemyCostFresh(RT::AIR))
+		+ " enemyAirRaw=" + int(aiEnemyMgr.GetEnemyCost(RT::AIR)) + " |";
+	// Bounded by the role census the model itself keeps, not by an enum symbol
+	// the script surface does not expose.
+	RoleGrossRefresh();
+	for (int r = 0; r < int(gRoleGross.length()); ++r) {
+		const float tgt = RoleTarget(r, full);
+		const float have = RoleValue(r);
+		if ((tgt < 1.f) && (have < 1.f))
+			continue;
+		ln += " r" + r + "=" + int(have) + "/" + int(tgt);
+	}
+	AiLog(ln);
+}
+
 // Own combat losses, decaying -- wrecks on the field are rez-bot demand.
 float gLossPool = 0.f;
 int gLossDecayAt = 0;
