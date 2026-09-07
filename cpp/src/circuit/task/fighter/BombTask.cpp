@@ -236,6 +236,29 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	}
 }
 
+// WHAT ONE POINT OF BUILD POWER IS WORTH PER SECOND, measured from the game's
+// own unit tree (mean metal cost per unit of build time) rather than assumed,
+// so the bomb score can price a nano farm or a constructor in metal like it
+// prices a generator. Game-wide and constant, so it is computed once.
+static float BuildMetalRate(CCircuitAI* circuit)
+{
+	static float rate = -1.f;
+	if (rate < 0.f) {
+		float sum = 0.f;
+		int n = 0;
+		for (CCircuitDef& cd : circuit->GetCircuitDefs()) {
+			const float bt = cd.GetBuildTime();
+			if ((bt > 1.f) && (cd.GetCostM() > 1.f)) {
+				sum += cd.GetCostM() / bt;
+				++n;
+			}
+		}
+		rate = (n > 0) ? (sum / n) : 0.f;
+		circuit->LOG("apex: bomb build-power rate %.4f metal per bp-second over %i defs", rate, n);
+	}
+	return rate;
+}
+
 void CBombTask::FindTarget()
 {
 	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
@@ -258,6 +281,7 @@ void CBombTask::FindTarget()
 	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
 	float minHealth = std::numeric_limits<float>::max();
 	float bestScore = 0.f;
+	float bestValue = 0.f;
 
 	COOAICallback* callback = circuit->GetCallback();
 	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
@@ -366,6 +390,14 @@ void CBombTask::FindTarget()
 			if (edef != nullptr) {
 				const float ecoH = circuit->GetTunable("apex_bomb_eco_h", 300.f);
 				value += edef->GetMakeE() * (ecoH / 70.f);
+				// THE OTHER TWO WAYS A BUILDING FEEDS THEM, in the same
+				// currency (apexearth: "find where the enemy converters, build
+				// power, energy production is and bomb that"). A T1 converter
+				// costs ONE metal, so cost alone priced their whole conversion
+				// farm at nothing. Build power is a metal rate too.
+				value += (edef->GetMakeM()
+						+ edef->GetConvertCapacity() * edef->GetConvertRatio()) * ecoH;
+				value += edef->GetBuildSpeed() * BuildMetalRate(circuit) * ecoH;
 			}
 			// A NANOFRAME IS NOT THE BUILDING. GetCostM prices the finished
 			// def, and a frame's low health then made it the best-looking
@@ -405,6 +437,7 @@ void CBombTask::FindTarget()
 			}
 			if (score > bestScore) {
 				bestScore = score;
+				bestValue = value;
 				minHealth = health;
 				if (sqDist < sqRange) {
 					bestTarget = enemy;
@@ -424,9 +457,15 @@ void CBombTask::FindTarget()
 		// the re-pick of the task's own target would read as fixation.
 		if (bestTarget != curTarget) {
 			const CCircuitDef* bd = bestTarget->GetCircuitDef();
-			circuit->LOG("apex: bomb-commit id=%d def=%s last=%d",
+			// worth= is the priced value, mob= says whether the run went at
+			// something that walks: an eco raid reading mob=1 is the doctrine
+			// failing, and that cannot be seen from the def name alone.
+			circuit->LOG("apex: bomb-commit id=%d def=%s worth=%.0f mob=%d antistat=%d last=%d",
 					bestTarget->GetId(),
 					(bd != nullptr) ? bd->GetDef()->GetName() : "?",
+					bestValue,
+					((bd != nullptr) && bd->IsMobile()) ? 1 : 0,
+					isAntiStatic ? 1 : 0,
 					milMgr->LastBombFrame(bestTarget->GetId()));
 		}
 		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());

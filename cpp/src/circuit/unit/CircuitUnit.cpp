@@ -375,6 +375,35 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 // apex: names for CCircuitUnit::OrdSrc, in enum order. Kept beside the enum
 // rather than at the log site so the census and the per-unit trace cannot
 // disagree about which call site an index means.
+// retreat > dodge > standoff > guard is apexearth's standing ruling; the rest
+// follow the same principle and his max-range rule. The derivation and what
+// it is for are in docs/24-how-units-fight.md.
+//
+// TRAVEL and FWALK are deliberately UNRANKED (-1): the unit-action layer
+// executes whatever was decided, so blocking it would freeze the very
+// retreat it is carrying out. SETTGT moves nothing.
+int CCircuitUnit::OrdSrcPrio(int src)
+{
+	switch (static_cast<OrdSrc>(src)) {
+		case OrdSrc::MANUAL:                        return 100;
+		case OrdSrc::RETREAT:                       return 90;
+		case OrdSrc::DODGE:                         return 80;
+		case OrdSrc::STANDOFF: case OrdSrc::RING:
+		case OrdSrc::SNIPER:                        return 70;
+		case OrdSrc::ENGAGE:   case OrdSrc::ATTACK:
+		case OrdSrc::COMBAT:                        return 60;
+		case OrdSrc::REGROUP:  case OrdSrc::RALLY:
+		case OrdSrc::ESCORT:                        return 50;
+		case OrdSrc::POST:     case OrdSrc::GUARD:  return 40;
+		case OrdSrc::PATROL:   case OrdSrc::SCOUT:
+		case OrdSrc::BUILD:                         return 30;
+		case OrdSrc::SCRIPT:                        return 20;
+		case OrdSrc::SETTGT:                        return -1;  // sets a target, moves nothing
+		case OrdSrc::TRAVEL:   case OrdSrc::FWALK:  return -1;  // executes, does not decide
+		default:                                    return 10;
+	}
+}
+
 const char* CCircuitUnit::OrdSrcName(int src)
 {
 	static const char* names[] = {"other", "ring", "travel", "dodge",
@@ -414,14 +443,11 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 				&& ((s.timeout == INT_MAX) || (gap * 2 < s.timeout - s.frame));
 	}
 	circuit->NoteOrder(static_cast<int>(kind), bucket, suppress, static_cast<int>(src));
-	// apex: PER-UNIT ORDER TRACE. The census says HOW MUCH churn there is and
-	// WHICH call site made it, then throws away who it happened to -- so a unit
-	// being pulled between two logic centres is invisible in the aggregate.
-	// apexearth 2026-09-06: "imagine if you can just grep a unit's command
-	// history and see the source of those commands". `jump` is the distance
-	// from the last order OF THE SAME KIND and `gap` the frames since it, so a
-	// contradiction reads as a large jump at a small gap. Off by default: this
-	// is one line per order, and the census counts ~4k a minute.
+	// apex: PER-UNIT ORDER TRACE. The census says how much churn there is and
+	// which call site made it, then throws away who it happened to. `jump` is
+	// the distance from this unit's last order OF THE SAME KIND and `gap` the
+	// frames since, so a contradiction reads as a large jump at a small gap.
+	// Off by default: one line per order.
 	if (circuit->GetTunable("apex_order_trace", 0.f) > 0.f) {
 		static const char* kindName[static_cast<int>(OrdKind::_SIZE)] = {
 				"move", "fight", "patrol", "attack", "target"};
@@ -453,6 +479,24 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 	// state is provably unchanged (above), but the dropped order also skips the
 	// extra UnitIdle the engine raises when it finishes a move the unit has
 	// already arrived at, and that event stream is not proven identical.
+
+	// THE ARBITER. A centre ranked below the one whose decision the unit is
+	// still carrying out does not get to overwrite it. Without this the last
+	// writer won, which is why a corrected standoff ring measured perfect and
+	// changed nothing visible: the unit was re-ordered before it ever arrived.
+	// The window is the same 3s the census uses to call a re-send a repeat --
+	// bounded, so a unit can never be held longer than one decision's life.
+	const int prio = OrdSrcPrio(static_cast<int>(src));
+	if ((prio >= 0) && (circuit->GetTunable("apex_order_arbiter", 1.f) > 0.f)) {
+		const int hold = int(circuit->GetTunable("apex_intent_hold", 3.f) * FRAMES_PER_SEC);
+		const int age = frame - intentFrame;
+		if ((intentPrio > prio) && (age >= 0) && (age < hold)) {
+			circuit->NoteOrderRefused(static_cast<int>(src), intentPrio);
+			return true;   // refused: the standing higher-ranked order keeps running
+		}
+		intentPrio = prio;
+		intentFrame = frame;
+	}
 	if (suppress) {
 		suppress = circuit->GetTunable("apex_order_dedupe", 0.f) > 0.f;
 	}
@@ -516,7 +560,9 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout, O
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);
-	NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout, src);
+	if (NoteOrder(OrdKind::FIGHT, options, pos, 0, timeout, src)) {
+		return;
+	}
 	unit->Fight(pos, options, timeout);
 }
 
@@ -526,7 +572,9 @@ void CCircuitUnit::CmdPatrolTo(const AIFloat3& pos, short options, int timeout)
 		return;
 	}
 	assert(utils::is_in_map(pos));
-	NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL);
+	if (NoteOrder(OrdKind::PATROL, options, pos, 0, timeout, OrdSrc::PATROL)) {
+		return;
+	}
 	unit->PatrolTo(pos, options, timeout);
 }
 
@@ -540,7 +588,9 @@ void CCircuitUnit::CmdAttackGround(const AIFloat3& pos, short options, int timeo
 		return;
 	}
 	assert(utils::is_in_map(pos));
-	NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout, OrdSrc::ATTACK);
+	if (NoteOrder(OrdKind::ATTACK, options, pos, -1, timeout, OrdSrc::ATTACK)) {
+		return;
+	}
 	unit->ExecuteCustomCommand(CMD_ATTACK_GROUND, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
@@ -580,7 +630,9 @@ void CCircuitUnit::CmdAttack(CEnemyInfo* enemy, short options, int timeout)
 	// Zero position on purpose: an attack order names a UNIT, so the enemy id
 	// alone decides whether this repeats the last one. The ground variant above
 	// names a point, and there the distance buckets are the measurement.
-	NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout, OrdSrc::ATTACK);
+	if (NoteOrder(OrdKind::ATTACK, options, ZeroVector, enemy->GetId(), timeout, OrdSrc::ATTACK)) {
+		return;
+	}
 	unit->Attack(enemy->GetUnit(), options, timeout);
 }
 

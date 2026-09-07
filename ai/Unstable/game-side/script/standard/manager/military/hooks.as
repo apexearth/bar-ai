@@ -125,6 +125,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
+	// A RELEASED BOMBER BOMBS -- whatever its config role says. The heavy tier
+	// the strike holds and releases (armblade, corcrw, legfort) carries role
+	// "heavy", not "bomber": DefaultMakeTask has no BOMB entry for that role
+	// and WantsMassing does not exclude it, so every one we released joined the
+	// GROUND massing pool and traded with armies. ANTI_STAT and the eco-value
+	// target scoring live in CBombTask::FindTarget, which those never reached.
+	if (Air::IsBomberDef(int(cdef.id)))
+		return NoteElect("air.bomb",
+				aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::BOMB)));
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.
 	if (RaidClaimed(int(unit.id))) {

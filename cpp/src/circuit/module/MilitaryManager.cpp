@@ -1108,6 +1108,30 @@ bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
 	return false;
 }
 
+// apex: the same score for a NAMED spot, so a pool can be asked what the place
+// it is already walking to is worth right now. GetGuardAnchor answers only
+// 'which is best', which is why the re-pick had nothing to compare against.
+float CMilitaryManager::GuardSpotScore(const AIFloat3& from, int idx) const
+{
+	const std::vector<CCircuitAI::SHotSpot>& spots = circuit->GetHotSpots();
+	if ((idx < 0) || (idx >= int(spots.size())) || !utils::is_valid(from)) {
+		return .0f;
+	}
+	const CCircuitAI::SHotSpot& spot = spots[idx];
+	if ((spot.weight < HOT_MIN_WEIGHT) || !circuit->IsPosOnMap(spot.pos)) {
+		return .0f;
+	}
+	if (circuit->GetInflMap()->GetInfluenceAt(spot.pos) <= -INFL_EPS) {
+		return .0f;
+	}
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	const float remaining = threatMap->GetThreatAt(spot.pos);
+	if (remaining <= .0f) {
+		return .0f;
+	}
+	return remaining / (from.distance2D(spot.pos) + float(threatMap->GetSquareSize()));
+}
+
 // The same question asked from ONE pool's position: which unanswered breach is
 // worth this pool walking to. Spots are scored by the threat still standing on
 // them minus what has already been sent, over the distance to get there, so two
@@ -1535,7 +1559,32 @@ void CMilitaryManager::UpdateDefenceTasks()
 			}
 			AIFloat3 anchor;
 			int spot = -1;
+			++guardPicks;
 			if (GetGuardAnchor(from, assigned, anchor, spot)) {
+				// MEASURE ONLY -- nothing is refused here yet. How often does a pool
+				// get sent somewhere new, how far, and how much better was the new
+				// spot than the one it was already walking to? A switch whose scores
+				// are near-equal is noise winning, not a decision.
+				const int held = dt->GetGuardSpot();
+				if ((held >= 0) && (held != spot)) {
+					++guardFlips;
+					const float sNew = GuardSpotScore(from, spot);
+					const float sOld = GuardSpotScore(from, held);
+					if (sNew <= sOld * 1.25f) {
+						++guardFlipsMarginal;
+					}
+					guardFlipDist += anchor.distance2D(dt->GetPosition());
+					if (circuit->GetLastFrame() >= guardFlipLogAt) {
+						guardFlipLogAt = circuit->GetLastFrame() + FRAMES_PER_SEC * 30;
+						circuit->LOG("apex: guardflip t=%i spot %i->%i moved=%.0f"
+								" scoreOld=%.4f scoreNew=%.4f power=%.0f flips=%u marginal=%u meanMove=%.0f",
+								circuit->GetTeamId(), held, spot,
+								anchor.distance2D(dt->GetPosition()), sOld, sNew,
+								dt->GetAttackPower(), guardFlips, guardFlipsMarginal,
+								guardFlipDist / float(guardFlips));
+					}
+				}
+				dt->SetGuardSpot(spot);
 				dt->SetPosition(anchor);
 				if (spot < int(assigned.size())) {
 					assigned[spot] += dt->GetAttackPower();
@@ -1578,6 +1627,18 @@ void CMilitaryManager::UpdateDefenceTasks()
 //			dt->SetMaxPower(std::max(minAttackers, enemyGroups[groupIdx].threat));
 //		}
 		dt->SetMaxPower(std::max(minAttackers, circuit->GetEnemyManager()->GetPreMaxGroupThreat()));
+	}
+
+	// apex: printed EVERY 30s whether or not anything flipped. A zero flip count
+	// and a dead code path look identical without the denominator -- the first
+	// version of this instrument logged nothing all game and could not tell me
+	// which of the two I was looking at.
+	if (circuit->GetLastFrame() >= guardSumLogAt) {
+		guardSumLogAt = circuit->GetLastFrame() + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: guardsum t=%i pools=%i picks=%u flips=%u marginal=%u meanMove=%.0f",
+				circuit->GetTeamId(), (int)defTasks.size(), guardPicks, guardFlips,
+				guardFlipsMarginal,
+				(guardFlips > 0) ? (guardFlipDist / float(guardFlips)) : 0.f);
 	}
 
 	/*

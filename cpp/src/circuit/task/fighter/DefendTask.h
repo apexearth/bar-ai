@@ -45,6 +45,13 @@ public:
 	bool IsDispatched(int frame) const { return frame < dispatchUntil; }
 	const springai::AIFloat3& GetDispatchPos() const { return dispatchPos; }
 
+	// apex: which hotspot this pool was last sent to. UpdateDefenceTasks re-picks
+	// from scratch every 5s with no memory of the previous answer, so two spots of
+	// near-equal score swap the lead on noise and the pool is dragged between them
+	// (apexearth, watching: "our squad stands in neither of the desired places").
+	// This is the memory that was missing -- first to MEASURE the flapping.
+	int GetGuardSpot() const { return guardSpot; }
+	void SetGuardSpot(int s) { guardSpot = s; }
 protected:
 	float GetMaxPower() const { return maxPower; }
 
@@ -61,6 +68,7 @@ private:
 	FightType check;
 	FightType promote;
 	float maxPower;
+	int guardSpot = -1;
 	// Why FindTarget came up empty this pass, for the intent ping: the walk
 	// back reads "back:hid"/"back:small"/... instead of an unexplained U-turn.
 	std::string noTgtWhy;

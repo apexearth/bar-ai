@@ -1100,6 +1100,16 @@ int CCircuitAI::Update(int frame)
 			LOG("apex: order-src t=%i (sent/rep/far) arcflip=%u/%u units=%u/%u%s",
 					teamId, arcFlip[0], arcFlip[1], arcFlipU[0], arcFlipU[1],
 					line.c_str());
+			std::string ref;
+			for (int i = 0; i < ORD_SRC_N; ++i) {
+				if (ordRefused[i] == 0) { continue; }
+				snprintf(buf, sizeof(buf), " %s=%u", CCircuitUnit::OrdSrcName(i), ordRefused[i]);
+				ref += buf;
+				ordRefused[i] = 0;
+			}
+			if (!ref.empty()) {
+				LOG("apex: order-refused t=%i (a lower-ranked centre tried to overwrite a live decision)%s", teamId, ref.c_str());
+			}
 		}
 		// apex: mirror the gadget's own un-enrolments before counting, or `own`
 		// only ever grows: it drops a dead target (n%5 checkTarget) and, for
@@ -3255,6 +3265,13 @@ void CCircuitAI::NoteOrder(int kind, int bucket, bool suppressed, int src)
 				++ordSrc[src][2];
 			}
 		}
+	}
+}
+
+void CCircuitAI::NoteOrderRefused(int src, int byPrio)
+{
+	if ((src >= 0) && (src < ORD_SRC_N)) {
+		++ordRefused[src];
 	}
 }
 

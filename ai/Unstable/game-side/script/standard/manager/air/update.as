@@ -326,21 +326,24 @@ void Update()
 		const bool defendHome = Military::BaseContested()
 			&& (EnemyAACost() < ai.GetTunable("apex_bomb_defend_aa", TUNE_BOMB_DEFEND_AA));
 		gDefendHome = defendHome;
-		if (gBomber !is null) {
-			if (defendHome) gBomber.DelAttribute(Unit::Attr::ANTI_STAT.type);
-			else            gBomber.AddAttribute(Unit::Attr::ANTI_STAT.type);
-		}
-		if (gBomber1 !is null) {
-			if (defendHome) gBomber1.DelAttribute(Unit::Attr::ANTI_STAT.type);
-			else            gBomber1.AddAttribute(Unit::Attr::ANTI_STAT.type);
-		}
+		// EVERY bomber tier, not just the two basic ones: the heavy (index 0)
+		// and the atomic (3) were given ANTI_STAT once at Release and never
+		// again, so they kept hunting army through a base invasion and kept
+		// ignoring it after one.
+		//
 		// A bombing run never turns around: the bomb is the sortie's whole
 		// value and the flak is thickest on the way BACK OUT -- apexearth:
 		// "Air bombing attacks should never retreat. You'll take 75% losses
 		// and achieve nothing." Previously zeroed only at Release; a wave
 		// that took hits inbound still peeled home with bombs unspent.
-		if (gBomber !is null)  gBomber.SetRetreat(0.f);
-		if (gBomber1 !is null) gBomber1.SetRetreat(0.f);
+		for (int i = 0; i <= 3; ++i) {
+			CCircuitDef@ b = StrikeDef(i);
+			if (b is null)
+				continue;
+			if (defendHome) b.DelAttribute(Unit::Attr::ANTI_STAT.type);
+			else            b.AddAttribute(Unit::Attr::ANTI_STAT.type);
+			b.SetRetreat(0.f);
+		}
 		// A held force does not hover through a base invasion -- gDefendHome
 		// opens HoldsUnit directly, without pretending a strike is under way.
 	}

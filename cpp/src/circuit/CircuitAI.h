@@ -531,6 +531,9 @@ public:
 	// apex: census of every engine order this AI sends, by kind, with the ones
 	// that repeat what the same unit was already told. See CCircuitUnit::NoteOrder.
 	void NoteOrder(int kind, int bucket, bool suppressed, int src = 0);
+	// apex: orders the arbiter refused, per call site -- what a centre TRIED to
+	// do while a higher-ranked decision was still running.
+	void NoteOrderRefused(int src, int byPrio);
 	// apex: the arc-side tiebreak that a sticky side would have held. Counted
 	// with apex_arc_sticky OFF too, so one run says what turning it on buys.
 	void NoteArcFlip(bool held, unsigned units);
@@ -630,6 +633,7 @@ private:
 	// the kind/distance one cannot say which loop is generating the churn.
 	// [0] sent, [1] re-sends within 3s, [2] the far ones among those.
 	static constexpr int ORD_SRC_N = 22;
+	unsigned ordRefused[ORD_SRC_N] = {0};
 	unsigned ordSrc[ORD_SRC_N][3] = {{0}};
 	unsigned arcFlip[2] = {0, 0};   // [0] side changed, [1] a sticky side held it
 	unsigned arcFlipU[2] = {0, 0};  // units re-slotted by those

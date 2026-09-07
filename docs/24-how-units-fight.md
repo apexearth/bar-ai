@@ -700,3 +700,49 @@ Map-midpoint destinations have two known sources worth ruling out first:
 (mean = map centre) whenever `HasFrontPos()` is false, and `GetEnemyPos()` is
 the MEAN of the enemy cluster centroids -- with enemies on two flanks that
 average is a spot where neither of them is.
+
+**The order-priority table** (`CCircuitUnit::OrdSrcPrio`) implements his ruling
+"retreat > dodge > standoff > guard", asked for when sixteen call sites were
+found issuing movement to the same units. The unlisted sources follow the same
+principle -- a survival reflex outranks holding a firing position, which
+outranks committing to a fight, which outranks formation-keeping, which
+outranks being stationed somewhere -- and STANDOFF/RING outrank ATTACK/ENGAGE
+because of his max-range rule above: if attack outranked standoff, the attack
+logic could still pull a sniper in.
+
+TRAVEL and FWALK are unranked on purpose. They are the unit-action layer
+carrying out whatever was decided, so blocking them would freeze the very
+retreat they are executing. SETTGT moves nothing.
+
+**What the arbiter does NOT fix, measured 2026-09-06.** It refused 5,273 orders
+in a 20-minute 1v1 (attack 2509, post 945, script 877, ring 802), so the
+cross-centre conflict is real. But the thing he actually watched --
+
+> "our army being given orders to defend one chokepoint, then another
+> completely different chokepoint... they stand in neither of the desired
+> places because they are constantly asked to go to completely different
+> areas. Therefore we're never properly grouped up."
+
+-- is NOT cross-centre. Instrumenting the GOAL (`ITravelAction::SetPath`, the
+one place a destination is replaced) rather than the waypoints:
+
+| owning task | long moves (>=1000 elmos) | of those, RETURNS to a place already used |
+|---|---|---|
+| RAID | 311 | 228 (73%) |
+| ATTACK | 147 | 103 (70%) |
+| DEFEND | 123 | 47 (38%) |
+| AA | 49 | 19 (39%) |
+
+Same source at both ends: **one task changing its own mind**, which no priority
+ranking can arbitrate. Whole squads swing together (three armpw with an
+identical 94 moves / 73 returns / 21 places).
+
+The defence anchor is INNOCENT and the obvious fix was already there:
+`guardsum` measured 337 re-picks with **0** changes of spot, and both offenders
+already carry a commitment term -- `RAID_TARGET_STICKY` and `TARGET_STICKY`,
+both 1.4, both added after his earlier "it can't make up its mind and just runs
+in circles". So the answer is not "add commitment"; commitment exists in
+exactly the two tasks that flap, and at 1.4 it is measurably not enough. Why it
+fails is the open question -- the discount applies only while `enemy ==
+GetTarget()`, so a target lost from LOS clears the incumbent's advantage and
+the comparison restarts cold.

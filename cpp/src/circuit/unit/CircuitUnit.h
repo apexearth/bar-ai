@@ -150,6 +150,16 @@ public:
 	// CircuitAI and the per-unit trace in NoteOrder both read it, so a new
 	// OrdSrc cannot be named in one place and left numeric in the other.
 	static const char* OrdSrcName(int src);
+	// ORDER ARBITRATION. Sixteen call sites move units and the last writer won,
+	// so a threat-aware path from one was overwritten seconds later by a centre
+	// that decided under different assumptions -- measured 2026-09-06, one
+	// armham took 322 orders in 14 minutes from 9 sources, 30% of them replacing
+	// the previous order with a point 128+ elmos away inside 3s.
+	// apexearth's ranking: "retreat > dodge > standoff > guard".
+	static int OrdSrcPrio(int src);
+	const springai::AIFloat3& GetTravelGoal() const { return travelGoal; }
+	int GetTravelGoalFrame() const { return travelGoalFrame; }
+	void SetTravelGoal(const springai::AIFloat3& p, int frame) { travelGoal = p; travelGoalFrame = frame; }
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
@@ -271,6 +281,16 @@ private:
 	// NOTE: taskFrame assigned on task change and OnUnitIdle to workaround idle spam.
 	//       Proper fix: do not issue any commands OnUnitIdle, delay them until next frame?
 	int taskFrame;
+	// The live movement intent: whose decision the unit is carrying out, and
+	// when it was taken. A lower-ranked centre may not overwrite it while it is
+	// still running (apex_intent_hold).
+	int intentFrame = 0;
+	int intentPrio = -1;
+	// apex: the unit's actual GOAL, not the waypoint it is walking to. Kept on
+	// the UNIT rather than the travel action so it survives a task change --
+	// being handed to a new task IS the redirection we want to measure.
+	springai::AIFloat3 travelGoal = -RgtVector;
+	int travelGoalFrame = 0;
 	ETaskState taskState;
 	ITaskModule* manager;
 	terrain::SArea* area;  // = nullptr if a unit flies

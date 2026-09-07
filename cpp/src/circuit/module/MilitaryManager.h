@@ -175,6 +175,15 @@ public:
 	void DiceBigGun();
 	float ClampMobileCostRatio() const;
 	void UpdateDefenceTasks();
+	// apex: how often a defend pool is re-aimed at a DIFFERENT hotspot, and how
+	// many of those switches were won by a margin too small to be a decision.
+	float GuardSpotScore(const springai::AIFloat3& from, int idx) const;
+	unsigned guardFlips = 0;
+	unsigned guardPicks = 0;   // the DENOMINATOR: a zero flip count means nothing without it
+	unsigned guardFlipsMarginal = 0;
+	float guardFlipDist = 0.f;
+	int guardFlipLogAt = 0;
+	int guardSumLogAt = 0;
 	void DispatchRaids();
 	// Guard posts, assigned by script (military/guardposts.as): where a home
 	// unit stands while its pool has nothing to fight, instead of the one

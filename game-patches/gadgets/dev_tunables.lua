@@ -523,6 +523,10 @@ local NAMES = {
 	-- a run with it off says what turning it on would buy (0).
 	"apex_order_dedupe",
 	"apex_order_trace",
+	-- The order arbiter: a centre ranked below the one whose decision the unit
+	-- is still carrying out may not overwrite it. 0 restores last-writer-wins.
+	"apex_order_arbiter",
+	"apex_intent_hold",
 	-- SquadTask.cpp: 1 = the arc-end DISTANCE tiebreak stops reversing a row's
 	-- slot assignment once it has picked a side; a real threat asymmetry still
 	-- re-decides. Counted either way in `apex: order-src` (arcflip=churn/held).
