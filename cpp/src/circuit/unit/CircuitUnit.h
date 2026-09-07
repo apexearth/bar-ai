@@ -107,8 +107,24 @@ public:
 	bool IsMoveFailed(int frame);
 	bool IsStuck() const { return isStuck; }
 
-	void ForceUpdate(int frame);
-	bool IsForceUpdate(int frame);
+	// A WAKE SAYS WHAT HAPPENED, NOT "RE-DECIDE EVERYTHING".
+	//
+	// ForceUpdate used to be one undifferentiated signal, so a unit taking a
+	// single hit re-opened its whole squad's destination question -- 0.33s
+	// later, per unit, OR'd across the squad. A squad in contact therefore
+	// re-elected where to go several times a second and closed ~0% of the
+	// distance to any of them (tools/goals.py, 2026-09-06). The damage
+	// reaction itself never needed this: OnUnitDamaged does KeepRange, dodge,
+	// counter-battery, coward-marking and the retreat vote inline, before the
+	// task ever runs.
+	//
+	// So the waker declares the level and the consumer declares what it will
+	// accept. REACT is "something hit us" -- per-unit business. RECONSIDER is
+	// "the world changed shape" (a sudden threat appearing), the only kind of
+	// news that should be allowed to move a squad's destination.
+	enum class Wake : int { REACT = 0, RECONSIDER = 1 };
+	void ForceUpdate(int frame, Wake w = Wake::REACT);
+	bool IsForceUpdate(int frame, Wake want = Wake::REACT);
 
 	void SetIsDead() { isDead = true; }
 	bool IsDead() const { return isDead; }
@@ -159,7 +175,30 @@ public:
 	static int OrdSrcPrio(int src);
 	const springai::AIFloat3& GetTravelGoal() const { return travelGoal; }
 	int GetTravelGoalFrame() const { return travelGoalFrame; }
-	void SetTravelGoal(const springai::AIFloat3& p, int frame) { travelGoal = p; travelGoalFrame = frame; }
+	// DO UNITS ACTUALLY GET CLOSER TO WHERE WE SEND THEM? apexearth: "we keep
+	// trying to move a unit between two fronts... they never get to either and
+	// hover in between". Every other measure here asks which order was sent;
+	// this asks whether the unit ever arrived. distStart is the gap when the
+	// goal was set, distMin the closest it ever came.
+	// Only restart the measurement when the destination actually MOVES. The
+	// median goal-jump is 0 -- most calls re-set the SAME place while the unit
+	// is still walking to it -- so resetting on every call zeroed the progress
+	// counter and made every task read 'closed 0%'.
+	void SetTravelGoal(const springai::AIFloat3& p, int frame) {
+		// travelGoal starts at -RgtVector, so a negative x means 'none yet'.
+		const bool moved = (travelGoal.x < 0.f) || (travelGoal.distance2D(p) > 128.f);
+		if (moved || (goalDistStart < 0.f)) {
+			goalDistStart = -1.f; goalDistMin = -1.f;
+			travelGoalFrame = frame;
+		}
+		travelGoal = p;
+	}
+	float GetGoalDistStart() const { return goalDistStart; }
+	float GetGoalDistMin() const { return goalDistMin; }
+	void NoteGoalDist(float d) {
+		if (goalDistStart < 0.f) { goalDistStart = d; }
+		if ((goalDistMin < 0.f) || (d < goalDistMin)) { goalDistMin = d; }
+	}
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
@@ -250,6 +289,24 @@ public:
 	void Guard(CCircuitUnit* target, int timeout);
 	void Gather(const springai::AIFloat3& groupPos, int timeout);
 
+	// A UNIT'S PLACE IN ITS SQUAD -- a property of the unit, not of one action.
+	//
+	// It used to live on ITravelAction, where only CMoveAction's mid-path
+	// waypoints ever read it. Every other way a squad is told where to go
+	// handed EVERY member the identical point: CFightAction's waypoints, both
+	// travel actions' arrival waypoint, CCircuitUnit::Gather, and the merge
+	// muster. Five leaks, and the squad balled up precisely on arrival and on
+	// regroup -- the moments the formation is worth having. apexearth, twice:
+	// "a squad should never have all of its units move to a single point".
+	//
+	// Held here and applied in the two command funnels below, so a call site
+	// cannot forget it -- there is no call site to forget.
+	void SetFormSlot(float lat, const springai::AIFloat3& dir) { formLateral = lat; formDir = dir; }
+	void SetFormDir(const springai::AIFloat3& dir) { formDir = dir; }
+	void ClearFormSlot() { formLateral = 0.f; formDir = -RgtVector; }
+	float GetFormLateral() const { return formLateral; }
+	springai::AIFloat3 InFormation(const springai::AIFloat3& p, OrdSrc src) const;
+
 	void Morph();
 	void StopMorph();
 	bool IsUpgradable();
@@ -291,6 +348,8 @@ private:
 	// being handed to a new task IS the redirection we want to measure.
 	springai::AIFloat3 travelGoal = -RgtVector;
 	int travelGoalFrame = 0;
+	float goalDistStart = -1.f;
+	float goalDistMin = -1.f;
 	ETaskState taskState;
 	ITaskModule* manager;
 	terrain::SArea* area;  // = nullptr if a unit flies
@@ -319,6 +378,9 @@ private:
 	springai::AIFloat3 damagedDir;
 	int dodgeFrame;
 	int execFrame;  // TODO: Replace by CExecuteAction?
+	Wake execWake = Wake::REACT;  // what the pending wake is FOR
+	float formLateral = 0.f;      // signed slot offset across the squad's front
+	springai::AIFloat3 formDir = -RgtVector;  // the squad's direction of travel
 	int disarmFrame;
 	int ammoFrame;
 

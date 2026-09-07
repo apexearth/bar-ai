@@ -593,10 +593,12 @@ int CBuilderManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
 	auto iter = unfinishedUnits.find(unit);
 	if (iter != unfinishedUnits.end()) {
+		iter->second->SetDeathNote("target-killed");
 		AbortTask(iter->second);
 	}
 	auto itre = repairUnits.find(unit->GetId());
 	if (itre != repairUnits.end()) {
+		itre->second->SetDeathNote("target-killed");
 		AbortTask(itre->second);
 	}
 	auto itcl = reclaimUnits.find(unit);

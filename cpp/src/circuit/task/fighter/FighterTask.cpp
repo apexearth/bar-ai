@@ -288,7 +288,10 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	CCircuitDef* cdef = unit->GetCircuitDef();
-	unit->ForceUpdate(frame + THREAT_UPDATE_RATE);
+	// REACT, not RECONSIDER: everything this handler does about the hit, it
+	// does below and now. Waking the squad's destination election as well is
+	// what made a squad under fire re-decide where to go three times a second.
+	unit->ForceUpdate(frame + THREAT_UPDATE_RATE, CCircuitUnit::Wake::REACT);
 
 	// FIXME: comm kamikaze
 	if (cdef->IsRoleComm() && (target != nullptr) && target->IsInLOS() && target->GetCircuitDef()->IsRoleComm()) {

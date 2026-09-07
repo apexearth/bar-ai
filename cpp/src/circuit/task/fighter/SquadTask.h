@@ -165,6 +165,9 @@ protected:
 	// health, 1.0 for a fresh squad. Promoted from CAttackTask so DEFEND and
 	// RAID odds use the same truth.
 	float GetHealthScale() const;
+	// Should the squad keep the destination it is already walking to?
+	// The single gate every squad destination change passes through.
+	bool HoldGoal(const springai::AIFloat3& newPos, bool isContact, int frame);
 	NSMicroPather::HitFunc GetHitTest() const;
 	void Attack(const int frame);
 	void Attack(const int frame, const bool isGround);
@@ -178,6 +181,14 @@ protected:
 	springai::AIFloat3 groupPos;
 	springai::AIFloat3 prevGroupPos;
 	std::shared_ptr<CPathInfo> pPath;
+
+	// The incumbent destination. Negative x means "none yet", as in
+	// CCircuitUnit::SetTravelGoal.
+	springai::AIFloat3 goalPos;
+	bool goalContact;   // an enemy is actually there, vs a guess about where to stand
+	int goalFrame;
+	float goalDist0;    // how far it was when adopted
+	float goalBest;     // the nearest the squad has actually come since
 
 	std::map<float, std::set<CCircuitUnit*>> rangeUnits;
 

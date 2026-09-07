@@ -241,7 +241,7 @@ void CDefendTask::Update()
 	bool isExecute = (updCount % 16 == 2);
 	if (!isExecute) {
 		for (CCircuitUnit* unit : units) {
-			isExecute |= unit->IsForceUpdate(frame);
+			isExecute |= unit->IsForceUpdate(frame, CCircuitUnit::Wake::RECONSIDER);
 		}
 		if (!isExecute) {
 			return;

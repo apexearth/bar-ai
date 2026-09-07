@@ -436,6 +436,7 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
 		// A genuinely unbuildable spot is already refused by FindBuildSite (which
 		// logs apex: site-fail), so the blocker was insuring against a case the
 		// site search answers on its own.
+		SetDeathNote("build-failed");
 		manager->AbortTask(this);
 	}
 }

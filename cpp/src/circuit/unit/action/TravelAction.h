@@ -27,26 +27,16 @@ public:
 	void SetPath(const std::shared_ptr<CPathInfo>& pPath, float speed = NO_SPEED_LIMIT);
 	const std::shared_ptr<CPathInfo>& GetPath() const { return pPath; }
 
-	// apex: lateral offset from the shared path, in elmos, signed. A squad walks
-	// ONE path -- ISquadTask::ActivePath hands every unit the same CPathInfo --
-	// so without this the whole squad files onto a single point and arrives as a
-	// blob. With it each unit walks its own line parallel to the path and the
-	// squad travels line-abreast, already facing the enemy when contact happens.
-	// apexearth: "lots of our basic moves are still an entire squad to a single
-	// point on the map... they should really be forming a wall against the enemy
-	// so when the enemy comes in to attack we have that 'wall of fire' coming out
-	// of all our nicely positioned units... also it helps to block enemy 'leaks'
-	// (raiding parties)."
-	// DEFAULTS TO ZERO and only squad tasks set it, so builders and every other
-	// ITravelAction user are byte-for-byte unchanged.
-	void SetLateral(float offset) { lateral = offset; }
-	float GetLateral() const { return lateral; }
 
 protected:
 	int CalcSpeedStep(CCircuitAI* circuit, float& stepSpeed);
+	// Keep the unit's formation heading square to the LOCAL direction of
+	// travel, so a line stays perpendicular to the path around corners
+	// instead of shearing. The offset itself is applied in CCircuitUnit's
+	// command funnel; only this action knows the heading.
+	void FaceStep(int idx);
 
 	std::shared_ptr<CPathInfo> pPath;
-	float lateral = 0.f;
 	float speed;
 	int pathIterator;
 	int increment;

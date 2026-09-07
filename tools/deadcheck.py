@@ -34,7 +34,8 @@ FIELD = re.compile(r"\b(?P<k>[A-Za-z_][A-Za-z0-9_]*)=(?P<v>-?\d+(?:\.\d+)?)\b")
 
 # Terms that mean "the rule DID something". Zero here is the interesting case.
 ACTION = ("applied", "fired", "pulled", "refused", "flips", "promoted",
-          "released", "switched", "taken", "chosen", "sent", "acted", "hit")
+          "released", "switched", "taken", "chosen", "sent", "acted", "hit",
+          "held")
 # Terms that mean "the rule had the CHANCE to do something".
 DENOM = ("passes", "seen", "cand", "picks", "candidates", "checked", "tried",
          "asks", "samples", "n", "total", "pools", "turrets")

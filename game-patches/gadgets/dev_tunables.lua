@@ -542,6 +542,26 @@ local NAMES = {
 	-- Every re-issue is a forced engine re-path; this prices that against
 	-- ms/frame. See docs/27-tunable-rationale.md.
 	"apex_standoff_s",
+	-- SquadTask::HoldGoal: 1 = a squad keeps the destination it is still
+	-- closing on unless something is actually THERE. 0 restores the old
+	-- re-elect-from-scratch behaviour, for the A/B only.
+	"apex_goal_hold",
+	-- CircuitUnit::IsForceUpdate: 1 = a wake armed by taking damage no longer
+	-- re-opens the squad's destination question (the reaction to the hit is
+	-- handled inline in OnUnitDamaged either way). 0 restores the old
+	-- everything-wakes-everything signal.
+	"apex_wake_split",
+	-- protect_want.as: 1 = the team-best-tower discount ranks a light tower
+	-- against the strongest tower we could BUY now, not the strongest that
+	-- exists in any builder's list. 0 restores the old behaviour, which held
+	-- the winning defence candidate at xTeamPow=0.352 all game while defHave
+	-- sat at 85 against a defTarget of 3,356.
+	"apex_def_teampow_afford",
+	-- coverage.as: weight on MOBILE cover (posted guards) when reading how
+	-- covered a place is. 1 = a guard counts like a turret (his ruling);
+	-- 0 removes it, to measure whether an arriving escort is what cancels the
+	-- tower the builder was already walking to.
+	"apex_unit_cover",
 }
 
 local pending = {}

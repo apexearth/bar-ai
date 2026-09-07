@@ -187,7 +187,7 @@ void CAntiAirTask::Update()
 	bool isExecute = (updCount % 4 == 2);
 	if (!isExecute) {
 		for (CCircuitUnit* unit : units) {
-			isExecute |= unit->IsForceUpdate(frame);
+			isExecute |= unit->IsForceUpdate(frame, CCircuitUnit::Wake::RECONSIDER);
 		}
 		if (!isExecute) {
 			if (wasRegroup && !pPath->posPath.empty()) {

@@ -184,20 +184,41 @@ bool CCircuitUnit::IsMoveFailed(int frame)
 	return isStuck;
 }
 
-void CCircuitUnit::ForceUpdate(int frame)
+static unsigned sWakeArm = 0, sWakeReact = 0, sWakeRecon = 0;
+static unsigned sWakeAsks = 0, sWakeRefused = 0;
+static int sWakeLogAt = 0;
+
+void CCircuitUnit::ForceUpdate(int frame, Wake w)
 {
+	++sWakeArm;
+	if (w == Wake::RECONSIDER) { ++sWakeRecon; } else { ++sWakeReact; }
 	if (execFrame < 0) {
 		execFrame = frame;
+		execWake = w;
+	} else if (int(w) > int(execWake)) {
+		execWake = w;  // a pending wake only ever gets more urgent
 	}
 }
 
-bool CCircuitUnit::IsForceUpdate(int frame)
+bool CCircuitUnit::IsForceUpdate(int frame, Wake want)
 {
-	if (execFrame > 0) {
-		if (execFrame <= frame) {
-			execFrame = -1;
-			return true;
+	if ((execFrame > 0) && (execFrame <= frame)) {
+		const Wake w = execWake;
+		execFrame = -1;  // consumed either way; an unaccepted wake must not linger
+		++sWakeAsks;
+		const bool accept = (int(w) >= int(want))
+				|| (manager->GetCircuit()->GetTunable("apex_wake_split", 1.f) <= 0.f);
+		if (!accept) {
+			++sWakeRefused;
 		}
+		// Unconditional census: "refused=0" only means something next to the
+		// number of times anyone asked.
+		if (frame >= sWakeLogAt) {
+			sWakeLogAt = frame + FRAMES_PER_SEC * 60;
+			manager->GetCircuit()->LOG("apex: wake armed=%u react=%u recon=%u asks=%u refused=%u",
+					sWakeArm, sWakeReact, sWakeRecon, sWakeAsks, sWakeRefused);
+		}
+		return accept;
 	}
 	return false;
 }
@@ -516,11 +537,48 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 	return suppress;
 }
 
-void CCircuitUnit::CmdMoveTo(const AIFloat3& pos, short options, int timeout, OrdSrc src)
+static unsigned sFormAsks = 0, sFormApplied = 0;
+
+// Only the orders that move a squad AS a squad get a slot. A build site, a
+// retreat point, the standoff ring and an attack position all carry their own
+// geometry and must land exactly where they were aimed.
+AIFloat3 CCircuitUnit::InFormation(const AIFloat3& p, OrdSrc src) const
+{
+	switch (src) {
+		case OrdSrc::TRAVEL: case OrdSrc::FWALK:
+		case OrdSrc::REGROUP: case OrdSrc::RALLY:
+			break;
+		default:
+			return p;
+	}
+	++sFormAsks;
+	if (formLateral == 0.f) {
+		return p;
+	}
+	AIFloat3 dir = formDir;
+	if (!utils::is_valid(dir) || (dir.SqLength2D() < 1.f)) {
+		// No squad heading yet (a gather with nobody having travelled): face the
+		// way we are about to walk, so the slots still open into a line abreast
+		// rather than a column.
+		dir = p - GetLastPos();
+		dir.y = 0.f;
+		if (dir.SqLength2D() < 1.f) {
+			return p;
+		}
+	}
+	dir.Normalize2D();
+	AIFloat3 out(p.x - dir.z * formLateral, p.y, p.z + dir.x * formLateral);
+	CTerrainManager::CorrectPosition(out);
+	++sFormApplied;
+	return out;
+}
+
+void CCircuitUnit::CmdMoveTo(const AIFloat3& p0, short options, int timeout, OrdSrc src)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
 	}
+	const AIFloat3 pos = InFormation(p0, src);
 	if (NoteOrder(OrdKind::MOVE, options, pos, 0, timeout, src)) {
 		return;
 	}
@@ -547,7 +605,7 @@ void CCircuitUnit::CmdJumpTo(const AIFloat3& pos, short options, int timeout)
 //	unit->ExecuteCustomCommand(CMD_JUMP, {pos.x, pos.y, pos.z}, options, timeout);
 }
 
-void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout, OrdSrc src)
+void CCircuitUnit::CmdFightTo(const AIFloat3& p0, short options, int timeout, OrdSrc src)
 {
 	if ((manager != nullptr) && IsDGunHeld(manager->GetCircuit()->GetLastFrame())) {
 		return;
@@ -556,9 +614,10 @@ void CCircuitUnit::CmdFightTo(const AIFloat3& pos, short options, int timeout, O
 	// first thing a weapon bears on. Every travel/regroup/fallback path funnels
 	// through here, so the swap covers all of them.
 	if (circuitDef->IsSniper()) {
-		CmdMoveTo(pos, options, timeout, src);
+		CmdMoveTo(p0, options, timeout, src);  // InFormation applies there
 		return;
 	}
+	const AIFloat3 pos = InFormation(p0, src);
 	NoteAct("fgt", timeout);
 	assert(utils::is_in_map(pos));
 	NoteSniperOrder(CCircuitDef::SniperOrder::FIGHT);

@@ -746,3 +746,25 @@ exactly the two tasks that flap, and at 1.4 it is measurably not enough. Why it
 fails is the open question -- the discount applies only while `enemy ==
 GetTarget()`, so a target lost from LOS clears the incumbent's advantage and
 the comparison restarts cold.
+
+## Escorts have to WIN the fight, not just reach it (2026-09-07)
+
+> "We are using rascals as escorts and they really suck at it. Need incisors if
+> you want a good enough vehicle escort."
+
+Rascal is `corfav`: 26 metal, and BAR's own description is **Light Scout
+Vehicle**. Incisor is `corgator`: 120 metal, **Light Tank**.
+
+`Market::EscortWorthy` admits a def on one of two axes -- FAST (above the
+ground field's mean speed) or TOUGH (the `RIOT` role tag) -- with a cost cap
+(`TUNE_ESCORT_MAX_COST` 120) and a SKIRM/ARTY exclusion. A scout car clears the
+speed bar trivially, so it qualifies, catches the raider coming for the
+constructor, and then loses to it. **Nothing in the filter asks whether the
+escort can kill what it caught.**
+
+This is the same shape as the Rocketeer error the SKIRM/ARTY exclusion was
+added for, one axis over. The missing axis is combat power, and the bar should
+come from the field's own mean the way the speed bar already does -- not from a
+unit name. `apex: escort-field` / `escort-cand` print the whole candidate field
+with cost, speed, power and the pass flag, so the bar is read off real data
+before it is enforced.

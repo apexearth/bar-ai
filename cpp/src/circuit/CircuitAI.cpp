@@ -1629,7 +1629,8 @@ int CCircuitAI::EnemyEnterLOS(CEnemyInfo* enemy)
 	for (int fId : friendlies) {
 		CCircuitUnit* unit = GetTeamUnit(fId);
 		if ((unit != nullptr) && (unit->GetTask()->GetType() != IUnitTask::Type::NIL)) {
-			unit->ForceUpdate(lastFrame + THREAT_UPDATE_RATE);
+			// A sudden threat appearing IS news about where to be.
+			unit->ForceUpdate(lastFrame + THREAT_UPDATE_RATE, CCircuitUnit::Wake::RECONSIDER);
 		}
 	}
 

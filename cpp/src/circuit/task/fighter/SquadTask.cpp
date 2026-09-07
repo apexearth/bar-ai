@@ -21,6 +21,7 @@
 #include "util/Utils.h"
 #include "Log.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -39,6 +40,11 @@ ISquadTask::ISquadTask(ITaskModule* mgr, FightType type, float powerMod)
 		, groupPos(-RgtVector)
 		, prevGroupPos(-RgtVector)
 		, pPath(std::shared_ptr<CPathInfo>(new CPathInfo()))
+		, goalPos(-RgtVector)
+		, goalContact(false)
+		, goalFrame(0)
+		, goalDist0(0.f)
+		, goalBest(0.f)
 		, groupFrame(0)
 		, attackFrame(-1)
 {
@@ -111,6 +117,9 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
 void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	IFighterTask::RemoveAssignee(unit);
+
+	// A unit that leaves the squad has no slot in its line any more.
+	unit->ClearFormSlot();
 
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	const float range = cdef->GetMaxRange();  // must match AssignTo's key
@@ -644,8 +653,115 @@ bool ISquadTask::IsMustRegroup()
 	return State::REGROUP == state;
 }
 
+// The same distance CCircuitUnit::SetTravelGoal calls "the goal moved": one
+// building footprint. Not a new number -- the one already in use for this.
+#define SQUAD_GOAL_SAME (DEFAULT_SLACK * 2)
+
+static unsigned sGoalAsks = 0, sGoalHeld = 0, sGoalSame = 0;
+static unsigned sGoalContact = 0, sGoalNoProg = 0, sGoalFresh = 0, sGoalArrived = 0;
+static int sGoalLogAt = 0;
+
+// SQUAD COMMITMENT: what we are already walking to is the incumbent.
+//
+// Every fighter task re-derives its destination from scratch whenever it runs,
+// and nothing remembers the answer -- so an election that ran for a reason and
+// an election that ran because a stray shot woke the squad are indistinguishable:
+// both replace the destination. Measured 2026-09-06 (tools/goals.py): DEFEND
+// squads closed 1% of a 1,616-elmo journey before being sent somewhere else,
+// and arrived 9% of the time; builders on the same movement code closed 33%.
+// apexearth watching it: "the result often tends to be that our squad stands in
+// neither of the desired places... never properly grouped up, never where we
+// really need to be."
+//
+// No threshold decides this, because a threshold here would be the same bug in
+// a new hat. Three cases, each one derived:
+//
+//  * CONTACT OUTRANKS POSTURE. A destination with an enemy at it is knowledge;
+//    a front post or the base is a guess about where trouble might appear.
+//    Knowledge always wins -- that is the base being bum-rushed while we walk
+//    to a chokepoint, and apexearth: "obviously, we should turn around".
+//  * SAME RANK, STILL CLOSING: keep walking. Abandoning a journey you are
+//    making progress on is exactly how a squad ends up between two places and
+//    in neither.
+//  * ARRIVED, STALLED, OR THE SAME PLACE: there is no commitment left to keep.
+//
+// "Still closing" is measured, not assumed: goalBest is the nearest the squad
+// has actually come. A blocked, outrun or impossible goal releases itself, so
+// the hold cannot wedge.
+bool ISquadTask::HoldGoal(const AIFloat3& newPos, bool isContact, int frame)
+{
+	if (leader == nullptr) {
+		return false;
+	}
+	++sGoalAsks;
+	if (frame >= sGoalLogAt) {  // census prints whether or not it ever holds
+		sGoalLogAt = frame + FRAMES_PER_SEC * 60;
+		manager->GetCircuit()->LOG("apex: goalhold asks=%u held=%u same=%u contact=%u"
+				" noprog=%u fresh=%u arrived=%u",
+				sGoalAsks, sGoalHeld, sGoalSame, sGoalContact, sGoalNoProg,
+				sGoalFresh, sGoalArrived);
+	}
+
+	const AIFloat3& lp = leader->GetPos(frame);
+	auto adopt = [&]() {
+		goalPos = newPos;
+		goalContact = isContact;
+		goalFrame = frame;
+		goalDist0 = goalBest = lp.distance2D(newPos);
+	};
+
+	if (goalPos.x < 0.f) {
+		++sGoalFresh;
+		adopt();
+		return false;
+	}
+	const float toOld = lp.distance2D(goalPos);
+	goalBest = std::min(goalBest, toOld);
+
+	// THE SAME JOURNEY, RE-ISSUED -- 62% of all asks, measured. This must NOT
+	// go through adopt(): restarting the progress record here made every later
+	// redirection read "no progress" and be waved through, which is exactly the
+	// contamination SetTravelGoal had. Only the point drifts; the journey is
+	// the one we are already on.
+	if (goalPos.distance2D(newPos) < SQUAD_GOAL_SAME) {
+		++sGoalSame;
+		goalPos = newPos;
+		return false;
+	}
+	if (toOld < SQUAD_GOAL_SAME) {  // we are there; nothing left to commit to
+		++sGoalArrived;
+		adopt();
+		return false;
+	}
+	if (isContact && !goalContact) {  // something is actually there
+		++sGoalContact;
+		adopt();
+		return false;
+	}
+	if (goalBest >= goalDist0 - SQUAD_GOAL_SAME) {  // not closing; no journey to defend
+		++sGoalNoProg;
+		adopt();
+		return false;
+	}
+
+	++sGoalHeld;
+	// Counted even when the hold is switched off, so both A/B arms report the
+	// same denominator and "held=0" cannot be mistaken for dead code.
+	return manager->GetCircuit()->GetTunable("apex_goal_hold", 1.f) > 0.f;
+}
+
 void ISquadTask::ActivePath(float speed)
 {
+	// The ONE place a squad's destination is handed to its units, so the one
+	// place the question "are we allowed to change our mind" has to be asked.
+	// Putting it here rather than at the twenty call sites is deliberate: a
+	// call site cannot forget a gate it does not have to call.
+	if (!pPath->posPath.empty()) {
+		const int frame = manager->GetCircuit()->GetLastFrame();
+		if (HoldGoal(pPath->posPath.back(), GetTarget() != nullptr, frame)) {
+			return;  // keep walking; the units already have this journey
+		}
+	}
 	// TRAVEL LINE-ABREAST, not single file. Every unit gets the same path, so
 	// without a per-unit offset the squad walks onto one point and meets contact
 	// as a column with only the leaders able to fire. Spread them perpendicular
@@ -684,6 +800,12 @@ void ISquadTask::ActivePath(float speed)
 		offset.push_back(span);
 		prevDef = cdef;
 	}
+	// A heading for every order issued before the travel action has walked a
+	// waypoint -- the gather, the muster, the arrival point. Without it those
+	// orders have no line to sit on and the squad balls up exactly when the
+	// formation matters.
+	AIFloat3 dir0 = pPath->posPath.back() - pPath->posPath.front();
+	dir0.y = 0.f;
 	const float scale = (span > cap) ? (cap / span) : 1.f;
 	const float half = span * scale * 0.5f;
 	int i = 0;
@@ -692,7 +814,7 @@ void ISquadTask::ActivePath(float speed)
 			unit->GetTravelAct()->SetPath(pPath, speed);
 		}
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->SetLateral((n > 1) ? (offset[i] * scale - half) : 0.f);
+			unit->SetFormSlot((n > 1) ? (offset[i] * scale - half) : 0.f, dir0);
 		}
 		++i;
 	}
