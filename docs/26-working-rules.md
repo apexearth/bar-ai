@@ -276,3 +276,52 @@ Split by layer: game-side configs → `beyond-all-reason/Beyond-All-Reason`
 BAR's `AI_POLICY.md` requires **explicit disclosure of AI-assisted code in the
 PR**, and human verification of it. Undisclosed use gets the PR closed. This
 applies to work done in this repo with Claude.
+
+## Every rule that can decline to act must count how often it was ASKED
+
+The only bug class this repo has actually suffered is the silent no-op: code
+that compiles, runs, passes the smoke test, wins or loses a normal-looking
+game, and does nothing. Four in one day (2026-09-06):
+
+    nanopull   static=1806  hasOutput=4  pulled=4      release was a no-op
+    raidsticky hadPrev=40   noPrev=461   applied=29    dead branch: the test
+                                                       read a pointer cleared
+                                                       82 lines above it
+    raidgate   passes=139   cand=1476    noBest=135    97% of picks chose
+                                                       nothing
+    (and an unpublished modoption, so GetTunable silently returned its default)
+
+None is visible in a win rate, a composition table, or a compile. All are
+obvious the moment the rule counts two numbers.
+
+**The convention.** A rule that can decline to act logs an ACTION term beside a
+DENOMINATOR term, in one `apex: <tag>` line:
+
+    denominators  passes seen cand picks checked tried asks samples pools turrets
+    actions       applied fired pulled refused flips promoted released switched
+
+Name them from those lists -- `tools/deadcheck.py` finds them by name, and a
+counter called something else is invisible to it (which is how the first
+version of `raidgate` escaped its own detector).
+
+    python tools/deadcheck.py <run>
+
+It reports rules that never fired and rules that barely fired. Neither is an
+error: `guardsum picks=337 flips=0` is a rule correctly declining, because the
+defence anchor really is stable. The output is a list of questions -- can this
+rule act at all?
+
+**And the rule that would have prevented the worst one:** capture what you are
+comparing against BEFORE you mutate anything. `RaidTask::FindTarget` called
+`SetTarget(nullptr)` at its top and then tested `enemy == GetTarget()` 82 lines
+later; `AttackTask` does the same job correctly by capturing `prevTarget` first.
+
+## Build with tools/build_dll.py, not a raw docker line
+
+A failed ninja leaves the PREVIOUS DLL in place, `deploy_ai.py` then reports
+`(local build)` truthfully, and the smoke test greens on hours-old code. Piping
+ninja through `grep` also replaces its exit code with grep's, so a failed build
+reports 0 -- that happened twice on 2026-09-06.
+
+`tools/build_dll.py` never pipes ninja, checks the exit code AND that the
+artifact's mtime actually moved, and refuses `--deploy` unless both hold.

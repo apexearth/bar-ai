@@ -103,6 +103,8 @@ conclusion each one produced.
 | **edit any `.as` file** | **S18** an anchor that does not match does nothing, quietly. Assert it exists |
 | **commit a change that touched comments** | `comment_audit.py` — a run report belongs in the commit message, a negative result in `docs/27` keyed by symbol. The rule alone failed for three weeks; this is the check |
 | **touch C++** | `cpp-dll` skill, `docs/06-building-the-dll.md` |
+| **build the DLL** | `python tools/build_dll.py` — a failed ninja leaves the OLD dll and deploy still says `(local build)` |
+| **judge whether a rule DOES anything** | `python tools/deadcheck.py <run>` — the silent no-op is this repo's only real bug class; `docs/26` has the counting convention |
 | **build on an engine binding** | **S7** callbacks can be silently dead — log the raw return once · **S9** `GetBuilderThreatAt` crashes off-map and reads zero anyway |
 | **create or rename a variant** | **S1** without its own shortName it loads stock BARb in every multiplayer game · `docs/03-barb-architecture.md` |
 | **reason about the economy or T3** | `docs/10-bar-game-concepts.md`, `eta-objective`. The same unit is unaffordable at 40 metal/s and trivial at 398 |
@@ -123,6 +125,8 @@ python tools/trace.py latest --filter=decide    # apex: lines for one tag, minut
                                                 #       posts eta defprice defsite
 python tools/diagnose.py <run>                  # 3 lines when clean
 python tools/check.py 2>&1 | tail -15           # 126 lines unpiped -- always tail it
+python tools/deadcheck.py <run>                 # rules that never fired
+python tools/build_dll.py [--deploy]            # build that cannot lie about succeeding
 python tools/as_scope.py                        # 2 lines
 python tools/comment_audit.py                   # run reports + essays in YOUR diff
 python tools/context_size.py --since            # what the repo costs to read

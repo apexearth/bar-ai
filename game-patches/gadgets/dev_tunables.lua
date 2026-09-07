@@ -526,6 +526,10 @@ local NAMES = {
 	-- RaidTask: how much a raid party flatters its CURRENT target's distance.
 	-- 1.0 = no commitment (what the nulled-out form was effectively doing).
 	"apex_raid_sticky",
+	-- RaidTask: multiplies how far a raid party may look for a target. 1.0 is
+	-- the leader's own weapon-or-sight radius +200, i.e. only what is already
+	-- in its face -- which is why 97% of target picks chose nothing.
+	"apex_raid_reach",
 	-- The order arbiter: a centre ranked below the one whose decision the unit
 	-- is still carrying out may not overwrite it. 0 restores last-writer-wins.
 	"apex_order_arbiter",

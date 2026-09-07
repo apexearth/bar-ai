@@ -420,7 +420,12 @@ bool CRaidTask::FindTarget()
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
 	const float range = std::max(leader->GetUnit()->GetMaxRange(), cdef->GetLosRadius()) + 200.f;
-	float minSqDist = SQUARE(range);
+	// A RAID PARTY COULD ONLY EVER PICK A TARGET ALREADY IN ITS FACE. minSqDist
+	// starts at the leader's own weapon-or-sight radius +200 and only shrinks, so
+	// nothing further away can win the comparison -- in a raid task, whose job is
+	// to travel to undefended things. Measured: 97% of passes chose nothing.
+	const float reach = circuit->GetTunable("apex_raid_reach", 1.f);
+	float minSqDist = SQUARE(range * reach);
 	float maxThreat = 0.f;
 	float minPower = maxPower;
 
@@ -438,6 +443,11 @@ bool CRaidTask::FindTarget()
 	// 8x stickiness moved nothing measurable, which looks exactly like a term
 	// that never applies -- as the pre-fix form provably never did.
 	static int sHad = 0, sNone = 0, sFired = 0, sLogAt = 0;
+	// One counter per `continue` in the candidate loop. 92% of passes end with no
+	// target at all; the aggregate cannot say which gate refused them.
+	static int gSeen=0, gHidden=0, gUrgent=0, gPower=0, gFlee=0, gCat=0, gWater=0,
+			gHigh=0, gDeep=0, gPass=0, gNoBest=0, gPasses=0;
+	++gPasses;
 	if (prevTarget != nullptr) { ++sHad; } else { ++sNone; }
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
@@ -447,9 +457,10 @@ bool CRaidTask::FindTarget()
 	threatMap->SetThreatType(leader);
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
+		++gSeen;
 		CEnemyInfo* enemy = kv.second;
 		if (enemy->IsHidden() || (enemy->GetTasks().size() > 1)) {
-			continue;
+			++gHidden; continue;
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
@@ -457,7 +468,7 @@ bool CRaidTask::FindTarget()
 		if ((!isEnemyUrgent && !urgentPositions.empty())
 			|| !terrainMgr->CanMobileReachAt(area, ePos, highestRange))
 		{
-			continue;
+			++gUrgent; continue;
 		}
 
 		const float sqEBDist = basePos.SqDistance2D(ePos);
@@ -469,11 +480,11 @@ bool CRaidTask::FindTarget()
 		}
 		const float power = threatMap->GetThreatAt(ePos);
 		if (checkPower <= power) {
-			continue;
+			++gPower; continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
 		if ((eVel.SqLength2D() >= checkSpeed) && (eVel.dot2D(pos - ePos) < 0)) {
-			continue;
+			++gFlee; continue;
 		}
 
 		int targetCat;
@@ -556,13 +567,17 @@ bool CRaidTask::FindTarget()
 			enemyPositions.push_back(ePos);
 		}
 	}
+	if (bestTarget == nullptr) { ++gNoBest; }
 	if (bestTarget == nullptr) {
 		bestTarget = worstTarget;
 	}
 
 	if (circuit->GetLastFrame() >= sLogAt) {
 		sLogAt = circuit->GetLastFrame() + FRAMES_PER_SEC * 30;
-		circuit->LOG("apex: raidsticky hadPrev=%i noPrev=%i applied=%i", sHad, sNone, sFired);
+		circuit->LOG("apex: raidgate passes=%i cand=%i hidden=%i unreach=%i power=%i"
+				" fleeing=%i noBest=%i | hadPrev=%i noPrev=%i applied=%i",
+				gPasses, gSeen, gHidden, gUrgent, gPower, gFlee, gNoBest,
+				sHad, sNone, sFired);
 	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
