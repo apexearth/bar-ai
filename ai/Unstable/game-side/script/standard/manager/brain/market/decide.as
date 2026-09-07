@@ -993,7 +993,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// on lathes: measured, 14 of 17 opening elections were this hoist, all of
 	// them joining one solar, while three mexes stood without a gun. Energy
 	// keeps its ticket in the draw below like anything else.
-	if (!aaPanic && HardEStall() && (EMakeInFlight() <= 0.f)) {
+	// ...AND ALWAYS FOR A BUILDER THE INTERRUPT JUST FREED: it was taken off a
+	// standing frame on the promise of this answer, so handing it back to the
+	// draw makes the abort pure loss.
+	const bool owedE = StallFreedOwed(unit);
+	if (!aaPanic && HardEStall() && ((EMakeInFlight() <= 0.f) || owedE)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
 				continue;
@@ -1004,6 +1008,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 			aaPanic = true;   // reuse the skip-the-lottery flag
 			why = "estall";
+			StallFreedClear(unit);
 			break;
 		}
 	}

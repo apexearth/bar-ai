@@ -1375,6 +1375,13 @@ bool gStallHadAnswer = false;
 // CCircuitUnit@ behind.
 array<Id> gDebtWho;     // the builder the stall interrupted
 array<Id> gDebtFrame;   // the frame it left standing
+
+// ...AND THE LOAN HAS TO BUY WHAT IT WAS TAKEN OUT FOR. The election hoists
+// energy only while nothing at all is on the way, so one turbine in flight
+// hands a builder aborted FOR the stall straight back to the roulette. The
+// mark says this one was taken off work for the stall; its next election owes
+// that answer.
+array<Id> gStallFreed;
 int gDebtPaid = 0;
 int gDebtDropped = 0;
 
@@ -1382,6 +1389,40 @@ void DebtDrop(uint i)
 {
 	gDebtWho.removeAt(i);
 	gDebtFrame.removeAt(i);
+}
+
+void StallFreedNote(CCircuitUnit@ u)
+{
+	if (u is null)
+		return;
+	for (uint i = 0; i < gStallFreed.length(); ++i) {
+		if (gStallFreed[i] == u.id)
+			return;
+	}
+	gStallFreed.insertLast(u.id);
+}
+
+bool StallFreedOwed(CCircuitUnit@ u)
+{
+	if (u is null)
+		return false;
+	for (uint i = 0; i < gStallFreed.length(); ++i) {
+		if (gStallFreed[i] == u.id)
+			return true;
+	}
+	return false;
+}
+
+void StallFreedClear(CCircuitUnit@ u)
+{
+	if (u is null)
+		return;
+	for (uint i = 0; i < gStallFreed.length(); ++i) {
+		if (gStallFreed[i] != u.id)
+			continue;
+		gStallFreed.removeAt(i);
+		return;
+	}
 }
 
 void DebtNote(CCircuitUnit@ u, IUnitTask@ t)
@@ -1490,8 +1531,10 @@ void StallWatch()
 	const float eBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
 	if ((eBar > 0.f) && (aiEconomyMgr.energy.income > eBar))
 		return;
-	if (!HardEStall())
+	if (!HardEStall()) {
+		gStallFreed.resize(0);
 		return;
+	}
 	const double _tDry = Perf::T0();
 	// HOW MANY WORKERS THE STALL IS WORTH, NOT ONE. The shortfall the answer
 	// has to cover is the same number EnergyShortOfOrdered prices against:
@@ -1502,6 +1545,7 @@ void StallWatch()
 	float deficit = (aiEconomyMgr.energy.pull + EDrainInFlight())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
 			- aiEconomyMgr.energy.income - EMakeInFlight();
+	const float deficit0 = deficit;
 	array<CCircuitUnit@> picks;
 	// COMMANDER FIRST. The scan used to dry-run the market for EVERY worker and
 	// keep the last one that qualified -- 74 ms in one call across 8 instances,
@@ -1630,8 +1674,11 @@ void StallWatch()
 		AiLog("apex: STALL interrupt -- " + p.circuitDef.GetName() + " #" + p.id
 			+ " progress=" + formatFloat(Requests::Progress(p.task), "", 0, 2)
 			+ " (" + (i + 1) + "/" + picks.length() + ")"
+			+ " short=" + formatFloat(deficit0, "", 0, 1)
+			+ " coming=" + formatFloat(EMakeInFlight(), "", 0, 1)
 			+ " leaves its build to answer the energy stall");
 		DebtNote(p, p.task);   // before Abort(): the task is what holds the frame
+		StallFreedNote(p);
 		p.task.Abort();
 	}
 }
