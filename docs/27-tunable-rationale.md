@@ -1610,3 +1610,44 @@ dashboard coverage, and **called by nothing**. The 50 metal/s bar it declared
 had never once applied. Deleted rather than wired: the shield want now prices
 against measured bombardment and remembered LRPC stake, which is a better
 answer than an income gate to the same question.
+
+## `apex_raid_sticky` (default 1.4) — MEASURED NULL, and why
+
+How much a raid party flatters its CURRENT target's distance when re-picking
+(`sqDist /= sticky^2`), so it stays committed unless something is genuinely
+closer. Added originally as `RAID_TARGET_STICKY` after apexearth's "it can't
+make up its mind and just runs in circles".
+
+**It never once applied.** `RaidTask::FindTarget` calls `SetTarget(nullptr)` at
+its top, and the test 82 lines later read `enemy == GetTarget()` — null by then,
+and `enemy` is never null, so the branch was unreachable. Fixed 2026-09-06 to
+capture `prevTarget` before the clear, the way `AttackTask` already did.
+
+**Sweeping it after the fix changed nothing measurable.** 6 seeds per arm,
+Frozen Ford 1v1 vs BARb:stable:hard, 25 min:
+
+| sticky | raid long moves | return rate | metal built | share | K/D |
+|---|---|---|---|---|---|
+| 1.0 | 1312 | 63.3% | 17,743 | 0.531 | 0.39 |
+| 2.0 | 1066 | 59.8% | 16,001 | 0.514 | 0.65 |
+| 4.0 | 1135 | 64.1% | 14,322 | 0.465 | 0.22 |
+| 8.0 | 1214 | 55.4% | 16,340 | 0.504 | 0.62 |
+
+builtSD ~3,200 and shareSD 0.03–0.07, so every difference is inside one
+standard deviation. At 8.0 the incumbent's SQUARED distance is divided by 64 —
+if the term bound at all, raiders would be pinned to their first target.
+
+**The S7 counter says why, and it is the real finding:**
+
+    apex: raidsticky hadPrev=40 noPrev=461 applied=29
+
+Over a whole 25-minute game `FindTarget` ran 501 times and **461 of them (92%)
+had NO previous target at all**. The branch applied 29 times. There is nothing
+to be sticky about, because a raid party does not HOLD a target between passes
+— so no value of this tunable can matter.
+
+Leave it at 1.4 or set it to 1.0; behaviourally it is the same. The question
+worth answering is why a raid task has no target 92% of the time, since a
+raider without a target falls through to `RoamPos` — the ±`apex_roam_r` scatter
+around the front, or a uniform pick over the whole map when no front is
+published, whose mean is the map centre.

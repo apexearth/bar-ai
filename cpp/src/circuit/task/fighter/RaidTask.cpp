@@ -434,6 +434,11 @@ bool CRaidTask::FindTarget()
 	// testing against nullptr and could never be true, so RAID_TARGET_STICKY
 	// never once applied. AttackTask captures prevTarget the same way.
 	CEnemyInfo* prevTarget = GetTarget();  // compared only, never dereferenced
+	// S7: prove the branch RUNS before believing any sweep of the constant. An
+	// 8x stickiness moved nothing measurable, which looks exactly like a term
+	// that never applies -- as the pre-fix form provably never did.
+	static int sHad = 0, sNone = 0, sFired = 0, sLogAt = 0;
+	if (prevTarget != nullptr) { ++sHad; } else { ++sNone; }
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
 	CEnemyInfo* worstTarget = nullptr;
@@ -520,6 +525,7 @@ bool CRaidTask::FindTarget()
 		// 1.0 restores no-commitment, which is what the broken form was doing.
 		if (enemy == prevTarget) {
 			const float sticky = circuit->GetTunable("apex_raid_sticky", RAID_TARGET_STICKY);
+			++sFired;
 			if (sticky > 1.f) {
 				sqDist /= SQUARE(sticky);
 			}
@@ -554,6 +560,10 @@ bool CRaidTask::FindTarget()
 		bestTarget = worstTarget;
 	}
 
+	if (circuit->GetLastFrame() >= sLogAt) {
+		sLogAt = circuit->GetLastFrame() + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: raidsticky hadPrev=%i noPrev=%i applied=%i", sHad, sNone, sFired);
+	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		return true;
