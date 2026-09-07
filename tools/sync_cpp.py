@@ -27,7 +27,14 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-BARB = REPO / "vendor" / "engine" / "AI" / "Skirmish" / "BARb"
+# A LANE edits its own copy of the BARb tree, so the mirror has to follow it --
+# otherwise lane C++ work lives in exactly one directory, is invisible to git,
+# and is destroyed by the next `apply`. That is not hypothetical: it happened
+# on 2026-09-07 (tools/lane.py).
+import os.path as _osp
+sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
+import lane as _lane
+BARB = _lane.barb_src()
 MIRROR = REPO / "cpp"
 
 

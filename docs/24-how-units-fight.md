@@ -789,3 +789,131 @@ exposed whenever it is outside the safe radius), so left alone it can consume
 the whole army. Whatever else changes, some share of the army must be on their
 side of the map, and that share is not the leftovers after every guard slot is
 filled.
+
+## When they are closing on the base, defence is not a purchase (2026-09-07)
+
+> "When enemies are getting closer and closer to our base and we're at T2 we
+> really really need to try and making T2 or T3 defense to stop the enemies.
+> It becomes a life/death situation."
+
+Two things in one sentence. **Closing** is the trigger, not arrival: the tower
+has to be standing when they get here, so the decision is made off a force that
+is still walking. And at T2 the answer is a T2 or T3 gun, not more of the cheap
+one -- a wall of light towers against a heavy push is metal spent on nothing.
+
+The field could not hear the first half. `HazardWith`'s loss term reads what
+has **already** been destroyed here, and its presence term is scaled by the
+gradient toward their **base**, which is zero at ours by construction -- so our
+own ground reported the floor hazard while it was being taken apart (Frozen
+Ford, `20260907-175233`, minutes 21-26: four mexes down to one, 1,148 / 2,251 /
+2,337 metal of losses per sample, `home[hazard=1.25/ks]` on every line, which
+is exactly `apex_risk_floor`). Defence finished that game at 1.7% of spend
+against BARb's 15.9%.
+
+## They arrive as one blob; we arrive in pieces (2026-09-07)
+
+> "The enemy tends to come at us with one big blob of army all together at the
+> same time. Our army tends to be very spread out so we die to them piece by
+> piece. That is at least part of why we lost that game."
+
+This is not the same rule as "curves and lines, never a ball" above. That one
+is about the SHAPE a formation holds when it arrives. This one is about how
+much of the army arrives at all. A wall is still a wall when it is the whole
+army; what loses is committing a third of it at a time.
+
+Measured in the game he watched (Altair Crossing, `20260907-183449`), from the
+`apex: squadsize` line, late game:
+
+| | | | | | | |
+|---|---|---|---|---|---|---|
+| their largest group | 19 | 22 | 25 | 27 | 30 | 32 |
+| our largest squad | 10 | 12 | 14 | 13 | 7 | 6 |
+| our squad count | 5 | 4 | 4 | 2 | 2 | 1 |
+
+Their mean group ran ~9-10 units against our ~4-6, and their peak group was
+32 against our peak of 15. Half of every pool pass that game (95 of 178) was a
+squad of one or two units.
+
+### What beats a blob (2026-09-07)
+
+> "How to beat a big 32 unit blob = beamers and HLT + jammer and make the enemy
+> bleed into us. Support those turrets with con turrets. Easy for me to say,
+> hard for us to make our AI good enough to do that lol"
+
+So the answer to a massed push is not only a massed answer. It is ground that
+costs them to cross: beam towers and HLTs to do the damage, a jammer so the
+blob cannot see what it is walking into, and **construction turrets behind the
+line** so the guns are repaired and rebuilt while they are being shot at. A
+turret without a nano behind it is a one-use item.
+
+This does not contradict "fight without turrets" at the top of this file --
+that is the condition he gauges FIGHTING under, so nothing hides a bad army. It
+is the same instruction as the life/death T2 defence entry below it, with the
+composition named.
+
+## Splash is worth what it hits (2026-09-08)
+
+> "If we have tons of enemy T1 coming at us we need big AOE damage to clear
+> them out. Perhaps we lack that logic?"
+
+We do. `TUNE_WORTH_AOE = 0` (`tunables.as:912`), and `UnitCore` guards the term
+with `if (wAoe != 0.f)`, so the splash factor never executes. It is
+unmeasured-and-off, not measured-and-rejected: `docs/27` has no entry for it.
+`RANGE` is the other one at zero; `DPS`, `HP`, `ALPHA` and `COST` are all live.
+
+But a fixed weight is not the rule he stated. **The value of splash is the
+number of targets standing inside it**, so it is a function of what the enemy
+is bringing, not a constant. Against six spread raiders a Fatboy's splash is
+worth one hit; against thirty massed T1 it is worth several per shot. We
+already measure their clustering — `CEnemyManager::GetEnemyGroups()` carries
+members and positions, and the `apex: squadsize` census records the enemy's
+mean and max group size every pass (it read `enemy n=9 avg=9.9 max=32` in the
+game he watched). So this is derivable from what we already collect, with no
+invented constant.
+
+Note the coupling: the big-AOE answer to massed T1 **is** the expensive T2
+assault unit, and the production auction cannot buy one — see the cost-squared
+error below. Turning AOE on without fixing that would change nothing.
+
+## The back rank leaves the front rank to die (2026-09-08)
+
+> "we often will have like 4 or 5 units up close to the enemy getting pummelled
+> while our units in the back move away OUT OF RANGE TO FIRE AT ENEMIES. So our
+> front guys take all the punishment and we aren't even dishing out any damage
+> at the enemies with the rest of our army. Imagine you are with your allies,
+> and you are attacking and getting hit... you think your allies are still there
+> behind you but they all turned around and left."
+
+The named mechanism is `IFighterTask::KeepRange` (`FighterTask.cpp:469`), called
+from `OnUnitDamaged` (`:303`) **before any health check** -- stock issues no
+movement at all for a healthy damaged unit. It fires on every damage event,
+throttled to once a second by `apex_dodge_cd`, and issues a raw `CmdMoveTo` to
+95% of the unit's own max range measured from **whichever single enemy last hit
+it**, plus a sideways offset proportional to speed (the orbit that reads as
+going in circles).
+
+Two things are wrong with that shape. It positions against ONE attacker with no
+reference to where our own front rank is standing, so a long-range unit walks
+back to its own maximum while the short-range units it was supposed to be
+shooting over are left in contact. And it is a movement order, not a fight
+order, so the unit spends the second walking rather than shooting -- which is
+his "we aren't even dishing out any damage".
+
+The rule he is stating: **a unit with range advantage holds at range and FIRES.
+It does not leave the line.** Standoff is a firing position, not a withdrawal.
+
+## Jammers are wanted every sample and never built (2026-09-08)
+
+> "Btw still no jammers, and we used to make jammer T2 units but wow im not
+> seeing those anymore either."
+
+Not a missing want. The instrument says the demand is live and constant --
+`apex: support-diag def=armaser cls=jam need=1.00 squads=1 have=0.00 own=0
+pend=0 adv=9852`, on every sample of `20260907-210124` -- and we finish the game
+owning zero. `armpeep` (radar) is identical: need 1.00, built 0.
+
+`armaser` never appears in the production rank line at all, so it is not losing
+the army draw; the support branch (`production.as:570`) builds its own Want and
+`continue`s, and that Want loses wherever it competes. Note also that `need` is
+capped by `EscortSquadCount()`, which read **1** against an advanced army of
+9,852 metal -- so even fully served we would buy one.

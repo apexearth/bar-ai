@@ -47,6 +47,13 @@ PATCH_DIR = REPO / "game-patches"
 # variant from BARb/stable so the bundled SkirmishAI.dll matches the installed
 # engine. A variant is never written under this name -- see short_name().
 BASE_SHORT_NAME = "BARb"
+
+# A LANE ships this same AI under its own shortName so two sessions can hold a
+# deploy and a match at once (tools/lane.py). Without one, nothing below
+# changes.
+import os.path as _osp
+sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
+import lane as _lane
 # The baseline's own version. A variant may not use this name: see the guard in
 # deploy() for what deleting BARb/stable costs.
 BASE_VERSION = "stable"
@@ -133,7 +140,15 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
             f"no variant '{variant}' in {AI_DIR} (have: {', '.join(variants()) or 'none'})"
         )
 
+    # A LANE DEPLOYS INTO ITS OWN FOLDER, so an engine another lane is running
+    # cannot have this DLL loaded and Windows has nothing to refuse. The blanket
+    # check exists only because a shared deploy replaces the file the running
+    # match is using; it serialises sessions that would never have collided.
     busy = _running_lockers()
+    if busy and _lane.name() and variant == _lane.variant():
+        print(f"  lane '{_lane.name()}'  {', '.join(busy)} is running in another "
+              f"lane -- deploying anyway, this folder is ours")
+        busy = []
     if busy and not allow_running:
         raise SystemExit(
             f"{', '.join(busy)} is running -- refusing to deploy.\n"
@@ -204,7 +219,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # trap, back again and hardest to spot on a machine set up from scratch. The
     # build output is generated from vendor/ as it stands, so prefer it whenever
     # it exists and say which one went out.
-    built_dll = REPO / "vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll"
+    built_dll = _lane.artifact()
     for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
         if name == "SkirmishAI.dll" and built_dll.exists():
@@ -467,7 +482,9 @@ def main() -> int:
     sub.add_parser("list", help="list variants in this repo")
 
     d = sub.add_parser("deploy", help="repo -> live install")
-    d.add_argument("variant")
+    # Optional: a lane deploys its own variant, so the name need not be typed
+    # (and typing the wrong one is how a lane ships into the shared slot).
+    d.add_argument("variant", nargs="?", default=None)
     d.add_argument("--allow-running", dest="allow_running", action="store_true",
                    help="deploy even though BAR appears to be running (it will "
                         "probably fail on the locked SkirmishAI.dll)")
@@ -497,7 +514,14 @@ def main() -> int:
     elif args.cmd == "list":
         print("\n".join(variants()) or "(none)")
     elif args.cmd == "deploy":
-        deploy(env, args.variant, args.allow_running)
+        # No variant named: a lane ships its own (materialised fresh from
+        # ai/Unstable each time, so a lane never drifts from the work).
+        v = args.variant
+        if v is None:
+            v = _lane.sync_variant() if _lane.name() else "Unstable"
+        elif _lane.name() and v == "Unstable":
+            v = _lane.sync_variant()
+        deploy(env, v, args.allow_running)
     elif args.cmd == "pull":
         pull(env, args.variant)
     elif args.cmd == "patches":

@@ -36,6 +36,22 @@ IUnitTask@ Retreat(CCircuitUnit@ unit)
 			return held;
 		}
 		const AIFloat3 rear = Market::RetirePos();
+		// A PATROL TO THE TILE YOU ARE STANDING ON IS NOT A RETREAT. Measured
+		// 2026-09-07: the commander walked to the nano farm, and every patrol
+		// issued afterwards had that farm as its destination -- 57 elmos away,
+		// inside his own build reach. He held a LOW-priority builder task, out
+		// of the market, frozen on one tile for 12,300 frames (5:20 to 12:10),
+		// re-issuing the same zero-length patrol every 20 seconds. Nothing was
+		// wrong with the patrol; there was nowhere to go. Returning null
+		// re-elects him onto the farm's own work instead of parking him on it,
+		// and his build reach is the honest measure of "already there" -- at
+		// that distance he can work the site he is standing beside.
+		if (OnMap(rear)
+			&& (unit.GetPos(ai.frame).distance2D(rear)
+				<= unit.circuitDef.GetBuildDistance()))
+		{
+			return null;
+		}
 		if (OnMap(rear)) {
 			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(
 					Task::Priority::LOW, rear, 20 * SECOND));

@@ -33,3 +33,7 @@ desktop.ini
 # agent/session worktrees
 .claude/worktrees/
 scratch_*.log
+
+# tools/lane.py: per-session build/deploy slots, never committed
+/.barai-lane
+/ai/lane-*

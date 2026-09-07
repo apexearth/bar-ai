@@ -89,6 +89,7 @@ private:
 	// the rest stay on or return to their posts.
 	void LeashPosts(const springai::AIFloat3& tgtPos);
 	int lastLeashLog = -999999;
+	int lastAidLog = -999999;   // aid census: what allies are fighting that we did not elect
 	float leashShort = 0.f;   // need - sent at the last leash, 0 when met
 	int leashAt = -999999;
 	int lastHoldLog = -999999;

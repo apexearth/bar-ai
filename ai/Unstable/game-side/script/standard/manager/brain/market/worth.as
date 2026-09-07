@@ -446,7 +446,22 @@ float UnitPPC(int d)
 			float safe = PfOutrangedFrac(d) * keep;
 			if (safe > 1.f)
 				safe = 1.f;
-			if (safe > 0.f)
+			// ONLY A DISCOUNT, WHICH IS WHAT THE NOTE ABOVE ALREADY CLAIMS THIS
+			// IS: "This form can only ever DISCOUNT the hp term UnitCore already
+			// charged". That holds for relHp > 1 and inverts below it -- pow()
+			// of a number under one is under one, and dividing by it MULTIPLIES.
+			// So a unit with below-average hit points was not merely forgiven
+			// its fragility, it was paid for it, and the bonus grew with speed
+			// because `keep` rises with speed.
+			//
+			// Measured 2026-09-08 from a standing T2 bot lab, both units
+			// available: Platypus (260m, 1170hp, speed 90) scored p=10.956
+			// against Fatboy (1400m, 7800hp, speed 30) at p=0.120 -- 91x --
+			// while their RAW power per metal is 0.034 against 0.029, a factor
+			// of 1.2. apexearth: "we could have made a fatboy easily and kicked
+			// the enemies butt but we made like 1 hound, then a fuckin platypus
+			// which is USELESS here."
+			if ((safe > 0.f) && (relHp > 1.f))
 				v /= pow(relHp, wHp * safe);
 		}
 	}

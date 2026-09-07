@@ -88,6 +88,7 @@ local NAMES = {
 	"apex_allow_tacmissile",
 	"apex_conv_horizon",
 	"apex_tech_survival",
+	"apex_lava",
 	"apex_bp_backlog_s",
 	"apex_front_line",
 	"apex_standoff_cover",
@@ -200,6 +201,7 @@ local NAMES = {
 	"apex_front_safe_edge",
 	"apex_greed_cons",
 	"apex_hot_radius",
+	"apex_hz_approach",
 	"apex_incoming_closing",
 	"apex_incoming_cost",
 	"apex_incoming_danger_cost",
@@ -322,6 +324,7 @@ local NAMES = {
 	"apex_ally_aggregate",
 	"apex_support_radius",
 	"apex_ally_converge",
+	"apex_defend_aid",     -- DefendTask.cpp: a guard pool elects the fight an ally is already in (1)
 	"apex_wall_commit",
 	"apex_static_plain_attack",
 	"apex_medic_share",

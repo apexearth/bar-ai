@@ -441,6 +441,7 @@ bool CDefendTask::FindTarget()
 	// the pool back to the front.
 	const bool prevHidden = (GetTarget() != nullptr) && GetTarget()->IsHidden();
 	int refusedOdds = 0, refusedSmall = 0, refusedSolo = 0;
+	int allyCarried = 0;   // instrument: elections carried by ally power alone
 	refusedHomeOdds = false;
 
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
@@ -457,6 +458,8 @@ bool CDefendTask::FindTarget()
 	struct SAllySquad {
 		springai::AIFloat3 pos;
 		float power;
+		springai::AIFloat3 tpos;   // where its fight is; == pos when it has none
+		bool hasTarget;
 	};
 	std::vector<SAllySquad> allySquads;
 	const float supportR = circuit->GetTunable("apex_support_radius", 3000.f);
@@ -473,8 +476,10 @@ bool CDefendTask::FindTarget()
 				if (olS == nullptr) {
 					continue;
 				}
-				allySquads.push_back({olS->GetPos(circuit->GetLastFrame()),
-						otherS->GetAttackPower()});
+				CEnemyInfo* otS = otherS->GetTarget();
+				const AIFloat3 opS = olS->GetPos(circuit->GetLastFrame());
+				allySquads.push_back({opS, otherS->GetAttackPower(),
+						(otS != nullptr) ? otS->GetPos() : opS, otS != nullptr});
 			}
 		}
 	}
@@ -592,6 +597,13 @@ bool CDefendTask::FindTarget()
 		// flat 2 per unarmed building (noise at this scale).
 		if (circuit->GetTunable("apex_defend_towers", 1.f) > 0.f) {
 			allyPower += std::max(.0f, inflMap->GetAllyDefendInflAt(ePos));
+		}
+		// INSTRUMENT (2026-09-07): the election counts allies within supportR of
+		// the enemy, but nothing makes those allies come -- their own election
+		// is keyed on their own post. Count the fights we accept on strength
+		// that will never arrive.
+		if ((checkPower <= eThreat) && (checkPower + allyPower > eThreat)) {
+			++allyCarried;
 		}
 		if (checkPower + allyPower <= eThreat) {
 			++refusedOdds;
@@ -712,6 +724,36 @@ bool CDefendTask::FindTarget()
 		}
 	}
 
+	// INSTRUMENT (2026-09-07, apexearth: "our units which are on task to guard a
+	// mex/building don't come to aid allies which are fighting"). What an ally
+	// is doing is not an input to this election at all -- the ATTACK half has
+	// apex_ally_converge, the DEFEND half has nothing. Count, before changing
+	// anything: ally squads in a fight within support range of THIS pool, and
+	// how many of those fights we elected.
+	{
+		const int frameA = circuit->GetLastFrame();
+		static constexpr float AID_SAME_FIGHT = 800.f;   // CAttackTask's nearby-enemy radius
+		int allyFights = 0, allyShared = 0;
+		const AIFloat3& mePos = leader->GetPos(frameA);
+		for (const SAllySquad& ally : allySquads) {
+			if (!ally.hasTarget || (mePos.SqDistance2D(ally.tpos) >= SQUARE(supportR))) {
+				continue;
+			}
+			++allyFights;
+			if ((bestTarget != nullptr)
+				&& (bestTarget->GetPos().SqDistance2D(ally.tpos) < SQUARE(AID_SAME_FIGHT)))
+			{
+				++allyShared;
+			}
+		}
+		if ((allyFights > 0) && (frameA >= lastAidLog + FRAMES_PER_SEC * 10)) {
+			lastAidLog = frameA;
+			circuit->LOG("apex: aid n=%d allyFights=%d shared=%d tgt=%s carried=%d pw=%.0f",
+					(int)units.size(), allyFights, allyShared,
+					(bestTarget != nullptr) ? "yes" : "no", allyCarried, attackPower);
+		}
+	}
+
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		// apex: the anchor does NOT follow the target. This rewrite advanced
@@ -808,10 +850,51 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 	if (GetTarget() != nullptr) {
 		need = std::max(need, threatMap->GetThreatAt(GetTarget()->GetPos()));
 	}
-	need = std::max(need, 1.f) * RESPONSE_MARGIN;
+	// `need` above reads CThreatMap, which this file already documents as
+	// measuring ~0 almost everywhere ("the old checkPower <= GetThreatAt test
+	// never refused anything"). Enemy GROUP influence is the live layer
+	// FindTarget switched to for exactly that reason; the threat map stays as a
+	// floor, since it is not wrong on the occasions it does read.
+	float inflNeed = .0f;
+	for (const CEnemyManager::SEnemyGroup& g : circuit->GetEnemyManager()->GetEnemyGroups()) {
+		if (g.pos.SqDistance2D(tgtPos) < SQUARE(800.f)) {
+			inflNeed += g.influence;
+		}
+	}
+	need = std::max(std::max(need, inflNeed), 1.f) * RESPONSE_MARGIN;
+	inflNeed *= RESPONSE_MARGIN;
+
+	// AT HOME, EVERYONE FIGHTS. THE LEASH IS FOR CHASES.
+	//
+	// apexearth 2026-09-08, watching live: "the enemy is attacking our base. Our
+	// army moves out of the way to let them hit our base, kill the defense
+	// there, and we aren't engaging them. Our army in the area that could
+	// respond is 1600 metal - the enemy in the attack which we can see is 1500
+	// metal. Why the hell aren't we defending ourselves?"
+	//
+	// Measured in that same game: `leash n=32 sent=4 held=10 local=11 inFight=7
+	// need=16 inflNeed=0 foes=46`. Forty-six visible enemies, a pool of
+	// thirty-two, four units sent -- because `need` is the threat read at ONE
+	// POINT and both layers feeding it under-read (the group layer returned zero
+	// outright). Ten guards were then issued CmdMoveTo(post): the army walking
+	// away from its own base while that base is destroyed.
+	//
+	// Sizing an answer is only defensible for a CHASE -- this function's own
+	// stated purpose, quoted from him: "not overcommitting to a chase,
+	// appropriately sizing the group we send after raiders". A fight on our own
+	// ground is the opposite case, and he has said so three times, most plainly
+	// on 2026-08-15: "if our base is being pushed we have to prioritize defense
+	// and meet that army and destroy it."
+	//
+	// So at home the leash does not apply: no sizing, no holding, no post walk.
+	// The test is the one the rest of this file already uses for "our ground".
+	const AIFloat3& homePos = circuit->GetSetupManager()->GetBasePos();
+	const float baseR = mil->GetBaseDefRange();
+	const bool fightAtHome = (homePos.SqDistance2D(tgtPos) < SQUARE(baseR))
+			|| (circuit->GetInflMap()->GetAllyDefendInflAt(tgtPos) > INFL_EPS);
 	std::vector<std::pair<float, CCircuitUnit*>> cands;   // sq distance to target
 	std::vector<CCircuitUnit*> leashed;
-	int unposted = 0, local = 0;
+	int unposted = 0, local = 0, inFight = 0;
 	// The enemies a post can answer: every visible mobile contact. The pool
 	// has ONE target; five groups from five bearings are answered by the
 	// guards whose posts each of them comes within reach of.
@@ -825,6 +908,42 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 		}
 		foes.push_back(e);
 	}
+	// WHAT A GUARD CAN ACTUALLY SHOOT. FindTarget filters candidates by
+	// category, ignore-list and air/water/land reach; this function filtered
+	// nothing, so a ground guard with an aircraft inside its post's reach was
+	// ordered to attack it and spent the fight walking around under a plane it
+	// cannot touch (apexearth 2026-09-08: "our AI also just trying to kill
+	// enemy air, so we stand around worthlessly going in circles never
+	// accomplishing anything"). Same tests as FindTarget, asked per GUARD
+	// rather than per leader, because a pool holds mixed defs and the leader's
+	// answer is not every member's answer.
+	CMap* lmap = circuit->GetMap();
+	auto canEngage = [&](CCircuitUnit* u, CEnemyInfo* e) -> bool {
+		CCircuitDef* ud = u->GetCircuitDef();
+		CCircuitDef* ed = e->GetCircuitDef();
+		if ((ud == nullptr) || (ed == nullptr) || !ud->IsAttacker()) {
+			return false;
+		}
+		if (((ed->GetCategory() & ud->GetTargetCategory()) == 0)
+			|| ((ed->GetCategory() & ud->GetNoChaseCategory()) != 0))
+		{
+			return false;
+		}
+		CCircuitDef* own = circuit->GetCircuitDef(ed->GetId());
+		if ((own != nullptr) && own->IsIgnore()) {
+			return false;
+		}
+		const AIFloat3& up = u->GetPos(frame);
+		const bool weWet = ud->IsPredictInWater(lmap->GetElevationAt(up.x, up.z));
+		const AIFloat3& ep = e->GetPos();
+		if (ed->IsAbleToFly()) {
+			return weWet ? ud->HasSubToAir() : ud->HasSurfToAir();
+		}
+		if (ed->IsInWater(lmap->GetElevationAt(ep.x, ep.z), ep.y)) {
+			return weWet ? ud->HasSubToWater() : ud->HasSurfToWater();
+		}
+		return weWet ? ud->HasSubToLand() : ud->HasSurfToLand();
+	};
 	for (CCircuitUnit* unit : units) {
 		AIFloat3 post;
 		float reach = 0.f;
@@ -832,11 +951,64 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 			++unposted;
 			continue;   // no post: goes with the pool
 		}
+		// A UNIT THAT IS ITSELF IN THE FIGHT DOES NOT WALK OUT OF IT.
+		//
+		// apexearth 2026-09-08: "It'll be a squad being engaged by an enemy squad
+		// and half of our squad walks away while the other half is being attacked
+		// by an army we can probably beat."
+		//
+		// Every distance below is measured from the POST, not from the unit. A
+		// guard that marched here with the pool and is standing in the middle of
+		// the fight has no enemy within reach OF ITS POST and the target is not
+		// within reach OF ITS POST -- so it took the FAR_RANK penalty, sorted
+		// behind every guard still sitting at home, missed the cut, and was then
+		// issued CmdMoveTo(post). The units most committed to the fight were the
+		// ones most reliably ordered out of it, which is exactly what he watched.
+		//
+		// Contact is measured from where the unit IS, and against whichever gun
+		// reaches -- ours or theirs, the same "reachesUs" idiom FindTarget uses.
+		// An enemy that close is already trading with this unit; leaving is the
+		// one thing it must not do.
+		const AIFloat3 upos = unit->GetPos(frame);
+		CEnemyInfo* onMe = nullptr;
+		float onMeSq = -1.f;
+		const float myR = (unit->GetCircuitDef() != nullptr)
+				? unit->GetCircuitDef()->GetMaxRange() : 0.f;
+		for (CEnemyInfo* e : foes) {
+			CCircuitDef* edef = e->GetCircuitDef();
+			const float eR = (edef != nullptr) ? edef->GetMaxRange() : 0.f;
+			const float r = std::max(myR, eR);
+			if (r <= 0.f) {
+				continue;
+			}
+			if (!canEngage(unit, e)) {
+				continue;
+			}
+			const float sq = upos.SqDistance2D(e->GetPos());
+			if ((sq < SQUARE(r)) && ((onMeSq < 0.f) || (sq < onMeSq))) {
+				onMeSq = sq;
+				onMe = e;
+			}
+		}
+		if (onMe != nullptr) {
+			++inFight;
+			if (unit->GetTravelAct() != nullptr) {
+				AttackEnemy(unit, onMe, frame);
+			} else {
+				TRY_UNIT(circuit, unit,
+					unit->CmdAttack(onMe, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+				)
+			}
+			continue;
+		}
 		if (reach > 0.f) {
 			// A contact inside this post's reach is this guard's own fight.
 			CEnemyInfo* nearest = nullptr;   // not `near`: a windef.h macro
 			float nearSq = SQUARE(reach);
 			for (CEnemyInfo* e : foes) {
+				if (!canEngage(unit, e)) {
+					continue;
+				}
 				const float sq = post.SqDistance2D(e->GetPos());
 				if (sq < nearSq) {
 					nearSq = sq;
@@ -872,7 +1044,7 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 	float sent = 0.f;
 	int sentN = 0;
 	for (const auto& c : cands) {
-		if (sent >= need) {
+		if (!fightAtHome && (sent >= need)) {
 			leashed.push_back(c.second);
 			continue;
 		}
@@ -900,8 +1072,8 @@ void CDefendTask::LeashPosts(const AIFloat3& tgtPos)
 	}
 	if ((!leashed.empty() || (local > 0)) && (frame >= lastLeashLog + FRAMES_PER_SEC * 10)) {
 		lastLeashLog = frame;
-		circuit->LOG("apex: leash n=%d sent=%d held=%d local=%d unposted=%d need=%.0f sent_pw=%.0f foes=%d",
-				(int)units.size(), sentN, (int)leashed.size(), local, unposted, need, sent, (int)foes.size());
+		circuit->LOG("apex: leash n=%d sent=%d held=%d local=%d inFight=%d unposted=%d home=%d need=%.0f inflNeed=%.0f sent_pw=%.0f foes=%d",
+				(int)units.size(), sentN, (int)leashed.size(), local, inFight, unposted, fightAtHome ? 1 : 0, need, inflNeed, sent, (int)foes.size());
 	}
 }
 

@@ -241,13 +241,37 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			}
 		}
 		const bool outgunned = (nearStr <= 0.f) || (nearStr > mineNow);
-		if ((hereInfl > fleeInfl) && !outgunned && (ai.frame >= gNextCommHoldLog)) {
+		// HE ONLY LEAVES GROUND THAT IS THEIRS (apexearth 2026-09-07, watching
+		// him stand still from 5:20 to 12:10: "He had no good reason to run.
+		// idk what jank stupid logic that is").
+		//
+		// The two sides of the old test read different populations at different
+		// places. `hereInfl` is a max over a 600-elmo cross of the influence
+		// map, which carries every enemy ever seen -- CEnemyManager retires a
+		// ghost only after TWENTY game-minutes -- so it climbed 0.63 -> 8.04 ->
+		// 33.05 -> 94.09 with nothing within 600 elmos of him, while `nearStr`
+		// correctly read 0.0000 and `outgunned` defaults to true on a zero. The
+		// "is home safer" clause compared that ring maximum against a single
+		// point at home, so it could not refuse either. Structurally the test
+		// could only ever say run, and it did, 24 times.
+		//
+		// SiteHot is this repo's own answer to the same question and every other
+		// danger test already uses it: "theirs means stronger, not merely
+		// present" -- both sides of the comparison read the same layer at the
+		// same point. Standing in his own base among his own army and towers,
+		// ours dominates and he stays; when a real push arrives, theirs exceeds
+		// ours and he leaves that instant. No new number.
+		const float allyHere = ai.GetAllyInflAt(here);
+		const bool theirGround = ai.GetEnemyInflAt(here) > allyHere;
+		if ((hereInfl > fleeInfl) && (!outgunned || !theirGround)
+			&& (ai.frame >= gNextCommHoldLog)) {
 			gNextCommHoldLog = ai.frame + 15 * SECOND;
 			AiLog("apex: commander holding, enemy influence " + formatFloat(hereInfl, "", 0, 2)
-				+ ", near str " + formatFloat(nearStr, "", 0, 4) + " vs his " + formatFloat(mineNow, "", 0, 4));
+				+ ", near str " + formatFloat(nearStr, "", 0, 4) + " vs his " + formatFloat(mineNow, "", 0, 4)
+				+ ", ally " + formatFloat(allyHere, "", 0, 2)
+				+ " vs theirs " + formatFloat(ai.GetEnemyInflAt(here), "", 0, 2));
 		}
-		if ((hereInfl > fleeInfl) && outgunned
-			&& (ai.GetEnemyInflAt(Builder::gHomePos) < hereInfl * 0.5f))
+		if ((hereInfl > fleeInfl) && outgunned && theirGround)
 		{
 			if (ai.frame >= gNextCommFleeLog) {
 				gNextCommFleeLog = ai.frame + 15 * SECOND;
@@ -255,7 +279,12 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 					+ formatFloat(hereInfl, "", 0, 2) + " > "
 					+ formatFloat(fleeInfl, "", 0, 2) + ", near str "
 					+ formatFloat(nearStr, "", 0, 4) + " vs his "
-					+ formatFloat(mineNow, "", 0, 4));
+					+ formatFloat(mineNow, "", 0, 4)
+					// Both sides of the ground test, so a misfire is one line, not
+					// a position trace (this one cost a whole session to find).
+					+ ", ally " + formatFloat(allyHere, "", 0, 2)
+					+ " vs theirs " + formatFloat(ai.GetEnemyInflAt(here), "", 0, 2)
+					+ ", home " + formatFloat(ai.GetEnemyInflAt(Builder::gHomePos), "", 0, 2));
 			}
 			IUnitTask@ bail = Builder::Retreat(unit);
 			if (bail !is null)

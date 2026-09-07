@@ -43,7 +43,12 @@ def main() -> int:
     busy = subprocess.run(["powershell", "-NoProfile", "-Command",
                            "@(Get-Process spring-headless,spring -ErrorAction SilentlyContinue).Count"],
                           capture_output=True, text=True).stdout.strip()
-    if busy.isdigit() and int(busy) > 0:
+    # A LANE deploys into its own folder, so an engine another lane is running
+    # never has this DLL loaded and the refusal does not apply (tools/lane.py).
+    import os.path as _osp
+    sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
+    import lane as _lane
+    if busy.isdigit() and int(busy) > 0 and not _lane.name():
         print(f"SMOKE FAIL: {busy} engine processes are running -- deploy cannot replace the DLL")
         return 1
     status = subprocess.run([sys.executable, str(REPO / "tools" / "deploy_ai.py"), "status"],

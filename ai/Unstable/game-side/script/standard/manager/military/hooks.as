@@ -264,7 +264,27 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return NoteElect("mass.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
-		return NoteElect("mass.attack", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+		// `check` IS THE REINFORCE HATCH, AND MELEE NAILED IT SHUT.
+		//
+		// TaskF::Defend's three-argument form is Defend(check, promote, power).
+		// CDefendTask::Update tests `!GetTasks(check).empty()` to decide whether
+		// this pool may join an attack that already exists -- and NOTHING in this
+		// codebase ever enqueues a MELEE task. The hold branch above relies on
+		// exactly that fact deliberately (see its comment); copying the same
+		// MELEE into the ATTACK branch's `check` slot made the clause
+		// permanently false, so the only remaining way out of defence was a
+		// single pool, alone, reaching its whole power bar.
+		//
+		// Stock passes the TWO-argument form, which sets check = promote =
+		// ATTACK: the instant one pool promotes, every other pool sees an attack
+		// exists and merges into it, and one pool bootstraps the army. That is
+		// how BARb arrives at our base while we hold 2,000 metal of DEFEND at
+		// home with attack=0/0/0 (fightcensus, 20260907-202519, final samples).
+		//
+		// The guard the author actually wanted is untouched and now reachable:
+		// apex_reinforce_frac still demands half a bar before a pool leaves, so
+		// this is not the old any-attack-exists shortcut that fed solos.
+		return NoteElect("mass.attack", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::ATTACK,
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack)));
 	}
 	return NoteElect("stock", aiMilitaryMgr.DefaultMakeTask(unit));

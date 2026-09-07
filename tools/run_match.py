@@ -40,7 +40,12 @@ import bar_env
 from bar_env import REPO
 
 MATCHES = REPO / "matches"
-ENGINE_WRITE_DIR = MATCHES / "_engine"
+# A LANE gets its own engine write dir so two sessions do not interleave into
+# one infolog.txt (tools/lane.py); without one this is matches/_engine.
+import os.path as _osp
+sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
+import lane as _lane
+ENGINE_WRITE_DIR = _lane.write_dir()
 
 # Faction names as they appear in BAR's sidedata.
 SIDES = ["Armada", "Cortex"]

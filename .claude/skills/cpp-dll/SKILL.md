@@ -18,6 +18,16 @@ about this layer — but respect its failure modes, which are silent or fatal.
   the parent repo.
 - **`cpp/src/circuit/`** — the version-controlled mirror (source of truth
   for git). After any vendor edit: `python tools/sync_cpp.py pull`.
+  **This is not optional.** A vendor edit that is not mirrored exists in
+  exactly one gitignored directory, and the next `sync_cpp.py apply` — from
+  this session or another one — destroys it. That happened 2026-09-07: the
+  instrument's numbers survived in the deployed binary and its source did not.
+- **Another session may be editing the same tree.** If one might be, claim a
+  lane first: `python tools/lane.py init <name>` gives you a private
+  `BARb-<name>` source, a private build output and a private deploy slot, then
+  every tool here follows it with no flags. `docs/28-parallel-sessions.md`.
+  Without one, two sessions build a single DLL containing both their changes
+  and each measures the other's work as its own.
 - Key files: `task/fighter/SquadTask.cpp` (wall, regroup, standoff ring,
   kite), `task/fighter/AttackTask.cpp` (engage decision, DEPLOY_SLACK,
   assembly gate, flanking, attack-break), `module/MilitaryManager.cpp`,

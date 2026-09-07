@@ -817,6 +817,25 @@ float PatrolShort()
 	return (cover > miss) ? cover : miss;
 }
 
+// CAN THIS UNIT HOLD A GUARD POST AT ALL?
+//
+// The same test Military::CoverUnitDef uses to decide what the coverage need is
+// DENOMINATED in -- so the thing we price and the thing we ask for are the same
+// class of unit. A flyer cannot stand on a building, and something with no
+// surface weapon cannot answer what walks up to one; CoverPerMetal is only
+// speed over cost, which an aircraft or a cheap AA bot wins outright while
+// covering nothing.
+//
+// Without this, coverage priced and role-weighted every candidate alike, and
+// bought 1,730 metal of anti-air against an enemy with no aircraft
+// (production.as, 2026-09-08).
+bool CoverCapable(int di)
+{
+	return Catalog::gAvailable[di] && Catalog::gMobile[di] && !Catalog::gFlyer[di]
+		&& !Catalog::gBuilder[di] && LineCombat(di)
+		&& (Catalog::gSurfT[di] > 0.01f);
+}
+
 // Ground a unit can cover per metal spent, against the field's own mean.
 float CoverPerMetal(int di)
 {

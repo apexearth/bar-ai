@@ -388,17 +388,33 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	const bool isSplitAnchor = (fightType == FightType::DEFEND) && utils::is_valid(position);
 	const float anchorRadius = isSplitAnchor ? circuit->GetTunable("apex_hot_radius", 1000.f) : .0f;
 
+	// WHY A MERGE DID NOT HAPPEN, per reason (apexearth 2026-09-07: "our army
+	// tends to be very spread out so we die to them piece by piece"). Every
+	// combat unit starts as its own one-unit pool -- CMilitaryManager::Enqueue
+	// builds a fresh CDefendTask per unit -- and merging is the ONLY way a
+	// defence pool grows, through the gates below. Which of them keeps the army
+	// in pieces is not knowable from the source, so count them before changing
+	// any of them.
+	int rWeaker = 0, rAssign = 0, rAnchor = 0, rTerrain = 0, rLine = 0, rFar = 0, rSeen = 0;
+
 	const std::set<IFighterTask*>& tasks = static_cast<CMilitaryManager*>(manager)->GetTasks(fightType);
 	for (const IFighterTask* candidate : tasks) {
-		if ((candidate == this)
-			|| (candidate->GetAttackPower() < attackPower)
-			|| !candidate->CanAssignTo(leader))
-		{
+		if (candidate == this) {
+			continue;
+		}
+		++rSeen;
+		if (candidate->GetAttackPower() < attackPower) {
+			++rWeaker;
+			continue;
+		}
+		if (!candidate->CanAssignTo(leader)) {
+			++rAssign;
 			continue;
 		}
 		if (isSplitAnchor && utils::is_valid(candidate->GetPosition())
 			&& (position.distance2D(candidate->GetPosition()) > anchorRadius))
 		{
+			++rAnchor;
 			continue;
 		}
 		const ISquadTask* candy = static_cast<const ISquadTask*>(candidate);
@@ -407,6 +423,7 @@ ISquadTask* ISquadTask::CheckMergeTask()
 		const AIFloat3& taskPos = utils::is_valid(tp) ? tp : pos;
 
 		if (!terrainMgr->CanMoveToPos(area, taskPos)) {  // ensure that path always exists
+			++rTerrain;
 			continue;
 		}
 
@@ -418,14 +435,32 @@ ISquadTask* ISquadTask::CheckMergeTask()
 				(attackPower + candidate->GetAttackPower())
 						* circuit->GetTunable("apex_merge_threat", 0.5f));
 		if (!query->IsSafeLine(pos, taskPos, mergeThreat)) {  // ensure safe passage
+			++rLine;
 			continue;
 		}
 
 		// Check time-distance to target
 		float sqDistCost = pos.SqDistance2D(taskPos);
-		if ((sqDistCost < metric) && (sqDistCost < sqMaxDistCost)) {
+		if (sqDistCost >= sqMaxDistCost) {
+			++rFar;
+			continue;
+		}
+		if (sqDistCost < metric) {
 			task = candy;
 			metric = sqDistCost;
+		}
+	}
+
+	if ((task == nullptr) && (rSeen > 0)) {
+		CMilitaryManager* mmL = static_cast<CMilitaryManager*>(manager);
+		if (frame >= mmL->GetMergeLogAt()) {
+			mmL->SetMergeLogAt(frame + FRAMES_PER_SEC * 10);
+			circuit->LOG("apex: merge-miss ft=%d n=%d pw=%.0f cands=%d weaker=%d assign=%d"
+					" anchor=%d terrain=%d line=%d far=%d ran=%u offbeat=%u unsafe=%u disp=%u",
+					(int)fightType, (int)units.size(), attackPower, rSeen,
+					rWeaker, rAssign, rAnchor, rTerrain, rLine, rFar,
+					mmL->GetMergeRan(), mmL->GetMergeSkip(0), mmL->GetMergeSkip(1),
+					mmL->GetMergeSkip(2));
 		}
 	}
 
@@ -444,9 +479,20 @@ ISquadTask* ISquadTask::GetMergeTask()
 	// that killed it. Tunable so the cadence can be measured, not argued.
 	const int every = std::max(2, (int)manager->GetCircuit()
 			->GetTunable("apex_merge_every", 8.f));
+	CMilitaryManager* mmG = static_cast<CMilitaryManager*>(manager);
 	if ((updCount % every == 1) || nearMiss) {
-		return IsMergeSafe() ? CheckMergeTask() : nullptr;
+		if (!IsMergeSafe()) {
+			mmG->NoteMergeSkip(1);
+			return nullptr;
+		}
+		mmG->NoteMergeRan();
+		return CheckMergeTask();
 	}
+	// THE HALF THE MISS CENSUS CANNOT SEE. A weak pool is the one meant to
+	// initiate -- the loop above refuses to merge into anything weaker, so the
+	// small squad must find the big one. If it is off-cadence or unsafe it
+	// never asks, and no merge-miss line is ever printed for it.
+	mmG->NoteMergeSkip(0);
 	return nullptr;
 }
 

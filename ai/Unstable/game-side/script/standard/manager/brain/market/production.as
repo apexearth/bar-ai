@@ -834,15 +834,33 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per
 			// metal there is -- and it fades as the fleet fills.
-			ppc *= 1.f + tCoverWorth * CoverPerMetal(d) * tPatrolShort;
+			if (CoverCapable(d))
+				ppc *= 1.f + tCoverWorth * CoverPerMetal(d) * tPatrolShort;
 			// THE COVERAGE SHARE OF THE GAP IS PRICED BY COVER, NOT BY COMBAT
 			// (apexearth: "quantify the value of grunts when it comes to
 			// defending a base from raiders. It is the speed that they have...
 			// being able to cover more of the base structures"). Ground
 			// covered per metal is speed over cost; the share of the gap that
 			// is coverage is priced on that axis outright, the rest as before.
-			if (coverShare > 0.f)
-				ppc *= pow(CoverPerMetal(d), coverShare);
+			// ...BUT ONLY FOR A UNIT THAT CAN ACTUALLY HOLD A POST. coverShare is
+			// one scalar for the whole election, so every candidate got the
+			// coverage axis whether or not it can answer what threatens a
+			// building. CoverUnitDef -- the function that decides what the
+			// coverage need is DENOMINATED in -- already excludes flyers and
+			// anything that cannot fight on the ground, and the need itself is
+			// quoted in armfast. The demand model knows a flyer cannot stand a
+			// guard post; the pricing model did not, and CoverPerMetal is just
+			// speed-over-cost, which an aircraft wins outright.
+			//
+			// This is the same argument the water case already makes 80 lines
+			// up ("A WEAPON THAT ONLY FIRES INTO WATER answers what FLOATS"),
+			// one axis over: a Jethro and a Freedom Fighter answer what flies,
+			// and the base's raider-coverage gap is not their gap. Measured
+			// 2026-09-08: a Freedom Fighter reached p=16515 against the line
+			// mean and scored v=357672 where the Banshee beside it scored 3057.
+			const float covD = CoverCapable(d) ? coverShare : 0.f;
+			if (covD > 0.f)
+				ppc *= pow(CoverPerMetal(d), covD);
 			// EYES (apexearth: "we tend to lack scouts... need some kind of
 			// value requirement on raider style units and scouts"). Sight is
 			// what every other sense in this AI is built on -- the danger
@@ -952,7 +970,27 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The coverage share of the gap is not a composition question: a
 			// guard by every building is asked for by the base, whatever
 			// role share the army's mix would give that unit.
-			roleW = coverShare + (1.f - coverShare) * roleW;
+			// COVERAGE MUST NOT REVIVE A ROLE THE MODEL PRICED AT ZERO.
+			//
+			// This line ran immediately after the portfolio-floor guard above
+			// and overwrote its answer: coverShare is 1.0 whenever the base has
+			// unmet guard coverage, so roleW became 1.0 for EVERY candidate,
+			// AA included. The floor fix took AA from 0.05 to 0.00 and this took
+			// it to 1.00 -- worse than the bug that was fixed.
+			//
+			// Measured 2026-09-08, one factory two samples apart, with
+			// enemyAirFresh=0 and enemyAirRaw=0 on all 48 rolemix lines:
+			//   armjeth=0(p10.166,r0.00,a0.92)          <- role model, correct
+			//   armjeth=6969.69(g871.21,p80.268,r1.00)  <- coverage overwrote it
+			// 42 of 177 production decisions that game were anti-air, 1,730
+			// metal of it, against an enemy that never built an aircraft
+			// (apexearth: "we have 17 AA and the enemy has no air. I've asked
+			// for us to fix this multiple times").
+			//
+			// Same predicate as the price axis: a unit that cannot hold a post
+			// gets no coverage share, and its role model answer stands.
+			const float covR = CoverCapable(d) ? coverShare : 0.f;
+			roleW = covR + (1.f - covR) * roleW;
 			float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
 					* (ppc / linePPC) * roleW * stakeMul
 					/ (1.f + have * 0.05f) * eFeedA;
@@ -972,6 +1010,32 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						+ ",a" + formatFloat(affM, "", 0, 2) + ")";
 				continue;
 			}
+			// COST WAS DIVIDED OUT TWICE, AND IT MADE EVERY EXPENSIVE UNIT
+			// UNBUYABLE.
+			//
+			// `ppc` is UnitPPC -- power PER COST -- so `gainA` above is already
+			// a per-metal quantity. Dividing it by cost again makes the score
+			// proportional to power / cost^2, and a unit is then punished by the
+			// SQUARE of its price. Measured 2026-09-08 off the army rank line in
+			// 20260907-203921, from a standing T2 bot lab with Fatboy available:
+			//
+			//   armamph (Platypus, 260m)  g=867.87  ->  867.87/260  = 3.338
+			//   armfboy (Fatboy,  1400m)  g= 44.01  ->   44.01/1400 = 0.031
+			//
+			// Fatboy last of nine, at 1/106th the Platypus. The cost ratio alone
+			// (1400/260)^2 is 29x of that before any question of which unit is
+			// actually better. apexearth, watching: "we could have made a fatboy
+			// easily and kicked the enemies butt but we made like 1 hound, then
+			// a fuckin platypus which is USELESS here."
+			//
+			// `v = gain / cost` is the right shape and every other want kind
+			// uses it, so the half that is wrong is the GAIN: it must be the
+			// absolute power this unit adds, not power per metal. Multiplying by
+			// cost here restores that -- vA then comes out proportional to
+			// ppc, which is value per metal, exactly once. This also makes
+			// candGain comparable with the other kinds' absolute gains, which it
+			// was not before.
+			gainA *= Catalog::gCostM[d];
 			const float vA = gainA / Catalog::gCostM[d];
 			candDef.insertLast(d);
 			candV.insertLast(vA);
@@ -1162,7 +1226,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " restore=" + formatFloat(rezRestore, "", 0, 2)
 				+ " pLine=" + formatFloat(pLine, "", 0, 1)
 				+ " pMedic=" + formatFloat(pMedic, "", 0, 1)
-				+ " gap=" + int(armyGap)
+				+ " cov=" + formatFloat(coverShare, "", 0, 2)
+					+ " gap=" + int(armyGap)
 				+ " repairPs=" + formatFloat(gRezRepairRate, "", 0, 2)
 				+ " wreckPs=" + formatFloat(gRezWreckRate, "", 0, 2)
 				+ " v=" + formatFloat(vM * 1000.f, "", 0, 2)

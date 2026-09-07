@@ -90,6 +90,7 @@ conclusion each one produced.
 | **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit · **S19** the deployed script can change mid-sweep — classify each game from its own log |
 | **run a sweep of a tunable** | **S8** — deploying the AI does NOT deploy the gadget; unpublished modoptions run the default with no error |
 | **launch or kill a run** | `docs/26-working-rules.md` — one match per write-dir, `pgrep`/`pkill` are dead here, `-u` when logging |
+| **start a session when another may be running** | `python tools/lane.py init <name>` — `docs/28-parallel-sessions.md`. Two sessions share one build tree, one deploy target and one write dir; a lane gives each its own. A shared-tree edit was destroyed 2026-09-07 |
 | **touch army / fighting** | `docs/24-how-units-fight.md` first, then `ai-military`, `ai-army-composition` |
 | **touch what gets built** | `ai-auction`, `ai-eco-pricing`, `docs/22-macro-demand.md`. Composition is decided in `manager/brain/market/`, **not** in `factory.json` — `docs/04-json-config-reference.md` |
 | **touch where buildings land** | `ai-placement`, `ai-risk-model` |
@@ -132,6 +133,7 @@ python tools/comment_audit.py                   # run reports + essays in YOUR d
 python tools/context_size.py --since            # what the repo costs to read
 python tools/unitdef.py <unit> [--builders|--builds|--trees]   # 8 lines
 python tools/deploy_ai.py status|deploy Unstable|pull Unstable|gadgets|patches
+python tools/lane.py init <name>|status|list|drop <name>   # private build/deploy/run slot
 python tools/dashboard.py                       # his UI: runs, launch, deploy, tunables
 python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1     # add --per-side 8 --watch to watch

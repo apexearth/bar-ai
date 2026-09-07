@@ -183,6 +183,10 @@ public:
 	unsigned guardFlipsMarginal = 0;
 	float guardFlipDist = 0.f;
 	int guardFlipLogAt = 0;
+	int mergeLogAt = 0;
+	// 0 = off-cadence, 1 = IsMergeSafe refused, 2 = dispatched pool
+	unsigned mergeSkip[3] = {0, 0, 0};
+	unsigned mergeRan = 0;
 	int guardSumLogAt = 0;
 	void DispatchRaids();
 	// Guard posts, assigned by script (military/guardposts.as): where a home
@@ -207,6 +211,15 @@ public:
 
 	void SetBaseDefRange(float range) { defence->SetBaseRange(range); }
 	float GetBaseDefRange() const { return defence->GetBaseRange(); }
+	// Shared cadence and counters for ISquadTask's merge census. They live on
+	// the manager because the tasks they measure are created and destroyed
+	// constantly, and the question is about the fleet, not one squad.
+	int GetMergeLogAt() const { return mergeLogAt; }
+	void SetMergeLogAt(int f) { mergeLogAt = f; }
+	void NoteMergeSkip(int which) { ++mergeSkip[which]; }
+	void NoteMergeRan() { ++mergeRan; }
+	unsigned GetMergeSkip(int which) const { return mergeSkip[which]; }
+	unsigned GetMergeRan() const { return mergeRan; }
 	float GetCommDefRadBegin() const { return defence->GetCommRadBegin(); }
 	float GetCommDefRad(float baseDist) const { return defence->GetCommRad(baseDist); }
 	unsigned int GetGuardTaskNum() const { return defence->GetGuardTaskNum(); }
