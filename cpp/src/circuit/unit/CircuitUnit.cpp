@@ -480,14 +480,16 @@ bool CCircuitUnit::NoteOrder(OrdKind kind, short options, const AIFloat3& pos, i
 	// extra UnitIdle the engine raises when it finishes a move the unit has
 	// already arrived at, and that event stream is not proven identical.
 
-	// THE ARBITER. A centre ranked below the one whose decision the unit is
+	// THE ARBITER. OFF by default: it refuses ~450 orders a game and no
+	// measurement showed that helping. A centre ranked below the one whose
+	// decision the unit is
 	// still carrying out does not get to overwrite it. Without this the last
 	// writer won, which is why a corrected standoff ring measured perfect and
 	// changed nothing visible: the unit was re-ordered before it ever arrived.
 	// The window is the same 3s the census uses to call a re-send a repeat --
 	// bounded, so a unit can never be held longer than one decision's life.
 	const int prio = OrdSrcPrio(static_cast<int>(src));
-	if ((prio >= 0) && (circuit->GetTunable("apex_order_arbiter", 1.f) > 0.f)) {
+	if ((prio >= 0) && (circuit->GetTunable("apex_order_arbiter", 0.f) > 0.f)) {
 		const int hold = int(circuit->GetTunable("apex_intent_hold", 3.f) * FRAMES_PER_SEC);
 		const int age = frame - intentFrame;
 		if ((intentPrio > prio) && (age >= 0) && (age < hold)) {
