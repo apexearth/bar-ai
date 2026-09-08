@@ -187,9 +187,17 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			Log(want, "join-site");
 			return cover;
 		}
-		++gCovered;
-		Log(want, "covered");
-		return null;
+		// A site nobody more can help at, while the economy is short: open the
+		// next one. Refused as covered, a cheap solar was strictly serial for
+		// the whole team at 400-650 e/s income (Isthmus minutes 11-15, pull
+		// 100-140 e/s over income, 44 advanced-solar elections held serial
+		// and their askers falling back to radars).
+		if (!(parallel && !spotWork && (bt != Task::BuildType::MEXUP))) {
+			++gCovered;
+			Log(want, "covered");
+			return null;
+		}
+		Log(want, "par-site");
 	}
 	// A FRAME OF OURS IS ALREADY UP HERE -- FINISH IT, NEVER START A SECOND.
 	// The metal in it is spent, and the alternative is what turns into two of

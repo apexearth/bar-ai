@@ -714,8 +714,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// two things at once: a deficit nothing in flight will cover is the other,
 	// and it is the one that mattered, because a stall guarantees the bank is
 	// NOT overflowing and so guaranteed the answer was serialized.
+	// Energy short of what is ordered AND a bank that covers the rung: the
+	// metal is there to feed a second site. MCostScale reads 1 in a stall
+	// (requests outrun income while the bank sits at 90%), so the parallel
+	// flag was off exactly when the deficit needed it.
 	bool par = (MCostScale() < 1.f)
-			|| ((w.kind == WK_ENERGY) && EnergyShortOfOrdered());
+			|| ((w.kind == WK_ENERGY) && (EnergyShortOfOrdered()
+				|| ((EnergyDeficitE() > 0.f) && (w.def !is null)
+					&& Requests::BankCovers(w.def))));
 	// ...and OVERFLOWING ENERGY opens them for the one building that exists to
 	// absorb it. The test above reads the METAL side only -- MCostScale is a
 	// metal stall -- so a converter, whose entire trigger is energy we are
@@ -812,12 +818,18 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Zero-E rungs first whatever they priced: mid-stall the cheap solar is
 		// the answer even when a dearer generator outranks it, and the dear one
 		// is only reached if no solar can be placed at all.
+		// The dear rungs are never the stall answer below the solar bar: this
+		// ladder handed a 5,000-E advanced solar to a builder whose solar was
+		// at its cap, at 57 e/s, and the fleet folded onto it for three
+		// minutes with the bank at 4-22.
+		const bool zeroOnly = aiEconomyMgr.energy.income
+				< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E);
 		for (uint pass = 0; pass < 2; ++pass) {
 		for (uint k = 0; k < gEAlt.length(); ++k) {
 			const int ad = gEAlt[k];
 			if ((w.def !is null) && (ad == int(w.def.id)))
 				continue;
-			if ((pass == 0) && (Catalog::gCostE[ad] > 0.f))
+			if (((pass == 0) || zeroOnly) && (Catalog::gCostE[ad] > 0.f))
 				continue;
 			CCircuitDef@ adef = Catalog::Def(ad);
 			if (adef is null)
