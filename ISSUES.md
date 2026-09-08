@@ -80,6 +80,11 @@ instrument shows next.
   it, and an energy-costing build's priced duration is stretched by the
   stall's throttle. Isthmus 12 games: poor-income stall 22% -> 19%, rich
   51% -> 32%, minute-14 share 27.8% -> 22.6%, production level.
+  Altair regression check on the same commit (12 games): metal produced
+  10,839 (earlier batteries 11,335-11,910), income 23.4 (24-34), stalled
+  7.1% (8-9%), poor-income stall 8% (was 3%), rich 9% (was 21%); BARb
+  8,812 / 16.5 / 5.5%. Inside the spread on production, but the early
+  stall on Altair should be re-read after the next change there.
   Still open there: the sense want elects a radar 37 times for 9 built
   (refused "full", re-elected every draw -- a wasted election per builder
   per cycle); and the air-plant opening (Whirlwinds at 4,600 E) remains the
