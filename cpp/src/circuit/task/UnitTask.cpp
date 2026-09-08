@@ -6,6 +6,7 @@
  */
 
 #include "task/UnitTask.h"
+#include <cstring>
 #include "task/IdleTask.h"
 #include "task/builder/BuilderTask.h"
 #include "module/TaskModule.h"
@@ -363,6 +364,10 @@ void IUnitTask::Dead()
 
 void IUnitTask::Abort()
 {
+	// Only the script calls this; without a note every such death reads "?".
+	if ((type == Type::BUILDER) && (std::strcmp(static_cast<IBuilderTask*>(this)->GetDeathNote(), "?") == 0)) {
+		static_cast<IBuilderTask*>(this)->SetDeathNote("script-abort");
+	}
 	manager->AbortTask(this);
 }
 
