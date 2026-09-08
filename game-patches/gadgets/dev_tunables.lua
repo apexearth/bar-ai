@@ -327,6 +327,13 @@ local NAMES = {
 	"apex_defend_aid",     -- DefendTask.cpp: a guard pool elects the fight an ally is already in (1)
 	-- Army splitting: read in the fight C++ but never published, so S8 applied --
 	-- they ran their defaults with no error and could not be switched off.
+	-- The constructor floor (2.7 + income/44). Read in production.as but never
+	-- published, so it could not be swept: apexearth 2026-09-08 "i suspect we
+	-- arent making enough cons and fail to expand properly".
+	"apex_con_base",
+	"apex_con_per_m",
+	"apex_t2_con_base",
+	"apex_t2_con_per_m",
 	"apex_army_split",
 	"apex_split_cd",
 	"apex_split_hold",

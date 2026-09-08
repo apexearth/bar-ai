@@ -529,6 +529,39 @@ collecting over the stake horizon. A tower within reach of the spot raises it
 directly, so cover makes the next claim beside it worth more. 0 disables, which
 is how the A/B control is run.
 
+### `TUNE_LAVA` = 1.f
+
+Master switch for the rising-lava tide (`manager/lava.as`). On a map running
+BAR's `map_lava` gadget the AI samples its public `lavaLevel` param each second
+and learns the schedule: the ramp speed is the climb it has measured, and the
+level a climb ENDS at is a target the gadget reached and held, so the highest of
+those is the ceiling. One output, `Eta(height)`, prices three consumers:
+
+* `StreamRisk` (coverage.as) takes it as a floor, so every survival discount in
+  the market sees it. A mex is bought against walk-plus-build and barely
+  notices a tide five minutes out; a fusion is bought against its payback and
+  is worthless on the same ground.
+* `PfRebuild` (protect_field.as) discounts an asset's defence worth by the
+  share of the stake horizon it survives, so the basin earns a light gun.
+* `ProbedSite` (sites.as) refuses ground that floods before the build pays for
+  itself, then retries without that filter so a flooded map still gets its
+  generators. A hard "not under the surface right now" veto also sits in the
+  C++ site predicate (`BuilderTask.cpp`), catching the whole farm — every
+  generator, converter and nano the lattice is free to move — and exempting the
+  sites the script chose deliberately, which are filtered above instead.
+
+Kept OUT of `HazardAt`, and not multiplied by `ShortfallAt`: that field drives
+defence gain, and a hazard turrets cannot answer would read there as a reason
+to buy turrets.
+
+Its limit is an escalating rhythm's NEXT step (Special Hotstepper climbs
+120 → 250 → 400 → 880). Once two crests materially escalate it stops claiming a
+ceiling and projects every height at the ramp speed; before that it will lose
+buildings to the first escalation.
+
+0 disables every price and placement while the sense keeps logging, which is
+the only way to A/B this on the same map.
+
 ### `TUNE_SPACE_RENT` = 2.f
 
 Rent a building pays for standing on DEFENDED ground: covering turrets' metal
@@ -1014,6 +1047,37 @@ it. What makes a producing mex worth more to lose than its build cost.
 RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
 insures something before the first loss teaches us. His "combination of enemy
 aggression and how well defended we are" -- this is the floor half.
+
+### `TUNE_HZ_APPROACH` = 0.f
+
+Hazard floor from enemy formations **walking at** this ground:
+`horizon / ETA`, clipped at 1, weighed by their mobile metal against
+`our army + cover here` — the same mass ratio the presence term already uses.
+`horizon` is `apex_exposed_loss_s`, which `gRkAnchor` is already the reciprocal
+of, so `p = 1` means "here within the window, certain" and lands hazard on the
+anchor. No new constant.
+
+apexearth, 2026-09-07: *"when enemies are getting closer and closer to our base
+and we're at T2 we really really need to try and making T2 or T3 defense…
+it becomes a life/death situation."* Nothing in the risk field could hear that.
+`HazardWith`'s loss term reads what has **already** been destroyed here, and
+its presence term is scaled by `GradAt`, which measures distance to their
+**base** and is zero at ours by construction. Measured, Frozen Ford minute
+21–26 of `20260907-175233`, while the base was being dismantled — four mexes
+down to one, economy 10,022 → 7,314, 1,148 / 2,251 / 2,337 metal of losses per
+sample: `home[hazard=1.25/ks]` every line. 1.25/ks **is** `RISK_FLOOR/120`.
+Defence gain over the same window: 0.03. Static defence ended that game at
+**1.7% of spend against BARb's 15.9%**.
+
+Evidence, never a prior: group data is LOS-slaved, so a wave we cannot see
+reads zero here and leaves the field exactly as it was. That is what keeps it
+out of the class of prior that repriced every want and cost 87% of standing
+army — it cannot fire where nothing was seen. It is a floor, so it can only
+raise. Mobile metal only (`GetEnemyGroupCost` counts the group's buildings,
+and `velVec` is its fastest member, so a group centred on their base would
+otherwise walk its whole economy at us at scout speed).
+
+Default and A/B: see below.
 
 ### `TUNE_ALLY_SHARE` = 1.f
 
@@ -1707,3 +1771,41 @@ running A* on every in-base hop looks actively worse rather than neutral.
 
 Defaulted OFF. The `apex: pathskip` census stays: the anomaly is real and worth
 knowing about, it is simply not what parks builders.
+
+## `apex_def_eco_s` = 120, `apex_bp_headroom` = 1.0 — MEASURED, both raised, both worse (2026-09-08)
+
+BARb outspends us badly in two categories, measured over 16 games of
+`reverted-long`, per game:
+
+| | us | BARb |
+|---|---|---|
+| static defence | 1,885 | **4,922** (2.6x) |
+| build power | 2,831 | **3,718** (1.3x) |
+| bank sitting >90% full | 12% of samples | 3% |
+
+apexearth read the same numbers and called both: "the build power is a genuine
+issue... it means they can build more army later and we fail to spend perhaps."
+The bank figure supports the mechanism -- our metal pools because the lathes
+cannot absorb it.
+
+Both were raised to the measured gap (`apex_def_eco_s` 120 -> 300,
+`apex_bp_headroom` 1.0 -> 1.4), separately and together, against BARb:stable:hard:
+
+| arm | default | +BP | +defence | +both |
+|---|---|---|---|---|
+| 1v1 big maps | 0% | 14% | 12% | 0% |
+| 2v2 | 30% | 12% | **0%** | -- |
+| **1v1 small maps** | **64%** | -- | -- | **25%** |
+
+Neither rescues an arm we lose; defence makes 2v2 strictly worse; and together
+they cut the arm we WIN from 64% to 25% over 12 decided games, the largest
+sample in the sweep.
+
+**The gap is not a deficiency.** BARb spends that way because it is BARb's
+strategy; the metal comes out of the army that is actually winning our games.
+Do not re-open this by pointing at the composition table -- a category where we
+spend less than the opponent is not evidence that we should spend more.
+
+Left at the defaults. The team-game and big-map failures are real (0% at 4v4 and
+8v8, before AND after the fight revert -- see docs/30) but this is not their
+cause.
