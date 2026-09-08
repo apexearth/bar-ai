@@ -85,6 +85,10 @@ instrument shows next.
   7.1% (8-9%), poor-income stall 8% (was 3%), rich 9% (was 21%); BARb
   8,812 / 16.5 / 5.5%. Inside the spread on production, but the early
   stall on Altair should be re-read after the next change there.
+  Then (supply discount for stuck generators, EMakeInFlight): Isthmus 12
+  games poor-income stall 19% -> 15%, rich 32% -> 22%, minute-14 share
+  22.6% -> 17.2%, production +4%. Lab and vehicle openings now sit at 6-7%
+  poor-income stall; air openings at 23% are the whole remainder.
   **The geo next to the base, started and abandoned** (his watched seed 12,
   5.2 min): `apex: stuck -- armck held armgeo progress=0.11 toSite=127
   buildDist=130 still 30s` -- the constructor stood 127 elmos from the vent
