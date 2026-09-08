@@ -411,3 +411,17 @@ in frames fires on the artefact; the 30-second parked-builder population that
 three sessions chased was partly this. The stuck watch now sizes its wait to
 the lag it measures in the game it is in. Read idle time from a `--speed 1`
 game or a watched one, never from a battery.
+
+## S25 — `.barai-lane` is ONE file per checkout, so every session shares the "active" lane
+
+`lane.py init <name>` writes the repo-root `.barai-lane`, and every tool reads
+it. Four sessions on 2026-09-08 all read `comm`: an unnamed `deploy`, `build_dll`,
+`sync_cpp.py pull` and the live-log write dir all followed whichever session
+had run `init` last, and two sessions believed they held the same lane. One
+session's AngelScript edits were overwritten in the shared tree and survived
+only in a lane snapshot; a mirror pull from a stale lane reverted committed
+C++ (bar-ai-be, bar-ai-19). The isolation docs/28 describes is per lane, not
+per session, and the file cannot tell sessions apart. Until lane.py keys the
+lane to the session: never rely on the file -- prefix every lane-following
+tool with `BARAI_LANE=<name>` (the environment wins over the file) and name
+the variant on every deploy/run (`deploy lane-<name>`, `--a Apex<name>:lane-<name>:standard`).

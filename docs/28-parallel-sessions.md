@@ -3,6 +3,12 @@
 Several Claude sessions work this repo at once. Four things are shared that are
 not safe to share, and each has already produced a wrong answer.
 
+
+> **2026-09-08 (S25):** `.barai-lane` is one file per checkout, shared by every
+> session in it. `init` reassigns the active lane for all of them at once. Pass
+> `BARAI_LANE=<name>` on every command and name the lane variant explicitly;
+> treat the file as a default for a lone session only.
+
 ## Claim a lane, then forget about it
 
 ```bash
