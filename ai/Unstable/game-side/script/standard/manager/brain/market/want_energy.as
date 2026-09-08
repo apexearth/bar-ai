@@ -336,10 +336,23 @@ float EMakeInFlight()
 		return gEMakeVal;
 	// Ledger COMING rows (flipped 2026-08-27): an orphaned generator frame
 	// is energy on the way exactly as an ordered one is -- nanos finish it.
+	// Energy-costing generation counts only at the share its own bill can be
+	// fed: ordered advanced solars stuck at a dry bank read as hundreds of
+	// e/s of coming supply, which priced the nanos that kept them stuck
+	// (seed 12, minutes 12-19: nano gain at its full 17.2 with the bank at 1).
+	float s = 1.f;
+	{
+		const float need = aiEconomyMgr.energy.pull + EDrainInFlight();
+		const float have = aiEconomyMgr.energy.income + aiEconomyMgr.energy.current / 30.f;
+		if ((need > have) && (have > 0.f))
+			s = have / need;
+	}
 	float e = 0.f;
 	for (uint i = 0; i < ComLen(); ++i) {
-		if (gComState[i] != CS_FINISHED)
-			e += Catalog::gMakeE[gComDef[i]];
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		e += Catalog::gMakeE[d] * ((Catalog::gCostE[d] > 1.f) ? s : 1.f);
 	}
 	gEMakeFrame = ai.frame;
 	gEMakeStamp = gComStamp;
