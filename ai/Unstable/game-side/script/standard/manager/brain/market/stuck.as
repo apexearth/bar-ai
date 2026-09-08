@@ -89,6 +89,12 @@ void UpdateStuckBuilds()
 		const AIFloat3 bp0 = t.GetBuildPos();
 		const bool noOrder = (u.CmdQueueSize() == 0) && OnMap(bp0)
 			&& (p.distance2D(bp0) > Catalog::gBuildDist[int(u.circuitDef.id)]);
+		// ON THE SITE WITH AN ORDER IS NOT STUCK, however still the frame: a
+		// build starved by an energy stall makes no progress for minutes, and
+		// reading that as stuck aborted a framed T2 lab twice in the canon game
+		// (2026-09-08) and cost four minutes of T2.
+		const bool onJob = (u.CmdQueueSize() > 0) && OnMap(bp0)
+			&& (p.distance2D(bp0) <= Catalog::gBuildDist[int(u.circuitDef.id)] + 64.f);
 		if (slot < 0) {
 			gStuckId.insertLast(u.id);
 			gStuckX.insertLast(p.x);
@@ -99,6 +105,11 @@ void UpdateStuckBuilds()
 			continue;
 		}
 		const uint i = uint(slot);
+		if (onJob) {
+			gStuckSince[i] = ai.frame;
+			gStuckDeadAt[i] = -1;
+			continue;
+		}
 		if (!noOrder) {
 			if (gStuckDeadAt[i] >= 0) {
 				const int lag = ai.frame - gStuckDeadAt[i];

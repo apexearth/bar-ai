@@ -27,6 +27,16 @@ before); minute 20: 83.0 -> 102.8. The shift is our arm's alone and clears the
 economy tickets into one draw, not the ladder's pick. Cost: 47.8 constructors
 at 30 (BARb 19.2) and a rich-income stall of 50% (32%).
 
+### `TUNE_ECO_ONLY` = 0.f
+
+THE ECONOMY-ONLY BENCHMARK. 1 removes every army product from the factories
+and every defence, AA and superweapon want from the market, so a game against
+an inactive opponent measures how fast the economy alone scales -- apexearth's
+canon scenario (2026-09-08: "focus on these eco scenarios without any military
+and see just how efficient we can make ourselves"). His own reference on Comet
+Catcher Remake with a 50% bonus: 2,032 metal/s and 103k e/s at 16:15. Never on
+in a real game.
+
 ### `TUNE_ETA_LOG` = 0.f
 
 The `apex: eta` shadow line while `apex_eta` is 0. Off because the layer it

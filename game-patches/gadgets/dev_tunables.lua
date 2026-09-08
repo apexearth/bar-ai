@@ -85,6 +85,7 @@ local NAMES = {
 	"apex_auction_diag",
 	"apex_efloor_diag",
 	"apex_task_trace",
+	"apex_eco_only",
 	"apex_comm_rules",
 	"apex_allow_juno",
 	"apex_allow_tacmissile",

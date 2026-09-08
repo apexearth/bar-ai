@@ -46,6 +46,11 @@ const float TUNE_ENERGY_HEADROOM = 1.35f;
 //   ETA re-rank wants WITHIN the four economic categories. See docs/27.
 const float TUNE_ETA = 1.f;
 
+// [switch] -- economy-only benchmark: no army products, no defence, AA or
+//   superweapon wants. For measuring how fast the economy alone scales against
+//   an inactive opponent (apexearth's canon scenario, 2026-09-08). See docs/27.
+const float TUNE_ECO_ONLY = 0.f;
+
 // [toggle 0/1] -- The `apex: eta` shadow log with the ETA layer OFF. One line
 //   costs a full ladder simulation per ranked want; on when apex_eta is.
 const float TUNE_ETA_LOG = 0.f;

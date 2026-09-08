@@ -426,11 +426,11 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
 	else if (step == 12) { @w = ProposeAssist(unit);          Perf::Add("want.assist", _t); }
-	else if (step == 13) { @w = MemoPropose(5, unit);         Perf::Add("want.protect", _t); }
-	else if (step == 14) { @w = ProposeTeeth(unit);           Perf::Add("want.teeth", _t); }
+	else if (step == 13) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
+	else if (step == 14) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
 	else if (step == 15) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
-	else if (step == 16) { @w = ProposeAirDef(unit);          Perf::Add("want.airdef", _t); }
-	else                 { @w = ProposeSuper(unit);           Perf::Add("want.super", _t); }
+	else if (step == 16) { if (!EcoOnly()) @w = ProposeAirDef(unit);   Perf::Add("want.airdef", _t); }
+	else                 { if (!EcoOnly()) @w = ProposeSuper(unit);    Perf::Add("want.super", _t); }
 	return w;
 }
 
@@ -705,6 +705,11 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 }
 
 int gStallRefuseLogAt = 0;
+
+bool EcoOnly()
+{
+	return ai.GetTunable("apex_eco_only", TUNE_ECO_ONLY) > 0.f;
+}
 
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {

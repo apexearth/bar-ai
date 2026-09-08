@@ -197,6 +197,9 @@ GROUPS = [
                   "competes — extraction, generation and build power stop "
                   "being three separate lottery tickets and become one "
                   "question"),
+                 ("TUNE_ECO_ONLY", "economy-only benchmark: no army products and no "
+                  "defence, AA or superweapon wants, for measuring how fast the "
+                  "economy alone scales against an inactive opponent"),
                  ("TUNE_ETA_LOG", "writes the `apex: eta` shadow line while "
                   "the layer is off, so you can read what it WOULD have "
                   "picked without changing anything. Each line is a full "

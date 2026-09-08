@@ -468,8 +468,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// not to build starved its whole mandate (measured: funded=0.024,
 		// a 40x tech discount on the one player built to tech).
 		float fundedMul = (funded > 1.f) ? 1.f : funded;
-		if (EcoQuiet())
-			fundedMul = 1.f;
+		if (EcoQuiet() || EcoOnly())
+			fundedMul = 1.f;   // no army mandate to fund in the economy-only benchmark
 		// BEING OUT-TECHED LIFTS THE FLOOR UNDER THAT DISCOUNT. apexearth: "if we
 		// see the enemy has T2 then we should boost building our own T2. We will
 		// 100% lose if we don't up to T2 to match them."

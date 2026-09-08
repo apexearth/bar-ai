@@ -228,7 +228,22 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		}
 		bool wins = !barred && (c.value > w.value);
 		if (!barred && (stallDef > 0.f)) {
-			const float wait = walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec);
+			float wait = walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec);
+			// An energy-costing rung is fed from the SURPLUS and the bank, and in
+			// a hard stall that is nothing: 37 advsol executions stood one advsol
+			// in 16 minutes at a bank of 6 (canon game 2026-09-08). The zero-E
+			// rung's wait is its build; the others' is their energy bill over
+			// what can actually feed it.
+			if (Catalog::gCostE[d] > 0.f) {
+				float feedE = aiEconomyMgr.energy.income + EMakeInFlight() - aiEconomyMgr.energy.pull;
+				if (feedE < 0.f)
+					feedE = 0.f;
+				const float lookE = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+				feedE += aiEconomyMgr.energy.current / ((lookE > 1.f) ? lookE : 30.f);
+				const float waitE = walkSec + Catalog::gCostE[d] / ((feedE > 1.f) ? feedE : 1.f);
+				if (waitE > wait)
+					wait = waitE;
+			}
 			const float closes = (Catalog::gMakeE[d] < stallDef) ? Catalog::gMakeE[d] : stallDef;
 			const float close = closes / ((wait > 1.f) ? wait : 1.f);
 			wins = (close > bestClose);
@@ -848,6 +863,16 @@ int gBpGapLogAt = 0;
 
 // The fraction of the fleet's lathe time energy permits: income plus ordered
 // generation over pull, 1 when nothing throttles.
+// Metal is being thrown away: the bank is full and income exceeds what the
+// fleet draws. In that state metal is not the cost of anything, hands and
+// energy are (canon game 2026-09-08: 34k of 65k metal made was wasted by
+// minute 20 against an inactive opponent while 35 stall answers were held).
+bool MetalWasting()
+{
+	return aiEconomyMgr.isMetalFull
+		&& (aiEconomyMgr.metal.income > aiEconomyMgr.metal.pull);
+}
+
 float EFeedShare()
 {
 	const float pull = aiEconomyMgr.energy.pull;

@@ -213,6 +213,13 @@ uint EffectiveCap(const CCircuitDef@ want)
 			return 1;
 	}
 	uint cap = InFlightCap();
+	// The cap is a metal-feed cap; with metal being wasted the feed is not the
+	// limit, the hands are.
+	if (Market::MetalWasting()) {
+		const uint hands = uint(Market::ConsOwnedAny());
+		if (hands > cap)
+			cap = hands;
+	}
 	const float per = want.costM * ai.GetTunable("apex_dup_bank", TUNE_DUP_BANK);
 	if (per > 0.f) {
 		const uint wealth = 1 + uint(aiEconomyMgr.metal.current / per);

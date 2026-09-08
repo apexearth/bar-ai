@@ -113,8 +113,12 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// A bank that covers the second one outright is not asked to wait
 	// (apexearth: "why we aren't making more advanced solars... overflowing
 	// metal"); parallelism scales with wealth, and this is the wealth.
+	// One big energy site at a time -- unless metal is being thrown away, when a
+	// second site costs nothing that matters and the hold was 35 refused stall
+	// answers in twelve minutes (canon game, 2026-09-08).
 	if (Gate(G_BIGE, IsBigEnergy(want) && BigEnergyRising()
-			&& !BigEnergyBetterThanRising(want) && !BankCovers(want))) {
+			&& !BigEnergyBetterThanRising(want) && !BankCovers(want)
+			&& !Market::MetalWasting())) {
 		// Hand the asker the best time-to-energy job instead of a hole in the
 		// ground: e/s per second of remaining build, so a half-done fusion beats
 		// a fresh afus (apexearth: "they should all focus their efforts on the
