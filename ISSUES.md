@@ -34,15 +34,22 @@ instrument shows next.
   and 1.8 m by `draw` (LLT v=21 over plant 13.7), lab at 2.3 m. The plant's
   price loses ordinary draws to towers and solars in the opening; the cover
   push's `PlantFramed` gate does not apply because these were not pushes.
-- **Isthmus still e-stalls in minutes 11-15.** After the feed-share fix
-  (bank term and con floor no longer read e-throttled hands as missing
-  hands) the economy is ahead of BARb hard by 43% metal produced at minute
-  14, but the energy bank sits at 14-32% from minute 11 with pull outrunning
-  income by 100-140 e/s (pull 776 at 14 m) and the metal bank still 60-94%
-  full. The ladder at 400-650 e/s is solars (20 e/s, cap per def) and ONE
-  advanced solar (`apex_advsol_serial`); whether that rung can follow a pull
-  growing ~100 e/s per minute, or whether the answer is the T2 plant
-  (techStart is -1 in most 15-minute games on both sides), is not measured.
+- **Isthmus still e-stalls 30-50% of samples per bin from minute 8.** After
+  the parallel-site commit (eb0a389e) the minute-14 stalled share is 24%
+  (BARb hard 13-20%) with the economy 25% ahead on metal produced. The
+  timeline says the ladder is not the limit any more: energy income climbs
+  ~60 e/s per minute, but pull climbs faster (268 -> 556 e/s between
+  minutes 8 and 10, 830 at 13) while the metal bank sits at 60-90%. The
+  fleet at 14 min holds 5-9 nano turrets, 6-8 constructors and 1-2 plants
+  on 25-40 m/s of metal -- several times the build power income can feed --
+  and `energy.pull` is that fleet's UNTHROTTLED ask, so the stall metric
+  saturates whenever hands outnumber income. The nano ring is sized to a
+  line's appetite (`LineCostCeil`, want_nano.as), not to income; that is
+  the coupling to price next (`ai-couplings`). Measured and reverted the
+  same day: pricing the hoist's deficit off the peak-held demand
+  (`gEDemandPk`) instead of raw pull -- 24.0% -> 36.7% stalled, n=6.
+  Untried: the lab's product drain while `LineWorking` (queued but between
+  units) is in neither pull nor `LineDrainE`.
 - **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
   flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
   asymmetry ("spending E is cheap at balance, which is what lets advsol and
