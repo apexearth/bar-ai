@@ -15,6 +15,7 @@ int gNextIdleLog = 0;
 int gNextAuctionDiag = 0;
 int gNextAaPanicLog = 0;
 int gNextDefPanicLog = 0;
+int gNextHoistLog = 0;
 array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 // Which builder may drop its work for the first AA tower, and when it claimed
 // that. One at a time: the tower is 80 metal, abandoning every frame in the
@@ -1020,8 +1021,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// builder and the hoist fired only for the ones the interrupt had freed.
 	// The interrupt's own bar ("above 400 we probably don't need it"): one
 	// bar for both by-fiat answers to a stall.
+	// ...except with the metal bank full: then the stall is not a transient
+	// in the pull, it is income being thrown away (apexearth, watching:
+	// "overflowing metal like crazy... we should just have loads of guys
+	// making solars").
 	const float hoistBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
-	const bool hoistWorth = (hoistBar <= 0.f) || (aiEconomyMgr.energy.income <= hoistBar);
+	const bool hoistWorth = (hoistBar <= 0.f) || (aiEconomyMgr.energy.income <= hoistBar)
+			|| aiEconomyMgr.isMetalFull;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitE() > 0.f) || owedE)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
@@ -1036,6 +1042,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			StallFreedClear(unit);
 			break;
 		}
+	}
+	if ((why != "estall") && (ai.frame >= gNextHoistLog) && aiEconomyMgr.isEnergyEmpty) {
+		gNextHoistLog = ai.frame + 15 * SECOND;
+		AiLog("apex: nohoist t=" + ai.teamId + " " + unit.circuitDef.GetName()
+			+ " aa=" + (aaPanic ? 1 : 0) + " worth=" + (hoistWorth ? 1 : 0)
+			+ " hard=" + (HardEStall() ? 1 : 0)
+			+ " deficit=" + int(EnergyDeficitE())
+			+ " mFull=" + (aiEconomyMgr.isMetalFull ? 1 : 0)
+			+ " eInc=" + int(aiEconomyMgr.energy.income)
+			+ " ranked=" + ranked.length());
 	}
 	// AFFORDABILITY IS THE WHOLE TEST FOR A STRATEGIC BUILD. apexearth: "it is
 	// more of a 'if I can afford this, I'll insert it as a want so we make

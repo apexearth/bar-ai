@@ -83,7 +83,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (Catalog::gNeedGeo[d])
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
-		const float bSec = Catalog::BuildSecondsAt(d, genBP);
+		float bSec = Catalog::BuildSecondsAt(d, genBP);
+		bSec *= EStretch(Catalog::gCostE[d], bSec);
 		const float fPrice = EPriceAt(bSec);
 		float fGrow = 1.f, fSurv = 1.f, fInf = 1.f, fReal = 1.f, fRent = 0.f;
 		float gain = Catalog::gMakeE[d] * fPrice;
@@ -431,6 +432,25 @@ float ProductDrainE(int facId)
 // ONLY THE LEDGER HALF IS MEMOED. LineWorking reads the factory's pending
 // queue, and the executor enqueues INSIDE a frame, so a frame-keyed answer for
 // the standing lines would be one order out of date.
+// Energy per build-power-second of the hungriest standing line: what one
+// point of assisting lathe asks of the energy economy.
+float LineEnergyDensity()
+{
+	float dens = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const int fd = int(f.circuitDef.id);
+		if (Catalog::gBuildPower[fd] <= 0.f)
+			continue;
+		const float d = ProductDrainE(fd) / Catalog::gBuildPower[fd];
+		if (d > dens)
+			dens = d;
+	}
+	return dens;
+}
+
 float gLineDrainComVal = 0.f;
 int   gLineDrainComFrame = -1;
 int   gLineDrainComStamp = -1;

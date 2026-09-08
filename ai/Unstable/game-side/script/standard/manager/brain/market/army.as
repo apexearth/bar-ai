@@ -1577,8 +1577,10 @@ void StallWatch()
 	// scarcity that stops existing: at this income a stall is a transient in
 	// the pull, not something a constructor should abandon work over. It is
 	// also where the scan costs most -- the worker list is longest late.
+	// ...unless the metal bank is full: then the stall is income thrown away,
+	// not a transient (see the hoist in decide.as).
 	const float eBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
-	if ((eBar > 0.f) && (aiEconomyMgr.energy.income > eBar))
+	if ((eBar > 0.f) && (aiEconomyMgr.energy.income > eBar) && !aiEconomyMgr.isMetalFull)
 		return;
 	if (!HardEStall()) {
 		gStallFreed.resize(0);
@@ -1733,8 +1735,14 @@ void StallWatch()
 			// Raw metal both sides: this is "which order finishes both sooner",
 			// not a market valuation, so the want's priced mCost (displacement,
 			// premiums) is the wrong side of the comparison.
+			// ...in BOTH currencies. Metal alone said a light tower (85 m,
+			// 680 E) was always cheaper to finish than a solar, so the builder
+			// on it was never interrupted and stalled the base building it
+			// (apexearth: "we usually stall building an LLT").
 			const float ansM = (e.def !is null) ? e.def.costM : e.mCost;
-			if ((1.f - done1) * t.buildDef.costM <= ansM)
+			const float ansE = (e.def !is null) ? Catalog::gCostE[int(e.def.id)] : 0.f;
+			if (((1.f - done1) * t.buildDef.costM <= ansM)
+				&& ((1.f - done1) * Catalog::gCostE[int(t.buildDef.id)] <= ansE))
 				continue;
 		}
 		Want@ mx = ProposeMex(u);

@@ -110,8 +110,11 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// caller is not allowed to answer for itself (the same reason the factory
 	// fork test lives here). Wealth is the only exemption, and it must cover
 	// the new bill on top of every bill already rising.
+	// A bank that covers the second one outright is not asked to wait
+	// (apexearth: "why we aren't making more advanced solars... overflowing
+	// metal"); parallelism scales with wealth, and this is the wealth.
 	if (Gate(G_BIGE, IsBigEnergy(want) && BigEnergyRising()
-			&& !BigEnergyBetterThanRising(want))) {
+			&& !BigEnergyBetterThanRising(want) && !BankCovers(want))) {
 		// Hand the asker the best time-to-energy job instead of a hole in the
 		// ground: e/s per second of remaining build, so a half-done fusion beats
 		// a fresh afus (apexearth: "they should all focus their efforts on the

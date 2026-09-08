@@ -248,8 +248,21 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if ((Catalog::gBuildPower[d] <= 0.f) || (Catalog::gBuildsList[d].length() > 0))
 			continue;
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
+		float gainN = (over < drain) ? over : drain;
+		// A lathe pulls energy as well as metal, so it is worth the share of
+		// its ask the energy economy can feed: overflow caused by an e-stall
+		// bought the nanos that deepened it (apexearth, watching: "even our
+		// nano turrets... are stalling because we lack energy").
+		{
+			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity();
+			if (askE > 1.f) {
+				const float spare = aiEconomyMgr.energy.income + EMakeInFlight()
+						- aiEconomyMgr.energy.pull;
+				gainN *= (spare <= 0.f) ? 0.f : ((spare < askE) ? (spare / askE) : 1.f);
+			}
+		}
 		Want c;
-		ValueOf(d, (over < drain) ? over : drain, WalkSecTo(unit, site),
+		ValueOf(d, gainN, WalkSecTo(unit, site),
 				Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;

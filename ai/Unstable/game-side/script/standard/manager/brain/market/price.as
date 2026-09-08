@@ -519,6 +519,25 @@ float MRealizeShare(float addM, float buildSec)
 	return share;
 }
 
+// HOW MUCH LONGER AN ENERGY-COSTING BUILD REALLY TAKES WHILE ENERGY IS SHORT.
+// A lathe gets the share of income its drain is of the pull, so the build
+// runs at income/pull speed: a 90-second advanced solar is minutes in a
+// stall while a zero-E solar keeps its nine seconds (apexearth, watching:
+// "when we're stalling right now then fixing that stalling sooner should
+// look much more attractive").
+float EStretch(float costE, float buildSec)
+{
+	if ((costE <= 1.f) || (buildSec <= 1.f))
+		return 1.f;
+	const float drain = costE / buildSec;
+	const float need = aiEconomyMgr.energy.pull + EDrainInFlight() + drain;
+	const float have = aiEconomyMgr.energy.income + EMakeInFlight()
+			+ aiEconomyMgr.energy.current / buildSec;
+	if ((have <= 0.01f) || (need <= have))
+		return 1.f;
+	return need / have;
+}
+
 float EPriceAt(float buildSec)
 {
 	PrTuneFill();
@@ -669,6 +688,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// saying so. (The size of that gap is NOT settled: see CHANGES.md; a
 	// compounding argument for it was checked and does not hold at fixed build
 	// power, where the small-step route is lathe-bound and grows linearly.)
+	// The stall's throttle, on the build's own energy bill.
+	buildSec *= EStretch(Catalog::gCostE[defId], buildSec);
 	w.gain = gain;
 	w.buildSec = buildSec;
 	// The E bill at what it actually forgoes (duration-priced, forgiven in
