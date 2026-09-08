@@ -133,7 +133,8 @@ def _running_lockers() -> list[str]:
     return sorted(found)
 
 
-def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> None:
+def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
+           repo_dll: bool = False) -> None:
     src = AI_DIR / variant
     if not (src / "game-side").is_dir():
         raise SystemExit(
@@ -230,6 +231,17 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
             f = built_dll
             name += " (local build)"
         elif name == "SkirmishAI.dll":
+            # The checked-in DLL is a stripped snapshot that goes stale the
+            # moment a binding is added: 2026-09-08 it lacked
+            # GetEnemyStructCostAt, raid.as failed to compile, and the variant
+            # played near-stock with nothing but smoke.py to say so (S3).
+            if not repo_dll:
+                raise SystemExit(
+                    f"no local DLL build for this lane ({built_dll}). The repo copy "
+                    "is a stale stripped snapshot and the script tree may reference "
+                    "bindings it lacks (compile error, near-stock play). Build first: "
+                    "python tools/build_dll.py -- or pass --repo-dll to ship the "
+                    "snapshot knowingly.")
             name += " (repo copy -- no local build in vendor/)"
         if f.exists():
             before = f.stat().st_size
@@ -493,6 +505,9 @@ def main() -> int:
     # Optional: a lane deploys its own variant, so the name need not be typed
     # (and typing the wrong one is how a lane ships into the shared slot).
     d.add_argument("variant", nargs="?", default=None)
+    d.add_argument("--repo-dll", dest="repo_dll", action="store_true",
+                   help="ship the checked-in stripped DLL when there is no local "
+                        "build (it may lack bindings the script uses)")
     d.add_argument("--allow-running", dest="allow_running", action="store_true",
                    help="deploy even though BAR appears to be running (it will "
                         "probably fail on the locked SkirmishAI.dll)")
@@ -535,7 +550,7 @@ def main() -> int:
             # still printed "Deployed": four batteries and two watched games
             # ran one stale tree on 2026-09-08 (docs/25, S22).
             v = _lane.sync_variant(v[len("lane-"):])
-        deploy(env, v, args.allow_running)
+        deploy(env, v, args.allow_running, args.repo_dll)
     elif args.cmd == "pull":
         pull(env, args.variant)
     elif args.cmd == "patches":

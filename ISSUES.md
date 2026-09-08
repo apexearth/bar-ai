@@ -169,7 +169,7 @@ instrument shows next.
   fusion be bought while solar-fed") is gone with it. Whether the fusion
   still gets bought at the right time is NOT measured; check
   `techStart`/fusion count on a 30-minute battery before trusting it.
-- **Commander idle -- a SECOND cause found 2026-09-08 (S25).** Beyond S24's
+- **Commander idle -- a SECOND cause found 2026-09-08 (S27).** Beyond S24's
   sim-speed lag, the engine flatly discards a build order whose square is
   blocked: `CBuilderCAI::GiveCommandReal` returns before queueing, and since
   the builder never left idle no `UnitIdle` event follows either, so neither

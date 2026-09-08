@@ -84,9 +84,32 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	CMap* map = circuit->GetMap();
-	if ((facing != UNIT_NO_FACING) && map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)) {
+	// A FACTORY IS THE WORST THING TO PARK ON TOP OF ITS OWN BUILDER: the
+	// biggest footprint we place, and nothing can start until whoever ordered
+	// it has been pushed off the whole apron. Same rule as
+	// IBuilderTask::FindBuildSite, and the same last-resort relaxation below --
+	// a factory that can only stand here still stands here.
+	const float selfClear = SelfClearance(builder, buildDef);
+	const AIFloat3 builderPos = builder->GetPos(circuit->GetLastFrame());
+	if (!TryBuildSite(builder, pos, searchRadius, selfClear, builderPos)
+		&& (selfClear > 0.f))
+	{
+		TryBuildSite(builder, pos, searchRadius, 0.f, builderPos);
+	}
+}
+
+bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
+		float searchRadius, float selfBar, const AIFloat3& builderPos)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CMap* map = circuit->GetMap();
+	auto clearsBuilder = [selfBar, &builderPos](const AIFloat3& p) {
+		return (selfBar <= 0.f) || (p.SqDistance2D(builderPos) >= SQUARE(selfBar));
+	};
+	if ((facing != UNIT_NO_FACING) && clearsBuilder(pos)
+		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)) {
 		SetBuildPos(pos);
-		return;
+		return true;
 	}
 
 	FindFacing(pos);
@@ -94,13 +117,15 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CTerrainManager::TerrainPredicate predicate;
 	if (reprDef == nullptr) {
-		predicate = [terrainMgr, builder](const AIFloat3& p) {
-			return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
+		predicate = [terrainMgr, builder, clearsBuilder](const AIFloat3& p) {
+			return clearsBuilder(p)
+					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
 		};
 	} else {
 		CCircuitDef* reprDef = this->reprDef;
-		predicate = [terrainMgr, builder, reprDef](const AIFloat3& p) {
-			return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
+		predicate = [terrainMgr, builder, reprDef, clearsBuilder](const AIFloat3& p) {
+			return clearsBuilder(p)
+					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
 					&& terrainMgr->CanBeBuiltAt(reprDef, p);
 		};
 	}
@@ -136,19 +161,19 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
 	};
 
 	if (checkFacing()) {
-		return;
+		return true;
 	}
 	facing = opposite[facing];
 	if (checkFacing()) {
-		return;
+		return true;
 	}
 	++facing %= 4;
 	if (checkFacing()) {
-		return;
+		return true;
 	}
 	facing = opposite[facing];
 	if (checkFacing()) {
-		return;
+		return true;
 	}
 
 	// All four facings failed: there is genuinely nowhere here to put this.
@@ -156,9 +181,12 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
 	// usually a bad search origin, whereas a gantry-sized building failing is
 	// what a base packed with old T1 clutter looks like. The script decides
 	// whether anything nearby is worth clearing; see CCircuitAI::NoteBuildBlocked.
-	if (testSize >= SQUARE_SIZE * 8) {
+	// Not while we are only holding ground clear for our own builder: that pass
+	// falls through to the relaxed one, which reports for it.
+	if ((selfBar <= 0.f) && (testSize >= SQUARE_SIZE * 8)) {
 		circuit->NoteBuildBlocked(pos);
 	}
+	return false;
 }
 
 #define SERIALIZE(stream, func)	\

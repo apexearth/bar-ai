@@ -1013,6 +1013,20 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
 	return circuit->GetLua()->CallUI(data.c_str(), data.size());
 }
 
+// Ground height under a position. Nothing else exposes the height map to the
+// script, and an AIFloat3 that came out of the base grid or a lattice walk
+// carries a computed y, not the terrain's -- so "how high is this ground"
+// cannot be answered by reading pos.y there. Off-map returns 0.
+static std::string CCircuitAI_ReadVfsFile(CCircuitAI* circuit, const std::string& name)
+{
+	return circuit->ReadVfsFile(name);
+}
+
+static float CCircuitAI_GetElevationAt(CCircuitAI* circuit, const springai::AIFloat3& pos)
+{
+	return circuit->GetElevationAt(pos);
+}
+
 static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
 {
 	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
@@ -1433,6 +1447,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "string CallRules(const string& in)", asFUNCTION(CCircuitAI_CallRules), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string CallUI(const string& in)", asFUNCTION(CCircuitAI_CallUI), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// RulesParams accessors on AI (game/team)
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetElevationAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetElevationAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "string ReadVfsFile(const string& in) const", asFUNCTION(CCircuitAI_ReadVfsFile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void SetLavaCrest(float)", asMETHOD(CCircuitAI, SetLavaCrest), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

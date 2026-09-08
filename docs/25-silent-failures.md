@@ -426,7 +426,7 @@ lane to the session: never rely on the file -- prefix every lane-following
 tool with `BARAI_LANE=<name>` (the environment wins over the file) and name
 the variant on every deploy/run (`deploy lane-<name>`, `--a Apex<name>:lane-<name>:standard`).
 
-## S25 — The engine DISCARDS a build order whose square is blocked, silently
+## S27 — The engine DISCARDS a build order whose square is blocked, silently
 
 `CBuilderCAI::GiveCommandReal` (`BuilderCAI.cpp`) tests `IsBuildPosBlocked` and
 `return`s **before queueing** when a finished building or an unreclaimable
@@ -458,3 +458,14 @@ says that figure is inflated by sim speed and the honest one needs `--speed 1`,
 which has NOT been run. The recovery is `stuck.as`'s `gStuckDeadAt` /
 `gOrderLagMax` (6318a09e), which sizes its wait to the lag it measures in the
 game it is in; a fixed-second wait is the trap S24 names.
+
+## S26 — The checked-in DLL is a stale snapshot; a deploy without a build shipped it silently
+
+`deploy_ai.py deploy` fell back to `ai/Unstable/engine-side/SkirmishAI.dll`
+(a 7 MB stripped copy from 2026-09-06) whenever the lane had no local build,
+printing `(repo copy)` and nothing else. By 2026-09-08 the script called
+`GetEnemyStructCostAt`, which that DLL does not bind: `raid.as (122, 34) : ERR`,
+the variant compiled nowhere and played near-stock -- S3 again, reachable by a
+fresh checkout, a fresh lane, or a dashboard deploy with no build (bar-ai-be).
+`deploy` now refuses the fallback unless `--repo-dll` is passed. The snapshot
+should be refreshed only from a tree that matches the cpp mirror.

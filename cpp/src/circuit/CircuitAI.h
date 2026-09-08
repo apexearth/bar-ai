@@ -243,6 +243,39 @@ public:
 	// same unchecked pattern that made GetBuilderThreatAt kill the engine at
 	// frame 3 on an off-map read. These guard; the raw ones must never be bound.
 	bool IsPosOnMap(const springai::AIFloat3& pos) const;
+	// Ground height, bounds-guarded. SAreaData::GetElevationAt indexes its
+	// heightmap straight from the position with no check, same hazard as above.
+	float GetElevationAt(const springai::AIFloat3& pos) const;
+	// Read a file from the VFS (game archive, map archive). Empty on failure.
+	// The one door onto content the engine does not otherwise hand an AI --
+	// used to read a map's lava schedule rather than learn it a crest at a time.
+	static const int MAX_VFS_READ = 1 << 20;
+	std::string ReadVfsFile(const std::string& name) const;
+	// THE LAVA TIDE. BAR's map_lava gadget publishes its current surface height
+	// as the public game rules param "lavaLevel" -- the very number it damages
+	// against -- and removes itself entirely on a map without lava, so the
+	// param never appears and this stays at NO_LAVA. Cached per frame: the site
+	// predicate asks it per candidate cell.
+	//
+	// Script owns the interesting half (how fast it climbs, when it gets here,
+	// what that does to a build's price -- manager/lava.as). This is only the
+	// hard floor: ground that is under the surface RIGHT NOW takes damage per
+	// second, and nothing may be sited there.
+	static constexpr float NO_LAVA = -99998.f;
+	float GetLavaLevel() const;
+	bool HasLava() const { return GetLavaLevel() > NO_LAVA; }
+	bool IsUnderLava(const springai::AIFloat3& pos, CCircuitDef* def) const;
+	// The tide's proven high-water mark, handed down from script the same way
+	// the front line and the base grid are -- the level a climb reached and
+	// held, which script learns by watching and C++ has no way to derive.
+	// NO_LAVA until a crest has been seen (or the behaviour is switched off).
+	// The farm site search prefers ground above it: a solar drowned every
+	// seven minutes is a solar bought seven times.
+	void SetLavaCrest(float y) { lavaCrest = y; }
+	float GetLavaCrest() const { return lavaCrest; }
+	bool AboveLavaCrest(const springai::AIFloat3& pos) const {
+		return (lavaCrest <= NO_LAVA) || (GetElevationAt(pos) > lavaCrest);
+	}
 	// The front line, handed down from script. Army positions were selected
 	// exclusively from metal-cluster defPoints, so squads had no position that
 	// meant "the line" and orbited bases instead of holding ground.
@@ -346,6 +379,9 @@ public:
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
 	mutable std::map<std::string, float> tunables;  // see GetTunable
+	mutable float lavaLevel = NO_LAVA;   // see GetLavaLevel
+	mutable int lavaFrame = -1;
+	float lavaCrest = NO_LAVA;           // see SetLavaCrest
 
 	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
 	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);

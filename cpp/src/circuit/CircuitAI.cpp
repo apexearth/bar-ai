@@ -59,6 +59,7 @@
 //#include "Info.h"
 #include "Mod.h"
 #include "Cheats.h"
+#include "File.h"
 //#include "WrappCurrentCommand.h"
 
 #include <fstream>
@@ -2513,6 +2514,91 @@ bool CCircuitAI::IsPosOnMap(const AIFloat3& pos) const
 	return (pos.x >= .0f) && (pos.z >= .0f)
 			&& (pos.x < terrainMgr->GetTerrainWidth())
 			&& (pos.z < terrainMgr->GetTerrainHeight());
+}
+
+// SAreaData::GetElevationAt indexes heightMap straight from the position with
+// no check of its own, and this build has asserts compiled out -- so the guards
+// are the code. The area data is double-buffered for threading and can be
+// swapped underneath a reader, hence the null test as well as the bounds one.
+// READ A FILE OUT OF THE VFS -- the game archive and the map archive both.
+//
+// File_getContent routes to CFileHandler with none of the alliance gating that
+// makes Game_getTeamResourceIncome useless (see GetTeamMetalIncome), so an AI
+// can read the same configs the gadgets read. This is how the lava tide's own
+// schedule becomes knowable at frame 0 instead of being learned a crest at a
+// time: manager/lava.as parses it.
+//
+// Empty string on any failure, including a file that is not there -- callers
+// must treat that as "no answer", never as "empty config".
+std::string CCircuitAI::ReadVfsFile(const std::string& name) const
+{
+	springai::File* file = callback->GetFile();
+	if (file == nullptr) {
+		return std::string();
+	}
+	const int size = file->GetSize(name.c_str());
+	if ((size <= 0) || (size > MAX_VFS_READ)) {
+		return std::string();
+	}
+	std::string buf(size_t(size), ' ');
+	if (!file->GetContent(name.c_str(), &buf[0], size)) {
+		return std::string();
+	}
+	return buf;
+}
+
+float CCircuitAI::GetElevationAt(const AIFloat3& pos) const
+{
+	if (!IsPosOnMap(pos)) {
+		return .0f;
+	}
+	CTerrainManager* terrainMgr = GetTerrainManager();
+	if (terrainMgr == nullptr) {
+		return .0f;
+	}
+	SAreaData* area = terrainMgr->GetAreaData();
+	if ((area == nullptr) || area->heightMap.empty()) {
+		return .0f;
+	}
+	const int ix = int(pos.x) / SQUARE_SIZE;
+	const int iz = int(pos.z) / SQUARE_SIZE;
+	const int idx = iz * area->heightMapXSize + ix;
+	if ((idx < 0) || (idx >= int(area->heightMap.size()))) {
+		return .0f;
+	}
+	return area->heightMap[idx];
+}
+
+float CCircuitAI::GetLavaLevel() const
+{
+	if (lavaFrame == lastFrame) {
+		return lavaLevel;
+	}
+	lavaFrame = lastFrame;
+	lavaLevel = (game != nullptr)
+			? game->GetRulesParamFloat("lavaLevel", NO_LAVA - 1.f)
+			: (NO_LAVA - 1.f);
+	return lavaLevel;
+}
+
+// Is this ground under the lava surface right now?
+//
+// The gadget damages whatever's BASE position sits below the level, so a
+// floating structure is judged at the waterline and a grounded one at the
+// terrain under it. Fixed sites (a mex on its spot) never ask: refusing the
+// spot loses the extractor rather than moving it, and that call belongs to the
+// script's pricing, not to a veto here.
+bool CCircuitAI::IsUnderLava(const AIFloat3& pos, CCircuitDef* def) const
+{
+	const float level = GetLavaLevel();
+	if (level <= NO_LAVA) {
+		return false;
+	}
+	float rest = GetElevationAt(pos);
+	if ((def != nullptr) && def->IsFloater() && (rest < .0f)) {
+		rest = .0f;
+	}
+	return rest <= level;
 }
 
 float CCircuitAI::GetAllyInflAt(const AIFloat3& pos) const
