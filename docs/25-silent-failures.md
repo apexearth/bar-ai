@@ -397,20 +397,32 @@ deployed, a copy whose size moved is refused, and `not found!` is a crash in
 both tools. The one-line check remains: md5 of the deployed DLL against its
 build output.
 
-## S24 — At 37x sim speed the engine holds NO order for a builder 57% of the time
+## S24 — At full sim speed a tail of builder orders lands late, and the stuck watch kills them
 
-`apex_task_trace=1` on Altair seed 3, 6 minutes: the DLL issued a build order
-for a site the engine itself called buildable and reachable, and
-`Unit_HasCommands` stayed false for 90+ frames in 4,017 of 7,026 task-holder
-samples at the harness's default speed. The same game at `--speed 1`: 52 of
-7,579. The order is applied some frames after it is given and the lag scales
-with sim speed (S13); past a point it is effectively lost, and a unit that was
-already idle gets no idle event, so nothing retries. Consequences: every
-constructor-idle figure from a fast battery is inflated; a stuck watch tuned
-in frames fires on the artefact; the 30-second parked-builder population that
-three sessions chased was partly this. The stuck watch now sizes its wait to
-the lag it measures in the game it is in. Read idle time from a `--speed 1`
-game or a watched one, never from a battery.
+Retracted 2026-09-08 (evening) and re-measured. The first version of this entry
+said the engine held no order for a builder in 57% of task-holder samples at
+the harness's default speed. That was sample-weighted (one task waiting long
+contributes many samples) and apexearth did not believe it: "we run inline with
+the game execution ... I bet all your commands are making it in." He was right
+about the substance. Same tree, same seed, `apex_task_trace=1`, sent-to-applied
+lag per order (`exec=1` to the first `q>0`):
+
+| | orders | applied >90 frames late | >300 | never seen | stuck-watch kills |
+|---|---|---|---|---|---|
+| `--speed 5` | 1,391 | 4 (0.3%) | 2 | 6 | 0 |
+| default (MinSpeed 9999) | 757 | 30 (4%) | 14 | 14 | 17 |
+
+Over 98% of orders arrive at either speed. `CAICallback::GiveOrder` sends the
+command as a net message and the unit receives it when the client reads the
+echo back, so a tail of orders is applied frames late, and that tail is ~13x
+more frequent at full speed (three engines shared the CPU in both runs).
+The damage is ours: `stuck.as` kills a task holding no engine order after
+`3 x` the largest lag it has seen, and it can only learn lags shorter than
+that wait, so the tail is killed and re-elected every time -- 19 kills in the
+first four minutes of the full-speed canon, 4 standing mexes at minute 4
+against 17, income at 20 halved (315 vs 736 m/s). Until the watch re-issues
+instead of killing, eco-only canon runs go at `--speed 5`; a battery at the
+default speed compares two arms that both suffer it.
 
 ## S25 — `.barai-lane` is ONE file per checkout, so every session shares the "active" lane
 

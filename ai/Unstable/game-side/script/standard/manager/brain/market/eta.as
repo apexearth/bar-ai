@@ -204,11 +204,13 @@ float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 	return (feed > bt) ? feed : bt;
 }
 
-// What can feed an energy bill right now: the surplus over the pull, plus the
-// bank spent over the lookahead.
+// What feeds an energy bill: the whole income, as the metal arm reads the
+// whole metal income -- the ladder displaces today's spending on both sides.
+// Netting the pull off read ~1 e/s under any build and priced a lab at its
+// energy cost in seconds.
 float EtaEnergyAvail()
 {
-	float e = aiEconomyMgr.energy.income + EMakeInFlight() - aiEconomyMgr.energy.pull;
+	float e = aiEconomyMgr.energy.income + EMakeInFlight();
 	if (e < 0.f)
 		e = 0.f;
 	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
@@ -322,6 +324,7 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 // changes nothing). Sizes constructors and nano turrets by the ladder
 // instead of by unspent metal, which bought 470 constructors in twenty
 // minutes of the economy-only canon (2026-09-08).
+int gHandsLogAt = 0;
 float EtaHandsShare()
 {
 	PoolRefresh();
@@ -335,27 +338,49 @@ float EtaHandsShare()
 	if (bp < 1.f)
 		bp = 1.f;
 	const float bpMob = (bp * MobileBPShare() > 1.f) ? (bp * MobileBPShare()) : 1.f;
-	// The next few rungs, not the first alone: the first is a cheap converter
-	// no hand is short for while the upgrade rungs behind it starve for T2 hands.
-	float best = 0.f;
-	uint seen = 0;
-	for (uint i = 0; (i < p.def.length()) && (seen < 4); ++i) {
-		if (p.n[i] <= 0)
-			continue;
-		++seen;
+	// The WHOLE walk to the target, not one rung: at 700 m/s a 26-metal mex is
+	// fed in 0.04 s and no fleet lathes it faster, so rung by rung every step
+	// read as hands-bound and the factories never stopped (209 air cons).
+	// Summed, the lathe time and the feed time over the same batches say
+	// which of the two the target is actually waiting on.
+	const float target = P * ETA_TARGET_MUL;
+	float eAvail = EtaEnergyAvail();
+	float tBuild = 0.f;
+	float tFeed = 0.f;
+	uint i = 0;
+	int steps = 0;
+	array<int> n = p.n;
+	while ((P < target) && (steps < ETA_MAX_STEPS)) {
+		while ((i < n.length()) && (n[i] <= 0))
+			++i;
+		if (i >= n.length())
+			break;
+		const float g = p.gain[i];
+		float want = P * ETA_CHUNK;
+		if (P + want > target)
+			want = target - P;
+		int k = int(want / g) + 1;
+		if (k > n[i])
+			k = n[i];
 		float bt = Catalog::BuildSecondsAt(p.def[i], p.mob[i] ? bpMob : bp);
 		if (bt < 0.1f)
 			bt = 0.1f;
-		// Income, not the bank: the bank pays one step and then it is gone, and
-		// counted here a full bank read every rung as hands-bound (318 cons).
-		const float feed = p.cost[i] / P;
-		if (feed < bt) {
-			const float share = 1.f - feed / bt;
-			if (share > best)
-				best = share;
-		}
+		tBuild += float(k) * bt;
+		tFeed += float(k) * p.cost[i] / P;
+		P += float(k) * g;
+		eAvail += float(k) * p.makeE[i];
+		n[i] -= k;
+		++steps;
 	}
-	return best;
+	if (ai.frame >= gHandsLogAt) {
+		gHandsLogAt = ai.frame + 30 * SECOND;
+		AiLog("apex: hands t=" + ai.teamId + " tBuild=" + int(tBuild) + " tFeed=" + int(tFeed)
+			+ " bp=" + int(bp) + " bpMob=" + int(bpMob) + " P=" + int(P) + " steps=" + steps
+			+ " first=" + ((p.def.length() > 0) ? Catalog::Def(p.def[0]).GetName() : "-"));
+	}
+	if ((tBuild <= 0.f) || (tFeed >= tBuild))
+		return 0.f;
+	return 1.f - tFeed / tBuild;
 }
 
 bool EtaOn()

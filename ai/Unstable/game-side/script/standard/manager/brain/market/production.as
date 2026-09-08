@@ -183,10 +183,8 @@ int ConsNeedAny()
 	// income again, which is what makes it a demand and not a cap.
 	// ...scaled by the share energy lets the hands run: e-throttled lathes
 	// leave metal unspent without being too few (see BPGap's bank term).
-	// Unspent metal buys hands only while the ladder's next step is waiting
-	// for hands (EtaHandsShare): 470 constructors in twenty minutes otherwise.
 	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
-			* (MetalWasting() ? 1.f : EFeedShare()) * EtaHandsShare();
+			* EFeedShare();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)
@@ -209,7 +207,7 @@ int CeilingConsNeed()
 	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
 	// metal spilled per game (2026-09-08).
 	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
-			* (MetalWasting() ? 1.f : EFeedShare()) * EtaHandsShare();
+			* EFeedShare();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)
@@ -1182,11 +1180,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// >= the game ceiling, not > our own: requiring the next con to
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
-		// No rung of the ladder waits for hands: a constructor buys nothing, and
-		// a factory with only constructors to offer idles instead (his lab makes
-		// six and stops; ours made 470).
-		if ((EtaHandsShare() <= 0.f) && !Catalog::gRezzer[d])
-			continue;
 		const float mob = MobilityMult(d);
 		// A rezzer that also BUILDS lands here instead of the non-builder
 		// branch above, and must price off the same stream and the same
@@ -1213,7 +1206,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			gain += mob * upD / float(1 + ceilCons);
 		}
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
-		gain += mob * ((over < drain) ? over : drain) * EtaHandsShare();
+		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f)) {
 			// A con claims spot after spot -- a stream of STREAMS -- but the
 			// STREAMS ARE FINITE: 37 cons once chased 13 spots and easy BARb
@@ -1462,7 +1455,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
 		+ " (gain=" + formatFloat(bestGain, "", 0, 2)
 		+ " m=" + formatFloat(Catalog::gCostM[best], "", 0, 0)
-		+ " serving=" + ServingCons() + ")");
+		+ " serving=" + ServingCons()
+		+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 	return Catalog::Def(best);
 }
 

@@ -378,3 +378,16 @@ and no one owns it. His proposal is that some constructors hold energy as their
 job, so the work is continuous rather than whoever happens to draw it.
 
 Open: how many, chosen how, and whether they are released when energy is ahead.
+
+## Eco base layout (apexearth, 2026-09-08)
+
+"Notice how we try to 100% use up our available space for economy with
+absolutely no spacing between the buildings. We only need spacing when we want
+land units to move around. In a real game I would probably build this vertical
+instead of horizontal and I would put all my factories to the right. I don't
+need to move military units around the eco at all. And I would surround the
+eco area with pulsar turrets, radar, stealth detection, anti nuke, etc... (in a
+normal game)" -- and: "Almost all build power comes from the nano turrets."
+Reference screenshot: ~/Downloads/bar-player-example.PNG; his replay census:
+`python tools/canon.py matches/_replay-canon`. Not built: the lattice still
+spaces buildings and mixes factories into the block (ai-placement skill).

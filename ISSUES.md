@@ -17,6 +17,29 @@ rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
 ## 2026-09-08 (night) — The canon economy scenario: where we stand against his curve
+- **The canon-driven commit (950094b5) regressed the real-game batteries, and
+  the cause was the hands-share multiplier on constructor demand.** Carrot at
+  30, ours vs BARb hard: t3 282 vs 228; t4 219 vs 215; t5 213 vs 248; t6 (hands
+  term out, converter ticket in) 272 vs 259, cons at 20 13.1 (t5 7.8). Isthmus
+  t4: 147.5 vs 224.3. t4 was a mixed sweep (S19: production.as redeployed at
+  12:37 into a battery started 12:30) and t5 ran the gate it was labelled as
+  lacking -- the deploy mtimes say so; classify a battery from its deployed
+  tree, not from the session's intent. In real games EtaHandsShare read 0 in
+  most elections (60-195 con-floor log lines per game at hands=0.00), so the
+  unspent-metal term bought nothing. Still open from the canon: the lab pumps
+  constructors into an energy stall (minute 8: lab 287 + nano ring 278 of
+  845 e/s), and the con floor's energy-throttle discount was bypassed while
+  metal wasted -- reverted; whether a stalled factory should pause is his call.
+- **Late constructor idle in the canon was an election livelock, not pricing.**
+  Census (`apex: elec-slice`): minute 20 done=0, lapse-dropped 1,581, queued
+  568. The 8 s ELEC_LAPSE was shorter than the engine's idle-pass revisit
+  (measured 4-13 s late), so every sliced set expired before its builder came
+  back to collect it. Lapse now derives from the measured revisit period;
+  idle 41% -> 17%, elections at minute 20 0 -> 740. The finish was also held
+  behind the pump's steps (held=189/min once the lapse stopped): the finish
+  is budgeted against finishes only. Remaining: `hk.maketask.builder` is still
+  ~0.7 ms a call; the idle pass itself (`job:bldIdle`) is the revisit clock.
+
 
 apexearth's reference (Comet Catcher Remake 1.8, +50% bonus, vs inactive AI,
 `tools/canon.py matches/_replay-canon`): minute 10 352 m/s / 4.8k e/s, minute
@@ -45,7 +68,7 @@ discounted per cell against the best the asker can place (unmeasured).
 
 New goal: "Refine our economy logic until we out-eco our opponents at 30m in
 Carrot Mountain." Baseline `carrot30-base` (HEAD 98f0b3f8, 1v1 vs BARb hard,
-12 games, 31 min, `--speed 10` so builder orders are not lost, S24):
+12 games, 31 min, `--speed 10` -- the late-order tail at full speed trips the stuck watch, S24):
 
 | minute | n | our m/s | BARb m/s | our mexes | BARb mexes | our e/s | BARb e/s |
 |---|---|---|---|---|---|---|---|
@@ -127,10 +150,11 @@ Isthmus; 11.5% vs 15.7% on Altair.
   `CmdQueueSize()==0` for 2 s is re-elected (stuck.as, unmeasured).
   `task-die why=?` was 29 of 80 deaths in that game -- the DLL has no reason
   code for an engine-refused build.
-- **Builder idle time in batteries is mostly a sim-speed artefact (S24).**
-  The traced DLL issued the build order for a buildable, reachable site and
-  the engine held no command afterwards in 57% of samples at 37x, 0.7% at
-  1x. Real idle must be read at `--speed 1`. What IS real: in an 8v8 the
+- **Builder idle time in batteries is inflated by the stuck watch (S24, re-measured).**
+  Orders arrive at every speed (>98%); a tail lands >90 frames late in 4% of
+  orders at full speed vs 0.3% at `--speed 5`, and the watch kills and
+  re-elects those (17 kills vs 0 in the same canon). Read idle at `--speed 5`
+  or watched until the watch re-issues instead of killing. What IS real: in an 8v8 the
   commander forward cap measured forward-ness against the ALLIED centre, so
   the team nearest the middle refused every want ("blue and light green ...
   weren't doing anything"); now relative to where he stands.

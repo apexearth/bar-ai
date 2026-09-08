@@ -271,7 +271,7 @@ def main() -> int:
                     help="matches per pairing per map (rounded up to even for side balance)")
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--speed", type=int, default=0,
-                    help="sim speed passed to run_match (S24: 37x loses builder orders; 5 is clean, 10 loses 6%%)")
+                    help="sim speed passed to run_match (S24: at full speed a tail of orders lands late and the stuck watch kills them; 5 is clean)")
     ap.add_argument("--workers", type=int, default=6,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,

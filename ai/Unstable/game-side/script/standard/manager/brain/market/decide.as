@@ -79,7 +79,7 @@ int MemoTtl()
 // protect run at 4.4-16 min depending on the game; the commander's never
 // ran at all -- which is why the first mexes stood naked for the tick).
 const int   MEMO_STARVED = 450;   // 15s
-const uint  MEMO_N = 7;
+const uint  MEMO_N = 8;
 array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
 array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
 // A starved copy that was ALREADY deferred once recomputes next time whatever
@@ -156,6 +156,7 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	if (slot == 3) return ProposeSense(unit);
 	if (slot == 4) return ProposeReclaimObsolete(unit);
 	if (slot == 6) return ProposeMexUp(unit);
+	if (slot == 7) return ProposePlant(unit);
 	return ProposeProtect(unit);
 }
 
@@ -287,6 +288,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 // The trade, the numbers and how to move it: docs/27, apex_elec_frame_us.
 int gElecFrame = -1;
 double gElecSpentUs = 0.0;
+double gElecPumpUs = 0.0;   // of gElecSpentUs, what the pump's steps took
 double gElecCallUs = 0.0;   // of that, what THIS call has already charged itself
 double gElecBudgetUs = -1.0;
 bool gElecFinishing = false;
@@ -314,6 +316,7 @@ void ElecFrameRoll()
 	if (gElecFrame != ai.frame) {
 		gElecFrame = ai.frame;
 		gElecSpentUs = 0.0;
+		gElecPumpUs = 0.0;
 	}
 }
 
@@ -350,7 +353,11 @@ bool ElecAfford(int step)
 	ElecFrameRoll();
 	if (gElecSpentUs <= 0.0)
 		return true;   // a step dearer than the whole slice must still run once
-	return gElecSpentUs + gStepEma[uint(step)] <= ElecFrameUs();
+	// The finish is budgeted against finishes only: the pump spends the slice
+	// on other sets' steps at the door of every hook call, and a whole set's
+	// own visit would otherwise find nothing left, every visit.
+	const double spent = (step == ELEC_STEPS - 1) ? (gElecSpentUs - gElecPumpUs) : gElecSpentUs;
+	return spent + gStepEma[uint(step)] <= ElecFrameUs();
 }
 
 void ElecCharge(int step, double us)
@@ -391,6 +398,15 @@ array<Elec@> gElecOf(32001);   // per-unit-id, Spring ids cap at 32k
 // Only silence resets a set: being held back by the budget must not, or a
 // saturated frame would restart the very elections it is starving.
 const int ELEC_LAPSE = 2 * 15 * 8;   // frames
+// Silence is a multiple of the revisit period as MEASURED: with 300 idle
+// builders the pass outran the fixed 8 s, and every sliced set expired
+// before its own builder came back to collect it.
+float gRevisitEma = 0.f;   // frames between one builder's visits
+int ElecLapse()
+{
+	const int byVisit = int(4.f * gRevisitEma);
+	return (byVisit > ELEC_LAPSE) ? byVisit : ELEC_LAPSE;
+}
 
 // THE PENDING SETS, OLDEST FIRST. FIFO is the whole aging rule: the slice goes
 // to the election that has waited longest, and one that wins finishes and
@@ -402,6 +418,10 @@ int gElecWorstWait = 0;
 int gElecPartial = 0;
 int gElecDone = 0;
 int gElecDropped = 0;
+int gElecDropLapse = 0;   // silent past ELEC_LAPSE
+int gElecDropTask = 0;    // put on a build since it opened
+int gElecHeld = 0;        // whole, and the slice could not afford the finish
+int gDecBounce = 0;       // the 2-s re-election gate
 int gNextElecLog = 0;
 
 // The eighteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
@@ -415,7 +435,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	if (step == 0)       { @w = ProposeMex(unit);             Perf::Add("want.mex", _t); }
 	else if (step == 1)  { @w = MemoPropose(0, unit);         Perf::Add("want.energy", _t); }
 	else if (step == 2)  { @w = ProposeGeo(unit);             Perf::Add("want.geo", _t); }
-	else if (step == 3)  { @w = ProposePlant(unit);           Perf::Add("want.plant", _t); }
+	else if (step == 3)  { @w = MemoPropose(7, unit);         Perf::Add("want.plant", _t); }
 	else if (step == 4)  { @w = ProposeConvert(unit);         Perf::Add("want.convert", _t); }
 	else if (step == 5)  { @w = ProposeStore(unit);           Perf::Add("want.store", _t); }
 	// Memoised: unmemoised this one is O(builders x mex spots) and grows all game.
@@ -449,16 +469,22 @@ bool ElecPending(CCircuitUnit@ unit)
 	Elec@ st = gElecOf[int(unit.id)];
 	return (st !is null) && (st.defId == int(unit.circuitDef.id))
 			&& (st.step < ELEC_STEPS - 1)
-			&& (ai.frame - st.askedAt <= ELEC_LAPSE);
+			&& (ai.frame - st.askedAt <= ElecLapse());
 }
 
 Elec@ ElecOpen(CCircuitUnit@ unit)
 {
 	const int uid = int(unit.id);
 	Elec@ st = gElecOf[uid];
+	if (st !is null) {
+		const float gap = float(ai.frame - st.askedAt);
+		gRevisitEma = (gRevisitEma <= 0.f) ? gap : (gRevisitEma * 0.9f + gap * 0.1f);
+	}
 	if ((st !is null) && ((st.defId != int(unit.circuitDef.id))
-			|| (ai.frame - st.askedAt > ELEC_LAPSE)))
-		@st = null;   // recycled onto another unit, or abandoned -- see ELEC_LAPSE
+			|| (ai.frame - st.askedAt > ElecLapse()))) {
+		ElecDrop(uid);   // and its queue entry: a reopen used to leave a duplicate behind
+		@st = null;   // recycled onto another unit, or abandoned -- see ElecLapse
+	}
 	if (st is null) {
 		Elec fresh;
 		fresh.defId = int(unit.circuitDef.id);
@@ -496,7 +522,9 @@ bool ElecSteps(CCircuitUnit@ unit, Elec@ st)
 			return false;
 		const double t0 = ai.ClockUs();
 		st.wants.insertLast(ProposeStep(st.step, unit));
-		ElecCharge(st.step, ai.ClockUs() - t0);
+		const double us = ai.ClockUs() - t0;
+		ElecCharge(st.step, us);
+		gElecPumpUs += us;
 		++st.step;
 		st.sMexOpen = gMexOpen;
 		st.sSpotM = gLastSpotM;
@@ -525,11 +553,16 @@ void ElecPump()
 		// build by the engine since it opened: none of those is still electing,
 		// and finishing the set would hand a job to a unit that has one.
 		bool gone = (st is null) || (u is null)
-				|| (st.defId != int(u.circuitDef.id))
-				|| (ai.frame - st.askedAt > ELEC_LAPSE);
+				|| (st.defId != int(u.circuitDef.id));
+		if (!gone && (ai.frame - st.askedAt > ElecLapse())) {
+			gone = true;
+			++gElecDropLapse;
+		}
 		if (!gone) {
 			IUnitTask@ held = u.task;
 			gone = (held !is null) && (held.GetType() == Task::Type::BUILDER);
+			if (gone)
+				++gElecDropTask;
 		}
 		if (gone) {
 			++gElecDropped;
@@ -550,12 +583,19 @@ void ElecLog()
 		return;
 	gNextElecLog = ai.frame + 60 * SECOND;
 	AiLog("apex: elec-slice done=" + gElecDone + " partial=" + gElecPartial
-		+ " dropped=" + gElecDropped + " queued=" + gElecQ.length()
+		+ " held=" + gElecHeld + " bounce=" + gDecBounce
+		+ " dropped=" + gElecDropped + " (lapse=" + gElecDropLapse
+		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
+		+ " revisitS=" + formatFloat(gRevisitEma / float(SECOND), "", 0, 2)
 		+ " sliceUs=" + int(ElecFrameUs()));
 	gElecDone = 0;
 	gElecPartial = 0;
 	gElecDropped = 0;
+	gElecDropLapse = 0;
+	gElecDropTask = 0;
+	gElecHeld = 0;
+	gDecBounce = 0;
 	gElecWorstWait = 0;
 }
 
@@ -601,7 +641,9 @@ bool PlantFramed()
 bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
 {
 	bool didDraw = false;
-	array<int> catBest(CAT_N, -1);   // index into ranked, or -1
+	// One slot past CAT_N: the economy want the ladder cannot rank keeps
+	// its own ticket while the ETA merges the rest (see below).
+	array<int> catBest(CAT_N + 1, -1);   // index into ranked, or -1
 	for (uint ri = 0; ri < ranked.length(); ++ri) {
 		const int c = CategoryOf(ranked[ri].kind);
 		if (c < 0)
@@ -616,7 +658,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	// build power are three ways of buying a bigger economy sooner, so the
 	// ladder answers them together and they hold ONE ticket between them
 	// instead of three. See eta.as; CAT_PRODUCE stays out of the merge.
-	array<float> catV(CAT_N, -1.f);   // >=0 overrides a ticket's weight
+	array<float> catV(CAT_N + 1, -1.f);   // >=0 overrides a ticket's weight
 	if (EtaOn()) {
 		const int pick = EtaEcoPick(ranked);
 		if (pick >= 0) {
@@ -627,6 +669,15 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 			const int pc = CategoryOf(ranked[pick].kind);
 			catBest[pc] = pick;
 			catV[pc] = EtaEcoWeight(ranked);
+			// A converter, a store or an assist has no rung, and clearing their
+			// category's ticket above deleted them from the draw: they keep
+			// their market price, so they keep a ticket.
+			for (uint ri = 0; ri < ranked.length(); ++ri) {
+				if (EtaMergedCat(CategoryOf(ranked[ri].kind)) && !EtaRanks(ranked[ri])) {
+					catBest[CAT_N] = int(ri);
+					break;   // ranked is value-sorted
+				}
+			}
 		}
 	}
 	// HOW SHARP THE DRAW IS. Weighting each ticket by its raw value means a
@@ -646,9 +697,9 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	const float payH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	const float bitCap = EcoPowerM() * ((payH > 1.f) ? payH : 900.f);
 	const float commitSh = ai.GetTunable("apex_commit_sharp", TUNE_COMMIT_SHARP);
-	array<float> wt(CAT_N, 0.f);
+	array<float> wt(CAT_N + 1, 0.f);
 	float sumV2 = 0.f;
-	for (int c = 0; c < CAT_N; ++c) {
+	for (int c = 0; c <= CAT_N; ++c) {
 		if (catBest[c] < 0)
 			continue;
 		const float v = (catV[c] >= 0.f) ? catV[c]
@@ -685,7 +736,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 		uint h2 = uint(atFrame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
 		h2 ^= (h2 >> 13);
 		float roll2 = float(h2 % 10000) / 10000.f * sumV2;
-		for (int c = 0; c < CAT_N; ++c) {
+		for (int c = 0; c <= CAT_N; ++c) {
 			if (catBest[c] < 0)
 				continue;
 			roll2 -= wt[c];
@@ -728,6 +779,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND) {
 			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 				++Builder::gComBounce;   // a task that died within 2 s of being handed out
+			++gDecBounce;
 			return null;
 		}
 		gLastDecideAt[int(unit.id)] = ai.frame;
@@ -804,7 +856,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Elec@ st = ElecOpen(unit);
 		ElecPump();   // oldest first, and this set is in the queue
 		if ((st.step < ELEC_STEPS - 1) || !ElecAfford(ELEC_STEPS - 1)) {
-			++gElecPartial;
+			if (st.step < ELEC_STEPS - 1)
+				++gElecPartial;
+			else
+				++gElecHeld;
 			Perf::Note("dec.partial");
 			return null;
 		}
