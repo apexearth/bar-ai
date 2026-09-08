@@ -65,6 +65,18 @@ instrument shows next.
   pin the plant (or filter the battery by opening plant) before judging any
   production-side energy price; and the gadget's `eAskFac/eAskCon/eAskNano/
   eUseTop` now say who is asking.
+  **Isthmus-only, 12 games, split by opening plant** (`isthmus-base`): air
+  openings 26.9% poor-income stall, bot-lab openings 16.1%. The
+  decomposition names the lab-game sink: 2-3 nano turrets assisting a
+  Fast Infantry Bot line ask ~130 e/s EACH (300 of a 555 pull at minute 10
+  on 334 income); the air-game sink is the plant itself. Pricing a nano by
+  the share of its energy ask the economy can feed (`isthmus-nanoE`, 12
+  games) moved the minute-14 stalled share 27.8% -> 22.5% and the
+  poor-income share 22% -> 21%, but tripled wasted metal (856 -> 2,587,
+  BARb 1,017) with metal produced unchanged -- reverted as a mixed result.
+  Three derivations tried against this stall, none a clean win; the line
+  (plant + its nano ring) is sized to a metal appetite the energy economy
+  is not asked to grow ahead of, and that coupling is the one still open.
 - **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
   flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
   asymmetry ("spending E is cheap at balance, which is what lets advsol and
