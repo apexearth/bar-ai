@@ -367,3 +367,18 @@ were teaching a dead model to a dead workflow.
 
 Do not restore any of them. Domain knowledge lives in the `ai-*` skills, which
 are maintained.
+
+## S22 — A lane NAMED on the deploy line shipped a stale snapshot
+
+`deploy_ai.py deploy` with no variant re-materialises the active lane from
+`ai/Unstable/` before shipping. `deploy lane-energy2` (a lane named explicitly,
+because the active lane was busy with a battery) shipped `ai/lane-energy2/` as
+it stood at the last unnamed deploy and printed `Deployed 'lane-energy2'`
+all the same. 2026-09-08: four 12-game Isthmus batteries and two watched games
+ran one identical tree while the working tree carried three further changes;
+the batteries spread 17.2–27.0% stalled at minute 14 — which is the noise floor
+of n=12 on that map, not any effect. Fixed in `deploy_ai.py` (a named lane is
+materialised too). The check that would have caught it in one line:
+`grep -c <new symbol> <game-side script dir>/…` after every deploy, or
+`deploy_ai.py status`, whose `repo`/`live` digest reads the lane's snapshot,
+not `ai/Unstable/`, so it said "in sync" throughout.

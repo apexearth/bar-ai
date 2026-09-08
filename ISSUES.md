@@ -85,10 +85,18 @@ instrument shows next.
   7.1% (8-9%), poor-income stall 8% (was 3%), rich 9% (was 21%); BARb
   8,812 / 16.5 / 5.5%. Inside the spread on production, but the early
   stall on Altair should be re-read after the next change there.
-  Then (supply discount for stuck generators, EMakeInFlight): Isthmus 12
-  games poor-income stall 19% -> 15%, rich 32% -> 22%, minute-14 share
-  22.6% -> 17.2%, production +4%. Lab and vehicle openings now sit at 6-7%
-  poor-income stall; air openings at 23% are the whole remainder.
+  **RETRACTED 2026-09-08 (S22):** the "supply discount" battery
+  (`isthmus-stuck2`, and `isthmus-stuck`, `isthmus-fleetask`,
+  `isthmus-fleetask2`) all ran the SAME stale lane snapshot -- the tree of
+  c8392af6 -- because a lane named on the deploy line was not
+  re-materialised. Their spread, 17.2% / 21.0% / 22.6% / 27.0% stalled at
+  minute 14 and 15-21% below 400 e/s, is the noise floor of a 12-game
+  Isthmus battery. fd140d87's numbers are that noise; the commit stands on
+  its derivation only and is unmeasured, as is the fleet-ask demand (in the
+  working tree). `isthmus-base` (27.8%) against that pooled 22% is inside
+  the same floor, so the c8392af6 changes are also not resolved by n=12.
+  Only the session's first batteries (control 36-38% -> 9-24%) are outside
+  it. Any further Isthmus claim needs ~36 games per arm.
   **The geo next to the base, started and abandoned** (his watched seed 12,
   5.2 min): `apex: stuck -- armck held armgeo progress=0.11 toSite=127
   buildDist=130 still 30s` -- the constructor stood 127 elmos from the vent

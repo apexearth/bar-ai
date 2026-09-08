@@ -521,6 +521,12 @@ def main() -> int:
             v = _lane.sync_variant() if _lane.name() else "Unstable"
         elif _lane.name() and v == "Unstable":
             v = _lane.sync_variant()
+        elif v.startswith("lane-"):
+            # A lane NAMED on the command line is materialised too. Without
+            # this it shipped the snapshot from the last unnamed deploy and
+            # still printed "Deployed": four batteries and two watched games
+            # ran one stale tree on 2026-09-08 (docs/25, S22).
+            v = _lane.sync_variant(v[len("lane-"):])
         deploy(env, v, args.allow_running)
     elif args.cmd == "pull":
         pull(env, args.variant)
