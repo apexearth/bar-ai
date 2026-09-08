@@ -145,6 +145,7 @@ Want@ WantCopy(Want@ s)
 	c.tCost = s.tCost;
 	c.value = s.value;
 	c.buildSec = s.buildSec;
+	c.walkSec = s.walkSec;
 	return c;
 }
 

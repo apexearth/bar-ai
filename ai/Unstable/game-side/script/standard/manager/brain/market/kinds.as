@@ -40,6 +40,7 @@ class Want {
 	// How long this want stands as a defenceless nanoframe. Set by ValueOf,
 	// read by the construction-risk charge in Decide.
 	float buildSec = 0.f;
+	float walkSec = 0.f;    // the asker's road to pos, so the ladder can charge it
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

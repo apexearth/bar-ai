@@ -474,16 +474,19 @@ float DPowerOf(Want@ w, int d)
 	return (dI > 0.f) ? dI : 0.f;
 }
 
+// The first move is walked to: a 26-metal claim two minutes down the road is
+// not a 5-second rung, and priced as one it sent every hand across the map
+// while the bank sat full.
 float EtaOfWant(Want@ w)
 {
 	if (!EtaRanks(w))
 		return ETA_BIG;
 	const int d = int(w.def.id);
 	if (w.kind == WK_NANO)
-		return EtaWith(d, 0.f, Catalog::gBuildPower[d], false);
+		return w.walkSec + EtaWith(d, 0.f, Catalog::gBuildPower[d], false);
 	if (w.kind == WK_TECH)
-		return EtaWith(d, 0.f, 0.f, true);
-	return EtaWith(d, DPowerOf(w, d), 0.f, false);
+		return w.walkSec + EtaWith(d, 0.f, 0.f, true);
+	return w.walkSec + EtaWith(d, DPowerOf(w, d), 0.f, false);
 }
 
 // ONE ECONOMIC QUESTION, ONE ANSWER. Extraction, generation and build power are

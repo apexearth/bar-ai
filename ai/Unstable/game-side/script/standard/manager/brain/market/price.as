@@ -707,6 +707,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	buildSec *= EStretch(Catalog::gCostE[defId], buildSec);
 	w.gain = gain;
 	w.buildSec = buildSec;
+	w.walkSec = (walkSec > 0.f) ? walkSec : 0.f;
 	// The E bill at what it actually forgoes (duration-priced, forgiven in
 	// overflow) -- pricing it at the spot spike structurally banned every
 	// big-E build (advsol, fusion) exactly when they were wanted.
