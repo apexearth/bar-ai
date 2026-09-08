@@ -44,7 +44,7 @@ const float TUNE_ENERGY_HEADROOM = 1.35f;
 
 // [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the
 //   ETA re-rank wants WITHIN the four economic categories. See docs/27.
-const float TUNE_ETA = 0.f;
+const float TUNE_ETA = 1.f;
 
 // [toggle 0/1] -- The `apex: eta` shadow log with the ETA layer OFF. One line
 //   costs a full ladder simulation per ranked want; on when apex_eta is.

@@ -10,7 +10,9 @@ what the code actually computes, what it deliberately refuses to compute, and ho
 to tell whether it is working. It describes **`manager/brain/market/eta.as`** and
 the one block it added to `market/decide.as`.
 
-Status, 2026-08-31: **economy-only, and the army half is not built.** The target
+Status, 2026-09-08: **ON by default (`apex_eta=1`) since the Carrot Mountains
+battery: minute-30 metal income 188 -> 236 m/s against a flat BARb, 12 games;
+see docs/27 `TUNE_ETA`.** Still economy-only, and the army half is not built. The target
 names a level of economic power and nothing else. Everything below is scoped to
 that; do not read it as a description of how the AI values army or defence.
 

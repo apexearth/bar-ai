@@ -42,6 +42,26 @@ objective (`apex_eta=1`, eta-objective skill) is the designed answer and is
 being A/B'd (`carrot30-eta`). Also running: `carrot30-t1` = hoist income bar
 removed + generators never retired while energy is short.
 
+- **The ETA objective closes the Carrot gap (`carrot30-eta`, apex_eta=1 on the
+  baseline tree, 12 games, all to 30).** Minute 20: 102.8 vs 116.6 m/s (base
+  83.0); minute 30: **236.3 vs 232.1** (base 188.0), 99.8 vs 81.5 mexes, 47.8
+  vs 19.2 constructors, energy 5,306 vs 3,628, rich-income stall 50% vs 32%,
+  no game lost (base 0-3). The shift is our arm's alone (BARb 237 -> 232), so
+  it clears the 15% floor. The ladder's pick disagreed with the market's
+  almost never in the log sample (`mkt=mex eta=mex`), which says the merge of
+  the three eco tickets into one, not the pick, is what moved. Default flipped
+  to 1. Open: 48 constructors at 30 is metal in hands that mohos would pay
+  more for; the rich stall rose to 50%.
+- **Carrot at 30, after t1 (82037166): the gap is mohos and T2 hands.** Minute
+  30, n=10: T2 mexes 9 vs 18, T2 constructors 9 vs 13, mex income 163 vs 227
+  with our T2 lab up two minutes EARLIER (12.2 vs 14.2). Our T2 cons' executions
+  in minutes 12-30: 15 assist, 10 fusion, 7 afus, 7 doomsday, 12 mex upgrades.
+  Spend: army 64.7k vs 35.8k, defence 7.4k vs 28.5k, build power 11.2k vs 16.3k.
+- **Rascal spam (army side, not touched).** 282 corfav (26 m scout cars) built
+  and 247 lost by minute 30 in one game; `prodrank` values it at 18.2M against
+  1.9M for the next product (g=472k, p=385). 7.3k metal and a factory's time.
+  docs/24 territory; recorded here because it is where economy metal goes.
+
 ## 2026-09-08 (late) — ECONOMY at 30 minutes: Altair ahead, Isthmus behind
 
 Goal moved by apexearth: "prove that we out-eco our opponents at 30m into the

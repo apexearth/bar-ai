@@ -13,11 +13,19 @@ from now on, and keep the one-liner in `tunables.as` in step.
 
 ## Economy — energy, fusion, converters, reclaim
 
-### `TUNE_ETA` = 0.f
+### `TUNE_ETA` = 1.f (was 0 until 2026-09-08)
 
 THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the ETA re-rank wants
 WITHIN the four economic categories. Swept against an inactive opponent -- see
-the eta-objective skill.
+the eta-objective skill -- and unresolved there. Resolved 2026-09-08 on Carrot
+Mountains v2.0, 1v1 vs BARb hard, 12 games each, 31 min, --speed 10: with
+apex_eta=1 our metal income at minute 30 went 188.0 -> 236.3 m/s (BARb 236.9
+-> 232.1, i.e. flat), mexes held 68.6 -> 99.8, and no game was lost (0-3
+before); minute 20: 83.0 -> 102.8. The shift is our arm's alone and clears the
+~15% floor BARb's own numbers show between batteries. The log sample showed
+`mkt` and `eta` agreeing almost always, so the effect is the MERGE of the three
+economy tickets into one draw, not the ladder's pick. Cost: 47.8 constructors
+at 30 (BARb 19.2) and a rich-income stall of 50% (32%).
 
 ### `TUNE_ETA_LOG` = 0.f
 
