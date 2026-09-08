@@ -34,11 +34,15 @@ instrument shows next.
   and 1.8 m by `draw` (LLT v=21 over plant 13.7), lab at 2.3 m. The plant's
   price loses ordinary draws to towers and solars in the opening; the cover
   push's `PlantFramed` gate does not apply because these were not pushes.
-- **Metal unspent while e-stalled mid-game.** Metal bank 95-100% at minutes
-  10-12 on Isthmus with energy at 20-37% and pull 480-760 against 380-500
-  made. `InFlightCap` now counts the bank's flow (draft 6); whether the
-  ladder's throughput (advsol serial, cap per def) can follow a pull that
-  grows 100 e/s per minute is not measured.
+- **Isthmus still e-stalls in minutes 11-15.** After the feed-share fix
+  (bank term and con floor no longer read e-throttled hands as missing
+  hands) the economy is ahead of BARb hard by 43% metal produced at minute
+  14, but the energy bank sits at 14-32% from minute 11 with pull outrunning
+  income by 100-140 e/s (pull 776 at 14 m) and the metal bank still 60-94%
+  full. The ladder at 400-650 e/s is solars (20 e/s, cap per def) and ONE
+  advanced solar (`apex_advsol_serial`); whether that rung can follow a pull
+  growing ~100 e/s per minute, or whether the answer is the T2 plant
+  (techStart is -1 in most 15-minute games on both sides), is not measured.
 - **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
   flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
   asymmetry ("spending E is cheap at balance, which is what lets advsol and
