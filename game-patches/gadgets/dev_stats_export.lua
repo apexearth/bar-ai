@@ -492,7 +492,7 @@ local mFillSum, eFillSum = {}, {}   -- summed bank/storage, for a mean fill
 local function sampleResources()
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI then
+		if isAI or (teamID ~= Spring.GetGaiaTeamID()) then   -- humans too: canon games
 			bump(resSamp, teamID, 1)
 			local mc, ms, mp, _, me = Spring.GetTeamResources(teamID, "metal")
 			local ec, es, ep, _, ee = Spring.GetTeamResources(teamID, "energy")
@@ -517,7 +517,7 @@ end
 local function sampleCommIdle()
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI then
+		if isAI or (teamID ~= Spring.GetGaiaTeamID()) then   -- humans too: canon games
 			for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
 				local udid = Spring.GetUnitDefID(uid)
 				local ud = udid and UnitDefs[udid]
@@ -603,7 +603,7 @@ end
 local function dump(reason, onlyTeam, atFrame)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI and (onlyTeam == nil or teamID == onlyTeam) then
+		if (isAI or teamID ~= Spring.GetGaiaTeamID()) and (onlyTeam == nil or teamID == onlyTeam) then
 			local parts = {
 				string.format("team=%d", teamID),
 				string.format("ally=%d", select(6, Spring.GetTeamInfo(teamID, false)) or 0),
@@ -851,7 +851,7 @@ end
 local function dumpPositions(onlyTeam, atFrame)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-		if isAI and (onlyTeam == nil or teamID == onlyTeam) then
+		if (isAI or teamID ~= Spring.GetGaiaTeamID()) and (onlyTeam == nil or teamID == onlyTeam) then
 			-- isBuilding alone excluded nano turrets (immobile UNITS, not
 			-- buildings, in Spring def terms) -- and the nanos-per-factory
 			-- audit needs them. Factories report canMove=true (they pass move
@@ -987,7 +987,7 @@ function gadget:GameFrame(frame)
 		dumpQ = {}
 		for _, teamID in ipairs(Spring.GetTeamList()) do
 			local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
-			if isAI then
+			if isAI or (teamID ~= Spring.GetGaiaTeamID()) then   -- humans too: canon games
 				dumpQ[#dumpQ + 1] = { teamID, "stats" }
 				dumpQ[#dumpQ + 1] = { teamID, "pos" }
 			end

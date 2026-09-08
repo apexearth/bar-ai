@@ -42,6 +42,15 @@ objective (`apex_eta=1`, eta-objective skill) is the designed answer and is
 being A/B'd (`carrot30-eta`). Also running: `carrot30-t1` = hoist income bar
 removed + generators never retired while energy is short.
 
+- **Same tree on Isthmus (`isthmus30-t3`, 12 games):** minute 14 37.1 vs 49.3 m/s,
+  minute 20 86.9 vs 98.2, minute 30 (n=9) 192.6 vs 234.2, produced 114k vs 147k,
+  mexes 52 vs 63, energy 5,931 vs 4,421; wins 3-0, nine timelimits. No regression
+  against the earlier Isthmus batteries (130-146 vs 141-176) but still behind on
+  extraction; the early curve (minute 14) is the gap on both maps.
+- **t3 = ETA + hoist/retire/T2-floor: 282.0 vs 228.4 m/s at 30 (n=11), production
+  157.8k vs 159.5k, 0 losses.** Behind at 20 (99.9 vs 120.3): the early curve is
+  the remaining problem on Carrot; energy 7,898 vs 4,093 says the late game is
+  now energy-rich and the metal follows.
 - **The ETA objective closes the Carrot gap (`carrot30-eta`, apex_eta=1 on the
   baseline tree, 12 games, all to 30).** Minute 20: 102.8 vs 116.6 m/s (base
   83.0); minute 30: **236.3 vs 232.1** (base 188.0), 99.8 vs 81.5 mexes, 47.8
