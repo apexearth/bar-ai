@@ -85,6 +85,17 @@ instrument shows next.
   7.1% (8-9%), poor-income stall 8% (was 3%), rich 9% (was 21%); BARb
   8,812 / 16.5 / 5.5%. Inside the spread on production, but the early
   stall on Altair should be re-read after the next change there.
+  **The geo next to the base, started and abandoned** (his watched seed 12,
+  5.2 min): `apex: stuck -- armck held armgeo progress=0.11 toSite=127
+  buildDist=130 still 30s` -- the constructor stood 127 elmos from the vent
+  (range 130), made no progress for 30 s with both banks full, and the
+  stuck detector aborted and re-elected. The abort put the vent on the
+  block list (`NearBlocked`), so the next two geo elections went to vents
+  3,000+ elmos away and died on the walk, while the 11% frame at home
+  stayed orphaned. Why the engine made no progress in range is not known
+  (3D range at a cliff vent, or a blocked footprint); the response to look
+  at is the block-list entry after a no-progress abort, which is what sent
+  the builders away from the one vent that was reachable.
   Still open there: the sense want elects a radar 37 times for 9 built
   (refused "full", re-elected every draw -- a wasted election per builder
   per cycle); and the air-plant opening (Whirlwinds at 4,600 E) remains the
