@@ -201,8 +201,18 @@ int ConsNeedAny()
 int CeilingConsNeed()
 {
 	const float per = ai.GetTunable("apex_t2_con_per_m", TUNE_T2_CON_PER_M);
-	const float want = ai.GetTunable("apex_t2_con_base", TUNE_T2_CON_BASE)
+	float want = ai.GetTunable("apex_t2_con_base", TUNE_T2_CON_BASE)
 			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 25.f);
+	// Unspent metal is hands we lack, at the ceiling tier as at the first:
+	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
+	// metal spilled per game (2026-09-08).
+	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
+			* EFeedShare();
+	if (unspent > 0.f) {
+		const float bp = ConWorkerBP();
+		if (bp > 0.f)
+			want += unspent / bp;
+	}
 	const int have = CeilingConsOwned() + CeilingConsInFlight();
 	return (float(have) < want) ? (int(want) - have) : 0;
 }

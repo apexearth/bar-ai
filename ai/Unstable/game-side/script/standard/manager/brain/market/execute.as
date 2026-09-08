@@ -216,6 +216,8 @@ IUnitTask@ StallDebtPay(CCircuitUnit@ unit)
 	return res;
 }
 
+int gMexupNullLogAt = 0;
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
@@ -302,8 +304,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		IUnitTask@ ju = Requests::JoinSpot(unit, w.def, w.pos);
 		if (ju !is null)
 			return ju;
-		return aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::MEXUP,
+		IUnitTask@ mu = aiBuilderMgr.Enqueue(TaskB::Spot(Task::BuildType::MEXUP,
 				Task::Priority::NORMAL, w.def, w.pos, w.spotId));
+		if ((mu is null) && (ai.frame >= gMexupNullLogAt)) {
+			gMexupNullLogAt = ai.frame + 5 * SECOND;
+			AiLog("apex: mexup-null t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " " + w.def.GetName() + " spot=" + w.spotId + " at=" + int(w.pos.x) + "," + int(w.pos.z)
+				+ " canBuild=" + (unit.circuitDef.CanBuild(w.def) ? 1 : 0));
+		}
+		return mu;
 	}
 	if (w.kind == WK_TECH) {
 		IUnitTask@ jt = JoinBig(w.def);
