@@ -48,8 +48,10 @@ IUnitTask@ Create(CCircuitDef@ want, Task::BuildType bt, Task::Priority prio,
 	return post;
 }
 
+string gLastWhat = "";   // every verdict, rate-limited or not; execute reads it
 void Log(CCircuitDef@ want, const string& in what)
 {
+	gLastWhat = what;
 	const int id = want.id;
 	const bool tracked = (id >= 0) && (uint(id) < gNextDefLog.length());
 	if (tracked && (ai.frame < gNextDefLog[id]))

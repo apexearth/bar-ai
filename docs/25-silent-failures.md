@@ -396,3 +396,18 @@ no crash and `review.py` gate 1 passed. Read in `ecoscale`: our arm at minute
 deployed, a copy whose size moved is refused, and `not found!` is a crash in
 both tools. The one-line check remains: md5 of the deployed DLL against its
 build output.
+
+## S24 — At 37x sim speed the engine holds NO order for a builder 57% of the time
+
+`apex_task_trace=1` on Altair seed 3, 6 minutes: the DLL issued a build order
+for a site the engine itself called buildable and reachable, and
+`Unit_HasCommands` stayed false for 90+ frames in 4,017 of 7,026 task-holder
+samples at the harness's default speed. The same game at `--speed 1`: 52 of
+7,579. The order is applied some frames after it is given and the lag scales
+with sim speed (S13); past a point it is effectively lost, and a unit that was
+already idle gets no idle event, so nothing retries. Consequences: every
+constructor-idle figure from a fast battery is inflated; a stuck watch tuned
+in frames fires on the artefact; the 30-second parked-builder population that
+three sessions chased was partly this. The stuck watch now sizes its wait to
+the lag it measures in the game it is in. Read idle time from a `--speed 1`
+game or a watched one, never from a battery.

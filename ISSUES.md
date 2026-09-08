@@ -47,6 +47,13 @@ Isthmus; 11.5% vs 15.7% on Altair.
   `CmdQueueSize()==0` for 2 s is re-elected (stuck.as, unmeasured).
   `task-die why=?` was 29 of 80 deaths in that game -- the DLL has no reason
   code for an engine-refused build.
+- **Builder idle time in batteries is mostly a sim-speed artefact (S24).**
+  The traced DLL issued the build order for a buildable, reachable site and
+  the engine held no command afterwards in 57% of samples at 37x, 0.7% at
+  1x. Real idle must be read at `--speed 1`. What IS real: in an 8v8 the
+  commander forward cap measured forward-ness against the ALLIED centre, so
+  the team nearest the middle refused every want ("blue and light green ...
+  weren't doing anything"); now relative to where he stands.
 - **The stall interrupt thrashes when its answer cannot execute.** Same con,
   minutes 4-5: interrupted off a 90%-done tower "to answer the energy stall",
   the solar request was refused (log rate-limited, reason unseen), exec fell
@@ -162,9 +169,24 @@ instrument shows next.
   fusion be bought while solar-fed") is gone with it. Whether the fusion
   still gets bought at the right time is NOT measured; check
   `techStart`/fusion count on a 30-minute battery before trusting it.
-- **Commander idle.** `commIdle` 49-61% of samples in minutes 4-8 on Altair
-  seed 1 (the gadget's own note says this bucket answers the wrong question;
-  `commStall` is the one to read). Not diagnosed.
+- **Commander idle. DIAGNOSED AND PARTLY FIXED 2026-09-08.** The engine
+  throws build orders away without telling anyone:
+  `CBuilderCAI::GiveCommandReal` returns before queueing when the build
+  square is blocked by a finished building or an unreclaimable feature, and
+  since the builder never left idle no `UnitIdle` event follows either. Both
+  of CircuitAI's retry routes need that event, so the builder stands with an
+  empty command queue holding a live task while `Reevaluate` re-elects and is
+  handed the same buildType back. The commander hits it hardest because an
+  in-base build skips pathing, so his travel ends at once and that single
+  `Execute` is the only order the task will ever issue. Measured (Geyser
+  Plains 1v1, commander sampled once a game-second): idle 43.7% of samples,
+  single stalls to 183 s, with a build order issued every ~30 s that never
+  reached the engine. `apex_ord_retry_s` (docs/27) re-drives the task through
+  `OnUnitIdle` after 3 s of empty queue: 33.4% -> 25.7% idle, worst stall
+  195 s -> 137 s, 196 orders recovered per 7-game arm.
+  **Still open:** 25.7% is not zero. `apex: ord-dropped dropped=/checked=`
+  counts the remaining ones per minute; the other routes into an empty queue
+  are not identified.
 
 ## 2026-09-06 — THE REZ FLEET IS SIZED TO A STREAM IT DOES NOT CONVERT
 

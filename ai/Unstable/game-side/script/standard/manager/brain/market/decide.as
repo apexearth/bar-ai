@@ -704,6 +704,8 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	return didDraw;
 }
 
+int gStallRefuseLogAt = 0;
+
 IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
@@ -1382,7 +1384,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// through (fwd -267 by the axis, 0.8 of the way to the enemy by the
 			// map) and he died there. The cap the caution rule runs him home at
 			// bounds where a job may send him.
-			const float ff = Military::ForwardFraction(ranked[i].pos);
+			// Forward of WHERE HE STANDS, not of the allied centre: in an 8v8 the
+			// team nearest the middle read its own start as 0.62 of the way to
+			// the enemy and its commander refused every want for the whole game
+			// (apexearth 2026-09-08: "blue and light green ... weren't doing
+			// anything after making 2 mexes and 1 energy").
+			const float ff = Military::ForwardFraction(ranked[i].pos)
+					- Military::ForwardFraction(unit.GetPos(ai.frame));
 			if ((fwdDist > 400.f)
 				|| (ff > ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP))) {
 				if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
@@ -1426,6 +1434,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))
 			++gExecFail[ranked[i].kind];
+		// The stall's answer refused: the interrupt that freed this builder
+		// will fire again on whatever the fallthrough starts (five in 500
+		// frames, watched), so the verdict is worth a line.
+		if (!refused && (i == 0) && (why == "estall") && (ai.frame >= gStallRefuseLogAt)) {
+			gStallRefuseLogAt = ai.frame + 3 * SECOND;
+			AiLog("apex: stall-answer refused t=" + ai.teamId + " " + unit.circuitDef.GetName()
+				+ " #" + unit.id + " " + ((ranked[0].def is null) ? "-" : ranked[0].def.GetName())
+				+ " verdict=" + Requests::gLastWhat);
+		}
 	}
 	// EVERY RANKED WANT REFUSED. The decide line above names what ranked
 	// first, NOT what got built -- so a builder can log a decision every

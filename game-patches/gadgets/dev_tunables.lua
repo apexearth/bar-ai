@@ -44,6 +44,7 @@ local NAMES = {
 	"apex_bomb_min_value",
 	"apex_bomb_eco_h",       -- BombTask.cpp: seconds of a generator's energy stream added to its bomb value (300)
 	"apex_build_threat_bar",
+	"apex_ord_retry_s",     -- BuilderTask.cpp: seconds a builder's command queue must be empty under a live task before the task re-issues (3; 0 off)
 	"apex_catalog_dump",
 	"apex_decide_log",
 	"apex_elec_frame_us",
@@ -83,6 +84,7 @@ local NAMES = {
 	"apex_medic_frac",
 	"apex_auction_diag",
 	"apex_efloor_diag",
+	"apex_task_trace",
 	"apex_comm_rules",
 	"apex_allow_juno",
 	"apex_allow_tacmissile",

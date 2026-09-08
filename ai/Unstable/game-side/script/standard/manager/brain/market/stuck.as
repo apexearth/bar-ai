@@ -16,6 +16,11 @@ array<float> gStuckZ;
 array<float> gStuckDone;
 array<int>   gStuckSince;
 array<int>   gStuckDeadAt;   // first frame seen holding a task with no engine order
+// The engine applies an order some frames after it is given, and the lag
+// scales with sim speed (S13): 18-90 frames at 37x, 1-3 at 1x. Measured on
+// every task-holder that goes from no order to one, so the dead wait is
+// sized to this game's own lag and never to a clock.
+int gOrderLagMax = 0;
 uint gStuckCursor = 0;
 int  gStuckFreed = 0;
 int  gStuckLogAt = 0;
@@ -94,12 +99,20 @@ void UpdateStuckBuilds()
 			continue;
 		}
 		const uint i = uint(slot);
-		if (!noOrder)
+		if (!noOrder) {
+			if (gStuckDeadAt[i] >= 0) {
+				const int lag = ai.frame - gStuckDeadAt[i];
+				if (lag > gOrderLagMax)
+					gOrderLagMax = lag;
+			}
 			gStuckDeadAt[i] = -1;
-		else if (gStuckDeadAt[i] < 0)
+		} else if (gStuckDeadAt[i] < 0) {
 			gStuckDeadAt[i] = ai.frame;
-		// Two seconds, not one sample: an order can still be in the net (S13).
-		const bool dead = (gStuckDeadAt[i] >= 0) && (ai.frame - gStuckDeadAt[i] >= 2 * SECOND);
+		}
+		int deadWait = 3 * gOrderLagMax;
+		if (deadWait < 2 * SECOND)
+			deadWait = 2 * SECOND;
+		const bool dead = (gStuckDeadAt[i] >= 0) && (ai.frame - gStuckDeadAt[i] >= deadWait);
 		const float dx = p.x - gStuckX[i];
 		const float dz = p.z - gStuckZ[i];
 		if (!dead && (((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
@@ -126,7 +139,7 @@ void UpdateStuckBuilds()
 			+ " buildDist=" + formatFloat(Catalog::gBuildDist[int(u.circuitDef.id)], "", 0, 0)
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z)
-			+ (dead ? " q=0 -- no engine order, re-electing" : " -- re-electing"));
+			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
 		freed.insertLast(u);
 		freedTask.insertLast(t);
 		StuckDrop(i);

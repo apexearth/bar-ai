@@ -718,6 +718,31 @@ local function dump(reason, onlyTeam, atFrame)
 			parts[#parts + 1] = string.format("eInc=%.2f", ei or 0)
 			parts[#parts + 1] = string.format("ePull=%.2f", ep or 0)
 			parts[#parts + 1] = string.format("eSpend=%.2f", ex or 0)
+			-- WHERE THE METAL COMES FROM: the same income can be 50 mexes or
+			-- 30 mexes and converters, and only the units know which.
+			do
+				local mkMex, mkConv, mkAll, nMex, mkMexMax = 0, 0, 0, 0, 0
+				for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+					local udid = Spring.GetUnitDefID(uid)
+					local ud = udid and UnitDefs[udid]
+					if ud ~= nil and not Spring.GetUnitIsBeingBuilt(uid) then
+						local mm = Spring.GetUnitResources(uid) or 0
+						mkAll = mkAll + mm
+						if (ud.extractsMetal or 0) > 0 then
+							mkMex = mkMex + mm
+							nMex = nMex + 1
+							if mm > mkMexMax then mkMexMax = mm end
+						elseif (ud.customParams or {}).energyconv_capacity then
+							mkConv = mkConv + mm
+						end
+					end
+				end
+				parts[#parts + 1] = string.format("mMakeMex=%.1f", mkMex)
+				parts[#parts + 1] = string.format("mMakeConv=%.1f", mkConv)
+				parts[#parts + 1] = string.format("mMakeAll=%.1f", mkAll)
+				parts[#parts + 1] = string.format("mexN=%d", nMex)
+				parts[#parts + 1] = string.format("mexMakeMax=%.1f", mkMexMax)
+			end
 			-- WHO IS ASKING FOR THE ENERGY. ePull is one number; a stall reads
 			-- the same whether a factory is pumping bombers or ten nanos are
 			-- assisting a lab. Each builder's unthrottled ask is its build

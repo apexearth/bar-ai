@@ -61,6 +61,14 @@ generator's gain by the share of its output something would actually absorb:
            + convCap + (eStorage − eCurrent)/apex_e_lookahead
     share  = max(clamp((target − eIncome − EMakeInFlight) / addE, 0, 1), apex_e_waste_worth)
 
+**Under a hard stall the winner is not the best rate of return.** `ProposeEnergy`
+picks the rung with the highest `min(makeE, EnergyDeficitE()) / (walk + stretched
+build)` while `HardEStall()` holds (ewant line: `close=`). The growth premium
+scales with a generator's size (`fGrow` 7.1 for an afus vs 3.0 for a fusion at
+one moment, 2026-09-08), so on rate alone the biggest generator wins while the
+stall runs on -- apexearth: "too early btw, fusion would have been smarter".
+Outside a stall the rate decides as before.
+
 Above the line the gain decays to the `apex_e_waste_worth` floor (0.25) -- NOT
 to zero: energy in the wasted band is worth the conversion floor as soon as a
 converter follows, and that converter's cost is already netted out inside
