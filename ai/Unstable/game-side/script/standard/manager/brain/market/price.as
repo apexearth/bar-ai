@@ -246,7 +246,10 @@ float EPrice()
 	// A stall multiplies the floor -- but only pull ABOVE income is a
 	// stall; the perpetuity premium that let energy outbid mohos forever
 	// is gone.
-	const float eInc = aiEconomyMgr.energy.income;
+	// Supply is income plus the generation already ORDERED, or the demand
+	// side's foresight is one-eyed: measured, a wind priced at 0.50 with the
+	// bank full and 359 e/s on the way, and five winds went up in one burst.
+	const float eInc = aiEconomyMgr.energy.income + EMakeInFlight();
 	// Anticipation (apexearth 2026-08-23: "we need to anticipate our coming
 	// lack of energy a little better"): price against where pull is HEADED
 	// within the lookahead, not where it is.
@@ -254,7 +257,10 @@ float EPrice()
 	// ...plus what we have ORDERED and are not yet drawing: committed work is
 	// invisible to energy.pull, so the price could not rise until the stall
 	// had already happened.
-	float ePull = aiEconomyMgr.energy.pull + EDrainInFlight();
+	// ...and the lines about to run (ECostSpot already counts them; the gain
+	// side did not, so a lab under construction raised the E bill of every
+	// build and the worth of no generator).
+	float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
 	if (gEPullGrowth > 0.f)
 		ePull += gEPullGrowth * gPrELookahead;
 	// Supply LEADS demand (apexearth 2026-08-23: "we shouldn't even let
@@ -277,8 +283,16 @@ float EPrice()
 	// metal produced in 40 minutes; "we e-stalled and should have made a
 	// basic solar").
 	const float fl = EPriceFloor();
-	const float atRisk = (eInc > 0.01f)
-			? (excess * aiEconomyMgr.metal.pull / eInc) : 1.f;
+	// ...bounded by what metal can feed: throughput the bank and income
+	// cannot pay for is not unlocked by energy either.
+	float flow = aiEconomyMgr.metal.pull;
+	{
+		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
+		const float feed = aiEconomyMgr.metal.income + aiEconomyMgr.metal.current / look;
+		if (flow > feed)
+			flow = feed;
+	}
+	const float atRisk = (eInc > 0.01f) ? (excess * flow / eInc) : 1.f;
 	return (atRisk > fl) ? atRisk : fl;
 }
 
@@ -289,7 +303,7 @@ float EPrice()
 float ECostSpot()
 {
 	PrTuneFill();
-	const float eInc = aiEconomyMgr.energy.income;
+	const float eInc = aiEconomyMgr.energy.income + EMakeInFlight();
 	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
@@ -317,11 +331,6 @@ float ECostSpot()
 float EPriceCostAt(float buildSec, float costE)
 {
 	PrTuneFill();
-	if (aiEconomyMgr.isEnergyFull
-		&& (aiEconomyMgr.energy.income > aiEconomyMgr.energy.pull))
-	{
-		return 0.f;
-	}
 	const float fl = EPriceFloor();
 	const float spot = ECostSpot();
 	// AN E BILL IS A DRAIN, AND WHAT MAKES IT AFFORDABLE IS INCOME. The
@@ -333,13 +342,28 @@ float EPriceCostAt(float buildSec, float costE)
 	// to make. So income restrictions must apply"). Charge the share of income
 	// the build's own drain eats at the scarcity price, the rest at the floor:
 	// the same building is cheap at 400 E/s and unaffordable at 100, on income
-	// alone. ONLY WHILE STALLED (apexearth: "it only matters when we're
-	// e-stalling"): with energy in hand, what a build's E bill competes with is
-	// nothing, and the build-length decay is the right price for it.
+	// alone. While stalled (apexearth: "it only matters when we're
+	// e-stalling") -- and while the build would CAUSE one: its drain is known
+	// before the order exists, and if income plus the bank cannot carry it
+	// for the whole build it stalls us, so it is billed as if we were.
 	float k;
-	if (gPrEBillOn
-		&& HardEStall() && (costE > 0.f) && (buildSec > 1.f))
+	bool eBill = gPrEBillOn && (costE > 0.f) && (buildSec > 1.f);
+	if (eBill && !HardEStall()) {
+		const float drain = costE / buildSec;
+		const float over = (aiEconomyMgr.energy.pull + EDrainInFlight() + drain)
+				- aiEconomyMgr.energy.income - EMakeInFlight();
+		eBill = (over > 0.f) && (over * buildSec > aiEconomyMgr.energy.current);
+	}
+	// Forgiven only when the build does NOT drain the bank and income also
+	// covers the lines about to run. Forgiven on the full bank alone, three
+	// 3,200-E nano turrets priced at zero energy in one minute and emptied it.
+	if (!eBill && aiEconomyMgr.isEnergyFull
+		&& (aiEconomyMgr.energy.income + EMakeInFlight()
+			> aiEconomyMgr.energy.pull + LineDrainE()))
 	{
+		return 0.f;
+	}
+	if (eBill) {
 		const float eInc = aiEconomyMgr.energy.income;
 		const float drain = costE / buildSec;
 		k = (eInc > 0.01f) ? (drain / eInc) : 1.f;
@@ -404,7 +428,7 @@ float ERealizeShare(float addE, float buildSec)
 	// converters to be above the energy want"). Generation is never switched
 	// off by an overflow, which is the standing ruling.
 	const float floorShare = gPrEWasteWorth;
-	const float room = target - aiEconomyMgr.energy.income;
+	const float room = target - aiEconomyMgr.energy.income - EMakeInFlight();
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addE) ? (room / addE) : 1.f);
 	if (share < floorShare)

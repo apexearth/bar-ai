@@ -440,16 +440,52 @@ void GuardSweep()
 // (empty bank, or income under pull with the bank low), and it is the same
 // signal that pauses the work, so our answer now fires exactly when the
 // throttle engages instead of never.
+int  gHardEAt = -1;
+bool gHardEVal = false;
 bool HardEStall()
+{
+	if (gHardEAt == ai.frame)
+		return gHardEVal;
+	gHardEAt = ai.frame;
+	gHardEVal = HardEStallNow();
+	return gHardEVal;
+}
+
+bool HardEStallNow()
 {
 	const float eInc = aiEconomyMgr.energy.income;
 	const float eCur = aiEconomyMgr.energy.current;
 	const float eStore = aiEconomyMgr.energy.storage;
 	if (eStore <= 1.f)
 		return false;
+	const float ePull = aiEconomyMgr.energy.pull;
+	const float sec = EGenBuildSeconds();
+	// ENERGY STALLS ONLY WHEN IT IS THE TIGHTER FEED. A lathe runs at the
+	// smaller of the two feed shares, so with the metal bank also dry more
+	// energy unlocks nothing -- measured at minute 10: metal 10.6 in against
+	// 30.7 asked with 20 banked, energy 191 against 412, and every builder
+	// hoisted onto solars the metal could not pay for while 27 spots stood open.
+	{
+		const float mInc = aiEconomyMgr.metal.income;
+		const float mPull = aiEconomyMgr.metal.pull;
+		const float h = (sec > 1.f) ? sec : 1.f;
+		if ((mPull > 0.01f) && (ePull > 0.01f)) {
+			const float mShare = (mInc + aiEconomyMgr.metal.current / h) / mPull;
+			const float eShare = (eInc + eCur / h) / ePull;
+			if ((mShare < 1.f) && (mShare < eShare))
+				return false;
+		}
+	}
 	if (aiEconomyMgr.isEnergyStalling)
 		return true;
-	return (aiEconomyMgr.energy.pull > eInc) && (eCur < 0.25f * eStore);
+	const float over = ePull - eInc;
+	if (over <= 0.f)
+		return false;
+	// Stalling NOW if the bank runs dry before a generator can stand: a fixed
+	// quarter-bank bar only said how long the stall took to notice.
+	if (sec > 0.f)
+		return (eCur / over) < sec;
+	return eCur < 0.25f * eStore;
 }
 
 // Builders known to the market: upserted as they pass through Decide (the

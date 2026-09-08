@@ -17,6 +17,7 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 | Defence allowed here? | `ExecuteWant`'s `WK_PROTECT`/`WK_SENSE`/`WK_AIRDEF` branch is THE chokepoint -- deliberately not the proposers, because three separate gain branches each carried their own veto and gating two still let claws through. Classified by the DEF's surface threat, never by spotId | `brain/market/execute.as` |
 | Mex guard tier & site | priced as ordinary protect wants over the mex's stake; no separate mex-guard rule survives the overhaul | `brain/market/protect_*.as` |
 | Site safety | `ThreatFor` = threat map (mostly dead) → LOS foes count → geometric PastFront fallback; `MexHeat` relaxes it for mexes | `builder/sitesafety.as` |
+| Rising lava | `Lava::` learns the tide from the gadget's `lavaLevel` param and answers `Eta(height)`. `ProbedSite` refuses ground that floods before a build pays, then retries without the filter; the C++ site predicate refuses anything already under the surface (farm builds only -- fixed sites are filtered in script). Inert off a lava map | `manager/lava.as`, `brain/market/sites.as`, `cpp/.../BuilderTask.cpp` |
 | Which mex to claim | priced in the market: `ProposeMex` ranks spots, and the walk is charged as builder-time in `ValueOf`'s `tCost`, so a far mex is dearer than a near one by the travel term rather than by a distance cap | `brain/market/want_mex.as` |
 
 ## Principles that keep recurring

@@ -48,7 +48,6 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// for each generator in the ladder: two of them walk the def table, one
 	// walks every standing turret, and the tunables build a string and hit a map.
 	const float genBP = EffBP(Catalog::gBuildPower[uid]);
-	const float genRatio = BestConvRatio();
 	const float genPower = EcoPowerM();
 	const float genGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
 	const bool  genSurvOn = ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f;
@@ -58,6 +57,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// SpaceRentM is perCell x cells x k, so one cell's worth answers every
 	// footprint -- it walked the whole defence field per rung for the same number.
 	const float genRentCell = SpaceRentM(eSite, 1);
+	const bool  genDiag = ai.GetTunable("apex_efloor_diag", 0.f) > 0.f;
 	const float genCrowdCell = PfCrowd() * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -83,7 +83,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
 		const float bSec = Catalog::BuildSecondsAt(d, genBP);
-		float gain = Catalog::gMakeE[d] * EPriceAt(bSec);
+		const float fPrice = EPriceAt(bSec);
+		float fGrow = 1.f, fSurv = 1.f, fInf = 1.f, fReal = 1.f, fRent = 0.f;
+		float gain = Catalog::gMakeE[d] * fPrice;
 		// ECO COMPOUNDS, AND ENERGY IS ECO (apexearth: "we are not properly
 		// multiplying the benefits of a strong eco... the more we boost eco the
 		// more all of our other metrics get boosted"). Decays with wealth on
@@ -99,9 +101,12 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// what share of TOTAL economic power does this add -- with energy
 		// carried at what a converter would actually pay for it.
 		{
-			const float mkM = Catalog::gMakeE[d] * genRatio;
-			gain *= 1.f + genGrowK
+			// At the PRICED value, not the conversion floor: the two agree in
+			// surplus and only the price knows a stall.
+			const float mkM = Catalog::gMakeE[d] * fPrice;
+			fGrow = 1.f + genGrowK
 					* mkM / ((genPower > mkM) ? genPower : ((mkM > 0.f) ? mkM : 1.f));
+			gain *= fGrow;
 		}
 		// A DEFERRED PURCHASE IS WORTH ONLY WHAT SURVIVES TO PAY IT BACK. An
 		// afus is minutes of building and more of payback, and if the base
@@ -113,8 +118,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// Scales with the build's own latency, so cheap fast generators are
 		// untouched and only the long bets are discounted; and with measured
 		// hazard, so it lifts by itself once the base is actually covered.
-		if (genSurvOn)
-			gain *= TechSurvival(d, Catalog::gBuildPower[uid]);
+		if (genSurvOn) {
+			fSurv = TechSurvival(d, Catalog::gBuildPower[uid]);
+			gain *= fSurv;
+		}
 		// INFERIOR WORK IS WORTH LESS, IT IS NOT FORBIDDEN. The same build
 		// power spent through a constructor that CAN build the better
 		// generator returns more energy per metal, so this one's gain carries
@@ -122,20 +129,25 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// the ratio is 1, so the opening is untouched, and a worker whose only
 		// option is the inferior one still takes it when nothing else competes
 		// -- it just loses to assisting the better build first.
-		if (genInferiorOn) {
+		// Void while the stall bars the better rung: nobody can build it either.
+		if (genInferiorOn && !solarOnly) {
 			const float mine = (Catalog::gCostM[d] > 0.f)
 					? (Catalog::gMakeE[d] / Catalog::gCostM[d]) : 0.f;
-			if ((genBestEPerM > mine) && (mine > 0.f))
-				gain *= mine / genBestEPerM;
+			if ((genBestEPerM > mine) && (mine > 0.f)) {
+				fInf = mine / genBestEPerM;
+				gain *= fInf;
+			}
 		}
 		// AND ONLY THE PART OF IT ANYTHING WOULD USE. Generation on top of an
 		// already-wasted band makes no metal until a converter chews it, so its
 		// gain decays across the waste line instead of being priced as though a
 		// converter were free and standing. See ERealizeShare in price.as.
-		gain *= ERealizeShare(Catalog::gMakeE[d], bSec);
+		fReal = ERealizeShare(Catalog::gMakeE[d], bSec);
+		gain *= fReal;
 		if (gain <= 0.f)
 			continue;
-		ValueOf(d, gain, WalkSecTo(unit, eSite), Catalog::gBuildPower[uid], c);
+		const float walkSec = WalkSecTo(unit, eSite);
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
 		// Rent on the defended ground this footprint would occupy -- PLUS the
 		// measured scarcity of base room, the same term RetireGain charges.
 		// Priced only on the reclaim side, the pair could not converge: the
@@ -150,9 +162,50 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 						? (genRentCell * float(Catalog::gAreaCells[d])) : 0.f)
 					+ genCrowdCell * cellsE;
 			if (rent > 0.f) {
+				fRent = rent;
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 			}
+		}
+		if (genDiag) {
+			const float wage = Wage();
+			const float walkM = walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage);
+			const float buildM = c.buildSec * wage;
+			AiLog("apex: ewant t=" + ai.teamId + " " + unit.circuitDef.GetName()
+				+ " #" + unit.id + " " + Catalog::Def(d).GetName()
+				+ (barred ? " barred" : "")
+				+ " v=" + formatFloat(c.value, "", 0, 2)
+				+ " gain=" + formatFloat(c.gain, "", 0, 2)
+				+ " (mkE=" + formatFloat(Catalog::gMakeE[d], "", 0, 1)
+				+ " P=" + formatFloat(fPrice, "", 0, 3)
+				+ " grow=" + formatFloat(fGrow, "", 0, 2)
+				+ " surv=" + formatFloat(fSurv, "", 0, 2)
+				+ " inf=" + formatFloat(fInf, "", 0, 2)
+				+ " real=" + formatFloat(fReal, "", 0, 2) + ")"
+				+ " m=" + formatFloat(c.mCost, "", 0, 0)
+				+ " (M" + formatFloat(Catalog::gCostM[d] * MCostScale(), "", 0, 0)
+				+ "+E" + formatFloat(Catalog::gCostE[d]
+					* EPriceCostAt(c.buildSec, Catalog::gCostE[d]), "", 0, 0)
+				+ "+A" + Catalog::gAreaCells[d]
+				+ "+rent" + formatFloat(fRent, "", 0, 0) + ")"
+				+ " t=" + formatFloat(c.tCost, "", 0, 0)
+				+ " (walk" + formatFloat(walkM, "", 0, 0)
+				+ "+build" + formatFloat(buildM, "", 0, 0)
+				+ "+late" + formatFloat(c.gain * walkSec, "", 0, 0)
+				+ "+rest" + formatFloat(c.tCost - walkM - buildM - c.gain * walkSec, "", 0, 0)
+				+ ") walk=" + formatFloat(walkSec, "", 0, 0)
+				+ "s build=" + formatFloat(c.buildSec, "", 0, 0)
+				+ "s | e " + int(aiEconomyMgr.energy.current) + "/" + int(aiEconomyMgr.energy.storage)
+				+ " inc=" + int(aiEconomyMgr.energy.income)
+				+ " pull=" + int(aiEconomyMgr.energy.pull)
+				+ " drainIF=" + int(EDrainInFlight())
+				+ " makeIF=" + int(EMakeInFlight())
+				+ " spot=" + formatFloat(EPrice(), "", 0, 3)
+				+ " floor=" + formatFloat(EPriceFloor(), "", 0, 4)
+				+ " mPull=" + int(aiEconomyMgr.metal.pull)
+				+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ " stall=" + (HardEStall() ? 1 : 0)
+				+ " solarOnly=" + (solarOnly ? 1 : 0));
 		}
 		if (c.value > 0.f) {
 			uint at = 0;
@@ -253,6 +306,27 @@ float gEMakeVal = 0.f;
 int   gEMakeFrame = -1;
 int   gEMakeStamp = -1;
 
+// HOW LONG A NEW GENERATOR TAKES TO STAND UP, for the cheapest rung we can
+// actually build. HardEStall asks it whether the energy bank outlasts the fix:
+// a stall is a stall the moment the store will run dry before a generator
+// finishes, whatever share of the bank is left. Same filters the generator
+// ladder itself uses, so the two cannot disagree about what a generator is.
+float EGenBuildSeconds()
+{
+	float best = -1.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
+			|| Catalog::gSub[d] || Catalog::gNeedGeo[d])
+			continue;
+		if (Catalog::gMakeE[d] <= 1.f)
+			continue;
+		const float sec = Catalog::BuildSecondsAt(d, EffBP(0.f));
+		if ((sec > 0.f) && ((best < 0.f) || (sec < best)))
+			best = sec;
+	}
+	return best;
+}
+
 float EMakeInFlight()
 {
 	if ((gEMakeFrame == ai.frame) && (gEMakeStamp == gComStamp))
@@ -278,14 +352,20 @@ float EMakeInFlight()
 // energy"). Parallel sites open exactly while what we have ordered still does
 // not cover the shortfall, and close by themselves the moment it does. The
 // in-flight request cap still bounds how many.
+// Headroom-scaled pull less income less what is ordered: the one number the
+// stall hoist, the interrupt and the parallel-site rule all answer to.
+float EnergyDeficitE()
+{
+	const float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
+			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	return need - aiEconomyMgr.energy.income - EMakeInFlight();
+}
+
 bool EnergyShortOfOrdered()
 {
 	if (ai.GetTunable("apex_e_parallel", TUNE_E_PARALLEL) <= 0.f)
 		return false;
-	const float eInc = aiEconomyMgr.energy.income;
-	const float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
-			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
-	return (need - eInc) > EMakeInFlight();
+	return EnergyDeficitE() > 0.f;
 }
 
 // Same memo, same reason. Build progress and EffBP are both settled for the

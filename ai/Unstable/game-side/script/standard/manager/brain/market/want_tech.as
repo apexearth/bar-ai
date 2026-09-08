@@ -100,6 +100,9 @@ void LogUpgradeCons()
 	AiLog(Factory::T() + "apex: upcons " + names);
 }
 
+int gMuDiagAt = 0;
+float gMuSurv = -1.f;
+float gMuRaw = 0.f;
 Want@ ProposeMexUp(CCircuitUnit@ unit)
 {
 	Want w;
@@ -187,8 +190,38 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				@w.def = Catalog::Def(d);
 				w.pos = gLPos[li];
 				w.spotId = gLSpot[li];
+				gMuSurv = surv;
+				gMuRaw = rawUpM;
 			}
 		}
+	}
+	// WHICH SPOT THE UPGRADE PICKED, AND WHETHER DANGER MOVED THE CHOICE.
+	// apexearth 2026-09-08: "the dumbass AI has upgraded our most dangerous
+	// mexes - the first ones that would die... We have logic where building
+	// stuff is perceived as less valuable when it is in a dangerous place. So
+	// what the heck is going on?"
+	//
+	// The discount is real and IS applied (delta *= surv above). The suspect is
+	// its input: StreamRisk reads HazardWith, and docs/24 already records that
+	// reporting the FLOOR on our own ground while that ground was being taken
+	// apart. If surv is the same at every spot, the discount cannot distinguish
+	// a forward mex from a rear one and the pick is income-only. Nothing in the
+	// risk model is logged anywhere, so this is the first reading of it.
+	if ((w.kind == WK_MEXUP) && (ai.frame >= gMuDiagAt)) {
+		gMuDiagAt = ai.frame + 15 * SECOND;
+		AiLog("apex: mexup t=" + ai.teamId
+			+ " at=" + int(w.pos.x) + "," + int(w.pos.z)
+			+ " surv=" + formatFloat(gMuSurv, "", 0, 3)
+			+ " raw=" + formatFloat(gMuRaw, "", 0, 2)
+			+ " v=" + formatFloat(w.value, "", 0, 3)
+			+ " homeD=" + int(w.pos.distance2D(Builder::gHomePos))
+			+ " fwd=" + formatFloat(Military::ForwardFraction(w.pos), "", 0, 2)
+			// The two halves of HazardWith, so the collapsing one is named:
+			// grad scales the PREDICTIVE term and is ~0 on our own ground by
+			// design; loss is RETROSPECTIVE and needs a death here first.
+			+ " grad=" + formatFloat(GradAt(w.pos), "", 0, 3)
+			+ " loss=" + formatFloat(LossRateAt(w.pos), "", 0, 4)
+			+ " haz=" + formatFloat(HazardWith(w.pos, CoverAt(w.pos)), "", 0, 4));
 	}
 	return w;
 }

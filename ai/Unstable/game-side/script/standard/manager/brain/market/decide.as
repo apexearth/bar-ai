@@ -113,7 +113,10 @@ array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
 float gMemoCell = 0.f;
 int MemoKey(int slot, CCircuitUnit@ unit)
 {
-	int k = gOwnSetStamp;
+	// The stall state is an input: a tower priced on a full bank was served
+	// 16 s later with the bank at 10, its 680 E bill still forgiven.
+	int k = gOwnSetStamp * 4 + (HardEStall() ? 1 : 0)
+			+ (aiEconomyMgr.isEnergyFull ? 2 : 0);
 	if ((slot == 3) || (slot == 4) || (slot == 5))
 		k = k * 31 + gPfAt * 7 + Military::gFrontStamp;
 	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6)) {
@@ -997,7 +1000,29 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// standing frame on the promise of this answer, so handing it back to the
 	// draw makes the abort pure loss.
 	const bool owedE = StallFreedOwed(unit);
-	if (!aaPanic && HardEStall() && ((EMakeInFlight() <= 0.f) || owedE)) {
+	// ONE SOLAR USED TO CALL OFF THE EMERGENCY. The gate was
+	// `EMakeInFlight() <= 0`, and EMakeInFlight is energy-per-second on the way,
+	// not a count -- so the instant ONE builder started a 20 e/s solar the hoist
+	// switched off for every other builder, and they all went back to mexes
+	// while the stall continued. apexearth, watching Supreme Isthmus 2026-09-08:
+	// "I just see a lot of e-stalling and only 1 con is making any effort to fix
+	// that. All it'd take to 3-4x our energy growth would be the commander
+	// focusing on improving that situation for a few minutes."
+	//
+	// Measured in that game at minute 6: income 226 e/s against a pull of 313,
+	// bank 25 of 1500, and the builders held 17 mex tasks against 7 energy ones
+	// -- and a mex makes the stall WORSE, because it costs energy to build and
+	// then adds metal income that needs energy to spend.
+	//
+	// Keep hoisting while what is ORDERED still does not cover the deficit, and
+	// stop by itself when it does. The deficit, not EnergyShortOfOrdered: that
+	// predicate is behind apex_e_parallel (0), so it read false for every
+	// builder and the hoist fired only for the ones the interrupt had freed.
+	// The interrupt's own bar ("above 400 we probably don't need it"): one
+	// bar for both by-fiat answers to a stall.
+	const float hoistBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
+	const bool hoistWorth = (hoistBar <= 0.f) || (aiEconomyMgr.energy.income <= hoistBar);
+	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitE() > 0.f) || owedE)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
 				continue;
@@ -1108,9 +1133,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// until that bill is small enough to be worth overriding the
 			// auction for; below it the tower still competes on price like
 			// anything else, so nothing is forbidden.
-			if ((cw.def !is null)
-				&& (Catalog::gCostM[int(cw.def.id)] > pushCap))
-				continue;
+			// The bill in one currency: a light tower is 85 metal and 680
+			// energy, and four of them went up through a hard stall on the
+			// metal half alone.
+			if (cw.def !is null) {
+				const int cd = int(cw.def.id);
+				const float bill = Catalog::gCostM[cd] + Catalog::gCostE[cd]
+						* EPriceCostAt(cw.buildSec, Catalog::gCostE[cd]);
+				if (bill > pushCap)
+					continue;
+			}
 			if (ri > 0) {
 				ranked.removeAt(ri);
 				ranked.insertAt(0, cw);

@@ -1550,6 +1550,7 @@ void StallDebtSettle(CCircuitUnit@ unit)
 int DebtPaid() { return gDebtPaid; }
 int DebtDropped() { return gDebtDropped; }
 
+int gStallDiagAt = 0;
 void StallWatch()
 {
 	if (ai.frame >= gNextStallSweep) {
@@ -1590,9 +1591,7 @@ void StallWatch()
 	// interrupt is charged the generation its own dry-run names, so a 35/s
 	// turbine against a 300/s deficit pulls the next worker too, and a fusion
 	// pulls nobody else.
-	float deficit = (aiEconomyMgr.energy.pull + EDrainInFlight())
-			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
-			- aiEconomyMgr.energy.income - EMakeInFlight();
+	float deficit = EnergyDeficitE();
 	const float deficit0 = deficit;
 	array<CCircuitUnit@> picks;
 	// COMMANDER FIRST. The scan used to dry-run the market for EVERY worker and
@@ -1624,21 +1623,31 @@ void StallWatch()
 	// Two passes rather than a veto, so a stall is still always answerable:
 	// if every candidate is mid-build, the second pass takes one anyway -- and
 	// only one, because that interrupt abandons a frame.
+	// WHY NOBODY IS EVER INTERRUPTED. `STALL interrupt` has fired ZERO times in
+	// every game measured, while apexearth watched the commander build a turret
+	// through a stall. Six filters can reject a candidate and none of them said
+	// so, which is this repo's dominant bug class wearing a scan's clothing.
+	int rjTask = 0, rjEnergy = 0, rjProg = 0, rjCanE = 0, rjWant = 0, rjNear = 0, rjFull = 0, seen = 0;
 	for (uint pass = 0; pass < 2; ++pass) {
 	for (uint i = 0; i < cand.length(); ++i) {
 		CCircuitUnit@ u = cand[i];
 		if (u is null)
 			continue;
 		IUnitTask@ t = u.task;
-		if ((t is null) || (t.GetType() != Task::Type::BUILDER))
+		++seen;
+		if ((t is null) || (t.GetType() != Task::Type::BUILDER)) {
+			++rjTask;
 			continue;
+		}
 		// GEO counts as an energy answer too, or the interrupt aborts the
 		// very build it elected (WK_GEO executes as BuildType::GEO).
 		if ((int(t.GetBuildType()) == int(Task::BuildType::ENERGY))
 			|| (int(t.GetBuildType()) == int(Task::BuildType::GEO)))
+			{ ++rjEnergy; continue; }
+		if ((pass == 0) && (Requests::Progress(t) > 0.01f)) {
+			++rjProg;
 			continue;
-		if ((pass == 0) && (Requests::Progress(t) > 0.01f))
-			continue;
+		}
 		// (guard/patrol holders pass straight through: their work is worth
 		// ~nothing mid-stall, so the dry-run below decides.)
 		// Only interrupt a unit that could actually answer with energy.
@@ -1650,14 +1659,39 @@ void StallWatch()
 				break;
 			}
 		}
-		if (!canE)
+		if (!canE) {
+			++rjCanE;
 			continue;
+		}
 		// Dry-run the market (proposers are pure): interrupt only a unit
 		// whose TOP want right now is energy -- a blind abort thrashed 73
 		// times in one game, re-deciding the same mex it left.
 		Want@ e = ProposeEnergy(u);
-		if ((e is null) || (e.value <= 0.f))
+		if ((e is null) || (e.value <= 0.f)) {
+			++rjWant;
 			continue;
+		}
+		// ...AND THAT CAN START. A rung at its in-flight cap with no site
+		// worth joining is refused at execution, so the freed builder falls
+		// back to another job and is interrupted again -- measured, one
+		// constructor aborted six times in 30 s and built nothing.
+		{
+			bool startable = false;
+			if (e.def !is null) {
+				startable = (Requests::InFlight(e.def) < Requests::EffectiveCap(e.def))
+						|| (JoinBigEnergy(u, e.def) !is null);
+			}
+			for (uint k = 0; !startable && (k < gEAlt.length()); ++k) {
+				CCircuitDef@ ad = Catalog::Def(gEAlt[k]);
+				if ((ad !is null)
+					&& (Requests::InFlight(ad) < Requests::EffectiveCap(ad)))
+					startable = true;
+			}
+			if (!startable) {
+				++rjFull;
+				continue;
+			}
+		}
 		// A walker CLOSER TO HIS OWN SITE than to the stall answer is not the
 		// free interrupt: what he has left to pay is smaller than the walk
 		// the answer demands, so finishing the trip is the cheaper path to
@@ -1668,8 +1702,10 @@ void StallWatch()
 			const AIFloat3 tp0 = t.GetBuildPos();
 			if (OnMap(tp0) && OnMap(e.pos)) {
 				const AIFloat3 up0 = u.GetPos(ai.frame);
-				if (up0.distance2D(tp0) < up0.distance2D(e.pos))
+				if (up0.distance2D(tp0) < up0.distance2D(e.pos)) {
+					++rjNear;
 					continue;
+				}
 			}
 		}
 		// THE SECOND PASS IS NOT FREE EITHER, and it was priced as if it were.
@@ -1719,6 +1755,16 @@ void StallWatch()
 	gStallHadAnswer = true;
 	for (uint i = 0; i < picks.length(); ++i) {
 		CCircuitUnit@ p = picks[i];
+	if (ai.frame >= gStallDiagAt) {
+		gStallDiagAt = ai.frame + 15 * SECOND;
+		AiLog("apex: stall-scan t=" + ai.teamId
+			+ " workers=" + gWorkers.length() + " seen=" + seen
+			+ " picks=" + picks.length()
+			+ " deficit=" + formatFloat(deficit0, "", 0, 0)
+			+ " rj: task=" + rjTask + " isE=" + rjEnergy + " prog=" + rjProg
+			+ " canE=" + rjCanE + " want=" + rjWant + " near=" + rjNear
+			+ " full=" + rjFull);
+	}
 		AiLog("apex: STALL interrupt -- " + p.circuitDef.GetName() + " #" + p.id
 			+ " progress=" + formatFloat(Requests::Progress(p.task), "", 0, 2)
 			+ " (" + (i + 1) + "/" + picks.length() + ")"

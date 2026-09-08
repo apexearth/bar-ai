@@ -697,16 +697,24 @@ void PfRebuild()
 				if (rr > gPfRimR[b])
 					gPfRimR[b] = rr;
 			}
-			// One smoothing pass, so a bearing that happens to hold nothing
-			// does not punch a notch into the perimeter.
+			// A bearing that holds nothing takes the chord between its nearest
+			// occupied neighbours -- the hull. Decaying to a notch instead read a
+			// four-building opening as a FULL base (crowd ~1), which charged a
+			// 155-metal solar 260-830 of room rent while a mex paid none.
 			array<float> sm = gPfRimR;
 			for (int b = 0; b < PF_RAYS; ++b) {
-				const int lo = (b + PF_RAYS - 1) % PF_RAYS;
-				const int hi = (b + 1) % PF_RAYS;
-				float nb = (gPfRimR[lo] > gPfRimR[hi]) ? gPfRimR[lo] : gPfRimR[hi];
-				nb *= 0.85f;
-				if (nb > sm[b])
-					sm[b] = nb;
+				if (gPfRimR[b] > 0.f)
+					continue;
+				int dl = 1, dh = 1;
+				while ((dl < PF_RAYS) && (gPfRimR[(b + PF_RAYS - dl) % PF_RAYS] <= 0.f))
+					++dl;
+				while ((dh < PF_RAYS) && (gPfRimR[(b + dh) % PF_RAYS] <= 0.f))
+					++dh;
+				if ((dl >= PF_RAYS) || (dh >= PF_RAYS))
+					continue;
+				const float rl = gPfRimR[(b + PF_RAYS - dl) % PF_RAYS];
+				const float rh = gPfRimR[(b + dh) % PF_RAYS];
+				sm[b] = (rl * float(dh) + rh * float(dl)) / float(dl + dh);
 			}
 			gPfRimR = sm;
 			gPfRimOk = true;

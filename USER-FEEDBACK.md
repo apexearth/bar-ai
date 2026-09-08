@@ -162,6 +162,25 @@ binding; `ai.GetPathLength` detour sampling is the available proxy).
 
 ## 2026-08-30 — THE FORTIFICATION DOCTRINE (unresolved; nothing implements it)
 
+Said again 2026-09-07, and it names the trigger the model was missing:
+
+> "When enemies are getting closer and closer to our base and we're at T2 we
+> really really need to try and making T2 or T3 defense to stop the enemies.
+> It becomes a life/death situation."
+
+**Second master blocker, measured 2026-09-07: our own ground reports the FLOOR
+hazard while it is being taken apart.** `HazardWith`'s loss term reads what has
+already been destroyed here; its presence term is scaled by the gradient toward
+their BASE, which is zero at ours by construction. `20260907-175233`, minutes
+21-26, four mexes down to one and 1,148 / 2,251 / 2,337 metal of losses per
+sample: `home[hazard=1.25/ks]` on every line -- exactly `apex_risk_floor`/120.
+Defence gain 0.03; static defence 1.7% of spend against BARb's 15.9%.
+`ApproachP` (`coverage.as`, `apex_hz_approach`) is the measurement that was
+missing -- an instrumented off-arm reads `appr=0.26..0.60` at home over exactly
+that collapse, i.e. hazard 4x the floor. **The second half of his sentence --
+that the answer is a T2/T3 gun and not more cheap ones -- is NOT yet
+confirmed.**
+
 His spec, verbatim in shape:
 
 1. **T2 constructors are defended HEAVILY while they work.**

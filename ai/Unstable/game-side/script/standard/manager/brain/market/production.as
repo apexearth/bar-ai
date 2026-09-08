@@ -136,11 +136,57 @@ int ConsInFlightAny()
 // 100 metal per second we should have at least 5". Those two points fix the
 // line: 2.7 + inc/44 gives 3.0 at 12 m/s and 5.0 at 100. Not a cap -- nothing
 // stops the auction buying more when they are worth more.
+// Metal per second one ordinary constructor can SPEND. The same conversion
+// BPCapacity uses (build power x 7/80), over the mobile non-commander builders
+// we actually own -- so it is what our own fleet is made of, not a def table
+// guess. Falls back to the cheapest available builder before we own any.
+float ConWorkerBP()
+{
+	float bp = 0.f;
+	int n = 0;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int d = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[d] || !Catalog::gBuilder[d]
+			|| Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		bp += float(gOwnCount[c]) * Catalog::gBuildPower[d];
+		n += gOwnCount[c];
+	}
+	if (n > 0)
+		return (bp / float(n)) * (7.f / 80.f);
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gAvailable[d] && Catalog::gMobile[d] && Catalog::gBuilder[d]
+			&& (Catalog::gBuildPower[d] > 0.f))
+			return Catalog::gBuildPower[d] * (7.f / 80.f);
+	}
+	return 0.f;
+}
+
 int ConsNeedAny()
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
-	const float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
+	float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
 			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 44.f);
+	// METAL WE CANNOT SPEND IS A SHORTAGE OF HANDS, AND THE LINE ABOVE CANNOT
+	// SEE IT. It asks what our INCOME implies; the question that decides the
+	// game is whether we can spend what we earn. Watched 2026-09-08 on Supreme
+	// Isthmus: three constructors held for the whole game while the metal bank
+	// sat at 1546 of 1550 and 3,605 metal was thrown away -- and the floor was
+	// satisfied, because 2.7 + 33/44 asks for exactly 3 (apexearth: "We're full
+	// on metal and our energy is like 1/5th the enemies... we should make more
+	// cons in my opinion").
+	//
+	// The extra hands are derived, not decreed: unspent metal per second is
+	// income we are failing to convert, and one constructor converts its own
+	// build power's worth per second. So the shortfall in hands is exactly
+	// unspent / per-con build power. It reads zero the moment we can spend our
+	// income again, which is what makes it a demand and not a cap.
+	const float unspent = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+	if (unspent > 0.f) {
+		const float bp = ConWorkerBP();
+		if (bp > 0.f)
+			want += unspent / bp;
+	}
 	const int have = ConsOwnedAny() + ConsInFlightAny();
 	return (float(have) < want) ? (int(want) - have) : 0;
 }

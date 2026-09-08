@@ -567,6 +567,35 @@ float GradAt(const AIFloat3& in pos)
 		return 1.f;
 	if (gRkGrad != 2)
 		return 0.f;
+	// THIS AXIS AND ForwardFraction'S DISAGREED COMPLETELY, AND THIS ONE WAS
+	// WRONG. Measured 2026-09-08 on Supreme Isthmus, at mex-upgrade sites:
+	//
+	//   fwd=1.00  grad=0.000      <- the enemy end of the map
+	//   fwd=0.97  grad=0.007
+	//   fwd=0.73  grad=0.000
+	//
+	// So the presence term of HazardWith -- GradAt(pos) * foeMass / ... -- was
+	// multiplied by ~0 at every position, not merely at home as its comment
+	// claims. The only term left moving was the RETROSPECTIVE loss rate, so a
+	// spot priced as perfectly safe until something had already died on it, and
+	// the mex upgrades went to the most exposed extractors we owned (apexearth:
+	// "the dumbass AI has upgraded our most dangerous mexes - the first ones
+	// that would die... We have logic where building stuff is perceived as less
+	// valuable when it is in a dangerous place. So what the heck is going on?").
+	//
+	// The cause is the ANCHOR. This projected against Front::FoeAnchor(), which
+	// falls back to the mirrored start when we have seen no enemy structure --
+	// and on a diagonal-start map the mirror points the wrong way, so forward
+	// ground projects NEGATIVE and clamps to zero. ForwardFraction projects
+	// against the enemy we can actually see (FoeMid, else GetEnemyPos) from the
+	// territory centre, and reported 1.00 on the same spots in the same frame.
+	//
+	// One axis, the one that is right. The local projection stays as the
+	// fallback for the frames before ForwardFraction has an enemy to point at.
+	const float fwd = Military::ForwardFraction(pos);
+	if (fwd > 0.f) {
+		return (fwd > 1.f) ? 1.f : fwd;
+	}
 	float t = ((pos.x - gRkGHx) * gRkGDx + (pos.z - gRkGHz) * gRkGDz) / gRkGSpan;
 	if (t < 0.f) t = 0.f;
 	if (t > 1.f) t = 1.f;

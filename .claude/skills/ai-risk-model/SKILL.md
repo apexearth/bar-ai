@@ -65,6 +65,17 @@ Our own turrets are EXCLUDED from the basis, or defences justify defences.
   cells, × footprint × `apex_space_rent`. Zero outside cover; rises as the
   perimeter fills.
 
+## The tide, alongside
+
+`Lava::RiskAt(pos)` (`manager/lava.as`) is a per-second rate in the same units
+as `HazardAt`, combined into `StreamRisk` **outside its 256-elmo cache** (lava
+risk follows elevation, which that cell cannot carry) and **never multiplied by
+`ShortfallAt`** (no gun turns away lava). It is deliberately NOT in `HazardAt`:
+that field drives defence gain, and a hazard turrets cannot answer would read
+there as a reason to buy turrets. `PfRebuild` discounts each asset's defence
+worth by `Lava::Survival` over the stake horizon, which is what makes the
+basin earn a light gun and the shelf a real one. `apex_lava`, docs/27.
+
 ## Traps
 
 - **`HazardAt` is ~0 at our own start by design** — its pressure term is scaled

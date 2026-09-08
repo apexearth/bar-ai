@@ -897,10 +897,29 @@ GROUPS = [
                   "box, 1 at theirs. 0 disables it"),
                  ("TUNE_RISK_FLOOR", "pressure a never-attacked asset still "
                   "carries, so cold starts are not treated as free"),
+                 ("TUNE_HZ_APPROACH", "treat an enemy formation WALKING at "
+                  "this ground as danger, by how soon it arrives"),
                  ("TUNE_EXPOSE_R", "distance from the core at which a building "
                   "counts as fully exposed"),
                  ("TUNE_ECO_RAID_TAU", "how long a structure loss stays fresh "
                   "in the risk field"),
+             ]},
+            {"title": "Rising lava",
+             "what": "Maps whose lava tide climbs on a schedule (Ghenna "
+                     "Rising cycles 250↔415; Special Hotstepper "
+                     "escalates all game). The AI reads the gadget's own "
+                     "`lavaLevel` and learns the ramp speed and the crest by "
+                     "watching them, then prices every site by how long it "
+                     "has before the tide arrives — so extractors and "
+                     "cheap guns go in the basin and anything with a long "
+                     "payback climbs. Inert on every other map. Watch the "
+                     "`apex: lava` line.",
+             "reads": "manager/lava.as",
+             "knobs": [
+                 ("TUNE_LAVA", "[toggle] prices and places against the tide. "
+                  "Off, the AI builds on a lava map exactly as it did before "
+                  "— the only way to A/B this on the same map. The "
+                  "sense keeps logging either way"),
              ]},
             {"title": "Scouting",
              "reads": "manager/brain/market/want_tech.as",
