@@ -55,6 +55,37 @@ static inline bool IsFixedSite(IBuilderTask::BuildType buildType)
 		|| (buildType == IBuilderTask::BuildType::TERRAFORM);
 }
 
+// A spot names its own ground: an extractor or a geo plant is built on the
+// vent or not at all, so it is never moved off it to keep a builder standing.
+static inline bool IsSpotSite(IBuilderTask::BuildType buildType)
+{
+	return (buildType == IBuilderTask::BuildType::MEX)
+		|| (buildType == IBuilderTask::BuildType::MEXUP)
+		|| (buildType == IBuilderTask::BuildType::GEO)
+		|| (buildType == IBuilderTask::BuildType::GEOUP);
+}
+
+// A BUILDING IS NOT SITED ON THE SQUARE ITS OWN BUILDER IS STANDING ON. The
+// site search reads a mobile unit as empty ground, so the nearest legal square
+// to a constructor inside its own base is the one under its feet, and the order
+// cannot start until the builder has been shoved off the footprint it just
+// claimed (apexearth, on the commander: "it is inefficient to have to step out
+// of the way for every building that you want to make"). A static builder is
+// already in the blocker map, so only mobile ones are asked.
+// The bar is the two half-footprints summed -- a def of N cells reaches
+// N * SQUARE_SIZE from its centre -- and 0 means "keep no clearance".
+float SelfClearance(CCircuitUnit* builder, CCircuitDef* buildDef)
+{
+	if ((builder == nullptr) || (buildDef == nullptr)
+		|| !builder->GetCircuitDef()->IsMobile())
+	{
+		return 0.f;
+	}
+	CCircuitDef* bdef = builder->GetCircuitDef();
+	return float(std::max(buildDef->GetFootX(), buildDef->GetFootZ())
+			+ std::max(bdef->GetFootX(), bdef->GetFootZ())) * SQUARE_SIZE;
+}
+
 IBuilderTask::BuildName IBuilderTask::buildNames = {
 	{"factory", IBuilderTask::BuildType::FACTORY},
 	{"nano",    IBuilderTask::BuildType::NANO},
@@ -199,8 +230,28 @@ void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 	HideAssignee(unit);
 }
 
+// apex: where a task's first order goes missing (apex_task_trace=1). A unit
+// held a build task 12 s with an empty command queue and no order sent.
+static bool TaskTraceOn(CCircuitAI* circuit)
+{
+	static int at = -1000;
+	static bool on = false;
+	const int frame = circuit->GetLastFrame();
+	if (frame - at >= 150) {
+		at = frame;
+		on = circuit->GetTunable("apex_task_trace", 0.f) > 0.f;
+	}
+	return on;
+}
+
 void IBuilderTask::Start(CCircuitUnit* unit)
 {
+	if (TaskTraceOn(manager->GetCircuit())) {
+		ITravelAction* tr = unit->GetTravelAct();
+		manager->GetCircuit()->LOG("apex: ttrace start #%d %s task=%p travel=%s", unit->GetId(),
+				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "-", static_cast<void*>(this),
+				(tr == nullptr) ? "null" : (tr->IsFinished() ? "fin" : (tr->IsWait() ? "wait" : "act")));
+	}
 	Update(unit);
 }
 
@@ -274,6 +325,11 @@ void IBuilderTask::Cancel()
 bool IBuilderTask::Execute(CCircuitUnit* unit)
 {
 	executors.insert(unit);
+	if (TaskTraceOn(manager->GetCircuit())) {
+		manager->GetCircuit()->LOG("apex: ttrace execute #%d task=%p target=%d possible=%d", unit->GetId(), static_cast<void*>(this),
+				(target != nullptr) ? 1 : 0,
+				(utils::is_valid(buildPos) && (buildDef != nullptr) && manager->GetCircuit()->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), buildPos, facing)) ? 1 : 0);
+	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	TRY_UNIT(circuit, unit,
@@ -377,9 +433,16 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 				* SQUARE_SIZE * 2;
 		CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 		const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, pos, slot, facing);
-		if (utils::is_valid(probe) && (probe.SqDistance2D(pos) <= SQUARE(SQUARE_SIZE))) {
+		const bool free = utils::is_valid(probe)
+				&& (probe.SqDistance2D(pos) <= SQUARE(SQUARE_SIZE));
+		// A slot the builder is itself standing in is not a slot that is taken:
+		// widening lets the search step to the neighbouring one instead of the
+		// builder stepping aside, and the ground is NOT reported blocked --
+		// script would then avoid it for as long as the mark lives.
+		const float clear = SelfClearance(unit, buildDef);
+		if (free && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
 			searchRadius = slot;   // the slot is free: hold the task to it
-		} else {
+		} else if (!free) {
 			circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
 		}
 	}
@@ -398,6 +461,14 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	}
 
 	if (utils::is_valid(buildPos)) {
+		if (TaskTraceOn(circuit)) {
+			const AIFloat3& up = unit->GetPos(frame);
+			circuit->LOG("apex: ttrace site #%d task=%p %s at=%.0f,%.0f unit=%.0f,%.0f facing=%d enginePossible=%d held=%d reach=%d",
+					unit->GetId(), static_cast<void*>(this), buildDef->GetDef()->GetName(), buildPos.x, buildPos.z, up.x, up.z, facing,
+					circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), buildPos, facing) ? 1 : 0,
+					unit->IsDGunHeld(frame) ? 1 : 0,
+					circuit->GetTerrainManager()->CanReachAt(unit, buildPos, unit->GetCircuitDef()->GetBuildDistance()) ? 1 : 0);
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
 		)
@@ -636,7 +707,16 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
 
 void IBuilderTask::Update(CCircuitUnit* unit)
 {
-	if (Reevaluate(unit)) {
+	const bool re = Reevaluate(unit);
+	if (TaskTraceOn(manager->GetCircuit())) {
+		ITravelAction* tr = unit->GetTravelAct();
+		manager->GetCircuit()->LOG("apex: ttrace update #%d task=%p re=%d travel=%s traveled=%d exec=%d q=%d", unit->GetId(),
+				static_cast<void*>(this), re ? 1 : 0,
+				(tr == nullptr) ? "null" : (tr->IsFinished() ? "fin" : (tr->IsWait() ? "wait" : "act")),
+				static_cast<int>(traveled.count(unit)), static_cast<int>(executors.count(unit)),
+				manager->GetCircuit()->GetCallback()->Unit_HasCommands(unit->GetId()) ? 1 : 0);
+	}
+	if (re) {
 		// Reevaluate runs the script pipeline, which can REASSIGN the unit to
 		// a different task -- RemoveAssignee clears its actions, so the travel
 		// act read here can be null. Crashed a watched game at 3 minutes the
@@ -819,6 +899,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// builders are not the parked ones. Off by default, table in docs/27.
 	const bool skipPath = inRange || (bothInBase
 			&& (circuit->GetTunable("apex_inbase_path", 0.f) <= 0.f));
+	if (TaskTraceOn(circuit)) {
+		circuit->LOG("apex: ttrace path #%d task=%p skip=%d inRange=%d", unit->GetId(), static_cast<void*>(this), skipPath ? 1 : 0, inRange ? 1 : 0);
+	}
 	if (skipPath) {
 		static unsigned sInRange = 0, sFarInBase = 0, sFarWorst = 0;
 		static int sPathSkipLogAt = 0;
@@ -868,6 +951,9 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 		return;
 	}
 
+	if (TaskTraceOn(manager->GetCircuit())) {
+		manager->GetCircuit()->LOG("apex: ttrace applypath #%d task=%p size=%d", unit->GetId(), static_cast<void*>(this), static_cast<int>(pPath->path.size()));
+	}
 	if (pPath->path.size() > 2) {
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 			unit->GetTravelAct()->SetPath(pPath);
@@ -987,14 +1073,69 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 	// the spot loses the mex rather than moving it.
 	CCircuitAI* circuit = manager->GetCircuit();
 	const bool keepLanes = !IsFixedSite(buildType);
-	CTerrainManager::TerrainPredicate predicate = [terrainMgr, builder, threatBar, circuit, keepLanes](const AIFloat3& p) {
-		if (keepLanes && circuit->IsInBaseLane(p)) {
-			return false;
-		}
-		return terrainMgr->CanReachAtSafe(builder, p,
-				builder->GetCircuitDef()->GetBuildDistance(), threatBar);
+	// NOTHING IS BUILT UNDER LAVA. The rising-tide maps flood a basin over a
+	// couple of minutes and everything standing in it burns down; a nanoframe
+	// raised there is metal handed to the map. This catches the farm -- the
+	// generators, converters and nanos the lattice is free to move. It shares
+	// the lanes' exemption for a FIXED site, which is one the script chose
+	// deliberately (an extractor's spot, a turret's slot, a factory's apron);
+	// those are filtered where they are chosen instead, in manager/lava.as.
+	// Costs nothing off a lava map -- HasLava is one cached compare.
+	const bool dryOnly = keepLanes && circuit->HasLava();
+	CCircuitDef* siteDef = buildDef;
+	// NOT ON THE BUILDER'S OWN FEET (see SelfClearance): the search reads a
+	// mobile unit as empty ground and hands back the square it is standing on,
+	// which cannot be started until the builder has been pushed clear of it.
+	// A spot site is exempt -- it is that vent or nothing.
+	const float selfClear = IsSpotSite(buildType) ? 0.f : SelfClearance(builder, buildDef);
+	const AIFloat3 builderPos = builder->GetPos(circuit->GetLastFrame());
+	// Each pass gets its OWN predicate with everything captured BY VALUE. An
+	// earlier version flipped one captured-by-reference flag between the two
+	// passes; FindBuildSite takes the predicate by non-const reference and the
+	// AI crashed with an access violation on two of twelve games. Nothing here
+	// outlives this frame now.
+	auto makePredicate = [terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, builderPos](bool aboveCrest, float selfBar) {
+		return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar](const AIFloat3& p) {
+			if ((selfBar > 0.f) && (p.SqDistance2D(builderPos) < SQUARE(selfBar))) {
+				return false;
+			}
+			if (keepLanes && circuit->IsInBaseLane(p)) {
+				return false;
+			}
+			if (dryOnly && circuit->IsUnderLava(p, siteDef)) {
+				return false;
+			}
+			if (aboveCrest && !circuit->AboveLavaCrest(p)) {
+				return false;
+			}
+			return terrainMgr->CanReachAtSafe(builder, p,
+					builder->GetCircuitDef()->GetBuildDistance(), threatBar);
+		});
 	};
-	SetBuildPos(terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate));
+	// ABOVE THE HIGH-WATER MARK FIRST. The submerged veto only refuses ground
+	// the tide is on RIGHT NOW, so at low tide the whole basin reads dry and
+	// the farm fills it, to burn on the next climb. The crest is the mark it
+	// has proven it reaches; the farm takes ground over that when any exists,
+	// and falls back to the ordinary search when none does -- returning
+	// nothing here releases the builder to a FallbackTask, which is how
+	// forward defence quietly went unstaffed once already.
+	auto search = [&](float selfBar) {
+		CTerrainManager::TerrainPredicate predicate = makePredicate(dryOnly, selfBar);
+		AIFloat3 s = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate);
+		if (dryOnly && !utils::is_valid(s)) {
+			CTerrainManager::TerrainPredicate wet = makePredicate(false, selfBar);
+			s = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, wet);
+		}
+		return s;
+	};
+	AIFloat3 site = search(selfClear);
+	// Nowhere in reach BUT under our own feet: take it and step aside, exactly
+	// as before. Returning nothing here releases the builder to a FallbackTask,
+	// which is how forward defence quietly went unstaffed once already.
+	if ((selfClear > 0.f) && !utils::is_valid(site)) {
+		site = search(0.f);
+	}
+	SetBuildPos(site);
 }
 
 void IBuilderTask::FindFacing(const springai::AIFloat3& pos)

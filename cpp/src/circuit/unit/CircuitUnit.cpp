@@ -229,6 +229,7 @@ void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
 		dgunHoldUntil = timeout;
 		dgunHoldReload = dgun->GetReloadFrame();
 	}
+	NoteAct("dgn", (manager != nullptr) ? manager->GetCircuit()->GetLastFrame() : timeout);
 	TRY_UNIT(manager->GetCircuit(), this,
 		if (circuitDef->HasDGun()) {
 			if (target->GetUnit()->IsCloaked()) {  // los-cheat related
@@ -276,13 +277,23 @@ bool CCircuitUnit::IsWeaponReady(int frame)
 	return isWeaponReady;
 }
 
-bool CCircuitUnit::IsDGunHeld(int frame) const
+bool CCircuitUnit::IsDGunHeld(int frame)
 {
 	if ((frame >= dgunHoldUntil) || (dgun == nullptr)) {
 		return false;
 	}
 	// The shot went off: the reload frame moved on.
-	return dgun->GetReloadFrame() <= dgunHoldReload;
+	if (dgun->GetReloadFrame() > dgunHoldReload) {
+		return false;
+	}
+	// apex: every Cmd* consults this as an early-return guard, so a true here
+	// is an order the engine never got and nothing ever retries. One mark a
+	// second -- the ring holds ten, and a flood erases the trace it is for.
+	if (frame - dgunHoldNoteAt >= FRAMES_PER_SEC) {
+		dgunHoldNoteAt = frame;
+		NoteAct("hld", frame);
+	}
+	return true;
 }
 
 float CCircuitUnit::GetDGunCostE() const

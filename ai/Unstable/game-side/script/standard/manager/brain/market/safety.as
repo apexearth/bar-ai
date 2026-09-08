@@ -15,6 +15,77 @@ int gNextCommHoldLog = 0;
 int gNextCommFleeLog = 0;
 int gNextCommHpLog = 0;
 int gNextCommFightLog = 0;
+int gCommEngageAt = -99999;
+
+// INSTRUMENT (temporary): is the commander standing with nothing in his engine
+// command queue, and for how long at a stretch? Sampled from AiUpdate, so one
+// sample a second. `act` is the C++ black box -- the last orders that actually
+// reached the engine, second-stamped -- so a stall with no new entries means
+// the orders were suppressed before they were sent, not that none were made.
+AIFloat3 gCwPos;
+bool gCwHave = false;
+int gCwStillFrom = -1;
+int gCwWorst = 0;
+int gCwStill = 0;
+int gCwSamples = 0;
+int gCwEngageStill = 0;
+int gCwQzero = 0;
+int gCwQpos = 0;
+int gNextCwLog = 0;
+
+void CommWatch()
+{
+	CCircuitUnit@ u = Builder::gComm;
+	if ((u is null) || (u.circuitDef is null))
+		return;
+	const AIFloat3 p = u.GetPos(ai.frame);
+	const float moved = gCwHave ? p.distance2D(gCwPos) : 999.f;
+	gCwPos = p;
+	gCwHave = true;
+	IUnitTask@ t = u.task;
+	const int tt = (t is null) ? -1 : int(t.GetType());
+	const int q = u.CmdQueueSize();
+	if (q > 0) ++gCwQpos; else ++gCwQzero;
+	++gCwSamples;
+	const bool still = (q <= 0) && (moved < 8.f);
+	if (still) {
+		++gCwStill;
+		if (gCwStillFrom < 0)
+			gCwStillFrom = ai.frame;
+		const int run = ai.frame - gCwStillFrom;
+		if (run > gCwWorst)
+			gCwWorst = run;
+		if (ai.frame - gCommEngageAt < 30 * SECOND)
+			++gCwEngageStill;
+		// One line per stall, at three seconds in and then every fifteen: the
+		// first says it started, the rest say it is still going.
+		if ((run == 3 * SECOND) || ((run > 3 * SECOND) && ((run % (15 * SECOND)) < SECOND))) {
+			AiLog(Factory::T() + "apex: com-still " + formatFloat(float(run) / 30.f, "", 0, 1)
+				+ "s task=" + tt + " q=" + q
+				+ " sinceEngage=" + ((gCommEngageAt > 0) ? int((ai.frame - gCommEngageAt) / 30) : -1)
+				+ " at=" + int(p.x) + "," + int(p.z)
+				+ " site=" + ((t is null) ? "-" : (int(t.GetBuildPos().x) + "," + int(t.GetBuildPos().z)
+					+ "@" + int(p.distance2D(t.GetBuildPos()))))
+				+ " hp=" + int(u.GetHealthPercent() * 100.f)
+				+ " act=" + u.GetActTrace());
+		}
+	} else {
+		gCwStillFrom = -1;
+	}
+	if (ai.frame >= gNextCwLog) {
+		gNextCwLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: com-watch still=" + gCwStill + "/" + gCwSamples
+			+ " q0=" + gCwQzero + " q+=" + gCwQpos
+			+ " worst=" + formatFloat(float(gCwWorst) / 30.f, "", 0, 1) + "s"
+			+ " postEngage=" + gCwEngageStill);
+		gCwStill = 0;
+		gCwSamples = 0;
+		gCwQzero = 0;
+		gCwQpos = 0;
+		gCwWorst = 0;
+		gCwEngageStill = 0;
+	}
+}
 
 bool CommRules()
 {
@@ -188,6 +259,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 						+ " str " + formatFloat(bestStr, "", 0, 2) + " vs his " + formatFloat(mine, "", 0, 2)
 						+ " approaching " + formatFloat(bestApp, "", 0, 0) + "/s at " + int(bestD));
 				}
+				gCommEngageAt = ai.frame;
 				unit.CmdMoveTo(foeAt);
 				return null;
 			}

@@ -226,7 +226,9 @@ public:
 	// other order in that window would replace it in the engine's queue (measured:
 	// every manual-fire order was followed by a move and a stop in the same
 	// frame, and no shot ever landed).
-	bool IsDGunHeld(int frame) const;
+	// NOT const: a held frame is an order the engine never got, and the black
+	// box has to say so -- a silent drop is invisible in every other log.
+	bool IsDGunHeld(int frame);
 	bool IsShieldCharged(float percent);
 	bool IsJumpReady();
 	bool IsJumping();
@@ -402,6 +404,7 @@ private:
 	springai::Weapon* dgun;
 	int dgunHoldUntil = 0;
 	int dgunHoldReload = 0;
+	int dgunHoldNoteAt = -1;
 	springai::Weapon* weapon;  // main weapon
 	springai::Weapon* shield;
 

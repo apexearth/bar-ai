@@ -169,24 +169,21 @@ instrument shows next.
   fusion be bought while solar-fed") is gone with it. Whether the fusion
   still gets bought at the right time is NOT measured; check
   `techStart`/fusion count on a 30-minute battery before trusting it.
-- **Commander idle. DIAGNOSED AND PARTLY FIXED 2026-09-08.** The engine
-  throws build orders away without telling anyone:
-  `CBuilderCAI::GiveCommandReal` returns before queueing when the build
-  square is blocked by a finished building or an unreclaimable feature, and
-  since the builder never left idle no `UnitIdle` event follows either. Both
-  of CircuitAI's retry routes need that event, so the builder stands with an
-  empty command queue holding a live task while `Reevaluate` re-elects and is
-  handed the same buildType back. The commander hits it hardest because an
-  in-base build skips pathing, so his travel ends at once and that single
-  `Execute` is the only order the task will ever issue. Measured (Geyser
-  Plains 1v1, commander sampled once a game-second): idle 43.7% of samples,
-  single stalls to 183 s, with a build order issued every ~30 s that never
-  reached the engine. `apex_ord_retry_s` (docs/27) re-drives the task through
-  `OnUnitIdle` after 3 s of empty queue: 33.4% -> 25.7% idle, worst stall
-  195 s -> 137 s, 196 orders recovered per 7-game arm.
-  **Still open:** 25.7% is not zero. `apex: ord-dropped dropped=/checked=`
-  counts the remaining ones per minute; the other routes into an empty queue
-  are not identified.
+- **Commander idle -- a SECOND cause found 2026-09-08 (S25).** Beyond S24's
+  sim-speed lag, the engine flatly discards a build order whose square is
+  blocked: `CBuilderCAI::GiveCommandReal` returns before queueing, and since
+  the builder never left idle no `UnitIdle` event follows either, so neither
+  of CircuitAI's retry routes can fire. The commander is worst hit because an
+  in-base build skips pathing, so his travel ends at once and that one
+  `Execute` is the only order the task will ever issue. Signature:
+  `apex: com-still ... q=0` for tens of seconds with a valid buildPos and the
+  site hundreds of elmos away, while `apex: com-exec` shows the AI issuing him
+  a build order every ~30 s. `stuck.as`'s `gStuckDeadAt`/`gOrderLagMax`
+  recovery (6318a09e) is the right shape for it -- it does not currently catch
+  the commander often enough.
+  **Not measured honestly yet:** 43.7% of commander samples idle and stalls to
+  183 s are BATTERY-SPEED figures and S24 says they are inflated; the real
+  number needs a `--speed 1` or watched game, which has not been run.
 
 ## 2026-09-06 — THE REZ FLEET IS SIZED TO A STREAM IT DOES NOT CONVERT
 

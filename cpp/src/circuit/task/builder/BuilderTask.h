@@ -22,6 +22,10 @@ class CAllyUnit;
 
 struct SBuildChain;
 
+// How far a build site must stay from the builder that ordered it for the
+// building's footprint to clear it. Defined in BuilderTask.cpp.
+float SelfClearance(CCircuitUnit* builder, CCircuitDef* buildDef);
+
 struct SResource {
 	float metal;
 	float energy;

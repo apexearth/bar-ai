@@ -425,3 +425,36 @@ per session, and the file cannot tell sessions apart. Until lane.py keys the
 lane to the session: never rely on the file -- prefix every lane-following
 tool with `BARAI_LANE=<name>` (the environment wins over the file) and name
 the variant on every deploy/run (`deploy lane-<name>`, `--a Apex<name>:lane-<name>:standard`).
+
+## S25 — The engine DISCARDS a build order whose square is blocked, silently
+
+`CBuilderCAI::GiveCommandReal` (`BuilderCAI.cpp`) tests `IsBuildPosBlocked` and
+`return`s **before queueing** when a finished building or an unreclaimable
+feature stands on the square. There is no queue entry, no error, no
+`AllowCommand` refusal to see -- and because the builder never left idle, no
+`UnitIdle` event either. Both of CircuitAI's routes back to an order need that
+event (`IBuilderTask::OnUnitIdle` needs the engine to say idle,
+`IBuilderTask::traveled` needs a travel to end), so the builder stands with an
+empty command queue holding a live task while `Reevaluate` re-elects, is handed
+the same buildType, and returns.
+
+This is a SECOND cause of the S24 signature and it is speed-independent: S24's
+lost order is late delivery scaling with sim speed, this one is a refusal that
+happens at speed 1 too, which is why apexearth sees the commander stand around
+in a watched game. The commander is worst hit because an in-base build skips
+pathing (`apex_inbase_path`) and so ends its travel at once -- after that single
+`Execute` nothing else in the task can ever issue him an order.
+
+The diagnosis path, for the next time: `Market::CommWatch` (`safety.as`) samples
+the commander once a game-second and logs `apex: com-still ... q=0 site=X,Z@d
+act=...`; `CCircuitUnit::NoteAct` now also marks `dgn` (a D-gun order) and `hld`
+(an order dropped by the D-gun hold, which is the other silent dropper -- every
+`Cmd*` early-returns on `IsDGunHeld` and nothing retries). A stall reads as
+`q=0` for tens of seconds with a valid `bp` and a site hundreds of elmos away.
+
+**Do not read an idle percentage off a battery**: measured 43.7% of commander
+samples idle on Geyser Plains at harness speed, single stalls to 183 s -- S24
+says that figure is inflated by sim speed and the honest one needs `--speed 1`,
+which has NOT been run. The recovery is `stuck.as`'s `gStuckDeadAt` /
+`gOrderLagMax` (6318a09e), which sizes its wait to the lag it measures in the
+game it is in; a fixed-second wait is the trap S24 names.
