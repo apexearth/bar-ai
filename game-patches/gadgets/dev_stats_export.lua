@@ -193,6 +193,9 @@ local nanoSamp = {}       -- team -> samples over finished nano turrets
 local nanoBusy = {}       -- team -> samples where the nano was lathing
 local facPow = {}         -- team -> sum of factories' build power in use (0-1 each)
 local nanoOnFac = {}      -- team -> samples where a nano lathed a factory's build (a mobile unit)
+local conSamp = {}        -- team -> samples over finished mobile constructors
+local conIdle = {}        -- team -> ...with an empty command queue
+local conGuardFin = {}    -- team -> ...guarding a finished structure while lathing nothing
 local CMD_REPAIR = CMD.REPAIR
 local CMD_GUARD = CMD.GUARD
 
@@ -525,6 +528,18 @@ local function sampleCommIdle()
 							bump(facBusy, teamID, 1)
 							bump(facPow, teamID, Spring.GetUnitCurrentBuildPower(uid) or 0)
 						end
+					elseif ud.isBuilder and (ud.speed or 0) > 0 and not (ud.customParams or {}).iscommander then
+						bump(conSamp, teamID, 1)
+						local q = Spring.GetUnitCommands(uid, 1)
+						if q == nil or #q == 0 then
+							bump(conIdle, teamID, 1)
+						elseif q[1].id == CMD_GUARD and not Spring.GetUnitIsBuilding(uid) then
+							local g = q[1].params and q[1].params[1]
+							if g and Spring.ValidUnitID(g) and not Spring.GetUnitIsBeingBuilt(g)
+								and (Spring.GetUnitDefID(g) and (UnitDefs[Spring.GetUnitDefID(g)].speed or 0) == 0) then
+								bump(conGuardFin, teamID, 1)
+							end
+						end
 					elseif ud.isBuilder and (ud.speed or 0) == 0 then
 						bump(nanoSamp, teamID, 1)
 						local b = Spring.GetUnitIsBuilding(uid)
@@ -792,11 +807,12 @@ local function dump(reason, onlyTeam, atFrame)
 			end
 			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
 			Spring.Echo(string.format(
-				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d facPow=%.1f nanoOnFac=%d",
+				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d facPow=%.1f nanoOnFac=%d conSamp=%d conIdle=%d conGuardFin=%d",
 				teamID, atFrame or Spring.GetGameFrame(),
 				facSamp[teamID] or 0, facBusy[teamID] or 0,
 				nanoSamp[teamID] or 0, nanoBusy[teamID] or 0,
-				facPow[teamID] or 0, nanoOnFac[teamID] or 0))
+				facPow[teamID] or 0, nanoOnFac[teamID] or 0,
+				conSamp[teamID] or 0, conIdle[teamID] or 0, conGuardFin[teamID] or 0))
 		end
 	end
 end

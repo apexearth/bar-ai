@@ -16,6 +16,50 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 (late) — ECONOMY at 30 minutes: Altair ahead, Isthmus behind
+
+Goal moved by apexearth: "prove that we out-eco our opponents at 30m into the
+game." First 30-minute battery (`eco30-head`, 12 games per map vs BARb hard,
+`--minutes 31`, tree = guard fix + stall-by-time-to-cover + fleet-ask):
+
+| map | minute | n | our m/s | BARb m/s | our produced | BARb produced |
+|---|---|---|---|---|---|---|
+| Altair | 14 | 10 | 24.2 | 14.0 | 11,576 | 8,726 |
+| Altair | 30 | 4 | 51.7 | 33.6 | 57,022 | 34,734 |
+| Isthmus | 14 | 12 | 33.9 | 36.0 | 15,255 | 11,446 |
+| Isthmus | 30 | 7 | **130.2** | **176.2** | 90,795 | 100,832 |
+
+n at 30 is the games that reached it: 9 of 24 ended in a gameover first
+(we won 7, lost 7 overall). Isthmus is the open problem: level at 14, 26%
+behind on income at 30, with 13,392 metal wasted per game against BARb's
+4,254 -- metal overflows while energy stalls 35% of rich-income samples.
+Constructor samples idle (new gadget field): 13.3% ours vs 9.3% BARb on
+Isthmus; 11.5% vs 15.7% on Altair.
+
+- **Early constructors idle half the time.** Altair seed 0, our first corck:
+  61% of samples in minutes 2-4 and 46% in 4-6 held no engine order. Trace:
+  elected a solar at 2.2 m, task died 11 s later (`task-die ... why=?`), no
+  re-election for 17 s, three more solar elections 2 s apart, then the stuck
+  watch found it 720 elmos from its site "still 30s" -- twice more at the
+  same coordinate holding a nano and a wind. The engine fires no idle for a
+  unit that was already idle when its order was refused, so nothing but the
+  30 s stuck watch ends it. Now: a task-holder off its site with
+  `CmdQueueSize()==0` for 2 s is re-elected (stuck.as, unmeasured).
+  `task-die why=?` was 29 of 80 deaths in that game -- the DLL has no reason
+  code for an engine-refused build.
+- **The stall interrupt thrashes when its answer cannot execute.** Same con,
+  minutes 4-5: interrupted off a 90%-done tower "to answer the energy stall",
+  the solar request was refused (log rate-limited, reason unseen), exec fell
+  to alternate picks (mex, tower, maw, nano) and the interrupt fired again on
+  each 0.00 build -- five interrupts in 500 frames. The startable check
+  passed and the request still failed; the refusal reason is the next read.
+- **In-flight energy drain was N half-fleets.** `EDrainInFlight` priced every
+  ledger row at `EffBP(0)` alone: 2,658 e/s of "drain" on 621 e/s income at
+  14 m. Now shares the fleet across rows (unmeasured; battery `eco30-b`).
+- **Growth premium is convex in generator size** (`fGrow` 7.1 for an afus vs
+  3.0 for a fusion at the same moment) with no arrival-time discount, so
+  outside a stall the biggest generator still wins on rate. Not changed.
+
 ## 2026-09-08 — ECONOMY: what the e-stall session left open
 
 Measured with `tools/ecotimeline.py` (minute-by-minute, his recommendation)

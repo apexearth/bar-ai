@@ -63,7 +63,11 @@ def check_ran(run: Path) -> tuple[bool, list[str]]:
     if not logs:
         return False, ["no infolog found -- cannot verify the variant ran"]
     bad = [p for p in logs if AS_ERR.search(p.read_text("utf-8", errors="replace"))]
-    crash = [p for p in logs if "has crashed" in p.read_text("utf-8", errors="replace")]
+    # "Skirmish AI X not found!" is a load failure: the engine seats stock or
+    # nothing in that slot and the match still runs to a normal-looking end
+    # (36 games of it on 2026-09-07 before anyone read the arm's income).
+    crash = [p for p in logs if re.search(r"has crashed|Skirmish AI \S+ not found!",
+                                          p.read_text("utf-8", errors="replace"))]
     # Runtime script exceptions are the compile error's sibling: the variant
     # loads, then every thrown election builds nothing, and the AI reads as
     # "the script is not running" on screen while the match completes

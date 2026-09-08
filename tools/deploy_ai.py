@@ -219,7 +219,11 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
     # trap, back again and hardest to spot on a machine set up from scratch. The
     # build output is generated from vendor/ as it stands, so prefer it whenever
     # it exists and say which one went out.
-    built_dll = _lane.artifact()
+    # The DLL of the lane being DEPLOYED, never the checkout's active lane: a
+    # named-lane deploy took the active lane's artifact mid-link (2026-09-07)
+    # and shipped a truncated DLL the engine reported as 'not found'.
+    built_dll = (_lane.artifact(variant[len('lane-'):]) if variant.startswith('lane-')
+                 else _lane.artifact())
     for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
         if name == "SkirmishAI.dll" and built_dll.exists():
@@ -228,7 +232,11 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False) -> No
         elif name == "SkirmishAI.dll":
             name += " (repo copy -- no local build in vendor/)"
         if f.exists():
+            before = f.stat().st_size
             shutil.copy2(f, target / name.split(" ")[0])
+            after = f.stat().st_size
+            if (before != after) or ((target / name.split(" ")[0]).stat().st_size != after):
+                raise SystemExit(f"{f} changed while being copied -- a build is writing it; retry")
             overlaid.append(name)
 
     for required in ("AIInfo.lua", "SkirmishAI.dll"):

@@ -20,6 +20,7 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
 					   Type::BUILDER, BuildType::GUARD, {0.f, 0.f}, 0.f, timeout)
 		, vipId(vip->GetId())
 		, isInterrupt(isInterrupt)
+		, isFrame(!vip->IsFinished())
 {
 }
 
@@ -83,6 +84,22 @@ void CBGuardTask::Stop(bool done)
 	}
 
 	IBuilderTask::Stop(done);
+}
+
+// A guard taken on a nanoframe is a build, and it ends when the frame does.
+// Nothing else ends it: a Guard has no target, so the base class never sees
+// completion, and a hold sized for one pair of hands outlived a many-handed
+// afus by twenty minutes (apexearth 2026-09-08).
+void CBGuardTask::Update()
+{
+	if (isFrame) {
+		CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
+		if ((vip == nullptr) || vip->IsFinished()) {
+			manager->AbortTask(this);
+			return;
+		}
+	}
+	IBuilderTask::Update();
 }
 
 bool CBGuardTask::Execute(CCircuitUnit* unit)

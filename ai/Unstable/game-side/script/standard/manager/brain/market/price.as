@@ -268,6 +268,12 @@ float EPrice()
 	// income at headroom over trending pull, so a standing premium exists
 	// while income merely MATCHES pull, and the bank never gets raced.
 	ePull *= gPrEHeadroom;
+	// ...and never below what the hands we own ask at full speed.
+	{
+		const float ask = FleetAskE();
+		if (ePull < ask)
+			ePull = ask;
+	}
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
@@ -432,8 +438,14 @@ float ERealizeShare(float addE, float buildSec)
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
-	const float target = demand * gPrEHeadroom
+	float target = demand * gPrEHeadroom
 			+ ConvCapE() + fill;
+	// ...and never below the standing fleet's full-speed ask.
+	{
+		const float ask = FleetAskE() + ConvCapE() + fill;
+		if (target < ask)
+			target = ask;
+	}
 	// NEVER ZERO. Energy in the wasted band is not worthless -- it is worth the
 	// conversion floor as soon as a converter follows, and the floor price
 	// already nets that converter's own cost out. What it is missing is the

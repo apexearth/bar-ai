@@ -493,6 +493,8 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
     # one run's log while believing it is another's is exactly how a crash gets
     # reported as a clean run. Make it a field.
     result.crashed = ("has crashed" in text) or ("problem with a skirmish AI" in text)
+    if re.search(r"Skirmish AI \S+ not found!", text):
+        result.crashed = True   # a load failure seats nothing in the slot
     for line in text.splitlines():
         if "SkirmishAI" in line and ("error" in line.lower() or "exception" in line.lower()):
             result.ai_errors.append(line.strip()[:300])

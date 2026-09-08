@@ -382,3 +382,17 @@ materialised too). The check that would have caught it in one line:
 `grep -c <new symbol> <game-side script dir>/…` after every deploy, or
 `deploy_ai.py status`, whose `repo`/`live` digest reads the lane's snapshot,
 not `ai/Unstable/`, so it said "in sync" throughout.
+
+## S23 — A named-lane deploy shipped the ACTIVE lane's DLL, mid-link
+
+`deploy_ai.py deploy lane-energy2` took `SkirmishAI.dll` from `_lane.artifact()`
+— the checkout's active lane (`.barai-lane`, another session's `comm`) — not
+from `build-energy2`. That session was linking at the time, so the copy was
+truncated (205,325,976 of 210,730,409 bytes), printed `(local build)`, and the
+engine logged `Skirmish AI Apexenergy2-lane-energy2 not found!` and seated
+nothing. 36 Isthmus games ran to a normal-looking end; `run_match.py` reported
+no crash and `review.py` gate 1 passed. Read in `ecoscale`: our arm at minute
+14 had 2 metal/s and 0 mexes. Fixed: the artifact comes from the lane being
+deployed, a copy whose size moved is refused, and `not found!` is a crash in
+both tools. The one-line check remains: md5 of the deployed DLL against its
+build output.

@@ -15,6 +15,7 @@ array<float> gStuckX;
 array<float> gStuckZ;
 array<float> gStuckDone;
 array<int>   gStuckSince;
+array<int>   gStuckDeadAt;   // first frame seen holding a task with no engine order
 uint gStuckCursor = 0;
 int  gStuckFreed = 0;
 int  gStuckLogAt = 0;
@@ -40,6 +41,7 @@ void StuckDrop(uint i)
 	gStuckZ.removeAt(i);
 	gStuckDone.removeAt(i);
 	gStuckSince.removeAt(i);
+	gStuckDeadAt.removeAt(i);
 }
 
 void UpdateStuckBuilds()
@@ -75,19 +77,33 @@ void UpdateStuckBuilds()
 		}
 		AIFloat3 p = u.GetPos(ai.frame);
 		const float done = Requests::Progress(t);
+		// A task-holder the engine has no order for is not walking and not
+		// building, and the engine fires no idle for a unit that was already
+		// idle when its order was refused: nothing ends this but us. Off his
+		// site only -- on it, a dropped order is the DLL's retry to make.
+		const AIFloat3 bp0 = t.GetBuildPos();
+		const bool noOrder = (u.CmdQueueSize() == 0) && OnMap(bp0)
+			&& (p.distance2D(bp0) > Catalog::gBuildDist[int(u.circuitDef.id)]);
 		if (slot < 0) {
 			gStuckId.insertLast(u.id);
 			gStuckX.insertLast(p.x);
 			gStuckZ.insertLast(p.z);
 			gStuckDone.insertLast(done);
 			gStuckSince.insertLast(ai.frame);
+			gStuckDeadAt.insertLast(noOrder ? ai.frame : -1);
 			continue;
 		}
 		const uint i = uint(slot);
+		if (!noOrder)
+			gStuckDeadAt[i] = -1;
+		else if (gStuckDeadAt[i] < 0)
+			gStuckDeadAt[i] = ai.frame;
+		// Two seconds, not one sample: an order can still be in the net (S13).
+		const bool dead = (gStuckDeadAt[i] >= 0) && (ai.frame - gStuckDeadAt[i] >= 2 * SECOND);
 		const float dx = p.x - gStuckX[i];
 		const float dz = p.z - gStuckZ[i];
-		if (((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
-			|| (done > gStuckDone[i]))
+		if (!dead && (((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
+			|| (done > gStuckDone[i])))
 		{
 			gStuckX[i] = p.x;
 			gStuckZ[i] = p.z;
@@ -95,7 +111,7 @@ void UpdateStuckBuilds()
 			gStuckSince[i] = ai.frame;
 			continue;
 		}
-		if (float(ai.frame - gStuckSince[i]) < secs * float(SECOND))
+		if (!dead && (float(ai.frame - gStuckSince[i]) < secs * float(SECOND)))
 			continue;
 		++gStuckFreed;
 		// HOW FAR FROM THE SITE IT STOPPED. A parked builder at ~0 is standing
@@ -109,7 +125,8 @@ void UpdateStuckBuilds()
 			+ " toSite=" + formatFloat(dSite, "", 0, 0)
 			+ " buildDist=" + formatFloat(Catalog::gBuildDist[int(u.circuitDef.id)], "", 0, 0)
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
-			+ "s at " + int(p.x) + "," + int(p.z) + " -- re-electing");
+			+ "s at " + int(p.x) + "," + int(p.z)
+			+ (dead ? " q=0 -- no engine order, re-electing" : " -- re-electing"));
 		freed.insertLast(u);
 		freedTask.insertLast(t);
 		StuckDrop(i);

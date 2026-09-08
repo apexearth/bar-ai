@@ -61,6 +61,12 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	const bool  genDiag = ai.GetTunable("apex_efloor_diag", 0.f) > 0.f;
 	const float genCrowdCell = PfCrowd() * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+	// A STALL IS ENDED BY WHAT ARRIVES SOONEST, not by the best rate of return:
+	// the growth premium scales with a generator's size, so an afus out-valued
+	// a fusion 4:1 while taking four times as long to close the same deficit
+	// (apexearth 2026-09-08: "too early btw, fusion would have been smarter").
+	const float stallDef = HardEStall() ? EnergyDeficitE() : 0.f;
+	float bestClose = 0.f;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -178,6 +184,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ " #" + unit.id + " " + Catalog::Def(d).GetName()
 				+ (barred ? " barred" : "")
 				+ " v=" + formatFloat(c.value, "", 0, 2)
+				+ " close=" + formatFloat((stallDef > 0.f)
+					? (((Catalog::gMakeE[d] < stallDef) ? Catalog::gMakeE[d] : stallDef)
+						/ (walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec) + 1.f)) : 0.f, "", 0, 2)
 				+ " gain=" + formatFloat(c.gain, "", 0, 2)
 				+ " (mkE=" + formatFloat(Catalog::gMakeE[d], "", 0, 1)
 				+ " P=" + formatFloat(fPrice, "", 0, 3)
@@ -217,7 +226,16 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			gEAlt.insertAt(at, d);
 			gEAltV.insertAt(at, c.value);
 		}
-		if (!barred && (c.value > w.value)) {
+		bool wins = !barred && (c.value > w.value);
+		if (!barred && (stallDef > 0.f)) {
+			const float wait = walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec);
+			const float closes = (Catalog::gMakeE[d] < stallDef) ? Catalog::gMakeE[d] : stallDef;
+			const float close = closes / ((wait > 1.f) ? wait : 1.f);
+			wins = (close > bestClose);
+			if (wins)
+				bestClose = close;
+		}
+		if (wins) {
 			w = c;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(d);
@@ -372,8 +390,14 @@ float EMakeInFlight()
 // stall hoist, the interrupt and the parallel-site rule all answer to.
 float EnergyDeficitE()
 {
-	const float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
+	float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	// ...and never below the standing fleet's full-speed ask.
+	{
+		const float ask = FleetAskE();
+		if (need < ask)
+			need = ask;
+	}
 	return need - aiEconomyMgr.energy.income - EMakeInFlight();
 }
 
@@ -398,6 +422,16 @@ float EDrainInFlight()
 		return gEDrainVal;
 	// Ledger COMING rows (flipped 2026-08-27): orphaned frames carry their
 	// remaining E bill exactly as live requests do.
+	// ONE FLEET, SHARED: each row was priced at the whole fleet's assist share
+	// lathing it alone, so N frames read as N half-fleets (2,658 e/s of "drain"
+	// on 621 e/s of income, 2026-09-08). The fleet is divided among the rows.
+	uint rows = 0;
+	for (uint i = 0; i < ComLen(); ++i) {
+		if ((gComState[i] != CS_FINISHED) && (Catalog::gCostE[gComDef[i]] > 1.f)
+			&& (ComProgress(i) < 1.f))
+			++rows;
+	}
+	const float bpEach = EffBP(0.f) / float((rows > 0) ? rows : 1);
 	float e = 0.f;
 	for (uint i = 0; i < ComLen(); ++i) {
 		if (gComState[i] == CS_FINISHED)
@@ -410,7 +444,7 @@ float EDrainInFlight()
 			continue;
 		if (left > 1.f)
 			left = 1.f;
-		const float sec = Catalog::BuildSecondsAt(d, EffBP(0.f));
+		const float sec = Catalog::BuildSecondsAt(d, bpEach);
 		if (sec > 1.f)
 			e += Catalog::gCostE[d] * left / sec;
 	}
@@ -624,6 +658,66 @@ float ConvUpDemand()
 int gBpCapFrame = -30000;
 int gBpCapOwn = -1;
 float gBpCapVal = 0.f;
+// WHAT THE HANDS WE OWN ASK OF THE ENERGY ECONOMY AT FULL SPEED. Pull is what
+// the lathes draw this second, throttled by the very stall being priced; the
+// standing fleet's ask is fixed by its build power and its line's energy
+// density, and it is the demand generation has to lead if energy is ever
+// to be ahead of the nanos that create the pull (apexearth: "we should
+// have a concept of 'always making energy'... energy is the staple").
+float gFleetAskVal = 0.f;
+int   gFleetAskFrame = -1;
+float FleetAskE()
+{
+	if (gFleetAskFrame == ai.frame)
+		return gFleetAskVal;
+	gFleetAskFrame = ai.frame;
+	float ask = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (f.circuitDef !is null))
+			ask += ProductDrainE(int(f.circuitDef.id));
+	}
+	// Nano turrets assist the lines and ask at the line's density; mobile
+	// constructors build structures and ask at the structures' density (a
+	// commander on mexes and a lab is ~80 e/s, not the lab's product rate --
+	// priced at the line's rate it bought energy before the second mex).
+	const float lineDens = LineEnergyDensity();
+	const float buildDens = BuildEnergyDensity();
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || (Catalog::gBuildPower[int(d)] <= 0.f))
+			continue;
+		const int id = int(d);
+		if (!Catalog::gMobile[id] && (Catalog::gBuildsList[id].length() > 0))
+			continue;   // a factory: counted above at its own product rate
+		const float dens = Catalog::gMobile[id] ? buildDens : lineDens;
+		ask += float(gOwnCount[d]) * Catalog::gBuildPower[id] * dens;
+	}
+	gFleetAskVal = ask;
+	return ask;
+}
+
+// Energy per build-power-second of the structures our constructors can
+// place: the mean over the available immobile, non-factory catalogue.
+float gBuildDensVal = -1.f;
+float BuildEnergyDensity()
+{
+	if (gBuildDensVal > 0.f)
+		return gBuildDensVal;
+	float sum = 0.f;
+	int n = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() > 0) || (Catalog::gBuildTime[d] <= 1.f))
+			continue;
+		sum += Catalog::gCostE[d] / Catalog::gBuildTime[d];
+		++n;
+	}
+	if (n <= 0)
+		return 0.f;   // not cached: defs may not be available yet
+	gBuildDensVal = sum / float(n);
+	return gBuildDensVal;
+}
+
 float BPCapacity()
 {
 	if ((gBpCapFrame == ai.frame) && (gBpCapOwn == gOwnStamp))

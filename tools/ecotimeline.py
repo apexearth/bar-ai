@@ -27,6 +27,7 @@ REPO = Path(__file__).resolve().parent.parent
 ENERGY = re.compile(r"\[f=(\d+)\] Skirmish AI <[^>]*>: \[[\d.]+m t(\d+)\] apex: energy "
                     r"cur=(-?\d+)/(\d+) inc=(-?\d+) pull=(-?\d+)")
 STATS = re.compile(r"\[f=(\d+)\] \[BARAI_STATS\] (.*)")
+DUTY = re.compile(r"\[f=(\d+)\] \[BARAI_DUTY\] (.*)")
 
 
 def find_runs(key: str) -> list[Path]:
@@ -60,6 +61,7 @@ def main() -> int:
     # (map, spec, minute) -> metric -> [values over games]
     acc: dict[tuple, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     games = 0
+    duty: dict[tuple, tuple[float, float, float]] = {}
     for log in logs:
         res = log.parent / "result.json"
         if not res.exists():
@@ -81,6 +83,15 @@ def main() -> int:
                 a["bank%"].append(100.0 * cur / store if store > 0 else 0.0)
                 a["eInc"].append(inc)
                 a["ePull"].append(pull)
+                continue
+            m = DUTY.search(ln)
+            if m:
+                # Cumulative per team; the last line of the game is the total.
+                kv = dict(p.split("=", 1) for p in m.group(2).split(" ") if "=" in p)
+                t = int(kv.get("team", -1))
+                duty[(mapname, specs.get(t, f"t{t}"), log)] = (
+                    float(kv.get("conSamp", 0)), float(kv.get("conIdle", 0)),
+                    float(kv.get("conGuardFin", 0)))
                 continue
             m = STATS.search(ln)
             if not m:
@@ -140,6 +151,15 @@ def main() -> int:
             parts.append(f"{label}: {100.0 * st / n:.0f}% of {n:.0f} samples" if n > 0
                          else f"{label}: no samples")
         print("   stalled while " + "  |  ".join(parts))
+        # Mobile constructors with nothing to do, or guarding a finished
+        # building (apexearth 2026-09-08: cons parked on a completed afus).
+        cs = ci = cg = 0.0
+        for (m_, s_, _), (a1, a2, a3) in duty.items():
+            if (m_, s_) == (mapname, spec):
+                cs, ci, cg = cs + a1, ci + a2, cg + a3
+        if cs > 0:
+            print(f"   constructor samples idle {100.0 * ci / cs:.1f}%, "
+                  f"guarding a finished building {100.0 * cg / cs:.1f}%  (n={cs:.0f})")
     return 0
 
 
