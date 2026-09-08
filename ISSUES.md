@@ -16,6 +16,39 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 — ECONOMY: what the e-stall session left open
+
+Measured with `tools/ecotimeline.py` (minute-by-minute, his recommendation)
+on 1v1 vs BARb hard, 15 min, 6 games per map. The opening e-stall is gone
+(stalled share in minutes 2-6: 28-54% -> 0-8%); these are what the same
+instrument shows next.
+
+- **The lab's product drain is invisible between its first order and the
+  engine's build delay.** `LineWorking` is `CountQueued > 0`, so a factory
+  that has orders but has not started drawing (the DLL's `buildDelay`) is
+  neither in `energy.pull` nor in `LineDrainE`. Measured on Altair seed 1:
+  `lineE=111` while the lab was framed, `lineE=0` and `pull=6` at 1.0-1.5 m
+  with the queue full, then `pull=161` at 2.0 m and the bank at 10. No
+  script binding reports whether a factory is currently building.
+- **First factory late on Supreme Isthmus.** Seed 1: two light towers at 35 s
+  and 1.8 m by `draw` (LLT v=21 over plant 13.7), lab at 2.3 m. The plant's
+  price loses ordinary draws to towers and solars in the opening; the cover
+  push's `PlantFramed` gate does not apply because these were not pushes.
+- **Metal unspent while e-stalled mid-game.** Metal bank 95-100% at minutes
+  10-12 on Isthmus with energy at 20-37% and pull 480-760 against 380-500
+  made. `InFlightCap` now counts the bank's flow (draft 6); whether the
+  ladder's throughput (advsol serial, cap per def) can follow a pull that
+  grows 100 e/s per minute is not measured.
+- **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
+  flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
+  asymmetry ("spending E is cheap at balance, which is what lets advsol and
+  fusion be bought while solar-fed") is gone with it. Whether the fusion
+  still gets bought at the right time is NOT measured; check
+  `techStart`/fusion count on a 30-minute battery before trusting it.
+- **Commander idle.** `commIdle` 49-61% of samples in minutes 4-8 on Altair
+  seed 1 (the gadget's own note says this bucket answers the wrong question;
+  `commStall` is the one to read). Not diagnosed.
+
 ## 2026-09-06 — THE REZ FLEET IS SIZED TO A STREAM IT DOES NOT CONVERT
 
 Both halves of the demand are honest rates now (docs/27 `TUNE_REZ_HORIZON`

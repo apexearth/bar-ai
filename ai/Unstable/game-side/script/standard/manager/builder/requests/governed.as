@@ -178,7 +178,13 @@ uint InFlightCap()
 	const float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
 	if (drain <= 0.f)
 		return MIN_INFLIGHT;
-	const float want = aiEconomyMgr.metal.income / drain;
+	// Income AND the bank's spendable flow, the same feed ValueOf prices by:
+	// on income alone a 97%-full bank still capped energy at two sites
+	// while the Isthmus mid-game stalled (minutes 12-15, pull 480-760
+	// against 380-500 made).
+	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+	const float bankFlow = aiEconomyMgr.metal.current / ((look > 1.f) ? look : 30.f);
+	const float want = (aiEconomyMgr.metal.income + bankFlow) / drain;
 	if (want <= float(MIN_INFLIGHT))
 		return MIN_INFLIGHT;
 	return uint(want);

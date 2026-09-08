@@ -283,16 +283,21 @@ float EPrice()
 	// metal produced in 40 minutes; "we e-stalled and should have made a
 	// basic solar").
 	const float fl = EPriceFloor();
-	// ...bounded by what metal can feed: throughput the bank and income
-	// cannot pay for is not unlocked by energy either.
-	float flow = aiEconomyMgr.metal.pull;
+	// THE DERIVATION, NOT A PREMIUM. Lathes run at the smaller of the two
+	// feed shares, so one e/s is worth (the metal flow they would run) /
+	// (the energy flow they need): the fleet's spend capacity, not the pull
+	// the stall has already throttled, bounded by what income and the bank
+	// can feed. excess*pull/income overpriced a deep stall six-fold and
+	// bought an advanced solar at 64 e/s.
+	float flow = BPCapacity();
 	{
 		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
 		const float feed = aiEconomyMgr.metal.income + aiEconomyMgr.metal.current / look;
 		if (flow > feed)
 			flow = feed;
 	}
-	const float atRisk = (eInc > 0.01f) ? (excess * flow / eInc) : 1.f;
+	const float atRisk = ((eInc > 0.01f) && (excess > 0.f))
+			? (flow / (eInc * (1.f + excess))) : 0.f;
 	return (atRisk > fl) ? atRisk : fl;
 }
 
@@ -314,8 +319,18 @@ float ECostSpot()
 	const float eStore = aiEconomyMgr.energy.storage;
 	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
 		excess = 1.f;
-	const float unlock = (eInc > 0.01f)
-			? (excess * aiEconomyMgr.metal.income / eInc) : 1.f;
+	// The same derivation and the same flow as EPrice: spending E throttles
+	// the same lathes. Priced off metal INCOME (7 m/s) while the gain side
+	// read the fleet's flow (47), a 5,000-E advanced solar billed 167.
+	float flow = BPCapacity();
+	{
+		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
+		const float feed = aiEconomyMgr.metal.income + aiEconomyMgr.metal.current / look;
+		if (flow > feed)
+			flow = feed;
+	}
+	const float unlock = ((eInc > 0.01f) && (excess > 0.f))
+			? (flow / (eInc * (1.f + excess))) : 0.f;
 	const float fl = EPriceFloor();
 	return (unlock > fl) ? unlock : fl;
 }

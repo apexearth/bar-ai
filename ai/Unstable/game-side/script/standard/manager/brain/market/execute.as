@@ -776,8 +776,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			slot = ProbedSite(w.def,
 					Catalog::Def(int(unit.circuitDef.id)), slot);
 		}
-		{
-			// Cross-def: an elected advsol joins the fusion being built.
+		// Cross-def: an elected advsol joins the fusion being built. Not a
+		// zero-E rung mid-stall: "make a basic solar" was routed onto a
+		// 5,000-E advanced solar and the whole fleet fed it through a
+		// three-minute stall.
+		if (!(HardEStall() && (Catalog::gCostE[int(w.def.id)] <= 0.f))) {
 			IUnitTask@ jt = JoinBigEnergy(unit, w.def);
 			if (jt !is null)
 				return jt;

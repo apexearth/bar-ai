@@ -48,6 +48,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// for each generator in the ladder: two of them walk the def table, one
 	// walks every standing turret, and the tunables build a string and hit a map.
 	const float genBP = EffBP(Catalog::gBuildPower[uid]);
+	const float genRatio = BestConvRatio();
 	const float genPower = EcoPowerM();
 	const float genGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
 	const bool  genSurvOn = ai.GetTunable("apex_eco_survival", TUNE_ECO_SURVIVAL) > 0.f;
@@ -101,9 +102,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// what share of TOTAL economic power does this add -- with energy
 		// carried at what a converter would actually pay for it.
 		{
-			// At the PRICED value, not the conversion floor: the two agree in
-			// surplus and only the price knows a stall.
-			const float mkM = Catalog::gMakeE[d] * fPrice;
+			// At the conversion floor: the compounding part is the permanent
+			// income, and pricing it at the stall premium saturated the 9x
+			// on any big generator mid-stall (an advanced solar at 64 e/s).
+			const float mkM = Catalog::gMakeE[d] * genRatio;
 			fGrow = 1.f + genGrowK
 					* mkM / ((genPower > mkM) ? genPower : ((mkM > 0.f) ? mkM : 1.f));
 			gain *= fGrow;

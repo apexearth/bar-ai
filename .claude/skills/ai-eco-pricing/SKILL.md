@@ -35,10 +35,23 @@ and t=904 in one game.
 ## The energy price ladder
 
 `EPriceFloor` (converter arbitrage, solved for P, restricted to converters we
-can place) → `EPrice` (GAIN: stall premium `excess*metal.pull/eInc`) /
-`ECostSpot` (COST: premium only above balance) → `EPriceAt`/`EPriceCostAt`
+can place) → `EPrice` / `ECostSpot` (one derivation on both sides since
+2026-09-08: lathes run at the smaller feed share, so one e/s is worth
+`flow / (eInc * (1 + excess))` with `flow = min(BPCapacity, mInc + bank/
+apex_e_lookahead)` — the fleet's spend capacity, NOT `metal.pull`, which the
+stall has already throttled; `excess` is headroom-scaled forecast pull over
+supply, and supply is `income + EMakeInFlight()`) → `EPriceAt`/`EPriceCostAt`
 decay premium→floor over `apex_e_response/buildSec`. `EPriceCostAt` returns 0
-outright while the E bank is full and income exceeds pull.
+while the E bank is full, income (plus ordered generation) exceeds pull plus
+the lines about to run, AND the build would not drain the bank over its own
+duration. The old `excess*metal.pull/eInc` overpriced a deep stall six-fold
+(and read 4 m/s of throttled pull as the whole economy); the old cost side
+`excess*metal.income/eInc` billed a 5,000-E advanced solar 167 metal at
+64 e/s.
+
+**HardEStall is true only when energy is the TIGHTER feed**: with the metal
+bank also dry (`mShare < eShare`, both feeds over the generator's build
+seconds) more energy unlocks nothing and the hoist/interrupt stand down.
 
 **Then the realizable share.** A price is what one E/s is worth; it is not a
 claim that anyone will use it. `ERealizeShare(addE, buildSec)` multiplies a
@@ -46,7 +59,7 @@ generator's gain by the share of its output something would actually absorb:
 
     target = max(pull − convUse, slow-decay peak) * apex_e_headroom
            + convCap + (eStorage − eCurrent)/apex_e_lookahead
-    share  = max(clamp((target − eIncome) / addE, 0, 1), apex_e_waste_worth)
+    share  = max(clamp((target − eIncome − EMakeInFlight) / addE, 0, 1), apex_e_waste_worth)
 
 Above the line the gain decays to the `apex_e_waste_worth` floor (0.25) -- NOT
 to zero: energy in the wasted band is worth the conversion floor as soon as a
@@ -150,5 +163,10 @@ a moho 1.6x) — a denominator artefact, not a fact about the game.
 ## Log lines
 
 `apex: efloor` (gate on `apex_efloor_diag`, and it carries the overflow state:
-`eInc ePull convUse convCap realize`) · `apex: tech-diag ... upD=` ·
+`eInc ePull convUse convCap realize`) · `apex: ewant` (same gate; EVERY factor
+of every generator rung an asker priced: `P grow surv inf real`, `m=(M+E+A+
+rent)`, `t=(walk+build+late+rest)`, and the energy ledger — read this before
+touching any term here; it is how the seven 2026-09-08 defects were found) ·
+`tools/ecotimeline.py` (bank/income/pull minute by minute per arm) ·
+`apex: tech-diag ... upD=` ·
 `apex: mexdiag` · `apex: eco-status` · `apex: decide <unit> -> <want> v=…`
