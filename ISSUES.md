@@ -42,9 +42,14 @@ its provenance.
   at 0.00, 293 consolidations in twelve minutes. Fixed: feed without in-flight
   make, live deficit, TTE with the energy bill (EStretch), never the last hand.
   12-min canon: solars at 8 6 -> 16, e/s at 12 1,899 -> 4,044, waste 14.9k ->
-  9.5k, strands 17 -> 0. Still open: the stall hoist takes far claimers (the
-  walk rule declined only 0-11 a minute), and `held` finishes are back to
-  363/min at minute 20 with 175 queued -- the finish budget needs another look.
+  9.5k, strands 17 -> 0. The "walks longer than it lathes" rule for the stall
+  hoist was WRONG on Carrot: it declined 416 hoists in 12 games, energy
+  executions per game fell ~110 -> ~73, stalled share at 20 doubled (12% ->
+  24%), metal wasted by 30 10.1k -> 27.8k (carrot30-t7 vs t6) -- on a 24x24
+  map every claimer walks longer than a solar lathes, so it declined everyone.
+  Reverted; t8 (per-frame idle pass, rule still in) and t9 (rule out) measure
+  the rest. The held finishes were the DLL idle pass batching ~10 elections
+  into one frame every 8 frames -- fixed in 011f3b04 (held 363 -> 0).
 - **Late constructor idle in the canon was an election livelock, not pricing.**
   Census (`apex: elec-slice`): minute 20 done=0, lapse-dropped 1,581, queued
   568. The 8 s ELEC_LAPSE was shorter than the engine's idle-pass revisit
