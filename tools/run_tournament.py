@@ -65,6 +65,8 @@ class Job:
     seed: int
 
 
+SPEED = 0   # --speed, applied to every run_match this process spawns
+
 def _ram_limited_workers() -> int:
     """How many concurrent matches free RAM allows. Windows only; else no limit."""
     try:
@@ -163,6 +165,8 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         cmd += ["--modoption", mo]
     if engine:
         cmd += ["--engine", engine]
+    if SPEED:
+        cmd += ["--speed", str(SPEED)]
 
     proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     result_file = outdir / "result.json"
@@ -266,6 +270,8 @@ def main() -> int:
     ap.add_argument("--games", type=int, default=4,
                     help="matches per pairing per map (rounded up to even for side balance)")
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
+    ap.add_argument("--speed", type=int, default=0,
+                    help="sim speed passed to run_match (S24: 37x loses builder orders; 5 is clean, 10 loses 6%%)")
     ap.add_argument("--workers", type=int, default=6,
                     help="concurrent matches; ~1 core and ~4.4 GB each in steady state")
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
@@ -289,6 +295,8 @@ def main() -> int:
     ap.add_argument("--report", nargs="?", const="", metavar="RUN_DIR",
                     help="summarise a finished run (default: the most recent)")
     args = ap.parse_args()
+    global SPEED
+    SPEED = args.speed
 
     TOURNAMENTS.mkdir(parents=True, exist_ok=True)
 

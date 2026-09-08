@@ -16,6 +16,32 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 (evening) — Carrot Mountains at 30: behind on METAL, ahead on energy
+
+New goal: "Refine our economy logic until we out-eco our opponents at 30m in
+Carrot Mountain." Baseline `carrot30-base` (HEAD 98f0b3f8, 1v1 vs BARb hard,
+12 games, 31 min, `--speed 10` so builder orders are not lost, S24):
+
+| minute | n | our m/s | BARb m/s | our mexes | BARb mexes | our e/s | BARb e/s |
+|---|---|---|---|---|---|---|---|
+| 10 | 12 | 42.7 | 40.2 | 19.6 | 17.9 | 407 | 614 |
+| 20 | 12 | 83.0 | 133.9 | 38.8 | 53.1 | 1,479 | 1,605 |
+| 30 | 9 | 188.0 | 236.9 | 68.6 | 83.6 | 4,736 | 3,636 |
+
+Metal from mexes at 30 (new gadget field): 171 vs 232. The map has 172 spots;
+the sweep marks 98-118 of them risky. Wins 0-3 with 9 timelimits.
+Mechanism in t000, minutes 10-25: the energy bank sat at 5-24 of 2,000-4,000
+for ten minutes with the METAL bank full, so the hoist fired on 182 of 185
+energy elections (`why=estall`, `mFull=1`, deficit 3,200-3,700) and the fleet
+executed 136 advanced solars, 29 fusions and 20 solars against 67 mexes.
+Energy income rose 295 -> 865 over those ten minutes (BARb 614 -> 1,605 over
+10-20) while BARb claimed 14 more spots. On this map the metal-full hoist
+trades compounding extraction for generation; on Isthmus the same tree
+plateaued on energy instead. The market is greedy in both cases; the ETA
+objective (`apex_eta=1`, eta-objective skill) is the designed answer and is
+being A/B'd (`carrot30-eta`). Also running: `carrot30-t1` = hoist income bar
+removed + generators never retired while energy is short.
+
 ## 2026-09-08 (late) — ECONOMY at 30 minutes: Altair ahead, Isthmus behind
 
 Goal moved by apexearth: "prove that we out-eco our opponents at 30m into the

@@ -458,7 +458,13 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	const float ratio = ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO);
 	const float hzR = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float hz = (hzR > 1.f) ? hzR : 300.f;
-	const float ePM = EPriceFloor();
+	// The generation given up is priced as the buy side prices it -- at the
+	// spot price, not the converter floor -- and NOTHING that makes energy is
+	// eaten while the hands we own ask for more than we make: watched 8v8,
+	// a team ate five of its own solars for room at 700 e/s flat and
+	// stalled 50-90% of the next ten minutes.
+	const float ePM = EPrice();
+	const bool eShort = EnergyDeficitE() > 0.f;
 	const float wageR = Wage();
 	// Converters are an elastic sink, not demand -- they are sized against
 	// income by construction, so counting their chew as pull makes a
@@ -490,7 +496,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// The margin is a share of the CANDIDATE'S own output, not of income:
 		// scaled to income it grew with the economy, so the bigger we got the
 		// less we could retire.
-		if (eFree - Catalog::gMakeE[d] <= 0.1f * Catalog::gMakeE[d])
+		if (eShort || (eFree - Catalog::gMakeE[d] <= 0.1f * Catalog::gMakeE[d]))
 			continue;
 		const float ec = Catalog::gMakeE[d]
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);

@@ -1027,9 +1027,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// in the pull, it is income being thrown away (apexearth, watching:
 	// "overflowing metal like crazy... we should just have loads of guys
 	// making solars").
-	const float hoistBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
-	const bool hoistWorth = (hoistBar <= 0.f) || (aiEconomyMgr.energy.income <= hoistBar)
-			|| aiEconomyMgr.isMetalFull;
+	// No income bar: the deficit is the fleet's ask against what we make,
+	// and it was 1,950 e/s at 773 e/s of income with the hoist switched off
+	// by the 400 bar while the metal bank sat full for twelve minutes
+	// (Isthmus seed 13, 2026-09-08). Above the bar the market's energy price
+	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
+	const bool hoistWorth = true;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitE() > 0.f) || owedE)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
