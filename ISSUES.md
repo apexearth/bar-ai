@@ -74,9 +74,16 @@ instrument shows next.
   games) moved the minute-14 stalled share 27.8% -> 22.5% and the
   poor-income share 22% -> 21%, but tripled wasted metal (856 -> 2,587,
   BARb 1,017) with metal produced unchanged -- reverted as a mixed result.
-  Three derivations tried against this stall, none a clean win; the line
-  (plant + its nano ring) is sized to a metal appetite the energy economy
-  is not asked to grow ahead of, and that coupling is the one still open.
+  Then, from his watched game (c8392af6): the hoist bar no longer applies
+  with the metal bank full, a nano is worth the share of its energy ask the
+  economy can feed, a second big generator is not held when the bank covers
+  it, and an energy-costing build's priced duration is stretched by the
+  stall's throttle. Isthmus 12 games: poor-income stall 22% -> 19%, rich
+  51% -> 32%, minute-14 share 27.8% -> 22.6%, production level.
+  Still open there: the sense want elects a radar 37 times for 9 built
+  (refused "full", re-elected every draw -- a wasted election per builder
+  per cycle); and the air-plant opening (Whirlwinds at 4,600 E) remains the
+  worst case at 20% poor-income stall.
 - **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
   flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
   asymmetry ("spending E is cheap at balance, which is what lets advsol and
