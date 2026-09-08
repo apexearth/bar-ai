@@ -703,6 +703,54 @@ local function dump(reason, onlyTeam, atFrame)
 			parts[#parts + 1] = string.format("eInc=%.2f", ei or 0)
 			parts[#parts + 1] = string.format("ePull=%.2f", ep or 0)
 			parts[#parts + 1] = string.format("eSpend=%.2f", ex or 0)
+			-- WHO IS ASKING FOR THE ENERGY. ePull is one number; a stall reads
+			-- the same whether a factory is pumping bombers or ten nanos are
+			-- assisting a lab. Each builder's unthrottled ask is its build
+			-- speed times the energy density of what it is building; other
+			-- units' actual draw is their upkeep (radar, cloak, jammers).
+			do
+				local askFac, askCon, askNano, useOther = 0, 0, 0, 0
+				local useByDef = {}
+				for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+					local udid = Spring.GetUnitDefID(uid)
+					local ud = udid and UnitDefs[udid]
+					if ud ~= nil and not Spring.GetUnitIsBeingBuilt(uid) then
+						if ud.isBuilder or ud.isFactory then
+							local b = Spring.GetUnitIsBuilding(uid)
+							local bdid = b and Spring.GetUnitDefID(b)
+							local bud = bdid and UnitDefs[bdid]
+							if bud and (bud.buildTime or 0) > 0 then
+								local ask = (ud.buildSpeed or 0) * (bud.energyCost or 0) / bud.buildTime
+								if ud.isFactory then
+									askFac = askFac + ask
+								elseif (ud.speed or 0) == 0 then
+									askNano = askNano + ask
+								else
+									askCon = askCon + ask
+								end
+							end
+						else
+							local _, _, _, eu = Spring.GetUnitResources(uid)
+							useOther = useOther + (eu or 0)
+							if (eu or 0) > 0 then
+								useByDef[ud.name] = (useByDef[ud.name] or 0) + eu
+							end
+						end
+					end
+				end
+				local top = {}
+				for name, v in pairs(useByDef) do top[#top + 1] = { name, v } end
+				table.sort(top, function(a, b) return a[2] > b[2] end)
+				local topParts = {}
+				for i = 1, math.min(4, #top) do
+					topParts[#topParts + 1] = string.format("%s:%.0f", top[i][1], top[i][2])
+				end
+				parts[#parts + 1] = "eUseTop=" .. table.concat(topParts, ",")
+				parts[#parts + 1] = string.format("eAskFac=%.0f", askFac)
+				parts[#parts + 1] = string.format("eAskCon=%.0f", askCon)
+				parts[#parts + 1] = string.format("eAskNano=%.0f", askNano)
+				parts[#parts + 1] = string.format("eUseOther=%.0f", useOther)
+			end
 			-- Cumulative stall samples against the sample count, so any two
 			-- rows difference into the stalled fraction of that window.
 			parts[#parts + 1] = string.format("resSamp=%d", resSamp[teamID] or 0)

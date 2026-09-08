@@ -109,6 +109,9 @@ def main() -> int:
                 a["gBank%"].append(100.0 * float(kv.get("eNow", 0)) / est)
             a["gEInc"].append(float(kv.get("eInc", 0)))
             a["gEPull"].append(float(kv.get("ePull", 0)))
+            for k in ("eAskFac", "eAskCon", "eAskNano", "eUseOther"):
+                if k in kv:
+                    a[k[1:]].append(float(kv[k]))
             mst = float(kv.get("mStore", 0))
             if mst > 0:
                 a["mBank%"].append(100.0 * float(kv.get("mNow", 0)) / mst)
@@ -116,7 +119,8 @@ def main() -> int:
             a["mProd"].append(float(kv.get("metalProduced", 0)))
     print(f"games={games}  (bank/inc/pull from the AI's 30 s ledger where it logs one; "
           f"g* columns from the 2-minute stats gadget, every team)")
-    cols = ["bank%", "eInc", "ePull", "gBank%", "gEInc", "gEPull", "stall%", "mBank%", "mInc", "mProd"]
+    cols = ["bank%", "eInc", "ePull", "gBank%", "gEInc", "gEPull", "AskFac", "AskCon", "AskNano",
+            "UseOther", "stall%", "mBank%", "mInc", "mProd"]
     keys = sorted({(m_, s) for (m_, s, _) in acc})
     for mapname, spec in keys:
         print(f"\n== {mapname}  {spec}")
