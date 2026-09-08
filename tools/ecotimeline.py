@@ -47,7 +47,10 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("run")
     ap.add_argument("--minutes", type=int, default=15)
+    ap.add_argument("--poor", type=float, default=400.0,
+                    help="energy income below which a stall counts as the real failure")
     args = ap.parse_args()
+    bands: dict[tuple, list[float]] = defaultdict(lambda: [0.0, 0.0])
     logs = find_runs(args.run)
     logs = [l if l.name == "infolog.txt" else l / "infolog.txt" for l in logs]
     logs = [l for l in logs if l.exists()]
@@ -94,6 +97,12 @@ def main() -> int:
             pes, psamp = prev.get(team, (0.0, 0.0))
             if samp > psamp:
                 a["stall%"].append(100.0 * (es - pes) / (samp - psamp))
+                # A stall on a small energy income is the failure he watches
+                # for; a stall at 2k e/s is the fleet asking for more than
+                # income can feed. Split by the bin's income (apexearth).
+                band = "poor" if float(kv.get("eInc", 0)) < args.poor else "rich"
+                bands[(mapname, spec, band)][0] += es - pes
+                bands[(mapname, spec, band)][1] += samp - psamp
             prev[team] = (es, samp)
             est = float(kv.get("eStore", 0))
             if est > 0:
@@ -121,6 +130,12 @@ def main() -> int:
                 v = a.get(c)
                 row += f"{mean(v):>8.0f}" if v else f"{'':>8}"
             print(row)
+        parts = []
+        for band, label in (("poor", f"eInc<{args.poor:.0f}"), ("rich", f"eInc>={args.poor:.0f}")):
+            st, n = bands.get((mapname, spec, band), [0.0, 0.0])
+            parts.append(f"{label}: {100.0 * st / n:.0f}% of {n:.0f} samples" if n > 0
+                         else f"{label}: no samples")
+        print("   stalled while " + "  |  ".join(parts))
     return 0
 
 
