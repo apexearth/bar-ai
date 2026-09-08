@@ -50,6 +50,21 @@ instrument shows next.
   (`gEDemandPk`) instead of raw pull -- 24.0% -> 36.7% stalled, n=6.
   Untried: the lab's product drain while `LineWorking` (queued but between
   units) is in neither pull nor `LineDrainE`.
+  **Split by income (his filter, `ecotimeline.py`):** stalled while energy
+  income < 400 is 3% on Altair (BARb 6%) and **22% on Isthmus (BARb 9%)**;
+  above 400 both sides sit at 40%. The poor-income Isthmus stall lives in
+  minutes 6-10, and in 4 of 6 games the opening plant there is an AIR plant
+  (`corap`) pumping Whirlwinds at 4,600 E per 150 metal on 200-300 e/s
+  (4-8 bombers by minute 10). `production.as` prices products on metal
+  alone -- no energy term anywhere. Billing products for their energy at
+  `EPriceCostAt` over the line's build seconds (one helper, six value
+  sites) was tried and MEASURED WORSE on the same battery (Isthmus
+  poor-income stall 22% -> 28%, metal produced 12,609 -> 11,120; Altair
+  3% -> 6%), reverted the same day; the plant choice varies by seed, so
+  n=6 cannot separate the bill's effect from which plant was opened. Next:
+  pin the plant (or filter the battery by opening plant) before judging any
+  production-side energy price; and the gadget's `eAskFac/eAskCon/eAskNano/
+  eUseTop` now say who is asking.
 - **`ECostSpot` and `EPrice` now share one derivation** (flow / energy need,
   flow = min(BPCapacity, income + bank/lookahead)). The old cost-side
   asymmetry ("spending E is cheap at balance, which is what lets advsol and
