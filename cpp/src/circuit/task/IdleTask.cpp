@@ -52,7 +52,9 @@ void CIdleTask::Update()
 {
 	if (updateUnits.empty()) {
 		updateUnits = units;  // copy units
-		updateSlice = updateUnits.size() / TEAM_SLOWUPDATE_RATE;
+		// apex: run every frame, so a pass still spans TEAM_SLOWUPDATE_RATE x 8
+		// frames; the +1 keeps a small idle set moving every frame.
+		updateSlice = updateUnits.size() / (TEAM_SLOWUPDATE_RATE * 8) + 1;
 	}
 
 	const int frame = manager->GetCircuit()->GetLastFrame();

@@ -713,7 +713,7 @@ void CFactoryManager::Init()
 		CScheduler* scheduler = circuit->GetScheduler().get();
 		const int interval = 4;
 		const int offset = circuit->GetSkirmishAIId() % interval;
-		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), interval, offset + 0, "facIdle");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::UpdateIdle, this), 1, offset + 0, "facIdle");  // apex: per frame; CIdleTask slices for it
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::Update, this), interval, offset + 2, "facUpd");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CFactoryManager::PullNanoOffBuilding, this),

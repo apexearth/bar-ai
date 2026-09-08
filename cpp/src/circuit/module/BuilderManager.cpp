@@ -468,7 +468,10 @@ void CBuilderManager::Init()
 		CScheduler* scheduler = circuit->GetScheduler().get();
 		const int interval = 8;
 		const int offset = circuit->GetSkirmishAIId() % interval;
-		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateIdle, this), interval, offset + 0, "bldIdle");
+		// apex: every frame, a slice sized for the same pass length. Once per
+		// 8 frames the pass put ~10 elections in one frame and the script's
+		// slice held the later finishes over to the next pass.
+		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::UpdateIdle, this), 1, offset + 0, "bldIdle");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CBuilderManager::Update, this), 1/*interval*/, offset + 1, "bldUpd");
 		// Six times a second: his bar is one second, and a reflex that samples
 		// at the bar is already late by the time it fires.
