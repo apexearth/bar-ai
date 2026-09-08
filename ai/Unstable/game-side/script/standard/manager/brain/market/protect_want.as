@@ -539,7 +539,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ "->" + formatFloat(gDbgShort1, "", 0, 2)
 					+ " hz=" + formatFloat(gDbgHz, "", 0, 5)
 					+ " (hazard=" + formatFloat(gDbgHazard, "", 0, 5)
-					+ " siege=" + formatFloat(gDbgSiege, "", 0, 5) + ")"
+					+ " siege=" + formatFloat(gDbgSiege, "", 0, 5)
+					// Printed whether or not apex_hz_approach is on: the term
+					// has to be readable at the site where the decision is
+					// actually made, not only at home.
+					+ " appr=" + formatFloat(ApproachP(bestAt,
+							Military::OurArmyNow() + gDbgCover0), "", 0, 3) + ")"
 					+ " | econM=" + formatFloat(gAssetsM - gProtM, "", 0, 0)
 					+ " protM=" + formatFloat(gProtM, "", 0, 0)
 					+ " army=" + formatFloat(ArmyValue(), "", 0, 0)

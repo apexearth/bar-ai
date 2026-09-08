@@ -1011,6 +1011,18 @@ number: past this the economy is big enough that an energy stall is a transient
 in the pull rather than something worth pulling a constructor off its task for.
 0 disables the gate and asks at every income.
 
+**2026-09-08: the bar now gates only the INTERRUPT (pulling a builder off a
+task, army.as), not the per-election hoist (decide.as).** Measured on Isthmus
+seed 13 at speed 10: energy income sat at 700 e/s from minute 12 to 24 with the
+metal bank full and a fleet ask 1,950 e/s above income; `apex: nohoist ...
+worth=0 hard=1 deficit=1950 eInc=773` every 15 s, and above the bar the
+market's energy price won 6 elections in 12 minutes against 37 radars and 36
+mexes. The deficit already says whether the stall is a transient (it is not
+when the hands we own ask for three times what we make), so the hoist reads the
+deficit alone. apexearth's 8v8 reading the same day: "teams are often lower on
+energy than they should be. Would be fixed if we just had constructors
+consistently creating energy buildings."
+
 ### `TUNE_UNPROT_DISCOUNT` = 0.20f
 
 WHAT A BUILDING IS WORTH WHILE NOTHING GUARDS IT (apexearth: "give buildings a
@@ -1077,7 +1089,36 @@ raise. Mobile metal only (`GetEnemyGroupCost` counts the group's buildings,
 and `velVec` is its fastest member, so a group centred on their base would
 otherwise walk its whole economy at us at scout speed).
 
-Default and A/B: see below.
+**MEASURED AND LEFT OFF. 8 games, Frozen Ford, 4 seeds x on/off, 2026-09-08.**
+The term does exactly what it was built to do and it changes nothing, because
+hazard was not the binding constraint.
+
+It fires: in `HZ-on-13` home hazard reached 5.30/ks against a 1.25 floor, and
+at the defence sites `hz` ran 0.0047-0.0053 where the floor is 0.00125 -- 4x,
+on the measured approach, exactly as designed.
+
+It does not matter: on the same lines `short=1.00->1.00`. One tower adds no
+measurable cover against a wave of 2,000-2,900, so `stopped` is ~0 and
+`gain = stakeK x hz x stopped` stays 0.01-0.06 however large `hz` gets.
+Multiplying nothing by four is nothing. The single line in that game with real
+gain (0.44) is the only one where the tower moved the shortfall at all
+(`short=1.00->0.87`).
+
+Across the sweep: defence 12.5% of spend off vs 13.7% on, T2+T3 50.3% vs 49.9%,
+per-run defence share 7.9-17.1% in BOTH arms with no separation -- and the one
+game where the term fired had the LOWEST defence share of its arm (9.8%).
+
+**So the master blocker in USER-FEEDBACK is confirmed as the blocker, and it is
+`stopped`, not hazard.** Defence against a real wave prices to zero because a
+single turret's share of a large threat is negligible; every term upstream of
+that is multiplying a zero. Fixing the risk field was the wrong blindness to
+fix first. Kept at 0 as a working instrument -- the `appr=` field on
+`apex: risk` and `apex: defprice` is what showed this -- not as a behaviour.
+
+Note the baseline moved under this measurement: the GradAt/ForwardFraction fix
+(same session, `coverage.as`) had already lifted defence from the 1.7% of the
+`20260907-175233` loss to ~12.5%, so the field blindness this was aimed at was
+substantially addressed by that change first.
 
 ### `TUNE_ALLY_SHARE` = 1.f
 

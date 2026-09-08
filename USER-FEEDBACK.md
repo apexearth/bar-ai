@@ -175,11 +175,14 @@ their BASE, which is zero at ours by construction. `20260907-175233`, minutes
 21-26, four mexes down to one and 1,148 / 2,251 / 2,337 metal of losses per
 sample: `home[hazard=1.25/ks]` on every line -- exactly `apex_risk_floor`/120.
 Defence gain 0.03; static defence 1.7% of spend against BARb's 15.9%.
-`ApproachP` (`coverage.as`, `apex_hz_approach`) is the measurement that was
-missing -- an instrumented off-arm reads `appr=0.26..0.60` at home over exactly
-that collapse, i.e. hazard 4x the floor. **The second half of his sentence --
-that the answer is a T2/T3 gun and not more cheap ones -- is NOT yet
-confirmed.**
+`ApproachP` (`coverage.as`, `apex_hz_approach`) closes that blindness and was
+MEASURED INERT -- 8 games, docs/27. It lifts hazard 4x on a measured approach
+exactly as designed, and defence spend does not move (12.5% -> 13.7%, T2+T3
+50.3% -> 49.9%), because on the same log lines `short=1.00->1.00`: one tower
+adds no measurable cover against a 2,000+ wave, so `gain = stake x hz x stopped`
+is multiplying a zero. **Hazard was not the blocker. `stopped` is** -- the
+original master blocker below, still unfixed and now confirmed as the only one
+that matters. Left at 0 as an instrument.
 
 His spec, verbatim in shape:
 

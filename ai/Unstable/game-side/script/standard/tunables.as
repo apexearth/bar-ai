@@ -1426,6 +1426,12 @@ const float TUNE_STAKE_HORIZON_S = 300.f;
 //   insures something before the first loss teaches us. See docs/27.
 const float TUNE_RISK_FLOOR = 0.15f;
 
+// HZ_APPROACH [weight]: hazard floor from enemy formations WALKING at this
+//   ground -- horizon/ETA, weighed by their metal against what defends it.
+//   Measured (LOS-slaved) and a floor only, so it never fires where nothing
+//   was seen. See docs/27.
+const float TUNE_HZ_APPROACH = 0.f;
+
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
 //   value (symmetric start); the observed census replaces it once larger.
 const float TUNE_ENEMY_PRIOR = 0.25f;   // 0.35 + a continuous line drained the bank into army (watched: out of metal)

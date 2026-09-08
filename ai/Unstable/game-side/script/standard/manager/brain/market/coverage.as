@@ -457,7 +457,16 @@ float gRkSeen = 0.f;
 // 0 = gradient disabled (flat 1.0), 1 = no usable bearing (0.0), 2 = project.
 int   gRkGrad = 0;
 float gRkGHx = 0.f, gRkGHz = 0.f, gRkGDx = 0.f, gRkGDz = 0.f, gRkGSpan = 1.f;
-
+// The enemy formations that are WALKING somewhere, gathered once a frame:
+// position, metal, and velocity. See ApproachP.
+array<float> gRkApX;
+array<float> gRkApZ;
+array<float> gRkApM;
+array<float> gRkApVx;
+array<float> gRkApVz;
+float gRkHoriz = 120.f;
+float gRkApproachW = 0.f;
+int   gRkApAt = -999999;
 // Frame memos: every input below moves on event/frame granularity, so within
 // one frame a refill returns the same numbers -- and the protect stack asks
 // per def per builder election.
@@ -501,6 +510,50 @@ void RiskFill()
 	if (pr > foe)
 		foe = pr;
 	gRkFoeMass = foe;
+	// THE WALK IS THE WARNING. Group data is LOS-slaved, so this is evidence
+	// and never a prior: it can only ever raise the hazard, and reads nothing
+	// while we are blind.
+	gRkHoriz = (horiz > 1.f) ? horiz : 120.f;
+	gRkApproachW = ai.GetTunable("apex_hz_approach", TUNE_HZ_APPROACH);
+	// Once a second, not once a frame: a formation moves ~60 elmos in that
+	// time and the distances this feeds are thousands. The per-member walk is
+	// the only unbounded work in RiskFill.
+	if (ai.frame - gRkApAt >= SECOND) {
+		gRkApAt = ai.frame;
+		gRkApX.resize(0);
+		gRkApZ.resize(0);
+		gRkApM.resize(0);
+		gRkApVx.resize(0);
+		gRkApVz.resize(0);
+		const int nAG = aiEnemyMgr.GetEnemyGroupCount();
+		for (int ag = 0; ag < nAG; ++ag) {
+			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(ag);
+			if (!OnMap(gp))
+				continue;
+			// MOBILE METAL ONLY. GetEnemyGroupCost counts the group's
+			// buildings too, and velVec is its FASTEST member -- so a group
+			// centred on their base would walk its whole economy at us at
+			// scout speed. Their fielded army is the thing that arrives.
+			float gm = 0.f;
+			const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(ag);
+			for (int k = 0; k < nU; ++k) {
+				const int ud = aiEnemyMgr.GetEnemyGroupUnitDef(ag, k);
+				if ((ud > 0) && (ud <= Catalog::gDefCount) && Catalog::gMobile[ud]
+					&& !Catalog::gBuilder[ud] && (Catalog::gPower[ud] > 1.f))
+				{
+					gm += Catalog::gCostM[ud];
+				}
+			}
+			if (gm <= 1.f)
+				continue;
+			const AIFloat3 gv = aiEnemyMgr.GetEnemyGroupVelVec(ag);
+			gRkApX.insertLast(gp.x);
+			gRkApZ.insertLast(gp.z);
+			gRkApM.insertLast(gm);
+			gRkApVx.insertLast(gv.x);
+			gRkApVz.insertLast(gv.z);
+		}
+	}
 	if (ai.GetTunable("apex_threat_gradient", TUNE_THREAT_GRADIENT) <= 0.f) {
 		gRkGrad = 0;
 		return;
@@ -644,6 +697,46 @@ float ThreatAt(const AIFloat3& in pos)
 //
 // `cover` is CoverAt(pos); the caller passes it because the protect market
 // already has it and it is the second most expensive read in the market.
+// Hazard floor from formations WALKING at this ground: horizon/ETA, clipped
+// at 1, against what defends here. HazardWith's other two terms cannot see a
+// force on its way -- the loss term is retrospective and the presence term is
+// scaled by GradAt, which is zero at our own base by construction.
+//
+// LOS-slaved, so it reads zero where nothing was seen and can only ever raise.
+// Mobile metal only: group cost counts buildings and velVec is the fastest
+// member, so a group on their base would walk its economy at us at scout speed.
+// MEASURED INERT, kept at 0 as an instrument -- docs/27.
+float ApproachP(const AIFloat3& in pos, float defended)
+{
+	RiskFill();   // stamped per frame; never reached from inside RiskFill
+	// THE WAVE DOES NOT SPLIT ITSELF -- the same law the site fill states. The
+	// group model cuts one push into a dozen clusters, so a max over groups
+	// reads a push as a skirmish; sum what is on its way, then take the ratio
+	// once.
+	float mass = 0.f;
+	for (uint g = 0; g < gRkApM.length(); ++g) {
+		const float dx = pos.x - gRkApX[g];
+		const float dz = pos.z - gRkApZ[g];
+		float d = sqrt(dx * dx + dz * dz);
+		if (d < 1.f)
+			d = 1.f;
+		// Closing speed toward THIS ground; a formation walking away is let go.
+		// velVec is the group's FASTEST member, so this is the earliest the
+		// force could land -- an upper bound on urgency, which is the safe
+		// direction for a floor.
+		const float closing = (gRkApVx[g] * dx + gRkApVz[g] * dz) / d;
+		if (closing <= 0.f)
+			continue;
+		float reach = closing * gRkHoriz / d;
+		if (reach > 1.f)
+			reach = 1.f;
+		mass += gRkApM[g] * reach;
+	}
+	if (mass <= 0.f)
+		return 0.f;
+	return mass / (mass + ((defended > 0.f) ? defended : 0.f));
+}
+
 float HazardWith(const AIFloat3& in pos, float cover)
 {
 	const float stake = StakeAt(pos, gRkThreatR);
@@ -664,6 +757,13 @@ float HazardWith(const AIFloat3& in pos, float cover)
 				/ (gRkFoeMass + ((defended > 0.f) ? defended : 0.f));
 		if (pres > p)
 			p = pres;
+	}
+	// ...and what is on its way here, whatever the map geometry says about
+	// this ground. See ApproachP.
+	if (gRkApproachW > 0.f) {
+		const float appr = ApproachP(pos, defended) * gRkApproachW;
+		if (appr > p)
+			p = appr;
 	}
 	if (p < gRkFloorP)
 		p = gRkFloorP;
@@ -914,8 +1014,14 @@ void RiskDiag()
 	// The two terms every DEFERRED want is discounted by (TechSurvival): the
 	// rate value dies at home, and the share our own guns fail to stop.
 	if (Builder::gHomeSet && OnMap(Builder::gHomePos)) {
+		// appr is printed whether or not apex_hz_approach is on -- it is the
+		// measurement, and a run with the term off must still show what it
+		// would have said. groups is the LOS-slaved sample it is drawn from.
 		ln += " home[hazard=" + formatFloat(HazardAt(Builder::gHomePos) * 1000.f, "", 0, 2)
-			+ "/ks short=" + formatFloat(ShortfallAt(Builder::gHomePos), "", 0, 2) + "]";
+			+ "/ks short=" + formatFloat(ShortfallAt(Builder::gHomePos), "", 0, 2)
+			+ " appr=" + formatFloat(ApproachP(Builder::gHomePos,
+					gRkOurArmy + CoverAt(Builder::gHomePos)), "", 0, 3)
+			+ " groups=" + gRkApM.length() + "]";
 	}
 	if (worst >= 0) {
 		const AIFloat3 wp = gLPos[worst];
