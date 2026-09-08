@@ -543,7 +543,10 @@ float EStretch(float costE, float buildSec)
 		return 1.f;
 	const float drain = costE / buildSec;
 	const float need = aiEconomyMgr.energy.pull + EDrainInFlight() + drain;
-	const float have = aiEconomyMgr.energy.income + EMakeInFlight()
+	// In-flight generators are not feed: their output arrives when they
+	// finish, and they finish on the same starved surplus. Counted, every
+	// crawling frame made the next one price as if it already ran.
+	const float have = aiEconomyMgr.energy.income
 			+ aiEconomyMgr.energy.current / buildSec;
 	if ((have <= 0.01f) || (need <= have))
 		return 1.f;

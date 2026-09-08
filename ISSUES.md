@@ -30,6 +30,21 @@ its provenance.
   constructors into an energy stall (minute 8: lab 287 + nano ring 278 of
   845 e/s), and the con floor's energy-throttle discount was bypassed while
   metal wasted -- reverted; whether a stalled factory should pause is his call.
+- **The canon's minute 4-10 energy stall was self-inflicted three ways** (all
+  read off `apex_efloor_diag=1` + the DLL's `apex: strand` census, 2026-09-08):
+  the stall answer counted in-flight generators as feed (each crawling advsol
+  frame made the next price as if it already ran: 30/69/82 advsol picks a
+  minute at a 0-6% bank); the stall deficit credited in-flight make and read a
+  deep stall as covered; and `ConsolidateEnergy` (his "focus on the most
+  efficient energy project") scored frames by a time-to-energy with no energy
+  bill and stripped whole crews, including the last hand -- the engine deletes
+  a zero-progress frame the moment no one lathes it: 33 solar frames destroyed
+  at 0.00, 293 consolidations in twelve minutes. Fixed: feed without in-flight
+  make, live deficit, TTE with the energy bill (EStretch), never the last hand.
+  12-min canon: solars at 8 6 -> 16, e/s at 12 1,899 -> 4,044, waste 14.9k ->
+  9.5k, strands 17 -> 0. Still open: the stall hoist takes far claimers (the
+  walk rule declined only 0-11 a minute), and `held` finishes are back to
+  363/min at minute 20 with 175 queued -- the finish budget needs another look.
 - **Late constructor idle in the canon was an election livelock, not pricing.**
   Census (`apex: elec-slice`): minute 20 done=0, lapse-dropped 1,581, queued
   568. The 8 s ELEC_LAPSE was shorter than the engine's idle-pass revisit

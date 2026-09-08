@@ -65,7 +65,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// the growth premium scales with a generator's size, so an afus out-valued
 	// a fusion 4:1 while taking four times as long to close the same deficit
 	// (apexearth 2026-09-08: "too early btw, fusion would have been smarter").
-	const float stallDef = HardEStall() ? EnergyDeficitE() : 0.f;
+	const float stallDef = HardEStall() ? EnergyDeficitNowE() : 0.f;
 	float bestClose = 0.f;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
@@ -235,9 +235,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			// rung's wait is its build; the others' is their energy bill over
 			// what can actually feed it.
 			if (Catalog::gCostE[d] > 0.f) {
-				float feedE = aiEconomyMgr.energy.income + EMakeInFlight() - aiEconomyMgr.energy.pull;
+				float feedE = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 				if (feedE < 0.f)
-					feedE = 0.f;
+					feedE = 0.f;   // in-flight make is what is starved, not feed (EStretch)
 				const float lookE = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 				feedE += aiEconomyMgr.energy.current / ((lookE > 1.f) ? lookE : 30.f);
 				const float waitE = walkSec + Catalog::gCostE[d] / ((feedE > 1.f) ? feedE : 1.f);
@@ -414,6 +414,19 @@ float EnergyDeficitE()
 			need = ask;
 	}
 	return need - aiEconomyMgr.energy.income - EMakeInFlight();
+}
+
+// The deficit as it stands, with nothing in flight credited: what a generator
+// started now would close. Crediting the frames already crawling in the stall
+// read a deep stall as covered and handed the pick back to plain price.
+float EnergyDeficitNowE()
+{
+	float need = aiEconomyMgr.energy.pull
+			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
+	const float ask = FleetAskE();
+	if (need < ask)
+		need = ask;
+	return need - aiEconomyMgr.energy.income;
 }
 
 bool EnergyShortOfOrdered()

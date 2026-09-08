@@ -217,10 +217,20 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
 	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
 }
 
+bool IBuilderTask::sInReelect = false;
+
 void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	if (initiator == unit) {
 		initiator = nullptr;
+	}
+	// apex: who strands a fresh frame -- the engine kills a nanoframe at
+	// zero progress the moment no one lathes it.
+	if ((target != nullptr) && (units.size() == 1) && (units.count(unit) > 0)
+		&& (buildDef != nullptr) && (target->GetUnit()->GetHealth() < target->GetUnit()->GetMaxHealth() * 0.02f))
+	{
+		manager->GetCircuit()->LOG("apex: strand %s at=%.0f,%.0f reelect=%d dead=%d", buildDef->GetDef()->GetName(),
+				buildPos.x, buildPos.z, sInReelect ? 1 : 0, IsDead() ? 1 : 0);
 	}
 
 	IUnitTask::RemoveAssignee(unit);
@@ -829,7 +839,9 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 		unit->SetElectFrame(frame);
 	}
 	HideAssignee(unit);
+	sInReelect = true;   // apex: strand census (see RemoveAssignee)
 	IUnitTask* task = manager->MakeTask(unit);
+	sInReelect = false;
 	ShowAssignee(unit);
 	if ((task != nullptr)
 		&& ((task->GetType() != IUnitTask::Type::BUILDER)

@@ -414,8 +414,15 @@ lag per order (`exec=1` to the first `q>0`):
 
 Over 98% of orders arrive at either speed. `CAICallback::GiveOrder` sends the
 command as a net message and the unit receives it when the client reads the
-echo back, so a tail of orders is applied frames late, and that tail is ~13x
-more frequent at full speed (three engines shared the CPU in both runs).
+echo back; the tail is ~13x more frequent at full speed (three engines shared
+the CPU in both runs). It is NOT a late echo: a DLL patch that re-sent any
+order still unapplied after a second made 343 re-sends at full speed and 0 at
+speed 5, and every re-sent order vanished within a frame (kills 30, curve no
+better) -- something clears or refuses those orders on receipt, and the
+commander's live build order was cleared mid-walk 700 elmos from its site.
+`allowOrders` is never false, engine move-failed events are not speed
+dependent (177 at speed 5, 34-44 at full), and no exception is logged. The
+cause is not identified; the patch was reverted as inert.
 The damage is ours: `stuck.as` kills a task holding no engine order after
 `3 x` the largest lag it has seen, and it can only learn lags shorter than
 that wait, so the tail is killed and re-elected every time -- 19 kills in the

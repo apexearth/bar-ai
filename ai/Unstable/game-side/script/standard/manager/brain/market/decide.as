@@ -588,6 +588,7 @@ void ElecLog()
 		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
 		+ " revisitS=" + formatFloat(gRevisitEma / float(SECOND), "", 0, 2)
+		+ " hoistFar=" + gHoistFar
 		+ " sliceUs=" + int(ElecFrameUs()));
 	gElecDone = 0;
 	gElecPartial = 0;
@@ -596,6 +597,7 @@ void ElecLog()
 	gElecDropTask = 0;
 	gElecHeld = 0;
 	gDecBounce = 0;
+	gHoistFar = 0;
 	gElecWorstWait = 0;
 }
 
@@ -756,6 +758,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 }
 
 int gStallRefuseLogAt = 0;
+int gHoistFar = 0;   // stall hoists declined for the walk
 
 bool EcoOnly()
 {
@@ -1093,10 +1096,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// (Isthmus seed 13, 2026-09-08). Above the bar the market's energy price
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
 	const bool hoistWorth = true;
-	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitE() > 0.f) || owedE)) {
+	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
 				continue;
+			// A builder that walks longer than it lathes is not the hands that
+			// close a stall soonest: the hoist pulled every claimer home.
+			if ((ranked[ri].def !is null) && OnMap(ranked[ri].pos)
+				&& (WalkSecTo(unit, ranked[ri].pos)
+					> Catalog::BuildSecondsAt(int(ranked[ri].def.id),
+						Catalog::gBuildPower[int(unit.circuitDef.id)]))) {
+				++gHoistFar;
+				break;
+			}
 			if (ri > 0) {
 				Want@ ew = ranked[ri];
 				ranked.removeAt(ri);

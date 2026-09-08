@@ -162,6 +162,15 @@ float ConWorkerBP()
 	return 0.f;
 }
 
+// Metal per second no number of hands could spend: income less the pull the
+// present fleet would exert at full energy feed.
+float UnspentByHands()
+{
+	const float share = EFeedShare();
+	const float pull = aiEconomyMgr.metal.pull / ((share > 0.05f) ? share : 0.05f);
+	return aiEconomyMgr.metal.income - pull;
+}
+
 int ConsNeedAny()
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
@@ -181,10 +190,10 @@ int ConsNeedAny()
 	// build power's worth per second. So the shortfall in hands is exactly
 	// unspent / per-con build power. It reads zero the moment we can spend our
 	// income again, which is what makes it a demand and not a cap.
-	// ...scaled by the share energy lets the hands run: e-throttled lathes
-	// leave metal unspent without being too few (see BPGap's bank term).
-	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
-			* EFeedShare();
+	// ...net of what the hands we have would spend if energy let them: an
+	// e-throttled fleet leaves metal unspent without being too few, and more
+	// hands add energy draw, not metal spend.
+	const float unspent = UnspentByHands();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)
@@ -206,8 +215,7 @@ int CeilingConsNeed()
 	// Unspent metal is hands we lack, at the ceiling tier as at the first:
 	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
 	// metal spilled per game (2026-09-08).
-	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
-			* EFeedShare();
+	const float unspent = UnspentByHands();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)

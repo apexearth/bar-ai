@@ -101,7 +101,7 @@ void ConsolidateEnergy()
 		if (busy == 0)
 			continue;
 		++sites;
-		const float score = Market::EnergyTTE(makeE, d.costM, Progress(t), busy);
+		const float score = Market::EnergyTTEWith(makeE, d.costM, d.costE, Progress(t), busy);
 		if ((bestT is null) || (score > bestScore)) {
 			bestScore = score;
 			@bestT = t;
@@ -125,7 +125,9 @@ void ConsolidateEnergy()
 			|| (aiEconomyMgr.GetEnergyMake(d) <= 1.f))
 			continue;
 		array<CCircuitUnit@>@ crew = t.GetUnits();
-		while ((crew !is null) && (crew.length() > 0) && (moved < PEEL_PER_TICK)) {
+		// Never the last hand: the engine deletes a frame at zero progress the
+		// moment no one lathes it, so moving it throws the project away.
+		while ((crew !is null) && (crew.length() > 1) && (moved < PEEL_PER_TICK)) {
 			CCircuitUnit@ top = null;
 			for (uint c = 0; c < crew.length(); ++c) {
 				CCircuitUnit@ u2 = crew[c];

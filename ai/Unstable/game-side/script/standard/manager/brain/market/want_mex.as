@@ -151,13 +151,25 @@ IUnitTask@ JoinBig(CCircuitDef@ def)
 // added, so a 55% fusion outranks an 11% afus however big the afus is.
 float EnergyTTE(float makeE, float costM, float prog, uint busy)
 {
-	const float remainM = costM * (1.f - ((prog < 0.f) ? 0.f : prog));
+	return EnergyTTEWith(makeE, costM, 0.f, prog, busy);
+}
+
+// The remaining energy bill stretches the time exactly as it stretches a
+// build (EStretch): in a stall a 5,000 E advanced solar at 0% outscored a
+// zero-E solar and drew every hand, 293 consolidations in twelve minutes.
+float EnergyTTEWith(float makeE, float costM, float costE, float prog, uint busy)
+{
+	const float p = (prog < 0.f) ? 0.f : prog;
+	const float remainM = costM * (1.f - p);
 	if (remainM <= 1.f)
 		return 0.f;   // effectively done; another pair of hands adds nothing
 	float drain = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
 	if (drain <= 1.f)
 		drain = 7.f;
-	return makeE * float(busy + 1) * drain / remainM;
+	float sec = remainM / (float(busy + 1) * drain);
+	if (costE > 1.f)
+		sec *= EStretch(costE * (1.f - p), sec);
+	return makeE / ((sec > 0.1f) ? sec : 0.1f);
 }
 
 IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
@@ -209,7 +221,8 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		if ((unit !is null) && !Requests::WorthJoining(
 				unit.GetPos(ai.frame).distance2D(where), prog, cost, busy))
 			continue;
-		const float score = EnergyTTE(makeE, cost, prog, busy);
+		const float score = EnergyTTEWith(makeE, cost,
+				Catalog::gCostE[int(cand.buildDef.id)], prog, busy);
 		if ((best is null) || (score > bestScore)) {
 			bestScore = score;
 			@best = cand;
@@ -246,8 +259,8 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		if (f is null)
 			continue;
 		const float h = f.GetHealthPercent();
-		const float score = EnergyTTE(Catalog::gMakeE[d], Catalog::gCostM[d],
-				(h < 0.f) ? 0.f : h, 0);
+		const float score = EnergyTTEWith(Catalog::gMakeE[d], Catalog::gCostM[d],
+				Catalog::gCostE[d], (h < 0.f) ? 0.f : h, 0);
 		if ((frame is null) || (score > frameScore)) {
 			frameScore = score;
 			@frame = f;
