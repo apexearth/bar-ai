@@ -181,7 +181,10 @@ int ConsNeedAny()
 	// build power's worth per second. So the shortfall in hands is exactly
 	// unspent / per-con build power. It reads zero the moment we can spend our
 	// income again, which is what makes it a demand and not a cap.
-	const float unspent = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+	// ...scaled by the share energy lets the hands run: e-throttled lathes
+	// leave metal unspent without being too few (see BPGap's bank term).
+	const float unspent = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
+			* EFeedShare();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)

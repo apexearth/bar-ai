@@ -719,6 +719,17 @@ float StructuralIncomeEma()
 
 int gBpGapLogAt = 0;
 
+// The fraction of the fleet's lathe time energy permits: income plus ordered
+// generation over pull, 1 when nothing throttles.
+float EFeedShare()
+{
+	const float pull = aiEconomyMgr.energy.pull;
+	if (pull <= 0.01f)
+		return 1.f;
+	const float s = (aiEconomyMgr.energy.income + EMakeInFlight()) / pull;
+	return (s < 0.f) ? 0.f : ((s > 1.f) ? 1.f : s);
+}
+
 float BPGap()
 {
 	TrackIncome();
@@ -739,7 +750,10 @@ float BPGap()
 	float bankTerm = 0.f;
 	if ((st2 > 1.f) && (bank > 0.5f * st2))
 		bankTerm = (bank - 0.5f * st2) / 60.f;
-	gap += bankTerm;
+	// Only the share energy lets the lathes run: a bank that fills because
+	// the hands are e-throttled is not a hands shortage, and reading it as
+	// one bought 3,200-E nano turrets into the stall that filled it.
+	gap += bankTerm * EFeedShare();
 	// AND THE WORK ALREADY ORDERED. Income headroom alone cannot see a queue:
 	// order fifteen turrets and this number does not move, so the turrets come
 	// out of expansion's hands instead of buying their own (apexearth: "we'll
