@@ -16,6 +16,31 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 (night) — The canon economy scenario: where we stand against his curve
+
+apexearth's reference (Comet Catcher Remake 1.8, +50% bonus, vs inactive AI,
+`tools/canon.py matches/_replay-canon`): minute 10 352 m/s / 4.8k e/s, minute
+16 1,567 / 86k. Ours, same map and bonus, `apex_eco_only=1`, `--speed 5`,
+minute 10 and 16 (m/s / e/s):
+
+| tree | min 10 | min 16 | min 20 |
+|---|---|---|---|
+| with military, HEAD of the morning | 43 / 200 | 88 / 571 | 120 / 1,272 |
+| economy-only switch | 96 / 1,390 | 236 / 7,463 | 366 / 12,0k |
+| + hands sized by the ladder, T2 priced without an army mandate, upgrade credit only for hands that can build the game's best mex, stuck watch spares on-site builders | 104 / 1,344 | 293 / 9,127 | 744 / 20,7k |
+| + factories idle when no rung waits for hands | 121 / 2,172 | 400 / 14,0k | 925 / 35,5k |
+| + the ladder's energy-feed arm | 129 / 1,828 | 446 / 13,8k | 884 / 34,5k |
+
+Still 3x behind at minute 10 and 3.5x at 16. What his curve has that ours
+lacks at minute 10: 15 mohos (ours 2), 62 nano turrets (17), 2 fusions (0),
+6 advanced converters (0); his T2 lab stands at ~5.5, ours at 6.7-7.2 after
+a 15,000 E bill on 300-500 e/s of income. His hands stay 6 T1 + 4 T2 + 10 air
+for the whole game; ours run to 80 T1 + 72 T2 + 209 air by minute 20 (the
+hands gate reads some rung as hands-bound late; `hands=` is now on the con
+floor log line). T1 converters (128) instead of advanced (9): the converter
+want priced per metal, where the 1-metal T1 converter always wins -- now
+discounted per cell against the best the asker can place (unmeasured).
+
 ## 2026-09-08 (evening) — Carrot Mountains at 30: behind on METAL, ahead on energy
 
 New goal: "Refine our economy logic until we out-eco our opponents at 30m in

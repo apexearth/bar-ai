@@ -1080,6 +1080,21 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	const float cvRentCell = SpaceRentM(cSite, 1);
 	const float cvCrowdCell = PfCrowd() * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
+	// INFERIOR WORK IS WORTH LESS here as on the generator side: metal per
+	// cell against the best converter THIS asker can place. Priced per metal
+	// alone the 1-metal T1 converter always won -- 207 of them and 2 advanced
+	// by minute 20 of the canon game against his 94 advanced.
+	float cvBestPerCell = 0.f;
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
+			|| Catalog::gSub[d] || (Catalog::gConvCapacity[d] <= 0.f))
+			continue;
+		const float cells = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		const float pc = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d] / cells;
+		if (pc > cvBestPerCell)
+			cvBestPerCell = pc;
+	}
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -1114,6 +1129,12 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// makes that metal was the only half of the pair paying flat, so the
 		// pair could never be bought in the order that realizes it.
 		float cGain = chew * Catalog::gConvRatio[d];
+		if (cvBestPerCell > 0.f) {
+			const float cellsI = float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+			const float mine = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d] / cellsI;
+			if (mine < cvBestPerCell)
+				cGain *= mine / cvBestPerCell;
+		}
 		if (realize) {
 			cGain *= 1.f + cvGrowK
 					* cGain / ((cvPower > cGain) ? cvPower : ((cGain > 0.f) ? cGain : 1.f));

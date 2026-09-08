@@ -91,7 +91,16 @@ the batch and so overestimates time — the conservative direction. (A closed fo
 would want a logarithm, and this AngelScript has no `log` binding.)
 
 `EtaWith(def, dPower, addBP, tech)` = time to build that first move, then the
-ladder from the resulting state. `def = 0` is the ladder as it stands, which is
+ladder from the resulting state.
+
+**Two arms added 2026-09-08.** (1) Every rung carries its energy bill and its
+energy output; `StepSec` is `max(build, metal feed, energy feed)` with the feed
+`EtaEnergyAvail()` = surplus over pull plus bank over the lookahead, and a rung
+taken adds its `makeE` to the feed -- so a solar shortens a 15,000 E lab. (2)
+Claim and upgrade rungs are built by MOBILE hands only (`Pool.mob`,
+`MobileBPShare`); a nano turret's `addBP` reaches the generation rungs alone.
+`EtaHandsShare()` (the next four rungs' build-bound share, income-fed) sizes
+constructors and lets a factory idle when nothing waits for hands. `def = 0` is the ladder as it stands, which is
 the baseline every candidate is measured against.
 
 ## What falls out with no rule saying so

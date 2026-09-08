@@ -36,6 +36,9 @@ class Pool {
 	array<float> cost;
 	array<float> gain;
 	array<int> n;
+	array<bool> mob;   // only MOBILE hands can build it: a spot is where it is
+	array<float> costE;   // its energy bill: a rung is fed in BOTH currencies
+	array<float> makeE;   // and what it adds to the energy feed once it stands
 }
 
 Pool@ gPoolNow;
@@ -52,7 +55,7 @@ float ConvRate()
 // cost/dI is EXACT and P-independent while metal is the binding constraint --
 // which is what lets the ladder walk the pool in order instead of re-scanning it
 // at every step.
-void PoolInsert(Pool@ p, int d, float cost, float gain, int n)
+void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 {
 	if ((p is null) || (cost <= 1.f) || (gain <= 0.0001f) || (n <= 0))
 		return;
@@ -64,6 +67,9 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n)
 	p.cost.insertAt(at, cost);
 	p.gain.insertAt(at, gain);
 	p.n.insertAt(at, n);
+	p.mob.insertAt(at, mob);
+	p.costE.insertAt(at, Catalog::gCostE[d]);
+	p.makeE.insertAt(at, Catalog::gMakeE[d]);
 }
 
 // anyTier ignores who can build it: that is the world AFTER an advanced plant,
@@ -112,6 +118,9 @@ void PoolFill(Pool@ p, bool anyTier)
 	p.cost.resize(0);
 	p.gain.resize(0);
 	p.n.resize(0);
+	p.mob.resize(0);
+	p.costE.resize(0);
+	p.makeE.resize(0);
 	const float rate = ConvRate();
 	const float im = IncomeMult();
 
@@ -121,7 +130,7 @@ void PoolFill(Pool@ p, bool anyTier)
 	const int open = int(gAllSpots.length()) - int(gLSpot.length());
 	const int claimDef = ClaimExtractDef(anyTier);
 	if ((open > 0) && (claimDef > 0))
-		PoolInsert(p, claimDef, Catalog::gCostM[claimDef], SpotM(), open);
+		PoolInsert(p, claimDef, Catalog::gCostM[claimDef], SpotM(), open, true);
 
 	// HELD GROUND: the upgrade each standing extractor still has left in it.
 	const int upDef = BestExtractDef(anyTier);
@@ -132,7 +141,7 @@ void PoolFill(Pool@ p, bool anyTier)
 			const float dI = gLIncome[i] * im
 					* (Catalog::gExtractsM[upDef] - gLExtract[i]);
 			if (dI > 0.f)
-				PoolInsert(p, upDef, Catalog::gCostM[upDef], dI, 1);
+				PoolInsert(p, upDef, Catalog::gCostM[upDef], dI, 1, true);
 		}
 	}
 
@@ -151,7 +160,7 @@ void PoolFill(Pool@ p, bool anyTier)
 			dI += Catalog::gMakeE[d] * rate;
 		if (dI <= 0.f)
 			continue;
-		PoolInsert(p, d, Catalog::gCostM[d], dI, ETA_INF_N);
+		PoolInsert(p, d, Catalog::gCostM[d], dI, ETA_INF_N, false);
 	}
 }
 
@@ -172,7 +181,12 @@ void PoolRefresh()
 
 // METAL FEEDS THE LATHE: a step takes the longer of what the fleet can build and
 // what the economy can pay for. This is the plan's max() term, per rung.
-float StepSec(int d, float cost, float P, float bank, float bp)
+// ...and the plan's max() has a THIRD arm: the energy bill over the energy
+// that can feed it. A T2 lab is 15,000 E; at 300 e/s of income and a pull to
+// match, it stood 5.6 minutes after its frame in the canon game while his,
+// on 1,200 e/s, stood in one. Without this arm the ladder could not see that
+// a solar shortens the lab.
+float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 {
 	float bt = Catalog::BuildSecondsAt(d, bp);
 	if (bt < 0.1f)
@@ -180,11 +194,51 @@ float StepSec(int d, float cost, float P, float bank, float bp)
 	float need = cost - bank;
 	if (need < 0.f)
 		need = 0.f;
-	const float feed = (P > 0.01f) ? (need / P) : ETA_BIG;
+	float feed = (P > 0.01f) ? (need / P) : ETA_BIG;
+	const float costE = Catalog::gCostE[d];
+	if (costE > 0.f) {
+		const float feedE = costE / ((eAvail > 1.f) ? eAvail : 1.f);
+		if (feedE > feed)
+			feed = feedE;
+	}
 	return (feed > bt) ? feed : bt;
 }
 
-float LadderRun(Pool@ p, float P, float bank, float bp, float target, int consumed)
+// What can feed an energy bill right now: the surplus over the pull, plus the
+// bank spent over the lookahead.
+float EtaEnergyAvail()
+{
+	float e = aiEconomyMgr.energy.income + EMakeInFlight() - aiEconomyMgr.energy.pull;
+	if (e < 0.f)
+		e = 0.f;
+	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+	e += aiEconomyMgr.energy.current / ((look > 1.f) ? look : 30.f);
+	return (e > 1.f) ? e : 1.f;
+}
+
+// The share of the fleet's lathe that can walk to a spot. A nano turret adds
+// build power the claim and upgrade rungs cannot use, and crediting it to
+// them bought 14 nano turrets in the first twelve minutes of a 172-spot map
+// while six constructors held the whole claim ladder (Carrot, 2026-09-08).
+float MobileBPShare()
+{
+	float mobile = 0.f;
+	float all = 0.f;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int d = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gBuilder[d] || (Catalog::gBuildPower[d] <= 0.f))
+			continue;
+		if (!Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0))
+			continue;   // a factory
+		const float bpd = float(gOwnCount[c]) * Catalog::gBuildPower[d];
+		all += bpd;
+		if (Catalog::gMobile[d])
+			mobile += bpd;
+	}
+	return (all > 0.f) ? (mobile / all) : 1.f;
+}
+
+float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvail, float target, int consumed)
 {
 	if (p is null)
 		return ETA_BIG;
@@ -221,9 +275,10 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float target, int consum
 		int k = int(want / g) + 1;
 		if (k > n[i])
 			k = n[i];
-		t += float(k) * StepSec(p.def[i], p.cost[i], P, bank, bp);
+		t += float(k) * StepSec(p.def[i], p.cost[i], P, bank, p.mob[i] ? bpMob : bp, eAvail);
 		bank = 0.f;
 		P += float(k) * g;
+		eAvail += float(k) * p.makeE[i];
 		n[i] -= k;
 		++steps;
 	}
@@ -244,16 +299,63 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 	float bp = EffBP(0.f);
 	if (bp < 1.f)
 		bp = 1.f;
+	float bpMob = bp * MobileBPShare();
+	if (bpMob < 1.f)
+		bpMob = 1.f;
+	float eAvail = EtaEnergyAvail();
 	float t = 0.f;
 	if (d > 0) {
-		t = StepSec(d, Catalog::gCostM[d], P, bank, bp);
+		t = StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail);
 		bank = 0.f;
 		if (gainM > 0.f)
 			P += gainM;
 		if (addBP > 0.f)
 			bp += addBP;
+		if (Catalog::gMakeE[d] > 0.f)
+			eAvail += Catalog::gMakeE[d];
 	}
-	return t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, target, d);
+	return t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
+}
+
+// HOW MUCH OF THE NEXT STEP IS WAITING FOR HANDS. 1: the next rung is
+// build-bound (more lathe shortens it); 0: it is fed-bound (more lathe
+// changes nothing). Sizes constructors and nano turrets by the ladder
+// instead of by unspent metal, which bought 470 constructors in twenty
+// minutes of the economy-only canon (2026-09-08).
+float EtaHandsShare()
+{
+	PoolRefresh();
+	Pool@ p = gPoolNow;
+	if (p is null)
+		return 1.f;
+	float P = EcoPowerM();
+	if (P < 0.5f)
+		P = 0.5f;
+	float bp = EffBP(0.f);
+	if (bp < 1.f)
+		bp = 1.f;
+	const float bpMob = (bp * MobileBPShare() > 1.f) ? (bp * MobileBPShare()) : 1.f;
+	// The next few rungs, not the first alone: the first is a cheap converter
+	// no hand is short for while the upgrade rungs behind it starve for T2 hands.
+	float best = 0.f;
+	uint seen = 0;
+	for (uint i = 0; (i < p.def.length()) && (seen < 4); ++i) {
+		if (p.n[i] <= 0)
+			continue;
+		++seen;
+		float bt = Catalog::BuildSecondsAt(p.def[i], p.mob[i] ? bpMob : bp);
+		if (bt < 0.1f)
+			bt = 0.1f;
+		// Income, not the bank: the bank pays one step and then it is gone, and
+		// counted here a full bank read every rung as hands-bound (318 cons).
+		const float feed = p.cost[i] / P;
+		if (feed < bt) {
+			const float share = 1.f - feed / bt;
+			if (share > best)
+				best = share;
+		}
+	}
+	return best;
 }
 
 bool EtaOn()
