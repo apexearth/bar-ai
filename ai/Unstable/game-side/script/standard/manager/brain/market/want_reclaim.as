@@ -304,8 +304,7 @@ bool GenObsoleteOnArrival(int d)
 // of our conversion throughput doing it, because nothing replaces what those
 // hands can no longer make. The ground was cheaper than the energy then thrown
 // away, so a builder is refused the basic only when it could have made the
-// better one itself. (Measured again 2026-09-08 at his settings, docs/27
-// TUNE_OBSOLETE_RATIO: team-wide refusal cut metal produced 704k -> 296k.)
+// better one itself. Team-wide refusal: docs/27, TUNE_OBSOLETE_RATIO.
 bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
 {
 	if (!ConvObsoleteOnArrival(d))
