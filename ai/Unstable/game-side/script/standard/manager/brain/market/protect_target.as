@@ -371,6 +371,29 @@ float DefenceValue()
 	return m;
 }
 
+// Tower metal already ordered. The gap that drives the pull counted only
+// standing towers, so every slot kept asking at full gap while ten were framed.
+float gDefFlyM = 0.f;
+int   gDefFlyAt = -999999;
+
+float DefenceInFlightM()
+{
+	if (gDefFlyAt == ai.frame)
+		return gDefFlyM;
+	gDefFlyAt = ai.frame;
+	float m = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (ProtClassOf(d) == PROT_DEF)
+			m += Catalog::gCostM[d];
+	}
+	gDefFlyM = m;
+	return m;
+}
+
 // What the wave arriving at OUR ground is worth, less the share our own mobile
 // army answers, converted to turret metal at the same exchange rate coverage
 // uses. Everything here is measured at home: a player nothing reaches wants no

@@ -23,6 +23,32 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-08 — CONSTRUCTOR ROLES BY SHARE (his proposal, not built)
+
+Watching the deepening tree: "The defenses appear to be improved. We still
+seem to lack nano turrets around Gantry. We have a lot of fragile T1 energy
+converters which should be reclaimed to make room for better things."
+
+Then the proposal, verbatim in shape: "it is so terribly hard to balance
+wants/needs on these constructors. Thus I wonder if the brain could assign
+roles to our constructors by a % based on what it sees as a split of our
+needs. Like if we have a lot of obsolete buildings to reclaim we can give an
+engineer a special role to do only that job until our brain decides it is no
+longer needed. This would help us dedicate some constructors to nanos, some to
+defense, some to energy, metal, etc... balancing 'is a nano or defense more
+important than making more energy or more metal?' In general I think they
+often are all equally important to do but just at different %s."
+
+What it changes against the market as built: the roulette already draws each
+election in proportion to value (the % split), but it re-draws EVERY election,
+so no hand holds a job -- and re-election is the measured killer (49-53% of
+defence wins dead before framing; 56 of 75 nano tasks dead in one game). A
+role is persistence: a hand committed to a category until the split says
+otherwise. Sized from the same demand the market prices (defence gap, nano
+demand, energy shortfall, obsolete stock), it is derived, not a table.
+`gEcoRole` is the one role that exists today. Awaiting his go-ahead on the
+mechanism before building.
+
 ## 2026-09-05 — SELF-PLAY: "how passive our AI is"
 
 *"They haven't attacked each other a single time in 13m. They've also not

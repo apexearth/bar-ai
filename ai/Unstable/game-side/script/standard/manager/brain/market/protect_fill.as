@@ -250,10 +250,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// zeroes it, and the target sat at 680/20,021 while eight LLTs stood (the
 	// per-def rank read armpb=0.0013 on a T2 hand -- defence could never win a
 	// roulette). A wall standing BEFORE anything arrives is the product being
-	// bought: every OPEN wall slot prices at least the unmet target amortized
-	// over the exposure horizon. Only open slots -- a slot a standing tower
-	// already covers earns nothing from the pull, so the ring completes one
-	// tower per slot and then deepens only where real threat prices it.
+	// bought: every wall slot prices at least the unmet target amortized over
+	// the exposure horizon. Held slots too -- a heavy gun behind a light one
+	// is the only way the obligation can be spent once the rim is filled.
 	//
 	// ...AND NOT BEFORE THERE IS A BASE TO WALL. The pull is demand for a
 	// wall standing before anything arrives; before the first factory has a
@@ -275,7 +274,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			TUNE_EXPOSED_LOSS_S);
 	float wallPull = 0.f;
 	if (wallOn && PlantFramed()) {
-		const float gapM = DefenceTarget() - DefenceValue();
+		const float gapM = DefenceTarget() - DefenceValue()
+				- DefenceInFlightM();
 		if (gapM > 0.f)
 			wallPull = gapM;
 	}
@@ -437,8 +437,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// themselves"). The mark lives in the per-def cache; the tolerance
 		// is the asker's, applied outside it, so a con never inherits a
 		// commander's courage from a shared fill.
-		const bool pullBase = (wallPull > 0.f)
-				&& ((isWall && WallSlotOpen(si)) || isMexG);
+		const bool pullBase = (wallPull > 0.f) && (isWall || isMexG);
 		float foeHere = -1.f;
 		bool pullHere = false;
 		if (pullBase) {

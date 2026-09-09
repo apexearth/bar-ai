@@ -1,5 +1,12 @@
 namespace Market {
 int gNextNanoWantLog = 0;
+// Which demand sited the want (w.spotId). Execute honours the first three
+// instead of re-deriving the ground, so a line-bought turret stands at the line.
+const int NS_FORT = 1;
+const int NS_ARMY = 2;
+const int NS_LINE = 3;
+const int NS_SINK = 4;
+const int NS_FARM = 5;
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -223,22 +230,29 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// sited at the eco farm, which is behind the anchor and outside assist
 	// reach -- so it could never touch the line that priced it.
 	AIFloat3 site = EcoSiteFor(unit);
+	int src = NS_FARM;
 	// The line takes the tie: a factory converts lathe into army for the rest
 	// of the game where a frame stops paying at completion, and the >= the
 	// other way sent every overflow-bought turret to a sink. An unset sinkPos
 	// is (-1,-1), so the zero-vs-zero case no longer reads as an on-map sink.
 	// The fortification takes the site whenever it priced the demand: a lathe
 	// bought to hold the wall is worth nothing at the eco farm.
-	if ((fortNeed >= over) && OnMap(fortPos))
+	if ((fortNeed >= over) && OnMap(fortPos)) {
 		site = fortPos;
-	else if ((armyNeed >= over) && OnMap(armyPos))
+		src = NS_FORT;
+	} else if ((armyNeed >= over) && OnMap(armyPos)) {
 		site = armyPos;
-	else if (haveLine && (lineNeed >= sinkNeed))
+		src = NS_ARMY;
+	} else if (haveLine && (lineNeed >= sinkNeed)) {
 		site = linePos;
-	else if ((sinkNeed > 0.f) && OnMap(sinkPos))
+		src = NS_LINE;
+	} else if ((sinkNeed > 0.f) && OnMap(sinkPos)) {
 		site = sinkPos;
-	else if (haveLine)
+		src = NS_SINK;
+	} else if (haveLine) {
 		site = linePos;
+		src = NS_LINE;
+	}
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -269,6 +283,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			w.kind = WK_NANO;
 			@w.def = Catalog::Def(d);
 			w.pos = site;
+			w.spotId = src;
 		}
 	}
 	return w;

@@ -36,6 +36,12 @@ const int NP_MAX_CELLS = 96;
 // The occupied ground of ONE walk, bucketed. Global so a walk reuses the last
 // one's arrays instead of allocating per election.
 Grid::Cells gNPOcc;
+// The last walk's refusals, so the batch log can say why it placed so few.
+int gNPTaken = 0;
+int gNPLane = 0;
+int gNPDoor = 0;
+int gNPFar = 0;
+int gNPOut = 0;   // rings the budget never reached
 
 // Nothing this plant produces rolls: every mobile thing it builds flies, so it
 // has no doorway and every side of it is packable.
@@ -226,20 +232,25 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 		gNPOcc.Add(op[k].x, op[k].z);
 
 	int budget = NP_MAX_CELLS;
+	gNPTaken = 0; gNPLane = 0; gNPDoor = 0; gNPFar = 0; gNPOut = 0;
 	for (int ring = ring0; ring <= ringN; ++ring) {
 		for (int i = -ring; i <= ring; ++i) {
 			for (int j = -ring; j <= ring; ++j) {
 				// The ring's own edge only -- the interior was walked already.
 				if ((i > -ring) && (i < ring) && (j > -ring) && (j < ring))
 					continue;
-				if (budget <= 0)
+				if (budget <= 0) {
+					gNPOut = ringN - ring + 1;
 					return int(slots.length());
+				}
 				--budget;
 				AIFloat3 p = at;
 				p.x += float(i) * pitch;
 				p.z += float(j) * pitch;
-				if (!OnMap(p) || (p.distance2D(at) > reach))
+				if (!OnMap(p) || (p.distance2D(at) > reach)) {
+					++gNPFar;
 					continue;
+				}
 				// LEAVE THE WALKWAYS EMPTY. FarmSlot drops every slot whose
 				// footprint crowds a lane because a solid slab across the
 				// base's central corridor once walled the commander in --
@@ -250,8 +261,10 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
 					const float lh = Base::LaneHalf() + pitch * 0.5f;
-					if ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))
+					if ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh)) {
+						++gNPLane;
 						continue;
+					}
 				}
 				if (lane) {
 					// Ahead of the plant and within the width units roll
@@ -260,8 +273,10 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 					const float rz = p.z - at.z;
 					const float ahead = rx * fwd.x + rz * fwd.z;
 					const float side = rx * fwd.z - rz * fwd.x;
-					if ((ahead > 0.f) && (abs(side) < ah + pitch))
+					if ((ahead > 0.f) && (abs(side) < ah + pitch)) {
+						++gNPDoor;
 						continue;
+					}
 				}
 				bool taken = false;
 				gNPOcc.Query(p.x, p.z, qr);
@@ -274,8 +289,10 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 						break;
 					}
 				}
-				if (taken)
+				if (taken) {
+					++gNPTaken;
 					continue;
+				}
 				slots.insertLast(p);
 				// A slot just handed out is ground the next one must not take.
 				op.insertLast(p);

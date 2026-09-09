@@ -1,6 +1,7 @@
 namespace Market {
 int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
 // The nano placement probe's cache (see the WK_NANO branch).
+int gNextNanoBatchLog = 0;
 AIFloat3 gNanoSite(-1.f, 0.f, -1.f);
 int gNanoSiteKey = 0;
 int gNanoSiteAt = -999999;
@@ -565,7 +566,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return null;
 		if (lineSited)
 			AiLog("apex: nano-to-line t=" + ai.teamId
-					+ " need=" + formatFloat(worst, "", 0, 1));
+					+ " need=" + formatFloat(worst, "", 0, 1)
+					+ " src=" + w.spotId);
 		// THE SINK'S OWN CENTER IS OCCUPIED GROUND. Every branch above names
 		// the factory's or the frame's exact position, so the turret can
 		// never stand on it: measured 447 nano executions, FOUR frames ever
@@ -668,6 +670,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					const uint nFacs = Factory::gFacUnits.length();
 					int left = wantN - 1;
 					const uint lines = (nFacs > 0) ? nFacs : 1;
+					string walkLog = "";
+					string lastRef = "";
 					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
@@ -688,6 +692,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							askK = 1;
 						array<AIFloat3> packK;
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						walkLog += " " + Catalog::Def(anchorK).GetName()
+								+ ":ask" + askK + "/got" + packK.length()
+								+ "/taken" + gNPTaken + "/lane" + gNPLane
+								+ "/door" + gNPDoor + "/out" + gNPOut;
+						int folded = 0;
+						int refused = 0;
 						for (uint si2 = 0; si2 < packK.length(); ++si2) {
 							bool mk = false;
 							IUnitTask@ tk = Requests::Take(null, w.def,
@@ -697,15 +707,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 							if (mk) {
 								++opened;
 								--left;
+							} else if (tk !is null) {
+								++folded;
+							} else {
+								++refused;
+								lastRef = Requests::gLastWhat;
 							}
 						}
+						walkLog += "/fold" + folded + "/ref" + refused
+								+ ((refused > 0) ? (":" + lastRef) : "");
 					}
 					Perf::Add("xw.nanobatch", _tBatch);
-					if (opened > 0)
+					if ((opened > 0) || (ai.frame >= gNextNanoBatchLog)) {
+						gNextNanoBatchLog = ai.frame + 30 * SECOND;
 						AiLog("apex: nano batch t=" + ai.teamId
-							+ " +" + opened
+							+ " +" + opened + " want=" + wantN
 							+ " over=" + int(OverflowM())
-							+ " bank=" + int(bankN));
+							+ " bank=" + int(bankN) + walkLog);
+					}
 				}
 			}
 		}

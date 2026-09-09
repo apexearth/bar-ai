@@ -188,7 +188,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		const float dHave = DefenceValue();
 		const float dWant = DefenceTarget();
 		if (PlantFramed())   // see the fill: no wall before a base
-			hGap = dWant - dHave;
+			hGap = dWant - dHave - DefenceInFlightM();
 		hWallUp = WallStands();
 		hRentPerCell = hWallUp ? (PfMetalPerCell() * PfCrowd()) : 0.f;
 		hFill = TargetFill(dHave, dWant);

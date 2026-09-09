@@ -17,6 +17,14 @@ being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
+## Constructor roles by share of need (apexearth 2026-09-08)
+
+"assign roles to our constructors by a % based on what it sees as a split of
+our needs... give an engineer a special role to do only that job until our
+brain decides it is no longer needed... dedicate some constructors to nanos,
+some to defense, some to energy, metal, etc." Full quote and the reading of it
+against the roulette: USER-FEEDBACK.md, same date.
+
 ## Abuse the BARb AI the way humans do -- the standing doctrine
 
 apexearth 2026-09-01, offered as frame of mind rather than a spec:

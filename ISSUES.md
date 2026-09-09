@@ -16,6 +16,42 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 — NANO: the lines starve while turrets go up at the sinks; the batch cannot open
+
+His game (Supreme Isthmus 1v1, +100%, 33 min): 116 nanos finished, and the
+neediest factory line held 10-50 m/s of lathe against 100-330 m/s of unserved
+spend from minute 22 (`apex: nanowant line= lathe=`). At the same settings on
+the lane a game finished 436 nanos and aborted 332 (`cornanotc` in
+`task-gone`), 264k metal, 12.4% of spend -- the most of any def.
+
+Three measured pieces, none fixed:
+
+- **The batch cannot open.** `apex: nano batch want= ... ask/got/fold/ref`:
+  the lattice walk finds the cells (317 of 380 asked over 8 games) and
+  `Requests::Take` returns an EXISTING task for nearly all of them
+  (`fold2..7/ref0`, every batch): 13 requests opened of 328 wanted. Not the
+  join-near fold -- `JoinFor` refuses defs under `JOIN_MIN_COST` -- so it is
+  `CoverFor`/adopt-orphan or `frame-standing`. Trace which before touching it.
+- **Execute re-derives the site.** Its sink loop runs after the want chose a
+  line, under the same law, so a full bank sends the turret to a frame. Making
+  execute honour the want's site (`w.spotId` NS_LINE/NS_ARMY, tagged now) was
+  tried 2026-09-08 and REVERTED the same evening: the NS_ARMY site
+  (`AnyLineSite`) named ground a land con could not reach -- 52 of 75 nano
+  tasks died `unreach-safe` in 23 minutes against 2 in the earlier game, the
+  election churned (89 buildpower decides in 12 min against 23) and the
+  economy fell to 12k built at minute 12 against 22k. Honouring the site
+  needs a reachability test on the named line first.
+- **The gantry has no nanos** (apexearth, watching 2026-09-08). While it is a
+  frame it is a sink (`nano-to-sink at corgant`); once standing it competes as
+  a line on unserved spend, and a gantry's spend is bursty.
+
+## 2026-09-08 — T1 converters stand until they die; the obsolete-reclaim market barely fires
+
+apexearth, watching: "We have a lot of fragile T1 energy converters which
+should be reclaimed to make room for better things." `want_reclaim.as` exists
+(`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
+prices retirement; measure why it loses before pricing it higher.
+
 ## 2026-09-08 (night) — The canon economy scenario: where we stand against his curve
 - **The canon-driven commit (950094b5) regressed the real-game batteries, and
   the cause was the hands-share multiplier on constructor demand.** Carrot at
