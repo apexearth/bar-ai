@@ -639,12 +639,18 @@ bool PlantFramed()
 // `atFrame` is the frame the ELECTION OPENED, not the frame it finished on, so
 // a set assembled over several frames rolls the same number an atomic one would
 // have rolled. Without that the slice changes the draw for no reason.
-bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
+// The tickets: one per category, weighted as the draw weighs them. Returns
+// their sum; catBest carries each ticket's want.
+float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& out wt)
 {
-	bool didDraw = false;
-	// One slot past CAT_N: the economy want the ladder cannot rank keeps
-	// its own ticket while the ETA merges the rest (see below).
-	array<int> catBest(CAT_N + 1, -1);   // index into ranked, or -1
+	catBest.resize(CAT_N + 1);
+	wt.resize(CAT_N + 1);
+	for (int c = 0; c <= CAT_N; ++c) {
+		catBest[c] = -1;   // index into ranked, or -1
+		wt[c] = 0.f;
+	}
+	if (ranked.length() == 0)
+		return 0.f;
 	for (uint ri = 0; ri < ranked.length(); ++ri) {
 		const int c = CategoryOf(ranked[ri].kind);
 		if (c < 0)
@@ -698,7 +704,6 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	const float payH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	const float bitCap = EcoPowerM() * ((payH > 1.f) ? payH : 900.f);
 	const float commitSh = ai.GetTunable("apex_commit_sharp", TUNE_COMMIT_SHARP);
-	array<float> wt(CAT_N + 1, 0.f);
 	float sumV2 = 0.f;
 	for (int c = 0; c <= CAT_N; ++c) {
 		if (catBest[c] < 0)
@@ -733,6 +738,15 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 		wt[c] = t;
 		sumV2 += t;
 	}
+	return sumV2;
+}
+
+bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
+{
+	bool didDraw = false;
+	array<int> catBest;
+	array<float> wt;
+	const float sumV2 = DrawWeights(ranked, catBest, wt);
 	if (sumV2 > 0.f) {
 		uint h2 = uint(atFrame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
 		h2 ^= (h2 >> 13);
@@ -949,6 +963,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ranked.insertAt(at, c);
 	}
 	Perf::Add("dec.rank", _tRank);
+	// THE SPLIT OF NEED, read off the full list before any hoist or role.
+	if (ranked.length() > 0) {
+		array<int> cbC;
+		array<float> wtC;
+		ConRoleCensus(wtC, DrawWeights(ranked, cbC, wtC));
+		ConRoleLog();
+	}
 	// THE ETA LAYER. Shadow-logs always; re-ranks the economic categories only
 	// while apex_eta is on. Above the panics on purpose -- those are safety and
 	// keep their hoist; this only decides which economy want represents its
@@ -1263,8 +1284,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// question, one ticket, weighted by that question's best answer.
 	// Rebuild is a price, not a rule: no hoist of the spot that just died.
 	Perf::Add("dec.panic", _tPanic);
+	// A ROLED HAND ELECTS INSIDE ITS CATEGORY -- see roles.as. Below the
+	// panics, above the draw.
+	bool roled = false;
+	if (!aaPanic && !superPush && !coverPush && (ranked.length() > 1)
+		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {
+		roled = ConRoleApply(unit, ranked);
+		if (roled)
+			why = "role";
+	}
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !roled)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
 	Perf::Add("dec.draw", _tDraw);
@@ -1317,6 +1347,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			+ " m=" + formatFloat(top.mCost, "", 0, 0)
 			+ " t=" + formatFloat(top.tCost, "", 0, 0) + ")"
 			+ " why=" + why
+			+ ((ConRoleOf(unit) >= 0) ? (" role=" + CatName(ConRoleOf(unit))) : "")
 			+ ((next is null) ? " over nothing"
 				: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
 					+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
@@ -1494,6 +1525,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
 					+ " pick=" + i
 					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+			// A category that could not be executed is not a job this hand
+			// can do: the role goes with the fall-through.
+			if (roled && (CategoryOf(ranked[i].kind) != ConRoleOf(unit))) {
+				ConRoleForget(int(unit.id));
+				++gRoleFell;
+			}
 			return t;
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))
@@ -1526,6 +1563,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// ...and a refused election is still an idle constructor, which is the
 	// exit that actually fires (measured: 472 all-refused elections in one
 	// game against zero of the no-want exit above).
+	if (roled) {
+		ConRoleForget(int(unit.id));
+		++gRoleFell;
+	}
 	return IdleFloor(unit, "all wants refused");
 }
 

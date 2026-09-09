@@ -1711,6 +1711,13 @@ const float TUNE_NANO_FED_S = 15.f;
 // how sharply the category draw follows value. See docs/27.
 const float TUNE_DRAW_SHARP = 2.f;
 
+// [ratio] -- share of the constructors that hold a ROLE (elect inside one
+//   category until the split says otherwise); the rest stay open. 0 is off.
+//   See docs/27.
+const float TUNE_ROLE_SHARE = 0.5f;
+// [seconds] -- how far back the split of need is averaged. See docs/27.
+const float TUNE_ROLE_TAU = 120.f;
+
 // [ratio] -- share of the rez fleet that serves as battlefield medics: they
 //   stay with the army's staging anchor, repair the wounded during fights and
 //   reclaim the aftermath there. See docs/27.

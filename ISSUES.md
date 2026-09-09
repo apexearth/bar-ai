@@ -16,6 +16,24 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 — SENSE: the radar want is elected thousands of times and executed once in thirty
+
+Supreme Isthmus 1v1 +100%, 33 min, `roles-h100-t` t002: 2,775 sense elections
+won, 84 executed, `apex: exec-refused ... sense=2052`; of the advanced radars
+that did become tasks, 21 of 24 died `unreach-safe` (`corarad done=3
+abort=21`). Same shape with roles off (`roles-h100-c` t002: 872 sense wins in
+the last ten minutes, `corarad done=4 abort=6`). His first game of the day had
+417 `sense/sense:armrad` decides, `armrad done=18 abort=30`.
+
+Couplings law 3: a want the executor refuses must not be ranked. The sense
+want passes its gates (`GATE_RADAR_GAP`, `_FRONT`, `_HOT`) on a site the
+request layer then refuses or the builder cannot reach safely, and nothing
+closes the demand, so every free hand re-elects it. Under constructor roles
+this became half the split of need at minute 28 with 41 hands holding the
+sense role (fixed the same night: a role is released when its category is
+refused at execution -- `fell=` on `apex: roles`); the churn itself is not
+fixed. Read `Requests::gLastWhat` on the refusal before pricing anything.
+
 ## 2026-09-08 — NANO: the lines starve while turrets go up at the sinks; the batch cannot open
 
 His game (Supreme Isthmus 1v1, +100%, 33 min): 116 nanos finished, and the

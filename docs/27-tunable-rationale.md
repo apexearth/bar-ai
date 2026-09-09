@@ -1078,6 +1078,29 @@ RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
 insures something before the first loss teaches us. His "combination of enemy
 aggression and how well defended we are" -- this is the floor half.
 
+### `TUNE_ROLE_SHARE` = 0.5, `TUNE_ROLE_TAU` = 120 (2026-09-08)
+
+apexearth's design, his words: "assign roles to our constructors by a % based
+on what it sees as a split of our needs... give an engineer a special role to
+do only that job until our brain decides it is no longer needed... leave some
+cons as open unroled cons." `market/roles.as`.
+
+The split is not a new model of need: it is the category draw's own ticket
+share, read off every election's full list and averaged over `TUNE_ROLE_TAU`
+seconds. `TUNE_ROLE_SHARE` of the workers hold a role, quota per category =
+share x roled hands, rounded. A hand takes the category furthest under quota
+that its own list can answer, keeps it until the category is over quota or
+offers it nothing, and its other wants stay behind the category's, so a
+refused category falls through instead of idling (couplings law 3). The
+commander is always open.
+
+Both are his policy, not the model's: how many hands are committed is the
+"leave some open" he asked for, and the averaging window is how long a role
+outlives the job it was given for (a job is 30-300 s of walk and build; 120 s
+is the exposure window every other rate here is scored over). 0 switches the
+layer off for the A/B. Instrument: `apex: roles` every 30 s (share, held/quota
+per category, taken/dropped) and `role=` on the decide line.
+
 ### `TUNE_HZ_APPROACH` = 0.f
 
 Hazard floor from enemy formations **walking at** this ground:

@@ -508,6 +508,7 @@ void WorkerGone(Id id)
 {
 	for (uint i = 0; i < gWorkerIds.length(); ++i) {
 		if (gWorkerIds[i] == id) {
+			ConRoleForget(int(id));
 			gWorkerBorn.removeAt(i);
 			gWorkers.removeAt(i);
 			gWorkerIds.removeAt(i);

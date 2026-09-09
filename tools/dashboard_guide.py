@@ -958,6 +958,12 @@ GROUPS = [
                   "every non-leading want before"),
                  ("TUNE_COMMIT_SHARP", "how much sharper the draw gets for an "
                   "expensive commitment"),
+                 ("TUNE_ROLE_SHARE", "more of the constructors hold a ROLE -- "
+                  "one category (metal, energy, defence, nanos...) they keep "
+                  "electing inside until the split of need moves. The rest "
+                  "stay open. 0 switches roles off; 1 leaves no open hands"),
+                 ("TUNE_ROLE_TAU", "the split of need looks further back, so "
+                  "roles change hands more slowly"),
                  ("TUNE_BUDGET_LIVE", "price the spend curves against live "
                   "income instead of a smoothed read"),
              ]},
