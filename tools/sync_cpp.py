@@ -138,8 +138,10 @@ def do_status() -> None:
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "pull":
+        _lane.require("sync_cpp pull")
         do_pull()
     elif cmd == "apply":
+        _lane.require("sync_cpp apply")
         do_apply()
     elif cmd == "status":
         do_status()

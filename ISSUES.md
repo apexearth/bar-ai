@@ -16,21 +16,6 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
-## 2026-09-08 — LANES: a session that never claimed one inherits another's
-
-`.barai-lane` is one file for the whole checkout, so a session that ran no
-`lane.py init` resolves to whatever lane the last session recorded. Measured
-tonight: this session's `sync_cpp.py apply` (meant for the shared tree) wrote
-301 files into `BARb-hz`, another session's private source, and
-`deploy_ai.py deploy Unstable` silently redeployed `lane-energy2` instead of
-the shared `Apex:Unstable` the dashboard launches. No hz work was found lost
-(no hz file newer than its last build except the six apply wrote, and neither
-hz session edited those six today), but that was luck, not design. The
-shared slot was deployed by forcing `lane.name()` to "" from a wrapper.
-Decision needed: a lane recorded per session (env only, no file), or tools
-that refuse to act when the recorded lane was not claimed by this session,
-and every tool printing the lane it resolved on its first line.
-
 ## 2026-09-08 (night) — The canon economy scenario: where we stand against his curve
 - **The canon-driven commit (950094b5) regressed the real-game batteries, and
   the cause was the hands-share multiplier on constructor demand.** Carrot at

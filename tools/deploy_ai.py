@@ -540,10 +540,11 @@ def main() -> int:
         # No variant named: a lane ships its own (materialised fresh from
         # ai/Unstable each time, so a lane never drifts from the work).
         v = args.variant
-        if v is None:
-            v = _lane.sync_variant() if _lane.name() else "Unstable"
-        elif _lane.name() and v == "Unstable":
-            v = _lane.sync_variant()
+        if v is None or v == "Unstable":
+            # The shared slot is his: a session with no claim is refused here
+            # rather than shipping over what he is playing.
+            lane = _lane.require("deploy")
+            v = _lane.sync_variant(lane) if lane else "Unstable"
         elif v.startswith("lane-"):
             # A lane NAMED on the command line is materialised too. Without
             # this it shipped the snapshot from the last unnamed deploy and

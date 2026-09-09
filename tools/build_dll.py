@@ -37,7 +37,7 @@ ENGINE = REPO / "vendor" / "engine"
 sys.path.insert(0, str(REPO / "tools"))
 import lane as _lane
 
-LANE = _lane.name()
+LANE = _lane.require("build_dll")
 BARB_SRC = _lane.barb_src(LANE)
 BUILD_OUT = _lane.build_out(LANE)
 ARTIFACT = _lane.artifact(LANE)

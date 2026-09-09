@@ -90,7 +90,7 @@ conclusion each one produced.
 | **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit · **S19** the deployed script can change mid-sweep — classify each game from its own log |
 | **run a sweep of a tunable** | **S8** — deploying the AI does NOT deploy the gadget; unpublished modoptions run the default with no error |
 | **launch or kill a run** | `docs/26-working-rules.md` — one match per write-dir, `pgrep`/`pkill` are dead here, `-u` when logging |
-| **start a session when another may be running** | `python tools/lane.py init <name>` — `docs/28-parallel-sessions.md`. Two sessions share one build tree, one deploy target and one write dir; a lane gives each its own. A shared-tree edit was destroyed 2026-09-07 |
+| **start a session when another may be running** | `python tools/lane.py init <name>` — `docs/28-parallel-sessions.md`. Claims are per session; a session with none is refused by every writing tool, because `Apex:Unstable` is HIS slot (the dashboard, his games). `BARAI_LANE=shared` names it on purpose |
 | **touch army / fighting** | `docs/24-how-units-fight.md` first, then `ai-military`, `ai-army-composition` |
 | **touch what gets built** | `ai-auction`, `ai-eco-pricing`, `docs/22-macro-demand.md`. Composition is decided in `manager/brain/market/`, **not** in `factory.json` — `docs/04-json-config-reference.md` |
 | **touch where buildings land** | `ai-placement`, `ai-risk-model` |

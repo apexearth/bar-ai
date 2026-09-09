@@ -75,12 +75,20 @@ _summary_cache = {}
 
 # ---------------------------------------------------------------- helpers
 
+def _his_env():
+    # The dashboard is his UI for the shared slot: whatever shell started it,
+    # its tools must not be refused for holding no lane claim (tools/lane.py).
+    env = dict(os.environ)
+    env.setdefault("BARAI_LANE", "shared")
+    return env
+
+
 def run_tool(args, timeout=600):
     """Run a repo python tool synchronously; return dict with output."""
     cmd = [PY, "-u"] + args
     try:
         p = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True,
-                           errors="replace", timeout=timeout)
+                           errors="replace", timeout=timeout, env=_his_env())
         out = p.stdout + (("\n[stderr]\n" + p.stderr) if p.stderr.strip() else "")
         return {"ok": p.returncode == 0, "code": p.returncode,
                 "cmd": " ".join(args), "output": out}
@@ -836,7 +844,7 @@ def start_job(desc, args):
     f.write((" ".join(cmd) + "\n\n").encode())
     f.flush()
     proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=f,
-                            stderr=subprocess.STDOUT)
+                            stderr=subprocess.STDOUT, env=_his_env())
     with JOBS_LOCK:
         JOBS[jid] = {"proc": proc, "logfile": f, "log": log, "desc": desc,
                      "cmd": " ".join(args), "started": time.time()}

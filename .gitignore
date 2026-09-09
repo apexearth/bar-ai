@@ -36,4 +36,5 @@ scratch_*.log
 
 # tools/lane.py: per-session build/deploy slots, never committed
 /.barai-lane
+/.barai-lanes
 /ai/lane-*

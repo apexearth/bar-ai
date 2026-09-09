@@ -440,10 +440,12 @@ had run `init` last, and two sessions believed they held the same lane. One
 session's AngelScript edits were overwritten in the shared tree and survived
 only in a lane snapshot; a mirror pull from a stale lane reverted committed
 C++ (bar-ai-be, bar-ai-19). The isolation docs/28 describes is per lane, not
-per session, and the file cannot tell sessions apart. Until lane.py keys the
-lane to the session: never rely on the file -- prefix every lane-following
-tool with `BARAI_LANE=<name>` (the environment wins over the file) and name
-the variant on every deploy/run (`deploy lane-<name>`, `--a Apex<name>:lane-<name>:standard`).
+per session, and the file cannot tell sessions apart. It happened once more
+the same evening: a session with no claim ran `sync_cpp.py apply` into
+`BARb-hz` and `deploy Unstable` into `lane-energy2`. **Fixed 2026-09-08:**
+claims live in `.barai-lanes` keyed by `CLAUDE_CODE_SESSION_ID`, a session
+with no claim is refused by every writing tool, and `BARAI_LANE=shared` is
+the only way a session reaches his slot (`docs/28`).
 
 ## S27 — The engine DISCARDS a build order whose square is blocked, silently
 

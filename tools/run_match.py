@@ -959,6 +959,7 @@ def main() -> int:
                          "its team id is sides*per_side + its index")
     ap.add_argument("--dry-run", action="store_true", help="print the script and stop")
     args = ap.parse_args()
+    _lane.require("run_match")  # the shared write dir holds his live infolog
     if args.speed == 0:
         args.speed = 3 if args.watch else 9999
     if args.handicap is None:
