@@ -37,6 +37,8 @@ array<float>    gWallX;
 array<float>    gWallZ;
 array<float>    gWallThreat;   // position-only senses, cached on the field stamp
 array<float>    gWallInfl;     // our own influence at the slot: army AND towers
+array<float>    gWallAtk;      // metal of ours lost on this slot's bearing
+float           gWallAtkMean = 0.f;
 int             gNextWallLog = 0;
 float           gWallInflMean = 0.f;
 array<float>    gWallCover;
@@ -145,6 +147,7 @@ void WallPrep()
 	gWallZ.resize(0);
 	gWallThreat.resize(0);
 	gWallInfl.resize(0);
+	gWallAtk.resize(0);
 	gWallCover.resize(0);
 	gWallHz.resize(0);
 	gWallSiege.resize(0);
@@ -421,6 +424,39 @@ void WallPrep()
 		gWallInflMean = (gWallInfl.length() > 0)
 				? (sm / float(gWallInfl.length())) : 0.f;
 	}
+	// WHICH WAY THEY HAVE ACTUALLY COME. Our own losses carry the bearing the
+	// damage arrived on; the decayed loss field is already that record, read
+	// here per slot instead of as one number (apexearth 2026-09-09: "learn what
+	// direction enemies are attacking us from and make more defenses in those
+	// angles"). A slot's weight is the lost metal within 60 degrees of it,
+	// tapering to nothing at the edge of that cone.
+	DecayLossField();
+	gWallAtk.resize(gWallP.length());
+	float atkSum = 0.f;
+	for (uint i = 0; i < gWallP.length(); ++i) {
+		float sx = gWallP[i].x - gPfMid.x;
+		float sz = gWallP[i].z - gPfMid.z;
+		const float sl = sqrt(sx * sx + sz * sz);
+		float w = 0.f;
+		if (sl > 1.f) {
+			sx /= sl;
+			sz /= sl;
+			for (uint j = 0; j < gLossM.length(); ++j) {
+				float lx = gLossX[j] - gPfMid.x;
+				float lz = gLossZ[j] - gPfMid.z;
+				const float ll = sqrt(lx * lx + lz * lz);
+				if (ll < 1.f)
+					continue;   // a loss at the centre has no bearing
+				const float c = (lx * sx + lz * sz) / ll;
+				if (c > 0.5f)
+					w += gLossM[j] * (c - 0.5f) * 2.f;
+			}
+		}
+		gWallAtk[i] = w;
+		atkSum += w;
+	}
+	gWallAtkMean = (gWallAtk.length() > 0)
+			? (atkSum / float(gWallAtk.length())) : 0.f;
 	// The wall's own shape, since nothing else can see it: how many slots, how
 	// tightly the clusters pack, and how uneven our cover is around the ring.
 	if (ai.frame >= gNextWallLog) {
@@ -438,6 +474,11 @@ void WallPrep()
 			if ((minStep <= 0.f) || (dd < minStep))
 				minStep = dd;
 		}
+		float atkHi = 0.f;
+		for (uint i = 0; i < gWallAtk.length(); ++i) {
+			if (gWallAtk[i] > atkHi)
+				atkHi = gWallAtk[i];
+		}
 		float lo = 0.f, hi = 0.f;
 		for (uint i = 0; i < gWallInfl.length(); ++i) {
 			if ((i == 0) || (gWallInfl[i] < lo)) lo = gWallInfl[i];
@@ -450,7 +491,11 @@ void WallPrep()
 			+ " min=" + int(minStep)
 			+ " infl=" + formatFloat(lo, "", 0, 2) + "/"
 			+ formatFloat(gWallInflMean, "", 0, 2) + "/"
-			+ formatFloat(hi, "", 0, 2));
+			+ formatFloat(hi, "", 0, 2)
+			+ " atk=" + int(gWallAtkMean) + " atkmax=" + int(atkHi)
+			+ " crowd=" + formatFloat(PfCrowd(), "", 0, 2)
+			+ " local=" + formatFloat(PfCrowdAt(gPfMid, Brain::LightTowerRange()), "", 0, 2)
+			+ " m/cell=" + formatFloat(PfMetalPerCell(), "", 0, 2));
 	}
 	gWallAdjPitch = pitch;
 	gWallAdjAt = -999999;
@@ -506,6 +551,21 @@ float PfWallThreat(uint i) { return gWallThreat[i]; }
 // heavily undefended ... detect which side that is and concentrate defenses
 // there"). 1.0 on an average bearing; the bounds keep one empty arc from
 // owning the whole pull.
+// The same shape as PfWallThin: 1.0 on an average bearing, 2.0 where the
+// damage has been landing, 0.5 on a side nothing has ever come from. Flat 1.0
+// until something of ours has died, so it says nothing before it knows.
+float PfWallAtk(uint i)
+{
+	if ((i >= gWallAtk.length()) || (gWallAtkMean <= 0.f))
+		return 1.f;
+	float f = 2.f * gWallAtk[i] / (gWallAtk[i] + gWallAtkMean);
+	if (f < 0.5f)
+		f = 0.5f;
+	if (f > 2.f)
+		f = 2.f;
+	return f;
+}
+
 float PfWallThin(uint i)
 {
 	if ((i >= gWallInfl.length()) || (gWallInflMean <= 0.f))

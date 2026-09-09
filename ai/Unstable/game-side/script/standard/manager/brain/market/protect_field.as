@@ -135,6 +135,46 @@ float PfCrowd()
 
 // What one build cell of our base is worth, in metal of standing assets. The
 // price of the room an obsolete building is sitting on.
+// ROOM IS LOCAL. PfCrowd divides our footprint by the area inside the rim, and
+// the rim grows with every outlying claim -- so the measure FALLS as the base
+// fills: 0.06 at minute 2 and 0.01 from minute 7 on, in a game where he could
+// see we had no room ("we're squeezed by the enemy and don't have enough room
+// so we really shouldn't be making stuff like this"). What a placement
+// competes for is the ground one gun covers, right here.
+AIFloat3 gPfCrowdAtP;
+float    gPfCrowdAtR = 0.f;
+float    gPfCrowdAtV = 0.f;
+int      gPfCrowdAtF = -999999;
+
+float PfCrowdAt(const AIFloat3& in pos, float r)
+{
+	if ((r < 16.f) || !OnMap(pos))
+		return PfCrowd();
+	if ((gPfCrowdAtF == ai.frame) && (gPfCrowdAtR == r)
+		&& (gPfCrowdAtP.distance2D(pos) < 16.f))
+		return gPfCrowdAtV;
+	const float cells = 3.14159f * r * r / 256.f;
+	if (cells <= 1.f)
+		return PfCrowd();
+	float occ = 0.f;
+	array<CCircuitUnit@>@ st = ai.GetOwnStructsNear(pos, r);
+	for (uint i = 0; i < st.length(); ++i) {
+		CCircuitUnit@ u = st[i];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const int d = int(u.circuitDef.id);
+		occ += float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	}
+	float f = occ / cells;
+	if (f > 1.f)
+		f = 1.f;
+	gPfCrowdAtF = ai.frame;
+	gPfCrowdAtP = pos;
+	gPfCrowdAtR = r;
+	gPfCrowdAtV = f;
+	return f;
+}
+
 float PfMetalPerCell()
 {
 	return (gPfCells > 1.f) ? (gPfTotal / gPfCells) : 0.f;

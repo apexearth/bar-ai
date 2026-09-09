@@ -640,6 +640,56 @@ float ConvRatioReach(const array<int>@ builds)
 int gOccFrame = -30000;
 int gOccOwn = -1;
 float gOccVal = 0.f;
+// THE SAME CEILING IN CELLS. The converter want discounts a rung that converts
+// less per cell than the best one -- but it measured "best" against what the
+// ASKING HAND can build, and the commander cannot build the advanced one, so
+// its basic converter always priced at full value and the commander went on
+// filling a squeezed base with them at 300 metal/s (apexearth 2026-09-09: "we
+// don't have enough room so we really shouldn't be making stuff like this";
+// 17 of 24 basic-converter elections in one game were the commander's).
+// A ceiling, not a refusal: a hand may still build the basic, it is simply
+// worth what its ground is worth.
+int gOccCellFrame = -30000;
+int gOccCellOwn = -1;
+float gOccCellVal = 0.f;
+
+float ConvPerCellReach(const array<int>@ builds)
+{
+	float best = 0.f;
+	if (builds is null)
+		return best;
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || (Catalog::gConvCapacity[d] <= 0.f))
+			continue;
+		const float cells = float((Catalog::gAreaCells[d] > 0)
+				? Catalog::gAreaCells[d] : 1);
+		const float pc = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d] / cells;
+		if (pc > best)
+			best = pc;
+	}
+	return best;
+}
+
+float OwnConvCellCeil()
+{
+	if ((gOccCellFrame == ai.frame) && (gOccCellOwn == gOwnStamp))
+		return gOccCellVal;
+	gOccCellFrame = ai.frame;
+	gOccCellOwn = gOwnStamp;
+	float best = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
+			continue;
+		const float pc = ConvPerCellReach(Catalog::gBuildsList[di]);
+		if (pc > best)
+			best = pc;
+	}
+	gOccCellVal = best;
+	return best;
+}
+
 float OwnConvCeil()
 {
 	if ((gOccFrame == ai.frame) && (gOccOwn == gOwnStamp))
@@ -1107,6 +1157,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		const float pc = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d] / cells;
 		if (pc > cvBestPerCell)
 			cvBestPerCell = pc;
+	}
+	// ...against what ANY of our hands could put on that ground, not only this
+	// one. See OwnConvCellCeil.
+	{
+		const float teamCell = OwnConvCellCeil();
+		if (teamCell > cvBestPerCell)
+			cvBestPerCell = teamCell;
 	}
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];

@@ -2714,3 +2714,25 @@ Two mechanisms, both structural, neither is the tech price being low:
 
 Fixing (2) is a real design change — the assist's bound should be the marginal
 job's value, not unspent flow — and it touches every big build, not only tech.
+
+## 2026-09-09 — ROOM: the crowding measure falls as the base fills
+
+`PfCrowd()` is our building footprint over the area inside the rim, and the rim
+is the furthest thing we own on each bearing — so the denominator grows as r²
+with every outlying claim while the numerator grows linearly. Measured in one
+game: crowd 0.06 at minute 2, **0.01 from minute 7 onward**, i.e. the AI reads
+"1% full" exactly when he can see the base is squeezed. Every room charge
+(`apex_room_worth` in the generator, converter and reclaim prices) is therefore
+inert late game.
+
+`PfCrowdAt(pos, r)` (protect_field.as) measures the same thing locally, over the
+ground one gun covers, and reads **0.17 against a base-wide 0.02** at minute 25.
+It is wired to the `apex: wall` log ONLY.
+
+Feeding it into the eco prices as-is is a measured regression: metal produced
+299k → 175k and energy wasted 631k → 2.79M over the same seed and length,
+because `PfMetalPerCell()` (~40) times a real local crowd charges ~20 metal per
+cell against a 1-metal converter, which prices conversion out of the game. The
+term the room charge needs is not this measure at the old weight — it is a
+price for ground that is bounded by what the ground is actually worth to the
+next building, and it has not been derived yet.

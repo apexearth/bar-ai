@@ -616,7 +616,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// ...AND THE THIN SIDE FIRST. The bearing our own army and guns
 			// have left empty answers the obligation before one already
 			// standing behind a line does.
-			const float thinW = isWall ? PfWallThin(si) : 1.f;
+			const float thinW = isWall ? (PfWallThin(si) * PfWallAtk(si)) : 1.f;
 			const float pullPrev = (horizW > 1.f)
 					? (slotGap / horizW) * dirW * thinW : slotGap * dirW * thinW;
 			if (prevented < pullPrev)
