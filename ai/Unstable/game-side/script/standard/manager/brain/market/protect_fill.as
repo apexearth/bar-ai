@@ -598,10 +598,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				}
 			}
 			// ONE SLOT HOLDS ONE BUILDING, so the shortfall this slot can
-			// answer is that building's cost.
+			// answer is that building's cost -- and a mex's guard is its FIRST
+			// SENTRY ("1 sentry turret guarding each of our mexes at least"),
+			// so the heavy gun's share of the obligation stands on the wall,
+			// where the bearing weight faces it at the enemy. Uncapped, the
+			// annihilators went to rear mexes (his watch, 2026-09-08).
 			float slotGap = wallPull;
-			if (slotGap > Catalog::gCostM[d])
-				slotGap = Catalog::gCostM[d];
+			const float slotCap = isMexG ? LightTowerCostM() : Catalog::gCostM[d];
+			if (slotGap > slotCap)
+				slotGap = slotCap;
 			// A STOCK OVER THE EXPOSURE WINDOW, NOT A HAZARD ROLL. The gap is
 			// metal we owe the wall; prevented is metal/s, so the conversion is
 			// the window every other rate here is scored over. Multiplying by hz

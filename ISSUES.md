@@ -16,6 +16,19 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 — ROLES: the release-on-refusal rule fires thousands of times, so almost no hand keeps a role
+
+`mexcap-h100-t` (4 games, Supreme Isthmus +100%, 33 min): `apex: roles ...
+roled=3..11 fell=2718..4799` at the end, against `roled=60..136` in the batch
+before the rule. A role is released whenever its category is refused at
+execution, and execution refuses categories constantly (`apex: exec-refused`
+in one game: sense=2052 convert=913 protect=499 nano=342 energy=204), so the
+layer now hands a role out and takes it back on the next election. Two ways
+forward, his call: release only after N consecutive refusals (a count, and he
+has ruled against those), or fix the refusals -- a want the executor turns
+down should not have been ranked (couplings law 3), and the sense entry above
+is the largest of them.
+
 ## 2026-09-08 — SENSE: the radar want is elected thousands of times and executed once in thirty
 
 Supreme Isthmus 1v1 +100%, 33 min, `roles-h100-t` t002: 2,775 sense elections
