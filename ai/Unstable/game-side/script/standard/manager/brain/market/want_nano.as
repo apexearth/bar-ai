@@ -222,6 +222,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
 			+ " over=" + formatFloat(over, "", 0, 1)
+			+ " real=" + formatFloat(LatheRealizedFrac(), "", 0, 3)
+			+ " cap=" + formatFloat(BPCapacity(), "", 0, 0)
 			+ " bank=" + int(aiEconomyMgr.metal.current) + "/" + int(aiEconomyMgr.metal.storage));
 	}
 	if (over <= 0.5f)
@@ -261,7 +263,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			continue;
 		if ((Catalog::gBuildPower[d] <= 0.f) || (Catalog::gBuildsList[d].length() > 0))
 			continue;
-		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
+		// Priced at what this turret would actually pour, not at its
+		// nameplate: the fleet can only spend what the economy feeds it.
+		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f)
+				* LatheRealizedFrac();
 		float gainN = (over < drain) ? over : drain;
 		// A lathe pulls energy as well as metal, so it is worth the share of
 		// its ask the energy economy can feed: overflow caused by an e-stall

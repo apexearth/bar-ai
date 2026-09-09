@@ -719,8 +719,18 @@ result: swings of that size are noise in an 18-game battery.
 The premise is also unproven. The overflow it answers was measured in a `--watch`
 game at +50% resources, and apexearth's objection stands: end-state totals are
 downstream of losing (dead builders cannot spend, so metal piles up and spills).
-The waste may be a symptom rather than a cause. Turning it on needs a paired A/B
-at +50%, the regime that actually reproduces the condition.
+The waste may be a symptom rather than a cause.
+
+**The +50% A/B this asked for was run 2026-09-09 and it does NOT resolve.** The
+canon economy board (Comet Catcher Remake 1.8, `apex_eco_only=1`, `--handicap
+50`, `--speed 5`, 4 seeds per arm) is exactly the regime named: metal spilling
+against an energy stall. ON 473 m/s at minute 16 and 988 at 20; OFF 412 and 913
+-- means 8-15% apart with the ranges overlapping ([396-543] against [398-438]).
+And the term is inert by its own instrument in that regime too: every sampled
+`apex: mrealize` line returned `share=1.000`, because peak-held metal demand
+(`pk`) holds the target above income even while the bank spills. Left OFF. The
+overflow it was aimed at is answered instead by `LatheRealizedFrac`, which is
+not a tunable.
 
 
 

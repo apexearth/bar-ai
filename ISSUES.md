@@ -101,6 +101,84 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 — The canon board: the fleet was eating the economy in both currencies
+
+His ask: match the pure-eco reference game (2,032 m/s and 103k e/s at 16:15).
+Instrumented first, and the same fact showed up three times:
+
+- **Build power ran 5-8x what income could feed from minute 7 to the end.**
+  `apex: bpgap` on the control tree, seed 1: `net` (the income clause after
+  capacity) went -109 at minute 7 to **-4,955 at minute 19** -- capacity 6,093
+  m/s of spend against 967 m/s of economic power -- with the metal bank at
+  **0%** the whole time. 59 T1 + 49 T2 + 170 air constructors and 310 nano
+  turrets by minute 20 against his 6 + 4 + 10 and 325: roughly 140,000 metal
+  and **2.8M energy** of lathe, and 2.8M energy is seven advanced fusions.
+- **Three separate demands were sized by the FLEET, so each grew with what it
+  bought.** (1) `BPGap`'s backlog clause is a FLOOR, and ordering work does not
+  pay for it, so it overrode the negative income clause every minute of every
+  game. (2) `FleetAskE` is the standing fleet's ask at full speed and it is the
+  floor under `EnergyDeficitNowE`, so an oversized fleet manufactured a
+  permanent energy stall out of its own size. (3) A lathe's gain was its
+  nameplate drain, which is what it could pour if metal were free.
+- **The consequence was an 18x price inversion in minutes 4-10.** The stall
+  hoist and the energy constructor role won elections at `v=0.22-0.94` while
+  the mex claim standing behind them priced `v=4.06-8.77`; 250 energy elections
+  against 19 mex claims; extraction frozen at 23 spots where his reference game
+  holds 44 by minute 8. Minute-8 income is very nearly spots x yield, so the
+  whole curve inherits that.
+
+Fixed by one law in three places -- **no demand for build power exceeds what the
+economy can feed, in either currency** (commit below). Canon, 4 seeds per arm,
+control = HEAD of 2026-09-09:
+
+| minute | control m/s | new m/s | control e/s | new e/s |
+|---|---|---|---|---|
+| 8  | 83 [76-89]   | 86 [80-89]   | 991    | 998    |
+| 12 | 174 [144-205]| 192 [173-205]| 4,089  | 4,328  |
+| 16 | 343 [317-378]| 434 [369-500]| 10,116 | 14,377 |
+| 20 | 746 [706-812]| **982 [954-1014]** | 24,448 | **38,747** |
+
+Metal produced by 20: 256k -> 317k. Minute-20 ranges do not overlap. Real games
+(1v1 vs BARb hard, 12 games per map, 16 min, minute 14): Altair produced 13,575
+-> 14,325 with energy income 481 -> 608 and the poor-income stall 14% -> 8%;
+Isthmus 18,573 -> 20,058 with income 36 -> 42, crossing from behind BARb
+(19,107) to ahead of it (17,839).
+
+**MEASURE FIRST: the canon board at `--speed 5` is NOT deterministic.** Three
+runs of the SAME tree, same seed, same modoptions: 700 / 771 / 845 m/s at minute
+20 and 5,416 / 8,720 / 12,162 metal wasted. The AI is time-sliced against wall
+clock, so a single run resolves nothing under ~20% and nothing at all on waste.
+Four runs per arm is the floor; two earlier single-run "results" this session
+(the backlog clause alone, `apex_m_realize`) both dissolved at n=4.
+
+STILL OPEN, in the order the arithmetic ranks them:
+- **Minute 8 is still 83-86 m/s against his 244**, and it is extraction: 23
+  spots to his 44. He claims the map by minute 8 and we take until 16-18. The
+  price is not the problem -- the mex want prices 5-9 and loses to hoists and
+  roles. A human queues a run of spots in one order; every AI claim is a fresh
+  election that usually picks something else.
+- **`sense` wins ~800 elections a game and executes ~37.** Gated out of the
+  eco-only benchmark this session (radar is intel); in real games it is a hand
+  holding a want it cannot place. Worse, the new constructor-role split reads
+  the draw's ticket share, so it read **sense = 0.54 of all need** on a board
+  with no enemy, and `fell` (roles released because the category could not be
+  executed) ran **86% of roles taken**. `apex_role_share=0` is a free A/B.
+- **A lathe's gain is still stated as metal/s it can pour, in the same units as
+  a mex's metal/s of income.** Spending capacity is not income. Capping nano
+  demand at the fleet-wide shortfall (marginal product zero when income-bound)
+  was measured and is WORSE -- 345 against 473 at minute 16 -- so the smooth
+  `tgt/cap` price is what ships; the category error stands.
+- **Converters stay T1**: 149-202 basic against 4-13 advanced by minute 20,
+  where his reference holds 58 advanced at minute 15. Per m/s of throughput the
+  basic one is 37x cheaper in metal and 1.8x cheaper in energy, so the market is
+  not wrong -- it is the density that decides it, and 103k e/s would need ~1,470
+  of them. Energy wasted at minutes 16-20 is 10-25% of what we make.
+- **The stall hoist over-answers and is an override, not a price.** Netting
+  what is already ordered off its deficit (`EnergyDeficitE` for
+  `EnergyDeficitNowE`) was measured INERT -- estall firings 109 -> 129, mex
+  claims 37 -> 35, curve unchanged -- and reverted. Clamping `FleetAskE` is what
+  actually moved it (115 -> 76 firings).
+
 ## 2026-09-08 (night) — The canon economy scenario: where we stand against his curve
 - **The canon-driven commit (950094b5) regressed the real-game batteries, and
   the cause was the hands-share multiplier on constructor demand.** Carrot at
