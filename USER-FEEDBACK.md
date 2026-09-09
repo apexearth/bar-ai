@@ -1370,3 +1370,11 @@ STILL OPEN, both measured in the same sets:
   nothing to do. The station walk absorbs some of it, not all.
 - the envelope reads only enemies we can SEE, so it is blind exactly when we
   are blind.
+
+## 2026-09-09 — from a watched game
+
+- **UNRESOLVED: jammer logic.** *"our jammer logic still needs improvement"* --
+  no detail given yet; ask what he sees going wrong before changing anything.
+- DONE (unmeasured): nano turrets must not reclaim dead commanders; wall slots
+  in tight clusters with gaps between them; concentrate defence on the side our
+  own army has left empty.

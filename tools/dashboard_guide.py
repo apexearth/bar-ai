@@ -728,6 +728,15 @@ GROUPS = [
                   "fraction of light-tower range. Lower is a denser, more "
                   "expensive wall; above 2.0 adjacent towers' fire no "
                   "longer overlaps and the wall has holes"),
+                 ("TUNE_WALL_CLUSTER", "guns per wall cluster — the wall's "
+                  "slots are grouped this many at a time, packed tight "
+                  "enough to cover each other, with the space saved taken "
+                  "as a gap before the next cluster. Same number of guns "
+                  "on the same perimeter, grouped instead of evenly "
+                  "spread; 1 restores the even spread"),
+                 ("TUNE_WALL_CLUSTER_TIGHT", "how tightly a cluster's guns "
+                  "pack, as a fraction of the old spacing — lower is a "
+                  "denser knot of fire and a wider hole between knots"),
                  ("TUNE_WALL_REACH", "how far one bearing's buildings can "
                   "drag the wall outward, as a multiple of the typical "
                   "(worth-weighted RMS) radius of everything we own — low "

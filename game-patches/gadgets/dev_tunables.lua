@@ -410,6 +410,8 @@ local NAMES = {
 	"apex_wall",              -- protect_wall.as: 1 = ground defence sites are wall slots on the base rim (replaces asset/front/ring candidates), 0 = old candidate set
 	"apex_wall_standoff",     -- protect_wall.as: wall stands this fraction of light-tower range outside the outermost building per bearing (0.5)
 	"apex_wall_pitch",        -- protect_wall.as: arc spacing between wall slots, fraction of light-tower range (1.2; <=2 keeps adjacent fields overlapping)
+	"apex_wall_cluster",      -- protect_wall.as: guns per wall cluster; the saved space becomes a gap before the next cluster (3; 1 = the old even spread)
+	"apex_wall_cluster_tight",-- protect_wall.as: how tightly a cluster packs, fraction of the pitch (0.5)
 	"apex_wall_reach",        -- protect_wall.as: per-bearing wall radius cap, multiple of the worth-weighted RMS radius of what we own (2.5)
 	"apex_wall_rear",         -- want_protect.as: share of the wall pull a directly-rear slot keeps; enemy-facing slots get full pull, tapering by bearing (0.2)
 	"apex_wall_line_w",       -- want_protect.as: the front line's pull relative to the ring -- completing the line outbids deepening it (2.0)

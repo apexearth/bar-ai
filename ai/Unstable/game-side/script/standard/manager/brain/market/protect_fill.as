@@ -613,8 +613,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// as well double-counted and sent rear slots to zero -- static
 			// defence fell 9.6% -> 0.7% of spend and trade with it. The cap at
 			// one building is what stops the runaway; the division never was.
+			// ...AND THE THIN SIDE FIRST. The bearing our own army and guns
+			// have left empty answers the obligation before one already
+			// standing behind a line does.
+			const float thinW = isWall ? PfWallThin(si) : 1.f;
 			const float pullPrev = (horizW > 1.f)
-					? (slotGap / horizW) * dirW : slotGap * dirW;
+					? (slotGap / horizW) * dirW * thinW : slotGap * dirW * thinW;
 			if (prevented < pullPrev)
 				prevented = pullPrev;
 		}

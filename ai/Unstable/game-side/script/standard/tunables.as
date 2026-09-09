@@ -1596,6 +1596,13 @@ const float TUNE_WALL_STANDOFF = 0.5f;
 //   below 2.0 adjacent light towers' fields overlap; lower is a denser wall.
 const float TUNE_WALL_PITCH = 1.2f;
 
+// [count] -- guns per wall CLUSTER. The wall's slots are grouped this many at
+//   a time, tight enough to cover each other, with the saved space taken as a
+//   gap before the next cluster. 1 restores the old even spread. See docs/27.
+const float TUNE_WALL_CLUSTER = 3.f;
+// [ratio of the pitch] -- how tightly a cluster's guns pack. See docs/27.
+const float TUNE_WALL_CLUSTER_TIGHT = 0.5f;
+
 // [ratio] -- Cap on how far one bearing's buildings can drag the wall, as a
 //   multiple of the worth-weighted RMS radius of everything we own. See docs/27.
 const float TUNE_WALL_REACH = 2.5f;

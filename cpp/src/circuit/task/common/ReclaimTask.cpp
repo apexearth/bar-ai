@@ -12,6 +12,7 @@
 #include "util/Utils.h"
 
 #include "AISCommands.h"
+#include "Log.h"
 
 namespace circuit {
 
@@ -68,6 +69,9 @@ void IReclaimTask::Cancel()
 {
 }
 
+// Elmos of daylight left between a reclaim circle and a commander corpse.
+static constexpr float COM_CORPSE_CLEAR = 96.f;
+
 bool IReclaimTask::Execute(CCircuitUnit* unit)
 {
 	executors.insert(unit);
@@ -93,6 +97,30 @@ bool IReclaimTask::Execute(CCircuitUnit* unit)
 	} else {
 		pos = position;
 		reclRadius = radius;
+	}
+	// apex: A COMMANDER CORPSE IS NEVER FOOD (apexearth: "make sure nano
+	// turrets don't reclaim dead commanders"). The per-feature filter in
+	// CBReclaimTask guards only the targeted search; an area command takes
+	// whatever is inside the circle, and a nano turret's circle is its own
+	// base -- exactly where our commander falls. Aim at the richest wreck
+	// that is not the corpse and pull the circle in short of it; if that
+	// leaves nothing to eat, there is no reclaim to do here.
+	const AIFloat3 comPos = circuit->GetCommanderWreckPos(pos, reclRadius);
+	if (utils::is_valid(comPos)) {
+		const AIFloat3 body = circuit->GetBestWreckPos(pos, reclRadius, 1.f);
+		if (!utils::is_valid(body)) {
+			return false;   // idle: OnUnitIdle retires the task
+		}
+		pos = body;
+		const float clear = pos.distance2D(comPos) - COM_CORPSE_CLEAR;
+		if (clear < COM_CORPSE_CLEAR) {
+			return false;
+		}
+		if (reclRadius > clear) {
+			reclRadius = clear;
+		}
+		circuit->LOG("apex: corpse-guard t=%i r=%.0f -- reclaim circle pulled off a commander corpse",
+				circuit->GetTeamId(), reclRadius);
 	}
 	TRY_UNIT(circuit, unit,
 		// NOTE: CONTROL_KEY enables special mode that ignores autoreclaimable value

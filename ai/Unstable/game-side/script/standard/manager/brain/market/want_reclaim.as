@@ -305,12 +305,75 @@ bool GenObsoleteOnArrival(int d)
 // hands can no longer make. The ground was cheaper than the energy then thrown
 // away, so a builder is refused the basic only when it could have made the
 // better one itself. Team-wide refusal: docs/27, TUNE_OBSOLETE_RATIO.
+// THE TRANSITION OFF THE BASIC CONVERTER (apexearth 2026-09-08: "we stop
+// wanting to build and then ... we start wanting to reclaim... you remove
+// them once you have more than enough advanced converters"). Denser
+// conversion we own or have ordered, against everything there is to convert:
+// no hand builds the basic once the denser capacity covers it all, and a
+// standing basic is eaten once that capacity covers it all AND the basic's
+// own share -- so the metal it was making is never lost to the transition.
+array<int> gDenserAt;
+array<float> gDenserE;
+float DenserConvCapE(int d)
+{
+	if (int(gDenserAt.length()) <= d) {
+		const uint n0 = gDenserAt.length();
+		gDenserAt.resize(d + 1);
+		gDenserE.resize(d + 1);
+		for (uint k = n0; k <= uint(d); ++k) {
+			gDenserAt[k] = -999999;
+			gDenserE[k] = 0.f;
+		}
+	}
+	if (ai.frame < gDenserAt[d] + 5 * SECOND)
+		return gDenserE[d];
+	gDenserAt[d] = ai.frame;
+	const float mine = Catalog::gConvCapacity[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	float e = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		if ((gOwnCount[cd] <= 0) || (Catalog::gConvCapacity[int(cd)] <= 0.f))
+			continue;
+		const float mc = Catalog::gConvCapacity[int(cd)]
+				/ float((Catalog::gAreaCells[int(cd)] > 0) ? Catalog::gAreaCells[int(cd)] : 1);
+		if (mc > mine)
+			e += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
+	}
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		const int od = int(t.buildDef.id);
+		if (Catalog::gConvCapacity[od] <= 0.f)
+			continue;
+		const float mc = Catalog::gConvCapacity[od]
+				/ float((Catalog::gAreaCells[od] > 0) ? Catalog::gAreaCells[od] : 1);
+		if (mc > mine)
+			e += Catalog::gConvCapacity[od];
+	}
+	gDenserE[d] = e;
+	return e;
+}
+
+// Everything there is to convert: the surplus nothing converts plus what the
+// standing fleet already chews.
+float ConvTotalE()
+{
+	return ConvertibleE() + ConvUseE();
+}
+
 bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
 {
 	if (!ConvObsoleteOnArrival(d))
 		return false;
 	if (unit is null)
 		return true;
+	// Both sides are zero before there is any spare energy OR any denser
+	// converter, and "0 covers 0" refused the basic for the whole opening:
+	// 700 basic converters became 379 and metal produced halved.
+	const float denser = DenserConvCapE(d);
+	if ((denser > 0.f) && (denser >= ConvTotalE()))
+		return true;   // the denser fleet covers it all: no hand builds the basic
 	const float mine = Catalog::gConvCapacity[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
@@ -544,6 +607,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		if (ownBestMcell < ratio * mc)
 			continue;   // not dwarfed: still earning its cells
+		if (DenserConvCapE(d) < ConvTotalE() + Catalog::gConvCapacity[d])
+			continue;   // the denser fleet cannot yet carry its share
 		const float v = RetireValue(unit, cv, d, ePM, wageR, hz)
 				* ReachVictimMul(unit, cv.GetPos(ai.frame));
 		if (v > bestValue) {

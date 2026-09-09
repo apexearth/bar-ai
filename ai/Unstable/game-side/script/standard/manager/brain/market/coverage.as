@@ -415,6 +415,25 @@ float LossRateAt(const AIFloat3& in pos)
 	return v;
 }
 
+// OUR OWN METAL DYING PER SECOND, ANYWHERE. LossRateAt is a point sample and
+// every caller asked it about home, so a base eaten from its outlying mexes
+// inward reads zero.
+int   gBleedAt = -1;
+float gBleedV = 0.f;
+
+float BleedM()
+{
+	if (gBleedAt == ai.frame)
+		return gBleedV;
+	DecayLossField();
+	gBleedAt = ai.frame;
+	float m = 0.f;
+	for (uint i = 0; i < gLossM.length(); ++i)
+		m += gLossM[i];
+	gBleedV = m / LossTau();
+	return gBleedV;
+}
+
 //------------------------------------------------------------------------------
 // The two risk senses every protect price is built from.
 //------------------------------------------------------------------------------

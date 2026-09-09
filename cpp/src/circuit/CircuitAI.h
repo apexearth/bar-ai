@@ -208,6 +208,8 @@ public:
 	};
 	const SFeatDefInfo& GetFeatDefInfo(int featureDefId);
 	bool IsCommanderWreckId(int rezDefId);
+	// apex: nearest commander corpse inside the circle, -RgtVector if none.
+	springai::AIFloat3 GetCommanderWreckPos(const springai::AIFloat3& pos, float radius);
 	int GetMetalResId();
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);

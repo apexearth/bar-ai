@@ -2764,6 +2764,36 @@ bool CCircuitAI::IsCommanderWreckId(int rezDefId)
 	return (cdef != nullptr) && cdef->IsRoleComm();
 }
 
+// AN AREA RECLAIM TAKES WHATEVER IS IN THE CIRCLE, so the only way to keep a
+// commander corpse out of one is to know where it is (apexearth: "make sure
+// nano turrets don't reclaim dead commanders"). The per-feature filter in
+// CBReclaimTask only guards the targeted search.
+springai::AIFloat3 CCircuitAI::GetCommanderWreckPos(const springai::AIFloat3& pos, float radius)
+{
+	springai::AIFloat3 best(-RgtVector);
+	if ((callback == nullptr) || (radius <= 0.f)) {
+		return best;
+	}
+	float bestSqd = std::numeric_limits<float>::max();
+	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
+	const int* fIds = callback->GetFeatureIdBuf();
+	perfFeatSweep += nFeats;
+	++perfFeatCalls;
+	for (int i = 0; i < nFeats; ++i) {
+		const int fId = fIds[i];
+		if (!IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
+			continue;
+		}
+		const springai::AIFloat3 fp = callback->Feature_GetPosition(fId);
+		const float sqd = pos.SqDistance2D(fp);
+		if (sqd < bestSqd) {
+			bestSqd = sqd;
+			best = fp;
+		}
+	}
+	return best;
+}
+
 springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal)
 {
 	springai::AIFloat3 best(-RgtVector);

@@ -36,6 +36,9 @@ array<AIFloat3> gWallP;        // slot positions, perimeter order
 array<float>    gWallX;
 array<float>    gWallZ;
 array<float>    gWallThreat;   // position-only senses, cached on the field stamp
+array<float>    gWallInfl;     // our own influence at the slot: army AND towers
+int             gNextWallLog = 0;
+float           gWallInflMean = 0.f;
 array<float>    gWallCover;
 array<float>    gWallHz;
 array<float>    gWallSiege;
@@ -60,6 +63,29 @@ const int  WALL_MAX_SLOTS = 64;
 const int  WALL_LINE_ROWS = 2;
 const float WALL_QUANT = 256.f;
 
+// WHERE SLOT n SITS ALONG THE WALL. A tight cluster of guns, then a gap, then
+// the next cluster -- the average spacing is exactly the old uniform pitch, so
+// the wall asks for the same number of guns on the same perimeter; they are
+// only grouped (apexearth 2026-09-09: "make clusters of defense all tightly
+// packed and then put spacing between each of those clusters"). Inside a
+// cluster the guns cover each other, which one pitch apart they do not.
+float WallSlotDist(int n, float pitch)
+{
+	int k = int(ai.GetTunable("apex_wall_cluster", TUNE_WALL_CLUSTER));
+	if (k < 1)
+		k = 1;
+	if (k == 1)
+		return float(n) * pitch;
+	float tf = ai.GetTunable("apex_wall_cluster_tight", TUNE_WALL_CLUSTER_TIGHT);
+	if (tf < 0.05f)
+		tf = 0.05f;
+	if (tf > 1.f)
+		tf = 1.f;
+	const int c = n / k;
+	const int j = n % k;
+	return float(c) * pitch * float(k) + float(j) * pitch * tf;
+}
+
 void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 {
 	const bool open = !PfCoveredAt(s);   // same test, off the tower index
@@ -68,6 +94,7 @@ void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 	gWallX.insertLast(s.x);
 	gWallZ.insertLast(s.z);
 	gWallThreat.insertLast(ThreatAt(s));
+	gWallInfl.insertLast(ai.GetAllyInflAt(s));
 	gWallCover.insertLast(cv);
 	gWallHz.insertLast(HazardWith(s, cv));
 	gWallSiege.insertLast(SiegeWith(s, cv, expFrac));
@@ -85,9 +112,10 @@ bool WallEmitRow(const AIFloat3& in rowA, const AIFloat3& in lat, float pitch,
 	WallEmitSlot(rowA, true, expFrac);
 	for (int sideK = -1; sideK <= 1; sideK += 2) {
 		for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
-			if ((lineHalf >= 0.f) && (pitch * float(k) > lineHalf))
+			const float dk = WallSlotDist(k, pitch);
+			if ((lineHalf >= 0.f) && (dk > lineHalf))
 				break;   // past the choke's shoulder
-			const AIFloat3 s = rowA + lat * (pitch * float(k * sideK));
+			const AIFloat3 s = rowA + lat * (dk * float(sideK));
 			if (!OnMap(s))
 				break;
 			bool allyLane = false;
@@ -116,6 +144,7 @@ void WallPrep()
 	gWallX.resize(0);
 	gWallZ.resize(0);
 	gWallThreat.resize(0);
+	gWallInfl.resize(0);
 	gWallCover.resize(0);
 	gWallHz.resize(0);
 	gWallSiege.resize(0);
@@ -335,20 +364,27 @@ void WallPrep()
 	// lobe and a small one cut up to 2,000 elmos inside the lobe (measured,
 	// first exercise game: rimD -1026 at election on wall slots).
 	const float wedge = 6.2831853f / float(PF_RAYS);
+	// The ring is walked as ONE arc so a cluster is not cut in half by a
+	// bearing boundary: slot n sits at WallSlotDist(n) elmos around it.
+	float arcAt = 0.f;
+	int slotN = 0;
 	for (int b = 0; b < PF_RAYS; ++b) {
+		const float arc = wr[b] * wedge;
 		if (gWallLineOk) {
 			// Within 60 degrees of the enemy bearing the LINE is the wall.
 			const float angC = wedge * (float(b) + 0.5f);
-			if (cos(angC) * gWallF.x + sin(angC) * gWallF.z > 0.5f)
+			if (cos(angC) * gWallF.x + sin(angC) * gWallF.z > 0.5f) {
+				arcAt += arc;
+				while (WallSlotDist(slotN, pitch) < arcAt)
+					++slotN;   // the line holds these; keep the pattern's phase
 				continue;
+			}
 		}
-		const float arc = wr[b] * wedge;
-		int nb = int(arc / pitch);
-		if (nb < 1)
-			nb = 1;
-		for (int k = 0; k < nb; ++k) {
+		while (WallSlotDist(slotN, pitch) < arcAt)
+			++slotN;
+		for (; WallSlotDist(slotN, pitch) < arcAt + arc; ++slotN) {
 			const float ang = wedge * float(b)
-					+ wedge * ((float(k) + 0.5f) / float(nb));
+					+ (WallSlotDist(slotN, pitch) - arcAt) / wr[b];
 			const AIFloat3 dir(cos(ang), 0.f, sin(ang));
 			const AIFloat3 s = gPfMid + dir * wr[b];
 			if (!OnMap(s))
@@ -371,12 +407,51 @@ void WallPrep()
 			if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 				break;
 		}
+		arcAt += arc;
 		if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 			break;
 	}
 	// The adjacency pass that used to stand here is now built on demand --
 	// see WallAdjPrep. It is every slot against every slot, and nothing has
 	// asked it a question since the pull stopped consulting it.
+	{
+		float sm = 0.f;
+		for (uint i = 0; i < gWallInfl.length(); ++i)
+			sm += gWallInfl[i];
+		gWallInflMean = (gWallInfl.length() > 0)
+				? (sm / float(gWallInfl.length())) : 0.f;
+	}
+	// The wall's own shape, since nothing else can see it: how many slots, how
+	// tightly the clusters pack, and how uneven our cover is around the ring.
+	if (ai.frame >= gNextWallLog) {
+		gNextWallLog = ai.frame + 30 * SECOND;
+		int nTight = 0;
+		int nStep = 0;
+		float minStep = 0.f;
+		for (uint i = 1; i < gWallP.length(); ++i) {
+			const float dd = gWallP[i].distance2D(gWallP[i - 1]);
+			if (dd > pitch * 4.f)
+				continue;   // a different arc, not a neighbour
+			++nStep;
+			if (dd < pitch * 0.75f)
+				++nTight;
+			if ((minStep <= 0.f) || (dd < minStep))
+				minStep = dd;
+		}
+		float lo = 0.f, hi = 0.f;
+		for (uint i = 0; i < gWallInfl.length(); ++i) {
+			if ((i == 0) || (gWallInfl[i] < lo)) lo = gWallInfl[i];
+			if ((i == 0) || (gWallInfl[i] > hi)) hi = gWallInfl[i];
+		}
+		AiLog(Factory::T() + "apex: wall t=" + ai.teamId
+			+ " slots=" + gWallP.length()
+			+ " pitch=" + int(pitch)
+			+ " tight=" + nTight + "/" + nStep
+			+ " min=" + int(minStep)
+			+ " infl=" + formatFloat(lo, "", 0, 2) + "/"
+			+ formatFloat(gWallInflMean, "", 0, 2) + "/"
+			+ formatFloat(hi, "", 0, 2));
+	}
 	gWallAdjPitch = pitch;
 	gWallAdjAt = -999999;
 	Perf::Add("prot.wall", _tWall);
@@ -423,6 +498,25 @@ uint PfWallSlots(array<AIFloat3>& out sites)
 }
 
 float PfWallThreat(uint i) { return gWallThreat[i]; }
+
+// WHICH SIDE IS THE OPEN ONE. Our own influence at a slot -- the army standing
+// there and the guns already up -- against the wall's own average, so the
+// number says THIS side against the others rather than anything absolute
+// (apexearth 2026-09-09: "our fight logic ... often leaves 1 side of our base
+// heavily undefended ... detect which side that is and concentrate defenses
+// there"). 1.0 on an average bearing; the bounds keep one empty arc from
+// owning the whole pull.
+float PfWallThin(uint i)
+{
+	if ((i >= gWallInfl.length()) || (gWallInflMean <= 0.f))
+		return 1.f;
+	float f = 2.f * gWallInflMean / (gWallInfl[i] + gWallInflMean);
+	if (f < 0.5f)
+		f = 0.5f;
+	if (f > 2.f)
+		f = 2.f;
+	return f;
+}
 bool WallSlotOpen(uint i)
 {
 	return (i < gWallOpen.length()) && gWallOpen[i];

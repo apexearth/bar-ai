@@ -2688,3 +2688,29 @@ RE-ELECTION, so a builder walking to a tower site is re-elected onto whatever
 prices best at that instant -- and a tower site is always further away than the
 mex next door. Not yet confirmed as the mechanism; the abort's caller has not
 been traced.
+
+## 2026-09-08 — TECH: one hand builds every big thing
+
+His complaint, watched game 2026-09-08: *"we usually have just 1 guy making T2
+and so we get to T2 behind our enemies."* Measured in that game (`matches/
+20260909-052738-Apex-Unstable-standard_vs_BARb-stable-hard`): the T2 lab was
+placed at 6.6 min and finished at 10.4 min — **3.8 minutes at ~11 m/s of spend
+while 12 constructors were alive** and income was several times that. ONE tech
+decide line in the whole game, ONE `apex: floor ... join:coralab` line, and that
+join fired only because "all wants refused".
+
+Two mechanisms, both structural, neither is the tech price being low:
+
+1. `want_tech.as:318` — `if (Requests::LiveOfDef(...)) continue; // this def is
+   already requested: help it, not double it`. Nothing produces the help. Once
+   the lab is requested no constructor can elect it again, so the only route to
+   a second lathe is the assist want or the idle floor.
+2. `want_assist.as` bounds a hand's drain by `FreeMetalFlow()` — UNSPENT income.
+   While the market has every metal committed to parallel jobs, free flow reads
+   ~0, the assist want dies, and every large build runs at one lathe. The bound
+   is right for a feed-bound build (extra hands buy nothing) and wrong here:
+   joining a committed job REALLOCATES spend from the marginal job, it does not
+   demand new income.
+
+Fixing (2) is a real design change — the assist's bound should be the marginal
+job's value, not unspent flow — and it touches every big build, not only tech.
