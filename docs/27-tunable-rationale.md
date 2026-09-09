@@ -1891,3 +1891,17 @@ spend less than the opponent is not evidence that we should spend more.
 Left at the defaults. The team-game and big-map failures are real (0% at 4v4 and
 8v8, before AND after the fight revert -- see docs/30) but this is not their
 cause.
+
+### `TUNE_OBSOLETE_RATIO`
+
+**Team-wide refusal of the basic converter, measured 2026-09-08 and reverted
+the same hour.** apexearth's ruling ("stop making T1 converters once they've
+become obsolete") was built as: no hand makes the basic once ANY hand we own
+can make the denser one. Supreme Isthmus 1v1 +100%, 33 min, 4 games
+(`defhold-h100-t`, which also carried the defence hold): basic converters
+finished 4 / 0 / 19 / 0 per game against 163 / 63 / 142 / 282 in the arm
+before (`mexcap-h100-t`); advanced ones did NOT take their place (0 / 0 / 11 /
+0 against 0 / 19 / 23 / 22); metal produced 296k against 704k; 2 of 4 games
+wiped out against 0. The 700 basics a game were carrying the conversion, and
+the T2 hands did not replace them. The per-hand law stands until the advanced
+converter is bought where the basic used to be; his ruling needs that first.

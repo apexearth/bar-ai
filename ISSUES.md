@@ -16,6 +16,24 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-08 — DEFENCE HOLD AS A DRAW FLOOR: starves the opening, reverted the same hour
+
+The plan's "army and defence are held at their share, the search proceeds
+with what remains" was built as a floor on defence's ticket in the category
+draw: unmet DefenceTarget over EcoPowerM x apex_payback_h, from the first
+framed plant. Supreme Isthmus 1v1 +100%, 33 min, 4 games (`defhold2-h100-t`
+vs `mexcap-h100-t`, the same tree without it): metal built at minute 12
+20.6k / 15.7k / 4.4k / 14.3k against 14.1k / 20.4k / 17.1k / 15.6k; wiped
+out 2 of 4 against 0; metal produced 227k against 704k; static defence 12.0%
+against 15.2%. The floor is ~13% of every election from minute one, because
+target and horizon both scale with the economy, so the opening spends on
+towers before there is an economy -- the same failure the fill records for
+the first-minute wall pull. The hold has to read what the economy is
+(a share of what stands), not a rate of what it makes.
+
+Where the heavy guns arrive without it: first Doomsday election at 15 / 15 /
+16 / 26 minutes in `mexcap-h100-t`, against 20 in the game he watched.
+
 ## 2026-09-08 — ROLES: the release-on-refusal rule fires thousands of times, so almost no hand keeps a role
 
 `mexcap-h100-t` (4 games, Supreme Isthmus +100%, 33 min): `apex: roles ...
