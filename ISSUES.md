@@ -47,9 +47,19 @@ its provenance.
   executions per game fell ~110 -> ~73, stalled share at 20 doubled (12% ->
   24%), metal wasted by 30 10.1k -> 27.8k (carrot30-t7 vs t6) -- on a 24x24
   map every claimer walks longer than a solar lathes, so it declined everyone.
-  Reverted; t8 (per-frame idle pass, rule still in) and t9 (rule out) measure
-  the rest. The held finishes were the DLL idle pass batching ~10 elections
-  into one frame every 8 frames -- fixed in 011f3b04 (held 363 -> 0).
+  Reverted. t8 (per-frame idle pass, rule in) 243 vs 276 at n=7; t9 (rule
+  out) 191 vs 249 at n=7, waste 27.4k, 0-5 wins, 73% of produced metal spent
+  vs BARb's 87%. So the rule was not the cause: t7/t8/t9 all waste ~27k where
+  t6 wasted 10k, and the difference is 699e5f68's pieces (stall feed, live
+  deficit, energy-aware TTE, last hand, UnspentByHands) -- each proven on the
+  canon, none yet on Carrot. t10 = HEAD (walk charge + two-currency pool) on
+  top; if waste stays, bisect 699e5f68 starting with UnspentByHands (no canon
+  evidence either). The held finishes were the DLL idle pass batching ~10
+  elections into one frame every 8 frames -- fixed in 011f3b04 (held 363 -> 0).
+  **t10 (cb57923d: walk-charged first move + two-currency pool): 307 vs 256 at
+  30 (n=10), 132 vs 123 at 20, 46 vs 37 at 10; produced 184k vs 162k, spent
+  90% vs 84%, waste 7.1k, e/s 10.0k vs 4.1k, mexes 106 vs 87, wins 2-0.** The
+  first arm ahead at every mark. t11 repeats it on the same tree.
 - **Late constructor idle in the canon was an election livelock, not pricing.**
   Census (`apex: elec-slice`): minute 20 done=0, lapse-dropped 1,581, queued
   568. The 8 s ELEC_LAPSE was shorter than the engine's idle-pass revisit
