@@ -55,13 +55,23 @@ float ConvRate()
 // cost/dI is EXACT and P-independent while metal is the binding constraint --
 // which is what lets the ladder walk the pool in order instead of re-scanning it
 // at every step.
+// Metal per energy at the feeds as they stand: the pool is ordered by payback
+// in both currencies, so a rung's energy bill counts at what it costs to feed.
+// Metal alone put a 5,000 E advanced solar ahead of a zero-E solar with the
+// bank full and every lathe energy-throttled.
+float gPoolMPerE = 0.f;
+float PoolEq(float cost, float costE)
+{
+	return cost + costE * gPoolMPerE;
+}
+
 void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 {
 	if ((p is null) || (cost <= 1.f) || (gain <= 0.0001f) || (n <= 0))
 		return;
-	const float pb = cost / gain;
+	const float pb = PoolEq(cost, Catalog::gCostE[d]) / gain;
 	uint at = 0;
-	while ((at < p.def.length()) && ((p.cost[at] / p.gain[at]) <= pb))
+	while ((at < p.def.length()) && ((PoolEq(p.cost[at], p.costE[at]) / p.gain[at]) <= pb))
 		++at;
 	p.def.insertAt(at, d);
 	p.cost.insertAt(at, cost);
@@ -121,6 +131,11 @@ void PoolFill(Pool@ p, bool anyTier)
 	p.mob.resize(0);
 	p.costE.resize(0);
 	p.makeE.resize(0);
+	{
+		const float pm = EcoPowerM();
+		const float ea = EtaEnergyAvail();
+		gPoolMPerE = ((pm > 0.5f) && (ea > 1.f)) ? (pm / ea) : 0.f;
+	}
 	const float rate = ConvRate();
 	const float im = IncomeMult();
 
