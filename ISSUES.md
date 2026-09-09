@@ -59,7 +59,10 @@ its provenance.
   **t10 (cb57923d: walk-charged first move + two-currency pool): 307 vs 256 at
   30 (n=10), 132 vs 123 at 20, 46 vs 37 at 10; produced 184k vs 162k, spent
   90% vs 84%, waste 7.1k, e/s 10.0k vs 4.1k, mexes 106 vs 87, wins 2-0.** The
-  first arm ahead at every mark. t11 repeats it on the same tree.
+  first arm ahead at every mark. t11 (same tree): 325 vs 267 at 30 (n=8),
+  112 vs 150 at 20, 43 vs 36 at 10, produced 170k vs 169k, wins 2-2. Two
+  batteries ahead at 30 by ~20%; minute 20 is not resolved (132/123 then
+  112/150).
 - **Late constructor idle in the canon was an election livelock, not pricing.**
   Census (`apex: elec-slice`): minute 20 done=0, lapse-dropped 1,581, queued
   568. The 8 s ELEC_LAPSE was shorter than the engine's idle-pass revisit
