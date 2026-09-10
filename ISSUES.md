@@ -101,6 +101,51 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 (night) — THE GROWTH LADDER IGNORES BUILD TIME, and adding it is not the fix
+
+His call, watching Greenest Fields: *"we try to make an AFUS before a fusion
+which is inefficient. Not sure why our math is wrong there."* He is right that
+we do. `PoolInsert` sorts every rung by `(costM + costE x mPerE) / gain`:
+
+| | metal | +energy | gain | payback |
+|---|---|---|---|---|
+| armfus | 4,300 | +300 | 14.3 m/s | 322 s |
+| armafus | 9,700 | +986 | 42.9 m/s | **249 s** |
+
+Per metal the advanced reactor IS the better buy (3.23 metal per E/s against
+4.30), so it sorts first and the ladder takes it first. **Build time is in no
+part of the key** -- 312,500 against the fusion's 70,000, four and a half times
+longer, and a rung earns nothing while it is a hole in the ground.
+
+**Adding the wait to the key is measured and NOT kept.** Key becomes
+`payback + Catalog::BuildSecondsAt(d, fleetBP)`, both terms seconds. 3 seeds
+per arm, 30 minutes, mean per player:
+
+| minute 30 | Isthmus ctl | Isthmus new | Greenest ctl | Greenest new |
+|---|---|---|---|---|
+| metal produced | 230,680 | **284,481** | 42,632 | **35,416** |
+| economy | 49,540 | 56,883 | 8,027 | 7,089 |
+| build power | 51,787 | 68,061 | 10,052 | 7,917 |
+
++23% on one map, -17% on the other. And **it does not do what it was for**:
+fusions went 0.8 -> 0.3 and AFUS 2.8 -> 3.5. The reason is the BP the term is
+divided by. `EffBP(0)` is the WHOLE FLEET, ~20,000 by minute 24 on Isthmus, so
+the delay reads 3 s for a fusion and 16 s against paybacks of 322 and 249 --
+it vanishes exactly where the decision is made. The build power that will
+actually be applied to one reactor is the crew that goes on it, not the fleet;
+at a realistic 1,000 the same key puts the fusion first by 392 to 561.
+
+**The other half of his complaint is bigger and is not this.** On his 33-minute
+Greenest Fields game (no metal spots, so conversion is the whole economy) we
+finished with **0 T2 labs, 0 fusions, 0 AFUS, 97.5 T1 converters** against
+BARb's 0.5 / 1.0 / 0.5 / 28.5 -- one of our two players ended on 155 basic
+converters and a single T1 lab. The `apex: eta` ladder at minute 32 contained
+exactly one rung, `energy:armadvsol`: with no advanced constructor, fusion and
+AFUS are not in any owned builder's list and can never be candidates. The
+comment in `want_energy.as` names this case -- the tech want's demand is the
+mex-upgrade stream, identically zero with no spots -- and says
+`ConvRatioReach` covers it. It does not carry. That is what loses this map.
+
 ## 2026-09-09 (night) — DEFENCE: the towers were priced off our own wealth, twice
 
 His complaint, on Greenest Fields (no metal spots, so the whole economy is
