@@ -101,7 +101,58 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 (night) — REVERTED f6043230: the canon board is not a proxy for a real game
+
+His 8v8 Supreme Isthmus dashboard games, back to back, same launch line
+(`--per-side 8 --sides Armada,Armada --boxes trbl --box-size 0.45 --handicap
+100`), one on each tree. Per-player means at minute 20, ours:
+
+| | before f6043230 | after | BARb |
+|---|---|---|---|
+| metal in economy | 11,788 | **7,962** | 24,347 |
+| metal in build power | 7,674 | **6,241** | 19,034 |
+| metal produced | 51,630 | **44,509** | 96,640 |
+| nano turrets | 8.5 | 7.8 | 21.9 |
+| advanced solars | 12.2 | 9.5 | 6.9 |
+| T1 converters | 20.9 | 18.0 | 14.1 |
+| adv converters | 1.6 | 0.1 | 4.6 |
+| mexes | 5.2 | 5.9 | 7.1 |
+
+Ten of eleven eco lines moved down; the one that rose is the one the change
+aimed at, and it bought 0.7 mexes for a third of the economy.
+
+**Why the board said the opposite.** `LatheRealizedFrac` prices a lathe at
+`EcoPowerM * headroom / BPCapacity`. On the eco-only board nothing else spends
+metal, so that ratio is the true utilization. In a real game the army spends
+most of the income, so the ratio reads low **permanently** -- 0.41-0.65 for the
+whole second half here -- and every pair of hands and every generator is
+discounted by that much forever. `FleetAskE` scaled the same way, which is why
+the generators fell with the lathes. The board rewards a change that stops
+building infrastructure because on the board there is nothing else to build.
+
+**Rule this leaves:** an eco change measured only on the canon board is not
+measured. Both arms of any future eco A/B run on a real opponent too.
+
+**What the game says is actually wrong** (both trees, so neither is new):
+
+- **Extraction freezes.** Mex count sat at 5.9 from minute 10 to minute 18 --
+  eight minutes, zero new ground -- while BARb walked 5.8 to 7.1 and put five
+  mohos up to our 3.4. Same failure the canon board shows at minute 8. This is
+  the biggest single gap and it is the oldest one.
+- **No nano turrets for six minutes.** 2.9 held from minute 10 to 16 while BARb
+  went 6 to 16. One of our eight players (team 0) built **zero** all game
+  (`BARAI_DUTY nanoSamp=0` end to end). His reference game is 62 nanos by
+  minute 10; "almost all build power comes from the nano turrets" is his words.
+- **Zero fusions in 21 minutes**, against BARb's 1.2 and his two by minute 12.
+  We stop the generator ladder at advanced solar.
+- **The bank is full while capacity is idle.** `apex: bpgap` at minute 13:
+  `cap=113 mInc=82 rawM=6,140 bank%=98`. Six thousand metal of ordered work,
+  113 m/s of hands, a full bank, and the bank does not drain. Hands are present
+  and unassigned -- see the parked-builder and election-livelock entries.
+
 ## 2026-09-09 — The canon board: the fleet was eating the economy in both currencies
+
+**Superseded: the change described below was reverted the same night — see above.**
 
 His ask: match the pure-eco reference game (2,032 m/s and 103k e/s at 16:15).
 Instrumented first, and the same fact showed up three times:

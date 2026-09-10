@@ -770,23 +770,6 @@ float FleetAskE()
 		const float dens = Catalog::gMobile[id] ? buildDens : lineDens;
 		ask += float(gOwnCount[d]) * Catalog::gBuildPower[id] * dens;
 	}
-	// A LATHE WITH NO METAL TO POUR ASKS FOR NO ENERGY. The sum above is every
-	// turret and every pair of hands running flat out, which the metal economy
-	// cannot fund -- and this ask is the FLOOR under EnergyDeficitNowE, so a
-	// fleet larger than income can support manufactured a permanent stall out of
-	// its own size and the hoist then took every election. Scaling by the share
-	// of the fleet's own spend the economy can fund is exact: same fleet, same
-	// speed, both currencies.
-	{
-		const float cap = BPCapacity();
-		if (cap > 1.f) {
-			const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-			const float feed = aiEconomyMgr.metal.income
-					+ aiEconomyMgr.metal.current / ((look > 1.f) ? look : 30.f);
-			if (feed < cap)
-				ask *= (feed > 0.f) ? (feed / cap) : 0.f;
-		}
-	}
 	gFleetAskVal = ask;
 	return ask;
 }
@@ -1002,18 +985,6 @@ float BPGap()
 	float blTerm = 0.f;
 	if (bl > 1.f)
 		blTerm = rawBl / bl;
-	// ...AND A BACKLOG WITH AN EMPTY BANK IS A METAL SHORTAGE, NOT A HANDS
-	// SHORTAGE. Ordering work does not pay for it, so the backlog grows with
-	// every election whether or not another pair of hands would help -- and as
-	// a FLOOR it then overrode the income clause forever. Unbuilt work asks for
-	// hands only to the extent metal is actually going unpoured.
-	{
-		const float fs = EFeedShare();
-		const float unspent = aiEconomyMgr.metal.income
-				- aiEconomyMgr.metal.pull / ((fs > 0.05f) ? fs : 0.05f);
-		if (blTerm > unspent)
-			blTerm = (unspent > 0.f) ? unspent : 0.f;
-	}
 	// A FLOOR, NOT AN ADDEND. Added to the income clause the backlog was
 	// swallowed whole: nameplate BPCapacity runs 4-6x actual income, so `net`
 	// sits at -120 to -200 and no positive term survives it. Measured 196 of
@@ -1042,33 +1013,11 @@ float BPGap()
 			+ " bank=" + formatFloat(bankTerm, "", 0, 1)
 			+ " blog=" + formatFloat(blTerm, "", 0, 1)
 			+ " rawM=" + int(rawBl)
-			+ " unsp=" + formatFloat(aiEconomyMgr.metal.income
-				- aiEconomyMgr.metal.pull / ((EFeedShare() > 0.05f)
-					? EFeedShare() : 0.05f), "", 0, 1)
 			+ " rows=" + gBacklogRows
 			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
 			+ " bank%=" + int((st2 > 1.f) ? (100.f * bank / st2) : -1.f));
 	}
 	return gapM;
-}
-
-// WHAT ANOTHER LATHE WOULD ACTUALLY DO. Nameplate build power is what a turret
-// could pour if metal were free; the fleet can only pour what the economy feeds
-// it, so the marginal lathe's realised throughput is its nameplate times the
-// share of that nameplate income can keep busy -- the diminishing-returns law
-// the crew terms apply per site, asked fleet-wide. Reads 1.0 the moment
-// capacity falls back under what income feeds, so it is a price, not a cap.
-float LatheRealizedFrac()
-{
-	const float cap = BPCapacity();
-	if (cap <= 1.f)
-		return 1.f;
-	const float head = ai.GetTunable("apex_bp_headroom", TUNE_BP_HEADROOM);
-	const float tgt = EcoPowerM() * ((head > 0.f) ? head : 1.15f);
-	if (tgt >= cap)
-		return 1.f;
-	const float f = tgt / cap;
-	return (f < 0.02f) ? 0.02f : f;
 }
 
 // Metal income nothing is spending: the arithmetic case for more build

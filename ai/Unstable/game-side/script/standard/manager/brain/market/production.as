@@ -1213,11 +1213,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const int ceilCons = CeilingConsOwned();
 			gain += mob * upD / float(1 + ceilCons);
 		}
-		// Same law as the nano want: a pair of hands is worth the work it
-		// would actually do, which is its nameplate times the share of the
-		// fleet's nameplate the economy can keep busy.
-		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f)
-				* LatheRealizedFrac();
+		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
 		if (gMexOpen && (reach > 0.f)) {
 			// A con claims spot after spot -- a stream of STREAMS -- but the
