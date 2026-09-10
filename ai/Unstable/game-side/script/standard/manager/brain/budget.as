@@ -10,6 +10,11 @@ namespace Brain {
 // was an outcome nobody chose, and army was always last because it had no rule
 // claiming metal for it.
 //
+// BudgetMult IS READ BY THE LOG AND NOTHING ELSE: wiring it into the draw's
+// ticket odds and the factory's unit gain was measured inert and reverted,
+// because the constructor floors in production.as return before anything is
+// priced. ISSUES 2026-09-09.
+//
 // SPEND IS COUNTED FROM WHAT FINISHES. Every manager's AiUnitAdded already
 // receives Unit::UseAs, the engine's own answer to "what is this unit for", so
 // the categories cost nothing to maintain and cannot drift from what was built.
@@ -23,6 +28,31 @@ enum Cat { ARMY = 0, DEFENCE = 1, AIRDEF = 2, ECONOMY = 3, BUILDPOWER = 4, CATS 
 array<float> gSpent(CATS, 0.f);
 float gSpentTotal = 0.f;
 int gNextBudgetLog = 0;
+int gSpentAt = 0;
+
+// THE SHARE IS OF RECENT SPEND, NOT OF THE WHOLE GAME. The rows above are a
+// running total against a STEADY-STATE target, and the two are not the same
+// question: the opening is necessarily almost all build power -- a lab and the
+// first constructors -- so a lifetime share reads 1.00 against a 0.17 target
+// and damps build power at the one moment it compounds. Old spend fades so
+// the ledger reads the mix we are choosing NOW.
+void BudgetDecay()
+{
+	if (ai.frame <= gSpentAt)
+		return;
+	const float tau = ai.GetTunable("apex_budget_tau", TUNE_BUDGET_TAU);
+	const float dt = float(ai.frame - gSpentAt) / float(SECOND);
+	gSpentAt = ai.frame;
+	if (tau <= 1.f)
+		return;
+	float a = dt / tau;          // the first-order fade roles.as already uses
+	if (a > 1.f)
+		a = 1.f;
+	const float k = 1.f - a;
+	for (int i = 0; i < int(CATS); ++i)
+		gSpent[i] *= k;
+	gSpentTotal *= k;
+}
 
 // The target split of METAL SPENT. Deliberately one table in one place, so the
 // question "what are we trying to build" has a single answer. Every entry is
@@ -138,15 +168,22 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	if (unit is null)
 		return;
+	// THE COMMANDER WAS NEVER A PURCHASE. It arrives at frame 0 and is 2,700
+	// metal of the ledger's first reading, which is how build power came to
+	// hold 100% of "spend" before anything had been built.
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return;
 	const float m = unit.circuitDef.costM;
 	if (m <= 0.f)
 		return;
+	BudgetDecay();
 	gSpent[CatOf(unit.circuitDef, usage)] += m;
 	gSpentTotal += m;
 }
 
 float ShareOf(Cat c)
 {
+	BudgetDecay();
 	return (gSpentTotal > 1.f) ? (gSpent[c] / gSpentTotal) : 0.f;
 }
 
@@ -195,6 +232,11 @@ void BudgetLog()
 		// The income the target CURVES are indexed by. Every row in targets.as
 		// is a function of this one number, so a wrong reading silently pins
 		// every curve to its opening column.
+		+ " mult=" + formatFloat(BudgetMult(ARMY), "", 0, 2)
+		+ "/" + formatFloat(BudgetMult(DEFENCE), "", 0, 2)
+		+ "/" + formatFloat(BudgetMult(AIRDEF), "", 0, 2)
+		+ "/" + formatFloat(BudgetMult(ECONOMY), "", 0, 2)
+		+ "/" + formatFloat(BudgetMult(BUILDPOWER), "", 0, 2)
 		+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 2)
 		+ " total=" + formatFloat(gSpentTotal, "", 0, 0)
 		+ " raw=" + formatFloat(gSpent[ARMY], "", 0, 0)

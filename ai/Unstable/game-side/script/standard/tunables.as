@@ -1725,6 +1725,11 @@ const float TUNE_ROLE_SHARE = 0.5f;
 // [seconds] -- how far back the split of need is averaged. See docs/27.
 const float TUNE_ROLE_TAU = 120.f;
 
+// [seconds] -- how far back the SPEND budget's realised share is averaged
+//   (brain/budget.as). Lifetime totals compare a whole game against a
+//   steady-state target, so the opening reads 100% build power. See docs/27.
+const float TUNE_BUDGET_TAU = 240.f;
+
 // [ratio] -- share of the rez fleet that serves as battlefield medics: they
 //   stay with the army's staging anchor, repair the wounded during fights and
 //   reclaim the aftermath there. See docs/27.

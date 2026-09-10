@@ -1088,6 +1088,20 @@ RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
 insures something before the first loss teaches us. His "combination of enemy
 aggression and how well defended we are" -- this is the floor half.
 
+### `TUNE_BUDGET_TAU` = 240 (2026-09-09)
+
+How far back `Brain::ShareOf` averages realised spend. It was a lifetime total
+against a steady-state target, which is not the same question: the commander is
+2,700 metal booked as build power at frame 0, so the ledger read 1.00 build
+power against a 0.17 target and `BudgetMult(BUILDPOWER)` sat on its 0.35 floor
+until minute 8. Wired into the draw that cost 10% of metal produced over 3
+seeds of his 8v8; with the fade and the commander excluded the same wiring is
+inert. 240 s is four minutes -- long enough that one factory order does not
+swing a row, short enough that the opening's build power does not follow us
+into the mid-game. Not swept: the wiring it exists to serve was reverted, and
+the ledger is a diagnostic until something reads `BudgetMult` again.
+See ISSUES 2026-09-09.
+
 ### `TUNE_ROLE_SHARE` = 0.5, `TUNE_ROLE_TAU` = 120 (2026-09-08)
 
 apexearth's design, his words: "assign roles to our constructors by a % based

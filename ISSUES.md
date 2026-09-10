@@ -101,6 +101,62 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 (night) — THE SPEND BUDGET WAS NEVER READ, and wiring it changes nothing
+
+`Brain::BudgetMult` (brain/budget.as) is the only thing in the AI that turns
+"what are we trying to build" into a decision. **It is called from nowhere.**
+The ledger under it runs, and `apex: budget` has been printing the answer once
+a minute in every game ever played. His 8v8, per team, `have/target`:
+
+| minute | army | defence | eco | build power |
+|---|---|---|---|---|
+| 4 | 0.11/0.17 | 0.10/0.30 | 0.21/0.29 | 0.58/0.17 |
+| 12 | 0.29/0.17 | 0.04/0.29 | 0.26/0.32 | 0.41/0.17 |
+| 20 | 0.44/0.23 | 0.05/0.35 | 0.25/0.23 | 0.24/0.14 |
+
+Army at **twice** its target, defence at **a seventh** of it, all game.
+
+**Wiring it in is a regression, then inert.** Ticket odds in `DrawWeights`
+times the category's row, factory unit gain times the army and build-power
+rows. 3 seeds per arm of his 8v8, per-player means at minute 20:
+
+| | control | wired | wired, ledger fixed |
+|---|---|---|---|
+| metal produced | 44,129 | 39,878 | 45,196 |
+| economy | 9,482 | 8,149 | 9,523 |
+| build power | 7,175 | 6,649 | 7,104 |
+| defence | 4,986 | 3,583 | 4,272 |
+
+The first arm failed because `have` was a LIFETIME share compared against a
+steady-state target: the commander is 2,700 metal booked as build power at
+frame 0, so the ledger opened every game reading 1.00 build power against a
+0.17 target and pinned that row's multiplier to its 0.35 floor from frame 0 to
+minute 8. Fixed here — the commander is not a purchase, and the share now
+fades over `apex_budget_tau` — after which the controller moves both ways and
+the outcome is **inert**: every metric within 7%, most within 2%.
+
+**Why inert, and this is the finding.** The multiplier moves a price, and a
+price is not what decides these things:
+
+- **Defence's odds were doubled for a whole game and defence came out 28%
+  LOWER.** Defence is not losing the draw. It is failing to execute — the same
+  473 `why=unreach` elections and the sense want that wins 1,043 elections to
+  place 43 buildings.
+- **Army's own share went 0.35 -> 0.40 against a 0.20 target while its
+  multiplier averaged 0.53.** The constructor floors in `production.as`
+  (`consNeedA > 0` and the ceiling-con floor) `return` before any candidate is
+  priced, so what a factory builds is decided above the price the budget
+  scales.
+
+Of 4,421 elections in his game the priced draw decided **710 (16%)**: roles
+1,336, panics 437, unreachable 473. Any change that works through price is
+arguing with a sixth of the decisions. That is why pricing changes here need
+to be violent to show up at all, and why violent ones break everything else.
+
+**Left in the tree:** the ledger fixes and the `mult=` field on `apex: budget`,
+so the line is now a truthful instrument. `BudgetMult` stays uncalled on
+purpose; the note is in the file.
+
 ## 2026-09-09 (night) — REVERTED f6043230: the canon board is not a proxy for a real game
 
 His 8v8 Supreme Isthmus dashboard games, back to back, same launch line
