@@ -83,6 +83,37 @@ int gBigEPre  = 0;   // a strictly better rung opened its own site
 // -- the register ------------------------------------------------------------
 
 array<IUnitTask@> gLive;
+// THE WAIT BETWEEN DECIDING AND BREAKING GROUND, per request, parallel to
+// gLive (apexearth: "if you build 1 wind -- what's the time between wanting
+// to create one and it actually starting? track those timelines"). Nothing
+// prices this yet; the log line is the instrument.
+array<int> gLiveAt;          // frame Register saw it
+array<bool> gLiveStarted;    // its nanoframe has been logged
+// The fleet's running mean of that wait, in seconds -- measured, not chosen,
+// so the ladder can charge every building the walk it actually costs.
+float gStartLatSum = 0.f;
+int gStartLatN = 0;
+float StartLatencyS()
+{
+	return (gStartLatN > 0) ? (gStartLatSum / float(gStartLatN)) : 0.f;
+}
+
+void LatencySweep()
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((i >= gLiveStarted.length()) || gLiveStarted[i] || (t is null)
+			|| t.IsDead() || (t.target is null) || (t.buildDef is null))
+			continue;
+		gLiveStarted[i] = true;
+		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
+		++gStartLatN;
+		AiLog(Factory::T() + "apex: latency " + t.buildDef.GetName()
+			+ " start=" + ((ai.frame - gLiveAt[i]) / SECOND)
+			+ " workers=" + Workers(t)
+			+ " m=" + int(t.buildDef.costM));
+	}
+}
 
 // HOW MANY HANDS ONE SITE CAN ACTUALLY BE FED. A lathe pulls a roughly constant
 // DRAIN whatever it is building, so the hands an economy can keep working at
@@ -200,6 +231,8 @@ void Register(IUnitTask@ task)
 	if (task.buildDef is null)
 		return;
 	gLive.insertLast(task);
+	gLiveAt.insertLast(ai.frame);
+	gLiveStarted.insertLast(false);
 	if (IsBigEnergy(task.buildDef))
 		Market::ComBigEInvalidate();
 	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
@@ -248,6 +281,15 @@ void Forget(IUnitTask@ task)
 		if (gLive[i] is task) {
 			if ((gLive[i].buildDef !is null) && IsBigEnergy(gLive[i].buildDef))
 				Market::ComBigEInvalidate();
+			if ((i < gLiveAt.length()) && (task.buildDef !is null)) {
+				// A request that ends with a nanoframe was built; one that
+				// ends without one was walked away from.
+				AiLog(Factory::T() + "apex: latency " + task.buildDef.GetName()
+					+ (gLiveStarted[i] ? " done=" : " dropped=")
+					+ ((ai.frame - gLiveAt[i]) / SECOND));
+				gLiveAt.removeAt(i);
+				gLiveStarted.removeAt(i);
+			}
 			gLive.removeAt(i);
 			return;
 		}

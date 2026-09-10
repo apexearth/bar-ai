@@ -113,6 +113,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 
 	{ double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
 	{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
+	{ double _t = Perf::T0(); Requests::LatencySweep(); Perf::Add("up.latency", _t); }
 	{ double _t = Perf::T0(); Requests::ConsolidateEnergy(); Perf::Add("up.econsolidate", _t); }
 	{ double _t = Perf::T0(); Market::ComSweep(); Perf::Add("up.comsweep", _t); }
 	{ double _t = Perf::T0(); Market::CommWatch(); Perf::Add("up.commwatch", _t); }

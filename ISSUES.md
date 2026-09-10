@@ -101,6 +101,52 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-10 — THE WALK IS FLAT AND THE LADDER CANNOT SEE IT; reordering the ladder splits the maps
+
+His instrument, built: `apex: latency <def> start=<s> workers=<n>` when a
+request's nanoframe appears, `done=`/`dropped=` when it leaves the register
+(`Requests::LatencySweep`). One 30-minute Greenest Fields 2v2, every request:
+
+| building | requests | s to break ground | s to finish | dropped |
+|---|---|---|---|---|
+| armmakr | 223 | **17.5** | 41.5 | 3% |
+| armwin | 113 | **16.6** | 32.3 | 14% |
+| armadvsol | 32 | 15.6 | 55.4 | 6% |
+| armnanotc | 64 | 34.2 | 132.4 | 12% |
+| armrad | 37 | 29.6 | 42.5 | **78%** |
+| armllt | 32 | 16.8 | 26.7 | **41%** |
+| armbeamer | 19 | 22.3 | 79.4 | 37% |
+| armafus | 4 | 17.5 | 522.0 | 50% |
+
+**The wait from committing to breaking ground is ~17 s for everything.** A
+wind spends more than half its life being walked to; a 1-metal converter
+costs 17 s of a constructor. `ValueOf` charges the walk per want; the growth
+ladder (`PoolInsert`) charges nothing per building and sees ten winds and one
+advanced solar as the same purchase. **Dropped requests are the execution
+failure seen from the request side**: 29 of 37 radars walked to and abandoned,
+41% of light towers, 37% of beamers -- a radar's real cost is about four walks.
+
+**Charging the measured wait in the ladder's key is measured and NOT kept.**
+`PoolKey = (PoolEq + StartLatencyS * Wage) / gain`, ordering only. 3 seeds per
+arm, 30 minutes, metal produced per player: Supreme Isthmus 205,332 ->
+**303,098**; Greenest Fields 42,718 -> **27,812**. On Greenest Fields the
+constructor fleet went 29.8 -> 10.0 and nano turrets 15.2 -> 3.7 with the
+energy mix unchanged (`first=armwin` in both arms; at a ~1 m/s wage the
+overhead is ~17 metal and does not reorder wind and advsol there).
+
+**This is the second time.** Build time in the key (above) gave Isthmus +23%,
+Greenest -17%. Two independent changes to the ORDER of the pool, neither
+touching cost or gain, both a large gain on the mex map and a large loss on the
+no-mex map, both through the constructor count. Pool order feeds three things:
+`LadderRun` (the ETA), `EtaEcoPick` (which eco want holds the ticket) and
+`EtaHandsShare` (constructor and nano sizing). Which of the three starves the
+no-mex map's hands is the open question, and until it is answered no ladder
+reorder is shippable: the map he watches is the one it breaks.
+
+**Noise note for the 2v2 board.** Supreme Isthmus control at minute 30 read
+230,680 / 282,927 / 205,332 across three batteries of the same tree; Greenest
+Fields 42,632 / 38,469 / 42,718. Isthmus 2v2 is +-16% on its control alone.
+
 ## 2026-09-09 (night) — CONVERSION UPGRADE DEMAND: the basic fleet erases its own reason to climb
 
 `ConvUpDemand = ConvertibleE() * (best ratio - our ratio)`, and
