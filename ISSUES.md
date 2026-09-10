@@ -101,6 +101,41 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 (night) — CONVERSION UPGRADE DEMAND: the basic fleet erases its own reason to climb
+
+`ConvUpDemand = ConvertibleE() * (best ratio - our ratio)`, and
+`ConvertibleE = energy income - standing converter capacity`. It counts only
+energy NOTHING is converting. On a no-mex map the basic fleet grows until its
+capacity covers our whole income -- 97 converters, 155 on one player -- at
+which point this returns **zero** and nothing asks for the advanced plant.
+The mex-upgrade stream that normally drives the tech want is identically zero
+there, so conversion is the only thing that can ask, and it has stopped asking
+exactly when the better ratio is worth most: 6,790 E/s running at 70 E per m/s
+instead of 600 E per 10.3 m/s is ~19 m/s left on the table.
+
+**Counting outclassed energy too is measured and NOT kept.** `ConvertibleE() +
+OutclassedConvE()`, capped at energy income. 3 seeds per arm, 30 minutes,
+metal produced per player: Greenest Fields 38,469 -> **30,250**, Supreme
+Isthmus 282,927 -> **251,876**. The mechanism fired -- advanced converters
+2.5 -> 4.3, basic 85.5 -> 54.2 -- and the rest of the economy paid for it:
+nano turrets 13.8 -> 5.8, advanced solars 10.0 -> 6.0, and T2 labs did not
+move (0.8 -> 0.7).
+
+**What that says.** The demand was not wrong to be bigger; it is spent wrong.
+`ConvUpDemand` feeds `want_tech`'s demand as an absolute gain competing with
+every other want, so raising it buys conversion upgrades out of the build power
+that was growing the thing being converted. The climb has to be paid for out of
+its own return, not out of the fleet.
+
+**Still missing from that demand, both his (2026-09-09):** the advanced
+converter is **5.8x denser** -- 1.55 build cells per m/s against 9.0 (3x3 for
+1 m/s vs 4x4 for 10.3) -- and 97 buildings in an 873-cell block is a raid
+surface and a wall bill that 10 buildings in 160 cells is not. `ConvPerCellReach`
+already computes exactly this number and uses it only to hold DOWN the basic
+converter when one is being bought; it is nowhere in the demand that decides
+whether to climb. On HP per m/s the basic converter is ahead (167 vs 43), so
+the sturdiness case is about count and block area, not hit points.
+
 ## 2026-09-09 (night) — THE GROWTH LADDER IGNORES BUILD TIME, and adding it is not the fix
 
 His call, watching Greenest Fields: *"we try to make an AFUS before a fusion
