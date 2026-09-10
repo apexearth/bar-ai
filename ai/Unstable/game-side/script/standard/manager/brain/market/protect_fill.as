@@ -264,12 +264,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	const float lineFill = wallOn ? WallLineFill() : -1.f;
 	const bool lineOpen = (lineFill >= 0.f) && (lineFill < 1.f);
 	// THE UNMET OBLIGATION IS A STOCK, NOT A RATE. Dividing it by
-	// apex_exposed_loss_s made a gain a bare metal/s -- and since
-	// DefenceTarget is EcoPowerM x apex_def_eco_s, with both constants at
-	// 120 the seconds CANCEL and the floor became our whole economic power
-	// on every open slot, growing with the economy so TargetFill never
-	// closed. Carried as a stock and multiplied by the site's own hazard
-	// below, it is the same stake x hz x stopped every other term here uses.
+	// apex_exposed_loss_s made a gain a bare metal/s, and the floor became
+	// our whole economic power on every open slot, growing with the economy
+	// so TargetFill never closed. Carried as a stock and multiplied by the
+	// site's own hazard below, it is the same stake x hz x stopped every
+	// other term here uses.
 	const float horizW = ai.GetTunable("apex_exposed_loss_s",
 			TUNE_EXPOSED_LOSS_S);
 	float wallPull = 0.f;

@@ -443,8 +443,17 @@ float DefenceTarget()
 	// economy alive are not negotiable.
 	//
 	// (ArmyTarget still returns 0 while growing -- that half stands.)
-	const float hold = ai.GetTunable("apex_def_eco_s", TUNE_DEF_ECO_S);
-	float t = EcoPowerM() * ((hold > 0.f) ? hold : 30.f);
+	// N% OF WHAT WE HOLD, not N seconds of what we earn (apexearth: "we should
+	// want our economy to be N% of our overall power, we want to keep all of
+	// our aspects in balance with each other"). Seconds of income says nothing
+	// about the size of the thing being guarded, and outruns it as income
+	// grows: measured on Greenest Fields the target reached 6,615 while the
+	// whole economy it protects stood at 5,478. The share is the budget's own
+	// defence row, normalised against every other row, so the aspects are
+	// balanced against each other instead of each against itself -- and
+	// turrets count inside the total they are measured against, so defence
+	// cannot become its own reason.
+	float t = (gAssetsM + ArmyValue()) * Brain::TargetShare(Brain::DEFENCE);
 	// ...and the per-mex floor is a target too. The site loop will not buy a
 	// turret the global target says we already have enough of, so the two must
 	// agree about the floor or it never gets built -- and the floor applies to

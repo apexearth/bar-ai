@@ -1790,6 +1790,8 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 
 // [seconds] -- HOW MUCH STATIC DEFENCE WE MAY OWN, as seconds of total
 //   economic power (EcoPowerM, metal/s incl. See docs/27.
+// SUPERSEDED 2026-09-09 -- DefenceTarget is now the budget's defence row
+//   times standing power. Kept so a config naming it still parses. See docs/27.
 const float TUNE_DEF_ECO_S = 120.f;
 
 // [toggle 0/1] -- THE NO-TURRET TEST (docs/24-how-units-fight.md): 1 proposes

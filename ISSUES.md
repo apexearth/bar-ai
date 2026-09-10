@@ -101,6 +101,58 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-09 (night) — DEFENCE: the towers were priced off our own wealth, twice
+
+His complaint, on Greenest Fields (no metal spots, so the whole economy is
+energy and conversion): *"we make far too many defenses in the very early
+game... You cannot in any way in hell argue that our proportion of defense was
+just."* His 2v2 there, ours against BARb's, share of everything built:
+
+| minute | ours | BARb |
+|---|---|---|
+| 4 | 16.7% | 0% |
+| 8 | **32.5%** | 2.2% |
+| 20 | 35.6% | 4.0% |
+
+Twelve light towers and four beamers by minute 8, against 18 wind and 9
+converters -- more metal in guns than in the economy -- with `foeSeen=0` until
+minute 9.
+
+**Two independent causes, both our own wealth priced as their threat.**
+
+1. `SiegeWith` set the blind prior to `(our economy + our army) * 0.25`, so
+   every solar panel enlarged the imagined enemy that justified the next
+   turret. The rate it returns is multiplied by the STAKE downstream, so our
+   wealth entered the price twice and a tower's worth grew with its square. It
+   now anchors on `gRkOurArmy`, the same basis `RiskFill` thirty lines up
+   already uses for the threat prior and documents as the self-scaling one.
+2. `DefenceTarget` was `EcoPowerM * 120s`. Seconds of income says nothing about
+   the size of the thing guarded and outruns it: at minute 19.8 the target was
+   6,615 against an economy of 5,478. It is now the budget's defence row times
+   standing power (`gAssetsM + ArmyValue()`), his balance ruling, with turrets
+   inside the total so defence cannot be its own reason.
+
+**Measured, 3 seeds per arm, 20 minutes, mean per player.** Greenest Fields:
+
+| | control | both changes |
+|---|---|---|
+| metal produced | 13,589 | **16,122** |
+| economy | 2,473 | **3,541** |
+| build power | 2,733 | **3,586** |
+| army | 5,920 | 6,677 |
+| defence | 4,058 | **2,920** |
+| defence share at 12/16/20 | 22 / 29 / 30% | **15 / 18 / 18%** |
+
+Supreme Isthmus is unchanged (65,621 against 64,648 produced; defence 3,198
+against 3,293) -- on a mex map defence was already 5% and the per-mex floor
+carries it, so the change moves the pathological case and leaves the healthy
+one alone.
+
+**Still open on defence.** 18% is not 7%, and from first contact the price is
+driven by `gRkSeen` through the same `stake x hz` shape, which is why the share
+still doubles between minutes 8 and 16. The share target caps the stock; it
+does not make an individual tower's gain honest.
+
 ## 2026-09-09 (night) — THE SPEND BUDGET WAS NEVER READ, and wiring it changes nothing
 
 `Brain::BudgetMult` (brain/budget.as) is the only thing in the AI that turns

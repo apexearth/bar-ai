@@ -1468,6 +1468,17 @@ mex, and clearing ground is not worth a mex.
 
 ### `TUNE_DEF_ECO_S` = 120.f
 
+**SUPERSEDED 2026-09-09.** `DefenceTarget` is now `(gAssetsM + ArmyValue()) *
+Brain::TargetShare(DEFENCE)` -- the defence row's share of standing power,
+normalised against every other row (apexearth: "we should want our economy to
+be N% of our overall power, we want to keep all of our aspects in balance with
+each other"). Seconds of income has no relation to the size of the thing being
+guarded and outruns it as income grows: on Greenest Fields the target reached
+6,615 while the whole economy it protected stood at 5,478, and defence ran 30%
+of everything we built against BARb's 7%. On the share basis the same game
+asked for ~2,000. The constant is kept so a config naming it still parses.
+
+
 HOW MUCH STATIC DEFENCE WE MAY OWN, as seconds of total economic power
 (EcoPowerM, metal/s incl. realizable energy). The whole basis of DefenceTarget:
 at 40 metal/s this is ~1,200 metal, a handful of light towers; at 400 it is

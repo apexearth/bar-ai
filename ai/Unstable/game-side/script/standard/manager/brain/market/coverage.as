@@ -812,7 +812,14 @@ float HazardWith(const AIFloat3& in pos, float cover)
 // total, or defence becomes its own justification and the loop runs away.
 float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 {
-	const float prior = (gRkEconM + gRkArmyV) * priorFrac;
+	// ...AND THE EXPECTATION ANCHORS ON OUR ARMY, the same basis RiskFill's
+	// own prior already uses. What this returns is a RATE, and the gain it
+	// feeds multiplies by the stake as well, so anchoring it on our economy
+	// counted our wealth twice: a tower's worth grew with the SQUARE of what
+	// we owned and the loop above ran anyway at a quarter strength. What an
+	// unseen enemy can send is bounded by what a mirror of us has committed
+	// to war, not by what we own.
+	const float prior = gRkOurArmy * priorFrac;
 	const float foe = (gRkSeen > prior) ? gRkSeen : prior;
 	if (foe <= 0.f)
 		return 0.f;
