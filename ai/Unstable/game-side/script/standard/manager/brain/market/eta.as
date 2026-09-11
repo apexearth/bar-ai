@@ -39,6 +39,7 @@ class Pool {
 	array<bool> mob;   // only MOBILE hands can build it: a spot is where it is
 	array<float> costE;   // its energy bill: a rung is fed in BOTH currencies
 	array<float> makeE;   // and what it adds to the energy feed once it stands
+	array<float> key;     // its place in the ladder: payback over survival
 }
 
 Pool@ gPoolNow;
@@ -65,13 +66,22 @@ float PoolEq(float cost, float costE)
 	return cost + costE * gPoolMPerE;
 }
 
+// THE LADDER AND ITS FIRST MOVE MUST AGREE. The first move runs under the
+// hazard at home (EtaWithN); a pool sorted on bare payback still put the
+// advanced fusion ahead of the fusion for every rung AFTER the first, so the
+// two moves differed only in their opening step and the plan behind both was
+// AFUS-heavy. A rung's place is its payback over its own survival.
+float gPoolSurvBP = 1.f;
 void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 {
 	if ((p is null) || (cost <= 1.f) || (gain <= 0.0001f) || (n <= 0))
 		return;
-	const float pb = PoolEq(cost, Catalog::gCostE[d]) / gain;
+	float surv = TechSurvival(d, gPoolSurvBP);
+	if (surv < 0.05f)
+		surv = 0.05f;
+	const float pb = PoolEq(cost, Catalog::gCostE[d]) / gain / surv;
 	uint at = 0;
-	while ((at < p.def.length()) && ((PoolEq(p.cost[at], p.costE[at]) / p.gain[at]) <= pb))
+	while ((at < p.def.length()) && (p.key[at] <= pb))
 		++at;
 	p.def.insertAt(at, d);
 	p.cost.insertAt(at, cost);
@@ -80,6 +90,7 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	p.mob.insertAt(at, mob);
 	p.costE.insertAt(at, Catalog::gCostE[d]);
 	p.makeE.insertAt(at, Catalog::gMakeE[d]);
+	p.key.insertAt(at, pb);
 }
 
 // anyTier ignores who can build it: that is the world AFTER an advanced plant,
@@ -131,10 +142,13 @@ void PoolFill(Pool@ p, bool anyTier)
 	p.mob.resize(0);
 	p.costE.resize(0);
 	p.makeE.resize(0);
+	p.key.resize(0);
 	{
 		const float pm = EcoPowerM();
 		const float ea = EtaEnergyAvail();
 		gPoolMPerE = ((pm > 0.5f) && (ea > 1.f)) ? (pm / ea) : 0.f;
+		const float fb = EffBP(0.f);
+		gPoolSurvBP = (fb > 1.f) ? fb : 1.f;
 	}
 	const float rate = ConvRate();
 	const float im = IncomeMult();
@@ -206,7 +220,14 @@ float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 	float bt = Catalog::BuildSecondsAt(d, bp);
 	if (bt < 0.1f)
 		bt = 0.1f;
-	float need = cost - bank;
+	// THE ENERGY BILL IS METAL THE CONVERTERS DID NOT MAKE. Charged only as a
+	// wait for energy to arrive, a 69,000 E reactor on an economy that lives
+	// by conversion read as cheap: the energy it eats over its build is metal
+	// income the sim went on counting (apexearth: "if you're building an
+	// advanced fusion then you don't have as much energy to do the
+	// conversion, which makes it so you don't have as much metal"). The pool's
+	// own metal-per-energy rate turns the bill into the metal it displaces.
+	float need = cost + Catalog::gCostE[d] * gPoolMPerE - bank;
 	if (need < 0.f)
 		need = 0.f;
 	float feed = (P > 0.01f) ? (need / P) : ETA_BIG;
@@ -300,7 +321,8 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		int k = int(want / g) + 1;
 		if (k > n[i])
 			k = n[i];
-		t += float(k) * (StepSec(p.def[i], p.cost[i], P, bank, p.mob[i] ? bpMob : bp, eAvail) + lat);
+		t += float(k) * (StepSec(p.def[i], p.cost[i], P, bank,
+				RungBP(p.def[i], p.mob[i] ? bpMob : bp), eAvail) + lat);
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -308,6 +330,19 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		++steps;
 	}
 	return (P >= target) ? t : ETA_BIG;
+}
+
+// THE LATHE A RUNG REALLY GETS. The fleet's whole build power is what the
+// serial ladder assumes for every rung, and for a field of solars that is
+// fair -- twenty hands on twenty panels. One reactor cannot use twenty hands,
+// and the crew that turns up is fewer still than the cap admits: the measured
+// effective lathe per def (Requests::EffBPFor) is what we have finished at,
+// and once one has finished it is the number, for the first move and for
+// every later rung of the same def alike.
+float RungBP(int d, float bp)
+{
+	const float eff = Requests::EffBPFor(d);
+	return ((eff > 1.f) && (eff < bp)) ? eff : bp;
 }
 
 float RungWalkS()
@@ -321,7 +356,7 @@ float RungWalkS()
 // its value only where the ladder is build-bound rather than feed-bound.
 float EtaWith(int d, float gainM, float addBP, bool tech)
 {
-	return EtaWithN(d, gainM, addBP, tech, 1);
+	return EtaWithN(d, gainM, addBP, tech, 1, 0.f);
 }
 
 // The first move taken k times over. A single wind against a single advanced
@@ -332,7 +367,11 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 // so twenty winds pay twenty walks, twenty cells and twenty energy bills
 // against one advanced solar's (apexearth: "concentrated efforts on advsol
 // might look even better").
-float EtaWithN(int d, float gainM, float addBP, bool tech, int k)
+// firstBP: the lathe that will actually stand on the first move -- the crew the
+// request layer will admit plus the nano turrets in reach -- when the caller
+// knows it. The fleet's whole build power put an advanced fusion up in 104 s in
+// the simulator; two T2 constructors took 15 minutes over it in the game.
+float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 {
 	PoolRefresh();
 	float P = EcoPowerM();
@@ -361,8 +400,12 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k)
 		float surv = TechSurvival(d, bp);
 		if (surv < 0.05f)
 			surv = 0.05f;
+		float bp1 = (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp;
+		if ((firstBP > 1.f) && (firstBP < bp1))
+			bp1 = firstBP;
+		bp1 = RungBP(d, bp1);
 		for (int u = 0; u < k; ++u) {
-			t += StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail) / surv;
+			t += StepSec(d, Catalog::gCostM[d], P, bank, bp1, eAvail) / surv;
 			if (u > 0)
 				t += lat;   // the first unit's walk is the asker's own, charged by the caller
 			bank = 0.f;

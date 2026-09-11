@@ -97,6 +97,29 @@ float StartLatencyS()
 {
 	return (gStartLatN > 0) ? (gStartLatSum / float(gStartLatN)) : 0.f;
 }
+// THE LATHE A BUILDING ACTUALLY GOT, per def: build time over the seconds from
+// its nanoframe to its finish, averaged over what we have finished. The crew
+// the request layer would admit is not the crew that shows up -- an advanced
+// fusion the cap allowed seven hands took 817 s, which is two -- and the
+// simulator's build times were wrong by that ratio. 0 until one has finished.
+array<int> gLiveStartAt;          // frame the nanoframe was first seen
+array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
+array<int> gEffBPN(ai.GetDefCount() + 1, 0);
+// ...and for the reactor CLASS as a whole, so the first advanced fusion is
+// priced at the lathe the fusions actually got rather than at the crew the cap
+// would admit.
+float gEffBPBigSum = 0.f;
+int gEffBPBigN = 0;
+float EffBPFor(int defId)
+{
+	if ((defId < 0) || (defId >= int(gEffBPN.length())))
+		return 0.f;
+	if (gEffBPN[defId] > 0)
+		return gEffBPSum[defId] / float(gEffBPN[defId]);
+	if ((gEffBPBigN > 0) && IsBigEnergy(Catalog::Def(defId)))
+		return gEffBPBigSum / float(gEffBPBigN);
+	return 0.f;
+}
 
 void LatencySweep()
 {
@@ -106,6 +129,8 @@ void LatencySweep()
 			|| t.IsDead() || (t.target is null) || (t.buildDef is null))
 			continue;
 		gLiveStarted[i] = true;
+		if (i < gLiveStartAt.length())
+			gLiveStartAt[i] = ai.frame;
 		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
 		++gStartLatN;
 		AiLog(Factory::T() + "apex: latency " + t.buildDef.GetName()
@@ -233,6 +258,7 @@ void Register(IUnitTask@ task)
 	gLive.insertLast(task);
 	gLiveAt.insertLast(ai.frame);
 	gLiveStarted.insertLast(false);
+	gLiveStartAt.insertLast(-1);
 	if (IsBigEnergy(task.buildDef))
 		Market::ComBigEInvalidate();
 	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
@@ -288,6 +314,21 @@ void Forget(IUnitTask@ task)
 					+ (gLiveStarted[i] ? " done=" : " dropped=")
 					+ ((ai.frame - gLiveAt[i]) / SECOND));
 				gLiveAt.removeAt(i);
+				if (gLiveStarted[i] && (i < gLiveStartAt.length()) && (gLiveStartAt[i] > 0)
+					&& (task.target !is null)) {
+					const float secs = float(ai.frame - gLiveStartAt[i]) / float(SECOND);
+					const int did = int(task.buildDef.id);
+					if ((secs > 1.f) && (did >= 0) && (did < int(gEffBPN.length()))) {
+						gEffBPSum[did] += Catalog::gBuildTime[did] / secs;
+						++gEffBPN[did];
+						if (IsBigEnergy(task.buildDef)) {
+							gEffBPBigSum += Catalog::gBuildTime[did] / secs;
+							++gEffBPBigN;
+						}
+					}
+				}
+				if (i < gLiveStartAt.length())
+					gLiveStartAt.removeAt(i);
 				gLiveStarted.removeAt(i);
 			}
 			gLive.removeAt(i);

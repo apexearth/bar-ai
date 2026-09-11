@@ -8,6 +8,7 @@ array<int> gEAlt;
 array<float> gEAltV;
 int gEAltFor = -1;
 int gNextEPickLog = 0;
+int gNextEBigLog = 0;
 
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
@@ -70,6 +71,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	float bestClose = 0.f;
 	const bool etaOn = EtaOn();
 	const float etaP = EcoPowerM();
+	string bigLine = "";
 	int etaD = -1;
 	float etaS = 0.f;
 	Want etaW;
@@ -274,13 +276,27 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// where the ladder's energy arm makes a 69,000 E bill wait its turn.
 		if (etaOn && !barred && (c.value > 0.f)) {
 			const float gM = Catalog::gMakeE[d] * ConvRate();
-			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP));
+			const float crewBP = Catalog::gBuildPower[uid]
+					* float(Requests::SiteWorkerCap(Catalog::Def(d)))
+					+ NanoLatheReaching(eSite);
+			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
 			if ((etaD < 0) || (s < etaS)) {
 				etaS = s;
 				etaD = d;
 				etaW = c;
 			}
+			if (Catalog::gCostM[d] > 3000.f)
+				bigLine += " " + Catalog::Def(d).GetName() + "=" + int(s);
 		}
+	}
+	// A reactor-class election is logged whether or not the two agree: the
+	// pick that mattered was the one the disagreement filter never showed.
+	if (etaOn && (bigLine.length() > 0) && (w.def !is null) && (ai.frame >= gNextEBigLog)) {
+		gNextEBigLog = ai.frame + 5 * SECOND;
+		AiLog(Factory::T() + "apex: ebig t=" + ai.teamId + " " + unit.circuitDef.GetName()
+			+ " #" + unit.id + " mkt=" + w.def.GetName()
+			+ " eta=" + ((etaD > 0) ? Catalog::Def(etaD).GetName() : "-")
+			+ " |" + bigLine);
 	}
 	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
 		if (ai.frame >= gNextEPickLog) {
@@ -290,7 +306,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ " eta=" + Catalog::Def(etaD).GetName() + " s=" + int(etaS)
 				+ " mktS=" + int(w.walkSec + EtaWithN(int(w.def.id),
 					Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
-					EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP))));
+					EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f)));
 		}
 		w = etaW;
 		w.kind = WK_ENERGY;
