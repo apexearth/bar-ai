@@ -7,6 +7,7 @@ namespace Market {
 array<int> gEAlt;
 array<float> gEAltV;
 int gEAltFor = -1;
+int gNextEPickLog = 0;
 
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
@@ -67,6 +68,11 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// (apexearth 2026-09-08: "too early btw, fusion would have been smarter").
 	const float stallDef = HardEStall() ? EnergyDeficitNowE() : 0.f;
 	float bestClose = 0.f;
+	const bool etaOn = EtaOn();
+	const float etaP = EcoPowerM();
+	int etaD = -1;
+	float etaS = 0.f;
+	Want etaW;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -256,6 +262,40 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			@w.def = Catalog::Def(d);
 			w.pos = eSite;
 		}
+		// WHICH GENERATOR: the one that brings the target soonest, not the one
+		// the multiplier stack rates highest. The ladder already decides which
+		// KIND of growth holds the economy's ticket; the proposer chose the DEF
+		// with premiums that priced a plant by the square of its size, so it
+		// offered the ladder an advanced fusion and never a fusion (apexearth:
+		// "we lose because we try to make AFUS before making fusion"). Same
+		// question, same arithmetic, one level down -- in a stall too: the
+		// closes-soonest rule is a RATE, so a deficit past 3,000 e/s handed
+		// every stalled election to the advanced fusion (measured, 14 of 16),
+		// where the ladder's energy arm makes a 69,000 E bill wait its turn.
+		if (etaOn && !barred && (c.value > 0.f)) {
+			const float gM = Catalog::gMakeE[d] * ConvRate();
+			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP));
+			if ((etaD < 0) || (s < etaS)) {
+				etaS = s;
+				etaD = d;
+				etaW = c;
+			}
+		}
+	}
+	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
+		if (ai.frame >= gNextEPickLog) {
+			gNextEPickLog = ai.frame + 15 * SECOND;
+			AiLog(Factory::T() + "apex: epick t=" + ai.teamId + " " + unit.circuitDef.GetName()
+				+ " mkt=" + w.def.GetName() + " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
+				+ " eta=" + Catalog::Def(etaD).GetName() + " s=" + int(etaS)
+				+ " mktS=" + int(w.walkSec + EtaWithN(int(w.def.id),
+					Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
+					EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP))));
+		}
+		w = etaW;
+		w.kind = WK_ENERGY;
+		@w.def = Catalog::Def(etaD);
+		w.pos = eSite;
 	}
 	return w;
 }

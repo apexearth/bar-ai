@@ -101,6 +101,53 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-10 — STAGE 1 OF PRICE-IS-DELTA-ETA: the generator is chosen by the ladder
+
+His nod (2026-09-10): every want is priced as the seconds it takes off the
+target's arrival; the multiplier stack is replaced in stages. Stage 1: the
+energy proposer prices its candidates as before, then OFFERS the one whose
+`walk + EtaWithN(def, power, batch)` is least, where the batch is the ladder's
+own ETA_CHUNK -- enough of each generator to grow the economy by a quarter --
+so twenty winds pay twenty walks, energy bills and cells against one advanced
+solar's. The simulator also charges every later rung the fleet's measured
+decision-to-groundbreaking wait (`Requests::StartLatencyS`), spread across the
+hands that walk in parallel. `apex: epick mkt=<def> eta=<def>` logs each
+disagreement.
+
+**Two things had to be found on the way.** (1) Every AFUS election in the
+first game was `why=estall`: the stall hoist's closes-soonest rule is a RATE,
+and past a 3,000 e/s deficit the bigger plant always won -- the ladder decides
+there too now. (2) Comparing one wind against one advanced solar by
+time-to-target is not a comparison: the ladder's cheap rungs make up the power
+difference for nothing, so the smaller step always won and Isthmus went
+274,942 -> 203,012 with 24 winds. The batch comparison is the fix.
+
+**Measured, 3 seeds per arm, 30 min, mean per player.**
+
+| | Isthmus ctl | Isthmus new | Greenest ctl | Greenest new |
+|---|---|---|---|---|
+| metal produced, min 16 | 31,259 | **40,798** | 10,302 | **13,874** |
+| metal produced, min 30 | 238,023 | **259,415** | 33,321 | **34,966** |
+| economy, min 16 | 6,553 | **9,522** | 2,138 | **3,744** |
+| fusions / AFUS built | 0.3 / 2.8 | **2.2 / 1.2** | -- | -- |
+| reactor elections | 48 fus / 55 afus | **196 fus / 0 afus** | | |
+| advsol / wind | 7.0 / 4.2 | **12.2 / 0** | | |
+| defence share, min 30 | 13.9% | 11.8% | 22.3% | 18.1% |
+
+First change tonight that moved both maps the same way at every checkpoint.
+
+**Frame budget, pre-existing and worse in a bigger game.** `frametime.py`
+FAILs both arms on Isthmus 2v2 (2.6x and 7.7x the 20% share at the worst
+minute); the new arm has 1.5x the units by minute 28 because both sides eco
+harder. The spikes are the same batching passes either way and the ETA pick is
+not among them: `want.reclobs` max **701 ms**, `xw.nanobatch` 574 ms,
+`xk.nano` 641 ms, `want.assist` 432 ms in one call. Half-second hitches. Those
+passes need spreading across frames before an 8v8 (`docs/26`, the lag ruling).
+
+**Still open on stage 1:** the ladder's `mkt=armadvsol eta=armwin` preference
+is gone, but the remaining disagreements have not been read one by one; and
+the tech want still picks its plant with the old stack.
+
 ## 2026-09-10 — THE WALK IS FLAT AND THE LADDER CANNOT SEE IT; reordering the ladder splits the maps
 
 His instrument, built: `apex: latency <def> start=<s> workers=<n>` when a

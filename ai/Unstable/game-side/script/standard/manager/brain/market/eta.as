@@ -271,6 +271,14 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 	float t = 0.f;
 	uint i = 0;
 	int steps = 0;
+	// EVERY RUNG IS WALKED TO. The first move charges its own walk; the rest of
+	// the ladder arrived free, so ten winds and one advanced solar read as the
+	// same time and the ladder preferred the winds (measured: 179 of 386
+	// disagreements with the market were advsol -> wind). The fleet's own
+	// measured wait from committing to breaking ground, spread across the hands
+	// that walk in parallel -- the same way build time is already spread across
+	// the fleet's lathe.
+	const float lat = RungWalkS();
 	// RUNGS ARE TAKEN IN BATCHES, not one at a time. A step budget spent one
 	// solar or one claim at a time cannot reach a target that scales with the
 	// economy: measured at P=63.6 against a target of 254.4, the walk ran out of
@@ -292,7 +300,7 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		int k = int(want / g) + 1;
 		if (k > n[i])
 			k = n[i];
-		t += float(k) * StepSec(p.def[i], p.cost[i], P, bank, p.mob[i] ? bpMob : bp, eAvail);
+		t += float(k) * (StepSec(p.def[i], p.cost[i], P, bank, p.mob[i] ? bpMob : bp, eAvail) + lat);
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -302,10 +310,29 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 	return (P >= target) ? t : ETA_BIG;
 }
 
+float RungWalkS()
+{
+	const int workers = int(aiBuilderMgr.GetWorkerCount());
+	return Requests::StartLatencyS() / float((workers < 1) ? 1 : workers);
+}
+
 // Seconds to the target if we start by building def d (0 = follow the ladder as
 // it stands). addBP is how a lathe helps: it buys HANDS, not income, and shows
 // its value only where the ladder is build-bound rather than feed-bound.
 float EtaWith(int d, float gainM, float addBP, bool tech)
+{
+	return EtaWithN(d, gainM, addBP, tech, 1);
+}
+
+// The first move taken k times over. A single wind against a single advanced
+// solar is not a comparison: the ladder's cheap rungs make up the difference in
+// power at almost no cost, so the smaller first step always won on step cost
+// alone and the economy was told to build winds. Candidates are compared at the
+// ladder's own batch size -- enough of each to grow the economy by ETA_CHUNK --
+// so twenty winds pay twenty walks, twenty cells and twenty energy bills
+// against one advanced solar's (apexearth: "concentrated efforts on advsol
+// might look even better").
+float EtaWithN(int d, float gainM, float addBP, bool tech, int k)
 {
 	PoolRefresh();
 	float P = EcoPowerM();
@@ -322,16 +349,32 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 	float eAvail = EtaEnergyAvail();
 	float t = 0.f;
 	if (d > 0) {
-		t = StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail);
-		bank = 0.f;
-		if (gainM > 0.f)
-			P += gainM;
-		if (addBP > 0.f)
-			bp += addBP;
-		if (Catalog::gMakeE[d] > 0.f)
-			eAvail += Catalog::gMakeE[d];
+		if (k < 1)
+			k = 1;
+		const float lat = RungWalkS();
+		for (int u = 0; u < k; ++u) {
+			t += StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail);
+			if (u > 0)
+				t += lat;   // the first unit's walk is the asker's own, charged by the caller
+			bank = 0.f;
+			if (gainM > 0.f)
+				P += gainM;
+			if (addBP > 0.f)
+				bp += addBP;
+			if (Catalog::gMakeE[d] > 0.f)
+				eAvail += Catalog::gMakeE[d];
+		}
 	}
 	return t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
+}
+
+// How many of def d make one of the ladder's batches from power P.
+int EtaBatchN(float gainM, float P)
+{
+	if (gainM <= 0.0001f)
+		return 1;
+	const int k = int(P * ETA_CHUNK / gainM) + 1;
+	return (k < 1) ? 1 : k;
 }
 
 // HOW MUCH OF THE NEXT STEP IS WAITING FOR HANDS. 1: the next rung is
@@ -360,6 +403,7 @@ float EtaHandsShare()
 	// which of the two the target is actually waiting on.
 	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
+	const float lat = RungWalkS();
 	float tBuild = 0.f;
 	float tFeed = 0.f;
 	uint i = 0;
@@ -380,7 +424,7 @@ float EtaHandsShare()
 		float bt = Catalog::BuildSecondsAt(p.def[i], p.mob[i] ? bpMob : bp);
 		if (bt < 0.1f)
 			bt = 0.1f;
-		tBuild += float(k) * bt;
+		tBuild += float(k) * (bt + lat);
 		tFeed += float(k) * p.cost[i] / P;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
