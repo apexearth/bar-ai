@@ -231,6 +231,47 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 // gated by the lines-per-income rule (its return is better economics, not
 // more parallel production). MODEL: the pipeline discount.
 int gTechDiagAt = 0;
+
+// The cheapest plant this builder can make whose products reach a better
+// extractor or a better converter than anything we own -- the first move the
+// tech ladder is measured with. 0 when there is none.
+int CheapestAdvancedPlant(CCircuitUnit@ unit)
+{
+	const array<int>@ builds = Catalog::BuildsOf(int(unit.circuitDef.id));
+	if (builds is null)
+		return 0;
+	const float ownCeil = OwnedCeil();
+	const float ownConv = OwnConvCeil();
+	int best = 0;
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		float reach = 0.f;
+		float conv = 0.f;
+		const array<int>@ prod = Catalog::gBuildsList[d];
+		for (uint q = 0; q < prod.length(); ++q) {
+			const int pd = prod[q];
+			if (!Catalog::gMobile[pd] || !Catalog::gBuilder[pd])
+				continue;
+			const array<int>@ pb = Catalog::gBuildsList[pd];
+			for (uint r = 0; r < pb.length(); ++r) {
+				if (Catalog::gExtractsM[pb[r]] > reach)
+					reach = Catalog::gExtractsM[pb[r]];
+			}
+			const float cr = ConvRatioReach(pb);
+			if (cr > conv)
+				conv = cr;
+		}
+		if ((reach <= ownCeil) && (conv <= ownConv))
+			continue;
+		if ((best == 0) || (Catalog::gCostM[d] < Catalog::gCostM[best]))
+			best = d;
+	}
+	return best;
+}
+
 Want@ ProposeTech(CCircuitUnit@ unit)
 {
 	Want w;
@@ -259,10 +300,31 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		if ((ours > 0.f) && (theirs > ours))
 			outclass = (theirs / ours) - 1.f;
 	}
-	const float demand = UpDemand() + ConvUpDemand() + outclass;
+	float demand = UpDemand() + ConvUpDemand() + outclass;
+	// THE CLIMB IS WORTH WHAT THE SIMULATOR SAYS IT SAVES. The demand terms
+	// are proxies for one question -- does the world after an advanced plant
+	// reach the target sooner -- and on a map with no spots the only proxy
+	// left, conversion demand, reads zero once the basic converters cover our
+	// income: 97 of them, no advanced lab in 33 minutes (apexearth: "the more
+	// efficient energy is an obvious want"). The tech pool IS the world after
+	// the plant; the seconds it saves, as a share of the journey, are the
+	// power the climb brings forward, in the same metal/s the proxies speak.
+	float etaSave = 0.f;
+	if (EtaOn()) {
+		const int lab = CheapestAdvancedPlant(unit);
+		if (lab > 0) {
+			const float base = EtaWith(0, 0.f, 0.f, false);
+			const float tech = EtaWith(lab, 0.f, 0.f, true);
+			if ((base < ETA_BIG) && (tech < base))
+				etaSave = EcoPowerM() * (base - tech) / base;
+		}
+	}
+	if (etaSave > demand)
+		demand = etaSave;
 	if (ai.frame >= gTechDiagAt) {
 		gTechDiagAt = ai.frame + 120 * SECOND;
 		AiLog("apex: tech-diag team=" + ai.teamId + " upD=" + demand
+				+ " etaSave=" + formatFloat(etaSave, "", 0, 2)
 				+ " outclass=" + formatFloat(outclass, "", 0, 2)
 				+ " ceil=" + BestExtract() + " ownCeil=" + OwnedCeil()
 				+ " spots=" + gLSpot.length() + " funded="
