@@ -101,6 +101,51 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-11 — STAGE 1 COMPLETE: the reactor question is arithmetic, verified on his map
+
+`python tools/test_reactor_order.py` -- Greenest Fields 2v2, FAILS if an
+advanced fusion is elected or finished before a fusion. PASS on 5 of 5 games
+tonight (two test seeds, three battery seeds); the one AFUS seen was elected
+at 22.0 m after a fusion finished at 18.0 m, which is the order he asked for.
+
+**Battery, 3 seeds per arm, 30 min, mean per player.** Control is the tree
+with the ladder choosing the generator but none of tonight's three simulator
+fixes; treated is his slot (`c4df94c35ce7`).
+
+| | Greenest ctl | Greenest new | Isthmus ctl | Isthmus new |
+|---|---|---|---|---|
+| metal produced, min 16 | 13,573 | 12,656 | 30,800 | **39,352** |
+| metal produced, min 30 | 46,508 | **55,364** | 209,077 | **226,240** |
+| economy, min 30 | 11,489 | **17,512** | 37,504 | **41,980** |
+| vs BARb at 30 | 46.5k vs 49.6k | **55.4k vs 44.6k** | | |
+| fusions / AFUS | 0.0 / 0.2 | **1.8 / 0.2** | 2.5 / 0.3 | 2.7 / 1.2 |
+| advanced converters | 2.3 | 4.2 | 3.0 | 5.7 |
+| defence share, min 30 | 19.1% | 16.3% | 13.3% | 10.9% |
+
+Greenest Fields crosses from behind BARb to ahead. Two earlier single test
+games on that map produced 80,280 and 78,438 -- the spread on this board is
+wide; read the battery mean, not those.
+
+**What stage 1 now is.** The energy proposer offers the generator with the
+least `walk + EtaWithN`, compared at the ladder's batch; the tech want
+proposes when `EtaWith(cheapest advanced plant, tech)` beats the base; and the
+simulator itself carries (a) the energy bill as the metal the converters did
+not make, (b) survival in the pool's key and on the first move, (c) the
+measured effective lathe per def, class-wide for reactors, on the first move
+and every rung. `apex: epick`, `apex: ebig`, `apex: latency` and `tech-diag
+etaSave=` are the instruments.
+
+**Left open from tonight, in order of what the game says it costs:**
+- Greenest Fields still ends on ~92 basic converters and 12 advanced solars
+  against BARb's 8 advsol; the converter and advsol wants price with the old
+  stack (converter is not a ladder rung by construction -- power-neutral).
+- The tech want's PLANT choice (which lab) and the mex/nano/plant proposers
+  still use the market's def pick; only energy asks the simulator per def.
+- Stage 2: the target carries holdings shares (his N%) and army in strength,
+  which is where the advanced lab's "much better army" enters.
+- frametime FAILs both arms on Isthmus 2v2 from the batching passes
+  (want.reclobs, xw.nanobatch); a bigger economy makes it worse.
+
 ## 2026-09-10 — STAGE 1 OF PRICE-IS-DELTA-ETA: the generator is chosen by the ladder
 
 His nod (2026-09-10): every want is priced as the seconds it takes off the
