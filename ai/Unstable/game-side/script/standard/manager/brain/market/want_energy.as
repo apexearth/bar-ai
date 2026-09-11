@@ -177,7 +177,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 					? Catalog::gAreaCells[d] : 1);
 			const float rent = ((Catalog::gAreaCells[d] > 0)
 						? (genRentCell * float(Catalog::gAreaCells[d])) : 0.f)
-					+ genCrowdCell * cellsE;
+					+ genCrowdCell * cellsE
+					+ BlastCollateralM(eSite, d);   // its fuse, and its neighbours'
 			if (rent > 0.f) {
 				fRent = rent;
 				c.mCost += rent;
@@ -1277,7 +1278,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 					? Catalog::gAreaCells[d] : 1);
 			const float rent = ((Catalog::gAreaCells[d] > 0)
 						? (cvRentCell * float(Catalog::gAreaCells[d])) : 0.f)
-					+ cvCrowdCell * cellsC;
+					+ cvCrowdCell * cellsC
+					+ BlastCollateralM(cSite, d);   // its fuse, and its neighbours'
 			if (rent > 0.f) {
 				c.mCost += rent;
 				c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;

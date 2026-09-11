@@ -953,6 +953,56 @@ float StreamSurvival(const AIFloat3& in pos)
 	return StreamSurvivalOver(pos, (T > 1.f) ? T : 300.f);
 }
 
+// WHAT A BUILDING'S DEATH COSTS ITS NEIGHBOURS, AND THEIRS COSTS IT. Every
+// structure carries its death explosion off the def (Catalog::gBlast*); a
+// basic converter is 167 HP that goes off for 660 in a 105-elmo radius, so in
+// a packed block each one is a fuse for the next (apexearth: "they're a big
+// risk for a huge chain explosion since they take up so much room"). Expected
+// metal lost over the stake horizon at this ground's hazard: what d's blast
+// would kill standing within its reach, plus d itself if any neighbour's blast
+// reaches it with enough left to kill it. First neighbours only -- the chain
+// past them is not counted, which is the conservative side.
+float BlastDamageAt(int d, float dist)
+{
+	const float R = Catalog::gBlastR[d];
+	if ((R <= 0.f) || (dist >= R))
+		return 0.f;
+	const float e = Catalog::gBlastE[d];
+	return Catalog::gBlastD[d] * (1.f - (1.f - e) * (dist / R));
+}
+
+float BlastCollateralM(const AIFloat3& in site, int d)
+{
+	if (!Catalog::ValidId(d) || !OnMap(site))
+		return 0.f;
+	float reach = Catalog::gBlastR[d];
+	array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(site, (reach > 160.f) ? reach : 160.f);
+	if (near is null)
+		return 0.f;
+	float m = 0.f;
+	bool dies = false;
+	for (uint i = 0; i < near.length(); ++i) {
+		CCircuitUnit@ u = near[i];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const int n = int(u.circuitDef.id);
+		const float dist = u.GetPos(ai.frame).distance2D(site);
+		if (BlastDamageAt(d, dist) >= Catalog::gHealth[n])
+			m += Catalog::gCostM[n];
+		if (!dies && (BlastDamageAt(n, dist) >= Catalog::gHealth[d]))
+			dies = true;
+	}
+	if (dies)
+		m += Catalog::gCostM[d];
+	if (m <= 0.f)
+		return 0.f;
+	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	float p = HazardAt(site) * ((T > 1.f) ? T : 300.f);
+	if (p > 1.f)
+		p = 1.f;
+	return m * p;
+}
+
 // DEFENDED GROUND IS A SCARCE RESOURCE. A turret protects an AREA, and the same
 // ring of guns can cover a field of one-metal converters or a pack of advanced
 // ones worth ten times as much (apexearth: "if you are in a well protected area

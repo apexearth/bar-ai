@@ -1082,11 +1082,19 @@ sample, reused rather than re-invented.
 STAKE_HORIZON_S: seconds of a mex's stream that count as the stake standing on
 it. What makes a producing mex worth more to lose than its build cost.
 
-### `TUNE_RISK_FLOOR` = 0.15f
+### `TUNE_RISK_FLOOR` = 0 (was 0.15, 2026-09-11)
 
-RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
-insures something before the first loss teaches us. His "combination of enemy
-aggression and how well defended we are" -- this is the floor half.
+A flat hazard -- 0.15 of the full-loss rate, 1/800 s -- that every asset
+carried whether or not anything had been seen, meant as cold-start insurance.
+Once the siege prior was anchored on our own army (2026-09-09) this constant
+became the whole of the early-game tower demand: on Greenest Fields at minutes
+2-8 `apex: defprice` read `hz=0.00125 haz=0.00125 siege=0.0008-0.0011`, the
+floor above the prior every time, nine light towers and four beamers before
+minute 8 with `threat=1` (apexearth: "we still make too many early game
+defenses and that slows us down"). The blind floor is now the siege prior
+alone -- what a mirror of us could have committed to war -- so it is an
+output that starts at zero and grows as anyone arms. The per-mex floor and
+the measured loss rate stand. 0.15 is one modoption away.
 
 ### `TUNE_BUDGET_TAU` = 240 (2026-09-09)
 

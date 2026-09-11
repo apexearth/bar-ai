@@ -1427,9 +1427,10 @@ const float TUNE_THREAT_R = 900.f;
 //   on it. See docs/27.
 const float TUNE_STAKE_HORIZON_S = 300.f;
 
-// RISK_FLOOR: pressure a never-attacked asset still carries, so cold start
-//   insures something before the first loss teaches us. See docs/27.
-const float TUNE_RISK_FLOOR = 0.15f;
+// RISK_FLOOR: a flat hazard every asset carries whether or not anything has
+//   been seen. 0 since 2026-09-11: the blind floor is the siege prior, a
+//   mirror of our own army, so it is an output. See docs/27.
+const float TUNE_RISK_FLOOR = 0.f;
 
 // HZ_APPROACH [weight]: hazard floor from enemy formations WALKING at this
 //   ground -- horizon/ETA, weighed by their metal against what defends it.
