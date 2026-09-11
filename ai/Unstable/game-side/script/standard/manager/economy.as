@@ -61,6 +61,8 @@ void AiUpdateEconomy()
 			+ "/" + formatFloat(energy.storage, "", 0, 0)
 			+ " inc=" + formatFloat(energy.income, "", 0, 0)
 			+ " pull=" + formatFloat(energy.pull, "", 0, 0)
+			+ " use=" + formatFloat(energy.usage, "", 0, 0)
+			+ " excess=" + formatFloat(energy.excess, "", 0, 0)
 			+ " lineE=" + formatFloat(Market::LineDrainE(), "", 0, 0)
 			+ " eFull=" + (aiEconomyMgr.isEnergyFull ? "1" : "0"));
 	}

@@ -314,6 +314,8 @@ private:
 		float storage;
 		float pull;
 		float income;
+		float usage;   // apex: what was actually consumed last frame (GetUsage); pull is what was ASKED
+		float excess;  // apex: what was thrown away last frame (GetExcess) -- the waste, straight from the engine
 	} metal, energy;
 	int metalPullCorFrame;
 	float metalPullCor;

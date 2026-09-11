@@ -1140,6 +1140,7 @@ void ConvWhyLog()
 		+ " nodef=" + gCwNoDef
 		+ " proposed=" + gCwProposed
 		+ " surplus=" + int(gCwSurplus)
+		+ " excess=" + int(aiEconomyMgr.energy.excess)
 		+ " ema=" + int(gESurplusEma)
 		+ " inflight=" + int(ConvCapInFlight())
 		+ " standing=" + int(StandingConvCap())
@@ -1238,12 +1239,20 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			++gCwObsolete;
 			continue;
 		}
-		// A full bank prices the NEXT converter at full capacity -- and the
-		// ones already ordered are that next converter.
+		// A full bank prices the NEXT converter at what is actually being
+		// thrown away, less what is already ordered to catch it. The engine
+		// counts the waste (energy.excess); income - pull cannot, because pull
+		// is what metal-starved lathes ASK for, not what they draw -- it read a
+		// 12 e/s surplus against 1,400 e/s of measured waste, and one basic
+		// converter in flight then zeroed the pinned price for the next
+		// (apexearth: "identical energy incomes on both sides but the enemy
+		// will make 25% more metal than we do").
 		float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
 		if (pinned) {
-			const float open = Catalog::gConvCapacity[d] - ConvCapInFlight();
+			float open = aiEconomyMgr.energy.excess - ConvCapInFlight();
+			if (open > Catalog::gConvCapacity[d])
+				open = Catalog::gConvCapacity[d];
 			if (open > chew)
 				chew = open;
 		}

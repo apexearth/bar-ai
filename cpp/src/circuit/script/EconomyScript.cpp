@@ -63,6 +63,8 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
 	r = engine->RegisterObjectProperty("SResourceInfo", "const float storage", asOFFSET(CEconomyManager::SResourceInfo, storage)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("SResourceInfo", "const float pull", asOFFSET(CEconomyManager::SResourceInfo, pull)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("SResourceInfo", "const float income", asOFFSET(CEconomyManager::SResourceInfo, income)); ASSERT(r >= 0);
+	r = engine->RegisterObjectProperty("SResourceInfo", "const float usage", asOFFSET(CEconomyManager::SResourceInfo, usage)); ASSERT(r >= 0);
+	r = engine->RegisterObjectProperty("SResourceInfo", "const float excess", asOFFSET(CEconomyManager::SResourceInfo, excess)); ASSERT(r >= 0);
 
 	r = engine->RegisterObjectType("CEconomyManager", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);
 	r = engine->RegisterGlobalProperty("CEconomyManager aiEconomyMgr", manager); ASSERT(r >= 0);
