@@ -352,8 +352,17 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k)
 		if (k < 1)
 			k = 1;
 		const float lat = RungWalkS();
+		// A PLAN THAT DIES BEFORE IT PAYS ARRIVES LATER, NOT NEVER: what is lost
+		// is rebuilt, so a first move that survives its own build with
+		// probability s costs 1/s of its time in expectation. TechSurvival is
+		// that s, from the measured hazard at home over the build's latency and
+		// pay time. Without it the ladder on Greenest Fields put the advanced
+		// fusion 200 s ahead of the fusion and watched it die half-built.
+		float surv = TechSurvival(d, bp);
+		if (surv < 0.05f)
+			surv = 0.05f;
 		for (int u = 0; u < k; ++u) {
-			t += StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail);
+			t += StepSec(d, Catalog::gCostM[d], P, bank, (Catalog::gExtractsM[d] > 0.f) ? bpMob : bp, eAvail) / surv;
 			if (u > 0)
 				t += lat;   // the first unit's walk is the asker's own, charged by the caller
 			bank = 0.f;
