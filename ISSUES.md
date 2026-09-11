@@ -101,6 +101,41 @@ should be reclaimed to make room for better things." `want_reclaim.as` exists
 (`reclaim/reclaim:armmakr` 14 decides in a 33-minute game, 124 built) and
 prices retirement; measure why it loses before pricing it higher.
 
+## 2026-09-11 — EARLY DEFENCE: the flat hazard floor is right on one map and wrong on the other
+
+His complaint stands after the siege-prior fix: *"we still make too many
+early game defenses and that slows us down."* On Greenest Fields at minutes
+2-8 `apex: defprice` reads `hz=0.00125 haz=0.00125 siege=0.0008-0.0011` --
+`apex_risk_floor` (0.15 of the full-loss rate, 1/800 s, "cold-start
+insurance") sits above the mirror prior every time and is now the whole of the
+early tower demand there: 9 light towers and 4 beamers before minute 8 with
+`threat=1`, defence 9.8% of everything built at minute 8 against BARb's 0.8%.
+
+**Setting it to 0 is measured on both maps and NOT kept.** 3 seeds per arm:
+
+| minute 30, metal produced | control | floor off |
+|---|---|---|
+| Greenest Fields | 40,870 | **59,030** (+44%) |
+| Supreme Isthmus | 273,556 | **200,729** (-27%) |
+| BARb on Isthmus | 216,451 | **305,234** |
+
+On Isthmus the first raid lands around minute 5. With no towers standing, the
+economy takes the hit, the measured loss rate then buys the towers reactively
+(defence at minute 16 is HIGHER without the floor, 1,866 vs 1,188), and the
+opponent snowballs. On Greenest nobody arrives for nine minutes and every
+early tower is waste. A constant cannot be right on both.
+
+**The honest replacement** is not a number: the model already carries the
+quiet-ground arrival rate (`apex_eco_raid_tau`, "a truth about attacks seen")
+and the enemy's start; the blind floor should be that rate applied to how
+soon a raid can reach the stake -- distance to them over their fastest
+raider's speed (`FoeSpeedCap`), so it reads near zero on a big open map and
+its current value on a short lane. Until that exists the floor stays at 0.15
+and the Greenest early towers stay.
+
+Also measured tonight: `BlastCollateralM` alone, Greenest 48,905 -> 57,476,
+Isthmus 215,242 -> 223,117 -- shipped (`12e657c895ac`).
+
 ## 2026-09-11 — STAGE 1 COMPLETE: the reactor question is arithmetic, verified on his map
 
 `python tools/test_reactor_order.py` -- Greenest Fields 2v2, FAILS if an
