@@ -362,6 +362,55 @@ float ConvTotalE()
 	return ConvertibleE() + ConvUseE();
 }
 
+// THE HANDS THAT CAN MAKE THE DENSER ONE COULD CONVERT IT ALL THEMSELVES
+// (apexearth 2026-09-12: "even at 1000 metal per second we're still making
+// basic converters... too fragile and take up far too much space" -- 163
+// basics in four minutes beside eleven fusions). Not a count of T2
+// constructors: the seconds those hands need to build the whole convertible
+// surplus's worth of their best converter, against the fill window the rest
+// of the economy plans in. One T2 con beside three fusions cannot, so the
+// basics that carried the 2026-09-08 arm (docs/27, TUNE_OBSOLETE_RATIO) are
+// still made; ten of them at 1,000 m/s can, and no hand makes a basic.
+bool DenserHandsCover(int d)
+{
+	const float mine = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	float bp = 0.f;
+	int best = -1;
+	float bestPc = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		const int di = int(cd);
+		if ((gOwnCount[cd] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
+			continue;
+		const array<int>@ b = Catalog::gBuildsList[di];
+		if (b is null)
+			continue;
+		bool denser = false;
+		for (uint i = 0; i < b.length(); ++i) {
+			const int o = b[i];
+			if (!Catalog::gAvailable[o] || Catalog::gMobile[o]
+				|| (Catalog::gConvCapacity[o] <= 0.f))
+				continue;
+			const float pc = Catalog::gConvCapacity[o] * Catalog::gConvRatio[o]
+					/ float((Catalog::gAreaCells[o] > 0) ? Catalog::gAreaCells[o] : 1);
+			if (pc <= mine)
+				continue;
+			denser = true;
+			if (pc > bestPc) {
+				bestPc = pc;
+				best = o;
+			}
+		}
+		if (denser)
+			bp += float(gOwnCount[cd]) * Catalog::gBuildPower[di];
+	}
+	if ((best < 0) || (bp <= 0.f))
+		return false;
+	const float n = ConvertibleE() / Catalog::gConvCapacity[best];
+	const float horizon = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return n * Catalog::gBuildTime[best] / bp <= ((horizon > 1.f) ? horizon : 180.f);
+}
+
 bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
 {
 	if (!ConvObsoleteOnArrival(d))
@@ -374,6 +423,8 @@ bool ConvObsoleteFor(CCircuitUnit@ unit, int d)
 	const float denser = DenserConvCapE(d);
 	if ((denser > 0.f) && (denser >= ConvTotalE()))
 		return true;   // the denser fleet covers it all: no hand builds the basic
+	if (DenserHandsCover(d))
+		return true;
 	const float mine = Catalog::gConvCapacity[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));

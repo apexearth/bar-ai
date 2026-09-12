@@ -120,10 +120,16 @@ void UpdateStuckBuilds()
 		} else if (gStuckDeadAt[i] < 0) {
 			gStuckDeadAt[i] = ai.frame;
 		}
+		// The order-lag verdict only hurries the 30 s stuck rule; it never
+		// undercuts a third of it. At 2 s it beat the engine to the order.
 		int deadWait = 3 * gOrderLagMax;
-		if (deadWait < 2 * SECOND)
-			deadWait = 2 * SECOND;
-		const bool dead = (gStuckDeadAt[i] >= 0) && (ai.frame - gStuckDeadAt[i] >= deadWait);
+		if (deadWait < int(secs * float(SECOND)) / 3)
+			deadWait = int(secs * float(SECOND)) / 3;
+		// No verdict before the lag has been measured once: the 2 s floor
+		// fired before any order could arrive, aborting the lab 13 times in
+		// a row -- and each abort kept the lag from ever being learned.
+		const bool dead = (gOrderLagMax > 0) && (gStuckDeadAt[i] >= 0)
+				&& (ai.frame - gStuckDeadAt[i] >= deadWait);
 		const float dx = p.x - gStuckX[i];
 		const float dz = p.z - gStuckZ[i];
 		// A hand that MOVED or whose frame GREW is not dead whatever the

@@ -23,6 +23,22 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-12 — Comet Catcher 1v1 watched: idle gantries, basic converters at 1,000 m/s
+
+> "We got to a point where suddenly we aren't making any more T3 units, 2
+> gantries and they're very often idle. no idea why."
+> "Even at 1000 metal per second we're still making basic converters, I'd
+> really like to stop seeing that. They're too fragile and take up far too
+> much space."  (second time: 2026-09-08 "stop making T1 converters once
+> they've become obsolete" -- that arm, docs/27 TUNE_OBSOLETE_RATIO, was
+> reverted for starving conversion at the T2 transition)
+
+Measured in his log: a queued Korgoth + Juggernaut (49k) booked as army held,
+`apex: prodrank ... gap=-19858`, every line `no-candidate` for 4 min; 163
+basic converters finished in minutes 24-28 beside 11 fusions and 6 advanced.
+Fixes in flight (`PendArmyMWithin`, `DenserHandsCover`); battery `t3conv`.
+Open until a game of his shows neither.
+
 ## 2026-09-08 — CONSTRUCTOR ROLES BY SHARE (his proposal, not built)
 
 Watching the deepening tree: "The defenses appear to be improved. We still

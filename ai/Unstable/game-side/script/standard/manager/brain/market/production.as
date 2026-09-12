@@ -231,18 +231,13 @@ int CeilingConsNeed()
 // the same gap and buys it over again.
 float ArmyInFlightM()
 {
-	float m = 0.f;
-	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
-		CCircuitDef@ pd = Brain::gFQPendDef[i];
-		if (pd is null)
-			continue;
-		const int d = int(pd.id);
-		if (!Catalog::gMobile[d] || Catalog::gBuilder[d]
-			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
-			continue;
-		m += Catalog::gCostM[d];
-	}
-	return m;
+	// The metal a queued unit turns into army within the fill window, not its
+	// price tag: a Korgoth (29,000) and a Juggernaut (20,000) queued on one
+	// gantry read as 49k of army held the instant they were ordered, the
+	// ~98k target was met on paper, and every line -- the second gantry
+	// included -- cut its whole slate as gap0 for four minutes at 1,000 m/s.
+	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return Brain::PendArmyMWithin((fillS > 1.f) ? fillS : 180.f);
 }
 
 // Why the last ConOrderFor call declined. The facqueue logs it when a line
@@ -1319,6 +1314,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			+ " t=" + ai.teamId
 			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 			+ " gap=" + int(armyGap)
+			+ " flight=" + int(armyFlight0)
 			+ " n=" + candDef.length() + prank);
 	}
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {

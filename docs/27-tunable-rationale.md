@@ -1948,3 +1948,22 @@ before (`mexcap-h100-t`); advanced ones did NOT take their place (0 / 0 / 11 /
 wiped out against 0. The 700 basics a game were carrying the conversion, and
 the T2 hands did not replace them. The per-hand law stands until the advanced
 converter is bought where the basic used to be; his ruling needs that first.
+
+2026-09-12, second ruling ("even at 1000 metal per second we're still making
+basic converters... too fragile and take up far too much space"; 163 basics in
+minutes 24-28 beside 11 fusions): `DenserHandsCover` -- a hand is refused the
+basic once the hands that can make the denser one could build the whole
+convertible surplus's worth of it inside the fill window. Comet Catcher 1v1,
+34 min: 5 basics finished against ~300 in his game, conversion capacity 2,680 E
+over a 478 E surplus, obsolete=176 of 255 asks. One T2 con beside three
+fusions still fails the test, which is the 2026-09-08 case above.
+
+### `NS_FLOORBID` (the gated factory floor -- measured and dropped)
+
+The factory nano floor (`NS_FLOOR`, f06581c4) was gated 2026-09-12 to bid only
+`min(FreeMetalFlow + OverflowM, one turret's drain)` and hoist only at the full
+drain. Greenest Fields 2v2 +100%, 4 matched seeds, speed 6: nanos finished by
+minute 16 fell 8/12/10/15 -> 8/7/5/4 for no change in metal waste (0.0-0.2%
+both arms) and one treated elimination. The un-gated floor is what he asked
+for ("high priority") and it wastes nothing; the gate is gone.
+

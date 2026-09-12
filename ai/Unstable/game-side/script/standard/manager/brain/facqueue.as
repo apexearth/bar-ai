@@ -153,6 +153,36 @@ float LineSecondsBp(int line, float bp, bool skipHead)
 	return sec;
 }
 
+// Combat metal the lines will have FINISHED within `horizonS`, each line's
+// FIFO walked at its own lathe; the part of an order that lands past the
+// horizon is not army yet and does not count against the army target.
+float PendArmyMWithin(float horizonS)
+{
+	float m = 0.f;
+	for (uint l = 0; l < gFQFac.length(); ++l) {
+		const float bp = LineBuildPower(gFQFac[l]);
+		if (bp <= 0.f)
+			continue;
+		float at = 0.f;
+		for (uint i = 0; (i < gFQPendLine.length()) && (at < horizonS); ++i) {
+			if ((gFQPendLine[i] != int(l)) || (gFQPendDef[i] is null))
+				continue;
+			const int d = int(gFQPendDef[i].id);
+			const float sec = Catalog::BuildSecondsAt(d, bp);
+			const float start = at;
+			at += sec;
+			if (!Catalog::gMobile[d] || Catalog::gBuilder[d]
+				|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
+				continue;
+			float frac = (sec > 0.f) ? ((horizonS - start) / sec) : 1.f;
+			if (frac > 1.f)
+				frac = 1.f;
+			m += Catalog::gCostM[d] * frac;
+		}
+	}
+	return m;
+}
+
 float LineSeconds(int line, CCircuitUnit@ fac, bool skipHead)
 {
 	return LineSecondsBp(line, LineBuildPower(fac), skipHead);
