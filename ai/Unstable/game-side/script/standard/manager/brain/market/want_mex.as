@@ -218,8 +218,10 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 		if (!OnMap(where))
 			continue;
 		const float prog = Requests::Progress(cand);
-		if ((unit !is null) && !Requests::WorthJoining(
-				unit.GetPos(ai.frame).distance2D(where), prog, cost, busy))
+		if ((unit !is null) && !Requests::WorthJoiningSite(cand,
+				unit.GetPos(ai.frame).distance2D(where),
+				Catalog::gSpeed[int(unit.circuitDef.id)],
+				Catalog::gBuildPower[int(unit.circuitDef.id)]))
 			continue;
 		const float score = EnergyTTEWith(makeE, cost,
 				Catalog::gCostE[int(cand.buildDef.id)], prog, busy);

@@ -190,6 +190,14 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			return null;
 		}
 		if ((want.costM >= JOIN_MIN_COST) && (Workers(cover) < SiteWorkerCap(want))) {
+			if ((unit !is null) && !WorthJoiningSite(cover,
+					unit.GetPos(ai.frame).distance2D(cover.GetBuildPos()),
+					Catalog::gSpeed[int(unit.circuitDef.id)],
+					Catalog::gBuildPower[int(unit.circuitDef.id)])) {
+				++gTooFar;
+				Log(want, "site-late");
+				return null;
+			}
 			++gJoined;
 			Log(want, "join-site");
 			return cover;

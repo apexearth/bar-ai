@@ -133,10 +133,9 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 		// Remaining work is the CANDIDATE's bill, not the want's: pricing a
 		// fusion's join by the 320m advsol that walked in read minutes of
 		// remaining lathe as not worth a forty-second walk.
-		if (!WorthJoining(dist, progress,
-				(cand.buildDef !is null) ? cand.buildDef.costM : want.costM,
-				busy,
-				(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f)) {
+		if (!WorthJoiningSite(cand, dist,
+				(unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f,
+				(unit !is null) ? Catalog::gBuildPower[int(unit.circuitDef.id)] : 0.f)) {
 			++gTooFar;
 			continue;
 		}

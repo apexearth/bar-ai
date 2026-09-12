@@ -134,9 +134,14 @@ void LatencySweep()
 		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
 		++gStartLatN;
 		const AIFloat3 sAt = t.GetBuildPos();
+		uint arrived = 0;
+		ArrivedLathe(t, arrived);
 		AiLog(Factory::T() + "apex: latency " + t.buildDef.GetName()
 			+ " start=" + ((ai.frame - gLiveAt[i]) / SECOND)
 			+ " workers=" + Workers(t)
+			+ " arrived=" + arrived
+			+ " cap=" + SiteWorkerCap(t.buildDef)
+			+ " banked=" + (BankCovers(t.buildDef) ? 1 : 0)
 			+ " m=" + int(t.buildDef.costM)
 			+ " at=" + int(sAt.x) + "," + int(sAt.z));
 	}
@@ -314,7 +319,8 @@ void Forget(IUnitTask@ task)
 				// ends without one was walked away from.
 				AiLog(Factory::T() + "apex: latency " + task.buildDef.GetName()
 					+ (gLiveStarted[i] ? " done=" : " dropped=")
-					+ ((ai.frame - gLiveAt[i]) / SECOND));
+					+ ((ai.frame - gLiveAt[i]) / SECOND)
+					+ " workers=" + Workers(task));
 				gLiveAt.removeAt(i);
 				if (gLiveStarted[i] && (i < gLiveStartAt.length()) && (gLiveStartAt[i] > 0)
 					&& (task.target !is null)) {
@@ -345,6 +351,48 @@ uint Workers(IUnitTask@ t)
 		return 0;
 	array<CCircuitUnit@>@ busy = t.GetUnits();
 	return (busy is null) ? 0 : busy.length();
+}
+
+// Build power [BP] from the hands that have ARRIVED -- inside their own build
+// reach of the site -- with the count in `arrived`. A hand still walking is on
+// the roster and lathes nothing yet, so a remaining-time estimate that counts
+// it reads the site as closer to done than it is. `aheadOf` > 0 also counts
+// the walkers nearer the site than that distance: they will be lathing by the
+// time a hand that far out gets there, and a stampede of forty onto a reactor
+// nobody has reached yet is the one case pure arrival cannot see.
+float ArrivedLathe(IUnitTask@ t, uint& out arrived, float aheadOf = -1.f)
+{
+	arrived = 0;
+	if ((t is null) || (t.buildDef is null))
+		return 0.f;
+	array<CCircuitUnit@>@ busy = t.GetUnits();
+	if (busy is null)
+		return 0.f;
+	const AIFloat3 site = t.GetBuildPos();
+	if (!OnMap(site))
+		return 0.f;
+	const int bd = int(t.buildDef.id);
+	const float half = Catalog::ValidId(bd)
+			? 8.f * float((Catalog::gFootX[bd] > Catalog::gFootZ[bd])
+				? Catalog::gFootX[bd] : Catalog::gFootZ[bd])
+			: 0.f;
+	float bp = 0.f;
+	for (uint i = 0; i < busy.length(); ++i) {
+		CCircuitUnit@ u = busy[i];
+		if (u is null)
+			continue;
+		const int ud = int(u.circuitDef.id);
+		if (!Catalog::ValidId(ud))
+			continue;
+		const float d = u.GetPos(ai.frame).distance2D(site);
+		if (d <= Catalog::gBuildDist[ud] + half + 32.f) {
+			++arrived;
+			bp += Catalog::gBuildPower[ud];
+		} else if ((aheadOf > 0.f) && (d < aheadOf)) {
+			bp += Catalog::gBuildPower[ud];
+		}
+	}
+	return bp;
 }
 
 // HOW CLOSE TO DONE. `target` is the nanoframe (IBuilderTask::SetTarget,

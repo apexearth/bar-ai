@@ -490,3 +490,14 @@ the variant compiled nowhere and played near-stock -- S3 again, reachable by a
 fresh checkout, a fresh lane, or a dashboard deploy with no build (bar-ai-be).
 `deploy` now refuses the fallback unless `--repo-dll` is passed. The snapshot
 should be refreshed only from a tree that matches the cpp mirror.
+
+## S29 — An uncapped battery measures the CPU, not the tree
+
+`ab.py` control arm, Greenest Fields 2v2 +100%, 2026-09-11: 838k metal by
+minute 55 and 59 fusions with three engines on the machine; the same lane,
+same map, lost to BARb by minute 30 with 41k metal and six fusions once
+another session's four engines joined. BARb is not sliced against the wall
+clock and we are, so under contention only our side degrades, and a change
+measured across a load change reads as a huge effect in whichever direction
+the load moved. `ab.py --speed 6` pins the sim; the wall time per game is then
+fixed and the AI gets the same budget in every game of the set.

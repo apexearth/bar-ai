@@ -150,7 +150,8 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 		}
 		const float dist = me.distance2D(where);
 		if (requireFeed
-			&& !Requests::WorthJoining(dist, progress, cand.buildDef.costM, busy)) {
+			&& !Requests::WorthJoiningSite(cand, dist, speed,
+				Catalog::gBuildPower[int(unit.circuitDef.id)])) {
 			++gJobLate;
 			continue;   // it lands before we arrive
 		}

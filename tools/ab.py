@@ -23,6 +23,12 @@ so under six-way CPU contention both arms play worse than they would alone and
 BARb, which is not sliced, plays the same -- BARb's metal on Greenest Fields
 read 91k in a parallel set against ~45k sequential. Read the A-vs-B contrast;
 do not compare absolute numbers across parallel and sequential sets.
+2026-09-11: the SAME control tree made 838k metal by minute 55 with three
+engines on the machine and lost to BARb by minute 30 with seven. Uncapped, the
+sim speed is what the CPU allows and the AI's think budget shrinks with it;
+`--speed 6` pins the sim so a game costs the same wall time whatever else runs,
+and both arms play the AI they would play alone. Use it whenever another
+battery shares the machine.
 """
 from __future__ import annotations
 
@@ -46,7 +52,7 @@ MINUTES = (8, 16, 24, 30)
 
 
 def launch(spec_a: str, spec_b: str, map_name: str, seed: int, minutes: int,
-           out: Path, slot: int, handicap: int):
+           out: Path, slot: int, handicap: int, speed: int = 0):
     wdir = ROOT / "matches" / f"_engine_ab{slot}"
     cmd = [sys.executable, "-u", str(HERE / "run_match.py"),
            "--a", spec_a, "--b", spec_b, "--map", map_name,
@@ -54,22 +60,25 @@ def launch(spec_a: str, spec_b: str, map_name: str, seed: int, minutes: int,
            "--boxes", "trbl", "--box-size", "0.45", "--handicap", str(handicap),
            "--seed", str(seed), "--out", str(out), "--write-dir", str(wdir),
            "--modoption", "dev_stats=1"]
+    if speed > 0:
+        cmd += ["--speed", str(speed)]
     log = open(out.parent / f"{out.name}.log", "w")
     return subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT), log
 
 
 def run_set(setdir: Path, arms: dict[str, str], maps: list[str], seeds: int,
-            minutes: int, parallel: int, handicap: int):
+            minutes: int, parallel: int, handicap: int, slot_base: int = 0,
+            speed: int = 0):
     setdir.mkdir(parents=True, exist_ok=True)
     jobs = [(m, tag, s) for m in maps for s in range(1, seeds + 1) for tag in arms]
-    slots = list(range(parallel))
+    slots = list(range(slot_base, slot_base + parallel))
     live = []
     while jobs or live:
         while jobs and slots:
             m, tag, s = jobs.pop(0)
             slot = slots.pop(0)
             out = setdir / f"{slug(m)}-{tag}-s{s}"
-            proc, log = launch(arms[tag], "BARb:stable:hard", m, s, minutes, out, slot, handicap)
+            proc, log = launch(arms[tag], "BARb:stable:hard", m, s, minutes, out, slot, handicap, speed)
             live.append((out.name, slot, proc, log))
             print(f"  launched {out.name} (slot {slot})", flush=True)
             time.sleep(4)
@@ -177,6 +186,12 @@ def main() -> int:
     ap.add_argument("--minutes", type=int, default=30)
     ap.add_argument("--parallel", type=int, default=6)
     ap.add_argument("--handicap", type=int, default=100)
+    ap.add_argument("--speed", type=int, default=0,
+                    help="sim speed cap; the AI is sliced against the wall clock, so an uncapped "
+                         "sim under load plays a worse AI than the same tree alone (measured: "
+                         "control metal 838k alone, 41k beside seven other engines)")
+    ap.add_argument("--slot-base", type=int, default=0,
+                    help="first _engine_ab<N> write-dir; a second session's battery takes another range")
     ap.add_argument("--name", default="ab")
     ap.add_argument("--report", help="existing set dir to re-read")
     a = ap.parse_args()
@@ -190,7 +205,8 @@ def main() -> int:
     (setdir / "arms.json").write_text(json.dumps({"A": a.a, "B": a.b, "maps": a.maps,
                                                   "seeds": a.seeds, "minutes": a.minutes}))
     t0 = time.time()
-    run_set(setdir, {"A": a.a, "B": a.b}, a.maps, a.seeds, a.minutes, a.parallel, a.handicap)
+    run_set(setdir, {"A": a.a, "B": a.b}, a.maps, a.seeds, a.minutes, a.parallel, a.handicap,
+            a.slot_base, a.speed)
     print(f"\n{setdir}  ({(time.time() - t0) / 60:.1f} min wall)")
     report(setdir)
     return 0

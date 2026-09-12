@@ -159,6 +159,38 @@ bool WorthJoining(float dist, float progress, float costM, uint busy,
 	return travelTime <= remainingTime;
 }
 
+// THE CREW IS SIZED BY THE TIME IT SAVES: one more pair of hands is worth
+// its walk when the seconds it takes off the site's remaining build time
+// exceed the seconds it spends walking there. Lathe is what is actually on
+// the site -- hands arrived, walkers nearer than this one, the nano ring --
+// in real build power; a walker farther out lathes nothing yet, and counting
+// it closed sites that had minutes left. The saving falls as the square of
+// the crew, which is the whole bound.
+bool WorthJoiningSite(IUnitTask@ cand, float dist, float speed = 0.f,
+		float handBP = 0.f)
+{
+	if ((cand is null) || (cand.buildDef is null))
+		return true;
+	if (dist <= 0.f)
+		return true;
+	const int bd = int(cand.buildDef.id);
+	if (!Catalog::ValidId(bd))
+		return true;
+	const float remainingBt = Catalog::gBuildTime[bd] * (1.f - Progress(cand));
+	if (remainingBt <= 0.f)
+		return false;
+	uint arrived = 0;
+	float lathe = ArrivedLathe(cand, arrived, dist);
+	if (cand.target !is null)
+		lathe += Market::RingBPAt(cand.GetBuildPos());
+	if (lathe <= 0.f)
+		return true;
+	const float b = (handBP > 0.f) ? handBP : lathe / float((arrived > 0) ? arrived : 1);
+	const float saved = remainingBt * b / (lathe * (lathe + b));
+	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
+	return (dist / v) <= saved;
+}
+
 int gTooFar = 0;    // refused: this site will finish (or near enough) before the walk
 
 // HOW MANY REQUESTS OF ONE DEF MAY BE IN FLIGHT AT ONCE, from what the ECONOMY
@@ -371,8 +403,16 @@ uint SiteWorkerCap(const CCircuitDef@ want)
 	// all that total build power onto one fusion would make it build that much
 	// faster". Saturation is then genuinely rare, and the class gate below
 	// keeps the second site shut until it happens.
+	// ...IN THE ECO ROLE. That statement was made of the eco player; in a
+	// standard game the pool is owed to army and defence too (apexearth
+	// 2026-09-11, on a mean crew of 14 and a peak of 49: "You're putting all
+	// our build power into that? In an eco role sure, but that's not what
+	// we're doing here"). Outside it a reactor keeps its cost-derived crew
+	// under the pool, never the per-site share: that share read ONE hand per
+	// fusion with twenty sites open (337 s a reactor against 88, measured),
+	// and WorthJoiningSite is what actually sizes the crew below the cap.
 	if (IsBigEnergy(want))
-		return (n > pool) ? n : pool;
+		return (Market::EcoQuiet() || Market::EcoOnly()) ? ((n > pool) ? n : pool) : n;
 	const uint fed = FeedableCrew(want);
 	return (n > fed) ? fed : n;
 }
