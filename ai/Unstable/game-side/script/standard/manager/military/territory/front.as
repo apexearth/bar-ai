@@ -95,6 +95,14 @@ const int RING_SAMPLES = 28;
 // `d > march` and OnMap tests before reading.
 array<float> gRingSA;   // ally influence at ray r, sample i-1
 array<float> gRingSF;   // ...and enemy influence
+array<float> gRingST;   // ...and builder threat
+array<int>   gRingN;    // samples filled on ray r
+array<float> gRingOwn;  // per ray: the furthest committed structure on its corridor
+int   gRingOwnStamp = -1;
+float gRingOwnHx = -1.f;
+float gRingOwnHz = -1.f;
+array<float> gRingCos;
+array<float> gRingSin;
 // TWO FIELDS, TWO BARS -- never their difference.
 //
 // GetNetInflAt is allyInfl - enemyInfl, both refilled to INFL_BASE = 0 every
@@ -179,6 +187,7 @@ void RebuildFront()
 	// rebuild for a constant. RebuildRing already reads it once for the same
 	// reason.
 	const float laneBar = ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR);
+	const double _tLn = Perf::T0();
 	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
 		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
 		float found = -1.f;
@@ -225,7 +234,10 @@ void RebuildFront()
 		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
 		gFrontSafe.insertLast(safe);
 	}
+	Perf::Add("fr.lanes", _tLn);
+	const double _tRg = Perf::T0();
 	RebuildRing(home);
+	Perf::Add("fr.ring", _tRg);
 	gFrontValid = true;
 	FrontDiag();
 }
@@ -244,6 +256,61 @@ void RebuildFront()
 // and it does not move when a raid drives past -- which is the same reason
 // Front:: settled on the outer edge of our own influence region after three
 // definitions that needed to see the enemy died against measurement.
+// The furthest committed structure on each bearing's corridor (within 900
+// elmo of the ray, ahead of home). One pass over the ledger, each row tested
+// against the few rays whose corridor can hold it -- the angular window is a
+// superset of the corridor test, which is then applied unchanged -- and only
+// when the ledger or home has moved. Walked per ray per rebuild, this was
+// rays x rows every second.
+void RingOwnFill(const AIFloat3& in home)
+{
+	if (gRingOwn.length() != uint(FRONT_RAYS)) {
+		gRingOwn.resize(uint(FRONT_RAYS));
+		gRingCos.resize(uint(FRONT_RAYS));
+		gRingSin.resize(uint(FRONT_RAYS));
+		for (int r = 0; r < FRONT_RAYS; ++r) {
+			const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
+			gRingCos[uint(r)] = cos(ang);
+			gRingSin[uint(r)] = sin(ang);
+		}
+	}
+	if ((gRingOwnStamp == Market::gComStamp) && (gRingOwnHx == home.x) && (gRingOwnHz == home.z))
+		return;
+	gRingOwnStamp = Market::gComStamp;
+	gRingOwnHx = home.x;
+	gRingOwnHz = home.z;
+	for (int r = 0; r < FRONT_RAYS; ++r)
+		gRingOwn[uint(r)] = 0.f;
+	const float rayStep = 6.2831853f / float(FRONT_RAYS);
+	const uint n = Market::ComLen();
+	for (uint hi = 0; hi < n; ++hi) {
+		const int hd = Market::gComDef[hi];
+		if (!Catalog::ValidId(hd) || Catalog::gMobile[hd]
+			|| !OnMap(Market::gComPos[hi]))
+			continue;
+		const float rx = Market::gComPos[hi].x - home.x;
+		const float rz = Market::gComPos[hi].z - home.z;
+		const float rho = sqrt(rx * rx + rz * rz);
+		if (rho <= 0.f)
+			continue;   // along is 0 on every ray
+		const float w = (rho > 900.f) ? asin(900.f / rho) : 1.5707964f;
+		const float th = atan2(rz, rx);
+		const int r0 = int(floor((th - w) / rayStep)) - 1;
+		const int r1 = int(ceil((th + w) / rayStep)) + 1;
+		for (int rr = r0; rr <= r1; ++rr) {
+			const uint r = uint(((rr % FRONT_RAYS) + FRONT_RAYS) % FRONT_RAYS);
+			const float along = rx * gRingCos[r] + rz * gRingSin[r];
+			if (along <= 0.f)
+				continue;   // behind us on this bearing
+			const float lat = rx * gRingSin[r] - rz * gRingCos[r];
+			if ((lat > 900.f) || (lat < -900.f))
+				continue;   // not on this bearing's corridor
+			if (along > gRingOwn[r])
+				gRingOwn[r] = along;
+		}
+	}
+}
+
 void RebuildRing(const AIFloat3& in home)
 {
 	gRayR.resize(0);
@@ -295,29 +362,26 @@ void RebuildRing(const AIFloat3& in home)
 	if (gRingSA.length() != uint(FRONT_RAYS * RING_SAMPLES)) {
 		gRingSA.resize(uint(FRONT_RAYS * RING_SAMPLES));
 		gRingSF.resize(uint(FRONT_RAYS * RING_SAMPLES));
+		gRingST.resize(uint(FRONT_RAYS * RING_SAMPLES));
+		gRingN.resize(uint(FRONT_RAYS));
 	}
+	// One binding call per ray fills the three reads for every sample: asked
+	// per sample, the cost was the script-to-engine call, not the read.
 	for (int r = 0; r < FRONT_RAYS; ++r) {
 		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
+		gRingN[uint(r)] = 0;
 		if (!rearToo && haveBearing
 			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
 			continue;
-		const int rowS = r * RING_SAMPLES;
-		for (int i = 1; i <= RING_SAMPLES; ++i) {
-			const float d = step * float(i);
-			if (d > march)
-				break;
-			const AIFloat3 p = home + dir * d;
-			if (!OnMap(p))
-				break;
-			const float a = ai.GetAllyInflAt(p);
-			const float f = ai.GetEnemyInflAt(p);
-			gRingSA[uint(rowS + i - 1)] = a;
-			gRingSF[uint(rowS + i - 1)] = f;
-			if (a > maxAlly) maxAlly = a;
-			if (f > maxFoe) maxFoe = f;
-		}
+		float mA = 0.f;
+		float mF = 0.f;
+		gRingN[uint(r)] = ai.GetInflRay(home, dir, step, RING_SAMPLES, march,
+				gRingSA, gRingSF, gRingST, r * RING_SAMPLES, mA, mF);
+		if (mA > maxAlly) maxAlly = mA;
+		if (mF > maxFoe) maxFoe = mF;
 	}
+	RingOwnFill(home);
 	gRingAllyBar = maxAlly * RING_ALLY_FRAC;
 	if (gRingAllyBar < RING_ALLY_FLOOR)
 		gRingAllyBar = RING_ALLY_FLOOR;
@@ -351,12 +415,12 @@ void RebuildRing(const AIFloat3& in home)
 		float metAt = 0.f;       // ...and at what distance
 		bool wall = false;       // did it run out of map
 		const int rowS = r * RING_SAMPLES;
+		const int nS = gRingN[uint(r)];
 		for (int i = 1; i <= RING_SAMPLES; ++i) {
 			const float d = step * float(i);
 			if (d > march)
 				break;
-			const AIFloat3 p = home + dir * d;
-			if (!OnMap(p)) {
+			if (i > nS) {   // the ray stopped short of march: it left the map
 				wall = true;
 				break;
 			}
@@ -402,9 +466,7 @@ void RebuildRing(const AIFloat3& in home)
 			if (allyHere < gRingAllyBar)
 				break;   // our territory ended at the previous sample
 			edge = d;
-			// Only inside our own ground: past the radius the answer is not used,
-			// and this is the expensive read of the three.
-			if (ai.GetBuilderThreatAt(p) <= bar)
+			if (gRingST[uint(rowS + i - 1)] <= bar)
 				safe = d;
 		}
 		// A bearing we hold nothing on carries `reach`, not 0. OnBorder compares a
@@ -442,22 +504,7 @@ void RebuildRing(const AIFloat3& in home)
 		// The ray may reach one hold-radius past the furthest thing we own on
 		// its bearing, and no further.
 		{
-			float own = 0.f;
-			for (uint hi = 0; hi < Market::ComLen(); ++hi) {
-				const int hd = Market::gComDef[hi];
-				if (!Catalog::ValidId(hd) || Catalog::gMobile[hd]
-					|| !OnMap(Market::gComPos[hi]))
-					continue;
-				const AIFloat3 rel = Market::gComPos[hi] - home;
-				const float along = rel.x * dir.x + rel.z * dir.z;
-				if (along <= 0.f)
-					continue;   // behind us on this bearing
-				const float lat = rel.x * dir.z - rel.z * dir.x;
-				if ((lat > 900.f) || (lat < -900.f))
-					continue;   // not on this bearing's corridor
-				if (along > own)
-					own = along;
-			}
+			const float own = gRingOwn[uint(r)];
 			const float cap = own + Front::HoldRadius();
 			if ((own > 0.f) && (edge > cap))
 				edge = cap;

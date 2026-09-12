@@ -858,6 +858,47 @@ static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos,
 	return circuit->GetEnemyCostAt(pos, radius);
 }
 
+// A whole ray of map reads in one call: samples from + dir * step * i, i = 1..n,
+// stopping past maxD or off the map, written to ally/enemy/bthr from index `at`
+// with the ray's two peaks (from 0) in maxAlly/maxEnemy. The reads are an array index
+// each, so per-sample binding calls (and the script loop copying them) were all
+// overhead. Returns the samples filled; a return short of n with
+// step * (k + 1) <= maxD means the ray left the map.
+static int CCircuitAI_GetInflRay(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& dir,
+		float step, int n, float maxD, CScriptArray* ally, CScriptArray* enemy, CScriptArray* bthr,
+		int at, float* maxAlly, float* maxEnemy)
+{
+	if (maxAlly != nullptr) *maxAlly = 0.f;
+	if (maxEnemy != nullptr) *maxEnemy = 0.f;
+	if ((ally == nullptr) || (enemy == nullptr) || (bthr == nullptr) || (n <= 0) || (at < 0)) {
+		return 0;
+	}
+	const asUINT need = (asUINT)(at + n);
+	if (ally->GetSize() < need) ally->Resize(need);
+	if (enemy->GetSize() < need) enemy->Resize(need);
+	if (bthr->GetSize() < need) bthr->Resize(need);
+	int k = 0;
+	for (int i = 1; i <= n; ++i) {
+		const float d = step * i;
+		if (d > maxD) {
+			break;
+		}
+		const AIFloat3 p = from + dir * d;
+		if (!circuit->IsPosOnMap(p)) {
+			break;
+		}
+		const float a = circuit->GetAllyInflAt(p);
+		const float e = circuit->GetEnemyInflAt(p);
+		*(float*)ally->At(at + k) = a;
+		*(float*)enemy->At(at + k) = e;
+		*(float*)bthr->At(at + k) = circuit->GetBuilderThreatAt(p);
+		if ((maxAlly != nullptr) && (a > *maxAlly)) *maxAlly = a;
+		if ((maxEnemy != nullptr) && (e > *maxEnemy)) *maxEnemy = e;
+		++k;
+	}
+	return k;
+}
+
 // The same envelope the rez-bot guard walks bots out of (BuilderManager's
 // UpdateRezGuard), so an election refuses the ground the reflex is leaving.
 static float CCircuitAI_EnemyReachSlack(CCircuitAI* circuit, const AIFloat3& pos, float reactS)
@@ -1486,6 +1527,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float EnemyReachSlack(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_EnemyReachSlack), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetInflRay(const AIFloat3& in, const AIFloat3& in, float, int, float, array<float>@+, array<float>@+, array<float>@+, int, float &out, float &out)", asFUNCTION(CCircuitAI_GetInflRay), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);

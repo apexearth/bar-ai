@@ -258,7 +258,20 @@ float EtaEnergyAvail()
 // build power the claim and upgrade rungs cannot use, and crediting it to
 // them bought 14 nano turrets in the first twelve minutes of a 172-spot map
 // while six constructors held the whole claim ladder (Carrot, 2026-09-08).
+int   gMbsFrame = -1;
+int   gMbsOwn = -1;
+float gMbsVal = 1.f;
 float MobileBPShare()
+{
+	if ((gMbsFrame == ai.frame) && (gMbsOwn == gOwnStamp))
+		return gMbsVal;
+	gMbsFrame = ai.frame;
+	gMbsOwn = gOwnStamp;
+	gMbsVal = MobileBPShareNow();
+	return gMbsVal;
+}
+
+float MobileBPShareNow()
 {
 	float mobile = 0.f;
 	float all = 0.f;
@@ -378,7 +391,10 @@ float EtaWith(int d, float gainM, float addBP, bool tech)
 // the simulator; two T2 constructors took 15 minutes over it in the game.
 float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 {
+	double _tE = Perf::T0();
 	PoolRefresh();
+	Perf::Add("et.pool", _tE);
+	_tE = Perf::T0();
 	float P = EcoPowerM();
 	if (P < 0.5f)
 		P = 0.5f;
@@ -425,7 +441,10 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 				eAvail += Catalog::gMakeE[d];
 		}
 	}
+	Perf::Add("et.head", _tE);
+	_tE = Perf::T0();
 	const float eta = t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
+	Perf::Add("et.ladder", _tE);
 	gLadderAddBP = 0.f;
 	return eta;
 }

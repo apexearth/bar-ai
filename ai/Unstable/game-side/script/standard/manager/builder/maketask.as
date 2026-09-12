@@ -77,14 +77,16 @@ float gRzVetoFfSum = 0.f;
 array<int> gRzHeldBt(32, 0);
 IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 {
+	double _tR = Perf::T0();
 	IUnitTask@ t = RezzerComRescue(unit);
+	Perf::Add("rz.rescue", _tR);
 	int why = 0;
-	if (t is null) { @t = RezzerMedic(unit); why = 1; }
-	if (t is null) { @t = RezzerFrontSalvage(unit); why = 2; }
-	if (t is null) { @t = RezzerEatCorpse(unit); why = 3; }
-	if (t is null) { @t = RezzerRezOrEat(unit); why = 4; }
-	if (t is null) { @t = RezzerRepairNearby(unit); why = 5; }
-	if (t is null) { @t = RezzerIdle(unit); why = 6; }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerMedic(unit); why = 1; Perf::Add("rz.medic", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerFrontSalvage(unit); why = 2; Perf::Add("rz.salvage", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerEatCorpse(unit); why = 3; Perf::Add("rz.eat", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerRezOrEat(unit); why = 4; Perf::Add("rz.rezeat", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerRepairNearby(unit); why = 5; Perf::Add("rz.repair", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerIdle(unit); why = 6; Perf::Add("rz.idle", _tR); }
 	if (t is null)
 		why = 7;
 	++gRzRule[why];

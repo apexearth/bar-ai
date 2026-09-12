@@ -14,6 +14,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
 	const int uid = int(unit.circuitDef.id);
+	const double _tPre = Perf::T0();
 	const AIFloat3 eSite = EcoSiteFor(unit);
 	gEAlt.resize(0);
 	gEAltV.resize(0);
@@ -75,6 +76,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	int etaD = -1;
 	float etaS = 0.f;
 	Want etaW;
+	Perf::Add("en.pre", _tPre);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -136,7 +138,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// untouched and only the long bets are discounted; and with measured
 		// hazard, so it lifts by itself once the base is actually covered.
 		if (genSurvOn) {
+			const double _tSv = Perf::T0();
 			fSurv = TechSurvival(d, Catalog::gBuildPower[uid]);
+			Perf::Add("en.surv", _tSv);
 			gain *= fSurv;
 		}
 		// INFERIOR WORK IS WORTH LESS, IT IS NOT FORBIDDEN. The same build
@@ -164,7 +168,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = WalkSecTo(unit, eSite);
+		const double _tVo = Perf::T0();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		Perf::Add("en.value", _tVo);
 		// Rent on the defended ground this footprint would occupy -- PLUS the
 		// measured scarcity of base room, the same term RetireGain charges.
 		// Priced only on the reclaim side, the pair could not converge: the
@@ -175,10 +181,13 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		{
 			const float cellsE = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
+			const double _tBl = Perf::T0();
+			const float blast = BlastCollateralM(eSite, d);   // its fuse, and its neighbours'
+			Perf::Add("en.blast", _tBl);
 			const float rent = ((Catalog::gAreaCells[d] > 0)
 						? (genRentCell * float(Catalog::gAreaCells[d])) : 0.f)
 					+ genCrowdCell * cellsE
-					+ BlastCollateralM(eSite, d);   // its fuse, and its neighbours'
+					+ blast;
 			if (rent > 0.f) {
 				fRent = rent;
 				c.mCost += rent;
@@ -276,11 +285,13 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// every stalled election to the advanced fusion (measured, 14 of 16),
 		// where the ladder's energy arm makes a 69,000 E bill wait its turn.
 		if (etaOn && !barred && (c.value > 0.f)) {
+			const double _tEt = Perf::T0();
 			const float gM = Catalog::gMakeE[d] * ConvRate();
 			const float crewBP = Catalog::gBuildPower[uid]
 					* float(Requests::SiteWorkerCap(Catalog::Def(d)))
 					+ NanoLatheReaching(eSite);
 			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
+			Perf::Add("en.eta", _tEt);
 			if ((etaD < 0) || (s < etaS)) {
 				etaS = s;
 				etaD = d;

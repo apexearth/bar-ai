@@ -9,15 +9,23 @@ namespace Market {
 // price themselves without a threshold anywhere: battles lost feed the loss
 // field, thin base defence raises the shortfall, and a lab we cannot afford
 // waits longer and is discounted harder.
-float TechSurvival(int defId, float askerBP)
+// The home risk is the same for every candidate in a frame; it is three
+// cover queries, so it is not re-asked per rung.
+int   gTsRiskFrame = -1;
+float gTsRisk = 0.f;
+float TechHomeRisk()
 {
+	if (gTsRiskFrame == ai.frame)
+		return gTsRisk;
+	gTsRiskFrame = ai.frame;
+	gTsRisk = 0.f;
 	if (ai.GetTunable("apex_tech_survival", TUNE_TECH_SURVIVAL) <= 0.f)
-		return 1.f;
+		return 0.f;
 	if (!Builder::gHomeSet)
-		return 1.f;
+		return 0.f;
 	const AIFloat3 home = Builder::gHomePos;
 	if (!OnMap(home))
-		return 1.f;
+		return 0.f;
 	// UNSCOUTED IS NOT SAFE. ShortfallAt says what share of the wave our guns
 	// fail to stop, but it is computed against the enemy we can SEE -- with no
 	// fix on them it reads 0 and a long-payback lab prices as risk-free
@@ -34,6 +42,13 @@ float TechSurvival(int defId, float askerBP)
 	const float siege = SiegeRisk(home) * shortH;
 	if (siege > risk)
 		risk = siege;
+	gTsRisk = risk;
+	return risk;
+}
+
+float TechSurvival(int defId, float askerBP)
+{
+	const float risk = TechHomeRisk();
 	if (risk <= 0.f)
 		return 1.f;
 	float T = PipeLatencySec(defId, askerBP);

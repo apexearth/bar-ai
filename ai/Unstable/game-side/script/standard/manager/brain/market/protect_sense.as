@@ -56,16 +56,35 @@ bool RadarSees(const AIFloat3& in pos)
 	}
 	// A radar ordered or framed sees too, or the gap it is closing is
 	// re-proposed every election and refused as covered until it stands.
-	ComNear(pos, 3600.f * overlap);
-	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
-		const uint ci = uint(gComGrid.hit[q]);
-		if (((gComState[ci] & CS_COMING) == 0) || (ProtClassOf(gComDef[ci]) != PROT_RADAR))
-			continue;
-		const float rr = Catalog::gRadarR[gComDef[ci]];
-		if ((rr > 1.f) && OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < rr * overlap))
+	ComRadarsFill();
+	for (uint q = 0; q < gCrPos.length(); ++q) {
+		if (pos.distance2D(gCrPos[q]) < gCrR[q] * overlap)
 			return true;
 	}
 	return false;
+}
+
+// The ledger's coming radars, listed once per ledger change: asked per asset
+// through a 2,880-elmo box query, most of the ledger came back every time.
+array<AIFloat3> gCrPos;
+array<float> gCrR;
+int gCrStamp = -1;
+void ComRadarsFill()
+{
+	if (gCrStamp == gComStamp)
+		return;
+	gCrStamp = gComStamp;
+	gCrPos.resize(0);
+	gCrR.resize(0);
+	for (uint ci = 0; ci < ComLen(); ++ci) {
+		if (((gComState[ci] & CS_COMING) == 0) || (ProtClassOf(gComDef[ci]) != PROT_RADAR))
+			continue;
+		const float rr = Catalog::gRadarR[gComDef[ci]];
+		if ((rr > 1.f) && OnMap(gComPos[ci])) {
+			gCrPos.insertLast(gComPos[ci]);
+			gCrR.insertLast(rr);
+		}
+	}
 }
 
 // The ground we care about that nothing watches, and how much of it there is.

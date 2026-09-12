@@ -451,7 +451,7 @@ void UpdateGuardPosts()
 		return;
 	}
 	gPostAt = ai.frame;
-	RefreshPostLife();
+	{ const double _tL = Perf::T0(); RefreshPostLife(); Perf::Add("gp.life", _tL); }
 	if (!Builder::gHomeSet)
 		return;
 	Market::PfRebuild();
@@ -556,7 +556,9 @@ void UpdateGuardPosts()
 				&& (gPostCovAtZ[i] == Market::gPfPos[i].z);
 	}
 	if (!covOk) {
+		const double _tCv = Perf::T0();
 		Market::PfCoverField(gPostCovCache);
+		Perf::Add("gp.cover", _tCv);
 		gPostCovAtX.resize(n);
 		gPostCovAtZ.resize(n);
 		for (uint i = 0; i < n; ++i) {
@@ -564,6 +566,7 @@ void UpdateGuardPosts()
 			gPostCovAtZ[i] = Market::gPfPos[i].z;
 		}
 	}
+	const double _tSc = Perf::T0();
 	for (uint i = 0; i < n; ++i) {
 		const AIFloat3 ap = Market::gPfPos[i];
 		px[i] = ap.x;
@@ -573,12 +576,16 @@ void UpdateGuardPosts()
 		seen[i] = Market::RadarSees(ap);
 		wm[i] = Market::gPfWorth[i];
 		gPostTotal += wm[i];
-		if (gPostReq[i] < 0.f)
+		if (gPostReq[i] < 0.f) {
+			const double _tTh = Perf::T0();
 			gPostReq[i] = Market::ThreatM(ap);
+			Perf::Add("gp.threat", _tTh);
+		}
 		rqv[i] = gPostReq[i];
 		gPostReqX[i] = ap.x;
 		gPostReqZ[i] = ap.z;
 	}
+	Perf::Add("gp.scan", _tSc);
 	gPostCovStamp = Market::gPfStamp;
 	gPostCovTwRev = Market::gPfTwRev;
 	// Wanted once, read twice: it sets the warning a radar buys that guard,

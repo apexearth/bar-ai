@@ -463,6 +463,26 @@ float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at)
 	return ai.CanDefReach(Catalog::Def(uid), at, at) ? 1.f : 0.25f;
 }
 
+Grid::Cells gDefGrid;
+int  gDefGridStamp = -1;
+uint gDefGridN = 0;
+float gDefGridMaxR = 400.f;
+void DefGridBuild()
+{
+	if ((gDefGridStamp == gOwnStamp) && (gDefGridN == gProtPos[PROT_DEF].length()))
+		return;
+	gDefGridStamp = gOwnStamp;
+	gDefGridN = gProtPos[PROT_DEF].length();
+	gDefGrid.Begin(256.f, 0.f, 0.f, float(AiTerrainWidth()), float(AiTerrainHeight()));
+	gDefGridMaxR = 400.f;
+	for (uint i = 0; i < gDefGridN; ++i) {
+		gDefGrid.Add(gProtPos[PROT_DEF][i].x, gProtPos[PROT_DEF][i].z);
+		const int d2 = gProtDefId[PROT_DEF][i];
+		if (Catalog::ValidId(d2) && (Catalog::gMaxRange[d2] > gDefGridMaxR))
+			gDefGridMaxR = Catalog::gMaxRange[d2];
+	}
+}
+
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
@@ -669,6 +689,9 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		}
 	}
 	// Defences: dominated by a much stronger one covering the same ground.
+	// Neighbours from a grid, not every tower against every other: the
+	// pairwise walk was turrets^2 distance tests per election.
+	DefGridBuild();
 	for (uint i = 0; i < gProtUnit[PROT_DEF].length(); ++i) {
 		CCircuitUnit@ g = gProtUnit[PROT_DEF][i];
 		if (g is null)
@@ -677,8 +700,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		const int d = gProtDefId[PROT_DEF][i];
 		bool dominated = false;
-		for (uint j = 0; j < gProtUnit[PROT_DEF].length(); ++j) {
-			if (i == j)
+		gDefGrid.Query(gProtPos[PROT_DEF][i].x, gProtPos[PROT_DEF][i].z, gDefGridMaxR);
+		for (uint q = 0; q < gDefGrid.hit.length(); ++q) {
+			const uint j = uint(gDefGrid.hit[q]);
+			if ((i == j) || (j >= gProtDefId[PROT_DEF].length()))
 				continue;
 			const int d2 = gProtDefId[PROT_DEF][j];
 			// COVERS THE SAME GROUND, in the BETTER tower's own reach rather
