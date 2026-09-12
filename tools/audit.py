@@ -10,6 +10,7 @@ with the evidence inline. A FLAG is a lead, not a verdict: it names the log
 line to read next. Checks and thresholds live in CHECKS at the bottom, one
 function per behavior, so adding an audit is adding a function.
 """
+import collections
 import re
 import sys
 from collections import defaultdict
@@ -1146,6 +1147,24 @@ def check_placement_sanity(text, rep):
                     f"median big-eco offset {med:.0f} elmos along the enemy"
                     f" axis ({len(fwd_d)} sites)"
                     + ("" if med <= 200 else " -- the farm is on the lawn"))
+    # RING SCATTER (apexearth 2026-09-11: "our construction is messy"). When
+    # the lattice has no slot it returns one constant, the engine marks it
+    # blocked, and ProbedSite lands the building on a 700-elmo ring around the
+    # farm instead: 65 of 67 energy asks at one point, wind turbines flung to
+    # the map corner. Every such landing logs site-widen; against the eco
+    # executions it should be rare.
+    widen = re.findall(r"apex: site-widen t=(\d+) (\w+) from=(-?\d+),(-?\d+)", text)
+    eco_ex = len(re.findall(r"apex: exec t=\d+ \S+ #\d+ (?:energy|convert):", text))
+    if eco_ex:
+        share = len(widen) / eco_ex
+        asks = collections.Counter((t, f"{x},{z}") for t, d, x, z in widen)
+        top = asks.most_common(1)[0] if asks else (("-", "-"), 0)
+        rep.add("ECONOMY", share < 0.10, "ring-scatter",
+                f"{len(widen)} of {eco_ex} eco executions landed on the probe"
+                f" ring ({100 * share:.0f}%); busiest blocked ask t{top[0][0]}"
+                f" at {top[0][1]} x{top[1]}"
+                + ("" if share < 0.10 else " -- the lattice has no slot and"
+                   " the ring is doing the placement"))
 
 
 

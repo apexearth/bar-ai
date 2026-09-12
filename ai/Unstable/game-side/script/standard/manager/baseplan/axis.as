@@ -176,13 +176,10 @@ bool Frame()
 	// Hand the frame down to C++, which snaps every non-fixed placement onto it,
 	// including stock task selection's. Held back until the anchor is final: a
 	// grid that moves puts everything already standing off it.
-	if (!gPublished && gAnchorFinal) {
+	// No grid handed to C++: the engine's spiral from the farm centre and
+	// the stock block map lay the base out (FarmSlot).
+	if (!gPublished && gAnchorFinal)
 		gPublished = true;
-		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LaneHalf(), GRID_RANGE);
-		AiLog("apex: base grid published cell=" + int(GRID_CELL)
-			+ " lane=" + int(LANE_PITCH) + "/" + int(LaneHalf())
-			+ " range=" + int(GRID_RANGE));
-	}
 	return true;
 }
 
