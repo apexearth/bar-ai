@@ -84,6 +84,7 @@ public:
 	// Fills the shared buffer and returns how many; read it with GetFeatureIdBuf().
 	// Leaf use only -- one buffer, so a nested query overwrites the outer one.
 	int GetFeatureIdsIn(const springai::AIFloat3& pos, float radius, bool spherical = false);
+	int GetFeatureIds();   // every feature the team can see, same buffer
 	const int* GetFeatureIdBuf() const { return featureIds.data(); }
 	int Feature_GetDefId(int featureId) const;
 	int Feature_GetResurrectDefId(int featureId) const;

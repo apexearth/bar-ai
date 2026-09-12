@@ -1040,6 +1040,13 @@ int CCircuitAI::Update(int frame)
 		// apex: how much WORK the O(n) helpers did, not how long they took --
 		// a visited count that grows faster than the unit count names the
 		// quadratic helper without a clock in the hot loop.
+		if (mapManager != nullptr) {
+			CWreckField& wf = mapManager->GetWreckField();
+			perfFeatSweep = wf.perfSweep; perfFeatCalls = wf.perfCalls;
+			LOG("apex: perf wreckfield scanned=%llu items=%i version=%i",
+					(unsigned long long)wf.perfScanned, wf.GetCount(), wf.GetVersion());
+			wf.perfSweep = 0; wf.perfCalls = 0; wf.perfScanned = 0;
+		}
 		LOG("apex: perf sweep feat=%llu/%u reach=%llu/%u own=%llu/%u ecost=%llu/%u",
 				(unsigned long long)perfFeatSweep, perfFeatCalls,
 				(unsigned long long)perfReachSweep, perfReachCalls,
@@ -2601,6 +2608,21 @@ bool CCircuitAI::IsUnderLava(const AIFloat3& pos, CCircuitDef* def) const
 	return rest <= level;
 }
 
+int CCircuitAI::GetTerritoryAt(const AIFloat3& pos) const
+{
+	return IsPosOnMap(pos) ? GetInflMap()->GetTerritoryAt(pos) : 0;
+}
+
+int CCircuitAI::GetTerritoryVersion() const
+{
+	return (mapManager == nullptr) ? 0 : GetInflMap()->GetTerritoryVersion();
+}
+
+int CCircuitAI::GetWreckFieldVersion() const
+{
+	return (mapManager == nullptr) ? 0 : mapManager->GetWreckField().GetVersion();
+}
+
 float CCircuitAI::GetAllyInflAt(const AIFloat3& pos) const
 {
 	return IsPosOnMap(pos) ? GetInflMap()->GetAllyInflAt(pos) : .0f;
@@ -2770,61 +2792,34 @@ bool CCircuitAI::IsCommanderWreckId(int rezDefId)
 // CBReclaimTask only guards the targeted search.
 springai::AIFloat3 CCircuitAI::GetCommanderWreckPos(const springai::AIFloat3& pos, float radius)
 {
-	springai::AIFloat3 best(-RgtVector);
-	if ((callback == nullptr) || (radius <= 0.f)) {
-		return best;
+	if ((mapManager == nullptr) || (radius <= 0.f)) {
+		return springai::AIFloat3(-RgtVector);
 	}
-	float bestSqd = std::numeric_limits<float>::max();
-	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
-	const int* fIds = callback->GetFeatureIdBuf();
-	perfFeatSweep += nFeats;
-	++perfFeatCalls;
-	for (int i = 0; i < nFeats; ++i) {
-		const int fId = fIds[i];
-		if (!IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
-			continue;
-		}
-		const springai::AIFloat3 fp = callback->Feature_GetPosition(fId);
-		const float sqd = pos.SqDistance2D(fp);
-		if (sqd < bestSqd) {
-			bestSqd = sqd;
-			best = fp;
-		}
-	}
-	return best;
+	return mapManager->GetWreckField().CommanderWreck(pos, radius);
 }
 
 springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, float radius, float minMetal)
 {
-	springai::AIFloat3 best(-RgtVector);
-	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
-		return best;
+	if ((mapManager == nullptr) || (radius <= 0.f)) {
+		return springai::AIFloat3(-RgtVector);
 	}
+	return mapManager->GetWreckField().BestWreck(pos, radius, minMetal);
+}
 
-	float bestMetal = minMetal;
-	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
-	const int* fIds = callback->GetFeatureIdBuf();
-	perfFeatSweep += nFeats;
-	++perfFeatCalls;
-	for (int i = 0; i < nFeats; ++i) {
-		const int fId = fIds[i];
-		if (IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
-			continue;
-		}
-		const int fDefId = callback->Feature_GetDefId(fId);
-		if (fDefId < 0) {
-			continue;
-		}
-		// Reclaim left is a fraction of the def's contained metal; a wreck
-		// someone else is already half way through is worth less to us.
-		const float value = GetFeatDefInfo(fDefId).metal
-				* callback->Feature_GetReclaimLeft(fId);
-		if (value > bestMetal) {
-			bestMetal = value;
-			best = callback->Feature_GetPosition(fId);
-		}
+springai::AIFloat3 CCircuitAI::GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost)
+{
+	if ((mapManager == nullptr) || (radius <= 0.f)) {
+		return springai::AIFloat3(-RgtVector);
 	}
-	return best;
+	return mapManager->GetWreckField().BestRez(pos, radius, minCost);
+}
+
+float CCircuitAI::GetFieldWorkAt(const springai::AIFloat3& pos, float radius)
+{
+	if ((mapManager == nullptr) || (radius <= 0.f)) {
+		return .0f;
+	}
+	return mapManager->GetWreckField().WorkAt(pos, radius);
 }
 
 // TOTAL reclaimable metal within radius, not the richest single body.
@@ -2837,84 +2832,12 @@ springai::AIFloat3 CCircuitAI::GetBestWreckPos(const springai::AIFloat3& pos, fl
 // field" total that gates whether a constructor gets sent at all, so a
 // commander corpse skewing that total high would still walk a con onto it even
 // if GetBestWreckPos itself never targets it directly.
-springai::AIFloat3 CCircuitAI::GetBestRezPos(const springai::AIFloat3& pos, float radius, float minCost)
-{
-	springai::AIFloat3 best(-RgtVector);
-	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
-		return best;
-	}
-	float bestCost = minCost;
-	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
-	const int* fIds = callback->GetFeatureIdBuf();
-	perfFeatSweep += nFeats;
-	++perfFeatCalls;
-	for (int i = 0; i < nFeats; ++i) {
-		const int fId = fIds[i];
-		// One resurrect-def read answers both questions the old code asked the
-		// engine separately: is this a commander corpse, and is it rezzable.
-		const int rezDefId = callback->Feature_GetResurrectDefId(fId);
-		if ((rezDefId < 0) || IsCommanderWreckId(rezDefId)) {
-			continue;
-		}
-		const int fDefId = callback->Feature_GetDefId(fId);
-		if (fDefId < 0) {
-			continue;
-		}
-		const SFeatDefInfo& info = GetFeatDefInfo(fDefId);
-		const float v = std::max(info.metal, info.rezCostM);
-		if (v > bestCost) {
-			bestCost = v;
-			best = callback->Feature_GetPosition(fId);
-		}
-	}
-	return best;
-}
-
-float CCircuitAI::GetFieldWorkAt(const springai::AIFloat3& pos, float radius)
-{
-	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
-		return .0f;
-	}
-	float total = .0f;
-	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
-	const int* fIds = callback->GetFeatureIdBuf();
-	perfFeatSweep += nFeats;
-	++perfFeatCalls;
-	for (int i = 0; i < nFeats; ++i) {
-		const int fId = fIds[i];
-		const int rezDefId = callback->Feature_GetResurrectDefId(fId);
-		if (IsCommanderWreckId(rezDefId)) {
-			continue;
-		}
-		const SFeatDefInfo& info = GetFeatDefInfo(callback->Feature_GetDefId(fId));
-		float v = info.metal * callback->Feature_GetReclaimLeft(fId);
-		if (rezDefId >= 0) {
-			v = std::max(v, info.rezCostM);
-		}
-		total += v;
-	}
-	return total;
-}
-
 float CCircuitAI::GetWreckValueAt(const springai::AIFloat3& pos, float radius)
 {
-	if ((callback == nullptr) || (radius <= 0.f) || (GetMetalResId() < 0)) {
+	if ((mapManager == nullptr) || (radius <= 0.f)) {
 		return .0f;
 	}
-	float total = .0f;
-	const int nFeats = callback->GetFeatureIdsIn(pos, radius, false);
-	const int* fIds = callback->GetFeatureIdBuf();
-	perfFeatSweep += nFeats;
-	++perfFeatCalls;
-	for (int i = 0; i < nFeats; ++i) {
-		const int fId = fIds[i];
-		if (IsCommanderWreckId(callback->Feature_GetResurrectDefId(fId))) {
-			continue;
-		}
-		total += GetFeatDefInfo(callback->Feature_GetDefId(fId)).metal
-				* callback->Feature_GetReclaimLeft(fId);
-	}
-	return total;
+	return mapManager->GetWreckField().ValueAt(pos, radius);
 }
 
 // Count of visible enemy units within radius of a position.

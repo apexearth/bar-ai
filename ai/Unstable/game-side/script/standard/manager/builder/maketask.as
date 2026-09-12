@@ -27,7 +27,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 // otherwise re-runs the whole corpse/medic/salvage scan every idle update
 // (flee is not rate-limited -- safety stays live). Spring unit ids cap at
 // 32k, same sizing as Market::gLastDecideAt.
-array<int> gRzDecideAt(32001, -30000);
+array<int> gRzDecideVer(32001, -1);
 // Per unit: when the held build's ground was last checked for danger.
 array<int> gHotCheckAt(32001, -30000);
 int gLetGo = 0;
@@ -213,19 +213,22 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (t !is null)
 		return t;
 	if (IsRezzer(unit)) {
-		// Twice a second, and not at all while something can shoot it.
-		// apexearth 2026-09-06: "they need to be quick to react. Delays of
-		// more than a second are unacceptable" -- a 2 s gate on the election
-		// IS a delay of more than a second, and it was refusing 8-160
-		// elections a minute while the bots stood idle (rez-front set).
-		if ((int(unit.id) >= 0) && (int(unit.id) < int(gRzDecideAt.length()))) {
-			if ((ai.frame - gRzDecideAt[int(unit.id)] < SECOND / 2)
+		// Once per wreck-field rebuild, and not at all while something can
+		// shoot it. The chain's questions are answered from that field, so a
+		// bot that found nothing is asked again when the field has new
+		// information and not before -- the field rebuilds about once a
+		// second, inside apexearth's 2026-09-06 "delays of more than a second
+		// are unacceptable"; the earlier half-second clock re-ran the whole
+		// chain on unchanged data.
+		if ((int(unit.id) >= 0) && (int(unit.id) < int(gRzDecideVer.length()))) {
+			const int ver = ai.GetWreckFieldVersion();
+			if ((gRzDecideVer[int(unit.id)] == ver)
 				&& !InEnemyReach(unit.GetPos(ai.frame)))
 			{
 				++gRzGate;
 				return null;
 			}
-			gRzDecideAt[int(unit.id)] = ai.frame;
+			gRzDecideVer[int(unit.id)] = ver;
 		}
 		const double _tRz = Perf::T0();
 		IUnitTask@ rz = RezzerChain(unit);

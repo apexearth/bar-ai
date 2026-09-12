@@ -309,6 +309,11 @@ public:
 	void DrawPoint(const springai::AIFloat3& pos, const std::string& label);
 	void DrawLine(const springai::AIFloat3& from, const springai::AIFloat3& to);
 	void DrawErase(const springai::AIFloat3& pos);
+	// apex: territory (0 nobody, 1 ours, 2 theirs) from the influence map's
+	// derived mask, and the versions the script keys its refreshes on.
+	int GetTerritoryAt(const springai::AIFloat3& pos) const;
+	int GetTerritoryVersion() const;
+	int GetWreckFieldVersion() const;
 	float GetAllyInflAt(const springai::AIFloat3& pos) const;
 	float GetEnemyInflAt(const springai::AIFloat3& pos) const;
 	float GetNetInflAt(const springai::AIFloat3& pos) const;

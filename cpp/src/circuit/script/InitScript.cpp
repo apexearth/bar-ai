@@ -11,6 +11,7 @@
 #include "script/RefCounter.h"
 #include "map/ThreatMap.h"
 #include "map/MapManager.h"
+#include "map/InfluenceMap.h"
 #include "scheduler/Scheduler.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
@@ -858,45 +859,51 @@ static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos,
 	return circuit->GetEnemyCostAt(pos, radius);
 }
 
-// A whole ray of map reads in one call: samples from + dir * step * i, i = 1..n,
-// stopping past maxD or off the map, written to ally/enemy/bthr from index `at`
-// with the ray's two peaks (from 0) in maxAlly/maxEnemy. The reads are an array index
-// each, so per-sample binding calls (and the script loop copying them) were all
-// overhead. Returns the samples filled; a return short of n with
-// step * (k + 1) <= maxD means the ray left the map.
-static int CCircuitAI_GetInflRay(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& dir,
-		float step, int n, float maxD, CScriptArray* ally, CScriptArray* enemy, CScriptArray* bthr,
-		int at, float* maxAlly, float* maxEnemy)
+// One ray over the territory mask and the builder threat map: see
+// CMapManager::TerritoryRay. edge/safe/metAt are this ray's answers, flags
+// 1 = met them, 2 = left the map.
+static void CCircuitAI_TerritoryRay(CCircuitAI* circuit, const AIFloat3& from, const AIFloat3& dir,
+		float step, int n, float maxD, float bar, bool stopAtOursEnd,
+		float* edge, float* safe, float* metAt, int* flags)
 {
-	if (maxAlly != nullptr) *maxAlly = 0.f;
-	if (maxEnemy != nullptr) *maxEnemy = 0.f;
-	if ((ally == nullptr) || (enemy == nullptr) || (bthr == nullptr) || (n <= 0) || (at < 0)) {
-		return 0;
+	float e = 0.f, sf = 0.f, m = 0.f;
+	int fl = 0;
+	if ((circuit->GetMapManager() != nullptr) && (n > 0)) {
+		circuit->GetMapManager()->TerritoryRay(from, dir, step, n, maxD, bar, stopAtOursEnd, e, sf, m, fl);
 	}
-	const asUINT need = (asUINT)(at + n);
-	if (ally->GetSize() < need) ally->Resize(need);
-	if (enemy->GetSize() < need) enemy->Resize(need);
-	if (bthr->GetSize() < need) bthr->Resize(need);
-	int k = 0;
-	for (int i = 1; i <= n; ++i) {
-		const float d = step * i;
-		if (d > maxD) {
-			break;
-		}
-		const AIFloat3 p = from + dir * d;
-		if (!circuit->IsPosOnMap(p)) {
-			break;
-		}
-		const float a = circuit->GetAllyInflAt(p);
-		const float e = circuit->GetEnemyInflAt(p);
-		*(float*)ally->At(at + k) = a;
-		*(float*)enemy->At(at + k) = e;
-		*(float*)bthr->At(at + k) = circuit->GetBuilderThreatAt(p);
-		if ((maxAlly != nullptr) && (a > *maxAlly)) *maxAlly = a;
-		if ((maxEnemy != nullptr) && (e > *maxEnemy)) *maxEnemy = e;
-		++k;
+	if (edge != nullptr) *edge = e;
+	if (safe != nullptr) *safe = sf;
+	if (metAt != nullptr) *metAt = m;
+	if (flags != nullptr) *flags = fl;
+}
+
+static int CCircuitAI_GetTerritoryAt(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	return circuit->GetTerritoryAt(pos);
+}
+
+static int CCircuitAI_GetTerritoryVersion(CCircuitAI* circuit)
+{
+	return circuit->GetTerritoryVersion();
+}
+
+static void CCircuitAI_SetTerritoryBars(CCircuitAI* circuit, float allyFrac, float foeFrac)
+{
+	if (circuit->GetMapManager() != nullptr) {
+		circuit->GetInflMap()->SetTerritoryBars(allyFrac, foeFrac);
 	}
-	return k;
+}
+
+static void CCircuitAI_GetTerritoryBars(CCircuitAI* circuit, float* allyBar, float* foeBar)
+{
+	const bool has = (circuit->GetMapManager() != nullptr);
+	if (allyBar != nullptr) *allyBar = has ? circuit->GetInflMap()->GetTerritoryAllyBar() : 0.f;
+	if (foeBar != nullptr) *foeBar = has ? circuit->GetInflMap()->GetTerritoryFoeBar() : 0.f;
+}
+
+static int CCircuitAI_GetWreckFieldVersion(CCircuitAI* circuit)
+{
+	return circuit->GetWreckFieldVersion();
 }
 
 // The same envelope the rez-bot guard walks bots out of (BuilderManager's
@@ -1527,7 +1534,12 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float EnemyReachSlack(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_EnemyReachSlack), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-	r = engine->RegisterObjectMethod("CCircuitAI", "int GetInflRay(const AIFloat3& in, const AIFloat3& in, float, int, float, array<float>@+, array<float>@+, array<float>@+, int, float &out, float &out)", asFUNCTION(CCircuitAI_GetInflRay), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void TerritoryRay(const AIFloat3& in, const AIFloat3& in, float, int, float, float, bool, float &out, float &out, float &out, int &out)", asFUNCTION(CCircuitAI_TerritoryRay), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTerritoryAt(const AIFloat3& in)", asFUNCTION(CCircuitAI_GetTerritoryAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTerritoryVersion()", asFUNCTION(CCircuitAI_GetTerritoryVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void SetTerritoryBars(float, float)", asFUNCTION(CCircuitAI_SetTerritoryBars), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void GetTerritoryBars(float &out, float &out)", asFUNCTION(CCircuitAI_GetTerritoryBars), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int GetWreckFieldVersion()", asFUNCTION(CCircuitAI_GetWreckFieldVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetUnitThreatAt(CCircuitUnit@, const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetUnitThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(CCircuitUnit@, bool)", asMETHODPR(CCircuitAI, UnitControl, (CCircuitUnit*, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool UnitControl(Id, bool)", asMETHODPR(CCircuitAI, UnitControl, (ICoreUnit::Id, bool), bool), asCALL_THISCALL); ASSERT(r >= 0);

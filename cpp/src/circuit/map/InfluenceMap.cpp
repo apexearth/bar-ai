@@ -19,6 +19,8 @@
 #include "json/json.h"
 
 #include <algorithm>
+
+#include <algorithm>
 #include <chrono>
 
 #include "spring/SpringCallback.h"
@@ -184,6 +186,7 @@ void CInfluenceMap::Apply()
 //	cheats->SetEnabled(false);
 
 	SwapBuffers();
+	DeriveTerritory();
 	isUpdating = false;
 
 	perfApplyUs.fetch_add(std::chrono::duration_cast<std::chrono::microseconds>(
@@ -208,6 +211,63 @@ void CInfluenceMap::SwapBuffers()
 //	tension = inflData.tension.data();
 //	vulnerability = inflData.vulnerability.data();
 //	featureInfl = inflData.featureInfl.data();
+}
+
+void CInfluenceMap::DeriveTerritory()
+{
+	if ((int)terr.size() != mapSize) {
+		terr.assign(mapSize, 0);
+	}
+	float maxAlly = 0.f;
+	float maxFoe = 0.f;
+	for (int i = 0; i < mapSize; ++i) {
+		const float a = allyInfl[i] - INFL_BASE;
+		const float f = enemyInfl[i] - INFL_BASE;
+		if (a > maxAlly) maxAlly = a;
+		if (f > maxFoe) maxFoe = f;
+	}
+	terrAllyBar = std::max(1.f, maxAlly * terrAllyFrac);
+	terrFoeBar = std::max(1.f, maxFoe * terrFoeFrac);
+	terrOurs = 0;
+	for (int i = 0; i < mapSize; ++i) {
+		const float a = allyInfl[i] - INFL_BASE;
+		const float f = enemyInfl[i] - INFL_BASE;
+		uint8_t t = 0;
+		if ((f >= terrFoeBar) && (f > a)) {
+			t = 2;
+		} else if (a >= terrAllyBar) {
+			t = 1;
+			++terrOurs;
+		}
+		terr[i] = t;
+	}
+	terrEdge.clear();
+	for (int z = 0; z < height; ++z) {
+		for (int x = 0; x < width; ++x) {
+			const int i = z * width + x;
+			if (terr[i] != 1) {
+				continue;
+			}
+			if (((x > 0) && (terr[i - 1] != 1)) || ((x + 1 < width) && (terr[i + 1] != 1))
+				|| ((z > 0) && (terr[i - width] != 1)) || ((z + 1 < height) && (terr[i + width] != 1)))
+			{
+				terrEdge.push_back(i);
+			}
+		}
+	}
+	++terrVersion;
+}
+
+int CInfluenceMap::GetTerritoryAt(const AIFloat3& position) const
+{
+	if ((int)terr.size() != mapSize) {
+		return 0;
+	}
+	int x, z;
+	PosToXZ(position, x, z);
+	x = std::min(std::max(x, 0), width - 1);
+	z = std::min(std::max(z, 0), height - 1);
+	return terr[z * width + x];
 }
 
 float CInfluenceMap::GetEnemyInflAt(const AIFloat3& position) const

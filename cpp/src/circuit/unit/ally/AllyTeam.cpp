@@ -357,6 +357,7 @@ void CAllyTeam::Update(CCircuitAI* ai)
 	} else {
 		enemyManager->UpdateEnemyDatas(quadField);
 	}
+	mapManager->GetWreckField().UpdateSlice(circuit, circuit->GetLastFrame());
 }
 
 void CAllyTeam::LogMapPerf(CCircuitAI* ai)

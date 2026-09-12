@@ -229,6 +229,13 @@ int COOAICallback::GetFeatureIdsIn(const AIFloat3& pos, float radius, bool spher
 	return (size < 0) ? 0 : std::min(size, MAX_UNITS);
 }
 
+int COOAICallback::GetFeatureIds()
+{
+	featureIds.resize(MAX_UNITS);
+	const int size = sAICallback->getFeatures(skirmishAIId, featureIds.data(), MAX_UNITS);
+	return (size < 0) ? 0 : std::min(size, MAX_UNITS);
+}
+
 int COOAICallback::Feature_GetDefId(int featureId) const
 {
 	return sAICallback->Feature_getDef(skirmishAIId, featureId);

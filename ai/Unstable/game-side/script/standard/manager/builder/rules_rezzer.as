@@ -208,7 +208,7 @@ int RezScanPeriod()
 
 // Slot by unit id. gConSlotId never shrinks -- every rez bot the game ever
 // builds keeps its row -- so the linear search was O(elections x cons-ever),
-// and both of those grow all game. Same Spring 32k id cap as gRzDecideAt; an
+// and both of those grow all game. Same Spring 32k id cap as gRzDecideVer; an
 // id past it falls back to the walk and behaves exactly as before.
 array<int> gConSlotOf(32001, -1);
 int ConSlot(CCircuitUnit@ unit)

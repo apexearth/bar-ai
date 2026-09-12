@@ -87,16 +87,6 @@ bool gAnyMet = false;
 // what the radius is quantised to, and at 14 samples over half the map diagonal
 // that was 366 elmos on a 16x12 map.
 const int RING_SAMPLES = 28;
-// THE RING'S TWO PASSES READ THE SAME CELLS. Pass 1 exists only to find the two
-// peaks, and it walks exactly the samples pass 2 marches -- so the influence
-// map was asked for every one of them twice a rebuild. Pass 1 keeps what it
-// read here and pass 2 indexes it: same numbers, half the engine reads. Pass 2
-// can never want a sample pass 1 did not take, because both guard on the same
-// `d > march` and OnMap tests before reading.
-array<float> gRingSA;   // ally influence at ray r, sample i-1
-array<float> gRingSF;   // ...and enemy influence
-array<float> gRingST;   // ...and builder threat
-array<int>   gRingN;    // samples filled on ray r
 array<float> gRingOwn;  // per ray: the furthest committed structure on its corridor
 int   gRingOwnStamp = -1;
 float gRingOwnHx = -1.f;
@@ -113,10 +103,11 @@ array<float> gRingSin;
 // influence reads 77 beside our base and exactly 0 on ground nobody has been
 // near, and most of the map is the second kind.
 //
-// So ally and enemy are tested SEPARATELY, each against a share of its own peak
-// over this same sample set. The two fields are not on one scale -- ally counts
-// every armed unit the whole ally team owns, enemy counts only what we have
-// seen -- so one absolute floor cannot serve both.
+// So ally and enemy are tested SEPARATELY, each against a share of its own
+// map-wide peak (the engine's territory mask, SetTerritoryBars). The two fields
+// are not on one scale -- ally counts every armed unit the whole ally team
+// owns, enemy counts only what we have seen -- so one absolute floor cannot
+// serve both.
 //
 // The fractions are Front::TERRITORY_FRAC and Front::FOE_FRAC, restated rather
 // than referenced: manager/military.as is included before manager/frontline.as
@@ -153,15 +144,27 @@ AIFloat3 gFrontSide;     // unit perpendicular
 AIFloat3 gFrontHome;
 bool gFrontValid = false;
 
+int  gFrontTerrVer = -1;
+bool gFrontBarsSet = false;
+
+// THE FRONT IS THE EDGE OF THE TERRITORY MASK. The engine derives it from the
+// finished influence map at every apply (0 nobody's, 1 ours, 2 theirs; the two
+// bars are shares of the map-wide peaks, RING_*_FRAC below), so this rebuilds
+// when that mask has a new version -- reading it every second re-read the same
+// data -- and at the 5 s his "5-10 s no big deal" already set for the rich
+// case, so the builder-threat edge, which moves faster than the map, is not
+// left longer than that.
 void RebuildFront()
 {
-	// Economy-scaled cadence: the later the game, the more slowly the front
-	// moves -- apexearth: "5-10s no big deal". Rich = 5s, else 1s.
-	const int frontPeriod = (aiEconomyMgr.metal.income
-			>= ai.GetTunable("apex_elect_rich_income", TUNE_ELECT_RICH_INCOME)) ? 150 : 30;
-	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < frontPeriod))
+	if (!gFrontBarsSet) {
+		gFrontBarsSet = true;
+		ai.SetTerritoryBars(RING_ALLY_FRAC, RING_FOE_FRAC);
+	}
+	const int terrVer = ai.GetTerritoryVersion();
+	if ((gFrontStamp >= 0) && (terrVer == gFrontTerrVer) && (ai.frame - gFrontStamp < 150))
 		return;
 	gFrontStamp = ai.frame;
+	gFrontTerrVer = terrVer;
 	gFrontValid = false;
 	gFrontLane.resize(0);
 	gFrontSafe.resize(0);
@@ -188,43 +191,21 @@ void RebuildFront()
 	// reason.
 	const float laneBar = ai.GetTunable("apex_build_threat_bar", TUNE_BUILD_THREAT_BAR);
 	const double _tLn = Perf::T0();
+	// One engine ray per lane over the territory mask: ours out to `edge`,
+	// theirs met at `metAt`, no man's land walked through; distances come back
+	// in elmo along the axis and go out as the fractions the rest reads.
+	const float axisLen = sqrt(fwd.SqLength2D());
+	AIFloat3 fwdDir = fwd;
+	fwdDir.SafeNormalize2D();
+	const float laneStep = axisLen * FRONT_SCAN_END / float(FRONT_SAMPLES);
 	for (int lane = -FRONT_LANES; lane <= FRONT_LANES; ++lane) {
 		const AIFloat3 origin = home + side * (float(lane) * FrontLaneGap());
-		float found = -1.f;
-		float ours = -1.f;
-		float safe = 0.f;
-		for (int i = 1; i <= FRONT_SAMPLES; ++i) {
-			const float t = FRONT_SCAN_END * float(i) / float(FRONT_SAMPLES);
-			const AIFloat3 p = origin + fwd * t;
-			if (!OnMap(p))
-				break;
-			// THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable sample,
-			// not the first threatened one. The engine's own CanReachAtSafe tests
-			// threat at the DESTINATION plus whether a path exists, not a clear
-			// straight line, so stopping at the first threat wrongly collapsed
-			// the whole lane onto the base whenever one raider sat close in.
-			//
-			// THE SAME BAR THE ENGINE USES: CanReachAtSafe tests
-			// `GetBuilderThreatAt(pos) > THREAT_MIN` (1.0, util/Defines.h), and
-			// the accessor has already subtracted THREAT_BASE, so testing `> 0`
-			// instead put the safe edge one step from the base in every lane.
-			if (ai.GetBuilderThreatAt(p) <= laneBar)
-				safe = t;
-			// EMPTY GROUND IS NOBODY'S, NOT THEIRS. GetNetInflAt is ally minus
-			// enemy, so ground neither side has been near reads exactly 0, and
-			// testing `<= 0` called the first such sample the crossing -- putting
-			// the front one step from our own base on any flank not yet walked.
-			const float inf = ai.GetNetInflAt(p);
-			if (inf > 0.f) {
-				ours = t;      // still ours out to here
-				continue;
-			}
-			if (inf < 0.f) {
-				found = t;     // theirs: this is the crossing
-				break;
-			}
-			// exactly 0: no man's land, keep walking
-		}
+		float edgeD = 0.f, safeD = 0.f, metD = 0.f;
+		int flags = 0;
+		ai.TerritoryRay(origin, fwdDir, laneStep, FRONT_SAMPLES, axisLen * FRONT_SCAN_END + 1.f,
+				laneBar, false, edgeD, safeD, metD, flags);
+		float found = ((flags & 1) != 0) ? (metD / axisLen) : -1.f;
+		const float ours = (edgeD > 0.f) ? (edgeD / axisLen) : -1.f;
 		// Held all the way to the last positive sample and never met them: the line
 		// is out past there, not back at the base.
 		if ((found < 0.f) && (ours > 0.5f))
@@ -232,7 +213,7 @@ void RebuildFront()
 		// A lane with no crossing is one we hold all the way, or one nobody has
 		// contested. Halfway is the start-box answer and is right for both.
 		gFrontLane.insertLast((found < 0.f) ? 0.5f : found);
-		gFrontSafe.insertLast(safe);
+		gFrontSafe.insertLast(safeD / axisLen);
 	}
 	Perf::Add("fr.lanes", _tLn);
 	const double _tRg = Perf::T0();
@@ -352,50 +333,13 @@ void RebuildRing(const AIFloat3& in home)
 	if (haveBearing && (sep > step) && (sep < march))
 		march = sep;
 
-	// PASS 1: the two peaks, over exactly the samples pass 2 will march. Every
-	// read is OnMap-guarded -- CInfluenceMap::PosToXZ does no bounds check at all
-	// (`x = (int)pos.x / squareSize`) and indexes enemyInfl[z * width + x] off the
-	// raw position, the same unchecked pattern that made GetBuilderThreatAt kill
-	// the engine at frame 3.
-	float maxAlly = 0.f;
-	float maxFoe = 0.f;
-	if (gRingSA.length() != uint(FRONT_RAYS * RING_SAMPLES)) {
-		gRingSA.resize(uint(FRONT_RAYS * RING_SAMPLES));
-		gRingSF.resize(uint(FRONT_RAYS * RING_SAMPLES));
-		gRingST.resize(uint(FRONT_RAYS * RING_SAMPLES));
-		gRingN.resize(uint(FRONT_RAYS));
-	}
-	// One binding call per ray fills the three reads for every sample: asked
-	// per sample, the cost was the script-to-engine call, not the read.
-	for (int r = 0; r < FRONT_RAYS; ++r) {
-		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
-		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
-		gRingN[uint(r)] = 0;
-		if (!rearToo && haveBearing
-			&& ((dir.x * toEnemy.x + dir.z * toEnemy.z) <= 0.f))
-			continue;
-		float mA = 0.f;
-		float mF = 0.f;
-		gRingN[uint(r)] = ai.GetInflRay(home, dir, step, RING_SAMPLES, march,
-				gRingSA, gRingSF, gRingST, r * RING_SAMPLES, mA, mF);
-		if (mA > maxAlly) maxAlly = mA;
-		if (mF > maxFoe) maxFoe = mF;
-	}
 	RingOwnFill(home);
-	gRingAllyBar = maxAlly * RING_ALLY_FRAC;
-	if (gRingAllyBar < RING_ALLY_FLOOR)
-		gRingAllyBar = RING_ALLY_FLOOR;
-	// NOTHING SEEN IS NOT NOTHING THERE. With maxFoe at 0 the bar sits on its
-	// floor and no sample can ever reach it, so the ray falls through to the ally
-	// test and answers "our territory ends here" -- a real measurement rather than
-	// a guess about an enemy we have not found. That is the point of splitting the
-	// two tests: a rear player, whose own influence map holds no enemy at all,
-	// still gets a line instead of concluding there is no front.
-	gRingFoeBar = maxFoe * RING_FOE_FRAC;
-	if (gRingFoeBar < RING_FOE_FLOOR)
-		gRingFoeBar = RING_FOE_FLOOR;
+	ai.GetTerritoryBars(gRingAllyBar, gRingFoeBar);
 
-	// PASS 2: march.
+	// The march. Territory is the engine's mask; its bars are RING_*_FRAC of the
+	// map-wide peaks (SetTerritoryBars in RebuildFront). Ally influence is
+	// team-wide, so a bearing along a teammate's ground is capped at `sep`
+	// above and by RingOwnFill's commitment cap below.
 	for (int r = 0; r < FRONT_RAYS; ++r) {
 		const float ang = 6.2831853f * float(r) / float(FRONT_RAYS);
 		const AIFloat3 dir = AIFloat3(cos(ang), 0.f, sin(ang));
@@ -411,84 +355,11 @@ void RebuildRing(const AIFloat3& in home)
 		}
 		float edge = 0.f;        // last sample that was still ours
 		float safe = 0.f;
-		bool met = false;        // did the ray break on THEM, or just run out
-		float metAt = 0.f;       // ...and at what distance
-		bool wall = false;       // did it run out of map
-		const int rowS = r * RING_SAMPLES;
-		const int nS = gRingN[uint(r)];
-		for (int i = 1; i <= RING_SAMPLES; ++i) {
-			const float d = step * float(i);
-			if (d > march)
-				break;
-			if (i > nS) {   // the ray stopped short of march: it left the map
-				wall = true;
-				break;
-			}
-			// A TEAMMATE'S GROUND IS NOT OUR FRONT. GetAllyInflAt is ally-wide,
-			// so a bearing running along the team's own band never leaves
-			// friendly influence and marches until the enemy-centroid cap --
-			// measured on Supreme Isthmus 8v8 (watch-isthmus-trbl, 26 min):
-			// ring-diag r/sep max=0.98, front-diag max=1.15, i.e. a line drawn
-			// past the enemy (apexearth, watching: "our line draws through the
-			// middle of them"). The cap at `sep` was the band-aid for this and
-			// the numbers above are it being hit, not a battlefield.
-			//
-			// Front::Mine is the split the perimeter already uses: a cell
-			// belongs to the ally whose home is nearest it. In a 1v1, or
-			// before any mate has published a home, it answers true and this
-			// costs nothing.
-			// (The sector split that used to live here is gone. It stopped a
-			// ray the moment it crossed into a teammate's half, which emptied
-			// the ring on a line-abreast team -- rays=0/24 -- and it was never
-			// shown to help. Reverted 2026-09-02.)
-			// THEM FIRST, so a cell they hold can never be recorded as ours. This
-			// is also what keeps the line out of the battle itself: where both
-			// fields are up, the last ground a builder can be sent to is the cell
-			// BEFORE the one they are standing in.
-			// THEIRS MEANS THEY ARE STRONGER HERE, NOT MERELY PRESENT.
-			//
-			// The bar is 10% of their peak influence, and enemy influence
-			// bleeds over a unit's whole threat range -- so one scout within a
-			// thousand elmos trips it, and every forward ray broke at its FIRST
-			// sample. Measured: r/sep 0.03, a "front line" ninety elmos from
-			// our own centre, which is why front defence had nowhere to stand
-			// (apexearth: "I just want to see us make a frontline of turrets").
-			//
-			// Ground where our own influence still dominates is ours whoever is
-			// standing on it. The ray stops where theirs actually wins.
-			const float foeHere = gRingSF[uint(rowS + i - 1)];
-			const float allyHere = gRingSA[uint(rowS + i - 1)];
-			if ((foeHere >= gRingFoeBar) && (foeHere > allyHere)) {
-				met = true;
-				metAt = d;   // remember WHERE, so a first-sample contact is
-				break;       // still a bearing we hold, not a discarded ray
-			}
-			if (allyHere < gRingAllyBar)
-				break;   // our territory ended at the previous sample
-			edge = d;
-			if (gRingST[uint(rowS + i - 1)] <= bar)
-				safe = d;
-		}
-		// A bearing we hold nothing on carries `reach`, not 0. OnBorder compares a
-		// position against gRayR on its own bearing WITHOUT consulting gRayHot, so
-		// a 0 here would make every position in that sector read "on the border" --
-		// this is the same sentinel the rear arc above already uses.
-		// A RAY THAT MEETS THEM AT THE FIRST SAMPLE IS THE MOST FRONT-LINE
-		// BEARING THERE IS, AND WE WERE THROWING IT AWAY.
-		//
-		// `edge` is only recorded AFTER the enemy test passes, so a bearing
-		// where their influence reaches within one step of our own centre
-		// breaks with edge = 0, takes the `reach` sentinel, and reads hot =
-		// false. Every ray can meet the enemy and not one be left hot, so
-		// FrontBuildSpots has nothing to
-		// offer and front-line defence was impossible however many other
-		// gates were opened. The ring emptied itself exactly when the enemy
-		// got close, which is precisely when the front line matters.
-		//
-		// Contact is not the absence of a front, it IS the front. A met ray
-		// holds ground up to where we met them; with no clear sample behind
-		// that, half the contact distance is the honest answer -- far enough
-		// to be ours, short of where they are standing.
+		float metAt = 0.f;       // where the ray broke on THEM, 0 if it just ran out
+		int flags = 0;
+		ai.TerritoryRay(home, dir, step, RING_SAMPLES, march, bar, true, edge, safe, metAt, flags);
+		const bool met = (flags & 1) != 0;
+		const bool wall = (flags & 2) != 0;
 		if (met && (edge <= 0.f) && (metAt > 0.f))
 			edge = metAt * 0.5f;
 		// AND NEVER PAST THE GROUND WE ACTUALLY HOLD. Stopping only where the

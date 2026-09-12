@@ -63,7 +63,30 @@ public:
 	std::atomic<uint32_t> perfApplies{0};
 	int GetMapSize() const { return mapSize; }
 
+	// apex: territory, derived from the finished map at the end of every
+	// Apply: 0 nobody's, 1 ours (ally influence at or above its bar and not
+	// dominated), 2 theirs (enemy influence at or above its bar and above
+	// ours). The bars are shares of the map-wide peaks, floored at 1. The front
+	// is the edge of this; the script rays over it instead of the raw fields.
+	int GetTerritoryAt(const springai::AIFloat3& position) const;
+	int GetTerritoryVersion() const { return terrVersion; }
+	void SetTerritoryBars(float allyFrac, float foeFrac) { terrAllyFrac = allyFrac; terrFoeFrac = foeFrac; }
+	float GetTerritoryAllyBar() const { return terrAllyBar; }
+	float GetTerritoryFoeBar() const { return terrFoeBar; }
+	int GetTerritoryEdgeCount() const { return (int)terrEdge.size(); }
+	int GetTerritoryOursCount() const { return terrOurs; }
+
 private:
+	void DeriveTerritory();
+	std::vector<uint8_t> terr;
+	std::vector<int> terrEdge;   // cell indices of ours with a 4-neighbour not ours
+	int terrVersion = 0;
+	int terrOurs = 0;
+	float terrAllyFrac = 0.03f;
+	float terrFoeFrac = 0.10f;
+	float terrAllyBar = 1.f;
+	float terrFoeBar = 1.f;
+
 	struct SInfluenceData {
 		FloatVec enemyInfl;
 		FloatVec allyInfl;
