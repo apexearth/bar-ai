@@ -85,6 +85,65 @@ float TaskPower(IUnitTask@ t)
 // that would shoot at us there; the best spot is the most metal per unit of
 // guard. Returns false when nothing of theirs has been seen at any of them,
 // which is the honest reading before contact.
+// METAL MAPS HAVE NO SPOTS, so the spot loop has nothing to score. A grid at
+// the threat pitch stands in for the spot list there, a few cells per update,
+// and the best of the last sweep is what RaidTarget answers with.
+array<AIFloat3> gRaidCells;
+uint  gRaidCellI = 0;
+bool  gRaidGridHas = false;
+AIFloat3 gRaidGridAt;
+float gRaidGridGuard = 0.f;
+float gRaidCurScore = 0.f;
+bool  gRaidCurHas = false;
+AIFloat3 gRaidCurAt;
+float gRaidCurGuard = 0.f;
+
+void RaidGridStep()
+{
+	if (!Builder::gHomeSet || !Market::gSpotsCached || (Market::gAllSpots.length() > 0))
+		return;
+	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	if (r <= 1.f)
+		return;
+	if (gRaidCells.length() == 0) {
+		const float w = float(AiTerrainWidth());
+		const float h = float(AiTerrainHeight());
+		for (float z = r * 0.5f; z < h; z += r) {
+			for (float x = r * 0.5f; x < w; x += r)
+				gRaidCells.insertLast(AIFloat3(x, 0.f, z));
+		}
+		if (gRaidCells.length() == 0)
+			return;
+	}
+	const AIFloat3 foe = Front::FoeAnchor();
+	// Four cells per one-second update: a sweep of the whole map in ~20 s,
+	// the ask's own cadence.
+	for (int step = 0; step < 4; ++step) {
+		const AIFloat3 sp = gRaidCells[gRaidCellI];
+		if (!OnMap(foe) || (sp.distance2D(foe) < sp.distance2D(Builder::gHomePos))) {
+			const float prize = aiEnemyMgr.GetEnemyStructCostAt(sp, r);
+			if (prize > 1.f) {
+				const float g = ai.GetEnemyInflAt(sp);
+				const float score = prize / (1.f + g);
+				if (!gRaidCurHas || (score > gRaidCurScore)) {
+					gRaidCurHas = true;
+					gRaidCurScore = score;
+					gRaidCurAt = sp;
+					gRaidCurGuard = g;
+				}
+			}
+		}
+		if (++gRaidCellI >= gRaidCells.length()) {
+			gRaidCellI = 0;
+			gRaidGridHas = gRaidCurHas;
+			gRaidGridAt = gRaidCurAt;
+			gRaidGridGuard = gRaidCurGuard;
+			gRaidCurHas = false;
+			gRaidCurScore = 0.f;
+		}
+	}
+}
+
 bool gRaidPrizeLogged = false;
 
 bool RaidTarget(AIFloat3& out at, float& out guard)
@@ -94,8 +153,15 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 	// moved when the whole map's spot list is taken. Measured 2026-09-05: metal
 	// built 8,775 -> 3,150 on the same seed with this director doing nothing
 	// else. Read the list its owner has already built, or wait.
-	if (!Builder::gHomeSet || (Market::gAllSpots.length() == 0))
+	if (!Builder::gHomeSet)
 		return false;
+	if (Market::gAllSpots.length() == 0) {
+		if (!gRaidGridHas)
+			return false;
+		at = gRaidGridAt;
+		guard = gRaidGridGuard;
+		return true;
+	}
 	AIFloat3 foe = Front::FoeAnchor();
 	if (!OnMap(foe)) {
 		foe = aiEnemyMgr.GetEnemyPos();
@@ -224,6 +290,7 @@ void UpdateRaidAsk()
 {
 	if (ai.GetTunable("apex_raid_ask", TUNE_RAID_ASK) <= 0.f)
 		return;
+	RaidGridStep();
 	if ((ai.frame - gAskAt) < 5 * SECOND)
 		return;
 	gAskAt = ai.frame;
