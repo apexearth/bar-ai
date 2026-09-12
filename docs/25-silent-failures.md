@@ -491,6 +491,23 @@ fresh checkout, a fresh lane, or a dashboard deploy with no build (bar-ai-be).
 `deploy` now refuses the fallback unless `--repo-dll` is passed. The snapshot
 should be refreshed only from a tree that matches the cpp mirror.
 
+## S28 — `GetEnemyCostAt` returns a COUNT of visible units, and two things priced it as metal
+
+`CCircuitAI::GetEnemyCostAt` is `CountEnemyUnitsIn` (CircuitAI.cpp:2937 --
+the comment on the raid director already says so). `Air::EcoDensity()` read
+it as "metal in their base" and fed it to `StrikeWorth`, which compared it
+against the wing's metal bill times `apex_air_payoff`: a few dozen visible
+units against thousands of metal, so the air lead logged `NOT armed` for 25
+minutes in his 2026-09-11 game whatever stood behind their 7.6k of AA, and
+`SettleStrike` scored a run's "damage" as a difference of unit counts, which
+priced the next bombers to nothing. `GetEnemyStructCostAt` is the metal-valued
+call; the strike target scan (`air/state.as`) uses it now. Any other reader of
+`GetEnemyCostAt` that adds, multiplies or compares it with metal is wrong the
+same way -- `ThreatFor`'s fallback in `sitesafety.as` treats it as a count on
+purpose. Not audited (2026-09-11): the readers in `army.as`, `coverage.as`,
+`guards.as`, `protect_fill.as`, `protect_senseprice.as` (`< 200.f` at line
+161 reads like metal), `safety.as`, `want_mex.as`.
+
 ## S29 — An uncapped battery measures the CPU, not the tree
 
 `ab.py` control arm, Greenest Fields 2v2 +100%, 2026-09-11: 838k metal by

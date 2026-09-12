@@ -349,6 +349,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
 	Military::NoteLocalDeath(pos, edef.costM, false);
+	Air::NoteEnemyDeath(edef, pos, byUs);
 	if (byUs)
 		Market::LossNote(int(edef.id));   // their wreck is rez work too
 	Perf::Add("hk.enemydead", hkT);

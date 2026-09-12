@@ -446,7 +446,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 9)  { @w = MemoPropose(4, unit);         Perf::Add("want.reclobs", _t); }
 	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
-	else if (step == 12) { @w = ProposeAssist(unit);          Perf::Add("want.assist", _t); }
+	else if (step == 12) { @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
 	else if (step == 13) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
 	else if (step == 14) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
 	else if (step == 15) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }

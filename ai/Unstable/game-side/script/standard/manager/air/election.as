@@ -98,12 +98,4 @@ bool IsAirLead()
 	return (lead >= 0) && (lead == ai.teamId);
 }
 
-// Permanently stood down: gAbort is never reset and the election is latched,
-// so this is one-way. factory.as reads it to release the air plants it would
-// otherwise lock out of production for the rest of the game.
-bool RoleAbandoned()
-{
-	return gAbort;
-}
-
 }  // namespace Air

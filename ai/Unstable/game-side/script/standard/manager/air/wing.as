@@ -34,15 +34,16 @@ bool Committed()
 // down rather than simply freezing production.
 bool Armed()
 {
-	if (gAbort || !IsAirLead())
+	if (!IsAirLead())
 		return false;
 	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return false;
 	// The absolute AA ceiling is GONE (it stood the assassin down against 2.5k
 	// of AA in a game we had already won). AA is priced instead: it raises the
-	// mass ScaledBombers asks for, and only a raid that cannot pay for itself
-	// even at that mass is declined.
-	return Committed() || StrikeWorth() || AADominated();
+	// mass ScaledBombers asks for, and the wing grows while the next plane
+	// pays (MarginalWorth) -- the whole-raid payoff test read a unit COUNT
+	// against a metal bill and never armed.
+	return Committed() || WingGrowing() || AADominated();
 }
 
 int Have(CCircuitDef@ def)
@@ -61,11 +62,6 @@ int Fighters() { return Have(gFighter) + Have(gFighter1); }
 bool Massed()
 {
 	return (Bombers() >= ScaledBombers()) && (Fighters() >= ScaledFighters());
-}
-
-bool HalfMassed()
-{
-	return (Bombers() * 2 >= ScaledBombers()) && (Fighters() * 2 >= ScaledFighters());
 }
 
 bool HaveAirCon()

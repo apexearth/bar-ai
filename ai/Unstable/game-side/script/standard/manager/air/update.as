@@ -42,15 +42,18 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// after the surprise, into the AA the wave woke up.
 	if (gStrike)
 		return !InWave(unit.id);
-	// The air lead follows the assassin's own discipline (Armed covers the
-	// abort and timing gates). EVERYONE ELSE holds too: a released fighter or
-	// bomber lands in stock tasks that wander it to the front line, where it
-	// dies for nothing -- apexearth: "they primarily only fly overhead of our
-	// bases... A bomber is not supposed to attack armies... they should mass
-	// up and then bomb enemies behind the lines." Held aircraft hover at the
-	// plant, which is home; the wave release lives in Update().
+	// The lead HOLDS, armed or not: this returned Armed(), so an unarmed lead
+	// handed every plane to the stock attack as it left the pad -- 91 Thunders
+	// built, 91 dead one at a time, no strike flown (apexearth 2026-09-11:
+	// "build up bombers, and then eventually attack enemy eco in a large
+	// mass"). EVERYONE ELSE holds too: a released fighter or bomber lands in
+	// stock tasks that wander it to the front line, where it dies for nothing
+	// -- apexearth: "they primarily only fly overhead of our bases... A bomber
+	// is not supposed to attack armies... they should mass up and then bomb
+	// enemies behind the lines." Held aircraft hover at the plant, which is
+	// home; the wave release lives in Update().
 	if (IsAirLead())
-		return Armed();
+		return true;
 	return ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f;
 }
 
@@ -136,6 +139,7 @@ void Release(const string& in why)
 {
 	gStrike = true;
 	BuildWave();
+	gWaveLaunched = gWaveBombers;
 	NoteStrikeLaunched();
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
 	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
@@ -161,9 +165,23 @@ void Release(const string& in why)
 		gFighter.SetRetreat(0.f);
 	if (gFighter1 !is null)
 		gFighter1.SetRetreat(0.f);
+	// ONE MASS AT ONE CELL: the DLL's bomb task hunts inside the focus only
+	// and judges the AA over it against the wave's whole power. Published on
+	// the team blackboard (strike_x/z/r/p) rather than a new binding, so a
+	// DLL without the reader still compiles this script.
+	if (gStrikeHas) {
+		ai.PublishTeamValue("strike_x", gStrikeAt.x);
+		ai.PublishTeamValue("strike_z", gStrikeAt.z);
+		ai.PublishTeamValue("strike_p", WavePower());
+		ai.PublishTeamValue("strike_r",
+				ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
+	}
 	AiLog(Factory::T() + "apex: air strike -- " + why
 		+ " bombers=" + Bombers() + " fighters=" + Fighters()
-		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
+		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0)
+		+ " target=" + (gStrikeHas ? (int(gStrikeAt.x) + "," + int(gStrikeAt.z)) : "-")
+		+ " prize=" + int(EcoDensity())
+		+ " cellAA=" + formatFloat(gStrikeAA, "", 0, 1));
 }
 
 // Release the strike because the LAND army is going in right now: the
@@ -184,9 +202,6 @@ bool ReleaseForPush()
 	return true;
 }
 
-// How many aircraft still flying counts as "the strike force still exists".
-const int STRIKE_SPENT_BELOW = 3;
-
 // Re-arm once the run is over. Two ways it ends, and neither is a clock:
 //
 //  - the wave is spent, or
@@ -203,12 +218,14 @@ void ReArm()
 	// BOMBERS ONLY: the strike force IS the bombers; fighters loiter and rarely
 	// die, so counting them kept `have` above the bar forever (apexearth,
 	// watching: "the few bombers that I do see are just solo attacking").
+	// Spent means half of what launched is gone; an absolute three read a
+	// small wave as spent on the tick it left and Release/ReArm flapped.
 	const int have = gWaveBombers;
 	const int held = HeldBombers();
-	if ((have >= STRIKE_SPENT_BELOW)
-		&& ((held < have) || (held < STRIKE_SPENT_BELOW)))
+	if ((have > 0) && (have * 2 >= gWaveLaunched) && (held <= have))
 		return;
 	RecallWave();
+	ai.PublishTeamValue("strike_r", 0.f);
 	gStrike = false;
 	gWave.resize(0);
 	gWaveBombers = 0;
@@ -310,6 +327,7 @@ void Update()
 	SettleStrike();
 	ResolveDefs();
 	ReArm();
+	StrikeScanStep();
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)
 		RunElection();
@@ -357,28 +375,8 @@ void Update()
 		Release("home wave massed");
 	}
 
-	// A stand-down latched against an enemy that has since lost its field army
-	// un-latches: the leftover flak of a beaten enemy must not veto the game's
-	// only commander-killing weapon.
-	if (gAbort && IsAirLead() && !gStrike && AADominated()) {
-		gAbort = false;
-		AiLog(Factory::T() + "apex: air assassin BACK ON -- enemy field army gone, "
-			+ "their AA small next to ours");
-	}
 	if (!IsAirLead() || gStrike)
 		return;
-	if (gAbort) {
-		// Standing down stops BUYING into their AA; it must not strand the
-		// wing already paid for ("a force already paid for is better spent
-		// than abandoned"). The outcome ledger scores the run either way,
-		// and a run that dies prices the next bombers to zero on its own.
-		if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
-			&& (float(Bombers()) >= DeadlineBombBar()))
-		{
-			Release("deadline -- stood down, spending the standing wing");
-		}
-		return;
-	}
 
 	if (!gAnnounced && Armed()) {
 		gAnnounced = true;
@@ -391,7 +389,7 @@ void Update()
 	// Economy::AiUpdateEconomy recomputes isAssistRequired every update, so the
 	// flag has to be asserted here rather than set once; it is dropped again in
 	// Release() so the assist does not outlive the strike.
-	if (Committed() && !Massed())
+	if (Committed() && WingGrowing())
 		Economy::isSwitchAssist = true;
 
 	// Do not start an air force while the ground war is being lost badly: the
@@ -401,9 +399,11 @@ void Update()
 	// strategy almost always -- this wants a real deficit. Checked only before
 	// COMMITTING; a force already paid for is better spent than abandoned, and
 	// Update()'s own abort path below handles anti-air appearing mid-build.
+	// A wing already standing is not held hostage to it: with planes bought,
+	// the clock below starts and the strike rules apply.
 	const float ourGround = Military::TeamArmyCost();
 	const float foeGround = Military::EnemyArmyCost();
-	if (!Committed() && (foeGround > ourGround * GROUND_LOST_RATIO)) {
+	if (!Committed() && (Bombers() == 0) && (foeGround > ourGround * GROUND_LOST_RATIO)) {
 		if (ai.frame >= gNextLog) {
 			gNextLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: air assassin holding off -- losing the ground war "
@@ -435,17 +435,13 @@ void Update()
 		}
 	}
 
+	// Standing down is gone: a wing that cannot grow any further goes with
+	// what stands, because the next plane not paying is the end of "build up"
+	// and the beginning of "eventually" -- and the planes are already bought.
 	if (Massed()) {
 		Release("massed");
-	} else if (Committed() && !StrikeWorth() && !AADominated()) {
-		if (HalfMassed()) {
-			Release("enemy AA rising, going early");
-		} else {
-			gAbort = true;
-			AiLog(Factory::T() + "apex: air assassin STANDING DOWN, enemyAA="
-				+ formatFloat(EnemyAACost(), "", 0, 0)
-				+ " with only " + Have(gBomber) + "/" + Have(gFighter) + " built");
-		}
+	} else if (Committed() && !WingGrowing() && (HeldBombers() > 0)) {
+		Release("wing at its worth -- the next bomber would not pay");
 	} else if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
 		&& (float(Bombers()) >= DeadlineBombBar()))
 	{
@@ -460,7 +456,9 @@ void Update()
 			+ " frame=" + ai.frame + "/" + AIR_FROM
 			+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0)
 			+ "/" + formatFloat(AIR_AA_CEILING, "", 0, 0)
-			+ " abort=" + (gAbort ? "1" : "0"));
+			+ " prize=" + int(EcoDensity())
+			+ " next=" + formatFloat(MarginalGain(BuyableBomberDef(), HeldBombers()), "", 0, 0)
+			+ " held=" + HeldBombers() + "/" + ScaledBombers());
 	}
 
 	// Heartbeat. A gate that never fires and an input that is dead read the same

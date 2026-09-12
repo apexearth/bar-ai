@@ -1,4 +1,7 @@
 namespace Market {
+int gFacGuardBids = 0;
+int gFacGuardWins = 0;
+int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assist priced
 // Assisting T2+ work is a PRICED want, not an idleness fallback (apexearth
 // 2026-08-23: "T1 cons are still not assisting T2 cons, helping build T2+
 // buildings, or assisting factories"). A joiner transfers its whole drain
@@ -171,8 +174,72 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	w.value = w.gain / (w.mCost + w.tCost);
 	@gAssistTarget = boss;
 	gAssistTargetId = (boss !is null) ? boss.id : -1;
+	gAssistGuardS = 60;
 	return w;
 }
+
+// BARb'S FLOOR, the other half (apexearth 2026-09-11: "OK"): a constructor
+// within 600 elmos of a factory that is recruiting guards it for 10 s while
+// the bank is above 20% of storage and energy is not stalling -- stock
+// EconomyManager.cpp CheckMobileAssistRequired, the bank test being what
+// economy.as already writes into isAssistRequired. Priced at the hand's own
+// fed drain -- the factory converts it into army for the rest of the game --
+// and taken only where it beats the priced assist above. Measured before it:
+// 0.8-0.9% of our constructor time on a factory against BARb's 12.8-21.6%.
+Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
+{
+	Want w = priced;
+	if (!aiFactoryMgr.isAssistRequired || (Brain::gFQFac.length() == 0))
+		return w;
+	const AIFloat3 me = unit.GetPos(ai.frame);
+	CCircuitUnit@ fac = null;
+	float best = 600.f * 600.f;
+	for (uint i = 0; i < Brain::gFQFac.length(); ++i) {
+		CCircuitUnit@ f = Brain::gFQFac[i];
+		if ((f is null) || (f.CountQueued(null) <= 0))
+			continue;
+		const float d2 = me.SqDistance2D(f.GetPos(ai.frame));
+		if (d2 < best) {
+			best = d2;
+			@fac = f;
+		}
+	}
+	if (fac is null)
+		return w;
+	const int uid = int(unit.circuitDef.id);
+	float eFeed = 1.f;
+	{
+		const float eInc = aiEconomyMgr.energy.income;
+		const float ePull = aiEconomyMgr.energy.pull;
+		if ((ePull > 1.f) && (eInc < ePull))
+			eFeed = eInc / ePull;
+	}
+	float drain = Catalog::gBuildPower[uid] * (7.f / 80.f) * eFeed;
+	const float mFree = FreeMetalFlow();
+	if (mFree < drain)
+		drain = mFree;
+	if (drain <= 0.05f)
+		return w;
+	const float speed = Catalog::gSpeed[uid];
+	const float walkSec = (speed > 1.f) ? (sqrt(best) / speed) : 60.f;
+	Want g;
+	g.kind = WK_ASSIST;
+	g.pos = fac.GetPos(ai.frame);
+	g.spotId = int(fac.id);
+	g.gain = drain;
+	g.mCost = 1.f;
+	g.tCost = (walkSec + 10.f) * Wage();
+	g.value = g.gain / (g.mCost + g.tCost);
+	++gFacGuardBids;
+	if (g.value <= w.value)
+		return w;
+	++gFacGuardWins;
+	@gAssistTarget = fac;
+	gAssistTargetId = fac.id;
+	gAssistGuardS = 10;
+	return g;
+}
+
 
 
 }  // namespace Market

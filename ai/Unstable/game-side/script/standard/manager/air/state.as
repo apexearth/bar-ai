@@ -47,18 +47,95 @@ const int   AIR_FIGHTERS   = 8;
 // AA sizes it on the other (see ScaledBombers).
 const float AIR_SCALE_INCOME = 30.f;   // extra metal/s per extra bomber above the floor
 
-// HOW PACKED THEIR BASE IS. Bombing pays in proportion to what one run can
-// reach, and a dense economy chains -- an AFUS going up takes its neighbours
-// with it (apexearth: "blow up their AFUS to cause a huge chain reaction").
-// Enemy cost sampled in one cluster radius around their centroid is the proxy;
-// it includes army as well as economy, which biases the read UP where their
-// army sits at home -- exactly where the bombs land anyway.
+// THE STRIKE TARGET: enemy ECONOMY, ranked by value over the AA covering it
+// (apexearth 2026-09-11: "build up bombers, and then eventually attack enemy
+// eco in a large mass"). The map is swept in cells of apex_air_cluster_r, a
+// few cells per update; a cell's prize is the metal of the structures in it
+// and its cover the air-threat map read for one of our own bombers. The best
+// cell of the last complete sweep is the target, and its prize is what the
+// wing is worth. Not GetEnemyCostAt, which is a unit COUNT (docs/25 S28).
+array<AIFloat3> gStrikeCells;
+uint gStrikeCellI = 0;
+bool gStrikeCurHas = false;
+float gStrikeCurScore = 0.f, gStrikeCurPrize = 0.f, gStrikeCurAA = 0.f;
+AIFloat3 gStrikeCurAt;
+bool gStrikeHas = false;
+float gStrikePrize = 0.f, gStrikeAA = 0.f;
+AIFloat3 gStrikeAt;
+int gStrikeSweeps = 0;
+
+CCircuitUnit@ AnyBomber()
+{
+	for (int i = 0; i < 4; ++i) {
+		CCircuitDef@ d = StrikeDef(i);
+		if (d is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(d, Builder::gHomePos, 0.f);
+		if ((us is null) || (us.length() == 0))
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if (us[k] !is null)
+				return us[k];
+		}
+	}
+	return null;
+}
+
+void StrikeScanStep()
+{
+	if (!Builder::gHomeSet)
+		return;
+	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
+	if (r <= 1.f)
+		return;
+	if (gStrikeCells.length() == 0) {
+		const float w = float(AiTerrainWidth());
+		const float h = float(AiTerrainHeight());
+		for (float z = r * 0.5f; z < h; z += r) {
+			for (float x = r * 0.5f; x < w; x += r)
+				gStrikeCells.insertLast(AIFloat3(x, 0.f, z));
+		}
+		if (gStrikeCells.length() == 0)
+			return;
+	}
+	CCircuitUnit@ probe = AnyBomber();
+	for (int step = 0; step < 4; ++step) {
+		const AIFloat3 sp = gStrikeCells[gStrikeCellI];
+		const float prize = aiEnemyMgr.GetEnemyStructCostAt(sp, r);
+		if (prize > 1.f) {
+			const float aa = (probe !is null) ? ai.GetUnitThreatAt(probe, sp) : 0.f;
+			const float score = prize / (1.f + aa);
+			if (!gStrikeCurHas || (score > gStrikeCurScore)) {
+				gStrikeCurHas = true;
+				gStrikeCurScore = score;
+				gStrikeCurPrize = prize;
+				gStrikeCurAA = aa;
+				gStrikeCurAt = sp;
+			}
+		}
+		if (++gStrikeCellI >= gStrikeCells.length()) {
+			gStrikeCellI = 0;
+			gStrikeHas = gStrikeCurHas;
+			gStrikePrize = gStrikeCurPrize;
+			gStrikeAA = gStrikeCurAA;
+			gStrikeAt = gStrikeCurAt;
+			gStrikeCurHas = false;
+			gStrikeCurScore = 0.f;
+			++gStrikeSweeps;
+		}
+	}
+}
+
+// Metal standing in the target cell -- before the first sweep completes, in
+// one cell around their structures' cost-weighted centre.
 float EcoDensity()
 {
-	const AIFloat3 at = aiEnemyMgr.GetEnemyPos();
+	if (gStrikeHas)
+		return gStrikePrize;
+	const AIFloat3 at = aiEnemyMgr.GetEnemyStructPos();
 	if (!OnMap(at))
 		return 0.f;
-	return ai.GetEnemyCostAt(at,
+	return aiEnemyMgr.GetEnemyStructCostAt(at,
 			ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
 }
 
@@ -120,37 +197,6 @@ float Throughput(int n)
 	if (soak <= 0.f)
 		return 0.f;
 	return soak / (soak + aa);
-}
-
-// Is the raid worth its own metal? Expected damage is what one pass can reach
-// times the share that survives to deliver it; the bar is the strike's own
-// cost at a payoff multiple. Density and AA both enter here as PRICES, which
-// is what lets a thin economy behind heavy AA be declined while a packed one
-// behind the same AA is still worth overwhelming.
-bool StrikeWorth()
-{
-	const int n = ScaledBombers();
-	if (n <= 0)
-		return false;
-	// Damage is measured per bomber where a run has been scored, and bounded by
-	// what the cluster actually holds; unmeasured, it falls back to "the wing
-	// destroys what it reaches", which is the optimistic prior that makes the
-	// first cheap probe worth flying.
-	const float obsPer = ObsDmg(DominantBomberDef());
-	float dmg = EcoDensity() * Throughput(n);
-	if (obsPer >= 0.f) {
-		const float measured = obsPer * float(n);
-		if (measured < dmg)
-			dmg = measured;
-	}
-	float spend = 0.f;
-	if (gBomber !is null)
-		spend = float(n) * gBomber.costM;
-	else if (gBomber1 !is null)
-		spend = float(n) * gBomber1.costM;
-	if (spend <= 1.f)
-		return true;   // no bomber priced yet; do not veto on a missing def
-	return dmg >= spend * ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF);
 }
 
 int ScaledBombers()
@@ -272,7 +318,6 @@ float DeadlineBombBar()
 	return bar;
 }
 bool gStrike       = false;
-bool gAbort        = false;
 int  gNextAirOrder = 0;
 int  gNextProbe    = 0;
 int  gNextLog      = 0;
@@ -298,8 +343,25 @@ array<float> gObsSurv;   // per def: measured survival fraction, <0 unmeasured
 array<float> gObsDmg;    // per def: measured metal destroyed per bomber sent
 int   gRunDef      = -1;
 int   gRunSent     = 0;
-float gRunEcoBefore = 0.f;
+float gRunKilled = 0.f;  // enemy structure metal that died in the target cell, by us
+AIFloat3 gRunAt;         // the cell the run was sent at
 int   gRunSettleAt = 0;
+int   gWaveLaunched = 0; // bombers the current wave left with
+
+// Fed from AiEnemyDestroyed: what the run is scored on. The cell's standing
+// value before and after read 0 for three runs that the death log showed
+// killing 3.6k -- they rebuild, and the registry lags -- so the deaths are
+// counted as they happen.
+void NoteEnemyDeath(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
+{
+	if ((gRunDef < 0) || !byUs || (edef is null) || edef.IsMobile())
+		return;
+	if (!OnMap(pos) || !OnMap(gRunAt))
+		return;
+	if (pos.distance2D(gRunAt)
+			<= ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R))
+		gRunKilled += edef.costM;
+}
 
 void ObsInit()
 {
@@ -336,46 +398,86 @@ bool IsBomberDef(int d)
 	return false;
 }
 
-// What one more bomber of THIS type returns, per second, to the assassin's
-// strike -- the value the production draw prices it on. Zero unless we are the
-// elected air player, the raid is on, and the wing is still short.
+// The bomber the plant would build next: the advanced one where it exists.
+int BuyableBomberDef()
+{
+	if ((gBomber !is null) && gBomber.IsAvailable(ai.frame))
+		return int(gBomber.id);
+	if (gBomber1 !is null)
+		return int(gBomber1.id);
+	if (gBomberH !is null)
+		return int(gBomberH.id);
+	return -1;
+}
+
+// WHAT THE NEXT BOMBER ADDS to the strike, in metal. Measured per bomber once
+// a run of this type has been scored; before that, the target cell's prize
+// times the share of the wing the model says gets through, differenced at
+// the wing that stands. This is also where "eventually" comes from: the wing
+// grows while the next plane raises what the strike destroys by more than
+// the plane costs, and goes when it no longer does -- no clock. With no AA
+// seen the model cannot rank, and the standing floor wing applies.
+float MarginalGain(int d, int n)
+{
+	if (d < 0)
+		return 0.f;
+	const float obsPer = ObsDmg(d);
+	if (obsPer >= 0.f)
+		return obsPer;
+	// Sized against everything they own, not one cell: a mass that survives
+	// the AA works through their base cell by cell, and one cell's 16k
+	// priced a six-plane wing (measured) -- not the mass he asked for. The
+	// prior is optimistic on purpose; the scored run replaces it.
+	const float prize = aiEnemyMgr.GetEnemyStructCost();
+	if (prize <= 0.f)
+		return 0.f;
+	const float aa = StrikeAACost();
+	const float s = Catalog::gHealth[d]
+			* ai.GetTunable("apex_air_aa_soak", TUNE_AIR_AA_SOAK);
+	if ((aa <= 0.f) || (s <= 0.f))
+		return (n < ScaledBombers()) ? prize : 0.f;
+	const float now = float(n) * s / (float(n) * s + aa);
+	const float next = float(n + 1) * s / (float(n + 1) * s + aa);
+	return prize * (next - now);
+}
+
+bool MarginalWorth(int d, int n)
+{
+	if (d < 0)
+		return false;
+	return MarginalGain(d, n)
+			>= Catalog::gCostM[d] * ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF);
+}
+
+// Is the wing still worth growing? Asked of the plane we would buy next.
+bool WingGrowing()
+{
+	const int d = BuyableBomberDef();
+	return (d >= 0) && (HeldBombers() < ScaledBombers()) && MarginalWorth(d, HeldBombers());
+}
+
+// What one more bomber of THIS type returns, per second, to the wing -- the
+// value the production draw prices it on. Zero unless we are the elected air
+// player, the economy carries air, and the next plane still pays.
 float StrikeGainFor(int d, float fillSec)
 {
-	if (!IsAirLead() || gAbort || !IsBomberDef(d))
+	if (!IsAirLead() || !IsBomberDef(d))
 		return 0.f;
 	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return 0.f;
-	// Bought only for a wing HoldsUnit will keep: same predicate as the hold.
-	if (!Armed())
+	// The same ground gate the commitment waits behind: no wing is STARTED
+	// while the ground war is being lost badly.
+	if (!Committed() && (HeldBombers() == 0)
+		&& (Military::EnemyArmyCost() > Military::TeamArmyCost() * GROUND_LOST_RATIO))
 		return 0.f;
 	// Priced against the force AT HOME, so a wave already out neither counts
-	// towards the next one nor stops it being built. Production used to stop
-	// dead for the length of a strike, which is what made every run smaller
-	// than the one before it.
-	const int need = ScaledBombers();
-	if ((need <= 0) || (HeldBombers() >= need))
+	// towards the next one nor stops it being built.
+	const int held = HeldBombers();
+	if ((ScaledBombers() <= 0) || (held >= ScaledBombers()))
 		return 0.f;
-	// Priced on the WHOLE raid this type would mount, then shared over its
-	// bombers: a type that needs a hundred to punch through carries the cost of
-	// a hundred. Measured survival and delivered damage override the prior as
-	// soon as one run of this type has been scored.
-	float surv = ObsSurv(d);
-	if (surv < 0.f) {
-		const float aa = EnemyAACost();
-		const float soak = float(need) * Catalog::gHealth[d]
-				* ai.GetTunable("apex_air_aa_soak", TUNE_AIR_AA_SOAK);
-		surv = (aa <= 0.f) ? 1.f : ((soak <= 0.f) ? 0.f : soak / (soak + aa));
-	}
-	float dmg = EcoDensity() * surv;
-	const float obsPer = ObsDmg(d);
-	if (obsPer >= 0.f) {
-		const float measured = obsPer * float(need);
-		if (measured < dmg)
-			dmg = measured;
-	}
-	if (dmg <= 0.f)
+	if (!MarginalWorth(d, held))
 		return 0.f;
-	return (dmg / float(need)) / ((fillSec > 1.f) ? fillSec : 180.f);
+	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
 int DominantBomberDef()
@@ -394,7 +496,8 @@ void NoteStrikeLaunched()
 	ObsInit();
 	gRunDef = DominantBomberDef();
 	gRunSent = gWaveBombers;
-	gRunEcoBefore = EcoDensity();
+	gRunAt = gStrikeHas ? gStrikeAt : aiEnemyMgr.GetEnemyStructPos();
+	gRunKilled = 0.f;
 	gRunSettleAt = ai.frame
 			+ int(ai.GetTunable("apex_air_settle_s", TUNE_AIR_SETTLE_S)) * SECOND;
 }
@@ -416,8 +519,7 @@ void SettleStrike()
 	float surv = float(left) / float(sent);
 	if (surv < 0.f) surv = 0.f;
 	if (surv > 1.f) surv = 1.f;
-	float dmg = gRunEcoBefore - EcoDensity();
-	if (dmg < 0.f) dmg = 0.f;
+	const float dmg = gRunKilled;
 	const float per = dmg / float(sent);
 	if ((d < 0) || (d >= int(gObsSurv.length())))
 		return;

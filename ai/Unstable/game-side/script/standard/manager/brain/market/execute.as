@@ -399,7 +399,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if ((gAssistTarget is null) || (int(gAssistTargetId) != w.spotId))
 			return null;
 		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
-				gAssistTarget, false, 60 * SECOND));
+				gAssistTarget, false, gAssistGuardS * SECOND));
 		if (gt !is null)
 			GuardNote(unit, gAssistTarget);
 		return gt;
@@ -471,7 +471,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// lines -- free flow less the lathe already on it. Bank-gated -- at an empty bank the lathe already outruns
 		// income and pre-positioning BP at a sink serves nothing.
 		const float mSt = aiEconomyMgr.metal.storage;
-		if ((mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
+		if ((w.spotId != NS_FLOOR) && (mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
 				* ai.GetTunable("apex_nano_sink_bank", TUNE_NANO_SINK_BANK))) {
 			// Same hoist as the want side: one free-flow read for the walk.
 			const float skFeed = FreeMetalFlow()

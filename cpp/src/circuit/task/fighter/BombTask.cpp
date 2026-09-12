@@ -271,7 +271,27 @@ void CBombTask::FindTarget()
 	const bool notAW = !cdef->HasSurfToWater();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const float scale = (cdef->GetMinRange() > 300.0f) ? 4.0f : 1.0f;
-	const float maxPower = attackPower * scale * powerMod;
+	// apex: a released wave hunts inside the STRIKE FOCUS only -- the cell of
+	// enemy economy the script chose, published on the team blackboard as
+	// strike_x/z/r/p (no new binding, so an older DLL simply ignores it) --
+	// and the AA it will accept is judged against the whole mass: one plane's
+	// power vetoed every target under a single flak, so a wave of ninety found
+	// nothing. Home defence (ANTI_STAT off) is not the strike.
+	const int myTeam = circuit->GetTeamId();
+	const float focusR = circuit->ReadTeamValue(myTeam, "strike_r", 0.f);
+	const bool focused = (focusR > 0.f) && isAntiStatic;
+	const float focusPower = focused ? circuit->ReadTeamValue(myTeam, "strike_p", 0.f) : 0.f;
+	const float maxPower = focused
+			? std::max(attackPower * scale * powerMod, focusPower)
+			: attackPower * scale * powerMod;
+	const AIFloat3 focusPos(circuit->ReadTeamValue(myTeam, "strike_x", -1.f), 0.f,
+			circuit->ReadTeamValue(myTeam, "strike_z", -1.f));
+	const float sqFocusR = SQUARE(focusR);
+	static bool focusLogged = false;
+	if (focused && !focusLogged) {
+		focusLogged = true;
+		circuit->LOG("apex: bomb focus at %.0f,%.0f r=%.0f power=%.1f", focusPos.x, focusPos.z, focusR, focusPower);
+	}
 //	const float maxAltitude = cdef->GetAltitude();
 	const float speed = cdef->GetSpeed() / 1.75f;
 	const int canTargetCat = cdef->GetTargetCategory();
@@ -307,6 +327,9 @@ void CBombTask::FindTarget()
 			continue;
 		}
 		const AIFloat3& ePos = enemy->GetPos();
+		if (focused && (ePos.SqDistance2D(focusPos) > sqFocusR)) {
+			continue;
+		}
 		float power = threatMap->GetThreatAt(ePos)/*- enemy->GetThreat(ROLE_TYPE(BOMBER))*/;
 		if ((maxPower <= power) ||
 			(notAW && (ePos.y < -SQUARE_SIZE * 5)))
@@ -449,6 +472,9 @@ void CBombTask::FindTarget()
 		}
 	}
 
+	if (focused && (bestTarget == nullptr) && !utils::is_valid(position)) {
+		position = focusPos;   // nothing scored yet: fly to the cell as one and look again there
+	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = bestTarget->GetPos();

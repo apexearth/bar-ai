@@ -67,6 +67,25 @@ void BuildWave()
 	}
 }
 
+// The wave's combined threat value, the mass the bomb task weighs AA against.
+float WavePower()
+{
+	float p = 0.f;
+	for (int i = 0; i < 4; ++i) {
+		CCircuitDef@ d = StrikeDef(i);
+		if (d is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(d, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && InWave(us[k].id))
+				p += Catalog::gPower[int(d.id)];
+		}
+	}
+	return p;
+}
+
 // Prune the roster to what is still flying. Death is the only way out of it, so
 // this is also what tells ReArm the run is over.
 void ScanWave()
