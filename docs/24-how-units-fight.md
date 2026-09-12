@@ -942,3 +942,33 @@ derivable from what we measure, with no threshold to invent.
 
 Note for the revert: neither the apex line nor the stock default implements
 this, so this is a REBUILD, not a KEEP. It is the only air item that is.
+
+## 2026-09-11 — bombers mass, then strike the economy; they do not wait forever
+
+On the wing that sat "not armed" for 25 minutes while its released planes died
+one at a time (91 built, 91 dead, no strike flown): *"fix that, we need to
+build up bombers, and then eventually attack enemy eco in a large mass. You
+can't sit around forever doing nothing."*
+
+So: the wing is held and grown until it can strike; the strike is the enemy
+ECONOMY, in one mass; and "until" has an end -- a wing that cannot strike is
+not kept indefinitely. The agent's 2026-09-11 change that stops buying bombers
+for a wing that will not be kept stands; this is the other half.
+
+## 2026-09-11 — "all build power onto one fusion" was an eco-role statement
+
+On fusions drawing a mean crew of 14 and a peak of 49 at 1,300 metal/s: *"You're
+putting all our build power into that? In an eco role sure, but that's not
+what we're doing here. You're taking that statement too far and out of proper
+context."* The whole-pool crew on big energy (`Requests::SiteWorkerCap`,
+"BIG ENERGY TAKES THE WHOLE HAND POOL") is the eco role's rule, not the
+standard game's.
+
+## 2026-09-11 — factory support: at least BARb's floor
+
+On constructors spending 0.8% of their time on a factory against BARb's
+13-22%: *"OK"* to adopting BARb's guarantee as a floor -- nanos in reach per
+factory by tier (T1 2, T2 4, T3 9, stock `FactoryManager.cpp:895-916`), and an
+idle builder within 600 elmos guards a recruiting factory while the bank is
+above 20% of storage (`EconomyManager.cpp:1697-1723`) -- priced above the floor
+as now.
