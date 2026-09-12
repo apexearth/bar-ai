@@ -1493,7 +1493,7 @@ const float TUNE_WAVE_MEET = 0.4f;
 // [toggle 0/1] -- Draw the computed front line. Allies and spectators see
 //   every map overlay below, so each ships off unless someone deliberately
 //   turned it on.
-const float TUNE_DRAW_FRONT = 1.f;
+const float TUNE_DRAW_FRONT = 0.f;
 
 // [toggle 0/1] -- Draw the defense zone on the map: the inner ring is the C++
 //   base-defence range (the army fights at any odds inside it), the outer ring

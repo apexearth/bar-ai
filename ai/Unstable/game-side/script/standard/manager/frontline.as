@@ -838,7 +838,7 @@ void DrawFrontLine()
 	// GetRulesParamFloat, which only dev_tunables.lua in BAR.sdd ever sets, and
 	// multiplayer plays the rapid packages -- so a default of 1 meant every
 	// hosted game drew on the map for human allies who never asked for it.
-	// The harness opts in: --modoption apex_draw_front=1.
+	// Opt in with --modoption apex_draw_front=1 or the dashboard toggle.
 	if (ai.GetTunable("apex_draw_front", TUNE_DRAW_FRONT) <= 0.f)
 		return;
 	if (ai.frame < gNextFrontDraw)
