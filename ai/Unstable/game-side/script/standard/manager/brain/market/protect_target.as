@@ -471,7 +471,7 @@ float DefenceTarget()
 	}
 	if (gMexFloorSum > t)
 		t = gMexFloorSum;
-	gDefTgtM = (t > 0.f) ? t : 0.f;
+	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF);
 	return gDefTgtM;
 }
 

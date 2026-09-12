@@ -483,6 +483,8 @@ void DefGridBuild()
 	}
 }
 
+int gNextReclObsLog = 0;
+
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
@@ -619,6 +621,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (ec > ownBestEcell)
 			ownBestEcell = ec;
 	}
+	int nGen = 0, nGenDwarf = 0, nGenFree = 0, nGenPriced = 0;
+	int nConv = 0, nConvDwarf = 0, nConvDenser = 0, nConvPriced = 0;
+	float bestGenV = 0.f, bestConvV = 0.f;
+	int bestGenDef = -1, bestConvDef = -1;
 	for (uint i = 0; i < gOwnGen.length(); ++i) {
 		CCircuitUnit@ g = gOwnGen[i];
 		if (g is null)
@@ -626,22 +632,31 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (ReclaimClaimed(g.id, unit.id))
 			continue;
 		const int d = int(g.circuitDef.id);
+		++nGen;
+		const float ec = Catalog::gMakeE[d]
+				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+		if (ownBestEcell < ratio * ec)
+			continue;   // not dwarfed: still pulling its weight per cell
+		++nGenDwarf;
 		// Removing it must LEAVE a surplus -- reclaim never causes a stall.
 		// The margin is a share of the CANDIDATE'S own output, not of income:
 		// scaled to income it grew with the economy, so the bigger we got the
 		// less we could retire.
 		if (eShort || (eFree - Catalog::gMakeE[d] <= 0.1f * Catalog::gMakeE[d]))
 			continue;
-		const float ec = Catalog::gMakeE[d]
-				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
-		if (ownBestEcell < ratio * ec)
-			continue;   // not dwarfed: still pulling its weight per cell
+		++nGenFree;
 		// PRICED, not ranked by E-per-cell. An argmin on that metric puts the
 		// worst generator we own permanently in front: a solar reads 0.80 and
 		// an advanced solar 4.69, so while one T1 panel stands the advanced
 		// solar can never even be the candidate.
 		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
 				* ReachVictimMul(unit, g.GetPos(ai.frame));
+		if (v > 0.f)
+			++nGenPriced;
+		if (v > bestGenV) {
+			bestGenV = v;
+			bestGenDef = d;
+		}
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
@@ -676,17 +691,46 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 		if (mc <= 0.f)
 			continue;
+		++nConv;
 		if (ownBestMcell < ratio * mc)
 			continue;   // not dwarfed: still earning its cells
+		++nConvDwarf;
 		if (DenserConvCapE(d) < ConvTotalE() + Catalog::gConvCapacity[d])
 			continue;   // the denser fleet cannot yet carry its share
+		++nConvDenser;
 		const float v = RetireValue(unit, cv, d, ePM, wageR, hz)
 				* ReachVictimMul(unit, cv.GetPos(ai.frame));
+		if (v > 0.f)
+			++nConvPriced;
+		if (v > bestConvV) {
+			bestConvV = v;
+			bestConvDef = d;
+		}
 		if (v > bestValue) {
 			bestValue = v;
 			@best = cv;
 			bestDef = d;
 		}
+	}
+	// Where the obsolete-eco retirement dies, once a minute (apexearth
+	// 2026-09-12: "we aren't reclaiming obsolete eco so we pretty easily run
+	// out of room").
+	if (ai.frame >= gNextReclObsLog) {
+		gNextReclObsLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: reclobs t=" + ai.teamId
+			+ " gen=" + nGen + "/" + nGenDwarf + "/" + nGenFree + "/" + nGenPriced
+			+ " best=" + ((bestGenDef >= 0) ? Catalog::Def(bestGenDef).GetName() : "-")
+			+ ":" + formatFloat(bestGenV * 1000.f, "", 0, 2)
+			+ " conv=" + nConv + "/" + nConvDwarf + "/" + nConvDenser + "/" + nConvPriced
+			+ " best=" + ((bestConvDef >= 0) ? Catalog::Def(bestConvDef).GetName() : "-")
+			+ ":" + formatFloat(bestConvV * 1000.f, "", 0, 2)
+			+ " eFree=" + int(eFree) + " eShort=" + (eShort ? 1 : 0)
+			+ " ePM=" + formatFloat(ePM, "", 0, 4)
+			+ " crowd=" + formatFloat(PfCrowd(), "", 0, 2)
+			+ " mpc=" + formatFloat(PfMetalPerCell(), "", 0, 2)
+			+ " hz=" + int(hz) + " ratio=" + formatFloat(ratio, "", 0, 1)
+			+ " bestEcell=" + formatFloat(ownBestEcell, "", 0, 2)
+			+ " bestMcell=" + formatFloat(ownBestMcell, "", 0, 2));
 	}
 	// Defences: dominated by a much stronger one covering the same ground.
 	// Neighbours from a grid, not every tower against every other: the

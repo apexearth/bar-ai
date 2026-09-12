@@ -1693,9 +1693,10 @@ const float TUNE_LAG_SPEED = 0.98f;
 //   kick in at severity 1, 2 and 3.
 const float TUNE_LAG_STEP = 0.34f;
 
-// [index] -- Force a specific personality kind for every instance (-1 = roll
-//   normally). See docs/27.
-const float TUNE_PERSONA = -1.f;
+// [ratio] -- Each personality trait (eco, def, army, t3, air, nuke, lrpc) is
+//   rolled log-uniform in [1/(1+s), 1+s] per instance; 0 = every instance
+//   identical (the A/B arm). See docs/27.
+const float TUNE_PERSONA_SPREAD = 0.35f;
 
 // [metal/s] -- In-flight build requests allowed per this much metal income
 //   (min 2) -- the governor on parallel sites.
@@ -1800,7 +1801,7 @@ const float TUNE_DEF_ECO_S = 120.f;
 //   docs/27.
 const float TUNE_DEF_OFF = 0.f;
 
-// Personality moves it (Persona::WantMult); this is the neutral baseline.
+// Personality moves it (Persona::Trait(T_ARMY)); this is the neutral baseline.
 const float TUNE_ARMY_ECO_S = 66.f;
 
 // The economy the rear specialist names before it spends anything on war, in

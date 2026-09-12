@@ -957,6 +957,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f))
 			continue;
+		// This instance's interest in the category (Persona): the strategic
+		// wants carry theirs from their own pricing.
+		if (c.kind != WK_SUPER)
+			c.value *= Persona::CategoryMult(CategoryOf(c.kind));
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))
 			++at;

@@ -1338,10 +1338,19 @@ ring scan was written around had never once run: measured rays=24/24 with the
 enemy on one bearing, which is the ring closing on itself that its own comment
 warns of.
 
-### `TUNE_PERSONA` = -1.f
+### `TUNE_PERSONA_SPREAD` = 0.35f
 
-Force a specific personality kind for every instance (-1 = roll normally). For
-A/Bs.
+apexearth 2026-09-12: "adding personality to each unique AI randomly. Simple
+high level modifiers affecting an AI's interest in making certain things --
+Economy, Defense, Army, T3 Army, Air, Nuke Weapons, LRPC." Seven traits per
+instance, each log-uniform in [1/(1+s), 1+s] (0.35: 0.74x to 1.35x), rolled
+once and logged as `apex: persona t=N rolled ...`. They multiply levers that
+already exist -- the army and defence targets, the draw value of eco and
+defence wants, the strategic wants (gantry/silo/big gun/air plant), the air
+commitment -- never a gate. 0 makes every instance identical: the A/B arm.
+Replaced `TUNE_PERSONA` (the six discrete kinds -- berserker, turtle, greedy,
+airboss, siloist, rearm -- whose budget lever nothing read since f4b8cdcc).
+The default width is his to move; nothing measured it yet.
 
 ### `TUNE_ASSIST_RELEASE` = 1.f
 

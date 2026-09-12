@@ -1,61 +1,87 @@
 namespace Persona {
 
 //------------------------------------------------------------------------------
-// PERSONALITY: one identity per instance, rolled at start and allowed to change
-// mid-game, so identically-tuned Apex instances play differently and a game's
-// story can turn. apexearth: "help to create an AI which can have a personality
-// capable of changing or adapting mid-game. Try to make our games unique and
-// interesting while staying efficient."
+// PERSONALITY: seven traits per instance, rolled at start, so identically tuned
+// Apex instances want different things. apexearth 2026-09-12: "Simple high
+// level modifiers affecting an AI's interest in making certain things --
+// Economy, Defense, Army, T3 Army, Air, Nuke Weapons, LRPC ... randomized mods
+// which manipulate the AI's overall balance to make their playstyle less
+// predictable."
 //
-// A persona is ONLY a set of multipliers on levers that already exist -- the
-// budget split (brain/budget.as), the Want ranking (brain.as), the engage
-// margin (posture.as), the air commitment (air/state.as). It shifts how much,
-// never whether: every gate a rule carries still applies, so a persona cannot
-// switch a behaviour off or invent a new one.
+// A trait is ONLY a multiplier on a lever that already exists -- the army and
+// defence targets (how much of each we mean to hold), the Want ranking (the
+// draw odds of an economy, defence or air-plant want), the strategic wants
+// (gantry, silo, big gun, air plant) and the air commitment. It shifts how
+// much, never whether: every gate still applies, so a trait cannot switch a
+// behaviour off or invent one. All neutral at 1.
 //------------------------------------------------------------------------------
 
-// REARM is adaptation-only (never rolled): out-fielded, it buys army harder
-// while DEMANDING better odds -- the opposite of berserker's discount, which
-// measured terribly as an out-fielded reaction (Altair, them 3.4 K/D).
-enum Kind { STANDARD = 0, BERSERKER, TURTLE, GREEDY, AIRBOSS, SILOIST, REARM, KINDS };
+const int T_ECO = 0;
+const int T_DEF = 1;
+const int T_ARMY = 2;
+const int T_T3 = 3;
+const int T_AIR = 4;
+const int T_NUKE = 5;
+const int T_LRPC = 6;
+const int T_N = 7;
 
-int    gKind      = -1;          // -1 until rolled
-int    gSince     = 0;           // frame the current persona took effect
-int    gNextEval  = 0;
-string gWhy       = "rolled";
+array<float> gTrait(T_N, 1.f);   // rolled once
+array<float> gAdapt(T_N, 1.f);   // the game's story, re-read every minute
+bool gRolled = false;
+int gNextEval = 0;
+int gSince = 0;
+string gStory = "";
 
-// After a switch the persona holds for this long, so adaptation is a decision
-// and not a flicker between two signals.
+// After a turn of the story the adaptation holds for this long, so it is a
+// decision and not a flicker between two signals.
 const int DWELL = 4 * MINUTE;
 
-string NameOf(int k)
+string NameOf(int t)
 {
-	if (k == BERSERKER) return "berserker";
-	if (k == TURTLE)    return "turtle";
-	if (k == GREEDY)    return "greedy";
-	if (k == AIRBOSS)   return "airboss";
-	if (k == SILOIST)   return "siloist";
-	if (k == REARM)     return "rearm";
-	return "standard";
+	if (t == T_ECO)  return "eco";
+	if (t == T_DEF)  return "def";
+	if (t == T_ARMY) return "army";
+	if (t == T_T3)   return "t3";
+	if (t == T_AIR)  return "air";
+	if (t == T_NUKE) return "nuke";
+	if (t == T_LRPC) return "lrpc";
+	return "?";
 }
 
-string Name() { return NameOf(gKind); }
-
-void Become(int k, const string &in why)
+string Line()
 {
-	if (k == gKind)
+	string s = "";
+	for (int t = 0; t < T_N; ++t)
+		s += " " + NameOf(t) + "=" + formatFloat(gTrait[t] * gAdapt[t], "", 0, 2);
+	return s;
+}
+
+// apex_persona_spread: each trait is log-uniform in [1/(1+s), 1+s], so a trait
+// is as likely to halve its interest as to double it and the product of the
+// seven stays centred on 1. 0 makes every instance identical (the A/B arm).
+void Roll()
+{
+	if (gRolled)
 		return;
-	gKind = k;
-	gSince = ai.frame;
-	gWhy = why;
-	AiLog(Factory::T() + "apex: persona -> " + NameOf(k) + " (" + why + ")");
+	gRolled = true;
+	const float spread = ai.GetTunable("apex_persona_spread", TUNE_PERSONA_SPREAD);
+	if (spread > 0.f) {
+		const float top = 1.f + spread;
+		for (int t = 0; t < T_N; ++t) {
+			const float u = float(AiRandom(0, 10000)) / 5000.f - 1.f;   // -1..1
+			gTrait[t] = pow(top, u);
+		}
+		// A silo or a big gun takes longer than a duel lasts; a duel's roll
+		// never leans INTO them, it may still lean away.
+		if (Duel()) {
+			if (gTrait[T_NUKE] > 1.f) gTrait[T_NUKE] = 1.f;
+			if (gTrait[T_LRPC] > 1.f) gTrait[T_LRPC] = 1.f;
+		}
+	}
+	AiLog(Factory::T() + "apex: persona t=" + ai.teamId + " rolled spread="
+		+ formatFloat(spread, "", 0, 2) + Line());
 }
 
-// A duel: one enemy, no allies. AIRBOSS and SILOIST are team identities --
-// measured 2026-08-20, airboss opened 3 of 8 benchmark 1v1s and lost the
-// ground war under its air plants, and siloist sank 6k+ into silos that never
-// fire inside a short game. apexearth: "We don't want to pick personas which
-// are very bad for a 1v1."
 bool Duel()
 {
 	array<Id>@ mates = ai.GetTeamIds();
@@ -63,83 +89,55 @@ bool Duel()
 		&& (ai.GetEnemyTeamSize() <= 1);
 }
 
-// apex_persona: -1 rolls freely (default); 0..5 forces that Kind and disables
-// adaptation, which is what an A/B needs.
-void Roll()
+float Trait(int t)
 {
-	if (gKind >= 0)
-		return;
-	const int forced = int(ai.GetTunable("apex_persona", TUNE_PERSONA));
-	if (forced >= 0 && forced < int(KINDS)) {
-		Become(forced, "forced");
-		return;
-	}
-	// Standard stays the most likely: the specials are seasoning, not the meal.
-	const int r = (AiRandom(0, 999) + ai.teamId * 7) % 100;
-	int k = STANDARD;                 // 30
-	if      (r < 15) k = BERSERKER;   // 15
-	else if (r < 30) k = TURTLE;      // 15
-	else if (r < 45) k = GREEDY;      // 15
-	else if (r < 57) k = AIRBOSS;     // 12
-	else if (r < 70) k = SILOIST;     // 13
-	if (Duel() && ((k == AIRBOSS) || (k == SILOIST)))
-		k = STANDARD;
-	Become(k, "rolled");
+	if (!gRolled)
+		Roll();
+	if ((t < 0) || (t >= T_N))
+		return 1.f;
+	return gTrait[t] * gAdapt[t];
 }
 
 //------------------------------------------------------------------------------
-// The multipliers. Read by budget.as (share), brain.as (wants), posture.as
-// (engage), air/state.as and air/wing.as (air commitment). All neutral at 1.
+// The levers. Each caller multiplies ONE quantity it already computes.
 //------------------------------------------------------------------------------
 
-// Budget-category bias; c is int(Brain::Cat).
-float ShareMult(int c)
-{
-	if (gKind == BERSERKER) return (c == 0) ? 1.35f : 1.f;               // ARMY
-	if (gKind == REARM)     return (c == 0) ? 1.35f : ((c == 1) ? 1.2f : 1.f);
-	if (gKind == TURTLE)    return (c == 1) ? 1.5f : ((c == 2) ? 1.2f : 1.f); // DEFENCE, AIRDEF
-	if (gKind == GREEDY)    return (c == 3) ? 1.35f : 1.f;               // ECONOMY
-	if (gKind == SILOIST)   return (c == 3) ? 1.15f : 1.f;               // silo needs the eco
-	if (gKind == AIRBOSS)   return (c == 0) ? 1.1f : 1.f;                // bombers are ARMY
-	return 1.f;
-}
-
-// Want-kind bias for the Brain's ranking.
+// The strategic wants, by want_super's class name.
 float WantMult(const string &in kind)
 {
-	if (gKind == SILOIST) {
-		if (kind == "silo")     return 2.5f;
-		if (kind == "pinpoint") return 1.5f;
-	}
-	if (gKind == GREEDY && (kind == "mexup" || kind == "convert"))
-		return 1.2f;
+	if (kind == "silo")     return Trait(T_NUKE);
+	if (kind == "lrpc")     return Trait(T_LRPC);
+	if (kind == "heavygun") return Trait(T_LRPC);
+	if (kind == "gantry")   return Trait(T_T3);
+	if (kind == "airplant") return Trait(T_AIR);
 	return 1.f;
 }
 
-// Engage-margin bias: <1 takes fights earlier, >1 wants better odds.
-// Same lever the team push already overrides.
+// The market's draw: a Want's value by the trait its category serves. The
+// strategic wants are already multiplied where they are priced, and an army
+// plant's worth is army demand, which the army TARGET carries.
+float CategoryMult(int cat)
+{
+	if ((cat == Market::CAT_METAL) || (cat == Market::CAT_ENERGY) || (cat == Market::CAT_BP))
+		return Trait(T_ECO);
+	if ((cat == Market::CAT_DEFENCE) || (cat == Market::CAT_AIRDEF))
+		return Trait(T_DEF);
+	return 1.f;
+}
+
+// Budget-category bias; c is int(Brain::Cat): 0 ARMY, 1 DEFENCE, 2 AIRDEF, 3 ECONOMY.
+float ShareMult(int c)
+{
+	if (c == 0) return Trait(T_ARMY);
+	if (c == 1) return Trait(T_DEF);
+	if (c == 2) return Trait(T_DEF);
+	if (c == 3) return Trait(T_ECO);
+	return 1.f;
+}
+
+// Engage margin is a fighting decision, not an interest; docs/24 owns it.
 float EngageBias()
 {
-	if (gKind == BERSERKER) return 0.82f;
-	if (gKind == TURTLE)    return 1.18f;
-	if (gKind == GREEDY)    return 1.18f;
-	if (gKind == REARM)     return 1.18f;
-	return 1.f;
-}
-
-// HOW MUCH T1 ARMY THIS INSTANCE WANTS STANDING BEFORE IT TECHS.
-// Multiplies Factory::T2ArmyFloor's per-income figure, so a berserker earns its
-// plant behind a bigger T1 mass and a greedy one reaches for tech sooner. A
-// multiplier on a floor that already scales with income -- it changes how much,
-// never whether, and every other T2 gate still applies.
-float T2ArmyBias()
-{
-	if (gKind == BERSERKER) return 1.4f;
-	if (gKind == TURTLE)    return 1.3f;
-	if (gKind == REARM)     return 1.5f;   // out-fielded: field something first
-	if (gKind == GREEDY)    return 0.7f;
-	if (gKind == SILOIST)   return 0.8f;
-	if (gKind == AIRBOSS)   return 0.8f;   // its army is in the air, not on armyCost
 	return 1.f;
 }
 
@@ -147,54 +145,64 @@ float T2ArmyBias()
 // the wing size where air/state.as reads them.
 float AirEagerness()
 {
-	return (gKind == AIRBOSS) ? 1.6f : 1.f;
+	return Trait(T_AIR);
 }
 
 //------------------------------------------------------------------------------
-// Adaptation. Signals only -- each persona still buys through the normal rules.
+// Adaptation: the game's story leans a trait, on the same signals as before.
+// Signals only -- every purchase still goes through the normal rules.
 //------------------------------------------------------------------------------
+
+void Lean(const string &in story, int a, float fa, int b, float fb)
+{
+	if (story == gStory)
+		return;
+	for (int t = 0; t < T_N; ++t)
+		gAdapt[t] = 1.f;
+	if (a >= 0) gAdapt[a] = fa;
+	if (b >= 0) gAdapt[b] = fb;
+	gStory = story;
+	gSince = ai.frame;
+	AiLog(Factory::T() + "apex: persona t=" + ai.teamId + " -> "
+		+ ((story.length() > 0) ? story : "story over") + Line());
+}
 
 void Update()
 {
 	if (ai.frame < 10 * SECOND)
 		return;
 	Roll();
-	if (int(ai.GetTunable("apex_persona", TUNE_PERSONA)) >= 0)
-		return;                   // forced persona never adapts
 	if (ai.frame < gNextEval || ai.frame < gSince + DWELL)
 		return;
 	gNextEval = ai.frame + 60 * SECOND;
-
 	// Sustained pressure at home outranks every identity: dig in.
 	if (Military::LosingGround() && Military::BaseContested()) {
-		Become(TURTLE, "losing ground at home");
+		Lean("losing ground at home", T_DEF, 1.3f, T_ARMY, 1.15f);
 		return;
 	}
-	// A quarter of income dying deep on their ground: stop identifying as the
-	// aggressor, hold the line and let the eco lead win instead.
+	// A quarter of income dying deep on their ground: hold and let eco win.
 	if (Military::ForwardBleedFrac() > 0.25f) {
-		if (gKind == BERSERKER || gKind == STANDARD)
-			Become(TURTLE, "bleeding on their ground");
+		Lean("bleeding on their ground", T_DEF, 1.2f, T_ECO, 1.15f);
 		return;
 	}
 	// Their fielded army dwarfs ours: buy army before anything clever.
 	const float ours = Military::TeamArmyCost();
 	const float theirs = Military::EnemyArmyCost();
 	if (theirs > ours * 2.f && ours > 0.f) {
-		Become(REARM, "out-fielded 2:1");
+		Lean("out-fielded 2:1", T_ARMY, 1.35f, -1, 1.f);
 		return;
 	}
-	// Comfortably ahead on the ground with the income to spend: reach for the
-	// finisher -- nukes if the game has gone long, otherwise press the lead.
+	// Comfortably ahead with the income to spend: reach for a finisher --
+	// the one this instance already leans to.
 	if (ours > theirs * 1.5f && Factory::gHaveT2) {
-		if (gKind != SILOIST && gKind != BERSERKER) {
-			// In a duel the finisher is always pressure: a silo takes longer
-			// than the lead lasts (see Duel()).
-			Become((!Duel() && (AiRandom(0, 1) == 0)) ? SILOIST : BERSERKER,
-				"ahead and funded");
-		}
+		int fin = T_T3;
+		if (!Duel() && (gTrait[T_NUKE] > gTrait[fin])) fin = T_NUKE;
+		if (!Duel() && (gTrait[T_LRPC] > gTrait[fin])) fin = T_LRPC;
+		if (gTrait[T_AIR] > gTrait[fin]) fin = T_AIR;
+		Lean("ahead and funded", fin, 1.3f, -1, 1.f);
 		return;
 	}
+	Lean("", -1, 1.f, -1, 1.f);
 }
 
 }  // namespace Persona
