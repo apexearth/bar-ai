@@ -734,6 +734,35 @@ def check_geometry(text, rep):
         rep.add("GEOMETRY", int(pct) >= 60 or int(n) < 20, "grid-tightness",
                 f"{pct}% of {n} eco structures touching a neighbor at game "
                 "end (grid target: tight rows)")
+    # apexearth 2026-09-11: winds beside each other, groups of ~16. Finished
+    # wind positions (latency ... at=), single-linkage at 1.45 pitch.
+    pts = [(int(x), int(z)) for x, z in re.findall(
+        r"apex: latency (?:arm|cor|leg)win done=\d+ workers=\d+ at=(-?\d+),(-?\d+)",
+        text)]
+    if len(pts) >= 8:
+        import math
+        link, pitch = 48 * 1.45, 48
+        parent = list(range(len(pts)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                if math.dist(pts[i], pts[j]) <= link:
+                    parent[find(i)] = find(j)
+        sizes = collections.Counter(find(i) for i in range(len(pts)))
+        flush = sum(1 for i in range(len(pts)) if any(
+            j != i and math.dist(pts[i], pts[j]) <= pitch * 1.4143 + 16
+            for j in range(len(pts))))
+        share = flush / len(pts)
+        biggest = max(sizes.values())
+        rep.add("GEOMETRY", share >= 0.8 and biggest <= 20, "wind-groups",
+                f"{flush} of {len(pts)} winds beside another wind "
+                f"({int(100 * share)}%), groups "
+                f"{sorted(sizes.values(), reverse=True)[:6]} (want ~16 max)")
 
 
 # ---------------------------------------------------------------- performance --

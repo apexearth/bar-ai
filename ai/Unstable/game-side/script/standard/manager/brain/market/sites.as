@@ -431,12 +431,108 @@ AIFloat3 LatheHeart()
 // file scope so Begin reuses the buckets instead of allocating a table a call.
 Grid::Cells gFarmKinGrid;
 Grid::Cells gFarmClaimGrid;
+// Cheap generators pack flush (block_map.json) in groups of ClusterN, groups
+// an aisle apart: the ask is the anchor of the nearest group with room, and
+// the engine's spiral fills the group from it. A fresh group opens only on
+// ground none of our structures stand on -- solars and winds asked from one
+// point interleave in one spiral -- and a started one is filled until full.
+bool GroupedDef(int d)
+{
+	return Catalog::ValidId(d) && !Catalog::gMobile[d] && !BigEcoDef(d)
+			&& (Catalog::gMakeE[d] > 0.f) && !Catalog::gNeedGeo[d]
+			&& (Catalog::gConvCapacity[d] <= 0.f);
+}
+array<int> gGroupLast;
+AIFloat3 GroupAnchor(int defId)
+{
+	CCircuitDef@ def = Catalog::Def(defId);
+	const float pitch = Lattice::StrideOf(defId);
+	const float side = float(Lattice::ClusterSide()) * pitch;
+	const float step = side + Lattice::AisleW();
+	const float within = side * 0.75f;   // a fresh group's own ground
+	const float cell = step * 0.5f;       // every kin counts to one anchor
+	const int cap = Lattice::ClusterN();
+	array<AIFloat3> kin;
+	KinNear(def, kin);
+	gFarmKinGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint k = 0; k < kin.length(); ++k)
+		gFarmKinGrid.Add(kin[k].x, kin[k].z);
+	// Asked-for ground of another def: its request sits at its own anchor
+	// until the engine sites it, which is exactly when two defs would race
+	// for one clean anchor.
+	array<AIFloat3> claimed;
+	for (uint qi = 0; qi < Requests::gLive.length(); ++qi) {
+		IUnitTask@ qt = Requests::gLive[qi];
+		if ((qt is null) || qt.IsDead() || (qt.buildDef is null) || (qt.buildDef is def))
+			continue;
+		const AIFloat3 qp = qt.GetBuildPos();
+		if (OnMap(qp))
+			claimed.insertLast(qp);
+	}
+	gFarmClaimGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint gq = 0; gq < claimed.length(); ++gq)
+		gFarmClaimGrid.Add(claimed[gq].x, claimed[gq].z);
+	// Never forward of the farm; nearest anchor first, a shallower one on ties.
+	const int span = int(Base::HALF_SPAN / step);
+	int bi = 0, bj = 0, bn = 0;
+	float bestD = -1.f;
+	for (int j = 0; j <= span; ++j) {
+		for (int i = -span; i <= span; ++i) {
+			const AIFloat3 a = gFarmPos + Base::gAcross * (float(i) * step)
+					- Base::gFwd * (float(j) * step);
+			if (!OnMap(a))
+				continue;
+			const float d = float(i * i + j * j) + float(j) * 0.01f;
+			if ((bestD >= 0.f) && (d >= bestD))
+				continue;
+			int n = 0;
+			gFarmKinGrid.Query(a.x, a.z, cell);
+			for (uint q = 0; q < gFarmKinGrid.hit.length(); ++q) {
+				if (kin[uint(gFarmKinGrid.hit[q])].distance2D(a) < cell)
+					++n;
+			}
+			if (n >= cap)
+				continue;
+			if (n == 0) {
+				if (LayoutForeignGap(defId, a, within) >= 0.f)
+					continue;
+				bool asked = false;
+				gFarmClaimGrid.Query(a.x, a.z, within);
+				for (uint q = 0; (q < gFarmClaimGrid.hit.length()) && !asked; ++q)
+					asked = claimed[uint(gFarmClaimGrid.hit[q])].distance2D(a) < within;
+				if (asked)
+					continue;
+			}
+			bestD = d;
+			bi = i;
+			bj = j;
+			bn = n;
+		}
+	}
+	if (bestD < 0.f)
+		return gFarmPos;
+	if (uint(defId) >= gGroupLast.length())
+		gGroupLast.resize(uint(defId) + 1);
+	const int key = (bi + 100) * 1000 + bj + 1;
+	if (gGroupLast[defId] != key) {
+		gGroupLast[defId] = key;
+		AiLog("apex: group t=" + ai.teamId + " " + def.GetName()
+			+ " anchor=" + bi + "," + bj + " n=" + bn + " kin=" + kin.length()
+			+ " step=" + int(step));
+	}
+	return gFarmPos + Base::gAcross * (float(bi) * step)
+			- Base::gFwd * (float(bj) * step);
+}
 
 AIFloat3 FarmSlot(int defId)
 {
 	CCircuitDef@ def = Catalog::Def(defId);
 	if (def is null)
 		return gFarmPos;
+	if (GroupedDef(defId) && Base::gAxisSet)
+		return GroupAnchor(defId);
 	// The ask is the farm centre, big energy a step further back (BARb's
 	// energyBase2); the engine's spiral and the stock block map choose the
 	// square. The lattice scan that stood here is in git (4fca2ee0's tree).

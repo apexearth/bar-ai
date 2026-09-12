@@ -320,7 +320,8 @@ void Forget(IUnitTask@ task)
 				AiLog(Factory::T() + "apex: latency " + task.buildDef.GetName()
 					+ (gLiveStarted[i] ? " done=" : " dropped=")
 					+ ((ai.frame - gLiveAt[i]) / SECOND)
-					+ " workers=" + Workers(task));
+					+ " workers=" + Workers(task)
+					+ " at=" + int(task.GetBuildPos().x) + "," + int(task.GetBuildPos().z));
 				gLiveAt.removeAt(i);
 				if (gLiveStarted[i] && (i < gLiveStartAt.length()) && (gLiveStartAt[i] > 0)
 					&& (task.target !is null)) {

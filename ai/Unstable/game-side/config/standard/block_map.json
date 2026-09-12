@@ -66,9 +66,10 @@
  			"ignore": ["engy_low", "def_low", "nano"]
 		},
 		"wind": {
-			"type": ["circle", "engy_low"],
-			"radius": 4,  // default: "explosion"
-			"not_ignore": ["factory", "engy_low", "convert", "terra"]
+			// Flush like solar, not stock's 4-cell circle: winds are asked in
+			// groups of ClusterN from one anchor (Market::GroupAnchor).
+			"type": ["rectangle", "engy_low"],
+			"ignore": ["engy_low", "def_low", "nano"]
 		},
 		"geo": {
 			"type": ["rectangle", "geo"],
