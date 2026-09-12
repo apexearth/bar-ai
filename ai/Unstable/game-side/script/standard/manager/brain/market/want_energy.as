@@ -1108,10 +1108,16 @@ float OverflowM()
 // -- absorb enough and the pin breaks, and the ordinary surplus pricing takes
 // over again. No threshold on how much waste is too much, and no cap on the
 // fleet; the same shape SlackFrac uses on the metal side.
+// ...AND THE ENERGY FILLING IT IS OURS. An ally's periodic overflow tops the
+// bank up for a moment, this read full, and the converter want bought for
+// energy we do not make (apexearth: "1 team is overflowing into the other team
+// periodically... we're getting tricked into making more converters"). Full
+// means what we make exceeds what we use; the engine's own usage says so.
 bool EnergyPinned()
 {
 	const float st = aiEconomyMgr.energy.storage;
-	return (st > 1.f) && (aiEconomyMgr.energy.current >= 0.98f * st);
+	return (st > 1.f) && (aiEconomyMgr.energy.current >= 0.98f * st)
+			&& (aiEconomyMgr.energy.income >= aiEconomyMgr.energy.usage);
 }
 
 int gCwCalls = 0;      // ProposeConvert entries
