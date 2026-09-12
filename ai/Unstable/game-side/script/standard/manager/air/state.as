@@ -345,6 +345,9 @@ float StrikeGainFor(int d, float fillSec)
 		return 0.f;
 	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return 0.f;
+	// Bought only for a wing HoldsUnit will keep: same predicate as the hold.
+	if (!Armed())
+		return 0.f;
 	// Priced against the force AT HOME, so a wave already out neither counts
 	// towards the next one nor stops it being built. Production used to stop
 	// dead for the length of a strike, which is what made every run smaller

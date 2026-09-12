@@ -711,7 +711,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// one pass, not to hold a line. Priced per bomber over the whole raid its
 		// type would need, so a type requiring a hundred to survive their AA
 		// carries that. Nothing here is a gate -- if the raid does not pay, the
-		// gain is zero and the line builds army as before.
+		// gain is zero and the line builds OTHER army. A bomber never falls
+		// through to the line pricing: it cannot hold ground, and priced there
+		// by power-per-cost it flies alone to the stock attack.
 		if (!Catalog::gBuilder[d] && Air::IsBomberDef(d)) {
 			const float gainB = Air::StrikeGainFor(d, fillS) * roleMul;
 			if (gainB > 0.f) {
@@ -720,8 +722,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				candV.insertLast(vB);
 				candGain.insertLast(gainB);
 				sumV += vB;
-				continue;
+			} else if (prankNow) {
+				prank += " " + Catalog::Def(d).GetName() + ":wing0";
 			}
+			continue;
 		}
 		// ESCORT: a guard for a worker walking outside safe ground. Priced,
 		// not decreed -- see EscortGain. Eligibility stays the military hook's
