@@ -1279,7 +1279,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const float pLine = (pLineN > 0) ? (pLineSum / float(pLineN)) : 1.f;
 		const float hM = (fillS > 1.f) ? fillS : 60.f;
 		const float pMedic = rezRestore * hM / Catalog::gCostM[rezDef] * pLine;
-		const float gainM = ((armyGap > 0.f) ? armyGap : 0.f) / hM * pMedic * stakeMul;
+		// Times cost like gainA above: pMedic is already per metal, and
+		// without it the medic was divided by its price twice (v=6974 against
+		// a pawn's 350276 at 36 m/s of wrecks and repair, 0 bots standing).
+		const float gainM = ((armyGap > 0.f) ? armyGap : 0.f) / hM * pMedic * stakeMul
+				* eFeedA * Catalog::gCostM[rezDef];
 		const float vM = gainM / Catalog::gCostM[rezDef];
 		if (gainM > 0.01f) {
 			candDef.insertLast(rezDef);
