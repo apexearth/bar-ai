@@ -17,6 +17,12 @@ his watched setting. Output: per map, per arm, per-player means of [BARAI_STATS]
 metal produced / eco / build power / army / defence at minutes 8/16/24/30, the
 opponent's metal, the per-seed spread, and the energy wasted from
 [BARAI_WASTE]. A lane must be claimed (or BARAI_LANE=shared named on purpose).
+
+CAVEAT: the AI is time-sliced against the wall clock (memory: canon-eco-game),
+so under six-way CPU contention both arms play worse than they would alone and
+BARb, which is not sliced, plays the same -- BARb's metal on Greenest Fields
+read 91k in a parallel set against ~45k sequential. Read the A-vs-B contrast;
+do not compare absolute numbers across parallel and sequential sets.
 """
 from __future__ import annotations
 
