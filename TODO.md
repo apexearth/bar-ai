@@ -17,6 +17,28 @@ being mostly such numbers, on top of duplicating the other two lists.
 
 # Strategies
 
+## The front is the edge of a territory grid; wrecks are a field (apexearth 2026-09-12)
+
+Two structural perf pieces he approved in one breath during the 2026-09-12
+review, both C++ with a thin binding, to be built together:
+
+- "A wreck field in C++ seems OK to me. Proper cadence I always think is a good
+  idea too in order to avoid choppy gameplay." -- one per-AI wreck field
+  rebuilt once a second so a rezbot's probe is a lookup, not a 2,200-elmo
+  feature query per bot per election (bld.rezzer, 27-36 ms per AI-minute,
+  #3 script cost after this review). And the idle-rezbot re-election every
+  half second is a cadence question he wants answered as cadence, not left.
+- "Seems surprising to me that understanding the front is so expensive. I
+  wonder if we can take advantage of some smarter data structures somehow.
+  Even if it's just a grid or quadtree showing territorial control, then your
+  frontline is the edge of that territorial control zone." "Yes I want that."
+  -- derive the territory edge in C++ when the influence map is rebuilt (mark
+  each cell ours or not, keep the boundary cells and a per-bearing radius
+  table), so RebuildFront's lanes and ring become lookups refreshed at the
+  map's own cadence off the sim thread. The ledger cap ("never past our
+  furthest committed building on that bearing") is a rule about commitments,
+  not control, and stays script-side (RingOwnFill).
+
 ## Constructor roles by share of need (apexearth 2026-09-08)
 
 "assign roles to our constructors by a % based on what it sees as a split of
