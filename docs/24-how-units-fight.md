@@ -955,6 +955,20 @@ ECONOMY, in one mass; and "until" has an end -- a wing that cannot strike is
 not kept indefinitely. The agent's 2026-09-11 change that stops buying bombers
 for a wing that will not be kept stands; this is the other half.
 
+### 2026-09-12 — scouts, so the wing knows what to hit; a bomb counts after its plane dies
+
+Told that in 15 of 16 games the strike never flew because the wing is priced
+on enemy structures we have SEEN and the census read zero for 10-17 minutes
+after the air plant landed: *"Yes we absolutely need scouts so we know what to
+hit."* So intel is bought for the wing -- the look at the enemy economy is
+part of the strike's price, not something that happens to arrive.
+
+And on the strike ledger that credited only bombs whose plane outlived them
+(a run that killed ~11k read 1/7 of it and stopped the buying): *"Should still
+value bombs that hit after the plane dies."* Built the same day: static deaths
+inside the run's cell count for the run whatever the attacker credit says
+(0e0a8b13, S30).
+
 ## 2026-09-11 — "all build power onto one fusion" was an eco-role statement
 
 On fusions drawing a mean crew of 14 and a peak of 49 at 1,300 metal/s: *"You're
