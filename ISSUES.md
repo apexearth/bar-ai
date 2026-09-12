@@ -37,21 +37,29 @@ the hands-could-cover test; the gate now demands the denser fleet STANDING
 carry the served load (DenserConvStandingE), which in these games means none
 retire. The room complaint is therefore open until the demand side is fixed.
 
-## 2026-09-12 — BOMBERS: the wing is priced on the enemy economy we can SEE, and for 15 minutes that reads zero
+## 2026-09-12 — BOMBERS: the wing flies at the deadline into the AA and dies whole; the T1 plant will not grow it while the army gap is open
 
-Greenest Fields 2v2 +100%, `tournaments/20260912-102411-bombstrike` and
-`-104619-bombstrike2`, treated arm: the air lead is elected at 25-33m and
-commits, then buys no bomber for 10-17 minutes because the heartbeat reads
-`structs=0 cell=0 next=0/345` (`B-s4` 27m-44m, `B-s3` 32m-45m; his own
-16:58 game `prize=2800` at 28m). `Air::MarginalGain` prices the next bomber
-on `GetEnemyStructCost()`, the registry of structures we have seen and not
-yet purged (`apex_ghost_stale_min` 15), and nothing in the air line buys the
-look at their base that would give it a number -- `ScoutOverflight` needs an
-air scout the plant is not asked for. Where the base HAD been seen (`B-s1`,
-`structs=12940` at 28m) the wing reached 12 by 41m and struck. The strike
-half fired in 1 of 8 treated games in 45-55 minutes; in the other 15 games
-of the two sets control and treated were the same AI. Not a fix for the
-census: intel is a spend, and how much of it the wing may buy is his call.
+The census half is built (the look, `Air::LookGainFor`, this date): the wing
+sees their economy within a minute of the plant. What the batteries then
+show (`tournaments/20260912-141649-scouts2`, `-144755-scouts3` in the
+`bar-ai-scouts` worktree, Greenest 2v2 vs BARb hard +100%):
+
+- Every strike that flew died to the last plane and killed nothing. Treated
+  `B-s2` 45.8m: `deadline bombers=12 fighters=8 enemyAA=10200`, then `run
+  scored def=armthund sent=11 home=0 surv=0.00 dmg/bomber=0`; `B-s3` three
+  runs, same score; control `A-s3` Phoenixes `sent=9 surv=0 dmg/bomber=919`,
+  `A-s4` `sent=14 dmg/bomber=0`. "Deadline" is a clock (`AIR_DEADLINE` after
+  the commit, `DeadlineBombBar` 12), and twelve Thunders against 7-10k of
+  seen AA is the model saying the run will not pay, overruled by the timer.
+- From the basic plant the bomber never wins the draw while the army gap is
+  open: `StrikeGainFor` is metal-destroyed over the fill window (`next=757` →
+  4.2 m/s) and the gap-priced gunship beside it reads `armkam g2045`, ~500:1
+  (`prodrank fac=armap t=1`, scouts B-s1 37-40m). The first bomber arrives
+  only once `gap<0` or the advanced plant stands (A-s4 46.5m, B-s2 38.8m),
+  so the wing at the deadline is whatever those minutes bought.
+- "Wing at its worth" re-released six times in five minutes in control
+  `A-s4` (49.0-54.0m, `bombers=14,21,27,35,40,47`): the run ends as spent
+  the moment the wave dies and the held remainder goes out at once behind it.
 
 ## 2026-09-12 — WATER: no bot con can build the shipyard from this Isthmus start; the line waits for an air con
 

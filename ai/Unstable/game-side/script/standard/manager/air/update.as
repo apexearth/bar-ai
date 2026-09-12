@@ -11,6 +11,8 @@ bool HoldsUnit(CCircuitUnit@ unit)
 {
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
+	if (IsLookDef(id) && LookDispatch(unit))
+		return true;
 	// A TORPEDO FLYER WITH NO FLOATING TARGET HAS NOTHING TO SHOOT ANYWHERE
 	// ON THE MAP -- its weapons read zero surf and zero air threat -- yet
 	// stock routing gave the ones we owned attack orders against land
@@ -243,6 +245,139 @@ void ReArm()
 		+ " for the next run");
 }
 
+// The scout the look bought flies it: a raw move across their structures
+// (the mirrored start until one is seen), held in the idle task so nothing
+// re-routes it, and handed back to stock the moment the look is not wanted.
+bool LookDispatch(CCircuitUnit@ unit)
+{
+	if (int(unit.id) == gLookScout)
+		return true;
+	if ((gLookScout >= 0) || !LookPays(int(unit.circuitDef.id)))
+		return false;
+	// A pass that showed nothing means the mirror is not where they live:
+	// the next one crosses their army instead, then the mirror again wider.
+	AIFloat3 over = Front::FoeAnchor();
+	if ((gLookMiss % 2) == 1) {
+		const AIFloat3 army = aiEnemyMgr.GetEnemyPos();
+		if (OnMap(army) && (army.distance2D(over) > 1000.f)
+			&& (army.SqLength2D() > 1.f))
+			over = army;
+	}
+	if (!OnMap(over))
+		return false;
+	const float ang = float((ai.frame / SECOND) % 8) * 0.785398f;
+	const AIFloat3 jit = over + AIFloat3(cos(ang), 0.f, sin(ang))
+			* (500.f * float(1 + (gLookMiss / 2) % 3));
+	if (OnMap(jit))
+		over = jit;
+	gLookWay = LookRoute(unit, over);
+	gLookLeg = gLookWay.distance2D(over) > 1.f ? 0 : 1;
+	unit.CmdMoveTo((gLookLeg == 0) ? gLookWay : over);
+	gLookScout = int(unit.id);
+	gLookDef = int(unit.circuitDef.id);
+	gLookTarget = over;
+	gLookSeen0 = aiEnemyMgr.GetEnemyStructCost();
+	++gLookFlown;
+	AiLog(Factory::T() + "apex: air look " + unit.circuitDef.GetName()
+		+ " #" + unit.id + " -> " + int(over.x) + "," + int(over.z)
+		+ ((gLookLeg == 0) ? (" via " + int(gLookWay.x) + "," + int(gLookWay.z)) : "")
+		+ " structs=" + int(gLookSeen0)
+		+ " mirror=" + int(MirrorPrize())
+		+ " stale=" + formatFloat(LookStale(), "", 0, 2)
+		+ " p=" + formatFloat(LookDelivery(), "", 0, 2)
+		+ " worth=" + int(LookWorth()));
+	return true;
+}
+
+// The straight line crosses the front, where the scout dies before it sees
+// anything. Three approaches -- straight, and wide around either flank -- are
+// read off the air-threat map for this scout; the quietest one is flown, as
+// a waypoint first when it is not the straight line.
+float RouteThreat(CCircuitUnit@ unit, const AIFloat3& in a, const AIFloat3& in b)
+{
+	float sum = 0.f;
+	for (int i = 1; i <= 6; ++i) {
+		const AIFloat3 p = a + (b - a) * (float(i) / 6.f);
+		if (OnMap(p))
+			sum += ai.GetUnitThreatAt(unit, p);
+	}
+	return sum;
+}
+
+AIFloat3 LookRoute(CCircuitUnit@ unit, const AIFloat3& in over)
+{
+	const AIFloat3 orig = unit.GetPos(ai.frame);
+	AIFloat3 axis = over - orig;
+	const float span = axis.Length2D();
+	if (span < 1.f)
+		return over;
+	AIFloat3 perp(-axis.z / span, 0.f, axis.x / span);
+	const AIFloat3 mid = orig + axis * 0.5f;
+	float bestT = RouteThreat(unit, orig, over);
+	AIFloat3 best = over;
+	const float wide = 0.5f * span;
+	const float mw = float(AiTerrainWidth());
+	const float mh = float(AiTerrainHeight());
+	for (int side = -1; side <= 1; side += 2) {
+		AIFloat3 w = mid + perp * (wide * float(side));
+		w.x = (w.x < 64.f) ? 64.f : ((w.x > mw - 64.f) ? mw - 64.f : w.x);
+		w.z = (w.z < 64.f) ? 64.f : ((w.z > mh - 64.f) ? mh - 64.f : w.z);
+		if (w.distance2D(mid) < 500.f)
+			continue;
+		const float t = RouteThreat(unit, orig, w) + RouteThreat(unit, w, over);
+		if (t < bestT) {
+			bestT = t;
+			best = w;
+		}
+	}
+	return best;
+}
+
+// The look is delivered when the scout's sight reaches the target; a scout
+// that dies short of it delivers whatever it saw on the way, and the census
+// says how much that was.
+void LookWatch()
+{
+	if (gLookScout < 0)
+		return;
+	CCircuitUnit@ scout = null;
+	if (gLookDef > 0) {
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gLookDef),
+				Builder::gHomePos, 0.f);
+		if (us !is null) {
+			for (uint i = 0; i < us.length(); ++i) {
+				if ((us[i] !is null) && (int(us[i].id) == gLookScout)) {
+					@scout = us[i];
+					break;
+				}
+			}
+		}
+	}
+	const float seen = aiEnemyMgr.GetEnemyStructCost();
+	const bool saw = seen > gLookSeen0 + 1.f;
+	if (scout !is null) {
+		const AIFloat3 at = scout.GetPos(ai.frame);
+		if ((gLookLeg == 0) && (at.distance2D(gLookWay) < 300.f)) {
+			gLookLeg = 1;
+			scout.CmdMoveTo(gLookTarget);
+		}
+		if (at.distance2D(gLookTarget) > Catalog::gLosR[gLookDef])
+			return;
+	}
+	if (saw) {
+		gLookAt = ai.frame;
+		gLookMiss = 0;
+		++gLookDelivered;
+	} else {
+		++gLookMiss;
+	}
+	AiLog(Factory::T() + "apex: air look " + ((scout is null) ? "lost" : "landed")
+		+ " #" + gLookScout + " structs=" + int(gLookSeen0) + "->" + int(seen)
+		+ " miss=" + gLookMiss
+		+ " next=" + int(MarginalGain(BuyableBomberDef(), HeldBombers())));
+	gLookScout = -1;
+}
+
 // EYES OVER THEIR BASE (apexearth, watching carefully: "I don't see any
 // scouts flying over their base"). Stock scout tasks chase unscouted MEX
 // clusters and go quiet once the map is claimed -- the enemy BASE is never
@@ -329,6 +464,7 @@ void Update()
 	SettleStrike();
 	ResolveDefs();
 	ReArm();
+	LookWatch();
 	StrikeScanStep();
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)

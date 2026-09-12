@@ -623,6 +623,22 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			continue;   // the economy-only benchmark: hands only
 		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
+		// THE WING'S LOOK: an air scout bought for what seeing their economy
+		// adds to the first bomber's price (Air::LookGainFor). A second demand
+		// beside the support one below, not instead of it.
+		if (!Catalog::gBuilder[d] && Air::IsLookDef(d)) {
+			const float gainL = Air::LookGainFor(d, fillS) * roleMul;
+			if (gainL > 0.f) {
+				const float vL = gainL / Catalog::gCostM[d];
+				candDef.insertLast(d);
+				candV.insertLast(vL);
+				candGain.insertLast(gainL);
+				sumV += vL;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName()
+						+ ":look(v" + formatFloat(vL, "", 0, 3) + ")";
+			}
+		}
 		// SUPPORT: mobile eyes and static-cover. One radar and one jammer per
 		// squad that can actually take one (apexearth: "we only need up to 2 of
 		// these per squad that we have"); attachment is the military layer's,

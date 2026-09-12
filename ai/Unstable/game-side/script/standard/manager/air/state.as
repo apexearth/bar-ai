@@ -430,8 +430,13 @@ float MarginalGain(int d, int n)
 	// the AA works through their base cell by cell, and one cell's 16k
 	// priced a six-plane wing (measured) -- not the mass he asked for. The
 	// prior is optimistic on purpose; the scored run replaces it.
-	const float prize = aiEnemyMgr.GetEnemyStructCost();
-	if (prize <= 0.f)
+	return PrizeGain(d, n, aiEnemyMgr.GetEnemyStructCost());
+}
+
+// The model half of MarginalGain, for a prize the caller names.
+float PrizeGain(int d, int n, float prize)
+{
+	if ((d < 0) || (prize <= 0.f))
 		return 0.f;
 	const float aa = StrikeAACost();
 	const float s = Catalog::gHealth[d]
@@ -465,12 +470,7 @@ float StrikeGainFor(int d, float fillSec)
 {
 	if (!IsAirLead() || !IsBomberDef(d))
 		return 0.f;
-	if ((ai.frame < AIR_FROM) || !AirEcoReady())
-		return 0.f;
-	// The same ground gate the commitment waits behind: no wing is STARTED
-	// while the ground war is being lost badly.
-	if (!Committed() && (HeldBombers() == 0)
-		&& (Military::EnemyArmyCost() > Military::TeamArmyCost() * GROUND_LOST_RATIO))
+	if (!WingBuys())
 		return 0.f;
 	// Priced against the force AT HOME, so a wave already out neither counts
 	// towards the next one nor stops it being built.
@@ -480,6 +480,110 @@ float StrikeGainFor(int d, float fillSec)
 	if (!MarginalWorth(d, held))
 		return 0.f;
 	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
+}
+
+// Would the wing buy a plane at all right now, prize aside: the economy
+// carries air, and the ground war is not being lost badly before a wing is
+// started (the same gate the commitment waits behind).
+bool WingBuys()
+{
+	if ((ai.frame < AIR_FROM) || !AirEcoReady())
+		return false;
+	if (!Committed() && (HeldBombers() == 0)
+		&& (Military::EnemyArmyCost() > Military::TeamArmyCost() * GROUND_LOST_RATIO))
+		return false;
+	return true;
+}
+
+// THE LOOK THE WING IS PRICED ON. MarginalGain reads the enemy structures we
+// have SEEN, and nothing else in the air line ever goes to look, so an unseen
+// base priced the wing at zero (apexearth: "we absolutely need scouts so we
+// know what to hit"). The scout is worth what the look adds to the first
+// bomber's gain: a mirror of our own economy against what the census already
+// holds, fading to nothing right after a look and growing back over the
+// horizon the census forgets on.
+int gLookAt = -1;         // frame the last look was delivered, -1: never
+int gLookScout = -1;      // the scout flying it, -1: none
+int gLookDef = -1;
+int gLookMiss = 0;        // passes in a row that showed nothing new
+float gLookSeen0 = 0.f;   // the census when it left
+AIFloat3 gLookTarget;
+AIFloat3 gLookWay;        // the flank waypoint, when the straight line is worse
+int gLookLeg = 1;         // 0 flying to the waypoint, 1 to the target
+int gLookFlown = 0;
+int gLookDelivered = 0;
+
+// The air SCOUT: a transport is unarmed and cheap too, and flew the first one.
+bool IsLookDef(int d)
+{
+	return (d > 0) && Catalog::gAvailable[d] && Catalog::gMobile[d]
+		&& Catalog::gFlyer[d] && !Catalog::gBuilder[d]
+		&& !Catalog::gKamikaze[d]
+		&& (Catalog::gPower[d] <= 1.f) && (Catalog::gCostM[d] <= 100.f)
+		&& Catalog::Def(d).IsRoleAny(Unit::Role::SCOUT.mask);
+}
+
+// The share of looks that came back with something, measured on this game's
+// own flights and the only survival model a 52-metal plane gets.
+float LookDelivery()
+{
+	return float(gLookDelivered + 1) / float(gLookFlown + 2);
+}
+
+// Their economy started equal to ours, base for base.
+float MirrorPrize()
+{
+	return Market::gAssetsM * Military::AllyCount();
+}
+
+float LookStale()
+{
+	if (gLookAt < 0)
+		return 1.f;
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	if (horizon <= 1.f)
+		return 1.f;
+	const float f = float(ai.frame - gLookAt) / horizon;
+	return (f > 1.f) ? 1.f : ((f < 0.f) ? 0.f : f);
+}
+
+// What a look would add to the wing's first purchase, in metal.
+float LookWorth()
+{
+	if (!IsAirLead() || !WingBuys())
+		return 0.f;
+	const int b = BuyableBomberDef();
+	const int held = HeldBombers();
+	if ((b < 0) || (ScaledBombers() <= 0) || (held >= ScaledBombers()))
+		return 0.f;
+	const float seen = aiEnemyMgr.GetEnemyStructCost();
+	const float est = MirrorPrize();
+	if (est <= seen)
+		return 0.f;
+	return (PrizeGain(b, held, est) - PrizeGain(b, held, seen)) * LookStale()
+			* LookDelivery();
+}
+
+// The production draw's price for one more scout of THIS type. A second one
+// in the air delivers the same picture the first will, so it adds nothing
+// while one is pending or flying.
+float LookGainFor(int d, float fillSec)
+{
+	if (!IsLookDef(d))
+		return 0.f;
+	if ((gLookScout >= 0) || (Brain::PendAnyOf(d) > 0))
+		return 0.f;
+	if (!LookPays(d))
+		return 0.f;
+	return LookWorth() / ((fillSec > 1.f) ? fillSec : 180.f);
+}
+
+// The same bar the wing holds its own planes to: the look must return the
+// plane it risks, at the strike's payoff. Below it a standing scout is stock's.
+bool LookPays(int d)
+{
+	return LookWorth() >= Catalog::gCostM[d]
+			* ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF);
 }
 
 int DominantBomberDef()

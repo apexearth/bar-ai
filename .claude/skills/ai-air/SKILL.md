@@ -16,7 +16,7 @@ reads them; functions are visible module-wide regardless).
 | `air/election.as` | resolving the faction's air defs, electing the air lead |
 | `air/wing.as` | `Bombers()`/`Fighters()`/`Massed()`, `Armed()`, `FactoryToBuild`, `IntelPlantToBuild` |
 | `air/wave.as` | the roster one strike owns — see below |
-| `air/update.as` | `HoldsUnit`, `Intercept`, `Release`, `ReArm`, `Update` |
+| `air/update.as` | `HoldsUnit`, `LookDispatch`/`LookWatch`, `Intercept`, `Release`, `ReArm`, `Update` |
 | `air/station.as` | spreading fighters over the fence ledger, spending obsolete T1 fighters |
 
 ## Ownership
@@ -27,6 +27,7 @@ reads them; functions are visible module-wide regardless).
 | Which plant to build next | `FactoryToBuild` (strike) and `IntelPlantToBuild` (intel/mandatory air) | `air/wing.as` |
 | Advanced plant output | **T2 air constructors FIRST**, then the T2 wing. His standing want is "by ~200 metal you should definitely be having one"; the `apex_aca_per_income` knob that encoded it as a rate is GONE, and air-con demand is priced through the market like any other build power — re-derive from `docs/23-the-plan.md` before restoring a per-income rule | facqueue |
 | Whether a plane flies at all | `HoldsUnit` | `air/update.as` |
+| The look the wing is priced on | `LookGainFor` prices an air scout at what seeing their economy adds to the first bomber's `PrizeGain` (mirror of our assets vs the census, fading after a look over `apex_ghost_stale_min`); `LookDispatch` flies it across `Front::FoeAnchor()`, the enemy army on a miss | `air/state.as`, `air/update.as`, `market/production.as` `:look` |
 | Which planes a strike owns | the wave roster | `air/wave.as` |
 | Recycling stale T1 air | station recycle (adv standing vs basic count) | `air/station.as` |
 | Static AA | `ProposeAirDef` prices a `WK_AIRDEF` want; the census and the heavy-AA ceiling are `HeavyAAWant` -- an income BAR (`apex_flak_floor_income`) plus one more per `apex_flak_per` of income beyond it, maxed against what air we have SEEN. That bar is a threshold `docs/23-the-plan.md` forbids; it is in the code today, see ISSUES.md | `brain/market/protect_want.as`, `military/airthreat.as` |
@@ -93,6 +94,7 @@ ground parity and lets the commitment gate open.
 
 `apex: air <n>/<want> bombers, <n>/<want> fighters ...` (60s heartbeat) ·
 `apex: air lead NOT armed ...` · `apex: air assassin holding off -- ...` ·
+`apex: air look <def> #<id> -> x,z structs= mirror= stale= worth=` · `apex: air look landed|lost #<id> structs=<before>-><after> miss= next=` ·
 `apex: air assassin committing, first plant <x>` · `apex: air strike -- <why>` ·
 `apex: air strike over -- <n> of the wave home, <n> built since` ·
 `apex: air run scored def=<x> sent= home= surv= dmg/bomber=` ·
