@@ -54,6 +54,17 @@ bool RadarSees(const AIFloat3& in pos)
 		if ((rr > 1.f) && (pos.distance2D(gProtPos[PROT_RADAR][i]) < rr * overlap))
 			return true;
 	}
+	// A radar ordered or framed sees too, or the gap it is closing is
+	// re-proposed every election and refused as covered until it stands.
+	ComNear(pos, 3600.f * overlap);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint ci = uint(gComGrid.hit[q]);
+		if (((gComState[ci] & CS_COMING) == 0) || (ProtClassOf(gComDef[ci]) != PROT_RADAR))
+			continue;
+		const float rr = Catalog::gRadarR[gComDef[ci]];
+		if ((rr > 1.f) && OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < rr * overlap))
+			return true;
+	}
 	return false;
 }
 
