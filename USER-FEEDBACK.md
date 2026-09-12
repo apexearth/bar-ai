@@ -39,6 +39,15 @@ basic converters finished in minutes 24-28 beside 11 fusions and 6 advanced.
 Fixes in flight (`PendArmyMWithin`, `DenserHandsCover`); battery `t3conv`.
 Open until a game of his shows neither.
 
+> "I did notice an issue with a gantry being blocked. It might be worth being
+> able to fix that after it's happened."
+
+Built as `FacYardWatch` (a finished unit still inside the plant's footprint
+20 s later = jammed: yard units pushed to the lane, a wreck in it reclaimed,
+structures counted) -- `apex: facyard jammed`. Nothing yet says what blocked
+HIS gantry; if the line reads `structs>0` with nothing else, the next step is
+reclaiming our own building off the exit, which needs the facing from the DLL.
+
 ## 2026-09-08 — CONSTRUCTOR ROLES BY SHARE (his proposal, not built)
 
 Watching the deepening tree: "The defenses appear to be improved. We still

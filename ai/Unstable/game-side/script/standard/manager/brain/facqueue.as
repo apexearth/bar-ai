@@ -32,6 +32,9 @@ array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
 array<int> gFQSeen;              // ...and the queue depth we last observed
 array<int> gFQAt;                // ...and the frame we last sent one an order
 array<int> gFQEvt;               // ...and the frame the line last did ANYTHING
+array<CCircuitDef@> gFQBornDef;   // ...the def it last finished, until it has left the yard
+array<int> gFQBornAt;            // ...and the frame it finished (-1: yard clear)
+array<int> gFQYardLog;           // ...and the last frame a jam was logged for it
 
 // EVERY ORDER STILL OUTSTANDING, as a flat FIFO of (line, def) pairs, retired
 // only when the unit is FINISHED. Reads lag sends by a whole order window
@@ -230,6 +233,9 @@ void FQForget(Id id)
 	gFQSeen.removeAt(i);
 	gFQAt.removeAt(i);
 	gFQEvt.removeAt(i);
+	gFQBornDef.removeAt(i);
+	gFQBornAt.removeAt(i);
+	gFQYardLog.removeAt(i);
 	PendReindex(i);
 }
 
@@ -286,6 +292,9 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQSeen.insertLast(0);
 		gFQAt.insertLast(ai.frame);
 		gFQEvt.insertLast(ai.frame);
+		gFQBornDef.insertLast(null);
+		gFQBornAt.insertLast(-1);
+		gFQYardLog.insertLast(0);
 		line = int(gFQId.length()) - 1;
 		AbortRecruitsOn(fac);
 		fac.CmdRepeat(false);
@@ -438,11 +447,96 @@ void SweepDeadRecruits()
 	}
 }
 
+// A FINISHED UNIT STILL STANDING IN THE YARD IS A BLOCKED LINE (apexearth
+// 2026-09-12: "I did notice an issue with a gantry being blocked. It might be
+// worth being able to fix that after it's happened"). The engine will not
+// start the next unit while something solid stands on the build spot, and
+// nothing reports it. One line per call; the born def is re-found by
+// position, never by a stored handle (NOCOUNT: see FQForget).
+int gFQYardLine = 0;
+int gFQYardAt = 0;
+const int YARD_SETTLE = 20 * SECOND;
+
+void FacYardWatch()
+{
+	if ((gFQFac.length() == 0) || (ai.frame < gFQYardAt))
+		return;
+	gFQYardAt = ai.frame + 2 * SECOND;
+	if (gFQYardLine >= int(gFQFac.length()))
+		gFQYardLine = 0;
+	const int l = gFQYardLine++;
+	if ((gFQBornAt[l] < 0) || (gFQBornDef[l] is null)
+		|| (ai.frame - gFQBornAt[l] < YARD_SETTLE))
+		return;
+	CCircuitUnit@ fac = gFQFac[l];
+	// Builders are not evidence: a new constructor works beside its plant.
+	if ((fac is null) || (fac.circuitDef is null) || !gFQBornDef[l].IsMobile()
+		|| gFQBornDef[l].IsAbleToFly() || gFQBornDef[l].IsBuilder())
+	{
+		gFQBornAt[l] = -1;
+		return;
+	}
+	const int fd = int(fac.circuitDef.id);
+	const int cells = (Catalog::gFootX[fd] > Catalog::gFootZ[fd])
+			? Catalog::gFootX[fd] : Catalog::gFootZ[fd];
+	const float footR = float(cells) * 8.f + 24.f;
+	const AIFloat3 fp = fac.GetPos(ai.frame);
+	array<CCircuitUnit@>@ born = ai.GetOwnUnitsOfDef(gFQBornDef[l], fp, footR);
+	if ((born is null) || (born.length() == 0)) {
+		gFQBornAt[l] = -1;   // it left; the yard is clear
+		return;
+	}
+	// Jammed. Push everything of ours standing in the yard toward the lane,
+	// eat any wreck in it, and say what else is there.
+	const AIFloat3 lane = aiSetupMgr.GetLanePos();
+	int pushed = 0;
+	for (uint cd = 1; cd < Market::gOwnCount.length(); ++cd) {
+		if ((Market::gOwnCount[cd] <= 0) || !Catalog::gMobile[int(cd)]
+			|| Catalog::gBuilder[int(cd)])
+			continue;
+		array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(Catalog::Def(int(cd)), fp, footR * 1.5f);
+		if (near is null)
+			continue;
+		for (uint i = 0; i < near.length(); ++i) {
+			if (near[i] is null)
+				continue;
+			if (ai.IsPosOnMap(lane))
+				near[i].CmdMoveTo(lane);
+			++pushed;
+		}
+	}
+	int wreck = 0;
+	const AIFloat3 wp = ai.GetBestWreckPos(fp, footR * 1.5f, 0.f);
+	if (ai.IsPosOnMap(wp) && (wp.distance2D(fp) <= footR * 1.5f)) {
+		if (aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, wp, 1000.f,
+				60 * SECOND, footR * 0.5f, true)) !is null)
+			wreck = 1;
+	}
+	int structs = 0;
+	array<CCircuitUnit@>@ st = ai.GetOwnStructsNear(fp, footR * 1.5f);
+	if (st !is null) {
+		for (uint i = 0; i < st.length(); ++i) {
+			if ((st[i] !is null) && (st[i].id != fac.id))
+				++structs;
+		}
+	}
+	if (ai.frame >= gFQYardLog[l]) {
+		gFQYardLog[l] = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: facyard jammed " + fac.circuitDef.GetName()
+			+ " #" + fac.id + " t=" + ai.teamId
+			+ " unit=" + gFQBornDef[l].GetName()
+			+ " age=" + int((ai.frame - gFQBornAt[l]) / SECOND) + "s"
+			+ " footR=" + int(footR)
+			+ " pushed=" + pushed + " wreck=" + wreck + " structs=" + structs);
+	}
+}
+
 void UpdateFacQueues()
 {
 	if (!FacQueueOn())
 		return;
 	SweepDeadRecruits();
+	FacYardWatch();
 }
 
 // The honest reconcile: the ordered unit APPEARED. CountQueued lags sends by
@@ -455,8 +549,11 @@ void NoteProduced(CCircuitUnit@ unit)
 	for (uint i = 0; i < gFQPendDef.length(); ++i) {
 		if ((gFQPendDef[i] !is null) && (gFQPendDef[i] is unit.circuitDef)) {
 			const int line = gFQPendLine[i];
-			if ((line >= 0) && (line < int(gFQEvt.length())))
+			if ((line >= 0) && (line < int(gFQEvt.length()))) {
 				gFQEvt[line] = ai.frame;
+				@gFQBornDef[line] = Catalog::Def(int(unit.circuitDef.id));
+				gFQBornAt[line] = ai.frame;
+			}
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);
 			return;
