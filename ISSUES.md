@@ -16,6 +16,80 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-11 — OPENING: a commander can fail to place its first factory for 20-35 minutes
+
+Greenest Fields 2v2 +100% headless battery, 3-5 engines sharing the CPU: in 5
+of 20 player-games the first factory finished after minute 19 (`four-diag-s1`
+t1 28.8m, `four-X-s1` t1 34.6m, `four-B-s1` t1 19.3m, `four-B-s2` t1 33.9m,
+`four-C-s1` t0 7.0m); every other player had one by 2.1m. That player builds
+3,475 metal by minute 16 against 13-20k for the rest, and the game is decided
+by it. The trace is one loop: `exec t=1 armcom -> plant:armlab at=7432,1896`,
+then `apex: stuck -- armcom held armlab progress=0.00 toSite=273 buildDist=145
+still 3s ... q=0 lagMax=30 -- no engine order, re-electing`, `task-die
+why=script-abort`, re-elect, same again -- 50 times in `four-B-s1` while the
+same commander built five solars and a converter in between. No `site-fail`
+line, so the C++ task had a site; the engine queue never held the order. S24
+(`docs/25`) describes lost orders as a tail, not a 20-minute run on one unit
+and one build type. Dominant noise in any battery at this load: metal at 30
+swung 33k-130k for the same seed and code.
+
+## 2026-09-11 — CREWS: a banked reactor takes 22-98 hands, and refusing the late ones slowed it
+
+His watched game (Greenest Fields 2v2 +100%): fusions started at a mean crew
+of 14.1, max 49 (`apex: latency armfus start= workers=`); annihilators 4.1,
+max 15; everything else 2 or under. Control battery `four-C-s*`: max 22, 31,
+98. The number is `CostCrew` (`builder/requests/governed.as`): 15 for a
+fusion plus `OverflowM()/7`, and `BankCovers` returns it uncapped, which is
+his ruling ("putting all that total build power onto one fusion would make it
+build that much faster"). What he saw is that ruling at 1,300 metal/s.
+
+Tried and REVERTED the same night: `WorthJoining` (walk vs remaining time at
+the standing crew) at the `join-site` rung of `Requests::Take`, the one rung
+that did not ask it. Crew at start fell to 3.6 / 2.0 mean (B / X arms, 3
+seeds each) -- and fusions took 1.9 / 2.9 min from frame to finish against
+1.2 in control, t0 metal at minute 30 54k / 47k against 82k. The test counts
+assigned walkers as already lathing, so it refuses the second wave of a
+fusion that still has minutes left. If the crowd is to shrink, the honest
+version prices remaining time on hands that have ARRIVED.
+
+## 2026-09-11 — BUILD POWER: the backlog term buys constructors while the hands stand idle
+
+Greenest Fields 2v2 +100%, his watched game (`matches/_engine`, 58 min), team 0:
+482 mobile constructors built by minute 56 (armca 111, armack 75, armck 63,
+armfark 50, armacv 40) against 14 factories; `apex: comm ... workers=467`. In
+the same window the builders had nothing to do: 1,251 `sense/sense:armjamt`
+elections won "over nothing" or over `buildpower/assist v=0.05`,
+`apex: exec-refused t=0 allNull=2127 ... sense=4360`, `apex: eta t=0 ...
+eta=nano:armnanotc=123031` (the growth ladder had one rung, 34 hours away).
+
+The demand: `apex: bpgap gap=515.6 tgt=2425.2 cap=6745.0 net=-4319.9 ...
+blog=515.6 rawM=30936 rows=24 bank%=94`. Build-power capacity is 2.8x the
+target and the bank is pinned, yet BPGap (`market/want_energy.as`, `blTerm =
+rawBl / apex_bp_backlog_s`) reads 30,936 metal of ORDERED-not-framed rows as
+a hands shortage and prices another constructor at `gain += mob * over`
+(`production.as`, the `over = bpGap * util` term). A backlog with idle hands
+is a site or gating problem, never a hands one; the term does not ask
+whether the standing hands are busy. His ask, same game: "stop making so many
+of those and instead build a lot more builder turrets" -- the arithmetic
+agrees (armnanotc 1.05 metal per build-power point, armck 1.38, armca 1.83,
+armack 2.39). What the backlog rows were waiting on was not measured.
+
+## 2026-09-11 — ASSIST: mobile constructors never support a factory; BARb spends 13-22% of con time there
+
+`dev_stats` DUTY census, Greenest Fields 2v2 +100% (`four-diag-s1`, 50 min):
+`conOnFac/conSamp` = 0.8% and 0.9% for our two players, 12.8% and 21.6% for
+BARb's. Nano turrets in reach per factory at minute 50 were not the gap: ours
+4-29 per factory (median 13), BARb's 12-26.
+
+`market/want_assist.as:12-49`: the assist boss is BestJobBoss, then any
+worker building a factory or nano, then NextServingCon, and a factory with a
+queue is the LAST fallback -- reached only when no constructor anywhere
+holds a builder task. Stock BARb (`EconomyManager.cpp:1697-1723`,
+`CheckMobileAssistRequired`): an idle builder within 600 elmos of a factory
+with an active recruit guards it for 10 s whenever the bank is above 20% of
+storage. Whether he wants con time on factories or fewer cons is his call
+(he offered both); the arithmetic above says nanos.
+
 ## 2026-09-08 — DEFENCE HOLD AS A DRAW FLOOR: starves the opening, reverted the same hour
 
 The plan's "army and defence are held at their share, the search proceeds

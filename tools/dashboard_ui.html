@@ -525,6 +525,7 @@ async function openGame(dir, isRefresh) {
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadFrontTowers(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadFacSupport(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadIntel(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBudget(dir);
@@ -728,6 +729,15 @@ function renderMatch(d) {
       role (Crew::Enlist; a role never changes once set). The white line is
       cumulative constructor deaths. Assist bots are not enrolled, so this is
       the working crew rather than every unit with a build menu.</div></div>
+  <div class="card"><h2>Factory support — nano turrets in reach of each factory</h2>
+    <div class="dim" id="fs-note"></div>
+    <div id="fs-table" style="margin-top:8px"></div>
+    <div class="dim" style="font-size:12px;margin-top:4px">Every team, BARb's
+      included: from the dev_stats gadget (last sample). A nano counts for a
+      factory when its lathe reaches the factory's footprint; one turret can
+      count for several. Stock BARb's target is caretaker &times; factories
+      (T1 2, T2 4, T3 9 per factory). "con time on factories" is the share of
+      mobile-constructor samples spent lathing a factory's build.</div></div>
   <div class="card"><h2>Front-line towers — completed vs won</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">team<select id="ft-team"></select></label>
@@ -1255,6 +1265,29 @@ function drawBrain() {
     return `<tr><td>${esc(l)}</td><td class="dim">${esc(cat)}</td>
       <td>${pickCount[l] || 0}</td><td>${meanC.toFixed(1)}%</td>
       <td>${Math.max(0, ...c).toFixed(1)}%</td><td>${meanS.toFixed(3)}</td></tr>`;
+  }).join("");
+}
+
+/* ---------- factory support ---------- */
+async function loadFacSupport(dir) {
+  const box = $("#fs-table"); if (!box) return;
+  let FS = null;
+  try { FS = await api("/api/facsupport?dir=" + encodeURIComponent(dir)); }
+  catch (e) { FS = null; }
+  const teams = FS && FS.teams ? Object.keys(FS.teams) : [];
+  if (!teams.length) {
+    $("#fs-note").textContent = "no facNano= DUTY lines (dev_stats gadget older than 2026-09-11, or dev_stats off)";
+    box.innerHTML = ""; return;
+  }
+  $("#fs-note").textContent = "";
+  box.innerHTML = teams.map(tid => {
+    const t = FS.teams[tid];
+    const rows = t.facs.map(f =>
+      `<tr><td>${esc(f.def)}</td><td>${f.nanos}</td><td>${f.busy ? "building" : "idle"}</td></tr>`).join("");
+    return `<div style="display:inline-block;vertical-align:top;margin-right:18px">
+      <div><b>team ${tid}</b> <span class="dim">at ${t.min.toFixed(0)}m, con time on factories ${t.conOnFacPct.toFixed(1)}%</span></div>
+      <table><thead><tr><th>factory</th><th>nanos in reach</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td class="dim" colspan="3">no factory</td></tr>'}</tbody></table></div>`;
   }).join("");
 }
 

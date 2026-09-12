@@ -133,10 +133,12 @@ void LatencySweep()
 			gLiveStartAt[i] = ai.frame;
 		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
 		++gStartLatN;
+		const AIFloat3 sAt = t.GetBuildPos();
 		AiLog(Factory::T() + "apex: latency " + t.buildDef.GetName()
 			+ " start=" + ((ai.frame - gLiveAt[i]) / SECOND)
 			+ " workers=" + Workers(t)
-			+ " m=" + int(t.buildDef.costM));
+			+ " m=" + int(t.buildDef.costM)
+			+ " at=" + int(sAt.x) + "," + int(sAt.z));
 	}
 }
 

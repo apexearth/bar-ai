@@ -359,6 +359,42 @@ def crew_roles(d):
     return {"roles": CREW_ROLES, "teams": teams}
 
 
+DUTY_RE = re.compile(
+    r"\[BARAI_DUTY\] team=(\d+) frame=(\d+) .*?conSamp=(\d+) .*?"
+    r"conOnFac=(\d+) facNano=(\S+)")
+
+
+def factory_support(d):
+    """Nano turrets whose lathe reaches each standing factory, per team,
+    from the dev_stats gadget's 2-minute DUTY line (every team, BARb's too).
+
+    `conOnFac` over `conSamp` is the share of mobile-constructor time spent
+    lathing a factory's build; stock BARb runs 13-22%, ours under 1%.
+    """
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "[BARAI_DUTY]" not in line or "facNano=" not in line:
+                continue
+            m = DUTY_RE.search(line)
+            if not m:
+                continue
+            facs = []
+            if m.group(5) != "-":
+                for item in m.group(5).split("|"):
+                    parts = item.split(":")
+                    if len(parts) == 3:
+                        facs.append({"def": parts[0], "nanos": int(parts[1]),
+                                     "busy": parts[2] == "1"})
+            con = int(m.group(3))
+            teams[m.group(1)] = {"min": int(m.group(2)) / 1800.0, "facs": facs,
+                                 "conOnFacPct": (100.0 * int(m.group(4)) / con) if con else 0.0}
+    return {"teams": teams}
+
+
 FRONTTOWER_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: fronttowers built=(\d+) lost=(\d+) "
     r"standing=(-?\d+) m=(\d+) backBuilt=(\d+) backLost=(\d+) "
@@ -1342,6 +1378,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(crew_roles(safe_run_dir(q["dir"])))
             elif u.path == "/api/fronttowers":
                 self.send_json(front_towers(safe_run_dir(q["dir"])))
+            elif u.path == "/api/facsupport":
+                self.send_json(factory_support(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
                 self.send_json({"maps": known_maps(), "specs": known_ai_specs(),
                                 "tunables": tunable_names(),

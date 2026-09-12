@@ -196,6 +196,7 @@ local nanoOnFac = {}      -- team -> samples where a nano lathed a factory's bui
 local conSamp = {}        -- team -> samples over finished mobile constructors
 local conIdle = {}        -- team -> ...with an empty command queue
 local conGuardFin = {}    -- team -> ...guarding a finished structure while lathing nothing
+local conOnFac = {}       -- team -> ...lathing a factory's build (a mobile unit)
 local CMD_REPAIR = CMD.REPAIR
 local CMD_GUARD = CMD.GUARD
 
@@ -514,6 +515,40 @@ end
 
 -- `io` is nil in the gadget sandbox, so emit through Spring.Echo and let the
 -- harness parse the infolog it already collects. Last line per team wins.
+-- Per standing factory: nano turrets whose lathe reaches it, and whether it
+-- is building right now -- "<def>:<nanos>:<busy 0|1>|...". A nano reaches a
+-- factory when the gap between its centre and the factory's footprint is
+-- inside its build distance.
+local function facNanoList(teamID)
+	local facs, nanos = {}, {}
+	for _, uid in ipairs(Spring.GetTeamUnits(teamID) or {}) do
+		local udid = Spring.GetUnitDefID(uid)
+		local ud = udid and UnitDefs[udid]
+		if ud ~= nil and not Spring.GetUnitIsBeingBuilt(uid) then
+			local x, _, z = Spring.GetUnitPosition(uid)
+			if ud.isFactory then
+				facs[#facs + 1] = {uid, ud, x, z}
+			elseif ud.isBuilder and (ud.speed or 0) == 0 and (ud.buildDistance or 0) > 0 then
+				nanos[#nanos + 1] = {x, z, ud.buildDistance}
+			end
+		end
+	end
+	local out = {}
+	for _, f in ipairs(facs) do
+		local half = math.max(f[2].xsize or 0, f[2].zsize or 0) * 4
+		local n = 0
+		for _, nn in ipairs(nanos) do
+			local dx, dz = nn[1] - f[3], nn[2] - f[4]
+			if math.sqrt(dx * dx + dz * dz) - half <= nn[3] then
+				n = n + 1
+			end
+		end
+		out[#out + 1] = string.format("%s:%d:%d", f[2].name, n, Spring.GetUnitIsBuilding(f[1]) and 1 or 0)
+	end
+	if #out == 0 then return "-" end
+	return table.concat(out, "|")
+end
+
 local function sampleCommIdle()
 	for _, teamID in ipairs(Spring.GetTeamList()) do
 		local _, _, _, isAI = Spring.GetTeamInfo(teamID, false)
@@ -533,7 +568,12 @@ local function sampleCommIdle()
 						local q = Spring.GetUnitCommands(uid, 1)
 						if q == nil or #q == 0 then
 							bump(conIdle, teamID, 1)
-						elseif q[1].id == CMD_GUARD and not Spring.GetUnitIsBuilding(uid) then
+						elseif Spring.GetUnitIsBuilding(uid) then
+							local cb = Spring.GetUnitDefID(Spring.GetUnitIsBuilding(uid))
+							if cb and (UnitDefs[cb].speed or 0) > 0 then
+								bump(conOnFac, teamID, 1)
+							end
+						elseif q[1].id == CMD_GUARD then
 							local g = q[1].params and q[1].params[1]
 							if g and Spring.ValidUnitID(g) and not Spring.GetUnitIsBeingBuilt(g)
 								and (Spring.GetUnitDefID(g) and (UnitDefs[Spring.GetUnitDefID(g)].speed or 0) == 0) then
@@ -832,12 +872,13 @@ local function dump(reason, onlyTeam, atFrame)
 			end
 			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
 			Spring.Echo(string.format(
-				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d facPow=%.1f nanoOnFac=%d conSamp=%d conIdle=%d conGuardFin=%d",
+				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d facPow=%.1f nanoOnFac=%d conSamp=%d conIdle=%d conGuardFin=%d conOnFac=%d facNano=%s",
 				teamID, atFrame or Spring.GetGameFrame(),
 				facSamp[teamID] or 0, facBusy[teamID] or 0,
 				nanoSamp[teamID] or 0, nanoBusy[teamID] or 0,
 				facPow[teamID] or 0, nanoOnFac[teamID] or 0,
-				conSamp[teamID] or 0, conIdle[teamID] or 0, conGuardFin[teamID] or 0))
+				conSamp[teamID] or 0, conIdle[teamID] or 0, conGuardFin[teamID] or 0,
+				conOnFac[teamID] or 0, facNanoList(teamID)))
 		end
 	end
 end
