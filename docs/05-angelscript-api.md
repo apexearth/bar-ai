@@ -111,6 +111,10 @@ Types: `CCircuitDef@`, `CCircuitUnit@`, `IUnitTask@`, `AIFloat3`, `TypeMask`,
 `Id`, plus AngelScript's `array<T>` and `dictionary` add-ons. `AiLog(string)`
 writes to the infolog prefixed with the AI name.
 
+`CCircuitUnit::GetFacing()` (2026-09-12) returns the engine's building facing
+(0 south +z, 1 east +x, 2 north -z, 3 west -x; -1 dead). Spring's "front" is
+NOT every plant's exit: measure it (`Brain::ExitSign`) before acting on it.
+
 ## Roles and attributes
 
 `unit.as` builds the mask tables. Engine-side roles: `builder`, `scout`,

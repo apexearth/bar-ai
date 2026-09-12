@@ -385,6 +385,21 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 	}
 }
 
+// apex: which way a building faces (UNIT_FACING_SOUTH=0 +z, EAST=1 +x,
+// NORTH=2 -z, WEST=3 -x); -1 for a dead unit. A blocked factory is cleared
+// by reclaiming what stands in FRONT of it, and only the engine knows front.
+static int CCircuitUnit_GetFacing(CCircuitUnit* unit)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return -1;
+	}
+	try {
+		return unit->GetUnit()->GetBuildingFacing();
+	} catch (const std::exception&) {
+		return -1;
+	}
+}
+
 // apex: point a lathe (nano or constructor) at ONE unit to reclaim -- the
 // targeted half of obsolete-building reclaim; policy stays in script.
 static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target)
@@ -1593,6 +1608,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetFacing()", asFUNCTION(CCircuitUnit_GetFacing), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
