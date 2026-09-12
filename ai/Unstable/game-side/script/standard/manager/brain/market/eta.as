@@ -339,9 +339,14 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 // effective lathe per def (Requests::EffBPFor) is what we have finished at,
 // and once one has finished it is the number, for the first move and for
 // every later rung of the same def alike.
+// ...plus the lathe the first move ADDS: the cap swallowed a nano's addBP
+// whole, so the ladder could never prefer a turret and the one eco ticket
+// never carried it -- a wind at v=4.65 beat the nano at v=51.72, and one
+// turret stood while the bank overflowed (his 8v8, 2026-09-11).
+float gLadderAddBP = 0.f;
 float RungBP(int d, float bp)
 {
-	const float eff = Requests::EffBPFor(d);
+	const float eff = Requests::EffBPFor(d) + gLadderAddBP;
 	return ((eff > 1.f) && (eff < bp)) ? eff : bp;
 }
 
@@ -387,6 +392,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 		bpMob = 1.f;
 	float eAvail = EtaEnergyAvail();
 	float t = 0.f;
+	gLadderAddBP = 0.f;
 	if (d > 0) {
 		if (k < 1)
 			k = 1;
@@ -411,13 +417,17 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 			bank = 0.f;
 			if (gainM > 0.f)
 				P += gainM;
-			if (addBP > 0.f)
+			if (addBP > 0.f) {
 				bp += addBP;
+				gLadderAddBP += addBP;
+			}
 			if (Catalog::gMakeE[d] > 0.f)
 				eAvail += Catalog::gMakeE[d];
 		}
 	}
-	return t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
+	const float eta = t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
+	gLadderAddBP = 0.f;
+	return eta;
 }
 
 // How many of def d make one of the ladder's batches from power P.

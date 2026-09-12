@@ -433,7 +433,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// hungriest working line or the biggest uncovered build site takes
 		// the turret; failing either, it parks beside any factory.
 		AIFloat3 slot = w.pos;
-		bool sited = false;
+		// A floor turret stands at its factory; nothing below re-sites it.
+		bool sited = (w.spotId == NS_FLOOR) && OnMap(w.pos);
 		// The line's pull is priced ONCE, in NeediestLine, so the turret is
 		// sited by the same arithmetic that bought it.
 		float worst = 0.f;
@@ -444,7 +445,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// doctrine's fourth point). A pitch behind the guns, one per
 		// section -- while no lathe stands or is ordered within this one's
 		// reach of the line's centre and the ground is plainly ours.
-		{
+		if (!sited) {
 			AIFloat3 fl;
 			int fn = 0;
 			const float bd = Catalog::gBuildDist[int(w.def.id)];

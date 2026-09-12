@@ -1295,15 +1295,33 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Perf::Add("dec.panic", _tPanic);
 	// A ROLED HAND ELECTS INSIDE ITS CATEGORY -- see roles.as. Below the
 	// panics, above the draw.
+	// BARb's factory floor outranks the draw: a nano want sourced from a
+	// factory short of its caretakers is taken, not sampled (apexearth
+	// 2026-09-11: "it should be high priority").
+	bool floorPush = false;
+	if (!aaPanic && !superPush && !coverPush) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
+				continue;
+			if (ri > 0) {
+				Want@ fw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, fw);
+			}
+			floorPush = true;
+			why = "nanofloor";
+			break;
+		}
+	}
 	bool roled = false;
-	if (!aaPanic && !superPush && !coverPush && (ranked.length() > 1)
+	if (!aaPanic && !superPush && !coverPush && !floorPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {
 		roled = ConRoleApply(unit, ranked);
 		if (roled)
 			why = "role";
 	}
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !roled)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
 	Perf::Add("dec.draw", _tDraw);
@@ -1466,7 +1484,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;   // could not place it; fall through rather than idle
 		}
 	}
-	for (uint i = 0; i < ranked.length(); ++i) {
+	// A refused winner is removed; then his adage (2026-09-11): "if you
+	// don't know what to do, make energy... or converters". The best economy
+	// want left is hoisted, and only a list with none rolls the draw again --
+	// falling through to ranked[1] was the value argmax, half of all
+	// executions.
+	const bool redraw = !aaPanic && !superPush && !coverPush && !floorPush && !roled;
+	for (uint depth = 0; ranked.length() > 0; ++depth) {
+		const uint i = 0;
 		bool refused = false;
 		// FORWARD of the anchor is what kills commanders; the farm-distance
 		// radius also banned the rear-flank PLANT site and the commander --
@@ -1532,7 +1557,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				AiLog("apex: exec t=" + ai.teamId + " " + unit.circuitDef.GetName()
 					+ " #" + unit.id + " " + KindName(ranked[i].kind) + ":"
 					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
-					+ " pick=" + i
+					+ " pick=" + depth
 					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
 			// A category that could not be executed is not a job this hand
 			// can do: the role goes with the fall-through.
@@ -1547,12 +1572,34 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// The stall's answer refused: the interrupt that freed this builder
 		// will fire again on whatever the fallthrough starts (five in 500
 		// frames, watched), so the verdict is worth a line.
-		if (!refused && (i == 0) && (why == "estall") && (ai.frame >= gStallRefuseLogAt)) {
+		if (!refused && (depth == 0) && (why == "estall") && (ai.frame >= gStallRefuseLogAt)) {
 			gStallRefuseLogAt = ai.frame + 3 * SECOND;
 			AiLog("apex: stall-answer refused t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " #" + unit.id + " " + ((ranked[0].def is null) ? "-" : ranked[0].def.GetName())
 				+ " verdict=" + Requests::gLastWhat);
 		}
+		ranked.removeAt(0);
+		// Converters while energy is being thrown away, else energy: the
+		// first pass took energy by price and doubled the waste (Isthmus
+		// 20.7% -> 41.9%).
+		const int ecoKind = (gESurplusEma > 1.f) ? WK_CONVERT : WK_ENERGY;
+		int ecoAt = -1;
+		for (uint e = 0; (e < ranked.length()) && (ecoAt < 0); ++e) {
+			if (ranked[e].kind == ecoKind)
+				ecoAt = int(e);
+		}
+		for (uint e = 0; (e < ranked.length()) && (ecoAt < 0); ++e) {
+			if ((ranked[e].kind == WK_ENERGY) || (ranked[e].kind == WK_CONVERT))
+				ecoAt = int(e);
+		}
+		const bool eco = (ecoAt >= 0);
+		if (ecoAt > 0) {
+			Want@ ew = ranked[uint(ecoAt)];
+			ranked.removeAt(uint(ecoAt));
+			ranked.insertAt(0, ew);
+		}
+		if (!eco && redraw && (ranked.length() > 1))
+			CategoryDraw(unit, ranked, depth + 1, elecAt);
 	}
 	// EVERY RANKED WANT REFUSED. The decide line above names what ranked
 	// first, NOT what got built -- so a builder can log a decision every

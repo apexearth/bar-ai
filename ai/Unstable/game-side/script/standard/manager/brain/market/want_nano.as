@@ -7,6 +7,51 @@ const int NS_ARMY = 2;
 const int NS_LINE = 3;
 const int NS_SINK = 4;
 const int NS_FARM = 5;
+const int NS_FLOOR = 6;
+
+// BARb's floor (apexearth 2026-09-11, twice: "we have to do at least that
+// good"; "factories with insufficient supporting nanos should have nanos as
+// very important placement by them"): every standing factory keeps 2 / 4 / 9
+// caretakers in reach for a T1 / T2 / T3 plant, as stock counts them. Returns
+// the worst shortfall and that factory; live nano requests in reach count.
+int FactoryNanoShort(AIFloat3& out at)
+{
+	int worst = 0;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if (f is null)
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (!OnMap(fp))
+			continue;
+		const int tier = PlantTier(int(f.circuitDef.id));
+		const int want = (tier >= 3) ? 9 : ((tier == 2) ? 4 : 2);
+		int have = 0;
+		NanoNear(fp, NanoMaxReach());
+		for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+			const uint i = uint(gNanoGrid.hit[q]);
+			const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+			if (fp.distance2D(gOwnNanoPos[i]) < 0.9f * r)
+				++have;
+		}
+		for (uint li = 0; li < Requests::gLive.length(); ++li) {
+			IUnitTask@ lt = Requests::gLive[li];
+			if ((lt is null) || lt.IsDead() || (lt.buildDef is null)
+				|| (lt.GetBuildType() != Task::BuildType::NANO))
+				continue;
+			const AIFloat3 lp = lt.GetBuildPos();
+			if (OnMap(lp) && (fp.distance2D(lp)
+					< 0.9f * Catalog::gBuildDist[int(lt.buildDef.id)]))
+				++have;
+		}
+		if (want - have > worst) {
+			worst = want - have;
+			at = fp;
+		}
+	}
+	return worst;
+}
+
 Want@ ProposeNano(CCircuitUnit@ unit)
 {
 	Want w;
@@ -205,6 +250,13 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
+	// The floor bids the turret's whole drain at the short factory; Decide
+	// hoists a floor-sourced want ahead of the draw.
+	AIFloat3 floorPos;
+	const int floorShort = FactoryNanoShort(floorPos);
+	const float floorNeed = ((floorShort > 0) && OnMap(floorPos)) ? 200.f * (7.f / 80.f) : 0.f;
+	if (floorNeed > over)
+		over = floorNeed;
 	// What the nano want saw, whether or not it bids (sampled 10 s): the
 	// line's free flow against what it eats is the whole "not supporting
 	// the factory" question.
@@ -221,6 +273,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " army=" + formatFloat(armyNeed, "", 0, 1)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
+			+ " floor=" + floorShort
 			+ " over=" + formatFloat(over, "", 0, 1)
 			+ " bank=" + int(aiEconomyMgr.metal.current) + "/" + int(aiEconomyMgr.metal.storage));
 	}
@@ -237,7 +290,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// is (-1,-1), so the zero-vs-zero case no longer reads as an on-map sink.
 	// The fortification takes the site whenever it priced the demand: a lathe
 	// bought to hold the wall is worth nothing at the eco farm.
-	if ((fortNeed >= over) && OnMap(fortPos)) {
+	if ((floorNeed > 0.f) && OnMap(floorPos)) {
+		site = floorPos;
+		src = NS_FLOOR;
+	} else if ((fortNeed >= over) && OnMap(fortPos)) {
 		site = fortPos;
 		src = NS_FORT;
 	} else if ((armyNeed >= over) && OnMap(armyPos)) {
