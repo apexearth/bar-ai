@@ -98,9 +98,10 @@ def _tree_digest(root: Path) -> str:
     return h.hexdigest()[:12]
 
 
-def _copy_tree(src: Path, dst: Path) -> None:
+def _copy_tree(src: Path, dst: Path, skip_dll: bool = False) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    ignore = (lambda d, names: [n for n in names if n == "SkirmishAI.dll"]) if skip_dll else None
+    shutil.copytree(src, dst, dirs_exist_ok=True, ignore=ignore)
 
 
 # Anything that holds an open handle on engine/<ver>/AI/Skirmish/**/SkirmishAI.dll.
@@ -199,10 +200,40 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
 
     # 1. Engine side: fresh copy of stable (DLL + baseline config/script), then
     #    overlay this repo's AIInfo/AIOptions so the version string says <variant>.
+    # A LOADED DLL IS KEPT, NEVER THE REASON THE TREE IS LOST. rmtree used to
+    # delete AIInfo.lua and the script tree and then die on the locked DLL,
+    # leaving the slot unloadable (his slot, mid-game, 2026-09-11). The DLL is
+    # compared first: identical -> kept in place and everything else refreshed;
+    # different and locked -> refuse before touching a file.
+    built_dll = (_lane.artifact(variant[len('lane-'):]) if variant.startswith('lane-')
+                 else _lane.artifact())
+    want_dll = built_dll if built_dll.exists() else (src / "engine-side" / "SkirmishAI.dll")
+    live_dll = target / "SkirmishAI.dll"
+    keep_dll = False
+    if live_dll.exists():
+        try:
+            with open(live_dll, "ab"):   # a loaded DLL cannot be opened for writing
+                pass
+            locked = False
+        except OSError:
+            locked = True
+        if locked:
+            if want_dll.exists() and filecmp.cmp(live_dll, want_dll, shallow=False):
+                keep_dll = True
+            else:
+                raise SystemExit(
+                    f"{live_dll} is loaded by a running engine and differs from the DLL to "
+                    f"deploy -- refusing before deleting anything. Close the game and retry.")
     if target.exists():
-        print(f"  engine-side  refreshing {target}")
-        shutil.rmtree(target)
-    _copy_tree(stable, target)
+        print(f"  engine-side  refreshing {target}" + ("  (loaded DLL kept, identical)" if keep_dll else ""))
+        for child in target.iterdir():
+            if keep_dll and child == live_dll:
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    _copy_tree(stable, target, skip_dll=keep_dll)
 
     engine_side = src / "engine-side"
     overlaid = []
@@ -223,10 +254,11 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
     # The DLL of the lane being DEPLOYED, never the checkout's active lane: a
     # named-lane deploy took the active lane's artifact mid-link (2026-09-07)
     # and shipped a truncated DLL the engine reported as 'not found'.
-    built_dll = (_lane.artifact(variant[len('lane-'):]) if variant.startswith('lane-')
-                 else _lane.artifact())
     for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
         f = engine_side / name
+        if name == "SkirmishAI.dll" and keep_dll:
+            overlaid.append("SkirmishAI.dll (loaded, identical, kept)")
+            continue
         if name == "SkirmishAI.dll" and built_dll.exists():
             f = built_dll
             name += " (local build)"
