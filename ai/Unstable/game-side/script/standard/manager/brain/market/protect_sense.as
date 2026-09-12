@@ -387,6 +387,26 @@ bool ProtAnyComing(int cls)
 // limit". Logged once because an engine callback returning zero is
 // indistinguishable from a real answer at the call site.
 bool gJamLogged = false;
+int gNextJamLog = 0;
+
+// What one jammer actually hides: the engine radius, floored like the spacing.
+float JamReach(int d)
+{
+	const float raw = Catalog::gJamR[d];
+	return (raw < 300.f) ? 300.f : raw;
+}
+
+void JamSiteLog(int d, const AIFloat3& in jp, int found, float jr)
+{
+	if (ai.frame < gNextJamLog)
+		return;
+	gNextJamLog = ai.frame + 20 * SECOND;
+	const int near = ComNearest(d, jp, 9999.f, CS_ANY);
+	AiLog("apex: jamsite t=" + ai.teamId + " at=" + int(jp.x) + "," + int(jp.z)
+		+ " found=" + found + " jr=" + int(jr)
+		+ " nearest=" + ((near < 0) ? -1 : int(jp.distance2D(gComPos[uint(near)])))
+		+ " standing=" + ComCountOf(d, CS_ANY));
+}
 
 float JamSpacing(int d)
 {

@@ -77,15 +77,17 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// cluster is the stated intent, so a dead radius degrades to that
 		// instead of to no limit at all. The raw value is logged once.
 		const float jr = JamSpacing(d);
+		// A point is covered by the jammer's REAL radius, and the tower is
+		// sited where it can stand inside it: the engine may place up to 1600
+		// elmos from the ask, so a cover test at the ask alone never closes.
+		const float jamR = JamReach(d);
 		AIFloat3 jat = core;
 		bool found = false;
-		// The line is a tower concentration whatever their artillery is
-		// doing: a jammer there hides the guns from the radar their attack
-		// is aimed by, and it is the second thing his fortification lists.
-		if (lineUp && !ProtCovered(PROT_JAM, lineAt, jr)) {
-			at = lineAt;
-			gain = gProtM * rate * 0.8f;
-			return gain > 0.f;
+		int how = 0;
+		if (lineUp && !ProtCovered(PROT_JAM, lineAt, jamR)) {
+			jat = lineAt;
+			found = true;
+			how = 2;
 		}
 		for (uint jd = 0; jd < gProtPos[PROT_DEF].length() && !found; ++jd) {
 			int nearDef = 0;
@@ -94,19 +96,28 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 					++nearDef;
 			}
 			if ((nearDef >= 3)
-				&& !ProtCovered(PROT_JAM, gProtPos[PROT_DEF][jd], jr))
+				&& !ProtCovered(PROT_JAM, gProtPos[PROT_DEF][jd], jamR))
 			{
 				jat = gProtPos[PROT_DEF][jd];
 				found = true;
+				how = 1;
 			}
 		}
-		// A SECOND JAMMER MUST CLEAR THE FIRST wherever it is going. The
-		// old test only guarded the `core` fallback, so a cluster site
-		// that passed the loop above was never re-checked against jammers
-		// standing anywhere else.
-		if (Gate(GATE_JAM_COVER,
-				ProtCovered(PROT_JAM, found ? jat : core, jr)))
+		if (Gate(GATE_JAM_COVER, !found && ProtCovered(PROT_JAM, core, jamR)))
 			return false;
+		const AIFloat3 jsite = ai.FindBuildSiteNear(Catalog::Def(d), jat, jamR);
+		if (Gate(GATE_JAM_SITE, !OnMap(jsite) || (jsite.distance2D(jat) > jamR)))
+			return false;
+		// A SECOND JAMMER MUST CLEAR THE FIRST wherever it is going.
+		if (Gate(GATE_JAM_COVER, ProtCovered(PROT_JAM, jsite, jr)))
+			return false;
+		jat = jsite;
+		JamSiteLog(d, jat, how, jamR);
+		if (how == 2) {
+			at = jat;
+			gain = gProtM * rate * 0.8f;
+			return gain > 0.f;
+		}
 		// A JAMMER DENIES RADAR, so it is worth nothing until something is
 		// USING radar against us -- indirect fire that shoots what it cannot
 		// see. Priced on assets alone it won an early sense ticket over the
@@ -117,7 +128,7 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 				+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f;
 		if (Gate(GATE_JAM_ARTY, indirect < 200.f))
 			return false;
-		at = found ? jat : core;
+		at = jat;
 		gain = ((indirect < gAssetsM) ? indirect : gAssetsM)
 				* rate * (found ? 0.8f : 0.5f);
 	} else if (cls == PROT_SHIELD) {
