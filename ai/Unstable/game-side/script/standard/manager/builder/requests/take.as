@@ -94,7 +94,10 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			// Manned only -- the engine's held placeholder task (see
 			// FactoryManned) also lives in this registry, and handing IT
 			// back wedged every asker on an unassignable task.
-			if (Workers(cand) == 0)
+			// ...but an unmanned task the MARKET commissioned is our own
+			// orphan, handed back: a commander freed off his lab left it
+			// blocking every plant ask for 15 minutes (first lab at 18.97 min).
+			if ((Workers(cand) == 0) && (Market::JobValue(cand) < 0.f))
 				continue;
 			if ((unit !is null) && (cand.buildDef !is null)
 				&& !unit.circuitDef.CanBuild(cand.buildDef))

@@ -126,7 +126,11 @@ void UpdateStuckBuilds()
 		const bool dead = (gStuckDeadAt[i] >= 0) && (ai.frame - gStuckDeadAt[i] >= deadWait);
 		const float dx = p.x - gStuckX[i];
 		const float dz = p.z - gStuckZ[i];
-		if (!dead && (((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
+		// A hand that MOVED or whose frame GREW is not dead whatever the
+		// queue read: the order-lag verdict freed a commander mid-walk to his
+		// lab three times (q=0 at 3 s, toSite 422 -> 387), and the plant
+		// ask was blocked for 15 minutes behind the orphan he left.
+		if ((((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
 			|| (done > gStuckDone[i])))
 		{
 			gStuckX[i] = p.x;

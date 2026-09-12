@@ -334,6 +334,11 @@ bool AnyPlantInFlight()
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d]
 			|| (Catalog::gBuildsList[d].length() == 0))
 			continue;
+		// An order nobody is walking to is not in flight; it is the orphan
+		// the next plant ask adopts (Requests::Take's fork test).
+		if ((gComState[ci] == CS_ORDERED) && (gComTask[ci] !is null)
+			&& (Requests::Workers(gComTask[ci]) == 0))
+			continue;
 		return true;
 	}
 	return false;
