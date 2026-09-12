@@ -16,6 +16,27 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-12 — CONVERTERS: the T2 hands never ask for the advanced one, so the basics cannot be retired
+
+Greenest Fields 2v2 +100% seed 10, `tournaments/probe-reclobs2/3-greenest-s10`
+(lane ctl5): the T2 constructors of team 0 elected 42 wants in 30 minutes --
+27 radars, 13 targeting, 2 supers, ZERO converters -- while energy waste ran
+10-25% and 77-85 basic converters stood at the end beside 1-3 advanced.
+`apex: convwhy t=0 ... surplus=-597 excess=1749 ... inflight=600 standing=2140
+bank%=100 pinned=1 ... nodef=725`: the converter proposer's `eSurplus` reads
+negative (it carries the fleet's potential ask, the same contamination the
+reclaim gate had) while the engine's measured excess is thousands; the pinned
+branch prices the next advanced converter at `capacity - ConvCapInFlight()` =
+600 - 600 = 0 while one is in flight, so with a single frame crawling the
+proposer returns no def for minutes. Pricing at the measured excess was tried
+2026-09-11 and lost on both maps (above); the fleet-ask term in `eSurplus` has
+not been separated from it. Until the T2 hands buy the advanced converter,
+the basics are the conversion and retiring them (his 2026-09-12 room ruling)
+churns: 130 basics eaten and 77 rebuilt in one game when the reclaim gate was
+the hands-could-cover test; the gate now demands the denser fleet STANDING
+carry the served load (DenserConvStandingE), which in these games means none
+retire. The room complaint is therefore open until the demand side is fixed.
+
 ## 2026-09-12 — BOMBERS: the wing is priced on the enemy economy we can SEE, and for 15 minutes that reads zero
 
 Greenest Fields 2v2 +100%, `tournaments/20260912-102411-bombstrike` and

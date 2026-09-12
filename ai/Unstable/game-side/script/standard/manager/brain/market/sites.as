@@ -526,6 +526,22 @@ AIFloat3 GroupAnchor(int defId)
 			- Base::gFwd * (float(bj) * step);
 }
 
+// Where the big eco is asked for -- the safest ground we have. How much a
+// standing building sits on it, 1 at the anchor falling to 0 at `r`.
+float BigEcoGroundAt(const AIFloat3& in pos, float r)
+{
+	if (!gFarmSet || (r <= 1.f))
+		return 0.f;
+	AIFloat3 anchor = gFarmPos;
+	if (Base::gAxisSet) {
+		const AIFloat3 back = gFarmPos - Base::gFwd * 400.f;
+		if (OnMap(back))
+			anchor = back;
+	}
+	const float f = 1.f - pos.distance2D(anchor) / r;
+	return (f > 0.f) ? f : 0.f;
+}
+
 AIFloat3 FarmSlot(int defId)
 {
 	CCircuitDef@ def = Catalog::Def(defId);

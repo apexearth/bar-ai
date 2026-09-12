@@ -190,10 +190,38 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 	// PfCrowd is the measured fill of the base's own rim, and PfMetalPerCell
 	// what a cell of it carries, so the freed ground is priced at what the base
 	// actually puts on a cell, and the whole term vanishes on an empty map.
-	const float room = PfCrowd() * PfMetalPerCell() * float(cells)
+	// ROOM IS LOCAL (see PfCrowdAt): the base-wide fill falls toward zero as
+	// the rim grows, in the very games he could see had no room.
+	const AIFloat3 at = tgt.GetPos(ai.frame);
+	// ...and the safest ground is scarce whatever the fill: the T1 eco that
+	// went up first sits at the base centre, exactly where the advanced
+	// fusion and converter are asked for (apexearth 2026-09-12: "all that T1
+	// eco ends up sitting in the safest spot of our base -- the center --
+	// which is where we'd much rather put AFUS and advanced converters").
+	float crowd = PfCrowdAt(at, 400.f);
+	const float core = BigEcoGroundAt(at, 700.f);
+	if (core > crowd)
+		crowd = core;
+	const float room = crowd * PfMetalPerCell() * float(cells)
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
-	return (Catalog::gCostM[d] + SpaceRentM(tgt.GetPos(ai.frame), cells) + room) / hz
-			- Catalog::gMakeE[d] * ePM;
+	// THE GROUND YIELDS MORE UNDER ITS SUCCESSOR: what our best generator (or
+	// converter) makes on these cells beyond what this one makes, realizable
+	// to the extent the ground around it is already full -- on open ground
+	// the successor simply goes next door and the upside is nothing.
+	RefreshBestCells();
+	float mine = 0.f, best = 0.f;
+	if (Catalog::gMakeE[d] > 0.f) {
+		mine = Catalog::gMakeE[d] / float(cells);
+		best = gBestEcell;
+	} else if (Catalog::gConvCapacity[d] > 0.f) {
+		mine = Catalog::gConvCapacity[d] / float(cells);
+		best = gBestMcell;
+	}
+	const float upside = ((best > mine) ? (best - mine) : 0.f) * float(cells) * ePM * crowd;
+	return (Catalog::gCostM[d] + SpaceRentM(at, cells) + room) / hz
+			+ upside
+			- Catalog::gMakeE[d] * ePM
+			- Catalog::gConvCapacity[d] * Catalog::gConvRatio[d];   // the metal it converts
 }
 
 float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
@@ -352,6 +380,23 @@ float DenserConvCapE(int d)
 			e += Catalog::gConvCapacity[od];
 	}
 	gDenserE[d] = e;
+	return e;
+}
+
+// The same, standing units only.
+float DenserConvStandingE(int d)
+{
+	const float mine = Catalog::gConvCapacity[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	float e = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		if ((gOwnCount[cd] <= 0) || (Catalog::gConvCapacity[int(cd)] <= 0.f))
+			continue;
+		const float mc = Catalog::gConvCapacity[int(cd)]
+				/ float((Catalog::gAreaCells[int(cd)] > 0) ? Catalog::gAreaCells[int(cd)] : 1);
+		if (mc > mine)
+			e += float(gOwnCount[cd]) * Catalog::gConvCapacity[int(cd)];
+	}
 	return e;
 }
 
@@ -596,11 +641,17 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	const float hz = (hzR > 1.f) ? hzR : 300.f;
 	// The generation given up is priced as the buy side prices it -- at the
 	// spot price, not the converter floor -- and NOTHING that makes energy is
-	// eaten while the hands we own ask for more than we make: watched 8v8,
-	// a team ate five of its own solars for room at 700 e/s flat and
-	// stalled 50-90% of the next ten minutes.
+	// eaten while what we PULL exceeds what we make (a team once ate five of
+	// its own solars for room at 700 e/s flat and stalled for ten minutes).
+	// The pull as it stands, not the fleet's potential ask: the buy side's
+	// deficit carries that ask so a generator ladder never rests, which read
+	// "short" in every healthy economy and retired nothing, ever.
 	const float ePM = EPrice();
-	const bool eShort = EnergyDeficitE() > 0.f;
+	// Converters are the elastic sink (see eFree below): they pull whatever
+	// is spare, so pull with them in reads ~income by construction.
+	const bool eShort = (aiEconomyMgr.energy.pull - ConvUseE())
+			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
+			> aiEconomyMgr.energy.income;
 	const float wageR = Wage();
 	// Converters are an elastic sink, not demand -- they are sized against
 	// income by construction, so counting their chew as pull makes a
@@ -695,8 +746,13 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (ownBestMcell < ratio * mc)
 			continue;   // not dwarfed: still earning its cells
 		++nConvDwarf;
-		if (DenserConvCapE(d) < ConvTotalE() + Catalog::gConvCapacity[d])
-			continue;   // the denser fleet cannot yet carry its share
+		// The denser fleet STANDING carries the load actually being converted
+		// plus this one's. Not every joule that could be (waste included) --
+		// no fleet ever covered that; not ordered ones -- they arrive minutes
+		// after the basic is eaten; not the hands test -- it flips as basics
+		// are eaten and rebuilt, and fed a churn.
+		if (DenserConvStandingE(d) < ConvUseE() + Catalog::gConvCapacity[d])
+			continue;
 		++nConvDenser;
 		const float v = RetireValue(unit, cv, d, ePM, wageR, hz)
 				* ReachVictimMul(unit, cv.GetPos(ai.frame));
