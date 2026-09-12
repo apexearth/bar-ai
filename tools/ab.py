@@ -12,8 +12,11 @@ of 6 leaves room for a watched game beside it.
     python tools/ab.py --a ... --b ... --seeds 3 --minutes 30 --parallel 6
     python tools/ab.py --report tournaments/<stamp>-ab        # re-read an old set
 
-Both arms play BARb:stable:hard at +100% in a 2v2, all Armada, boxes trbl --
-his watched setting. Output: per map, per arm, per-player means of [BARAI_STATS]
+Both arms play BARb:stable:hard at +100%. Default is a 1v1 on a bigger map
+(apexearth 2026-09-12: "for our test games we're just doing 1v1 games on
+bigger maps, usually it's a good metric and far faster than the team games");
+`--per-side 2 --boxes trbl --box-size 0.45 --maps "Greenest Fields"` is his
+watched 2v2. Output: per map, per arm, per-player means of [BARAI_STATS]
 metal produced / eco / build power / army / defence at minutes 8/16/24/30, the
 opponent's metal, the per-seed spread, and the energy wasted from
 [BARAI_WASTE]. A lane must be claimed (or BARAI_LANE=shared named on purpose).
@@ -52,14 +55,18 @@ MINUTES = (8, 16, 24, 30)
 
 
 def launch(spec_a: str, spec_b: str, map_name: str, seed: int, minutes: int,
-           out: Path, slot: int, handicap: int, speed: int = 0):
+           out: Path, slot: int, handicap: int, speed: int = 0,
+           per_side: int = 1, sides: str = "Armada,Armada", boxes: str = "",
+           box_size: float = 0.0):
     wdir = ROOT / "matches" / f"_engine_ab{slot}"
     cmd = [sys.executable, "-u", str(HERE / "run_match.py"),
            "--a", spec_a, "--b", spec_b, "--map", map_name,
-           "--minutes", str(minutes), "--per-side", "2", "--sides", "Armada,Armada",
-           "--boxes", "trbl", "--box-size", "0.45", "--handicap", str(handicap),
+           "--minutes", str(minutes), "--per-side", str(per_side), "--sides", sides,
+           "--handicap", str(handicap),
            "--seed", str(seed), "--out", str(out), "--write-dir", str(wdir),
            "--modoption", "dev_stats=1"]
+    if boxes:
+        cmd += ["--boxes", boxes, "--box-size", str(box_size)]
     if speed > 0:
         cmd += ["--speed", str(speed)]
     log = open(out.parent / f"{out.name}.log", "w")
@@ -68,7 +75,8 @@ def launch(spec_a: str, spec_b: str, map_name: str, seed: int, minutes: int,
 
 def run_set(setdir: Path, arms: dict[str, str], maps: list[str], seeds: int,
             minutes: int, parallel: int, handicap: int, slot_base: int = 0,
-            speed: int = 0):
+            speed: int = 0, per_side: int = 1, sides: str = "Armada,Armada",
+            boxes: str = "", box_size: float = 0.0):
     setdir.mkdir(parents=True, exist_ok=True)
     jobs = [(m, tag, s) for m in maps for s in range(1, seeds + 1) for tag in arms]
     slots = list(range(slot_base, slot_base + parallel))
@@ -78,7 +86,8 @@ def run_set(setdir: Path, arms: dict[str, str], maps: list[str], seeds: int,
             m, tag, s = jobs.pop(0)
             slot = slots.pop(0)
             out = setdir / f"{slug(m)}-{tag}-s{s}"
-            proc, log = launch(arms[tag], "BARb:stable:hard", m, s, minutes, out, slot, handicap, speed)
+            proc, log = launch(arms[tag], "BARb:stable:hard", m, s, minutes, out, slot,
+                               handicap, speed, per_side, sides, boxes, box_size)
             live.append((out.name, slot, proc, log))
             print(f"  launched {out.name} (slot {slot})", flush=True)
             time.sleep(4)
@@ -121,6 +130,11 @@ def read_run(path: Path):
 
 
 def report(setdir: Path):
+    n_side = 2
+    try:
+        n_side = int(json.loads((setdir / "arms.json").read_text()).get("per_side", 2))
+    except (OSError, ValueError):
+        pass
     runs = sorted(p for p in setdir.iterdir() if p.is_dir())
     by = collections.defaultdict(list)   # (mapslug, tag) -> runs
     for r in runs:
@@ -143,7 +157,7 @@ def report(setdir: Path):
                     mn = round(f / 1800)
                     if mn not in MINUTES:
                         continue
-                    for lo, hi, side in ((0, 2, "us"), (2, 4, "them")):
+                    for lo, hi, side in ((0, n_side, "us"), (n_side, 2 * n_side, "them")):
                         tot = collections.Counter(); n = 0
                         for t in range(lo, hi):
                             if t in hist[f]:
@@ -159,7 +173,7 @@ def report(setdir: Path):
                                 seeds.append(int(tot["mBuiltReal"] / n))
                         else:
                             them[mn].append(tot["mBuiltReal"] / n)
-                for t in (0, 1):
+                for t in range(n_side):
                     if t in waste:
                         _, ew, em = waste[t]
                         w_w += ew; w_e += em
@@ -181,7 +195,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--a", help="control AI spec")
     ap.add_argument("--b", help="treated AI spec")
-    ap.add_argument("--maps", nargs="+", default=["Greenest Fields", "Supreme Isthmus v2.1"])
+    ap.add_argument("--maps", nargs="+", default=["Comet Catcher Remake", "Supreme Isthmus v2.1"])
+    ap.add_argument("--per-side", type=int, default=1,
+                    help="apexearth 2026-09-12: test games are 1v1 on bigger maps -- a good "
+                         "metric and far faster than the team games (2 for his watched 2v2)")
+    ap.add_argument("--sides", default="Armada,Armada")
+    ap.add_argument("--boxes", default="", help="e.g. trbl for the 2v2 Greenest setting")
+    ap.add_argument("--box-size", type=float, default=0.0)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--minutes", type=int, default=30)
     ap.add_argument("--parallel", type=int, default=6)
@@ -203,10 +223,11 @@ def main() -> int:
     setdir = ROOT / "tournaments" / f"{time.strftime('%Y%m%d-%H%M%S')}-{a.name}"
     (setdir).mkdir(parents=True, exist_ok=True)
     (setdir / "arms.json").write_text(json.dumps({"A": a.a, "B": a.b, "maps": a.maps,
-                                                  "seeds": a.seeds, "minutes": a.minutes}))
+                                                  "seeds": a.seeds, "minutes": a.minutes,
+                                                  "per_side": a.per_side}))
     t0 = time.time()
     run_set(setdir, {"A": a.a, "B": a.b}, a.maps, a.seeds, a.minutes, a.parallel, a.handicap,
-            a.slot_base, a.speed)
+            a.slot_base, a.speed, a.per_side, a.sides, a.boxes, a.box_size)
     print(f"\n{setdir}  ({(time.time() - t0) / 60:.1f} min wall)")
     report(setdir)
     return 0
