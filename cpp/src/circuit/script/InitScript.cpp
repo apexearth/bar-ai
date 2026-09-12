@@ -559,6 +559,36 @@ static bool CCircuitAI_CanDefReach(CCircuitAI* circuit, CCircuitDef* cdef,
 	return terrainMgr->CanMoveToPos(area, to);
 }
 
+// apex: the builder veto's own question (CanMobileReachAt): can this def stand
+// within range of pos anywhere in its own area. CanDefReach is exact and says
+// no to every water site for every land con, shore or not.
+static bool CCircuitAI_CanDefReachAt(CCircuitAI* circuit, CCircuitDef* cdef,
+		const AIFloat3& from, const AIFloat3& to, float range)
+{
+	if (cdef == nullptr) {
+		return false;
+	}
+	const int mtId = cdef->GetMobileId();
+	if (mtId < 0) {
+		return true;
+	}
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	terrain::SAreaData* areaData = terrainMgr->GetAreaData();
+	if ((areaData == nullptr) || (mtId >= (int)areaData->mobileType.size())) {
+		return false;
+	}
+	const int si = terrainMgr->GetSectorIndex(from);
+	terrain::SMobileType& mt = areaData->mobileType[mtId];
+	if ((si < 0) || (si >= (int)mt.sector.size())) {
+		return false;
+	}
+	terrain::SArea* area = mt.sector[si].area;
+	if (area == nullptr) {
+		return false;
+	}
+	return terrainMgr->CanMobileReachAt(area, to, range);
+}
+
 // apex: how many of a given enemy def stand within radius of pos -- the
 // "count the antinukes covering this spot" primitive, generic on purpose.
 // apex: WHAT SHARE OF THE MAP THIS DEF CAN ACTUALLY TRAVERSE, 0-100.
@@ -1399,6 +1429,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "int CountEnemyDefNear(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CountEnemyDefNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float DefMapCoverage(CCircuitDef@)", asFUNCTION(CCircuitAI_DefMapCoverage), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReachAt(CCircuitDef@, const AIFloat3& in, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CanDefReachAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);

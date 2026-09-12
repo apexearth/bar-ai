@@ -859,7 +859,11 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// TODO: Check IsForceUpdate, shield charge and retreat
 
 	CCircuitDef* cdef = unit->GetCircuitDef();
-	const float range = cdef->GetBuildDistance();
+	// The engine builds from buildDistance + the buildee's radius (CBuilder);
+	// testing the bare distance to a shipyard's CENTRE refused every shore
+	// site a bot con could actually build from.
+	const float range = cdef->GetBuildDistance()
+			+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
 	const AIFloat3& endPos = GetPosition();
 	// A DEFENCE IS BUILT INTO THE THREAT IT ANSWERS. The safe-reach veto
 	// killed every front tower task ever created (s43: all bt=7 deaths
@@ -880,6 +884,13 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		// pocket, SI 8v8 s106). Mark the ground so ProbedSite steps around
 		// it on the next election.
 		circuit->NoteBuildBlocked(endPos);
+		{
+			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);
+			circuit->LOG("apex: unreach %s by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
+					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?", cdef->GetDef()->GetName(),
+					endPos.x, endPos.z, gap, range,
+					circuit->GetThreatMap()->GetThreatAt(endPos), cdef->GetPower());
+		}
 		SetDeathNote("unreach-safe");
 		manager->AbortTask(this);
 		return;

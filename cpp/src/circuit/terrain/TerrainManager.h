@@ -192,6 +192,12 @@ private:
 	terrain::SSector* GetAlternativeSector(terrain::SArea* destinationArea, const int sourceSIndex, terrain::SImmobileType* destinationIT); // can return 0
 	const terrain::SSector& GetSector(int sIndex) const { return areaData->sector[sIndex]; }
 public:
+	// apex: how far the nearest ground this area holds is from pos -- the
+	// distance CanMobileReachAt tests against a builder's range.
+	float ReachGap(terrain::SArea* area, const springai::AIFloat3& pos) {
+		return (area == nullptr) ? 0.f
+				: GetClosestSector(area, GetSectorIndex(pos))->S->position.distance2D(pos);
+	}
 	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
 		return areaData->mobileType;
 	}

@@ -23,6 +23,23 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-12 — "legion in water seems to only 90% only make constructors and rez subs... our water build logic is quite bad in general"
+
+Also: "We should try to not have any AI start with an air lab."
+
+Measured in his log (Supreme Isthmus 4v4): `prodrank fac=legsy` cut every
+combat ship `:h2o` -- `behaviour_leg.json` shipped stock BARb's zero-threat
+stub for the Legion navy. Stub removed; the shipyard now prices destroyer,
+AA ship, scout and arty (frigate and sub read water-only, ISSUES.md). The
+air opening was the con half of the plant price ignoring delivery rate
+(`PipeRateMul`); 12 openings on Isthmus, Comet and a 4v4 all bot/vehicle.
+OPEN, his call: from this Isthmus start no BOT con can build a shipyard
+(`apex: wet-unreach`, Legion and Armada alike), so the water line waits for
+an amphibious con -- Cortex's Muskrat had it up at 9.8 min; Armada's Beaver
+and Legion's air con depend on which plant was opened (18 min or never). The
+builder that can do it at minute 5 is the naval lead's commander, which his
+2026-08-28 ruling refuses. Allow the LEAD's commander only?
+
 ## 2026-09-12 — Comet Catcher 1v1 watched: idle gantries, basic converters at 1,000 m/s
 
 > "We got to a point where suddenly we aren't making any more T3 units, 2

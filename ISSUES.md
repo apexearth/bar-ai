@@ -32,6 +32,36 @@ half fired in 1 of 8 treated games in 45-55 minutes; in the other 15 games
 of the two sets control and treated were the same AI. Not a fix for the
 census: intel is a spend, and how much of it the wing may buy is his call.
 
+## 2026-09-12 — WATER: no bot con can build the shipyard from this Isthmus start; the line waits for an air con
+
+Legion 1v1, Supreme Isthmus, seeds 1-2, 20 min. Every wet site within the eco
+leash is 260 elmos from the nearest ground a `legck` can stand on against a
+182 reach (`apex: unreach legsy ... gap=260 range=182`); the ring search
+(`WetPlantSiteFor`) finds none either (`apex: wet-unreach legck legsy` every
+minute). The shipyard is elected by the first air con (18.7 min, seed 1) or
+never (seed 2). In his watched 4v4 it stood at 5.1 min only because that
+player had opened with an air plant, which the rate term now prices out.
+The builder that can do it at minute 5 is the commander (amphibious), which
+`ProposePlant` refuses for water plants by his 2026-08-28 ruling (eight
+commanders to eight beaches -- before `NavalLead` existed). Whether the
+naval LEAD's commander may build the first shipyard is his call.
+
+## 2026-09-12 — LEGION CONFIG: towers and two ships carry zero threat
+
+`behaviour_leg.json` (stock BARb's stub, identical upstream) sets
+`threat: {air:0, surf:0, water:0, default:0}` on `legmg`, `legrl`, `legcluster`,
+`legrhapsis`, `leglupara`, `legbastion`, `legflak`, `leglraa`, `legbombard`,
+`leglrpc`, `legstarfall`, `legministarfall`, `legdeflector`, `legrwall`,
+`legacluster`, `legarad` and every T2 Legion defence. The DLL applies it as
+`ModSurfThreat(0)`, so an enemy Legion tower is walked into as harmless and our
+own reads as no cover. The navy entries were the same stub and were removed
+2026-09-12 (the `h2o` cut that left `legsy` making only cons and rez subs);
+the towers were not touched. `legnavyfrigate` and `legnavysub` still read
+water-only: both weapons carry `badtargetcategory NOTSUB`, which
+`CircuitDef.cpp` strips from the target category (`only & ~bad`, the Pawn
+rule) leaving subs, so `apex: threat-blind` names them and the shipyard never
+orders the frigate on a game with no enemy afloat.
+
 ## 2026-09-11 — OPENING: a commander can fail to place its first factory for 20-35 minutes
 
 Greenest Fields 2v2 +100% headless battery, 3-5 engines sharing the CPU: in 5

@@ -95,6 +95,63 @@ float PipeLatencyMult(int plantId, float askerBP)
 	return h / (h + PipeLatencySec(plantId, askerBP));
 }
 
+// BUILD POWER PER SECOND OF LINE TIME: the con half priced every line as if
+// it filled the gap at one rate, and an air line delivers 55 BP per 50 s where
+// a bot lab delivers 75 per 22 (measured: air openings on every wet map,
+// bought for the reach of cons that arrive at a third of the rate).
+float PipeRate(int plantId)
+{
+	float best = 0.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		const int pd = prods[p];
+		if (!Catalog::gMobile[pd] || !Catalog::gBuilder[pd])
+			continue;
+		const float sec = Catalog::BuildSecondsAt(pd, Catalog::gBuildPower[plantId]);
+		const float r = Catalog::gBuildPower[pd] / ((sec > 1.f) ? sec : 1.f);
+		if (r > best)
+			best = r;
+	}
+	return best;
+}
+
+// Relative to the best line the ASKER could start: the catalog's "tier" is
+// config-attributed and puts the hard-variant plants and lootbox nanos
+// beside a bot lab.
+array<float> gAskRate;
+
+float PipeRateMul(int plantId, int askerDef)
+{
+	if (int(gAskRate.length()) <= Catalog::gDefCount) {
+		gAskRate.resize(Catalog::gDefCount + 1);
+		for (uint i = 0; i < gAskRate.length(); ++i)
+			gAskRate[i] = -1.f;
+	}
+	if (gAskRate[askerDef] < 0.f) {
+		float best = 0.f;
+		string row = "";
+		const array<int>@ builds = Catalog::BuildsOf(askerDef);
+		for (uint i = 0; i < builds.length(); ++i) {
+			const int d = builds[i];
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+				|| Catalog::gFloater[d] || Catalog::gSub[d]
+				|| (Catalog::gBuildsList[d].length() == 0))
+				continue;   // a plant that stands in water is no land line's peer
+			const float r = PipeRate(d);
+			if (r > best)
+				best = r;
+			row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(r, "", 0, 2);
+		}
+		if (best <= 0.f)
+			return 1.f;   // never cache a zero
+		gAskRate[askerDef] = best;
+		AiLog("apex: pipe-rate t=" + ai.teamId + " " + Catalog::Def(askerDef).GetName()
+			+ " best=" + formatFloat(best, "", 0, 2) + row);
+	}
+	const float m = PipeRate(plantId) / gAskRate[askerDef];
+	return (m > 1.f) ? 1.f : m;
+}
+
 // Real water share, the same bar amphib capability is priced against: the
 // engine's water flag trips on a pond, which must not buy a shipyard.
 bool MapHasWater()
@@ -124,6 +181,57 @@ AIFloat3 WetPlantSite(CCircuitDef@ plant, const AIFloat3& in anchor)
 	gWetPlantSite = (OnMap(wet) && (wet.distance2D(anchor) <= near))
 			? wet : AIFloat3(-1.f, 0.f, -1.f);
 	return gWetPlantSite;
+}
+
+// ...and the water THIS ASKER can build from: the nearest wet site is the
+// deep side of a beach a bot con cannot stand on, so the ring around the
+// anchor is asked for a shore it can (the veto's own test, per asker).
+array<AIFloat3> gWetSiteFor;
+array<int> gWetSiteAt;
+
+AIFloat3 WetPlantSiteFor(CCircuitDef@ plant, const AIFloat3& in anchor,
+		int askerDef, const AIFloat3& in here)
+{
+	if (int(gWetSiteFor.length()) <= Catalog::gDefCount) {
+		gWetSiteFor.resize(Catalog::gDefCount + 1);
+		gWetSiteAt.resize(Catalog::gDefCount + 1);
+		for (uint i = 0; i < gWetSiteAt.length(); ++i) {
+			gWetSiteAt[i] = 0;
+			gWetSiteFor[i] = AIFloat3(-1.f, 0.f, -1.f);
+		}
+	}
+	if (ai.frame < gWetSiteAt[askerDef])
+		return gWetSiteFor[askerDef];
+	gWetSiteAt[askerDef] = ai.frame + 10 * SECOND;
+	CCircuitDef@ ask = Catalog::Def(askerDef);
+	const float reach = Catalog::gBuildDist[askerDef];
+	const float near = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	AIFloat3 best = WetPlantSite(plant, anchor);
+	if (OnMap(best) && ai.CanDefReachAt(ask, here, best, reach)) {
+		gWetSiteFor[askerDef] = best;
+		return best;
+	}
+	best = AIFloat3(-1.f, 0.f, -1.f);
+	float bestD = 0.f;
+	for (int k = 0; k < 8; ++k) {
+		const float a = float(k) * 0.7853982f;
+		const AIFloat3 probe(anchor.x + cos(a) * near * 0.6f, 0.f,
+				anchor.z + sin(a) * near * 0.6f);
+		if (!OnMap(probe))
+			continue;
+		const AIFloat3 wet = ai.FindBuildSiteNear(plant, probe, near * 0.6f);
+		if (!OnMap(wet) || (wet.distance2D(anchor) > near))
+			continue;
+		if (!ai.CanDefReachAt(ask, here, wet, reach))
+			continue;
+		const float dd = wet.distance2D(anchor);
+		if (!OnMap(best) || (dd < bestD)) {
+			best = wet;
+			bestD = dd;
+		}
+	}
+	gWetSiteFor[askerDef] = best;
+	return best;
 }
 
 // A plant's DOMAIN: land, air or water. Two plants are parallel capacity only
@@ -342,6 +450,8 @@ int OwnedWaterPlants()
 // metal of an advanced lab. Returned as the RATIO between the two, so nothing
 // is forbidden -- the second lab wins when the substitute is unavailable.
 int gNextPlantDupLog = 0;
+int gNextPlantCandLog = 0;
+int gNextWetReachLog = 0;
 
 float DupBpSubstMul(int d)
 {
@@ -775,6 +885,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool substOn = ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f;
 	AIFloat3 homeAnchor;
 	bool homeAnchorSet = false;
+	// The opening plant, term by term: the decide line names only the winner.
+	const bool candLog = (Factory::gFactoryCount == 0)
+			&& (ai.frame >= gNextPlantCandLog);
+	string cand = "";
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
@@ -804,10 +918,18 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (Catalog::gFloater[d]) {
 			if (!MapHasWater())
 				continue;
-			site = WetPlantSite(Catalog::Def(d),
-					Builder::gHomeSet ? Builder::gHomePos : here);
-			if (!OnMap(site))
+			// A bot con elected to a beach it cannot build from re-elects
+			// the same site forever (unreach-safe x6, no shipyard in 20 min).
+			site = WetPlantSiteFor(Catalog::Def(d),
+					Builder::gHomeSet ? Builder::gHomePos : here, uid, here);
+			if (!OnMap(site)) {
+				if (ai.frame >= gNextWetReachLog) {
+					gNextWetReachLog = ai.frame + 60 * SECOND;
+					AiLog("apex: wet-unreach t=" + ai.teamId + " " + unit.circuitDef.GetName()
+						+ " " + Catalog::Def(d).GetName());
+				}
 				continue;
+			}
 		}
 		// A plant that cannot produce a mobile builder buys no expansion --
 		// and the builder must be able to EXIST where the plant will stand: a
@@ -849,7 +971,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// NOTE: dupSubst is applied to the BUILD-POWER half below, not just to
 		// production -- see the duplicate block. Expansion is not substitutable
 		// (a nano claims no ground), so only pipeTerm is.
-		const float conHalf = pipeTerm + expTerm;
+		const float rateMul = PipeRateMul(d, uid);
+		const float conHalf = (pipeTerm + expTerm) * rateMul;
 		// Only the PRODUCTION half is a tier question against THEM: what this
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
@@ -1003,8 +1126,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// is substituted too -- the cons claim the ground, not the plant, and
 		// nanos on the standing kin deliver the same cons cheaper. A new
 		// capability keeps its expansion at full value.
-		const float conSub = pipeTerm * subMul * dupSubst
-				+ expTerm * subMul * (isCopy ? dupSubst : 1.f);
+		const float conSub = (pipeTerm * subMul * dupSubst
+				+ expTerm * subMul * (isCopy ? dupSubst : 1.f)) * rateMul;
 		float dupGain = (conSub + prodOwn * dupSubst)
 				/ float(1 + dupKin);
 		if (liveOther > 0)
@@ -1049,12 +1172,31 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		Want c;
 		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
+		if (candLog) {
+			cand += " " + Catalog::Def(d).GetName()
+				+ "=" + formatFloat(c.value, "", 0, 2)
+				+ "(con" + formatFloat(conHalf, "", 0, 2)
+				+ ",prod" + formatFloat(prodOwn, "", 0, 2)
+				+ ",reach" + formatFloat(gPlantReach[d], "", 0, 2)
+				+ ",terr" + formatFloat(LineTerrainMul(d), "", 0, 2)
+				+ ",rate" + formatFloat(rateMul, "", 0, 2)
+				+ ",mob" + formatFloat(bestMob, "", 0, 2)
+				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)
+				+ ")";
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_PLANT;
 			@w.def = Catalog::Def(d);
 			w.pos = lands;
 		}
+	}
+	if (candLog && (cand.length() > 0)) {
+		gNextPlantCandLog = ai.frame + 20 * SECOND;
+		AiLog("apex: plantcand t=" + ai.teamId + " " + unit.circuitDef.GetName()
+			+ " stream=" + formatFloat(stream, "", 0, 2)
+			+ " pipe=" + formatFloat(pipeTerm, "", 0, 2)
+			+ " prodHalf=" + formatFloat(prodHalf, "", 0, 2) + cand);
 	}
 	return w;
 }

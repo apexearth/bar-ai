@@ -798,6 +798,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
 			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
 #endif
+	// apex/S7: an attacker with power but no surface or air threat is invisible
+	// to every script-side "can it hit what floats" test; name it once.
+	if (IsAttacker() && (surfDps <= .1f) && (airDps <= .1f)) {
+		circuit->LOG("apex: threat-blind %s water=%.1f cat=0x%x land=0x%x air=0x%x water=0x%x",
+				def->GetName(), waterDps, targetCategory,
+				circuit->GetLandCategory(), circuit->GetAirCategory(), circuit->GetWaterCategory());
+	}
 }
 
 CCircuitDef::~CCircuitDef()
