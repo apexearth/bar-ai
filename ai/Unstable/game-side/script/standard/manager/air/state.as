@@ -351,10 +351,12 @@ int   gWaveLaunched = 0; // bombers the current wave left with
 // Fed from AiEnemyDestroyed: what the run is scored on. The cell's standing
 // value before and after read 0 for three runs that the death log showed
 // killing 3.6k -- they rebuild, and the registry lags -- so the deaths are
-// counted as they happen.
+// counted as they happen. Not gated on byUs: a bomb whose plane is already
+// dead when it lands reports no attacker, which is most of a wave's kills
+// (docs/25 S30); the cell and the run's window are the attribution.
 void NoteEnemyDeath(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
-	if ((gRunDef < 0) || !byUs || (edef is null) || edef.IsMobile())
+	if ((gRunDef < 0) || (edef is null) || edef.IsMobile())
 		return;
 	if (!OnMap(pos) || !OnMap(gRunAt))
 		return;

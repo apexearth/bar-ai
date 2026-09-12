@@ -518,3 +518,19 @@ clock and we are, so under contention only our side degrades, and a change
 measured across a load change reads as a huge effect in whichever direction
 the load moved. `ab.py --speed 6` pins the sim; the wall time per game is then
 fixed and the AI gets the same budget in every game of the set.
+
+## S30 — `byUs` on an enemy death is "attacker still alive and ours", and a bomb's plane is usually dead
+
+`EVENT_ENEMY_DESTROYED` carries an attacker id only when the killer is an
+allied unit that still exists; a bomb landing after its plane died reports
+-1, and so do chained explosions. `Air::NoteEnemyDeath` gated the strike
+ledger on `byUs`, so a 10-Blizzard run on Greenest Fields (2026-09-12,
+`tournaments/20260912-102411-bombstrike/greenestfi-B-s1`) that the death log
+shows killing a Big Bertha, an antinuke, an air plant and twenty nano turrets
+inside its cell -- ~11k -- scored `dmg/bomber=155`: the four kills whose
+plane outlived its bomb. Below the 345 bar, that verdict stopped Blizzard
+buying, threw the survivors out in the "wing at its worth" branch six at a
+time, and moved the wing's spend to the one bomber def with no measurement
+yet (two Liches). Any per-unit outcome ledger keyed on `byUs` undercounts
+every delayed-effect weapon the same way; the strike ledger now counts static
+deaths in the run's cell during its window whoever is credited.

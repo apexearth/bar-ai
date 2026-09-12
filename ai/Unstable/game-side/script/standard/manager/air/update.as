@@ -181,6 +181,8 @@ void Release(const string& in why)
 		+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0)
 		+ " target=" + (gStrikeHas ? (int(gStrikeAt.x) + "," + int(gStrikeAt.z)) : "-")
 		+ " prize=" + int(EcoDensity())
+		+ " structs=" + int(aiEnemyMgr.GetEnemyStructCost())
+		+ " scaled=" + ScaledBombers()
 		+ " cellAA=" + formatFloat(gStrikeAA, "", 0, 1));
 }
 
@@ -438,9 +440,11 @@ void Update()
 	// Standing down is gone: a wing that cannot grow any further goes with
 	// what stands, because the next plane not paying is the end of "build up"
 	// and the beginning of "eventually" -- and the planes are already bought.
+	// What stands must still be a wing: below the floor this threw a spent
+	// run's survivors back out the tick they were recalled, six at a time.
 	if (Massed()) {
 		Release("massed");
-	} else if (Committed() && !WingGrowing() && (HeldBombers() > 0)) {
+	} else if (Committed() && !WingGrowing() && (HeldBombers() >= AIR_BOMBERS)) {
 		Release("wing at its worth -- the next bomber would not pay");
 	} else if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
 		&& (float(Bombers()) >= DeadlineBombBar()))
@@ -466,13 +470,20 @@ void Update()
 	if (Armed() && (ai.frame >= gNextLog)) {
 		gNextLog = ai.frame + 60 * SECOND;
 		CCircuitDef@ want = FactoryToBuild();
+		const int buy = BuyableBomberDef();
 		AiLog(Factory::T() + "apex: air " + Bombers() + "/" + ScaledBombers()
 			+ " bombers, " + Fighters() + "/" + ScaledFighters() + " fighters"
 			+ " bar=" + (Committed() ? int(DeadlineBombBar()) : -1)
 			+ " plants=" + Have(gPlant1) + "," + Have(gPlant2)
 			+ " cons=" + (HaveAirCon() ? "1" : "0")
 			+ " want=" + ((want is null) ? "-" : want.GetName())
-			+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0));
+			+ " enemyAA=" + formatFloat(EnemyAACost(), "", 0, 0)
+			+ " structs=" + int(aiEnemyMgr.GetEnemyStructCost())
+			+ " cell=" + int(EcoDensity())
+			+ " next=" + int(MarginalGain(buy, HeldBombers()))
+			+ "/" + ((buy < 0) ? 0 : int(Catalog::gCostM[buy]
+				* ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF)))
+			+ " held=" + HeldBombers());
 	}
 }
 

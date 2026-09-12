@@ -16,6 +16,22 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-12 — BOMBERS: the wing is priced on the enemy economy we can SEE, and for 15 minutes that reads zero
+
+Greenest Fields 2v2 +100%, `tournaments/20260912-102411-bombstrike` and
+`-104619-bombstrike2`, treated arm: the air lead is elected at 25-33m and
+commits, then buys no bomber for 10-17 minutes because the heartbeat reads
+`structs=0 cell=0 next=0/345` (`B-s4` 27m-44m, `B-s3` 32m-45m; his own
+16:58 game `prize=2800` at 28m). `Air::MarginalGain` prices the next bomber
+on `GetEnemyStructCost()`, the registry of structures we have seen and not
+yet purged (`apex_ghost_stale_min` 15), and nothing in the air line buys the
+look at their base that would give it a number -- `ScoutOverflight` needs an
+air scout the plant is not asked for. Where the base HAD been seen (`B-s1`,
+`structs=12940` at 28m) the wing reached 12 by 41m and struck. The strike
+half fired in 1 of 8 treated games in 45-55 minutes; in the other 15 games
+of the two sets control and treated were the same AI. Not a fix for the
+census: intel is a spend, and how much of it the wing may buy is his call.
+
 ## 2026-09-11 — OPENING: a commander can fail to place its first factory for 20-35 minutes
 
 Greenest Fields 2v2 +100% headless battery, 3-5 engines sharing the CPU: in 5
