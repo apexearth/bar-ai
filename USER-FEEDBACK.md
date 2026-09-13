@@ -36,11 +36,12 @@ find such an entry, delete it in the same commit as whatever you were doing.
 Watched on the 2c684d73 deploy (Carrot Mountains 8v8, `matches/20260913-082619`):
 `escort-diag` read `short=0 paired=0` for the first 12 minutes -- the
 influence-map "ours" test counted the builder's own presence, so every mex site
-read as home ground. Fixed same night (`Base::Inside` is the ground test; lane
-game: 6-8 of 9 workers paired by minute 5, battery `rd3hold`). OPEN: the
-fighter escort for air cons (nothing guards them; `Air::` owns fighters), and
-the outer-mex guns -- see ISSUES "DEFENCE: the only site offered is a
-contested choke" and the per-mex gun contract in `tools/test_frontline.py`.
+read as home ground. Fixed and deployed as bc24a693 (`Base::Inside` is the
+ground test; rd3hold2 battery: 82-156 of 68-146 workers paired on Carrot,
+constructor deaths 2-14 vs 0-25). OPEN: the fighter escort for air cons
+(nothing guards them; `Air::` owns fighters), and the outer-mex guns -- see
+ISSUES "DEFENCE: the only site offered is a contested choke" (the raid-priced
+mex site was tried and was inert).
 
 ## 2026-09-13 — Carrot Mountains 8v8 watched: escorts fill the base, defence at 1%
 
