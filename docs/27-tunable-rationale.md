@@ -1563,8 +1563,18 @@ production half is ~0.8 against a constructor half of ~4.3, so the line is
 chosen for its constructor; and the T2 plant is priced in `want_tech.as` by
 `PlantLineWorth` (mean power/cost), which this term does not touch. Outcomes
 were noise either way (Comet control 2-1-1, treated 1-3; Isthmus 0-1-3 vs
-1-1-2). The next move is to put the line's army worth where those two
-decisions are made, not to turn this on.
+1-1-2).
+
+**Second form, same day, his terrain ruling.** *"If the map is mostly flat
+with just some hills then we want vehicles but if it is full of hills all over
+the place then we might want bots."* The factor is now units x ground --
+median army-per-metal times `LineCoverage`, the pathfinder's own reach for the
+line, which is his height average done by the thing that decides where a tank
+can go (a smooth ramp stops nothing, a field of ridges stops everything) --
+normalised to the best line of the class and tier and applied to the WHOLE
+plant price and to the tech want's `lineW`. On Comet Catcher Remake that reads
+T1 armvp 0.66x0.88 against armlab 0.51x0.95: vehicles; on Sulphur Springs
+(coverage 54 vs 66) the T2 vehicle lab still wins on its units. Battery pending.
 
 ### `TUNE_SCREEN_GAP` = 200.f
 

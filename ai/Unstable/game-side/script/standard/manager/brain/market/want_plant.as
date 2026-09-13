@@ -717,15 +717,19 @@ float LineTerrainMul(int plantDef)
 	return (m > 1.f) ? 1.f : m;
 }
 
-// WHAT THE LINE'S UNITS ARE WORTH HERE. apexearth 2026-09-12: "if we lose,
-// it is because we are not making the most optimal army composition. I still
-// notice ... that we just make bots almost all the time. So in maps where
-// vehicles are obviously more powerful, we don't do quite as well." The
-// production half priced every line the same per metal; terrain and tier
-// were its only line facts. This is the best army-per-metal the line can
-// field, on the same yardstick production buys single units with (UnitPPC,
-// speed, sight), against the best line of its class and tier.
+// WHAT THE LINE IS WORTH HERE: its units times the ground they can cross.
+// apexearth 2026-09-12: "we just make bots almost all the time. So in maps
+// where vehicles are obviously more powerful, we don't do quite as well" and
+// "if the map is mostly flat with just some hills then we want vehicles but
+// if it is full of hills all over the place then we might want bots". The
+// units' worth is the median product on the yardstick production buys single
+// units with (UnitPPC, speed, sight); the ground is the pathfinder's own
+// reach for the line (LineCoverage). Their product, against the best line of
+// the class and tier, multiplies the WHOLE plant price -- the opening plant
+// is bought at minute 1 for its constructor, and a production-half term
+// moved nothing there (docs/27).
 array<float> gLineQual;
+array<float> gLineMulV;
 int gLineQualAt = -999999;
 
 float LineUnitWorth(int pd)
@@ -813,11 +817,14 @@ float LineBestWorth(int plantDef)
 // the log line is the instrument -- what OUR model thinks of each line here.
 float LineQualityMul(int plantDef)
 {
-	if (int(gLineQual.length()) <= Catalog::gDefCount)
+	if (int(gLineQual.length()) <= Catalog::gDefCount) {
 		gLineQual.resize(Catalog::gDefCount + 1);
+		gLineMulV.resize(Catalog::gDefCount + 1);
+	}
 	if (ai.frame >= gLineQualAt + MINUTE) {
 		gLineQualAt = ai.frame;
 		array<float> bestOf(12, 0.f);   // class*4 + tier
+		array<float> bestMul(12, 0.f);
 		array<float> own(Catalog::gDefCount + 1, 0.f);
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
 			// a plant is a line only if a mobile builder can place it: the
@@ -829,23 +836,40 @@ float LineQualityMul(int plantDef)
 			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			if (own[d] > bestOf[k])
 				bestOf[k] = own[d];
+			const float m = own[d] * LineTerrainMul(d);
+			if (m > bestMul[k])
+				bestMul[k] = m;
 		}
 		string row = "";
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
 			gLineQual[d] = 1.f;
+			gLineMulV[d] = 1.f;
 			if (own[d] <= 0.f)
 				continue;
 			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			gLineQual[d] = own[d] / bestOf[k];
+			gLineMulV[d] = (bestMul[k] > 0.f) ? (own[d] * LineTerrainMul(d) / bestMul[k]) : 1.f;
 			if (PlantClass(d) == PC_LAND)
-				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineQual[d], "", 0, 2)
-						+ "(" + formatFloat(own[d], "", 0, 2) + ")";
+				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineMulV[d], "", 0, 2)
+						+ "(q" + formatFloat(gLineQual[d], "", 0, 2)
+						+ " t" + formatFloat(LineTerrainMul(d), "", 0, 2) + ")";
 		}
 		AiLog("apex: line-quality t=" + ai.teamId + row);
 	}
 	if (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) <= 0.f)
 		return 1.f;
 	return gLineQual[plantDef];
+}
+
+// The line factor on the whole plant: units x ground, best line of the class
+// and tier = 1. With the tunable off the terrain term alone applies, on the
+// production half, as before.
+float LineMul(int plantDef)
+{
+	LineQualityMul(plantDef);
+	if (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) <= 0.f)
+		return 1.f;
+	return gLineMulV[plantDef];
 }
 
 // WHAT THE TEAM ALREADY FIELDS.
@@ -1108,9 +1132,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// line would field is worth less while they field a tier above it. Its
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
-		const float prodOwn = prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d)
-				* LineQualityMul(d) * TeamLineMul(d);
-		const float gain = conHalf + prodOwn;
+		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
+		const float prodOwn = prodHalf * FoeTierPlantMul(d)
+				* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d);
+		const float gain = (conHalf + prodOwn) * LineMul(d);
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -1310,7 +1335,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",prod" + formatFloat(prodOwn, "", 0, 2)
 				+ ",reach" + formatFloat(gPlantReach[d], "", 0, 2)
 				+ ",terr" + formatFloat(LineTerrainMul(d), "", 0, 2)
-				+ ",qual" + formatFloat(LineQualityMul(d), "", 0, 2)
+				+ ",line" + formatFloat(LineMul(d), "", 0, 2)
 				+ ",rate" + formatFloat(rateMul, "", 0, 2)
 				+ ",mob" + formatFloat(bestMob, "", 0, 2)
 				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)

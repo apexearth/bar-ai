@@ -568,9 +568,12 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 					fundedMul = floorMul;
 			}
 		}
-		// Two plants can unlock the same thing; the one whose line trades
-		// worse per metal is worth less for it. See PlantLineWorth.
-		const float lineW = PlantLineWorth(d);
+		// Two plants can unlock the same thing; the one whose line is worth
+		// less here -- its units times the ground they cross (want_plant
+		// LineMul) -- is worth less for it. PlantLineWorth is the old
+		// power-per-cost mean, kept as the control arm.
+		const float lineW = (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f)
+				? LineMul(d) : PlantLineWorth(d);
 		float techGain = 0.f;
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);

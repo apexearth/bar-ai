@@ -631,10 +631,11 @@ GROUPS = [
                   "of the map its ARMY can move around in -- 1 on, 0 off. On a "
                   "flat map every line reads the same and this changes nothing; "
                   "on a hilly map the vehicle line is discounted against bots"),
-                 ("TUNE_LINE_QUALITY", "weigh a production line by the best "
-                  "army-per-metal its units offer on this map, against the best "
-                  "line of its class and tier -- 1 on, 0 off. Read the line it "
-                  "logs (apex: line-quality) before believing a plant choice"),
+                 ("TUNE_LINE_QUALITY", "weigh a production line -- its whole "
+                  "price, and the tech want -- by its units (median army-per-"
+                  "metal) times the ground they can cross, against the best line "
+                  "of its class and tier: flat map, vehicles; hills everywhere, "
+                  "bots. 1 on, 0 old pricing. apex: line-quality logs the census"),
                  ("TUNE_DEF_DOMINANCE", "refuse a tower that a gun we can "
                   "AFFORD RIGHT NOW beats on both reach and killing power -- a "
                   "defence slot holds one building, so a beaten tower is "
