@@ -251,6 +251,32 @@ AIFloat3 SuperSite(CCircuitUnit@ unit, int sc)
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if ((sc == SC_LRPC) || (sc == SC_HEAVY)) {
 		if (Base::gAnchorSet) {
+			// ONE GUN PER DOORWAY (apexearth 2026-09-13, his screenshot:
+			// three Pulsars in the same blob while the raided flank had
+			// nothing). The gate with the fewest supers already standing
+			// in reach takes the next one; the old single front choke is
+			// the fallback when no gate is known.
+			array<AIFloat3> gates;
+			if (Front::GateChokes(gates) > 0) {
+				int bestN = 1 << 30;
+				AIFloat3 bestAt;
+				bool got = false;
+				for (uint gi = 0; gi < gates.length(); ++gi) {
+					AIFloat3 site;
+					if (!Front::BehindChoke(gates[gi], 180.f, site))
+						site = gates[gi];
+					if (!OnMap(site))
+						continue;
+					const int n = ProtCoverCount(PROT_SUPER, site, 1200.f);
+					if (n < bestN) {
+						bestN = n;
+						bestAt = site;
+						got = true;
+					}
+				}
+				if (got)
+					return bestAt;
+			}
 			AIFloat3 cp;
 			if (Front::FrontChoke(Base::gAnchor, cp)) {
 				AIFloat3 site;

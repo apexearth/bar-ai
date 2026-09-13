@@ -13,6 +13,18 @@ python tools/audit.py <tournament-dir>           # aggregates matches/*/infolog.
 Also a button on every run in the dashboard (Games tab → audit). Non-zero
 exit when anything flags, so a runner can act on it.
 
+**After a battery, the set-level check is `tools/expect.py`** — one line per
+complaint he has raised, asserted over a POOL of games that were long enough
+for the thing to have happened (25 min, income bars per check): the wing
+masses and strikes, gantries produce, plants carry nanos, silo before the
+big gun, anti-nuke depth, escorts pair, fodder goes forward, the army leaves
+home, towers stand where we are hit, outer mexes have guns, rez bots bounded,
+a 1.5x lead closes, personas up-only, health. `NEED MORE` when the pool is
+too thin; `RED` is his complaint back; `ab.py` prints it for the treated arm
+of every set. apexearth 2026-09-13: "I don't want to have to be the one who
+mentions that stuff is broken. I want you to find it automatically." Add the
+next expectation the day he raises the next complaint.
+
 **A FLAG is a lead, not a verdict.** Each one names the log line to read
 next. A clean section is a real answer too — do not manufacture findings.
 And a single game is noise: pool before claiming a trend (a per-game "e.g."

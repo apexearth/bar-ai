@@ -46,6 +46,21 @@ This is the C++ squad/retreat layer (stock since 09-07) under our election;
 (`posture.as` ApplyRetreatPosture) are where to read next. Until this is
 fixed a 2.5x economy does not end a game in 30 minutes.
 
+## 2026-09-13 — DEFENCE BLOBS: the choke that shields everything on paper wins every slot; the raided flank gets nothing
+
+His screenshot (`~/Downloads/bar-defence-concentrations.PNG`, Carrot 8v8):
+one blob of shields and towers at the centre choke, three Pulsars in it, and
+the flank green is raided on bare. Mechanism: a wall slot's stake is
+`FrontedStakeAt + ShieldedStakeAt x dClose`, and the centre choke shields
+the whole base behind it, so its credit dwarfs any rim slot; hazard reads its
+cap (`hz=0.00833`) at every front site, so it cannot separate them; the LRPC
+site was always `FrontChoke(anchor)`. 09-13 changes (unmeasured): the closure
+bearings are weighted by the loss field's share per bearing (a flank losing
+3x the mean counts 4x), the map-edge bearings carry the off-map traffic, and
+the big guns take the doorway with the fewest supers in reach. Judge on
+`defsite`/`fronttowers` and on where towers stand relative to where
+structures die (`[BARAI_DEATH]` team=0, static, vs tower positions).
+
 ## 2026-09-13 — DEFENCE: the only site offered is a contested choke, so the target stays 99% unmet and the LRPC discount never lifts
 
 Carrot Mountains 8v8 `matches/20260913-062405-…`, team 7 (549k built, 1,234

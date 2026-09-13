@@ -312,6 +312,31 @@ void ClosurePrep()
 			}
 		}
 	}
+	// WHERE THEY ACTUALLY COME (apexearth 2026-09-13, his screenshot: "We
+	// concentrate our defenses into blobs... The side of the map where green
+	// keeps getting attacked is completely undefended"): the loss field says
+	// which bearings the raids arrive on. Each bearing's weight is scaled by
+	// its share of the decayed structure losses, against the mean bearing --
+	// a flank losing three times the average counts four times -- so a rim
+	// slot covering the raided side out-prices the choke that shields
+	// everything on paper and is hit by nothing.
+	DecayLossField();
+	array<float> lossB(nb, 0.f);
+	float lossSum = 0.f;
+	for (uint i = 0; i < gLossPos.length(); ++i) {
+		if (gLossM[i] <= 0.f)
+			continue;
+		const float ang = atan2(gLossPos[i].z - c.z, gLossPos[i].x - c.x);
+		int bb = int((ang / 6.2831853f) * float(nb) + 0.5f);
+		bb = ((bb % int(nb)) + int(nb)) % int(nb);
+		lossB[uint(bb)] += gLossM[i];
+		lossSum += gLossM[i];
+	}
+	if (lossSum > 0.f) {
+		const float mean = lossSum / float(nb);
+		for (uint b = 0; b < nb; ++b)
+			gClRingW[b] *= 1.f + lossB[b] / mean;
+	}
 	for (uint b = 0; b < nb; ++b)
 		gClRingWSum += gClRingW[b];
 }

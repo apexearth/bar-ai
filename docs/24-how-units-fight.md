@@ -1100,3 +1100,11 @@ Measured in the game he was watching: the air lead had 11 advanced air plants,
 159 fighters and **0 bombers against a wing target of 102** -- the wing was
 priced on the 36k of enemy structures in sight against a mirrored base of
 690k, so every bomber lost the draw to fighters and air cons.
+
+## 2026-09-13 (midday) — defence blobs, and the raided flank with nothing
+
+His screenshot (`~/Downloads/bar-defence-concentrations.PNG`): *"We concentrate
+our defenses into blobs like you see here in the center. The side of the map
+where green keeps getting attacked is completely undefended, yet we've made 3
+pulsars all in the same area. This is a very bad defence flaw which we really
+need to address."*

@@ -139,6 +139,8 @@ python tools/dashboard.py                       # his UI: runs, launch, deploy, 
 python tools/run_match.py --a Apex:Unstable:standard --b BARb:stable:hard \
     --map "Comet Catcher" --minutes 60 --seed 1     # add --per-side 8 --watch to watch
 python tools/battery.py                         # the regression instrument after a behaviour session
+python tools/expect.py <set-dirs...>            # what a big enough battery MUST show; RED = his
+                                                # complaint is back. ab.py prints it for the treated arm
 python tools/composition.py <tournament>        # where the metal actually went
 python tools/ecotimeline.py <tournament|match>  # energy + metal minute by minute per arm;
                                                 # bank pinned at 0 = e-stall, pinned full = waste

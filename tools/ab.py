@@ -217,6 +217,7 @@ def main() -> int:
     a = ap.parse_args()
     if a.report:
         report(Path(a.report))
+        expect_arm(Path(a.report))
         return 0
     if not (a.a and a.b):
         ap.error("--a and --b are required unless --report")
@@ -230,7 +231,23 @@ def main() -> int:
             a.slot_base, a.speed, a.per_side, a.sides, a.boxes, a.box_size)
     print(f"\n{setdir}  ({(time.time() - t0) / 60:.1f} min wall)")
     report(setdir)
+    expect_arm(setdir)
     return 0
+
+
+def expect_arm(setdir):
+    # WHAT THE SET MUST SHOW (apexearth: "I want you to find it automatically").
+    # The treated arm alone: the control is the deploy he already plays.
+    try:
+        import expect
+        games = [g for g in expect.collect([str(setdir)]) if "-B-" in g["name"]]
+        print("")
+        print(f"expect (treated arm, {len(games)} games):")
+        for name, fn in expect.EXPECTATIONS:
+            status, detail = fn(games)
+            print(f"  {status:9s} {name:<32} {detail}")
+    except Exception as e:  # never lose the report to the audit
+        print(f"expect failed: {e}")
 
 
 if __name__ == "__main__":
