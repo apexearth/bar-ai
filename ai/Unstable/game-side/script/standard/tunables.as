@@ -1827,6 +1827,16 @@ const float TUNE_SCREEN_GAP = 200.f;
 //   second team copy is worth half and the third a third. See docs/27.
 const float TUNE_TEAM_LINE = 1.f;
 
+// [toggle 0/1] -- A cover pool promotes to ATTACK like stock's massing pool, so
+//   a full pool leaves and home keeps what is still filling. 0: the pool never
+//   converts (the pre-2026-09-12 hold). See docs/27.
+const float TUNE_COVER_LEAVES = 1.f;
+
+// [toggle 0/1] -- No more metal is posted to cover than our share of the raider
+//   metal they have fielded (the AA counter's answer law). 0: the coverage
+//   need alone decides, which at scale never closed. See docs/27.
+const float TUNE_COVER_BY_RAID = 1.f;
+
 // [toggle 0/1] -- Weigh a production line, on its WHOLE price and in the tech
 //   want, by its units (median army-per-metal) times the ground they can cross
 //   (LineCoverage), against the best line of its class and tier. 0 restores

@@ -1576,6 +1576,21 @@ plant price and to the tech want's `lineW`. On Comet Catcher Remake that reads
 T1 armvp 0.66x0.88 against armlab 0.51x0.95: vehicles; on Sulphur Springs
 (coverage 54 vs 66) the T2 vehicle lab still wins on its units. Battery pending.
 
+### `TUNE_COVER_LEAVES` = 1.f and `TUNE_COVER_BY_RAID` = 1.f
+
+apexearth 2026-09-12, told that the C++ fight tasks are stock but the election
+that feeds them is ours and that a 40-minute Isthmus 1v1 held 427 units in
+`cover`, 231 in `escort` and 61 in `mass.hold` against 60 handed to stock and
+20 in `mass.attack` -- a 307k army (target 323k, met) against 13-27k of theirs,
+holding an uncontested line at -0.11 to the time limit: *"Ok try doing both of
+those."* (1) the cover pool gets stock's exit -- `Defend(ATTACK, ATTACK,
+quota.attack)` instead of the MELEE pair nothing ever converts; (2) the metal
+posted to cover is bounded by our share of the raider metal they have fielded,
+the AA counter's answer law, because the coverage need counts sites and a pool
+never stands on the posts, so at scale it never closed. `apex: elect ... |
+coverM=held/cap need=` is the instrument. 0/0 restores the hold. Battery on
+the same eight time-out seeds pending.
+
 ### `TUNE_SCREEN_GAP` = 200.f
 
 How far IN FRONT of the squad's longest row a short-range row holds, elmos.

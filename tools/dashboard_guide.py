@@ -631,6 +631,12 @@ GROUPS = [
                   "of the map its ARMY can move around in -- 1 on, 0 off. On a "
                   "flat map every line reads the same and this changes nothing; "
                   "on a hilly map the vehicle line is discounted against bots"),
+                 ("TUNE_COVER_LEAVES", "a cover pool promotes to ATTACK like "
+                  "stock's massing pool once its power bar fills, so home keeps "
+                  "only what is still filling. 0 = the pool never leaves"),
+                 ("TUNE_COVER_BY_RAID", "post no more metal to base cover than "
+                  "our share of the raider metal they have fielded. 0 = the "
+                  "coverage need alone decides (at scale it never closed)"),
                  ("TUNE_LINE_QUALITY", "weigh a production line -- its whole "
                   "price, and the tech want -- by its units (median army-per-"
                   "metal) times the ground they can cross, against the best line "

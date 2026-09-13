@@ -1000,3 +1000,15 @@ game: 8 bot labs, 8 T2 bot labs); BARb splits bots and vehicles at both tiers.
 Until then the production half of a plant's price carried no fact about the
 units it makes -- only terrain coverage and tier -- so on Comet Catcher Remake
 the bot and vehicle labs priced within 5% and bots won on coverage 95 vs 88.
+
+## 2026-09-12 — the held army leaves: cover pools promote, and cover is sized by their raiders
+
+Shown that the C++ fight tasks are stock since 09-07 but the election feeding
+them is ours -- in a 40-minute Isthmus 1v1, 427 units elected to `cover` and
+61 to `mass.hold` (both a Defend pool that never converts), 231 to `escort`,
+60 to stock, 20 to `mass.attack`; a 307k army at its 323k target against
+13-27k of theirs, holding an uncontested line to the time limit -- and offered
+two changes: cover and hold pools get stock's exit to ATTACK once full, and the
+cover need is sized by the raider metal they have fielded rather than by our
+building count. *"Ok try doing both of those."* Earlier, on whether the army
+target should scale higher late: it was met, so not size -- use.

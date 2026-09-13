@@ -83,6 +83,45 @@ array<string> gElectTag;
 array<int>    gElectN;
 int gNextElectLog = 0;
 
+// Metal standing in cover pools, by unit: added at election, dropped when
+// the unit is removed. There is no unit-by-id lookup, so the cost is kept.
+array<int> gCoverId;
+array<float> gCoverCost;
+float gCoverHeldM = 0.f;
+
+void NoteCover(CCircuitUnit@ unit)
+{
+	gCoverId.insertLast(unit.id);
+	gCoverCost.insertLast(Catalog::gCostM[int(unit.circuitDef.id)]);
+	gCoverHeldM += Catalog::gCostM[int(unit.circuitDef.id)];
+}
+
+void ForgetCover(int id)
+{
+	for (uint i = 0; i < gCoverId.length(); ++i) {
+		if (gCoverId[i] == id) {
+			gCoverHeldM -= gCoverCost[i];
+			gCoverId.removeAt(i);
+			gCoverCost.removeAt(i);
+			return;
+		}
+	}
+}
+
+float CoverHeldM()
+{
+	return (gCoverHeldM > 0.f) ? gCoverHeldM : 0.f;
+}
+
+// Our share of the raider metal they have fielded; with the bound off, the
+// coverage need alone decides, as before.
+float CoverCapM()
+{
+	if (ai.GetTunable("apex_cover_by_raid", TUNE_COVER_BY_RAID) <= 0.f)
+		return 1e9f;
+	return EnemyCostOf(Unit::Role::RAIDER.type) * Market::AnswerShare();
+}
+
 IUnitTask@ NoteElect(const string tag, IUnitTask@ task)
 {
 	for (uint i = 0; i < gElectTag.length(); ++i) {
@@ -104,6 +143,8 @@ void ElectCensus()
 	string msg = "apex: elect";
 	for (uint i = 0; i < gElectTag.length(); ++i)
 		msg += " " + gElectTag[i] + "=" + gElectN[i];
+	msg += " | coverM=" + int(CoverHeldM()) + "/" + int(CoverCapM())
+			+ " need=" + int(CoverNeedM());
 	AiLog(Factory::T() + msg);
 }
 
@@ -158,18 +199,28 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return NoteElect("escort", aiMilitaryMgr.Enqueue(TaskF::Guard(vip)));
 		}
 	}
-	// COVER UNITS HOLD. What the base bought for coverage (guardposts.as)
-	// joins a pool that never promotes to attack and never raids, so the
-	// posts can spread it over the buildings; the raid and scout pools are
-	// invisible to them (apexearth: "keep our units spread out enough to
-	// react quickly").
+	// COVER UNITS: what the base buys against raiders (guardposts.as), spread
+	// over the buildings (apexearth: "keep our units spread out enough to
+	// react quickly"). Two bounds, his 2026-09-12 ruling after a 40-minute
+	// game held 427 units here against 13-27k of enemy army: the pool
+	// promotes to ATTACK like stock's, so a full pool leaves and home keeps
+	// whatever is still filling; and no more metal is posted than the
+	// raider metal they have fielded -- our share of it, the same answer law
+	// the AA counter uses -- so a base facing nothing keeps a small guard.
+	// The need itself is not the bound: it counts sites, and a pool never
+	// stands on the posts, so at scale it never closed.
 	if ((Military::CoverNeedM() > 0.f) && !cdef.IsAbleToFly()
 		&& Market::LineCombat(int(cdef.id))
-		&& (Market::CoverPerMetal(int(cdef.id)) >= 1.f))
+		&& (Market::CoverPerMetal(int(cdef.id)) >= 1.f)
+		&& (CoverHeldM() < CoverCapM()))
 	{
 		NotePostureDef(cdef, false);
-		return NoteElect("cover", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
-				Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
+		NoteCover(unit);
+		const bool leaves = ai.GetTunable("apex_cover_leaves", TUNE_COVER_LEAVES) > 0.f;
+		return NoteElect("cover", aiMilitaryMgr.Enqueue(TaskF::Defend(
+				leaves ? Task::FightType::ATTACK : Task::FightType::MELEE,
+				leaves ? Task::FightType::ATTACK : Task::FightType::MELEE,
+				aiMilitaryMgr.quota.attack)));
 	}
 	if (IsFodder(cdef)) {
 		// The set of defs the spam posture applies to, discovered rather than
@@ -657,8 +708,10 @@ void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 {
 	// SUPER is registered by UnitAddedInner, so it has to be forgotten here too
 	// or the register keeps an id that only the null sweep will ever clear.
-	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER))
+	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER)) {
 		ForgetPenned(unit.id);
+		ForgetCover(unit.id);
+	}
 	if (usage != Unit::UseAs::FENCE)
 		return;
 	const int id = unit.id;
