@@ -154,6 +154,7 @@ local NAMES = {
 	"apex_eco_target_base",
 	"apex_air_eco_base",
 	"apex_line_terrain",
+	"apex_line_quality",
 	"apex_screen_gap",
 	"apex_team_line",
 	"apex_def_dominance",

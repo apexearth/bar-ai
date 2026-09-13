@@ -1827,6 +1827,11 @@ const float TUNE_SCREEN_GAP = 200.f;
 //   second team copy is worth half and the third a third. See docs/27.
 const float TUNE_TEAM_LINE = 1.f;
 
+// [toggle 0/1] -- Weigh a production line by the best army-per-metal its units
+//   offer on this map (UnitPPC with speed and sight), against the best line of
+//   its class and tier. 0 prices every line the same per metal. See docs/27.
+const float TUNE_LINE_QUALITY = 1.f;
+
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it
 //   is stranded metal (apexearth: "why build something that so quickly becomes

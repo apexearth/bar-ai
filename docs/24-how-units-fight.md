@@ -986,3 +986,17 @@ factory by tier (T1 2, T2 4, T3 9, stock `FactoryManager.cpp:895-916`), and an
 idle builder within 600 elmos guards a recruiting factory while the bank is
 above 20% of storage (`EconomyManager.cpp:1697-1723`) -- priced above the floor
 as now.
+
+## 2026-09-12 — the line is chosen for the map: vehicles where vehicles are stronger
+
+*"Since we're back on the basic fight logic, I kinda feel like if we lose, it
+is because we are not making the most optimal army composition. I still notice
+and feel very often that we just make bots almost all the time. So in maps
+where vehicles are obviously more powerful, we don't do quite as well."*
+
+Measured the same day across 40 logged games: our first plant is a bot lab in
+most of them and our T2 step is the T2 bot lab almost always (one 8-player
+game: 8 bot labs, 8 T2 bot labs); BARb splits bots and vehicles at both tiers.
+Until then the production half of a plant's price carried no fact about the
+units it makes -- only terrain coverage and tier -- so on Comet Catcher Remake
+the bot and vehicle labs priced within 5% and bots won on coverage 95 vs 88.

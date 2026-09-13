@@ -717,6 +717,79 @@ float LineTerrainMul(int plantDef)
 	return (m > 1.f) ? 1.f : m;
 }
 
+// WHAT THE LINE'S UNITS ARE WORTH HERE. apexearth 2026-09-12: "if we lose,
+// it is because we are not making the most optimal army composition. I still
+// notice ... that we just make bots almost all the time. So in maps where
+// vehicles are obviously more powerful, we don't do quite as well." The
+// production half priced every line the same per metal; terrain and tier
+// were its only line facts. This is the best army-per-metal the line can
+// field, on the same yardstick production buys single units with (UnitPPC,
+// speed, sight), against the best line of its class and tier.
+array<float> gLineQual;
+int gLineQualAt = -999999;
+
+float LineUnitWorth(int pd)
+{
+	const float tFoeSpeed = FoeSpeedCap();
+	float v = UnitPPC(pd);
+	if (tFoeSpeed > 0.f)
+		v *= 1.f + (Catalog::gSpeed[pd] / tFoeSpeed)
+				* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
+	v *= 1.f + (Catalog::gLosR[pd] / 1000.f)
+			* ai.GetTunable("apex_los_worth", TUNE_LOS_WORTH);
+	return v;
+}
+
+float LineBestWorth(int plantDef)
+{
+	float best = 0.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantDef];
+	for (uint i = 0; i < prods.length(); ++i) {
+		if (!Catalog::gAvailable[prods[i]] || !LineCombat(prods[i]))
+			continue;
+		const float v = LineUnitWorth(prods[i]);
+		if (v > best)
+			best = v;
+	}
+	return best;
+}
+
+// ShieldShare and the worth means move, so the census is re-read per minute;
+// the log line is the instrument -- what OUR model thinks of each line here.
+float LineQualityMul(int plantDef)
+{
+	if (int(gLineQual.length()) <= Catalog::gDefCount)
+		gLineQual.resize(Catalog::gDefCount + 1);
+	if (ai.frame >= gLineQualAt + MINUTE) {
+		gLineQualAt = ai.frame;
+		array<float> bestOf(6, 0.f);   // class*2 + (tier>1)
+		array<float> own(Catalog::gDefCount + 1, 0.f);
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+				|| (Catalog::gBuildsList[d].length() == 0))
+				continue;
+			own[d] = LineBestWorth(d);
+			const int k = PlantClass(d) * 2 + ((PlantTier(d) > 1) ? 1 : 0);
+			if (own[d] > bestOf[k])
+				bestOf[k] = own[d];
+		}
+		string row = "";
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			gLineQual[d] = 1.f;
+			if (own[d] <= 0.f)
+				continue;
+			const int k = PlantClass(d) * 2 + ((PlantTier(d) > 1) ? 1 : 0);
+			gLineQual[d] = own[d] / bestOf[k];
+			if (PlantClass(d) == PC_LAND)
+				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineQual[d], "", 0, 2);
+		}
+		AiLog("apex: line-quality t=" + ai.teamId + row);
+	}
+	if (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) <= 0.f)
+		return 1.f;
+	return gLineQual[plantDef];
+}
+
 // WHAT THE TEAM ALREADY FIELDS.
 //
 // apexearth, watching a 4v4 on Comet Catcher 2026-09-01: "I'm still seeing us
@@ -978,7 +1051,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// constructor half buys mohos and build power, which their tier does
 		// not devalue -- so a T2 lab is still bought for its cons.
 		const float prodOwn = prodHalf * FoeTierPlantMul(d) * LineTerrainMul(d)
-				* TeamLineMul(d);
+				* LineQualityMul(d) * TeamLineMul(d);
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
@@ -1179,6 +1252,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",prod" + formatFloat(prodOwn, "", 0, 2)
 				+ ",reach" + formatFloat(gPlantReach[d], "", 0, 2)
 				+ ",terr" + formatFloat(LineTerrainMul(d), "", 0, 2)
+				+ ",qual" + formatFloat(LineQualityMul(d), "", 0, 2)
 				+ ",rate" + formatFloat(rateMul, "", 0, 2)
 				+ ",mob" + formatFloat(bestMob, "", 0, 2)
 				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)

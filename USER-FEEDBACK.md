@@ -23,6 +23,16 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-12 — "we just make bots almost all the time. So in maps where vehicles are obviously more powerful, we don't do quite as well"
+
+Full quote in docs/24. Measured: bot lab first in most logged games, T2 bot lab
+almost always; BARb splits the lines at both tiers. Built: the plant's
+production half now carries the best army-per-metal its units offer here
+(`TUNE_LINE_QUALITY`, `apex: line-quality`). Open until the 1v1 battery on
+Comet Catcher Remake + Supreme Isthmus says the choice moved AND the games got
+better -- if our own model still ranks bots above vehicles on a flat map, the
+next question is his: what makes vehicles "obviously more powerful" there.
+
 ## 2026-09-12 — "every ~10 in game seconds some long ai operation happens which pauses the game for almost a full second. I couldn't play online with it like this"
 
 Then, of the log stream in the in-game chat: *"do I need to see that log? it

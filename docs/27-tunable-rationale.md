@@ -1539,6 +1539,19 @@ off, which is the control arm. On a flat map every line reads the same and this
 changes nothing; on a hill map the vehicle line is discounted against the bot
 line, which is apexearth's rule for picking the ground line.
 
+### `TUNE_LINE_QUALITY` = 1.f
+
+Weigh a production line by the best army-per-metal its units offer here --
+UnitPPC with the speed and sight terms production already buys single units
+with -- against the best line of its class and tier. apexearth 2026-09-12: "if
+we lose, it is because we are not making the most optimal army composition. I
+still notice ... that we just make bots almost all the time. So in maps where
+vehicles are obviously more powerful, we don't do quite as well." Before this
+the production half of a plant's price carried no fact about its units at all:
+on Comet Catcher Remake the bot and vehicle labs priced within 5% of each other
+and bots won on coverage (95 vs 88). `apex: line-quality` logs what the model
+thinks of each land line, once a minute. 0 is the control arm.
+
 ### `TUNE_SCREEN_GAP` = 200.f
 
 How far IN FRONT of the squad's longest row a short-range row holds, elmos.
