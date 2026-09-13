@@ -14,6 +14,15 @@
 -- Parsed by tools/orders.py.
 --------------------------------------------------------------------------------
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Order Counter",
@@ -100,7 +109,7 @@ function gadget:GameFrame(f)
 			for i = 1, math.min(6, #ids) do
 				parts[#parts + 1] = "oth" .. ids[i].id .. "=" .. ids[i].n
 			end
-			Spring.Echo(table.concat(parts, " "))
+			BARAI_Echo(table.concat(parts, " "))
 		end
 	end
 	counts = {}

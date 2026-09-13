@@ -25,6 +25,15 @@
 local modOptions = Spring.GetModOptions() or {}
 local enabled = tostring(modOptions.dev_stats or "") == "1"
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Stats Export",
@@ -246,7 +255,7 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 		local cd = UnitDefs[unitDefID]
 		if cd ~= nil and (cd.customParams or {}).iscommander and commLost[unitTeam] == nil then
 			commLost[unitTeam] = Spring.GetGameFrame()
-			Spring.Echo(string.format("[BARAI_COMMLOST] team=%d ally=%d frame=%d min=%.1f",
+			BARAI_Echo(string.format("[BARAI_COMMLOST] team=%d ally=%d frame=%d min=%.1f",
 				unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
 				commLost[unitTeam], commLost[unitTeam] / 1800))
 		end
@@ -299,7 +308,7 @@ function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 	if techStart[unitTeam] == nil then
 		local f = Spring.GetGameFrame()
 		techStart[unitTeam] = f
-		Spring.Echo(string.format("[BARAI_T2START] team=%d ally=%d frame=%d min=%.1f unit=%s cost=%d",
+		BARAI_Echo(string.format("[BARAI_T2START] team=%d ally=%d frame=%d min=%.1f unit=%s cost=%d",
 			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
 			f, f / 1800, ud.name, ud.metalCost or 0))
 	end
@@ -319,7 +328,7 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	-- built" was unmeasurable, not zero.
 	if ud.isBuilding or ((ud.speed or 0) == 0) then
 		local f = Spring.GetGameFrame()
-		Spring.Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d",
+		BARAI_Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d",
 			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
 			f, f / 1800, ud.name, ud.metalCost or 0))
 	end
@@ -408,7 +417,7 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 		if techOf(ud) >= 2 and techFrame[unitTeam] == nil then
 			local f = Spring.GetGameFrame()
 			techFrame[unitTeam] = f
-			Spring.Echo(string.format("[BARAI_T2DONE] team=%d ally=%d frame=%d min=%.1f unit=%s build=%.1fm",
+			BARAI_Echo(string.format("[BARAI_T2DONE] team=%d ally=%d frame=%d min=%.1f unit=%s build=%.1fm",
 				unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
 				f, f / 1800, ud.name, (f - (techStart[unitTeam] or f)) / 1800))
 		end
@@ -870,8 +879,8 @@ local function dump(reason, onlyTeam, atFrame)
 					end
 				end
 			end
-			Spring.Echo("[BARAI_STATS] " .. table.concat(parts, " "))
-			Spring.Echo(string.format(
+			BARAI_Echo("[BARAI_STATS] " .. table.concat(parts, " "))
+			BARAI_Echo(string.format(
 				"[BARAI_DUTY] team=%d frame=%d facSamp=%d facBusy=%d nanoSamp=%d nanoBusy=%d facPow=%.1f nanoOnFac=%d conSamp=%d conIdle=%d conGuardFin=%d conOnFac=%d facNano=%s",
 				teamID, atFrame or Spring.GetGameFrame(),
 				facSamp[teamID] or 0, facBusy[teamID] or 0,
@@ -923,7 +932,7 @@ local function dumpPositions(onlyTeam, atFrame)
 			-- short lines: gui_chat's string.lines is quadratic in line length (S31)
 			local parts = math.ceil(#head / 10)
 			for p = 1, parts do
-				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d part=%d/%d %s",
+				BARAI_Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d part=%d/%d %s",
 						teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
 						atFrame or Spring.GetGameFrame(), #head, p, parts,
 						table.concat(head, ",", (p - 1) * 10 + 1, math.min(p * 10, #head))))
@@ -988,7 +997,7 @@ local function sampleEFrames(frame)
 		end
 		if n >= 2 then
 			eframeBad[teamID] = (eframeBad[teamID] or 0) + 1
-			Spring.Echo(string.format(
+			BARAI_Echo(string.format(
 				"[BARAI_EFRAMES] team=%d ally=%d frame=%d min=%.2f n=%d defs=%s",
 				teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
 				frame, frame / 1800, n, table.concat(names, ",")))
@@ -998,7 +1007,7 @@ end
 
 local function dumpEFrames(reason)
 	for _, teamID in ipairs(Spring.GetTeamList()) do
-		Spring.Echo(string.format(
+		BARAI_Echo(string.format(
 			"[BARAI_EPEAK] team=%d ally=%d reason=%s peak=%d badSamples=%d"
 			.. " samples=%d costBar=%d",
 			teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0, reason,

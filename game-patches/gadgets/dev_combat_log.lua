@@ -20,6 +20,15 @@
 local modOptions = Spring.GetModOptions() or {}
 local enabled = tostring(modOptions.dev_combatlog or "") == "1"
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Combat Log",
@@ -142,7 +151,7 @@ function gadget:AllowCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams, cmdO
 		for i = 1, #q do
 			qs[#qs + 1] = tostring(q[i].id)
 		end
-		Spring.Echo(string.format("[BARAI_MF] frame=%d team=%d unit=%d params=%d target=%s dist=%d e=%d opts=%s queue=%s",
+		BARAI_Echo(string.format("[BARAI_MF] frame=%d team=%d unit=%d params=%d target=%s dist=%d e=%d opts=%s queue=%s",
 			frame, unitTeam, unitID, #cmdParams, tostring(cmdParams[1]), dist, math.floor(eCur or 0),
 			tostring(cmdOptions.coded), table.concat(qs, ",")))
 		mfCheck[unitID] = frame + 1
@@ -154,7 +163,7 @@ function gadget:AllowCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams, cmdO
 		for i = 1, #q do
 			qs[#qs + 1] = tostring(q[i].id)
 		end
-		Spring.Echo(string.format("[BARAI_MFNEXT] frame=%d team=%d unit=%d after=%d cmd=%d shift=%s lua=%s player=%s queue=%s",
+		BARAI_Echo(string.format("[BARAI_MFNEXT] frame=%d team=%d unit=%d after=%d cmd=%d shift=%s lua=%s player=%s queue=%s",
 			frame, unitTeam, unitID, frame - mfTrace[unitID], cmdID, tostring(cmdOptions.shift),
 			tostring(fromLua), tostring(playerID), table.concat(qs, ",")))
 	end
@@ -168,7 +177,7 @@ function gadget:GameStart()
 			aiTeam[teamID] = true
 			local x, _, z = Spring.GetTeamStartPosition(teamID)
 			startX[teamID], startZ[teamID] = x or 0, z or 0
-			Spring.Echo(string.format("[BARAI_START] team=%d x=%d z=%d",
+			BARAI_Echo(string.format("[BARAI_START] team=%d x=%d z=%d",
 				teamID, startX[teamID], startZ[teamID]))
 		end
 	end
@@ -218,7 +227,7 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 			ax, az = px, pz
 		end
 	end
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_DEATH] frame=%d team=%d unit=%s cost=%d x=%d z=%d vx=%.1f vz=%.1f built=%d mob=%d atkteam=%d atk=%s atkx=%d atkz=%d st=%d ffdg=%d",
 		Spring.GetGameFrame(), unitTeam, (ud and ud.name) or "?", cost, x, z,
 		vx or 0, vz or 0, built, mobileArmed[unitDefID] and 1 or 0,
@@ -297,7 +306,7 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 			isManual[weaponDefID] = manual
 			if manual and not manualEchoed then
 				manualEchoed = true
-				Spring.Echo("[BARAI_DGUNWD] " .. tostring(wd.name))
+				BARAI_Echo("[BARAI_DGUNWD] " .. tostring(wd.name))
 			end
 		end
 	end
@@ -319,7 +328,7 @@ local function snapshot(frame)
 	for teamID in pairs(aiTeam) do
 		local t = dmgOf(teamID)
 		local eCur, eStore = Spring.GetTeamResources(teamID, "energy")
-		Spring.Echo(string.format(
+		BARAI_Echo(string.format(
 			"[BARAI_DMG] frame=%d team=%d dm=%d ds=%d rm=%d rs=%d rfs=%d bi=%d bib=%d bd=%d bdmg=%d dg=%d dgm=%d mfo=%d dgp=%d e=%d es=%d ffdg=%d ffdgm=%d ffdgk=%d",
 			frame, teamID, t.dm, t.ds, t.rm, t.rs, t.rfs, t.bi, t.bib, t.bd, t.bdmg, t.dg, t.dgm, t.mfo, t.dgp,
 			math.floor(eCur or 0), math.floor(eStore or 0),
@@ -345,7 +354,7 @@ local function snapshot(frame)
 		end
 		local parts = math.ceil(#out / SNAP_CHUNK)
 		for p = 1, parts do
-			Spring.Echo(string.format("[BARAI_ARMY] frame=%d team=%d n=%d part=%d/%d %s",
+			BARAI_Echo(string.format("[BARAI_ARMY] frame=%d team=%d n=%d part=%d/%d %s",
 				frame, teamID, #out, p, parts,
 				table.concat(out, ",", (p - 1) * SNAP_CHUNK + 1, math.min(p * SNAP_CHUNK, #out))))
 		end
@@ -362,7 +371,7 @@ function gadget:GameFrame(frame)
 				qs[#qs + 1] = tostring(q[i].id)
 			end
 			local _, _, _, _, bp = Spring.GetUnitHealth(uid)
-			Spring.Echo(string.format("[BARAI_MFQ] frame=%d unit=%d queue=%s", frame, uid, table.concat(qs, ",")))
+			BARAI_Echo(string.format("[BARAI_MFQ] frame=%d unit=%d queue=%s", frame, uid, table.concat(qs, ",")))
 		end
 	end
 	if frame >= nextSnap then

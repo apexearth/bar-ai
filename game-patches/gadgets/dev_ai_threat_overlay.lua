@@ -17,6 +17,15 @@
 -- Dev only: it never ships to multiplayer, and it draws nothing until asked.
 --------------------------------------------------------------------------------
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev AI Threat Overlay",
@@ -100,7 +109,7 @@ function gadget:RecvSkirmishAIMessage(aiTeam, msg)
 			cells = nil
 			dirty = true
 		end
-		Spring.Echo("[ai-overlay] " .. (drawing and "ON" or "OFF") .. " for AI team " .. tostring(aiTeam))
+		BARAI_Echo("[ai-overlay] " .. (drawing and "ON" or "OFF") .. " for AI team " .. tostring(aiTeam))
 		return drawing and "1" or "0"
 	end
 
@@ -109,7 +118,7 @@ function gadget:RecvSkirmishAIMessage(aiTeam, msg)
 		squareSize = tonumber(s) or 0
 		base = tonumber(b) or 0
 		gw, gh = 0, 0
-		Spring.Echo("[ai-overlay] cell " .. tostring(squareSize) .. " elmos, base " .. tostring(base))
+		BARAI_Echo("[ai-overlay] cell " .. tostring(squareSize) .. " elmos, base " .. tostring(base))
 		return
 	end
 

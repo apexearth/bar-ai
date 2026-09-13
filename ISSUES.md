@@ -101,8 +101,10 @@ errors, exceptions and the file path go through the engine; `run_match`
 merges the files back by frame (tools/apexlog.py). Verified on a 6-minute
 run: merged log identical in shape, every reader unchanged. NOT yet verified:
 that a 60-minute 8v8 no longer reaches the emergency collect -- the next perf
-benchmark answers it (grep "Emergency garbage" in its infolog). Still on the
-console: the dev gadgets' short lines and stock BARb's own log.
+benchmark answers it (grep "Emergency garbage" in its infolog). The dev
+gadgets' telemetry now goes the same way (dev_log_sink.lua ->
+barai-gadgets.log, merged by run_match). Still on the console: stock BARb's
+own log, [BARAI_NAME] from ai_namer, and one shutdown line per gadget.
 
 ## 2026-09-12 — CONVERTERS: the T2 hands never ask for the advanced one, so the basics cannot be retired
 

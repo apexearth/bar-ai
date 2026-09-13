@@ -703,13 +703,13 @@ def run(args) -> int:
         # The AI logs to its own files (S31); fold them back in by frame so the
         # copies read as they always did. The write dir's own infolog too, for
         # anything pointed straight at it.
-        apex_files = apexlog.apex_files(infolog_src.read_text("utf-8", errors="replace"))
+        apex_files = apexlog.apex_files(infolog_src.read_text("utf-8", errors="replace"), str(write_dir))
         apexlog.merge_into(str(outdir / "infolog.txt"), apex_files)
         apexlog.merge_into(str(infolog_src), apex_files)
         infolog_text = (outdir / "infolog.txt").read_text("utf-8", errors="replace")
     if stdout:
         (outdir / "stdout.txt").write_text(stdout, encoding="utf-8")
-        apexlog.merge_into(str(outdir / "stdout.txt"), apexlog.apex_files(stdout))
+        apexlog.merge_into(str(outdir / "stdout.txt"), apexlog.apex_files(stdout, str(write_dir)))
         if not infolog_text:
             infolog_text = (outdir / "stdout.txt").read_text("utf-8", errors="replace")
 

@@ -26,13 +26,21 @@ LOGFILE = re.compile(r'apex: log file (\S.*?\.log)\s*$', re.M)
 MERGED = 'apex-log merged'
 
 
-def apex_files(text: str) -> list[str]:
+GADGET_FILE = 'barai-gadgets.log'   # the dev gadgets' sink, in the write dir (dev_log_sink.lua)
+
+
+def apex_files(text: str, near: str | None = None) -> list[str]:
+    """The AI's files the infolog names, plus the gadget sink beside it."""
     seen, out = set(), []
     for m in LOGFILE.finditer(text):
         p = m.group(1)
         if p not in seen:
             seen.add(p)
             out.append(p)
+    if near:
+        g = os.path.join(near, GADGET_FILE)
+        if os.path.isfile(g) and g not in seen:
+            out.append(g)
     return out
 
 
@@ -78,7 +86,7 @@ def merge_into(target: str, files: list[str] | None = None) -> int:
     text = open(target, encoding='utf-8', errors='replace').read()
     if MERGED in text[-200:]:
         return 0
-    files = files if files is not None else apex_files(text)
+    files = files if files is not None else apex_files(text, os.path.dirname(os.path.abspath(target)))
     files = [f for f in files if os.path.isfile(f)]
     if not files:
         return 0
@@ -102,7 +110,7 @@ def main():
         import shutil
         shutil.copyfile(args[0], out)
         text = open(args[0], encoding='utf-8', errors='replace').read()
-        n = merge_into(out, apex_files(text))
+        n = merge_into(out, apex_files(text, os.path.dirname(os.path.abspath(args[0]))))
         print(f'{out}: merged {n} file(s)' if n else f'{out}: nothing to merge')
         return
     for arg in args:

@@ -87,7 +87,7 @@ def analyze(path):
             wall = wall_seconds(m.group(1), m.group(2), m.group(3))
             b = frame // BUCKET
             # engine stamps only: the AI's merged lines carry their own clock
-            if "Skirmish AI <" not in line:
+            if ("Skirmish AI <" not in line) and ("[BARAI_" not in line):
                 if b not in first or frame < first[b][1]:
                     first[b] = (wall, frame)
                 if b not in last or frame > last[b][1]:

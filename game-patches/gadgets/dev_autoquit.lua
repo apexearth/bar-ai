@@ -18,6 +18,15 @@
 local modOptions = Spring.GetModOptions() or {}
 local enabled = tostring(modOptions.dev_autoquit or "") == "1"
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Autoquit",
@@ -54,7 +63,7 @@ if gadgetHandler:IsSyncedCode() then
 		for _, allyTeamID in ipairs(winners or {}) do
 			list[#list + 1] = tostring(allyTeamID)
 		end
-		Spring.Echo(string.format(
+		BARAI_Echo(string.format(
 			"[BARAI_RESULT] reason=%s frame=%d winners=%s",
 			reason, Spring.GetGameFrame(), table.concat(list, ",")
 		))
@@ -100,7 +109,7 @@ else
 		countdown = countdown - 1
 		if countdown <= 0 then
 			countdown = nil
-			Spring.Echo("[BARAI_RESULT] quitting")
+			BARAI_Echo("[BARAI_RESULT] quitting")
 			Spring.Quit()
 		end
 	end

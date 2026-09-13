@@ -20,6 +20,15 @@
 -- dependency degrades quietly rather than breaking.
 --------------------------------------------------------------------------------
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Team Income",
@@ -176,7 +185,7 @@ local function updateLeads(frame)
 				for _, t in ipairs(teams) do
 					Spring.SetGameRulesParam("ai_lead_" .. t, pick)
 				end
-				Spring.Echo(string.format(
+				BARAI_Echo(string.format(
 					"[BARAI_LEAD] ally=%d team=%d inc=%.1f frame=%d min=%.1f why=committed-to-t2",
 					allyID, pick, avg[pick] or 0, frame, frame / 1800))
 			end
@@ -258,7 +267,7 @@ function gadget:GameFrame(frame)
 	if frame >= next_waste_echo then
 		next_waste_echo = frame + WASTE_ECHO
 		for teamID, w in pairs(waste) do
-			Spring.Echo(string.format(
+			BARAI_Echo(string.format(
 				"[BARAI_WASTE] frame=%d team=%d mWaste=%.0f mMade=%.0f eWaste=%.0f eMade=%.0f",
 				frame, teamID, w.mW, w.mI, w.eW, w.eI))
 		end

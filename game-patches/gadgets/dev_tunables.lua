@@ -613,7 +613,7 @@ for _, k in ipairs(NAMES) do
 		if n then
 			pending[k] = n
 		else
-			Spring.Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
+			BARAI_Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
 		end
 	end
 end
@@ -630,12 +630,21 @@ for _, ud in pairs(UnitDefs) do
 		if n then
 			pending[k] = n
 		else
-			Spring.Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
+			BARAI_Echo("[BARAI_TUNABLE] ignoring non-numeric " .. k .. "=" .. tostring(raw))
 		end
 	end
 end
 
 local enabled = next(pending) ~= nil
+
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
 
 function gadget:GetInfo()
 	return {
@@ -658,6 +667,6 @@ end
 function gadget:Initialize()
 	for k, v in pairs(pending) do
 		Spring.SetGameRulesParam(k, v)
-		Spring.Echo(string.format("[BARAI_TUNABLE] %s=%s", k, tostring(v)))
+		BARAI_Echo(string.format("[BARAI_TUNABLE] %s=%s", k, tostring(v)))
 	end
 end

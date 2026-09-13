@@ -58,6 +58,15 @@
 local modOptions = Spring.GetModOptions() or {}
 local enabled = tostring(modOptions.dev_raid or "") == "1"
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Raid",
@@ -118,7 +127,7 @@ local function parseWaves(spec)
 				if ud then
 					list[#list + 1] = { id = ud.id, n = tonumber(n) or 1, cost = ud.metalCost or 0 }
 				else
-					Spring.Echo("[BARAI_RAID] unknown unit in dev_raid_waves: " .. tostring(item))
+					BARAI_Echo("[BARAI_RAID] unknown unit in dev_raid_waves: " .. tostring(item))
 					ok = false
 				end
 			end
@@ -191,13 +200,13 @@ end
 
 function gadget:Initialize()
 	if HOLDER < 0 or not Spring.GetTeamInfo(HOLDER, false) then
-		Spring.Echo("[BARAI_RAID] no holder team (dev_raid_team); gadget off")
+		BARAI_Echo("[BARAI_RAID] no holder team (dev_raid_team); gadget off")
 		gadgetHandler:RemoveGadget(self)
 		return
 	end
 	waves = parseWaves(WAVES_SPEC)
 	if #waves == 0 then
-		Spring.Echo("[BARAI_RAID] no waves parsed from dev_raid_waves; gadget off")
+		BARAI_Echo("[BARAI_RAID] no waves parsed from dev_raid_waves; gadget off")
 		gadgetHandler:RemoveGadget(self)
 		return
 	end
@@ -254,7 +263,7 @@ function gadget:GameStart()
 		end
 	end
 	if targetTeam == nil then
-		Spring.Echo("[BARAI_RAID] no target team; gadget off")
+		BARAI_Echo("[BARAI_RAID] no target team; gadget off")
 		gadgetHandler:RemoveGadget(self)
 		return
 	end
@@ -266,7 +275,7 @@ function gadget:GameStart()
 	for _, id in ipairs(Spring.GetTeamUnits(HOLDER) or {}) do
 		Spring.DestroyUnit(id, false, true)
 	end
-	Spring.Echo(string.format("[BARAI_RAID] init holder=%d waves=%d targetTeam=%d",
+	BARAI_Echo(string.format("[BARAI_RAID] init holder=%d waves=%d targetTeam=%d",
 		HOLDER, #waves, targetTeam))
 end
 
@@ -416,7 +425,7 @@ local function spawnGroup(w, g, frame)
 	local hx, hz = enemySide()
 	if shape == nil or hx == nil then
 		g.at = frame
-		Spring.Echo(string.format("[BARAI_RAID] wave=%d group=%d/%d frame=%d skipped: no target or holder units",
+		BARAI_Echo(string.format("[BARAI_RAID] wave=%d group=%d/%d frame=%d skipped: no target or holder units",
 			w.index, g.index, #w.groups, frame))
 		return
 	end
@@ -428,7 +437,7 @@ local function spawnGroup(w, g, frame)
 		if RATIO > 0 then
 			raiders, raidM = scaleWave(w, armyM / RATIO)
 		end
-		Spring.Echo(string.format("[BARAI_BASE] frame=%d team=%d bld=%d rms=%d max=%d mex=%d mexmax=%d army=%d armyM=%d armyRms=%d raiders=%d raidM=%d",
+		BARAI_Echo(string.format("[BARAI_BASE] frame=%d team=%d bld=%d rms=%d max=%d mex=%d mexmax=%d army=%d armyM=%d armyRms=%d raiders=%d raidM=%d",
 			frame, targetTeam, shape.n, shape.rms, shape.max, shape.mexN, shape.mexMax,
 			armyN, armyM, armyRms, raiders, raidM))
 	end
@@ -508,7 +517,7 @@ local function spawnGroup(w, g, frame)
 		w.at = frame
 	end
 	g.at = frame
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_RAID] wave=%d group=%d/%d frame=%d n=%d metal=%d x=%d z=%d tx=%d tz=%d bearing=%d target=%s seen=%d",
 		w.index, g.index, #w.groups, frame, n, metal, sx, sz, ax, az, math.floor(deg % 360), kind, seenAt))
 end
@@ -528,7 +537,7 @@ local function finishWave(w, frame)
 	end
 	w.done = true
 	local alive = w.spawned - w.killed
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_RAIDEND] wave=%d frame=%d spawned=%d killed=%d alive=%d dur=%d closest=%d seen=%d engaged=%d resp=%d peak=%d army=%d",
 		w.index, frame, w.spawned, w.killed, alive, frame - w.at,
 		(w.closest < 1e9) and math.floor(w.closest) or -1,

@@ -43,6 +43,15 @@
 local modOptions = Spring.GetModOptions() or {}
 local enabled = tostring(modOptions.dev_arena or "") == "1"
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Arena",
@@ -161,7 +170,7 @@ local function parkStarters()
 		Spring.SetTeamResource(teamID, "ms", 50000)
 	end
 	pureDone = true
-	Spring.Echo("[BARAI_ARENA] pure mode: starters parked and neutralized")
+	BARAI_Echo("[BARAI_ARENA] pure mode: starters parked and neutralized")
 end
 
 local function restun(frame)
@@ -193,7 +202,7 @@ end
 local function resolveDef(name)
 	local ud = UnitDefNames[name]
 	if not ud then
-		Spring.Echo("[BARAI_ARENA] ERROR unknown unit def '" .. tostring(name) .. "'")
+		BARAI_Echo("[BARAI_ARENA] ERROR unknown unit def '" .. tostring(name) .. "'")
 		return nil
 	end
 	return ud.id, ud.metalCost
@@ -251,7 +260,7 @@ local function buildPools()
 			end
 		end
 	end
-	Spring.Echo(string.format("[BARAI_ARENA] random pools: %d combat, %d rez",
+	BARAI_Echo(string.format("[BARAI_ARENA] random pools: %d combat, %d rez",
 		#rndPool, #rezPool))
 end
 
@@ -408,7 +417,7 @@ local function spawnSide(ally, anchor, facingAway)
 			end
 		end
 	end
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_ARENA] round=%d ally=%d team=%d def=%s n=%d x=%d z=%d",
 		roundNo, ally, team, ally == 0 and DEF_A or DEF_B, n, px, pz))
 	return n
@@ -497,7 +506,7 @@ local function beginRound(frame)
 	local n1 = spawnSide(1, b, not flip)
 	active = (n0 > 0 and n1 > 0)
 	if not active then
-		Spring.Echo("[BARAI_ARENA] ERROR spawn failed, arena disabled")
+		BARAI_Echo("[BARAI_ARENA] ERROR spawn failed, arena disabled")
 		waitUntil = math.huge
 	end
 end
@@ -513,7 +522,7 @@ local function endRound(frame)
 	if a0 == 0 or a1 == 0 then
 		roundReason = "wipe"
 	end
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_ARENA_END] round=%d frames=%d winner=%d alive0=%d alive1=%d "
 		.. "metal0=%.0f metal1=%.0f spawn0=%d spawn1=%d flip=%d clean=%d "
 		.. "reason=%s hc=%.2f spawnM0=%.0f spawnM1=%.0f def=%s",
@@ -554,7 +563,7 @@ function gadget:Initialize()
 		SEP = math.max(200, math.min(SEP, sight * 0.85))
 	end
 	computeAnchors()
-	Spring.Echo(string.format(
+	BARAI_Echo(string.format(
 		"[BARAI_ARENA] init defA=%s defB=%s count=%d/%d sep=%d round=%d",
 		DEF_A, DEF_B, totalA, totalB, SEP, ROUND))
 end
@@ -614,7 +623,7 @@ function gadget:UnitDestroyed(unitID, unitDefID, teamID, attackerID)
 			end
 		end
 		local adid = Spring.GetUnitDefID(attackerID)
-		Spring.Echo(string.format(
+		BARAI_Echo(string.format(
 			"[BARAI_ARENA] dirty round=%d atk=%s team=%s parked=%s",
 			roundNo, (adid and UnitDefs[adid].name) or "?",
 			tostring(Spring.GetUnitTeam(attackerID)),

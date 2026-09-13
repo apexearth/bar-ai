@@ -9,6 +9,15 @@
 -- Inert outside replays.
 --------------------------------------------------------------------------------
 
+-- Telemetry goes through the log sink (dev_log_sink.lua), not the console.
+local function BARAI_Echo(line)
+	if GG and GG.BARAI_LOG then
+		GG.BARAI_LOG(line)
+	else
+		Spring.Echo(line)
+	end
+end
+
 function gadget:GetInfo()
 	return {
 		name    = "Dev Replay Census",
@@ -65,7 +74,7 @@ function gadget:GameFrame(frame)
 				parts[#parts + 1] = name .. ":" .. n
 			end
 			table.sort(parts)
-			Spring.Echo(string.format(
+			BARAI_Echo(string.format(
 				"[BARAI_CENSUS] frame=%d team=%d mInc=%.1f mPull=%.1f mCur=%.0f/%.0f eInc=%.1f ePull=%.1f eCur=%.0f/%.0f builders=%d busy=%d units=%s",
 				frame, teamID, mi or 0, mp or 0, mc or 0, ms or 0, ei or 0, ep or 0, ec or 0, es or 0,
 				builders, busy, table.concat(parts, ",")))
