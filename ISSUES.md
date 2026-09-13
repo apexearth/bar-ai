@@ -16,6 +16,80 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-13 — TEAM GAMES: the mex claim dies on the builder's safe-reach veto, so per-player expansion collapses with player count
+
+Twelve harness games of 2026-09-12/13 (all `Handicap=100` on EVERY team --
+`run_match.py --handicap` and the dashboard bonus are symmetric, so "BARb
++100%" is not an edge in any of these logs). Side sums from `[BARAI_STATS]`.
+
+- **Our trade is the same everywhere.** Mobile metal killed / lost at 16-20
+  min: 1v1 wins 0.6-1.7, 2v2 win 0.5-0.8, 3v3/4v4/8v8 losses 0.4-0.6. We win
+  only where we out-produce, never by trading.
+- **We out-produce in 1v1 by out-expanding; that vanishes with player
+  count.** Comet Catcher Remake, same night, same build: 1v1 `002658` had 27
+  mexes at 8 min against BARb's 13 and 79 vs 45 at 20 (metal 52k vs 37k at
+  12); 4v4 `002224` had 7/8/12/6 per player against 8/12/8/10 at 8 min, and
+  `163618` 15 vs 31 per player at 20 (metal 22k vs 34k per player at 12).
+  BARb's per-player mex count and constructor metal are unchanged by player
+  count; ours fall to a third. Same on Sulphur 4v4 (`000927`: 28 vs 53 per
+  player at 32), Altored 3v3 (19 vs 40), Tripolis 2v2 (36 vs 106).
+- **The claims are made; they do not become mexes.** `apex: exec ... mex:`
+  claims to `[BARAI_BUILD] unit=armmex` by minute 16, per player: 1v1 55%,
+  59%, 75%, 90%; 2v2 52%/43%; 3v3 21-35%; 4v4 12-37%; 8v8 7-37% (Isthmus t6:
+  68 claims, 5 mexes). In the Comet 4v4, 60 of 89 claims were followed by the
+  same builder's next election within 30 s (31 within 10 s), 25 of them to
+  a different mex spot; the 1v1 had 9 of 33.
+- **Mechanism (measured on the two games with the new `apex: unreach` line):**
+  `PickSpot` (`want_mex.as:421`) prices a spot by depth toward the enemy
+  (`TripRiskWith`) and asks `FindOpenMexSpot` with a threat ceiling of 99 --
+  "a contested spot is priced, not hidden" -- but `IBuilderTask::UpdatePath`
+  (`BuilderTask.cpp:879`) kills the task when the threat AT THE SPOT exceeds
+  `cdef->GetPower()`, which is 0.0 for a constructor: every `unreach armmex`
+  line reads `threat=0.1..5.4/0.0`. Chooser and executor disagree, the claim
+  dies on assignment (`task-die why=unreach-safe`: 106 mex tasks in the Comet
+  4v4, 122 in the Sulphur 4v4, 41 in the Comet 1v1), the builder re-elects
+  and walks to the next painted spot. Matched by site within 90 s: 43 of 95
+  claims by 8 min and 122 of 203 by 16 min in the Comet 4v4; 6 of 36 and 31
+  of 84 in the Comet 1v1. Four to eight enemies' raiders paint our whole half
+  from minute 3; one enemy paints a corridor. Second contributor: allies do
+  not see each other's claims until the mex STANDS (`MetalManager::SetOpenSpot`
+  is called from the finished-unit scan; `IsZoneAlly` only marks ground next
+  to an ally building) -- 16 of 39 spots in the Comet 4v4 opening were
+  claimed by two or more of our own players, 0 of 31 in the 1v1.
+- **Consequence in the fight:** in the Comet 4v4 98% of our losses were in
+  our own territory (BARb's: 94% in ours); in the Comet 1v1 win 67% of ours
+  were in theirs. Their army stands at our door from minute 6-9 (Bulldogs at
+  9.1m in `002224`, battle 20: 33 of our T1 died `still` to 1,574 of Bulldog),
+  the front-most player is raided first (t0: lab, 9 solars, 2 nanos at 7.0m,
+  dead at 14.7m) and the economies of all four flatten together.
+- **Greenest Fields 1.3.1 is a different case:** `mexdiag mapSpots=0` for
+  BOTH sides and the Metalspots widget exits "not enough spots detected" --
+  no mex is built by either side in any Greenest log, the economy is
+  converters only, so the veto above is not the mechanism there. What the
+  three Greenest 8v8s show: metal even at 16 min, then our constructor metal
+  per player stops growing (2.4-3k, flat 16-24 min) while BARb's reaches 8-9k;
+  BP (cons+nanos) 16% vs 27% of spend at 16 min, static defence 17% vs 6%
+  (141 LLT/HLLT vs 36); and BARb's gunships (Banshee, Ape) took 30-43% of
+  everything we lost from minute 16 on (`023648`: 62k of 210k), our air
+  killing nothing. In the harness two of the three Greenest 8v8s had us ahead
+  on metal at the cutoff (1.37x at 58, 2.0x at 34) and one behind (0.63 at 30);
+  his watched 35-48 min wipes are not reproduced here and run at 1-3x speed.
+- Not measured: whether BARb's armies converge on one of our players
+  (`battles.py` forces-at-start misses long guns and air beyond 900 elmos, so
+  the count is unusable); ally gifting; who wins the same seed with the veto
+  keyed to the chooser's ceiling.
+
+Runs that would decide it (none launched this pass):
+
+    python tools/run_match.py --a Apex:Unstable:standard --b NullAI:0.1         --map "Comet Catcher Remake" --per-side 4 --minutes 10 --seed 1 --handicap 100
+    # no enemy => no threat paint. If per-player mexes at 8 min recover toward
+    # the 1v1's 27 (team total ~4x), the paint is the trigger; if they stay at
+    # 6-12 with claim->mex under 40%, it is the ally spot race alone.
+    python tools/run_tournament.py --a Apex:Unstable:standard --b BARb:stable:hard         --maps "Comet Catcher Remake" --games 6 --per-side 4 --minutes 16 --handicap 100         --modoption apex_persona=0
+    # the baseline the fix is judged against: claim->mex conversion and
+    # `unreach armmex` count per player, same seeds, before and after making
+    # PickSpot refuse (or the mex task accept) the same threat ceiling.
+
 ## 2026-09-12 — CONSOLE: every AI log line is kept forever by the chat widget
 
 `gui_chat.lua` stores every console line it receives in `orgLines` and a

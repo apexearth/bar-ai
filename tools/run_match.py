@@ -45,6 +45,7 @@ MATCHES = REPO / "matches"
 import os.path as _osp
 sys.path.insert(0, _osp.dirname(_osp.abspath(__file__)))
 import lane as _lane
+import apexlog
 ENGINE_WRITE_DIR = _lane.write_dir()
 
 # Faction names as they appear in BAR's sidedata.
@@ -698,12 +699,19 @@ def run(args) -> int:
     infolog_src = write_dir / "infolog.txt"
     infolog_text = ""
     if infolog_src.exists():
-        infolog_text = infolog_src.read_text("utf-8", errors="replace")
         shutil.copy2(infolog_src, outdir / "infolog.txt")
+        # The AI logs to its own files (S31); fold them back in by frame so the
+        # copies read as they always did. The write dir's own infolog too, for
+        # anything pointed straight at it.
+        apex_files = apexlog.apex_files(infolog_src.read_text("utf-8", errors="replace"))
+        apexlog.merge_into(str(outdir / "infolog.txt"), apex_files)
+        apexlog.merge_into(str(infolog_src), apex_files)
+        infolog_text = (outdir / "infolog.txt").read_text("utf-8", errors="replace")
     if stdout:
         (outdir / "stdout.txt").write_text(stdout, encoding="utf-8")
+        apexlog.merge_into(str(outdir / "stdout.txt"), apexlog.apex_files(stdout))
         if not infolog_text:
-            infolog_text = stdout
+            infolog_text = (outdir / "stdout.txt").read_text("utf-8", errors="replace")
 
     result = MatchResult(exit_code=exit_code, wall_seconds=round(wall, 1))
     parse_infolog(infolog_text, result)
