@@ -30,8 +30,21 @@ pool marched at ~240 power into a base held by towers. The wave that ends a
 game has to be sized against what stands at the target (their static plus
 what can arrive), which is the killing-blow's question, not the massing
 law's. Separately, `apex: tgthold ... hold=31 rel=85 est=15.2` reads a
-target hold that releases far more than it holds. Read `killingblow.as`
-first.
+target hold that releases far more than it holds.
+
+The worse half, rd3air carrotmoun-A-s1 (the bc24a693 deploy): 751k built
+against 291k, KILLING BLOW ON from 15.0 min, 437k of army built, 198k of it
+lost, their whole army (158k built, 144k lost) killed -- and 13k of their 42k
+static, base standing at 30. `deaths.py`: 78% of lost metal (174k, 702
+units) died with last action `retreat`; the three actions before death were
+`mov>mov>mov` for 498 of ~730 army deaths, alternating between two move
+targets every frame (`646mov>649mov>709mov>651mov>711mov...`) at fwd 0.8-1.3
+under threat 10-20. Units walking, not fighting, oscillating between the
+squad's forward order and the retreat's homeward one, dying in the open.
+This is the C++ squad/retreat layer (stock since 09-07) under our election;
+`fight-analysis` skill, `tools/fight1v1.py`, and the retreat posture
+(`posture.as` ApplyRetreatPosture) are where to read next. Until this is
+fixed a 2.5x economy does not end a game in 30 minutes.
 
 ## 2026-09-13 — DEFENCE: the only site offered is a contested choke, so the target stays 99% unmet and the LRPC discount never lifts
 
