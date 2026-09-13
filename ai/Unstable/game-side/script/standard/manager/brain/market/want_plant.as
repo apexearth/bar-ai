@@ -740,28 +740,73 @@ float LineUnitWorth(int pd)
 	return v;
 }
 
-bool HandBuilt(int d)
+// The lines a commander's tree reaches, and their tier by unlock depth --
+// Factory::userData only tiers the configured plants, so the underwater
+// gantry read T1 and the scavenger labs (built by scavenger cons) ranked at all.
+array<int> gLineTier;   // 0 = not in any commander's tree
+
+int LineTier(int d)
 {
-	const array<int>@ bb = Catalog::gBuiltBy[d];
-	for (uint i = 0; i < bb.length(); ++i) {
-		if (Catalog::gMobile[bb[i]] && Catalog::gBuilder[bb[i]])
-			return true;
+	if (int(gLineTier.length()) <= Catalog::gDefCount) {
+		gLineTier.resize(Catalog::gDefCount + 1);
+		for (int i = 0; i <= Catalog::gDefCount; ++i)
+			gLineTier[i] = 0;
+		array<int> frontier;
+		for (int i = 1; i <= Catalog::gDefCount; ++i) {
+			const CCircuitDef@ cd = Catalog::Def(i);
+			if ((cd !is null) && cd.IsRoleAny(Unit::Role::COMM.mask)) {
+				gLineTier[i] = 1;
+				frontier.insertLast(i);
+			}
+		}
+		// a builder's tier is the tier of the plant that made it; a plant's
+		// tier is its builder's
+		while (frontier.length() > 0) {
+			array<int> next;
+			for (uint f = 0; f < frontier.length(); ++f) {
+				const int b = frontier[f];
+				const array<int>@ made = Catalog::gBuildsList[b];
+				for (uint m = 0; m < made.length(); ++m) {
+					const int d2 = made[m];
+					if (gLineTier[d2] != 0)
+						continue;
+					if (Catalog::gMobile[d2]) {
+						if (!Catalog::gBuilder[d2])
+							continue;
+						gLineTier[d2] = gLineTier[b];          // con of this tier
+					} else if (Catalog::gBuildsList[d2].length() > 0) {
+						// commanders are expanded first, so every plant a
+						// commander places is T1; a con places the tier above
+						gLineTier[d2] = (gLineTier[b] == 1 && Catalog::Def(b).IsRoleAny(Unit::Role::COMM.mask))
+								? 1 : (gLineTier[b] + 1);
+					} else {
+						continue;
+					}
+					next.insertLast(d2);
+				}
+			}
+			frontier = next;
+		}
 	}
-	return false;
+	return (d >= 0 && d < int(gLineTier.length())) ? gLineTier[d] : 0;
 }
 
+// THE MEDIAN UNIT, NOT THE BEST ONE, as LineCoverage: the best is one
+// outlier speaking for the line (the T1 hover plant read 5x the bot lab on
+// the Halberd alone); the median is what the line will actually mass.
 float LineBestWorth(int plantDef)
 {
-	float best = 0.f;
+	array<float> w;
 	const array<int>@ prods = Catalog::gBuildsList[plantDef];
 	for (uint i = 0; i < prods.length(); ++i) {
 		if (!Catalog::gAvailable[prods[i]] || !LineCombat(prods[i]))
 			continue;
-		const float v = LineUnitWorth(prods[i]);
-		if (v > best)
-			best = v;
+		w.insertLast(LineUnitWorth(prods[i]));
 	}
-	return best;
+	if (w.length() == 0)
+		return 0.f;
+	w.sortAsc();
+	return w[w.length() / 2];
 }
 
 // ShieldShare and the worth means move, so the census is re-read per minute;
@@ -778,10 +823,10 @@ float LineQualityMul(int plantDef)
 			// a plant is a line only if a mobile builder can place it: the
 			// scavenger lootbox "plants" build things no line ever will
 			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
-				|| (Catalog::gBuildsList[d].length() == 0) || !HandBuilt(d))
+				|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) == 0))
 				continue;
 			own[d] = LineBestWorth(d);
-			const int k = PlantClass(d) * 4 + PlantTier(d);
+			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			if (own[d] > bestOf[k])
 				bestOf[k] = own[d];
 		}
@@ -790,10 +835,11 @@ float LineQualityMul(int plantDef)
 			gLineQual[d] = 1.f;
 			if (own[d] <= 0.f)
 				continue;
-			const int k = PlantClass(d) * 4 + PlantTier(d);
+			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			gLineQual[d] = own[d] / bestOf[k];
 			if (PlantClass(d) == PC_LAND)
-				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineQual[d], "", 0, 2);
+				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineQual[d], "", 0, 2)
+						+ "(" + formatFloat(own[d], "", 0, 2) + ")";
 		}
 		AiLog("apex: line-quality t=" + ai.teamId + row);
 	}
