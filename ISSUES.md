@@ -16,6 +16,23 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-13 — CLOSING: a 25-50% lead at 30 minutes marches in waves of 240 into 17k of static and never ends the game
+
+rd3hold2 battery, Carrot Mountains v2.0, all four treated games timed out at
+30 min with more metal (375-485k vs 302-386k), D% 125-176, 664-968
+mass.attack elections. carrotmoun-B-s2 at the end: our standing army 16k,
+theirs 7.6k mobile + 17.5k static; we had built 231k of army and lost 79k
+mobile -- trading well, piecemeal. `apex: mass want=240 floor=239 own=218
+enemyArmy=-2375` -- the wave is sized by MassWant against THEIR MOBILE army,
+which `FoeMobileMassing` read negative (massing threat minus the static
+term; floored at 0 on 09-13), so the promotion bar sat at the floor and each
+pool marched at ~240 power into a base held by towers. The wave that ends a
+game has to be sized against what stands at the target (their static plus
+what can arrive), which is the killing-blow's question, not the massing
+law's. Separately, `apex: tgthold ... hold=31 rel=85 est=15.2` reads a
+target hold that releases far more than it holds. Read `killingblow.as`
+first.
+
 ## 2026-09-13 — DEFENCE: the only site offered is a contested choke, so the target stays 99% unmet and the LRPC discount never lifts
 
 Carrot Mountains 8v8 `matches/20260913-062405-…`, team 7 (549k built, 1,234

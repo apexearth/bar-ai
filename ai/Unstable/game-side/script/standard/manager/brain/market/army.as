@@ -127,12 +127,14 @@ float WorkerExposure(CCircuitUnit@ wkr)
 	return gWkExpoVal[id];
 }
 
-bool EscortableWorker(CCircuitUnit@ wkr)
+// A ground escort follows a ground worker; a fighter follows an air con
+// (apexearth: "Even air cons should get a little fighter escort").
+bool EscortableWorker(CCircuitUnit@ wkr, bool air)
 {
 	if ((wkr is null) || (wkr.task is null))
 		return false;
-	if (Catalog::gFlyer[int(wkr.circuitDef.id)])
-		return false;   // air cons outrun ground escorts
+	if (Catalog::gFlyer[int(wkr.circuitDef.id)] != air)
+		return false;
 	return !wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask);   // his own escort
 }
 
@@ -146,7 +148,7 @@ void ExposeRefresh()
 	gExpoMax = 0.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
-		if (!EscortableWorker(wkr) || EscortedWorker(wkr.id))
+		if (!EscortableWorker(wkr, false) || EscortedWorker(wkr.id))
 			continue;
 		const float e = WorkerExposure(wkr);
 		if (e > gExpoMax) {

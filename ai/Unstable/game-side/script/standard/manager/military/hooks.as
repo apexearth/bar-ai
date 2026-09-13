@@ -190,7 +190,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// enough to outlast one -- Market::EscortWorthy is the single test, shared
 	// with the production floor that ORDERS them, so nothing is built for the
 	// duty that would then refuse it.
-	if (Market::EscortWorthy(int(cdef.id))
+	if ((Market::EscortWorthy(int(cdef.id)) || Market::FighterEscortWorthy(int(cdef.id)))
 		&& (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
 		// A unit back in the election is no longer guarding anyone (retreat,
 		// aborted task); its pairing dropped only on death, so its worker

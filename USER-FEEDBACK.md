@@ -38,8 +38,11 @@ Watched on the 2c684d73 deploy (Carrot Mountains 8v8, `matches/20260913-082619`)
 influence-map "ours" test counted the builder's own presence, so every mex site
 read as home ground. Fixed and deployed as bc24a693 (`Base::Inside` is the
 ground test; rd3hold2 battery: 82-156 of 68-146 workers paired on Carrot,
-constructor deaths 2-14 vs 0-25). OPEN: the fighter escort for air cons
-(nothing guards them; `Air::` owns fighters), and the outer-mex guns -- see
+constructor deaths 2-14 vs 0-25). The fighter escort for air cons is BUILT
+(`FighterEscortWorthy`: an armed flyer that shoots up takes Guard on an
+exposed air con, the same registry) but UNVERIFIED -- no 1v1 Carrot game of
+the night built an air con, so no `armfig escorts armca` line exists yet;
+read one from a game of his before calling it done. OPEN: the outer-mex guns -- see
 ISSUES "DEFENCE: the only site offered is a contested choke" (the raid-priced
 mex site was tried and was inert).
 

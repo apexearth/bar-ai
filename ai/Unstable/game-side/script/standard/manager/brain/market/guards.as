@@ -123,9 +123,10 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
+	const bool air = Catalog::gFlyer[int(mil.circuitDef.id)];
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
-		if (!EscortableWorker(wkr))
+		if (!EscortableWorker(wkr, air))
 			continue;
 		const float expo = WorkerExposure(wkr);
 		if (expo <= 0.f)
@@ -214,6 +215,15 @@ void EscortMeans()
 	gEscMeanPow = (n > 0) ? (pw / float(n)) : -1.f;
 }
 
+
+// The air half: a fighter (an armed flyer that shoots up) escorts an air con.
+bool FighterEscortWorthy(int di)
+{
+	return Catalog::gAvailable[di] && Catalog::gMobile[di] && Catalog::gFlyer[di]
+		&& !Catalog::gBuilder[di] && !Catalog::gKamikaze[di]
+		&& (Catalog::gAirT[di] > 0.01f) && (Catalog::gCostM[di] > 0.f)
+		&& !Air::IsBomberDef(di);
+}
 
 bool EscortWorthy(int di)
 {

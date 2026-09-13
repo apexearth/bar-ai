@@ -160,9 +160,10 @@ float EnemyGroupPower()
 // leave home because porc exists does not.
 float FoeMobileMassing()
 {
-	return EnemyMassingThreat()
+	const float m = EnemyMassingThreat()
 		- (1.f - ai.GetTunable("apex_feed_static_w", TUNE_FEED_STATIC_W))
 			* STATIC_DEFENSE_WEIGHT() * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	return (m > 0.f) ? m : 0.f;   // read negative once their army was dead and their towers stood
 }
 
 // TeamArmyCost read ~40% of the field telemetry; the withdraw register's live
