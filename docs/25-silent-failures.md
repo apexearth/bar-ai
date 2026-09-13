@@ -552,4 +552,6 @@ and never showed it in any per-section number. Matched pair, same seed: census
 on, stall 0.09 → 0.64 s over minutes 12-29; `dev_combatlog=0`, 0.03-0.06 s
 flat. Two lessons: a wall-gap scan of the infolog (`[t=` between consecutive
 lines) is the instrument for a hitch the sections do not own; and nothing
-long ever goes through `Spring.Echo`. The census now ships in 10-unit lines.
+long ever goes through `Spring.Echo`. The census now ships in 10-unit lines,
+and the AI's own log no longer goes through the engine at all: it writes
+`apex-t<team>.log` and `run_match` merges it back by frame (`tools/apexlog.py`).

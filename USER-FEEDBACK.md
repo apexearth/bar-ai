@@ -29,12 +29,10 @@ Then, of the log stream in the in-game chat: *"do I need to see that log? it
 all comes through so fast that it is completely useless to me in game."*
 
 The freeze was one 25 KB `[BARAI_ARMY]` console line every 300 frames, fixed
-by chunking (31eca356, S31). OPEN: the AI's own `apex:` lines still reach his
-chat widget -- thousands a minute, kept forever by `gui_chat.lua` -- which is
-the LuaUI heap growth and full-collect stalls at the hour mark (ISSUES
-"CONSOLE"). He does not want any of it on screen; the tools do. Not yet
-decided how the log leaves the console (own file merged by frame, or a level
-the widget drops) -- his call is only that it goes.
+by chunking (31eca356, S31). The AI's own `apex:` lines now go to their own
+file and are merged back into the infolog after the run (his "oh for sure if
+you can do that it is WAY better"). Entry stays until an hour-scale 8v8 shows
+the LuaUI emergency collect gone and he has watched a game without the spam.
 
 ## 2026-09-12 — "legion in water seems to only 90% only make constructors and rez subs... our water build logic is quite bad in general"
 

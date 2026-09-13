@@ -28,6 +28,7 @@
 #include "unit/enemy/EnemyManager.h"
 #include "util/GameAttribute.h"
 #include "util/Utils.h"
+#include "util/ProcessClock.h"
 #include "util/Profiler.h"
 #ifdef DEBUG_VIS
 #include "map/ThreatMap.h"
@@ -59,6 +60,8 @@
 //#include "Info.h"
 #include "Mod.h"
 #include "Cheats.h"
+#include "DataDirs.h"
+#include "Info.h"
 #include "File.h"
 //#include "WrappCurrentCommand.h"
 
@@ -146,12 +149,61 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 	ownerTeamId = teamId = skirmishAI->GetTeamId();
 	team = std::unique_ptr<Team>(WrappTeam::GetInstance(skirmishAIId, teamId));
 	allyTeamId = game->GetMyAllyTeam();
+
+	logFile = nullptr;
+	{
+		std::unique_ptr<Info> info(skirmishAI->GetInfo());
+		const char* name = info->GetValueByKey("name");
+		const char* version = info->GetValueByKey("version");
+		logTag = std::string((name != nullptr) ? name : "?") + "-" + ((version != nullptr) ? version : "?");
+		std::unique_ptr<DataDirs> dirs(clb->GetDataDirs());
+		const char* dir = dirs->GetWriteableDir();
+		if (dir != nullptr) {
+			const std::string path = std::string(dir) + "apex-t" + std::to_string(teamId) + ".log";
+			logFile = fopen(path.c_str(), "w");
+			if (logFile != nullptr) {
+				setvbuf(logFile, nullptr, _IOFBF, 1 << 16);
+				logEpochNs = utils::ProcessAgeNs();
+				logSteady0 = std::chrono::steady_clock::now();
+				LOG_ENGINE("apex: log file %s", path.c_str());
+			}
+		}
+	}
+}
+
+void CCircuitAI::LogLine(const char* msg)
+{
+	if (logFile == nullptr) {
+		GetLog()->DoLog(msg);
+		return;
+	}
+	// the engine's own prefix, so every tool reads the merged file unchanged
+	int64_t ns = logEpochNs + std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now() - logSteady0).count();
+	const int hh = int(ns / 3600000000000LL); ns %= 3600000000000LL;
+	const int mm = int(ns / 60000000000LL); ns %= 60000000000LL;
+	const int ss = int(ns / 1000000000LL); ns %= 1000000000LL;
+	std::lock_guard<std::mutex> lock(logMutex);
+	fprintf(logFile, "[t=%02d:%02d:%02d.%06lld][f=%07d] Skirmish AI <%s>: %s\n",
+			hh, mm, ss, (long long)(ns / 1000), (lastFrame < 0) ? -1 : lastFrame, logTag.c_str(), msg);
+}
+
+void CCircuitAI::FlushLog()
+{
+	if (logFile != nullptr) {
+		std::lock_guard<std::mutex> lock(logMutex);
+		fflush(logFile);
+	}
 }
 
 CCircuitAI::~CCircuitAI()
 {
 	if (isInitialized) {
 		Release(0);
+	}
+	if (logFile != nullptr) {
+		fclose(logFile);
+		logFile = nullptr;
 	}
 }
 
@@ -249,16 +301,16 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 				ret = this->Init(evt->skirmishAIId, evt->callback);
 			} catch (const CException& e) {
 				Release(RELEASE_CORRUPTED);
-				LOG("Exception: %s", e.what());
+				LOG_ENGINE("Exception: %s", e.what());
 				NotifyGameEnd();
 				ret = 0;
 			} catch (const std::exception& e) {
 				Release(RELEASE_CORRUPTED);
-				LOG("Lib exception: %s", e.what());
+				LOG_ENGINE("Lib exception: %s", e.what());
 				ret = ERROR_INIT;  // non-zero value deletes AI
 			} catch (...) {
 				Release(RELEASE_CORRUPTED);  // DestroyGameAttribute
-				LOG("Unknown exception");
+				LOG_ENGINE("Unknown exception");
 				ret = ERROR_INIT;  // non-zero value deletes AI
 			}
 			return ret;
@@ -584,7 +636,7 @@ void CCircuitAI::CheatPreload()
 
 int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICallback)
 {
-	LOG(version);
+	LOG_ENGINE(version);
 	this->skirmishAIId = skirmishAIId;
 	callback->Init(sAICallback);
 	engine = std::unique_ptr<CEngine>(new CEngine(sAICallback, skirmishAIId));
@@ -1018,6 +1070,7 @@ int CCircuitAI::Update(int frame)
 			std::chrono::steady_clock::now() - perfT0).count();
 	perfFrameUs += perfUs;
 	perfFrameMaxUs = std::max(perfFrameMaxUs, perfUs);
+	FlushLog();
 	if (perfUs > 30000) {  // name any spike instantly: aligns (or not) with watched hitches
 		LOG("apex: perf SPIKE frame=%d ms=%.1f", frame, perfUs / 1000.f);
 	}

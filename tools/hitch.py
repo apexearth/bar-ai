@@ -20,7 +20,9 @@ PERIODS = (300, 900, 1800, 150, 90, 60, 30, 15)
 
 
 def scan(path):
-    prev = None
+    # The AI's own lines carry its own clock, a few hundred ms off the engine's
+    # (tools/apexlog.py), so a gap is only measured between lines of one source.
+    prev = {}
     gaps = []
     with open(path, encoding='utf-8', errors='replace') as fh:
         for line in fh:
@@ -29,9 +31,11 @@ def scan(path):
                 continue
             t = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
             f = int(m[4])
-            if prev is not None and f > 0 and 0 <= f - prev[1] <= 2:
-                gaps.append((t - prev[0], prev[1], f, prev[2], line.rstrip()))
-            prev = (t, f, line.rstrip())
+            src = 'Skirmish AI <' in line
+            p = prev.get(src)
+            if p is not None and f > 0 and 0 <= f - p[1] <= 2:
+                gaps.append((t - p[0], p[1], f, p[2], line.rstrip()))
+            prev[src] = (t, f, line.rstrip())
     return gaps
 
 

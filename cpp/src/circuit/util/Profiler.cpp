@@ -6,6 +6,43 @@
  */
 
 #include "util/Profiler.h"
+#include "util/ProcessClock.h"
+
+// the build does not re-glob new sources, so ProcessClock.h lives here
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <chrono>
+#endif
+
+namespace utils {
+
+int64_t ProcessAgeNs()
+{
+#ifdef _WIN32
+	FILETIME created, exited, kernel, user, now;
+	if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) {
+		return 0;
+	}
+	GetSystemTimePreciseAsFileTime(&now);
+	ULARGE_INTEGER a, b;
+	a.LowPart = created.dwLowDateTime; a.HighPart = created.dwHighDateTime;
+	b.LowPart = now.dwLowDateTime;     b.HighPart = now.dwHighDateTime;
+	return (int64_t)(b.QuadPart - a.QuadPart) * 100;  // FILETIME ticks are 100 ns
+#else
+	static const auto start = std::chrono::steady_clock::now();
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now() - start).count();
+#endif
+}
+
+}  // namespace utils
 
 namespace circuit {
 

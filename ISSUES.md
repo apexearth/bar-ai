@@ -90,23 +90,19 @@ Runs that would decide it (none launched this pass):
     # `unreach armmex` count per player, same seeds, before and after making
     # PickSpot refuse (or the mex task accept) the same threat ceiling.
 
-## 2026-09-12 — CONSOLE: every AI log line is kept forever by the chat widget
+## 2026-09-12 — CONSOLE: the AI's log now bypasses the chat; the hour-scale effect is unmeasured
 
-`gui_chat.lua` stores every console line it receives in `orgLines` and a
-word-wrapped copy in `consoleLines`, and never drops them. The AI's engine-side
-log (`Skirmish AI <...>: apex: ...`) is ~100k lines per 30 minutes in a 2v2,
-so LuaUI's heap grows until `barwidgets.lua` forces a full collect at 1.2 GB:
-the 8v8 benchmark of 2026-09-12 (`bar-ai-perf/matches/_engine_perf`) went from
-90 ms/frame to 606 ms/frame at minute 58 with the AI at 5% of it, and the
-harness's late-game runs crawl for the same reason. Headless games load LuaUI
-too. In a hosted multiplayer game the host's chat widget receives the same
-stream. Not measured yet: how much of the incremental GC budget (which is at
-its per-frame maximum above 100 MB of Lua) the log stream costs before the
-emergency collect. Options: the AI writes its own log file next to the
-infolog (every tool greps `apex:` from `infolog.txt`, so run_match would have
-to merge them by frame), or a log level the widget drops (`L_DEPRECATED` is
-skipped only outside dev-mode single-player, which is every harness game). The
-10-second freeze itself was the census line, fixed the same day (S31).
+`gui_chat.lua` keeps every console line forever, and the AI's engine-side log
+was ~100k lines per 30 minutes in a 2v2: LuaUI's heap grew until
+`barwidgets.lua` forced a full collect at 1.2 GB (8v8 benchmark 2026-09-12,
+90 -> 606 ms/frame at minute 58 with the AI at 5%). Since the log-routing
+change the AI writes `apex-t<team>.log` in its data dir and only compile
+errors, exceptions and the file path go through the engine; `run_match`
+merges the files back by frame (tools/apexlog.py). Verified on a 6-minute
+run: merged log identical in shape, every reader unchanged. NOT yet verified:
+that a 60-minute 8v8 no longer reaches the emergency collect -- the next perf
+benchmark answers it (grep "Emergency garbage" in its infolog). Still on the
+console: the dev gadgets' short lines and stock BARb's own log.
 
 ## 2026-09-12 — CONVERTERS: the T2 hands never ask for the advanced one, so the basics cannot be retired
 

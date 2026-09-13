@@ -86,10 +86,12 @@ def analyze(path):
                 continue
             wall = wall_seconds(m.group(1), m.group(2), m.group(3))
             b = frame // BUCKET
-            if b not in first or frame < first[b][1]:
-                first[b] = (wall, frame)
-            if b not in last or frame > last[b][1]:
-                last[b] = (wall, frame)
+            # engine stamps only: the AI's merged lines carry their own clock
+            if "Skirmish AI <" not in line:
+                if b not in first or frame < first[b][1]:
+                    first[b] = (wall, frame)
+                if b not in last or frame > last[b][1]:
+                    last[b] = (wall, frame)
             hm = HELD.search(line)
             if hm:
                 units.setdefault(b, {})[f"t{hm.group(2)}"] = int(hm.group(3))

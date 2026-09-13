@@ -76,7 +76,11 @@ with none standing).
   our own reclaim shows only via a preceding `exec ... reclaim:` line.
 - **Mid-game reads**: a live game's infolog is in `matches/_engine*/` —
   check the file's mtime against the game being discussed; `_engine_watch`
-  once served a 17-day-old log as "live".
+  once served a 17-day-old log as "live". DURING a game the AI's own lines are
+  not in it: they go to `apex-t<team>.log` in the AI's data dir (the infolog's
+  `apex: log file` line names them) and `run_match` merges them in when the
+  game ends. For a mid-game read, or a lobby game's `<data>/infolog.txt`, run
+  `python tools/apexlog.py <infolog> --out <copy>` first (S31).
 - **Handicap**: `Handicap=100` doubles engine income but NOT
   `GetMexSpotIncome` — economics read off spot income must go through
   `Market::IncomeMult()`.

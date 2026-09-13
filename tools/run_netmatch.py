@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bar_env  # noqa: E402
 import run_match  # noqa: E402
+import apexlog  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 MATCHES = REPO / "matches"
@@ -125,6 +126,7 @@ def _report(out: Path) -> int:
         print(f"no host infolog at {log}")
         return 2
 
+    apexlog.merge_into(str(log))   # the AI's own log files, by frame (S31)
     text = log.read_text(errors="replace")
 
     # A peer that never simulated cannot disagree, so "no sync errors" from a

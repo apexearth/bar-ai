@@ -172,7 +172,7 @@ bool CScriptManager::Load(const char* modname, const std::string& subdir, const 
 		}
 	}
 
-	circuit->LOG("Load script: %s", (dirname + filename).c_str());
+	circuit->LOG_ENGINE("Load script: %s", (dirname + filename).c_str());
 	r = builder.AddSectionFromFile((dirname + filename).c_str());
 	if (r < 0) {
 		// The builder wasn't able to load the string. Maybe some
@@ -242,7 +242,7 @@ bool CScriptManager::Exec(asIScriptContext* ctx)
 		if (r == asEXECUTION_EXCEPTION) {
 			// An exception occurred, let the script writer know what happened so it can be corrected.
 			std::lock_guard<spring::mutex> mlock(mtx);
-			circuit->LOG("Script"
+			circuit->LOG_ENGINE("Script"
 						 "\n  Exception: %s"
 						 "\n  Function: %s"
 						 "\n  Line: %i",
@@ -284,7 +284,7 @@ void CScriptManager::MessageCallback(const asSMessageInfo* msg, void* param)
 	} else if (msg->type == asMSGTYPE_INFORMATION) {
 		type = "INFO";
 	}
-	circuit->LOG("%s (%d, %d) : %s : %s", msg->section, msg->row, msg->col, type, msg->message);
+	circuit->LOG_ENGINE("%s (%d, %d) : %s : %s", msg->section, msg->row, msg->col, type, msg->message);
 }
 
 #ifdef DEBUG_VIS

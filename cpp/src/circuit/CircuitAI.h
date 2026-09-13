@@ -20,6 +20,9 @@
 #include <limits>
 #include <set>
 #include <vector>
+#include <chrono>
+#include <mutex>
+#include <cstdio>
 
 struct SSkirmishAICallback;
 
@@ -46,7 +49,12 @@ namespace circuit {
 #define ERROR_LOAD				(ERROR_UNKNOWN + EVENT_LOAD)
 #define ERROR_SAVE				(ERROR_UNKNOWN + EVENT_SAVE)
 #define ERROR_ENEMY_CREATED		(ERROR_UNKNOWN + EVENT_ENEMY_CREATED)
-#define LOG(fmt, ...)	GetLog()->DoLog(utils::string_format(std::string(fmt), ##__VA_ARGS__).c_str())
+// apex: the engine's log call feeds the infolog AND the in-game chat widget,
+// which keeps every line forever (S31); ordinary lines go to our own file next
+// to the infolog and the harness merges them back by frame. LOG_ENGINE is for
+// what must be seen without the merge: compile errors, exceptions, the path.
+#define LOG(fmt, ...)	LogLine(utils::string_format(std::string(fmt), ##__VA_ARGS__).c_str())
+#define LOG_ENGINE(fmt, ...)	GetLog()->DoLog(utils::string_format(std::string(fmt), ##__VA_ARGS__).c_str())
 
 class CGameAttribute;
 class CSetupManager;
@@ -590,6 +598,8 @@ public:
 	CEngine*              GetEngine()     const { return engine.get(); }
 	springai::Cheats*     GetCheats()     const { return cheats.get(); }
 	springai::Log*        GetLog()        const { return log.get(); }
+	void LogLine(const char* msg);
+	void FlushLog();
 	springai::Game*       GetGame()       const { return game.get(); }
 	CMap*                 GetMap()        const { return map.get(); }
 	springai::Lua*        GetLua()        const { return lua.get(); }
@@ -742,6 +752,11 @@ private:
 	std::unique_ptr<springai::Pathing>    pathing;
 	std::unique_ptr<springai::Drawer>     drawer;
 	std::unique_ptr<springai::SkirmishAI> skirmishAI;
+	FILE* logFile;
+	std::string logTag;
+	int64_t logEpochNs;   // process age when logSteady0 was taken
+	std::chrono::steady_clock::time_point logSteady0;
+	std::mutex logMutex;
 	std::unique_ptr<springai::Team>       team;
 
 	static std::unique_ptr<CGameAttribute> gameAttribute;
