@@ -728,7 +728,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		if (!Catalog::gBuilder[d] && Air::IsBomberDef(d)) {
 			const float gainB = Air::StrikeGainFor(d, fillS) * roleMul;
 			if (gainB > 0.f) {
-				const float vB = gainB / Catalog::gCostM[d];
+				// THE SAME CURRENCY AS THE ARMY BID. The army candidate's
+				// value below is its demand RATE (gap over the fill window,
+				// scaled by relative quality) -- the cost is multiplied in
+				// and divided out again. Dividing the strike rate by cost
+				// here priced a Phoenix at v=45.8 beside a Brawler at
+				// v=58018 (his 8v8: 159 Hawks, 0 bombers), so the wing only
+				// ever grew while the army gap was shut.
+				const float vB = gainB;
 				candDef.insertLast(d);
 				candV.insertLast(vB);
 				candGain.insertLast(gainB);
