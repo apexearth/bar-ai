@@ -5,9 +5,12 @@ namespace Market {
 // needed... leave some cons as open unroled cons."
 //
 // The split is the draw's own ticket share per category, smoothed over
-// apex_role_tau seconds -- what the market itself would pick, not a second
-// model of need. apex_role_share of the hands hold a role; the rest stay open
-// and elect as before. A roled hand elects inside its category until its
+// apex_role_tau seconds, floored by the unmet share of the category's own
+// target where it has one (apexearth 2026-09-13: roles from target gaps --
+// the ticket share alone starves exactly what the draw starves, and a
+// category's target is the one number that says the hands are missing).
+// apex_role_share of the hands hold a role; the rest stay open and elect as
+// before. A roled hand elects inside its category until its
 // category is over quota or offers it nothing, and the commander is always
 // open. A role changes which want a hand takes FIRST, never whether: the rest
 // of its list stays behind the category, so a refused category falls through.
@@ -38,6 +41,28 @@ void ConRoleCensus(const array<float>& in wt, float sum)
 		gRoleShare[c] += (wt[c] / sum - gRoleShare[c]) * a;
 }
 
+// The unmet share of a category's target, 0..1; 0 where no target exists.
+float CatGapFrac(int c)
+{
+	if (c == CAT_DEFENCE) {
+		const float t = DefenceTarget();
+		if (t <= 1.f)
+			return 0.f;
+		const float g = t - DefenceValue() - DefenceInFlightM();
+		return (g <= 0.f) ? 0.f : ((g > t) ? 1.f : g / t);
+	}
+	if (c == CAT_BP) {
+		const float g = BPGap();
+		const float t = BPCapacity() + g;
+		return ((g <= 0.f) || (t <= 1.f)) ? 0.f : (g / t);
+	}
+	if (c == CAT_ENERGY)
+		return 1.f - EFeedShare();
+	return 0.f;
+}
+
+array<float> gRoleNeed(CAT_N, 0.f);
+
 void ConRoleRecount()
 {
 	if (gRoleCountAt == ai.frame)
@@ -55,8 +80,15 @@ void ConRoleRecount()
 	}
 	const float shareK = ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE);
 	const int roled = int(float(gWorkerIds.length()) * shareK);
+	float sum = 0.f;
+	for (int c = 0; c < CAT_N; ++c) {
+		const float gap = CatGapFrac(c);
+		gRoleNeed[c] = (gap > gRoleShare[c]) ? gap : gRoleShare[c];
+		sum += gRoleNeed[c];
+	}
 	for (int c = 0; c < CAT_N; ++c)
-		gRoleQuota[c] = int(gRoleShare[c] * float(roled) + 0.5f);
+		gRoleQuota[c] = (sum > 0.f)
+				? int(gRoleNeed[c] / sum * float(roled) + 0.5f) : 0;
 }
 
 bool RankedHas(array<Want@>@ ranked, int c)
@@ -144,9 +176,10 @@ void ConRoleLog()
 			+ " taken=" + gRoleTaken + " dropped=" + gRoleDropped
 			+ " fell=" + gRoleFell + " |";
 	for (int c = 0; c < CAT_N; ++c) {
-		if ((gRoleShare[c] < 0.005f) && (gRoleCount[c] == 0))
+		if ((gRoleNeed[c] < 0.005f) && (gRoleCount[c] == 0))
 			continue;
 		ln += " " + CatName(c) + "=" + formatFloat(gRoleShare[c], "", 0, 2)
+				+ "+" + formatFloat(CatGapFrac(c), "", 0, 2)
 				+ ":" + gRoleCount[c] + "/" + gRoleQuota[c];
 	}
 	AiLog(ln);

@@ -540,9 +540,14 @@ bool EtaOn()
 // production floors that dump overflow into units still ask.
 //
 // Army is bought against its target, at its price, like everything else.
+//
+// A hands shortage is a fleet that cannot lathe the income; the switch alone
+// made the statement unconditional and idled full gantries beside a full bank.
 bool OverflowBuysHands()
 {
-	return EtaOn();
+	if (!EtaOn())
+		return false;
+	return BPCapacity() < aiEconomyMgr.metal.income;
 }
 
 // THE SHARE OF OUR INCOME NOTHING IS SPENDING.

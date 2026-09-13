@@ -990,6 +990,22 @@ to be lost against a real opponent -- his "almost guaranteed". 300 priced
 sentries below the NEXT mex claim, so every spot was claimed naked and died to
 BARb inside the window; 120 flips to claim-then-guard.
 
+### `TUNE_EXPOSE_R` = 1200.f
+
+Until 2026-09-13 this circle around the nano farm WAS the escort trigger: a
+worker more than half of it from the farm point was "exposed" and drew one
+guard, whatever stood around it. Watched on Carrot Mountains 8v8: a base of
+272 buildings had 225 of them past the circle, every Fark and Consul in the
+back of it held a Pawn, 55% of fighter elections went to escort and 406
+cheap units stood at home -- and those same Pawns filled the army target
+that told five gantries `gap0`. Exposure is now `Market::WorkerExposure`:
+the larger of the measured risk field's expected loss over the stake horizon
+(`HazardAt x ShortfallAt x TUNE_STAKE_HORIZON_S`) and the territory map's
+word on the ground (ours 0, empty half an escort, contested or theirs one).
+His 2026-08-25 "home safe territory", read off the model instead of a
+radius. The radius survives only as the reach inside which enemy metal near
+a worker counts as escort demand.
+
 ### `TUNE_FRAME_RISK` = 0.0f
 
 DEFAULT 0 -- the mechanism is wired but priced out. At 1.0 it suppressed
@@ -1125,6 +1141,16 @@ that its own list can answer, keeps it until the category is over quota or
 offers it nothing, and its other wants stay behind the category's, so a
 refused category falls through instead of idling (couplings law 3). The
 commander is always open.
+
+2026-09-13: the split is FLOORED BY THE TARGET GAP where a category has a
+target of its own (`CatGapFrac`: defence = unmet share of `DefenceTarget`
+net of in-flight; build power = `BPGap` over capacity; energy = unfed share of
+pull). His ruling, watching Carrot Mountains 8v8: defence was 1% of every
+Apex player's spend against a target 100x the holding, and the roles copied
+that -- the ticket share IS what the draw picks, so a category the draw
+starves got a starved quota too ("builder roles from target gaps sounds like
+a smart idea to me. We certainly have more than enough builders"). The
+`roles` line now prints `share+gap:held/quota`.
 
 Both are his policy, not the model's: how many hands are committed is the
 "leave some open" he asked for, and the averaging window is how long a role
@@ -1451,11 +1477,19 @@ line army (the pre-2026-08-30 behaviour). 0 = they keep raiding all game, as
 stock BARb does. Measured at 1: zero RAID and zero ATTACK task elections across
 11 matches.
 
-### `TUNE_SPAM_RAIDERS` = 0.f
+### `TUNE_SPAM_RAIDERS` = 1.f (0 until 2026-09-13)
 
 1 = cheap RAIDER-role units are routed to solo scout tasks in spam phase,
 spreading over unscouted clusters. 0 keeps them raiding; scout-role chaff
 spreads either way. CScoutTask cannot group.
+
+On since 2026-09-13, his ruling after the Carrot Mountains 8v8 where 55% of
+one player's fighter elections went to escort and 406 cheap units stood in
+the base: "All these escorts should instead be the fodder/spam guys
+distracting our enemies... if raider-spam works correctly then yes I'm ok
+with having it on." The condition is that it WORKS: judge on where the
+spamscout units die (`deaths.py`, forward of the farm) and on the `elect`
+census, not on the flag.
 
 ### `TUNE_SLOT_TRIES` = 12.f
 

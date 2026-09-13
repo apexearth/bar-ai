@@ -167,7 +167,9 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	w.pos = bp;
 	w.spotId = int(boss.id);
 	w.gain = gainRate;
-	w.mCost = 1.f;
+	// The metal the stint moves, in the currency every building pays; at 1 an
+	// assist outbid a tower a hundredfold and the draw bought nothing else.
+	w.mCost = myDrain * occupiedSec * MCostScale();
 	// The seconds this actually commits, not a flat stint: a lonely 9,000
 	// metal reactor is a ten-minute posting and has to be priced as one.
 	w.tCost = (walkSec + occupiedSec) * Wage();
@@ -227,7 +229,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	g.pos = fac.GetPos(ai.frame);
 	g.spotId = int(fac.id);
 	g.gain = drain;
-	g.mCost = 1.f;
+	g.mCost = drain * 10.f * MCostScale();
 	g.tCost = (walkSec + 10.f) * Wage();
 	g.value = g.gain / (g.mCost + g.tCost);
 	++gFacGuardBids;

@@ -99,7 +99,6 @@ bool EscortedWorker(Id wid)
 }
 
 int gEscDiagAt = 0;
-int gEscOrderAt = 0;         // frame of the last escort order, all lines
 // GetEnemyCostAt is an engine sweep of the enemy registry, and EscortNeeded ran
 // one per exposed worker on EVERY military election -- several elections land
 // in the same frame, where neither the registry nor the worker's position can
@@ -120,42 +119,29 @@ float WorkerEnemyM(CCircuitUnit@ wkr, float r)
 
 CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
-	if ((mil is null) || !gFarmSet)
+	if (mil is null)
 		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
-		if ((wkr is null) || (wkr.task is null))
+		if (!EscortableWorker(wkr))
 			continue;
-		if (Catalog::gFlyer[int(wkr.circuitDef.id)])
-			continue;   // air cons outrun ground escorts
-		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-			continue;   // the commander is his own escort (apexearth)
-		const float expo = wkr.GetPos(ai.frame).distance2D(gFarmPos)
-				/ ((expoR > 1.f) ? expoR : 1200.f);
-		if (expo < 0.5f)
+		const float expo = WorkerExposure(wkr);
+		if (expo <= 0.f)
 			continue;
-		// ESCORT SCALES WITH HOW FAR FORWARD THE WORKER IS. apexearth
+		// ESCORT SCALES WITH HOW EXPOSED THE WORKER IS. apexearth
 		// 2026-08-30: "If we're too far forward an entire squad or two should
-		// be escorting us." One-per-worker was a registry, not a price: the
-		// loop below skipped any worker that already held a single grunt,
-		// which is the right answer at the base edge and the wrong one at the
-		// front, where the whole fortification is built.
-		//
-		// The demand is METAL, and it is what can actually reach the worker:
-		// the enemy value inside the same exposure radius the trigger above
-		// already uses, floored by the exposure itself so a forward worker is
-		// covered BEFORE contact rather than after it. Two comparisons, no
-		// threshold and no count -- at the base edge expo is ~0.5 and one
-		// escort satisfies it; deep forward against a real army it asks for a
-		// squad, which is exactly the ask.
+		// be escorting us." The demand is METAL: the enemy value that can
+		// reach the worker, floored by the exposure's share of one escort so
+		// a forward worker is covered before contact rather than after it.
+		// A unit takes the duty when at least half of it is still wanted.
 		const float haveM = EscortMetalOn(wkr.id);
-		const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
 		float needM = WorkerEnemyM(wkr, (expoR > 1.f) ? expoR : 1200.f);
 		const float floorM = expo * mineM;
 		if (floorM > needM)
 			needM = floorM;
-		if (haveM >= needM)
+		if (needM - haveM < 0.5f * mineM)
 			continue;
 		// Only a NEARBY unit takes the duty: a cross-map death march
 		// delivered 16 of 63 army losses as lone escorts (ladder autopsy).
@@ -169,7 +155,7 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		gEscUnit.insertLast(mil.id);
 		gEscDef.insertLast(int(mil.circuitDef.id));
 		if (EscIdOk(wkr.id)) {
-			gEscHaveM[int(wkr.id)] += Catalog::gCostM[int(mil.circuitDef.id)];
+			gEscHaveM[int(wkr.id)] += mineM;
 			++gEscHaveN[int(wkr.id)];
 		}
 		return wkr;
@@ -318,60 +304,22 @@ float EscortGain(float fillS)
 	return (risk / float(need)) / horizon;
 }
 
-CCircuitDef@ EscortOrderFor(CCircuitUnit@ fac)
+void EscortDiag()
 {
-	if ((fac is null) || (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f))
-		return null;
-	const int need = EscortShortfall();
+	if (ai.frame < gEscDiagAt)
+		return;
+	gEscDiagAt = ai.frame + 60 * SECOND;
 	EscortMeans();
-	if (ai.frame >= gEscDiagAt) {
-		gEscDiagAt = ai.frame + 60 * SECOND;
-		AiLog("apex: escort-diag t=" + ai.teamId
-			+ " workers=" + gWorkers.length()
-			+ " short=" + need
-			+ " paired=" + gEscWorker.length()
-			+ " risk=" + formatFloat(EscortMetalAtRisk(), "", 0, 0)
-			// What escort duty has taken out of the free army, and what is
-			// left standing for everything else -- the pair that used to be
-			// indistinguishable in this line.
-			+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
-			+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
-			+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0));
-	}
-	if (need <= 0)
-		return null;
-	// Eligibility is the military hook's, exactly: anything else we order
-	// here would be produced and then refuse the duty.
-	const array<int>@ prods = Catalog::BuildsOf(int(fac.circuitDef.id));
-	int best = -1;
-	float bestS = 0.f;
-	for (uint i = 0; i < prods.length(); ++i) {
-		const int d = prods[i];
-		if (!EscortWorthy(d))
-			continue;
-		// Combat per metal x speed: the escort has to both fight off a raid
-		// and keep up with a worker that walks. That is the Pawn/Grunt shape.
-		const float s = (Catalog::gCombat[d] / Catalog::gCostM[d])
-				* Catalog::gSpeed[d];
-		if (s > bestS) {
-			bestS = s;
-			best = d;
-		}
-	}
-	if (best < 0)
-		return null;
-	CCircuitDef@ pick = Catalog::Def(best);
-	// One order per unescorted worker: what is already coming counts. An order
-	// is invisible to BOTH counts for one message round-trip -- the sent-ledger
-	// is dropped for the whole line as soon as any order becomes visible, and
-	// an escort is queued behind exactly that -- so a fresh order also holds
-	// the floor for one sweep.
-	if (ai.frame - gEscOrderAt < Brain::FQ_WAIT)
-		return null;
-	if (need - EscortInFlight(pick) <= 0)
-		return null;
-	gEscOrderAt = ai.frame;
-	return pick;
+	AiLog("apex: escort-diag t=" + ai.teamId
+		+ " workers=" + gWorkers.length()
+		+ " short=" + gExpoN
+		+ " paired=" + gEscWorker.length()
+		+ " risk=" + formatFloat(gExpoM, "", 0, 0)
+		// What escort duty has taken out of the free army, and what is
+		// left standing for everything else.
+		+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
+		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
+		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0));
 }
 
 void EscortGone(Id id)

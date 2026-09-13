@@ -23,6 +23,27 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-13 — Carrot Mountains 8v8 watched: escorts fill the base, defence at 1%
+
+> "We have so many escorts in the base it is ludicrous. At this point in the
+> game I'm not so sure we need these escorts anymore. Barb stable seems to
+> have no more escorts late game... All these escorts should instead be the
+> fodder/spam guys distracting our enemies."
+> "I think our whole weights system is brutal at times and we completely stop
+> caring about building certain things (?) But I thought that our builder
+> role system was supposed to solve that."
+
+Measured (team 7, 25-32 min): 55% of fighter elections to escort, 406 cheap
+units within 1,600 of the farm, exposure was distance from the nano farm;
+builder wins buildpower 6,626 / defence 999 / energy 284 / metal 41 with the
+assist want priced at metal cost 1 (median winning v 183 vs a tower's 7.9);
+defence 1% of spend against a target 100x the holding, roles copying the
+draw's shares. Rulings: raider spam on if it works; roles from target gaps.
+Fixes 09-13 in battery `rd3esc`: exposure off the risk field + territory
+map, assist pays its metal, roles floored by target gap, `apex_spam_raiders`
+= 1. Open until a game of his shows the base without a Pawn per builder and
+the spam units dying forward.
+
 ## 2026-09-12 — "we just make bots almost all the time. So in maps where vehicles are obviously more powerful, we don't do quite as well"
 
 Full quote in docs/24. Measured: bot lab first in most logged games, T2 bot lab
@@ -69,6 +90,18 @@ builder that can do it at minute 5 is the naval lead's commander, which his
 
 > "We got to a point where suddenly we aren't making any more T3 units, 2
 > gantries and they're very often idle. no idea why."
+> (2026-09-13, Carrot Mountains 8v8, second time:) "Why have 3 gantries if we
+> aren't even using them?... This guy has almost 1000 metal income and all
+> his gantries are idle and he's full on metal. wtf?... It is hard to win
+> when you don't make units."
+
+Measured 09-13 (team 7, five gantries, 80% idle, bank pinned at 13.5k for
+four minutes): every T3 candidate `gap0` because 245 Pawns + 140 Favs built
+FOR ESCORT DUTY filled the army target; the spilled-metal army floor
+(`RichArmyGapM`) was dead behind `OverflowBuysHands() == EtaOn()` since
+09-08; the wealth waiver bought gantries 2-5 off the same spill. Fixes
+09-13: hands verdict = lathe capacity vs income; copy waiver needs every
+standing line working; escorts by risk, not radius. Battery `rd3esc`.
 > "Even at 1000 metal per second we're still making basic converters, I'd
 > really like to stop seeing that. They're too fragile and take up far too
 > much space."  (second time: 2026-09-08 "stop making T1 converters once

@@ -275,7 +275,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			+ ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED) >= 1)
 		&& (DupBpSubstMul(int(w.def.id)) < 1.f))
 	{
-		if (!WealthWaiver()) {
+		if (!CopyWaived(int(w.def.id))) {
 			AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
 				+ w.def.GetName()
 				+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)

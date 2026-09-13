@@ -86,6 +86,48 @@ int gExpoAt = -999999;
 int gExpoN = 0;
 float gExpoM = 0.f;
 
+// HOW MUCH OF A WORKER THE GROUND IT STANDS ON WRITES OFF, 0..1: the larger
+// of the risk field's expected loss over the stake horizon and the territory
+// map's word on whose ground it is (ours nothing, empty half an escort,
+// contested or theirs a whole one). A radius from the farm stood in for this
+// and guarded the back of the base. Cached per worker: the cover sample behind
+// HazardAt is not free and the fleet is walked per election.
+array<int> gWkExpoAt(32001, -30000);
+array<float> gWkExpoVal(32001, 0.f);
+float WorkerExposureNow(CCircuitUnit@ wkr)
+{
+	const AIFloat3 p = wkr.GetPos(ai.frame);
+	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
+	float e = HazardAt(p) * ShortfallAt(p) * ((T > 1.f) ? T : 300.f);
+	const int own = Front::Classify(p);
+	const float ground = (own == Front::OURS) ? 0.f
+			: ((own == Front::EMPTY) ? 0.5f : 1.f);
+	if (ground > e)
+		e = ground;
+	return (e > 1.f) ? 1.f : e;
+}
+
+float WorkerExposure(CCircuitUnit@ wkr)
+{
+	const int id = int(wkr.id);
+	if ((id < 0) || (id >= int(gWkExpoAt.length())))
+		return WorkerExposureNow(wkr);
+	if (ai.frame - gWkExpoAt[id] < 3 * SECOND)
+		return gWkExpoVal[id];
+	gWkExpoAt[id] = ai.frame;
+	gWkExpoVal[id] = WorkerExposureNow(wkr);
+	return gWkExpoVal[id];
+}
+
+bool EscortableWorker(CCircuitUnit@ wkr)
+{
+	if ((wkr is null) || (wkr.task is null))
+		return false;
+	if (Catalog::gFlyer[int(wkr.circuitDef.id)])
+		return false;   // air cons outrun ground escorts
+	return !wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask);   // his own escort
+}
+
 void ExposeRefresh()
 {
 	if (gExpoAt == ai.frame)
@@ -93,26 +135,17 @@ void ExposeRefresh()
 	gExpoAt = ai.frame;
 	gExpoN = 0;
 	gExpoM = 0.f;
-	if (!gFarmSet)
-		return;
-	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
-		if ((wkr is null) || (wkr.task is null))
+		if (!EscortableWorker(wkr) || EscortedWorker(wkr.id))
 			continue;
-		const int wd = int(wkr.circuitDef.id);
-		if (Catalog::gFlyer[wd])
-			continue;
-		if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-			continue;   // the commander is his own escort
-		if (wkr.GetPos(ai.frame).distance2D(gFarmPos)
-				/ ((expoR > 1.f) ? expoR : 1200.f) < 0.5f)
-			continue;
-		if (EscortedWorker(wkr.id))
+		const float e = WorkerExposure(wkr);
+		if (e < 0.5f)
 			continue;
 		++gExpoN;
-		gExpoM += Catalog::gCostM[wd];
+		gExpoM += e * Catalog::gCostM[int(wkr.circuitDef.id)];
 	}
+	EscortDiag();
 }
 
 int EscortShortfall()

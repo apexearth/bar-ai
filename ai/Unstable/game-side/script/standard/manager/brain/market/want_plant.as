@@ -486,6 +486,24 @@ bool WealthWaiver()
 	return OverflowM() >= ((bar > 1.f) ? bar : 140.f);
 }
 
+// The waiver argues that unspent metal falsifies the nano substitute; an idle
+// standing line falsifies the waiver instead -- its metal has no orders, not
+// too few lathes -- so a copy of a production def needs every line working.
+bool LinesAllWorking(int d)
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (int(f.circuitDef.id) == d) && !LineWorking(f))
+			return false;
+	}
+	return true;
+}
+
+bool CopyWaived(int d)
+{
+	return WealthWaiver() && LinesAllWorking(d);
+}
+
 // A copy bought under the waiver is SAFE FROM THE RETIRE LAW for the replant
 // window: the squeezed-economy test alone still flapped during spend bursts
 // (armshltx reclaimed and rebuilt 5x/game after the first damping), because

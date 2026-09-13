@@ -1012,3 +1012,29 @@ two changes: cover and hold pools get stock's exit to ATTACK once full, and the
 cover need is sized by the raider metal they have fielded rather than by our
 building count. *"Ok try doing both of those."* Earlier, on whether the army
 target should scale higher late: it was met, so not size -- use.
+
+## 2026-09-13 — escorts are not a late-game posture; the cheap units go forward
+
+Watching Carrot Mountains 8v8, on one player's base full of Pawns and Rovers
+beside its workers: *"We have so many escorts in the base it is ludicrous. At
+this point in the game I'm not so sure we need these escorts anymore. Barb
+stable seems to have no more escorts late game... All these escorts should
+instead be the fodder/spam guys distracting our enemies."* Stock caps escorts
+at three for the whole game (`"escort": [3, 1, 540]`).
+
+On routing cheap raiders to spam: *"if raider-spam works correctly then yes I'm
+ok with having it on."* The condition is the doing: the units must be seen
+going forward and dying on their side, not standing at home under a new name.
+
+On the idle lines the same base kept buying: *"Why have 3 gantries if we aren't
+even using them?... This guy has almost 1000 metal income and all his gantries
+are idle and he's full on metal... It is hard to win when you don't make
+units."* An idle production line is never a reason to buy another; metal the
+economy cannot spend is army, not a shortage of hands.
+
+On the builders: *"I think our whole weights system is brutal at times and we
+completely stop caring about building certain things... I thought that our
+builder role system was supposed to solve that."* Shown that the roles copied
+the draw's own shares (defence 1% of spend, 99% of its target unmet): *"Having
+builder roles come from target gaps sounds like a smart idea to me. We
+certainly have more than enough builders."*

@@ -1762,7 +1762,7 @@ const float TUNE_RAIDER_MASSING = 0.f;
 
 // [0/1] -- 1 = cheap RAIDER-role units are routed to solo scout tasks in spam
 //   phase, spreading over unscouted clusters. See docs/27.
-const float TUNE_SPAM_RAIDERS = 0.f;
+const float TUNE_SPAM_RAIDERS = 1.f;
 
 const float TUNE_SPAM_SUICIDAL = 1.f;
 

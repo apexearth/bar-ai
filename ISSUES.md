@@ -16,6 +16,31 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-13 — DEFENCE: the only site offered is a contested choke, so the target stays 99% unmet and the LRPC discount never lifts
+
+Carrot Mountains 8v8 `matches/20260913-062405-…`, team 7 (549k built, 1,234
+m/s at 32 min): `defHave=340` against `defTarget=38,158-83,576` for ten
+minutes; defence 1-3% of every Apex team's spend, roll `def=0.76` or `1.12`
+alike. Not the price and not the hands -- 999 protect elections won in
+minutes 20-32 and 261 executed, ALL at two forward sites (5927,11065 /
+5936,10549, a choke 3.6k elmos out); refusals `protect=869` with verdicts
+`site-late 63, covered 26, join 35`; every frame there died
+(`task-die armamb hurt-retreat/target-killed`). The base rim offered
+nothing. Consequence: silo and LRPC gain carry
+`(0.1 + 0.9 x DefenceValue/DefenceTarget)` (`want_super.as:509-527`) =
+x0.108, so the Pulsar priced 0.02-3.9 against an air plant's 16-70 and came
+only when nothing else was eligible. The roles-from-gaps floor (09-13) sends
+hands to defence; it cannot give them a site. Fix is the wall paradigm
+(memory `defence-wall-paradigm`: towers are wall slots on the building rim),
+not the discount -- leave the discount alone.
+
+## 2026-09-13 — SENSE: 2,459 wins, 32 builds
+
+Same game, team 7, minutes 20-32: the sense category won 2,459 builder
+elections and executed 32 (`exec-refused ... sense=2505`). Each refusal
+drops the hand's role and the draw re-elects it into sense again. Whatever
+the site test refuses is refusing nearly everything; not yet read.
+
 ## 2026-09-13 — TEAM GAMES: the mex claim dies on the builder's safe-reach veto, so per-player expansion collapses with player count
 
 Twelve harness games of 2026-09-12/13 (all `Handicap=100` on EVERY team --

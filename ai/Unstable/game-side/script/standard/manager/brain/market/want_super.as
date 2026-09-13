@@ -400,7 +400,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			&& ((ComCountOf(d, CS_FINISHED)
 				+ ComCountManned(d, CS_FRAMED | CS_ORDERED)) >= 1)
 			&& (DupBpSubstMul(d) < 1.f)
-			&& !WealthWaiver())
+			&& !CopyWaived(d))
 			continue;
 		const float bill = SuperBill(d);
 		// ONE LINE, THE TEAM'S PURSE (apexearth 2026-08-28: "I saw a team
