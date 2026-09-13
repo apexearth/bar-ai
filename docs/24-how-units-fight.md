@@ -1061,3 +1061,22 @@ lane's gain was affordability alone, which rewards the cheaper class.
 
 *"The edges of map are often the most vulnerable and undefended areas. Let's
 make sure if we are on the edge of the map we make extra defense there."*
+
+## 2026-09-13 (morning) — rezbots down a little; support the gantry, don't multiply it
+
+*"Let's turn the rezbots down a little and I'll watch it in future games."*
+
+Watching an 8v8: *"I'm looking at the enemy team's 1 gantry -- it is supported
+by 170 nano turrets. Our base opposing it has 6 gantries and if you added all
+of the nanos that can support them combined we do not have as many as 170.
+This is a lesson in efficiency. I like redundancy, and know that if they hit
+my gantry I won't lose all of the build power at once. However, we're just
+very inefficient with how we support these gantries. We've taken up a shit-ton
+of room and support the gantry very little. In an 8v8 imagine we're more
+likely to lose because we run out of room, make our T3 in parallel, thus get
+the T3 later/slower, lose ground on the battlefield, and that compounds down
+the road. We have room on the side of our gantries to make ~3 more nanos but
+we keep distance on the side -- we don't need to keep distance on the side. A
+much better use of our resource in late game is to make more nuke launchers or
+LRPC, and have fewer Gantries -- but to better support the gantries we have
+with nanos."*

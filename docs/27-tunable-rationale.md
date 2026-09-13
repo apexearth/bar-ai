@@ -1240,13 +1240,20 @@ speed over the game (10.1x vs 11.5x, minute 12 to 54), where the deleted
 the early fleet from 3.5 to ~2 bots at minute 12 and from 5.8 to ~1.8 at
 minute 24, below the 4-5 apexearth asked for. Left alone.
 
-### `TUNE_REZ_UTIL` = 0.25f
+### `TUNE_REZ_UTIL` = 0.35f (0.25 until 2026-09-13)
 
 Share of a rez bot's work rate it actually delivers (the rest is walking
 between wrecks). The fleet saturates when have x buildPower x this covers the
 recoverable stream; an ESTIMATE, not a measurement -- raise it to field fewer
 bots. It is the one term that scales the whole fleet 1:1 and the only one still
 unmeasured; see ISSUES.md 2026-09-06 for what the fleet actually returns.
+
+2026-09-13: 0.25 fielded 99-129 Rectors per player at 30 min in 1v1s (peak
+`rezwant have=`) against BARb's `"limit": 60`. apexearth: "I like that we
+have them, they're very good, but wow we have a lot... let's turn the rezbots
+down a little and I'll watch it in future games." 0.35 is ~30% fewer at the
+same stream. The honest value is still unmeasured: `rez-time` logs what the
+bots spend their samples on and would give it.
 
 ### `TUNE_RETREAT_FLOOR` = 0.08f
 

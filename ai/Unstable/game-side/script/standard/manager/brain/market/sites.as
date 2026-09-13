@@ -972,6 +972,38 @@ bool LineWorking(CCircuitUnit@ f)
 // (apexearth: "we rarely make them around factories that are building units").
 // The queue is the demand signal -- the market already decided those units are
 // worth buying; free flow is the ceiling, so lathe is never bought idle.
+// One line's unserved spend: its share of the free flow, floored by the
+// per-line appetite, less the lathe already standing on it. Zero for a line
+// that is not working. The nano batch splits by this, so the gantry with a
+// queue takes the turrets and an idle plant takes none.
+float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
+{
+	if ((f is null) || !LineWorking(f))
+		return 0.f;
+	float share = (sumCeil > 1.f)
+			? (feed * LineCostCeil(f) / sumCeil)
+			: feed;
+	if (spendFloor > share)
+		share = spendFloor;
+	const AIFloat3 fp = f.GetPos(ai.frame);
+	if (!OnMap(fp))
+		return 0.f;
+	// The plant's own lathe counts: it is already eating part of the
+	// share -- at the line's own product density, not the 7/80 average.
+	const float u = share - LineEat(f, fp);
+	return (u > 0.f) ? u : 0.f;
+}
+
+float LineCeilSum()
+{
+	float sumCeil = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		if ((Factory::gFacUnits[fi] !is null) && LineWorking(Factory::gFacUnits[fi]))
+			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
+	}
+	return sumCeil;
+}
+
 float NeediestLine(AIFloat3& out at)
 {
 	float worst = 0.f;
@@ -981,29 +1013,13 @@ float NeediestLine(AIFloat3& out at)
 	// feed, below its own lathe -- so labs priced zero nano demand while
 	// metal overflowed. LineSpend is the per-line army/overflow appetite.
 	const float spendFloor = LineSpend();
-	float sumCeil = 0.f;
-	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-		if ((Factory::gFacUnits[fi] !is null) && LineWorking(Factory::gFacUnits[fi]))
-			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
-	}
+	const float sumCeil = LineCeilSum();
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		if ((f is null) || !LineWorking(f))
-			continue;
-		float share = (sumCeil > 1.f)
-				? (feed * LineCostCeil(f) / sumCeil)
-				: feed;
-		if (spendFloor > share)
-			share = spendFloor;
-		const AIFloat3 fp = f.GetPos(ai.frame);
-		if (!OnMap(fp))
-			continue;
-		// The plant's own lathe counts: it is already eating part of the
-		// share -- at the line's own product density, not the 7/80 average.
-		const float u = share - LineEat(f, fp);
+		const float u = LineUnserved(f, feed, spendFloor, sumCeil);
 		if (u > worst) {
 			worst = u;
-			at = fp;
+			at = f.GetPos(ai.frame);
 		}
 	}
 	return worst;

@@ -594,6 +594,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					nAnchor, 1, nPacked);
 			Perf::Add("xw.nanoprobe", _tProbe);
 		}
+		if (Catalog::ValidId(nAnchor) && (Catalog::gBuildsList[nAnchor].length() > 0))
+			NoteNanoDry(nAnchor, nPacked.length() == 0);
 		if (nPacked.length() > 0) {
 			slot = nPacked[0];
 		} else {
@@ -673,9 +675,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					const uint lines = (nFacs > 0) ? nFacs : 1;
 					string walkLog = "";
 					string lastRef = "";
+					// BY UNSERVED SPEND, NOT BY HEAD (apexearth 2026-09-13, on
+					// their one gantry under 170 nanos against our six under
+					// fewer: "fewer Gantries -- but to better support the
+					// gantries we have with nanos"). An equal split handed an
+					// idle air plant as much as the working gantry.
+					const float bFeed = FreeMetalFlow();
+					const float bFloor = LineSpend();
+					const float bCeil = LineCeilSum();
+					array<float> needK(nFacs, 0.f);
+					float needSum = 0.f;
+					for (uint fk = 0; fk < nFacs; ++fk) {
+						needK[fk] = LineUnserved(Factory::gFacUnits[fk], bFeed, bFloor, bCeil);
+						needSum += needK[fk];
+					}
 					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {
 						AIFloat3 baseK = nSlot;
 						int anchorK = nAnchor;
+						int askK = left / int(lines - fi2);
 						if (nFacs > 0) {
 							CCircuitUnit@ fK = Factory::gFacUnits[fi2];
 							if (fK is null)
@@ -685,14 +702,20 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 								continue;
 							baseK = fp;
 							anchorK = int(fK.circuitDef.id);
+							if (needSum > 0.f) {
+								if (needK[fi2] <= 0.f)
+									continue;
+								askK = int(float(wantN - 1) * needK[fi2] / needSum + 0.5f);
+								if (askK > left)
+									askK = left;
+							}
 						}
-						// Its share of what is left, so a rich bank spreads
-						// over the lines instead of filling the first.
-						int askK = left / int(lines - fi2);
 						if (askK < 1)
 							askK = 1;
 						array<AIFloat3> packK;
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
+						if (nFacs > 0)
+							NoteNanoDry(anchorK, packK.length() == 0);
 						walkLog += " " + Catalog::Def(anchorK).GetName()
 								+ ":ask" + askK + "/got" + packK.length()
 								+ "/taken" + gNPTaken + "/lane" + gNPLane

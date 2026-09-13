@@ -1459,7 +1459,7 @@ const float TUNE_REZ_HORIZON = 120.f;
 
 // [ratio] -- Share of a rez bot's work rate it actually delivers (the rest is
 //   walking between wrecks). See docs/27.
-const float TUNE_REZ_UTIL = 0.25f;
+const float TUNE_REZ_UTIL = 0.35f;
 
 // REZ_RICH_M [metal]: a corpse at least this rich is RESURRECTED whatever the
 //   pre-AFUS eat-the-field doctrine says -- a unit for the rez cost ("we

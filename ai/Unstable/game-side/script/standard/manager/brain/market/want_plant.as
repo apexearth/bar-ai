@@ -499,9 +499,29 @@ bool LinesAllWorking(int d)
 	return true;
 }
 
+// A plant whose nano block is FULL: the last pack walk beside a plant of this
+// def found no cell. Until then the copy's metal buys nanos at the standing
+// line (apexearth 2026-09-13, their one gantry under 170 nanos: "fewer
+// Gantries -- but to better support the gantries we have with nanos").
+array<int> gNanoDryAt;
+
+void NoteNanoDry(int d, bool dry)
+{
+	while (int(gNanoDryAt.length()) <= d)
+		gNanoDryAt.insertLast(-1000000);
+	gNanoDryAt[d] = dry ? ai.frame : -1000000;
+}
+
+bool NanoBlockFull(int d)
+{
+	if ((d < 0) || (d >= int(gNanoDryAt.length())))
+		return false;
+	return (ai.frame - gNanoDryAt[d]) < 120 * SECOND;
+}
+
 bool CopyWaived(int d)
 {
-	return WealthWaiver() && LinesAllWorking(d);
+	return WealthWaiver() && LinesAllWorking(d) && NanoBlockFull(d);
 }
 
 // A copy bought under the waiver is SAFE FROM THE RETIRE LAW for the replant
