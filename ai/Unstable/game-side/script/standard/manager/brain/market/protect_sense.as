@@ -482,6 +482,21 @@ float JamSpacing(int d)
 	return r;
 }
 
+// How many of a class cover pos: standing, framed and ordered alike.
+int ProtCoverCount(int cls, const AIFloat3& in pos, float r)
+{
+	int n = 0;
+	ComNear(pos, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint ci = uint(gComGrid.hit[q]);
+		if (ProtClassOf(gComDef[ci]) != cls)
+			continue;
+		if (OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < r))
+			++n;
+	}
+	return n;
+}
+
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 {
 	// ONE ALREADY COMING COVERS THIS GROUND, whoever remembers it: standing,

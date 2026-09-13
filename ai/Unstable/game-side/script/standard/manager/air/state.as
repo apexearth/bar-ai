@@ -430,7 +430,16 @@ float MarginalGain(int d, int n)
 	// the AA works through their base cell by cell, and one cell's 16k
 	// priced a six-plane wing (measured) -- not the mass he asked for. The
 	// prior is optimistic on purpose; the scored run replaces it.
-	return PrizeGain(d, n, aiEnemyMgr.GetEnemyStructCost());
+	// THEIR BASE IS AT LEAST OUR OWN, MIRRORED: the census only holds what
+	// is in sight, so it read 36k against a mirror of 690k and the wing lost
+	// every draw to fighters (apexearth: "I want to see us making bombers
+	// and doing bombing raids... Our bombing logic is boring"). The same
+	// floor the nuke director prices its mirrored target on.
+	float prize = aiEnemyMgr.GetEnemyStructCost();
+	const float mirror = MirrorPrize();
+	if (mirror > prize)
+		prize = mirror;
+	return PrizeGain(d, n, prize);
 }
 
 // The model half of MarginalGain, for a prize the caller names.

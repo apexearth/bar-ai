@@ -23,6 +23,22 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-13 — "Our bombing logic is boring": 0 bombers against a wing target of 102
+
+> "I want to see us making bombers and doing bombing raids on our enemies but
+> I'm really not seeing this very much. Our bombing logic is boring. We need
+> to be more exciting -- so more late-game LRPC and nukes, less perpetual
+> making of factories we hardly support."
+
+His live Carrot 8v8 (team 1, the air lead): `apex: air 0/102 bombers, 159/68
+fighters ... structs=36475` beside `air look ... mirror=690620`. The wing's
+per-plane gain is the marginal share of the SEEN enemy structures (LOS-slaved
+census) -- 762 metal a plane against fighters priced at v=14125 -- so the
+draw bought 159 Hawks and no Phoenix. Fix in flight: the prize is floored at
+the mirrored base (their economy started equal to ours), the same floor the
+nuke director uses. Open until a game of his shows a wing massing and
+striking eco; the strike-into-AA deadline (ISSUES BOMBERS) is the next wall.
+
 ## 2026-09-13 — Escorts are for the workers OUTSIDE the base; the outer mexes have no guns
 
 > "The times when we're likely to need escort is when we're going out to make

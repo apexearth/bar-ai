@@ -295,7 +295,24 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 			found = true;
 		}
 	}
-	return found;
+	if (found)
+		return true;
+	// DEPTH AT THE CORE (apexearth 2026-09-13: "in late game we may want our
+	// anti nuke coverage to go from just 1 AN to ~3 AN"): a second and third
+	// umbrella over the core once the economy is large -- a volley beats one
+	// stockpile, and the base under it is the whole game.
+	if (OnMap(core)) {
+		TrackIncome();
+		const float inc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+		int depth = 1 + int(inc / 400.f);
+		if (depth > 3)
+			depth = 3;
+		if (ProtCoverCount(PROT_ANTINUKE, core, r) < depth) {
+			at = SuperSite(unit, SC_ANTINUKE);
+			return OnMap(at);
+		}
+	}
+	return false;
 }
 
 // ONE ADVANCED PLANT AT A TIME, PER PLAYER (apexearth 2026-08-28, watching

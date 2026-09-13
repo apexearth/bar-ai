@@ -1080,3 +1080,23 @@ we keep distance on the side -- we don't need to keep distance on the side. A
 much better use of our resource in late game is to make more nuke launchers or
 LRPC, and have fewer Gantries -- but to better support the gantries we have
 with nanos."*
+
+## 2026-09-13 (midday) — adjacent nanos, fewer plants, bombing raids, three anti-nukes
+
+*"We aren't building nanos completely adjacent to air labs. We should be. Same
+with the sides of our gantry, seem to be keeping distance still. And I see
+gantries with obvious room for dozens more nanos but we still made more
+gantries. Same with advanced air labs -- we have 10 advanced air labs but
+really we should just have ~4 with heavy nano turret support. I want to see us
+making bombers and doing bombing raids on our enemies but I'm really not seeing
+this very much. Our bombing logic is boring. We need to be more exciting -- so
+more late-game LRPC and nukes, less perpetual making of factories we hardly
+support."*
+
+*"Also in late game we may want our anti nuke coverage to go from just 1 AN to
+~3 AN."*
+
+Measured in the game he was watching: the air lead had 11 advanced air plants,
+159 fighters and **0 bombers against a wing target of 102** -- the wing was
+priced on the 36k of enemy structures in sight against a mirrored base of
+690k, so every bomber lost the draw to fighters and air cons.

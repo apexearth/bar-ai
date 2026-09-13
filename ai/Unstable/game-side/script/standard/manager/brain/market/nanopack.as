@@ -189,10 +189,9 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 	// plant's take off, so it has no lane to keep clear.
 	AIFloat3 fwd(0.f, 0.f, 0.f);
 	bool lane = false;
-	if (Catalog::ValidId(anchorDef) && Base::Ready()
-		&& (Catalog::gBuildsList[anchorDef].length() > 0)
-		&& !AirPlant(anchorDef))
-	{
+	const bool plantAnchor = Catalog::ValidId(anchorDef)
+		&& (Catalog::gBuildsList[anchorDef].length() > 0);
+	if (plantAnchor && Base::Ready() && !AirPlant(anchorDef)) {
 		fwd = Base::gFwd;
 		if (Base::AxisIsRearward()) {
 			fwd.x = -fwd.x;
@@ -257,15 +256,15 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 				// it held a task, could not move, and burned every retry.
 				// A packed block is exactly the shape that does that, so it
 				// asks the same question.
-				// ...EXCEPT THE RING TOUCHING A PLANT (apexearth 2026-09-13:
-				// "We have room on the side of our gantries to make ~3 more
-				// nanos but we keep distance on the side -- we don't need
-				// to keep distance on the side"). The walkways' half-width
-				// refused most of a gantry's first ring (measured lane86
-				// against got1); the cells hugging a plant's flanks are its
-				// nano block, not a corridor. The doorway test below still
-				// holds the front open.
-				if (Base::Ready() && !(lane && (ring == ring0))) {
+				// ...EXCEPT THE RING TOUCHING A PLANT, air plants included
+				// (apexearth 2026-09-13: "we keep distance on the side -- we
+				// don't need to keep distance on the side"; "We aren't
+				// building nanos completely adjacent to air labs. We should
+				// be"). The walkways' half-width refused most of a plant's
+				// first ring; the cells hugging its flanks are its nano
+				// block, not a corridor. The doorway test below still holds
+				// a ground plant's front open.
+				if (Base::Ready() && !(plantAnchor && (ring == ring0))) {
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
 					const float lh = Base::LaneHalf() + pitch * 0.5f;
