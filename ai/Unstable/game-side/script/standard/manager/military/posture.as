@@ -660,6 +660,7 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); UpdateKillingBlow(); Perf::Add("post.killblow", _t); }
 	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
 	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
+	{ double _t = Perf::T0(); ReleaseHold(); Perf::Add("post.hold", _t); }
 	// Last, so it is the final word on the quota and the posture.
 	{ double _t = Perf::T0(); UpdateTeamPush(); Perf::Add("post.teampush", _t); }
 	// After massing and both role rules, so it is the last word on the quota.

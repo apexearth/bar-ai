@@ -14,7 +14,7 @@ fighter/` (mirrored in `cpp/`, see the cpp-dll skill).
 | Decision | Owner | File |
 |---|---|---|
 | Which units mass vs stay stock | `WantsMassing` role filter (AA/scout/arty/super excluded; raiders mass post-T2; riots fall through when escort tasks exist) | `military/hooks.as` |
-| Hold home vs march | the DEFEND→ATTACK promote pool; MELEE-promote = never converts (deliberate hold) | hooks.as + C++ DefendTask |
+| Hold home vs march | the DEFEND→ATTACK promote pool; MELEE-promote = a hold. Since 2026-09-13 a hold is a STATE: `HoldReason()` (base attacked / contested / raided / conservative stance) says whether, `HoldNeedM()` (enemy metal within `BASE_DANGER_DIST` of home; the stance case their massed army) says how much -- past it new units go to attack -- and `ReleaseHold()` hands every held pool stock's exit (`aiMilitaryMgr.ReleaseHoldPools()`, C++ `CDefendTask::SetPromote`) the moment no reason remains. Before that a unit elected in a 45-s raid alarm stood at home for the rest of the game. `apex: hold` census | `massing.as`, hooks.as + C++ DefendTask |
 | Enemy stance read | `UpdateStance` (AGGRESSIVE/PASSIVE/UNKNOWN, split thresholds, 30s dwell) → budget lean via `StanceShareMult` | `military/stance.as` |
 | All-in attack | killing blow (`OurArmyNow` vs `FoeMobileMassing`, hysteresis 1.2/0.5) + T1-commit variant | `military/killingblow.as` |
 | Retreat/leash | `OutgunnedHere` odds trigger, DEFEND leash on forward fraction | `military/withdraw.as` |

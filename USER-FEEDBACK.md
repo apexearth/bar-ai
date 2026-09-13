@@ -23,6 +23,25 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-13 — Escorts are for the workers OUTSIDE the base; the outer mexes have no guns
+
+> "The times when we're likely to need escort is when we're going out to make
+> more mexes or are making defences and things outside our base area... Right
+> now I see our cons losing their escorts really early on and as a result we
+> lose a lot of constructors. Even air cons should get a little fighter
+> escort :-P"
+> "Also none of our mexes outside our base have any turrets guarding them. it
+> costs us to push enemy mexes, it costs them nothing."
+
+Watched on the 2c684d73 deploy (Carrot Mountains 8v8, `matches/20260913-082619`):
+`escort-diag` read `short=0 paired=0` for the first 12 minutes -- the
+influence-map "ours" test counted the builder's own presence, so every mex site
+read as home ground. Fixed same night (`Base::Inside` is the ground test; lane
+game: 6-8 of 9 workers paired by minute 5, battery `rd3hold`). OPEN: the
+fighter escort for air cons (nothing guards them; `Air::` owns fighters), and
+the outer-mex guns -- see ISSUES "DEFENCE: the only site offered is a
+contested choke" and the per-mex gun contract in `tools/test_frontline.py`.
+
 ## 2026-09-13 — Carrot Mountains 8v8 watched: escorts fill the base, defence at 1%
 
 > "We have so many escorts in the base it is ludicrous. At this point in the

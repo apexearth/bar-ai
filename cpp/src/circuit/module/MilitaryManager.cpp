@@ -1502,6 +1502,20 @@ float CMilitaryManager::ClampMobileCostRatio() const
 // outnumbered fight orders 10:1 -- and the raid dispatcher was already inert
 // (apex_intercept defaulted to 0). The army-split block went with them: it
 // held a freshly split pool off promotion, which is fight logic.
+unsigned int CMilitaryManager::ReleaseHoldPools()
+{
+	unsigned int n = 0;
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
+		CDefendTask* dt = static_cast<CDefendTask*>(task);
+		if (dt->GetPromote() != IFighterTask::FightType::MELEE) {
+			continue;
+		}
+		dt->SetPromote(IFighterTask::FightType::ATTACK);
+		++n;
+	}
+	return n;
+}
+
 void CMilitaryManager::UpdateDefenceTasks()
 {
 	/*

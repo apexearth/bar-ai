@@ -71,6 +71,16 @@ about this layer — but respect its failure modes, which are silent or fatal.
        > <repo>/game-patches/circuitai/0003-cumulative.patch
    ```
    A bare `git diff` drops everything already committed on `barbarian-apex`.
+   **In a lane, `BARb-<lane>/.git` points at the SHARED gitdir**, so every git
+   command run inside it reads `BARb/`'s files, not the lane's -- a `git diff`
+   there silently omits the lane's edits (2026-09-13). Diff the lane tree
+   through a scratch index instead:
+   ```bash
+   cd vendor/engine/AI/Skirmish/BARb && BASE=$(git merge-base apex/barbarian HEAD)
+   GIT_INDEX_FILE=/tmp/lane.idx git read-tree $BASE
+   GIT_INDEX_FILE=/tmp/lane.idx git --work-tree=../BARb-<lane> add -A src
+   GIT_INDEX_FILE=/tmp/lane.idx git diff --cached --ignore-cr-at-eol $BASE > <repo>/game-patches/circuitai/0003-cumulative.patch
+   ```
 
 ## Crash triage
 

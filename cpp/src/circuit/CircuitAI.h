@@ -323,6 +323,7 @@ public:
 	int GetTerritoryVersion() const;
 	int GetWreckFieldVersion() const;
 	float GetAllyInflAt(const springai::AIFloat3& pos) const;
+	float GetAllyDefendInflAt(const springai::AIFloat3& pos) const;
 	float GetEnemyInflAt(const springai::AIFloat3& pos) const;
 	float GetNetInflAt(const springai::AIFloat3& pos) const;
 	float GetRecentTradeRatio();

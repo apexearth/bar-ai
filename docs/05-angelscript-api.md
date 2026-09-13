@@ -252,6 +252,7 @@ IUnitTask@+ Enqueue(const SFightTask& in)
 IUnitTask@+ EnqueueRetreat()
 void        DefaultMakeDefence(int, const AIFloat3& in)
 uint        GetGuardTaskNum() const
+uint        ReleaseHoldPools()      // every DEFEND pool promoting to MELEE now promotes to ATTACK (ours, 2026-09-13)
 const float armyCost
 SQuotaMilitary quota { uint scout; float attack; SRaidQuota raid{min,avg}; }
 SResponseInfo@ GetResponseInfo(Type)   // { float maxPercent; float factor; }

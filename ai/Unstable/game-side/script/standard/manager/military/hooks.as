@@ -192,6 +192,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// duty that would then refuse it.
 	if (Market::EscortWorthy(int(cdef.id))
 		&& (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) > 0.f)) {
+		// A unit back in the election is no longer guarding anyone (retreat,
+		// aborted task); its pairing dropped only on death, so its worker
+		// read escorted by nobody for the rest of the game.
+		Market::EscortGone(unit.id);
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);
 		if (vip !is null) {
 			AiLog(Factory::T() + "apex: " + cdef.GetName() + " #" + unit.id
@@ -308,10 +312,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// they chose offence, the army we bought is for holding, not for
 		// trading. Every one of these reverts by itself; it only decides the
 		// task a unit joins now.
-		if ((ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) > 0.f)
-			&& (Builder::BaseUnderAttack() || BaseContested() || BaseRaided()
-				|| ConservativeStance()))
-		{
+		if (HoldHome()) {
+			NoteHold(unit);
 			return NoteElect("mass.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
@@ -711,6 +713,7 @@ void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 	if ((usage == Unit::UseAs::COMBAT) || (usage == Unit::UseAs::SUPER)) {
 		ForgetPenned(unit.id);
 		ForgetCover(unit.id);
+		ForgetHold(unit.id);
 	}
 	if (usage != Unit::UseAs::FENCE)
 		return;

@@ -34,6 +34,19 @@ hands to defence; it cannot give them a site. Fix is the wall paradigm
 (memory `defence-wall-paradigm`: towers are wall slots on the building rim),
 not the discount -- leave the discount alone.
 
+2026-09-13 (later), his words: "none of our mexes outside our base have any
+turrets guarding them. it costs us to push enemy mexes, it costs them
+nothing." Tried and REVERTED as inert: pricing the mex-guard sites'
+concentration floor against `gRkRaid` (their raider metal) instead of
+`gRkHost` (their whole army) in `protect_fill.as` changed nothing -- towers
+built 13/22/14/13 vs 13/13/13/21 over four paired Carrot seeds, 6-8 of ~75
+outer mexes gunned either way. The deciding term is the `stopped` clip
+(`kill / threat`: an LLT's 21.8 against a site threat floored by
+`min(heaviest attacker, stake)`), so a light tower at a mex prevents ~nothing
+by construction; the wall generator's slots win (`bestWallGain` 23-70 vs
+`bestAssetGain` 8-11). A mex gun has to be priced as what it TAXES a raid,
+not as the share of a wave it stops.
+
 ## 2026-09-13 — SENSE: 2,459 wins, 32 builds
 
 Same game, team 7, minutes 20-32: the sense category won 2,459 builder

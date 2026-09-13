@@ -2681,6 +2681,12 @@ float CCircuitAI::GetAllyInflAt(const AIFloat3& pos) const
 	return IsPosOnMap(pos) ? GetInflMap()->GetAllyInflAt(pos) : .0f;
 }
 
+// Armed units and turrets only: where our guns reach, not where a builder stands.
+float CCircuitAI::GetAllyDefendInflAt(const AIFloat3& pos) const
+{
+	return IsPosOnMap(pos) ? GetInflMap()->GetAllyDefendInflAt(pos) : .0f;
+}
+
 float CCircuitAI::GetEnemyInflAt(const AIFloat3& pos) const
 {
 	return IsPosOnMap(pos) ? GetInflMap()->GetEnemyInflAt(pos) : .0f;

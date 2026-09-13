@@ -30,6 +30,9 @@ public:
 //	void SetWantedTarget(CEnemyInfo* enemy) { SetTarget(enemy); }
 
 	FightType GetPromote() const { return promote; }
+	// A hold pool (promote MELEE) is a state, not a capture: the script
+	// releases it to stock's exit when the hold no longer applies.
+	void SetPromote(FightType type) { check = type; promote = type; }
 
 protected:
 	float GetMaxPower() const { return maxPower; }

@@ -319,7 +319,8 @@ void EscortDiag()
 		// left standing for everything else.
 		+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
-		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0));
+		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0)
+		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy);
 }
 
 void EscortGone(Id id)

@@ -87,23 +87,31 @@ int gExpoN = 0;
 float gExpoM = 0.f;
 
 // HOW MUCH OF A WORKER THE GROUND IT STANDS ON WRITES OFF, 0..1: the larger
-// of the risk field's expected loss over the stake horizon and the territory
-// map's word on whose ground it is (ours nothing, empty half an escort,
-// contested or theirs a whole one). A radius from the farm stood in for this
-// and guarded the back of the base. Cached per worker: the cover sample behind
-// HazardAt is not free and the fleet is walked per election.
+// of the risk field's expected loss over the stake horizon and where it is --
+// inside the base plan's footprint nothing, on their influence a whole
+// escort, anywhere else half (apexearth: escorts are for "going out to make
+// more mexes or making defences and things outside our base area"). A radius
+// from the farm guarded the back of a large base; the influence map read
+// every mex site as ours because the builder itself, or a passing raider,
+// lights it. Cached per worker: the cover sample behind HazardAt is not free
+// and the fleet is walked per election.
 array<int> gWkExpoAt(32001, -30000);
 array<float> gWkExpoVal(32001, 0.f);
+// The most exposed unescorted worker of the last refresh, for escort-diag.
+float gExpoMax = 0.f;
+string gExpoMaxWhy = "";
 float WorkerExposureNow(CCircuitUnit@ wkr)
 {
 	const AIFloat3 p = wkr.GetPos(ai.frame);
 	const float T = ai.GetTunable("apex_stake_horizon_s", TUNE_STAKE_HORIZON_S);
-	float e = HazardAt(p) * ShortfallAt(p) * ((T > 1.f) ? T : 300.f);
-	const int own = Front::Classify(p);
-	const float ground = (own == Front::OURS) ? 0.f
-			: ((own == Front::EMPTY) ? 0.5f : 1.f);
-	if (ground > e)
-		e = ground;
+	const float risk = HazardAt(p) * ShortfallAt(p) * ((T > 1.f) ? T : 300.f);
+	const float foe = ai.GetEnemyInflAt(p);
+	float ground = 0.5f;
+	if (Base::Inside(p))
+		ground = 0.f;
+	else if (foe >= 0.01f)
+		ground = 1.f;
+	const float e = (ground > risk) ? ground : risk;
 	return (e > 1.f) ? 1.f : e;
 }
 
@@ -135,11 +143,17 @@ void ExposeRefresh()
 	gExpoAt = ai.frame;
 	gExpoN = 0;
 	gExpoM = 0.f;
+	gExpoMax = 0.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
 		if (!EscortableWorker(wkr) || EscortedWorker(wkr.id))
 			continue;
 		const float e = WorkerExposure(wkr);
+		if (e > gExpoMax) {
+			gExpoMax = e;
+			gExpoMaxWhy = wkr.circuitDef.GetName() + "#" + wkr.id + " far="
+				+ int(wkr.GetPos(ai.frame).distance2D(Builder::gHomePos));
+		}
 		if (e < 0.5f)
 			continue;
 		++gExpoN;

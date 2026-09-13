@@ -1038,3 +1038,17 @@ builder role system was supposed to solve that."* Shown that the roles copied
 the draw's own shares (defence 1% of spend, 99% of its target unmet): *"Having
 builder roles come from target gaps sounds like a smart idea to me. We
 certainly have more than enough builders."*
+
+## 2026-09-13 (later) — where escorts belong, and the outer mexes
+
+*"The times when we're likely to need escort is when we're going out to make
+more mexes or are making defences and things outside our base area... Right now
+I see our cons losing their escorts really early on and as a result we lose a
+lot of constructors. Even air cons should get a little fighter escort :-P"*
+
+*"Also none of our mexes outside our base have any turrets guarding them. it
+costs us to push enemy mexes, it costs them nothing."*
+
+On what to read a trade by: *"stop looking at k/d and look at damage
+efficiency more"* -- BAR's D%, damage dealt over damage received.
+

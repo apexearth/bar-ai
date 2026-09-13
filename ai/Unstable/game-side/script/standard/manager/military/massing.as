@@ -342,6 +342,108 @@ float MassFloor()
 	return want;
 }
 
+// WHY THE POOL HOLDS, one predicate for the election and the release. The
+// MELEE pool never promotes, so a unit elected during a 45-second raid alarm
+// stood at home for the rest of the game. ReleaseHoldPools hands every held
+// pool stock's exit the moment no reason remains.
+array<int> gHoldWhyN(4, 0);
+int gHoldReleased = 0;
+int gHoldFull = 0;      // elections that went to attack because enough already held
+int gHoldWhyLast = -1;
+int gNextHoldRelLog = 0;
+
+bool HoldReason()
+{
+	if (ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) <= 0.f)
+		return false;
+	int why = -1;
+	if (Builder::BaseUnderAttack())
+		why = 0;
+	else if (BaseContested())
+		why = 1;
+	else if (BaseRaided())
+		why = 2;
+	else if (ConservativeStance())
+		why = 3;
+	if (why < 0)
+		return false;
+	++gHoldWhyN[why];
+	gHoldWhyLast = why;
+	return true;
+}
+
+// Metal standing in hold pools, by unit, the same ledger the cover pools keep.
+array<int> gHoldId;
+array<float> gHoldCost;
+float gHoldHeldM = 0.f;
+
+void NoteHold(CCircuitUnit@ unit)
+{
+	gHoldId.insertLast(unit.id);
+	gHoldCost.insertLast(Catalog::gCostM[int(unit.circuitDef.id)]);
+	gHoldHeldM += Catalog::gCostM[int(unit.circuitDef.id)];
+}
+
+void ForgetHold(int id)
+{
+	for (uint i = 0; i < gHoldId.length(); ++i) {
+		if (gHoldId[i] == id) {
+			gHoldHeldM -= gHoldCost[i];
+			gHoldId.removeAt(i);
+			gHoldCost.removeAt(i);
+			return;
+		}
+	}
+}
+
+// WHAT THE HOLD IS FOR: the enemy metal actually on our home ground. The
+// alarms above say whether to hold at all; this says how much, or a base that
+// loses a building every 45 seconds keeps every unit it ever elected at home.
+float HoldNeedM()
+{
+	if (!Builder::gHomeSet)
+		return 0.f;
+	float need = ai.GetEnemyCostAt(Builder::gHomePos, Builder::BASE_DANGER_DIST);
+	// The stance hold answers an army we cannot see: what they have massed.
+	if (gHoldWhyLast == 3) {
+		const float foe = FoeMobileMassing();
+		if (foe > need)
+			need = foe;
+	}
+	return need;
+}
+
+bool HoldHome()
+{
+	if (!HoldReason())
+		return false;
+	if (gHoldHeldM >= HoldNeedM()) {
+		++gHoldFull;
+		return false;
+	}
+	return true;
+}
+
+void ReleaseHold()
+{
+	if (!HoldReason()) {
+		gHoldReleased += int(aiMilitaryMgr.ReleaseHoldPools());
+		gHoldId.resize(0);
+		gHoldCost.resize(0);
+		gHoldHeldM = 0.f;
+	}
+	if (ai.frame >= gNextHoldRelLog) {
+		gNextHoldRelLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: hold t=" + ai.teamId
+			+ " attack=" + gHoldWhyN[0] + " contested=" + gHoldWhyN[1]
+			+ " raided=" + gHoldWhyN[2] + " stance=" + gHoldWhyN[3]
+			+ " released=" + gHoldReleased + " full=" + gHoldFull
+			+ " heldM=" + int(gHoldHeldM) + " needM=" + int(HoldNeedM())
+			+ " | homeInfl=" + formatFloat(Builder::gHomeSet ? ai.GetEnemyInflAt(Builder::gHomePos) : 0.f, "", 0, 2)
+			+ " foeDist=" + int(Builder::gHomeSet ? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : -1.f));
+	}
+}
+
 void UpdateMassing()
 {
 	LogUnitPower();
