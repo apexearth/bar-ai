@@ -1052,3 +1052,12 @@ costs us to push enemy mexes, it costs them nothing."*
 On what to read a trade by: *"stop looking at k/d and look at damage
 efficiency more"* -- BAR's D%, damage dealt over damage received.
 
+
+## 2026-09-13 (morning) — the silo before the gun; the map edge is where they come
+
+*"I notice we often make like 1 basilica per team early on. Why is that? I
+would rather it be a nuke silo."* The Basilica came first because the super
+lane's gain was affordability alone, which rewards the cheaper class.
+
+*"The edges of map are often the most vulnerable and undefended areas. Let's
+make sure if we are on the edge of the map we make extra defense there."*

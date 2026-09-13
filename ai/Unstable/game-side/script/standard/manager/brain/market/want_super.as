@@ -524,6 +524,22 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					TUNE_OFFENSE_DEF_FLOOR);
 			gain *= dfloor + (1.f - dfloor) * fill;
 		}
+		// A GUN IS WORTH WHAT IT CAN REACH (apexearth: "I would rather it be
+		// a nuke silo"). Affordability alone made the cheaper class the first
+		// strategic build; a warhead reaches their base wherever it is, a gun
+		// only what stands inside its range. Same discount shape as the
+		// defence fill above, never a gate.
+		if (sc == SC_LRPC) {
+			const float reach = Catalog::gMaxRange[d];
+			const float ref = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
+			float inReach = (reach > 1.f) && (ref > 1.f)
+					? (ai.GetEnemyCostAt(at, reach) / ref) : 0.f;
+			if (inReach > 1.f)
+				inReach = 1.f;
+			const float dfloor = ai.GetTunable("apex_offense_def_floor",
+					TUNE_OFFENSE_DEF_FLOOR);
+			gain *= dfloor + (1.f - dfloor) * inReach;
+		}
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;

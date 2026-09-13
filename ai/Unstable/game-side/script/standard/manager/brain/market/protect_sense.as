@@ -179,16 +179,17 @@ float LineClosure(const AIFloat3& in extraAt, float extraReach)
 	const float ring = extent + Military::FoeReach();
 	if (ring <= 1.f)
 		return 0.f;
-	int closed = 0;
+	float closed = 0.f;
+	float wsum = 0.f;
 	for (int b = 0; b < CLOSE_RAYS; ++b) {
 		const float ang = 6.2831853f * float(b) / float(CLOSE_RAYS);
 		const AIFloat3 p = c + AIFloat3(cos(ang), 0.f, sin(ang)) * ring;
-		if (!OnMap(p)) {
-			++closed;
-			continue;
-		}
+		if (!OnMap(p))
+			continue;   // its weight rides on the edge lanes beside it
+		const float w = (b < int(gClRingW.length())) ? gClRingW[b] : 1.f;
+		wsum += w;
 		if ((b < int(gClAllyShield.length())) && gClAllyShield[b]) {
-			++closed;
+			closed += w;
 			continue;
 		}
 		bool ok = (extraReach > 0.f) && (extraAt.distance2D(p) <= extraReach);
@@ -197,9 +198,9 @@ float LineClosure(const AIFloat3& in extraAt, float extraReach)
 				ok = true;
 		}
 		if (ok)
-			++closed;
+			closed += w;
 	}
-	return float(closed) / float(CLOSE_RAYS);
+	return (wsum > 0.f) ? (closed / wsum) : 0.f;
 }
 
 // THE STANDING RING, RESOLVED ONCE. The closure a candidate ADDS is
@@ -210,6 +211,14 @@ float LineClosure(const AIFloat3& in extraAt, float extraReach)
 // of 16 x every tower we own.
 array<AIFloat3> gClRingP;
 array<bool>     gClRingOpen;
+// THE EDGE LANES CARRY THE OFF-MAP TRAFFIC (apexearth 2026-09-13: "The edges
+// of map are often the most vulnerable and undefended areas... if we are on
+// the edge of the map we make extra defense there"). A bearing that runs off
+// the map is closed by geometry, but whoever would have come that way comes
+// along the border instead, so its weight moves to the on-map bearings beside
+// it: a post covering an edge lane closes that much more of the ring.
+array<float>    gClRingW;
+float           gClRingWSum = 0.f;
 bool            gClRingOk = false;
 // The ring's own centre and radius, kept for the candidate generator below --
 // and a memo on the field stamp: the ring is a function of the field and the
@@ -227,6 +236,8 @@ void ClosurePrep()
 	gClRingOk = false;
 	gClRingP.resize(0);
 	gClRingOpen.resize(0);
+	gClRingW.resize(0);
+	gClRingWSum = 0.f;
 	AIFloat3 c;
 	float extent = 0.f;
 	if (!BaseCentroid(c, extent))
@@ -283,7 +294,26 @@ void ClosurePrep()
 		}
 		gClRingP.insertLast(p);
 		gClRingOpen.insertLast(open);
+		gClRingW.insertLast(OnMap(p) ? 1.f : 0.f);
 	}
+	// Each off-map bearing hands half its weight to the nearest on-map
+	// neighbour on either side.
+	const uint nb = gClRingP.length();
+	for (uint b = 0; b < nb; ++b) {
+		if (OnMap(gClRingP[b]))
+			continue;
+		for (int dir = -1; dir <= 1; dir += 2) {
+			for (uint k = 1; k < nb; ++k) {
+				const uint j = uint((int(b) + dir * int(k) + int(nb)) % int(nb));
+				if (OnMap(gClRingP[j])) {
+					gClRingW[j] += 0.5f;
+					break;
+				}
+			}
+		}
+	}
+	for (uint b = 0; b < nb; ++b)
+		gClRingWSum += gClRingW[b];
 }
 
 // Share of approach bearings something standing already covers; -1 before the
@@ -293,24 +323,24 @@ float ClosureFrac()
 	ClosurePrep();
 	if (!gClRingOk || (gClRingOpen.length() == 0))
 		return -1.f;
-	int closed = 0;
+	float closed = 0.f;
 	for (uint b = 0; b < gClRingOpen.length(); ++b) {
 		if (!gClRingOpen[b])
-			++closed;
+			closed += gClRingW[b];
 	}
-	return float(closed) / float(gClRingOpen.length());
+	return (gClRingWSum > 0.f) ? (closed / gClRingWSum) : -1.f;
 }
 
 float ClosureAdds(const AIFloat3& in extraAt, float extraReach)
 {
-	if (!gClRingOk || (extraReach <= 0.f))
+	if (!gClRingOk || (extraReach <= 0.f) || (gClRingWSum <= 0.f))
 		return 0.f;
-	int add = 0;
+	float add = 0.f;
 	for (uint b = 0; b < gClRingP.length(); ++b) {
 		if (gClRingOpen[b] && (extraAt.distance2D(gClRingP[b]) <= extraReach))
-			++add;
+			add += gClRingW[b];
 	}
-	return float(add) / float(CLOSE_RAYS);
+	return add / gClRingWSum;
 }
 
 // THE OUTSKIRTS, AND SPREAD AROUND THEM. apexearth: "we put our AA defense in
