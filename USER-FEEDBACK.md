@@ -26,12 +26,16 @@ find such an entry, delete it in the same commit as whatever you were doing.
 ## 2026-09-12 — "we just make bots almost all the time. So in maps where vehicles are obviously more powerful, we don't do quite as well"
 
 Full quote in docs/24. Measured: bot lab first in most logged games, T2 bot lab
-almost always; BARb splits the lines at both tiers. Built: the plant's
-production half now carries the best army-per-metal its units offer here
-(`TUNE_LINE_QUALITY`, `apex: line-quality`). Open until the 1v1 battery on
-Comet Catcher Remake + Supreme Isthmus says the choice moved AND the games got
-better -- if our own model still ranks bots above vehicles on a flat map, the
-next question is his: what makes vehicles "obviously more powerful" there.
+almost always; BARb splits the lines at both tiers. Our own model AGREES with
+him once asked (`apex: line-quality` on Comet Catcher Remake: T1 vehicles 1.3x
+Armada / 1.8x Cortex over bots, T2 vehicles 2.5x over Armada T2 bots) -- but
+wiring that into the plant's production half moved nothing in 8 games
+(docs/27 `TUNE_LINE_QUALITY`): the opening plant is bought for its
+CONSTRUCTOR at minute 1 when army demand is ~0, and the T2 plant is priced in
+`want_tech.as` by mean power/cost. OPEN: put the line's army worth where those
+two decisions are made -- the opening plant priced on the army it will field
+over its first fill window, and want_tech's line worth on the same median
+yardstick -- then the battery again.
 
 ## 2026-09-12 — "every ~10 in game seconds some long ai operation happens which pauses the game for almost a full second. I couldn't play online with it like this"
 

@@ -1552,6 +1552,20 @@ on Comet Catcher Remake the bot and vehicle labs priced within 5% of each other
 and bots won on coverage (95 vs 88). `apex: line-quality` logs what the model
 thinks of each land line, once a minute. 0 is the control arm.
 
+**Measured inert, 2026-09-12, and left OFF.** The census itself agrees with
+him -- Comet Catcher Remake reads T1 corvp 1.00 / armvp 0.66 / corlab 0.56 /
+armlab 0.51 and T2 armavp 0.65 / armalab 0.26 -- but the plant choice did not
+move in any of 8 treated games (`tournaments/20260912-185255-linequal2`,
+1v1 Comet Catcher Remake + Supreme Isthmus, 4 seeds, vs a control lane at
+9986d2d8): every game still opened armlab and stepped to armalab. Two reasons,
+both outside this term: the opening plant is bought at 0.7-1.3 min when the
+production half is ~0.8 against a constructor half of ~4.3, so the line is
+chosen for its constructor; and the T2 plant is priced in `want_tech.as` by
+`PlantLineWorth` (mean power/cost), which this term does not touch. Outcomes
+were noise either way (Comet control 2-1-1, treated 1-3; Isthmus 0-1-3 vs
+1-1-2). The next move is to put the line's army worth where those two
+decisions are made, not to turn this on.
+
 ### `TUNE_SCREEN_GAP` = 200.f
 
 How far IN FRONT of the squad's longest row a short-range row holds, elmos.

@@ -1829,8 +1829,9 @@ const float TUNE_TEAM_LINE = 1.f;
 
 // [toggle 0/1] -- Weigh a production line by the best army-per-metal its units
 //   offer on this map (UnitPPC with speed and sight), against the best line of
-//   its class and tier. 0 prices every line the same per metal. See docs/27.
-const float TUNE_LINE_QUALITY = 1.f;
+//   its class and tier. 0 prices every line the same per metal. Measured
+//   inert on the decisions that matter (docs/27); off until it is moved there.
+const float TUNE_LINE_QUALITY = 0.f;
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it
