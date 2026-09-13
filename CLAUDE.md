@@ -103,7 +103,7 @@ conclusion each one produced.
 | **write AngelScript** | `docs/05-angelscript-api.md` · **S4** no forward declarations · **S5** a unit can only build what its own def lists · `tools/as_scope.py` |
 | **edit any `.as` file** | **S18** an anchor that does not match does nothing, quietly. Assert it exists |
 | **commit a change that touched comments** | `comment_audit.py` — a run report belongs in the commit message, a negative result in `docs/27` keyed by symbol. The rule alone failed for three weeks; this is the check |
-| **fix a hitch, a lag report, or review performance** | `ai-performance` skill: the 16-AI budget, the instruments, approved and forbidden fixes, the review procedure. The `perf-review` agent runs it end to end |
+| **fix a hitch, a lag report, or review performance** | `ai-performance` skill: the 16-AI budget, the instruments, approved and forbidden fixes, the review procedure. The `perf-review` agent runs it end to end · **S31** a freeze no section owns: `tools/hitch.py <run>` reads the wall gaps |
 | **touch C++** | `cpp-dll` skill, `docs/06-building-the-dll.md` |
 | **build the DLL** | `python tools/build_dll.py` — a failed ninja leaves the OLD dll and deploy still says `(local build)` |
 | **judge whether a rule DOES anything** | `python tools/deadcheck.py <run>` — the silent no-op is this repo's only real bug class; `docs/26` has the counting convention |

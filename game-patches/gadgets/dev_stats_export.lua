@@ -920,10 +920,13 @@ local function dumpPositions(onlyTeam, atFrame)
 				end
 			end
 			for i = 1, #rest do head[#head + 1] = rest[i] end
-			if #head > 0 then
-				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d %s",
+			-- short lines: gui_chat's string.lines is quadratic in line length (S31)
+			local parts = math.ceil(#head / 10)
+			for p = 1, parts do
+				Spring.Echo(string.format("[BARAI_POS] team=%d ally=%d frame=%d n=%d part=%d/%d %s",
 						teamID, select(6, Spring.GetTeamInfo(teamID, false)) or 0,
-						atFrame or Spring.GetGameFrame(), #head, table.concat(head, ",")))
+						atFrame or Spring.GetGameFrame(), #head, p, parts,
+						table.concat(head, ",", (p - 1) * 10 + 1, math.min(p * 10, #head))))
 			end
 		end
 	end

@@ -68,7 +68,7 @@ DEATH_RE = re.compile(
     r" cost=(?P<cost>\d+) x=(?P<x>-?\d+) z=(?P<z>-?\d+)"
     r" vx=(?P<vx>-?[\d.]+) vz=(?P<vz>-?[\d.]+) built=(?P<built>\d) mob=(?P<mob>\d)"
     r" atkteam=(?P<atkteam>-?\d+) atk=(?P<atk>\S+) atkx=(?P<atkx>-?\d+) atkz=(?P<atkz>-?\d+)")
-ARMY_RE = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d+) n=\d+ (\S+)")
+ARMY_RE = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d+) n=\d+ (?:part=\d+/\d+ )?(\S+)")
 START_RE = re.compile(r"\[BARAI_START\] team=(\d+) x=(-?\d+) z=(-?\d+)")
 BUILD_RE = re.compile(r"\[BARAI_BUILD\] team=\d+ ally=\d+ frame=\d+ min=[\d.]+ unit=(\S+) cost=(\d+)")
 
@@ -102,12 +102,12 @@ def parse(log_text):
     # snapshots: frame -> team -> [(id, def, x, z, hp)]
     snaps = defaultdict(dict)
     for frame, team, data in ARMY_RE.findall(log_text):
-        units = []
+        # one snapshot arrives as several part= lines
+        units = snaps[int(frame)].setdefault(int(team), [])
         for tok in data.split(","):
             p = tok.split(":")
             if len(p) == 5:
                 units.append((int(p[0]), p[1], int(p[2]), int(p[3]), int(p[4])))
-        snaps[int(frame)][int(team)] = units
     return deaths, starts, costs, dict(snaps)
 
 

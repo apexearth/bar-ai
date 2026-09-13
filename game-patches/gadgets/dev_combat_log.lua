@@ -38,6 +38,10 @@ end
 
 local SNAP_INTERVAL = 30 * 10  -- army snapshot every 10 game-seconds
 local nextSnap = SNAP_INTERVAL
+-- Units per [BARAI_ARMY] line. Every console line reaches gui_chat, whose
+-- string.lines is quadratic in the line's length: one 25 KB census line
+-- froze the game for 1.5 s every 10 s.
+local SNAP_CHUNK = 10
 
 local aiTeam = {}      -- teamID -> true for AI-controlled teams
 local startX, startZ = {}, {}  -- teamID -> start position, for retreat headings
@@ -339,9 +343,11 @@ local function snapshot(frame)
 				end
 			end
 		end
-		if #out > 0 then
-			Spring.Echo(string.format("[BARAI_ARMY] frame=%d team=%d n=%d %s",
-				frame, teamID, #out, table.concat(out, ",")))
+		local parts = math.ceil(#out / SNAP_CHUNK)
+		for p = 1, parts do
+			Spring.Echo(string.format("[BARAI_ARMY] frame=%d team=%d n=%d part=%d/%d %s",
+				frame, teamID, #out, p, parts,
+				table.concat(out, ",", (p - 1) * SNAP_CHUNK + 1, math.min(p * SNAP_CHUNK, #out))))
 		end
 	end
 end

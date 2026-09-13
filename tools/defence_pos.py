@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bar_env  # noqa: E402
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (.*)")
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (?:part=\d+/\d+ )?(.*)")
 AI_BLOCK_RE = re.compile(r"\[AI(\d+)\]\s*\{(.*?)\}", re.S)
 FWD_MARK = 0.25   # "past the quarter mark" -- out of the base, toward them
 
@@ -83,7 +83,7 @@ def last_positions(text: str):
                 rows.append((bits[0].lower(), float(bits[1]), float(bits[2])))
             except ValueError:
                 continue
-        frames[frame][(ally, team)] = rows
+        frames[frame].setdefault((ally, team), []).extend(rows)
     if latest < 0:
         return latest, {}
     return latest, frames[latest]

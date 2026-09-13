@@ -372,9 +372,13 @@ def check_vs_enemy(text, rep):
 
     # NANOS PER FACTORY, both sides, from the last BARAI_POS building snapshot
     # per team (name:x:z:xsize:zsize). Factories and nanos by def-name pattern.
-    pos = {}
-    for tm, n, data in re.findall(r"\[BARAI_POS\] team=(\d+) ally=\d+ frame=\d+ n=(\d+) (\S+)", text):
-        pos[int(tm)] = data  # keep last
+    pos, pos_frame = {}, {}
+    for tm, fr, data in re.findall(r"\[BARAI_POS\] team=(\d+) ally=\d+ frame=(\d+) n=\d+ (?:part=\d+/\d+ )?(\S+)", text):
+        tm = int(tm)
+        if pos_frame.get(tm) == fr:       # a further part= line of the same snapshot
+            pos[tm] += "," + data
+        else:
+            pos[tm], pos_frame[tm] = data, fr  # keep last
     FACS = ("alab", "avp", "aap", "lab", "vp", "ap", "hp", "sy", "gant", "shltx")
     def nano_density(team):
         if team not in pos:
@@ -1340,7 +1344,11 @@ def check_missteps(text, rep):
             continue
         units = {u.group(1): (float(u.group(2)), float(u.group(3)))
                  for u in ARMY_UNIT_RE.finditer(m.group(3))}
-        snaps.setdefault(m.group(2), []).append((int(m.group(1)), units))
+        rows = snaps.setdefault(m.group(2), [])
+        if rows and rows[-1][0] == int(m.group(1)):   # a further part= line
+            rows[-1][1].update(units)
+        else:
+            rows.append((int(m.group(1)), units))
     events = []
     for m in retreats:
         team = m.group(1)

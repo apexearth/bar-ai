@@ -16,6 +16,24 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-12 — CONSOLE: every AI log line is kept forever by the chat widget
+
+`gui_chat.lua` stores every console line it receives in `orgLines` and a
+word-wrapped copy in `consoleLines`, and never drops them. The AI's engine-side
+log (`Skirmish AI <...>: apex: ...`) is ~100k lines per 30 minutes in a 2v2,
+so LuaUI's heap grows until `barwidgets.lua` forces a full collect at 1.2 GB:
+the 8v8 benchmark of 2026-09-12 (`bar-ai-perf/matches/_engine_perf`) went from
+90 ms/frame to 606 ms/frame at minute 58 with the AI at 5% of it, and the
+harness's late-game runs crawl for the same reason. Headless games load LuaUI
+too. In a hosted multiplayer game the host's chat widget receives the same
+stream. Not measured yet: how much of the incremental GC budget (which is at
+its per-frame maximum above 100 MB of Lua) the log stream costs before the
+emergency collect. Options: the AI writes its own log file next to the
+infolog (every tool greps `apex:` from `infolog.txt`, so run_match would have
+to merge them by frame), or a log level the widget drops (`L_DEPRECATED` is
+skipped only outside dev-mode single-player, which is every harness game). The
+10-second freeze itself was the census line, fixed the same day (S31).
+
 ## 2026-09-12 — CONVERTERS: the T2 hands never ask for the advanced one, so the basics cannot be retired
 
 Greenest Fields 2v2 +100% seed 10, `tournaments/probe-reclobs2/3-greenest-s10`

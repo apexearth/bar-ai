@@ -534,3 +534,22 @@ time, and moved the wing's spend to the one bomber def with no measurement
 yet (two Liches). Any per-unit outcome ledger keyed on `byUs` undercounts
 every delayed-effect weapon the same way; the strike ledger now counts static
 deaths in the run's cell during its window whoever is credited.
+
+## S31 — A hitch the AI's own clock cannot see: every console line runs through `gui_chat.lua`, quadratically
+
+apexearth watched a 2v2 on Sulphur Springs (2026-09-12, `matches/_engine`)
+freeze for ~1.5 s every 10 game-seconds from minute 22. `frametime.py` read
+the game as clean: no AI frame over 36 ms, every C++ scheduler job under 4 ms.
+The wall gaps in the infolog sat on frames `% 300 == 0`, exactly where
+`dev_combat_log.lua` echoes its `[BARAI_ARMY]` census, one line per team with
+every armed unit in it -- 25 KB by minute 30. BAR's `string.lines`, which
+`gui_chat.lua` runs on every console line, is `gsub("(.-)\r?\n", ...)`: on a
+line with no newline the lazy `.-` rescans to the end from every position, so
+the cost is the square of the line's length (25 KB² ≈ 3·10⁸ pattern steps ≈
+1.5 s). LuaUI loads in headless too (`barwidgets.lua` printed its 1.2 GB
+emergency-GC warning in the 8v8 benchmark), so the harness had the same stall
+and never showed it in any per-section number. Matched pair, same seed: census
+on, stall 0.09 → 0.64 s over minutes 12-29; `dev_combatlog=0`, 0.03-0.06 s
+flat. Two lessons: a wall-gap scan of the infolog (`[t=` between consecutive
+lines) is the instrument for a hitch the sections do not own; and nothing
+long ever goes through `Spring.Echo`. The census now ships in 10-unit lines.

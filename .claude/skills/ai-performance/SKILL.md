@@ -52,6 +52,10 @@ lines it produces, one per game-minute per player:
 That section does N things in one frame. Lowering its frequency makes the
 spike rarer, not smaller (CLAUDE.md). The fix is a slice.
 
+- `python tools/hitch.py <run>` -- the largest wall gaps between consecutive
+  infolog lines, the frame period they sit on, and the line before and after.
+  The instrument for a freeze that `frametime.py` reads as clean (S31).
+
 ## The benchmark
 
 Perf is judged on HIS setting at scale, not on a 2v2:
@@ -133,3 +137,8 @@ Previous reviews, for the arc: `208a82b3` (worker pool seen), `e6e842c7`
   labs being aborted before the engine answers.
 - A watched game at 1x hides everything; a 30 ms single call is a visible
   hitch there and nowhere else (`game-audit` PERF section).
+- **S31** the AI's clock only sees the AI. A hitch on a fixed frame period
+  that no section owns is in the engine or in LuaUI (which headless loads
+  too); scan the infolog for wall gaps between consecutive `[t=` stamps and
+  check what else logs at that frame. One long `Spring.Echo` line costs
+  `gui_chat.lua` the square of its length.

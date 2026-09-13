@@ -29,7 +29,7 @@ import re
 import sys
 from pathlib import Path
 
-POS = re.compile(r"\[BARAI_POS\] team=(\d+) ally=\d+ frame=(\d+) n=\d+ (\S*)")
+POS = re.compile(r"\[BARAI_POS\] team=(\d+) ally=\d+ frame=(\d+) n=\d+ (?:part=\d+/\d+ )?(\S*)")
 DEAD = re.compile(r"apex: unit-destroyed (\w+) .*?frame=(\d+) at=(-?\d+),(-?\d+)")
 TOWER_PREFIX = ("armllt", "armbeam", "armclaw", "armguard", "armhlt", "armanni",
                 "armpb", "armmaw", "corllt", "corhllt", "corhlt", "corvipe",
@@ -63,7 +63,10 @@ def snapshots(stdout: Path, teams):
                     units.append((p[0].lower(), float(p[1]), float(p[2])))
                 except ValueError:
                     pass
-        out.append((int(m.group(2)), t, units))
+        if out and out[-1][0] == int(m.group(2)) and out[-1][1] == t:
+            out[-1][2].extend(units)          # a further part= line
+        else:
+            out.append((int(m.group(2)), t, units))
     out.sort(key=lambda r: r[0])
     return out
 
