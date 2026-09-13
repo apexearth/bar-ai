@@ -34,10 +34,13 @@ His live Carrot 8v8 (team 1, the air lead): `apex: air 0/102 bombers, 159/68
 fighters ... structs=36475` beside `air look ... mirror=690620`. The wing's
 per-plane gain is the marginal share of the SEEN enemy structures (LOS-slaved
 census) -- 762 metal a plane against fighters priced at v=14125 -- so the
-draw bought 159 Hawks and no Phoenix. Fix in flight: the prize is floored at
-the mirrored base (their economy started equal to ours), the same floor the
-nuke director uses. Open until a game of his shows a wing massing and
-striking eco; the strike-into-AA deadline (ISSUES BOMBERS) is the next wall.
+draw bought 159 Hawks and no Phoenix. Two fixes deployed 09-13 (a13edb2f):
+the prize is floored at the mirrored base, and the bomber bids in the army
+candidates' currency (its strike rate was divided by cost once more than
+theirs -- v=45.8 beside v=58018). Battery after both: wings of 10-17 mass
+and strike (`run scored sent=17 home=17 dmg/bomber=412`; another `sent=11
+home=0`). Open until a game of his shows it; the strike-into-AA release
+(ISSUES BOMBERS) is the next wall.
 
 ## 2026-09-13 — Escorts are for the workers OUTSIDE the base; the outer mexes have no guns
 
