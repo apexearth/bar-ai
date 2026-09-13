@@ -67,6 +67,7 @@ def analyze(path):
     script = {}  # bucket -> ms
     ai = {}      # bucket -> ms, whole-AI (AiFrame lines, all players summed)
     spike = {}   # bucket -> worst single AiFrame ms across players
+    luagc = set()  # buckets where LuaUI forced a full collect (S31: not the AI)
     secs = {}    # name -> [ms, calls, maxMs], whole run
     perframe = {}  # frame -> AiFrame lines on it, = AIs in the game
     secb = {}    # name -> bucket -> ms, for the growth table
@@ -95,6 +96,8 @@ def analyze(path):
             om = OWN.search(line)
             if om:
                 units.setdefault(b, {})[f"s{om.group(1)}"] = int(om.group(2))
+            if "Emergency garbage collection" in line:
+                luagc.add(b)
             am = AIFR.search(line)
             if am:
                 ai[b] = ai.get(b, 0.0) + float(am.group(1))
@@ -194,6 +197,9 @@ def analyze(path):
         proj = per_ai * 16.0
         share = 33.33 * 0.20          # the AI's working share of one frame
         print()
+        if luagc:
+            print(f"  LuaUI emergency GC in min {min(luagc)}-{max(luagc)}: the ms/frame there is the"
+                  f" chat widget's heap (ISSUES 2026-09-12 CONSOLE), not the AI")
         print(f"  16-AI budget, worst game-minute (min {peak}, {nai} AI here):")
         print(f"    per AI per frame   {per_ai:>8.3f} ms")
         print(f"    x16                {proj:>8.2f} ms of the 33.33 ms frame"
