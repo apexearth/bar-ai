@@ -13,7 +13,8 @@ namespace Persona {
 // draw odds of an economy, defence or air-plant want), the strategic wants
 // (gantry, silo, big gun, air plant) and the air commitment. It shifts how
 // much, never whether: every gate still applies, so a trait cannot switch a
-// behaviour off or invent one. All neutral at 1.
+// behaviour off or invent one. Neutral is 1 and a roll never goes below it:
+// personality adds interest, it cannot starve one.
 //------------------------------------------------------------------------------
 
 const int T_ECO = 0;
@@ -56,9 +57,9 @@ string Line()
 	return s;
 }
 
-// apex_persona_spread: each trait is log-uniform in [1/(1+s), 1+s], so a trait
-// is as likely to halve its interest as to double it and the product of the
-// seven stays centred on 1. 0 makes every instance identical (the A/B arm).
+// apex_persona_spread: each trait is log-uniform in [1, 1+s] -- up only, so
+// the worst roll is the neutral AI. 0 makes every instance identical (the
+// A/B arm).
 void Roll()
 {
 	if (gRolled)
@@ -68,14 +69,13 @@ void Roll()
 	if (spread > 0.f) {
 		const float top = 1.f + spread;
 		for (int t = 0; t < T_N; ++t) {
-			const float u = float(AiRandom(0, 10000)) / 5000.f - 1.f;   // -1..1
+			const float u = float(AiRandom(0, 10000)) / 10000.f;   // 0..1
 			gTrait[t] = pow(top, u);
 		}
-		// A silo or a big gun takes longer than a duel lasts; a duel's roll
-		// never leans INTO them, it may still lean away.
+		// A silo or a big gun takes longer than a duel lasts.
 		if (Duel()) {
-			if (gTrait[T_NUKE] > 1.f) gTrait[T_NUKE] = 1.f;
-			if (gTrait[T_LRPC] > 1.f) gTrait[T_LRPC] = 1.f;
+			gTrait[T_NUKE] = 1.f;
+			gTrait[T_LRPC] = 1.f;
 		}
 	}
 	AiLog(Factory::T() + "apex: persona t=" + ai.teamId + " rolled spread="

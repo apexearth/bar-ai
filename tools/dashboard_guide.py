@@ -975,8 +975,8 @@ GROUPS = [
                   "by target-vs-actual share"),
                  ("TUNE_PERSONA_SPREAD", "how different two instances may be: "
                   "each of the seven personality traits (eco, defence, army, "
-                  "T3, air, nukes, LRPC) rolls within 1/(1+s)..1+s; 0 makes "
-                  "every AI identical"),
+                  "T3, air, nukes, LRPC) rolls within 1..1+s, up only, so the "
+                  "worst roll is the neutral AI; 0 makes every AI identical"),
                  ("TUNE_DRAW_SHARP", "the draw follows value more sharply — "
                   "higher is closer to winner-takes-all, which has starved "
                   "every non-leading want before"),

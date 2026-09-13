@@ -933,16 +933,13 @@ FACTION_CHOICES = {"random", "armada", "cortex", "legion"}
 
 
 def faction_sides(p):
-    """Compose a --sides value from the per-side faction pickers. Both left at
-    'random' (the UI default) returns None so the tool's own default holds --
-    run_match alternates Armada/Cortex, run_tournament plays Cortex,Cortex --
-    exactly what launches did before the pickers existed."""
+    """Compose a --sides value from the per-side faction pickers. 'random' is
+    passed through: dropping it let run_match's Armada-vs-Cortex default play
+    while the picker said Random."""
     a = str(p.get("side_a") or "random").strip().lower()
     b = str(p.get("side_b") or "random").strip().lower()
     if a not in FACTION_CHOICES or b not in FACTION_CHOICES:
         raise ValueError("bad faction: %s,%s" % (a, b))
-    if a == b == "random":
-        return None
     return ",".join(s if s == "random" else s.capitalize() for s in (a, b))
 
 

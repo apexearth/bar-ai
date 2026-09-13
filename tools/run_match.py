@@ -332,7 +332,8 @@ def build_script(
     side_for = list(sides) if sides else [SIDES[i % len(SIDES)] for i in range(len(ais))]
     while len(side_for) < len(ais):
         side_for.append(side_for[-1])
-    rng = random.Random(seed if seed is not None else 0)
+    # No seed = a fresh draw; Random(0) here made every seedless run the same.
+    rng = random.Random(seed)
     side_of = [[rng.choice(FACTIONS) for _ in range(per_side)]
                if side_for[a].lower() == "random" else [side_for[a]] * per_side
                for a in range(len(ais))]
@@ -618,6 +619,9 @@ def run(args) -> int:
     print(f"map      {map_name}")
     print(f"game     {game_name}")
     print(f"engine   {env.engine_version}")
+    # Faction per team, in team order, read back from the script so a random
+    # draw is visible at launch and in meta.json.
+    team_sides = re.findall(r"^\s*Side=(\w+);", script, re.M)[:len(ais) * args.per_side]
     for i, a in enumerate(ais):
         print(f"team {i}   {a.label()}")
     if args.per_side > 1:
@@ -630,8 +634,11 @@ def run(args) -> int:
         for i, a in enumerate(ais):
             for slot in range(args.per_side):
                 name = COLOR_NAMES[slot % len(COLOR_NAMES)]
-                print(f"  team {tid} ({a.label()})   {name}")
+                print(f"  team {tid} ({a.label()})   {name:8s} {team_sides[tid]}")
                 tid += 1
+    else:
+        for i in range(len(ais)):
+            print(f"  team {i}   {team_sides[i]}")
     print(f"out      {outdir}")
 
     if args.dry_run:
@@ -750,6 +757,8 @@ def run(args) -> int:
         "map": map_name,
         "game": game_name,
         "seed": args.seed,
+        # Faction per ENGINE team id (not per spec like teams[] below).
+        "sides": team_sides,
         "minutes_cap": args.minutes,
         # Which income the run actually had. Behaviours are income-gated, so a
         # run is not comparable to one at a different bonus.

@@ -1343,11 +1343,21 @@ warns of.
 apexearth 2026-09-12: "adding personality to each unique AI randomly. Simple
 high level modifiers affecting an AI's interest in making certain things --
 Economy, Defense, Army, T3 Army, Air, Nuke Weapons, LRPC." Seven traits per
-instance, each log-uniform in [1/(1+s), 1+s] (0.35: 0.74x to 1.35x), rolled
-once and logged as `apex: persona t=N rolled ...`. They multiply levers that
-already exist -- the army and defence targets, the draw value of eco and
-defence wants, the strategic wants (gantry/silo/big gun/air plant), the air
-commitment -- never a gate. 0 makes every instance identical: the A/B arm.
+instance, each log-uniform in [1, 1+s] (0.35: 1x to 1.35x), rolled once and
+logged as `apex: persona t=N rolled ...`. They multiply levers that already
+exist -- the army and defence targets, the draw value of eco and defence
+wants, the strategic wants (gantry/silo/big gun/air plant), the air commitment
+-- never a gate. 0 makes every instance identical: the A/B arm.
+
+Up only, never below 1 -- apexearth 2026-09-12, on seeing a roll of eco=0.76
+army=0.75: *"we should probably not go below 1 on eco and gantry ... maybe we
+should only ever increase some tendencies and not decrease them. i worry about
+some really bad configs."* The worst roll is now the neutral AI; a lean is
+extra interest in something, never starved interest in something else. The
+budget rows are still shares of one pot, so army=1.35 still buys its army out
+of the other rows -- the floor protects the pricing of eco wants and the
+gantry, not the eco share. The adaptation leans were already all >= 1. In a
+duel nuke and lrpc stay at 1 (was: clamped from above).
 Replaced `TUNE_PERSONA` (the six discrete kinds -- berserker, turtle, greedy,
 airboss, siloist, rearm -- whose budget lever nothing read since f4b8cdcc).
 The default width is his to move; nothing measured it yet.
