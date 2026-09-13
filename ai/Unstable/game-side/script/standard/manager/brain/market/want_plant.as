@@ -740,6 +740,16 @@ float LineUnitWorth(int pd)
 	return v;
 }
 
+bool HandBuilt(int d)
+{
+	const array<int>@ bb = Catalog::gBuiltBy[d];
+	for (uint i = 0; i < bb.length(); ++i) {
+		if (Catalog::gMobile[bb[i]] && Catalog::gBuilder[bb[i]])
+			return true;
+	}
+	return false;
+}
+
 float LineBestWorth(int plantDef)
 {
 	float best = 0.f;
@@ -762,14 +772,16 @@ float LineQualityMul(int plantDef)
 		gLineQual.resize(Catalog::gDefCount + 1);
 	if (ai.frame >= gLineQualAt + MINUTE) {
 		gLineQualAt = ai.frame;
-		array<float> bestOf(6, 0.f);   // class*2 + (tier>1)
+		array<float> bestOf(12, 0.f);   // class*4 + tier
 		array<float> own(Catalog::gDefCount + 1, 0.f);
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			// a plant is a line only if a mobile builder can place it: the
+			// scavenger lootbox "plants" build things no line ever will
 			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
-				|| (Catalog::gBuildsList[d].length() == 0))
+				|| (Catalog::gBuildsList[d].length() == 0) || !HandBuilt(d))
 				continue;
 			own[d] = LineBestWorth(d);
-			const int k = PlantClass(d) * 2 + ((PlantTier(d) > 1) ? 1 : 0);
+			const int k = PlantClass(d) * 4 + PlantTier(d);
 			if (own[d] > bestOf[k])
 				bestOf[k] = own[d];
 		}
@@ -778,7 +790,7 @@ float LineQualityMul(int plantDef)
 			gLineQual[d] = 1.f;
 			if (own[d] <= 0.f)
 				continue;
-			const int k = PlantClass(d) * 2 + ((PlantTier(d) > 1) ? 1 : 0);
+			const int k = PlantClass(d) * 4 + PlantTier(d);
 			gLineQual[d] = own[d] / bestOf[k];
 			if (PlantClass(d) == PC_LAND)
 				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gLineQual[d], "", 0, 2);
