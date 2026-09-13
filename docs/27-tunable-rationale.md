@@ -1574,7 +1574,21 @@ can go (a smooth ramp stops nothing, a field of ridges stops everything) --
 normalised to the best line of the class and tier and applied to the WHOLE
 plant price and to the tech want's `lineW`. On Comet Catcher Remake that reads
 T1 armvp 0.66x0.88 against armlab 0.51x0.95: vehicles; on Sulphur Springs
-(coverage 54 vs 66) the T2 vehicle lab still wins on its units. Battery pending.
+(coverage 54 vs 66) the T2 vehicle lab still wins on its units.
+
+**Measured worse, 2026-09-12 late, and left OFF.** Third battery
+(`tournaments/20260912-223726-lineunits2`, the factor on the value the plant
+is actually priced by, 340a4a92): Comet control 4-0, treated 2-2; Isthmus
+control 0-1 (+3 time-outs), treated 0-2 (+2). The opening plant still read
+armlab 0.03 to armvp 0.02 with line 0.83 vs 1.00: the vehicle plant's own
+higher cost and build time outweigh a 17% line factor in the ETA price, and
+the proportional draw then opens a bot lab 7 games in 8. Where the factor did
+move the choice it opened the HOVER plant on Isthmus (line 0.95) and lost at
+24 min with 34k metal. Two of the treated Comet games opened a minute late and
+were dead by 16 min -- near-equal plant candidates alternating in the draw is
+the suspect (S14), unverified. What his rule needs is a factor that IS the
+decision on a flat map, not a nudge under the plant's price; and the hover
+plant must not qualify as "vehicles".
 
 ### `TUNE_COVER_LEAVES` = 1.f and `TUNE_COVER_BY_RAID` = 1.f
 

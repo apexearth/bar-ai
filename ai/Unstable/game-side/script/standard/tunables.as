@@ -1840,8 +1840,10 @@ const float TUNE_COVER_BY_RAID = 1.f;
 // [toggle 0/1] -- Weigh a production line, on its WHOLE price and in the tech
 //   want, by its units (median army-per-metal) times the ground they can cross
 //   (LineCoverage), against the best line of its class and tier. 0 restores
-//   the old pricing: terrain on the production half only. See docs/27.
-const float TUNE_LINE_QUALITY = 1.f;
+//   the old pricing: terrain on the production half only. Measured worse
+//   2026-09-12 (docs/27); off until the line factor is strong enough to be
+//   the decision rather than a 17% nudge under the plant's own cost.
+const float TUNE_LINE_QUALITY = 0.f;
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it
