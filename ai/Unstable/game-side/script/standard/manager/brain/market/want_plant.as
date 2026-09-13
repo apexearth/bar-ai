@@ -1136,7 +1136,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
 		const float prodOwn = prodHalf * FoeTierPlantMul(d)
 				* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d);
-		const float gain = (conHalf + prodOwn) * LineMul(d);
+		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
 		// A DUPLICATE line is only parallel capacity: value divides per
@@ -1289,6 +1289,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				/ float(1 + dupKin);
 		if (liveOther > 0)
 			dupGain /= float(1 + liveOther);
+		// the value below is built from dupGain, not gain: the line factor
+		// has to land here or it decides nothing (8 games said so)
+		dupGain *= LineMul(d);
 		// The duplicate decision, in one line, so the audit can assert it
 		// rather than infer it from two labs standing.
 		if ((reachKin > 0) && (ai.frame >= gNextPlantDupLog)) {
