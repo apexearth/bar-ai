@@ -830,8 +830,9 @@ float LineQualityMul(int plantDef)
 			// a plant is a line only if a mobile builder can place it: the
 			// scavenger lootbox "plants" build things no line ever will
 			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
-				|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) == 0))
-				continue;
+				|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) == 0)
+				|| !Producible(d))   // OUR tree: against the other faction's best
+				continue;            // a whole faction's plants would price at 0.66
 			own[d] = LineBestWorth(d);
 			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			if (own[d] > bestOf[k])
