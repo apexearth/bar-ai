@@ -106,6 +106,7 @@ public:
 
 	bool IsMoveFailed(int frame);
 	bool IsStuck() const { return isStuck; }
+	void ClearStuck() { isStuck = false; moveFails = 0; }
 
 	// A WAKE SAYS WHAT HAPPENED, NOT "RE-DECIDE EVERYTHING".
 	//

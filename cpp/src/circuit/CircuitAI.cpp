@@ -1541,6 +1541,14 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 	}
 
 	if (unit->IsMoveFailed(lastFrame)) {
+		// The commander is never written off: a permanent stuck flag swallowed
+		// every idle and move-failed event after minute 6.7 while a Reclaim of
+		// himself sat in the queue. The script's pen test frees him.
+		if (unit->GetCircuitDef()->IsRoleComm()) {
+			unit->ClearStuck();
+			LOG("apex: move-failed commander #%d", unit->GetId());
+			return 0;  // signaling: OK
+		}
 		// ROAM unsticks a fighter; on a builder it was permanent, and a
 		// roaming commander is the one that chases "into the sunset".
 		const bool roam = !unit->GetCircuitDef()->IsBuilder();
@@ -1550,9 +1558,6 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 				unit->CmdSetMoveState(CCircuitDef::MoveType::ROAM);
 			}
 		)
-		if (unit->GetCircuitDef()->IsRoleComm()) {
-			LOG("apex: move-failed commander #%d roam=%d", unit->GetId(), roam ? 1 : 0);
-		}
 //		Garbage(unit, "stuck");
 		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
 	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
