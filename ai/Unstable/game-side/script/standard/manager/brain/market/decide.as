@@ -1566,6 +1566,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// A category that could not be executed is not a job this hand
 			// can do: the role goes with the fall-through.
 			if (roled && (CategoryOf(ranked[i].kind) != ConRoleOf(unit))) {
+				NoteCategoryFell(ConRoleOf(unit));
 				ConRoleForget(int(unit.id));
 				++gRoleFell;
 			}
@@ -1624,6 +1625,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// exit that actually fires (measured: 472 all-refused elections in one
 	// game against zero of the no-want exit above).
 	if (roled) {
+		NoteCategoryFell(ConRoleOf(unit));
 		ConRoleForget(int(unit.id));
 		++gRoleFell;
 	}

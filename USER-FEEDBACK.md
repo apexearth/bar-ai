@@ -23,6 +23,42 @@ Three rules, because it reached 1,090 lines and 54 entries by not having them:
 Anything already implemented and validated should be gone from here. If you
 find such an entry, delete it in the same commit as whatever you were doing.
 
+## 2026-09-14 — the eco seat makes 100 advanced land cons; nanos, not cons; snap to the building's grid
+
+> "On 8v8 games our eco player still makes 100 advanced land cons. We don't
+> focus enough on eco because we spend so much time making constructors. We
+> should use a lot more nano turrets, and a lot less constructors."
+
+> "If I was doing eco i'd have only ~4 advanced constructors, ~10 t1 air cons,
+> and 5 or 6 advanced air cons. I wouldn't need so many because I would have a
+> ton of nano turrets helping me build everything. Alternatively if I want
+> less turrets I can make more t1 air cons for build power."
+
+> "We should building more organize, IE a converter only builds up, left,
+> down, or right. not up and slightly to the side. snap to a grid of the
+> building's own size. (have asked this before and it seems hard to get it
+> right?)"
+
+Measured (20260914-164249, Supreme Isthmus 8v8, seat = t7, 26 min): 115
+corack + 75 coraca + 64 corca ordered; mBP 97k of 309k built; 200k of 590k
+metal made was WASTED; live requests 7 at 25.8m with join=5677 against
+new=315; reactors opened one at a time ~70 s apart (16.2 17.1 18.5 19.8 20.7).
+Mechanisms: `feedRoom` licensed income/7 x 1.5 = 260 cons and counted no
+nano as a hand; a nano is not `IsBuilder()` so `MobileBPShare` read 1.0 for
+every team; `CostCrew` put OverflowM/7 (~140) hands on ONE reactor so
+`SitesSaturated` never opened the second. Grid snapping: open (TODO.md tip,
+C++ FindBuildSite).
+
+State after 2026-09-14's commit (Supreme Isthmus 8v8 seeds 3/4, seat at 24
+min): income 988-1085, cons 112-128, nanos 48-61, metal wasted 23-36%. The
+cons now come from the T2-con FLOOR, 2 + income/25 -- his 2026-08-23 "at
+100 metal per second we should have at least 5" scaled up: 50 at 1,200.
+Whether that ratio holds at 1,000+ income on a seat ringed with turrets is
+his call; the draw's own con demand now counts turrets as hands. Grid
+snapping: a taken slot now walks the def's own lattice rings first (C++).
+`tools/seat.py <run>` reads a seat; `expect.py` "eco seat hands are
+turrets" stays RED on the con count.
+
 ## 2026-09-13 — "Our bombing logic is boring": 0 bombers against a wing target of 102
 
 > "I want to see us making bombers and doing bombing raids on our enemies but

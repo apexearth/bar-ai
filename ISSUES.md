@@ -51,6 +51,18 @@ and its blast collateral; read one `decide` pair (energy vs convert) with
 the terms before touching either. He also saw two Legion players at 59
 advanced solars in another game -- unread.
 
+09-14, Supreme Isthmus 8v8 seed 3 (control ctl6 AND treated): the seat's
+corner puts its farm slot past a cliff. `unreach cormmkr by corack
+at=11197,558 gap=253` x27, `cortarg` x27 at the same point; 1,624 `unreach ?`
+(a wreck at 11008,391 handed to every idle con) -- 65% of the seat's 2,690
+elections. 16 fusions, 0 advanced converters, 91% of energy wasted, income
+88 at 24 min. The converter's `decide` pair on the seat: convert v=9.4
+(gain=11.3 m=726 t=797) against cortarg v=10.3 (gain=20.7 m=820 t=1193) --
+a 70-second payback priced level with a targeting facility; the sense gain
+is the term to read next. The convert/sense/nano/wreck paths now honour
+the reach mark (commit of 09-14); the corner itself still needs FarmSlot
+to test reach from home the way CanDefReach does for defence.
+
 ## 2026-09-13 — CLOSING: a 25-50% lead at 30 minutes marches in waves of 240 into 17k of static and never ends the game
 
 rd3hold2 battery, Carrot Mountains v2.0, all four treated games timed out at

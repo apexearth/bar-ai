@@ -24,6 +24,17 @@ int gNextRolesLog = 0;
 int gRoleTaken = 0;
 int gRoleDropped = 0;
 int gRoleFell = 0;      // released because the category could not be executed
+// When a category last fell: a role is not handed out again for ground the
+// executor is refusing (measured: 823 role=sense elections in five minutes
+// on one seat, each refused at the chokepoint and re-assigned the next tick).
+array<int> gCatFellAt(CAT_N, -999999);
+const int CAT_FELL_HOLD = 30 * SECOND;
+
+void NoteCategoryFell(int c)
+{
+	if ((c >= 0) && (c < CAT_N))
+		gCatFellAt[c] = ai.frame;
+}
 
 void ConRoleCensus(const array<float>& in wt, float sum)
 {
@@ -136,6 +147,8 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 		int bestGap = 0;
 		for (int c = 0; c < CAT_N; ++c) {
 			const int gap = gRoleQuota[c] - gRoleCount[c];
+			if (ai.frame < gCatFellAt[c] + CAT_FELL_HOLD)
+				continue;
 			if ((gap > bestGap) && RankedHas(ranked, c)) {
 				best = c;
 				bestGap = gap;

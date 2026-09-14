@@ -343,8 +343,10 @@ def exp_eco_seat(games):
     rows = []
     reds = 0
     for g in games:
-        for m in re.finditer(r"apex: rear-specialist ON team=(\d+)", g["text"]):
-            t = m.group(1)
+        grow = Counter(re.findall(r"apex: eco-status team=(\d+) growing=1", g["text"]))
+        for t, n in grow.most_common(1):
+            if n < 3:
+                continue
             stat = re.findall(r"apex: eco-status team=%s growing=(\d) P=(\d+)/(\d+)" % t, g["text"])
             if not stat:
                 continue
@@ -373,6 +375,44 @@ def exp_eco_seat(games):
                 reds += 1
     if not rows:
         return "NEED MORE", "no game with a rear specialist"
+    if reds:
+        return "RED", "; ".join(rows[:4])
+    return "OK", "; ".join(rows[:4])
+
+
+def exp_seat_hands(games):
+    """The eco seat's hands are turrets, not constructors (apexearth: ~4 T2 ground,
+    ~10 T1 air, 5-6 T2 air, "a ton of nano turrets"); its energy is converted."""
+    rows = []
+    reds = 0
+    con = re.compile(r"(arm|cor|leg)(ck|ack|ca|aca|cv|acv|ch|cs|acs|csa|acsub|otter|beaver|muskrat|fark|consul|decom|mlv)$")
+    nano = re.compile(r"(arm|cor|leg)nanotc")
+    for g in games:
+        if g["minutes"] < 20:
+            continue
+        # the seat is the team that spent longest growing (the role is
+        # re-elected early and a second team can print ON once)
+        grow = Counter(re.findall(r"apex: eco-status team=(\d+) growing=1", g["text"]))
+        for t, n in grow.most_common(1):
+            if n < 3:
+                continue
+            nanos = 0
+            for b in re.finditer(r"\[BARAI_BUILD\] team=%s ally=\d+ frame=\d+ min=[\d.]+ unit=(\w+) " % t, g["text"]):
+                if nano.match(b.group(1)):
+                    nanos += 1
+            # constructors are mobile and reach no gadget line: the lab's own
+            # produce decisions are the census (orders, a few never finish)
+            cons = 0
+            for a in re.finditer(r"apex: decide t=%s \S+ #\d+ -> produce:(\w+)" % t, g["text"]):
+                if con.match(a.group(1)):
+                    cons += 1
+            ew = re.findall(r"\[BARAI_WASTE\] frame=\d+ team=%s mWaste=\d+ mMade=\d+ eWaste=(\d+) eMade=(\d+)" % t, g["text"])
+            epct = int(100 * int(ew[-1][0]) / max(int(ew[-1][1]), 1)) if ew else -1
+            rows.append(f"{g['name']} t{t}: cons={cons} nanos={nanos} energy-wasted={epct}%")
+            if cons > 30 or nanos < cons or epct > 50:
+                reds += 1
+    if not rows:
+        return "NEED MORE", "no 20-min game with a rear specialist"
     if reds:
         return "RED", "; ".join(rows[:4])
     return "OK", "; ".join(rows[:4])
@@ -407,6 +447,7 @@ def exp_no_flipflop(games):
 EXPECTATIONS = [
     ("no rebuild of what we reclaimed", exp_no_flipflop),
     ("eco seat keeps to economy", exp_eco_seat),
+    ("eco seat hands are turrets", exp_seat_hands),
     ("health", exp_health),
     ("personas up-only", exp_personas_up_only),
     ("escorts pair", exp_escorts),

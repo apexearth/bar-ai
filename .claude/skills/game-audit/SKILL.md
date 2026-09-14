@@ -23,7 +23,13 @@ a 1.5x lead closes, personas up-only, health. `NEED MORE` when the pool is
 too thin; `RED` is his complaint back; `ab.py` prints it for the treated arm
 of every set. apexearth 2026-09-13: "I don't want to have to be the one who
 mentions that stuff is broken. I want you to find it automatically." Add the
-next expectation the day he raises the next complaint.
+next expectation the day he raises the next complaint. The eco seat has its
+own reader, `tools/seat.py <run>`: income curve, cons ordered, sites
+opened, grounds with crew and latency, elections vs `unreach`, waste. The
+seat only exists on an 8-player team, so it needs an 8v8 run (`run_match.py
+--per-side 8`, ~12 min wall at --speed 6); Supreme Isthmus seed 3 puts the
+seat in a corner whose rear is past a cliff -- a reach test, not a
+representative economy.
 
 **A FLAG is a lead, not a verdict.** Each one names the log line to read
 next. A clean section is a real answer too — do not manufacture findings.

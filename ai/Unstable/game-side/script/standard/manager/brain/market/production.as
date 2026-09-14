@@ -499,22 +499,24 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// T2 cons while the army was funded at 0.15, and at the end more metal
 	// stood in constructors than in living army.
 	float feedRoom = 1.f;
+	float starterNeed = 0.f;
 	{
-		const float drainR = ai.GetTunable("apex_request_drain", TUNE_REQUEST_DRAIN);
+		// HANDS ARE LATHE, AND A NANO IS A HAND. Counted as constructors
+		// against income/drain, the forecast licensed 260 cons at 1,231 m/s
+		// and saw no turret at all (his eco seat: "100 advanced land cons...
+		// we should use a lot more nano turrets, and a lot less
+		// constructors"). BPCapacity is the same fleet in metal/s, turrets
+		// at face value and walkers at their measured discount.
 		const float hands = aiEconomyMgr.metal.income
-				/ ((drainR > 1.f) ? drainR : 7.f)
 				* ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
-		float ownedHands = 0.f;
-		for (uint hd = 1; hd < gOwnCount.length(); ++hd) {
-			if ((gOwnCount[hd] > 0) && Catalog::gMobile[int(hd)]
-				&& Catalog::gBuilder[int(hd)] && !Catalog::gRezzer[int(hd)])
-				ownedHands += float(gOwnCount[hd]);
-		}
-		if (hands > 0.5f) {
+		const float ownedHands = BPCapacity();
+		starterNeed = hands;
+		// No need is no room -- not full room, which is what the old guard
+		// read when the need was under half a hand (measured: starters=0.5
+		// room=1.00 on the seat).
+		feedRoom = 0.f;
+		if ((hands > 0.5f) && (hands > ownedHands))
 			feedRoom = (hands - ownedHands) / hands;
-			if (feedRoom < 0.f)
-				feedRoom = 0.f;
-		}
 		// A PREDICTION THAT THE WASTE REFUTES. The line above forecasts how many
 		// lathes the income can keep fed and caps hands there. Overflow is the
 		// measurement that says the forecast is wrong: we are throwing metal
@@ -1502,7 +1504,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		+ " (gain=" + formatFloat(bestGain, "", 0, 2)
 		+ " m=" + formatFloat(Catalog::gCostM[best], "", 0, 0)
 		+ " serving=" + ServingCons()
-		+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
+		+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2)
+		+ " lathe=" + formatFloat(starterNeed, "", 0, 0) + "/" + formatFloat(BPCapacity(), "", 0, 0)
+		+ " room=" + formatFloat(feedRoom, "", 0, 2) + ")");
 	return Catalog::Def(best);
 }
 

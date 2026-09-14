@@ -10,6 +10,7 @@ namespace Requests {
 // them to the idle task, which is a fresh election next frame). Only sites
 // with a standing nanoframe: walkers already re-elect on their own.
 int gPeeled = 0;
+int gNanoFedPeel = 0;   // sites emptied because the ring finishes them
 int gNextPeelLog = 0;
 void PeelSurplus()
 {
@@ -30,9 +31,19 @@ void PeelSurplus()
 		// while SiteWorkerCap admitted against another only cycled them.
 		// Big energy peels to the SAME number the join rung admits (its
 		// cost-derived crew), or the two rungs cycle the same hands.
-		const int wantN = IsBigEnergy(t.buildDef)
+		int wantN = IsBigEnergy(t.buildDef)
 				? int(SiteWorkerCap(t.buildDef))
 				: int(FeedableCrew(t.buildDef));
+		// THE FOUNDER LEAVES TOO. A frame the turrets in reach finish on
+		// their own keeps no hand at all -- the join rung already refuses
+		// joiners on that test (nano-fed), but the con that broke ground
+		// stayed to the end, one election fewer per site (apexearth, on
+		// his own eco: "a ton of nano turrets helping me build everything";
+		// "~4 advanced constructors").
+		if ((wantN > 0) && NanoFed(t, crew.length(), 0.f, 0.f)) {
+			wantN = 0;
+			++gNanoFedPeel;
+		}
 		int surplus = int(crew.length()) - wantN;
 		// A few at a time, largest ids first -- the same stampede guard the
 		// hold rung uses: everyone reads the same pre-order counts.
@@ -59,7 +70,8 @@ void PeelSurplus()
 	if ((peeledNow > 0) && (ai.frame >= gNextPeelLog)) {
 		gNextPeelLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: peeled " + peeledNow
-			+ " surplus assister(s) back to the auction (total " + gPeeled + ")");
+			+ " surplus assister(s) back to the auction (total " + gPeeled
+			+ " nanoFed=" + gNanoFedPeel + ")");
 	}
 }
 

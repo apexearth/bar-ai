@@ -425,7 +425,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
 			continue;
-		if (noLines && (sc == SC_GANTRY))
+		// ...and no silo, big gun or heavy turret either: they are the
+		// military ("makes no military, focusing on economy"). The anti-nuke
+		// stays, priced on the enemy's silos as before.
+		if (noLines && (sc != SC_ANTINUKE))
 			continue;
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;

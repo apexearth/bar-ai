@@ -2244,20 +2244,32 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 	// only pitch on which two of them touch), widened by script where the death
 	// explosion makes a flush pack a single-bomb loss. Strides stay whole
 	// multiples of the footprint, so widened lattices interleave exactly.
-	float cellLat = gridCell;
-	float cellDepth = gridCell;
+	// The frame is snapped to a cardinal, and an east/west facing swaps the
+	// footprint axes, so the across-axis stride is X or Z depending on facing.
+	float cellLat, cellDepth;
+	LatticeStrides(def, facing, cellLat, cellDepth);
+	const float sLat = std::round(lat / cellLat) * cellLat;
+	const float sDepth = std::round(depth / cellDepth) * cellDepth;
+	LatticePoint(sLat, sDepth, cellLat, cellDepth, pos.y, def, facing, outPos);
+	return true;
+}
+
+void CCircuitAI::LatticeStrides(CCircuitDef* def, int facing, float& cellLat, float& cellDepth) const
+{
+	cellLat = gridCell;
+	cellDepth = gridCell;
 	if (def != nullptr) {
-		// The frame is snapped to a cardinal, and an east/west facing swaps the
-		// footprint axes, so the across-axis stride is X or Z depending on facing.
 		const bool swap = ((facing != UNIT_NO_FACING) && ((facing & 1) == 1));
 		cellLat = swap ? def->GetLatticeStrideZ() : def->GetLatticeStrideX();
 		cellDepth = swap ? def->GetLatticeStrideX() : def->GetLatticeStrideZ();
 		if (cellLat < gridCell) cellLat = gridCell;
 		if (cellDepth < gridCell) cellDepth = gridCell;
 	}
-	float sLat = std::round(lat / cellLat) * cellLat;
-	float sDepth = std::round(depth / cellDepth) * cellDepth;
+}
 
+void CCircuitAI::LatticePoint(float sLat, float sDepth, float cellLat, float cellDepth, float y,
+		CCircuitDef* def, int facing, AIFloat3& outPos) const
+{
 	// Walkways run on BOTH axes, so a snapped cell that lands in one is pushed
 	// clear of it. Without this the grid packs the corridors shut, which is the
 	// self-walling it exists to prevent. Lateral lanes alone leave slabs the
@@ -2269,7 +2281,7 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 	}
 
 	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
-					  pos.y,
+					  y,
 					  gridAnchor.z - gridFwd.z * sDepth + gridFwd.x * sLat);
 	// Onto the engine's build lattice: Pos2BuildPos is the engine's own
 	// center-parity mapping (16k, +8 per odd half-footprint axis, facing swaps
@@ -2279,7 +2291,25 @@ bool CCircuitAI::SnapToBaseGrid(const AIFloat3& pos, AIFloat3& outPos,
 		outPos = CTerrainManager::Pos2BuildPos(def, outPos, facing);
 	}
 	CTerrainManager::CorrectPosition(outPos);
-	return true;
+}
+
+bool CCircuitAI::LatticeNeighbour(const AIFloat3& snapped, CCircuitDef* def, int facing,
+		int i, int j, AIFloat3& outPos) const
+{
+	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(snapped)) {
+		return false;
+	}
+	float cellLat, cellDepth;
+	LatticeStrides(def, facing, cellLat, cellDepth);
+	const float dx = snapped.x - gridAnchor.x;
+	const float dz = snapped.z - gridAnchor.z;
+	const float depth = -(dx * gridFwd.x + dz * gridFwd.z) + float(j) * cellDepth;
+	const float lat = dx * -gridFwd.z + dz * gridFwd.x + float(i) * cellLat;
+	if ((depth * depth + lat * lat) > (gridRange * gridRange)) {
+		return false;
+	}
+	LatticePoint(lat, depth, cellLat, cellDepth, snapped.y, def, facing, outPos);
+	return utils::is_valid(outPos);
 }
 
 // A large building found no site. Recorded rather than acted on: deciding what

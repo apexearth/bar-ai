@@ -277,7 +277,12 @@ float MobileBPShareNow()
 	float all = 0.f;
 	for (uint c = 1; c < gOwnCount.length(); ++c) {
 		const int d = int(c);
-		if ((gOwnCount[c] <= 0) || !Catalog::gBuilder[d] || (Catalog::gBuildPower[d] <= 0.f))
+		// A nano turret is not IsBuilder() (no build options), and it is
+		// the static lathe this share exists to see: gated on gBuilder it
+		// read 1.0 for every team with any number of turrets standing.
+		if ((gOwnCount[c] <= 0) || (Catalog::gBuildPower[d] <= 0.f))
+			continue;
+		if (Catalog::gMobile[d] && !Catalog::gBuilder[d])
 			continue;
 		if (!Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0))
 			continue;   // a factory

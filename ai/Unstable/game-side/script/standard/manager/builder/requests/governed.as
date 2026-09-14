@@ -254,7 +254,20 @@ uint EffectiveCap(const CCircuitDef@ want)
 	}
 	const float per = want.costM * ai.GetTunable("apex_dup_bank", TUNE_DUP_BANK);
 	if (per > 0.f) {
-		const uint wealth = 1 + uint(aiEconomyMgr.metal.current / per);
+		// ...AND THE FLOW NOTHING IS SPENDING, over the duplicate's own
+		// build. A bank capped by storage under one reactor's price read
+		// "not wealthy" while a thousand metal a second was thrown away
+		// (the eco seat: storage 3,400, fusion 4,500, one site forever).
+		float paid = aiEconomyMgr.metal.current;
+		const float unspent = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+		const uint crew = ArrivalCrew(want);
+		if ((unspent > 0.f) && (crew > 0)) {
+			const float hand = Market::ConWorkerBP() * (80.f / 7.f);
+			const float secs = StartLatencyS()
+					+ Catalog::gBuildTime[int(want.id)] / (float(crew) * hand);
+			paid += unspent * secs;
+		}
+		const uint wealth = 1 + uint(paid / per);
 		if (wealth < cap)
 			cap = wealth;
 	}
@@ -292,8 +305,25 @@ bool SitesSaturated(const CCircuitDef@ want)
 		if ((has is null) || (has.id != want.id))
 			continue;
 		const uint busy = Workers(t);
-		if ((busy < cap) && ((busy > 0) || (t.target !is null)))
+		if ((busy < cap) && ((busy > 0) || (t.target !is null))) {
+			// ...unless the lathe already on it finishes it before another
+			// hand could arrive: counted by crew, a reactor with five hands
+			// and a ring stayed "unsaturated" for its whole build and the
+			// next one waited (seat: 7 reactors in 26 min, take.full x805).
+			if (t.target !is null) {
+				uint arrived = 0;
+				const float lathe = ArrivedLathe(t, arrived)
+						+ Market::RingBPAt(t.GetBuildPos());
+				const float lat = StartLatencyS();
+				if ((lathe > 0.f) && (lat > 1.f)) {
+					const int bd = int(has.id);
+					const float left = Catalog::gBuildTime[bd] * (1.f - Progress(t));
+					if (left / lathe <= lat)
+						continue;
+				}
+			}
 			return false;
+		}
 	}
 	return true;
 }
@@ -380,7 +410,34 @@ bool BankCovers(const CCircuitDef@ want)
 			&& ((aiEconomyMgr.metal.current - Market::MOrderedM()) >= want.costM);
 }
 
+// A CREW IS BOUNDED BY ARRIVAL. Past the hands that finish the site within
+// the fleet's measured order-to-ground wait, the next hand walks up to a
+// finished building -- so those hands are a second site, not a bigger crew.
+// Without this the overflow term above put ~140 hands on ONE reactor,
+// SitesSaturated never held, and a 1,000 m/s eco seat ran its reactors one at
+// a time ~60 s apart (measured: 20 hands each, 38 s latency, 200k of 590k
+// metal wasted). Zero until the first ground is broken.
+uint ArrivalCrew(const CCircuitDef@ want)
+{
+	const float lat = StartLatencyS();
+	const float hand = Market::ConWorkerBP() * (80.f / 7.f);
+	if ((lat <= 1.f) || (hand <= 1.f) || (want is null))
+		return 0;
+	const int wd = int(want.id);
+	if (!Catalog::ValidId(wd))
+		return 0;
+	const uint n = uint(1.f + Catalog::gBuildTime[wd] / (hand * lat));
+	return (n < MIN_INFLIGHT) ? MIN_INFLIGHT : n;
+}
+
 uint SiteWorkerCap(const CCircuitDef@ want)
+{
+	uint n = SiteWorkerCapFed(want);
+	const uint arrive = ArrivalCrew(want);
+	return ((arrive > 0) && (n > arrive)) ? arrive : n;
+}
+
+uint SiteWorkerCapFed(const CCircuitDef@ want)
 {
 	if (want is null)
 		return MIN_INFLIGHT;

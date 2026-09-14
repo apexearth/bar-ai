@@ -97,6 +97,21 @@ float StartLatencyS()
 {
 	return (gStartLatN > 0) ? (gStartLatSum / float(gStartLatN)) : 0.f;
 }
+// What a start is worth in metal right now: the mean price of the sites
+// standing in the register. 0 with none.
+float LiveSiteMeanCost()
+{
+	float sum = 0.f;
+	int n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		sum += t.buildDef.costM;
+		++n;
+	}
+	return (n > 0) ? (sum / float(n)) : 0.f;
+}
 // THE LATHE A BUILDING ACTUALLY GOT, per def: build time over the seconds from
 // its nanoframe to its finish, averaged over what we have finished. The crew
 // the request layer would admit is not the crew that shows up -- an advanced

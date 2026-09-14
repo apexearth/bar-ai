@@ -302,6 +302,14 @@ public:
 			float cell, float lanePitch, float laneHalf, float range);
 	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos,
 			CCircuitDef* def = nullptr, int facing = UNIT_NO_FACING) const;
+	// The lattice cell (i across, j deeper) from a snapped position, in the
+	// def's own strides; false outside the base. The neighbour of a taken
+	// slot is the next slot, never the next build square.
+	bool LatticeNeighbour(const springai::AIFloat3& snapped, CCircuitDef* def, int facing,
+			int i, int j, springai::AIFloat3& outPos) const;
+	void LatticeStrides(CCircuitDef* def, int facing, float& cellLat, float& cellDepth) const;
+	void LatticePoint(float sLat, float sDepth, float cellLat, float cellDepth, float y,
+			CCircuitDef* def, int facing, springai::AIFloat3& outPos) const;
 	// Is this ground one of the published walkways? The snap alone only keeps a
 	// street clear while the slot it snapped to is free; a base whose slots are
 	// all taken falls back to a 3200-elmo site search that lands wherever it

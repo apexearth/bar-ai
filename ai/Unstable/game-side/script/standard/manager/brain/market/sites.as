@@ -876,6 +876,17 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 		if (back > NanoRange() * 0.8f)
 			back = NanoRange() * 0.8f;
 		AIFloat3 spot = Base::gAnchor - Base::gFwd * back;
+		// The rear of the axis can be past a cliff (Supreme Isthmus corner
+		// seat: farm at 11197,558, every converter and radar asked there
+		// died unreachable, 91% of the energy wasted). Walk the farm back
+		// toward the anchor until the asker can reach it.
+		CCircuitDef@ mover = (unit !is null) ? Catalog::Def(int(unit.circuitDef.id)) : null;
+		if ((mover !is null) && !Catalog::gFlyer[int(mover.id)]) {
+			for (int step = 0; (step < 4) && (!OnMap(spot) || !ReachableBy(mover, spot)); ++step) {
+				back *= 0.5f;
+				spot = Base::gAnchor - Base::gFwd * back;
+			}
+		}
 		if (OnMap(spot)) {
 			gFarmPos = spot;
 			gFarmSet = true;

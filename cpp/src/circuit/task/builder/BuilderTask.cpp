@@ -33,8 +33,13 @@
 
 #include "AISCommands.h"
 #include "Log.h"
+#include <cstdlib>
 
 namespace circuit {
+
+// Lattice rings walked before a taken slot falls to the wide site search.
+static constexpr int LATTICE_RINGS = 4;
+
 
 using namespace springai;
 
@@ -452,8 +457,52 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		const float clear = SelfClearance(unit, buildDef);
 		if (free && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
 			searchRadius = slot;   // the slot is free: hold the task to it
-		} else if (!free) {
-			circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
+		} else {
+			// THE NEXT SLOT, NOT THE NEXT SQUARE. A taken slot fell straight
+			// to the wide search, which steps by one build square and lands
+			// the building a few squares off the row (apexearth: "a converter
+			// only builds up, left, down, or right. not up and slightly to the
+			// side. snap to a grid of the building's own size"). Rings of the
+			// def's own lattice, nearest first; the wide search only when no
+			// ring within reach has a free slot.
+			if (!free) {
+				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
+			}
+			const AIFloat3 self = unit->GetPos(frame);
+			const AIFloat3 snapped = pos;
+			bool found = false;
+			for (int ring = 1; (ring <= LATTICE_RINGS) && !found; ++ring) {
+				float bestSq = -1.f;
+				AIFloat3 best;
+				for (int j = -ring; j <= ring; ++j) {
+					for (int i = -ring; i <= ring; ++i) {
+						if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
+							continue;
+						}
+						AIFloat3 cell;
+						if (!circuit->LatticeNeighbour(snapped, buildDef, facing, i, j, cell)) {
+							continue;
+						}
+						const float sq = cell.SqDistance2D(snapped);
+						if ((bestSq >= .0f) && (sq >= bestSq)) {
+							continue;
+						}
+						const AIFloat3 p2 = terrainMgr->FindBuildSite(buildDef, cell, slot, facing);
+						if (!utils::is_valid(p2) || (p2.SqDistance2D(cell) > SQUARE(SQUARE_SIZE))
+							|| (p2.SqDistance2D(self) < SQUARE(clear)))
+						{
+							continue;
+						}
+						bestSq = sq;
+						best = cell;
+					}
+				}
+				if (bestSq >= .0f) {
+					pos = best;
+					searchRadius = slot;
+					found = true;
+				}
+			}
 		}
 	}
 	FindBuildSite(unit, pos, searchRadius);
@@ -886,9 +935,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		circuit->NoteBuildBlocked(endPos);
 		{
 			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);
-			circuit->LOG("apex: unreach %s by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
-					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?", cdef->GetDef()->GetName(),
-					endPos.x, endPos.z, gap, range,
+			circuit->LOG("apex: unreach %s bt=%i by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
+					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?", int(buildType),
+					cdef->GetDef()->GetName(), endPos.x, endPos.z, gap, range,
 					circuit->GetThreatMap()->GetThreatAt(endPos), cdef->GetPower());
 		}
 		SetDeathNote("unreach-safe");

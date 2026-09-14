@@ -300,6 +300,10 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 					++gNPTaken;
 					continue;
 				}
+				// Ground the reach veto refused is not a slot (the ring
+				// re-elected the same unreachable cell twelve times a game).
+				if (NearBlocked(p))
+					continue;
 				slots.insertLast(p);
 				// A slot just handed out is ground the next one must not take.
 				op.insertLast(p);

@@ -363,10 +363,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// neighbouring cluster centres as the 2s cache refills, and at 300 the
 		// re-elected want missed the standing request next door -- a new task
 		// per election, each killing the last (117 tasks, 2 towers, watched).
+		// Ground the C++ reach veto has refused is re-probed, not re-taken:
+		// a targeting facility was elected into the same unreachable corner
+		// 21 times in a row, eating a fifth of the eco seat's elections.
+		AIFloat3 sAt = groundDef ? OffFactoryExit(w.pos) : w.pos;
+		if (NearBlocked(sAt))
+			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
 		return Requests::Take(unit, w.def, Task::BuildType(bt),
-				Task::Priority::NORMAL,
-				groundDef ? OffFactoryExit(w.pos) : w.pos,
-				600.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f);
 	}
 	if (w.kind == WK_SUPER) {
 		// A gantry is a factory and goes through the plant's own siting and
@@ -907,7 +911,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return null;
 	}
 	if (w.kind == WK_CONVERT) {
-		const AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		// The same deadlock the energy branch probes for: the farm slot is
+		// deterministic, and a seat whose farm sits past a cliff lost every
+		// advanced converter it ordered at one point (27 unreach deaths,
+		// zero built, 91% of its energy thrown away).
+		if ((unit !is null) && NearBlocked(slot))
+			slot = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		const AIFloat3 cAt = ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f);
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
 				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
