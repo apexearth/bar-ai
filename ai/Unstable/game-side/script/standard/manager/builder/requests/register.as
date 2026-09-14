@@ -104,20 +104,20 @@ float StartLatencyS()
 // simulator's build times were wrong by that ratio. 0 until one has finished.
 array<int> gLiveStartAt;          // frame the nanoframe was first seen
 array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
-array<int> gEffBPN(ai.GetDefCount() + 1, 0);
+array<float> gEffBPN(ai.GetDefCount() + 1, 0.f);
 // ...and for the reactor CLASS as a whole, so the first advanced fusion is
 // priced at the lathe the fusions actually got rather than at the crew the cap
 // would admit.
 float gEffBPBigSum = 0.f;
-int gEffBPBigN = 0;
+float gEffBPBigN = 0.f;
 float EffBPFor(int defId)
 {
 	if ((defId < 0) || (defId >= int(gEffBPN.length())))
 		return 0.f;
-	if (gEffBPN[defId] > 0)
-		return gEffBPSum[defId] / float(gEffBPN[defId]);
-	if ((gEffBPBigN > 0) && IsBigEnergy(Catalog::Def(defId)))
-		return gEffBPBigSum / float(gEffBPBigN);
+	if (gEffBPN[defId] > 0.f)
+		return gEffBPSum[defId] / gEffBPN[defId];
+	if ((gEffBPBigN > 0.f) && IsBigEnergy(Catalog::Def(defId)))
+		return gEffBPBigSum / gEffBPBigN;
 	return 0.f;
 }
 
@@ -328,11 +328,16 @@ void Forget(IUnitTask@ task)
 					const float secs = float(ai.frame - gLiveStartAt[i]) / float(SECOND);
 					const int did = int(task.buildDef.id);
 					if ((secs > 1.f) && (did >= 0) && (did < int(gEffBPN.length()))) {
-						gEffBPSum[did] += Catalog::gBuildTime[did] / secs;
-						++gEffBPN[did];
+						// RECENT builds, not the lifetime mean: the hands a
+						// reactor got at minute eight said nothing about the
+						// pool at minute thirty, and the advanced reactor was
+						// priced on it (apexearth: "we keep building fusion
+						// for too long"). Each sample halves what came before.
+						gEffBPSum[did] = gEffBPSum[did] * 0.5f + Catalog::gBuildTime[did] / secs;
+						gEffBPN[did] = gEffBPN[did] * 0.5f + 1.f;
 						if (IsBigEnergy(task.buildDef)) {
-							gEffBPBigSum += Catalog::gBuildTime[did] / secs;
-							++gEffBPBigN;
+							gEffBPBigSum = gEffBPBigSum * 0.5f + Catalog::gBuildTime[did] / secs;
+							gEffBPBigN = gEffBPBigN * 0.5f + 1.f;
 						}
 					}
 				}

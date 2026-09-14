@@ -311,19 +311,30 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			+ " |" + bigLine);
 	}
 	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
+		const float mktS = w.walkSec + EtaWithN(int(w.def.id),
+				Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
+				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f);
+		// A TIE GOES TO THE MARKET. The ladder's seconds carry at least one
+		// order's start latency of noise; a reactor it calls sooner by less
+		// than that is not sooner (measured: fusion 20607 s against the
+		// advanced fusion's 20664, every election, so the AFUS never came --
+		// his "we keep building fusion for too long"). The market's pick
+		// carries survival, the crew it would get and the compounding the
+		// ladder does not price.
+		const bool sooner = etaS < mktS - Requests::StartLatencyS();
 		if (ai.frame >= gNextEPickLog) {
 			gNextEPickLog = ai.frame + 15 * SECOND;
 			AiLog(Factory::T() + "apex: epick t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " mkt=" + w.def.GetName() + " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
 				+ " eta=" + Catalog::Def(etaD).GetName() + " s=" + int(etaS)
-				+ " mktS=" + int(w.walkSec + EtaWithN(int(w.def.id),
-					Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
-					EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f)));
+				+ " mktS=" + int(mktS) + (sooner ? " eta-wins" : " tie-mkt"));
 		}
-		w = etaW;
-		w.kind = WK_ENERGY;
-		@w.def = Catalog::Def(etaD);
-		w.pos = eSite;
+		if (sooner) {
+			w = etaW;
+			w.kind = WK_ENERGY;
+			@w.def = Catalog::Def(etaD);
+			w.pos = eSite;
+		}
 	}
 	return w;
 }

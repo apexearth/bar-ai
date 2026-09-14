@@ -16,6 +16,29 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-13 — REACTORS: no advanced fusion in an 8v8 at 733 income; the eco seat wastes 13k E/s with no converters
+
+His watched Carrot 8v8 (all Legion): fusions 5-16 per player, ZERO advanced
+fusions in 34 minutes, one player at 733 m/s. `ebig t=7 ... mkt=legafus
+eta=legfus` -- the market picks the AFUS, the ETA re-ranks to the fusion on
+seconds-to-target, and the ETA's build power for a never-built def is the
+lifetime mean of what fusions got (`Requests::EffBPFor`), i.e. the crews of
+minute eight applied at minute thirty. 09-13: the measurement is now
+recency-weighted (each sample halves what came before). The Legion AFUS is
+10,500 metal / 340k build time against the fusion's 4,900 / 80k, so the
+class mean still undersells it on any pool that has grown -- if it still
+never comes, price the AFUS on the crew it would GET (CostCrew x con BP +
+nano lathe in reach), which is what the market side already does.
+
+The eco seat in the earlier game: energy income 18k, pull 6.5k, 13k/s
+wasted, bank 94% -- 84 cloakable fusions and 21 fusions bought, converter
+want `v=0.010`, `standing=0`. The generator keeps 25% of its worth in the
+wasted band (TUNE_E_WASTE_WORTH) and the converter is supposed to outrank it
+there; it did not. The converter's mCost carries its E bill, its space rent
+and its blast collateral; read one `decide` pair (energy vs convert) with
+the terms before touching either. He also saw two Legion players at 59
+advanced solars in another game -- unread.
+
 ## 2026-09-13 — CLOSING: a 25-50% lead at 30 minutes marches in waves of 240 into 17k of static and never ends the game
 
 rd3hold2 battery, Carrot Mountains v2.0, all four treated games timed out at

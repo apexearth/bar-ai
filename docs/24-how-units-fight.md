@@ -1123,3 +1123,11 @@ Watching the first game of it: *"I see who is doing eco and the issue I'm seeing
 is they spend huge on defenses. Almost 10k on defenses spent by minute 13, we
 would eco so much faster if we didn't do that."* The seat's defence target is
 zero while it grows.
+
+Same game: *"they made 15k worth of energy buildings but aren't making
+converters. Lastly we don't seem to be transitioning early enough to making
+AFUS buildings. We keep building fusion for too long. Look at the last fix for
+fusion -> afus, it went too strong."* And: *"two players on our team made 59
+advanced solars -- both legion -- I'm unsure if legion players have an issue
+making fusion/afus."* Measured in that game: no team of eight built an
+advanced fusion in 34 minutes (fusions 5-16 each, one at 733 income).
