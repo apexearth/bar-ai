@@ -218,10 +218,21 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 		best = gBestMcell;
 	}
 	const float upside = ((best > mine) ? (best - mine) : 0.f) * float(cells) * ePM * crowd;
+	// A DEF WE WOULD REFUSE TO BUILD KEEPS NO CREDIT FOR ITS TRICKLE
+	// (apexearth 2026-09-13: "Our base ends up cluttered with buildings which
+	// aren't worth the space they take up. Old energy, old converters, old
+	// defenses. We need to clean up a lot faster"). Its output netted against
+	// its refund held a solar at zero for the whole game once an advanced
+	// fusion stood; the same per-cell dwarf test that refuses to build it
+	// says its output is had cheaper on the same ground.
+	const bool dwarfed = (Catalog::gMakeE[d] > 0.f) ? GenObsoleteOnArrival(d)
+			: ((Catalog::gConvCapacity[d] > 0.f) ? ConvObsoleteOnArrival(d) : false);
+	const float trickle = dwarfed ? 0.f
+			: (Catalog::gMakeE[d] * ePM
+				+ Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]);   // the metal it converts
 	return (Catalog::gCostM[d] + SpaceRentM(at, cells) + room) / hz
 			+ upside
-			- Catalog::gMakeE[d] * ePM
-			- Catalog::gConvCapacity[d] * Catalog::gConvRatio[d];   // the metal it converts
+			- trickle;
 }
 
 float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,

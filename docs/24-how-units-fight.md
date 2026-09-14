@@ -1144,3 +1144,11 @@ prefer air?... Also still mostly just building fusions, not afuses."* Measured:
 the seat's hands line read `tBuild=1578 tFeed=242` at 15.9k build power and
 1,142 income -- the order start latency counted as lathe time -- and bought 147
 advanced bot constructors against 28 air.
+
+*"Do rezbots reclaim old buildings? We need to increase the speed at which we
+reclaim old stuff."* They did not: the rez chain had no retirement rule while
+the market discounted every constructor's retirement bid the moment a rez bot
+existed. *"Our base ends up cluttered with buildings which aren't worth the
+space they take up. Old energy, old converters, old defenses. We need to clean
+up a lot faster."* And: *"land reclaim seems to feed into resurrection sub want
+and it shouldn't. We often make tons of rez boats but no real navy."*

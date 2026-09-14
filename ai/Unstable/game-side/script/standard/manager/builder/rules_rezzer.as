@@ -521,6 +521,21 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 // bot claiming its own nearest target immediately. The wreck scans above were
 // moved off their shared clock for the same reason.
 
+// OLD BUILDINGS ARE THE REZ BOT'S TO EAT (apexearth 2026-09-13: "Do rezbots
+// reclaim old buildings? We need to increase the speed at which we reclaim
+// old stuff"). The market's retirement want discounts every constructor's
+// bid by the rez bias the moment a rez bot exists -- on the reasoning that
+// the bot will take the work -- and this chain never asked for it, so
+// obsolete solars, dwarfed converters and walled-in towers stood for the
+// game. The market prices the victim; the bot eats it.
+IUnitTask@ RezzerRetire(CCircuitUnit@ unit)
+{
+	Market::Want@ w = Market::ProposeReclaimObsolete(unit);
+	if ((w is null) || (w.value <= 0.f) || (w.kind != Market::WK_RECLAIM))
+		return null;
+	return Market::ExecuteWant(unit, w);
+}
+
 IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit))

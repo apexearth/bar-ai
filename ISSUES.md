@@ -16,6 +16,18 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-13 — REZ BOATS: the resurrection want is fed by land wrecks, so a shipyard buys rez boats and no navy
+
+apexearth: "land reclaim seems to feed into resurrection sub want and it
+shouldn't. We often make tons of rez boats but no real navy and thats not
+great." The rez fleet is sized by the recoverable stream (wreck metal per
+second + repair backlog, `rezwant`), and the stream is map-wide; a naval
+plant's rezzer product is priced on it like a land rezzer, so land wrecks
+buy boats that cannot reach them. Unread: split the stream by domain
+(floating wrecks for hovers/boats, land for bots) in `Military::WreckRateM`
+or wherever `wreckPs` is summed, and price a rezzer on the share its own
+movetype can reach.
+
 ## 2026-09-13 — REACTORS: no advanced fusion in an 8v8 at 733 income; the eco seat wastes 13k E/s with no converters
 
 His watched Carrot 8v8 (all Legion): fusions 5-16 per player, ZERO advanced

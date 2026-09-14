@@ -58,8 +58,8 @@ string HeldBtStr()
 			s += k + ":" + gRzHeldBt[k] + ",";
 	return s;
 }
-const int RZ_RULES = 8;
-array<int> gRzRule(RZ_RULES, 0);   // rescue medic salvage eat rez repair idle none
+const int RZ_RULES = 9;
+array<int> gRzRule(RZ_RULES, 0);   // rescue medic salvage eat rez repair idle none retire
 int gRzGate = 0;
 // Elections held while something could already shoot the bot where it stands:
 // the DLL's guard is walking it out at the same moment (BuilderManager's
@@ -85,6 +85,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 	if (t is null) { _tR = Perf::T0(); @t = RezzerFrontSalvage(unit); why = 2; Perf::Add("rz.salvage", _tR); }
 	if (t is null) { _tR = Perf::T0(); @t = RezzerEatCorpse(unit); why = 3; Perf::Add("rz.eat", _tR); }
 	if (t is null) { _tR = Perf::T0(); @t = RezzerRezOrEat(unit); why = 4; Perf::Add("rz.rezeat", _tR); }
+	if (t is null) { _tR = Perf::T0(); @t = RezzerRetire(unit); why = 8; Perf::Add("rz.retire", _tR); }
 	if (t is null) { _tR = Perf::T0(); @t = RezzerRepairNearby(unit); why = 5; Perf::Add("rz.repair", _tR); }
 	if (t is null) { _tR = Perf::T0(); @t = RezzerIdle(unit); why = 6; Perf::Add("rz.idle", _tR); }
 	if (t is null)
@@ -129,7 +130,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 				bots += Market::gOwnCount[d];
 		AiLog(Factory::T() + "apex: rez-time bots=" + bots
 			+ " rescue=" + gRzRule[0] + " medic=" + gRzRule[1] + " salvage=" + gRzRule[2]
-			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " repair=" + gRzRule[5]
+			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " retire=" + gRzRule[8] + " repair=" + gRzRule[5]
 			+ " idleRule=" + gRzRule[6] + " none=" + gRzRule[7]
 			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto
 			+ " hurtOk=" + gRzOkHurt + "/" + (gRzOkHurt + gRzVetoHurt)
