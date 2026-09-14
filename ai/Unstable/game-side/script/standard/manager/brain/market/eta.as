@@ -336,6 +336,7 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 			k = n[i];
 		t += float(k) * (StepSec(p.def[i], p.cost[i], P, bank,
 				RungBP(p.def[i], p.mob[i] ? bpMob : bp), eAvail) + lat);
+		gLadderLatS += float(k) * lat;
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -357,6 +358,10 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 // never carried it -- a wind at v=4.65 beat the nano at v=51.72, and one
 // turret stood while the bank overflowed (his 8v8, 2026-09-11).
 float gLadderAddBP = 0.f;
+// The latency the last EtaWithN plan carried: the part of its seconds that is
+// a per-order guess, not lathe or feed -- the resolution two plans can be
+// told apart at.
+float gLadderLatS = 0.f;
 float RungBP(int d, float bp)
 {
 	const float eff = Requests::EffBPFor(d) + gLadderAddBP;
@@ -409,6 +414,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	float eAvail = EtaEnergyAvail();
 	float t = 0.f;
 	gLadderAddBP = 0.f;
+	gLadderLatS = 0.f;
 	if (d > 0) {
 		if (k < 1)
 			k = 1;
@@ -428,8 +434,10 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 		bp1 = RungBP(d, bp1);
 		for (int u = 0; u < k; ++u) {
 			t += StepSec(d, Catalog::gCostM[d], P, bank, bp1, eAvail) / surv;
-			if (u > 0)
+			if (u > 0) {
 				t += lat;   // the first unit's walk is the asker's own, charged by the caller
+				gLadderLatS += lat;
+			}
 			bank = 0.f;
 			if (gainM > 0.f)
 				P += gainM;
@@ -484,6 +492,17 @@ float EtaHandsShare()
 	// which of the two the target is actually waiting on.
 	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
+	// METAL IS FED BY METAL. Feeding a rung's metal cost from P -- economic
+	// power, which carries the energy income at what a converter would make
+	// of it -- read the feed as five times faster than the metal income can
+	// deliver whenever energy was being wasted, and so the lathe as the
+	// bottleneck (measured: tBuild=1443 tFeed=205 at 818 metal/s and a fleet
+	// that could lathe 1,100, hands=0.86 on 63 constructor orders). What
+	// actually arrives at a site is metal income plus the bank.
+	float feedM = aiEconomyMgr.metal.income
+			+ aiEconomyMgr.metal.current / 60.f;   // the bank as a minute's drawdown, as FreeMetalFlow reads it
+	if (feedM < 0.5f)
+		feedM = 0.5f;
 	float tBuild = 0.f;
 	float tFeed = 0.f;
 	uint i = 0;
@@ -511,7 +530,15 @@ float EtaHandsShare()
 		// rungs and bought 147 more advanced constructors (his watched eco
 		// seat: "we have like 100 advanced bot cons, way too many").
 		tBuild += float(k) * bt;
-		tFeed += float(k) * p.cost[i] / P;
+		{
+			float fd = p.cost[i] / feedM;
+			if (p.costE[i] > 0.f) {
+				const float fdE = p.costE[i] / ((eAvail > 1.f) ? eAvail : 1.f);
+				if (fdE > fd)
+					fd = fdE;
+			}
+			tFeed += float(k) * fd;
+		}
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
 		n[i] -= k;

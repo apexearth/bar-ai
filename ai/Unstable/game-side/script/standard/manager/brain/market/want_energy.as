@@ -62,7 +62,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// footprint -- it walked the whole defence field per rung for the same number.
 	const float genRentCell = SpaceRentM(eSite, 1);
 	const bool  genDiag = ai.GetTunable("apex_efloor_diag", 0.f) > 0.f;
-	const float genCrowdCell = PfCrowd() * PfMetalPerCell()
+	// ROOM IS LOCAL (protect_field.as on PfCrowd: the base-wide fill FALLS as
+	// the base grows, 0.024 in a full base against 0.15 at the site). The
+	// ground a reactor competes for is the ground around where it would stand.
+	const float genCrowdCell = PfCrowdAt(eSite, 400.f) * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 	// A STALL IS ENDED BY WHAT ARRIVES SOONEST, not by the best rate of return:
 	// the growth premium scales with a generator's size, so an afus out-valued
@@ -308,26 +311,34 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		AiLog(Factory::T() + "apex: ebig t=" + ai.teamId + " " + unit.circuitDef.GetName()
 			+ " #" + unit.id + " mkt=" + w.def.GetName()
 			+ " eta=" + ((etaD > 0) ? Catalog::Def(etaD).GetName() : "-")
-			+ " |" + bigLine);
+			+ " |" + bigLine
+			// The room terms, so "value the space more" can be read against
+			// what the site actually charges (apexearth 2026-09-13).
+			+ " | rentCell=" + formatFloat(genRentCell, "", 0, 2)
+			+ " crowdCell=" + formatFloat(genCrowdCell, "", 0, 2)
+			+ " crowd=" + formatFloat(PfCrowd(), "", 0, 3)
+			+ " local=" + formatFloat(PfCrowdAt(eSite, 400.f), "", 0, 3)
+			+ " m/cell=" + formatFloat(PfMetalPerCell(), "", 0, 1));
 	}
 	if (etaOn && (etaD > 0) && (w.def !is null) && (int(w.def.id) != etaD)) {
 		const float mktS = w.walkSec + EtaWithN(int(w.def.id),
 				Catalog::gMakeE[int(w.def.id)] * ConvRate(), 0.f, false,
 				EtaBatchN(Catalog::gMakeE[int(w.def.id)] * ConvRate(), etaP), 0.f);
-		// A TIE GOES TO THE MARKET. The ladder's seconds carry at least one
-		// order's start latency of noise; a reactor it calls sooner by less
-		// than that is not sooner (measured: fusion 20607 s against the
-		// advanced fusion's 20664, every election, so the AFUS never came --
-		// his "we keep building fusion for too long"). The market's pick
-		// carries survival, the crew it would get and the compounding the
-		// ladder does not price.
-		const bool sooner = etaS < mktS - Requests::StartLatencyS();
+		// A TIE GOES TO THE MARKET. The ladder's seconds carry a per-order
+		// latency guess on every rung of the plan; a reactor it calls sooner
+		// by less than that guess is not sooner (measured: fusion 7800 s
+		// against the advanced fusion's 8257 at 1,142 income, every election,
+		// so the AFUS never came -- his "we keep building fusion for too
+		// long"). The market's pick carries survival, the crew it would get,
+		// the room and the compounding the ladder does not price.
+		const bool sooner = etaS < mktS - gLadderLatS;
 		if (ai.frame >= gNextEPickLog) {
 			gNextEPickLog = ai.frame + 15 * SECOND;
 			AiLog(Factory::T() + "apex: epick t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " mkt=" + w.def.GetName() + " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
 				+ " eta=" + Catalog::Def(etaD).GetName() + " s=" + int(etaS)
-				+ " mktS=" + int(mktS) + (sooner ? " eta-wins" : " tie-mkt"));
+				+ " mktS=" + int(mktS) + " lat=" + int(gLadderLatS)
+				+ (sooner ? " eta-wins" : " tie-mkt"));
 		}
 		if (sooner) {
 			w = etaW;
