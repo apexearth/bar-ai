@@ -47,7 +47,10 @@ void CommWatch()
 	const int q = u.CmdQueueSize();
 	if (q > 0) ++gCwQpos; else ++gCwQzero;
 	++gCwSamples;
-	const bool still = (q <= 0) && (moved < 8.f);
+	// Not moving is still, orders or not: a penned commander holds a move
+	// order it cannot execute, and the q<=0 test read him as busy for
+	// seventeen minutes.
+	const bool still = (moved < 8.f);
 	if (still) {
 		++gCwStill;
 		if (gCwStillFrom < 0)

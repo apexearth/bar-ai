@@ -1100,9 +1100,8 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		CCircuitUnit@ victim = ai.GetTeamUnit(Military::gPenVictim[i]);
 		if ((victim is null) || (victim.circuitDef is null))
 			continue;
-		// Never the commander, on either side of the trade.
-		if (victim.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-			continue;
+		// The commander may be the PENNED side of the trade -- the wall that
+		// is eaten is a structure, never him (WallToEat).
 		const int vd = int(victim.circuitDef.id);
 		CCircuitUnit@ wall = null;
 		int wd = -1;

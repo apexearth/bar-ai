@@ -171,21 +171,8 @@ float UnspentByHands()
 	return aiEconomyMgr.metal.income - pull;
 }
 
-// THE SPILL BUYS HANDS ONLY WHILE THE HANDS CANNOT LATHE THE INCOME. Both
-// floors below add the unspent metal as more constructors; at 1,070 metal/s
-// that term asked for 71 on top of a fleet that could already lathe the
-// income (apexearth: "100 advanced bot cons, way too many"). The income
-// term stays: his "at 100 metal/s we should have at least 5" is about
-// reach, and with it at the base alone the T2 tier never came. The same
-// test OverflowBuysHands makes: past it, unspent metal is demand, not hands.
-bool HandsShortOfIncome()
-{
-	return BPCapacity() < aiEconomyMgr.metal.income;
-}
-
 int ConsNeedAny()
 {
-	const bool short = HandsShortOfIncome();
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
 	float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
 			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 44.f);
@@ -206,7 +193,7 @@ int ConsNeedAny()
 	// ...net of what the hands we have would spend if energy let them: an
 	// e-throttled fleet leaves metal unspent without being too few, and more
 	// hands add energy draw, not metal spend.
-	const float unspent = short ? UnspentByHands() : 0.f;
+	const float unspent = UnspentByHands();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)
@@ -222,14 +209,13 @@ int ConsNeedAny()
 // reach the ceiling, and the ReachesCeiling test is def-based, not lab-based.
 int CeilingConsNeed()
 {
-	const bool short = HandsShortOfIncome();
 	const float per = ai.GetTunable("apex_t2_con_per_m", TUNE_T2_CON_PER_M);
 	float want = ai.GetTunable("apex_t2_con_base", TUNE_T2_CON_BASE)
 			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 25.f);
 	// Unspent metal is hands we lack, at the ceiling tier as at the first:
 	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
 	// metal spilled per game (2026-09-08).
-	const float unspent = short ? UnspentByHands() : 0.f;
+	const float unspent = UnspentByHands();
 	if (unspent > 0.f) {
 		const float bp = ConWorkerBP();
 		if (bp > 0.f)

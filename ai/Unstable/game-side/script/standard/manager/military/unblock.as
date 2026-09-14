@@ -226,21 +226,22 @@ void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	// move is overridden, the unit never moves, and it reads as penned when it
 	// is working. Measured: without this the commander was tested at 1.0 min and
 	// a wind generator was reclaimed underneath it.
+	// ...UNLESS IT IS NOWHERE NEAR ITS SITE. A builder still for the pen
+	// window with a build order it cannot reach is not working, it is walled
+	// in -- his commander on Supreme Isthmus held 69 unreachable orders and
+	// 13 stuck re-elections from minute 2 to its death at 18.7, penned by its
+	// own solars 44 elmos away (apexearth: "They never ever fix the situation.
+	// They should reclaim whatever made them stuck"). At its site it works and
+	// is left alone; a build distance away from it, it is tested like any
+	// other unit, the commander included -- the trade below eats the cheaper
+	// side, which is never him.
 	IUnitTask@ t = unit.task;
-	if ((t !is null) && (t.GetType() == Task::Type::BUILDER))
-		return;
-	// A super parked on the defence line is standing still because it was told
-	// to -- but IUnitTask exposes GetType/GetBuildType and NOT GetFightType, so
-	// "parked" cannot be read directly. The existing gates cover it instead: the
-	// move test only calls a unit penned after TWO refused orders, and TryUnblock
-	// additionally requires UNBLOCK_MIN_WALL of our own structures ringing it.
-	// A parked super obeys the first order and is cleared.
-	// NOR the commander. It stands in the middle of the base by design, with our
-	// buildings packed around it, and CircuitAI re-tasks it every few seconds --
-	// so the move order is overridden and it reads as penned. Left in, it is
-	// the commander that every clearing order picks, and always wrongly.
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-		return;
+	if ((t !is null) && (t.GetType() == Task::Type::BUILDER)) {
+		const AIFloat3 site = t.GetBuildPos();
+		const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)];
+		if (!OnMap(site) || (at.distance2D(site) <= reach + 64.f))
+			return;
+	}
 	const AIFloat3 dir = ThinnestDir(at);
 	const AIFloat3 to = at + dir * (UNBLOCK_RING * 0.5f);
 	if (!OnMap(to))

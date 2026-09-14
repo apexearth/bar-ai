@@ -834,6 +834,19 @@ we should have at least 5"). Under that count a factory line orders one
 outright instead of pricing it against the army draw, which it loses whenever
 the army gap is open -- which is nearly always.
 
+NEGATIVE RESULT, 2026-09-14. Both floors also add the spilled metal as
+more constructors (unspent / con BP), and on his 8v8 seat at 1,070 income
+that term asked for 71 on top of 43 ("we have like 100 advanced bot cons,
+way too many"). Gating that term on BPCapacity() < income -- the
+OverflowBuysHands law -- and feeding the ETA's hands verdict from metal
+income instead of economic power was measured together over 12 paired
+Carrot 1v1s (Cortex, 30 min): metal built 335-554k -> 165-262k, damage
+efficiency 81-132 -> 55-103, T2 constructors 41-70 -> 16. On a map with
+seventy mexes the "excess" T2 constructors are the mohos. Reverted the
+same day; his complaint stands for the mex-limited 8v8 base, where the
+hands assist each other, and needs a term that reads what the hands are
+DOING, not their count.
+
 ### `TUNE_CON_BASE` = 2.7f
 
 constructors of ANY TIER the line orders before the draw, the plain "how many

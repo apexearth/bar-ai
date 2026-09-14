@@ -492,17 +492,6 @@ float EtaHandsShare()
 	// which of the two the target is actually waiting on.
 	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
-	// METAL IS FED BY METAL. Feeding a rung's metal cost from P -- economic
-	// power, which carries the energy income at what a converter would make
-	// of it -- read the feed as five times faster than the metal income can
-	// deliver whenever energy was being wasted, and so the lathe as the
-	// bottleneck (measured: tBuild=1443 tFeed=205 at 818 metal/s and a fleet
-	// that could lathe 1,100, hands=0.86 on 63 constructor orders). What
-	// actually arrives at a site is metal income plus the bank.
-	float feedM = aiEconomyMgr.metal.income
-			+ aiEconomyMgr.metal.current / 60.f;   // the bank as a minute's drawdown, as FreeMetalFlow reads it
-	if (feedM < 0.5f)
-		feedM = 0.5f;
 	float tBuild = 0.f;
 	float tFeed = 0.f;
 	uint i = 0;
@@ -530,15 +519,7 @@ float EtaHandsShare()
 		// rungs and bought 147 more advanced constructors (his watched eco
 		// seat: "we have like 100 advanced bot cons, way too many").
 		tBuild += float(k) * bt;
-		{
-			float fd = p.cost[i] / feedM;
-			if (p.costE[i] > 0.f) {
-				const float fdE = p.costE[i] / ((eAvail > 1.f) ? eAvail : 1.f);
-				if (fdE > fd)
-					fd = fdE;
-			}
-			tFeed += float(k) * fd;
-		}
+		tFeed += float(k) * p.cost[i] / P;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
 		n[i] -= k;
