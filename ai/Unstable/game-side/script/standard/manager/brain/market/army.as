@@ -1154,8 +1154,12 @@ int gEcoStatusAt = 0;
 // (apexearth 2026-08-29: the eco role "does *not* work").
 float EcoRoleTargetM()
 {
-	return ai.GetTunable("apex_eco_target_base", TUNE_ECO_TARGET_BASE)
-			* IncomeMult();
+	array<Id>@ mates = ai.GetTeamIds();
+	const bool eight = (mates !is null) && (mates.length() >= 8);
+	const float base = eight
+			? ai.GetTunable("apex_eco_target_base8", TUNE_ECO_TARGET_BASE_8)
+			: ai.GetTunable("apex_eco_target_base", TUNE_ECO_TARGET_BASE);
+	return base * IncomeMult();
 }
 
 // TRUE while the rear specialist is still building the economy it named --

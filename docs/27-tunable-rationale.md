@@ -1573,6 +1573,25 @@ Isthmus 8v8 +100%, the median player passes 500 at minute 20 and 855 by minute
 25, which is apexearth's "no army and no defense until like 20 minutes"
 expressed as economy rather than a clock.
 
+### `TUNE_ECO_TARGET_BASE_8` = 1000.f (2026-09-13)
+
+The same bar for an eight-player team. His design: "1 player does an eco
+role where they only activate their military once they've hit ~1000 metal
+income... if bonus is +100% then its 2000 metal income. So this would be
+only on an 8v8 map, 1 AI makes almost no defense and makes no military,
+focusing on economy. It should be the player furthest away from the
+enemies." The election (rear-most by margin, teams of 5+) is unchanged; the
+bar is 1000 x handicap on an 8-player team and 250 x handicap below that.
+What changed with it: while the role grows, the cover need, the spilled-metal
+floor and the escort bid buy no army for that player -- measured on his
+Carrot 8v8, the specialist (team 1) reached 386 of 500, then spent 76k on
+army against 48k on economy through exactly those three and lost 228k, the
+most on its team. Defence stays at its target (his 2026-09-02 correction:
+"they certainly would need to be making defense"), and the raid valve
+(EcoDangerNear) still ends the growth. Judge on `apex: eco-status` (P
+against the target by minute, danger flips) and the specialist's own
+metal lost.
+
 ### `TUNE_AIR_ECO_BASE` = 100.f
 
 Economic power, at NO-BONUS scale, before the bomber raid is worth mounting at

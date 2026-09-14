@@ -152,6 +152,7 @@ local NAMES = {
 	"apex_def_off",
 	"apex_army_eco_s",
 	"apex_eco_target_base",
+	"apex_eco_target_base8",
 	"apex_air_eco_base",
 	"apex_line_terrain",
 	"apex_line_quality",

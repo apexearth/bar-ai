@@ -1809,6 +1809,11 @@ const float TUNE_ARMY_ECO_S = 66.f;
 //   game's own handicap, so 250 here is 500 in a +100% game. See docs/27.
 const float TUNE_ECO_TARGET_BASE = 250.f;
 
+// The same economy for an EIGHT-player team, where the rear seat is far enough
+//   from the war to spend the whole early game on it (apexearth 2026-09-13:
+//   "~1000 metal income... and if bonus is +100% then its 2000"). See docs/27.
+const float TUNE_ECO_TARGET_BASE_8 = 1000.f;
+
 // Economic power, at NO-BONUS scale, before the bomber raid is worth mounting
 //   at all -- the game's handicap multiplies it, so 100 here is apexearth's "200
 //   m/s" in a +100% game. See docs/27.

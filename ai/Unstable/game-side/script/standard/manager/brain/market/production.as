@@ -436,6 +436,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// somewhere to go.
 	if (!ovfHands && (richGap > armyGap))
 		armyGap = richGap;
+	// THE ROLE MEANS IT (apexearth 2026-09-13: the rear specialist "makes no
+	// military, focusing on economy"). ArmyTarget reads zero while it grows,
+	// but the cover need, the spilled-metal floor and the escort bid all
+	// bought army past it -- his watched specialist spent 76k on army against
+	// 48k on economy and lost the most metal on its team. While growing, none
+	// of those asks; the raid valve (EcoDangerNear) ends the growth instead.
+	const bool ecoGrowing = EcoRoleGrowing();
+	if (ecoGrowing) {
+		armyGap = 0.f;
+		coverShare = 0.f;
+	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
 	// already zero here and a second multiplier would apply the same rule
@@ -750,7 +761,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
 		Market::EscortFieldCensus();
-		if (!Catalog::gBuilder[d] && EscortWorthy(d)) {
+		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing) {
 			if (escShort < -1)
 				escShort = EscortShortfall();
 			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
@@ -827,7 +838,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
 			}
-			const float sinkGap = ovfHands ? 0.f : (richGap * roleMul);
+			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richGap * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)

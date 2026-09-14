@@ -1108,3 +1108,13 @@ our defenses into blobs like you see here in the center. The side of the map
 where green keeps getting attacked is completely undefended, yet we've made 3
 pulsars all in the same area. This is a very bad defence flaw which we really
 need to address."*
+
+## 2026-09-13 (evening) — the eight-player eco seat
+
+*"Can we try adding in something where 1 player does an eco role where they
+only activate their military once they've hit ~1000 metal income? They spend
+the entire early game only making economy... and if bonus is +100% then its
+2000 metal income. So this would be only on an 8v8 map, 1 AI makes almost no
+defense and makes no military, focusing on economy. It should be the player
+furthest away from the enemies."* Shown the existing rear specialist at 500
+and what became of it in his game: *"Yes let's do it."*
