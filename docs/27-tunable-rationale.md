@@ -1586,9 +1586,12 @@ What changed with it: while the role grows, the cover need, the spilled-metal
 floor and the escort bid buy no army for that player -- measured on his
 Carrot 8v8, the specialist (team 1) reached 386 of 500, then spent 76k on
 army against 48k on economy through exactly those three and lost 228k, the
-most on its team. Defence stays at its target (his 2026-09-02 correction:
-"they certainly would need to be making defense"), and the raid valve
-(EcoDangerNear) still ends the growth. Judge on `apex: eco-status` (P
+most on its team. Defence is ZERO while it grows too, his ruling an hour
+into the first watch game ("they spend huge on defenses. Almost 10k on
+defenses spent by minute 13, we would eco so much faster if we didn't do
+that") -- superseding his 2026-09-02 correction, which was made on a 4v4
+where no seat was safe. The raid valve (EcoDangerNear) still ends the
+growth; anti-nuke and the AA emergency are not this target. Judge on `apex: eco-status` (P
 against the target by minute, danger flips) and the specialist's own
 metal lost.
 
