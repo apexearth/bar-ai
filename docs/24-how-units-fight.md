@@ -1118,3 +1118,8 @@ the entire early game only making economy... and if bonus is +100% then its
 defense and makes no military, focusing on economy. It should be the player
 furthest away from the enemies."* Shown the existing rear specialist at 500
 and what became of it in his game: *"Yes let's do it."*
+
+Watching the first game of it: *"I see who is doing eco and the issue I'm seeing
+is they spend huge on defenses. Almost 10k on defenses spent by minute 13, we
+would eco so much faster if we didn't do that."* The seat's defence target is
+zero while it grows.

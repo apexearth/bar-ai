@@ -429,20 +429,15 @@ float DefenceTarget()
 	// ProposeSuper already budgets against. Seconds of economic power, so it
 	// scales with income at every stage and needs no cap: at 40 metal/s it is
 	// a handful of light towers, at 400 it can carry a heavy gun.
-	// THE REAR SPECIALIST STILL BUILDS DEFENCE. This returned 0 while the role
-	// was growing, on an over-literal reading of "no army and no defense until
-	// like 20 minutes into the game" -- and watching it play, he corrected it:
-	// "If we were to have an eco player on a map like this they certainly
-	// would need to be making defense."
-	//
-	// It was also self-defeating. The eco player cannot reach the economy that
-	// ends the role if it is being eaten on the way there, and measured on
-	// Comet Catcher 4v4 that is exactly what happened: zero defence metal at
-	// minutes 6, 12 and 18, economy peaking at 127 of the 500 it needed, then
-	// falling. Army is what the role gives up; the towers that keep its
-	// economy alive are not negotiable.
-	//
-	// (ArmyTarget still returns 0 while growing -- that half stands.)
+	// THE REAR SPECIALIST BUILDS NO DEFENCE WHILE IT GROWS (apexearth
+	// 2026-09-13, watching the eight-player seat: "they spend huge on
+	// defenses. Almost 10k on defenses spent by minute 13, we would eco so
+	// much faster if we didn't do that"). His 2026-09-02 correction went the
+	// other way on a 4v4 where no seat was safe; the raid valve
+	// (EcoDangerNear) is what ends the growth when the seat is not safe
+	// after all, and the anti-nuke and the AA emergency are not this target.
+	if (EcoRoleGrowing())
+		return 0.f;
 	// N% OF WHAT WE HOLD, not N seconds of what we earn (apexearth: "we should
 	// want our economy to be N% of our overall power, we want to keep all of
 	// our aspects in balance with each other"). Seconds of income says nothing
