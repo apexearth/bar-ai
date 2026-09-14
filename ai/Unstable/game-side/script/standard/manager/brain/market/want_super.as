@@ -415,10 +415,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 	const float speed = Catalog::gSpeed[uid];
 	const float share = ai.GetTunable("apex_super_share", TUNE_SUPER_SHARE);
 	const float power = EcoPowerM();
+	// NO GANTRY BEFORE THE MILITARY IT FEEDS (apexearth 2026-09-13: "We need
+	// to make sure we do not make a gantry until we intend to make military
+	// -- nothing non military comes out of there"). The rear specialist's
+	// army target is zero while it grows, so its gantry's is too.
+	const bool noLines = EcoRoleGrowing();
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
+			continue;
+		if (noLines && (sc == SC_GANTRY))
 			continue;
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;

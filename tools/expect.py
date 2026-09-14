@@ -338,7 +338,48 @@ def exp_personas_up_only(games):
     return "OK", "every roll at or above neutral"
 
 
+def exp_eco_seat(games):
+    """The eight-player eco seat: no army, no defence, no gantry while it grows."""
+    rows = []
+    reds = 0
+    for g in games:
+        for m in re.finditer(r"apex: rear-specialist ON team=(\d+)", g["text"]):
+            t = m.group(1)
+            stat = re.findall(r"apex: eco-status team=%s growing=(\d) P=(\d+)/(\d+)" % t, g["text"])
+            if not stat:
+                continue
+            grew = [i for i, (gr, _, _) in enumerate(stat) if gr == "1"]
+            act = next((i for i, (gr, _, _) in enumerate(stat) if gr == "0"), None)
+            # builds by the seat before it activated (eco-status is every 2 minutes)
+            first_off = None
+            if act is not None:
+                mm = list(re.finditer(r"apex: eco-status team=%s growing=0" % t, g["text"]))
+                if mm:
+                    fm = re.search(r"\[f=(\d+)\]", g["text"][max(0, mm[0].start() - 200):mm[0].start()])
+                    first_off = int(fm.group(1)) if fm else None
+            gant = arm = defm = 0
+            for b in re.finditer(r"\[BARAI_BUILD\] team=%s ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)" % t, g["text"]):
+                fr = int(b.group(1))
+                if first_off is not None and fr >= first_off:
+                    continue
+                u = b.group(2)
+                if u in ("armshltx", "corgant", "leggant"):
+                    gant += 1
+                if re.match(r"(arm|cor|leg)(llt|beamer|hlt|claw|guard|amb|pb|drag|hllt|exp|toast|pun|vipe|doom|anni|mwl|bhmth)$", u):
+                    defm += int(b.group(3))
+            last = stat[-1]
+            rows.append(f"{g['name']} t{t}: P {last[1]}/{last[2]} growing={last[0]} gantries-while-growing={gant} defence-metal-while-growing={defm}")
+            if gant > 0 or defm > 3000:
+                reds += 1
+    if not rows:
+        return "NEED MORE", "no game with a rear specialist"
+    if reds:
+        return "RED", "; ".join(rows[:4])
+    return "OK", "; ".join(rows[:4])
+
+
 EXPECTATIONS = [
+    ("eco seat keeps to economy", exp_eco_seat),
     ("health", exp_health),
     ("personas up-only", exp_personas_up_only),
     ("escorts pair", exp_escorts),

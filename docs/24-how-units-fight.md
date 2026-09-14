@@ -1131,3 +1131,7 @@ fusion -> afus, it went too strong."* And: *"two players on our team made 59
 advanced solars -- both legion -- I'm unsure if legion players have an issue
 making fusion/afus."* Measured in that game: no team of eight built an
 advanced fusion in 34 minutes (fusions 5-16 each, one at 733 income).
+
+*"We need to make sure we do not make a gantry until we intend to make
+military. (nothing non military comes out of there)"* -- the seat's gantry
+waits for its activation.
