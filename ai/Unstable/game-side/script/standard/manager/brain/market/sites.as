@@ -987,9 +987,36 @@ bool LineWorking(CCircuitUnit@ f)
 // per-line appetite, less the lathe already standing on it. Zero for a line
 // that is not working. The nano batch splits by this, so the gantry with a
 // queue takes the turrets and an idle plant takes none.
-float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
+// ...AND THE WORK MUST BE ARMY. A line whose queue is constructors is not
+// spending the flow the nano want prices: a con is a starter, and a turret
+// at a con lab only makes cons faster (the eco seat: `line=1003` of nano
+// demand at its T2 lab churning constructors, `sink=194` at the reactor
+// field where the metal went; 42 turrets against 118 cons). apexearth
+// 2026-09-14, on nanos following the spend: "ok on both".
+bool LineWorkingArmy(CCircuitUnit@ f)
 {
 	if ((f is null) || !LineWorking(f))
+		return false;
+	const int line = Brain::FQIndex(f.id);
+	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	for (uint q = 0; q < pr.length(); ++q) {
+		const int d = pr[q];
+		if (!Catalog::gMobile[d] || Catalog::gBuilder[d])
+			continue;
+		CCircuitDef@ cd = Catalog::Def(d);
+		if (cd is null)
+			continue;
+		if (f.CountQueued(cd) > 0)
+			return true;
+		if ((line >= 0) && (Brain::PendCount(line, cd) > 0))
+			return true;
+	}
+	return false;
+}
+
+float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
+{
+	if ((f is null) || !LineWorkingArmy(f))
 		return 0.f;
 	float share = (sumCeil > 1.f)
 			? (feed * LineCostCeil(f) / sumCeil)
@@ -1009,7 +1036,7 @@ float LineCeilSum()
 {
 	float sumCeil = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-		if ((Factory::gFacUnits[fi] !is null) && LineWorking(Factory::gFacUnits[fi]))
+		if ((Factory::gFacUnits[fi] !is null) && LineWorkingArmy(Factory::gFacUnits[fi]))
 			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
 	}
 	return sumCeil;
@@ -1174,12 +1201,12 @@ float UnservedLineSpend()
 	float sumCeil = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		if ((Factory::gFacUnits[fi] !is null)
-			&& LineWorking(Factory::gFacUnits[fi]))
+			&& LineWorkingArmy(Factory::gFacUnits[fi]))
 			sumCeil += LineCostCeil(Factory::gFacUnits[fi]);
 	}
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		if ((f is null) || !LineWorking(f))
+		if ((f is null) || !LineWorkingArmy(f))
 			continue;
 		const float share = (sumCeil > 1.f)
 				? (per * float(Factory::gFactoryCount) * LineCostCeil(f) / sumCeil)

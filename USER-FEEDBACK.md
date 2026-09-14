@@ -59,6 +59,14 @@ snapping: a taken slot now walks the def's own lattice rings first (C++).
 `tools/seat.py <run>` reads a seat; `expect.py` "eco seat hands are
 turrets" stays RED on the con count.
 
+His bet the same day ("we are not good at making the nano turrets so that we
+end up with a lack of build power") measured true: nano batch asked 16 and got
+0-1 a pass (78 cells refused as walkway lanes at the T1 lab, the rest already
+requested), `line=1003` of nano demand at the con lab against `sink=194` at
+the reactor field; 42 turrets. "ok on both": a plant's nano block now fills
+every ring (doorway kept) and only army-producing lines draw turrets. After:
+seat income 1153-1313 at 24 min, 64-100 nano grounds, metal wasted 7-25%.
+
 ## 2026-09-13 — "Our bombing logic is boring": 0 bombers against a wing target of 102
 
 > "I want to see us making bombers and doing bombing raids on our enemies but

@@ -264,7 +264,11 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 				// first ring; the cells hugging its flanks are its nano
 				// block, not a corridor. The doorway test below still holds
 				// a ground plant's front open.
-				if (Base::Ready() && !(plantAnchor && (ring == ring0))) {
+				// ...AND EVERY RING OF IT (apexearth 2026-09-14, "ok on
+				// both"): with only the first ring exempt, the eco seat's
+				// batch asked 16 and got 0-1 a pass -- 14 taken, 78 refused
+				// as lanes -- and stood 42 turrets against 118 constructors.
+				if (Base::Ready() && !plantAnchor) {
 					float pd = 0.f, pl = 0.f;
 					Base::Coords(p, pd, pl);
 					const float lh = Base::LaneHalf() + pitch * 0.5f;
