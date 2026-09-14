@@ -17,6 +17,16 @@ float RetiredDefMul(int d)
 	if ((d <= 0) || (d >= int(gDefRetiredAt.length()))
 		|| (gDefRetiredAt[d] <= 0))
 		return 1.f;
+	// A DEF WE RETIRED AS OBSOLETE IS NOT BOUGHT WHILE IT STILL IS (apexearth
+	// 2026-09-14: "We keep making the same obsolete buildings we've
+	// reclaimed... if it is obsolete we shouldn't be making it, need some
+	// buffer in there so we aren't flipflopping"). A discount in a
+	// proportional draw still wins its share; the bar is the dwarf test the
+	// retirement itself ran, so it lifts only when the thing stops being
+	// obsolete. The window discount below stays for everything else.
+	if (((Catalog::gMakeE[d] > 0.f) && GenObsoleteOnArrival(d))
+		|| ((Catalog::gConvCapacity[d] > 0.f) && ConvObsoleteOnArrival(d)))
+		return 0.f;
 	const float win = ai.GetTunable("apex_replant_window_s", TUNE_REPLANT_WINDOW_S);
 	if (float(ai.frame - gDefRetiredAt[d]) >= win * float(SECOND))
 		return 1.f;

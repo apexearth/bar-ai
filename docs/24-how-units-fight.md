@@ -1152,3 +1152,9 @@ existed. *"Our base ends up cluttered with buildings which aren't worth the
 space they take up. Old energy, old converters, old defenses. We need to clean
 up a lot faster."* And: *"land reclaim seems to feed into resurrection sub want
 and it shouldn't. We often make tons of rez boats but no real navy."*
+
+*"We keep making the same obsolete buildings we've reclaimed. Need to fix
+that... if it is obsolete we shouldn't be making it, need some buffer in there
+so we aren't flipflopping."* *"I saw converters doing this."* Measured on the
+rd3blob8 set: one game rebuilt the basic converter twelve times after
+reclaiming it.

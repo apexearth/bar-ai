@@ -378,7 +378,34 @@ def exp_eco_seat(games):
     return "OK", "; ".join(rows[:4])
 
 
+def exp_no_flipflop(games):
+    """We keep making the same obsolete buildings we've reclaimed."""
+    ev = [g for g in games if g["minutes"] >= 20]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 20+ min (need 3)"
+    rows = []
+    reds = 0
+    for g in ev:
+        loops = Counter()
+        for t in g["apex"]:
+            eats = {}
+            for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: exec t=%s \S+ #\d+ reclaim:(\w+) " % t, g["text"]):
+                eats.setdefault(m.group(2), []).append(int(m.group(1)))
+            for m in re.finditer(r"\[BARAI_BUILD\] team=%s ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) " % t, g["text"]):
+                u, fr = m.group(2), int(m.group(1))
+                if u in eats and any(fr > e for e in eats[u]):
+                    loops[u] += 1
+        tot = sum(loops.values())
+        rows.append(f"{g['name']}: {tot} rebuilt-after-reclaim ({', '.join(f'{u} x{n}' for u, n in loops.most_common(3))})")
+        if tot >= 5:
+            reds += 1
+    if reds >= 1:
+        return "RED", "; ".join(rows[:4])
+    return "OK", "; ".join(rows[:4])
+
+
 EXPECTATIONS = [
+    ("no rebuild of what we reclaimed", exp_no_flipflop),
     ("eco seat keeps to economy", exp_eco_seat),
     ("health", exp_health),
     ("personas up-only", exp_personas_up_only),
