@@ -38,6 +38,9 @@ const string TV_MINC   = "minc";
 // does not license a lab. TV_MINC stays raw for the front budget and the
 // census share: reclaimed metal really does buy units.
 const string TV_MINC_NET = "mincnet";
+// 1 while this player is the rear specialist still growing: the allies'
+// answer shares and the air-lead election leave it out (it fields nothing).
+const string TV_ECOSEAT = "ecoseat";
 // The player's standing ECONOMIC assets (Market::EconAssetsM) -- what a
 // teammate's forward guard post is protecting when a back player buys
 // defence at the front ally's door instead of its own (the ally-front
@@ -148,6 +151,7 @@ void PublishDefence()
 		ai.PublishTeamValue(TV_FFENCE, float(gFenceFrontN));
 		ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
 		ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
+		ai.PublishTeamValue(TV_ECOSEAT, Market::EcoRoleGrowing() ? 1.f : 0.f);
 		ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());
 		Perf::Add("pubdef.write", _t);
 	}

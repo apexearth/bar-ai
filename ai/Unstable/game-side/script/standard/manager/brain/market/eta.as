@@ -484,7 +484,6 @@ float EtaHandsShare()
 	// which of the two the target is actually waiting on.
 	const float target = P * ETA_TARGET_MUL;
 	float eAvail = EtaEnergyAvail();
-	const float lat = RungWalkS();
 	float tBuild = 0.f;
 	float tFeed = 0.f;
 	uint i = 0;
@@ -505,7 +504,13 @@ float EtaHandsShare()
 		float bt = Catalog::BuildSecondsAt(p.def[i], p.mob[i] ? bpMob : bp);
 		if (bt < 0.1f)
 			bt = 0.1f;
-		tBuild += float(k) * (bt + lat);
+		// THE START LATENCY IS NOT HANDS. It is the wait from order to
+		// breaking ground, and more constructors do not shorten it -- they
+		// lengthen it, and this read it as build time: a hundred hands at
+		// 1,142 income said tBuild=1578 against tFeed=242 over 500 cheap
+		// rungs and bought 147 more advanced constructors (his watched eco
+		// seat: "we have like 100 advanced bot cons, way too many").
+		tBuild += float(k) * bt;
 		tFeed += float(k) * p.cost[i] / P;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];

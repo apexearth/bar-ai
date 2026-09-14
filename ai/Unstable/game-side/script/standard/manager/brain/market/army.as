@@ -1248,6 +1248,12 @@ float AnswerShare()
 	float team = 0.f;
 	int pubs = 0;
 	for (uint i = 0; i < mates.length(); ++i) {
+		// A growing eco seat answers nothing: its income in the team sum
+		// would hand every ally a smaller share of the counter than the
+		// team actually fields.
+		if ((int(mates[i]) != ai.teamId)
+			&& (ai.ReadTeamValue(int(mates[i]), Military::TV_ECOSEAT, 0.f) > 0.5f))
+			continue;
 		const float v = ai.ReadTeamValue(int(mates[i]), Military::TV_MINC, 0.f);
 		if (v <= 0.f)
 			continue;

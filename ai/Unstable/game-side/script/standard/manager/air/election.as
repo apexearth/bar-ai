@@ -58,6 +58,10 @@ void RunElection()
 		const int t = int(mates[i]);
 		if (skipTech && (t == tech))
 			continue;
+		// The growing eco seat is the richest ally and buys no wing: an
+		// assassin that never flies.
+		if (ai.ReadTeamValue(t, Military::TV_ECOSEAT, 0.f) > 0.5f)
+			continue;
 		const float inc = ai.ReadTeamValue(t, TV_AIRINC, -1.f);
 		if (inc > bestSeen)
 			bestSeen = inc;

@@ -1135,3 +1135,12 @@ advanced fusion in 34 minutes (fusions 5-16 each, one at 733 income).
 *"We need to make sure we do not make a gantry until we intend to make
 military. (nothing non military comes out of there)"* -- the seat's gantry
 waits for its activation.
+
+Watching the seat on Supreme Isthmus: *"we have like 100 advanced bot cons, way
+too many. we should be using air cons, should do something to not run into a
+situation where we have such an excess number of ground cons. I think if we are
+too often idle or spending most of our time walking around maybe we start to
+prefer air?... Also still mostly just building fusions, not afuses."* Measured:
+the seat's hands line read `tBuild=1578 tFeed=242` at 15.9k build power and
+1,142 income -- the order start latency counted as lathe time -- and bought 147
+advanced bot constructors against 28 air.
