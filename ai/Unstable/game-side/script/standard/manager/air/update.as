@@ -541,13 +541,13 @@ void Update()
 	// the clock below starts and the strike rules apply.
 	const float ourGround = Military::TeamArmyCost();
 	const float foeGround = Military::EnemyArmyCost();
-	if (!Committed() && (Bombers() == 0) && (foeGround > ourGround * GROUND_LOST_RATIO)) {
-		if (ai.frame >= gNextLog) {
-			gNextLog = ai.frame + 60 * SECOND;
-			AiLog(Factory::T() + "apex: air assassin holding off -- losing the ground war "
-				+ formatFloat(ourGround, "", 0, 0) + " vs " + formatFloat(foeGround, "", 0, 0));
-		}
-		return;
+	// The ground-war hold-off that stood here is gone (see WingBuys); the
+	// deficit is logged with the commit instead.
+	if (!Committed() && (Bombers() == 0) && (foeGround > ourGround * GROUND_LOST_RATIO)
+		&& (ai.frame >= gNextLog)) {
+		gNextLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: air assassin committing behind on the ground "
+			+ formatFloat(ourGround, "", 0, 0) + " vs " + formatFloat(foeGround, "", 0, 0));
 	}
 
 	if (!Committed() && Armed()) {

@@ -498,9 +498,12 @@ bool WingBuys()
 {
 	if ((ai.frame < AIR_FROM) || !AirEcoReady())
 		return false;
-	if (!Committed() && (HeldBombers() == 0)
-		&& (Military::EnemyArmyCost() > Military::TeamArmyCost() * GROUND_LOST_RATIO))
-		return false;
+	// (The "losing the ground war" hold-off that stood here is gone: it kept
+	// a rich seat from buying a single bomber for the whole game -- seat seed
+	// 4, `armpnix:wing0` at 34 min, "holding off -- losing the ground war
+	// 60611 vs 103461" -- when a raid on their economy is the answer to a
+	// ground war we are losing. apexearth 2026-09-14: "Need more air
+	// plants, more air, more everything really.")
 	return true;
 }
 
