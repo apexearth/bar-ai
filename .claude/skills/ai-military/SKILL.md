@@ -1,6 +1,6 @@
 ---
 name: ai-military
-description: How the army fights — massing pools, stance, killing blow, withdraw/leash, supers, raids, and the C++ squad movement layer
+description: How the army fights — massing pools, stance, killing blow, supers, raids; the C++ fight classes are stock since 2026-09-07 (docs/30)
 ---
 
 # The military — who commands the army

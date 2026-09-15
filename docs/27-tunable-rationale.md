@@ -1637,7 +1637,7 @@ off, which is the control arm. On a flat map every line reads the same and this
 changes nothing; on a hill map the vehicle line is discounted against the bot
 line, which is apexearth's rule for picking the ground line.
 
-### `TUNE_LINE_QUALITY` = 1.f
+### `TUNE_LINE_QUALITY` = 0.f
 
 Weigh a production line by the best army-per-metal its units offer here --
 UnitPPC with the speed and sight terms production already buys single units
@@ -1703,7 +1703,11 @@ never stands on the posts, so at scale it never closed. `apex: elect ... |
 coverM=held/cap need=` is the instrument. 0/0 restores the hold. Battery on
 the same eight time-out seeds pending.
 
-### `TUNE_SCREEN_GAP` = 200.f
+### `TUNE_SCREEN_GAP` = 200.f -- declared, read by nothing
+
+The screen-row code it governed went back to stock with the fight classes
+(2026-09-07, docs/30); the constant remains until the revert is final.
+
 
 How far IN FRONT of the squad's longest row a short-range row holds, elmos.
 apexearth 2026-09-01: "the tanks should just stand around in front of the

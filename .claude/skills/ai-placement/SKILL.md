@@ -1,6 +1,6 @@
 ---
 name: ai-placement
-description: Where buildings land — base bands, nano gravity, the advsol pack, defence placement gates, site safety vetoes
+description: Where buildings land — base bands, nano gravity, the advsol pack, defence placement gates, site safety vetoes Defence slots come from the TEAM hull and its walkable gaps (docs/32, protect_team.as).
 ---
 
 # Placement — where things get built

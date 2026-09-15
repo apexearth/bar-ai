@@ -26,14 +26,14 @@ tech or energy price.
 - `FrontedStakeAt(pos, reach)` — plain `StakeAt(pos, reach)`. Distance only; a
   side test zeroed home towers, subtracting standoff zeroed nearly everything.
 - `ShieldedStakeAt(pos, reach)` — what a forward post intercepts BEYOND its own
-  reach, on the true enemy bearing (not the cardinal `Base::gFwd`).
-  **Credited only in proportion to the closure the post ADDS**:
-  `brain/market/protect_sense.as` computes `dClose = LineClosure(s, reach) − LineClosure(at, 0)`
-  over 16 approach bearings on the ring at `extent + FoeReach()` (off-map
-  bearings count as CLOSED — the edge is the wall), and prices
-  `stake = FrontedStakeAt + ShieldedStakeAt × dClose`. Without the closure
-  factor every candidate claimed the whole base and defence never saturated
-  (stake 13,606 against an economy of 8,751).
+  reach, on the true enemy bearing; credited in proportion to the closure the
+  post adds (`protect_sense.as`, `LineClosure`). Used by front and gate sites.
+- **Wall slots are priced by the TEAM's gap, not by this** (2026-09-15,
+  `protect_team.as`, docs/32): each bearing of the team hull carries whether
+  their ground can walk in, the cover meeting it (ours and allies' guns),
+  the metal behind it, the interior shared among the open holes, and the
+  mex spots raids through it starve; `GapBehindAt` is the slot's stake and a
+  walkable bearing faces the wave prior even at threat 0.
 
 ## Two priors, one function
 
@@ -98,7 +98,7 @@ basin earn a light gun and the shelf a real one. `apex_lava`, docs/27.
 
 ## Tunables
 
-`apex_risk_floor` (0.15) · `apex_enemy_prior` (0.25) · `apex_siege_prior` (1.0) ·
+`apex_risk_floor` (0, measured and left off 2026-09-11) · `apex_enemy_prior` (0.25) · `apex_siege_prior` (1.0) ·
 `apex_threat_r` (900) · `apex_threat_gradient` (1) · `apex_stake_horizon_s` (300) ·
 `apex_exposed_loss_s` (120) · `apex_eco_raid_tau` (180) · `apex_expose_r` (1200) ·
 `apex_def_trade` (2) · `apex_standoff_cover` (1) ·
