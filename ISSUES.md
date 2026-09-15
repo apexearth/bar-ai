@@ -16,26 +16,6 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
-## 2026-09-15 — WALLED-IN BUILDER: the lattice fills every cell around the hand that builds it, and only the cure exists
-
-Frozen Ford 2v2 he watched (matches/_engine/.../apex-t0.log): the commander
-stood at 1283,5700 from 28m to the end, `com-still` x177, held sites at
-187-1283 elmo it never reached, and built the wind cluster around itself from
-where it stood (`latency armwin done` at 1240/1288/1336 x 5656/5704/5752
-between 14.0m and 27.9m, the last one in the cell it had just stepped out of).
-`SelfClearance` (BuilderTask.cpp) keeps only the builder's OWN footprint out of
-the ring walk; no placement path -- C++ lattice rings, `GroupAnchor`,
-`LanesApply` (rear of the anchor has no walkways, his ruling 2026-09-14) --
-asks whether the builder keeps a way out. The cure (unblock.as) was found
-broken in four places and fixed on this date, unmeasured: a passed move test
-dropped the unit from the register forever, a builder within reach+64 of an
-unstartable site was exempt, the wall picked was the cheapest in a 700 lane
-rather than the first, and a verdict whose wall had died offered the VICTIM --
-`reclaim:armcom` x841 elected against our own commander. Prevention -- never
-place the cell that closes the builder's last exit, or hold a one-cell lane to
-the block edge while a builder stands inside it -- is unbuilt and is a
-placement policy question for him.
-
 ## 2026-09-14 — SEAT CORNERS: a farm past a cliff still kills a seat, and a full yard falls to the probe ring
 
 Supreme Isthmus seeds 3 and 5 (Armada) put the rear seat where the farm's

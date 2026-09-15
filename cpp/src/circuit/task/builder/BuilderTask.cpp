@@ -91,6 +91,79 @@ float SelfClearance(CCircuitUnit* builder, CCircuitDef* buildDef)
 			+ std::max(bdef->GetFootX(), bdef->GetFootZ())) * SQUARE_SIZE;
 }
 
+// DOES THE BUILDER KEEP A WAY OUT if this cell is built? A mobile builder
+// standing inside the lattice it fills can wall itself in: its build range
+// covers the cells around it, so it never has to move, and the last free cell
+// beside it is a legal site (the commander he watched sat inside its own
+// wind cluster for 37 minutes). Flood the free cells of the def's lattice
+// out from the builder's cell with the candidate counted as taken; an exit
+// is any cell four rings out or off the grid. Only asked when the candidate
+// lands within two cells of the builder -- further away it closes nothing.
+static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
+		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
+{
+	if ((builder == nullptr) || !builder->GetCircuitDef()->IsMobile()) {
+		return true;
+	}
+	constexpr int R = 4;
+	const AIFloat3 self = builder->GetPos(circuit->GetLastFrame());
+	int bi = 0, bj = 0;
+	float bestSq = -1.f;
+	for (int j = -2; j <= 2; ++j) {
+		for (int i = -2; i <= 2; ++i) {
+			AIFloat3 c;
+			if (!circuit->LatticeNeighbour(cand, buildDef, facing, i, j, c)) {
+				continue;
+			}
+			const float sq = c.SqDistance2D(self);
+			if ((bestSq < .0f) || (sq < bestSq)) {
+				bestSq = sq;
+				bi = i;
+				bj = j;
+			}
+		}
+	}
+	if ((bestSq < .0f) || (bestSq > SQUARE(2.f * slot))) {
+		return true;   // the builder is not standing in this lattice's rings
+	}
+	const int W = 2 * R + 1;
+	std::vector<char> state(W * W, 0);   // 0 unknown, 1 free/visited, 2 taken
+	auto idx = [&](int i, int j) { return (j + R) * W + (i + R); };
+	std::vector<std::pair<int, int>> queue;
+	queue.emplace_back(bi, bj);
+	state[idx(bi, bj)] = 1;
+	state[idx(0, 0)] = 2;
+	while (!queue.empty()) {
+		const auto [ci, cj] = queue.back();
+		queue.pop_back();
+		if ((std::abs(ci) >= R) || (std::abs(cj) >= R)) {
+			return true;
+		}
+		for (int dj = -1; dj <= 1; ++dj) {
+			for (int di = -1; di <= 1; ++di) {
+				const int ni = ci + di, nj = cj + dj;
+				if (((di == 0) && (dj == 0)) || (std::abs(ni) > R) || (std::abs(nj) > R)
+					|| (state[idx(ni, nj)] != 0))
+				{
+					continue;
+				}
+				AIFloat3 c;
+				if (!circuit->LatticeNeighbour(cand, buildDef, facing, ni, nj, c)) {
+					return true;   // off the grid: open ground
+				}
+				const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
+				const bool freeCell = utils::is_valid(probe)
+						&& (probe.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
+				state[idx(ni, nj)] = freeCell ? 1 : 2;
+				if (freeCell) {
+					queue.emplace_back(ni, nj);
+				}
+			}
+		}
+	}
+	return false;
+}
+
 IBuilderTask::BuildName IBuilderTask::buildNames = {
 	{"factory", IBuilderTask::BuildType::FACTORY},
 	{"nano",    IBuilderTask::BuildType::NANO},
@@ -455,7 +528,13 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		// builder stepping aside, and the ground is NOT reported blocked --
 		// script would then avoid it for as long as the mark lives.
 		const float clear = SelfClearance(unit, buildDef);
-		if (free && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
+		const bool keepsExit = !free
+				|| KeepsExit(circuit, terrainMgr, unit, buildDef, facing, slot, probe);
+		if (!keepsExit) {
+			circuit->LOG("apex: exit-kept %s by %s at=%.0f,%.0f", buildDef->GetDef()->GetName(),
+					unit->GetCircuitDef()->GetDef()->GetName(), probe.x, probe.z);
+		}
+		if (free && keepsExit && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
 			searchRadius = slot;   // the slot is free: hold the task to it
 		} else {
 			// THE NEXT SLOT, NOT THE NEXT SQUARE. A taken slot fell straight
@@ -486,7 +565,8 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 						}
 						const AIFloat3 p2 = terrainMgr->FindBuildSite(buildDef, cell, slot, facing);
 						if (!utils::is_valid(p2) || (p2.SqDistance2D(cell) > SQUARE(SQUARE_SIZE))
-							|| (p2.SqDistance2D(self) < SQUARE(clear)))
+							|| (p2.SqDistance2D(self) < SQUARE(clear))
+							|| !KeepsExit(circuit, terrainMgr, unit, buildDef, facing, slot, cell))
 						{
 							continue;
 						}
