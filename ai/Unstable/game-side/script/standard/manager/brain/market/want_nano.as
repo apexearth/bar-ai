@@ -185,8 +185,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// is the measured failure to spend, so the lathe fleet grows until the
 	// waste stops -- no count, no cooldown, and it reads zero the moment the
 	// economy is actually being spent. Sited by the fallback chain below.
+	// ...NET OF THE TURRETS ALREADY IDLE: waste beside lathe with nothing to
+	// lathe is a shortage of sites, not of turrets.
 	{
-		const float wasted = OverflowM();
+		const float wasted = OverflowM() - IdleNanoLatheM();
 		if (wasted > over)
 			over = wasted;
 	}
@@ -272,6 +274,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " sink=" + formatFloat(sinkNeed, "", 0, 1)
 			+ " army=" + formatFloat(armyNeed, "", 0, 1)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
+			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
 			+ " floor=" + floorShort
 			+ " over=" + formatFloat(over, "", 0, 1)

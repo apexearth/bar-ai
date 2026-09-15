@@ -461,6 +461,38 @@ AIFloat3 LatheSiteFor(CCircuitUnit@ unit)
 	return best;
 }
 
+// LATHE STANDING WITH NOTHING TO LATHE [m/s]: turrets with no rising frame
+// in reach. Waste beside idle turrets is not a lathe shortage (his watched
+// seat: 328 turrets at 848 income, "lots of idle nano turrets").
+float gIdleNanoM = 0.f;
+int gIdleNanoAt = -999999;
+float IdleNanoLatheM()
+{
+	if (ai.frame - gIdleNanoAt < 5 * SECOND)
+		return gIdleNanoM;
+	gIdleNanoAt = ai.frame;
+	array<AIFloat3> rising;
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.target is null))
+			continue;
+		const AIFloat3 lp = lt.GetBuildPos();
+		if (OnMap(lp))
+			rising.insertLast(lp);
+	}
+	float idle = 0.f;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		bool busy = false;
+		for (uint k = 0; (k < rising.length()) && !busy; ++k)
+			busy = gOwnNanoPos[i].distance2D(rising[k]) < r;
+		if (!busy)
+			idle += NANO_ABSORB;
+	}
+	gIdleNanoM = idle;
+	return idle;
+}
+
 AIFloat3 gLatheHeart(-1.f, 0.f, -1.f);
 int gLatheHeartAt = -999999;
 AIFloat3 LatheHeart()
