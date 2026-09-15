@@ -876,6 +876,27 @@ void BlockPoll()
 	}
 }
 
+// A site the script itself found unreachable (the stuck watch: a builder
+// that never closed on it) joins the same memory, or it is re-elected the
+// moment the task is freed.
+void BlockNote(const AIFloat3& in b)
+{
+	if (!OnMap(b))
+		return;
+	for (uint i = 0; i < gBlockPos.length(); ++i) {
+		if (gBlockPos[i].distance2D(b) < BLOCK_NEAR) {
+			gBlockAt[i] = ai.frame;
+			return;
+		}
+	}
+	gBlockPos.insertLast(b);
+	gBlockAt.insertLast(ai.frame);
+	while (gBlockPos.length() > BLOCK_MAX) {
+		gBlockPos.removeAt(0);
+		gBlockAt.removeAt(0);
+	}
+}
+
 bool NearBlocked(const AIFloat3& in p)
 {
 	if (!OnMap(p))

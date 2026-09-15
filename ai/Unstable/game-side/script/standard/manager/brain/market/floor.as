@@ -269,6 +269,11 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 		return null;
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const bool logIt = (ai.frame >= gNextFloorLog);
+	// The commander takes only nearby jobs -- until he has stood idle ten
+	// seconds, when any job beats standing (watched: 10-20 s stills after a
+	// chase, every election refused, nothing near).
+	const bool comIdle = isComm && (gCwStillFrom >= 0)
+			&& (ai.frame - gCwStillFrom >= 10 * SECOND);
 	// FIRST CHOICE: take the most valuable job in flight and work it
 	// directly. Taking the task beats guarding whoever holds it -- the hand
 	// is counted on the site, so the crew bounds see it and the next idle
@@ -276,7 +281,7 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 	{
 		IUnitTask@ any = BestLiveJob(unit, true);
 		IUnitTask@ job = gJobNearBest;
-		if ((job is null) && !isComm)
+		if ((job is null) && (!isComm || comIdle))
 			@job = any;
 		if (job !is null) {
 			if (logIt) {
@@ -304,7 +309,7 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 	CCircuitUnit@ boss = BestJobBoss(unit);
 	if (boss is null)
 		@boss = FloorBoss(unit, true);
-	if ((boss is null) && !isComm)
+	if ((boss is null) && (!isComm || comIdle))
 		@boss = FloorBoss(unit, false);
 	if (boss !is null) {
 		// SHORT LEASH. A held builder task is not re-elected, so the floor

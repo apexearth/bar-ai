@@ -14,6 +14,7 @@ array<Id>    gStuckId;
 array<float> gStuckX;
 array<float> gStuckZ;
 array<float> gStuckDone;
+array<float> gStuckDist;     // nearest the unit has been to its site
 array<int>   gStuckSince;
 array<int>   gStuckDeadAt;   // first frame seen holding a task with no engine order
 // The engine applies an order some frames after it is given, and the lag
@@ -24,6 +25,8 @@ int gOrderLagMax = 0;
 uint gStuckCursor = 0;
 int  gStuckFreed = 0;
 int  gStuckLogAt = 0;
+int  gNextStuckComLog = 0;
+bool unit_is_comm(CCircuitUnit@ u) { return u.circuitDef.IsRoleAny(Unit::Role::COMM.mask); }
 
 // Under one building footprint: the position is the engine's own, so there is
 // no jitter to filter -- the watched commander held the same integer coordinate
@@ -45,6 +48,7 @@ void StuckDrop(uint i)
 	gStuckX.removeAt(i);
 	gStuckZ.removeAt(i);
 	gStuckDone.removeAt(i);
+	gStuckDist.removeAt(i);
 	gStuckSince.removeAt(i);
 	gStuckDeadAt.removeAt(i);
 }
@@ -93,18 +97,41 @@ void UpdateStuckBuilds()
 		// build starved by an energy stall makes no progress for minutes, and
 		// reading that as stuck aborted a framed T2 lab twice in the canon game
 		// (2026-09-08) and cost four minutes of T2.
-		const bool onJob = (u.CmdQueueSize() > 0) && OnMap(bp0)
-			&& (p.distance2D(bp0) <= Catalog::gBuildDist[int(u.circuitDef.id)] + 64.f);
+		// ON THE JOB means building, or standing in reach with an order --
+		// not "near the site": within reach+64 counted as working, and a
+		// commander stood 2.5 min at 178 elmo from a site it could not
+		// reach, progress 0, re-armed every pass.
+		const float dSite0 = OnMap(bp0) ? p.distance2D(bp0) : -1.f;
+		// The engine builds from buildDistance plus the buildee's own radius:
+		// a hand 180 elmo from a converter's centre is building it.
+		const int bdId = int(t.buildDef.id);
+		const int foot = (Catalog::gFootX[bdId] > Catalog::gFootZ[bdId])
+				? Catalog::gFootX[bdId] : Catalog::gFootZ[bdId];
+		const float reach = Catalog::gBuildDist[int(u.circuitDef.id)]
+				+ float(foot) * 8.f + 16.f;
+		const bool inReach = (dSite0 >= 0.f) && (dSite0 <= reach);
+		const bool onJob = (u.CmdQueueSize() > 0) && inReach;
 		if (slot < 0) {
 			gStuckId.insertLast(u.id);
 			gStuckX.insertLast(p.x);
 			gStuckZ.insertLast(p.z);
 			gStuckDone.insertLast(done);
+			gStuckDist.insertLast(dSite0);
 			gStuckSince.insertLast(ai.frame);
 			gStuckDeadAt.insertLast(noOrder ? ai.frame : -1);
 			continue;
 		}
 		const uint i = uint(slot);
+		if (unit_is_comm(u) && (ai.frame >= gNextStuckComLog)) {
+			gNextStuckComLog = ai.frame + 15 * SECOND;
+			AiLog(Factory::T() + "apex: stuck-com q=" + u.CmdQueueSize()
+				+ " dSite=" + int(dSite0) + " best=" + int(gStuckDist[i])
+				+ " reach=" + int(reach)
+				+ " done=" + formatFloat(done, "", 0, 2) + "/" + formatFloat(gStuckDone[i], "", 0, 2)
+				+ " onJob=" + (onJob ? 1 : 0) + " noOrder=" + (noOrder ? 1 : 0)
+				+ " sinceS=" + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
+				+ " secs=" + int(secs));
+		}
 		if (onJob) {
 			gStuckSince[i] = ai.frame;
 			gStuckDeadAt[i] = -1;
@@ -136,12 +163,24 @@ void UpdateStuckBuilds()
 		// queue read: the order-lag verdict freed a commander mid-walk to his
 		// lab three times (q=0 at 3 s, toSite 422 -> 387), and the plant
 		// ask was blocked for 15 minutes behind the orphan he left.
-		if ((((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED))
-			|| (done > gStuckDone[i])))
-		{
+		// With a site, only getting NEARER it counts as moving: a unit
+		// pushing at a wall it cannot path through drifts a few elmos a
+		// second and read as walking.
+		const bool nearer = (dSite0 >= 0.f) && (gStuckDist[i] >= 0.f)
+				&& (dSite0 < gStuckDist[i] - STUCK_MOVED);
+		const bool moved = (dSite0 < 0.f)
+				&& ((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED));
+		// A frame growing under OTHER hands does not excuse a hand that is
+		// not in reach of it (the commander held a converter 207 elmo off
+		// for four minutes while others built it).
+		const bool assisting = (done > gStuckDone[i])
+				&& ((dSite0 < 0.f) || (dSite0 <= reach + 64.f));
+		if (nearer || moved || assisting) {
 			gStuckX[i] = p.x;
 			gStuckZ[i] = p.z;
 			gStuckDone[i] = done;
+			if (nearer || ((dSite0 >= 0.f) && (gStuckDist[i] < 0.f)))
+				gStuckDist[i] = dSite0;
 			gStuckSince[i] = ai.frame;
 			continue;
 		}
@@ -161,6 +200,8 @@ void UpdateStuckBuilds()
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z)
 			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
+		if ((dSite > reach) && (done <= 0.f))
+			BlockNote(bp);   // never reached: not the next election's site either
 		freed.insertLast(u);
 		freedTask.insertLast(t);
 		StuckDrop(i);

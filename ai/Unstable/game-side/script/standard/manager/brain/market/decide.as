@@ -32,6 +32,7 @@ array<int> gExecFail(32, 0);
 int gExecNone = 0;
 int gComFwdLogAt = -999999;   // see the commander forward skip in the exec loop
 int gNextExecLog = 0;
+int gNextComRefuseLog = 0;
 
 // The decide and exec lines are one ~20-term concatenation per election and per
 // execution, built whether or not anyone reads the infolog. On by default --
@@ -1492,6 +1493,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// falling through to ranked[1] was the value argmax, half of all
 	// executions.
 	const bool redraw = !aaPanic && !superPush && !coverPush && !floorPush && !roled;
+	const int topKind = (ranked.length() > 0) ? ranked[0].kind : -1;
+	const string topDef = ((ranked.length() > 0) && (ranked[0].def !is null))
+			? ranked[0].def.GetName() : "-";
+	const uint rankedN = ranked.length();
 	for (uint depth = 0; ranked.length() > 0; ++depth) {
 		const uint i = 0;
 		bool refused = false;
@@ -1618,6 +1623,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ln += " " + KindName(int(k)) + "=" + gExecFail[k];
 		}
 		AiLog(ln);
+	}
+	// The commander's refusals by name: his stills are what he watches.
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && (ai.frame >= gNextComRefuseLog)) {
+		gNextComRefuseLog = ai.frame + 5 * SECOND;
+		AiLog("apex: com-refused t=" + ai.teamId + " top=" + KindName(topKind)
+			+ ":" + topDef + " verdict=" + Requests::gLastWhat
+			+ " ranked=" + rankedN);
 	}
 	// ...and a refused election is still an idle constructor, which is the
 	// exit that actually fires (measured: 472 all-refused elections in one
