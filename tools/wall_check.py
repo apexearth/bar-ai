@@ -16,6 +16,7 @@ reclaimed." This measures exactly that, from [BARAI_POS] snapshots:
 
 Usage:
     python tools/wall_check.py <match-dir> [--team 0] [--every 5]
+    python tools/wall_check.py <match-dir> --ally 0     # the TEAM hull
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from defence_pos import defence_defs  # noqa: E402
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (\S*)")
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (?:part=\d+/\d+ )?(\S*)")
 RAYS = 24
 BAND_IN = -300.0
 BAND_OUT = 700.0
@@ -44,11 +45,21 @@ def parse_units(blob):
 
 
 def snapshots(stdout: Path, team: int):
+    # A large base is split over several part=i/n rows of one frame.
+    cur = None
+    units = []
     for line in stdout.read_text(errors="replace").splitlines():
         m = POS_RE.search(line)
         if not m or int(m.group(1)) != team:
             continue
-        yield int(m.group(3)), parse_units(m.group(5))
+        f = int(m.group(3))
+        if cur is not None and f != cur:
+            yield cur, units
+            units = []
+        cur = f
+        units = units + parse_units(m.group(5))
+    if cur is not None:
+        yield cur, units
 
 
 def enemy_start(stdout: Path, team: int):
@@ -158,16 +169,65 @@ def analyse(units, ddefs, foe=None):
     }
 
 
+def team_snapshot(stdout: Path, ally: int):
+    """The whole allyteam's last snapshot as one unit list, plus which team
+    owns each unit -- the team hull, for the closure the enemy actually
+    faces (one player's ring says nothing about the gap beside its ally)."""
+    last = {}
+    for line in stdout.read_text(errors="replace").splitlines():
+        m = POS_RE.search(line)
+        if not m or int(m.group(2)) != ally:
+            continue
+        t = int(m.group(1))
+        f = int(m.group(3))
+        if t not in last or f > last[t][0]:
+            last[t] = (f, [])
+        if f == last[t][0]:
+            last[t][1].extend(parse_units(m.group(5)))
+    units = []
+    owner = []
+    for t, (_, us) in sorted(last.items()):
+        units.extend(us)
+        owner.extend([t] * len(us))
+    return units, owner
+
+
+def team_report(stdout: Path, ally: int, ddefs):
+    units, owner = team_snapshot(stdout, ally)
+    r = analyse(units, ddefs)
+    if r is None:
+        print("team hull: no snapshot")
+        return
+    print(f"allyteam {ally} hull: towers={r['towers']} onWall%={r['onWallPct']:.0f} "
+          f"closure={r['closure']:.2f} nnMed={r['nnMed']:.0f}")
+    base = [(x, z) for n, x, z in units if n not in ddefs]
+    cx = sum(x for x, _ in base) / len(base)
+    cz = sum(z for _, z in base) / len(base)
+    per = {}
+    for (n, x, z), t in zip(units, owner):
+        if n not in ddefs:
+            continue
+        per.setdefault(bearing(cx, cz, x, z), set()).add(t)
+    print("  bearing: owners of guns on it (24 bearings, 0 = +x, counter-clockwise)")
+    print("  " + " ".join(f"{b:>2}:{''.join(str(t) for t in sorted(per.get(b, ())))or '-'}"
+                          for b in range(RAYS)))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("match")
     ap.add_argument("--team", type=int, default=0)
     ap.add_argument("--every", type=int, default=5, help="minutes between rows")
+    ap.add_argument("--ally", type=int, default=None,
+                    help="report the whole allyteam's hull instead of one team")
     args = ap.parse_args()
     stdout = Path(args.match) / "stdout.txt"
     if not stdout.exists():
         sys.exit(f"no stdout.txt under {args.match}")
     ddefs = defence_defs()
+    if args.ally is not None:
+        team_report(stdout, args.ally, ddefs)
+        return
     foe = enemy_start(stdout, args.team)
     step = args.every * 60 * 30
     nxt = step
