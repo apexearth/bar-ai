@@ -200,7 +200,7 @@ bool ReleaseForPush()
 		return false;
 	// The same frozen bar the deadline uses, not HalfMassed: half of a live
 	// want that tracks income and their AA is a bar the wave never reaches.
-	if (float(Bombers()) < DeadlineBombBar())
+	if (BomberMass() < DeadlineBombBar())
 		return false;
 	Release("team push -- hitting the line with the army");
 	return true;
@@ -508,7 +508,7 @@ void Update()
 	// lead's scaled force is a real raid without hoarding a second air army.
 	if (!IsAirLead() && !gStrike
 		&& (ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f)
-		&& (Bombers() * 2 >= ScaledBombers()))
+		&& (BomberMass() * 2.f >= float(ScaledBombers())))
 	{
 		Release("home wave massed");
 	}
@@ -583,7 +583,7 @@ void Update()
 	} else if (Committed() && !WingGrowing() && (HeldBombers() >= AIR_BOMBERS)) {
 		Release("wing at its worth -- the next bomber would not pay");
 	} else if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
-		&& (float(Bombers()) >= DeadlineBombBar()))
+		&& (BomberMass() >= DeadlineBombBar()))
 	{
 		Release("deadline");
 	}

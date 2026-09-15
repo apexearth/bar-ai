@@ -45,6 +45,7 @@ void BuildWave()
 	gWave.resize(0);
 	gRunWave.resize(0);
 	gWaveBombers = 0;
+	gWaveMass = 0.f;
 	gWaveFighters = 0;
 	for (int i = 0; i < 6; ++i) {
 		CCircuitDef@ d = StrikeDef(i);
@@ -60,6 +61,7 @@ void BuildWave()
 			if (i < 4) {
 				gRunWave.insertLast(us[k].id);
 				++gWaveBombers;
+				gWaveMass += BomberUnits(d);
 			} else {
 				++gWaveFighters;
 			}
@@ -92,11 +94,13 @@ void ScanWave()
 {
 	if (gWave.length() == 0) {
 		gWaveBombers = 0;
+		gWaveMass = 0.f;
 		gWaveFighters = 0;
 		return;
 	}
 	array<Id> alive;
 	int bomb = 0;
+	float mass = 0.f;
 	int fight = 0;
 	for (int i = 0; i < 6; ++i) {
 		CCircuitDef@ d = StrikeDef(i);
@@ -109,11 +113,12 @@ void ScanWave()
 			if ((us[k] is null) || !InWave(us[k].id))
 				continue;
 			alive.insertLast(us[k].id);
-			if (i < 4) ++bomb; else ++fight;
+			if (i < 4) { ++bomb; mass += BomberUnits(d); } else ++fight;
 		}
 	}
 	gWave = alive;
 	gWaveBombers = bomb;
+	gWaveMass = mass;
 	gWaveFighters = fight;
 }
 
@@ -140,7 +145,28 @@ int RunSurvivors()
 }
 
 // Bombers/fighters standing at home, i.e. NOT part of the wave that is out.
-int HeldBombers()  { const int n = Bombers()  - gWaveBombers;  return (n < 0) ? 0 : n; }
+// THE WING IS WEIGHED, NOT COUNTED. The bars (ScaledBombers, the deadline)
+// were laid out in advanced-bomber units; a heavy gunship counted as ONE of
+// them, so nine Tyrannus -- 50k of air -- sat at home for a dozen minutes
+// under a bar of 22 (apexearth 2026-09-14: "when are we going to use it? It
+// is very boring"). Every bomber def weighs its cost over the advanced
+// bomber's; held and flown are compared in those units.
+float gWaveMass = 0.f;
+float BomberUnits(CCircuitDef@ d)
+{
+	if (d is null)
+		return 0.f;
+	const float unit = ((gBomber !is null) && (Catalog::gCostM[int(gBomber.id)] > 1.f))
+			? Catalog::gCostM[int(gBomber.id)] : 1000.f;
+	const float w = Catalog::gCostM[int(d.id)] / unit;
+	return (w < 1.f) ? 1.f : w;
+}
+float BomberMass()
+{
+	return float(Have(gBomber)) * BomberUnits(gBomber) + float(Have(gBomber1)) * BomberUnits(gBomber1)
+		+ float(Have(gBomberH)) * BomberUnits(gBomberH) + float(Have(gBomberN)) * BomberUnits(gBomberN);
+}
+int HeldBombers()  { const float n = BomberMass() - gWaveMass;  return (n < 0.f) ? 0 : int(n); }
 int HeldFighters() { const int n = Fighters() - gWaveFighters; return (n < 0) ? 0 : n; }
 
 // The run is over -- bring the survivors back so they mass with what was built
