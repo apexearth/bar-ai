@@ -518,7 +518,7 @@ const float TUNE_GATE_DEPTH = 2.f;
 // [toggle 0/1] -- The teeth line: one wall piece per election across the
 //   strongest defended gate's span, a step enemy-ward of the doorway ("slow them
 //   down with some walls outside"). See docs/27.
-const float TUNE_TEETH = 0.f;
+const float TUNE_TEETH = 1.f;
 
 // [gain] -- What one tooth's share of breaking a push is worth, on the
 //   auction's own value scale. Calibrated between losing every election and

@@ -1032,6 +1032,90 @@ static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIF
 	return arr;
 }
 
+static const asPWORD FLOAT_ARRAY_TYPE_UD = 0x415046;  // 'APF'
+
+static asITypeInfo* FloatArrayType()
+{
+	asIScriptContext* ctx = asGetActiveContext();
+	if (ctx == nullptr) {
+		return nullptr;
+	}
+	asIScriptEngine* engine = ctx->GetEngine();
+	if (engine == nullptr) {
+		return nullptr;
+	}
+	asITypeInfo* t = static_cast<asITypeInfo*>(engine->GetUserData(FLOAT_ARRAY_TYPE_UD));
+	if (t == nullptr) {
+		t = engine->GetTypeInfoByDecl("array<float>");
+		engine->SetUserData(t, FLOAT_ARRAY_TYPE_UD);
+	}
+	return t;
+}
+
+// Allied (not own) static attackers as [x, z, defId, ...] -- the team's guns,
+// so the script's cover field can read an ally's tower the way it reads ours.
+static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
+{
+	std::vector<float> out;
+	const int frame = circuit->GetLastFrame();
+	for (const auto& kv : circuit->GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr)) {
+			continue;
+		}
+		const CCircuitDef* cdef = u->GetCircuitDef();
+		if (cdef->IsMobile() || !cdef->IsAttacker()) {
+			continue;
+		}
+		if (circuit->GetTeamUnit(kv.first) != nullptr) {
+			continue;  // ours: the script already holds it
+		}
+		const AIFloat3& pos = u->GetPos(frame);
+		out.push_back(pos.x);
+		out.push_back(pos.z);
+		out.push_back(float(cdef->GetId()));
+	}
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
+}
+
+// Can any usable LAND move type walk from a to b -- both sectors in one
+// of its areas? Hover and floating types are left out: the question is
+// whether an approach is open to the ground army, not to boats.
+static bool CCircuitAI_GroundConnected(CCircuitAI* circuit, const AIFloat3& a, const AIFloat3& b)
+{
+	CTerrainManager* tm = circuit->GetTerrainManager();
+	AIFloat3 pa = a;
+	AIFloat3 pb = b;
+	CTerrainManager::CorrectPosition(pa);
+	CTerrainManager::CorrectPosition(pb);
+	const int ia = tm->GetSectorIndex(pa);
+	const int ib = tm->GetSectorIndex(pb);
+	if ((ia < 0) || (ib < 0)) {
+		return false;
+	}
+	for (const terrain::SMobileType& mt : tm->GetMobileTypes()) {
+		if (!mt.typeUsable || mt.canFloat || mt.canHover) {
+			continue;
+		}
+		if ((size_t)ia >= mt.sector.size() || (size_t)ib >= mt.sector.size()) {
+			continue;
+		}
+		const terrain::SArea* aa = mt.sector[ia].area;
+		if ((aa != nullptr) && (aa == mt.sector[ib].area)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static CScriptArray* CCircuitAI_GetOwnDamagedNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnDamagedNear(pos, radius);
@@ -1530,6 +1614,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1642,6 +1728,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsTargFac() const", asMETHOD(CCircuitDef, IsTargFac), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsKamikazeDef() const", asMETHOD(CCircuitDef, IsKamikazeDef), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsShieldDef() const", asMETHOD(CCircuitDef, IsShieldDef), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetShieldRadius() const", asMETHOD(CCircuitDef, GetShieldRadius), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "string GetActTrace() const", asMETHOD(CCircuitUnit, GetActTrace), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsRezAble() const", asMETHOD(CCircuitDef, IsRezAble), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetStoreM() const", asMETHOD(CCircuitDef, GetStoreM), asCALL_THISCALL); ASSERT(r >= 0);

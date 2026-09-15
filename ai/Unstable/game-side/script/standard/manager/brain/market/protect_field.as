@@ -554,6 +554,33 @@ float PfTowerKill(int d)
 // of searching. Written per pass and validated by the pass number rather than
 // cleared, so a dead unit id never has to be hunted down.
 //------------------------------------------------------------------------------
+// THE FIRE A DEF SOAKS, in the same light-tower metal as PfTowerKill: its
+// health against the light tower's, times what the light tower stops. What
+// the front row is worth -- cheap things in front of the mains absorb the
+// first volleys and split the attacker's fire while the mains behind kill.
+array<float> gPkAbs;
+float PfAbsorb(int d)
+{
+	if (int(gPkAbs.length()) <= Catalog::gDefCount) {
+		const uint n0 = gPkAbs.length();
+		gPkAbs.resize(uint(Catalog::gDefCount + 1));
+		for (uint i = n0; i < gPkAbs.length(); ++i)
+			gPkAbs[i] = -1.f;
+	}
+	if (gPkAbs[d] >= 0.f)
+		return gPkAbs[d];
+	float a = 0.f;
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	if (light !is null) {
+		const int ld = int(light.id);
+		if (Catalog::gHealth[ld] > 0.f)
+			a = Catalog::gHealth[d] / Catalog::gHealth[ld] * PfTowerKill(ld);
+	}
+	if (PfKillRef() > 0.f)
+		gPkAbs[d] = a;   // not cached before the light tower is readable
+	return a;
+}
+
 int gPfPassN = 0;
 array<int> gPfIdSeen;    // pass this unit id was written in...
 array<int> gPfIdSlot;    // ...and the slot it took
@@ -660,6 +687,92 @@ void PfCommit()
 // most expensive thing in the market (measured: want.protect at 9.2 ms per call
 // by minute 19, growing superlinearly with base size).
 //------------------------------------------------------------------------------
+// OUR HULL ON THE BLACKBOARD, for the team hull (protect_team.as): centre,
+// the rim per bearing capped the way the wall caps it (one far mex must not
+// balloon it), and the worth standing in each bearing.
+const string TV_PF_MX = "pfmx";
+const string TV_PF_MZ = "pfmz";
+const string TV_PF_W  = "pfw";
+const string TV_PF_FX = "pffx";   // our furthest capped mex toward them
+const string TV_PF_FZ = "pffz";
+float gPfCapR = 0.f;
+int gNextPfHullLog = 0;
+int gPfDbgFoeOk = -1;
+AIFloat3 gPfDbgFoe;
+void PfPublishHull()
+{
+	if (!gPfRimOk) {
+		ai.PublishTeamValue(TV_PF_MX, -1.f);
+		return;
+	}
+	float sw = 0.f;
+	float sd2 = 0.f;
+	array<float> bw(PF_RAYS, 0.f);
+	for (uint i = 0; i < gPfPos.length(); ++i) {
+		bw[uint(PfRayOf(gPfPos[i]))] += gPfWorth[i];
+		if ((i < gPfIsMex.length()) && gPfIsMex[i])
+			continue;
+		const float dd = gPfPos[i].distance2D(gPfMid);
+		sd2 += gPfWorth[i] * dd * dd;
+		sw += gPfWorth[i];
+	}
+	gPfCapR = (sw > 1.f)
+			? sqrt(sd2 / sw) * ai.GetTunable("apex_wall_reach", TUNE_WALL_REACH)
+			: 0.f;
+	ai.PublishTeamValue(TV_PF_MX, gPfMid.x);
+	ai.PublishTeamValue(TV_PF_MZ, gPfMid.z);
+	ai.PublishTeamValue(TV_PF_W, gPfTotal);
+	// Our furthest capped extractor toward them: the team's frontier is the
+	// furthest of these (protect_wall.as), not one player's.
+	{
+		AIFloat3 foe;
+		float best = -1.f;
+		AIFloat3 bestP(-1.f, 0.f, -1.f);
+		const bool foeOk = FoeRef(foe);
+		gPfDbgFoeOk = foeOk ? 1 : 0;
+		gPfDbgFoe = foe;
+		if (foeOk && Builder::gHomeSet) {
+			AIFloat3 fd = foe - Builder::gHomePos;
+			if (fd.SqLength2D() > 1.f) {
+				fd.SafeNormalize2D();
+				for (uint i = 0; i < gPfPos.length(); ++i) {
+					if ((i >= gPfIsMex.length()) || !gPfIsMex[i])
+						continue;
+					const float df = (gPfPos[i].x - Builder::gHomePos.x) * fd.x
+							+ (gPfPos[i].z - Builder::gHomePos.z) * fd.z;
+					if (df > best) {
+						best = df;
+						bestP = gPfPos[i];
+					}
+				}
+			}
+		}
+		ai.PublishTeamValue(TV_PF_FX, bestP.x);
+		ai.PublishTeamValue(TV_PF_FZ, bestP.z);
+		if (ai.frame >= gNextPfHullLog) {
+			gNextPfHullLog = ai.frame + 60 * SECOND;
+			int nMex = 0;
+			for (uint i = 0; i < gPfIsMex.length(); ++i)
+				if (gPfIsMex[i])
+					++nMex;
+			AiLog(Factory::T() + "apex: pfhull assets=" + gPfPos.length()
+				+ " mex=" + nMex + " rows=" + MexRows().length()
+				+ " fwd=" + int(bestP.x) + "," + int(bestP.z)
+				+ " fwdD=" + int(best) + " cap=" + int(gPfCapR)
+				+ " foeOk=" + gPfDbgFoeOk + " foe=" + int(gPfDbgFoe.x) + "," + int(gPfDbgFoe.z)
+				+ " home=" + int(Builder::gHomePos.x) + "," + int(Builder::gHomePos.z)
+				+ " mid=" + int(gPfMid.x) + "," + int(gPfMid.z));
+		}
+	}
+	for (int b = 0; b < PF_RAYS; ++b) {
+		float rb = gPfRimR[b];
+		if ((gPfCapR > 1.f) && (rb > gPfCapR))
+			rb = gPfCapR;
+		ai.PublishTeamValue("pfr" + b, rb);
+		ai.PublishTeamValue("pfw" + b, bw[uint(b)]);
+	}
+}
+
 void PfRebuild()
 {
 	const float everyS = ai.GetTunable("apex_protect_field_s", TUNE_PROTECT_FIELD_S);
@@ -760,6 +873,7 @@ void PfRebuild()
 			gPfRimOk = true;
 		}
 	}
+	PfPublishHull();
 
 	// Gathered aside and compared, so gPfTwRev moves only when the towers
 	// PfCoverPoint reads actually change.
@@ -774,6 +888,26 @@ void PfRebuild()
 		tPos.insertLast(gProtPos[PROT_DEF][i]);
 		tReach.insertLast(r);
 		tKill.insertLast(PfTowerKill(d));
+	}
+	// THE TEAM'S GUNS, NOT ONLY OURS. An ally's tower stops the same wave, so
+	// the cover field reads it -- or every player buys its own gun beside a
+	// mate's, and a bearing an ally holds reads open (measured: 79% of the
+	// team's guns inside the team hull, each player ringing its own base).
+	{
+		const array<float>@ ad = ai.GetAllyDefences();
+		if (ad !is null) {
+			for (uint k = 0; k + 2 < ad.length(); k += 3) {
+				const int d = int(ad[k + 2]);
+				if ((d <= 0) || (d >= Catalog::gDefCount) || (ProtClassOf(d) != PROT_DEF))
+					continue;
+				const float r = Catalog::gMaxRange[d];
+				if (r <= 1.f)
+					continue;
+				tPos.insertLast(AIFloat3(ad[k], 0.f, ad[k + 1]));
+				tReach.insertLast(r);
+				tKill.insertLast(PfTowerKill(d));
+			}
+		}
 	}
 	bool twSame = (tPos.length() == gPfTwPos.length());
 	for (uint i = 0; twSame && (i < tPos.length()); ++i) {
@@ -1033,6 +1167,17 @@ float PfCoverPoint(const AIFloat3& in at, const AIFloat3& in extraAt,
 	}
 	if ((extraReach > 0.f) && (extraAt.distance2D(at) <= extraReach))
 		m += extraKill;
+	return m;
+}
+
+// Gun worth (light-tower metal, the team's) standing within r of a point.
+float PfTowerKillNear(const AIFloat3& in at, float r)
+{
+	float m = 0.f;
+	for (uint i = 0; i < gPfTwPos.length(); ++i) {
+		if (gPfTwPos[i].distance2D(at) <= r)
+			m += gPfTwKill[i];
+	}
 	return m;
 }
 

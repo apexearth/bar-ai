@@ -46,11 +46,22 @@ array<float>    gWallHz;
 array<float>    gWallSiege;
 array<bool>     gWallOpen;     // no standing tower of ours covers this slot
 array<bool>     gWallLine;     // slot belongs to the FRONT LINE, not the ring
+array<int>      gWallRow;      // line row: 0 teeth/light, 1 mains, 2 support; -1 ring
+array<float>    gWallLat;      // signed lateral offset along the line, elmos
 array<bool>     gWallAdj;      // a neighbouring slot is already held
 int             gWallAdjAt = -999999;   // ...built on first ask per wall stamp
 float           gWallAdjPitch = 0.f;
 array<float>    gWallR;        // the wall's radius per rim bearing
 bool            gWallROk = false;
+AIFloat3        gWallMid;      // the hull the wall wraps: the TEAM's when the
+                               // blackboard has it, else our own
+bool            gWallTeam = false;
+array<bool>     gWallWalk;     // per bearing: their ground can walk in here
+float           gWallLineRPrev = 0.f;  // last line radius: a quantum of hysteresis
+float           gWallDbgLineR = 0.f;   // the line's geometry, for the log
+float           gWallDbgMexFwd = 0.f;
+float           gWallDbgHalfD = 0.f;
+int             gWallDbgLineN = 0;
 // THE FRONT LINE (apexearth, watching a 2v2: "I'm expecting a clear line of
 // towers across the map"). A ring wraps one base; a front is a LINE: slots
 // along the perpendicular to the home->enemy axis, standing at the wall's
@@ -61,8 +72,8 @@ bool            gWallLineOk = false;
 AIFloat3        gWallA;        // the line's anchor point
 AIFloat3        gWallF;        // unit home->enemy direction
 int             gWallAt = -999999;
-const int  WALL_MAX_SLOTS = 64;
-const int  WALL_LINE_ROWS = 2;
+const int  WALL_MAX_SLOTS = 96;   // three line rows and the ring
+const int  WALL_LINE_ROWS = 3;
 const float WALL_QUANT = 256.f;
 
 // WHERE SLOT n SITS ALONG THE WALL. A tight cluster of guns, then a gap, then
@@ -88,8 +99,11 @@ float WallSlotDist(int n, float pitch)
 	return float(c) * pitch * float(k) + float(j) * pitch * tf;
 }
 
-void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
+void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac,
+		int row = -1, float lat = 0.f)
 {
+	gWallRow.insertLast(row);
+	gWallLat.insertLast(lat);
 	const bool open = !PfCoveredAt(s);   // same test, off the tower index
 	const float cv = CoverAt(s);
 	gWallP.insertLast(s);
@@ -109,9 +123,9 @@ void WallEmitSlot(const AIFloat3& in s, bool line, float expFrac)
 // once the slot table is full.
 bool WallEmitRow(const AIFloat3& in rowA, const AIFloat3& in lat, float pitch,
 		float lineHalf, const array<float>& in hx, const array<float>& in hz,
-		float expFrac)
+		float expFrac, int row)
 {
-	WallEmitSlot(rowA, true, expFrac);
+	WallEmitSlot(rowA, true, expFrac, row, 0.f);
 	for (int sideK = -1; sideK <= 1; sideK += 2) {
 		for (int k = 1; k <= WALL_MAX_SLOTS; ++k) {
 			const float dk = WallSlotDist(k, pitch);
@@ -121,14 +135,14 @@ bool WallEmitRow(const AIFloat3& in rowA, const AIFloat3& in lat, float pitch,
 			if (!OnMap(s))
 				break;
 			bool allyLane = false;
-			const float dUs = s.distance2D(gPfMid);
+			const float dUs = s.distance2D(gWallMid);
 			for (uint m = 0; !allyLane && (m < hx.length()); ++m) {
 				if (s.distance2D(AIFloat3(hx[m], 0.f, hz[m])) < dUs)
 					allyLane = true;
 			}
 			if (allyLane)
 				break;
-			WallEmitSlot(s, true, expFrac);
+			WallEmitSlot(s, true, expFrac, row, dk * float(sideK));
 			if (int(gWallP.length()) >= WALL_MAX_SLOTS)
 				return false;
 		}
@@ -153,6 +167,8 @@ void WallPrep()
 	gWallSiege.resize(0);
 	gWallOpen.resize(0);
 	gWallLine.resize(0);
+	gWallRow.resize(0);
+	gWallLat.resize(0);
 	gWallAdj.resize(0);
 	gWallROk = false;
 	gWallLineOk = false;
@@ -196,13 +212,19 @@ void WallPrep()
 			rms = sqrt(sd2 / sw);
 	}
 	const float capR = rms * ai.GetTunable("apex_wall_reach", TUNE_WALL_REACH);
+	// THE TEAM'S HULL, NOT OURS (protect_team.as): the wall wraps what the
+	// team owns, so a player behind an ally builds on the team's edge instead
+	// of ringing its own base inside it.
+	TeamHullPrep();
+	gWallTeam = gThOk && (gThMates > 0);
+	gWallMid = gWallTeam ? gThMid : gPfMid;
 	// One radius per bearing: capped, stepped so growth inside a quantum does
 	// not move the wall, standoff outside the buildings.
 	array<float> wr(PF_RAYS, 0.f);
 	float perim = 0.f;
 	for (int b = 0; b < PF_RAYS; ++b) {
-		float rb = gPfRimR[b];
-		if ((capR > 1.f) && (rb > capR))
+		float rb = gWallTeam ? gThR[b] : gPfRimR[b];
+		if (!gWallTeam && (capR > 1.f) && (rb > capR))
 			rb = capR;
 		float rq = float(int(rb / WALL_QUANT)) * WALL_QUANT + standoff;
 		if (rq < standoff)
@@ -221,7 +243,7 @@ void WallPrep()
 	array<float> hz2;
 	if (gShieldMates is null)
 		@gShieldMates = ai.GetTeamIds();
-	if (gShieldMates !is null) {
+	if (!gWallTeam && (gShieldMates !is null)) {
 		for (uint m = 0; m < gShieldMates.length(); ++m) {
 			if (int(gShieldMates[m]) == ai.teamId)
 				continue;
@@ -237,13 +259,26 @@ void WallPrep()
 	RiskFill();
 	RiskFillSiege();
 	const float expFrac = ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
+	// A bearing their ground cannot walk -- cliff, water, off the map -- is a
+	// wall already and gets no slot.
+	gWallWalk.resize(PF_RAYS);
+	{
+		AIFloat3 foeW;
+		const bool foeWOk = FoeRef(foeW);
+		const float wedgeW = 6.2831853f / float(PF_RAYS);
+		for (int b = 0; b < PF_RAYS; ++b) {
+			const float ang = wedgeW * (float(b) + 0.5f);
+			const AIFloat3 e = gWallMid + AIFloat3(cos(ang), 0.f, sin(ang)) * wr[b];
+			gWallWalk[b] = !foeWOk || (OnMap(e) && ai.GroundConnected(e, foeW));
+		}
+	}
 	// THE LINE FIRST -- see the header. Anchored at the wall's forward radius
 	// on the enemy bearing, running along the perpendicular until the map
 	// edge (a wall already) or an ally's lane (a slot closer to their home
 	// than ours is theirs to hold -- their line continues ours).
 	AIFloat3 foeP;
 	if (FoeRef(foeP)) {
-		AIFloat3 fd = foeP - gPfMid;
+		AIFloat3 fd = foeP - gWallMid;
 		const float foeD = sqrt(fd.SqLength2D());
 		if (foeD > 1.f) {
 			fd *= (1.f / foeD);
@@ -255,15 +290,33 @@ void WallPrep()
 			// a model -- bounded by the halfway point so a lone deep claim
 			// cannot drag it into their half. No forward mexes yet means it
 			// hugs the base hull; every capped mex walks it out.
-			float lineR = wr[PfRayOf(gPfMid + fd * 1000.f)];
+			float lineR = wr[gWallTeam ? TeamRayOf(gWallMid + fd * 1000.f)
+					: PfRayOf(gWallMid + fd * 1000.f)];
 			float mexFwd = 0.f;
 			for (uint i = 0; i < gPfPos.length(); ++i) {
 				if ((i >= gPfIsMex.length()) || !gPfIsMex[i])
 					continue;
-				const float df = (gPfPos[i].x - gPfMid.x) * fd.x
-						+ (gPfPos[i].z - gPfMid.z) * fd.z;
+				const float df = (gPfPos[i].x - gWallMid.x) * fd.x
+						+ (gPfPos[i].z - gWallMid.z) * fd.z;
 				if (df > mexFwd)
 					mexFwd = df;
+			}
+			// ...and the team's: the frontier is the furthest capped mex any
+			// member holds toward them, so one line stands for all of us.
+			if (gWallTeam && (gShieldMates !is null)) {
+				for (uint m = 0; m < gShieldMates.length(); ++m) {
+					const int t = int(gShieldMates[m]);
+					if (t == ai.teamId)
+						continue;
+					const float mx = ai.ReadTeamValue(t, TV_PF_FX, -1.f);
+					const float mz = ai.ReadTeamValue(t, TV_PF_FZ, -1.f);
+					if ((mx < 0.f) || (mz < 0.f))
+						continue;
+					const float df = (mx - gWallMid.x) * fd.x
+							+ (mz - gWallMid.z) * fd.z;
+					if (df > mexFwd)
+						mexFwd = df;
+				}
 			}
 			if (mexFwd + standoff > lineR)
 				lineR = float(int(mexFwd / WALL_QUANT)) * WALL_QUANT
@@ -275,7 +328,7 @@ void WallPrep()
 			// guards and none for the line, a commander dead at 0.43).
 			float halfD = foeD * 0.5f;
 			if (Builder::gHomeSet) {
-				const AIFloat3 hrel = gPfMid - Builder::gHomePos;
+				const AIFloat3 hrel = gWallMid - Builder::gHomePos;
 				const AIFloat3 frel = foeP - Builder::gHomePos;
 				const float midAhead = (frel.x * fd.x + frel.z * fd.z) * 0.5f
 						- (hrel.x * fd.x + hrel.z * fd.z);
@@ -288,7 +341,48 @@ void WallPrep()
 				lineR = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
 			if (lineR < standoff)
 				lineR = standoff;
-			AIFloat3 anchor = gPfMid + fd * lineR;
+			// THE GUNS COME UP UNDER THE ARMY. The hull-and-mexes radius is
+			// the floor; the line stands as far forward as the ground the
+			// army actually holds, up to halfway: from halfway back a pitch
+			// at a time until a point our influence holds and theirs does
+			// not. A base ringed at its own hull has no room to grow behind
+			// the line; a line at halfway with nothing holding it is a row of
+			// guns dying alone (measured both ways). Stepped a quantum at a
+			// time so the army's ebb and flow does not walk the line.
+			{
+				float rSafe = lineR;
+				for (float r = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
+						r > lineR; r -= pitch) {
+					const AIFloat3 p = gWallMid + fd * r;
+					if (!OnMap(p) || Builder::SiteHot(p))
+						continue;
+					// Ground the front-line model calls OURS -- presence
+					// above its floor and twice theirs -- and not the
+					// contested edge itself: the pitch ahead is not theirs.
+					if ((Front::Classify(p) != Front::OURS)
+						|| (Front::Classify(p + fd * pitch) == Front::THEIRS))
+						continue;
+					rSafe = r;
+					break;
+				}
+				float rq = float(int(rSafe / WALL_QUANT)) * WALL_QUANT + standoff;
+				if (rq < lineR)
+					rq = lineR;
+				if ((gWallLineRPrev > 0.f)
+					&& (rq > gWallLineRPrev - WALL_QUANT)
+					&& (rq < gWallLineRPrev + WALL_QUANT))
+					rq = gWallLineRPrev;   // within a quantum: stay put
+				if (rq > halfD)
+					rq = float(int(halfD / WALL_QUANT)) * WALL_QUANT;
+				if (rq < lineR)
+					rq = lineR;
+				lineR = rq;
+				gWallLineRPrev = lineR;
+			}
+			AIFloat3 anchor = gWallMid + fd * lineR;
+			gWallDbgLineR = lineR;
+			gWallDbgMexFwd = mexFwd;
+			gWallDbgHalfD = halfD;
 			// THE NARROWEST PASSAGE WINS (apexearth: "Ideally we hold a
 			// frontline at a narrower part of the map... holding that line
 			// is best"). With a choke on our lane the line stands on it and
@@ -329,7 +423,7 @@ void WallPrep()
 				// ends -- never the passage itself, never only the base.
 				{
 					const AIFloat3 homeP = Builder::gHomeSet
-							? Builder::gHomePos : gPfMid;
+							? Builder::gHomePos : gWallMid;
 					const AIFloat3 relA = anchor - homeP;
 					const float span = relA.x * fd.x + relA.z * fd.z;
 					const int steps = int(span / pitch) - 1;
@@ -356,7 +450,7 @@ void WallPrep()
 				for (int row = 0; row < WALL_LINE_ROWS; ++row) {
 					const AIFloat3 rowA = anchor - fd * (pitch * float(row));
 					if (!OnMap(rowA) || !WallEmitRow(rowA, lineLat, pitch,
-							lineHalf, hx, hz2, expFrac))
+							lineHalf, hx, hz2, expFrac, row))
 						break;
 				}
 			}
@@ -389,13 +483,15 @@ void WallPrep()
 			const float ang = wedge * float(b)
 					+ (WallSlotDist(slotN, pitch) - arcAt) / wr[b];
 			const AIFloat3 dir(cos(ang), 0.f, sin(ang));
-			const AIFloat3 s = gPfMid + dir * wr[b];
+			const AIFloat3 s = gWallMid + dir * wr[b];
 			if (!OnMap(s))
 				continue;   // the map edge is a wall already
+			if (!gWallWalk[b])
+				continue;   // so is ground they cannot walk
 			bool shielded = false;
 			for (uint m = 0; !shielded && (m < hx.length()); ++m) {
-				const float vx = hx[m] - gPfMid.x;
-				const float vz = hz2[m] - gPfMid.z;
+				const float vx = hx[m] - gWallMid.x;
+				const float vz = hz2[m] - gWallMid.z;
 				const float along = vx * dir.x + vz * dir.z;
 				if (along <= wr[b])
 					continue;
@@ -434,16 +530,16 @@ void WallPrep()
 	gWallAtk.resize(gWallP.length());
 	float atkSum = 0.f;
 	for (uint i = 0; i < gWallP.length(); ++i) {
-		float sx = gWallP[i].x - gPfMid.x;
-		float sz = gWallP[i].z - gPfMid.z;
+		float sx = gWallP[i].x - gWallMid.x;
+		float sz = gWallP[i].z - gWallMid.z;
 		const float sl = sqrt(sx * sx + sz * sz);
 		float w = 0.f;
 		if (sl > 1.f) {
 			sx /= sl;
 			sz /= sl;
 			for (uint j = 0; j < gLossM.length(); ++j) {
-				float lx = gLossX[j] - gPfMid.x;
-				float lz = gLossZ[j] - gPfMid.z;
+				float lx = gLossX[j] - gWallMid.x;
+				float lz = gLossZ[j] - gWallMid.z;
 				const float ll = sqrt(lx * lx + lz * lz);
 				if (ll < 1.f)
 					continue;   // a loss at the centre has no bearing
@@ -484,7 +580,21 @@ void WallPrep()
 			if ((i == 0) || (gWallInfl[i] < lo)) lo = gWallInfl[i];
 			if ((i == 0) || (gWallInfl[i] > hi)) hi = gWallInfl[i];
 		}
+		int nLine = 0;
+		int nWalk = 0;
+		for (uint i = 0; i < gWallLine.length(); ++i)
+			if (gWallLine[i])
+				++nLine;
+		for (int b = 0; b < PF_RAYS; ++b)
+			if (gWallWalk[b])
+				++nWalk;
 		AiLog(Factory::T() + "apex: wall t=" + ai.teamId
+			+ " team=" + (gWallTeam ? 1 : 0) + " mates=" + gThMates
+			+ " mid=" + int(gWallMid.x) + "," + int(gWallMid.z)
+			+ " line=" + (gWallLineOk ? 1 : 0) + " lineN=" + nLine
+			+ " anchor=" + int(gWallA.x) + "," + int(gWallA.z)
+			+ " lineR=" + int(gWallDbgLineR) + " mexFwd=" + int(gWallDbgMexFwd)
+			+ " halfD=" + int(gWallDbgHalfD) + " walk=" + nWalk
 			+ " slots=" + gWallP.length()
 			+ " pitch=" + int(pitch)
 			+ " tight=" + nTight + "/" + nStep
@@ -587,6 +697,26 @@ bool WallSlotLine(uint i)
 	return (i < gWallLine.length()) && gWallLine[i];
 }
 
+int WallSlotRow(uint i)
+{
+	return (i < gWallRow.length()) ? gWallRow[i] : -1;
+}
+
+// The slot of `row` directly behind (or ahead of) slot i on the line: same
+// lateral offset, another row. -1 when the line has none there.
+int WallSlotInRow(uint i, int row)
+{
+	if ((i >= gWallLat.length()) || !gWallLine[i])
+		return -1;
+	for (uint j = 0; j < gWallLat.length(); ++j) {
+		if ((j == i) || !gWallLine[j] || (gWallRow[j] != row))
+			continue;
+		if (gWallLat[j] == gWallLat[i])
+			return int(j);
+	}
+	return -1;
+}
+
 bool WallSlotAdjHeld(uint i)
 {
 	WallAdjPrep();
@@ -672,6 +802,75 @@ bool WallLineHeld(AIFloat3& out at, int& out n, int minHeld)
 // Three engine reads and a walk over the line's slots, for an answer with no
 // arguments: SenseGainOf asks it once per CANDIDATE, so every radar, jammer,
 // shield and AA tower in the list re-derived the same frame's answer.
+// THE SUPPORT ROW'S BEST SLOT for a lathe: the row behind the mains whose
+// reach holds the most standing gun worth and no lathe yet. A nano behind a
+// tower heals it while it fights, so the line survives the attack it would
+// otherwise lose; one per reach, spread along the line rather than one at
+// the line's centroid.
+// `cls` < 0 asks for a lathe slot (no lathe of ours in reach); a protect
+// class asks for that class's slot (none of it committed in reach) -- the
+// shield behind the mains against their tanks and artillery.
+bool WallSupportSlot(float reach, AIFloat3& out at, float& out guns, int cls = -1)
+{
+	WallPrep();
+	guns = 0.f;
+	if (!gWallLineOk || (reach <= 1.f))
+		return false;
+	int best = -1;
+	for (uint j = 0; j < gWallP.length(); ++j) {
+		if (!gWallLine[j] || (gWallRow[j] != WALL_LINE_ROWS - 1))
+			continue;
+		const float g = PfTowerKillNear(gWallP[j], reach);
+		if ((g <= guns) || Builder::SiteHot(gWallP[j]))
+			continue;
+		if ((cls < 0) ? ComLatheNear(gWallP[j], reach)
+				: ProtCovered(cls, gWallP[j], reach))
+			continue;
+		guns = g;
+		best = int(j);
+	}
+	if (best < 0)
+		return false;
+	at = gWallP[uint(best)];
+	return OnMap(at);
+}
+
+// A TOOTH POINT ON THE FRONT ROW: a step enemy-ward of a front-row slot
+// whose mains behind stand, along the row at tooth pitch, the first spot
+// nothing of ours occupies. Teeth split the attacker's fire in front of the
+// guns; they are worthless where no gun stands behind them.
+bool WallTeethPoint(AIFloat3& out p)
+{
+	WallPrep();
+	if (!gWallLineOk)
+		return false;
+	const float pitch = Brain::LightTowerRange()
+			* ai.GetTunable("apex_wall_pitch", TUNE_WALL_PITCH);
+	const AIFloat3 lat(-gWallF.z, 0.f, gWallF.x);
+	const int nK = int(pitch / 48.f) + 1;
+	for (uint i = 0; i < gWallP.length(); ++i) {
+		if (!gWallLine[i] || (gWallRow[i] != 0))
+			continue;
+		const int mj = WallSlotInRow(i, 1);
+		if ((mj < 0) || gWallOpen[uint(mj)])
+			continue;
+		if (Builder::SiteHot(gWallP[i]))
+			continue;
+		for (int k = 0; k < nK; ++k) {
+			const AIFloat3 c = gWallP[i] + gWallF * 140.f
+					+ lat * (48.f * float(k));
+			if (!OnMap(c))
+				break;
+			array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(c, 40.f);
+			if ((near !is null) && (near.length() > 0))
+				continue;
+			p = c;
+			return true;
+		}
+	}
+	return false;
+}
+
 int      gWlqAt = -999999;
 bool     gWlqOk = false;
 AIFloat3 gWlqPos;
@@ -737,7 +936,7 @@ float WallRimDist(const AIFloat3& in p)
 	// distance along the enemy axis, so the line's advance is what strands
 	// a tower there, not the ring radius behind it.
 	if (gWallLineOk) {
-		AIFloat3 d = p - gPfMid;
+		AIFloat3 d = p - gWallMid;
 		const float l = sqrt(d.SqLength2D());
 		if ((l > 1.f)
 			&& ((d.x * gWallF.x + d.z * gWallF.z) / l > 0.5f))
@@ -746,7 +945,8 @@ float WallRimDist(const AIFloat3& in p)
 					+ (p.z - gWallA.z) * gWallF.z;
 		}
 	}
-	return p.distance2D(gPfMid) - gWallR[PfRayOf(p)];
+	return p.distance2D(gWallMid)
+			- gWallR[gWallTeam ? TeamRayOf(p) : PfRayOf(p)];
 }
 
 bool WallStands()

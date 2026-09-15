@@ -260,12 +260,15 @@ keeps deepening until its cover OVERWHELMS the push, not merely matches it
 ("Have an unusual amount of tower at some spots. Try to deeply cover those
 choke points").
 
-### `TUNE_TEETH` = 0.f
+### `TUNE_TEETH` = 1.f
 
-The teeth line: one wall piece per election across the strongest defended
-gate's span, a step enemy-ward of the doorway ("slow them down with some walls
-outside"). OFF at his request 2026-08-29 ("the implementation is terrible") --
-the knob stays so a better implementation can be A/B'd.
+The teeth line: one wall piece per election, a step enemy-ward of the wall's
+FRONT ROW where the mains behind it stand (`WallTeethPoint`), or across a
+defended gate's span when the map has one. Teeth split the attacker's fire in
+front of the guns and are worthless with no gun behind them, which is what
+the gate-only version (off 2026-08-29, "the implementation is terrible") got
+wrong: it stood teeth at a doorway with nothing behind. On again 2026-09-15
+with the layered line (docs/32); A/B it against 0 on Greenest 8v8.
 
 ### `TUNE_TEETH_GAIN` = 40.f
 

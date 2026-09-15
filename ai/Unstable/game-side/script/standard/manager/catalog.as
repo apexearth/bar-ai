@@ -82,6 +82,7 @@ array<bool> gDumbFire;
 array<int> gRole;        // CircuitAI main role (raider/riot/assault/...)
 array<bool> gKamikaze;   // suicide unit: ammunition, not army
 array<bool> gShield;     // projectile shield structure
+array<float> gShieldR;   // ...and the radius its dome covers
 array<bool> gRezzer;     // can resurrect wrecks
 array<float> gSurfT;     // threat vs surface targets
 array<float> gAirT;      // threat vs air
@@ -119,7 +120,7 @@ void Init()
 	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
 	gAimTrue.resize(n); gDumbFire.resize(n);
 	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n); gKamikaze.resize(n);
-	gShield.resize(n); gRezzer.resize(n);
+	gShield.resize(n); gShieldR.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
 
@@ -189,6 +190,7 @@ void Init()
 		gRole[i]         = int(cdef.GetMainRole());
 		gKamikaze[i]     = cdef.IsKamikazeDef();
 		gShield[i]       = cdef.IsShieldDef();
+		gShieldR[i]      = cdef.GetShieldRadius();
 		gRezzer[i]       = cdef.IsRezAble();
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();

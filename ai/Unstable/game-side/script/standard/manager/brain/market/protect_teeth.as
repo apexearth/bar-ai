@@ -118,6 +118,12 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 			if (OnMap(gTeethPoint))
 				break;
 		}
+		// No gate: the line's own front row, where mains stand behind.
+		if (!OnMap(gTeethPoint)) {
+			AIFloat3 lp;
+			if (WallTeethPoint(lp))
+				gTeethPoint = lp;
+		}
 		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
 			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
 				+ " gates=" + gidx.length()

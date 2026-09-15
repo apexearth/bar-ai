@@ -451,9 +451,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// reach of the line's centre and the ground is plainly ours.
 		if (!sited) {
 			AIFloat3 fl;
-			int fn = 0;
+			float flGuns = 0.f;
 			const float bd = Catalog::gBuildDist[int(w.def.id)];
-			if ((bd > 1.f) && WallLineQuiet(fl, fn) && !ComLatheNear(fl, bd)) {
+			if ((bd > 1.f) && WallSupportSlot(bd, fl, flGuns)) {
 				slot = fl;
 				sited = true;
 				lineSited = true;

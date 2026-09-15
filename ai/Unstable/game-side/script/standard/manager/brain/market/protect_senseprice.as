@@ -146,9 +146,24 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// almost always. See LrpcStake in protect_target.as.
 		const float lrpcS = LrpcStake();
 		const int lrpc = (lrpcS > 0.f) ? 1 : 0;
-		const float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
+		float artyS = Military::EnemyCostOf(Unit::Role::ARTY.type)
 				+ Military::EnemyCostOf(Unit::Role::SKIRM.type) * 0.5f
 				+ lrpcS;
+		// THE SHIELD IN THE LINE. A shield behind the mains stops the shells
+		// of their tanks as well as their artillery: against a tank army the
+		// line holds with shields and does not without. Sited on the support
+		// row where the most gun worth stands in its radius and no shield is
+		// committed yet; the shells it answers there are their assault metal
+		// too, and the stake is the guns it keeps alive.
+		AIFloat3 lineAtS;
+		float lineGuns = 0.f;
+		const float shR = (Catalog::gShieldR[d] > 1.f) ? Catalog::gShieldR[d] : 400.f;
+		const bool onLine = WallSupportSlot(shR, lineAtS, lineGuns, PROT_SHIELD)
+				&& (lineGuns > 1.f);
+		if (onLine) {
+			artyS += Military::EnemyCostOf(Unit::Role::ASSAULT.type);
+			at = lineAtS;
+		}
 		if (Gate(GATE_SHLD_ARTY, artyS < 200.f))
 			return false;
 		// ...and only when a threat is actually NEAR: a global arty
@@ -157,10 +172,10 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// very close"). The bombardier must be within twice its reach
 		// of what the shield would cover -- unless it is an LRPC, whose
 		// reach covers everything.
-		if (Gate(GATE_SHLD_FAR,
+		if (!onLine && Gate(GATE_SHLD_FAR,
 				(lrpc <= 0) && (ai.GetEnemyCostAt(core, 1800.f) < 200.f)))
 			return false;
-		if (Gate(GATE_SHLD_COVER, ProtCovered(PROT_SHIELD, core, 400.f)))
+		if (!onLine && Gate(GATE_SHLD_COVER, ProtCovered(PROT_SHIELD, core, 400.f)))
 			return false;
 		// THE SAME THREE TERMS AS AA BELOW: what is at risk, how often it is
 		// being hit, and the share THIS dome newly blanks. What stood here
@@ -187,7 +202,7 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			return false;
 		// Turrets are excluded from the stake for the same reason AA and
 		// SiegeRiskAt exclude them: defence must not be its own reason.
-		float econS = gAssetsM - gProtM;
+		float econS = onLine ? lineGuns : (gAssetsM - gProtM);
 		if (econS < 0.f)
 			econS = 0.f;
 		const float horizS = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);

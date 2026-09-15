@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..45382aec 100644
+index aeea9339..0954d3fd 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,19 @@
@@ -700,7 +700,7 @@ index aeea9339..45382aec 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1940,1278 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1940,1245 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -983,9 +983,6 @@ index aeea9339..45382aec 100644
 +	}
 +	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
 +	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
-+	if (depth > .0f) {
-+		return false;  // behind the anchor is the economy: no streets (script LanesApply)
-+	}
 +	return (LaneGapAt(lat, gridLanePitch) < gridLaneHalf)
 +		|| (LaneGapAt(depth, gridLanePitch) < gridLaneHalf);
 +}
@@ -1012,44 +1009,32 @@ index aeea9339..45382aec 100644
 +	// only pitch on which two of them touch), widened by script where the death
 +	// explosion makes a flush pack a single-bomb loss. Strides stay whole
 +	// multiples of the footprint, so widened lattices interleave exactly.
-+	// The frame is snapped to a cardinal, and an east/west facing swaps the
-+	// footprint axes, so the across-axis stride is X or Z depending on facing.
-+	float cellLat, cellDepth;
-+	LatticeStrides(def, facing, cellLat, cellDepth);
-+	const float sLat = std::round(lat / cellLat) * cellLat;
-+	const float sDepth = std::round(depth / cellDepth) * cellDepth;
-+	LatticePoint(sLat, sDepth, cellLat, cellDepth, pos.y, def, facing, outPos);
-+	return true;
-+}
-+
-+void CCircuitAI::LatticeStrides(CCircuitDef* def, int facing, float& cellLat, float& cellDepth) const
-+{
-+	cellLat = gridCell;
-+	cellDepth = gridCell;
++	float cellLat = gridCell;
++	float cellDepth = gridCell;
 +	if (def != nullptr) {
++		// The frame is snapped to a cardinal, and an east/west facing swaps the
++		// footprint axes, so the across-axis stride is X or Z depending on facing.
 +		const bool swap = ((facing != UNIT_NO_FACING) && ((facing & 1) == 1));
 +		cellLat = swap ? def->GetLatticeStrideZ() : def->GetLatticeStrideX();
 +		cellDepth = swap ? def->GetLatticeStrideX() : def->GetLatticeStrideZ();
 +		if (cellLat < gridCell) cellLat = gridCell;
 +		if (cellDepth < gridCell) cellDepth = gridCell;
 +	}
-+}
++	float sLat = std::round(lat / cellLat) * cellLat;
++	float sDepth = std::round(depth / cellDepth) * cellDepth;
 +
-+void CCircuitAI::LatticePoint(float sLat, float sDepth, float cellLat, float cellDepth, float y,
-+		CCircuitDef* def, int facing, AIFloat3& outPos) const
-+{
 +	// Walkways run on BOTH axes, so a snapped cell that lands in one is pushed
 +	// clear of it. Without this the grid packs the corridors shut, which is the
 +	// self-walling it exists to prevent. Lateral lanes alone leave slabs the
 +	// full depth of the base with no way across; the cross-streets cut those
 +	// into blocks.
-+	if ((gridLanePitch > .0f) && (sDepth <= .0f)) {  // no streets behind the anchor
++	if (gridLanePitch > .0f) {
 +		sLat = PushOutOfLane(sLat, cellLat, gridLanePitch, gridLaneHalf);
 +		sDepth = PushOutOfLane(sDepth, cellDepth, gridLanePitch, gridLaneHalf);
 +	}
 +
 +	outPos = AIFloat3(gridAnchor.x - gridFwd.x * sDepth + -gridFwd.z * sLat,
-+					  y,
++					  pos.y,
 +					  gridAnchor.z - gridFwd.z * sDepth + gridFwd.x * sLat);
 +	// Onto the engine's build lattice: Pos2BuildPos is the engine's own
 +	// center-parity mapping (16k, +8 per odd half-footprint axis, facing swaps
@@ -1059,25 +1044,7 @@ index aeea9339..45382aec 100644
 +		outPos = CTerrainManager::Pos2BuildPos(def, outPos, facing);
 +	}
 +	CTerrainManager::CorrectPosition(outPos);
-+}
-+
-+bool CCircuitAI::LatticeNeighbour(const AIFloat3& snapped, CCircuitDef* def, int facing,
-+		int i, int j, AIFloat3& outPos) const
-+{
-+	if ((gridCell <= .0f) || !utils::is_valid(gridAnchor) || !utils::is_valid(snapped)) {
-+		return false;
-+	}
-+	float cellLat, cellDepth;
-+	LatticeStrides(def, facing, cellLat, cellDepth);
-+	const float dx = snapped.x - gridAnchor.x;
-+	const float dz = snapped.z - gridAnchor.z;
-+	const float depth = -(dx * gridFwd.x + dz * gridFwd.z) + float(j) * cellDepth;
-+	const float lat = dx * -gridFwd.z + dz * gridFwd.x + float(i) * cellLat;
-+	if ((depth * depth + lat * lat) > (gridRange * gridRange)) {
-+		return false;
-+	}
-+	LatticePoint(lat, depth, cellLat, cellDepth, snapped.y, def, facing, outPos);
-+	return utils::is_valid(outPos);
++	return true;
 +}
 +
 +// A large building found no site. Recorded rather than acted on: deciding what
@@ -1980,7 +1947,7 @@ index aeea9339..45382aec 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3370,54 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3337,54 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -2035,7 +2002,7 @@ index aeea9339..45382aec 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3525,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3492,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -2050,7 +2017,7 @@ index aeea9339..45382aec 100644
  
  void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f403..77a4ed02 100644
+index b4f4f403..28479a79 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,8 +16,13 @@
@@ -2089,7 +2056,7 @@ index b4f4f403..77a4ed02 100644
  class COOAICallback;
  class CEngine;
  class CMap;
-@@ -148,7 +159,237 @@ private:
+@@ -148,7 +159,229 @@ private:
  	void UnregisterTeamUnit(CCircuitUnit* unit);
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
@@ -2236,14 +2203,6 @@ index b4f4f403..77a4ed02 100644
 +			float cell, float lanePitch, float laneHalf, float range);
 +	bool SnapToBaseGrid(const springai::AIFloat3& pos, springai::AIFloat3& outPos,
 +			CCircuitDef* def = nullptr, int facing = UNIT_NO_FACING) const;
-+	// The lattice cell (i across, j deeper) from a snapped position, in the
-+	// def's own strides; false outside the base. The neighbour of a taken
-+	// slot is the next slot, never the next build square.
-+	bool LatticeNeighbour(const springai::AIFloat3& snapped, CCircuitDef* def, int facing,
-+			int i, int j, springai::AIFloat3& outPos) const;
-+	void LatticeStrides(CCircuitDef* def, int facing, float& cellLat, float& cellDepth) const;
-+	void LatticePoint(float sLat, float sDepth, float cellLat, float cellDepth, float y,
-+			CCircuitDef* def, int facing, springai::AIFloat3& outPos) const;
 +	// Is this ground one of the published walkways? The snap alone only keeps a
 +	// street clear while the slot it snapped to is free; a base whose slots are
 +	// all taken falls back to a 3200-elmo site search that lands wherever it
@@ -2327,7 +2286,7 @@ index b4f4f403..77a4ed02 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -161,6 +402,11 @@ public:
+@@ -161,6 +394,11 @@ public:
  
  	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
  private:
@@ -2339,7 +2298,7 @@ index b4f4f403..77a4ed02 100644
  	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
  	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
  	void UnregisterEnemyInfo(CEnemyInfo* enemy);
-@@ -175,12 +421,30 @@ public:
+@@ -175,12 +413,30 @@ public:
  	bool UnitControl(CCircuitUnit* unit, bool isEnable);
  	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
  
@@ -2371,7 +2330,7 @@ index b4f4f403..77a4ed02 100644
  	EnemyInfos enemyInfos;  // owner
  	CAllyTeam* allyTeam;
  	bool isAllyTeamInit;
-@@ -189,6 +453,24 @@ private:
+@@ -189,6 +445,24 @@ private:
  	unsigned int actionIterator;
  
  	std::set<CCircuitUnit*> garbage;
@@ -2396,7 +2355,7 @@ index b4f4f403..77a4ed02 100644
  // <<< Units ---- END
  
  // >>> AIOptions.lua ---- BEGIN
-@@ -205,6 +487,41 @@ private:
+@@ -205,6 +479,41 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -2438,7 +2397,7 @@ index b4f4f403..77a4ed02 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -268,6 +585,18 @@ public:
+@@ -268,6 +577,18 @@ public:
  	CGameAttribute* GetGameAttribute() const { return gameAttribute.get(); }
  	const std::shared_ptr<CScheduler>& GetScheduler() { return scheduler; }
  	int GetLastFrame()    const { return lastFrame; }
@@ -2457,7 +2416,7 @@ index b4f4f403..77a4ed02 100644
  	int GetSkirmishAIId() const { return skirmishAIId; }
  	int GetTeamId()       const { return teamId; }
  	int GetAllyTeamId()   const { return allyTeamId; }
-@@ -278,6 +607,8 @@ public:
+@@ -278,6 +599,8 @@ public:
  	CEngine*              GetEngine()     const { return engine.get(); }
  	springai::Cheats*     GetCheats()     const { return cheats.get(); }
  	springai::Log*        GetLog()        const { return log.get(); }
@@ -2466,7 +2425,7 @@ index b4f4f403..77a4ed02 100644
  	springai::Game*       GetGame()       const { return game.get(); }
  	CMap*                 GetMap()        const { return map.get(); }
  	springai::Lua*        GetLua()        const { return lua.get(); }
-@@ -317,6 +648,102 @@ private:
+@@ -317,6 +640,102 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -2569,7 +2528,7 @@ index b4f4f403..77a4ed02 100644
  	int skirmishAIId;
  	int teamId;
  	int allyTeamId;
-@@ -334,6 +761,11 @@ private:
+@@ -334,6 +753,11 @@ private:
  	std::unique_ptr<springai::Pathing>    pathing;
  	std::unique_ptr<springai::Drawer>     drawer;
  	std::unique_ptr<springai::SkirmishAI> skirmishAI;
@@ -10529,7 +10488,7 @@ index 275db3ae..0dbc7ea7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..2e0438aa 100644
+index bc8ff11b..b4a28954 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -10540,19 +10499,14 @@ index bc8ff11b..2e0438aa 100644
  #include "module/MilitaryManager.h"
  #include "resource/MetalManager.h"
  #include "resource/EnergyGrid.h"
-@@ -31,11 +32,65 @@
+@@ -31,11 +32,60 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
 +#include "Log.h"
-+#include <cstdlib>
  
  namespace circuit {
  
-+// Lattice rings walked before a taken slot falls to the wide site search.
-+static constexpr int LATTICE_RINGS = 6;
-+
-+
  using namespace springai;
  
 +// A site the script chose and the lattice must not move: an extractor sits on
@@ -10606,7 +10560,7 @@ index bc8ff11b..2e0438aa 100644
  IBuilderTask::BuildName IBuilderTask::buildNames = {
  	{"factory", IBuilderTask::BuildType::FACTORY},
  	{"nano",    IBuilderTask::BuildType::NANO},
-@@ -69,7 +124,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
+@@ -69,7 +119,7 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
  		, nextTask(nullptr)
  		, initiator(nullptr)
  		, buildFails(0)
@@ -10615,7 +10569,7 @@ index bc8ff11b..2e0438aa 100644
  {
  	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
  	savedIncome.metal = economyMgr->GetAvgMetalIncome();
-@@ -91,13 +146,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
+@@ -91,13 +141,19 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
  		, initiator(nullptr)
  		, savedIncome({0.f, 0.f})
  		, buildFails(0)
@@ -10637,7 +10591,7 @@ index bc8ff11b..2e0438aa 100644
  }
  
  bool IBuilderTask::CanAssignTo(CCircuitUnit* unit) const
-@@ -134,8 +195,14 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -134,8 +190,14 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	}
  
  	if (unit->HasDGun()) {
@@ -10654,7 +10608,7 @@ index bc8ff11b..2e0438aa 100644
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -155,14 +222,21 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -155,14 +217,21 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
  }
  
@@ -10679,7 +10633,7 @@ index bc8ff11b..2e0438aa 100644
  
  	IUnitTask::RemoveAssignee(unit);
  	traveled.erase(unit);
-@@ -171,8 +245,28 @@ void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
+@@ -171,8 +240,28 @@ void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
  	HideAssignee(unit);
  }
  
@@ -10708,7 +10662,7 @@ index bc8ff11b..2e0438aa 100644
  	Update(unit);
  }
  
-@@ -246,6 +340,11 @@ void IBuilderTask::Cancel()
+@@ -246,6 +335,11 @@ void IBuilderTask::Cancel()
  bool IBuilderTask::Execute(CCircuitUnit* unit)
  {
  	executors.insert(unit);
@@ -10720,7 +10674,7 @@ index bc8ff11b..2e0438aa 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	TRY_UNIT(circuit, unit,
-@@ -285,14 +384,154 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,14 +379,106 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -10800,56 +10754,8 @@ index bc8ff11b..2e0438aa 100644
 +		const float clear = SelfClearance(unit, buildDef);
 +		if (free && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
 +			searchRadius = slot;   // the slot is free: hold the task to it
-+		} else {
-+			// THE NEXT SLOT, NOT THE NEXT SQUARE. A taken slot fell straight
-+			// to the wide search, which steps by one build square and lands
-+			// the building a few squares off the row (apexearth: "a converter
-+			// only builds up, left, down, or right. not up and slightly to the
-+			// side. snap to a grid of the building's own size"). Rings of the
-+			// def's own lattice, nearest first; the wide search only when no
-+			// ring within reach has a free slot.
-+			const AIFloat3 self = unit->GetPos(frame);
-+			const AIFloat3 snapped = pos;
-+			bool found = false;
-+			for (int ring = 1; (ring <= LATTICE_RINGS) && !found; ++ring) {
-+				float bestSq = -1.f;
-+				AIFloat3 best;
-+				for (int j = -ring; j <= ring; ++j) {
-+					for (int i = -ring; i <= ring; ++i) {
-+						if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
-+							continue;
-+						}
-+						AIFloat3 cell;
-+						if (!circuit->LatticeNeighbour(snapped, buildDef, facing, i, j, cell)) {
-+							continue;
-+						}
-+						const float sq = cell.SqDistance2D(snapped);
-+						if ((bestSq >= .0f) && (sq >= bestSq)) {
-+							continue;
-+						}
-+						const AIFloat3 p2 = terrainMgr->FindBuildSite(buildDef, cell, slot, facing);
-+						if (!utils::is_valid(p2) || (p2.SqDistance2D(cell) > SQUARE(SQUARE_SIZE))
-+							|| (p2.SqDistance2D(self) < SQUARE(clear)))
-+						{
-+							continue;
-+						}
-+						bestSq = sq;
-+						best = cell;
-+					}
-+				}
-+				if (bestSq >= .0f) {
-+					pos = best;
-+					searchRadius = slot;
-+					found = true;
-+				}
-+			}
-+			// Blocked ground is ground with no free slot on ANY ring: marked
-+			// on the first taken cell, the script's probe ring took over the
-+			// placement it was meant to back up (ring-scatter 20% on the
-+			// seat the day the grid came back).
-+			if (!found && !free) {
-+				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
-+			}
++		} else if (!free) {
++			circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
 +		}
 +	}
  	FindBuildSite(unit, pos, searchRadius);
@@ -10878,7 +10784,7 @@ index bc8ff11b..2e0438aa 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
  		)
-@@ -302,6 +541,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +488,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -10886,7 +10792,7 @@ index bc8ff11b..2e0438aa 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -315,8 +555,23 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -315,8 +502,23 @@ void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  	} else if (buildFails <= TASK_RETRIES) {
  		RemoveAssignee(unit);
  	} else if (target == nullptr) {
@@ -10911,7 +10817,7 @@ index bc8ff11b..2e0438aa 100644
  	}
  }
  
-@@ -333,10 +588,87 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +535,87 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -10999,7 +10905,7 @@ index bc8ff11b..2e0438aa 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +678,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +625,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -11007,7 +10913,7 @@ index bc8ff11b..2e0438aa 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +760,34 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +707,34 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -11049,7 +10955,7 @@ index bc8ff11b..2e0438aa 100644
  	}
  }
  
-@@ -447,13 +796,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +743,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -11072,7 +10978,7 @@ index bc8ff11b..2e0438aa 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -483,7 +840,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -483,7 +787,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  				TRY_UNIT(circuit, unit,
  					AIFloat3 awayPos = utils::get_radial_pos(pos, 64.f);
  					CTerrainManager::CorrectPosition(awayPos);
@@ -11081,7 +10987,7 @@ index bc8ff11b..2e0438aa 100644
  				)
  			}
  			return true;
-@@ -492,12 +849,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +796,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -11104,7 +11010,7 @@ index bc8ff11b..2e0438aa 100644
  				}
  			)
  			return true;
-@@ -508,8 +873,28 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,8 +820,28 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -11133,7 +11039,7 @@ index bc8ff11b..2e0438aa 100644
  	ShowAssignee(unit);
  	if ((task != nullptr)
  		&& ((task->GetType() != IUnitTask::Type::BUILDER)
-@@ -527,22 +912,92 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -527,22 +859,92 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	// TODO: Check IsForceUpdate, shield charge and retreat
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -11166,9 +11072,9 @@ index bc8ff11b..2e0438aa 100644
 +		circuit->NoteBuildBlocked(endPos);
 +		{
 +			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);
-+			circuit->LOG("apex: unreach %s bt=%i by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
-+					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?", int(buildType),
-+					cdef->GetDef()->GetName(), endPos.x, endPos.z, gap, range,
++			circuit->LOG("apex: unreach %s by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
++					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?", cdef->GetDef()->GetName(),
++					endPos.x, endPos.z, gap, range,
 +					circuit->GetThreatMap()->GetThreatAt(endPos), cdef->GetPower());
 +		}
 +		SetDeathNote("unreach-safe");
@@ -11233,7 +11139,7 @@ index bc8ff11b..2e0438aa 100644
  		return;
  	}
  
-@@ -565,11 +1020,24 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,11 +967,24 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -11260,7 +11166,7 @@ index bc8ff11b..2e0438aa 100644
  	}
  }
  
-@@ -637,14 +1105,126 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
+@@ -637,14 +1052,126 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
  	FindFacing(pos);
  
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
@@ -11390,7 +11296,7 @@ index bc8ff11b..2e0438aa 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,204 +1240,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,204 +1187,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -11780,19 +11686,18 @@ index b05d07b8..50d596c9 100644
  	virtual bool Load(std::istream& is) override;
  	virtual void Save(std::ostream& os) const override;
 diff --git a/src/circuit/task/builder/GuardTask.cpp b/src/circuit/task/builder/GuardTask.cpp
-index a8950289..aa2b6edf 100644
+index a8950289..a32d4b94 100644
 --- a/src/circuit/task/builder/GuardTask.cpp
 +++ b/src/circuit/task/builder/GuardTask.cpp
-@@ -20,6 +20,8 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
+@@ -20,6 +20,7 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
  					   Type::BUILDER, BuildType::GUARD, {0.f, 0.f}, 0.f, timeout)
  		, vipId(vip->GetId())
  		, isInterrupt(isInterrupt)
 +		, isFrame(!vip->IsFinished())
-+		, vipTask(vip->GetTask())
  {
  }
  
-@@ -85,6 +87,30 @@ void CBGuardTask::Stop(bool done)
+@@ -85,6 +86,22 @@ void CBGuardTask::Stop(bool done)
  	IBuilderTask::Stop(done);
  }
  
@@ -11802,20 +11707,12 @@ index a8950289..aa2b6edf 100644
 +// afus by twenty minutes (apexearth 2026-09-08).
 +void CBGuardTask::Update()
 +{
-+	CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 +	if (isFrame) {
++		CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 +		if ((vip == nullptr) || vip->IsFinished()) {
 +			manager->AbortTask(this);
 +			return;
 +		}
-+	} else if ((vip == nullptr) || (vip->GetTask() != vipTask)) {
-+		// A guard on a CONSTRUCTOR was priced for the job it was raising;
-+		// when that con moves to its next job the assist follows it across
-+		// the base for the rest of the stint (apexearth 2026-09-14: "once we
-+		// start to guard a constructor, we rarely consider stopping that
-+		// guard action"). The job ending ends the guard.
-+		manager->AbortTask(this);
-+		return;
 +	}
 +	IBuilderTask::Update();
 +}
@@ -11823,7 +11720,7 @@ index a8950289..aa2b6edf 100644
  bool CBGuardTask::Execute(CCircuitUnit* unit)
  {
  	executors.insert(unit);
-@@ -106,7 +132,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
+@@ -106,7 +123,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
  			if ((unit->GetCircuitDef()->GetBuildDistance() > 80.f) && (vipPos.SqDistance2D(unitPos) < SQUARE(48.f))) {
  				AIFloat3 pos = vipPos + (unitPos - vipPos).Normalize2D() * 64.f;
  				CTerrainManager::CorrectPosition(pos);
@@ -11833,7 +11730,7 @@ index a8950289..aa2b6edf 100644
  			}
  			unit->GetUnit()->Guard(vip->GetUnit(), options);
 diff --git a/src/circuit/task/builder/GuardTask.h b/src/circuit/task/builder/GuardTask.h
-index decf61ba..79a51516 100644
+index decf61ba..a6024c13 100644
 --- a/src/circuit/task/builder/GuardTask.h
 +++ b/src/circuit/task/builder/GuardTask.h
 @@ -24,6 +24,7 @@ public:
@@ -11844,12 +11741,11 @@ index decf61ba..79a51516 100644
  
  protected:
  	virtual bool Execute(CCircuitUnit* unit) override;
-@@ -39,6 +40,8 @@ private:
+@@ -39,6 +40,7 @@ private:
  
  	ICoreUnit::Id vipId;
  	bool isInterrupt;
 +	bool isFrame;  // vip was a nanoframe when taken; the guard ends with it
-+	IUnitTask* vipTask;  // a mobile vip's job when taken; the guard ends when it changes
  };
  
  } // namespace circuit
@@ -17168,32 +17064,6 @@ index 8e955a46..1b048fd1 100644
  	virtual void Update(CCircuitAI* circuit) = 0;
  	virtual void OnStart();
  	virtual void OnEnd();
-diff --git a/src/circuit/util/ProcessClock.h b/src/circuit/util/ProcessClock.h
-new file mode 100644
-index 00000000..a0a2cf43
---- /dev/null
-+++ b/src/circuit/util/ProcessClock.h
-@@ -0,0 +1,20 @@
-+/*
-+ * ProcessClock.h
-+ *
-+ * Time since this process started, in nanoseconds. The engine stamps its log
-+ * lines with the time since its first log call, the same moment to within a
-+ * few milliseconds, so our own log file can carry the same [t=].
-+ */
-+
-+#ifndef SRC_CIRCUIT_UTIL_PROCESSCLOCK_H_
-+#define SRC_CIRCUIT_UTIL_PROCESSCLOCK_H_
-+
-+#include <cstdint>
-+
-+namespace utils {
-+
-+int64_t ProcessAgeNs();
-+
-+}  // namespace utils
-+
-+#endif  // SRC_CIRCUIT_UTIL_PROCESSCLOCK_H_
 diff --git a/src/circuit/util/Profiler.cpp b/src/circuit/util/Profiler.cpp
 index 71683538..64b9f26b 100644
 --- a/src/circuit/util/Profiler.cpp

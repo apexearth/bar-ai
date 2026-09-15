@@ -281,6 +281,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	ClosurePrep();
 	RiskFill();
 	RiskFillSiege();
+	if (wallOn)
+		GapsPrep(siteWave, Brain::LightTowerRange()
+				* ai.GetTunable("apex_wall_standoff", TUNE_WALL_STANDOFF));
 	// Site-invariant, so read once per fill and not once per site. Each of
 	// these was a string built and a lookup done ~300 times a pass, several
 	// hundred passes a game-minute across sixteen players; the values are the
@@ -314,7 +317,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// adjacency all read as before -- only where the gun goes moves.
 		if (isWall && Builder::SiteHot(s)) {
 			AIFloat3 back = WallSlotLine(si)
-					? AIFloat3(-gWallF.x, 0.f, -gWallF.z) : (gPfMid - s);
+					? AIFloat3(-gWallF.x, 0.f, -gWallF.z) : (gWallMid - s);
 			if (back.SqLength2D() > 1.f) {
 				back.SafeNormalize2D();
 				const float pitchB = Brain::LightTowerRange()
@@ -361,6 +364,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (gateFloor > threat)
 				threat = gateFloor;
 		}
+		// THE WAVE CAN ARRIVE ON ANY BEARING THEIR GROUND CAN WALK. Threat read
+		// from sightings and our own losses is zero on the flank that has not
+		// bled yet, and that is exactly where they go around (measured: the
+		// three enemy-facing bearings of the team hull empty, 79% of the
+		// team's guns inside it). A wall slot on a walkable bearing faces the
+		// wave prior, so a quiet gap is priced, not gated out.
+		if (isWall && (siteWave > threat) && GapWalkableAt(s))
+			threat = siteWave;
 		// Exposure-scaled both ways -- see MexFloorFactor above.
 		const float mexFloorHere = (mexFloorWave > 0.f)
 				? (mexFloorWave * MexFloorFactor(s)) : 0.f;
@@ -468,7 +479,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// separate walks over every asset we own.
 		AIFloat3 foeO;
 		const AIFloat3 outDir = (isFront && FoeRef(foeO))
-				? (foeO - s) : (s - gPfMid);
+				? (foeO - s) : (s - (isWall ? gWallMid : gPfMid));
 		const bool wantShield = isFront || gPfRimOk;
 		float sInReach = 0.f;
 		float sBeyond = 0.f;
@@ -489,11 +500,32 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// teammate published -- see the candidate's comment above.
 		if (isAllyF)
 			stake = allyStake;
+		// A wall slot stands in front of the TEAM's metal an army entering on
+		// its bearing reaches before it meets fire (protect_team.as) -- the
+		// weakest approach is worth what lies behind it, whoever owns it.
+		if (isWall) {
+			const float behind = GapBehindAt(s);
+			if (behind > stake)
+				stake = behind;
+		}
 		if (Gate(GATE_SITE_STAKE, (stake <= 1.f) && !pullHere))
 			continue;
 		const float cover0 = cached ? PfSiteCover(si)
 				: (isWall ? PfWallCover(si) : CoverAt(s));
-		const float cover1 = cover0 + CoverAddsAt(s, reach, adds);
+		// THE FRONT ROW IS A SOAK ROW: a def standing there is worth the fire
+		// it absorbs for the mains behind it, not its own gun -- health per
+		// metal, so light towers and teeth take it and heavy guns fall back
+		// to the mains row. Worth nothing until mains stand behind it.
+		float addsHere = adds;
+		if (isWall && (WallSlotRow(si) == 0)) {
+			const int mj = WallSlotInRow(si, 1);
+			const float mainsCover = (mj >= 0) ? PfWallCover(uint(mj)) : 0.f;
+			float mainsFrac = (threat > 1.f) ? (mainsCover / threat) : 0.f;
+			if (mainsFrac > 1.f)
+				mainsFrac = 1.f;
+			addsHere = PfAbsorb(d) * mainsFrac;
+		}
+		const float cover1 = cover0 + CoverAddsAt(s, reach, addsHere);
 		float short0 = (threat - cover0) / threat;
 		if (short0 < 0.f)
 			short0 = 0.f;
@@ -573,8 +605,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				if (lw > 1.f)
 					dirW = lw;
 			} else if (foePOk) {
-				AIFloat3 toS = s - gPfMid;
-				AIFloat3 toF = foeP - gPfMid;
+				AIFloat3 toS = s - gWallMid;
+				AIFloat3 toF = foeP - gWallMid;
 				const float lS = sqrt(toS.SqLength2D());
 				const float lF = sqrt(toF.SqLength2D());
 				if ((lS > 1.f) && (lF > 1.f)) {

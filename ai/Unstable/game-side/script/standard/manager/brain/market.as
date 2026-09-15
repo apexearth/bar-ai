@@ -44,6 +44,7 @@
 #include "market/protect_senseprice.as" // radar/jam/shield/AA/targfac prices
 #include "market/protect_want.as"       // ProposeProtectHalf: the defence election itself
 #include "market/protect_choke.as"  // the choke: the narrowest crossing the line stands on
+#include "market/protect_team.as"   // the team hull and its gaps: where they can walk in
 #include "market/protect_wall.as"   // the wall: perimeter slots ground defence fills
 #include "market/want_super.as"     // the strategic Want: gantry, silo, anti-nuke, big guns
 #include "market/want_assist.as"    // the assist Want

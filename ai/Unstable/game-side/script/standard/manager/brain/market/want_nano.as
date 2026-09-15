@@ -238,12 +238,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// the hazard there -- what a lathe keeps alive per second -- while no
 		// lathe stands or is ordered within reach of it.
 		AIFloat3 fl;
-		int fn = 0;
-		if ((nanoReach > 1.f) && WallLineQuiet(fl, fn)
-			&& !ComLatheNear(fl, nanoReach))
-		{
-			const float lineNano = Military::FenceGunMetalNear(fl, nanoReach)
-					* HazardWith(fl, CoverAt(fl));
+		float flGuns = 0.f;
+		if ((nanoReach > 1.f) && WallSupportSlot(nanoReach, fl, flGuns)) {
+			const float lineNano = flGuns * HazardWith(fl, CoverAt(fl));
 			if (lineNano > fortNeed) {
 				fortNeed = lineNano;
 				fortPos = fl;
