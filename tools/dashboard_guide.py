@@ -663,8 +663,8 @@ GROUPS = [
                   "no army and no defence at all; above it the role stops "
                   "existing. RAISE for a longer greed phase"),
                  ("TUNE_ECO_TARGET_BASE_8", "the same economy for an "
-                  "EIGHT-player team, at no bonus -- 1000 here is 2000 m/s "
-                  "in a +100% game (his 2026-09-13 design: one of eight "
+                  "EIGHT-player team, at no bonus -- 500 here is 1000 m/s "
+                  "in a +100% game (his 2026-09-14 ruling: 1k, not 2k; one of eight "
                   "spends the whole early game on economy). While it grows "
                   "the cover, spill and escort floors buy no army for that "
                   "player either; a raid on its home ends the growth"),
