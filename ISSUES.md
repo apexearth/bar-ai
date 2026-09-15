@@ -16,6 +16,28 @@ market rework and the perf campaign, and the code they describe has been
 rewritten under them. `git log -p -- ISSUES.md` has all of it if a claim needs
 its provenance.
 
+## 2026-09-14 — SEAT CORNERS: a farm past a cliff still kills a seat, and a full yard falls to the probe ring
+
+Supreme Isthmus seeds 3 and 5 (Armada) put the rear seat where the farm's
+rear point and the lattice rings sit past a cliff; the reach marks now stop
+the re-election loops (unreach 1,751 -> 40-100 on seed 4) but seeds 3/5
+still read 700-1,100 `unreach` and the seat is overrun by minute 24 with
+income under 40. `FarmSlot`'s rear point walks back toward the anchor until
+reachable (sites.as EcoSiteFor) -- the yards and the lattice rings do not.
+Separately, when a converter yard fills, one ask is refused ~20-40 times at
+the same point and `ProbedSite` places it on the 700-elmo ring:
+`audit.py ring-scatter` 14-28% on the seat, 2-7% on Carrot. The yard should
+step to the next block before the ring does the placing (GroupAnchor's scan
+already knows the next anchor; the blocked mark is what sends it to the ring).
+
+## 2026-09-14 — SEAT AIR: the eco seat's bomber output once it turns military is unread
+
+His ask: "I want to see a lot more air being made by this eco player... the
+devastating bombing raids." The seat turns normal at 1k displayed income
+(TUNE_ECO_TARGET_BASE_8 = 500 x handicap); the advanced air plant count is
+income/apex_adv_air_income under the army-fed gate. Read `apex: wing` and
+`facqueue` for the seat after it turns in the next watched game.
+
 ## 2026-09-13 — REZ BOATS: the resurrection want is fed by land wrecks, so a shipyard buys rez boats and no navy
 
 apexearth: "land reclaim seems to feed into resurrection sub want and it

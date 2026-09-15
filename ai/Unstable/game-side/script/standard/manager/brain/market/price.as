@@ -454,7 +454,23 @@ float ERealizeShare(float addE, float buildSec)
 	// (apexearth: "we still should care about energy, so not zero - but we want
 	// converters to be above the energy want"). Generation is never switched
 	// off by an overflow, which is the standing ruling.
-	const float floorShare = gPrEWasteWorth;
+	// ...AND THE CONVERTER MUST ACTUALLY BE FOLLOWING. The flat floor kept
+	// buying reactors at 62k e/s income with 21k wasted and 27k of converter
+	// standing (his seat, minute 28): the band's worth is the share of the
+	// waste a converter already ordered will eat, never more than the
+	// floor, never quite zero.
+	float floorShare = gPrEWasteWorth;
+	{
+		const float wasteE = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+		if (wasteE > 1.f) {
+			float follow = ConvCapInFlight() / wasteE;
+			if (follow > 1.f)
+				follow = 1.f;
+			floorShare = gPrEWasteWorth * follow;
+			if (floorShare < 0.02f)
+				floorShare = 0.02f;
+		}
+	}
 	const float room = target - aiEconomyMgr.energy.income - EMakeInFlight();
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addE) ? (room / addE) : 1.f);
