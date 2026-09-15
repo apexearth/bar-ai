@@ -1175,6 +1175,25 @@ bool EcoRoleGrowing()
 			&& (EcoPowerM() < EcoRoleTargetM());
 }
 
+// HOW MUCH OF THE WAR THE GROWING SEAT ALREADY OWES: nothing to half its
+// economic target, the full targets at the target, linear between. The
+// seat with zero army and zero silos to the target died in every game
+// (apexearth 2026-09-14: "we would do better if we made some nuclear
+// missile launchers, and if we started to ramp up the army at like 500
+// metal income, doesn't mean we have to go full throttle"). 1 off the role.
+float EcoRoleRamp()
+{
+	if (!EcoRoleGrowing())
+		return 1.f;
+	const float t = EcoRoleTargetM();
+	if (t <= 1.f)
+		return 1.f;
+	const float r = (EcoPowerM() - 0.5f * t) / (0.5f * t);
+	// Squared: "some", not a linear march to the full targets -- linear read
+	// 139k of army and 138k of defence by minute 30 at 970 income.
+	return (r <= 0.f) ? 0.f : ((r >= 1.f) ? 1.f : (r * r));
+}
+
 // IS THE HANDICAP BINDING REAL? Logged once, raw, because this repo has been
 // burned by a binding that quietly returned nonsense for every team
 // (Game_getTeamResource*), and the crossover above now depends on this one.
@@ -1302,7 +1321,7 @@ float ArmyTarget()
 	// built one -- see EcoRoleGrowing. Not a suppression multiplier: the want
 	// is simply not part of the state this player is trying to reach.
 	if (EcoRoleGrowing())
-		return 0.f;
+		return ArmyTargetFull() * EcoRoleRamp();
 	return ArmyTargetFull();
 }
 

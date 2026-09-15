@@ -80,16 +80,8 @@
 			"type": ["rectangle", "geo"],
 			"ignore": ["all"]
 		},
-		"fusion": {
-			"type": ["circle", "engy_mid"],
-			"radius": 6,
-			"ignore": ["mex", "engy_mid", "def_low"]
-		},
-		"singu": {
-			"type": ["circle", "engy_high"],
-			"radius": 8,
-			"ignore": ["mex", "engy_high", "def_low"]
-		},
+		"fusion": {"type": ["circle", "engy_mid"], "radius": 6, "ignore": ["mex", "engy_mid", "engy_high", "engy_low", "convert", "nano", "def_low"]},
+		"singu": {"type": ["circle", "engy_high"], "radius": 8, "ignore": ["mex", "engy_high", "engy_mid", "engy_low", "convert", "nano", "def_low"]},
 		"pylon": {
 			"type": ["circle", "pylon"],
 			"not_ignore": ["factory", "pylon", "terra"]  // default: ["all"]
@@ -108,20 +100,13 @@
 			"type": ["rectangle", "mex"],
 			"ignore": ["all"]
 		},
-		"converter": {
-			"type": ["rectangle", "convert"],
-			"yard": [8, 8],
-			"ignore": ["convert"]
-		},
+		"converter": {"type": ["rectangle", "convert"], "ignore": ["convert", "nano", "engy_low", "engy_mid", "engy_high"]},
 		"def_low": {
 			"type": ["circle", "def_low"],
 			"radius": 5,  // 80 / (SQUARE_SIZE * 2)
 			"ignore": ["engy_mid", "engy_high", "engy_low", "nano"]
 		},
-		"caretaker": {
-			"type": ["rectangle", "nano"],
-			"ignore": ["mex", "def_low", "engy_mid", "engy_high"]
-		},
+		"caretaker": {"type": ["rectangle", "nano"], "ignore": ["mex", "def_low", "engy_low", "engy_mid", "engy_high", "convert"]},
 		"superweapon": {
 			"type": ["circle", "special"],
 			"ignore": ["mex", "def_low", "engy_high"]

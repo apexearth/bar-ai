@@ -436,8 +436,13 @@ float DefenceTarget()
 	// other way on a 4v4 where no seat was safe; the raid valve
 	// (EcoDangerNear) is what ends the growth when the seat is not safe
 	// after all, and the anti-nuke and the AA emergency are not this target.
-	if (EcoRoleGrowing())
-		return 0.f;
+	// ...ramping in from half the seat's target (EcoRoleRamp).
+	float ecoRamp = 1.f;
+	if (EcoRoleGrowing()) {
+		ecoRamp = EcoRoleRamp();
+		if (ecoRamp <= 0.f)
+			return 0.f;
+	}
 	// N% OF WHAT WE HOLD, not N seconds of what we earn (apexearth: "we should
 	// want our economy to be N% of our overall power, we want to keep all of
 	// our aspects in balance with each other"). Seconds of income says nothing
@@ -466,7 +471,7 @@ float DefenceTarget()
 	}
 	if (gMexFloorSum > t)
 		t = gMexFloorSum;
-	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF);
+	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF) * ecoRamp;
 	return gDefTgtM;
 }
 

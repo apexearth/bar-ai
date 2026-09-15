@@ -425,10 +425,12 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const int sc = SuperClassOf(d);
 		if (sc < 0)
 			continue;
-		// ...and no silo, big gun or heavy turret either: they are the
-		// military ("makes no military, focusing on economy"). The anti-nuke
-		// stays, priced on the enemy's silos as before.
-		if (noLines && (sc != SC_ANTINUKE))
+		// ...and no big gun or heavy turret either: they are the military
+		// ("makes no military, focusing on economy"). The anti-nuke stays,
+		// priced on the enemy's silos as before -- and the SILO comes in with
+		// the seat's ramp (his "some nuclear missile launchers" from half the
+		// target), scaled below.
+		if (noLines && (sc != SC_ANTINUKE) && !((sc == SC_SILO) && (EcoRoleRamp() > 0.f)))
 			continue;
 		if (Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;
@@ -518,6 +520,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const float afford = (classBudget - bill) / classBudget;
 		float gain = power * share * afford
 				* Persona::WantMult(SuperName(sc));
+		if (noLines)
+			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone
 		// rewards being CHEAP -- (budget-bill)/budget is near zero for the
 		// most expensive structure in the game -- so it lost every election

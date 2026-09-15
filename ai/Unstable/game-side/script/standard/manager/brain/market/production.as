@@ -620,8 +620,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// 48k on economy and lost the most metal on its team. While growing, none
 	// of those asks; the raid valve (EcoDangerNear) ends the growth instead.
 	const bool ecoGrowing = EcoRoleGrowing();
-	if (ecoGrowing) {
-		armyGap = 0.f;
+	if (ecoGrowing && (EcoRoleRamp() <= 0.f)) {
+		armyGap = 0.f;   // ArmyTarget already carries the ramp past half the target
 		coverShare = 0.f;
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from

@@ -128,6 +128,23 @@ plant, which it did in one game of three.
 
 OPEN: defences for allies past ~500 income -- not built.
 
+> "Notice how I have no gap between the building types in my screenshot.
+> Because we're using air constructors, we don't need any gap at all in all
+> of this building. The entire premise is about using those air cons to
+> completely tightly pack everything... maybe make two separate or three
+> separate bodies like this, so that if one blows up, it doesn't destroy
+> everything... In every game, we end up dying so far, and I feel like we
+> would do better if we made some nuclear missile launchers, and if we
+> started to ramp up the army at like 500 metal income, doesn't mean we
+> have to go full throttle on army at that point, but like start to make
+> some."
+
+Built 2026-09-14 (late): block_map yards between converters, reactors and
+turrets dropped (mex/geo/defence kept; bodies = blocks of ClusterN with an
+aisle); EcoRoleRamp -- army, defence and the silo ramp in from half the
+seat's target. "You always want to adhere to lanes but in the back of our
+base we don't need any lanes" -> LanesApply: no walkways behind the anchor.
+
 Measured (seat seed 4, minutes 13-22): E income 44k, pull 20k; T2 cons 164
 converter executions against 80 assist and 75 energy; the Twitchers 363
 assist (they cannot build the T2 converter -- `convwhy nodef=1131`). The
