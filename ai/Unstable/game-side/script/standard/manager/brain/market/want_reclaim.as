@@ -1158,7 +1158,7 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 			if ((wall !is null) && (wall.circuitDef !is null))
 				wd = int(wall.circuitDef.id);
 			else
-				@wall = null;
+				continue;   // the wall is already gone: the hole is walked, not the victim eaten
 		}
 		// WHICHEVER IS WORTH LESS. The unit is the only candidate when nothing
 		// of ours is to blame, and the wall is never chosen when it costs more
@@ -1166,10 +1166,13 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		CCircuitUnit@ eat = victim;
 		int eatDef = vd;
 		float freed = 0.f;   // metal put back in service by clearing the wall
-		if ((wall !is null) && (Catalog::gCostM[wd] < Catalog::gCostM[vd])) {
+		const bool comm = victim.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+		if ((wall !is null) && (comm || (Catalog::gCostM[wd] < Catalog::gCostM[vd]))) {
 			@eat = wall;
 			eatDef = wd;
 			freed = Catalog::gCostM[vd];
+		} else if (comm) {
+			continue;
 		}
 		const AIFloat3 ep = eat.GetPos(ai.frame);
 		if (!OnMap(ep))

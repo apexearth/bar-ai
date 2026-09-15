@@ -71,20 +71,26 @@ array<Id> gUnblockAsked;
 array<Id>  gPenVictim;
 array<Id>  gPenWall;
 array<int> gPenVerdictAt;
+array<AIFloat3> gPenExit;   // where the wall stood: the hole once it is eaten
+array<AIFloat3> gPenDir;    // the way out through it
 const int PEN_VERDICT_TTL = 120 * SECOND;
 
-void NotePenVerdict(Id victim, Id wall)
+void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3& in dir)
 {
 	for (uint i = 0; i < gPenVictim.length(); ++i) {
 		if (gPenVictim[i] == victim) {
 			gPenWall[i] = wall;
 			gPenVerdictAt[i] = ai.frame;
+			gPenExit[i] = exit;
+			gPenDir[i] = dir;
 			return;
 		}
 	}
 	gPenVictim.insertLast(victim);
 	gPenWall.insertLast(wall);
 	gPenVerdictAt.insertLast(ai.frame);
+	gPenExit.insertLast(exit);
+	gPenDir.insertLast(dir);
 }
 
 void DropPenVerdict(Id victim)
@@ -94,18 +100,40 @@ void DropPenVerdict(Id victim)
 			gPenVictim.removeAt(i);
 			gPenWall.removeAt(i);
 			gPenVerdictAt.removeAt(i);
+			gPenExit.removeAt(i);
+			gPenDir.removeAt(i);
 			return;
 		}
 	}
 }
 
+// The victim walks through the hole the moment its wall dies, before the
+// lattice refills it; a verdict with no wall would otherwise offer the victim.
+int gUnblockWalks = 0;
+
 void SweepPenVerdicts()
 {
 	for (uint i = 0; i < gPenVictim.length(); ) {
-		if (ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL) {
+		const bool expired = ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL;
+		const bool wallGone = (gPenWall[i] != 0) && (ai.GetTeamUnit(gPenWall[i]) is null);
+		if (wallGone && !expired) {
+			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
+			if (v !is null) {
+				const AIFloat3 to = gPenExit[i] + gPenDir[i] * (UNBLOCK_RING * 0.5f);
+				v.CmdMoveTo(OnMap(to) ? to : gPenExit[i]);
+				MarkPenMoved(gPenVictim[i], v.GetPos(ai.frame));
+				++gUnblockWalks;
+				AiLog(Factory::T() + "apex: unblock-walk " + v.circuitDef.GetName()
+					+ " #" + v.id + " through " + int(gPenExit[i].x) + ","
+					+ int(gPenExit[i].z) + " (walk " + gUnblockWalks + ")");
+			}
+		}
+		if (expired || wallGone) {
 			gPenVictim.removeAt(i);
 			gPenWall.removeAt(i);
 			gPenVerdictAt.removeAt(i);
+			gPenExit.removeAt(i);
+			gPenDir.removeAt(i);
 			continue;
 		}
 		++i;
@@ -137,6 +165,18 @@ void ForgetPenned(Id id)
 			gPenId.removeAt(i);
 			gPenPos.removeAt(i);
 			gPenMoved.removeAt(i);
+			return;
+		}
+	}
+}
+
+// A unit that walked is parked today, not exempt forever: it stays watched.
+void MarkPenMoved(Id id, const AIFloat3& in at)
+{
+	for (uint i = 0; i < gPenId.length(); ++i) {
+		if (gPenId[i] == id) {
+			gPenPos[i] = at;
+			gPenMoved[i] = ai.frame;
 			return;
 		}
 	}
@@ -219,7 +259,7 @@ void DropTest(uint i)
 
 // Send it somewhere. Short of the ring, so a unit that CAN move registers the
 // move well inside the verdict window.
-void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
+bool StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 {
 	// NOT a unit whose task wants it standing still. A constructor building, or
 	// anything else mid-task, has its orders re-asserted by that task, so our
@@ -235,23 +275,26 @@ void StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	// is left alone; a build distance away from it, it is tested like any
 	// other unit, the commander included -- the trade below eats the cheaper
 	// side, which is never him.
+	// Working means a nanoframe stands: in range with nothing raised after
+	// the still window is a site it cannot start, not a site it is building.
 	IUnitTask@ t = unit.task;
-	if ((t !is null) && (t.GetType() == Task::Type::BUILDER)) {
+	if ((t !is null) && (t.GetType() == Task::Type::BUILDER) && (t.target !is null)) {
 		const AIFloat3 site = t.GetBuildPos();
 		const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)];
 		if (!OnMap(site) || (at.distance2D(site) <= reach + 64.f))
-			return;
+			return false;
 	}
 	const AIFloat3 dir = ThinnestDir(at);
 	const AIFloat3 to = at + dir * (UNBLOCK_RING * 0.5f);
 	if (!OnMap(to))
-		return;
+		return false;
 	unit.CmdMoveTo(to);
 	gTestId.insertLast(unit.id);
 	gTestFrom.insertLast(at);
 	gTestFrame.insertLast(ai.frame);
 	gTestDir.insertLast(dir);
 	gTestStrikes.insertLast(0);
+	return true;
 }
 
 // The cheapest thing of OURS standing in the lane the unit would leave by.
@@ -268,7 +311,7 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 	wallCount = int(structs.length());
 
 	CCircuitUnit@ pick = null;
-	float bestCost = -1.f;
+	float bestAlong = -1.f;
 	for (uint i = 0; i < structs.length(); ++i) {
 		CCircuitUnit@ s = structs[i];
 		if (s is null)
@@ -289,8 +332,9 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 		const float across = abs(rel.x * dir.z - rel.z * dir.x);
 		if (across > UNBLOCK_CORRIDOR)
 			continue;
-		if ((bestCost < 0.f) || (sdef.costM < bestCost)) {
-			bestCost = sdef.costM;
+		// The first thing in the lane is the wall; a cheaper one behind it opens nothing.
+		if ((bestAlong < 0.f) || (along < bestAlong)) {
+			bestAlong = along;
 			@pick = s;
 		}
 	}
@@ -338,7 +382,7 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 			gStuckAsked.insertLast(int(unit.id));
 			gStuckAskedFrame.insertLast(ai.frame);
 			++gStuckOffered;
-			NotePenVerdict(unit.id, 0);
+			NotePenVerdict(unit.id, 0, at, dir);
 			AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
 				+ " #" + unit.id + " terrain-penned -> offered to the market");
 		}
@@ -347,7 +391,7 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 	if (eat is null)
 		return false;
 
-	NotePenVerdict(unit.id, eat.id);
+	NotePenVerdict(unit.id, eat.id, eat.GetPos(ai.frame), dir);
 	gUnblockAsked.insertLast(eat.id);
 	if (gUnblockAsked.length() > 64)
 		gUnblockAsked.removeAt(0);
@@ -375,7 +419,7 @@ void PenDiag()
 	AiLog(Factory::T() + "apex: pendiag watched=" + gPenId.length()
 		+ " testing=" + gTestId.length() + " verdicts=" + gPenVictim.length()
 		+ " | penned=" + gPennedSeen + " ate-wall=" + gUnblockOrders
-		+ " offered-unit=" + gStuckOffered);
+		+ " walked=" + gUnblockWalks + " offered-unit=" + gStuckOffered);
 }
 
 void UpdateUnblock()
@@ -418,10 +462,11 @@ void UpdateUnblock()
 		if ((frame < gNextProbe) || (frame < gNextUnblockOrder))
 			continue;
 
-		gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
-		if (!UnderTest(u.id))
-			StartMoveTest(u, at);
-		return;   // one candidate per tick
+		// The probe slot is spent on a test, not on a working builder passed over.
+		if (!UnderTest(u.id) && StartMoveTest(u, at)) {
+			gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
+			return;   // one candidate per tick
+		}
 	}
 }
 
@@ -440,7 +485,7 @@ void UpdateMoveTests()
 		}
 		const AIFloat3 at = u.GetPos(frame);
 		if (at.distance2D(gTestFrom[i]) > UNBLOCK_EPS) {
-			ForgetPenned(gTestId[i]);   // it walked; it was parked, not penned
+			MarkPenMoved(gTestId[i], at);   // it walked; it was parked, not penned
 			DropTest(i);
 			continue;
 		}
