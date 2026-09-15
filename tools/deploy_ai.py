@@ -151,15 +151,14 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
         print(f"  lane '{_lane.name()}'  {', '.join(busy)} is running in another "
               f"lane -- deploying anyway, this folder is ours")
         busy = []
+    # THE LOCK TEST BELOW IS THE REAL GUARD. A running engine only matters if
+    # it has THIS slot's DLL loaded, and that is exactly what opening the live
+    # DLL for writing tells us (kept when identical, refused when different).
+    # Refusing on any engine anywhere held his slot's deploy behind a lane's
+    # headless test game (apexearth 2026-09-14: "Fix the deploy tool? My game
+    # is done.").
     if busy and not allow_running:
-        raise SystemExit(
-            f"{', '.join(busy)} is running -- refusing to deploy.\n"
-            f"Windows will not let the loaded SkirmishAI.dll be replaced, and this\n"
-            f"deploy deletes the engine-side folder before rewriting it, so going\n"
-            f"ahead would leave '{variant}' unloadable.\n"
-            f"Close BAR (and any running match) and retry, or pass --allow-running\n"
-            f"if you are certain nothing has the engine directory open."
-        )
+        print(f"  note         {', '.join(busy)} is running -- the live DLL's lock decides")
 
     stable = env.skirmish_dir(BASE_SHORT_NAME, "stable")
     if not (stable / "SkirmishAI.dll").exists():
