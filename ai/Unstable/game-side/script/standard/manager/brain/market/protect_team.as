@@ -305,14 +305,25 @@ void GapsPrep(float wave0, float standoff)
 	// stopping point, plus -- when its walk-in met no stopping fire at all
 	// -- the metal every other wedge holds INSIDE its own. One hole in an
 	// otherwise closed wall is priced at everything behind the wall.
+	// ...shared among the holes that exist: they walk in through ONE of
+	// them, so with twelve open each carries a twelfth of the interior and
+	// closing one moves little; the hazard term picks the bearing they have
+	// actually come from. As holes close the rest grow, and the last one
+	// is worth everything. Priced at the whole interior each, every open
+	// bearing read the same 50-60k and the guns spread evenly instead of
+	// closing the enemy's side first (Isthmus D8: closure 0.62 -> 0.17).
 	if (gGapCursor >= PF_RAYS) {
 		float insideAll = 0.f;
-		for (int b = 0; b < PF_RAYS; ++b)
+		int nHoles = 0;
+		for (int b = 0; b < PF_RAYS; ++b) {
 			insideAll += gGapInside[b];
+			if (gGapWalk[b] && (gGapOpen[b] > 0.f) && (gGapStopR[b] < GAP_STEP))
+				++nHoles;
+		}
 		for (int b = 0; b < PF_RAYS; ++b) {
 			float reach = gGapWedge[b];
 			if (gGapWalk[b] && (gGapOpen[b] > 0.f) && (gGapStopR[b] < GAP_STEP))
-				reach += insideAll - gGapInside[b];
+				reach += (insideAll - gGapInside[b]) / float(nHoles);
 			gGapBehind[b] = reach;
 		}
 	}
