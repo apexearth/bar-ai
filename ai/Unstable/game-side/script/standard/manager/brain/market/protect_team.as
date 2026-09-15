@@ -163,6 +163,7 @@ array<float>    gGapCover;
 array<float>    gGapBehind;    // what an entry here reaches: wedge + the hole rule
 array<float>    gGapWedge;     // the wedge's own metal beyond the stopping point
 array<float>    gGapInside;    // the wedge's metal inside it -- reachable through a hole
+array<float>    gGapStarved;   // stream of the spots raids through here keep us off
 array<float>    gGapOpen;
 array<float>    gGapStopR;     // radius the walk-in met the wave's worth of fire
 float           gGapWave = 0.f;
@@ -219,6 +220,7 @@ void GapsPrep(float wave0, float standoff)
 			gGapBehind.resize(PF_RAYS);
 			gGapWedge.resize(PF_RAYS);
 			gGapInside.resize(PF_RAYS);
+			gGapStarved.resize(PF_RAYS);
 			gGapOpen.resize(PF_RAYS);
 			gGapStopR.resize(PF_RAYS);
 		}
@@ -269,7 +271,34 @@ void GapsPrep(float wave0, float standoff)
 			else if (gGapWalk[b] && (open > 0.f))
 				behind += gThVW[i];
 		}
-		gGapWedge[b] = behind;
+		// THE STARVED ECONOMY IS STAKE TOO. A mex spot on this bearing that
+		// we do not hold and that reads builder threat is ground the raids
+		// through this gap have taken from us: the con refuses it
+		// (unreach-safe), the mex is never built, the economy that would
+		// buy the gun never exists (Frozen Ford 2v2: 3 of 34 spots held at
+		// 30 min, 21 of 26 mex tasks dead unreach-safe, 380 metal of
+		// defence). The stream those spots would pay is what a gun here
+		// wins back.
+		float starved = 0.f;
+		if (gGapWalk[b]) {
+			CacheSpots();
+			const float rIn = gThR[b] + standoff + GAP_STEP;
+			for (uint i = 0; i < gAllSpots.length(); ++i) {
+				const AIFloat3 sp = gAllSpots[i];
+				if (TeamRayOf(sp) != b)
+					continue;
+				if (sp.distance2D(gThMid) > rIn)
+					continue;
+				const int li = LedgerNearest(sp);
+				if ((li >= 0) && (gLExtract[uint(li)] > 0.f))
+					continue;   // ours, standing
+				if (!OnMap(sp) || (ai.GetBuilderThreatAt(sp) <= 0.f))
+					continue;
+				starved += gAllSpotInc[i] * IncomeMult() * PfHorizon();
+			}
+		}
+		gGapStarved[b] = starved;
+		gGapWedge[b] = behind + starved;
 		gGapInside[b] = inside;
 	}
 	gGapCursor = bEnd;
@@ -332,6 +361,9 @@ void GapsPrep(float wave0, float standoff)
 		gNextGapLog = ai.frame + 30 * SECOND;
 		int nWalk = 0;
 		int nHeld = 0;
+		float starvedAll = 0.f;
+		for (int b = 0; b < PF_RAYS; ++b)
+			starvedAll += gGapStarved[b];
 		int w0 = -1, w1 = -1, w2 = -1;
 		float m0 = 0.f, m1 = 0.f, m2 = 0.f;
 		string row = "";
@@ -356,7 +388,7 @@ void GapsPrep(float wave0, float standoff)
 		AiLog("apex: gaps mates=" + gThMates + " mid=" + int(gThMid.x) + ","
 			+ int(gThMid.z) + " foe=" + int(gGapFoe.x) + "," + int(gGapFoe.z)
 			+ " wave=" + int(wave) + " walkable=" + nWalk
-			+ " fallback=" + gGapWalkFallback
+			+ " fallback=" + gGapWalkFallback + " starved=" + int(starvedAll)
 			+ " held=" + nHeld + " worst=" + w0 + ":" + int(m0) + "," + w1
 			+ ":" + int(m1) + "," + w2 + ":" + int(m2)
 			+ " |" + row);
