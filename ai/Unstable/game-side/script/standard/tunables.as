@@ -520,11 +520,6 @@ const float TUNE_GATE_DEPTH = 2.f;
 //   down with some walls outside"). See docs/27.
 const float TUNE_TEETH = 1.f;
 
-// [gain] -- What one tooth's share of breaking a push is worth, on the
-//   auction's own value scale. Calibrated between losing every election and
-//   outbidding a mex claim; see docs/27.
-const float TUNE_TEETH_GAIN = 40.f;
-
 // [ratio] -- HOW HARD A BUILDER PREFERS THE GROUND IT IS ALREADY STANDING ON.
 //   See docs/27.
 const float TUNE_DEF_SITE_WALK = 1.f;

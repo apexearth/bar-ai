@@ -1086,30 +1086,43 @@ static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
 	return arr;
 }
 
-// Can any usable LAND move type walk from a to b -- both sectors in one
-// of its areas? Hover and floating types are left out: the question is
-// whether an approach is open to the ground army, not to boats.
+// The area a point stands in for one move type, or the nearest one within a
+// few sectors: a point in the sea or on a cliff face belongs to the ground
+// beside it for the question below.
+static const terrain::SArea* NearestLandArea(const terrain::SMobileType& mt, CTerrainManager* tm, const AIFloat3& p)
+{
+	static const int OFF[9][2] = {{0,0},{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,-1},{1,-1},{-1,1}};
+	for (int ring = 0; ring <= 3; ++ring) {
+		const float step = 256.f * ring;
+		for (int k = 0; k < ((ring == 0) ? 1 : 9); ++k) {
+			AIFloat3 q(p.x + OFF[k][0] * step, p.y, p.z + OFF[k][1] * step);
+			CTerrainManager::CorrectPosition(q);
+			const int idx = tm->GetSectorIndex(q);
+			if ((idx < 0) || ((size_t)idx >= mt.sector.size())) {
+				continue;
+			}
+			const terrain::SArea* area = mt.sector[idx].area;
+			if (area != nullptr) {
+				return area;
+			}
+		}
+	}
+	return nullptr;
+}
+
+// Can any usable LAND move type walk from a to b -- both points (or the
+// ground nearest them) in one of its areas? Hover and floating types are
+// left out: the question is whether an approach is open to the ground
+// army, not to boats.
 static bool CCircuitAI_GroundConnected(CCircuitAI* circuit, const AIFloat3& a, const AIFloat3& b)
 {
 	CTerrainManager* tm = circuit->GetTerrainManager();
-	AIFloat3 pa = a;
-	AIFloat3 pb = b;
-	CTerrainManager::CorrectPosition(pa);
-	CTerrainManager::CorrectPosition(pb);
-	const int ia = tm->GetSectorIndex(pa);
-	const int ib = tm->GetSectorIndex(pb);
-	if ((ia < 0) || (ib < 0)) {
-		return false;
-	}
 	for (const terrain::SMobileType& mt : tm->GetMobileTypes()) {
 		if (!mt.typeUsable || mt.canFloat || mt.canHover) {
 			continue;
 		}
-		if ((size_t)ia >= mt.sector.size() || (size_t)ib >= mt.sector.size()) {
-			continue;
-		}
-		const terrain::SArea* aa = mt.sector[ia].area;
-		if ((aa != nullptr) && (aa == mt.sector[ib].area)) {
+		const terrain::SArea* aa = NearestLandArea(mt, tm, a);
+		if ((aa != nullptr) && (aa == NearestLandArea(mt, tm, b))) {
 			return true;
 		}
 	}

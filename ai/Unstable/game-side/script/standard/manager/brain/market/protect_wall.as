@@ -266,10 +266,21 @@ void WallPrep()
 		AIFloat3 foeW;
 		const bool foeWOk = FoeRef(foeW);
 		const float wedgeW = 6.2831853f / float(PF_RAYS);
+		int nWalkable = 0;
 		for (int b = 0; b < PF_RAYS; ++b) {
 			const float ang = wedgeW * (float(b) + 0.5f);
 			const AIFloat3 e = gWallMid + AIFloat3(cos(ang), 0.f, sin(ang)) * wr[b];
 			gWallWalk[b] = !foeWOk || (OnMap(e) && ai.GroundConnected(e, foeW));
+			if (gWallWalk[b])
+				++nWalkable;
+		}
+		// Nothing walkable is a failed test, not a fortress (protect_team.as).
+		if (nWalkable == 0) {
+			for (int b = 0; b < PF_RAYS; ++b) {
+				const float ang = wedgeW * (float(b) + 0.5f);
+				gWallWalk[b] = OnMap(gWallMid
+						+ AIFloat3(cos(ang), 0.f, sin(ang)) * wr[b]);
+			}
 		}
 	}
 	// THE LINE FIRST -- see the header. Anchored at the wall's forward radius
@@ -465,18 +476,16 @@ void WallPrep()
 	// bearing boundary: slot n sits at WallSlotDist(n) elmos around it.
 	float arcAt = 0.f;
 	int slotN = 0;
+	const uint nLineSlots = gWallP.length();
+	const float lineNear2 = (1.5f * pitch) * (1.5f * pitch);
 	for (int b = 0; b < PF_RAYS; ++b) {
 		const float arc = wr[b] * wedge;
-		if (gWallLineOk) {
-			// Within 60 degrees of the enemy bearing the LINE is the wall.
-			const float angC = wedge * (float(b) + 0.5f);
-			if (cos(angC) * gWallF.x + sin(angC) * gWallF.z > 0.5f) {
-				arcAt += arc;
-				while (WallSlotDist(slotN, pitch) < arcAt)
-					++slotN;   // the line holds these; keep the pattern's phase
-				continue;
-			}
-		}
+		// The LINE is the wall where it actually runs, not across a 60-degree
+		// cone: a line on a choke is as wide as the passage, and the
+		// approaches beside it on the enemy side were left without a slot
+		// at all (Isthmus: the three bearings they come from empty). A ring
+		// slot near a line slot yields to it; every other bearing keeps its
+		// ring.
 		while (WallSlotDist(slotN, pitch) < arcAt)
 			++slotN;
 		for (; WallSlotDist(slotN, pitch) < arcAt + arc; ++slotN) {
@@ -488,6 +497,14 @@ void WallPrep()
 				continue;   // the map edge is a wall already
 			if (!gWallWalk[b])
 				continue;   // so is ground they cannot walk
+			bool nearLine = false;
+			for (uint li = 0; !nearLine && (li < nLineSlots); ++li) {
+				const float dx = s.x - gWallX[li];
+				const float dz = s.z - gWallZ[li];
+				nearLine = (dx * dx + dz * dz) < lineNear2;
+			}
+			if (nearLine)
+				continue;   // the line holds this ground
 			bool shielded = false;
 			for (uint m = 0; !shielded && (m < hx.length()); ++m) {
 				const float vx = hx[m] - gWallMid.x;

@@ -50,7 +50,9 @@ void ChokeUpdate()
 	AIFloat3 foe;
 	if (!FoeRef(foe))
 		return;
-	const AIFloat3 home = Builder::gHomePos;
+	// The TEAM's axis when the team hull stands: eight players picking
+	// chokes on eight axes stand eight different lines.
+	const AIFloat3 home = (gThOk && (gThMates > 0)) ? gThMid : Builder::gHomePos;
 	const float sep = home.distance2D(foe);
 	if (sep < 1000.f)
 		return;

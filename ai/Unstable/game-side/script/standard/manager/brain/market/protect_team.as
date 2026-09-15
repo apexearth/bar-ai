@@ -171,6 +171,7 @@ int             gNextGapLog = 0;
 const float     GAP_STEP = 256.f;
 
 int             gGapCursor = PF_RAYS;   // next bearing of the running pass
+int             gGapWalkFallback = 0;
 AIFloat3        gGapFoe;
 bool            gGapFoeOk = false;
 const int       GAP_PER_CALL = 3;       // bearings read per call: spread, not batched
@@ -247,6 +248,31 @@ void GapsPrep(float wave, float standoff)
 		gGapBehind[b] = behind;
 	}
 	gGapCursor = bEnd;
+	// No bearing walkable with a known foe means the ground test failed
+	// (their reference point in the sea, a map the terrain analysis reads
+	// as islands), not a fortress: every on-map bearing stays open rather
+	// than the whole wall silently switching off.
+	if (gGapCursor >= PF_RAYS) {
+		int nw = 0;
+		for (int b = 0; b < PF_RAYS; ++b)
+			if (gGapWalk[b])
+				++nw;
+		if ((nw == 0) && gGapFoeOk) {
+			++gGapWalkFallback;
+			for (int b = 0; b < PF_RAYS; ++b) {
+				const float ang = wedge * (float(b) + 0.5f);
+				const AIFloat3 e = gThMid + AIFloat3(cos(ang), 0.f, sin(ang))
+						* (gThR[b] + standoff);
+				gGapWalk[b] = OnMap(e);
+				if (gGapWalk[b] && (wave > 1.f)) {
+					float open = (wave - gGapCover[b]) / wave;
+					if (open < 0.f) open = 0.f;
+					if (open > 1.f) open = 1.f;
+					gGapOpen[b] = open;
+				}
+			}
+		}
+	}
 	Perf::Add("prot.gaps", _t);
 	if ((gGapCursor >= PF_RAYS) && (ai.frame >= gNextGapLog)) {
 		gNextGapLog = ai.frame + 30 * SECOND;
@@ -274,7 +300,9 @@ void GapsPrep(float wave, float standoff)
 				+ "@" + int(gGapOpen[b] * 100.f);
 		}
 		AiLog("apex: gaps mates=" + gThMates + " mid=" + int(gThMid.x) + ","
-			+ int(gThMid.z) + " wave=" + int(wave) + " walkable=" + nWalk
+			+ int(gThMid.z) + " foe=" + int(gGapFoe.x) + "," + int(gGapFoe.z)
+			+ " wave=" + int(wave) + " walkable=" + nWalk
+			+ " fallback=" + gGapWalkFallback
 			+ " held=" + nHeld + " worst=" + w0 + ":" + int(m0) + "," + w1
 			+ ":" + int(m1) + "," + w2 + ":" + int(m2)
 			+ " |" + row);

@@ -270,13 +270,14 @@ the gate-only version (off 2026-08-29, "the implementation is terrible") got
 wrong: it stood teeth at a doorway with nothing behind. On again 2026-09-15
 with the layered line (docs/32); A/B it against 0 on Greenest 8v8.
 
-### `TUNE_TEETH_GAIN` = 40.f
+### `TUNE_TEETH_GAIN` -- removed 2026-09-15
 
-What one tooth's share of breaking a push is worth, on the auction's own value
-scale: winning wants carry v>=3 and a tooth's costs price near 70, so 2 gave
-v=0.03 and lost every election in 24 games; 200 overshot to v~20 and had the
-COMMANDER placing teeth at 1.8m over a mex claim. 40 lands a tooth at v~4: it
-wins idle nearby hands and loses to real economy.
+A tooth is now priced as the soak it is: the prevented loss a front-row
+slot earns (team metal behind the gap x hazard x the wave share its health
+absorbs for the guns behind it), through the same terms as every gun. The
+fixed gain of 40 read v~55 against guns at 2-15 once the line stood, and
+1517 of 1548 defence elections in one Greenest 8v8 were teeth (271 standing
+at 20 min, 36 guns).
 
 ### `TUNE_DEF_SITE_WALK` = 1.f
 

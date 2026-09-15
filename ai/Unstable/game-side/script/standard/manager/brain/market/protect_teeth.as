@@ -137,9 +137,39 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f)
 			? (unit.GetPos(ai.frame).distance2D(gTeethPoint) / speed) : 60.f;
+	// PRICED AS THE SOAK IT IS, not a preference: the same prevented loss a
+	// front-row slot earns (protect_fill.as) -- the team metal behind the
+	// gap, the hazard there, and the share of the wave this tooth's health
+	// absorbs for the guns behind it. A fixed gain of 40 outbid every real
+	// gun (1517 of 1548 defence elections were teeth, guns priced 2-15).
+	float gain = 0.f;
+	{
+		const float wave = ArmyTargetFull()
+				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
+				* TeamExposure();
+		const float cover0 = CoverAt(gTeethPoint);
+		if (wave > 1.f) {
+			float mainsFrac = cover0 / wave;
+			if (mainsFrac > 1.f)
+				mainsFrac = 1.f;
+			const float cover1 = cover0 + PfAbsorb(wd) * mainsFrac;
+			float short0 = (wave - cover0) / wave;
+			if (short0 < 0.f)
+				short0 = 0.f;
+			float short1 = (wave - cover1) / wave;
+			if (short1 < 0.f)
+				short1 = 0.f;
+			float stake = GapBehindAt(gTeethPoint);
+			const float near = StakeAt(gTeethPoint, Brain::LightTowerRange());
+			if (near > stake)
+				stake = near;
+			gain = stake * HazardWith(gTeethPoint, cover0) * (short0 - short1);
+		}
+	}
+	if (gain <= 0.f)
+		return w;
 	Want c;
-	ValueOf(wd, ai.GetTunable("apex_teeth_gain", TUNE_TEETH_GAIN), walkSec,
-			Catalog::gBuildPower[uid], c);
+	ValueOf(wd, gain, walkSec, Catalog::gBuildPower[uid], c);
 	w = c;
 	w.kind = WK_TEETH;
 	@w.def = Catalog::Def(wd);

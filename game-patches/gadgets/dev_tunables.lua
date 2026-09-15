@@ -424,7 +424,6 @@ local NAMES = {
 	"apex_air_aa_split",      -- air/state.as: 1 = strike sizes vs enemy AA divided by their base count (one raid, one base), 0 = whole-map AA census
 	"apex_gate_depth",       -- want_protect.as: gate threat floor as a multiple of the arriving wave (2)
 	"apex_teeth",            -- want_protect.as: 1 = teeth line across defended gates
-	"apex_teeth_gain",       -- want_protect.as: one tooth's gain (2)
 	"apex_guard_forward",     -- protect_field.as: asset guard sites stand this fraction of tower reach enemy-ward of the assets (0.5)
 	"apex_con_scratch_gate",  -- BuilderTask.cpp: 1 = a scratched builder above the stand floor retreats only where danger is read, 0 = always
 	"apex_t1_def_late",
