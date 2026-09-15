@@ -115,6 +115,10 @@
 			"type": ["circle", "special"],
 			"ignore": ["mex", "def_low", "engy_mid", "engy_high"]
 		},
+		"flush_special": {
+			"type": ["rectangle", "special"],
+			"ignore": ["nano", "engy_low", "engy_mid", "engy_high", "convert", "def_low", "special"]
+		},
 //		"terraform": {
 //			"type": ["rectangle", "special"],
 //			"size": [7, 7]  // int2(3 + 4, 3 + 4)
@@ -165,7 +169,8 @@
 		"def_low": ["armllt", "armclaw", "corllt", "cormaw", "leglht", "legdtr"],
 		"caretaker": ["armnanotc", "armnanotcplat", "cornanotc", "cornanotcplat", "legnanotc"],
 		"small": ["armrad", "corrad", "armfrad", "corfrad", "legrad", "legfrad"],
-		"wall": ["armdrag", "cordrag", "legdrag"]
+		"wall": ["armdrag", "cordrag", "legdrag"],
+		"flush_special": ["armsilo", "corsilo", "legsilo", "armamd", "corfmd", "legabm", "armtarg", "cortarg", "legtarg"]
 	}
 }
 }

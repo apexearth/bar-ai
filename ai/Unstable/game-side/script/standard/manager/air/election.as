@@ -98,6 +98,12 @@ int AirLeadTeamId()
 
 bool IsAirLead()
 {
+	// The former eco seat is a second assassin: the election latched on a
+	// front player long before the seat turned, and the seat -- the richest
+	// air economy on the team, with the plants already bought -- read
+	// `corhurc:wing0` at 999 income while it made 128 scouts.
+	if (Market::gWasEcoSeat && !Market::EcoRoleGrowing())
+		return true;
 	const int lead = AirLeadTeamId();
 	return (lead >= 0) && (lead == ai.teamId);
 }

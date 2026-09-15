@@ -1169,10 +1169,18 @@ float EcoRoleTargetM()
 // stands naked through the whole growth phase and dies to the first raid that
 // gets past the line, which is the failure mode that killed this role the first
 // time. Sustained enemy metal near home (30s) restores the ordinary targets.
+// Once the seat, always a wing: the player that grew the team's economy is
+// the one apexearth wants flying the bombers when it turns ("I want to see
+// them sending the devastating bombing raids"). Latched here, read by
+// Air::IsAirLead.
+bool gWasEcoSeat = false;
 bool EcoRoleGrowing()
 {
-	return EcoRoleActive() && !EcoDangerNear()
+	const bool g = EcoRoleActive() && !EcoDangerNear()
 			&& (EcoPowerM() < EcoRoleTargetM());
+	if (g)
+		gWasEcoSeat = true;
+	return g;
 }
 
 // HOW MUCH OF THE WAR THE GROWING SEAT ALREADY OWES: nothing to half its
