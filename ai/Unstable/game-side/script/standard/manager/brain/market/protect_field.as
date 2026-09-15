@@ -693,6 +693,7 @@ void PfCommit()
 const string TV_PF_MX = "pfmx";
 const string TV_PF_MZ = "pfmz";
 const string TV_PF_W  = "pfw";
+const string TV_PF_WAVE = "pfwave";   // the wave prior we defend against
 const string TV_PF_FX = "pffx";   // our furthest capped mex toward them
 const string TV_PF_FZ = "pffz";
 float gPfCapR = 0.f;
@@ -722,6 +723,9 @@ void PfPublishHull()
 	ai.PublishTeamValue(TV_PF_MX, gPfMid.x);
 	ai.PublishTeamValue(TV_PF_MZ, gPfMid.z);
 	ai.PublishTeamValue(TV_PF_W, gPfTotal);
+	ai.PublishTeamValue(TV_PF_WAVE, ArmyTargetFull()
+			* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
+			* TeamExposure());
 	// Our furthest capped extractor toward them: the team's frontier is the
 	// furthest of these (protect_wall.as), not one player's.
 	{

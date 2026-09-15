@@ -160,7 +160,9 @@ void TeamHullPrep()
 
 array<bool>     gGapWalk;
 array<float>    gGapCover;
-array<float>    gGapBehind;
+array<float>    gGapBehind;    // what an entry here reaches: wedge + the hole rule
+array<float>    gGapWedge;     // the wedge's own metal beyond the stopping point
+array<float>    gGapInside;    // the wedge's metal inside it -- reachable through a hole
 array<float>    gGapOpen;
 array<float>    gGapStopR;     // radius the walk-in met the wave's worth of fire
 float           gGapWave = 0.f;
@@ -176,11 +178,31 @@ AIFloat3        gGapFoe;
 bool            gGapFoeOk = false;
 const int       GAP_PER_CALL = 3;       // bearings read per call: spread, not batched
 
-void GapsPrep(float wave, float standoff)
+float TeamWave(float own)
+{
+	float w = own;
+	if (gShieldMates !is null) {
+		for (uint m = 0; m < gShieldMates.length(); ++m) {
+			const int t = int(gShieldMates[m]);
+			if (t == ai.teamId)
+				continue;
+			const float mw = ai.ReadTeamValue(t, TV_PF_WAVE, 0.f);
+			if (mw > w)
+				w = mw;
+		}
+	}
+	return w;
+}
+
+void GapsPrep(float wave0, float standoff)
 {
 	TeamHullPrep();
 	if (!gThOk)
 		return;
+	// ONE WAVE FOR THE TEAM -- the largest any member expects. Read against
+	// each member's own, the same bearing was held for the poor player and
+	// open for the rich one, and "held" meant nothing.
+	const float wave = TeamWave(wave0);
 	if (gGapCursor >= PF_RAYS) {
 		if ((gGapHullAt == gThAt) && (ai.frame - gGapAt < 10 * SECOND)
 			&& (gGapWave == wave))
@@ -195,6 +217,8 @@ void GapsPrep(float wave, float standoff)
 			gGapWalk.resize(PF_RAYS);
 			gGapCover.resize(PF_RAYS);
 			gGapBehind.resize(PF_RAYS);
+			gGapWedge.resize(PF_RAYS);
+			gGapInside.resize(PF_RAYS);
 			gGapOpen.resize(PF_RAYS);
 			gGapStopR.resize(PF_RAYS);
 		}
@@ -235,17 +259,18 @@ void GapsPrep(float wave, float standoff)
 		}
 		gGapStopR[b] = stopR;
 		float behind = 0.f;
-		if (gGapWalk[b] && (open > 0.f)) {
-			for (uint i = 0; i < gThVX.length(); ++i) {
-				const AIFloat3 v(gThVX[i], 0.f, gThVZ[i]);
-				if (TeamRayOf(v) != b)
-					continue;
-				if (v.distance2D(gThMid) < stopR)
-					continue;
+		float inside = 0.f;
+		for (uint i = 0; i < gThVX.length(); ++i) {
+			const AIFloat3 v(gThVX[i], 0.f, gThVZ[i]);
+			if (TeamRayOf(v) != b)
+				continue;
+			if (v.distance2D(gThMid) < stopR)
+				inside += gThVW[i];
+			else if (gGapWalk[b] && (open > 0.f))
 				behind += gThVW[i];
-			}
 		}
-		gGapBehind[b] = behind;
+		gGapWedge[b] = behind;
+		gGapInside[b] = inside;
 	}
 	gGapCursor = bEnd;
 	// No bearing walkable with a known foe means the ground test failed
@@ -271,6 +296,24 @@ void GapsPrep(float wave, float standoff)
 					gGapOpen[b] = open;
 				}
 			}
+		}
+	}
+	// THE HOLE RULE. A perimeter is worth its weakest point: an army that
+	// walks in on a bearing where nothing stops it before the centre is
+	// inside every other bearing's line of fire, so it reaches what those
+	// bearings protect too. A bearing's reach is its own wedge beyond the
+	// stopping point, plus -- when its walk-in met no stopping fire at all
+	// -- the metal every other wedge holds INSIDE its own. One hole in an
+	// otherwise closed wall is priced at everything behind the wall.
+	if (gGapCursor >= PF_RAYS) {
+		float insideAll = 0.f;
+		for (int b = 0; b < PF_RAYS; ++b)
+			insideAll += gGapInside[b];
+		for (int b = 0; b < PF_RAYS; ++b) {
+			float reach = gGapWedge[b];
+			if (gGapWalk[b] && (gGapOpen[b] > 0.f) && (gGapStopR[b] < GAP_STEP))
+				reach += insideAll - gGapInside[b];
+			gGapBehind[b] = reach;
 		}
 	}
 	Perf::Add("prot.gaps", _t);
