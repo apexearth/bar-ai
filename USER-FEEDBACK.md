@@ -115,6 +115,19 @@ plant, which it did in one game of three.
 > the issue is that once we start to guard a constructor, we rarely consider
 > stopping that guard action."
 
+> "when we're full of metal, we still just think about our one main want
+> and we apply the guard entirely onto that one thing. We have a dude
+> walking around to make a single nano turret and he's followed by like 30
+> dollars. And he builds the nano turret in a place where there's already a
+> bunch of other nano turrets... Meanwhile, we're making a bunch of
+> advanced converters in places where there's absolutely no nano turrets...
+> This is why I have often said we should be building air constructors...
+> I think that once we get to 500 metal, we should be willing to go out and
+> build defenses for our allies. But first, we really need to get on the
+> ball here with making air and using air cons."
+
+OPEN: defences for allies past ~500 income -- not built.
+
 Measured (seat seed 4, minutes 13-22): E income 44k, pull 20k; T2 cons 164
 converter executions against 80 assist and 75 energy; the Twitchers 363
 assist (they cannot build the T2 converter -- `convwhy nodef=1131`). The

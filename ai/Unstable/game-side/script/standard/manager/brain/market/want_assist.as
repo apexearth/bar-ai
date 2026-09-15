@@ -149,8 +149,11 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	if ((gBossJob !is null) && (gBossJob.buildDef !is null)) {
 		const float G = JobGain(gBossJob);
 		if (G > 0.f) {
-			const uint hands = Requests::Workers(gBossJob);
-			const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN;
+			// ...the guards already sent and the ring reaching the site
+			// included, or the fortieth guard prices like the first.
+			const uint hands = Requests::Workers(gBossJob) + uint(GuardsOnJob(gBossJob));
+			const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN
+					+ NanoLatheReaching(gBossJob.GetBuildPos());
 			float R = gBossJob.buildDef.costM
 					* (1.f - Requests::Progress(gBossJob));
 			if (R < 1.f)

@@ -413,6 +413,54 @@ void ClusterSizes(const array<AIFloat3>& in kin, float link, array<int>& out siz
 // THE DENSEST STANDING LATHE: the turret with the most build power reaching
 // it, which is the heart of whichever cluster is thickest. Invalid when no
 // nano stands at all.
+// THE GROUP OF TURRETS WITH THE MOST SPARE LATHE FOR THIS ASKER. One heart
+// sent every ask to one group; with four or five groups standing the other
+// rings idled and the walk to the one was the build time (apexearth
+// 2026-09-14: "I see 4 or 5 groups of nanos, we should be willing to make
+// something next to each of them in parallel... the walk times also make
+// us incredibly slow"). Each turret stands for its ring: the ring's build
+// power over the frames already rising in its reach, over the asker's
+// walk. Invalid when no turret stands.
+AIFloat3 LatheSiteFor(CCircuitUnit@ unit)
+{
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestScore = 0.f;
+	if (gOwnNanoPos.length() == 0)
+		return best;
+	const AIFloat3 me = (unit !is null) ? unit.GetPos(ai.frame) : AIFloat3(-1.f, 0.f, -1.f);
+	const float speed = (unit !is null) ? Catalog::gSpeed[int(unit.circuitDef.id)] : 0.f;
+	// The frames rising, once: a live request with a standing nanoframe.
+	array<AIFloat3> rising;
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.target is null))
+			continue;
+		const AIFloat3 lp = lt.GetBuildPos();
+		if (OnMap(lp))
+			rising.insertLast(lp);
+	}
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const AIFloat3 p = gOwnNanoPos[i];
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		const float bp = RingBPAt(p);
+		if (bp <= 0.f)
+			continue;
+		int sites = 0;
+		for (uint k = 0; k < rising.length(); ++k) {
+			if (p.distance2D(rising[k]) < r)
+				++sites;
+		}
+		const float spare = bp / float(1 + sites);
+		const float walkSec = ((speed > 1.f) && OnMap(me)) ? (me.distance2D(p) / speed) : 0.f;
+		const float score = spare / (1.f + walkSec / 60.f);
+		if (score > bestScore) {
+			bestScore = score;
+			best = p;
+		}
+	}
+	return best;
+}
+
 AIFloat3 gLatheHeart(-1.f, 0.f, -1.f);
 int gLatheHeartAt = -999999;
 AIFloat3 LatheHeart()
@@ -454,9 +502,18 @@ bool GroupedDef(int d)
 			&& !Catalog::gNeedGeo[d];
 }
 array<int> gGroupLast;
-AIFloat3 GroupAnchor(int defId)
+AIFloat3 GroupAnchor(int defId, CCircuitUnit@ unit = null)
 {
 	CCircuitDef@ def = Catalog::Def(defId);
+	// A converter yard starts at the densest turret ring, not the farm
+	// centre: raised where no turret reaches, each one was one con's work
+	// while forty hands stood where the turrets were (apexearth 2026-09-14).
+	AIFloat3 origin = gFarmPos;
+	if (Catalog::gConvCapacity[defId] > 0.f) {
+		const AIFloat3 heart = LatheSiteFor(unit);
+		if (OnMap(heart))
+			origin = heart;
+	}
 	const float pitch = Lattice::StrideOf(defId);
 	const float side = float(Lattice::ClusterSide()) * pitch;
 	const float step = side + Lattice::AisleW();
@@ -491,7 +548,7 @@ AIFloat3 GroupAnchor(int defId)
 	float bestD = -1.f;
 	for (int j = 0; j <= span; ++j) {
 		for (int i = -span; i <= span; ++i) {
-			const AIFloat3 a = gFarmPos + Base::gAcross * (float(i) * step)
+			const AIFloat3 a = origin + Base::gAcross * (float(i) * step)
 					- Base::gFwd * (float(j) * step);
 			if (!OnMap(a))
 				continue;
@@ -523,7 +580,7 @@ AIFloat3 GroupAnchor(int defId)
 		}
 	}
 	if (bestD < 0.f)
-		return gFarmPos;
+		return origin;
 	if (uint(defId) >= gGroupLast.length())
 		gGroupLast.resize(uint(defId) + 1);
 	const int key = (bi + 100) * 1000 + bj + 1;
@@ -533,7 +590,7 @@ AIFloat3 GroupAnchor(int defId)
 			+ " anchor=" + bi + "," + bj + " n=" + bn + " kin=" + kin.length()
 			+ " step=" + int(step));
 	}
-	return gFarmPos + Base::gAcross * (float(bi) * step)
+	return origin + Base::gAcross * (float(bi) * step)
 			- Base::gFwd * (float(bj) * step);
 }
 
@@ -553,13 +610,13 @@ float BigEcoGroundAt(const AIFloat3& in pos, float r)
 	return (f > 0.f) ? f : 0.f;
 }
 
-AIFloat3 FarmSlot(int defId)
+AIFloat3 FarmSlot(int defId, CCircuitUnit@ unit = null)
 {
 	CCircuitDef@ def = Catalog::Def(defId);
 	if (def is null)
 		return gFarmPos;
 	if (GroupedDef(defId) && Base::gAxisSet)
-		return GroupAnchor(defId);
+		return GroupAnchor(defId, unit);
 	// The ask is the farm centre, big energy a step further back (BARb's
 	// energyBase2); the engine's spiral and the stock block map choose the
 	// square. The lattice scan that stood here is in git (4fca2ee0's tree).
@@ -571,7 +628,7 @@ AIFloat3 FarmSlot(int defId)
 		// (apexearth 2026-09-14: "prefer to build our really large
 		// buildings as close as we can to our nano turrets. This is often
 		// the difference between whether or not we make it at double speed").
-		const AIFloat3 heart = LatheHeart();
+		const AIFloat3 heart = LatheSiteFor(unit);
 		if (OnMap(heart) && (RingBPAt(heart) > RingBPAt(back)))
 			back = heart;
 		if (OnMap(back))

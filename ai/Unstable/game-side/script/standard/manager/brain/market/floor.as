@@ -160,7 +160,19 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			continue;
 		}
 		const float walkSec = (speed > 1.f) ? (dist / speed) : 60.f;
-		const float score = val / (float(busy) + 1.f) / (1.f + walkSec / 60.f);
+		// The hands on it are its crew, the guards already following that
+		// crew, and the turrets whose reach covers it -- a frame the ring
+		// finishes needs nobody (his watched seat: 30 guards on one nano
+		// builder at a site full of turrets, advanced converters raised
+		// alone where none stood).
+		if (requireFeed
+			&& Requests::NanoFed(cand, (busy > 0) ? busy : 1, dist, speed)) {
+			++gJobFull;
+			continue;
+		}
+		const float hands = float(busy) + float(GuardsOnJob(cand))
+				+ NanoLatheReaching(where) / Requests::DRAIN;
+		const float score = val / (hands + 1.f) / (1.f + walkSec / 60.f);
 		if (!far && (score > nearScore)) {
 			nearScore = score;
 			@gJobNearBest = cand;

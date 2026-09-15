@@ -38,6 +38,31 @@ void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 	gGuardBId.insertLast(boss.id);
 }
 
+// How many guards follow the workers of this job. The assist want counts a
+// job's crew to divide the return; the guards it had already sent were not
+// in that count, so every asker saw a lonely job (apexearth 2026-09-14: "we
+// have a dude walking around to make a single nano turret and he's followed
+// by like 30 dollars").
+int GuardsOnJob(IUnitTask@ t)
+{
+	if (t is null)
+		return 0;
+	array<CCircuitUnit@>@ crew = t.GetUnits();
+	if (crew is null)
+		return 0;
+	int n = 0;
+	for (uint c = 0; c < crew.length(); ++c) {
+		if (crew[c] is null)
+			continue;
+		const Id bid = crew[c].id;
+		for (uint g = 0; g < gGuardBId.length(); ++g) {
+			if (gGuardBId[g] == bid)
+				++n;
+		}
+	}
+	return n;
+}
+
 // Either party dying drops the pair -- before any sweep can dereference it.
 void GuardGone(Id id)
 {

@@ -155,7 +155,11 @@ CCircuitDef@ IntelPlantToBuild()
 				// gate opened widest just after a lost fight. Standing army
 				// against what the enemy fields closes it again.
 				&& !Military::Outmassed();
-		if (!armyFedA && (Military::AirThreatNow() <= 0.f))
+		// ...except on the eco seat, whose army target is zero by design
+		// and whose scaling IS the advanced air constructor (apexearth
+		// 2026-09-14: "we really need to get on the ball here with making
+		// air and using air cons").
+		if (!armyFedA && (Military::AirThreatNow() <= 0.f) && !Market::EcoRoleGrowing())
 			return null;
 		if ((wantN > 1) && !armyFedA)
 			wantN = 1;

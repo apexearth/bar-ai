@@ -62,13 +62,19 @@ int CeilingConsOwned()
 		return gCcoVal;
 	gCcoFrame = ai.frame;
 	gCcoOwn = gOwnStamp;
+	// THE FLOOR IS FILLED BY FLYERS ONCE A PLANT OFFERS THEM: a walker's
+	// every start costs the walk, and the floor satisfied by walkers never
+	// bought the air con (apexearth 2026-09-14: "we really need to get on
+	// the ball here with making air and using air cons"; the seat's T1 air
+	// plant produced none).
+	const bool flyLab = FlyingConLab(true);
 	int n = 0;
 	for (uint c = 1; c < gOwnCount.length(); ++c) {
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
-		if (ReachesCeiling(int(c)))
+		if (ReachesCeiling(int(c)) && (Catalog::gFlyer[int(c)] || !flyLab))
 			n += gOwnCount[c];
 	}
 	gCcoVal = n;
@@ -80,10 +86,12 @@ int CeilingConsOwned()
 // floor below re-orders for the whole build and lands a crowd.
 int CeilingConsInFlight()
 {
+	const bool flyLab = FlyingConLab(true);
 	int n = 0;
 	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
 		CCircuitDef@ pd = Brain::gFQPendDef[i];
-		if ((pd !is null) && ReachesCeiling(int(pd.id)))
+		if ((pd !is null) && ReachesCeiling(int(pd.id))
+			&& (Catalog::gFlyer[int(pd.id)] || !flyLab))
 			++n;
 	}
 	return n;
@@ -105,13 +113,15 @@ int CeilingConsInFlight()
 // opening to run and cannot be replaced if it dies working.
 int ConsOwnedAny()
 {
+	const bool flyLab = FlyingConLab(false);   // same law as the ceiling count
 	int n = 0;
 	for (uint c = 1; c < gOwnCount.length(); ++c) {
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
-		n += gOwnCount[c];
+		if (Catalog::gFlyer[int(c)] || !flyLab)
+			n += gOwnCount[c];
 	}
 	return n;
 }
@@ -121,11 +131,13 @@ int ConsOwnedAny()
 // for the whole build and lands a crowd.
 int ConsInFlightAny()
 {
+	const bool flyLab = FlyingConLab(false);
 	int n = 0;
 	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
 		CCircuitDef@ pd = Brain::gFQPendDef[i];
 		if ((pd !is null) && pd.IsMobile() && pd.IsBuilder()
-			&& !pd.IsRoleAny(Unit::Role::COMM.mask))
+			&& !pd.IsRoleAny(Unit::Role::COMM.mask)
+			&& (pd.IsAbleToFly() || !flyLab))
 			++n;
 	}
 	return n;

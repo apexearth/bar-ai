@@ -822,7 +822,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// (apexearth: "place those next to each other... fusions belong
 		// in the back of the map, furthest from the enemy"). The farm sits in
 		// the rear of the base axis, which is that ground.
-		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : BigEnergySite();
+		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id), unit) : BigEnergySite();
 		// A DETERMINISTIC SLOT RE-ELECTED INTO REFUSED GROUND IS A DEADLOCK.
 		// FarmSlot is a pure function of the farm, so when the C++ reach-safe
 		// veto refuses that ground the next election computes the same answer
@@ -890,7 +890,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			CCircuitDef@ adef = Catalog::Def(ad);
 			if (adef is null)
 				continue;
-			AIFloat3 aslot = gFarmSet ? FarmSlot(ad) : BigEnergySite();
+			AIFloat3 aslot = gFarmSet ? FarmSlot(ad, unit) : BigEnergySite();
 			if (OnMap(aslot))
 				aslot = ClearOfSpots(aslot, 120.f);
 			bool acrtd = false;
@@ -911,7 +911,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return null;
 	}
 	if (w.kind == WK_CONVERT) {
-		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id)) : w.pos;
+		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id), unit) : w.pos;
 		// The same deadlock the energy branch probes for: the farm slot is
 		// deterministic, and a seat whose farm sits past a cliff lost every
 		// advanced converter it ordered at one point (27 unreach deaths,
