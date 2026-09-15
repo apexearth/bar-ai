@@ -67,6 +67,38 @@ the reactor field; 42 turrets. "ok on both": a plant's nano block now fills
 every ring (doorway kept) and only army-producing lines draw turrets. After:
 seat income 1153-1313 at 24 min, 64-100 nano grounds, metal wasted 7-25%.
 
+> "If I had 1000 income i would only have 42 T2 cons. I didn't get to 2000
+> metal income, I shouldn't have really had 130 T2 cons, the game simple has
+> nothing else to build at the factory - though if we're thinking in terms of
+> 'i need more build power' then the butler would have been the better
+> choice."
+
+Measured: all 132 came from the T2-con floor; 2 + income/25 is his 42 at
+1,000, and the floor's UNSPENT term (unspent metal / one con's lathe) was the
+other half. That term now buys the lab's pure assist unit (Butler/Twitcher)
+where one is offered.
+
+> "Rather than just adding all those cons back on I'd prefer you to fix the
+> other issues we have. Bad nano construction is a huge problem we have and
+> that's why the lack of cons hurts us so much."
+
+> "Now we're not making the air cons we need to really scale and build fast
+> without the slow walking being an issue. Also we're still not properly
+> snapping our buildings to a grid. Why are we failing on this snap to grid
+> logic???"
+
+State after the second 09-14 commit (Isthmus seed 4, seat at 24 min): 30 T2
+bot cons + 66 Twitchers, 102 turrets finished (from 58), metal wasted 0%,
+income 686 -- slower than the 1,153 the 132-con seat reached, because the
+seat now has few T2 STARTERS early (T2 floor 2+income/25 reads ~8 at 150
+income) and the Twitchers cannot found T2 converters. Next: starters priced
+for growth (the ladder's hands-bound verdict), not for waste. Grid: the base
+grid was never handed to C++ since a637dc7f (2026-09-11, his "revert to
+BARb's placement"); republished. Ring-scatter on the seat still 24-28%
+(Carrot 2-7%); grid-tightness 62-80%. Air cons: walking labs yield the con
+floors to a plant that offers a flyer -- inert until the seat builds an air
+plant, which it did in one game of three.
+
 ## 2026-09-13 — "Our bombing logic is boring": 0 bombers against a wing target of 102
 
 > "I want to see us making bombers and doing bombing raids on our enemies but

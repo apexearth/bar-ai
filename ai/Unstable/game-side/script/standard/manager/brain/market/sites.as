@@ -436,11 +436,14 @@ Grid::Cells gFarmClaimGrid;
 // the engine's spiral fills the group from it. A fresh group opens only on
 // ground none of our structures stand on -- solars and winds asked from one
 // point interleave in one spiral -- and a started one is filled until full.
+// ...and converters: asked at the farm centre they have no slot once the
+// centre fills and the probe ring places them. A converter yard is a block
+// of ClusterN an aisle from the next.
 bool GroupedDef(int d)
 {
 	return Catalog::ValidId(d) && !Catalog::gMobile[d] && !BigEcoDef(d)
-			&& (Catalog::gMakeE[d] > 0.f) && !Catalog::gNeedGeo[d]
-			&& (Catalog::gConvCapacity[d] <= 0.f);
+			&& ((Catalog::gMakeE[d] > 0.f) || (Catalog::gConvCapacity[d] > 0.f))
+			&& !Catalog::gNeedGeo[d];
 }
 array<int> gGroupLast;
 AIFloat3 GroupAnchor(int defId)

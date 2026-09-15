@@ -277,7 +277,12 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		// already answers "full": a saturated site returns null here and
 		// falls through to the parallel Create below, which is the one case
 		// parallel was ever for.
-		{
+		// A BATCH ASK NAMES ITS OWN CELL. The nano batch has already chosen a
+		// distinct free cell; folding it onto the pending request next door
+		// (JoinFor's reach, not the cover radius) made every batch pass
+		// "+0 ... fold7/fold15" on the eco seat -- 345 nano executions, 66
+		// grounds -- so a batch ask (no unit) opens its cell.
+		if (unit !is null) {
 			IUnitTask@ near = JoinFor(unit, want, at);
 			if (Gate(G_JOINNEAR, near !is null)) {
 				++gJoined;

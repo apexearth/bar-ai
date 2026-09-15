@@ -171,6 +171,150 @@ float UnspentByHands()
 	return aiEconomyMgr.metal.income - pull;
 }
 
+// A PURE ASSIST UNIT: the Butler and the Twitcher -- a fast, unarmed
+// builder a ceiling-tier lab offers BESIDE its real constructor, reaching
+// only the basic tier (0.6-0.67 BP per metal at 75-90 speed against the T2
+// con's 0.40 at 33). Metal we cannot spend is a shortage of LATHE, and this
+// is the cheapest mobile lathe such a lab makes, so it takes the unspent
+// term where it exists (apexearth 2026-09-14: "if we're thinking in terms of
+// 'i need more build power' then the butler would have been the better
+// choice"). Armed helpers (the spider, the spy) are not it: a first draft
+// that read "lathes, no build options" bought 117 spies.
+array<int> gAssistFlag;   // per def: -1 unknown, 0 no, 1 yes
+bool IsAssistDef(int d)
+{
+	if (!Catalog::ValidId(d))
+		return false;
+	if (uint(d) >= gAssistFlag.length()) {
+		// resize fills with 0 = "no", which memoised every def as not
+		// an assist unit before a single test ran.
+		const uint was = gAssistFlag.length();
+		gAssistFlag.resize(uint(Catalog::gDefCount + 1));
+		for (uint k = was; k < gAssistFlag.length(); ++k)
+			gAssistFlag[k] = -1;
+	}
+	if (gAssistFlag[d] < 0) {
+		bool yes = Catalog::gAvailable[d] && Catalog::gMobile[d] && Catalog::gBuilder[d]
+			&& !Catalog::gFlyer[d] && (Catalog::gBuildPower[d] > 0.f)
+			&& (Catalog::gDps[d] <= 0.f) && (Catalog::gCostM[d] > 1.f)
+			&& !ReachesCeiling(d)
+			&& !Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask);
+		if (yes) {
+			// ...offered beside a ceiling constructor: the T1 lab's own con
+			// is a starter, not a helper.
+			yes = false;
+			for (int f = 1; (f <= Catalog::gDefCount) && !yes; ++f) {
+				if (Catalog::gMobile[f] || (Catalog::gBuildsList[f].length() == 0))
+					continue;
+				const array<int>@ pr = Catalog::gBuildsList[f];
+				bool mine = false, ceil = false;
+				for (uint q = 0; q < pr.length(); ++q) {
+					if (pr[q] == d)
+						mine = true;
+					else if (Catalog::gMobile[pr[q]] && Catalog::gBuilder[pr[q]]
+						&& ReachesCeiling(pr[q]))
+						ceil = true;
+				}
+				yes = mine && ceil;
+			}
+		}
+		// Not memoised before the ceiling is known: ReachesCeiling reads
+		// false for everything until BestExtract names the moho, and a "no"
+		// cached then stood for the game (measured: corfast assist=0 with
+		// every other flag right).
+		if (BestExtract() > 0.f)
+			gAssistFlag[d] = yes ? 1 : 0;
+		return yes;
+	}
+	return gAssistFlag[d] == 1;
+}
+
+array<int> gAssistLogged;
+int AssistDefOf(int facDef)
+{
+	int best = -1;
+	float bestPerM = 0.f;
+	const array<int>@ pr = Catalog::BuildsOf(facDef);
+	// Once per plant def: which product qualifies and why not (the first
+	// draft bought spies; the second bought nothing and nobody could say why).
+	const bool logNow = (gAssistLogged.find(facDef) < 0);
+	if (logNow)
+		gAssistLogged.insertLast(facDef);
+	for (uint q = 0; q < pr.length(); ++q) {
+		const int d = pr[q];
+		if (logNow && Catalog::gMobile[d] && Catalog::gBuilder[d]) {
+			AiLog("apex: assistdef t=" + ai.teamId + " lab=" + Catalog::Def(facDef).GetName()
+				+ " " + Catalog::Def(d).GetName()
+				+ " avail=" + (Catalog::gAvailable[d] ? 1 : 0)
+				+ " fly=" + (Catalog::gFlyer[d] ? 1 : 0)
+				+ " bp=" + int(Catalog::gBuildPower[d])
+				+ " dps=" + formatFloat(Catalog::gDps[d], "", 0, 2)
+				+ " ceil=" + (ReachesCeiling(d) ? 1 : 0)
+				+ " assist=" + (IsAssistDef(d) ? 1 : 0));
+		}
+		if (!IsAssistDef(d))
+			continue;
+		const float perM = Catalog::gBuildPower[d] / Catalog::gCostM[d];
+		if (perM > bestPerM) {
+			bestPerM = perM;
+			best = d;
+		}
+	}
+	return best;
+}
+
+// Assist lathe standing and ordered, in metal/s (build power x 7/80).
+float AssistLatheM()
+{
+	float m = 0.f;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		if ((gOwnCount[c] > 0) && IsAssistDef(int(c)))
+			m += float(gOwnCount[c]) * Catalog::gBuildPower[int(c)] * (7.f / 80.f);
+	}
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if ((pd !is null) && IsAssistDef(int(pd.id)))
+			m += Catalog::gBuildPower[int(pd.id)] * (7.f / 80.f);
+	}
+	return m;
+}
+
+// How many of assist def `d` the unspent metal asks for, net of the assist
+// lathe already standing or ordered.
+int AssistNeed(int d)
+{
+	if (d < 0)
+		return 0;
+	const float unspent = UnspentByHands() - AssistLatheM();
+	const float bp = Catalog::gBuildPower[d] * (7.f / 80.f);
+	if ((unspent <= 0.f) || (bp <= 0.f))
+		return 0;
+	return int(unspent / bp);
+}
+
+// Does a standing plant of ours offer a FLYING constructor (of the ceiling
+// tier when asked)? The floors are rules that fill from whichever lab asks
+// first, and the bot lab asks most; a walker's every start costs the walk
+// (apexearth 2026-09-14: "we're not making the air cons we need to really
+// scale and build fast without the slow walking being an issue"). While a
+// plant offers the flyer, the walking labs leave the floor to it.
+bool FlyingConLab(bool ceiling)
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if (f is null)
+			continue;
+		const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+		for (uint q = 0; q < pr.length(); ++q) {
+			const int d = pr[q];
+			if (Catalog::gAvailable[d] && Catalog::gMobile[d] && Catalog::gBuilder[d]
+				&& Catalog::gFlyer[d] && (!ceiling || ReachesCeiling(d)))
+				return true;
+		}
+	}
+	return false;
+}
+
 int ConsNeedAny()
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
@@ -193,14 +337,30 @@ int ConsNeedAny()
 	// ...net of what the hands we have would spend if energy let them: an
 	// e-throttled fleet leaves metal unspent without being too few, and more
 	// hands add energy draw, not metal spend.
-	const float unspent = UnspentByHands();
-	if (unspent > 0.f) {
-		const float bp = ConWorkerBP();
-		if (bp > 0.f)
-			want += unspent / bp;
+	// ...served by a pure assist unit where a lab offers one (AssistNeed);
+	// as constructors only before that -- a T1 con is also the starter the
+	// full bank needed.
+	if (!AnyAssistLab()) {
+		const float unspent = UnspentByHands();
+		if (unspent > 0.f) {
+			const float bp = ConWorkerBP();
+			if (bp > 0.f)
+				want += unspent / bp;
+		}
 	}
 	const int have = ConsOwnedAny() + ConsInFlightAny();
 	return (float(have) < want) ? (int(want) - have) : 0;
+}
+
+// Does any standing plant of ours offer a pure assist unit?
+bool AnyAssistLab()
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (AssistDefOf(int(f.circuitDef.id)) >= 0))
+			return true;
+	}
+	return false;
 }
 
 // How far under the floor we are. The floor SCALES WITH INCOME -- one con
@@ -214,12 +374,16 @@ int CeilingConsNeed()
 			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 25.f);
 	// Unspent metal is hands we lack, at the ceiling tier as at the first:
 	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
-	// metal spilled per game (2026-09-08).
-	const float unspent = UnspentByHands();
-	if (unspent > 0.f) {
-		const float bp = ConWorkerBP();
-		if (bp > 0.f)
-			want += unspent / bp;
+	// metal spilled per game (2026-09-08). ...but it is LATHE we lack, not
+	// starters: where a lab offers a pure assist unit the term buys that
+	// (apexearth: "If I had 1000 income i would only have 42 T2 cons").
+	if (!AnyAssistLab()) {
+		const float unspent = UnspentByHands();
+		if (unspent > 0.f) {
+			const float bp = ConWorkerBP();
+			if (bp > 0.f)
+				want += unspent / bp;
+		}
 	}
 	const int have = CeilingConsOwned() + CeilingConsInFlight();
 	return (float(have) < want) ? (int(want) - have) : 0;
@@ -391,7 +555,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float richGap = RichArmyGapM();
 	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
 		&& (armyT0 - armyHave <= 0.5f)
-		&& (richGap <= 0.5f))
+		&& (richGap <= 0.5f)
+		&& (AssistNeed(AssistDefOf(int(fac.circuitDef.id))) <= 0))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -623,6 +788,25 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	int amphBan = -1;
 	int consNeedA = -1;
 	float bpProt = -1.f;
+	// THE ASSIST FLOOR: the unspent term of the con floors, bought as pure
+	// lathe from a lab that offers it. A rule like the con floors, ahead of
+	// the draw, for the same reason.
+	// Starters first: the T2-con floor still outranks it.
+	if (ceilNeed <= 0) {
+		const int ad = AssistDefOf(fid);
+		if (ad >= 0) {
+			const int an = AssistNeed(ad);
+			if (an > 0) {
+				AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+					+ " #" + fac.id + " -> produce:" + Catalog::Def(ad).GetName()
+					+ " (assist floor need=" + an
+					+ " latheM=" + formatFloat(AssistLatheM(), "", 0, 0)
+					+ " unspent=" + formatFloat(UnspentByHands(), "", 0, 0)
+					+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1) + ")");
+				return Catalog::Def(ad);
+			}
+		}
+	}
 	// RoleTarget and RoleValue are per ROLE, and a line offers far more
 	// candidates than roles. Linear over at most a handful of entries.
 	array<int> rcRole;
@@ -1180,6 +1364,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// construction. Any tier counts -- this asks for hands, not reach.
 		if (consNeedA < 0)
 			consNeedA = ConsNeedAny();
+		// A walker yields the floor to a flyer another plant can make.
+		const bool walker = !Catalog::gFlyer[d];
+		if ((consNeedA > 0) && walker && FlyingConLab(false))
+			consNeedA = 0;
 		if (consNeedA > 0) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -1190,7 +1378,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
 		}
-		if ((ceilNeed > 0) && ReachesCeiling(d)) {
+		if ((ceilNeed > 0) && ReachesCeiling(d) && !(walker && FlyingConLab(true))) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (t2-con floor need=" + ceilNeed

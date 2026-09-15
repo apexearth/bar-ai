@@ -38,7 +38,7 @@
 namespace circuit {
 
 // Lattice rings walked before a taken slot falls to the wide site search.
-static constexpr int LATTICE_RINGS = 4;
+static constexpr int LATTICE_RINGS = 6;
 
 
 using namespace springai;
@@ -465,9 +465,6 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			// side. snap to a grid of the building's own size"). Rings of the
 			// def's own lattice, nearest first; the wide search only when no
 			// ring within reach has a free slot.
-			if (!free) {
-				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
-			}
 			const AIFloat3 self = unit->GetPos(frame);
 			const AIFloat3 snapped = pos;
 			bool found = false;
@@ -502,6 +499,13 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 					searchRadius = slot;
 					found = true;
 				}
+			}
+			// Blocked ground is ground with no free slot on ANY ring: marked
+			// on the first taken cell, the script's probe ring took over the
+			// placement it was meant to back up (ring-scatter 20% on the
+			// seat the day the grid came back).
+			if (!found && !free) {
+				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
 			}
 		}
 	}
