@@ -93,6 +93,15 @@ Open: the shield and support-row nano fire rarely; the defence share of
 spend is 16% against BARb's 8% now that the target is met -- whether that
 share is right is the target's question, not the line's.
 
+
+Update, later 2026-09-15 (f4017fe5): the hole rule (one hole among N carries
+interior/N; the last carries everything), one team wave, the starved-spot
+stake (a raided bearing is worth every unheld spot on our side of it) and
+the economy-site refusal bar (our guns' influence at the site, not the
+builder's ~0 power). Greenest 8v8 on this build: seeds 22, 23 won at 25-28
+min, seed 21 lost; Isthmus seed 4 and Frozen Ford 2v2 still BARb-led --
+on both, army share (10% vs their 32%) is the loss, not the line.
+
 ## The plan, in order
 
 Every step is measured on 4–6 Greenest Fields 8v8 games (+100%, 30 min)
