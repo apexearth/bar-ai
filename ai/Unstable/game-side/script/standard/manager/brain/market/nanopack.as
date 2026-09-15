@@ -39,6 +39,7 @@ Grid::Cells gNPOcc;
 // The last walk's refusals, so the batch log can say why it placed so few.
 int gNPTaken = 0;
 int gNPLane = 0;
+const int STRIP_W = 8;   // a converter row, cells across
 int gNPDoor = 0;
 int gNPFar = 0;
 int gNPOut = 0;   // rings the budget never reached
@@ -232,6 +233,62 @@ int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
 
 	int budget = NP_MAX_CELLS;
 	gNPTaken = 0; gNPLane = 0; gNPDoor = 0; gNPFar = 0; gNPOut = 0;
+	// A CONVERTER YARD IS ROWS, NOT RINGS. Rings from the anchor grow a blob;
+	// the yard is laid as rows of STRIP_W across the base, the next row
+	// behind the last, every cell on the lattice -- the work planned ahead
+	// (apexearth 2026-09-14: "add converters in blocks of 2x8, like long
+	// queues of what we want to build... It is like planning ahead").
+	if (!Catalog::ValidId(anchorDef) && (Catalog::gConvCapacity[nanoDef] > 0.f)
+		&& Base::Ready())
+	{
+		for (int j = 0; j <= ringN; ++j) {
+			for (int i = 0; i < STRIP_W; ++i) {
+				if (budget <= 0)
+					return int(slots.length());
+				--budget;
+				const AIFloat3 p = at + Base::gAcross * (float(i) * pitch)
+						- Base::gFwd * (float(j) * pitch);
+				if (!OnMap(p) || (p.distance2D(at) > reach + float(STRIP_W) * pitch)) {
+					++gNPFar;
+					continue;
+				}
+				{
+					float pd = 0.f, pl = 0.f;
+					Base::Coords(p, pd, pl);
+					const float lh = Base::LaneHalf() + pitch * 0.5f;
+					if ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh)) {
+						++gNPLane;
+						continue;
+					}
+				}
+				bool taken = false;
+				gNPOcc.Query(p.x, p.z, qr);
+				for (uint q = 0; q < gNPOcc.hit.length(); ++q) {
+					const uint k = uint(gNPOcc.hit[q]);
+					if ((abs(p.x - op[k].x) < (nhx + ohx[k]))
+						&& (abs(p.z - op[k].z) < (nhz + ohz[k])))
+					{
+						taken = true;
+						break;
+					}
+				}
+				if (taken) {
+					++gNPTaken;
+					continue;
+				}
+				if (NearBlocked(p))
+					continue;
+				slots.insertLast(p);
+				op.insertLast(p);
+				ohx.insertLast(nhx);
+				ohz.insertLast(nhz);
+				gNPOcc.Add(p.x, p.z);
+				if (int(slots.length()) >= n)
+					return int(slots.length());
+			}
+		}
+		return int(slots.length());
+	}
 	for (int ring = ring0; ring <= ringN; ++ring) {
 		for (int i = -ring; i <= ring; ++i) {
 			for (int j = -ring; j <= ring; ++j) {

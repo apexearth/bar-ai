@@ -974,8 +974,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				// subtracts what stands, so the surplus still converts to the
 				// same fleet within seconds -- the work just stops landing
 				// inside one sim frame.
-				if (wantC > 12)
-					wantC = 12;
+				if (wantC > 16)
+					wantC = 16;   // two rows of eight (his 2x8 block)
 				if (wantC > 1) {
 					const double _tC = Perf::T0();
 					array<AIFloat3> packC;
