@@ -3617,3 +3617,18 @@ cell against a 1-metal converter, which prices conversion out of the game. The
 term the room charge needs is not this measure at the old weight — it is a
 price for ground that is bounded by what the ground is actually worth to the
 next building, and it has not been derived yet.
+
+## COMET 1V1: THE FIRST FACTORY COMES LATE IN HALF THE GAMES (2026-09-15)
+
+Comet Catcher 1v1 vs BARb:stable:hard, 25 min, handicap 0, six games per
+build: on both 7f2649c1 (before the team front) and d9b6b1ee (after), three
+of six games have the first constructor at 5-13 min and the side's metal
+built at 4-14k against 25-50k in the other three. Same rate in both, so
+not the defence work. In the worst case the commander's first lab task is
+aborted by the stuck watch three times ("held corlab progress=0.00
+toSite=700 ... no engine order, re-electing", `apex: latency corlab
+dropped=10`) and it walks off claiming mexes across the map with no
+factory until minute 12; in others the plant is simply elected late
+(firstplant=3.2m). Runs: `tournaments/20260915-081342-ctl7f26-Comet`,
+`tournaments/*trt-d9b6-Comet`. Read the engine-order drop first (S13, the
+lattice ring walk) before the election.
