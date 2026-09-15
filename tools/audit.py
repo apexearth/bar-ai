@@ -581,6 +581,25 @@ def check_structures(text, rep):
             + ("" if late_m <= 500
                else " -- the newer guns should have won (apex_t1_def_late)"))
 
+    # "Light blue made ~60 LLTs around their base. That is beyond excessive
+    # and it provides almost no value." (apexearth 2026-09-14) -- 72 of them
+    # were one commander's DEF PANIC hoists, elected at v=0.00 over a mex at
+    # v=1.19. The hoist is bounded to the first tower of a zero-defence
+    # episode; a team electing it more than a few times is the hoist running
+    # as a standing rule again, and each one is a tower the price refused.
+    panic = defaultdict(int)
+    for m in re.finditer(r"apex: decide t=(\d+) \S+ #\d+ -> defence/protect:"
+                         r"(\S+) v=([\d.]+) .*?why=defpanic", text):
+        if m.group(1) in ours:
+            panic[m.group(1)] += 1
+    worst = max(panic.values()) if panic else 0
+    rep.add("STRUCTURES", worst <= 3, "def-panic-bounded",
+            f"{sum(panic.values())} panic-hoisted tower election(s), "
+            f"worst team {worst}"
+            + ("" if worst <= 3
+               else " -- the hoist should end at the first tower (decide.as "
+                    "defEmerg)"))
+
     # "We reclaim our T2 labs and then rebuild them." A successful reclaim
     # exec on a def followed by a NEW build of the same def is the loop
     # itself, whatever the def.

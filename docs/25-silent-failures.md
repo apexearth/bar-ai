@@ -555,3 +555,21 @@ lines) is the instrument for a hitch the sections do not own; and nothing
 long ever goes through `Spring.Echo`. The census now ships in 10-unit lines,
 and the AI's own log no longer goes through the engine at all: it writes
 `apex-t<team>.log` and `run_match` merges it back by frame (`tools/apexlog.py`).
+
+## S32 — An emergency whose exit is a growing target is a standing rule, and it was measured by its firing
+
+Commit 87a39d68 (2026-09-09) widened the home-defence hoist: sensor from
+`LossRateAt(home)` to `BleedM()` (anywhere), exit from "any tower coming" to
+`DefenceValue()+DefenceInFlightM() < DefenceTarget()`. Its own message
+measured "panic lines 0 -> 45-51 per game, ~60 defence elections won per
+game" and shipped with "outcome NOT resolved". Both halves are unbounded:
+the loss field decays geometrically so `BleedM() > 0` is "a structure has
+ever died", and `DefenceTarget()` is a share of holdings, which grows faster
+than 70-metal towers at a commander's lathe can fill it. Supreme Isthmus 8v8
++100% he watched 2026-09-14 (`matches/20260914-224733-*`): 515 panic
+elections across eight seats, 287 of them at v<0.5 and 478 overriding a
+better-priced want; one Legion commander bought 72 Pharos at v=0.00 over a
+mex at v=1.19, on a bleed of 0.28 m/s. The hoist's job was "0 defense" (his
+words); the target shortfall is the priced market's, and the loss field
+already prices it (`coverage.as` ThreatAt/HazardWith) at the sites that are
+dying. Now bounded to the first tower; `audit.py def-panic-bounded` reads it.

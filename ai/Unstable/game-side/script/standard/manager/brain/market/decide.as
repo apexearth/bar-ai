@@ -1033,15 +1033,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	float homeLoss = 0.f;
 	bool defEmerg = false;
 	if (!aaPanic) {
-		// THE SENSOR IS THE WHOLE FIELD, AND THE OBLIGATION SAYS WHETHER IT IS
-		// ANSWERED. LossRateAt(home) is a 1200-elmo circle, so a base eaten
-		// from its outlying mexes inward reads zero -- 83 finished structures
-		// died in the game he watched and this never fired. And "any tower
-		// coming" cannot answer a 36,000-metal shortfall: what ends the
-		// emergency is the wall reaching its target, in flight included.
+		// The sensor is the whole field (LossRateAt(home) misses outlying
+		// mexes); the exit is the first tower, standing or ordered. "Below
+		// DefenceTarget" as the exit is never reached while the economy
+		// grows, so the hoist ran all game buying v=0.00 towers -- the
+		// shortfall is the priced market's job, and the loss field already
+		// prices it at the sites that are dying.
 		homeLoss = BleedM();
 		defEmerg = (homeLoss > 0.f)
-				&& ((DefenceValue() + DefenceInFlightM()) < DefenceTarget());
+				&& (DefenceValue() <= 0.f) && (DefenceInFlightM() <= 0.f);
 	}
 	if (defEmerg) {
 		const bool dStale = (ai.frame - gDefClaimAt) > 20 * SECOND;
@@ -1069,9 +1069,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				gNextDefPanicLog = ai.frame + 15 * SECOND;
 				AiLog("apex: DEF PANIC -- losing "
 					+ formatFloat(homeLoss, "", 0, 2)
-					+ " m/s of our own structures with def "
-					+ int(DefenceValue()) + "+" + int(DefenceInFlightM())
-					+ " of " + int(DefenceTarget()) + " standing; "
+					+ " m/s of our own structures with zero defence standing or ordered; "
 					+ ((ranked[0].def is null) ? "?" : ranked[0].def.GetName())
 					+ " jumps the queue");
 			}
