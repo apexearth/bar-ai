@@ -164,6 +164,7 @@ array<float>    gGapBehind;    // what an entry here reaches: wedge + the hole r
 array<float>    gGapWedge;     // the wedge's own metal beyond the stopping point
 array<float>    gGapInside;    // the wedge's metal inside it -- reachable through a hole
 array<float>    gGapStarved;   // stream of the spots raids through here keep us off
+array<float>@   gGapUnsafe = null;   // the builders' refused sites, read once per pass
 array<float>    gGapOpen;
 array<float>    gGapStopR;     // radius the walk-in met the wave's worth of fire
 float           gGapWave = 0.f;
@@ -178,6 +179,24 @@ int             gGapWalkFallback = 0;
 AIFloat3        gGapFoe;
 bool            gGapFoeOk = false;
 const int       GAP_PER_CALL = 3;       // bearings read per call: spread, not batched
+
+// The basic extractor's share of a spot's raw income -- what a starved
+// spot would pay once it can be built.
+float gLeastExtract = -1.f;
+float LeastExtract()
+{
+	if (gLeastExtract > 0.f)
+		return gLeastExtract;
+	float e = 0.f;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		const float x = Catalog::gExtractsM[i];
+		if (Catalog::gAvailable[i] && (x > 0.f) && ((e <= 0.f) || (x < e)))
+			e = x;
+	}
+	if (e > 0.f)
+		gLeastExtract = e;
+	return e;
+}
 
 float TeamWave(float own)
 {
@@ -282,19 +301,44 @@ void GapsPrep(float wave0, float standoff)
 		float starved = 0.f;
 		if (gGapWalk[b]) {
 			CacheSpots();
+			if (b == gGapCursor)
+				@gGapUnsafe = ai.GetUnsafeSites();   // once per call, not per bearing
+			// Has a builder been refused a site on this bearing, on our side
+			// of the map, in the last five minutes? Then every unheld spot
+			// there is what the raids through this gap cost us, not only the
+			// one refused: the con that was turned back from one is turned
+			// back from the next. Two refused spots read ~2k of stake against
+			// a 4k wedge and bought nothing; the side's whole stream is the
+			// economy the gun unlocks.
+			bool raided = false;
+			if (gGapUnsafe !is null) {
+				for (uint u = 0; !raided && (u + 2 < gGapUnsafe.length()); u += 3) {
+					const AIFloat3 us(gGapUnsafe[u], 0.f, gGapUnsafe[u + 1]);
+					raided = (ai.frame - int(gGapUnsafe[u + 2]) < 5 * 60 * SECOND)
+							&& OnMap(us) && (TeamRayOf(us) == b)
+							&& (!gGapFoeOk || (us.distance2D(gThMid) < us.distance2D(gGapFoe)));
+				}
+			}
 			const float rIn = gThR[b] + standoff + GAP_STEP;
 			for (uint i = 0; i < gAllSpots.length(); ++i) {
 				const AIFloat3 sp = gAllSpots[i];
 				if (TeamRayOf(sp) != b)
 					continue;
-				if (sp.distance2D(gThMid) > rIn)
+				if (!OnMap(sp))
+					continue;
+				const bool ourSide = !gGapFoeOk
+						|| (sp.distance2D(gThMid) < sp.distance2D(gGapFoe));
+				if (!(raided && ourSide) && (sp.distance2D(gThMid) > rIn))
 					continue;
 				const int li = LedgerNearest(sp);
 				if ((li >= 0) && (gLExtract[uint(li)] > 0.f))
 					continue;   // ours, standing
-				if (!OnMap(sp) || (ai.GetBuilderThreatAt(sp) <= 0.f))
+				if (!raided && (ai.GetThreatAt(sp) <= 0.f))
 					continue;
-				starved += gAllSpotInc[i] * IncomeMult() * PfHorizon();
+				// Spot income is the map's raw figure; a mex takes its
+				// extraction share of it (the ledger's gLIncome x gLExtract).
+				starved += gAllSpotInc[i] * LeastExtract() * IncomeMult()
+						* PfHorizon();
 			}
 		}
 		gGapStarved[b] = starved;

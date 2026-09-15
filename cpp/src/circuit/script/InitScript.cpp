@@ -854,6 +854,24 @@ static float CCircuitAI_GetBuilderThreatAt(CCircuitAI* circuit, const AIFloat3& 
 	return circuit->GetBuilderThreatAt(pos);
 }
 
+// The threat the builder's safe-reach test refuses a site on (CanReachAtSafe):
+// the surface threat, clamped on-map -- the map's assert is compiled out of
+// a release build and an off-map read is a wild index.
+static float CCircuitAI_GetThreatAt(CCircuitAI* circuit, const AIFloat3& pos)
+{
+	if ((pos.x < 0.f) || (pos.z < 0.f)
+		|| (pos.x >= CTerrainManager::GetTerrainWidth())
+		|| (pos.z >= CTerrainManager::GetTerrainHeight()))
+	{
+		return 0.f;
+	}
+	CMapManager* mm = circuit->GetMapManager();
+	if ((mm == nullptr) || (mm->GetThreatMap() == nullptr)) {
+		return 0.f;
+	}
+	return mm->GetThreatMap()->GetThreatAt(pos);
+}
+
 static float CCircuitAI_GetEnemyCostAt(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	return circuit->GetEnemyCostAt(pos, radius);
@@ -1127,6 +1145,26 @@ static bool CCircuitAI_GroundConnected(CCircuitAI* circuit, const AIFloat3& a, c
 		}
 	}
 	return false;
+}
+
+// Sites a builder refused as unsafe in the last ten minutes: [x, z, frame, ...].
+static CScriptArray* CCircuitAI_GetUnsafeSites(CCircuitAI* circuit)
+{
+	std::vector<float> out;
+	for (const auto& e : circuit->GetUnsafeSites()) {
+		out.push_back(e.first.x);
+		out.push_back(e.first.z);
+		out.push_back(float(e.second));
+	}
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
 }
 
 static CScriptArray* CCircuitAI_GetOwnDamagedNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
@@ -1628,12 +1666,14 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetUnsafeSites()", asFUNCTION(CCircuitAI_GetUnsafeSites), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float EnemyReachSlack(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_EnemyReachSlack), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void TerritoryRay(const AIFloat3& in, const AIFloat3& in, float, int, float, float, bool, float &out, float &out, float &out, int &out)", asFUNCTION(CCircuitAI_TerritoryRay), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTerritoryAt(const AIFloat3& in)", asFUNCTION(CCircuitAI_GetTerritoryAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetTerritoryVersion()", asFUNCTION(CCircuitAI_GetTerritoryVersion), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

@@ -926,10 +926,22 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	const bool intoThreat = (buildType == BuildType::DEFENCE)
 			|| (buildType == BuildType::BUNKER)
 			|| (buildType == BuildType::BIG_GUN);
+	// THE BAR FOR ECONOMY IS NOT THE BUILDER'S OWN POWER. A constructor's power
+	// is ~0, so a site was refused at threat 0.1 -- the residue of a raider
+	// that passed minutes ago -- and on a raided map the cons built nothing
+	// at all (Frozen Ford 2v2, watched: 3 of 34 spots held at 30 min, 21 of
+	// 26 mex tasks refused at threats of 0.1-3). The bar is OUR OWN GUNS'
+	// influence at the site, the same power scale as the threat: ground our
+	// towers reach is built under them, ground they do not is refused while
+	// it is hot -- and that gap is what the defence market prices first.
+	float safeBar = cdef->GetPower();
+	if (!intoThreat) {
+		safeBar = std::max(safeBar, std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(endPos)));
+	}
 	if ((target == nullptr)
 		&& !(intoThreat
 			? circuit->GetTerrainManager()->CanReachAt(unit, endPos, range)
-			: circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, cdef->GetPower())))
+			: circuit->GetTerrainManager()->CanReachAtSafe(unit, endPos, range, safeBar)))
 	{
 		// The chooser tested reachability from HOME (CanDefReach); this
 		// stricter per-unit test disagreeing is exactly the loop where a
@@ -945,6 +957,9 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 					circuit->GetThreatMap()->GetThreatAt(endPos), cdef->GetPower());
 		}
 		SetDeathNote("unreach-safe");
+		if (!intoThreat) {
+			circuit->NoteUnsafeSite(endPos);
+		}
 		manager->AbortTask(this);
 		return;
 	}

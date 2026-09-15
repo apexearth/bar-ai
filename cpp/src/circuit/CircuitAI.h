@@ -355,6 +355,10 @@ public:
 	// A large building could not be placed. Reported, not acted on: what to
 	// clear out of the way is a policy question and lives in AngelScript.
 	void NoteBuildBlocked(const springai::AIFloat3& pos);
+	// Sites a builder refused as unsafe (CanReachAtSafe), newest last: the
+	// ground raids keep us off, for the script's defence pricing.
+	void NoteUnsafeSite(const springai::AIFloat3& pos);
+	const std::vector<std::pair<springai::AIFloat3, int>>& GetUnsafeSites() const { return unsafeSites; }
 	bool GetBlockedBuildPos(springai::AIFloat3& outPos);
 	// Our own units of `def` within radius of pos. The script can see a def's
 	// count but has no way to reach the instances.
@@ -500,6 +504,7 @@ private:
 	#define BLOCKED_BUILD_TTL	(FRAMES_PER_SEC * 30)
 	springai::AIFloat3 blockedBuildPos = -RgtVector;
 	int blockedBuildFrame = -1000000;
+	std::vector<std::pair<springai::AIFloat3, int>> unsafeSites;
 	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
 	// caller must delete, so the lookup is done once per def.
 	std::map<int, int> pathTypes;

@@ -2324,6 +2324,26 @@ void CCircuitAI::NoteBuildBlocked(const springai::AIFloat3& pos)
 	blockedBuildFrame = GetLastFrame();
 }
 
+void CCircuitAI::NoteUnsafeSite(const springai::AIFloat3& pos)
+{
+	const int frame = GetLastFrame();
+	// Ten minutes of memory, one entry per site: a refused site is refused
+	// again every election until something changes.
+	for (auto& e : unsafeSites) {
+		if (e.first.SqDistance2D(pos) < 100.f * 100.f) {
+			e.second = frame;
+			return;
+		}
+	}
+	unsafeSites.emplace_back(pos, frame);
+	while (!unsafeSites.empty() && (frame - unsafeSites.front().second > 30 * 60 * 10)) {
+		unsafeSites.erase(unsafeSites.begin());
+	}
+	if (unsafeSites.size() > 256) {
+		unsafeSites.erase(unsafeSites.begin());
+	}
+}
+
 bool CCircuitAI::GetBlockedBuildPos(springai::AIFloat3& outPos)
 {
 	if (GetLastFrame() > blockedBuildFrame + BLOCKED_BUILD_TTL) {
