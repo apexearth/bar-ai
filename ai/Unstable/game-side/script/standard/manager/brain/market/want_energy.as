@@ -1190,6 +1190,7 @@ void ConvWhyLog()
 
 // Converters: worth exactly the energy surplus they would chew, at their own
 // ratio. Pure catalog arithmetic, no model.
+int gNextConvPriceLog = 0;
 Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
@@ -1337,6 +1338,29 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	if (w.value > 0.f) {
 		++gCwProposed;
 		gCwVal = w.value;
+		// The price, term by term: the seat wasted 24k E/s with the converter
+		// at v=8 under an assist at v=17, and only m= and t= were readable.
+		if (ai.frame >= gNextConvPriceLog) {
+			gNextConvPriceLog = ai.frame + 30 * SECOND;
+			const int cd2 = int(w.def.id);
+			const float wage = Wage();
+			const float lock = (gPrPaybackH > 1.f)
+					? (Catalog::gCostM[cd2] * (w.buildSec / gPrPaybackH) * gPrLockup) : 0.f;
+			AiLog("apex: convprice t=" + ai.teamId + " " + w.def.GetName()
+				+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
+				+ " gain=" + formatFloat(w.gain, "", 0, 2)
+				+ " m=" + int(w.mCost) + " (metal=" + int(Catalog::gCostM[cd2] * MCostScale())
+				+ " e=" + int(Catalog::gCostE[cd2] * EPriceCostAt(w.buildSec, Catalog::gCostE[cd2]))
+				+ " space=" + int(float(Catalog::gAreaCells[cd2]) * gPrSpaceM)
+				+ " rent=" + int(w.mCost - Catalog::gCostM[cd2] * MCostScale()
+					- Catalog::gCostE[cd2] * EPriceCostAt(w.buildSec, Catalog::gCostE[cd2])
+					- float(Catalog::gAreaCells[cd2]) * gPrSpaceM) + ")"
+				+ " t=" + int(w.tCost) + " (build=" + int(w.buildSec) + "s walk=" + int(w.walkSec)
+				+ "s wage=" + formatFloat(wage, "", 0, 1)
+				+ " late=" + int(w.gain * w.walkSec) + " lock=" + int(lock)
+				+ " rest=" + int(w.tCost - w.walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage)
+					- w.buildSec * wage - w.gain * w.walkSec - lock) + ")");
+		}
 	} else {
 		++gCwNoDef;
 	}

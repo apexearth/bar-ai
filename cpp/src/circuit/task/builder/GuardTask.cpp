@@ -21,6 +21,7 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
 		, vipId(vip->GetId())
 		, isInterrupt(isInterrupt)
 		, isFrame(!vip->IsFinished())
+		, vipTask(vip->GetTask())
 {
 }
 
@@ -92,12 +93,20 @@ void CBGuardTask::Stop(bool done)
 // afus by twenty minutes (apexearth 2026-09-08).
 void CBGuardTask::Update()
 {
+	CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 	if (isFrame) {
-		CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 		if ((vip == nullptr) || vip->IsFinished()) {
 			manager->AbortTask(this);
 			return;
 		}
+	} else if ((vip == nullptr) || (vip->GetTask() != vipTask)) {
+		// A guard on a CONSTRUCTOR was priced for the job it was raising;
+		// when that con moves to its next job the assist follows it across
+		// the base for the rest of the stint (apexearth 2026-09-14: "once we
+		// start to guard a constructor, we rarely consider stopping that
+		// guard action"). The job ending ends the guard.
+		manager->AbortTask(this);
+		return;
 	}
 	IBuilderTask::Update();
 }

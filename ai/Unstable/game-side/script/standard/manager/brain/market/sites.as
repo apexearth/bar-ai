@@ -413,8 +413,15 @@ void ClusterSizes(const array<AIFloat3>& in kin, float link, array<int>& out siz
 // THE DENSEST STANDING LATHE: the turret with the most build power reaching
 // it, which is the heart of whichever cluster is thickest. Invalid when no
 // nano stands at all.
+AIFloat3 gLatheHeart(-1.f, 0.f, -1.f);
+int gLatheHeartAt = -999999;
 AIFloat3 LatheHeart()
 {
+	// A ring query per turret; asked on every big-energy siting now, so
+	// held for a few seconds.
+	if (ai.frame - gLatheHeartAt < 5 * SECOND)
+		return gLatheHeart;
+	gLatheHeartAt = ai.frame;
 	AIFloat3 best(-1.f, 0.f, -1.f);
 	float bestBP = 0.f;
 	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
@@ -424,6 +431,7 @@ AIFloat3 LatheHeart()
 			best = gOwnNanoPos[i];
 		}
 	}
+	gLatheHeart = best;
 	return best;
 }
 
@@ -556,7 +564,16 @@ AIFloat3 FarmSlot(int defId)
 	// energyBase2); the engine's spiral and the stock block map choose the
 	// square. The lattice scan that stood here is in git (4fca2ee0's tree).
 	if (BigEcoDef(defId) && Base::gAxisSet) {
-		const AIFloat3 back = gFarmPos - Base::gFwd * 400.f;
+		AIFloat3 back = gFarmPos - Base::gFwd * 400.f;
+		// A BIG BUILD GRAVITATES TO THE LATHE. Where the densest ring of
+		// turrets reaches more build power than the rear point does, the ask
+		// goes there and the lattice rings find the cell beside it
+		// (apexearth 2026-09-14: "prefer to build our really large
+		// buildings as close as we can to our nano turrets. This is often
+		// the difference between whether or not we make it at double speed").
+		const AIFloat3 heart = LatheHeart();
+		if (OnMap(heart) && (RingBPAt(heart) > RingBPAt(back)))
+			back = heart;
 		if (OnMap(back))
 			return back;
 	}

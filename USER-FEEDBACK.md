@@ -99,6 +99,31 @@ BARb's placement"); republished. Ring-scatter on the seat still 24-28%
 floors to a plant that offers a flyer -- inert until the seat builds an air
 plant, which it did in one game of three.
 
+> "I feel pretty happy with the snap-to-grid improvement... The layout looks
+> a lot better than it has ever in my opinion. The next crucial thing we
+> need is to prefer to build our really large buildings, close systems as we
+> can to our nano turrets. This is often the difference between whether or
+> not we make it at double speed. Whatever that logic is that controls where
+> we're putting things we need that logic to really somehow gravitate
+> towards all those nanoturrets. I think that in eco mode we're not letting
+> the eco player make any rezbots, but I think that it should be okay for
+> them to do that. I also think we have an issue where too many of our guys
+> are assisting each other and we're not making enough other types of
+> buildings. Like you've got 32,000 energy income and we're only using less
+> than 5,000 of it. So we should be making tons of these advanced converters
+> and we would be like super duper powerful if we were doing that... Maybe
+> the issue is that once we start to guard a constructor, we rarely consider
+> stopping that guard action."
+
+Measured (seat seed 4, minutes 13-22): E income 44k, pull 20k; T2 cons 164
+converter executions against 80 assist and 75 energy; the Twitchers 363
+assist (they cannot build the T2 converter -- `convwhy nodef=1131`). The
+converter at v=8 (gain 12, m 750, t ~1600) loses to assist at v=17 by
+`role=buildpower`. Instrument added: `apex: convprice` (the converter's
+price term by term). Lathe gravity: big eco builds ask at the densest nano
+ring when it out-lathes the rear point. Rez bots: priced on the unmet
+wreck/retire stream where the army form is zero (the seat).
+
 ## 2026-09-13 — "Our bombing logic is boring": 0 bombers against a wing target of 102
 
 > "I want to see us making bombers and doing bombing raids on our enemies but

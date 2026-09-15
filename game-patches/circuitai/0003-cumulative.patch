@@ -11777,18 +11777,19 @@ index b05d07b8..50d596c9 100644
  	virtual bool Load(std::istream& is) override;
  	virtual void Save(std::ostream& os) const override;
 diff --git a/src/circuit/task/builder/GuardTask.cpp b/src/circuit/task/builder/GuardTask.cpp
-index a8950289..a32d4b94 100644
+index a8950289..aa2b6edf 100644
 --- a/src/circuit/task/builder/GuardTask.cpp
 +++ b/src/circuit/task/builder/GuardTask.cpp
-@@ -20,6 +20,7 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
+@@ -20,6 +20,8 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
  					   Type::BUILDER, BuildType::GUARD, {0.f, 0.f}, 0.f, timeout)
  		, vipId(vip->GetId())
  		, isInterrupt(isInterrupt)
 +		, isFrame(!vip->IsFinished())
++		, vipTask(vip->GetTask())
  {
  }
  
-@@ -85,6 +86,22 @@ void CBGuardTask::Stop(bool done)
+@@ -85,6 +87,30 @@ void CBGuardTask::Stop(bool done)
  	IBuilderTask::Stop(done);
  }
  
@@ -11798,12 +11799,20 @@ index a8950289..a32d4b94 100644
 +// afus by twenty minutes (apexearth 2026-09-08).
 +void CBGuardTask::Update()
 +{
++	CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 +	if (isFrame) {
-+		CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
 +		if ((vip == nullptr) || vip->IsFinished()) {
 +			manager->AbortTask(this);
 +			return;
 +		}
++	} else if ((vip == nullptr) || (vip->GetTask() != vipTask)) {
++		// A guard on a CONSTRUCTOR was priced for the job it was raising;
++		// when that con moves to its next job the assist follows it across
++		// the base for the rest of the stint (apexearth 2026-09-14: "once we
++		// start to guard a constructor, we rarely consider stopping that
++		// guard action"). The job ending ends the guard.
++		manager->AbortTask(this);
++		return;
 +	}
 +	IBuilderTask::Update();
 +}
@@ -11811,7 +11820,7 @@ index a8950289..a32d4b94 100644
  bool CBGuardTask::Execute(CCircuitUnit* unit)
  {
  	executors.insert(unit);
-@@ -106,7 +123,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
+@@ -106,7 +132,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
  			if ((unit->GetCircuitDef()->GetBuildDistance() > 80.f) && (vipPos.SqDistance2D(unitPos) < SQUARE(48.f))) {
  				AIFloat3 pos = vipPos + (unitPos - vipPos).Normalize2D() * 64.f;
  				CTerrainManager::CorrectPosition(pos);
@@ -11821,7 +11830,7 @@ index a8950289..a32d4b94 100644
  			}
  			unit->GetUnit()->Guard(vip->GetUnit(), options);
 diff --git a/src/circuit/task/builder/GuardTask.h b/src/circuit/task/builder/GuardTask.h
-index decf61ba..a6024c13 100644
+index decf61ba..79a51516 100644
 --- a/src/circuit/task/builder/GuardTask.h
 +++ b/src/circuit/task/builder/GuardTask.h
 @@ -24,6 +24,7 @@ public:
@@ -11832,11 +11841,12 @@ index decf61ba..a6024c13 100644
  
  protected:
  	virtual bool Execute(CCircuitUnit* unit) override;
-@@ -39,6 +40,7 @@ private:
+@@ -39,6 +40,8 @@ private:
  
  	ICoreUnit::Id vipId;
  	bool isInterrupt;
 +	bool isFrame;  // vip was a nanoframe when taken; the guard ends with it
++	IUnitTask* vipTask;  // a mobile vip's job when taken; the guard ends when it changes
  };
  
  } // namespace circuit

@@ -41,6 +41,7 @@ private:
 	ICoreUnit::Id vipId;
 	bool isInterrupt;
 	bool isFrame;  // vip was a nanoframe when taken; the guard ends with it
+	IUnitTask* vipTask;  // a mobile vip's job when taken; the guard ends when it changes
 };
 
 } // namespace circuit

@@ -624,7 +624,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// probability -- tapering to normal at parity. One modeled weight.
 	float stakeMul = 1.f;
 	int rezDef = -1, rezHave = 0;
-	float rezRestore = 0.f, rezStream = 0.f, rezCap = 0.f;
+	float rezRestore = 0.f, rezStream = 0.f, rezCap = 0.f, rezEat = 0.f;
 	float pLineSum = 0.f;
 	int pLineN = 0;
 	{
@@ -1009,7 +1009,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				float unmet = rezStream - float(rezHave) * rezCap;
 				if (unmet > rezCap)
 					unmet = rezCap;
-				rezRestore = ((unmet > 0.f) ? unmet : 0.f) * roleMul;
+				rezEat = (unmet > 0.f) ? unmet : 0.f;
+				rezRestore = rezEat * roleMul;
 				continue;
 			}
 		// Until T3-grade units, the quiet rear builds NO army (apexearth);
@@ -1501,8 +1502,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// Times cost like gainA above: pMedic is already per metal, and
 		// without it the medic was divided by its price twice (v=6974 against
 		// a pawn's 350276 at 36 m/s of wrecks and repair, 0 bots standing).
-		const float gainM = ((armyGap > 0.f) ? armyGap : 0.f) / hM * pMedic * stakeMul
+		float gainM = ((armyGap > 0.f) ? armyGap : 0.f) / hM * pMedic * stakeMul
 				* eFeedA * Catalog::gCostM[rezDef];
+		// THE WRECKS AND THE RETIRED BUILDINGS ARE A STREAM WHATEVER THE
+		// ARMY: the medic form above is zero wherever the army target is
+		// (the eco seat), and the seat is where old solars and converters
+		// pile up (apexearth 2026-09-14: "I think it should be okay for them
+		// to [make rezbots]"). The unmet stream, in the con's own m/s
+		// currency, stands on its own.
+		if (rezEat * eFeedA > gainM)
+			gainM = rezEat * eFeedA;
 		const float vM = gainM / Catalog::gCostM[rezDef];
 		if (gainM > 0.01f) {
 			candDef.insertLast(rezDef);
