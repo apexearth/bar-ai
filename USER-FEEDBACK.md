@@ -139,6 +139,18 @@ OPEN: defences for allies past ~500 income -- not built.
 > have to go full throttle on army at that point, but like start to make
 > some."
 
+> "I see we started to make more military but we didn't make any more
+> factories. I guess we should just let it go full military and normal
+> behavior at 1k metal instead of 2k metal. We're still making like 2 nanos
+> worth of space around our air labs, which we don't at all need... I want
+> to see a lot more air being made by this eco player... I want to see them
+> sending the devastating bombing raids... :)"
+
+Built: TUNE_ECO_TARGET_BASE_8 1000 -> 500 (x handicap = his 1k); the air
+plant's block-map yard dropped (turrets and eco pack against it). OPEN: the
+seat's air/bomber output once it turns military -- read the next watched
+game's `apex: wing` lines.
+
 Built 2026-09-14 (late): block_map yards between converters, reactors and
 turrets dropped (mex/geo/defence kept; bodies = blocks of ClusterN with an
 aisle); EcoRoleRamp -- army, defence and the silo ramp in from half the

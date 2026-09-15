@@ -1586,7 +1586,15 @@ Isthmus 8v8 +100%, the median player passes 500 at minute 20 and 855 by minute
 25, which is apexearth's "no army and no defense until like 20 minutes"
 expressed as economy rather than a clock.
 
-### `TUNE_ECO_TARGET_BASE_8` = 1000.f (2026-09-13)
+### `TUNE_ECO_TARGET_BASE_8` = 500.f (2026-09-13; halved 2026-09-14)
+
+2026-09-14, watching the seat with the war ramp (army/defence/silo from half
+the target): "we started to make more military but we didn't make any more
+factories. I guess we should just let it go full military and normal
+behavior at 1k metal instead of 2k metal." 500 x the +100% handicap is his
+1k; the ramp then runs from 500 to 1,000 displayed. The seat at the old bar
+(seed 4, 30 min): income 969, 4 silos, 139k army on a linear ramp.
+
 
 The same bar for an eight-player team. His design: "1 player does an eco
 role where they only activate their military once they've hit ~1000 metal

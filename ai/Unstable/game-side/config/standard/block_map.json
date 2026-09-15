@@ -49,7 +49,7 @@
 		},
 		"fac_air": {
 			"type": ["rectangle", "factory"],
-			"yard": [8, 8]
+			"ignore": ["nano", "engy_low", "engy_mid", "engy_high", "convert"]
 		},
 		"fac_water": {
 			"type": ["rectangle", "factory"],
