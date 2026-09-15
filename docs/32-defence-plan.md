@@ -70,6 +70,21 @@ three bearings the enemy actually comes from are the open ones. Per player
 Greenest, −0.02 on Isthmus, 0% beyond a quarter; on Isthmus our front
 players ended with 0–8 defence buildings each against BARb's 21–49.
 
+## Status 2026-09-15 (commit 9690d580)
+
+Built: steps 0, 1, 2, 5 and the front/support layers of 4; step 3's
+frontier (team's furthest capped mex, then as far forward as ground the
+front-line model calls OURS, up to halfway). `apex: gaps` is the live
+instrument; `wall_check.py --ally N` the post-game one. Greenest 8v8 +100%,
+four seeds: 4/4 wins at 14-21 min (baseline: BARb ahead at the 30-min cap),
+median gun position 0.14-0.15 of the way to them (was 0.04), static
+defence 4% of spend (was 11%, most of it interior rings), army 23% (was
+10%). Team closure is still 0.17-0.33: the defence target is not met in
+either build (def=2775/10463 at 20 min) -- the auction spends on army and
+economy first, and the wins say that is not wrong on this map. Open: the
+shield and support-row nano fired rarely (lines short-lived); reclaim of
+interior rings not observed; teeth are a preference gain, not a price.
+
 ## The plan, in order
 
 Every step is measured on 4–6 Greenest Fields 8v8 games (+100%, 30 min)
