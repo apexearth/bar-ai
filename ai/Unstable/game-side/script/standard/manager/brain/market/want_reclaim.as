@@ -434,6 +434,7 @@ bool DenserHandsCover(int d)
 	float bp = 0.f;
 	int best = -1;
 	float bestPc = 0.f;
+	array<int> denserDef;
 	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
 		const int di = int(cd);
 		if ((gOwnCount[cd] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
@@ -458,13 +459,60 @@ bool DenserHandsCover(int d)
 			}
 		}
 		if (denser)
-			bp += float(gOwnCount[cd]) * Catalog::gBuildPower[di];
+			denserDef.insertLast(di);
 	}
-	if ((best < 0) || (bp <= 0.f))
+	if (best < 0)
+		return false;
+	const float horizon = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	const float h = (horizon > 1.f) ? horizon : 180.f;
+	// ...AND THOSE HANDS MUST BE FREE TO. Nominal build power read one T2
+	// con raising a fusion as able to convert the whole surplus, so every T1
+	// hand refused the basic and nobody converted (apexearth 2026-09-14:
+	// "all our T2 was too busy to make any T1 converters so we still should
+	// have made T1 converters"). A hand counts when its current job is done
+	// within half the window.
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if (u is null)
+			continue;
+		const int ud = int(u.circuitDef.id);
+		if (denserDef.find(ud) < 0)
+			continue;
+		if (HandFreeWithin(u, 0.5f * h))
+			bp += Catalog::gBuildPower[ud];
+	}
+	if (bp <= 0.f)
 		return false;
 	const float n = ConvertibleE() / Catalog::gConvCapacity[best];
-	const float horizon = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	return n * Catalog::gBuildTime[best] / bp <= ((horizon > 1.f) ? horizon : 180.f);
+	return n * Catalog::gBuildTime[best] / bp <= h;
+}
+
+// Is this hand's current job over within `secs`? Idle is free; a guard or a
+// patrol is not (it is someone else's job); a build is judged by what is
+// left of it at the lathe on it.
+bool HandFreeWithin(CCircuitUnit@ u, float secs)
+{
+	if (u.task is null)
+		return true;
+	if (u.task.GetType() != Task::Type::BUILDER)
+		return false;
+	const int bt = int(u.task.GetBuildType());
+	if ((bt == int(Task::BuildType::GUARD)) || (bt == int(Task::BuildType::PATROL)))
+		return false;
+	if (u.task.buildDef is null)
+		return false;
+	const int bd = int(u.task.buildDef.id);
+	float lathe = Catalog::gBuildPower[int(u.circuitDef.id)];
+	if (u.task.target !is null) {
+		uint arrived = 0;
+		const float on = Requests::ArrivedLathe(u.task, arrived);
+		if (on > lathe)
+			lathe = on;
+	}
+	if (lathe <= 0.f)
+		return false;
+	const float left = Catalog::gBuildTime[bd] * (1.f - Requests::Progress(u.task));
+	return left / lathe <= secs;
 }
 
 bool ConvObsoleteFor(CCircuitUnit@ unit, int d)

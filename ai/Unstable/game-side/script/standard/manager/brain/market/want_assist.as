@@ -8,6 +8,20 @@ int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assis
 // into a build the market already values at clearing rates; the bill is
 // the walk and the occupied time. That beats a marginal solar and loses to
 // a fresh mex -- the right ordering by construction.
+// Does a standing basic (non-ceiling) constructor of ours build this def?
+bool BasicHandCan(int d)
+{
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int hd = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[hd] || !Catalog::gBuilder[hd]
+			|| ReachesCeiling(hd))
+			continue;
+		if (Catalog::gBuildsList[hd].find(d) >= 0)
+			return true;
+	}
+	return false;
+}
+
 Want@ ProposeAssist(CCircuitUnit@ unit)
 {
 	Want w;
@@ -77,6 +91,15 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 		}
 	}
 	if (boss is null)
+		return w;
+	// A CEILING CON DOES NOT ASSIST WORK A BASIC HAND CAN DO. Its exclusive
+	// work -- the advanced converter, the fusion -- is what nobody else can
+	// start; a T2 con holding a T1 con's nano frame is that work undone
+	// (apexearth 2026-09-14, watching a full bank: "bunch of T2 cons doing
+	// nothing but assisting T1 cons. come on... this is STUPID logic").
+	// Only while basic hands exist to do it instead.
+	if (ReachesCeiling(uid) && (gBossJob !is null) && (gBossJob.buildDef !is null)
+		&& !ReachesCeiling(int(gBossJob.buildDef.id)) && BasicHandCan(int(gBossJob.buildDef.id)))
 		return w;
 	// A lathe cannot draw without energy: assist delivers its drain TIMES
 	// what the E economy can feed it (measured stall: lab -> mex -> assist
