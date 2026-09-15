@@ -70,20 +70,28 @@ three bearings the enemy actually comes from are the open ones. Per player
 Greenest, −0.02 on Isthmus, 0% beyond a quarter; on Isthmus our front
 players ended with 0–8 defence buildings each against BARb's 21–49.
 
-## Status 2026-09-15 (commit 9690d580)
+## Status 2026-09-15 (commits 9690d580, 207b1a1b)
 
-Built: steps 0, 1, 2, 5 and the front/support layers of 4; step 3's
-frontier (team's furthest capped mex, then as far forward as ground the
-front-line model calls OURS, up to halfway). `apex: gaps` is the live
-instrument; `wall_check.py --ally N` the post-game one. Greenest 8v8 +100%,
-four seeds: 4/4 wins at 14-21 min (baseline: BARb ahead at the 30-min cap),
-median gun position 0.14-0.15 of the way to them (was 0.04), static
-defence 4% of spend (was 11%, most of it interior rings), army 23% (was
-10%). Team closure is still 0.17-0.33: the defence target is not met in
-either build (def=2775/10463 at 20 min) -- the auction spends on army and
-economy first, and the wins say that is not wrong on this map. Open: the
-shield and support-row nano fired rarely (lines short-lived); reclaim of
-interior rings not observed; teeth are a preference gain, not a price.
+Built: steps 0, 1, 2, 5; step 3's frontier (team's furthest capped mex,
+then as far forward as ground the front-line model calls OURS, up to
+halfway; the stranded-tower retirement in `want_reclaim.as` reclaims rows
+the wall has grown past once the wall ahead is held); step 4's front row
+(soak-valued), support row (line nano, shield against tanks and arty) and
+teeth (priced as a soak -- a fixed gain of 40 flooded the auction: 2398
+teeth elections in one Isthmus game, guns 62 -> 9). `apex: gaps` is the
+live instrument; `wall_check.py --ally N` the post-game one.
+
+| | baseline | after (D7, 207b1a1b) |
+|---|---|---|
+| Greenest 8v8 +100%, seeds 21-22 | BARb ahead at the 30-min cap | 2/2 wins, 14 and 29 min |
+| Greenest median gun position / beyond 1/4 | 0.04 / 0% | 0.18-0.20 / 27-37% |
+| Greenest team closure | 0.46 (79% of guns interior) | 0.33-0.38 (18-41% interior) |
+| Isthmus 8v8 +100% seed 4 | wiped, BARb leading; enemy bearings 6-9 empty | no clear leader; bearings 6-9 held by 5-6 players each |
+| Isthmus team closure / guns | 0.54 / 62 | 0.62 / 140 |
+
+Open: the shield and support-row nano fire rarely; the defence share of
+spend is 16% against BARb's 8% now that the target is met -- whether that
+share is right is the target's question, not the line's.
 
 ## The plan, in order
 
