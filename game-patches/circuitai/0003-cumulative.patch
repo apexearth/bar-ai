@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..fc84067d 100644
+index aeea9339..45382aec 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,19 @@
@@ -700,7 +700,7 @@ index aeea9339..fc84067d 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,7 +1940,1275 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,7 +1940,1278 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -983,6 +983,9 @@ index aeea9339..fc84067d 100644
 +	}
 +	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
 +	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
++	if (depth > .0f) {
++		return false;  // behind the anchor is the economy: no streets (script LanesApply)
++	}
 +	return (LaneGapAt(lat, gridLanePitch) < gridLaneHalf)
 +		|| (LaneGapAt(depth, gridLanePitch) < gridLaneHalf);
 +}
@@ -1040,7 +1043,7 @@ index aeea9339..fc84067d 100644
 +	// self-walling it exists to prevent. Lateral lanes alone leave slabs the
 +	// full depth of the base with no way across; the cross-streets cut those
 +	// into blocks.
-+	if (gridLanePitch > .0f) {
++	if ((gridLanePitch > .0f) && (sDepth <= .0f)) {  // no streets behind the anchor
 +		sLat = PushOutOfLane(sLat, cellLat, gridLanePitch, gridLaneHalf);
 +		sDepth = PushOutOfLane(sDepth, cellDepth, gridLanePitch, gridLaneHalf);
 +	}
@@ -1977,7 +1980,7 @@ index aeea9339..fc84067d 100644
  }
  
  void CCircuitAI::GiveUnits(std::vector<CCircuitUnit*>&& units, int newTeamId)
-@@ -1644,6 +3367,54 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+@@ -1644,6 +3370,54 @@ bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
  	return true;
  }
  
@@ -2032,7 +2035,7 @@ index aeea9339..fc84067d 100644
  void CCircuitAI::UpdateActions()
  {
  	if (actionIterator >= actionUnits.size()) {
-@@ -1751,6 +3522,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +3525,13 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}

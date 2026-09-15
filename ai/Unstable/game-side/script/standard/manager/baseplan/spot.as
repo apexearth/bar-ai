@@ -62,7 +62,7 @@ bool Spot(CCircuitUnit@ unit, CCircuitDef@ def, int kind, AIFloat3& out spot)
 			++gFailTerrain;   // left the band; treat the cell as taken
 			continue;
 		}
-		if ((LaneGap(sLat) < LaneHalf()) || (LaneGap(sDepth) < LaneHalf())) {
+		if (LanesApply(sDepth) && ((LaneGap(sLat) < LaneHalf()) || (LaneGap(sDepth) < LaneHalf()))) {
 			++gFailTerrain;   // would stand in a walkway or across a cross-street
 			continue;
 		}

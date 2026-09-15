@@ -167,12 +167,25 @@ bool Inside(const AIFloat3& in p)
 
 // Is this position standing in a walkway? Only asked of things already known to
 // be inside the footprint.
+// WALKWAYS RUN FORWARD OF THE ANCHOR ONLY. Behind it is the economy, where
+// nothing marches; a street there only pushed the next converter across it
+// from the turrets that would have built it (apexearth 2026-09-14: "in the
+// back of our base we don't need any lanes for units to walk... We need to
+// designate certain zones as 'we don't care about pathing here' zones").
+// The plants' doorways are kept by their own test.
+bool LanesApply(float depth)
+{
+	return depth <= 0.f;
+}
+
 bool InLaneAt(const AIFloat3& in p)
 {
 	if (!Ready())
 		return false;
 	float depth, lat;
 	Coords(p, depth, lat);
+	if (!LanesApply(depth))
+		return false;
 	return (LaneGap(lat) < LaneHalf()) || (LaneGap(depth) < LaneHalf());
 }
 

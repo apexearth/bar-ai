@@ -2218,6 +2218,9 @@ bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
 	}
 	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
 	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
+	if (depth > .0f) {
+		return false;  // behind the anchor is the economy: no streets (script LanesApply)
+	}
 	return (LaneGapAt(lat, gridLanePitch) < gridLaneHalf)
 		|| (LaneGapAt(depth, gridLanePitch) < gridLaneHalf);
 }
@@ -2275,7 +2278,7 @@ void CCircuitAI::LatticePoint(float sLat, float sDepth, float cellLat, float cel
 	// self-walling it exists to prevent. Lateral lanes alone leave slabs the
 	// full depth of the base with no way across; the cross-streets cut those
 	// into blocks.
-	if (gridLanePitch > .0f) {
+	if ((gridLanePitch > .0f) && (sDepth <= .0f)) {  // no streets behind the anchor
 		sLat = PushOutOfLane(sLat, cellLat, gridLanePitch, gridLaneHalf);
 		sDepth = PushOutOfLane(sDepth, cellDepth, gridLanePitch, gridLaneHalf);
 	}
