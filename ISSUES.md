@@ -82,6 +82,13 @@ instant. Free (the gadget intercepts it, 0.03% of a frame), but the doctrine
 
 ### Small residues, one line each
 
+- `Military::ForwardFraction` runs from the territory centre to the NEAREST
+  enemy (`GetEnemyPos`), so a raider in the base shrinks its span to the
+  raider's distance and every point in the base reads +-1 (gate f791769d
+  s5: the start at -1.3, a point 400 elmo from it at -0.9). 37 call sites
+  read it as "0 home, 1 their base" -- the commander chase's 0.5 bar, the
+  defplace fwd, the caution cap. The commander leash left it 2026-09-15; the
+  rest still read it.
 - Amphibious units "act very cowardly" (2026-08-29 arena): retreat threshold
   ruled out; no amph gate in fight logic; the standoff suspect is stock code
   now. Unattributed.
