@@ -1224,6 +1224,10 @@ const float TUNE_T2_CON_PER_M = 25.f;
 //   plain "how many hands" floor. See docs/27.
 const float TUNE_CON_BASE = 2.7f;
 
+// [count] -- basic air constructors kept once an air lab stands, one in the
+//   queue at a time so the other air keeps coming. See docs/27.
+const float TUNE_T1_AIR_CON_MIN = 10.f;
+
 // [metal/s per extra constructor] --
 const float TUNE_CON_PER_M = 44.f;
 

@@ -859,6 +859,16 @@ only cons that reach BestExtract(), which scans every available def and so
 means the MOHO, so no T1 con and no commander ever satisfied it. 2.7 + inc/44
 is apexearth's own two points: 3 at 12 metal/s, 5 at 100. A floor, not a cap.
 
+### `TUNE_T1_AIR_CON_MIN` = 10.f
+
+apexearth 2026-09-15, watching a 1v1 with two basic air cons at 40 minutes:
+basic air constructors are the hands that raise nano turrets; once an air
+lab stands, keep making them until ten fly, and be willing to make more.
+Not a hoist of the whole lab: the floor orders one only while none is in
+the queue, so the lab's other air keeps coming ("don't completely stop
+making other air either"). Before an air lab exists nothing asks for them.
+His number, not tuned.
+
 ### `TUNE_RECLAIM_REZ_BIAS` = 3.f
 
 How much more a reclaim is worth in the hands of a dedicated reclaimer (rezbot:

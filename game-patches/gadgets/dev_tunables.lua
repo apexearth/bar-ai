@@ -338,6 +338,7 @@ local NAMES = {
 	-- published, so it could not be swept: apexearth 2026-09-08 "i suspect we
 	-- arent making enough cons and fail to expand properly".
 	"apex_con_base",
+	"apex_t1_air_con_min",
 	"apex_con_per_m",
 	"apex_t2_con_base",
 	"apex_t2_con_per_m",

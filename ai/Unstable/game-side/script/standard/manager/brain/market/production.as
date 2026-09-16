@@ -168,6 +168,42 @@ int CeilingConsInFlight()
 //
 // The commander is excluded because it is not one of the crew -- it has the
 // opening to run and cannot be replaced if it dies working.
+// Basic (non-ceiling) flying constructors: the nano-turret hands.
+bool IsT1AirCon(int d)
+{
+	return Catalog::gMobile[d] && Catalog::gBuilder[d] && Catalog::gFlyer[d]
+		&& !ReachesCeiling(d)
+		&& !Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask);
+}
+
+int T1AirConsOwned()
+{
+	int n = 0;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		if ((gOwnCount[c] > 0) && IsT1AirCon(int(c)))
+			n += gOwnCount[c];
+	}
+	return n;
+}
+
+int T1AirConsInFlight()
+{
+	int n = 0;
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if ((pd !is null) && IsT1AirCon(int(pd.id)))
+			++n;
+	}
+	return n;
+}
+
+int T1AirConsNeed()
+{
+	const int want = int(ai.GetTunable("apex_t1_air_con_min", TUNE_T1_AIR_CON_MIN));
+	const int have = T1AirConsOwned() + T1AirConsInFlight();
+	return (have < want) ? (want - have) : 0;
+}
+
 int ConsOwnedAny()
 {
 	const bool flyLab = FlyingConLab(false);   // same law as the ceiling count
@@ -1472,6 +1508,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool walker = !Catalog::gFlyer[d];
 		if ((consNeedA > 0) && walker && FlyingConLab(false))
 			consNeedA = 0;
+		// THE T1 AIR CON FLOOR (his ruling 2026-09-15): once an air lab
+		// stands, keep making basic air cons until ten fly -- they are the
+		// hands that raise nano turrets -- but never the whole lab: one in
+		// the queue at a time, so the other air keeps coming.
+		if (!walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
+			&& (T1AirConsInFlight() == 0))
+		{
+			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
+				+ " (t1-air-con floor need=" + T1AirConsNeed()
+				+ " have=" + T1AirConsOwned() + ")");
+			return Catalog::Def(d);
+		}
 		if (consNeedA > 0) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
