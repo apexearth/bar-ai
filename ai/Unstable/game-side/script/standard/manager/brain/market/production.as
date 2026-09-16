@@ -1,4 +1,61 @@
 namespace Market {
+
+// The best power-per-metal a factory can field, tier fades included -- the
+// line's quality against the enemy it faces. 10 s memo per factory def.
+array<float> gFacPPC;
+array<int>   gFacPPCAt;
+string gYieldLog = "";
+float FacBestPPC(int facDef)
+{
+	if (int(gFacPPC.length()) <= Catalog::gDefCount) {
+		gFacPPC.resize(uint(Catalog::gDefCount + 1));
+		gFacPPCAt.resize(uint(Catalog::gDefCount + 1));
+		for (uint i = 0; i < gFacPPCAt.length(); ++i)
+			gFacPPCAt[i] = -999999;
+	}
+	if (ai.frame - gFacPPCAt[facDef] < 10 * SECOND)
+		return gFacPPC[facDef];
+	gFacPPCAt[facDef] = ai.frame;
+	float best = 0.f;
+	const array<int>@ pl = Catalog::BuildsOf(facDef);
+	for (uint i = 0; i < pl.length(); ++i) {
+		const int d = pl[i];
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
+			continue;
+		const float v = UnitPPC(d);
+		if (v > best)
+			best = v;
+	}
+	gFacPPC[facDef] = best;
+	return best;
+}
+
+// Metal per second a factory turns into its best unit: its own build power
+// plus the lathe on it, over that unit's build effort per metal.
+float FacMetalRate(CCircuitUnit@ f)
+{
+	const int fd = int(f.circuitDef.id);
+	const array<int>@ pl = Catalog::BuildsOf(fd);
+	float best = 0.f;
+	int bd = -1;
+	for (uint i = 0; i < pl.length(); ++i) {
+		const int d = pl[i];
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
+			continue;
+		const float v = UnitPPC(d);
+		if (v > best) {
+			best = v;
+			bd = d;
+		}
+	}
+	if ((bd < 0) || (Catalog::gBuildTime[bd] <= 1.f))
+		return 0.f;
+	const float bp = Catalog::gBuildPower[fd] + RingBPAt(f.GetPos(ai.frame));
+	return bp * Catalog::gCostM[bd] / Catalog::gBuildTime[bd];
+}
+
 //------------------------------------------------------------------------------
 // The production market's first Want: one constructor at a time while open
 // expansion ground remains. Serialized by the sent-ledger, never by a count.
@@ -623,6 +680,40 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if (ecoGrowing && (EcoRoleRamp() <= 0.f)) {
 		armyGap = 0.f;   // ArmyTarget already carries the ramp past half the target
 		coverShare = 0.f;
+	}
+	// THE BETTER LINES SPEND FIRST. Every factory filled the whole army gap
+	// on its own, so a T1 lab kept turning out Hammers at full rate beside a
+	// T2 lab against an enemy that was all T2 (Carrot 1v1: 179 T1-lab orders
+	// in the last ten minutes at foe tier above1=0.94). This line is left the
+	// gap the better lines cannot spend within the fill window at their own
+	// build rate -- with one T2 lab that is a few hundred metal, which is what
+	// fodder is for; a big gap the T2 lab cannot fill is still T1's to fill.
+	// Coverage demand (cheap bodies) is not taken away: the better lines do
+	// not make it.
+	{
+		const float mine = FacBestPPC(fid);
+		float betterCap = 0.f;
+		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+			CCircuitUnit@ f2 = Factory::gFacUnits[fi];
+			if ((f2 is null) || (f2.circuitDef is null) || (int(f2.id) == int(fac.id)))
+				continue;
+			const int f2d = int(f2.circuitDef.id);
+			if (FacBestPPC(f2d) <= mine)
+				continue;
+			betterCap += FacMetalRate(f2) * fillS;
+		}
+		if (betterCap > 0.f) {
+			const float coverGapKeep = armyGap * coverShare;
+			float left = armyGap - betterCap;
+			if (left < coverGapKeep)
+				left = coverGapKeep;
+			if (left < 0.f)
+				left = 0.f;
+			gYieldLog = " yield=" + int(armyGap - left) + " betterCap=" + int(betterCap);
+			armyGap = left;
+		} else {
+			gYieldLog = "";
+		}
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
@@ -1560,7 +1651,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 			+ " gap=" + int(armyGap)
 			+ " flight=" + int(armyFlight0)
-			+ " n=" + candDef.length() + prank);
+			+ " n=" + candDef.length() + gYieldLog + prank);
 	}
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {
 		gNoOrder = "no-candidate";

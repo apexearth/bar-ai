@@ -439,6 +439,23 @@ void GapsPrep(float wave0, float standoff)
 	}
 }
 
+// The share of the wave the worst open hole lets through to a point inside
+// the team hull; -1 outside the hull or before the gaps are read.
+float InteriorShortfall(const AIFloat3& in pos)
+{
+	if (!gThOk || (gGapOpen.length() == 0) || (gGapCursor < PF_RAYS))
+		return -1.f;
+	const int b = TeamRayOf(pos);
+	if (pos.distance2D(gThMid) > gThR[b])
+		return -1.f;
+	float worst = 0.f;
+	for (int k = 0; k < PF_RAYS; ++k) {
+		if (gGapWalk[k] && (gGapOpen[k] > worst))
+			worst = gGapOpen[k];
+	}
+	return worst;
+}
+
 // The team metal a wall slot on this bearing stands in front of.
 float GapBehindAt(const AIFloat3& in pos)
 {

@@ -401,6 +401,10 @@ float ConvUseE()
 // Converter capacity ORDERED and not yet standing: not in pull, not in the
 // rules params, and the only reason a second converter want should read a
 // smaller surplus than the first.
+// Capacity that is COMING, not merely ordered: an order no hand is on
+// counts only for what stands of it. Ordered-but-unstaffed converters read
+// as capacity, the want priced at zero behind them, and 10k E/s overflowed
+// for ten minutes with 7,200 metal of converters "in flight" (watched).
 float ConvCapInFlight()
 {
 	float cap = 0.f;
@@ -408,7 +412,13 @@ float ConvCapInFlight()
 		IUnitTask@ t = Requests::gLive[i];
 		if ((t is null) || t.IsDead() || (t.buildDef is null))
 			continue;
-		cap += Catalog::gConvCapacity[int(t.buildDef.id)];
+		const float c = Catalog::gConvCapacity[int(t.buildDef.id)];
+		if (c <= 0.f)
+			continue;
+		if (Requests::Workers(t) > 0)
+			cap += c;
+		else
+			cap += c * Requests::Progress(t);
 	}
 	return cap;
 }

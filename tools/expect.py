@@ -444,7 +444,150 @@ def exp_no_flipflop(games):
     return "OK", "; ".join(rows[:4])
 
 
+
+
+def _minute_of(text, pat):
+    """Game minute of the first line matching pat (its [M.Mm tN] stamp), or None."""
+    for m in re.finditer(r"\[(\d+\.\d)m t\d+\] " + pat, text):
+        return float(m.group(1))
+    return None
+
+
+def exp_home_mex_upgrades(games):
+    """Home mexes are upgraded before a reactor is started, not after it."""
+    ev = [g for g in games if g["minutes"] >= 25]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} mature games (need 3)"
+    late = []
+    for g in ev:
+        t0 = _minute_of(g["text"], r"apex: request new (?:arm|cor|leg)(?:fus|afus|ckfus|uwfus)\b")
+        if t0 is None:
+            continue
+        last = None
+        for m in re.finditer(r"\[(\d+\.\d)m t\d+\] apex: mexup t=\d+ at=[\d,]+ surv=[\d.]+ raw=[\d.]+ v=[\d.]+ homeD=(\d+)", g["text"]):
+            if int(m.group(2)) <= 700 and float(m.group(1)) > t0 + 3.0:
+                last = float(m.group(1))
+        if last is not None:
+            late.append((g["name"], t0, last))
+    if late and len(late) >= max(1, len(ev) // 3):
+        return "RED", f"{len(late)}/{len(ev)} games still upgrading HOME mexes 3+ min after the reactor started: " + ", ".join(f"{n} reactor@{t0:.0f}m home mexup@{l:.0f}m" for n, t0, l in late[:3])
+    return "OK", f"{len(late)}/{len(ev)} games with home mexes pending after the reactor"
+
+
+def exp_home_not_discounted(games):
+    """A mex inside the base is not priced as half-lost while nothing is hitting it."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    survs = []
+    for g in ev:
+        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)[^\n]*haz=([\d.]+)", g["text"]):
+            if int(m.group(2)) <= 600 and float(m.group(3)) < 0.0005:
+                survs.append(float(m.group(1)))
+    if len(survs) < 10:
+        return "NEED MORE", f"{len(survs)} home mexup readings with hazard 0 (need 10)"
+    survs.sort()
+    med = survs[len(survs) // 2]
+    if med < 0.75:
+        return "RED", f"median survival of a home mex with hazard 0 is {med:.2f} ({len(survs)} readings) -- the economy at home is discounted by a risk that is not there"
+    return "OK", f"median home-mex survival {med:.2f} over {len(survs)} readings"
+
+
+def exp_converters_on_overflow(games):
+    """Energy overflowing for minutes is answered with converters, always."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    bad = []
+    for g in ev:
+        conv_min = set()
+        for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: exec t=\d+ \S+ #\d+ convert:", g["text"]):
+            conv_min.add(int(m.group(1)))
+        unanswered = 0
+        for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"]):
+            mn, inc, exc = int(m.group(1)), float(m.group(2)), float(m.group(3))
+            if inc > 100 and exc > 0.25 * inc and not any((mn + d) in conv_min for d in (-1, 0, 1)):
+                unanswered += 1
+        if unanswered >= 8:
+            bad.append((g["name"], unanswered))
+    if bad and len(bad) >= max(1, len(ev) // 3):
+        return "RED", f"{len(bad)}/{len(ev)} games threw away 25%+ of energy for 8+ minutes with no converter ordered: " + ", ".join(f"{n} ({u} min)" for n, u in bad[:3])
+    return "OK", f"{len(bad)}/{len(ev)} games with unanswered overflow"
+
+
+def exp_builders_finish_walks(games):
+    """A builder sent to a site is not aborted every 30 s on the walk."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    rates = []
+    for g in ev:
+        far = 0
+        for m in re.finditer(r"apex: stuck -- \S+ #\d+ held \w+ progress=0\.00 toSite=(\d+) buildDist=(\d+)", g["text"]):
+            if int(m.group(1)) > 4 * int(m.group(2)):
+                far += 1
+        rates.append((g["name"], far / max(g["minutes"], 1.0) * 30.0))
+    bad = [(n, r) for n, r in rates if r > 30]
+    if bad and len(bad) >= max(1, len(ev) // 3):
+        return "RED", f"{len(bad)}/{len(ev)} games abort far walks {max(r for _, r in bad):.0f}+ times per 30 min -- builders walking away from what they were sent to"
+    return "OK", "far-walk aborts per 30 min: " + ", ".join(f"{r:.0f}" for _, r in rates)
+
+
+def exp_commander_moves(games):
+    """The commander is never penned and never stands more than four minutes."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    penned = [g["name"] for g in ev if re.search(r"apex: unblock (?:arm|cor|leg)com\w* #\d+ walled in", g["text"])]
+    frozen = []
+    for g in ev:
+        worst = 0.0
+        for m in re.finditer(r"apex: com-still ([\d.]+)s", g["text"]):
+            worst = max(worst, float(m.group(1)))
+        if worst >= 240.0:
+            frozen.append((g["name"], worst))
+    if penned or frozen:
+        parts = []
+        if penned:
+            parts.append(f"penned commander in {len(penned)} game(s): " + ", ".join(penned[:3]))
+        if frozen:
+            parts.append(f"commander still {max(w for _, w in frozen):.0f}s in {len(frozen)} game(s)")
+        return "RED", "; ".join(parts)
+    return "OK", f"no penned commander, longest stand-still under 240 s in {len(ev)} games"
+
+
+def exp_t1_yields(games):
+    """Once the enemy is T2, the T1 labs stop being the main producers."""
+    ev = [g for g in games if g["minutes"] >= 25]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} mature games (need 3)"
+    t1 = re.compile(r"\[(\d+\.\d)m t\d+\] apex: decide t=\d+ (?:arm|cor|leg)(?:lab|vp|hp) #\d+ -> produce:")
+    t2 = re.compile(r"\[(\d+\.\d)m t\d+\] apex: decide t=\d+ (?:arm|cor|leg)(?:alab|avp|aap|ap) #\d+ -> produce:")
+    bad = []
+    for g in ev:
+        t0 = None
+        for m in re.finditer(r"\[(\d+\.\d)m t\d+\] apex: foetier [^\n]*above1=([\d.]+)", g["text"]):
+            if float(m.group(2)) >= 0.8:
+                t0 = float(m.group(1))
+                break
+        if t0 is None:
+            continue
+        n1 = sum(1 for m in t1.finditer(g["text"]) if float(m.group(1)) > t0 + 3.0)
+        n2 = sum(1 for m in t2.finditer(g["text"]) if float(m.group(1)) > t0 + 3.0)
+        if n2 > 0 and n1 > n2:
+            bad.append((g["name"], n1, n2))
+    if bad and len(bad) >= max(1, len(ev) // 3):
+        return "RED", f"{len(bad)}/{len(ev)} games kept the T1 labs busier than the T2 ones after the enemy went T2: " + ", ".join(f"{n} T1={a} T2={b}" for n, a, b in bad[:3])
+    return "OK", f"{len(bad)}/{len(ev)} games with T1 labs out-producing T2 after the enemy went T2"
+
+
 EXPECTATIONS = [
+    ("home mexes upgrade before the reactor", exp_home_mex_upgrades),
+    ("home ground is not discounted", exp_home_not_discounted),
+    ("converters answer overflow", exp_converters_on_overflow),
+    ("builders finish their walks", exp_builders_finish_walks),
+    ("commander never penned or frozen", exp_commander_moves),
+    ("T1 labs yield once the enemy is T2", exp_t1_yields),
     ("no rebuild of what we reclaimed", exp_no_flipflop),
     ("eco seat keeps to economy", exp_eco_seat),
     ("eco seat hands are turrets", exp_seat_hands),

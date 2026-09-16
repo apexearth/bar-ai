@@ -924,7 +924,18 @@ float StreamRisk(const AIFloat3& in pos)
 	RiskFill();
 	RiskFillSiege();
 	const float cover = CoverAt(pos);
-	const float shortP = ShortWith(pos, cover, ThreatAt(pos));
+	float shortP = ShortWith(pos, cover, ThreatAt(pos));
+	// INSIDE THE TEAM'S LINE, THE LINE IS THE COVER. Ground behind a held
+	// front is exposed only through the worst open hole, whatever gun stands
+	// beside the building: the guns went to the front (docs/32) and every
+	// home mex read a 45% chance of loss with hazard 0 -- halving every
+	// economy want at home. The hole rule prices the hole; the interior
+	// carries its open share, not a shortfall of its own.
+	{
+		const float holeShort = InteriorShortfall(pos);
+		if ((holeShort >= 0.f) && (holeShort < shortP))
+			shortP = holeShort;
+	}
 	float risk = HazardWith(pos, cover) * shortP;
 	const float siege = SiegeWith(pos, cover,
 			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP;

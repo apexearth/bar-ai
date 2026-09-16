@@ -539,6 +539,8 @@ def main() -> int:
     d.add_argument("--repo-dll", dest="repo_dll", action="store_true",
                    help="ship the checked-in stripped DLL when there is no local "
                         "build (it may lack bindings the script uses)")
+    d.add_argument("--allow-red", dest="allow_red", action="store_true",
+                   help="ship to the shared slot without a green gate record (his call)")
     d.add_argument("--allow-running", dest="allow_running", action="store_true",
                    help="deploy even though BAR appears to be running (it will "
                         "probably fail on the locked SkirmishAI.dll)")
@@ -576,6 +578,15 @@ def main() -> int:
             # rather than shipping over what he is playing.
             lane = _lane.require("deploy")
             v = _lane.sync_variant(lane) if lane else "Unstable"
+            # HIS SLOT SHIPS ONLY WHAT THE GATE HAS CLEARED (tools/gate.py):
+            # a green expect.py run on this exact commit. Four regressions
+            # reached him in one day without it. --allow-red is for him.
+            if not lane and not getattr(args, "allow_red", False):
+                import gate as _gate
+                if not _gate.check():
+                    print("deploy: refused -- run `python tools/gate.py run` on a lane, "
+                          "or `--allow-red` if he says so", file=sys.stderr)
+                    return 1
         elif v.startswith("lane-"):
             # A lane NAMED on the command line is materialised too. Without
             # this it shipped the snapshot from the last unnamed deploy and
