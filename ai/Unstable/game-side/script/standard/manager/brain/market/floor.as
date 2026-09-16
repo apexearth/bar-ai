@@ -93,18 +93,23 @@ int gJobSeen = 0, gJobUnpriced = 0, gJobFar = 0, gJobFull = 0,
 // winner is left here; the return is the any-distance winner.
 IUnitTask@ gJobNearBest;
 // THE COMMANDER'S LEASH, one test for the election, the floor and the
-// chase: further toward them than the caution cap, measured from HOME (from
-// his feet it ratchets; from the lab it refused a tower at his own start,
-// the lab standing 450 behind it), or past the eco leash from home. He is
+// chase: past the eco leash from home, or half of it toward them along the
+// base axis. Home is where he started and the axis is the map's, fixed
+// when the base was laid: the forward FRACTION is measured to the nearest
+// enemy, so a raider in the base made a point 400 elmo from his start
+// read a third of the way to them, and the lab (450 behind the start)
+// once bounded a 400-elmo box he could not build his own tower in. He is
 // the game; a job out there is not worth him.
 bool ComFar(const AIFloat3& in p)
 {
 	if (!Builder::gHomeSet)
 		return false;
-	if (p.distance2D(Builder::gHomePos) > ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH))
+	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	const AIFloat3 rel = p - Builder::gHomePos;
+	if ((rel.x * rel.x + rel.z * rel.z) > leash * leash)
 		return true;
-	return (Military::ForwardFraction(p) - Military::ForwardFraction(Builder::gHomePos))
-			> ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP);
+	return Base::gAxisSet
+		&& ((rel.x * Base::gFwd.x + rel.z * Base::gFwd.z) > 0.5f * leash);
 }
 
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)

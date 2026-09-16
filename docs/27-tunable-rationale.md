@@ -1899,12 +1899,15 @@ alone let a radar 1300 elmos sideways of the anchor through (fwd -267 by the
 axis, 0.82 by the map) and lost him. Commander minutes forward per 6-game
 set: 10-11 before, 0 after. Not tuned; 0.25 is the caution value.
 
-2026-09-15: the bound is `Market::ComFar` -- this cap measured from HOME
-(the start position), or `TUNE_ECO_LEASH` from home -- and it is the one
-test for the election, the idle floor and the chase. The 400-elmo
-forward-of-the-lab test is gone: the lab stood 450 behind the start on
-Frozen Ford and the commander refused a tower at his own start. Measured
-from where he stands the cap ratchets a quarter of the map per job.
+2026-09-15: the election no longer uses this cap. Its bound is
+`Market::ComFar` -- `TUNE_ECO_LEASH` from the start position, or half of it
+forward along the fixed base axis -- the one test for the election, the
+idle floor and the chase. The forward fraction is measured to the NEAREST
+enemy, so a raider in the base made a point 400 elmo from the start read a
+third of the way to them; the 400-elmo forward-of-the-lab test refused a
+tower at his own start (the lab stood 450 behind it); measured from where
+he stands the cap ratcheted a quarter of the map per job. The cap still
+runs him home under caution.
 
 ### `LatheHeart` / `FarmSlot` origin (no tunable)
 

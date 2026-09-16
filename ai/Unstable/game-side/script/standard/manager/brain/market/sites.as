@@ -947,7 +947,13 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 		const AIFloat3 c = gFarmSet ? gFarmPos
 				: (Base::gAnchorSet ? Base::gAnchor : primary);
 		float ring = 700.f;
-		for (uint r = 0; !ok && (r < 4); ++r) {
+		// A fallback site is still THIS want's site. The rings stay inside the
+		// eco leash of the base, and a gun stays in reach of what it was
+		// placed to cover: a 5,600 ring put the commander's first LLT in the
+		// far corner, 5,000 elmo from the lab it covered, and he walked there.
+		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+		const float reachR = Catalog::gMaxRange[did];
+		for (uint r = 0; !ok && (r < 4) && (ring <= leash); ++r) {
 			float bestFwd = 1e9f;
 			for (int b = 0; b < 8; ++b) {
 				const float ang = float(b) * 0.7853981f;
@@ -959,6 +965,8 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 				if (!OnMap(s2) || (s2.distance2D(cand) > seek))
 					continue;
 				if (NearBlocked(s2))
+					continue;
+				if ((reachR > 0.f) && (s2.distance2D(primary) > reachR))
 					continue;
 				const float fwd = Military::ForwardFraction(s2);
 				if (fwd < bestFwd) {
