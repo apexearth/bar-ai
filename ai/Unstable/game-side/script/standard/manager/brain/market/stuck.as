@@ -203,9 +203,12 @@ void UpdateStuckBuilds()
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z)
 			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
-		// The site is at fault only when the hand stalled NEAR it; a walk that
-		// stalled far away says nothing about the site.
-		if ((dSite > reach) && (dSite <= 4.f * reach) && (done <= 0.f))
+		// A hand that held an order for the whole watch and never got nearer
+		// could not path there (Frozen Ford: 39 mex holds of 30 s each on
+		// cons standing 400-5,000 elmo from their site). The site is noted
+		// whatever the distance -- the mark lives three minutes -- so the
+		// next election does not send the next hand.
+		if ((dSite > reach) && (done <= 0.f))
 			BlockNote(bp);
 		freed.insertLast(u);
 		freedTask.insertLast(t);

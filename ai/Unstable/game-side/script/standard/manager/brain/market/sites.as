@@ -853,7 +853,7 @@ array<int> gProbeAt;
 // reachable (a wreck cleared, a lane opened) is not banned for the game.
 const float BLOCK_NEAR = 250.f;    // matches the C++ mark's own granularity
 const int   BLOCK_TTL  = 3 * MINUTE;
-const uint  BLOCK_MAX  = 16;
+const uint  BLOCK_MAX  = 48;   // a cliff map bans many spots at once
 array<AIFloat3> gBlockPos;
 array<int> gBlockAt;
 

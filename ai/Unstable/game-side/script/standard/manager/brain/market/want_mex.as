@@ -450,6 +450,13 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		const float inc = gAllSpotInc[si] * incMul;
 		if (inc <= 0.f)
 			continue;
+		// A spot a hand could not reach in the last three minutes is not
+		// offered to the next hand (the stuck watch and the C++ path test
+		// both write the mark).
+		if (NearBlocked(sp)) {
+			++gSwPast;
+			continue;
+		}
 		// The rear-specialist leash is geometry and applied here so a refused
 		// spot does not consume an engine probe; the trip risk is a PRICE, not
 		// a veto, and ranks the spot below a safer one of equal yield.
