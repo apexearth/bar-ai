@@ -59,6 +59,10 @@ lines of quotes.
   again; and five seats each bought the team line's one shield slot. Built
   09-16 (site.blocked gate, service-radius fallback, team-aware coverage) --
   unverified by him.
+- Team games: we do well when wealthy and badly under scarcity; be more
+  careful and thoughtful about spending (09-16). Measured: at +0 an 8v8 is
+  lost 8/8 with a third of their metal -- income, not spend; ISSUES
+  SCARCITY has the mechanisms. Not built.
 - The eco seat's guns stand inside its base with walk gaps, blocking the farm;
   two gantries starve for nanos with a full bank; LRPCs belong on hills;
   Behemoths when the enemy is winning (09-16). Recorded in ISSUES/TODO, not

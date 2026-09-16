@@ -164,6 +164,49 @@ rewritten 09-15 (`ccf28df7`: reach + approach, not nearness + wiggle; Ford
 on it. Read the engine-order drop first (S13, S27: the engine discards a
 build order on a blocked square with no idle event) before the election.
 
+### SCARCITY: at no resource bonus an 8v8 is lost outright -- 122k metal to their 416k, 48 mexes to 128, every seat wiped (2026-09-16)
+
+His hypothesis ("we do really good when we are wealthy, but as soon as
+there's a limitation in resources we do much worse") measured on Supreme
+Isthmus v2.1 8v8 vs BARb hard, seed 1, lane gridsnap at 6ff77c96:
+
+| | +100% both (32 min) | +0 (30 min) |
+|---|---|---|
+| metal produced, ours / theirs | 1,909k / 2,426k | 122k / 416k |
+| mexes held at end, ours / theirs | 88 / 136 | 48 / 128 |
+| T2 mexes | 32 / 57 | 5 / 31 |
+| per-seat metal, ours | 58k .. 793k (one seat 41%) | 5k .. 26k |
+| per-seat metal, theirs | 161k .. 434k | 34k .. 82k |
+| outcome | no winner at cap, 1 seat wiped | all 8 seats wiped |
+
+By minute 14 the two sides are level (7-15k per seat each); the collapse
+is minutes 14-30, where they keep claiming and we do not. It is INCOME, not
+spend: at +0 the whole team averaged 8 m/s per seat. Three mechanisms read
+off the +0 log (`matches/20260916-222751-*`):
+
+1. **Elections go to insurance, not income.** Team-wide: energy 772, airdef
+   556, sense 327, metal 275, buildpower 262, defence 100. A 100-metal AA
+   tower priced v=12-38 (gain 11-16 m/s of "cover" against the 63
+   Bladewings BARb flew) over a mex at v=4-10 in 101 head-to-heads; 212
+   times over energy at v=1. At 8 m/s income the insurance rate outbids the
+   only thing that raises income.
+2. **Most of those elections are churn.** 556 AA wins became 167
+   executions, 29 new requests, 26 towers; the same site executed 52, 34,
+   21 times. A hand whose election the executor refuses is idle again next
+   tick and elects the same want (the livelock shape, memory
+   `election-livelock`). Under scarcity the hands' time is the scarce
+   thing and it goes here.
+3. **Mex tasks die.** 135 `task-die cormex` (110 with a crew and no build
+   failure) against 53 finished; 54 mexes destroyed. The claim-to-mex
+   conversion problem of TEAM GAMES below, now with the bonus off.
+
+Also the +100 game's own shape: one seat made 41% of the team's metal (the
+eco seat, 793k) while three front seats made 58-90k in 32 minutes with 4-8
+mexes each -- the bonus hides that the front is starved. The lever is the
+price of income under scarcity against the insurance rates (AA, energy
+ladder, sense), and the executor refusing an election it cannot site; the
+army share (ARMY SHARE above) is downstream of both.
+
 ### TEAM GAMES: per-player expansion collapses with player count (2026-09-13)
 
 Twelve harness games 09-12/13, all +100% both sides: 1v1 Comet 27 mexes at
