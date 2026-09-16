@@ -51,7 +51,9 @@ def head_sha() -> str:
 
 
 def tree_dirty() -> bool:
-    out = subprocess.run(["git", "status", "--porcelain", "ai/Unstable", "cpp", "tools"],
+    # Tracked changes only: another session's untracked file is not ours.
+    out = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no",
+                          "ai/Unstable", "cpp", "tools"],
                          cwd=ROOT, capture_output=True, text=True).stdout
     return bool(out.strip())
 
