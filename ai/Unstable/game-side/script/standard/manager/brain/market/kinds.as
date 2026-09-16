@@ -41,6 +41,8 @@ class Want {
 	// read by the construction-risk charge in Decide.
 	float buildSec = 0.f;
 	float walkSec = 0.f;    // the asker's road to pos, so the ladder can charge it
+	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
+	float valueRaw = 0.f;   // value before the trip was charged
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

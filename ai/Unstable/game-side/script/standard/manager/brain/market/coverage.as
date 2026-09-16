@@ -871,6 +871,25 @@ float TripRisk(const AIFloat3& in pos)
 	return TripRiskWith(pos, TripShare());
 }
 
+// The road, not the doorstep: the worst ground a walk from `from` to `pos`
+// crosses. A corner mex far from them reads safe at its own coordinate
+// while the walk to it runs through the middle of the map.
+float TripRiskFrom(const AIFloat3& in from, const AIFloat3& in pos)
+{
+	const float share = TripShare();
+	float worst = TripRiskWith(pos, share);
+	if (!OnMap(from))
+		return worst;
+	for (int k = 1; k <= 3; ++k) {
+		const float f = float(k) * 0.25f;
+		const AIFloat3 p = from + (pos - from) * f;
+		const float r = TripRiskWith(p, share);
+		if (r > worst)
+			worst = r;
+	}
+	return worst;
+}
+
 float ThreatM(const AIFloat3& in pos)
 {
 	RiskFill();

@@ -631,7 +631,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			@ap = null;
 		}
 		if ((ap !is null) && unit.circuitDef.CanBuild(ap)
-			&& !Requests::LiveOfDef(ap))
+			&& !Requests::LiveOfDef(ap) && !PlantCopyRefusable(int(ap.id)))
 		{
 			const float bill = SuperBill(int(ap.id));
 			if (bill < budget) {

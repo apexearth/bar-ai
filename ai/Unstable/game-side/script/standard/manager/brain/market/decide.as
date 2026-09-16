@@ -453,7 +453,29 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 15) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
 	else if (step == 16) { if (!EcoOnly()) @w = ProposeAirDef(unit);   Perf::Add("want.airdef", _t); }
 	else                 { if (!EcoOnly()) @w = ProposeSuper(unit);    Perf::Add("want.super", _t); }
+	ChargeTrip(w, unit);
 	return w;
+}
+
+// EVERY WANT PAYS THE ASKER'S ROAD, not only the mex want: a T2 con walked
+// 6,000 elmo to raise an advanced radar and a flak at an outpost mex and
+// died there (his 1v1, minute 20). The charge is the expected loss on the
+// trip -- TripRisk times what the asker is worth, the commander being worth
+// everything we own -- and it is assigned, not accumulated, because memoed
+// wants come back as the same object.
+void ChargeTrip(Want@ w, CCircuitUnit@ unit)
+{
+	if ((w is null) || (w.kind == WK_NONE) || (w.kind == WK_MEX) || !OnMap(w.pos))
+		return;
+	const float c = w.mCost + w.tCost;
+	if ((c <= 0.f) || (w.value <= 0.f))
+		return;
+	if (w.tripM <= 0.f)
+		w.valueRaw = w.value;
+	const float worth = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			? (gAssetsM + ArmyValue()) : Catalog::gCostM[int(unit.circuitDef.id)];
+	w.tripM = TripRiskFrom(unit.GetPos(ai.frame), w.pos) * worth;
+	w.value = w.valueRaw * c / (c + w.tripM);
 }
 
 bool ElecIdOk(CCircuitUnit@ unit)

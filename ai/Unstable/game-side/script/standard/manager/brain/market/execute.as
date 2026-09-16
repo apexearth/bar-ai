@@ -219,6 +219,22 @@ IUnitTask@ StallDebtPay(CCircuitUnit@ unit)
 
 int gMexupNullLogAt = 0;
 
+// A second copy of a plant we own prices zero (the forwarding ruling), and
+// the executor refuses it below. The proposers ask this first: the super
+// want offered a second T2 air plant 454 times in one game, hoisted past
+// the lottery each time, refused each time, and every hand that drew it
+// fell to its second pick while the nano wants went unbuilt.
+bool PlantCopyRefusable(int d)
+{
+	if (!Catalog::ValidId(d) || Catalog::gMobile[d])
+		return false;
+	return (Catalog::gBuildsList[d].length() > 0)
+		&& !UnlocksProduct(d)
+		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) >= 1)
+		&& (DupBpSubstMul(d) < 1.f)
+		&& !CopyWaived(d);
+}
+
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
@@ -267,6 +283,15 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	// the adoption block so finishing a standing frame is never refused.
 	// Law 1: no founding a copy of a plant we already run (the escape is a
 	// substitute that cannot exist -- see DupBpSubstMul).
+	if ((w.def !is null) && (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST)
+		&& PlantCopyRefusable(int(w.def.id)))
+	{
+		AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
+			+ w.def.GetName()
+			+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)
+			+ " coming=" + ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED));
+		return null;
+	}
 	if ((w.def !is null) && !w.def.IsMobile()
 		&& (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST)
 		&& (Catalog::gBuildsList[int(w.def.id)].length() > 0)
@@ -275,13 +300,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			+ ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED) >= 1)
 		&& (DupBpSubstMul(int(w.def.id)) < 1.f))
 	{
-		if (!CopyWaived(int(w.def.id))) {
-			AiLog("apex: INVARIANT plant-copy refused t=" + ai.teamId + " "
-				+ w.def.GetName()
-				+ " fin=" + ComCountOf(int(w.def.id), CS_FINISHED)
-				+ " coming=" + ComCountManned(int(w.def.id), CS_FRAMED | CS_ORDERED));
-			return null;
-		}
 		AiLog("apex: copy waived t=" + ai.teamId + " " + w.def.GetName()
 			+ " overflow=" + int(OverflowM()));
 		NoteCopyWaived(int(w.def.id));

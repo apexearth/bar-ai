@@ -688,8 +688,24 @@ def exp_commander_stays_home(games):
         return "RED", f"{len(bad)}/{seen} games with the commander past his leash more than a tenth of the time after minute 10: " + ", ".join(f"{n} {f}/{t}" for n, f, t in bad[:3])
     return "OK", f"commander inside his leash in {seen} games"
 
+
+def exp_no_refused_copies(games):
+    """A plant copy the executor refuses is not offered again and again."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
+    bad = []
+    for g in ev:
+        n = len(re.findall(r"apex: INVARIANT plant-copy refused", g["text"]))
+        if n >= 30:
+            bad.append((g["name"], n))
+    if bad:
+        return "RED", f"{len(bad)}/{len(ev)} games kept electing a plant copy the executor refuses (hands fall to their second pick each time): " + ", ".join(f"{n} x{c}" for n, c in bad[:3])
+    return "OK", f"no refused-copy livelock in {len(ev)} games"
+
 EXPECTATIONS = [
     ("first T2 con builds a moho first", exp_first_t2_con_mohos),
+    ("no refused plant-copy livelock", exp_no_refused_copies),
     ("commander stays home", exp_commander_stays_home),
     ("home mexes outrank forward ones", exp_home_outranks_front),
     ("home mexes upgrade before the reactor", exp_home_mex_upgrades),

@@ -1499,7 +1499,12 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 			if (!firstMobile && (buildTime >= curCost)) {
 				continue;
 			}
-			if (IsHighPriority(cand) ||
+			// ...whatever the metal bank reads: with the bank empty a T3
+			// hull failed the cost bar, the turret took the building beside
+			// it, PullNanoOffBuilding freed it a second later and the pair
+			// thrashed (1,650 pulls in one game of his).
+			if (candMobile ||
+				IsHighPriority(cand) ||
 				(!isMetalEmpty && cdef->IsAssistable()) ||
 				(*cdef == *terraDef) ||
 				(buildTime < maxCost))

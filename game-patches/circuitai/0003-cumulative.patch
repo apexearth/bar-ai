@@ -5386,7 +5386,7 @@ index 2925da70..1f1626cb 100644
  	int metalPullCorFrame;
  	float metalPullCor;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a9..8e619fba 100644
+index dda9b5a9..38db800b 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
 @@ -713,12 +713,15 @@ void CFactoryManager::Init()
@@ -5474,7 +5474,7 @@ index dda9b5a9..8e619fba 100644
  	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
  	float radius = unit->GetCircuitDef()->GetBuildDistance();
  
-@@ -1483,7 +1482,21 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1483,16 +1482,36 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  			CCircuitDef* cdef = cand->GetCircuitDef();
  			const float maxHealth = u->GetMaxHealth();
  			const float buildTime = cdef->GetBuildTime() * (maxHealth - u->GetHealth()) / maxHealth;
@@ -5496,8 +5496,16 @@ index dda9b5a9..8e619fba 100644
 +			if (!firstMobile && (buildTime >= curCost)) {
  				continue;
  			}
- 			if (IsHighPriority(cand) ||
-@@ -1493,6 +1506,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+-			if (IsHighPriority(cand) ||
++			// ...whatever the metal bank reads: with the bank empty a T3
++			// hull failed the cost bar, the turret took the building beside
++			// it, PullNanoOffBuilding freed it a second later and the pair
++			// thrashed (1,650 pulls in one game of his).
++			if (candMobile ||
++				IsHighPriority(cand) ||
+ 				(!isMetalEmpty && cdef->IsAssistable()) ||
+ 				(*cdef == *terraDef) ||
+ 				(buildTime < maxCost))
  			{
  				curCost = buildTime;
  				buildTarget = cand;
@@ -5505,7 +5513,7 @@ index dda9b5a9..8e619fba 100644
  			}
  		} else if ((repairTarget == nullptr) && (u->GetHealth() < u->GetMaxHealth())) {
  			repairTarget = cand;
-@@ -1513,8 +1527,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1513,8 +1532,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  		// Repair task
  		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
  	}
@@ -5519,7 +5527,7 @@ index dda9b5a9..8e619fba 100644
  		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
  			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
  		}
-@@ -1545,6 +1562,102 @@ void CFactoryManager::Watchdog()
+@@ -1545,6 +1567,102 @@ void CFactoryManager::Watchdog()
  	}
  }
  
@@ -5622,7 +5630,7 @@ index dda9b5a9..8e619fba 100644
  void CFactoryManager::SetLastRequiredDef(CCircuitDef::Id facId, CCircuitDef* cdef,
  		const std::vector<float>& probs, bool isResp)
  {
-@@ -1706,7 +1819,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1706,7 +1824,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -5659,7 +5667,7 @@ index dda9b5a9..8e619fba 100644
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
-@@ -1717,7 +1858,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+@@ -1717,7 +1863,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
  	tierDbg = 0;
  #endif
  	auto facIt = tiers.begin();

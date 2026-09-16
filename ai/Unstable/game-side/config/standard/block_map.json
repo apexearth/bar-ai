@@ -138,6 +138,13 @@
 			"type": ["rectangle", "def_low"],
 			"not_ignore": ["factory", "mex", "geo", "terra"]
 		},
+		// A jammer or an advanced radar stands flush: the default six-cell
+		// yard left a 96-elmo ring of dead ground around every jammer (his
+		// watched game, 2026-09-15).
+		"flush_sense": {
+			"type": ["rectangle", "unknown"],
+			"ignore": ["all"]
+		},
 		"_default_": {
 			"type": ["rectangle", "unknown"],
 			"yard": [6, 6],
@@ -171,6 +178,7 @@
 		"caretaker": ["armnanotc", "armnanotcplat", "cornanotc", "cornanotcplat", "legnanotc"],
 		"small": ["armrad", "corrad", "armfrad", "corfrad", "legrad", "legfrad"],
 		"wall": ["armdrag", "cordrag", "legdrag"],
+		"flush_sense": ["armjamt", "corjamt", "legjam", "armveil", "corshroud", "armarad", "corarad", "legarad"],
 		"flush_special": ["armsilo", "corsilo", "legsilo", "armamd", "corfmd", "legabm", "armtarg", "cortarg", "legtarg"]
 	}
 }

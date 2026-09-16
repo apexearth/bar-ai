@@ -542,7 +542,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	++gMexPriced;
 	// The walker may not arrive: the stream is worth its survival share and
 	// the trip costs the con's expected loss (TripRisk, coverage.as).
-	const float risk = TripRisk(pos);
+	const float risk = TripRiskFrom(here, pos);
 	gMexRiskSum += risk;
 	// What the trip stakes: the hand's price -- or, for the commander,
 	// everything we own, because his death is the game.
