@@ -137,6 +137,9 @@ void SweepPenVerdicts()
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
 			walkedOut = (v is null)
 				|| (v.GetPos(ai.frame).distance2D(gPenExit[i]) > 2.f * UNBLOCK_RING);
+			if (walkedOut && (v !is null))
+				AiLog(Factory::T() + "apex: unblock-free " + v.circuitDef.GetName()
+					+ " #" + v.id + " clear of the ring on its own");
 		}
 		if (wallGone && !expired) {
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);

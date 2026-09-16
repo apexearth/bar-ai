@@ -560,7 +560,8 @@ def exp_commander_moves(games):
     penned = []
     for g in ev:
         verdicts = [float(m.group(1)) for m in re.finditer(r"\[(\d+\.\d)m t\d+\] apex: unblock (?:arm|cor|leg)com\w* #\d+ walled in", g["text"])]
-        walks = [float(m.group(1)) for m in re.finditer(r"\[(\d+\.\d)m t\d+\] apex: unblock-walk (?:arm|cor|leg)com\w*", g["text"])]
+        # Relieved by the cure's walk, or clear of the ring on its own.
+        walks = [float(m.group(1)) for m in re.finditer(r"\[(\d+\.\d)m t\d+\] apex: unblock-(?:walk|free) (?:arm|cor|leg)com\w*", g["text"])]
         held = [v for v in verdicts if not any(v <= w <= v + 1.0 for w in walks)]
         if held or len(verdicts) >= 3:
             penned.append(f"{g['name']} ({len(verdicts)} verdicts, {len(held)} unrelieved)")
