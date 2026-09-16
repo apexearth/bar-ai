@@ -581,7 +581,34 @@ def exp_t1_yields(games):
     return "OK", f"{len(bad)}/{len(ev)} games with T1 labs out-producing T2 after the enemy went T2"
 
 
+
+
+def exp_first_t2_con_mohos(games):
+    """The first advanced constructor's first job is an advanced extractor."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    pat = re.compile(r"\[f=(\d+)\][^\n]*apex: exec t=(\d+) (?:arm|cor|leg)(?:ack|acv|aca) #\d+ (\w+):(\w+) ")
+    wrong = []
+    seen = 0
+    for g in ev:
+        first = {}
+        for m in pat.finditer(g["text"]):
+            t = m.group(2)
+            if t in g["apex"] and t not in first:
+                first[t] = (int(m.group(1)) / 1800.0, m.group(3), m.group(4))
+        for t, (mn, kind, d) in first.items():
+            seen += 1
+            if not d.endswith("moho"):
+                wrong.append(f"{g['name']} t{t} {mn:.1f}m {kind}:{d}")
+    if seen < 3:
+        return "NEED MORE", f"{seen} first T2-con orders seen (need 3)"
+    if wrong and len(wrong) >= max(1, seen // 3):
+        return "RED", f"{len(wrong)}/{seen} first advanced constructors did something other than an advanced extractor first: " + ", ".join(wrong[:4])
+    return "OK", f"{seen - len(wrong)}/{seen} first advanced constructors opened with a moho"
+
 EXPECTATIONS = [
+    ("first T2 con builds a moho first", exp_first_t2_con_mohos),
     ("home mexes upgrade before the reactor", exp_home_mex_upgrades),
     ("home ground is not discounted", exp_home_not_discounted),
     ("converters answer overflow", exp_converters_on_overflow),
