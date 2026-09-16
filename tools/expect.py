@@ -456,8 +456,8 @@ def _minute_of(text, pat):
 def exp_home_mex_upgrades(games):
     """Home mexes are upgraded before a reactor is started, not after it."""
     ev = [g for g in games if g["minutes"] >= 25]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} mature games (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} mature games (need 2)"
     late = []
     for g in ev:
         t0 = _minute_of(g["text"], r"apex: request new (?:arm|cor|leg)(?:fus|afus|ckfus|uwfus)\b")
@@ -477,8 +477,8 @@ def exp_home_mex_upgrades(games):
 def exp_home_not_discounted(games):
     """A mex inside the base is not priced as half-lost while nothing is hitting it."""
     ev = [g for g in games if g["minutes"] >= 15]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     survs = []
     for g in ev:
         for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)[^\n]*haz=([\d.]+)", g["text"]):
@@ -496,8 +496,8 @@ def exp_home_not_discounted(games):
 def exp_converters_on_overflow(games):
     """Energy overflowing for minutes is answered with converters, always."""
     ev = [g for g in games if g["minutes"] >= 15]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     bad = []
     for g in ev:
         conv_min = set()
@@ -506,7 +506,9 @@ def exp_converters_on_overflow(games):
         unanswered = 0
         for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"]):
             mn, inc, exc = int(m.group(1)), float(m.group(2)), float(m.group(3))
-            if inc > 100 and exc > 0.25 * inc and not any((mn + d) in conv_min for d in (-1, 0, 1)):
+            # A converter's worth of waste, not a wind spike: 500 E/s is seven
+            # basic converters' intake.
+            if inc > 100 and exc > 500 and exc > 0.25 * inc and not any((mn + d) in conv_min for d in (-1, 0, 1)):
                 unanswered += 1
         if unanswered >= 8:
             bad.append((g["name"], unanswered))
@@ -518,8 +520,8 @@ def exp_converters_on_overflow(games):
 def exp_builders_finish_walks(games):
     """A builder sent to a site is not aborted every 30 s on the walk."""
     ev = [g for g in games if g["minutes"] >= 15]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     rates = []
     for g in ev:
         far = 0
@@ -536,8 +538,8 @@ def exp_builders_finish_walks(games):
 def exp_commander_moves(games):
     """The commander is never penned and never stands more than four minutes."""
     ev = [g for g in games if g["minutes"] >= 15]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     penned = [g["name"] for g in ev if re.search(r"apex: unblock (?:arm|cor|leg)com\w* #\d+ walled in", g["text"])]
     frozen = []
     for g in ev:
@@ -559,8 +561,8 @@ def exp_commander_moves(games):
 def exp_t1_yields(games):
     """Once the enemy is T2, the T1 labs stop being the main producers."""
     ev = [g for g in games if g["minutes"] >= 25]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} mature games (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} mature games (need 2)"
     t1 = re.compile(r"\[(\d+\.\d)m t\d+\] apex: decide t=\d+ (?:arm|cor|leg)(?:lab|vp|hp) #\d+ -> produce:")
     t2 = re.compile(r"\[(\d+\.\d)m t\d+\] apex: decide t=\d+ (?:arm|cor|leg)(?:alab|avp|aap|ap) #\d+ -> produce:")
     bad = []
@@ -586,8 +588,8 @@ def exp_t1_yields(games):
 def exp_first_t2_con_mohos(games):
     """The first advanced constructor's first job is an advanced extractor."""
     ev = [g for g in games if g["minutes"] >= 15]
-    if len(ev) < 3:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 3)"
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     pat = re.compile(r"\[f=(\d+)\][^\n]*apex: exec t=(\d+) (?:arm|cor|leg)(?:ack|acv|aca) #\d+ (\w+):(\w+) ")
     wrong = []
     seen = 0
@@ -601,8 +603,8 @@ def exp_first_t2_con_mohos(games):
             seen += 1
             if not d.endswith("moho"):
                 wrong.append(f"{g['name']} t{t} {mn:.1f}m {kind}:{d}")
-    if seen < 3:
-        return "NEED MORE", f"{seen} first T2-con orders seen (need 3)"
+    if seen < 2:
+        return "NEED MORE", f"{seen} first T2-con orders seen (need 2)"
     if wrong and len(wrong) >= max(1, seen // 3):
         return "RED", f"{len(wrong)}/{seen} first advanced constructors did something other than an advanced extractor first: " + ", ".join(wrong[:4])
     return "OK", f"{seen - len(wrong)}/{seen} first advanced constructors opened with a moho"

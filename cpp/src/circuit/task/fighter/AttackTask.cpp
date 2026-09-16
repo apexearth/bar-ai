@@ -319,7 +319,20 @@ void CAttackTask::FindTarget()
 				}
 			}
 
-			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale;  // Own to Enemy distance
+			// METAL KILLED PER THREAT FACED, not the nearest thing. Nearest-first
+			// walks the squad into the enemy's outer towers and it dies there
+			// with the economy behind them untouched; the doctrine is to kill
+			// the economy and leave the wall alone when a path exists. A
+			// target's pull is its cost over its power (plus our leader's own,
+			// so a toothless mex is not infinitely attractive); a mex 3x the
+			// distance of a tower still wins. The overpower gates above are
+			// unchanged: a group we cannot beat is still refused.
+			float pull = 1.f;
+			if (edef != nullptr) {
+				const float ownPow = std::max(cdef->GetPower(), 1.f);
+				pull = std::max(enemy->GetCost(), 1.f) / (edef->GetPower() + ownPow);
+			}
+			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale / pull;  // Own to Enemy distance
 			if (minSqDist > sqOEDist) {
 				minSqDist = sqOEDist;
 				bestTarget = enemy;

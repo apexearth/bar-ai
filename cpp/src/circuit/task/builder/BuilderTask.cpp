@@ -164,6 +164,21 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 	return false;
 }
 
+// The builder itself and the COMMANDER: another hand's turbine closes his
+// exit as surely as his own (the cure freed him twice in one gate game).
+static bool KeepsExits(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
+		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
+{
+	if (!KeepsExit(circuit, terrainMgr, builder, buildDef, facing, slot, cand)) {
+		return false;
+	}
+	CCircuitUnit* com = circuit->GetSetupManager()->GetCommander();
+	if ((com != nullptr) && (com != builder) && !com->IsDead()) {
+		return KeepsExit(circuit, terrainMgr, com, buildDef, facing, slot, cand);
+	}
+	return true;
+}
+
 IBuilderTask::BuildName IBuilderTask::buildNames = {
 	{"factory", IBuilderTask::BuildType::FACTORY},
 	{"nano",    IBuilderTask::BuildType::NANO},
@@ -529,7 +544,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		// script would then avoid it for as long as the mark lives.
 		const float clear = SelfClearance(unit, buildDef);
 		const bool keepsExit = !free
-				|| KeepsExit(circuit, terrainMgr, unit, buildDef, facing, slot, probe);
+				|| KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, probe);
 		if (!keepsExit) {
 			circuit->LOG("apex: exit-kept %s by %s at=%.0f,%.0f", buildDef->GetDef()->GetName(),
 					unit->GetCircuitDef()->GetDef()->GetName(), probe.x, probe.z);
@@ -566,7 +581,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 						const AIFloat3 p2 = terrainMgr->FindBuildSite(buildDef, cell, slot, facing);
 						if (!utils::is_valid(p2) || (p2.SqDistance2D(cell) > SQUARE(SQUARE_SIZE))
 							|| (p2.SqDistance2D(self) < SQUARE(clear))
-							|| !KeepsExit(circuit, terrainMgr, unit, buildDef, facing, slot, cell))
+							|| !KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, cell))
 						{
 							continue;
 						}
@@ -1130,6 +1145,27 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 			unit->GetTravelAct()->SetPath(pPath);
 		}
 	} else {
+		// NO PATH AND NOT THERE: the travel step used to finish anyway and the
+		// build order went to the engine, which could not path either -- the
+		// builder stood with its task until the script's watch aborted it at
+		// 30 s and the next election sent it back (Frozen Ford: 85 of 99 such
+		// aborts on one con). The site is marked and the task dies here.
+		CCircuitAI* circuit = manager->GetCircuit();
+		const AIFloat3& endPos = GetPosition();
+		const float range = unit->GetCircuitDef()->GetBuildDistance()
+				+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
+		if (utils::is_valid(endPos)
+			&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
+		{
+			circuit->NoteBuildBlocked(endPos);
+			circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
+					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+					unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
+					sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+			SetDeathNote("no-path");
+			manager->AbortTask(this);
+			return;
+		}
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 			unit->GetTravelAct()->StateFinish();
 		}
