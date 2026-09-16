@@ -13,10 +13,10 @@ expect.py -- his complaints as assertions -- and this is what makes it bind:
 `deploy_ai.py deploy` to the shared slot refuses a commit with no green
 record here. A lane deploy never asks.
 
-The gate set is small enough to run after every behaviour change (~35 min
-wall at --speed 6): two Frozen Ford 2v2 (the map the walk-away, the
-converter and the pen were watched on) and one Greenest 8v8 (what he
-watches), all +100%. The record is tournaments/gate/<sha>.json; a RED
+The gate set is small enough to run after every behaviour change (three
+games in parallel at full speed, ~12 min wall): two Frozen Ford 2v2 (the
+map the walk-away, the converter and the pen were watched on) and one
+Greenest 8v8 (what he watches), all +100%. The record is tournaments/gate/<sha>.json; a RED
 records too, so `check` can say why it refused.
 """
 from __future__ import annotations
@@ -80,17 +80,27 @@ def run(argv: list[str]) -> int:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out_root = ROOT / "tournaments" / f"gate-{sha}-{stamp}"
     out_root.mkdir(parents=True, exist_ok=True)
+    # ALL AT ONCE, AT FULL SPEED: one engine write dir per game (run_tournament's
+    # pool -- never two games in one write dir), no --speed cap. Sequential at
+    # 6x was 35 minutes for three games; the battery plays 18 in five.
+    sys.path.insert(0, str(HERE))
+    import run_tournament as _rt  # type: ignore
+    pool = _rt.worker_dirs(len(GAMES))
+    procs = []
     dirs = []
     for mp, per_side, minutes, seed in GAMES:
         slug = mp.split()[0].lower().replace("_", "")[:8]
         out = out_root / f"{slug}-s{seed}"
+        wd = pool.get()
         cmd = [sys.executable, str(HERE / "run_match.py"), "--a", spec, "--b", "BARb:stable:hard",
                "--map", mp, "--per-side", str(per_side), "--sides", "Armada,Armada",
                "--minutes", str(minutes), "--seed", str(seed), "--handicap", "100",
-               "--speed", "6", "--out", str(out)]
-        print(f"gate: {mp} {per_side}v{per_side} {minutes} min seed {seed}")
-        subprocess.run(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+               "--out", str(out), "--write-dir", str(wd)]
+        print(f"gate: {mp} {per_side}v{per_side} {minutes} min seed {seed} -> {out.name}")
+        procs.append(subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
         dirs.append(str(out))
+    for pr in procs:
+        pr.wait()
     return judge(dirs, sha)
 
 
