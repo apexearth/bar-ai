@@ -287,6 +287,13 @@ maps up. Open, in the order the game says it costs:
   until answered no ladder reorder is shippable.
 - Greenest still ends on ~92 basic converters and 12 advanced solars against
   BARb's 8 advsol (CONVERTERS above).
+- The base ETA is NOISY at the scale of its own decisions: his Comet 1v1
+  (2026-09-15, 15.1-16.4 min) read `base=545, 7119, 1333, 7839, 9300, 1875`
+  at P=178-247 -- a 17x swing inside 80 s with the same pool -- and a fusion
+  was drawn at v=1.33 over a mexup at v=13.36 because the ladder read the
+  moho as SLOWER than doing nothing (9315 vs base 9300). Which input jumps
+  (bank, eAvail, the pool's `n`, StepSec at a dry feed) is unread; until it
+  is, the merged eco ticket is a lottery on noise.
 - Two rules from those sessions: an eco change measured only on the canon
   board is not measured (the board rewards not building infrastructure);
   the canon at `--speed 5` is not deterministic (700/771/845 m/s at minute
