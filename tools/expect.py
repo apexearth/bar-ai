@@ -654,8 +654,34 @@ def exp_home_outranks_front(games):
         return "RED", f"{len(bad)}/{seen} games price a HOME mex below a forward one: " + ", ".join(f"{n} home={h:.2f} fwd={f:.2f}" for n, h, f in bad[:3])
     return "OK", f"home mex survival >= forward in {seen} games"
 
+
+def exp_commander_stays_home(games):
+    """After minute 10 the commander is inside his leash nearly all the time."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
+    bad, seen = [], 0
+    for g in ev:
+        far = tot = 0
+        for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: com-pos t=\d+ at=[\d,-]+ fwd=[\d.-]+ home=-?\d+ far=(\d)", g["text"]):
+            if int(m.group(1)) < 10:
+                continue
+            tot += 1
+            far += int(m.group(2))
+        if tot < 10:
+            continue
+        seen += 1
+        if far > 0.1 * tot:
+            bad.append((g["name"], far, tot))
+    if seen < 2:
+        return "NEED MORE", f"{seen} games with commander samples past minute 10 (need 2)"
+    if bad:
+        return "RED", f"{len(bad)}/{seen} games with the commander past his leash more than a tenth of the time after minute 10: " + ", ".join(f"{n} {f}/{t}" for n, f, t in bad[:3])
+    return "OK", f"commander inside his leash in {seen} games"
+
 EXPECTATIONS = [
     ("first T2 con builds a moho first", exp_first_t2_con_mohos),
+    ("commander stays home", exp_commander_stays_home),
     ("home mexes outrank forward ones", exp_home_outranks_front),
     ("home mexes upgrade before the reactor", exp_home_mex_upgrades),
     ("home ground is not discounted", exp_home_not_discounted),

@@ -130,6 +130,14 @@ void SweepPenVerdicts()
 	for (uint i = 0; i < gPenVictim.length(); ) {
 		const bool expired = ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL;
 		const bool wallGone = (gPenWall[i] != 0) && (ai.GetTeamUnit(gPenWall[i]) is null);
+		// A victim that got clear of the ring on its own is not penned: the
+		// verdict held a freed commander on a walk back to eat its wall.
+		bool walkedOut = false;
+		if (!wallGone && !expired) {
+			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
+			walkedOut = (v is null)
+				|| (v.GetPos(ai.frame).distance2D(gPenExit[i]) > 2.f * UNBLOCK_RING);
+		}
 		if (wallGone && !expired) {
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
 			if (v !is null) {
@@ -142,7 +150,7 @@ void SweepPenVerdicts()
 					+ int(gPenExit[i].z) + " (walk " + gUnblockWalks + ")");
 			}
 		}
-		if (expired || wallGone) {
+		if (expired || wallGone || walkedOut) {
 			gPenVictim.removeAt(i);
 			gPenWall.removeAt(i);
 			gPenVerdictAt.removeAt(i);

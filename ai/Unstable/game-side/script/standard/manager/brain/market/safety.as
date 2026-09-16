@@ -25,6 +25,7 @@ int gCommEngageAt = -99999;
 AIFloat3 gCwPos;
 bool gCwHave = false;
 int gCwStillFrom = -1;
+int gNextCwPosLog = 0;
 int gCwWorst = 0;
 int gCwStill = 0;
 int gCwSamples = 0;
@@ -42,6 +43,15 @@ void CommWatch()
 	const float moved = gCwHave ? p.distance2D(gCwPos) : 999.f;
 	gCwPos = p;
 	gCwHave = true;
+	// Where he is, sampled: expect.py reads how far forward he spends the game.
+	if (ai.frame >= gNextCwPosLog) {
+		gNextCwPosLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: com-pos t=" + ai.teamId
+			+ " at=" + int(p.x) + "," + int(p.z)
+			+ " fwd=" + formatFloat(Military::ForwardFraction(p), "", 0, 2)
+			+ " home=" + (Builder::gHomeSet ? int(p.distance2D(Builder::gHomePos)) : -1)
+			+ " far=" + (ComFar(p) ? 1 : 0));
+	}
 	IUnitTask@ t = u.task;
 	const int tt = (t is null) ? -1 : int(t.GetType());
 	const int q = u.CmdQueueSize();
