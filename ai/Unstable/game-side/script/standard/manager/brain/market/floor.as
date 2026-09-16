@@ -92,18 +92,19 @@ int gJobSeen = 0, gJobUnpriced = 0, gJobFar = 0, gJobFull = 0,
 // four times per idle election once BestJobBoss ran its own pair. The near
 // winner is left here; the return is the any-distance winner.
 IUnitTask@ gJobNearBest;
-// THE COMMANDER'S LEASH, one test for the election and the floor: forward
-// of the anchor by more than the base-front post, or past the eco leash
-// from home. He is the game; a job out there is not worth him.
+// THE COMMANDER'S LEASH, one test for the election, the floor and the
+// chase: further toward them than the caution cap, measured from HOME (from
+// his feet it ratchets; from the lab it refused a tower at his own start,
+// the lab standing 450 behind it), or past the eco leash from home. He is
+// the game; a job out there is not worth him.
 bool ComFar(const AIFloat3& in p)
 {
-	if (Base::gAnchorSet && Base::gAxisSet) {
-		const AIFloat3 rel = p - Base::gAnchor;
-		if ((rel.x * Base::gFwd.x + rel.z * Base::gFwd.z) > 400.f)
-			return true;
-	}
-	return Builder::gHomeSet
-		&& (p.distance2D(Builder::gHomePos) > ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH));
+	if (!Builder::gHomeSet)
+		return false;
+	if (p.distance2D(Builder::gHomePos) > ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH))
+		return true;
+	return (Military::ForwardFraction(p) - Military::ForwardFraction(Builder::gHomePos))
+			> ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP);
 }
 
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)

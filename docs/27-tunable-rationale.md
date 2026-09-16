@@ -1899,6 +1899,13 @@ alone let a radar 1300 elmos sideways of the anchor through (fwd -267 by the
 axis, 0.82 by the map) and lost him. Commander minutes forward per 6-game
 set: 10-11 before, 0 after. Not tuned; 0.25 is the caution value.
 
+2026-09-15: the bound is `Market::ComFar` -- this cap measured from HOME
+(the start position), or `TUNE_ECO_LEASH` from home -- and it is the one
+test for the election, the idle floor and the chase. The 400-elmo
+forward-of-the-lab test is gone: the lab stood 450 behind the start on
+Frozen Ford and the commander refused a tower at his own start. Measured
+from where he stands the cap ratchets a quarter of the map per job.
+
 ### `LatheHeart` / `FarmSlot` origin (no tunable)
 
 Where an expensive building is founded relative to the build power we already

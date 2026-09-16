@@ -1558,48 +1558,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	for (uint depth = 0; ranked.length() > 0; ++depth) {
 		const uint i = 0;
 		bool refused = false;
-		// FORWARD of the anchor is what kills commanders; the farm-distance
-		// radius also banned the rear-flank PLANT site and the commander --
-		// early game's only builder -- never made a factory (watched, and it
-		// poisoned a 20-game medium anchor). Behind the anchor is safe by
-		// the grid's own construction.
-		// Extraction is NOT exempt (it was for one day: the trip-risk price
-		// let a 0.45-value mex 1900 elmo out win a draw, and that walk killed
-		// the commander at 17.4 min, watched 2026-09-05). His ruling stands:
-		// the commander stays home; spots inside 400 forward are still his.
-		if (isComm && Base::gAnchorSet && Base::gAxisSet) {
-			const AIFloat3 rel = ranked[i].pos - Base::gAnchor;
-			const float fwdDist = rel.x * Base::gFwd.x + rel.z * Base::gFwd.z;
-			// 400: the base-front turret post sits at anchor+150, and a 150
-			// cutoff banned the commander from it. Beyond 400 is the
-			// con-and-escort frontier, the wall included: the walk to a
-			// mid-map line is not worth the base's only lathe.
-			// The axis test alone let a radar 1300 elmos SIDEWAYS of the anchor
-			// through (fwd -267 by the axis, 0.8 of the way to the enemy by the
-			// map) and he died there. The cap the caution rule runs him home at
-			// bounds where a job may send him.
-			// Forward of WHERE HE STANDS, not of the allied centre: in an 8v8 the
-			// team nearest the middle read its own start as 0.62 of the way to
-			// the enemy and its commander refused every want for the whole game
-			// (apexearth 2026-09-08: "blue and light green ... weren't doing
-			// anything after making 2 mexes and 1 energy").
-			// ...and forward of HOME, not of where he stands: from his feet
-			// the cap ratchets, each job a quarter further out. The 8v8 mid
-			// team's home is mid, so its jobs still clear.
-			const float ff = Military::ForwardFraction(ranked[i].pos)
-					- Military::ForwardFraction(Builder::gHomeSet
-						? Builder::gHomePos : unit.GetPos(ai.frame));
-			if ((fwdDist > 400.f)
-				|| (ff > ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP))) {
-				if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
-					gComFwdLogAt = ai.frame;
-					AiLog("apex: com-fwd skip t=" + ai.teamId + " "
-						+ KindName(ranked[i].kind) + " at="
-						+ int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
-						+ " fwd=" + int(fwdDist) + " ff=" + formatFloat(ff, "", 0, 2) + " (sampled 30s)");
-				}
-				refused = true;
+		// THE COMMANDER STAYS HOME: one leash (ComFar) for the election, the
+		// floor and the chase. Extraction is NOT exempt (a 0.45-value mex
+		// 1900 elmo out won a draw and that walk killed him, watched
+		// 2026-09-05).
+		if (isComm && ComFar(ranked[i].pos)) {
+			if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
+				gComFwdLogAt = ai.frame;
+				AiLog("apex: com-fwd skip t=" + ai.teamId + " "
+					+ KindName(ranked[i].kind) + " at="
+					+ int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
+					+ " ff=" + formatFloat(Military::ForwardFraction(ranked[i].pos), "", 0, 2)
+					+ " home=" + (Builder::gHomeSet ? int(ranked[i].pos.distance2D(Builder::gHomePos)) : -1)
+					+ " (sampled 30s)");
 			}
+			refused = true;
 		}
 		IUnitTask@ t = null;
 		if (!refused) {
