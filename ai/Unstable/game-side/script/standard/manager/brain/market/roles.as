@@ -102,6 +102,30 @@ void ConRoleRecount()
 				? int(gRoleNeed[c] / sum * float(roled) + 0.5f) : 0;
 }
 
+// A ROLE RESERVES A HAND FOR WORK WORTH DOING, NOT FOR ANY WORK. A category
+// earns one of the R roled hands when the draw itself would hand it at least
+// one of R elections -- its sharpened ticket share is at least 1/R. Below
+// that the category's best want is worthless by the market's own arithmetic
+// (the eco seat's defence-roled hands bought Bulwarks in the safe corner at
+// v=0.09 over assist at v=52), and the hand is released to the draw.
+array<int> gRwCatBest;
+array<float> gRwWt;
+float gRwSum = 0.f;
+void RoleWorthPrep(array<Want@>@ ranked)
+{
+	gRwSum = DrawWeights(ranked, gRwCatBest, gRwWt);
+}
+bool RoleWorthDoing(int c)
+{
+	if ((gRwSum <= 0.f) || (c < 0) || (c >= int(gRwWt.length())) || (gRwCatBest[c] < 0))
+		return false;
+	const float shareK = ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE);
+	int roled = int(float(gWorkerIds.length()) * shareK);
+	if (roled < 1)
+		roled = 1;
+	return gRwWt[c] * float(roled) >= gRwSum;
+}
+
 bool RankedHas(array<Want@>@ ranked, int c)
 {
 	for (uint i = 0; i < ranked.length(); ++i) {
@@ -159,9 +183,11 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if (SoleAdvancedHand(unit))
 		return false;
 	ConRoleRecount();
+	RoleWorthPrep(ranked);
 	int r = gRoleOf[id];
 	if (r >= 0) {
-		if ((gRoleCount[r] > gRoleQuota[r]) || !RankedHas(ranked, r)) {
+		if ((gRoleCount[r] > gRoleQuota[r]) || !RankedHas(ranked, r)
+			|| !RoleWorthDoing(r)) {
 			gRoleOf[id] = -1;
 			--gRoleCount[r];
 			++gRoleDropped;
@@ -175,7 +201,7 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 			const int gap = gRoleQuota[c] - gRoleCount[c];
 			if (ai.frame < gCatFellAt[c] + CAT_FELL_HOLD)
 				continue;
-			if ((gap > bestGap) && RankedHas(ranked, c)) {
+			if ((gap > bestGap) && RankedHas(ranked, c) && RoleWorthDoing(c)) {
 				best = c;
 				bestGap = gap;
 			}

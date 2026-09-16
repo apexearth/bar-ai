@@ -246,9 +246,48 @@ bool SuperInFlight()
 // the base as the tech lab does -- they are the most protection-hungry things
 // we own. A long-range gun and a heavy turret face the fight instead: the
 // choke behind our own front if there is one, otherwise the base front.
-AIFloat3 SuperSite(CCircuitUnit@ unit, int sc)
+// THE GUN GOES UP ON THE HILL (apexearth 2026-09-16: long-range cannons on
+// high ground fire long distances unobstructed; the flat is allowed, hills
+// are preferred). The highest legal ground within a short walk of the
+// chosen site takes it -- height, then nearness on a tie.
+AIFloat3 HighGroundNear(CCircuitDef@ def, const AIFloat3& in site, float r)
+{
+	if ((def is null) || !OnMap(site))
+		return site;
+	const float h0 = ai.GetElevationAt(site);
+	float bestH = h0;
+	float bestD = 0.f;
+	AIFloat3 best = site;
+	const float step = 96.f;
+	for (float dz = -r; dz <= r; dz += step) {
+		for (float dx = -r; dx <= r; dx += step) {
+			if (dx * dx + dz * dz > r * r)
+				continue;
+			const AIFloat3 p = site + AIFloat3(dx, 0.f, dz);
+			if (!OnMap(p))
+				continue;
+			const float h = ai.GetElevationAt(p);
+			const float d = dx * dx + dz * dz;
+			if ((h < bestH) || ((h == bestH) && (d >= bestD)))
+				continue;
+			const AIFloat3 s = ai.FindBuildSiteNear(def, p, 64.f);
+			if (!OnMap(s) || (s.distance2D(p) > 64.f) || NearBlocked(s))
+				continue;
+			bestH = h;
+			bestD = d;
+			best = s;
+		}
+	}
+	return best;
+}
+
+AIFloat3 SuperSite(CCircuitUnit@ unit, int sc, CCircuitDef@ def = null)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (sc == SC_LRPC) {
+		const AIFloat3 flat = SuperSite(unit, SC_HEAVY);
+		return HighGroundNear(def, flat, 600.f);
+	}
 	if ((sc == SC_LRPC) || (sc == SC_HEAVY)) {
 		if (Base::gAnchorSet) {
 			// ONE GUN PER DOORWAY (apexearth 2026-09-13, his screenshot:
@@ -507,7 +546,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			if (!AntiNukeSite(unit, at))
 				continue;
 		} else {
-			at = SuperSite(unit, sc);
+			at = SuperSite(unit, sc, Catalog::Def(d));
 		}
 		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
 		if (!OnMap(at))

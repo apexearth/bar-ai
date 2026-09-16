@@ -404,9 +404,26 @@ float StrRatio(float theirsM, float oursM)
 	return (theirsM * FoeQualityM()) / (oursM * OurQualityM());
 }
 
+// The hold multiplier, live only while ground is being lost; the tunable
+// reaches every def the way apex_worth_<name> does.
+array<float> gHoldMod;
+float HoldModOf(int d)
+{
+	if (!(Military::LosingGround() || Military::BaseContested()))
+		return 1.f;
+	if (int(gHoldMod.length()) <= Catalog::gDefCount)
+		gHoldMod.resize(Catalog::gDefCount + 1);
+	if (gHoldMod[d] > 0.f)
+		return gHoldMod[d];
+	const string nm = Catalog::Def(d).GetName();
+	const float v = ai.GetTunable("apex_hold_" + nm, UnitHoldMod(nm));
+	gHoldMod[d] = (v > 0.f) ? v : 1.f;
+	return gHoldMod[d];
+}
+
 float UnitPPC(int d)
 {
-	float v = UnitCore(d) * WorthModOf(d);
+	float v = UnitCore(d) * WorthModOf(d) * HoldModOf(d);
 	// REACH IS ONLY WORTH WHAT SOMETHING ELSE IS ABSORBING (apexearth: "low HP
 	// units with more range... on their own they're garbage"). Scaled by the
 	// share of our line that can stand in front, so reach pays exactly as much
@@ -525,7 +542,7 @@ void WorthDiag()
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || !WorthScorable(d))
 			continue;
-		const float s = UnitCore(d) * WorthModOf(d);
+		const float s = UnitCore(d) * WorthModOf(d) * HoldModOf(d);
 		uint at = topV.length();
 		for (uint i = 0; i < topV.length(); ++i) {
 			if (s > topV[i]) {

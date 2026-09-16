@@ -218,6 +218,18 @@ units. This is an issue that we have very often." NeediestLine read the
 gantry line at 0-58 m/s of need while its queue held 592 s of work; a
 gantry's line should be the hungriest thing on the seat.
 
+Found 09-16 (later): `LineUnserved` subtracted the lathe standing at a
+working line from its share of the FREE flow -- but busy lathe is already
+inside the pull that FreeMetalFlow nets off, so the line's need read zero
+whenever its standing lathe exceeded the unspent flow's share, however much
+overflowed. Removed (sites.as). One 32-min 8v8 seed: the eco seat's line
+term moved 0-5 -> 11-59 m/s at 15-25 min and its turret count 113 -> 176,
+but waste at the seat was 10-116 either way; no gantry stood on that seat
+in either run, so the gantry case itself is still unmeasured. Its labs
+make constructors, and a con line is not nano demand by his 09-14 ruling,
+so the remaining waste is the seat's factory capacity (plant-glut, TODO
+"never an idle factory"), not its lathe.
+
 ### ECO SEAT DEFENCES: bought late, inside the base, with walk gaps that block the farm (2026-09-16)
 
 Same game: t7's Bulwarks (`cordoom`) executed 20 times within 1,000 elmos of
@@ -225,6 +237,17 @@ its anchor and 30 claws (`cormaw`) within 1,000, i.e. inside the eco block,
 with the 6-cell `_default_` yard around each (dropped to flush in ad3aa4bc).
 He: they "block useful construction of a lot of other things". The eco seat's
 guns belong on its rim (defence-wall paradigm), not in its rows.
+
+Found 09-16 (later): two buyers. (1) The DEFENCE role hoist took the seat's
+best defence want whatever its price -- `why=role role=defence` at v=0.09
+over assist at v=52; in a 32-min 8v8, 211 of 338 defence-role hoists were
+under a tenth of the alternative. Fixed (roles.as `RoleWorthDoing`): a role
+holds only while the category's sharpened draw ticket would win at least
+one of the R roled elections; after: 0 hoists under a tenth, 5 under half.
+(2) `why=draw over nothing`: a hand whose only candidate is a ~0-valued claw
+or Bulwark on the home hull takes it -- 108 such elections on the eco seat
+in one game, 11 guns within 1,000 of its anchor. Whether an idle hand should
+build a worthless gun rather than wait is his call; not changed.
 
 ### LATTICE RESIDUE: 4-6% of nano turrets stand off the lattice, hugging a fixed site; mixed pitches leave 1-3 square strips (2026-09-16)
 

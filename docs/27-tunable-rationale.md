@@ -2196,3 +2196,13 @@ minute 16 fell 8/12/10/15 -> 8/7/5/4 for no change in metal waste (0.0-0.2%
 both arms) and one treated elimination. The un-gated floor is what he asked
 for ("high priority") and it wastes nothing; the gate is gone.
 
+## `apex_hold_<unit>` (UnitHoldMod, default 1; corjugg 2)
+
+A second field-report table beside `apex_worth_<unit>`: what a unit is good
+FOR when ground is being lost. Live only while `Military::LosingGround()` or
+`BaseContested()`; the Behemoth's 2x is apexearth's own call (2026-09-16,
+watching Cortex lose Supreme Isthmus: "the best thing to do in this situation
+is to make a Behemoth"). A multiplier on power-per-cost, so it needs a gantry
+and a budget to matter -- it moves the T3 pick, it does not buy the gantry.
+Unmeasured.
+

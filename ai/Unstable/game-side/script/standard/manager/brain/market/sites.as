@@ -1175,10 +1175,14 @@ float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
 	const AIFloat3 fp = f.GetPos(ai.frame);
 	if (!OnMap(fp))
 		return 0.f;
-	// The plant's own lathe counts: it is already eating part of the
-	// share -- at the line's own product density, not the 7/80 average.
-	const float u = share - LineEat(f, fp);
-	return (u > 0.f) ? u : 0.f;
+	// THE LATHE ALREADY STANDING IS NOT SUBTRACTED. It is busy on a working
+	// line, so its eating is already inside the pull that FreeMetalFlow
+	// nets off: taking it off again capped a line's lathe at the unspent
+	// flow's share however much overflowed. The eco seat's gantries read
+	// line=0 with 592 s queued, a full bank and 270 m/s of waste while 77
+	// turrets stood idle elsewhere. The flow itself is the stop: each
+	// turret bought here pulls, and the free flow falls by what it eats.
+	return share;
 }
 
 float LineCeilSum()

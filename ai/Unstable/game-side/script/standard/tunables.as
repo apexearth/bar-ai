@@ -1191,6 +1191,17 @@ float UnitWorthMod(const string &in name)
 	if (name == "armthor") return 10.f;
 	return 1.f;
 }
+
+// WHAT A UNIT IS GOOD FOR when the ground is being lost (apexearth
+// 2026-09-16, Cortex losing Supreme Isthmus: "the best thing to do in this
+// situation is to make a Behemoth. They're super duper defensive"). Applied
+// on top of UnitWorthMod only while Military::LosingGround() or the base is
+// contested; 1.0 = no opinion.
+float UnitHoldMod(const string &in name)
+{
+	if (name == "corjugg") return 2.f;     // Behemoth: the answer when losing
+	return 1.f;
+}
 // AA_URGENCY: multiplier on the insurance rate for anti-air. See docs/27.
 const float TUNE_AA_URGENCY = 1.f;
 

@@ -1358,7 +1358,9 @@ GOALS = [
              "note": "toward the SQUARE law: quality wins over cheap mass"},
         ],
         "watch": "python tools/army_mix.py / composition.py, and the "
-                 "`apex: worth` lines with apex_worth_diag=1.",
+                 "`apex: worth` lines with apex_worth_diag=1. Per unit: "
+                 "apex_worth_<unit> (always) and apex_hold_<unit> (only while "
+                 "ground is being lost; Behemoth corjugg defaults to 2).",
     },
     {
         "id": "air",

@@ -297,12 +297,16 @@ balance, priced against each other, not two independent targets
 apexearth 2026-09-16, Cortex losing ground on Supreme Isthmus: build
 Behemoths (`corjugg`) -- "super duper defensive" -- when the enemy is winning
 on our ground. Asks for a store of what each unit is good FOR (the Behemoth:
-defence) that composition can read. Not built. The gantry-side prerequisite
-is the nano/gantry issue in ISSUES (ECO SEAT GANTRIES).
+defence) that composition can read. Built 09-16 as `UnitHoldMod` /
+`apex_hold_<unit>` (tunables.as, worth.as): a worth multiplier live only
+while `LosingGround()` or the base is contested, corjugg 2x. Unmeasured --
+needs a losing Cortex game with a gantry standing.
 
 ## LRPC on high ground
 
 apexearth 2026-09-16: long-range cannons go up on hills so they fire long
 distances unobstructed; the ground is allowed, hills are preferred. Supreme
-Isthmus has them. `want_super.as` sites an LRPC with no height term. Not built.
+Isthmus has them. Built 09-16: `HighGroundNear` in want_super.as takes the
+highest legal ground within 600 elmos of the gate site. Unmeasured -- no LRPC
+went up in the 32-minute test games.
 
