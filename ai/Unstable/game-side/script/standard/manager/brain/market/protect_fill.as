@@ -648,8 +648,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// have left empty answers the obligation before one already
 			// standing behind a line does.
 			const float thinW = isWall ? (PfWallThin(si) * PfWallAtk(si)) : 1.f;
-			const float pullPrev = (horizW > 1.f)
-					? (slotGap / horizW) * dirW * thinW : slotGap * dirW * thinW;
+			// The budget floor is cost over the horizon; the direction and
+			// thinness terms pick WHICH slot, they do not enlarge the floor.
+			// Multiplied in, they made a 1.2k Ambusher read 50 prevented
+			// metal/s against a 60-second-payback moho at 10, and the first
+			// T2 con opened with the gun (gate: 4 of 4).
+			float shape = dirW * thinW / 4.f;   // thin x attacked, each at most 2
+			if (shape > 1.f)
+				shape = 1.f;
+			const float pullPrev = ((horizW > 1.f) ? (slotGap / horizW) : slotGap) * shape;
 			if (prevented < pullPrev)
 				prevented = pullPrev;
 		}

@@ -99,39 +99,19 @@ float SelfClearance(CCircuitUnit* builder, CCircuitDef* buildDef)
 // out from the builder's cell with the candidate counted as taken; an exit
 // is any cell four rings out or off the grid. Only asked when the candidate
 // lands within two cells of the builder -- further away it closes nothing.
-static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
-		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
+// Flood the free cells of the def's lattice out from (si, sj) with the
+// candidate (0,0) taken; true when some cell R rings out or off the grid is
+// reached. Free = FindBuildSite returns the cell itself.
+static bool CellHasExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitDef* buildDef,
+		int facing, float slot, const AIFloat3& cand, int si, int sj)
 {
-	if ((builder == nullptr) || !builder->GetCircuitDef()->IsMobile()) {
-		return true;
-	}
 	constexpr int R = 4;
-	const AIFloat3 self = builder->GetPos(circuit->GetLastFrame());
-	int bi = 0, bj = 0;
-	float bestSq = -1.f;
-	for (int j = -2; j <= 2; ++j) {
-		for (int i = -2; i <= 2; ++i) {
-			AIFloat3 c;
-			if (!circuit->LatticeNeighbour(cand, buildDef, facing, i, j, c)) {
-				continue;
-			}
-			const float sq = c.SqDistance2D(self);
-			if ((bestSq < .0f) || (sq < bestSq)) {
-				bestSq = sq;
-				bi = i;
-				bj = j;
-			}
-		}
-	}
-	if ((bestSq < .0f) || (bestSq > SQUARE(2.f * slot))) {
-		return true;   // the builder is not standing in this lattice's rings
-	}
 	const int W = 2 * R + 1;
 	std::vector<char> state(W * W, 0);   // 0 unknown, 1 free/visited, 2 taken
 	auto idx = [&](int i, int j) { return (j + R) * W + (i + R); };
 	std::vector<std::pair<int, int>> queue;
-	queue.emplace_back(bi, bj);
-	state[idx(bi, bj)] = 1;
+	queue.emplace_back(si, sj);
+	state[idx(si, sj)] = 1;
 	state[idx(0, 0)] = 2;
 	while (!queue.empty()) {
 		const auto [ci, cj] = queue.back();
@@ -162,6 +142,63 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 		}
 	}
 	return false;
+}
+
+// DOES THE GROUND KEEP ITS EXITS if this cell is built? A mobile builder
+// standing inside the lattice it fills can wall itself in, and so can any
+// unit standing in a cell the next turbine closes: with no walkways in the
+// rear (his ruling) a flush block is solid, and the one cell a unit stands
+// in cannot be built over, so it becomes a pocket (the commander he watched
+// sat inside its own wind cluster for 37 minutes; a gate game had 46 of
+// ours in the ring around him). So: the builder's own cell, and every FREE
+// cell touching the candidate, must still reach open ground with the
+// candidate taken -- then no pocket can form, whoever stands where.
+static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
+		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
+{
+	// Every free neighbour of the candidate keeps an exit.
+	for (int j = -1; j <= 1; ++j) {
+		for (int i = -1; i <= 1; ++i) {
+			if ((i == 0) && (j == 0)) {
+				continue;
+			}
+			AIFloat3 c;
+			if (!circuit->LatticeNeighbour(cand, buildDef, facing, i, j, c)) {
+				continue;
+			}
+			const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
+			const bool freeCell = utils::is_valid(probe)
+					&& (probe.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
+			if (freeCell && !CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, i, j)) {
+				return false;
+			}
+		}
+	}
+	// ...and the builder's own cell, wherever it stands within two cells.
+	if ((builder == nullptr) || !builder->GetCircuitDef()->IsMobile()) {
+		return true;
+	}
+	const AIFloat3 self = builder->GetPos(circuit->GetLastFrame());
+	int bi = 0, bj = 0;
+	float bestSq = -1.f;
+	for (int j = -2; j <= 2; ++j) {
+		for (int i = -2; i <= 2; ++i) {
+			AIFloat3 c;
+			if (!circuit->LatticeNeighbour(cand, buildDef, facing, i, j, c)) {
+				continue;
+			}
+			const float sq = c.SqDistance2D(self);
+			if ((bestSq < .0f) || (sq < bestSq)) {
+				bestSq = sq;
+				bi = i;
+				bj = j;
+			}
+		}
+	}
+	if ((bestSq < .0f) || (bestSq > SQUARE(2.f * slot)) || ((bi == 0) && (bj == 0))) {
+		return true;
+	}
+	return CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, bi, bj);
 }
 
 // The builder itself and the COMMANDER: another hand's turbine closes his

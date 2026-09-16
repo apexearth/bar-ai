@@ -378,11 +378,17 @@ float EPriceCostAt(float buildSec, float costE)
 	// Forgiven only when the build does NOT drain the bank and income also
 	// covers the lines about to run. Forgiven on the full bank alone, three
 	// 3,200-E nano turrets priced at zero energy in one minute and emptied it.
-	if (!eBill && aiEconomyMgr.isEnergyFull
-		&& (aiEconomyMgr.energy.income + EMakeInFlight()
-			> aiEconomyMgr.energy.pull + LineDrainE()))
-	{
-		return 0.f;
+	// ...and when the surplus itself carries this build's drain, bank full
+	// or not: with income 1,700 over a pull of 700 and the bank swinging
+	// 76-100%, a one-metal converter was billed 110-160 metal of energy and
+	// priced below the overflow it would eat (gate game, 19 min of waste).
+	// Energy neither stored nor used has no price.
+	if (!eBill) {
+		const float spare = aiEconomyMgr.energy.income + EMakeInFlight()
+				- aiEconomyMgr.energy.pull - LineDrainE();
+		const float drain = (buildSec > 1.f) ? (costE / buildSec) : costE;
+		if ((aiEconomyMgr.isEnergyFull && (spare > 0.f)) || (spare >= drain))
+			return 0.f;
 	}
 	if (eBill) {
 		const float eInc = aiEconomyMgr.energy.income;
