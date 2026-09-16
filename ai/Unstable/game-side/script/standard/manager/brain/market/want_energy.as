@@ -1230,9 +1230,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// capacity stopped growing while energy overflowed. What is NOT in pull is
 	// the capacity we have already ordered.
 	const bool realize = ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f;
+	const float eWasted = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
 	const float eSurplus = realize
-			? (gESurplusEma - ConvCapInFlight())
-			: (gESurplusEma - StandingConvCap());
+			? (eWasted - ConvCapInFlight())
+			: (eWasted - StandingConvCap());
 	gCwSurplus = eSurplus;
 	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
 	// wrong instrument there, so it does not get to veto.

@@ -1379,6 +1379,38 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 	if ((selfClear > 0.f) && !utils::is_valid(site)) {
 		site = search(0.f);
 	}
+	// EVERY BUILD, not only the lattice walk: nano turrets and converter
+	// yards come through here and closed the commander's pocket in every
+	// gate game after the ring walk learned the rule. The chosen site is
+	// tested once; a site that closes a pocket is refused and the search
+	// rerun without it, three times, then the ground is marked.
+	if (utils::is_valid(site) && (buildDef != nullptr)) {
+		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ()) * SQUARE_SIZE * 2;
+		std::vector<AIFloat3> refused;
+		for (int tries = 0; tries < 3; ++tries) {
+			if (KeepsExits(circuit, terrainMgr, builder, buildDef, facing, slot, site)) {
+				break;
+			}
+			refused.push_back(site);
+			circuit->LOG("apex: exit-kept %s by %s at=%.0f,%.0f (site search)",
+					buildDef->GetDef()->GetName(), builder->GetCircuitDef()->GetDef()->GetName(),
+					site.x, site.z);
+			CTerrainManager::TerrainPredicate base = makePredicate(dryOnly, selfClear);
+			CTerrainManager::TerrainPredicate pred([base, refused](const AIFloat3& p) {
+				for (const AIFloat3& r : refused) {
+					if (p.SqDistance2D(r) < SQUARE(SQUARE_SIZE)) {
+						return false;
+					}
+				}
+				return base(p);
+			});
+			site = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, pred);
+			if (!utils::is_valid(site)) {
+				circuit->NoteBuildBlocked(pos);
+				break;
+			}
+		}
+	}
 	SetBuildPos(site);
 }
 

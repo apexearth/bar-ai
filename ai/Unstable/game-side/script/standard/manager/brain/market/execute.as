@@ -937,7 +937,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const float capD = Catalog::gConvCapacity[cvd];
 			const float perM = Catalog::gCostM[cvd];
 			if ((capD > 1.f) && (perM > 1.f)) {
-				const float spare = gESurplusEma - ConvCapInFlight();
+				const float spare = ((gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma) - ConvCapInFlight();
 				// WHILE THE BANK IS PINNED, METAL IS THE ONLY REAL BOUND.
 				// The surplus EMA is built from `pull`, which is demand and
 				// understates the waste by an order of magnitude (see

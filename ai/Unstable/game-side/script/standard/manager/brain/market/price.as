@@ -111,6 +111,7 @@ float gEPullPrev = -1.f;
 int gEPullPrevAt = 0;
 float gEPullGrowth = 0.f;
 float gESurplusEma = 0.f;
+float gEExcessEma = 0.f;   // the engine's own excess, smoothed like the surplus
 float gEDemandPk = 0.f;
 void TrackEPull()
 {
@@ -129,6 +130,13 @@ void TrackEPull()
 	// third appearance of the temporal-consistency law).
 	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
 	gESurplusEma = 0.9f * gESurplusEma + 0.1f * ((sur > 0.f) ? sur : 0.f);
+	// ...AND WHAT IS ACTUALLY THROWN AWAY. Pull spikes with every build
+	// burst, so income - pull read 3-33 E/s while the engine's own excess
+	// read 600-1,000 and the bank sat at 80-99% (gate games, 13 min of
+	// waste with converters at gain 0.07). The converter prices the larger
+	// of the two, both smoothed the same way.
+	const float exc = aiEconomyMgr.energy.excess;
+	gEExcessEma = 0.9f * gEExcessEma + 0.1f * ((exc > 0.f) ? exc : 0.f);
 	// REAL DEMAND, WHICH PULL UNDERSTATES. Pull is throttled demand and it
 	// also dips to nothing whenever the fleet is between jobs -- read raw, it
 	// called a working economy's whole generation wasted one tick and starving
