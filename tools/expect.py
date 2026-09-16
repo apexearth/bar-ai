@@ -503,28 +503,31 @@ def exp_converters_on_overflow(games):
         return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     bad = []
     for g in ev:
-        conv_min = set()
-        for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: exec t=\d+ \S+ #\d+ convert:", g["text"]):
-            conv_min.add(int(m.group(1)))
-        # The complaint is a RUN of waste with no converter started in it:
-        # the longest stretch of overflow minutes (>500 E/s, >25% of income)
-        # with no converter ordered anywhere inside it.
-        over = sorted({int(m.group(1)) for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"])
-                       if float(m.group(2)) > 100 and float(m.group(3)) > 500 and float(m.group(3)) > 0.25 * float(m.group(2))})
-        unanswered = 0
-        run = 0
-        prev = None
-        for mn in over:
-            if mn in conv_min:
-                run = 0
-            elif prev is not None and mn == prev + 1:
-                run += 1
-            else:
-                run = 1
-            unanswered = max(unanswered, run)
-            prev = mn
-        if unanswered >= 8:
-            bad.append((g["name"], unanswered))
+        # exec lines carry no minute stamp, only the frame; per team, because
+        # a 2v2 log holds two of ours and one's converter is not the other's.
+        conv_min = {}
+        for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: exec t=(\d+) \S+ #\d+ convert:", g["text"]):
+            conv_min.setdefault(m.group(2), set()).add(int(m.group(1)) // 1800)
+        over = {}
+        for m in re.finditer(r"\[(\d+)\.\dm t(\d+)\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"]):
+            if float(m.group(3)) > 100 and float(m.group(4)) > 500 and float(m.group(4)) > 0.25 * float(m.group(3)):
+                over.setdefault(m.group(2), set()).add(int(m.group(1)))
+        worst = 0
+        for team, mins in over.items():
+            conv = conv_min.get(team, set())
+            run = 0
+            prev = None
+            for mn in sorted(mins):
+                if mn in conv:
+                    run = 0
+                elif prev is not None and mn == prev + 1:
+                    run += 1
+                else:
+                    run = 1
+                worst = max(worst, run)
+                prev = mn
+        if worst >= 8:
+            bad.append((g["name"], worst))
     if bad and len(bad) >= max(1, len(ev) // 3):
         return "RED", f"{len(bad)}/{len(ev)} games threw away 500+ E/s for 8+ minutes running with no converter ordered: " + ", ".join(f"{n} ({u} min)" for n, u in bad[:3])
     return "OK", f"{len(bad)}/{len(ev)} games with an unanswered overflow run"
