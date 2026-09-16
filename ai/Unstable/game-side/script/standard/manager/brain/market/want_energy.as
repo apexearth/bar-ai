@@ -1285,9 +1285,19 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// Per HAND, not globally -- see ConvObsoleteFor. Most constructors
 		// can only build the basic one, and refusing it there converts
 		// nothing at all.
+		// ...unless the bank is pinned and the denser fleet, standing or
+		// staffed, does not cover the surplus: then any converter beats the
+		// energy thrown away (his rule: overflowing means converters, the
+		// only question is how many). Watched: standing=0, 4-5k E/s excess,
+		// T1 hands refusing the basic as obsolete-on-arrival while the T2
+		// hands priced the advanced one out.
 		if (ConvObsoleteFor(unit, d)) {
-			++gCwObsolete;
-			continue;
+			const bool starved = EnergyPinned()
+					&& (DenserConvStandingE(d) + ConvCapInFlight() < eSurplus);
+			if (!starved) {
+				++gCwObsolete;
+				continue;
+			}
 		}
 		// A full bank prices the NEXT converter at full capacity -- and the
 		// ones already ordered are that next converter. Pricing it at the

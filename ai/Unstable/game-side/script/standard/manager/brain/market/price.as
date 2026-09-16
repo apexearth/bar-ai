@@ -680,8 +680,17 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				// own can perform -- taxing every T1 solar and tower for
 				// upgrades nobody could have done. OpenSpotStream already
 				// bounds itself this way.
-				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f))
-					displacedM = DisplacedStreamM() * dur * share;
+				// A build that returns more per second than the stream it
+				// holds up displaces nothing: the advanced converter at 16 m/s
+				// was charged 500-2,200 s of "rest" for the mex upgrades its
+				// own metal would fund, and priced below them while 5k E/s
+				// was thrown away on a metal-starved map.
+				if ((share > 0.f) && (Catalog::gExtractsM[defId] <= 0.f)) {
+					float held = DisplacedStreamM() - ((gain > 0.f) ? gain : 0.f);
+					if (held < 0.f)
+						held = 0.f;
+					displacedM = held * dur * share;
+				}
 			}
 			if (feedSec > buildSec) {
 				buildSec = feedSec;

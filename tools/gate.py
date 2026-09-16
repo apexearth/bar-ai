@@ -13,10 +13,9 @@ expect.py -- his complaints as assertions -- and this is what makes it bind:
 `deploy_ai.py deploy` to the shared slot refuses a commit with no green
 record here. A lane deploy never asks.
 
-The gate set is small enough to run after every behaviour change (three
-games in parallel at full speed, ~12 min wall): two Frozen Ford 2v2 (the
-map the walk-away, the converter and the pen were watched on) and one
-Greenest 8v8 (what he watches), all +100%. The record is tournaments/gate/<sha>.json; a RED
+The gate set is two Frozen Ford 2v2 in parallel at full speed (his call:
+the map the walk-away, the converter and the pen were watched on), +100%,
+30 minutes; ~8 min wall. The record is tournaments/gate/<sha>.json; a RED
 records too, so `check` can say why it refused.
 """
 from __future__ import annotations
@@ -40,10 +39,9 @@ def _main_root() -> Path:
 
 GATE_DIR = _main_root() / "tournaments" / "gate"
 GAMES = [
-    # (map, per-side, minutes, seed)
-    ("Frozen_Ford_V2", 2, 25, 5),
-    ("Frozen_Ford_V2", 2, 25, 6),
-    ("Greenest Fields 1.3.1", 8, 30, 22),
+    # (map, per-side, minutes, seed) -- his call 2026-09-15: Frozen Ford, two in parallel
+    ("Frozen_Ford_V2", 2, 30, 5),
+    ("Frozen_Ford_V2", 2, 30, 6),
 ]
 
 

@@ -448,10 +448,23 @@ float InteriorShortfall(const AIFloat3& in pos)
 	const int b = TeamRayOf(pos);
 	if (pos.distance2D(gThMid) > gThR[b])
 		return -1.f;
+	// Against the army they have actually SHOWN, not the wave prior: the
+	// prior is thousands and no line ever closes against it, which read
+	// every home mex as 45% lost with hazard 0 (0.55 survival, unchanged
+	// since before the front). Nothing seen, nothing gets in.
+	RiskFillSiege();
+	const float seen = gRkSeen;   // their mobile army, in metal, as the siege risk reads it
+	if (seen <= 1.f)
+		return 0.f;
 	float worst = 0.f;
 	for (int k = 0; k < PF_RAYS; ++k) {
-		if (gGapWalk[k] && (gGapOpen[k] > worst))
-			worst = gGapOpen[k];
+		if (!gGapWalk[k])
+			continue;
+		float open = (seen - gGapCover[k]) / seen;
+		if (open < 0.f)
+			open = 0.f;
+		if (open > worst)
+			worst = open;
 	}
 	return worst;
 }
