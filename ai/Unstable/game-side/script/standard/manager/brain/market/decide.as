@@ -1165,6 +1165,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_SUPER)
 				continue;
+			// An anti-nuke against no silo seen is insurance, priced in the
+			// draw like the rest; the push is for the weapon itself. His
+			// Comet 1v1: the third T2 con hoisted to an anti-nuke at 13 min,
+			// metal-starved, no enemy silo, the enemy at 250 m/s.
+			if ((ranked[ri].def !is null) && Catalog::gAntiNuke[int(ranked[ri].def.id)]
+				&& (Brain::EnemyNukeSilos() <= 0))
+				continue;
 			if (ri > 0) {
 				Want@ sw = ranked[ri];
 				ranked.removeAt(ri);

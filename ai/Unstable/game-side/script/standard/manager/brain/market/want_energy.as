@@ -91,7 +91,14 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// want to create obsolete buildings" -- the reclaim-rebuild loop was
 		// this ladder re-placing the wind the reclaim side had just eaten).
 		// The hard-stall basic solar keeps its "full stop" ruling.
-		if (GenObsoleteOnArrival(d)
+		// ...EXCEPT WHILE ENERGY IS SHORT: the dwarf law made the advanced
+		// solar obsolete the moment a fusion-capable hand existed, so a stall
+		// at 1,300 E/s was answered with a ten-minute fusion by the T2 hands
+		// and basic solars by the T1 ones, and nothing in between (his Comet
+		// 1v1: 27 basic solars, 10 advanced, one fusion, the enemy at 250
+		// m/s). A deficit is closed by what ARRIVES soonest; the ETA pick
+		// below chooses among all rungs while it lasts.
+		if (GenObsoleteOnArrival(d) && !HardEStall()
 			&& !(solarOnly && (Catalog::gCostE[d] <= 0.f)))
 			continue;
 		// A PREFERENCE THAT STILL LEAVES AN ANSWER. The zero-E rung cannot win
