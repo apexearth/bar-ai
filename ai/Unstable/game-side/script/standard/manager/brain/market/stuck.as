@@ -166,6 +166,9 @@ void UpdateStuckBuilds()
 		// With a site, only getting NEARER it counts as moving: a unit
 		// pushing at a wall it cannot path through drifts a few elmos a
 		// second and read as walking.
+		// Against the distance at the LAST RESET, not the best so far: a slow
+		// walker closes 6-15 elmo between visits, never 16 in one, and was
+		// aborted every 30 s on a 3,000-elmo walk (his game: 103 aborts).
 		const bool nearer = (dSite0 >= 0.f) && (gStuckDist[i] >= 0.f)
 				&& (dSite0 < gStuckDist[i] - STUCK_MOVED);
 		const bool moved = (dSite0 < 0.f)
@@ -179,8 +182,8 @@ void UpdateStuckBuilds()
 			gStuckX[i] = p.x;
 			gStuckZ[i] = p.z;
 			gStuckDone[i] = done;
-			if (nearer || ((dSite0 >= 0.f) && (gStuckDist[i] < 0.f)))
-				gStuckDist[i] = dSite0;
+			if (dSite0 >= 0.f)
+				gStuckDist[i] = dSite0;   // the distance this reset was taken at
 			gStuckSince[i] = ai.frame;
 			continue;
 		}
@@ -200,8 +203,10 @@ void UpdateStuckBuilds()
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z)
 			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
-		if ((dSite > reach) && (done <= 0.f))
-			BlockNote(bp);   // never reached: not the next election's site either
+		// The site is at fault only when the hand stalled NEAR it; a walk that
+		// stalled far away says nothing about the site.
+		if ((dSite > reach) && (dSite <= 4.f * reach) && (done <= 0.f))
+			BlockNote(bp);
 		freed.insertLast(u);
 		freedTask.insertLast(t);
 		StuckDrop(i);
