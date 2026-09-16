@@ -38,9 +38,13 @@ base is the fork point, and the working tree is CRLF against LF blobs, so the
 CR difference has to be ignored or every touched file comes out rewritten
 whole (22,000 lines instead of 3,500):
 
-    cd vendor/engine/AI/Skirmish/BARb
-    git diff --ignore-cr-at-eol $(git merge-base apex/barbarian HEAD) \
+    cd vendor/engine/AI/Skirmish/BARb-<lane>     # a lane holding EVERY change (sync_cpp.py apply first)
+    git --work-tree="$PWD" diff --ignore-cr-at-eol $(git merge-base apex/barbarian HEAD) \
         > /path/to/bar-ai/game-patches/circuitai/0003-cumulative.patch
+
+`--work-tree` is not optional: a lane's `.git` points at the shared gitdir,
+so a bare `git diff` there reads the MAIN checkout's tree and the patch comes
+out without the lane's edits (2026-09-16: none of the lattice hunks, silently).
 
 `0001-guardtasks-use-after-free.patch` and `0002-real-ally-team-id.patch` are
 kept for the reasoning in their headers, not to be applied. They are subsumed:
