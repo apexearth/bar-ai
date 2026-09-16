@@ -1189,6 +1189,7 @@ void ConvWhyLog()
 		+ " nodef=" + gCwNoDef
 		+ " proposed=" + gCwProposed
 		+ " surplus=" + int(gCwSurplus)
+		+ " wasted=" + int((gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma)
 		+ " excess=" + int(aiEconomyMgr.energy.excess)
 		+ " ema=" + int(gESurplusEma)
 		+ " inflight=" + int(ConvCapInFlight())

@@ -202,6 +202,8 @@ void UpdateStuckBuilds()
 			+ " buildDist=" + formatFloat(Catalog::gBuildDist[int(u.circuitDef.id)], "", 0, 0)
 			+ " still " + int(float(ai.frame - gStuckSince[i]) / float(SECOND))
 			+ "s at " + int(p.x) + "," + int(p.z)
+			+ " from " + int(gStuckX[i]) + "," + int(gStuckZ[i])
+			+ " q=" + u.CmdQueueSize()
 			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
 		// A hand that held an order for the whole watch and never got nearer
 		// could not path there (Frozen Ford: 39 mex holds of 30 s each on
