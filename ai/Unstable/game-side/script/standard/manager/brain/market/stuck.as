@@ -171,8 +171,18 @@ void UpdateStuckBuilds()
 		// aborted every 30 s on a 3,000-elmo walk (his game: 103 aborts).
 		const bool nearer = (dSite0 >= 0.f) && (gStuckDist[i] >= 0.f)
 				&& (dSite0 < gStuckDist[i] - STUCK_MOVED);
-		const bool moved = (dSite0 < 0.f)
-				&& ((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED));
+		// A DETOUR IS A WALK. Around the river the path leads away from
+		// the site first, and "nearer" aborted cons 1,000 elmo into it.
+		// Ground covered at a quarter of the unit's own speed since the
+		// reset is walking; a wall-pusher drifts far slower than that.
+		const float sinceS = float(ai.frame - gStuckSince[i]) / float(SECOND);
+		const float walkFloor = 0.25f * Catalog::gSpeed[int(u.circuitDef.id)] * sinceS;
+		const float floor2 = (walkFloor > STUCK_MOVED) ? (walkFloor * walkFloor)
+				: (STUCK_MOVED * STUCK_MOVED);
+		const bool moved = ((dSite0 < 0.f)
+					&& ((dx * dx + dz * dz) > (STUCK_MOVED * STUCK_MOVED)))
+				|| ((dSite0 >= 0.f) && (sinceS >= 5.f)
+					&& ((dx * dx + dz * dz) > floor2));
 		// A frame growing under OTHER hands does not excuse a hand that is
 		// not in reach of it (the commander held a converter 207 elmo off
 		// for four minutes while others built it).
