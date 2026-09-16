@@ -364,6 +364,17 @@ before pricing anything. Not re-read since.
 
 ## AIR
 
+### A T3 nuclear bomber reaches the base (2026-09-15)
+
+His 1v1 (54 min, lost to a Ragnarok): one enemy nuclear bomber got through
+at ~33 min and took 43 nano turrets and a share of the eco with it
+(`unit-destroyed armnanotc` 43 in 30-35 min; workers 40 -> 15). What the
+AA layer reads against a T3 flyer, and whether the air-defence want prices
+one plane's payload against the base it flies over, is unread. The army
+then went passive on the massing law (`stance -> passive`, foeMass 188k
+against ours 73k) -- outmassed 2.5:1 at +100%, which is the ARMY SHARE
+issue, not timidity.
+
 ### BOMBERS: the wing flies at the deadline into the AA and dies whole; the seat's bombing output is unread (2026-09-12, 09-14)
 
 `tournaments/20260912-141649-scouts2`, Greenest 2v2: every strike died to the
