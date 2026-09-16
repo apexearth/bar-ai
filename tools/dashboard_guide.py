@@ -411,6 +411,10 @@ GROUPS = [
                  ("TUNE_CON_FEED_HEADROOM", "how many constructors the lines "
                   "may pay for, as a multiple of what income keeps fed — "
                   "lower means army sooner once the hands are hired"),
+                 ("TUNE_T1_AIR_CON_MIN", "basic air constructors kept once an "
+                  "air lab stands (the nano-turret hands), ordered one at a "
+                  "time between the lab's other air — higher means more "
+                  "turrets go up, at the cost of air units"),
                  ("TUNE_UNIT_AFFORD_S", "seconds of income a unit may cost "
                   "before its bid dies — lower means mass-first harder and "
                   "T3 waits for a richer economy"),
