@@ -51,6 +51,18 @@ lines of quotes.
   Census (`tools/tiling.py`): same scenario 55% -> 100% aligned; eco-only 25
   min 94-96% of 700 structures, the rest nano turrets hugging a fixed site.
   Unverified by him.
+- Shields only where they can be shelled: on the line, or once an enemy LRPC
+  is seen; two on the eco seat far from any gun is waste (09-16). Jammers:
+  one per location, a second adjacent one adds nothing (09-16). Mechanism
+  found: a line want whose site the C++ veto refused fell to the base's
+  700-ring 3,400 elmos away and the line stayed uncovered, so it was bought
+  again; and five seats each bought the team line's one shield slot. Built
+  09-16 (site.blocked gate, service-radius fallback, team-aware coverage) --
+  unverified by him.
+- The eco seat's guns stand inside its base with walk gaps, blocking the farm;
+  two gantries starve for nanos with a full bank; LRPCs belong on hills;
+  Behemoths when the enemy is winning (09-16). Recorded in ISSUES/TODO, not
+  built.
 - An eco base is rows with no gaps, no lanes behind the anchor, factories to
   one side, guns/radar/anti-nuke ringing it; two or three bodies so one blast
   does not take everything. Rows and no-lanes are built; "factories to one

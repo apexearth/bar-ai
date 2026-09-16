@@ -507,6 +507,111 @@ float JamSpacing(int d)
 	return r;
 }
 
+// THE TEAM'S STATICS, NOT ONLY OURS: an ally's jammer or shield at the team
+// line covers it as well as ours does. Refreshed on a clock -- the ally list
+// is a C++ walk and this is asked per candidate.
+array<AIFloat3> gAllyStPos;
+array<int> gAllyStDef;
+Grid::Cells gAllyStGrid;
+int gAllyStAt = -999999;
+void AllyStaticsSync()
+{
+	if (ai.frame - gAllyStAt < 5 * SECOND)
+		return;
+	gAllyStAt = ai.frame;
+	gAllyStPos.resize(0);
+	gAllyStDef.resize(0);
+	const array<float>@ ad = ai.GetAllyStatics();
+	if (ad !is null) {
+		for (uint k = 0; k + 2 < ad.length(); k += 3) {
+			const int d = int(ad[k + 2]);
+			if (!Catalog::ValidId(d))
+				continue;
+			gAllyStPos.insertLast(AIFloat3(ad[k], 0.f, ad[k + 1]));
+			gAllyStDef.insertLast(d);
+		}
+	}
+	gAllyStGrid.Begin(256.f, 0.f, 0.f,
+			float(AiTerrainWidth()), float(AiTerrainHeight()));
+	for (uint i = 0; i < gAllyStPos.length(); ++i)
+		gAllyStGrid.Add(gAllyStPos[i].x, gAllyStPos[i].z);
+}
+
+// ...AND THEIR ORDERS. A shield walks minutes to the line before it is a
+// frame anyone can see, and other seats buy the same slot in that window.
+// Each seat publishes its last few unarmed-class orders on the team channel;
+// a claim is cover while it is fresh.
+const int CLAIM_SLOTS = 3;
+const int CLAIM_TTL = 5 * 60 * 30;   // frames: a long walk plus the build
+array<int> gClaimNext(PROT_N, 0);
+void PublishSenseClaim(int cls, const AIFloat3& in pos)
+{
+	if ((cls < 0) || (cls >= PROT_N) || !OnMap(pos))
+		return;
+	const int k = gClaimNext[cls];
+	gClaimNext[cls] = (k + 1) % CLAIM_SLOTS;
+	const string key = "sc" + cls + "_" + k;
+	ai.PublishTeamValue(key + "x", pos.x);
+	ai.PublishTeamValue(key + "z", pos.z);
+	ai.PublishTeamValue(key + "f", float(ai.frame));
+}
+
+array<AIFloat3> gClaimPos;
+array<int> gClaimCls;
+int gClaimAt = -999999;
+void AllyClaimsSync()
+{
+	if (ai.frame - gClaimAt < 2 * SECOND)
+		return;
+	gClaimAt = ai.frame;
+	gClaimPos.resize(0);
+	gClaimCls.resize(0);
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		for (int cls = 0; cls < PROT_N; ++cls) {
+			if (cls == PROT_DEF)
+				continue;
+			for (int k = 0; k < CLAIM_SLOTS; ++k) {
+				const string key = "sc" + cls + "_" + k;
+				const float f = ai.ReadTeamValue(t, key + "f", -1.f);
+				if ((f < 0.f) || (float(ai.frame) - f > float(CLAIM_TTL)))
+					continue;
+				const AIFloat3 p(ai.ReadTeamValue(t, key + "x", -1.f), 0.f,
+						ai.ReadTeamValue(t, key + "z", -1.f));
+				if (!OnMap(p))
+					continue;
+				gClaimPos.insertLast(p);
+				gClaimCls.insertLast(cls);
+			}
+		}
+	}
+}
+
+// Allied statics of the class within r of pos, standing or ordered.
+int AllyProtCount(int cls, const AIFloat3& in pos, float r)
+{
+	AllyStaticsSync();
+	int n = 0;
+	gAllyStGrid.Query(pos.x, pos.z, r);
+	for (uint q = 0; q < gAllyStGrid.hit.length(); ++q) {
+		const uint i = uint(gAllyStGrid.hit[q]);
+		if ((ProtClassOf(gAllyStDef[i]) == cls)
+			&& (pos.distance2D(gAllyStPos[i]) < r))
+			++n;
+	}
+	AllyClaimsSync();
+	for (uint i = 0; i < gClaimPos.length(); ++i) {
+		if ((gClaimCls[i] == cls) && (pos.distance2D(gClaimPos[i]) < r))
+			++n;
+	}
+	return n;
+}
+
 // How many of a class cover pos: standing, framed and ordered alike.
 int ProtCoverCount(int cls, const AIFloat3& in pos, float r)
 {
@@ -519,7 +624,7 @@ int ProtCoverCount(int cls, const AIFloat3& in pos, float r)
 		if (OnMap(gComPos[ci]) && (pos.distance2D(gComPos[ci]) < r))
 			++n;
 	}
-	return n;
+	return n + AllyProtCount(cls, pos, r);
 }
 
 bool ProtCovered(int cls, const AIFloat3& in pos, float r)
@@ -539,7 +644,7 @@ bool ProtCovered(int cls, const AIFloat3& in pos, float r)
 			break;
 		}
 	}
-	return old;
+	return old || (AllyProtCount(cls, pos, r) > 0);
 }
 
 // Insurance pricing: protection is worth a fraction of the assets it

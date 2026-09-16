@@ -204,6 +204,28 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### ECO SEAT GANTRIES: two gantries, a full bank, 1,300 m/s of idle nano lathe, and the turrets went to the line and to towers (2026-09-16)
+
+His watched Supreme Isthmus 8v8 (`matches/_engine`, seat t7 at 10150,597):
+at 32 min `nanowant ... idle=1347-1662 bank=4966/5000`, both gantries at
+`depth 2+2/592s`, `facqueue idle coraap/corap: no-candidate`. The seat's nano
+executions: 122 at the team line 3,669 elmos away (`nano-to-line`), then
+`nano-to-sink` cordoom 101, cormmkr 87, corfmd 48, corfus 29 -- the gantries
+(`corgant` at 10124,682 and 12080,384) are not sinks in that list and the
+cells within 300 of them saw 10-36 attempts. He: "two gantries and only a
+small number of nano turrets around them... good income, not able to produce
+units. This is an issue that we have very often." NeediestLine read the
+gantry line at 0-58 m/s of need while its queue held 592 s of work; a
+gantry's line should be the hungriest thing on the seat.
+
+### ECO SEAT DEFENCES: bought late, inside the base, with walk gaps that block the farm (2026-09-16)
+
+Same game: t7's Bulwarks (`cordoom`) executed 20 times within 1,000 elmos of
+its anchor and 30 claws (`cormaw`) within 1,000, i.e. inside the eco block,
+with the 6-cell `_default_` yard around each (dropped to flush in ad3aa4bc).
+He: they "block useful construction of a lot of other things". The eco seat's
+guns belong on its rim (defence-wall paradigm), not in its rows.
+
 ### LATTICE RESIDUE: 4-6% of nano turrets stand off the lattice, hugging a fixed site; mixed pitches leave 1-3 square strips (2026-09-16)
 
 `tools/tiling.py` on the eco-only board (`matches/20260916-082921-*`,

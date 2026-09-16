@@ -1097,7 +1097,10 @@ static asITypeInfo* FloatArrayType()
 
 // Allied (not own) static attackers as [x, z, defId, ...] -- the team's guns,
 // so the script's cover field can read an ally's tower the way it reads ours.
-static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
+// Allied statics as (x, z, defId) triples -- every one when `armedOnly` is
+// false, else the guns. An ally's jammer or shield at the team line covers
+// it as well as ours does.
+static CScriptArray* CCircuitAI_AllyStatics(CCircuitAI* circuit, bool armedOnly)
 {
 	std::vector<float> out;
 	const int frame = circuit->GetLastFrame();
@@ -1107,7 +1110,7 @@ static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
 			continue;
 		}
 		const CCircuitDef* cdef = u->GetCircuitDef();
-		if (cdef->IsMobile() || !cdef->IsAttacker()) {
+		if (cdef->IsMobile() || (armedOnly && !cdef->IsAttacker())) {
 			continue;
 		}
 		if (circuit->GetTeamUnit(kv.first) != nullptr) {
@@ -1127,6 +1130,16 @@ static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
 		arr->SetValue(i, &out[i]);
 	}
 	return arr;
+}
+
+static CScriptArray* CCircuitAI_GetAllyDefences(CCircuitAI* circuit)
+{
+	return CCircuitAI_AllyStatics(circuit, true);
+}
+
+static CScriptArray* CCircuitAI_GetAllyStatics(CCircuitAI* circuit)
+{
+	return CCircuitAI_AllyStatics(circuit, false);
 }
 
 // The area a point stands in for one move type, or the nearest one within a
@@ -1694,6 +1707,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStatics()", asFUNCTION(CCircuitAI_GetAllyStatics), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetUnsafeSites()", asFUNCTION(CCircuitAI_GetUnsafeSites), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

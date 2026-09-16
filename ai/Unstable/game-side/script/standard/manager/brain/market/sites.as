@@ -956,7 +956,14 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 		// placed to cover: a 5,600 ring put the commander's first LLT in the
 		// far corner, 5,000 elmo from the lab it covered, and he walked there.
 		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
-		const float reachR = Catalog::gMaxRange[did];
+		// ...and what it SERVES stays in reach of the primary: a gun's range,
+		// a jammer's or a shield's dome, a radar's sweep. Unbounded, a line
+		// jammer fell to the base ring 3,400 elmos from the line and the
+		// next one stood beside it.
+		float reachR = Catalog::gMaxRange[did];
+		if (Catalog::gJamR[did] > reachR) reachR = Catalog::gJamR[did];
+		if (Catalog::gShieldR[did] > reachR) reachR = Catalog::gShieldR[did];
+		if (Catalog::gRadarR[did] > reachR) reachR = Catalog::gRadarR[did];
 		for (uint r = 0; !ok && (r < 4) && (ring <= leash); ++r) {
 			float bestFwd = 1e9f;
 			for (int b = 0; b < 8; ++b) {

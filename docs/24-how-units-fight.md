@@ -430,6 +430,10 @@ unit.
 - Amphibious tanks must not act cowardly.
 - The commander hovers under a jammer, cloaked, and surprise D-guns enemy T3
   when it comes.
+- 2026-09-16, watching Cortex lose ground on Supreme Isthmus 8v8: when the
+  enemy is encroaching and winning, the thing to build is the Behemoth
+  (`corjugg`) -- it is extremely defensive. He asked whether we hold any
+  store of what units are good FOR, so that "Behemoth" answers "defence".
 
 ## Diagnostics he asked for
 

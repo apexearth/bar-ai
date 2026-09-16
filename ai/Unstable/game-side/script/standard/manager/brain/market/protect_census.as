@@ -68,7 +68,8 @@ const int GATE_SITE_STOP   = 27;
 const int GATE_DEF_ROUTE   = 28;
 const int GATE_SHLD_SAT    = 29;   // appended: renumbering would move every counter
 const int GATE_JAM_SITE    = 30;
-const int GATE_N           = 31;
+const int GATE_SITE_BLOCKED = 31;   // the C++ reach veto marked the site
+const int GATE_N           = 32;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -107,6 +108,7 @@ string GateName(int g)
 	if (g == GATE_SITE_STOP)   return "site.nostop";
 	if (g == GATE_DEF_ROUTE)   return "def.route";
 	if (g == GATE_JAM_SITE)    return "jam.nosite";
+	if (g == GATE_SITE_BLOCKED) return "site.blocked";
 	return "g" + g;
 }
 

@@ -387,8 +387,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		AIFloat3 sAt = groundDef ? OffFactoryExit(w.pos) : w.pos;
 		if (NearBlocked(sAt))
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
-		return Requests::Take(unit, w.def, Task::BuildType(bt),
-				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f);
+		bool sMade = false;
+		IUnitTask@ sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
+				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f, sMade);
+		// The team hears the order now, not when the frame appears.
+		if (sMade && !groundDef)
+			PublishSenseClaim(w.spotId, sAt);
+		return sTask;
 	}
 	if (w.kind == WK_SUPER) {
 		// A gantry is a factory and goes through the plant's own siting and

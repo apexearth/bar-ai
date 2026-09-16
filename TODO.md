@@ -291,3 +291,18 @@ The territory mask (09-12) and the team hull (docs/32) are the map. Not built:
 defence and army as two ways of buying the same hold -- substitutes in one
 balance, priced against each other, not two independent targets
 (`TUNE_DEF_ECO_S` 120 vs `TUNE_ARMY_ECO_S` 66 is the framing he rejected).
+
+## Behemoths when the enemy is encroaching (defence by unit choice)
+
+apexearth 2026-09-16, Cortex losing ground on Supreme Isthmus: build
+Behemoths (`corjugg`) -- "super duper defensive" -- when the enemy is winning
+on our ground. Asks for a store of what each unit is good FOR (the Behemoth:
+defence) that composition can read. Not built. The gantry-side prerequisite
+is the nano/gantry issue in ISSUES (ECO SEAT GANTRIES).
+
+## LRPC on high ground
+
+apexearth 2026-09-16: long-range cannons go up on hills so they fire long
+distances unobstructed; the ground is allowed, hills are preferred. Supreme
+Isthmus has them. `want_super.as` sites an LRPC with no height term. Not built.
+
