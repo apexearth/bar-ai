@@ -70,9 +70,16 @@ def modified_files() -> list[str]:
     files = {line.strip() for line in out.splitlines() if line.strip()}
     # Uncommitted edits too -- an agent that has just written a file has not
     # committed it, and it is still ours.
-    out = subprocess.run(["git", "diff", "--name-only"], cwd=BARB,
-                         capture_output=True, text=True, check=True).stdout
-    files.update(line.strip() for line in out.splitlines() if line.strip())
+    # A lane's .git points at the SHARED gitdir: --work-tree reads this tree.
+    # --name-only compares blob hashes, so every CRLF checkout of an LF blob
+    # counts; numstat with CR ignored names only real edits.
+    out = subprocess.run(["git", f"--work-tree={BARB}", "diff", "--numstat",
+                          "--ignore-cr-at-eol"],
+                         cwd=BARB, capture_output=True, text=True, check=True).stdout
+    for line in out.splitlines():
+        parts = line.split("	")
+        if len(parts) == 3 and (parts[0] != "0" or parts[1] != "0"):
+            files.add(parts[2].strip())
     return sorted(files)
 
 

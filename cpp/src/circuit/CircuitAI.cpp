@@ -167,6 +167,7 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 				logSteady0 = std::chrono::steady_clock::now();
 				LOG_ENGINE("apex: log file %s", path.c_str());
 			}
+			recPath = std::string(dir) + "apex-record.txt";
 		}
 	}
 }
@@ -452,6 +453,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 			TRACY_TOPIC("EVENT_ENEMY_DAMAGED", EnemyDamaged);
 
 			struct SEnemyDamagedEvent* evt = (struct SEnemyDamagedEvent*)data;
+			if (evt->attacker >= 0) {
+				RecordDealt(evt->attacker, evt->damage);
+			}
 			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
 			ret = (enemy != nullptr) ? this->EnemyDamaged(enemy) : ERROR_ENEMY_DAMAGED;
 		} break;
@@ -678,6 +682,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
 	InitWeaponDefs();
 	float decloakRadius;
 	InitUnitDefs(armor, decloakRadius);  // Inits TerrainData
+	RecordLoad();
 
 	setupManager->DisabledUnits();
 	if (!setupManager->OpenConfig(profile, cfgParts)) {
@@ -836,6 +841,11 @@ int CCircuitAI::Release(int reason)
 	if (!isInitialized && (reason < RELEASE_SIDE)) {
 		return 0;
 	}
+
+	for (auto& kv : teamUnits) {
+		RecordFold(kv.second, false);
+	}
+	RecordSave();
 
 	scheduler->ProcessRelease();
 	scheduler = nullptr;
@@ -1596,6 +1606,7 @@ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 	const bool firstDeath = destroyed.insert(unit->GetId()).second;
 	if (firstDeath) {
 		NoteTrade(false, unit->GetCircuitDef());
+		RecordFold(unit, true);
 		// Feeds the attack hotspot: where we are losing things is the best
 		// evidence available of where the enemy actually is. (Repeated calls
 		// were also multiplying this and NoteTrade -- pre-existing.)
@@ -2114,6 +2125,147 @@ void CCircuitAI::NoteTrade(bool isKill, CCircuitDef* cdef)
 	} else {
 		tradeLost += v;
 	}
+}
+
+// A unit type's record. Ratio 1 = its units dealt their own health in damage;
+// the prior counts as apex_record_prior units at exactly that, so one death
+// cannot condemn a type, and the window keeps it a moving average over the
+// last apex_record_window units rather than a lifetime verdict.
+bool CCircuitAI::RecordCounts(CCircuitDef* cdef)
+{
+	return (cdef != nullptr) && cdef->IsMobile() && cdef->IsAttacker() && !cdef->IsRoleComm();
+}
+
+void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, float damage)
+{
+	if ((damage <= .0f) || (GetTeamUnit(attacker) == nullptr)) {
+		return;
+	}
+	recDealt[attacker] += damage;
+}
+
+void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died)
+{
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	auto it = recDealt.find(unit->GetId());
+	const float dealt = (it != recDealt.end()) ? it->second : .0f;
+	if (it != recDealt.end()) {
+		recDealt.erase(it);
+	}
+	if (!RecordCounts(cdef) || !unit->IsFinished()) {
+		return;
+	}
+	const float hp = cdef->GetHealth();
+	if (hp <= .0f) {
+		return;
+	}
+	// Only a death is a verdict: a survivor at a time-limit end is young.
+	if (died) {
+		SRecord& r = recGame[cdef->GetId()];
+		r.dealt += dealt;
+		r.health += hp;
+		r.n += 1.f;
+	}
+	LOG("apex: record %s %s dealt=%.0f hp=%.0f r=%.2f avg=%.2f n=%d", cdef->GetDef()->GetName(),
+			died ? "died" : "alive", dealt, hp, dealt / hp, RecordRatio(cdef), RecordCount(cdef));
+}
+
+float CCircuitAI::RecordRatio(CCircuitDef* cdef) const
+{
+	if (!RecordCounts(cdef)) {
+		return 1.f;
+	}
+	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetHealth();
+	float dealt = prior, health = prior;
+	auto g = recGame.find(cdef->GetId());
+	if (g != recGame.end()) {
+		dealt += g->second.dealt;
+		health += g->second.health;
+	}
+	auto st = recStored.find(cdef->GetId());
+	if (st != recStored.end()) {
+		dealt += st->second.dealt;
+		health += st->second.health;
+	}
+	return dealt / health;
+}
+
+int CCircuitAI::RecordCount(CCircuitDef* cdef) const
+{
+	float n = .0f;
+	auto g = recGame.find(cdef->GetId());
+	if (g != recGame.end()) {
+		n += g->second.n;
+	}
+	auto st = recStored.find(cdef->GetId());
+	if (st != recStored.end()) {
+		n += st->second.n;
+	}
+	return int(n + 0.5f);
+}
+
+static void RecordRead(const std::string& path, std::unordered_map<std::string, CCircuitAI::SRecord>& out)
+{
+	std::ifstream in(path);
+	std::string name;
+	CCircuitAI::SRecord r;
+	while (in >> name >> r.dealt >> r.health >> r.n) {
+		out[name] = r;
+	}
+}
+
+void CCircuitAI::RecordLoad()
+{
+	recStored.clear();
+	if (recPath.empty()) {
+		return;
+	}
+	std::unordered_map<std::string, SRecord> byName;
+	RecordRead(recPath, byName);
+	for (auto& kv : byName) {
+		CCircuitDef* cdef = GetCircuitDef(kv.first.c_str());
+		if (cdef != nullptr) {
+			recStored[cdef->GetId()] = kv.second;
+		}
+	}
+	LOG_ENGINE("apex: record loaded %d types from %s", (int)recStored.size(), recPath.c_str());
+}
+
+// Re-read before writing: every AI in this process saves its own game onto
+// whatever the file holds by then, so eight teams do not overwrite each other.
+void CCircuitAI::RecordSave()
+{
+	if (recPath.empty() || recGame.empty()) {
+		return;
+	}
+	std::unordered_map<std::string, SRecord> all;
+	RecordRead(recPath, all);
+	const float window = GetTunable("apex_record_window", 40.f);
+	for (auto& kv : recGame) {
+		CCircuitDef* cdef = GetCircuitDef(kv.first);
+		if (cdef == nullptr) {
+			continue;
+		}
+		SRecord& r = all[cdef->GetDef()->GetName()];
+		r.dealt += kv.second.dealt;
+		r.health += kv.second.health;
+		r.n += kv.second.n;
+		if (r.n > window) {
+			const float k = window / r.n;
+			r.dealt *= k;
+			r.health *= k;
+			r.n = window;
+		}
+	}
+	std::ofstream out(recPath, std::ios::trunc);
+	if (!out.is_open()) {
+		LOG_ENGINE("apex: record NOT saved: %s", recPath.c_str());
+		return;
+	}
+	for (auto& kv : all) {
+		out << kv.first << ' ' << kv.second.dealt << ' ' << kv.second.health << ' ' << kv.second.n << std::endl;
+	}
+	LOG_ENGINE("apex: record saved %d types (%d this game)", (int)all.size(), (int)recGame.size());
 }
 
 // Kills over losses, lately. 1.0 means even. Returns 1.0 until enough has

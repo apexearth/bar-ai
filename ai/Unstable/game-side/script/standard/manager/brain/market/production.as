@@ -1378,7 +1378,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				rcTgt.insertLast(RoleTarget(rIdx, armyT0));
 				rcVal.insertLast(RoleValue(rIdx));
 			}
-			const float rTarget = rcTgt[rSlot];
+			float rTarget = rcTgt[rSlot];
+			// The cover half of the AA target is FIGHTER demand: a ground AA
+			// unit cannot fly beside a scout (the 23-Crashers-vs-no-air game).
+			if ((rIdx == int(Unit::Role::AA.type)) && !Catalog::gFlyer[d])
+				rTarget -= Air::CoverDemandM();
 			const float rGap = rTarget - rcVal[rSlot];
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			// THE PORTFOLIO FLOOR MUST NOT REVIVE A ROLE THAT IS WORTH NOTHING.

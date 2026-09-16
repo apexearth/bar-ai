@@ -290,6 +290,11 @@ escorts by risk, copy waiver needs every line working, hands verdict) --
 unverified in a watched game. `FacYardWatch` (`apex: facyard jammed`) reads
 a blocked plant; nothing yet says what blocked HIS gantry.
 
+Third report 2026-09-16, Isthmus 8v8: the eco player stood ~10 advanced air
+labs, often idle, while spending about half of income. His infolog from that
+game is unread; the first thing to read from it is what the auction offered
+those labs per minute.
+
 ### ECONOMY LADDER: what stage 1 left open (2026-09-11)
 
 Stage 1 (the generator chosen by the ladder, the tech want asking the

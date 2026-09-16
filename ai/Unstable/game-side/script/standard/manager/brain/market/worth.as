@@ -468,7 +468,26 @@ float UnitPPC(int d)
 	v *= OutrangeMul(d);
 	v *= FoeTierMul(d);
 	v *= OwnTierMul(d);
+	v *= RecordMul(d);
 	return v;
+}
+
+// THE TRACK RECORD (apexearth 2026-09-16): a type whose units keep dying
+// without dealing their own health in damage is bought at what its dead
+// actually returned, not what its stats promise. A discount only, so the stats still
+// rank what has proven itself. Fodder is bought to die and fighters are
+// always needed, so neither is judged. Never reaches zero: the prior in the
+// DLL keeps the floor at prior/(prior+window).
+float RecordMul(int d)
+{
+	if (ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) <= 0.f)
+		return 1.f;
+	const CCircuitDef@ cdef = Catalog::Def(d);
+	if (Military::IsFodder(cdef)
+		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
+		return 1.f;
+	const float r = ai.RecordRatio(cdef);
+	return (r < 1.f) ? r : 1.f;
 }
 
 // The cheapest measurement there is: what the current exponents actually rank,

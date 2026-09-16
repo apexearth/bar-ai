@@ -386,6 +386,19 @@ static void CCircuitUnit_CmdMoveTo(CCircuitUnit* unit, const AIFloat3& pos)
 	}
 }
 
+// apex: a raw guard order, for aircraft the script drives without a task
+// (held fighters covering a look or an overflight).
+static void CCircuitUnit_CmdGuard(CCircuitUnit* unit, CCircuitUnit* target)
+{
+	if ((unit == nullptr) || unit->IsDead() || (target == nullptr) || target->IsDead()) {
+		return;
+	}
+	try {
+		unit->Guard(target, INT_MAX);
+	} catch (const std::exception&) {
+	}
+}
+
 // apex: which way a building faces (UNIT_FACING_SOUTH=0 +z, EAST=1 +x,
 // NORTH=2 -z, WEST=3 -x); -1 for a dead unit. A blocked factory is cleared
 // by reclaiming what stands in FRONT of it, and only the engine knows front.
@@ -1646,6 +1659,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatio(const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordRatio), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int RecordCount(const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "double ClockUs() const", asFUNCTION(CCircuitAI_ClockUs), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void PublishTeamValue(const string& in, float)", asFUNCTION(CCircuitAI_PublishTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float ReadTeamValue(int, const string& in, float) const", asFUNCTION(CCircuitAI_ReadTeamValue), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -1846,6 +1861,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// retreat task substitutes for everything it would otherwise build. A raw
 	// command moves the unit without consuming its task slot.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdGuard(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdGuard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetFacing()", asFUNCTION(CCircuitUnit_GetFacing), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

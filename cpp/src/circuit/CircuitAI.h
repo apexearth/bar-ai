@@ -219,6 +219,13 @@ public:
 	// apex: nearest commander corpse inside the circle, -RgtVector if none.
 	springai::AIFloat3 GetCommanderWreckPos(const springai::AIFloat3& pos, float radius);
 	int GetMetalResId();
+	// Track record: damage each unit type dealt against its own health,
+	// carried across games in the AI's data dir. Fodder and fighters are the
+	// script's business; this only measures.
+	void RecordDealt(ICoreUnit::Id attacker, float damage);
+	void RecordFold(CCircuitUnit* unit, bool died);
+	float RecordRatio(CCircuitDef* cdef) const;
+	int RecordCount(CCircuitDef* cdef) const;
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
 	// WHERE we are losing units, cost-weighted and decaying. The AI had no
@@ -493,6 +500,19 @@ private:
 	bool isCommMerge;
 	bool isAllyBaseAvoid;
 // <<< AIOptions.lua ---- END
+
+// >>> Unit track record ---- BEGIN
+public:
+	struct SRecord { float dealt = .0f; float health = .0f; float n = .0f; };
+private:
+	std::unordered_map<ICoreUnit::Id, float> recDealt;      // this game, per unit
+	std::unordered_map<CCircuitDef::Id, SRecord> recGame;   // this game, per def
+	std::unordered_map<CCircuitDef::Id, SRecord> recStored; // from the file
+	std::string recPath;
+	void RecordLoad();
+	void RecordSave();
+	static bool RecordCounts(CCircuitDef* cdef);
+// <<< Unit track record ---- END
 
 // >>> Recent trade record ---- BEGIN
 private:

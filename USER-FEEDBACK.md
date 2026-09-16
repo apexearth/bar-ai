@@ -22,8 +22,10 @@ lines of quotes.
 - At 1,000 m/s no basic converter should be started; at 32k E/s income with
   5k pulled, advanced converters should be going up in numbers. Open until a
   watched game shows it (ISSUES CONVERTERS, GANTRIES).
-- Idle gantries must not exist while the bank is full; an idle gantry never
-  justifies another. Fixes 09-13 unverified in a watched game.
+- Idle factories must not exist while the bank is full; an idle gantry never
+  justifies another. Fixes 09-13 did not close it: 09-16 Isthmus 8v8, ~10
+  advanced air labs idle while half our metal went unspent. Third report
+  (TODO "Never an idle factory"; ISSUES GANTRIES).
 - A T2 lab is built by many hands, not one; we reach T2 behind our enemies.
 - A T2 lab is not started while the front is being lost (seed 17) -- the
   tech price has no army-share term (ISSUES ECONOMY LADDER, stage 2).

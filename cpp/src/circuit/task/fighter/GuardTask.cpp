@@ -84,13 +84,20 @@ void CFGuardTask::Update()
 	CEnemyInfo* target = nullptr;
 	const int frame = circuit->GetLastFrame();
 	const AIFloat3& pos = vip->GetPos(frame);
+	// A flying VIP's guards are fighters: what threatens it is air, and a
+	// ground target would pull the escort off it for nothing.
+	const bool airOnly = vip->GetCircuitDef()->IsAbleToFly();
 	const std::vector<ICoreUnit::Id>& enemyIds = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, vip->GetCircuitDef()->GetLosRadius() + 500.f);
 	for (ICoreUnit::Id enemyId : enemyIds) {
 		CEnemyInfo* ei = circuit->GetEnemyInfo(enemyId);
-		if (ei != nullptr) {
-			target = ei;
-			break;
+		if (ei == nullptr) {
+			continue;
 		}
+		if (airOnly && ((ei->GetCircuitDef() == nullptr) || !ei->GetCircuitDef()->IsAbleToFly())) {
+			continue;
+		}
+		target = ei;
+		break;
 	}
 
 	if (target != nullptr) {

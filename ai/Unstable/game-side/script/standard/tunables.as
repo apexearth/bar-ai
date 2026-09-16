@@ -736,6 +736,11 @@ const float TUNE_INTEL_AIR_INCOME = 25.f;
 //   feeding into flak is worse than waiting.
 const float TUNE_INTERCEPT_MIN_FIGHTERS = 4.f;
 
+// 1 = held fighters guard every scout, radar plane and bomber sent out
+//   (enough to match the route's air threat, never none); 0 = they fly alone.
+//   See docs/27.
+const float TUNE_AIR_COVER = 1.f;
+
 // [ratio] -- One-shot bombers (Legion Martyr) get their wanted count scaled by
 //   this -- they die on delivery, so a full bomber count overbuys.
 const float TUNE_ONESHOT_BOMBER_SCALE = 0.4f;
@@ -917,6 +922,10 @@ const float TUNE_WORTH_COST = 1.f;
 // 1 = print the exponents and field means once; 2 = also dump the ranked
 //   field. See docs/27.
 const float TUNE_WORTH_DIAG = 0.f;
+
+// 1 = a unit type's measured damage-dealt/health record discounts its price
+//   (fodder and fighters exempt); 0 = record only. See docs/27.
+const float TUNE_RECORD_BITE = 1.f;
 
 // What a weapon's reach is worth when it CANNOT hit a moving target -- a slow
 //   un-tracked rocket. See docs/27.

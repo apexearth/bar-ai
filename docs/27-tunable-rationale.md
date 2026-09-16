@@ -365,6 +365,19 @@ until he is dead.
 
 ## Air
 
+### `TUNE_AIR_COVER` = 1.f (2026-09-16)
+
+apexearth watched scouts fly out alone and die to the first enemy fighters.
+`Air::Cover` sends held fighters with a look, a radar post and an overflight
+on a raw guard order (`CmdGuard`, bound for this), enough by `Catalog::gPower`
+to match `RouteThreat` for the VIP and never none -- the threat map reads zero
+exactly when we have not seen their air, which is when the lone scout dies.
+Basic fighters go first. Cover flies home when the look ends or its guard
+order empties (VIP dead), checked every 5 s. A strike's wave fighters are
+elected into `TaskF::Guard(bomber)` round-robin instead, and CFGuardTask now
+engages only AIR for a flying VIP. Not yet measured: the 1v1 benchmark flies
+no air; self-play with handicap is the exercise.
+
 ### `TUNE_AIR_DOMINANCE_AA` = 0.15f
 
 Enemy AA under this fraction of our own team army counts as DOMINATED: the
@@ -496,6 +509,25 @@ bodies trade one for one and cheap chaff wins the draw; at 0 it is cost^1, the
 SQUARE law where a massed army fires at once and quality wins superlinearly.
 Tzar-and-Banisher armies are the square-law case; 0.5 is the middle. 1 is what
 this AI has always priced under.
+
+### `TUNE_RECORD_BITE` = 1.f (2026-09-16)
+
+apexearth's track record: a unit type has justified its existence when the
+damage it dealt equals its own health; a 1,000-metal unit that dealt 50 is
+nearly useless. The DLL sums damage dealt per unit (EVENT_ENEMY_DAMAGED) and
+folds dealt/health per type at DEATH ONLY -- a survivor at a time-limit end is
+young: 68 of 90 Fleas alive at 0 dealt read the type at 0.44 while its dead
+read 1.10 (six-game battery). The average is shrunk toward 1.0 by
+`apex_record_prior` (10) units so one death cannot condemn a type, and capped
+at `apex_record_window` (40) deaths so it stays a moving average; the file
+`apex-record.txt` in the AI's data dir carries it across games, every AI in
+the process merging its own game onto whatever is there. `RecordMul` in
+worth.as applies min(1, ratio) to the combat price -- a discount only, never
+a boost, never a ban (floor prior/(prior+window) = 0.2), fodder and fighters
+exempt (his ruling). Six-game battery 2026-09-16 vs BARb: dead T1 bots read
+0.77-1.01 pooled; the multiplier moved Pawn between 0.70 and 0.93 game to
+game -- a gentle discount for a type trading under par, and no type here
+"always dies for nothing". Window 40 vs 100 gave identical multipliers.
 
 ### `TUNE_WORTH_DIAG` = 0.f
 

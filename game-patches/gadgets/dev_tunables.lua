@@ -460,6 +460,7 @@ local NAMES = {
 	"apex_intercept_r",      -- air/update.as: radius of the home air-raid sensor (1400)
 	"apex_intercept_min",    -- air/update.as: enemy air value that summons the pool (500)
 	"apex_intercept_min_fighters", -- air/update.as: fighters held before we answer an ally (4)
+	"apex_air_cover", -- air/cover.as: held fighters guard every scout, radar plane and bomber sent out (1)
 	"apex_air_dominance_aa",
 	"apex_air_dominance_army",
 	"apex_draw_defzone",
@@ -542,6 +543,9 @@ local NAMES = {
 	"apex_worth_aoe",
 	"apex_worth_cost",
 	"apex_worth_diag",
+	"apex_record_bite", -- market/worth.as: a type's measured damage/health record discounts its price (1)
+	"apex_record_prior", -- CircuitAI.cpp: units of "justified" the record starts from (10)
+	"apex_record_window", -- CircuitAI.cpp: the moving average spans this many deaths (40)
 	"apex_line_abs",
 	"apex_line_range_exp",
 	"apex_line_median",

@@ -141,7 +141,7 @@ void RecycleOldFighters()
 	// wing leaving at once.
 	for (uint i = 0; i < wings.length(); ++i) {
 		CCircuitUnit@ w = wings[i];
-		if (w is null)
+		if ((w is null) || Covering(w.id))
 			continue;
 		w.CmdMoveTo(foe);
 		++gRecycled;

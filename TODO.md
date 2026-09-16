@@ -138,6 +138,55 @@ Surprise the enemy by building up a force of 20+ fighters and 20+ bombers (T2), 
 
 In late game, like 20-30m+ in time, when theres lots of big bois or annoying long range units attacking you, you can distract them very well by spamming ticks at the enemy. Alternatives are grunts, pawns, rascals, wheelies, the cheap but fast units - we don't care about grouping up these units. They go straight to the front and run as far into the enemy base as they can. Their purpose is to provide vision and to be a distraction. These shouldn't get swept up into groups, or treated like normal army - they are fodder. (`TUNE_SPAM_RAIDERS` is on since 09-13 for the raider class; the deliberate late-game fodder wave is not built.)
 
+## Stop buying what keeps dying for nothing (unit track record)
+
+apexearth 2026-09-16. Keep a record, across games and within one, of how
+each unit type performs, and discount the ones that keep proving useless:
+
+- A unit has justified its existence when the damage it dealt equals its own
+  health. Five times its health is a 5x. A 1,000-metal unit that dealt 50
+  metal of damage is almost useless.
+- Keep it simple: a moving average per unit type. It has to read bad
+  continuously for some duration before the AI says "you're not worth it".
+- **Fodder is never judged.** Its whole purpose is distraction; we know it will
+  die. Keep making it. (In code that is the raider class the spam path sends,
+  `hooks.as` / `TUNE_SPAM_RAIDERS`.)
+- **Fighters are never discounted.** You always need fighters with aircraft.
+  At most, T1 fighters may be discounted in favour of T2 ones.
+- The engine tracks unit experience already; the AI can read damage dealt per
+  unit through the damage callbacks, so no new bookkeeping in the game.
+- Where it lands: the per-def worth multiplier (`worth.as` `UnitWorthMod`,
+  hand-set today) becomes the measured ratio. A price term, not a ban.
+- Stage 0 is the instrument: log damage-dealt/health per unit type at death
+  and at game end, check the ranking is stable across a battery, THEN price.
+
+## Fighter cover for air missions
+
+apexearth 2026-09-16, watching scouts fly out alone and die to the first
+enemy fighters. When we send scouts, bombers or radar planes out on a mission,
+fighters go with them to guard them. (Stage 0 of the track record and this
+are the same session's work.)
+
+## Never an idle factory while metal goes unspent
+
+apexearth 2026-09-16, from an 8v8 on Isthmus he watched. Our eco player got
+very strong and stood about ten advanced air labs -- and they sat idle much of
+the time while we spent only about half the metal we were making. There was no
+excuse: with that bank and that income the labs should have been pumping out
+air without pause. An idle factory next to unspent metal is UNACCEPTABLE, not
+a tuning question.
+
+This is the third report of the same class (gantries 09-12 and 09-13, air labs
+now; ISSUES GANTRIES). The fixes of 09-12/13 did not close it. What is open:
+
+- Nothing yet says WHY a standing lab is idle -- army target reached, a want
+  that never elects, a `gap0` on every candidate, a jammed yard. `FacYardWatch`
+  reads a blocked plant only. Stage 0 is the instrument: per lab, per minute,
+  idle time and the reason the auction gave it nothing.
+- The standing obligation ("army stays at its share of the economy we built")
+  must not read satisfied while the bank sits full. Metal we are not spending
+  is not economy we have built; the share is of what is USED.
+
 ## Nuke Spam!
 
 - prefer a docile enemy, likely wait until we have a rush to T2 and based on observed enemy strength *maybe* enable this strategy

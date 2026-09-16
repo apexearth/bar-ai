@@ -93,6 +93,11 @@ PANELS = [
              "army fires at once and quality wins superlinearly. 0.5 is the middle"),
             ("TUNE_AIM_MISS", "credits full reach to a weapon that cannot hit a "
              "moving target; lower says half that range only ever lands on buildings"),
+            ("TUNE_RECORD_BITE", "ON prices a unit type by what its DEAD actually "
+             "dealt: a type whose units keep dying under their own health in "
+             "damage is bought at that fraction, kept as a moving average across "
+             "games (fodder and fighters are never judged). OFF keeps the record "
+             "but prices by stats alone"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "
@@ -862,6 +867,10 @@ GROUPS = [
                   "wing and held 50 real bombers at home forever"),
                  ("TUNE_INTERCEPT_MIN_FIGHTERS", "more fighters required "
                   "before an intercept launches"),
+                 ("TUNE_AIR_COVER", "ON sends held fighters with every scout, "
+                  "radar plane and bomber that leaves -- enough to match the "
+                  "air threat on the route, never none -- and brings them home "
+                  "when the mission ends. OFF flies them alone"),
                  ("TUNE_AIR_SPREAD", "idle fighters patrol stations instead of "
                   "clumping at the plant"),
                  ("TUNE_AIR_HOME_WAVE", "non-lead players hold aircraft at the "

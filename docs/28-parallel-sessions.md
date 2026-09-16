@@ -96,5 +96,18 @@ python tools/sync_cpp.py pull
 - **A lane still shares the game install's `BAR.sdd`.** Gadgets and patches
   (`deploy_ai.py gadgets|patches`) are global. Two sessions changing modoption
   gadgets still collide; that is not solved here.
+- **`sync_cpp.py pull` whole-file-writes `cpp/` from YOUR lane.** A peer
+  session editing `cpp/` directly, or whose lane holds C++ yours does not,
+  loses that work on your pull (2026-09-16: a lattice block wiped twice).
+  Before a pull, `git diff --stat cpp/` -- if a file shows hunks that are not
+  yours, merge (base = HEAD, yours, theirs) instead of pulling, and commit
+  your hunks by selection. A lane is also refreshed from `cpp/` only at
+  `init`/`apply`, so it can be older than the mirror: a pull from a stale
+  lane reverted 3,761 lines the same day.
+- **The shared script tree needs every lane's bindings.** `ai/Unstable/` is
+  one tree; a peer's script edit that calls a binding only their lane's DLL
+  has compiles to a DISABLED variant under yours (`No matching symbol`, and
+  review.py's gate 1 catches it). Restore those files to HEAD in your
+  installed lane copy only, never in the repo.
 - **`lane.py drop <name>`** deletes the lane's directories. Do it when the
   session is finished, or they accumulate at 0.7 GB each.

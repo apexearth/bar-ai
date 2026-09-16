@@ -175,6 +175,15 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	if (Air::IsBomberDef(int(cdef.id)))
 		return NoteElect("air.bomb",
 				aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::BOMB)));
+	// A WAVE FIGHTER FLIES WITH A BOMBER (apexearth 2026-09-16: "when we send
+	// bombers ... have fighters to guard them"). Stock's AA task hunts on its
+	// own; the guard task follows the bomber and engages only air.
+	if (Air::InWave(unit.id) && Air::IsFighterDef(int(cdef.id))
+		&& (ai.GetTunable("apex_air_cover", TUNE_AIR_COVER) > 0.f)) {
+		CCircuitUnit@ b = Air::WaveBomberFor(unit);
+		if (b !is null)
+			return NoteElect("air.cover", aiMilitaryMgr.Enqueue(TaskF::Guard(b)));
+	}
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.
 	if (RaidClaimed(int(unit.id))) {

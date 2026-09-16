@@ -55,7 +55,7 @@ void BuildWave()
 		if (us is null)
 			continue;
 		for (uint k = 0; k < us.length(); ++k) {
-			if (us[k] is null)
+			if ((us[k] is null) || Covering(us[k].id))
 				continue;
 			gWave.insertLast(us[k].id);
 			if (i < 4) {

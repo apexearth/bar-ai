@@ -13,6 +13,9 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	const int id = unit.circuitDef.id;
 	if (IsLookDef(id) && LookDispatch(unit))
 		return true;
+	// A fighter on cover keeps its guard order; CoverWatch sends it home.
+	if (Covering(unit.id))
+		return true;
 	// A TORPEDO FLYER WITH NO FLOATING TARGET HAS NOTHING TO SHOOT ANYWHERE
 	// ON THE MAP -- its weapons read zero surf and zero air threat -- yet
 	// stock routing gave the ones we owned attack orders against land
@@ -123,7 +126,7 @@ void Intercept()
 		if (wings is null)
 			continue;
 		for (uint i = 0; i < wings.length(); ++i) {
-			if ((wings[i] is null) || InWave(wings[i].id))
+			if ((wings[i] is null) || InWave(wings[i].id) || Covering(wings[i].id))
 				continue;
 			wings[i].CmdMoveTo(to);
 			++sent;
@@ -273,6 +276,7 @@ bool LookDispatch(CCircuitUnit@ unit)
 	gLookWay = LookRoute(unit, over);
 	gLookLeg = gLookWay.distance2D(over) > 1.f ? 0 : 1;
 	unit.CmdMoveTo((gLookLeg == 0) ? gLookWay : over);
+	Cover(unit, over, "look");
 	gLookScout = int(unit.id);
 	gLookDef = int(unit.circuitDef.id);
 	gLookTarget = over;
@@ -375,6 +379,7 @@ void LookWatch()
 		+ " #" + gLookScout + " structs=" + int(gLookSeen0) + "->" + int(seen)
 		+ " miss=" + gLookMiss
 		+ " next=" + int(MarginalGain(BuyableBomberDef(), HeldBombers())));
+	CoverRelease(Id(gLookScout), (scout is null) ? "look lost" : "look landed");
 	gLookScout = -1;
 }
 
@@ -426,6 +431,7 @@ void ScoutOverflight()
 				if (!OnMap(post))
 					continue;
 				rs[ri].CmdMoveTo(post);
+				Cover(rs[ri], post, "radar-post");
 				AiLog("apex: radar-post " + Catalog::Def(rd).GetName()
 					+ " #" + rs[ri].id + " -> " + int(post.x) + "," + int(post.z));
 				break;
@@ -452,6 +458,7 @@ void ScoutOverflight()
 			if (!OnMap(over))
 				over = foe;
 			us[i].CmdMoveTo(over);
+			Cover(us[i], over, "overflight");
 			AiLog("apex: overflight " + Catalog::Def(d).GetName()
 				+ " #" + us[i].id + " -> " + int(over.x) + "," + int(over.z));
 			return;
@@ -465,6 +472,7 @@ void Update()
 	ResolveDefs();
 	ReArm();
 	LookWatch();
+	CoverWatch();
 	StrikeScanStep();
 	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
 	if (Factory::ElectorTeamId() == ai.teamId)
