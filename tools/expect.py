@@ -481,8 +481,11 @@ def exp_home_not_discounted(games):
         return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
     survs = []
     for g in ev:
-        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)[^\n]*haz=([\d.]+)", g["text"]):
-            if int(m.group(2)) <= 600 and float(m.group(3)) < 0.0005:
+        # Hazard 0 AND no recent loss beside it: a base being raided is
+        # discounted for a risk that IS there (gate 81db14dd s5: loss=3-4.6
+        # at home, 0.55 survival, deserved).
+        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)[^\n]*loss=([\d.]+) haz=([\d.]+)", g["text"]):
+            if int(m.group(2)) <= 600 and float(m.group(4)) < 0.0005 and float(m.group(3)) < 0.5:
                 survs.append(float(m.group(1)))
     if len(survs) < 10:
         return "NEED MORE", f"{len(survs)} home mexup readings with hazard 0 (need 10)"
@@ -635,8 +638,10 @@ def exp_home_outranks_front(games):
     bad, seen = [], 0
     for g in ev:
         home, front = [], []
-        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)", g["text"]):
+        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)[^\n]*loss=([\d.]+)", g["text"]):
             d = int(m.group(2))
+            if float(m.group(3)) >= 0.5:
+                continue   # something died beside it: the discount is earned
             if d <= 600:
                 home.append(float(m.group(1)))
             elif d >= 1500:

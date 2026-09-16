@@ -287,6 +287,15 @@ maps up. Open, in the order the game says it costs:
   until answered no ladder reorder is shippable.
 - Greenest still ends on ~92 basic converters and 12 advanced solars against
   BARb's 8 advsol (CONVERTERS above).
+- HOME READS LIKE THE FRONT once their army dwarfs ours: the siege term
+  is foe/(foe+ourArmy+cover)/tau x shortfall, and at 10x it saturates to
+  1/tau everywhere, so only local cover separates a mex behind the start
+  from one at the wall's foot (0.545 flat, gate games 2026-09-15; p25 of
+  home readings 0.545 in every loss band). The interior-as-worst-hole rule
+  (gGapShort) helps only when every walkable bearing carries guns. What is
+  missing is DEPTH: the rate at which a siege reaches a point should fall
+  with the ground of ours it must cross first (the raid gradient against
+  the line's own gradient), not with the guns beside the point.
 - The base ETA is NOISY at the scale of its own decisions: his Comet 1v1
   (2026-09-15, 15.1-16.4 min) read `base=545, 7119, 1333, 7839, 9300, 1875`
   at P=178-247 -- a 17x swing inside 80 s with the same pool -- and a fusion
