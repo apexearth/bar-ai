@@ -347,7 +347,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 int gMexNoOpen = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
 // Last single sweep (see PickSpot): total spots, on our ledger, at a trip
 // risk of half or worse, surviving candidates, and the home->FoeAnchor span.
-int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0;
+int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0, gSwHot = 0;
 float gSwSpan = 0.f;
 int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
 float gMexRiskSum = 0.f;   // TripRisk over priced proposals, for mexdiag
@@ -382,7 +382,7 @@ void MexDiag()
 		+ " priced=" + gMexPriced
 		+ " riskAvg=" + formatFloat((gMexPriced > 0) ? (gMexRiskSum / float(gMexPriced)) : 0.f, "", 0, 2)
 		+ " share=" + formatFloat(TripShare(), "", 0, 2)
-		+ " | sweep " + gSwPast + "risky+" + gSwLedger + "own/" + gSwTotal
+		+ " | sweep " + gSwPast + "risky+" + gSwHot + "hot+" + gSwLedger + "own/" + gSwTotal
 		+ " cand=" + gSwCand + " span=" + int(gSwSpan));
 	gMexNoOpen = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
@@ -434,7 +434,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const float incMul = IncomeMult();
 	// One sweep's composition, kept for mexdiag.
-	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0;
+	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0; gSwHot = 0;
 	gSwSpan = sqrt(fex * fex + fez * fez);
 	const array<int>@ lidx = LedgerIdx();
 	const int lidxN = int(lidx.length());
@@ -456,6 +456,20 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		if (NearBlocked(sp)) {
 			++gSwPast;
 			continue;
+		}
+		// THE EXECUTOR'S OWN BAR, ASKED HERE. The builder task refuses a site
+		// hotter than our guns' influence on it (CanReachAtSafe, safeBar),
+		// and a spot chosen past that bar is a walk, an abort and the same
+		// election again: at +0 on Isthmus 68 of 86 mex elections in one
+		// four-minute window died so, our extractor count peaking at
+		// minute 8 while theirs kept climbing. A hot spot is not offered;
+		// the ground it sits on is the defence market's starved-spot stake.
+		{
+			const float hot = ai.GetThreatAt(sp);
+			if ((hot > 1.f) && (hot > ai.GetAllyDefendInflAt(sp))) {
+				++gSwHot;
+				continue;
+			}
 		}
 		// The rear-specialist leash is geometry and applied here so a refused
 		// spot does not consume an engine probe; the trip risk is a PRICE, not

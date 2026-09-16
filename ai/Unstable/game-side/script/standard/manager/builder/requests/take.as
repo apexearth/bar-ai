@@ -308,9 +308,87 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 			return null;
 		}
 	}
+	// CONCENTRATE UNDER SCARCITY (apexearth 2026-09-16: "we spend our money
+	// on a lot of different things at the same time... whereas the other
+	// team is way more concentrated"). InFlightCap is per DEF, so a seat at
+	// 8 m/s held two energy, two AA, two radar and two converter sites at
+	// once (live 3-8 against a cap of 2-4 in the +0 8v8), and every one of
+	// them landed at the end. The same income arithmetic, across ALL defs:
+	// past it a new site is not opened -- the asker helps finish one that
+	// is, or waits. Extractor claims are exempt: they are the income.
+	if (!spotWork && (TotalLive() >= InFlightCap())) {
+		if (unit !is null) {
+			IUnitTask@ any = JoinAny(unit);
+			if (any !is null) {
+				++gJoined;
+				Log(want, "concentrate");
+				return any;
+			}
+		}
+		++gConcentrated;
+		Log(want, "held");
+		return null;
+	}
 	IUnitTask@ post = Create(want, bt, prio, spot, shake);
 	created = (post !is null);
 	return post;
+}
+
+// Live requests that are spending, spot claims aside.
+uint TotalLive()
+{
+	uint n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int bt = t.GetBuildType();
+		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP)))
+			continue;
+		++n;
+	}
+	return n;
+}
+
+// A live site this hand can help -- any def, a standing frame taking any
+// hands (repair). An ORPHAN first (a request nobody works is the site most
+// in need of finishing: a seat's first plant sat unmanned 322 s while its
+// hands joined the nearest solar), then the nearest manned site with room.
+IUnitTask@ JoinAny(CCircuitUnit@ unit)
+{
+	IUnitTask@ best = null;
+	float bestDist = 0.f;
+	bool bestOrphan = false;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ cand = gLive[i];
+		if ((cand is null) || cand.IsDead() || (cand.buildDef is null))
+			continue;
+		const int bt = cand.GetBuildType();
+		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP)))
+			continue;
+		const uint busy = Workers(cand);
+		if (busy >= SiteWorkerCap(cand.buildDef))
+			continue;
+		if (!unit.circuitDef.CanBuild(cand.buildDef) && (cand.target is null))
+			continue;
+		const AIFloat3 where = cand.GetBuildPos();
+		if (!OnMap(where))
+			continue;
+		const float dist = here.distance2D(where);
+		const bool orphan = (busy == 0);
+		if (!orphan && !WorthJoiningSite(cand, dist, Catalog::gSpeed[int(unit.circuitDef.id)],
+				Catalog::gBuildPower[int(unit.circuitDef.id)]))
+			continue;
+		if ((best is null) || (orphan && !bestOrphan)
+			|| ((orphan == bestOrphan) && (dist < bestDist)))
+		{
+			@best = cand;
+			bestDist = dist;
+			bestOrphan = orphan;
+		}
+	}
+	return best;
 }
 
 }  // namespace Requests

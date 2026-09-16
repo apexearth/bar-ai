@@ -257,6 +257,7 @@ int gCreated = 0;
 int gJoined = 0;
 int gCovered = 0;    // refused: this ground is already requested
 int gFull = 0;       // refused: the income cannot feed another of this def
+int gConcentrated = 0;   // held: the income cannot feed another site of anything
 
 // PER-DEF, NOT GLOBAL. A single shared cooldown meant a burst on one def (say
 // six armadvsol requested close together) could be silenced by an unrelated

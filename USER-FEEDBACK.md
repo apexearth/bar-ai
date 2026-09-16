@@ -62,7 +62,14 @@ lines of quotes.
 - Team games: we do well when wealthy and badly under scarcity; be more
   careful and thoughtful about spending (09-16). Measured: at +0 an 8v8 is
   lost 8/8 with a third of their metal -- income, not spend; ISSUES
-  SCARCITY has the mechanisms. Not built.
+  SCARCITY has the mechanisms. His ruling: grow ballistic only when it is
+  intelligent; concentrate spending under scarcity; in 8v8 the mex count
+  per player is small so income must come from the economy (energy,
+  converters), and "understand our potential untapped mex economy". Built
+  09-16: a TOTAL in-flight cap from income (help finish what is started),
+  hot spots refused at choice time, `tools/mexeco.py` (extractors and
+  income per side over time). One seed: 122k -> 257k metal vs their
+  416k -> 343k, wiped -> no winner. Unverified by him.
 - The eco seat's guns stand inside its base with walk gaps, blocking the farm;
   two gantries starve for nanos with a full bank; LRPCs belong on hills;
   Behemoths when the enemy is winning (09-16). Recorded in ISSUES/TODO, not

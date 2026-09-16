@@ -200,6 +200,26 @@ off the +0 log (`matches/20260916-222751-*`):
    failure) against 53 finished; 54 mexes destroyed. The claim-to-mex
    conversion problem of TEAM GAMES below, now with the bonus off.
 
+Later 09-16, three changes measured on the same seed (one seed: a
+progression, not a proof), metal ours/theirs and outcome:
+122k/416k wiped -> 159k/320k lost (TOTAL in-flight cap: past what the
+income feeds, a new site is not opened, the asker helps finish one; per DEF
+it had licensed 2 of everything) -> 215k/355k no winner (orphans first in
+that fold: the first plant sat unmanned 322 s) -> 257k/343k no winner (a
+spot hotter than our guns' influence is not offered -- the executor's own
+bar asked at choice time; 3,995 spots refused, mex task deaths 213 still).
+`tools/mexeco.py` reads the shape that remains: our extractor count PEAKS
+AT MINUTE 8-12 (33-35) and falls to 11-16 by minute 28 while theirs climbs
+28 -> 64-77; three front seats hold zero mexes from minute 16 and lose their
+commanders at 15-26 min. We build half their constructors and a sixth of
+their rez bots (40 vs 244 necros; reclaim 267 vs 1,055). His 09-16 read:
+in 8v8 there are too few spots per player for mex-led income; the
+economy (energy, converters) has to carry it, and we make army instead.
+At +100 the converters do carry us (1,118 m/s at 32 min vs their 893); at
++0 there is no energy to convert. The next lever is the frontier: the
+seats that lose their spots are the ones the wall (docs/32) should be
+standing in front of.
+
 Also the +100 game's own shape: one seat made 41% of the team's metal (the
 eco seat, 793k) while three front seats made 58-90k in 32 minutes with 4-8
 mexes each -- the bonus hides that the front is starved. The lever is the

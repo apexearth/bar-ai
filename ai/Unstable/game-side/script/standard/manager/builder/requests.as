@@ -65,7 +65,8 @@ void Log(CCircuitDef@ want, const string& in what)
 		+ " inFlight=" + InFlight(want) + " cap=" + InFlightCap()
 		+ " live=" + gLive.length()
 		+ " new=" + gCreated + " join=" + gJoined
-		+ " covered=" + gCovered + " full=" + gFull + " tooFar=" + gTooFar);
+		+ " covered=" + gCovered + " full=" + gFull + " tooFar=" + gTooFar
+		+ " held=" + gConcentrated);
 }
 
 }  // namespace Requests
