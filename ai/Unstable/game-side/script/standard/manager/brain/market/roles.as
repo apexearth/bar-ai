@@ -117,6 +117,25 @@ void ConRoleForget(int id)
 		gRoleOf[id] = -1;
 }
 
+// The one hand of its tier: not a T1 hand, and no other advanced builder
+// stands. It takes no role and upgrades a mex first (decide.as).
+bool SoleAdvancedHand(CCircuitUnit@ unit)
+{
+	const int uid = int(unit.circuitDef.id);
+	if ((uid < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[uid])
+		return false;
+	int advanced = 0;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int ci = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci] || !Catalog::gBuilder[ci])
+			continue;
+		if ((ci < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[ci])
+			continue;
+		advanced += gOwnCount[c];
+	}
+	return advanced <= 1;
+}
+
 int ConRoleOf(CCircuitUnit@ unit)
 {
 	const int id = int(unit.id);
@@ -137,23 +156,8 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 	// at v=8 that no other hand could build (gate: 3 of 3 opened with an
 	// Ambusher, a radar or an anti-nuke). A category's quota is for hands
 	// that have peers; the one hand of its tier serves the best job of it.
-	{
-		const int uid = int(unit.circuitDef.id);
-		const bool t1 = (uid < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[uid];
-		if (!t1) {
-			int advanced = 0;
-			for (uint c = 1; c < gOwnCount.length(); ++c) {
-				const int ci = int(c);
-				if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci] || !Catalog::gBuilder[ci])
-					continue;
-				if ((ci < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[ci])
-					continue;
-				advanced += gOwnCount[c];
-			}
-			if (advanced <= 1)
-				return false;
-		}
-	}
+	if (SoleAdvancedHand(unit))
+		return false;
 	ConRoleRecount();
 	int r = gRoleOf[id];
 	if (r >= 0) {

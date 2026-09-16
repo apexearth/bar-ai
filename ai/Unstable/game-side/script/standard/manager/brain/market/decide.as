@@ -1316,6 +1316,28 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// THE ONLY ADVANCED HAND UPGRADES A MEX FIRST (his rule, 2026-09-15:
+	// "after you make the first advanced constructor... it should be to make
+	// an advanced metal extractor, and if it's not, then something's
+	// wrong"). The draw had it start the reactor at v=15 over the moho at
+	// v=17 -- a 60-second payback against a ten-minute one, and no other
+	// hand can build either. While no second advanced hand stands, a mexup
+	// in the list is taken, not drawn.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && (ranked.length() > 1)
+		&& SoleAdvancedHand(unit)) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_MEXUP)
+				continue;
+			if (ri > 0) {
+				Want@ mw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, mw);
+			}
+			floorPush = true;
+			why = "firstT2";
+			break;
+		}
+	}
 	bool roled = false;
 	if (!aaPanic && !superPush && !coverPush && !floorPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {
