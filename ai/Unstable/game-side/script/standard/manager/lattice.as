@@ -16,24 +16,18 @@ namespace Lattice {
 //   2. SEED  -- past a cluster's size, start a fresh cluster elsewhere.
 //   3. AISLE -- clusters are parted by ground the biggest unit we field can
 //               walk through.
-//   4. SORT  -- a different def does not take a slot touching this cluster.
+//   4. SORT  -- a fresh cluster starts on its own cell, not inside another
+//               def's; it may touch it (apexearth 2026-09-16: different
+//               types directly beside each other, "very tight").
 //
 // Every def's stride is simply its FOOTPRINT, the only pitch on which two of
 // them touch. C++ (CCircuitAI::SnapToBaseGrid) snaps every non-fixed placement
-// onto that, so stock task selection lands on the same grid we do.
+// onto that, so stock task selection lands on the same grid we do. A script
+// walk that needs a cell asks ai.SnapToLattice for it -- there is no second
+// copy of the rounding here to drift from the one C++ keeps.
 //------------------------------------------------------------------------------
 
 const float CELL = 16.f;   // the engine's build square
-
-// Onto a multiple of `pitch`, the same rounding C++ does in SnapToBaseGrid.
-float Snap(float v, float pitch)
-{
-	if (pitch <= 0.f)
-		return v;
-	const float k = v / pitch;
-	const int n = int((k >= 0.f) ? (k + .5f) : (k - .5f));
-	return float(n) * pitch;
-}
 
 float FootPitch(int defId)
 {
@@ -127,8 +121,7 @@ int gFlush = 0;
 int gApart = 0;
 int gIsle = 0;
 
-// Rule 4 -- "prefer not to build units of differing types right next to each
-// other" -- is answered by Market::LayoutForeignGap off this register's index.
+// Rule 4 is answered by Market::LayoutForeignGap off this register's index.
 
 void NoteDead(Id id)
 {
@@ -150,6 +143,10 @@ void NotePlaced(int defId, const AIFloat3& in p, Id id)
 	if (!OnMap(p) || Catalog::gMobile[defId]
 		|| (Catalog::gExtractsM[defId] > 0.f) || Catalog::gNeedGeo[defId])
 		return;
+	// The census tools/tiling.py reads: exact lattice residue and foreign gaps.
+	AiLog("apex: placed t=" + ai.teamId + " " + Catalog::Def(defId).GetName()
+		+ " at=" + int(p.x) + "," + int(p.z)
+		+ " foot=" + Catalog::gFootX[defId] + "x" + Catalog::gFootZ[defId]);
 	gSeen.insertLast(p);
 	gSeenDef.insertLast(defId);
 	gSeenId.insertLast(id);

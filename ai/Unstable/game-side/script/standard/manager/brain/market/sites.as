@@ -549,7 +549,11 @@ AIFloat3 GroupAnchor(int defId, CCircuitUnit@ unit = null)
 	const float pitch = Lattice::StrideOf(defId);
 	const float side = float(Lattice::ClusterSide()) * pitch;
 	const float step = side + Lattice::AisleW();
-	const float within = side * 0.75f;   // a fresh group's own ground
+	// A fresh group needs only its own first cell (apexearth 2026-09-16:
+	// different types directly beside each other, "you want things to be
+	// very tight"); three-quarters of a side held every foreign cluster a
+	// block apart.
+	const float within = pitch;
 	const float cell = step * 0.5f;       // every kin counts to one anchor
 	const int cap = Lattice::ClusterN();
 	array<AIFloat3> kin;

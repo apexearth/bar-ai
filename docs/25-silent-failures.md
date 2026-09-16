@@ -573,3 +573,20 @@ mex at v=1.19, on a bleed of 0.28 m/s. The hoist's job was "0 defense" (his
 words); the target shortfall is the priced market's, and the loss field
 already prices it (`coverage.as` ThreatAt/HazardWith) at the sites that are
 dying. Now bounded to the first tower; `audit.py def-panic-bounded` reads it.
+
+## S33 — A subclass override skipped the chokepoint, and the chokepoint's own log said it fired
+
+The lattice snap and the ring walk live in `IBuilderTask::Execute`, and every
+farm type was said to go through them: `apex: tiling flush=` read 72-76%,
+the walk's log lines fired, and the placement work was called done
+(2026-09-14). `CBNanoTask::Execute` overrode the base and ran its own
+square-by-square search inside the turret's build distance — no snap, no
+walk — so every nano turret whose packed cell was taken stood one build
+square off the block. That is the "one space away" he watched, and the
+census (`tools/tiling.py`, 2026-09-16) read it as 7 of 12 turrets
+misaligned while the tiling line called the same base 76% flush: its FLUSH
+bar accepts a neighbour a whole square off. Two lessons: (1) when a
+mechanism is a chokepoint, `grep -l "::Execute(" task/builder/*.cpp` — a
+subclass with its own copy is outside it; (2) an instrument whose pass bar
+is wider than the complaint cannot see the complaint. The census asks the
+exact question (both axis offsets a whole number of pitches).

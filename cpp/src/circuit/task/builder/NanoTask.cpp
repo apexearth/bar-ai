@@ -38,46 +38,12 @@ CBNanoTask::~CBNanoTask()
 
 bool CBNanoTask::Execute(CCircuitUnit* unit)
 {
-	executors.insert(unit);
-
-	CCircuitAI* circuit = manager->GetCircuit();
-	TRY_UNIT(circuit, unit,
-		unit->CmdPriority(ClampPriority());
-	)
-
-	const int frame = circuit->GetLastFrame();
-	if (target != nullptr) {
-		TRY_UNIT(circuit, unit,
-			unit->CmdRepair(target, UNIT_CMD_OPTION, frame + FRAMES_PER_SEC * 60);
-		)
-		return true;
-	}
-	if (utils::is_valid(buildPos)
-		&& circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), buildPos, facing))
-	{
-		TRY_UNIT(circuit, unit,
-			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-		)
-		return true;
-	}
-
-	// Alter/randomize position
-	AIFloat3 pos = (shake > .0f) ? utils::get_near_pos(position, shake) : position;
-
-	circuit->GetThreatMap()->SetThreatType(unit);
-	float searchRadius = buildDef->GetBuildDistance();
-	FindBuildSite(unit, pos, searchRadius);
-
-	if (utils::is_valid(buildPos)) {
-		TRY_UNIT(circuit, unit,
-			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
-		)
-	} else {
-		// Fallback to Guard/Assist/Patrol
-		manager->FallbackTask(unit);
-		return false;
-	}
-	return true;
+	// THE BASE SEARCH, NOT A PRIVATE ONE. This override searched square by
+	// square inside the turret's build distance and never touched the
+	// lattice, so every turret whose packed cell was taken stood one square
+	// off the block -- the "one space away" he watched (the census read 7 of
+	// 12 turrets off the row).
+	return IBuilderTask::Execute(unit);
 }
 
 } // namespace circuit

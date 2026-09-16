@@ -12,6 +12,7 @@
 #include "util/Defines.h"
 #include "util/math/Geometry.h"
 
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -141,6 +142,7 @@ protected:
 	void ShowAssignee(CCircuitUnit* unit);
 	virtual CAllyUnit* FindSameAlly(CCircuitUnit* builder, const std::vector<springai::Unit*>& friendlies);
 	virtual void FindBuildSite(CCircuitUnit* builder, const springai::AIFloat3& pos, float searchRadius);
+	std::function<bool (const springai::AIFloat3&)> SitePredicate(CCircuitUnit* builder, float selfBar, bool aboveCrest);
 	void FindFacing(const springai::AIFloat3& pos);
 
 	void ExecuteChain(SBuildChain* chain);

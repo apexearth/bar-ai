@@ -151,15 +151,20 @@ int AnchorDefAt(const AIFloat3& in at)
 // and asking this per site would re-scan the same rings once per turret -- the
 // bulk-work-in-one-frame shape the frame-budget rule forbids. The walk stops
 // as soon as it has `n`, so the common single-slot ask still ends on ring one.
-int PackSlots(int nanoDef, const AIFloat3& in at, int anchorDef, int n,
+int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 		array<AIFloat3>& out slots)
 {
 	slots.resize(0);
-	if (!Catalog::ValidId(nanoDef) || !OnMap(at) || (n < 1))
+	if (!Catalog::ValidId(nanoDef) || !OnMap(atRaw) || (n < 1))
 		return 0;
 	const float pitch = Lattice::FootPitch(nanoDef);
 	if (pitch < 1.f)
 		return 0;
+	// ON THE DEF'S OWN LATTICE. The walk stepped its pitch from the anchor's
+	// centre, and C++ then snapped every cell to the base lattice -- half a
+	// cell away, onto ground this walk had read as taken or as free. Start
+	// from the cell C++ will keep and every step lands on one it keeps.
+	const AIFloat3 at = ai.SnapToLattice(Catalog::Def(nanoDef), atRaw);
 	const float nhx = float(Catalog::gFootX[nanoDef]) * NP_HALFCELL;
 	const float nhz = float(Catalog::gFootZ[nanoDef]) * NP_HALFCELL;
 

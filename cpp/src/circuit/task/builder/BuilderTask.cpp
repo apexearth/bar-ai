@@ -38,7 +38,10 @@
 namespace circuit {
 
 // Lattice rings walked before a taken slot falls to the wide site search.
-static constexpr int LATTICE_RINGS = 6;
+// The lattice walk's reach and its work slice: rings 0..7 are 225 cells, and
+// a probe is one build-square mask test plus the site predicate.
+static constexpr int LATTICE_RINGS = 8;
+static constexpr int LATTICE_PROBES = 200;
 
 
 using namespace springai;
@@ -160,7 +163,7 @@ static bool CellHasExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircu
 					open = true;   // off the grid: open ground
 					break;
 				}
-				const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
+				const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, SQUARE_SIZE * 2, facing);
 				const bool freeCell = utils::is_valid(probe)
 						&& (probe.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
 				state[idx(ni, nj)] = freeCell ? 1 : 2;
@@ -199,7 +202,7 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 			if (!circuit->LatticeNeighbour(cand, buildDef, facing, i, j, c)) {
 				continue;
 			}
-			const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
+			const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, SQUARE_SIZE * 2, facing);
 			const bool freeCell = utils::is_valid(probe)
 					&& (probe.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
 			if (freeCell && !CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, i, j, win)) {
@@ -583,7 +586,17 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	}
 	const bool onGrid = !isFixed && circuit->SnapToBaseGrid(origin, pos, buildDef, facing);
 	if (!onGrid) {
-		pos = (shake > .0f) ? utils::get_near_pos(origin, shake) : origin;
+		// A LAB IS ASKED FOR ON ITS OWN LATTICE, though searched as the fixed
+		// site it is: a 6-cell lab on its 96 pitch shares every edge line
+		// with the 48-pitch turrets and converters that pack against it, so
+		// the block around it is flush. Off it, the first ring of turrets
+		// stood a part-cell short of the lab (the census's nano misses were
+		// all at labs). The move is at most half its footprint.
+		if ((buildType != BuildType::FACTORY)
+			|| !circuit->SnapToBaseGrid(origin, pos, buildDef, facing))
+		{
+			pos = (shake > .0f) ? utils::get_near_pos(origin, shake) : origin;
+		}
 	}
 	CTerrainManager::CorrectPosition(pos);
 
@@ -603,79 +616,144 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	// reservation.
 	float searchRadius = 200 * SQUARE_SIZE;
 	if (onGrid) {
+		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ())
 				* SQUARE_SIZE * 2;
-		CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
-		const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, pos, slot, facing);
-		const bool free = utils::is_valid(probe)
-				&& (probe.SqDistance2D(pos) <= SQUARE(SQUARE_SIZE));
+		// A stale reservation of our own reads as a taken cell.
+		if (utils::is_valid(buildPos)) {
+			SetBuildPos(-RgtVector);
+		}
 		// A slot the builder is itself standing in is not a slot that is taken:
 		// widening lets the search step to the neighbouring one instead of the
 		// builder stepping aside, and the ground is NOT reported blocked --
 		// script would then avoid it for as long as the mark lives.
 		const float clear = SelfClearance(unit, buildDef);
-		const bool keepsExit = !free
-				|| KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, probe);
-		if (!keepsExit) {
-			circuit->LOG("apex: exit-kept %s by %s at=%.0f,%.0f", buildDef->GetDef()->GetName(),
-					unit->GetCircuitDef()->GetDef()->GetName(), probe.x, probe.z);
-		}
-		if (free && keepsExit && (probe.SqDistance2D(unit->GetPos(frame)) >= SQUARE(clear))) {
-			searchRadius = slot;   // the slot is free: hold the task to it
-		} else {
-			// THE NEXT SLOT, NOT THE NEXT SQUARE. A taken slot fell straight
-			// to the wide search, which steps by one build square and lands
-			// the building a few squares off the row (apexearth: "a converter
-			// only builds up, left, down, or right. not up and slightly to the
-			// side. snap to a grid of the building's own size"). Rings of the
-			// def's own lattice, nearest first; the wide search only when no
-			// ring within reach has a free slot.
-			const AIFloat3 self = unit->GetPos(frame);
-			const AIFloat3 snapped = pos;
-			bool found = false;
-			for (int ring = 1; (ring <= LATTICE_RINGS) && !found; ++ring) {
-				float bestSq = -1.f;
-				AIFloat3 best;
-				for (int j = -ring; j <= ring; ++j) {
-					for (int i = -ring; i <= ring; ++i) {
-						if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
-							continue;
-						}
-						AIFloat3 cell;
-						if (!circuit->LatticeNeighbour(snapped, buildDef, facing, i, j, cell)) {
-							continue;
-						}
-						const float sq = cell.SqDistance2D(snapped);
-						if ((bestSq >= .0f) && (sq >= bestSq)) {
-							continue;
-						}
-						const AIFloat3 p2 = terrainMgr->FindBuildSite(buildDef, cell, slot, facing);
-						if (!utils::is_valid(p2) || (p2.SqDistance2D(cell) > SQUARE(SQUARE_SIZE))
-							|| (p2.SqDistance2D(self) < SQUARE(clear))
-							|| !KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, cell))
-						{
-							continue;
-						}
-						bestSq = sq;
-						best = cell;
+		const AIFloat3 self = unit->GetPos(frame);
+		// THE CELL, EXACTLY. The probe radius is one build square, so the
+		// engine can only answer with the cell itself; a wider radius answered
+		// with the nearest free square and the row lost its phase. The commit's
+		// own predicate (reach, threat, lanes, lava) is applied here too, so a
+		// cell taken here is a cell the commit will accept.
+		CTerrainManager::TerrainPredicate pred = SitePredicate(unit, clear, circuit->HasLava());
+		auto cellFree = [&](const AIFloat3& c) {
+			const AIFloat3 p = terrainMgr->FindBuildSite(buildDef, c, SQUARE_SIZE * 2, facing, pred);
+			return utils::is_valid(p) && (p.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
+		};
+		// THE NEXT SLOT, NOT THE NEXT SQUARE. A taken slot once fell straight
+		// to the wide search, which steps by one build square and lands the
+		// building a few squares off the row (apexearth: "a converter only
+		// builds up, left, down, or right. not up and slightly to the side.
+		// snap to a grid of the building's own size"). Rings of the def's own
+		// lattice, nearest first, under a probe budget; the wide search only
+		// when no ring in the budget has a free slot -- and even then its
+		// answer is put back on the lattice below.
+		const AIFloat3 snapped = pos;
+		bool found = false;
+		bool slotFree = false;
+		bool searched = false;
+		int budget = LATTICE_PROBES;
+		for (int ring = 0; (ring <= LATTICE_RINGS) && !found && (budget > 0); ++ring) {
+			float bestSq = -1.f;
+			AIFloat3 best;
+			for (int j = -ring; j <= ring; ++j) {
+				for (int i = -ring; i <= ring; ++i) {
+					if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
+						continue;
 					}
-				}
-				if (bestSq >= .0f) {
-					pos = best;
-					searchRadius = slot;
-					found = true;
+					AIFloat3 cell;
+					if (!circuit->LatticeNeighbour(snapped, buildDef, facing, i, j, cell)) {
+						continue;
+					}
+					const float sq = cell.SqDistance2D(snapped);
+					if ((bestSq >= .0f) && (sq >= bestSq)) {
+						continue;
+					}
+					if (--budget < 0) {
+						break;
+					}
+					const bool free = cellFree(cell);
+					if (ring == 0) {
+						slotFree = free;
+					}
+					if (!free || !KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, cell)) {
+						continue;
+					}
+					bestSq = sq;
+					best = cell;
 				}
 			}
+			if (bestSq >= .0f) {
+				pos = best;
+				searchRadius = SQUARE_SIZE * 2;   // the cell is free: hold the task to it
+				found = true;
+			}
+		}
+		if (!found) {
 			// Blocked ground is ground with no free slot on ANY ring: marked
 			// on the first taken cell, the script's probe ring took over the
 			// placement it was meant to back up (ring-scatter 20% on the
 			// seat the day the grid came back).
-			if (!found && !free) {
+			if (!slotFree) {
 				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
 			}
+			// THE WIDE SEARCH ANSWERS OFF THE LATTICE; put it back on. The
+			// ground it found is free, so the lattice cell over it or one of
+			// that cell's neighbours nearly always is too. Only when none is
+			// does the building stand off the row, and it says so.
+			FindBuildSite(unit, pos, searchRadius);
+			searched = true;
+			if (utils::is_valid(buildPos)) {
+				const AIFloat3 wide = buildPos;
+				SetBuildPos(-RgtVector);   // the commit reserved it; probe without that
+				AIFloat3 cell;
+				float bestSq = -1.f;
+				AIFloat3 best;
+				int nTaken = 0, nExit = 0;
+				if (circuit->SnapToBaseGrid(wide, cell, buildDef, facing)) {
+					for (int ring = 0; (ring <= 2) && (bestSq < .0f); ++ring) {
+						for (int j = -ring; j <= ring; ++j) {
+							for (int i = -ring; i <= ring; ++i) {
+								if ((std::abs(i) != ring) && (std::abs(j) != ring)) {
+									continue;
+								}
+								AIFloat3 c;
+								if (!circuit->LatticeNeighbour(cell, buildDef, facing, i, j, c)) {
+									continue;
+								}
+								const float sq = c.SqDistance2D(wide);
+								if ((bestSq >= .0f) && (sq >= bestSq)) {
+									continue;
+								}
+								if (!cellFree(c)) {
+									++nTaken;
+									continue;
+								}
+								if (!KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, c)) {
+									++nExit;
+									continue;
+								}
+								bestSq = sq;
+								best = c;
+							}
+						}
+					}
+				}
+				if (bestSq >= .0f) {
+					SetBuildPos(best);
+				} else {
+					circuit->LOG("apex: off-lattice t=%i %s at=%.0f,%.0f asked=%.0f,%.0f taken=%i exit=%i",
+							circuit->GetTeamId(), buildDef->GetDef()->GetName(),
+							wide.x, wide.z, snapped.x, snapped.z, nTaken, nExit);
+					SetBuildPos(wide);
+				}
+			}
 		}
+		if (!searched) {
+			FindBuildSite(unit, pos, searchRadius);
+		}
+	} else {
+		FindBuildSite(unit, pos, searchRadius);
 	}
-	FindBuildSite(unit, pos, searchRadius);
 
 	// WHY A TASK NEVER BECOMES A BUILDING. Everything upstream is logged --
 	// the want, the price, the request -- and this step, where the site search
@@ -1302,10 +1380,13 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
 	return nullptr;
 }
 
-void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, float searchRadius)
+// The one test of a site, shared by the lattice walk and the wide search so
+// a cell the walk accepts is a cell the commit accepts (a walk without it
+// took a cell the commit's reach test refused, and the commit stepped one
+// build square off the row).
+CTerrainManager::TerrainPredicate IBuilderTask::SitePredicate(CCircuitUnit* builder,
+		float selfBar, bool aboveCrest)
 {
-	FindFacing(pos);
-
 	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
 	// A DEFENCE TASK MAY STAND ON GROUND THAT IS NOT PERFECTLY QUIET.
 	//
@@ -1361,34 +1442,43 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 	// Costs nothing off a lava map -- HasLava is one cached compare.
 	const bool dryOnly = keepLanes && circuit->HasLava();
 	CCircuitDef* siteDef = buildDef;
+	const AIFloat3 builderPos = builder->GetPos(circuit->GetLastFrame());
+	// Everything captured BY VALUE. An earlier version flipped one
+	// captured-by-reference flag between two passes; FindBuildSite takes the
+	// predicate by non-const reference and the AI crashed with an access
+	// violation on two of twelve games. Nothing here outlives this frame.
+	return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar](const AIFloat3& p) {
+		if ((selfBar > 0.f) && (p.SqDistance2D(builderPos) < SQUARE(selfBar))) {
+			return false;
+		}
+		if (keepLanes && circuit->IsInBaseLane(p)) {
+			return false;
+		}
+		if (dryOnly && circuit->IsUnderLava(p, siteDef)) {
+			return false;
+		}
+		if (aboveCrest && !circuit->AboveLavaCrest(p)) {
+			return false;
+		}
+		return terrainMgr->CanReachAtSafe(builder, p,
+				builder->GetCircuitDef()->GetBuildDistance(), threatBar);
+	});
+}
+
+void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, float searchRadius)
+{
+	FindFacing(pos);
+
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	const bool dryOnly = !IsFixedSite(buildType) && circuit->HasLava();
 	// NOT ON THE BUILDER'S OWN FEET (see SelfClearance): the search reads a
 	// mobile unit as empty ground and hands back the square it is standing on,
 	// which cannot be started until the builder has been pushed clear of it.
 	// A spot site is exempt -- it is that vent or nothing.
 	const float selfClear = IsSpotSite(buildType) ? 0.f : SelfClearance(builder, buildDef);
-	const AIFloat3 builderPos = builder->GetPos(circuit->GetLastFrame());
-	// Each pass gets its OWN predicate with everything captured BY VALUE. An
-	// earlier version flipped one captured-by-reference flag between the two
-	// passes; FindBuildSite takes the predicate by non-const reference and the
-	// AI crashed with an access violation on two of twelve games. Nothing here
-	// outlives this frame now.
-	auto makePredicate = [terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, builderPos](bool aboveCrest, float selfBar) {
-		return CTerrainManager::TerrainPredicate([terrainMgr, builder, threatBar, circuit, keepLanes, dryOnly, siteDef, aboveCrest, builderPos, selfBar](const AIFloat3& p) {
-			if ((selfBar > 0.f) && (p.SqDistance2D(builderPos) < SQUARE(selfBar))) {
-				return false;
-			}
-			if (keepLanes && circuit->IsInBaseLane(p)) {
-				return false;
-			}
-			if (dryOnly && circuit->IsUnderLava(p, siteDef)) {
-				return false;
-			}
-			if (aboveCrest && !circuit->AboveLavaCrest(p)) {
-				return false;
-			}
-			return terrainMgr->CanReachAtSafe(builder, p,
-					builder->GetCircuitDef()->GetBuildDistance(), threatBar);
-		});
+	auto makePredicate = [this, builder](bool aboveCrest, float selfBar) {
+		return SitePredicate(builder, selfBar, aboveCrest);
 	};
 	// ABOVE THE HIGH-WATER MARK FIRST. The submerged veto only refuses ground
 	// the tide is on RIGHT NOW, so at low tide the whole basin reads dry and

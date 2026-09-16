@@ -204,6 +204,21 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### LATTICE RESIDUE: 4-6% of nano turrets stand off the lattice, hugging a fixed site; mixed pitches leave 1-3 square strips (2026-09-16)
+
+`tools/tiling.py` on the eco-only board (`matches/20260916-082921-*`,
+`-083637-*`): 641/667 and 623/660 aligned, every miss a nano. The ring walk
+(8 rings / 200 probes) finds nothing in a full block; the wide search then
+returns a hole that is not a lattice cell (`apex: off-lattice ... taken=25`),
+which is a hole beside a mex, tower or radar -- fixed sites are not on the
+turret's lattice. Those turrets are flush with what they hug, so this may be
+what he wants; if not, the walk should resume from ring 8 on the next
+Execute instead of falling to the square search. Separately FOREIGN gaps of
+1-3 squares (20-30% of structures) are where two defs of different pitch
+meet: on one global lattice a solar (80) and a converter (48) share an edge
+line only every 240 elmos. Flush everywhere would need a per-neighbour
+placement (a cell chosen against the neighbour's edge), not a lattice.
+
 ### SEAT CORNERS: a farm past a cliff still kills an eco seat; a full yard falls to the probe ring (2026-09-14)
 
 Supreme Isthmus seeds 3 and 5 (Armada): the rear seat's farm rear point and

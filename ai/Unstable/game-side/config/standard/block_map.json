@@ -81,8 +81,12 @@
 			"type": ["rectangle", "geo"],
 			"ignore": ["all"]
 		},
-		"fusion": {"type": ["circle", "engy_mid"], "radius": 6, "ignore": ["mex", "engy_mid", "engy_high", "engy_low", "convert", "nano", "def_low"]},
-		"singu": {"type": ["circle", "engy_high"], "radius": 8, "ignore": ["mex", "engy_high", "engy_mid", "engy_low", "convert", "nano", "def_low"]},
+		// Reactors stand flush too: the 6- and 8-cell circles kept only labs,
+		// radar, guns and silos a hundred elmos off, never another reactor
+		// (they ignored each other). Chain-blast spacing is FarmSlot's, by
+		// cluster, not a yard. The apron of a lab is the lab's own yard.
+		"fusion": {"type": ["rectangle", "engy_mid"], "not_ignore": ["factory", "terra"]},
+		"singu": {"type": ["rectangle", "engy_high"], "not_ignore": ["factory", "terra"]},
 		"pylon": {
 			"type": ["circle", "pylon"],
 			"not_ignore": ["factory", "pylon", "terra"]  // default: ["all"]
@@ -102,10 +106,12 @@
 			"ignore": ["all"]
 		},
 		"converter": {"type": ["rectangle", "convert"], "ignore": ["convert", "nano", "engy_low", "engy_mid", "engy_high"]},
+		// A light turret's five-cell circle held every converter, storage,
+		// radar and lab 80 elmos off it; the wall stands flush (apexearth
+		// 2026-09-16: "you want things to be very tight").
 		"def_low": {
-			"type": ["circle", "def_low"],
-			"radius": 5,  // 80 / (SQUARE_SIZE * 2)
-			"ignore": ["engy_mid", "engy_high", "engy_low", "nano"]
+			"type": ["rectangle", "def_low"],
+			"not_ignore": ["factory", "terra"]
 		},
 		"caretaker": {"type": ["rectangle", "nano"], "ignore": ["mex", "def_low", "engy_low", "engy_mid", "engy_high", "convert"]},
 		"superweapon": {
@@ -131,8 +137,7 @@
 		},
 		"small": {
 			"type": ["rectangle", "unknown"],
-			"yard": [4, 4],
-			"not_ignore": ["factory", "def_low", "terra"]
+			"not_ignore": ["factory", "terra"]
 		},
 		"wall": {
 			"type": ["rectangle", "def_low"],
@@ -145,10 +150,12 @@
 			"type": ["rectangle", "unknown"],
 			"ignore": ["all"]
 		},
+		// Everything unlisted -- the heavier guns, anti-air, big guns --
+		// stood in a six-cell dead ring that refused every farm cell around
+		// it. Nothing but a lab's apron keeps ground now.
 		"_default_": {
 			"type": ["rectangle", "unknown"],
-			"yard": [6, 6],
-			"ignore": ["engy_high"]
+			"not_ignore": ["factory", "terra"]
 		}
 	},
 	// Water overrides land. Map considered as water if amount of land < 40%

@@ -38,8 +38,17 @@ lines of quotes.
 
 - Big builds go where the nano turrets are; that decides double-speed
   building. Built (densest ring, 09-14) -- unverified by him.
-- Grid snapping and flush packing satisfied him 09-14; the seat's
-  ring-scatter (14-28%) is the residue (ISSUES SEAT CORNERS).
+- Grid snapping, raised again 09-16 (third time): same-size buildings must
+  line up exactly, never one square off; nano turrets go directly beside
+  other nano turrets and form a block; different types MAY stand directly
+  beside each other -- tight everywhere, with only room for units to move.
+  Built 09-16: one per-def lattice from the map corner, the nano task routed
+  through it (it had its own square search), the wide search's answer put
+  back on the lattice, labs asked for on their own lattice, the block-map
+  yards dropped to flush, the fresh-group foreign gap cut to one cell.
+  Census (`tools/tiling.py`): same scenario 55% -> 100% aligned; eco-only 25
+  min 94-96% of 700 structures, the rest nano turrets hugging a fixed site.
+  Unverified by him.
 - An eco base is rows with no gaps, no lanes behind the anchor, factories to
   one side, guns/radar/anti-nuke ringing it; two or three bodies so one blast
   does not take everything. Rows and no-lanes are built; "factories to one

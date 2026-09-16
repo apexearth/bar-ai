@@ -307,9 +307,12 @@ public:
 	// slot is the next slot, never the next build square.
 	bool LatticeNeighbour(const springai::AIFloat3& snapped, CCircuitDef* def, int facing,
 			int i, int j, springai::AIFloat3& outPos) const;
-	void LatticeStrides(CCircuitDef* def, int facing, float& cellLat, float& cellDepth) const;
-	void LatticePoint(float sLat, float sDepth, float cellLat, float cellDepth, float y,
-			CCircuitDef* def, int facing, springai::AIFloat3& outPos) const;
+	// The def's lattice in world axes: pitch and the corner phase from (0,0).
+	void LatticeOf(CCircuitDef* def, int facing, float& px, float& pz, float& ox, float& oz) const;
+	void LatticeCell(const springai::AIFloat3& pos, CCircuitDef* def, int facing,
+			springai::AIFloat3& outPos) const;
+	void LatticePoint(const springai::AIFloat3& cell, CCircuitDef* def, int facing,
+			springai::AIFloat3& outPos) const;
 	// Is this ground one of the published walkways? The snap alone only keeps a
 	// street clear while the slot it snapped to is free; a base whose slots are
 	// all taken falls back to a 3200-elmo site search that lands wherever it
