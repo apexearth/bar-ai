@@ -26,6 +26,12 @@ int FactoryNanoShort(AIFloat3& out at)
 			continue;
 		const int tier = PlantTier(int(f.circuitDef.id));
 		const int want = (tier >= 3) ? 9 : ((tier == 2) ? 4 : 2);
+		// A plant whose ground is being raided does not hoist its turret
+		// past the draw: the floor sent a nano to the same raided row 104
+		// times in one game, every frame killed (watched). Priced like any
+		// other want there, it waits for the gun the loss field is buying.
+		if (LossNearM(fp, NanoMaxReach()) > 200.f)
+			continue;
 		int have = 0;
 		NanoNear(fp, NanoMaxReach());
 		for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {

@@ -357,6 +357,18 @@ void DecayLossField()
 		gLossM[i] *= k;
 }
 
+// Metal of ours lost within r of a point, as the decayed field remembers it.
+float LossNearM(const AIFloat3& in at, float r)
+{
+	DecayLossField();
+	float m = 0.f;
+	for (uint i = 0; i < gLossPos.length(); ++i) {
+		if (gLossPos[i].distance2D(at) <= r)
+			m += gLossM[i];
+	}
+	return m;
+}
+
 // A finished structure of ours died here. Unlike Military::NoteStructureLoss
 // this keeps no forward-fraction filter: an outlying mex dies well past the
 // home line, which is exactly the loss that ledger drops.

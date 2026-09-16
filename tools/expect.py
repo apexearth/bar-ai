@@ -503,19 +503,28 @@ def exp_converters_on_overflow(games):
         conv_min = set()
         for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: exec t=\d+ \S+ #\d+ convert:", g["text"]):
             conv_min.add(int(m.group(1)))
+        # The complaint is a RUN of waste with no converter started in it:
+        # the longest stretch of overflow minutes (>500 E/s, >25% of income)
+        # with no converter ordered anywhere inside it.
+        over = sorted({int(m.group(1)) for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"])
+                       if float(m.group(2)) > 100 and float(m.group(3)) > 500 and float(m.group(3)) > 0.25 * float(m.group(2))})
         unanswered = 0
-        for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: energy cur=\d+/\d+ inc=(\d+) pull=\d+ use=\d+ excess=(-?\d+) [^\n]*eFull=1", g["text"]):
-            mn, inc, exc = int(m.group(1)), float(m.group(2)), float(m.group(3))
-            # A converter's worth of waste, not a wind spike: 500 E/s is seven
-            # basic converters' intake.
-            if inc > 100 and exc > 500 and exc > 0.25 * inc and not any((mn + d) in conv_min for d in (-1, 0, 1)):
-                unanswered += 1
+        run = 0
+        prev = None
+        for mn in over:
+            if mn in conv_min:
+                run = 0
+            elif prev is not None and mn == prev + 1:
+                run += 1
+            else:
+                run = 1
+            unanswered = max(unanswered, run)
+            prev = mn
         if unanswered >= 8:
             bad.append((g["name"], unanswered))
     if bad and len(bad) >= max(1, len(ev) // 3):
-        return "RED", f"{len(bad)}/{len(ev)} games threw away 25%+ of energy for 8+ minutes with no converter ordered: " + ", ".join(f"{n} ({u} min)" for n, u in bad[:3])
-    return "OK", f"{len(bad)}/{len(ev)} games with unanswered overflow"
-
+        return "RED", f"{len(bad)}/{len(ev)} games threw away 500+ E/s for 8+ minutes running with no converter ordered: " + ", ".join(f"{n} ({u} min)" for n, u in bad[:3])
+    return "OK", f"{len(bad)}/{len(ev)} games with an unanswered overflow run"
 
 def exp_builders_finish_walks(games):
     """A builder sent to a site is not aborted every 30 s on the walk."""
