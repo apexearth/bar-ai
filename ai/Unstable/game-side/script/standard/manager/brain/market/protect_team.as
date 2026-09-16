@@ -160,6 +160,7 @@ void TeamHullPrep()
 
 array<bool>     gGapWalk;
 array<float>    gGapCover;
+array<float>    gGapShort;    // the rim's own shortfall, as a mex beside it prices it
 array<float>    gGapBehind;    // what an entry here reaches: wedge + the hole rule
 array<float>    gGapWedge;     // the wedge's own metal beyond the stopping point
 array<float>    gGapInside;    // the wedge's metal inside it -- reachable through a hole
@@ -236,6 +237,7 @@ void GapsPrep(float wave0, float standoff)
 		if (gGapWalk.length() != uint(PF_RAYS)) {
 			gGapWalk.resize(PF_RAYS);
 			gGapCover.resize(PF_RAYS);
+			gGapShort.resize(PF_RAYS);
 			gGapBehind.resize(PF_RAYS);
 			gGapWedge.resize(PF_RAYS);
 			gGapInside.resize(PF_RAYS);
@@ -255,6 +257,7 @@ void GapsPrep(float wave0, float standoff)
 		const AIFloat3 e = gThMid + dir * edgeR;
 		gGapWalk[b] = OnMap(e) && gGapFoeOk && ai.GroundConnected(e, gGapFoe);
 		gGapCover[b] = OnMap(e) ? CoverAt(e) : 0.f;
+		gGapShort[b] = OnMap(e) ? ShortWith(e, gGapCover[b], ThreatAt(e)) : 1.f;
 		float open = 0.f;
 		if (wave > 1.f) {
 			open = (wave - gGapCover[b]) / wave;
@@ -443,28 +446,22 @@ void GapsPrep(float wave0, float standoff)
 // the team hull; -1 outside the hull or before the gaps are read.
 float InteriorShortfall(const AIFloat3& in pos)
 {
-	if (!gThOk || (gGapOpen.length() == 0) || (gGapCursor < PF_RAYS))
+	if (!gThOk || (gGapShort.length() == 0) || (gGapCursor < PF_RAYS))
 		return -1.f;
 	const int b = TeamRayOf(pos);
 	if (pos.distance2D(gThMid) > gThR[b])
 		return -1.f;
-	// Against the army they have actually SHOWN, not the wave prior: the
-	// prior is thousands and no line ever closes against it, which read
-	// every home mex as 45% lost with hazard 0 (0.55 survival, unchanged
-	// since before the front). Nothing seen, nothing gets in.
-	RiskFillSiege();
-	const float seen = gRkSeen;   // their mobile army, in metal, as the siege risk reads it
-	if (seen <= 1.f)
-		return 0.f;
+	// The rim's shortfall, priced as a mex standing beside the wall prices
+	// its own: against the threat the model expects on that bearing, not
+	// against their whole seen army. Priced against the army, the interior
+	// read more exposed than the mex at the wall's foot -- 0.545 at home
+	// against 0.664 one step out -- and the second moho went forward.
 	float worst = 0.f;
 	for (int k = 0; k < PF_RAYS; ++k) {
 		if (!gGapWalk[k])
 			continue;
-		float open = (seen - gGapCover[k]) / seen;
-		if (open < 0.f)
-			open = 0.f;
-		if (open > worst)
-			worst = open;
+		if (gGapShort[k] > worst)
+			worst = gGapShort[k];
 	}
 	return worst;
 }

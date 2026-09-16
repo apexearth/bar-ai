@@ -500,6 +500,21 @@ float EMakeInFlight()
 	return e;
 }
 
+// What the ordered generators make ONCE FED -- the make the stall hoist
+// has to compare its answer against: a second frame started beside a
+// crawling reactor draws on the same feed, so it arrives no sooner than
+// the first would have with the hands on it.
+float EMakeOrderedE()
+{
+	float e = 0.f;
+	for (uint i = 0; i < ComLen(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		e += Catalog::gMakeE[gComDef[i]];
+	}
+	return e;
+}
+
 // IS THE ANSWER TO THIS STALL BIG ENOUGH? Energy asks fold onto one standing
 // request unless the bank is overflowing -- and during a stall it never is, so
 // every builder that wanted energy joined the SAME turbine and we answered a

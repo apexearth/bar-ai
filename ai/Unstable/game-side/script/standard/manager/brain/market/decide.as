@@ -1128,16 +1128,25 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
 	const bool hoistWorth = true;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)) {
+		// WHAT IS ORDERED COVERS IT ONCE FED: then the stall wants hands on
+		// the crawling frame, not another frame beside it. Watched on Comet
+		// Catcher (2026-09-15): the hoist put up a second and a third fusion
+		// while the first crawled, and all three then starved on one moho.
+		const bool ordered = (EnergyDeficitNowE() - EMakeOrderedE() <= 0.f);
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO))
+			if (ordered) {
+				if (ranked[ri].kind != WK_ASSIST)
+					continue;
+			} else if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO)) {
 				continue;
+			}
 			if (ri > 0) {
 				Want@ ew = ranked[ri];
 				ranked.removeAt(ri);
 				ranked.insertAt(0, ew);
 			}
 			aaPanic = true;   // reuse the skip-the-lottery flag
-			why = "estall";
+			why = ordered ? "estall-hands" : "estall";
 			StallFreedClear(unit);
 			break;
 		}

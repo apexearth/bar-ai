@@ -949,8 +949,13 @@ float StreamRisk(const AIFloat3& in pos)
 			shortP = holeShort;
 	}
 	float risk = HazardWith(pos, cover) * shortP;
+	// The prior says they are coming; the gradient says where first. Flat,
+	// it priced the mex nearest their base like the one behind our own
+	// start (0.545 both), and the second moho went to the front (watched).
+	// A stream at the front carries the prior twice, one at the rear once.
 	const float siege = SiegeWith(pos, cover,
-			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP;
+			ai.GetTunable("apex_siege_prior", TUNE_SIEGE_PRIOR)) * shortP
+			* (1.f + GradAt(pos));
 	if (siege > risk)
 		risk = siege;
 	gSsKey[slot] = key;

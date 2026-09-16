@@ -626,8 +626,37 @@ def exp_first_t2_con_mohos(games):
         return "RED", f"{len(wrong)}/{seen} first advanced constructors did something other than an advanced extractor first: " + ", ".join(wrong[:4])
     return "OK", f"{seen - len(wrong)}/{seen} first advanced constructors opened with a moho"
 
+
+def exp_home_outranks_front(games):
+    """A home mex never reads a worse survival than a mex out toward them."""
+    ev = [g for g in games if g["minutes"] >= 15]
+    if len(ev) < 2:
+        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
+    bad, seen = [], 0
+    for g in ev:
+        home, front = [], []
+        for m in re.finditer(r"apex: mexup t=\d+ at=[\d,]+ surv=([\d.]+) raw=[\d.]+ v=[\d.]+ homeD=(\d+)", g["text"]):
+            d = int(m.group(2))
+            if d <= 600:
+                home.append(float(m.group(1)))
+            elif d >= 1500:
+                front.append(float(m.group(1)))
+        if len(home) < 5 or len(front) < 5:
+            continue
+        seen += 1
+        home.sort(); front.sort()
+        h, f = home[len(home) // 2], front[len(front) // 2]
+        if h < f - 0.02:
+            bad.append((g["name"], h, f))
+    if seen < 2:
+        return "NEED MORE", f"{seen} games with both home and forward mexup readings (need 2)"
+    if bad:
+        return "RED", f"{len(bad)}/{seen} games price a HOME mex below a forward one: " + ", ".join(f"{n} home={h:.2f} fwd={f:.2f}" for n, h, f in bad[:3])
+    return "OK", f"home mex survival >= forward in {seen} games"
+
 EXPECTATIONS = [
     ("first T2 con builds a moho first", exp_first_t2_con_mohos),
+    ("home mexes outrank forward ones", exp_home_outranks_front),
     ("home mexes upgrade before the reactor", exp_home_mex_upgrades),
     ("home ground is not discounted", exp_home_not_discounted),
     ("converters answer overflow", exp_converters_on_overflow),
