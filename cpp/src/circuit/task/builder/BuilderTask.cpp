@@ -96,40 +96,69 @@ float SelfClearance(CCircuitUnit* builder, CCircuitDef* buildDef)
 // covers the cells around it, so it never has to move, and the last free cell
 // beside it is a legal site (the commander he watched sat inside its own
 // wind cluster for 37 minutes). Flood the free cells of the def's lattice
-// out from the builder's cell with the candidate counted as taken; an exit
-// is any cell four rings out or off the grid. Only asked when the candidate
-// lands within two cells of the builder -- further away it closes nothing.
+// out from the builder's cell with the candidate counted as taken. Only asked
+// when the candidate lands within two cells of the builder -- further away it
+// closes nothing.
 // Flood the free cells of the def's lattice out from (si, sj) with the
 // candidate (0,0) taken; true when some cell R rings out or off the grid is
 // reached. Free = FindBuildSite returns the cell itself.
+// R is eight rings: at four, a corridor five cells long between the lab and
+// the farm read as an exit, and the commander stood in it two minutes (gate,
+// Frozen Ford, 7 of 9 runs). The window is shared across one candidate's
+// neighbours: cells one flood proved open (3) or closed (4) answer the next
+// flood on arrival, so the whole window is probed at most once.
+struct ExitWindow {
+	static constexpr int R = 8;
+	static constexpr int W = 2 * R + 1;
+	std::vector<char> state;   // 0 unknown, 1 visiting, 2 taken, 3 open, 4 pocket
+	ExitWindow() : state(W * W, 0) { state[Idx(0, 0)] = 2; }
+	static int Idx(int i, int j) { return (j + R) * W + (i + R); }
+};
+
 static bool CellHasExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitDef* buildDef,
-		int facing, float slot, const AIFloat3& cand, int si, int sj)
+		int facing, float slot, const AIFloat3& cand, int si, int sj, ExitWindow& win)
 {
-	constexpr int R = 4;
-	const int W = 2 * R + 1;
-	std::vector<char> state(W * W, 0);   // 0 unknown, 1 free/visited, 2 taken
-	auto idx = [&](int i, int j) { return (j + R) * W + (i + R); };
+	constexpr int R = ExitWindow::R;
+	auto idx = [](int i, int j) { return ExitWindow::Idx(i, j); };
+	std::vector<char>& state = win.state;
+	const char s0 = state[idx(si, sj)];
+	if (s0 == 3) {
+		return true;
+	}
+	if ((s0 == 2) || (s0 == 4)) {
+		return false;
+	}
 	std::vector<std::pair<int, int>> queue;
+	std::vector<int> visited;
 	queue.emplace_back(si, sj);
 	state[idx(si, sj)] = 1;
-	state[idx(0, 0)] = 2;
-	while (!queue.empty()) {
+	visited.push_back(idx(si, sj));
+	bool open = false;
+	while (!queue.empty() && !open) {
 		const auto [ci, cj] = queue.back();
 		queue.pop_back();
 		if ((std::abs(ci) >= R) || (std::abs(cj) >= R)) {
-			return true;
+			open = true;
+			break;
 		}
-		for (int dj = -1; dj <= 1; ++dj) {
+		for (int dj = -1; dj <= 1 && !open; ++dj) {
 			for (int di = -1; di <= 1; ++di) {
 				const int ni = ci + di, nj = cj + dj;
-				if (((di == 0) && (dj == 0)) || (std::abs(ni) > R) || (std::abs(nj) > R)
-					|| (state[idx(ni, nj)] != 0))
-				{
+				if (((di == 0) && (dj == 0)) || (std::abs(ni) > R) || (std::abs(nj) > R)) {
+					continue;
+				}
+				const char st = state[idx(ni, nj)];
+				if (st == 3) {
+					open = true;
+					break;
+				}
+				if (st != 0) {
 					continue;
 				}
 				AIFloat3 c;
 				if (!circuit->LatticeNeighbour(cand, buildDef, facing, ni, nj, c)) {
-					return true;   // off the grid: open ground
+					open = true;   // off the grid: open ground
+					break;
 				}
 				const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
 				const bool freeCell = utils::is_valid(probe)
@@ -137,11 +166,15 @@ static bool CellHasExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircu
 				state[idx(ni, nj)] = freeCell ? 1 : 2;
 				if (freeCell) {
 					queue.emplace_back(ni, nj);
+					visited.push_back(idx(ni, nj));
 				}
 			}
 		}
 	}
-	return false;
+	for (int k : visited) {
+		state[k] = open ? 3 : 4;
+	}
+	return open;
 }
 
 // DOES THE GROUND KEEP ITS EXITS if this cell is built? A mobile builder
@@ -154,7 +187,7 @@ static bool CellHasExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircu
 // cell touching the candidate, must still reach open ground with the
 // candidate taken -- then no pocket can form, whoever stands where.
 static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
-		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
+		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand, ExitWindow& win)
 {
 	// Every free neighbour of the candidate keeps an exit.
 	for (int j = -1; j <= 1; ++j) {
@@ -169,7 +202,7 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 			const AIFloat3 probe = terrainMgr->FindBuildSite(buildDef, c, slot, facing);
 			const bool freeCell = utils::is_valid(probe)
 					&& (probe.SqDistance2D(c) <= SQUARE(SQUARE_SIZE));
-			if (freeCell && !CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, i, j)) {
+			if (freeCell && !CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, i, j, win)) {
 				return false;
 			}
 		}
@@ -198,7 +231,7 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 	if ((bestSq < .0f) || (bestSq > SQUARE(2.f * slot)) || ((bi == 0) && (bj == 0))) {
 		return true;
 	}
-	return CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, bi, bj);
+	return CellHasExit(circuit, terrainMgr, buildDef, facing, slot, cand, bi, bj, win);
 }
 
 // The builder itself and the COMMANDER: another hand's turbine closes his
@@ -206,12 +239,13 @@ static bool KeepsExit(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuit
 static bool KeepsExits(CCircuitAI* circuit, CTerrainManager* terrainMgr, CCircuitUnit* builder,
 		CCircuitDef* buildDef, int facing, float slot, const AIFloat3& cand)
 {
-	if (!KeepsExit(circuit, terrainMgr, builder, buildDef, facing, slot, cand)) {
+	ExitWindow win;
+	if (!KeepsExit(circuit, terrainMgr, builder, buildDef, facing, slot, cand, win)) {
 		return false;
 	}
 	CCircuitUnit* com = circuit->GetSetupManager()->GetCommander();
 	if ((com != nullptr) && (com != builder) && !com->IsDead()) {
-		return KeepsExit(circuit, terrainMgr, com, buildDef, facing, slot, cand);
+		return KeepsExit(circuit, terrainMgr, com, buildDef, facing, slot, cand, win);
 	}
 	return true;
 }

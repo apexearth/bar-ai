@@ -92,6 +92,20 @@ int gJobSeen = 0, gJobUnpriced = 0, gJobFar = 0, gJobFull = 0,
 // four times per idle election once BestJobBoss ran its own pair. The near
 // winner is left here; the return is the any-distance winner.
 IUnitTask@ gJobNearBest;
+// THE COMMANDER'S LEASH, one test for the election and the floor: forward
+// of the anchor by more than the base-front post, or past the eco leash
+// from home. He is the game; a job out there is not worth him.
+bool ComFar(const AIFloat3& in p)
+{
+	if (Base::gAnchorSet && Base::gAxisSet) {
+		const AIFloat3 rel = p - Base::gAnchor;
+		if ((rel.x * Base::gFwd.x + rel.z * Base::gFwd.z) > 400.f)
+			return true;
+	}
+	return Builder::gHomeSet
+		&& (p.distance2D(Builder::gHomePos) > ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH));
+}
+
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 {
 	JobSweep();
@@ -106,6 +120,7 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
 	// EcoFar's first two terms do not read the site; taken once.
 	const bool leashed = EcoQuiet() && Builder::gHomeSet;
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {
 		IUnitTask@ cand = Requests::gLive[i];
 		if ((cand is null) || cand.IsDead()
@@ -123,7 +138,7 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 		const AIFloat3 where = cand.GetBuildPos();
 		if (!OnMap(where))
 			continue;
-		const bool far = leashed && EcoFar(where);
+		const bool far = isComm ? ComFar(where) : (leashed && EcoFar(where));
 		if (far)
 			++gJobFar;
 		const float progress = Requests::Progress(cand);
@@ -220,13 +235,14 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 	CCircuitUnit@ fac = null;
 	CCircuitUnit@ any = null;
 	const bool leashed = nearOnly && EcoQuiet() && Builder::gHomeSet;
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ w = gWorkers[i];
 		if ((w is null) || (w.id == unit.id) || (w.task is null))
 			continue;
 		if (w.task.GetType() != Task::Type::BUILDER)
 			continue;
-		if (leashed && EcoFar(w.GetPos(ai.frame)))
+		if (isComm ? ComFar(w.GetPos(ai.frame)) : (leashed && EcoFar(w.GetPos(ai.frame))))
 			continue;
 		const int bt = int(w.task.GetBuildType());
 		if (bt == int(Task::BuildType::NANO)) {
@@ -269,11 +285,8 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 		return null;
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const bool logIt = (ai.frame >= gNextFloorLog);
-	// The commander takes only nearby jobs -- until he has stood idle ten
-	// seconds, when any job beats standing (watched: 10-20 s stills after a
-	// chase, every election refused, nothing near).
-	const bool comIdle = isComm && (gCwStillFrom >= 0)
-			&& (ai.frame - gCwStillFrom >= 10 * SECOND);
+	// The commander takes only jobs inside his leash (ComFar). Far out
+	// with nothing near, he walks home (below), never to any job.
 	// FIRST CHOICE: take the most valuable job in flight and work it
 	// directly. Taking the task beats guarding whoever holds it -- the hand
 	// is counted on the site, so the crew bounds see it and the next idle
@@ -281,7 +294,7 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 	{
 		IUnitTask@ any = BestLiveJob(unit, true);
 		IUnitTask@ job = gJobNearBest;
-		if ((job is null) && (!isComm || comIdle))
+		if ((job is null) && !isComm)
 			@job = any;
 		if (job !is null) {
 			if (logIt) {
@@ -309,7 +322,7 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 	CCircuitUnit@ boss = BestJobBoss(unit);
 	if (boss is null)
 		@boss = FloorBoss(unit, true);
-	if ((boss is null) && (!isComm || comIdle))
+	if ((boss is null) && !isComm)
 		@boss = FloorBoss(unit, false);
 	if (boss !is null) {
 		// SHORT LEASH. A held builder task is not re-elected, so the floor
@@ -329,6 +342,18 @@ IUnitTask@ IdleFloor(CCircuitUnit@ unit, const string &in why)
 					+ " (" + why + ")");
 			}
 			return gt;
+		}
+	}
+	// A commander with nothing to do out past his leash walks home first.
+	if (isComm && ComFar(unit.GetPos(ai.frame))) {
+		IUnitTask@ home = Builder::Retreat(unit);
+		if (home !is null) {
+			if (logIt) {
+				gNextFloorLog = ai.frame + 30 * SECOND;
+				AiLog("apex: floor " + unit.circuitDef.GetName() + " #" + unit.id
+					+ " -> home, past the leash (" + why + ")");
+			}
+			return home;
 		}
 	}
 	// Nothing to help: metal lying on the ground is still metal.

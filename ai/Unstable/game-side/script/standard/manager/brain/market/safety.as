@@ -205,6 +205,9 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 			if (!OnMap(gp) || (Military::ForwardFraction(gp) >= 0.5f))
 				continue;
+			// ...and inside the one leash the floor and the election use.
+			if (ComFar(gp))
+				continue;
 			// HE DEFENDS WHAT WE OWN, he does not go on tour. "Our half of the
 			// map" was too loose a leash: he chased to the midpoint, chained
 			// the next target from there and ended up duelling the enemy

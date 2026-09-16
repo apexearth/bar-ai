@@ -995,6 +995,26 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// What put ranked[0] there -- logged on the decide line, because a hoist
 	// and a draw look identical from outside and were read as a broken draw.
 	string why = "draw";
+	// A WALLED-IN UNIT CAN REACH NOTHING BUT ITS WALL. The pen reclaim
+	// held v=143-148 and still lost the commander's election to the stall
+	// hoist twice and to the draw once (gate, Frozen Ford s5): two minutes
+	// in the pocket with the cure priced and waiting.
+	const Id penWall = Military::PenWallOf(unit.id);
+	if (penWall != 0) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if ((ranked[ri].kind != WK_RECLAIM) || (ranked[ri].target is null)
+					|| (ranked[ri].target.id != penWall))
+				continue;
+			if (ri > 0) {
+				Want@ pw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, pw);
+			}
+			aaPanic = true;
+			why = "penned";
+			break;
+		}
+	}
 	if (aaEmerg) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_AIRDEF)
@@ -1563,8 +1583,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// the enemy and its commander refused every want for the whole game
 			// (apexearth 2026-09-08: "blue and light green ... weren't doing
 			// anything after making 2 mexes and 1 energy").
+			// ...and forward of HOME, not of where he stands: from his feet
+			// the cap ratchets, each job a quarter further out. The 8v8 mid
+			// team's home is mid, so its jobs still clear.
 			const float ff = Military::ForwardFraction(ranked[i].pos)
-					- Military::ForwardFraction(unit.GetPos(ai.frame));
+					- Military::ForwardFraction(Builder::gHomeSet
+						? Builder::gHomePos : unit.GetPos(ai.frame));
 			if ((fwdDist > 400.f)
 				|| (ff > ai.GetTunable("apex_comm_fwd_cap", TUNE_COMM_FWD_CAP))) {
 				if (ai.frame >= gComFwdLogAt + 30 * SECOND) {

@@ -544,7 +544,10 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	// the trip costs the con's expected loss (TripRisk, coverage.as).
 	const float risk = TripRisk(pos);
 	gMexRiskSum += risk;
-	const float conRiskM = Catalog::gCostM[uid] * risk;
+	// What the trip stakes: the hand's price -- or, for the commander,
+	// everything we own, because his death is the game.
+	const float conRiskM = risk * (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			? (gAssetsM + ArmyValue()) : Catalog::gCostM[uid]);
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot) * IncomeMult();
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);

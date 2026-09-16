@@ -93,6 +93,20 @@ void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3&
 	gPenDir.insertLast(dir);
 }
 
+// The wall standing between this victim and everything else, or 0.
+Id PenWallOf(Id victim)
+{
+	for (uint i = 0; i < gPenVictim.length(); ++i) {
+		if (gPenVictim[i] != victim)
+			continue;
+		if (gPenWall[i] == 0)
+			return 0;
+		CCircuitUnit@ wall = ai.GetTeamUnit(gPenWall[i]);
+		return ((wall !is null) && (wall.circuitDef !is null)) ? gPenWall[i] : 0;
+	}
+	return 0;
+}
+
 void DropPenVerdict(Id victim)
 {
 	for (uint i = 0; i < gPenVictim.length(); ++i) {
