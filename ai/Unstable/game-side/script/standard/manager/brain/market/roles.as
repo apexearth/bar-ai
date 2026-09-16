@@ -132,6 +132,28 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 		return false;
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return false;
+	// THE ONLY ADVANCED HAND TAKES NO ROLE: a role parks it in one category,
+	// and the first T2 con was parked in DEFENCE at v=1.3 with a home moho
+	// at v=8 that no other hand could build (gate: 3 of 3 opened with an
+	// Ambusher, a radar or an anti-nuke). A category's quota is for hands
+	// that have peers; the one hand of its tier serves the best job of it.
+	{
+		const int uid = int(unit.circuitDef.id);
+		const bool t1 = (uid < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[uid];
+		if (!t1) {
+			int advanced = 0;
+			for (uint c = 1; c < gOwnCount.length(); ++c) {
+				const int ci = int(c);
+				if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci] || !Catalog::gBuilder[ci])
+					continue;
+				if ((ci < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[ci])
+					continue;
+				advanced += gOwnCount[c];
+			}
+			if (advanced <= 1)
+				return false;
+		}
+	}
 	ConRoleRecount();
 	int r = gRoleOf[id];
 	if (r >= 0) {
