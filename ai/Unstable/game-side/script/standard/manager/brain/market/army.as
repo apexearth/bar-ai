@@ -851,7 +851,13 @@ void PatrolCensus()
 	}
 }
 
-float PatrolShort()
+// The patrol half alone: ground-seen against ground-to-see, which the
+// screen units bought against it fill and so saturate. The posted-guard
+// share (CoverShort) never fell for them -- a scout escorting a constructor
+// or dead in the field holds no post -- so the screen term read a full
+// shortfall all game and the vehicle plant made 882 Darts (his 8v8,
+// 2026-09-17: "that seems a bit excessive on the darts").
+float PatrolMiss()
 {
 	PatrolCensus();
 	const float sites = float(gLSpot.length()) + gPatSites;
@@ -862,7 +868,12 @@ float PatrolShort()
 	if (need <= 0.f)
 		return 0.f;
 	float miss = 1.f - have / need;
-	miss = (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+}
+
+float PatrolShort()
+{
+	const float miss = PatrolMiss();
 	// The posted guard's own reading of the same shortfall: the share of the
 	// base's worth no unit or turret covers (military/guardposts.as).
 	const float cover = Military::CoverShort();

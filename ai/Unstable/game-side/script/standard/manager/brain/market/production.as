@@ -890,7 +890,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// EVERYTHING BELOW IS THE SAME ANSWER FOR EVERY CANDIDATE. PatrolShort
 	// alone walks the whole def table twice and was called twice per
 	// candidate; RoleTarget/RoleValue walk it once each per candidate.
-	const float tPatrolShort = PatrolShort();
+	const float tPatrolMiss = PatrolMiss();   // the cover and screen terms saturate on this half alone
 	const float tFoeSpeed = FoeSpeedCap();
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
@@ -1263,7 +1263,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// what buys pawns early -- cheap and fast is the most coverage per
 			// metal there is -- and it fades as the fleet fills.
 			if (CoverCapable(d))
-				ppc *= 1.f + tCoverWorth * CoverPerMetal(d) * tPatrolShort;
+				// ...on the patrol reading, which the units bought here fill: the
+				// posted-guard share never fell (see PatrolMiss) and this term
+				// alone bought a plant's worth of Darts every minute.
+				ppc *= 1.f + tCoverWorth * CoverPerMetal(d) * tPatrolMiss;
 			// THE COVERAGE SHARE OF THE GAP IS PRICED BY COVER, NOT BY COMBAT
 			// (apexearth: "quantify the value of grunts when it comes to
 			// defending a base from raiders. It is the speed that they have...
@@ -1316,7 +1319,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				{
 					const float dash = 1.f + Catalog::gSpeed[d] / tFoeSpeed;
 					const float screen = kS * (Catalog::gLosR[d] / 1000.f)
-							* dash * tPatrolShort / (mineM / gWMCost);
+							* dash * tPatrolMiss / (mineM / gWMCost);
 					if (screen > ppc)
 						ppc = screen;
 				}

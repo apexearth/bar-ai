@@ -81,6 +81,14 @@ lines of quotes.
   `tools/opening.py` is the under-10-minute table. The minute-2-4 hole (10
   mexes to their 19) is the energy-stall hoist buying solars -- his 09-08
   ruling, not touched. Unverified by him.
+- Darts (09-17): "a bit excessive... we still need scouts but not so many";
+  T2 only when the T2 can be afforded once built, but not late. Built 09-17:
+  the cover and screen terms saturate on the patrol reading (the posted-guard
+  share never fell: an escort holds no post), and a tech lab is never
+  drawn by the lottery -- it wins when it is the best-priced thing. Comet
+  8v8 seed 2: Darts made 882 -> 150, first T2 4.4 min -> 7.6, standing army
+  at 10 min 16.5k -> 20.2k (theirs 20.4k), metal 378k -> 480k over the
+  day's four steps. Unverified by him.
 - The eco seat's guns stand inside its base with walk gaps, blocking the farm;
   two gantries starve for nanos with a full bank; LRPCs belong on hills;
   Behemoths when the enemy is winning (09-16). Recorded in ISSUES/TODO, not

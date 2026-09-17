@@ -764,6 +764,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	return sumV2;
 }
 
+int gTechNotDrawnAt = 0;
 bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
 {
 	bool didDraw = false;
@@ -780,6 +781,24 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 			roll2 -= wt[c];
 			if (roll2 <= 0.f) {
 				const int ri = catBest[c];
+				// A TECH LAB IS NOT SAMPLED (apexearth 2026-09-17: "only go
+				// T2 if we can actually afford the T2 once it's built"). Its
+				// price already carries the lab, its first constructor and
+				// the time income needs to pay for both; a lottery re-rolled
+				// every election bought one seat's advanced lab at 4.4 min
+				// at v=2.57 over a mex at v=6.34. It wins when it is the
+				// best thing to do, which is also what keeps it from being
+				// late: nothing here delays a lab the price puts first.
+				if ((ri > 0) && (ranked[ri].kind == WK_TECH)) {
+					if (ai.frame >= gTechNotDrawnAt) {
+						gTechNotDrawnAt = ai.frame + 60 * SECOND;
+						AiLog("apex: tech-not-drawn t=" + ai.teamId + " "
+							+ ((ranked[ri].def is null) ? "?" : ranked[ri].def.GetName())
+							+ " v=" + formatFloat(ranked[ri].value, "", 0, 2)
+							+ " lead=" + formatFloat(ranked[0].value, "", 0, 2));
+					}
+					break;
+				}
 				if (ri > 0) {
 					Want@ drawn = ranked[ri];
 					ranked.removeAt(uint(ri));
