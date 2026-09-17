@@ -316,7 +316,10 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// them landed at the end. The same income arithmetic, across ALL defs:
 	// past it a new site is not opened -- the asker helps finish one that
 	// is, or waits. Extractor claims are exempt: they are the income.
-	if (!spotWork && (TotalLive() >= InFlightCap())) {
+	// ...and converters, which are the income when energy is wasted (a T1
+	// converter is one metal) -- a yard opens as many sites as the waste
+	// needs, never one at a time.
+	if (!spotWork && (bt != Task::BuildType::CONVERT) && (TotalLive() >= InFlightCap())) {
 		if (unit !is null) {
 			IUnitTask@ any = JoinAny(unit);
 			if (any !is null) {
@@ -343,7 +346,8 @@ uint TotalLive()
 		if ((t is null) || t.IsDead() || (t.buildDef is null))
 			continue;
 		const int bt = t.GetBuildType();
-		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP)))
+		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP))
+			|| (bt == int(Task::BuildType::CONVERT)))
 			continue;
 		++n;
 	}

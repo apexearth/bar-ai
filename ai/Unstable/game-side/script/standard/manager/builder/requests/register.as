@@ -66,6 +66,12 @@ bool BigEnergyRising()
 // threshold, and it cannot bring back the original bug -- seven advanced
 // solars all make 75 e/s, so no member of an equal-output group can ever
 // preempt another, and the ladder's depth bounds the overlap.
+// ...AND SOONER, NOT ONLY BIGGER. Output alone let an advanced fusion open
+// beside a fusion at 93% and take its hands (his watch, 2026-09-16: "switches
+// all build power to an AFUS before the fusion completes... has only 500
+// energy income"). The bar is energy per unit of build time REMAINING on the
+// best reactor rising: a nearly finished fusion is seconds from its 1,000
+// e/s and nothing outbids that; a fresh one is fair game for an afus.
 bool BigEnergyBetterThanRising(const CCircuitDef@ d)
 {
 	if (d is null)
@@ -73,7 +79,13 @@ bool BigEnergyBetterThanRising(const CCircuitDef@ d)
 	const int id = int(d.id);
 	if (!Catalog::ValidId(id))
 		return false;
-	return Catalog::gMakeE[id] > Market::ComBigEnergyBestMakeE();
+	float risingRate = 0.f;
+	if (!Market::ComBigEnergyBestRate(risingRate))
+		return true;
+	const float bt = Catalog::gBuildTime[id];
+	if (bt <= 1.f)
+		return false;
+	return (Catalog::gMakeE[id] / bt) > risingRate;
 }
 
 int gBigEFold = 0;   // cross-def folds onto the standing reactor

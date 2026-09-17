@@ -10,10 +10,60 @@ int gEAltFor = -1;
 int gNextEPickLog = 0;
 int gNextEBigLog = 0;
 
+// Wasted e/s beyond what the converters already in flight will eat. Read by
+// both proposers: a generator while this is positive buys more of what is
+// being thrown away.
+float EnergyUnconverted()
+{
+	const float eWasted = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
+	return eWasted - ConvCapInFlight();
+}
+
+// The smallest converter we can build eats this much e/s: the unit of waste
+// that is a converter's job rather than noise. Below it the opening's full
+// 1,000-energy bank read as waste and the commander built converters, one
+// metal each, in place of its first mexes (10 mexes at minute 4 against the
+// usual 15-24, lost at 19 minutes).
+float gConvUnit = -1.f;
+float ConverterUnitE()
+{
+	if (gConvUnit > 0.f)
+		return gConvUnit;
+	float best = 0.f;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::gAvailable[i] || Catalog::gMobile[i] || (Catalog::gConvCapacity[i] <= 0.f))
+			continue;
+		if ((best <= 0.f) || (Catalog::gConvCapacity[i] < best))
+			best = Catalog::gConvCapacity[i];
+	}
+	gConvUnit = (best > 0.f) ? best : 70.f;
+	return gConvUnit;
+}
+
+// Waste a converter is the answer to: at least one converter's own eat.
+bool EnergyWasting()
+{
+	return EnergyUnconverted() >= ConverterUnitE();
+}
+
+int gGenHeldLogAt = 0;
 Want@ ProposeEnergy(CCircuitUnit@ unit)
 {
 	Want w;
 	const int uid = int(unit.circuitDef.id);
+	// NO GENERATOR WHILE ENERGY IS BEING THROWN AWAY (apexearth 2026-09-16,
+	// 5,800 e/s income, 2,000 wasted, a fusion elected 41 times: "instead
+	// we're making even more energy... very stupid"). Reverses the 09-11
+	// "energy always" ruling for exactly this case: the converters are the
+	// answer to waste, and a rung priced beside them was drawn anyway.
+	// Holding every generator while EnergyWasting() was measured worse on one
+	// seed (see decide.as convertPush): the waste is the converters' price,
+	// not a gate on the rungs. The instrument stays.
+	if (EnergyWasting() && (ai.frame >= gGenHeldLogAt)) {
+		gGenHeldLogAt = ai.frame + 30 * SECOND;
+		AiLog("apex: gen-wasting t=" + ai.teamId + " unconverted="
+			+ int(EnergyUnconverted()) + " e/s");
+	}
 	const double _tPre = Perf::T0();
 	const AIFloat3 eSite = EcoSiteFor(unit);
 	gEAlt.resize(0);

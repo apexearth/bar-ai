@@ -681,6 +681,13 @@ float EtaEcoWeight(array<Want@>@ ranked)
 	for (uint i = 0; i < ranked.length(); ++i) {
 		if (!EtaMergedCat(CategoryOf(ranked[i].kind)))
 			continue;
+		// The RUNGS' best, not the merged categories': a converter is
+		// CAT_ENERGY without a rung, so its price was handed to the ladder's
+		// pick as that pick's ticket -- a fusion at v=2 drew level with the
+		// converter at v=10 while 2,000 e/s was thrown away (his 8v8,
+		// 2026-09-16: 41 fusion elections to 42 converter ones).
+		if (!EtaRanks(ranked[i]))
+			continue;
 		if (ranked[i].value > best)
 			best = ranked[i].value;
 	}

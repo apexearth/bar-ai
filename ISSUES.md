@@ -164,6 +164,21 @@ rewritten 09-15 (`ccf28df7`: reach + approach, not nearness + wiggle; Ford
 on it. Read the engine-order drop first (S13, S27: the engine discards a
 build order on a blocked square with no idle event) before the election.
 
+### COMET 8v8: level at minute 8, then the mexes go to T1 raids and the army trades 1:3 -- no eco decision moved it (2026-09-16/17)
+
+Comet Catcher Remake 8v8 +100% vs BARb hard, seed 1, four runs of the
+same seed. Control (0ace8c67): mexes 29 -> 18 -> 9 at 8/16/24 min against
+32 -> 45 -> 55; metal 418k vs 856k; K/D 0.38 vs 1.54. Three eco variants
+on top (converters hoisted above the draw + no generator while wasting;
+that plus the honest ladder ticket; the ticket alone): 339k / 335k metal,
+mexes 5 / 3 at 24 min, K/D 0.24-0.29 -- none better, one seed each. Our
+mexes die from minute 8 to peewees and hammers (`BARAI_DEATH atk=armpw`),
+54 a game; our T1 army dies 3-4 to 1. His watched 4v4 on the same map had
+the same curve (29 -> 6). The eco market is not the binding constraint on
+this map; holding the mexes past minute 8 is (docs/32 frontier, ARMY
+SHARE, RAIDS). The converter hoist experiment is recorded in docs/27
+(`apex_convert_push` -- not built as a tunable; the flag is a constant).
+
 ### SCARCITY: at no resource bonus an 8v8 is lost outright -- 122k metal to their 416k, 48 mexes to 128, every seat wiped (2026-09-16)
 
 His hypothesis ("we do really good when we are wealthy, but as soon as

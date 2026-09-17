@@ -451,6 +451,37 @@ float ComBigEnergyBestMakeE()
 	return best;
 }
 
+// The best rising reactor's energy per unit of build time it has LEFT; false
+// when none rises. The comparison BigEnergyBetterThanRising makes.
+bool ComBigEnergyBestRate(float &out rate)
+{
+	rate = 0.f;
+	bool any = false;
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d))
+			continue;
+		if (!Requests::IsBigEnergy(ai.GetCircuitDef(d)))
+			continue;
+		const float bt = Catalog::gBuildTime[d];
+		if (bt <= 1.f)
+			continue;
+		IUnitTask@ t = gComTask[i];
+		float left = 1.f;
+		if ((t !is null) && !t.IsDead())
+			left = 1.f - Requests::Progress(t);
+		if (left < 0.02f)
+			left = 0.02f;
+		const float r = Catalog::gMakeE[d] / (bt * left);
+		if (r > rate)
+			rate = r;
+		any = true;
+	}
+	return any;
+}
+
 uint ComBigEnergyRising(uint &out room)
 {
 	if (gBigEFrame == ai.frame) {

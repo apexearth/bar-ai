@@ -1211,8 +1211,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// proposer already refuses unless the economy makes the whole bill inside
 	// apex_super_afford_s, only one strategic frame stands at a time, and the
 	// counts rise with income, so what this skips is the lottery, not a budget.
+	// A converter hoist was tried here (2026-09-16, "stop what they're doing
+	// entirely to make converters") and measured worse on one seed against
+	// the draw with an honest ladder ticket (eta.as EtaEcoWeight): 339k
+	// metal against 418k, converter income 39 against 104 m/s at 24 min.
+	// The price wins the draw once the ticket is its own; the hoist and the
+	// no-generator-while-wasting hold both starved the energy the converters
+	// needed. Kept as a flag so the draw's own arithmetic can be re-read.
+	const bool convertPush = false;
 	bool superPush = false;
-	if (!aaPanic && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {
+	if (!aaPanic && !convertPush && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_SUPER)
 				continue;
@@ -1254,7 +1262,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// ordered.
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
 	// it is asked first.
-	if (!aaPanic && !superPush
+	if (!aaPanic && !superPush && !convertPush
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
 		&& PlantFramed())
 	{
@@ -1290,6 +1298,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			const float coverHere = CoverAt(cw.pos);
 			if (coverHere >= floorHere)
+				continue;
+			// THE LEDGER, NOT THE FINISHED FIELD. CoverAt reads standing guns,
+			// so while the first tower was a frame the jump fired again every
+			// election: the commander stacked seven light towers on one mex
+			// cluster in eighty seconds at cover=0 throughout (his watch,
+			// 2026-09-16: "~7 turrets all made right next to each other at
+			// 7m"). A gun ordered within reach of the site's mex is its gun.
+			if (!MexUnguardedInReach(cw.pos, near))
 				continue;
 			// ...AND ONLY ONCE THE BASE CAN AFFORD IT (apexearth 2026-08-27:
 			// "turrets aren't bad to have but usually thats made after we have
@@ -1360,7 +1376,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// factory short of its caretakers is taken, not sampled (apexearth
 	// 2026-09-11: "it should be high priority").
 	bool floorPush = false;
-	if (!aaPanic && !superPush && !coverPush) {
+	if (!aaPanic && !superPush && !coverPush && !convertPush) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;
@@ -1381,7 +1397,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// v=17 -- a 60-second payback against a ten-minute one, and no other
 	// hand can build either. While no second advanced hand stands, a mexup
 	// in the list is taken, not drawn.
-	if (!aaPanic && !superPush && !coverPush && !floorPush && (ranked.length() > 1)
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
 		&& SoleAdvancedHand(unit)) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_MEXUP)
@@ -1397,14 +1413,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 	}
 	bool roled = false;
-	if (!aaPanic && !superPush && !coverPush && !floorPush && (ranked.length() > 1)
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {
 		roled = ConRoleApply(unit, ranked);
 		if (roled)
 			why = "role";
 	}
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
 	Perf::Add("dec.draw", _tDraw);
