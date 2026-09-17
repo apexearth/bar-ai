@@ -145,6 +145,59 @@ int AnchorDefAt(const AIFloat3& in at)
 	return best;
 }
 
+// The ring a walk from this origin should start on next time.
+const int NP_RESUME_TTL = 2 * MINUTE;
+array<int> gNPResumeKey;
+array<int> gNPResumeRing;
+array<int> gNPResumeAt;
+int PackKey(const AIFloat3& in o)
+{
+	return int(o.x / 16.f) * 4096 + int(o.z / 16.f);
+}
+void PackResume(const AIFloat3& in o, int ring)
+{
+	const int key = PackKey(o);
+	for (uint k = 0; k < gNPResumeKey.length(); ++k) {
+		if (gNPResumeKey[k] == key) {
+			gNPResumeRing[k] = ring;
+			gNPResumeAt[k] = ai.frame;
+			return;
+		}
+	}
+	gNPResumeKey.insertLast(key);
+	gNPResumeRing.insertLast(ring);
+	gNPResumeAt.insertLast(ai.frame);
+	while (gNPResumeKey.length() > 64) {
+		gNPResumeKey.removeAt(0);
+		gNPResumeRing.removeAt(0);
+		gNPResumeAt.removeAt(0);
+	}
+}
+
+// Where the anchor's turrets should lean: the lathe-weighted centre of the
+// turrets already standing within two reaches, else the ground behind it.
+AIFloat3 PackHeart(const AIFloat3& in at, float reach, float flush, bool lane,
+		const AIFloat3& in fwd)
+{
+	AIFloat3 sum(0.f, 0.f, 0.f);
+	float w = 0.f;
+	NanoNear(at, reach * 2.f);
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
+		if (at.distance2D(gOwnNanoPos[i]) > reach * 2.f)
+			continue;
+		const float bp = (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;
+		sum.x += gOwnNanoPos[i].x * bp;
+		sum.z += gOwnNanoPos[i].z * bp;
+		w += bp;
+	}
+	if (w > 0.f)
+		return AIFloat3(sum.x / w, 0.f, sum.z / w);
+	if (lane)
+		return at - fwd * flush;
+	return at;
+}
+
 // Up to `n` packed slots for turrets of `nanoDef` beside `at`, nearest first.
 //
 // ONE WALK FOR THE WHOLE BURST. A nano execution opens several sites at once,
@@ -187,7 +240,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 	int ring0 = int((ah + nhx) / pitch);
 	if (ring0 < 1)
 		ring0 = 1;
-	const int ringN = int(reach / pitch);
+	int ringN = int(reach / pitch);
 	if (ringN < ring0)
 		return 0;
 
@@ -294,6 +347,43 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 		}
 		return int(slots.length());
 	}
+	// ONE CORE, PLANTS ON ITS RIM (apexearth 2026-09-16: rings on every side
+	// of every plant merged into "one single massive blob" with the plants
+	// inside it; "if you make all your factories on the outside of that
+	// blob... you don't need any walking room there"). The walk starts flush
+	// against the anchor on the side facing the standing turrets -- behind
+	// it when none stand yet -- and grows from there to meet them, so the
+	// anchor stays on the block's edge. Reach is still measured from the
+	// anchor: every cell handed out lathes what bought it.
+	const AIFloat3 heart = PackHeart(at, reach, ah + nhx, lane, fwd);
+	AIFloat3 origin = at;
+	{
+		const float hx = heart.x - at.x;
+		const float hz = heart.z - at.z;
+		const float hl = sqrt(hx * hx + hz * hz);
+		if (hl > 1.f) {
+			origin.x += hx / hl * (ah + nhx);
+			origin.z += hz / hl * (ah + nhx);
+			origin = ai.SnapToLattice(Catalog::Def(nanoDef), origin);
+			ring0 = 0;
+			// The anchor's far side is still in its reach, one offset further.
+			ringN = int((reach + ah + nhx) / pitch);
+		}
+	}
+	// RESUME, DON'T RESTART: a slice that ends inside a full block is
+	// re-read from the start by the next walk, which ends there again. The
+	// rings a walk found full stay full until something dies, so the next
+	// walk starts where this one stopped.
+	{
+		const int key = PackKey(origin);
+		for (uint k = 0; k < gNPResumeKey.length(); ++k) {
+			if (gNPResumeKey[k] != key)
+				continue;
+			if ((ai.frame - gNPResumeAt[k] < NP_RESUME_TTL) && (gNPResumeRing[k] > ring0))
+				ring0 = gNPResumeRing[k];
+			break;
+		}
+	}
 	for (int ring = ring0; ring <= ringN; ++ring) {
 		for (int i = -ring; i <= ring; ++i) {
 			for (int j = -ring; j <= ring; ++j) {
@@ -302,10 +392,11 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 					continue;
 				if (budget <= 0) {
 					gNPOut = ringN - ring + 1;
+					PackResume(origin, ring);
 					return int(slots.length());
 				}
 				--budget;
-				AIFloat3 p = at;
+				AIFloat3 p = origin;
 				p.x += float(i) * pitch;
 				p.z += float(j) * pitch;
 				if (!OnMap(p) || (p.distance2D(at) > reach)) {
@@ -376,6 +467,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 				ohx.insertLast(nhx);
 				ohz.insertLast(nhz);
 				gNPOcc.Add(p.x, p.z);
+				PackResume(origin, ring);
 				if (int(slots.length()) >= n)
 					return int(slots.length());
 			}

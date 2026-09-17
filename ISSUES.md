@@ -282,22 +282,6 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
-### THE NANO BLOB: every plant ringed to its turrets' full reach, plants inside it (2026-09-16, his watched Altored 1v1)
-
-`matches/_engine` 2026-09-16 23:39, +100 1v1: 229 construction turrets;
-each of six plants had 71-81 within +-450 of its centre, the rings filled
-to the turret's 400 reach on every side (`armlab` 432,1296: dx -344..408,
-dz -424..408). The blocks of neighbouring plants merge into one blob with
-the plants inside it, doorways kept open through it. He: "the space in these
-sectors is really wide... we end up filling up those entire blocks just
-with nano turrets... one single massive blob. If you make all your factories
-on the outside of that blob, then it's not an issue -- you don't need any
-walking room there." `PackSlots` walks rings outward from the plant it
-serves, so the blob is the plant's reach disc; the shape he wants is one
-turret core with the plants on its rim. Unbuilt -- the walk's origin would
-have to be the block's heart-facing edge rather than the plant. His word
-first. The gantry half of the complaint is built (`LatheSite`, 09-17).
-
 ### ECO SEAT GANTRIES: two gantries, a full bank, 1,300 m/s of idle nano lathe, and the turrets went to the line and to towers (2026-09-16)
 
 His watched Supreme Isthmus 8v8 (`matches/_engine`, seat t7 at 10150,597):
@@ -323,6 +307,13 @@ in either run, so the gantry case itself is still unmeasured. Its labs
 make constructors, and a con line is not nano demand by his 09-14 ruling,
 so the remaining waste is the seat's factory capacity (plant-glut, TODO
 "never an idle factory"), not its lathe.
+
+Found 09-17 (1v1, Altored): the pack walk's 96-cell slice ran out inside a
+full block before reaching a free cell -- the gantry asked 318 turrets over
+66 walks, got 95, 49 walks out of budget -- and every walk restarted from
+the same rings. PackSlots now resumes where the last slice stopped
+(`PackResume`); after, 48/48 and 0 walks out. The eco-seat 8v8 case is
+still unmeasured with it.
 
 ### ECO SEAT DEFENCES: bought late, inside the base, with walk gaps that block the farm (2026-09-16)
 
