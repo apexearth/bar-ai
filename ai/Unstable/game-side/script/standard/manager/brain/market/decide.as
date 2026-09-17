@@ -698,16 +698,12 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 					catBest[c] = -1;
 			}
 			int pc = CategoryOf(ranked[pick].kind);
-			// THE LADDER STEERS TECH. It already prices the lab as a rung
-			// (`eta ... tech:armalab=185` beside `mex=290`) and never acted
-			// on it, so T2 came from the lottery on the market price alone:
-			// the lab at 4.4 min one game, at 7.3-12.5 against BARb's
-			// 4.2-6.3 the next (his watch, 2026-09-17: "they go T2 before we
-			// do... and have T2 tanks on the field pushing our attacks
-			// back"). When the lab reaches the target sooner than the best
-			// mex, generator or hand, it IS the economy pick -- income-scaled
-			// by construction, which is "afford it once built" and "not
-			// late" in one number.
+			// THE LADDER STEERS TECH. It already prices the lab as a rung and
+			// never acted on it, so T2 came from the lottery on the market
+			// price alone (commit 608f14b9). When the lab reaches the target
+			// sooner than the best mex, generator or hand, it IS the economy
+			// pick -- income-scaled by construction, which is his "afford it
+			// once built" and "not late" in one number.
 			const int techPick = EtaTechPick(ranked);
 			if ((techPick >= 0) && (EtaOfWant(ranked[techPick]) < EtaOfWant(ranked[pick]))) {
 				pick = techPick;
