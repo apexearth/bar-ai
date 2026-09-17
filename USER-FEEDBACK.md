@@ -70,6 +70,17 @@ lines of quotes.
   hot spots refused at choice time, `tools/mexeco.py` (extractors and
   income per side over time). One seed: 122k -> 257k metal vs their
   416k -> 343k, wiped -> no winner. Unverified by him.
+- Team games under 10 minutes (09-17): we out-build their army early while
+  holding fewer mexes -- too much army, too little economy -- and they always
+  defend their mexes; put the guns right on our mexes outside the base, more
+  the further from home. Built 09-17: a mex earns 1 + 3 x forward-fraction
+  light towers, the floor and the cover jump read that count, and the jump
+  puts the gun on the mex the hand stands at. Two seeds of Comet 8v8: metal
+  418k -> 559k and 378k -> 422k, mexes held at 24 min 9 -> 31 and 6 -> 13,
+  K/D 0.38 -> 0.59 and 0.29 -> 0.51 -- still losing the map, less badly.
+  `tools/opening.py` is the under-10-minute table. The minute-2-4 hole (10
+  mexes to their 19) is the energy-stall hoist buying solars -- his 09-08
+  ruling, not touched. Unverified by him.
 - The eco seat's guns stand inside its base with walk gaps, blocking the farm;
   two gantries starve for nanos with a full bank; LRPCs belong on hills;
   Behemoths when the enemy is winning (09-16). Recorded in ISSUES/TODO, not

@@ -73,24 +73,21 @@ float MexCoverFloorM()
 int   gMexEarlyAt = -999999;   // the screen term is per frame, not per site
 float gMexEarly = 0.f;
 bool  gMexEarlyOk = false;
-float gMexExpose = 0.f;        // ...and so is the exposure weight
 
 float MexFloorFactor(const AIFloat3& in pos)
 {
 	if (gMexEarlyAt != ai.frame) {
 		gMexEarlyAt = ai.frame;
-		gMexExpose = ai.GetTunable("apex_mex_expose", TUNE_MEX_EXPOSE);
 		const float screen = ai.GetTunable("apex_leak_screen_m",
 				TUNE_LEAK_SCREEN_M);
 		gMexEarlyOk = (screen > 1.f);
 		gMexEarly = gMexEarlyOk ? (1.f - ArmyValue() / screen) : 0.f;
 	}
-	float fwd = Military::ForwardFraction(pos);
-	if (fwd < 0.f)
-		fwd = 0.f;
-	if (fwd > 1.f)
-		fwd = 1.f;
-	float f = fwd * (1.f + fwd * gMexExpose);
+	// The floor is the guns the spot earns (MexGunsWanted), in light-tower
+	// cover: one gun's worth at home, four at the doorstep. The old shape
+	// (fwd * (1 + 1.5 fwd)) topped out at a gun and a quarter, so the cover
+	// jump stopped after the first tower wherever the mex stood.
+	float f = float(MexGunsWanted(pos));
 	// EARLY, EVERY MEX IS THE FRONTIER. The forwardness scaling is a
 	// late-game truth -- rear ground is safe because the army screens it.
 	// With no army fielded there is no screen, and the first mexes sit AT
@@ -143,6 +140,22 @@ int OwnMexCount()
 
 // Is this position one of our standing mexes? Diagnostics only: it is how
 // "did it cover the spot it was standing on" is read off a log.
+// The nearest extracting mex of ours within r of pos; off-map when none.
+AIFloat3 NearestMex(const AIFloat3& in pos, float r)
+{
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestD = r;
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		const float d = gLPos[uint(rows[q])].distance2D(pos);
+		if (d < bestD) {
+			bestD = d;
+			best = gLPos[uint(rows[q])];
+		}
+	}
+	return best;
+}
+
 bool SiteIsMex(const AIFloat3& in pos)
 {
 	const array<int>@ rows = MexRows();
@@ -167,6 +180,22 @@ bool SiteIsMex(const AIFloat3& in pos)
 // Measured at 10 minutes: teams holding 15 turrets for 4 and 7 mexes, up to
 // FOUR on a single extractor, while other mexes stood naked. This asks the
 // question he actually asked: does a mex in reach still have NO gun of its own?
+// GUNS A MEX EARNS BY WHERE IT STANDS (apexearth 2026-09-17, on BARb's 6.1k
+// of towers against our 2.2k by minute 10 and 19 mexes to our 10 at minute
+// 4: "they always defend their mexes... the further from home the more
+// defenses the mex needs"). One at home, up to 1 + apex_mex_guard_far at the
+// enemy's doorstep, by the spot's forward fraction.
+int MexGunsWanted(const AIFloat3& in pos)
+{
+	float fwd = Military::ForwardFraction(pos);
+	if (fwd < 0.f)
+		fwd = 0.f;
+	if (fwd > 1.f)
+		fwd = 1.f;
+	const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
+	return 1 + int(fwd * ((far > 0.f) ? far : 0.f));
+}
+
 bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 {
 	// THE NEAREST MEX, NOT ANY MEX. Asking "is some mex in reach unguarded"
@@ -193,10 +222,16 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 	}
 	if (near < 0)
 		return false;
+	// Standing and ordered guns together against what the spot earns: the
+	// ledger holds both, and a gun in flight is a gun (see below).
+	int have = 0;
+	const int wanted = MexGunsWanted(gLPos[near]);
 	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t) {
 		if (gProtPos[PROT_DEF][t].distance2D(gLPos[near]) < r)
-			return false;   // its gun already stands
+			++have;
 	}
+	if (have >= wanted)
+		return false;
 	// A GUN ORDERED IS A GUN. gProtPos holds FINISHED towers only, and a light
 	// tower takes long enough to build that half a dozen more get ordered at
 	// the same mex before the first one stands -- which is exactly the stack
@@ -213,10 +248,10 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 		if (!Catalog::ValidId(cd) || Catalog::gMobile[cd]
 			|| (ProtClassOf(cd) != PROT_DEF) || !OnMap(gComPos[c]))
 			continue;
-		if (gComPos[c].distance2D(gLPos[near]) < r)
-			return false;   // one is already on its way
+		if ((gComState[c] != CS_FINISHED) && (gComPos[c].distance2D(gLPos[near]) < r))
+			++have;   // on its way
 	}
-	return true;
+	return have < wanted;
 }
 
 // WHERE THE ENEMY'S BASE IS, for defence geometry: the mirror of the team's

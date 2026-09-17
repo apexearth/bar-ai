@@ -498,12 +498,11 @@ const float TUNE_T2_HOLD_BOOST = 1.60f;
 //   the threat class exists, premature at eco-opening scale (apexearth...
 const float TUNE_ANTINUKE_INCOME = 60.f;
 
-// [light towers] -- MINIMUM PROTECTION PER MEX. Every site the defence auction
-//   considers is priced against the wave that has actually arrived there, and a
-//   mex nothing has attacked yet reads a wave of zero -- so it was skipped
-//   outright, and the economy stayed naked until something came for it. See
-//   docs/27.
-const float TUNE_MEX_COVER_FLOOR = 0.5f;
+// [light towers] -- MINIMUM PROTECTION PER MEX, per gun the spot earns
+//   (MexGunsWanted): 1.0 is one light tower's cover per wanted gun. A mex
+//   nothing has attacked yet reads a wave of zero and was skipped outright
+//   until something came for it. See docs/27.
+const float TUNE_MEX_COVER_FLOOR = 1.0f;
 
 // [metal] -- Fielded army value at which the mobile screen, not per-mex
 //   towers, takes over answering leaks. See docs/27.
@@ -884,9 +883,9 @@ const float TUNE_LINE_DPS = 0.17f;
 //   the reach target up (renormalized). See docs/27.
 const float TUNE_LINE_ADAPT = 0.f;
 
-// [ratio] -- The per-mex defence floor grows with the spot's forward fraction:
-//   floor * (1 + fwd * this). See docs/27.
-const float TUNE_MEX_EXPOSE = 1.5f;
+// [guns] -- Light towers a mex earns beyond its first, at the enemy's
+//   doorstep (forward fraction 1); linear in between, one at home. See docs/27.
+const float TUNE_MEX_GUARD_FAR = 3.f;
 
 // [forward fraction] -- An IDLE rezzer past this retires to the haven
 //   regardless of the threat read (the sensor is the documented liar); working

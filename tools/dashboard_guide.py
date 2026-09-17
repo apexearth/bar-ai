@@ -567,10 +567,15 @@ GROUPS = [
              "reads": "brain/market/want_protect.as",
              "knobs": [
                  ("TUNE_MEX_COVER_FLOOR", "MINIMUM PROTECTION PER MEX, in the "
-                  "faction's own light towers. The only defence knob that acts "
-                  "before anything has attacked us — every other one scales a "
-                  "wave that reads zero at a mex nobody has come for yet. "
-                  "0 restores the observed-threat-only behaviour"),
+                  "faction's own light towers per gun the spot earns. The only "
+                  "defence knob that acts before anything has attacked us — "
+                  "every other one scales a wave that reads zero at a mex "
+                  "nobody has come for yet. 0 restores the observed-threat-only "
+                  "behaviour"),
+                 ("TUNE_MEX_GUARD_FAR", "how many MORE guns a mex earns at the "
+                  "enemy's doorstep than at home (1 at home, 1+this at forward "
+                  "fraction 1, linear between). His 09-17 ruling: the further "
+                  "from home, the more defence the mex needs"),
                  ("TUNE_COVER_PUSH", "let a tower on a mex the builder is "
                   "STANDING ON skip the category lottery. The draw is "
                   "proportional, so a tower worth twice the mex beside it still "
@@ -1193,6 +1198,9 @@ GOALS = [
                      "other knobs below all scale the threat that HAS arrived, "
                      "which is zero at a mex nobody has attacked yet — so they "
                      "do nothing about eco that is undefended from the start"},
+            {"ref": "TUNE_MEX_GUARD_FAR", "dir": "up",
+             "note": "more guns on the FAR mexes specifically — the ones raids "
+                     "take first"},
             {"ref": "TUNE_COVER_PUSH", "dir": "up",
              "note": "the constructor that just finished a mex covers THAT mex "
                      "instead of re-entering the lottery. Costs expansion by "

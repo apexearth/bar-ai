@@ -1285,6 +1285,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// That leaves the real problem where it belongs -- the wall
 			// generator does not offer sites at the things we build -- instead
 			// of papering over it with a rule that spends without a bound.
+			// THE GUN GOES ON THE MEX THE HAND IS STANDING AT (apexearth
+			// 2026-09-17: "focusing our defenses right on our mexes outside
+			// our bases"). The auction's best site is somewhere else more
+			// often than not; the mex the builder just capped, short of the
+			// guns it earns, is the site. Retargeting was tried once and
+			// stacked six guns on one mex because cover counted finished
+			// towers only -- the ledger test below is what makes it safe.
+			{
+				const AIFloat3 mexAt = NearestMex(uAt, near);
+				if (OnMap(mexAt) && MexUnguardedInReach(mexAt, near))
+					cw.pos = mexAt;
+			}
 			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
 				continue;
 			// The same exposure-scaled floor the site loop asks for -- a

@@ -2206,3 +2206,17 @@ is to make a Behemoth"). A multiplier on power-per-cost, so it needs a gantry
 and a budget to matter -- it moves the T3 pick, it does not buy the gantry.
 Unmeasured.
 
+## `apex_mex_guard_far` (TUNE_MEX_GUARD_FAR = 3) and `apex_mex_cover_floor` (now 1.0)
+
+apexearth 2026-09-17, on Comet 8v8 (+100%) where BARb held 6.1k of static
+defence to our 2.2k by minute 10 and 19 mexes to our 10 at minute 4: "they
+always defend their mexes... the further from home the more defenses the mex
+needs." A mex earns 1 + far x forwardFraction light towers (1 at home, 4 at
+the enemy's doorstep); the site floor and the cover queue-jump both read
+that count, and the floor is one tower's cover per gun earned (the old 0.5 x
+fwd(1+1.5fwd) shape topped out at a gun and a quarter, so the jump stopped
+after the first tower). `apex_mex_expose` is gone with it. Comet 8v8 seed 1,
+same seed three times: metal 418k -> 467k -> 559k, our mexes at 24 min
+9 -> 16 -> 31 against theirs 55 -> 48 -> 36, K/D 0.38 -> 0.62 -> 0.59.
+One seed; the second is in the commit that lands this.
+
