@@ -1211,13 +1211,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// proposer already refuses unless the economy makes the whole bill inside
 	// apex_super_afford_s, only one strategic frame stands at a time, and the
 	// counts rise with income, so what this skips is the lottery, not a budget.
-	// A converter hoist was tried here (2026-09-16, "stop what they're doing
-	// entirely to make converters") and measured worse on one seed against
-	// the draw with an honest ladder ticket (eta.as EtaEcoWeight): 339k
-	// metal against 418k, converter income 39 against 104 m/s at 24 min.
-	// The price wins the draw once the ticket is its own; the hoist and the
-	// no-generator-while-wasting hold both starved the energy the converters
-	// needed. Kept as a flag so the draw's own arithmetic can be re-read.
+	// No converter hoist: tried 2026-09-16 and measured worse (commit
+	// 28504349) -- the price wins the draw once the ladder's ticket is its
+	// own (eta.as EtaEcoWeight). The flag stays so the chain below reads.
 	const bool convertPush = false;
 	bool superPush = false;
 	if (!aaPanic && !convertPush && (ai.GetTunable("apex_super_push", TUNE_SUPER_PUSH) > 0.f)) {

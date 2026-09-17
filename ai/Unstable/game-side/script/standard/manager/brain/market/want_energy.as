@@ -20,10 +20,8 @@ float EnergyUnconverted()
 }
 
 // The smallest converter we can build eats this much e/s: the unit of waste
-// that is a converter's job rather than noise. Below it the opening's full
-// 1,000-energy bank read as waste and the commander built converters, one
-// metal each, in place of its first mexes (10 mexes at minute 4 against the
-// usual 15-24, lost at 19 minutes).
+// that is a converter's job rather than noise (the opening's full energy
+// bank otherwise reads as waste).
 float gConvUnit = -1.f;
 float ConverterUnitE()
 {
@@ -56,9 +54,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// we're making even more energy... very stupid"). Reverses the 09-11
 	// "energy always" ruling for exactly this case: the converters are the
 	// answer to waste, and a rung priced beside them was drawn anyway.
-	// Holding every generator while EnergyWasting() was measured worse on one
-	// seed (see decide.as convertPush): the waste is the converters' price,
-	// not a gate on the rungs. The instrument stays.
+	// Not a gate on the rungs (tried, measured worse -- commit 28504349):
+	// the waste is the converters' price. The instrument stays.
 	if (EnergyWasting() && (ai.frame >= gGenHeldLogAt)) {
 		gGenHeldLogAt = ai.frame + 30 * SECOND;
 		AiLog("apex: gen-wasting t=" + ai.teamId + " unconverted="
