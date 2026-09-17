@@ -92,6 +92,12 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	}
 	if (boss is null)
 		return w;
+	// A fallback boss's own task is the job: the pricing below reads its
+	// gain and its progress; without it every fallback bid the flat
+	// transfer.
+	if ((gBossJob is null) && boss.circuitDef.IsMobile() && (boss.task !is null)
+		&& (boss.task.GetType() == Task::Type::BUILDER))
+		@gBossJob = boss.task;
 	// A CEILING CON DOES NOT ASSIST WORK A BASIC HAND CAN DO. Its exclusive
 	// work -- the advanced converter, the fusion -- is what nobody else can
 	// start; a T2 con holding a T1 con's nano frame is that work undone
@@ -167,28 +173,31 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// anything real. Annuitized over the same horizon the rest of the market
 	// pays back against, a nearly-finished site is worth nearly nothing to
 	// join and a lonely reactor is worth a lot.
-	float gainRate = myDrain;              // work nobody priced: the old flat transfer
-	float occupiedSec = 60.f;              // ...and its flat guard stint
+	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	if (H < 1.f)
+		H = 900.f;
+	// Work nobody priced is still a ONE-OFF: the metal the stint moves,
+	// annuitized like the priced case. As a standing rate it bid like a
+	// permanent stream.
+	float occupiedSec = 60.f;
+	float gainRate = myDrain * occupiedSec / H;
 	if ((gBossJob !is null) && (gBossJob.buildDef !is null)) {
 		const float G = JobGain(gBossJob);
-		if (G > 0.f) {
-			// ...the guards already sent and the ring reaching the site
-			// included, or the fortieth guard prices like the first.
-			const uint hands = Requests::Workers(gBossJob) + uint(GuardsOnJob(gBossJob));
-			const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN
-					+ NanoLatheReaching(gBossJob.GetBuildPos());
-			float R = gBossJob.buildDef.costM
-					* (1.f - Requests::Progress(gBossJob));
-			if (R < 1.f)
-				R = 1.f;
-			const float savedSec = R * myDrain / (B * (B + myDrain));
-			float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-			if (H < 1.f)
-				H = 900.f;
-			gainRate = G * savedSec / H;
-			occupiedSec = R / (B + myDrain);
-		}
+		// ...the guards already sent and the ring reaching the site
+		// included, or the fortieth guard prices like the first.
+		const uint hands = Requests::Workers(gBossJob) + uint(GuardsOnJob(gBossJob));
+		const float B = float((hands > 0) ? hands : 1) * Requests::DRAIN
+				+ NanoLatheReaching(gBossJob.GetBuildPos());
+		float R = gBossJob.buildDef.costM
+				* (1.f - Requests::Progress(gBossJob));
+		if (R < 1.f)
+			R = 1.f;
+		const float savedSec = R * myDrain / (B * (B + myDrain));
+		occupiedSec = R / (B + myDrain);
+		gainRate = (G > 0.f) ? (G * savedSec / H)
+				: (myDrain * occupiedSec / H);
 	}
+
 	w.kind = WK_ASSIST;
 	w.pos = bp;
 	w.spotId = int(boss.id);
@@ -250,11 +259,16 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 		return w;
 	const float speed = Catalog::gSpeed[uid];
 	const float walkSec = (speed > 1.f) ? (sqrt(best) / speed) : 60.f;
+	// A FLOOR, priced as one: the stint's metal as a one-off over the
+	// market's horizon, not a standing rate.
+	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	if (H < 1.f)
+		H = 900.f;
 	Want g;
 	g.kind = WK_ASSIST;
 	g.pos = fac.GetPos(ai.frame);
 	g.spotId = int(fac.id);
-	g.gain = drain;
+	g.gain = drain * 10.f / H;
 	g.mCost = drain * 10.f * MCostScale();
 	g.tCost = (walkSec + 10.f) * Wage();
 	g.value = g.gain / (g.mCost + g.tCost);

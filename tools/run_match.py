@@ -202,6 +202,7 @@ MAP_BOXES = {
     "glitters":             ("tb",   0.0),
     "nine_metal_islands":   ("trbl", 0.45),
     "altair":               ("lr",   0.0),
+    "altored divide":       ("lr",   0.25),   # his dashboard boxes
 }
 
 

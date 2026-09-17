@@ -590,3 +590,18 @@ mechanism is a chokepoint, `grep -l "::Execute(" task/builder/*.cpp` — a
 subclass with its own copy is outside it; (2) an instrument whose pass bar
 is wider than the complaint cannot see the complaint. The census asks the
 exact question (both axis offsets a whole number of pitches).
+
+## S34 — a full-speed headless game on a hilly map stalls BOTH AIs (2026-09-17)
+
+`run_match` at unbounded sim speed on Altored Divide (~27x realtime) left
+both our AI and BARb hard with 2-4 extractors and a metal bank pinned at
+100% for ten minutes: 3,400-4,400 metal built by minute 8 against 7,000-
+10,000 in his watched game and in the same seed at `--speed 5`, `10` or
+`15`. Every conclusion drawn from a day of full-speed Altored runs -- game
+lengths, T2 timings, "we lost at 14 min" -- was drawn from two stalled
+economies. Comet Catcher had not shown it. The mechanism is not pinned
+(pathing or order latency at that speed on complex terrain are the
+suspects); the rule is: on a map that is not flat, cap the speed (`--speed
+10` costs 90 s wall for 12 game-minutes) and check `ecotimeline.py`'s
+metal bank -- a bank pinned at 100% from minute 2 is a stalled run, not an
+economy. `run_match` now carries Altored's boxes (lr 0.25, his dashboard's).

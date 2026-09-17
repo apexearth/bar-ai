@@ -706,6 +706,22 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 			// once built" and "not late" in one number.
 			const int techPick = EtaTechPick(ranked);
 			if ((techPick >= 0) && (EtaOfWant(ranked[techPick]) < EtaOfWant(ranked[pick]))) {
+				if (ai.GetTunable("apex_eta_trace", 0.f) > 0.f) {
+					gLadderTrace = true;
+					gLadderTraceS = "";
+					EtaOfWant(ranked[techPick]);
+					AiLog("apex: eta-trace tech:" + gLadderTraceS);
+					gLadderTraceS = "";
+					EtaOfWant(ranked[pick]);
+					AiLog("apex: eta-trace eco:" + gLadderTraceS);
+					gLadderTrace = false;
+				}
+				AiLog("apex: eta-tech t=" + ai.teamId + " "
+					+ ((ranked[techPick].def is null) ? "?" : ranked[techPick].def.GetName())
+					+ " eta=" + int(EtaOfWant(ranked[techPick]))
+					+ " over " + KindName(ranked[pick].kind)
+					+ " eta=" + int(EtaOfWant(ranked[pick]))
+					+ " P=" + formatFloat(EcoPowerM(), "", 0, 1));
 				pick = techPick;
 				pc = CategoryOf(ranked[pick].kind);
 				gDrawLadderTech = pick;
@@ -1210,7 +1226,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (ordered) {
 				if (ranked[ri].kind != WK_ASSIST)
 					continue;
-			} else if ((ranked[ri].kind != WK_ENERGY) && (ranked[ri].kind != WK_GEO)) {
+			} else if (ranked[ri].kind != WK_ENERGY) {
+				// "MAKE A BASIC SOLAR" -- not a 900-metal geothermal
+				// (watched on Altored: the hoist sent the opening's cons to
+				// the vents while the mexes stood unclaimed).
 				continue;
 			}
 			if (ri > 0) {

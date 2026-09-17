@@ -182,6 +182,10 @@ void PoolFill(Pool@ p, bool anyTier)
 			continue;
 		if (!anyTier && !CanBuildEver(d))
 			continue;
+		// ...and nothing NOBODY builds (a free reactor no unit can place
+		// read as five cheap rungs of the T2 ladder).
+		if (Catalog::gBuiltBy[d].length() == 0)
+			continue;
 		if (Catalog::gNeedGeo[d])
 			continue;   // vent-limited, so not a free tail
 		float dI = Catalog::gMakeM[d];
@@ -339,8 +343,18 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		int k = int(want / g) + 1;
 		if (k > n[i])
 			k = n[i];
-		t += float(k) * (StepSec(p.def[i], p.cost[i], P, bank,
-				RungBP(p.def[i], p.mob[i] ? bpMob : bp), eAvail) + lat);
+		// A rung nothing we own can build yet is the new tier's: its hands
+		// are the lab's first constructor and the ceiling hands we hold, not
+		// the fleet (gLadderTierBP, set by the tech first move).
+		const float rbp = p.mob[i]
+				? ((CanBuildEver(p.def[i]) || (gLadderTierBP <= 0.f)) ? bpMob : gLadderTierBP)
+				: bp;
+		const float stepS = StepSec(p.def[i], p.cost[i], P, bank,
+				RungBP(p.def[i], rbp), eAvail);
+		if (gLadderTrace)
+			gLadderTraceS += " " + Catalog::Def(p.def[i]).GetName() + "x" + k
+				+ "@" + int(stepS) + "+" + int(lat) + "(P" + int(P) + ",bp" + int(RungBP(p.def[i], rbp)) + ")";
+		t += float(k) * (stepS + lat);
 		gLadderLatS += float(k) * lat;
 		bank = 0.f;
 		P += float(k) * g;
@@ -363,6 +377,23 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 // never carried it -- a wind at v=4.65 beat the nano at v=51.72, and one
 // turret stood while the bank overflowed (his 8v8, 2026-09-11).
 float gLadderAddBP = 0.f;
+// The new tier's mobile lathe once a tech first move stands: the lab's first
+// constructor plus the ceiling hands already owned. 0 = not a tech plan.
+float gLadderTierBP = 0.f;
+bool gLadderTrace = false;
+string gLadderTraceS;
+float CeilingHandsBP()
+{
+	float bpc = 0.f;
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		const int d = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[d] || !Catalog::gBuilder[d])
+			continue;
+		if (ReachesCeiling(d))
+			bpc += float(gOwnCount[c]) * Catalog::gBuildPower[d];
+	}
+	return bpc;
+}
 // The latency the last EtaWithN plan carried: the part of its seconds that is
 // a per-order guess, not lathe or feed -- the resolution two plans can be
 // told apart at.
@@ -453,12 +484,34 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 			if (Catalog::gMakeE[d] > 0.f)
 				eAvail += Catalog::gMakeE[d];
 		}
+		// THE LAB IS NOT THE TIER. Its rungs are built by the constructor it
+		// makes: the cheapest builder it fields is the next step, at the
+		// lab's own lathe, and the tier's mobile rungs then run on that hand
+		// (plus any ceiling hands we hold), not on the whole fleet.
+		if (tech) {
+			int conD = -1;
+			const array<int>@ fp = Catalog::gBuildsList[d];
+			for (uint pi = 0; pi < fp.length(); ++pi) {
+				if (Catalog::gMobile[fp[pi]] && Catalog::gBuilder[fp[pi]]
+					&& ((conD < 0) || (Catalog::gCostM[fp[pi]] < Catalog::gCostM[conD])))
+					conD = fp[pi];
+			}
+			if (conD > 0) {
+				const float labBP = Catalog::gBuildPower[d];
+				t += StepSec(conD, Catalog::gCostM[conD], P, bank,
+						(labBP > 1.f) ? labBP : 1.f, eAvail);
+				bank = 0.f;
+				const float tier = Catalog::gBuildPower[conD] + CeilingHandsBP();
+				gLadderTierBP = (tier > 1.f) ? tier : 1.f;
+			}
+		}
 	}
 	Perf::Add("et.head", _tE);
 	_tE = Perf::T0();
 	const float eta = t + LadderRun(tech ? gPoolTech : gPoolNow, P, bank, bp, bpMob, eAvail, target, d);
 	Perf::Add("et.ladder", _tE);
 	gLadderAddBP = 0.f;
+	gLadderTierBP = 0.f;
 	return eta;
 }
 
