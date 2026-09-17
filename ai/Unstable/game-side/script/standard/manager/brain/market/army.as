@@ -854,9 +854,7 @@ void PatrolCensus()
 // The patrol half alone: ground-seen against ground-to-see, which the
 // screen units bought against it fill and so saturate. The posted-guard
 // share (CoverShort) never fell for them -- a scout escorting a constructor
-// or dead in the field holds no post -- so the screen term read a full
-// shortfall all game and the vehicle plant made 882 Darts (his 8v8,
-// 2026-09-17: "that seems a bit excessive on the darts").
+// or dead in the field holds no post (commit 3351e3d0).
 float PatrolMiss()
 {
 	PatrolCensus();

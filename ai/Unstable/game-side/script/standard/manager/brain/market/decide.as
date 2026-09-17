@@ -781,14 +781,12 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 			roll2 -= wt[c];
 			if (roll2 <= 0.f) {
 				const int ri = catBest[c];
-				// A TECH LAB IS NOT SAMPLED (apexearth 2026-09-17: "only go
-				// T2 if we can actually afford the T2 once it's built"). Its
-				// price already carries the lab, its first constructor and
-				// the time income needs to pay for both; a lottery re-rolled
-				// every election bought one seat's advanced lab at 4.4 min
-				// at v=2.57 over a mex at v=6.34. It wins when it is the
-				// best thing to do, which is also what keeps it from being
-				// late: nothing here delays a lab the price puts first.
+				// A TECH LAB IS NOT SAMPLED (his 09-17 ruling: T2 only once
+				// it can be afforded, and not late). Its price carries the
+				// lab, its first constructor and the time income needs to
+				// pay for both; a lottery re-rolled every election buys any
+				// commitment eventually. It wins when it is the best thing
+				// to do, which is what keeps it from being late.
 				if ((ri > 0) && (ranked[ri].kind == WK_TECH)) {
 					if (ai.frame >= gTechNotDrawnAt) {
 						gTechNotDrawnAt = ai.frame + 60 * SECOND;
