@@ -493,25 +493,115 @@ float IdleNanoLatheM()
 	return idle;
 }
 
-AIFloat3 gLatheHeart(-1.f, 0.f, -1.f);
-int gLatheHeartAt = -999999;
-AIFloat3 LatheHeart()
+// WHERE A BIG FRAME RISES FASTEST: the legal footprint the most standing
+// lathe already reaches. Its arrival is the bill over the lathe that can
+// touch it, so the turrets choose the ground, not the farm flank. The K
+// richest turret rings are probed, one per block.
+const int LATHE_SITE_PROBES = 6;
+// The cell C++ will keep, not the engine's raw square, or the score is read
+// off ground the build never stands on.
+AIFloat3 LatticeFit(CCircuitDef@ def, const AIFloat3& in raw)
 {
-	// A ring query per turret; asked on every big-energy siting now, so
-	// held for a few seconds.
-	if (ai.frame - gLatheHeartAt < 5 * SECOND)
-		return gLatheHeart;
-	gLatheHeartAt = ai.frame;
-	AIFloat3 best(-1.f, 0.f, -1.f);
-	float bestBP = 0.f;
-	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
-		const float bp = RingBPAt(gOwnNanoPos[i]);
-		if (bp > bestBP) {
-			bestBP = bp;
-			best = gOwnNanoPos[i];
+	if (!OnMap(raw))
+		return raw;
+	const AIFloat3 cell = ai.SnapToLattice(def, raw);
+	const float pitch = Lattice::FootPitch(int(def.id));
+	const AIFloat3 s = ai.FindBuildSiteNear(def, cell, pitch);
+	if (OnMap(s) && (s.distance2D(cell) < pitch * 0.5f))
+		return cell;
+	return ai.FindBuildSiteNear(def, cell, pitch * 3.f);
+}
+array<int> gLSDefs;
+array<AIFloat3> gLSPos;
+array<int> gLSAt;
+AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
+{
+	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
+		return interior;
+	const int did = int(def.id);
+	for (uint i = 0; i < gLSDefs.length(); ++i) {
+		if ((gLSDefs[i] == did) && (ai.frame - gLSAt[i] < 10 * SECOND))
+			return gLSPos[i];
+	}
+	// One probe per BLOCK: the richest squares all sit inside one block,
+	// and a big footprint fits nowhere near a block's middle.
+	array<float> ringBP;
+	ringBP.resize(gOwnNanoPos.length());
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i)
+		ringBP[i] = RingBPAt(gOwnNanoPos[i]);
+	array<int> top;
+	for (int k = 0; k < LATHE_SITE_PROBES; ++k) {
+		int pick = -1;
+		for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+			if ((ringBP[i] <= 0.f) || ((pick >= 0) && (ringBP[i] <= ringBP[uint(pick)])))
+				continue;
+			const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+			bool dup = false;
+			for (uint t = 0; (t < top.length()) && !dup; ++t)
+				dup = gOwnNanoPos[i].distance2D(gOwnNanoPos[uint(top[t])]) < r;
+			if (!dup)
+				pick = int(i);
+		}
+		if (pick < 0)
+			break;
+		top.insertLast(pick);
+	}
+	// A line's nano block is not a lab site: the same eco leash the fallback
+	// rings keep, and the constructor's own past-the-front test.
+	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	// The interior is a candidate on the same terms: scored where a footprint
+	// FITS, not at the ask -- asked inside a block it reads the richest lathe
+	// of all and fits nowhere, and the widening walk leaves for bare ground.
+	AIFloat3 best = interior;
+	float bestBP = -1.f;
+	float interiorBP = -1.f;
+	if (OnMap(interior)) {
+		const AIFloat3 s0 = LatticeFit(def, ai.FindBuildSiteNear(def, interior, NanoRange() * 2.f));
+		if (OnMap(s0) && !NearBlocked(s0) && ReachableBy(mover, s0)) {
+			best = s0;
+			bestBP = RingBPAt(s0);
+			interiorBP = bestBP;
 		}
 	}
-	gLatheHeart = best;
+	int fwdRefused = 0;
+	for (uint t = 0; t < top.length(); ++t) {
+		const uint i = uint(top[t]);
+		// The window is the block's width: the nearest legal footprint to
+		// a block's centre is on its rim, and the score below still demands
+		// lathe on it.
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		const AIFloat3 s = LatticeFit(def, ai.FindBuildSiteNear(def, gOwnNanoPos[i], r * 2.f));
+		if (!OnMap(s) || NearBlocked(s) || !ReachableBy(mover, s))
+			continue;
+		if ((s.distance2D(Base::gAnchor) > leash) || Builder::PastFront(s)) {
+			++fwdRefused;
+			continue;
+		}
+		const float bp = RingBPAt(s);
+		if (bp > bestBP) {
+			bestBP = bp;
+			best = s;
+		}
+	}
+	AiLog("apex: lathe-site t=" + ai.teamId + " " + def.GetName()
+		+ " interior=" + int(interior.x) + "," + int(interior.z)
+		+ " bp=" + int(interiorBP)
+		+ " to=" + int(best.x) + "," + int(best.z) + " bp=" + int(bestBP)
+		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused);
+	bool cached = false;
+	for (uint i = 0; i < gLSDefs.length(); ++i) {
+		if (gLSDefs[i] == did) {
+			gLSPos[i] = best;
+			gLSAt[i] = ai.frame;
+			cached = true;
+			break;
+		}
+	}
+	if (!cached) {
+		gLSDefs.insertLast(did);
+		gLSPos.insertLast(best);
+		gLSAt.insertLast(ai.frame);
+	}
 	return best;
 }
 

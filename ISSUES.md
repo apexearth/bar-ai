@@ -282,6 +282,22 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### THE NANO BLOB: every plant ringed to its turrets' full reach, plants inside it (2026-09-16, his watched Altored 1v1)
+
+`matches/_engine` 2026-09-16 23:39, +100 1v1: 229 construction turrets;
+each of six plants had 71-81 within +-450 of its centre, the rings filled
+to the turret's 400 reach on every side (`armlab` 432,1296: dx -344..408,
+dz -424..408). The blocks of neighbouring plants merge into one blob with
+the plants inside it, doorways kept open through it. He: "the space in these
+sectors is really wide... we end up filling up those entire blocks just
+with nano turrets... one single massive blob. If you make all your factories
+on the outside of that blob, then it's not an issue -- you don't need any
+walking room there." `PackSlots` walks rings outward from the plant it
+serves, so the blob is the plant's reach disc; the shape he wants is one
+turret core with the plants on its rim. Unbuilt -- the walk's origin would
+have to be the block's heart-facing edge rather than the plant. His word
+first. The gantry half of the complaint is built (`LatheSite`, 09-17).
+
 ### ECO SEAT GANTRIES: two gantries, a full bank, 1,300 m/s of idle nano lathe, and the turrets went to the line and to towers (2026-09-16)
 
 His watched Supreme Isthmus 8v8 (`matches/_engine`, seat t7 at 10150,597):

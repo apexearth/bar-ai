@@ -704,7 +704,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		}
 		// The lab lands at the interior anchor, so that -- not the asker's own
 		// feet -- is the walk this want is priced against.
-		const AIFloat3 lands = InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
+		const AIFloat3 lands = LatheSite(Catalog::Def(d),
+				Catalog::Def(int(unit.circuitDef.id)),
+				InteriorSite(here, Catalog::Def(int(unit.circuitDef.id))));
 		Want c;
 		ValueOf(d, techGain * fundedMul
 					* PipeLatencyMult(d, Catalog::gBuildPower[uid]),

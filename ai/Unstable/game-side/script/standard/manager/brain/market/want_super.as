@@ -331,7 +331,11 @@ AIFloat3 SuperSite(CCircuitUnit@ unit, int sc, CCircuitDef@ def = null)
 			}
 		}
 	}
-	return InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
+	const AIFloat3 interior = InteriorSite(here, Catalog::Def(int(unit.circuitDef.id)));
+	// A plant rises where the lathe already stands.
+	if ((def !is null) && ((sc == SC_GANTRY) || (sc == SC_AIRPLANT)))
+		return LatheSite(def, Catalog::Def(int(unit.circuitDef.id)), interior);
+	return interior;
 }
 
 // A second anti-nuke belongs over ground the first one does not reach.
@@ -676,7 +680,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			if (bill < budget) {
 				const AIFloat3 at3 = ProbedSite(ap,
 						Catalog::Def(int(unit.circuitDef.id)),
-						SuperSite(unit, SC_AIRPLANT));
+						SuperSite(unit, SC_AIRPLANT, ap));
 				if (OnMap(at3)) {
 					const float afford = (budget - bill) / budget;
 					const float gain = power * share * afford
