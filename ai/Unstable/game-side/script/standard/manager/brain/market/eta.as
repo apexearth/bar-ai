@@ -694,6 +694,27 @@ float EtaEcoWeight(array<Want@>@ ranked)
 	return best;
 }
 
+// The tech lab that reaches the target soonest, or -1. Tech sits in
+// CAT_PRODUCE, outside the merge, so the economy pick never saw it; the
+// draw compares the two ETAs and lets the lab be the economy's answer.
+int EtaTechPick(array<Want@>@ ranked)
+{
+	if (ranked is null)
+		return -1;
+	int bestAt = -1;
+	float bestEta = ETA_BIG;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (ranked[i].kind != WK_TECH)
+			continue;
+		const float e = EtaOfWant(ranked[i]);
+		if (e < bestEta) {
+			bestEta = e;
+			bestAt = int(i);
+		}
+	}
+	return bestAt;
+}
+
 // The index in `ranked` of the economy want that reaches the target soonest, or
 // -1 when nothing in the merged categories can be priced.
 int EtaEcoPick(array<Want@>@ ranked)
