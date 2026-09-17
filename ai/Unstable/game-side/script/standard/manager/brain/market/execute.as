@@ -232,7 +232,7 @@ bool PlantCopyRefusable(int d)
 		&& !UnlocksProduct(d)
 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) >= 1)
 		&& (DupBpSubstMul(d) < 1.f)
-		&& !CopyWaived(d);
+		&& !CopyWaived(d) && !MoveWaived(d);
 }
 
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
@@ -345,9 +345,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// already makes for the T1 one.
 		const AIFloat3 tAt = Catalog::gFloater[int(w.def.id)]
 				? w.pos
-				: ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
-					OffFactoryExit(ClearExitLane(
-						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))));
+				: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, tAt, 256.f, SQUARE_SIZE * 16.f);
 	}
@@ -449,8 +447,6 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			NoteReclaimClaim(tgt.id, unit.id,
 					ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND),
 					tgt, tgt.GetPos(ai.frame));
-			if (!Catalog::gMobile[td] && (Catalog::gBuildsList[td].length() > 0))
-				gPlantMoveUntil = ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND);
 			if (gReclaimTgt.length() > 1)
 				AiLog("apex: reclaim-parallel t=" + ai.teamId
 						+ " victims=" + gReclaimTgt.length());
@@ -1044,13 +1040,32 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// "a t1 vehicle lab blocked by a T2 vehicle lab").
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
 				? w.pos
-				: ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)),
-					OffFactoryExit(ClearExitLane(
-						ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)))));
+				: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}
 	return null;
+}
+
+// The executor's site nudges for a plant, with the step that moved it named
+// when the ask and the order part by more than a cell.
+AIFloat3 PlantNudge(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in ask)
+{
+	const AIFloat3 a = ClearOfSpots(ask, 180.f);
+	const AIFloat3 b = ClearOfLiveFactories(a);
+	const AIFloat3 c = ClearExitLane(b);
+	const AIFloat3 d = OffFactoryExit(c);
+	const AIFloat3 e = ProbedSite(def, mover, d);
+	if (e.distance2D(ask) > Lattice::FootPitch(int(def.id)))
+		AiLog("apex: plant-nudge t=" + ai.teamId + " " + def.GetName()
+			+ " ask=" + int(ask.x) + "," + int(ask.z)
+			+ " spots=" + int(a.distance2D(ask))
+			+ " facs=" + int(b.distance2D(a))
+			+ " lane=" + int(c.distance2D(b))
+			+ " exit=" + int(d.distance2D(c))
+			+ " probed=" + int(e.distance2D(d))
+			+ " to=" + int(e.x) + "," + int(e.z));
+	return e;
 }
 
 

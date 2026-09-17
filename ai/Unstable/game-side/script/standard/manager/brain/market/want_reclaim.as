@@ -99,12 +99,41 @@ void NoteReclaimClaim(Id tgt, Id worker, int untilFrame,
 array<int> gNanoDefs;
 bool gNanoDefsSet = false;
 int gNanoAssistNext = 0;
+// A turret handed a reclaim stands IDLE when it is done: its patrol was the
+// one command in its queue and the reclaim replaced it. Every turret sent is
+// remembered and put back on patrol once its queue is empty.
+array<CCircuitUnit@> gNanoSent;
+const int NANO_SEND_MAX = 64;   // one pass's orders; the rest go next pass
+// The census drops a dead turret here before its handle is read again.
+void NanoSentDrop(CCircuitUnit@ u)
+{
+	for (uint i = 0; i < gNanoSent.length(); ++i) {
+		if (gNanoSent[i] is u) {
+			gNanoSent.removeAt(i);
+			return;
+		}
+	}
+}
 
 void NanoReclaimAssist()
 {
 	if (ai.frame < gNanoAssistNext)
 		return;
 	gNanoAssistNext = ai.frame + 15 * SECOND;
+	for (uint i = 0; i < gNanoSent.length(); ) {
+		CCircuitUnit@ nu = gNanoSent[i];
+		if ((nu !is null) && (nu.CmdQueueSize() > 0)) {
+			++i;
+			continue;
+		}
+		if (nu !is null) {
+			AIFloat3 pp = nu.GetPos(ai.frame);
+			pp.x += 48.f;
+			pp.z += 48.f;
+			nu.CmdPatrolTo(pp);
+		}
+		gNanoSent.removeAt(i);
+	}
 	if (!gNanoDefsSet) {
 		gNanoDefsSet = true;
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
@@ -118,8 +147,11 @@ void NanoReclaimAssist()
 	if (gNanoDefs.length() == 0)
 		return;
 	const float reach = NanoRange();
+	// EVERY turret in reach, not six: the others are on patrol, and patrol
+	// REPAIRS a damaged own unit -- so a plant eaten by six turrets and
+	// healed by forty stood through five minutes of reclaim orders.
 	int sent = 0;
-	for (uint i = 0; (i < gReclaimTgt.length()) && (sent < 6); ++i) {
+	for (uint i = 0; (i < gReclaimTgt.length()) && (sent < NANO_SEND_MAX); ++i) {
 		if (ai.frame >= gReclaimUntil[i])
 			continue;
 		CCircuitUnit@ v = gReclaimHand[i];
@@ -128,15 +160,23 @@ void NanoReclaimAssist()
 		const AIFloat3 vp = gReclaimPos[i];
 		if (!OnMap(vp))
 			continue;
-		for (uint n = 0; (n < gNanoDefs.length()) && (sent < 6); ++n) {
+		for (uint n = 0; (n < gNanoDefs.length()) && (sent < NANO_SEND_MAX); ++n) {
 			array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(
 					Catalog::Def(gNanoDefs[n]), vp, reach);
 			if (ns is null)
 				continue;
-			for (uint k = 0; (k < ns.length()) && (sent < 6); ++k) {
-				if ((ns[k] is null) || (ns[k].CmdQueueSize() > 0))
+			// A patrolling turret (one command) is fair game -- the patrol
+			// is what every turret carries; a longer queue is real work.
+			for (uint k = 0; (k < ns.length()) && (sent < NANO_SEND_MAX); ++k) {
+				if ((ns[k] is null) || (ns[k].CmdQueueSize() > 1))
+					continue;
+				bool tracked = false;
+				for (uint t = 0; (t < gNanoSent.length()) && !tracked; ++t)
+					tracked = (gNanoSent[t] is ns[k]);
+				if (tracked)
 					continue;
 				ns[k].CmdReclaimUnit(v);
+				gNanoSent.insertLast(ns[k]);
 				++sent;
 			}
 		}
@@ -594,7 +634,6 @@ int gNextReclObsLog = 0;
 array<Id> gEncId;
 array<float> gEncV;
 array<int> gEncAt;
-int gPlantMoveUntil = 0;   // one plant moves at a time
 float PlantEnclosure(CCircuitUnit@ f)
 {
 	for (uint i = 0; i < gEncId.length(); ++i) {
@@ -1149,18 +1188,16 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			}
 		}
 	}
-	// A PLANT THE CORE HAS SWALLOWED MOVES TO THE RIM (apexearth 2026-09-17:
-	// "be willing to reclaim and move the first plant outside the base
-	// eventually. That way you can just totally use all the space inside").
-	// Its footprint and the doorway held open through the block are turret
-	// ground, worth what the base puts on a cell, realized to the extent the
-	// ground beyond its doorway and off both flanks is already full -- at the
-	// rim that is nothing, so a moved plant does not move again until the
-	// block has grown past it. The move costs the line its downtime: the walk
-	// and the rebuild at the rim's lathe, at the appetite one line carries.
-	// A vacancy, not a retirement: the re-buy is not discounted.
+	// A PLANT THE CORE HAS SWALLOWED MOVES TO THE RIM, new one first
+	// (apexearth 2026-09-17). Its footprint and the doorway held open
+	// through the block are turret ground, worth what the base puts on a
+	// cell, realized to the extent the ground beyond its doorway and off
+	// both flanks is full -- nothing at the rim, so a moved plant stays put
+	// until the block grows past it. With no twin standing this is a PLANT
+	// want at the rim priced by that room; once a freer twin stands, the
+	// walled one is the reclaim. Neither retires the def.
 	bool moving = false;
-	if (!EcoDangerNear() && (ai.frame >= gPlantMoveUntil)) {
+	if (!EcoDangerNear()) {
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f = Factory::gFacUnits[fi];
 			if ((f is null) || (f.circuitDef is null))
@@ -1188,32 +1225,68 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			const float room = enc * PfMetalPerCell() * (cells + doorCells)
 					* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 			const AIFloat3 fp = f.GetPos(ai.frame);
+			const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+			// The twin: a finished plant of the same def that stands freer
+			// than this one, or one still coming (then nothing to do yet).
+			CCircuitUnit@ twin = null;
+			bool coming = false;
+			for (uint gi = 0; gi < Factory::gFacUnits.length(); ++gi) {
+				CCircuitUnit@ g = Factory::gFacUnits[gi];
+				if ((g is null) || (g is f) || (g.circuitDef is null)
+					|| (int(g.circuitDef.id) != fd))
+					continue;
+				if (PlantEnclosure(g) < enc)
+					@twin = g;
+			}
+			for (uint ci = 0; (twin is null) && (ci < ComLen()); ++ci)
+				coming = coming || ((gComDef[ci] == fd) && (gComState[ci] != CS_FINISHED));
+			if (twin !is null) {
+				const float walkSec = (speed > 1.f)
+						? (unit.GetPos(ai.frame).distance2D(fp) / speed) : 60.f;
+				const float gain = (room + Catalog::gCostM[fd]) / hz;
+				const float v = gain / (1.f + (walkSec + Catalog::gCostM[fd] / 90.f) * wageR);
+				AiLog("apex: plant-walled t=" + ai.teamId + " " + f.circuitDef.GetName()
+					+ " at=" + int(fp.x) + "," + int(fp.z)
+					+ " enc=" + formatFloat(enc, "", 0, 2)
+					+ " room=" + int(room) + " twin=#" + twin.id
+					+ " reclaim v=" + formatFloat(v, "", 0, 3)
+					+ " best=" + formatFloat(bestValue, "", 0, 3));
+				if (v > bestValue) {
+					bestValue = v;
+					@best = f;
+					bestDef = fd;
+					moving = true;
+				}
+				continue;
+			}
+			if (coming || !unit.circuitDef.CanBuild(Catalog::Def(fd))
+				|| (AnyPlantInFlight() && !WealthWaiver()))
+				continue;
 			CCircuitDef@ mover = Catalog::Def(int(unit.circuitDef.id));
 			const AIFloat3 rim = LatheSite(Catalog::Def(fd), mover, InteriorSite(fp, mover));
-			const float rimBP = RingBPAt(rim) + Catalog::gBuildPower[int(unit.circuitDef.id)];
-			const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
-			const float walkSec = (speed > 1.f) ? (unit.GetPos(ai.frame).distance2D(fp) / speed) : 60.f;
-			const float rebuildSec = Catalog::gBuildTime[fd] / ((rimBP > 1.f) ? rimBP : 1.f);
-			const float gap = (walkSec + Catalog::gCostM[fd] / 90.f + rebuildSec) * LineSpend();
-			const float gain = (room - gap) / hz;
-			if (gain <= 0.f)
-				continue;
-			const float v = gain / (1.f + (walkSec + Catalog::gCostM[fd] / 90.f) * wageR);
+			if (!OnMap(rim) || (rim.distance2D(fp) < NanoRange()))
+				continue;   // no rim to move to
+			Want c;
+			ValueOf(fd, room / hz, WalkSecTo(unit, rim),
+					Catalog::gBuildPower[int(unit.circuitDef.id)], c);
 			AiLog("apex: plant-walled t=" + ai.teamId + " " + f.circuitDef.GetName()
 				+ " at=" + int(fp.x) + "," + int(fp.z)
 				+ " enc=" + formatFloat(enc, "", 0, 2)
-				+ " room=" + int(room) + " gap=" + int(gap)
-				+ " rim=" + int(rim.x) + "," + int(rim.z) + " rimBP=" + int(rimBP)
-				+ " v=" + formatFloat(v, "", 0, 3)
-				+ " best=" + formatFloat(bestValue, "", 0, 3));
-			if (v > bestValue) {
-				bestValue = v;
-				@best = f;
-				bestDef = fd;
-				moving = true;
+				+ " room=" + int(room)
+				+ " copy at=" + int(rim.x) + "," + int(rim.z)
+				+ " v=" + formatFloat(c.value, "", 0, 3)
+				+ " best=" + formatFloat(w.value, "", 0, 3));
+			if (c.value > w.value) {
+				w = c;
+				w.kind = WK_PLANT;
+				@w.def = Catalog::Def(fd);
+				w.pos = rim;
+				NoteMoveWaived(fd);
 			}
 		}
 	}
+	if (w.kind == WK_PLANT)
+		return w;
 	if (best is null)
 		return w;
 	// One-shot metal amortized at the market's payback scale -- 60s priced a

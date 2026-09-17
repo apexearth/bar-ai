@@ -67,12 +67,20 @@ bool AirPlant(int defId)
 // framed or standing) plus every live request, as centre + half-extent. Built
 // once per walk so the cell loop is a short array scan instead of a full
 // ledger pass per cell.
+// EVERY GROUND PLANT'S DOORWAY, not only the anchor's: an ordered plant next
+// door had its lane filled by this plant's turrets before its frame stood,
+// and the executor then backed it three cells out of the block it was
+// asked beside.
+array<AIFloat3> gNPDoorPos;
+array<float> gNPDoorHalf;
 void NearGround(const AIFloat3& in at, float span,
 		array<AIFloat3>& out pos, array<float>& out hx, array<float>& out hz)
 {
 	pos.resize(0);
 	hx.resize(0);
 	hz.resize(0);
+	gNPDoorPos.resize(0);
+	gNPDoorHalf.resize(0);
 	const float sq = span * span;
 	// The ledger's bucket index, not the ledger: this ran once per PackSlots and
 	// the batch runs one PackSlots per factory line, so the walk was
@@ -88,6 +96,11 @@ void NearGround(const AIFloat3& in at, float span,
 		pos.insertLast(gComPos[i]);
 		hx.insertLast(float(Catalog::gFootX[d]) * NP_HALFCELL);
 		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
+		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
+			gNPDoorPos.insertLast(gComPos[i]);
+			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
+					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
+		}
 	}
 	// A request enqueued this tick has no ledger row yet -- and the whole point
 	// of the nano burst is that several asks resolve inside one window, so
@@ -103,7 +116,27 @@ void NearGround(const AIFloat3& in at, float span,
 		pos.insertLast(p);
 		hx.insertLast(float(Catalog::gFootX[d]) * NP_HALFCELL);
 		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
+		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
+			gNPDoorPos.insertLast(p);
+			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
+					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
+		}
 	}
+}
+
+// Is this cell in the doorway of any ground plant NearGround saw?
+bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd)
+{
+	for (uint k = 0; k < gNPDoorPos.length(); ++k) {
+		const float rx = p.x - gNPDoorPos[k].x;
+		const float rz = p.z - gNPDoorPos[k].z;
+		const float ahead = rx * fwd.x + rz * fwd.z;
+		const float side = rx * fwd.z - rz * fwd.x;
+		if ((ahead > 0.f) && (ahead < 220.f + pitch)
+			&& (abs(side) < gNPDoorHalf[k] + pitch))
+			return true;
+	}
+	return false;
 }
 
 // WHAT THE TURRET IS BEING PACKED AGAINST. Every siting branch in the nano
@@ -247,15 +280,19 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 	// THE DOORWAY. A ground plant's units roll out along the base axis; an air
 	// plant's take off, so it has no lane to keep clear.
 	AIFloat3 fwd(0.f, 0.f, 0.f);
+	AIFloat3 exitDir(0.f, 0.f, 0.f);
+	if (Base::Ready()) {
+		exitDir = Base::gFwd;
+		if (Base::AxisIsRearward()) {
+			exitDir.x = -exitDir.x;
+			exitDir.z = -exitDir.z;
+		}
+	}
 	bool lane = false;
 	const bool plantAnchor = Catalog::ValidId(anchorDef)
 		&& (Catalog::gBuildsList[anchorDef].length() > 0);
 	if (plantAnchor && Base::Ready() && !AirPlant(anchorDef)) {
-		fwd = Base::gFwd;
-		if (Base::AxisIsRearward()) {
-			fwd.x = -fwd.x;
-			fwd.z = -fwd.z;
-		}
+		fwd = exitDir;
 		lane = true;
 	}
 
@@ -441,6 +478,10 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 						++gNPDoor;
 						continue;
 					}
+				}
+				if (Base::Ready() && InAnyDoorway(p, pitch, exitDir)) {
+					++gNPDoor;
+					continue;
 				}
 				bool taken = false;
 				gNPOcc.Query(p.x, p.z, qr);

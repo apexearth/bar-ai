@@ -504,12 +504,18 @@ AIFloat3 LatticeFit(CCircuitDef@ def, const AIFloat3& in raw)
 {
 	if (!OnMap(raw))
 		return raw;
-	const AIFloat3 cell = ai.SnapToLattice(def, raw);
 	const float pitch = Lattice::FootPitch(int(def.id));
-	const AIFloat3 s = ai.FindBuildSiteNear(def, cell, pitch);
-	if (OnMap(s) && (s.distance2D(cell) < pitch * 0.5f))
-		return cell;
-	return ai.FindBuildSiteNear(def, cell, pitch * 3.f);
+	AIFloat3 cell = ai.SnapToLattice(def, raw);
+	for (int tries = 0; tries < 3; ++tries) {
+		const AIFloat3 s = ai.FindBuildSiteNear(def, cell, pitch);
+		if (OnMap(s) && (s.distance2D(cell) < pitch * 0.5f))
+			return cell;
+		const AIFloat3 next = ai.FindBuildSiteNear(def, cell, pitch * 3.f);
+		if (!OnMap(next))
+			return next;
+		cell = ai.SnapToLattice(def, next);
+	}
+	return cell;
 }
 array<int> gLSDefs;
 array<AIFloat3> gLSPos;
@@ -556,11 +562,25 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 	float bestBP = -1.f;
 	float interiorBP = -1.f;
 	// A ground plant on the rim faces OUT: a site whose doorway the block
-	// already fills is the walled-in plant the move law would eat again.
+	// already fills is the walled-in plant the move law would eat again, so
+	// the site backs out of the block until its lane is clear (the same
+	// step the executor takes), and is refused only when it cannot.
 	const bool doorway = !AirPlant(did) && (Catalog::gBuildsList[did].length() > 0);
 	int doorRefused = 0;
+	AIFloat3 exitDir(0.f, 0.f, 0.f);
+	if (Base::Ready()) {
+		exitDir = Base::gFwd;
+		if (Base::AxisIsRearward()) {
+			exitDir.x = -exitDir.x;
+			exitDir.z = -exitDir.z;
+		}
+	}
 	if (OnMap(interior)) {
-		const AIFloat3 s0 = LatticeFit(def, ai.FindBuildSiteNear(def, interior, NanoRange() * 2.f));
+		AIFloat3 s0 = ai.FindBuildSiteNear(def, interior, NanoRange() * 2.f);
+		if (OnMap(s0))
+			s0 = LatticeFit(def, ClearOfSpots(s0, 180.f));
+		if (doorway && OnMap(s0))
+			s0 = LatticeFit(def, ClearExitLane(s0));
 		if (OnMap(s0) && !NearBlocked(s0) && ReachableBy(mover, s0)
 			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
@@ -569,15 +589,28 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		}
 	}
 	int fwdRefused = 0;
+	string why;
 	for (uint t = 0; t < top.length(); ++t) {
 		const uint i = uint(top[t]);
 		// The window is the block's width: the nearest legal footprint to
 		// a block's centre is on its rim, and the score below still demands
 		// lathe on it.
 		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
-		const AIFloat3 s = LatticeFit(def, ai.FindBuildSiteNear(def, gOwnNanoPos[i], r * 2.f));
-		if (!OnMap(s) || NearBlocked(s) || !ReachableBy(mover, s))
+		// A doorway plant is asked for on the block's FRONT edge, where its
+		// lane opens onto clear ground; backed out of the block from
+		// anywhere else it leaves the lathe behind.
+		AIFloat3 from = gOwnNanoPos[i];
+		if (doorway)
+			from = from + exitDir * r;
+		const AIFloat3 raw = ai.FindBuildSiteNear(def, from, r * 2.f);
+		AIFloat3 s = OnMap(raw) ? LatticeFit(def, ClearOfSpots(raw, 180.f)) : raw;
+		if (doorway && OnMap(s))
+			s = LatticeFit(def, ClearExitLane(s));
+		if (!OnMap(s) || NearBlocked(s) || !ReachableBy(mover, s)) {
+			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z)
+				+ (OnMap(raw) ? (OnMap(s) ? (NearBlocked(s) ? ":blocked" : ":unreach") : ":nofit-cell") : ":nofit");
 			continue;
+		}
 		if ((s.distance2D(Base::gAnchor) > leash) || Builder::PastFront(s)) {
 			++fwdRefused;
 			continue;
@@ -597,7 +630,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		+ " bp=" + int(interiorBP)
 		+ " to=" + int(best.x) + "," + int(best.z) + " bp=" + int(bestBP)
 		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused
-		+ " doorRefused=" + doorRefused);
+		+ " doorRefused=" + doorRefused + why);
 	bool cached = false;
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
 		if (gLSDefs[i] == did) {
@@ -941,6 +974,7 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 array<int> gProbeDefs;
 array<AIFloat3> gProbePos;
 array<int> gProbeAt;
+array<AIFloat3> gProbeFrom;   // a cached answer is for ITS ask, not the def
 
 // EVERY REFUSED SLOT, NOT JUST THE LAST ONE.
 //
@@ -1030,7 +1064,8 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 	BlockPoll();
 	const int did = int(def.id);
 	for (uint i = 0; i < gProbeDefs.length(); ++i) {
-		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND)) {
+		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND)
+			&& (gProbeFrom[i].distance2D(primary) < Lattice::FootPitch(did))) {
 			if (NearBlocked(gProbePos[i]))
 				break;
 			return gProbePos[i];
@@ -1101,6 +1136,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 		if (gProbeDefs[i] == did) {
 			gProbePos[i] = found;
 			gProbeAt[i] = ai.frame;
+			gProbeFrom[i] = primary;
 			cached = true;
 			break;
 		}
@@ -1109,6 +1145,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 		gProbeDefs.insertLast(did);
 		gProbePos.insertLast(found);
 		gProbeAt.insertLast(ai.frame);
+		gProbeFrom.insertLast(primary);
 	}
 	return found;
 }

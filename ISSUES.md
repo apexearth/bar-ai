@@ -308,6 +308,12 @@ make constructors, and a con line is not nano demand by his 09-14 ruling,
 so the remaining waste is the seat's factory capacity (plant-glut, TODO
 "never an idle factory"), not its lathe.
 
+Found 09-17 (eco-only Altored): a turret handed a reclaim by the pile-on
+(`NanoReclaimAssist`) stood IDLE afterwards for the rest of the game -- its
+patrol was the one command in its queue and the reclaim replaced it. Fixed
+(re-patrolled when its queue empties); the "lots of idle nano turrets" he
+saw at the eco seat may have been partly this. Unmeasured at the seat.
+
 Found 09-17 (1v1, Altored): the pack walk's 96-cell slice ran out inside a
 full block before reaching a free cell -- the gantry asked 318 turrets over
 66 walks, got 95, 49 walks out of budget -- and every walk restarted from

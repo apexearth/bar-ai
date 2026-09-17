@@ -534,6 +534,23 @@ bool CopyWaived(int d)
 	return WealthWaiver() && LinesAllWorking(d) && NanoBlockFull(d);
 }
 
+// A copy bought to MOVE a walled-in plant (the reclaim market's move law):
+// the twin is the vacancy's successor, not a duplicate.
+array<int> gMoveWaivedAt;
+void NoteMoveWaived(int d)
+{
+	while (int(gMoveWaivedAt.length()) <= d)
+		gMoveWaivedAt.insertLast(-1000000);
+	gMoveWaivedAt[d] = ai.frame;
+	NoteCopyWaived(d);
+}
+bool MoveWaived(int d)
+{
+	if ((d < 0) || (d >= int(gMoveWaivedAt.length())))
+		return false;
+	return (ai.frame - gMoveWaivedAt[d]) < 30 * SECOND;
+}
+
 // A copy bought under the waiver is SAFE FROM THE RETIRE LAW for the replant
 // window: the squeezed-economy test alone still flapped during spend bursts
 // (armshltx reclaimed and rebuilt 5x/game after the first damping), because
@@ -1376,7 +1393,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			homeAnchor = InteriorSite(EcoSiteFor(unit),
 					Catalog::Def(int(unit.circuitDef.id)));
 		}
-		const AIFloat3 lands = OnMap(site) ? site : homeAnchor;
+		// ...beside the lathe that will raise it, when any stands.
+		const AIFloat3 lands = OnMap(site) ? site
+				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), homeAnchor);
 		Want c;
 		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);

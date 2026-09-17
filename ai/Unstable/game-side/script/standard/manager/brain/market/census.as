@@ -584,6 +584,7 @@ void NoteDead(CCircuitUnit@ unit)
 			if (nn < gOwnNanoBP.length())
 				gOwnNanoBP.removeAt(nn);
 			NanoGridDrop();
+			NanoSentDrop(unit);
 			break;
 		}
 	}
