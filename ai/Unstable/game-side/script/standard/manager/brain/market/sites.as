@@ -608,7 +608,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			s = LatticeFit(def, ClearExitLane(s));
 		if (!OnMap(s) || NearBlocked(s) || !ReachableBy(mover, s)) {
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z)
-				+ (OnMap(raw) ? (OnMap(s) ? (NearBlocked(s) ? ":blocked" : ":unreach") : ":nofit-cell") : ":nofit");
+				+ (OnMap(raw) ? (OnMap(s) ? (NearBlocked(s) ? ":blocked" : (":unreach@" + int(s.x) + "," + int(s.z) + "/" + mover.GetName() + "/home" + int(Builder::gHomePos.x) + "," + int(Builder::gHomePos.z))) : ":nofit-cell") : ":nofit");
 			continue;
 		}
 		if ((s.distance2D(Base::gAnchor) > leash) || Builder::PastFront(s)) {
@@ -887,13 +887,16 @@ bool ShieldArcSpots(array<AIFloat3>& out pts, float denyR)
 //
 // ai.CanDefReach is the engine's own answer, so ask it before handing a site
 // out rather than discovering it one rejected order at a time.
+// ...the builder's question, not the walker's: a con stands within its
+// build range of the site, it never stands ON it.
 bool ReachableBy(CCircuitDef@ mover, const AIFloat3& in to)
 {
 	if (!OnMap(to))
 		return false;
 	if ((mover is null) || !Builder::gHomeSet)
 		return true;
-	return ai.CanDefReach(mover, Builder::gHomePos, to);
+	const float r = Catalog::gBuildDist[int(mover.id)];
+	return ai.CanDefReachAt(mover, Builder::gHomePos, to, (r > 64.f) ? r : 64.f);
 }
 
 AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
@@ -1099,8 +1102,12 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 		if (Catalog::gJamR[did] > reachR) reachR = Catalog::gJamR[did];
 		if (Catalog::gShieldR[did] > reachR) reachR = Catalog::gShieldR[did];
 		if (Catalog::gRadarR[did] > reachR) reachR = Catalog::gRadarR[did];
+		// A big frame takes the ring candidate the most lathe reaches, the
+		// most rearward one only when none has any.
+		const bool lathed = NanoSinkWorthy(did);
 		for (uint r = 0; !ok && (r < 4) && (ring <= leash); ++r) {
 			float bestFwd = 1e9f;
+			float bestLathe = 0.f;
 			for (int b = 0; b < 8; ++b) {
 				const float ang = float(b) * 0.7853981f;
 				const AIFloat3 cand = c
@@ -1115,7 +1122,10 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 				if ((reachR > 0.f) && (s2.distance2D(primary) > reachR))
 					continue;
 				const float fwd = Military::ForwardFraction(s2);
-				if (fwd < bestFwd) {
+				const float lathe = lathed ? RingBPAt(s2) : 0.f;
+				if ((lathe > bestLathe)
+					|| ((lathe == bestLathe) && (fwd < bestFwd))) {
+					bestLathe = lathe;
 					bestFwd = fwd;
 					found = s2;
 					ok = true;

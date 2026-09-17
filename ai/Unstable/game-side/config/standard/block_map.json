@@ -59,7 +59,9 @@
 		"fac_strider": {
 			"type": ["rectangle", "factory"],
 			"offset": [0, 12],
-			"yard": [16, 20],
+			// Flush on the flanks (his 2026-09-16 ruling); the apron ahead is
+			// the exit.
+			"yard": [0, 20],
 			"ignore": ["nano"]
 		},
 		"solar": {
