@@ -449,6 +449,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			NoteReclaimClaim(tgt.id, unit.id,
 					ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND),
 					tgt, tgt.GetPos(ai.frame));
+			if (!Catalog::gMobile[td] && (Catalog::gBuildsList[td].length() > 0))
+				gPlantMoveUntil = ai.frame + int((60.f + Catalog::gCostM[td] / 90.f) * SECOND);
 			if (gReclaimTgt.length() > 1)
 				AiLog("apex: reclaim-parallel t=" + ai.teamId
 						+ " victims=" + gReclaimTgt.length());

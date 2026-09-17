@@ -555,9 +555,14 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 	AIFloat3 best = interior;
 	float bestBP = -1.f;
 	float interiorBP = -1.f;
+	// A ground plant on the rim faces OUT: a site whose doorway the block
+	// already fills is the walled-in plant the move law would eat again.
+	const bool doorway = !AirPlant(did) && (Catalog::gBuildsList[did].length() > 0);
+	int doorRefused = 0;
 	if (OnMap(interior)) {
 		const AIFloat3 s0 = LatticeFit(def, ai.FindBuildSiteNear(def, interior, NanoRange() * 2.f));
-		if (OnMap(s0) && !NearBlocked(s0) && ReachableBy(mover, s0)) {
+		if (OnMap(s0) && !NearBlocked(s0) && ReachableBy(mover, s0)
+			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
 			bestBP = RingBPAt(s0);
 			interiorBP = bestBP;
@@ -577,6 +582,10 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			++fwdRefused;
 			continue;
 		}
+		if (doorway && (ClearExitLane(s).distance2D(s) > 1.f)) {
+			++doorRefused;
+			continue;
+		}
 		const float bp = RingBPAt(s);
 		if (bp > bestBP) {
 			bestBP = bp;
@@ -587,7 +596,8 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		+ " interior=" + int(interior.x) + "," + int(interior.z)
 		+ " bp=" + int(interiorBP)
 		+ " to=" + int(best.x) + "," + int(best.z) + " bp=" + int(bestBP)
-		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused);
+		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused
+		+ " doorRefused=" + doorRefused);
 	bool cached = false;
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
 		if (gLSDefs[i] == did) {
