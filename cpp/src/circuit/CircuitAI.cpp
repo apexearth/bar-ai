@@ -2490,10 +2490,11 @@ bool CCircuitAI::LatticeNeighbour(const AIFloat3& snapped, CCircuitDef* def, int
 // A large building found no site. Recorded rather than acted on: deciding what
 // is expendable is policy, and policy lives in AngelScript. apexearth: "when
 // theres no room to build a gantry we need to reclaim older t1 buildings."
-void CCircuitAI::NoteBuildBlocked(const springai::AIFloat3& pos)
+void CCircuitAI::NoteBuildBlocked(const springai::AIFloat3& pos, const CCircuitDef* def)
 {
 	blockedBuildPos = pos;
 	blockedBuildFrame = GetLastFrame();
+	blockedBuildDef = (def != nullptr) ? int(def->GetId()) : -1;
 }
 
 void CCircuitAI::NoteUnsafeSite(const springai::AIFloat3& pos)

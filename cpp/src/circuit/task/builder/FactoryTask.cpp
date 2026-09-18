@@ -184,7 +184,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	// Not while we are only holding ground clear for our own builder: that pass
 	// falls through to the relaxed one, which reports for it.
 	if ((selfBar <= 0.f) && (testSize >= SQUARE_SIZE * 8)) {
-		circuit->NoteBuildBlocked(pos);
+		circuit->NoteBuildBlocked(pos, buildDef);
 	}
 	return false;
 }

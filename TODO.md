@@ -310,3 +310,18 @@ Isthmus has them. Built 09-16: `HighGroundNear` in want_super.as takes the
 highest legal ground within 600 elmos of the gate site. Unmeasured -- no LRPC
 went up in the 32-minute test games.
 
+
+## Air-lift idle nano turrets to the factory that needs them
+
+apexearth 2026-09-18, after a game where three gantries stood with a handful
+of turrets each while ~130 turrets served T1 plants: turrets that have had
+nothing to do for a while get picked up by air transports and set down beside
+a line short of hands. The game allows it -- a Construction Turret is
+`cantbetransported = false`, mass 700, and a Stork lifts 750 -- but the DLL
+has no transport logic at all (`CircuitDef.h`: "Not implemented: mine,
+transport"): a transport role, a load/carry/unload task, script bindings and
+Stork production would all be new C++. Held until the siting law (09-18:
+`LineSiteFor`, turrets to the line furthest short of its ceiling share net of
+the lathe already on it) is measured: if new turrets land at the gantry, the
+old ones at the T1 plants are the only case left, and reclaiming them (full
+metal back) beside the line that needs them is the cheaper move.

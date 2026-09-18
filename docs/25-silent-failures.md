@@ -605,3 +605,19 @@ suspects); the rule is: on a map that is not flat, cap the speed (`--speed
 10` costs 90 s wall for 12 game-minutes) and check `ecotimeline.py`'s
 metal bank -- a bank pinned at 100% from minute 2 is a stalled run, not an
 economy. `run_match` now carries Altored's boxes (lr 0.25, his dashboard's).
+
+## S35 — a refusal mark with no def on it bans ground for every def (2026-09-18)
+
+The C++ "build blocked here" mark (`NoteBuildBlocked`) fires for ANY
+building that finds no site -- a wind with no free lattice slot, a con
+that cannot path to a mex -- and the script (`NearBlocked`) kept every
+mark for three minutes within 250 elmo. In a dense base the nano blocks
+were almost always inside some recent mark, so the gantry probe read
+`:blocked` on the very ground it was built for and fell through to bare
+ground (his 58-minute game: gantries with 1, 5, 2 turrets in reach; seed
+21: both blocks `:blocked`). No log line said why the block was refused
+beyond the word. The mark now carries the def (`GetBlockedBuildDef`) and a
+probe for def X honours only marks for X or for no def
+(`NearBlockedFor`). General rule: a memory of a refusal is only as
+specific as its key; a key of "position" alone says the refusal applies
+to everything that could ever stand there.

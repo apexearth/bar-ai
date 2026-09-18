@@ -480,10 +480,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				lineSited = true;
 			}
 		}
+		CCircuitUnit@ lineAt = null;
 		if (!sited) {
 			AIFloat3 lp;
-			const float ln = NeediestLine(lp);
-			if ((ln > 0.f) && OnMap(lp)) {
+			float ln = 0.f;
+			if (LineSiteFor(lp, ln, lineAt)) {
 				worst = ln;
 				slot = lp;
 				sited = true;
@@ -548,7 +549,10 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					if (sh2 < 1.f)
 						u2 *= sh2;
 				}
-				if (u2 > worst) {
+				// A sink displaces a line only while it is short of hands:
+				// with nothing unserved the turret stands where the flow
+				// will go later, and a line outlives every frame.
+				if ((u2 > worst) && ((u2 > 0.f) || (lineAt is null))) {
 					worst = u2;
 					slot = sp;
 					sited = true;
@@ -561,8 +565,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		// Bare big frames (no crew yet) are sites too: "if you're making
 		// these fusions or afus somewhere, just go ahead and make nanos
-		// beside them."
-		if (!sited) {
+		// beside them." A line already over its share yields to one.
+		if (!sited || ((lineAt !is null) && (worst <= 0.f))) {
 			for (uint li = 0; li < Requests::gLive.length(); ++li) {
 				IUnitTask@ lt2 = Requests::gLive[li];
 				if ((lt2 is null) || (lt2.buildDef is null))
@@ -570,21 +574,30 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				const int bd2 = int(lt2.buildDef.id);
 				if (!NanoSinkWorthy(bd2))
 					continue;
+				// Over a served line only the reactor cluster wins: the
+				// next one is raised there, a tower frame is raised once.
+				if (sited && !BigEcoDef(bd2))
+					continue;
 				const AIFloat3 sp4 = lt2.GetBuildPos();
 				if (OnMap(sp4)) {
 					slot = sp4;
 					sited = true;
+					lineSited = false;
 					break;
 				}
 			}
 		}
 		if (!sited) {
+			float bigCeil = -1.f;
 			for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 				CCircuitUnit@ f2 = Factory::gFacUnits[fi];
-				if (f2 !is null) {
+				if ((f2 is null) || !OnMap(f2.GetPos(ai.frame)))
+					continue;
+				const float c2 = LineCostCeil(f2);
+				if (c2 > bigCeil) {
+					bigCeil = c2;
 					slot = f2.GetPos(ai.frame);
 					sited = true;
-					break;
 				}
 			}
 		}
@@ -592,7 +605,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return null;
 		if (lineSited)
 			AiLog("apex: nano-to-line t=" + ai.teamId
-					+ " need=" + formatFloat(worst, "", 0, 1)
+					+ " " + ((lineAt !is null) ? lineAt.circuitDef.GetName() : "wall")
+					+ " net=" + formatFloat(worst, "", 0, 1)
+					+ " ring=" + formatFloat(RingBPAt(slot), "", 0, 0)
 					+ " src=" + w.spotId);
 		// THE SINK'S OWN CENTER IS OCCUPIED GROUND. Every branch above names
 		// the factory's or the frame's exact position, so the turret can

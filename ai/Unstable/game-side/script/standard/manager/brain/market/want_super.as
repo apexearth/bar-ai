@@ -271,7 +271,7 @@ AIFloat3 HighGroundNear(CCircuitDef@ def, const AIFloat3& in site, float r)
 			if ((h < bestH) || ((h == bestH) && (d >= bestD)))
 				continue;
 			const AIFloat3 s = ai.FindBuildSiteNear(def, p, 64.f);
-			if (!OnMap(s) || (s.distance2D(p) > 64.f) || NearBlocked(s))
+			if (!OnMap(s) || (s.distance2D(p) > 64.f) || NearBlockedFor(s, int(def.id)))
 				continue;
 			bestH = h;
 			bestD = d;

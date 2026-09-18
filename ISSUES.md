@@ -164,6 +164,20 @@ rewritten 09-15 (`ccf28df7`: reach + approach, not nearness + wiggle; Ford
 on it. Read the engine-order drop first (S13, S27: the engine discards a
 build order on a blocked square with no idle event) before the election.
 
+### ALTORED 1v1: the commander dies claiming outer mexes (2026-09-18)
+
+Altored Divide +100 vs BARb hard, `--speed 10`, seeds 21-24: three of four
+games end on a commander death at 7.6, 16.4 and 24.0 min (`unit-destroyed
+armcom ... at=2622,1071 thr=22.76`, `at=708,2926 thr=46.62`, `at=575,624`).
+Every game, his three of 09-18 included, elects the commander to mexes at
+x=2288-3056 on an 8192-wide map (`exec armcom mex:armmex at=2656,1008`,
+walk charged `t=904` and still `v=7.11` over a radar at 3.26); in his it
+walked back alive, in mine the retreat started at hp=0.60 with `walk=2016`
+and lost the race. The mex-guard ruling (guns on the mexes outside the
+base, more the further out) and `con-retreat`'s trigger are the two reads
+to make before pricing the commander's walk any differently: a mex claim
+two thousand elmo out is worth its income only if the claimer comes home.
+
 ### COMET 8v8: level at minute 8, then the mexes go to T1 raids and the army trades 1:3 -- no eco decision moved it (2026-09-16/17)
 
 Comet Catcher Remake 8v8 +100% vs BARb hard, seed 1, four runs of the

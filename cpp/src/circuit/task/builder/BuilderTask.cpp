@@ -694,7 +694,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 			// placement it was meant to back up (ring-scatter 20% on the
 			// seat the day the grid came back).
 			if (!slotFree) {
-				circuit->NoteBuildBlocked(pos);   // script decides whether to clear it
+				circuit->NoteBuildBlocked(pos, buildDef);   // script decides whether to clear it
 			}
 			// THE WIDE SEARCH ANSWERS OFF THE LATTICE; put it back on. The
 			// ground it found is free, so the lattice cell over it or one of
@@ -1192,7 +1192,7 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		// deterministic site is re-elected and aborted forever (t5's no-lab
 		// pocket, SI 8v8 s106). Mark the ground so ProbedSite steps around
 		// it on the next election.
-		circuit->NoteBuildBlocked(endPos);
+		circuit->NoteBuildBlocked(endPos, buildDef);
 		{
 			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);
 			circuit->LOG("apex: unreach %s bt=%i by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",
@@ -1306,7 +1306,7 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 		if (utils::is_valid(endPos)
 			&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
 		{
-			circuit->NoteBuildBlocked(endPos);
+			circuit->NoteBuildBlocked(endPos, buildDef);
 			circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
 					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 					unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
@@ -1530,7 +1530,7 @@ void IBuilderTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, flo
 			});
 			site = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, pred);
 			if (!utils::is_valid(site)) {
-				circuit->NoteBuildBlocked(pos);
+				circuit->NoteBuildBlocked(pos, buildDef);
 				break;
 			}
 		}

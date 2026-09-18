@@ -520,6 +520,40 @@ AIFloat3 LatticeFit(CCircuitDef@ def, const AIFloat3& in raw)
 array<int> gLSDefs;
 array<AIFloat3> gLSPos;
 array<int> gLSAt;
+// What of ours stands within r of a point, the three commonest defs -- the
+// answer to "no room" being terrain or our own T1 clutter.
+string StandingNear(const AIFloat3& in at, float r)
+{
+	array<int> defs;
+	array<int> n;
+	ComNear(at, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const int d = gComDef[uint(gComGrid.hit[q])];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d])
+			continue;
+		int k = defs.find(d);
+		if (k < 0) {
+			defs.insertLast(d);
+			n.insertLast(1);
+		} else {
+			n[uint(k)] += 1;
+		}
+	}
+	string txt = "(";
+	for (int pass = 0; pass < 3; ++pass) {
+		int best = -1;
+		for (uint i = 0; i < defs.length(); ++i) {
+			if ((n[i] > 0) && ((best < 0) || (n[i] > n[uint(best)])))
+				best = int(i);
+		}
+		if (best < 0)
+			break;
+		txt += Catalog::Def(defs[uint(best)]).GetName() + "x" + n[uint(best)] + " ";
+		n[uint(best)] = 0;
+	}
+	return txt + ")";
+}
+
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
@@ -581,7 +615,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			s0 = LatticeFit(def, ClearOfSpots(s0, 180.f));
 		if (doorway && OnMap(s0))
 			s0 = LatticeFit(def, ClearExitLane(s0));
-		if (OnMap(s0) && !NearBlocked(s0) && ReachableBy(mover, s0)
+		if (OnMap(s0) && !NearBlockedFor(s0, did) && ReachableBy(mover, s0)
 			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
 			bestBP = RingBPAt(s0);
@@ -602,13 +636,20 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		AIFloat3 from = gOwnNanoPos[i];
 		if (doorway)
 			from = from + exitDir * r;
-		const AIFloat3 raw = ai.FindBuildSiteNear(def, from, r * 2.f);
+		AIFloat3 raw = ai.FindBuildSiteNear(def, from, r * 2.f);
+		// The front edge can be a cliff or the map's edge; the block itself
+		// is asked next, and the exit lane backs the site out of it.
+		bool fromBlock = false;
+		if (!OnMap(raw) && doorway) {
+			raw = ai.FindBuildSiteNear(def, gOwnNanoPos[i], r * 2.f);
+			fromBlock = OnMap(raw);
+		}
 		AIFloat3 s = OnMap(raw) ? LatticeFit(def, ClearOfSpots(raw, 180.f)) : raw;
 		if (doorway && OnMap(s))
 			s = LatticeFit(def, ClearExitLane(s));
-		if (!OnMap(s) || NearBlocked(s) || !ReachableBy(mover, s)) {
+		if (!OnMap(s) || NearBlockedFor(s, did) || !ReachableBy(mover, s)) {
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z)
-				+ (OnMap(raw) ? (OnMap(s) ? (NearBlocked(s) ? ":blocked" : (":unreach@" + int(s.x) + "," + int(s.z) + "/" + mover.GetName() + "/home" + int(Builder::gHomePos.x) + "," + int(Builder::gHomePos.z))) : ":nofit-cell") : ":nofit");
+				+ (OnMap(raw) ? (OnMap(s) ? (NearBlockedFor(s, did) ? ":blocked" : (":unreach@" + int(s.x) + "," + int(s.z) + "/" + mover.GetName() + "/home" + int(Builder::gHomePos.x) + "," + int(Builder::gHomePos.z))) : ":nofit-cell") : (":nofit" + StandingNear(gOwnNanoPos[i], r)));
 			continue;
 		}
 		if ((s.distance2D(Base::gAnchor) > leash) || Builder::PastFront(s)) {
@@ -620,6 +661,9 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			continue;
 		}
 		const float bp = RingBPAt(s);
+		if (fromBlock)
+			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
+				+ int(s.x) + "," + int(s.z) + "/" + int(bp);
 		if (bp > bestBP) {
 			bestBP = bp;
 			best = s;
@@ -997,23 +1041,33 @@ const int   BLOCK_TTL  = 3 * MINUTE;
 const uint  BLOCK_MAX  = 48;   // a cliff map bans many spots at once
 array<AIFloat3> gBlockPos;
 array<int> gBlockAt;
+// The def each mark was about (-1: unknown). A wind with no free ring slot
+// marked the nano block; a gantry probe read the mark and refused the block.
+array<int> gBlockDef;
 
 void BlockPoll()
 {
 	AIFloat3 b(-1.f, 0.f, -1.f);
 	if (!ai.GetBlockedBuildPos(b) || !OnMap(b))
 		return;
+	BlockAdd(b, ai.GetBlockedBuildDef());
+}
+
+void BlockAdd(const AIFloat3& in b, int def)
+{
 	for (uint i = 0; i < gBlockPos.length(); ++i) {
-		if (gBlockPos[i].distance2D(b) < BLOCK_NEAR) {
+		if ((gBlockPos[i].distance2D(b) < BLOCK_NEAR) && (gBlockDef[i] == def)) {
 			gBlockAt[i] = ai.frame;   // still being refused; keep it alive
 			return;
 		}
 	}
 	gBlockPos.insertLast(b);
 	gBlockAt.insertLast(ai.frame);
+	gBlockDef.insertLast(def);
 	while (gBlockPos.length() > BLOCK_MAX) {
 		gBlockPos.removeAt(0);
 		gBlockAt.removeAt(0);
+		gBlockDef.removeAt(0);
 	}
 }
 
@@ -1022,23 +1076,18 @@ void BlockPoll()
 // moment the task is freed.
 void BlockNote(const AIFloat3& in b)
 {
-	if (!OnMap(b))
-		return;
-	for (uint i = 0; i < gBlockPos.length(); ++i) {
-		if (gBlockPos[i].distance2D(b) < BLOCK_NEAR) {
-			gBlockAt[i] = ai.frame;
-			return;
-		}
-	}
-	gBlockPos.insertLast(b);
-	gBlockAt.insertLast(ai.frame);
-	while (gBlockPos.length() > BLOCK_MAX) {
-		gBlockPos.removeAt(0);
-		gBlockAt.removeAt(0);
-	}
+	if (OnMap(b))
+		BlockAdd(b, -1);
 }
 
 bool NearBlocked(const AIFloat3& in p)
+{
+	return NearBlockedFor(p, -1);
+}
+
+// Marks for THIS def, and marks with no def: another def's refusal says
+// nothing about this footprint. def < 0 reads every mark.
+bool NearBlockedFor(const AIFloat3& in p, int def)
 {
 	if (!OnMap(p))
 		return false;
@@ -1047,9 +1096,11 @@ bool NearBlocked(const AIFloat3& in p)
 		if (ai.frame - gBlockAt[i] > BLOCK_TTL) {
 			gBlockPos.removeAt(i);
 			gBlockAt.removeAt(i);
+			gBlockDef.removeAt(i);
 			continue;
 		}
-		if (gBlockPos[i].distance2D(p) < BLOCK_NEAR)
+		if ((gBlockPos[i].distance2D(p) < BLOCK_NEAR)
+			&& ((def < 0) || (gBlockDef[i] < 0) || (gBlockDef[i] == def)))
 			return true;
 		++i;
 	}
@@ -1069,7 +1120,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 	for (uint i = 0; i < gProbeDefs.length(); ++i) {
 		if ((gProbeDefs[i] == did) && (ai.frame - gProbeAt[i] < 30 * SECOND)
 			&& (gProbeFrom[i].distance2D(primary) < Lattice::FootPitch(did))) {
-			if (NearBlocked(gProbePos[i]))
+			if (NearBlockedFor(gProbePos[i], did))
 				break;
 			return gProbePos[i];
 		}
@@ -1080,7 +1131,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 	{
 		const AIFloat3 s = ai.FindBuildSiteNear(def, primary, seek);
 		if (OnMap(s) && (s.distance2D(primary) <= seek)
-			&& !NearBlocked(s)) {
+			&& !NearBlockedFor(s, did)) {
 			found = s;
 			ok = true;
 		}
@@ -1117,7 +1168,7 @@ AIFloat3 ProbedSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in pri
 				const AIFloat3 s2 = ai.FindBuildSiteNear(def, cand, seek);
 				if (!OnMap(s2) || (s2.distance2D(cand) > seek))
 					continue;
-				if (NearBlocked(s2))
+				if (NearBlockedFor(s2, did))
 					continue;
 				if ((reachR > 0.f) && (s2.distance2D(primary) > reachR))
 					continue;
@@ -1364,6 +1415,34 @@ float NeediestLine(AIFloat3& out at)
 		}
 	}
 	return worst;
+}
+
+// WHERE the next turret stands: the working army line furthest short of
+// its ceiling-weighted share of the flow, NET of the lathe already on it.
+// NeediestLine's floored number is the count's currency; used for siting it
+// ties every line once the economy is spending, and a tie is the oldest lab.
+bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
+{
+	bool any = false;
+	const float feed = FreeMetalFlow();
+	const float sumCeil = LineCeilSum();
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || !LineWorkingArmy(f))
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (!OnMap(fp))
+			continue;
+		const float share = (sumCeil > 1.f) ? (feed * LineCostCeil(f) / sumCeil) : feed;
+		const float u = share - LineEat(f, fp);
+		if (!any || (u > net)) {
+			net = u;
+			at = fp;
+			@line = f;
+			any = true;
+		}
+	}
+	return any;
 }
 
 // A working line at all, worst-served first -- the site an ARMY shortfall
