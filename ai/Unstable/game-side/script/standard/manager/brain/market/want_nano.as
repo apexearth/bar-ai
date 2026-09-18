@@ -138,10 +138,12 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// frame reads seconds and stops outbidding every working lab with the
 		// whole feed -- measured 2074 sink sitings against 2 line sitings,
 		// mean priced need 389 m/s, while 46% of income overflowed.
-		// ...but a PLANT's frame is the plant's ring: the turrets that raise
-		// a gantry serve its queue afterwards, so its stream does not die at
-		// completion and it is not life-scaled.
-		if (Catalog::gBuildsList[bd].length() == 0) {
+		// ...but a PLANT's frame is the plant's ring, and a BIG ECO frame
+		// stands in the reactor cluster where the next one is raised: their
+		// turrets keep working at completion, so neither is life-scaled
+		// (apexearth 2026-09-18: the turrets served the factories while the
+		// fusions were raised by hands alone).
+		if ((Catalog::gBuildsList[bd].length() == 0) && !BigEcoDef(bd)) {
 			const float eat = crew3 + ringEat;
 			const float oneNano = 200.f * sdens;
 			float life = Catalog::gCostM[bd]
