@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from defence_pos import defence_defs  # noqa: E402
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=\d+ (\S*)")
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=\d+(?: part=\d+/\d+)? (\S*)")
 SIZE = 760
 # (tower, building) fill per allyteam; further allies cycle.
 PALETTE = [("#d02020", "#3060c0"), ("#e08800", "#909090"),
@@ -61,7 +61,12 @@ def main():
             continue
         t = int(m.group(1))
         ally_of[t] = int(m.group(2))
-        snaps.setdefault(t, []).append((int(m.group(3)), m.group(4)))
+        fr = int(m.group(3))
+        lst = snaps.setdefault(t, [])
+        if lst and lst[-1][0] == fr:
+            lst[-1] = (fr, lst[-1][1] + "," + m.group(4))
+        else:
+            lst.append((fr, m.group(4)))
     if not snaps:
         sys.exit("no [BARAI_POS] telemetry (dev gadgets installed?)")
 

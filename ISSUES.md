@@ -105,6 +105,35 @@ instant. Free (the gadget intercepts it, 0.03% of a frame), but the doctrine
 
 ## DEFENCE
 
+### THE 10-20 MINUTE HOLE: T1 hands are routed out, the T2 hand's gun loses to eco (2026-09-18)
+
+His watch of `matches/20260918-055500`: five LLTs and a beamer die at
+15-17 min to the first T2 wave and nothing replaces them until minute 20.
+Read from the log: the defence target asked for 2,400-4,200 metal of guns
+from minute 6 (`defTarget=2413..4204 defHave=740..1185`) and no defence
+election won between 5 and 20 min -- never even runner-up. Two prices
+under it, both fixed 09-18 (wall slots price the whole shortfall over the
+army's fill time; the T1 discount keys on a T2 hand, not the lab), and the
+window still reads 0-2 towers in four treated games (seeds 33-36): the
+remaining mechanism is `def.route=411/411` -- once the team-wide winner is
+a T2 gun, every T1 hand proposes nothing (his 08-27/08-30 ruling), and the
+one T2 constructor prices its Pulsar at `v=1.26-3.83` against a mex-up at
+5.9-8.9 (`t=2321` of walk, build and displaced eco) until the cover/role
+hoists lift it at 15-19 min. Whether T1 hands may answer the shortfall
+with their own best gun while the T2 want waits is his call (asked 09-18).
+
+### THE FRONT-LINE CONTRACT HAS BEEN FAILING UNREAD (2026-09-18)
+
+`frontline_check.py` and three other `[BARAI_POS]` readers matched
+`n=(\d+) (\S*)` after the census started shipping `part=a/b` (31eca356),
+so `test_frontline.py` scored zero mexes and zero towers for every team
+since then. Readers fixed 09-18; the first honest runs: control (his tree,
+`fl-ctl`) guard 2/6, line unscored; treated (`fl-defgap`) guard 1/6, line
+2/5 -- both FAIL the 75% contract. Nobody has looked at this instrument's
+verdict since it broke; the contract needs re-reading before it is trusted
+either way (expect.py's thresholds date from a different placement model).
+
+
 ### THE LINE (team front, docs/32): built through step 5; what is open (2026-09-15)
 
 Status and numbers: `docs/32-defence-plan.md`. Open there: the shield and

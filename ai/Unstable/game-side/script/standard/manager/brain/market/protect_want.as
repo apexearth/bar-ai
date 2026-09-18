@@ -447,7 +447,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				gDwT1[d] = 0.f;
 				continue;
 			}
-			if (T1Tower(d) && (Factory::gHaveT2 || T2DefHandsStanding())) {
+			// ...once a T2 HAND stands, not the lab: until its first
+			// constructor is out, a T1 tower is what we can have.
+			if (T1Tower(d) && T2DefHandsStanding()) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
 			}

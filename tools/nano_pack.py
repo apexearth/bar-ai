@@ -43,7 +43,7 @@ import statistics
 import sys
 from pathlib import Path
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (\S*)")
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+)(?: part=\d+/\d+)? (\S*)")
 # A nano turret is a structure that assists and builds nothing of its own. The
 # game names them consistently across all three factions.
 NANO_RE = re.compile(r"nanotc", re.I)
@@ -81,7 +81,9 @@ def last_snapshots(stdout: Path):
         team = int(m.group(1))
         frame = int(m.group(3))
         prev = latest.get(team)
-        if (prev is None) or (frame >= prev[0]):
+        if (prev is not None) and (frame == prev[0]):
+            latest[team] = (frame, prev[1] + parse_units(m.group(5)))
+        elif (prev is None) or (frame > prev[0]):
             latest[team] = (frame, parse_units(m.group(5)))
     return latest
 

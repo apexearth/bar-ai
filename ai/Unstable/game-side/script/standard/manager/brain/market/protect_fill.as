@@ -263,14 +263,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// Does the line still have an open slot? Read once per fill.
 	const float lineFill = wallOn ? WallLineFill() : -1.f;
 	const bool lineOpen = (lineFill >= 0.f) && (lineFill < 1.f);
-	// THE UNMET OBLIGATION IS A STOCK, NOT A RATE. Dividing it by
-	// apex_exposed_loss_s made a gain a bare metal/s, and the floor became
-	// our whole economic power on every open slot, growing with the economy
-	// so TargetFill never closed. Carried as a stock and multiplied by the
-	// site's own hazard below, it is the same stake x hz x stopped every
-	// other term here uses.
+	// The obligation is a stock; a mex site converts it over the exposure
+	// window, a wall slot over the army's fill time (below). TargetFill,
+	// not this floor, is what closes it.
 	const float horizW = ai.GetTunable("apex_exposed_loss_s",
 			TUNE_EXPOSED_LOSS_S);
+	// The army's fill time: the shortfall closes at the army gap's urgency.
+	float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	if (fillS <= 1.f)
+		fillS = 180.f;
 	float wallPull = 0.f;
 	if (wallOn && PlantFramed()) {
 		const float gapM = DefenceTarget() - DefenceValue()
@@ -634,16 +635,17 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// so the heavy gun's share of the obligation stands on the wall,
 			// where the bearing weight faces it at the enemy. Uncapped, the
 			// annihilators went to rear mexes (his watch, 2026-09-08).
+			// ...AND A WALL SLOT PRICES THE WHOLE SHORTFALL, as an army unit
+			// prices the whole army gap: capped at one tower's cost over the
+			// exposure window the pull could never beat a mex (an LLT read
+			// 0.77 m/s, a 184 s payback) and the target sat unmet until the
+			// first loss. apexearth 2026-09-18: buy the defence shortfall on
+			// its own. The mex guard keeps its one-sentry cap.
 			float slotGap = wallPull;
-			const float slotCap = isMexG ? LightTowerCostM() : Catalog::gCostM[d];
-			if (slotGap > slotCap)
-				slotGap = slotCap;
-			// A STOCK OVER THE EXPOSURE WINDOW, NOT A HAZARD ROLL. The gap is
-			// metal we owe the wall; prevented is metal/s, so the conversion is
-			// the window every other rate here is scored over. Multiplying by hz
-			// as well double-counted and sent rear slots to zero -- static
-			// defence fell 9.6% -> 0.7% of spend and trade with it. The cap at
-			// one building is what stops the runaway; the division never was.
+			if (isMexG && (slotGap > LightTowerCostM()))
+				slotGap = LightTowerCostM();
+			// NOT A HAZARD ROLL: multiplied by hz as well the pull
+			// double-counted and sent rear slots to zero.
 			// ...AND THE THIN SIDE FIRST. The bearing our own army and guns
 			// have left empty answers the obligation before one already
 			// standing behind a line does.
@@ -656,7 +658,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			float shape = dirW * thinW / 4.f;   // thin x attacked, each at most 2
 			if (shape > 1.f)
 				shape = 1.f;
-			const float pullPrev = ((horizW > 1.f) ? (slotGap / horizW) : slotGap) * shape;
+			const float pullPrev = (isWall
+					? (slotGap / fillS)
+					: ((horizW > 1.f) ? (slotGap / horizW) : slotGap)) * shape;
 			if (prevented < pullPrev)
 				prevented = pullPrev;
 		}

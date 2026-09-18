@@ -44,7 +44,7 @@ WARN_ONLY = {"plant"}
 
 
 def run_set(out: Path, games: int, parallel: int, minutes: int, handicap: int,
-            per_side: int = 1):
+            per_side: int = 1, spec_a: str = SPEC_A):
     out.mkdir(parents=True, exist_ok=True)
     (out / "matches").mkdir(exist_ok=True)
     pending = list(range(1, games + 1))
@@ -59,7 +59,7 @@ def run_set(out: Path, games: int, parallel: int, minutes: int, handicap: int,
             mdir = out / "matches" / f"s{seed}"
             wdir = ROOT / "matches" / f"_engine_fl{slot}"
             cmd = [sys.executable, "-u", str(HERE / "run_match.py"),
-                   "--a", SPEC_A, "--b", SPEC_B, "--map", MAP,
+                   "--a", spec_a, "--b", SPEC_B, "--map", MAP,
                    "--minutes", str(minutes), "--seed", str(seed),
                    "--sides", "Armada,Armada", "--handicap", str(handicap),
                    "--per-side", str(per_side),
@@ -128,13 +128,14 @@ def main():
                     help="AIs per side; 4 is a 4v4 (every Apex team is scored)")
     ap.add_argument("--report", help="judge this set instead of running one")
     ap.add_argument("--name", default="frontline")
+    ap.add_argument("--a", default=SPEC_A, help="the AI under test (a lane spec)")
     a = ap.parse_args()
     if a.report:
         out = Path(a.report)
     else:
         out = ROOT / "tournaments" / f"{time.strftime('%Y%m%d-%H%M%S')}-{a.name}"
         print(f"== {out}")
-        run_set(out, a.games, a.parallel, a.minutes, a.handicap, a.per_side)
+        run_set(out, a.games, a.parallel, a.minutes, a.handicap, a.per_side, a.a)
     ok = judge(out)
     print(f"\n{'PASS' if ok else 'FAIL'}  {out}")
     sys.exit(0 if ok else 1)

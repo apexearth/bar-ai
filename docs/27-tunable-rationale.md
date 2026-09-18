@@ -1410,7 +1410,10 @@ the old pricing for an A/B.
 
 ### `TUNE_T1_DEF_LATE` = 0.02f
 
-A T1 tower's gain once our own advanced lab stands; 1 prices tiers equally.
+A T1 tower's gain once a T2 DEFENCE HAND stands (2026-09-18: the lab alone no
+longer discounts -- between the lab and its first constructor a T1 tower was
+the only thing buildable and it priced at 2%, his "nothing between 10 and 20");
+1 prices tiers equally.
 Sized to agree with the AI's own outclassing measure: where an advanced defence
 hand IS standing, TeamBestTowerPower already scales a Twin Guard by power
 190/29000, and this is the same order for the players that have the lab but not

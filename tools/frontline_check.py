@@ -41,7 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bar_env  # noqa: E402
 from defence_pos import ai_teams  # noqa: E402
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (\S*)")
+# `part=a/b` since the census ships in short lines (31eca356); parts of one
+# frame are concatenated.
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+)(?: part=\d+/\d+)? (\S*)")
 START_RE = re.compile(r"\[BARAI_START\] team=(\d+) x=(-?\d+) z=(-?\d+)")
 DEATH_RE = re.compile(
     r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\S+) cost=(\d+) "
@@ -164,7 +166,7 @@ def read(match_dir: Path):
         if m:
             team, ally, frame = int(m.group(1)), int(m.group(2)), int(m.group(3))
             ally_of[team] = ally
-            snaps[frame][team] = parse_units(m.group(5))
+            snaps[frame][team] = snaps[frame].get(team, []) + parse_units(m.group(5))
             continue
         m = DEATH_RE.search(line)
         if m:

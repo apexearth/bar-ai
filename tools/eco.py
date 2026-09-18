@@ -37,7 +37,7 @@ REPO = Path(__file__).resolve().parent.parent
 # their footprint edges is one of these, not zero elmos.
 SQUARE = 8.0
 
-POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+) (.*)")
+POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=(\d+)(?: part=\d+/\d+)? (.*)")
 STAT_RE = re.compile(r"\[BARAI_STATS\] (.*)")
 
 
@@ -68,7 +68,7 @@ def parse_positions(text: str):
             except ValueError:
                 continue
         if rows:
-            out[int(frame)][int(ally)][int(team)] = rows
+            out[int(frame)][int(ally)][int(team)] = out[int(frame)][int(ally)].get(int(team), []) + rows
     return out
 
 
