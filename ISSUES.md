@@ -119,8 +119,11 @@ remaining mechanism is `def.route=411/411` -- once the team-wide winner is
 a T2 gun, every T1 hand proposes nothing (his 08-27/08-30 ruling), and the
 one T2 constructor prices its Pulsar at `v=1.26-3.83` against a mex-up at
 5.9-8.9 (`t=2321` of walk, build and displaced eco) until the cover/role
-hoists lift it at 15-19 min. Whether T1 hands may answer the shortfall
-with their own best gun while the T2 want waits is his call (asked 09-18).
+hoists lift it at 15-19 min. His 09-18 ruling: T1 hands fill the shortfall with their best gun
+(`def.ownfill`), the pull's slot shape no longer scales the demand, the
+T1 discount keys on the asking hand's own options. Defence metal placed in
+minutes 10-20: control 92/1092/3440/184, his game 180; treated (seeds
+41-44) 190/1692/9500/9160. Two of four still thin -- open until his watch.
 
 ### THE FRONT-LINE CONTRACT HAS BEEN FAILING UNREAD (2026-09-18)
 

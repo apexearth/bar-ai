@@ -16,6 +16,32 @@ array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
 int gDsFillN = 0;
+// A wall slot's share of the pull by bearing: the line and a mex's first gun
+// at the line weight, a ring slot by its angle to the enemy (the rear
+// minimum while the line has an open slot).
+float WallDirW(uint si, const AIFloat3& in s, bool isMexG, const AIFloat3& in foeP,
+		bool foePOk, bool lineOpen, float lw, float rear)
+{
+	float dirW = 1.f;
+	if (isMexG || WallSlotLine(si)) {
+		if (lw > 1.f)
+			dirW = lw;
+	} else if (foePOk) {
+		AIFloat3 toS = s - gWallMid;
+		AIFloat3 toF = foeP - gWallMid;
+		const float lS = sqrt(toS.SqLength2D());
+		const float lF = sqrt(toF.SqLength2D());
+		if ((lS > 1.f) && (lF > 1.f)) {
+			const float cosA = (toS.x * toF.x + toS.z * toF.z) / (lS * lF);
+			const float w01 = 0.5f + 0.5f * cosA;
+			dirW = rear + (1.f - rear) * w01;
+			if (lineOpen)
+				dirW = rear;
+		}
+	}
+	return dirW;
+}
+
 void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float siteWave, float siegeFrac)
 {
@@ -299,6 +325,24 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// a number that is a property of the DEF, asked once per site.
 	const float capM = PfKillCapM(d);
 	float fillBest = 0.f;
+	float wallRear = tuneWallRear;
+	if (wallRear < 0.f) wallRear = 0.f;
+	if (wallRear > 1.f) wallRear = 1.f;
+	AIFloat3 foeP;
+	const bool foePOk = FoeRef(foeP);
+	// The best slot's shape, so the pull is whole there.
+	float shapeMax = 1.f;
+	if (wallPull > 0.f) {
+		shapeMax = 0.f;
+		for (uint wi = 0; wi < nWall; ++wi) {
+			const float sh = WallDirW(wi, sites[wi], false, foeP, foePOk, lineOpen,
+					tuneWallLineW, wallRear) * PfWallThin(wi) * PfWallAtk(wi);
+			if (sh > shapeMax)
+				shapeMax = sh;
+		}
+		if (shapeMax <= 0.f)
+			shapeMax = 1.f;
+	}
 	for (uint si = 0; si < sites.length(); ++si) {
 		AIFloat3 s = sites[si];
 		if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
@@ -582,53 +626,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// held. Real measured threat is untouched; this shapes only the
 		// no-evidence floor.
 		if (pullHere && (wallPull > 0.f)) {
-			float dirW = 1.f;
-			AIFloat3 foeP;
-			const bool foePOk = FoeRef(foeP);
 			// Line slots ARE the front -- full pull along their whole
-			// lateral run, which is what makes the towers a line across the
-			// lane instead of an arc hugging the base. And MORE than full
-			// while the line is incomplete: his ruling ("a wall of towers
-			// is useless if the enemy can just walk around it. So it needs
-			// to extend the whole way") makes an extending section worth
-			// more than a redundant deepening -- at flat urge the line sat
-			// at fill 0.33 when a 44-minute game timed out.
-			// A mex's first gun ranks with the line, whatever its bearing:
-			// the two are the same obligation ("1 sentry turret guarding
-			// each of our mexes at least" beside "frontline, frontline,
-			// frontline"), and at equal pull the walk decides -- the hand
-			// that just capped the mex guards it, the rest extend the line.
-			// At 1.0 against the line's 2.0 the mex site lost even to the
-			// builder standing on it (measured: guard share 0.2-0.67 at
-			// minute six across six games, every placement a line slot).
-			if (isMexG || WallSlotLine(si)) {
-				const float lw = tuneWallLineW;
-				if (lw > 1.f)
-					dirW = lw;
-			} else if (foePOk) {
-				AIFloat3 toS = s - gWallMid;
-				AIFloat3 toF = foeP - gWallMid;
-				const float lS = sqrt(toS.SqLength2D());
-				const float lF = sqrt(toF.SqLength2D());
-				if ((lS > 1.f) && (lF > 1.f)) {
-					const float cosA = (toS.x * toF.x + toS.z * toF.z)
-							/ (lS * lF);
-					const float w01 = 0.5f + 0.5f * cosA;
-					float rear = tuneWallRear;
-					if (rear < 0.f) rear = 0.f;
-					if (rear > 1.f) rear = 1.f;
-					dirW = rear + (1.f - rear) * w01;
-					// THE LINE FIRST, THE RING WHEN THE LINE STANDS. Spread
-					// over thirty ring slots the demand bought one tower per
-					// slot everywhere and a thin line nowhere (apexearth:
-					// "It needs to be really strong to succeed"). While the
-					// line has an open slot a ring slot takes only the rear
-					// minimum -- his flexible-angle floor -- and the whole
-					// pull lands where the enemy will come.
-					if (lineOpen)
-						dirW = rear;
-				}
-			}
+			// lateral run, and MORE than full while the line is incomplete
+			// (his ruling: "a wall of towers is useless if the enemy can just
+			// walk around it. So it needs to extend the whole way"). A mex's
+			// first gun ranks with the line, whatever its bearing ("1 sentry
+			// turret guarding each of our mexes at least"). THE LINE FIRST,
+			// THE RING WHEN THE LINE STANDS: while the line has an open slot
+			// a ring slot takes only the rear minimum.
+			const float dirW = WallDirW(si, s, isMexG, foeP, foePOk, lineOpen,
+					tuneWallLineW, wallRear);
 			// ONE SLOT HOLDS ONE BUILDING, so the shortfall this slot can
 			// answer is that building's cost -- and a mex's guard is its FIRST
 			// SENTRY ("1 sentry turret guarding each of our mexes at least"),
@@ -650,12 +657,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// have left empty answers the obligation before one already
 			// standing behind a line does.
 			const float thinW = isWall ? (PfWallThin(si) * PfWallAtk(si)) : 1.f;
-			// The budget floor is cost over the horizon; the direction and
-			// thinness terms pick WHICH slot, they do not enlarge the floor.
-			// Multiplied in, they made a 1.2k Ambusher read 50 prevented
-			// metal/s against a 60-second-payback moho at 10, and the first
-			// T2 con opened with the gun (gate: 4 of 4).
-			float shape = dirW * thinW / 4.f;   // thin x attacked, each at most 2
+			// The direction and thinness terms pick WHICH slot, they do not
+			// enlarge the floor -- nor shrink it: the best slot of this fill
+			// carries the whole pull, the rest in proportion. Divided by the
+			// terms' ceiling instead, an average enemy-facing slot carried a
+			// quarter of the shortfall and a 1.4k Pulsar priced under a mex.
+			float shape = dirW * thinW / shapeMax;
 			if (shape > 1.f)
 				shape = 1.f;
 			const float pullPrev = (isWall

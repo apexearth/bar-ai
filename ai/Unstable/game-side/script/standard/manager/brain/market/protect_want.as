@@ -4,6 +4,22 @@ namespace Market {
 // its tier. corcomlvl5..10 build cordoom (Bulwark, 3000m), so gT1Hand called it
 // a T1 tower and it took the late-T1 discount; the Cerberus, whose builder list
 // has no commander, did not. Same tier, 50x apart on a technicality.
+// Does this build list hold a tower above T1?
+bool HandHasT2Tower(const array<int>@ b)
+{
+	if (b is null)
+		return false;
+	for (uint i = 0; i < b.length(); ++i) {
+		const int o = b[i];
+		if (Catalog::gMobile[o] || !Catalog::gAvailable[o]
+			|| (ProtClassOf(o) != PROT_DEF))
+			continue;
+		if (!T1Tower(o))
+			return true;
+	}
+	return false;
+}
+
 bool T1Tower(int d)
 {
 	const array<int>@ bb = Catalog::gBuiltBy[d];
@@ -71,6 +87,7 @@ bool gWallEffDiag = false;
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
+	Want own;
 	if (Gate(GATE_ASSETS, gAssetsM < 1.f))
 		return w;
 	// DEFENCE MUST NOT WAIT ON A NANO. This used to require gFarmSet, which
@@ -447,9 +464,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				gDwT1[d] = 0.f;
 				continue;
 			}
-			// ...once a T2 HAND stands, not the lab: until its first
-			// constructor is out, a T1 tower is what we can have.
-			if (T1Tower(d) && T2DefHandsStanding()) {
+			// ...outclassed by a gun THIS hand can build: a T1 hand filling
+			// the shortfall (below) has no better option to be discounted
+			// against, and a T2 hand's light tower still is.
+			if (T1Tower(d) && HandHasT2Tower(builds)) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
 			}
@@ -636,6 +654,15 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			w.pos = at;
 			w.spotId = cls;
 		}
+		// The best gun THIS hand can place, for the shortfall below.
+		if ((cls == PROT_DEF) && (c.value > own.value)
+			&& unit.circuitDef.CanBuild(Catalog::Def(d))) {
+			own = c;
+			own.kind = WK_PROTECT;
+			@own.def = Catalog::Def(d);
+			own.pos = at;
+			own.spotId = cls;
+		}
 	}
 	if (rankNow && (gDefRankDef.length() > 0)) {
 		gNextDefRankOf[ruid] = ai.frame + 60 * SECOND;
@@ -706,6 +733,14 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	// want waits for a hand that can fulfil it.
 	if ((w.def !is null) && (half == HALF_GROUND)
 		&& !unit.circuitDef.CanBuild(w.def)) {
+		// ...UNLESS THE SHORTFALL STANDS. apexearth 2026-09-18: "let the T1
+		// cons fill the shortfall with their best gun." The team's gun still
+		// waits for a hand that can build it; this hand answers the unmet
+		// target with the best it has, and stops when the target is met.
+		if ((hGap > 0.f) && (own.def !is null)) {
+			Gate(GATE_DEF_OWN, true);
+			return own;
+		}
 		Gate(GATE_DEF_ROUTE, true);
 		Want none;
 		return none;
