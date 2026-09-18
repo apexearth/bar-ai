@@ -392,8 +392,10 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 // drain and delivers nothing sooner -- sequential is strictly faster even
 // rich. Standing copies stay governed by wealth (his adv-air ruling); this
 // serializes STARTS only.
+int gAdvInFlightRow = -1;   // the ledger row the last true answer stood on
 bool AdvPlantInFlight()
 {
+	gAdvInFlightRow = -1;
 	for (uint ci = 0; ci < ComLen(); ++ci) {
 		if (gComState[ci] == CS_FINISHED)
 			continue;
@@ -402,8 +404,10 @@ bool AdvPlantInFlight()
 			|| (Catalog::gBuildsList[d].length() == 0))
 			continue;
 		if ((Factory::userData[d].attr
-			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0) {
+			gAdvInFlightRow = int(ci);
 			return true;
+		}
 	}
 	return false;
 }
@@ -436,8 +440,16 @@ void AdvDeferLog(const string& in what)
 	if (ai.frame < gNextAdvDeferLog)
 		return;
 	gNextAdvDeferLog = ai.frame + 30 * SECOND;
+	string row = "";
+	if ((gAdvInFlightRow >= 0) && (gAdvInFlightRow < int(ComLen()))) {
+		const uint r = uint(gAdvInFlightRow);
+		row = " " + Catalog::Def(gComDef[r]).GetName() + " state=" + gComState[r]
+			+ " at=" + int(gComPos[r].x) + "," + int(gComPos[r].z)
+			+ " task=" + ((gComTask[r] is null) ? "none" : "live")
+			+ " workers=" + ((gComTask[r] is null) ? 0 : Requests::Workers(gComTask[r]));
+	}
 	AiLog("apex: adv-plant defer t=" + ai.teamId + " " + what
-		+ " -- an advanced plant is already in flight");
+		+ " -- an advanced plant is already in flight:" + row);
 }
 
 int gNextSuperLog = 0;

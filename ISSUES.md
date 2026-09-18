@@ -282,6 +282,25 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### THE OPENING ON ALTORED: T2 lab done a minute after BARb's, four fewer mexes at minute 4 (2026-09-17)
+
+Measured at --speed 10 (full speed stalls this map, docs/25 S34), +100, six
+seeds, 14 min, against BARb hard, after 8de2c695 and the assist/ladder
+repricing that followed it. Where we stand versus the control (his slot at
+816cd437): mexes at minute 8 7.8 -> 10.0-10.8 (BARb 10.3-10.7), metal/s at
+minute 8 44.8 -> 57-71, army at minute 12 14.2k -> 16.6k. What is left:
+- The T2 lab starts at 6.8-6.9 and stands at 8.9-9.0; BARb's stands at 7-8.
+  The ETA ladder picks it when its ETA beats the best eco rung; giving the
+  tier's rungs the fleet's assist share did not move the pick (6.8/8.9 with,
+  6.9/9.0 without). The start-to-stand gap is ~2 min of which the walk is
+  most (latency start=25-98 s) -- the asker is whichever hand won the draw,
+  not the nearest.
+- Minute 4: 5.3-5.5 mexes against BARb's 7-8. The commander's LLT at 0.5-
+  0.8 min (his mex-guard ruling) and the nano floor's turret at 1.7-2.1 min
+  (his 09-11 ruling) sit in the window; the next open spots are a 60-100 s
+  walk; the roulette still draws v=1-4 winds over v=5-9 mexes one election
+  in three.
+
 ### ECO SEAT GANTRIES: two gantries, a full bank, 1,300 m/s of idle nano lathe, and the turrets went to the line and to towers (2026-09-16)
 
 His watched Supreme Isthmus 8v8 (`matches/_engine`, seat t7 at 10150,597):

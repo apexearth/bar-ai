@@ -202,9 +202,11 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	w.pos = bp;
 	w.spotId = int(boss.id);
 	w.gain = gainRate;
-	// The metal the stint moves, in the currency every building pays; at 1 an
-	// assist outbid a tower a hundredfold and the draw bought nothing else.
-	w.mCost = myDrain * occupiedSec * MCostScale();
+	// The metal the stint moves is NOT the assist's cost: the market paid it
+	// when it bought the job, and billing every helper for it again left
+	// one hand on the T2 lab. The annuitized gain already falls as hands
+	// pile on; the hand's own time is the cost.
+	w.mCost = 1.f;
 	// The seconds this actually commits, not a flat stint: a lonely 9,000
 	// metal reactor is a ten-minute posting and has to be priced as one.
 	w.tCost = (walkSec + occupiedSec) * Wage();

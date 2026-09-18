@@ -1317,8 +1317,11 @@ float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
 	float share = (sumCeil > 1.f)
 			? (feed * LineCostCeil(f) / sumCeil)
 			: feed;
-	if (spendFloor > share)
-		share = spendFloor;
+	// The appetite floor stays under the free-flow ceiling, or a line reads
+	// unserved on an empty bank and buys lathe nothing can feed.
+	const float floorCapped = (spendFloor < feed) ? spendFloor : feed;
+	if (floorCapped > share)
+		share = floorCapped;
 	const AIFloat3 fp = f.GetPos(ai.frame);
 	if (!OnMap(fp))
 		return 0.f;

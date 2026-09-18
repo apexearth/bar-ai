@@ -45,6 +45,7 @@ class Pool {
 Pool@ gPoolNow;
 Pool@ gPoolTech;
 int gPoolAt = -999999;
+float gPoolSpotWalkS = 0.f;   // mean walk home -> open spot, one hand
 
 float ConvRate()
 {
@@ -160,6 +161,33 @@ void PoolFill(Pool@ p, bool anyTier)
 	const int claimDef = ClaimExtractDef(anyTier);
 	if ((open > 0) && (claimDef > 0))
 		PoolInsert(p, claimDef, Catalog::gCostM[claimDef], SpotM(), open, true);
+	// THE OPEN SPOTS ARE WHERE THEY ARE. A claim rung walked to in the
+	// fleet's order latency while the first move paid its real walk let any
+	// build at the base beat every claim as the first move. The pool's
+	// claim rung carries the mean walk from home to the open spots, shared
+	// across the hands that walk in parallel, on top of the latency.
+	gPoolSpotWalkS = 0.f;
+	if ((open > 0) && (claimDef > 0) && Builder::gHomeSet) {
+		float sum = 0.f;
+		int cnt = 0;
+		const array<int>@ lidx = LedgerIdx();
+		for (uint si = 0; si < gAllSpots.length(); ++si) {
+			if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
+				continue;
+			if (!OnMap(gAllSpots[si]))
+				continue;
+			sum += Builder::gHomePos.distance2D(gAllSpots[si]);
+			++cnt;
+		}
+		float speed = 0.f;
+		const array<int>@ bb = Catalog::gBuiltBy[claimDef];
+		for (uint q = 0; q < bb.length(); ++q) {
+			if (Catalog::gMobile[bb[q]] && (Catalog::gSpeed[bb[q]] > speed))
+				speed = Catalog::gSpeed[bb[q]];
+		}
+		if ((cnt > 0) && (speed > 1.f))
+			gPoolSpotWalkS = (sum / float(cnt)) / speed;
+	}
 
 	// HELD GROUND: the upgrade each standing extractor still has left in it.
 	const int upDef = BestExtractDef(anyTier);
@@ -351,11 +379,16 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 				: bp;
 		const float stepS = StepSec(p.def[i], p.cost[i], P, bank,
 				RungBP(p.def[i], rbp), eAvail);
+		float rlat = lat;
+		if (p.mob[i] && (Catalog::gExtractsM[p.def[i]] > 0.f) && (gPoolSpotWalkS > 0.f)) {
+			const int workers = int(aiBuilderMgr.GetWorkerCount());
+			rlat += gPoolSpotWalkS / float((workers < 1) ? 1 : workers);
+		}
 		if (gLadderTrace)
 			gLadderTraceS += " " + Catalog::Def(p.def[i]).GetName() + "x" + k
-				+ "@" + int(stepS) + "+" + int(lat) + "(P" + int(P) + ",bp" + int(RungBP(p.def[i], rbp)) + ")";
-		t += float(k) * (stepS + lat);
-		gLadderLatS += float(k) * lat;
+				+ "@" + int(stepS) + "+" + int(rlat) + "(P" + int(P) + ",bp" + int(RungBP(p.def[i], rbp)) + ")";
+		t += float(k) * (stepS + rlat);
+		gLadderLatS += float(k) * rlat;
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];
@@ -501,7 +534,11 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 				t += StepSec(conD, Catalog::gCostM[conD], P, bank,
 						(labBP > 1.f) ? labBP : 1.f, eAvail);
 				bank = 0.f;
-				const float tier = Catalog::gBuildPower[conD] + CeilingHandsBP();
+				// ...with the fleet ASSISTING it, at the share EffBP grants
+				// every build: a T1 hand cannot start a moho, but it can lathe
+				// the frame the T2 hand opened.
+				const float tier = Catalog::gBuildPower[conD] + CeilingHandsBP()
+						+ bpMob * ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
 				gLadderTierBP = (tier > 1.f) ? tier : 1.f;
 			}
 		}
