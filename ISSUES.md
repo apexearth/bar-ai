@@ -295,6 +295,15 @@ minute 8 44.8 -> 57-71, army at minute 12 14.2k -> 16.6k. What is left:
   6.9/9.0 without). The start-to-stand gap is ~2 min of which the walk is
   most (latency start=25-98 s) -- the asker is whichever hand won the draw,
   not the nearest.
+- The gantry stands at 25-27 min against BARb's 15.5-17.8 (30-min games,
+  seeds 11-12). Its want first appears at 16-19.5 min: the host income gate
+  `apex_gantry_host_inc` = 150 m/s of STRUCTURAL income (reclaim rate
+  subtracted, 60-s EMA) is his 2026-08-30 ruling ("push back to 150 or
+  later"), and his 09-17 brief ("take a really long time to even start the
+  gantry") pulls the other way -- his call. Once wanted, the frame took
+  522 s on one hand while 83 turrets went to the lines beside it: the sink
+  branch life-scaled a plant's frame like a converter's; fixed (a plant's
+  frame is its ring), 57-203 s after.
 - Minute 4: 5.3-5.5 mexes against BARb's 7-8. The commander's LLT at 0.5-
   0.8 min (his mex-guard ruling) and the nano floor's turret at 1.7-2.1 min
   (his 09-11 ruling) sit in the window; the next open spots are a 60-100 s

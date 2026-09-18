@@ -138,7 +138,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// frame reads seconds and stops outbidding every working lab with the
 		// whole feed -- measured 2074 sink sitings against 2 line sitings,
 		// mean priced need 389 m/s, while 46% of income overflowed.
-		{
+		// ...but a PLANT's frame is the plant's ring: the turrets that raise
+		// a gantry serve its queue afterwards, so its stream does not die at
+		// completion and it is not life-scaled.
+		if (Catalog::gBuildsList[bd].length() == 0) {
 			const float eat = crew3 + ringEat;
 			const float oneNano = 200.f * sdens;
 			float life = Catalog::gCostM[bd]
