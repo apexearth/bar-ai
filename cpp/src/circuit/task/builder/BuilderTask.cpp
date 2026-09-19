@@ -1213,9 +1213,16 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// why=unreach-safe; 960 front elections won, 0 towers built) -- the
 	// ground a tower is for is exactly the ground this refused. Defence
 	// types test pure reachability; everything else keeps the threat term.
+	// ...and a FIXED site: the script priced the spot's danger when it chose
+	// it (MexHeat, ThreatFor) and lets the walk go if the ground turns hot;
+	// tested again here at a constructor's bar of 1.0, a reading of 1.2 --
+	// one raider in the neighbourhood -- turned the con around at the mex
+	// (his watch: "walk out and then just turn around more than 80% of the
+	// time"; 62 unreach armmex at gap=36-48 of a 154 range in one game).
 	const bool intoThreat = (buildType == BuildType::DEFENCE)
 			|| (buildType == BuildType::BUNKER)
-			|| (buildType == BuildType::BIG_GUN);
+			|| (buildType == BuildType::BIG_GUN)
+			|| IsFixedSite(buildType);
 	// THE BAR FOR ECONOMY IS NOT THE BUILDER'S OWN POWER. A constructor's power
 	// is ~0, so a site was refused at threat 0.1 -- the residue of a raider
 	// that passed minutes ago -- and on a raided map the cons built nothing
@@ -1352,6 +1359,21 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 		if (utils::is_valid(endPos)
 			&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
 		{
+			// A FIXED SITE WALKS ON THE ENGINE'S PATH. Our sector pathfinder
+			// answered "no path" to mexes 190-390 elmo away whose reach test
+			// had passed (146 nopath armmex in one game), and the task died
+			// with the con standing short of the spot. The engine paths it;
+			// the stuck watch still ends a walk that never arrives.
+			if (IsFixedSite(buildType)) {
+				circuit->LOG("apex: nopath-engine %s by %s at=%.0f,%.0f dist=%.0f",
+						(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+						unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
+						sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+				if (unit->GetTravelAct() != nullptr) {
+					unit->GetTravelAct()->StateFinish();
+				}
+				return;
+			}
 			circuit->NoteBuildBlocked(endPos, buildDef);
 			circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
 					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
