@@ -424,7 +424,7 @@ int ConsNeedAny()
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
 	float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
-			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 44.f);
+			+ ConFloorIncomeTerm(per);
 	// METAL WE CANNOT SPEND IS A SHORTAGE OF HANDS, AND THE LINE ABOVE CANNOT
 	// SEE IT. It asks what our INCOME implies; the question that decides the
 	// game is whether we can spend what we earn. Watched 2026-09-08 on Supreme
@@ -472,11 +472,32 @@ bool AnyAssistLab()
 // plus one per 25 metal/s (apexearth 2026-08-23: "at 100 metal per second we
 // should have at least 5"). Any lab qualifies: air, bot or vehicle cons all
 // reach the ceiling, and the ReachesCeiling test is def-based, not lab-based.
+// A CONSTRUCTOR FLOOR IS BOUNDED BY THE FEED. The income term below is a
+// line with no ceiling: at 6,070 m/s it asked for 245 advanced constructors
+// (his watch: 150 standing, 234 dead, the advanced air plant a con factory
+// for the game and one bomber held of a 299 wing). Hands are lathe, and
+// lathe past what the income keeps fed is idle -- so the income term stops
+// at the hands the feed has room for: (income x headroom - BPCapacity) over
+// one con's own lathe. The unspent-metal term below is the other half of
+// the same law and stays.
+float ConFloorIncomeTerm(float per)
+{
+	const float inc = aiEconomyMgr.metal.income;
+	float term = inc / ((per > 1.f) ? per : 25.f);
+	const float hands = inc * ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
+	const float owned = BPCapacity();
+	const float bp = ConWorkerBP();
+	float room = 0.f;
+	if ((hands > owned) && (bp > 0.f))
+		room = (hands - owned) / bp;
+	return (term < room) ? term : room;
+}
+
 int CeilingConsNeed()
 {
 	const float per = ai.GetTunable("apex_t2_con_per_m", TUNE_T2_CON_PER_M);
 	float want = ai.GetTunable("apex_t2_con_base", TUNE_T2_CON_BASE)
-			+ aiEconomyMgr.metal.income / ((per > 1.f) ? per : 25.f);
+			+ ConFloorIncomeTerm(per);
 	// Unspent metal is hands we lack, at the ceiling tier as at the first:
 	// Carrot at 30 min, 9 T2 cons to BARb's 13 and 9 mohos to 18 with 6k
 	// metal spilled per game (2026-09-08). ...but it is LATHE we lack, not

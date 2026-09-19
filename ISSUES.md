@@ -245,6 +245,18 @@ vs 15.6%. Read from the Glacier 1v1s:
   MexHeat accepted, on a threat reading barely above the 1.0 floor; 3-15
   per game on Comet, `nopath` 100+ on Carrot (cliffs).
 
+### NUKES FIRE AT GROUND NOBODY REMEMBERS (2026-09-18)
+
+His 3x-economy game, won late by one nuke: the silo log reads `nuke ground
+confirmed -- forgot 0 remembered enemies at the impact` x30 and `nuke intel
+spent -- 0 remembered enemies need re-sighting` x23 against 5+4 launches
+that forgot 2-4 remembered enemies. Most warheads went to ground with no
+remembered enemy on it; the one that won hit their base. `nukes saving 0/1
+for a target worth 30000 behind 1 antinukes` x7: one silo, stock 0. His
+lens: what a human would do is mass nukes on scouted targets. The reads:
+ai-nukes (target memory and the antinuke count), the scout task (eyes kept
+alive over their base), and a second silo at that economy.
+
 ### THE COMMANDER FIGHTS T2 (2026-09-18)
 
 His watch: "the commander is still being frontline rambo when enemy is
