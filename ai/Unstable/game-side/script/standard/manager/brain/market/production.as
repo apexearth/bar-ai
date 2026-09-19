@@ -997,11 +997,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// A screen class counts its recent dead against the limit too: the
 		// standing count never reached it while the lab replaced every flea
 		// that died at its post.
+		// ...and its queued orders, or the cap leaks by the queue depth.
 		const int screenDead = (Catalog::gPower[d] <= 1.01f)
 				? int(Military::ScreenLostM() / ((Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f))
 				: 0;
 		if ((Catalog::gLimit[d] > 0) && (Catalog::gLimit[d] < 1000000)
-			&& (gOwnCount[d] + screenDead >= Catalog::gLimit[d])) {
+			&& (gOwnCount[d] + Brain::PendAnyOf(d) + screenDead >= Catalog::gLimit[d])) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":limit";
 			continue;
