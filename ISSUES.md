@@ -243,6 +243,19 @@ five solars) where BARb's commander alone claims six mexes. Instrument:
 
 ### OPENING in 2v2: their army is 1.4x ours by minute 4-6 and the middle is theirs (2026-09-19)
 
+2026-09-19 night, Red Comet 2v2 seed 5 after the opening fixes: armies at
+parity by minute 5-6 (2,319 to 2,565; 2,671 to 3,259) and mexes 11 to 13
+at minute 4 -- and our army front stays 0.20-0.32 while theirs holds 0.50
+over its cons, so the middle is theirs by minute 8 (7 mexes to 26). Read:
+`mass want=48-64` against `own=12-19` at 5-6 min (the floor's meet term
+is the enemy's group power over AllyCount, above one player's whole army,
+so no pool promotes until minute 7); capping the want at the player's own
+power (tried, one game) promoted the pools but the front did not move --
+`hold ... attack=` counts BaseUnderAttack true almost continuously with a
+scout in the base, and recall-home reads the same. The 2v2 posture --
+two allied pools that never combine, a hold that a 23-metal flea can arm
+-- is the next campaign; docs/33 section 8.
+
 story.py on 2v2 x8 per arm (Comet Catcher Remake + Glacier Pass, +100 vs
 BARb hard): our combat metal over theirs at 4 min reads 0.69-0.96 by arm,
 and by minute 6 their army stands at front 0.50 while ours stays at
