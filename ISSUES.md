@@ -207,7 +207,12 @@ eco spend halves (2,912 -> 1,859 per 4 min) while theirs rises (3,425 ->
 4,150). His doctrine: defending at home takes near parity, "we need
 time to build the army to match rather than continuously letting units
 die". docs/33 8 (cohesion 0.11 vs 0.44) is the same finding from the
-other side. Not a wrong number; the next campaign.
+other side. Not a wrong number; the next campaign. Tried the same
+evening: an attack group containing a static gun always faces the power
+test (no influence exemption) in CAttackTask::FindTarget -- metal lost to
+towers on the same seed 1,230 -> 1,160, the deaths moved to home against
+Bulls at 10-12 min; reverted. The turn is their T2 vehicles at 10 min
+against our T1 line, not the wall.
 
 ### OPENING in 2v2: their army is 1.4x ours by minute 4-6 and the middle is theirs (2026-09-19)
 
