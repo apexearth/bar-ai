@@ -29,6 +29,16 @@ still BARb-led at army 10% vs 32%. In team games our trade is 0.4-0.6 at
 out-produce. The army target (`ArmyTarget`, `RichArmyGapM`, the escort
 conscription fixed 09-13) is the term to read; docs/32 says "the target's
 question, not the line's".
+2026-09-19 night, Comet Catcher 1v1 seed 3 at --speed 20, after the opening
+fixes: 7-11 mexes to their 5-6 at minute 4, income 42-54 to 26-31 -- and
+250-350 metal of army to their 1,500 at minute 5. The one T1 lab made six
+cons in its first five minutes (con floor need=4 at 42 m/s, plus the
+UnspentByHands term while the bank sat full) and three combat units; its
+lathe is the army's only supplier. Zero nanos stood by minute 8 in one
+game and one by minute 7 in the other (frames killed by the minute-5 flash
+raid; `apex: nano-hot refused` now stops the re-election churn). Whether
+the lab's minutes go to cons or to army at 40 m/s is his call
+(USER-FEEDBACK: apex_con_per_m).
 
 ### CLOSING: a 25-50% lead at 30 minutes marches in waves of 240 into 17k of static and never ends the game (2026-09-13)
 

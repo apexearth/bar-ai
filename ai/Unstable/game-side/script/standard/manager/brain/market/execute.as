@@ -1,4 +1,6 @@
 namespace Market {
+int gNanoHotRefused = 0;
+int gNextNanoHotLog = 0;
 int gInteriorRefused = 0;
 int gNextInteriorLog = 0;
 int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
@@ -630,6 +632,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		}
 		if (!sited)
 			return null;
+		// Ground the con would let go of on arrival (con-letgo: SiteHot) is
+		// not offered: elect, walk, let go, elect the same slot ran every
+		// three seconds for minutes after a raid killed the frames there.
+		if (Builder::SiteHot(slot) && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+			++gNanoHotRefused;
+			if (ai.frame >= gNextNanoHotLog) {
+				gNextNanoHotLog = ai.frame + 30 * SECOND;
+				AiLog("apex: nano-hot refused t=" + ai.teamId
+					+ " at=" + int(slot.x) + "," + int(slot.z)
+					+ " total=" + gNanoHotRefused);
+			}
+			return null;
+		}
 		if (lineSited)
 			AiLog("apex: nano-to-line t=" + ai.teamId
 					+ " " + ((lineAt !is null) ? lineAt.circuitDef.GetName() : "wall")
