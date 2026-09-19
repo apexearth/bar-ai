@@ -180,11 +180,14 @@ bool Frame()
 	// engine's square-by-square spiral. The ask is still the farm centre; C++
 	// snaps it to the def's own lattice and walks that lattice's rings
 	// before the wide search.
-	if (!gPublished && gAnchorFinal) {
+	// ...and again when the street width changes: it follows the widest
+	// hull we field, and the first big one out of the gantry widens it.
+	if (gAnchorFinal && (!gPublished || (LaneHalf() != gPublishedHalf))) {
 		gPublished = true;
-		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, LaneHalf(), GRID_RANGE);
+		gPublishedHalf = LaneHalf();
+		ai.SetBaseGrid(gAnchor, gFwd, GRID_CELL, LANE_PITCH, gPublishedHalf, GRID_RANGE);
 		AiLog("apex: base grid published cell=" + int(GRID_CELL)
-			+ " lane=" + int(LANE_PITCH) + "/" + int(LaneHalf())
+			+ " lane=" + int(LANE_PITCH) + "/" + int(gPublishedHalf)
 			+ " range=" + int(GRID_RANGE));
 	}
 	return true;

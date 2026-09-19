@@ -31,6 +31,10 @@ description: Where buildings land — base bands, nano gravity, the advsol pack,
 ## Principles that keep recurring
 
 - Eco/energy behind the base; defence on the line; nanos tight with lanes.
+- Streets (`IsInBaseLane`, `Base::LaneHalf`): forward of the anchor only, 720
+  apart, as wide as twice the widest ground hull we FIELD (`Lattice::AisleW`,
+  monotonic; 96 for a bot base, was 256 from the widest buildable hull --
+  his 09-18 "we're wasting a lot of space"). Republished to C++ when it grows.
 - Placement rules must RESERVE sites (`Base::ReserveSite`) or the same ground
   gets picked every period.
 - `FindBuildSiteNear` returns any legal site — snap/verify, never trust the

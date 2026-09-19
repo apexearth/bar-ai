@@ -38,16 +38,24 @@ float FootPitch(int defId)
 
 // AISLE: ground kept clear between two clusters, wide enough for the biggest
 // thing we field to walk through rather than around. Derived from the widest
-// mobile unit available to us, so a base that fields Korgoths leaves Korgoth-
-// sized streets and a bot-only base does not waste the ground.
+// ground unit we OWN (apexearth 2026-09-18: "the units that walk through
+// there are very small... we're wasting a lot of space" -- read from the
+// widest buildable hull it kept 256-elmo streets for an 8-cell hull no
+// bot base ever fields), so the streets grow when the first big hull
+// rolls out and not before. Re-read when the fleet changes.
 float gAisle = -1.f;
+int gAisleStamp = -1;
 float AisleW()
 {
-	if (gAisle > 0.f)
+	if ((gAisle > 0.f) && (gAisleStamp == Market::gOwnStamp))
 		return gAisle;
+	gAisleStamp = Market::gOwnStamp;
 	int widest = 0;
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {
-		if (!Catalog::gMobile[i] || !Catalog::gAvailable[i] || Catalog::gFlyer[i])
+		if ((uint(i) >= Market::gOwnCount.length()) || (Market::gOwnCount[i] <= 0))
+			continue;
+		if (!Catalog::gMobile[i] || Catalog::gFlyer[i] || Catalog::gFloater[i]
+			|| Catalog::gSub[i])
 			continue;
 		const int f = (Catalog::gFootX[i] > Catalog::gFootZ[i])
 				? Catalog::gFootX[i] : Catalog::gFootZ[i];
@@ -55,10 +63,13 @@ float AisleW()
 			widest = f;
 	}
 	// Room to WALK, not just to fit: a lane exactly one hull wide is a lane
-	// the pathfinder refuses under any crowding.
-	gAisle = float(widest) * CELL * 2.f;
-	if (gAisle < 64.f)
-		gAisle = 64.f;
+	// the pathfinder refuses under any crowding. Never narrower than it has
+	// been: the buildings already stand on the old streets' edges.
+	float aisle = float(widest) * CELL * 2.f;
+	if (aisle < 64.f)
+		aisle = 64.f;
+	if (aisle > gAisle)
+		gAisle = aisle;
 	return gAisle;
 }
 

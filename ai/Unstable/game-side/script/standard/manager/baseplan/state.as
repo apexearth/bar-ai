@@ -18,6 +18,7 @@ bool gAnchorSet = false;
 bool gAnchorFinal = false;
 bool gAxisSet = false;
 bool gPublished = false;
+float gPublishedHalf = -1.f;
 const int ANCHOR_DEADLINE = 3 * MINUTE;
 
 // --- grid geometry -----------------------------------------------------------
@@ -44,7 +45,7 @@ const float GRID_CELL  = 16.f;    // the engine's build square; the pitch publis
 const float LANE_PITCH = 720.f;   // spacing between walkways, in world offset
 // FLOOR on the half-width of a walkway, not the width: that is LaneHalf(), in
 // grid.as, and it is derived from the widest hull we field.
-const float LANE_HALF_MIN = 72.f;
+const float LANE_HALF_MIN = 32.f;   // half of AisleW's own floor
 // Lateral slack on Inside(). Kept separate from LANE_PITCH, which used to also
 // serve as this bound and rejected ground the base needed. Effectively
 // unbounded: depth still bounds the band, and GRID_RANGE still bounds the grid
