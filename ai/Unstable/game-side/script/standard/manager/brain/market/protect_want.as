@@ -20,6 +20,18 @@ bool HandHasT2Tower(const array<int>@ b)
 	return false;
 }
 
+// Metal standing in towers a basic hand can build.
+float T1TowerStandingM()
+{
+	float m = 0.f;
+	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i) {
+		const int d = gProtDefId[PROT_DEF][i];
+		if (T1Tower(d))
+			m += Catalog::gCostM[d];
+	}
+	return m;
+}
+
 bool T1Tower(int d)
 {
 	const array<int>@ bb = Catalog::gBuiltBy[d];
@@ -738,8 +750,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		// waits for a hand that can build it; this hand answers the unmet
 		// target with the best it has, and stops when the target is met.
 		// ...not the commander: he stays home.
+		// ...and bounded at ONE gun of its own kind standing: the fill is
+		// the stopgap until the hand that can build the team's gun arrives,
+		// not a wall of light towers (25 inside 250 elmos of one base, his
+		// watch).
 		if ((hGap > 0.f) && (own.def !is null)
-			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			&& (T1TowerStandingM() + DefenceInFlightM() < Catalog::gCostM[int(own.def.id)])) {
 			Gate(GATE_DEF_OWN, true);
 			return own;
 		}
