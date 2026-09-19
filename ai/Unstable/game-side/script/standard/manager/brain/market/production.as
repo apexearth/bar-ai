@@ -488,8 +488,7 @@ float ConFloorIncomeTerm(float per)
 	// The turrets count against the floor only on the seat, whose ruling is
 	// "nanos, not cons". A front player's constructors do what no turret
 	// can -- the mohos, the spots -- and counting its turrets read a floor
-	// of 1 advanced con at 50-100 income (one moho every 1.5 min against
-	// their 19 by minute 16, 2v2 measured 2026-09-19).
+	// of one advanced con whatever the income.
 	const float owned = gEcoRole ? BPCapacity() : MobileBPCapacity();
 	const float bp = ConWorkerBP();
 	float room = 0.f;
