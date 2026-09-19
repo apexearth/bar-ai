@@ -1499,8 +1499,20 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (roled)
 			why = "role";
 	}
+	// THE FIRST PLANT IS NOT A DICE ROLL. The draw keeps runners-up alive
+	// over many elections; the one election that unlocks the con floor and
+	// every unit lost the roll twice at 60:40 and the lab came a minute
+	// after theirs, into an energy stall. While no plant stands or is
+	// ordered, a plant that is the argmax is taken.
+	bool firstPlant = false;
+	if ((ranked.length() > 0) && (ranked[0].kind == WK_PLANT)
+		&& (Factory::gFacUnits.length() == 0) && !AnyPlantInFlight())
+	{
+		firstPlant = true;
+		why = "firstplant";
+	}
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = "draw";
 	Perf::Add("dec.draw", _tDraw);
