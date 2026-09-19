@@ -196,6 +196,27 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 
 ## EXPANSION AND THE OPENING
 
+### OPENING in 2v2: their army is 1.4x ours by minute 4-6 and the middle is theirs (2026-09-19)
+
+story.py on 2v2 x8 per arm (Comet Catcher Remake + Glacier Pass, +100 vs
+BARb hard): our combat metal over theirs at 4 min reads 0.69-0.96 by arm,
+and by minute 6 their army stands at front 0.50 while ours stays at
+0.22-0.27; they hold the mid mexes from minute 6 and the income lead flips
+by minute 8-10. Equal lab busy (92%) and lab power; our two labs' first
+four minutes are ~22% non-combat (cons, rez, scouts) and the rest pawns,
+theirs 21 combat units from one lab with the cons assisting it. Our
+commander's first five minutes: energy x127, mex x39, converters x37,
+towers x23 over eight games. The army target reads 2,090 against 110
+standing at 2.4 min -- the gap is known; the lab is its only supplier.
+Tried and measured the same day: holding the mid mexes at parity (inert,
+never at parity); screen axis off (no change); rez bots priced on the
+core ratio (early rez 23 -> 4, ratio @4 0.69 -> 0.96, kept); the
+commander assisting the lab on the army gap (assists 1 -> 29, ratio @4
+0.96 -> 0.73, 0-6-2, reverted -- the commander's mexes and solars are
+what feeds the lab). Open: what the lab should make in the first four
+minutes (a con floor of 2.7 fires at t=0) and whether the T1 con walks
+to a solar or stands at the lab; test_earlyfight.py is the harness.
+
 ### OPENING: the first factory comes late in half the games (2026-09-11, 09-15)
 
 Comet 1v1 vs BARb hard, six games per build (`tournaments/20260915-081342-
