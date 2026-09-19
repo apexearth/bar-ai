@@ -836,7 +836,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// SlackFrac. Only while the target is economy; elsewhere the unspent
 		// metal already has somewhere to go (the army sink above), which is what
 		// hid this.
-		if (ovfHands) {
+		// ...whatever the target: with 200 m/s spilling the hands cannot be
+		// "already enough" (measured: room=0 against over=67-242 for ten
+		// minutes, no constructor bought).
+		{
 			const float slack = SlackFrac();
 			if (feedRoom < slack)
 				feedRoom = slack;
@@ -1492,6 +1495,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// them; maybe useful for later logic").
 		if (Catalog::gSurfT[d] + Catalog::gAirT[d] > 0.01f)
 			continue;
+		if (prankNow)
+			prank += " " + Catalog::Def(d).GetName() + ":b";
 		float gain = 0.f;
 		float reach = 0.f;
 		const array<int>@ pb = Catalog::gBuildsList[d];
@@ -1565,8 +1570,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					}
 				}
 			}
-			if (float(landT1) >= tEcoConKeep + 2.f)
+			if (float(landT1) >= tEcoConKeep + 2.f) {
+				if (prankNow)
+					prank += "keep";
 				continue;
+			}
 		}
 		// >= the game ceiling, not > our own: requiring the next con to
 		// EXCEED what the first one reaches made a second armack impossible
@@ -1598,6 +1606,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		gain += mob * ((over < drain) ? over : drain);
+		float claimGain = 0.f;
 		if (gMexOpen && (reach > 0.f)) {
 			// A con claims spot after spot -- a stream of STREAMS -- but the
 			// STREAMS ARE FINITE: 37 cons once chased 13 spots and easy BARb
@@ -1619,7 +1628,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			float share = (open > 0.f) ? (open / (claimers + 1.f)) : 0.f;
 			if (share > 1.f)
 				share = 1.f;
-			gain += mob * util * SpotM() * (((fillS > 1.f) ? fillS : 180.f) / 60.f)
+			// Over the payback horizon every other economic buy is amortised
+			// on: a claimed spot streams for the game, not for one fill window.
+			const float hClaim = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			claimGain = mob * util * SpotM() * (((hClaim > 1.f) ? hClaim : 900.f) / 60.f)
 					* share;
 		}
 		// UNPROTECTED BUILD POWER IS DISCOUNTED BUILD POWER (apexearth: "we
@@ -1635,20 +1647,32 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			bpProt = BPProtectedFrac();
 		gain *= bpProt;
 		// Rez bots eat the field, not the feed; every other builder pays
-		// the closed-loop room. The tier floors above already guarantee
-		// the minimums, so zero here starves nothing essential.
+		// the closed-loop room for its LATHE. Not for its claims: a mex
+		// creates the income the room says is missing, and gated on the
+		// room the claim value read zero all game once a few turrets stood
+		// (5 constructors to their 16, mexes 3-4 to their 11 at minute 12).
 		if (!Catalog::gRezzer[d])
 			gain *= feedRoom;
+		gain += claimGain * bpProt;
 		if (gain <= 0.5f) {
 			// A cut candidate leaves no trace otherwise -- it is absent from
 			// prodrank, so "we stopped making pawns" reads as a lost election
 			// rather than a unit that was never offered.
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName()
-					+ ":cut(g" + formatFloat(gain, "", 0, 3) + ")";
+					+ ":cut(g" + formatFloat(gain, "", 0, 3)
+					+ (Catalog::gBuilder[d] ? (" prot=" + formatFloat(bpProt, "", 0, 2)
+						+ " room=" + formatFloat(feedRoom, "", 0, 2)
+						+ " claim=" + formatFloat(claimGain, "", 0, 1)
+						+ " over=" + formatFloat(over, "", 0, 1)
+						+ " open=" + (gMexOpen ? 1 : 0)
+						+ " upD=" + formatFloat(upD, "", 0, 1)) : "") + ")";
 			continue;
 		}
 		const float v = gain / Catalog::gCostM[d];
+		if (prankNow)
+			prank += "=" + formatFloat(v * 1000.f, "", 0, 2) + "(g" + formatFloat(gain, "", 0, 2)
+				+ ",claim" + formatFloat(claimGain, "", 0, 1) + ",room" + formatFloat(feedRoom, "", 0, 2) + ")";
 		candDef.insertLast(d);
 		candV.insertLast(v);
 		candGain.insertLast(gain);

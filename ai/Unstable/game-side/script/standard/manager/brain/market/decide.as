@@ -17,6 +17,18 @@ int gNextAaPanicLog = 0;
 int gNextDefPanicLog = 0;
 int gNextHoistLog = 0;
 array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
+// THE JOB A HAND IS ON IS A CANDIDATE, NOT A BLANK. C++ hides the unit's
+// assignment before every re-election, so the hold in maketask.as never
+// sees it and a walking constructor rolled the draw afresh every 3 s --
+// a 60 s walk survived only if twenty rolls all landed on the same
+// category (his watch: "constructors go on long journeys, get to the
+// other side and turn around"). The incumbent's walk is partly paid, so
+// its value only rises en route: a drawn challenger must beat it; the
+// hoists (estall, cover, role) still override.
+array<IUnitTask@> gIncTask(32001);
+array<float> gIncVal(32001, 0.f);
+int gKeepJob = 0;
+int gNextKeepLog = 0;
 // Which builder may drop its work for the first AA tower, and when it claimed
 // that. One at a time: the tower is 80 metal, abandoning every frame in the
 // base is not.
@@ -1484,6 +1496,36 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Perf::Add("dec.draw", _tDraw);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
+	// Only an emergency takes a hand off a job it is walking to: the
+	// stall, the air and defence panics, the commander's first gun. The
+	// floors and roles wait for a free hand (his watch: a con on its way to
+	// a mex turned around for a turret floor 61 times in one game).
+	const bool emergency = (why == "estall") || (why == "estall-hands") || (why == "aa")
+			|| (why == "defpanic") || (why == "penned") || (why == "cover");
+	if (!emergency && (top !is null)) {
+		const int uidk = int(unit.id);
+		if ((uidk >= 0) && (uidk < int(gIncTask.length())) && (gIncTask[uidk] !is null)) {
+			IUnitTask@ inc = gIncTask[uidk];
+			if (inc.IsDead()) {
+				@gIncTask[uidk] = null;
+			} else {
+				const AIFloat3 ip = inc.GetBuildPos();
+				const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)] + 64.f;
+				if (OnMap(ip) && (unit.GetPos(ai.frame).distance2D(ip) > reach)
+					&& ((why != "draw") || (top.value <= gIncVal[uidk])) && !Builder::SiteHot(ip)) {
+					++gKeepJob;
+					if (ai.frame >= gNextKeepLog) {
+						gNextKeepLog = ai.frame + 30 * SECOND;
+						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
+							+ " #" + unit.id + " v=" + formatFloat(gIncVal[uidk] * 1000.f, "", 0, 2)
+							+ " over " + KindName(top.kind) + " v=" + formatFloat(top.value * 1000.f, "", 0, 2)
+							+ " kept=" + gKeepJob);
+					}
+					return inc;
+				}
+			}
+		}
+	}
 	// Auction dump for T2-capable builders, one per 30s, tunable-gated.
 	if ((ai.GetTunable("apex_auction_diag", 0.f) > 0.f) && (ai.frame >= gNextAuctionDiag)) {
 		bool t2able = false;
@@ -1697,6 +1739,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
 					+ " pick=" + depth
 					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
+				@gIncTask[int(unit.id)] = t;
+				gIncVal[int(unit.id)] = ranked[i].value;
+			}
 			// A category that could not be executed is not a job this hand
 			// can do: the role goes with the fall-through.
 			if (roled && (CategoryOf(ranked[i].kind) != ConRoleOf(unit))) {

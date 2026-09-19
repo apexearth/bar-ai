@@ -215,6 +215,36 @@ rewritten 09-15 (`ccf28df7`: reach + approach, not nearness + wiggle; Ford
 on it. Read the engine-order drop first (S13, S27: the engine discards a
 build order on a blocked square with no idle event) before the election.
 
+### 1v1 vs BARb HARD: 3-15 and 1-18, outbuilt 2-3x by minute 15 (2026-09-18)
+
+Tournaments, four maps x 6, +100 both, 30 min: HEAD 3-15 (6 timeouts), his
+slot 1-18. Every decided game ends on a commander kill at 12-23 min with
+our metal built at a third to a half of theirs (Comet 32k vs 112k, Glacier
+11k vs 41k). Constructors held at peak 9 vs 33 (T1) and 6 vs 16 (T2), mex
+upgrades 8 vs 15, army (real) 10.6% of spend vs 30.3%, static defence 7.6%
+vs 15.6%. Read from the Glacier 1v1s:
+- A walking constructor was re-elected every 3 s with a fresh draw; the
+  DLL hides its assignment so the script's hold never saw it (S14). Fixed
+  09-18: the incumbent job is kept while en route unless an emergency
+  hoist fires or a drawn challenger beats its value (`apex: keep-job`,
+  70-104 keeps per 20-minute game). `why=nanofloor` alone had pulled cons
+  off their walks 61 times a game.
+- The constructor is never bought by the auction: v=0.12-1.3 (x1000)
+  against a Pawn at 9,000-1,000,000 -- the army side's ppc carries
+  quality x line-bite x speed x coverage multipliers (p=15 for a pawn)
+  that no economic gain has. Only the con FLOOR (apex_con_base +
+  income/44) produces builders: 5-7 T1 cons a game to BARb's 16-22. The
+  feed-room gate zeroed even the floor's excess (room=0 all game once a
+  few turrets stood; fixed: a con's claim value is not gated on room, and
+  overflow floors the room whatever the target). What a constructor is
+  worth against a pawn in one currency is his call: the plan says seconds
+  off the target, and a claimed mex streams for the game while a pawn
+  closes 55 metal of a gap once.
+- Mex tasks die at arrival: `unreach armmex gap=16 range=154 threat=1.7/
+  0.0` -- the DLL's CanReachAtSafe refuses a fixed site the script's
+  MexHeat accepted, on a threat reading barely above the 1.0 floor; 3-15
+  per game on Comet, `nopath` 100+ on Carrot (cliffs).
+
 ### ALTORED 1v1: the commander dies claiming outer mexes (2026-09-18)
 
 Altored Divide +100 vs BARb hard, `--speed 10`, seeds 21-24: three of four
