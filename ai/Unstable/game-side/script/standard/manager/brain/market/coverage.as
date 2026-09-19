@@ -594,9 +594,12 @@ void RiskFill()
 		return;
 	}
 	const AIFloat3 home = Builder::gHomePos;
-	// Their structures, else the mirrored start -- the same anchor the
-	// past-front tests use, so depth and the vetoes agree on the axis.
-	AIFloat3 foeP = Front::FoeAnchor();
+	// Their START, not their structures: the structure centroid follows
+	// their forward mexes and towers, and a spot beside our own lab read
+	// full depth once they had expanded to mid. The mirror is the fallback.
+	AIFloat3 foeP = aiSetupMgr.GetEnemyBoxCentre();
+	if (!OnMap(foeP))
+		foeP = Front::FoeAnchor();
 	if (!OnMap(foeP)) {
 		foeP = AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
 				float(AiTerrainHeight()) - home.z);
@@ -676,10 +679,11 @@ float GradAt(const AIFloat3& in pos)
 	//
 	// One axis, the one that is right. The local projection stays as the
 	// fallback for the frames before ForwardFraction has an enemy to point at.
-	const float fwd = Military::ForwardFraction(pos);
-	if (fwd > 0.f) {
-		return (fwd > 1.f) ? 1.f : fwd;
-	}
+	// ...and the sightings axis was wrong the other way: ForwardFraction
+	// points at the enemy influence we have SEEN, which in the opening is
+	// one scout car in our own base, so every home mex read most of the
+	// way to them. The start-box axis below is his "start box centerpoint
+	// compared to their start box centerpoint".
 	float t = ((pos.x - gRkGHx) * gRkGDx + (pos.z - gRkGHz) * gRkGDz) / gRkGSpan;
 	if (t < 0.f) t = 0.f;
 	if (t > 1.f) t = 1.f;

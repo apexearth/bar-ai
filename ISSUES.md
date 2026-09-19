@@ -214,6 +214,23 @@ towers on the same seed 1,230 -> 1,160, the deaths moved to home against
 Bulls at 10-12 min; reverted. The turn is their T2 vehicles at 10 min
 against our T1 line, not the wall.
 
+### OPENING MEXES in 2v2: 10 to their 15 at minute 4, then no growth to minute 8 (2026-09-19, night)
+
+Red Comet 2v2 seed 5, +100 vs BARb hard, one game per change at --speed 20
+(uncapped, two games in a row crippled BOTH AIs to 1 mex at 4 min -- run
+capped). Before: 7-8 mexes to their 13-15 at minute 4 in every 2v2 today;
+the commander's claim was refused by ComFar 4-11 times before minute 5 (the
+core rim is three buildings at minute one) and each refusal's eco fallback
+bought a solar or converter; a scout car in the base set the risk axis so
+every home spot read risk 0.78; the nano floor took two cons at 13 m/s.
+After the six fixes in the 2026-09-19 night commit: 10 to 15 at minute 4.
+Still open: from minute 4 the sweep reads 9-16 of 40 spots hot (their army
+sits on the middle) and cand=0-1, so we stay at 10 while they reach 22 by
+minute 8; and the cons build 4-5 basic converters by minute 4 (E surplus off
+five solars) where BARb's commander alone claims six mexes. Instrument:
+`apex: mexprice` (sampled 10 s, every factor of the top rung) and
+`mexdiag ... comFar= ... sweep Nhot`.
+
 ### OPENING in 2v2: their army is 1.4x ours by minute 4-6 and the middle is theirs (2026-09-19)
 
 story.py on 2v2 x8 per arm (Comet Catcher Remake + Glacier Pass, +100 vs

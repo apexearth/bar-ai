@@ -47,6 +47,7 @@ public:
 	// Defined in the .cpp: CAllyTeam is only forward-declared here.
 	int FindAllyTeamOf(int teamId) const;
 	const utils::CRegion& GetStartBox(int boxId) { return boxes[boxId]; }
+	const BoxMap& GetStartBoxes() const { return boxes; }
 
 	const ModOptions& GetModOptions() const { return modoptions; }
 

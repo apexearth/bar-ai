@@ -50,6 +50,14 @@ int FactoryNanoShort(AIFloat3& out at)
 					< 0.9f * Catalog::gBuildDist[int(lt.buildDef.id)]))
 				++have;
 		}
+		// Stock's own gate on that count (CheckAssistRequired): a caretaker
+		// is asked for only while income exceeds what the plant and its
+		// turrets already convert; without it the floor takes cons off the
+		// opening mexes.
+		// NANO_ABSORB is one 200-workertime turret's draw; the plant's is pro rata.
+		const float facDraw = NANO_ABSORB * Catalog::gBuildPower[int(f.circuitDef.id)] / 200.f;
+		if (aiEconomyMgr.metal.income < facDraw + float(have + 1) * NANO_ABSORB)
+			continue;
 		if (want - have > worst) {
 			worst = want - have;
 			at = fp;

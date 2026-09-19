@@ -216,6 +216,7 @@ public:
 	float GetCommDefRad(float baseDist) const { return defence->GetCommRad(baseDist); }
 	unsigned int GetGuardTaskNum() const { return defence->GetGuardTaskNum(); }
 	unsigned int ReleaseHoldPools();
+	unsigned int HoldPools();
 	unsigned int GetGuardsNum() const { return defence->GetGuardsNum(); }
 	int GetGuardFrame() const { return defence->GetGuardFrame(); }
 

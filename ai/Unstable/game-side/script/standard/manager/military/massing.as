@@ -42,9 +42,21 @@ float FreshMassingThreat()
 	     + aiEnemyMgr.GetEnemyCostFresh(RT::SUPER);
 }
 
+// Sticky: once they have fielded anything, ground past our rim is exposed for
+// the rest of the game (ComFar). Before that there is nothing to be exposed to.
+bool gFoeArmySeen = false;
+bool FoeArmySeen()
+{
+	if (!gFoeArmySeen && (EnemyArmyCost() > 0.f))
+		gFoeArmySeen = true;
+	return gFoeArmySeen;
+}
+
 float EnemyMassingThreat()
 {
 	const float fresh = FreshMassingThreat();
+	if (fresh > 0.f)
+		gFoeArmySeen = true;
 	if (fresh > gSeenPeak) {
 		gSeenPeak = fresh;
 	} else {
@@ -349,6 +361,7 @@ float MassFloor()
 // pool stock's exit the moment no reason remains.
 array<int> gHoldWhyN(4, 0);
 int gHoldReleased = 0;
+int gHoldPooled = 0;    // standing attack pools turned back into holds
 int gHoldFull = 0;      // elections that went to attack because enough already held
 int gHoldWhyLast = -1;
 int gNextHoldRelLog = 0;
@@ -439,13 +452,18 @@ void ReleaseHold()
 		gHoldId.resize(0);
 		gHoldCost.resize(0);
 		gHoldHeldM = 0.f;
+	} else if (HoldHome()) {
+		// The election only decides the task a NEW unit joins; a pool already
+		// standing at home promotes on its own bar and marches out as the
+		// raid arrives.
+		gHoldPooled += int(aiMilitaryMgr.HoldPools());
 	}
 	if (ai.frame >= gNextHoldRelLog) {
 		gNextHoldRelLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: hold t=" + ai.teamId
 			+ " attack=" + gHoldWhyN[0] + " contested=" + gHoldWhyN[1]
 			+ " raided=" + gHoldWhyN[2] + " stance=" + gHoldWhyN[3]
-			+ " released=" + gHoldReleased + " full=" + gHoldFull
+			+ " released=" + gHoldReleased + " pooled=" + gHoldPooled + " full=" + gHoldFull
 			+ " heldM=" + int(gHoldHeldM) + " needM=" + int(HoldNeedM())
 			+ " | homeInfl=" + formatFloat(Builder::gHomeSet ? ai.GetEnemyInflAt(Builder::gHomePos) : 0.f, "", 0, 2)
 			+ " foeDist=" + int(Builder::gHomeSet ? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : -1.f));

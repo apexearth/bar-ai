@@ -1516,6 +1516,22 @@ unsigned int CMilitaryManager::ReleaseHoldPools()
 	return n;
 }
 
+// The inverse: while the script says home cannot answer what is standing on it,
+// a pool that would leave on its next promotion tick stays a defence instead.
+unsigned int CMilitaryManager::HoldPools()
+{
+	unsigned int n = 0;
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
+		CDefendTask* dt = static_cast<CDefendTask*>(task);
+		if (dt->GetPromote() != IFighterTask::FightType::ATTACK) {
+			continue;
+		}
+		dt->SetPromote(IFighterTask::FightType::MELEE);
+		++n;
+	}
+	return n;
+}
+
 void CMilitaryManager::UpdateDefenceTasks()
 {
 	/*

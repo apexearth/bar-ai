@@ -93,6 +93,10 @@ public:
 
 	void Welcome() const;
 
+	// The mean centre of every start box that is not our ally team's;
+	// off-map when the script carries no boxes.
+	springai::AIFloat3 GetEnemyBoxCentre() const;
+
 private:
 	void FindStart();
 	void CalcStartPos();

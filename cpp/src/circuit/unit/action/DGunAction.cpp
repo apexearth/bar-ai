@@ -103,7 +103,9 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	// One sweep per update, positions cached: the friendly set does not vary
 	// with which enemy is being scored, and a callback per candidate is both
 	// the buffer hazard above and needless cost.
-	std::vector<float> ffX, ffZ;
+	// A building is its footprint, not its centre: the disc is far narrower
+	// than a lab, and the beam killed one it missed by that test.
+	std::vector<float> ffX, ffZ, ffR;
 	if (ffOn) {
 		const float qR = range * closeMult + wRange + wAoe;
 		const std::vector<int> mine = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, qR);
@@ -120,22 +122,24 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			const AIFloat3& fp = f->GetPos(frame);
 			ffX.push_back(fp.x);
 			ffZ.push_back(fp.z);
+			CCircuitDef* fdef = f->GetCircuitDef();
+			ffR.push_back((fdef != nullptr) ? fdef->GetRadius() : 0.f);
 		}
 	}
 	// True when firing from `fx,fz` along the unit 2D heading `dx,dz` would put
 	// one of ours inside the beam's disc anywhere along its travel.
 	auto beamHitsOwn = [&](float fx, float fz, float dx, float dz, float len) {
-		const float aoe2 = wAoe * wAoe;
 		for (size_t i = 0; i < ffX.size(); ++i) {
 			const float rx = ffX[i] - fx;
 			const float rz = ffZ[i] - fz;
 			const float t = rx * dx + rz * dz;
-			if ((t < 0.f) || (t > len)) {
+			const float reach = wAoe + ffR[i];
+			if ((t < -reach) || (t > len + reach)) {
 				continue;   // beside the muzzle or past the end of travel
 			}
 			const float px = rx - dx * t;
 			const float pz = rz - dz * t;
-			if (px * px + pz * pz <= aoe2) {
+			if (px * px + pz * pz <= reach * reach) {
 				return true;
 			}
 		}
@@ -194,6 +198,12 @@ void CDGunAction::Update(CCircuitAI* circuit)
 
 		const bool inRange = pos.SqDistance2D(ePos) <= sqRange;
 		if (!inRange && (edef->GetCostM() < worthBar)) {
+			++nFar;
+			continue;
+		}
+		// No walk-in after what outruns him: that is the scout chase, with a
+		// mex claim queued behind it.
+		if (!inRange && (edef->GetSpeed() > cdef->GetSpeed())) {
 			++nFar;
 			continue;
 		}

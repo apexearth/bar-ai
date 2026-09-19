@@ -767,6 +767,11 @@ AIFloat3 FoeAnchor()
 		if (OnMap(s))
 			return s;
 	}
+	// Their start boxes are where they are until a structure says otherwise;
+	// the point mirror pointed at the wrong corner on diagonal-start maps.
+	const AIFloat3 box = aiSetupMgr.GetEnemyBoxCentre();
+	if (OnMap(box))
+		return box;
 	if (Builder::gHomeSet) {
 		return AIFloat3(float(AiTerrainWidth()) - Builder::gHomePos.x, 0.f,
 				float(AiTerrainHeight()) - Builder::gHomePos.z);

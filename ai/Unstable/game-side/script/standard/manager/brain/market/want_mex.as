@@ -372,7 +372,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 // we are not making enough mexes. If we aren't capturing half the map worth of
 // mexes in a 1v1 then we're losing the game." Each refusal is counted at its
 // own gate so the answer is read, not guessed.
-int gMexNoOpen = 0, gMexDeathWalk = 0, gMexEcoFar = 0;
+int gMexNoOpen = 0, gMexDeathWalk = 0, gMexEcoFar = 0, gMexComFar = 0;
 // Last single sweep (see PickSpot): total spots, on our ledger, at a trip
 // risk of half or worse, surviving candidates, and the home->FoeAnchor span.
 int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0, gSwHot = 0;
@@ -405,14 +405,14 @@ void MexDiag()
 		+ " depthMax=" + formatFloat(gMax, "", 0, 2)
 		+ " | noOpen=" + gMexNoOpen + " claimed=" + gMexClaimed
 		+ " deathWalk=" + gMexDeathWalk
-		+ " ecoFar=" + gMexEcoFar + " ecoQuiet=" + gMexEcoQuiet
+		+ " ecoFar=" + gMexEcoFar + " comFar=" + gMexComFar + " ecoQuiet=" + gMexEcoQuiet
 		+ " deep=" + gMexDeep
 		+ " priced=" + gMexPriced
 		+ " riskAvg=" + formatFloat((gMexPriced > 0) ? (gMexRiskSum / float(gMexPriced)) : 0.f, "", 0, 2)
 		+ " share=" + formatFloat(TripShare(), "", 0, 2)
 		+ " | sweep " + gSwPast + "risky+" + gSwHot + "hot+" + gSwLedger + "own/" + gSwTotal
 		+ " cand=" + gSwCand + " span=" + int(gSwSpan));
-	gMexNoOpen = 0; gMexDeathWalk = 0; gMexEcoFar = 0;
+	gMexNoOpen = 0; gMexDeathWalk = 0; gMexEcoFar = 0; gMexComFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
 	gMexDeep = 0; gMexRiskSum = 0.f;
 }
@@ -459,6 +459,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const float fez = foeAt.z - Builder::gHomePos.z;
 	const float share = TripShare();
 	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
+	const bool comm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const float incMul = IncomeMult();
 	// One sweep's composition, kept for mexdiag.
@@ -504,6 +505,13 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// a veto, and ranks the spot below a safer one of equal yield.
 		if (ecoOn && (sp.distance2D(Builder::gHomePos) > ecoLeash)) {
 			++gMexEcoFar;
+			continue;
+		}
+		// The commander's leash likewise: a spot the election would refuse
+		// (ComFar) must not be his one mex want, or the refusal's fallback
+		// buys energy while the next spot in stands unclaimed.
+		if (comm && ComFar(sp)) {
+			++gMexComFar;
 			continue;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
@@ -634,11 +642,16 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
 		// A spot with a recent loss near it is a rebuild: say what it is
 		// priced at and why (sampled 10 s).
-		if ((LossRateAt(pos) > 0.f) && (ai.frame >= gNextRebuildLog)) {
+		// ...and any spot, sampled the same way, so a collapse in the value
+		// names its factor.
+		if (ai.frame >= gNextRebuildLog) {
 			gNextRebuildLog = ai.frame + 10 * SECOND;
-			AiLog(Factory::T() + "apex: rebuild " + unit.circuitDef.GetName() + " #" + unit.id
+			AiLog(Factory::T() + ((LossRateAt(pos) > 0.f) ? "apex: rebuild " : "apex: mexprice ")
+				+ unit.circuitDef.GetName() + " #" + unit.id
 				+ " spot=" + int(pos.x) + "," + int(pos.z)
 				+ " inc=" + formatFloat(spotIncome * Catalog::gExtractsM[d], "", 0, 2)
+				+ " grow=" + formatFloat(1.f + mxGrowK * rawAddM / ((mxPower > rawAddM) ? mxPower : rawAddM), "", 0, 2)
+				+ " real=" + formatFloat(MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP)), "", 0, 2)
 				+ " surv=" + formatFloat(surv, "", 0, 2)
 				+ " cover=" + formatFloat(CoverAt(pos), "", 0, 0)
 				+ " threat=" + formatFloat(ThreatAt(pos), "", 0, 0)

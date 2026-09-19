@@ -66,6 +66,26 @@ CSetupManager::CSetupManager(CCircuitAI* circuit, CSetupData* setupData)
 	circuit->GetScheduler()->RunJobEvery(findStart, 1, 0, "findStart");
 }
 
+AIFloat3 CSetupManager::GetEnemyBoxCentre() const
+{
+	const int myAlly = setupData->FindAllyTeamOf(circuit->GetTeamId());
+	AIFloat3 sum(ZeroVector);
+	int n = 0;
+	for (const auto& kv : setupData->GetStartBoxes()) {
+		if (kv.first == myAlly) {
+			continue;
+		}
+		const utils::SBox& b = kv.second.GetBox();
+		sum.x += 0.5f * (b.left + b.right);
+		sum.z += 0.5f * (b.top + b.bottom);
+		++n;
+	}
+	if (n == 0) {
+		return AIFloat3(-1.f, 0.f, -1.f);
+	}
+	return AIFloat3(sum.x / n, 0.f, sum.z / n);
+}
+
 CSetupManager::~CSetupManager()
 {
 	delete script;

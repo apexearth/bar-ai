@@ -107,6 +107,17 @@ bool ComFar(const AIFloat3& in p)
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	if (p.distance2D(Builder::gHomePos) > leash)
 		return true;
+	// UNTIL THEY HAVE FIELDED A UNIT THE RIM IS NOT A BOUNDARY: at minute one
+	// it is the lab and two solars, and every home mex reads "past it". The
+	// documented leash holds instead: half of it forward along the base axis.
+	if (!Military::FoeArmySeen()) {
+		if (!Base::Ready())
+			return false;
+		AIFloat3 f = Base::gFwd;
+		if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
+		const AIFloat3 d = p - Builder::gHomePos;
+		return (d.x * f.x + d.z * f.z) > 0.5f * leash;
+	}
 	// The commander's home is the base proper, not its outermost mex: the
 	// uncapped rim called a flank claim home and he died there.
 	if (!gPfRimOk)

@@ -1020,6 +1020,11 @@ static AIFloat3 CSetupManager_GetLanePos(CSetupManager* mgr)
 	return mgr->GetLanePos();
 }
 
+static AIFloat3 CSetupManager_GetEnemyBoxCentre(CSetupManager* mgr)
+{
+	return mgr->GetEnemyBoxCentre();
+}
+
 // Where the army HOLDS. CMilitaryManager::FillFrontPos picks the metal cluster
 // nearest lanePos and hands back that cluster's defence points, so this is the
 // one lever that decides whether the army stands at the front of the base or in
@@ -1939,6 +1944,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetBasePos() const", asFUNCTION(CSetupManager_GetBasePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "void SetLanePos(const AIFloat3& in)", asFUNCTION(CSetupManager_SetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetLanePos() const", asFUNCTION(CSetupManager_GetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetEnemyBoxCentre() const", asFUNCTION(CSetupManager_GetEnemyBoxCentre), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 }
 
 CInitScript::~CInitScript()
