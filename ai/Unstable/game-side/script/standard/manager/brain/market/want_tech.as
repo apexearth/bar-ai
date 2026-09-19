@@ -157,9 +157,15 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		float surv = -1.f;
 		const float walkSecU = (speed > 1.f)
 				? (here.distance2D(gLPos[li]) / speed) : 60.f;
+		// A spot under water takes a floating or submerged extractor and a
+		// dry one a land extractor: an air con offered a land moho for a
+		// naval mex, reclaimed the mex and could not build (his watch).
+		const bool wet = ai.GetElevationAt(gLPos[li]) < 0.f;
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
 			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
+				continue;
+			if (wet != (Catalog::gFloater[d] || Catalog::gSub[d]))
 				continue;
 			float delta = gLIncome[li] * incMulU
 					* (Catalog::gExtractsM[d] - gLExtract[li]);

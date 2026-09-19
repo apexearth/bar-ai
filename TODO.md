@@ -337,3 +337,24 @@ Unbuilt: a re-anchoring election -- when the home ground reads lost
 (EcoDangerNear sustained, the plants dead) and quieter ground of ours
 exists (a held mex cluster, an ally's rear), the anchor, farm and leash
 move there and the plant want rebuilds at the new anchor.
+
+## Finish a won game: nukes, flanks, air, scouts, LRPC, Ragnarok
+
+apexearth 2026-09-18, watching a game at three times the enemy's economy
+that took "forever" to win: "we don't use our nukes very smart. We're not
+attacking the enemy from the sides pretty much ever. We don't use air
+against the enemy... We don't even use scouts, so we don't really know
+where we should be nuking... if we just built nukes and consistently nuked
+the enemy, that would probably be the easiest way to win, but I would like
+to see us be able to do a variety of strategies. Like if we made a whole
+lot of marauders, if you attack the enemy with like 50 marauders, all of a
+sudden from the side, you'll really wreck the enemy good. We also lack LRPC
+cannons, and I never see us make anything like a Ragnarok."
+Six plays, none built as a play today: (1) nuke targeting from scouting
+(the silo fires at what radar and scouts have seen -- ai-nukes); (2) a
+flank: the army's approach vector off the direct line; (3) air used
+offensively (the bomber wing exists -- ISSUES BOMBERS -- and never flies
+in his games); (4) scouts kept alive as eyes (the Tick is buyable since
+479ab851); (5) a massed single-type strike (50 Marauders from a side);
+(6) LRPC (HighGroundNear exists, unmeasured) and the Ragnarok never
+priced in -- is it the super-weapon budget or the track record?

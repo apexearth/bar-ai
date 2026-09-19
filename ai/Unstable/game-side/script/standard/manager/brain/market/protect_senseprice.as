@@ -219,9 +219,23 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// On the perimeter, not the anchor: AA set no position at all, so
 		// every battery landed on the start position.
 		{
+			// ...A WAYS OUTSIDE (apexearth 2026-09-18: "enemy bombers have to
+			// be killed before they reach inside our base"): one of its own
+			// ranges beyond the rim gap on that bearing.
 			AIFloat3 aat;
-			if (RimGapSite(PROT_AA, aat))
+			if (RimGapSite(PROT_AA, aat)) {
 				at = aat;
+				const float rng = Catalog::gMaxRange[d];
+				if ((rng > 1.f) && gPfRimOk) {
+					AIFloat3 outw = aat - gPfMid;
+					if (outw.SqLength2D() > 1.f) {
+						outw.SafeNormalize2D();
+						const AIFloat3 far = aat + outw * (rng * 0.8f);
+						if (OnMap(far))
+							at = far;
+					}
+				}
+			}
 			// ...and the held line before the rim, once air has been seen
 			// (the gate below), while nothing that shoots up covers it.
 			if (lineUp && (Catalog::gMaxRange[d] > 1.f)
@@ -267,7 +281,10 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		if (aaFrac < 0.01f)
 			aaFrac = 0.01f;
 		const float aaTrade = 1.f / aaFrac;
-		float aaCover = MobileAACoverM() * aaTrade;
+		// STATIC AA ONLY covers the base: the mobile AA is where the army is
+		// (his watch: 8 AA posts against 44 heavy guns, the fighters counted
+		// as the base's cover).
+		float aaCover = 0.f;
 		for (uint ai2 = 0; ai2 < gProtDefId[PROT_AA].length(); ++ai2)
 			aaCover += Catalog::gCostM[gProtDefId[PROT_AA][ai2]] * aaTrade;
 		const float aaAdds = Catalog::gCostM[d] * aaTrade;
