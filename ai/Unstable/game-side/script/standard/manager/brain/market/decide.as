@@ -1509,7 +1509,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// Only an emergency takes a hand off a job it is on: the stall, the
 	// air and defence panics, the commander's first gun. The floors and
 	// roles wait for a free hand.
-	const bool emergency = (why == "estall") || (why == "estall-hands") || (why == "aa")
+	// The stall's FIRST answer (a generator ordered) is worth a hand off
+	// its walk; the hands that follow to lathe it are not -- once make is
+	// ordered every hand in the base was pulled off its mex walk to assist
+	// two solars (42 stall solars in eight minutes, seven mexes built).
+	const bool emergency = (why == "estall") || (why == "aa")
 			|| (why == "defpanic") || (why == "penned") || (why == "cover");
 	if (!emergency && (top !is null)) {
 		const int uidk = int(unit.id);
