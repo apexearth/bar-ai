@@ -754,8 +754,17 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// a flat metal-per-cell price (apex_space_m) until base-crowding senses
 	// price it dynamically. This is what makes dense energy (advsol) beat a
 	// field of solars at equal payback.
+	// A GENERATOR REPAYS ITS OWN ENERGY BILL, so that bill is priced at the
+	// conversion floor, never at the stall premium: priced at the premium an
+	// economy short of energy could never afford the thing that makes it
+	// and bought T1 solars instead all game (20 solars and 4 advanced ones
+	// against their 9 and 13 at minute 8, four 2v2s). The build itself is
+	// still stretched by the stall above; that part is physical.
+	const float ePriceE = (Catalog::gMakeE[defId] > 0.f)
+			? EPriceFloor()
+			: EPriceCostAt(buildSec, Catalog::gCostE[defId]);
 	w.mCost = Catalog::gCostM[defId] * MCostScale()
-			+ Catalog::gCostE[defId] * EPriceCostAt(buildSec, Catalog::gCostE[defId])
+			+ Catalog::gCostE[defId] * ePriceE
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;
 	const float wageNow = Wage();
