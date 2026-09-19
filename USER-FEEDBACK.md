@@ -26,6 +26,25 @@ lines of quotes.
   justifies another. Fixes 09-13 did not close it: 09-16 Isthmus 8v8, ~10
   advanced air labs idle while half our metal went unspent. Third report
   (TODO "Never an idle factory"; ISSUES GANTRIES).
+- No pile of basic towers in the base: 25 light towers inside 250 elmos of one
+  base (09-19, Red Comet 2v2) was "embarrassingly stupid" and the money of a
+  moho spent on T1 towers while a moho crawls. Fixed 09-19 in three parts (the
+  T1 fill bounded at one gun; shortfall slots take the strongest affordable
+  gun and only for ground still short; no basic tower once an advanced con
+  exists; a gun no stronger than one that died there is not rebuilt there):
+  towers per 2v2 game 25-65 -> 11-24. Unverified by him.
+- Constructors do not walk out alone onto ground where the last one died, and
+  lost mexes are not passively conceded (09-19). The first half is built: a
+  con's death marks its ground for the claims, the wrecks, the rez chain and
+  a walking hand's own job. The second half -- the army retaking the mexes --
+  is doctrine and open.
+- The commander does not chase light scouts he cannot catch; he puts a turret
+  where he stands (09-19). Built in the DLL (FindBCombatTarget) and the cover
+  push; needs his DLL rebuild to reach his slot.
+- The front players of an 8v8 scale their economy past one fusion (09-19).
+  Found: the seat's energy overflow fills their bank so no generator is
+  bought, their T1 converters eat it, their advanced-con floor read 1 with
+  turrets standing (fixed), and their mex claims walk into the enemy. Open.
 - A T2 lab is built by many hands, not one; we reach T2 behind our enemies.
   09-19 (Isthmus 1v1, T2 at 15.7 min at 120 income against their 6.5; his
   fifth report): the market bought it at 7.6 -- the hand walked off it, the
