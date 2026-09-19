@@ -507,9 +507,12 @@ AIFloat3 LatticeFit(CCircuitDef@ def, const AIFloat3& in raw)
 	const float pitch = Lattice::FootPitch(int(def.id));
 	AIFloat3 cell = ai.SnapToLattice(def, raw);
 	for (int tries = 0; tries < 3; ++tries) {
-		const AIFloat3 s = ai.FindBuildSiteNear(def, cell, pitch);
-		if (OnMap(s) && (s.distance2D(cell) < pitch * 0.5f))
-			return cell;
+		// THE COMMIT'S OWN QUESTION (CanPlaceCell): the cell exactly, the
+		// engine's footprint test at the task's facing, every reservation.
+		// Any weaker probe passed cells the commit refused (S36).
+		AIFloat3 got;
+		if (ai.CanPlaceCell(def, cell, got))
+			return got;
 		const AIFloat3 next = ai.FindBuildSiteNear(def, cell, pitch * 3.f);
 		if (!OnMap(next))
 			return next;
@@ -554,14 +557,37 @@ string StandingNear(const AIFloat3& in at, float r)
 	return txt + ")";
 }
 
+// Live requests with a standing nanoframe within r of a point.
+int RisingNear(const AIFloat3& in at, float r)
+{
+	int n = 0;
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.target is null))
+			continue;
+		const AIFloat3 lp = lt.GetBuildPos();
+		if (OnMap(lp) && (lp.distance2D(at) < r))
+			++n;
+	}
+	return n;
+}
+
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
 		return interior;
 	const int did = int(def.id);
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
-		if ((gLSDefs[i] == did) && (ai.frame - gLSAt[i] < 10 * SECOND))
-			return gLSPos[i];
+		if ((gLSDefs[i] == did) && (ai.frame - gLSAt[i] < 10 * SECOND)) {
+			// A cached cell is re-asked exactly: in a busy blob a turret lands
+			// on it within the cache's life (measured: six of ours on the
+			// asked cell at the commit).
+			AIFloat3 chk;
+			if (ai.CanPlaceCell(def, gLSPos[i], chk))
+				return gLSPos[i];
+			gLSAt[i] = -999999;
+			break;
+		}
 	}
 	// One probe per BLOCK: the richest squares all sit inside one block,
 	// and a big footprint fits nowhere near a block's middle.
@@ -618,7 +644,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		if (OnMap(s0) && !NearBlockedFor(s0, did) && ReachableBy(mover, s0)
 			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
-			bestBP = RingBPAt(s0);
+			bestBP = RingBPAt(s0) / float(1 + RisingNear(s0, NanoRange()));
 			interiorBP = bestBP;
 		}
 	}
@@ -660,7 +686,9 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			++doorRefused;
 			continue;
 		}
-		const float bp = RingBPAt(s);
+		// The ring's lathe over the frames already rising in it: several
+		// groups, one build beside each.
+		const float bp = RingBPAt(s) / float(1 + RisingNear(s, r));
 		if (fromBlock)
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
 				+ int(s.x) + "," + int(s.z) + "/" + int(bp);
@@ -717,11 +745,25 @@ AIFloat3 GroupAnchor(int defId, CCircuitUnit@ unit = null)
 	// A converter yard starts at the densest turret ring, not the farm
 	// centre: raised where no turret reaches, each one was one con's work
 	// while forty hands stood where the turrets were (apexearth 2026-09-14).
+	// ...at the core's REAR EDGE, not its heart: a converter finishes in
+	// seconds under any ring, a gantry or a reactor takes minutes, so the
+	// ground the thick ring reaches is theirs.
 	AIFloat3 origin = gFarmPos;
 	if (Catalog::gConvCapacity[defId] > 0.f) {
 		const AIFloat3 heart = LatheSiteFor(unit);
-		if (OnMap(heart))
+		if (OnMap(heart)) {
 			origin = heart;
+			if (Base::Ready()) {
+				AIFloat3 exitDir = Base::gFwd;
+				if (Base::AxisIsRearward()) {
+					exitDir.x = -exitDir.x;
+					exitDir.z = -exitDir.z;
+				}
+				const AIFloat3 rear = heart - exitDir * NanoRange();
+				if (OnMap(rear))
+					origin = rear;
+			}
+		}
 	}
 	const float pitch = Lattice::StrideOf(defId);
 	const float side = float(Lattice::ClusterSide()) * pitch;
@@ -835,15 +877,18 @@ AIFloat3 FarmSlot(int defId, CCircuitUnit@ unit = null)
 	// square. The lattice scan that stood here is in git (4fca2ee0's tree).
 	if (BigEcoDef(defId) && Base::gAxisSet) {
 		AIFloat3 back = gFarmPos - Base::gFwd * 400.f;
-		// A BIG BUILD GRAVITATES TO THE LATHE. Where the densest ring of
-		// turrets reaches more build power than the rear point does, the ask
-		// goes there and the lattice rings find the cell beside it
-		// (apexearth 2026-09-14: "prefer to build our really large
-		// buildings as close as we can to our nano turrets. This is often
-		// the difference between whether or not we make it at double speed").
-		const AIFloat3 heart = LatheSiteFor(unit);
-		if (OnMap(heart) && (RingBPAt(heart) > RingBPAt(back)))
-			back = heart;
+		// A BIG BUILD GRAVITATES TO THE LATHE (apexearth 2026-09-14: "prefer
+		// to build our really large buildings as close as we can to our nano
+		// turrets. This is often the difference between whether or not we
+		// make it at double speed") -- scored where its footprint FITS, as
+		// the gantry is: asked at a ring's heart it fit nowhere there and
+		// the engine's search carried it 1,200 elmo to bare ground.
+		CCircuitDef@ mover = (unit !is null) ? Catalog::Def(int(unit.circuitDef.id)) : null;
+		if (mover !is null) {
+			const AIFloat3 site = LatheSite(def, mover, OnMap(back) ? back : gFarmPos);
+			if (OnMap(site))
+				return site;
+		}
 		if (OnMap(back))
 			return back;
 	}

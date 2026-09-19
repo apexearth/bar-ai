@@ -71,7 +71,14 @@ with none standing).
   our reclaim exec then a rebuild), `plant-count` (any plant def ×3+),
   `nanos-standing`, `nano-latency` (plant→first nano), `t1-eco-with-afus`,
   `sense-churn` (executions per radar standing), `defence-tier` (T1-tower
-  share once advanced cons exist).
+  share once advanced cons exist), and per team since 09-18:
+  `tN-big-builds-at-the-lathe` (every gantry / advanced plant / reactor,
+  turrets in reach AT PLACEMENT against the richest ring the team had --
+  his 09-14/09-18 "where the nanos are"; the same line is expect.py's
+  `big builds stand at the lathe`) and `tN-converters-off-the-plant-ring`
+  (converters within 350 of a plant). Both read the per-team
+  `AI/Skirmish/*/*/apex-t*.log` files too, which is where a dashboard
+  game's `apex:` lines live (the infolog carries none with 8 players).
 - **GEOMETRY** — `front-band` (band/R ~1.0 = the trim is inert and "front"
   wraps the base), `front-towers` (sites won vs towers standing),
   `grid-tightness` (% of eco structures touching a neighbour).

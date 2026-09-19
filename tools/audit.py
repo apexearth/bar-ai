@@ -20,10 +20,18 @@ FRAMES_PER_MIN = 30 * 60
 
 
 def load(path):
+    """The infolog plus every per-team AI log beside it: with many players the
+    `apex:` lines go only to AI/Skirmish/<name>/<ver>/apex-t<N>.log."""
     p = Path(path)
-    if p.is_dir():
-        p = p / "infolog.txt"
-    return p.read_text(errors="replace")
+    if not p.is_dir():
+        return p.read_text(errors="replace")
+    parts = []
+    info = p / "infolog.txt"
+    if info.exists():
+        parts.append(info.read_text(errors="replace"))
+    for f in sorted(p.glob("AI/Skirmish/*/*/apex-t*.log")):
+        parts.append(f.read_text(errors="replace"))
+    return "\n".join(parts)
 
 
 def minute_of(line):
@@ -1121,6 +1129,59 @@ def _eframe_episodes(text, min_seconds=10.0):
     return len(episodes), peak, worst
 
 
+BIG_LATHE_DEFS = ("shltx", "gant", "alab", "avp", "aap", "afus", "fus", "ckfus")
+
+
+def check_lathe_siting(text, rep):
+    """apexearth 2026-09-14/18: big builds stand where the turrets are. For
+    every lathe-worthy frame a team placed, the turrets in reach of it at
+    that moment against the richest turret spot it had; and converters
+    standing where a plant's ring belongs."""
+    placed = defaultdict(list)   # team -> [(frame, def, x, z)]
+    for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: placed t=(\d+) (\w+) at=(-?\d+),(-?\d+)", text):
+        placed[int(m.group(2))].append((int(m.group(1)), m.group(3), int(m.group(4)), int(m.group(5))))
+    if not placed:
+        return
+    # a line can stand in the infolog and the team's own log both
+    placed = {t: sorted(set(v)) for t, v in placed.items()}
+    REACH = 496.0
+    for team in sorted(placed):
+        rows = placed[team]
+        nanos = [(f, x, z) for f, d, x, z in rows if "nanotc" in d]
+        def reach(px, pz, fr):
+            return sum(1 for f, x, z in nanos if f < fr and (x-px)**2 + (z-pz)**2 < REACH**2)
+        def best(fr):
+            return max((reach(x, z, fr) for f, x, z in nanos if f < fr), default=0)
+        starved, judged = [], 0
+        for f, d, x, z in rows:
+            if not any(d.endswith(k) for k in BIG_LATHE_DEFS):
+                continue
+            b = best(f)
+            if b < 8:
+                continue          # no ring worth the name yet
+            judged += 1
+            have = reach(x, z, f)
+            if have * 2 < b:
+                starved.append(f"{d}@{f/1800:.0f}m {have}/{b}")
+        if judged:
+            rep.add("STRUCTURES", not starved, f"t{team}-big-builds-at-the-lathe",
+                    f"{judged} big frame(s), each within half the best ring's turrets"
+                    if not starved else
+                    f"{len(starved)}/{judged} big frame(s) placed with under half the "
+                    f"turrets of the best ring available: {' '.join(starved[:6])}")
+        # converters inside a plant's ring: the ground its turrets belong on
+        plants = [(f, x, z) for f, d, x, z in rows
+                  if any(d.endswith(k) for k in ("shltx", "gant", "alab", "avp", "aap", "lab", "vp", "hp", "ap"))]
+        convs = [(f, x, z) for f, d, x, z in rows if "mmkr" in d or "makr" in d]
+        crowd = 0
+        for pf, px, pz in plants:
+            crowd += sum(1 for f, x, z in convs if (x-px)**2 + (z-pz)**2 < 350**2)
+        if convs and plants:
+            rep.add("STRUCTURES", crowd < 4, f"t{team}-converters-off-the-plant-ring",
+                    f"{crowd} converter(s) within 350 of a plant"
+                    + ("" if crowd < 4 else " -- the ring's ground went to converters"))
+
+
 def check_placement_sanity(text, rep):
     """The three live-watch symptoms of 2026-08-28, measured directly and
     faction-blind: parallel same-def eco sites (pooling law), a base axis
@@ -1404,7 +1465,7 @@ def check_missteps(text, rep):
 
 
 CHECKS = [check_health, check_ledger, check_commitments, check_priority,
-          check_economy, check_lab_timing, check_placement_sanity,
+          check_economy, check_lab_timing, check_placement_sanity, check_lathe_siting,
           check_military, check_missteps, check_efficiency, check_vs_enemy,
           check_structures, check_geometry, check_perf, check_overflow_spend]
 

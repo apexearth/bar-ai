@@ -291,6 +291,25 @@ IBuilderTask::IBuilderTask(ITaskModule* mgr, Priority priority,
 	CEconomyManager* economyMgr = manager->GetCircuit()->GetEconomyManager();
 	savedIncome.metal = economyMgr->GetAvgMetalIncome();
 	savedIncome.energy = economyMgr->GetAvgEnergyIncome();
+	// A BIG FRAME'S CELL IS RESERVED WHEN ASKED, not when the builder
+	// arrives: the commit came 20-100 s after the script proved the cell
+	// free, and in a busy turret blob other hands had filled it (measured:
+	// four to six of our own buildings on the asked cell, the reactor carried
+	// 480 elmo to bare ground). The blocking map is what every probe reads,
+	// so a reservation here is a cell nothing else takes; Execute drops and
+	// re-probes it, Cancel releases it.
+	if ((buildDef != nullptr) && utils::is_valid(position) && !IsFixedSite(buildType)) {
+		const float slot = std::max(buildDef->GetFootX(), buildDef->GetFootZ()) * SQUARE_SIZE * 2;
+		if (slot >= SQUARE_SIZE * 12) {
+			CCircuitAI* circuit = manager->GetCircuit();
+			AIFloat3 cell;
+			const int f = circuit->GetBaseGridFacing(position);
+			if (circuit->SnapToBaseGrid(position, cell, buildDef, f)) {
+				facing = f;
+				SetBuildPos(cell);
+			}
+		}
+	}
 }
 
 IBuilderTask::IBuilderTask(ITaskModule* mgr, Type type, BuildType buildType)
@@ -652,6 +671,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 		bool slotFree = false;
 		bool searched = false;
 		int budget = LATTICE_PROBES;
+		int ringTaken = 0, ringExit = 0;
 		for (int ring = 0; (ring <= LATTICE_RINGS) && !found && (budget > 0); ++ring) {
 			float bestSq = -1.f;
 			AIFloat3 best;
@@ -675,7 +695,12 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 					if (ring == 0) {
 						slotFree = free;
 					}
-					if (!free || !KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, cell)) {
+					if (!free) {
+						++ringTaken;
+						continue;
+					}
+					if (!KeepsExits(circuit, terrainMgr, unit, buildDef, facing, slot, cell)) {
+						++ringExit;
 						continue;
 					}
 					bestSq = sq;
@@ -687,6 +712,27 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 				searchRadius = SQUARE_SIZE * 2;   // the cell is free: hold the task to it
 				found = true;
 			}
+		}
+		// A big frame that leaves its asked cell says why the cell was refused:
+		// the script verified a footprint there without this predicate.
+		if ((slot >= SQUARE_SIZE * 12) && (!found || (pos.SqDistance2D(snapped) > SQUARE(slot)))) {
+			const bool possible = circuit->GetMap()->IsPossibleToBuildAt(buildDef->GetDef(), snapped, facing);
+			// What stands on the cell: a parked unit is not a taken cell.
+			int nMobile = 0, nStatic = 0;
+			circuit->UpdateFriendlyUnits();
+			auto& onCell = circuit->GetCallback()->GetFriendlyUnitsIn(snapped, slot * 0.5f);
+			for (springai::Unit* u : onCell) {
+				CCircuitDef* cd = circuit->GetCircuitDef(circuit->GetCallback()->Unit_GetDefId(u->GetUnitId()));
+				if (cd == nullptr) continue;
+				if (cd->IsMobile()) ++nMobile; else ++nStatic;
+			}
+			utils::free(onCell);
+			circuit->LOG("apex: cell-refused t=%i %s origin=%.0f,%.0f asked=%.0f,%.0f facing=%i to=%.0f,%.0f possible=%i lane=%i threat=%.1f selfD=%.0f ringTaken=%i ringExit=%i onCell=%im/%is",
+					circuit->GetTeamId(), buildDef->GetDef()->GetName(),
+					origin.x, origin.z, snapped.x, snapped.z, facing, found ? pos.x : -1.f, found ? pos.z : -1.f,
+					possible ? 1 : 0, circuit->IsInBaseLane(snapped) ? 1 : 0,
+					circuit->GetBuilderThreatAt(snapped), self.distance2D(snapped),
+					ringTaken, ringExit, nMobile, nStatic);
 		}
 		if (!found) {
 			// Blocked ground is ground with no free slot on ANY ring: marked

@@ -621,3 +621,21 @@ probe for def X honours only marks for X or for no def
 (`NearBlockedFor`). General rule: a memory of a refusal is only as
 specific as its key; a key of "position" alone says the refusal applies
 to everything that could ever stand there.
+
+## S36 — the script's "this cell fits" and the DLL's commit ask different questions (2026-09-18)
+
+`LatheSite` verified a lattice cell with `FindBuildSiteNear(def, cell,
+pitch)` and accepted any legal square within half a pitch -- for a reactor,
+80 elmo -- then served it from a 10-second cache; the DLL's `Execute` probes
+the cell itself with its own predicate (lanes, threat, reach, its blocking
+map with every live task's RESERVED site) and, refused, walks eight lattice
+rings and a 1,600-elmo search. Every reactor and gantry read `nanos in
+reach 0-14` at placement while the ring the script chose had 40-70
+(`apex: cell-refused ... possible=0 onCell=0m/6s`: six of our own
+buildings on the "free" cell; `possible=1 onCell=0m/0s ringTaken=108`:
+an empty, buildable cell the DLL's map still called taken). Exact-cell
+probes and a re-verified cache close the first; the second needs ONE
+question both sides ask (a binding running the commit's own test). General
+rule: a site proved by one predicate and committed by another is not
+proved; the log line that names the commit's reason (`cell-refused`) is
+the instrument, and it did not exist for a week of placement work.

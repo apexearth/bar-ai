@@ -737,7 +737,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		// cons fill the shortfall with their best gun." The team's gun still
 		// waits for a hand that can build it; this hand answers the unmet
 		// target with the best it has, and stops when the target is met.
-		if ((hGap > 0.f) && (own.def !is null)) {
+		// ...not the commander: he stays home.
+		if ((hGap > 0.f) && (own.def !is null)
+			&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
 			Gate(GATE_DEF_OWN, true);
 			return own;
 		}

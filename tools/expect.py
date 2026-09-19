@@ -37,6 +37,9 @@ def load_game(d):
     if not il.is_file():
         return None
     text = il.read_text(errors="replace")
+    # with many players the `apex:` lines go only to the per-team AI logs
+    for f in sorted(d.glob("AI/Skirmish/*/*/apex-t*.log")):
+        text += "\n" + f.read_text(errors="replace")
     g = {"dir": str(d), "name": d.name, "text": text}
     try:
         r = json.loads((d / "result.json").read_text())["result"]
@@ -689,6 +692,43 @@ def exp_commander_stays_home(games):
     return "OK", f"commander inside his leash in {seen} games"
 
 
+def exp_big_builds_at_lathe(games):
+    """apexearth 2026-09-14/18: gantries, advanced plants and reactors stand
+    where the turrets are. Each such frame, at placement, has at least half
+    the turrets of the richest ring the team had."""
+    REACH2 = 496.0 ** 2
+    BIG = ("shltx", "gant", "alab", "avp", "aap", "afus", "fus", "ckfus")
+    ev = [g for g in games if g["minutes"] >= 20]
+    if len(ev) < 3:
+        return "NEED MORE", f"{len(ev)} games of 20+ min (need 3)"
+    starved = judged = 0
+    worst = []
+    for g in ev:
+        rows = set()
+        for m in re.finditer(r"\[f=(\d+)\][^\n]*apex: placed t=(\d+) (\w+) at=(-?\d+),(-?\d+)", g["text"]):
+            if m.group(2) in g["apex"]:
+                rows.add((int(m.group(1)), m.group(3), int(m.group(4)), int(m.group(5))))
+        nanos = [(f, x, z) for f, d, x, z in rows if "nanotc" in d]
+        for f, d, x, z in sorted(rows):
+            if not any(d.endswith(k) for k in BIG):
+                continue
+            def reach(px, pz):
+                return sum(1 for nf, nx, nz in nanos if nf < f and (nx-px)**2 + (nz-pz)**2 < REACH2)
+            best = max((reach(nx, nz) for nf, nx, nz in nanos if nf < f), default=0)
+            if best < 8:
+                continue
+            judged += 1
+            have = reach(x, z)
+            if have * 2 < best:
+                starved += 1
+                worst.append(f"{g['name']} {d}@{f/1800:.0f}m {have}/{best}")
+    if judged < 6:
+        return "NEED MORE", f"{judged} big frames placed under a ring of 8+ (need 6)"
+    if starved * 3 > judged:
+        return "RED", f"{starved}/{judged} big frames placed with under half the best ring's turrets: " + " ".join(worst[:5])
+    return "OK", f"{judged - starved}/{judged} big frames at the lathe"
+
+
 def exp_no_refused_copies(games):
     """A plant copy the executor refuses is not offered again and again."""
     ev = [g for g in games if g["minutes"] >= 15]
@@ -706,6 +746,7 @@ def exp_no_refused_copies(games):
 EXPECTATIONS = [
     ("first T2 con builds a moho first", exp_first_t2_con_mohos),
     ("no refused plant-copy livelock", exp_no_refused_copies),
+    ("big builds stand at the lathe", exp_big_builds_at_lathe),
     ("commander stays home", exp_commander_stays_home),
     ("home mexes outrank forward ones", exp_home_outranks_front),
     ("home mexes upgrade before the reactor", exp_home_mex_upgrades),

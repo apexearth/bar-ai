@@ -987,6 +987,11 @@ static AIFloat3 CCircuitAI_FindBuildSiteNear(CCircuitAI* circuit, CCircuitDef* d
 	return circuit->FindBuildSiteNear(def, pos, radius);
 }
 
+static bool CCircuitAI_CanPlaceCell(CCircuitAI* circuit, CCircuitDef* def, const AIFloat3& pos, AIFloat3& outCell)
+{
+	return circuit->CanPlaceCell(def, pos, outCell);
+}
+
 static void CCircuitAI_SetBaseGrid(CCircuitAI* circuit, const AIFloat3& anchor,
 		const AIFloat3& fwd, float cell, float lanePitch, float laneHalf, float range)
 {
@@ -1709,6 +1714,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawLine(const AIFloat3& in, const AIFloat3& in)", asMETHOD(CCircuitAI, DrawLine), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void DrawErase(const AIFloat3& in)", asMETHOD(CCircuitAI, DrawErase), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 FindBuildSiteNear(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_FindBuildSiteNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanPlaceCell(CCircuitDef@, const AIFloat3& in, AIFloat3& out)", asFUNCTION(CCircuitAI_CanPlaceCell), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

@@ -2724,6 +2724,26 @@ springai::AIFloat3 CCircuitAI::FindBuildSiteNear(CCircuitDef* def, const springa
 	return tm->FindBuildSite(def, pos, radius, UNIT_NO_FACING);
 }
 
+bool CCircuitAI::CanPlaceCell(CCircuitDef* def, const springai::AIFloat3& pos, springai::AIFloat3& outCell)
+{
+	outCell = -RgtVector;
+	if ((def == nullptr) || !utils::is_valid(pos)) {
+		return false;
+	}
+	const int facing = GetBaseGridFacing(pos);
+	AIFloat3 cell;
+	if (!SnapToBaseGrid(pos, cell, def, facing)) {
+		return false;
+	}
+	outCell = cell;
+	if (!GetMap()->IsPossibleToBuildAt(def->GetDef(), cell, facing)) {
+		return false;
+	}
+	CTerrainManager* tm = GetTerrainManager();
+	const AIFloat3 p = tm->FindBuildSite(def, cell, SQUARE_SIZE * 2, facing);
+	return utils::is_valid(p) && (p.SqDistance2D(cell) <= SQUARE(SQUARE_SIZE));
+}
+
 // --- BWEM chokepoints, exposed to script -------------------------------------
 //
 // Read-only plumbing. The analysis already runs; nothing here changes it.

@@ -125,6 +125,25 @@ T1 discount keys on the asking hand's own options. Defence metal placed in
 minutes 10-20: control 92/1092/3440/184, his game 180; treated (seeds
 41-44) 190/1692/9500/9160. Two of four still thin -- open until his watch.
 
+### BIG FRAMES STILL LEAVE THE TURRET RING AT THE COMMIT (2026-09-18)
+
+His watch (8-player Glacier Pass, eco seat): every AFUS in one rear column
+with 2-14 turrets in reach while base spots had 40-52; "a gantry with all
+advanced converters behind it". `audit.py` now says it per game
+(`tN-big-builds-at-the-lathe`, `tN-converters-off-the-plant-ring`;
+expect.py `big builds stand at the lathe`). Fixed 09-18: reactors sited by
+LatheSite (fit-scored), converter yards at the core's rear edge, LatticeFit
+and the LatheSite cache ask the DLL's own `CanPlaceCell`, a big frame's cell
+is reserved in the blocking map at request time (S36). The audit still reads
+RED on the last four seeds (72-75: 12/17, 4/6, 1/2, 2/7 starved). What the
+`apex: cell-refused` line shows is left: (1) a second AFUS request asks the
+cell where an AFUS frame ALREADY STANDS (asked and refused 0.1 min after the
+first was placed there; `Take`'s cover/`JoinBigEnergy` should have folded
+it); (2) an old task re-executed at 28-31 min for a cell a fusion took at
+18 min (its position is not in any `energy-site` line of the last ten
+minutes), so every adopting hand walks it to bare ground. Read those two
+before touching the siting again; the siting itself now answers the ring.
+
 ### THE FRONT-LINE CONTRACT HAS BEEN FAILING UNREAD (2026-09-18)
 
 `frontline_check.py` and three other `[BARAI_POS]` readers matched

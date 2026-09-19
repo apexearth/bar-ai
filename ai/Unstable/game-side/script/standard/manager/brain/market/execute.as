@@ -890,6 +890,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		w.pos = ClearOfSpots(w.pos, clr);
 		if (OnMap(slot))
 			slot = ClearOfSpots(slot, clr);
+		// The slot handed over, so a frame that stands elsewhere is traced
+		// to the request or to the engine's search, not guessed.
+		if (BigEcoDef(int(w.def.id)))
+			AiLog("apex: energy-site t=" + ai.teamId + " " + w.def.GetName()
+				+ " slot=" + int(slot.x) + "," + int(slot.z)
+				+ " ring=" + int(RingBPAt(slot))
+				+ " farm=" + int(w.pos.x) + "," + int(w.pos.z));
 		IUnitTask@ et = Requests::Take(unit, w.def, Task::BuildType::ENERGY,
 				Task::Priority::NORMAL, OnMap(slot) ? slot : w.pos, cell, 0.f,
 				crtd, par);

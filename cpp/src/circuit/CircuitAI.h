@@ -360,6 +360,10 @@ public:
 	// died having never resolved a build site; this lets the script ask the
 	// engine the same question CBFactoryTask asks, before enqueuing.
 	springai::AIFloat3 FindBuildSiteNear(CCircuitDef* def, const springai::AIFloat3& pos, float radius);
+	// The commit's own question: does the def's lattice cell at pos hold it
+	// right now -- the cell exactly, the engine's footprint test at the
+	// facing the task will use, the blocking map with every reservation.
+	bool CanPlaceCell(CCircuitDef* def, const springai::AIFloat3& pos, springai::AIFloat3& outCell);
 	void SetCommitted(bool v) { isCommitted = v; }
 	bool IsCommitted() const { return isCommitted; }
 	// A large building could not be placed. Reported, not acted on: what to
