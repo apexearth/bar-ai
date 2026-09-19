@@ -1498,8 +1498,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Only an emergency takes a hand off a job it is walking to: the
 	// stall, the air and defence panics, the commander's first gun. The
-	// floors and roles wait for a free hand (his watch: a con on its way to
-	// a mex turned around for a turret floor 61 times in one game).
+	// floors and roles wait for a free hand.
 	const bool emergency = (why == "estall") || (why == "estall-hands") || (why == "aa")
 			|| (why == "defpanic") || (why == "penned") || (why == "cover");
 	if (!emergency && (top !is null)) {
