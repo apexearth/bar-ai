@@ -1119,6 +1119,16 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const int dClass = PlantClass(d);
 		if (waterOnly && (dClass != PC_WATER))
 			continue;
+		// An air line for a player who is neither the air lead nor the eco
+		// seat waits for his mandatory-air income, the same bar the air
+		// mandate keeps: this market bought one at 30 income for half a
+		// team because air cons reach the whole of a cliff map, and the
+		// team fielded air where the enemy walked in with ground.
+		if ((dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
+			&& !Military::EnemyAfloat()
+			&& (aiEconomyMgr.metal.income
+				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
+			continue;
 		// The water mandate is held, ships-only, and never the commander's
 		// errand -- see the naval election above. The backoff kills the
 		// elect-order-abort churn for every def alike.

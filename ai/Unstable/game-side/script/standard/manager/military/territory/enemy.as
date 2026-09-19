@@ -54,8 +54,12 @@ bool EnemyAfloat()
 	if (ai.frame < gNextAfloatCheck)
 		return gAfloat;
 	gNextAfloatCheck = ai.frame + 10 * SECOND;
-	bool now = EnemyCostOf(Unit::Role::SUB.type)
-			>= ai.GetTunable("apex_afloat_sub_cost", TUNE_AFLOAT_SUB_COST);
+	// ...a fleet that outweighs what they field ASHORE: two subs beside a
+	// massive ground army read "afloat" and handed every player on an 8v8
+	// an air plant while the ground army walked in (his watch).
+	const float subs = EnemyCostOf(Unit::Role::SUB.type);
+	bool now = (subs >= ai.GetTunable("apex_afloat_sub_cost", TUNE_AFLOAT_SUB_COST))
+			&& (subs >= EnemyArmyCost());
 	if (!now && (aiTerrainMgr.GetLandPercent()
 			<= ai.GetTunable("apex_afloat_land_pct", TUNE_AFLOAT_LAND_PCT))
 		// A centroid means nothing before an enemy is actually SEEN --

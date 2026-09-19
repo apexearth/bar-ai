@@ -985,6 +985,16 @@ has been seen: with none, a second anti-nuke at 150 income won every super
 election over the gantry (t003 of tournaments/20260919-011515: anti-nukes
 elected 10-26 min, the gantry never; BARb's stood at 14).
 
+### `TUNE_AFLOAT_SUB_COST` = 400.f
+
+AFLOAT_SUB_COST [metal] -- seen enemy submarine value that reads "the enemy
+lives on the water" without the land-fraction test. Since 2026-09-19 the subs
+must also outweigh the seen land army: on his Isthmus 8v8 two subs (440)
+flipped the flag at 10.6 min and all seven non-lead players bought an air
+plant inside 40 s (five a T2 air plant by 20 min) while the enemy's ground
+army walked in -- the flag is what hands EVERY player the air mandate at 25
+income. A mostly-surface navy still reads afloat through the centroid clause.
+
 ### `TUNE_SUPER_SHARE` = 0.25f
 
 SUPER_SHARE: the slice of total economic power the strategic market may claim

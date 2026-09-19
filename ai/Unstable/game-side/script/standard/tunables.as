@@ -1542,7 +1542,8 @@ const float TUNE_AFLOAT_NEAR = 350.f;
 const float TUNE_AFLOAT_STREAK = 3.f;
 
 // [metal] -- Seen enemy submarine value that reads as the enemy afloat
-//   immediately, whatever the land fraction.
+//   immediately, whatever the land fraction -- when it also outweighs the
+//   seen land army.
 const float TUNE_AFLOAT_SUB_COST = 400.f;
 
 // [seconds] -- Only ally tower losses fresher than this summon defence aid.
