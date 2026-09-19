@@ -103,6 +103,26 @@ void CacheSpots()
 	for (uint i = 0; i < gAllSpots.length(); ++i)
 		gSpotGrid.Add(gAllSpots[i].x, gAllSpots[i].z);
 }
+// A mex spot within r that is ours or still free: ground worth standing on.
+// A spot the enemy has built on reads their cost at the point and is a raid
+// target, not held ground.
+bool HeldOrOpenSpotNear(const AIFloat3& in p, float r)
+{
+	CacheSpots();
+	gSpotGrid.Query(p.x, p.z, r);
+	for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+		const int si = gSpotGrid.hit[q];
+		const AIFloat3 sp = gAllSpots[uint(si)];
+		if (p.distance2D(sp) >= r)
+			continue;
+		if (LedgerFind(si) >= 0)
+			return true;
+		if (ai.GetEnemyCostAt(sp, 48.f) <= 0.f)
+			return true;
+	}
+	return false;
+}
+
 bool NearSpotR(const AIFloat3& in p, float r)
 {
 	CacheSpots();

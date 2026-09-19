@@ -995,6 +995,25 @@ plant inside 40 s (five a T2 air plant by 20 min) while the enemy's ground
 army walked in -- the flag is what hands EVERY player the air mandate at 25
 income. A mostly-surface navy still reads afloat through the centroid clause.
 
+### `TUNE_HOLD_MEX_GROUND` = 0.f
+
+HOLD_MEX_GROUND [flag] -- a unit within its own weapon range of a mex spot we
+hold or could still claim does not answer the `infl` (enemy influence on this
+ground) or `pack` (an incoming group outweighs us here) withdrawals while the
+local odds are not against it. apexearth 2026-09-19, watching an Isthmus 8v8:
+the enemy came for the middle mexes, we contested, "we decided to retreat and
+then they ended up keeping those mexes and using that metal advantage to win".
+story.py on the 2v2s that day: their front at 0.50 from minute 4, ours at
+0.22-0.27 withdrawing 10-17 times a bucket (`infl` 25, `pack` 26, `recall-home`
+34, `trade` 10 in twelve minutes), 12 mexes to our 6 by minute 6, income 2x
+by minute 10. Outgunned, losing the trade, the leash and a base under attack
+still pull back. Measured the same day, 2v2 x8 on the same maps with it on:
+0-5 with 3 draws against 0-3 with 1 without it; the rule held 11-36 units a
+game and moved nothing, because at minutes 2-4 their army is 2.5-3x ours (our
+labs' first four minutes: 12 pawns and 15 cons/scouts/rez bots; theirs 21
+combat units) so the odds test refuses and they reach the middle unopposed.
+Off by default until the opening is fixed; the arm stays for the dashboard.
+
 ### `TUNE_SUPER_SHARE` = 0.25f
 
 SUPER_SHARE: the slice of total economic power the strategic market may claim

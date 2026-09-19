@@ -35,6 +35,8 @@ int gNextWithdraw = 0;
 int gNextTaskAbort = 0;
 int gWithdrawn = 0;
 int gHeldCommitted = 0;
+int gHeldGround = 0;
+int gNextHeldGroundLog = 0;
 int gNextHoldLog = 0;
 int gNextWithdrawLog = 0;
 int gNextCensusLog = 0;
@@ -492,6 +494,28 @@ void UpdateWithdraw()
 		if (!leash && !recallHome && !outgunned && !losingFight
 			&& !consolidate && !LosingHere(p))
 			continue;
+		// THE MEXES UNDER OUR FEET ARE WORTH THE FIGHT (apexearth 2026-09-19,
+		// watching: the enemy took the middle mexes, we were contesting them,
+		// "we decided to retreat and then they ended up keeping those mexes
+		// and using that metal advantage to win"). Influence and an incoming
+		// group are the enemy ARRIVING on contested ground; at odds near
+		// parity a unit within its own reach of a spot we hold or could
+		// claim stands, so the cons can take it. Being outgunned, losing
+		// the trade, the leash and a base under attack still pull it back.
+		if (!leash && !recallHome && !outgunned && !losingFight
+			&& (ai.GetTunable("apex_hold_mex_ground", TUNE_HOLD_MEX_GROUND) > 0.f)
+			&& (u.circuitDef !is null)
+			&& Market::HeldOrOpenSpotNear(p, Catalog::gMaxRange[int(u.circuitDef.id)] + 64.f))
+		{
+			++gHeldGround;
+			if (ai.frame >= gNextHeldGroundLog) {
+				gNextHeldGroundLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: hold-ground "
+					+ u.circuitDef.GetName() + " at=" + int(p.x) + "," + int(p.z)
+					+ (consolidate ? " pack" : " infl") + " -- " + gHeldGround + " held");
+			}
+			continue;
+		}
 		// COMMIT COHERENCE. A unit whose ground the enemy's guns already
 		// cover does not get a solo pull-out: the order is a rout, not a
 		// retreat (wdeaths: 43% die in place ping-ponging the re-asserting

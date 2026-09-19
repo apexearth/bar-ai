@@ -400,6 +400,12 @@ const float TUNE_WITHDRAW_NEAR = 300.f;
 //   this.
 const float TUNE_WITHDRAW_ODDS = 1.5f;
 
+// [flag] -- A unit standing within its own range of a mex spot we hold or could
+//   claim ignores the influence and incoming-group withdrawals while the odds
+//   are not against it; the outgunned, losing-trade, leash and base-attacked
+//   pull-backs still apply. 0 restores the withdrawals. See docs/27.
+const float TUNE_HOLD_MEX_GROUND = 0.f;
+
 // [seconds] -- A withdrawing unit's pull-back order is re-issued at most once
 //   per this interval.
 const float TUNE_WITHDRAW_REISSUE = 6.f;

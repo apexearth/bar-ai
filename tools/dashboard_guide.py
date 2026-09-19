@@ -515,6 +515,11 @@ GROUPS = [
                   "our front while a hold is on"),
                  ("TUNE_DEFEND_LEASH", "lets a defending unit chase further "
                   "forward before it is recalled"),
+                 ("TUNE_HOLD_MEX_GROUND", "a unit within its own range of a mex "
+                  "spot we hold or could claim stands through the influence and "
+                  "incoming-group withdrawals while the odds are not against it "
+                  "— the contested middle mexes are held, not handed over. OFF "
+                  "restores the withdrawals"),
                  ("TUNE_HOLD_COMMITTED", "units already under enemy fire are "
                   "never given solo pull-out orders — the force stands or was "
                   "never engaged. OFF restores per-unit withdrawal everywhere, "

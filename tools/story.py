@@ -7,7 +7,9 @@ things started to turn'."
 
     python tools/story.py <match-dir> [--bucket 60] [--from 0] [--to 999]
 
-One line per bucket for each side (allies pooled): income, mexes held and
+One line per bucket for each side (allies pooled), stamped with the bucket's
+END minute (standing values are read there; lost/built/spent are the bucket's
+own): income, mexes held and
 changed (by region: home / mid / enemy ground), standing army metal, how far
 forward that army sits (0 = own start, 1 = enemy start), metal lost and to
 what, what was finished, and the apex retreat counters. Then the TURN: the
@@ -29,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import battles  # noqa: E402  (parse, load_cost_table, team_labels)
 
 FPS = 30
-STATS_RE = re.compile(r"\[BARAI_STATS\] team=(\d+) ally=(\d+) \S+ frame=(\d+).*? mInc=([\d.]+)")
+STATS_RE = re.compile(r"\[BARAI_STATS\] team=(\d+) ally=(\d+) \S+ frame=(\d+).*? mDefence=(\d+) mEco=(\d+) mArmy=(\d+) mBP=(\d+).*? mInc=([\d.]+)")
 POS_RE = re.compile(r"\[BARAI_POS\] team=(\d+) ally=(\d+) frame=(\d+) n=\d+ part=\d+/\d+ (\S+)")
 BUILD_RE = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.]+ unit=(\S+) cost=(\d+)")
 APEX_RE = re.compile(r"\[f=(\d+)\].*?apex: (withdraw|con-retreat|withdraw-hold|STALL interrupt|keep-job)\b.*?\bt=(\d+)")
@@ -78,9 +80,11 @@ def load(match_dir):
     deaths, starts, costs, snaps = battles.parse(text)
     ally = {}
     inc = defaultdict(dict)       # frame -> team -> mInc
-    for t, a, f, mi in STATS_RE.findall(text):
+    spent = defaultdict(dict)     # frame -> team -> (def, eco, army, bp) cumulative
+    for t, a, f, md_, me, ma, mb, mi in STATS_RE.findall(text):
         ally[int(t)] = int(a)
         inc[int(f)][int(t)] = float(mi)
+        spent[int(f)][int(t)] = (int(md_), int(me), int(ma), int(mb))
     pos = defaultdict(lambda: defaultdict(list))   # frame -> team -> [(name,x,z)]
     for t, a, f, data in POS_RE.findall(text):
         ally[int(t)] = int(a)
@@ -94,7 +98,7 @@ def load(match_dir):
     notes = []
     for f, t, what in APEX_RE2.findall(text):
         notes.append((int(f), int(t), what))
-    return deaths, starts, costs, snaps, ally, inc, pos, builds, notes
+    return deaths, starts, costs, snaps, ally, inc, spent, pos, builds, notes
 
 
 def main():
@@ -105,7 +109,7 @@ def main():
     ap.add_argument("--to", dest="mto", type=float, default=999)
     args = ap.parse_args()
     md = Path(args.match)
-    deaths, starts, costs, snaps, ally, inc, pos, builds, notes = load(md)
+    deaths, starts, costs, snaps, ally, inc, spent, pos, builds, notes = load(md)
     sides = sorted(set(ally.values()))
     if len(sides) != 2:
         print("need exactly two allyteams, saw", sides)
@@ -203,15 +207,35 @@ def main():
             return None
         return sum(inc[cand[-1]].get(t, 0.0) for t in teams_of[s])
 
+    def spent_at(frame, s):
+        cand = [f for f in sorted(spent) if f <= frame]
+        if not cand:
+            return None
+        tot = [0, 0, 0, 0]
+        for t in teams_of[s]:
+            v = spent[cand[-1]].get(t)
+            if v:
+                for i in range(4):
+                    tot[i] += v[i]
+        return tot
+
+    def spent_in(b, s):
+        """metal into def/eco/army/bp during bucket b (cumulative deltas)."""
+        a0 = spent_at(b * bf - 1, s)
+        a1 = spent_at((b + 1) * bf - 1, s)
+        if a0 is None or a1 is None:
+            return None
+        return [a1[i] - a0[i] for i in range(4)]
+
     print("match %s   %s = %s   %s = %s   bucket %ds   (front: 0 = own start, 1 = enemy start)"
           % (md.name[:60], "A", name_of[A], "B", name_of[B], args.bucket))
-    print("%5s | %-4s | %5s %5s %-13s | %6s %5s | %7s %-34s | %-30s | %s" % (
-        "min", "side", "inc", "mex", "(home/mid/en)", "army", "front", "lost", "to (region)", "built", "notes"))
+    print("%5s | %-4s | %5s %5s %-13s | %6s %5s | %-21s | %7s %-34s | %-30s | %s" % (
+        "by", "side", "inc", "mex", "(home/mid/en)", "army", "front", "spent arm/eco/def/bp", "lost", "to (region)", "built", "notes"))
     series = []   # (b, incA, incB, mexA, mexB, armyA, armyB, lostA, lostB, killedA, killedB)
     prev_mex = {A: None, B: None}
     for b in range(nb):
         fend = (b + 1) * bf - 1
-        minute = b * args.bucket / 60.0
+        minute = (b + 1) * args.bucket / 60.0   # the bucket's END: army/mex/inc are read there
         row = {}
         for s in (A, B):
             m, fw = army_at(fend, s)
@@ -232,12 +256,14 @@ def main():
             ml = " ".join("mex-%s x%d" % (k, v) for k, v in mexlost[b][s].items())
             bl = " ".join("%s:%d/%dm" % (k, builtn[b][s][k], v) for k, v in built[b][s].most_common(4))
             nt = " ".join("%s:%d" % (k, v) for k, v in note[b][s].items())
-            print("%5.1f | %-4s | %5s %5s %-13s | %6.0f %5s | %7.0f %-34s | %-30s | %s %s" % (
+            sp = spent_in(b, s)
+            spt = "-" if sp is None else "%d/%d/%d/%d" % (sp[2], sp[1], sp[0], sp[3])
+            print("%5.1f | %-4s | %5s %5s %-13s | %6.0f %5s | %-21s | %7.0f %-34s | %-30s | %s %s" % (
                 minute, "A" if s == A else "B",
                 "-" if i is None else "%.0f" % i,
                 ("-" if mx is None else str(mx)) + dmx,
                 "" if not byr else "%d/%d/%d" % (byr.get("home", 0), byr.get("mid", 0), byr.get("enemy", 0)),
-                m, "-" if fw is None else "%.2f" % fw,
+                m, "-" if fw is None else "%.2f" % fw, spt,
                 lost[b][s], (tops + (" @" + regs if regs else ""))[:34], bl[:30], nt, ml))
         print("-" * 150)
 
@@ -263,7 +289,7 @@ def main():
                        ("income", lambda v: (v[0], v[1]))):
         at, now = last_flip(key)
         holder = name_of[A] if now > 0 else (name_of[B] if now < 0 else "even")
-        print("  %-7s lead: %s, now %s" % (label, "never changed" if at is None else "last flipped at %.1f min" % (at * args.bucket / 60.0), holder))
+        print("  %-7s lead: %s, now %s" % (label, "never changed" if at is None else "last flipped by %.1f min" % ((at + 1) * args.bucket / 60.0), holder))
         flips[label] = at
     worst = {}
     for s in (A, B):
@@ -271,16 +297,16 @@ def main():
         trade = [(b, lost[b][o] - lost[b][s]) for b in range(nb)]
         bw, tw = min(trade, key=lambda x: x[1])
         worst[s] = bw
-        print("  worst bucket for %s: %.1f min, net trade %+.0f metal (lost %.0f, killed %.0f)" % (
-            name_of[s], bw * args.bucket / 60.0, tw, lost[bw][s], lost[bw][o]))
+        print("  worst bucket for %s: the one ending %.1f min, net trade %+.0f metal (lost %.0f, killed %.0f)" % (
+            name_of[s], (bw + 1) * args.bucket / 60.0, tw, lost[bw][s], lost[bw][o]))
     cands = [v for v in flips.values() if v is not None] + list(worst.values())
     if not cands:
         return 0
     turn = min(cands)
     print()
-    print("AROUND %.1f MIN" % (turn * args.bucket / 60.0))
+    print("AROUND THE BUCKET ENDING %.1f MIN" % ((turn + 1) * args.bucket / 60.0))
     for b in range(max(0, turn - 2), min(nb, turn + 3)):
-        minute = b * args.bucket / 60.0
+        minute = (b + 1) * args.bucket / 60.0
         for s in (A, B):
             o = foe[s]
             i, mx, byr, m, fw = None, None, None, None, None
@@ -296,8 +322,11 @@ def main():
             regs = ", ".join("%s %dm" % (k, v) for k, v in where[b][s].most_common(3))
             ml = ", ".join("%d mex on %s ground" % (v, k) for k, v in mexlost[b][s].items())
             bl = ", ".join("%d %s (%dm)" % (builtn[b][s][k], k, v) for k, v in built[b][s].most_common(3))
+            sp = spent_in(b, s)
+            if sp is not None:
+                bl = ("spent army %d, eco %d, def %d, buildpower %d; " % (sp[2], sp[1], sp[0], sp[3])) + bl
             nt = ", ".join("%s x%d" % (k, v) for k, v in note[b][s].items())
-            print("  %5.1f %-26s army %6.0fm front %s  mex %s  %s" % (
+            print("  by %4.1f %-26s army %6.0fm front %s  mex %s  %s" % (
                 minute, name_of[s][:26], m, "-" if fw is None else "%.2f" % fw,
                 "-" if mx is None else mx, move))
             if lost[b][s] > 0:
