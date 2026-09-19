@@ -665,9 +665,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			float shape = dirW * thinW / shapeMax;
 			if (shape > 1.f)
 				shape = 1.f;
+			// ...on the ground still SHORT of cover: a slot whose standing
+			// guns already meet the wave carries none of the pull, or the
+			// same enemy-facing slot takes every gun of the shortfall (a
+			// blob of twenty rings at one point, his watch).
 			const float pullPrev = (isWall
 					? (slotGap / fillS)
-					: ((horizW > 1.f) ? (slotGap / horizW) : slotGap)) * shape;
+					: ((horizW > 1.f) ? (slotGap / horizW) : slotGap)) * shape
+					* ((short0 > 0.f) ? short0 : 0.f);
 			if (prevented < pullPrev)
 				prevented = pullPrev;
 		}
