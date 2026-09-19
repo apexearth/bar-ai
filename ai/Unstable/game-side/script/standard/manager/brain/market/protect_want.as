@@ -483,6 +483,16 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
 			}
+			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
+			// 2026-09-19: "spend as much money as it would take to upgrade a
+			// T2 Mex on tier 1 towers in the center of our base... at the
+			// same time as we're slowly upgrading a Mex"). The shortfall
+			// waits for the advanced hand's gun; the basic hand's one
+			// stopgap (own-fill) is the only light tower after T2.
+			if (T1Tower(d) && (CeilingConsOwned() > 0)) {
+				gDwT1[d] = 0.f;
+				continue;
+			}
 			// A WALL SLOT IS DEMAND FOR A WALL, NOT FOR A BIG GUN. Its gain
 			// is the def-INDEPENDENT unmet-target pull, so the only thing
 			// separating two towers there is the power scaling further down,

@@ -279,8 +279,10 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		// ledger above drops everything past FWD_HOME, which is where the
 		// outlying mexes die.
 		Market::NoteEcoLoss(at, cdef.costM);
-		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF)
+		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
 			Market::NoteTowerLost(at);
+			Market::NoteTowerGrave(at, cdef.costM);
+		}
 	}
 	// A CONSTRUCTOR'S DEATH IS THE GROUND'S VERDICT. The risk model reads
 	// only enemies it can see, so a spot where a con just died prices as

@@ -1149,6 +1149,42 @@ bool NearConDeath(const AIFloat3& in p)
 	return false;
 }
 
+// WHERE OUR TOWERS DIED, and how strong they were: a gun that died on this
+// ground was outgunned there, and the same gun again is the same death
+// (the commander rebuilt a light tower on one point 22 times under fire).
+array<AIFloat3> gGravePos;
+array<int> gGraveAt;
+array<float> gGraveCost;
+void NoteTowerGrave(const AIFloat3& in at, float costM)
+{
+	gGravePos.insertLast(at);
+	gGraveAt.insertLast(ai.frame);
+	gGraveCost.insertLast(costM);
+	while (gGravePos.length() > BLOCK_MAX) {
+		gGravePos.removeAt(0);
+		gGraveAt.removeAt(0);
+		gGraveCost.removeAt(0);
+	}
+}
+// A gun no stronger than one that died within reach of p in the mark's life.
+bool TowerGraveNear(const AIFloat3& in p, float costM)
+{
+	if (!OnMap(p))
+		return false;
+	for (uint i = 0; i < gGravePos.length(); ) {
+		if (ai.frame - gGraveAt[i] > BLOCK_TTL) {
+			gGravePos.removeAt(i);
+			gGraveAt.removeAt(i);
+			gGraveCost.removeAt(i);
+			continue;
+		}
+		if ((gGravePos[i].distance2D(p) < BLOCK_NEAR) && (costM <= gGraveCost[i]))
+			return true;
+		++i;
+	}
+	return false;
+}
+
 void BlockAdd(const AIFloat3& in b, int def)
 {
 	for (uint i = 0; i < gBlockPos.length(); ++i) {

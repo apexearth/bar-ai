@@ -383,6 +383,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
 		AIFloat3 sAt = groundDef ? OffFactoryExit(w.pos) : w.pos;
+		// A gun no stronger than one that just died here is not an answer
+		// here: the ground is outgunned, and the market goes on to its next
+		// want (a stronger gun, or elsewhere).
+		if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)]))
+			return null;
 		if (NearBlocked(sAt))
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
 		bool sMade = false;
