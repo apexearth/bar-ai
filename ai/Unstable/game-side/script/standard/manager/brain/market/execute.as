@@ -1,4 +1,6 @@
 namespace Market {
+int gInteriorRefused = 0;
+int gNextInteriorLog = 0;
 int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
 // The nano placement probe's cache (see the WK_NANO branch).
 int gNextNanoBatchLog = 0;
@@ -366,6 +368,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				&& (Catalog::gSurfT[int(w.def.id)] > 0.01f);
 		if (groundDef)
 			AiLog("apex: prot-exec t=" + ai.teamId + " def=" + w.def.GetName()
+					+ " depth=" + (gPfRimOk ? int(PfHullRadius() - w.pos.distance2D(gPfMid)) : -9999)
+					+ " hull=" + int(PfHullRadius())
 					+ " role=" + (gEcoRole ? 1 : 0)
 					+ " danger=" + (EcoDangerNear() ? 1 : 0)
 					+ " streak=" + gEcoDangerStreak);
@@ -383,6 +387,24 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
 		AIFloat3 sAt = groundDef ? OffFactoryExit(w.pos) : w.pos;
+		// NO GUN IN THE BASE INTERIOR (apexearth 2026-09-19: "imagine you
+		// only have 12 towers and six of them are in the center of your
+		// base... by the time those towers are defending anything you've
+		// already lost half your base"). A gun stands where at least half
+		// its reach lies outside the base's hull; deeper in, it covers
+		// buildings that are already behind everything it could stop.
+		if (groundDef && gPfRimOk
+			&& (sAt.distance2D(gPfMid) < PfHullRadius() - 0.5f * Catalog::gMaxRange[int(w.def.id)]))
+		{
+			++gInteriorRefused;
+			if (ai.frame >= gNextInteriorLog) {
+				gNextInteriorLog = ai.frame + 30 * SECOND;
+				AiLog("apex: interior-gun refused t=" + ai.teamId + " "
+					+ w.def.GetName() + " at=" + int(sAt.x) + "," + int(sAt.z)
+					+ " depth=" + int(PfHullRadius() - sAt.distance2D(gPfMid)) + " -- " + gInteriorRefused + " refused");
+			}
+			return null;
+		}
 		// A gun no stronger than one that just died here is not an answer
 		// here: the ground is outgunned, and the market goes on to its next
 		// want (a stronger gun, or elsewhere).

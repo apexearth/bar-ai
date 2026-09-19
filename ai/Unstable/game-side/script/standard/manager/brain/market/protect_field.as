@@ -127,6 +127,24 @@ float PfRimDist(const AIFloat3& in p)
 
 // ...against the base PROPER: the rim capped at the wall's reach, so an
 // outer mex does not extend "home" to wherever the last claim landed.
+// The base's outer radius: the longest capped ray. The per-ray rim is a
+// star -- a bearing with few buildings has a short ray, and "outside the
+// rim" there is still among the other bearings' buildings.
+float PfHullRadius()
+{
+	if (!gPfRimOk)
+		return 0.f;
+	float r = 0.f;
+	for (uint b = 0; b < gPfRimR.length(); ++b) {
+		float rb = gPfRimR[b];
+		if ((gPfCapR > 1.f) && (rb > gPfCapR))
+			rb = gPfCapR;
+		if (rb > r)
+			r = rb;
+	}
+	return r;
+}
+
 float PfCoreRimDist(const AIFloat3& in p)
 {
 	if (!gPfRimOk)
