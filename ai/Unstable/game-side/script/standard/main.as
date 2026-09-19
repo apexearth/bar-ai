@@ -288,6 +288,9 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	// only enemies it can see, so a spot where a con just died prices as
 	// safe as home and the next con walks the same road. The claim, the
 	// wreck trip and a hand's own site read it for the mark's life.
+	if ((cdef !is null) && cdef.IsMobile() && !cdef.IsBuilder()
+		&& (Catalog::gPower[int(cdef.id)] <= 1.01f) && WasFinished(int(unit.id)))
+		Military::NoteScreenLoss(cdef.costM);
 	if ((cdef !is null) && cdef.IsMobile() && cdef.IsBuilder()
 		&& !cdef.IsRoleAny(Unit::Role::COMM.mask) && OnMap(at)) {
 		Market::NoteConDeath(at);

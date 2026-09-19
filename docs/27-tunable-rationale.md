@@ -825,6 +825,16 @@ commander kill, ours at 9.4-9.6 min in two). Reverted the same night. The
 pawn flood the inflated axis buys is what wins the opening; the con currency
 question stays his (ISSUES "1v1 vs BARb HARD").
 
+### `TUNE_SCREEN_MAX` = 5.f
+
+SCREEN_MAX [count] -- standing screen units (the Tick class: power at the
+1.01 floor) a player fields at once. apexearth 2026-09-18 asked for Ticks
+("their speed is good for getting enemy scouts and for being annoying"), a
+handful; the screen axis prices one at 100x the line's best soldier and it
+dies at the post it was bought to watch, so without a bound a T1 lab was a
+flea conveyor (67 fleas in 13 min on Red Comet 2v2, 2 standing). 5 is the
+Tick limit read the day before; his number to move.
+
 ### `TUNE_MEDIC_FRAC` = 0.12f
 
 MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute

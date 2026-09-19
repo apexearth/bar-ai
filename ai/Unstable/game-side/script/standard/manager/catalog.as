@@ -208,6 +208,13 @@ void Init()
 		// AiMain anyway. Available = the game ships it and no zero limit.
 		gAvailable[i]    = (cdef.maxThisUnit > 0) && !BlockedDef(cdef.GetName());
 		gLimit[i]        = cdef.maxThisUnit;
+		// A screen unit (the Tick and its kin) is a handful, not a line: the
+		// screen axis prices it 100x the line's best and it dies at the post
+		// it was bought to watch, so the game's own limit never bites (67
+		// fleas from one lab in 13 min, 2 standing). His number for Ticks.
+		if ((gPower[i] <= 1.01f) && gMobile[i] && !gBuilder[i]
+			&& (gSurfT[i] + gAirT[i] > 0.01f) && (gLimit[i] > int(TUNE_SCREEN_MAX)))
+			gLimit[i] = int(TUNE_SCREEN_MAX);
 	}
 
 	// Who-builds-what, both directions. Outer loop is builders only, so this

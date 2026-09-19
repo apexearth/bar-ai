@@ -22,6 +22,7 @@ float gBleedHome = 0.f;          // decayed metal: home-ground combat deaths
 float gKillFwd   = 0.f;          // decayed metal: enemy things WE killed deep forward
 float gLossAll   = 0.f;          // decayed metal: ALL combat deaths, any ground
 float gRezLost   = 0.f;          // decayed metal: rez bots of ours that died
+float gScreenLost = 0.f;         // decayed metal: screen units (the Tick class) of ours that died
 float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
 // What killed our army, by attacker class -- observability first; consumers
 // get their own measured pass.
@@ -156,6 +157,16 @@ float RezLostRateM()
 {
 	return gRezLost / BLEED_TAU;
 }
+// The screen's deaths over the window, in units of one screen unit: a scout
+// that dies at the post it was bought to watch is not eyes, it is feed.
+void NoteScreenLoss(float costM)
+{
+	gScreenLost += costM;
+}
+float ScreenLostM()
+{
+	return gScreenLost;
+}
 
 // NET deep-forward burn as a fraction of metal income: losses minus what we
 // killed out there. A bloody push that pays for itself must not read as a
@@ -249,6 +260,7 @@ void UpdateDeathLedger()
 	gKillFwd *= k;
 	gLossAll *= k;
 	gRezLost *= k;
+	gScreenLost *= k;
 	gKillAll *= k;
 	gDeadToStatic *= k;
 	gDeadToAir *= k;

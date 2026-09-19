@@ -985,8 +985,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			continue;
 		// The def's own cap (behaviour.json "limit"): the Tick's screen axis
 		// out-prices every pawn, and its config says five.
+		// A screen class counts its recent dead against the limit too: the
+		// standing count never reached it while the lab replaced every flea
+		// that died at its post.
+		const int screenDead = (Catalog::gPower[d] <= 1.01f)
+				? int(Military::ScreenLostM() / ((Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f))
+				: 0;
 		if ((Catalog::gLimit[d] > 0) && (Catalog::gLimit[d] < 1000000)
-			&& (gOwnCount[d] >= Catalog::gLimit[d])) {
+			&& (gOwnCount[d] + screenDead >= Catalog::gLimit[d])) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":limit";
 			continue;

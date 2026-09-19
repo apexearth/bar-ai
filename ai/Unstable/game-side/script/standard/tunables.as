@@ -1128,6 +1128,10 @@ const float TUNE_LOS_WORTH = 1.f;
 //   unit that is a hopeless soldier can still be a good screen. See docs/27.
 const float TUNE_SCREEN_WORTH = 0.2f;
 
+// [count] -- Standing units of a screen class (power at the Tick floor) a
+//   player fields at once; the screen axis stops buying past it. See docs/27.
+const float TUNE_SCREEN_MAX = 5.f;
+
 // MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
 //   (apexearth: "3 times more rezbots" -- was 0.04). See docs/27.
 const float TUNE_MEDIC_FRAC = 0.12f;
