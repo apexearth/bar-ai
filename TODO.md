@@ -340,6 +340,14 @@ move there and the plant want rebuilds at the new anchor.
 
 ## Finish a won game: nukes, flanks, air, scouts, LRPC, Ragnarok
 
+THE LENS (apexearth 2026-09-18): "I'm just trying to think what a human
+would do to beat us in this particular game. And the answer would be mass
+nukes, naval attacks from the side, or some big air attacks. Those are the
+things that they would be able to do to kill us. We finally won because we
+finally landed a nuke in their base." Judge every play below by that: is
+it what a human would do to us at this economy, from a direction we do not
+hold.
+
 apexearth 2026-09-18, watching a game at three times the enemy's economy
 that took "forever" to win: "we don't use our nukes very smart. We're not
 attacking the enemy from the sides pretty much ever. We don't use air
