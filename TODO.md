@@ -325,3 +325,15 @@ Stork production would all be new C++. Held until the siting law (09-18:
 the lathe already on it) is measured: if new turrets land at the gantry, the
 old ones at the T1 plants are the only case left, and reclaiming them (full
 metal back) beside the line that needs them is the cheaper move.
+
+## Do not marry the starting point
+
+apexearth 2026-09-18: "We really shouldn't 'marry' our starting point. If
+we lose our base but have other safe ground to rebuild on then we should
+do that." Today every anchor, farm, lane and leash is measured from the
+start position (Base::gAnchor, Builder::gHomePos, EcoSiteFor's farm); a
+base overrun keeps rebuilding on the same ground under the same guns.
+Unbuilt: a re-anchoring election -- when the home ground reads lost
+(EcoDangerNear sustained, the plants dead) and quieter ground of ours
+exists (a held mex cluster, an ally's rear), the anchor, farm and leash
+move there and the plant want rebuilds at the new anchor.

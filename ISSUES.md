@@ -245,6 +245,17 @@ vs 15.6%. Read from the Glacier 1v1s:
   MexHeat accepted, on a threat reading barely above the 1.0 floor; 3-15
   per game on Comet, `nopath` 100+ on Carrot (cliffs).
 
+### THE COMMANDER FIGHTS T2 (2026-09-18)
+
+His watch: "the commander is still being frontline rambo when enemy is
+attacking with T2 -- he can't compete with that". In that game's log the
+commander's samples read fwd=-0.3..-1.2, home=700-2400, far=0 -- behind
+the anchor and inside his leash -- so the fight was the raid reaching him,
+not him reaching the front: the DLL's commander fight/D-gun behaviour
+engages whatever comes in range regardless of its tier. The ai-commander
+skill and the StrRatio ruling ("Strength, not metal") are the reads; the
+question is what he does when the strength ratio says he loses.
+
 ### ALTORED 1v1: the commander dies claiming outer mexes (2026-09-18)
 
 Altored Divide +100 vs BARb hard, `--speed 10`, seeds 21-24: three of four

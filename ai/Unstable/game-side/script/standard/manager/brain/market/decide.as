@@ -1496,9 +1496,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Perf::Add("dec.draw", _tDraw);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
-	// Only an emergency takes a hand off a job it is walking to: the
-	// stall, the air and defence panics, the commander's first gun. The
-	// floors and roles wait for a free hand.
+	// Only an emergency takes a hand off a job it is on: the stall, the
+	// air and defence panics, the commander's first gun. The floors and
+	// roles wait for a free hand.
 	const bool emergency = (why == "estall") || (why == "estall-hands") || (why == "aa")
 			|| (why == "defpanic") || (why == "penned") || (why == "cover");
 	if (!emergency && (top !is null)) {
@@ -1508,10 +1508,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if (inc.IsDead()) {
 				@gIncTask[uidk] = null;
 			} else {
+				// En route or at the frame alike: a hand with a lab nine
+				// tenths up was drawn off it to a mex (his watch).
 				const AIFloat3 ip = inc.GetBuildPos();
-				const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)] + 64.f;
-				if (OnMap(ip) && (unit.GetPos(ai.frame).distance2D(ip) > reach)
-					&& ((why != "draw") || (top.value <= gIncVal[uidk])) && !Builder::SiteHot(ip)) {
+				if (OnMap(ip) && ((why != "draw") || (top.value <= gIncVal[uidk]))
+					&& !Builder::SiteHot(ip)) {
 					++gKeepJob;
 					if (ai.frame >= gNextKeepLog) {
 						gNextKeepLog = ai.frame + 30 * SECOND;
