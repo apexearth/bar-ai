@@ -1528,6 +1528,26 @@ float LineCeilSum()
 	return sumCeil;
 }
 
+// What the lines BELOW a line's tier are eating: metal a higher line's
+// lathe would take from them. With the T1 lab eating the whole flow on
+// pawns, the T2 lab read "no free metal" and got no turrets, and the T1
+// pawns died to their T2 (his watch, docs/33). The free flow is what the
+// higher line's turrets shift, not what they wait for.
+float LowerLinesEat(CCircuitUnit@ f)
+{
+	const int tier = PlantTier(int(f.circuitDef.id));
+	float eat = 0.f;
+	for (uint gi = 0; gi < Factory::gFacUnits.length(); ++gi) {
+		CCircuitUnit@ g = Factory::gFacUnits[gi];
+		if ((g is null) || (g is f) || !LineWorkingArmy(g))
+			continue;
+		if (PlantTier(int(g.circuitDef.id)) >= tier)
+			continue;
+		eat += LineEat(g, g.GetPos(ai.frame));
+	}
+	return eat;
+}
+
 float NeediestLine(AIFloat3& out at)
 {
 	float worst = 0.f;
@@ -1540,7 +1560,9 @@ float NeediestLine(AIFloat3& out at)
 	const float sumCeil = LineCeilSum();
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
-		const float u = LineUnserved(f, feed, spendFloor, sumCeil);
+		if (f is null)
+			continue;
+		const float u = LineUnserved(f, feed + LowerLinesEat(f), spendFloor, sumCeil);
 		if (u > worst) {
 			worst = u;
 			at = f.GetPos(ai.frame);

@@ -109,7 +109,15 @@ bool ComFar(const AIFloat3& in p)
 		return true;
 	// The commander's home is the base proper, not its outermost mex: the
 	// uncapped rim called a flank claim home and he died there.
-	return gPfRimOk && (PfCoreRimDist(p) > 400.f);
+	if (!gPfRimOk)
+		return false;
+	const float past = PfCoreRimDist(p);
+	// ...and nothing FORWARD of the rim at all: a mex claim 1,580 elmos
+	// out toward the middle, 190 past the core rim, was a walk to mid and
+	// a Janus (his "the walk to mid killed the economy").
+	if ((past > 0.f) && (Military::ForwardFraction(p) > 0.1f))
+		return true;
+	return past > 400.f;
 }
 
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
