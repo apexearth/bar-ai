@@ -1029,6 +1029,22 @@ labs' first four minutes: 12 pawns and 15 cons/scouts/rez bots; theirs 21
 combat units) so the odds test refuses and they reach the middle unopposed.
 Off by default until the opening is fixed; the arm stays for the dashboard.
 
+### `TUNE_MASS_HOLD_SECS` = 100000.f
+
+MASS_HOLD_SECS [seconds] -- how long a massing pool waits for its want before
+committing whatever it has. Was 240 (120 "expired into under-strength commits
+('committing at 29')"). 2026-09-19 on Red Comet 2v2 seed 5 the 240-s expiry
+read `mass hold expired, committing at 78` with want=110 at 8.6 min and the
+pool walked into the enemy's T2 wave: army 4,332 -> 2,674 by 11 min. His
+doctrine has no clock ("When ready, push more. No time-based cooldown";
+"either commit to the enemy base or come home, never neither"), so the expiry
+is effectively off: a pool commits on its want or a killing blow, and holds
+at home otherwise. One game with it off: army 7.7k at 12 min and 10.8k at 16
+against 4.2k and 0 with it on; the game was still lost at 17 min to snipers
+and a Starlight. The risk is a pool that never reaches a want set by an enemy
+it cannot match and so never leaves -- which is the defend-at-home his notes
+ask for while the army is rebuilt.
+
 ### `TUNE_SUPER_SHARE` = 0.25f
 
 SUPER_SHARE: the slice of total economic power the strategic market may claim

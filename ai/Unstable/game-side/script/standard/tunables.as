@@ -224,8 +224,11 @@ const float TUNE_MASS_COMMIT_FRAC = 0.5f;
 //   of nearly nothing; the real size is the share of standing army.
 const float TUNE_MASS_FLOOR = 5.f;
 
-// [seconds] -- Bound the hold.
-const float TUNE_MASS_HOLD_SECS = 240.f;  // 120 expired into under-strength commits ('committing at 29'); patient pools trade better
+// [seconds] -- Bound the hold. A pool commits when it reaches its want or a
+//   killing blow opens, never on a clock: the expiry sent under-strength
+//   pushes into the enemy's T2 wave ("committing at 78" of 110 wanted, then
+//   the army halved in two minutes). See docs/27.
+const float TUNE_MASS_HOLD_SECS = 100000.f;
 
 // [ratio] -- The massing floor is also bounded below by the biggest enemy
 //   group we can see, times this -- a pool that cannot meet it does not go.
