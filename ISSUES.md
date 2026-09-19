@@ -217,6 +217,20 @@ what feeds the lab). Open: what the lab should make in the first four
 minutes (a con floor of 2.7 fires at t=0) and whether the T1 con walks
 to a solar or stands at the lab; test_earlyfight.py is the harness.
 
+### T2 IN 8v8 COMES AT 9-17 MIN: the ETA ladder keeps choosing mexes the cons die reaching (2026-09-19)
+
+Isthmus 8v8 replays (seed 5, +100): our T2 starts 8.9-16.5 min against
+BARb's 4.4-11.7; `apex: eta` for a late player reads the mex rung ahead of
+the T2 lab every sample from minute 5 to 14 (mex 459-711 s, tech 684-938)
+while the market's cons walk 5,000 elmo to those spots and die (his game:
+25 T1 cons of one player). The mex rung's survival is TechSurvival(home),
+so a far spot prices as safe as the base. Tried: a spot-hazard survival
+for the mex rungs (HazardAt(spot) with the unscouted prior) -- inert, the
+ladder still read mex 711 against tech 938 at 8 min, because the risk
+field knows nothing about ground no unit of ours has seen. Reverted. The
+death count at those spots is the evidence the field lacks (deaths.py /
+story.py have it); the ladder does not read it.
+
 ### OPENING: the first factory comes late in half the games (2026-09-11, 09-15)
 
 Comet 1v1 vs BARb hard, six games per build (`tournaments/20260915-081342-
