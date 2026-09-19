@@ -513,6 +513,10 @@ bool BaseUnderAttack()
 	}
 	if (ai.GetEnemyInflAt(gHomePos) > gBaseInflBar)
 		return true;
+	// Buildings dying at home in the last 45 s: an attack whatever the
+	// influence map, which reads the enemies it can see.
+	if (Military::BaseRaided())
+		return true;
 	return gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) < BASE_DANGER_DIST;
 }
 

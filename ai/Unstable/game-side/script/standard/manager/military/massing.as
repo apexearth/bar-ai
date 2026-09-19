@@ -405,6 +405,13 @@ float HoldNeedM()
 	if (!Builder::gHomeSet)
 		return 0.f;
 	float need = ai.GetEnemyCostAt(Builder::gHomePos, Builder::BASE_DANGER_DIST);
+	// BUILDINGS DYING AT HOME ARE THE FORCE WE CANNOT SEE: the enemy cost
+	// read 5 while Rockos and Mavericks killed the T2 lab and eleven
+	// generators at 470 elmos from home (the raiders had no LOS entry),
+	// the hold read "covered" and the recall never fired. The metal they
+	// are killing is the least they are worth.
+	if (gRaidM > need)
+		need = gRaidM;
 	// The stance hold answers an army we cannot see: what they have massed.
 	if (gHoldWhyLast == 3) {
 		const float foe = FoeMobileMassing();
