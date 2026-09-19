@@ -991,6 +991,20 @@ float BPCapacity()
 	return cap;
 }
 
+// The mobile part of BPCapacity, same discount.
+float MobileBPCapacity()
+{
+	float cap = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)]
+			|| (Catalog::gBuildPower[int(d)] <= 0.f))
+			continue;
+		cap += float(gOwnCount[d]) * Catalog::gBuildPower[int(d)] * (7.f / 80.f)
+				* ai.GetTunable("apex_mobile_bp_eff", TUNE_MOBILE_BP_EFF);
+	}
+	return cap;
+}
+
 // Smoothed income growth rate, m/s per second -- the compounding signal.
 float gIncPrev = -1.f;
 int gIncPrevAt = 0;

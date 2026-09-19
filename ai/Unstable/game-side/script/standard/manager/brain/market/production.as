@@ -485,7 +485,12 @@ float ConFloorIncomeTerm(float per)
 	const float inc = aiEconomyMgr.metal.income;
 	float term = inc / ((per > 1.f) ? per : 25.f);
 	const float hands = inc * ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
-	const float owned = BPCapacity();
+	// The turrets count against the floor only on the seat, whose ruling is
+	// "nanos, not cons". A front player's constructors do what no turret
+	// can -- the mohos, the spots -- and counting its turrets read a floor
+	// of 1 advanced con at 50-100 income (one moho every 1.5 min against
+	// their 19 by minute 16, 2v2 measured 2026-09-19).
+	const float owned = gEcoRole ? BPCapacity() : MobileBPCapacity();
 	const float bp = ConWorkerBP();
 	float room = 0.f;
 	if ((hands > owned) && (bp > 0.f))
