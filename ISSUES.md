@@ -196,6 +196,19 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 
 ## EXPANSION AND THE OPENING
 
+### THE T2 TRANSITION IN 2v2: ahead at 8 min, tripled at 12 (2026-09-19, evening)
+
+Red Comet seed 5 after the day's fixes: at 8 min army 6.2k to their 4.8k,
+income 73 to 81; at 12 min 4.9k to 13.2k and 72 to 185. Their T2 units
+(snipers, Bulls) and mohos arrive at 10-12; our T1 lab keeps 68 of 92
+units decided 9-16 min (6.8k of 18.5k metal) and its pawns die at home
+4:1, the army gap grows, the market answers the gap with more T1, and
+eco spend halves (2,912 -> 1,859 per 4 min) while theirs rises (3,425 ->
+4,150). His doctrine: defending at home takes near parity, "we need
+time to build the army to match rather than continuously letting units
+die". docs/33 8 (cohesion 0.11 vs 0.44) is the same finding from the
+other side. Not a wrong number; the next campaign.
+
 ### OPENING in 2v2: their army is 1.4x ours by minute 4-6 and the middle is theirs (2026-09-19)
 
 story.py on 2v2 x8 per arm (Comet Catcher Remake + Glacier Pass, +100 vs
