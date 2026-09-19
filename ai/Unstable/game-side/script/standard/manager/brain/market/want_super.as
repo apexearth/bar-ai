@@ -188,6 +188,12 @@ int SuperTarget(int sc)
 	// 500m/s - i often see us lose games because we aren't aggressive
 	// enough in building in late game") -- at 500 own income the tight
 	// spacing wants 4, the doubled one 2.
+	// The anti-nuke's extra copies are safety against a warhead: with no
+	// enemy silo seen the second one is not safer, and at 150 income it
+	// out-bid the gantry every super election (a T3 line at 20 min against
+	// their 14, 2026-09-19). The first is never optional.
+	if ((sc == SC_ANTINUKE) && (Brain::EnemyNukeSilos() <= 0))
+		return 1;
 	if ((sc == SC_ANTINUKE) || (sc == SC_SILO) || (sc == SC_GANTRY))
 		return 1 + int(inc / per);
 	return 1 + int(inc / (per * 2.f));

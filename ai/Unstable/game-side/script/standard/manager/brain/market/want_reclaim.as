@@ -1262,6 +1262,12 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if (coming || !unit.circuitDef.CanBuild(Catalog::Def(fd))
 				|| (AnyPlantInFlight() && !WealthWaiver()))
 				continue;
+			// A move that does not buy back its own bill is not a move: at
+			// 5% enclosure the copy priced v=0.001 and still went up as the
+			// last want left after two refusals -- his "second T2 bot lab
+			// and we don't even have a gantry" (2026-09-19).
+			if (room <= Catalog::gCostM[fd])
+				continue;
 			CCircuitDef@ mover = Catalog::Def(int(unit.circuitDef.id));
 			const AIFloat3 rim = LatheSite(Catalog::Def(fd), mover, InteriorSite(fp, mover));
 			if (!OnMap(rim) || (rim.distance2D(fp) < NanoRange()))

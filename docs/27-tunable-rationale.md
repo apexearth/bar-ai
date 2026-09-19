@@ -814,6 +814,17 @@ that is a hopeless soldier can still be a good screen. 0 disables it. 0.2 is
 calibrated, not derived: it puts a Tick modestly ahead of a Pawn at a
 half-covered patrol shortfall while the Pawn still wins on combat.
 
+Measured 2026-09-19: read against the tree-wide mean cost the axis makes a
+Pawn 46x the line's best soldier (prodrank `p=46` against its core `pc=0.8`),
+and that is the number that prices constructors out of the T1 lab (con
+`b=1017` against pawn `42015`). Normalising the axis to the line's own best
+(and re-calibrating to 2x the best soldier so the Tick-over-Pawn claim held)
+brought `p` to 3 -- and lost 1-7 where the same tree without it won 6-2
+(1v1 +100 vs BARb hard, Comet Catcher Remake + Glacier Pass, every game a
+commander kill, ours at 9.4-9.6 min in two). Reverted the same night. The
+pawn flood the inflated axis buys is what wins the opening; the con currency
+question stays his (ISSUES "1v1 vs BARb HARD").
+
 ### `TUNE_MEDIC_FRAC` = 0.12f
 
 MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
@@ -969,7 +980,10 @@ one".
 SUPER_PER_INCOME [metal/s] -- income per additional anti-nuke; the offensive
 classes (silo, long-range gun) space at twice this. Never a cap: the count
 rises with the economy, which is his "at least 1 usually, more if we want to be
-safer".
+safer". Since 2026-09-19 the anti-nuke's count rises only once an enemy silo
+has been seen: with none, a second anti-nuke at 150 income won every super
+election over the gantry (t003 of tournaments/20260919-011515: anti-nukes
+elected 10-26 min, the gantry never; BARb's stood at 14).
 
 ### `TUNE_SUPER_SHARE` = 0.25f
 

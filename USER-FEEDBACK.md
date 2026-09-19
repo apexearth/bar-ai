@@ -27,6 +27,16 @@ lines of quotes.
   advanced air labs idle while half our metal went unspent. Third report
   (TODO "Never an idle factory"; ISSUES GANTRIES).
 - A T2 lab is built by many hands, not one; we reach T2 behind our enemies.
+  09-19 (Isthmus 1v1, T2 at 15.7 min at 120 income against their 6.5; his
+  fifth report): the market bought it at 7.6 -- the hand walked off it, the
+  orphan order deferred every re-ask, the def sat in abort backoff. Fixed
+  09-19 (keep-job without the draw escape); 1v1 T2 median 4.2 min since.
+  Still open: is T2 at 4 min and 27 income what he wants, and gantry timing.
+- The gantry comes when the economy can carry it (~100-150 m/s), before a
+  second T2 lab and before the enemy's T3 is on the field; 09-19 Isthmus: no
+  gantry at 36 min against their 14, a second T2 bot lab at 30 (a plant-move
+  copy priced 0.001 that went up as the last want left). The anti-nuke's
+  extra copies (target 1 + income/150) won every super election over it.
 - A T2 lab is not started while the front is being lost (seed 17) -- the
   tech price has no army-share term (ISSUES ECONOMY LADDER, stage 2).
 - A dead mex is rebuilt quickly; six reports. Structural now (draw share and

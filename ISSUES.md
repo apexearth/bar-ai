@@ -240,6 +240,14 @@ vs 15.6%. Read from the Glacier 1v1s:
   worth against a pawn in one currency is his call: the plan says seconds
   off the target, and a claimed mex streams for the game while a pawn
   closes 55 metal of a gap once.
+  09-19: the multipliers are measured (`prodrank ... p,pc`): a pawn's
+  core is pc=0.8 of the line's best and its final p=46; the whole excess
+  is the SCREEN axis (sight x dash / cost against the tree-wide mean
+  cost, so a 35-metal unit reads 40x). Normalised to the line's best it
+  read p=3 -- and lost 1-7 where the same tree without it won 6-2 (every
+  1v1 ends on a commander kill; ours at 9.4-9.6 min in two). Reverted;
+  docs/27 TUNE_SCREEN_WORTH. The pawn flood is what wins the opening, so
+  the con currency cannot be fixed by deflating the army side alone.
 - Mex tasks die at arrival: `unreach armmex gap=16 range=154 threat=1.7/
   0.0` -- the DLL's CanReachAtSafe refuses a fixed site the script's
   MexHeat accepted, on a threat reading barely above the 1.0 floor; 3-15

@@ -1207,6 +1207,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// Carries the by-name worth override, the reach-vs-shield bonus
 			// and the reach-answers-reach response with it.
 			float ppc = UnitPPC(d);
+			const float ppcCore = ppc;   // before the sight, screen and afford terms
 			// A WEAPON THAT ONLY FIRES INTO WATER answers what FLOATS.
 			// Surf/air threat are the DLL's own read of what a def can hit
 			// -- a plain torpedo contributes to neither, so a torpedo
@@ -1515,6 +1516,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ "=" + formatFloat(vA * 1000.f, "", 0, 2)
 					+ "(g" + formatFloat(gainA, "", 0, 2)
 					+ ",p" + formatFloat(ppc / linePPC, "", 0, 3)
+					+ ",pc" + formatFloat(ppcCore / linePPC, "", 0, 3)
 					+ ",r" + formatFloat(roleW, "", 0, 2)
 					+ ",a" + formatFloat(affM, "", 0, 2) + ")";
 			continue;
