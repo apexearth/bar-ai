@@ -1796,6 +1796,14 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
 			{
 				continue;
 			}
+			// apex: the commander fights what is nearly in his reach and walks
+			// to nothing (apexearth: "the commander is still being frontline
+			// rambo"; died 1,200 elmos out chasing Warriors at 6.8 min).
+			if (cdef->IsRoleComm()
+				&& (ePos.SqDistance2D(pos) > SQUARE(cdef->GetMaxRange() * 1.5f)))
+			{
+				continue;
+			}
 			float elevation = map->GetElevationAt(ePos.x, ePos.z);
 			if (edef->IsInWater(elevation, ePos.y)) {
 				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
