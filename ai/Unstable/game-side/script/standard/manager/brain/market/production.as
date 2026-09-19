@@ -1509,7 +1509,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
 			sumV += vA;
-			pLineSum += ppc / linePPC;
+			// The medic is priced against the line's SOLDIERS, not against
+			// their sight and screen premiums: on the final ratio a rez bot
+			// read 26 soldiers' worth at minute one with no wreck on the map.
+			pLineSum += ppcCore / linePPC;
 			++pLineN;
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName()
