@@ -404,10 +404,17 @@ bool AdvPlantInFlight()
 			|| (Catalog::gBuildsList[d].length() == 0))
 			continue;
 		if ((Factory::userData[d].attr
-			& (Factory::Attr::T2 | Factory::Attr::T3)) != 0) {
-			gAdvInFlightRow = int(ci);
-			return true;
-		}
+			& (Factory::Attr::T2 | Factory::Attr::T3)) == 0)
+			continue;
+		// An order nobody is walking to is not in flight (the same clause
+		// as AnyPlantInFlight): an abandoned T2 vehicle plant order
+		// deferred every T2 lab ask for the five minutes it took to time
+		// out (his Isthmus game, T2 at 15.7 min against their 6.5).
+		if ((gComState[ci] == CS_ORDERED) && (gComTask[ci] !is null)
+			&& (Requests::Workers(gComTask[ci]) == 0))
+			continue;
+		gAdvInFlightRow = int(ci);
+		return true;
 	}
 	return false;
 }

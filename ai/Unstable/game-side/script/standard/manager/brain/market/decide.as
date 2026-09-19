@@ -1509,10 +1509,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				@gIncTask[uidk] = null;
 			} else {
 				// En route or at the frame alike: a hand with a lab nine
-				// tenths up was drawn off it to a mex (his watch).
+				// tenths up was drawn off it to a mex (his watch). A draw
+				// is not new information either: the election that took the
+				// job saw the same categories, and a value is a RATE, so a
+				// nano always out-rates the plant it would abandon (the T2
+				// vehicle plant left 5 s after the order, his Isthmus game).
 				const AIFloat3 ip = inc.GetBuildPos();
-				if (OnMap(ip) && ((why != "draw") || (top.value <= gIncVal[uidk]))
-					&& !Builder::SiteHot(ip)) {
+				if (OnMap(ip) && !Builder::SiteHot(ip)) {
 					++gKeepJob;
 					if (ai.frame >= gNextKeepLog) {
 						gNextKeepLog = ai.frame + 30 * SECOND;

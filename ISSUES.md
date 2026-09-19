@@ -649,6 +649,13 @@ deathledger.as:141), so a shipyard buys rez boats off land wrecks and no
 navy (his 09-13 report); split by movetype domain unbuilt. Early fleet 2.7
 at 12 min against his 4-5 (`RezWorkM` pricing). The back-away envelope reads
 only enemies we SEE (`GetEnemyReachSlack` skips hidden ones).
+09-19, his Isthmus 1v1 (`matches/20260919-055126`): 14,716 `apex: nopath ?
+by armrectr` and 3,160 `unreach ? bt=16` -- the rez chain hands land bots
+reclaim tasks up to 6,965 elmo away across water, the DLL aborts each at the
+path test, 6 a second for 40 minutes. `EnqueueWreckReclaim` tests
+`NearBlocked` and threat but never `ReachableBy`; the RezzerChain path is
+unchecked. Con-idle samples count these bots, so the 43% idle figure is
+partly them.
 
 ### NAVY: no bot con can reach a shipyard from the Isthmus start; the T2 con sub never elects (2026-08-31, 09-12)
 

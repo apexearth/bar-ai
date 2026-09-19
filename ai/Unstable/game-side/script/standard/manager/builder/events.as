@@ -62,9 +62,15 @@ int gAbortLog = 0;
 array<int> gAbortStreak;
 array<int> gAbortAt;
 
+// A plant is never held: its refused ground is already marked per def
+// (NoteBuildBlocked), and two minutes without a T2 lab ask cost more than
+// the doomed-converter loop this guards against (three fast aborts at 8.0
+// min held the lab while its site was re-probed, his Isthmus game).
 bool AbortBackoff(int d)
 {
 	if ((d <= 0) || (d >= int(gAbortStreak.length())))
+		return false;
+	if (!Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0))
 		return false;
 	return (gAbortStreak[d] >= 3)
 		&& (ai.frame < gAbortAt[d] + 120 * SECOND);
