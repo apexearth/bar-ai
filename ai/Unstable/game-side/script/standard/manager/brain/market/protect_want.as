@@ -499,7 +499,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// line of the cheapest tower per metal is the half-built line
 			// he is watching fail ("It needs to be really strong to
 			// succeed"). The per-metal ranking stays for the ring.
-			if (bestIsWall && !bestIsLine && hEffOn
+			// ...and not on a slot carrying the SHORTFALL pull either: that
+			// pull asks for the strongest gun the economy affords, and by
+			// cover per metal it bought the commander 42 light towers in a
+			// ring (his watch: "25 llts in one base within 250 elmos").
+			if (bestIsWall && !bestIsLine && hEffOn && (wallPullP <= 0.f)
 				&& (Catalog::gCostM[d] > 1.f)) {
 				const float eff = PfTowerKill(d) / Catalog::gCostM[d];
 				// The benchmark is over the ASKER's build list, so it is the

@@ -1118,6 +1118,37 @@ void BlockPoll()
 	BlockAdd(b, ai.GetBlockedBuildDef());
 }
 
+// WHERE OUR CONSTRUCTORS DIED, for the mark's life: the risk model reads
+// only enemies it can see, and a spot a con just died on priced as safe as
+// home while the next con walked the same road.
+array<AIFloat3> gConDeathPos;
+array<int> gConDeathAt;
+void NoteConDeath(const AIFloat3& in at)
+{
+	gConDeathPos.insertLast(at);
+	gConDeathAt.insertLast(ai.frame);
+	while (gConDeathPos.length() > BLOCK_MAX) {
+		gConDeathPos.removeAt(0);
+		gConDeathAt.removeAt(0);
+	}
+}
+bool NearConDeath(const AIFloat3& in p)
+{
+	if (!OnMap(p))
+		return false;
+	for (uint i = 0; i < gConDeathPos.length(); ) {
+		if (ai.frame - gConDeathAt[i] > BLOCK_TTL) {
+			gConDeathPos.removeAt(i);
+			gConDeathAt.removeAt(i);
+			continue;
+		}
+		if (gConDeathPos[i].distance2D(p) < BLOCK_NEAR)
+			return true;
+		++i;
+	}
+	return false;
+}
+
 void BlockAdd(const AIFloat3& in b, int def)
 {
 	for (uint i = 0; i < gBlockPos.length(); ++i) {

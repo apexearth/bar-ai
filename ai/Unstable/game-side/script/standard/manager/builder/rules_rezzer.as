@@ -174,6 +174,11 @@ float ArmyFront(AIFloat3 &out pos)
 bool RezSiteOk(const AIFloat3 &in site)
 {
 	++gRzSiteCalls;
+	// Ground a constructor of ours just died on: the reach test reads the
+	// enemies it can see, and 22 rez bots walked into the same Bulls in
+	// one minute where it saw none.
+	if (Market::NearConDeath(site))
+		return false;
 	// THE COVER BRANCH IS REVERTED, ON THE BATTERY. Letting a bot take work
 	// wherever our influence merely matched theirs -- docs/24's "heal units
 	// while they fight" read literally -- collapsed army from 11.7% to 5.6% of
@@ -197,7 +202,7 @@ bool RezSiteOk(const AIFloat3 &in site)
 // commander rescue keeps RezSiteOk: him back on his feet outranks the minute.
 bool RezRezSiteOk(const AIFloat3 &in site)
 {
-	return !InEnemyReach(site);
+	return !Market::NearConDeath(site) && !InEnemyReach(site);
 }
 
 int RezScanPeriod()

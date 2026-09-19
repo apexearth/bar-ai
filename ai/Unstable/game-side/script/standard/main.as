@@ -282,6 +282,14 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF)
 			Market::NoteTowerLost(at);
 	}
+	// A CONSTRUCTOR'S DEATH IS THE GROUND'S VERDICT. The risk model reads
+	// only enemies it can see, so a spot where a con just died prices as
+	// safe as home and the next con walks the same road (53 in one 2v2,
+	// 35 spots re-sent to, his watch). The claim, the wreck trip and a
+	// hand's own site read it for the mark's life.
+	if ((cdef !is null) && cdef.IsMobile() && cdef.IsBuilder()
+		&& !cdef.IsRoleAny(Unit::Role::COMM.mask) && OnMap(at))
+		Market::NoteConDeath(at);
 	const string hist = Builder::TakeHistFor(int(unit.id));
 	// WHAT THE SAFETY SENSOR SAID WHERE THE UNIT ACTUALLY DIED. Every "is this
 	// position safe" test in the AI reads the threat map, and nothing has ever

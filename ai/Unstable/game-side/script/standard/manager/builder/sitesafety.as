@@ -337,6 +337,9 @@ bool SiteHot(const AIFloat3& in where)
 {
 	if (!OnMap(where))
 		return false;
+	// A constructor died here in the last minutes: hot whatever we can see.
+	if (Market::NearConDeath(where))
+		return true;
 	if (FoesNear(where) < CON_FOE_COUNT)
 		return false;
 	return ai.GetEnemyInflAt(where) > ai.GetAllyInflAt(where);

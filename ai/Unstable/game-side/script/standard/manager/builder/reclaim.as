@@ -235,7 +235,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// A wreck on ground the reach veto refused is not a job: the best wreck
 	// is deterministic, so every idle con was sent to the same one past the
 	// cliff and aborted there (1,624 of one seat's 2,690 elections).
-	if (Market::NearBlocked(wreck))
+	if (Market::NearBlocked(wreck) || Market::NearConDeath(wreck))
 		return null;
 	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:
 	// neither checked whether the wreck itself sits somewhere safe before

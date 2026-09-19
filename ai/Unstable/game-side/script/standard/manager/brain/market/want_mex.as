@@ -453,7 +453,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// A spot a hand could not reach in the last three minutes is not
 		// offered to the next hand (the stuck watch and the C++ path test
 		// both write the mark).
-		if (NearBlocked(sp)) {
+		if (NearBlocked(sp) || NearConDeath(sp)) {
 			++gSwPast;
 			continue;
 		}
