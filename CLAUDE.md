@@ -111,7 +111,8 @@ conclusion each one produced.
 | **create or rename a variant** | **S1** without its own shortName it loads stock BARb in every multiplayer game · `docs/03-barb-architecture.md` |
 | **reason about the economy or T3** | `docs/10-bar-game-concepts.md`, `eta-objective`. The same unit is unaffordable at 40 metal/s and trivial at 398 |
 | **work on nukes / air / the commander** | `ai-nukes` · `ai-air` · `ai-commander` |
-| **diagnose why we lost a fight** | `fight-analysis` skill, `tools/deaths.py` |
+| **say why a game was won or lost** | `python tools/story.py <match> --bucket 120` FIRST -- the game in buckets, both sides, and where the mex/army/income leads last changed hands. His rule 2026-09-19: the final numbers are never the story; find the turn |
+| **diagnose why we lost a fight** | `fight-analysis` skill, `tools/deaths.py`, `tools/battles.py` |
 | **check a game against his complaints** | `game-audit` skill |
 | **investigate a desync** | `desync-check` skill |
 | **find a path or an engine version** | `python tools/bar_env.py`, `docs/01-local-environment.md` |
