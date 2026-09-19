@@ -1262,10 +1262,9 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if (coming || !unit.circuitDef.CanBuild(Catalog::Def(fd))
 				|| (AnyPlantInFlight() && !WealthWaiver()))
 				continue;
-			// A move that does not buy back its own bill is not a move: at
-			// 5% enclosure the copy priced v=0.001 and still went up as the
-			// last want left after two refusals -- his "second T2 bot lab
-			// and we don't even have a gantry" (2026-09-19).
+			// A move that does not buy back its own bill is not a move: a
+			// near-worthless copy still goes up as the last want left after
+			// refusals (his "second T2 bot lab and no gantry").
 			if (room <= Catalog::gCostM[fd])
 				continue;
 			CCircuitDef@ mover = Catalog::Def(int(unit.circuitDef.id));
