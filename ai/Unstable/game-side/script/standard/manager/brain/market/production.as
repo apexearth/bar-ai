@@ -446,7 +446,16 @@ int ConsNeedAny()
 	// as constructors only before that -- a T1 con is also the starter the
 	// full bank needed.
 	if (!AnyAssistLab()) {
-		const float unspent = UnspentByHands();
+		float unspent = UnspentByHands();
+		// Unspent metal is hands we lack only as far as the army stands at
+		// its target; short of it, the lab that would make those hands is
+		// the hand that converts it (balance over power: a full bank at
+		// a sixth of their army bought four more cons off the one lab).
+		const float tgt = ArmyTarget();
+		if (tgt > 1.f) {
+			const float fill = ArmyValue() / tgt;
+			unspent *= (fill < 1.f) ? fill : 1.f;
+		}
 		if (unspent > 0.f) {
 			const float bp = ConWorkerBP();
 			if (bp > 0.f)

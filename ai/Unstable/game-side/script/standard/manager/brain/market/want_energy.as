@@ -1391,7 +1391,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
 		if (pinned) {
-			const float open = Catalog::gConvCapacity[d] - ConvCapInFlight();
+			// Capacity standing idle is what the pin is NOT: the bank pinned
+			// full through five idle converters and bought a sixth at full
+			// chew each time.
+			float idle = ConvCapE() - ConvUseE();
+			if (idle < 0.f)
+				idle = 0.f;
+			const float open = Catalog::gConvCapacity[d] - ConvCapInFlight() - idle;
 			if (open > chew)
 				chew = open;
 		}
