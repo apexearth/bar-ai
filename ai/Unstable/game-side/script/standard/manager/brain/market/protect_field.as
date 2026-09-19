@@ -103,11 +103,38 @@ float PfRimAt(const AIFloat3& in p)
 
 // How far OUTSIDE the perimeter this position is. Negative is inside; the
 // magnitude is how deep.
+// An enemy group within r moving faster than the asker: something it
+// cannot catch, only cover against.
+bool FastFoeNear(const AIFloat3& in at, float r, float mySpeed)
+{
+	const int n = aiEnemyMgr.GetEnemyGroupCount();
+	for (int g = 0; g < n; ++g) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
+		if (!OnMap(gp) || (gp.distance2D(at) > r))
+			continue;
+		if (aiEnemyMgr.GetEnemyGroupVel(g) > mySpeed)
+			return true;
+	}
+	return false;
+}
+
 float PfRimDist(const AIFloat3& in p)
 {
 	if (!gPfRimOk)
 		return 0.f;
 	return p.distance2D(gPfMid) - gPfRimR[PfRayOf(p)];
+}
+
+// ...against the base PROPER: the rim capped at the wall's reach, so an
+// outer mex does not extend "home" to wherever the last claim landed.
+float PfCoreRimDist(const AIFloat3& in p)
+{
+	if (!gPfRimOk)
+		return 0.f;
+	float rb = gPfRimR[PfRayOf(p)];
+	if ((gPfCapR > 1.f) && (rb > gPfCapR))
+		rb = gPfCapR;
+	return p.distance2D(gPfMid) - rb;
 }
 
 // The base's own footprint in build cells, from the measured rim: a fan of

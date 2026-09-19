@@ -1786,6 +1786,16 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
 			{
 				continue;
 			}
+			// apex: a builder never chases what outruns it. A scout outside
+			// our range that is faster than we are is not a target -- the
+			// commander walked after light scouts it could never catch
+			// (apexearth 2026-09-19: "he should just make a turret where he
+			// is"). Inside range the guns answer without a step.
+			if ((edef->GetSpeed() > cdef->GetSpeed())
+				&& (ePos.SqDistance2D(pos) > SQUARE(cdef->GetMaxRange())))
+			{
+				continue;
+			}
 			float elevation = map->GetElevationAt(ePos.x, ePos.z);
 			if (edef->IsInWater(elevation, ePos.y)) {
 				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW

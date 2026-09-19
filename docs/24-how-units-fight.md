@@ -274,6 +274,11 @@ this file wins and the other is stale.
 - **Do not abandon a nearly-won endgame to caution.** An enormous army must
   saturate a doomsday gun, not orbit its range ring.
 
+- **The commander does not chase light scouts he can never catch.** He builds
+  a turret where he stands instead, so that ground is closed to them; with
+  turret coverage on whatever he is building, the scout does not matter
+  (2026-09-19).
+
 ## Retreat
 
 - **A squad in a fight it obviously cannot win turns around and retreats

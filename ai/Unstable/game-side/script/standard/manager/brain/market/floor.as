@@ -107,7 +107,9 @@ bool ComFar(const AIFloat3& in p)
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	if (p.distance2D(Builder::gHomePos) > leash)
 		return true;
-	return gPfRimOk && (PfRimDist(p) > 400.f);
+	// The commander's home is the base proper, not its outermost mex: the
+	// uncapped rim called a flank claim home and he died there.
+	return gPfRimOk && (PfCoreRimDist(p) > 400.f);
 }
 
 IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)

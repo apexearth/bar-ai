@@ -76,10 +76,38 @@ float ServableUpDemand()
 // it actually postponed was eighty-four spots (apexearth, watching it happen
 // again). Bounded by the hands that could actually claim them, the same
 // unserved-demand shape used everywhere else.
+// SPOTS WE COULD ACTUALLY CLAIM: not ours, not under a seen enemy building,
+// not ground the reach veto or a constructor's death has marked. "All spots
+// minus ours" counted the enemy's whole half of the map as open and bought
+// air cons by the hundred to fly at it.
+int gClaimableAt = -1000;
+int gClaimableN = 0;
+int ClaimableSpots()
+{
+	if (ai.frame - gClaimableAt < 5 * SECOND)
+		return gClaimableN;
+	gClaimableAt = ai.frame;
+	CacheSpots();
+	const array<int>@ lidx = LedgerIdx();
+	int n = 0;
+	for (uint si = 0; si < gAllSpots.length(); ++si) {
+		if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
+			continue;
+		const AIFloat3 sp = gAllSpots[si];
+		if (!OnMap(sp) || NearBlocked(sp) || NearConDeath(sp))
+			continue;
+		if (ai.GetEnemyCostAt(sp, 48.f) > 0.f)
+			continue;
+		++n;
+	}
+	gClaimableN = n;
+	return n;
+}
+
 float OpenSpotStream()
 {
 	CacheSpots();
-	const int open = int(gAllSpots.length()) - int(gLSpot.length());
+	const int open = ClaimableSpots();
 	if (open <= 0)
 		return 0.f;
 	float claimers = 0.f;

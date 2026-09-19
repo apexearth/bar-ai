@@ -422,9 +422,15 @@ void UpdateWithdraw()
 		// physical enemy presence at home, not a clock, so this only fires while
 		// the threat is actually standing there.
 		bool recallHome = false;
+		// ...and only while what stands at home cannot answer what is there
+		// (HoldHome: the hold's own metal-against-metal test). A raid the
+		// home pool covers recalled the whole push anyway, and the front
+		// never rose. His rule: armies ignore enemies under half their
+		// strength unless defending the home base.
 		if (((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
 			&& (ai.GetTunable("apex_recall_home", TUNE_RECALL_HOME) > 0.f)
-			&& Builder::gHomeSet && Builder::BaseUnderAttack())
+			&& Builder::gHomeSet && Builder::BaseUnderAttack()
+			&& HoldHome())
 		{
 			recallHome = Military::ForwardFraction(p)
 				> ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);

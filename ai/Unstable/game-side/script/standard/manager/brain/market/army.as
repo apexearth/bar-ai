@@ -419,7 +419,9 @@ float RezRateM()
 	gRezWorkAt = ai.frame;
 	const float h = ai.GetTunable("apex_rez_horizon", TUNE_REZ_HORIZON);
 	gRezRepairRate = ai.GetOwnRepairM() / ((h > 1.f) ? h : 120.f);
-	gRezWreckRate = Military::WreckRateM();
+	gRezWreckRate = Military::WreckRateM() - Military::RezLostRateM();
+	if (gRezWreckRate < 0.f)
+		gRezWreckRate = 0.f;
 	gRezRate = gRezRepairRate + gRezWreckRate;
 	return gRezRate;
 }

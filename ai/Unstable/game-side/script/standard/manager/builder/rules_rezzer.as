@@ -267,7 +267,11 @@ IUnitTask@ RezzerFlee(CCircuitUnit@ unit)
 	// unlike an armed constructor, a rez bot cannot dig in, only leave.
 	if (IsRezzer(unit)) {
 		ConDugIn(unit);   // refreshes the hit window from the health delta
-		if (ai.frame < gConHitUntil[ConSlot(unit)]) {
+		// ...or standing where a constructor of ours just died: the fleet
+		// walks to one field together, and the first death is the only
+		// warning the rest get before the same guns reach them.
+		if ((ai.frame < gConHitUntil[ConSlot(unit)])
+			|| Market::NearConDeath(unit.GetPos(ai.frame))) {
 			IUnitTask@ flee = Retreat(unit);
 			if (flee !is null) {
 				// TROUBLE_WINDOW holds this true for up to 90s per hit, so without a

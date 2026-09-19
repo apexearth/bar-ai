@@ -21,6 +21,7 @@ float gBleedFwd  = 0.f;          // decayed metal: deep-forward combat deaths
 float gBleedHome = 0.f;          // decayed metal: home-ground combat deaths
 float gKillFwd   = 0.f;          // decayed metal: enemy things WE killed deep forward
 float gLossAll   = 0.f;          // decayed metal: ALL combat deaths, any ground
+float gRezLost   = 0.f;          // decayed metal: rez bots of ours that died
 float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
 // What killed our army, by attacker class -- observability first; consumers
 // get their own measured pass.
@@ -143,6 +144,19 @@ float WreckRateM()
 	return (gLossAll + gKillAll) / BLEED_TAU;
 }
 
+// THE FLEET'S OWN DEATHS ARE THE WRECKS IT CANNOT HAVE. A wreck field
+// under the enemy's guns reads as a stream and bought bots by the dozen to
+// walk into the same guns. What the fleet loses per second comes off the
+// stream it is sized to.
+void NoteRezLoss(float costM)
+{
+	gRezLost += costM;
+}
+float RezLostRateM()
+{
+	return gRezLost / BLEED_TAU;
+}
+
 // NET deep-forward burn as a fraction of metal income: losses minus what we
 // killed out there. A bloody push that pays for itself must not read as a
 // bleed. Ledger holds roughly BLEED_TAU seconds, so ledger/TAU is metal/s.
@@ -234,6 +248,7 @@ void UpdateDeathLedger()
 	gBleedHome *= k;
 	gKillFwd *= k;
 	gLossAll *= k;
+	gRezLost *= k;
 	gKillAll *= k;
 	gDeadToStatic *= k;
 	gDeadToAir *= k;

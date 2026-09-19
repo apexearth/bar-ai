@@ -1359,7 +1359,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				if (OnMap(mexAt) && MexUnguardedInReach(mexAt, near))
 					cw.pos = mexAt;
 			}
-			if (!SiteIsMex(cw.pos) || (uAt.distance2D(cw.pos) > near))
+			// THE GUN GOES WHERE THE COMMANDER STANDS when something he
+			// cannot catch is circling him (apexearth 2026-09-19: "Instead
+			// of him chasing them, he should just make a turret where he
+			// is... as long as we've got some turret coverage on whatever
+			// he's trying to build"). The ground he works is the site.
+			const bool scouted = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+					&& FastFoeNear(uAt, near * 2.f,
+					Catalog::gSpeed[int(unit.circuitDef.id)]);
+			if (scouted && !MexUnguardedInReach(cw.pos, near))
+				cw.pos = uAt;
+			if ((!SiteIsMex(cw.pos) && !scouted) || (uAt.distance2D(cw.pos) > near))
 				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.

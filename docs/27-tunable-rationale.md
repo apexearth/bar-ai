@@ -829,7 +829,12 @@ question stays his (ISSUES "1v1 vs BARb HARD").
 
 MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
 (apexearth: "3 times more rezbots" -- was 0.04). Named _FRAC: a legacy
-TUNE_MEDIC_SHARE with other semantics survives at the bottom.
+TUNE_MEDIC_SHARE with other semantics survives at the bottom. Unread from
+the 09-13 rez overhaul until 2026-09-19, when the wreck-stream sizing bought
+210 rez bots in one 2v2 (a 40k army dying at home reads as a 100 m/s
+stream); since then the rez fleet's standing metal stops at this fraction
+of ArmyValue, and a fleet losing more per second than it could return
+(RezLostRateM) buys none.
 
 ### `TUNE_WATER_FIRST` = 1.0f
 

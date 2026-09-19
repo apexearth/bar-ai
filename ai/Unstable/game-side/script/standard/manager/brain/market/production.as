@@ -1184,6 +1184,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				float unmet = rezStream - float(rezHave) * rezCap;
 				if (unmet > rezCap)
 					unmet = rezCap;
+				// A fleet losing more than it could ever return is not
+				// short of bots: the wrecks are under the enemy's guns.
+				if (Military::RezLostRateM() >= float(rezHave + 1) * rezCap)
+					unmet = 0.f;
+				// ...and the fleet is part of the army, sized to it (his
+				// apex_medic_frac); a wreck stream alone bought bots by
+				// the hundred.
+				const float medic = ai.GetTunable("apex_medic_frac", TUNE_MEDIC_FRAC);
+				if ((medic > 0.f)
+					&& (float(rezHave) * Catalog::gCostM[d] >= medic * ArmyValue()))
+					unmet = 0.f;
 				rezEat = (unmet > 0.f) ? unmet : 0.f;
 				rezRestore = rezEat * roleMul;
 				continue;
@@ -1652,7 +1663,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// claim gain divides by claimers per open spot -- the unserved-
 			// demand law, fourth application.
 			CacheSpots();
-			const float open = float(int(gAllSpots.length()) - int(gLSpot.length()));
+			const float open = float(ClaimableSpots());
 			// Loop-invariant: the claimer fleet does not depend on which unit
 			// the line is pricing. Taken once per pass on first use.
 			if (claimers < 0.f) {
