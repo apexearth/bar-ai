@@ -501,8 +501,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// succeed"). The per-metal ranking stays for the ring.
 			// ...and not on a slot carrying the SHORTFALL pull either: that
 			// pull asks for the strongest gun the economy affords, and by
-			// cover per metal it bought the commander 42 light towers in a
-			// ring (his watch: "25 llts in one base within 250 elmos").
+			// cover per metal it bought a ring of light towers (his watch).
 			if (bestIsWall && !bestIsLine && hEffOn && (wallPullP <= 0.f)
 				&& (Catalog::gCostM[d] > 1.f)) {
 				const float eff = PfTowerKill(d) / Catalog::gCostM[d];
