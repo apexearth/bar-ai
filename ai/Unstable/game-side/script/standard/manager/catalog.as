@@ -35,6 +35,7 @@ array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
 array<bool> gFloater;   // stands on water
 array<bool> gAmphib;    // moves through water and land both
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
+array<int>  gLimit;     // the def's own cap (behaviour.json "limit"), the DLL's maxThisUnit
 array<int> gAreaCells;  // footprint in 16-elmo build cells
 array<int> gFootX;      // footprint per axis, in 16-elmo build cells
 array<int> gFootZ;
@@ -109,7 +110,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n); gAmphib.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
 	gFootX.resize(n); gFootZ.resize(n);
 	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
 	gBuildDist.resize(n);
@@ -194,10 +195,19 @@ void Init()
 		gRezzer[i]       = cdef.IsRezAble();
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();
+		// AN ARMED UNIT IS ARMY, however weak: power <= 1 is "unarmed" to
+		// every army test in the market, and a scout's config zeroes its
+		// power, so the Tick never reached the screen axis written for it
+		// (apexearth 2026-09-18: "we never make them but their speed is
+		// good for getting enemy scouts and for being annoying").
+		if (gMobile[i] && !gBuilder[i] && (gPower[i] <= 1.f)
+			&& (gSurfT[i] + gAirT[i] > 0.01f))
+			gPower[i] = 1.01f;
 		// NOT IsAvailable(frame): that folds in behaviour.json "since" clocks
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.
 		gAvailable[i]    = (cdef.maxThisUnit > 0) && !BlockedDef(cdef.GetName());
+		gLimit[i]        = cdef.maxThisUnit;
 	}
 
 	// Who-builds-what, both directions. Outer loop is builders only, so this

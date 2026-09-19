@@ -958,6 +958,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
 			continue;
+		// The def's own cap (behaviour.json "limit"): the Tick's screen axis
+		// out-prices every pawn, and its config says five.
+		if ((Catalog::gLimit[d] > 0) && (Catalog::gLimit[d] < 1000000)
+			&& (gOwnCount[d] >= Catalog::gLimit[d])) {
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":limit";
+			continue;
+		}
 		if (EcoOnly() && !Catalog::gBuilder[d])
 			continue;   // the economy-only benchmark: hands only
 		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
@@ -1693,8 +1701,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// pile up (apexearth 2026-09-14: "I think it should be okay for them
 		// to [make rezbots]"). The unmet stream, in the con's own m/s
 		// currency, stands on its own.
-		if (rezEat * eFeedA > gainM)
-			gainM = rezEat * eFeedA;
+		// ...over the payback horizon, as the constructor's claim is: raw
+		// m/s read v=25 against a pawn's 3,240 with 839 m/s of wrecks on the
+		// field and fourteen bots standing (his watch: "we are lacking
+		// rezbots").
+		const float hRez = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+		if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
+			gainM = rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f);
 		const float vM = gainM / Catalog::gCostM[rezDef];
 		if (gainM > 0.01f) {
 			candDef.insertLast(rezDef);
