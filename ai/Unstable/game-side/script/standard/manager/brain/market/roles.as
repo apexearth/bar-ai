@@ -110,15 +110,40 @@ void ConRoleRecount()
 // v=0.09 over assist at v=52), and the hand is released to the draw.
 array<int> gRwCatBest;
 array<float> gRwWt;
+array<Want@>@ gRwRanked;
 float gRwSum = 0.f;
 void RoleWorthPrep(array<Want@>@ ranked)
 {
+	@gRwRanked = ranked;
 	gRwSum = DrawWeights(ranked, gRwCatBest, gRwWt);
 }
+
+// Whether the category's best want is one its TARGET counts: a turret closes
+// the defence gap, dragon's teeth do not (a T1 hand's only ground-defence
+// candidate once the turret is routed out, and the role hoisted it 150 times
+// a game at v=0.06).
+bool RoleWantClosesGap(int c)
+{
+	if ((gRwRanked is null) || (gRwCatBest[c] < 0)
+		|| (gRwCatBest[c] >= int(gRwRanked.length())))
+		return false;
+	const Want@ w = gRwRanked[uint(gRwCatBest[c])];
+	if (c == CAT_DEFENCE)
+		return (w.kind == WK_PROTECT) && (w.spotId == PROT_DEF);
+	return true;
+}
+
 bool RoleWorthDoing(int c)
 {
 	if ((gRwSum <= 0.f) || (c < 0) || (c >= int(gRwWt.length())) || (gRwCatBest[c] < 0))
 		return false;
+	// A QUOTA THE TARGET GAP SET IS NOT RE-JUDGED BY THE DRAW: the gap floor
+	// exists because a category the draw starves gets a starved ticket, and
+	// testing the quota against that same ticket starved it again. Only for
+	// a want that closes the gap; anything else in the category is judged as
+	// the draw would.
+	if ((CatGapFrac(c) > gRoleShare[c]) && RoleWantClosesGap(c))
+		return true;
 	const float shareK = ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE);
 	int roled = int(float(gWorkerIds.length()) * shareK);
 	if (roled < 1)

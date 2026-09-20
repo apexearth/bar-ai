@@ -18,7 +18,7 @@ int gNextDefFwdLog = 0;
 // EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
 // guessed (apexearth: "what is the connection causing this? We need to not
 // guess here").
-float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f;
+float gDbgStake = 0.f, gDbgHz = 0.f, gDbgSiege = 0.f, gDbgHazard = 0.f, gDbgCapM = 0.f;
 float gDbgShort0 = 0.f, gDbgShort1 = 0.f, gDbgThreat = 0.f, gDbgCover0 = 0.f;
 float gDbgCover1 = 0.f;
 int gNextDefPriceLog = 0;
@@ -166,6 +166,7 @@ array<float> gDwFill;    // TargetFill(have, target)
 array<float> gDwTeam;    // mine/team tower power
 array<float> gDwVal;     // the Want value that came out of ValueOf
 array<float> gDwStake;   // fill terms, as of that def's own last real fill
+array<float> gDwCapM;
 array<float> gDwHz;
 array<float> gDwStop;
 array<float> gDwThreat;
@@ -187,7 +188,7 @@ void DwEnsure(int d)
 		return;
 	gDwRaw.resize(n);   gDwTtd.resize(n);    gDwT1.resize(n);
 	gDwEff.resize(n);   gDwFill.resize(n);   gDwTeam.resize(n);
-	gDwVal.resize(n);   gDwStake.resize(n);  gDwHz.resize(n);
+	gDwVal.resize(n);   gDwStake.resize(n);  gDwHz.resize(n);  gDwCapM.resize(n);
 	gDwStop.resize(n);  gDwThreat.resize(n); gDwCov0.resize(n);
 	gDwCov1.resize(n);  gDwKill.resize(n);   gDwSite.resize(n);
 }
@@ -221,14 +222,9 @@ string PfKillWhy(int d)
 		return "never priced";
 	const bool lin = (gPkLin[d] > 0);
 	return "basis=" + (lin ? "dps " : "surfT ") + PkF(gPkBase[d], 2)
-		// SIX DECIMALS, NOT ONE. PfSurfDps recovers surfDps*THREAT_MOD^2 from
-		// the engine's threat figure, and THREAT_MOD is ~0.006, so a 400-dps
-		// Beamer reads 0.0145. The constant cancels against /ref so the price
-		// is right, but at one decimal both fields printed 0.0 and read as
-		// "this term annihilated the product".
-		+ " dps=" + PkF(gPkDps[d], 6)
+		+ " dps=" + PkF(gPkDps[d], 1)
 		+ " xOutr=" + PkF(gPkOutr[d], 3)
-		+ " /ref=" + PkF(gPkRef[d], 6)
+		+ " /ref=" + PkF(gPkRef[d], 3)
 		+ " xDur=" + PkF(gPkDur[d], 3)
 		+ " xTrade=" + PkF(gPkTrade[d], 2)
 		+ " =pk" + PkF(gPkOut[d], 2);
@@ -241,6 +237,7 @@ string DefWhyTerms(int d)
 		+ " val=" + formatFloat(gDwVal[d], "", 0, 4)
 		+ " raw=" + formatFloat(gDwRaw[d], "", 0, 3)
 		+ " [stake=" + formatFloat(gDwStake[d], "", 0, 0)
+		+ " cap=" + formatFloat(gDwCapM[d], "", 0, 0)
 		+ " hz=" + formatFloat(gDwHz[d], "", 0, 5)
 		+ " stopped=" + formatFloat(gDwStop[d], "", 0, 3)
 		+ " threat=" + formatFloat(gDwThreat[d], "", 0, 0)

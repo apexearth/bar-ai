@@ -411,7 +411,7 @@ float PfKillRef()
 			gPfKillRef = dps / Catalog::gCostM[ld];
 	}
 	if (gPfKillRef <= 0.f)
-		gPfKillRef = 2.8f;   // the measured light-tower figure, if the def is missing
+		gPfKillRef = 1.9f;   // the light tower's dps per metal, if the def is missing
 	return gPfKillRef;
 }
 
@@ -518,24 +518,19 @@ float PfHeavyRef()
 	return gPfAlphaHi;
 }
 
-// SURFACE DPS, recovered from the engine's own threat figure.
-//
-// CircuitDef.cpp:622 builds surfThreat as
-// sqrt(surfDps) * surfDmg^0.25 * THREAT_MOD * sqrt(health), so dividing that
-// back out by sqrt(health) and alpha^0.25 and squaring leaves surfDps times a
-// constant -- and the constant cancels against the light-tower reference this
-// is always divided by. Recovered rather than read off Catalog::gDps because
-// gDps counts every weapon: an AA turret would otherwise score as ground
-// cover, and surfT is the only field that knows what a gun can shoot.
+// SURFACE DPS, in real damage per second. Catalog::gDps is the DLL's raw rate
+// over every weapon; the surface share of it is read off the threat split, which
+// is the only field that knows what a gun can shoot. Not inverted from gSurfT:
+// behaviour.json's threat-map mods (Pulsar surf 0.5, Pit Bull 1.5) are inside
+// that figure, and squaring them out read the Pulsar at a ninth of a Pit Bull.
 float PfSurfDps(int d)
 {
-	const float t = Catalog::gSurfT[d];
-	const float hp = Catalog::gHealth[d];
-	const float a = Catalog::gAlpha[d];
-	if ((t <= 0.f) || (hp <= 0.f) || (a <= 0.f))
+	const float dps = Catalog::gDps[d];
+	const float st = Catalog::gSurfT[d];
+	const float at = Catalog::gAirT[d];
+	if ((dps <= 0.f) || (st <= 0.f))
 		return 0.f;
-	const float r = t / (sqrt(hp) * pow(a, 0.25f));
-	return r * r;
+	return dps * (st * st) / (st * st + at * at);
 }
 
 // Cover this def contributes at a point it reaches, in light-tower metal.

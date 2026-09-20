@@ -465,6 +465,8 @@ void AdvDeferLog(const string& in what)
 }
 
 int gNextSuperLog = 0;
+int gNextLrpcLog = 0;
+float gLrpcInReach = 0.f;
 
 Want@ ProposeSuper(CCircuitUnit@ unit)
 {
@@ -653,22 +655,41 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// strategic build; a warhead reaches their base wherever it is, a gun
 		// only what stands inside its range. Same discount shape as the
 		// defence fill above, never a gate.
+		// REMEMBERED STRUCTURE METAL, not ai.GetEnemyCostAt: that one is a
+		// count of enemies visible right now, which at a gun site behind our
+		// own line is zero all game (inReach=0.00 in every reading).
 		if (sc == SC_LRPC) {
 			const float reach = Catalog::gMaxRange[d];
 			const float ref = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
 			float inReach = (reach > 1.f) && (ref > 1.f)
-					? (ai.GetEnemyCostAt(at, reach) / ref) : 0.f;
+					? (aiEnemyMgr.GetEnemyStructCostAt(at, reach) / ref) : 0.f;
 			if (inReach > 1.f)
 				inReach = 1.f;
 			const float dfloor = ai.GetTunable("apex_offense_def_floor",
 					TUNE_OFFENSE_DEF_FLOOR);
 			gain *= dfloor + (1.f - dfloor) * inReach;
+			gLrpcInReach = inReach;
 		}
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;
 		Want c;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		if ((sc == SC_LRPC) && (ai.frame >= gNextLrpcLog)) {
+			gNextLrpcLog = ai.frame + 30 * SECOND;
+			AiLog("apex: lrpc t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+				+ " bill=" + int(bill) + " budget=" + int(budget)
+				+ " have=" + SuperHave(sc) + "/" + SuperTarget(sc)
+				+ " defFill=" + formatFloat((DefenceTarget() > 1.f)
+					? (DefenceValue() / DefenceTarget()) : 1.f, "", 0, 2)
+				+ " inReach=" + formatFloat(gLrpcInReach, "", 0, 2)
+				+ " at=" + int(at.x) + "," + int(at.z)
+				+ " gain=" + formatFloat(gain, "", 0, 2)
+				+ " m=" + int(c.mCost) + " t=" + int(c.tCost)
+				+ " v=" + formatFloat(c.value * 1000.f, "", 0, 2)
+				+ " best=" + ((w.def is null) ? "none" : (SuperName(w.spotId) + ":" + w.def.GetName()))
+				+ " bestV=" + formatFloat(w.value * 1000.f, "", 0, 2));
+		}
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_SUPER;

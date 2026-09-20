@@ -1341,6 +1341,15 @@ starves got a starved quota too ("builder roles from target gaps sounds like
 a smart idea to me. We certainly have more than enough builders"). The
 `roles` line now prints `share+gap:held/quota`.
 
+2026-09-16: a role holds only work the draw would pick (`RoleWorthDoing`: the
+category's sharpened ticket wins at least one of the R roled elections) --
+the eco seat's defence-roled hands had bought Bulwarks at v=0.09 over assist
+at 52. 2026-09-20: that test starved the gap floor it sat under (Frozen Ford
+1v1: `defence=0.00+0.90:0/3` for 17 minutes), so a quota the TARGET GAP set
+is exempt from it when the category's best want is one the target counts (a
+turret); teeth or anything else in the category still face the ticket test,
+because the first cut hoisted 153 teeth elections at v=0.06.
+
 Both are his policy, not the model's: how many hands are committed is the
 "leave some open" he asked for, and the averaging window is how long a role
 outlives the job it was given for (a job is 30-300 s of walk and build; 120 s

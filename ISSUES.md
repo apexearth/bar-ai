@@ -115,6 +115,39 @@ instant. Free (the gadget intercepts it, 0.03% of a frame), but the doctrine
 
 ## DEFENCE
 
+### DEFENCE SHARE: 2-6% of metal against BARb's 15-18%; the target is 90% unmet from minute 10 (2026-09-20)
+
+His ask: "we're pretty much always making a lot less [defence] than the
+barbarian stable AI is... we should be making the long range plasma cannons
+as well." Frozen Ford 1v1 +100% (his 20:57 game and `matches/def-ctl-ff-s3`):
+static defence 3.8% of spend vs BARb 17.7%; `apex: targets` def=85-765
+against a target of 5-30k from minute 10; per 5-min bucket we spent
+85/190/0/0/0 on defence from 5 to 30 min while BARb spent 885/1865/2560/1210/
+14440. Found and fixed 09-20 (commit message has the numbers):
+- `apex: roles` read `defence=0.00+0.90:0/3` for 17 minutes: the gap earned
+  the quota and `RoleWorthDoing` (09-16) re-judged it by the draw's ticket.
+  A gap-earned quota now stands when the category's best want is a turret;
+  teeth and anything else in the category are judged as the draw would (the
+  first cut hoisted 153 dragon's-teeth elections at v=0.06 -- the eco-seat
+  Bulwark again).
+- `PfSurfDps` inverted the engine threat with behaviour.json's threat-map
+  mods inside it (Pulsar surf 0.5, Pit Bull 1.5, squared): Pulsar kill 567
+  vs Pit Bull 1341 at real dps 1091 vs 422, and `PfKillCapM` in those units
+  capped every stake at ~1 metal, so the threat-priced arm of the gain was
+  inert. Real dps now; `defwhy` prints `cap=`.
+- The LRPC's "worth what it reaches" read `ai.GetEnemyCostAt`, a count of
+  enemies visible now: `inReach=0.00` in every reading. Reads remembered
+  structure metal now (`apex: lrpc` line).
+Open after the fixes: the quota is still 0/4-0/6 on Frozen Ford at 13-25
+min. Only T2 hands can propose a turret (his 09-19 no-basic-tower rule), the
+first takes no role, and a roled T2 hand's Pulsar order is repeatedly pulled
+off by the e-stall hoist (`why=estall role=defence`, 6-15 a game) -- 13
+Pulsar executions, 1 placed in `defB/frozenford-B-s2`. The e-stall is the
+energy side's problem; the defence hole is its shadow. Also unread as metal:
+`ThreatAt` (coverage.as), `foeHere` (protect_fill.as), the shield-far gate,
+gift.as and HoldNeedM all read the same visible-unit count as metal; each
+has a floor that hides it. Not changed.
+
 ### THE 10-20 MINUTE HOLE: T1 hands are routed out, the T2 hand's gun loses to eco (2026-09-18)
 
 His watch of `matches/20260918-055500`: five LLTs and a beamer die at

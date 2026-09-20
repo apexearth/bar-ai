@@ -129,6 +129,7 @@ string KindName(int k)
 	if (k == WK_SENSE) return "sense";
 	if (k == WK_AIRDEF) return "airdef";
 	if (k == WK_SUPER) return "super";
+	if (k == WK_TEETH) return "teeth";
 	return "none";
 }
 

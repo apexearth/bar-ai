@@ -47,7 +47,13 @@ lines of quotes.
 - 380 m/s income and not one pulsar; defence spend read 0 in half the
   3-min buckets (2026-09-20). Same game: 604 nano orders to 16 defence orders
   after 20 min; where defence was worth more it lost to the energy role seat
-  10 of 10. Re-measure after the nano fix before touching defence pricing.
+  10 of 10. Re-measured 09-20 after the nano fix: unchanged (3.8% vs BARb
+  17.7%). Three mechanisms fixed the same day (ISSUES DEFENCE SHARE): the
+  defence role never assigned, the Pulsar rated under a Pit Bull, the LRPC
+  reading zero in reach. Defence at 16-24 min ~3x on three seeds; still a
+  third of BARb's share -- open.
+- We make far less defence than BARb stable and no long-range plasma
+  cannons; "we need to do better" (2026-09-20). Same entry.
 - Constructors do not walk out alone onto ground where the last one died, and
   lost mexes are not passively conceded (09-19). The first half is built: a
   con's death marks its ground for the claims, the wrecks, the rez chain and

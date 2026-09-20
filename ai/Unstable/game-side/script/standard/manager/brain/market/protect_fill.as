@@ -708,7 +708,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// winner can differ slightly.
 		if (prevented > fillBest) {
 			fillBest = prevented;
-			gDbgStake = stake;
+			gDbgStake = stakeK;
+			gDbgCapM = capM;
 			gDbgHz = hz;
 			gDbgSiege = sg;
 			gDbgHazard = hazard;
@@ -733,6 +734,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	DwEnsure(d);
 	gDwKill[d] = adds;
 	gDwStake[d] = (fillBest > 0.f) ? gDbgStake : 0.f;
+	gDwCapM[d] = (fillBest > 0.f) ? gDbgCapM : 0.f;
 	gDwHz[d] = (fillBest > 0.f) ? gDbgHz : 0.f;
 	gDwStop[d] = (fillBest > 0.f) ? gDbgStopped : 0.f;
 	gDwThreat[d] = (fillBest > 0.f) ? gDbgThreat : 0.f;
