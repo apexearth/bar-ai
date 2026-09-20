@@ -95,8 +95,9 @@ PANELS = [
              "moving target; lower says half that range only ever lands on buildings"),
             ("TUNE_RECORD_BITE", "ON prices a unit type by what its DEAD actually "
              "dealt: a type whose units keep dying under their own health in "
-             "damage is bought at that fraction, kept per tier of what killed it "
-             "and read against what the enemy fields now, as a moving average "
+             "damage is bought at that fraction, kept per matchup (our type vs "
+             "the unit that killed it) and read against what the enemy fields "
+             "now -- their Tzars price our Pawns by what Tzars did to Pawns -- as a moving average "
              "across games (fodder and fighters are never judged). OFF keeps the "
              "record but prices by stats alone. `record` on a run shows it"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "

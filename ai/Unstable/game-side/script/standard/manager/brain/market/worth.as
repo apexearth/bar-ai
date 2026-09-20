@@ -496,11 +496,12 @@ float UnitPPC(int d)
 // fighters are always needed, so neither is judged. Never reaches zero: the
 // prior in the DLL keeps the floor at prior/(prior+window).
 //
-// READ AGAINST WHAT THEY FIELD (apexearth 2026-09-19: "consider what each of
-// these units is dying to ... good in the early game, then later on just
-// bad"). The DLL keeps one bucket per killer tier; the price is the buckets
-// weighted by the identified enemy metal per tier, so a type that trades
-// with T1 and dies for nothing to T2 is discounted as their T2 share grows.
+// READ AGAINST WHAT THEY FIELD (apexearth 2026-09-19: "if the enemy has
+// Tzars or Fatboys ... I shouldn't be building crappy short-range units").
+// The DLL keeps one bucket per (our type, what killed it) and weights them
+// by the enemy attackers it currently knows of, by metal; a matchup with no
+// deaths of its own reads as its killer's tier, then as the pool. The tier
+// table is pushed once so the DLL can do that fallback.
 bool gRecordTiersSet = false;
 array<float> gRecordMulLast;
 float RecordMul(int d)
@@ -517,17 +518,7 @@ float RecordMul(int d)
 			if (Catalog::ValidId(i))
 				ai.RecordSetTier(Catalog::Def(i), DefTier(i));
 	}
-	float tot = 0.f;
-	for (uint t = 1; t < Military::gFoeTierM.length(); ++t)
-		tot += Military::gFoeTierM[t];
-	float r;
-	if (tot <= 1.f) {
-		r = ai.RecordRatio(cdef, -1);
-	} else {
-		r = 0.f;
-		for (uint t = 1; t < Military::gFoeTierM.length(); ++t)
-			r += (Military::gFoeTierM[t] / tot) * ai.RecordRatio(cdef, int(t));
-	}
+	const float r = ai.RecordRatioMix(cdef);
 	const float m = (r < 1.f) ? r : 1.f;
 	// The proof that the record reaches a price: logged when it moves.
 	if (int(gRecordMulLast.length()) <= Catalog::gDefCount)
@@ -535,10 +526,8 @@ float RecordMul(int d)
 	if ((gRecordMulLast[d] == 0.f) ? (m < 0.95f) : (abs(m - gRecordMulLast[d]) > 0.05f)) {
 		gRecordMulLast[d] = m;
 		AiLog(Factory::T() + "apex: record-mul " + cdef.GetName() + " " + formatFloat(m, "", 0, 2)
+			+ " pooled=" + formatFloat(ai.RecordRatio(cdef, -1), "", 0, 2)
 			+ " n=" + ai.RecordCount(cdef, -1)
-			+ " mix=" + ((tot > 1.f) ? (int(100.f * Military::gFoeTierM[1] / tot) + "/"
-				+ int(100.f * Military::gFoeTierM[2] / tot) + "/"
-				+ int(100.f * Military::gFoeTierM[3] / tot)) : "-")
 			+ " t1=" + formatFloat(ai.RecordRatio(cdef, 1), "", 0, 2)
 			+ " t2=" + formatFloat(ai.RecordRatio(cdef, 2), "", 0, 2)
 			+ " t3=" + formatFloat(ai.RecordRatio(cdef, 3), "", 0, 2));

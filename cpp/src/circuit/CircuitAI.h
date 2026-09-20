@@ -224,9 +224,17 @@ public:
 	// script's business; this only measures.
 	void RecordDealt(ICoreUnit::Id attacker, float damage);
 	void RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer);
-	// tier: the killer's tier the bucket is read for, or -1 for all of them.
+	// The buckets whose killer is of this tier (0 = unknown killer, always
+	// counted), or every bucket for -1.
 	float RecordRatio(CCircuitDef* cdef, int tier) const;
 	int RecordCount(CCircuitDef* cdef, int tier) const;
+	// One matchup: how this type fares against that killer, shrunk toward
+	// the killer's tier when the pair has few deaths.
+	float RecordRatioVs(CCircuitDef* cdef, CCircuitDef* killer) const;
+	int RecordCountVs(CCircuitDef* cdef, CCircuitDef* killer) const;
+	// The matchups weighted by what the enemy fields now (our own census of
+	// known live enemy attackers, refreshed every 10 s); pooled when blind.
+	float RecordRatioMix(CCircuitDef* cdef);
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
@@ -514,13 +522,18 @@ public:
 	struct SRecord { float dealt = .0f; float health = .0f; float n = .0f; };
 private:
 	std::unordered_map<ICoreUnit::Id, float> recDealt;      // this game, per unit
-	// Keyed by def and the tier of what killed it (0 unknown, 1..3), so a
-	// type that trades fine with T1 and dies for nothing to T2 reads both.
-	std::unordered_map<int, SRecord> recGame;     // this game
-	std::unordered_map<int, SRecord> recStored;   // from the file
+	// Keyed by def and the def that killed it (0 = unknown), so "they field
+	// Tzars" reads what Tzars do to each of our types.
+	std::unordered_map<long long, SRecord> recGame;     // this game
+	std::unordered_map<long long, SRecord> recStored;   // from the file
 	std::unordered_map<CCircuitDef::Id, int> recTier;   // the script's DefTier
-	static int RecordKey(CCircuitDef::Id id, int tier) { return id * 4 + tier; }
-	int RecordTierOf(CCircuitDef* cdef) const;
+	static long long RecordKey(CCircuitDef::Id id, CCircuitDef::Id killer) { return (long long)id * 65536 + killer; }
+	int RecordTierOf(CCircuitDef::Id killer) const;
+	void RecordSum(CCircuitDef::Id id, CCircuitDef::Id killer, float& dealt, float& health, float& n) const;
+	std::vector<std::pair<CCircuitDef*, float>> recFoe;   // fielded enemy attackers by def
+	float recFoeTotal = .0f;
+	int recFoeFrame = -1;
+	void RecordFoeRefresh();
 	std::string recPath;
 	void RecordLoad();
 	void RecordSave();

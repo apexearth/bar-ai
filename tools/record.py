@@ -3,7 +3,8 @@
     python tools/record.py <match-dir|infolog|apex-record.txt> [...]
 
 Per type: damage dealt over own health, by the tier of what killed it (t0 =
-unknown killer), and the top killers. Fodder and fighters are listed but the
+unknown killer), and the top killers. Pass a run BEFORE a file so the file's
+killers get their tiers from the log lines. Fodder and fighters are listed but the
 price never reads them (worth.as RecordMul).
 """
 import collections
@@ -12,6 +13,7 @@ import re
 import sys
 
 LINE = re.compile(r'apex: record (\S+) died dealt=(\S+) hp=(\S+) .*killed-by=(\S+) t(\d)')
+TIERS = {}  # killer name -> tier, learned from the log lines
 
 
 def read_log(path, acc, killers):
@@ -20,6 +22,7 @@ def read_log(path, acc, killers):
         if not m:
             continue
         d, dealt, hp, killer, tier = m.group(1), float(m.group(2)), float(m.group(3)), m.group(4), int(m.group(5))
+        TIERS[killer] = tier
         a = acc[(d, tier)]
         a[0] += dealt
         a[1] += hp
@@ -27,19 +30,26 @@ def read_log(path, acc, killers):
         killers[d][killer] += 1
 
 
-def read_file(path, acc):
+def read_file(path, acc, killers):
+    """name killer dealt health n; killer '-' unknown. Older lines carry a
+    numeric tier instead of a killer, or no second field at all."""
     for line in open(path):
         parts = line.split()
         if len(parts) == 5:
-            name, tier, dealt, hp, n = parts[0], int(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+            name, killer, dealt, hp, n = parts[0], parts[1], float(parts[2]), float(parts[3]), float(parts[4])
+            tier = int(killer) if killer.isdigit() else TIERS.get(killer, 0)
+            if killer.isdigit():
+                killer = '-'
         elif len(parts) == 4:
-            name, tier, dealt, hp, n = parts[0], 0, float(parts[1]), float(parts[2]), float(parts[3])
+            name, killer, tier, dealt, hp, n = parts[0], '-', 0, float(parts[1]), float(parts[2]), float(parts[3])
         else:
             continue
         a = acc[(name, tier)]
         a[0] += dealt
         a[1] += hp
         a[2] += n
+        if killer != '-':
+            killers[name][killer] += int(n)
 
 
 def main(argv):
@@ -52,7 +62,7 @@ def main(argv):
         if os.path.isdir(p):
             p = os.path.join(p, 'infolog.txt')
         if p.endswith('apex-record.txt'):
-            read_file(p, acc)
+            read_file(p, acc, killers)
         else:
             read_log(p, acc, killers)
     types = sorted({d for d, _ in acc}, key=lambda d: -sum(acc[(d, t)][2] for t in range(4)))

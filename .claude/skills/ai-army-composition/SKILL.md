@@ -44,6 +44,7 @@ and the term pulls back to them on its own.
 | `apex_speed_worth * speed/FoeSpeedCap()` | speed valued against the fastest ground combat unit the GAME offers — read from the catalog, NOT from what we have seen, because the assumption must hold while blind |
 | `apex_cover_worth * CoverPerMetal(d) * PatrolShort()` | coverage = quantity x speed per metal against the sites we must watch; buys cheap fast bodies while thin, fades to zero as they arrive |
 | `apex_los_worth * losR/1000` | sight, because every other sense reads zero while blind |
+| `RecordMul(d)` | the measured track record: min(1, dealt/health of this type's dead, per matchup against what the enemy fields now). Discount only; fodder and fighters exempt. `apex: record-mul`, `tools/record.py`, docs/27 `TUNE_RECORD_BITE` |
 
 `PatrolShort` counts standing sites (mex spots + generators + plants) times
 `FoeSpeedCap` as the need, and our fielded ground speed as the have.

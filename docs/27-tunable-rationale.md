@@ -524,14 +524,19 @@ at `apex_record_window` (40) deaths so it stays a moving average; the file
 the process merging its own game onto whatever is there. `RecordMul` in
 worth.as applies min(1, ratio) to the combat price -- a discount only, never
 a boost, never a ban (floor prior/(prior+window) = 0.2), fodder and fighters
-exempt (his ruling). Since 2026-09-19 the file holds one bucket per KILLER
-TIER (0 unknown, 1-3; his ask: "consider what each unit is dying to ... good
-early, then later just bad") and RecordMul reads them weighted by the
-identified enemy metal per tier (`Military::gFoeTierM`), the unknown bucket
-counting for every tier. `apex: record-mul <def> <m> mix=<t1/t2/t3%>
-t1= t2= t3=` is the proof a read reached a price; `tools/record.py` reads a
-run or a file. First read: Rocko 0.78 against their T1, 0.30 against their
-T2; Warrior 1.01 / 0.86. After ~120 harness games the pooled record had a
+exempt (his ruling). Since 2026-09-19 the file holds one bucket per
+MATCHUP -- our type against the def that killed it ("-" unknown; his ask:
+"if the enemy has Tzars or Fatboys ... I shouldn't be building crappy
+short-range units") -- and `RecordRatioMix` weights the matchups by the
+enemy attackers this AI currently knows of, by metal, towers included
+(refreshed every 10 s from its own enemy roster). A matchup with few
+deaths is shrunk toward the killer's tier read, which is shrunk toward the
+pool, so it prices sensibly from the first game and earns its own number
+as deaths accrue. `apex: record-mul <def> <m> pooled= n= t1= t2= t3=` is
+the proof a read reached a price; every death line carries `killed-by=`;
+`tools/record.py` reads a run or a file. First reads: Rocko 0.78 against
+their T1, 0.30 against their T2; Artillery 0.72 against one enemy's fielded
+mix with a pooled record of 0.64. After ~120 harness games the pooled record had a
 median of 0.64 across 71 types with the tanky front line at 0.2-0.3 and
 long-range units at 2-19 -- the absolute "its own health" bar flattens
 prices across the field and hits the shield class hardest, which the line
