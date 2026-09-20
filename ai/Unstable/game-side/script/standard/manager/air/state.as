@@ -63,6 +63,12 @@ bool gStrikeHas = false;
 float gStrikePrize = 0.f, gStrikeAA = 0.f;
 AIFloat3 gStrikeAt;
 int gStrikeSweeps = 0;
+// The atomic bomber's cell from the same sweep: prize times ONE plane's chance
+// over it, so a base under one flak outranks an empty cell of two mexes.
+bool gAtomCellCurHas = false, gAtomCellHas = false;
+float gAtomCellCurScore = 0.f, gAtomCellCurPrize = 0.f;
+float gAtomCellPrize = 0.f;
+AIFloat3 gAtomCellCurAt, gAtomCellAt;
 
 CCircuitUnit@ AnyBomber()
 {
@@ -103,7 +109,7 @@ void StrikeScanStep()
 		const AIFloat3 sp = gStrikeCells[gStrikeCellI];
 		const float prize = aiEnemyMgr.GetEnemyStructCostAt(sp, r);
 		if (prize > 1.f) {
-			const float aa = (probe !is null) ? ai.GetUnitThreatAt(probe, sp) : 0.f;
+			const float aa = CellAA(probe, sp, r);
 			const float score = prize / (1.f + aa);
 			if (!gStrikeCurHas || (score > gStrikeCurScore)) {
 				gStrikeCurHas = true;
@@ -111,6 +117,17 @@ void StrikeScanStep()
 				gStrikeCurPrize = prize;
 				gStrikeCurAA = aa;
 				gStrikeCurAt = sp;
+			}
+			if (gBomberN !is null) {
+				const float sN = Catalog::gHealth[int(gBomberN.id)]
+						* ai.GetTunable("apex_air_aa_soak", TUNE_AIR_AA_SOAK);
+				const float scoreN = (sN > 0.f) ? prize * sN / (sN + aa) : 0.f;
+				if (!gAtomCellCurHas || (scoreN > gAtomCellCurScore)) {
+					gAtomCellCurHas = true;
+					gAtomCellCurScore = scoreN;
+					gAtomCellCurPrize = prize;
+					gAtomCellCurAt = sp;
+				}
 			}
 		}
 		if (++gStrikeCellI >= gStrikeCells.length()) {
@@ -121,6 +138,11 @@ void StrikeScanStep()
 			gStrikeAt = gStrikeCurAt;
 			gStrikeCurHas = false;
 			gStrikeCurScore = 0.f;
+			gAtomCellHas = gAtomCellCurHas;
+			gAtomCellPrize = gAtomCellCurPrize;
+			gAtomCellAt = gAtomCellCurAt;
+			gAtomCellCurHas = false;
+			gAtomCellCurScore = 0.f;
 			++gStrikeSweeps;
 		}
 	}
@@ -481,6 +503,8 @@ float StrikeGainFor(int d, float fillSec)
 		return 0.f;
 	if (!WingBuys())
 		return 0.f;
+	if (IsAtomicDef(d))
+		return AtomicGainFor(fillSec);
 	// Priced against the force AT HOME, so a wave already out neither counts
 	// towards the next one nor stops it being built.
 	const int held = HeldBombers();
@@ -559,8 +583,16 @@ float LookStale()
 	return (f > 1.f) ? 1.f : ((f < 0.f) ? 0.f : f);
 }
 
-// What a look would add to the wing's first purchase, in metal.
+// What a look is worth: the wing's first purchase, or the atomic run waiting on it.
 float LookWorth()
+{
+	const float a = AtomicLookWorth();
+	const float w = WingLookWorth();
+	return (a > w) ? a : w;
+}
+
+// What a look would add to the wing's first purchase, in metal.
+float WingLookWorth()
 {
 	if (!IsAirLead() || !WingBuys())
 		return 0.f;

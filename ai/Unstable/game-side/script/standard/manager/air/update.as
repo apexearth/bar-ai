@@ -11,7 +11,7 @@ bool HoldsUnit(CCircuitUnit@ unit)
 {
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
-	if (IsLookDef(id) && LookDispatch(unit))
+	if (IsLookDef(id) && (AtomicLookHolds(unit) || LookDispatch(unit)))
 		return true;
 	// A fighter on cover keeps its guard order; CoverWatch sends it home.
 	if (Covering(unit.id))
@@ -47,6 +47,8 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// after the surprise, into the AA the wave woke up.
 	if (gStrike)
 		return !InWave(unit.id);
+	if (IsAtomicDef(id))
+		return AtomicHold(unit);
 	// The lead HOLDS, armed or not: this returned Armed(), so an unarmed lead
 	// handed every plane to the stock attack as it left the pad -- 91 Thunders
 	// built, 91 dead one at a time, no strike flown (apexearth 2026-09-11:
@@ -471,6 +473,8 @@ void Update()
 	SettleStrike();
 	ResolveDefs();
 	ReArm();
+	AtomicWatch();
+	AtomicLookWatch();
 	LookWatch();
 	CoverWatch();
 	StrikeScanStep();

@@ -1167,3 +1167,29 @@ that... if it is obsolete we shouldn't be making it, need some buffer in there
 so we aren't flipflopping."* *"I saw converters doing this."* Measured on the
 rd3blob8 set: one game rebuilt the basic converter twelve times after
 reclaiming it.
+
+## 2026-09-20 — an atomic bomber built early is used, alone: scouts find the AA gap, it flies round it
+
+Watching Frozen Ford, a Liche bought at 18 minutes and held at home with three
+Phoenixes: *"If we're pretty early into the game and we make a nuclear bomber,
+we should find a way to use that thing. Still early on, the enemy likely
+doesn't have very strong anti-air yet. So get some scouts out there, find
+where the anti-air is not, and then send that nuclear bomber in and attack the
+enemy's base. We're basically holding our bombers back until we get a good
+mass... right now, one nuclear bomber could go around the outside of the map
+and bomb all their converters that do have one flak in their base. It's worth
+trying."*
+
+- **An atomic bomber is a strike by itself.** Its bomb takes what it flies
+  over; there is no mass it waits for. It goes when the scouted picture shows
+  a cell whose economy pays for the plane's risk, and it stays with the wing
+  only while no such cell exists.
+- **Scouts first.** Where the AA is not is the question the run is priced on;
+  the look is part of the run, not something that happens to arrive.
+- **Around, not through.** The approach goes round the AA -- the outside of
+  the map -- to the cell the AA does not cover, not across the base that has
+  the flak.
+- Measured in that game: the Liche read as ten Phoenixes of wing mass, so the
+  wing "reached" its deadline bar with four planes and flew twice into a
+  base it had not looked at; the Liche died 36 seconds into the second run,
+  killed by something the threat map had never seen.

@@ -232,6 +232,8 @@ otherwise `return aiMilitaryMgr.DefaultMakeTask(unit);`.
   faster than launching the client.
 - `ai.frame` is in sim frames; `SECOND` = 30, `MINUTE` = 1800.
 - `@` is AngelScript's handle syntax; `!is null` is the null test.
+- `CCircuitUnit::GetHealthPercent()` is a 0..1 FRACTION despite the name
+  (`CircuitUnit.cpp`); dividing by 100 cut a plane's soak to 1% (2026-09-20).
 - Scripts are per-profile. Changing `standard/main.as` does not affect any
   other profile.
 - There is no hot reload for AngelScript — it loads at AI init, so a new match

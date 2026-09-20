@@ -42,6 +42,7 @@ FEATURES: list[tuple[str, str, str]] = [
     ("T2 gate blocked",      r"T2GATE blocked",                  "healthy to be absent"),
     ("air assassin armed",   r"air assassin armed",              "needs AIR_FROM + income"),
     ("air strike released",  r"apex: air strike --",             "needs time to mass"),
+    ("atomic bomber run",    r"apex: air atomic #\d+ ->",       "needs a Liche bought (Armada)"),
     ("air role stood down",  r"air assassin STANDING DOWN",      "healthy to be absent"),
     ("eco lead active",      r"apex: ECO LEAD",                  "off under 6 per side by design"),
     ("T3 gantry started",    r"building T3 gantry",              "needs a long game"),

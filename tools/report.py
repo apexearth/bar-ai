@@ -66,6 +66,8 @@ FEATURES = [
     # When a feature reads 0/N, grep the source for the log string before
     # believing it.
     ("air STRIKE released", r"apex: air strike --"),
+    ("atomic bomber run", r"apex: air atomic #\d+ ->"),
+    ("atomic run over", r"apex: air atomic run over"),
     ("air stood down", r"apex: air assassin STANDING DOWN"),
     ("late-game air plant", r"apex: late game with no air"),
     ("bot lab for rez", r"apex: no T1 bot lab"),

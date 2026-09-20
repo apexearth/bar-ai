@@ -801,6 +801,16 @@ second assassin. His ask stands until a watched game shows the raids: read
 `apex_air_home_wave` bar (update.as:510) was never given the frozen snapshot
 the lead's has.
 
+2026-09-20, his Frozen Ford game (`matches/_engine`, t0) and lane seed 1: a
+run ends before it arrives. `ReArm` ends the run when what was built since
+is the bigger force (`held <= have` fails), and a four-plane wave has that
+the moment one plane finishes at home -- `air strike -- deadline bombers=4`
+at 28.2m, `air strike over -- 2 of the wave home, 3 built since` at 28.8m,
+36 seconds later, planes still en route; `RecallWave`'s move is then
+overridden by the bomb task they already hold, and they died at the map's
+far edge one by one (the Liche among them, at 29.1m). The rule needs the
+wave to have ARRIVED before "the bigger force is at home" can be read.
+
 ## INSTRUMENTS, PERF, TREE
 
 ### PERF: 16 AIs hold 1x to ~5,600 units; order volume unread since the revert (2026-09-06)

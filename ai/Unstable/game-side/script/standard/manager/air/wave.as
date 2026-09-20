@@ -154,7 +154,9 @@ int RunSurvivors()
 float gWaveMass = 0.f;
 float BomberUnits(CCircuitDef@ d)
 {
-	if (d is null)
+	// The atomic bomber is its own strike (atomic.as): read as ten Phoenixes
+	// of mass, one Liche sent a four-plane wave at the deadline bar.
+	if ((d is null) || IsAtomicDef(int(d.id)))
 		return 0.f;
 	const float unit = ((gBomber !is null) && (Catalog::gCostM[int(gBomber.id)] > 1.f))
 			? Catalog::gCostM[int(gBomber.id)] : 1000.f;

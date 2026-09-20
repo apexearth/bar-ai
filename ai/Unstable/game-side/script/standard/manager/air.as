@@ -12,3 +12,4 @@
 
 #include "air/update.as"    // holding units back, releasing them, re-arming
 #include "air/station.as"     // spread the wing, spend obsolete fighters
+#include "air/atomic.as"      // the atomic bomber: a strike by itself
