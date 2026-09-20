@@ -170,7 +170,6 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 				LOG_ENGINE("apex: log file %s", path.c_str());
 			}
 			recPath = std::string(dir) + "apex-record.txt";
-			recFoePath = std::string(dir) + "apex-record-foe.txt";
 		}
 	}
 }
@@ -380,7 +379,7 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 
 			CCircuitUnit* unit = GetTeamUnit(evt->unit);
 			if ((unit != nullptr) && (evt->attacker >= 0)) {
-				RecordTaken(evt->attacker, evt->attacker, evt->damage);
+				RecordTaken(evt->unit, evt->attacker, evt->damage);
 			}
 			ret = (unit != nullptr)
 					? this->UnitDamaged(unit, evt->attacker, evt->weaponDefId, AIFloat3(evt->dir_posF3))
@@ -460,7 +459,7 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 
 			struct SEnemyDamagedEvent* evt = (struct SEnemyDamagedEvent*)data;
 			if (evt->attacker >= 0) {
-				RecordDealt(evt->attacker, evt->damage);
+				RecordDealt(evt->attacker, evt->enemy, evt->damage);
 			}
 			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
 			ret = (enemy != nullptr) ? this->EnemyDamaged(enemy) : ERROR_ENEMY_DAMAGED;
@@ -474,9 +473,8 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 				// Here, not in the deferred EnemyDestroyed: the attacker id only
 				// exists in this event, and a non-(-1) attacker is by contract
 				// allied with us -- ours iff it is one of our team units.
-				CCircuitUnit* ours = GetTeamUnit(evt->attacker);
-				RecordFoeFold(enemy, (ours != nullptr) ? ours->GetCircuitDef() : nullptr);
-				script->EnemyDestroyed(enemy->GetCircuitDef(), enemy->GetPos(), ours != nullptr);
+				script->EnemyDestroyed(enemy->GetCircuitDef(), enemy->GetPos(),
+						GetTeamUnit(evt->attacker) != nullptr);
 				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
 				ret = 0;
 			} else {
@@ -2141,32 +2139,80 @@ void CCircuitAI::NoteTrade(bool isKill, CCircuitDef* cdef)
 	}
 }
 
-// A unit type's record. Ratio 1 = its units dealt their own health in damage;
-// the prior counts as apex_record_prior units at exactly that, so one death
-// cannot condemn a type, and the window keeps it a moving average over the
-// last apex_record_window units rather than a lifetime verdict.
+// THE EXCHANGE MATRIX. A hit is worth the victim's cost times the share of
+// its health it took, so the cell (A, B) is metal of B that our A destroyed
+// against metal of A that their B destroyed; 1 = an even trade. The prior
+// counts apex_record_prior A's worth of metal at 1 so one fight cannot
+// condemn a pair, and apex_record_window A's worth caps what the file
+// remembers, so it stays a moving average.
 bool CCircuitAI::RecordCounts(CCircuitDef* cdef)
 {
-	return (cdef != nullptr) && cdef->IsMobile() && cdef->IsAttacker() && !cdef->IsRoleComm();
+	return (cdef != nullptr) && cdef->IsAttacker() && !cdef->IsRoleBuilder() && !cdef->IsRoleComm();
 }
 
-void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, float damage)
+float CCircuitAI::MetalOf(CCircuitDef* cdef, float damage)
 {
-	if ((damage <= .0f) || (GetTeamUnit(attacker) == nullptr)) {
-		return;
+	const float hp = cdef->GetHealth();
+	if (hp <= .0f) {
+		return .0f;
 	}
-	recDealt[attacker] += damage;
+	const float share = damage / hp;
+	return ((share > 1.f) ? 1.f : share) * cdef->GetCostM();
 }
 
-int CCircuitAI::RecordTierOf(CCircuitDef::Id killer) const
+int CCircuitAI::RecordTierOf(CCircuitDef::Id id) const
 {
-	auto it = recTier.find(killer);
+	auto it = recTier.find(id);
 	if (it == recTier.end()) {
 		return 0;
 	}
 	return std::max(0, std::min(3, it->second));
 }
 
+void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float damage)
+{
+	if (damage <= .0f) {
+		return;
+	}
+	CCircuitUnit* ours = GetTeamUnit(attacker);
+	if (ours == nullptr) {
+		return;
+	}
+	recDealt[attacker] += damage;
+	if (recTweaked) {
+		return;
+	}
+	CEnemyInfo* e = GetEnemyInfo(enemy);
+	CCircuitDef* a = ours->GetCircuitDef();
+	CCircuitDef* b = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+	// Both sides armed: a mex we shelled is raid value, not a matchup.
+	if (!RecordCounts(a) || !RecordCounts(b)) {
+		return;
+	}
+	recGame[RecordKey(a->GetId(), b->GetId())].dealt += MetalOf(b, damage);
+}
+
+void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
+{
+	if ((damage <= .0f) || recTweaked || (GetTeamUnit(attacker) != nullptr)) {
+		return;
+	}
+	CCircuitUnit* ours = GetTeamUnit(unit);
+	CEnemyInfo* e = GetEnemyInfo(attacker);
+	if ((ours == nullptr) || (e == nullptr)) {
+		return;
+	}
+	CCircuitDef* a = ours->GetCircuitDef();
+	CCircuitDef* b = e->GetCircuitDef();
+	if (!RecordCounts(a) || !RecordCounts(b)) {
+		return;
+	}
+	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
+}
+
+// The death line: what this unit dealt over its own health, and what killed
+// it -- the instrument tools/record.py reads for "what died to what". The
+// matrix itself is fed per hit above, so nothing is folded here.
 void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
 {
 	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -2175,21 +2221,14 @@ void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
 	if (it != recDealt.end()) {
 		recDealt.erase(it);
 	}
-	if (!RecordCounts(cdef) || !unit->IsFinished()) {
+	if (!RecordCounts(cdef) || !unit->IsFinished() || !cdef->IsMobile()) {
 		return;
 	}
 	const float hp = cdef->GetHealth();
 	if (hp <= .0f) {
 		return;
 	}
-	// Only a death is a verdict: a survivor at a time-limit end is young.
 	const CCircuitDef::Id kid = (killer != nullptr) ? killer->GetId() : 0;
-	if (died && !recTweaked) {
-		SRecord& r = recGame[RecordKey(cdef->GetId(), kid)];
-		r.dealt += dealt;
-		r.health += hp;
-		r.n += 1.f;
-	}
 	LOG("apex: record %s %s dealt=%.0f hp=%.0f r=%.2f avg=%.2f n=%d killed-by=%s t%d vs=%.2f nVs=%d",
 			cdef->GetDef()->GetName(), died ? "died" : "alive", dealt, hp, dealt / hp,
 			RecordRatio(cdef, -1), RecordCount(cdef, -1),
@@ -2197,90 +2236,111 @@ void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
 			RecordRatioVs(cdef, killer), RecordCountVs(cdef, killer));
 }
 
-void CCircuitAI::RecordSum(CCircuitDef::Id id, CCircuitDef::Id killer, float& dealt, float& health, float& n) const
+void CCircuitAI::RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const
 {
-	const long long key = RecordKey(id, killer);
-	auto g = recGame.find(key);
-	if (g != recGame.end()) {
-		dealt += g->second.dealt; health += g->second.health; n += g->second.n;
-	}
-	auto st = recStored.find(key);
-	if (st != recStored.end()) {
-		dealt += st->second.dealt; health += st->second.health; n += st->second.n;
+	const long long key = RecordKey(a, b);
+	for (const auto* m : {&recGame, &recStored}) {
+		auto f = m->find(key);
+		if (f != m->end()) {
+			dealt += f->second.dealt; taken += f->second.taken;
+		}
 	}
 }
 
-// Walks every bucket of the type: the killer set is small (what has ever
-// killed it), so this is cheaper than indexing by tier.
+// Walks every cell of the row: the set of B's is small (what A has ever
+// traded with), so this is cheaper than indexing by tier.
 float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
 {
 	if (!RecordCounts(cdef) || recTweaked) {
 		return 1.f;
 	}
-	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetHealth();
-	float dealt = prior, health = prior, n = .0f;
+	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
+	float dealt = prior, taken = prior;
 	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 	for (const auto* m : {&recGame, &recStored}) {
 		for (const auto& kv : *m) {
 			if ((kv.first < lo) || (kv.first >= hi)) {
 				continue;
 			}
-			const CCircuitDef::Id kid = CCircuitDef::Id(kv.first - lo);
-			if ((tier >= 0) && (kid != 0) && (RecordTierOf(kid) != tier)) {
+			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
+			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
 				continue;
 			}
-			dealt += kv.second.dealt; health += kv.second.health; n += kv.second.n;
+			dealt += kv.second.dealt; taken += kv.second.taken;
 		}
 	}
-	return dealt / health;
+	return dealt / taken;
 }
 
 int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
 {
-	if (cdef == nullptr) {
+	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
 		return 0;
 	}
-	float n = .0f;
+	float taken = .0f;
 	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 	for (const auto* m : {&recGame, &recStored}) {
 		for (const auto& kv : *m) {
 			if ((kv.first < lo) || (kv.first >= hi)) {
 				continue;
 			}
-			const CCircuitDef::Id kid = CCircuitDef::Id(kv.first - lo);
-			if ((tier >= 0) && (kid != 0) && (RecordTierOf(kid) != tier)) {
+			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
+			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
 				continue;
 			}
-			n += kv.second.n;
+			taken += kv.second.taken;
 		}
 	}
-	return int(n + 0.5f);
+	return int(taken / cdef->GetCostM() + 0.5f);
 }
 
-// The pair's own deaths, shrunk toward the killer's tier read: a matchup
-// with no history prices as its tier does, and earns its own number as
-// the deaths come in.
-float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* killer) const
+// The pair's own exchange, shrunk toward B's tier read: a matchup with no
+// history prices as its tier does, and earns its own number as the hits
+// come in.
+float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const
 {
 	if (!RecordCounts(cdef) || recTweaked) {
 		return 1.f;
 	}
-	const CCircuitDef::Id kid = (killer != nullptr) ? killer->GetId() : 0;
-	const float base = RecordRatio(cdef, RecordTierOf(kid));
-	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetHealth();
-	float dealt = prior * base, health = prior, n = .0f;
-	RecordSum(cdef->GetId(), kid, dealt, health, n);
-	return dealt / health;
+	const CCircuitDef::Id bid = (foe != nullptr) ? foe->GetId() : 0;
+	const float base = RecordRatio(cdef, RecordTierOf(bid));
+	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
+	float dealt = prior * base, taken = prior;
+	RecordSum(cdef->GetId(), bid, dealt, taken);
+	return dealt / taken;
 }
 
-int CCircuitAI::RecordCountVs(CCircuitDef* cdef, CCircuitDef* killer) const
+int CCircuitAI::RecordCountVs(CCircuitDef* cdef, CCircuitDef* foe) const
 {
-	if (cdef == nullptr) {
+	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
 		return 0;
 	}
-	float dealt = .0f, health = .0f, n = .0f;
-	RecordSum(cdef->GetId(), (killer != nullptr) ? killer->GetId() : 0, dealt, health, n);
-	return int(n + 0.5f);
+	float dealt = .0f, taken = .0f;
+	RecordSum(cdef->GetId(), (foe != nullptr) ? foe->GetId() : 0, dealt, taken);
+	return int(taken / cdef->GetCostM() + 0.5f);
+}
+
+// Their B against our A is the same cell inverted; ours == nullptr reads
+// B's whole column.
+float CCircuitAI::RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const
+{
+	if ((edef == nullptr) || recTweaked) {
+		return 1.f;
+	}
+	const float prior = GetTunable("apex_record_prior", 10.f) * edef->GetCostM();
+	float dealt = prior, taken = prior;   // from B's side: dealt = our taken
+	for (const auto* m : {&recGame, &recStored}) {
+		for (const auto& kv : *m) {
+			if (CCircuitDef::Id(kv.first % 65536) != edef->GetId()) {
+				continue;
+			}
+			if ((ours != nullptr) && (CCircuitDef::Id(kv.first / 65536) != ours->GetId())) {
+				continue;
+			}
+			dealt += kv.second.taken; taken += kv.second.dealt;
+		}
+	}
+	return dealt / taken;
 }
 
 // What the enemy fields, as this AI knows it: every live known enemy with a
@@ -2327,102 +2387,10 @@ float CCircuitAI::RecordRatioMix(CCircuitDef* cdef)
 	return r;
 }
 
-void CCircuitAI::RecordTaken(ICoreUnit::Id enemyId, ICoreUnit::Id attacker, float damage)
-{
-	if ((damage <= .0f) || (GetTeamUnit(attacker) != nullptr)) {
-		return;
-	}
-	recTaken[enemyId] += damage;
-}
-
-// Their unit's verdict, the mirror of ours: what it dealt us over its own
-// health, filed against the one of ours that killed it. The engine names
-// the killer only while it is still alive and credits damage only from an
-// attacker we could see, so "-" is common and a fog shooter reads low.
-void CCircuitAI::RecordFoeFold(CEnemyInfo* enemy, CCircuitDef* killer)
-{
-	auto it = recTaken.find(enemy->GetId());
-	const float dealt = (it != recTaken.end()) ? it->second : .0f;
-	if (it != recTaken.end()) {
-		recTaken.erase(it);
-	}
-	CCircuitDef* edef = enemy->GetCircuitDef();
-	if (!RecordCounts(edef) || recTweaked || enemy->IsBeingBuilt()) {
-		return;
-	}
-	const float hp = edef->GetHealth();
-	if (hp <= .0f) {
-		return;
-	}
-	const CCircuitDef::Id kid = (killer != nullptr) ? killer->GetId() : 0;
-	SRecord& r = recFoeGame[RecordKey(edef->GetId(), kid)];
-	r.dealt += dealt;
-	r.health += hp;
-	r.n += 1.f;
-	LOG("apex: record-foe %s died dealt=%.0f hp=%.0f r=%.2f avg=%.2f n=%d killed-by=%s vs=%.2f nVs=%d",
-			edef->GetDef()->GetName(), dealt, hp, dealt / hp,
-			RecordFoeRatio(edef, nullptr), RecordFoeCount(edef, nullptr),
-			(killer != nullptr) ? killer->GetDef()->GetName() : "-",
-			RecordFoeRatio(edef, killer), RecordFoeCount(edef, killer));
-}
-
-// killer == nullptr: every bucket of the type; else that matchup, shrunk
-// toward the type's whole read.
-float CCircuitAI::RecordFoeRatio(CCircuitDef* edef, CCircuitDef* killer) const
-{
-	if (!RecordCounts(edef) || recTweaked) {
-		return 1.f;
-	}
-	const float prior = GetTunable("apex_record_prior", 10.f) * edef->GetHealth();
-	const long long lo = RecordKey(edef->GetId(), 0), hi = RecordKey(edef->GetId() + 1, 0);
-	float dealt = prior, health = prior;
-	for (const auto* m : {&recFoeGame, &recFoeStored}) {
-		for (const auto& kv : *m) {
-			if ((kv.first >= lo) && (kv.first < hi)) {
-				dealt += kv.second.dealt; health += kv.second.health;
-			}
-		}
-	}
-	if (killer == nullptr) {
-		return dealt / health;
-	}
-	const float base = dealt / health;
-	float d2 = prior * base, h2 = prior;
-	const long long key = RecordKey(edef->GetId(), killer->GetId());
-	for (const auto* m : {&recFoeGame, &recFoeStored}) {
-		auto f = m->find(key);
-		if (f != m->end()) {
-			d2 += f->second.dealt; h2 += f->second.health;
-		}
-	}
-	return d2 / h2;
-}
-
-int CCircuitAI::RecordFoeCount(CCircuitDef* edef, CCircuitDef* killer) const
-{
-	if (edef == nullptr) {
-		return 0;
-	}
-	float n = .0f;
-	const long long lo = RecordKey(edef->GetId(), 0), hi = RecordKey(edef->GetId() + 1, 0);
-	for (const auto* m : {&recFoeGame, &recFoeStored}) {
-		for (const auto& kv : *m) {
-			if ((kv.first < lo) || (kv.first >= hi)) {
-				continue;
-			}
-			if ((killer != nullptr) && (kv.first != RecordKey(edef->GetId(), killer->GetId()))) {
-				continue;
-			}
-			n += kv.second.n;
-		}
-	}
-	return int(n + 0.5f);
-}
-
-// One line per (type, killer): "name killer dealt health n", killer "-" when
-// unknown. Older lines -- four fields, or five with a numeric tier -- are
-// read as unknown-killer when the tier was 0 and dropped otherwise.
-static void RecordRead(const std::string& path, std::map<std::pair<std::string, std::string>, CCircuitAI::SRecord>& out)
+// One line per cell: "ours theirs dealtM takenM". Older files (death
+// buckets, "name killer dealt health n") are not the same quantity and are
+// skipped, so the matrix starts clean.
+static void RecordRead(const std::string& path, std::map<std::pair<std::string, std::string>, CCircuitAI::SXch>& out)
 {
 	std::ifstream in(path);
 	std::string line;
@@ -2433,110 +2401,74 @@ static void RecordRead(const std::string& path, std::map<std::pair<std::string, 
 		while (ss >> tok) {
 			f.push_back(tok);
 		}
-		CCircuitAI::SRecord r;
-		std::string name, killer;
+		if ((f.size() != 4) || (f[1] == "-") || std::isdigit((unsigned char)f[1][0])) {
+			continue;
+		}
 		try {
-			if (f.size() == 5) {
-				name = f[0]; killer = f[1];
-				r.dealt = std::stof(f[2]); r.health = std::stof(f[3]); r.n = std::stof(f[4]);
-				if (!killer.empty() && std::isdigit((unsigned char)killer[0])) {
-					if (killer != "0") {
-						continue;
-					}
-					killer = "-";
-				}
-			} else if (f.size() == 4) {
-				name = f[0]; killer = "-";
-				r.dealt = std::stof(f[1]); r.health = std::stof(f[2]); r.n = std::stof(f[3]);
-			} else {
-				continue;
-			}
+			CCircuitAI::SXch x;
+			x.dealt = std::stof(f[2]);
+			x.taken = std::stof(f[3]);
+			out[std::make_pair(f[0], f[1])] = x;
 		} catch (const std::exception&) {
 			continue;
 		}
-		out[std::make_pair(name, killer)] = r;
 	}
 }
 
 void CCircuitAI::RecordLoad()
 {
 	recStored.clear();
-	recFoeStored.clear();
 	if (recPath.empty() || recTweaked) {
 		return;
 	}
-	for (int side = 0; side < 2; ++side) {
-		const std::string& path = (side == 0) ? recPath : recFoePath;
-		auto& into = (side == 0) ? recStored : recFoeStored;
-		std::map<std::pair<std::string, std::string>, SRecord> byName;
-		RecordRead(path, byName);
-		for (auto& kv : byName) {
-			CCircuitDef* cdef = GetCircuitDef(kv.first.first.c_str());
-			if (cdef == nullptr) {
-				continue;
-			}
-			CCircuitDef::Id kid = 0;
-			if (kv.first.second != "-") {
-				CCircuitDef* k = GetCircuitDef(kv.first.second.c_str());
-				if (k == nullptr) {
-					continue;
-				}
-				kid = k->GetId();
-			}
-			into[RecordKey(cdef->GetId(), kid)] = kv.second;
+	std::map<std::pair<std::string, std::string>, SXch> byName;
+	RecordRead(recPath, byName);
+	for (auto& kv : byName) {
+		CCircuitDef* a = GetCircuitDef(kv.first.first.c_str());
+		CCircuitDef* b = GetCircuitDef(kv.first.second.c_str());
+		if ((a == nullptr) || (b == nullptr)) {
+			continue;
 		}
+		recStored[RecordKey(a->GetId(), b->GetId())] = kv.second;
 	}
-	LOG_ENGINE("apex: record loaded %d buckets (+%d foe) from %s", (int)recStored.size(), (int)recFoeStored.size(), recPath.c_str());
+	LOG_ENGINE("apex: record loaded %d cells from %s", (int)recStored.size(), recPath.c_str());
 }
 
 // Re-read before writing: every AI in this process saves its own game onto
 // whatever the file holds by then, so eight teams do not overwrite each other.
 void CCircuitAI::RecordSave()
 {
-	if (recPath.empty() || recTweaked) {
+	if (recPath.empty() || recTweaked || recGame.empty()) {
 		return;
 	}
-	RecordSaveOne(recPath, recGame);
-	RecordSaveOne(recFoePath, recFoeGame);
-}
-
-void CCircuitAI::RecordSaveOne(const std::string& path, const std::unordered_map<long long, SRecord>& game)
-{
-	if (game.empty()) {
-		return;
-	}
-	std::map<std::pair<std::string, std::string>, SRecord> all;
-	RecordRead(path, all);
+	std::map<std::pair<std::string, std::string>, SXch> all;
+	RecordRead(recPath, all);
 	const float window = GetTunable("apex_record_window", 40.f);
-	for (auto& kv : game) {
-		CCircuitDef* cdef = GetCircuitDef(CCircuitDef::Id(kv.first / 65536));
-		const CCircuitDef::Id kid = CCircuitDef::Id(kv.first % 65536);
-		CCircuitDef* kdef = (kid != 0) ? GetCircuitDef(kid) : nullptr;
-		if ((cdef == nullptr) || ((kid != 0) && (kdef == nullptr))) {
+	for (auto& kv : recGame) {
+		CCircuitDef* a = GetCircuitDef(CCircuitDef::Id(kv.first / 65536));
+		CCircuitDef* b = GetCircuitDef(CCircuitDef::Id(kv.first % 65536));
+		if ((a == nullptr) || (b == nullptr)) {
 			continue;
 		}
-		SRecord& r = all[std::make_pair(std::string(cdef->GetDef()->GetName()),
-				(kdef != nullptr) ? std::string(kdef->GetDef()->GetName()) : std::string("-"))];
-		r.dealt += kv.second.dealt;
-		r.health += kv.second.health;
-		r.n += kv.second.n;
-		if (r.n > window) {
-			const float k = window / r.n;
-			r.dealt *= k;
-			r.health *= k;
-			r.n = window;
+		SXch& x = all[std::make_pair(std::string(a->GetDef()->GetName()), std::string(b->GetDef()->GetName()))];
+		x.dealt += kv.second.dealt;
+		x.taken += kv.second.taken;
+		const float cap = window * a->GetCostM();
+		if ((cap > .0f) && (x.taken > cap)) {
+			const float k = cap / x.taken;
+			x.dealt *= k;
+			x.taken *= k;
 		}
 	}
-	std::ofstream out(path, std::ios::trunc);
+	std::ofstream out(recPath, std::ios::trunc);
 	if (!out.is_open()) {
-		LOG_ENGINE("apex: record NOT saved: %s", path.c_str());
+		LOG_ENGINE("apex: record NOT saved: %s", recPath.c_str());
 		return;
 	}
 	for (auto& kv : all) {
-		out << kv.first.first << ' ' << kv.first.second << ' ' << kv.second.dealt << ' '
-			<< kv.second.health << ' ' << kv.second.n << std::endl;
+		out << kv.first.first << ' ' << kv.first.second << ' ' << kv.second.dealt << ' ' << kv.second.taken << std::endl;
 	}
-	LOG_ENGINE("apex: record saved %d buckets (%d this game) -> %s", (int)all.size(), (int)game.size(), path.c_str());
+	LOG_ENGINE("apex: record saved %d cells (%d this game) -> %s", (int)all.size(), (int)recGame.size(), recPath.c_str());
 }
 
 // Kills over losses, lately. 1.0 means even. Returns 1.0 until enough has

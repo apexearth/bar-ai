@@ -514,14 +514,21 @@ this AI has always priced under.
 
 apexearth's track record: a unit type has justified its existence when the
 damage it dealt equals its own health; a 1,000-metal unit that dealt 50 is
-nearly useless. The DLL sums damage dealt per unit (EVENT_ENEMY_DAMAGED) and
-folds dealt/health per type at DEATH ONLY -- a survivor at a time-limit end is
-young: 68 of 90 Fleas alive at 0 dealt read the type at 0.44 while its dead
-read 1.10 (six-game battery). The average is shrunk toward 1.0 by
-`apex_record_prior` (10) units so one death cannot condemn a type, and capped
-at `apex_record_window` (40) deaths so it stays a moving average; the file
-`apex-record.txt` in the AI's data dir carries it across games, every AI in
-the process merging its own game onto whatever is there. `RecordMul` in
+nearly useless. SINCE 2026-09-19 (his choice of the long-run form) the DLL
+keeps an EXCHANGE MATRIX read per hit off the damage events: cell (A, B) is
+metal of their B our A destroyed over metal of our A their B destroyed
+(a hit is the victim's cost times the health share it took; both sides must
+be armed, so a shelled mex is raid value and not a matchup). 1 = an even
+trade, no last-hit guessing, no death needed. `apex_record_prior` (10) A's
+worth of metal at 1 shrinks a row so one fight cannot condemn a pair, and
+`apex_record_window` (40) A's worth caps what a cell remembers; the file
+`apex-record.txt` ("ours theirs dealtM takenM") in the AI's data dir carries
+it across games, every AI in the process merging its own game onto whatever
+is there. Older death-bucket files are skipped, so the matrix started clean.
+The death line (`apex: record <def> died ... killed-by=`) stays as the
+instrument for what died to what (`record.py --deaths`). The earlier
+death-keyed form measured: a survivor at a time-limit end is young (68 of 90
+Fleas alive at 0 dealt read the type at 0.44 while its dead read 1.10). `RecordMul` in
 worth.as applies min(1, ratio) to the combat price -- a discount only, never
 a boost, never a ban (floor prior/(prior+window) = 0.2), fodder and fighters
 exempt (his ruling). Since 2026-09-19 the file holds one bucket per
@@ -550,15 +557,13 @@ squadmates' output) is his idea, unbuilt: TODO.md.
 TWEAKS DISABLE IT (his rule 2026-09-19): any non-empty `tweakunits*` /
 `tweakdefs*` modoption means altered stats, so the record is neither read
 (every ratio 1.0), learned from, nor saved that game; `apex: record
-disabled -- <key> is set` says so. THEIR SIDE IS RECORDED TOO:
-`apex-record-foe.txt` holds (their def, our killer def) with what their
-unit dealt us over its own health (`apex: record-foe`, `record.py --foe`).
-Two engine limits: the killer is named only while our killing unit is
-still alive, and damage is credited only from an attacker we could see, so
-a fog shooter reads low. Nanoframes killed with their plant are skipped.
-Not yet priced -- what to do with "their Gator reads 1.42 against us" is
-his call (a prior for our own copy of the def; or weighting the fielded
-mix by lethality rather than metal). After ~120 harness games the pooled record had a
+disabled -- <key> is set` says so. THEIR SIDE IS THE SAME
+MATRIX TRANSPOSED (`RecordFoeRatio`, `record.py --foe`): their B against
+our A is cell (A, B) inverted, so "their Gator trades 2.7:1 against us" is
+read off the file with no second ledger. One engine limit remains: damage
+from an attacker outside our LOS/radar carries no attacker id, so a fog
+shooter's column reads low. Not yet priced beyond the mix weighting: using
+their column as a prior for our own copy of a def is his call. After ~120 harness games the pooled record had a
 median of 0.64 across 71 types with the tanky front line at 0.2-0.3 and
 long-range units at 2-19 -- the absolute "its own health" bar flattens
 prices across the field and hits the shield class hardest, which the line

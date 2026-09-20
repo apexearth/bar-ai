@@ -219,29 +219,27 @@ public:
 	// apex: nearest commander corpse inside the circle, -RgtVector if none.
 	springai::AIFloat3 GetCommanderWreckPos(const springai::AIFloat3& pos, float radius);
 	int GetMetalResId();
-	// Track record: damage each unit type dealt against its own health,
-	// carried across games in the AI's data dir. Fodder and fighters are the
-	// script's business; this only measures.
-	void RecordDealt(ICoreUnit::Id attacker, float damage);
-	void RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer);
-	// The buckets whose killer is of this tier (0 = unknown killer, always
-	// counted), or every bucket for -1.
+	// THE EXCHANGE MATRIX: metal our type A destroyed of their type B over
+	// metal of A that B destroyed, read per hit off the damage events (no
+	// last-hit guessing, no death needed). Carried across games in the AI's
+	// data dir. Fodder and fighters are the script's business; this only
+	// measures.
+	void RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float damage);
+	void RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage);
+	void RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer);   // the death log line
+	// A's exchange against the B's of this tier (0 = unknown B, always
+	// counted), or against everything for -1.
 	float RecordRatio(CCircuitDef* cdef, int tier) const;
-	int RecordCount(CCircuitDef* cdef, int tier) const;
-	// One matchup: how this type fares against that killer, shrunk toward
-	// the killer's tier when the pair has few deaths.
-	float RecordRatioVs(CCircuitDef* cdef, CCircuitDef* killer) const;
-	int RecordCountVs(CCircuitDef* cdef, CCircuitDef* killer) const;
+	int RecordCount(CCircuitDef* cdef, int tier) const;   // A-equivalents of metal lost
+	// One matchup, shrunk toward B's tier when the pair has little history.
+	float RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const;
+	int RecordCountVs(CCircuitDef* cdef, CCircuitDef* foe) const;
 	// The matchups weighted by what the enemy fields now (our own census of
 	// known live enemy attackers, refreshed every 10 s); pooled when blind.
 	float RecordRatioMix(CCircuitDef* cdef);
+	// The same matrix read from their side: their B against our A.
+	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
-	// The other direction: what THEIR unit dealt to us before one of ours
-	// killed it, filed as (their def, our killer def) in apex-record-foe.txt.
-	void RecordTaken(ICoreUnit::Id enemyId, ICoreUnit::Id attacker, float damage);
-	void RecordFoeFold(CEnemyInfo* enemy, CCircuitDef* killer);
-	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* killer) const;
-	int RecordFoeCount(CCircuitDef* edef, CCircuitDef* killer) const;
 	bool RecordTweaked() const { return recTweaked; }
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
@@ -526,21 +524,15 @@ private:
 
 // >>> Unit track record ---- BEGIN
 public:
-	struct SRecord { float dealt = .0f; float health = .0f; float n = .0f; };
+	struct SXch { float dealt = .0f; float taken = .0f; };   // metal, A -> B and B -> A
 private:
-	std::unordered_map<ICoreUnit::Id, float> recDealt;      // this game, per unit
-	// Keyed by def and the def that killed it (0 = unknown), so "they field
-	// Tzars" reads what Tzars do to each of our types.
-	std::unordered_map<long long, SRecord> recGame;     // this game
-	std::unordered_map<long long, SRecord> recStored;   // from the file
+	std::unordered_map<ICoreUnit::Id, float> recDealt;      // per unit this game, for the death line
+	std::unordered_map<long long, SXch> recGame;     // this game, (our def, their def)
+	std::unordered_map<long long, SXch> recStored;   // from the file
 	std::unordered_map<CCircuitDef::Id, int> recTier;   // the script's DefTier
-	static long long RecordKey(CCircuitDef::Id id, CCircuitDef::Id killer) { return (long long)id * 65536 + killer; }
-	int RecordTierOf(CCircuitDef::Id killer) const;
-	void RecordSum(CCircuitDef::Id id, CCircuitDef::Id killer, float& dealt, float& health, float& n) const;
-	std::unordered_map<ICoreUnit::Id, float> recTaken;   // damage each enemy unit dealt us
-	std::unordered_map<long long, SRecord> recFoeGame;
-	std::unordered_map<long long, SRecord> recFoeStored;
-	std::string recFoePath;
+	static long long RecordKey(CCircuitDef::Id a, CCircuitDef::Id b) { return (long long)a * 65536 + b; }
+	int RecordTierOf(CCircuitDef::Id id) const;
+	void RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const;
 	// A game with tweakunits/tweakdefs set plays altered stats: the record
 	// neither learns from it nor prices by it.
 	bool recTweaked = false;
@@ -551,8 +543,8 @@ private:
 	std::string recPath;
 	void RecordLoad();
 	void RecordSave();
-	void RecordSaveOne(const std::string& path, const std::unordered_map<long long, SRecord>& game);
 	static bool RecordCounts(CCircuitDef* cdef);
+	static float MetalOf(CCircuitDef* cdef, float damage);
 // <<< Unit track record ---- END
 
 // >>> Recent trade record ---- BEGIN
