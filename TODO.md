@@ -151,6 +151,11 @@ each unit type performs, and discount the ones that keep proving useless:
 - **Fodder is never judged.** Its whole purpose is distraction; we know it will
   die. Keep making it. (In code that is the raider class the spam path sends,
   `hooks.as` / `TUNE_SPAM_RAIDERS`.)
+- Open, his idea 2026-09-19: judge a squad, not a unit -- "this was our
+  squad, and based on our squad's composition, how did we do against this
+  unit?" -- so a tank is credited with what its squadmates dealt while it
+  absorbed. Fuzzy by his own account; the class bar (a tank judged as a
+  tank) is the simple form built instead.
 - **Fighters are never discounted.** You always need fighters with aircraft.
   At most, T1 fighters may be discounted in favour of T2 ones.
 - The engine tracks unit experience already; the AI can read damage dealt per

@@ -536,7 +536,16 @@ as deaths accrue. `apex: record-mul <def> <m> pooled= n= t1= t2= t3=` is
 the proof a read reached a price; every death line carries `killed-by=`;
 `tools/record.py` reads a run or a file. First reads: Rocko 0.78 against
 their T1, 0.30 against their T2; Artillery 0.72 against one enemy's fielded
-mix with a pooled record of 0.64. After ~120 harness games the pooled record had a
+mix with a pooled record of 0.64. A TANK IS JUDGED AS A TANK (his ruling
+the same day: "it's supposed to take more damage, it's supposed to have a
+lower damage efficiency"): the bar a type must clear is its line class's
+own deaths-weighted record (`RecordBar`, shrunk toward 1 by the prior,
+capped at 1), so the multiplier is min(1, mix/bar). Measured bars from the
+120-game file: tank 0.80, mid 0.83, reach and dps at the cap -- so Stumpy
+0.23 and Zeus 0.40 still read badly judged as tanks (it is the unit, not
+the class) while Blade 0.68 -> 0.85 and Bull 0.61 -> 0.76 come back toward
+neutral. Squad-level credit (the tank's absorbed damage paid to its
+squadmates' output) is his idea, unbuilt: TODO.md. After ~120 harness games the pooled record had a
 median of 0.64 across 71 types with the tanky front line at 0.2-0.3 and
 long-range units at 2-19 -- the absolute "its own health" bar flattens
 prices across the field and hits the shield class hardest, which the line

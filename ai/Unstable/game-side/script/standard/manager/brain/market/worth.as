@@ -502,6 +502,44 @@ float UnitPPC(int d)
 // by the enemy attackers it currently knows of, by metal; a matchup with no
 // deaths of its own reads as its killer's tier, then as the pool. The tier
 // table is pushed once so the DLL can do that fallback.
+// A TANK IS JUDGED AS A TANK (apexearth 2026-09-19: "it's supposed to take
+// more damage, it's supposed to have a lower damage efficiency"). The bar a
+// type must clear is what its own line class measurably achieves -- the
+// deaths-weighted record of every scorable def in the class, shrunk toward
+// 1 by the prior -- capped at 1 so dealing its own health is still the
+// ceiling. Recomputed every 30 s.
+array<float> gRecordBar;   // sized on first use: army.as's LC_N is declared later
+int gRecordBarAt = -1;
+float RecordBar(int cls)
+{
+	if (gRecordBar.length() == 0) {
+		gRecordBar.resize(LC_N);
+		for (int c = 0; c < LC_N; ++c)
+			gRecordBar[c] = 1.f;
+	}
+	if ((gRecordBarAt >= 0) && (ai.frame < gRecordBarAt + 30 * SECOND))
+		return gRecordBar[cls];
+	gRecordBarAt = ai.frame;
+	const float prior = ai.GetTunable("apex_record_prior", 10.f);
+	array<float> num(LC_N, prior), den(LC_N, prior);
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !WorthScorable(i))
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(i);
+		const int n = ai.RecordCount(cd, -1);
+		if (n <= 0)
+			continue;
+		const int c = LineClassOf(i);
+		num[c] += float(n) * ai.RecordRatio(cd, -1);
+		den[c] += float(n);
+	}
+	for (int c = 0; c < LC_N; ++c) {
+		const float b = num[c] / den[c];
+		gRecordBar[c] = (b < 1.f) ? b : 1.f;
+	}
+	return gRecordBar[cls];
+}
+
 bool gRecordTiersSet = false;
 array<float> gRecordMulLast;
 float RecordMul(int d)
@@ -518,7 +556,8 @@ float RecordMul(int d)
 			if (Catalog::ValidId(i))
 				ai.RecordSetTier(Catalog::Def(i), DefTier(i));
 	}
-	const float r = ai.RecordRatioMix(cdef);
+	const float bar = RecordBar(LineClassOf(d));
+	const float r = ai.RecordRatioMix(cdef) / ((bar > 0.01f) ? bar : 1.f);
 	const float m = (r < 1.f) ? r : 1.f;
 	// The proof that the record reaches a price: logged when it moves.
 	if (int(gRecordMulLast.length()) <= Catalog::gDefCount)
@@ -526,6 +565,7 @@ float RecordMul(int d)
 	if ((gRecordMulLast[d] == 0.f) ? (m < 0.95f) : (abs(m - gRecordMulLast[d]) > 0.05f)) {
 		gRecordMulLast[d] = m;
 		AiLog(Factory::T() + "apex: record-mul " + cdef.GetName() + " " + formatFloat(m, "", 0, 2)
+			+ " bar=" + formatFloat(bar, "", 0, 2) + " cls=" + LineClassOf(d)
 			+ " pooled=" + formatFloat(ai.RecordRatio(cdef, -1), "", 0, 2)
 			+ " n=" + ai.RecordCount(cdef, -1)
 			+ " t1=" + formatFloat(ai.RecordRatio(cdef, 1), "", 0, 2)
