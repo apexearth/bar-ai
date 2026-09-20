@@ -563,7 +563,19 @@ our A is cell (A, B) inverted, so "their Gator trades 2.7:1 against us" is
 read off the file with no second ledger. One engine limit remains: damage
 from an attacker outside our LOS/radar carries no attacker id, so a fog
 shooter's column reads low. Not yet priced beyond the mix weighting: using
-their column as a prior for our own copy of a def is his call. After ~120 harness games the pooled record had a
+their column as a prior for our own copy of a def is his call.
+
+NORMALISED (2026-09-20): the multiplier is divided by its mean over the
+buildable army (`RecordMean`, 30 s), because a raw discount lowers WORTH,
+which is what army wants bid against economy and defence with. Measured
+on the frozen 20-game matrix, 20 paired seeds each: raw form army metal
+-15%, metal -10%, D% worse in 16 of 20; normalised form army +7%, metal
++16%, D% better in 12 of 20 -- but the OFF arm alone swung 6 D% points
+between the two runs on the same seeds and file, so neither is a verdict.
+What the runs do show: with raw capped at 1 and a class bar, the
+multiplier spans 0.9-1.0 for a handful of units (mean 0.99) -- the term is
+nearly inert. Removing the cap (normalisation now holds army spend fixed)
+would make it a real ranking; his call. After ~120 harness games the pooled record had a
 median of 0.64 across 71 types with the tanky front line at 0.2-0.3 and
 long-range units at 2-19 -- the absolute "its own health" bar flattens
 prices across the field and hits the shield class hardest, which the line

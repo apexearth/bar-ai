@@ -540,6 +540,44 @@ float RecordBar(int cls)
 	return gRecordBar[cls];
 }
 
+// THE RECORD RANKS, IT DOES NOT SHRINK THE ARMY. A raw discount lowers a
+// unit's worth, and worth is what army wants bid against economy and
+// defence with -- measured 2026-09-20, 20 paired games: army metal -15%,
+// metal -10%, D% worse in 16 of 20. So every multiplier is divided by the
+// mean over the buildable army (recomputed every 30 s): the average price
+// is unchanged and only the order moves.
+float gRecordMean = 1.f;
+int gRecordMeanAt = -1;
+float RecordRaw(int d)
+{
+	const CCircuitDef@ cdef = Catalog::Def(d);
+	if (Military::IsFodder(cdef)
+		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
+		return 1.f;
+	const float bar = RecordBar(LineClassOf(d));
+	const float r = ai.RecordRatioMix(cdef) / ((bar > 0.01f) ? bar : 1.f);
+	return (r < 1.f) ? r : 1.f;
+}
+
+float RecordMean()
+{
+	if ((gRecordMeanAt >= 0) && (ai.frame < gRecordMeanAt + 30 * SECOND))
+		return gRecordMean;
+	gRecordMeanAt = ai.frame;
+	float sum = 0.f;
+	int n = 0;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !WorthScorable(i))
+			continue;
+		sum += RecordRaw(i);
+		++n;
+	}
+	gRecordMean = (n > 0) ? (sum / float(n)) : 1.f;
+	if (gRecordMean < 0.05f)
+		gRecordMean = 0.05f;
+	return gRecordMean;
+}
+
 bool gRecordTiersSet = false;
 array<float> gRecordMulLast;
 float RecordMul(int d)
@@ -557,14 +595,14 @@ float RecordMul(int d)
 				ai.RecordSetTier(Catalog::Def(i), DefTier(i));
 	}
 	const float bar = RecordBar(LineClassOf(d));
-	const float r = ai.RecordRatioMix(cdef) / ((bar > 0.01f) ? bar : 1.f);
-	const float m = (r < 1.f) ? r : 1.f;
+	const float m = RecordRaw(d) / RecordMean();
 	// The proof that the record reaches a price: logged when it moves.
 	if (int(gRecordMulLast.length()) <= Catalog::gDefCount)
 		gRecordMulLast.resize(Catalog::gDefCount + 1);
-	if ((gRecordMulLast[d] == 0.f) ? (m < 0.95f) : (abs(m - gRecordMulLast[d]) > 0.05f)) {
+	if ((gRecordMulLast[d] == 0.f) ? (abs(m - 1.f) > 0.05f) : (abs(m - gRecordMulLast[d]) > 0.05f)) {
 		gRecordMulLast[d] = m;
 		AiLog(Factory::T() + "apex: record-mul " + cdef.GetName() + " " + formatFloat(m, "", 0, 2)
+			+ " raw=" + formatFloat(RecordRaw(d), "", 0, 2) + " mean=" + formatFloat(gRecordMean, "", 0, 2)
 			+ " bar=" + formatFloat(bar, "", 0, 2) + " cls=" + LineClassOf(d)
 			+ " pooled=" + formatFloat(ai.RecordRatio(cdef, -1), "", 0, 2)
 			+ " n=" + ai.RecordCount(cdef, -1)
