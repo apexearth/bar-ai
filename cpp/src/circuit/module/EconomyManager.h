@@ -119,6 +119,7 @@ public:
 	bool IsOpenGeoSpot(int spotId) const { return IsValidGeoSpot(spotId) && geoSpots[spotId].isOpen; }
 	void SetOpenGeoSpot(int spotId, bool value) { if (IsValidGeoSpot(spotId)) geoSpots[spotId].isOpen = value; }
 	bool IsUpgradingGeoSpot(int spotId) const { return IsValidGeoSpot(spotId) && geoSpots[spotId].isUp; }
+	int OpenGeoSpotCount() const { int n = 0; for (const SResSpot& g : geoSpots) { if (g.isOpen) ++n; } return n; }
 	void SetUpgradingGeoSpot(int spotId, bool value) { if (IsValidGeoSpot(spotId)) geoSpots[spotId].isUp = value; }
 
 	// apex: spot queries a script can call safely. FindOpenMexSpot applies the

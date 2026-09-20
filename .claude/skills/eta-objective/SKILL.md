@@ -55,11 +55,19 @@ count)` rung:
 | Held ground | `spotIncome x (bestExtract - standing)` per spot | 1 per upgradable mex we own |
 | Generation | `gMakeM + gMakeE x ConvRate()` | inexhaustible |
 
-**The pool is sorted by payback (`cost/gain`), ascending.** That ordering is
-*exact*, not a heuristic, while metal is the binding constraint: a feed-bound
-step advances the economy at `gain x P / cost`, so ranking by `gain/cost` is
-independent of `P`. This is what lets the ladder walk the pool in order instead
-of rescanning it at every step, and it is why the whole thing is cheap.
+**The pool is sorted by seconds per power at the current feed and lathe**
+(`max(cost/P, buildSeconds/wide) / gain`, over survival), ascending. For a
+feed-bound rung that is the old payback order (`cost/gain`, exact while metal
+binds); for a lathe-bound one -- an afus at 711 s, a fusion at 300 -- it is the
+order the ladder's own objective needs. Metal-only ordering put the afus ahead
+of the fusion and charged a moho-first path a slice of it (2026-09-20). The
+pool is rebuilt every 5 s, so the sort is still one pass per fill. `wide` is
+how many of our hands can build the def, capped by the rung's count.
+
+Geos are in the pool as a vent-limited rung, `n` = `OpenGeoSpotCount()`.
+Left out, a path that *started* with the geo held power no other path could
+reach, and the ladder sent T2 cons across the map for it over mohos priced
+four times higher.
 
 Two pools are kept: `gPoolNow` (what our constructors can build) and
 `gPoolTech` (what anyone could build, i.e. the world after an advanced plant).
@@ -215,18 +223,24 @@ constant.
 
 1. **Open spots are priced at one average yield** (`SpotM()`, the last probed
    spot), not per spot. Real yields differ across a map.
-2. **The ladder is serial.** One rung at a time, where the real economy builds
-   many things at once. The bias is common-mode across candidates, so it should
-   not change the ranking — but it inflates every absolute ETA.
+2. **A batch is lathed as wide as the hands that can build it** (`StepSecWide`):
+   the feed is charged for all k, the build time for k/wide. Before 2026-09-20 it
+   was fully serial, and the bias was NOT common-mode: a 127-wind tail read
+   1,400 s, and any head that trimmed it by a few power won the ladder --
+   fusion over moho, geo over moho, measured in a 2v2 trace. The head is
+   still the asker's own time while the tail is fleet-time; measured harmless
+   for T1 elections (same category shares over 9 seeds x 2 maps), unproven
+   in general.
 3. **Tech unlocks everything at once.** `gPoolTech` ignores `CanBuildEver`
    entirely, so an advanced plant is credited with the whole T2 tree. Broadly
    true (a T2 con builds fusion and moho), but it is an upper bound.
-4. **Geo is excluded** from the tail — it is vent-limited, so it is not free
-   growth, and it is not yet modelled as a finite rung.
-5. **Payback ordering ignores build-boundness.** Exact while feed-bound; a cheap
-   fast rung and an expensive slow one with equal payback are ranked as equals.
-6. **A batch is priced at its starting power**, so a long batch overestimates its
-   own duration. Bounded by `ETA_CHUNK`.
+4. **A batch is priced at its starting power**, so a long batch overestimates its
+   own duration. Bounded by `ETA_CHUNK`. The LAST batch is pro-rated to the power
+   still needed: whole-unit overshoot turned a 7-power margin into a 1,392 s afus.
+5. **The layers can still disagree**: `apex: eta-pick` logs every ladder pick
+   that is not the best-valued rung (sampled, unsampled when priced under half),
+   and `apex: eta-pick-trace` prints both ladders when the rung it outranks is a
+   mexup. Read those before touching the arithmetic.
 
 ## Rules for working on this
 

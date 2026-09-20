@@ -1562,7 +1562,15 @@ float NeediestLine(AIFloat3& out at)
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if (f is null)
 			continue;
-		const float u = LineUnserved(f, feed + LowerLinesEat(f), spendFloor, sumCeil);
+		float u = LineUnserved(f, feed, spendFloor, sumCeil);
+		// A higher line's turrets shift metal off the lines below it, but only
+		// what those lines eat: past parity the flow shifts nothing, so with an
+		// empty bank the term terminates instead of buying lathe forever.
+		if (LineWorkingArmy(f)) {
+			const float shift = LowerLinesEat(f) - LineEat(f, f.GetPos(ai.frame));
+			if (shift > 0.f)
+				u += shift;
+		}
 		if (u > worst) {
 			worst = u;
 			at = f.GetPos(ai.frame);

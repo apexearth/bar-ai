@@ -40,6 +40,7 @@ class Pool {
 	array<float> costE;   // its energy bill: a rung is fed in BOTH currencies
 	array<float> makeE;   // and what it adds to the energy feed once it stands
 	array<float> key;     // its place in the ladder: payback over survival
+	array<int> hands;     // our mobile builders that can build it: a batch runs that wide
 }
 
 Pool@ gPoolNow;
@@ -73,6 +74,8 @@ float PoolEq(float cost, float costE)
 // two moves differed only in their opening step and the plan behind both was
 // AFUS-heavy. A rung's place is its payback over its own survival.
 float gPoolSurvBP = 1.f;
+float gPoolMobBP = 1.f;
+float gPoolP = 1.f;
 void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 {
 	if ((p is null) || (cost <= 1.f) || (gain <= 0.0001f) || (n <= 0))
@@ -80,7 +83,28 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	float surv = TechSurvival(d, gPoolSurvBP);
 	if (surv < 0.05f)
 		surv = 0.05f;
-	const float pb = PoolEq(cost, Catalog::gCostE[d]) / gain / surv;
+	int hands = 0;
+	const array<int>@ bb = Catalog::gBuiltBy[d];
+	for (uint q = 0; q < bb.length(); ++q) {
+		if (Catalog::gMobile[bb[q]] && (bb[q] < int(gOwnCount.length())))
+			hands += gOwnCount[bb[q]];
+	}
+	if (hands < 1)
+		hands = 1;
+	// Seconds per power at today's feed and lathe, not metal per power: the
+	// metal order is the same for feed-bound rungs and wrong for the big
+	// lathe-bound ones (an afus at 711 s ranked ahead of a fusion at 300,
+	// and a moho-first path was charged a slice of that afus while the
+	// fusion sat behind it).
+	float tp = PoolEq(cost, Catalog::gCostE[d]) / gPoolP;
+	{
+		const int wide = (n < hands) ? n : hands;
+		const float bt = Catalog::BuildSecondsAt(d,
+				RungBP(d, mob ? gPoolMobBP : gPoolSurvBP)) / float((wide > 0) ? wide : 1);
+		if (bt > tp)
+			tp = bt;
+	}
+	const float pb = tp / gain / surv;
 	uint at = 0;
 	while ((at < p.def.length()) && (p.key[at] <= pb))
 		++at;
@@ -92,6 +116,7 @@ void PoolInsert(Pool@ p, int d, float cost, float gain, int n, bool mob)
 	p.costE.insertAt(at, Catalog::gCostE[d]);
 	p.makeE.insertAt(at, Catalog::gMakeE[d]);
 	p.key.insertAt(at, pb);
+	p.hands.insertAt(at, hands);
 }
 
 // anyTier ignores who can build it: that is the world AFTER an advanced plant,
@@ -144,12 +169,16 @@ void PoolFill(Pool@ p, bool anyTier)
 	p.costE.resize(0);
 	p.makeE.resize(0);
 	p.key.resize(0);
+	p.hands.resize(0);
 	{
 		const float pm = EcoPowerM();
 		const float ea = EtaEnergyAvail();
 		gPoolMPerE = ((pm > 0.5f) && (ea > 1.f)) ? (pm / ea) : 0.f;
 		const float fb = EffBP(0.f);
 		gPoolSurvBP = (fb > 1.f) ? fb : 1.f;
+		const float mb = gPoolSurvBP * MobileBPShare();
+		gPoolMobBP = (mb > 1.f) ? mb : 1.f;
+		gPoolP = (pm > 0.5f) ? pm : 0.5f;
 	}
 	const float rate = ConvRate();
 	const float im = IncomeMult();
@@ -190,6 +219,7 @@ void PoolFill(Pool@ p, bool anyTier)
 	}
 
 	// HELD GROUND: the upgrade each standing extractor still has left in it.
+	const int openGeo = aiEconomyMgr.OpenGeoSpotCount();
 	const int upDef = BestExtractDef(anyTier);
 	if (upDef > 0) {
 		for (uint i = 0; i < gLSpot.length(); ++i) {
@@ -214,13 +244,20 @@ void PoolFill(Pool@ p, bool anyTier)
 		// read as five cheap rungs of the T2 ladder).
 		if (Catalog::gBuiltBy[d].length() == 0)
 			continue;
-		if (Catalog::gNeedGeo[d])
-			continue;   // vent-limited, so not a free tail
 		float dI = Catalog::gMakeM[d];
 		if (Catalog::gMakeE[d] > 0.f)
 			dI += Catalog::gMakeE[d] * rate;
 		if (dI <= 0.f)
 			continue;
+		// A geo is a vent-limited rung like a moho is a spot-limited one. Left
+		// out, a path starting with the geo held power no other path could
+		// reach, and the ladder sent T2 cons across the map for it over mohos
+		// priced four times higher.
+		if (Catalog::gNeedGeo[d]) {
+			if (openGeo > 0)
+				PoolInsert(p, d, Catalog::gCostM[d], dI, openGeo, false);
+			continue;
+		}
 		PoolInsert(p, d, Catalog::gCostM[d], dI, ETA_INF_N, false);
 	}
 }
@@ -247,6 +284,26 @@ void PoolRefresh()
 // match, it stood 5.6 minutes after its frame in the canon game while his,
 // on 1,200 e/s, stood in one. Without this arm the ladder could not see that
 // a solar shortens the lab.
+// One unit's share of a batch of k built `wide` at a time: the metal and
+// energy feeds are charged for all k, the lathe for k/wide of them.
+float StepSecWide(int d, float cost, float P, float bank, float bp, float eAvail, int k, int wide)
+{
+	float bt = Catalog::BuildSecondsAt(d, bp) / float(wide);
+	if (bt < 0.1f)
+		bt = 0.1f;
+	float need = cost + Catalog::gCostE[d] * gPoolMPerE - bank / float(k);
+	if (need < 0.f)
+		need = 0.f;
+	float feed = (P > 0.01f) ? (need / P) : ETA_BIG;
+	const float costE = Catalog::gCostE[d];
+	if (costE > 0.f) {
+		const float feedE = costE / ((eAvail > 1.f) ? eAvail : 1.f);
+		if (feedE > feed)
+			feed = feedE;
+	}
+	return (feed > bt) ? feed : bt;
+}
+
 float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 {
 	float bt = Catalog::BuildSecondsAt(d, bp);
@@ -377,8 +434,13 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		const float rbp = p.mob[i]
 				? ((CanBuildEver(p.def[i]) || (gLadderTierBP <= 0.f)) ? bpMob : gLadderTierBP)
 				: bp;
-		const float stepS = StepSec(p.def[i], p.cost[i], P, bank,
-				RungBP(p.def[i], rbp), eAvail);
+		// k units are fed one after another but lathed side by side: 127
+		// winds read 1,400 s serial when twenty hands stand them in ~70,
+		// and every head that trimmed that tail by a few power -- a fusion
+		// over a moho -- won the ladder on it.
+		const int wide = (k < p.hands[i]) ? k : p.hands[i];
+		const float stepS = StepSecWide(p.def[i], p.cost[i], P, bank,
+				RungBP(p.def[i], rbp), eAvail, k, (wide > 0) ? wide : 1);
 		float rlat = lat;
 		if (p.mob[i] && (Catalog::gExtractsM[p.def[i]] > 0.f) && (gPoolSpotWalkS > 0.f)) {
 			const int workers = int(aiBuilderMgr.GetWorkerCount());
@@ -387,8 +449,14 @@ float LadderRun(Pool@ p, float P, float bank, float bp, float bpMob, float eAvai
 		if (gLadderTrace)
 			gLadderTraceS += " " + Catalog::Def(p.def[i]).GetName() + "x" + k
 				+ "@" + int(stepS) + "+" + int(rlat) + "(P" + int(P) + ",bp" + int(RungBP(p.def[i], rbp)) + ")";
-		t += float(k) * (stepS + rlat);
-		gLadderLatS += float(k) * rlat;
+		// The last batch is charged for the power still needed, not for the
+		// whole unit: a target 7 power past four afus read a fifth (1,392 s),
+		// and that overshoot -- not the rungs -- decided fusion over moho.
+		float fill = 1.f;
+		if ((target > P) && (float(k) * g > target - P))
+			fill = (target - P) / (float(k) * g);
+		t += float(k) * (stepS + rlat) * fill;
+		gLadderLatS += float(k) * rlat * fill;
 		bank = 0.f;
 		P += float(k) * g;
 		eAvail += float(k) * p.makeE[i];

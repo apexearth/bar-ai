@@ -677,6 +677,8 @@ bool PlantFramed()
 // have rolled. Without that the slice changes the draw for no reason.
 // The tickets: one per category, weighted as the draw weighs them. Returns
 // their sum; catBest carries each ticket's want.
+int gEtaPickLogAt = 0;
+int gEtaPickTraceAt = 0;
 float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& out wt)
 {
 	catBest.resize(CAT_N + 1);
@@ -741,6 +743,44 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 			}
 			catBest[pc] = pick;
 			catV[pc] = EtaEcoWeight(ranked);
+			// The ladder's pick carries the best rung's ticket, so a pick the
+			// market prices far below that rung wins on the rung's odds and
+			// reads why=draw: both geo walks were this.
+			{
+				int vb = -1;
+				for (uint ri = 0; ri < ranked.length(); ++ri) {
+					if (EtaMergedCat(CategoryOf(ranked[ri].kind)) && EtaRanks(ranked[ri])) {
+						vb = int(ri);
+						break;   // ranked is value-sorted
+					}
+				}
+				// Sampled, except a pick priced under half the rung it outranks.
+				if ((vb >= 0) && (vb != pick) && ((ai.frame >= gEtaPickLogAt)
+						|| (ranked[pick].value < 0.5f * ranked[vb].value))) {
+					gEtaPickLogAt = ai.frame + 10 * SECOND;
+					AiLog("apex: eta-pick t=" + ai.teamId + " " + KindName(ranked[pick].kind)
+						+ ":" + ((ranked[pick].def is null) ? "?" : ranked[pick].def.GetName())
+						+ " eta=" + int(EtaOfWant(ranked[pick]))
+						+ " v=" + formatFloat(ranked[pick].value, "", 0, 2)
+						+ " over " + KindName(ranked[vb].kind)
+						+ ":" + ((ranked[vb].def is null) ? "?" : ranked[vb].def.GetName())
+						+ " eta=" + int(EtaOfWant(ranked[vb]))
+						+ " v=" + formatFloat(ranked[vb].value, "", 0, 2)
+						+ " P=" + formatFloat(EcoPowerM(), "", 0, 1)
+						+ " eAvail=" + formatFloat(EtaEnergyAvail(), "", 0, 0));
+					if ((ranked[vb].kind == WK_MEXUP) && (ai.frame >= gEtaPickTraceAt)) {
+						gEtaPickTraceAt = ai.frame + 30 * SECOND;
+						gLadderTrace = true;
+						gLadderTraceS = "";
+						EtaOfWant(ranked[pick]);
+						AiLog("apex: eta-pick-trace pick:" + gLadderTraceS);
+						gLadderTraceS = "";
+						EtaOfWant(ranked[vb]);
+						AiLog("apex: eta-pick-trace best:" + gLadderTraceS);
+						gLadderTrace = false;
+					}
+				}
+			}
 			// A converter, a store or an assist has no rung, and clearing their
 			// category's ticket above deleted them from the draw: they keep
 			// their market price, so they keep a ticket.
@@ -791,12 +831,19 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 		// and a want that would consume the whole horizon's output is
 		// effectively argmax.
 		float sh = sharp;
-		if ((bitCap > 1.f) && (ranked[catBest[c]].def !is null)) {
-			float bite = ranked[catBest[c]].def.costM / bitCap;
-			if (bite > 1.f)
-				bite = 1.f;
-			sh += bite * commitSh;
-		}
+		float bite = 0.f;
+		if ((bitCap > 1.f) && (ranked[catBest[c]].def !is null))
+			bite = ranked[catBest[c]].def.costM / bitCap;
+		// The hand's time is the other thing a wrong draw spends: a 1,984-metal
+		// geo read a 4% bite and took the only T2 con for five minutes over a
+		// moho priced four times higher. Its own time cost over the same
+		// horizon is the bite that says so.
+		const float tb = ranked[catBest[c]].tCost / ((payH > 1.f) ? payH : 900.f);
+		if (tb > bite)
+			bite = tb;
+		if (bite > 1.f)
+			bite = 1.f;
+		sh += bite * commitSh;
 		float t = v;
 		if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
 			t = lead * pow(v / lead, sh);

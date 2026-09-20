@@ -47,6 +47,12 @@ static AIFloat3 CEconomyManager_GetGeoSpotPos(CEconomyManager* mgr, int spotId)
 	return mgr->GetGeoSpotPos(spotId);
 }
 
+// apex: the ETA pool carries geos as a vent-limited rung; this is its n.
+static int CEconomyManager_OpenGeoSpotCount(CEconomyManager* mgr)
+{
+	return mgr->OpenGeoSpotCount();
+}
+
 static IUnitTask* CEconomyManager_EnqueueGeoAt(CEconomyManager* mgr, CCircuitUnit* unit, int spotId)
 {
 	return mgr->EnqueueGeoAt(unit, spotId);
@@ -90,6 +96,7 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
 	// FindOpenGeoSpot for why HomeEnergy needed this.
 	r = engine->RegisterObjectMethod("CEconomyManager", "int FindOpenGeoSpot(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CEconomyManager_FindOpenGeoSpot), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "AIFloat3 GetGeoSpotPos(int) const", asFUNCTION(CEconomyManager_GetGeoSpotPos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEconomyManager", "int OpenGeoSpotCount() const", asFUNCTION(CEconomyManager_OpenGeoSpotCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEconomyManager", "IUnitTask@+ EnqueueGeoAt(CCircuitUnit@, int)", asFUNCTION(CEconomyManager_EnqueueGeoAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 }
 

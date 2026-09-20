@@ -33,6 +33,21 @@ lines of quotes.
   gun and only for ground still short; no basic tower once an advanced con
   exists; a gun no stronger than one that died there is not rebuilt there):
   towers per 2v2 game 25-65 -> 11-24. Unverified by him.
+- Metal first, in his order: build the mexes, upgrade the mexes, then protect
+  the mexes (2026-09-20, Frozen Ford 1v1 watched). Measured there: 5 mexes to
+  their 10 at 9 min; the two mexes beside the commander upgraded at 23-25 min
+  with the first T2 con out at 8.6; the upgrade was the top-valued want in 11
+  elections 9-23 min and won none (5 to the defence role seat, 6 to the draw
+  -- a geo at v=2.5 over a moho at 10.2). Both T2 cons walked to geos 1,900
+  and 5,200 elmos out. Open: the election, not the price.
+- No nano turret while the bank is empty and metal is fully spent
+  (2026-09-20): 96 nanos in 6 min on a bank pinned at 0. Cause was 09-19's
+  LowerLinesEat (a higher line's demand = the lower lines' paper lathe,
+  unbounded). Bounded at parity 09-20; one 2v2: nanos per team 187 -> ~54.
+- 380 m/s income and not one pulsar; defence spend read 0 in half the
+  3-min buckets (2026-09-20). Same game: 604 nano orders to 16 defence orders
+  after 20 min; where defence was worth more it lost to the energy role seat
+  10 of 10. Re-measure after the nano fix before touching defence pricing.
 - Constructors do not walk out alone onto ground where the last one died, and
   lost mexes are not passively conceded (09-19). The first half is built: a
   con's death marks its ground for the claims, the wrecks, the rez chain and
