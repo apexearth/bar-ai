@@ -236,6 +236,13 @@ public:
 	// known live enemy attackers, refreshed every 10 s); pooled when blind.
 	float RecordRatioMix(CCircuitDef* cdef);
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
+	// The other direction: what THEIR unit dealt to us before one of ours
+	// killed it, filed as (their def, our killer def) in apex-record-foe.txt.
+	void RecordTaken(ICoreUnit::Id enemyId, ICoreUnit::Id attacker, float damage);
+	void RecordFoeFold(CEnemyInfo* enemy, CCircuitDef* killer);
+	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* killer) const;
+	int RecordFoeCount(CCircuitDef* edef, CCircuitDef* killer) const;
+	bool RecordTweaked() const { return recTweaked; }
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
 	// WHERE we are losing units, cost-weighted and decaying. The AI had no
@@ -530,6 +537,13 @@ private:
 	static long long RecordKey(CCircuitDef::Id id, CCircuitDef::Id killer) { return (long long)id * 65536 + killer; }
 	int RecordTierOf(CCircuitDef::Id killer) const;
 	void RecordSum(CCircuitDef::Id id, CCircuitDef::Id killer, float& dealt, float& health, float& n) const;
+	std::unordered_map<ICoreUnit::Id, float> recTaken;   // damage each enemy unit dealt us
+	std::unordered_map<long long, SRecord> recFoeGame;
+	std::unordered_map<long long, SRecord> recFoeStored;
+	std::string recFoePath;
+	// A game with tweakunits/tweakdefs set plays altered stats: the record
+	// neither learns from it nor prices by it.
+	bool recTweaked = false;
 	std::vector<std::pair<CCircuitDef*, float>> recFoe;   // fielded enemy attackers by def
 	float recFoeTotal = .0f;
 	int recFoeFrame = -1;
@@ -537,6 +551,7 @@ private:
 	std::string recPath;
 	void RecordLoad();
 	void RecordSave();
+	void RecordSaveOne(const std::string& path, const std::unordered_map<long long, SRecord>& game);
 	static bool RecordCounts(CCircuitDef* cdef);
 // <<< Unit track record ---- END
 

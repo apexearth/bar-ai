@@ -545,7 +545,20 @@ capped at 1), so the multiplier is min(1, mix/bar). Measured bars from the
 0.23 and Zeus 0.40 still read badly judged as tanks (it is the unit, not
 the class) while Blade 0.68 -> 0.85 and Bull 0.61 -> 0.76 come back toward
 neutral. Squad-level credit (the tank's absorbed damage paid to its
-squadmates' output) is his idea, unbuilt: TODO.md. After ~120 harness games the pooled record had a
+squadmates' output) is his idea, unbuilt: TODO.md.
+
+TWEAKS DISABLE IT (his rule 2026-09-19): any non-empty `tweakunits*` /
+`tweakdefs*` modoption means altered stats, so the record is neither read
+(every ratio 1.0), learned from, nor saved that game; `apex: record
+disabled -- <key> is set` says so. THEIR SIDE IS RECORDED TOO:
+`apex-record-foe.txt` holds (their def, our killer def) with what their
+unit dealt us over its own health (`apex: record-foe`, `record.py --foe`).
+Two engine limits: the killer is named only while our killing unit is
+still alive, and damage is credited only from an attacker we could see, so
+a fog shooter reads low. Nanoframes killed with their plant are skipped.
+Not yet priced -- what to do with "their Gator reads 1.42 against us" is
+his call (a prior for our own copy of the def; or weighting the fielded
+mix by lethality rather than metal). After ~120 harness games the pooled record had a
 median of 0.64 across 71 types with the tanky front line at 0.2-0.3 and
 long-range units at 2-19 -- the absolute "its own health" bar flattens
 prices across the field and hits the shield class hardest, which the line
