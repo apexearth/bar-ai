@@ -489,12 +489,11 @@ float UnitPPC(int d)
 	return v;
 }
 
-// THE TRACK RECORD (apexearth 2026-09-16): a type whose units keep dying
-// without dealing their own health in damage is bought at what its dead
-// actually returned, not what its stats promise. A discount only, so the
-// stats still rank what has proven itself. Fodder is bought to die and
-// fighters are always needed, so neither is judged. Never reaches zero: the
-// prior in the DLL keeps the floor at prior/(prior+window).
+// THE TRACK RECORD (apexearth 2026-09-16): a type is bought at what it
+// has actually traded, not what its stats promise -- a ranking around the
+// army's mean, never a ban (the prior in the DLL keeps the floor at
+// prior/(prior+window)). Fodder is bought to die and fighters are always
+// needed, so neither is judged.
 //
 // READ AGAINST WHAT THEY FIELD (apexearth 2026-09-19: "if the enemy has
 // Tzars or Fatboys ... I shouldn't be building crappy short-range units").
@@ -555,8 +554,10 @@ float RecordRaw(int d)
 		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
 		return 1.f;
 	const float bar = RecordBar(LineClassOf(d));
-	const float r = ai.RecordRatioMix(cdef) / ((bar > 0.01f) ? bar : 1.f);
-	return (r < 1.f) ? r : 1.f;
+	// Uncapped (apexearth 2026-09-20: "we would prefer to try to use the
+	// better units"): a type trading above its class bar prices above 1,
+	// and the mean below holds the army's total worth where it was.
+	return ai.RecordRatioMix(cdef) / ((bar > 0.01f) ? bar : 1.f);
 }
 
 float RecordMean()
