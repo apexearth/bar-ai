@@ -1525,8 +1525,19 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// its walk; the hands that follow to lathe it are not -- once make is
 	// ordered every hand in the base was pulled off its mex walk to assist
 	// two solars (42 stall solars in eight minutes, seven mexes built).
-	const bool emergency = (why == "estall") || (why == "aa")
+	bool emergency = (why == "estall") || (why == "aa")
 			|| (why == "defpanic") || (why == "penned") || (why == "cover");
+	// METAL FIRST (apexearth 2026-09-19: "focus everything on the thing
+	// that gets you more metal"): the stall's answer does not take a hand
+	// off a mex upgrade -- the first advanced con left its first moho for
+	// a fusion at v=1 over v=16, and the moho came from the third con.
+	if ((why == "estall") && (top !is null)) {
+		const int uidm = int(unit.id);
+		if ((uidm >= 0) && (uidm < int(gIncTask.length())) && (gIncTask[uidm] !is null)
+			&& !gIncTask[uidm].IsDead()
+			&& (gIncTask[uidm].GetBuildType() == Task::BuildType::MEXUP))
+			emergency = false;
+	}
 	if (!emergency && (top !is null)) {
 		const int uidk = int(unit.id);
 		if ((uidk >= 0) && (uidk < int(gIncTask.length())) && (gIncTask[uidk] !is null)) {

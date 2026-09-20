@@ -988,6 +988,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	array<int> rcRole;
 	array<float> rcTgt;
 	array<float> rcVal;
+	const bool metalPath = MetalPathStarved();
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -1009,6 +1010,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		if (EcoOnly() && !Catalog::gBuilder[d])
 			continue;   // the economy-only benchmark: hands only
+		// Metal first: the unlock in flight takes the feed (guards.as).
+		if (metalPath && !Catalog::gBuilder[d]) {
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
+			continue;
+		}
 		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
 		// THE WING'S LOOK: an air scout bought for what seeing their economy

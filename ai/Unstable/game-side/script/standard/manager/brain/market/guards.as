@@ -424,6 +424,73 @@ void GuardSweep()
 // (empty bank, or income under pull with the bank low), and it is the same
 // signal that pauses the work, so our answer now fires exactly when the
 // throttle engages instead of never.
+// METAL FIRST (apexearth 2026-09-19): while the metal unlock -- an advanced
+// plant, or the first mex upgrade -- is in flight and the metal feed is short
+// of what is pulling on it, the plants make no army: a T2 lab crawled for
+// three minutes at 26-50 metal/s beside a T1 lab that put 1,800 metal into
+// Pawns. Feed-bound, not hand-bound, so the answer is fewer sinks, not more
+// hands.
+int  gMetalPathAt = -1;
+bool gMetalPathVal = false;
+int  gMetalPathTicks = 0;
+int  gNextMetalPathLog = 0;
+bool MetalPathStarved()
+{
+	if (gMetalPathAt == ai.frame)
+		return gMetalPathVal;
+	gMetalPathAt = ai.frame;
+	gMetalPathVal = false;
+	bool unlock = AdvPlantInFlight();
+	if (!unlock && (MohoStanding() == 0)) {
+		for (uint li = 0; li < Requests::gLive.length(); ++li) {
+			IUnitTask@ lt = Requests::gLive[li];
+			if ((lt !is null) && !lt.IsDead()
+				&& (lt.GetBuildType() == Task::BuildType::MEXUP)) {
+				unlock = true;
+				break;
+			}
+		}
+	}
+	if (!unlock)
+		return false;
+	const float mInc = aiEconomyMgr.metal.income;
+	const float mPull = aiEconomyMgr.metal.pull;
+	const float mCur = aiEconomyMgr.metal.current;
+	const float h = EGenBuildSeconds();
+	const float share = (mPull > 0.01f) ? ((mInc + mCur / ((h > 1.f) ? h : 1.f)) / mPull) : 9.f;
+	gMetalPathVal = (share < 1.f);
+	if (gMetalPathVal) {
+		++gMetalPathTicks;
+		if (ai.frame >= gNextMetalPathLog) {
+			gNextMetalPathLog = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: metal-path starved share="
+				+ formatFloat(share, "", 0, 2) + " inc=" + formatFloat(mInc, "", 0, 0)
+				+ " pull=" + formatFloat(mPull, "", 0, 0)
+				+ " advPlant=" + (AdvPlantInFlight() ? 1 : 0)
+				+ " ticks=" + gMetalPathTicks);
+		}
+	}
+	return gMetalPathVal;
+}
+
+// Finished upgraded extractors we own: ledger rows extracting more than the
+// basic extractor does.
+int MohoStanding()
+{
+	float basic = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		const float e = Catalog::gExtractsM[d];
+		if ((e > 0.f) && !Catalog::gMobile[d] && ((basic <= 0.f) || (e < basic)))
+			basic = e;
+	}
+	int n = 0;
+	for (uint i = 0; i < gLExtract.length(); ++i) {
+		if (gLExtract[i] > basic * 1.5f)
+			++n;
+	}
+	return n;
+}
+
 int  gHardEAt = -1;
 bool gHardEVal = false;
 bool HardEStall()

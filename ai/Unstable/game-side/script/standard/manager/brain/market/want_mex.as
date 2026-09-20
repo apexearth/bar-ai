@@ -442,6 +442,48 @@ int MexTries()
 	}
 	return gMexTries;
 }
+// WHERE A DEAD EXTRACTOR'S SPOT GOES. apexearth, watching: "we spend minutes
+// not rebuilding mexes even though they're perfectly safe." Each of our dead
+// spots is watched for four minutes and the sweep names the gate that
+// refuses it (sampled 15 s a spot).
+array<AIFloat3> gDeadSpotPos;
+array<int> gDeadSpotAt;
+array<int> gDeadSpotLogAt;
+void NoteMexDeath(const AIFloat3& in at)
+{
+	gDeadSpotPos.insertLast(at);
+	gDeadSpotAt.insertLast(ai.frame);
+	gDeadSpotLogAt.insertLast(0);
+}
+int DeadSpotWatch(const AIFloat3& in sp)
+{
+	for (uint i = 0; i < gDeadSpotPos.length(); ) {
+		if (ai.frame - gDeadSpotAt[i] > 4 * MINUTE) {
+			gDeadSpotPos.removeAt(i);
+			gDeadSpotAt.removeAt(i);
+			gDeadSpotLogAt.removeAt(i);
+			continue;
+		}
+		if ((gDeadSpotPos[i].distance2D(sp) < 100.f) && (ai.frame >= gDeadSpotLogAt[i])) {
+			gDeadSpotLogAt[i] = ai.frame + 15 * SECOND;
+			return int(i);
+		}
+		++i;
+	}
+	return -1;
+}
+void DeadSpotSay(int w, const AIFloat3& in sp, const string& in gate)
+{
+	if (w < 0)
+		return;
+	AiLog(Factory::T() + "apex: deadspot " + int(sp.x) + "," + int(sp.z)
+		+ " dead=" + int((ai.frame - gDeadSpotAt[uint(w)]) / SECOND) + "s"
+		+ " gate=" + gate
+		+ " threat=" + formatFloat(ai.GetThreatAt(sp), "", 0, 0)
+		+ " infl=" + formatFloat(ai.GetAllyDefendInflAt(sp), "", 0, 1)
+		+ " foe=" + formatFloat(ai.GetEnemyCostAt(sp, 600.f), "", 0, 0));
+}
+
 // The sweep's working set, kept between calls. Ninety insertLast into two
 // freshly-constructed arrays, every election, was the sweep's own overhead.
 array<int> gPsCand;
@@ -469,11 +511,16 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const int lidxN = int(lidx.length());
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		++gSwTotal;
+		const AIFloat3 sp = gAllSpots[si];
+		const int dw = (gDeadSpotPos.length() > 0) ? DeadSpotWatch(sp) : -1;
 		if ((int(si) < lidxN) ? (lidx[si] >= 0) : (LedgerFind(int(si)) >= 0)) {
 			++gSwLedger;
+			if (dw >= 0) {
+				const int row = LedgerFind(int(si));
+				DeadSpotSay(dw, sp, ((row >= 0) && (gLExtract[uint(row)] > 0.f)) ? "standing" : "claimed");
+			}
 			continue;
 		}
-		const AIFloat3 sp = gAllSpots[si];
 		if (!OnMap(sp))
 			continue;
 		const float inc = gAllSpotInc[si] * incMul;
@@ -484,6 +531,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// both write the mark).
 		if (NearBlocked(sp) || NearConDeath(sp)) {
 			++gSwPast;
+			DeadSpotSay(dw, sp, NearBlocked(sp) ? "blocked" : "condeath");
 			continue;
 		}
 		// THE EXECUTOR'S OWN BAR, ASKED HERE. The builder task refuses a site
@@ -497,6 +545,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			const float hot = ai.GetThreatAt(sp);
 			if ((hot > 1.f) && (hot > ai.GetAllyDefendInflAt(sp))) {
 				++gSwHot;
+				DeadSpotSay(dw, sp, "hot");
 				continue;
 			}
 		}
@@ -505,6 +554,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// a veto, and ranks the spot below a safer one of equal yield.
 		if (ecoOn && (sp.distance2D(Builder::gHomePos) > ecoLeash)) {
 			++gMexEcoFar;
+			DeadSpotSay(dw, sp, "ecofar");
 			continue;
 		}
 		// The commander's leash likewise: a spot the election would refuse
@@ -512,10 +562,12 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// buys energy while the next spot in stands unclaimed.
 		if (comm && ComFar(sp)) {
 			++gMexComFar;
+			DeadSpotSay(dw, sp, "comfar");
 			continue;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
 		const float risk = TripRiskWith(sp, share);
+		DeadSpotSay(dw, sp, "priced risk=" + formatFloat(risk, "", 0, 2));
 		if (risk >= 0.5f)
 			++gSwPast;
 		gPsCand.insertLast(int(si));

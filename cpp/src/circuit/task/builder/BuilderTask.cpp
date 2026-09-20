@@ -1244,8 +1244,12 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		// stricter per-unit test disagreeing is exactly the loop where a
 		// deterministic site is re-elected and aborted forever (t5's no-lab
 		// pocket, SI 8v8 s106). Mark the ground so ProbedSite steps around
-		// it on the next election.
-		circuit->NoteBuildBlocked(endPos, buildDef);
+		// it on the next election -- but only ground the unit cannot REACH.
+		// A site refused for threat is the unsafe list's, not a three-minute
+		// block: the raider leaves and the dead mex stayed unbuilt (his watch).
+		if (intoThreat || !circuit->GetTerrainManager()->CanReachAt(unit, endPos, range)) {
+			circuit->NoteBuildBlocked(endPos, buildDef);
+		}
 		{
 			const float gap = circuit->GetTerrainManager()->ReachGap(unit->GetArea(), endPos);
 			circuit->LOG("apex: unreach %s bt=%i by %s at=%.0f,%.0f gap=%.0f range=%.0f threat=%.1f/%.1f",

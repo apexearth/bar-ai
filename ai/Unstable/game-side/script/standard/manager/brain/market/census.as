@@ -607,6 +607,8 @@ void NoteDead(CCircuitUnit@ unit)
 		OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
+	if (Main::WasFinished(int(unit.id)))
+		NoteMexDeath(unit.GetPos(ai.frame));
 	const int i = LedgerNearest(unit.GetPos(ai.frame));
 	if (i < 0)
 		return;
