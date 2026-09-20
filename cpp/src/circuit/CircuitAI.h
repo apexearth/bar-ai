@@ -223,9 +223,11 @@ public:
 	// carried across games in the AI's data dir. Fodder and fighters are the
 	// script's business; this only measures.
 	void RecordDealt(ICoreUnit::Id attacker, float damage);
-	void RecordFold(CCircuitUnit* unit, bool died);
-	float RecordRatio(CCircuitDef* cdef) const;
-	int RecordCount(CCircuitDef* cdef) const;
+	void RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer);
+	// tier: the killer's tier the bucket is read for, or -1 for all of them.
+	float RecordRatio(CCircuitDef* cdef, int tier) const;
+	int RecordCount(CCircuitDef* cdef, int tier) const;
+	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
 	// WHERE we are losing units, cost-weighted and decaying. The AI had no
@@ -512,8 +514,13 @@ public:
 	struct SRecord { float dealt = .0f; float health = .0f; float n = .0f; };
 private:
 	std::unordered_map<ICoreUnit::Id, float> recDealt;      // this game, per unit
-	std::unordered_map<CCircuitDef::Id, SRecord> recGame;   // this game, per def
-	std::unordered_map<CCircuitDef::Id, SRecord> recStored; // from the file
+	// Keyed by def and the tier of what killed it (0 unknown, 1..3), so a
+	// type that trades fine with T1 and dies for nothing to T2 reads both.
+	std::unordered_map<int, SRecord> recGame;     // this game
+	std::unordered_map<int, SRecord> recStored;   // from the file
+	std::unordered_map<CCircuitDef::Id, int> recTier;   // the script's DefTier
+	static int RecordKey(CCircuitDef::Id id, int tier) { return id * 4 + tier; }
+	int RecordTierOf(CCircuitDef* cdef) const;
 	std::string recPath;
 	void RecordLoad();
 	void RecordSave();

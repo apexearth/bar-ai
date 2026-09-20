@@ -46,6 +46,7 @@ ANALYSIS_TOOLS = {
     "fight1v1": ("fight1v1.py", False),
     "trace_flow": ("trace_flow.py", False),
     "deaths": ("deaths.py", False),
+    "record": ("record.py", False),
     "scaling": ("scaling.py", False),
     "wdeaths": ("wdeaths.py", False),
     "arena": ("arena.py", False),

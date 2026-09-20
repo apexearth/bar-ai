@@ -491,10 +491,18 @@ float UnitPPC(int d)
 
 // THE TRACK RECORD (apexearth 2026-09-16): a type whose units keep dying
 // without dealing their own health in damage is bought at what its dead
-// actually returned, not what its stats promise. A discount only, so the stats still
-// rank what has proven itself. Fodder is bought to die and fighters are
-// always needed, so neither is judged. Never reaches zero: the prior in the
-// DLL keeps the floor at prior/(prior+window).
+// actually returned, not what its stats promise. A discount only, so the
+// stats still rank what has proven itself. Fodder is bought to die and
+// fighters are always needed, so neither is judged. Never reaches zero: the
+// prior in the DLL keeps the floor at prior/(prior+window).
+//
+// READ AGAINST WHAT THEY FIELD (apexearth 2026-09-19: "consider what each of
+// these units is dying to ... good in the early game, then later on just
+// bad"). The DLL keeps one bucket per killer tier; the price is the buckets
+// weighted by the identified enemy metal per tier, so a type that trades
+// with T1 and dies for nothing to T2 is discounted as their T2 share grows.
+bool gRecordTiersSet = false;
+array<float> gRecordMulLast;
 float RecordMul(int d)
 {
 	if (ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) <= 0.f)
@@ -503,8 +511,39 @@ float RecordMul(int d)
 	if (Military::IsFodder(cdef)
 		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
 		return 1.f;
-	const float r = ai.RecordRatio(cdef);
-	return (r < 1.f) ? r : 1.f;
+	if (!gRecordTiersSet) {
+		gRecordTiersSet = true;
+		for (int i = 1; i <= Catalog::gDefCount; ++i)
+			if (Catalog::ValidId(i))
+				ai.RecordSetTier(Catalog::Def(i), DefTier(i));
+	}
+	float tot = 0.f;
+	for (uint t = 1; t < Military::gFoeTierM.length(); ++t)
+		tot += Military::gFoeTierM[t];
+	float r;
+	if (tot <= 1.f) {
+		r = ai.RecordRatio(cdef, -1);
+	} else {
+		r = 0.f;
+		for (uint t = 1; t < Military::gFoeTierM.length(); ++t)
+			r += (Military::gFoeTierM[t] / tot) * ai.RecordRatio(cdef, int(t));
+	}
+	const float m = (r < 1.f) ? r : 1.f;
+	// The proof that the record reaches a price: logged when it moves.
+	if (int(gRecordMulLast.length()) <= Catalog::gDefCount)
+		gRecordMulLast.resize(Catalog::gDefCount + 1);
+	if ((gRecordMulLast[d] == 0.f) ? (m < 0.95f) : (abs(m - gRecordMulLast[d]) > 0.05f)) {
+		gRecordMulLast[d] = m;
+		AiLog(Factory::T() + "apex: record-mul " + cdef.GetName() + " " + formatFloat(m, "", 0, 2)
+			+ " n=" + ai.RecordCount(cdef, -1)
+			+ " mix=" + ((tot > 1.f) ? (int(100.f * Military::gFoeTierM[1] / tot) + "/"
+				+ int(100.f * Military::gFoeTierM[2] / tot) + "/"
+				+ int(100.f * Military::gFoeTierM[3] / tot)) : "-")
+			+ " t1=" + formatFloat(ai.RecordRatio(cdef, 1), "", 0, 2)
+			+ " t2=" + formatFloat(ai.RecordRatio(cdef, 2), "", 0, 2)
+			+ " t3=" + formatFloat(ai.RecordRatio(cdef, 3), "", 0, 2));
+	}
+	return m;
 }
 
 // The cheapest measurement there is: what the current exponents actually rank,
