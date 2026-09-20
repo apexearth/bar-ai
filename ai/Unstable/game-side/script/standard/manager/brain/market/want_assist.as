@@ -22,6 +22,64 @@ bool BasicHandCan(int d)
 	return false;
 }
 
+// METAL FIRST (apexearth 2026-09-19): the unlock in flight -- an advanced
+// plant or a mex upgrade -- takes every free hand that can reach it while
+// its crew is short and the feed can carry another. Priced nowhere: the
+// priced assist read the T2 lab at v=0.5 and it rose on one hand for 99 s
+// with ten allowed. Decide hoists this ahead of the draw.
+int gUnlockAssists = 0;
+Want@ ProposeUnlockAssist(CCircuitUnit@ unit)
+{
+	Want w;
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) || MetalPathStarved())
+		return w;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	IUnitTask@ best = null;
+	float bestD = 0.f;
+	for (uint li = 0; li < Requests::gLive.length(); ++li) {
+		IUnitTask@ lt = Requests::gLive[li];
+		if ((lt is null) || lt.IsDead() || (lt.buildDef is null)
+			|| !Requests::IsMetalUnlock(lt.buildDef))
+			continue;
+		const AIFloat3 bp = lt.GetBuildPos();
+		if (!OnMap(bp) || (Requests::Workers(lt) == 0)
+			|| (Requests::Workers(lt) >= Requests::SiteWorkerCap(lt.buildDef)))
+			continue;
+		if (!ai.CanDefReach(Catalog::Def(int(unit.circuitDef.id)), here, bp))
+			continue;
+		const float d = here.distance2D(bp);
+		if ((best is null) || (d < bestD)) {
+			@best = lt;
+			bestD = d;
+		}
+	}
+	if (best is null)
+		return w;
+	array<CCircuitUnit@>@ on = best.GetUnits();
+	CCircuitUnit@ boss = null;
+	for (uint i = 0; (on !is null) && (i < on.length()); ++i) {
+		if ((on[i] !is null) && (on[i].id != unit.id)) {
+			@boss = on[i];
+			break;
+		}
+	}
+	if (boss is null)
+		return w;
+	w.kind = WK_ASSIST;
+	w.pos = best.GetBuildPos();
+	w.spotId = int(boss.id);
+	w.gain = 1.f;
+	w.mCost = 1.f;
+	w.tCost = 1.f;
+	w.value = 1.f;
+	@w.def = best.buildDef;
+	@gAssistTarget = boss;
+	gAssistTargetId = boss.id;
+	gAssistGuardS = 60;
+	++gUnlockAssists;
+	return w;
+}
+
 Want@ ProposeAssist(CCircuitUnit@ unit)
 {
 	Want w;

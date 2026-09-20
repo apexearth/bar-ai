@@ -467,6 +467,7 @@ bool MetalPathStarved()
 				+ formatFloat(share, "", 0, 2) + " inc=" + formatFloat(mInc, "", 0, 0)
 				+ " pull=" + formatFloat(mPull, "", 0, 0)
 				+ " advPlant=" + (AdvPlantInFlight() ? 1 : 0)
+				+ " mohos=" + MohoStanding()
 				+ " ticks=" + gMetalPathTicks);
 		}
 	}

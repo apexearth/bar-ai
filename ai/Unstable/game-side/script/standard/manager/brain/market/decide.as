@@ -1,4 +1,5 @@
 namespace Market {
+int gMetalFirstCut = 0;   // wants dropped while the unlock is starved
 //------------------------------------------------------------------------------
 // The arbiter's builder side. Called only from Brain::Decide.
 //------------------------------------------------------------------------------
@@ -1498,6 +1499,37 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		roled = ConRoleApply(unit, ranked);
 		if (roled)
 			why = "role";
+	}
+	// METAL FIRST: while the unlock is starved of feed, no hand opens
+	// another sink -- four Dragon's Claws and an air plant went up beside
+	// a T2 plant crawling at share 0.77. Metal, its energy, reclaim and
+	// help stay; the panics above have already had their say.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
+		&& (ranked.length() > 1) && MetalPathStarved())
+	{
+		for (uint ri = 0; ri < ranked.length(); ) {
+			const int k = ranked[ri].kind;
+			if ((k == WK_MEX) || (k == WK_MEXUP) || (k == WK_TECH) || (k == WK_ENERGY)
+				|| (k == WK_CONVERT) || (k == WK_RECLAIM) || (k == WK_ASSIST) || (k == WK_GEO)) {
+				++ri;
+				continue;
+			}
+			ranked.removeAt(ri);
+			++gMetalFirstCut;
+		}
+	}
+	// METAL FIRST: a free hand joins the unlock in flight (want_assist.as).
+	// Not over its own metal work -- a mex, an upgrade or the plant itself.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
+		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
+		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
+	{
+		Want@ ua = ProposeUnlockAssist(unit);
+		if ((ua !is null) && (ua.kind == WK_ASSIST)) {
+			ranked.insertAt(0, ua);
+			floorPush = true;
+			why = "metalfirst";
+		}
 	}
 	// THE FIRST PLANT IS NOT A DICE ROLL. The draw keeps runners-up alive
 	// over many elections; the one election that unlocks the con floor and

@@ -470,6 +470,10 @@ uint SiteWorkerCapFed(const CCircuitDef@ want)
 	// and WorthJoiningSite is what actually sizes the crew below the cap.
 	if (IsBigEnergy(want))
 		return (Market::EcoQuiet() || Market::EcoOnly()) ? ((n > pool) ? n : pool) : n;
+	// The metal unlock likewise takes the whole pool: split evenly over eight
+	// live sites the T2 lab got one hand, the same as a solar.
+	if (IsMetalUnlock(want))
+		return (n > pool) ? n : pool;
 	const uint fed = FeedableCrew(want);
 	return (n > fed) ? fed : n;
 }

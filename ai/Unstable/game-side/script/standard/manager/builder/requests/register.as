@@ -15,6 +15,29 @@ namespace Requests {
 // and C++ build_chain alike.
 const float BIG_E_COST = 300.f;   // above solar (155) and wind; advsol 370 up
 
+// The metal unlock: an advanced plant, or an extractor above the basic one.
+// apexearth 2026-09-19: "to get more metal, you just need to focus everything
+// on the thing that gets you more metal."
+bool IsMetalUnlock(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id) || Catalog::gMobile[id])
+		return false;
+	if ((Catalog::gBuildsList[id].length() > 0)
+		&& ((Factory::userData[id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+		return true;
+	if (Catalog::gExtractsM[id] <= 0.f)
+		return false;
+	for (int k = 1; k <= Catalog::gDefCount; ++k) {
+		const float e = Catalog::gExtractsM[k];
+		if ((e > 0.f) && !Catalog::gMobile[k] && (e < Catalog::gExtractsM[id]))
+			return true;   // something extracts less: this is an upgrade
+	}
+	return false;
+}
+
 bool IsBigEnergy(const CCircuitDef@ d)
 {
 	if (d is null)
