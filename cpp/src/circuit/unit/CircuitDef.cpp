@@ -182,6 +182,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	thrDmgMod.fill(1.f);
 	maxRange.fill(.0f);
 	autoRange.fill(.0f);
+	autoShellS.fill(1.0e9f);
 	threatRange.fill(0);
 
 	id = def->GetUnitDefId();
@@ -608,6 +609,16 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		// so its range is not reach. @see GetAutoRange.
 		intercept |= wd->GetInterceptor();
 		const bool isAutoFire = !wd->IsManualFire() && (wd->GetInterceptor() == 0);
+		const bool wInstant = (wt == "BeamLaser") || (wt == "LightningCannon") || (wt == "Rifle")
+				|| (((wt == "MissileLauncher") || (wt == "StarburstLauncher") || (wt == "TorpedoLauncher")) && wd->IsTracks());
+		const float wShellS = (wInstant || (projectileSpeed <= 0.f)) ? 1.0e9f : projectileSpeed * FRAMES_PER_SEC;
+		auto noteAuto = [this, wShellS](RangeType rt, float r) {
+			float& ar = autoRange[static_cast<RangeT>(rt)];
+			if (r > ar) {
+				ar = r;
+				autoShellS[static_cast<RangeT>(rt)] = wShellS;
+			}
+		};
 		if ((weaponCat & circuit->GetAirCategory()) && isAirWeapon) {
 			float& mr = maxRange[static_cast<RangeT>(RangeType::AIR)];
 			mr = std::max(mr, range);
@@ -615,8 +626,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				maxRangeType = RangeType::AIR;
 			}
 			if (isAutoFire) {
-				float& ar = autoRange[static_cast<RangeT>(RangeType::AIR)];
-				ar = std::max(ar, range);
+				noteAuto(RangeType::AIR, range);
 			}
 		}
 		if ((weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > longestLandRange)) {
@@ -636,8 +646,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				maxRangeType = RangeType::LAND;
 			}
 			if (isAutoFire) {
-				float& ar = autoRange[static_cast<RangeT>(RangeType::LAND)];
-				ar = std::max(ar, landRange);
+				noteAuto(RangeType::LAND, landRange);
 			}
 		}
 		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
@@ -647,8 +656,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 				maxRangeType = RangeType::WATER;
 			}
 			if (isAutoFire) {
-				float& ar = autoRange[static_cast<RangeT>(RangeType::WATER)];
-				ar = std::max(ar, range);
+				noteAuto(RangeType::WATER, range);
 			}
 		}
 
@@ -726,6 +734,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	if (GetMaxRange() > GetAutoRange()) {
 		circuit->LOG("apex: reach %s maxRange=%.0f autoRange=%.0f interceptor=%i",
 				def->GetName(), GetMaxRange(), GetAutoRange(), intercept);
+	}
+	// The other way a range is not reach: a shell that takes longer than a
+	// second to arrive. One line per def whose surface reach shrinks.
+	{
+		const float lr = GetAutoRange(RangeType::LAND);
+		const float ls = GetAutoShellSpeed(RangeType::LAND);
+		if ((lr > 0.f) && (ls < lr)) {
+			circuit->LOG("apex: reach-mover %s range=%.0f shell=%.0f/s", def->GetName(), lr, ls);
+		}
 	}
 
 	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);

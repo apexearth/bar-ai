@@ -785,7 +785,7 @@ private:
 	int metalResId = -1;
 	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
 	struct SReachEnemy {
-		float x, z, reach, speed;
+		float x, z, reach, speed, shell;
 		uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
 	};
 	std::vector<SReachEnemy> reachCache;
@@ -801,6 +801,7 @@ private:
 	float ReachNodeMinDist(int32_t ni, float px, float pz) const;
 	void ReachQuery(int32_t ni, float px, float pz, float reactS, float minDist,
 			float& worst, uint32_t& bestIdx, const SReachEnemy*& best);
+	static float ReachIn(const SReachEnemy& e, float reactS);
 	int reachCacheFrame = -1;
 	int squadDiagNextLog = 0;
 	int ghostPurgeNext = 0;

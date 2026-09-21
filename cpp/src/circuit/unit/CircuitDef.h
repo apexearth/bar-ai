@@ -283,6 +283,11 @@ public:
 								 autoRange[static_cast<RangeT>(RangeType::LAND)]),
 						autoRange[static_cast<RangeT>(RangeType::WATER)]);
 	}
+	float GetAutoRange(RangeType type) const { return autoRange[static_cast<RangeT>(type)]; }
+	// apex: elmo/s of the shell behind that auto range (instant-hit and
+	// tracking read as infinite). What it flies in a react window is its reach
+	// against a unit that is walking: a Basilisk's 4950 is 1150 to a rez bot.
+	float GetAutoShellSpeed(RangeType type) const { return autoShellS[static_cast<RangeT>(type)]; }
 	int GetThreatRange(ThreatType type) const { return threatRange[static_cast<ThreatT>(type)]; }
 	float GetShieldRadius() const { return shieldRadius; }
 	float GetMaxShield() const { return maxShield; }
@@ -506,6 +511,7 @@ private:
 	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> maxRange;
 	// apex: maxRange counting only weapons that fire at a unit on their own.
 	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> autoRange;
+	std::array<float, static_cast<RangeT>(RangeType::_SIZE_)> autoShellS;
 	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
 	float shieldRadius;
 	float maxShield;

@@ -210,7 +210,15 @@ bool RezSiteOk(const AIFloat3 &in site)
 // commander rescue keeps RezSiteOk: him back on his feet outranks the minute.
 bool RezRezSiteOk(const AIFloat3 &in site)
 {
-	return !Market::NearConDeath(site) && !InEnemyReach(site);
+	if (Market::NearConDeath(site) || InEnemyReach(site))
+		return false;
+	// The same no-path mark RezSiteOk honours: one unreachable rich corpse
+	// took 1,878 aborted walks in five minutes through this door.
+	if (Market::NearBlocked(site)) {
+		++gRzVetoBlocked;
+		return false;
+	}
+	return true;
 }
 
 int RezScanPeriod()

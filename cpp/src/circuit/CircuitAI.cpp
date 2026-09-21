@@ -3406,6 +3406,16 @@ int CCircuitAI::GetMetalResId()
 // a frame is seen by the callers after it rather than before.
 static constexpr size_t REACH_LEAF = 8;  // below this the tree costs more than the scan
 
+// A shell still in the air past the react window is one the bot walks out
+// from under (apexearth 2026-09-20: an enemy Basilisk is not a reason to
+// spend the game at home). Its reach against a mover is what it flies in
+// that window; instant and tracking weapons keep their range. Never above
+// the node bound, so the tree prunes exactly as before.
+float CCircuitAI::ReachIn(const SReachEnemy& e, float reactS)
+{
+	return std::min(e.reach, e.shell * reactS);
+}
+
 void CCircuitAI::RebuildReachCache()
 {
 	if (reachCacheFrame == lastFrame) {
@@ -3425,7 +3435,12 @@ void CCircuitAI::RebuildReachCache()
 		}
 		// Not GetMaxRange: that is the max over EVERY weapon, so a nuke silo
 		// enters the cache with 72000 of "reach" and vetoes the whole map.
-		const float reach = edef->GetAutoRange();
+		// Surface weapons only: an AA tower's 765 was in here too.
+		CCircuitDef::RangeType rt = CCircuitDef::RangeType::LAND;
+		if (edef->GetAutoRange(CCircuitDef::RangeType::WATER) > edef->GetAutoRange(rt)) {
+			rt = CCircuitDef::RangeType::WATER;
+		}
+		const float reach = edef->GetAutoRange(rt);
 		if (reach <= 0.f) {
 			continue;
 		}
@@ -3434,7 +3449,7 @@ void CCircuitAI::RebuildReachCache()
 			perfReachMaxDef = edef;
 		}
 		const springai::AIFloat3& p = e->GetPos();
-		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(),
+		reachCache.push_back({p.x, p.z, reach, edef->GetSpeed(), edef->GetAutoShellSpeed(rt),
 				(uint32_t)reachCache.size()});
 	}
 	reachNodes.clear();
@@ -3519,7 +3534,7 @@ void CCircuitAI::ReachQuery(int32_t ni, float px, float pz, float reactS, float 
 			const SReachEnemy& e = reachCache[i];
 			const float dx = px - e.x;
 			const float dz = pz - e.z;
-			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
+			const float slack = sqrtf(dx * dx + dz * dz) - (ReachIn(e, reactS) + e.speed * reactS);
 			if ((slack < worst) || ((slack == worst) && (e.idx < bestIdx))) {
 				worst = slack;
 				bestIdx = e.idx;
@@ -3554,7 +3569,7 @@ float CCircuitAI::GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS
 		for (const SReachEnemy& e : reachCache) {
 			const float dx = pos.x - e.x;
 			const float dz = pos.z - e.z;
-			const float slack = sqrtf(dx * dx + dz * dz) - (e.reach + e.speed * reactS);
+			const float slack = sqrtf(dx * dx + dz * dz) - (ReachIn(e, reactS) + e.speed * reactS);
 			if (slack < worst) {
 				worst = slack;
 				best = &e;

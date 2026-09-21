@@ -105,7 +105,11 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 	if (t is null)
 		why = 7;
 	++gRzRule[why];
-	if (t !is null) {
+	// A retreat is about the electing bot's own ground, not a job: shared, a
+	// patrol home lands on every bot already standing at home.
+	if ((t !is null) && !((t.GetType() == Task::Type::BUILDER)
+		&& (t.GetBuildType() == Task::BuildType::PATROL)))
+	{
 		CCircuitUnit@ tg = t.target;
 		gRzSharedPos = (tg !is null) ? tg.GetPos(ai.frame) : t.GetBuildPos();
 		@gRzShared = OnMap(gRzSharedPos) ? t : null;

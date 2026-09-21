@@ -1283,3 +1283,30 @@ stock hard's [0.6,0.8] and [0.3,0.5] is the one knob stock turns to be
 aggressive, ours was set to offset a margin function the 09-07 revert deleted;
 `withdraw.as` orders a unit off enemy-influenced ground with no gun on it;
 the MELEE hold pool never marches while the base reads "under attack".
+
+## 2026-09-20 (late) — rez bots work under artillery; the Dragons' flap
+
+Watching Comet Catcher 1v1 (`matches/_engine-39028`): *"Our rezbot logic
+seems to break in the late game. They just keep seeming to get their orders
+interrupted by patrol orders."* Read from the log: an enemy Basilisk (range
+4,950) put every rez bot on the map inside "enemy reach"; the rez guard
+dropped ~2,900 jobs a minute across 120+ bots and the election sent each one
+home on a 20-second patrol.
+
+*"If it's LRPC from enemies that's hitting us, we can't just spend the entire
+game running away and huddling in our base. We have to go out and do our
+job. Yeah, some of us are gonna die, but that's okay."*
+
+- **Long-range artillery is not a reason for a rez bot to stay home.** A
+  shell still in the air past the react window is one the bot walks out from
+  under: its reach against a mover is what it flies in that window
+  (`CircuitAI.cpp ReachIn`, `apex: reach-mover` per def). Basilisk 4,950 →
+  1,150; Tremor 1,470 → 420; Goliath 650 → 310; lasers unchanged.
+- **Rez bots dying at their job is accepted.** The flee-on-hit rule stays.
+
+Dragons (`corcrwh`): *"They wanted to go out and attack multiple times, but
+then they kept going back to the base."* Traced: a Dragon nanoframe counted
+as 16 held bombers, and the "home is bigger" recall fired against the wave's
+plane COUNT every second for ten minutes (`air/update.as:235`). Open, his to
+rule: does a gunship finishing mid-strike join the wave out, and is a strike
+ever recalled because home outgrew it?
