@@ -639,3 +639,24 @@ question both sides ask (a binding running the commit's own test). General
 rule: a site proved by one predicate and committed by another is not
 proved; the log line that names the commit's reason (`cell-refused`) is
 the instrument, and it did not exist for a week of placement work.
+
+## S37 — an election that hands back the task the hand was just taken off (2026-09-20)
+
+`PeelSurplus` removes a surplus hand from a nano/converter/energy site
+(`RemoveUnit`, "back to the auction"); the hand idles, runs a full
+19-proposer election, and the keep-job branch of `c1b404b2` returned its
+old task because `gIncTask` was still alive -- the DLL re-attached it and
+the next slow update peeled it again. Elections went 22 -> 90 per
+player-minute on Greenest and 236 on his Carrot 8v8 (3,408 keeps on one
+player in 37 minutes), the AI read FAIL 1.3x-3.8x, and the peel he asked
+for on 09-14 never released a hand. The commit's own account of WHY the
+branch was needed ("the DLL hides the assignment before re-electing a
+walking builder") does not happen: `unit.task` stays set through
+`IBuilderTask::Reevaluate`, so `maketask.as`'s hold returns before
+`Decide`; the branch only ever re-attached peeled hands. Found by
+splitting `keep=` on the `elec-slice` line by held task and crew
+membership: `onCrew=0` on every keep. General rule: a task remembered
+per unit (`gIncTask`) is only the unit's while `GetUnits()` says so; and
+a fix whose mechanism was never instrumented (`keep-job` was counted,
+never characterised) can be "measured working" while doing something
+else entirely.

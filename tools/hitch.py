@@ -31,7 +31,8 @@ def scan(path):
                 continue
             t = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
             f = int(m[4])
-            src = ('Skirmish AI <' in line) or ('[BARAI_' in line)   # three clocks: engine, AI, gadget sink
+            # three clocks: engine, AI, gadget sink -- the sink's is 22 s off the AI's
+            src = 1 if 'Skirmish AI <' in line else 2 if '[BARAI_' in line else 0
             p = prev.get(src)
             if p is not None and f > 0 and 0 <= f - p[1] <= 2:
                 gaps.append((t - p[0], p[1], f, p[2], line.rstrip()))
