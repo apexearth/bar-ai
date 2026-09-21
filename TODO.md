@@ -371,3 +371,18 @@ in his games); (4) scouts kept alive as eyes (the Tick is buyable since
 479ab851); (5) a massed single-type strike (50 Marauders from a side);
 (6) LRPC (HighGroundNear exists, unmeasured) and the Ragnarok never
 priced in -- is it the super-weapon budget or the track record?
+
+## Building as he would think it (2026-09-20)
+
+His model, offered as perspective while the election was being measured at
+121-236 runs per player-minute: the thought starts from the WANT, not the
+hand. "I want a fusion" -> "do I have a spare T2 con, or what are they
+doing?" -> if none is free, drop it and come back a second or two later.
+Only when every hand is on a job worth more than the want does the hard
+question run: "if I take one off the moho, how much does that cost, and is
+the fusion worth it?" Later in the game that collapses to "which hands are
+free or just guarding someone -- take one", because a guard's lathe is
+what the nanos give anyway and we rarely build many things in parallel.
+Today's market is the inverse: every idle hand re-asks all nineteen
+proposers. The demand-first shape is a ranked want list computed once per
+team on its own cadence, with a hand's election a lookup into it.
