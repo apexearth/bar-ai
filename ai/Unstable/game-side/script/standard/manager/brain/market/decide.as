@@ -29,6 +29,8 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
 int gKeepJob = 0;
+int gKeepMin = 0;      // keeps this minute
+int gOffCrewMin = 0;   // incumbents forgotten because the hand was taken off them
 int gNextKeepLog = 0;
 // Which builder may drop its work for the first AA tower, and when it claimed
 // that. One at a time: the tower is 80 metal, abandoning every frame in the
@@ -626,7 +628,10 @@ void ElecLog()
 		+ " task=" + gElecDropTask + ") queued=" + gElecQ.length()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
 		+ " revisitS=" + formatFloat(gRevisitEma / float(SECOND), "", 0, 2)
-		+ " sliceUs=" + int(ElecFrameUs()));
+		+ " sliceUs=" + int(ElecFrameUs())
+		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin);
+	gKeepMin = 0;
+	gOffCrewMin = 0;
 	gElecDone = 0;
 	gElecPartial = 0;
 	gElecDropped = 0;
@@ -1690,8 +1695,23 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// nano always out-rates the plant it would abandon (the T2
 				// vehicle plant left 5 s after the order, his Isthmus game).
 				const AIFloat3 ip = inc.GetBuildPos();
-				if (OnMap(ip) && !Builder::SiteHot(ip)) {
+				// A hand the peel (or any RemoveUnit) took off this job is
+				// not on it: handing it back re-attached it to be peeled
+				// again, a full election per cycle and never a new job.
+				bool onCrew = false;
+				array<CCircuitUnit@>@ crew = inc.GetUnits();
+				for (uint ci = 0; (crew !is null) && (ci < crew.length()); ++ci) {
+					if ((crew[ci] !is null) && (crew[ci].id == unit.id)) {
+						onCrew = true;
+						break;
+					}
+				}
+				if (!onCrew) {
+					@gIncTask[uidk] = null;
+					++gOffCrewMin;
+				} else if (OnMap(ip) && !Builder::SiteHot(ip)) {
 					++gKeepJob;
+					++gKeepMin;
 					if (ai.frame >= gNextKeepLog) {
 						gNextKeepLog = ai.frame + 30 * SECOND;
 						AiLog("apex: keep-job t=" + ai.teamId + " " + unit.circuitDef.GetName()
