@@ -1234,6 +1234,23 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":eco";
 				continue;
 			}
+			// A LOSING TRADE IS NOT A CANDIDATE. The record already discounts
+			// a type against its class bar, but a discount on a lab's whole
+			// list only reorders the lab's draw; it never removes anything, so
+			// the T1 lab kept turning out Hammers at 0.43 metal-for-metal
+			// against a T2 field. A type trading under its class bar against
+			// what the enemy fields now is dropped outright (apexearth
+			// 2026-09-20: "when we see the enemy having Tier 2 units on the
+			// field that dominate Tier 1 units ... stop making Tier 1").
+			// Fodder and fighters are never judged (RecordRaw reads 1 for
+			// them), so spam survives -- the cheap body wastes the same fire.
+			if ((ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) > 0.f)
+				&& (RecordRaw(d) < 1.f))
+			{
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":losing";
+				continue;
+			}
 			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richGap * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {

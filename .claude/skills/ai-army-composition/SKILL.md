@@ -44,7 +44,8 @@ and the term pulls back to them on its own.
 | `apex_speed_worth * speed/FoeSpeedCap()` | speed valued against the fastest ground combat unit the GAME offers — read from the catalog, NOT from what we have seen, because the assumption must hold while blind |
 | `apex_cover_worth * CoverPerMetal(d) * PatrolShort()` | coverage = quantity x speed per metal against the sites we must watch; buys cheap fast bodies while thin, fades to zero as they arrive |
 | `apex_los_worth * losR/1000` | sight, because every other sense reads zero while blind |
-| `RecordMul(d)` | the measured track record: min(1, dealt/health of this type's dead, per matchup against what the enemy fields now). Discount only; fodder and fighters exempt. `apex: record-mul`, `tools/record.py`, docs/27 `TUNE_RECORD_BITE` |
+| `RecordMul(d)` | the measured track record: dealt/health of this type's dead, per matchup against what the enemy fields now, over its class bar and around the army's mean. Fodder and fighters exempt. `apex: record-mul`, `tools/record.py`, docs/27 `TUNE_RECORD_BITE` |
+| `:losing` (production.as) | a type whose record against the current enemy field is UNDER its class bar is not a candidate at all. A multiplier on a lab's whole list only reorders that lab's draw, so the T1 lab kept ordering Hammers at 0.43; the drop is what stops it (his 2026-09-20 ruling). Same `apex_record_bite` gate. `tools/tiercensus.py` is the instrument |
 
 `PatrolShort` counts standing sites (mex spots + generators + plants) times
 `FoeSpeedCap` as the need, and our fielded ground speed as the have.
