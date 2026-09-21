@@ -35,6 +35,20 @@ lines of quotes.
   spend to their 30%, eco 16% to their 28%) -- under scarcity the split
   between the lab and the eco hands is decided by build-power pull, not by
   any price. `tools/allies.py`. The split is his to rule on; open.
+- The switch (2026-09-21): make enough army for a normal defence of
+  ourselves, then stop making army and switch to a good T2 economy --
+  upgraded mexes, fusions, advanced converters. His read of BARb: heavy T1
+  army, then a sudden all-in on economy (measured: BARb's army spend flat
+  from minute 8 to 14 while its economy spend triples). Built 09-21
+  (`T2SwitchOn`, army.as): for non-seat players the army's share leaves the
+  target until the T2 economy stands; cover, AA, towers and the seat's danger
+  valve stay. Isthmus 8v8, 3 seeds: metal per player at 30 min 152k -> 208k.
+  Open: (1) the labs still convert spare metal into army (the "waste is free
+  army" law) -- the strict form that stopped that sent the freed metal into
+  nano turrets and Farks (BP 31k -> 52k per player) and gained no economy;
+  (2) the switch never read DONE in 30 minutes: the far mexes are never
+  upgraded and no ally builds a fusion while the seat's energy overflow fills
+  its bank. `apex: t2switch` says what is missing.
 - Air labs idle with unlimited money and many nano turrets; make longer
   queues so the line never runs out (2026-09-21, fourth report). Found and
   built 09-21 (`RedrawFor`, TODO "Never an idle factory"): seat lines empty

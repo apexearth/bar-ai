@@ -1190,6 +1190,101 @@ bool EcoRoleGrowing()
 	return g;
 }
 
+// THE SWITCH (apexearth 2026-09-21): "make enough army for a normal defence
+// of ourselves and then stop making army to focus on the switch to a good T2
+// economy -- upgraded mexes, fusions, advanced converters." BARb's own curve:
+// army spend flat from minute 8 to 14 while its economy spend triples, then
+// the T2 army. While the switch is on the army's share of the economy is not
+// in the target; the cover units, the AA counter and the towers -- the
+// defence of ourselves -- stay, and sustained enemy metal at home restores the
+// full target the way it does for the seat. Done once the T2 economy stands,
+// and done for good: a moho lost to a raid later is a rebuild, not a return
+// to the switch.
+bool gT2SwitchDone = false;
+bool gT2SwitchWas = false;
+int gT2SwitchLogAt = 0;
+
+// A def only an advanced hand builds: no T1 hand in its builder list.
+bool AdvancedOnlyDef(int d)
+{
+	const array<int>@ by = Catalog::gBuiltBy[d];
+	if (by.length() == 0)
+		return false;
+	for (uint i = 0; i < by.length(); ++i) {
+		const int b = by[i];
+		if ((b < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[b])
+			return false;
+	}
+	return true;
+}
+
+// Upgraded mexes, a fusion, an advanced converter -- all three standing. The
+// mexes that count are the ones at home (the seat's safe radius): the far
+// ones are the contested middle, upgraded at 222 s of walk and dropped, and
+// "all of them" never fired in 30 minutes.
+string gT2Missing = "";
+bool T2EconomyStands()
+{
+	const float ceil = BestExtract();
+	const float r = ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R);
+	int up = 0;
+	int low = 0;
+	for (uint i = 0; i < gLSpot.length(); ++i) {
+		if ((gLExtract[i] <= 0.f) || !Builder::gHomeSet
+			|| (gLPos[i].distance2D(Builder::gHomePos) > r))
+			continue;
+		if (gLExtract[i] < ceil)
+			++low;
+		else
+			++up;
+	}
+	bool gen = false;
+	bool conv = false;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di] || !AdvancedOnlyDef(di))
+			continue;
+		if (Catalog::gMakeE[di] > 0.f)
+			gen = true;
+		if (Catalog::gConvCapacity[di] > 0.f)
+			conv = true;
+	}
+	gT2Missing = "mohos=" + up + "/" + (up + low) + (gen ? " fus" : " NOFUS") + (conv ? " conv" : " NOCONV");
+	return (up > 0) && (low == 0) && gen && conv;
+}
+
+int gT2SwitchAt = -1;
+bool gT2SwitchVal = false;
+bool T2SwitchOn()
+{
+	if (gT2SwitchAt == ai.frame)
+		return gT2SwitchVal;
+	gT2SwitchAt = ai.frame;
+	gT2SwitchVal = T2SwitchEval();
+	return gT2SwitchVal;
+}
+
+bool T2SwitchEval()
+{
+	if (gT2SwitchDone || gEcoRole)
+		return false;
+	if (T2EconomyStands()) {
+		gT2SwitchDone = true;
+		AiLog("apex: t2switch DONE t=" + ai.teamId + " f=" + ai.frame
+			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue()));
+		return false;
+	}
+	const bool on = !EcoDangerNear();
+	if ((on != gT2SwitchWas) || (ai.frame >= gT2SwitchLogAt)) {
+		gT2SwitchWas = on;
+		gT2SwitchLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: t2switch " + (on ? "on" : "danger") + " t=" + ai.teamId
+			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue())
+			+ " upD=" + int(UpDemand()) + " " + gT2Missing);
+	}
+	return on;
+}
+
 // HOW MUCH OF THE WAR THE GROWING SEAT ALREADY OWES: nothing to half its
 // economic target, the full targets at the target, linear between. The
 // seat with zero army and zero silos to the target died in every game
@@ -1337,6 +1432,8 @@ float ArmyTarget()
 	// is simply not part of the state this player is trying to reach.
 	if (EcoRoleGrowing())
 		return ArmyTargetFull() * EcoRoleRamp();
+	if (T2SwitchOn())
+		return 0.f;
 	return ArmyTargetFull();
 }
 
