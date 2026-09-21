@@ -604,6 +604,10 @@ float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at)
 	const int uid = int(unit.circuitDef.id);
 	if (Catalog::gFlyer[uid])
 		return 1.f;
+	// The path query refused this ground already: CanDefReach is the sector
+	// read that said yes while 2,212 walks to one LLT row died on nopath.
+	if (NearBlocked(at))
+		return 0.f;
 	return ai.CanDefReach(Catalog::Def(uid), at, at) ? 1.f : 0.25f;
 }
 
@@ -1038,7 +1042,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		}
 		if (!dominated && !stranded)
 			continue;
-		const float v = RetireValue(unit, g, d, ePM, wageR, hz);
+		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
+				* ReachVictimMul(unit, gProtPos[PROT_DEF][i]);
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
