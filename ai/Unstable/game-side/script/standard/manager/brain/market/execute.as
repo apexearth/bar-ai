@@ -452,6 +452,22 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// this pattern causes (see gAssistTargetId).
 		if ((gAssistTarget is null) || (int(gAssistTargetId) != w.spotId))
 			return null;
+		// A hand that can place the def takes its own order, not a guard: the
+		// first to arrive starts the frame instead of trailing the lead's
+		// walk. Flyers go ahead only to a safe site.
+		if ((w.def !is null) && OnMap(w.pos) && unit.circuitDef.CanBuild(w.def)
+			&& !(Catalog::gFlyer[int(unit.circuitDef.id)]
+				&& (Builder::SiteHot(w.pos) || Builder::PastFront(w.pos))))
+		{
+			IUnitTask@ jt = Requests::JoinSpot(unit, w.def, w.pos);
+			if (jt !is null) {
+				AiLog("apex: assist-own t=" + ai.teamId + " " + unit.circuitDef.GetName()
+					+ " #" + unit.id + " -> " + w.def.GetName()
+					+ " at=" + int(w.pos.x) + "," + int(w.pos.z)
+					+ " workers=" + Requests::Workers(jt));
+				return jt;
+			}
+		}
 		IUnitTask@ gt = aiBuilderMgr.Enqueue(TaskB::Guard(Task::Priority::LOW,
 				gAssistTarget, false, gAssistGuardS * SECOND));
 		if (gt !is null)

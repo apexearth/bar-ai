@@ -50,6 +50,7 @@ int gFQMilReq = 0;               // military task requests, see NoteMilRequest
 int gFQLost = 0;                 // orders presumed lost
 int gNextFQLog = 0;
 int gFQIdleLog = 0;
+int gFQBatchLog = 0;
 
 void PendAdd(int line, CCircuitDef@ d)
 {
@@ -348,15 +349,20 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	const float lineBp = LineBuildPower(fac);
 	int lineHave = pend;
 	float lineSec = LineSecondsBp(line, lineBp, true);
+	string stop = "window";
 	for (int slot = 0; slot < 16; ++slot) {
 		if (lineSec >= window)
 			break;
 		if ((slot > 0)
-			&& ((ai.ClockUs() - _tBatch) > double(BATCH_SLICE_US)))
+			&& ((ai.ClockUs() - _tBatch) > double(BATCH_SLICE_US))) {
+			stop = "slice";
 			break;
+		}
 		CCircuitDef@ o = Market::ConOrderFor(fac, line, slot);
-		if (o is null)
+		if (o is null) {
+			stop = "null:" + Market::gNoOrder;
 			break;
+		}
 		batch.insertLast(o);
 		PendAdd(line, o);
 		if (lineHave > 0)
@@ -366,6 +372,13 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// AN ELECTION THAT ORDERS NOTHING IS IDLE FACTORY TIME. Logged with the
 	// market's own reason, rate-limited per line, because the gap between
 	// orders is otherwise invisible.
+	if ((batch.length() > 0) && (lineSec < window) && (ai.frame >= gFQBatchLog)) {
+		gFQBatchLog = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: facqueue short " + fac.circuitDef.GetName()
+			+ " #" + fac.id + " ordered=" + batch.length() + " pend=" + outstanding
+			+ " sec=" + int(lineSec) + "/" + int(window) + " stop=" + stop
+			+ " us=" + int(ai.ClockUs() - _tBatch));
+	}
 	if ((batch.length() == 0) && (fac.CountQueued(null) == 0)
 		&& (ai.frame >= gFQIdleLog))
 	{
@@ -397,7 +410,10 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQEvt[line] = ai.frame;
 		gFQOrders += int(batch.length());
 	}
-	return aiFactoryMgr.Enqueue(TaskS::Wait(false, FQ_WAIT));
+	// A slice that stopped short comes back next second, not next window:
+	// one order outruns the slice, so the line was fed one unit per window.
+	const bool cut = (stop == "slice") && (lineSec < window);
+	return aiFactoryMgr.Enqueue(TaskS::Wait(false, cut ? SECOND : FQ_WAIT));
 }
 
 // Recruit orders nobody can ever start, swept up as they appear -- and the

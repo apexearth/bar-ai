@@ -253,6 +253,7 @@ void UpdateWithdraw()
 	if ((ai.frame < gNextWithdraw) || !ApexActive())
 		return;
 	gNextWithdraw = ai.frame + 2 * SECOND;
+	{ double _t = Perf::T0(); ArmyCoverSample(); Perf::Add("up.armycover", _t); }
 	if (ai.GetTunable("apex_withdraw", TUNE_WITHDRAW) <= 0.f)
 		return;
 	// A committed finisher is the one time being out there is the decision.

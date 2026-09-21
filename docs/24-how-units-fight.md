@@ -1168,6 +1168,39 @@ so we aren't flipflopping."* *"I saw converters doing this."* Measured on the
 rd3blob8 set: one game rebuilt the basic converter twelve times after
 reclaiming it.
 
+## 2026-09-20 — the commander defends the base against T1; the base arms when the army is away
+
+Watching a 4v4 on Comet Catcher Remake, T1 artillery shelling one of our bases
+with the commander standing by: *"Sometimes the only thing that'll save a base
+is the commander delegating the enemies and protecting his base. Yeah, there's
+a good chance he'll die, but if he doesn't [go], he will have lost his entire
+base. So he really should defend it, sometimes, at least in the early game. If
+it's just T1 attacking, try to protect your base. We've got a bunch of
+artillery pounding our base. All the commander had to do was walk up to them
+and D-gun them."*
+
+- **T1 attacking the base is the commander's to kill.** The tier of what is
+  attacking is his test -- not the enemy's whole field, not a strength sum,
+  not his own health. The risk of his death is accepted: losing the base is
+  the worse outcome.
+- Measured in that game: caution flipped at 3.4 minutes for every one of our
+  four commanders (four enemies' mobile mass against one commander's cost),
+  which held the fight rule at zero engagements for the whole game.
+
+Same session: *"One thing I'm often seeing is our entire army wants to go to
+one side of the map. When this happens, our base should make extra defenses
+if most of the army is far from home."*
+
+- **When most of the army is far from home, the base buys extra defence.**
+  The army at home is cover; the army away is not, and the defence price must
+  read that. His answer when asked which way (2026-09-20): the army at home
+  counts as cover, both directions. Built the same day in guardposts.as
+  (`ArmyCoverSample`, `apex: army-cover`); measured near inert in a 1v1 --
+  each unit covers only its 8-second answer reach (~360 elmo, one building's
+  life against one raider), so a 1,500-metal army at the farm read 0-31
+  metal of cover at the rim sites priced. The reach a massed army answers
+  within is the open question.
+
 ## 2026-09-20 — an atomic bomber built early is used, alone: scouts find the AA gap, it flies round it
 
 Watching Frozen Ford, a Liche bought at 18 minutes and held at home with three
@@ -1193,3 +1226,60 @@ trying."*
   wing "reached" its deadline bar with four planes and flew twice into a
   base it had not looked at; the Liche died 36 seconds into the second run,
   killed by something the threat map had never seen.
+
+## 2026-09-20 (evening) — air cons lead safe builds; bombers commit over the cell; Titans are never walked home
+
+Watching an 8v8 on Greenest: every constructor on the team trailed one T2 bot
+con 80 s to a gantry site inside the base. *"Advanced constructors should
+always have priority on building if they're an air constructor. If the
+location is safe, air can definitely get there faster. If it's on the front
+line, that's where you want to bring all your ground constructors."*
+
+- **A safe site is started by whoever arrives first, and that is the air
+  con.** A front-line site is the ground crew's. Built the same day: a hand
+  that can place the def takes its own order on the site instead of guarding
+  the lead (`execute.as` WK_ASSIST, `apex: assist-own`); a flyer only where
+  the site is not hot and not past the front.
+
+The same game, a 29-Phoenix wave over the enemy base: *"They decided they
+were scared of something, so they tried to turn around, but they're already
+over the enemy base. They should have just committed and attacked the best
+thing that they could have."* Measured: no target scored inside the cell for
+three minutes, no bomb dropped, 15 of 29 lost circling.
+
+- **Over the cell the wave is committed.** The AA veto shapes the approach;
+  inside the cell nothing is refused on threat -- the AA is paid on the way
+  out whether the bomb drops or not. Built in `BombTask.cpp` (`apex: bomb
+  no-target` counts what was refused and why).
+- **While bombers are being held for a strike, the plant makes bombers
+  without pause.** *"We're making one and then waiting five, ten or more
+  seconds before we try to make another one."* Measured: one order per
+  election because a single order costs 8-28 ms against a 4 ms slice; the
+  line now re-enters after one second instead of a ten-second window
+  (`facqueue.as`, `apex: facqueue short`).
+
+Titans: *"We retreat our titans back to our main base sometimes. And that's
+a really, really long walk. ... We've got like 13 there. We could walk those
+through the ocean, come up the side of the enemy's base and win the game.
+None of the BARb stable AI seems to do this -- they're using all their titans
+for offense."*
+
+- **A Titan is never walked home.** Measured in that game: 17 of 17 Titans
+  that turned at 30% died on the walk, none reached repair. Chargers now
+  carry retreat 0 (`posture.as ApplyRetreatPosture`).
+- **A Titan is not parked at home because shells are landing.** The
+  charger's home hold was the raw under-attack test with no cap; it is now
+  the pool's own need-capped hold, registered so the release reaches it
+  (`hooks.as`, `apex: armbanth holds home heldM= needM=`).
+- Open, his to rule: solo beeline (his 2026-08-19 ruling, the code today) or
+  the thirteen going together as BARb's do.
+
+*"Is our fight logic identical to our opponents'? ... I feel like we are
+more cautious and careful and because of that less likely to capture ground
+and attack enemies and more likely to move out of the way of our enemies."*
+Audited the same evening (agent report in the commit message): the C++ squad
+core is stock; `quota/thr_mod` attack [1.0,1.0] and defence [1.0,1.0] against
+stock hard's [0.6,0.8] and [0.3,0.5] is the one knob stock turns to be
+aggressive, ours was set to offset a margin function the 09-07 revert deleted;
+`withdraw.as` orders a unit off enemy-influenced ground with no gun on it;
+the MELEE hold pool never marches while the base reads "under attack".

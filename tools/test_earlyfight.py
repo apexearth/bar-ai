@@ -90,7 +90,8 @@ def apex_teams(match_dir: Path) -> set[int]:
     for block in AI_BLOCK_RE.findall(p.read_text("utf-8", errors="replace")):
         m_name = re.search(r"ShortName\s*=\s*(\w+)", block)
         m_team = re.search(r"Team\s*=\s*(\d+)", block)
-        if m_name and m_team and m_name.group(1) == "Apex":
+        # A lane deploys as Apex<name>; it is still ours.
+        if m_name and m_team and m_name.group(1).startswith("Apex"):
             out.add(int(m_team.group(1)))
     return out
 

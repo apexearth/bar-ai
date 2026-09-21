@@ -19,6 +19,13 @@ lines of quotes.
 - Air constructors are how a rich base scales; the seat should open an air
   plant and build T1/advanced air cons. Con floors count flyers once a plant
   offers them, but the seat opened an air plant in one game of three.
+- A safe big build is started by the air con that flies there, not the
+  ground con everyone trails (2026-09-20: the crew followed a T2 bot con 80 s
+  to a base gantry). A front-line site is the ground crew's. Built 09-20
+  (`apex: assist-own`); air cons took own orders on mohos in a 2v2, no
+  gantry case seen yet.
+- On big 8v8 maps (Carrot Mountains) he sees no eco player (2026-09-20).
+  Under measurement.
 - At 1,000 m/s no basic converter should be started; at 32k E/s income with
   5k pulled, advanced converters should be going up in numbers. Open until a
   watched game shows it (ISSUES CONVERTERS, GANTRIES).
@@ -165,6 +172,10 @@ lines of quotes.
 - Jammer logic "still needs improvement" (2026-09-09), no detail given -- ask
   what he sees before changing anything.
 - Flak is spread around the base, not clustered at the nano block.
+- When most of the army is far from home the base buys extra defence
+  (2026-09-20). Army at home counts as cover both ways (his choice); built
+  09-20, reads 0-31 metal of cover at the sites priced because a unit's
+  answer reach is one building's 8-s life -- inert until the reach is his.
 
 ## Army
 
@@ -199,6 +210,16 @@ lines of quotes.
 - The whole army should not chase one Pawn; groups sent after raiders are
   sized to the raid (fight layer is stock since 09-07; docs/24 holds the
   doctrine).
+- Titans are never walked home and never parked at home because shells are
+  landing (2026-09-20, 8v8: 17 of 17 that turned at 30% died on the walk;
+  13 stood at home on an uncapped under-attack hold). Both built 09-20;
+  unverified in a game of his. OPEN, his to rule: solo beeline (08-19) or
+  the thirteen going together as BARb's do -- "walk them through the ocean,
+  come up the side and win".
+- Are we more cautious than BARb? (2026-09-20) Yes on the one knob stock
+  turns: `quota/thr_mod` neutral against stock hard's 0.6-0.8 / 0.3-0.5, set
+  to offset a margin the 09-07 revert deleted; plus withdraw.as pulling units
+  off enemy-influenced ground. The JSON A/B is not run (ISSUES ARMY).
 
 ## Air
 
@@ -210,6 +231,12 @@ lines of quotes.
   bot/vehicle -- hold).
 - Air scouting coverage has never been measured against the threat readings
   it feeds.
+- A wave over the enemy base commits: no turning around over the cell
+  (2026-09-20: 29 Phoenix circled, dropped nothing, lost 15). Built 09-20 in
+  the DLL (`apex: bomb no-target`); unverified.
+- While bombers are held for a strike the plant does not pause between them
+  (2026-09-20). One order per election on an 8-28 ms order cost; re-entry
+  after a second built 09-20, empty-line samples 28% -> 2% in a 2v2.
 
 ## Navy and water
 
@@ -232,6 +259,9 @@ lines of quotes.
 - The commander stays home (docs/24; ruling 2026-09-02); his retreat must not
   end inside enemy influence (ISSUES army residues).
 - Our commander's D-gun must not kill our own buildings behind the target.
+- T1 attacking the base is the commander's to kill, cautious or hurt or not;
+  his death is an accepted risk against losing the base (2026-09-20, docs/24).
+  Built 09-20 in safety.as; unverified in a team game.
 
 ## Performance and the console
 

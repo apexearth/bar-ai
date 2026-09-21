@@ -373,6 +373,7 @@ void NoteFinished(CCircuitUnit@ unit)
 		&& (int(unit.id) < int(gBuiltFrame.length())))
 		gBuiltFrame[int(unit.id)] = (ai.frame > 0) ? ai.frame : 1;
 	Lattice::NotePlaced(defId, unit.GetPos(ai.frame), unit.id);
+	NoteSquatter(unit);
 	if (!Catalog::gMobile[defId] && (Catalog::gMakeE[defId] > 1.f)
 		&& !Catalog::gNeedGeo[defId])
 	{

@@ -308,11 +308,11 @@ double gElecCallUs = 0.0;   // of that, what THIS call has already charged itsel
 double gElecBudgetUs = -1.0;
 bool gElecFinishing = false;
 
-// 18 proposers, then the finish: rank, price the exposure, hoist the panics,
+// 19 proposers, then the finish: rank, price the exposure, hoist the panics,
 // draw, execute. The finish is a step of its own because it is the other half
 // of the frame cost, and a frame with nothing left to spend must be able to
 // hold it over exactly the way it holds a proposer over.
-const int ELEC_STEPS = 19;
+const int ELEC_STEPS = 20;
 // Each step's own measured cost. A step is opened only when what it is EXPECTED
 // to cost still fits the slice -- checking after the fact leaves the frame
 // carrying the overshoot, which is the bug this replaces.
@@ -439,7 +439,7 @@ int gElecHeld = 0;        // whole, and the slice could not afford the finish
 int gDecBounce = 0;       // the 2-s re-election gate
 int gNextElecLog = 0;
 
-// The eighteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
+// The nineteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
 // That order is load-bearing, not cosmetic: ProposeMex's probe feeds the plant
 // and the three reclaim proposers (see class Elec). Slicing preserves it, so a
 // set assembled over five frames is priced the same way one assembled in one is.
@@ -460,11 +460,12 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 9)  { @w = MemoPropose(4, unit);         Perf::Add("want.reclobs", _t); }
 	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
-	else if (step == 12) { @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
-	else if (step == 13) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
-	else if (step == 14) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
-	else if (step == 15) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
-	else if (step == 16) { if (!EcoOnly()) @w = ProposeAirDef(unit);   Perf::Add("want.airdef", _t); }
+	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
+	else if (step == 13) { @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
+	else if (step == 14) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
+	else if (step == 15) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
+	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
+	else if (step == 17) { if (!EcoOnly()) @w = ProposeAirDef(unit);   Perf::Add("want.airdef", _t); }
 	else                 { if (!EcoOnly()) @w = ProposeSuper(unit);    Perf::Add("want.super", _t); }
 	ChargeTrip(w, unit);
 	return w;

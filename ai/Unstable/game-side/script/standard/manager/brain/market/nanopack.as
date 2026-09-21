@@ -237,8 +237,10 @@ AIFloat3 PackHeart(const AIFloat3& in at, float reach, float flush, bool lane,
 // and asking this per site would re-scan the same rings once per turret -- the
 // bulk-work-in-one-frame shape the frame-budget rule forbids. The walk stops
 // as soon as it has `n`, so the common single-slot ask still ends on ring one.
+// probe: the anchor is a site being SCORED, not a standing building -- its
+// footprint is taken and the walk leaves no resume mark behind.
 int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
-		array<AIFloat3>& out slots)
+		array<AIFloat3>& out slots, bool probe = false)
 {
 	slots.resize(0);
 	if (!Catalog::ValidId(nanoDef) || !OnMap(atRaw) || (n < 1))
@@ -301,6 +303,11 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 	array<float> ohz;
 	const float span = reach + pitch * 2.f;
 	NearGround(at, span, op, ohx, ohz);
+	if (probe && Catalog::ValidId(anchorDef)) {
+		op.insertLast(at);
+		ohx.insertLast(float(Catalog::gFootX[anchorDef]) * NP_HALFCELL);
+		ohz.insertLast(float(Catalog::gFootZ[anchorDef]) * NP_HALFCELL);
+	}
 
 	// THE OCCUPANCY TEST, BUCKETED. It ran once per candidate cell against every
 	// occupied footprint in the span, so a packed base paid (cells) x
@@ -411,7 +418,7 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 	// re-read from the start by the next walk, which ends there again. The
 	// rings a walk found full stay full until something dies, so the next
 	// walk starts where this one stopped.
-	{
+	if (!probe) {
 		const int key = PackKey(origin);
 		for (uint k = 0; k < gNPResumeKey.length(); ++k) {
 			if (gNPResumeKey[k] != key)
@@ -429,7 +436,8 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 					continue;
 				if (budget <= 0) {
 					gNPOut = ringN - ring + 1;
-					PackResume(origin, ring);
+					if (!probe)
+						PackResume(origin, ring);
 					return int(slots.length());
 				}
 				--budget;
@@ -508,7 +516,8 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 				ohx.insertLast(nhx);
 				ohz.insertLast(nhz);
 				gNPOcc.Add(p.x, p.z);
-				PackResume(origin, ring);
+				if (!probe)
+					PackResume(origin, ring);
 				if (int(slots.length()) >= n)
 					return int(slots.length());
 			}

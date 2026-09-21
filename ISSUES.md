@@ -55,6 +55,35 @@ has to be sized against what STANDS at the target (their static plus arrivals),
 the killing-blow's question, not the massing law's. `apex: tgthold hold=31
 rel=85` reads a target hold releasing far more than it holds.
 
+### WE ENGAGE AT WORSE ODDS THAN STOCK: thr_mod attack [1,1] / defence [1,1] vs stock hard [0.6,0.8] / [0.3,0.5] (2026-09-20)
+
+His question: are we more cautious than BARb, less likely to take ground.
+Audited (commit `TBD`, agent report in its message): the C++ squad core is
+stock since 09-07, but `behaviour.json` `quota/thr_mod` is the one knob the
+stock engage test multiplies (`MilitaryManager.cpp:716`, `AttackTask.cpp:273`,
+`DefendTask.cpp:228`): ours gives attack powerMod 0.8 and defence 1.0 where
+stock hard rolls 1.0-1.33 and 2.0-3.3. The comment at `behaviour.json:13` says
+the neutral value is offset by `TradeScaledMargin` -- deleted in the revert.
+Second: `withdraw.as:142/561` orders a unit off enemy-influenced ground with
+no gun on it (62 orders + 304 in-contact holds in one 1v1). Third: the MELEE
+hold pool (`hooks.as`, `massing.as:369`) never marches while the base reads
+"under attack" (4669 ticks in that game). Not tried: the JSON A/B is one line,
+no rebuild -- run it on the battery before any script change.
+
+### ONE FACTORY ORDER COSTS 8-28 ms (2026-09-20)
+
+`apex: facqueue short ... stop=slice us=8086` avg over 327 elections, max
+28 ms, in a 2v2: `ConOrderFor` alone exceeds the 4 ms batch slice every
+time. The line is fed again after a second now instead of idling to the next
+window (empty-line samples 28% -> 2%), but the per-order cost is the thing;
+`hk.maketask.factory` avg 3-4 ms, max 28 ms, on a FAIL frame budget.
+
+### check.py reports 'from' as a reserved word at lines that do not contain it (2026-09-20)
+
+`sites.as:682/738` carry no `from`; the variant compiled (review gate 1, the
+lathe-site line prints). The identifier was renamed anyway; the check's regex
+matches comment text and the line numbers are wrong.
+
 ### The attack bar is per-pool, so we rarely attack (2026-09-06)
 
 Stock `CMilitaryManager::UpdateDefenceTasks` (MilitaryManager.cpp:1578) rewrites

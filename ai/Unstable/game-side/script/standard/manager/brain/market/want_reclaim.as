@@ -1505,4 +1505,99 @@ Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
 }
 
 
+// RECLAIM WHAT STANDS ON A METAL SPOT. apexearth 2026-09-20: a tower on a mex
+// spot is reclaimed, whatever put it there. Spotted once, when the structure
+// finishes, so the proposer walks a list that is nearly always empty.
+array<Id> gSquatter;
+
+void NoteSquatter(CCircuitUnit@ unit)
+{
+	const int d = int(unit.circuitDef.id);
+	if (Catalog::gMobile[d] || (Catalog::gExtractsM[d] > 0.f) || Catalog::gNeedGeo[d])
+		return;
+	int mexD = -1;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (Catalog::gAvailable[i] && (Catalog::gExtractsM[i] > 0.f)
+			&& ((mexD < 0) || (Catalog::gCostM[i] < Catalog::gCostM[mexD])))
+			mexD = i;
+	}
+	if (mexD < 0)
+		return;
+	const AIFloat3 p = unit.GetPos(ai.frame);
+	// Footprints overlap when the centres are closer than the half-sum on
+	// both axes; a square of slack so a flush neighbour is not a squatter.
+	const float hx = 8.f * float(Catalog::gFootX[d] + Catalog::gFootX[mexD]) - SQUARE_SIZE;
+	const float hz = 8.f * float(Catalog::gFootZ[d] + Catalog::gFootZ[mexD]) - SQUARE_SIZE;
+	CacheSpots();
+	gSpotGrid.Query(p.x, p.z, (hx > hz) ? hx : hz);
+	for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+		const AIFloat3 sp = gAllSpots[uint(gSpotGrid.hit[q])];
+		if ((abs(p.x - sp.x) >= hx) || (abs(p.z - sp.z) >= hz))
+			continue;
+		gSquatter.insertLast(unit.id);
+		AiLog("apex: spot-squatter t=" + ai.teamId + " " + unit.circuitDef.GetName()
+				+ " at=" + int(p.x) + "," + int(p.z) + " spot=" + int(sp.x) + "," + int(sp.z)
+				+ " income=" + formatFloat(gAllSpotInc[uint(gSpotGrid.hit[q])] * LeastExtract() * IncomeMult(), "", 0, 2));
+		return;
+	}
+}
+
+Want@ ProposeReclaimSquatter(CCircuitUnit@ unit)
+{
+	Want w;
+	if (gSquatter.length() == 0)
+		return w;
+	const float hzP = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float horizon = (hzP > 1.f) ? hzP : 300.f;
+	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	// The map's raw spot value times what a mex takes from it -- the same
+	// metal/s the mex want prices (want_mex.as).
+	const float incMul = LeastExtract() * IncomeMult();
+	float bestValue = 0.f;
+	CCircuitUnit@ best = null;
+	for (uint i = 0; i < gSquatter.length(); ) {
+		CCircuitUnit@ s = ai.GetTeamUnit(gSquatter[i]);
+		if ((s is null) || (s.circuitDef is null)) {
+			gSquatter[i] = gSquatter[gSquatter.length() - 1];
+			gSquatter.removeLast();
+			continue;
+		}
+		++i;
+		if (ReclaimClaimed(s.id, unit.id))
+			continue;
+		const int d = int(s.circuitDef.id);
+		const AIFloat3 gp = s.GetPos(ai.frame);
+		float inc = 0.f;
+		gSpotGrid.Query(gp.x, gp.z, BLOCKER_REACH);
+		for (uint q = 0; q < gSpotGrid.hit.length(); ++q)
+			if (gAllSpotInc[uint(gSpotGrid.hit[q])] > inc)
+				inc = gAllSpotInc[uint(gSpotGrid.hit[q])];
+		const float walkSec = (speed > 1.f) ? (here.distance2D(gp) / speed) : 60.f;
+		Want c;
+		c.kind = WK_RECLAIM;
+		@c.def = Catalog::Def(d);
+		c.pos = gp;
+		c.spotId = int(s.id);
+		// The spot's stream, freed, plus the metal back over the horizon.
+		c.gain = inc * incMul + Catalog::gCostM[d] / horizon;
+		c.mCost = 1.f;
+		c.tCost = (walkSec + Catalog::gCostM[d] / 90.f) * Wage();
+		c.value = c.gain / (c.mCost + c.tCost);
+		if (c.value > bestValue) {
+			bestValue = c.value;
+			@best = s;
+			w = c;
+		}
+	}
+	if (best is null)
+		return w;
+	const float hm = ReclaimHandMul(unit);
+	w.gain *= hm;
+	w.value *= hm;
+	@w.target = best;
+	return w;
+}
+
+
 }  // namespace Market

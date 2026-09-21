@@ -427,6 +427,7 @@ def run_set(out: Path, games: int, parallel: int, minutes: int, handicap: int,
 
 
 def main():
+    global SPEC_A
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("set_dir", nargs="?", help="judge an existing set instead of running one")
     ap.add_argument("--games", type=int, default=8)
@@ -443,6 +444,8 @@ def main():
     ap.add_argument("--ratio", type=float, default=2.0,
                     help="size each wave to our mobile army's metal / RATIO (0 = the roster as written)")
     ap.add_argument("--name", default="raid")
+    ap.add_argument("--a", dest="spec_a", default=SPEC_A,
+                    help="the Apex spec under test (a lane's Apex<name>:lane-<name>:standard for a treated arm)")
     ap.add_argument("--seed0", type=int, default=1, help="first seed; a second set on fresh seeds starts at games+1")
     ap.add_argument("--speed", type=int, default=0,
                     help="sim speed cap (default: as fast as the machine runs). Order lag scales with "
@@ -450,6 +453,7 @@ def main():
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
                     help="extra modoption for every game, e.g. apex_intercept=0 for a control arm")
     args = ap.parse_args()
+    SPEC_A = args.spec_a
     if args.set_dir:
         out = Path(args.set_dir)
         m = re.search(r"-L(\d+)", out.name)

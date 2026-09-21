@@ -100,8 +100,13 @@ void CacheSpots()
 	}
 	gSpotGrid.Begin(256.f, 0.f, 0.f,
 			float(AiTerrainWidth()), float(AiTerrainHeight()));
-	for (uint i = 0; i < gAllSpots.length(); ++i)
+	string ls;
+	for (uint i = 0; i < gAllSpots.length(); ++i) {
 		gSpotGrid.Add(gAllSpots[i].x, gAllSpots[i].z);
+		ls += " " + int(gAllSpots[i].x) + "," + int(gAllSpots[i].z);
+	}
+	// The map's spot table, once: tools check every placed line against it.
+	AiLog("apex: spots t=" + ai.teamId + " n=" + gAllSpots.length() + ls);
 }
 // A mex spot within r that is ours or still free: ground worth standing on.
 // A spot the enemy has built on reads their cost at the point and is a raid
@@ -592,6 +597,68 @@ int RisingNear(const AIFloat3& in at, float r)
 	return n;
 }
 
+// ROOM FOR THE RING (apexearth 2026-09-20: a plant goes where there is room
+// for nano turrets around it, not against a wall). The ring a line is due is
+// its ceiling-weighted share of the ECONOMY'S POWER (LineSiteFor's share
+// taken over EcoPowerM, not the free flow: free flow times the next turret
+// and read 0 for every line of a 20-minute game) at the line's product
+// density, net of the plant's own arm; counted only where a turret could
+// stand -- the walk that will place them. Slots past that ring are not bought.
+bool NanoDefLike(int d)
+{
+	return Catalog::gAvailable[d] && !Catalog::gMobile[d] && !Catalog::gFloater[d]
+		&& !Catalog::gSub[d] && (Catalog::gBuildPower[d] > 0.f)
+		&& (Catalog::gBuildsList[d].length() == 0);
+}
+
+// The ring is whoever's to build: the T2 con that places the gantry builds
+// no nano at all (read nano=- for every gantry and fusion), so the mover's
+// own list is tried first and any hand of ours second.
+int NanoDefOf(CCircuitDef@ mover)
+{
+	int best = -1;
+	if (mover !is null) {
+		const array<int>@ builds = Catalog::BuildsOf(int(mover.id));
+		for (uint i = 0; i < builds.length(); ++i) {
+			const int d = builds[i];
+			if (NanoDefLike(d) && ((best < 0) || (Catalog::gBuildPower[d] > Catalog::gBuildPower[best])))
+				best = d;
+		}
+	}
+	for (uint c = 1; (best < 0) && (c < gOwnCount.length()); ++c) {
+		const int hd = int(c);
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[hd] || !Catalog::gBuilder[hd])
+			continue;
+		const array<int>@ builds = Catalog::BuildsOf(hd);
+		for (uint i = 0; i < builds.length(); ++i) {
+			const int d = builds[i];
+			if (NanoDefLike(d) && ((best < 0) || (Catalog::gBuildPower[d] > Catalog::gBuildPower[best])))
+				best = d;
+		}
+	}
+	return best;
+}
+
+int NanosDueFor(int did, int nanoDef)
+{
+	if (!Catalog::ValidId(did) || !Catalog::ValidId(nanoDef)
+		|| (Catalog::gBuildsList[did].length() == 0) || (Catalog::gBuildPower[nanoDef] <= 0.f))
+		return 0;
+	const float lineCeil = LineCostCeilOf(did);
+	const float share = EcoPowerM() * lineCeil / (LineCeilSum() + lineCeil);
+	const float bp = share / LineDensityOf(did) - Catalog::gBuildPower[did];
+	return (bp > 0.f) ? int(ceil(bp / Catalog::gBuildPower[nanoDef])) : 0;
+}
+
+float RoomBPAt(int did, int nanoDef, int due, const AIFloat3& in s)
+{
+	if (due <= 0)
+		return 0.f;
+	array<AIFloat3> slots;
+	const int n = PackSlots(nanoDef, s, did, due, slots, true);
+	return float(n) * Catalog::gBuildPower[nanoDef];
+}
+
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
@@ -640,7 +707,11 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 	// of all and fits nowhere, and the widening walk leaves for bare ground.
 	AIFloat3 best = interior;
 	float bestBP = -1.f;
+	float bestStand = -1.f;
+	float bestRoom = 0.f;
 	float interiorBP = -1.f;
+	const int nanoDef = NanoDefOf(mover);
+	const int due = NanosDueFor(did, nanoDef);
 	// A ground plant on the rim faces OUT: a site whose doorway the block
 	// already fills is the walled-in plant the move law would eat again, so
 	// the site backs out of the block until its lane is clear (the same
@@ -664,7 +735,9 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		if (OnMap(s0) && !NearBlockedFor(s0, did) && ReachableBy(mover, s0)
 			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
-			bestBP = RingBPAt(s0) / float(1 + RisingNear(s0, NanoRange()));
+			bestStand = RingBPAt(s0);
+			bestRoom = RoomBPAt(did, nanoDef, due, s0);
+			bestBP = (bestStand + bestRoom) / float(1 + RisingNear(s0, NanoRange()));
 			interiorBP = bestBP;
 		}
 	}
@@ -679,10 +752,10 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		// A doorway plant is asked for on the block's FRONT edge, where its
 		// lane opens onto clear ground; backed out of the block from
 		// anywhere else it leaves the lathe behind.
-		AIFloat3 from = gOwnNanoPos[i];
+		AIFloat3 ask = gOwnNanoPos[i];
 		if (doorway)
-			from = from + exitDir * r;
-		AIFloat3 raw = ai.FindBuildSiteNear(def, from, r * 2.f);
+			ask = ask + exitDir * r;
+		AIFloat3 raw = ai.FindBuildSiteNear(def, ask, r * 2.f);
 		// The front edge can be a cliff or the map's edge; the block itself
 		// is asked next, and the exit lane backs the site out of it.
 		bool fromBlock = false;
@@ -708,12 +781,16 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		}
 		// The ring's lathe over the frames already rising in it: several
 		// groups, one build beside each.
-		const float bp = RingBPAt(s) / float(1 + RisingNear(s, r));
+		const float stand = RingBPAt(s);
+		const float room = RoomBPAt(did, nanoDef, due, s);
+		const float bp = (stand + room) / float(1 + RisingNear(s, r));
 		if (fromBlock)
 			why += " " + int(gOwnNanoPos[i].x) + "," + int(gOwnNanoPos[i].z) + ":block-fit@"
 				+ int(s.x) + "," + int(s.z) + "/" + int(bp);
-		if (bp > bestBP) {
+		if ((bp > bestBP) || ((bp == bestBP) && (stand > bestStand))) {
 			bestBP = bp;
+			bestStand = stand;
+			bestRoom = room;
 			best = s;
 		}
 	}
@@ -721,6 +798,10 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		+ " interior=" + int(interior.x) + "," + int(interior.z)
 		+ " bp=" + int(interiorBP)
 		+ " to=" + int(best.x) + "," + int(best.z) + " bp=" + int(bestBP)
+		+ " stand=" + int(bestStand) + " room=" + int(bestRoom) + " due=" + due
+		+ " nano=" + (Catalog::ValidId(nanoDef) ? Catalog::Def(nanoDef).GetName() : "-")
+		+ " share=" + int(EcoPowerM() * LineCostCeilOf(did) / (LineCeilSum() + LineCostCeilOf(did)))
+		+ " dens=" + formatFloat(LineDensityOf(did), "", 0, 4)
 		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused
 		+ " doorRefused=" + doorRefused + why);
 	bool cached = false;
@@ -1396,10 +1477,10 @@ AIFloat3 EcoSiteFor(CCircuitUnit@ unit)
 // A line's fair share of the production appetite scales with what it can
 // BUILD: the T2 lab making 700-metal units earns a bigger nano ring than a
 // pawn line (apexearth: "need more nano turrets near our T2 lab").
-float LineCostCeil(CCircuitUnit@ f)
+float LineCostCeilOf(int d)
 {
 	float ceil = 100.f;
-	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	const array<int>@ pr = Catalog::BuildsOf(d);
 	for (uint q = 0; q < pr.length(); ++q) {
 		if (Catalog::gMobile[pr[q]] && (Catalog::gCostM[pr[q]] > ceil))
 			ceil = Catalog::gCostM[pr[q]];
@@ -1407,18 +1488,21 @@ float LineCostCeil(CCircuitUnit@ f)
 	return ceil;
 }
 
+float LineCostCeil(CCircuitUnit@ f)
+{
+	return LineCostCeilOf(int(f.circuitDef.id));
+}
+
 // Metal per buildtime-unit of the line's flagship product: converts BP
 // serving this line into the m/s it can actually absorb. The flat 7/80
 // average read a gantry nano at 17.5 m/s when a Vanguard line runs it at
 // 7.3 -- so the supply ledger said "served" at half the ring the line
 // needed, which is the arithmetic behind their 35-nano gantry vs our 6.
-float LineDensity(CCircuitUnit@ f)
+float LineDensityOf(int d)
 {
 	float dens = 7.f / 80.f;
-	if ((f is null) || (f.circuitDef is null))
-		return dens;
 	float best = 0.f;
-	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	const array<int>@ pr = Catalog::BuildsOf(d);
 	for (uint q = 0; q < pr.length(); ++q) {
 		if (!Catalog::gMobile[pr[q]] || (Catalog::gCostM[pr[q]] <= best))
 			continue;
@@ -1427,6 +1511,13 @@ float LineDensity(CCircuitUnit@ f)
 			dens = Catalog::gCostM[pr[q]] / Catalog::gBuildTime[pr[q]];
 	}
 	return dens;
+}
+
+float LineDensity(CCircuitUnit@ f)
+{
+	if ((f is null) || (f.circuitDef is null))
+		return 7.f / 80.f;
+	return LineDensityOf(int(f.circuitDef.id));
 }
 
 // What the lathe standing at this line actually eats [m/s]: its own arm plus

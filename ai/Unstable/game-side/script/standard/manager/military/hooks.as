@@ -274,11 +274,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// While home is being hit they defend it instead, same gate as the pool.
 	if (IsChargerDef(cdef) && (ai.GetTunable("apex_charger_strike", TUNE_CHARGER_STRIKE) > 0.f)) {
 		NotePostureDef(cdef, false);
-		if ((ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) > 0.f)
-			&& (Builder::BaseUnderAttack() || BaseContested()))
-		{
-			return aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
-					Task::FightType::MELEE, aiMilitaryMgr.quota.attack));
+		// The pool's own gate, need-capped and registered: the raw
+		// under-attack test parked every Titan born while shells landed.
+		if (HoldHome()) {
+			AiLog(Factory::T() + "apex: " + cdef.GetName() + " holds home heldM="
+				+ int(gHoldHeldM) + " needM=" + int(HoldNeedM()));
+			NoteHold(unit);
+			return NoteElect("charger.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
 		AiLog(Factory::T() + "apex: " + cdef.GetName() + " charges the enemy base");
 		return NoteElect("charger", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));

@@ -16,6 +16,7 @@ int gNextCommFleeLog = 0;
 int gNextCommHpLog = 0;
 int gNextCommFightLog = 0;
 int gCommEngageAt = -99999;
+int gCommCautionWas = -1;
 
 // INSTRUMENT (temporary): is the commander standing with nothing in his engine
 // command queue, and for how long at a stretch? Sampled from AiUpdate, so one
@@ -172,6 +173,16 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	if (!OnMap(here))
 		return null;
 	const bool caution = CommCaution(unit);
+	// The flip and its inputs: commander.as's CAUTIOUS/loose heartbeat reads a
+	// different test and said "loose" through a game this one held from 3.4 m.
+	if (int(caution ? 1 : 0) != gCommCautionWas) {
+		gCommCautionWas = caution ? 1 : 0;
+		AiLog(Factory::T() + "apex: commander caution=" + (caution ? "on" : "off")
+			+ " haveT2=" + (Factory::gHaveT2 ? 1 : 0)
+			+ " heavies=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::HEAVY) + aiEnemyMgr.GetEnemyCost(RT::SUPER), "", 0, 0)
+			+ " foeMobile=" + formatFloat(Military::FoeMobileMassing(), "", 0, 0)
+			+ " q=" + formatFloat(FoeQualityM(), "", 0, 2));
+	}
 	// "If enemy is running away, fine - let them" (apexearth). Hold position
 	// shoots whatever reaches him and never walks after anything; maneuvre
 	// let the engine chase to leash+range from his last order, and a
@@ -186,50 +197,81 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	// commander to run (apexearth, twice: "does our commander only have flee
 	// logic and no fight logic? ... ours is playing like a coward. He should
 	// only be careful late game when really powerful units are on the field").
-	// CommCaution already IS "late game with heavies about", so its inverse is
-	// exactly the window he should be fighting in. He goes at anything raiding
-	// our own ground that is worth less than he is -- his own cost is the
-	// measure, so this stops on its own once the field outgrows him. Standing
-	// on them is enough: units fire at what is in range, and a D-gun is
-	// point-blank anyway.
-	if (!caution && (ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f)
-		&& (unit.GetHealthPercent() >= COM_RETREAT_HEALTH))
+	//
+	// T1 AT THE BASE IS HIS TO KILL, cautious or not, scratched or not
+	// (apexearth 2026-09-20, watching artillery pound a base: "all the
+	// commander had to do was walk up to them and D-gun them... there's a good
+	// chance he'll die, but if he doesn't, he will have lost his entire base").
+	// The gates that used to hold him back were measured at zero engagements
+	// in his 4v4: caution is true from minute 3 of any team game (four
+	// enemies' mobile mass against one commander), and a strength sum with the
+	// D-gun excluded reads five T1 as more than him. The tier of what is
+	// attacking is his test, so it is the test here. T2 and up keep the old
+	// bars: not cautious, unhurt, and outweighing them.
+	if (ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f)
 	{
 		// His strength at his current hp, against theirs -- not metal against
 		// metal (apexearth, docs/24). The kill is still WORTH metal below.
 		const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
 		const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+		const bool heavyOk = !caution && (unit.GetHealthPercent() >= COM_RETREAT_HEALTH);
+		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 		// The enemy groups themselves, not the PUSH sensor: that one wants a
 		// closing formation of real size and never fired once in a 1v1 (0
 		// engagements, measured), while the raids actually eating our mexes are
-		// two units. Nearest group standing on OUR half that he outweighs.
+		// two units. Nearest group with something of ours inside ITS reach.
 		AIFloat3 foeAt;
 		bool fresh = false;
 		float bestD = -1.f;
 		float bestCost = 0.f;
-		float bestVel = 0.f;
+		float bestStake = 0.f;
+		float bestDpsM = 0.f;
 		float bestApp = 0.f;
 		float bestStr = 0.f;
+		int bestTier = 0;
+		int bestN = 0;
 		const int nG = aiEnemyMgr.GetEnemyGroupCount();
 		for (int gi = 0; gi < nG; ++gi) {
 			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 			if (!OnMap(gp) || (Military::ForwardFraction(gp) >= 0.5f))
 				continue;
-			// ...and inside the one leash the floor and the election use.
-			if (ComFar(gp))
+			// The highest tier among its mobile members; a group of nothing
+			// mobile (a turret creeping in) is not his to walk at.
+			int tier = 0;
+			int nMob = 0;
+			float dps = 0.f;
+			const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+			for (int k = 0; k < nU; ++k) {
+				const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+				if (!Catalog::ValidId(d) || !Catalog::gMobile[d])
+					continue;
+				++nMob;
+				dps += Catalog::gDps[d];
+				const int t = DefTier(d);
+				if (t > tier)
+					tier = t;
+			}
+			if (nMob == 0)
 				continue;
 			// HE DEFENDS WHAT WE OWN, he does not go on tour. "Our half of the
 			// map" was too loose a leash: he chased to the midpoint, chained
 			// the next target from there and ended up duelling the enemy
 			// commander in their base while ours stood empty (apexearth,
 			// watched -- we won that game, which is not evidence it was right).
-			// The bar is now our own property: something of ours must be
-			// standing within the raider's reach, so there is nothing to
-			// defend at their base and nothing to chase toward.
-			if (StakeAt(gp, r) <= 0.f)
+			// The bar is our own property inside THEIR reach: artillery shells
+			// the base from past the threat radius, and standing outside the
+			// home leash by exactly its range is how it does that.
+			float reach = aiEnemyMgr.GetEnemyGroupRange(gi);
+			if (reach < r)
+				reach = r;
+			const float stake = StakeAt(gp, reach);
+			if (stake <= 0.f)
+				continue;
+			if (ComFar(gp) && (!Builder::gHomeSet
+				|| (gp.distance2D(Builder::gHomePos) > leash + reach)))
 				continue;
 			const float gStr = EnemyGroupStrength(gi);
-			if (gStr > mine)
+			if ((tier >= 2) && (!heavyOk || (gStr > mine)))
 				continue;
 			// Coming at us, or leaving: a group walking away is let go.
 			const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
@@ -242,23 +284,25 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			if ((bestD < 0.f) || (dd < bestD)) {
 				bestD = dd;
 				bestCost = aiEnemyMgr.GetEnemyGroupCost(gi);
-				bestVel = aiEnemyMgr.GetEnemyGroupVel(gi);
+				bestStake = stake;
+				bestDpsM = dps * StructureMetalPerHp();
 				bestApp = app;
 				bestStr = gStr;
+				bestTier = tier;
+				bestN = nMob;
 				foeAt = gp;
 				fresh = true;
 			}
 		}
 		if (fresh) {
-			// The GROUP's own cost, not a radius sample: the sample read 1
-			// metal for raids the group model valued properly.
-			const float theirs = (bestCost > 0.f) ? bestCost
-					: ai.GetEnemyCostAt(foeAt, r);
 			// WORTH THE WALK. His time is priced like any builder-second, so a
 			// detour is only justified when it denies more metal than it costs
 			// -- otherwise he trails a 1-metal scout around the base forever
-			// (measured: 6 engagements, every one against "1 metal"). No new
-			// constant: Wage() is the market's own price for his time.
+			// (measured: 6 engagements, every one against "1 metal"). What the
+			// walk denies is the raiders AND what they destroy while he walks:
+			// their damage per second in metal, so five artillery pieces shelling
+			// the base outweigh the trip and a flea sitting in a corner does not.
+			// No new constant: Wage() is the market's own price for his time.
 			const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
 			// The trip is the CATCH at closing speed plus the walk back; a group
 			// moving as fast as he does is never caught (apexearth: "enemy pawns
@@ -266,18 +310,42 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			const float closing = spd + bestApp;
 			const float tripS = ((spd > 1.f) && (closing > 1.f))
 					? (bestD / closing + bestD / spd) : 1e9f;
+			const float theirs = bestCost + bestDpsM * tripS;
 			const float worthIt = Wage() * tripS;
-			if ((theirs > worthIt) && (bestStr <= mine)) {
-				if (ai.frame >= gNextCommFightLog) {
-					gNextCommFightLog = ai.frame + 15 * SECOND;
-					AiLog("apex: commander engaging -- "
-						+ formatFloat(theirs, "", 0, 0) + " metal raiding our ground,"
-						+ " str " + formatFloat(bestStr, "", 0, 2) + " vs his " + formatFloat(mine, "", 0, 2)
-						+ " approaching " + formatFloat(bestApp, "", 0, 0) + "/s at " + int(bestD));
+			if (theirs > worthIt) {
+				// A TASK, NOT A MOVE ORDER. CmdMoveTo from here was overridden by
+				// the build task Decide handed back on the same election -- three
+				// engagements logged, 15-45 s standing still after each, zero
+				// kills (measured 2026-09-20). A builder patrol is a task the C++
+				// keeps, it fights whatever it meets, and it carries the D-gun
+				// action that walks him in on a target. Held across re-elections
+				// while it still points at the group.
+				IUnitTask@ held = unit.task;
+				if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+					&& (held.GetBuildType() == Task::BuildType::PATROL)
+					&& (held.GetBuildPos().distance2D(foeAt) < 300.f))
+				{
+					return held;
 				}
-				gCommEngageAt = ai.frame;
-				unit.CmdMoveTo(foeAt);
-				return null;
+				const int dwell = int((bestD / ((spd > 1.f) ? spd : 1.f) + 15.f) * SECOND);
+				IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(
+						Task::Priority::HIGH, foeAt, dwell));
+				if (pt !is null) {
+					if (ai.frame >= gNextCommFightLog) {
+						gNextCommFightLog = ai.frame + 15 * SECOND;
+						AiLog("apex: commander engaging -- T" + bestTier + " x" + bestN + ", "
+							+ formatFloat(bestCost, "", 0, 0) + " metal killing "
+							+ formatFloat(bestDpsM, "", 0, 1) + " m/s at "
+							+ formatFloat(bestStake, "", 0, 0) + " of ours,"
+							+ " str " + formatFloat(bestStr, "", 0, 2) + " vs his " + formatFloat(mine, "", 0, 2)
+							+ " hp=" + int(unit.GetHealthPercent() * 100.f)
+							+ (caution ? " cautious" : "")
+							+ " approaching " + formatFloat(bestApp, "", 0, 0) + "/s at " + int(bestD)
+							+ " worth " + formatFloat(theirs, "", 0, 0) + "/" + formatFloat(worthIt, "", 0, 0));
+					}
+					gCommEngageAt = ai.frame;
+					return pt;
+				}
 			}
 		}
 	}

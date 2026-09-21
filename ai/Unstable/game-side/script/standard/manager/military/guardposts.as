@@ -36,6 +36,64 @@ array<float> gPostUReach;
 
 // Guard metal covering `pos`: each posted unit counts fully at its post and
 // fades to nothing at its reach, the falloff the posting itself uses.
+// THE ARMY AT HOME IS COVER; THE ARMY AWAY IS NOT (apexearth 2026-09-20:
+// "our entire army wants to go to one side of the map. When this happens,
+// our base should make extra defenses"). Each combat unit inside the home
+// leash counts at where it stands with the post reach, so a tower prices up
+// the moment the army leaves and down while it sits at home. Sampled with
+// the withdraw pass; units beyond leash + reach can cover nothing of ours.
+array<float> gArmyUX;
+array<float> gArmyUZ;
+array<float> gArmyUM;
+array<float> gArmyUReach;
+float gArmyHomeM = 0.f;
+float gArmyFieldM = 0.f;
+int gNextArmyCoverLog = 0;
+
+void ArmyCoverSample()
+{
+	array<float> xs, zs, ms, rs;
+	float homeM = 0.f, fieldM = 0.f;
+	if (Builder::gHomeSet) {
+		RefreshPostLife();
+		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+		for (uint i = 0; i < gCombatId.length(); ++i) {
+			CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
+			if ((u is null) || (u.circuitDef is null))
+				continue;
+			const AIFloat3 p = u.GetPos(ai.frame);
+			if (!OnMap(p))
+				continue;
+			const int d = int(u.circuitDef.id);
+			const float m = Catalog::gCostM[d];
+			IUnitTask@ t = u.task;
+			const bool fleeing = (t !is null) && (t.GetType() == Task::Type::RETREAT);
+			const float r = PostReach(d);
+			if (fleeing || (p.distance2D(Builder::gHomePos) > leash + r)) {
+				fieldM += m;
+				continue;
+			}
+			homeM += m;
+			xs.insertLast(p.x);
+			zs.insertLast(p.z);
+			ms.insertLast(m);
+			rs.insertLast(r);
+		}
+	}
+	gArmyUX = xs;
+	gArmyUZ = zs;
+	gArmyUM = ms;
+	gArmyUReach = rs;
+	gArmyHomeM = homeM;
+	gArmyFieldM = fieldM;
+	if (ai.frame >= gNextArmyCoverLog) {
+		gNextArmyCoverLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: army-cover home=" + formatFloat(homeM, "", 0, 0)
+			+ " away=" + formatFloat(fieldM, "", 0, 0) + " n=" + xs.length()
+			+ " lifeS=" + formatFloat(gPostLifeS, "", 0, 1));
+	}
+}
+
 float UnitCoverAt(const AIFloat3& in pos)
 {
 	float m = 0.f;
@@ -48,6 +106,16 @@ float UnitCoverAt(const AIFloat3& in pos)
 		const float d2 = dx * dx + dz * dz;
 		if (d2 < r * r)
 			m += gPostUM[i] * (1.f - sqrt(d2) / r);
+	}
+	for (uint i = 0; i < gArmyUX.length(); ++i) {
+		const float r = gArmyUReach[i];
+		if (r <= 1.f)
+			continue;
+		const float dx = gArmyUX[i] - pos.x;
+		const float dz = gArmyUZ[i] - pos.z;
+		const float d2 = dx * dx + dz * dz;
+		if (d2 < r * r)
+			m += gArmyUM[i] * (1.f - sqrt(d2) / r);
 	}
 	return m;
 }

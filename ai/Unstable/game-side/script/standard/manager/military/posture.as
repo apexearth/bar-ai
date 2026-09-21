@@ -346,8 +346,9 @@ void ApplyRetreatPosture()
 	const float bar = (secs > 0.f) ? (aiEconomyMgr.metal.income * secs) : 0.f;
 	uint zeroed = 0;
 	for (uint i = 0; i < gPostureDef.length(); ++i) {
+		// A charger is never pulled back (docs/24); the walk home is what kills it.
 		const bool zero = (gPostureFodder[i] && gRaiderSuicidal)
-			|| (gPostureDef[i].costM < bar);
+			|| (gPostureDef[i].costM < bar) || IsChargerDef(gPostureDef[i]);
 		// WRITE ON THE EDGE, NOT EVERY FRAME. gPostureRetreat is a snapshot
 		// taken once at registration -- before any rezbot existed -- and this
 		// runs every frame, so it overwrote RetreatRefresh's value on the frame

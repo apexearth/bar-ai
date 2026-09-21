@@ -87,15 +87,15 @@
 		// radar, guns and silos a hundred elmos off, never another reactor
 		// (they ignored each other). Chain-blast spacing is FarmSlot's, by
 		// cluster, not a yard. The apron of a lab is the lab's own yard.
-		"fusion": {"type": ["rectangle", "engy_mid"], "not_ignore": ["factory", "terra"]},
-		"singu": {"type": ["rectangle", "engy_high"], "not_ignore": ["factory", "terra"]},
+		"fusion": {"type": ["rectangle", "engy_mid"], "not_ignore": ["factory", "mex", "geo", "terra"]},
+		"singu": {"type": ["rectangle", "engy_high"], "not_ignore": ["factory", "mex", "geo", "terra"]},
 		"pylon": {
 			"type": ["circle", "pylon"],
-			"not_ignore": ["factory", "pylon", "terra"]  // default: ["all"]
+			"not_ignore": ["factory", "pylon", "mex", "geo", "terra"]  // default: ["all"]
 		},
 		"store": {
 			"type": ["rectangle", "mex"],
-			"not_ignore": ["factory", "terra"]
+			"not_ignore": ["factory", "mex", "geo", "terra"]
 		},
 		"mex": {
 			"type": ["rectangle", "mex"],
@@ -113,16 +113,16 @@
 		// 2026-09-16: "you want things to be very tight").
 		"def_low": {
 			"type": ["rectangle", "def_low"],
-			"not_ignore": ["factory", "terra"]
+			"not_ignore": ["factory", "mex", "geo", "terra"]
 		},
-		"caretaker": {"type": ["rectangle", "nano"], "ignore": ["mex", "def_low", "engy_low", "engy_mid", "engy_high", "convert"]},
+		"caretaker": {"type": ["rectangle", "nano"], "ignore": ["def_low", "engy_low", "engy_mid", "engy_high", "convert"]},
 		"superweapon": {
 			"type": ["circle", "special"],
-			"ignore": ["mex", "def_low", "engy_high"]
+			"ignore": ["def_low", "engy_high"]
 		},
 		"protector": {
 			"type": ["circle", "special"],
-			"ignore": ["mex", "def_low", "engy_mid", "engy_high"]
+			"ignore": ["def_low", "engy_mid", "engy_high"]
 		},
 		"flush_special": {
 			"type": ["rectangle", "special"],
@@ -139,7 +139,7 @@
 		},
 		"small": {
 			"type": ["rectangle", "unknown"],
-			"not_ignore": ["factory", "terra"]
+			"not_ignore": ["factory", "mex", "geo", "terra"]
 		},
 		"wall": {
 			"type": ["rectangle", "def_low"],
@@ -150,14 +150,16 @@
 		// watched game, 2026-09-15).
 		"flush_sense": {
 			"type": ["rectangle", "unknown"],
-			"ignore": ["all"]
+			"not_ignore": ["mex", "geo"]
 		},
 		// Everything unlisted -- the heavier guns, anti-air, big guns --
 		// stood in a six-cell dead ring that refused every farm cell around
-		// it. Nothing but a lab's apron keeps ground now.
+		// it. Nothing but a lab's apron keeps ground now -- and the metal and
+		// geo spots, which are blockers of type mex/geo: a list that leaves
+		// them out puts the tower ON the spot (watched 2026-09-20).
 		"_default_": {
 			"type": ["rectangle", "unknown"],
-			"not_ignore": ["factory", "terra"]
+			"not_ignore": ["factory", "mex", "geo", "terra"]
 		}
 	},
 	// Water overrides land. Map considered as water if amount of land < 40%

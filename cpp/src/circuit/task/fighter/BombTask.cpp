@@ -292,6 +292,12 @@ void CBombTask::FindTarget()
 		focusLogged = true;
 		circuit->LOG("apex: bomb focus at %.0f,%.0f r=%.0f power=%.1f", focusPos.x, focusPos.z, focusR, focusPower);
 	}
+	// apex: OVER the cell the wave is committed -- the AA is paid on the way
+	// out whether it drops or not, so nothing inside the cell is vetoed on
+	// threat; the veto still shapes the approach.
+	const bool overFocus = focused && (pos.SqDistance2D(focusPos) <= sqFocusR);
+	int nHidden = 0, nPower = 0, nMobile = 0, nCat = 0, nSeen = 0;
+	float worstPower = 0.f;
 //	const float maxAltitude = cdef->GetAltitude();
 	const float speed = cdef->GetSpeed() / 1.75f;
 	const int canTargetCat = cdef->GetTargetCategory();
@@ -323,17 +329,23 @@ void CBombTask::FindTarget()
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
-		if (enemy->IsHidden()) {
-			continue;
-		}
 		const AIFloat3& ePos = enemy->GetPos();
 		if (focused && (ePos.SqDistance2D(focusPos) > sqFocusR)) {
 			continue;
 		}
+		if (enemy->IsHidden()) {
+			++nHidden;
+			continue;
+		}
 		float power = threatMap->GetThreatAt(ePos)/*- enemy->GetThreat(ROLE_TYPE(BOMBER))*/;
-		if ((maxPower <= power) ||
+		if (focused) {
+			++nSeen;
+			if (power > worstPower) worstPower = power;
+		}
+		if ((!overFocus && (maxPower <= power)) ||
 			(notAW && (ePos.y < -SQUARE_SIZE * 5)))
 		{
+			++nPower;
 			continue;
 		}
 
@@ -357,10 +369,12 @@ void CBombTask::FindTarget()
 				|| skipMobile
 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore())
 			{
+				++nMobile;
 				continue;
 			}
 			targetCat = edef->GetCategory();
 			if ((targetCat & canTargetCat) == 0) {
+				++nCat;
 				continue;
 			}
 			health = enemy->GetHealth();
@@ -474,6 +488,12 @@ void CBombTask::FindTarget()
 
 	if (focused && (bestTarget == nullptr) && !utils::is_valid(position)) {
 		position = focusPos;   // nothing scored yet: fly to the cell as one and look again there
+		static int nextNoTargetLog = 0;
+		if (overFocus && (circuit->GetLastFrame() >= nextNoTargetLog)) {
+			nextNoTargetLog = circuit->GetLastFrame() + FRAMES_PER_SEC * 5;
+			circuit->LOG("apex: bomb no-target over %.0f,%.0f seen=%d hidden=%d power=%d mobile=%d cat=%d maxPower=%.1f worst=%.1f units=%d",
+					focusPos.x, focusPos.z, nSeen, nHidden, nPower, nMobile, nCat, maxPower, worstPower, (int)units.size());
+		}
 	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);

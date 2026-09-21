@@ -377,6 +377,33 @@ float PfHpPerMetal()
 	return gPfHpPerM;
 }
 
+// ...and the mirror: METAL PER HIT POINT of what we build, so an attacker's
+// damage rate reads as the metal of ours it destroys per second. Median over
+// the structures anything can build.
+float gPfMPerHp = -1.f;
+
+float StructureMetalPerHp()
+{
+	if (gPfMPerHp >= 0.f)
+		return gPfMPerHp;
+	array<float> r;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gMobile[d] || (Catalog::gBuiltBy[d].length() == 0))
+			continue;
+		if ((Catalog::gHealth[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+			continue;
+		r.insertLast(Catalog::gCostM[d] / Catalog::gHealth[d]);
+	}
+	if (r.length() == 0) {
+		gPfMPerHp = 0.f;
+		return gPfMPerHp;
+	}
+	r.sortAsc();
+	gPfMPerHp = r[r.length() / 2];
+	return gPfMPerHp;
+}
+
+
 // THE METAL A TURRET CAN ACTUALLY KILL in the window an exposed asset is
 // expected to survive. A post's stake is everything inside its own reach
 // (PfStakeIn buckets at the candidate's range), so a 1220-elmo gun is credited

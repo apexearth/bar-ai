@@ -1039,6 +1039,11 @@ bool EcoRoleActive()
 	}
 	if (hx.length() < 4)
 		return false;
+	// Mates publish their homes over the first frames; an election on a
+	// partial roster seated the wrong team at frame 6 (and its one-shot
+	// diag lied). A non-Apex ally never publishes, so the wait is bounded.
+	if ((hx.length() < mates.length()) && (ai.frame < 30 * SECOND))
+		return was;
 	cx /= float(hx.length());
 	cz /= float(hx.length());
 	const float ex = float(AiTerrainWidth()) - cx;
@@ -1061,23 +1066,11 @@ bool EcoRoleActive()
 	const float mz = Builder::gHomePos.z - ez;
 	const float mine = mx * mx + mz * mz;
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
-	gEcoRole = (mine >= d1) && (dmed > 1.f) && (mine >= dmed * margin * margin);
-	// THE OVERRIDE IS GONE. It read: with four or more allies the rear-most
-	// takes the role REGARDLESS OF MARGIN, on the reasoning that someone is
-	// always hindmost. That is true and it is not a reason -- on a
-	// line-abreast start nobody is meaningfully safer, and the margin test
-	// above had already said so correctly.
-	//
-	// Measured 2026-09-01, Comet Catcher 4v4 vs BARb hard: team 3 elected as
-	// the rear specialist on a map where no seat is protected, held
-	// growing=1 for the entire game (its economy peaked at 127 against the
-	// 500 crossover and then fell as it was eaten), and spent ZERO metal on
-	// defence at minute 6, 12 and 18. apexearth, watching: "Some maps... like
-	// this one... especially when it is a 4v4... we shouldn't have an eco
-	// player."
-	//
-	// So the margin decides, always. A team with no genuinely protected seat
-	// elects nobody, which is the right answer for a line-abreast start.
+	// An eight-player team seats its rear-most whatever the margin (docs/24
+	// 2026-09-13); the margin was for the 4v4 line-abreast start, which the
+	// size gate above refuses, and a line-abreast 8v8 never reaches it.
+	gEcoRole = (mine >= d1) && (dmed > 1.f)
+		&& ((mates.length() >= 8) || (mine >= dmed * margin * margin));
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
 		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
