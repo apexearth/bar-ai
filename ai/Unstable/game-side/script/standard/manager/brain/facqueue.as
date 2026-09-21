@@ -350,17 +350,22 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	int lineHave = pend;
 	float lineSec = LineSecondsBp(line, lineBp, true);
 	string stop = "window";
+	// Past the slice the rest of the window is drawn from the election's own
+	// ranked list: the same mix without the pricing walk, and a line that
+	// would otherwise stand one unit deep until the next election.
+	bool redraw = false;
 	for (int slot = 0; slot < 16; ++slot) {
 		if (lineSec >= window)
 			break;
-		if ((slot > 0)
+		if (!redraw && (slot > 0)
 			&& ((ai.ClockUs() - _tBatch) > double(BATCH_SLICE_US))) {
 			stop = "slice";
-			break;
+			redraw = true;
 		}
-		CCircuitDef@ o = Market::ConOrderFor(fac, line, slot);
+		CCircuitDef@ o = redraw ? Market::RedrawFor(fac, slot)
+				: Market::ConOrderFor(fac, line, slot);
 		if (o is null) {
-			stop = "null:" + Market::gNoOrder;
+			stop = redraw ? "slice" : ("null:" + Market::gNoOrder);
 			break;
 		}
 		batch.insertLast(o);

@@ -563,6 +563,20 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### The walled-plant move fired on a gantry 11% enclosed (2026-09-21)
+
+His Isthmus 8v8 (`matches/_engine`, 01:35): the seat's gantry #25347 stood
+`enc=0.11` -- its least-filled side 11% full, i.e. open -- and the rule of
+09-17 ("a plant the core has swallowed moves to the rim, new one first") bought
+a twin at 23.3m and reclaimed it at 29.5m (`apex: plant-walled ... reclaim
+v=0.038 best=0.000`). He watched it: "our gantry get reclaimed... we made an
+AFUS instead." The reclaim's gain counted the plant's own 7,900 metal as a
+gain (removed 09-21, `want_reclaim.as`: a transfer, not a gain), but the move
+still prices positive at any enclosure because `room` is linear in `enc` and a
+seat's cell is worth thousands, and it wins whenever nothing else on the seat
+prices at all. OPEN, his call: what counts as swallowed -- the doorway (the
+side units leave by) closed, or every side?
+
 ### A crewless frame is only re-adopted by a same-def ask; it should be a priced want (2026-09-20)
 
 His Ring Atoll game `matches/20260921-045243`: a fusion emptied at 95% by the

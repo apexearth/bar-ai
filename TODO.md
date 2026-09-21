@@ -188,9 +188,31 @@ now; ISSUES GANTRIES). The fixes of 09-12/13 did not close it. What is open:
   that never elects, a `gap0` on every candidate, a jammed yard. `FacYardWatch`
   reads a blocked plant only. Stage 0 is the instrument: per lab, per minute,
   idle time and the reason the auction gave it nothing.
+  Found 09-21 (his Isthmus 8v8, fourth report: "we still have a lot of idle
+  time on our airlabs... we need to be making longer queues"): `apex: facqueue
+  short <lab> ordered=1 pend=0 sec=0/15 stop=slice us=16000-79000` on every
+  seat lab after minute 30 -- one ConOrderFor costs 16-79 ms, the 4 ms batch
+  slice ends after slot 0, and a nano'd line that builds a unit in 2 s gets
+  one unit per 10 s election. Built 09-21: past the slice the window is
+  filled by re-drawing the election's own ranked list (`RedrawFor`).
+  Unmeasured in a rich game yet.
 - The standing obligation ("army stays at its share of the economy we built")
   must not read satisfied while the bank sits full. Metal we are not spending
   is not economy we have built; the share is of what is USED.
+
+## Allies keep each other's walkways -- one lane system for the team
+
+apexearth 2026-09-21, watching an Isthmus 8v8: we purposely leave certain
+areas open so our units can walk there, and then an ally builds in that gap and
+blocks it. All of us should align to the same system.
+
+What stands: each AI lays its walkways from its OWN anchor and axis
+(`baseplan/state.as`, lanes in world offsets at `LANE_PITCH`), so two adjacent
+bases stripe the ground on unrelated grids, and neither one's site test knows
+the other's gaps. A team frame -- one origin and axis published like the eco
+seat is (`TV_*` team values), lanes as world lines in that frame -- makes the
+gaps the same lines for every base, and a site that lands in any ally's lane
+is refused the way our own is.
 
 ## Nuke Spam!
 

@@ -973,6 +973,18 @@ only cons that reach BestExtract(), which scans every available def and so
 means the MOHO, so no T1 con and no commander ever satisfied it. 2.7 + inc/44
 is apexearth's own two points: 3 at 12 metal/s, 5 at 100. A floor, not a cap.
 
+The unspent-metal term on top of it (`HandsShort`, 2026-09-21) reads hands
+short of the income at the rate the WORKING hands actually spend, not at the
+nominal 7/80 density: three T1 cons and the commander spent 17 of 25 m/s and
+the nominal read them as 34 m/s of lathe, so every 8v8 ally stood on a full
+bank for its first six minutes (1.3k spilled each, cons 4.7 to BARb's 10).
+Measured 1v1, 12 min, 3 seeds x 2 maps against BARb hard: minute-8 metal
+built per player 8.1k -> 11.6k (Comet), 10.1k -> 11.6k (Copper); minute-12
+income on Comet 32/32/45 -> 158/88/100. The first form counted every hand and
+fed on itself (new cons walking raised the fleet, not the spend: 11 cons and
+no army in five minutes); the working-lathe form is bounded by the hands the
+measurement was taken on.
+
 ### `TUNE_T1_AIR_CON_MIN` = 10.f
 
 apexearth 2026-09-15, watching a 1v1 with two basic air cons at 40 minutes:

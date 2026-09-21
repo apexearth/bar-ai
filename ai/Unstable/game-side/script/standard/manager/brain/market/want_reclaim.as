@@ -1248,7 +1248,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			if (twin !is null) {
 				const float walkSec = (speed > 1.f)
 						? (unit.GetPos(ai.frame).distance2D(fp) / speed) : 60.f;
-				const float gain = (room + Catalog::gCostM[fd]) / hz;
+				// The plant's own metal is a transfer, not a gain: the twin it
+				// pays for already stands (his watched seat gantry, 11%
+				// enclosed, reclaimed at v=0.038 with cost as the gain).
+				const float gain = room / hz;
 				const float v = gain / (1.f + (walkSec + Catalog::gCostM[fd] / 90.f) * wageR);
 				AiLog("apex: plant-walled t=" + ai.teamId + " " + f.circuitDef.GetName()
 					+ " at=" + int(fp.x) + "," + int(fp.z)

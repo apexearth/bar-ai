@@ -445,25 +445,65 @@ int ConsNeedAny()
 	// ...served by a pure assist unit where a lab offers one (AssistNeed);
 	// as constructors only before that -- a T1 con is also the starter the
 	// full bank needed.
-	if (!AnyAssistLab()) {
-		float unspent = UnspentByHands();
-		// Unspent metal is hands we lack only as far as the army stands at
-		// its target; short of it, the lab that would make those hands is
-		// the hand that converts it (balance over power: a full bank at
-		// a sixth of their army bought four more cons off the one lab).
-		const float tgt = ArmyTarget();
-		if (tgt > 1.f) {
-			const float fill = ArmyValue() / tgt;
-			unspent *= (fill < 1.f) ? fill : 1.f;
-		}
-		if (unspent > 0.f) {
-			const float bp = ConWorkerBP();
-			if (bp > 0.f)
-				want += unspent / bp;
-		}
-	}
+	if (!AnyAssistLab())
+		want += HandsShort();
 	const int have = ConsOwnedAny() + ConsInFlightAny();
 	return (float(have) < want) ? (int(want) - have) : 0;
+}
+
+// The lathe that is spending right now, at the nominal density: every static
+// builder, plus the mobile hands standing at a frame with progress. A hand
+// walking to its site, or fleeing a raid, lathes nothing and is not evidence
+// of what a hand converts -- counted, the cons a full bank bought raised
+// the fleet and not the spend, and the term asked for more (11 cons and no
+// army in five minutes).
+float gWorkBpVal = 0.f;
+float gWorkHandsVal = 0.f;
+int gWorkBpAt = -1;
+void WorkingLathe()
+{
+	if (gWorkBpAt == ai.frame)
+		return;
+	gWorkBpAt = ai.frame;
+	float bp = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] > 0) && !Catalog::gMobile[int(d)]
+			&& (Catalog::gBuildPower[int(d)] > 0.f))
+			bp += float(gOwnCount[d]) * Catalog::gBuildPower[int(d)] * (7.f / 80.f);
+	}
+	float hands = 0.f;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if ((u is null) || (u.task is null) || (Requests::Progress(u.task) <= 0.01f))
+			continue;
+		bp += Catalog::gBuildPower[int(u.circuitDef.id)] * (7.f / 80.f);
+		hands += 1.f;
+	}
+	gWorkBpVal = bp;
+	gWorkHandsVal = hands;
+}
+
+// Constructors short of the income, at the rate the hands we have ACTUALLY
+// spend. The nominal density read a T1 con as 7.9 m/s of lathe while three
+// of them and the commander spent 17 of 25 between them, so every 8v8 ally
+// stood on a full bank for its first six minutes (1.3k metal spilled each,
+// BARb's cons 2x ours) with this term at zero. The lab is not the converter
+// of that metal either: its line was fed the whole time.
+float HandsShort()
+{
+	TrackIncome();
+	const float inc = aiEconomyMgr.metal.income;
+	const float share = EFeedShare();
+	const float spent = (inc - gMSpareEma) / ((share > 0.05f) ? share : 0.05f);
+	const float unspent = inc - spent;
+	WorkingLathe();
+	const float conBp = ConWorkerBP();
+	if ((unspent <= 0.f) || (spent <= 0.f) || (gWorkBpVal <= 0.f) || (conBp <= 0.f)
+		|| (gWorkHandsVal <= 0.f))
+		return 0.f;
+	const float short = unspent / (conBp * spent / gWorkBpVal);
+	// Bounded by the hands the measurement was taken on.
+	return (short < gWorkHandsVal) ? short : gWorkHandsVal;
 }
 
 // Does any standing plant of ours offer a pure assist unit?
@@ -547,6 +587,40 @@ float ArmyInFlightM()
 // comes back with nothing: an election that orders nothing is idle factory
 // time, and until this existed the reason was invisible.
 string gNoOrder = "";
+
+// The last draw's ranked list, so a line whose election ran out of slice after
+// one order can fill the rest of its window from the same distribution
+// (measured: every nano'd lab on the seat idle 80% of the game at one order
+// per 10 s election, ConOrderFor 16-79 ms a call).
+array<int> gRedrawDef;
+array<float> gRedrawV;
+float gRedrawSum = 0.f;
+int gRedrawFac = -1;
+int gRedrawAt = -1;
+
+CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
+{
+	if ((fac is null) || (gRedrawAt != ai.frame) || (gRedrawFac != int(fac.id))
+		|| (gRedrawSum <= 0.f))
+		return null;
+	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
+			+ uint(slot) * 2246822519;
+	h ^= (h >> 13);
+	float roll = float(h % 10000) / 10000.f * gRedrawSum;
+	uint pick = 0;
+	for (uint ci = 0; ci < gRedrawV.length(); ++ci) {
+		roll -= gRedrawV[ci];
+		if (roll <= 0.f) {
+			pick = ci;
+			break;
+		}
+	}
+	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
+		&& (gRedrawV[pick] < gWantEmaV
+			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
+		return null;
+	return Catalog::Def(gRedrawDef[pick]);
+}
 
 // The line's own ranking, defrank's pattern (his zero-Titan report at
 // ~500 m/s: which TERM zeroes a candidate is invisible in every log, and a
@@ -1629,6 +1703,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " have=" + ConsOwnedAny()
 				+ " inflight=" + ConsInFlightAny()
 				+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ " short=" + formatFloat(HandsShort(), "", 0, 1)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
 		}
@@ -1954,6 +2029,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	best = candDef[pick];
 	bestV = candV[pick];
 	bestGain = candGain[pick];
+	gRedrawDef = candDef;
+	gRedrawV = candV;
+	gRedrawSum = sumV;
+	gRedrawFac = int(fac.id);
+	gRedrawAt = ai.frame;
 	// Priced in the same currency; factory time is free while the line idles.
 	// OPPORTUNITY FLOOR: the draw compares a line's candidates only against
 	// each other, so a saturated line kept producing v=1.2 cons while
