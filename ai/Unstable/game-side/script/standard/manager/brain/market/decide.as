@@ -639,6 +639,52 @@ void ElecLog()
 
 // An executed want of kind K evicts every cached answer of that kind, for
 // every asker class -- see the memo's header comment.
+// A want this hand was refused at this site does not win its next draw: an
+// unplaceable tower held the top price for twelve minutes while every
+// fallthrough bought eco and the first lab never came (his Carrot 8v8).
+array<int> gRefUnit;
+array<int> gRefKind;
+array<int> gRefDef;
+array<AIFloat3> gRefPos;
+array<int> gRefAt;
+int gRefDropped = 0;
+int gNextRefLog = 0;
+const int REFUSAL_MEMO_S = 45;
+
+void NoteRefused(CCircuitUnit@ unit, Want@ w)
+{
+	const int did = (w.def is null) ? -1 : int(w.def.id);
+	for (uint i = 0; i < gRefUnit.length(); ++i) {
+		if ((gRefUnit[i] == int(unit.id)) && (gRefKind[i] == w.kind) && (gRefDef[i] == did)) {
+			gRefPos[i] = w.pos;
+			gRefAt[i] = ai.frame;
+			return;
+		}
+	}
+	if (gRefUnit.length() >= 64) {
+		gRefUnit.removeAt(0); gRefKind.removeAt(0); gRefDef.removeAt(0);
+		gRefPos.removeAt(0); gRefAt.removeAt(0);
+	}
+	gRefUnit.insertLast(int(unit.id));
+	gRefKind.insertLast(w.kind);
+	gRefDef.insertLast(did);
+	gRefPos.insertLast(w.pos);
+	gRefAt.insertLast(ai.frame);
+}
+
+bool RecentlyRefused(CCircuitUnit@ unit, Want@ w)
+{
+	const int did = (w.def is null) ? -1 : int(w.def.id);
+	for (uint i = 0; i < gRefUnit.length(); ++i) {
+		if ((gRefUnit[i] != int(unit.id)) || (gRefKind[i] != w.kind) || (gRefDef[i] != did))
+			continue;
+		if (ai.frame - gRefAt[i] > REFUSAL_MEMO_S * SECOND)
+			return false;
+		return !OnMap(w.pos) || !OnMap(gRefPos[i]) || (w.pos.distance2D(gRefPos[i]) < 160.f);
+	}
+	return false;
+}
+
 void MemoEvictKind(int k)
 {
 	if ((k < 0) || (uint(k) >= gMemoKindCells.length()) || (gMemoKindCells[k] is null))
@@ -1088,6 +1134,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f))
 			continue;
+		if (RecentlyRefused(unit, c)) {
+			++gRefDropped;
+			if (ai.frame >= gNextRefLog) {
+				gNextRefLog = ai.frame + 30 * SECOND;
+				AiLog("apex: refused-memo t=" + ai.teamId + " " + unit.circuitDef.GetName()
+					+ " #" + unit.id + " drops " + KindName(c.kind) + ":"
+					+ ((c.def is null) ? "-" : c.def.GetName())
+					+ " at=" + int(c.pos.x) + "," + int(c.pos.z)
+					+ " dropped=" + gRefDropped);
+			}
+			continue;
+		}
 		// This instance's interest in the category (Persona): the strategic
 		// wants carry theirs from their own pricing.
 		if (c.kind != WK_SUPER)
@@ -1874,6 +1932,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))
 			++gExecFail[ranked[i].kind];
+		NoteRefused(unit, ranked[i]);
 		// The stall's answer refused: the interrupt that freed this builder
 		// will fire again on whatever the fallthrough starts (five in 500
 		// frames, watched), so the verdict is worth a line.
