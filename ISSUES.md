@@ -563,6 +563,31 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### The 8v8 allies' mohos are metal-bound, not hand-bound (2026-09-21)
+
+Allies stand 2.4 mohos to BARb's 5.0 at minute 16 (live Isthmus 8v8). The
+role census gave metal no target gap (`CatGapFrac` reads 0 for CAT_METAL) so
+the defence gap (0.89-0.95 on every ally) took the roled hands, T2 cons
+included: 6% of their decisions a moho, `role=defence` the reason. Giving
+metal the ladder's gap (spots + servable upgrades over the growth still owed)
+moved the decision -- metal gap 0.00 -> 0.32, quota 0.7 -> 1.5, T2-con
+first picks airdef -> mexup -- and moved nothing else: mohos per ally at 16
+2.5/1.7/2.9 -> 2.9/1.6/2.4, at 24 4.0/2.0/3.3 -> 4.0/3.2/3.4, starts
+69 -> 65, ally income unchanged (3 seeds, `tournaments/*-roles8`). Reverted.
+A moho takes 48-78 s of a 620-metal bill at 40-60 income with the bank at
+zero: the T2 con already starts them; the lab's pull (its own 300 BP plus
+the nanos) takes the metal first. The constraint is the army/eco split under
+scarcity, not who holds the role.
+
+Same game, the defence side of it (his 09-21 report: their mexes are always
+better defended, ours lightly): towers per player at 16 min 9.2 (a third of
+them AA) to BARb's 15.9, defence metal 2.0k to 6.3k, no HLT to their 2.1.
+The defence role held quota 8-27 of the roled hands with 0-1 filled
+(`fell=59-125`: the protect want refused at execution, the role released,
+re-assigned next tick) -- so the hands stood roled to towers that were not
+placed while the mohos waited. Why the protect executions fall is the next
+instrument (`apex: prot-exec` streaks, `defsite` trace).
+
 ### The walled-plant move fired on a gantry 11% enclosed (2026-09-21)
 
 His Isthmus 8v8 (`matches/_engine`, 01:35): the seat's gantry #25347 stood
