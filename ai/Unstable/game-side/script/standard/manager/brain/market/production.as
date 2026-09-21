@@ -1,59 +1,41 @@
 namespace Market {
 
-// The best power-per-metal a factory can field, tier fades included -- the
-// line's quality against the enemy it faces. 10 s memo per factory def.
-array<float> gFacPPC;
-array<int>   gFacPPCAt;
-string gYieldLog = "";
-float FacBestPPC(int facDef)
+// Everything any standing plant of ours can build, as one list: the draw
+// runs over the team's catalogue, not one lab's, so a lab that offers only
+// the worse buy orders nothing rather than filling what the better lab left.
+array<int> gTeamCat;
+array<bool> gTeamCatMark;
+int gTeamCatFrame = -1;
+int gNextTeamPickLog = 0;
+const array<int>@ TeamCatalogue(int askingFac)
 {
-	if (int(gFacPPC.length()) <= Catalog::gDefCount) {
-		gFacPPC.resize(uint(Catalog::gDefCount + 1));
-		gFacPPCAt.resize(uint(Catalog::gDefCount + 1));
-		for (uint i = 0; i < gFacPPCAt.length(); ++i)
-			gFacPPCAt[i] = -999999;
-	}
-	if (ai.frame - gFacPPCAt[facDef] < 10 * SECOND)
-		return gFacPPC[facDef];
-	gFacPPCAt[facDef] = ai.frame;
-	float best = 0.f;
-	const array<int>@ pl = Catalog::BuildsOf(facDef);
-	for (uint i = 0; i < pl.length(); ++i) {
-		const int d = pl[i];
-		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
-			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
-			continue;
-		const float v = UnitPPC(d);
-		if (v > best)
-			best = v;
-	}
-	gFacPPC[facDef] = best;
-	return best;
-}
-
-// Metal per second a factory turns into its best unit: its own build power
-// plus the lathe on it, over that unit's build effort per metal.
-float FacMetalRate(CCircuitUnit@ f)
-{
-	const int fd = int(f.circuitDef.id);
-	const array<int>@ pl = Catalog::BuildsOf(fd);
-	float best = 0.f;
-	int bd = -1;
-	for (uint i = 0; i < pl.length(); ++i) {
-		const int d = pl[i];
-		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
-			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
-			continue;
-		const float v = UnitPPC(d);
-		if (v > best) {
-			best = v;
-			bd = d;
+	if (gTeamCatFrame == ai.frame)
+		return gTeamCat;
+	gTeamCatFrame = ai.frame;
+	gTeamCat.resize(0);
+	if (int(gTeamCatMark.length()) <= Catalog::gDefCount)
+		gTeamCatMark.resize(uint(Catalog::gDefCount + 1));
+	for (uint i = 0; i < gTeamCatMark.length(); ++i)
+		gTeamCatMark[i] = false;
+	// The asking lab is in the union whether or not the registry has it yet.
+	for (int fi = -1; fi < int(Factory::gFacUnits.length()); ++fi) {
+		int fd = askingFac;
+		if (fi >= 0) {
+			CCircuitUnit@ f = Factory::gFacUnits[uint(fi)];
+			if ((f is null) || (f.circuitDef is null))
+				continue;
+			fd = int(f.circuitDef.id);
+		}
+		const array<int>@ pl = Catalog::BuildsOf(fd);
+		for (uint i = 0; i < pl.length(); ++i) {
+			const int d = pl[i];
+			if (gTeamCatMark[d])
+				continue;
+			gTeamCatMark[d] = true;
+			gTeamCat.insertLast(d);
 		}
 	}
-	if ((bd < 0) || (Catalog::gBuildTime[bd] <= 1.f))
-		return 0.f;
-	const float bp = Catalog::gBuildPower[fd] + RingBPAt(f.GetPos(ai.frame));
-	return bp * Catalog::gCostM[bd] / Catalog::gBuildTime[bd];
+	return gTeamCat;
 }
 
 //------------------------------------------------------------------------------
@@ -652,7 +634,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	gNoOrder = "";
 	if (int(gNextProdRankOf.length()) <= Catalog::gDefCount)
 		gNextProdRankOf.resize(Catalog::gDefCount + 1);
-	const int prankUid = int(fac.circuitDef.id);
+	const int prankUid = 0;   // one list per team now, so one line a minute
 	const bool prankNow = (ai.frame >= gNextProdRankOf[prankUid]);
 	string prank = "";
 	// Production pays the E-flow discipline too: a factory pumping pawns
@@ -701,7 +683,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		return null;
 	}
 	const int fid = int(fac.circuitDef.id);
-	const array<int>@ prods = Catalog::BuildsOf(fid);
+	const array<int>@ prods = TeamCatalogue(fid);
 	// Each product priced, best value ordered. A constructor's gain: the
 	// tier-unique upgrade demand it unlocks, at DIMINISHING returns per con
 	// already serving (the binary version stopped at exactly one T2 con);
@@ -750,40 +732,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if (ecoGrowing && (EcoRoleRamp() <= 0.f)) {
 		armyGap = 0.f;   // ArmyTarget already carries the ramp past half the target
 		coverShare = 0.f;
-	}
-	// THE BETTER LINES SPEND FIRST. Every factory filled the whole army gap
-	// on its own, so a T1 lab kept turning out Hammers at full rate beside a
-	// T2 lab against an enemy that was all T2 (Carrot 1v1: 179 T1-lab orders
-	// in the last ten minutes at foe tier above1=0.94). This line is left the
-	// gap the better lines cannot spend within the fill window at their own
-	// build rate -- with one T2 lab that is a few hundred metal, which is what
-	// fodder is for; a big gap the T2 lab cannot fill is still T1's to fill.
-	// Coverage demand (cheap bodies) is not taken away: the better lines do
-	// not make it.
-	{
-		const float mine = FacBestPPC(fid);
-		float betterCap = 0.f;
-		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
-			CCircuitUnit@ f2 = Factory::gFacUnits[fi];
-			if ((f2 is null) || (f2.circuitDef is null) || (int(f2.id) == int(fac.id)))
-				continue;
-			const int f2d = int(f2.circuitDef.id);
-			if (FacBestPPC(f2d) <= mine)
-				continue;
-			betterCap += FacMetalRate(f2) * fillS;
-		}
-		if (betterCap > 0.f) {
-			const float coverGapKeep = armyGap * coverShare;
-			float left = armyGap - betterCap;
-			if (left < coverGapKeep)
-				left = coverGapKeep;
-			if (left < 0.f)
-				left = 0.f;
-			gYieldLog = " yield=" + int(armyGap - left) + " betterCap=" + int(betterCap);
-			armyGap = left;
-		} else {
-			gYieldLog = "";
-		}
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
@@ -884,16 +832,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// out once our own advanced air plant stands -- the same metal buys the
 	// advanced airframe. Builders and unarmed scouts keep flowing.
 	bool t1AirMute = false;
-	if ((PlantClass(fid) == PC_AIR) && (PlantTier(fid) == 1)) {
-		for (uint ad = 1; ad < gOwnCount.length(); ++ad) {
-			const int adi = int(ad);
-			if ((gOwnCount[ad] <= 0) || Catalog::gMobile[adi]
-				|| (Catalog::gBuildsList[adi].length() == 0))
-				continue;
-			if ((PlantClass(adi) == PC_AIR) && (PlantTier(adi) >= 2)) {
-				t1AirMute = true;
-				break;
-			}
+	for (uint ad = 1; ad < gOwnCount.length(); ++ad) {
+		const int adi = int(ad);
+		if ((gOwnCount[ad] <= 0) || Catalog::gMobile[adi]
+			|| (Catalog::gBuildsList[adi].length() == 0))
+			continue;
+		if ((PlantClass(adi) == PC_AIR) && (PlantTier(adi) >= 2)) {
+			t1AirMute = true;
+			break;
 		}
 	}
 	// Best power-per-cost this line can produce, for normalizing army bids.
@@ -993,6 +939,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
 			continue;
+		// Hands are this lab's own question; army is the team's.
+		if (Catalog::gBuilder[d] && !Catalog::Builds(fid, d))
+			continue;
 		// The def's own cap (behaviour.json "limit"): the Tick's screen axis
 		// out-prices every pawn, and its config says five.
 		// A screen class counts its recent dead against the limit too: the
@@ -1016,7 +965,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;
 		}
-		if (t1AirMute && !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
+		if (t1AirMute && Catalog::gFlyer[d] && (DefTier(d) <= 1)
+			&& !Catalog::gBuilder[d] && (Catalog::gPower[d] > 1.f))
 			continue;
 		// THE WING'S LOOK: an air scout bought for what seeing their economy
 		// adds to the first bomber's price (Air::LookGainFor). A second demand
@@ -1808,7 +1758,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
 			+ " gap=" + int(armyGap)
 			+ " flight=" + int(armyFlight0)
-			+ " n=" + candDef.length() + gYieldLog + prank);
+			+ " n=" + candDef.length() + prank);
 	}
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {
 		gNoOrder = "no-candidate";
@@ -1921,14 +1871,31 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 		}
 	}
+	// The brain's draw (decide.as): odds on the value ratio to the leader
+	// raised to apex_draw_sharp, so a buy the market rates three times worse
+	// is not one order in four.
+	float lead = 0.f;
+	for (uint li = 0; li < candV.length(); ++li)
+		if (candV[li] > lead)
+			lead = candV[li];
+	const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
+	array<float> tick;
+	float sumT = 0.f;
+	for (uint ti = 0; ti < candV.length(); ++ti) {
+		float t = candV[ti];
+		if ((lead > 0.f) && (sharp > 0.f) && (sharp != 1.f) && (t > 0.f))
+			t = lead * pow(t / lead, sharp);
+		tick.insertLast(t);
+		sumT += t;
+	}
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
 			+ uint(slot) * 2246822519;
 	h ^= (h >> 13);
-	float roll = float(h % 10000) / 10000.f * sumV;
+	float roll = float(h % 10000) / 10000.f * sumT;
 	uint pick = 0;
-	for (uint ci = 0; ci < candV.length(); ++ci) {
-		roll -= candV[ci];
+	for (uint ci = 0; ci < tick.length(); ++ci) {
+		roll -= tick[ci];
 		if (roll <= 0.f) {
 			pick = ci;
 			break;
@@ -1937,6 +1904,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	best = candDef[pick];
 	bestV = candV[pick];
 	bestGain = candGain[pick];
+	// The team drew something this lab does not make: this lab idles rather
+	// than making its own second choice.
+	if (!Catalog::Builds(fid, best)) {
+		gNoOrder = "team-pick:" + Catalog::Def(best).GetName();
+		if (ai.frame >= gNextTeamPickLog) {
+			gNextTeamPickLog = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: team-pick t=" + ai.teamId
+				+ " fac=" + fac.circuitDef.GetName() + " #" + fac.id
+				+ " drew=" + Catalog::Def(best).GetName()
+				+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
+				+ " lead=" + formatFloat(lead * 1000.f, "", 0, 2)
+				+ " cand=" + candDef.length() + " -> idle");
+		}
+		return null;
+	}
 	// Priced in the same currency; factory time is free while the line idles.
 	// OPPORTUNITY FLOOR: the draw compares a line's candidates only against
 	// each other, so a saturated line kept producing v=1.2 cons while

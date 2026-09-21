@@ -68,6 +68,7 @@ int RezFleeWindow()
 // further toward the enemy than our units' lane; with no lane there is
 // nothing to be in front of.
 int gRzFrontVeto = 0;
+int gRzVetoBlocked = 0;
 // The same refusals split by WHAT was refused and counted against what got
 // through, because the rez demand prices damaged units and wrecks as separate
 // streams and one lumped veto total cannot say which stream is unreachable.
@@ -179,6 +180,13 @@ bool RezSiteOk(const AIFloat3 &in site)
 	// one minute where it saw none.
 	if (Market::NearConDeath(site))
 		return false;
+	// Ground no builder could path to: the DLL marks a no-path target and
+	// this chain re-picked it every second (7,629 nopath by armrectr in four
+	// minutes of his Carrot 8v8, a task and a path query each).
+	if (Market::NearBlocked(site)) {
+		++gRzVetoBlocked;
+		return false;
+	}
 	// THE COVER BRANCH IS REVERTED, ON THE BATTERY. Letting a bot take work
 	// wherever our influence merely matched theirs -- docs/24's "heal units
 	// while they fight" read literally -- collapsed army from 11.7% to 5.6% of
@@ -756,8 +764,12 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	// our own units instead -- the area reclaim is the move order, and it eats
 	// whatever it finds on the way.
 	AIFloat3 station;
+	// A station no bot could path to is not walked to again for the mark's
+	// life (19,325 nopath by armrectr in one Carrot 8v8: the station sat
+	// across a cliff and every bot re-took the walk each second).
 	if (RezStationPos(unit, station) && !InEnemyReach(station)
-		&& (here.distance2D(station) > MedicReach()))
+		&& (here.distance2D(station) > MedicReach())
+		&& !Market::NearBlocked(station))
 	{
 		IUnitTask@ walk = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::LOW, station, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));

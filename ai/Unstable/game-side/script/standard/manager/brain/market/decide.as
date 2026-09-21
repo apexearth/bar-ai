@@ -88,6 +88,16 @@ int MemoTtl()
 		gMemoTtl = int(ai.GetTunable("apex_memo_ttl", TUNE_MEMO_TTL));
 	return (gMemoTtl > 1) ? gMemoTtl : 1;
 }
+// One more mex matters less the more income already stands, so the spot
+// answer is re-asked once per that many mexes' worth of time (apexearth
+// 2026-09-20); an executed claim still evicts it at once.
+int MemoTtlMex()
+{
+	const float spot = SpotM() * IncomeMult();
+	const float inc = aiEconomyMgr.metal.income;
+	const float n = (spot > 0.f) ? (inc / spot) : 1.f;
+	return MemoTtl() * int((n > 1.f) ? n : 1.f);
+}
 // A copy this old ALWAYS recomputes, on its own bounded budget. The stack
 // calls the memo slots in one fixed order, so energy+tech drained the whole
 // 2-per-frame budget on every election and protect served its frame-25
@@ -95,7 +105,10 @@ int MemoTtl()
 // protect run at 4.4-16 min depending on the game; the commander's never
 // ran at all -- which is why the first mexes stood naked for the tick).
 const int   MEMO_STARVED = 450;   // 15s
-const uint  MEMO_N = 8;
+const uint  MEMO_N = 9;
+// The mex slot keeps gMexOpen with its answer: a served copy must leave the
+// other proposers reading what the computation read.
+array<bool> gMemoMexOpen;
 array<array<int>@> gMemoAt;     // per slot: per-askerDef frame stamp
 array<array<Want@>@> gMemoW;    // per slot: the pristine cached answer
 // A starved copy that was ALREADY deferred once recomputes next time whatever
@@ -136,7 +149,9 @@ int MemoKey(int slot, CCircuitUnit@ unit)
 			+ (aiEconomyMgr.isEnergyFull ? 2 : 0);
 	if ((slot == 3) || (slot == 4) || (slot == 5))
 		k = k * 31 + gPfAt * 7 + Military::gFrontStamp;
-	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6)) {
+	if (slot == 8)
+		k = k * 31 + gLStamp;
+	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8)) {
 		if (gMemoCell <= 1.f)
 			gMemoCell = Brain::LightTowerRange();
 		const AIFloat3 p = unit.GetPos(ai.frame);
@@ -174,6 +189,7 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	if (slot == 4) return ProposeReclaimObsolete(unit);
 	if (slot == 6) return ProposeMexUp(unit);
 	if (slot == 7) return ProposePlant(unit);
+	if (slot == 8) return ProposeMex(unit);
 	return ProposeProtect(unit);
 }
 
@@ -242,6 +258,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoKindPos.resize(MEMO_N);
 		gMemoKey.resize(MEMO_N);
 		gMemoStride = Catalog::gDefCount + 1;
+		gMemoMexOpen.resize(uint(Catalog::gDefCount + 1));
 		for (uint s = 0; s < MEMO_N; ++s) {
 			array<int> a(uint(Catalog::gDefCount + 1), -30000);
 			array<Want@> ws(uint(Catalog::gDefCount + 1));
@@ -262,8 +279,10 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	// the per-frame prices need.
 	const int key = MemoKey(slot, unit);
 	if ((gMemoKey[slot][ud] == key)
-		&& (ai.frame - gMemoAt[slot][ud] < MemoTtl())) {
+		&& (ai.frame - gMemoAt[slot][ud] < ((slot == 8) ? MemoTtlMex() : MemoTtl()))) {
 		Perf::Note("memo.hit");
+		if (slot == 8)
+			gMexOpen = gMemoMexOpen[ud];
 		return WantCopy(gMemoW[slot][ud]);
 	}
 	if (gMemoFreshFrame != ai.frame) {
@@ -280,6 +299,8 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 			Perf::Note("memo.defer");
 			if (starved)
 				gMemoDeferred[slot][ud] = true;
+			if (slot == 8)
+				gMexOpen = gMemoMexOpen[ud];
 			return WantCopy(gMemoW[slot][ud]);
 		}
 		++gMemoStarvN;
@@ -287,6 +308,8 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	++gMemoFreshN;
 	Perf::Note("memo.miss");
 	Want@ fresh = MemoSlotCall(slot, unit);
+	if (slot == 8)
+		gMemoMexOpen[ud] = gMexOpen;
 	gMemoAt[slot][ud] = ai.frame;
 	gMemoKey[slot][ud] = key;
 	gMemoDeferred[slot][ud] = false;
@@ -449,7 +472,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 {
 	const double _t = Perf::T0();
 	Want@ w = null;
-	if (step == 0)       { @w = ProposeMex(unit);             Perf::Add("want.mex", _t); }
+	if (step == 0)       { @w = MemoPropose(8, unit);         Perf::Add("want.mex", _t); }
 	else if (step == 1)  { @w = MemoPropose(0, unit);         Perf::Add("want.energy", _t); }
 	else if (step == 2)  { @w = ProposeGeo(unit);             Perf::Add("want.geo", _t); }
 	else if (step == 3)  { @w = MemoPropose(7, unit);         Perf::Add("want.plant", _t); }

@@ -75,8 +75,22 @@ float gRzWorstS = 0.f;
 int gRzWorstId = -1;
 float gRzVetoFfSum = 0.f;
 array<int> gRzHeldBt(32, 0);
+// ONE BOT THINKS, ITS NEIGHBOURS FOLLOW (apexearth 2026-09-20): the job the
+// chain just chose is handed to every bot electing within the scan period
+// whose own search reach covers it, instead of each running the chain.
+IUnitTask@ gRzShared = null;
+int gRzSharedAt = -30000;
+AIFloat3 gRzSharedPos;
+int gRzHandOff = 0;
 IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 {
+	if ((gRzShared !is null) && !gRzShared.IsDead()
+		&& (ai.frame - gRzSharedAt <= REZ_WRECK_PERIOD)
+		&& (unit.GetPos(ai.frame).distance2D(gRzSharedPos) <= WRECK_SEARCH))
+	{
+		++gRzHandOff;
+		return gRzShared;
+	}
 	double _tR = Perf::T0();
 	IUnitTask@ t = RezzerComRescue(unit);
 	Perf::Add("rz.rescue", _tR);
@@ -91,6 +105,12 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 	if (t is null)
 		why = 7;
 	++gRzRule[why];
+	if (t !is null) {
+		CCircuitUnit@ tg = t.target;
+		gRzSharedPos = (tg !is null) ? tg.GetPos(ai.frame) : t.GetBuildPos();
+		@gRzShared = OnMap(gRzSharedPos) ? t : null;
+		gRzSharedAt = ai.frame;
+	}
 	if (InEnemyReach(unit.GetPos(ai.frame)))
 		++gRzPressed;
 	const int slot = ConSlot(unit);
@@ -132,7 +152,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 			+ " rescue=" + gRzRule[0] + " medic=" + gRzRule[1] + " salvage=" + gRzRule[2]
 			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " retire=" + gRzRule[8] + " repair=" + gRzRule[5]
 			+ " idleRule=" + gRzRule[6] + " none=" + gRzRule[7]
-			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto
+			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto + " blocked=" + gRzVetoBlocked + " handoff=" + gRzHandOff
 			+ " hurtOk=" + gRzOkHurt + "/" + (gRzOkHurt + gRzVetoHurt)
 			+ " groundOk=" + gRzOkGround + "/" + (gRzOkGround + gRzVetoGround)
 			// Whether the cover branch of RezSiteOk is deciding anything at all.
@@ -152,6 +172,8 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 		gRzGate = 0;
 		gRzPressed = 0;
 		gRzFrontVeto = 0;
+		gRzVetoBlocked = 0;
+		gRzHandOff = 0;
 		gRzOkHurt = 0;
 		gRzVetoHurt = 0;
 		gRzOkGround = 0;
