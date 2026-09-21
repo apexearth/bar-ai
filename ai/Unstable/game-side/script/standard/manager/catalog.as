@@ -360,18 +360,6 @@ const array<int>@ BuildsOf(int builderId)
 	return gBuildsList[builderId];
 }
 
-// Whether one builder def lists another def.
-bool Builds(int builderId, int defId)
-{
-	if (!ValidId(builderId))
-		return false;
-	const array<int>@ bl = gBuildsList[builderId];
-	for (uint i = 0; i < bl.length(); ++i)
-		if (bl[i] == defId)
-			return true;
-	return false;
-}
-
 // Builder def ids able to build the given def.
 const array<int>@ BuildersOf(int defId)
 {
