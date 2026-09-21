@@ -506,7 +506,17 @@ call; the strike target scan (`air/state.as`) uses it now. Any other reader of
 same way -- `ThreatFor`'s fallback in `sitesafety.as` treats it as a count on
 purpose. Not audited (2026-09-11): the readers in `army.as`, `coverage.as`,
 `guards.as`, `protect_fill.as`, `protect_senseprice.as` (`< 200.f` at line
-161 reads like metal), `safety.as`, `want_mex.as`.
+161 reads like metal), `safety.as`.
+
+`want_mex.as` audited 2026-09-21: `DeathWalk` -- his "the walk is the risk"
+gate -- compared the count against the walker's metal (110), so it needed 110
+visible enemy units on the road and `mexdiag` read `deathWalk=0` in every game
+it was ever in. In his Supreme Isthmus 8v8 that day the allies held every home
+spot, the only open ones lay behind the enemy army, and three teams walked 5-6
+cons each down the same road into it at thr 100-460 (every other check --
+`PickSpot`'s hot gate, the executor's `CanReachAtSafe`, `NearConDeath` -- reads
+the doorstep, not the road). It reads the threat map along the road now, at
+the hot gate's bar.
 
 ## S29 — An uncapped battery measures the CPU, not the tree
 

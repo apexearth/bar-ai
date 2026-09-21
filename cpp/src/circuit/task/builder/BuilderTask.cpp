@@ -34,6 +34,7 @@
 #include "AISCommands.h"
 #include "Log.h"
 #include <cstdlib>
+#include <limits>
 
 namespace circuit {
 
@@ -1321,10 +1322,20 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 		return;
 	}
 
+	// THE ROAD IS HELD TO THE DOORSTEP'S BAR. Every safety test above reads
+	// the site, and a walk through the enemy army to a spot behind it passed
+	// them all. The pathfinder skips squares above maxThreat, so a road hotter than
+	// our own guns' reach at the site has no path -- ApplyPath tells that
+	// apart from terrain. Defence walks into the threat it answers.
+	const bool roadFree = (buildType == BuildType::DEFENCE)
+			|| (buildType == BuildType::BUNKER)
+			|| (buildType == BuildType::BIG_GUN);
+	const float roadBar = roadFree ? std::numeric_limits<float>::max()
+			: std::max(cdef->GetPower(), std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(endPos)));
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			unit, circuit->GetThreatMap(),
-			startPos, endPos, range);
+			startPos, endPos, range, nullptr, roadBar);
 	pathQueries[unit] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -1350,46 +1361,96 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
 			unit->GetTravelAct()->SetPath(pPath);
 		}
-	} else {
-		// NO PATH AND NOT THERE: the travel step used to finish anyway and the
-		// build order went to the engine, which could not path either -- the
-		// builder stood with its task until the script's watch aborted it at
-		// 30 s and the next election sent it back (Frozen Ford: 85 of 99 such
-		// aborts on one con). The site is marked and the task dies here.
+		return;
+	}
+	if (query->GetMaxThreat() < std::numeric_limits<float>::max()) {
+		// Terrain or threat? Ask once more with no bar: a road that exists
+		// unbounded was refused for its heat.
 		CCircuitAI* circuit = manager->GetCircuit();
-		const AIFloat3& endPos = GetPosition();
+		CPathFinder* pathfinder = circuit->GetPathfinder();
 		const float range = unit->GetCircuitDef()->GetBuildDistance()
 				+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
-		if (utils::is_valid(endPos)
-			&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
-		{
-			// A FIXED SITE WALKS ON THE ENGINE'S PATH. Our sector pathfinder
-			// answered "no path" to mexes 190-390 elmo away whose reach test
-			// had passed (146 nopath armmex in one game), and the task died
-			// with the con standing short of the spot. The engine paths it;
-			// the stuck watch still ends a walk that never arrives.
-			if (IsFixedSite(buildType)) {
-				circuit->LOG("apex: nopath-engine %s by %s at=%.0f,%.0f dist=%.0f",
-						(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
-						unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
-						sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
-				if (unit->GetTravelAct() != nullptr) {
-					unit->GetTravelAct()->StateFinish();
-				}
-				return;
-			}
-			circuit->NoteBuildBlocked(endPos, buildDef);
-			circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
+		std::shared_ptr<IPathQuery> again = pathfinder->CreatePathSingleQuery(
+				unit, circuit->GetThreatMap(),
+				unit->GetPos(circuit->GetLastFrame()), GetPosition(), range);
+		pathQueries[unit] = again;
+		pathfinder->RunQuery(circuit->GetScheduler().get(), again, [this](const IPathQuery* q) {
+			this->ApplyPathUnbounded(static_cast<const CQueryPathSingle*>(q));
+		});
+		return;
+	}
+	OnNoPath(unit);
+}
+
+void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
+{
+	CCircuitUnit* unit = query->GetUnit();
+	if ((unit == nullptr) || (unit->GetTravelAct() == nullptr)) {
+		return;
+	}
+	if (query->GetPathInfo()->path.size() <= 2) {
+		OnNoPath(unit);
+		return;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	const AIFloat3& endPos = GetPosition();
+	const float range = unit->GetCircuitDef()->GetBuildDistance()
+			+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
+	if (!utils::is_valid(endPos)
+		|| (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) <= SQUARE(range + SQUARE_SIZE * 4)))
+	{
+		unit->GetTravelAct()->StateFinish();  // already there: no road to refuse
+		return;
+	}
+	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f",
+			(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
+			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+	circuit->NoteBuildBlocked(endPos, buildDef);
+	SetDeathNote("hot-road");
+	manager->AbortTask(this);
+}
+
+void IBuilderTask::OnNoPath(CCircuitUnit* unit)
+{
+	// NO PATH AND NOT THERE: the travel step used to finish anyway and the
+	// build order went to the engine, which could not path either -- the
+	// builder stood with its task until the script's watch aborted it at
+	// 30 s and the next election sent it back (Frozen Ford: 85 of 99 such
+	// aborts on one con). The site is marked and the task dies here.
+	CCircuitAI* circuit = manager->GetCircuit();
+	const AIFloat3& endPos = GetPosition();
+	const float range = unit->GetCircuitDef()->GetBuildDistance()
+			+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
+	if (utils::is_valid(endPos)
+		&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
+	{
+		// A FIXED SITE WALKS ON THE ENGINE'S PATH. Our sector pathfinder
+		// answered "no path" to mexes 190-390 elmo away whose reach test
+		// had passed (146 nopath armmex in one game), and the task died
+		// with the con standing short of the spot. The engine paths it;
+		// the stuck watch still ends a walk that never arrives.
+		if (IsFixedSite(buildType)) {
+			circuit->LOG("apex: nopath-engine %s by %s at=%.0f,%.0f dist=%.0f",
 					(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 					unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
 					sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
-			SetDeathNote("no-path");
-			manager->AbortTask(this);
+			if (unit->GetTravelAct() != nullptr) {
+				unit->GetTravelAct()->StateFinish();
+			}
 			return;
 		}
-		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
-			unit->GetTravelAct()->StateFinish();
-		}
+		circuit->NoteBuildBlocked(endPos, buildDef);
+		circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
+				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+				unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
+				sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+		SetDeathNote("no-path");
+		manager->AbortTask(this);
+		return;
+	}
+	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted
+		unit->GetTravelAct()->StateFinish();
 	}
 }
 

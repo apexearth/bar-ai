@@ -323,46 +323,25 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 	return res;
 }
 
-// The walk risk's spatial read, cached: GetEnemyCostAt is an engine sweep
-// (radius 900 over the enemy registry) and DeathWalk asked for it twice
-// per spot per election -- ~200 sweeps per mexup proposal at ~100 held
-// spots, which was the whole of want.mexup's ledger cost. A danger read
-// tolerates cell-and-3-seconds granularity; every other risk cache here
-// (StreamSurvival, RiskFill) already accepts the same contract.
-array<int> gEcKey(128, 0);
-array<int> gEcAt(128, -30000);
-array<float> gEcVal(128, 0.f);
-
-float EnemyCostNear(const AIFloat3& in p)
-{
-	const int key = (int(p.x) >> 8) * 4096 + (int(p.z) >> 8) + 1;
-	const uint slot = uint(key) & 127;
-	if ((gEcKey[slot] == key) && (ai.frame - gEcAt[slot] < 3 * SECOND))
-		return gEcVal[slot];
-	const float v = ai.GetEnemyCostAt(p, 900.f);
-	gEcKey[slot] = key;
-	gEcAt[slot] = ai.frame;
-	gEcVal[slot] = v;
-	return v;
-}
-
 // THE WALK IS THE RISK, not just the destination (apexearth, after a fresh
-// T2 con marched into the enemy army while 4 home mexes sat unupgraded):
-// known enemy mass along the corridor above the walker's own metal cost is
-// a death walk whatever the spot pays. The walker's value is the bar -- a
-// 100m con risks more than a 500m one, no fixed threshold anywhere.
+// T2 con marched into the enemy army while 4 home mexes sat unupgraded).
+// The road is read off the threat map -- the sensor that reads 100-460 at
+// every con death -- against the hot gate's own bar: ground our guns do not
+// reach that is hot for a builder is not walked through, whatever the spot
+// pays. (This compared GetEnemyCostAt, a visible-unit COUNT, against the
+// walker's metal: it never once fired, docs/25 S28.)
 bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	const float bar = Catalog::gCostM[int(unit.circuitDef.id)];
-	for (int s = 1; s <= 2; ++s) {
+	for (int s = 1; s <= 4; ++s) {
 		AIFloat3 p = here;
-		const float f = float(s) / 2.f;
+		const float f = float(s) / 4.f;
 		p.x += (dest.x - here.x) * f;
 		p.z += (dest.z - here.z) * f;
 		if (!OnMap(p))
 			continue;
-		if (EnemyCostNear(p) > bar)
+		const float hot = ai.GetThreatAt(p);
+		if ((hot > 1.f) && (hot > ai.GetAllyDefendInflAt(p)))
 			return true;
 	}
 	return false;
@@ -596,6 +575,11 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			continue;
 		if (LedgerFind(open) >= 0) {
 			++gMexClaimed;
+			continue;
+		}
+		// A hot road moves this hand to the next spot, not to no want.
+		if (DeathWalk(unit, aiEconomyMgr.GetMexSpotPos(open))) {
+			++gMexDeathWalk;
 			continue;
 		}
 		return open;
