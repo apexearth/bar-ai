@@ -200,6 +200,22 @@ now; ISSUES GANTRIES). The fixes of 09-12/13 did not close it. What is open:
   must not read satisfied while the bank sits full. Metal we are not spending
   is not economy we have built; the share is of what is USED.
 
+## The jammer ring -- the stall that buys more time than the same metal in army
+
+apexearth 2026-09-21: when we cannot match their army, the right choice can be
+to make a jammer, put a bunch of HLT turrets inside its ring, some nano turrets
+there too, and make sure we have radar; with T2, T2 defence goes in the ring.
+The best choice is the T3 turret -- that is what costs the ~4,000 metal -- with
+a bunch of crappy turrets in front of it to take the enemy fire, all under the
+jammer. Against a bonused enemy AI coming down with really tough stuff, that
+holds; it buys more time than 4,000 metal of army would.
+
+The situation it answers is the 8v8 ally's (ISSUES "the allies' mohos are
+metal-bound"): an army that stands at 1-6k against 12-22k, walks in, dies and
+is rebuilt from zero every ~5 minutes. The trigger is the same reading -- the
+enemy field in reach against our own -- that the class bar and the track record
+already take; the answer is a defence ring priced as time bought, not a unit.
+
 ## Allies keep each other's walkways -- one lane system for the team
 
 apexearth 2026-09-21, watching an Isthmus 8v8: we purposely leave certain

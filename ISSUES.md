@@ -563,6 +563,26 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### BAR's builder priority cannot carry the split: the shipped gadget barely throttles (2026-09-21)
+
+His proposal for the scarcity split: "everybody building this thing gets
+high priority, and the other people set themselves to low priority" -- the
+game's own `unit_builder_priority.lua` (CMD 34571, 0 = low). Built and
+measured: `CmdBARPriority(float)` bound to the script (kept), a pass that set
+every builder's flag from what it builds (economy frames high; towers,
+sensors, the labs and the nanos on them low), and `passive=`/`passiveBusy=`
+on `[BARAI_STATS]` (kept). The flag took (labs read passive) and the split
+did not move (Isthmus 8v8 seed 1: army 278k vs 280k, eco 82k vs 70k at 24 min),
+because the passive builders kept lathing: 17 of 26, 26 of 35 busy with the
+bank at 8-46 metal and pull at or over income. The gadget in game 2026.07.04
+computes the metal a passive builder may draw as `cur - max(inc*0.2,
+stor*0.01) - 1 + interval*(nonPassiveExpense + inc + rec - sent)/simSpeed`
+-- the non-passive builders' expense is ADDED as if it were income -- so a
+passive builder pauses only when the bank is under a fifth of a second of
+income. Synced Lua, so not ours to fix (multiplayer is the target). The pass
+was removed; the C++ stock toggle is back as it was. The split still has no
+lever but build-power pull.
+
 ### The 8v8 allies' mohos are metal-bound, not hand-bound (2026-09-21)
 
 Allies stand 2.4 mohos to BARb's 5.0 at minute 16 (live Isthmus 8v8). The

@@ -444,7 +444,7 @@ end
 -- originals in git history for why each counts what it counts.
 local function teamSnapshot(teamID)
 	local r = {
-		units = 0, builders = 0,            -- ownUnitCounts
+		units = 0, builders = 0, passive = 0, passiveBusy = 0, -- ownUnitCounts; passive = BAR low build priority
 		conT1 = 0, conT2 = 0, conMetal = 0, -- builderCounts (commanders excluded)
 		army = 0, armyCheap = 0,            -- armyValue (mobile, armed, non-builder)
 		facs = 0, facOrders = 0,            -- factoryQueueDepth
@@ -458,6 +458,15 @@ local function teamSnapshot(teamID)
 			local mobile = (ud.speed or 0) > 0
 			if ud.isBuilder then
 				r.builders = r.builders + 1
+				if Spring.GetUnitRulesParam(uid, "builderPriority") == 0 then
+					r.passive = r.passive + 1
+					-- A passive builder the gadget has throttled builds at 0: the
+					-- count of passive builders actually lathing says whether the
+					-- flag bites (Spring.GetUnitCurrentBuildPower, 0..1).
+					if (Spring.GetUnitCurrentBuildPower(uid) or 0) > 0.01 then
+						r.passiveBusy = r.passiveBusy + 1
+					end
+				end
 				if mobile and not (ud.customParams or {}).iscommander then
 					r.conMetal = r.conMetal + (ud.metalCost or 0)
 					if techOf(ud) >= 2 then r.conT2 = r.conT2 + 1
@@ -739,6 +748,8 @@ local function dump(reason, onlyTeam, atFrame)
 			parts[#parts + 1] = string.format("cmdsWin=%d", cmdWindow[teamID] or 0)
 			parts[#parts + 1] = string.format("ownUnits=%d", snap.units)
 			parts[#parts + 1] = string.format("ownBuilders=%d", snap.builders)
+			parts[#parts + 1] = string.format("passive=%d", snap.passive)
+			parts[#parts + 1] = string.format("passiveBusy=%d", snap.passiveBusy)
 			parts[#parts + 1] = string.format("commIdle=%d", commIdle[teamID] or 0)
 			parts[#parts + 1] = string.format("commSamp=%d", commSamp[teamID] or 0)
 			parts[#parts + 1] = string.format("commBuild=%d", commBuild[teamID] or 0)

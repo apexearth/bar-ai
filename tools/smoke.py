@@ -55,7 +55,7 @@ def main() -> int:
                             capture_output=True, text=True).stdout
     variant = args.ai.split(":")[1]
     for line in status.splitlines():
-        if line.strip().startswith(variant) and "DRIFTED" in line:
+        if (line.split() and line.split()[0] == variant) and "DRIFTED" in line:
             print(f"SMOKE FAIL: '{variant}' is DRIFTED -- deploy before smoking")
             return 1
 

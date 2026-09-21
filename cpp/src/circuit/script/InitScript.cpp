@@ -734,6 +734,15 @@ static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
 	unit->CmdRepeat(repeat);
 }
 
+// apex: BAR's builder priority (unit_builder_priority.lua): 0 = low, a
+// builder that only draws what the others leave; 1 = high. The script sets
+// it per builder from what the builder is building; CCircuitUnit skips a
+// repeat of the same value.
+static void CCircuitUnit_CmdBARPriority(CCircuitUnit* unit, float value)
+{
+	unit->CmdBARPriority(value);
+}
+
 // HOW MANY BUILD ORDERS THIS UNIT ALREADY HAS QUEUED, all defs or one.
 //
 // Without this every script-side view of a factory's queue is a guess. Nothing
@@ -1917,6 +1926,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
 	// producing instead of waiting to be handed each unit as a separate task.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdBARPriority(float)", asFUNCTION(CCircuitUnit_CmdBARPriority), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// Build orders straight to a factory, bypassing CRecruitTask entirely. The
 	// two schemes cannot share a factory: CRecruitTask::Finish() calls Cancel(),
 	// which CmdRemoves every build order still queued, so the first completion

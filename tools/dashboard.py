@@ -42,6 +42,7 @@ ANALYSIS_TOOLS = {
     "audit": ("audit.py", False),
     "diagnose": ("diagnose.py", False),
     "composition": ("composition.py", False),
+    "allies": ("allies.py", False),
     "tl": ("tl.py", False),
     "fight1v1": ("fight1v1.py", False),
     "trace_flow": ("trace_flow.py", False),
