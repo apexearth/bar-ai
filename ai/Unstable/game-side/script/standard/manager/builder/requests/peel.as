@@ -10,7 +10,7 @@ namespace Requests {
 // them to the idle task, which is a fresh election next frame). Only sites
 // with a standing nanoframe: walkers already re-elect on their own.
 int gPeeled = 0;
-int gNanoFedPeel = 0;   // sites emptied because the ring finishes them
+int gNanoFedPeel = 0;   // sites trimmed to the founder because the ring is on them
 int gNextPeelLog = 0;
 void PeelSurplus()
 {
@@ -34,15 +34,19 @@ void PeelSurplus()
 		int wantN = IsBigEnergy(t.buildDef)
 				? int(SiteWorkerCap(t.buildDef))
 				: int(FeedableCrew(t.buildDef));
-		// THE FOUNDER LEAVES TOO. A frame the turrets in reach finish on
-		// their own keeps no hand at all -- the join rung already refuses
-		// joiners on that test (nano-fed), but the con that broke ground
-		// stayed to the end, one election fewer per site (apexearth, on
-		// his own eco: "a ton of nano turrets helping me build everything";
-		// "~4 advanced constructors").
-		if ((wantN > 0) && NanoFed(t, crew.length(), 0.f, 0.f)) {
-			wantN = 0;
+		// THE FOUNDER NEVER LEAVES. A ring seen lathing the frame trims the
+		// crew to one hand, never to none: turrets work their nearest target
+		// and an unattended frame decays (apexearth 2026-09-20: "those nano
+		// turrets don't seem to give a crap").
+		if ((wantN > 1) && NanoFed(t, crew.length(), 0.f, 0.f)) {
+			wantN = 1;
 			++gNanoFedPeel;
+			const AIFloat3 fAt = t.GetBuildPos();
+			AiLog(Factory::T() + "apex: ring-trim " + t.buildDef.GetName()
+				+ " at=" + int(fAt.x) + "," + int(fAt.z)
+				+ " done=" + formatFloat(Progress(t), "", 0, 2)
+				+ " crew=" + crew.length()
+				+ " seen=" + int(RingSeen(t)));
 		}
 		int surplus = int(crew.length()) - wantN;
 		// A few at a time, largest ids first -- the same stampede guard the

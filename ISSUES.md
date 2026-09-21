@@ -563,6 +563,25 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### A crewless frame is only re-adopted by a same-def ask; it should be a priced want (2026-09-20)
+
+His Ring Atoll game `matches/20260921-045243`: a fusion emptied at 95% by the
+nano-fed peel, then during the e-stall at 25.3m both T2 cons founded a NEW
+fusion 150 elmos from it (`request new armfus inFlight=2`). The peel no longer
+empties a site (the founder stays, `peel.as`), and `Requests::Take` now hands a
+crewless frame of the asked def to the asker (`adopt-empty`). What is still
+missing: a frame nobody asks for by def -- an advanced solar rotting while
+the market elects fusions, a converter frame while it elects mexups -- competes
+in no election. Lane run `20260921-051803` (interim build): armadvsol at
+1376,6016 emptied at 96% decayed to 81% over 80 s, `adopt-empty` 0, because no
+con asked for an advsol in that window; `IdleFloor` would take it only when
+nothing else prices above the floor. The right shape is a finish want: the
+def's own gain over the REMAINING bill, so a 95% fusion is the cheapest energy
+on the map. `ValueOf` prices a def from scratch and would need a remaining
+fraction; not built. `apex: frame-stalled` and audit `no frame left to rot` are
+the instrument.
+
+
 ### THE OPENING ON ALTORED: T2 lab done a minute after BARb's, four fewer mexes at minute 4 (2026-09-17)
 
 Measured at --speed 10 (full speed stalls this map, docs/25 S34), +100, six

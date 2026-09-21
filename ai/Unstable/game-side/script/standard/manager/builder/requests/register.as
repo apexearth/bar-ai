@@ -153,6 +153,11 @@ float LiveSiteMeanCost()
 // fusion the cap allowed seven hands took 817 s, which is two -- and the
 // simulator's build times were wrong by that ratio. 0 until one has finished.
 array<int> gLiveStartAt;          // frame the nanoframe was first seen
+array<float> gLiveProg;           // progress last seen rising
+array<int> gLiveProgAt;           // ...and when
+array<float> gLiveSample;         // progress at the last rate sample
+array<int> gLiveSampleAt;
+array<float> gLiveRingBP;         // lathe SEEN on the frame beyond its crew
 array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
 array<float> gEffBPN(ai.GetDefCount() + 1, 0.f);
 // ...and for the reactor CLASS as a whole, so the first advanced fusion is
@@ -244,47 +249,28 @@ uint FeedableCrew(const CCircuitDef@ want)
 }
 
 // LATHE IS CREW (apexearth: "avoid having cons assist making nanos which are
-// near other nanos which can already assist it. This should help us get more
-// individual builders creating more nanos"). A standing nano finishes any
-// frame its reach covers -- the patrol auto-assist plus the C++ repair
-// fallback -- but only a mobile constructor can FOUND the next frame, so a
-// join here spends the one thing the cluster cannot supply and parks the
-// builder out of the auction for the whole build. Refused when the lathe
-// already on the site clears the remaining bill within the joiner's walk
-// plus apex_nano_fed_s; a fusion's long middle still takes hands, only the
-// covered tail sheds them. Founders are exempt: a site with no workers has
-// nobody to raise or guard the frame, whatever lathe stands nearby.
+// near other nanos which can already assist it"). A join spends the one thing
+// the ring cannot supply -- a hand that can FOUND the next frame -- so it is
+// refused when the ring already on the site clears the remaining bill within
+// the joiner's walk plus apex_nano_fed_s. The ring is what was SEEN lathing
+// the frame, never the turrets in reach: a patrolling turret works its
+// nearest target, and a lab's pad is nearer and never empties.
 bool NanoFed(IUnitTask@ cand, uint busy, float dist, float speed)
 {
-	if ((cand is null) || (busy == 0) || (cand.target is null))
+	if ((cand is null) || (busy == 0) || (cand.target is null) || (cand.buildDef is null))
 		return false;
 	const float fedS = ai.GetTunable("apex_nano_fed_s", TUNE_NANO_FED_S);
 	if (fedS <= 0.f)
 		return false;
-	const AIFloat3 where = cand.GetBuildPos();
-	if (!OnMap(where))
+	const float ring = RingSeen(cand);
+	if (ring <= 0.f)
 		return false;
-	float lathe = Market::NanoLatheReaching(where);
-	if (lathe <= 0.f)
+	const int bd = int(cand.buildDef.id);
+	if (!Catalog::ValidId(bd))
 		return false;
-	// One nano works one frame at a time: share the lathe across the frames
-	// standing in the same cluster, or five frames would each claim the same
-	// two turrets.
-	uint frames = 0;
-	for (uint i = 0; i < gLive.length(); ++i) {
-		IUnitTask@ t = gLive[i];
-		if ((t is null) || t.IsDead() || (t.target is null))
-			continue;
-		const AIFloat3 tp = t.GetBuildPos();
-		if (OnMap(tp) && (where.distance2D(tp) < 400.f))
-			++frames;
-	}
-	if (frames > 1)
-		lathe /= float(frames);
-	const float costM = (cand.buildDef !is null) ? cand.buildDef.costM : 0.f;
-	const float remainM = costM * (1.f - Progress(cand));
+	const float remainBt = Catalog::gBuildTime[bd] * (1.f - Progress(cand));
 	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
-	return remainM / lathe <= dist / v + fedS;
+	return remainBt / ring <= dist / v + fedS;
 }
 
 int gDupLog = 0;
@@ -317,6 +303,11 @@ void Register(IUnitTask@ task)
 	gLiveAt.insertLast(ai.frame);
 	gLiveStarted.insertLast(false);
 	gLiveStartAt.insertLast(-1);
+	gLiveProg.insertLast(0.f);
+	gLiveProgAt.insertLast(ai.frame);
+	gLiveSample.insertLast(0.f);
+	gLiveSampleAt.insertLast(ai.frame);
+	gLiveRingBP.insertLast(0.f);
 	if (IsBigEnergy(task.buildDef))
 		Market::ComBigEInvalidate();
 	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
@@ -394,6 +385,16 @@ void Forget(IUnitTask@ task)
 				}
 				if (i < gLiveStartAt.length())
 					gLiveStartAt.removeAt(i);
+				if (i < gLiveProg.length())
+					gLiveProg.removeAt(i);
+				if (i < gLiveProgAt.length())
+					gLiveProgAt.removeAt(i);
+				if (i < gLiveSample.length())
+					gLiveSample.removeAt(i);
+				if (i < gLiveSampleAt.length())
+					gLiveSampleAt.removeAt(i);
+				if (i < gLiveRingBP.length())
+					gLiveRingBP.removeAt(i);
 				gLiveStarted.removeAt(i);
 			}
 			gLive.removeAt(i);
@@ -466,6 +467,103 @@ float Progress(IUnitTask@ t)
 		return 0.f;
 	CCircuitUnit@ nano = t.target;
 	return (nano is null) ? 0.f : nano.GetHealthPercent();
+}
+
+// A framed task with no hand on it and no progress for STALL_S is starved,
+// whatever lathe stands in reach; an idle frame decays.
+const int STALL_S = 20;
+bool FrameStalled(IUnitTask@ t)
+{
+	if ((t is null) || (t.target is null))
+		return false;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] !is t)
+			continue;
+		if (i >= gLiveProgAt.length())
+			return false;
+		return (Workers(t) == 0) && (ai.frame - gLiveProgAt[i] >= STALL_S * SECOND);
+	}
+	return false;
+}
+
+// The crewless frame of this def nearest `spot`. The orphan register only
+// knows frames whose REQUEST died; a live task with no crew is not in it.
+IUnitTask@ EmptyFrameOf(const CCircuitDef@ want, const AIFloat3& in spot)
+{
+	if (want is null)
+		return null;
+	IUnitTask@ best = null;
+	float bestD = 0.f;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.target is null)
+			|| (t.buildDef is null) || (t.buildDef.id != want.id))
+			continue;
+		if ((Workers(t) > 0) || (Progress(t) >= 1.f))
+			continue;
+		if ((RingSeen(t) > 0.f) && !FrameStalled(t))
+			continue;   // the ring is on it and it is moving
+		const float d = OnMap(spot) ? spot.distance2D(t.GetBuildPos()) : 0.f;
+		if ((best is null) || (d < bestD)) {
+			@best = t;
+			bestD = d;
+		}
+	}
+	return best;
+}
+
+float RingSeen(IUnitTask@ t)
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] is t)
+			return (i < gLiveRingBP.length()) ? gLiveRingBP[i] : 0.f;
+	}
+	return 0.f;
+}
+
+const int RING_SAMPLE_S = 5;
+array<int> gNextStallLog;
+void StallSweep()
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.target is null) || (t.buildDef is null)
+			|| (i >= gLiveRingBP.length()))
+			continue;
+		const float p = Progress(t);
+		// Build power the frame received beyond its own crew: what the ring
+		// actually does here, as opposed to what stands in reach.
+		if (ai.frame - gLiveSampleAt[i] >= RING_SAMPLE_S * SECOND) {
+			const float secs = float(ai.frame - gLiveSampleAt[i]) / float(SECOND);
+			const int bd = int(t.buildDef.id);
+			const float gotBP = (p - gLiveSample[i]) * Catalog::gBuildTime[bd] / secs;
+			uint arrived = 0;
+			const float crewBP = ArrivedLathe(t, arrived);
+			const float ring = (gotBP > crewBP) ? gotBP - crewBP : 0.f;
+			gLiveRingBP[i] = 0.5f * gLiveRingBP[i] + 0.5f * ring;
+			gLiveSample[i] = p;
+			gLiveSampleAt[i] = ai.frame;
+		}
+		if (p > gLiveProg[i] + 0.002f) {
+			gLiveProg[i] = p;
+			gLiveProgAt[i] = ai.frame;
+			continue;
+		}
+		if (!FrameStalled(t))
+			continue;
+		if (gNextStallLog.length() < gLive.length())
+			gNextStallLog.resize(gLive.length());
+		if (ai.frame < gNextStallLog[i])
+			continue;
+		gNextStallLog[i] = ai.frame + 60 * SECOND;
+		const AIFloat3 at = t.GetBuildPos();
+		AiLog(Factory::T() + "apex: frame-stalled " + t.buildDef.GetName()
+			+ " at=" + int(at.x) + "," + int(at.z)
+			+ " done=" + formatFloat(p, "", 0, 2)
+			+ " idle=" + ((ai.frame - gLiveProgAt[i]) / SECOND)
+			+ " ring=" + int(Market::RingBPAt(at))
+			+ " seen=" + int(gLiveRingBP[i]));
+	}
 }
 
 // -- buildings of ours already standing half-finished -------------------------

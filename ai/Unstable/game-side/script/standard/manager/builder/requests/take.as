@@ -107,6 +107,22 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		}
 	}
 
+	// A FRAME OF THIS DEF STANDS WITH NOBODY ON IT: it is the answer, before
+	// any gate below can open a new hole. G_FRAME below knows only the
+	// ledger's orphans (request died), not a live task with no crew.
+	if ((unit !is null) && (bt != Task::BuildType::FACTORY)
+		&& (bt != Task::BuildType::MEX) && (bt != Task::BuildType::MEXUP))
+	{
+		IUnitTask@ empty = EmptyFrameOf(want, spot);
+		if ((empty !is null)
+			&& (Builder::ThreatFor(unit, empty.GetBuildPos()) <= Builder::CON_THREAT_VETO))
+		{
+			++gJoined;
+			Log(want, "adopt-empty");
+			return empty;
+		}
+	}
+
 	// A SECOND EXPENSIVE REACTOR IS NEVER FOUNDED WHILE THE FIRST STILL HAS
 	// ROOM FOR HANDS -- across DEFS. Not skippable by `parallel`: that flag is
 	// a caller saying "open another site", and this is the one question the

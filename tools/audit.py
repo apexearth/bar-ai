@@ -864,6 +864,30 @@ def check_commitments(text, rep):
         rep.add("PRIORITY", True, "finish before founding",
                 "no abandoned nanoframes")
 
+    # apexearth 2026-09-20: "we get a fusion to like 95% done, and then we
+    # just walk away from it". The line above only sees frames whose TASK
+    # died; a frame the peel emptied keeps its task, and an idle frame decays.
+    # `frame-stalled` is a live framed task with no hand and no progress for
+    # 20 s, logged once a minute per frame -- so lines are frame-minutes.
+    stalled = re.findall(
+        r"apex: frame-stalled ([a-z0-9]+) at=(-?\d+,-?\d+) done=([\d.]+) idle=(\d+)",
+        text)
+    if stalled:
+        by_site = defaultdict(lambda: [0.0, 0])
+        for d, at, done, idle in stalled:
+            k = f"{d}@{at}"
+            by_site[k][0] = max(by_site[k][0], float(done))
+            by_site[k][1] = max(by_site[k][1], int(idle))
+        worst = sorted(by_site.items(), key=lambda kv: -kv[1][1])[:4]
+        big = [k for k, v in by_site.items() if v[0] >= 0.5]
+        rep.add("PRIORITY", not big, "no frame left to rot",
+                f"{len(by_site)} frame(s) stood crewless with no progress, "
+                f"{len(big)} past half built; worst "
+                + " ".join(f"{k}:{v[0]:.2f}@{v[1]}s" for k, v in worst))
+    else:
+        rep.add("PRIORITY", True, "no frame left to rot",
+                "no crewless frame stalled (needs the frame-stalled line)")
+
 
 def check_ledger(text, rep):
     """The commitment ledger holds truth: drift means a missed event, an

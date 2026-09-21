@@ -182,7 +182,7 @@ bool WorthJoiningSite(IUnitTask@ cand, float dist, float speed = 0.f,
 	uint arrived = 0;
 	float lathe = ArrivedLathe(cand, arrived, dist);
 	if (cand.target !is null)
-		lathe += Market::RingBPAt(cand.GetBuildPos());
+		lathe += RingSeen(cand);
 	if (lathe <= 0.f)
 		return true;
 	const float b = (handBP > 0.f) ? handBP : lathe / float((arrived > 0) ? arrived : 1);
@@ -312,8 +312,7 @@ bool SitesSaturated(const CCircuitDef@ want)
 			// next one waited (seat: 7 reactors in 26 min, take.full x805).
 			if (t.target !is null) {
 				uint arrived = 0;
-				const float lathe = ArrivedLathe(t, arrived)
-						+ Market::RingBPAt(t.GetBuildPos());
+				const float lathe = ArrivedLathe(t, arrived) + RingSeen(t);
 				const float lat = StartLatencyS();
 				if ((lathe > 0.f) && (lat > 1.f)) {
 					const int bd = int(has.id);
