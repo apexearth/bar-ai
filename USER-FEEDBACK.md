@@ -26,6 +26,19 @@ lines of quotes.
   gantry case seen yet.
 - On big 8v8 maps (Carrot Mountains) he sees no eco player (2026-09-20).
   Under measurement.
+- The 8v8 allies never scale: the eco seat does its role and supports the
+  team, the other seven fall behind BARb's players all game and do nothing
+  useful with unlimited money (2026-09-21, Isthmus 8v8). Measured: the seven
+  reach a third of BARb's income by minute 16 in every 8v8 of the day; the
+  first six minutes on a full bank (fixed 09-21, `HandsShort`), then the
+  same army metal as BARb on a third of the economy (min 8-16: army 45% of
+  spend to their 30%, eco 16% to their 28%) -- under scarcity the split
+  between the lab and the eco hands is decided by build-power pull, not by
+  any price. `tools/allies.py`. The split is his to rule on; open.
+- Air labs idle with unlimited money and many nano turrets; make longer
+  queues so the line never runs out (2026-09-21, fourth report). Found and
+  built 09-21 (`RedrawFor`, TODO "Never an idle factory"): seat lines empty
+  46% -> 22% of snapshots. Unverified by him.
 - At 1,000 m/s no basic converter should be started; at 32k E/s income with
   5k pulled, advanced converters should be going up in numbers. Open until a
   watched game shows it (ISSUES CONVERTERS, GANTRIES).
@@ -95,6 +108,9 @@ lines of quotes.
 
 ## Base layout
 
+- Allies block each other's walkways: we leave ground open to walk through
+  and an ally builds in it; one lane system for the whole team
+  (2026-09-21). TODO "Allies keep each other's walkways"; not built.
 - Big builds go where the nano turrets are; that decides double-speed
   building. Built (densest ring, 09-14) -- unverified by him.
 - Grid snapping, raised again 09-16 (third time): same-size buildings must
