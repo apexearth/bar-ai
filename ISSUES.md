@@ -397,6 +397,24 @@ independently; the census and their corrections:
   Snipers. We are answering their T2 heavies with T1 and light T2 while
   they build the heavies; the record's class bar cannot see it because it
   ranks a Hound against other Hounds.
+- THE RECORD CANNOT BITE, and two arms proved it. (a) Settling the matrix
+  METAL FOR METAL ON DEATHS instead of on damage -- his 09-16 ruling taken
+  literally, and the defect it answers is real (the record read Hound
+  1.19-1.46 while the tournament exchange was 0.72, because damage a
+  repair pad undoes was still credited): 5-11, every type's multiplier
+  still inside 0.85-1.27, trade 1.72:1 against us. (b) The reason: the
+  prior is `apex_record_prior` (10) times the unit's COST IN METAL on both
+  sides of the ratio -- 2,850 metal for a Hound -- which swamps a game's
+  real exchange, so every multiplier sits at ~1.00 all game. Dropping it
+  to 2 spread them only to 0.82-0.94 and read 2-14, trade 1.94:1. Both
+  reverted. If the record is meant to steer composition it needs a prior
+  in the units of the evidence (a few fights), not ten unit-costs.
+- So the 12-24 minute trade is NOT fixable through the unit-worth model as
+  it stands. What is left untried: the plants themselves (we build 1.94
+  T2 bot labs and 0.25 vehicle plants per game, they 1.19 and 1.12, and
+  their Fatboys/Bulldogs are what kill our Hounds), and static defence
+  (they spend 21.9k to our 12.2k on army+defence structures 12-24 min,
+  22% of theirs on Annihilators).
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
