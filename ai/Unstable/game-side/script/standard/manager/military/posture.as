@@ -532,7 +532,12 @@ void UpdateLanePos()
 			guns = chokeHold;
 			haveGuns = true;
 		}
-		if (haveGuns && (ForwardFraction(lane) > ForwardFraction(guns)))
+		// Our own perimeter is never "forward of our guns": the front is
+		// where our holdings end (docs/24), and the forward mexes are
+		// holdings. Pulled back to the rim towers the army stood at 0.18
+		// while every spot past 0.3 went to the enemy; the pull-back keeps
+		// its meaning for the fallback lane, which is a guess at a front.
+		if (haveGuns && !onFront && (ForwardFraction(lane) > ForwardFraction(guns)))
 		{
 			lane = guns;
 			if (!gBehindGuns) {
