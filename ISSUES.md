@@ -356,6 +356,15 @@ independently; the census and their corrections:
   lab's queue is 64% combat; ours 45%. The early rez bots are the medic
   share of the squad doctrine bought ahead of any army; that and the lab
   rate (energy pacing) are the two remaining levers, both his.
+- The medic share without the round-up (the next rez bot only when 12% of
+  the army covers it) was inert too (3-13, 4-min army 1107). What is left
+  is one number: at 4 min their labs have each produced 14.7 units to our
+  9.4, with equal cons, equal nanos on average and equal energy income; a
+  100-BP lab cannot make 14.7 units in 240 s after three constructors, so
+  theirs runs at 2-3x nameplate in minutes 0-4 and ours at nameplate. The
+  next step is an instrument, not a change: per-lab units and buildtime
+  per minute, both sides, from [BARAI_DUTY]/[BARAI_ARMY], to say whether
+  it is nano timing, con time on the factory or the resource throttle.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
