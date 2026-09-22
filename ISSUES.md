@@ -335,6 +335,19 @@ independently; the census and their corrections:
   + 4.2 solars) while its commander lathes the factory. The opening lever
   is energy that keeps pace with two labs, then the assist gate opens by
   itself.
+- Third try, also inert (4-12, hands on the plant 0.05): the guard's own
+  `CountQueued <= 0` gate refused a working lab (the read lags sends and
+  the line orders one unit at a time; fixed to read the line's pending
+  ledger), and with gain + held stint restored the commander's guard still
+  never bid in minutes 1-3 -- `isAssistRequired` is false while the energy
+  stalls, and that gate is right (build power on an E-starved lab makes
+  nothing). What decides the 4-min army (2.1k vs 1.2k) is the lab's
+  effective build rate: 28% of BARb's con-time is on its factory, 5% of
+  ours, and our con floor spends the lab's first 600 metal on three cons
+  that then go to nanos, mexes and towers. The lever is the opening energy
+  (the stall hoist fires at 1.0, 1.2, 2.1 min every game) and cons that
+  lathe the lab before they leave it -- BARb's opener interleaves builder,
+  raider, builder, raider.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
