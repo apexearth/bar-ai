@@ -99,12 +99,16 @@ void CBGuardTask::Update()
 			manager->AbortTask(this);
 			return;
 		}
-	} else if ((vip == nullptr) || (vip->GetTask() != vipTask)) {
+	} else if ((vip == nullptr)
+		|| (vip->GetCircuitDef()->IsMobile() && (vip->GetTask() != vipTask)))
+	{
 		// A guard on a CONSTRUCTOR was priced for the job it was raising;
 		// when that con moves to its next job the assist follows it across
 		// the base for the rest of the stint (apexearth 2026-09-14: "once we
 		// start to guard a constructor, we rarely consider stopping that
-		// guard action"). The job ending ends the guard.
+		// guard action"). The job ending ends the guard. A FACTORY's job is
+		// producing and its task rolls over with every unit it finishes, so
+		// the same test cut every plant assist to one unit's build time.
 		manager->AbortTask(this);
 		return;
 	}
