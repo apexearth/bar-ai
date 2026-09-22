@@ -310,6 +310,13 @@ independently; the census and their corrections:
   Fatboys at 660-760. Damage does not convert to kills (they absorb 10-12
   damage per metal lost, we 7.6-8.7). The track record reads Hound 1.19-1.46
   by damage dealt, blind to damage repaired away.
+- THE BASELINE, measured at the same setting as everything else and not
+  before (2026-09-22, `c3-pre-session-s5-16`): 287a6e73, the tree that was
+  on his slot when the night began, reads 1-15 at pinned --speed 5 with
+  six workers. The night's committed tree (e72b8775) reads 6-10 there.
+  That is the only honest comparison of the two, and it is the one that
+  says the session bought something: 4-min army 472 -> 1250, 8-min mexes
+  6.2 -> 6.6 against their 9-10, 12-min income 62 -> 75.
 - THE SIM SPEED IS PART OF THE RESULT. One worker runs ~15x, eight ~5.6x,
   pinned `--speed 5` with six ~4.4x. BARb's opening is far stronger at
   honest speed (2.1k army and 9.4 mexes at 8 min vs 5.2k/6.9 at 15x); his
