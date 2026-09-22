@@ -236,7 +236,33 @@ def spread_starts(rect: dict, per_side: int, boxes: str, starts, size):
     b = rect.get("StartRectBottom", 1.0) * h
     lateral = (lambda p: p[1]) if boxes in ("lr",) else (lambda p: p[0]) if boxes == "tb" \
         else (lambda p: p[0] - p[1])
-    inside = sorted((p for p in starts if l <= p[0] <= r and t <= p[1] <= b), key=lateral)
+    # A map start on this box's side of the map but just outside the box is
+    # clamped in, not dropped: Glacier Pass's second right start sits at
+    # x=0.77, so a 0.2 box lost it and the filler put both right players in
+    # the upper half while the left pair spanned the map.
+    cx, cz = w / 2.0, h / 2.0
+    bx, bz = (l + r) / 2.0, (t + b) / 2.0
+    inset = 64.0
+
+    def own_side(p):
+        if boxes == "lr":
+            return (p[0] < cx) == (bx < cx)
+        if boxes == "tb":
+            return (p[1] < cz) == (bz < cz)
+        return l <= p[0] <= r and t <= p[1] <= b
+
+    def clamp(p):
+        return (min(max(p[0], l + inset), r - inset), min(max(p[1], t + inset), b - inset))
+
+    # Starts already inside the box first, so a clamped one never displaces a
+    # real one; a clamped start landing on a kept one is dropped.
+    kept = []
+    for p in sorted((p for p in starts if own_side(p)),
+                    key=lambda p: (clamp(p) != (p[0], p[1]), lateral(p))):
+        c = clamp(p)
+        if all(((c[0] - k[0]) ** 2 + (c[1] - k[1]) ** 2) ** 0.5 > 600 for k in kept):
+            kept.append(c)
+    inside = sorted(kept, key=lateral)
     if len(inside) >= per_side:
         # Evenly spaced picks along the lateral order.
         idx = [round(i * (len(inside) - 1) / max(per_side - 1, 1)) for i in range(per_side)]
