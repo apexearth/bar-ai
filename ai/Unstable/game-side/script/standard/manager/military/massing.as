@@ -417,7 +417,13 @@ float HoldNeedM()
 {
 	if (!Builder::gHomeSet)
 		return 0.f;
-	float need = ai.GetEnemyCostAt(Builder::gHomePos, Builder::BASE_DANGER_DIST);
+	// Group METAL: GetEnemyCostAt is a unit count.
+	float need = 0.f;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		if (aiEnemyMgr.GetEnemyGroupPos(i).distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST)
+			need += aiEnemyMgr.GetEnemyGroupCost(i);
+	}
 	// BUILDINGS DYING AT HOME ARE THE FORCE WE CANNOT SEE: the enemy cost
 	// read 5 while Rockos and Mavericks killed the T2 lab and eleven
 	// generators at 470 elmos from home (the raiders had no LOS entry),

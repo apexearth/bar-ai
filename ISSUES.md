@@ -292,6 +292,51 @@ escort loses to the pawns that do most of the killing).
 Raid blind-target + scouts on the intel gap, 96 paired games: inert on
 their mexes (7.7 -> 7.7 at minute 4) and ours; +220 standing army metal.
 
+Full length with the escort floor (`t30-escort-s5-16`, speed 5): 3-13. A
+mex lead at minute 4 in 7 of 16, but it does not survive to minute 6
+(t010 +4 -> -1, t008 +2 -> -2), and a lead at 4 won 2 of 7.
+
+### GLACIER PASS FAVOURS THE LEFT BOX, FOR BOTH AIs (2026-09-22)
+
+Minute-4 mexes by our start box (96 openloop games, and 48 full games):
+from the LEFT we have 7.0 against their 6.8; from the RIGHT 5.4 against
+their 8.7. Whoever starts left gains ~1.7 mexes. Full games: 6/24 from the
+left, 0/24 from the right. So the "minute-4 gap" was a box effect; on
+equal footing we are level on mexes, and the left-box losses (18 of 24)
+are lost with mex parity and ~700 less army at minutes 4 and 6.
+`scratchpad bybox.py` is the read; read L and R separately from now on.
+
+Defence-army fix (T2 switch keeps our share of their shown army; danger
+and hold read group metal), 16 full games: 1-15 (control 3-13, not
+separable at n=16). Home structures lost min 4-14 in losses 6,150 -> 4,400.
+
+### THE LEAD IS LOST AT HOME, MINUTES 4-14 (2026-09-22)
+
+Same batch. Metal of our finished STRUCTURES lost on our own ground
+(f < 0.3), minutes 4-14, per game: losses ~6,150, wins ~950. BARb in our
+losses loses ~2,770 of its own. Victims: the T2 lab (906/game), solars,
+nano turrets, advanced solars, cons, winds, mexes. Attackers are their main
+T1 army (warrior 19%, rocketeer 13%, pawn 12%, fido 10%, hammer 10%), not
+raiders. t014: ahead 8-6 on mexes at minute 6; at minute 8 our army is at
+f 0.53 while 1,450 metal dies at home, then 2,865 at home by minute 10.
+docs/24 already says "if our base is being pushed, defence is the priority".
+
+Mechanism (diagnosis agent, verified in code): our army is at home and
+loses there, 1.6:1 on our ground. It is too small because the T2 switch
+zeroed the army target from frame 0 for every non-seat player (a 2v2 has
+no seat): `targets army=X/0` in 581 of 700 lines, `nanowant army=0.0`
+2,448 of 2,450. His 2026-09-21 ruling was "enough army for a normal
+defence, THEN stop"; the first half was never built. The valve back
+(EcoDangerNear) compared `GetEnemyCostAt` -- a UNIT COUNT -- with 250
+METAL, so it never armed (637 `on`, 0 `danger`). HoldNeedM read the same
+count (needM 23-150 while foeMass averaged 8,286). Fixed together
+2026-09-22: switch target = our share of their shown army, capped at the
+full target; both readers use enemy group metal.
+
+Still reading the count as if it were metal: guards.as WorkerEnemyM (escort
+sizing), coverage.as:715, protect_fill.as:513, protect_senseprice.as:43/176,
+safety.as:261, and two more with a 250 bar near home.
+
 ### THE 2v2 IS DECIDED BY MINUTE 4, AND MINUTE 4 IS EXPANSION (2026-09-22)
 
 His rule that produced it: "analyze each game minute by minute rather than
