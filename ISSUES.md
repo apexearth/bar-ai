@@ -298,6 +298,11 @@ the ETA ladder itself picks the T2 lab over the spot (`eta-pick tech:
 armalab eta=425 over mex:armmex eta=486`). 73 of 80 games start T2 before
 minute 6.
 
+The predictor holds inside a single arm as well as across them: in the
+feed-bounded-walk arm (t30, 2-14) the two games we won were +3.0 mexes at
+minute 4 and the fourteen we lost were -1.5; every game where we were
+behind at minute 4 was a loss (0 of 9).
+
 TARGET for the next session, stated as a number: +1.5 mexes by minute 4.
 The instrument is `runtime/mex4_vs_result.py` (win rate by minute-4 mex
 lead) and `tools/perminute.py` on one win and one loss.
