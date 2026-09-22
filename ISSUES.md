@@ -373,6 +373,19 @@ independently; the census and their corrections:
   (`defsite`/`site.*` gates, DefObsoleteOnArrival and the T1-tower refusal
   at protect_want.as:475-495 are uncounted `continue`s), not at pricing.
   Reverted.
+- THE MINUTE 2-4 STALL IS THE COMMANDER'S LEASH, and it is mine: after
+  the radial half-leash (e72b8775) `apex: mexdiag` reads comFar=63 refused
+  spot claims per sample in minutes 2-4, more than every other mex
+  refusal combined (priced 7.1, noOpen 2.9, claimed 2.2, deathWalk 1.5),
+  and our claims in that window are 0.29 a player against BARb's 2.8.
+  He is the biggest lathe we own there. Widening the WORK radius back to
+  the full leash (the chase keeps its own 0.5-leash bound in safety.as)
+  ran 3 of 16 games before the batch was stopped for system memory:
+  mexes at 8 min 6.1 -> 7.7 and at 12 min 6.1 -> 9.3, army at 4 min 1974
+  against their 1817 (ahead for the first time all night), and 0-3 with
+  9.3k of losses in the 8-12 bucket. Promising and NOT measured -- the
+  change is reverted and the arm needs re-running when the machine is
+  free. This is the first candidate that moved the minute-4 wall at all.
 - NOR IN THE ELECTION MIX. The `metalfirst` assist hoist takes 29% of
   constructor elections and sits above the draw, so it also outranks the
   ladder's spot claim; letting the claim win when the ladder's own first
