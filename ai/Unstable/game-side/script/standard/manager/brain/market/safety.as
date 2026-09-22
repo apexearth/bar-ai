@@ -307,14 +307,27 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			const float stake = StakeAt(gp, reach);
 			if (stake <= 0.f)
 				continue;
+			// Half the leash forward is where his claims stop (ComFar), so
+			// it is where his chases stop too: a lone Pawn 2,646 out was
+			// worth a 141 s walk by this test, and the base stood empty.
 			if (ComFar(gp) && (!Builder::gHomeSet
-				|| (gp.distance2D(Builder::gHomePos) > leash + reach)))
+				|| (gp.distance2D(Builder::gHomePos) > 0.5f * leash + reach)))
 				continue;
 			const float gStr = EnemyGroupStrength(gi);
 			if ((tier >= 2) && (!heavyOk || (gStr > mine)))
 				continue;
 			if ((tier < 2) && (!t1Ok || (lastCom && (gStr > mine))))
 				continue;
+			// A FIGHT HE LOSES IS A TRADE, and the trade has to pay: what
+			// he kills before he falls (Lanchester's square law on the two
+			// strengths) or what his walk saves must be worth more than he is.
+			if ((tier < 2) && !lastCom && (gStr > mine) && (mine > 0.f)) {
+				const float rr = mine / gStr;
+				const float killed = 1.f - sqrt(1.f - rr * rr);
+				const float him = Catalog::gCostM[int(unit.circuitDef.id)];
+				if ((killed * aiEnemyMgr.GetEnemyGroupCost(gi) < him) && (stake < him))
+					continue;
+			}
 			// Coming at us, or leaving: a group walking away is let go.
 			const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
 			AIFloat3 toMe = here - gp;
@@ -352,7 +365,10 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			const float closing = spd + bestApp;
 			const float tripS = ((spd > 1.f) && (closing > 1.f))
 					? (bestD / closing + bestD / spd) : 1e9f;
-			const float theirs = bestCost + bestDpsM * tripS;
+			// They cannot destroy more than is in their reach, however long
+			// the walk: unbounded, a far group read as the richer target.
+			const float denied = bestDpsM * tripS;
+			const float theirs = bestCost + ((denied < bestStake) ? denied : bestStake);
 			const float worthIt = Wage() * tripS;
 			if (theirs > worthIt) {
 				// A TASK, NOT A MOVE ORDER. CmdMoveTo from here was overridden by

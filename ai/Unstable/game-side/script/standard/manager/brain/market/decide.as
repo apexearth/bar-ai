@@ -780,9 +780,12 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	// instead of three. See eta.as; CAT_PRODUCE stays out of the merge.
 	array<float> catV(CAT_N + 1, -1.f);   // >=0 overrides a ticket's weight
 	gDrawLadderTech = -1;
+	gDrawLadderMex = -1;
 	if (EtaOn()) {
 		int pick = EtaEcoPick(ranked);
 		if (pick >= 0) {
+			if (ranked[pick].kind == WK_MEX)
+				gDrawLadderMex = pick;
 			for (int c = 0; c < CAT_N; ++c) {
 				if (EtaMergedCat(c))
 					catBest[c] = -1;
@@ -929,6 +932,8 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 }
 
 int gTechNotDrawnAt = 0;
+int gDrawLadderMex = -1;    // the ranked index the ladder chose as a spot claim, this draw
+bool gDrawLadderTaken = false;
 int gDrawLadderTech = -1;   // the ranked index the ladder chose as tech, this draw
 bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFrame)
 {
@@ -936,6 +941,26 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	array<int> catBest;
 	array<float> wt;
 	const float sumV2 = DrawWeights(ranked, catBest, wt);
+	gDrawLadderTaken = false;
+	// AN OPEN SPOT IS NOT SAMPLED EITHER (the plan: a rung is reached when
+	// the cheaper growth beneath it is exhausted -- spots taken). The ladder
+	// named the claim as the economy's first move and the draw then handed
+	// the hand to a tower or a lathe nine times in ten: 1.25 mexes per
+	// player in minutes 2-10 against BARb's 3.7, the spots gone to them.
+	// A constructor's job; the commander keeps his leash and his draw.
+	if ((gDrawLadderMex > 0) && (gDrawLadderMex < int(ranked.length()))
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	{
+		Want@ claim = ranked[uint(gDrawLadderMex)];
+		ranked.removeAt(uint(gDrawLadderMex));
+		ranked.insertAt(0, claim);
+		gDrawLadderTaken = true;
+		return true;
+	}
+	if ((gDrawLadderMex == 0) && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+		gDrawLadderTaken = true;
+		return true;
+	}
 	if (sumV2 > 0.f) {
 		uint h2 = uint(atFrame) * 2654435761 + uint(unit.id) * 40503 + salt * 97;
 		h2 ^= (h2 >> 13);
@@ -1671,18 +1696,31 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// over many elections; the one election that unlocks the con floor and
 	// every unit lost the roll twice at 60:40 and the lab came a minute
 	// after theirs, into an energy stall. While no plant stands or is
-	// ordered, a plant that is the argmax is taken.
+	// ordered, a plant anywhere in the list is taken: every target holds
+	// army, and no army arrives through a tower, so the plant's ETA to any
+	// of them is the shortest whatever the per-instant ranking says. Only
+	// the panics above outrank it.
 	bool firstPlant = false;
-	if ((ranked.length() > 0) && (ranked[0].kind == WK_PLANT)
+	if (!aaPanic && !superPush && !coverPush && (ranked.length() > 0)
 		&& (Factory::gFacUnits.length() == 0) && !AnyPlantInFlight())
 	{
-		firstPlant = true;
-		why = "firstplant";
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_PLANT)
+				continue;
+			if (ri > 0) {
+				Want@ pw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, pw);
+			}
+			firstPlant = true;
+			why = "firstplant";
+			break;
+		}
 	}
 	const double _tDraw = Perf::T0();
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
-			why = "draw";
+			why = gDrawLadderTaken ? "ladder" : "draw";
 	Perf::Add("dec.draw", _tDraw);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;

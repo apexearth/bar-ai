@@ -447,42 +447,48 @@ void CRetreatTask::Update()
 		// apexearth: "commander ai seems to break at some point after
 		// losing some stuff"). Enemy influence and unit power are the same
 		// currency (CInfluenceMap::AddStaticArmed writes GetPower()).
+		// The influence field is presence, painted map-wide by a big army,
+		// so it never drops below him once his base has fallen. Reach is the
+		// threat map -- what can actually hit this cell -- so that is what
+		// holds him and what he steps out of.
 		const float comPower = cdef->IsRoleComm() ? circuit->GetThreatMap()->GetUnitPower(unit) : 0.f;
 		const float safeInfl = std::max(INFL_EPS, comPower);
-		const float inflHere = circuit->GetInflMap()->GetEnemyInflAt(unit->GetPos(frame));
+		const AIFloat3 herePos = unit->GetPos(frame);
+		const float inflHere = circuit->GetInflMap()->GetEnemyInflAt(herePos);
+		const float threatHere = cdef->IsRoleComm()
+				? circuit->GetThreatMap()->GetThreatAt(unit, herePos) : 0.f;
+		const bool comHeld = cdef->IsRoleComm() && (threatHere > 0.f) && (inflHere >= safeInfl);
 		if (cdef->IsRoleComm() && (frame >= comHoldLogAt + FRAMES_PER_SEC * 30)) {
 			comHoldLogAt = frame;
-			circuit->LOG("apex: com-retreat-hold t=%i hp=%.2f infl=%.1f pw=%.1f",
-					circuit->GetTeamId(), healthPerc, inflHere, comPower);
+			circuit->LOG("apex: com-retreat-hold t=%i hp=%.2f infl=%.1f pw=%.1f thr=%.1f",
+					circuit->GetTeamId(), healthPerc, inflHere, comPower, threatHere);
 		}
-		// A retreat whose haven sits inside the enemy's influence is a stand-
+		// A retreat whose haven sits inside the enemy's reach is a stand-
 		// still (seed 18: 40 s at the base edge, hp 0.91 -> dead to a
-		// Banisher). Held there, he keeps walking to the lowest influence
+		// Banisher). Held there, he keeps walking to the lowest threat
 		// around him instead.
-		if (cdef->IsRoleComm() && (inflHere >= safeInfl)
-			&& (frame >= comEvadeAt + FRAMES_PER_SEC * 5))
-		{
+		if (comHeld && (frame >= comEvadeAt + FRAMES_PER_SEC * 5)) {
 			comEvadeAt = frame;
 			static constexpr float STEP = 400.f;
-			const AIFloat3 here = unit->GetPos(frame);
+			const AIFloat3 here = herePos;
 			AIFloat3 best = here;
-			float bestInfl = inflHere;
+			float bestThr = threatHere;
 			for (int k = 0; k < 8; ++k) {
 				const float a = k * 0.7853981634f;
 				AIFloat3 p(here.x + cosf(a) * STEP, here.y, here.z + sinf(a) * STEP);
 				CTerrainManager::CorrectPosition(p);
-				const float v = circuit->GetInflMap()->GetEnemyInflAt(p);
-				if (v < bestInfl) {
-					bestInfl = v;
+				const float v = circuit->GetThreatMap()->GetThreatAt(unit, p);
+				if (v < bestThr) {
+					bestThr = v;
 					best = p;
 				}
 			}
-			if (bestInfl < inflHere * 0.8f) {
+			if (bestThr < threatHere * 0.8f) {
 				TRY_UNIT(circuit, unit,
 					unit->CmdMoveTo(best, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 10, CCircuitUnit::OrdSrc::RETREAT);
 				)
-				circuit->LOG("apex: com-evade t=%i infl=%.1f -> %.1f at=%.0f,%.0f",
-						circuit->GetTeamId(), inflHere, bestInfl, best.x, best.z);
+				circuit->LOG("apex: com-evade t=%i thr=%.1f -> %.1f at=%.0f,%.0f",
+						circuit->GetTeamId(), threatHere, bestThr, best.x, best.z);
 			}
 		}
 		if (isRepaired && !unit->IsDisarmed(frame) && !cdef->IsRoleComm()) {
@@ -491,7 +497,7 @@ void CRetreatTask::Update()
 			Start(unit);
 		} else if ((circuit->GetBindedRole(cdef->GetMainRole()) == ROLE_TYPE(BUILDER))
 			&& (!cdef->IsRoleComm() || (healthPerc >= cdef->GetRetreat()))
-			&& (inflHere < safeInfl))
+			&& (cdef->IsRoleComm() ? !comHeld : (inflHere < safeInfl)))
 		{
 			Recovered(unit);
 		}

@@ -105,19 +105,17 @@ bool ComFar(const AIFloat3& in p)
 	if (!Builder::gHomeSet)
 		return false;
 	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
-	if (p.distance2D(Builder::gHomePos) > leash)
+	// Half the rear's leash in any direction. Not along the base axis: on
+	// Glacier Pass the axis ran perpendicular to the enemy and a teeth
+	// site 1,500 out read as home. The rim below can only tighten this,
+	// never loosen it -- every forward tower he builds extends the hull,
+	// so an uncapped rim walked him to the middle one post at a time.
+	if (p.distance2D(Builder::gHomePos) > 0.5f * leash)
 		return true;
 	// UNTIL THEY HAVE FIELDED A UNIT THE RIM IS NOT A BOUNDARY: at minute one
-	// it is the lab and two solars, and every home mex reads "past it". The
-	// documented leash holds instead: half of it forward along the base axis.
-	if (!Military::FoeArmySeen()) {
-		if (!Base::Ready())
-			return false;
-		AIFloat3 f = Base::gFwd;
-		if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
-		const AIFloat3 d = p - Builder::gHomePos;
-		return (d.x * f.x + d.z * f.z) > 0.5f * leash;
-	}
+	// it is the lab and two solars, and every home mex reads "past it".
+	if (!Military::FoeArmySeen())
+		return false;
 	// The commander's home is the base proper, not its outermost mex: the
 	// uncapped rim called a flank claim home and he died there.
 	if (!gPfRimOk)
