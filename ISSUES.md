@@ -310,6 +310,22 @@ independently; the census and their corrections:
   Fatboys at 660-760. Damage does not convert to kills (they absorb 10-12
   damage per metal lost, we 7.6-8.7). The track record reads Hound 1.19-1.46
   by damage dealt, blind to damage repaired away.
+- THE SIM SPEED IS PART OF THE RESULT. One worker runs ~15x, eight ~5.6x,
+  pinned `--speed 5` with six ~4.4x. BARb's opening is far stronger at
+  honest speed (2.1k army and 9.4 mexes at 8 min vs 5.2k/6.9 at 15x); his
+  games run at 1x. The same tree read 9-7 at 15x and 4-12 at 4.4x. Every
+  number below is at pinned speed 5 unless said otherwise.
+- Standing after the night (e72b8775, on his slot): at 4.4x rung+anchor
+  6-10 vs rung-only 4-12 vs 64fcb121 (no rung) 3-13 at 15x; at 15x
+  rung 9-7 vs 3-13. Not the >50% he asked for at honest speed.
+- Measured inert and reverted: the plant-assist want carrying the unmet
+  army share (`drain * TargetFill(ArmyValue, ArmyTargetFull)`): 3-13,
+  hands on the plant 0.00 -> 0.03 of samples (BARb 0.28-0.31). The
+  assist is a transient order the next election replaces, and the estall
+  hoist pulls the commander to solars in minutes 1-3 (two labs plus his
+  lathe outrun the early energy). What would move it: the assist held as
+  a job across elections while the army is short, and energy that keeps
+  pace with the plant instead of stalling behind it.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
