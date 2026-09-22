@@ -348,6 +348,14 @@ independently; the census and their corrections:
   (the stall hoist fires at 1.0, 1.2, 2.1 min every game) and cons that
   lathe the lab before they leave it -- BARb's opener interleaves builder,
   raider, builder, raider.
+- The 4-minute army, measured to the unit (a2db9356): cons per lab are
+  equal (2.9 vs 3.0 per factory-sample), nanos per plant are equal once
+  the caretaker gate is stock's, energy income is equal; the labs' output
+  is ~5.4 m/s of units to their ~6.8, and a quarter of ours is rez bots
+  (1.3-2 per player by minute 4, before any wreck) plus fleas. Their bot
+  lab's queue is 64% combat; ours 45%. The early rez bots are the medic
+  share of the squad doctrine bought ahead of any army; that and the lab
+  rate (energy pacing) are the two remaining levers, both his.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
