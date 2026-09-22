@@ -92,6 +92,11 @@ int gJobSeen = 0, gJobUnpriced = 0, gJobFar = 0, gJobFull = 0,
 // four times per idle election once BestJobBoss ran its own pair. The near
 // winner is left here; the return is the any-distance winner.
 IUnitTask@ gJobNearBest;
+// ...and the best one within arm's reach of the hand itself, for a commander
+// who is already forward. HERE_R is one light tower's build radius plus a
+// short walk: the ground he can work without commuting.
+const float HERE_R = 600.f;
+IUnitTask@ gJobHereBest;
 // THE COMMANDER'S LEASH, one test for the election, the floor and the
 // chase: home is the ground our own buildings stand on -- the hull rim
 // plus the post distance -- inside the eco leash from the start. Not the
@@ -136,7 +141,9 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 	gJobSeen = 0; gJobUnpriced = 0; gJobFar = 0; gJobFull = 0;
 	gJobLate = 0; gJobCant = 0; gJobHot = 0;
 	@gJobNearBest = null;
+	@gJobHereBest = null;
 	float nearScore = 0.f;
+	float hereScore = 0.f;
 	IUnitTask@ best = null;
 	float bestScore = 0.f;
 	const AIFloat3 me = unit.GetPos(ai.frame);
@@ -214,6 +221,16 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			nearScore = score;
 			@gJobNearBest = cand;
 		}
+		// THE WORK HE IS STANDING IN, for a hand that has already walked out.
+		// "Near" above is measured from HOME, so once the commander is
+		// forward every job around him reads far and the near-preference
+		// pulls him back. His rule 2026-09-22: having walked to a mid mex
+		// he should spend time there rather than commute -- and standing
+		// there is what defends it.
+		if ((dist < HERE_R) && (score > hereScore)) {
+			hereScore = score;
+			@gJobHereBest = cand;
+		}
 		if (score > bestScore) {
 			bestScore = score;
 			@best = cand;
@@ -233,7 +250,14 @@ CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 {
 	@gBossJob = null;
 	IUnitTask@ any = BestLiveJob(unit, false);
-	IUnitTask@ job = (gJobNearBest !is null) ? gJobNearBest : any;
+	// A commander who is already outside the leash finishes what is around
+	// him before he walks home for work.
+	IUnitTask@ job = null;
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& ComFar(unit.GetPos(ai.frame)) && (gJobHereBest !is null))
+		@job = gJobHereBest;
+	if (job is null)
+		@job = (gJobNearBest !is null) ? gJobNearBest : any;
 	if (job is null)
 		return null;
 	@gBossJob = job;
