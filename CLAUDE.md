@@ -49,6 +49,12 @@ ideas. Where code disagrees with it, the code is stale.
   N/frames per frame. Lowering the frequency makes a spike rarer, not smaller.
   A section whose `maxMs` is many times its `avgUs` is batching, and that is the
   bug (`apex_perf=1` + `frametime.py`).
+- **Never author Python in a Bash heredoc.** `Write` for any script (a
+  throwaway goes in the scratchpad, a keeper in `tools/`), `Edit` for changes,
+  then `python <path>`. `python -c` only for a one-liner with no backslashes
+  and no nested quotes. Escaping breaks — a `rstrip('/\\')` inside a heredoc
+  is a syntax error — and he has raised it twice (2026-09-22: *"You do this
+  every time. You need to have some better way of remembering this"*).
 - **Write far fewer comments than feels natural.** One line: what looks wrong
   otherwise, and why. Never a finding, a measurement or a session transcript —
   those go in the commit message or `ISSUES.md`. `docs/26-working-rules.md`.
@@ -87,6 +93,7 @@ conclusion each one produced.
 | About to… | Read first |
 |---|---|
 | **judge any run** | `review.py <run>` — gate 1 IS the compile/crash/did-it-run check. `bar-benchmark` skill |
+| **say what a batch showed** | `perminute.py <match>` on a WIN and a LOSS of that batch, not an average over games: if we are losing we make less metal *because* we are losing, so an aggregate at minute 12 reports the consequence as the cause (his rule, 2026-09-22). `spendtable.py` is the batch-wide view, read second |
 | **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit · **S19** the deployed script can change mid-sweep — classify each game from its own log |
 | **run a sweep of a tunable** | **S8** — deploying the AI does NOT deploy the gadget; unpublished modoptions run the default with no error |
 | **launch or kill a run** | `docs/26-working-rules.md` — one match per write-dir, `pgrep`/`pkill` are dead here, `-u` when logging |

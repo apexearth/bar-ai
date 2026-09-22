@@ -268,6 +268,40 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 
 ## EXPANSION AND THE OPENING
 
+### THE 2v2 IS DECIDED BY MINUTE 4, AND MINUTE 4 IS EXPANSION (2026-09-22)
+
+His rule that produced it: "analyze each game minute by minute rather than
+just by the end state... if you're losing you're going to make less metal
+because you're being bossed around the entire game and starved". Averages
+over a batch report the consequence as the cause. `tools/perminute.py` is
+the per-game read; `spendtable.py` is second.
+
+Pooled over 96 games of six arms, at MINUTE 4, ours minus theirs:
+
+    we lead on mexes      n=36   win rate 44%   (mex +1.2, army  -626)
+    we are behind         n=60   win rate  5%   (mex -1.8, army -1565)
+
+Everything I chased all night -- the 12-24 minute trade, the defence share,
+the plant mix, the record -- sits downstream of that. In the games we win
+our opening is level with BARb's; in the games we lose we are 2-6 spots
+behind before either side has lost anything worth counting (first blood
+is minute 1-2 and under 300 metal a side at minute 4).
+
+Both our seats are equally behind (1.2 and 1.3 mexes at 4 min against
+their 1.7 and 1.6), so it is not placement or a seat asymmetry.
+
+The window is minutes 2-4: we finish 0.29 mexes a player there, BARb 2.8.
+The hands exist (3 cons a factory-sample, same as theirs), they are not
+refused (ecoFar 0.0, ecoQuiet 0.0, deathWalk 1.5 per sample) and 7.1
+spots are priced per sample -- the claims lose the draw, and at 3.2 min
+the ETA ladder itself picks the T2 lab over the spot (`eta-pick tech:
+armalab eta=425 over mex:armmex eta=486`). 73 of 80 games start T2 before
+minute 6.
+
+TARGET for the next session, stated as a number: +1.5 mexes by minute 4.
+The instrument is `runtime/mex4_vs_result.py` (win rate by minute-4 mex
+lead) and `tools/perminute.py` on one win and one loss.
+
 ### 2v2 GLACIER PASS +100% (his regime): 1-19 at HEAD, 8-15 after the opening and commander fixes; the game is now lost at 16-24 min (2026-09-21, night)
 
 His ask: beat BARb stable hard reliably in his 2v2 (Armada both, +100%
