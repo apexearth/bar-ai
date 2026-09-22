@@ -145,6 +145,7 @@ void RaidGridStep()
 }
 
 bool gRaidPrizeLogged = false;
+bool gRaidBlindLogged = false;
 
 bool RaidTarget(AIFloat3& out at, float& out guard)
 {
@@ -208,6 +209,37 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 			at = sp;
 			guard = g;
 			have = true;
+		}
+	}
+	// THE SPOTS ARE THE TARGET EVEN WHEN NOTHING HAS BEEN SEEN. The prize
+	// above is REMEMBERED structure metal, and in the first six minutes we
+	// have scouted nothing, so it reads zero at every spot and the whole
+	// director refuses -- 128 asks in eight games, two of them answered
+	// (2026-09-22). A spot on their half is where their extractor and its
+	// engineer are, whether or not we have looked: his directive is to
+	// harass their engineers and mexes with cheap raiders, and the nearest
+	// one is also the shortest walk. Only while we have seen nothing at
+	// all; the moment a structure is remembered the scoring above owns it.
+	if (!have && (aiEnemyMgr.GetEnemyStructCost() <= 1.f)) {
+		float near = 0.f;
+		for (uint i = 0; i < Market::gAllSpots.length(); ++i) {
+			const AIFloat3 sp = Market::gAllSpots[i];
+			if (!OnMap(sp))
+				continue;
+			const float dHome = sp.distance2D(Builder::gHomePos);
+			if (sp.distance2D(foe) >= dHome)
+				continue;   // our half: not a raid
+			if (!have || (dHome < near)) {
+				near = dHome;
+				at = sp;
+				guard = ai.GetEnemyInflAt(sp);
+				have = true;
+			}
+		}
+		if (have && !gRaidBlindLogged) {
+			gRaidBlindLogged = true;
+			AiLog("apex: raid blind-target at=" + int(at.x) + "," + int(at.z)
+				+ " (nothing of theirs seen yet; nearest spot on their half)");
 		}
 	}
 	return have;

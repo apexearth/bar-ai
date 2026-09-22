@@ -445,3 +445,26 @@ mexes at 12 min 6.1 -> 9.3, army at 4 min ahead of BARb for the first time,
 Read: `tools/spendtable.py` (mexes at 8/12 min, the 8-12 loss bucket),
 `mexdiag comFar`, and commander death times. If the mexes hold and the
 losses do not, it is the first thing all night to move the minute-4 wall.
+
+## His four early-game directives (2026-09-22), with what is measured so far
+
+1. **Guard our mexes with a turret.** At minute 4 we are at parity (59% vs
+   60%) and by minute 6 we are not (62% vs 88%) -- their tower count nearly
+   doubles between 4 and 6, ours is flat. `apex_t1_tower_late=0` and
+   `apex_mex_cover_floor=2` both read inside the noise, so it is not the
+   rule or the floor: it is hands and metal in that window.
+2. **Harass their engineers and mexes with pawns/ticks.** The raid director
+   was DEAD: `RaidTarget` needs a remembered enemy STRUCTURE near a spot and
+   we scout nothing early, so it refused 128 of 130 asks ("no enemy ground
+   seen"). Given a geometric target (nearest spot on their half when nothing
+   has been seen) it asks 50 times and forms raid tasks -- but the packs are
+   1-3 units because the director wants ~5 Pawns and our whole early army is
+   defending. Neutral at 8 minutes (32 games each); full-length arm running.
+3. **Minimize walk time; fortify what the commander walks to.** Not built.
+   The walk is priced twice today (see ISSUES: a 34 s walk costs a mex claim
+   609 metal and an assist 37) and making them equal did not help.
+4. **Keep enemies off our energy and converters.** Not built, not measured.
+
+The loop for all four: `python tools/openloop.py run --name X --games 32`
+(6.5 min), compare against a 32-game control, then `tools/perminute.py` on
+one win and one loss. Anything under ~0.5 mex at n=32 is noise.
