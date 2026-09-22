@@ -436,6 +436,18 @@ independently; the census and their corrections:
   vehicle plant is reachable only through a T1 vehicle plant we rarely
   keep. That is the next defect, and it is upstream of every unit-mix
   question.
+- HANDS ARE NOT FUNGIBLE, and the con floor (ConsNeedAny) treats them as
+  one pool, so a vehicle plant never makes a vehicle hand once bot hands
+  stand. Built as a capability floor -- a hand that is the only way to
+  reach a plant no owned hand can build is worth one of itself, the shape
+  of the existing air-con floor (production.as, `opens a plant no hand of
+  ours can build`, fired 74 times in 16 games). It WORKS mechanically:
+  advanced vehicle plants 0.12 -> 0.44 a game and T1 vehicle plants 0.81
+  -> 1.44. The win count did not follow (3-13) and the 12-24 trade went
+  BACK to 1.91:1 from the 1.37:1 that line-quality alone bought -- the
+  second plant and its hands are paid for out of the same opening, and on
+  this map that opening is already the thing we are losing. Kept in the
+  tree only if a later arm shows it pays; reverted for now.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
