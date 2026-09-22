@@ -378,6 +378,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// its site takes the same demand pull an open wall slot does. One
 		// gun: the site is only offered while the mex has none.
 		const bool isMexG = (si >= mexG0) && (si < nAsset);
+		if (Gate(GATE_SITE_INTERIOR, InteriorGunSite(d, s)))
+			continue;
 		// Only the GUARD-SITE prefix is in the field's slot cache; the mex
 		// guard sites appended after it are not, and gates, front spots and
 		// ring sites read their senses live. Wall slots have their own stamp

@@ -2,6 +2,14 @@ namespace Market {
 int gNanoHotRefused = 0;
 int gNextNanoHotLog = 0;
 int gInteriorRefused = 0;
+
+// The executor's interior test, shared with the proposers so a site it will
+// refuse is never elected (the refusal fell through to energy every election).
+bool InteriorGunSite(int d, const AIFloat3& in at)
+{
+	return gPfRimOk && Catalog::ValidId(d) && (Catalog::gSurfT[d] > 0.01f)
+		&& (at.distance2D(gPfMid) < PfHullRadius() - 0.5f * Catalog::gMaxRange[d]);
+}
 int gNextInteriorLog = 0;
 int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
 // The nano placement probe's cache (see the WK_NANO branch).
@@ -395,8 +403,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// already lost half your base"). A gun stands where at least half
 		// its reach lies outside the base's hull; deeper in, it covers
 		// buildings that are already behind everything it could stop.
-		if (groundDef && gPfRimOk
-			&& (sAt.distance2D(gPfMid) < PfHullRadius() - 0.5f * Catalog::gMaxRange[int(w.def.id)]))
+		if (groundDef && InteriorGunSite(int(w.def.id), sAt))
 		{
 			++gInteriorRefused;
 			if (ai.frame >= gNextInteriorLog) {
@@ -515,7 +522,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// doctrine's fourth point). A pitch behind the guns, one per
 		// section -- while no lathe stands or is ordered within this one's
 		// reach of the line's centre and the ground is plainly ours.
-		if (!sited) {
+		// ...and only when the fortification is what priced it; taken first
+		// whatever bought the turret, the wall took a starving line's nano.
+		if (!sited && (w.spotId == NS_FORT)) {
 			AIFloat3 fl;
 			float flGuns = 0.f;
 			const float bd = Catalog::gBuildDist[int(w.def.id)];

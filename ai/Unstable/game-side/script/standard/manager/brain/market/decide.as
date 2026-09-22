@@ -1506,6 +1506,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				cw.pos = uAt;
 			if ((!SiteIsMex(cw.pos) && !scouted) || (uAt.distance2D(cw.pos) > near))
 				continue;
+			if ((cw.def !is null) && InteriorGunSite(int(cw.def.id), cw.pos))
+				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
 			const float floorHere = floorWave * MexFloorFactor(cw.pos);

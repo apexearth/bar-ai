@@ -408,6 +408,57 @@ vs 15.6%. Read from the Glacier 1v1s:
   MexHeat accepted, on a threat reading barely above the 1.0 floor; 3-15
   per game on Comet, `nopath` 100+ on Carrot (cliffs).
 
+### 1v1 ON SMALL MAPS: 4-43 across three handicaps, lost in the first eight minutes (2026-09-21)
+
+Eight small maps (Altair, Avalanche, Geyser Plains, Hotstepper, Wanderlust,
+Red Comet, Copper Hill, TitanDuel) x 2 sides, BARb hard, 40 min, `--speed 8`:
++0 0-16, +50 3-12 (1 draw), +100 1-15 (`tournaments/20260921-17*-wr-h*`).
+Hotstepper is lava and not data (both commanders die to the map). At minute
+4 we hold 4.4 mexes to 6.2 and 5.6 armed units to 12.6; at minute 8, 4.8 to
+10.3 and 12.7 to 28.1 (+0 means; +50/+100 the same shape with the mexes level
+at 4 and half theirs at 8). Read per mechanism (`tools/opening_ab.py <tournament> 4,8`, `tools/fallthrough.py`,
+`tools/comm_engage.py` are the census scripts):
+- LAB THROUGHPUT, not the lab's timing. BARb has MORE constructors than us
+  at minute 4 (4.2 to 2.2 at +0, 7.6 to 5.3 at +100) and twice the army:
+  its commander guards the lab between builds (stock
+  CheckMobileAssistRequired), so the lab runs at 300-450 BP to our 150.
+  Our factory-guard floor (`ProposeFactoryGuard`, his "OK" of 09-11) priced
+  at v~1 against mexes at 10-30 and fired 5 times in 16 games before minute
+  5. Repriced 09-21 at the overflow rate while the bank is pinned (the nano
+  want's own law): +50 armed at 8 min 24.5 -> 31.8 (theirs 32.2), win rate
+  unchanged (1-15). `apex: facguard` is the instrument; bids are rare
+  because `isAssistRequired` needs bank > 20% and no e-stall.
+- THE CON FLOOR TAKES THE LAB'S FIRST TWO MINUTES: 3.6 constructors per game
+  from the first lab before minute 5 (60% of its lathe) while the commander
+  never assists it. `need=2..3` from `apex_con_base + inc/25 + HandsShort`,
+  and HandsShort keeps asking because the bank is full -- but the bank is
+  full because the lab is the bottleneck, not the hands (+100: bank 87-100%
+  from minute 2 to 8). A con from the lab is the slowest lathe there is
+  (34 s of lab time for 80 BP); a nano is 200 BP for none. The con-vs-army
+  currency is his call (see 1v1 vs BARb HARD above), unchanged.
+- THE COMMANDER WALKS INTO T1 GROUPS OF 2-35x HIS STRENGTH: 6 of 43 losses
+  end on `commander engaging -- T1 x9..13 ... str 0.09-0.24 vs his 0.01-0.02`
+  (Geyser +0 4.5x, Altair +50 2.0x at 5.5 min, Wanderlust +50 24x and 35x).
+  His 09-20 ruling made T1 at the base his to kill with no strength gate;
+  the stake in those cases was 155-842 metal, not the base. `tools/
+  comm_engage.py` lists every engagement with the ratio. His call.
+- THE RISK MODEL CEDES THE MIDDLE: Avalanche +50, 19 spots, we hold 4-7 all
+  game to their 11-16; `mexdiag` reads 11 of 19 risky by minute 5, then
+  `deathWalk=140` refusals at minute 10, while their army stands on the
+  spots (front 0.3-0.47 to our 0.22). Expansion is army-gated and the army
+  is at home.
+- FIXED 09-21, measured inert on the outcome: the mex-guard gun the executor
+  refuses as interior was proposed and cover-pushed every election, and the
+  fallthrough bought converters and wind (19 refusals and 15 fallthroughs
+  per game before minute 10 -> 1.6 and 8.4; converters before 10 min 6.0 ->
+  3.9; +0 mexes at 8 min 4.8 -> 6.1, 0-16 -> 0-16). A crewless first-plant
+  frame counted as in flight and deferred the only ask that re-adopts it
+  (TitanDuel +50: 96% built at 2.0 min, rotted to 3.6, no lab until 4.9).
+  The stall interrupt's "cheaper to finish" test was two ANDed currencies
+  and every T1 generator's 0 E made it never hold. The first nano of the
+  game went to the wall whatever bought it and stood idle (`idle=17.5`
+  from minute 4, +100 Wanderlust).
+
 ### NUKES FIRE AT GROUND NOBODY REMEMBERS (2026-09-18)
 
 His 3x-economy game, won late by one nuke: the silo log reads `nuke ground

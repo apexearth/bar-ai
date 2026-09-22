@@ -441,6 +441,10 @@ bool AnyPlantInFlight()
 		if ((gComState[ci] == CS_ORDERED) && (gComTask[ci] !is null)
 			&& (Requests::Workers(gComTask[ci]) == 0))
 			continue;
+		// Nor is a crewless frame: counted, it deferred the only ask that
+		// re-adopts it, and the frame rotted.
+		if (ComIsOrphan(ci))
+			continue;
 		return true;
 	}
 	return false;

@@ -70,7 +70,8 @@ const int GATE_DEF_OWN     = 32;
 const int GATE_SHLD_SAT    = 29;   // appended: renumbering would move every counter
 const int GATE_JAM_SITE    = 30;
 const int GATE_SITE_BLOCKED = 31;   // the C++ reach veto marked the site
-const int GATE_N           = 33;
+const int GATE_SITE_INTERIOR = 33;   // the executor's no-gun-in-the-interior rule
+const int GATE_N           = 34;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -111,6 +112,7 @@ string GateName(int g)
 	if (g == GATE_DEF_OWN)     return "def.ownfill";
 	if (g == GATE_JAM_SITE)    return "jam.nosite";
 	if (g == GATE_SITE_BLOCKED) return "site.blocked";
+	if (g == GATE_SITE_INTERIOR) return "site.interior";
 	return "g" + g;
 }
 

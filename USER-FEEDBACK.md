@@ -48,7 +48,21 @@ lines of quotes.
   nano turrets and Farks (BP 31k -> 52k per player) and gained no economy;
   (2) the switch never read DONE in 30 minutes: the far mexes are never
   upgraded and no ally builds a fusion while the seat's energy overflow fills
-  its bank. `apex: t2switch` says what is missing.
+  its bank. `apex: t2switch` says what is missing. 09-21 evening, his
+  Isthmus 1v1: it could not read DONE at all -- the ledger dropped every
+  upgraded spot (the moho's finish kills the mex under it) and the levelled
+  commanders made the advanced converter read as T1-buildable (`mohos=0/N
+  NOCONV` all game with 64 upgrades and 37 advanced converters standing).
+  Fixed 09-21 (census.as, army.as; probe: `mohos=5/6 fus`). Its side-effect
+  was his three reports that evening: with the army target at 0 only the
+  counter roles have a share, so the T2 lab made 86 Hounds (artillery vs
+  their statics) and nothing else, the T1 lab 21 Maces at 20-30 min, and
+  the metal with no army to buy went into 772 nano turrets (107 around the
+  fusion cluster, `idle=8960`). Still open: while the switch IS on the labs
+  get only the counter roles (item 1), and his late-game rule -- past T2 the
+  T1 lab makes only the cheap fodder (pawns, ticks), never a Mace: "you get
+  a unit that takes the enemy fire but costs you a lot less" -- is not built
+  (the record's class bar lets a 0.74 Mace through as an even trade).
 - Air labs idle with unlimited money and many nano turrets; make longer
   queues so the line never runs out (2026-09-21, fourth report). Found and
   built 09-21 (`RedrawFor`, TODO "Never an idle factory"): seat lines empty
@@ -60,6 +74,12 @@ lines of quotes.
   justifies another. Fixes 09-13 did not close it: 09-16 Isthmus 8v8, ~10
   advanced air labs idle while half our metal went unspent. Third report
   (TODO "Never an idle factory"; ISSUES GANTRIES).
+- A pulsar alone at a few mid-map mexes with 79 nano turrets around it and
+  nothing else: "if you're gonna commit so goddamn hard, at least build more
+  defensive turrets around there" (2026-09-21). The turrets were the fusion
+  cluster's sink term on a bank pinned full with no army to buy (see the
+  switch above); the defence half -- a second base's guns where the
+  economy commits -- is not built.
 - No pile of basic towers in the base: 25 light towers inside 250 elmos of one
   base (09-19, Red Comet 2v2) was "embarrassingly stupid" and the money of a
   moho spent on T1 towers while a moho crawls. Fixed 09-19 in three parts (the

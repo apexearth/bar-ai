@@ -409,7 +409,21 @@ void NoteFinished(CCircuitUnit@ unit)
 	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;
-	const int i = LedgerNearest(unit.GetPos(ai.frame));
+	const AIFloat3 mp = unit.GetPos(ai.frame);
+	int i = LedgerNearest(mp);
+	// No row: the mex under this moho died first and took it (BAR's
+	// mex_upgrade_reclaimer; the death handler keeps the row only when the
+	// moho's finish came first). The spot is ours, so it is re-entered.
+	if (i < 0) {
+		CacheSpots();
+		for (uint s = 0; s < gAllSpots.length(); ++s) {
+			if (gAllSpots[s].distance2D(mp) < 150.f) {
+				LedgerClaim(int(s), gAllSpots[s], aiEconomyMgr.GetMexSpotIncome(int(s)));
+				i = LedgerFind(int(s));
+				break;
+			}
+		}
+	}
 	if (i >= 0)
 		gLExtract[i] = Catalog::gExtractsM[defId];
 }
@@ -608,9 +622,13 @@ void NoteDead(CCircuitUnit@ unit)
 		OwnAdd(int(unit.circuitDef.id), -1);
 	if (Catalog::gExtractsM[int(unit.circuitDef.id)] <= 0.f)
 		return;
+	const int i = LedgerNearest(unit.GetPos(ai.frame));
+	// The moho's finish is what kills the mex under it (BAR's
+	// mex_upgrade_reclaimer), so a row already carrying more is an upgrade.
+	if ((i >= 0) && (gLExtract[i] > Catalog::gExtractsM[int(unit.circuitDef.id)]))
+		return;
 	if (Main::WasFinished(int(unit.id)))
 		NoteMexDeath(unit.GetPos(ai.frame));
-	const int i = LedgerNearest(unit.GetPos(ai.frame));
 	if (i < 0)
 		return;
 	gLSpot.removeAt(i);

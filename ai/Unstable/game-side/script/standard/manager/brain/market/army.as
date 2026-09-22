@@ -1212,6 +1212,11 @@ bool AdvancedOnlyDef(int d)
 		return false;
 	for (uint i = 0; i < by.length(); ++i) {
 		const int b = by[i];
+		// A levelled commander is a COMM def and so a "T1 hand", and it can
+		// build the advanced converter: read that way nothing is advanced-only.
+		const CCircuitDef@ bd = Catalog::Def(b);
+		if ((bd !is null) && bd.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
 		if ((b < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[b])
 			return false;
 	}
@@ -1929,10 +1934,14 @@ void StallWatch()
 			// 680 E) was always cheaper to finish than a solar, so the builder
 			// on it was never interrupted and stalled the base building it
 			// (apexearth: "we usually stall building an LLT").
+			// ...as ONE bill at the stall's own energy price: two tests both
+			// required never held, since every T1 generator costs 0 E.
 			const float ansM = (e.def !is null) ? e.def.costM : e.mCost;
 			const float ansE = (e.def !is null) ? Catalog::gCostE[int(e.def.id)] : 0.f;
-			if (((1.f - done1) * t.buildDef.costM <= ansM)
-				&& ((1.f - done1) * Catalog::gCostE[int(t.buildDef.id)] <= ansE))
+			const float eAt = ECostSpot();
+			const float left = (1.f - done1) * (t.buildDef.costM
+					+ Catalog::gCostE[int(t.buildDef.id)] * eAt);
+			if (left <= ansM + ansE * eAt)
 				continue;
 		}
 		Want@ mx = ProposeMex(u);

@@ -1,6 +1,7 @@
 namespace Market {
 int gFacGuardBids = 0;
 int gFacGuardWins = 0;
+int gNextFacGuardLog = 0;
 int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assist priced
 // Assisting T2+ work is a PRICED want, not an idleness fallback (apexearth
 // 2026-08-23: "T1 cons are still not assisting T2 cons, helping build T2+
@@ -324,11 +325,17 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	if (H < 1.f)
 		H = 900.f;
+	// WASTE IS FREE LATHE -- the nano want's own law: while metal overflows a
+	// hand on the line converts metal being thrown away, so the stint is worth
+	// that rate standing, not a one-off amortised into nothing.
+	float over = OverflowM();
+	if (over > drain)
+		over = drain;
 	Want g;
 	g.kind = WK_ASSIST;
 	g.pos = fac.GetPos(ai.frame);
 	g.spotId = int(fac.id);
-	g.gain = drain * 10.f / H;
+	g.gain = drain * 10.f / H + over;
 	g.mCost = drain * 10.f * MCostScale();
 	g.tCost = (walkSec + 10.f) * Wage();
 	g.value = g.gain / (g.mCost + g.tCost);
@@ -336,6 +343,15 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	if (g.value <= w.value)
 		return w;
 	++gFacGuardWins;
+	if (ai.frame >= gNextFacGuardLog) {
+		gNextFacGuardLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: facguard " + unit.circuitDef.GetName()
+			+ " bids=" + gFacGuardBids + " wins=" + gFacGuardWins
+			+ " over=" + formatFloat(over, "", 0, 1)
+			+ " drain=" + formatFloat(drain, "", 0, 1)
+			+ " v=" + formatFloat(g.value * 1000.f, "", 0, 2)
+			+ " beat=" + formatFloat(w.value * 1000.f, "", 0, 2));
+	}
 	@gAssistTarget = fac;
 	gAssistTargetId = fac.id;
 	gAssistGuardS = 10;
