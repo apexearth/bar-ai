@@ -365,6 +365,29 @@ independently; the census and their corrections:
   next step is an instrument, not a change: per-lab units and buildtime
   per minute, both sides, from [BARAI_DUTY]/[BARAI_ARMY], to say whether
   it is nano timing, con time on the factory or the resource throttle.
+- The instrument is `tools/labrate.py` (buildtime produced per
+  factory-sample, both sides, per 2 min). It says the opening gap is the
+  LINE'S RATE, not what the line chooses: 0-2 min BARb 46.5 to our 14.1,
+  4 min 71 to 41, 8 min 75 to 58. But the same read on the arm that won
+  its regime (t5-conv-rung, 9-7 at one worker) is 20.0 to 2.4 at 2 min and
+  17.5 to 15.8 at 4 -- a WIDER early gap on the winning arm, so the
+  2-minute rate does not decide the game either.
+- Putting the commander's 300 BP on the plant while the army is short:
+  0-16, the worst arm of the night. The rate moved as intended (14.1 ->
+  16.5 at 2 min, 40.7 -> 43.8 at 4) and everything else collapsed with it
+  (mexes 5.8 vs 12.0 at 16 min, income 113 vs 174): the commander's
+  lathe-seconds in minutes 1-4 are worth more as mexes and energy than as
+  units, which is the market's own answer and it was right.
+- So the ranking of causes for the loss at 4.4x, on fourteen 16-game arms:
+  nothing in the opening PRODUCTION is the lever -- cons, nanos, medics,
+  the plant guard, the con floor's spare reading and the lab's rate were
+  each moved and each lost ground or nothing. The two things that did move
+  the win count are the CONVERSION rung (+6 games at one worker) and the
+  commander's survival (median first death 10 -> 29 min). What is still
+  untried: the army's own quality after 16 min (same T1 types trade ~3x
+  worse in our hands; the record credits damage dealt, theirs is repaired
+  away) and the forward spots (we hold 5.8 to their 12.0 at 16 min while
+  losing 2x the metal to raids).
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
