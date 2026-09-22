@@ -310,6 +310,16 @@ independently; the census and their corrections:
   Fatboys at 660-760. Damage does not convert to kills (they absorb 10-12
   damage per metal lost, we 7.6-8.7). The track record reads Hound 1.19-1.46
   by damage dealt, blind to damage repaired away.
+- WHERE THE DEFENCE SHARE ACTUALLY GOES, measured per 6-minute bucket per
+  side (t12, 16 games): light towers, us 4.31 / 0.38 / 0.06 / 0.06 against
+  BARb's 8.88 / 4.81 / 1.69 / 3.00. Ours stop dead the moment an advanced
+  hand exists -- that is `T1Tower(d) && CeilingConsOwned() > 0` in
+  protect_want.as:492, HIS 2026-09-19 rule ("no basic tower at all once an
+  advanced hand exists"). BARb keeps building 85-metal LLTs all game and
+  its mexes are 78% covered to our 45%. We answer with Beamers (2.9 in
+  minutes 6-12) and then nothing until Ambushers at 12-18. THIS is the
+  defence-share gap, it is a rule and not a defect, and it is his to
+  revisit -- the price fix above proves the auction is not what stops us.
 - DEFENCE IS PRICED THE OPPOSITE WAY TO ARMY, and fixing that does not
   help here. The army want multiplies a unit's price by `1 + deficit *
   (assets+army)/target * apex_stake_weight` capped at 8 (production.as
