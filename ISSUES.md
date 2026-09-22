@@ -373,6 +373,17 @@ independently; the census and their corrections:
   (`defsite`/`site.*` gates, DefObsoleteOnArrival and the T1-tower refusal
   at protect_want.as:475-495 are uncounted `continue`s), not at pricing.
   Reverted.
+- THE OPENING IS NOT LOST IN THE ENERGY MIX EITHER, though the mix is
+  lopsided: by 4 min we finish 1,683 metal of generators (6.7 solars, 9.1
+  winds) to BARb's 782 (15.6 winds, 0.9 solars) -- on Glacier Pass wind is
+  40 metal for 11 E/s and solar 155 for 20, so wind pays 2.1x per metal.
+  Most of ours come from his rule `apex_stall_solar_e` (300): while hard
+  e-stalled under 300 E/s the want is restricted to zero-energy-cost
+  generators, and at +100% we do not pass 300 E/s until minute 6-8, so
+  162 of 168 stall generators were solars. Swept to 0 (16 games): solars
+  by 4 min 8.0 -> 6.7, generator metal 2,964 -> 1,683, and the game did
+  not move (3-13, income at 4 min 23 vs their 32). The rule costs ~900
+  metal of opening and buying it back is not what we are missing.
 - THE BASELINE, measured at the same setting as everything else and not
   before (2026-09-22, `c3-pre-session-s5-16`): 287a6e73, the tree that was
   on his slot when the night began, reads 1-15 at pinned --speed 5 with
