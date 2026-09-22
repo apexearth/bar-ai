@@ -329,6 +329,26 @@ independently; the census and their corrections:
   `slot.nopull` refuses 44-66% of wall slots and `site.interior` 33-49%,
   and the two uncounted `continue`s at protect_want.as:475-495 hide 320
   of 418 candidates a game. That is the next thing to instrument.
+  INSTRUMENTED (c0497d3e + the two new gates, `def.obsolete` and
+  `def.t1late`, six-game probe `t22-defgates-probe`, cumulative over both
+  our players): the defence funnel is
+    cand.class   7526/11278 (67%)   -- the def is not this line class
+    cand.avail   1510/12788 (12%)
+    cand.half     2599/3752 (69%)
+    def.obsolete  1693/3517 (48%)   -- dominated on reach AND kill by
+                                       something affordable now
+    def.nosite    2091/5608 (37%)
+    def.t1late     355/1824 (19%)   -- his rule, the smallest of them
+    slot.nopull  45397/120004 (37%) -- wall slots with no pull
+    fill.framecap 3482/4825 (72%)   -- the per-frame work cap
+    def.targetfill/teampower/zerogain  0 refused
+  So nothing downstream of the price refuses anything (targetfill,
+  teampower and zerogain are all 0/1469-3630), and the biggest single
+  defence-side refusal is `def.obsolete` at 48%: a tower is dropped when
+  something we can afford RIGHT NOW dominates it on reach and kill --
+  which on this map is the Beamer and then the Ambusher, i.e. the rule
+  that makes us buy few expensive guns instead of many cheap ones. That,
+  plus `fill.framecap` at 72%, is where the next work goes.
 - DEFENCE IS PRICED THE OPPOSITE WAY TO ARMY, and fixing that does not
   help here. The army want multiplies a unit's price by `1 + deficit *
   (assets+army)/target * apex_stake_weight` capped at 8 (production.as

@@ -71,7 +71,9 @@ const int GATE_SHLD_SAT    = 29;   // appended: renumbering would move every cou
 const int GATE_JAM_SITE    = 30;
 const int GATE_SITE_BLOCKED = 31;   // the C++ reach veto marked the site
 const int GATE_SITE_INTERIOR = 33;   // the executor's no-gun-in-the-interior rule
-const int GATE_N           = 34;
+const int GATE_DEF_OBSOLETE = 34;   // dominated on reach and kill by an affordable gun
+const int GATE_DEF_T1LATE  = 35;   // his no-basic-tower-after-T2 rule
+const int GATE_N           = 36;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -113,6 +115,8 @@ string GateName(int g)
 	if (g == GATE_JAM_SITE)    return "jam.nosite";
 	if (g == GATE_SITE_BLOCKED) return "site.blocked";
 	if (g == GATE_SITE_INTERIOR) return "site.interior";
+	if (g == GATE_DEF_OBSOLETE) return "def.obsolete";
+	if (g == GATE_DEF_T1LATE)  return "def.t1late";
 	return "g" + g;
 }
 

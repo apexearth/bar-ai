@@ -472,7 +472,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// low-value defense... Fix it with priority").
 			// Dominated on reach AND killing power by something we can
 			// afford right now: its metal is stranded on arrival.
-			if (hDomOn && DefObsoleteOnArrival(builds, d, hAffordM)) {
+			// Both refusals below are counted: they hid 320 of 418
+			// candidates a game and every defwhy read "RUNNERUP none".
+			if (Gate(GATE_DEF_OBSOLETE,
+					hDomOn && DefObsoleteOnArrival(builds, d, hAffordM))) {
 				gDwT1[d] = 0.f;
 				continue;
 			}
@@ -489,8 +492,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// same time as we're slowly upgrading a Mex"). The shortfall
 			// waits for the advanced hand's gun; the basic hand's one
 			// stopgap (own-fill) is the only light tower after T2.
-			if (T1Tower(d) && (CeilingConsOwned() > 0)
-				&& (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)) {
+			if (Gate(GATE_DEF_T1LATE, T1Tower(d) && (CeilingConsOwned() > 0)
+				&& (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f))) {
 				gDwT1[d] = 0.f;
 				continue;
 			}
