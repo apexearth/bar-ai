@@ -383,9 +383,14 @@ independently; the census and their corrections:
   ran 3 of 16 games before the batch was stopped for system memory:
   mexes at 8 min 6.1 -> 7.7 and at 12 min 6.1 -> 9.3, army at 4 min 1974
   against their 1817 (ahead for the first time all night), and 0-3 with
-  9.3k of losses in the 8-12 bucket. Promising and NOT measured -- the
-  change is reverted and the arm needs re-running when the machine is
-  free. This is the first candidate that moved the minute-4 wall at all.
+  9.3k of losses in the 8-12 bucket. RE-RUN over 16 games (t27b, four
+  workers): 2-14, mexes at 8 min 5.4 and at 12 min 5.7 -- no better than
+  the tree with the tight leash -- and comFar still refuses 47.2 claims a
+  sample, because most of them are the RIM test, not the radius. The
+  three-game signal was noise. The leash is not the stall either; what
+  refuses the claims is `PfCoreRimDist > 400` plus the forward-fraction
+  test on ground the hull has not reached, i.e. the commander may not
+  claim anything past his own buildings. Reverted.
 - NOR IN THE ELECTION MIX. The `metalfirst` assist hoist takes 29% of
   constructor elections and sits above the draw, so it also outranks the
   ladder's spot claim; letting the claim win when the ladder's own first
