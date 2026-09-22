@@ -310,6 +310,20 @@ independently; the census and their corrections:
   Fatboys at 660-760. Damage does not convert to kills (they absorb 10-12
   damage per metal lost, we 7.6-8.7). The track record reads Hound 1.19-1.46
   by damage dealt, blind to damage repaired away.
+- DEFENCE IS PRICED THE OPPOSITE WAY TO ARMY, and fixing that does not
+  help here. The army want multiplies a unit's price by `1 + deficit *
+  (assets+army)/target * apex_stake_weight` capped at 8 (production.as
+  stakeMul), so being below target makes army dearer; defence had only
+  `TargetFill`, bounded at 1, so 96% unmet priced within 5% of met. Given
+  the army's own formula (same tunable, same cap) the multiplier fires
+  hard -- `defwhy ... xFill=5.10`, gain 18.2 where it was 1-4 -- and the
+  realised defence row does NOT move: 0.11 of a 0.29 target against the
+  control's 0.13 of 0.27, and the arm reads 1-15. So the defence row is
+  not held down by its price: the towers win their own auction and the
+  metal still goes elsewhere, which points at the executor and the hands
+  (`defsite`/`site.*` gates, DefObsoleteOnArrival and the T1-tower refusal
+  at protect_want.as:475-495 are uncounted `continue`s), not at pricing.
+  Reverted.
 - THE BASELINE, measured at the same setting as everything else and not
   before (2026-09-22, `c3-pre-session-s5-16`): 287a6e73, the tree that was
   on his slot when the night began, reads 1-15 at pinned --speed 5 with
