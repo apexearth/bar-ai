@@ -424,3 +424,24 @@ what the nanos give anyway and we rarely build many things in parallel.
 Today's market is the inverse: every idle hand re-asks all nineteen
 proposers. The demand-first shape is a ranked want list computed once per
 team on its own cadence, with a hand's election a lookup into it.
+
+## 2v2 Glacier Pass: the one arm left unmeasured (2026-09-22)
+
+The commander's WORK leash is what stalls the expansion at minutes 2-4
+(`mexdiag comFar=63` per sample, everything else under 8). Widening it back
+to the full `apex_eco_leash` while the chase keeps its own 0.5-leash bound
+in safety.as ran 3 of 16 games before the batch was reaped for memory:
+mexes at 12 min 6.1 -> 9.3, army at 4 min ahead of BARb for the first time,
+0-3 with 9.3k lost in the 8-12 bucket. To finish it:
+
+    # in floor.as ComFar: `> 0.5f * leash` -> `> leash`
+    BARAI_LANE=winrate python tools/deploy_ai.py deploy
+    BARAI_LANE=winrate python tools/run_tournament.py \
+      --a Apexwinrate:lane-winrate:standard --b BARb:stable:hard \
+      --maps "Glacier Pass" --games 16 --minutes 60 --speed 5 --per-side 2 \
+      --sides Armada,Armada --handicap 100 --box-size 0.2 --boxes lr \
+      --workers 4 --name t27b-comleash-s5-16
+
+Read: `tools/spendtable.py` (mexes at 8/12 min, the 8-12 loss bucket),
+`mexdiag comFar`, and commander death times. If the mexes hold and the
+losses do not, it is the first thing all night to move the minute-4 wall.
