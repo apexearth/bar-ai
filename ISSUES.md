@@ -415,6 +415,27 @@ independently; the census and their corrections:
   their Fatboys/Bulldogs are what kill our Hounds), and static defence
   (they spend 21.9k to our 12.2k on army+defence structures 12-24 min,
   22% of theirs on Annihilators).
+- THE PLANT PRICE IS ONE-SIDED, and the fix is a tunable that already
+  exists. `TUNE_LINE_TERRAIN` is 1 and `TUNE_LINE_QUALITY` is 0
+  (tunables.as:1858, :1884), so a plant's price carries the map-coverage
+  penalty against vehicles (armavp reads 57.6% of the map to armalab's
+  83.5, `apex: line-terrain`) with nothing speaking for what the line
+  FIELDS -- while the disabled census says the vehicle line is the better
+  one here (`line-quality armavp=0.69(q1.00 t0.58) armalab=0.40(q0.40
+  t0.84)`). Coverage is `percentOfMap` of the largest connected component
+  for the move class (InitScript.cpp:629-644), every cell counted the
+  same, corners included.
+  Turning it on (the documented 09-12 control arm) IS wired -- plantcand
+  reads `line0.90` for armvp against armlab's 1.00 -- and moves the
+  opening: T1 vehicle plants 0.25 -> 0.81 per game, and the 12-24 minute
+  mobile trade from 1.72-1.94:1 against us to 1.37:1, the best of the
+  night. The win count did not follow (2-13): the vehicle line arrives
+  but the T2 vehicle plant still does not (armavp 0.12 vs their 1.19),
+  because our T2 bot con cannot build it -- `unitdef.py armavp` lists
+  armacv/armbeaver/armch/armcv/armhacv/armsacv, not armck, so the T2
+  vehicle plant is reachable only through a T1 vehicle plant we rarely
+  keep. That is the next defect, and it is upstream of every unit-mix
+  question.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
