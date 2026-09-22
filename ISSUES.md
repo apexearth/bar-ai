@@ -440,8 +440,14 @@ at 4 and half theirs at 8). Read per mechanism (`tools/opening_ab.py <tournament
   end on `commander engaging -- T1 x9..13 ... str 0.09-0.24 vs his 0.01-0.02`
   (Geyser +0 4.5x, Altair +50 2.0x at 5.5 min, Wanderlust +50 24x and 35x).
   His 09-20 ruling made T1 at the base his to kill with no strength gate;
-  the stake in those cases was 155-842 metal, not the base. `tools/
-  comm_engage.py` lists every engagement with the ratio. His call.
+  the stake in those cases was 155-842 metal, not the base. Ruled 09-21:
+  the LAST commander on the side is careful, a commander with allied
+  commanders standing may be spent. Built (safety.as `LastCommander`,
+  allies publish `comalive`; an ally that never publishes counts as
+  holding one): the last commander keeps the T2 bar's strength and health
+  halves against T1. 8 games +50: every engagement tagged `last`, no
+  fatal engagement above parity, 0-7 -- the base is overrun at 15-27 min
+  either way. `tools/comm_engage.py` is the instrument.
 - THE RISK MODEL CEDES THE MIDDLE: Avalanche +50, 19 spots, we hold 4-7 all
   game to their 11-16; `mexdiag` reads 11 of 19 risky by minute 5, then
   `deathWalk=140` refusals at minute 10, while their army stands on the

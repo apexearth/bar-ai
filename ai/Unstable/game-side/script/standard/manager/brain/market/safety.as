@@ -16,6 +16,40 @@ int gNextCommFleeLog = 0;
 int gNextCommHpLog = 0;
 int gNextCommFightLog = 0;
 int gCommEngageAt = -99999;
+
+// THE LAST COMMANDER IS CAREFUL (apexearth 2026-09-21: in a 1v1 his death is
+// the game; in an 8v8 a commander may be spent to kill an army). An ally
+// that publishes a live commander, or one that never publishes (a human, a
+// stock AI), counts as holding one.
+array<Id>@ gComMates = null;
+int gLastComAt = -999999;
+bool gLastComVal = true;
+void PublishCommanderAlive()
+{
+	ai.PublishTeamValue("comalive", float(ai.frame));
+}
+bool LastCommander()
+{
+	if (ai.frame - gLastComAt < 5 * SECOND)
+		return gLastComVal;
+	gLastComAt = ai.frame;
+	if (gComMates is null)
+		@gComMates = ai.GetTeamIds();
+	gLastComVal = true;
+	if (gComMates is null)
+		return gLastComVal;
+	for (uint m = 0; m < gComMates.length(); ++m) {
+		const int t = int(gComMates[m]);
+		if (t == ai.teamId)
+			continue;
+		const float f = ai.ReadTeamValue(t, "comalive", -1.f);
+		if ((f < 0.f) || (ai.frame - int(f) < 60 * SECOND)) {
+			gLastComVal = false;
+			break;
+		}
+	}
+	return gLastComVal;
+}
 int gCommCautionWas = -1;
 
 // INSTRUMENT (temporary): is the commander standing with nothing in his engine
@@ -215,6 +249,12 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
 		const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
 		const bool heavyOk = !caution && (unit.GetHealthPercent() >= COM_RETREAT_HEALTH);
+		PublishCommanderAlive();
+		// T1 keeps the T2 bar's strength and health halves for the last
+		// commander; the caution half would refuse every raid once their T2
+		// is on the field.
+		const bool lastCom = LastCommander();
+		const bool t1Ok = !lastCom || ((unit.GetHealthPercent() >= COM_RETREAT_HEALTH));
 		const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 		// The enemy groups themselves, not the PUSH sensor: that one wants a
 		// closing formation of real size and never fired once in a 1v1 (0
@@ -272,6 +312,8 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 				continue;
 			const float gStr = EnemyGroupStrength(gi);
 			if ((tier >= 2) && (!heavyOk || (gStr > mine)))
+				continue;
+			if ((tier < 2) && (!t1Ok || (lastCom && (gStr > mine))))
 				continue;
 			// Coming at us, or leaving: a group walking away is let go.
 			const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
@@ -339,7 +381,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 							+ formatFloat(bestStake, "", 0, 0) + " of ours,"
 							+ " str " + formatFloat(bestStr, "", 0, 2) + " vs his " + formatFloat(mine, "", 0, 2)
 							+ " hp=" + int(unit.GetHealthPercent() * 100.f)
-							+ (caution ? " cautious" : "")
+							+ (caution ? " cautious" : "") + (lastCom ? " last" : "")
 							+ " approaching " + formatFloat(bestApp, "", 0, 0) + "/s at " + int(bestD)
 							+ " worth " + formatFloat(theirs, "", 0, 0) + "/" + formatFloat(worthIt, "", 0, 0));
 					}
