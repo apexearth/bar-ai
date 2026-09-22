@@ -388,6 +388,15 @@ independently; the census and their corrections:
   worse in our hands; the record credits damage dealt, theirs is repaired
   away) and the forward spots (we hold 5.8 to their 12.0 at 16 min while
   losing 2x the metal to raids).
+- WHAT THE 12-24 MINUTE METAL BUYS, per side (t12, 16 games): we spend
+  12.2k on army+defence structures to their 21.9k, and 35% of ours is
+  Ambushers to their 14%; they put 20% into a Shipyard-class gantry
+  (armshltx) and 22% into Annihilators. Our mobile losses in the same
+  window are 531k: Hounds 17%, Hammers 11%, Pawns 10% -- 21% of the Hound
+  losses to Fatboys (1400 metal, outranges a 285-metal Hound) and 19% to
+  Snipers. We are answering their T2 heavies with T1 and light T2 while
+  they build the heavies; the record's class bar cannot see it because it
+  ranks a Hound against other Hounds.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
