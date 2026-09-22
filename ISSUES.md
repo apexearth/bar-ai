@@ -268,6 +268,30 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 
 ## EXPANSION AND THE OPENING
 
+### THE MID MEXES ARE LOST IN TRANSIT: THEIR RAIDERS KILL OUR CONS (2026-09-22)
+
+96-game control (`ol-ctl96`, 8-min games, Glacier 2v2 +100%). Before
+minute 4 we lose 1.3 finished cons and 0.9 mexes a game; they lose 0.1 and
+0.3. Killers of those 212 con/mex deaths: pawn 120, tick 60, rover 22.
+The first die at ~90 s (frame 2800), to ticks and rovers.
+
+Along the home->enemy axis (f 0 home, 0.5 mid) at minute 4: home mexes
+(f <= 0.1) are at parity, 5.2 ours vs 5.4 theirs. The gap is mid (f 0.4-0.5),
+0.7 ours vs 1.75 theirs, and our cons die at f 0.2-0.4, on the walk out.
+BARb puts guns forward: at minute 4 they have 1.9 towers at f >= 0.3
+against our 0.6, and at minute 6 4.2 against 0.8. We build MORE towers
+(6.6 vs 5.0), but at home (mean f 0.04 vs 0.22).
+
+The escort bid could not fire in the opening: production.as only offers it
+when `!ecoGrowing`, and even then it is one ticket in the draw
+(`escort-diag` at 1.3 min: short=2 paired=0). Built 2026-09-22 on his
+ruling: the ESCORT FLOOR, one escort per exposed con while the free raider
+army is worth less than the metal at risk, strongest worthy unit (a tick
+escort loses to the pawns that do most of the killing).
+
+Raid blind-target + scouts on the intel gap, 96 paired games: inert on
+their mexes (7.7 -> 7.7 at minute 4) and ours; +220 standing army metal.
+
 ### THE 2v2 IS DECIDED BY MINUTE 4, AND MINUTE 4 IS EXPANSION (2026-09-22)
 
 His rule that produced it: "analyze each game minute by minute rather than

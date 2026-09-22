@@ -146,6 +146,12 @@ void RaidGridStep()
 
 bool gRaidPrizeLogged = false;
 bool gRaidBlindLogged = false;
+// HOW MUCH GROUND WE HAVE NOT LOOKED AT: the spots on their half that hold
+// nothing we remember. A refusal for want of intel is demand for intel (his
+// 2026-09-22 rule: "if we lack intel then we need scouts"), so the count is
+// published for the scout role's target rather than thrown away.
+int gIntelGapSpots = 0;
+int IntelGapSpots() { return gIntelGapSpots; }
 
 bool RaidTarget(AIFloat3& out at, float& out guard)
 {
@@ -211,6 +217,8 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 			have = true;
 		}
 	}
+	if (have)
+		gIntelGapSpots = 0;   // something of theirs is known; the eyes did their job
 	// THE SPOTS ARE THE TARGET EVEN WHEN NOTHING HAS BEEN SEEN. The prize
 	// above is REMEMBERED structure metal, and in the first six minutes we
 	// have scouted nothing, so it reads zero at every spot and the whole
@@ -222,6 +230,7 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 	// all; the moment a structure is remembered the scoring above owns it.
 	if (!have && (aiEnemyMgr.GetEnemyStructCost() <= 1.f)) {
 		float near = 0.f;
+		gIntelGapSpots = 0;
 		for (uint i = 0; i < Market::gAllSpots.length(); ++i) {
 			const AIFloat3 sp = Market::gAllSpots[i];
 			if (!OnMap(sp))
@@ -229,6 +238,7 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 			const float dHome = sp.distance2D(Builder::gHomePos);
 			if (sp.distance2D(foe) >= dHome)
 				continue;   // our half: not a raid
+			++gIntelGapSpots;
 			if (!have || (dHome < near)) {
 				near = dHome;
 				at = sp;

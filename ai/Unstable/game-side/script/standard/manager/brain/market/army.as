@@ -220,6 +220,25 @@ float BPProtectedFracNow()
 	return safe / tot;
 }
 
+// The cheapest thing we could field that counts as eyes, in metal.
+float gCheapScoutM = -1.f;
+float CheapestScoutM()
+{
+	if (gCheapScoutM >= 0.f)
+		return gCheapScoutM;
+	gCheapScoutM = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gFlyer[d])
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(d);
+		if ((cd is null) || !cd.IsRoleAny(Unit::Role::SCOUT.mask))
+			continue;
+		if ((gCheapScoutM <= 0.f) || (Catalog::gCostM[d] < gCheapScoutM))
+			gCheapScoutM = Catalog::gCostM[d];
+	}
+	return gCheapScoutM;
+}
+
 float RoleTarget(int role, float armyTarget)
 {
 	// AA is a PURE COUNTER: it has no value without enemy air, so it gets
@@ -260,6 +279,14 @@ float RoleTarget(int role, float armyTarget)
 		counter = aiEnemyMgr.GetEnemyCost(RT::STATIC) * 0.5f * cShr;
 	else if (role == int(Unit::Role::ASSAULT.type))
 		counter = Military::EnemyCostOf(Unit::Role::ASSAULT.type) * cShr;
+	else if (role == int(Unit::Role::SCOUT.type))
+		// EYES ARE BOUGHT WHEN WE ARE BLIND. The raid director refuses for
+		// want of remembered structures -- 128 asks of 130 in eight games --
+		// and that refusal is demand, not a dead end (apexearth 2026-09-22:
+		// "if we lack intel then we need scouts"). One scout per spot on
+		// their half we know nothing about, at what the cheapest scout
+		// costs; it returns to the base prior the moment anything is seen.
+		counter = float(Military::IntelGapSpots()) * CheapestScoutM();
 	return base + counter;
 }
 
