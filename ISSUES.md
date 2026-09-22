@@ -401,6 +401,17 @@ independently; the census and their corrections:
   0.0, deathWalk 1.5, priced 7.1): the spots are priced for the hands
   that can take them and lost to assist and energy in the draw. That is
   the same wall as every other arm, from the other side.
+- THE WALK IS PRICED TWO WAYS, and fixing it changes nothing either.
+  `ValueOf` charges a walk at `WalkRateWith` (what the lathe would have
+  built in those seconds: 34 s cost a mex claim 609 metal) while the
+  assist want charged plain `Wage` (the same 34 s, 37 metal) -- one
+  builder, one walk, 13x. Charging both the same way (t29, 16 games):
+  3-13, buildpower's share of constructor elections 24% -> 17% and
+  metal's 13% -> 7% (it fell: the hands went to energy and defence, not
+  to spots), mexes 3.9/5.9/6.4 at 4/8/12 min. Reverted. Six separate
+  reallocations of the opening have now been measured -- ladder claim,
+  mex-before-plant, claim-over-assist, both leash halves, and this --
+  and the only one that helped was the first.
 - NOR IN THE ELECTION MIX. The `metalfirst` assist hoist takes 29% of
   constructor elections and sits above the draw, so it also outranks the
   ladder's spot claim; letting the claim win when the ladder's own first
