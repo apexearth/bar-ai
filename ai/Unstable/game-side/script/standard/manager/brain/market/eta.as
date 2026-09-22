@@ -232,9 +232,46 @@ void PoolFill(Pool@ p, bool anyTier)
 		}
 	}
 
+	// CONVERSION IS A RUNG WHILE ENERGY SPILLS. The tail below carries energy
+	// at the conversion anchor, which assumes the converters exist: with the
+	// bank full and 959 e/s wasted, the ladder kept buying fusions and never
+	// the 380-metal converter that turns the spill into 10 m/s. What is
+	// actually wasted, less what is already in flight to eat it, is the
+	// rung's pool; a converter adds nothing once it is gone.
+	{
+		float spill = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
+		spill -= ConvCapInFlight();
+		int bestC = 0;
+		float bestPb = 0.f;
+		for (int d = 1; (spill > 1.f) && (d <= Catalog::gDefCount); ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
+				|| Catalog::gSub[d] || (Catalog::gConvCapacity[d] <= 0.f)
+				|| (Catalog::gConvRatio[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+				continue;
+			if (!anyTier && !CanBuildEver(d))
+				continue;
+			if (Catalog::gBuiltBy[d].length() == 0)
+				continue;
+			const float cap = Catalog::gConvCapacity[d];
+			const float chew = (spill < cap) ? spill : cap;
+			const float pb = chew * Catalog::gConvRatio[d] / Catalog::gCostM[d];
+			if (pb > bestPb) {
+				bestPb = pb;
+				bestC = d;
+			}
+		}
+		if (bestC > 0) {
+			const float cap = Catalog::gConvCapacity[bestC];
+			const int n = int(spill / cap) + 1;
+			const float chew = (spill < cap) ? spill : cap;
+			PoolInsert(p, bestC, Catalog::gCostM[bestC],
+					chew * Catalog::gConvRatio[bestC], n, false);
+		}
+	}
 	// THE TAIL: generation, which nothing exhausts. Energy is carried at the
 	// conversion anchor, the same rate EcoPowerM values it at -- so a converter
-	// is power-neutral here by construction and is not a growth rung.
+	// is power-neutral here by construction and is not a growth rung until
+	// the spill above says otherwise.
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d])
 			continue;
@@ -769,7 +806,8 @@ bool EtaRanks(Want@ w)
 	if ((w is null) || (w.def is null))
 		return false;
 	return (w.kind == WK_MEX) || (w.kind == WK_MEXUP) || (w.kind == WK_ENERGY)
-			|| (w.kind == WK_GEO) || (w.kind == WK_NANO) || (w.kind == WK_TECH);
+			|| (w.kind == WK_GEO) || (w.kind == WK_NANO) || (w.kind == WK_TECH)
+			|| (w.kind == WK_CONVERT);
 }
 
 // The first move's contribution to ECONOMIC POWER, read from the catalog rather
@@ -788,6 +826,14 @@ float DPowerOf(Want@ w, int d)
 			return gLIncome[li] * IncomeMult()
 					* (Catalog::gExtractsM[d] - gLExtract[li]);
 		return 0.f;
+	}
+	if (w.kind == WK_CONVERT) {
+		// The spill it eats, not its nameplate: the tail's rung is the same.
+		float spill = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
+		spill -= ConvCapInFlight();
+		const float cap = Catalog::gConvCapacity[d];
+		const float chew = (spill < cap) ? spill : cap;
+		return (chew > 0.f) ? chew * Catalog::gConvRatio[d] : 0.f;
 	}
 	float dI = Catalog::gMakeM[d];
 	if (Catalog::gMakeE[d] > 0.f)

@@ -301,17 +301,20 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			// The bar is our own property inside THEIR reach: artillery shells
 			// the base from past the threat radius, and standing outside the
 			// home leash by exactly its range is how it does that.
-			float reach = aiEnemyMgr.GetEnemyGroupRange(gi);
+			const float gunRange = aiEnemyMgr.GetEnemyGroupRange(gi);
+			float reach = gunRange;
 			if (reach < r)
 				reach = r;
 			const float stake = StakeAt(gp, reach);
 			if (stake <= 0.f)
 				continue;
 			// Half the leash forward is where his claims stop (ComFar), so
-			// it is where his chases stop too: a lone Pawn 2,646 out was
-			// worth a 141 s walk by this test, and the base stood empty.
+			// it is where his chases stop too, plus the group's own guns --
+			// artillery shells the base from past it. The stake radius
+			// floor above is not a gun: with it, four Pawns 1,688 out were
+			// "in reach" and he walked to them.
 			if (ComFar(gp) && (!Builder::gHomeSet
-				|| (gp.distance2D(Builder::gHomePos) > 0.5f * leash + reach)))
+				|| (gp.distance2D(Builder::gHomePos) > 0.5f * leash + gunRange)))
 				continue;
 			const float gStr = EnemyGroupStrength(gi);
 			if ((tier >= 2) && (!heavyOk || (gStr > mine)))

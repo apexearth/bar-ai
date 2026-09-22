@@ -268,6 +268,53 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 
 ## EXPANSION AND THE OPENING
 
+### 2v2 GLACIER PASS +100% (his regime): 1-19 at HEAD, 8-15 after the opening and commander fixes; the game is now lost at 16-24 min (2026-09-21, night)
+
+His ask: beat BARb stable hard reliably in his 2v2 (Armada both, +100%
+both, 0.2 lr boxes). Control `tournaments/20260921-202615-ctl2v2-gp` 0-8
+and `20260921-200959-*` 1-11 (0.38 boxes). Three agents read the losses
+independently; the census and their corrections:
+
+- Fixed in 64fcb121 (measured per arm in its message): one commander had no
+  plant for 2-7 min in 7 of 11 losses; the commander walked out and died in
+  3 of the 4 shortest losses (engagements at 2-33x his strength, a leash
+  along a base axis that ran perpendicular to the enemy, a retreat hold on
+  the influence field); the ladder's spot claim lost the draw nine times in
+  ten. After: second plant 0.0 min, first commander death median ~10 -> ~29
+  min, income and army lead at 16 min (126 vs 93, 10.9k vs 8.8k over 16
+  games, `20260921-212544-t4b-ladder-claim-16`).
+- OPEN, the 16-24 window: their income doubles (93 -> 236 at 24) on 4.0
+  advanced converters and 2.4 fusions per side to our 0.3 / 0.3 while our
+  energy bank is full and 300-959 e/s spill (`convwhy wasted=959`,
+  `convprice armmmkr v=4.86 gain=9.55` losing to metal v=14 and the
+  metalfirst assist v=1000). The ETA ladder carries energy at the
+  conversion anchor and has no conversion rung, so it buys fusions and
+  never the converter. A conversion rung (spill less in-flight capacity)
+  is written and deployed to the winrate lane, unmeasured.
+- OPEN, the spot gap is FORWARD spots only: home band 5.2 vs 5.0, forward
+  1.3 vs 6.0 at 12 min. It forms in the 10-12 window: they finish 23 mexes
+  to our 8 while we finish 13 mohos to their 4 (we tech first: T2DONE 8.2
+  vs 11.5 min). "Our mexes die 4x" was wrong -- `atk=?` deaths at home are
+  moho upgrades; raider kills are ~2x ours early, parity after 12 min.
+- OPEN, where the army stands: ours at front 0.18 (60% of units under
+  0.2), theirs 0.23 -> 0.38 with a quarter past the midpoint. The regroup
+  anchor is pulled back behind our forward-most tower
+  (`TUNE_LANE_BEHIND_GUNS`) and our towers stand on the base rim, so the
+  forward band -- where all the spot gap is and 45% of our losses fall --
+  is theirs uncontested. Patch (the pull-back skipped when the lane is our
+  own perimeter) in the session scratchpad, unmeasured.
+- OPEN, the fights: trades are even through 18 min and 2.3:1 after. Our
+  damage efficiency is >= 1.0 ([BARAI_DMG]) yet the same T1 types trade
+  ~3x worse in our hands (pw 0.54 vs 1.47, ham 0.48 vs 2.01, fido 0.72 vs
+  2.84); our Hounds die from >450 elmo to Bulldogs, Mannis, Snipers and
+  Fatboys at 660-760. Damage does not convert to kills (they absorb 10-12
+  damage per metal lost, we 7.6-8.7). The track record reads Hound 1.19-1.46
+  by damage dealt, blind to damage repaired away.
+- Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
+  tower within 350, ours 45%. Tower orders do land near spots (58/130
+  beamer orders within 350 of a spot) but the standing set at 12 min is 11%
+  near a mex vs their 24%.
+
 ### THE T2 TRANSITION IN 2v2: ahead at 8 min, tripled at 12 (2026-09-19, evening)
 
 Red Comet seed 5 after the day's fixes: at 8 min army 6.2k to their 4.8k,

@@ -10,6 +10,17 @@ lines of quotes.
 
 ## Economy and builders
 
+- HIS GOAL 2026-09-21 (night): beat BARb stable hard reliably, over half the
+  time, in his 2v2 -- Glacier Pass, Armada both, +100% both, 0.2 lr boxes.
+  He asked for unbiased agents to challenge the session's reading. Standing
+  at 8-15 over 24 games from 1-19 (ISSUES "2v2 GLACIER PASS +100%"); the
+  16-24 window (their converters and fusions, our army standing on the base
+  rim while the forward spots go to them) is what is left. UNRESOLVED.
+- We do a bad job expanding (his watch, 2026-09-21): both of our players
+  held 5-7 mexes for 16 minutes on a 19-spot map while BARb's two took the
+  strip between our corners by minute 8. Measured: the spot gap is forward
+  spots only, and it forms while our hands upgrade home mohos in the 10-12
+  window. The ladder's spot claim is no longer sampled away (64fcb121).
 - The eco seat should run on nano turrets, not constructors: about 4 advanced
   land cons, ~10 T1 air cons, 5-6 advanced air cons, and turrets for the rest.
   Today the seat's ~120 T2 cons come from the T2-con floor `2 + income/25`

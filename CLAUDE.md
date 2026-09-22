@@ -145,6 +145,8 @@ python tools/expect.py <set-dirs...>            # what a big enough battery MUST
                                                 # complaint is back. ab.py prints it for the treated arm
 python tools/composition.py <tournament>        # where the metal actually went
 python tools/allies.py <match|run>              # 8v8: the seven non-seat allies as one side vs the enemy
+python tools/spendtable.py <tournament>         # income/mex/army/spend/lost per 4 min, us vs them:
+                                                # where a batch is lost before the win count is read
 python tools/ecotimeline.py <tournament|match>  # energy + metal minute by minute per arm;
                                                 # bank pinned at 0 = e-stall, pinned full = waste
 python tools/frametime.py <run>                 # per-section maxMs + the 16-AI verdict.
