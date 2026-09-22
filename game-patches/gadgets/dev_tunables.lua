@@ -139,6 +139,7 @@ local NAMES = {
 	"apex_retreat_cost_scale",
 	"apex_retreat_floor",
 	"apex_stake_weight",
+	"apex_t1_tower_late",
 	"apex_static_guard",
 	"apex_wave_meet",
 	"apex_chase_min_ratio",

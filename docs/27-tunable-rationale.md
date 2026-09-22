@@ -1834,6 +1834,19 @@ off, which is the control arm. On a flat map every line reads the same and this
 changes nothing; on a hill map the vehicle line is discounted against the bot
 line, which is apexearth's rule for picking the ground line.
 
+### `TUNE_T1_TOWER_LATE` = 1.f
+
+His 2026-09-19 rule, kept as the default: once an advanced hand exists, no
+basic tower at all. 0 is the arm that measures it. Measured 2026-09-22,
+Glacier Pass 2v2 +100% 0.2 boxes vs BARb hard, 16 games at pinned
+--speed 5: the refusal is real but it is NOT the defence-share gap. With
+the rule off, our light towers per side per 6-min bucket went
+4.31/0.38/0.06/0.06 to 4.56/0.56/0.19/0.25 -- still a tenth of BARb's
+9.31/3.75/2.00/3.62 -- mexes lost before 24 min were unchanged (19.9 vs
+19.4 theirs) and the arm read 2-14 against 5-11 for the same tree with
+the rule on. What holds our tower count down is the hands and the sites,
+not this rule: with it off the towers still are not built.
+
 ### `TUNE_LINE_QUALITY` = 0.f
 
 Weigh a production line by the best army-per-metal its units offer here --

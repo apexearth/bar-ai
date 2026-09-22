@@ -489,7 +489,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// same time as we're slowly upgrading a Mex"). The shortfall
 			// waits for the advanced hand's gun; the basic hand's one
 			// stopgap (own-fill) is the only light tower after T2.
-			if (T1Tower(d) && (CeilingConsOwned() > 0)) {
+			if (T1Tower(d) && (CeilingConsOwned() > 0)
+				&& (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)) {
 				gDwT1[d] = 0.f;
 				continue;
 			}

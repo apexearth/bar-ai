@@ -320,6 +320,15 @@ independently; the census and their corrections:
   minutes 6-12) and then nothing until Ambushers at 12-18. THIS is the
   defence-share gap, it is a rule and not a defect, and it is his to
   revisit -- the price fix above proves the auction is not what stops us.
+  ...AND THE RULE IS EXONERATED: put behind `apex_t1_tower_late` (default
+  1 = his behaviour) and measured with it off, light towers moved only
+  4.31/0.38/0.06/0.06 -> 4.56/0.56/0.19/0.25 per 6-min bucket against
+  BARb's 9.31/3.75/2.00/3.62, mexes lost before 24 min were unchanged
+  (19.9 vs their 19.4) and the arm read 2-14. Neither the price nor the
+  rule holds the towers down. What is left is the SITES and the HANDS:
+  `slot.nopull` refuses 44-66% of wall slots and `site.interior` 33-49%,
+  and the two uncounted `continue`s at protect_want.as:475-495 hide 320
+  of 418 candidates a game. That is the next thing to instrument.
 - DEFENCE IS PRICED THE OPPOSITE WAY TO ARMY, and fixing that does not
   help here. The army want multiplies a unit's price by `1 + deficit *
   (assets+army)/target * apex_stake_weight` capped at 8 (production.as

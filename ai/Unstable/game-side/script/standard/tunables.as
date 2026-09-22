@@ -1513,6 +1513,12 @@ const float TUNE_RETREAT_FLOOR = 0.08f;
 //   value at risk (expected loss = everything x defeat probability).
 const float TUNE_STAKE_WEIGHT = 1.f;
 
+// [toggle 0/1] -- Keep his 2026-09-19 rule: once an advanced hand exists, no
+//   basic tower at all. 1 is his behaviour and the default; 0 is the arm that
+//   measures what the rule costs against an enemy that laps the map in
+//   85-metal turrets. See docs/27.
+const float TUNE_T1_TOWER_LATE = 1.f;
+
 // STATIC_GUARD: how much a metal of CORE static defense counts toward the army
 //   when computing the stake -- under 1 because towers cannot chase.
 const float TUNE_STATIC_GUARD = 0.7f;
