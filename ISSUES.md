@@ -349,6 +349,16 @@ independently; the census and their corrections:
   which on this map is the Beamer and then the Ambusher, i.e. the rule
   that makes us buy few expensive guns instead of many cheap ones. That,
   plus `fill.framecap` at 72%, is where the next work goes.
+  TESTED: comparing the two towers PER METAL instead of absolutely (a
+  Beamer outkills an LLT and costs 2.2x; two LLTs guard two mexes) does
+  what it says -- light towers per game 4.8 -> 9.6, beamers 5.2, the
+  whole tower count roughly doubled -- and it does NOT close the gap:
+  BARb still fields 20.3 LLTs to our 9.6 and 40 towers to our 18, mex
+  coverage 31% to our 18%, arm 2-14. Reverted. The refusals are real but
+  the binding constraint is further up: we do not have the HANDS or the
+  METAL at the time the towers are wanted (def spend 629/644/1312 per
+  4-min bucket from 8 to 16 min against their 815/1601/4141), which is
+  the same opening deficit every other arm of the night ran into.
 - DEFENCE IS PRICED THE OPPOSITE WAY TO ARMY, and fixing that does not
   help here. The army want multiplies a unit's price by `1 + deficit *
   (assets+army)/target * apex_stake_weight` capped at 8 (production.as
