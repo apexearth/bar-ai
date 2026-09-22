@@ -373,6 +373,19 @@ independently; the census and their corrections:
   (`defsite`/`site.*` gates, DefObsoleteOnArrival and the T1-tower refusal
   at protect_want.as:475-495 are uncounted `continue`s), not at pricing.
   Reverted.
+- NOR IN THE ELECTION MIX. The `metalfirst` assist hoist takes 29% of
+  constructor elections and sits above the draw, so it also outranks the
+  ladder's spot claim; letting the claim win when the ladder's own first
+  move is a claim moved the opening a little (mexes at 4 min 3.9 -> 4.2,
+  at 12 min 6.1 with their lead down from 11.9 to 11.0) and the game not
+  at all (2-14). Reverted. Three separate ways of spending the opening on
+  spots -- the ladder claim (kept, it was the 4-4 arm), mex-before-plant,
+  and claim-over-assist -- all land in the same place: we can move WHICH
+  of our 4,300 metal by minute 4 goes where, and BARb still arrives with
+  5.4 mexes and 2,450 of army to our 4.2 and 1,220 because it finishes
+  3,639 metal in that window against our 4,286 AND has more of it on the
+  map. The remaining difference is not allocation, it is that a third of
+  our opening metal is still in flight when theirs is standing.
 - THE OPENING IS NOT LOST IN THE ENERGY MIX EITHER, though the mix is
   lopsided: by 4 min we finish 1,683 metal of generators (6.7 solars, 9.1
   winds) to BARb's 782 (15.6 winds, 0.9 solars) -- on Glacier Pass wind is
