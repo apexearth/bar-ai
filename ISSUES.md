@@ -326,6 +326,15 @@ independently; the census and their corrections:
   lathe outrun the early energy). What would move it: the assist held as
   a job across elections while the army is short, and energy that keeps
   pace with the plant instead of stalling behind it.
+- Also inert (2-14, hands on the plant 0.05): the same term with the guard
+  held for gap/drain seconds instead of ten. The gate is upstream:
+  `isAssistRequired` (economy.as, BARb's rule: metal > 20% storage AND not
+  energy-stalling) is false through most of our opening at honest speed
+  because the energy stalls from minute 1 -- 4 facguard bids in three
+  minutes. BARb's cons put up ~9 winds per player by 8 min (ours 2.8 winds
+  + 4.2 solars) while its commander lathes the factory. The opening lever
+  is energy that keeps pace with two labs, then the assist gate opens by
+  itself.
 - Towers: LLTs 10.1 vs 2.6 per side at 16 min; their mexes 78% covered by a
   tower within 350, ours 45%. Tower orders do land near spots (58/130
   beamer orders within 350 of a spot) but the standing set at 12 min is 11%
