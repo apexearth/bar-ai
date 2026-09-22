@@ -391,6 +391,16 @@ independently; the census and their corrections:
   refuses the claims is `PfCoreRimDist > 400` plus the forward-fraction
   test on ground the hull has not reached, i.e. the commander may not
   claim anything past his own buildings. Reverted.
+  ...AND RELAXING THE RIM DOES NOT HELP EITHER (t28, 16 games): allowing
+  claims past the rim on REARWARD ground, with his forward guard intact,
+  read 3-13 and mexes 3.8/6.1/6.6 at 4/8/12 min -- no better -- while
+  comFar rose to 76.3 a sample because the refusals simply move to the
+  forward test. Both halves of the commander leash are now measured and
+  neither is the expansion stall. What the census actually says is that
+  the commander is refused and THE CONS ARE NOT (ecoFar 0.0, ecoQuiet
+  0.0, deathWalk 1.5, priced 7.1): the spots are priced for the hands
+  that can take them and lost to assist and energy in the draw. That is
+  the same wall as every other arm, from the other side.
 - NOR IN THE ELECTION MIX. The `metalfirst` assist hoist takes 29% of
   constructor elections and sits above the draw, so it also outranks the
   ladder's spot claim; letting the claim win when the ladder's own first
