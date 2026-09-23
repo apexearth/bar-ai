@@ -2102,3 +2102,34 @@ already shown what an untested change to that path costs. It is the first
 thing to build next, and the chain it closes is complete -- charge
 abandonment -> hands finish defence jobs -> the base is held -> the commander
 lives -> the game is not lost by minute 21.
+
+#### Correction: it is not abandonment pricing, the want VANISHES
+
+Of 337 pulls off defence, what the winning want beat:
+
+  over nothing            124   37%
+  over defence/protect     46   14%
+  over defence/teeth       26    8%
+  over buildpower/assist   33   10%
+  over energy/convert      24    7%
+
+In 37% of pulls the runner-up was NOTHING -- defence was not in the ranked
+list at all that tick. The hand was not out-bid; it was left holding one
+unrelated want and took it. Only 22% lost a straight comparison to another
+defence want.
+
+So the abandonment-cost fix proposed above is aimed wrong: you cannot charge a
+challenger for displacing a want that is not on offer. The defence want is
+TRANSIENT -- it exists on the tick that elects the hand and is gone a few
+seconds later, which is also why 29% of the pulls land within 5 s.
+
+The question is therefore why `ProposeProtect` stops proposing between ticks.
+The defence funnel already names its own gates (`apex: defwhy`, Gate() with
+def.obsolete, def.t1late, cover, fill, teampow), and one of them is presumably
+flipping. That funnel is already instrumented, so the next step is to read
+`defwhy` on the tick BEFORE a pull and see which gate closed -- no new
+instrument needed.
+
+Third time this session a measurement stopped the wrong fix being built: the
+budget lever (it steers values, and 22% of metal has no rival), the deathwalk
+gate (loosening it lost more extractors), and now this.
