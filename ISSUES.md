@@ -1540,3 +1540,36 @@ Untested: `apex_cover_push_s` (10 s of economic power) is the affordability
 bar on the mex-cover queue jump and has never been swept. `tools/mexkill.py`
 is the outcome instrument -- we lose 1.41 extractors a game by minute 6 and
 0.67 more killed mid-build, against BARb's 0.95 and 0.03.
+
+### NANO BLOBS: 53 TURRETS ON ONE AIR PLANT, 21k METAL (2026-09-22)
+
+His read, watching: "sometimes we make huge nano blobs for little reason."
+`tools/nanoblob.py` on the gate set, our side at 28 minutes:
+
+  frozenfo-s5  101 turrets in 8 groups -- 85 in ONE group, 53 of them within
+               350 elmo of a single armaap
+  frozenfo-s6   84 turrets in 11 groups, one group of 14 sitting 2,937 elmo
+               from the nearest plant at all
+
+At 210 metal each that is ~21,200 metal in s5, and 53 turrets is ~10,600
+build power on one advanced air plant that cannot consume a tenth of it.
+
+It is NOT the feedback he suspected. The priced want subtracts the lathe
+already standing at the site (`ringEat` + the site's crew, want_nano.as), so
+each turret makes the next worth less; and `FactoryNanoShort` is hard-capped
+at 9 per plant for tier 3, 4 for tier 2, 2 for tier 1, so the floor cannot
+reach 53 either.
+
+What is missing is any bound on the TOTAL. Demand is
+`FreeMetalFlow() * apex_nano_site_share` less the standing lathe, and the
+want says so deliberately: "spare metal flow is the honest bound ... the
+turret count rises with income on its own and needs no ceiling." That was
+right against the failure it was written for (five T2 labs with four nanos
+between them). Its other end is unmeasured: while metal is spare, every new
+big-build site near the blob's edge opens fresh demand the existing ring does
+not cover, and the ring grows outward.
+
+Worth what it displaces? 21k metal is the same order as the army deficit this
+regime loses on (-1,924 by minute 6, and ISSUES above). The group 2,937 elmo
+from any plant is the part with no reading at all -- no site demand explains
+it, so find what proposed it before touching the share.
