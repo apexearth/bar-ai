@@ -2308,3 +2308,26 @@ The instrument needed is one line: log the refused sites' gain components at
 the moment `bestGain <= 0`, the way defwhy logs the winners. Until that
 exists, the cause of the single largest defence refusal in the game is
 unknown.
+
+##### Confirmation: the tower effect is real but much smaller than the first arm
+
+32-game confirmation of `apex_t1_tower_late=0`:
+
+                        towers/game   structure lost   wins
+  =1 (his rule, 16g)       14.4          101%          1/16
+  =0        (16g)          18.3           77%          3/16
+  =0 CONFIRM (32g)         15.7           86%          4/32  12.5%
+
+Neither headline from the 16-game arm replicated: 77% came back at 86%, and
+18.8% came back at 12.5%. Pooled over 48 games, =0 gives ~83% structure loss
+and 14.6% wins against a 16-game control at 101% and 6.2%.
+
+The direction survives -- more towers, less structure lost -- and the
+magnitude does not. The control is also only 16 games, so the 101% figure is
+itself thin. This is NOT grounds to flip his no-basic-tower ruling.
+
+Second time tonight a 16-game arm produced a headline that a 32-game
+confirmation erased (the other was the three-fix bundle, 18.8% -> 9.4%). At a
+12.5% base rate, 16 games resolves nothing about win rate, and evidently not
+much about structure loss either. Anything claimed from a 16-game arm in this
+file should be read with that in mind.
