@@ -1708,3 +1708,44 @@ piece, a fusion want in the ranked list is TAKEN rather than sampled -- the
 same shape as every other floor in decide.as. That is arguably implementing
 his ruling rather than inventing policy, since the ruling names fusions as
 the switch's purpose, but it is his call and it is unmeasured.
+
+### HANDS CHANGE THEIR MINDS MID-WALK: 23% OF JOB CHANGES INSIDE 5 SECONDS (2026-09-22)
+
+His read, watching one unit: "it's almost like he can't make up his mind, what
+is important... if I was to pick a constructor, like the first constructor
+that comes out of a lab and just analyze what that constructor does, that
+would probably be very telling."
+
+`tools/onehand.py` follows one hand through its whole working life. The first
+constructor of one game, six elections in 6.4 minutes:
+
+  0.9m  energy/energy:armsolar     why=estall
+  1.6m* metal/mex:armmex           why=ladder
+  2.6m* defence/protect:armbeamer  why=cover
+  3.7m  defence/protect:armbeamer  why=cover
+  5.7m* energy/energy:armadvsol    why=draw
+  7.3m* energy/energy:armwin       why=draw
+
+Four of six elections changed the job. Across 8 games, 44-65% of every
+constructor election changes what that hand is doing.
+
+A change is not automatically churn -- a hand re-elected after finishing is
+correct. The discriminator is time, and it is damning: of 2,025 job changes,
+**23% land within 5 seconds of the previous election and 30% within 10**,
+median gap 25 s. Nothing can be walked to and finished in five seconds, so
+those are hands redirected before they could accomplish anything -- about 57 a
+game.
+
+The repo already says why this is possible: stuck.as records that "the engine
+only re-elects a builder while it is AWAY from its build position", so every
+re-election lands on a hand mid-walk.
+
+And the existing guard does NOT cover it. `expect.py`'s "builders finish their
+walks" counts only `apex: stuck --` aborts, i.e. hands the STUCK WATCH freed;
+a hand the MARKET moved is invisible to it. That check reads OK at 11-18 per
+30 min while this is running at ~57 a game.
+
+Not fixed. The shape of a fix is a pricing one and needs care: abandoning a
+job should cost what has already been walked and built toward it, and nothing
+in the election charges that today. A dwell time would be a threshold and is
+the wrong answer.
