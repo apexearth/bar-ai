@@ -207,8 +207,14 @@ float BudgetMult(Cat c)
 	// the ranking between them is unchanged because they all scale together.
 	const float have = ShareOf(c);
 	const float mult = target / ((have > 0.001f) ? have : 0.001f);
-	if (mult > BUDGET_MAX)
-		return BUDGET_MAX;
+	// A corrector that saturates cannot correct: defence sat at 0.11 of a
+	// 0.29 target with this clamp binding on 61% of samples, so the row was
+	// asking for its full correction and being refused it every time.
+	float hi = ai.GetTunable("apex_budget_max", TUNE_BUDGET_MAX);
+	if (hi < 1.f)
+		hi = BUDGET_MAX;
+	if (mult > hi)
+		return hi;
 	if (mult < BUDGET_MIN)
 		return BUDGET_MIN;
 	return mult;

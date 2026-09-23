@@ -966,6 +966,8 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 		float t = v;
 		if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
 			t = lead * pow(v / lead, sh);
+		if (ai.GetTunable("apex_budget_after", TUNE_BUDGET_AFTER) > 0.f)
+			t *= BudgetCatMult(c);
 		wt[c] = t;
 		sumV2 += t;
 	}
@@ -1249,8 +1251,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// we already see that our build power is high, then we do it even less
 		// ... and 0.38 divided by 0.1 amplifies that one -- we whip things back
 		// into shape". apex_budget already gates it and already reads 1.
+		// Applied to the value, the correction is then raised to the draw's
+		// commitment exponent, which cancels it -- and cancels it hardest for
+		// the expensive wants, whose exponent is the largest. apex_budget_after
+		// moves it onto the ticket instead, where a 2x correction is 2x the
+		// chance of being drawn.
 		if ((c.kind != WK_SUPER)
-			&& (ai.GetTunable("apex_budget_lever", TUNE_BUDGET_LEVER) > 0.f))
+			&& (ai.GetTunable("apex_budget_lever", TUNE_BUDGET_LEVER) > 0.f)
+			&& (ai.GetTunable("apex_budget_after", TUNE_BUDGET_AFTER) <= 0.f))
 			c.value *= BudgetCatMult(CategoryOf(c.kind));
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))
