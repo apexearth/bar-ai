@@ -2068,3 +2068,37 @@ his fortress ruling (2026-09-22) are both about exactly this ground.
 
 So the objective gap named above is narrower than "nothing prices the
 commander staying alive": nothing prices HOLDING THE GROUND HE STANDS ON.
+
+### DEFENCE IS ELECTED AND THEN THE HAND IS PULLED OFF IT (2026-09-23)
+
+The missing link between "defence IS elected" and "the base is empty when
+their army arrives". 8 games of his regime:
+
+  defence elections -> towers built     725 -> 116   (16%)
+
+  of 982 defence elections with a following decision by the same hand:
+    stayed on defence          443   45%
+    pulled to something else   539   55%
+      of those pulled: 29% within 5 SECONDS, 49% within 15 s, median 16 s
+
+A hand is elected to build a tower and more than half the time it is
+reassigned, a third of those before it could have walked anywhere. So the
+defence share cannot rise no matter what defence is priced at, and the two
+levers aimed at the price both failed for that reason: the budget multiplier
+(3.1% against 12.5%) and the cover-push bar (fired twice as often, built FEWER
+towers).
+
+This is the general abandonment measured earlier -- 23% of ALL job changes
+land within 5 s of the previous election, ~57 a game -- hitting defence harder
+than average.
+
+THE FIX, and it is a pricing correction rather than a rule: switching forfeits
+the walk already spent toward the current site, and nothing in the election
+charges it, so every challenger looks cheaper than it is. The walk invested is
+known. A minimum dwell time would be a threshold and is the wrong answer.
+
+Not implemented: it is a change to the core election and this session has
+already shown what an untested change to that path costs. It is the first
+thing to build next, and the chain it closes is complete -- charge
+abandonment -> hands finish defence jobs -> the base is held -> the commander
+lives -> the game is not lost by minute 21.
