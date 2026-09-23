@@ -1334,3 +1334,19 @@ comes at us with titans and thor tanks we really can't stop them."*
   Titans and Thors they do not hold, whatever RANGE/DAMAGE/HP says.
 - The units: `armvadert4` (Epic Tumbleweed, the T4 rolling bomb),
   `armdronecarry`, `armdronecarryland`, `cordronecarry`, `cordronecarryair`.
+
+A nano concentration should become a fortress (2026-09-22): *"I see in the
+game we will make one pulsar, just one. Not even enough, honestly. And then
+we'll make a ton of nanoturrets all around it. So my thought immediately is
+like, oh great, we have a lot of nanoturrets there. We could make a nice
+little fortress right there. We could even put a shield there. Man, it would
+be freaking awesome. But all we do is make one pulsar, and that's it. It
+sucks."*
+
+- **One gun is not a defence.** Where a gun stands, more guns belong.
+- **Where the nano turrets are massed, that ground is worth fortifying** --
+  the lathe to build it is already standing there, which is the cheapest
+  fortress on the map.
+- **A shield belongs on that ground too.**
+- Read with his 2026-09-17 mex-guard ruling: this is the same complaint one
+  step up -- we buy the first gun and never the second.
