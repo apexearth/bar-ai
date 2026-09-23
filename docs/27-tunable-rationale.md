@@ -2844,3 +2844,29 @@ share itself, which runs at 0.09-0.17 against a target of 0.29-0.34 all game.
 
 Commander deaths did not move either (1.94 -> 2.00), which is the outcome this
 was aimed at.
+
+### `TUNE_FILL_FIRSTPASS` = 0.f pending confirmation
+
+The fix for the largest defence refusal in the game. `DefSiteFill` is
+throttled to one fill per frame; a def that has NEVER been filled and loses
+that race returns leaving `gDsPrev[d]` empty, and the caller reads empty as
+"nowhere worth a gun". def.nosite fired 8,078 times in one game, every line
+`sites=0`, every one a heavy gun. The model was not declining heavy towers --
+it was never offered a site for one.
+
+Bounded exemption: a never-filled def gets ONE extra fill slot per frame,
+ending once each def has been filled once. The old exemption was unbounded
+(8-14 fills in a frame) and was rightly removed; this is a transient at game
+start.
+
+16 games an arm, his regime:
+
+              heavy towers/game   structure lost   median game   wins
+  off               0.8              116%           21.5 min     0/16
+  on                4.6               92%           26.0 min     2/16
+
+5.75x the heavy towers. That is the mechanism, on a low-variance count, and it
+is not a sample-size artefact. Structure loss -24 points, games 21% longer.
+
+The win figure is NOT claimed at this n -- two 16-game headlines evaporated at
+32 tonight. A 32-game confirmation is running.
