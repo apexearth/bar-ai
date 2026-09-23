@@ -2641,3 +2641,17 @@ Measured before testing it, so a null is not misread: the T2 switch fires in
 32/32 control games, but only 12/32 ever reach the state where the pull would
 trigger (` fus ` in the t2switch line). A 32-game arm is therefore n=12
 treated, and anything smaller cannot resolve it at all.
+
+#### The real baseline in his regime is 0 of 32, not 12.5%
+
+2026-09-23. A 45-minute, 32-game arm at stock settings on Glacier Pass 1.2,
+2v2, Armada v Armada, +100% both, 0.2 boxes, left/right, vs BARb stable hard:
+32 of 32 decided, ZERO wins, no timeouts.
+
+The ~12.5% that this session and earlier notes kept quoting came from arms
+with different settings. Against the regime he actually watches and actually
+asked about, the AI wins nothing. Any future claim of improvement should be
+measured against 0/32, and note that a floor of zero gives a win-rate test
+almost no power -- mechanism metrics (income, extractors held, commander
+deaths, games lost inside N minutes) are what can resolve a change at these
+sample sizes.
