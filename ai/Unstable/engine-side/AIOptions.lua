@@ -95,14 +95,7 @@ local options = {
 	{ -- number
 		key     = 'apex_eco_force',
 		name    = 'Economy focus',
-		desc    = 'Seat THIS bot as the eco player.
-'
-		       .. '0 = off (normal play).
-'
-		       .. '1 = full eco phase, 0.5 = half as long.
-'
-		       .. 'It grows to that share of the eco target before army and '
-		       .. 'defence return; home danger still restores them.',
+		desc    = '0 = off. Above 0 seats THIS bot as the eco player: it grows to that share of the eco target before army and defence return. 1 = full eco phase, 0.5 = half as long. Home danger still restores them.',
 		type    = 'number',
 		section = 'play',
 		def     = 0,
