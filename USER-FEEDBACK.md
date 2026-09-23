@@ -397,3 +397,33 @@ are done. Measured: our first T2 plant at minute 8.0 and our first fusion at
 This is the ruling `TUNE_T2_FUSION_PULL` was left off waiting for -- the pull
 overrides a price (wind is not worse than fusion on energy-per-metal), and
 whether to override it was his call. It is his answer: soon.
+
+### UNRESOLVED: WE BUILD THINGS WE DO NOT WANT THE OUTPUT OF (2026-09-22)
+
+*"If I was to sum it up -- we're like a crazy cancer virus that spreads all
+around the map but we lack any good organization to do this craziness
+efficiently."*
+
+Four behaviours he called toxic, watching with extra units and scavenger
+units for players turned on:
+
+1. **A plant is built and then nothing is made from it.** He watched an
+   Experimental Aircraft Plant go up and sit. A plant should only be built if
+   we genuinely want one of the units it can produce; if we do not want the
+   output, we do not want the plant.
+2. **Fusion straight to Epic Fusion Reactor, skipping AFUS.** The Epic takes
+   far too long. AFUS first -- and the algorithm has to choose that ITSELF,
+   not be told. His suggested instrument: a script that shows, at income N,
+   what eco we would build.
+3. **Hovers, almost every game**, including maps with no water and well past
+   T2. Hovers are T1; unless it is a deliberate water move they are not worth
+   it.
+4. **Still far too much build power**, and often placed outside the range of
+   anything it could serve.
+
+All four are the same shape: we buy capacity without wanting what the
+capacity produces, and we buy it where it cannot be used. `nanoblob.py` found
+14 turrets 2,937 elmo from any plant; this is that, generalised.
+
+Also his read on the budget lever deployed 2026-09-22: "that balancing isn't
+really working." Unresolved -- the A/B was still running when he said it.
