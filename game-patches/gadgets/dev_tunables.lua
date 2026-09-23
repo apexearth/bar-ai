@@ -526,6 +526,7 @@ local NAMES = {
 	"apex_deathwalk_price", -- want_mex.as: price a hot-road spot through TripRisk instead of refusing it (0 = off)
 	"apex_com_stay_forward", -- market/floor.as: a forward commander takes work around him rather than walking home (1 = since 3bb47630)
 	"apex_nosite_diag", -- protect_want.as: log WHY a defence site scored zero gain (0 = off)
+	"apex_fill_firstpass", -- protect_fill.as: a never-filled defence def gets one extra site-fill slot per frame (0 = off)
 	"apex_share_army",
 	"apex_share_defence",
 	"apex_share_economy",

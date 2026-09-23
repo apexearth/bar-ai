@@ -1664,6 +1664,12 @@ const float TUNE_DEATHWALK_PRICE = 0.f;
 //   since 2026-09-22; forward is also where he dies. See docs/27.
 const float TUNE_COM_STAY_FORWARD = 1.f;
 
+// [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
+//   extra fill slot per frame, until it has been filled once. Without it the
+//   one-fill-per-frame throttle returns an empty site array and the caller
+//   reads it as "nowhere worth a gun". See docs/27.
+const float TUNE_FILL_FIRSTPASS = 0.f;
+
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
 const float TUNE_BUILD_THREAT_BAR = 1.f;

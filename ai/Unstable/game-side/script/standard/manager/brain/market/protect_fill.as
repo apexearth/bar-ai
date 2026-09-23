@@ -7,6 +7,7 @@ namespace Market {
 // PREVENTED loss at most once per def per two seconds; the election keeps
 // only the walk-weighted argmax. The arithmetic inside is unchanged.
 array<array<float>@> gDsPrev;
+int gDsFirstN = 0;   // never-filled defs given the extra slot this frame
 array<array<float>@> gDsX;
 array<array<float>@> gDsZ;
 array<array<bool>@> gDsFront;
@@ -77,6 +78,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	if (gDsFillFrame != ai.frame) {
 		gDsFillFrame = ai.frame;
 		gDsFillN = 0;
+		gDsFirstN = 0;
 	}
 	// ONE FILL PER FRAME, not two. Each costs ~5.5 ms once the base is large,
 	// so two is an 11 ms frame from this source alone. The 4-second per-def
@@ -85,8 +87,21 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// the standing rule (apexearth: "we should calculate how many frames happen
 	// in five seconds and spread out the processing unit by unit throughout the
 	// frames... We split out that operation over time").
-	if (Gate(GATE_FILL_FRAME, gDsFillN >= 1))
+	// A DEF THAT HAS NEVER BEEN FILLED RETURNS AN EMPTY SITE LIST, and the
+	// caller reads empty as "nowhere worth a gun" (def.nosite, 8,078 firings a
+	// game, every one of them sites=0 and every one a heavy gun). "We did not
+	// look" is not "there is nothing there". The old exemption for uncached
+	// defs was unbounded -- 8-14 fills in one frame; this one is bounded at a
+	// single extra fill per frame and ends as soon as each def has been filled
+	// once.
+	const bool neverFilled = (gDsAt[d] <= 0);
+	const bool firstPass = neverFilled
+			&& (ai.GetTunable("apex_fill_firstpass", TUNE_FILL_FIRSTPASS) > 0.f)
+			&& (gDsFirstN < 1);
+	if (Gate(GATE_FILL_FRAME, (gDsFillN >= 1) && !firstPass))
 		return;
+	if (firstPass)
+		++gDsFirstN;
 	++gDsFillN;
 	gDsAt[d] = (ai.frame > 0) ? ai.frame : 1;
 	const double _tSites = Perf::T0();
