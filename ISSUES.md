@@ -2482,3 +2482,37 @@ Method note for whoever reads this next: "distance to the nearest X" is
 almost never the right instrument when the Xs differ in reach. Ask whether
 one of them covered the point. tools/comguard.py is eight lines different
 from the first version and says the opposite thing.
+
+### The deploy gate is noise-dominated at 2 games
+
+2026-09-23. Ran `gate.py run` twice on the SAME commit (155b91ab), same map,
+same two seeds, nothing rebuilt or redeployed between them:
+
+  run 1: RED (3) -- refused plant-copy livelock (frozenfo-s5 x97),
+                    home ground is not discounted (12 readings),
+                    commander never penned or frozen (frozenfo-s6)
+  run 2: GREEN, no red flags
+
+Same commit. Opposite verdicts. This is the known harness trap -- the same
+seed does not reproduce here -- meeting a 2-game sample, and it means a gate
+verdict carries roughly no information about the commit: a green run does not
+say the change is safe and a red run does not say it is not. Every "gate
+green" in this repo's commit messages should be read with that in mind.
+
+It matters more than a normal noisy metric because the gate is the
+AUTHORIZATION for deploying to the slot apexearth watches. As it stands the
+gate mostly gates on luck, and the honest use of it is: a RED is worth
+reading for WHICH check tripped (the plant-copy livelock below is a real
+behaviour, found this way), not as a verdict.
+
+Fixing it means more games per gate, which costs wall time on every deploy,
+or scoring the checks over a rolling window of recent gate runs rather than
+the last one. That is a decision about how much a deploy should cost and it
+is apexearth's to make, not a session's.
+
+Two of the three reds are worth chasing on their own evidence regardless:
+  - a plant copy elected 97 times in one game that the executor refuses each
+    time, with hands falling to their second pick -- that is the "want
+    forwarding"/refused-election path and it is burning elections
+  - median survival 0.57 for a home mex at hazard 0: home ground is being
+    priced as risky when it is not
