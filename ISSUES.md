@@ -2623,3 +2623,21 @@ GetTunable call, inside an accessor in policy.as (T2Energy(),
 T2EnergyReactor(), FusionMinEnergy()) that NOTHING CALLS -- grep finds the
 call and you conclude it is wired. It sets nothing today. Whoever
 takes this should start there rather than adding a fourth.
+
+#### The fusion lever is already built, already authorised, and still off
+
+`TUNE_T2_FUSION_PULL` (decide.as:1722) takes a fusion from the ranked list
+instead of drawing it, while the T2 switch is on and no advanced generator
+stands. Its own comment records the failure it was written for: the switch
+frees metal for fusions and "the freed metal went to the draw, which bought
+wind 48 times to the fusion's 3 while the switch read NOFUS from frame 18."
+That is the same thing `ecoladder.py` now measures across a whole arm.
+
+It is default 0. USER-FEEDBACK.md's FUSIONS START SOON entry records that it
+was left off waiting for apexearth's ruling on overriding the price, and that
+he gave it on 2026-09-22: "soon". So it is authorised and untested.
+
+Measured before testing it, so a null is not misread: the T2 switch fires in
+32/32 control games, but only 12/32 ever reach the state where the pull would
+trigger (` fus ` in the t2switch line). A 32-game arm is therefore n=12
+treated, and anything smaller cannot resolve it at all.
