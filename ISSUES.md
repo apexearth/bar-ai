@@ -2618,6 +2618,8 @@ making fusions. Pretty soon."
 NOT yet diagnosed: WHY wind wins. want_energy.as has long history here
 (a reactor is priced on delta-ETA and a cheap fast rung beats a slow big one
 on that measure), and three reactor tunables -- TUNE_FUSION_MIN_ENERGY,
-TUNE_T2_ENERGY, TUNE_T2_ENERGY_REACTOR -- are declared with NO GetTunable
-call reading them, so they set nothing today (`dashboard_audit.py`). Whoever
+TUNE_T2_ENERGY, TUNE_T2_ENERGY_REACTOR -- look live and are not. Each HAS a
+GetTunable call, inside an accessor in policy.as (T2Energy(),
+T2EnergyReactor(), FusionMinEnergy()) that NOTHING CALLS -- grep finds the
+call and you conclude it is wired. It sets nothing today. Whoever
 takes this should start there rather than adding a fourth.
