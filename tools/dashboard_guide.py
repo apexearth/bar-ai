@@ -437,6 +437,12 @@ GROUPS = [
                  ("TUNE_ECO_ROLE", "master switch for the rear-specialist "
                   "role — 0 (current) means every player plays the full "
                   "game; 1 re-arms the eco-specialist experiment"),
+                 ("TUNE_ECO_FORCE", "makes this AI play the eco player "
+                  "outright, and says how long for: 0 leaves the usual "
+                  "rear-most election alone, 1 ecos the whole way to the "
+                  "eco target before army and defence come back, 0.5 half "
+                  "as far. Unlike the switch above it needs no big team — "
+                  "it seats this AI in a 1v1 or a 2v2 as well"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},

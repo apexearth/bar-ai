@@ -1026,12 +1026,29 @@ float ShieldShare()
 bool gEcoRole = false;
 bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
+
+// How much of the eco seat this AI has been told to play, 0 = decide normally.
+// Clamped so a value above 1 cannot ask for more eco than the seat's own
+// target, which is the thing the rest of the role is scaled against.
+float EcoForce()
+{
+	const float v = ai.GetTunable("apex_eco_force", TUNE_ECO_FORCE);
+	return (v <= 0.f) ? 0.f : ((v > 1.f) ? 1.f : v);
+}
 bool EcoRoleActive()
 {
 	// DISABLED BY HIS RULING (2026-08-29, watching: "Let's disable the eco
 	// role for now because it does *not* work"). The election, the army
 	// suppression and the quality bias all sit behind this one gate;
 	// apex_eco_role=1 re-arms the whole machinery for a future experiment.
+	// FORCED SEAT. Above 0 this AI is the eco player whatever the team's size
+	// or shape -- the rear-most election below cannot seat anyone in a 1v1 or
+	// a 4v4, and the point of the setting is to say "this one ecos" and watch
+	// it. How far it ecos is EcoRoleTargetM, not here.
+	if (EcoForce() > 0.f) {
+		gEcoRole = true;
+		return true;
+	}
 	if (ai.GetTunable("apex_eco_role", TUNE_ECO_ROLE) < 0.5f) {
 		gEcoRole = false;
 		return false;
@@ -1193,7 +1210,12 @@ float EcoRoleTargetM()
 	const float base = eight
 			? ai.GetTunable("apex_eco_target_base8", TUNE_ECO_TARGET_BASE_8)
 			: ai.GetTunable("apex_eco_target_base", TUNE_ECO_TARGET_BASE);
-	return base * IncomeMult();
+	// A forced seat ecos as far as it was told to. This target is what ends
+	// the growing phase (EcoRoleGrowing) and what the army ramp is measured
+	// against, so halving it is half the eco phase -- the length, not a
+	// separate clock.
+	const float force = EcoForce();
+	return base * IncomeMult() * ((force > 0.f) ? force : 1.f);
 }
 
 // TRUE while the rear specialist is still building the economy it named --

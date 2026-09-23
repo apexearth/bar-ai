@@ -1391,6 +1391,13 @@ const float TUNE_SCOUT_OVER_S = 45.f;
 // RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. See docs/27.
 const float TUNE_ECO_ROLE = 1.f;
 
+// [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
+//   the ordinary rear-most election alone. Above 0 it takes the seat whatever
+//   the team's size or shape, and the value is how FAR it grows before army
+//   and defence come back: 1 the whole eco target, 0.5 half of it, so half the
+//   eco phase. See docs/27.
+const float TUNE_ECO_FORCE = 0.f;
+
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse. See
 //   docs/27.

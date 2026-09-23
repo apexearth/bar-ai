@@ -2426,3 +2426,36 @@ So the bound is not the lever, and the residual inflation is upstream of it:
 actually building, which in the opening is mexes and solars. Left for whoever
 picks this up -- with the warning that mex@4 is a coin flip as a screen
 (docs/33 correction), so judge it on army differential.
+
+### `TUNE_ECO_FORCE` = 0.f
+
+Off by default, so nothing changes until he asks for it. His ask, 2026-09-22:
+"force a particular AI to play as the eco player ... 1 is full eco, 0.5 is
+half-length eco".
+
+The eco seat already existed -- the rear specialist, `army.as` -- with its own
+election (rear-most of the team, by a margin) and its own end condition. Two
+things stopped it being usable as a setting. The election refuses a team of
+four or fewer outright ("in a 4v4 we just don't want a player in the eco
+role", 2026-09-02), so in his 2v2 and in any 1v1 nobody can be seated at all;
+and the seat was all-or-nothing, with no way to say "eco, but not the whole
+way".
+
+Above 0, `EcoForce()` seats this AI directly and skips the election, the team
+size gate and the margin. The scale is NOT a second clock: `EcoRoleTargetM()`
+is multiplied by it, and that target is already the thing that ends the
+growing phase (`EcoRoleGrowing` is `EcoPowerM() < EcoRoleTargetM()`) and the
+thing the army ramp is measured against. So 0.5 means the seat grows to half
+the economic power before army and defence come back into its target -- half
+the eco phase, out of the number that already defined the whole one, with no
+new threshold introduced.
+
+What it does NOT change: `EcoDangerNear` still restores the ordinary targets
+when enemy metal sits near home for 30 s, so a forced eco player is not naked
+-- that valve is what killed this role the first time and it is untouched.
+
+Note the seat is per-AI but a modoption is per-game, so setting it in a 2v2
+seats BOTH Apex AIs. To eco exactly one, keep `apex_eco_role` doing the
+electing, or run the arm with one Apex and one stock ally.
+
+Not swept yet -- it is a control he asked for, not a default being proposed.
