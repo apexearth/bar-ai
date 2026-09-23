@@ -2941,3 +2941,43 @@ follows from this repo's own paradigm is that a task with sunk progress
 should carry that progress as VALUE in the next election -- a half-built
 fusion is worth more than an unstarted one, and today the auction cannot see
 the difference.
+
+#### ...and the cause: the walk has to survive a re-election every tick, and 54-65% of them change the job
+
+Same arm, `tools/abortwhy.py` (the AI's own `apex: abort` line) and
+`tools/onehand.py --all`:
+
+  67% of aborts had a WORKER STILL ON THE TASK -- these are not unattended
+  tasks being tidied away. The task died under an active builder.
+
+  median walk STILL REMAINING when the task died:
+      armmex 1790    armgeo 2400    armalab 605    armrad 815
+      armmoho 159    armhlt 158     armguard 147
+
+  constructor elections that CHANGED the job: 54% (t000), 65% (t002)
+  changed TO: assist, nano, energy, convert  -- the cheap, near things
+
+Put together: we elect a site 1,790-2,400 elmo away, the hand sets off, and
+more than half of every subsequent election moves it somewhere else, so it
+never arrives. The builds that complete are the ones already underfoot
+(median 147-159 elmo remaining). Wind survives at 4% because it finishes
+inside one election window; a geo at 2,400 elmo never does.
+
+That is the whole of it: THE PROBABILITY A BUILD COMPLETES DECAYS WITH ITS
+WALK, because every tick is a fresh auction and sunk progress is worth
+nothing in it. S14 already records that AiMakeTask is a re-election; what was
+missing was that the re-election rate is 54-65% and the walk is long.
+
+It explains, with one mechanism, every separate "we never build X" in this
+file: fusions and geo (98-100% abort), every factory (94-100%), advanced
+converters (82%), forward extractors (70%) -- and it explains why four
+successive PRICING fixes each moved their own metric and left the result
+alone. The price was never the problem. We price it correctly, set off, and
+stop.
+
+FIX DIRECTION, in this repo's own paradigm rather than a cap: a task already
+walked toward should carry what has been spent on it as VALUE at the next
+election. The auction today cannot tell a build with 1,700 elmo of walk
+already paid from an identical one not yet started, so it keeps picking the
+nearer thing forever. Note there is already a keep-job notion in the peel
+path (S37); this is the same idea applied to the walk.
