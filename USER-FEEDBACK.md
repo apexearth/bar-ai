@@ -353,3 +353,33 @@ lines of quotes.
 - Longer term: surprising strategies against humans, distinct personalities
   (rolled 09-12), cooperation between allied Apex AIs, water and mixed maps.
   Multiplayer is host-side only: no archive changes, no synced Lua.
+
+## UNRESOLVED: WE DO NOT TAKE THE ECONOMY SERIOUSLY (2026-09-22)
+
+Watching a 2v2 on Glitters: *"we're definitely not focusing on economy
+enough... our kind of view is matching our opponent, but I'm watching this
+stuff and I'm thinking to myself, no, we're just not even trying really. Like,
+when you watch it, it looks like a player who doesn't care that much about
+expanding their economy. They're not taking it seriously. And if you take it
+seriously, you're going to do crazy phenomenal."*
+
+He is describing something already in the numbers. Our standing extractors
+over the game, his 2v2 regime, pooled by start box:
+
+  minute        4     6     8    10    12    16
+  left, us   7.01  7.18  7.58  7.87  7.32  7.44
+  left, them 6.39  8.06  8.82  9.33  9.65  8.09
+  right, us  5.48  4.81  4.54  4.61  4.04  3.38
+
+We plateau at about seven and the right box goes BACKWARDS. BARb roughly
+doubles. The opening gap is not the story -- the SLOPE is. We stop expanding
+at minute 4 and never restart.
+
+Consistent with it: over 20 games the market chose energy 1243 times against
+metal/mex 263, and 56% of opening decisions never reach the priced draw at
+all (hoists). docs/33's minute-4 programme measured the intercept; this is
+the part nobody measured.
+
+"Matching our opponent" is worth reading literally when looking for the
+cause: several terms price against enemy strength rather than against our own
+growth, and a target set by what they have cannot outgrow them.
