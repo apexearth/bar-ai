@@ -304,6 +304,7 @@ local NAMES = {
 	"apex_t1_push_off",
 	"apex_t2_army_hold",
 	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
+	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
 	"apex_retreat_scale", -- posture.as: scale every def's retreat hp threshold (1 = config value; lower fights longer before pulling out)
 	"apex_budget_after", -- decide.as: apply the budget correction to the draw ticket instead of the value the draw sharpens (0 = off)
 	"apex_budget_max", -- budget.as: ceiling on the budget corrector (2 = stock; higher lets a starved row actually catch up)

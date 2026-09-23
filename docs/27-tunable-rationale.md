@@ -3084,3 +3084,27 @@ TUNE_BUDGET_AFTER, measured NOTHING -- the names were added to
 game-patches/gadgets/dev_tunables.lua but `deploy_ai.py gadgets` was never
 run, so every one of them ran the default with no error. Redeploy the gadget
 whenever a tunable name is added.
+
+## TUNE_ETA_COMMIT_BONUS — default 0 (off)
+
+The ladder and the market both pick a generator; the market wins the tie
+unless the ladder is sooner by a flat latency allowance. That allowance is
+symmetric and the consequences are not, so it always favours the larger, less
+reversible build — measured, the market's pick was the bigger reactor in EVERY
+disagreement, never once smaller. This charges the asymmetry: the market must
+beat the ladder by a share of the extra fleet-time its bigger pick locks up.
+The draw's commitment rule, one level down where it was missing.
+
+It works — paired arms, advanced-fusion orders 101 -> 18, the ladder taking
+70% -> 59% of tie-breaks — and shows NO gain here: energy income per minute
+flat within noise, wins 3/32 against 4/32.
+
+OFF because unvalidated, not because it failed: a 45-minute 2v2 ends before
+the giant reactor is the live choice (apexearth's was at minute 29). Validate
+in a long game.
+
+NOT FIXED, the larger half: `gLadderLatS` reads up to 6,375 s here against
+34-40 in his game; where it is that big the market wins regardless.
+
+OPEN for apexearth: `armafust3` is a Scavengers-tree building. If it should
+not be a candidate at all, that is cheaper than out-arguing the price model.

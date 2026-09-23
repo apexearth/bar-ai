@@ -418,13 +418,32 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// so the AFUS never came -- his "we keep building fusion for too
 		// long"). The market's pick carries survival, the crew it would get,
 		// the room and the compounding the ladder does not price.
-		const bool sooner = etaS < mktS - gLadderLatS;
+		// THE TIE-BREAK WAS SYMMETRIC AND THE CONSEQUENCES ARE NOT. The market's
+		// pick is the bigger reactor in every disagreement measured (168 of 221
+		// in a watched game, never once smaller), so a flat latency allowance
+		// always hands the tie to the larger commitment. Being wrong about a
+		// fusion costs its build; being wrong about an epic fusion freezes the
+		// whole fleet for the length of one. Charge the difference: the market
+		// must beat the ladder by a share of the extra fleet-time it locks up.
+		float latBar = gLadderLatS;
+		{
+			const float cb = ai.GetTunable("apex_eta_commit_bonus", TUNE_ETA_COMMIT_BONUS);
+			if (cb > 0.f) {
+				const float ubp = Catalog::gBuildPower[uid];
+				const float bp = (ubp > 1.f) ? ubp : 100.f;
+				const float extra = Catalog::BuildSecondsAt(int(w.def.id), bp)
+						- Catalog::BuildSecondsAt(etaD, bp);
+				if (extra > 0.f)
+					latBar -= cb * extra;
+			}
+		}
+		const bool sooner = etaS < mktS - latBar;
 		if (ai.frame >= gNextEPickLog) {
 			gNextEPickLog = ai.frame + 15 * SECOND;
 			AiLog(Factory::T() + "apex: epick t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " mkt=" + w.def.GetName() + " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
 				+ " eta=" + Catalog::Def(etaD).GetName() + " s=" + int(etaS)
-				+ " mktS=" + int(mktS) + " lat=" + int(gLadderLatS)
+				+ " mktS=" + int(mktS) + " lat=" + int(latBar)
 				+ (sooner ? " eta-wins" : " tie-mkt"));
 		}
 		if (sooner) {
