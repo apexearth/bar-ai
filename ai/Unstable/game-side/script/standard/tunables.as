@@ -1442,12 +1442,12 @@ const float TUNE_OBSOLETE_RATIO = 4.f;
 // LATHE_OBSOLETE: 1 = a construction turret a denser one per cell of ground
 //   replaces is obsolete on arrival and a candidate for retirement; 0 = the
 //   basic turret is built and kept forever. See docs/27.
-const float TUNE_LATHE_OBSOLETE = 0.f;
+const float TUNE_LATHE_OBSOLETE = 1.f;
 
 // NANO_SHIFT_IDLE [share] -- how much of the lathe standing with nothing to
 //   lathe is netted off a line's shift demand. 0 = the shift is bid whole.
 //   See docs/27.
-const float TUNE_NANO_SHIFT_IDLE = 0.f;
+const float TUNE_NANO_SHIFT_IDLE = 1.f;
 
 // EXPOSE_R: elmos from the core at which a structure counts fully exposed (a
 //   walk away from where the army lives).
@@ -1950,7 +1950,7 @@ const float TUNE_LINE_QUALITY = 0.f;
 //   product the unit market refuses on this map (the amphib x0) prices its line
 //   at nothing. 1 is parity with what we field; 0 restores the old test, which
 //   asked only whether the product was new. See docs/27.
-const float TUNE_PLANT_UNLOCK = 0.f;
+const float TUNE_PLANT_UNLOCK = 1.f;
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it

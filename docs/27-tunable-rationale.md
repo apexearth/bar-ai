@@ -2755,3 +2755,32 @@ cannot steer a decision that has no alternative to be steered towards.
 
 TUNE_BUDGET still gates BudgetMult itself, so the `apex: budget` line keeps
 printing real multipliers for diagnosis with the lever off.
+
+### The three build-power fixes ship ON (2026-09-23)
+
+`TUNE_PLANT_UNLOCK`, `TUNE_LATHE_OBSOLETE` and `TUNE_NANO_SHIFT_IDLE` were
+written default-off and are now 1. Bisected against one shared control, 16
+games each, his Glacier Pass 2v2 regime, no deploy during any arm:
+
+  arm                 median game   wins
+  all off               22.2 min    0/16
+  plant_unlock          23.0 min    2/16
+  lathe_obsolete        24.5 min    0/16
+  nano_shift_idle       24.9 min    2/16
+  all three             26.7 min    3/16   18.8%
+
+Win counts at n=16 cannot resolve a 12.5% base rate -- that is why the
+decision rests on the median game length, which is continuous, far lower
+variance, and rises with every fix added across five independent arms. The
+bundle is the best arm on both measures, and better than either single fix,
+so they are complementary rather than redundant. lathe_obsolete wins nothing
+alone and still lengthens the game; it ships with the other two on that basis
+and should be the first suspect if the bundle later reads worse.
+
+What they do, each measured before it was written: a plant is priced on the
+units it would ADD rather than on its constructor half (`prod=0.00 con=301`
+bought five hover platforms that made zero hovers); the denser construction
+turret makes the basic one obsolete (3,432 basic built against 0 advanced,
+ever); and the line-shift demand is netted against lathe already standing
+idle (a turret landing out of reach RAISED the buying line's own demand,
+shift 0 -> 650 m/s while the lathe reaching it stayed at 14).
