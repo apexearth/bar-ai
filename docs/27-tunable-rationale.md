@@ -3044,3 +3044,43 @@ reason the test is there. The question for him is narrower than that ruling:
 not whether a builder may WALK INTO danger, but whether a builder ALREADY
 2,000 elmos into a walk should abandon it because one enemy scout is near the
 destination. Those are different questions and only the first was ever asked.
+
+## TUNE_ARMY_RICH_BALANCE — default 0 (off)
+
+The spare-metal floor ("metal we fail to spend is army demand") sets army
+demand two thirds of the time, and the budget controller cannot see it, so
+army runs far over its share. This offers that floor only as far as army is
+still under its target; what is left stays for the constructor market, which
+does price against the target.
+
+It works. 32 games on Glacier Pass 2v2 vs BARb hard, against a paired control
+on the same tree and seeds:
+
+  row       control   rich_balance=1   target
+  army       51.2%        39.7%         ~21%
+  economy    18.6%        27.3%         ~30%
+  defence    11.4%        11.6%         ~29%
+  bp         17.5%        21.0%         ~15%
+
+Army falls 11.5 points and economy rises 8.7, most of the distance to target
+on both rows. `src=rich` on the prodrank line drops from 56 samples to 9, so
+the term really is being suppressed.
+
+LEFT OFF because it does not convert: 2/32 against the control's 6/32
+(p=0.26), damage efficiency unchanged (minute 14: 0.85 against the control's
+1.00), and the loss ratio unmoved at 1.02 against 0.99.
+
+Defence does not move at all, which is the same result every budget lever
+gives: defence is under target because its purchases are ABANDONED, not
+because it loses the auction.
+
+The finding this leaves for apexearth is not about the tunable. Our actual
+split already matches BARb's (47/22/12 against our 51/19/11) and BARb wins;
+moving OUR split toward OUR targets moved us away from BARb's and lost more
+games. The targets are the thing that does not match reality.
+
+S8 WARNING: the first three arms of this tunable, and of TUNE_BUDGET_MAX and
+TUNE_BUDGET_AFTER, measured NOTHING -- the names were added to
+game-patches/gadgets/dev_tunables.lua but `deploy_ai.py gadgets` was never
+run, so every one of them ran the default with no error. Redeploy the gadget
+whenever a tunable name is added.
