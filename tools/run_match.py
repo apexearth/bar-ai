@@ -689,10 +689,12 @@ def run(args) -> int:
     # whatever that worker happened to play. Every Apex AI is seeded from the
     # live record before every match (never written back), so each game of
     # each arm starts from the same evidence his own games do.
-    # --no-record-seed is how an arm is compared against one run before the
-    # seeding existed: it landed mid-day and changes what every game plays from.
+    # OPT-IN. Seeding every match from the live record cut our army spend from
+    # 12.8% of metal to 1.3% on identical code, because 26.7% of that file's
+    # rows are zero-dealt and the record ranks the army around its mean. See
+    # ISSUES.md; --record-seed asks for it deliberately.
     live_rec = MATCHES / "_engine" / "AI" / "Skirmish" / "Apex" / "Unstable" / "apex-record.txt"
-    if (live_rec.exists() and not getattr(args, "no_record_seed", False)
+    if (live_rec.exists() and getattr(args, "record_seed", False)
             and write_dir.resolve() != (MATCHES / "_engine").resolve()):
         for a in ais:
             if a.is_lua or not a.short_name.startswith("Apex"):
@@ -1009,8 +1011,11 @@ def main() -> int:
                     help="omit Version from every [AI] block, as a lobby-hosted "
                          "multiplayer game does; use with --game to test the AI "
                          "exactly as a hosted match will load it")
+    ap.add_argument("--record-seed", action="store_true",
+                    help="seed each match's unit record from the live game "
+                         "(off by default: it collapsed army spend, see ISSUES.md)")
     ap.add_argument("--no-record-seed", action="store_true",
-                    help="do not seed the unit record from the live game")
+                    help=argparse.SUPPRESS)
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
                     help="extra start-script modoption, repeatable. The one that "
                          "matters for reproducing a hosted game is "

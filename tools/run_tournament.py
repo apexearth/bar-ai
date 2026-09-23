@@ -66,7 +66,7 @@ class Job:
 
 
 SPEED = 0   # --speed, applied to every run_match this process spawns
-NO_RECORD_SEED = False   # --no-record-seed, likewise
+RECORD_SEED = False   # --record-seed, likewise (opt-in, see ISSUES.md)
 
 def _ram_limited_workers() -> int:
     """How many concurrent matches free RAM allows. Windows only; else no limit."""
@@ -164,8 +164,8 @@ def play(job: Job, minutes: int, engine: str | None, write_dir: Path,
         cmd += ["--sides", sides]
     for mo in (modoptions or []):
         cmd += ["--modoption", mo]
-    if NO_RECORD_SEED:
-        cmd += ["--no-record-seed"]
+    if RECORD_SEED:
+        cmd += ["--record-seed"]
     if engine:
         cmd += ["--engine", engine]
     if SPEED:
@@ -289,8 +289,9 @@ def main() -> int:
                          "variant under test")
     ap.add_argument("--per-side", dest="per_side", type=int, default=1,
                     help="AIs per side; 4 makes every match a 4v4")
-    ap.add_argument("--no-record-seed", action="store_true",
-                    help="do not seed the unit record from the live game")
+    ap.add_argument("--record-seed", action="store_true",
+                    help="seed each match from the live unit record (off by default)")
+    ap.add_argument("--no-record-seed", action="store_true", help="deprecated no-op")
     ap.add_argument("--modoption", action="append", default=[], metavar="K=V",
                     help="extra start-script modoption, repeatable; passed to "
                          "every match. Used to select an arm of an A/B without "
@@ -302,7 +303,7 @@ def main() -> int:
     args = ap.parse_args()
     global SPEED
     SPEED = args.speed
-    globals()['NO_RECORD_SEED'] = args.no_record_seed
+    globals()['RECORD_SEED'] = args.record_seed
 
     TOURNAMENTS.mkdir(parents=True, exist_ok=True)
 
