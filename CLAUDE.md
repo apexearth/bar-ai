@@ -141,6 +141,10 @@ python tools/build_dll.py [--deploy]            # build that cannot lie about su
 python tools/as_scope.py                        # 2 lines
 python tools/comment_audit.py                   # run reports + essays in YOUR diff
 python tools/context_size.py --since            # what the repo costs to read
+python tools/reclaim.py [--apply <category>]    # what the repo costs in DISK, and what
+                                                # can go. Never check it with `du` -- du
+                                                # cannot descend a build dir here and
+                                                # reports a seventh of the truth
 python tools/unitdef.py <unit> [--builders|--builds|--trees]   # 8 lines
 python tools/deploy_ai.py status|deploy Unstable|pull Unstable|gadgets|patches
 python tools/lane.py init <name>|status|list|drop <name>   # private build/deploy/run slot

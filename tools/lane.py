@@ -304,8 +304,11 @@ def lanes() -> list:
 def drop(lane: str) -> int:
     lane = _clean(lane)
     _write_claims({k: v for k, v in _claims().items() if v != lane})
+    # The deployed slot too: leaving it behind is how 70 of them reached 14 GB.
+    import bar_env
+    deployed = bar_env.load().engine_dir / "AI" / "Skirmish" / short(lane)
     for p in (barb_src(lane), build_out(lane), write_dir(lane),
-              REPO / "ai" / variant(lane)):
+              REPO / "ai" / variant(lane), deployed):
         if p.exists():
             print(f"  removing {p}")
             shutil.rmtree(p, ignore_errors=True)
