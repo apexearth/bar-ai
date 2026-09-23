@@ -2981,3 +2981,43 @@ election. The auction today cannot tell a build with 1,700 elmo of walk
 already paid from an identical one not yet started, so it keeps picking the
 nearer thing forever. Note there is already a keep-job notion in the peel
 path (S37); this is the same idea applied to the walk.
+
+#### THE KEEP-JOB MECHANISM HAS NEVER FIRED. keeps=0 in 32 games, 7,370 incumbencies discarded
+
+2026-09-23. decide.as:1830-1880 holds a hand on the job it is already walking
+to -- written for exactly the failure measured above, and its comment says so:
+"constructors go on long journeys, get to the other side and turn around...
+The incumbent's walk is partly paid, so its value only rises en route."
+
+Summed over the 32-game arm from the AI's own election log:
+
+    keeps = 0        offCrew (incumbent forgotten) = 7,370      -> 100%
+
+It has never fired. Not once in 32 games. Every single re-election takes the
+`!onCrew` branch, nulls gIncTask and forgets the incumbent.
+
+WHY, and it is in the mechanism's own comment three lines up: "C++ hides the
+unit's assignment before every re-election, so the hold in maketask.as never
+sees it". The engine detaches the unit from the task BEFORE MakeTask runs, so
+`inc.GetUnits()` cannot contain this unit and `onCrew` is structurally false
+every time. The guard was added to stop handing a PEELED hand back to the job
+it was peeled from (S37) -- correct intent -- but it cannot distinguish
+"peeled away" from "detached by the engine a microsecond ago, as happens on
+every election", so it fires on both and the incumbency never survives.
+
+That closes the chain end to end:
+
+  keep-job dead  ->  every tick is a blank auction  ->  54-65% of elections
+  change the job  ->  a build 1,790-2,400 elmo away never survives the walk
+  ->  37% of all builds abandoned, 98-100% of the big/distant ones
+  ->  no fusions, no factories, no forward extractors, no advanced converters
+  ->  half the economy BARb has, and an army bought as cover reaction
+
+It is this repo's named bug class -- the silent no-op -- sitting under the
+single biggest behavioural complaint apexearth has made about this AI.
+
+THE FIX has to separate the two removals. A peel is ours and recorded
+(PeelSurplus + RemoveUnit); the pre-election detach is the engine's and
+happens to every hand every time. Testing `onCrew` conflates them. Something
+that marks a hand at the moment WE peel it, and tests that instead, restores
+the mechanism without re-attaching peeled hands.
