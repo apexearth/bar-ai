@@ -2418,3 +2418,34 @@ loses to a T2/T3 push regardless of count.
 The instrument for the first of those is one line: the distance from each
 commander death to the nearest standing gun of ours. That has never been
 measured and it separates "wrong place" from "wrong idea".
+
+#### Answered: the guns and the commander are in different places
+
+The number that separates the three explanations, measured on the 32-game arm
+that carries 5.3 heavy towers a game:
+
+  62 commander deaths with a standing-tower sample
+  distance to our NEAREST gun: median 644  p25 466  p75 1016  min 102
+    within  300 elmo: 15%
+    within  600 elmo: 42%
+    within 1000 elmo: 73%
+  nearest gun type: armanni 21, armllt 13, armguard 8, armamb 7, armhlt 6
+
+A light tower reaches ~230-280 elmo and a Sentry ~450, so at a median 644 the
+commander dies outside the cover of the short-ranged guns that make up most of
+our count. He also dies a median 605 from his own START, so this is not him
+wandering: the guns are simply not where he is.
+
+CAVEAT, and it matters: 21 of the 62 nearest guns were Annihilators, which
+reach ~1100 and at 644 elmo could have been covering him. For that third,
+presence was not the problem and the gun did not save him -- which is the
+third explanation (static defence loses to the push) surviving alongside the
+first.
+
+So the answer is mostly WRONG PLACE and partly WRONG IDEA, and the two need
+separating by range: measure the distance to the nearest gun THAT REACHES
+(distance <= that def's own range) rather than to the nearest gun of any kind.
+That is a one-line change to the query above and it is the next thing to run.
+
+His fortress ruling (docs/24, 2026-09-22) is the same observation from the
+other side: build up the ground where our things already stand.
