@@ -2828,3 +2828,33 @@ CHANGE, default OFF: `apex_army_budget_damp` multiplies the spare-metal army
 floor by the ARMY row's own budget multiplier. At the measured shares that is
 0.202/0.320 = 0.63, so the floor asks for 37% less and the metal is available
 to the categories the corrector is already straining to fill. Untested.
+
+### Two instruments that resolve changes where the win rate cannot
+
+2026-09-23. At a 12.5% base rate a 32-game arm cannot resolve a win-rate
+change, but both of these are metal quantities summed over every fight of
+every game, and both are stable across arms.
+
+`tools/trade.py` -- metal killed against metal lost, 32-game arms:
+
+                 us trade   them trade   static killed us/them
+  control          0.49       1.63         643,150 / 639,841
+  damp arm         0.50       1.82         540,617 / 306,478
+
+Our trade is 0.49-0.50 in every arm measured. We kill STRUCTURES as well as
+they do -- 643k against 640k, dead level -- and lose every unit fight by a
+factor of 3.3. That gap is larger than any economic gap in this file.
+
+`tools/mexguard.py` -- when one of our extractors died forward (>800 elmo
+from home, moho-upgrade phantoms excluded):
+
+  had a gun within 600 elmo:  36 (27%)
+  had NO gun:                 95 (73%)
+  median distance with a gun: 1505;  with none: 1968
+
+So his mex-guard ruling (2026-09-17, guns on the mexes outside the base, more
+the further out) is implemented -- MexGunsWanted scales one light tower at
+home to four at the doorstep -- and does not reach the forward spots: three
+in four die unguarded, and the unguarded ones are the further out. The floor
+is computed over STANDING mex rows, so the gun is only demanded once the mex
+exists, which is after the thing that kills it has arrived.
