@@ -2584,3 +2584,40 @@ price. Default 0 keeps the veto exactly.
 NOT yet established: that pricing it wins games. A 16-game pair moved income
 at minute 12 from 73 to 91 and extractors from 5.1 to 5.9, but this session
 has twice watched an effect that size evaporate at n=32.
+
+### The energy ladder never climbs: wind wins half of every energy election at every income
+
+2026-09-23, same 32-game arm, `ecoladder.py --kind energy`. Bucketed by eco
+power, the def that WON each energy election:
+
+   20-30 m/s   armwin 57%  armadvsol 26%  armsolar 15%  armfus 0%
+   80-90       armwin 50%  armadvsol 33%  armfus 6%
+  100-110      armwin 52%  armadvsol 35%  armfus 7%
+  130-140      armwin 51%  armadvsol 37%  armafus 5%  armfus 4%
+  170-180      armwin 55%  armadvsol 23%  armfus 8%
+
+Wind takes about half of every energy election from 20 m/s all the way to 180.
+At 170 m/s of eco power we are still mostly building wind.
+
+What that costs, per side, us against BARb:
+
+  min    our fusions   theirs   our small gens   theirs
+   12       0.4         1.9         36.6          29.0
+   16       1.1         3.2         39.4          21.3
+   20       2.0         5.0         36.5          14.9
+
+They tear the small generators DOWN as they climb -- 28.7 at minute 8 to 14.9
+at minute 20 -- while their big reactors go 0.8 to 5.0. We add small ones (29
+to 36.5) and reach 2 reactors. A solar is 20 energy and a fusion is 1000.
+
+This is the second half of why income flatlines: ours goes 93 -> 121 -> 126
+across minutes 16-24 while theirs compounds 160 -> 265 -> 331. It is also what
+apexearth asked for directly on 2026-09-22: "we also do need to get started on
+making fusions. Pretty soon."
+
+NOT yet diagnosed: WHY wind wins. want_energy.as has long history here
+(a reactor is priced on delta-ETA and a cheap fast rung beats a slow big one
+on that measure), and three reactor tunables -- TUNE_FUSION_MIN_ENERGY,
+TUNE_T2_ENERGY, TUNE_T2_ENERGY_REACTOR -- are declared with NO GetTunable
+call reading them, so they set nothing today (`dashboard_audit.py`). Whoever
+takes this should start there rather than adding a fourth.
