@@ -935,6 +935,10 @@ const float TUNE_WORTH_DIAG = 0.f;
 //   (fodder and fighters exempt); 0 = record only. See docs/27.
 const float TUNE_RECORD_BITE = 1.f;
 
+// How hard a def scoring outside its line class's own spread, with no exchange
+//   record of its own, is priced back toward that class. 0 = off. See docs/27.
+const float TUNE_EVIDENCE_SHRINK = 0.f;
+
 // What a weapon's reach is worth when it CANNOT hit a moving target -- a slow
 //   un-tracked rocket. See docs/27.
 const float TUNE_AIM_MISS = 1.f;

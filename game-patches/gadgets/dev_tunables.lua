@@ -548,6 +548,7 @@ local NAMES = {
 	"apex_worth_cost",
 	"apex_worth_diag",
 	"apex_record_bite", -- market/worth.as: a type's measured damage/health record discounts its price (1)
+	"apex_evidence_shrink", -- market/worth.as: how hard a def outside its class's spread with no record is priced back to that class (0 = off)
 	"apex_record_prior", -- CircuitAI.cpp: units of "justified" the record starts from (10)
 	"apex_record_window", -- CircuitAI.cpp: the moving average spans this many deaths (40)
 	"apex_line_abs",

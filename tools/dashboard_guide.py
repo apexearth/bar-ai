@@ -1386,6 +1386,11 @@ GOALS = [
              "note": "favour units that soak damage"},
             {"ref": "TUNE_WORTH_COST", "dir": "down",
              "note": "toward the SQUARE law: quality wins over cheap mass"},
+            {"ref": "TUNE_EVIDENCE_SHRINK", "dir": "up",
+             "note": "a unit scoring far outside its class with no exchange "
+                     "record of its own is priced back toward that class — the "
+                     "scavenger Epics and drone carriers are what it is for "
+                     "(0 = off)"},
         ],
         "watch": "python tools/army_mix.py / composition.py, and the "
                  "`apex: worth` lines with apex_worth_diag=1. Per unit: "

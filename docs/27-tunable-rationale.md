@@ -585,6 +585,76 @@ his open call. Six-game battery 2026-09-16 vs BARb: dead T1 bots read
 game -- a gentle discount for a type trading under par, and no type here
 "always dies for nothing". Window 40 vs 100 gave identical multipliers.
 
+### `TUNE_EVIDENCE_SHRINK` = 0.f (2026-09-22, OFF — A/B not run)
+
+apexearth's scavenger complaint: "when scavenger units are on we make a ton of
+drone carriers, and Epic Tumbleweed units... these units are not that good but
+our algorithm thinks they're pretty good. So when the enemy comes at us with
+titans and thor tanks we really can't stop them."
+
+Measured, from `20260923-022448` and `20260923-030350` (both `scavunitsforplayers=1`):
+
+- `apex: escort-cand armvadert4 cost=15000 pow=288791.5 hp=67000` — **19.3
+  power per metal**, where `armbanth` reads 0.081, `corjugg` 0.071, `corgator`
+  0.054 and the whole normal field lies between 0.05 and 0.13. The source is
+  `crawl_dummy`: 20,000 damage on a 0.1 s reload = 200,000 dps at range 47.
+  `alldefs_post.lua:706` adds it and `armdronecarryland` to `armshltx`'s
+  buildoptions under the modoption, so it is both buyable and inside `gOurTree`.
+- `production.as:974` sets `linePPC` to the **MAX** `UnitCore` the line can
+  produce, and every army bid is `ppc / linePPC`. At the gantry that max is a
+  scav def, so the whole real T3 line prices at zero:
+  `armbanth=0(p0.000,r1.00) armthor=0(p0.000,r1.00) armvang=0(p0.000,r1.00)
+  armrattet4=0(p0.000,r1.00) armvadert4=1174.13(g17612.00,p0.013,pc0.497,r1.00)`
+  — armvadert4 is the only candidate on the line with a non-zero `p`, and it is
+  what gets built. That is the "we can't stop titans and thors" half stated in
+  the AI's own numbers: it cannot buy its own T3 either.
+- The exchange matrix cannot catch it. `apex: record-mul armvadert4 0.81
+  raw=1.00 pooled=1.00 **n=0**` on every sample of both runs: no history, so
+  `RecordRatio` returns the prior and the multiplier is inert. Even where there
+  IS history it is inert — in his own `matches/_engine` file armvadert4 has
+  dealt 54 metal against 35,105 taken (a true exchange of 0.0015) and
+  `RecordRatio` still reports 0.81, because `apex_record_prior` is 10
+  **A-equivalents** and 35,105 metal of a 15,000-metal unit is 2.3 of them.
+
+So the corrective has to reach the SCORE, not the ratio. This is the shrink
+`RecordRatioVs` already applies to a matchup with no history — fall back to the
+class read, earn your own number as the record fills — moved onto `UnitCore`:
+
+    keep = w + (1 - w) / (1 + over)      core' = ceil * (core/ceil)^keep
+
+`w = n / (n + apex_record_prior)` is the def's own evidence (`RecordCount`,
+A-equivalents of metal lost). `ceil` is the **median plus one IQR/1.349** of
+`UnitCoreRaw` over the def's own line class; `over` is how many of those spreads
+it sits beyond `ceil`. A median and an interquartile range, not a mean and a
+standard deviation, for the reason this file's own header gives about the field
+means — a mean over a population containing the outlier is the outlier's average.
+The tunable scales the whole thing (`keep = 1 - k(1 - keep)`), 0 = identity.
+
+Three properties, all load-bearing:
+
+- **One-sided.** `core <= ceil` returns untouched, and above it the exponent is
+  in (0,1], so the term can only ever discount. Same shape as the standoff-HP
+  block above it, added for the same reason.
+- **Continuous at the gate.** At `core == ceil` the shrink is the identity
+  whatever `keep` is, so nothing jumps across the boundary.
+- **Graded by how absurd the claim is, not just by evidence.** A def one spread
+  past `ceil` with no record keeps exponent 0.5 (a ~12% demotion at 1.3x ceil);
+  armvadert4, hundreds of spreads past it, collapses to the class ceiling.
+
+Bucketed by line class only, not class x tier: power per metal is measured flat
+across tiers in this game (corgator T1 0.054, corjugg T3 0.071, armbanth T3
+0.081), so a tier split would only thin the buckets.
+
+Cost: the class table is static and built once (`EvidenceStats`, latched only
+once two classes are non-empty, so it cannot latch while `LineMeans` still calls
+everything LC_MID); the per-def exponent is cached on a 30 s window, one
+`RecordCount` call per def per window. `apex: evidence <def> keep= core= -> ceil=
+sig= over= n= cls=` logs each def the first time its exponent moves.
+
+NOT APPLIED TO `UnitStrength` — that is what sizes enemies and the massing law,
+and moving it would move fighting decisions as well as buying ones. Deliberately
+out of scope.
+
 ### `TUNE_WORTH_DIAG` = 0.f
 
 1 = print the exponents and field means once; 2 = also dump the ranked field.

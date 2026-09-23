@@ -272,7 +272,7 @@ float OwnTierMul(int d)
 // total power of cost 1 + apex_worth_cost: at 1 that is cost^2, the LINEAR law
 // where bodies trade one for one and chaff wins; at 0 it is cost^1, the SQUARE
 // law where a massed army fires at once and quality wins superlinearly.
-float UnitCore(int d)
+float UnitCoreRaw(int d)
 {
 	WorthMeans();
 	if (gWMDps <= 0.f)
@@ -299,6 +299,130 @@ float UnitCore(int d)
 	if (wCost != 0.f)
 		v /= pow(Catalog::gCostM[d] / gWMCost, wCost);
 	return v * PowerMod(d);
+}
+
+// A DEF THE MODEL HAS NO EVIDENCE ABOUT IS PRICED AT ITS CLASS, NOT AT ITS
+// STATS -- the fallback RecordRatioVs already applies to a matchup with no
+// history, moved onto the SCORE, because the record cannot reach a def nobody
+// has fought with yet. docs/27 `TUNE_EVIDENCE_SHRINK` has the measurement.
+//
+// Median and interquartile range, never a mean and a deviation: a mean over a
+// population containing the outlier is the outlier's own average, which is the
+// argument this file's header already makes about the field means. Both are
+// static, so the table is built once.
+array<float> gEvidCeil;
+array<float> gEvidSig;
+bool gEvidStatsOk = false;
+
+void EvidenceStats()
+{
+	if (gEvidStatsOk)
+		return;
+	WorthMeans();
+	if (gWMDps <= 0.f)
+		return;
+	gEvidCeil.resize(LC_N);
+	gEvidSig.resize(LC_N);
+	array<array<float>> byCls(LC_N);
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !WorthScorable(i))
+			continue;
+		byCls[LineClassOf(i)].insertLast(UnitCoreRaw(i));
+	}
+	int filled = 0;
+	for (int c = 0; c < LC_N; ++c) {
+		gEvidCeil[c] = 0.f;
+		gEvidSig[c] = 0.f;
+		const uint n = byCls[c].length();
+		if (n < 8)
+			continue;
+		byCls[c].sortAsc();
+		// IQR / 1.349 is the normal-distribution equivalent of a standard
+		// deviation; nothing here is a chosen number.
+		const float sig = (byCls[c][(n * 3) / 4] - byCls[c][n / 4]) / 1.349f;
+		if (sig <= 0.f)
+			continue;
+		gEvidCeil[c] = byCls[c][n / 2] + sig;
+		gEvidSig[c] = sig;
+		++filled;
+	}
+	// Before LineMeans() can answer, LineClassOf calls everything LC_MID and
+	// three of the four buckets are empty -- latching there would fix every
+	// class's reference to the one that happened to be filled.
+	if (filled >= 2)
+		gEvidStatsOk = true;
+}
+
+array<float> gEvidKeep;
+array<float> gEvidKeepLog;
+int gEvidKeepAt = -999999;
+
+float EvidenceShrink(int d, float core)
+{
+	const float k = ai.GetTunable("apex_evidence_shrink", TUNE_EVIDENCE_SHRINK);
+	if ((k <= 0.f) || (core <= 0.f))
+		return core;
+	EvidenceStats();
+	if (!gEvidStatsOk)
+		return core;
+	if (int(gEvidKeep.length()) <= Catalog::gDefCount) {
+		gEvidKeep.resize(Catalog::gDefCount + 1);
+		gEvidKeepLog.resize(Catalog::gDefCount + 1);
+	}
+	if (ai.frame >= gEvidKeepAt + 30 * SECOND) {
+		gEvidKeepAt = ai.frame;
+		for (int i = 0; i <= Catalog::gDefCount; ++i)
+			gEvidKeep[i] = 0.f;   // 0 = not yet answered this window
+	}
+	float keep = gEvidKeep[d];
+	if (keep == 0.f) {
+		const int c = LineClassOf(d);
+		const float cl = gEvidCeil[c];
+		const float sig = gEvidSig[c];
+		if ((sig <= 0.f) || (core <= cl)) {
+			gEvidKeep[d] = 1.f;   // inside its class's own spread: ordinary
+			return core;
+		}
+		// Evidence is the record's own count -- A-equivalents of metal lost --
+		// against the prior the matrix already weighs a matchup by, so a type
+		// earns its stats back at exactly the rate the record trusts them.
+		const CCircuitDef@ cdef = Catalog::Def(d);
+		const float prior = ai.GetTunable("apex_record_prior", 10.f);
+		const float n = float(ai.RecordCount(cdef, -1));
+		const float w = ((n + prior) > 0.f) ? (n / (n + prior)) : 0.f;
+		const float over = (core - cl) / sig;
+		keep = w + (1.f - w) / (1.f + over);
+		keep = 1.f - k * (1.f - keep);
+		// Never exactly zero: 0 is the "not answered this window" sentinel, and
+		// pow(x, 0.001) is the full collapse to the ceiling anyway.
+		if (keep < 0.001f)
+			keep = 0.001f;
+		if (keep > 1.f)
+			keep = 1.f;
+		gEvidKeep[d] = keep;
+		if (abs(keep - gEvidKeepLog[d]) > 0.02f) {
+			gEvidKeepLog[d] = keep;
+			AiLog(Factory::T() + "apex: evidence " + cdef.GetName()
+				+ " keep=" + formatFloat(keep, "", 0, 3)
+				+ " core=" + formatFloat(core, "", 0, 4)
+				+ " -> " + formatFloat(cl * pow(core / cl, keep), "", 0, 4)
+				+ " ceil=" + formatFloat(cl, "", 0, 4)
+				+ " sig=" + formatFloat(sig, "", 0, 4)
+				+ " over=" + formatFloat(over, "", 0, 1)
+				+ " n=" + int(n) + " cls=" + c);
+		}
+	}
+	if (keep >= 1.f)
+		return core;
+	const float cl2 = gEvidCeil[LineClassOf(d)];
+	if (core <= cl2)
+		return core;
+	return cl2 * pow(core / cl2, keep);
+}
+
+float UnitCore(int d)
+{
+	return EvidenceShrink(d, UnitCoreRaw(d));
 }
 
 // ...and with the per-election terms the candidate is judged on. The line
