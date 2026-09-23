@@ -2331,3 +2331,33 @@ confirmation erased (the other was the three-fix bundle, 18.8% -> 9.4%). At a
 12.5% base rate, 16 games resolves nothing about win rate, and evidently not
 much about structure loss either. Anything claimed from a 16-game arm in this
 file should be read with that in mind.
+
+##### ANSWERED: def.nosite fires because the candidate site list is EMPTY
+
+The diagnostic ran (after the modoption had to be whitelisted -- S8 again, my
+second time tonight). 90 refusals in one 20-minute game, and every single one
+reads the same way:
+
+  nosite armclaw  sites=0 negative=0 bestPrev=0.0000 gap=324 wallPull=2.7018 lineN=0
+  nosite armguard sites=0 ...
+  all 90 lines: sites=0
+
+  by def: armguard 34, armclaw 29, armhlt 15, armanni 12
+
+`gDsPrev[d]` is EMPTY. The gate is not "no site scored a positive gain" -- it
+is "no candidate site was generated at all", and it happens for the heavy and
+T2 defences specifically, while `gap` says a shortfall exists (94-456) and
+`wallPull` is positive.
+
+So the model never evaluates a place to put a heavy tower. That is why we
+stand on 1.00 armanni, 0.69 armguard and 0.31 armhlt a game.
+
+This REDIRECTS the whole defence thread above. The cause is site GENERATION
+(whatever populates gDsPrev / DefSiteFill for a def), not the prevention
+value, not hazard, not visible threat, not cover, and not the budget share --
+all of which were probed tonight and none of which is reached, because the
+loop that would use them never has a site to score.
+
+The next session starts here, and it is a narrow question: why does the site
+builder produce zero candidates for armguard/armclaw/armhlt/armanni while
+producing them for armllt/armbeamer?

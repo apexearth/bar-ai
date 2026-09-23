@@ -525,6 +525,7 @@ local NAMES = {
 	"apex_floor_yield", -- market/decide.as: a floor stands down while its category is over target (0 = off)
 	"apex_deathwalk_price", -- want_mex.as: price a hot-road spot through TripRisk instead of refusing it (0 = off)
 	"apex_com_stay_forward", -- market/floor.as: a forward commander takes work around him rather than walking home (1 = since 3bb47630)
+	"apex_nosite_diag", -- protect_want.as: log WHY a defence site scored zero gain (0 = off)
 	"apex_share_army",
 	"apex_share_defence",
 	"apex_share_economy",
