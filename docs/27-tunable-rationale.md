@@ -2870,3 +2870,29 @@ is not a sample-size artefact. Structure loss -24 points, games 21% longer.
 
 The win figure is NOT claimed at this n -- two 16-game headlines evaporated at
 32 tonight. A 32-game confirmation is running.
+
+#### Confirmation: the mechanism holds, the outcome does not
+
+32-game confirmation of `apex_fill_firstpass=1`:
+
+                  heavy towers   structure lost   median   com deaths   wins
+  off (16g)           0.8            116%         21.5 min      -       0/16
+  on  (16g)           4.6             92%         26.0 min      -       2/16
+  on  (32g)           5.3             97%         27.0 min     1.94     2/32
+
+The mechanism is emphatic and replicated: 0.8 -> 5.3 heavy towers, 6.6x, on a
+low-variance count. Structure loss is 19 points better than off and games run
+26% longer, both holding across arms.
+
+COMMANDER DEATHS DID NOT MOVE: 1.94 against a 1.81 baseline. Pooled, the
+treated arms give 4/48 = 8.3% wins, indistinguishable from the 12.5% baseline.
+
+So static defence does not save the commander, and the chain this session
+built -- towers -> base held -> commander lives -> game won -- breaks at the
+last link. More guns make the base survive longer and the commander dies
+anyway, to the same main line, at the same rate.
+
+Kept ON regardless: it is a correctness fix, not a preference. An empty site
+list caused by a frame throttle was being read as "nowhere worth a gun", which
+is false, and the cost is one extra fill per frame until each def has been
+filled once. Longer games and less structure lost with no measured harm.

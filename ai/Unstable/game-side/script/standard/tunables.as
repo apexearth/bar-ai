@@ -1668,7 +1668,7 @@ const float TUNE_COM_STAY_FORWARD = 1.f;
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller
 //   reads it as "nowhere worth a gun". See docs/27.
-const float TUNE_FILL_FIRSTPASS = 0.f;
+const float TUNE_FILL_FIRSTPASS = 1.f;
 
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.

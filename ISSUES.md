@@ -2390,3 +2390,31 @@ is to rotate the slot rather than give it to whoever asks first.
 This is a PERFORMANCE THROTTLE deciding the AI's defence composition, which is
 the kind of coupling CLAUDE.md's "spread work across frames" rule exists to
 prevent -- the work is spread, but the same def wins every time.
+
+### STATIC DEFENCE DOES NOT SAVE THE COMMANDER (2026-09-23)
+
+The session's chain broke at its last link, and the break is measured.
+
+`apex_fill_firstpass` fixed a real defect -- a frame throttle returned an
+empty site list and the caller read it as "nowhere worth a gun" -- and it
+works: heavy towers 0.8 -> 5.3 a game (6.6x, replicated over 48 games),
+structure lost 19 points better, games 26% longer.
+
+Commander deaths: 1.94 against a 1.81 baseline. Unmoved. Wins 4/48 = 8.3%
+against a 12.5% baseline. Unmoved.
+
+So more guns make the base survive longer and the commander still dies, to the
+same main line (armfboy/armfido/armsnipe/armbull), at the same rate, a median
+605 elmo from his own start. The proposed chain -- towers -> base held ->
+commander lives -> game won -- is false at the last step.
+
+What that leaves, and it is now the sharpest open question in this file:
+what actually kills the commander, given a base with five times the heavy
+guns? Either the guns are in the wrong PLACE (the site list is now non-empty,
+but nothing has checked whether those sites are near him), or the commander is
+somewhere the guns are not when the line arrives, or static defence simply
+loses to a T2/T3 push regardless of count.
+
+The instrument for the first of those is one line: the distance from each
+commander death to the nearest standing gun of ours. That has never been
+measured and it separates "wrong place" from "wrong idea".
