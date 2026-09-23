@@ -2183,3 +2183,23 @@ For the next session, the shortest statement of the problem: we build a
 million metal of structures, 86% of it is destroyed, and the model's own site
 valuation concludes there is nowhere worth putting a gun (def.nosite 8,078).
 Those two facts cannot both be right.
+
+#### Ruled out: hazard is not blind to our losses
+
+`HazardWith` (coverage.as:775) computes `p = LossRateAt(pos) * gRkTau / stake`
+-- it already learns from metal actually lost near the point, and takes the
+max of that against the foe-mass gradient and the approach term. So the
+zero-valued towers are NOT caused by the model failing to notice that our
+buildings die.
+
+That narrows the next session's question to one line: `prev` in
+protect_want.as is the MARGINAL reduction in expected loss from adding this
+tower, and at 8,078 sites it computes as <= 0 while 86% of the stake
+eventually dies. Either the marginal term is wrong, or a tower genuinely does
+not reduce the loss -- and if the second is true then towers are not the
+answer to the 86% and the whole defence thread above is misdirected.
+
+That is a question about one computation, with both outcomes actionable, and
+it is where a fresh session should start. It is NOT a question about hazard
+inputs, want pricing, floors, shares, claims or expansion gates -- all of
+those are measured and ruled out in the entries above.
