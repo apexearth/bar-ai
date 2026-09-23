@@ -302,7 +302,8 @@ local NAMES = {
 	"apex_static_defense_weight",
 	"apex_t1_push_edge",
 	"apex_t1_push_off",
-	"apex_t2_army_hold", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
+	"apex_t2_army_hold",
+	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
 	"apex_army_budget_damp", -- production.as: damp the spare-metal army floor by the ARMY row budget multiplier (0 = off)
 	"apex_t2_energy",
 	"apex_t2_energy_reactor",

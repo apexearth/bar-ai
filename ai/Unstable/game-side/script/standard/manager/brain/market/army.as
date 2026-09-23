@@ -1499,11 +1499,11 @@ float ArmyTarget()
 	// The switch is meant to keep a DEFENSIVE army and then stop buying, not
 	// to stand the army down: zero holds from frame 18 to the mohos, and the
 	// valve meant to restore it (EcoDangerNear) compares a unit COUNT against
-	// a metal threshold, so it never arms. apex_t2_army_hold > 0 holds the
+	// a metal threshold, so it never arms. apex_t2_army_floor > 0 holds the
 	// defensive need instead, capped at the full target. See docs/27.
 	if (T2SwitchOn()) {
-		const float hold = ai.GetTunable("apex_t2_army_hold",
-				TUNE_T2_ARMY_HOLD);
+		const float hold = ai.GetTunable("apex_t2_army_floor",
+				TUNE_T2_ARMY_FLOOR);
 		if (hold <= 0.f)
 			return 0.f;
 		const float need = Military::HoldNeedM() * hold;

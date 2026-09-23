@@ -2971,3 +2971,36 @@ income +38% at minute 12, commander deaths 37 -> 20, games lost inside 20
 minutes 12/32 -> 4/32 at p = 0.041, standing army +22%, metal lost -14% --
 with no measured harm anywhere, including the risk the veto existed to
 manage. It is one flag, and it is on the dashboard.
+
+## TUNE_ARMY_BUDGET_DAMP -- MEASURED INERT, left off
+
+Damps the spare-metal army floor (RichArmyGapM) by the ARMY row's budget
+multiplier, so the category running over target is on the same scale as the
+ones the corrector amplifies.
+
+32 games, 45 min, Glacier Pass 1.2 2v2 Armada/Armada +100% 0.2 boxes lr vs
+BARb stable hard, against the matched control arm:
+
+                 army held/target    def held/target    wins
+  damp off (32g)   0.320 / 0.202      0.142 / 0.288     4/32
+  damp on  (32g)   0.318 / 0.208      0.134 / 0.286     2/32
+
+NOTHING MOVED. Verified it was not a wiring failure: the modoption is in the
+start script, the gadget published, zero compile errors, and the single-game
+smoke test that looked promising (army 0.22, def 0.20) was noise.
+
+WHY. Army demand in production.as:797-825 is a MAX of three terms:
+
+    armyGap = ArmyTarget() - armyHave          (zero while the T2 switch is on)
+    if (coverGap > armyGap) armyGap = coverGap  (Military::CoverNeedM)
+    if (richGap  > armyGap) armyGap = richGap   (spare metal x 180 s)
+
+Damping the third does nothing whenever the second is the maximum, and the
+null says it is. Our army is not bought with leftover metal, it is bought as
+COVER against seen threat -- and cover need answers to no target at all.
+
+So the finding underneath stands and is unchanged: the budget corrector
+steers only what constructors build, and army sits outside it. But the lever
+is CoverNeedM, not RichArmyGapM. Whether cover need should be bounded by the
+army row is a question about what the AI is ALLOWED to do when it is being
+attacked, which is apexearth's call, not a session's.

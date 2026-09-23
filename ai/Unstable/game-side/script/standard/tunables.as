@@ -1676,7 +1676,7 @@ const float TUNE_COM_MEX_PRICE = 0.f;
 //   the defensive need (Military::HoldNeedM) instead, capped at the full
 //   target. The switch's stated purpose is a defensive army, not a stand-down.
 //   See docs/27.
-const float TUNE_T2_ARMY_HOLD = 0.f;
+const float TUNE_T2_ARMY_FLOOR = 0.f;
 
 // [toggle 0/1] -- The spare-metal army floor is damped by the ARMY row's own
 //   budget multiplier. 0 is the behaviour before 2026-09-23: production.as
