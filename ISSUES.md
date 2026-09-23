@@ -2886,3 +2886,58 @@ withdraw orders -- so the next split is which of the two owns the gain.
 TUNE_RETREAT_COST_SECS is already recorded as harmful (K/D 0.33 -> 0.11) and
 his standing rule is that "retreat is never the answer, look at the action
 before it", so withdraw is the first suspect and the cheaper half to test.
+
+### WE ABANDON 37% OF EVERY BUILD WE START, AND ALMOST 100% OF THE BIG ONES
+
+2026-09-23, `tools/aborts.py` over the 32-game 45-minute control arm. The AI
+already logs every ended builder task as done= or abort= (`apex: task-gone`);
+nobody had summed it.
+
+  def            done   abort   abort share
+  armwin         1404      55      4%
+  armmakr        1553     328     17%
+  armnanotc      1228     386     24%
+  armmoho          68      74     52%
+  armrad          105     207     66%
+  armmex          392     936     70%
+  armmmkr          83     389     82%
+  armalab           4      64     94%
+  armlab            2      48     96%
+  armaap            1      23     96%
+  armgeo            5     282     98%
+  armap             2     101     98%
+  armvp             0      59    100%
+  armageo           0      71    100%
+
+  ALL DEFS       5295    3144     37%      (165.5 finished, 98.2 abandoned/game)
+
+THE SHAPE IS THE FINDING: what is cheap and fast completes, what is expensive
+and slow is abandoned. Wind aborts 4% and geo 98%. We are not choosing wind
+over fusion because wind is priced better -- we CHOOSE the big build, walk to
+it, and drop it, over and over, and wind is simply the only rung short enough
+to survive our own re-election.
+
+This is one mechanism under at least three things this file diagnoses
+separately:
+  - the energy ladder that "never climbs" (34 windmills, 2 reactors)
+  - the extractor shortfall (70% of mex tasks abandoned; 12.3 finished a game)
+  - the missing advanced converters (82%), where BARb runs 10.3 to our 3.9
+  - every factory: armlab 96%, armvp 100%, armap 98%, armalab 94%
+
+It is also exactly what apexearth reported from watching, twice: "he walks
+all over the damn place... it's almost like he can't make up his mind", and
+"we're like a crazy cancer virus that spreads all around the map but we lack
+any good organization to do this craziness efficiently."
+
+RELATED, already in this file and now explained: 23% of constructor job
+changes land within 5 s of the last one; 55% of defence elections are
+abandoned; S14 records that AiMakeTask is a RE-ELECTION, so every tick can
+drop work in progress.
+
+NOT YET ESTABLISHED: why. `abort=N(nopos 0)` says these are not
+position failures. The candidates are re-election dropping a live task, the
+site becoming invalid, or the hand being peeled. The fix direction that
+follows from this repo's own paradigm is that a task with sunk progress
+should carry that progress as VALUE in the next election -- a half-built
+fusion is worth more than an unstarted one, and today the auction cannot see
+the difference.
