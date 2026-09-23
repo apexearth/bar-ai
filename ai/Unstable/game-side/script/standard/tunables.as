@@ -1671,6 +1671,13 @@ const float TUNE_COM_STAY_FORWARD = 1.f;
 //   does not keep the commander alive. See docs/27.
 const float TUNE_COM_MEX_PRICE = 0.f;
 
+// [multiplier] -- What the army target is while the T2 switch is on. 0 is the
+//   behaviour since 91d09dd7: literally zero, for ~80% of the game. 1 holds
+//   the defensive need (Military::HoldNeedM) instead, capped at the full
+//   target. The switch's stated purpose is a defensive army, not a stand-down.
+//   See docs/27.
+const float TUNE_T2_ARMY_HOLD = 0.f;
+
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller

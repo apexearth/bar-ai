@@ -2698,3 +2698,45 @@ and half the absolute army.
 So: the defect is real and verified, its size is unknown, and the honest test
 is whether a live target changes absolute army and wins -- not whether it
 changes the share.
+
+### CORRECTION: the 0/32 baseline was my own broken win counter, and it inverts the com_mex_price result
+
+2026-09-23, found by an unbiased red-team of this session's own analysis.
+
+`result.json` pretty-prints the winner field:
+
+    "winner_specs": [
+      "BARb-stable-hard"
+    ],
+
+I counted wins with `grep -o '"winner_specs":[^]]*]'`. grep works line by
+line, the closing bracket is on the NEXT line, so the pattern never matched
+anything and `grep -q Apex` was false for every game in every arm. It read
+ZERO WINS regardless of what happened. Parsed as JSON (`tools/wins.py`):
+
+  45-min, apex_com_mex_price=0    (control)    32 decided, 4 wins  (12.5%)
+  45-min, apex_com_mex_price=0.35 (treatment)  26 decided, 0 wins  ( 0.0%)
+  fp-conf32 (earlier arm)                      32 decided, 2 wins  ( 6.2%)
+
+TWO THINGS I PUBLISHED ARE WRONG AND ARE NOW WRONG IN THIS FILE ABOVE:
+
+1. "The real baseline in his regime is 0 of 32, not 12.5%." Backwards. The
+   baseline IS about 12.5% (4/32 here, 2/32 on fp-conf32). The 12.5% figure I
+   spent the session trying to correct was right all along.
+
+2. "apex_com_mex_price does not convert to wins, and the win test had no
+   power." The test was not powerless and it did not come back neutral. It
+   came back 4/32 -> 0/26, which points AGAINST the change. Fisher two-sided
+   p = 0.120, so it does not resolve -- but the point estimate is a loss of
+   every win, not a wash, and I recommended turning it on off the back of a
+   number that did not exist.
+
+The mechanism results (income +38% at minute 12, commander deaths 37->20,
+games lost inside 20 min 12/32 -> 4/32 at p=0.041) were computed by different
+code and are not affected by this bug. So the change does what it says to the
+economy and may still cost games. It stays default 0, and the recommendation
+to enable it is WITHDRAWN pending an arm that resolves wins.
+
+Lesson worth more than the result: never count a JSON field with grep. Every
+win count in this repo's session notes that was taken that way should be
+re-read with tools/wins.py.
