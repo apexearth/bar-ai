@@ -939,6 +939,19 @@ float FleetAskE()
 		const float dens = Catalog::gMobile[id] ? buildDens : lineDens;
 		ask += float(gOwnCount[d]) * Catalog::gBuildPower[id] * dens;
 	}
+	// Hands the metal feed cannot run do not ask for energy. Same bound EPrice
+	// already puts on this same fleet (price.as). Unbounded, the ask rises with
+	// our own build power and floors four separate demand terms, so
+	// ERealizeShare read 1.00 -- "all of it will be used" -- at income 499
+	// against pull 278 with the bank full.
+	if (ai.GetTunable("apex_e_feed_bound", TUNE_E_FEED_BOUND) > 0.f) {
+		const float cap = BPCapacity();
+		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
+		const float feed = aiEconomyMgr.metal.income
+				+ aiEconomyMgr.metal.current / look;
+		if ((cap > 0.f) && (feed < cap))
+			ask *= feed / cap;
+	}
 	gFleetAskVal = ask;
 	return ask;
 }
@@ -1321,7 +1334,14 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	gCwSurplus = eSurplus;
 	// A pinned bank is its own evidence -- see EnergyPinned. The EMA is the
 	// wrong instrument there, so it does not get to veto.
-	const bool pinned = EnergyPinned();
+	// A FULL BANK IS NOT WASTE AT FRAME ZERO. The game grants full energy
+	// storage at the start, so EnergyPinned() reads pinned=1 with excess,
+	// surplus and the waste EMA all at zero, and the first election of the
+	// game bought a converter -- 1.64 of them per player before minute 4
+	// against BARb's none, each one eating the energy that then forced the
+	// stall rule to buy basic solars. His ruling is converters on WASTE;
+	// with nothing wasted there is nothing for one to modulate.
+	const bool pinned = EnergyPinned() && (eWasted > 1.f);
 	if ((eSurplus <= 1.f) && !pinned) {
 		++gCwNoSurplus;
 		ConvWhyLog();

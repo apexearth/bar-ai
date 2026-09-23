@@ -1063,6 +1063,12 @@ const float TUNE_FARM_BACK = 500.f;
 //   anticipation, so the solar starts before the bank empties.
 const float TUNE_E_LOOKAHEAD = 30.f;
 
+// E_FEED_BOUND: 1 = the standing fleet's energy ask is bounded by the metal
+//   feed that would actually run those hands, the same bound EPrice already
+//   puts on the same fleet. 0 = the ask stands at full nominal speed (the
+//   behaviour before 2026-09-22). Measured flat and left OFF; see docs/27.
+const float TUNE_E_FEED_BOUND = 0.f;
+
 // E_HEADROOM: energy income target as a multiple of trending pull -- the
 //   standing reserve that keeps the bank from ever being raced to zero. See
 //   docs/27.

@@ -236,7 +236,11 @@ float EPriceFloor()
 			+ " ePull=" + formatFloat(aiEconomyMgr.energy.pull, "", 0, 0)
 			+ " convUse=" + formatFloat(ConvUseE(), "", 0, 0)
 			+ " convCap=" + formatFloat(ConvCapE(), "", 0, 0)
-			+ " realize=" + formatFloat(ERealizeShare(20.f, 30.f), "", 0, 2));
+			+ " realize=" + formatFloat(ERealizeShare(20.f, 30.f), "", 0, 2)
+			+ " fleetAsk=" + formatFloat(FleetAskE(), "", 0, 0)
+			+ " bpCap=" + formatFloat(BPCapacity(), "", 0, 1)
+			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0));
 	}
 	return gEPriceFloor;
 }

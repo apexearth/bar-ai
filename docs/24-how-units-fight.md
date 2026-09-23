@@ -1310,3 +1310,17 @@ as 16 held bombers, and the "home is bigger" recall fired against the wave's
 plane COUNT every second for ten minutes (`air/update.as:235`). Open, his to
 rule: does a gunship finishing mid-strike join the wave out, and is a strike
 ever recalled because home outgrew it?
+
+Rolling bombs (2026-09-22): *"Make sure that rolling bombs don't group up into
+squads and make sure they just head straight for enemies. They should try to
+avoid being near allies so when they blow up they don't hurt allies."*
+
+- **A rolling bomb never joins a squad.** It is one delivery of one explosion,
+  not a line unit: massing it waits for a group it does not need, and a group
+  of them dies to one blast.
+- **It goes straight at an enemy.** No forming up, no waiting for a ratio.
+- **It keeps away from our own units on the way in.** Its own death is the
+  weapon, so standing among allies is how the weapon lands on us.
+- Armada `armvader` (Tumbleweed) is the one in his 2v2 regime; `corroach`
+  (Bedbug) and `corsktl` (Skuttle) are the Cortex pair. All three were roled
+  `raider` + `melee`, which is what put them in raid packs.

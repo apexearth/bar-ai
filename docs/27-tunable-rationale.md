@@ -2399,3 +2399,30 @@ same seed three times: metal 418k -> 467k -> 559k, our mexes at 24 min
 9 -> 16 -> 31 against theirs 55 -> 48 -> 36, K/D 0.38 -> 0.62 -> 0.59.
 One seed; the second is in the commit that lands this.
 
+
+### `TUNE_E_FEED_BOUND` = 0.f
+
+Off, measured flat. `FleetAskE()` (want_energy.as) is the standing fleet's
+energy ask at FULL nominal speed, and it floors four separate demand terms --
+`ERealizeShare`'s target and `EPrice`'s `excess` (price.as:281, 459) plus
+`EnergyDeficitE` twice -- while nothing floors the energy COST side. It is
+never bounded by the metal that would actually run those hands, and it rises
+with our own build power, so it is self-amplifying. The defect is real and
+instrumented: with `apex_efloor_diag=1` the realize term, whose whole job is
+"would anything absorb this?", reads `realize=1.00` at eInc 499 against ePull
+278 with the bank full, at every sample of the opening.
+
+At 1 the ask is multiplied by `feed / BPCapacity()` when the metal feed is the
+smaller -- the same bound `EPrice` already applies to the same fleet eleven
+lines from one of the call sites. It bites: the ask fell from ~740 to 317 at
+f3313, and e-stall hoists dropped from 13.9 to 9.7 a game. The decision moved
+and the OUTCOME did not: against the 96-game post-harness baseline, mex@4
+6.2 vs 6.3, guarded@4 2.9 vs 3.1, army@4 7033 vs 7070, army@6 9507 vs 9405.
+n=76; the paired control arm was cut short when he started playing.
+
+So the bound is not the lever, and the residual inflation is upstream of it:
+`BuildEnergyDensity()` is an unweighted mean over the whole immobile catalogue
+(advanced solar's 5,000 E included) rather than over what our hands are
+actually building, which in the opening is mexes and solars. Left for whoever
+picks this up -- with the warning that mex@4 is a coin flip as a screen
+(docs/33 correction), so judge it on army differential.

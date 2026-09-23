@@ -43,8 +43,13 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit)
 			|| !Requests::IsMetalUnlock(lt.buildDef))
 			continue;
 		const AIFloat3 bp = lt.GetBuildPos();
+		// Guards count against the cap. They never become Workers -- they sit
+		// on a Guard task -- so counting only the crew, every free hand saw a
+		// short site and piled on: the priced assist above already folds them
+		// in for the same reason.
 		if (!OnMap(bp) || (Requests::Workers(lt) == 0)
-			|| (Requests::Workers(lt) >= Requests::SiteWorkerCap(lt.buildDef)))
+			|| ((Requests::Workers(lt) + uint(GuardsOnJob(lt)))
+				>= Requests::SiteWorkerCap(lt.buildDef)))
 			continue;
 		if (!ai.CanDefReach(Catalog::Def(int(unit.circuitDef.id)), here, bp))
 			continue;
