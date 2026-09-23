@@ -15,7 +15,7 @@ In the early game most of the economy comes from metal extractors and energy.
 As the game goes later, a greater and greater portion of it comes from energy
 production and energy conversion into metal.
 
-The number of extractor spots on a map is fixed and small (34 on Glacier Pass),
+The number of extractor spots on a map is fixed and small (19 on Glacier Pass 1.2 -- the AI's own mexdiag reads mapSpots=19; 34 is Frozen Ford),
 so extraction stops growing. Energy does not. Conversion runs at roughly 60
 energy per 1 metal. `docs/10-bar-game-concepts.md`.
 

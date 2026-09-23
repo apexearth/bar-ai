@@ -17,7 +17,7 @@ and no game since has been read for it.
 
 ## ARMY
 
-### ARMY SHARE: we put ~10% of metal into army, BARb 23-32%, and that decides the team games (2026-09-06, re-read 09-15)
+### ARMY SHARE (STALE for the Glacier 2v2 regime -- see the HOLDING FAILURE entry at the end; there we are 53% army to BARb's 43%): we put ~10% of metal into army, BARb 23-32% (2026-09-06, re-read 09-15)
 
 `tournaments/20260906-123343-fixes-on` vs `-123756-fixes-off`, Comet 1v1 vs
 BARb hard, 8+8: both arms 0-8; army 10.0% / 9.7% of spend against BARb's
@@ -2740,3 +2740,50 @@ to enable it is WITHDRAWN pending an arm that resolves wins.
 Lesson worth more than the result: never count a JSON field with grep. Every
 win count in this repo's session notes that was taken that way should be
 re-read with tools/wins.py.
+
+### It is a HOLDING failure, not an acquisition failure, and that retires the direction I spent today on
+
+2026-09-23, from two independent unbiased reviews, cross-checked against my
+own numbers.
+
+Glacier Pass 1.2 has **19** metal spots, not the 34 CLAUDE.md claimed (the
+AI's own `mexdiag mapSpots=19`, 53 samples in one game; 34 is Frozen Ford).
+CLAUDE.md is corrected.
+
+On a 19-spot map the two sides hold 6.4 + 8.1 = 14.5 of 19 by minute 4 and
+17.8 of 19 by minute 12. **After about minute 8 there is no free ground.**
+Every further extractor has to be taken off them.
+
+And we already pay for the whole map: we BUILD ~18.5 extractors a game and
+STAND 5. They build ~30.8 and stand 11. My own mexkill numbers agree -- 11.5
+lost by minute 20 against 4.8 standing.
+
+That retires the whole class of fix I worked on today. `apex_com_mex_price`
+makes the commander PROPOSE more spots. There are no more spots, and the
+election-level log says so: `noOpen` is the dominant refusal once the map
+fills. It is consistent with the win result going the wrong way (4/32 -> 0/26).
+
+Where our things actually are, measured per side against the home->enemy axis
+(3,480 elmo; f=1 is their spawn):
+
+  min 12   extractors mean r / fwd f      defences mean r / fwd f
+  us          385 / 0.038                    569 / 0.010
+  them       1055 / 0.229                   1102 / 0.235
+
+We build a symmetric ~500-elmo bubble around the spawn and never leave it.
+Our defences at f=0.010 are not "at home", they are DIRECTIONLESS -- a ring
+with no bias toward the enemy at all. Theirs sit ~765 elmo up the attack
+axis. Territory goes as r-squared, so their disc is ~4.4x ours, which IS the
+10-vs-5 extractor split. The count is the territory ratio, not an
+independent fact. The deepest spot we have ever held reads depth 0.04.
+
+Two more things that are not in any note and change the picture:
+
+- Our army is 53% of everything we build and trades at 0.49; theirs is 43%
+  and trades at 1.63. mKillStatic is DEAD LEVEL (20,098 vs 19,995) while
+  mKillMobile is 0.43. We kill buildings as well as they do and lose every
+  unit fight.
+- So the stale ARMY SHARE entry at the top of this file ("we put ~10% of
+  metal into army, BARb 23-32%") is wrong for this regime by a mile and
+  points the wrong way: acting on it enlarges the thing already killing us.
+  It is from Comet 1v1, 2026-09-06. RE-SCOPED, do not act on it here.
