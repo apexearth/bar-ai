@@ -64,6 +64,7 @@ void PeelSurplus()
 			if (top is null)
 				break;
 			t.RemoveUnit(top);
+			Builder::NotePeel(int(top.id));
 			++gPeeled;
 			++peeledNow;
 			@crew = t.GetUnits();
@@ -155,6 +156,7 @@ void ConsolidateEnergy()
 			if (top is null)
 				break;
 			t.RemoveUnit(top);
+			Builder::NotePeel(int(top.id));
 			++gConsolidated;
 			++moved;
 			@crew = t.GetUnits();

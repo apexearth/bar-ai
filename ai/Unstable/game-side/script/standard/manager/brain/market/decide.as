@@ -1863,7 +1863,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 						break;
 					}
 				}
-				if (!onCrew) {
+				// ...but the ENGINE detaches the hand before every re-election
+				// too, so onCrew is false every time and this hold has never
+				// once fired: keeps=0 against offCrew=7,370 over 32 games.
+				// apex_keep_job_peel tests the removals that are ours instead.
+				bool dropped = !onCrew;
+				if (ai.GetTunable("apex_keep_job_peel", TUNE_KEEP_JOB_PEEL) > 0.f)
+					dropped = Builder::PeeledWithin(int(unit.id), 10 * SECOND);
+				if (dropped) {
 					@gIncTask[uidk] = null;
 					++gOffCrewMin;
 				} else if (OnMap(ip) && !Builder::SiteHot(ip)) {

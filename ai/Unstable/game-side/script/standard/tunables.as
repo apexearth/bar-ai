@@ -1685,6 +1685,13 @@ const float TUNE_T2_ARMY_FLOOR = 0.f;
 //   can only ever amplify the starved side. See docs/27.
 const float TUNE_ARMY_BUDGET_DAMP = 0.f;
 
+// [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
+//   consolidate, con-letgo) instead of crew membership. The engine detaches a
+//   hand before every re-election, so the crew test is false every time and
+//   the hold has never fired: keeps=0 against offCrew=7,370 over 32 games.
+//   See docs/27.
+const float TUNE_KEEP_JOB_PEEL = 0.f;
+
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller

@@ -289,6 +289,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 				&& SiteHot(at))
 			{
 				held.RemoveUnit(unit);
+				NotePeel(int(unit.id));
 				++gLetGo;
 				if (ai.frame >= gNextLetGoLog) {
 					gNextLetGoLog = ai.frame + 30 * SECOND;
