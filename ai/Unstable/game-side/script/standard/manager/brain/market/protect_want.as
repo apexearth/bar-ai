@@ -1,4 +1,5 @@
 namespace Market {
+int gNextNoSiteLog = 0;
 // A T1 tower is one the T1 LINE can build -- gT1Line, not gT1Hand, because
 // gT1Hand includes the commander and a levelled commander reaches well above
 // its tier. corcomlvl5..10 build cordoom (Bulwark, 3000m), so gT1Hand called it
@@ -389,6 +390,30 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				}
 			}
 			gDbgLineN = gDsLineN[d];
+			// WHY THE BIGGEST GATE IN THE GAME CLOSES. `apex: defwhy` samples
+			// only elections a tower WON, so def.nosite -- 8,078 refusals in
+			// one game, the largest by far -- has never been looked at. Same
+			// shape as defwhy, on the refusal instead of the win.
+			if ((bestGain <= 0.f) && (ai.frame >= gNextNoSiteLog)
+				&& (ai.GetTunable("apex_nosite_diag", 0.f) > 0.f)) {
+				gNextNoSiteLog = ai.frame + 10 * SECOND;
+				float pMax = 0.f;
+				int pNeg = 0;
+				const array<float>@ pv = gDsPrev[d];
+				if (pv !is null) {
+					for (uint pi = 0; pi < pv.length(); ++pi) {
+						if (pv[pi] > pMax) pMax = pv[pi];
+						if (pv[pi] < 0.f) ++pNeg;
+					}
+				}
+				AiLog(Factory::T() + "apex: nosite " + Catalog::Def(d).GetName()
+					+ " sites=" + ((pv !is null) ? pv.length() : 0)
+					+ " negative=" + pNeg
+					+ " bestPrev=" + formatFloat(pMax, "", 0, 4)
+					+ " gap=" + formatFloat(hGap, "", 0, 0)
+					+ " wallPull=" + formatFloat(wallPullP, "", 0, 4)
+					+ " lineN=" + gDbgLineN);
+			}
 			if (Gate(GATE_DEF_NOSITE, bestGain <= 0.f))
 				continue;
 			DwEnsure(d);
