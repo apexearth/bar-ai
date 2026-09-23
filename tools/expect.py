@@ -668,15 +668,22 @@ def exp_home_outranks_front(games):
 
 
 def exp_commander_stays_home(games):
-    """After minute 10 the commander is inside his leash nearly all the time."""
-    ev = [g for g in games if g["minutes"] >= 15]
+    """Late in the game the commander is inside his leash nearly all the time.
+
+    LATE MEANS AFTER MINUTE 15, not 10 (apexearth 2026-09-22: "that 'commander
+    stays home' is only something we'd ever want after like 15-20 minutes into
+    the game. we don't want it on a tiny short smoke test"). At minute 10 he is
+    still expected to be out capping ground, so the old window called the
+    opening a violation and the gate had been RED on this for a week.
+    """
+    ev = [g for g in games if g["minutes"] >= 20]
     if len(ev) < 2:
-        return "NEED MORE", f"{len(ev)} games of 15+ min (need 2)"
+        return "NEED MORE", f"{len(ev)} games of 20+ min (need 2)"
     bad, seen = [], 0
     for g in ev:
         far = tot = 0
         for m in re.finditer(r"\[(\d+)\.\dm t\d+\] apex: com-pos t=\d+ at=[\d,-]+ fwd=[\d.-]+ home=-?\d+ far=(\d)", g["text"]):
-            if int(m.group(1)) < 10:
+            if int(m.group(1)) < 15:
                 continue
             tot += 1
             far += int(m.group(2))
@@ -686,9 +693,9 @@ def exp_commander_stays_home(games):
         if far > 0.1 * tot:
             bad.append((g["name"], far, tot))
     if seen < 2:
-        return "NEED MORE", f"{seen} games with commander samples past minute 10 (need 2)"
+        return "NEED MORE", f"{seen} games with commander samples past minute 15 (need 2)"
     if bad:
-        return "RED", f"{len(bad)}/{seen} games with the commander past his leash more than a tenth of the time after minute 10: " + ", ".join(f"{n} {f}/{t}" for n, f, t in bad[:3])
+        return "RED", f"{len(bad)}/{seen} games with the commander past his leash more than a tenth of the time after minute 15: " + ", ".join(f"{n} {f}/{t}" for n, f, t in bad[:3])
     return "OK", f"commander inside his leash in {seen} games"
 
 
