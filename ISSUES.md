@@ -2047,3 +2047,24 @@ exposure only to the mex want he is walking to, not to the plan as a whole.
 
 Our win rate is 12.5%. We keep a commander in 10 of 80 games, which is 12.5%.
 Those are the same number.
+
+#### Where the commander actually dies: at home, to the main line
+
+117 commander deaths over 64 full-length games:
+
+  median distance from his own start   605 elmo   (p25 399, p75 932)
+  killed by  armfboy 16%  armfido 12%  armsnipe 9%  armbull 7%
+
+He dies IN OUR OWN BASE, killed by BARb's main battle line -- not forward, and
+not by raiders. That weakens the "forward commander dies" reading of
+3bb47630 that this entry started with, and it points somewhere else entirely:
+BARb's army arrives at our base around minute 21 and there is nothing there.
+
+Which joins the two halves of this file. Defence runs at 0.09-0.17 against a
+target of 0.29-0.34 all game, we stand on 4.3 light towers to BARb's 9.3,
+57% of our extractors have a gun nearby against their 84%, and the commander
+dies at home to the army that walks in. His mex-guard ruling (2026-09-17) and
+his fortress ruling (2026-09-22) are both about exactly this ground.
+
+So the objective gap named above is narrower than "nothing prices the
+commander staying alive": nothing prices HOLDING THE GROUND HE STANDS ON.
