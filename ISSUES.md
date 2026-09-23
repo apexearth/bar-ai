@@ -3068,3 +3068,18 @@ def's threshold for an A/B. NOT YET MEASURED.
 This is the likeliest single cause of the army row reading over target: the
 budget counts SPEND, so army killed on the retreat is charged to army again
 every time it is rebuilt -- we lose 1.22x the army we build, BARb loses 0.52x.
+
+## Our benchmark regime is not his game (2026-09-23)
+
+apexearth plays with the scavenger pack on: his start scripts carry
+`experimentalextraunits=1` and `scavunitsforplayers=1`. Those put the `*t3`
+units in the player pool -- `armafust3` (Epic Fusion: 90,000 metal, 2,500,000
+buildtime), `armannit3`, `armmmkrt3`, `armapt3`.
+
+Every arm run before this date omitted both, so the unit pool differed from
+his. A behaviour he watched could not appear in our games at all: his Epic
+Fusion complaint was invisible to a 32-game arm, and the fix for it measured
+flat because the unit was never a candidate.
+
+Pass both modoptions for anything meant to reflect his regime, and grep the
+arm for `*t3` defs before trusting a null result.
