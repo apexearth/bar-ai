@@ -2203,3 +2203,26 @@ That is a question about one computation, with both outcomes actionable, and
 it is where a fresh session should start. It is NOT a question about hazard
 inputs, want pricing, floors, shares, claims or expansion gates -- all of
 those are measured and ruled out in the entries above.
+
+#### Do towers actually reduce the 86%? Not established
+
+Correlation over 35 full-length games, our side, by tower count quartile:
+
+  12-14 towers   89% of structure metal lost
+  14-17          102%
+  17-19          101%
+  19-36           76%
+
+The top quartile loses less and the middle two do not, so the relationship is
+not monotonic, n is 8-11 a bucket, and it is confounded in both directions --
+a longer game builds more towers AND has more time to lose things.
+
+So the question the chain ends on is still open, and it is the RIGHT question:
+before building anything to make towers cheaper or more available, run a
+controlled arm that changes tower count alone and read structure metal lost.
+If towers do not move that number, the whole defence thread in these entries
+is misdirected and the 86% is caused by something else -- most likely that we
+lose the field army and everything static follows.
+
+Do not take the 76% as evidence for towers. It is a correlation with an
+obvious confound and it is recorded here so nobody quotes it as a result.
