@@ -1670,7 +1670,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// factory short of its caretakers is taken, not sampled (apexearth
 	// 2026-09-11: "it should be high priority").
 	bool floorPush = false;
-	if (!aaPanic && !superPush && !coverPush && !convertPush) {
+	// A FLOOR THAT FIRES WHILE ITS CATEGORY IS ALREADY OVER TARGET IS NOT A
+	// FLOOR. It guarantees a minimum, and buildpower has run 0.32 against a
+	// 0.15 target while defence sat at 0.09 against 0.29. BudgetMult is
+	// target/actual, so > 1 is "still short" -- below that the nano floor
+	// yields and the election falls through to the priced draw.
+	const bool bpShort = (ai.GetTunable("apex_floor_yield", TUNE_FLOOR_YIELD) <= 0.f)
+			|| (Brain::BudgetMult(Brain::BUILDPOWER) > 1.f);
+	if (!aaPanic && !superPush && !coverPush && !convertPush && bpShort) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;

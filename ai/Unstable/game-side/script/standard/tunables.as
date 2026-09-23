@@ -1647,6 +1647,12 @@ const float TUNE_BUDGET = 1.f;
 //   32 games with it on won 3.1% against 48 games off at 12.5%. See docs/27.
 const float TUNE_BUDGET_LEVER = 0.f;
 
+// [toggle 0/1] -- A category FLOOR stands down while its own category is
+//   already above its target share, so the election falls through to the
+//   priced draw. The budget multiplier scaled want VALUES and could not reach
+//   the hoists, which is where the floors decide. See docs/27.
+const float TUNE_FLOOR_YIELD = 0.f;
+
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
 const float TUNE_BUILD_THREAT_BAR = 1.f;

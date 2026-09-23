@@ -522,6 +522,7 @@ local NAMES = {
 	"apex_hold_release",
 	"apex_budget",
 	"apex_budget_lever", -- market/decide.as: whether the budget multiplier actually scales wants (0 = logged only)
+	"apex_floor_yield", -- market/decide.as: a floor stands down while its category is over target (0 = off)
 	"apex_share_army",
 	"apex_share_defence",
 	"apex_share_economy",

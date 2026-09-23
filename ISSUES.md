@@ -1902,3 +1902,31 @@ more because the journey is fatal. That is not an economy fault and no price
 can fix it -- expansion is gated on territory we do not hold. It is the same
 conclusion the minute-4 work reached from the other end, and it points at the
 army/defence share obligation rather than at any want's pricing.
+
+### THE SHARE OBLIGATION CANNOT BE ENFORCED FROM THE CONSTRUCTOR SIDE (2026-09-23)
+
+Three attempts tonight, all measured, all failed the same way.
+
+1. Scale want VALUES by BudgetMult (target/actual). Defence share 0.16 ->
+   0.23, economy unmoved, 32 games at 3.1% against 48 at 12.5%. Shipped off.
+2. Make the nano FLOOR yield while buildpower is over target, so the election
+   falls through to the priced draw. Shares, minute 12+, 8 games an arm:
+
+     off   army 0.35/0.19  def 0.14/0.33  eco 0.24/0.27  bp 0.27/0.14
+     on    army 0.43/0.19  def 0.17/0.34  eco 0.17/0.27  bp 0.23/0.14
+
+   The floor stood down as designed. Buildpower fell. The freed metal went to
+   ARMY -- already at twice its target -- and ECONOMY got WORSE. 1/16 both
+   arms.
+
+The reason is the same one budget.as states in its own header and I read past:
+army is bought at the FACTORY, on the produce path, and "the constructor
+floors in production.as return before anything is priced". Every lever tried
+tonight acts on the constructor market. Taking metal away from build power
+there simply hands it to the factory, which is the category already over.
+
+So the obligation is not enforceable from this side at all. Whatever enforces
+it has to act where army is actually bought. That is the next session's
+starting point, and it is a narrower question than "wire up BudgetMult":
+production.as, the floors that return before pricing, and whether a factory
+should keep producing while army sits at 2-3x its share.
