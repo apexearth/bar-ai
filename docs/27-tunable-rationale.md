@@ -2938,3 +2938,36 @@ veto was there to manage, and is the result most worth re-testing.
 NOT ESTABLISHED: wins. Nothing in a 20-minute arm is decided in our favour
 (0 wins in both arms; the cap is why). The 45-minute arm is what decides
 whether this converts, and until it reads, this is a mechanism result.
+
+### The 45-minute win test: it does NOT convert, and the test had no power
+
+Same regime, 45-minute cap so games finish:
+
+  veto       32 results, 32 decided, 0 wins
+  price 0.35 30 results, 26 decided, 0 wins   (arm killed at 30 by the host
+                                               running out of memory)
+
+So the mechanism gains do not become wins. State the limit honestly though:
+THE CONTROL IS ZERO. A comparison against a 0/32 floor can only detect an
+effect large enough to produce wins outright; it cannot distinguish "no
+improvement" from "improved but still short of beating them". Both arms
+scoring zero is consistent with the change helping a lot and with it helping
+not at all. This test did not resolve the question, it only ruled out a
+change big enough to win games on its own.
+
+What the 45-minute control DOES establish, and it is worth having: in
+apexearth's exact regime the AI wins 0 of 32, not the ~12.5% carried in
+earlier notes from an arm with different settings. The honest baseline is
+zero.
+
+VALUE NOT JUSTIFIED: 0.35 was chosen from the air, which is the thing this
+repo says not to do. Nothing has been measured about 0.2 against 0.6 against
+1.0. A sweep is the obvious next step and would cost four arms.
+
+RECOMMENDED, NOT SHIPPED: default stays 0. Turning it on changes what the
+commander is ALLOWED to do, which is apexearth's call, not a session's. The
+evidence for turning it on is every mechanism metric moving together --
+income +38% at minute 12, commander deaths 37 -> 20, games lost inside 20
+minutes 12/32 -> 4/32 at p = 0.041, standing army +22%, metal lost -14% --
+with no measured harm anywhere, including the risk the veto existed to
+manage. It is one flag, and it is on the dashboard.
