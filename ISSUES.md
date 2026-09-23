@@ -1993,3 +1993,34 @@ efficiency (D%), not K/D -- and ISSUES already records "WE ENGAGE AT WORSE ODDS
 THAN STOCK: thr_mod attack [1,1] / defence [1,1] vs stock hard [0.6,0.8] /
 [0.3,0.5]" from 2026-09-20, unresolved. That entry and this number are probably
 the same problem, and it was sitting in this file the whole time.
+
+### WE LOSE 1.81 COMMANDERS A GAME; BARb LOSES 0.38 (2026-09-23)
+
+The single most decisive number measured this session. 16 games of his 2v2
+regime, both our teams counted:
+
+  our commanders lost   1.81 per game
+  their commanders lost 0.38 per game
+  median minute ours dies  21.7
+
+We field two. We lose nearly both, every game, at 4.8x their rate. In BAR a
+commander death is catastrophic, and the median at 21.7 min is exactly where
+these games are decided.
+
+It also explains the trade ratio above without any combat-efficiency theory:
+`armcom` is 48,600 metal of our mobile losses over 10 games, the sixth
+largest line, and a commander lost is also the build power, the D-gun and the
+rebuild capacity gone at once.
+
+The thread back to the start of the session: this is his opening complaint --
+the commander walking away and doing nothing -- and `expect.py`'s "commander
+stays home" ran RED for most of the night. docs/33 records `3bb47630` ("a
+forward commander takes the work around him") as the one change that helped
+the minute-4 extractor metric, measured on a metric later shown to be a coin
+flip (AUC 0.528). That change keeps the commander forward. Forward is where
+he dies.
+
+FIRST TEST FOR THE NEXT SESSION, and it is cheap: does reverting or gating
+3bb47630 drop commander deaths, and does that beat the extractor it was
+bought for? Nothing has measured the commander's survival against the work he
+does while exposed.
