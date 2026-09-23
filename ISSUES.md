@@ -1930,3 +1930,36 @@ it has to act where army is actually bought. That is the next session's
 starting point, and it is a narrower question than "wire up BudgetMult":
 production.as, the floors that return before pricing, and whether a factory
 should keep producing while army sits at 2-3x its share.
+
+### THE LOOP: BLOCKED EXPANSION BECOMES ARMY, AND THE ARMY DOES NOT UNBLOCK IT (2026-09-23)
+
+This is what the three failed obligation attempts were really hitting, and it
+is not a bug in any one term.
+
+`production.as:788-816` -- armyGap is the MAX of three demands: the army
+target gap, the coverage need, and `richGap`, under the comment "METAL WE FAIL
+TO SPEND IS ARMY DEMAND (his standing law: the economy is for spending; waste
+is free army)".
+
+So:
+
+  1. expansion is refused -- Glacier Pass reads `noOpen=11..16 deathWalk=6..14
+     claimed=0 priced=0`, i.e. the walk to a spot is judged lethal
+  2. metal cannot go to economy
+  3. by the standing law, unspendable metal becomes ARMY demand
+  4. army runs 0.35-0.48 against a 0.17-0.19 target; defence sits at
+     0.09-0.17 against 0.29-0.34
+  5. that army is coverage and spillover, so it does not take ground
+  6. ground stays unheld, the walk stays lethal, back to 1
+
+The army overshoot is therefore a SYMPTOM, not a fault, and rebalancing shares
+attacks it from the wrong end -- which is exactly what the floor-yield arm
+measured: buildpower stood down and the freed metal went to army (0.35 ->
+0.43) while economy FELL (0.24 -> 0.17). The law did what it says.
+
+What this rules out: every share-based lever on the constructor side. What it
+leaves is one question, and it is a military one, not an economic one -- why
+does an army at two to three times its own target not take and hold the ground
+that would let us expand? `deathWalk` is the gate that says the ground is not
+ours; nothing in tonight's work asked what it would take to change that
+answer.
