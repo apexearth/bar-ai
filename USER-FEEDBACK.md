@@ -383,3 +383,17 @@ the part nobody measured.
 "Matching our opponent" is worth reading literally when looking for the
 cause: several terms price against enemy strength rather than against our own
 growth, and a target set by what they have cannot outgrow them.
+
+### FUSIONS START SOON, ALONGSIDE THE MOHO WALK (2026-09-22)
+
+*"I think we spend a long time walking all around the map to make as many T2
+mexes as we can, while I applaud that effort. We also do need to get started
+on making fusions. Pretty soon."*
+
+The moho upgrades are RIGHT and stay. The fusion is not to be left until they
+are done. Measured: our first T2 plant at minute 8.0 and our first fusion at
+16.2, against BARb's 8.6 and 9.7.
+
+This is the ruling `TUNE_T2_FUSION_PULL` was left off waiting for -- the pull
+overrides a price (wind is not worse than fusion on energy-per-metal), and
+whether to override it was his call. It is his answer: soon.
