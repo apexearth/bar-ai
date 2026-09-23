@@ -2133,3 +2133,29 @@ instrument needed.
 Third time this session a measurement stopped the wrong fix being built: the
 budget lever (it steers values, and 22% of metal has no rival), the deathwalk
 gate (loosening it lost more extractors), and now this.
+
+#### The gate that closes: the model values a tower at zero
+
+Read straight off `apex: defwhy`'s own gate census, one game, our side:
+
+  def.nosite    8,078      no candidate site scored a POSITIVE gain
+  def.obsolete  7,819      the tower would be obsolete on arrival
+  def.t1late    1,426
+  def.zerogain     54      everything else negligible
+
+`GATE_DEF_NOSITE` is `bestGain <= 0` (protect_want.as:392) -- not "no room",
+but "no site is worth a tower". So the want vanishes because the model
+evaluates defence as worthless at every candidate site, most ticks. That is
+the terminal answer to why 37% of pulls off defence had no defence want to
+compare against.
+
+It is NOT the T2-never-built failure repeating: we do build T2 towers.
+Per game, our side, 16 games: armllt 5.75, armbeamer 5.62, armamb 1.56,
+armanni 1.00, armguard 0.69, armhlt 0.31 -- about 15 towers. BARb builds 9.31
+LIGHT towers in the first six-minute bucket alone (docs/27, TUNE_T1_TOWER_LATE).
+
+So the chain ends at a valuation, and the whole session's failures follow from
+it: every lever tried scaled or reordered a want that the model had already
+decided was worth zero. The question for the next session is what `prev` (the
+metal a tower is credited with preventing) is reading at a site where BARb
+would put a gun, and why it comes out non-positive there.
