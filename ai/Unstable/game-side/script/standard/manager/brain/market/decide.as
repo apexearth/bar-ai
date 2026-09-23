@@ -1654,6 +1654,30 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	// THE T2 SWITCH'S OWN PURPOSE, TAKEN AND NOT SAMPLED. The switch names
+	// fusions as what it is for and then only removes army from the target;
+	// the freed metal went to the draw, which bought wind 48 times to the
+	// fusion's 3 while the switch read NOFUS from frame 18.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush
+		&& (ranked.length() > 1)
+		&& (ai.GetTunable("apex_t2_fusion_pull", TUNE_T2_FUSION_PULL) > 0.f)
+		&& T2WantsFusion()) {
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			Want@ fw = ranked[ri];
+			if ((fw.kind != WK_ENERGY) || (fw.def is null))
+				continue;
+			const int fd = int(fw.def.id);
+			if (!AdvancedOnlyDef(fd) || (Catalog::gMakeE[fd] <= 0.f))
+				continue;
+			if (ri > 0) {
+				ranked.removeAt(ri);
+				ranked.insertAt(0, fw);
+			}
+			floorPush = true;
+			why = "t2fusion";
+			break;
+		}
+	}
 	bool roled = false;
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {

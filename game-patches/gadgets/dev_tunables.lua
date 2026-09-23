@@ -500,6 +500,7 @@ local NAMES = {
 	"apex_eco_role",
 	"apex_eco_force",
 	"apex_role_share",
+	"apex_t2_fusion_pull", -- market/decide.as: while the T2 switch is on and no advanced generator stands, take the fusion instead of drawing it (0 = off)
 	"apex_role_tau",
 	"apex_flank_deep_pct",    -- AttackTask: share of flanking squads whose via sits at the MAP EDGE (35)
 	"apex_def_setback",

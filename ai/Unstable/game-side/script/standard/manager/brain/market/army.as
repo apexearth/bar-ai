@@ -1277,6 +1277,7 @@ bool AdvancedOnlyDef(int d)
 // ones are the contested middle, upgraded at 222 s of walk and dropped, and
 // "all of them" never fired in 30 minutes.
 string gT2Missing = "";
+bool gT2NoFus = true;
 bool T2EconomyStands()
 {
 	const float ceil = BestExtract();
@@ -1304,7 +1305,15 @@ bool T2EconomyStands()
 			conv = true;
 	}
 	gT2Missing = "mohos=" + up + "/" + (up + low) + (gen ? " fus" : " NOFUS") + (conv ? " conv" : " NOCONV");
+	gT2NoFus = !gen;
 	return (up > 0) && (low == 0) && gen && conv;
+}
+
+// The switch names fusions as what it is FOR, but it only takes army out of
+// the target -- the metal it frees goes to the draw, which buys wind.
+bool T2WantsFusion()
+{
+	return T2SwitchOn() && gT2NoFus;
 }
 
 int gT2SwitchAt = -1;

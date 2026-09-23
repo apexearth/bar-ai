@@ -1791,6 +1791,12 @@ const float TUNE_DRAW_SHARP = 2.f;
 //   category until the split says otherwise); the rest stay open. 0 is off.
 //   See docs/27.
 const float TUNE_ROLE_SHARE = 0.5f;
+
+// T2_FUSION_PULL: [toggle 0/1] -- while the T2 switch is on and no advanced
+//   generator stands, a fusion in the ranked list is TAKEN rather than drawn.
+//   The switch already names fusions as its purpose and only removes army from
+//   the target. 0 = the behaviour before 2026-09-22. See docs/27.
+const float TUNE_T2_FUSION_PULL = 0.f;
 // [seconds] -- how far back the split of need is averaged. See docs/27.
 const float TUNE_ROLE_TAU = 120.f;
 

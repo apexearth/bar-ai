@@ -2529,3 +2529,30 @@ seats BOTH Apex AIs. To eco exactly one, keep `apex_eco_role` doing the
 electing, or run the arm with one Apex and one stock ally.
 
 Not swept yet -- it is a control he asked for, not a default being proposed.
+
+### `TUNE_T2_FUSION_PULL` = 0.f
+
+Off until measured. His 2026-09-21 T2 switch says: "make enough army for a
+normal defence of ourselves and then stop making army to focus on the switch
+to a good T2 economy -- upgraded mexes, fusions, advanced converters."
+
+What the switch does is remove the army's share from the target. That is all
+it does. `apex: t2switch` reads `on ... NOFUS NOCONV` from frame 18 and keeps
+reading it, so the switch knows the fusion is missing continuously from minute
+0 -- and the metal it frees is handed to the ordinary draw, which buys wind.
+One game's energy elections: armwin 48, armadvsol 14, armsolar 11, armfus 3.
+
+Measured over 21 games of his 2v2 regime, per side: our first T2 plant lands
+at minute 8.0 (21/21 games) and our first fusion at 16.2 (16/21). BARb's land
+at 8.6 and 9.7 (21/21). We tech FIRST and then wait 8.2 minutes; they wait
+1.1. Standing generators at minute 20: ours 45.5 small / 2.0 big against their
+16.2 / 4.6, and metal income 152 against 302.
+
+At 1, while the switch is on and no advanced-only generator stands, a fusion
+in the ranked list is taken rather than sampled -- the same shape as every
+other floor in decide.as, and `why=t2fusion` names it in the trace.
+
+Read before turning it on: on raw energy-per-metal wind is NOT worse than
+fusion (~0.275 E/s per metal against ~0.23), so the draw preferring wind is
+not obviously an error, and this pull overrides a price rather than correcting
+one. That is why it is a tunable and not a fix.

@@ -172,6 +172,7 @@ GROUPS = [
                  ("TUNE_PLANT_INFLIGHT", "discounts a new lab by the labs of other domains already under construction -- stops the bot/vehicle/air rotation leaving three unfinished frames"),
                  ("TUNE_PLANT_COPY", "his 2026-08-27 ruling, on by default: no second plant of a type we already own. 0 lets a copy compete on price, which was measured worse -- -0.67 extractors at minute 4 and THEIRS +0.55 -- so the ruling is exonerated"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
+                 ("TUNE_T2_FUSION_PULL", "while the T2 switch is on and no advanced generator stands, TAKE the fusion instead of drawing it. The switch already names fusions as its purpose but only removes army from the target, and the freed metal went to wind: measured first fusion at minute 16.2 against BARb's 9.7, from a T2 plant we finished FIRST at 8.0"),
                  ("TUNE_INFERIOR_DISCOUNT", "stops building a generator tier "
                   "once a better one is available"),
              ]},
