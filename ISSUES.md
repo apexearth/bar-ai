@@ -1646,3 +1646,35 @@ matchup with no history toward its tier read): a unit whose stats are far
 above the field AND which has no exchange history of its own is a unit the
 model has no evidence about, and should be priced toward its class rather
 than at its stats. Unmeasured; his call on whether that is the shape.
+
+### WE REACH T2 FIRST AND THEN WAIT EIGHT MINUTES TO BUILD A FUSION (2026-09-22)
+
+His read: "we're definitely not focusing on economy enough... it looks like a
+player who doesn't care that much about expanding their economy."
+
+Measured over the 21-game Glacier Pass arm, per SIDE (tools/ecoside.py, which
+sums teams 0+1 as ours -- a per-team table labels our own second AI as the
+enemy, S16):
+
+  first T2 plant   us  8.0 min (21/21)    them  8.6 min (21/21)
+  first fusion     us 16.2 min (16/21)    them  9.7 min (21/21)
+  fusions built    us  2.5 avg            them  6.2 avg
+
+We tech FIRST and then sit on it for 8.2 minutes; they convert in 1.1. In five
+of 21 games we never build a fusion at all.
+
+What we buy instead, one game's energy elections: armwin 48, armadvsol 14,
+armsolar 11, armfus 3. Standing generators per side at minute 20: ours 45.5
+small / 2.0 big, theirs 16.2 small / 4.6 big -- and their SMALL count falls
+from 28.7 at minute 8 while ours climbs from 30.4.
+
+Metal invested in economy diverges at the same moment the fusions do:
+minute 12 us 6,621 them 7,721; minute 16 us 11,032 them 19,191; minute 20 us
+18,061 them 30,709. Metal income minute 20: us 152, them 302.
+
+Note before pricing anything: on raw energy-per-metal wind is not worse than
+fusion (wind ~0.275 E/s per metal, fusion ~0.23), so a rung chosen on that
+ratio alone will keep choosing wind and is arguably choosing correctly. The
+question this raises -- and it is not answered here -- is what wind costs that
+the ratio does not price: 45 scattered buildings against 16, the ground they
+occupy, and the build power spent walking between them.

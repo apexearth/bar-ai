@@ -82,8 +82,8 @@ for T in sys.argv[1:]:
 
 games = max(1, seen[("us", MIN[0])]["n"] // 2) if seen else 1
 print("per SIDE (both AIs summed), averaged over games")
-print("%-5s %-5s %8s %8s %8s %8s %8s" %
-      ("min", "side", "mInc", "mEco", "mexes", "convs", "gens"))
+print("%-5s %-5s %8s %8s %8s %8s %8s %8s" %
+      ("min", "side", "mInc", "mEco", "mexes", "convs", "gensSm", "gensBig"))
 for minute in MIN:
     for side in ("us", "them"):
         n = seen[(side, minute)]["n"]
@@ -91,6 +91,7 @@ for minute in MIN:
             continue
         g = max(n / 2.0, 1.0)      # two teams a side per game
         a = acc[(side, minute)]
-        print("%-5d %-5s %8.0f %8.0f %8.1f %8.1f %8.1f"
+        print("%-5d %-5s %8.0f %8.0f %8.1f %8.1f %8.1f %8.1f"
               % (minute, side, a["mInc"] / g, a["mEco"] / g,
-                 a["mex"] / g, a["conv"] / g, a["gen"] / g))
+                 a["mex"] / g, a["conv"] / g,
+                 a["genSmall"] / g, a["genBig"] / g))
