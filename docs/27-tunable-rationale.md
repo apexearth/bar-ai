@@ -2825,3 +2825,22 @@ that dies on the road. The ground genuinely is not ours.
 This closes the "is expansion over-refused" question with a no, and leaves
 the loop in ISSUES.md pointing where it already pointed: at why an army at
 two to three times its target does not take and hold that ground.
+
+### `TUNE_COVER_PUSH_S` stays 10 (swept 2026-09-23)
+
+ISSUES had it recorded as never swept, and it looked like the lever for his
+mex-guard ruling: the affordability bar on the mex-cover QUEUE JUMP. Swept
+10 -> 40, 16 games an arm, his regime:
+
+           wins   median   towers/game   cover-push firings/game   com deaths
+  10       1/16   25.0 min     14.9              4.2                  1.94
+  40       0/12   22.2 min     13.1              7.8                  2.00
+
+The jump fired nearly twice as often and we built FEWER towers. It is a queue
+JUMP -- it reorders which want is taken first, it does not add defence demand
+-- so the bar cannot change the tower COUNT, only its timing. The count is
+bounded somewhere else, and on the evidence that somewhere is the defence
+share itself, which runs at 0.09-0.17 against a target of 0.29-0.34 all game.
+
+Commander deaths did not move either (1.94 -> 2.00), which is the outcome this
+was aimed at.
