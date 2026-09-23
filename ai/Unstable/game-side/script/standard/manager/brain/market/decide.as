@@ -744,6 +744,22 @@ bool PlantFramed()
 	return false;
 }
 
+// The market's categories onto the budget's five rows. Only the four with an
+// honest counterpart are steered: produce, sense, super and reclaim have no row
+// of their own and stay at 1 rather than borrow someone else's shortfall.
+float BudgetCatMult(int c)
+{
+	if ((c == CAT_METAL) || (c == CAT_ENERGY))
+		return Brain::BudgetMult(Brain::ECONOMY);
+	if (c == CAT_BP)
+		return Brain::BudgetMult(Brain::BUILDPOWER);
+	if (c == CAT_DEFENCE)
+		return Brain::BudgetMult(Brain::DEFENCE);
+	if (c == CAT_AIRDEF)
+		return Brain::BudgetMult(Brain::AIRDEF);
+	return 1.f;
+}
+
 // The per-category draw, on a ranked list: the best want of each category
 // holds a ticket proportional to its value; the drawn one is hoisted to
 // ranked[0]. `salt` varies the roll for a redraw within the same frame.
@@ -1203,6 +1219,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// wants carry theirs from their own pricing.
 		if (c.kind != WK_SUPER)
 			c.value *= Persona::CategoryMult(CategoryOf(c.kind));
+		// THE BUDGET IS A LEVER, not a log. BudgetMult is target/actual, bounded
+		// 0.35..2, computed every frame for nobody -- apexearth 2026-09-22: "if
+		// we already see that our build power is high, then we do it even less
+		// ... and 0.38 divided by 0.1 amplifies that one -- we whip things back
+		// into shape". apex_budget already gates it and already reads 1.
+		if (c.kind != WK_SUPER)
+			c.value *= BudgetCatMult(CategoryOf(c.kind));
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))
 			++at;
