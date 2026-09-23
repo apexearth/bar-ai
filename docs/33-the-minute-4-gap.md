@@ -61,6 +61,10 @@ energy: 780 metal to their 435, for less energy per metal (solar is 155 for
   forms packs of 1-3 units, which is neutral at n=96. Scout demand from the
   intel gap: flat, reverted.
 - **Energy and converter losses**: at parity full-length (1,464 vs 1,544).
+- **The constructor floor** (`apex_con_base` 2.7 -> 2, on the theory that
+  fewer lathes means less energy stall and more metal for spots): -0.50 mex
+  (se 0.19), worse -- our extractors -0.21 and theirs +0.29. Fewer hands
+  claim fewer spots, which is the simplest reading and the right one.
 - **The no-duplicate-plant ruling** (`TUNE_PLANT_COPY`, his 2026-08-27):
   letting a copy compete on price reads -0.67 mex (se 0.21), worse, with
   their extractors +0.55. Exonerated.
@@ -88,3 +92,9 @@ which has now been measured to be worth more than the spot it displaces.
 So the remaining gap is not a gate, a price, a leash or a rule that can be
 switched off: it is that BARb converts the same opening into a second
 plant and more extractors while we convert it into energy and towers.
+
+Eleven levers have now been measured at n=96 and every one is flat or
+worse than the tree as it stands. That is itself the finding: the opening
+is not misallocated by any single term this model exposes, so the next
+move is a decision about what the opening should BUY -- less energy, or an
+earlier second line -- and that is apexearth's to make, not another sweep.
