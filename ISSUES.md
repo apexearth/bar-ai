@@ -1678,3 +1678,33 @@ ratio alone will keep choosing wind and is arguably choosing correctly. The
 question this raises -- and it is not answered here -- is what wind costs that
 the ratio does not price: 45 scattered buildings against 16, the ground they
 occupy, and the build power spent walking between them.
+
+### THE T2 SWITCH SUPPRESSES ARMY AND NOTHING PULLS THE FUSION THROUGH (2026-09-22)
+
+Follow-on from the entry above, and it names the mechanism.
+
+His 2026-09-21 ruling, quoted in army.as: "make enough army for a normal
+defence of ourselves and then stop making army to focus on the switch to a
+good T2 economy -- upgraded mexes, fusions, advanced converters."
+
+`apex: t2switch` in a baseline game reads `on` from frame 18 and stays on,
+carrying `NOFUS NOCONV` the whole time -- the switch knows a fusion is
+missing, continuously, from minute 0. The first fusion still lands at minute
+16.2, eight minutes after our first T2 plant at 8.0.
+
+What the switch does is take the army's share OUT of the target. That is the
+whole of it. The metal it frees is then handed to the ordinary draw, and the
+ordinary draw buys wind: one game's energy elections read armwin 48,
+armadvsol 14, armsolar 11, armfus 3.
+
+So the switch is a permission, not a pull. The thing it exists to buy is
+named in his ruling and is exactly the thing that does not get bought.
+
+Same shape as the budget entry above: a signal computed correctly and then
+read by nothing that decides.
+
+Untested candidate: while the switch is on and the fusion is the missing
+piece, a fusion want in the ranked list is TAKEN rather than sampled -- the
+same shape as every other floor in decide.as. That is arguably implementing
+his ruling rather than inventing policy, since the ruling names fusions as
+the switch's purpose, but it is his call and it is unmeasured.
