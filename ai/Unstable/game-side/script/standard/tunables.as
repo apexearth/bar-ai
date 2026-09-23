@@ -1692,6 +1692,13 @@ const float TUNE_ARMY_BUDGET_DAMP = 0.f;
 //   See docs/27.
 const float TUNE_KEEP_JOB_PEEL = 0.f;
 
+// [0..1] -- A hand already this fraction of the way to its site KEEPS the job
+//   even when the site reads hot. 0 is the behaviour before 2026-09-23: any
+//   hot site drops the incumbency, which is every contested site, which is
+//   where 70-99% of our builds are abandoned mid-walk. 0.6 = past 60% of the
+//   original walk. See docs/27.
+const float TUNE_KEEP_WALK_PAID = 0.f;
+
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller

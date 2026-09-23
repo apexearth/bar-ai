@@ -306,6 +306,7 @@ local NAMES = {
 	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
 	"apex_army_budget_damp", -- production.as: damp the spare-metal army floor by the ARMY row budget multiplier (0 = off)
 	"apex_keep_job_peel", -- decide.as: keep-job tests OUR removals (peel) not crew membership (0 = the dead crew test)
+	"apex_keep_walk_paid", -- decide.as: fraction of the walk already paid that keeps a job at a hot site (0 = off)
 	"apex_t2_energy",
 	"apex_t2_energy_reactor",
 	"apex_t2_hold_boost",
