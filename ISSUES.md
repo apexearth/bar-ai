@@ -2255,3 +2255,30 @@ things, and the later one measures the thing that matters.
 His call, not a default to flip unasked. A 32-game confirmation is running;
 the 18.8% win figure in particular must not be quoted until it replicates,
 because an identical-looking 18.8% failed to replicate earlier tonight.
+
+#### Why prev is zero: it is gated on VISIBLE threat, while hazard learns from losses
+
+protect_want.as:264 states the rule outright: gain is "the stake standing in
+its reach, times how often lethal force arrives there, times the share of the
+local threat it newly stops", and "once standing cover already exceeds the
+threat, the next turret prevents nothing and prices itself out".
+
+That last clause is the whole of def.nosite's 8,078 firings. Cover >= threat
+-> prev = 0 -> no want -> the hand is pulled away -> no tower.
+
+And the threat it compares against is what we can SEE. The repo's own standing
+trap applies exactly here: gates keyed on visible enemy strength read "safe"
+precisely when we are blind. BARb's army masses out of sight, cover looks
+sufficient against the nothing we can see, no gun is bought, and then the army
+arrives and takes 86% of what we built.
+
+The asymmetry is the tell: HazardWith already learns from metal actually lost
+(LossRateAt, coverage.as:775), so one half of the defence valuation is
+evidence-based and the other half is line-of-sight. A tower's prevention
+should be measured against the force that ACTUALLY arrives -- which the AI
+already records -- not against what is visible at the moment of the election.
+
+That is the fix, it is a mis-measurement rather than a policy, and it would
+let towers arrive on their own merit instead of by switching off his
+no-basic-tower rule. Not built: it is a change to the core defence valuation
+and this session has shown three times what an untested change there costs.
