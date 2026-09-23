@@ -1573,3 +1573,32 @@ Worth what it displaces? 21k metal is the same order as the army deficit this
 regime loses on (-1,924 by minute 6, and ISSUES above). The group 2,937 elmo
 from any plant is the part with no reading at all -- no site demand explains
 it, so find what proposed it before touching the share.
+
+### SCAV MODE: EPIC STATS BEAT AN EMPTY TRADE RECORD (2026-09-22)
+
+His read: with scav units on we buy drone carriers and Epic Tumbleweeds, and
+then cannot stop Titans and Thors.
+
+The mechanism is not that the worth model ignores scav units -- it is that it
+stops ignoring them. `worth.as` scores a combat unit on RANGE/DAMAGE/HP
+normalised over the field, and it deliberately restricts that field to defs
+reachable from OUR OWN commander, precisely because scavenger units otherwise
+poisoned the means ("corblackhy at 21,000 metal still ranked 5th"). With
+`scavunitsforplayers=1` those defs BECOME reachable, so they re-enter the
+yardstick and are buyable -- and an epic's stats are enormous.
+
+The corrective that should catch it is his own unit-track-record ruling, and
+it cannot: `record.py` over his live 154 KB `apex-record.txt` lists no scav
+unit at all. Every scav matchup therefore has zero history and prices at its
+prior, so the stats win by default and keep winning -- we buy the unit, it
+trades badly, and the loss lands on a pair the matrix has no row for.
+
+`behaviour_scav_units.json` exists but covers only six T3 eco buildings; it
+says nothing about any scav combat unit.
+
+Do not answer this with a hand-set `apex_worth_armvadert4`. The derived form
+is the one the matrix already uses for pairs (`RecordRatioVs` shrinks a
+matchup with no history toward its tier read): a unit whose stats are far
+above the field AND which has no exchange history of its own is a unit the
+model has no evidence about, and should be priced toward its class rather
+than at its stats. Unmeasured; his call on whether that is the shape.

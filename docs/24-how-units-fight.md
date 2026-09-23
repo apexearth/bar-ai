@@ -1324,3 +1324,13 @@ avoid being near allies so when they blow up they don't hurt allies."*
 - Armada `armvader` (Tumbleweed) is the one in his 2v2 regime; `corroach`
   (Bedbug) and `corsktl` (Skuttle) are the Cortex pair. All three were roled
   `raider` + `melee`, which is what put them in raid packs.
+
+Scavenger units (2026-09-22): *"When scavenger units are on we make a ton of
+drone carriers, and Epic Tumbleweed units. Unfortunately these units are not
+that good but our algorithm thinks they're pretty good. So when the enemy
+comes at us with titans and thor tanks we really can't stop them."*
+
+- **Drone carriers and Epic Tumbleweeds are not worth their stats.** Against
+  Titans and Thors they do not hold, whatever RANGE/DAMAGE/HP says.
+- The units: `armvadert4` (Epic Tumbleweed, the T4 rolling bomb),
+  `armdronecarry`, `armdronecarryland`, `cordronecarry`, `cordronecarryair`.
