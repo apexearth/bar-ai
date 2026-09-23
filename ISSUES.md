@@ -3021,3 +3021,29 @@ THE FIX has to separate the two removals. A peel is ours and recorded
 happens to every hand every time. Testing `onCrew` conflates them. Something
 that marks a hand at the moment WE peel it, and tests that instead, restores
 the mechanism without re-attaching peeled hands.
+
+## The budget cannot balance while builds are abandoned (2026-09-23)
+
+Defence holds 0.13 of spend against a 0.29 target with `BudgetMult` railed at
+2.0 for 61% of samples. The corrector is not the constraint: defence already
+wins 85 of 548 constructor elections (15.5%) and still books only 10.9% of
+spend, because what it wins is abandoned before it is paid for.
+
+Abort share tracks walk distance and build time, not category:
+
+| def | metal | abort |
+|---|---|---|
+| armwin | 40 | 6% |
+| armsolar | 155 | 24% |
+| armmex | 26, forward | 70% |
+| armgeo | 560 | 99% |
+| armanni | 3500 | 69% |
+
+Anything cheap and at home completes; anything far or slow does not. 36% of
+all builds are abandoned. Freeing metal from army does not reach defence --
+`apex_army_rich_balance=1` moved army 0.308 -> 0.289 and defence 0.127 ->
+0.109, with the difference going to economy. Fix the aborts first.
+
+`apex_keep_job_peel` + `apex_keep_walk_paid` reach only 434 keeps against
+5,935 off-crew events (7%): the peel marker catches peels, but most off-crew
+cases are the engine's pre-election detach, which we still cannot distinguish.
