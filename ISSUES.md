@@ -2024,3 +2024,26 @@ FIRST TEST FOR THE NEXT SESSION, and it is cheap: does reverting or gating
 3bb47630 drop commander deaths, and does that beat the extractor it was
 bought for? Nothing has measured the commander's survival against the work he
 does while exposed.
+
+#### The 100%/0% split is definitional -- the RATE is not
+
+Across 80 full-length games: 0 commanders lost -> 9 games, 9 wins; 1 lost ->
+1 game, 1 win; 2 lost -> 70 games, 0 wins. Perfect separation.
+
+That is almost certainly the win CONDITION, not a finding: the start script
+sets no deathmode, so BAR's default applies and the game ends when a side's
+commanders are gone. "We lose when we lose both commanders" is a tautology and
+must not be quoted as a discovery.
+
+What is NOT tautological is the rate: 1.81 a game against BARb's 0.38, at the
+same stage of the same games. BARb keeps its commanders and we do not.
+
+And that has a design consequence worth stating plainly. If commander survival
+IS the win condition, then the objective in docs/23 -- fastest path to a named
+army/economy state -- has no term for the one thing that decides the game. The
+model prices extractors, energy, army share and build power. Nothing prices
+the commander staying alive, and `conRiskM` (want_mex.as:634) charges his
+exposure only to the mex want he is walking to, not to the plan as a whole.
+
+Our win rate is 12.5%. We keep a commander in 10 of 80 games, which is 12.5%.
+Those are the same number.
