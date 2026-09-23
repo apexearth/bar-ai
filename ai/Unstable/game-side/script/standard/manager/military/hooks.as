@@ -30,6 +30,10 @@ bool IsFodder(const CCircuitDef@ cdef)
 // Air:: owns them, and a fighter parked in a ground squad cannot intercept.
 bool WantsMassing(const CCircuitDef@ cdef)
 {
+	// A rolling bomb carries one explosion to one place; a squad of them dies
+	// to one blast and waiting to form up spends the only asset it has.
+	if (IsRollingBomb(cdef))
+		return false;
 	if (cdef.IsRoleAny(Unit::Role::SCOUT.mask | Unit::Role::SUPPORT.mask))
 		return false;
 	const Type role = ai.GetBindedRole(cdef.GetMainRole());
@@ -166,6 +170,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
+	if ((ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
+		&& !cdef.IsAbleToFly() && !cdef.IsRoleAny(Unit::Role::COMM.mask)
+		&& !Catalog::gBuilder[int(cdef.id)] && (Catalog::gPower[int(cdef.id)] > 1.f))
+		return NoteElect("stock.army", aiMilitaryMgr.DefaultMakeTask(unit));
 	// A RELEASED BOMBER BOMBS -- whatever its config role says. The heavy tier
 	// the strike holds and releases (armblade, corcrw, legfort) carries role
 	// "heavy", not "bomber": DefaultMakeTask has no BOMB entry for that role
@@ -183,6 +191,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		CCircuitUnit@ b = Air::WaveBomberFor(unit);
 		if (b !is null)
 			return NoteElect("air.cover", aiMilitaryMgr.Enqueue(TaskF::Guard(b)));
+	}
+	// A ROLLING BOMB IS NEVER PACKED. It is roled `raider`, so the director
+	// would pull it into a pack and the pack would walk it in formation: one
+	// blast then takes the whole group, and the walk spends the surprise that
+	// is the only thing it carries. It keeps stock raider routing, alone.
+	if (IsRollingBomb(cdef)) {
+		DropRaidClaim(int(unit.id));
+		return NoteElect("bomb.solo", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.

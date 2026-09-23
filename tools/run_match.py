@@ -684,6 +684,21 @@ def run(args) -> int:
     if not watching:
         shutil.rmtree(write_dir / "LuaUI" / "Config", ignore_errors=True)
 
+    # THE UNIT RECORD HIS GAMES HAVE BUILT. A worker's write dir is fresh, so
+    # its first game started with an empty exchange matrix and later ones with
+    # whatever that worker happened to play. Every Apex AI is seeded from the
+    # live record before every match (never written back), so each game of
+    # each arm starts from the same evidence his own games do.
+    live_rec = MATCHES / "_engine" / "AI" / "Skirmish" / "Apex" / "Unstable" / "apex-record.txt"
+    if live_rec.exists() and write_dir.resolve() != (MATCHES / "_engine").resolve():
+        for a in ais:
+            if a.is_lua or not a.short_name.startswith("Apex"):
+                continue
+            dst = write_dir / "AI" / "Skirmish" / a.short_name / a.version / "apex-record.txt"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(live_rec, dst)
+        print(f"record   seeded from {live_rec}")
+
 
     cmd = [str(exe), "--write-dir", str(write_dir)]
     # headless.cfg forces an 8x8 window, which is right for a batch and useless

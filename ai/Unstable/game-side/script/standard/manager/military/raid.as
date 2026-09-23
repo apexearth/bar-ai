@@ -277,6 +277,8 @@ float RaidPackNeed(const AIFloat3& in at)
 // invented.
 bool RaidMayPull()
 {
+	if (ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
+		return false;
 	if (Builder::BaseUnderAttack() || BaseContested() || BaseRaided())
 		return false;
 	return CoverShort() <= 0.05f;
