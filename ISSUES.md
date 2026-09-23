@@ -1963,3 +1963,33 @@ does an army at two to three times its own target not take and hold the ground
 that would let us expand? `deathWalk` is the gate that says the ground is not
 ours; nothing in tonight's work asked what it would take to change that
 answer.
+
+### THE BINDING CONSTRAINT IS THE TRADE RATIO, NOT THE ECONOMY (2026-09-23)
+
+The loop above terminates here, and this is the number the whole session was
+looking for. Our side, 8 games of his 2v2 regime:
+
+  minute   army metal   killed   lost    kill/lost
+    12        9,051      2,017   6,065      0.33
+    20       21,776      9,340  19,359      0.48
+
+We destroy a third to a half of what we lose. An army trading at 0.48 cannot
+take ground at any size -- it dissolves faster than it gains, so the ground
+stays theirs, the walk stays lethal, expansion stays refused, and the metal
+that cannot be spent becomes more army by the standing law. That is the whole
+loop, and the trade ratio is what closes it.
+
+It also inverts the session's premise. We are not weak because we are poor. We
+make about half BARb's metal AND trade at about half efficiency, and those
+multiply: an economy fix alone buys more units that die at a loss. That is
+consistent with every result tonight -- six mechanisms measured, four fixes
+shipped, every one of them moving its own metric and none moving the outcome,
+because all of them were on the buying side.
+
+Where to go, and it is NOT this file's usual territory: docs/24-how-units-fight.md
+(his directives), the fight-analysis skill, tools/deaths.py, tools/battles.py,
+tools/fight1v1.py. His own standing note is already there -- trades are damage
+efficiency (D%), not K/D -- and ISSUES already records "WE ENGAGE AT WORSE ODDS
+THAN STOCK: thr_mod attack [1,1] / defence [1,1] vs stock hard [0.6,0.8] /
+[0.3,0.5]" from 2026-09-20, unresolved. That entry and this number are probably
+the same problem, and it was sitting in this file the whole time.
