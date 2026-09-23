@@ -61,6 +61,9 @@ energy: 780 metal to their 435, for less energy per metal (solar is 155 for
   forms packs of 1-3 units, which is neutral at n=96. Scout demand from the
   intel gap: flat, reverted.
 - **Energy and converter losses**: at parity full-length (1,464 vs 1,544).
+- **The no-duplicate-plant ruling** (`TUNE_PLANT_COPY`, his 2026-08-27):
+  letting a copy compete on price reads -0.67 mex (se 0.21), worse, with
+  their extractors +0.55. Exonerated.
 
 ## What helped
 

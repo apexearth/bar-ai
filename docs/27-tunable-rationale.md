@@ -1834,6 +1834,17 @@ off, which is the control arm. On a flat map every line reads the same and this
 changes nothing; on a hill map the vehicle line is discounted against the bot
 line, which is apexearth's rule for picking the ground line.
 
+### `TUNE_PLANT_COPY` = 0.f
+
+His 2026-08-27 ruling, kept as the default: a copy of a line we already run
+is ineligible and the want forwards to a nano at the standing lab. 1 lets
+the copy compete on price, which is the arm that measures the ruling. The
+reason to ask: BARb stands on ~1.5 plants per player at minute 4 to our 1
+and fields twice our units in that window. Measured 2026-09-22, 96 games at
+8 minutes against a 96-game control: minute-4 extractor gap -0.67 (se 0.21)
+WORSE, their extractors +0.55, our army unchanged. The ruling is not what
+costs us the opening, and letting copies compete makes it worse.
+
 ### `TUNE_T1_TOWER_LATE` = 1.f
 
 His 2026-09-19 rule, kept as the default: once an advanced hand exists, no

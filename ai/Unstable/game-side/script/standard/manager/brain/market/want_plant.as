@@ -927,6 +927,64 @@ float LineQualityMul(int plantDef)
 	return gLineQual[plantDef];
 }
 
+// WHAT A LINE'S UNITS HAVE ACTUALLY TRADED (his ruling 2026-09-22: "per-unit
+// performance absolutely should feed into factory selection"). Per unit, the
+// exchange record from both sides of the matrix: our copies' record, and the
+// enemy's copies of the same def against us -- in a mirror their Janus is
+// evidence for a vehicle plant we have never built. The line reads its median
+// combat unit; the plant is priced against the best line of its class and
+// tier, so the order moves and the class's total does not.
+array<float> gRecLine;
+int gRecLineAt = -999999;
+float UnitRecordAny(int d)
+{
+	const CCircuitDef@ cd = Catalog::Def(d);
+	return 0.5f * (ai.RecordRatio(cd, -1) + ai.RecordFoeRatio(cd, null));
+}
+
+float RecordLineMul(int plantDef)
+{
+	if (int(gRecLine.length()) <= Catalog::gDefCount)
+		gRecLine.resize(Catalog::gDefCount + 1);
+	if (ai.frame >= gRecLineAt + MINUTE) {
+		gRecLineAt = ai.frame;
+		array<float> own(Catalog::gDefCount + 1, 0.f);
+		array<float> best(12, 0.f);
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			gRecLine[d] = 1.f;
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+				|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) == 0)
+				|| !Producible(d))
+				continue;
+			array<float> r;
+			const array<int>@ prods = Catalog::gBuildsList[d];
+			for (uint i = 0; i < prods.length(); ++i) {
+				if (Catalog::gAvailable[prods[i]] && LineCombat(prods[i]))
+					r.insertLast(UnitRecordAny(prods[i]));
+			}
+			if (r.length() == 0)
+				continue;
+			r.sortAsc();
+			own[d] = r[r.length() / 2];
+			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
+			if (own[d] > best[k])
+				best[k] = own[d];
+		}
+		string row = "";
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (own[d] <= 0.f)
+				continue;
+			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
+			gRecLine[d] = own[d] / best[k];
+			if (PlantClass(d) == PC_LAND)
+				row += " " + Catalog::Def(d).GetName() + "=" + formatFloat(gRecLine[d], "", 0, 2)
+						+ "(" + formatFloat(own[d], "", 0, 2) + ")";
+		}
+		AiLog("apex: record-line t=" + ai.teamId + row);
+	}
+	return gRecLine[plantDef];
+}
+
 // The line factor on the whole plant: units x ground, best line of the class
 // and tier = 1. With the tunable off the terrain term alone applies, on the
 // production half, as before.
@@ -1210,7 +1268,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// not devalue -- so a T2 lab is still bought for its cons.
 		const bool lineOn = ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f;
 		const float prodOwn = prodHalf * FoeTierPlantMul(d)
-				* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d);
+				* (lineOn ? 1.f : LineTerrainMul(d)) * TeamLineMul(d) * RecordLineMul(d);
 		const float gain = conHalf + prodOwn;
 		if (gain <= 0.05f)
 			continue;
@@ -1326,7 +1384,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				break;
 			}
 		}
-		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)) {
+		if (isCopy && dupUsable && (DupBpSubstMul(d) < 1.f)
+			&& (ai.GetTunable("apex_plant_copy", TUNE_PLANT_COPY) <= 0.f)) {
 			if (ai.frame >= gNextPlantDupLog) {
 				gNextPlantDupLog = ai.frame + 30 * SECOND;
 				AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
@@ -1417,6 +1476,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",reach" + formatFloat(gPlantReach[d], "", 0, 2)
 				+ ",terr" + formatFloat(LineTerrainMul(d), "", 0, 2)
 				+ ",line" + formatFloat(LineMul(d), "", 0, 2)
+				+ ",rec" + formatFloat(RecordLineMul(d), "", 0, 2)
 				+ ",rate" + formatFloat(rateMul, "", 0, 2)
 				+ ",mob" + formatFloat(bestMob, "", 0, 2)
 				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)

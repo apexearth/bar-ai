@@ -1071,6 +1071,11 @@ const float TUNE_E_HEADROOM = 1.75f;   // 1.5 still read 'not that great' in a w
 // CON_ESCORT: exposed constructors claim one army guard each (master).
 const float TUNE_CON_ESCORT = 1.f;
 
+// STOCK_ARMY: 1 hands every armed ground unit to BARb's own task pools and
+// switches off our withdraw orders -- the A/B for "is our assignment layer
+// what loses the fights" (docs/27).
+const float TUNE_STOCK_ARMY = 0.f;
+
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
 //   guarding a con is a Bull missing from the line.
 const float TUNE_ESCORT_MAX_COST = 120.f;
@@ -1518,6 +1523,13 @@ const float TUNE_STAKE_WEIGHT = 1.f;
 //   measures what the rule costs against an enemy that laps the map in
 //   85-metal turrets. See docs/27.
 const float TUNE_T1_TOWER_LATE = 1.f;
+
+// [toggle 0/1] -- His 2026-08-27 ruling: a copy of a line we already run is
+//   INELIGIBLE and the want forwards to a nano at the standing lab. 0 is that
+//   ruling and the default; 1 lets the copy compete on price, which is the arm
+//   that measures what the ruling costs in the opening (BARb stands on ~1.5
+//   plants per player at minute 4, we stand on 1). See docs/27.
+const float TUNE_PLANT_COPY = 0.f;
 
 // STATIC_GUARD: how much a metal of CORE static defense counts toward the army
 //   when computing the stake -- under 1 because towers cannot chase.
