@@ -612,20 +612,20 @@ float BestLatheBPPerM()
 	// would latch the ratio off forever.
 	if (gBestLatheBPM > 0.f)
 		return gBestLatheBPM;
-	float best = 0.f;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::gAvailable[d] || !IsLatheDef(d))
+	float topBPM = 0.f;
+	for (int ld = 1; ld <= Catalog::gDefCount; ++ld) {
+		if (!Catalog::gAvailable[ld] || !IsLatheDef(ld))
 			continue;
-		const float m = Catalog::gCostM[d];
-		if (m <= 1.f)
+		const float lm = Catalog::gCostM[ld];
+		if (lm <= 1.f)
 			continue;
-		const float r = Catalog::gBuildPower[d] / m;
-		if (r > best)
-			best = r;
+		const float lr = Catalog::gBuildPower[ld] / lm;
+		if (lr > topBPM)
+			topBPM = lr;
 	}
-	if (best > 0.f)
-		gBestLatheBPM = best;
-	return best;
+	if (topBPM > 0.f)
+		gBestLatheBPM = topBPM;
+	return topBPM;
 }
 
 CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
@@ -1864,10 +1864,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const float bpm = ai.GetTunable("apex_bp_vs_lathe", TUNE_BP_VS_LATHE);
 			const float myM = Catalog::gCostM[d];
 			if ((bpm > 0.f) && (myM > 1.f)) {
-				const float best = BestLatheBPPerM();
-				const float mine = Catalog::gBuildPower[d] / myM;
-				if ((best > 0.f) && (mine < best))
-					capG *= (1.f - bpm) + bpm * (mine / best);
+				const float latheBPM = BestLatheBPPerM();
+				const float myBPM = Catalog::gBuildPower[d] / myM;
+				if ((latheBPM > 0.f) && (myBPM < latheBPM))
+					capG *= (1.f - bpm) + bpm * (myBPM / latheBPM);
 			}
 		}
 		gain += capG;

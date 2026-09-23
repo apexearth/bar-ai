@@ -96,7 +96,10 @@ def main():
     res = collections.defaultdict(lambda: collections.defaultdict(list))
     for name, mods in arms:
         for s in range(1, a.seeds + 1):
-            out = os.path.join("matches", "eco-%s-s%d" % (name, s))
+            # the map goes in the path: two boards sharing one directory
+            # silently overwrote the first board's census.
+            slug = "".join(c if c.isalnum() else "_" for c in a.map)[:16]
+            out = os.path.join("matches", "eco-%s-%s-s%d" % (slug, name, s))
             print("  running %s seed %d ..." % (name, s), flush=True)
             run(a.lane, out, s, a.minutes, mods, a.map)
             c = curve(os.path.join(ROOT, out))
@@ -105,6 +108,17 @@ def main():
                 continue
             for mn, row in c.items():
                 res[name][mn].append(row)
+
+    # S3: a compile error disables the variant and the board still prints a
+    # tidy table of near-zero numbers. Warnings are errors here, and as_scope
+    # does not catch a shadowed local -- only a smoke test or this guard does.
+    for name, _ in arms:
+        peak = max((x[0] for rows in res[name].values() for x in rows),
+                   default=0.0)
+        if peak < 20.0:
+            print("!! arm %r never built anything (peak %.0f m/s) -- the script"
+                  " almost certainly did not compile." % (name, peak))
+            print("   check it: python tools/smoke.py --ai %s" % a.lane)
 
     canon = (a.map == CANON)
     mins = (sorted(m for m in HIS if m <= a.minutes) if canon
