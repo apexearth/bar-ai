@@ -2282,3 +2282,29 @@ That is the fix, it is a mis-measurement rather than a policy, and it would
 let towers arrive on their own merit instead of by switching off his
 no-basic-tower rule. Not built: it is a change to the core defence valuation
 and this session has shown three times what an untested change there costs.
+
+##### Correction: the "cover exceeds threat" mechanism is NOT established
+
+The entry above took protect_want.as:264's own comment as the explanation for
+def.nosite. Checking it against the logs does not support it and cannot refute
+it either:
+
+  778 defwhy samples carrying threat/cover
+    standing cover >= threat :   0   (0%)
+    cover <  threat          : 778 (100%)   typical: threat 255-270, cover 0 -> 210
+
+So in every sampled election a tower DID have threat to stop. But `apex:
+defwhy` is emitted only where a tower WON (`SAMPLE 1of1wins`), so these are
+the successes. The 8,078 def.nosite refusals are not sampled and nothing here
+says why they failed.
+
+What stands: def.nosite is `bestGain <= 0` over candidate SITES
+(protect_want.as:392), it fires 8,078 times, and towers demonstrably reduce
+structure loss (101% -> 77% at +27% towers). What does NOT stand: my claim
+that the cause is cover already exceeding visible threat. That was the code
+comment's account, not a measurement.
+
+The instrument needed is one line: log the refused sites' gain components at
+the moment `bestGain <= 0`, the way defwhy logs the winners. Until that
+exists, the cause of the single largest defence refusal in the game is
+unknown.
