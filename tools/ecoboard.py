@@ -39,10 +39,11 @@ EINC = re.compile(r"\beInc=([\d.]+)")
 MEX = re.compile(r"\bmex=(\d+)")
 
 
-def run(lane, out, seed, minutes, modopts, mapname):
+def run(lane, out, seed, minutes, modopts, mapname, handicap):
     cmd = [sys.executable, os.path.join(HERE, "run_match.py"),
            "--a", lane, "--b", "NullAI:0.1", "--map", mapname,
-           "--minutes", str(minutes), "--handicap", "50", "--speed", "5",
+           "--minutes", str(minutes), "--handicap", str(handicap),
+           "--speed", "5",
            "--seed", str(seed), "--out", out,
            "--modoption", "dev_stats=1", "--modoption", "apex_eco_only=1",
            # NullAI's commander dies to the map ruins and the game ends at
@@ -81,6 +82,8 @@ def main():
     ap.add_argument("--minutes", type=int, default=20)
     ap.add_argument("--map", default=CANON,
                     help="a low-spot map measures growth with extraction capped")
+    ap.add_argument("--handicap", type=int, default=50,
+                    help="resource bonus; his reference game was +50% (verified in the demo)")
     ap.add_argument("--scav", action="store_true",
                     help="his regime: the scavenger pack's *t3 units")
     ap.add_argument("--arm", action="append", default=[],
@@ -101,7 +104,7 @@ def main():
             slug = "".join(c if c.isalnum() else "_" for c in a.map)[:16]
             out = os.path.join("matches", "eco-%s-%s-s%d" % (slug, name, s))
             print("  running %s seed %d ..." % (name, s), flush=True)
-            run(a.lane, out, s, a.minutes, mods, a.map)
+            run(a.lane, out, s, a.minutes, mods, a.map, a.handicap)
             c = curve(os.path.join(ROOT, out))
             if not c:
                 print("    no stats (did it run?)")

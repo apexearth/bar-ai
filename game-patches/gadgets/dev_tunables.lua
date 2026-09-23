@@ -304,6 +304,7 @@ local NAMES = {
 	"apex_t1_push_off",
 	"apex_t2_army_hold",
 	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
+	"apex_bp_travel", -- production.as: discount a hand's build power by its speed against the quickest builder we own (0 = off)
 	"apex_bp_vs_lathe", -- production.as: price a constructor's build-power capture against the best lathe per metal (0 = off, 1 = full)
 	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
 	"apex_retreat_scale", -- posture.as: scale every def's retreat hp threshold (1 = config value; lower fights longer before pulling out)

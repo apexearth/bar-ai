@@ -606,6 +606,31 @@ int gRedrawAt = -1;
 // we wanted to build on (apexearth 2026-09-23).
 float gBestLatheBPM = -1.f;
 
+// THE FASTEST HAND WE CAN FIELD. A lathe delivers its build power from the
+// moment it stands; a hand delivers its own only while it is AT the work, and
+// a ground constructor moves at 33-36 against an aircraft's 192-208
+// (apexearth 2026-09-23: ground hands "are too slow for scaling properly").
+// Measured against the quickest builder we own, so it is a ratio the game
+// supplies rather than a number chosen here.
+float gFastBuilder = -1.f;
+
+float FastestBuilderSpeed()
+{
+	if (gFastBuilder > 0.f)
+		return gFastBuilder;
+	float top = 0.f;
+	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+		const int di = int(cd);
+		if ((gOwnCount[cd] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
+			continue;
+		if (Catalog::gSpeed[di] > top)
+			top = Catalog::gSpeed[di];
+	}
+	if (top > 0.f)
+		gFastBuilder = top;
+	return top;
+}
+
 float BestLatheBPPerM()
 {
 	// Never cache a zero: availability is frame-dependent and an early scan
@@ -1865,7 +1890,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const float myM = Catalog::gCostM[d];
 			if ((bpm > 0.f) && (myM > 1.f)) {
 				const float latheBPM = BestLatheBPPerM();
-				const float myBPM = Catalog::gBuildPower[d] / myM;
+				float myBP = Catalog::gBuildPower[d];
+				if (ai.GetTunable("apex_bp_travel", TUNE_BP_TRAVEL) > 0.f) {
+					const float topS = FastestBuilderSpeed();
+					const float myS = Catalog::gSpeed[d];
+					if ((topS > 0.f) && (myS > 0.f) && (myS < topS))
+						myBP *= myS / topS;
+				}
+				const float myBPM = myBP / myM;
 				if ((latheBPM > 0.f) && (myBPM < latheBPM))
 					capG *= (1.f - bpm) + bpm * (myBPM / latheBPM);
 			}
