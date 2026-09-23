@@ -2545,3 +2545,42 @@ The shared deploy apexearth asked for is therefore NOT done: it needs
 `--allow-red`, which is his call. Re-running the gate until it comes up
 green would be result-shopping, and given the three runs above it would
 have meant nothing.
+
+### 95% of every extractor proposal is refused at a gate, and the commander's leash is 40% of it
+
+2026-09-23, 32-game arm. `want_mex.as` already counts every mex refusal at its
+own gate and prints them as `apex: mexdiag`. Nobody had summed them. Over
+93,578 proposals:
+
+  comFar     37652  40.2%     <- the commander's leash
+  noOpen     30122  32.2%
+  deathWalk  13917  14.9%
+  claimed     7285   7.8%
+  priced      4602   4.9%
+
+  minute  held    noOpen  claimed  deathWalk   comFar   priced
+   0-3     2.0      2.5%     0.1%       0.8%    89.1%     7.4%
+   4-7     4.3     15.4%     7.2%      22.5%    49.1%     5.8%
+   8-11    3.6     28.7%     7.1%      26.9%    31.5%     5.8%
+  12-15    3.4     36.8%     1.6%      23.9%    33.9%     3.9%
+
+The commander's leash refuses 89% of every extractor proposal in minutes 0-3.
+That is the window the game is decided in: BARb reaches 7.9 extractors by
+minute 4 and 10.8 by minute 8, while we go 6.2 -> 5.7, and by minute 20 we
+hold 4.8 to their 11.6. Our income flatlines at 126 against their 331.
+
+Why this gate and not the others: it is the biggest, it bites earliest, and
+it is the only one of the five whose stated purpose is measurably NOT being
+served. The leash exists to keep the commander alive. He dies 1.94 times a
+game to BARb's 0.38, a median 703 elmo from home, with 58% of those deaths
+inside what this very leash calls home (tools/compos.py, tools/comguard.py).
+It is charging the whole early economy for a protection it does not deliver.
+
+The code one line above it already states the right principle -- "the trip
+risk is a PRICE, not a veto, and ranks the spot below a safer one of equal
+yield" -- and then applies ComFar as a veto. `apex_com_mex_price` makes it a
+price. Default 0 keeps the veto exactly.
+
+NOT yet established: that pricing it wins games. A 16-game pair moved income
+at minute 12 from 73 to 91 and extractors from 5.1 to 5.9, but this session
+has twice watched an effect that size evaporate at n=32.

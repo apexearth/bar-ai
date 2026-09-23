@@ -527,6 +527,7 @@ local NAMES = {
 	"apex_com_stay_forward", -- market/floor.as: a forward commander takes work around him rather than walking home (1 = since 3bb47630)
 	"apex_nosite_diag", -- protect_want.as: log WHY a defence site scored zero gain (0 = off)
 	"apex_fill_firstpass", -- protect_fill.as: a never-filled defence def gets one extra site-fill slot per frame (0 = off)
+	"apex_com_mex_price", -- want_mex.as: what a mex spot outside the commander's leash is worth to him, 0..1 (0 = the veto)
 	"apex_share_army",
 	"apex_share_defence",
 	"apex_share_economy",

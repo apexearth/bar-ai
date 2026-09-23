@@ -539,10 +539,22 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// The commander's leash likewise: a spot the election would refuse
 		// (ComFar) must not be his one mex want, or the refusal's fallback
 		// buys energy while the next spot in stands unclaimed.
+		// ...but as the SAME price the two gates above are, when
+		// apex_com_mex_price > 0. As a veto it refused 89% of every extractor
+		// proposal in the first three minutes -- the window the game is
+		// decided in -- and it does not buy what it is charging for: he dies
+		// a median 703 elmo from home with 58% of those inside what this very
+		// leash calls home. See docs/27.
+		float comPen = 1.f;
 		if (comm && ComFar(sp)) {
 			++gMexComFar;
-			DeadSpotSay(dw, sp, "comfar");
-			continue;
+			const float cp = ai.GetTunable("apex_com_mex_price",
+					TUNE_COM_MEX_PRICE);
+			if (cp <= 0.f) {
+				DeadSpotSay(dw, sp, "comfar");
+				continue;
+			}
+			comPen = cp;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
 		const float risk = TripRiskWith(sp, share);
@@ -550,7 +562,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		if (risk >= 0.5f)
 			++gSwPast;
 		gPsCand.insertLast(int(si));
-		gPsScore.insertLast(inc * (1.f - risk) / (walk + 1.f));
+		gPsScore.insertLast(comPen * inc * (1.f - risk) / (walk + 1.f));
 	}
 	gSwCand = int(gPsCand.length());
 	const int tries = MexTries();
