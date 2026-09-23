@@ -1624,7 +1624,11 @@ float LineCeilSum()
 // pawns, the T2 lab read "no free metal" and got no turrets, and the T1
 // pawns died to their T2 (his watch, docs/33). The free flow is what the
 // higher line's turrets shift, not what they wait for.
-float LowerLinesEat(CCircuitUnit@ f)
+// ...LATHE THIS LINE ALREADY REACHES IS NOT FLOW IT HAS YET TO TAKE. A
+// turret in reach of a lab and of the advanced plant beside it was counted
+// in every lower line's eat but subtracted from the higher line's once, so
+// each turret raised the higher line's own demand.
+float LowerLinesEat(CCircuitUnit@ f, const AIFloat3& in fp)
 {
 	const int tier = PlantTier(int(f.circuitDef.id));
 	float eat = 0.f;
@@ -1634,14 +1638,31 @@ float LowerLinesEat(CCircuitUnit@ f)
 			continue;
 		if (PlantTier(int(g.circuitDef.id)) >= tier)
 			continue;
-		eat += LineEat(g, g.GetPos(ai.frame));
+		eat += (Catalog::gBuildPower[int(g.circuitDef.id)]
+				+ RingBPUnshared(g.GetPos(ai.frame), fp)) * LineDensity(g);
 	}
 	return eat;
 }
 
+// Metal the economy actually moves [m/s]: what it can deliver, or what it is
+// asking for, whichever is smaller. A reallocation between lines cannot
+// exceed it.
+float MetalMoved()
+{
+	const float have = aiEconomyMgr.metal.income
+			+ aiEconomyMgr.metal.current / 60.f;
+	const float want = aiEconomyMgr.metal.pull;
+	return (want < have) ? want : have;
+}
+
+// The winning line's shift term, for the nanowant log: the part of `line`
+// that the free flow does not bound.
+float gLineShift = 0.f;
+
 float NeediestLine(AIFloat3& out at)
 {
 	float worst = 0.f;
+	float worstShift = 0.f;
 	const float feed = FreeMetalFlow();
 	// The army want floors every working line's share: the ceiling weight
 	// alone let one standing gantry (ceil 29000) starve a T2 lab to ~2% of
@@ -1654,19 +1675,33 @@ float NeediestLine(AIFloat3& out at)
 		if (f is null)
 			continue;
 		float u = LineUnserved(f, feed, spendFloor, sumCeil);
+		float sh = 0.f;
 		// A higher line's turrets shift metal off the lines below it, but only
 		// what those lines eat: past parity the flow shifts nothing, so with an
 		// empty bank the term terminates instead of buying lathe forever.
+		// A line's eat is the lathe's CAPACITY, and a capacity is not a flow:
+		// it read 862 m/s of shiftable metal on a team building 86, because
+		// most of that lathe was standing idle. Metal cannot be moved off the
+		// lines below unless it is moving.
 		if (LineWorkingArmy(f)) {
-			const float shift = LowerLinesEat(f) - LineEat(f, f.GetPos(ai.frame));
-			if (shift > 0.f)
+			const AIFloat3 fp = f.GetPos(ai.frame);
+			float lower = LowerLinesEat(f, fp);
+			const float moved = MetalMoved();
+			if (lower > moved)
+				lower = moved;
+			const float shift = lower - LineEat(f, fp);
+			if (shift > 0.f) {
 				u += shift;
+				sh = shift;
+			}
 		}
 		if (u > worst) {
 			worst = u;
+			worstShift = sh;
 			at = f.GetPos(ai.frame);
 		}
 	}
+	gLineShift = worstShift;
 	return worst;
 }
 
@@ -1824,6 +1859,23 @@ float RingBPAt(const AIFloat3& in at)
 		const uint i = uint(gNanoGrid.hit[q]);
 		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
 		if (at.distance2D(gOwnNanoPos[i]) < r)
+			bp += (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;
+	}
+	return bp;
+}
+
+// Ring BP at `at` that a turret standing at `mine` could not already use:
+// a turret in reach of both is already serving both, so it is supply the
+// asker has, not flow it has yet to take.
+float RingBPUnshared(const AIFloat3& in at, const AIFloat3& in mine)
+{
+	float bp = 0.f;
+	NanoNear(at, NanoMaxReach());
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if ((at.distance2D(gOwnNanoPos[i]) < r)
+			&& (mine.distance2D(gOwnNanoPos[i]) >= r))
 			bp += (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;
 	}
 	return bp;

@@ -1554,25 +1554,69 @@ His read, watching: "sometimes we make huge nano blobs for little reason."
 At 210 metal each that is ~21,200 metal in s5, and 53 turrets is ~10,600
 build power on one advanced air plant that cannot consume a tenth of it.
 
-It is NOT the feedback he suspected. The priced want subtracts the lathe
+It is NOT the SITE feedback he suspected. The priced want subtracts the lathe
 already standing at the site (`ringEat` + the site's crew, want_nano.as), so
 each turret makes the next worth less; and `FactoryNanoShort` is hard-capped
 at 9 per plant for tier 3, 4 for tier 2, 2 for tier 1, so the floor cannot
-reach 53 either.
+reach 53 either. The `sink` term reads 0.0-2.3 m/s after minute 15 in all
+four seats.
 
-What is missing is any bound on the TOTAL. Demand is
-`FreeMetalFlow() * apex_nano_site_share` less the standing lathe, and the
-want says so deliberately: "spare metal flow is the honest bound ... the
-turret count rises with income on its own and needs no ceiling." That was
-right against the failure it was written for (five T2 labs with four nanos
-between them). Its other end is unmeasured: while metal is spare, every new
-big-build site near the blob's edge opens fresh demand the existing ring does
-not cover, and the ring grows outward.
+**It is the LINE term, and the answer to his question is yes.** Tabulating
+`apex: nanowant`, the `line` term (NeediestLine) is what `over` equals in
+62-81% of samples in every seat, and after minute 15 it averages 22-322 m/s
+while `feed` (FreeMetalFlow) averages 3.9-19.3 and `idle` (nano lathe with
+nothing to lathe) averages 290-496. `LineUnserved` cannot exceed `feed`, so
+the excess is entirely `NeediestLine`'s shift term,
+`LowerLinesEat(f) - LineEat(f)`. Reconstructing that from the final
+`[BARAI_POS]` snapshot reproduces the logged numbers exactly:
 
-Worth what it displaces? 21k metal is the same order as the army deficit this
-regime loses on (-1,924 by minute 6, and ISSUES above). The group 2,937 elmo
-from any plant is the part with no reading at all -- no site demand explains
-it, so find what proposed it before touching the share.
+  s5 t0  armaap  ring 39  eat 306.6  lowerEat 356.2  shift  +49.6   (log 42.9)
+  s6 t1  armshltx ring 7  eat 153.0  lowerEat1007.0  shift +854.0   (log 724.1)
+
+Two mis-measurements make it grow with itself:
+
+1. **Shared lathe is counted once per lower line and subtracted once.** The
+   85-group has armlab, armap, armalab and armaap inside 632 elmo, and a
+   turret reaches 400, so one turret sits in several rings. Per turret added
+   in reach of {armlab, armap, armaap} the aap's own shift rises by
+   `200*(.0643+.0224-.0383)` = **+9.7 m/s**; for the T3 gantry over four
+   lower plants it is **+20.3**. Building a turret raises the demand for the
+   next one. De-duplicating (only lathe the asker cannot already reach is
+   shiftable) turns every T2 case negative: s5 t0 armaap +49.6 -> -57.8,
+   armalab +42.9 -> -98.6; s6 t0 armalab +41.2 -> -114.8.
+2. **A capacity is read as a flow.** `LineEat` is BP times density -- what
+   the ring WOULD eat. s6 t1 claims 1007 m/s shiftable on a team whose whole
+   game averaged 86 m/s built (`mBuiltReal` 154,467 / 30 min), with 496 m/s
+   of that lathe measured idle at the same instant.
+
+Both are fixed in `sites.as` (de-duplicate, and bound the shift by
+`MetalMoved()` = min(pull, income + bank/60)). Untested -- see the commit.
+
+**The groups far from any plant are not a bug, they are his fortress.** The
+extended `nanoblob.py` splits every group by what it rings, and there is no
+group ringing nothing:
+
+  s6  group of 14 @2386,3425  GUN   rings: armanni x1        (nearest plant 2937)
+  s6  group of 15 @1701,5880  GUN   rings: armamb x1, armsolar x1
+
+`armanni` IS the Pulsar. This is his 2026-09-22 complaint from the other
+side: one gun, a ton of nanoturrets around it. Two things put them there and
+neither is priced:
+
+- `BigEcoDef` is `gCostM >= 2500 || gMakeE >= 400`, so the Pulsar (3500) and
+  the Rattlesnake (2500) are "big eco frames". That exempts them from the
+  remaining-life scaling in want_nano.as (their turrets are treated as
+  working forever after completion, the exemption written for a reactor
+  cluster), and it wins them execute.as's last sink branch over a served
+  line.
+- That branch is **silent and unpriced**: it takes the first matching live
+  task in `Requests::gLive` order, logs nothing, and sets `sited`. 65 of
+  t0's 84 turrets in s6 carry an `apex: nano-to-line` line; the rest do not.
+
+Do NOT answer this by cutting the ring at the gun -- docs/24: where the
+turrets are massed, that ground is worth fortifying. The open work is the
+fortress (more guns, a shield on that ground), plus pricing that execute
+branch so it is a decision rather than a fallthrough.
 
 ### SCAV MODE: EPIC STATS BEAT AN EMPTY TRADE RECORD (2026-09-22)
 

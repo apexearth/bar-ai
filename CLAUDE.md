@@ -9,6 +9,21 @@ never hardcode one. `BAR-GUIDE.md` covers game mechanics.
 govern a session, and a router. Everything else is one lookup away, and the
 linked file is authoritative where it disagrees with a summary here.
 
+## Where the economy comes from
+
+In the early game most of the economy comes from metal extractors and energy.
+As the game goes later, a greater and greater portion of it comes from energy
+production and energy conversion into metal.
+
+The number of extractor spots on a map is fixed and small (34 on Glacier Pass),
+so extraction stops growing. Energy does not. Conversion runs at roughly 60
+energy per 1 metal. `docs/10-bar-game-concepts.md`.
+
+Measure economy growth as energy income, generator capacity and conversion.
+Extractor count describes the early game only. `tools/ecoside.py` reads it per
+side; in a 2v2 both Apex AIs are our side (engine teams 0 and 1), and
+`teams[].team` in result.json is the spec index, not the engine team (**S16**).
+
 ## The one idea
 
 Every decision answers one question: **what is the fastest path to the state we
