@@ -2480,5 +2480,5 @@ walks all over the map and cannot make up his mind.
 
 Method note for whoever reads this next: "distance to the nearest X" is
 almost never the right instrument when the Xs differ in reach. Ask whether
-one of them covered the point. tmp/comguard2.py is eight lines different
-from comguard.py and says the opposite thing.
+one of them covered the point. tools/comguard.py is eight lines different
+from the first version and says the opposite thing.
