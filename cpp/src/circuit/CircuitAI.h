@@ -438,6 +438,8 @@ public:
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
 	mutable std::map<std::string, float> tunables;  // see GetTunable
+	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options
+	mutable bool aiOptsRead = false;
 	mutable float lavaLevel = NO_LAVA;   // see GetLavaLevel
 	mutable int lavaFrame = -1;
 	float lavaCrest = NO_LAVA;           // see SetLavaCrest

@@ -86,6 +86,30 @@ local options = {
 			},
 		},
 	},
+	{ -- section
+		key    = 'play',
+		name   = 'Play style',
+		desc   = 'How this particular bot plays, independent of the others.',
+		type   = 'section',
+	},
+	{ -- number
+		key     = 'apex_eco_force',
+		name    = 'Economy focus',
+		desc    = 'Seat THIS bot as the eco player.
+'
+		       .. '0 = off (normal play).
+'
+		       .. '1 = full eco phase, 0.5 = half as long.
+'
+		       .. 'It grows to that share of the eco target before army and '
+		       .. 'defence return; home danger still restores them.',
+		type    = 'number',
+		section = 'play',
+		def     = 0,
+		min     = 0,
+		max     = 1,
+		step    = 0.1,
+	},
 }
 
 return options

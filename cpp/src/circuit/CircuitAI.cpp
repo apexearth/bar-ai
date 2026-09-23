@@ -2029,6 +2029,34 @@ float CCircuitAI::GetTunable(const char* name, float defVal) const
 	if (it != tunables.end()) {
 		return it->second;
 	}
+	// THIS BOT'S OWN OPTION OUTRANKS THE GAME-WIDE RULES PARAM. A rules param is
+	// set once for the match, so it can never say "this bot plays the eco seat
+	// and that one does not" -- which is what the lobby's per-AI options are for
+	// (apexearth 2026-09-22: "add one of these AI in multiplayer and check a box
+	// to say I want it to be an eco AI"). Read once, because GetOptionValues
+	// allocates.
+	if (!aiOptsRead) {
+		aiOptsRead = true;
+		springai::SkirmishAI* ai = GetSkirmishAI();
+		if (ai != nullptr) {
+			springai::OptionValues* opts = ai->GetOptionValues();
+			if (opts != nullptr) {
+				const int n = opts->GetSize();
+				for (int i = 0; i < n; ++i) {
+					aiOpts[opts->GetKey(i)] = opts->GetValue(i);
+				}
+				delete opts;
+			}
+		}
+	}
+	auto ov = aiOpts.find(name);
+	if (ov != aiOpts.end()) {
+		try {
+			const float value = std::stof(ov->second);
+			tunables[name] = value;
+			return value;
+		} catch (...) {}
+	}
 	const float value = (game != nullptr) ? game->GetRulesParamFloat(name, defVal) : defVal;
 	tunables[name] = value;
 	return value;
