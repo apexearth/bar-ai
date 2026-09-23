@@ -2516,3 +2516,32 @@ Two of the three reds are worth chasing on their own evidence regardless:
     forwarding"/refused-election path and it is burning elections
   - median survival 0.57 for a home mex at hazard 0: home ground is being
     priced as risky when it is not
+
+#### Third run, same content: RED (2)
+
+Ran a third time (sha 1121153e, ai/ and cpp/ byte-identical to the two runs
+above -- only ISSUES.md changed between them):
+
+  run 3: RED (2) -- home ground is not discounted (0.59, 13 readings),
+                    commander never penned or frozen (BOTH seeds this time)
+
+So RED(3), GREEN, RED(2) on the same AI. The entry above stands and is
+stronger than when it was written.
+
+Two checks recur in 2 of the 3 runs and are probably NOT noise -- they sit
+near their boundary rather than flipping across it:
+  - home ground is not discounted (0.57 then 0.59, both runs that read it)
+  - commander never penned or frozen (1 seed, then 2 seeds)
+Those two are the ones to chase. The plant-copy livelock appeared once at
+x97, which is a large enough count in the one game it appeared in to be
+worth a look on its own.
+
+Note for the mechanism: the gate keys on the repo HEAD sha, so a docs-only
+commit invalidates a green record and forces a re-run. Keying on a hash of
+the DEPLOYED set (ai/ + cpp/) instead would make a gate record survive the
+commit that writes up its own result.
+
+The shared deploy apexearth asked for is therefore NOT done: it needs
+`--allow-red`, which is his call. Re-running the gate until it comes up
+green would be result-shopping, and given the three runs above it would
+have meant nothing.
