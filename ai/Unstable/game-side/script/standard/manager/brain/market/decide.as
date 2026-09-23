@@ -744,6 +744,12 @@ bool PlantFramed()
 	return false;
 }
 
+int gOfferN = 0;
+int gOffer1 = 0;
+int gOfferSum = 0;
+int gNextOfferLog = 0;
+array<int> gOffer1Kind(16, 0);
+
 // The market's categories onto the budget's five rows. Only the four with an
 // honest counterpart are steered: produce, sense, super and reclaim have no row
 // of their own and stay at 1 rather than borrow someone else's shortfall.
@@ -1233,6 +1239,28 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ranked.insertAt(at, c);
 	}
 	Perf::Add("dec.rank", _tRank);
+	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
+	// want with no rival, and a price cannot steer a decision with nothing to
+	// steer towards -- so count the offers, not just the winner.
+	++gOfferN;
+	if (ranked.length() <= 1) {
+		++gOffer1;
+		if (ranked.length() == 1)
+			gOffer1Kind[CategoryOf(ranked[0].kind)] += 1;
+	}
+	gOfferSum += int(ranked.length());
+	if (ai.frame >= gNextOfferLog) {
+		gNextOfferLog = ai.frame + 60 * SECOND;
+		string mix = "";
+		for (uint ci = 0; ci < gOffer1Kind.length(); ++ci) {
+			if (gOffer1Kind[ci] > 0)
+				mix += " " + CatName(int(ci)) + "=" + gOffer1Kind[ci];
+		}
+		AiLog(Factory::T() + "apex: offers elections=" + gOfferN
+			+ " alone=" + gOffer1
+			+ " mean=" + formatFloat(float(gOfferSum) / float((gOfferN > 0) ? gOfferN : 1), "", 0, 2)
+			+ " |" + mix);
+	}
 	// THE SPLIT OF NEED, read off the full list before any hoist or role.
 	if (ranked.length() > 0) {
 		array<int> cbC;
