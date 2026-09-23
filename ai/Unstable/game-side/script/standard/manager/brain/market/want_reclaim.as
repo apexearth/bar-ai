@@ -250,14 +250,22 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 	// the successor simply goes next door and the upside is nothing.
 	RefreshBestCells();
 	float mine = 0.f, best = 0.f;
+	float perUnit = ePM;
 	if (Catalog::gMakeE[d] > 0.f) {
 		mine = Catalog::gMakeE[d] / float(cells);
 		best = gBestEcell;
 	} else if (Catalog::gConvCapacity[d] > 0.f) {
 		mine = Catalog::gConvCapacity[d] / float(cells);
 		best = gBestMcell;
+	} else if (LatheCellBP(d) > 0.f) {
+		// A turret's output is build power, so the ground's yield is priced in
+		// the metal-per-buildtime density every nano want already uses.
+		RefreshBestLathe();
+		mine = LatheCellBP(d);
+		best = gBestLcell;
+		perUnit = 7.f / 80.f;
 	}
-	const float upside = ((best > mine) ? (best - mine) : 0.f) * float(cells) * ePM * crowd;
+	const float upside = ((best > mine) ? (best - mine) : 0.f) * float(cells) * perUnit * crowd;
 	// A DEF WE WOULD REFUSE TO BUILD KEEPS NO CREDIT FOR ITS TRICKLE
 	// (apexearth 2026-09-13: "Our base ends up cluttered with buildings which
 	// aren't worth the space they take up. Old energy, old converters, old
@@ -266,10 +274,12 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 	// fusion stood; the same per-cell dwarf test that refuses to build it
 	// says its output is had cheaper on the same ground.
 	const bool dwarfed = (Catalog::gMakeE[d] > 0.f) ? GenObsoleteOnArrival(d)
-			: ((Catalog::gConvCapacity[d] > 0.f) ? ConvObsoleteOnArrival(d) : false);
+			: ((Catalog::gConvCapacity[d] > 0.f) ? ConvObsoleteOnArrival(d)
+				: LatheObsoleteOnArrival(d));
 	const float trickle = dwarfed ? 0.f
 			: (Catalog::gMakeE[d] * ePM
-				+ Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]);   // the metal it converts
+				+ Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]   // the metal it converts
+				+ LatheCellBP(d) * float(cells) * (7.f / 80.f));
 	return (Catalog::gCostM[d] + SpaceRentM(at, cells) + room) / hz
 			+ upside
 			- trickle;
@@ -592,6 +602,113 @@ bool ConvObsoleteOnArrival(int d)
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	return (mc > 0.f) && (gBestMcell
 			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * mc);
+}
+
+// LATHE, ON THE SAME LAW AS THE CONVERTER: build power per CELL of ground.
+// apex_obsolete_ratio is NOT applied -- it is 4x, calibrated on the energy
+// ladder, and the lathe rung is 1.69x, so the whole law would be a silent
+// no-op. The successor does the same job on the same ground, so strictly
+// denser is the test and RetireGain's room term decides the swap. docs/27,
+// TUNE_LATHE_OBSOLETE.
+float LatheCellBP(int d)
+{
+	if (!IsLatheDef(d))
+		return 0.f;
+	return Catalog::gBuildPower[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+}
+
+float gBestLcell = 0.f;
+int gBestLcellAt = -999999;
+void RefreshBestLathe()
+{
+	if (ai.frame < gBestLcellAt + 5 * SECOND)
+		return;
+	gBestLcellAt = ai.frame;
+	gBestLcell = 0.f;
+	// WHAT WE COULD BUILD, not what we own -- the same correction the converter
+	// scan needed, or the basic turret can never be obsolete until an advanced
+	// one already stands and the ladder has one build too few. Our own tree
+	// only, so another faction's turret cannot condemn ours; and no water defs,
+	// since a floating turret does not dwarf ground the land one holds.
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gFloater[d] || Catalog::gSub[d]
+			|| !Producible(d))
+			continue;
+		const float bc = LatheCellBP(d);
+		if (bc > gBestLcell)
+			gBestLcell = bc;
+	}
+}
+
+bool LatheObsoleteOnArrival(int d)
+{
+	const float bc = LatheCellBP(d);
+	if (bc <= 0.f)
+		return false;
+	if (ai.GetTunable("apex_lathe_obsolete", TUNE_LATHE_OBSOLETE) <= 0.f)
+		return false;
+	RefreshBestLathe();
+	return gBestLcell > bc;
+}
+
+// EDIBLE ONLY IF THIS PAIR OF HANDS COULD HAVE BUILT THE DENSER ONE -- the
+// converter's per-hand law, for the same reason: only our T2 constructors list
+// the advanced turret, so refusing the basic to a T1 hand costs us every
+// turret that hand would have stood and replaces it with nothing.
+bool LatheObsoleteFor(CCircuitUnit@ unit, int d)
+{
+	if (!LatheObsoleteOnArrival(d))
+		return false;
+	if (unit is null)
+		return true;
+	const float mine = LatheCellBP(d);
+	const array<int>@ b = Catalog::BuildsOf(int(unit.circuitDef.id));
+	for (uint i = 0; i < b.length(); ++i) {
+		const int o = b[i];
+		if ((o == d) || !Catalog::gAvailable[o] || Catalog::gFloater[o]
+			|| Catalog::gSub[o])
+			continue;
+		if (LatheCellBP(o) > mine)
+			return true;
+	}
+	return false;
+}
+
+// THE TURRET ALREADY STANDING IS NOT EATEN UNTIL ITS WORK IS COVERED -- the
+// converter retirement's DenserConvStandingE guard, in build power. Denser
+// turrets we own must already carry what the fleet is actually lathing plus
+// this one's share, so the reclaim-rebuild loop the energy ladder ran into
+// cannot recur: nothing is eaten before its replacement is doing the work.
+// Answered PER DEF and cached: asked inside the victim walk it is a second
+// walk per candidate, and one seat has stood 217 turrets.
+array<int> gDenserLatheAt;
+array<float> gDenserLatheBP;
+float DenserLatheStandingBP(int d)
+{
+	if (int(gDenserLatheAt.length()) <= d) {
+		const uint n0 = gDenserLatheAt.length();
+		gDenserLatheAt.resize(d + 1);
+		gDenserLatheBP.resize(d + 1);
+		for (uint k = n0; k <= uint(d); ++k) {
+			gDenserLatheAt[k] = -999999;
+			gDenserLatheBP[k] = 0.f;
+		}
+	}
+	if (ai.frame < gDenserLatheAt[d] + 5 * SECOND)
+		return gDenserLatheBP[d];
+	gDenserLatheAt[d] = ai.frame;
+	const float mine = LatheCellBP(d);
+	float bp = 0.f;
+	for (uint i = 0; i < gOwnNano.length(); ++i) {
+		if (gOwnNano[i] is null)
+			continue;
+		const int od = int(gOwnNano[i].circuitDef.id);
+		if (LatheCellBP(od) > mine)
+			bp += Catalog::gBuildPower[od];
+	}
+	gDenserLatheBP[d] = bp;
+	return bp;
 }
 
 // GROUND HANDS EAT WHAT THEY CAN REACH (apexearth 2026-08-28: "we build so
@@ -925,6 +1042,46 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			bestDef = d;
 		}
 	}
+	// Construction turrets, on the same law again: build power per cell of
+	// ground, against the densest turret we could build. The load test is what
+	// keeps this off the reclaim-rebuild loop -- denser turrets we already own
+	// must be carrying what the fleet is actually lathing plus this one's
+	// share before the basic one is scrap.
+	int nLathe = 0, nLatheDwarf = 0, nLatheCovered = 0;
+	float bestLatheV = 0.f;
+	int bestLatheDef = -1;
+	const bool latheOn =
+			ai.GetTunable("apex_lathe_obsolete", TUNE_LATHE_OBSOLETE) > 0.f;
+	for (uint i = 0; latheOn && (i < gOwnNano.length()); ++i) {
+		CCircuitUnit@ nt = gOwnNano[i];
+		if (nt is null)
+			continue;
+		if (ReclaimClaimed(nt.id, unit.id))
+			continue;
+		const int d = int(nt.circuitDef.id);
+		const float mine = LatheCellBP(d);
+		if (mine <= 0.f)
+			continue;
+		++nLathe;
+		if (!LatheObsoleteOnArrival(d))
+			continue;
+		++nLatheDwarf;
+		if (DenserLatheStandingBP(d)
+				< BusyNanoBP() + Catalog::gBuildPower[d])
+			continue;
+		++nLatheCovered;
+		const float v = RetireValue(unit, nt, d, ePM, wageR, hz)
+				* ReachVictimMul(unit, nt.GetPos(ai.frame));
+		if (v > bestLatheV) {
+			bestLatheV = v;
+			bestLatheDef = d;
+		}
+		if (v > bestValue) {
+			bestValue = v;
+			@best = nt;
+			bestDef = d;
+		}
+	}
 	// Where the obsolete-eco retirement dies, once a minute (apexearth
 	// 2026-09-12: "we aren't reclaiming obsolete eco so we pretty easily run
 	// out of room").
@@ -943,7 +1100,12 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			+ " mpc=" + formatFloat(PfMetalPerCell(), "", 0, 2)
 			+ " hz=" + int(hz) + " ratio=" + formatFloat(ratio, "", 0, 1)
 			+ " bestEcell=" + formatFloat(ownBestEcell, "", 0, 2)
-			+ " bestMcell=" + formatFloat(ownBestMcell, "", 0, 2));
+			+ " bestMcell=" + formatFloat(ownBestMcell, "", 0, 2)
+			+ " lathe=" + nLathe + "/" + nLatheDwarf + "/" + nLatheCovered
+			+ " best=" + ((bestLatheDef >= 0) ? Catalog::Def(bestLatheDef).GetName() : "-")
+			+ ":" + formatFloat(bestLatheV * 1000.f, "", 0, 2)
+			+ " bestLcell=" + formatFloat(gBestLcell, "", 0, 2)
+			+ " busyBP=" + int(BusyNanoBP()));
 	}
 	// Defences: dominated by a much stronger one covering the same ground.
 	// Neighbours from a grid, not every tower against every other: the

@@ -88,7 +88,19 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// caretaker logic). The income-headroom gap (BPGap) buys constructors
 	// now, never farm turrets.
 	AIFloat3 linePos;
-	const float lineNeed = NeediestLine(linePos);
+	float lineNeed = NeediestLine(linePos);
+	// A SHIFT IS NOT A SHORTAGE OF LATHE WHILE LATHE STANDS IDLE -- the law the
+	// waste term below already runs under. Alone of the terms here the shift is
+	// not bounded by FreeMetalFlow, and a turret landing out of the buying
+	// line's reach raises LowerLinesEat and so raises that line's OWN shift, so
+	// it ran away: docs/27, TUNE_NANO_SHIFT_IDLE.
+	if (gLineShift > 0.f) {
+		const float slack = IdleNanoLatheM()
+				* ai.GetTunable("apex_nano_shift_idle", TUNE_NANO_SHIFT_IDLE);
+		lineNeed -= (slack < gLineShift) ? slack : gLineShift;
+		if (lineNeed < 0.f)
+			lineNeed = 0.f;
+	}
 	bool haveLine = (lineNeed > 0.f) && OnMap(linePos);
 	AIFloat3 sinkPos = AIFloat3(-1.f, 0.f, -1.f);
 	float sinkNeed = 0.f;
@@ -336,6 +348,15 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
 			continue;
 		if ((Catalog::gBuildPower[d] <= 0.f) || (Catalog::gBuildsList[d].length() > 0))
+			continue;
+		// NEVER BUILD WHAT WE WOULD EAT, one family over (apexearth
+		// 2026-09-22: "We never treat our T1 construction turrets as obsolete
+		// buildings. Eventually the space is better used with T2 construction
+		// turrets"). Per hand, as the converter is: the basic turret always
+		// won this loop on value -- 4x the metal and 4x the energy for 3x the
+		// lathe -- so the advanced one was never built once in a 16-game
+		// batch, at any demand.
+		if (LatheObsoleteFor(unit, d))
 			continue;
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		float gainN = (over < drain) ? over : drain;

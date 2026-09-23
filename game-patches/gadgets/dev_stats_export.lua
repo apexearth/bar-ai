@@ -314,6 +314,19 @@ function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 	end
 end
 
+-- WHICH PLANT A UNIT CAME OUT OF. UnitFinished above logs buildings only, so
+-- "we built a plant and never used it" was unmeasurable (plantuse.py).
+function gadget:UnitFromFactory(unitID, unitDefID, unitTeam, factID, factDefID)
+	local ud, fd = UnitDefs[unitDefID], UnitDefs[factDefID]
+	if ud == nil or fd == nil then
+		return
+	end
+	local f = Spring.GetGameFrame()
+	BARAI_Echo(string.format("[BARAI_PROD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d fac=%s",
+		unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
+		f, f / 1800, ud.name, ud.metalCost or 0, fd.name))
+end
+
 function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	local ud = UnitDefs[unitDefID]
 	if ud == nil then

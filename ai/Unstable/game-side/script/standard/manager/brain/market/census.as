@@ -432,6 +432,8 @@ array<AIFloat3> gOwnNanoPos;
 array<Id> gOwnNanoIds;
 array<float> gOwnNanoReach;
 array<float> gOwnNanoBP;
+// The handles, for the retirement market: the other three are read by position.
+array<CCircuitUnit@> gOwnNano;
 
 // THE TURRET CENSUS, BUCKETED. NanoLatheReaching and RingBPAt walked every
 // standing turret, and Requests::Take asks NanoFed once per live request, so
@@ -528,6 +530,7 @@ void NoteFarm(CCircuitUnit@ unit)
 	gOwnNanoIds.insertLast(unit.id);
 	gOwnNanoReach.insertLast(Catalog::gBuildDist[d]);
 	gOwnNanoBP.insertLast(Catalog::gBuildPower[d]);
+	gOwnNano.insertLast(unit);
 	NanoGridAppend();
 	if (gFarmSet)
 		return;
@@ -598,6 +601,8 @@ void NoteDead(CCircuitUnit@ unit)
 				gOwnNanoReach.removeAt(nn);
 			if (nn < gOwnNanoBP.length())
 				gOwnNanoBP.removeAt(nn);
+			if (nn < gOwnNano.length())
+				gOwnNano.removeAt(nn);
 			NanoGridDrop();
 			NanoSentDrop(unit);
 			break;

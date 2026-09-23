@@ -1107,6 +1107,12 @@ const float TUNE_INFERIOR_DISCOUNT = 1.f;
 
 const float TUNE_ENERGY_GROWTH = 8.f;
 
+// [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
+//   share of the plan's own horizon a generator would actually be paying over,
+//   so a reactor that lands after the target is due stops out-valuing one that
+//   lands before it. See docs/27.
+const float TUNE_ENERGY_GROWTH_ARRIVE = 0.f;
+
 // E_REALIZE [toggle 0/1]: the overflow-aware half of the energy market --
 //   generation priced by the share of it anything would actually use (real
 //   demand at E_HEADROOM plus standing converter capacity), the converter want
@@ -1432,6 +1438,16 @@ const float TUNE_ANTINUKE_R = 2000.f;
 //   (per cell for generators, in power for defences) before a building is scrap
 //   -- his "much better".
 const float TUNE_OBSOLETE_RATIO = 4.f;
+
+// LATHE_OBSOLETE: 1 = a construction turret a denser one per cell of ground
+//   replaces is obsolete on arrival and a candidate for retirement; 0 = the
+//   basic turret is built and kept forever. See docs/27.
+const float TUNE_LATHE_OBSOLETE = 0.f;
+
+// NANO_SHIFT_IDLE [share] -- how much of the lathe standing with nothing to
+//   lathe is netted off a line's shift demand. 0 = the shift is bid whole.
+//   See docs/27.
+const float TUNE_NANO_SHIFT_IDLE = 0.f;
 
 // EXPOSE_R: elmos from the core at which a structure counts fully exposed (a
 //   walk away from where the army lives).
@@ -1923,6 +1939,13 @@ const float TUNE_COVER_BY_RAID = 1.f;
 //   2026-09-12 (docs/27); off until the line factor is strong enough to be
 //   the decision rather than a 17% nudge under the plant's own cost.
 const float TUNE_LINE_QUALITY = 0.f;
+
+// A new line escapes the copy ban only while the best combat unit it would ADD
+//   is worth at least this share of the best one we already produce, and a
+//   product the unit market refuses on this map (the amphib x0) prices its line
+//   at nothing. 1 is parity with what we field; 0 restores the old test, which
+//   asked only whether the product was new. See docs/27.
+const float TUNE_PLANT_UNLOCK = 0.f;
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it

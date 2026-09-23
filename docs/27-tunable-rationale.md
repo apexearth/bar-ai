@@ -845,6 +845,54 @@ mex would double our income it is very important... if it boosts our income
 only 1% then its not too important"). At 8: doubling x9, +10% x1.8, +1% x1.08
 -- 3 gave x4 / x1.3 / x1.03, too flat to express that ordering.
 
+### `TUNE_ENERGY_GROWTH_ARRIVE` = 0.f (default OFF, untested in a batch)
+
+THE GROWTH PREMIUM STOPS BEING A SIZE PRIZE. `TUNE_ENERGY_GROWTH` multiplies a
+generator's gain by `1 + k * mkM / max(P, mkM)`, which is linear in the
+generator's own output while its cost is also linear in that output — so the
+value it produces rises with size and the biggest reactor on the builder's list
+wins every non-stalled election for being big. That is the same error the stall
+arm fixed in 2026-09-08 ("too early btw, fusion would have been smarter"), one
+rung higher up and unfixed.
+
+Evidence, from his live 8v8 with the scavenger units enabled
+(`matches/_engine`, `python tools/ecoladder.py matches/_engine --kind energy`):
+the energy elections were armsolar 83, armfus 63, **armafust3 (Epic Fusion,
+90,000 metal) 54**, armadvsol 62, armckfus 13, **armafus (AFUS) 3**. The Epic
+took over at EcoPowerM ≈ 600 m/s and never gave the rung back. At the first
+Epic election the AI's own ladder was printing
+`mkt=armafust3 eta=armfus | armafus=1374 armafust3=4832 armckfus=840
+armfus=560` — the Epic arriving nine times later than the fusion, and elected
+anyway (apexearth 2026-09-22: "straight from making fusions to the Epic Fusion
+Reactor... we should make AFUS first, but we need to make the algorithm smart
+enough to have chosen this on its own").
+
+At 1, `mkM` is first scaled by the share of the plan's own horizon the
+generator would actually be paying over: `max(0, hz - aSec) / hz`, where `hz`
+is `EtaWith(0)` — seconds to the target following the ladder as it stands — and
+`aSec` is the build's duration at the CREW it would get, stretched by its own
+energy bill. Income that lands after the target is due compounded nothing, so
+it earns no compounding premium. Nothing is barred and no number is supplied:
+a reactor that lands inside the horizon keeps the whole premium, and every one
+of them does once the hands and the income are there, which is the rung order
+falling out rather than being written down.
+
+Expected size of it, ESTIMATED not measured (nothing has been run): at that
+first Epic election P was ≈ 400 m/s and the ladder's base ETA ≈ 900 s, so the
+Epic's converted 429 m/s saturates the old denominator and takes the full
+`1 + k` = 9.0, the AFUS 1.86 and the fusion 1.29. Under the arrival share the
+Epic's own build is far longer than 900 s at any crew we field there, so its
+premium goes to 1.0 while the two smaller rungs lose a few percent — and its
+market value, 8x the fusion's in the table above, falls below it. Read the two
+new fields to check this rather than assuming it: `hz=` on the `ebig` line, and
+`arr=` on the `ewant` diag line (`apex_efloor_diag=1`).
+
+Default OFF because it has not been through a batch. The A/B is
+`apex_energy_growth_arrive=1` against the same arm at 0, judged on
+`tools/ecoladder.py --kind energy` (the Epic/AFUS/fusion split) and then on
+`composition.py`; it needs the scavenger units enabled to reproduce his case at
+all.
+
 ### `TUNE_INFERIOR_DISCOUNT` = 1.f
 
 Discount a generator by how much better a one any constructor we own could
@@ -1915,6 +1963,43 @@ and fields twice our units in that window. Measured 2026-09-22, 96 games at
 WORSE, their extractors +0.55, our army unchanged. The ruling is not what
 costs us the opening, and letting copies compete makes it worse.
 
+### `TUNE_PLANT_UNLOCK` = 0.f
+
+apexearth 2026-09-22: *"We made an 'Experimental Aircraft Plant' and then did
+nothing with it. These plants should only be built if we actually desire to
+create something out of it."* And: hovers get built on dry maps past T2, where
+a T1-only line is never what we want.
+
+The plant market's copy ban — the one thing that makes a plant's want come out
+at exactly **0**, and so the only thing that removes it from the draw — is
+skipped whenever `UnlocksProduct()` is true, and that function asks a
+*capability* question: does this plant make anything no plant of ours makes? A
+hover platform answers yes all game, so it kept full expansion value and never
+paid the parallel-capacity divisor. Measured over
+`tournaments/20260922-225115-wr-budgetoff16` (Glacier Pass 2v2, 16 games):
+every `armhp` line logged `unlocks=1 prod=0.00 con=301`, and **every one of the
+four `armhp` buys was `why=draw over nothing`** — it won because it was the
+only ticket in the roulette, so discounting it changes nothing. `armavp` (16)
+and `armamsub` (13) were bought the same way.
+
+This tunable makes the exemption a *desire* question instead. `UnlockWorth()`
+is the best combat unit this line would ADD over the best one we already
+produce, on `LineUnitWorth` — the same UnitPPC-with-speed-and-sight yardstick
+production buys single units with — measured against what we **own or have in
+flight**, never the catalog. 1 is parity with what we field. It also makes
+`LineUnitWorth` honour the unit market's own dry-map x0 (production.as's
+amphib test), so a line whose combat units the market will refuse here prices
+at nothing rather than at "no information".
+
+The opening is safe by construction, not by a bound: the test is only reached
+inside `reachKin > 0`, and the first plant of a domain — and the first plant
+of a *higher reach*, i.e. the T2 lab — has no kin, so it never asks. With
+nothing standing `OwnedBestUnitWorth()` is 0 and the ratio is 1.
+
+0 restores the capability test exactly. `unlockW=` is printed on the
+`apex: plantdup` line at either setting, so the ratio can be read for every
+line before it is allowed to decide anything.
+
 ### `TUNE_T1_TOWER_LATE` = 1.f
 
 His 2026-09-19 rule, kept as the default: once an advanced hand exists, no
@@ -2435,6 +2520,93 @@ convertible surplus's worth of it inside the fill window. Comet Catcher 1v1,
 34 min: 5 basics finished against ~300 in his game, conversion capacity 2,680 E
 over a 478 E surplus, obsolete=176 of 255 asks. One T2 con beside three
 fusions still fails the test, which is the 2026-09-08 case above.
+
+### `TUNE_LATHE_OBSOLETE` = 0.f (OFF; the T1 construction turret's retirement)
+
+apexearth 2026-09-22: *"We never treat our T1 construction turrets as obsolete
+buildings. Eventually the space is better used with T2 construction turrets."*
+
+The measurement that motivated it, over `20260922-225115-wr-budgetoff16` (16
+games, Glacier Pass 2v2 +100%): **`armnanotct2` was built zero times**, against
+37,209 log mentions of `armnanotc`. Not a placement failure -- `armaca`,
+`armack` and `armacv` all list the advanced turret (injected by the game's
+`gamedata/alldefs_post.lua`, which is why `tools/unitdef.py --builders` reports
+"NOBODY"), and all three were present in quantity. It is a pricing result:
+`ProposeNano` takes the highest-value def its hand can build, and the basic
+turret is 210 metal / 3,200 energy for 200 workertime where the advanced is
+840 / 12,800 for 600 -- four times the bill for three times the lathe, so the
+basic wins at every level of demand, forever.
+
+The metric is the one the generator and converter ladders already use, output
+per CELL of ground: `armnanotc` 200 over 3x3 = 22.2, `armnanotct2` 600 over
+4x4 = 37.5, and the advanced one lathes to 500 elmos where the basic reaches
+400. **`apex_obsolete_ratio` is deliberately NOT applied here.** It is 4x,
+calibrated on an energy ladder whose rungs are 5.9x and 7.1x; the lathe rung is
+1.69x, so under the shared ratio the whole law would be a silent no-op. The
+successor does the same job on the same ground, so strictly-denser is the whole
+test, and `RetireGain`'s room term decides whether the swap is worth doing --
+on open ground it prices near zero and the advanced turret simply goes next
+door instead of eating anything.
+
+Two halves, both behind this switch:
+
+- **Build side** (`LatheObsoleteFor`, per hand, exactly `ConvObsoleteFor`'s
+  shape): a hand refuses the basic turret only when it could have stood the
+  denser one itself. The team-wide version is the 2026-09-08 converter mistake
+  above -- it removes what the T1 hands were carrying and replaces it with
+  nothing.
+- **Retirement side** (a fourth victim family in `ProposeReclaimObsolete`,
+  beside generators, converters and defences): a standing basic turret is
+  eaten only once denser turrets we already own carry what the fleet is
+  actually lathing (`BusyNanoBP`) plus this one's share -- the load test that
+  `DenserConvStandingE` is for the converter. That is what keeps this off the
+  reclaim-rebuild loop `want_energy.as` warns about: nothing is eaten before
+  its replacement is doing the work, and the build side refuses to re-buy it.
+
+Instrument: the `apex: reclobs` line now carries
+`lathe=<own>/<dwarfed>/<covered> best=<def>:<value> bestLcell= busyBP=`.
+UNMEASURED at time of writing (the parent session owned the lane).
+
+### `TUNE_NANO_SHIFT_IDLE` = 0.f (OFF; the shift term against idle lathe)
+
+apexearth 2026-09-22: *"Still a ton of build power being created and often
+outside the range of anything that it can be useful for."*
+
+Measured over the same batch with `tools/nanoreach.py` (per turret, at the
+turret's own build distance, rather than `nanoblob.py`'s 250-elmo grouping):
+429 turrets standing, **40 of them (9.3%, 8,400 metal) with no plant, no big
+eco building and no gun anywhere in their own reach** -- and 38 of those 40 in
+one game, t002, which finished 46 minutes with 147 turrets, 26% of them
+serving nothing.
+
+The mechanism is in that game's `apex: nanowant` line. Late game, every sample:
+
+```
+feed=0.0  line=649.7  shift=649.7  lathe=14.0  sink=0.0  army=0.0
+waste=0.0  idle=3500.0  fort=0.0  floor=0  over=649.7  bank=504/7850
+```
+
+`FreeMetalFlow` is zero -- the economy has nothing spare -- and 3,500 m/s of
+lathe (200 turrets) is standing with nothing in reach to lathe. The entire
+649.7 m/s of nano demand is `NeediestLine`'s **shift** term, which is
+deliberately not bounded by the free flow (`sites.as`: "the free flow is what
+the higher line's turrets shift, not what they wait for"). The term climbed
+0 -> 99.5 -> 166.9 -> 205.5 -> 649.7 across the game while `lathe` (what
+reaches the line that priced it) stayed at 14.0, because `LowerLinesEat`
+counts `RingBPUnshared` -- lathe reaching a LOWER line but not this one. Every
+turret that lands out of the buying line's reach therefore RAISES that line's
+own shift demand, and the packed block beside a plant runs out of cells long
+before the demand does (`PackSlots` empty -> `FindBuildSiteNear(..., 300)`).
+
+The fix is the law the waste term next to it already runs under -- "waste
+beside idle turrets is not a lathe shortage" -- applied to the shift: metal a
+new turret would MOVE is not metal only a new turret can move, so the lathe
+already standing idle is netted off. It terminates at the number the economy
+produced, with no cap and no distance test. At 1.0 the sample above prices
+zero; at the earlier sample (`line=106.5 shift=99.5 idle=787.5`) it prices
+7.0, the un-shifted part, which is the right answer with 45 turrets idle.
+
+UNMEASURED at time of writing. `tools/nanoreach.py` is the before/after.
 
 ### `NS_FLOORBID` (the gated factory floor -- measured and dropped)
 

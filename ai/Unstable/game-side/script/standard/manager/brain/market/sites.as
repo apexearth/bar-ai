@@ -490,12 +490,14 @@ AIFloat3 LatheSiteFor(CCircuitUnit@ unit)
 // in reach. Waste beside idle turrets is not a lathe shortage (his watched
 // seat: 328 turrets at 848 income, "lots of idle nano turrets").
 float gIdleNanoM = 0.f;
+float gBusyNanoBP = 0.f;
 int gIdleNanoAt = -999999;
 float IdleNanoLatheM()
 {
 	if (ai.frame - gIdleNanoAt < 5 * SECOND)
 		return gIdleNanoM;
 	gIdleNanoAt = ai.frame;
+	gBusyNanoBP = 0.f;
 	array<AIFloat3> rising;
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
@@ -513,9 +515,20 @@ float IdleNanoLatheM()
 			busy = gOwnNanoPos[i].distance2D(rising[k]) < r;
 		if (!busy)
 			idle += NANO_ABSORB;
+		else if (i < gOwnNanoBP.length())
+			gBusyNanoBP += gOwnNanoBP[i];
 	}
 	gIdleNanoM = idle;
 	return idle;
+}
+
+// Build power [workertime] of the turrets that DO have something in reach,
+// counted in the same pass. The retirement market's load test: what the fleet
+// is actually carrying, not what it could carry.
+float BusyNanoBP()
+{
+	IdleNanoLatheM();
+	return gBusyNanoBP;
 }
 
 // WHERE A BIG FRAME RISES FASTEST: the legal footprint the most standing

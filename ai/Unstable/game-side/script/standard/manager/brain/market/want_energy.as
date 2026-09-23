@@ -122,6 +122,19 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	float bestClose = 0.f;
 	const bool etaOn = EtaOn();
 	const float etaP = EcoPowerM();
+	// ...AND THE SAME ERROR IS LIVE ONE RUNG HIGHER, outside the stall: the
+	// growth premium below is linear in a generator's output and so is its
+	// cost, so value rises with size and the biggest reactor on the list wins
+	// for being big. Charged instead on the share of the plan's own horizon
+	// the generator would be paying over (docs/27 TUNE_ENERGY_GROWTH_ARRIVE).
+	const bool genArriveOn = ai.GetTunable("apex_energy_growth_arrive",
+			TUNE_ENERGY_GROWTH_ARRIVE) > 0.f;
+	// One number for every rung; the ETA arm below asked the turret grid for it
+	// once per generator.
+	const float genNanoBP = (genArriveOn || etaOn) ? NanoLatheReaching(eSite) : 0.f;
+	// Seconds to the target following the ladder AS IT STANDS: the window new
+	// income has to compound in before the plan is over.
+	const float genHorizonS = genArriveOn ? EtaWith(0, 0.f, 0.f, false) : 0.f;
 	string bigLine = "";
 	int etaD = -1;
 	float etaS = 0.f;
@@ -159,6 +172,13 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		float bSec = Catalog::BuildSecondsAt(d, genBP);
 		bSec *= EStretch(Catalog::gCostE[d], bSec);
 		const float fPrice = EPriceAt(bSec);
+		// The hands that would actually stand on this site. Shared with the
+		// ETA arm at the foot of the loop, which fills it if this does not.
+		float crewBP = 0.f;
+		if (genArriveOn)
+			crewBP = Catalog::gBuildPower[uid]
+					* float(Requests::SiteWorkerCap(Catalog::Def(d))) + genNanoBP;
+		float fArr = 1.f;
 		float fGrow = 1.f, fSurv = 1.f, fInf = 1.f, fReal = 1.f, fRent = 0.f;
 		float gain = Catalog::gMakeE[d] * fPrice;
 		// ECO COMPOUNDS, AND ENERGY IS ECO (apexearth: "we are not properly
@@ -180,8 +200,19 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			// income, and pricing it at the stall premium saturated the 9x
 			// on any big generator mid-stall (an advanced solar at 64 e/s).
 			const float mkM = Catalog::gMakeE[d] * genRatio;
+			float mkEff = mkM;
+			// The CREW's seconds, not one lathe's: priced solo every reactor
+			// misses every horizon and the ladder would stop at fusions.
+			if (genArriveOn && (genHorizonS > 1.f)) {
+				float aSec = Catalog::BuildSecondsAt(d,
+						(crewBP > genBP) ? crewBP : genBP);
+				aSec *= EStretch(Catalog::gCostE[d], aSec);
+				const float pay = genHorizonS - aSec;
+				fArr = (pay > 0.f) ? (pay / genHorizonS) : 0.f;
+				mkEff = mkM * fArr;
+			}
 			fGrow = 1.f + genGrowK
-					* mkM / ((genPower > mkM) ? genPower : ((mkM > 0.f) ? mkM : 1.f));
+					* mkEff / ((genPower > mkEff) ? genPower : ((mkEff > 0.f) ? mkEff : 1.f));
 			gain *= fGrow;
 		}
 		// A DEFERRED PURCHASE IS WORTH ONLY WHAT SURVIVES TO PAY IT BACK. An
@@ -266,6 +297,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ " (mkE=" + formatFloat(Catalog::gMakeE[d], "", 0, 1)
 				+ " P=" + formatFloat(fPrice, "", 0, 3)
 				+ " grow=" + formatFloat(fGrow, "", 0, 2)
+				+ " arr=" + formatFloat(fArr, "", 0, 2)
 				+ " surv=" + formatFloat(fSurv, "", 0, 2)
 				+ " inf=" + formatFloat(fInf, "", 0, 2)
 				+ " real=" + formatFloat(fReal, "", 0, 2) + ")"
@@ -344,9 +376,9 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (etaOn && !barred && (c.value > 0.f)) {
 			const double _tEt = Perf::T0();
 			const float gM = Catalog::gMakeE[d] * ConvRate();
-			const float crewBP = Catalog::gBuildPower[uid]
-					* float(Requests::SiteWorkerCap(Catalog::Def(d)))
-					+ NanoLatheReaching(eSite);
+			if (crewBP <= 0.f)
+				crewBP = Catalog::gBuildPower[uid]
+						* float(Requests::SiteWorkerCap(Catalog::Def(d))) + genNanoBP;
 			const float s = walkSec + EtaWithN(d, gM, 0.f, false, EtaBatchN(gM, etaP), crewBP);
 			Perf::Add("en.eta", _tEt);
 			if ((etaD < 0) || (s < etaS)) {
@@ -368,7 +400,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			+ " |" + bigLine
 			// The room terms, so "value the space more" can be read against
 			// what the site actually charges (apexearth 2026-09-13).
-			+ " | rentCell=" + formatFloat(genRentCell, "", 0, 2)
+			+ " | hz=" + int(genHorizonS)
+			+ " rentCell=" + formatFloat(genRentCell, "", 0, 2)
 			+ " crowdCell=" + formatFloat(genCrowdCell, "", 0, 2)
 			+ " crowd=" + formatFloat(PfCrowd(), "", 0, 3)
 			+ " local=" + formatFloat(PfCrowdAt(eSite, 400.f), "", 0, 3)

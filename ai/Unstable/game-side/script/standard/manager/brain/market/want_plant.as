@@ -694,6 +694,70 @@ bool UnlocksProduct(int plantId)
 	return false;
 }
 
+// A PLANT UNLOCKS WHAT WE WANT, NOT WHAT WE LACK (apexearth 2026-09-22: "these
+// plants should only be built if we actually desire to create something out of
+// it"). UnlocksProduct above is a capability test, so the hover platform read
+// unlocks=1 all game and kept the copy exemption -- full expansion value and an
+// escape from the copy ban -- while every unit it could make was worth less
+// than what our standing lines already field. This is the same question asked
+// in worth: the best NEW combat unit this line would add, over the best one we
+// already produce. Against what we OWN, never the catalog -- nothing is
+// outgrown before its better exists, and with nothing standing every line is
+// an unlock (which is what leaves the opening alone).
+float gUnlockOwnBest = 0.f;
+int gUnlockOwnAt = -999999;
+
+float OwnedBestUnitWorth()
+{
+	if (ai.frame < gUnlockOwnAt + 10 * SECOND)
+		return gUnlockOwnBest;
+	gUnlockOwnAt = ai.frame;
+	float best = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0)
+			|| !ComAny(d, CS_ANY))
+			continue;
+		const array<int>@ prods = Catalog::gBuildsList[d];
+		for (uint p = 0; p < prods.length(); ++p) {
+			if (!Catalog::gAvailable[prods[p]] || !LineCombat(prods[p]))
+				continue;
+			const float v = LineUnitWorth(prods[p]);
+			if (v > best)
+				best = v;
+		}
+	}
+	gUnlockOwnBest = best;
+	return best;
+}
+
+float UnlockWorth(int plantId)
+{
+	const float own = OwnedBestUnitWorth();
+	if (own <= 0.f)
+		return 1.f;
+	float best = 0.f;
+	const array<int>@ prods = Catalog::gBuildsList[plantId];
+	for (uint p = 0; p < prods.length(); ++p) {
+		const int pd = prods[p];
+		if (!Catalog::gAvailable[pd] || !LineCombat(pd))
+			continue;
+		bool made = false;
+		const array<int>@ by = Catalog::gBuiltBy[pd];
+		for (uint b = 0; b < by.length(); ++b) {
+			if (ComAny(by[b], CS_ANY)) {
+				made = true;
+				break;
+			}
+		}
+		if (made)
+			continue;
+		const float v = LineUnitWorth(pd);
+		if (v > best)
+			best = v;
+	}
+	return best / own;
+}
+
 // MODEL: a plant's return is its constructor pipeline -- each con carries
 // roughly one open spot's stream while expansion ground remains, plus the
 // overflow the pipeline would capture (arithmetic, see OverflowM). One named
@@ -797,8 +861,24 @@ array<float> gLineQual;
 array<float> gLineMulV;
 int gLineQualAt = -999999;
 
+// The dry-map x0 the UNIT market already applies (production.as's amphib test,
+// same shape), asked where the LINE is priced -- a plant bought for products
+// production.as will refuse is bought for nothing.
+bool AmphibDead(int pd)
+{
+	if (!Catalog::gAmphib[pd] || MapHasWater())
+		return false;
+	const CCircuitDef@ cd = Catalog::Def(pd);
+	if ((cd !is null) && cd.IsRoleAny(Unit::Role::AA.mask))
+		return false;
+	return UnitCore(pd) < 1.f;
+}
+
 float LineUnitWorth(int pd)
 {
+	if ((ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK) > 0.f)
+		&& AmphibDead(pd))
+		return 0.f;
 	const float tFoeSpeed = FoeSpeedCap();
 	float v = UnitPPC(pd);
 	if (tFoeSpeed > 0.f)
@@ -872,8 +952,10 @@ float LineBestWorth(int plantDef)
 			continue;
 		w.insertLast(LineUnitWorth(prods[i]));
 	}
+	// -1 is "no combat line here", which the census has no opinion about; 0 is
+	// a combat line whose every unit prices at nothing, which is a verdict.
 	if (w.length() == 0)
-		return 0.f;
+		return -1.f;
 	w.sortAsc();
 	return w[w.length() / 2];
 }
@@ -890,7 +972,8 @@ float LineQualityMul(int plantDef)
 		gLineQualAt = ai.frame;
 		array<float> bestOf(12, 0.f);   // class*4 + tier
 		array<float> bestMul(12, 0.f);
-		array<float> own(Catalog::gDefCount + 1, 0.f);
+		array<float> own(Catalog::gDefCount + 1, -1.f);
+		const bool unlockOn = ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK) > 0.f;
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
 			// a plant is a line only if a mobile builder can place it: the
 			// scavenger lootbox "plants" build things no line ever will
@@ -899,6 +982,10 @@ float LineQualityMul(int plantDef)
 				|| !Producible(d))   // OUR tree: against the other faction's best
 				continue;            // a whole faction's plants would price at 0.66
 			own[d] = LineBestWorth(d);
+			if (own[d] < 0.f || (!unlockOn && (own[d] <= 0.f))) {
+				own[d] = -1.f;
+				continue;
+			}
 			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
 			if (own[d] > bestOf[k])
 				bestOf[k] = own[d];
@@ -910,9 +997,11 @@ float LineQualityMul(int plantDef)
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
 			gLineQual[d] = 1.f;
 			gLineMulV[d] = 1.f;
-			if (own[d] <= 0.f)
+			if (own[d] < 0.f)
 				continue;
 			const int k = PlantClass(d) * 4 + ((LineTier(d) > 3) ? 3 : LineTier(d));
+			if (bestOf[k] <= 0.f)
+				continue;
 			gLineQual[d] = own[d] / bestOf[k];
 			gLineMulV[d] = (bestMul[k] > 0.f) ? (own[d] * LineTerrainMul(d) / bestMul[k]) : 1.f;
 			if (PlantClass(d) == PC_LAND)
@@ -1362,7 +1451,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// that UNLOCKS products no nano can deliver keeps the old rule --
 		// substituted only while an existing line is short of hands -- and
 		// DupBpSubstMul returns 1 when no nano def exists to substitute.
-		const bool isCopy = (reachKin > 0) && !UnlocksProduct(d);
+		const float unlockBar = ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK);
+		const bool unlockCap = UnlocksProduct(d);
+		// asked only where it can decide anything; logged below either way
+		const float unlockW = (unlockCap && (reachKin > 0)) ? UnlockWorth(d) : 1.f;
+		const bool isCopy = (reachKin > 0)
+				&& !(unlockCap && ((unlockBar <= 0.f) || (unlockW >= unlockBar)));
 		// HIS RULING (2026-08-27): a copy of a lab we already run is
 		// INELIGIBLE, not discounted -- "the want ... should come out as 0
 		// ... we forward our want over to the nano." A zero never enters the
@@ -1434,7 +1528,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			AiLog(Factory::T() + "apex: plantdup " + Catalog::Def(d).GetName()
 				+ " kin=" + reachKin
 				+ " dupKin=" + dupKin
-				+ " unlocks=" + (UnlocksProduct(d) ? 1 : 0)
+				+ " unlocks=" + (unlockCap ? 1 : 0)
+				+ " unlockW=" + formatFloat(unlockW, "", 0, 2)
 				+ " liveOther=" + liveOther
 				+ " subst=" + formatFloat(dupSubst, "", 0, 3)
 				+ " lineNeed=" + formatFloat(NeediestLine(nlp2), "", 0, 2)
