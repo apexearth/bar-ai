@@ -598,6 +598,36 @@ float gRedrawSum = 0.f;
 int gRedrawFac = -1;
 int gRedrawAt = -1;
 
+// BUILD POWER IS BOUGHT IN TWO AUCTIONS THAT NEVER COMPETE: the factory buys
+// constructors and the want market buys lathes, so a constructor's share of the
+// build-power gap has never been priced against the cheaper way to buy the same
+// thing. A nano turret is 200 build power for 210 metal; a T2 ground
+// constructor is 180 for 430, and it walks to the work and stands on the cell
+// we wanted to build on (apexearth 2026-09-23).
+float gBestLatheBPM = -1.f;
+
+float BestLatheBPPerM()
+{
+	// Never cache a zero: availability is frame-dependent and an early scan
+	// would latch the ratio off forever.
+	if (gBestLatheBPM > 0.f)
+		return gBestLatheBPM;
+	float best = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !IsLatheDef(d))
+			continue;
+		const float m = Catalog::gCostM[d];
+		if (m <= 1.f)
+			continue;
+		const float r = Catalog::gBuildPower[d] / m;
+		if (r > best)
+			best = r;
+	}
+	if (best > 0.f)
+		gBestLatheBPM = best;
+	return best;
+}
+
 CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 {
 	if ((fac is null) || (gRedrawAt != ai.frame) || (gRedrawFac != int(fac.id))
@@ -1829,7 +1859,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			gain += mob * upD / float(1 + ceilCons);
 		}
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
-		gain += mob * ((over < drain) ? over : drain);
+		float capG = mob * ((over < drain) ? over : drain);
+		{
+			const float bpm = ai.GetTunable("apex_bp_vs_lathe", TUNE_BP_VS_LATHE);
+			const float myM = Catalog::gCostM[d];
+			if ((bpm > 0.f) && (myM > 1.f)) {
+				const float best = BestLatheBPPerM();
+				const float mine = Catalog::gBuildPower[d] / myM;
+				if ((best > 0.f) && (mine < best))
+					capG *= (1.f - bpm) + bpm * (mine / best);
+			}
+		}
+		gain += capG;
 		float claimGain = 0.f;
 		if (gMexOpen && (reach > 0.f)) {
 			// A con claims spot after spot -- a stream of STREAMS -- but the

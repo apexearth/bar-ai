@@ -24,7 +24,9 @@ KEYS = [("mex", ("armmex", "cormex", "legmex")), ("moho", ("armmoho", "cormoho",
         ("mmkr", ("armmmkr", "cormmkr", "legmmkr")), ("nano", ("armnanotc", "cornanotc", "legnanotc")),
         ("con1", ("armck", "corck", "legck", "armcv", "corcv", "legcv")),
         ("con2", ("armack", "corack", "legack", "armacv", "coracv", "legacv")),
-        ("air", ("armca", "corca", "legca", "armaca", "coraca", "legaca"))]
+        ("air", ("armca", "corca", "legca", "armaca", "coraca", "legaca")),
+        ("afus3", ("armafust3", "corafust3")),
+        ("mmkr3", ("armmmkrt3", "cormmkrt3"))]
 
 
 def main() -> int:

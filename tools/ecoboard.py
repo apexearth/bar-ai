@@ -44,7 +44,10 @@ def run(lane, out, seed, minutes, modopts, mapname):
            "--a", lane, "--b", "NullAI:0.1", "--map", mapname,
            "--minutes", str(minutes), "--handicap", "50", "--speed", "5",
            "--seed", str(seed), "--out", out,
-           "--modoption", "dev_stats=1", "--modoption", "apex_eco_only=1"]
+           "--modoption", "dev_stats=1", "--modoption", "apex_eco_only=1",
+           # NullAI's commander dies to the map ruins and the game ends at
+           # minute 9-15 with us the winner, truncating the curve.
+           "--modoption", "deathmode=neverend"]
     for m in modopts:
         cmd += ["--modoption", m]
     subprocess.run(cmd, cwd=ROOT, stdout=subprocess.DEVNULL,
