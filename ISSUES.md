@@ -1880,3 +1880,25 @@ other hand regardless of how far away or how slow the claimant is -- a hand
 600 elmo from a spot cannot take it from one 3,000 elmo away. That is a
 serialisation, not a price, which is consistent with the finding that pricing
 fixes do not reach this 22%.
+
+#### Resolved: the claim ledger is NOT it, on his map
+
+Measured on Glacier Pass (his regime), not Frozen Ford (the gate map the
+earlier numbers came from):
+
+  mexdiag mapSpots=19 held=0..3 | noOpen=11..16 claimed=0 deathWalk=6..14 priced=0
+
+`claimed=0`. The ledger blocks nothing here, so the serialisation theory above
+is dead for this regime. The refusals are `noOpen` and `deathWalk` -- the walk
+to the spot crosses ground the model judges lethal -- and `priced=0` means not
+one spot reaches a price in those windows.
+
+Note the map difference that produced the wrong lead: Glacier Pass has 19
+spots, Frozen Ford 34. The `claimed=415..653` figures quoted earlier are the
+GATE map and do not describe his 2v2.
+
+What it means: late in these games we hold 0-3 of 19 spots and decline to take
+more because the journey is fatal. That is not an economy fault and no price
+can fix it -- expansion is gated on territory we do not hold. It is the same
+conclusion the minute-4 work reached from the other end, and it points at the
+army/defence share obligation rather than at any want's pricing.
