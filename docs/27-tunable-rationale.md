@@ -2896,3 +2896,45 @@ Kept ON regardless: it is a correctness fix, not a preference. An empty site
 list caused by a frame throttle was being read as "nowhere worth a gun", which
 is false, and the cost is one extra fill per frame until each def has been
 filled once. Longer games and less structure lost with no measured harm.
+
+## TUNE_COM_MEX_PRICE
+
+What a metal spot outside the commander's leash is worth to him, as a
+multiplier on its score. 0 keeps the veto that was the behaviour before
+2026-09-23; 0.35 ranks a far spot below a near one of equal yield.
+
+WHY. `want_mex.as` counts every extractor refusal at its own gate. Summed
+over a 32-game arm for the first time, 95% of proposals never reach a price,
+and the commander's leash is the largest single gate:
+
+  comFar 40.2%  noOpen 32.2%  deathWalk 14.9%  claimed 7.8%  priced 4.9%
+
+and in minutes 0-3 the leash alone refuses 89.1%. Its purpose is to keep the
+commander alive. It does not: he dies 1.94 times a game to BARb's 0.38, a
+median 703 elmo from home, with 58% of those deaths inside the ground this
+same leash calls home. The two gates immediately above it in the same loop
+are prices, and the loop's own comment says why -- "the trip risk is a PRICE,
+not a veto, and ranks the spot below a safer one of equal yield."
+
+MEASURED. Glacier Pass 1.2, 2v2, Armada v Armada, +100% both, 0.2 boxes,
+left/right, vs BARb stable hard, 20-minute cap, 32 games an arm:
+
+                    min 8    min 12   min 16
+  income   veto       53        69       90
+           price 0.35 59        95      120
+  mexes    veto      5.2       5.0      4.1
+           price 0.35 5.8       5.8      4.8
+
+  commander deaths   37 -> 20 over 32 games
+  lost inside 20 min 12/32 -> 4/32   (Fisher two-sided p = 0.041)
+
+Income at minute 12 is +38% and our share of BARb's income at minute 16 goes
+0.36 -> 0.52. A 16-game pair run first gave the same directions at smaller
+magnitude (69->91 at minute 12, 17->13 commander deaths), so it replicates.
+
+COMMANDER DEATHS WENT DOWN, NOT UP, which is the opposite of the risk the
+veto was there to manage, and is the result most worth re-testing.
+
+NOT ESTABLISHED: wins. Nothing in a 20-minute arm is decided in our favour
+(0 wins in both arms; the cap is why). The 45-minute arm is what decides
+whether this converts, and until it reads, this is a mechanism result.
