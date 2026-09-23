@@ -2361,3 +2361,32 @@ loop that would use them never has a site to score.
 The next session starts here, and it is a narrow question: why does the site
 builder produce zero candidates for armguard/armclaw/armhlt/armanni while
 producing them for armllt/armbeamer?
+
+##### The mechanism behind sites=0: the one-fill-per-frame throttle
+
+`DefSiteFill` (protect_fill.as) has three exits in order:
+
+  1. GATE_FILL_CACHE  -- fresh cache (4 s), returns and SERVES the cached arrays
+  2. GATE_FILL_FRAME  -- `gDsFillN >= 1`, one fill per frame, returns WITHOUT
+                         filling anything
+  3. the fill itself, which assigns gDsPrev[d] at the end
+
+Exit 2 is the one that produces `sites=0`: a def that has never been filled and
+loses the per-frame race returns leaving `gDsPrev[d]` empty, and the caller
+then reads an empty array and raises def.nosite. The throttle is there for a
+real reason (each fill is ~5.5 ms once the base is large, and two per frame is
+an 11 ms frame from this source alone).
+
+NOT ESTABLISHED: why the losers are ALWAYS armguard/armclaw/armhlt/armanni
+rather than rotating. With a 4 s cache (120 frames) and one fill a frame there
+is capacity for every def many times over, so a naive reading says they should
+take turns. They do not -- 90 of 90 refusals in one game were those four.
+
+That is the next question and it needs one counter: how many frames pass
+between a given def winning the fill slot. If the answer is "never for these
+four", the throttle's ordering starves the heavy guns permanently and the fix
+is to rotate the slot rather than give it to whoever asks first.
+
+This is a PERFORMANCE THROTTLE deciding the AI's defence composition, which is
+the kind of coupling CLAUDE.md's "spread work across frames" rule exists to
+prevent -- the work is spread, but the same def wins every time.
