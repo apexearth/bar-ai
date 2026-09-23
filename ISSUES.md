@@ -1853,3 +1853,30 @@ The question this raises is not "what should these wants be worth". It is why
 a constructor standing in our own base has ONE thing it can propose. Whether
 that is the per-hand filtering (can-build, site found, reachable), the refusal
 memo, or genuinely empty ground is not established here.
+
+### WHY A HAND'S ONLY OFFER IS ENERGY (2026-09-23, partly open)
+
+Follow-on from the 22%-uncontested entry. The new `apex: offers` census says
+hands are not generally starved of choice -- mean 3.1-4.3 wants an election,
+13-16% of elections have at most one -- but the lone want is most often
+ENERGY, and energy is the biggest slice of the uncontested metal (225 k of
+718 k).
+
+The extractor side is what goes missing. `want_mex.as:577`: a candidate spot
+already in our own request ledger is skipped (`++gMexClaimed`), and the search
+gives up after `TUNE_MEX_TRIES` (10) ranked candidates. So a hand whose ten
+best spots are all claimed proposes NO extractor, and whatever else it can
+build wins with no rival.
+
+NOT ESTABLISHED, and it matters: `claimed=415..653` in a diag window counts
+REFUSALS, not distinct spots. Glacier Pass has 34 spots and we hold 10-14, so
+most of those refusals are probably many hands repeatedly hitting the same few
+spots we are already correctly building -- which would make this benign. The
+measurement that settles it is distinct claimed spot IDs per window against
+the number of free spots, and it has not been made.
+
+If it is NOT benign, the shape of the problem is that a claim blocks every
+other hand regardless of how far away or how slow the claimant is -- a hand
+600 elmo from a spot cannot take it from one 3,000 elmo away. That is a
+serialisation, not a price, which is consistent with the finding that pricing
+fixes do not reach this 22%.
