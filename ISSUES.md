@@ -2419,7 +2419,7 @@ The instrument for the first of those is one line: the distance from each
 commander death to the nearest standing gun of ours. That has never been
 measured and it separates "wrong place" from "wrong idea".
 
-#### Answered: the guns and the commander are in different places
+#### Answered: static defence does not keep the commander alive (see CORRECTION below)
 
 The number that separates the three explanations, measured on the 32-game arm
 that carries 5.3 heavy towers a game:
@@ -2449,3 +2449,36 @@ That is a one-line change to the query above and it is the next thing to run.
 
 His fortress ruling (docs/24, 2026-09-22) is the same observation from the
 other side: build up the ground where our things already stand.
+
+##### CORRECTION to the entry above, same day
+
+The entry above weighed "the tower reach must be weighed before claiming
+this" and then did not weigh it. Weighed, it reverses the conclusion.
+Distance to the nearest gun OF ANY KIND conflates a Sentry (430) with an
+Annihilator (1400). Asking instead whether ANY gun's own range covered the
+spot he died on:
+
+  62 commander deaths with a standing-tower sample
+    INSIDE a gun's range when he died: 39 (63%)
+      that gun: armanni 19, armguard 10, armamb 6, armhlt 2
+    OUTSIDE every gun's range:         23 (37%)
+      elmo beyond the nearest envelope: median 371  p25 100  p75 1006
+      nearest (still short) gun: armllt 8, armanni 6, armhlt 4, armamb 2
+
+So it is mostly WRONG IDEA, not wrong place. Nearly two thirds of the time a
+gun of ours could already shoot the ground he was standing on, and he died
+anyway -- to armfboy/armfido/armsnipe/armbull, which one long-range turret
+does not stop. That is exactly consistent with the result that motivated the
+question: 5.3 heavy towers a game instead of 0.8 moved structure loss 19
+points and did NOT move commander deaths (1.94 vs 1.81). More guns, or guns
+in better places, is not the lever for commander survival.
+
+The lever left is his own exposure -- he dies a median 605 elmo from home,
+and the question is why he is there at all, not what is standing near him.
+That is the same thing apexearth has reported from watching: the commander
+walks all over the map and cannot make up his mind.
+
+Method note for whoever reads this next: "distance to the nearest X" is
+almost never the right instrument when the Xs differ in reach. Ask whether
+one of them covered the point. tmp/comguard2.py is eight lines different
+from comguard.py and says the opposite thing.
