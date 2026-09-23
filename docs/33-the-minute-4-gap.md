@@ -1,5 +1,32 @@
 # The minute-4 gap
 
+> **CORRECTION, later the same day. Read this first; it changes what the rest
+> of the page is worth.** Everything below is scored on our minute-4 extractor
+> count, and `tools/predict.py` over 551 full-length games shows that number
+> has **AUC 0.528 against the win within a start box** — a coin flip. The
+> pooled 0.717 that makes it look predictive is start-box membership leaking
+> in: the box is worth 1.5–2.2 extractors by itself (`tools/sidesplit.py`,
+> `tools/boxwin.py`), and we win 34.9% from the left box against 0.7% from the
+> right. So the "44% ahead vs 5% behind" split below is very largely a
+> relabelling of which box we drew, and the "1.2–1.5 extractors behind" figure
+> is the mean of +0.62 (left) and −3.09 (right) — it describes no game that
+> was played.
+>
+> **The eleven levers were therefore not measured innocent.** They were
+> screened with an instrument that cannot see our own opening, so "flat or
+> worse at n=96" means the ruler could not resolve them, not that they do
+> nothing. Do not cite this page as evidence that a lever is dead.
+>
+> Use instead: **army differential**, AUC 0.682 at minute 4 and 0.704 at
+> minute 6 within box. `docs/23-the-plan.md` names army share as the model's
+> one standing obligation, and `budget.as:13` says it is not implemented.
+>
+> Two things below still stand on their own evidence: the minute-4 spend table
+> (a direct measurement, not a correlation) and `3bb47630`. One thing is
+> added: by minute 6 we lose 1.41 extractors a game and 0.67 more killed
+> mid-build, against BARb's 0.95 and 0.03 (`tools/mexkill.py`) — about half
+> the minute-4 gap is extractors we started and did not keep.
+
 *2026-09-22. Glacier Pass 2v2, Armada both, +100% both, 0.2 lr boxes, vs
 BARb stable hard — his benchmark. Everything here is measured with
 `tools/openloop.py` (8-minute games at speed 20, 96 games in ~20 minutes)
