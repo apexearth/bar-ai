@@ -1788,3 +1788,38 @@ Two consequences:
 Not reverted here: the change belongs to another session working in this
 checkout. `--no-record-seed` exists on run_match and run_tournament so any arm
 can be run without it.
+
+### FIVE HOVER PLANTS, ZERO HOVER UNITS (2026-09-22)
+
+His complaint: "we almost always make hovers at some point in our games --
+even when there's no water on the map, and often late in the game past T2.
+Hovers are only T1 units."
+
+Measured over the 16-game Glacier Pass control arm (tools/plantuse.py):
+
+  armhp (Hovercraft Platform, 750 metal) built 5 times
+  armch/armsh/armanac/armah/armmh produced:  ZERO
+
+Five plants, 3,750 metal, no unit ever came out of any of them. Median first
+build: minute 29 -- a T1 factory started half an hour into a game.
+
+It is not only hovers. Plants per game and when the first one lands:
+
+  armlab   2.38   1,188 m   4 min      armshltx 0.31  2,469 m  32 min
+  armalab  2.06   5,981 m  11 min      armaap   0.25    800 m  30 min
+  armap    1.25     888 m  24 min      armavp   0.19    544 m  38 min
+  armvp    0.69     406 m  19 min      armhp    0.31    234 m  29 min
+
+About 12,500 metal a game goes into plants, and the late T1 ones (air at 24,
+vehicle at 19, hover at 29) are capacity bought after the tier it serves
+stopped mattering.
+
+This is his general form of it: "these plants should only be built if we
+actually desire to create something out of it. If we don't genuinely want one
+of the units it can produce, then we should not be making it."
+
+Blocking a fix: THERE IS NO PER-PLANT OUTPUT LOG. `plantuse.py` had to infer
+production by counting the unit types a plant can build, because no line says
+which factory a unit came from. A `fac=` field on the unit-finished line
+would make "was this plant worth it" directly readable and is the first thing
+to add here.

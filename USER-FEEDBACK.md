@@ -427,3 +427,9 @@ capacity produces, and we buy it where it cannot be used. `nanoblob.py` found
 
 Also his read on the budget lever deployed 2026-09-22: "that balancing isn't
 really working." Unresolved -- the A/B was still running when he said it.
+
+5. **T1 construction turrets are never treated as obsolete.** Once T2
+   construction turrets are available the ground is better spent on those.
+   (2026-09-22. The "obsolete on arrival" machinery already exists for the
+   GENERATOR ladder -- `DefObsoleteOnArrival`, gate check `def.obsolete` --
+   and is not applied to nanos.)
