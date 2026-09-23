@@ -1653,6 +1653,12 @@ const float TUNE_BUDGET_LEVER = 0.f;
 //   the hoists, which is where the floors decide. See docs/27.
 const float TUNE_FLOOR_YIELD = 0.f;
 
+// [toggle 0/1] -- A spot whose straight-line walk crosses hot ground is
+//   PRICED through TripRisk rather than refused outright. The refusal is a
+//   binary gate on four samples and contradicts the loop's own comment that a
+//   contested spot is priced, not hidden. See docs/27.
+const float TUNE_DEATHWALK_PRICE = 0.f;
+
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
 const float TUNE_BUILD_THREAT_BAR = 1.f;

@@ -2802,3 +2802,26 @@ not worse than baseline. They are correctness, not a win.
 The median game length is still longer than the off arm (25.9 against 22.2),
 but that is now a single-arm comparison against an outlier control and should
 not be quoted as a result either.
+
+### `TUNE_DEATHWALK_PRICE` = 0.f
+
+Off, measured worse. The spot loop's own comment says "a contested spot is
+priced, not hidden", and TripRisk does price one -- then DeathWalk refuses it
+anyway on a binary gate over four straight-line samples. On Glacier Pass that
+gate reads 6-14 refusals a window while `priced` reads 0, so the hypothesis
+was that it hides ground the price would have handled, and that this is the
+first link in the loop that turns contested ground into unspendable metal.
+
+It is not. 16 games an arm, his regime:
+
+              wins    mex held @20   metal income @20
+  refuse      2/16        5.1             153
+  priced      1/16        3.7             135
+
+Walking into hot ground to take a spot loses MORE extractors than refusing
+it. The gate is doing its job and the price does not compensate for a builder
+that dies on the road. The ground genuinely is not ours.
+
+This closes the "is expansion over-refused" question with a no, and leaves
+the loop in ISSUES.md pointing where it already pointed: at why an army at
+two to three times its target does not take and hold that ground.

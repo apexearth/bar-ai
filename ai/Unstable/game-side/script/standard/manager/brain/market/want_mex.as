@@ -578,9 +578,15 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			continue;
 		}
 		// A hot road moves this hand to the next spot, not to no want.
+		// PRICED, NOT HIDDEN, when apex_deathwalk_price is on: the comment
+		// above this loop says a contested spot is priced, and TripRisk does
+		// price it -- this gate hides the same spot the price would have
+		// discounted, and on Glacier Pass it refuses 6-14 candidates a window
+		// while `priced` reads 0.
 		if (DeathWalk(unit, aiEconomyMgr.GetMexSpotPos(open))) {
 			++gMexDeathWalk;
-			continue;
+			if (ai.GetTunable("apex_deathwalk_price", TUNE_DEATHWALK_PRICE) <= 0.f)
+				continue;
 		}
 		return open;
 	}
