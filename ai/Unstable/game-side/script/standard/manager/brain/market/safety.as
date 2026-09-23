@@ -95,7 +95,25 @@ void CommWatch()
 	// Not moving is still, orders or not: a penned commander holds a move
 	// order it cannot execute, and the q<=0 test read him as busy for
 	// seventeen minutes.
-	const bool still = (moved < 8.f);
+	// A COMMANDER LATHING IN PLACE IS NOT FROZEN. `moved` alone counted a
+	// four-minute build as a four-minute freeze: measured in the gate set at
+	// dSite 152 inside a reach of 209 with progress running 0.77 -> 0.92,
+	// which is the commander doing exactly what he should. Same on-job test
+	// the stuck watch uses (stuck.as): an order, and inside the site's own
+	// reach, is working however still the frame.
+	bool working = false;
+	if ((t !is null) && (t.buildDef !is null) && (q > 0)) {
+		const AIFloat3 wbp = t.GetBuildPos();
+		if (OnMap(wbp)) {
+			const int wbd = int(t.buildDef.id);
+			const int wfoot = (Catalog::gFootX[wbd] > Catalog::gFootZ[wbd])
+					? Catalog::gFootX[wbd] : Catalog::gFootZ[wbd];
+			const float wreach = Catalog::gBuildDist[int(u.circuitDef.id)]
+					+ float(wfoot) * 8.f + 16.f;
+			working = (p.distance2D(wbp) <= wreach);
+		}
+	}
+	const bool still = (moved < 8.f) && !working;
 	if (still) {
 		++gCwStill;
 		if (gCwStillFrom < 0)
