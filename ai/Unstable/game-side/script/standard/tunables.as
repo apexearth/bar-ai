@@ -1667,9 +1667,8 @@ const float TUNE_COM_STAY_FORWARD = 1.f;
 // [0..1] -- What an extractor spot outside the commander's leash is WORTH to
 //   him, as a multiplier on its score. 0 keeps the veto (the behaviour before
 //   2026-09-23); 0.35 ranks a far spot below a near one of equal yield instead
-//   of hiding it. The veto refuses 40% of every extractor proposal in the arm
-//   and 89% of them in minutes 0-3, and we hold 4.8 extractors at minute 20 to
-//   BARb's 11.6. See docs/27.
+//   of hiding it. The veto is the largest single refuser of extraction and
+//   does not keep the commander alive. See docs/27.
 const float TUNE_COM_MEX_PRICE = 0.f;
 
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one

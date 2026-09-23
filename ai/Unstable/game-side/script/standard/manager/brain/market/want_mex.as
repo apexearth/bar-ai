@@ -540,11 +540,8 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// (ComFar) must not be his one mex want, or the refusal's fallback
 		// buys energy while the next spot in stands unclaimed.
 		// ...but as the SAME price the two gates above are, when
-		// apex_com_mex_price > 0. As a veto it refused 89% of every extractor
-		// proposal in the first three minutes -- the window the game is
-		// decided in -- and it does not buy what it is charging for: he dies
-		// a median 703 elmo from home with 58% of those inside what this very
-		// leash calls home. See docs/27.
+		// apex_com_mex_price > 0: as a veto it is the largest single refuser
+		// of extraction and it does not keep him alive. See docs/27.
 		float comPen = 1.f;
 		if (comm && ComFar(sp)) {
 			++gMexComFar;
