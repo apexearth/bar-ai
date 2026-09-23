@@ -2784,3 +2784,21 @@ turret makes the basic one obsolete (3,432 basic built against 0 advanced,
 ever); and the line-shift demand is netted against lathe already standing
 idle (a turret landing out of reach RAISED the buying line's own demand,
 shift 0 -> 650 m/s while the lathe reaching it stayed at 14).
+
+#### Correction, 32 games later
+
+The 18.8% above did NOT replicate. A 32-game confirmation of the same three
+tunables on reads 3/32 = 9.4%, median 25.9 min. Pooled with the arm that
+produced the 18.8%, the bundle is 6/48 = 12.5% -- the same rate as every
+baseline measured tonight. The 0/16 control it was compared against was a low
+outlier: at a 12.5% true rate, zero in sixteen happens 12% of the time.
+
+So these three are NOT shown to improve the win rate. They stay on because
+each corrects a measured mis-measurement and removes provably wasted metal
+(hover plants that produce nothing, turrets that reach nothing, a T2 turret
+the arithmetic could never buy), the gate is green with them on, and 6/48 is
+not worse than baseline. They are correctness, not a win.
+
+The median game length is still longer than the off arm (25.9 against 22.2),
+but that is now a single-arm comparison against an outlier control and should
+not be quoted as a result either.
