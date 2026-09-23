@@ -2159,3 +2159,27 @@ it: every lever tried scaled or reordered a want that the model had already
 decided was worth zero. The question for the next session is what `prev` (the
 metal a tower is credited with preventing) is reading at a site where BARb
 would put a gun, and why it comes out non-positive there.
+
+#### The number the whole chain reduces to: 86% of what we build is destroyed
+
+16 games of his regime, our side, finished structures only:
+
+  built      1,047,987 metal
+  destroyed    905,238 metal      86%
+
+We do not have an economy problem in the sense of building too little. We
+build over a million metal of structures and lose almost all of it. Every
+extractor, generator, plant and turret in the ISSUES entries above is inside
+that 86%.
+
+It also reframes the defence valuation directly above. A tower is credited
+with preventing `stake x hz`, and the hz on a winning tower line reads
+0.00833 -- while the realised outcome is that 86% of the stake dies. I am NOT
+claiming a clean ratio between those: hz is a per-second rate and the gain
+integrates it over a horizon, so comparing it to a per-game fraction needs the
+formula, which I did not work out. What is certain is the 86%.
+
+For the next session, the shortest statement of the problem: we build a
+million metal of structures, 86% of it is destroyed, and the model's own site
+valuation concludes there is nowhere worth putting a gun (def.nosite 8,078).
+Those two facts cannot both be right.
