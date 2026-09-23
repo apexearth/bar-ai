@@ -2858,3 +2858,31 @@ home to four at the doorstep -- and does not reach the forward spots: three
 in four die unguarded, and the unguarded ones are the further out. The floor
 is computed over STANDING mex rows, so the gun is only demanded once the mex
 exists, which is after the thing that kills it has arrived.
+
+### ABOUT HALF THE FIGHTING GAP IS OUR OWN ASSIGNMENT LAYER
+
+2026-09-23. `apex_stock_army=1` hands every armed ground unit to BARb's own
+task pools and switches off our withdraw orders. It is the A/B the tunable
+was declared for and it had never been run. 32 games an arm, 45 min, his
+regime, read on `tools/trade.py`:
+
+                        us trade   them trade   ratio   our mobile kills
+  our layer (control)     0.49       1.63       0.30      1,251,167
+  BARb's layer            0.66       1.12       0.59      2,309,788
+
+Our driving costs us 35% of our own trade AND hands BARb 0.5 of theirs: the
+relative gap nearly doubles when we stop steering. Median game length is
+unchanged (24.9 -> 26.0 min), so this is not a longer-game artifact -- our
+kills nearly double at the same clock.
+
+Wins went 4/32 -> 1/30, Fisher p = 0.355: UNRESOLVED. This does not say ship
+stock army, and stock army is not a fix -- it is a measurement. What it
+establishes is where the 3.3x fighting gap lives: roughly half of it is in
+how we DRIVE the army, not in what we BUILD. Composition work should not be
+the first thing anyone tries.
+
+The tunable switches off two things at once -- our task pools and our
+withdraw orders -- so the next split is which of the two owns the gain.
+TUNE_RETREAT_COST_SECS is already recorded as harmful (K/D 0.33 -> 0.11) and
+his standing rule is that "retreat is never the answer, look at the action
+before it", so withdraw is the first suspect and the cheaper half to test.
