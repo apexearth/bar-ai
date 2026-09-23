@@ -327,6 +327,13 @@ def check_engine_side(variant_dir: Path, variant: str, rep: Report) -> list[str]
     otext = opts.read_text("utf-8", errors="replace")
     # Only lines that are not Lua-commented declare a real, selectable profile.
     body = otext[otext.find("key     = 'profile'"):] if "key     = 'profile'" in otext else ""
+    # ...and only until the profile entry ends. Read to end of file, any option
+    # declared BELOW the profile list reads as a profile: the "Play style"
+    # section added 2026-09-23 invented two ('play', 'apex_eco_force') and
+    # warned that neither had a config tree, which is true and meaningless.
+    nxt = body.find("\n\t{ --")
+    if nxt > 0:
+        body = body[:nxt]
     return [
         mm.group(1)
         for line in body.splitlines()

@@ -1106,6 +1106,10 @@ GROUPS = [
                   "reclaim old wind, solar and converters to make room"),
                  ("TUNE_MEX_TRIES", "how many metal spots a builder offers to "
                   "the engine before giving up on expanding this tick"),
+                 ("TUNE_COM_MEX_PRICE", "what a metal spot outside the "
+                  "commander's leash is worth to him, 0..1 — 0 refuses it "
+                  "outright, which is 89% of every extractor proposal in the "
+                  "first three minutes"),
                  ("TUNE_NANO_SITE_SHARE", "how much of the metal nothing is "
                   "spending one factory or big build may claim as nano demand "
                   "— raise it for more turrets around labs and gantries"),
