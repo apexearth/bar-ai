@@ -2226,3 +2226,32 @@ lose the field army and everything static follows.
 
 Do not take the 76% as evidence for towers. It is a correlation with an
 obvious confound and it is recorded here so nobody quotes it as a result.
+
+#### Towers DO reduce the 86%, and his no-basic-tower rule is what holds them down
+
+The controlled arm the entry above asked for. `apex_t1_tower_late` 1 vs 0,
+16 games each, nothing else changed:
+
+                          towers/game   structure metal lost   wins
+  =1 (his rule, default)      14.4            101%             1/16
+  =0                          18.3             77%             3/16
+
+The knob moved tower count by 27%, so the arm tested something, and structure
+loss fell 24 points. That is a continuous per-game measure and it is the
+quantity the 86% question is about -- unlike the win count, it is resolvable
+at this sample size.
+
+So towers DO reduce the loss and the defence chain above is pointed the right
+way: `prev`, the marginal gain credited to a tower (protect_want.as), is
+under-valuing them, which is why def.nosite fires 8,078 times.
+
+THIS IS HIS OWN RULING (2026-09-19, no basic tower once an advanced hand
+exists) and docs/27 records it as "measured innocent". That earlier test
+counted LIGHT towers in 6-minute buckets and read 4.31 -> 4.56 with mexes lost
+unchanged. Measured over the whole game against structure metal lost it looks
+expensive. The two tests do not contradict each other; they measure different
+things, and the later one measures the thing that matters.
+
+His call, not a default to flip unasked. A 32-game confirmation is running;
+the 18.8% win figure in particular must not be quoted until it replicates,
+because an identical-looking 18.8% failed to replicate earlier tonight.
