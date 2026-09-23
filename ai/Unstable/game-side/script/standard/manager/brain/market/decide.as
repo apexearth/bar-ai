@@ -1224,7 +1224,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// we already see that our build power is high, then we do it even less
 		// ... and 0.38 divided by 0.1 amplifies that one -- we whip things back
 		// into shape". apex_budget already gates it and already reads 1.
-		if (c.kind != WK_SUPER)
+		if ((c.kind != WK_SUPER)
+			&& (ai.GetTunable("apex_budget_lever", TUNE_BUDGET_LEVER) > 0.f))
 			c.value *= BudgetCatMult(CategoryOf(c.kind));
 		uint at = 0;
 		while ((at < ranked.length()) && (ranked[at].value >= c.value))

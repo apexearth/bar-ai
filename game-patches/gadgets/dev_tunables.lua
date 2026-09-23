@@ -521,6 +521,7 @@ local NAMES = {
 	"apex_draw_front",
 	"apex_hold_release",
 	"apex_budget",
+	"apex_budget_lever", -- market/decide.as: whether the budget multiplier actually scales wants (0 = logged only)
 	"apex_share_army",
 	"apex_share_defence",
 	"apex_share_economy",

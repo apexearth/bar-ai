@@ -1642,6 +1642,11 @@ const float TUNE_BLEED_CAP = 1.6f;
 //   share; 0 turns budget shaping off.
 const float TUNE_BUDGET = 1.f;
 
+// [toggle 0/1] -- Whether the category budget's target/actual multiplier
+//   actually SCALES wants, as opposed to only being logged. Measured off:
+//   32 games with it on won 3.1% against 48 games off at 12.5%. See docs/27.
+const float TUNE_BUDGET_LEVER = 0.f;
+
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
 const float TUNE_BUILD_THREAT_BAR = 1.f;

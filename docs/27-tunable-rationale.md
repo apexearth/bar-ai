@@ -2728,3 +2728,30 @@ Read before turning it on: on raw energy-per-metal wind is NOT worse than
 fusion (~0.275 E/s per metal against ~0.23), so the draw preferring wind is
 not obviously an error, and this pull overrides a price rather than correcting
 one. That is why it is a tunable and not a fix.
+
+### `TUNE_BUDGET_LEVER` = 0.f
+
+Off, measured worse. `BudgetMult` (budget.as) is target/actual share per
+category, clamped 0.35..2, and was computed every frame while being read by
+nothing but its own log line. apexearth asked for it to steer decisions
+("if we already see that our build power is high, then we just do it even
+less ... 0.38 divided by 0.1 causes that to get amplified -- we whip things
+back into shape"), so it was wired to multiply a want's value where the
+ranked list is built.
+
+It does what it says. With it on, defence share moved 0.16 -> 0.23 against a
+target of 0.31, army 0.43 -> 0.34, and buildpower's share of decisions fell
+27%. Economy did not move at all.
+
+It lost anyway: 32 games with it on won 3.1%, against 48 games with it off at
+12.5%, in his Glacier Pass 2v2 regime. Small numbers, but one-directional
+across four arms, and his own watch of the live build said the same thing
+before the arms finished.
+
+Why economy did not move is the useful part, and it bounds what this lever
+can ever do: 22% of all decided metal is chosen with NO rival want
+(ISSUES.md), and economy is the biggest share of that. A multiplier on value
+cannot steer a decision that has no alternative to be steered towards.
+
+TUNE_BUDGET still gates BudgetMult itself, so the `apex: budget` line keeps
+printing real multipliers for diagnosis with the lever off.
