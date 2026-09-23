@@ -3004,3 +3004,43 @@ steers only what constructors build, and army sits outside it. But the lever
 is CoverNeedM, not RichArmyGapM. Whether cover need should be bounded by the
 army row is a question about what the AI is ALLOWED to do when it is being
 attacked, which is apexearth's call, not a session's.
+
+## TUNE_KEEP_JOB_PEEL -- the mechanism is alive, the outcome did not move
+
+The keep-job hold tested crew membership; the engine detaches a hand before
+every re-election, so it was false every time and the hold had never fired
+(keeps=0, offCrew=7,370 over 32 games). This marks the three removals that
+are OURS (PeelSurplus, consolidate, con-letgo) and tests that instead.
+
+32 games, 45 min, his regime, against the matched control:
+
+                    keeps   abort rate   armmex   armgeo   armmmkr   wins
+  off (control)         0       37%        70%      98%      82%     4/32
+  on                  474       37%        69%      99%      73%     2/30
+
+IT FIRES -- 474 keeps against 0, confirmed alive -- AND THE ABORT RATE DID
+NOT MOVE. 37% before, 37% after. Wins 4/32 -> 2/30 (unresolved at this n).
+The one real movement is the advanced converter, 82% -> 73%.
+
+WHY IT RECOVERS SO LITTLE, and this is the useful part. The restored hold
+only reaches 474 of 8,640 incumbencies. The rest split two ways:
+
+  - 8,166 hands WERE peeled by us within 10 s. Those drops are correct: a
+    peeled hand should re-elect. The churn there is the peel's own rate
+    (~255 a game), not the auction's.
+  - A hand walking alone to a distant site is never peeled (crew of one, no
+    surplus), so it reaches the hold's SECOND condition,
+    `OnMap(ip) && !Builder::SiteHot(ip)` -- and a forward or contested site
+    IS hot, by one enemy unit within 600 elmos. So incumbency is refused at
+    precisely the sites that abort at 70-99%, and nothing counts it.
+
+That is the latch, stated exactly: we will not persist toward a site that is
+contested, and every site worth taking is contested, so we never take one.
+
+NOT CHANGED, because it is not a session's call. Loosening SiteHot for an
+in-flight build contradicts apexearth's ruling of 2026-09-02 -- "if it's too
+dangerous then they should pull back or build further away" -- which is the
+reason the test is there. The question for him is narrower than that ruling:
+not whether a builder may WALK INTO danger, but whether a builder ALREADY
+2,000 elmos into a walk should abandon it because one enemy scout is near the
+destination. Those are different questions and only the first was ever asked.
