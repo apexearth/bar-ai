@@ -1749,3 +1749,42 @@ Not fixed. The shape of a fix is a pricing one and needs care: abandoning a
 job should cost what has already been walked and built toward it, and nothing
 in the election charges that today. A dwell time would be a threshold and is
 the wrong answer.
+
+### SEEDING THE UNIT RECORD FROM HIS LIVE GAME COLLAPSES OUR ARMY SPEND (2026-09-22)
+
+A harness change landed mid-day: every Apex AI in every batch is seeded from
+`matches/_engine/.../apex-record.txt` before each match, so each game starts
+from the evidence his own games built.
+
+It is not neutral. `wr-round2` (seeded) and `wr-noseed16` (--no-record-seed)
+run IDENTICAL code on the same regime and differ only in this:
+
+  our metal            seeded      unseeded     BARb
+  army (real)            1.3%         12.8%     24-26%
+  constructors           0.6%          2.9%       8.5%
+
+The earlier seeded arm `wr-fixes32` agrees: army 2.2%, constructors 0.6%.
+
+Win rate moves the same way -- 2/32 (6.2%) seeded against 2/16 (12.5%)
+unseeded, with this morning's 551 unseeded games at 17.6% -- but both arms
+hold only two wins, so the win rate is not what carries this. The composition
+split is, and it is a factor of ten on identical code.
+
+Mechanism, consistent with what the scav work found separately: the record is
+a metal-for-metal exchange matrix and a unit with a bad remembered exchange is
+priced down. His live record is out of distribution for this regime -- other
+maps, other team sizes, other factions, and scav games (it carries
+`armvadert4` at 54 metal dealt against 35,105 taken). Seeded with enough bad
+rows, every unit looks bad and almost no army is bought.
+
+Two consequences:
+- Every arm run after the change is polluted, including the ones used this
+  evening to judge the nano fix and the fusion timing. This morning's 551 are
+  not.
+- The army deficit measured all day (-1,180 at minute 4, -1,924 at minute 6)
+  is real in the morning data but was AMPLIFIED by the harness in the evening
+  data.
+
+Not reverted here: the change belongs to another session working in this
+checkout. `--no-record-seed` exists on run_match and run_tournament so any arm
+can be run without it.
