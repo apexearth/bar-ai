@@ -1687,6 +1687,7 @@ const float TUNE_ARMY_BUDGET_DAMP = 0.f;
 const float TUNE_ARMY_RICH_BALANCE = 0.f;
 const float TUNE_BUDGET_MAX = 2.f;
 const float TUNE_BUDGET_AFTER = 0.f;
+const float TUNE_RETREAT_SCALE = 1.f;
 
 // [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a

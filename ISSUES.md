@@ -3047,3 +3047,24 @@ all builds are abandoned. Freeing metal from army does not reach defence --
 `apex_keep_job_peel` + `apex_keep_walk_paid` reach only 434 keeps against
 5,935 off-crew events (7%): the peel marker catches peels, but most off-crew
 cases are the engine's pre-election detach, which we still cannot distinguish.
+
+## Most of the army metal we lose dies running away (2026-09-23)
+
+`deaths.py` on a Glacier Pass 2v2, our side: 59% of all metal lost had
+`retreat` as its last action (500 units, avg forward depth 0.35); on team 0
+alone it is 81% at depth 0.49. Exactly one unit died with `fight:attack` as
+its last action. Units are not dying in fights they should not have taken --
+they are dying on the walk home from fights they did take.
+
+Our `behaviour.json` sets 78 retreat thresholds, 40 of them at 0.6 and 24 at
+0.8. Stock BARb sets 26, and its distribution reaches down to 0.1 and 0.
+A unit pulled out at 0.8 hp runs the whole way home being shot while dealing
+nothing back, which is also the shape of the trade gap: we trade at 0.49
+against BARb's 1.63.
+
+`apex_retreat_scale` (posture.as, default 1 = the config value) scales every
+def's threshold for an A/B. NOT YET MEASURED.
+
+This is the likeliest single cause of the army row reading over target: the
+budget counts SPEND, so army killed on the retreat is charged to army again
+every time it is rebuilt -- we lose 1.22x the army we build, BARb loses 0.52x.

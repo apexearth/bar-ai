@@ -327,7 +327,17 @@ void NotePostureDef(const CCircuitDef@ cdef, bool fodder)
 	if (d is null)
 		return;
 	gPostureDef.insertLast(d);
-	gPostureRetreat.insertLast(d.GetRetreat());
+	// Scaled once at registration so the snapshot and the engine's own copy
+	// agree: 59% of the metal we lose dies with retreat as its last action,
+	// and a unit pulled out at 0.8 hp runs the whole way home being shot
+	// while dealing nothing back.
+	float r0 = d.GetRetreat();
+	const float rs = ai.GetTunable("apex_retreat_scale", TUNE_RETREAT_SCALE);
+	if ((rs > 0.f) && (rs != 1.f) && (r0 > 0.f)) {
+		r0 *= rs;
+		d.SetRetreat(r0);
+	}
+	gPostureRetreat.insertLast(r0);
 	gPostureFodder.insertLast(fodder);
 	gPostureWasZero.insertLast(false);
 }
