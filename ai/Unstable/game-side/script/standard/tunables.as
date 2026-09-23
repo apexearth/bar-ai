@@ -1684,6 +1684,7 @@ const float TUNE_T2_ARMY_FLOOR = 0.f;
 //   to absorb becomes army regardless of the army target, and the corrector
 //   can only ever amplify the starved side. See docs/27.
 const float TUNE_ARMY_BUDGET_DAMP = 0.f;
+const float TUNE_ARMY_RICH_BALANCE = 0.f;
 
 // [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a

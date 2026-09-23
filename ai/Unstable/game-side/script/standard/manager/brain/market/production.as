@@ -795,6 +795,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float mobileCeil = OwnedMobileCeil();
 	LossDecay();
 	float armyGap = armyT0 - armyHave;
+	string gapSrc = "target";
 	// COVERAGE IS ARMY DEMAND: the light units the base still needs so a
 	// guard stands by every building (military/guardposts.as, his "units
 	// are cover" ruling). Not a share of income -- what the base's own
@@ -802,8 +803,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	float coverShare = 0.f;   // how much of the gap is coverage, 0..1
 	{
 		const float coverGap = Military::CoverNeedM() - armyFlight0;
-		if (coverGap > armyGap)
+		if (coverGap > armyGap) {
 			armyGap = coverGap;
+			gapSrc = "cover";
+		}
 		// COVER IS THE FIRST CLAIM ON THE LAB. A proportional share let a
 		// big army target drown the coverage need under the role prior
 		// (watched: 13 Pawns to 40 Rocko/Hammer with 30 Pawns of cover
@@ -821,8 +824,28 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// max() says when a step is build-bound rather than feed-bound. The
 	// constructor gain below already prices overflow capture, so the metal has
 	// somewhere to go.
-	if (!ovfHands && (richGap > armyGap))
-		armyGap = richGap;
+	// The spare-metal floor is the binding term two thirds of the time and the
+	// budget cannot see it, so army outruns its share while defence sits under
+	// its own with the corrector railed. Offer the spare only as far as army is
+	// still owed; the rest stays for the constructor market, which does price
+	// against the target.
+	float richBal = richGap;
+	{
+		const float rb = ai.GetTunable("apex_army_rich_balance", TUNE_ARMY_RICH_BALANCE);
+		if (rb > 0.f) {
+			const float tgt = Brain::TargetShare(Brain::ARMY);
+			float owed = (tgt > 0.f) ? (1.f - Brain::ShareOf(Brain::ARMY) / tgt) : 0.f;
+			if (owed < 0.f)
+				owed = 0.f;
+			else if (owed > 1.f)
+				owed = 1.f;
+			richBal *= (1.f - rb) + rb * owed;
+		}
+	}
+	if (!ovfHands && (richBal > armyGap)) {
+		armyGap = richBal;
+		gapSrc = "rich";
+	}
 	// THE ROLE MEANS IT (apexearth 2026-09-13: the rear specialist "makes no
 	// military, focusing on economy"). ArmyTarget reads zero while it grows,
 	// but the cover need, the spilled-metal floor and the escort bid all
@@ -1362,7 +1385,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
 				continue;
 			}
-			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richGap * roleMul);
+			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
@@ -1935,7 +1958,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		AiLog(Factory::T() + "apex: prodrank fac=" + fac.circuitDef.GetName()
 			+ " t=" + ai.teamId
 			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
-			+ " gap=" + int(armyGap)
+			+ " gap=" + int(armyGap) + " src=" + gapSrc
 			+ " flight=" + int(armyFlight0)
 			+ " n=" + candDef.length() + gYieldLog + prank);
 	}
