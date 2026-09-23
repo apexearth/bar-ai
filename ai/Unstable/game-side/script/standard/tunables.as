@@ -1659,6 +1659,11 @@ const float TUNE_FLOOR_YIELD = 0.f;
 //   contested spot is priced, not hidden. See docs/27.
 const float TUNE_DEATHWALK_PRICE = 0.f;
 
+// [toggle 0/1] -- A commander already outside his leash finishes the work
+//   around him (3bb47630) instead of walking home for it. 1 is the behaviour
+//   since 2026-09-22; forward is also where he dies. See docs/27.
+const float TUNE_COM_STAY_FORWARD = 1.f;
+
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
 const float TUNE_BUILD_THREAT_BAR = 1.f;
