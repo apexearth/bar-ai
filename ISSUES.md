@@ -2655,3 +2655,46 @@ measured against 0/32, and note that a floor of zero gives a win-rate test
 almost no power -- mechanism metrics (income, extractors held, commander
 deaths, games lost inside N minutes) are what can resolve a change at these
 sample sizes.
+
+### VERIFIED: ArmyTarget() returns literally zero for ~80% of the game, and the commit that says it was fixed never touched the file
+
+2026-09-23, found by an unbiased code survey and then verified directly.
+
+  army.as:1499    if (T2SwitchOn())
+                          return 0.f;
+
+Not reduced, not deferred. Zero. It feeds production.as's `armyGap`, which is
+the factory's entire army demand, plus want_nano, want_plant, want_tech and
+want_mex's army-opportunity charge.
+
+The valve that is supposed to restore it, EcoDangerNear (army.as:1156),
+compares `GetEnemyCostAt(...)` -- a unit COUNT (S28) -- against
+TUNE_ECO_DANGER_M, which is declared in METAL and set to 250 ("two T1
+raiders' worth"). It needs ~250 visible enemy units within 2500 elmos held
+for 30 s. It never arms.
+
+How long the zero holds, one 45-minute game of the control arm: the switch
+reads `on` at FRAME 18 and DONE at frame 42,593 -- minute 0.01 to minute
+23.7 of a 29.4-minute game.
+
+THE SILENT FAILURE. ISSUES.md's own ARMY SHARE entry says "Fixed together
+2026-09-22: switch target = our share of their shown army". Commit b314ada8,
+which carries that message, has a two-file diff: ISSUES.md and
+military/massing.as. army.as IS NOT IN IT. Only HoldNeedM() got the
+group-metal read; `return 0.f` was never edited, and the measured result
+quoted in that commit came from a build carrying half the described change.
+
+WHAT IS *NOT* ESTABLISHED, and the survey overstated this. The impact claim
+leans on "army 10% of spend vs BARb's 23-32%", which is from Comet 1v1 on
+2026-09-06 -- a different map, date and codebase. On the arms measured TODAY
+in his regime, our army spend share is ~48% against BARb's ~47%: comparable.
+So the dead target is NOT currently collapsing army spend. What buys our army
+instead is CoverNeedM() and RichArmyGapM() -- cover reactions and a
+spare-metal EMA. Our army buying is REACTIVE, not TARGETED: it never asks
+"how much army do they have", only "what is left over". With half their
+economy, leftovers are half as big, which is consistent with a similar share
+and half the absolute army.
+
+So: the defect is real and verified, its size is unknown, and the honest test
+is whether a live target changes absolute army and wins -- not whether it
+changes the share.
