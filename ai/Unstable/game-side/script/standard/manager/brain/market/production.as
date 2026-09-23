@@ -713,7 +713,16 @@ float RichArmyGapM()
 	// in both. The smoothed spare is the same fact without either error.
 	TrackIncome();
 	const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	return gMSpareEma * ((fillS > 1.f) ? fillS : 180.f);
+	float m = gMSpareEma * ((fillS > 1.f) ? fillS : 180.f);
+	// THE OTHER HALF OF THE BALANCE. The budget corrector steers what
+	// CONSTRUCTORS build and this file never consults it, so spare metal
+	// becomes army whatever the army row says: measured 0.32 held against a
+	// 0.202 target while defence sat at 0.142 against 0.288 with its own
+	// multiplier railed at the clamp. Amplifying the starved categories
+	// cannot work while the overfed one is not on the scale.
+	if (ai.GetTunable("apex_army_budget_damp", TUNE_ARMY_BUDGET_DAMP) > 0.f)
+		m *= Brain::BudgetMult(Brain::ARMY);
+	return m;
 }
 
 

@@ -2787,3 +2787,44 @@ Two more things that are not in any note and change the picture:
   metal into army, BARb 23-32%") is wrong for this regime by a mile and
   points the wrong way: acting on it enlarges the thing already killing us.
   It is from Comet 1v1, 2026-09-06. RE-SCOPED, do not act on it here.
+
+### THE BALANCE ONLY WORKS ONE WAY: army is not on the scale
+
+2026-09-23, apexearth's steer ("our target would be like 0.35 and we would
+only be at 0.12; I don't think we ever managed to balance that out"). He is
+right, and the reason is structural, not a tuning miss.
+
+`tools/budgetgap.py` over the 32-game 45-minute control arm, 1,640 samples:
+
+  cat    held   target    gap     mult   railed at the 2.0 clamp
+  army   0.320  0.202   +0.118    0.82      14%
+  def    0.142  0.288   -0.147    1.75      59%
+  aa     0.003  0.059   -0.057    1.98      97%
+  eco    0.238  0.302   -0.065    1.39      26%
+  bp     0.259  0.148   +0.110    0.79       5%
+
+Defence sits at half its target for the whole game (0.06 -> 0.18 while the
+target climbs 0.26 -> 0.31) and never converges. Its corrector is pinned at
+the clamp 59% of the time; AA's 97%.
+
+WHY IT CANNOT CONVERGE. `BudgetMult = target/have`, clamped [0.35, 2.0], and
+it is applied in ONE place: decide.as:1235, on the ranked list of what
+CONSTRUCTORS build. Army does not come from there. Army comes out of
+factories through production.as, and production.as contains NO reference to
+BudgetMult, ShareOf or TargetShare -- verified by grep. Its army demand is
+
+    RichArmyGapM() = gMSpareEma * 180s
+
+spare metal times three minutes. So every metal the steered categories fail
+to absorb becomes army automatically, whatever the army row says. The
+corrector can amplify a starved category to at most 2x; it has no way at all
+to reduce the overfed one, because the overfed one is not on the scale.
+
+That is also why raising defence has failed repeatedly: defence's ticket is
+already at its rail, and the metal it does not win is not returned to the
+pool, it is converted into army by a floor that no target bounds.
+
+CHANGE, default OFF: `apex_army_budget_damp` multiplies the spare-metal army
+floor by the ARMY row's own budget multiplier. At the measured shares that is
+0.202/0.320 = 0.63, so the floor asks for 37% less and the metal is available
+to the categories the corrector is already straining to fill. Untested.

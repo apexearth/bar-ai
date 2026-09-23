@@ -1678,6 +1678,13 @@ const float TUNE_COM_MEX_PRICE = 0.f;
 //   See docs/27.
 const float TUNE_T2_ARMY_HOLD = 0.f;
 
+// [toggle 0/1] -- The spare-metal army floor is damped by the ARMY row's own
+//   budget multiplier. 0 is the behaviour before 2026-09-23: production.as
+//   never consults the budget at all, so every metal the other categories fail
+//   to absorb becomes army regardless of the army target, and the corrector
+//   can only ever amplify the starved side. See docs/27.
+const float TUNE_ARMY_BUDGET_DAMP = 0.f;
+
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller
