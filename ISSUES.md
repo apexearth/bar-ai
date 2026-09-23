@@ -1823,3 +1823,33 @@ production by counting the unit types a plant can build, because no line says
 which factory a unit came from. A `fac=` field on the unit-finished line
 would make "was this plant worth it" directly readable and is the first thing
 to add here.
+
+### A QUARTER OF OUR METAL IS SPENT ON UNCONTESTED WANTS (2026-09-22)
+
+Over 8 games of his 2v2 regime, summing `m=` on every `apex: decide` line and
+splitting by whether the line reads `over nothing`:
+
+  decided metal            3,303 k
+  chosen with NO rival       718 k   22%
+
+  energy/energy   225 k     defence/protect  71 k
+  buildpower/nano 161 k     airdef/airdef    56 k
+  produce/plant    86 k     sense/sense      38 k
+
+For that 22% the hand had exactly one executable want and took it. There is
+no auction, no comparison, and therefore nothing a price can change.
+
+This is the structural reason four separately-correct pricing fixes each
+moved their own metric and left the outcome alone, and it is why the plant
+work concluded "discounting cannot remove them, only an exact zero can" -- an
+uncontested want wins at any price above zero.
+
+It also puts a ceiling on the budget lever: it scales want VALUES, so it can
+only steer the 78% that is contested. Measured with it on, defence share rose
+0.16 -> 0.23 and economy did not move at all -- economy is the category most
+often decided with no rival (225 k of the 718 k).
+
+The question this raises is not "what should these wants be worth". It is why
+a constructor standing in our own base has ONE thing it can propose. Whether
+that is the per-hand filtering (can-build, site found, reachable), the refusal
+memo, or genuinely empty ground is not established here.
