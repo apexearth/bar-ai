@@ -1662,13 +1662,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& (ranked.length() > 1)
 		&& (ai.GetTunable("apex_t2_fusion_pull", TUNE_T2_FUSION_PULL) > 0.f)
 		&& T2WantsFusion()) {
+		int fusSeen = 0;
+		int fusEnergy = 0;
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			Want@ fw = ranked[ri];
 			if ((fw.kind != WK_ENERGY) || (fw.def is null))
 				continue;
+			++fusEnergy;
 			const int fd = int(fw.def.id);
 			if (!AdvancedOnlyDef(fd) || (Catalog::gMakeE[fd] <= 0.f))
 				continue;
+			++fusSeen;
 			if (ri > 0) {
 				ranked.removeAt(ri);
 				ranked.insertAt(0, fw);
@@ -1676,6 +1680,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			floorPush = true;
 			why = "t2fusion";
 			break;
+		}
+		if ((why != "t2fusion") && (ai.frame >= gNextFusDiag)) {
+			gNextFusDiag = ai.frame + 15 * SECOND;
+			AiLog(Factory::T() + "apex: t2fusion-miss " + unit.circuitDef.GetName()
+				+ " ranked=" + ranked.length()
+				+ " energyWants=" + fusEnergy
+				+ " advGenWants=" + fusSeen);
 		}
 	}
 	bool roled = false;

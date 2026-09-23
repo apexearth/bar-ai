@@ -1278,6 +1278,7 @@ bool AdvancedOnlyDef(int d)
 // "all of them" never fired in 30 minutes.
 string gT2Missing = "";
 bool gT2NoFus = true;
+int gNextFusDiag = 0;
 bool T2EconomyStands()
 {
 	const float ceil = BestExtract();
