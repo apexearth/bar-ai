@@ -1488,3 +1488,55 @@ read, so the throw is inside the binding -- the target dying between the
 check and the order (S13). 1x and 4x in two 16-AI hours, absent in four
 others. The exception aborts the election, so the reclaim silently does not
 happen.
+
+### THE STANDING OBLIGATION IS MEASURED AND THEN DISCARDED (2026-09-22)
+
+`docs/23` names one obligation: army and defence hold their share of the
+economy we have built. `budget.as` computes it correctly and then throws it
+away -- its own header says so: "BudgetMult IS READ BY THE LOG AND NOTHING
+ELSE ... the constructor floors in production.as return before anything is
+priced."
+
+The log it writes into, one baseline game of the 2v2 regime:
+
+  f=0      army=0.00/0.23  def=0.00/0.21  eco=0.00/0.35  bp=0.00/0.16
+  f=5400   army=0.07/0.18  def=0.18/0.20  eco=0.38/0.42  bp=0.37/0.15
+  f=10800  army=0.43/0.17  def=0.10/0.27  eco=0.31/0.35  bp=0.16/0.16
+
+At minute 3 army is at a third of its target and build power at 2.5x its own;
+by minute 6 defence is at 0.10 against 0.27. `BudgetMult(ARMY)` sits pinned at
+its 2.00 ceiling throughout. Nothing reads it.
+
+Why the earlier wiring read inert: 56% of opening decisions never reach the
+priced draw. Over 20 games, decisions before minute 4 by `why=`: draw 487,
+estall 277, role 151, nanofloor 82, ladder 57, cover 47, firstplant 40. A
+multiplier on the draw's ticket odds can only touch the 44%.
+
+Why it matters more than anything else measured this session: army
+differential is the only opening metric that predicts the win within a start
+box (AUC 0.682 at minute 4, 0.704 at minute 6, against 0.528 for our own
+minute-4 extractor count -- `tools/predict.py`), and every arm run today
+carries the same deficit, -1,180 at minute 4 and -1,924 at minute 6,
+untouched by any of the eleven levers in docs/33.
+
+Not attempted here. It is a decision about what outranks what, which is his.
+
+### MEX GUNS: 57% COVERED AGAINST BARb'S 84% AT MINUTE 6 (2026-09-22)
+
+His complaint, and it is not that we never try. Defence IS elected -- 715
+times against metal/mex's 263 over 20 games -- and the funnel is healthy
+(`apex: defwhy` reads `WIN armllt`). Two things eat it:
+
+- The e-stall hoist takes the hand off `defence/protect` 95 times and off
+  `metal/mex` 180 times per 20 games. `ISSUES` already concluded "the defence
+  hole is the e-stall's shadow", and bounding the e-stall's fabricated demand
+  (TUNE_E_FEED_BOUND, docs/27) cut its firings 13.9 -> 9.7 a game and changed
+  no outcome. So that is not the whole story.
+- Guarded share: 3.1 of 6.3 extractors at minute 4 (BARb 5.0 of 8.1), 3.4 of
+  6.0 at minute 6 (BARb 7.8 of 9.3). BARb adds 2.8 guarded mexes between
+  minute 4 and 6; we add 0.3.
+
+Untested: `apex_cover_push_s` (10 s of economic power) is the affordability
+bar on the mex-cover queue jump and has never been swept. `tools/mexkill.py`
+is the outcome instrument -- we lose 1.41 extractors a game by minute 6 and
+0.67 more killed mid-build, against BARb's 0.95 and 0.03.
