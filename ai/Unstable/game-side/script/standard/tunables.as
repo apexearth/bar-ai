@@ -1632,6 +1632,7 @@ const float TUNE_ARTY_MASS = 1.f;
 //   respect it; our own read stronger too (they are chargers and ignore the
 //   margin anyway).
 const float TUNE_BEHEMOTH_THREAT = 2.f;
+const float TUNE_COM_BERTH = 1.f;
 
 // [ratio] -- Cap on the forward-bleed engage caution.
 const float TUNE_BLEED_CAP = 1.6f;

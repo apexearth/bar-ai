@@ -72,6 +72,37 @@ void AiMain()
 	// by probe (SetThreatKernel(1), read, rescale) because the kernel itself is
 	// write-only. Side effect, accepted: def power scales too, so our OWN
 	// Behemoths read stronger -- they are chargers and ignore the margin anyway.
+	// AND THE COMMANDER GETS ONE TOO (apexearth 2026-09-23: "some of our units
+	// can just shoot at a commander and never ever get killed ... all they have
+	// to do is keep their distance. Trouble is, we don't."). Same mechanism,
+	// same reason: the D-gun one-shots whatever walks in and DPS-derived threat
+	// cannot see it, so the early game is decided by units strolling into a
+	// range they never had to enter. A hot kernel makes squads demand better
+	// odds near him and makes threat-aware paths bend around him, which is
+	// exactly "keep your distance" expressed as the map rather than a rule.
+	//
+	// SIDE EFFECT, and it is bigger here than for the Behemoth: the kernel is
+	// per-def, so OUR commander reads stronger too, and unlike a Behemoth there
+	// is always one on the field. Watch StrRatio if this is on.
+	{
+		const float cmult = ai.GetTunable("apex_com_berth", TUNE_COM_BERTH);
+		array<string> coms = {"armcom", "corcom", "legcom"};
+		for (uint ci = 0; (cmult > 1.f) && (ci < coms.length()); ++ci) {
+			CCircuitDef@ com = ai.GetCircuitDef(coms[ci]);
+			if (com is null)
+				continue;
+			const float c0 = com.threat;
+			com.SetThreatKernel(1.f);
+			const float cK = com.threat;
+			if ((c0 > 0.f) && (cK > 0.0001f)) {
+				com.SetThreatKernel(cmult * c0 / cK);
+				AiLog("apex: com berth -- " + coms[ci] + " threat "
+					+ formatFloat(c0, "", 0, 0) + " -> "
+					+ formatFloat(com.threat, "", 0, 0));
+			}
+		}
+	}
+
 	{
 		const float mult = ai.GetTunable("apex_behemoth_threat", TUNE_BEHEMOTH_THREAT);
 		CCircuitDef@ jugg = ai.GetCircuitDef("corjugg");
