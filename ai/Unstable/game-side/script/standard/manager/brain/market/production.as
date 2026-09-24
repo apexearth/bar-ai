@@ -1703,11 +1703,40 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				rcVal.insertLast(RoleValue(rIdx));
 			}
 			float rTarget = rcTgt[rSlot];
+			float rValue = rcVal[rSlot];
 			// The cover half of the AA target is FIGHTER demand: a ground AA
 			// unit cannot fly beside a scout (the 23-Crashers-vs-no-air game).
-			if ((rIdx == int(Unit::Role::AA.type)) && !Catalog::gFlyer[d])
-				rTarget -= Air::CoverDemandM();
-			const float rGap = rTarget - rcVal[rSlot];
+			if (rIdx == int(Unit::Role::AA.type)) {
+				// TWO KINDS OF AA ANSWER TWO QUESTIONS. Ground AA defends the
+				// ground it stands on; only a fighter denies the airspace and
+				// makes the raids stop. Counted as one role, 21,000 metal of
+				// mobile AA closed the gap and the fighters were never bought
+				// (apexearth: "not making enough anti-air to convince them to
+				// stop. We should have fighters").
+				const float fShare = ai.GetTunable("apex_aa_fighter_share",
+						TUNE_AA_FIGHTER_SHARE);
+				const float escort = Air::CoverDemandM();
+				if (fShare > 0.f) {
+					float airPart = rTarget - escort;
+					if (airPart < 0.f)
+						airPart = 0.f;
+					const float fTgt = airPart * fShare + escort;
+					if (Catalog::gFlyer[d]) {
+						rTarget = fTgt;
+						rValue = Air::FighterMetalHeld();
+					} else {
+						rTarget -= fTgt;
+						rValue -= Air::FighterMetalHeld();
+					}
+					if (rTarget < 0.f)
+						rTarget = 0.f;
+					if (rValue < 0.f)
+						rValue = 0.f;
+				} else if (!Catalog::gFlyer[d]) {
+					rTarget -= escort;
+				}
+			}
+			const float rGap = rTarget - rValue;
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			// THE PORTFOLIO FLOOR MUST NOT REVIVE A ROLE THAT IS WORTH NOTHING.
 			// It keeps a never-first role from starving, which is right for the

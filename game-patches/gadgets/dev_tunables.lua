@@ -301,6 +301,7 @@ local NAMES = {
 	"apex_t1_push_off",
 	"apex_t2_army_hold",
 	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
+	"apex_aa_fighter_share", -- production.as: share of the enemy-air AA target only a fighter can fill (0 = off, one role as before)
 	"apex_com_berth", -- main.as: scale the commander threat kernel so paths and squads keep out of D-gun range (1 = off)
 	"apex_unlock_afford", -- want_plant.as: discount a plant's unlock by whether the plant plus one product is reachable (0 = off)
 	"apex_conv_feed_cap", -- want_energy.as: a converter can only eat the energy we make plus the bank (0 = off)

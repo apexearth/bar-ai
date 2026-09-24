@@ -18,6 +18,23 @@ bool IsFighterDef(int d)
 	return false;
 }
 
+// What we hold in FIGHTERS alone. The AA role counts every anti-air unit
+// together, so 21,000 metal of mobile ground AA read the role as satisfied and
+// stopped the fighters being bought -- against 64,634 metal of enemy air that
+// went on harassing us unopposed (apexearth 2026-09-23).
+float FighterMetalHeld()
+{
+	float m = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!IsFighterDef(d))
+			continue;
+		const int have = Catalog::Def(d).count;
+		if (have > 0)
+			m += float(have) * Catalog::gCostM[d];
+	}
+	return m;
+}
+
 CCircuitUnit@ FighterById(Id id)
 {
 	for (int pass = 0; pass < 2; ++pass) {
