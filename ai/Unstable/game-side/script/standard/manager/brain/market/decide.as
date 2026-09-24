@@ -29,7 +29,6 @@ array<int> gLastDecideAt(32001, -30000);   // per-unit-id, Spring ids cap at 32k
 array<IUnitTask@> gIncTask(32001);
 array<float> gIncVal(32001, 0.f);
 // The walk each incumbent job started with, for the sunk-walk hold below.
-array<float> gIncD0(32001, -1.f);
 
 // HOW MUCH OF THE WALK IS ALREADY SPENT. His ruling of 2026-09-02 is that a
 // builder should not walk INTO danger. The hold below was applying it to a
@@ -37,16 +36,6 @@ array<float> gIncD0(32001, -1.f);
 // the trip because one scout stands near the destination -- and that is what
 // this answers. A bar on the fraction of the original walk already paid, not
 // an exemption from the ruling.
-bool WalkPaid(CCircuitUnit@ unit, const AIFloat3& in ip, int uid)
-{
-	const float bar = ai.GetTunable("apex_keep_walk_paid", TUNE_KEEP_WALK_PAID);
-	if ((bar <= 0.f) || (uid < 0) || (uid >= int(gIncD0.length())))
-		return false;
-	const float d0 = gIncD0[uid];
-	if (d0 <= 1.f)
-		return false;
-	return (1.f - unit.GetPos(ai.frame).distance2D(ip) / d0) >= bar;
-}
 int gKeepJob = 0;
 int gKeepMin = 0;      // keeps this minute
 int gOffCrewMin = 0;   // incumbents forgotten because the hand was taken off them
@@ -1892,16 +1881,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				}
 				// ...but the ENGINE detaches the hand before every re-election
 				// too, so onCrew is false every time and this hold has never
-				// once fired: keeps=0 against offCrew=7,370 over 32 games.
-				// apex_keep_job_peel tests the removals that are ours instead.
-				bool dropped = !onCrew;
-				if (ai.GetTunable("apex_keep_job_peel", TUNE_KEEP_JOB_PEEL) > 0.f)
-					dropped = Builder::PeeledWithin(int(unit.id), 10 * SECOND);
+				// once fired. Testing our own removals instead reached only 7%
+				// of the cases and lost every game of an arm; see docs/27.
+				const bool dropped = !onCrew;
 				if (dropped) {
 					@gIncTask[uidk] = null;
 					++gOffCrewMin;
 				} else if (OnMap(ip)
-						&& (!Builder::SiteHot(ip) || WalkPaid(unit, ip, uidk))) {
+						&& !Builder::SiteHot(ip)) {
 					++gKeepJob;
 					++gKeepMin;
 					if (ai.frame >= gNextKeepLog) {
@@ -2135,8 +2122,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();
-				gIncD0[int(unit.id)] = OnMap(tp0)
-						? unit.GetPos(ai.frame).distance2D(tp0) : -1.f;
 			}
 			// A category that could not be executed is not a job this hand
 			// can do: the role goes with the fall-through.

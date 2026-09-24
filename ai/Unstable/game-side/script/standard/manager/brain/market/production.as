@@ -775,8 +775,6 @@ float RichArmyGapM()
 	// 0.202 target while defence sat at 0.142 against 0.288 with its own
 	// multiplier railed at the clamp. Amplifying the starved categories
 	// cannot work while the overfed one is not on the scale.
-	if (ai.GetTunable("apex_army_budget_damp", TUNE_ARMY_BUDGET_DAMP) > 0.f)
-		m *= Brain::BudgetMult(Brain::ARMY);
 	return m;
 }
 

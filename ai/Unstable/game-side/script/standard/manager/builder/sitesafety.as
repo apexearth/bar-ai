@@ -521,23 +521,5 @@ bool BaseUnderAttack()
 }
 
 // WHICH REMOVALS ARE OURS. The engine detaches a unit from its task before
-// every re-election, so a crew-membership test cannot tell a hand we PEELED
-// from one that is merely between elections -- and the keep-job hold in
-// decide.as read keeps=0 against offCrew=7,370 over 32 games because of it.
-// Marked at the three places we take a hand off a builder task ourselves.
-array<int> gPeelAt(32001, -30000);
-
-void NotePeel(int id)
-{
-	if ((id >= 0) && (id < int(gPeelAt.length())))
-		gPeelAt[id] = ai.frame;
-}
-
-bool PeeledWithin(int id, int frames)
-{
-	if ((id < 0) || (id >= int(gPeelAt.length())))
-		return false;
-	return (ai.frame - gPeelAt[id]) <= frames;
-}
 
 }  // namespace Builder

@@ -309,11 +309,7 @@ local NAMES = {
 	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
 	"apex_retreat_scale", -- posture.as: scale every def's retreat hp threshold (1 = config value; lower fights longer before pulling out)
 	"apex_budget_after", -- decide.as: apply the budget correction to the draw ticket instead of the value the draw sharpens (0 = off)
-	"apex_budget_max", -- budget.as: ceiling on the budget corrector (2 = stock; higher lets a starved row actually catch up)
 	"apex_army_rich_balance", -- production.as: offer the spare-metal army floor only as far as army is under its budget target (0 = off, 1 = full)
-	"apex_army_budget_damp", -- production.as: damp the spare-metal army floor by the ARMY row budget multiplier (0 = off)
-	"apex_keep_job_peel", -- decide.as: keep-job tests OUR removals (peel) not crew membership (0 = the dead crew test)
-	"apex_keep_walk_paid", -- decide.as: fraction of the walk already paid that keeps a job at a hot site (0 = off)
 	"apex_t2_energy",
 	"apex_t2_energy_reactor",
 	"apex_t2_hold_boost",

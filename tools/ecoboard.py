@@ -139,9 +139,11 @@ def main():
             mean = sum(v) / len(v)
             mx = [x[2] for x in res[name].get(mn, [])]
             tail = ("   his %5d   %.2fx" % (HIS[mn], mean / HIS[mn])) if canon else ""
-            print("  %-10s %6d   %7.0f [%.0f-%.0f]  n=%d   mex %2.0f%s"
-                  % (name, mn, mean, min(v), max(v), len(v),
-                     (sum(mx) / len(mx)) if mx else 0, tail))
+            # per-seed values, not just the range: a 4-seed arm cannot be
+            # judged from a mean and two extremes.
+            print("  %-10s %6d   %7.0f [%s]  n=%d   mex %2.0f%s"
+                  % (name, mn, mean, " ".join("%.0f" % x for x in sorted(v)),
+                     len(v), (sum(mx) / len(mx)) if mx else 0, tail))
         print()
     print("energy/s by minute")
     for name, _ in arms:
