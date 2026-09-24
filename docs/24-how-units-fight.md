@@ -1350,3 +1350,21 @@ sucks."*
 - **A shield belongs on that ground too.**
 - Read with his 2026-09-17 mex-guard ruling: this is the same complaint one
   step up -- we buy the first gun and never the second.
+
+## Rolling bombs (2026-09-23)
+
+*"Right now we have amphibious rolling bombs trying to run away when they are
+almost dead, but the point of them is to like die and blow up into the enemy,
+so we shouldn't have them run away. The one I'm talking about happened to be a
+rolling nuclear bomb, so we really don't want that exploding in our base."*
+
+*"We also shouldn't let these rolling bombs merge into a squad together.
+They'll just all blow up together in one place. We need to spread them out and
+have them attack the enemy from different angles."*
+
+- **A bomb never retreats.** Its weapon IS its death, so pulling it out at low
+  hp wastes it -- and a nuclear one retreating detonates in our own base.
+- **Bombs do not group.** Several arriving together spend one blast on the
+  ground one of them could have covered alone.
+- **They arrive separately, from different bearings.** Spread is the delivery,
+  not a formation preference.

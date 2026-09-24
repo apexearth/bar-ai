@@ -18,7 +18,11 @@ bool IsRollingBomb(const CCircuitDef@ cdef)
 		return false;
 	const string n = cdef.GetName();
 	// Armada and Cortex only: this build's unit table has no Legion bomb.
+	// The scavenger variant must be named too -- it inherited nothing from
+	// armvader and so both grouped and retreated, which for a nuclear bomb
+	// means detonating in our own base (apexearth 2026-09-23).
 	return (n == "armvader")      // Tumbleweed, Amphibious Rolling Bomb
+		|| (n == "armvadert4")    // Epic Tumbleweed, the NUCLEAR one
 		|| (n == "corroach")      // Bedbug, Amphibious Crawling Bomb
 		|| (n == "corsktl");      // Skuttle, Advanced Amphibious Crawling Bomb
 }

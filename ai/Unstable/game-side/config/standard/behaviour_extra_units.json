@@ -21,6 +21,18 @@
 				"retreat": 0.0,
 				"power": 5.0
 			},
+			// A rolling bomb's weapon IS its death, so pulling it out at low hp
+			// wastes it -- and armvadert4 is a NUCLEAR one, which retreating
+			// detonates in our own base (apexearth, watching). armvader has
+			// carried retreat 0 all along; the scavenger variant had no entry
+			// at all and inherited the default.
+			"armvadert4": {
+				"role": ["raider"],
+				"attribute": ["melee"],
+				"retreat": 0,
+				"threat": {"air": 0.0, "water": 0.1, "surf": 0.1},
+				"power": 10.0
+			},
 			"armpwt4": {
 				"role": ["raider"],
 				"attribute": ["melee"],
