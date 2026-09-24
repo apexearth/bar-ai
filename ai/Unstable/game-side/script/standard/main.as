@@ -163,6 +163,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
 	{ double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }
 	{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
+	{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 	{ double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
 	{ double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	{ double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
@@ -222,6 +223,7 @@ void UnitFinishedInner(CCircuitUnit@ unit)
 		return;
 	Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
+	Market::LiftNoteFinished(unit);
 	Market::ComUnitFinished(unit);
 	Market::NoteFarm(unit);
 	Brain::NoteSiloFinished(unit);
@@ -260,6 +262,7 @@ void UnitFinishedInner(CCircuitUnit@ unit)
 void AiUnitDestroyed(CCircuitUnit@ unit)
 {
 	Market::NoteDead(unit);
+	Market::LiftNoteDead(unit);
 	if (unit is null)
 		return;
 	Market::ComUnitDead(unit);

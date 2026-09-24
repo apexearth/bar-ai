@@ -185,44 +185,7 @@ void CFactoryManager::InitHandlers()
 			// FIXME: BA
 		)
 
-		// check factory nano belongs to
-		const float radius = unit->GetCircuitDef()->GetBuildDistance() * 0.9f;
-		const float sqRadius = SQUARE(radius);
-		SAssistToFactory& af = assists[unit];
-		for (SFactory& fac : factories) {
-			if (assPos.SqDistance2D(fac.unit->GetPos(frame)) >= sqRadius) {
-				continue;
-			}
-			auto it = fac.nanos.find(unit->GetCircuitDef());
-			if (it == fac.nanos.end()) {
-				fac.nanos[unit->GetCircuitDef()].incomeMod = unit->GetCircuitDef()->GetWorkerTime() / fac.unit->GetCircuitDef()->GetWorkerTime();
-			}
-			SAssistant& assist = fac.nanos[unit->GetCircuitDef()];
-			const float metalUse = fac.miRequire * assist.incomeMod;
-			const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
-			af.metalRequire = std::max(af.metalRequire, metalUse);
-			af.energyRequire = std::max(af.energyRequire, energyUse);
-			fac.miRequireTotal += metalUse;
-			fac.eiRequireTotal += energyUse;
-			assist.units.insert(unit);
-			++fac.nanoSize;
-			af.factories.insert(fac.unit);
-		}
-		if (!af.factories.empty()) {
-			metalRequire += af.metalRequire;
-			energyRequire += af.energyRequire;
-
-			bool isInHaven = false;
-			for (const AIFloat3& hav : havens) {
-				if (assPos.SqDistance2D(hav) < sqRadius) {
-					isInHaven = true;
-					break;
-				}
-			}
-			if (!isInHaven) {
-				havens.push_back(assPos);
-			}
-		}
+		AttachAssist(unit, assPos, frame);
 
 		UnitAdded(unit, UseAs::ASSIST);
 	};
@@ -237,41 +200,7 @@ void CFactoryManager::InitHandlers()
 		if (task->GetType() == IUnitTask::Type::NIL) {
 			return;
 		}
-		const AIFloat3& assPos = unit->GetPos(this->circuit->GetLastFrame());
-		const float radius = unit->GetCircuitDef()->GetBuildDistance();
-		const float sqRadius = SQUARE(radius);
-		for (SFactory& fac : factories) {
-			auto fit = fac.nanos.find(unit->GetCircuitDef());
-			if (fit == fac.nanos.end()) {
-				continue;
-			}
-			SAssistant& assist = fit->second;
-			if (assist.units.erase(unit) == 0) {
-				continue;
-			}
-			const float metalUse = fac.miRequire * assist.incomeMod;
-			const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
-			fac.miRequireTotal -= metalUse;
-			fac.eiRequireTotal -= energyUse;
-			if (--fac.nanoSize > 0) {
-				continue;
-			}
-			auto it = havens.begin();
-			while (it != havens.end()) {
-				if (it->SqDistance2D(assPos) < sqRadius) {
-					*it = havens.back();
-					havens.pop_back();
-				} else {
-					++it;
-				}
-			}
-		}
-		SAssistToFactory& af = assists[unit];
-		if (!af.factories.empty()) {
-			metalRequire -= af.metalRequire;
-			energyRequire -= af.energyRequire;
-		}
-		assists.erase(unit);
+		DetachAssist(unit, unit->GetPos(this->circuit->GetLastFrame()));
 
 		UnitRemoved(unit, UseAs::ASSIST);
 	};
@@ -1925,6 +1854,112 @@ CCircuitDef* CFactoryManager::GetFacRoleDef(CCircuitDef::RoleT role, const SFact
 	candidates.clear();
 
 	return buildDef;
+}
+
+void CFactoryManager::AttachAssist(CCircuitUnit* unit, const AIFloat3& assPos, int frame)
+{
+	const float radius = unit->GetCircuitDef()->GetBuildDistance() * 0.9f;
+	const float sqRadius = SQUARE(radius);
+	SAssistToFactory& af = assists[unit];
+	for (SFactory& fac : factories) {
+		if (assPos.SqDistance2D(fac.unit->GetPos(frame)) >= sqRadius) {
+			continue;
+		}
+		auto it = fac.nanos.find(unit->GetCircuitDef());
+		if (it == fac.nanos.end()) {
+			fac.nanos[unit->GetCircuitDef()].incomeMod = unit->GetCircuitDef()->GetWorkerTime() / fac.unit->GetCircuitDef()->GetWorkerTime();
+		}
+		SAssistant& assist = fac.nanos[unit->GetCircuitDef()];
+		const float metalUse = fac.miRequire * assist.incomeMod;
+		const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
+		af.metalRequire = std::max(af.metalRequire, metalUse);
+		af.energyRequire = std::max(af.energyRequire, energyUse);
+		fac.miRequireTotal += metalUse;
+		fac.eiRequireTotal += energyUse;
+		assist.units.insert(unit);
+		++fac.nanoSize;
+		af.factories.insert(fac.unit);
+	}
+	if (!af.factories.empty()) {
+		metalRequire += af.metalRequire;
+		energyRequire += af.energyRequire;
+
+		bool isInHaven = false;
+		for (const AIFloat3& hav : havens) {
+			if (assPos.SqDistance2D(hav) < sqRadius) {
+				isInHaven = true;
+				break;
+			}
+		}
+		if (!isInHaven) {
+			havens.push_back(assPos);
+		}
+	}
+}
+
+void CFactoryManager::DetachAssist(CCircuitUnit* unit, const AIFloat3& assPos)
+{
+	const float radius = unit->GetCircuitDef()->GetBuildDistance();
+	const float sqRadius = SQUARE(radius);
+	for (SFactory& fac : factories) {
+		auto fit = fac.nanos.find(unit->GetCircuitDef());
+		if (fit == fac.nanos.end()) {
+			continue;
+		}
+		SAssistant& assist = fit->second;
+		if (assist.units.erase(unit) == 0) {
+			continue;
+		}
+		const float metalUse = fac.miRequire * assist.incomeMod;
+		const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
+		fac.miRequireTotal -= metalUse;
+		fac.eiRequireTotal -= energyUse;
+		if (--fac.nanoSize > 0) {
+			continue;
+		}
+		auto it = havens.begin();
+		while (it != havens.end()) {
+			if (it->SqDistance2D(assPos) < sqRadius) {
+				*it = havens.back();
+				havens.pop_back();
+			} else {
+				++it;
+			}
+		}
+	}
+	SAssistToFactory& af = assists[unit];
+	if (!af.factories.empty()) {
+		metalRequire -= af.metalRequire;
+		energyRequire -= af.energyRequire;
+	}
+	assists.erase(unit);
+}
+
+// apex: a structure an air transport set down somewhere else. The engine sends
+// an AI no load/unload event, so the script that flew it reports the landing.
+void CFactoryManager::UnitRelocated(CCircuitUnit* unit, const AIFloat3& from)
+{
+	if ((unit == nullptr) || unit->IsDead() || unit->GetCircuitDef()->IsMobile()) {
+		return;
+	}
+	const int frame = circuit->GetLastFrame();
+	const AIFloat3& to = unit->GetPos(frame);
+	int facing = UNIT_FACING_SOUTH;
+	TRY_UNIT(circuit, unit,
+		facing = unit->GetUnit()->GetBuildingFacing();
+	)
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	terrainMgr->DelBlocker(unit->GetCircuitDef(), from, facing, true);
+	terrainMgr->AddBlocker(unit->GetCircuitDef(), to, facing, true);
+	int before = -1, after = -1;
+	if (assists.find(unit) != assists.end()) {
+		before = assists[unit].factories.size();
+		DetachAssist(unit, from);
+		AttachAssist(unit, to, frame);
+		after = assists[unit].factories.size();
+	}
+	circuit->LOG("apex: relocated %s #%d %.0f,%.0f -> %.0f,%.0f factories %d -> %d",
+		unit->GetCircuitDef()->GetDef()->GetName(), unit->GetId(), from.x, from.z, to.x, to.z, before, after);
 }
 
 } // namespace circuit

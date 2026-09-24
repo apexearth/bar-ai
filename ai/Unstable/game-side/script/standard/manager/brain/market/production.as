@@ -1259,6 +1259,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						+ ":look(v" + formatFloat(vL, "", 0, 3) + ")";
 			}
 		}
+		if (!Catalog::gBuilder[d] && IsLiftDef(d)) {
+			const float gainT = LiftGainFor(d, fillS) * roleMul;
+			if (gainT > 0.f) {
+				const float vT = gainT / Catalog::gCostM[d];
+				candDef.insertLast(d);
+				candV.insertLast(vT);
+				candGain.insertLast(gainT);
+				sumV += vT;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName()
+						+ ":lift(v" + formatFloat(vT, "", 0, 3) + ")";
+			}
+			continue;
+		}
 		// SUPPORT: mobile eyes and static-cover. One radar and one jammer per
 		// squad that can actually take one (apexearth: "we only need up to 2 of
 		// these per squad that we have"); attachment is the military layer's,

@@ -6198,10 +6198,99 @@ index 2925da70..0724a6d7 100644
  	int metalPullCorFrame;
  	float metalPullCor;
 diff --git a/src/circuit/module/FactoryManager.cpp b/src/circuit/module/FactoryManager.cpp
-index dda9b5a9..38db800b 100644
+index dda9b5a9..a9f03350 100644
 --- a/src/circuit/module/FactoryManager.cpp
 +++ b/src/circuit/module/FactoryManager.cpp
-@@ -713,12 +713,15 @@ void CFactoryManager::Init()
+@@ -185,44 +185,7 @@ void CFactoryManager::InitHandlers()
+ 			// FIXME: BA
+ 		)
+ 
+-		// check factory nano belongs to
+-		const float radius = unit->GetCircuitDef()->GetBuildDistance() * 0.9f;
+-		const float sqRadius = SQUARE(radius);
+-		SAssistToFactory& af = assists[unit];
+-		for (SFactory& fac : factories) {
+-			if (assPos.SqDistance2D(fac.unit->GetPos(frame)) >= sqRadius) {
+-				continue;
+-			}
+-			auto it = fac.nanos.find(unit->GetCircuitDef());
+-			if (it == fac.nanos.end()) {
+-				fac.nanos[unit->GetCircuitDef()].incomeMod = unit->GetCircuitDef()->GetWorkerTime() / fac.unit->GetCircuitDef()->GetWorkerTime();
+-			}
+-			SAssistant& assist = fac.nanos[unit->GetCircuitDef()];
+-			const float metalUse = fac.miRequire * assist.incomeMod;
+-			const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
+-			af.metalRequire = std::max(af.metalRequire, metalUse);
+-			af.energyRequire = std::max(af.energyRequire, energyUse);
+-			fac.miRequireTotal += metalUse;
+-			fac.eiRequireTotal += energyUse;
+-			assist.units.insert(unit);
+-			++fac.nanoSize;
+-			af.factories.insert(fac.unit);
+-		}
+-		if (!af.factories.empty()) {
+-			metalRequire += af.metalRequire;
+-			energyRequire += af.energyRequire;
+-
+-			bool isInHaven = false;
+-			for (const AIFloat3& hav : havens) {
+-				if (assPos.SqDistance2D(hav) < sqRadius) {
+-					isInHaven = true;
+-					break;
+-				}
+-			}
+-			if (!isInHaven) {
+-				havens.push_back(assPos);
+-			}
+-		}
++		AttachAssist(unit, assPos, frame);
+ 
+ 		UnitAdded(unit, UseAs::ASSIST);
+ 	};
+@@ -237,41 +200,7 @@ void CFactoryManager::InitHandlers()
+ 		if (task->GetType() == IUnitTask::Type::NIL) {
+ 			return;
+ 		}
+-		const AIFloat3& assPos = unit->GetPos(this->circuit->GetLastFrame());
+-		const float radius = unit->GetCircuitDef()->GetBuildDistance();
+-		const float sqRadius = SQUARE(radius);
+-		for (SFactory& fac : factories) {
+-			auto fit = fac.nanos.find(unit->GetCircuitDef());
+-			if (fit == fac.nanos.end()) {
+-				continue;
+-			}
+-			SAssistant& assist = fit->second;
+-			if (assist.units.erase(unit) == 0) {
+-				continue;
+-			}
+-			const float metalUse = fac.miRequire * assist.incomeMod;
+-			const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
+-			fac.miRequireTotal -= metalUse;
+-			fac.eiRequireTotal -= energyUse;
+-			if (--fac.nanoSize > 0) {
+-				continue;
+-			}
+-			auto it = havens.begin();
+-			while (it != havens.end()) {
+-				if (it->SqDistance2D(assPos) < sqRadius) {
+-					*it = havens.back();
+-					havens.pop_back();
+-				} else {
+-					++it;
+-				}
+-			}
+-		}
+-		SAssistToFactory& af = assists[unit];
+-		if (!af.factories.empty()) {
+-			metalRequire -= af.metalRequire;
+-			energyRequire -= af.energyRequire;
+-		}
+-		assists.erase(unit);
++		DetachAssist(unit, unit->GetPos(this->circuit->GetLastFrame()));
+ 
+ 		UnitRemoved(unit, UseAs::ASSIST);
+ 	};
+@@ -713,12 +642,15 @@ void CFactoryManager::Init()
  		CScheduler* scheduler = circuit->GetScheduler().get();
  		const int interval = 4;
  		const int offset = circuit->GetSkirmishAIId() % interval;
@@ -6220,7 +6309,7 @@ index dda9b5a9..38db800b 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -816,7 +819,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
+@@ -816,7 +748,7 @@ CRecruitTask* CFactoryManager::Enqueue(const TaskS::SRecruitTask& ti)
  {
  	CRecruitTask* task = new CRecruitTask(this, ti.priority, ti.buildDef, ti.position, ti.type, ti.radius);
  	factoryTasks.push_back(task);
@@ -6229,7 +6318,7 @@ index dda9b5a9..38db800b 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -845,7 +848,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
+@@ -845,7 +777,7 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
  		} break;
  	}
  
@@ -6238,7 +6327,7 @@ index dda9b5a9..38db800b 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -1178,11 +1181,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
+@@ -1178,11 +1110,8 @@ CCircuitDef* CFactoryManager::GetLargestDef(const CCircuitDef* facDef) const
  
  CCircuitDef* CFactoryManager::DefaultGetFactoryToBuild(const AIFloat3& position, bool isStart, bool isReset)
  {
@@ -6252,7 +6341,7 @@ index dda9b5a9..38db800b 100644
  }
  
  void CFactoryManager::EnableFactory(CCircuitUnit* unit)
-@@ -1317,13 +1317,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
+@@ -1317,13 +1246,7 @@ void CFactoryManager::DisableFactory(CCircuitUnit* unit)
  					}
  				}
  			}
@@ -6267,7 +6356,7 @@ index dda9b5a9..38db800b 100644
  		}
  	};
  
-@@ -1431,6 +1425,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
+@@ -1431,6 +1354,10 @@ IUnitTask* CFactoryManager::CreateFactoryTask(CCircuitUnit* unit)
  		}
  	}
  
@@ -6278,7 +6367,7 @@ index dda9b5a9..38db800b 100644
  	const bool isActive = (noT1FacCount <= 0) || !IsT1Factory(unit->GetCircuitDef());
  
  	IUnitTask* task = UpdateBuildPower(unit, isActive);
-@@ -1461,6 +1459,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1461,6 +1388,7 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  	bool isMetalEmpty = economyMgr->IsMetalEmpty();
  	CAllyUnit* repairTarget = nullptr;
  	CAllyUnit* buildTarget = nullptr;
@@ -6286,7 +6375,7 @@ index dda9b5a9..38db800b 100644
  	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
  	float radius = unit->GetCircuitDef()->GetBuildDistance();
  
-@@ -1483,16 +1482,36 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1483,16 +1411,36 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  			CCircuitDef* cdef = cand->GetCircuitDef();
  			const float maxHealth = u->GetMaxHealth();
  			const float buildTime = cdef->GetBuildTime() * (maxHealth - u->GetHealth()) / maxHealth;
@@ -6325,7 +6414,7 @@ index dda9b5a9..38db800b 100644
  			}
  		} else if ((repairTarget == nullptr) && (u->GetHealth() < u->GetMaxHealth())) {
  			repairTarget = cand;
-@@ -1513,8 +1532,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
+@@ -1513,8 +1461,11 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
  		// Repair task
  		return Enqueue(TaskS::Repair(IBuilderTask::Priority::NORMAL, repairTarget));
  	}
@@ -6339,7 +6428,7 @@ index dda9b5a9..38db800b 100644
  		if (circuit->GetCallback()->IsFeaturesIn(pos, radius) && !builderMgr->IsResurrect(pos, radius)) {
  			return Enqueue(TaskS::Reclaim(IBuilderTask::Priority::NORMAL, pos, radius));
  		}
-@@ -1545,6 +1567,102 @@ void CFactoryManager::Watchdog()
+@@ -1545,6 +1496,102 @@ void CFactoryManager::Watchdog()
  	}
  }
  
@@ -6442,7 +6531,7 @@ index dda9b5a9..38db800b 100644
  void CFactoryManager::SetLastRequiredDef(CCircuitDef::Id facId, CCircuitDef* cdef,
  		const std::vector<float>& probs, bool isResp)
  {
-@@ -1706,7 +1824,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
+@@ -1706,7 +1753,35 @@ CFactoryManager::SRecruitDef CFactoryManager::RequiredFireDef(CCircuitUnit* buil
  const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& facDef) const
  {
  	CEconomyManager* economyMgr = circuit->GetEconomyManager();
@@ -6479,7 +6568,7 @@ index dda9b5a9..38db800b 100644
  	const bool isWaterMap = circuit->GetTerrainManager()->IsWaterMap();
  	const float enemyTotalAirCost = circuit->GetEnemyManager()->GetEnemyCost(ROLE_TYPE(AIR));
  	const float allyAACost = circuit->GetMilitaryManager()->GetRoleCost(ROLE_TYPE(AA)) * circuit->GetAllyTeam()->GetAliveSize();
-@@ -1717,7 +1863,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
+@@ -1717,7 +1792,7 @@ const std::vector<float>& CFactoryManager::GetFacTierProbs(const SFactoryDef& fa
  	tierDbg = 0;
  #endif
  	auto facIt = tiers.begin();
@@ -6488,11 +6577,129 @@ index dda9b5a9..38db800b 100644
  		while (facIt != tiers.end()) {
  			if (metalIncome < facDef.incomes[facIt->first]) {
  				break;
+@@ -1781,4 +1856,105 @@ CCircuitDef* CFactoryManager::GetFacRoleDef(CCircuitDef::RoleT role, const SFact
+ 	return buildDef;
+ }
+ 
++void CFactoryManager::AttachAssist(CCircuitUnit* unit, const AIFloat3& assPos, int frame)
++{
++	const float radius = unit->GetCircuitDef()->GetBuildDistance() * 0.9f;
++	const float sqRadius = SQUARE(radius);
++	SAssistToFactory& af = assists[unit];
++	for (SFactory& fac : factories) {
++		if (assPos.SqDistance2D(fac.unit->GetPos(frame)) >= sqRadius) {
++			continue;
++		}
++		auto it = fac.nanos.find(unit->GetCircuitDef());
++		if (it == fac.nanos.end()) {
++			fac.nanos[unit->GetCircuitDef()].incomeMod = unit->GetCircuitDef()->GetWorkerTime() / fac.unit->GetCircuitDef()->GetWorkerTime();
++		}
++		SAssistant& assist = fac.nanos[unit->GetCircuitDef()];
++		const float metalUse = fac.miRequire * assist.incomeMod;
++		const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
++		af.metalRequire = std::max(af.metalRequire, metalUse);
++		af.energyRequire = std::max(af.energyRequire, energyUse);
++		fac.miRequireTotal += metalUse;
++		fac.eiRequireTotal += energyUse;
++		assist.units.insert(unit);
++		++fac.nanoSize;
++		af.factories.insert(fac.unit);
++	}
++	if (!af.factories.empty()) {
++		metalRequire += af.metalRequire;
++		energyRequire += af.energyRequire;
++
++		bool isInHaven = false;
++		for (const AIFloat3& hav : havens) {
++			if (assPos.SqDistance2D(hav) < sqRadius) {
++				isInHaven = true;
++				break;
++			}
++		}
++		if (!isInHaven) {
++			havens.push_back(assPos);
++		}
++	}
++}
++
++void CFactoryManager::DetachAssist(CCircuitUnit* unit, const AIFloat3& assPos)
++{
++	const float radius = unit->GetCircuitDef()->GetBuildDistance();
++	const float sqRadius = SQUARE(radius);
++	for (SFactory& fac : factories) {
++		auto fit = fac.nanos.find(unit->GetCircuitDef());
++		if (fit == fac.nanos.end()) {
++			continue;
++		}
++		SAssistant& assist = fit->second;
++		if (assist.units.erase(unit) == 0) {
++			continue;
++		}
++		const float metalUse = fac.miRequire * assist.incomeMod;
++		const float energyUse = fac.eiRequire * assist.incomeMod + unit->GetCircuitDef()->GetUpkeepE();
++		fac.miRequireTotal -= metalUse;
++		fac.eiRequireTotal -= energyUse;
++		if (--fac.nanoSize > 0) {
++			continue;
++		}
++		auto it = havens.begin();
++		while (it != havens.end()) {
++			if (it->SqDistance2D(assPos) < sqRadius) {
++				*it = havens.back();
++				havens.pop_back();
++			} else {
++				++it;
++			}
++		}
++	}
++	SAssistToFactory& af = assists[unit];
++	if (!af.factories.empty()) {
++		metalRequire -= af.metalRequire;
++		energyRequire -= af.energyRequire;
++	}
++	assists.erase(unit);
++}
++
++// apex: a structure an air transport set down somewhere else. The engine sends
++// an AI no load/unload event, so the script that flew it reports the landing.
++void CFactoryManager::UnitRelocated(CCircuitUnit* unit, const AIFloat3& from)
++{
++	if ((unit == nullptr) || unit->IsDead() || unit->GetCircuitDef()->IsMobile()) {
++		return;
++	}
++	const int frame = circuit->GetLastFrame();
++	const AIFloat3& to = unit->GetPos(frame);
++	int facing = UNIT_FACING_SOUTH;
++	TRY_UNIT(circuit, unit,
++		facing = unit->GetUnit()->GetBuildingFacing();
++	)
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	terrainMgr->DelBlocker(unit->GetCircuitDef(), from, facing, true);
++	terrainMgr->AddBlocker(unit->GetCircuitDef(), to, facing, true);
++	if (assists.find(unit) != assists.end()) {
++		DetachAssist(unit, from);
++		AttachAssist(unit, to, frame);
++	}
++}
++
+ } // namespace circuit
 diff --git a/src/circuit/module/FactoryManager.h b/src/circuit/module/FactoryManager.h
-index e56339eb..0b351eb3 100644
+index e56339eb..4ec8e2f0 100644
 --- a/src/circuit/module/FactoryManager.h
 +++ b/src/circuit/module/FactoryManager.h
-@@ -214,6 +214,15 @@ private:
+@@ -204,7 +204,11 @@ public:
+ 	float GetMinOffset() const { return minOffset; }
+ 	float GetLenOffset() const { return lenOffset; }
+ 
++	void UnitRelocated(CCircuitUnit* unit, const springai::AIFloat3& from);
++
+ private:
++	void AttachAssist(CCircuitUnit* unit, const springai::AIFloat3& assPos, int frame);
++	void DetachAssist(CCircuitUnit* unit, const springai::AIFloat3& assPos);
+ 	CCircuitDef* DefaultGetFactoryToBuild(const springai::AIFloat3& position, bool isStart, bool isReset);
+ 	void EnableFactory(CCircuitUnit* unit);
+ 	void DisableFactory(CCircuitUnit* unit);
+@@ -214,6 +218,15 @@ private:
  
  	void Watchdog();
  
@@ -8400,15 +8607,28 @@ index 193efa90..e6799b8f 100644
  }
  
  CEconomyScript::~CEconomyScript()
+diff --git a/src/circuit/script/FactoryScript.cpp b/src/circuit/script/FactoryScript.cpp
+index 8de9554c..c6a074b8 100644
+--- a/src/circuit/script/FactoryScript.cpp
++++ b/src/circuit/script/FactoryScript.cpp
+@@ -50,6 +50,7 @@ CFactoryScript::CFactoryScript(CScriptManager* scr, CFactoryManager* mgr)
+ 	r = engine->RegisterObjectMethod("CFactoryManager", "CCircuitDef@ GetRoleDef(const CCircuitDef@, Type)", asMETHOD(CFactoryManager, GetRoleDef), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectMethod("CFactoryManager", "int GetFactoryCount()", asMETHOD(CFactoryManager, GetFactoryCount), asCALL_THISCALL); ASSERT(r >= 0);
+ 	r = engine->RegisterObjectProperty("CFactoryManager", "bool isAssistRequired", asOFFSET(CFactoryManager, isAssistRequired)); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CFactoryManager", "void UnitRelocated(CCircuitUnit@, const AIFloat3& in)", asMETHOD(CFactoryManager, UnitRelocated), asCALL_THISCALL); ASSERT(r >= 0);
+ }
+ 
+ CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..c2664892 100644
+index 2839b72e..2dac4cd9 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
-@@ -10,11 +10,15 @@
+@@ -10,11 +10,16 @@
  #include "script/ScriptManager.h"
  #include "script/RefCounter.h"
  #include "map/ThreatMap.h"
 +#include "map/MapManager.h"
++#include "module/EconomyManager.h"
 +#include "map/InfluenceMap.h"
  #include "scheduler/Scheduler.h"
  #include "setup/SetupManager.h"
@@ -8420,7 +8640,7 @@ index 2839b72e..c2664892 100644
  #include "CircuitAI.h"
  #include "util/GameAttribute.h"
  #include "util/MaskHandler.h"
-@@ -34,13 +38,60 @@
+@@ -34,13 +39,60 @@
  #include "Game.h"
  #include "Team.h"
  #include "Lua.h"
@@ -8483,7 +8703,7 @@ index 2839b72e..c2664892 100644
  
  CInitScript::SInitInfo::SInitInfo(const SInitInfo& o)
  {
-@@ -169,6 +220,123 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
+@@ -169,6 +221,123 @@ static std::string CCircuitAI_GetMapName(CCircuitAI* circuit)
  	return circuit->GetMap()->GetName();
  }
  
@@ -8607,7 +8827,7 @@ index 2839b72e..c2664892 100644
  static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
  {
  	return circuit->GetAllyTeam()->GetLeaderId();
-@@ -176,8 +344,15 @@ static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
+@@ -176,8 +345,15 @@ static int CCircuitAI_GetLeadTeamId(CCircuitAI* circuit)
  
  static CScriptArray* CCircuitAI_GetTeamIds(CCircuitAI* circuit)
  {
@@ -8624,7 +8844,7 @@ index 2839b72e..c2664892 100644
  	asUINT i = 0;
  	for (CAllyTeam::Id teamId : allyTeam->GetTeamIds()) {
  		*(CAllyTeam::Id*)arr->At(i++) = teamId;
-@@ -195,6 +370,929 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
+@@ -195,6 +371,986 @@ static void CCircuitAI_GiveUnits(CCircuitAI* circuit, const CScriptArray* array,
  	circuit->GiveUnits(std::move(units), newTeamId);
  }
  
@@ -8685,6 +8905,63 @@ index 2839b72e..c2664892 100644
 +	} catch (const std::exception&) {
 +		// a unit killed between the script's census and this command
 +	}
++}
++
++static void CCircuitUnit_CmdLoadUnit(CCircuitUnit* unit, CCircuitUnit* cargo)
++{
++	if ((unit == nullptr) || unit->IsDead() || (cargo == nullptr) || cargo->IsDead()) {
++		return;
++	}
++	try {
++		unit->GetUnit()->LoadUnits({cargo->GetUnit()}, 0, INT_MAX);
++	} catch (const std::exception&) {
++	}
++}
++
++static void CCircuitUnit_CmdUnloadAt(CCircuitUnit* unit, const AIFloat3& pos, CCircuitUnit* cargo)
++{
++	if ((unit == nullptr) || unit->IsDead() || (cargo == nullptr) || cargo->IsDead()) {
++		return;
++	}
++	try {
++		unit->GetUnit()->Unload(pos, cargo->GetUnit(), 0, INT_MAX);
++	} catch (const std::exception&) {
++	}
++}
++
++// What this unit is spending right now [per second]; a builder at zero on both
++// is doing nothing (repair spends energy only).
++static float CCircuitAI_GetResUse(CCircuitAI* circuit, CCircuitUnit* unit, bool energy)
++{
++	if ((unit == nullptr) || unit->IsDead()) {
++		return 0.f;
++	}
++	CEconomyManager* eco = circuit->GetEconomyManager();
++	try {
++		return unit->GetUnit()->GetResourceUse(energy ? eco->GetEnergyRes() : eco->GetMetalRes());
++	} catch (const std::exception&) {
++		return 0.f;
++	}
++}
++
++// The static half of CUnit::CanTransport (rts/Sim/Units/Unit.cpp); the game's
++// own gadgets can still refuse a lift this allows.
++static bool CCircuitDef_CanLift(const CCircuitDef* transport, const CCircuitDef* cargo)
++{
++	if ((transport == nullptr) || (cargo == nullptr)) {
++		return false;
++	}
++	springai::UnitDef* t = transport->GetDef();
++	springai::UnitDef* c = cargo->GetDef();
++	if ((t->GetTransportCapacity() <= 0) || (t->GetTransportMass() <= 0.f) || c->IsNotTransportable()) {
++		return false;
++	}
++	const int xsize = c->GetXSize();
++	if ((xsize > t->GetTransportSize() * 2) || (xsize < t->GetMinTransportSize() * 2)) {
++		return false;
++	}
++	const float mass = c->GetMass();
++	return (mass < 100000.f) && (mass >= t->GetMinTransportMass()) && (mass <= t->GetTransportMass());
 +}
 +
 +// apex: the Brain's nuke director. Attack-ground is a netted order (safe);
@@ -9554,7 +9831,7 @@ index 2839b72e..c2664892 100644
  static std::string CCircuitAI_CallRules(CCircuitAI* circuit, const std::string& data)
  {
  	return circuit->GetLua()->CallRules(data.c_str(), data.size());
-@@ -205,6 +1303,20 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
+@@ -205,6 +1361,20 @@ static std::string CCircuitAI_CallUI(CCircuitAI* circuit, const std::string& dat
  	return circuit->GetLua()->CallUI(data.c_str(), data.size());
  }
  
@@ -9575,7 +9852,7 @@ index 2839b72e..c2664892 100644
  static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
  {
  	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
-@@ -240,12 +1352,70 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
+@@ -240,12 +1410,70 @@ static std::string CCircuitUnit_GetRulesParamString(CCircuitUnit* unit, const st
  	return unit->GetUnit()->GetRulesParamString(key.c_str(), defVal.c_str());
  }
  
@@ -9647,7 +9924,7 @@ index 2839b72e..c2664892 100644
  	asUINT i = 0;
  	for (CCircuitUnit* unit : task->GetAssignees()) {
  		arr->SetValue(i++, &unit);
-@@ -472,12 +1642,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -472,12 +1700,21 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectBehaviour("IUnitTask", asBEHAVE_RELEASE, "void f()", asMETHODPR(IRefCounter, Release, (), int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "int GetRefCount() const", asMETHODPR(IRefCounter, GetRefCount, () const, int), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "Type GetType() const", asMETHODPR(IUnitTask, GetType, () const, IUnitTask::Type), asCALL_THISCALL); ASSERT(r >= 0);
@@ -9674,7 +9951,7 @@ index 2839b72e..c2664892 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -490,21 +1669,100 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +1727,100 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -9776,7 +10053,7 @@ index 2839b72e..c2664892 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -556,6 +1814,58 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1872,58 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -9835,7 +10112,7 @@ index 2839b72e..c2664892 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1874,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1932,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -9859,7 +10136,7 @@ index 2839b72e..c2664892 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1900,50 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1958,54 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -9871,6 +10148,10 @@ index 2839b72e..c2664892 100644
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdGuard(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdGuard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdLoadUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdLoadUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdUnloadAt(const AIFloat3& in, CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdUnloadAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitDef", "bool CanLift(const CCircuitDef@) const", asFUNCTION(CCircuitDef_CanLift), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetResUse(CCircuitUnit@, bool)", asFUNCTION(CCircuitAI_GetResUse), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetFacing()", asFUNCTION(CCircuitUnit_GetFacing), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -9910,7 +10191,7 @@ index 2839b72e..c2664892 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +1956,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +2018,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -9921,7 +10202,7 @@ index 2839b72e..c2664892 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +2078,25 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +2140,25 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -9947,7 +10228,7 @@ index 2839b72e..c2664892 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +2118,8 @@ bool CInitScript::Init()
+@@ -724,6 +2180,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -9956,7 +10237,7 @@ index 2839b72e..c2664892 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +2136,28 @@ void CInitScript::Update()
+@@ -740,9 +2198,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -9985,7 +10266,7 @@ index 2839b72e..c2664892 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +2194,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +2256,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -10017,7 +10298,7 @@ index 2839b72e..c2664892 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +2342,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +2404,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});

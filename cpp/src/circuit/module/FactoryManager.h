@@ -204,7 +204,11 @@ public:
 	float GetMinOffset() const { return minOffset; }
 	float GetLenOffset() const { return lenOffset; }
 
+	void UnitRelocated(CCircuitUnit* unit, const springai::AIFloat3& from);
+
 private:
+	void AttachAssist(CCircuitUnit* unit, const springai::AIFloat3& assPos, int frame);
+	void DetachAssist(CCircuitUnit* unit, const springai::AIFloat3& assPos);
 	CCircuitDef* DefaultGetFactoryToBuild(const springai::AIFloat3& position, bool isStart, bool isReset);
 	void EnableFactory(CCircuitUnit* unit);
 	void DisableFactory(CCircuitUnit* unit);

@@ -613,6 +613,7 @@ async function openGame(dir, isRefresh) {
     if ((changed || !isRefresh) && !d.matches && d.chart) loadBrain(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadFrontTowers(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadLift(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadFacSupport(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadIntel(dir);
@@ -826,6 +827,16 @@ function renderMatch(d) {
       count for several. Stock BARb's target is caretaker &times; factories
       (T1 2, T2 4, T3 9 per factory). "con time on factories" is the share of
       mobile-constructor samples spent lathing a factory's build.</div></div>
+  <div class="card"><h2>Air-lifted turrets</h2>
+    <div class="dim" id="lf-note"></div>
+    <table style="margin-top:8px"><thead><tr><th>team</th><th>turrets</th>
+      <th>idle 60s+</th><th>transports</th><th>moved</th><th>aborted</th>
+      <th>lost in flight</th></tr></thead><tbody id="lf-table"></tbody></table>
+    <div class="dim" style="font-size:12px;margin-top:4px">A construction
+      turret that has spent no metal for longer than the flight takes is picked
+      up by a transport and set down beside the working factory furthest short
+      of build power. Transports are bought only when such turrets exist.
+      Last sample per team.</div></div>
   <div class="card"><h2>Front-line towers — completed vs won</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">team<select id="ft-team"></select></label>
@@ -1408,6 +1419,21 @@ function drawFrontTowers() {
   $("#ft-table").innerHTML = rows.map(r =>
     `<tr><td>${r[0]}</td><td>${t[r[1]][i]}</td><td>${t[r[2]][i]}</td></tr>`).join("");
   $("#ft-note").textContent = `at ${t.min[i]}m, ${t.min.length} samples`;
+}
+
+async function loadLift(dir) {
+  const tb = $("#lf-table"); if (!tb) return;
+  let L = null;
+  try { L = await api("/api/lift?dir=" + encodeURIComponent(dir)); } catch (e) {}
+  const teams = L && L.teams ? Object.keys(L.teams) : [];
+  if (!teams.length) {
+    $("#lf-note").textContent = "no `apex: lift census` lines in this infolog";
+    setHTML(tb, ""); return;
+  }
+  $("#lf-note").textContent = "";
+  setHTML(tb, teams.map(k => { const t = L.teams[k];
+    return `<tr><td>${esc(k)} <span class="dim">(${esc(t.min)}m)</span></td>` +
+      L.keys.map(c => `<td>${esc(t[c])}</td>`).join("") + "</tr>"; }).join(""));
 }
 
 /* ---------- constructor crew ---------- */

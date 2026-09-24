@@ -11,6 +11,7 @@
 #include "script/RefCounter.h"
 #include "map/ThreatMap.h"
 #include "map/MapManager.h"
+#include "module/EconomyManager.h"
 #include "map/InfluenceMap.h"
 #include "scheduler/Scheduler.h"
 #include "setup/SetupManager.h"
@@ -427,6 +428,63 @@ static void CCircuitUnit_CmdReclaimUnit(CCircuitUnit* unit, CCircuitUnit* target
 	} catch (const std::exception&) {
 		// a unit killed between the script's census and this command
 	}
+}
+
+static void CCircuitUnit_CmdLoadUnit(CCircuitUnit* unit, CCircuitUnit* cargo)
+{
+	if ((unit == nullptr) || unit->IsDead() || (cargo == nullptr) || cargo->IsDead()) {
+		return;
+	}
+	try {
+		unit->GetUnit()->LoadUnits({cargo->GetUnit()}, 0, INT_MAX);
+	} catch (const std::exception&) {
+	}
+}
+
+static void CCircuitUnit_CmdUnloadAt(CCircuitUnit* unit, const AIFloat3& pos, CCircuitUnit* cargo)
+{
+	if ((unit == nullptr) || unit->IsDead() || (cargo == nullptr) || cargo->IsDead()) {
+		return;
+	}
+	try {
+		unit->GetUnit()->Unload(pos, cargo->GetUnit(), 0, INT_MAX);
+	} catch (const std::exception&) {
+	}
+}
+
+// What this unit is spending right now [per second]; a builder at zero on both
+// is doing nothing (repair spends energy only).
+static float CCircuitAI_GetResUse(CCircuitAI* circuit, CCircuitUnit* unit, bool energy)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return 0.f;
+	}
+	CEconomyManager* eco = circuit->GetEconomyManager();
+	try {
+		return unit->GetUnit()->GetResourceUse(energy ? eco->GetEnergyRes() : eco->GetMetalRes());
+	} catch (const std::exception&) {
+		return 0.f;
+	}
+}
+
+// The static half of CUnit::CanTransport (rts/Sim/Units/Unit.cpp); the game's
+// own gadgets can still refuse a lift this allows.
+static bool CCircuitDef_CanLift(const CCircuitDef* transport, const CCircuitDef* cargo)
+{
+	if ((transport == nullptr) || (cargo == nullptr)) {
+		return false;
+	}
+	springai::UnitDef* t = transport->GetDef();
+	springai::UnitDef* c = cargo->GetDef();
+	if ((t->GetTransportCapacity() <= 0) || (t->GetTransportMass() <= 0.f) || c->IsNotTransportable()) {
+		return false;
+	}
+	const int xsize = c->GetXSize();
+	if ((xsize > t->GetTransportSize() * 2) || (xsize < t->GetMinTransportSize() * 2)) {
+		return false;
+	}
+	const float mass = c->GetMass();
+	return (mass < 100000.f) && (mass >= t->GetMinTransportMass()) && (mass <= t->GetTransportMass());
 }
 
 // apex: the Brain's nuke director. Attack-ground is a netted order (safe);
@@ -1908,6 +1966,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdMoveTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdMoveTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdGuard(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdGuard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdReclaimUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdReclaimUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdLoadUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdLoadUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdUnloadAt(const AIFloat3& in, CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdUnloadAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "bool CanLift(const CCircuitDef@) const", asFUNCTION(CCircuitDef_CanLift), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetResUse(CCircuitUnit@, bool)", asFUNCTION(CCircuitAI_GetResUse), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetFacing()", asFUNCTION(CCircuitUnit_GetFacing), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetStockpile()", asFUNCTION(CCircuitUnit_GetStockpile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

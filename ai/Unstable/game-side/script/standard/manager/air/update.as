@@ -11,6 +11,8 @@ bool HoldsUnit(CCircuitUnit@ unit)
 {
 	ResolveDefs();
 	const int id = unit.circuitDef.id;
+	if (Market::LiftHolds(unit))
+		return true;
 	if (IsLookDef(id) && (AtomicLookHolds(unit) || LookDispatch(unit)))
 		return true;
 	// A fighter on cover keeps its guard order; CoverWatch sends it home.

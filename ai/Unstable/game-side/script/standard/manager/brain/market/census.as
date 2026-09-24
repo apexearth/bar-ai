@@ -434,6 +434,8 @@ array<float> gOwnNanoReach;
 array<float> gOwnNanoBP;
 // The handles, for the retirement market: the other three are read by position.
 array<CCircuitUnit@> gOwnNano;
+// Last frame the turret was seen spending anything (lift.as samples it).
+array<int> gOwnNanoWorkAt;
 
 // THE TURRET CENSUS, BUCKETED. NanoLatheReaching and RingBPAt walked every
 // standing turret, and Requests::Take asks NanoFed once per live request, so
@@ -441,7 +443,7 @@ array<CCircuitUnit@> gOwnNano;
 // cluster of 217. Same discipline as the commitment ledger: a death removes by
 // index and shifts everything after it, so the grid is thrown away and the next
 // query rebuilds it; a new turret appends, which shifts nothing and goes in
-// directly. A turret never moves, so nothing else can invalidate it.
+// directly. A turret moves only by air (lift.as), which drops the grid too.
 Grid::Cells gNanoGrid;
 bool gNanoGridDirty = true;
 uint gNanoGridN = 0;
@@ -531,6 +533,7 @@ void NoteFarm(CCircuitUnit@ unit)
 	gOwnNanoReach.insertLast(Catalog::gBuildDist[d]);
 	gOwnNanoBP.insertLast(Catalog::gBuildPower[d]);
 	gOwnNano.insertLast(unit);
+	gOwnNanoWorkAt.insertLast(ai.frame);
 	NanoGridAppend();
 	if (gFarmSet)
 		return;
@@ -603,6 +606,8 @@ void NoteDead(CCircuitUnit@ unit)
 				gOwnNanoBP.removeAt(nn);
 			if (nn < gOwnNano.length())
 				gOwnNano.removeAt(nn);
+			if (nn < gOwnNanoWorkAt.length())
+				gOwnNanoWorkAt.removeAt(nn);
 			NanoGridDrop();
 			NanoSentDrop(unit);
 			break;

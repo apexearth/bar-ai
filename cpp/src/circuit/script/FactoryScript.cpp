@@ -50,6 +50,7 @@ CFactoryScript::CFactoryScript(CScriptManager* scr, CFactoryManager* mgr)
 	r = engine->RegisterObjectMethod("CFactoryManager", "CCircuitDef@ GetRoleDef(const CCircuitDef@, Type)", asMETHOD(CFactoryManager, GetRoleDef), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CFactoryManager", "int GetFactoryCount()", asMETHOD(CFactoryManager, GetFactoryCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CFactoryManager", "bool isAssistRequired", asOFFSET(CFactoryManager, isAssistRequired)); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CFactoryManager", "void UnitRelocated(CCircuitUnit@, const AIFloat3& in)", asMETHOD(CFactoryManager, UnitRelocated), asCALL_THISCALL); ASSERT(r >= 0);
 }
 
 CFactoryScript::~CFactoryScript()

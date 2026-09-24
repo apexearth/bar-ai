@@ -49,6 +49,7 @@
 #include "market/want_super.as"     // the strategic Want: gantry, silo, anti-nuke, big guns
 #include "market/want_assist.as"    // the assist Want
 #include "market/want_reclaim.as"   // the obsolete-reclaim Want
+#include "market/lift.as"           // idle turrets flown to the short line
 #include "market/safety.as"        // commander self-preservation, ahead of the auction
 #include "market/eta.as"            // the economy-only ETA target and its ladder
 #include "market/roles.as"          // constructor roles: the split of need, who holds which

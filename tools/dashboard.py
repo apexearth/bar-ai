@@ -433,6 +433,30 @@ def front_towers(d):
     return {"keys": FRONTTOWER_KEYS, "teams": teams}
 
 
+LIFT_RE = re.compile(
+    r"\[f=(\d+)\].*apex: lift census t=(\d+) turrets=(\d+) idle60=(\d+) "
+    r"fleet=(\d+) moved=(\d+) aborted=(\d+) lost=(\d+)")
+LIFT_KEYS = ["turrets", "idle60", "fleet", "moved", "aborted", "lost"]
+
+
+def lift(d):
+    """Construction turrets flown by air transport to the line short of lathe (lift.as)."""
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: lift census " not in line:
+                continue
+            m = LIFT_RE.search(line)
+            if not m:
+                continue
+            teams[m.group(2)] = {"min": round(int(m.group(1)) / 1800.0, 1),
+                                 **{k: int(m.group(3 + i)) for i, k in enumerate(LIFT_KEYS)}}
+    return {"keys": LIFT_KEYS, "teams": teams}
+
+
 # Cumulative metal by destination, straight from dev_stats_export's exclusive
 # buckets. Runs from before those fields existed simply read zero everywhere,
 # which is what an absent counter should look like.
@@ -1377,6 +1401,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(crew_roles(safe_run_dir(q["dir"])))
             elif u.path == "/api/fronttowers":
                 self.send_json(front_towers(safe_run_dir(q["dir"])))
+            elif u.path == "/api/lift":
+                self.send_json(lift(safe_run_dir(q["dir"])))
             elif u.path == "/api/facsupport":
                 self.send_json(factory_support(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":

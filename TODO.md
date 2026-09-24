@@ -354,24 +354,20 @@ highest legal ground within 600 elmos of the gate site. Unmeasured -- no LRPC
 went up in the 32-minute test games.
 
 
-## Air-lift idle nano turrets to the factory that needs them
+## Air-lift turrets: what is still unbuilt
 
-apexearth 2026-09-18, after a game where three gantries stood with a handful
-of turrets each while ~130 turrets served T1 plants: turrets that have had
-nothing to do for a while get picked up by air transports and set down beside
-a line short of hands. The game allows it -- a Construction Turret is
-`cantbetransported = false`, mass 700, and a Stork lifts 750 -- but the DLL
-has no transport logic at all (`CircuitDef.h`: "Not implemented: mine,
-transport"): a transport role, a load/carry/unload task, script bindings and
-Stork production would all be new C++. Held until the siting law (09-18:
-`LineSiteFor`, turrets to the line furthest short of its ceiling share net of
-the lathe already on it) is measured: if new turrets land at the gantry, the
-old ones at the T1 plants are the only case left, and reclaiming them (full
-metal back) beside the line that needs them is the cheaper move.
-
-Asked again 2026-09-24, wider: transports that move turrets "around the base"
-to wherever they are needed, not only to a short line -- raised while ruling
-that a gantry over the build-power share must still get its turrets.
+apexearth 2026-09-18 and 09-24: idle turrets flown by transport to where they
+are needed "around the base"; also transports that free a stuck unit. Built
+2026-09-24 (`market/lift.as`, DLL `CmdLoadUnit`/`CmdUnloadAt`/`CanLift`/
+`GetResUse`/`UnitRelocated`): idle turrets to the working line furthest short
+(`LineSiteFor`) only. Still unbuilt:
+- other destinations -- a big frame being built (the nano-sink sites
+  execute.as already scores), the held front line (`WallSupportSlot`);
+- the stuck unit: `UnitMoveFailed` reaches the DLL, nothing asks for a lift;
+- more than one transport per turret class (`LiftGainFor` prices a second
+  plane at zero while one that fits stands);
+- BAR's `unit_transportable_nanos.lua` refuses a lift of an ALLY's turret,
+  so in team games each seat only moves its own.
 
 ## Do not marry the starting point
 
