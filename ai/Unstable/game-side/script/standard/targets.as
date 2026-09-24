@@ -108,7 +108,7 @@ float At(const array<float>& in curve, float income)
 
 float At(const array<float>& in curve)
 {
-	return At(curve, aiEconomyMgr.metal.income);
+	return At(curve, Eco::MInc());
 }
 
 }  // namespace Targets

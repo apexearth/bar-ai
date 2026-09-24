@@ -1682,7 +1682,7 @@ const float TUNE_T2_ARMY_FLOOR = 0.f;
 //   never consults the budget at all, so every metal the other categories fail
 //   to absorb becomes army regardless of the army target, and the corrector
 //   can only ever amplify the starved side. See docs/27.
-const float TUNE_ARMY_RICH_BALANCE = 1.f;
+const float TUNE_ARMY_RICH_BALANCE = 0.f;
 const float TUNE_BUDGET_AFTER = 1.f;
 const float TUNE_RETREAT_SCALE = 1.f;
 const float TUNE_ETA_COMMIT_BONUS = 0.f;

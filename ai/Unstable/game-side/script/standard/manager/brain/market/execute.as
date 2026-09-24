@@ -550,8 +550,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// metal"): a live build site competes under the same bar as the
 		// lines -- free flow less the lathe already on it. Bank-gated -- at an empty bank the lathe already outruns
 		// income and pre-positioning BP at a sink serves nothing.
-		const float mSt = aiEconomyMgr.metal.storage;
-		if ((w.spotId != NS_FLOOR) && (mSt > 1.f) && (aiEconomyMgr.metal.current > mSt
+		const float mSt = Eco::MStor();
+		if ((w.spotId != NS_FLOOR) && (mSt > 1.f) && (Eco::MCur() > mSt
 				* ai.GetTunable("apex_nano_sink_bank", TUNE_NANO_SINK_BANK))) {
 			// Same hoist as the want side: one free-flow read for the walk.
 			const float skFeed = FreeMetalFlow()
@@ -751,8 +751,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// the next askers; the ring bearings keep them off each other's
 		// ground. No cap: the bank is the bound and surplus refills it.
 		if (nFirst !is null) {
-			const float bankN = aiEconomyMgr.metal.current;
-			if (aiEconomyMgr.metal.income > aiEconomyMgr.metal.pull) {
+			const float bankN = Eco::MCur();
+			if (Eco::MInc() > Eco::MPull()) {
 				const float perM = Catalog::gCostM[int(w.def.id)];
 				int wantN = int((bankN / ((perM > 1.f) ? perM : 200.f)) + 0.5f);
 				wantN -= int(Requests::InFlight(w.def));
@@ -908,7 +908,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			if ((Catalog::gCostM[gd] >= 2500.f) && (Catalog::gMakeE[gd] >= 400.f))
 				gBill += Catalog::gCostM[gd];
 		}
-		if (aiEconomyMgr.metal.current < gBill)
+		if (Eco::MCur() < gBill)
 			par = false;
 	}
 	bool crtd = false;
@@ -988,7 +988,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// ladder handed a 5,000-E advanced solar to a builder whose solar was
 		// at its cap, at 57 e/s, and the fleet folded onto it for three
 		// minutes with the bank at 4-22.
-		const bool zeroOnly = aiEconomyMgr.energy.income
+		const bool zeroOnly = Eco::EInc()
 				< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E);
 		for (uint pass = 0; pass < 2; ++pass) {
 		for (uint k = 0; k < gEAlt.length(); ++k) {

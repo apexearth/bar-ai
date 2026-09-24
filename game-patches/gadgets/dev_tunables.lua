@@ -86,6 +86,7 @@ local NAMES = {
 	"apex_medic_frac",
 	"apex_auction_diag",
 	"apex_efloor_diag",
+	"apex_wanttest",
 	"apex_task_trace",
 	"apex_eco_only",
 	"apex_comm_rules",

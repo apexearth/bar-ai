@@ -223,7 +223,7 @@ float Throughput(int n)
 
 int ScaledBombers()
 {
-	const int extra = int(aiEconomyMgr.metal.income * Persona::AirEagerness()
+	const int extra = int(Eco::MInc() * Persona::AirEagerness()
 			/ AIR_SCALE_INCOME);
 	const int want = AIR_BOMBERS + extra;
 	// AA RAISES THE MASS NEEDED, it does not forbid the raid: enough bombers

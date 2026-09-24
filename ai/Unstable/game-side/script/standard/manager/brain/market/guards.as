@@ -453,9 +453,9 @@ bool MetalPathStarved()
 	}
 	if (!unlock)
 		return false;
-	const float mInc = aiEconomyMgr.metal.income;
-	const float mPull = aiEconomyMgr.metal.pull;
-	const float mCur = aiEconomyMgr.metal.current;
+	const float mInc = Eco::MInc();
+	const float mPull = Eco::MPull();
+	const float mCur = Eco::MCur();
 	const float h = EGenBuildSeconds();
 	const float share = (mPull > 0.01f) ? ((mInc + mCur / ((h > 1.f) ? h : 1.f)) / mPull) : 9.f;
 	gMetalPathVal = (share < 1.f);
@@ -505,12 +505,12 @@ bool HardEStall()
 
 bool HardEStallNow()
 {
-	const float eInc = aiEconomyMgr.energy.income;
-	const float eCur = aiEconomyMgr.energy.current;
-	const float eStore = aiEconomyMgr.energy.storage;
+	const float eInc = Eco::EInc();
+	const float eCur = Eco::ECur();
+	const float eStore = Eco::EStor();
 	if (eStore <= 1.f)
 		return false;
-	const float ePull = aiEconomyMgr.energy.pull;
+	const float ePull = Eco::EPull();
 	const float sec = EGenBuildSeconds();
 	// ENERGY STALLS ONLY WHEN IT IS THE TIGHTER FEED. A lathe runs at the
 	// smaller of the two feed shares, so with the metal bank also dry more
@@ -518,11 +518,11 @@ bool HardEStallNow()
 	// 30.7 asked with 20 banked, energy 191 against 412, and every builder
 	// hoisted onto solars the metal could not pay for while 27 spots stood open.
 	{
-		const float mInc = aiEconomyMgr.metal.income;
-		const float mPull = aiEconomyMgr.metal.pull;
+		const float mInc = Eco::MInc();
+		const float mPull = Eco::MPull();
 		const float h = (sec > 1.f) ? sec : 1.f;
 		if ((mPull > 0.01f) && (ePull > 0.01f)) {
-			const float mShare = (mInc + aiEconomyMgr.metal.current / h) / mPull;
+			const float mShare = (mInc + Eco::MCur() / h) / mPull;
 			const float eShare = (eInc + eCur / h) / ePull;
 			if ((mShare < 1.f) && (mShare < eShare))
 				return false;

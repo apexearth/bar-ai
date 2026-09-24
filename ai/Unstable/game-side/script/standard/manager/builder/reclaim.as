@@ -385,8 +385,8 @@ bool PreferReclaim()
 	// of this bot's tile.
 	if (LosingNow())
 		return true;
-	return aiEconomyMgr.metal.current
-	     < aiEconomyMgr.metal.storage * REZ_METAL_FLOOR;
+	return Eco::MCur()
+	     < Eco::MStor() * REZ_METAL_FLOOR;
 }
 
 }  // namespace Builder

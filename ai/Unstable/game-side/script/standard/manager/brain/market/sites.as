@@ -157,8 +157,8 @@ bool NearSpot(const AIFloat3& in p)
 // anywhere -- marginal BP at a fed site is worth zero.
 float FreeMetalFlow()
 {
-	const float free = (aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull)
-			+ aiEconomyMgr.metal.current / 60.f;
+	const float free = (Eco::MInc() - Eco::MPull())
+			+ Eco::MCur() / 60.f;
 	return (free > 0.f) ? free : 0.f;
 }
 
@@ -1662,9 +1662,9 @@ float LowerLinesEat(CCircuitUnit@ f, const AIFloat3& in fp)
 // exceed it.
 float MetalMoved()
 {
-	const float have = aiEconomyMgr.metal.income
-			+ aiEconomyMgr.metal.current / 60.f;
-	const float want = aiEconomyMgr.metal.pull;
+	const float have = Eco::MInc()
+			+ Eco::MCur() / 60.f;
+	const float want = Eco::MPull();
 	return (want < have) ? want : have;
 }
 

@@ -920,15 +920,15 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	const float ePM = EPrice();
 	// Converters are the elastic sink (see eFree below): they pull whatever
 	// is spare, so pull with them in reads ~income by construction.
-	const bool eShort = (aiEconomyMgr.energy.pull - ConvUseE())
+	const bool eShort = (Eco::EPull() - ConvUseE())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
-			> aiEconomyMgr.energy.income;
+			> Eco::EInc();
 	const float wageR = Wage();
 	// Converters are an elastic sink, not demand -- they are sized against
 	// income by construction, so counting their chew as pull makes a
 	// structural surplus read as fully spent while excess energy piles up.
-	const float eFree = aiEconomyMgr.energy.income
-			- (aiEconomyMgr.energy.pull - ConvUseE());
+	const float eFree = Eco::EInc()
+			- (Eco::EPull() - ConvUseE());
 	CCircuitUnit@ best = null;
 	int bestDef = -1;
 	float bestValue = 0.f;
@@ -1333,10 +1333,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			// under half and income not covering pull. A tier successor still
 			// retires its predecessor whatever the bank says.
 			if (covered && !succeeded) {
-				const float st3 = aiEconomyMgr.metal.storage;
+				const float st3 = Eco::MStor();
 				const bool squeezed = (st3 > 1.f)
-					&& (aiEconomyMgr.metal.current < 0.5f * st3)
-					&& (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull);
+					&& (Eco::MCur() < 0.5f * st3)
+					&& (Eco::MInc() <= Eco::MPull());
 				if (!squeezed || RecentCopyWaiver(fd))
 					covered = false;
 			}

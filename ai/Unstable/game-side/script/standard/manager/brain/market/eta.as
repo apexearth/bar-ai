@@ -372,11 +372,11 @@ float StepSec(int d, float cost, float P, float bank, float bp, float eAvail)
 // energy cost in seconds.
 float EtaEnergyAvail()
 {
-	float e = aiEconomyMgr.energy.income + EMakeInFlight();
+	float e = Eco::EInc() + EMakeInFlight();
 	if (e < 0.f)
 		e = 0.f;
 	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-	e += aiEconomyMgr.energy.current / ((look > 1.f) ? look : 30.f);
+	e += Eco::ECur() / ((look > 1.f) ? look : 30.f);
 	return (e > 1.f) ? e : 1.f;
 }
 
@@ -578,7 +578,7 @@ float EtaWithN(int d, float gainM, float addBP, bool tech, int k, float firstBP)
 	if (P < 0.5f)
 		P = 0.5f;
 	const float target = P * ETA_TARGET_MUL;
-	float bank = aiEconomyMgr.metal.current;
+	float bank = Eco::MCur();
 	float bp = EffBP(0.f);
 	if (bp < 1.f)
 		bp = 1.f;
@@ -760,7 +760,7 @@ bool OverflowBuysHands()
 {
 	if (!EtaOn())
 		return false;
-	return BPCapacity() < aiEconomyMgr.metal.income;
+	return BPCapacity() < Eco::MInc();
 }
 
 // THE SHARE OF OUR INCOME NOTHING IS SPENDING.
@@ -781,10 +781,10 @@ float SlackFrac()
 {
 	if (ai.frame - gSlackAt >= SECOND) {
 		gSlackAt = ai.frame;
-		const float inc = aiEconomyMgr.metal.income;
+		const float inc = Eco::MInc();
 		float f = 0.f;
 		if (inc > 0.1f) {
-			const float slack = inc - aiEconomyMgr.metal.pull;
+			const float slack = inc - Eco::MPull();
 			if (slack > 0.f)
 				f = slack / inc;
 		}

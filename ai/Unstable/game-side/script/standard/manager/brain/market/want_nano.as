@@ -306,7 +306,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
 			+ " floor=" + floorShort
 			+ " over=" + formatFloat(over, "", 0, 1)
-			+ " bank=" + int(aiEconomyMgr.metal.current) + "/" + int(aiEconomyMgr.metal.storage));
+			+ " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
 	}
 	if (over <= 0.5f)
 		return w;
@@ -366,8 +366,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		{
 			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity();
 			if (askE > 1.f) {
-				const float spare = aiEconomyMgr.energy.income + EMakeInFlight()
-						- aiEconomyMgr.energy.pull;
+				const float spare = Eco::EInc() + EMakeInFlight()
+						- Eco::EPull();
 				gainN *= (spare <= 0.f) ? 0.f : ((spare < askE) ? (spare / askE) : 1.f);
 			}
 		}

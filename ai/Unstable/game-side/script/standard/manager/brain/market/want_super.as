@@ -162,7 +162,7 @@ float SuperBill(int d)
 float SuperBudget()
 {
 	TrackIncome();
-	const float inc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+	const float inc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 	const float sec = ai.GetTunable("apex_super_afford_s", TUNE_SUPER_AFFORD_S);
 	return inc * ((sec > 1.f) ? sec : 60.f);
 }
@@ -175,7 +175,7 @@ float SuperBudget()
 int SuperTarget(int sc)
 {
 	TrackIncome();
-	const float inc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+	const float inc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 	float per = ai.GetTunable("apex_super_per_income", TUNE_SUPER_PER_INCOME);
 	if (per < 1.f)
 		per = 150.f;
@@ -377,7 +377,7 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 	// stockpile, and the base under it is the whole game.
 	if (OnMap(core)) {
 		TrackIncome();
-		const float inc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+		const float inc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 		int depth = 1 + int(inc / 400.f);
 		if (depth > 3)
 			depth = 3;
@@ -538,7 +538,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// its own horizon -- the per-player budget needed ~155 m/s EACH,
 		// which a 4v4 sharing 400 never reaches (measured same day: first
 		// corgant election 27.8-28.6 min, gain 6-9.5, none ever finished).
-		float teamInc = (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+		float teamInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 		float classBudget = budget;
 		if (sc == SC_GANTRY) {
 			if (AdvPlantInFlight() && !WealthWaiver()) {
@@ -551,7 +551,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// at 400m/s to making it at 80m/s - it is too early now" -- the
 			// gate is the FULL anchor, his original "we can have a gantry
 			// at like 100 m/s".
-			if (((gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income)
+			if (((gIncEma > 0.f) ? gIncEma : Eco::MInc())
 				< ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC))
 				continue;
 			// The NET lane: teammates' reclaim feasts do not license it.
@@ -573,7 +573,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			if (Brain::EnemyNukeSilos() <= 0) {
 				TrackIncome();
 				const float incNow = (gIncEma > 0.f)
-						? gIncEma : aiEconomyMgr.metal.income;
+						? gIncEma : Eco::MInc();
 				if (incNow < Policy::AntinukeIncome())
 					continue;
 			}
@@ -628,7 +628,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			// at 80m/s - it is too early now"). The team purse still decides
 			// affordability above; the host's economy sizes the urgency.
 			const float insure = ((gIncEma > 0.f)
-						? gIncEma : aiEconomyMgr.metal.income)
+						? gIncEma : Eco::MInc())
 					* ai.GetTunable("apex_gantry_insure", TUNE_GANTRY_INSURE)
 					* afford * Persona::WantMult(SuperName(sc));
 			if (insure > gain)
@@ -759,7 +759,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			+ " bill=" + int(SuperBill(int(w.def.id)))
 			+ " budget=" + int((w.spotId == SC_GANTRY)
 				? (Military::TeamSum(Military::TV_MINC_NET,
-						aiEconomyMgr.metal.income)
+						Eco::MInc())
 					* ai.GetTunable("apex_gantry_afford_s", TUNE_GANTRY_AFFORD_S))
 				: budget)
 			+ " have=" + SuperHave(w.spotId) + "/" + SuperTarget(w.spotId)

@@ -102,7 +102,7 @@ int MemoTtl()
 int MemoTtlMex()
 {
 	const float spot = SpotM() * IncomeMult();
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	const float n = (spot > 0.f) ? (inc / spot) : 1.f;
 	return MemoTtl() * int((n > 1.f) ? n : 1.f);
 }
@@ -1043,6 +1043,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 {
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
 		return null;
+	WantTestOffer(unit);
 	gElecCallUs = 0.0;
 	// A unit whose task keeps dying young re-enters every frame; 2s per
 	// unit caps the global decide rate without touching legit elections
@@ -1490,7 +1491,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			+ " hard=" + (HardEStall() ? 1 : 0)
 			+ " deficit=" + int(EnergyDeficitE())
 			+ " mFull=" + (aiEconomyMgr.isMetalFull ? 1 : 0)
-			+ " eInc=" + int(aiEconomyMgr.energy.income)
+			+ " eInc=" + int(Eco::EInc())
 			+ " ranked=" + ranked.length());
 	}
 	// AFFORDABILITY IS THE WHOLE TEST FOR A STRATEGIC BUILD. apexearth: "it is

@@ -46,7 +46,7 @@ void PrTuneFill()
 float Wage()
 {
 	const int workers = int(aiBuilderMgr.GetWorkerCount());
-	return aiEconomyMgr.metal.income / float(workers < 1 ? 1 : workers);
+	return Eco::MInc() / float(workers < 1 ? 1 : workers);
 }
 
 // WHAT A SECOND OF THIS BUILDER'S WALK COSTS. apexearth 2026-09-02, watching
@@ -117,7 +117,7 @@ void TrackEPull()
 {
 	if (ai.frame < gEPullPrevAt + 5 * SECOND)
 		return;
-	const float pull = aiEconomyMgr.energy.pull;
+	const float pull = Eco::EPull();
 	if (gEPullPrev >= 0.f) {
 		const float dt = float(ai.frame - gEPullPrevAt) / float(SECOND);
 		const float g = (pull - gEPullPrev) / ((dt > 1.f) ? dt : 1.f);
@@ -128,7 +128,7 @@ void TrackEPull()
 	// Slow EMA of the E surplus: converters must price the DURABLE surplus,
 	// not a spike (a T1 converter outbidding a mex walk, watched -- the
 	// third appearance of the temporal-consistency law).
-	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	const float sur = Eco::EInc() - Eco::EPull();
 	gESurplusEma = 0.9f * gESurplusEma + 0.1f * ((sur > 0.f) ? sur : 0.f);
 	// ...AND WHAT IS ACTUALLY THROWN AWAY. Pull spikes with every build
 	// burst, so income - pull read 3-33 E/s while the engine's own excess
@@ -143,7 +143,7 @@ void TrackEPull()
 	// the next. Rises instantly, decays slowly, so a lull does not erase what
 	// the fleet was drawing a minute ago. Converters are excluded: they are
 	// the sink for what nothing else wants, not a consumer to supply.
-	const float dem = aiEconomyMgr.energy.pull - ConvUseE();
+	const float dem = Eco::EPull() - ConvUseE();
 	const float d0 = (dem > 0.f) ? dem : 0.f;
 	gEDemandPk = (d0 > gEDemandPk) ? d0 : (0.97f * gEDemandPk + 0.03f * d0);
 }
@@ -158,7 +158,7 @@ void TrackMPull()
 {
 	if (ai.frame < gMPullPrevAt + 5 * SECOND)
 		return;
-	const float pull = aiEconomyMgr.metal.pull;
+	const float pull = Eco::MPull();
 	if (gMPullPrev >= 0.f) {
 		const float dt = float(ai.frame - gMPullPrevAt) / float(SECOND);
 		const float g = (pull - gMPullPrev) / ((dt > 1.f) ? dt : 1.f);
@@ -232,15 +232,15 @@ float EPriceFloor()
 			+ " owned=" + ((best > 0.f) ? 1 : 0)
 			+ " bp=" + formatFloat(bp, "", 0, 0)
 			+ " wage=" + formatFloat(wage, "", 0, 2)
-			+ " eInc=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 0)
-			+ " ePull=" + formatFloat(aiEconomyMgr.energy.pull, "", 0, 0)
+			+ " eInc=" + formatFloat(Eco::EInc(), "", 0, 0)
+			+ " ePull=" + formatFloat(Eco::EPull(), "", 0, 0)
 			+ " convUse=" + formatFloat(ConvUseE(), "", 0, 0)
 			+ " convCap=" + formatFloat(ConvCapE(), "", 0, 0)
 			+ " realize=" + formatFloat(ERealizeShare(20.f, 30.f), "", 0, 2)
 			+ " fleetAsk=" + formatFloat(FleetAskE(), "", 0, 0)
 			+ " bpCap=" + formatFloat(BPCapacity(), "", 0, 1)
-			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
-			+ " mCur=" + formatFloat(aiEconomyMgr.metal.current, "", 0, 0));
+			+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1)
+			+ " mCur=" + formatFloat(Eco::MCur(), "", 0, 0));
 	}
 	return gEPriceFloor;
 }
@@ -261,7 +261,7 @@ float EPrice()
 	// Supply is income plus the generation already ORDERED, or the demand
 	// side's foresight is one-eyed: measured, a wind priced at 0.50 with the
 	// bank full and 359 e/s on the way, and five winds went up in one burst.
-	const float eInc = aiEconomyMgr.energy.income + EMakeInFlight();
+	const float eInc = Eco::EInc() + EMakeInFlight();
 	// Anticipation (apexearth 2026-08-23: "we need to anticipate our coming
 	// lack of energy a little better"): price against where pull is HEADED
 	// within the lookahead, not where it is.
@@ -272,7 +272,7 @@ float EPrice()
 	// ...and the lines about to run (ECostSpot already counts them; the gain
 	// side did not, so a lab under construction raised the E bill of every
 	// build and the worth of no generator).
-	float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
+	float ePull = Eco::EPull() + EDrainInFlight() + LineDrainE();
 	if (gEPullGrowth > 0.f)
 		ePull += gEPullGrowth * gPrELookahead;
 	// Supply LEADS demand (apexearth 2026-08-23: "we shouldn't even let
@@ -291,8 +291,8 @@ float EPrice()
 		excess = 2.f;
 	if (excess < 0.f)
 		excess = 0.f;
-	const float eCur = aiEconomyMgr.energy.current;
-	const float eStore = aiEconomyMgr.energy.storage;
+	const float eCur = Eco::ECur();
+	const float eStore = Eco::EStor();
 	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
 		excess = 1.f;
 	// A genuine stall throttles the fleet's whole SPENDING flow -- the
@@ -310,7 +310,7 @@ float EPrice()
 	float flow = BPCapacity();
 	{
 		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
-		const float feed = aiEconomyMgr.metal.income + aiEconomyMgr.metal.current / look;
+		const float feed = Eco::MInc() + Eco::MCur() / look;
 		if (flow > feed)
 			flow = feed;
 	}
@@ -326,15 +326,15 @@ float EPrice()
 float ECostSpot()
 {
 	PrTuneFill();
-	const float eInc = aiEconomyMgr.energy.income + EMakeInFlight();
-	const float ePull = aiEconomyMgr.energy.pull + EDrainInFlight() + LineDrainE();
+	const float eInc = Eco::EInc() + EMakeInFlight();
+	const float ePull = Eco::EPull() + EDrainInFlight() + LineDrainE();
 	float excess = (eInc > 0.01f) ? (ePull / eInc - 1.f) : 2.f;
 	if (excess > 2.f)
 		excess = 2.f;
 	if (excess < 0.f)
 		excess = 0.f;
-	const float eCur = aiEconomyMgr.energy.current;
-	const float eStore = aiEconomyMgr.energy.storage;
+	const float eCur = Eco::ECur();
+	const float eStore = Eco::EStor();
 	if ((eStore > 1.f) && (eCur < 0.25f * eStore) && (excess < 1.f))
 		excess = 1.f;
 	// The same derivation and the same flow as EPrice: spending E throttles
@@ -343,7 +343,7 @@ float ECostSpot()
 	float flow = BPCapacity();
 	{
 		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
-		const float feed = aiEconomyMgr.metal.income + aiEconomyMgr.metal.current / look;
+		const float feed = Eco::MInc() + Eco::MCur() / look;
 		if (flow > feed)
 			flow = feed;
 	}
@@ -383,9 +383,9 @@ float EPriceCostAt(float buildSec, float costE)
 	bool eBill = gPrEBillOn && (costE > 0.f) && (buildSec > 1.f);
 	if (eBill && !HardEStall()) {
 		const float drain = costE / buildSec;
-		const float over = (aiEconomyMgr.energy.pull + EDrainInFlight() + drain)
-				- aiEconomyMgr.energy.income - EMakeInFlight();
-		eBill = (over > 0.f) && (over * buildSec > aiEconomyMgr.energy.current);
+		const float over = (Eco::EPull() + EDrainInFlight() + drain)
+				- Eco::EInc() - EMakeInFlight();
+		eBill = (over > 0.f) && (over * buildSec > Eco::ECur());
 	}
 	// Forgiven only when the build does NOT drain the bank and income also
 	// covers the lines about to run. Forgiven on the full bank alone, three
@@ -396,14 +396,14 @@ float EPriceCostAt(float buildSec, float costE)
 	// priced below the overflow it would eat (gate game, 19 min of waste).
 	// Energy neither stored nor used has no price.
 	if (!eBill) {
-		const float spare = aiEconomyMgr.energy.income + EMakeInFlight()
-				- aiEconomyMgr.energy.pull - LineDrainE();
+		const float spare = Eco::EInc() + EMakeInFlight()
+				- Eco::EPull() - LineDrainE();
 		const float drain = (buildSec > 1.f) ? (costE / buildSec) : costE;
 		if ((aiEconomyMgr.isEnergyFull && (spare > 0.f)) || (spare >= drain))
 			return 0.f;
 	}
 	if (eBill) {
-		const float eInc = aiEconomyMgr.energy.income;
+		const float eInc = Eco::EInc();
 		const float drain = costE / buildSec;
 		k = (eInc > 0.01f) ? (drain / eInc) : 1.f;
 	} else {
@@ -434,7 +434,7 @@ float ERealizeShare(float addE, float buildSec)
 	if (!gPrERealizeOn)
 		return 1.f;
 	TrackEPull();
-	float demand = aiEconomyMgr.energy.pull - ConvUseE();
+	float demand = Eco::EPull() - ConvUseE();
 	if (demand < gEDemandPk)
 		demand = gEDemandPk;
 	if (demand < 0.f)
@@ -452,7 +452,7 @@ float ERealizeShare(float addE, float buildSec)
 	float fill = 0.f;
 	{
 		const float look = gPrELookahead;
-		const float bankRoom = aiEconomyMgr.energy.storage - aiEconomyMgr.energy.current;
+		const float bankRoom = Eco::EStor() - Eco::ECur();
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
@@ -479,7 +479,7 @@ float ERealizeShare(float addE, float buildSec)
 	// floor, never quite zero.
 	float floorShare = gPrEWasteWorth;
 	{
-		const float wasteE = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+		const float wasteE = Eco::EInc() - Eco::EPull();
 		if (wasteE > 1.f) {
 			float follow = ConvCapInFlight() / wasteE;
 			if (follow > 1.f)
@@ -489,7 +489,7 @@ float ERealizeShare(float addE, float buildSec)
 				floorShare = 0.02f;
 		}
 	}
-	const float room = target - aiEconomyMgr.energy.income - EMakeInFlight();
+	const float room = target - Eco::EInc() - EMakeInFlight();
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addE) ? (room / addE) : 1.f);
 	if (share < floorShare)
@@ -518,10 +518,10 @@ float MRealizeShare(float addM, float buildSec)
 	// measured, share=0.250 on the first sample of a fresh game. A resource
 	// that is not flowing yet cannot be spilling; the peak-held demand covers
 	// every later lull on its own.
-	if (aiEconomyMgr.metal.income <= 0.f)
+	if (Eco::MInc() <= 0.f)
 		return 1.f;
 	TrackMPull();
-	float demand = aiEconomyMgr.metal.pull;
+	float demand = Eco::MPull();
 	if (demand < gMDemandPk)
 		demand = gMDemandPk;
 	if (demand < 0.f)
@@ -535,7 +535,7 @@ float MRealizeShare(float addM, float buildSec)
 	float fill = 0.f;
 	{
 		const float look = gPrELookahead;
-		const float bankRoom = aiEconomyMgr.metal.storage - aiEconomyMgr.metal.current;
+		const float bankRoom = Eco::MStor() - Eco::MCur();
 		if ((bankRoom > 0.f) && (look > 1.f))
 			fill = bankRoom / look;
 	}
@@ -544,23 +544,23 @@ float MRealizeShare(float addM, float buildSec)
 	// a spot claimed now is still ours when it does. The band loses the wait,
 	// not the metal.
 	const float floorShare = gPrMWasteWorth;
-	const float room = target - aiEconomyMgr.metal.income;
+	const float room = target - Eco::MInc();
 	float share = (room <= 0.f) ? 0.f
 			: ((room < addM) ? (room / addM) : 1.f);
 	if (share < floorShare)
 		share = floorShare;
 	if (ai.frame >= gMRealLogAt) {
 		gMRealLogAt = ai.frame + 30 * SECOND;
-		const float mst = aiEconomyMgr.metal.storage;
+		const float mst = Eco::MStor();
 		AiLog("apex: mrealize t=" + ai.teamId
 			+ " share=" + formatFloat(share, "", 0, 3)
 			+ " addM=" + formatFloat(addM, "", 0, 2)
-			+ " mInc=" + int(aiEconomyMgr.metal.income)
-			+ " mPull=" + int(aiEconomyMgr.metal.pull)
+			+ " mInc=" + int(Eco::MInc())
+			+ " mPull=" + int(Eco::MPull())
 			+ " pk=" + int(gMDemandPk)
 			+ " growth=" + formatFloat(gMPullGrowth, "", 0, 2)
 			+ " target=" + int(target)
-			+ " bank%=" + int((mst > 1.f) ? (100.f * aiEconomyMgr.metal.current / mst) : -1.f));
+			+ " bank%=" + int((mst > 1.f) ? (100.f * Eco::MCur() / mst) : -1.f));
 	}
 	return share;
 }
@@ -576,12 +576,12 @@ float EStretch(float costE, float buildSec)
 	if ((costE <= 1.f) || (buildSec <= 1.f))
 		return 1.f;
 	const float drain = costE / buildSec;
-	const float need = aiEconomyMgr.energy.pull + EDrainInFlight() + drain;
+	const float need = Eco::EPull() + EDrainInFlight() + drain;
 	// In-flight generators are not feed: their output arrives when they
 	// finish, and they finish on the same starved surplus. Counted, every
 	// crawling frame made the next one price as if it already ran.
-	const float have = aiEconomyMgr.energy.income
-			+ aiEconomyMgr.energy.current / buildSec;
+	const float have = Eco::EInc()
+			+ Eco::ECur() / buildSec;
 	if ((have <= 0.01f) || (need <= have))
 		return 1.f;
 	return need / have;
@@ -624,8 +624,8 @@ float EffBP(float builderBP)
 // keeps relative ordering by cost.
 float MCostScale()
 {
-	const float st = aiEconomyMgr.metal.storage;
-	if ((st <= 1.f) || (aiEconomyMgr.metal.income <= aiEconomyMgr.metal.pull))
+	const float st = Eco::MStor();
+	if ((st <= 1.f) || (Eco::MInc() <= Eco::MPull()))
 		return 1.f;
 	// A high bank is the integral of underpricing: forgiveness ramps in
 	// from HALF-full (watched: 3,700 banked while outnumbered -- "we
@@ -633,7 +633,7 @@ float MCostScale()
 	// NET OF WHAT IS ALREADY PROMISED. Read raw, the same full bank was handed
 	// to every claimant in the same instant and each one discounted itself
 	// against metal the others had already spoken for (see Market::MOrderedM).
-	float bank = aiEconomyMgr.metal.current - MOrderedM();
+	float bank = Eco::MCur() - MOrderedM();
 	if (bank < 0.f)
 		bank = 0.f;
 	const float frac = bank / st;
@@ -662,8 +662,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// rule anywhere -- the upgrades finish fast AND raise the feed.
 	float displacedM = 0.f;
 	{
-		const float mInc = aiEconomyMgr.metal.income;
-		const float mBank = aiEconomyMgr.metal.current;
+		const float mInc = Eco::MInc();
+		const float mBank = Eco::MCur();
 		if (mInc > 0.1f) {
 			// (An affordability multiplier of (cost+committedDebt)/cost was
 			// tried here and REVERTED same day: a debt ledger is not a
@@ -809,11 +809,11 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// lost fleet throughput -- arithmetic, not a model.
 	if ((Catalog::gCostE[defId] > 1.f) && (buildSec > 1.f)) {
 		const float wantDrain = Catalog::gCostE[defId] / buildSec;
-		const float projPull = aiEconomyMgr.energy.pull + wantDrain;
-		const float bankRate = aiEconomyMgr.energy.current / buildSec;
-		const float unfunded = projPull - aiEconomyMgr.energy.income - bankRate;
+		const float projPull = Eco::EPull() + wantDrain;
+		const float bankRate = Eco::ECur() / buildSec;
+		const float unfunded = projPull - Eco::EInc() - bankRate;
 		if ((unfunded > 0.f) && (projPull > 1.f)) {
-			w.tCost += buildSec * aiEconomyMgr.metal.pull * (unfunded / projPull);
+			w.tCost += buildSec * Eco::MPull() * (unfunded / projPull);
 		}
 	}
 	w.value = gain / (w.mCost + w.tCost);

@@ -179,8 +179,8 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	if (HardEStall()) {
 		eFeed = 0.1f;
 	} else {
-		const float eInc = aiEconomyMgr.energy.income;
-		const float ePull = aiEconomyMgr.energy.pull;
+		const float eInc = Eco::EInc();
+		const float ePull = Eco::EPull();
 		if ((ePull > 1.f) && (eInc < ePull))
 			eFeed = eInc / ePull;
 	}
@@ -312,8 +312,8 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	const int uid = int(unit.circuitDef.id);
 	float eFeed = 1.f;
 	{
-		const float eInc = aiEconomyMgr.energy.income;
-		const float ePull = aiEconomyMgr.energy.pull;
+		const float eInc = Eco::EInc();
+		const float ePull = Eco::EPull();
 		if ((ePull > 1.f) && (eInc < ePull))
 			eFeed = eInc / ePull;
 	}

@@ -215,8 +215,8 @@ uint InFlightCap()
 	// while the Isthmus mid-game stalled (minutes 12-15, pull 480-760
 	// against 380-500 made).
 	const float look = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-	const float bankFlow = aiEconomyMgr.metal.current / ((look > 1.f) ? look : 30.f);
-	const float want = (aiEconomyMgr.metal.income + bankFlow) / drain;
+	const float bankFlow = Eco::MCur() / ((look > 1.f) ? look : 30.f);
+	const float want = (Eco::MInc() + bankFlow) / drain;
 	if (want <= float(MIN_INFLIGHT))
 		return MIN_INFLIGHT;
 	return uint(want);
@@ -258,8 +258,8 @@ uint EffectiveCap(const CCircuitDef@ want)
 		// build. A bank capped by storage under one reactor's price read
 		// "not wealthy" while a thousand metal a second was thrown away
 		// (the eco seat: storage 3,400, fusion 4,500, one site forever).
-		float paid = aiEconomyMgr.metal.current;
-		const float unspent = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+		float paid = Eco::MCur();
+		const float unspent = Eco::MInc() - Eco::MPull();
 		const uint crew = ArrivalCrew(want);
 		if ((unspent > 0.f) && (crew > 0)) {
 			const float hand = Market::ConWorkerBP() * (80.f / 7.f);
@@ -406,7 +406,7 @@ bool BankCovers(const CCircuitDef@ want)
 	// sits inside MOrderedM, which only makes the test stricter -- and it
 	// relaxes again the moment the row is framed and drawing.
 	return (want !is null)
-			&& ((aiEconomyMgr.metal.current - Market::MOrderedM()) >= want.costM);
+			&& ((Eco::MCur() - Market::MOrderedM()) >= want.costM);
 }
 
 // A CREW IS BOUNDED BY ARRIVAL. Past the hands that finish the site within

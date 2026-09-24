@@ -149,7 +149,7 @@ void PublishDefence()
 	{
 		double _t = Perf::T0();
 		ai.PublishTeamValue(TV_FFENCE, float(gFenceFrontN));
-		ai.PublishTeamValue(TV_MINC, aiEconomyMgr.metal.income);
+		ai.PublishTeamValue(TV_MINC, Eco::MInc());
 		ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
 		ai.PublishTeamValue(TV_ECOSEAT, Market::EcoRoleGrowing() ? 1.f : 0.f);
 		ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());

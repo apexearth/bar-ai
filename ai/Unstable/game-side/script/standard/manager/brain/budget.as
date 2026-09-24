@@ -173,6 +173,10 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 	// hold 100% of "spend" before anything had been built.
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return;
+	// A plant is capacity to produce, not holdings: counted as build power a
+	// gantry put the row over its share and braked the turrets it needs.
+	if (usage == Unit::UseAs::FACTORY)
+		return;
 	const float m = unit.circuitDef.costM;
 	if (m <= 0.f)
 		return;
@@ -237,7 +241,7 @@ void BudgetLog()
 		+ "/" + formatFloat(BudgetMult(AIRDEF), "", 0, 2)
 		+ "/" + formatFloat(BudgetMult(ECONOMY), "", 0, 2)
 		+ "/" + formatFloat(BudgetMult(BUILDPOWER), "", 0, 2)
-		+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 2)
+		+ " inc=" + formatFloat(Eco::MInc(), "", 0, 2)
 		+ " total=" + formatFloat(gSpentTotal, "", 0, 0)
 		+ " raw=" + formatFloat(gSpent[ARMY], "", 0, 0)
 		+ "/" + formatFloat(gSpent[DEFENCE], "", 0, 0)

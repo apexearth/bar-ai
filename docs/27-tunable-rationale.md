@@ -3079,6 +3079,16 @@ split already matches BARb's (47/22/12 against our 51/19/11) and BARb wins;
 moving OUR split toward OUR targets moved us away from BARb's and lost more
 games. The targets are the thing that does not match reality.
 
+Turned ON 2026-09-23 (his ask that shares match their targets), back OFF
+2026-09-24. His 1v1 Cortex on All That Glitters: from minute 24 we out-earned
+BARb 3x-11x, army sat exactly at its 0.21 target so every factory read
+`gap=0 src=rich`, and the refused metal priced as "not enough hands" --
+build power ran 0.35-0.41 against 0.15, 191 turrets in two minutes, 1,061
+of the turret wants sited at converters. His ruling: extra metal can go to
+build power or army, both are fine; what is not fine is army starved while
+we are ten times richer. Build power over its share is the next lever, with
+the plant's own turrets exempt (a gantry must still get its turrets).
+
 S8 WARNING: the first three arms of this tunable, and of TUNE_BUDGET_MAX and
 TUNE_BUDGET_AFTER, measured NOTHING -- the names were added to
 game-patches/gadgets/dev_tunables.lua but `deploy_ai.py gadgets` was never

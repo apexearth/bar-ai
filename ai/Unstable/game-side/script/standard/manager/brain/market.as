@@ -55,3 +55,4 @@
 #include "market/decide.as"         // the arbiter: rank the Wants, pick one
 #include "market/execute.as"        // turning a won Want into a task
 #include "market/production.as"     // the production market: con orders, batch demand
+#include "market/wanttest.as"       // apex_wanttest: the energy ladder under posed economies

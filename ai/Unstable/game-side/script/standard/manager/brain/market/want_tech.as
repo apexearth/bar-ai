@@ -54,10 +54,10 @@ float TechSurvival(int defId, float askerBP)
 	float T = PipeLatencySec(defId, askerBP);
 	// Same affordability the lathe actually sees (see ValueOf's feedSec):
 	// half the bank is spendable now, the rest waits on income.
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	if (inc > 0.1f) {
 		const float payS = (Catalog::gCostM[defId]
-				- aiEconomyMgr.metal.current * 0.5f) / inc;
+				- Eco::MCur() * 0.5f) / inc;
 		if (payS > 0.f)
 			T += payS;
 	}

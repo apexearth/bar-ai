@@ -79,7 +79,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// whole ladder competes on price as before.
 	bool solarOnly = false;
 	if (HardEStall()
-		&& (aiEconomyMgr.energy.income
+		&& (Eco::EInc()
 			< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E)))
 	{
 		for (uint z = 0; z < builds.length(); ++z) {
@@ -108,7 +108,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// SpaceRentM is perCell x cells x k, so one cell's worth answers every
 	// footprint -- it walked the whole defence field per rung for the same number.
 	const float genRentCell = SpaceRentM(eSite, 1);
-	const bool  genDiag = ai.GetTunable("apex_efloor_diag", 0.f) > 0.f;
+	const bool  genDiag = (ai.GetTunable("apex_efloor_diag", 0.f) > 0.f) || gWtRunning;
 	// ROOM IS LOCAL (protect_field.as on PfCrowd: the base-wide fill FALLS as
 	// the base grows, 0.024 in a full base against 0.15 at the site). The
 	// ground a reactor competes for is the ground around where it would stand.
@@ -335,15 +335,15 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ "+rest" + formatFloat(c.tCost - walkM - buildM - c.gain * walkSec, "", 0, 0)
 				+ ") walk=" + formatFloat(walkSec, "", 0, 0)
 				+ "s build=" + formatFloat(c.buildSec, "", 0, 0)
-				+ "s | e " + int(aiEconomyMgr.energy.current) + "/" + int(aiEconomyMgr.energy.storage)
-				+ " inc=" + int(aiEconomyMgr.energy.income)
-				+ " pull=" + int(aiEconomyMgr.energy.pull)
+				+ "s | e " + int(Eco::ECur()) + "/" + int(Eco::EStor())
+				+ " inc=" + int(Eco::EInc())
+				+ " pull=" + int(Eco::EPull())
 				+ " drainIF=" + int(EDrainInFlight())
 				+ " makeIF=" + int(EMakeInFlight())
 				+ " spot=" + formatFloat(EPrice(), "", 0, 3)
 				+ " floor=" + formatFloat(EPriceFloor(), "", 0, 4)
-				+ " mPull=" + int(aiEconomyMgr.metal.pull)
-				+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ " mPull=" + int(Eco::MPull())
+				+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " stall=" + (HardEStall() ? 1 : 0)
 				+ " solarOnly=" + (solarOnly ? 1 : 0));
 		}
@@ -363,11 +363,11 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			// rung's wait is its build; the others' is their energy bill over
 			// what can actually feed it.
 			if (Catalog::gCostE[d] > 0.f) {
-				float feedE = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+				float feedE = Eco::EInc() - Eco::EPull();
 				if (feedE < 0.f)
 					feedE = 0.f;   // in-flight make is what is starved, not feed (EStretch)
 				const float lookE = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-				feedE += aiEconomyMgr.energy.current / ((lookE > 1.f) ? lookE : 30.f);
+				feedE += Eco::ECur() / ((lookE > 1.f) ? lookE : 30.f);
 				const float waitE = walkSec + Catalog::gCostE[d] / ((feedE > 1.f) ? feedE : 1.f);
 				if (waitE > wait)
 					wait = waitE;
@@ -508,17 +508,21 @@ float StandingConvCap()
 // params are absent (a game without that gadget).
 float ConvCapE()
 {
+	if (Eco::gOn && (Eco::gConvCap >= 0.f))
+		return Eco::gConvCap;
 	const float cap = ai.GetTeamRulesParam("mmCapacity", -1.f);
 	return (cap >= 0.f) ? cap : StandingConvCap();
 }
 
 float ConvUseE()
 {
+	if (Eco::gOn && (Eco::gConvUse >= 0.f))
+		return Eco::gConvUse;
 	const float use = ai.GetTeamRulesParam("mmUse", -1.f);
 	if ((use >= 0.f) && (ai.GetTunable("apex_e_realize", TUNE_E_REALIZE) > 0.f))
 		return use;
 	// No param: assume the fleet chews whatever surplus it can hold.
-	const float sur = aiEconomyMgr.energy.income - aiEconomyMgr.energy.pull;
+	const float sur = Eco::EInc() - Eco::EPull();
 	const float cap = StandingConvCap();
 	if (sur <= 0.f)
 		return 0.f;
@@ -602,8 +606,8 @@ float EMakeInFlight()
 	// (seed 12, minutes 12-19: nano gain at its full 17.2 with the bank at 1).
 	float s = 1.f;
 	{
-		const float need = aiEconomyMgr.energy.pull + EDrainInFlight();
-		const float have = aiEconomyMgr.energy.income + aiEconomyMgr.energy.current / 30.f;
+		const float need = Eco::EPull() + EDrainInFlight();
+		const float have = Eco::EInc() + Eco::ECur() / 30.f;
 		if ((need > have) && (have > 0.f))
 			s = have / need;
 	}
@@ -647,7 +651,7 @@ float EMakeOrderedE()
 // stall hoist, the interrupt and the parallel-site rule all answer to.
 float EnergyDeficitE()
 {
-	float need = (aiEconomyMgr.energy.pull + EDrainInFlight())
+	float need = (Eco::EPull() + EDrainInFlight())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
 	// ...and never below the standing fleet's full-speed ask.
 	{
@@ -655,7 +659,7 @@ float EnergyDeficitE()
 		if (need < ask)
 			need = ask;
 	}
-	return need - aiEconomyMgr.energy.income - EMakeInFlight();
+	return need - Eco::EInc() - EMakeInFlight();
 }
 
 // The deficit as it stands, with nothing in flight credited: what a generator
@@ -663,12 +667,12 @@ float EnergyDeficitE()
 // read a deep stall as covered and handed the pick back to plain price.
 float EnergyDeficitNowE()
 {
-	float need = aiEconomyMgr.energy.pull
+	float need = Eco::EPull()
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM);
 	const float ask = FleetAskE();
 	if (need < ask)
 		need = ask;
-	return need - aiEconomyMgr.energy.income;
+	return need - Eco::EInc();
 }
 
 bool EnergyShortOfOrdered()
@@ -831,7 +835,7 @@ float EcoPowerM()
 	// inside metal.income; the rest is carried at the conversion anchor, the
 	// game's own exchange rate and the floor price of energy everywhere else
 	// in this market.
-	float p = aiEconomyMgr.metal.income;
+	float p = Eco::MInc();
 	// Subtract what converters ACTUALLY chew, not their nameplate capacity.
 	// Converters run on surplus and idle when energy is tight, so subtracting
 	// full capacity erased real energy income -- with capacity above income it
@@ -843,7 +847,7 @@ float EcoPowerM()
 	// use if nothing we own can place it.
 	const float own = OwnConvCeil();
 	const float rate = (own > 0.f) ? own : BestConvRatio();
-	const float eNet = aiEconomyMgr.energy.income - chewed;
+	const float eNet = Eco::EInc() - chewed;
 	if (eNet > 0.f)
 		p += eNet * rate;
 	return p;
@@ -954,7 +958,7 @@ float OwnConvCeil()
 // Energy nothing is already converting -- what a better ratio would act on.
 float ConvertibleE()
 {
-	const float e = aiEconomyMgr.energy.income - StandingConvCap();
+	const float e = Eco::EInc() - StandingConvCap();
 	return (e > 0.f) ? e : 0.f;
 }
 
@@ -1020,8 +1024,8 @@ float FleetAskE()
 	if (ai.GetTunable("apex_e_feed_bound", TUNE_E_FEED_BOUND) > 0.f) {
 		const float cap = BPCapacity();
 		const float look = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
-		const float feed = aiEconomyMgr.metal.income
-				+ aiEconomyMgr.metal.current / look;
+		const float feed = Eco::MInc()
+				+ Eco::MCur() / look;
 		if ((cap > 0.f) && (feed < cap))
 			ask *= feed / cap;
 	}
@@ -1103,7 +1107,7 @@ void TrackIncome()
 {
 	if (ai.frame < gIncPrevAt + 10 * SECOND)
 		return;
-	float inc = aiEconomyMgr.metal.income;
+	float inc = Eco::MInc();
 	// STRUCTURAL income: a reclaim burst is a spike, not a standard of
 	// living -- labs must not be licensed off it (apexearth). The EMA alone
 	// still followed a minutes-long post-battle wreck feast, so the reclaim
@@ -1133,7 +1137,7 @@ void TrackIncome()
 	// whenever the fleet is between jobs, so an instantaneous read calls a
 	// fully committed economy idle one tick and starving the next -- the same
 	// trap TrackEPull documents on the energy side.
-	const float sur = inc - aiEconomyMgr.metal.pull;
+	const float sur = inc - Eco::MPull();
 	gMSpareEma = 0.85f * gMSpareEma + 0.15f * ((sur > 0.f) ? sur : 0.f);
 	gIncPrev = inc;
 	gIncPrevAt = ai.frame;
@@ -1188,7 +1192,7 @@ float BacklogM()
 float StructuralIncomeEma()
 {
 	TrackIncome();
-	return (gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income;
+	return (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 }
 
 int gBpGapLogAt = 0;
@@ -1202,15 +1206,15 @@ int gBpGapLogAt = 0;
 bool MetalWasting()
 {
 	return aiEconomyMgr.isMetalFull
-		&& (aiEconomyMgr.metal.income > aiEconomyMgr.metal.pull);
+		&& (Eco::MInc() > Eco::MPull());
 }
 
 float EFeedShare()
 {
-	const float pull = aiEconomyMgr.energy.pull;
+	const float pull = Eco::EPull();
 	if (pull <= 0.01f)
 		return 1.f;
-	const float s = (aiEconomyMgr.energy.income + EMakeInFlight()) / pull;
+	const float s = (Eco::EInc() + EMakeInFlight()) / pull;
 	return (s < 0.f) ? 0.f : ((s > 1.f) ? 1.f : s);
 }
 
@@ -1229,8 +1233,8 @@ float BPGap()
 	// lathe already failed to serve (measured: 9.4k banked at 234 m/s
 	// income with ~30 nanos - the income target alone reads "satisfied"
 	// exactly when the backlog is worst).
-	const float bank = aiEconomyMgr.metal.current;
-	const float st2 = aiEconomyMgr.metal.storage;
+	const float bank = Eco::MCur();
+	const float st2 = Eco::MStor();
 	float bankTerm = 0.f;
 	if ((st2 > 1.f) && (bank > 0.5f * st2))
 		bankTerm = (bank - 0.5f * st2) / 60.f;
@@ -1283,7 +1287,7 @@ float BPGap()
 			+ " blog=" + formatFloat(blTerm, "", 0, 1)
 			+ " rawM=" + int(rawBl)
 			+ " rows=" + gBacklogRows
-			+ " mInc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+			+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1)
 			+ " bank%=" + int((st2 > 1.f) ? (100.f * bank / st2) : -1.f));
 	}
 	return gapM;
@@ -1294,12 +1298,12 @@ float BPGap()
 // this is the closed-loop build-power term, not a model.
 float OverflowM()
 {
-	const float over = aiEconomyMgr.metal.income - aiEconomyMgr.metal.pull;
+	const float over = Eco::MInc() - Eco::MPull();
 	if (over <= 0.f)
 		return 0.f;
 	// Only real once the bank is filling; a draining bank absorbs the gap.
-	const float st = aiEconomyMgr.metal.storage;
-	if ((st > 1.f) && (aiEconomyMgr.metal.current < 0.8f * st))
+	const float st = Eco::MStor();
+	if ((st > 1.f) && (Eco::MCur() < 0.8f * st))
 		return 0.f;
 	return over;
 }
@@ -1327,9 +1331,9 @@ float OverflowM()
 // means what we make exceeds what we use; the engine's own usage says so.
 bool EnergyPinned()
 {
-	const float st = aiEconomyMgr.energy.storage;
-	return (st > 1.f) && (aiEconomyMgr.energy.current >= 0.98f * st)
-			&& (aiEconomyMgr.energy.income >= aiEconomyMgr.energy.usage);
+	const float st = Eco::EStor();
+	return (st > 1.f) && (Eco::ECur() >= 0.98f * st)
+			&& (Eco::EInc() >= aiEconomyMgr.energy.usage);
 }
 
 int gCwCalls = 0;      // ProposeConvert entries
@@ -1348,7 +1352,7 @@ void ConvWhyLog()
 	if (ai.frame < gCwLogAt)
 		return;
 	gCwLogAt = ai.frame + 30 * SECOND;
-	const float st = aiEconomyMgr.energy.storage;
+	const float st = Eco::EStor();
 	AiLog("apex: convwhy t=" + ai.teamId
 		+ " calls=" + gCwCalls
 		+ " bankRefused=" + gCwBank
@@ -1363,7 +1367,7 @@ void ConvWhyLog()
 		+ " ema=" + int(gESurplusEma)
 		+ " inflight=" + int(ConvCapInFlight())
 		+ " standing=" + int(StandingConvCap())
-		+ " bank%=" + int((st > 1.f) ? (100.f * aiEconomyMgr.energy.current / st) : -1.f)
+		+ " bank%=" + int((st > 1.f) ? (100.f * Eco::ECur() / st) : -1.f)
 		+ " pinned=" + (EnergyPinned() ? 1 : 0)
 		+ " v=" + formatFloat(gCwVal, "", 0, 3));
 }
@@ -1380,7 +1384,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// own definitions -- a converter never outbids a slightly-longer mex
 	// walk again (apexearth's call, twice). Overflow = the surplus the E bank
 	// cannot absorb.
-	const float eStore2 = aiEconomyMgr.energy.storage;
+	const float eStore2 = Eco::EStor();
 	// WHY THERE IS NO CONVERTER. Measured 2026-08-31 on Red Comet 1v1 +100%:
 	// 46-56% of all energy thrown away, the bank pinned at 87-99% of storage
 	// for the whole game, and `energy/convert` winning ZERO elections while
@@ -1389,7 +1393,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	// silent; the last line says which one is eating the want.
 	++gCwCalls;
 	if ((eStore2 > 1.f)
-		&& (aiEconomyMgr.energy.current < 0.85f * eStore2)) {
+		&& (Eco::ECur() < 0.85f * eStore2)) {
 		++gCwBank;
 		ConvWhyLog();
 		return w;
@@ -1501,9 +1505,9 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			// can: equal need, and the cheaper way to cover it wins.
 			if (ai.GetTunable("apex_conv_feed_cap", TUNE_CONV_FEED_CAP) > 0.f) {
 				const float lookN = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-				float feedN = aiEconomyMgr.energy.income;
+				float feedN = Eco::EInc();
 				if (lookN > 1.f)
-					feedN += aiEconomyMgr.energy.current / lookN;
+					feedN += Eco::ECur() / lookN;
 				float needN = feedN - idle - ConvCapInFlight();
 				if (needN < 0.f)
 					needN = 0.f;
@@ -1520,9 +1524,9 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// And never more than the economy feeds, whichever branch set it.
 		if (ai.GetTunable("apex_conv_feed_cap", TUNE_CONV_FEED_CAP) > 0.f) {
 			const float lookC = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-			float feed = aiEconomyMgr.energy.income;
+			float feed = Eco::EInc();
 			if (lookC > 1.f)
-				feed += aiEconomyMgr.energy.current / lookC;
+				feed += Eco::ECur() / lookC;
 			if (chew > feed)
 				chew = feed;
 		}

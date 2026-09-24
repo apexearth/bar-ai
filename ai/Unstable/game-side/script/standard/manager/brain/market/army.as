@@ -1396,8 +1396,8 @@ void EcoStatusLog()
 			+ " danger=" + (EcoDangerNear() ? 1 : 0)
 			+ " foeNear=" + ai.GetEnemyCostAt(Builder::gHomePos,
 					ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R))
-			+ " bank=" + aiEconomyMgr.metal.current
-			+ " inc=" + aiEconomyMgr.metal.income);
+			+ " bank=" + Eco::MCur()
+			+ " inc=" + Eco::MInc());
 }
 
 // THE WEALTH AN ARMY EXISTS FOR. Not everything standing: defence and lathe
@@ -1437,7 +1437,7 @@ float AnswerShare()
 		return gAnswerShare;
 	if (ai.GetTunable("apex_ally_share", TUNE_ALLY_SHARE) < 0.5f)
 		return gAnswerShare;
-	const float mine = aiEconomyMgr.metal.income;
+	const float mine = Eco::MInc();
 	float team = 0.f;
 	int pubs = 0;
 	for (uint i = 0; i < mates.length(); ++i) {
@@ -1846,7 +1846,7 @@ void StallWatch()
 	// ...unless the metal bank is full: then the stall is income thrown away,
 	// not a transient (see the hoist in decide.as).
 	const float eBar = ai.GetTunable("apex_stall_answer_max_e", TUNE_STALL_ANSWER_MAX_E);
-	if ((eBar > 0.f) && (aiEconomyMgr.energy.income > eBar) && !aiEconomyMgr.isMetalFull)
+	if ((eBar > 0.f) && (Eco::EInc() > eBar) && !aiEconomyMgr.isMetalFull)
 		return;
 	if (!HardEStall()) {
 		gStallFreed.resize(0);

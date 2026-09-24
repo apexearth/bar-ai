@@ -1,4 +1,5 @@
 #include "tunables.as"       // EVERY default, in one file -- edit here
+#include "eco.as"             // every economy reading, through one seam a test can pose
 #include "../side.as"
 #include "../world.as"
 #include "perf.as"
@@ -142,6 +143,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (!ApexActive())
 		return;
 
+	Market::WantTestTick();
 	{ double _t = Perf::T0(); Builder::SampleWreckField(); Perf::Add("up.wreck", _t); }
 	{ double _t = Perf::T0(); Requests::PeelSurplus(); Perf::Add("up.peel", _t); }
 	{ double _t = Perf::T0(); Requests::LatencySweep(); Perf::Add("up.latency", _t); }

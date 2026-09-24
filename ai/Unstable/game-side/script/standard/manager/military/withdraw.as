@@ -359,8 +359,8 @@ void UpdateWithdraw()
 		// min(metal,energy) income picks the tier row, and enemy AIR cost
 		// above our AA cost silently switches the whole lab to its air table.
 		AiLog(Factory::T() + "apex: army-census n=" + alive.length() + cen
-			+ " | incM=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
-			+ " incE=" + formatFloat(aiEconomyMgr.energy.income, "", 0, 1)
+			+ " | incM=" + formatFloat(Eco::MInc(), "", 0, 1)
+			+ " incE=" + formatFloat(Eco::EInc(), "", 0, 1)
 			+ " foeAir=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::AIR), "", 0, 0)
 			// The aggression gate's two inputs and the enemy side's static
 			// term, so a "we never attack" game can be attributed to the

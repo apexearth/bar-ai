@@ -112,10 +112,10 @@ IUnitTask@ JoinFor(CCircuitUnit@ unit, CCircuitDef@ want, const AIFloat3& in spo
 			const float mMake = aiEconomyMgr.GetMetalMake(cand.buildDef);
 			float impact = 0.f;
 			if (eMake > 0.f) {
-				const float eInc = aiEconomyMgr.energy.income;
+				const float eInc = Eco::EInc();
 				impact = eMake / ((eInc < 1.f) ? 1.f : eInc);
 			} else if (mMake > 0.f) {
-				const float mInc = aiEconomyMgr.metal.income;
+				const float mInc = Eco::MInc();
 				impact = mMake / ((mInc < 1.f) ? 1.f : mInc);
 			}
 			if (impact > 3.f)

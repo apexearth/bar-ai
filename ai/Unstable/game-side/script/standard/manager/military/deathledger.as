@@ -173,7 +173,7 @@ float ScreenLostM()
 // bleed. Ledger holds roughly BLEED_TAU seconds, so ledger/TAU is metal/s.
 float ForwardBleedFrac()
 {
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	if (inc <= 0.5f)
 		return 0.f;
 	const float net = gBleedFwd - gKillFwd;
@@ -204,7 +204,7 @@ float BleedCaution()
 // Enough recent combat to judge by: losses worth this many seconds of income.
 bool TradeMeaningful()
 {
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	return gLossAll > inc * ai.GetTunable("apex_trade_vol", TUNE_TRADE_VOL);
 }
 
@@ -225,7 +225,7 @@ bool TradeBad()
 // getting killed" pressure. Same construction as ForwardBleedFrac but total.
 float LossPressureFrac()
 {
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	if (inc <= 0.5f)
 		return 0.f;
 	const float net = gLossAll - gKillAll;

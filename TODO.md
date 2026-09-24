@@ -369,6 +369,10 @@ the lathe already on it) is measured: if new turrets land at the gantry, the
 old ones at the T1 plants are the only case left, and reclaiming them (full
 metal back) beside the line that needs them is the cheaper move.
 
+Asked again 2026-09-24, wider: transports that move turrets "around the base"
+to wherever they are needed, not only to a short line -- raised while ruling
+that a gantry over the build-power share must still get its turrets.
+
 ## Do not marry the starting point
 
 apexearth 2026-09-18: "We really shouldn't 'marry' our starting point. If

@@ -48,7 +48,7 @@ void UpdateRaidCaution()
 	// tit for tat." A raid PACK is 4-6 raiders: base 8 power plus a fifth of
 	// income, so packs grow with the economy instead of never forming.
 	const float pack = ai.GetTunable("apex_raid_pack", TUNE_RAID_PACK)
-			+ aiEconomyMgr.metal.income * ai.GetTunable("apex_raid_per_income", TUNE_RAID_PER_INCOME);
+			+ Eco::MInc() * ai.GetTunable("apex_raid_per_income", TUNE_RAID_PER_INCOME);
 	const float want = Factory::gHaveT2 ? gRaidMinStock : pack;
 	if (aiMilitaryMgr.quota.raid.min != want)
 		aiMilitaryMgr.quota.raid.min = want;
@@ -353,7 +353,7 @@ void NoteFodderDef(const CCircuitDef@ cdef)
 void ApplyRetreatPosture()
 {
 	const float secs = ai.GetTunable("apex_retreat_cost_secs", TUNE_RETREAT_COST_SECS);
-	const float bar = (secs > 0.f) ? (aiEconomyMgr.metal.income * secs) : 0.f;
+	const float bar = (secs > 0.f) ? (Eco::MInc() * secs) : 0.f;
 	uint zeroed = 0;
 	for (uint i = 0; i < gPostureDef.length(); ++i) {
 		// A charger is never pulled back (docs/24); the walk home is what kills it.

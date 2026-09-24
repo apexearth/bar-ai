@@ -272,8 +272,8 @@ float ConWorkerBP()
 float UnspentByHands()
 {
 	const float share = EFeedShare();
-	const float pull = aiEconomyMgr.metal.pull / ((share > 0.05f) ? share : 0.05f);
-	return aiEconomyMgr.metal.income - pull;
+	const float pull = Eco::MPull() / ((share > 0.05f) ? share : 0.05f);
+	return Eco::MInc() - pull;
 }
 
 // A PURE ASSIST UNIT: the Butler and the Twitcher -- a fast, unarmed
@@ -492,7 +492,7 @@ void WorkingLathe()
 float HandsShort()
 {
 	TrackIncome();
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	const float share = EFeedShare();
 	const float spent = (inc - gMSpareEma) / ((share > 0.05f) ? share : 0.05f);
 	const float unspent = inc - spent;
@@ -531,7 +531,7 @@ bool AnyAssistLab()
 // the same law and stays.
 float ConFloorIncomeTerm(float per)
 {
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	float term = inc / ((per > 1.f) ? per : 25.f);
 	const float hands = inc * ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
 	// The turrets count against the floor only on the seat, whose ruling is
@@ -1042,7 +1042,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// we should use a lot more nano turrets, and a lot less
 		// constructors"). BPCapacity is the same fleet in metal/s, turrets
 		// at face value and walkers at their measured discount.
-		const float hands = aiEconomyMgr.metal.income
+		const float hands = Eco::MInc()
 				* ai.GetTunable("apex_con_feed_headroom", TUNE_CON_FEED_HEADROOM);
 		const float ownedHands = BPCapacity();
 		starterNeed = hands;
@@ -1129,7 +1129,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
 	const float bestExt = BestExtract();
-	const float incA = aiEconomyMgr.metal.income;
+	const float incA = Eco::MInc();
 	const float tLineBite = ai.GetTunable("apex_line_bite", TUNE_LINE_BITE);
 	const float tSpeedWorth = ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);
 	const float tCoverWorth = ai.GetTunable("apex_cover_worth", TUNE_COVER_WORTH);
@@ -1146,8 +1146,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// candidate at all.
 	float eFeedA = 1.f;
 	{
-		const float eI = aiEconomyMgr.energy.income;
-		const float eP = aiEconomyMgr.energy.pull;
+		const float eI = Eco::EInc();
+		const float eP = Eco::EPull();
 		if ((eP > 1.f) && (eI < eP))
 			eFeedA = eI / eP;
 	}
@@ -1175,7 +1175,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ " (assist floor need=" + an
 					+ " latheM=" + formatFloat(AssistLatheM(), "", 0, 0)
 					+ " unspent=" + formatFloat(UnspentByHands(), "", 0, 0)
-					+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1) + ")");
+					+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");
 				return Catalog::Def(ad);
 			}
 		}
@@ -1890,7 +1890,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " (con floor need=" + consNeedA
 				+ " have=" + ConsOwnedAny()
 				+ " inflight=" + ConsInFlightAny()
-				+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1)
+				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " short=" + formatFloat(HandsShort(), "", 0, 1)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
@@ -1901,7 +1901,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " (t2-con floor need=" + ceilNeed
 				+ " have=" + CeilingConsOwned()
 				+ " inflight=" + CeilingConsInFlight()
-				+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 1) + ")");
+				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");
 			return Catalog::Def(d);
 		}
 		// The quiet rear caps LAND con production at its keep-fleet (+2 for
@@ -2103,7 +2103,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		gNextProdRankOf[prankUid] = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: prodrank fac=" + fac.circuitDef.GetName()
 			+ " t=" + ai.teamId
-			+ " inc=" + formatFloat(aiEconomyMgr.metal.income, "", 0, 0)
+			+ " inc=" + formatFloat(Eco::MInc(), "", 0, 0)
 			+ " gap=" + int(armyGap) + " src=" + gapSrc
 			+ " flight=" + int(armyFlight0)
 			+ " n=" + candDef.length() + gYieldLog + prank);

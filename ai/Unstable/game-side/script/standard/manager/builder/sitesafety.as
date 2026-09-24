@@ -86,7 +86,7 @@ const float FACTORY_PER_INCOME  = 60.f;
 
 int FactoryTypeCap()
 {
-	return 1 + int(aiEconomyMgr.metal.income / FACTORY_PER_INCOME);
+	return 1 + int(Eco::MInc() / FACTORY_PER_INCOME);
 }
 
 // The count cap alone does not close the race that causes the overshoot:

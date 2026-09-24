@@ -112,7 +112,7 @@ bool WantsFactory(const CCircuitDef@ facDef)
 CCircuitDef@ IntelPlantToBuild()
 {
 	ResolveDefs();
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	// The basic plant: the air lead builds the team's early one at intel income;
 	// past apex_air_mandatory_income EVERY player owes themselves one -- air
 	// constructors are the most efficient build power there is, and a mature

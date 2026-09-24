@@ -53,7 +53,7 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	// (armgeo: 13,000 E), and while hard-stalled under the solar bar the
 	// zero-E solar is the only rung (same rule as ProposeEnergy's solarOnly).
 	if ((Catalog::gCostE[geoId] > 0.f) && HardEStall()
-		&& (aiEconomyMgr.energy.income
+		&& (Eco::EInc()
 			< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E)))
 		return w;
 	const AIFloat3 here = unit.GetPos(ai.frame);
@@ -1205,7 +1205,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// income estimate: it is the direct proof the lines we hold cannot eat
 	// what we make (apexearth: "if you are super wealthy, always overflowing
 	// metal, make more Gantries... or adv air labs too").
-	const float structInc = ((gIncEma > 0.f) ? gIncEma : aiEconomyMgr.metal.income)
+	const float structInc = ((gIncEma > 0.f) ? gIncEma : Eco::MInc())
 			+ OverflowM();
 	const int supported = 1 + int(structInc / ((per > 1.f) ? per : 50.f));
 	const bool overLine = (Factory::gFactoryCount
@@ -1285,7 +1285,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// team fielded air where the enemy walked in with ground.
 		if ((dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
 			&& !Military::EnemyAfloat()
-			&& (aiEconomyMgr.metal.income
+			&& (Eco::MInc()
 				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
 			continue;
 		// The water mandate is held, ships-only, and never the commander's

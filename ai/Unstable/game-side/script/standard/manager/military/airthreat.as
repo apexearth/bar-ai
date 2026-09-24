@@ -99,7 +99,7 @@ int HeavyAAWant()
 	// of the game means economy, never clock: one flak above the income bar,
 	// another per flak-per of income beyond it.
 	int floorN = 0;
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	const float bar = ai.GetTunable("apex_flak_floor_income", TUNE_FLAK_FLOOR_INCOME);
 	if (inc >= bar)
 		floorN = 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));

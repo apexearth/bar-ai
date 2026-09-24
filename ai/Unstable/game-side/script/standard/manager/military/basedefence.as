@@ -272,7 +272,7 @@ float RaidPressure()
 {
 	if (!BaseRaided())
 		return 1.f;
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	if (inc <= 0.5f)
 		return 1.f;
 	return 1.f + gRaidM / (inc * RAID_TAU());

@@ -478,7 +478,7 @@ void Update()
 	LookWatch();
 	CoverWatch();
 	StrikeScanStep();
-	ai.PublishTeamValue(TV_AIRINC, aiEconomyMgr.metal.income);
+	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
 		RunElection();
 	Intercept();

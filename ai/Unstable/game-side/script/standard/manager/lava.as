@@ -921,7 +921,7 @@ float Survival(const AIFloat3& in pos, float T)
 float PayHorizon(int defId, float buildPower)
 {
 	float T = Catalog::BuildSecondsAt(defId, buildPower);
-	const float inc = aiEconomyMgr.metal.income;
+	const float inc = Eco::MInc();
 	if (inc > 0.1f)
 		T += Catalog::gCostM[defId] / inc;
 	return T;
