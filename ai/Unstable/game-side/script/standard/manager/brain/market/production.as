@@ -631,6 +631,44 @@ float FastestBuilderSpeed()
 	return top;
 }
 
+// THE CHEAPEST SOURCE OF A SQUAD SENSOR, over every def any of our builders
+// can make. The support need is "a radar per squad", which is one question for
+// the fleet -- but it is priced per FACTORY, so a gantry that can only build
+// T3 answered it with a 1,250-metal drone carrier while a radar bot costs a
+// fraction of that (apexearth, watching: the drone carriers "were 90%
+// useless"). A carrier reads as a sensor at all because its weapons are its
+// drones, so the unarmed test above passes it.
+float gCheapSupM = -1.f;
+float gCheapJamM = -1.f;
+
+float CheapestSupportM(bool isJam)
+{
+	float memo = isJam ? gCheapJamM : gCheapSupM;
+	if (memo > 0.f)
+		return memo;
+	float best = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d])
+			continue;
+		if (Catalog::gSurfT[d] + Catalog::gAirT[d] >= 0.01f)
+			continue;
+		if (isJam ? !Catalog::gJammer[d] : !Catalog::gRadar[d])
+			continue;
+		const float m = Catalog::gCostM[d];
+		if (m <= 1.f)
+			continue;
+		if ((best <= 0.f) || (m < best))
+			best = m;
+	}
+	if (best > 0.f) {
+		if (isJam)
+			gCheapJamM = best;
+		else
+			gCheapSupM = best;
+	}
+	return best;
+}
+
 float BestLatheBPPerM()
 {
 	// Never cache a zero: availability is frame-dependent and an early scan
@@ -1253,6 +1291,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				need = squads;
 			if ((need < 1.f) && (squads >= 1.f))
 				need = 1.f;
+			// One slot, one price: a def that costs many times the cheapest
+			// source of the same sensor fills the slot many times worse.
+			if (ai.GetTunable("apex_support_per_metal", TUNE_SUPPORT_PER_METAL) > 0.f) {
+				const float cheapS = CheapestSupportM(isJamS);
+				const float mineS = Catalog::gCostM[d];
+				if ((cheapS > 0.f) && (mineS > cheapS))
+					need *= cheapS / mineS;
+			}
 			if (ai.frame >= gSupportDiagAt) {
 				gSupportDiagAt = ai.frame + 60 * SECOND;
 				AiLog("apex: support-diag t=" + ai.teamId + " def="
