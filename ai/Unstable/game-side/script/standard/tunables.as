@@ -1689,6 +1689,7 @@ const float TUNE_BP_TRAVEL = 0.f;
 const float TUNE_ENERGY_GROWTH_FLAT = 0.f;
 const float TUNE_SUPPORT_PER_METAL = 0.f;
 const float TUNE_CONV_FEED_CAP = 0.f;
+const float TUNE_UNLOCK_AFFORD = 0.f;
 
 // [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a

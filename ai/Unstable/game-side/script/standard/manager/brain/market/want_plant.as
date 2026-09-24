@@ -751,7 +751,21 @@ float UnlockWorth(int plantId)
 		}
 		if (made)
 			continue;
-		const float v = LineUnitWorth(pd);
+		float v = LineUnitWorth(pd);
+		// AN UNLOCK WE CANNOT AFFORD TO USE IS NOT AN UNLOCK. The worth of a
+		// plant is the products we will actually order out of it, and this
+		// asked only whether the product is BETTER, never whether the bill for
+		// the plant plus one unit is reachable -- so an Experimental Aircraft
+		// Plant at 8,500 metal was bought at 80 metal/s and never built a
+		// thing (apexearth, watching). Saturating, so a cheap unlock is
+		// untouched and only the far bets are discounted.
+		if (ai.GetTunable("apex_unlock_afford", TUNE_UNLOCK_AFFORD) > 0.f) {
+			const float horU = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+			const float reachU = EcoPowerM() * ((horU > 1.f) ? horU : 180.f);
+			const float billU = Catalog::gCostM[plantId] + Catalog::gCostM[pd];
+			if ((reachU > 0.f) && (billU > 0.f))
+				v *= reachU / (reachU + billU);
+		}
 		if (v > best)
 			best = v;
 	}
