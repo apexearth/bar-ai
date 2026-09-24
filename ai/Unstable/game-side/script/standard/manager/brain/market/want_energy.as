@@ -1494,6 +1494,21 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			if (open > chew)
 				chew = open;
 		}
+		// YOU CANNOT CONVERT ENERGY YOU DO NOT MAKE. The pin says we are
+		// throwing energy away, not that the supply is unlimited, and nothing
+		// above bounded the chew by what the economy actually feeds -- so an
+		// Epic Energy Converter priced its whole 6,000 e/s nameplate at 2,000
+		// e/s of income, for 9,000 metal against 80 metal/s (apexearth,
+		// watching). What a converter can eat is what we make plus what the
+		// bank can hand it over the same window the rest of the ladder uses.
+		if (ai.GetTunable("apex_conv_feed_cap", TUNE_CONV_FEED_CAP) > 0.f) {
+			const float lookC = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+			float feed = aiEconomyMgr.energy.income;
+			if (lookC > 1.f)
+				feed += aiEconomyMgr.energy.current / lookC;
+			if (chew > feed)
+				chew = feed;
+		}
 		if (chew < 0.f)
 			chew = 0.f;
 		Want c;

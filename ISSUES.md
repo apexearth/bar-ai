@@ -3106,3 +3106,28 @@ It also means every arm run WITHOUT those two modoptions overstates our
 economy against his real games by about a third, and any change measured in
 one regime must be re-measured in the other: apex_bp_vs_lathe gave +37% at
 minute 16 with the pack on and is INERT with it off.
+
+## We keep paying for capacity we cannot use (2026-09-23)
+
+Three watched complaints, one defect family. In every case the AI prices a
+unit's NAMEPLATE and nothing bounds it by what the economy can actually feed:
+
+  Epic Fusion (armafust3)     90,000 m, 2,500,000 buildtime. Gain was 200x a
+      fusion's for 30x the energy, because the growth premium is multiplied by
+      the generator's own share of the economy and saturates at the full 9x
+      for anything bigger than the whole economy.
+  Epic Energy Converter       9,000 m, eats 6,000 e/s. Bought at 2,000 e/s of
+      (armmmkrt3)             income and 80 m/s of metal. When the energy bank
+      is pinned the chew is set to the def's full capacity, and nothing caps
+      it by energy income.
+  Drone carrier               1,250 m each, sixteen of them. Its drones are
+      (armdronecarryland)     its weapons, so it reads as unarmed, carries
+      radar, and fills a "one radar per squad" slot a 60-metal Radar Tower
+      covers.
+
+The shape is always the same: a quantity the def declares is taken as the
+quantity we will realize. The scavenger pack makes it acute because its t3
+units declare enormous numbers -- and it costs a third of our economy.
+
+apex_energy_growth_flat, apex_conv_feed_cap and apex_support_per_metal each
+close one of the three. None is measured in a real game yet.
