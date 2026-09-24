@@ -882,11 +882,14 @@ void PfRebuild()
 			const AIFloat3 p = u.GetPos(ai.frame);
 			if (!OnMap(p))
 				continue;
+			// An effigy is the commander's next life: losing it costs him.
+			const float worth = IsEffigyDef(d) ? OwnCommanderWorthM(Catalog::gCostM[d])
+					: Catalog::gCostM[d];
 			gPfNPos.insertLast(p);
-			gPfNWorth.insertLast(Catalog::gCostM[d]);
+			gPfNWorth.insertLast(worth);
 			gPfNIsMex.insertLast(false);
 			gPfNKey.insertLast(int(u.id));
-			gPfTotal += Catalog::gCostM[d];
+			gPfTotal += worth;
 		}
 	}
 	const array<int>@ mexRows = MexRows();

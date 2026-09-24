@@ -158,6 +158,91 @@ bool CommRules()
 	return ai.GetTunable("apex_comm_rules", TUNE_COMM_RULES) > 0.f;
 }
 
+// THE EFFIGY (modoption comrespawn): while one of ours stands, the
+// commander's death sacrifices it instead of ending the game (apexearth
+// 2026-09-24: "he doesn't have to be careful with his life... he then just has
+// to make sure that that thing stays alive"). Any def named comeffigy*.
+array<int> gEffigyDefs;
+bool gEffigyScanned = false;
+
+void EffigyScan()
+{
+	if (gEffigyScanned)
+		return;
+	gEffigyScanned = true;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::Def(d).GetName().findFirst("comeffigy") == 0)
+			gEffigyDefs.insertLast(d);
+	}
+}
+
+bool IsEffigyDef(int d)
+{
+	EffigyScan();
+	return gEffigyDefs.find(d) >= 0;
+}
+
+// The dearest commander we field, or `floor` if none stands.
+float OwnCommanderWorthM(float floor)
+{
+	float best = floor;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] > 0) && Catalog::Def(int(d)).IsRoleAny(Unit::Role::COMM.mask)
+			&& (Catalog::gCostM[d] > best))
+			best = Catalog::gCostM[d];
+	}
+	return best;
+}
+
+bool OwnEffigyStands()
+{
+	EffigyScan();
+	for (uint i = 0; i < gEffigyDefs.length(); ++i) {
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(gEffigyDefs[i]),
+				Builder::gHomePos, 0.f);
+		if ((us !is null) && (us.length() > 0))
+			return true;
+	}
+	return false;
+}
+
+// WHAT CAN CATCH HIM: a ground unit that outranges AND outruns him (apexearth
+// 2026-09-24: "a single tier 2 tank can easily kill a commander because it can
+// outrange him and move faster than him"). Read off his own def, so an evolved
+// commander outgrows the threat level by level.
+array<int> gOutclassed;   // per commander def: -1 unknown, 0 no, 1 yes
+
+bool FieldOutclasses(int cd)
+{
+	if (int(gOutclassed.length()) <= Catalog::gDefCount) {
+		gOutclassed.resize(Catalog::gDefCount + 1);
+		for (uint i = 0; i < gOutclassed.length(); ++i)
+			gOutclassed[i] = -1;
+	}
+	if (gOutclassed[cd] >= 0)
+		return gOutclassed[cd] == 1;
+	int hit = 0;
+	for (int d = 1; d <= Catalog::gDefCount && (hit == 0); ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gFlyer[d]
+			|| (Catalog::gSurfT[d] <= 0.f))
+			continue;
+		if ((Catalog::gMaxRange[d] > Catalog::gMaxRange[cd])
+			&& (Catalog::gSpeed[d] > Catalog::gSpeed[cd]))
+		{
+			hit = 1;
+			AiLog("apex: commander " + Catalog::Def(cd).GetName() + " is outclassed by "
+				+ Catalog::Def(d).GetName() + " (range " + int(Catalog::gMaxRange[d])
+				+ " > " + int(Catalog::gMaxRange[cd]) + ", speed "
+				+ int(Catalog::gSpeed[d]) + " > " + int(Catalog::gSpeed[cd]) + ")");
+		}
+	}
+	if (hit == 0)
+		AiLog("apex: commander " + Catalog::Def(cd).GetName()
+			+ " -- nothing on the list both outranges and outruns him");
+	gOutclassed[cd] = hit;
+	return hit == 1;
+}
+
 // HOW BRAVE THE COMMANDER MAY BE, read off what is fielded against him
 // (apexearth: "Our commander is too brave when lots of T2 and T3 are on the
 // field. He should run but he doesn't"). The stake is his own cost, so both
@@ -175,8 +260,10 @@ bool CommCaution(CCircuitUnit@ unit)
 	// the game -- progression-anchored, no clock, no sensing required. The
 	// enemy clauses remain as PRE-T2 escalators (a heavy rush earns caution
 	// before we tech).
+	if (OwnEffigyStands())
+		return false;
 	if (Factory::gHaveT2)
-		return true;
+		return FieldOutclasses(int(unit.circuitDef.id));
 	const float heavies = aiEnemyMgr.GetEnemyCost(RT::HEAVY)
 			+ aiEnemyMgr.GetEnemyCost(RT::SUPER);
 	if (heavies >= mine * ai.GetTunable("apex_comm_heavy_frac", TUNE_COMM_HEAVY_FRAC))
@@ -231,6 +318,8 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		gCommCautionWas = caution ? 1 : 0;
 		AiLog(Factory::T() + "apex: commander caution=" + (caution ? "on" : "off")
 			+ " haveT2=" + (Factory::gHaveT2 ? 1 : 0)
+			+ " effigy=" + (OwnEffigyStands() ? 1 : 0)
+			+ " def=" + unit.circuitDef.GetName()
 			+ " heavies=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::HEAVY) + aiEnemyMgr.GetEnemyCost(RT::SUPER), "", 0, 0)
 			+ " foeMobile=" + formatFloat(Military::FoeMobileMassing(), "", 0, 0)
 			+ " q=" + formatFloat(FoeQualityM(), "", 0, 2));

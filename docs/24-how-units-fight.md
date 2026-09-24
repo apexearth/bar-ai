@@ -1372,3 +1372,16 @@ have them attack the enemy from different angles."*
   ground one of them could have covered alone.
 - **They arrive separately, from different bearings.** Spread is the delivery,
   not a formation preference.
+
+## 2026-09-24 — how careful the commander is depends on the game mode
+
+- **Respawning commanders** (modoption `comrespawn`): the commander has an
+  Effigy; when he dies the Effigy is sacrificed and he returns. While one
+  stands he does not have to be careful with his life -- the Effigy is what
+  has to stay alive.
+- **Evolving commanders** (modoption `evocom`): he grows very strong, and at
+  level 10 is "a crazy powerful dude"; he does not have to be quite so
+  careful, but still has to be careful -- killing the commander is often the
+  game.
+- **Default**: in T2 play the commander must be careful. A single T2 tank can
+  kill him: it outranges him and moves faster than him.
