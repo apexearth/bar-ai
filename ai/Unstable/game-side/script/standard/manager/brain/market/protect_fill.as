@@ -95,9 +95,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// single extra fill per frame and ends as soon as each def has been filled
 	// once.
 	const bool neverFilled = (gDsAt[d] <= 0);
-	const bool firstPass = neverFilled
-			&& (ai.GetTunable("apex_fill_firstpass", TUNE_FILL_FIRSTPASS) > 0.f)
-			&& (gDsFirstN < 1);
+	const bool firstPass = neverFilled && (gDsFirstN < 1);
 	if (Gate(GATE_FILL_FRAME, (gDsFillN >= 1) && !firstPass))
 		return;
 	if (firstPass)

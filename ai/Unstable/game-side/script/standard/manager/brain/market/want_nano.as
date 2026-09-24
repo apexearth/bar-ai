@@ -93,10 +93,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// waste term below already runs under. Alone of the terms here the shift is
 	// not bounded by FreeMetalFlow, and a turret landing out of the buying
 	// line's reach raises LowerLinesEat and so raises that line's OWN shift, so
-	// it ran away: docs/27, TUNE_NANO_SHIFT_IDLE.
+	// it ran away: docs/27.
 	if (gLineShift > 0.f) {
-		const float slack = IdleNanoLatheM()
-				* ai.GetTunable("apex_nano_shift_idle", TUNE_NANO_SHIFT_IDLE);
+		const float slack = IdleNanoLatheM();
 		lineNeed -= (slack < gLineShift) ? slack : gLineShift;
 		if (lineNeed < 0.f)
 			lineNeed = 0.f;

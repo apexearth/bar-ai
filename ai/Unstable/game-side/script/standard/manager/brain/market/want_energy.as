@@ -211,9 +211,30 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				fArr = (pay > 0.f) ? (pay / genHorizonS) : 0.f;
 				mkEff = mkM * fArr;
 			}
+			// THE PREMIUM MUST NOT BE BOUGHT WITH SIZE. gain is already linear
+			// in a generator's output, so multiplying it again by that output's
+			// share of the economy counts the addition twice -- and because the
+			// denominator is max(economy, output), anything bigger than the whole
+			// economy collects the FULL multiplier. One 30,000 E reactor took 9x
+			// where thirty 1,000 E ones adding the same energy take 1.27x each,
+			// which is why the biggest rung always won and why the scavenger
+			// pack's t3 reactors cost a third of the economy.
+			// Read the appetite off the ECONOMY instead: every rung in one
+			// election then carries the same premium, and the ranking is left to
+			// gain over cost, when it arrives, and what we can absorb.
+			float growNum = mkEff;
+			const bool growFlat =
+					ai.GetTunable("apex_energy_growth_flat", TUNE_ENERGY_GROWTH_FLAT) > 0.f;
+			if (growFlat)
+				growNum = EnergyDeficitE() * genRatio;
 			fGrow = 1.f + genGrowK
-					* mkEff / ((genPower > mkEff) ? genPower : ((mkEff > 0.f) ? mkEff : 1.f));
+					* growNum / ((genPower > growNum) ? genPower : ((growNum > 0.f) ? growNum : 1.f));
 			gain *= fGrow;
+			// The arrival discount rode inside mkEff; with the premium flat it has
+			// to be charged on its own or a ten-minute build pays nothing for the
+			// wait.
+			if (growFlat && genArriveOn && (fArr >= 0.f) && (fArr < 1.f))
+				gain *= fArr;
 		}
 		// A DEFERRED PURCHASE IS WORTH ONLY WHAT SURVIVES TO PAY IT BACK. An
 		// afus is minutes of building and more of payback, and if the base

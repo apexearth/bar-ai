@@ -109,8 +109,6 @@ local NAMES = {
 	"apex_nuke_risk",
 	"apex_targfac_want",
 	"apex_obsolete_ratio",
-	"apex_lathe_obsolete",
-	"apex_nano_shift_idle",
 	"apex_expose_r",
 	"apex_exposed_loss_s",
 	"apex_enemy_prior",
@@ -162,7 +160,6 @@ local NAMES = {
 	"apex_air_eco_base",
 	"apex_line_terrain",
 	"apex_line_quality",
-	"apex_plant_unlock",
 	"apex_cover_leaves",
 	"apex_cover_by_raid",
 	"apex_screen_gap",
@@ -304,6 +301,7 @@ local NAMES = {
 	"apex_t1_push_off",
 	"apex_t2_army_hold",
 	"apex_t2_army_floor", -- army.as: army target while the T2 switch is on; 0 = the hard zero, 1 = hold the defensive need
+	"apex_energy_growth_flat", -- want_energy.as: take the growth premium from the economy's appetite instead of the generator's own size (0 = off)
 	"apex_bp_travel", -- production.as: discount a hand's build power by its speed against the quickest builder we own (0 = off)
 	"apex_bp_vs_lathe", -- production.as: price a constructor's build-power capture against the best lathe per metal (0 = off, 1 = full)
 	"apex_eta_commit_bonus", -- want_energy.as: share of the extra fleet-time a bigger reactor commits, credited to the ladder's smaller pick in the tie-break (0 = off)
@@ -531,9 +529,7 @@ local NAMES = {
 	"apex_budget_lever", -- market/decide.as: whether the budget multiplier actually scales wants (0 = logged only)
 	"apex_floor_yield", -- market/decide.as: a floor stands down while its category is over target (0 = off)
 	"apex_deathwalk_price", -- want_mex.as: price a hot-road spot through TripRisk instead of refusing it (0 = off)
-	"apex_com_stay_forward", -- market/floor.as: a forward commander takes work around him rather than walking home (1 = since 3bb47630)
 	"apex_nosite_diag", -- protect_want.as: log WHY a defence site scored zero gain (0 = off)
-	"apex_fill_firstpass", -- protect_fill.as: a never-filled defence def gets one extra site-fill slot per frame (0 = off)
 	"apex_com_mex_price", -- want_mex.as: what a mex spot outside the commander's leash is worth to him, 0..1 (0 = the veto)
 	"apex_share_army",
 	"apex_share_defence",

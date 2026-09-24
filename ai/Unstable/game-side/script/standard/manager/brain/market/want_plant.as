@@ -876,8 +876,7 @@ bool AmphibDead(int pd)
 
 float LineUnitWorth(int pd)
 {
-	if ((ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK) > 0.f)
-		&& AmphibDead(pd))
+	if (AmphibDead(pd))
 		return 0.f;
 	const float tFoeSpeed = FoeSpeedCap();
 	float v = UnitPPC(pd);
@@ -973,7 +972,6 @@ float LineQualityMul(int plantDef)
 		array<float> bestOf(12, 0.f);   // class*4 + tier
 		array<float> bestMul(12, 0.f);
 		array<float> own(Catalog::gDefCount + 1, -1.f);
-		const bool unlockOn = ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK) > 0.f;
 		for (int d = 1; d <= Catalog::gDefCount; ++d) {
 			// a plant is a line only if a mobile builder can place it: the
 			// scavenger lootbox "plants" build things no line ever will
@@ -982,7 +980,7 @@ float LineQualityMul(int plantDef)
 				|| !Producible(d))   // OUR tree: against the other faction's best
 				continue;            // a whole faction's plants would price at 0.66
 			own[d] = LineBestWorth(d);
-			if (own[d] < 0.f || (!unlockOn && (own[d] <= 0.f))) {
+			if (own[d] < 0.f) {
 				own[d] = -1.f;
 				continue;
 			}
@@ -1451,12 +1449,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// that UNLOCKS products no nano can deliver keeps the old rule --
 		// substituted only while an existing line is short of hands -- and
 		// DupBpSubstMul returns 1 when no nano def exists to substitute.
-		const float unlockBar = ai.GetTunable("apex_plant_unlock", TUNE_PLANT_UNLOCK);
 		const bool unlockCap = UnlocksProduct(d);
 		// asked only where it can decide anything; logged below either way
 		const float unlockW = (unlockCap && (reachKin > 0)) ? UnlockWorth(d) : 1.f;
 		const bool isCopy = (reachKin > 0)
-				&& !(unlockCap && ((unlockBar <= 0.f) || (unlockW >= unlockBar)));
+				&& !(unlockCap && (unlockW >= 1.f));
 		// HIS RULING (2026-08-27): a copy of a lab we already run is
 		// INELIGIBLE, not discounted -- "the want ... should come out as 0
 		// ... we forward our want over to the nano." A zero never enters the

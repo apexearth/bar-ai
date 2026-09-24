@@ -1442,12 +1442,10 @@ const float TUNE_OBSOLETE_RATIO = 4.f;
 // LATHE_OBSOLETE: 1 = a construction turret a denser one per cell of ground
 //   replaces is obsolete on arrival and a candidate for retirement; 0 = the
 //   basic turret is built and kept forever. See docs/27.
-const float TUNE_LATHE_OBSOLETE = 1.f;
 
 // NANO_SHIFT_IDLE [share] -- how much of the lathe standing with nothing to
 //   lathe is netted off a line's shift demand. 0 = the shift is bid whole.
 //   See docs/27.
-const float TUNE_NANO_SHIFT_IDLE = 1.f;
 
 // EXPOSE_R: elmos from the core at which a structure counts fully exposed (a
 //   walk away from where the army lives).
@@ -1662,7 +1660,6 @@ const float TUNE_DEATHWALK_PRICE = 0.f;
 // [toggle 0/1] -- A commander already outside his leash finishes the work
 //   around him (3bb47630) instead of walking home for it. 1 is the behaviour
 //   since 2026-09-22; forward is also where he dies. See docs/27.
-const float TUNE_COM_STAY_FORWARD = 1.f;
 
 // [0..1] -- What an extractor spot outside the commander's leash is WORTH to
 //   him, as a multiplier on its score. 0 keeps the veto (the behaviour before
@@ -1689,6 +1686,7 @@ const float TUNE_RETREAT_SCALE = 1.f;
 const float TUNE_ETA_COMMIT_BONUS = 0.f;
 const float TUNE_BP_VS_LATHE = 0.f;
 const float TUNE_BP_TRAVEL = 0.f;
+const float TUNE_ENERGY_GROWTH_FLAT = 0.f;
 
 // [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a
@@ -1706,7 +1704,6 @@ const float TUNE_BP_TRAVEL = 0.f;
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller
 //   reads it as "nowhere worth a gun". See docs/27.
-const float TUNE_FILL_FIRSTPASS = 1.f;
 
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
@@ -2011,7 +2008,6 @@ const float TUNE_LINE_QUALITY = 0.f;
 //   product the unit market refuses on this map (the amphib x0) prices its line
 //   at nothing. 1 is parity with what we field; 0 restores the old test, which
 //   asked only whether the product was new. See docs/27.
-const float TUNE_PLANT_UNLOCK = 1.f;
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it

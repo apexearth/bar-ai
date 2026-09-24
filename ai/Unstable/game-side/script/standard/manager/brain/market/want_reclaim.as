@@ -608,8 +608,7 @@ bool ConvObsoleteOnArrival(int d)
 // apex_obsolete_ratio is NOT applied -- it is 4x, calibrated on the energy
 // ladder, and the lathe rung is 1.69x, so the whole law would be a silent
 // no-op. The successor does the same job on the same ground, so strictly
-// denser is the test and RetireGain's room term decides the swap. docs/27,
-// TUNE_LATHE_OBSOLETE.
+// denser is the test and RetireGain's room term decides the swap. docs/27.
 float LatheCellBP(int d)
 {
 	if (!IsLatheDef(d))
@@ -645,8 +644,6 @@ bool LatheObsoleteOnArrival(int d)
 {
 	const float bc = LatheCellBP(d);
 	if (bc <= 0.f)
-		return false;
-	if (ai.GetTunable("apex_lathe_obsolete", TUNE_LATHE_OBSOLETE) <= 0.f)
 		return false;
 	RefreshBestLathe();
 	return gBestLcell > bc;
@@ -1050,9 +1047,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	int nLathe = 0, nLatheDwarf = 0, nLatheCovered = 0;
 	float bestLatheV = 0.f;
 	int bestLatheDef = -1;
-	const bool latheOn =
-			ai.GetTunable("apex_lathe_obsolete", TUNE_LATHE_OBSOLETE) > 0.f;
-	for (uint i = 0; latheOn && (i < gOwnNano.length()); ++i) {
+	for (uint i = 0; i < gOwnNano.length(); ++i) {
 		CCircuitUnit@ nt = gOwnNano[i];
 		if (nt is null)
 			continue;

@@ -253,12 +253,10 @@ CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 	// A commander who is already outside the leash finishes what is around
 	// him before he walks home for work.
 	IUnitTask@ job = null;
-	// Keeping him out there was bought on the minute-4 extractor metric, which
-	// is a coin flip within a start box (AUC 0.528), and we lose 1.81
-	// commanders a game to BARb's 0.38. apex_com_stay_forward=0 sends him home
-	// for work instead.
+	// A commander far from home takes work HERE: keeping him forward was
+	// bought on a metric that is a coin flip within a start box (AUC 0.528)
+	// while we lost 1.81 commanders a game to BARb's 0.38.
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-		&& (ai.GetTunable("apex_com_stay_forward", TUNE_COM_STAY_FORWARD) > 0.f)
 		&& ComFar(unit.GetPos(ai.frame)) && (gJobHereBest !is null))
 		@job = gJobHereBest;
 	if (job is null)
