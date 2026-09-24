@@ -13,6 +13,7 @@ bool  gPrTuneSet = false;
 float gPrSpaceM = 0.f;
 float gPrPaybackH = 0.f;
 float gPrLockup = 0.f;
+bool  gPrLateBuild = false;
 float gPrAssistShare = 0.f;
 float gPrEResponse = 0.f;
 bool  gPrEBillOn = false;
@@ -30,6 +31,7 @@ void PrTuneFill()
 	gPrSpaceM = ai.GetTunable("apex_space_m", TUNE_SPACE_M);
 	gPrPaybackH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	gPrLockup = ai.GetTunable("apex_lockup", TUNE_LOCKUP);
+	gPrLateBuild = ai.GetTunable("apex_late_build", TUNE_LATE_BUILD) > 0.f;
 	gPrAssistShare = ai.GetTunable("apex_assist_share", TUNE_ASSIST_SHARE);
 	gPrEResponse = ai.GetTunable("apex_e_response", TUNE_E_RESPONSE);
 	gPrEBillOn = ai.GetTunable("apex_e_bill_share", TUNE_E_BILL_SHARE) > 0.f;
@@ -654,6 +656,7 @@ float MCostScale()
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 		bool lateStart = true, float riskM = 0.f)
 {
+	PrTuneFill();
 	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
 	// METAL FEEDS THE LATHE (apexearth: a fusion started before the mohos
 	// runs at quarter feed and takes 4x longer -- "the math is bad"). A
@@ -782,8 +785,11 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// which is the far larger number for anything that yields a rate. Scales
 	// with the gain, so it decides extractor siting and is noise for a nano --
 	// no per-kind distance rule anywhere.
+	// The build delays the stream exactly as the walk does: a nine-minute
+	// reactor paid one builder's wage for its build and outbid a fusion that
+	// would have been producing for eight of those minutes.
 	if (lateStart)
-		w.tCost += gain * walkSec;
+		w.tCost += gain * (walkSec + (gPrLateBuild ? buildSec : 0.f));
 	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
 	// you're making an AFUS you can afford military better and protect
 	// yourself. You're giving yourself options... you can put a little bit

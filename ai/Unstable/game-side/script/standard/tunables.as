@@ -986,6 +986,10 @@ const float TUNE_PAYBACK_H = 900.f;
 //   (cost x duration / payback horizon). See docs/27.
 const float TUNE_LOCKUP = 0.5f;
 
+// [toggle 0/1] -- the late-start charge (gain x seconds before the asset pays)
+//   counts the BUILD as well as the walk. See docs/27.
+const float TUNE_LATE_BUILD = 1.f;
+
 // How much sharper the category draw gets for a COMMITMENT -- added to
 //   apex_draw_sharp in proportion to the candidate's cost as a share of what the
 //   economy can produce over the payback horizon. See docs/27.

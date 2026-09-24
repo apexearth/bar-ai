@@ -307,6 +307,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			const float wage = Wage();
 			const float walkM = walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage);
 			const float buildM = c.buildSec * wage;
+			const float lateM = c.gain * (walkSec + (gPrLateBuild ? c.buildSec : 0.f));
 			AiLog("apex: ewant t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " #" + unit.id + " " + Catalog::Def(d).GetName()
 				+ (barred ? " barred" : "")
@@ -331,8 +332,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ " t=" + formatFloat(c.tCost, "", 0, 0)
 				+ " (walk" + formatFloat(walkM, "", 0, 0)
 				+ "+build" + formatFloat(buildM, "", 0, 0)
-				+ "+late" + formatFloat(c.gain * walkSec, "", 0, 0)
-				+ "+rest" + formatFloat(c.tCost - walkM - buildM - c.gain * walkSec, "", 0, 0)
+				+ "+late" + formatFloat(lateM, "", 0, 0)
+				+ "+rest" + formatFloat(c.tCost - walkM - buildM - lateM, "", 0, 0)
 				+ ") walk=" + formatFloat(walkSec, "", 0, 0)
 				+ "s build=" + formatFloat(c.buildSec, "", 0, 0)
 				+ "s | e " + int(Eco::ECur()) + "/" + int(Eco::EStor())
@@ -474,8 +475,25 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			w.pos = eSite;
 		}
 	}
+	// A generator dearer than a minute of metal income is re-priced once with
+	// every factor logged, so the pick can be posed in tools/wanttest.py.
+	if (!gWtRunning && !genDiag && (w.def !is null)
+		&& (Catalog::gCostM[int(w.def.id)] > 60.f * Eco::MInc())
+		&& (ai.frame >= gNextEBigWhyAt))
+	{
+		gNextEBigWhyAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: ebig-why t=" + ai.teamId + " pick=" + w.def.GetName()
+			+ " mInc=" + int(Eco::MInc()) + " eInc=" + int(Eco::EInc())
+			+ " convCap=" + int(ConvCapE()) + " convUse=" + int(ConvUseE())
+			+ " ecoP=" + int(EcoPowerM()) + " -- every rung follows");
+		gWtRunning = true;
+		ProposeEnergy(unit);
+		gWtRunning = false;
+	}
 	return w;
 }
+
+int gNextEBigWhyAt = 0;
 
 // TOTAL ECONOMIC POWER, in metal/s. Metal income alone is not how big the
 // economy is: what pays for buildings is metal AND the energy a converter

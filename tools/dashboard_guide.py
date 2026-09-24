@@ -163,6 +163,11 @@ GROUPS = [
                  ("TUNE_ENERGY_GROWTH", "energy is worth more against "
                   "everything else, so generators win more auctions"),
                  ("TUNE_ENERGY_GROWTH_ARRIVE", "charges the premium above only on the income that lands BEFORE the plan's target is due, so a reactor stops out-valuing a smaller one purely for being bigger. Off (the default) the premium is flat in size, which is why the Epic Fusion was elected 54 times against the advanced fusion's 3 in his 8v8 while the AI's own ladder had the Epic at 4,832 s and a fusion at 560"),
+                 ("TUNE_LATE_BUILD", "charges a building for the output it does "
+                  "not make while it is being BUILT, not only while the builder "
+                  "walks. Off, a nine-minute Epic Fusion paid almost nothing "
+                  "for the wait and outbid fusions that would have been "
+                  "producing for eight of those minutes"),
                  ("TUNE_ENERGY_GROWTH_FLAT", "takes the growth premium from how "
                   "much energy the ECONOMY still wants instead of from the "
                   "generator's own size. Off, a reactor bigger than the whole "
@@ -182,7 +187,6 @@ GROUPS = [
                  ("TUNE_E_FEED_BOUND", "stops the standing fleet asking for the energy of hands the METAL feed cannot run. Off (the default) the ask is the fleet's full nominal speed, which rises with our own build power and holds the 'would anything absorb this?' term at 1.00 even with the bank full. On, it was measured to move the e-stall and change no outcome -- see docs/27"),
                  ("TUNE_PLANT_INFLIGHT", "discounts a new lab by the labs of other domains already under construction -- stops the bot/vehicle/air rotation leaving three unfinished frames"),
                  ("TUNE_PLANT_COPY", "his 2026-08-27 ruling, on by default: no second plant of a type we already own. 0 lets a copy compete on price, which was measured worse -- -0.67 extractors at minute 4 and THEIRS +0.55 -- so the ruling is exonerated"),
-                 ("TUNE_PLANT_UNLOCK", "a new line escapes the copy ban only while the best combat unit it would ADD beats this share of the best one we already produce -- and a unit the market refuses on this map (the amphib x0) prices its line at nothing. 1 is parity with what we field; 0 is the old test, which asked only whether the product was NEW and so bought hover platforms nobody ever built a hover from"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
                  ("TUNE_BUDGET_LEVER", "whether the category budget's target/actual multiplier actually SCALES wants or is only logged. Measured OFF: 32 games with it on won 3.1% against 48 games off at 12.5%, and his live read agreed -- it moves defence share 0.16 -> 0.23 and does not move economy at all, because economy is the category most often decided with no rival want to price against"),
                  ("TUNE_T2_FUSION_PULL", "while the T2 switch is on and no advanced generator stands, TAKE the fusion instead of drawing it. The switch already names fusions as its purpose but only removes army from the target, and the freed metal went to wind: measured first fusion at minute 16.2 against BARb's 9.7, from a T2 plant we finished FIRST at 8.0"),
@@ -1123,12 +1127,6 @@ GROUPS = [
                  ("TUNE_NANO_SITE_SHARE", "how much of the metal nothing is "
                   "spending one factory or big build may claim as nano demand "
                   "— raise it for more turrets around labs and gantries"),
-                 ("TUNE_LATHE_OBSOLETE", "1 retires basic construction "
-                  "turrets once an advanced one puts more lathe on the same "
-                  "ground, and stops T2 hands building the basic at all"),
-                 ("TUNE_NANO_SHIFT_IDLE", "how much of the lathe already "
-                  "standing idle is netted off a higher line's shift demand — "
-                  "raise it to stop buying turrets while turrets sit unused"),
                  ("TUNE_RECLAIM_REZ_BIAS", "how much more a reclaim is worth "
                   "to a rezbot than to a constructor that could be claiming "
                   "ground — raise it to keep cons expanding"),

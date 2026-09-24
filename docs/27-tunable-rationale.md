@@ -3127,3 +3127,16 @@ moment the stance read AGGRESSIVE, so against his curves (army 5, defence 4)
 defence out-ranked army exactly when we were pressured -- his All That
 Glitters game read army 0.27 / defence 0.31 targets with both gantries idle.
 Not A/B'd; set on his word.
+
+## TUNE_LATE_BUILD — default 1 (on)
+
+The late-start charge in ValueOf is the asset's own stream forgone before it
+pays -- his words on the walk: "the cost in that walk sec is ALSO the amount of
+metal you'd have lost from all that walk time". It charged `gain x walkSec`
+only; the build delays the stream exactly as the walk does. Caught by the
+`apex: ebig-why` instrument (2026-09-24, All That Glitters 2v2 scav seed 11):
+an Epic Fusion picked at 296 m/s, v=10.9 against an AFUS 5.8, with a 558 s
+build charged 1,209 metal of wage and a 42 s walk's late start. Counting the
+build: Epic ~1.5, AFUS ~4.3, fusion ~4.4 (hand arithmetic from that line).
+No threshold: at high build power the build is short and the big rung
+competes again. 0 is the walk-only control.
