@@ -455,6 +455,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			continue;
 		}
 
+		{
+			auto cu = customParams.find("carried_unit");
+			if (cu != customParams.end()) {
+				droneName = cu->second;
+				auto mu = customParams.find("maxunits");
+				const int mx = (mu != customParams.end())
+						? utils::string_to_int(mu->second) : 1;
+				droneCount = (mx > 1) ? mx : 1;
+			}
+		}
+
 		float dps = .0f;
 		float dmg = .0f;
 

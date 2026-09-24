@@ -303,10 +303,10 @@ const float TUNE_STANCE = 1.f;
 
 // [ratio] -- ARMY share multiplier while the stance is AGGRESSIVE (base being
 //   hit or pressured).
-const float TUNE_STANCE_AGGRO_ARMY = 0.75f;
+const float TUNE_STANCE_AGGRO_ARMY = 1.0f;
 
 // [ratio] -- DEFENCE share multiplier while AGGRESSIVE.
-const float TUNE_STANCE_AGGRO_DEF = 1.3f;
+const float TUNE_STANCE_AGGRO_DEF = 1.0f;
 
 // [ratio] -- ECONOMY share multiplier while AGGRESSIVE (below 1: guns before
 //   growth while under attack).

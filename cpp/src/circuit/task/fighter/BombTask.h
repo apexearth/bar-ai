@@ -33,6 +33,13 @@ private:
 	void FallbackBasePos();
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
+	void CheckCommit(const springai::AIFloat3& pos, const springai::AIFloat3& focusPos, float focusR);
+
+	// Past the point where going home costs more AA than reaching the cell.
+	bool committed = false;
+	bool spent = false;  // committed, and the cell has nothing left to bomb
+	springai::AIFloat3 commitPos;
+	float commitR = 0.f;
 };
 
 } // namespace circuit

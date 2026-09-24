@@ -3984,6 +3984,22 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
 	for (CCircuitDef& cdef : GetCircuitDefs()) {
 		cdef.Init(this);
 	}
+	// Only now does every drone's own def exist to read threat from.
+	for (CCircuitDef& cdef : GetCircuitDefs()) {
+		if (cdef.GetDroneCount() <= 0) {
+			continue;
+		}
+		auto dit = defsByName.find(cdef.GetDroneName().c_str());
+		if (dit == defsByName.end()) {
+			continue;
+		}
+		const float s0 = cdef.GetSurfThreat();
+		const float a0 = cdef.GetAirThreat();
+		cdef.AddDroneThreat(dit->second);
+		LOG("apex: drone-carrier t=%i %s carries %i x %s -- surf %.0f -> %.0f, air %.0f -> %.0f",
+			teamId, std::string(cdef.GetDef()->GetName()).c_str(), cdef.GetDroneCount(),
+			cdef.GetDroneName().c_str(), s0, cdef.GetSurfThreat(), a0, cdef.GetAirThreat());
+	}
 	std::string snipers;
 	for (const CCircuitDef& cdef : GetCircuitDefs()) {
 		if (cdef.IsSniper()) {

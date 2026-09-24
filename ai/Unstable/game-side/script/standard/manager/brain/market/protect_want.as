@@ -72,6 +72,12 @@ bool T1Tower(int d)
 // is not outdated, it is what we can have.
 // `affordM` is EcoPowerM() x apex_def_afford_s, read once per election by the
 // caller: it is the same number for every candidate and every build option.
+// A tower's price in metal, its energy at the conversion rate.
+float TowerCostEq(int d)
+{
+	return Catalog::gCostM[d] + Catalog::gCostE[d] * BestConvRatio();
+}
+
 bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 {
 	if (b is null)
@@ -85,7 +91,9 @@ bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 		if ((o == d) || Catalog::gMobile[o] || !Catalog::gAvailable[o]
 			|| (ProtClassOf(o) != PROT_DEF))
 			continue;
-		if (Catalog::gCostM[o] > affordM)
+		// Energy counts: on metal alone an Epic Pulsar (13,500 m + 450,000 E)
+		// read affordable at ~480 m/s and obsoleted the Pulsar.
+		if (TowerCostEq(o) > affordM)
 			continue;   // cannot have it yet: d is not outdated, it is the answer
 		// Beaten on BOTH axes -- reach and killing power. Either alone is a
 		// trade-off; both together is obsolescence.

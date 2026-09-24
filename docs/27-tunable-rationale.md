@@ -3108,3 +3108,12 @@ NOT FIXED, the larger half: `gLadderLatS` reads up to 6,375 s here against
 
 OPEN for apexearth: `armafust3` is a Scavengers-tree building. If it should
 not be a candidate at all, that is cheaper than out-arguing the price model.
+
+## TUNE_STANCE_AGGRO_ARMY / TUNE_STANCE_AGGRO_DEF — 1.0 / 1.0 (were 0.75 / 1.3)
+
+His ruling 2026-09-23: economy plus big mobile units that defend us, some
+turrets but no extremes. The old pair cut army 25% and raised towers 30% the
+moment the stance read AGGRESSIVE, so against his curves (army 5, defence 4)
+defence out-ranked army exactly when we were pressured -- his All That
+Glitters game read army 0.27 / defence 0.31 targets with both gantries idle.
+Not A/B'd; set on his word.

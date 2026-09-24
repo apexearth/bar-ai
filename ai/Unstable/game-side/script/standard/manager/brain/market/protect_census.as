@@ -406,7 +406,7 @@ void TeamTowerLadder()
 			CCircuitDef@ cd = Catalog::Def(bd);
 			if (cd is null)
 				continue;
-			gTeamTowerCost.insertLast(Catalog::gCostM[bd]);
+			gTeamTowerCost.insertLast(TowerCostEq(bd));
 			gTeamTowerPow.insertLast(cd.power);
 		}
 	}

@@ -403,6 +403,10 @@ this file wins and the other is stale.
 - **Air attacks the enemy home base**, not the small mex emplacements; hitting
   a low-value target and flying a huge arc home usually dies to AA.
 - **Vary air targets.** Air must not repeatedly bomb the same thing.
+- **A bombing raid past the point of no return commits** (2026-09-23). Deep in
+  enemy territory, meeting AA is not a reason to turn: circling and dodging
+  there dies for nothing, while pressing on to the economy does damage. Once
+  the way home costs as much as the way in, go for the target.
 - **Coordinate air raids with the land engagement** on the same front at the
   same time.
 - **Air scouts are not spam.** Scouts get made so the army knows where the

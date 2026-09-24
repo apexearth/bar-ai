@@ -140,7 +140,7 @@ void CBombTask::Update()
 	 * Regroup if required
 	 */
 	bool wasRegroup = (State::REGROUP == state);
-	bool mustRegroup = IsMustRegroup();
+	bool mustRegroup = !committed && IsMustRegroup();
 	if (State::REGROUP == state) {
 		if (mustRegroup) {
 			CCircuitAI* circuit = manager->GetCircuit();
@@ -181,6 +181,12 @@ void CBombTask::Update()
 		state = State::ENGAGE;
 		Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
 			|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
+		return;
+	}
+
+	// A path around the AA from here only turns a committed wave in circles.
+	if (committed && utils::is_valid(position)) {
+		Fallback();
 		return;
 	}
 
@@ -225,6 +231,9 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
 
 void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
+	if (committed && !spent) {
+		return;
+	}
 	// Do not retreat if bomber is close to target
 	if (GetTarget() == nullptr) {
 		ISquadTask::OnUnitDamaged(unit, attacker);
@@ -278,14 +287,22 @@ void CBombTask::FindTarget()
 	// power vetoed every target under a single flak, so a wave of ninety found
 	// nothing. Home defence (ANTI_STAT off) is not the strike.
 	const int myTeam = circuit->GetTeamId();
-	const float focusR = circuit->ReadTeamValue(myTeam, "strike_r", 0.f);
-	const bool focused = (focusR > 0.f) && isAntiStatic;
+	float focusR = circuit->ReadTeamValue(myTeam, "strike_r", 0.f);
+	AIFloat3 focusPos(circuit->ReadTeamValue(myTeam, "strike_x", -1.f), 0.f,
+			circuit->ReadTeamValue(myTeam, "strike_z", -1.f));
+	// A committed run keeps its cell after the script calls the strike off.
+	if (committed) {
+		focusR = commitR;
+		focusPos = commitPos;
+	}
+	const bool focused = (focusR > 0.f) && isAntiStatic && !spent;
 	const float focusPower = focused ? circuit->ReadTeamValue(myTeam, "strike_p", 0.f) : 0.f;
 	const float maxPower = focused
 			? std::max(attackPower * scale * powerMod, focusPower)
 			: attackPower * scale * powerMod;
-	const AIFloat3 focusPos(circuit->ReadTeamValue(myTeam, "strike_x", -1.f), 0.f,
-			circuit->ReadTeamValue(myTeam, "strike_z", -1.f));
+	if (focused && !committed) {
+		CheckCommit(pos, focusPos, focusR);
+	}
 	const float sqFocusR = SQUARE(focusR);
 	static bool focusLogged = false;
 	if (focused && !focusLogged) {
@@ -342,7 +359,7 @@ void CBombTask::FindTarget()
 			++nSeen;
 			if (power > worstPower) worstPower = power;
 		}
-		if ((!overFocus && (maxPower <= power)) ||
+		if ((!overFocus && !committed && (maxPower <= power)) ||
 			(notAW && (ePos.y < -SQUARE_SIZE * 5)))
 		{
 			++nPower;
@@ -486,7 +503,12 @@ void CBombTask::FindTarget()
 		}
 	}
 
-	if (focused && (bestTarget == nullptr) && !utils::is_valid(position)) {
+	if (committed && overFocus && (bestTarget == nullptr) && !utils::is_valid(position)) {
+		committed = false;
+		spent = true;
+		circuit->LOG("apex: bomb run spent over %.0f,%.0f units=%d -- nothing left in the cell, home",
+				focusPos.x, focusPos.z, (int)units.size());
+	} else if (focused && (bestTarget == nullptr) && !utils::is_valid(position)) {
 		position = focusPos;   // nothing scored yet: fly to the cell as one and look again there
 		static int nextNoTargetLog = 0;
 		if (overFocus && (circuit->GetLastFrame() >= nextNoTargetLog)) {
@@ -517,6 +539,41 @@ void CBombTask::FindTarget()
 		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
 	}
 	// Return: target, startPos=leader->pos, endPos=position
+}
+
+// apex: the point of no return -- once the way home crosses more AA than the way
+// to the cell, turning back buys nothing, so the wave presses on (docs/24).
+static float LineThreat(CThreatMap* threatMap, CCircuitUnit* unit, const AIFloat3& a, const AIFloat3& b)
+{
+	const float w = CTerrainManager::GetTerrainWidth();
+	const float h = CTerrainManager::GetTerrainHeight();
+	float sum = 0.f;
+	for (int i = 1; i <= 6; ++i) {
+		AIFloat3 p = a + (b - a) * (float(i) / 6.f);
+		p.x = utils::clamp(p.x, 0.f, w - 1.f);
+		p.z = utils::clamp(p.z, 0.f, h - 1.f);
+		sum += std::max(threatMap->GetThreatAt(unit, p), 0.f);
+	}
+	return sum;
+}
+
+void CBombTask::CheckCommit(const AIFloat3& pos, const AIFloat3& focusPos, float focusR)
+{
+	if (spent || !utils::is_valid(focusPos)) {
+		return;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+	const float back = LineThreat(threatMap, leader, pos, home);
+	const float on = LineThreat(threatMap, leader, pos, focusPos);
+	if (back > on) {
+		committed = true;
+		commitPos = focusPos;
+		commitR = focusR;
+		circuit->LOG("apex: bomb commit -- way home %.1f AA vs way on %.1f, %i planes at %.0f,%.0f pressing on to %.0f,%.0f",
+				back, on, (int)units.size(), pos.x, pos.z, focusPos.x, focusPos.z);
+	}
 }
 
 void CBombTask::ApplyTargetPath(const CQueryPathSingle* query)

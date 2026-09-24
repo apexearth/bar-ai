@@ -306,6 +306,20 @@ public:
 	void ModAirThreat(float mod) { airThrMod *= mod; airThrDmg *= mod; }
 	void ModSurfThreat(float mod) { surfThrMod *= mod; surfThrDmg *= mod; }
 	void ModWaterThreat(float mod) { waterThrMod *= mod; waterThrDmg *= mod; }
+
+	// A DRONE CARRIER FIGHTS WITH ITS DRONES. The spawner weapon names the
+	// carried unit and how many it keeps up (weapon customparams carried_unit /
+	// maxunits); the carrier's own guns are nothing, so without this it read as
+	// unarmed and was bought as a radar for its 1,500 radar range.
+	const std::string& GetDroneName() const { return droneName; }
+	int GetDroneCount() const { return droneCount; }
+	void AddDroneThreat(const CCircuitDef* drone) {
+		const float n = float(droneCount);
+		airThrDmg   += n * drone->airThrDmg;
+		surfThrDmg  += n * drone->surfThrDmg;
+		waterThrDmg += n * drone->waterThrDmg;
+		defThrDmg   += n * drone->defThrDmg;
+	}
 	void SetThreatRange(ThreatType type, int range) { threatRange[static_cast<ThreatT>(type)] = range; }
 	void SetFireState(FireT ft) { fireState = ft; }
 	void SetMoveState(MoveT mt) { moveState = mt; }
@@ -496,6 +510,8 @@ private:
 	springai::WeaponMount* shieldMount;
 	springai::WeaponMount* weaponMount;
 	float pwrDmg, pwrMod;  // ally damage
+	std::string droneName;  // carried_unit of a drone-spawner weapon, if any
+	int droneCount = 0;     // its maxunits
 	float defThrDmg, defThrMod;  // enemy damage, for influence
 	float airThrDmg, airThrMod;  // air enemy damage
 	float surfThrDmg, surfThrMod;  // surface, even on water

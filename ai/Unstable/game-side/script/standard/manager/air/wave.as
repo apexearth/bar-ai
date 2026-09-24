@@ -177,6 +177,7 @@ void RecallWave()
 {
 	if (!Builder::gHomeSet)
 		return;
+	int kept = 0;
 	for (int i = 0; i < 6; ++i) {
 		CCircuitDef@ d = StrikeDef(i);
 		if (d is null)
@@ -185,10 +186,22 @@ void RecallWave()
 		if (us is null)
 			continue;
 		for (uint k = 0; k < us.length(); ++k) {
-			if ((us[k] !is null) && InWave(us[k].id))
-				us[k].CmdMoveTo(Builder::gHomePos);
+			if ((us[k] is null) || !InWave(us[k].id))
+				continue;
+			// Past the point of no return the bomb task presses on; a raw move
+			// home here only flip-flops against it (the wave "circling").
+			const AIFloat3 at = us[k].GetPos(ai.frame);
+			if (gStrikeHas && (RouteThreat(us[k], at, Builder::gHomePos)
+					> RouteThreat(us[k], at, gStrikeAt))) {
+				++kept;
+				continue;
+			}
+			us[k].CmdMoveTo(Builder::gHomePos);
 		}
 	}
+	if (kept > 0)
+		AiLog(Factory::T() + "apex: air recall -- " + kept
+			+ " bombers past the point of no return press on");
 }
 
 }  // namespace Air
