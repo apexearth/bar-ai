@@ -97,13 +97,22 @@ bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 			continue;   // cannot have it yet: d is not outdated, it is the answer
 		// Beaten on BOTH axes -- reach and killing power. Either alone is a
 		// trade-off; both together is obsolescence.
-		if ((Catalog::gMaxRange[o] >= myR) && (PfTowerKill(o) > myK))
+		if ((Catalog::gMaxRange[o] >= myR) && (PfTowerKill(o) > myK)) {
+			if (!T1Tower(d) && (ai.frame >= gNextObsoleteLog)) {
+				gNextObsoleteLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: def-obsolete " + Catalog::Def(d).GetName()
+					+ " by " + Catalog::Def(o).GetName()
+					+ " costEq=" + int(TowerCostEq(o)) + " afford=" + int(affordM)
+					+ " ecoP=" + int(EcoPowerM()));
+			}
 			return true;
+		}
 	}
 	return false;
 }
 
 bool gWallEffDiag = false;
+int gNextObsoleteLog = 0;
 
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
