@@ -1490,17 +1490,34 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			float idle = ConvCapE() - ConvUseE();
 			if (idle < 0.f)
 				idle = 0.f;
-			const float open = Catalog::gConvCapacity[d] - ConvCapInFlight() - idle;
-			if (open > chew)
-				chew = open;
+			// HOW MUCH MORE CONVERSION WE NEED IS ONE NUMBER, NOT ONE PER
+			// NAMEPLATE. Subtracting the idle and the in-flight from each
+			// def's OWN capacity made the same absolute shortfall leave a
+			// 6,000 e/s converter with 5,400 of headroom and a 600 e/s one
+			// with none, so idle capacity selected the biggest def on the
+			// board -- the Epic Energy Converter priced gain 76.5 against the
+			// advanced converter's 0.44 (apexearth, watching, twice). Compute
+			// the shortfall once, then let each def cover as much of it as it
+			// can: equal need, and the cheaper way to cover it wins.
+			if (ai.GetTunable("apex_conv_feed_cap", TUNE_CONV_FEED_CAP) > 0.f) {
+				const float lookN = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
+				float feedN = aiEconomyMgr.energy.income;
+				if (lookN > 1.f)
+					feedN += aiEconomyMgr.energy.current / lookN;
+				float needN = feedN - idle - ConvCapInFlight();
+				if (needN < 0.f)
+					needN = 0.f;
+				const float coverN = (needN < Catalog::gConvCapacity[d])
+						? needN : Catalog::gConvCapacity[d];
+				if (coverN > chew)
+					chew = coverN;
+			} else {
+				const float open = Catalog::gConvCapacity[d] - ConvCapInFlight() - idle;
+				if (open > chew)
+					chew = open;
+			}
 		}
-		// YOU CANNOT CONVERT ENERGY YOU DO NOT MAKE. The pin says we are
-		// throwing energy away, not that the supply is unlimited, and nothing
-		// above bounded the chew by what the economy actually feeds -- so an
-		// Epic Energy Converter priced its whole 6,000 e/s nameplate at 2,000
-		// e/s of income, for 9,000 metal against 80 metal/s (apexearth,
-		// watching). What a converter can eat is what we make plus what the
-		// bank can hand it over the same window the rest of the ladder uses.
+		// And never more than the economy feeds, whichever branch set it.
 		if (ai.GetTunable("apex_conv_feed_cap", TUNE_CONV_FEED_CAP) > 0.f) {
 			const float lookC = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
 			float feed = aiEconomyMgr.energy.income;
@@ -1525,8 +1542,22 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 				cGain *= mine / cvBestPerCell;
 		}
 		if (realize) {
+			// THE SAME SIZE DOUBLE-COUNT THE GENERATOR HAD. cGain is already
+			// linear in what this converter chews, and multiplying it again by
+			// its own share of the economy means anything bigger than the whole
+			// economy takes the full multiplier -- so the Epic Energy Converter
+			// kept winning at 9,000 metal even after its chew was capped to the
+			// energy we actually make (apexearth, watching, twice). The
+			// appetite is the spare energy the ECONOMY has, which is one number
+			// for every candidate in the election.
+			float growC = cGain;
+			if (ai.GetTunable("apex_energy_growth_flat", TUNE_ENERGY_GROWTH_FLAT) > 0.f) {
+				growC = eSurplus * BestConvRatio();
+				if (growC < 0.f)
+					growC = 0.f;
+			}
 			cGain *= 1.f + cvGrowK
-					* cGain / ((cvPower > cGain) ? cvPower : ((cGain > 0.f) ? cGain : 1.f));
+					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
 				Catalog::gBuildPower[uid], c);
