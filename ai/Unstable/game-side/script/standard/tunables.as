@@ -1632,8 +1632,8 @@ const float TUNE_ARTY_MASS = 1.f;
 //   respect it; our own read stronger too (they are chargers and ignore the
 //   margin anyway).
 const float TUNE_BEHEMOTH_THREAT = 2.f;
-const float TUNE_COM_BERTH = 1.f;
-const float TUNE_AA_FIGHTER_SHARE = 0.f;
+const float TUNE_COM_BERTH = 3.f;
+const float TUNE_AA_FIGHTER_SHARE = 0.5f;
 
 // [ratio] -- Cap on the forward-bleed engage caution.
 const float TUNE_BLEED_CAP = 1.6f;
@@ -1686,12 +1686,12 @@ const float TUNE_ARMY_RICH_BALANCE = 1.f;
 const float TUNE_BUDGET_AFTER = 1.f;
 const float TUNE_RETREAT_SCALE = 1.f;
 const float TUNE_ETA_COMMIT_BONUS = 0.f;
-const float TUNE_BP_VS_LATHE = 0.f;
+const float TUNE_BP_VS_LATHE = 1.f;
 const float TUNE_BP_TRAVEL = 0.f;
-const float TUNE_ENERGY_GROWTH_FLAT = 0.f;
-const float TUNE_SUPPORT_PER_METAL = 0.f;
-const float TUNE_CONV_FEED_CAP = 0.f;
-const float TUNE_UNLOCK_AFFORD = 0.f;
+const float TUNE_ENERGY_GROWTH_FLAT = 1.f;
+const float TUNE_SUPPORT_PER_METAL = 1.f;
+const float TUNE_CONV_FEED_CAP = 1.f;
+const float TUNE_UNLOCK_AFFORD = 1.f;
 
 // [toggle 0/1] -- The keep-job hold tests the removals that are OURS (peel,
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a

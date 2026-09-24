@@ -286,6 +286,17 @@
     <datalist id="maplist"></datalist>
     <datalist id="speclist"></datalist>
     <div id="l-ovsum" style="margin-top:8px;font-size:12px"></div>
+    <details id="l-adv" style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:13px">Advanced &mdash; mod options
+        (<span id="l-advn">0</span> set)</summary>
+      <div class="row" style="margin:8px 0">
+        <label class="f">Filter <input id="l-advq" size="20"
+          placeholder="aa, converter, energy, commander&hellip;"></label>
+        <button class="act" onclick="advClear()">Clear all</button>
+        <span class="dim" style="font-size:12px">blank = use the deployed default</span>
+      </div>
+      <div id="l-advlist" style="max-height:340px;overflow:auto"></div>
+    </details>
     <div class="dim" style="margin-top:8px;font-size:12px">
       Watch opens a real game window at the chosen speed. Headless runs as fast as
       the machine allows and lands in <span class="mono">matches/</span>.
@@ -439,6 +450,83 @@ function renderOvSummary() {
     + ` — <a href="javascript:ovGoTunables()">edit in Tunables</a>`;
 }
 
+/* ---------- Launch tab: the Advanced mod-option picker ----------
+   Every name dev_tunables.lua republishes, with the deployed default beside it
+   and a box to set a launch value. It writes UI.tuneOv, the same store the
+   Tunables tab's override column uses, so the value rides along as
+   --modoption on this launch with no extra plumbing. apexearth 2026-09-23:
+   "a list of mod options we can just choose from". */
+let ADVROWS = null;   // [{name, def, section}] once /api/tunables has been read
+
+async function advRows() {
+  if (ADVROWS) return ADVROWS;
+  if (!TUNE) { try { TUNE = await api("/api/tunables"); } catch (e) { return []; } }
+  if (!GADGET) GADGET = new Set((TUNE && TUNE.gadget_tunables) || []);
+  const out = [];
+  for (const sec of ((TUNE && TUNE.sections) || [])) {
+    for (const t of (sec.entries || [])) {
+      // `name` is the TUNE_ symbol; `tunable` is the apex_ modoption name, which
+      // is what dev_tunables.lua republishes and what a launch passes.
+      if (t.tunable && GADGET.has(t.tunable))
+        out.push({ name: t.tunable,
+                   def: (t.value === undefined ? "" : String(t.value)),
+                   unit: t.unit || "", desc: t.desc || "",
+                   section: sec.title || "" });
+    }
+  }
+  out.sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+  ADVROWS = out;
+  return out;
+}
+
+function advClear() {
+  const ov = tuneOv();
+  for (const k of Object.keys(ov)) delete ov[k];
+  UI.tuneOv = ov; uiSave();
+  renderOvSummary(); renderAdvOpts();
+}
+
+async function renderAdvOpts() {
+  const host = $("#l-advlist"); if (!host) return;
+  const rows = await advRows(), ov = tuneOv();
+  const q = (($("#l-advq") || {}).value || "").trim().toLowerCase();
+  const hit = q ? rows.filter(r => r.name.includes(q)
+                    || r.section.toLowerCase().includes(q)
+                    || r.desc.toLowerCase().includes(q))
+                : rows;
+  const n = $("#l-advn"); if (n) n.textContent = String(Object.keys(ov).length);
+  if (!rows.length) {
+    setHTML(host, '<div class="dim" style="font-size:12px">no settable mod options found'
+      + ' &mdash; is dev_tunables.lua present?</div>');
+    return;
+  }
+  setHTML(host, hit.map(r => {
+    const cur = ov[r.name] === undefined ? "" : ov[r.name];
+    return '<div class="row" style="gap:8px;align-items:center;padding:1px 0">'
+      + `<input size="8" value="${esc(cur)}" data-adv="${esc(r.name)}"`
+      + ` placeholder="${esc(r.def)}" style="font-family:monospace">`
+      + `<span class="mono" style="font-size:12px">${esc(r.name)}</span>`
+      + `<span class="dim" style="font-size:11px">${esc(r.def)}`
+      + (r.unit ? ` &middot; ${esc(r.unit)}` : "") + `</span>`
+      + (r.desc ? `<span class="dim" style="font-size:11px;flex:1;overflow:hidden;`
+          + `white-space:nowrap;text-overflow:ellipsis" title="${esc(r.desc)}">`
+          + `${esc(r.desc)}</span>` : "")
+      + '</div>';
+  }).join("") || '<div class="dim" style="font-size:12px">nothing matches that filter</div>');
+}
+
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t && t.id === "l-advq") { renderAdvOpts(); return; }
+  if (!t || !t.dataset || !t.dataset.adv) return;
+  const v = t.value.trim();
+  if (v !== "" && !MODOPT_VAL_RE.test(v)) { t.style.color = "var(--bad)"; return; }
+  t.style.color = "";
+  setTuneOv(t.dataset.adv, v);
+  const n = $("#l-advn");
+  if (n) n.textContent = String(Object.keys(tuneOv()).length);
+});
+
 /* ---------- tabs ---------- */
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
@@ -447,7 +535,7 @@ $("#nav").addEventListener("click", e => {
     x.classList.toggle("on", x.id === "tab-" + b.dataset.tab));
   uiSet("tab", b.dataset.tab);
   if (b.dataset.tab === "games") loadGames();
-  if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); }
+  if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); renderAdvOpts(); }
   if (b.dataset.tab === "tunables") loadTunables();
   if (b.dataset.tab === "balance") loadBalance();
 });

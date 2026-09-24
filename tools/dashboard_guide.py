@@ -163,6 +163,16 @@ GROUPS = [
                  ("TUNE_ENERGY_GROWTH", "energy is worth more against "
                   "everything else, so generators win more auctions"),
                  ("TUNE_ENERGY_GROWTH_ARRIVE", "charges the premium above only on the income that lands BEFORE the plan's target is due, so a reactor stops out-valuing a smaller one purely for being bigger. Off (the default) the premium is flat in size, which is why the Epic Fusion was elected 54 times against the advanced fusion's 3 in his 8v8 while the AI's own ladder had the Epic at 4,832 s and a fusion at 560"),
+                 ("TUNE_ENERGY_GROWTH_FLAT", "takes the growth premium from how "
+                  "much energy the ECONOMY still wants instead of from the "
+                  "generator's own size. Off, a reactor bigger than the whole "
+                  "economy collects the full premium, which is why one Epic "
+                  "Fusion was priced 200x a fusion for 30x the energy"),
+                 ("TUNE_CONV_FEED_CAP", "a converter is only worth the energy we "
+                  "actually make. Off, a pinned energy bank prices every "
+                  "converter at its nameplate and the shortfall is measured "
+                  "against each one's OWN capacity, so idle capacity SELECTS the "
+                  "biggest converter -- the 9,000-metal Epic at 2,000 e/s of income"),
                  ("TUNE_E_LOOKAHEAD", "prices in energy demand that has not "
                   "arrived yet"),
                  ("TUNE_STALL_SOLAR_E", "while e-stalled below this energy income, only build generators that cost NO energy to make -- the basic solar. Raise it to hold that rule further up the economy; 0 lets the auction pick the rung during a stall"),
