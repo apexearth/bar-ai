@@ -3083,3 +3083,26 @@ flat because the unit was never a candidate.
 
 Pass both modoptions for anything meant to reflect his regime, and grep the
 arm for `*t3` defs before trusting a null result.
+
+## The scavenger pack costs us a third of the economy (2026-09-23)
+
+Eco board, Comet Catcher Remake 1.8, +50%, vs NullAI, eco-only, 6 seeds an
+arm. The only difference is `experimentalextraunits=1 scavunitsforplayers=1`,
+which apexearth plays with:
+
+  minute      8      10      12      14      16
+  pack off  117     250     436     501     693
+  pack on    79     192     298     361     431
+  cost     -32%    -23%    -32%    -28%    -38%
+
+The `*t3` units are better per metal AND per build time than their T2
+equivalents, so nothing in the pricing refuses them -- and they are enormous
+lumps (armafust3: 90,000 metal, 2,500,000 buildtime, nothing delivered until
+it finishes). With the pack on, the AI reaches for them and the economy stops
+compounding. This is apexearth's watched complaint of this date, reproduced as
+a number.
+
+It also means every arm run WITHOUT those two modoptions overstates our
+economy against his real games by about a third, and any change measured in
+one regime must be re-measured in the other: apex_bp_vs_lathe gave +37% at
+minute 16 with the pack on and is INERT with it off.
