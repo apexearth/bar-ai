@@ -302,6 +302,10 @@ array<int> gProtClass;
 
 int ProtClassCompute(int defId)
 {
+	// A factory is never protection: armaap carries radarDistance 1000, and
+	// the sense market bought it as a radar.
+	if (Catalog::gBuildsList[defId].length() > 0)
+		return -1;
 	if (Catalog::gShield[defId] && !Catalog::gMobile[defId]) return PROT_SHIELD;
 	if (Catalog::gAntiNuke[defId]) return PROT_ANTINUKE;
 	if (IsSuperWeapon(defId)) return PROT_SUPER;

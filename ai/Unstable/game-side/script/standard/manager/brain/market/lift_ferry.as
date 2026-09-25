@@ -78,6 +78,20 @@ bool OwnPlaneFits(int c)
 	return false;
 }
 
+// Cargo a plane we own, or one already ordered, can carry is demand that is
+// met; misses remembered from before the plane existed must not buy another.
+bool LiftServed(int c)
+{
+	if (OwnPlaneFits(c))
+		return true;
+	LiftDefsList();
+	for (uint i = 0; i < gLiftDefs.length(); ++i) {
+		if ((Brain::PendAnyOf(gLiftDefs[i]) > 0) && LiftFits(gLiftDefs[i], c))
+			return true;
+	}
+	return false;
+}
+
 Ferry@ FerryNear(int d, const AIFloat3& in site)
 {
 	for (uint i = 0; i < gFerries.length(); ++i) {
@@ -311,7 +325,7 @@ float FerryMissedFor(int t, float fillSec)
 			gFerryMissPos.removeAt(i);
 			continue;
 		}
-		if ((t >= 0) && LiftFits(t, gFerryMissDef[i]))
+		if ((t >= 0) && LiftFits(t, gFerryMissDef[i]) && !LiftServed(gFerryMissDef[i]))
 			m += gFerryMissM[i];
 	}
 	return m;

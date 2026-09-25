@@ -1393,3 +1393,8 @@ have them attack the enemy from different angles."*
 - **Towers can be flown forward.** Light towers (a beamer) are built in the
   safety of the base and carried up toward the front line.
 - **A constructor can be sneaked behind enemy lines to make a base there.**
+- **After a drop the transport goes back to the base.** Staying to hover over
+  what it dropped at the front line is dangerous: "Don't do that. Go back to
+  the base." A transport never keeps holding its cargo either.
+- **Build only as many transports as are needed**; a fleet that sits unused is
+  waste.

@@ -467,6 +467,19 @@ static float CCircuitAI_GetResUse(CCircuitAI* circuit, CCircuitUnit* unit, bool 
 	}
 }
 
+// The engine picks the legal spot within `radius`: a drop refused at an exact
+// point otherwise leaves the plane holding its cargo.
+static void CCircuitUnit_CmdUnloadArea(CCircuitUnit* unit, const AIFloat3& pos, float radius)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return;
+	}
+	try {
+		unit->GetUnit()->UnloadUnitsInArea(pos, radius, 0, INT_MAX);
+	} catch (const std::exception&) {
+	}
+}
+
 // The static half of CUnit::CanTransport (rts/Sim/Units/Unit.cpp); the game's
 // own gadgets can still refuse a lift this allows.
 static bool CCircuitDef_CanLift(const CCircuitDef* transport, const CCircuitDef* cargo)
@@ -1969,6 +1982,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdLoadUnit(CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdLoadUnit), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdUnloadAt(const AIFloat3& in, CCircuitUnit@)", asFUNCTION(CCircuitUnit_CmdUnloadAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool CanLift(const CCircuitDef@) const", asFUNCTION(CCircuitDef_CanLift), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdUnloadArea(const AIFloat3& in, float)", asFUNCTION(CCircuitUnit_CmdUnloadArea), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetResUse(CCircuitUnit@, bool)", asFUNCTION(CCircuitAI_GetResUse), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "int GetFacing()", asFUNCTION(CCircuitUnit_GetFacing), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdAttackGround(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdAttackGround), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

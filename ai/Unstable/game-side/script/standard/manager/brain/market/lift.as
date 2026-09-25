@@ -67,6 +67,7 @@ class LiftJob {
 	int stage = 0;      // 0 free, 1 flying to load, 2 carrying
 	int deadline = 0;
 	bool retried = false;
+	int drops = 0;
 }
 array<LiftJob@> gLift;
 
@@ -225,13 +226,13 @@ void LiftSample()
 	}
 }
 
-void LiftDispatch(LiftJob@ jb)
+bool LiftDispatch(LiftJob@ jb)
 {
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
 	if (!LineSiteFor(lp, net, line) || (net <= 0.f))
-		return;
+		return false;
 	const int pd = int(jb.plane.circuitDef.id);
 	const float speed = LiftSpeed(jb.plane);
 	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
@@ -248,7 +249,7 @@ void LiftDispatch(LiftJob@ jb)
 		if (up.distance2D(lp) < Catalog::gBuildDist[c])
 			continue;
 		const float sec = (pp.distance2D(up) + up.distance2D(lp)) / speed;
-		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || Builder::SiteHot(up))
+		if (!LiftIdleEnough(i, sec) || InLiftJob(u) || LiftRefused(u) || Builder::SiteHot(up))
 			continue;
 		if ((best < 0) || (sec < bestSec)) {
 			best = int(i);
@@ -256,14 +257,14 @@ void LiftDispatch(LiftJob@ jb)
 		}
 	}
 	if (best < 0)
-		return;
+		return false;
 	CCircuitUnit@ cargo = gOwnNano[best];
 	const int cd = int(cargo.circuitDef.id);
 	array<AIFloat3> slots;
 	PackSlots(cd, lp, AnchorDefAt(lp), 1, slots);
 	AIFloat3 to = (slots.length() > 0) ? slots[0] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
 	if (!OnMap(to) || Builder::SiteHot(to))
-		return;
+		return false;
 	@jb.cargo = cargo;
 	jb.src = cargo.GetPos(ai.frame);
 	jb.to = to;
@@ -281,6 +282,7 @@ void LiftDispatch(LiftJob@ jb)
 			+ " net=" + formatFloat(net, "", 0, 1)
 			+ " idle=" + idleSec + "s"
 			+ " flight=" + int(bestSec) + "s");
+	return true;
 }
 
 void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
@@ -296,18 +298,62 @@ void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 	cargo.CmdPatrolTo(p);
 }
 
+// Carried or on the ground: a plane hovering over the drop with its cargo
+// still hooked holds as still as a turret that landed. A standing turret's
+// position reads ~13 above the ground, so height alone cannot say it.
+bool Carried(CCircuitUnit@ cargo, CCircuitUnit@ plane)
+{
+	const AIFloat3 p = cargo.GetPos(ai.frame);
+	return (p.distance2D(plane.GetPos(ai.frame)) < 40.f)
+			&& (p.y - ai.GetElevationAt(p) > 30.f);
+}
+
+// Falling or down, for a turret whose plane died under it.
+bool Airborne(CCircuitUnit@ u)
+{
+	const AIFloat3 p = u.GetPos(ai.frame);
+	return p.y - ai.GetElevationAt(p) > 30.f;
+}
+
+// A turret the engine would not lift is not asked again.
+array<Id> gLiftRefusedIds;
+
+bool LiftRefused(CCircuitUnit@ u)
+{
+	return gLiftRefusedIds.find(u.id) >= 0;
+}
+
+// Between jobs a plane waits over the base, never where it made its last drop
+// (apexearth 2026-09-24).
+void LiftGoHome(LiftJob@ jb)
+{
+	if (!Base::gAnchorSet)
+		return;
+	if (jb.plane.GetPos(ai.frame).distance2D(Base::gAnchor) > 300.f)
+		jb.plane.CmdMoveTo(Base::gAnchor);
+}
+
+void LiftEnd(LiftJob@ jb)
+{
+	@jb.ferry = null;
+	@jb.cargo = null;
+	jb.stage = 0;
+	jb.retried = false;
+	jb.drops = 0;
+	LiftGoHome(jb);
+}
+
 void LiftStep(LiftJob@ jb)
 {
 	if (jb.stage == 0) {
-		if (!FerryDispatch(jb))
-			LiftDispatch(jb);
+		if (!FerryDispatch(jb) && !LiftDispatch(jb))
+			LiftGoHome(jb);
 		return;
 	}
 	const AIFloat3 cp = jb.cargo.GetPos(ai.frame);
 	if (jb.stage == 1) {
-		if (cp.distance2D(jb.src) > 20.f) {
+		if (Carried(jb.cargo, jb.plane)) {
 			jb.stage = 2;
-			jb.last = cp;
 			jb.deadline = ai.frame + int((cp.distance2D(jb.to) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
 			jb.plane.CmdUnloadAt(jb.to, jb.cargo);
 			AiLog("apex: lift up t=" + ai.teamId + " #" + jb.cargo.id);
@@ -315,66 +361,55 @@ void LiftStep(LiftJob@ jb)
 			jb.plane.CmdStop();
 			CensusMove(jb.cargo, jb.src);
 			++gLiftAborted;
+			gLiftRefusedIds.insertLast(jb.cargo.id);
 			AiLog("apex: lift abort t=" + ai.teamId + " #" + jb.cargo.id + " never lifted");
 			if (jb.ferry !is null)
 				FerryDrop(jb.ferry, "never lifted");
-			@jb.ferry = null;
-			@jb.cargo = null;
-			jb.stage = 0;
+			LiftEnd(jb);
 		}
 		return;
 	}
-	const bool still = cp.distance2D(jb.last) < 2.f;
-	jb.last = cp;
-	if (still && (cp.distance2D(jb.to) < 64.f)) {
+	if (!Carried(jb.cargo, jb.plane)) {
 		LiftLanded(jb.cargo, jb.src);
-		++gLiftMoved;
+		const bool atTarget = cp.distance2D(jb.to) < 200.f;
+		if (atTarget)
+			++gLiftMoved;
 		AiLog("apex: lift done t=" + ai.teamId + " #" + jb.cargo.id
-				+ " at=" + int(cp.x) + "," + int(cp.z) + " moved=" + gLiftMoved);
+				+ " at=" + int(cp.x) + "," + int(cp.z)
+				+ (atTarget ? "" : " (off target)") + " moved=" + gLiftMoved);
 		if (jb.ferry !is null) {
-			if (jb.retried)
-				FerryDrop(jb.ferry, "drop refused at the front");
-			else
+			if (atTarget && !jb.retried)
 				FerryLanded(jb.ferry);
+			else
+				FerryDrop(jb.ferry, "set down off the front slot");
 		}
-		@jb.ferry = null;
-		@jb.cargo = null;
-		jb.stage = 0;
+		LiftEnd(jb);
 		return;
 	}
 	if (ai.frame <= jb.deadline)
 		return;
-	if (!jb.retried) {
-		// The game refuses a drop on slopes and water; where it stood is known good.
-		jb.retried = true;
-		jb.to = jb.src;
-		jb.deadline = ai.frame + int((cp.distance2D(jb.src) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
-		jb.plane.CmdUnloadAt(jb.to, jb.cargo);
-		AiLog("apex: lift refused t=" + ai.teamId + " #" + jb.cargo.id + " returning it");
-		return;
-	}
-	jb.plane.CmdStop();
-	++gLiftAborted;
-	AiLog("apex: lift abort t=" + ai.teamId + " #" + jb.cargo.id + " cannot unload");
-	gLiftSettle.insertLast(jb.cargo);
-	gLiftSettleFrom.insertLast(jb.src);
-	gLiftSettleLast.insertLast(cp);
-	if (jb.ferry !is null)
-		FerryDrop(jb.ferry, "cannot unload");
-	@jb.ferry = null;
-	@jb.cargo = null;
-	jb.stage = 0;
+	// A refused drop never ends with the cargo still hooked: first any legal
+	// ground near the target, then any near the plane, widening each time.
+	jb.retried = true;
+	++jb.drops;
+	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
+	const AIFloat3 at = (jb.drops == 1) ? jb.to : pp;
+	const float r = 300.f * float(jb.drops);
+	jb.plane.CmdUnloadArea(at, r);
+	jb.deadline = ai.frame + 30 * SECOND;
+	AiLog("apex: lift refused t=" + ai.teamId + " #" + jb.cargo.id
+			+ " unloading within " + int(r) + " of " + int(at.x) + "," + int(at.z)
+			+ " cargoY=" + int(cp.y) + " ground=" + int(ai.GetElevationAt(cp))
+			+ " planeY=" + int(pp.y) + " sep=" + int(cp.distance2D(pp)));
 }
 
 void LiftSettleStep()
 {
 	for (uint i = 0; i < gLiftSettle.length(); ++i) {
 		CCircuitUnit@ u = gLiftSettle[i];
-		const AIFloat3 p = u.GetPos(ai.frame);
-		if (p.distance2D(gLiftSettleLast[i]) >= 2.f) {
-			gLiftSettleLast[i] = p;
+		if (Airborne(u))
 			continue;
-		}
+		const AIFloat3 p = u.GetPos(ai.frame);
 		LiftLanded(u, gLiftSettleFrom[i]);
 		AiLog("apex: lift settled t=" + ai.teamId + " #" + u.id
 				+ " at=" + int(p.x) + "," + int(p.z));
@@ -384,6 +419,7 @@ void LiftSettleStep()
 		return;
 	}
 }
+
 
 int gLiftLogAt = 0;
 void LiftUpdate()
@@ -452,10 +488,7 @@ float LiftTurretWorth(int d, float& out took)
 		const int c = int(u.circuitDef.id);
 		if (!LiftFits(d, c))
 			continue;
-		bool served = false;
-		for (uint j = 0; (j < gLift.length()) && !served; ++j)
-			served = LiftFits(int(gLift[j].plane.circuitDef.id), c);
-		if (served)
+		if (LiftServed(c))
 			continue;
 		const AIFloat3 up = gOwnNanoPos[i];
 		if (up.distance2D(lp) < Catalog::gBuildDist[c])
