@@ -45,9 +45,22 @@ bool IsLiftDef(int d)
 	return false;
 }
 
+// A tower built at home for a front slot, waiting for its flight (lift_ferry.as).
+class Ferry {
+	int def = -1;
+	AIFloat3 home;
+	AIFloat3 site;
+	CCircuitUnit@ tower;
+	int stage = 0;      // 0 building at home, 1 built and waiting, 2 flying
+	int madeAt = 0;
+	int seenAt = 0;     // last frame a live request stood at home
+	int builtAt = 0;
+}
+
 class LiftJob {
 	CCircuitUnit@ plane;
 	CCircuitUnit@ cargo;
+	Ferry@ ferry;
 	AIFloat3 src;
 	AIFloat3 to;
 	AIFloat3 last;
@@ -91,6 +104,25 @@ void NanoCensusMove(CCircuitUnit@ u, const AIFloat3& in p)
 	NanoGridDrop();
 }
 
+void ProtCensusMove(CCircuitUnit@ u, const AIFloat3& in p)
+{
+	const int pc = ProtClassOf(int(u.circuitDef.id));
+	if (pc < 0)
+		return;
+	for (uint i = 0; i < gProtIds[pc].length(); ++i) {
+		if (gProtIds[pc][i] == u.id) {
+			gProtPos[pc][i] = p;
+			return;
+		}
+	}
+}
+
+void CensusMove(CCircuitUnit@ u, const AIFloat3& in p)
+{
+	NanoCensusMove(u, p);
+	ProtCensusMove(u, p);
+}
+
 bool InLiftJob(CCircuitUnit@ u)
 {
 	for (uint j = 0; j < gLift.length(); ++j) {
@@ -102,6 +134,7 @@ bool InLiftJob(CCircuitUnit@ u)
 
 void LiftNoteFinished(CCircuitUnit@ unit)
 {
+	FerryNoteFinished(unit);
 	if (!LiftHolds(unit))
 		return;
 	LiftJob@ j = LiftJob();
@@ -131,8 +164,12 @@ void LiftNoteDead(CCircuitUnit@ unit)
 				gLiftSettleFrom.insertLast(jb.src);
 				gLiftSettleLast.insertLast(jb.cargo.GetPos(ai.frame));
 				++gLiftLost;
+				if (jb.ferry !is null)
+					FerryDrop(jb.ferry, "plane shot down carrying it");
 			} else if ((jb.stage == 1) && (jb.cargo !is null)) {
-				NanoCensusMove(jb.cargo, jb.src);
+				CensusMove(jb.cargo, jb.src);
+				if (jb.ferry !is null)
+					jb.ferry.stage = 1;
 			}
 			AiLog("apex: lift plane-dead t=" + ai.teamId + " #" + unit.id
 					+ " stage=" + jb.stage);
@@ -143,11 +180,15 @@ void LiftNoteDead(CCircuitUnit@ unit)
 			AiLog("apex: lift cargo-dead t=" + ai.teamId + " #" + unit.id
 					+ " stage=" + jb.stage);
 			jb.plane.CmdStop();
+			if (jb.ferry !is null)
+				FerryDrop(jb.ferry, "tower died");
+			@jb.ferry = null;
 			@jb.cargo = null;
 			jb.stage = 0;
 			return;
 		}
 	}
+	FerryNoteDead(unit);
 }
 
 float LiftSpeed(CCircuitUnit@ plane)
@@ -246,7 +287,9 @@ void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 {
 	const AIFloat3 at = cargo.GetPos(ai.frame);
 	aiFactoryMgr.UnitRelocated(cargo, src);
-	NanoCensusMove(cargo, at);
+	CensusMove(cargo, at);
+	if (NanoIndexOf(cargo.id) < 0)
+		return;
 	AIFloat3 p = at;
 	p.x += 48.f;
 	p.z += 48.f;
@@ -256,7 +299,8 @@ void LiftLanded(CCircuitUnit@ cargo, const AIFloat3& in src)
 void LiftStep(LiftJob@ jb)
 {
 	if (jb.stage == 0) {
-		LiftDispatch(jb);
+		if (!FerryDispatch(jb))
+			LiftDispatch(jb);
 		return;
 	}
 	const AIFloat3 cp = jb.cargo.GetPos(ai.frame);
@@ -269,9 +313,12 @@ void LiftStep(LiftJob@ jb)
 			AiLog("apex: lift up t=" + ai.teamId + " #" + jb.cargo.id);
 		} else if (ai.frame > jb.deadline) {
 			jb.plane.CmdStop();
-			NanoCensusMove(jb.cargo, jb.src);
+			CensusMove(jb.cargo, jb.src);
 			++gLiftAborted;
 			AiLog("apex: lift abort t=" + ai.teamId + " #" + jb.cargo.id + " never lifted");
+			if (jb.ferry !is null)
+				FerryDrop(jb.ferry, "never lifted");
+			@jb.ferry = null;
 			@jb.cargo = null;
 			jb.stage = 0;
 		}
@@ -284,6 +331,13 @@ void LiftStep(LiftJob@ jb)
 		++gLiftMoved;
 		AiLog("apex: lift done t=" + ai.teamId + " #" + jb.cargo.id
 				+ " at=" + int(cp.x) + "," + int(cp.z) + " moved=" + gLiftMoved);
+		if (jb.ferry !is null) {
+			if (jb.retried)
+				FerryDrop(jb.ferry, "drop refused at the front");
+			else
+				FerryLanded(jb.ferry);
+		}
+		@jb.ferry = null;
 		@jb.cargo = null;
 		jb.stage = 0;
 		return;
@@ -305,6 +359,9 @@ void LiftStep(LiftJob@ jb)
 	gLiftSettle.insertLast(jb.cargo);
 	gLiftSettleFrom.insertLast(jb.src);
 	gLiftSettleLast.insertLast(cp);
+	if (jb.ferry !is null)
+		FerryDrop(jb.ferry, "cannot unload");
+	@jb.ferry = null;
 	@jb.cargo = null;
 	jb.stage = 0;
 }
@@ -332,6 +389,7 @@ int gLiftLogAt = 0;
 void LiftUpdate()
 {
 	LiftSample();
+	FerryUpdate();
 	for (uint j = 0; j < gLift.length(); ++j)
 		LiftStep(gLift[j]);
 	LiftSettleStep();
@@ -347,17 +405,36 @@ void LiftUpdate()
 			+ " idle60=" + idle + " fleet=" + gLift.length()
 			+ " moved=" + gLiftMoved + " aborted=" + gLiftAborted + " lost=" + gLiftLost
 			+ " lastGain=" + formatFloat(gLiftPriced, "", 0, 2) + " over=" + gLiftPricedTurrets
-			+ " asked=" + gLiftAsk + " noLine=" + gLiftNoLine);
+			+ " asked=" + gLiftAsk + " noLine=" + gLiftNoLine
+			+ " ferryPlans=" + gFerryPlans + " ferried=" + gFerried
+			+ " ferryDropped=" + gFerryDropped + " ferryOnsite=" + gFerryOnsite
+			+ " repriced=" + gFerryRepriced + " ferryHeld=" + gFerryHeld
+			+ " missSlots=" + gFerryMissM.length() + " missM=" + formatFloat(FerryMissSum(), "", 0, 1)
+			+ " plantLift=" + formatFloat(gPlantLiftLast, "", 0, 3));
 }
 
 // What a transport of def d is worth [metal/s over the fill]: the turrets it
-// could carry into the short line instead of building them there. A plane we
-// already have answers the same turrets, so it answers the same demand.
+// could carry into the short line instead of building them there, and the
+// front towers lost building on site that it would have flown instead. A plane
+// we already have answers the same cargo, so it answers the same demand.
 float LiftGainFor(int d, float fillSec)
 {
 	++gLiftAsk;
 	if (!IsLiftDef(d) || (Brain::PendAnyOf(d) > 0))
 		return 0.f;
+	const float fill = (fillSec > 1.f) ? fillSec : 180.f;
+	float took = 0.f;
+	const float worth = LiftTurretWorth(d, took);
+	gLiftPriced = (worth + FerryMissedFor(d, fill)) / fill;
+	gLiftPricedTurrets = int(took);
+	return gLiftPriced;
+}
+
+// The metal of the idle turrets a plane of def d could carry into the short
+// line, and how many.
+float LiftTurretWorth(int d, float& out took)
+{
+	took = 0.f;
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
@@ -368,7 +445,6 @@ float LiftGainFor(int d, float fillSec)
 	const float need = net / NANO_ABSORB;
 	const float speed = (Catalog::gSpeed[d] > 1.f) ? Catalog::gSpeed[d] : 100.f;
 	float worth = 0.f;
-	float took = 0.f;
 	for (uint i = 0; (i < gOwnNano.length()) && (took < need); ++i) {
 		CCircuitUnit@ u = gOwnNano[i];
 		if (u is null)
@@ -389,9 +465,43 @@ float LiftGainFor(int d, float fillSec)
 		worth += Catalog::gCostM[c];
 		took += 1.f;
 	}
-	gLiftPriced = worth / ((fillSec > 1.f) ? fillSec : 180.f);
-	gLiftPricedTurrets = int(took);
-	return gLiftPriced;
+	return worth;
+}
+
+// What a new plant adds by being able to build transports [metal/s over the
+// fill]: the best net saving -- carried cargo less the plane's own price --
+// of any transport on its list. Nothing while a plant we already own offers
+// one: that demand is served, and a second plant would count it twice.
+float gPlantLiftLast = 0.f;
+float PlantLiftGain(int plant)
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if (f is null)
+			continue;
+		const array<int>@ fl = Catalog::gBuildsList[int(f.circuitDef.id)];
+		for (uint k = 0; k < fl.length(); ++k) {
+			if (Catalog::gAvailable[fl[k]] && IsLiftDef(fl[k]))
+				return 0.f;
+		}
+	}
+	float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	if (fill <= 1.f)
+		fill = 180.f;
+	float best = 0.f;
+	const array<int>@ pl = Catalog::gBuildsList[plant];
+	for (uint i = 0; i < pl.length(); ++i) {
+		const int t = pl[i];
+		if (!Catalog::gAvailable[t] || !IsLiftDef(t))
+			continue;
+		float took = 0.f;
+		const float net = LiftTurretWorth(t, took) + FerryMissedFor(t, fill)
+				- Catalog::gCostM[t];
+		if (net > best)
+			best = net;
+	}
+	gPlantLiftLast = best / fill;
+	return gPlantLiftLast;
 }
 
 }  // namespace Market

@@ -460,6 +460,7 @@ int OwnedWaterPlants()
 // metal of an advanced lab. Returned as the RATIO between the two, so nothing
 // is forbidden -- the second lab wins when the substitute is unavailable.
 int gNextPlantDupLog = 0;
+int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
 int gNextWetReachLog = 0;
 
@@ -1572,7 +1573,15 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const AIFloat3 lands = OnMap(site) ? site
 				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), homeAnchor);
 		Want c;
-		ValueOf(d, dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]),
+		const float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
+		const float liftG = PlantLiftGain(d);
+		if ((liftG > 0.f) && (ai.frame >= gNextPlantLiftLog)) {
+			gNextPlantLiftLog = ai.frame + 30 * SECOND;
+			AiLog("apex: plant-lift t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+					+ " plant=" + formatFloat(plantG, "", 0, 3)
+					+ " lift=" + formatFloat(liftG, "", 0, 3));
+		}
+		ValueOf(d, plantG + liftG,
 				WalkSecTo(unit, lands), Catalog::gBuildPower[uid], c);
 		if (candLog) {
 			cand += " " + Catalog::Def(d).GetName()

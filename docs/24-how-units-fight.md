@@ -1385,3 +1385,11 @@ have them attack the enemy from different angles."*
   game.
 - **Default**: in T2 play the commander must be careful. A single T2 tank can
   kill him: it outranges him and moves faster than him.
+
+## 2026-09-24 — air transports: raid, flank, and a hidden base
+
+- **Transports carry army to raid or to flank.** Those are the two uses that
+  matter: drop units where the enemy will not expect them.
+- **Towers can be flown forward.** Light towers (a beamer) are built in the
+  safety of the base and carried up toward the front line.
+- **A constructor can be sneaked behind enemy lines to make a base there.**

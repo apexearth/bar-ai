@@ -522,7 +522,8 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	const float worth = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			? (gAssetsM + ArmyValue()) : Catalog::gCostM[int(unit.circuitDef.id)];
 	w.tripM = TripRiskFrom(unit.GetPos(ai.frame), w.pos) * worth;
-	w.value = w.valueRaw * c / (c + w.tripM);
+	const float denom = FerryReprice(w, unit, c, c + w.tripM);
+	w.value = w.valueRaw * c / denom;
 }
 
 bool ElecIdOk(CCircuitUnit@ unit)

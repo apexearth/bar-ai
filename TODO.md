@@ -369,6 +369,29 @@ are needed "around the base"; also transports that free a stuck unit. Built
 - BAR's `unit_transportable_nanos.lua` refuses a lift of an ALLY's turret,
   so in team games each seat only moves its own.
 
+## Escort strength scales with the risk of the trip
+
+apexearth 2026-09-24: the "assumed danger" prior backfired because some cons
+were allowed no risk and never walked out to build; perhaps boost the escort
+considerably based on the risk instead. Today an escort is binary: exposure
+>= 0.5 asks for one (army.as ExposeRefresh), and one escort of any size makes
+the worker "escorted" (guards.as EscortedWorker). Nothing sizes it to what
+could arrive. Unbuilt: escort metal per worker against the threat expected at
+its site, and the build's danger priced as min(expected loss, escort cost) so
+risk buys protection instead of cancelling the trip.
+
+## Air-lift towers forward, army to raid or flank, a hidden base
+
+apexearth 2026-09-24: build light towers (beamers) in the safety of the base
+and fly them up toward the front line; transport army to raid or to flank
+("a place the enemy will not expect"); sneak a constructor behind enemy lines
+to make a base there (docs/24). Transportable towers (engine default for a building is NOT
+transportable; these opt in): LLT (armllt/corllt, mass 5100), Beamer
+(armbeamer 7500), corhllt (10200), armrl/corrl, radars. HLT, Dragon's Claw
+and Maw cannot be lifted. Every tower is over the Stork's 750 mass, so this
+is heavy transports only (Abductor/Skyhook). T1 army fits a Stork (mass is
+capped at 750 for units under 751 metal); the heavies take footprint <= 4.
+
 ## Do not marry the starting point
 
 apexearth 2026-09-18: "We really shouldn't 'marry' our starting point. If

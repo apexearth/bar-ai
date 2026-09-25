@@ -421,6 +421,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			return null;
 		if (NearBlocked(sAt))
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
+		AIFloat3 fHome;
+		const int fRoute = FerryRoute(unit, w, sAt, fHome);
+		if (fRoute == 0)
+			return null;
+		if (fRoute == 1) {
+			IUnitTask@ fTask = Requests::Take(unit, w.def, Task::BuildType(bt),
+					Task::Priority::NORMAL, fHome, 150.f, SQUARE_SIZE * 16.f);
+			FerryCommit(fTask !is null);
+			return fTask;
+		}
 		bool sMade = false;
 		IUnitTask@ sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
 				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f, sMade);
