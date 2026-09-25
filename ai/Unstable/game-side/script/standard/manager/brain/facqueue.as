@@ -624,7 +624,12 @@ void FacYardWatch()
 	// 26 s reading the game ended before it could contradict.
 	int structs = 0;
 	string eaten = "";
-	const int sg = ExitSign(fd);
+	int sg = ExitSign(fd);
+	// A plant jammed from its first unit never casts an exit vote, so its
+	// blocker was never named; after the long settle the engine's facing map
+	// stands in for the vote.
+	if ((sg == 0) && (ai.frame - gFQBornAt[l] >= 6 * YARD_SETTLE))
+		sg = 1;
 	if ((sg != 0) && (ai.frame - gFQBornAt[l] >= 2 * YARD_SETTLE)) {
 		array<CCircuitUnit@>@ st = ai.GetOwnStructsNear(fp, halfD + 2.f * halfW + 64.f);
 		if (st !is null) {

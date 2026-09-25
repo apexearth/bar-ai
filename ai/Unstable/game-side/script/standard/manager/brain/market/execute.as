@@ -1154,7 +1154,22 @@ AIFloat3 PlantNudge(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in ask
 	const AIFloat3 b = ClearOfLiveFactories(a);
 	const AIFloat3 c = ClearExitLane(b);
 	const AIFloat3 d = OffFactoryExit(c);
-	const AIFloat3 e = ProbedSite(def, mover, d);
+	AIFloat3 e = ProbedSite(def, mover, d);
+	// The probe can move the site hundreds of elmos after the lane checks ran
+	// (a T2 lab landed with its exit against a finished vehicle plant's back),
+	// so the ground it picked is checked again.
+	for (int k = 0; k < 2; ++k) {
+		const AIFloat3 e2 = OffFactoryExit(ClearExitLane(e));
+		if (e2.distance2D(e) < 1.f)
+			break;
+		// Marked, or the engine's nearest legal footprint is the same one again.
+		BlockAdd(e, int(def.id));
+		const AIFloat3 e3 = ProbedSite(def, mover, e2);
+		AiLog("apex: plant-nudge relane t=" + ai.teamId + " " + def.GetName()
+			+ " probed=" + int(e.x) + "," + int(e.z)
+			+ " -> " + int(e3.x) + "," + int(e3.z));
+		e = e3;
+	}
 	if (e.distance2D(ask) > Lattice::FootPitch(int(def.id)))
 		AiLog("apex: plant-nudge t=" + ai.teamId + " " + def.GetName()
 			+ " ask=" + int(ask.x) + "," + int(ask.z)
