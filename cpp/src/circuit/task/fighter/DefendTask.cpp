@@ -48,6 +48,11 @@ CDefendTask::~CDefendTask()
 
 bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
 {
+	if ((leader != nullptr)
+		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef()))
+	{
+		return false;
+	}
 	return (attackPower < maxPower) && (static_cast<CDefendTask*>(unit->GetTask())->GetPromote() == promote);
 }
 

@@ -817,6 +817,32 @@ float RichArmyGapM()
 }
 
 
+// Spare metal becomes army only while we out-build them (apexearth 2026-09-25,
+// Koom 8v8: our army led theirs while they out-earned us 2x). The economy
+// signal we have for them is the structure metal we have seen; ours is the
+// team's own, summed across allies.
+const string TV_ASSETS = "apexAssetsM";
+bool gEcoBehind = true;
+int gEcoBehindAt = -999999;
+bool EcoBehind()
+{
+	if (ai.frame < gEcoBehindAt + 30 * SECOND)
+		return gEcoBehind;
+	gEcoBehindAt = ai.frame;
+	ai.PublishTeamValue(TV_ASSETS, gAssetsM);
+	float ours = 0.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i)
+		ours += ai.ReadTeamValue(int(mates[i]), TV_ASSETS, 0.f);
+	if (ours < gAssetsM)
+		ours = gAssetsM;
+	const float theirs = aiEnemyMgr.GetEnemyStructCost();
+	gEcoBehind = (theirs >= ours);
+	AiLog("apex: ecoside t=" + ai.teamId + " ours=" + int(ours) + " theirs=" + int(theirs)
+		+ " behind=" + (gEcoBehind ? 1 : 0));
+	return gEcoBehind;
+}
+
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
@@ -933,6 +959,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			richBal *= (1.f - rb) + rb * owed;
 		}
 	}
+	// Before our own T2 lab stands, spare metal is the T2 lab's, not T1 army
+	// (apexearth 2026-09-26: at +100% the T1 window is too short to use).
+	if ((TopOwnPlantTier() < 2) || EcoBehind())
+		richBal = 0.f;
 	if (!ovfHands && (richBal > armyGap)) {
 		armyGap = richBal;
 		gapSrc = "rich";
@@ -1224,7 +1254,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// standing count never reached it while the lab replaced every flea
 		// that died at its post.
 		// ...and its queued orders, or the cap leaks by the queue depth.
-		const int screenDead = (Catalog::gPower[d] <= 1.01f)
+		// Radars and jammers are unarmed too, but not screen: the Ticks' dead
+		// filled their cap of two with none standing.
+		const int screenDead = ((Catalog::gPower[d] <= 1.01f)
+					&& !Catalog::gRadar[d] && !Catalog::gJammer[d])
 				? int(Military::ScreenLostM() / ((Catalog::gCostM[d] > 1.f) ? Catalog::gCostM[d] : 1.f))
 				: 0;
 		if ((Catalog::gLimit[d] > 0) && (Catalog::gLimit[d] < 1000000)
@@ -1392,7 +1425,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
 		Market::EscortFieldCensus();
-		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing) {
+		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !OutgrownAtT3(d)) {
 			if (escShort < -1)
 				escShort = EscortShortfall();
 			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
@@ -1491,11 +1524,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// field that dominate Tier 1 units ... stop making Tier 1").
 			// Fodder and fighters are never judged (RecordRaw reads 1 for
 			// them), so spam survives -- the cheap body wastes the same fire.
+			// A type we have never lost one of has no trade to lose: a 90-metal
+			// scratch read the Juggernaut as 0.9997 and dropped it for a game.
 			if ((ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) > 0.f)
-				&& (RecordRaw(d) < 1.f))
+				&& (RecordRaw(d) < 1.f)
+				&& (ai.RecordCount(Catalog::Def(d), -1) > 0))
 			{
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
+				continue;
+			}
+			if (OutgrownAtT3(d)) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
 			}
 			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);

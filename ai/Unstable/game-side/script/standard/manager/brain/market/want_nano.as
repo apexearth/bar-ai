@@ -206,6 +206,23 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			}
 		}
 	}
+	// Fed by what is spare on average, not on one tick: the raw flow reads free
+	// metal at an empty bank, and the line's shift term had no bound. The floor
+	// and the fortification keep their own rulings.
+	// ...and net of the lathe already standing idle, as the waste term is.
+	TrackIncome();
+	const float idleL = IdleNanoLatheM();
+	const float spareS = gMSpareEma + Eco::MCur() / 60.f;
+	if (lineNeed > spareS)
+		lineNeed = spareS;
+	if (sinkNeed > spareS)
+		sinkNeed = spareS;
+	if (armyNeed > spareS)
+		armyNeed = spareS;
+	lineNeed = (lineNeed > idleL) ? (lineNeed - idleL) : 0.f;
+	sinkNeed = (sinkNeed > idleL) ? (sinkNeed - idleL) : 0.f;
+	armyNeed = (armyNeed > idleL) ? (armyNeed - idleL) : 0.f;
+	haveLine = (lineNeed > 0.f) && OnMap(linePos);
 	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;
 	if (armyNeed > over)
 		over = armyNeed;
@@ -296,6 +313,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		AnyLineSite(lp0, lathe0);
 		AiLog(Factory::T() + "apex: nanowant " + unit.circuitDef.GetName()
 			+ " feed=" + formatFloat(FreeMetalFlow(), "", 0, 1)
+			+ " spare=" + formatFloat(spareS, "", 0, 1)
 			+ " line=" + formatFloat(lineNeed, "", 0, 1)
 			+ " shift=" + formatFloat(gLineShift, "", 0, 1)
 			+ " lathe=" + formatFloat(lathe0, "", 0, 1)

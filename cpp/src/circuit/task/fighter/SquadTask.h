@@ -15,6 +15,8 @@
 
 namespace circuit {
 
+class CCircuitDef;
+
 class ISquadTask: public IFighterTask {
 protected:
 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
@@ -30,6 +32,8 @@ public:
 
 	CCircuitUnit* GetLeader() const { return leader; }
 	const springai::AIFloat3& GetLeaderPos(int frame) const;
+
+	static bool SameClimb(CCircuitAI* circuit, CCircuitDef* a, CCircuitDef* b);
 
 private:
 	void FindLeader(decltype(units)::iterator itBegin, decltype(units)::iterator itEnd);

@@ -237,6 +237,7 @@ public:
 	// The matchups weighted by what the enemy fields now (our own census of
 	// known live enemy attackers, refreshed every 10 s); pooled when blind.
 	float RecordRatioMix(CCircuitDef* cdef);
+	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
 	// The same matrix read from their side: their B against our A.
 	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }

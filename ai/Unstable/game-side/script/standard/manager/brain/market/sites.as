@@ -867,13 +867,10 @@ AIFloat3 GroupAnchor(int defId, CCircuitUnit@ unit = null)
 		const AIFloat3 heart = LatheSiteFor(unit);
 		if (OnMap(heart)) {
 			origin = heart;
+			// gFwd points at the enemy, as the search below and FarmSlot read
+			// it; the doorway's flipped exitDir put the yard a nano range forward.
 			if (Base::Ready()) {
-				AIFloat3 exitDir = Base::gFwd;
-				if (Base::AxisIsRearward()) {
-					exitDir.x = -exitDir.x;
-					exitDir.z = -exitDir.z;
-				}
-				const AIFloat3 rear = heart - exitDir * NanoRange();
+				const AIFloat3 rear = heart - Base::gFwd * NanoRange();
 				if (OnMap(rear))
 					origin = rear;
 			}

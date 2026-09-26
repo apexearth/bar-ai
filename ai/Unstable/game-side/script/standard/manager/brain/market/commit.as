@@ -453,10 +453,14 @@ float ComBigEnergyBestMakeE()
 
 // The best rising reactor's energy per unit of build time it has LEFT; false
 // when none rises. The comparison BigEnergyBetterThanRising makes.
-bool ComBigEnergyBestRate(float &out rate)
+// A rising def that `want` beats on energy per metal AND per build time holds
+// nothing against it: an advanced solar under way refused every fusion.
+bool ComBigEnergyBestRate(float &out rate, int want = -1)
 {
 	rate = 0.f;
 	bool any = false;
+	const bool cmp = Catalog::ValidId(want) && (Catalog::gCostM[want] > 1.f)
+			&& (Catalog::gBuildTime[want] > 1.f);
 	for (uint i = 0; i < gComDef.length(); ++i) {
 		if (gComState[i] == CS_FINISHED)
 			continue;
@@ -467,6 +471,10 @@ bool ComBigEnergyBestRate(float &out rate)
 			continue;
 		const float bt = Catalog::gBuildTime[d];
 		if (bt <= 1.f)
+			continue;
+		if (cmp && (Catalog::gCostM[d] > 1.f)
+				&& (Catalog::gMakeE[want] / Catalog::gCostM[want] > Catalog::gMakeE[d] / Catalog::gCostM[d])
+				&& (Catalog::gMakeE[want] / Catalog::gBuildTime[want] > Catalog::gMakeE[d] / bt))
 			continue;
 		IUnitTask@ t = gComTask[i];
 		float left = 1.f;

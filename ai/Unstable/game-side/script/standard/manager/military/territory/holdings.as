@@ -262,8 +262,10 @@ float ForwardFraction(const AIFloat3& in pos)
 		const bool stable = ai.GetTunable("apex_fwd_stable", TUNE_FWD_STABLE) > 0.f;
 		const AIFloat3 home = TerritoryCentre();
 		AIFloat3 e;
-		if (!stable || !Front::FoeMid(e))
+		if (!stable)
 			e = aiEnemyMgr.GetEnemyPos();
+		else if (!Front::FoeMid(e))
+			e = Front::FoeAnchor();
 		if (OnMap(e)) {
 			const float dx = e.x - home.x;
 			const float dz = e.z - home.z;

@@ -1402,6 +1402,17 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 		unit->GetTravelAct()->StateFinish();  // already there: no road to refuse
 		return;
 	}
+	// One far hand's hot road is that hand's problem: a crew already on the job
+	// or a frame already standing keeps the site (16-hand reactors were aborted).
+	if ((target != nullptr) || (units.size() > 1)) {
+		circuit->LOG("apex: hot-road-leave %s by %s at=%.0f,%.0f dist=%.0f crew=%i",
+				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
+				unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
+				sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)),
+				static_cast<int>(units.size()));
+		RemoveAssignee(unit);
+		return;
+	}
 	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f",
 			(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,

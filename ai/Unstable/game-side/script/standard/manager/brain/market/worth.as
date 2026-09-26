@@ -263,6 +263,46 @@ float OwnTierMul(int d)
 	return 1.f / (1.f + k * float(above));
 }
 
+// Mean health of the T2 ground combat line the game offers us; recomputed until
+// the catalog is populated so an early zero is never cached.
+float gT2HpMean = 0.f;
+float T2HpMean()
+{
+	if (gT2HpMean > 0.f)
+		return gT2HpMean;
+	float sum = 0.f;
+	int n = 0;
+	for (int i = 1; i <= Catalog::gDefCount; ++i) {
+		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !Catalog::gMobile[i]
+				|| Catalog::gBuilder[i] || Catalog::gFlyer[i] || Catalog::gKamikaze[i]
+				|| (Catalog::gMaxRange[i] <= 0.f) || (DefTier(i) != 2))
+			continue;
+		sum += Catalog::gHealth[i];
+		++n;
+	}
+	if (n > 0)
+		gT2HpMean = sum / float(n);
+	return gT2HpMean;
+}
+
+// Once a gantry stands the lower labs make only fodder and the heavy T2 bodies
+// (apexearth 2026-09-25). A drop, not a price: OwnTierMul only reorders a lab
+// whose whole list is one tier, so the T1 lab still made 367 Thugs at T3.
+// Ground AA is left alone -- it answers air, not the T3 line.
+bool OutgrownAtT3(int d)
+{
+	if (TopOwnPlantTier() < 3)
+		return false;
+	if (Catalog::gFlyer[d] || (Catalog::gCostM[d] < Military::FODDER_COST()))
+		return false;
+	if ((Catalog::gAirT[d] > 0.f) && (Catalog::gSurfT[d] <= 0.f))
+		return false;
+	const int tier = DefTier(d);
+	if (tier == 1)
+		return true;
+	return (tier == 2) && (Catalog::gHealth[d] < T2HpMean());
+}
+
 // The score. Raw, before any of the situational multipliers -- this is what
 // normalizes the line, so it must not carry anything that varies per election.
 //

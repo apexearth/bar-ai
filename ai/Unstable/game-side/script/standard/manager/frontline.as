@@ -362,6 +362,12 @@ void Scan()
 	if (gFoeKnown) {
 		gFoeMid.x = tx / tw;
 		gFoeMid.z = tz / tw;
+		// Sightings on our side of the line to their base are raids, not their
+		// territory; left in, a raid makes our own base read as the front.
+		const AIFloat3 anchor = FoeAnchor();
+		if (Builder::gHomeSet && OnMap(anchor)
+				&& (gFoeMid.distance2D(Builder::gHomePos) < gFoeMid.distance2D(anchor)))
+			gFoeMid = anchor;
 	}
 
 	for (int i = 0; i < SEAM_N; ++i) {

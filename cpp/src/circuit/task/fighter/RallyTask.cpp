@@ -6,6 +6,7 @@
  */
 
 #include "task/fighter/RallyTask.h"
+#include "task/fighter/SquadTask.h"
 #include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
 #include "terrain/TerrainManager.h"
@@ -40,6 +41,9 @@ bool CRallyTask::CanAssignTo(CCircuitUnit* unit) const
 		return false;
 	}
 	CCircuitDef* cdef = (*units.begin())->GetCircuitDef();
+	if (!ISquadTask::SameClimb(manager->GetCircuit(), cdef, unit->GetCircuitDef())) {
+		return false;
+	}
 	if ((cdef->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
 		|| (cdef->IsAmphibious() && unit->GetCircuitDef()->IsAmphibious())
 		|| (cdef->IsSurfer() && unit->GetCircuitDef()->IsSurfer())

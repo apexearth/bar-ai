@@ -220,6 +220,9 @@ bool LosingFightHere(const AIFloat3& in p, float& out lost, float& out killed)
 // is standing there, so compare it against what WE have standing nearby -- our
 // combat units plus our own towers -- and call the spot lost when they outgun
 // us by the margin. Threat-map values and GetSurfThreat are the same scale.
+int gWithdrawAllySaved = 0;
+int gWithdrawAllyLogAt = 0;
+
 bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 	const array<AIFloat3>@ allyPos, const array<float>@ allyPow, float& out oddsFor)
 {
@@ -244,8 +247,17 @@ bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 			ours += d.GetSurfThreat();
 		}
 	}
+	const float oddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	// Our allies' army standing here is our side too; asked only when our own
+	// would already lose, so the scan runs for the few, not the whole army.
+	if (enemyT > ours * oddsK) {
+		const float allies = ai.GetAllyPowerAt(p, r);
+		if ((allies > 0.f) && (enemyT <= (ours + allies) * oddsK))
+			++gWithdrawAllySaved;
+		ours += allies;
+	}
 	oddsFor = (ours > 0.f) ? (enemyT / ours) : 99.f;
-	return enemyT > ours * ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	return enemyT > ours * oddsK;
 }
 
 void UpdateWithdraw()
@@ -256,6 +268,10 @@ void UpdateWithdraw()
 	{ double _t = Perf::T0(); ArmyCoverSample(); Perf::Add("up.armycover", _t); }
 	if (ai.GetTunable("apex_withdraw", TUNE_WITHDRAW) <= 0.f)
 		return;
+	if (ai.frame >= gWithdrawAllyLogAt) {
+		gWithdrawAllyLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: withdraw-allies t=" + ai.teamId + " kept=" + gWithdrawAllySaved);
+	}
 	// A committed finisher is the one time being out there is the decision.
 	if (gKilling)
 		return;

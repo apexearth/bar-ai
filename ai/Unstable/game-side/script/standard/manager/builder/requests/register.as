@@ -103,12 +103,30 @@ bool BigEnergyBetterThanRising(const CCircuitDef@ d)
 	if (!Catalog::ValidId(id))
 		return false;
 	float risingRate = 0.f;
-	if (!Market::ComBigEnergyBestRate(risingRate))
+	if (!Market::ComBigEnergyBestRate(risingRate, id))
 		return true;
 	const float bt = Catalog::gBuildTime[id];
 	if (bt <= 1.f)
 		return false;
 	return (Catalog::gMakeE[id] / bt) > risingRate;
+}
+
+// "Multiple reactors if we can afford it" (apexearth 2026-09-25). The bank is
+// never the test late: the army spends it to zero at 1,300 m/s. Afford means
+// the income over one full-crew build pays for every reactor rising plus this.
+bool IncomeCoversReactors(const CCircuitDef@ want)
+{
+	if (want is null)
+		return false;
+	const int wd = int(want.id);
+	if (!Catalog::ValidId(wd))
+		return false;
+	const float bp = Market::ConWorkerBP() * (80.f / 7.f) * float(SiteWorkerCap(want));
+	if (bp <= 1.f)
+		return false;
+	uint room = 0;
+	const uint n = Market::ComBigEnergyRising(room);
+	return Eco::MInc() * (Catalog::gBuildTime[wd] / bp) >= float(n + 1) * want.costM;
 }
 
 int gBigEFold = 0;   // cross-def folds onto the standing reactor

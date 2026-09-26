@@ -24,6 +24,7 @@
 #include "task/PlayerTask.h"
 #include "task/fighter/FighterTask.h"
 #include "unit/CircuitUnit.h"
+#include "unit/ally/AllyUnit.h"
 #include "unit/enemy/EnemyUnit.h"
 #include "unit/enemy/EnemyManager.h"
 #include "util/GameAttribute.h"
@@ -2397,6 +2398,31 @@ void CCircuitAI::RecordFoeRefresh()
 	for (const auto& kv : recFoe) {
 		recFoeTotal += kv.second;
 	}
+}
+
+// Surface power of ALLIED players' ground combat units near pos -- ours are
+// excluded, the script already counts them. The withdraw odds read only our
+// own army, so in a team game every AI saw itself outgunned beside its allies
+// (apexearth 2026-09-26: "maybe our teams just don't fight well together").
+float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
+{
+	const float sqR = radius * radius;
+	float sum = 0.f;
+	for (auto& kv : GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (GetTeamUnit(kv.first) != nullptr)) {
+			continue;
+		}
+		CCircuitDef* cdef = u->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsAbleToFly()) {
+			continue;
+		}
+		if (u->GetLastPos().SqDistance2D(pos) > sqR) {
+			continue;
+		}
+		sum += cdef->GetSurfThreat();
+	}
+	return sum;
 }
 
 float CCircuitAI::RecordRatioMix(CCircuitDef* cdef)

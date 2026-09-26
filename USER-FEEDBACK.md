@@ -72,8 +72,8 @@ lines of quotes.
   fusion cluster, `idle=8960`). Still open: while the switch IS on the labs
   get only the counter roles (item 1), and his late-game rule -- past T2 the
   T1 lab makes only the cheap fodder (pawns, ticks), never a Mace: "you get
-  a unit that takes the enemy fire but costs you a lot less" -- is not built
-  (the record's class bar lets a 0.74 Mace through as an even trade).
+  a unit that takes the enemy fire but costs you a lot less" -- built 09-25
+  as `OutgrownAtT3`, see "AT T3, ALL RESOURCES TO THE BIG UNITS" below.
 - Air labs idle with unlimited money and many nano turrets; make longer
   queues so the line never runs out (2026-09-21, fourth report). Found and
   built 09-21 (`RedrawFor`, TODO "Never an idle factory"): seat lines empty
@@ -397,6 +397,114 @@ are done. Measured: our first T2 plant at minute 8.0 and our first fusion at
 This is the ruling `TUNE_T2_FUSION_PULL` was left off waiting for -- the pull
 overrides a price (wind is not worse than fusion on energy-per-metal), and
 whether to override it was his call. It is his answer: soon.
+
+### AT T3, ALL RESOURCES TO THE BIG UNITS; REACTORS WITHOUT GAPS (2026-09-25)
+
+Raised again (the "T1 lab makes only fodder past T2" rule above was unbuilt).
+Once a gantry stands, the T1 lab makes only spam (Pawn, Tick, Grunt -- never
+Thug or Mace) and the T2 labs only the tougher, bigger T2 units. Reactors:
+several at once when we can afford them, and never a gap between one and the
+next. Measured in his Cortex 2v2 on All That Glitters, minutes 20-38: equal
+spend (1.33M each), theirs 664k in Juggernauts/Behemoths, ours spread over 20+
+types with 367 Thugs; we never built a Juggernaut or a Behemoth (`:losing` read a
+90-metal scratch as 0.9997); 11 afus to our 4; a 2.1-min reactor gap at 29.5
+(three `hot-road` aborts tripped the 120 s backoff). Built 09-25, unverified:
+`OutgrownAtT3`, the `RecordCount > 0` gate, `IncomeCoversReactors`,
+`hot-road-leave`.
+
+More anti-nukes: one per base, and the base had grown out from under it.
+Measured the same game at minute 58: one each, never a second (no enemy silo
+seen held the target at 1); 188k of our structure metal (19%) outside both
+umbrellas -- 3 afus, 3 fusions, a gantry. Built 09-25, unverified: blind to
+their silos, the count follows coverage (`UncoveredClusterM`, one more while
+an uncovered cluster is worth more than an anti-nuke).
+
+### THE COMMANDER: MID EARLY, HOME FROM T2, TURRETS NOT CHASES (2026-09-25)
+
+His Red Comet 2v2: our commander walked 9,680 elmos in 8 minutes and ended
+139 from where he started; the enemy held mid from minute 3. Rulings:
+(1) the 09-02 "stays home" is a mid/late rule (T2+) -- early, the commander
+leads to mid and stays well protected (unbuilt; open: with the army, or near it);
+(2) commanders do not chase -- they are too slow; turrets counter raiders.
+Built 09-25, unverified by him: a raid in our half no longer becomes "the enemy
+centre" (`gFoeMid` falls back to `FoeAnchor`), and a group made entirely of
+raiders/scouts is never his to walk at (artillery still is, per 09-20). Measured,
+4 Red Comet 2v2 games each, first 8 min: engages 4 -> 0, walked 5,143 -> 4,336
+per commander, reversals 23 -> 10. Still open: he took 2 turret jobs in 8 games,
+so the turret answer to raiders is not there yet.
+
+### TOO MUCH ARMY, BEHIND ON ECONOMY (2026-09-25)
+
+His Koom Valley 8v8 (Armada, +100%): our army led theirs all game while they
+put the difference into economy and pulled away -- minute 16: income 623 vs
+1,343, eco 49k vs 101k, build power 46k vs 99k, army 155k vs 147k. Seven of
+eight AIs spent 43-60% on army against 21-28% targets; the lab orders came from
+the spare-metal floor (`src=rich`, 102 vs 0 from the target). One AI sat at
+48 m/s with no T2 lab at minute 17 (army 49-65% of its spend from minute 6).
+Ruling: spare metal goes to the economy while the enemy out-earns us; to army
+only once we out-earn them (his 09-24 "no starved army when far richer" holds).
+Built 09-25, unverified: `EcoBehind()` compares our team's structure metal with
+the enemy's seen structure metal; `apex: ecoside` logs both every 30 s.
+
+### NANO TURRETS WHILE OUT OF METAL (2026-09-26)
+
+He sees more nano turrets ordered while the bank is empty, until there is no
+room left -- not to be overturned, just not so much. Measured in his Omega 3v3:
+with the bank under 5%, 35% of nano bids still went ahead, set by the factory
+line's share of a raw one-tick "free metal" read (7.9 m/s median at a 23-metal
+bank) while ~2 turrets of lathe stood idle. Built 09-26 in the lane, unverified by
+him: the line/site/army terms are capped by the smoothed spare and netted of
+idle lathe (the floor and fortification rulings untouched). Omega 3v3, 4 games
+each: bids on an empty bank 35% -> 6%, nanos built 206 -> 143 per game (BARb
+156-193).
+
+### ALL-TERRAIN UNITS SQUAD APART (2026-09-26)
+
+He sees Vanguards and other all-terrain units mostly walking the roads like
+normal units. Cause: a squad's leader is its least mobile member and the squad
+paths for the leader's move type, so a Vanguard beside a tank took the tank's
+road. Ruling: all-terrain units never squad with units that cannot climb. Built
+09-26 (C++ `ISquadTask::SameClimb`, used by attack, defend and rally admission
+and so by merges; `apex: climb` logs each def's class once), unverified.
+
+### TEN FUSIONS BEFORE THE FIRST ADVANCED FUSION (2026-09-26)
+
+His Omega 3v3: 9-11 fusions per AI before any afus (ours first afus 33.6 min
+or none by 36; BARb 24.7-27.9). The market prefers the afus (per metal 0.309 vs
+0.233); the ETA pick overrides it for the fusion (per build time 0.0143 vs
+0.0096) -- `eta-wins`. The afus blast is worse, but that does not explain ten.
+Proposed, awaiting his go: the ETA override only while build power binds (metal
+piling up); with the bank near empty the per-metal pick stands.
+
+### BOMBERS, NOT ONLY GUNSHIPS (2026-09-26)
+
+His Omega 3v3: we made hundreds of gunships and fighters and no bombers, where
+bombers would have demolished their base and shortened the game. Gunships read
+high on damage efficiency; bombers will not, and still fit their own role --
+judge them separately. Also open: gunships rarely go for enemy economy or the
+base itself. Found: bombers ARE priced apart (the wing prices structure damage),
+but the one scored run -- 9 Phoenixes over an empty mirrored cell at 21 min,
+42 metal per bomber -- replaced the model outright, so every later bomber read
+42 against a 345 bar (`:wing0` on every air plant to minute 46, 1/143 bombers).
+Built 09-26 in the lane, unverified: the first run blends with the model's
+expectation at apex_air_obs_w instead of replacing it.
+
+### THEY REACH T2 FIRST AND STAY AHEAD FOR A LONG TIME (2026-09-26)
+
+Raised as his general read after several games: the enemy gets to T2 before us,
+puts the rest into economy and stays ahead economically "for a long, long, long
+time"; only if we survive very long does our economy pass theirs. Meanwhile we
+keep making T1 units that trade horribly against their T2 -- roughly 10,000+
+metal of T1 that sucks, where they built fewer, better units and banked the
+difference into economy. Same root as the two entries above (army share far
+over target, late T2 labs, few T2 constructors).
+
+Raised again the same day, as a standing rule: at +100% (his regime) income is
+so high that T2 comes quickly, so there is almost no window to use a T1 army --
+only an all-in rush straight into their base could. Make far less T1 army and
+get to T2 fast. Measured: our median first T2 lab 3-5 min after theirs in team
+games, 14k-56k of T1 army bought in that gap. Built 09-26 in the lane: before
+an AI owns a T2 lab, spare metal is not army (base coverage still is).
 
 ### UNRESOLVED: WE BUILD THINGS WE DO NOT WANT THE OUTPUT OF (2026-09-22)
 

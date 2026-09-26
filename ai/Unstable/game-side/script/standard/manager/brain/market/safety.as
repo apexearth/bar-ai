@@ -387,6 +387,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			int tier = 0;
 			int nMob = 0;
 			float dps = 0.f;
+			int nRaid = 0;
 			const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 			for (int k = 0; k < nU; ++k) {
 				const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
@@ -397,8 +398,15 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 				const int t = DefTier(d);
 				if (t > tier)
 					tier = t;
+				if (Catalog::Def(d).IsRoleAny(Unit::Role::RAIDER.mask | Unit::Role::SCOUT.mask))
+					++nRaid;
 			}
 			if (nMob == 0)
+				continue;
+			// Raiders outrun him and turrets answer them (apexearth 2026-09-25:
+			// "coms are too slow to chase any of that"); artillery shelling the
+			// base is still his to walk to.
+			if (nRaid == nMob)
 				continue;
 			// HE DEFENDS WHAT WE OWN, he does not go on tour. "Our half of the
 			// map" was too loose a leash: he chased to the midpoint, chained

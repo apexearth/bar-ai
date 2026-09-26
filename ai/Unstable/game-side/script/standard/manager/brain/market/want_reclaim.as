@@ -273,7 +273,7 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 	// its refund held a solar at zero for the whole game once an advanced
 	// fusion stood; the same per-cell dwarf test that refuses to build it
 	// says its output is had cheaper on the same ground.
-	const bool dwarfed = (Catalog::gMakeE[d] > 0.f) ? GenObsoleteOnArrival(d)
+	const bool dwarfed = (Catalog::gMakeE[d] > 0.f) ? GenDwarfedByStanding(d)
 			: ((Catalog::gConvCapacity[d] > 0.f) ? ConvObsoleteOnArrival(d)
 				: LatheObsoleteOnArrival(d));
 	const float trickle = dwarfed ? 0.f
@@ -316,6 +316,7 @@ float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 // eaten; the moment an AFUS stands, wind is unproposable by the same number
 // that makes wind edible.
 float gBestEcell = 0.f;
+float gBuildEcell = 0.f;
 float gBestMcell = 0.f;
 int gBestCellAt = -999999;
 
@@ -334,6 +335,26 @@ void RefreshBestCells()
 				/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 		if (ec > gBestEcell)
 			gBestEcell = ec;
+	}
+	// ...and, for NEW builds only, every generator a constructor we own can
+	// raise: owning no fusion kept the advanced solar current, so 66 were built
+	// beside eleven T2 hands and no fusion (apexearth 2026-09-26). Reclaim keeps
+	// the standing figure, or it would eat the solars before a fusion stood.
+	gBuildEcell = gBestEcell;
+	for (uint b = 1; b < gOwnCount.length(); ++b) {
+		if ((gOwnCount[b] <= 0) || !Catalog::gMobile[int(b)] || !Catalog::gBuilder[int(b)])
+			continue;
+		const array<int>@ bo = Catalog::BuildsOf(int(b));
+		for (uint k = 0; k < bo.length(); ++k) {
+			const int gd = bo[k];
+			if (!Catalog::gAvailable[gd] || Catalog::gMobile[gd] || Catalog::gFloater[gd]
+					|| Catalog::gSub[gd] || Catalog::gNeedGeo[gd] || (Catalog::gMakeE[gd] <= 1.f))
+				continue;
+			const float ec = Catalog::gMakeE[gd]
+					/ float((Catalog::gAreaCells[gd] > 0) ? Catalog::gAreaCells[gd] : 1);
+			if (ec > gBuildEcell)
+				gBuildEcell = ec;
+		}
 	}
 	// WHAT WE COULD BUILD, not only what we happen to own.
 	//
@@ -374,12 +395,21 @@ void RefreshBestCells()
 	}
 }
 
-bool GenObsoleteOnArrival(int d)
+bool GenDwarfedByStanding(int d)
 {
 	RefreshBestCells();
 	const float ec = Catalog::gMakeE[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	return (ec > 0.f) && (gBestEcell
+			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * ec);
+}
+
+bool GenObsoleteOnArrival(int d)
+{
+	RefreshBestCells();
+	const float ec = Catalog::gMakeE[d]
+			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
+	return (ec > 0.f) && (gBuildEcell
 			>= ai.GetTunable("apex_obsolete_ratio", TUNE_OBSOLETE_RATIO) * ec);
 }
 

@@ -217,6 +217,25 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	return const_cast<ISquadTask*>(task);
 }
 
+// All-terrain walkers never share a squad with units that cannot climb: the
+// leader is the least mobile member, so a Vanguard beside a tank walked the
+// tank's road (apexearth 2026-09-26). The pathfinder's own spider test.
+bool ISquadTask::SameClimb(CCircuitAI* circuit, CCircuitDef* a, CCircuitDef* b)
+{
+	static std::set<CCircuitDef::Id> logged;
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	auto climbs = [&](CCircuitDef* d) {
+		const SMobileType* mt = terrainMgr->GetMobileType(d->GetId());
+		const bool c = (mt != nullptr) && (mt->maxSlope > 0.99f);
+		if (logged.insert(d->GetId()).second) {
+			circuit->LOG("apex: climb %s allterrain=%i maxSlope=%.3f", d->GetDef()->GetName(),
+					c ? 1 : 0, (mt != nullptr) ? mt->maxSlope : -1.f);
+		}
+		return c;
+	};
+	return climbs(a) == climbs(b);
+}
+
 ISquadTask* ISquadTask::GetMergeTask()
 {
 	if (updCount % 32 == 1) {

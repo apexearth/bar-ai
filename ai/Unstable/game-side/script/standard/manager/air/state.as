@@ -675,7 +675,22 @@ void SettleStrike()
 		return;
 	const float w = ai.GetTunable("apex_air_obs_w", TUNE_AIR_OBS_W);
 	gObsSurv[d] = (gObsSurv[d] < 0.f) ? surv : (1.f - w) * gObsSurv[d] + w * surv;
-	gObsDmg[d]  = (gObsDmg[d]  < 0.f) ? per  : (1.f - w) * gObsDmg[d]  + w * per;
+	// The first run moves the model's own expectation, as later runs move the
+	// estimate: taken outright, nine Phoenixes over an empty mirrored cell priced
+	// every bomber at 42 metal for the rest of the game (apexearth 2026-09-26).
+	float prior = per;
+	if (gObsDmg[d] < 0.f) {
+		float prize = aiEnemyMgr.GetEnemyStructCost();
+		const float mirror = MirrorPrize();
+		if (mirror > prize)
+			prize = mirror;
+		float sum = 0.f;
+		for (int k = 0; k < sent; ++k)
+			sum += PrizeGain(d, k, prize);
+		prior = sum / float(sent);
+	}
+	gObsDmg[d]  = (gObsDmg[d]  < 0.f) ? ((1.f - w) * prior + w * per)
+			: ((1.f - w) * gObsDmg[d] + w * per);
 	AiLog(Factory::T() + "apex: air run scored def=" + Catalog::Def(d).GetName()
 		+ " sent=" + sent + " home=" + left
 		+ " surv=" + formatFloat(gObsSurv[d], "", 0, 2)

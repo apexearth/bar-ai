@@ -1772,6 +1772,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "void RecordSetTier(const CCircuitDef@, int)", asMETHOD(CCircuitAI, RecordSetTier), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatioVs(const CCircuitDef@, const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordRatioVs), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatioMix(const CCircuitDef@)", asMETHOD(CCircuitAI, RecordRatioMix), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyPowerAt(const AIFloat3& in, float)", asMETHOD(CCircuitAI, GetAllyPowerAt), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordFoeRatio(const CCircuitDef@, const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordFoeRatio), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool RecordTweaked() const", asMETHOD(CCircuitAI, RecordTweaked), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "double ClockUs() const", asFUNCTION(CCircuitAI_ClockUs), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

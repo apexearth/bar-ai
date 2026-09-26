@@ -188,11 +188,16 @@ int SuperTarget(int sc)
 	// 500m/s - i often see us lose games because we aren't aggressive
 	// enough in building in late game") -- at 500 own income the tight
 	// spacing wants 4, the doubled one 2.
-	// The anti-nuke's extra copies are safety against a warhead: with no
-	// enemy silo seen the second one is not safer, and being cheap it
-	// out-bids the gantry every super election. The first is never optional.
-	if ((sc == SC_ANTINUKE) && (Brain::EnemyNukeSilos() <= 0))
-		return 1;
+	// Blind to their silos, extra copies follow what we have built: one more
+	// while a cluster worth more than an umbrella stands outside every one
+	// (apexearth 2026-09-25: the base had grown out from under its only one).
+	if ((sc == SC_ANTINUKE) && (Brain::EnemyNukeSilos() <= 0)) {
+		AIFloat3 unused;
+		const int have = SuperHave(sc);
+		if (UncoveredClusterM(unused) > AntiNukeCostM())
+			return have + 1;
+		return (have > 1) ? have : 1;
+	}
 	if ((sc == SC_ANTINUKE) || (sc == SC_SILO) || (sc == SC_GANTRY))
 		return 1 + int(inc / per);
 	return 1 + int(inc / (per * 2.f));
@@ -343,6 +348,67 @@ AIFloat3 SuperSite(CCircuitUnit@ unit, int sc, CCircuitDef@ def = null)
 	return interior;
 }
 
+float gAntiNukeCostM = 0.f;
+float AntiNukeCostM()
+{
+	if (gAntiNukeCostM > 0.f)
+		return gAntiNukeCostM;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::ValidId(d) || !Catalog::gAvailable[d] || !Catalog::gAntiNuke[d]
+				|| Catalog::gMobile[d])
+			continue;
+		if ((gAntiNukeCostM <= 0.f) || (Catalog::gCostM[d] < gAntiNukeCostM))
+			gAntiNukeCostM = Catalog::gCostM[d];
+	}
+	return gAntiNukeCostM;
+}
+
+// The most big-structure metal one umbrella could cover that none covers now,
+// centred on one of those structures. An umbrella worth less than its own
+// cost is not built.
+int gUncovAt = -1;
+float gUncovM = 0.f;
+AIFloat3 gUncovPos;
+float UncoveredClusterM(AIFloat3& out at)
+{
+	if (gUncovAt == ai.frame) {
+		at = gUncovPos;
+		return gUncovM;
+	}
+	gUncovAt = ai.frame;
+	gUncovM = UncoveredClusterScan(gUncovPos);
+	at = gUncovPos;
+	return gUncovM;
+}
+
+float UncoveredClusterScan(AIFloat3& out at)
+{
+	const float r = ai.GetTunable("apex_antinuke_r", TUNE_ANTINUKE_R);
+	array<AIFloat3> pos;
+	array<float> m;
+	for (uint i = 0; i < gOwnBig.length(); ++i) {
+		if ((gOwnBig[i] is null) || (gOwnBig[i].circuitDef is null))
+			continue;
+		const AIFloat3 p = gOwnBig[i].GetPos(ai.frame);
+		if (!OnMap(p) || ProtCovered(PROT_ANTINUKE, p, r))
+			continue;
+		pos.insertLast(p);
+		m.insertLast(Catalog::gCostM[int(gOwnBig[i].circuitDef.id)]);
+	}
+	float best = 0.f;
+	for (uint i = 0; i < pos.length(); ++i) {
+		float sum = 0.f;
+		for (uint j = 0; j < pos.length(); ++j)
+			if (pos[i].distance2D(pos[j]) < r)
+				sum += m[j];
+		if (sum > best) {
+			best = sum;
+			at = pos[i];
+		}
+	}
+	return best;
+}
+
 // A second anti-nuke belongs over ground the first one does not reach.
 bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 {
@@ -353,23 +419,7 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 		at = SuperSite(unit, SC_ANTINUKE);
 		return OnMap(at);
 	}
-	// The richest thing standing outside every umbrella we own.
-	float best = 0.f;
-	bool found = false;
-	for (uint i = 0; i < gOwnBig.length(); ++i) {
-		if ((gOwnBig[i] is null) || (gOwnBig[i].circuitDef is null))
-			continue;
-		const AIFloat3 p = gOwnBig[i].GetPos(ai.frame);
-		if (!OnMap(p) || ProtCovered(PROT_ANTINUKE, p, r))
-			continue;
-		const float m = Catalog::gCostM[int(gOwnBig[i].circuitDef.id)];
-		if (m > best) {
-			best = m;
-			at = p;
-			found = true;
-		}
-	}
-	if (found)
+	if (UncoveredClusterM(at) > AntiNukeCostM())
 		return true;
 	// DEPTH AT THE CORE (apexearth 2026-09-13: "in late game we may want our
 	// anti nuke coverage to go from just 1 AN to ~3 AN"): a second and third

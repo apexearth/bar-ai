@@ -137,7 +137,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// answers in twelve minutes (canon game, 2026-09-08).
 	if (Gate(G_BIGE, IsBigEnergy(want) && BigEnergyRising()
 			&& !BigEnergyBetterThanRising(want) && !BankCovers(want)
-			&& !Market::MetalWasting())) {
+			&& !IncomeCoversReactors(want) && !Market::MetalWasting())) {
 		// Hand the asker the best time-to-energy job instead of a hole in the
 		// ground: e/s per second of remaining build, so a half-done fusion beats
 		// a fresh afus (apexearth: "they should all focus their efforts on the
