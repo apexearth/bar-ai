@@ -69,6 +69,10 @@ no gun on it (62 orders + 304 in-contact holds in one 1v1). Third: the MELEE
 hold pool (`hooks.as`, `massing.as:369`) never marches while the base reads
 "under attack" (4669 ticks in that game). Not tried: the JSON A/B is one line,
 no rebuild -- run it on the battery before any script change.
+RUN 2026-09-26 for attack only (defence left at 1.0, his "allies don't come to
+help" reason): Koom 8v8 +100%, 4 paired games, first 12 min. attack [0.6,0.8]
+lost 68.5k vs their 50.7k, control [1.0,1.0] 55.7k vs 41.3k -- ratio 1.35 both.
+More fighting, same trade; reverted. The defence value is untested and his call.
 
 ### ONE FACTORY ORDER COSTS 8-28 ms (2026-09-20)
 
@@ -93,6 +97,14 @@ second-largest group -- every 5 s. 8v8 census: 42% of pools held 1-2 units,
 63% defending; losing raises the bar. His ruling 2026-09-06: "we should be able
 to coordinate attacks with multiple groups" -- odds judged on what commits
 together, pools stay separate. Not built.
+
+Re-measured 2026-09-26, Koom 8v8 +100%, first 12 min: at a fight's start ~1.3k
+of our army is within 900 of it and 7-13k stands 900-2500 away, mostly guard
+(f1) and defend (f2) pools; we lose 1.3-1.9x the metal they do, even in fights
+where we had the numbers. TRIED AND REVERTED: `CDefendTask::FindTarget` judging
+a target by `max(pool power, GetAllyInflAt(ePos))` (the side's power there).
+4 paired games: less army waiting (5.4-11k vs 7.4-11.3k) but loss ratio 1.79
+against the control's 1.35. Joining more of the waiting army did not trade.
 
 ### RAIDS: the director produces a real target in 1-3% of asks; we run almost no scouts (2026-09-06)
 
