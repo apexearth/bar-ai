@@ -1792,6 +1792,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				}
 			}
 			const float rGap = rTarget - rValue;
+			// AA answers their air and nothing else: at or over its target it is
+			// not bought, whatever its anti-air damage prices it at as army
+			// (apexearth 2026-09-26: 105k of AA against 22k of enemy air, 44% of
+			// the army, the Archangel ranked a top army unit on air damage).
+			if ((rIdx == int(Unit::Role::AA.type)) && (rGap <= 0.f)) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":aafull";
+				continue;
+			}
 			float roleW = (rTarget > 1.f) ? (rGap / rTarget) : 0.f;
 			// THE PORTFOLIO FLOOR MUST NOT REVIVE A ROLE THAT IS WORTH NOTHING.
 			// It keeps a never-first role from starving, which is right for the

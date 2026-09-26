@@ -17,6 +17,7 @@
 #include "unit/action/MoveAction.h"
 #include "unit/action/FightAction.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/enemy/EnemyManager.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
@@ -156,6 +157,7 @@ void CRaidTask::Update()
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
+		noTargetSince = -1;
 		state = State::ENGAGE;
 		position = GetTarget()->GetPos();
 		circuit->GetMilitaryManager()->ClearScoutPosition(this);
@@ -393,6 +395,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
 	pPath = query->GetPathInfo();
 
 	if (!pPath->posPath.empty()) {
+		noTargetSince = -1;
 		position = pPath->posPath.back();
 		ActivePath();
 	} else {
@@ -400,9 +403,44 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
 	}
 }
 
+// A raid with nothing it can reach for a minute joins the army instead of
+// wandering the map edges: on a narrow isthmus land raiders found no way in
+// and trickled into the choke (apexearth 2026-09-26). Amphibious raiders keep
+// raiding -- the water is their way round.
+bool CRaidTask::GiveUpRaid()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	if (noTargetSince < 0) {
+		noTargetSince = frame;
+		return false;
+	}
+	if ((leader == nullptr) || leader->GetCircuitDef()->IsAmphibious() || leader->GetCircuitDef()->IsSurfer()
+		|| leader->GetCircuitDef()->IsAbleToFly() || (frame < noTargetSince + FRAMES_PER_SEC * 60))
+	{
+		return false;
+	}
+	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+	IFighterTask* task = militaryMgr->Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK,
+			std::max(1.f, circuit->GetEnemyManager()->GetPreMaxGroupThreat())));
+	if (task == nullptr) {
+		return false;
+	}
+	circuit->LOG("apex: raid-giveup %s x%i -> army pool", leader->GetCircuitDef()->GetDef()->GetName(),
+			static_cast<int>(units.size()));
+	decltype(units) tmpUnits = units;
+	for (CCircuitUnit* unit : tmpUnits) {
+		manager->AssignTask(unit, task);
+	}
+	return true;
+}
+
 void CRaidTask::FallbackRaid()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
+	if (GiveUpRaid()) {
+		return;
+	}
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());

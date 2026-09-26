@@ -326,6 +326,10 @@ float ArmyValue()
 		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
 			|| Catalog::gKamikaze[int(d)])
 			continue;
+		// A unit that cannot hit the ground is the AA role's, not the army's:
+		// counted here it closed the army gap with Archangels.
+		if (Catalog::gSurfT[int(d)] <= 0.01f)
+			continue;
 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}
 	gArmyVal = v;

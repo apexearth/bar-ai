@@ -32,8 +32,10 @@ private:
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackRaid();
 	void ApplyRaidPath(const CQueryPathSingle* query);
+	bool GiveUpRaid();
 
 	float maxPower;
+	int noTargetSince = -1;
 };
 
 } // namespace circuit
