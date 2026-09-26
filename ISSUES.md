@@ -105,6 +105,12 @@ where we had the numbers. TRIED AND REVERTED: `CDefendTask::FindTarget` judging
 a target by `max(pool power, GetAllyInflAt(ePos))` (the side's power there).
 4 paired games: less army waiting (5.4-11k vs 7.4-11.3k) but loss ratio 1.79
 against the control's 1.35. Joining more of the waiting army did not trade.
+ALSO TRIED AND REVERTED 2026-09-26: `UpdateDefenceTasks` promoting every
+attack-bound pool together once their SUM met the bar (his 09-06 "coordinate
+attacks with multiple groups"). 4 paired games: fired 19 times, attack-task
+units +57% (767 -> 1207 census), loss ratio 1.13 -> 1.20, worse in all four.
+More of the army committing is not the missing piece; what it fights with, and
+how, is (Rocko 10.3k lost for 4.1k killed in the same games).
 
 ### RAIDS: the director produces a real target in 1-3% of asks; we run almost no scouts (2026-09-06)
 
