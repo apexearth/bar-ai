@@ -862,15 +862,20 @@ AIFloat3 GroupAnchor(int defId, CCircuitUnit@ unit = null)
 	// ...at the core's REAR EDGE, not its heart: a converter finishes in
 	// seconds under any ring, a gantry or a reactor takes minutes, so the
 	// ground the thick ring reaches is theirs.
+	// ...and the small generators too, starting HALF a reach back, inside it:
+	// a full reach put the yard's first slot at the ring's edge, and 67-73% of
+	// solars, advanced solars and converters stood out of every turret's reach
+	// (apexearth 2026-09-26: eco is to be built within turret range). The
+	// reactors keep the ring's heart through LatheSite.
 	AIFloat3 origin = gFarmPos;
-	if (Catalog::gConvCapacity[defId] > 0.f) {
+	{
 		const AIFloat3 heart = LatheSiteFor(unit);
 		if (OnMap(heart)) {
 			origin = heart;
 			// gFwd points at the enemy, as the search below and FarmSlot read
 			// it; the doorway's flipped exitDir put the yard a nano range forward.
 			if (Base::Ready()) {
-				const AIFloat3 rear = heart - Base::gFwd * NanoRange();
+				const AIFloat3 rear = heart - Base::gFwd * (0.5f * NanoRange());
 				if (OnMap(rear))
 					origin = rear;
 			}
