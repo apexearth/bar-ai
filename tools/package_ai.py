@@ -32,6 +32,9 @@ INSTALL = """\
 {name} -- a custom AI for Beyond All Reason
 Engine build: {engine}   (packaged {date}, source {git})
 
+Made by apexearth (in-game name: apexearth)
+GitHub: https://github.com/apexearth
+
 WHO NEEDS THIS
   Only the player HOSTING the game. Everyone else just joins the lobby.
 
