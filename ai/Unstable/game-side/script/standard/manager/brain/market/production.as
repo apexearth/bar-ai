@@ -385,10 +385,8 @@ float AssistLatheM()
 }
 
 // How many of assist def `d` the unspent metal asks for, net of the assist
-// lathe already standing or ordered -- and of the nano lathe standing idle,
-// as the nano want nets it: idle lathe is a shortage of orders, not hands
-// (his 1v1, 2026-09-27: 225 Farks from the T2 lab at 22+ min, no T2 army,
-// with 1,450 m/s of turret lathe idle and the bank pinned full).
+// lathe already standing or ordered and of the nano lathe standing idle:
+// idle lathe is a shortage of orders, not hands.
 int AssistNeed(int d)
 {
 	if (d < 0)
