@@ -1535,19 +1535,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ranked[ri].kind != WK_SUPER)
 				continue;
-			// An anti-nuke against no silo seen is insurance, priced in the
-			// draw like the rest; the push is for the weapon itself. His
-			// Comet 1v1: the third T2 con hoisted to an anti-nuke at 13 min,
-			// metal-starved, no enemy silo, the enemy at 250 m/s.
-			// ...EXCEPT THE FIRST, once a silo is possible: our T2 lab stands and
-			// theirs has shown. An interceptor stocks 90 s after the build, so an
-			// anti-nuke started at the silo sighting is late (apexearth
-			// 2026-09-26: the eco seat's finished at 19.7 and died to the nuke at
-			// 20.2; "at +100% we can do anti nuke by ~15 minutes").
-			const bool firstAnti = (SuperHave(SC_ANTINUKE) <= 0) && Factory::gHaveT2
-					&& (Military::FoeTierAbove(1) > 0.f);
-			if ((ranked[ri].def !is null) && Catalog::gAntiNuke[int(ranked[ri].def.id)]
-				&& (Brain::EnemyNukeSilos() <= 0) && !firstAnti)
+			if (!SuperPushable(ranked[ri].def))
 				continue;
 			if (ri > 0) {
 				Want@ sw = ranked[ri];

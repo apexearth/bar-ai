@@ -252,6 +252,32 @@ bool SuperInFlight()
 	return gSuperFlight >= SuperFlightCap();
 }
 
+// Whether decide.as's super-push will jump the queue for this def. An
+// anti-nuke against no silo seen is insurance, priced in the draw like the
+// rest; the push is for the weapon itself. His Comet 1v1: the third T2 con
+// hoisted to an anti-nuke at 13 min, metal-starved, no enemy silo, the enemy
+// at 250 m/s.
+// ...EXCEPT THE FIRST, once a silo is possible: our T2 lab stands and theirs
+// has shown. An interceptor stocks 90 s after the build, so an anti-nuke
+// started at the silo sighting is late (apexearth 2026-09-26: the eco seat's
+// finished at 19.7 and died to the nuke at 20.2; "at +100% we can do anti
+// nuke by ~15 minutes").
+// ...and never while metal is overflowing: the starved case is the one the
+// refusal exists for (apexearth 2026-09-27: "Things were full on metals, and
+// we have a lot of constructors. We should be willing to do more things at
+// the same time").
+bool SuperPushable(const CCircuitDef@ d)
+{
+	if ((d is null) || !Catalog::gAntiNuke[int(d.id)])
+		return true;
+	if (Brain::EnemyNukeSilos() > 0)
+		return true;
+	if ((SuperHave(SC_ANTINUKE) <= 0) && Factory::gHaveT2
+		&& (Military::FoeTierAbove(1) > 0.f))
+		return true;
+	return WealthWaiver();
+}
+
 // Where a strategic static goes. Silos, gantries and anti-nukes go as deep in
 // the base as the tech lab does -- they are the most protection-hungry things
 // we own. A long-range gun and a heavy turret face the fight instead: the
@@ -525,6 +551,7 @@ float gLrpcInReach = 0.f;
 Want@ ProposeSuper(CCircuitUnit@ unit)
 {
 	Want w;
+	Want wIns;
 	if (ai.GetTunable("apex_super_want", TUNE_SUPER_WANT) <= 0.f)
 		return w;
 	if (SuperInFlight())
@@ -744,12 +771,18 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				+ " best=" + ((w.def is null) ? "none" : (SuperName(w.spotId) + ":" + w.def.GetName()))
 				+ " bestV=" + formatFloat(w.value * 1000.f, "", 0, 2));
 		}
-		if (c.value > w.value) {
-			w = c;
-			w.kind = WK_SUPER;
-			@w.def = Catalog::Def(d);
-			w.pos = at;
-			w.spotId = sc;
+		// A candidate the push refuses may not hide one it would take: a
+		// second anti-nuke outranked the gantry for nine minutes, the push
+		// skipped it, the draw never picked it, and nothing was built.
+		Want@ slot = wIns;
+		if (SuperPushable(Catalog::Def(d)))
+			@slot = w;
+		if (c.value > slot.value) {
+			slot = c;
+			slot.kind = WK_SUPER;
+			@slot.def = Catalog::Def(d);
+			slot.pos = at;
+			slot.spotId = sc;
 		}
 	}
 	// THE AIR MANDATE HAS NO OTHER BUYER. Air::IntelPlantToBuild carries
@@ -802,6 +835,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			}
 		}
 	}
+	if ((w.def is null) && (wIns.def !is null))
+		w = wIns;
 	if ((w.def !is null) && (ai.frame >= gNextSuperLog)) {
 		gNextSuperLog = ai.frame + 30 * SECOND;
 		AiLog("apex: super t=" + ai.teamId + " " + SuperName(w.spotId)
