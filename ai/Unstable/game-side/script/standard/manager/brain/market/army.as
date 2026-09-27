@@ -1255,6 +1255,7 @@ bool EcoRoleGrowing()
 // to the switch.
 bool gT2SwitchDone = false;
 bool gT2SwitchWas = false;
+bool gT2Rich = false;
 int gT2SwitchLogAt = 0;
 
 // A def only an advanced hand builds: no T1 hand in its builder list.
@@ -1292,8 +1293,10 @@ float T2HomeRadius()
 	float speed = 0.f;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		const int di = int(d);
+		// A hand that can build the moho: the Fark is advanced-only and
+		// faster, and it stretched home to 2,250 (22 spots) in the test game.
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di]
-			|| Catalog::gFlyer[di] || !AdvancedOnlyDef(di))
+			|| Catalog::gFlyer[di] || !AdvancedOnlyDef(di) || !ReachesCeiling(di))
 			continue;
 		if (Catalog::gSpeed[di] > speed)
 			speed = Catalog::gSpeed[di];
@@ -1376,9 +1379,15 @@ bool T2SwitchEval()
 		return false;
 	}
 	// Overflowing metal is army the switch would only throw away (his ruling
-	// 2026-09-27); not DONE, so it holds again once the metal is spent.
+	// 2026-09-27); not DONE, so it holds again once the bank runs dry. Released
+	// on the flow alone it flapped every few seconds: the army it let in spent
+	// the overflow and the next read zeroed the army target again.
 	const bool danger = EcoDangerNear();
-	const bool rich = !danger && WealthWaiver();
+	if (WealthWaiver())
+		gT2Rich = true;
+	else if (aiEconomyMgr.isMetalEmpty)
+		gT2Rich = false;
+	const bool rich = !danger && gT2Rich;
 	const bool on = !danger && !rich;
 	if ((on != gT2SwitchWas) || (ai.frame >= gT2SwitchLogAt)) {
 		gT2SwitchWas = on;
