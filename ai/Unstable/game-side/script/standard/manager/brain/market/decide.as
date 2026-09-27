@@ -351,17 +351,34 @@ const int ELEC_STEPS = 20;
 // carrying the overshoot, which is the bug this replaces.
 array<double> gStepEma(uint(ELEC_STEPS), 0.0);
 
+// His 16-AI budget: 20% of a 33.3 ms frame over sixteen AIs.
+const double AI_FRAME_BUDGET_US = 417.0;
+
+// His ruling 2026-09-26: when the host lags, elect less often. The slice falls
+// from the tunable toward the whole AI's per-frame budget as the lag ladder
+// climbs (Perf::LagSeverity, 0..3), and returns as the sim catches up.
 double ElecFrameUs()
 {
 	if (gElecBudgetUs < 0.0)
 		gElecBudgetUs = double(ai.GetTunable("apex_elec_frame_us",
 				TUNE_ELEC_FRAME_US));
-	return gElecBudgetUs;
+	const double sev = double(Perf::LagSeverity()) / 3.0;
+	if ((sev <= 0.0) || (gElecBudgetUs <= AI_FRAME_BUDGET_US))
+		return gElecBudgetUs;
+	return gElecBudgetUs + (AI_FRAME_BUDGET_US - gElecBudgetUs) * ((sev < 1.0) ? sev : 1.0);
 }
+
+// Carried across frames: a step dearer than the slice leaves a debt the next
+// frames repay by electing nothing, so the average stays under the slice.
+double gElecCredit = 0.0;
 
 void ElecFrameRoll()
 {
 	if (gElecFrame != ai.frame) {
+		const double slice = ElecFrameUs();
+		gElecCredit += slice * double((gElecFrame < 0) ? 1 : (ai.frame - gElecFrame));
+		if (gElecCredit > slice)
+			gElecCredit = slice;
 		gElecFrame = ai.frame;
 		gElecSpentUs = 0.0;
 		gElecPumpUs = 0.0;
@@ -371,8 +388,10 @@ void ElecFrameRoll()
 void ElecSpend(double us)
 {
 	ElecFrameRoll();
-	if (us > 0.0)
+	if (us > 0.0) {
 		gElecSpentUs += us;
+		gElecCredit -= us;
+	}
 }
 
 // What the caller (maketask.as) owes on top of what the election charged itself:
@@ -399,6 +418,8 @@ void ElecSpendRest(double totalUs)
 bool ElecAfford(int step)
 {
 	ElecFrameRoll();
+	if (gElecCredit <= 0.0)
+		return false;
 	if (gElecSpentUs <= 0.0)
 		return true;   // a step dearer than the whole slice must still run once
 	// The finish is budgeted against finishes only: the pump spends the slice
@@ -615,7 +636,7 @@ void ElecPump()
 	ElecFrameRoll();
 	uint i = 0;
 	while (i < gElecQ.length()) {
-		if (gElecSpentUs > ElecFrameUs())
+		if ((gElecSpentUs > ElecFrameUs()) || (gElecCredit <= 0.0))
 			return;
 		const int uid = gElecQ[i];
 		Elec@ st = ((uid >= 0) && (uid < int(gElecOf.length())))
@@ -661,6 +682,8 @@ void ElecLog()
 		+ " worstWaitS=" + formatFloat(float(gElecWorstWait) / float(SECOND), "", 0, 2)
 		+ " revisitS=" + formatFloat(gRevisitEma / float(SECOND), "", 0, 2)
 		+ " sliceUs=" + int(ElecFrameUs())
+		+ " credit=" + int(gElecCredit)
+		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin);
 	gKeepMin = 0;
 	gOffCrewMin = 0;

@@ -564,7 +564,9 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 // game. The market prices the victim; the bot eats it.
 IUnitTask@ RezzerRetire(CCircuitUnit@ unit)
 {
-	Market::Want@ w = Market::ProposeReclaimObsolete(unit);
+	// Memoised like the constructors' step: uncached, an idle fleet re-ran the
+	// whole obsolete search every election and found nothing.
+	Market::Want@ w = Market::MemoPropose(4, unit);
 	if ((w is null) || (w.value <= 0.f) || (w.kind != Market::WK_RECLAIM))
 		return null;
 	return Market::ExecuteWant(unit, w);

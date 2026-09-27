@@ -100,7 +100,10 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	// important"). What follows it is the fallback for work the market never
 	// priced: build power compounds, so a worker raising a nano outranks one
 	// raising a factory, then serving cons, then a line with a queue.
+	double _tA = Perf::T0();
 	CCircuitUnit@ boss = BestJobBoss(unit);
+	Perf::Add("as.boss", _tA);
+	_tA = Perf::T0();
 	// A worker raising a FACTORY outranks everything -- one con on the T2
 	// plant was the measured bottleneck (apexearth: "we are more efficient
 	// when we assist building some things").
@@ -154,6 +157,8 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 			}
 		}
 	}
+	Perf::Add("as.fallback", _tA);
+	_tA = Perf::T0();
 	if (boss is null)
 		return w;
 	// A fallback boss's own task is the job: the pricing below reads its
@@ -262,6 +267,7 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 				: (myDrain * occupiedSec / H);
 	}
 
+	Perf::Add("as.price", _tA);
 	w.kind = WK_ASSIST;
 	w.pos = bp;
 	w.spotId = int(boss.id);

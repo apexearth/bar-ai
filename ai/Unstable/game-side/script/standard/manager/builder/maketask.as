@@ -17,7 +17,7 @@ IUnitTask@ AiMakeTask(CCircuitUnit@ unit)
 	// holding a task or on the rez gate; without this those frames do nothing
 	// for the half-built sets, and an election's step rate collapses to how
 	// often the engine hands that ONE builder back (Market::ElecPump).
-	Market::ElecPump();
+	{ double _tP = Perf::T0(); Market::ElecPump(); Perf::Add("bld.pump", _tP); }
 	IUnitTask@ _r = MakeTaskInner(unit);
 	Perf::Add("hk.maketask.builder", _mt);
 	return _r;
@@ -315,6 +315,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// of it. Every return path still counts, and nothing counts twice.
 	const double _tD = ai.ClockUs();
 	IUnitTask@ dec = Brain::Decide(unit);
+	Perf::Add("bld.decide", _tD);
 	Market::ElecSpendRest(ai.ClockUs() - _tD);
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		NoteCommDecide(unit, dec);
