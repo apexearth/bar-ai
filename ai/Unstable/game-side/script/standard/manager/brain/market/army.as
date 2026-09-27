@@ -1899,7 +1899,7 @@ void StallWatch()
 	// every game measured, while apexearth watched the commander build a turret
 	// through a stall. Six filters can reject a candidate and none of them said
 	// so, which is this repo's dominant bug class wearing a scan's clothing.
-	int rjTask = 0, rjEnergy = 0, rjProg = 0, rjCanE = 0, rjWant = 0, rjNear = 0, rjFull = 0, seen = 0;
+	int rjTask = 0, rjEnergy = 0, rjProg = 0, rjSole = 0, rjCanE = 0, rjWant = 0, rjNear = 0, rjFull = 0, seen = 0;
 	for (uint pass = 0; pass < 2; ++pass) {
 	for (uint i = 0; i < cand.length(); ++i) {
 		CCircuitUnit@ u = cand[i];
@@ -1919,6 +1919,15 @@ void StallWatch()
 		if ((pass == 0) && (Requests::Progress(t) > 0.01f)) {
 			++rjProg;
 			continue;
+		}
+		// The only hand on a job carries the order with it: the gantry's sole
+		// walker was pulled at 13.8 min and the gantry came back at 23.5.
+		if (pass == 0) {
+			array<CCircuitUnit@>@ crew = t.GetUnits();
+			if ((crew is null) || (crew.length() <= 1)) {
+				++rjSole;
+				continue;
+			}
 		}
 		// (guard/patrol holders pass straight through: their work is worth
 		// ~nothing mid-stall, so the dry-run below decides.)
@@ -2043,7 +2052,7 @@ void StallWatch()
 			+ " workers=" + gWorkers.length() + " seen=" + seen
 			+ " picks=" + picks.length()
 			+ " deficit=" + formatFloat(deficit0, "", 0, 0)
-			+ " rj: task=" + rjTask + " isE=" + rjEnergy + " prog=" + rjProg
+			+ " rj: task=" + rjTask + " isE=" + rjEnergy + " prog=" + rjProg + " sole=" + rjSole
 			+ " canE=" + rjCanE + " want=" + rjWant + " near=" + rjNear
 			+ " full=" + rjFull);
 	}
@@ -2055,7 +2064,12 @@ void StallWatch()
 			+ " leaves its build to answer the energy stall");
 		DebtNote(p, p.task);   // before Abort(): the task is what holds the frame
 		StallFreedNote(p);
-		p.task.Abort();
+		// Abort() ends the job for the whole crew, not just this hand.
+		array<CCircuitUnit@>@ crew = p.task.GetUnits();
+		if ((crew !is null) && (crew.length() > 1))
+			p.task.RemoveUnit(p);
+		else
+			p.task.Abort();
 	}
 }
 
