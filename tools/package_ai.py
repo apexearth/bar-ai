@@ -1,7 +1,7 @@
 """Package a variant for other players.
 
-    python tools/package_ai.py            # packages 'apex'
-    python tools/package_ai.py apex --out dist
+    python tools/package_ai.py            # packages 'Unstable'
+    python tools/package_ai.py Unstable --out dist
 
 Produces dist/<ShortName>-<variant>-<engine>-<date>-<git>.zip containing the
 same self-contained engine-side folder deploy_ai.py installs locally:
@@ -58,7 +58,7 @@ IMPORTANT
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("variant", nargs="?", default="apex")
+    ap.add_argument("variant", nargs="?", default="Unstable")
     ap.add_argument("--out", default="dist", help="output directory (default dist/)")
     args = ap.parse_args()
 
