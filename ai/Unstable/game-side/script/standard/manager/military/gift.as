@@ -23,6 +23,7 @@ namespace Military {
 const string TV_GNEED  = "gneed";
 const string TV_GSPARE = "gspare";
 const string TV_GAT    = "gat";
+const string TV_GFOE   = "gfoe";
 
 int gGiftPubAt = 0;
 int gGiftNextAt = 0;
@@ -64,12 +65,30 @@ float GiftNeedM()
 	return (gap > 0.f) ? gap : 0.f;
 }
 
+// Our share of the enemy army that is NOT already standing at one of our
+// homes: the army attacking the ally we would help is not also a threat to
+// hold back against, and counting it twice leaves every seat nothing to spare.
+float FreeFoeShareM()
+{
+	float free = EnemyArmyCost();
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates !is null) {
+		for (uint i = 0; i < mates.length(); ++i) {
+			const int id = int(mates[i]);
+			if (float(ai.frame) - ai.ReadTeamValue(id, TV_GAT, -1000000.f) > 10 * SECOND)
+				continue;
+			free -= ai.ReadTeamValue(id, TV_GFOE, 0.f);
+		}
+	}
+	return (free > 0.f) ? (free / AllyCount()) : 0.f;
+}
+
 float GiftSpareM()
 {
 	if (Builder::BaseUnderAttack() || BaseContested())
 		return 0.f;
 	float keep = FoeAtHomeM();
-	const float share = EnemyArmyCost() / AllyCount();
+	const float share = FreeFoeShareM();
 	if (share > keep)
 		keep = share;
 	const float spare = aiMilitaryMgr.armyCost - keep;
@@ -86,6 +105,7 @@ void UpdateGifts()
 {
 	if (ai.frame >= gGiftPubAt) {
 		gGiftPubAt = ai.frame + 2 * SECOND;
+		ai.PublishTeamValue(TV_GFOE, FoeAtHomeM());
 		ai.PublishTeamValue(TV_GNEED, GiftNeedM());
 		ai.PublishTeamValue(TV_GSPARE, GiftSpareM());
 		ai.PublishTeamValue(TV_GAT, float(ai.frame));
