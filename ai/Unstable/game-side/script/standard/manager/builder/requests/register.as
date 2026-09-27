@@ -136,6 +136,7 @@ int gBigEPre  = 0;   // a strictly better rung opened its own site
 // -- the register ------------------------------------------------------------
 
 array<IUnitTask@> gLive;
+int gLiveStamp = 0;   // bumped on every insert and removal of gLive
 // THE WAIT BETWEEN DECIDING AND BREAKING GROUND, per request, parallel to
 // gLive (apexearth: "if you build 1 wind -- what's the time between wanting
 // to create one and it actually starting? track those timelines"). Nothing
@@ -318,6 +319,7 @@ void Register(IUnitTask@ task)
 	if (task.buildDef is null)
 		return;
 	gLive.insertLast(task);
+	++gLiveStamp;
 	gLiveAt.insertLast(ai.frame);
 	gLiveStarted.insertLast(false);
 	gLiveStartAt.insertLast(-1);
@@ -416,6 +418,7 @@ void Forget(IUnitTask@ task)
 				gLiveStarted.removeAt(i);
 			}
 			gLive.removeAt(i);
+			++gLiveStamp;
 			return;
 		}
 	}

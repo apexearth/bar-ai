@@ -33,9 +33,20 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 void SweepDead()
 {
 	for (uint i = 0; i < gLive.length(); ) {
-		if ((gLive[i] is null) || gLive[i].IsDead())
+		if ((gLive[i] is null) || gLive[i].IsDead()) {
+			// The parallel arrays go with it, or every later entry reads its
+			// neighbour's ring, samples and start frame.
+			if (i < gLiveAt.length()) gLiveAt.removeAt(i);
+			if (i < gLiveStarted.length()) gLiveStarted.removeAt(i);
+			if (i < gLiveStartAt.length()) gLiveStartAt.removeAt(i);
+			if (i < gLiveProg.length()) gLiveProg.removeAt(i);
+			if (i < gLiveProgAt.length()) gLiveProgAt.removeAt(i);
+			if (i < gLiveSample.length()) gLiveSample.removeAt(i);
+			if (i < gLiveSampleAt.length()) gLiveSampleAt.removeAt(i);
+			if (i < gLiveRingBP.length()) gLiveRingBP.removeAt(i);
 			gLive.removeAt(i);
-		else
+			++gLiveStamp;
+		} else
 			++i;
 	}
 }

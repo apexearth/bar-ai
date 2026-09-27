@@ -28,6 +28,7 @@ array<CCircuitUnit@> gGuardUnit;
 array<CCircuitUnit@> gGuardBoss;
 array<Id> gGuardUId;
 array<Id> gGuardBId;
+int gGuardStamp = 0;   // bumped on every insert and removal of the ledger
 void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 {
 	if ((u is null) || (boss is null))
@@ -36,6 +37,7 @@ void GuardNote(CCircuitUnit@ u, CCircuitUnit@ boss)
 	gGuardBoss.insertLast(boss);
 	gGuardUId.insertLast(u.id);
 	gGuardBId.insertLast(boss.id);
+	++gGuardStamp;
 }
 
 // How many guards follow the workers of this job. The assist want counts a
@@ -72,6 +74,7 @@ void GuardGone(Id id)
 			gGuardBoss.removeAt(i);
 			gGuardUId.removeAt(i);
 			gGuardBId.removeAt(i);
+			++gGuardStamp;
 			continue;
 		}
 		++i;
@@ -407,6 +410,7 @@ void GuardSweep()
 			gGuardBoss.removeAt(i);
 			gGuardUId.removeAt(i);
 			gGuardBId.removeAt(i);
+			++gGuardStamp;
 			continue;
 		}
 		++i;

@@ -23,11 +23,13 @@ array<float> gJobGain;   // metal/s the finished thing returns -- what an
 // The job BestJobBoss ranked first, for callers that need to price the help
 // rather than just walk to it.
 IUnitTask@ gBossJob;
+int gJobStamp = 0;   // bumped whenever a job record is added, repriced or dropped
 
 void NoteJob(IUnitTask@ t, Want@ w)
 {
 	if ((t is null) || (w is null))
 		return;
+	++gJobStamp;
 	for (uint i = 0; i < gJobTask.length(); ++i) {
 		if (gJobTask[i] is t) {
 			gJobVal[i] = w.value;
@@ -47,6 +49,7 @@ void JobSweep()
 			gJobTask.removeAt(i);
 			gJobVal.removeAt(i);
 			gJobGain.removeAt(i);
+			++gJobStamp;
 			continue;
 		}
 		++i;
@@ -134,10 +137,67 @@ bool ComFar(const AIFloat3& in p)
 	return past > 400.f;
 }
 
-IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
+// What BestLiveJob reads of each live job that does not depend on the asker,
+// taken once per frame. Every constructor's election walked the live list and
+// did two linear lookups and a crew x guard-ledger scan per job: jobs-squared
+// work per asker.
+array<IUnitTask@> gJcTask;
+array<float> gJcVal;
+array<AIFloat3> gJcPos;
+array<bool> gJcOnMap;
+array<bool> gJcFar;
+array<float> gJcProg;
+array<float> gJcRing;
+array<int> gJcGuards;
+int gJcFrame = -1;
+int gJcJobStamp = -1;
+int gJcLiveStamp = -1;
+int gJcGuardStamp = -1;
+bool gJcLeashed = false;
+
+void JobCacheFill(bool leashed)
 {
 	JobSweep();
 	Requests::SweepDead();
+	if ((gJcFrame == ai.frame) && (gJcJobStamp == gJobStamp)
+		&& (gJcLiveStamp == Requests::gLiveStamp)
+		&& (gJcGuardStamp == gGuardStamp) && (gJcLeashed == leashed))
+		return;
+	gJcFrame = ai.frame;
+	gJcJobStamp = gJobStamp;
+	gJcLiveStamp = Requests::gLiveStamp;
+	gJcGuardStamp = gGuardStamp;
+	gJcLeashed = leashed;
+	gJcTask.resize(0);
+	gJcVal.resize(0);
+	gJcPos.resize(0);
+	gJcOnMap.resize(0);
+	gJcFar.resize(0);
+	gJcProg.resize(0);
+	gJcRing.resize(0);
+	gJcGuards.resize(0);
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ cand = Requests::gLive[i];
+		if ((cand is null) || cand.IsDead()
+			|| (cand.GetType() != Task::Type::BUILDER)
+			|| (cand.buildDef is null))
+			continue;
+		const float val = JobValue(cand);
+		const AIFloat3 where = cand.GetBuildPos();
+		const bool onMap = OnMap(where);
+		gJcTask.insertLast(cand);
+		gJcVal.insertLast(val);
+		gJcPos.insertLast(where);
+		gJcOnMap.insertLast(onMap);
+		gJcFar.insertLast((val > 0.f) && onMap && leashed && EcoFar(where));
+		gJcProg.insertLast(Requests::Progress(cand));
+		gJcRing.insertLast(Requests::RingSeen(cand));
+		gJcGuards.insertLast((val > 0.f) ? GuardsOnJob(cand) : 0);
+	}
+}
+
+IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
+{
 	gJobSeen = 0; gJobUnpriced = 0; gJobFar = 0; gJobFull = 0;
 	gJobLate = 0; gJobCant = 0; gJobHot = 0;
 	@gJobNearBest = null;
@@ -151,27 +211,26 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 	// EcoFar's first two terms do not read the site; taken once.
 	const bool leashed = EcoQuiet() && Builder::gHomeSet;
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ cand = Requests::gLive[i];
-		if ((cand is null) || cand.IsDead()
-			|| (cand.GetType() != Task::Type::BUILDER)
-			|| (cand.buildDef is null))
+	JobCacheFill(leashed);
+	for (uint i = 0; i < gJcTask.length(); ++i) {
+		IUnitTask@ cand = gJcTask[i];
+		if (cand.IsDead())
 			continue;
 		if (cand is unit.task)
 			continue;
 		++gJobSeen;
-		const float val = JobValue(cand);
+		const float val = gJcVal[i];
 		if (val <= 0.f) {
 			++gJobUnpriced;
 			continue;   // never priced, or priced at nothing
 		}
-		const AIFloat3 where = cand.GetBuildPos();
-		if (!OnMap(where))
+		const AIFloat3 where = gJcPos[i];
+		if (!gJcOnMap[i])
 			continue;
-		const bool far = isComm ? ComFar(where) : (leashed && EcoFar(where));
+		const bool far = isComm ? ComFar(where) : gJcFar[i];
 		if (far)
 			++gJobFar;
-		const float progress = Requests::Progress(cand);
+		const float progress = gJcProg[i];
 		// Starting a building needs the build option; adding a lathe to a
 		// nanoframe that already stands does not.
 		if ((progress <= 0.f) && !unit.circuitDef.CanBuild(cand.buildDef)) {
@@ -214,8 +273,8 @@ IUnitTask@ BestLiveJob(CCircuitUnit@ unit, bool requireFeed)
 			++gJobFull;
 			continue;
 		}
-		const float hands = float(busy) + float(GuardsOnJob(cand))
-				+ Requests::RingSeen(cand) * (NANO_ABSORB / 200.f) / Requests::DRAIN;
+		const float hands = float(busy) + float(gJcGuards[i])
+				+ gJcRing[i] * (NANO_ABSORB / 200.f) / Requests::DRAIN;
 		const float score = val / (hands + 1.f) / (1.f + walkSec / 60.f);
 		if (!far && (score > nearScore)) {
 			nearScore = score;
