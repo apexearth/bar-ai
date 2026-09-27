@@ -7,7 +7,6 @@
 #include "military/roles.as"        // rush/eco roles, quotas, metal slinging
 #include "military/deathledger.as"  // where our metal dies, fed back into caution
 #include "military/massing.as"      // how much army to hold back and mass
-#include "military/killingblow.as"  // committing everything to finish a player
 #include "military/basedefence.as"  // approach threat, porcupines, line jammers
 #include "military/stance.as"       // the enemy's stance; budget answer + scout demand
 #include "military/posture.as"      // raid caution, persona, team push, corridors

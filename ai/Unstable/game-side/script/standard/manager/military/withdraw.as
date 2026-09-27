@@ -272,9 +272,6 @@ void UpdateWithdraw()
 		gWithdrawAllyLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: withdraw-allies t=" + ai.teamId + " kept=" + gWithdrawAllySaved);
 	}
-	// A committed finisher is the one time being out there is the decision.
-	if (gKilling)
-		return;
 
 	// Pass 1: prune the dead, cache everyone's position and power once --
 	// pass 2 sums local strength around each candidate from this cache.
@@ -430,12 +427,9 @@ void UpdateWithdraw()
 					> ai.GetTunable("apex_defend_leash", TUNE_DEFEND_LEASH))
 				&& (ai.GetNetInflAt(p) < 0.f);
 		}
-		// THE COMMIT CHOICE. gKilling already returns before this whole pass
-		// runs (top of UpdateWithdraw), so an ATTACK/RAID squad reaching here
-		// means no killing blow is armed -- apexearth 2026-08-21, watching our
-		// base take hits for minutes while the army "roamed around ... without
-		// getting anything useful done": either commit to the enemy base (killing
-		// blow) or come home, never neither. BaseUnderAttack() is our own
+		// THE COMMIT CHOICE. apexearth 2026-08-21, watching our base take hits
+		// for minutes while the army "roamed around ... without getting anything
+		// useful done": an attacking squad comes home. BaseUnderAttack() is our own
 		// physical enemy presence at home, not a clock, so this only fires while
 		// the threat is actually standing there.
 		bool recallHome = false;

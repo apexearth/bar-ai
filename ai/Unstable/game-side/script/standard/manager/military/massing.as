@@ -479,17 +479,13 @@ void ReleaseHold()
 void UpdateMassing()
 {
 	LogUnitPower();
-	// The killing blow owns the quota once it is on: massing is what was holding
-	// the win up, so re-raising the minimum here would undo it every tick.
-	if (gKilling)
-		return;
 	if (gTurtle)
 		return;   // an active hold is stricter; do not loosen it
 
 	// TEAM against team: aiMilitaryMgr.armyCost is THIS player's army while
 	// EnemyArmyCost() sums every enemy, so comparing them directly on a 4v4 is
 	// one player against four and reads far too pessimistic. TeamArmyCost()
-	// sums the ally side over TV_ARMY, the same figure the killing blow uses.
+	// sums the ally side over TV_ARMY.
 	const float ours = TeamArmyCost();
 	// The same reading MassWant decides on, so `enemyArmy`/`ratio` in the log
 	// explain the want rather than a different comparison.
@@ -614,25 +610,10 @@ void UpdateMassing()
 	}
 	// Tracks the want BOTH ways: with an army-scaled floor, a ratchet that only
 	// rises would leave the bar stuck at a dead army's size -- a side that just
-	// lost 30k of army could never form another attack. gKilling/gTurtle return
-	// early above, so nothing else owns the quota while this writes it.
+	// lost 30k of army could never form another attack. gTurtle returns early
+	// above, so nothing else owns the quota while this writes it.
 	aiMilitaryMgr.quota.attack = want;
 }
-
-//------------------------------------------------------------------------------
-// KILLING BLOW: once clearly winning, stop waiting for a bigger army.
-//
-// UpdateMassing walks quota.attack up to MASS_CAP and pins it there outright
-// whenever the enemy out-values us. Once we are far ahead that gate is pure
-// delay: we hold an army several times their size and keep waiting for a
-// bigger one. So when clearly winning, drop the minimum so attacks form
-// continuously and release the turtle if it is holding -- conditional on
-// holding KILL_EDGE times the enemy's army value, so even a partial commitment
-// outnumbers everything they can field. Lowering minAttackers globally is known
-// to be catastrophic; this only lowers it once we are already dominant.
-float KILL_EDGE() { return ai.GetTunable("apex_kill_edge", TUNE_KILL_EDGE); }
-float KILL_FLOOR() { return ai.GetTunable("apex_kill_floor", TUNE_KILL_FLOOR); }
-bool gKilling = false;
 
 // Our whole side's army value, pooled over the same blackboard the tech lead
 // election uses. Has to be TEAM against TEAM: aiMilitaryMgr.armyCost is one
@@ -640,6 +621,22 @@ bool gKilling = false;
 // comparison asks "is one of us worth more than all of them" and is
 // unreachable by construction.
 const string TV_ARMY = "army";
+
+void PublishArmy()
+{
+	ai.PublishTeamValue(TV_ARMY, aiMilitaryMgr.armyCost);
+}
+
+float TeamArmyCost()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return aiMilitaryMgr.armyCost;
+	float total = 0.f;
+	for (uint i = 0; i < mates.length(); ++i)
+		total += ai.ReadTeamValue(int(mates[i]), TV_ARMY, 0.f);
+	return total;
+}
 
 }  // namespace Military
 

@@ -86,11 +86,6 @@ re-election gap, measured in that line's own build seconds. Below 1 the plant
 is idle by construction; the margin over 1 covers the order lag, which is a
 window of its own at benchmark speed.
 
-### `TUNE_KILL_QUOTA` = 300.f
-
-Attack quota set while the killing blow is on -- concentrate the push, do not
-disperse. Skipped for the eco lead, whose army is deliberately tiny.
-
 
 ## Military — stance, engagement, squads
 
@@ -132,18 +127,15 @@ units at or under this cost are fodder: exempt from massing, always sent
 forward (their job is vision and pulled fire). Cost AND role, so cheap
 AA/bombers are not swept in.
 
-### `TUNE_KILL_OFF_FRAC` = 0.35f
+### `TUNE_KILL_*` -- removed 2026-09-26 with the killing blow
 
-The blow disarms below KILL_EDGE times this. Wide enough to survive the push's
-own measurement dip (retreating units read zero power); 0.6 flapped 15x in one
-game.
-
-### `TUNE_KILL_FROM` = 900.f
-
-killing blow: earliest the normal (non-T1-commit) gate may arm. A clock, not an
-economy reading, and the only one left in the blow -- it exists so a fog-driven
-army estimate in the opening cannot commit the whole army. Tunable so the cost
-of holding it can be measured against a faster finish.
+The blow compared OUR WHOLE TEAM's army (TeamArmyCost, every seat summed)
+against the enemy army we could SEE, armed at 1.8x and disarmed only below
+0.63x. In his watched Carrot Mountains 8v8 all eight seats armed at 15.0m
+(the TUNE_KILL_FROM clock) on 99.7k vs 23k while the enemy actually fielded
+~60k+, and it never disarmed: withdraw, the hold and the behind-the-guns lane
+were all switched off for the rest of the game while the north seats were
+overrun. Removed at his call rather than retuned.
 
 ### `TUNE_SEEN_HALFLIFE` = 300.f
 

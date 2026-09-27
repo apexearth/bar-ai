@@ -160,17 +160,6 @@ const float TUNE_FAC_QUEUE = 1.5f;
 //   factory.json bypassed); 0 returns the lines to stock CircuitAI.
 const float TUNE_FAC_QUEUE_BRAIN = 1.f;
 
-// [power] -- Attack quota set while the killing blow is on -- concentrate the
-//   push, do not disperse. See docs/27.
-const float TUNE_KILL_QUOTA = 300.f;
-
-// [ratio] -- During a T1 commit, all-in push once our army is this multiple of
-//   the enemy's massed value (wide hysteresis so fog wobble cannot flap it).
-const float TUNE_T1_PUSH_EDGE = 1.2f;
-
-// WIDE hysteresis, or it is not "all or nothing".
-const float TUNE_T1_PUSH_OFF = 0.5f;
-
 // [toggle 0/1] -- Hold the aggressive posture while still short of the T1 army
 //   the advanced plant is gated on; closes itself once T2 exists.
 const float TUNE_T2_ARMY_HOLD = 1.f;
@@ -438,18 +427,6 @@ const float TUNE_ATTACK_EDGE = 0.95f;
 //   always sent forward (their job is vision and pulled fire). See docs/27.
 const float TUNE_FODDER_COST = 100.f;
 
-// [ratio] -- killing blow: once OUR TEAM's army value is this multiple of
-//   theirs, attack continuously and release any turtle -- even a partial
-//   commitment outnumbers everything they field.
-const float TUNE_KILL_EDGE = 1.8f;
-
-// [fraction] -- The blow disarms below KILL_EDGE times this. See docs/27.
-const float TUNE_KILL_OFF_FRAC = 0.35f;
-
-// [seconds] -- killing blow: earliest the normal (non-T1-commit) gate may arm.
-//   See docs/27.
-const float TUNE_KILL_FROM = 900.f;
-
 // [seconds] -- half-life of gSeenPeak, the largest enemy massing threat ever
 //   seen at once. See docs/27.
 const float TUNE_SEEN_HALFLIFE = 300.f;
@@ -457,10 +434,6 @@ const float TUNE_SEEN_HALFLIFE = 300.f;
 // [toggle 0/1] -- evaluate the SPEND_* target curves against live income (1)
 //   or against the frame-0 column (0). See docs/27.
 const float TUNE_BUDGET_LIVE = 0.f;
-
-// [metal] -- killing blow needs at least this much enemy army value on the
-//   books; ratios off a tiny sample are noise.
-const float TUNE_KILL_FLOOR = 20000.f;
 
 // [ratio] -- enemy/our army ratio at or above which we stop attacking entirely
 //   and let them come to the defences.

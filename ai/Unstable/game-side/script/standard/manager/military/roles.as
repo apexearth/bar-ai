@@ -34,9 +34,8 @@ int gNextMassLog = 0;
 // retreat or redeploy, and only threatens the ground it covers, unlike a
 // mobile unit of the same value. Folding it in at full weight would let a
 // static-heavy base pin quota.attack at MASS_CAP for the rest of the game, so
-// this is scoped to MassWant()/UpdateMassing() only -- KillingBlow() and
-// T3Worthwhile(), which read EnemyArmyCost() directly, are unaffected, and the
-// killing-blow override still bypasses this once we are dominant.
+// this is scoped to MassWant()/UpdateMassing() only -- T3Worthwhile(), which
+// reads EnemyArmyCost() directly, is unaffected.
 float STATIC_DEFENSE_WEIGHT() { return ai.GetTunable("apex_static_defense_weight", TUNE_STATIC_DEFENSE_WEIGHT); }
 
 }  // namespace Military

@@ -71,8 +71,8 @@ void UpdateRaidCaution()
 // trigger is a STATE (relative army value) rather than a clock, so there is no
 // timing to learn.
 //
-// TV_ARMY and TeamArmyCost() already exist above (UpdateKillingBlow publishes
-// it every tick); reuse them rather than declaring a second copy.
+// TV_ARMY and TeamArmyCost() already exist in massing.as (PublishArmy runs
+// every tick); reuse them rather than declaring a second copy.
 const string TV_PUSH = "push";     // elector's answer: frame the window ends
 
 // How far ahead the TEAM must be before committing everything. Deliberately
@@ -506,8 +506,7 @@ void UpdateLanePos()
 	// the front line... hunker down and make them bleed, control where that metal
 	// falls on the playing field, so we can resurrect or reclaim." Behind the
 	// guns, the enemy that follows a damaged unit walks into the turrets and the
-	// wreckage falls on our ground. A committed push (gKilling) is exempt: that
-	// is the one time being forward is the decision.
+	// wreckage falls on our ground.
 	//
 	// THE CHOKE IS THE LINE, guns or no guns yet. apexearth 2026-09-02,
 	// watching the 4v4: "Ideally we hold a frontline at a narrower part of
@@ -535,7 +534,7 @@ void UpdateLanePos()
 	} else if (gChokeHeld) {
 		gChokeHeld = false;
 	}
-	if (!gKilling && (ai.GetTunable("apex_lane_behind_guns", TUNE_LANE_BEHIND_GUNS) > 0.f)) {
+	if (ai.GetTunable("apex_lane_behind_guns", TUNE_LANE_BEHIND_GUNS) > 0.f) {
 		AIFloat3 guns;
 		bool haveGuns = ForwardMostFence(guns) && OnMap(guns);
 		if (chokeOk && (!haveGuns || (ForwardFraction(chokeHold) > ForwardFraction(guns)))) {
@@ -654,7 +653,7 @@ void UpdateLanePos()
 		gLanePinged = gLaneAt;
 		AiAddPoint(gLaneAt, "REGROUP " + (onFront ? "front" : "fallback")
 			+ " mass=" + formatFloat(aiMilitaryMgr.quota.attack, "", 0, 0)
-			+ (gTurtle ? " TURTLE" : "") + (gKilling ? " KILL" : ""));
+			+ (gTurtle ? " TURTLE" : ""));
 	}
 }
 
@@ -673,23 +672,12 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); LogAidState(); Perf::Add("post.aidlog", _t); }      // read-only: what an ally-aid response would do
 	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
 	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed
-	{ double _t = Perf::T0(); UpdateKillingBlow(); Perf::Add("post.killblow", _t); }
+	PublishArmy();
 	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
 	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
 	{ double _t = Perf::T0(); ReleaseHold(); Perf::Add("post.hold", _t); }
 	// Last, so it is the final word on the quota and the posture.
 	{ double _t = Perf::T0(); UpdateTeamPush(); Perf::Add("post.teampush", _t); }
-	// After massing and both role rules, so it is the last word on the quota.
-	// Not for the eco lead: it holds almost no army by design, and sending that
-	// at a base is throwing it away rather than ending anything.
-	if (gKilling) {
-		aiMilitaryMgr.quota.attack = ai.GetTunable("apex_kill_quota", TUNE_KILL_QUOTA);
-		if (gTurtle) {
-			gTurtle = false;
-			gPostureUntil = ai.frame;
-			AiLog(Factory::T() + "apex: killing blow releases the hold");
-		}
-	}
 	// A HOLD MUST NEVER STOP US DEFENDING OUR OWN GROUND.
 	//
 	// The hold is entered when our army shrinks -- precisely what being attacked
@@ -699,7 +687,7 @@ void UpdatePosture()
 	// built for: stop feeding the army into THEIR base while losing the trade.
 	// Enemies in ours is the opposite -- short supply lines, our defences
 	// shooting, their army out of position -- and the one moment the trade is in
-	// our favour. Released the same way the killing blow releases it.
+	// our favour.
 	if (gTurtle && (ai.GetTunable("apex_hold_release", TUNE_HOLD_RELEASE) > 0.f)
 		&& (BaseContested() || Builder::BaseUnderAttack())) {
 		gTurtle = false;
@@ -711,7 +699,7 @@ void UpdatePosture()
 	// hold posture uses, applied after UpdateMassing (which overwrites it) and
 	// left off entirely once the base is actually being fought over -- defending
 	// our own ground is the trade we want, and the release below says so.
-	if (ArmyBuildupHold() && !gKilling && !BaseContested() && !BaseRaided()
+	if (ArmyBuildupHold() && !BaseContested() && !BaseRaided()
 		&& (aiMilitaryMgr.quota.attack < TURTLE_ATTACK))
 	{
 		aiMilitaryMgr.quota.attack = TURTLE_ATTACK;
@@ -733,9 +721,6 @@ void UpdatePosture()
 
 	if ((prev <= 0.f) || (ai.frame < gPostureUntil) || (ai.frame < TURTLE_EARLIEST))
 		return;
-
-	if (gKilling)
-		return;   // committed: a dip mid-push is not a reason to stop pushing
 
 	if (!gTurtle) {
 		// Shrinking army while the enemy still has a mobile force means we are

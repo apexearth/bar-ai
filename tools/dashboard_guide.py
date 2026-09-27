@@ -524,10 +524,6 @@ GROUPS = [
                   "odds (hysteresis, keep under the ratio above)"),
                  ("TUNE_PUSH_MIN_ARMY", "no push below this much of our own "
                   "army value"),
-                 ("TUNE_KILL_EDGE", "the army multiple that arms the killing "
-                  "blow"),
-                 ("TUNE_KILL_FLOOR", "enemy army that must be on the books "
-                  "before the killing blow is allowed"),
              ]},
             {"title": "Walking away",
              "what": "Withdrawal, recall and leashing. Every one of these is a "
@@ -1314,8 +1310,6 @@ GOALS = [
              "note": "commit smaller groups instead of waiting to mass"},
             {"ref": "TUNE_PUSH_TEAM_RATIO", "dir": "down",
              "note": "start the all-in team push on a smaller team advantage"},
-            {"ref": "TUNE_KILL_EDGE", "dir": "down",
-             "note": "arm the killing blow earlier"},
             {"ref": "TUNE_STANCE_PRESSURE", "dir": "down",
              "note": "turn AGGRESSIVE on less provocation"},
         ],

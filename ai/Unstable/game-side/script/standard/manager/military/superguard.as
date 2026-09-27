@@ -109,8 +109,6 @@ float SuperMassOwned()
 
 bool SuperReleased()
 {
-	if (gKilling)
-		return true;
 	if (ai.frame < int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f)))
 		return true;
 	// TWO TITANS BY A HILL ARE THE ARMY. Holding supers back is right while
