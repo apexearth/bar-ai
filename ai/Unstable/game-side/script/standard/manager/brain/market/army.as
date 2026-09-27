@@ -1277,16 +1277,48 @@ bool AdvancedOnlyDef(int d)
 }
 
 // Upgraded mexes, a fusion, an advanced converter -- all three standing. The
-// mexes that count are the ones at home (the seat's safe radius): the far
-// ones are the contested middle, upgraded at 222 s of walk and dropped, and
-// "all of them" never fired in 30 minutes.
+// mexes that count are the ones a T2 hand walks to from home in
+// T2_HOME_WALK_S (his ruling 2026-09-27: "Once we get our closest advanced
+// metal extractors upgraded, then we can stop... It takes a long time to walk
+// all these constructors out there"). The 2,500 safe radius it replaces held
+// 22 spots on Carrot Mountains and read mohos=11/22 at 37 min.
+const float T2_HOME_WALK_S = 30.f;
 string gT2Missing = "";
 bool gT2NoFus = true;
 int gNextFusDiag = 0;
+
+float T2HomeRadius()
+{
+	float speed = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di]
+			|| Catalog::gFlyer[di] || !AdvancedOnlyDef(di))
+			continue;
+		if (Catalog::gSpeed[di] > speed)
+			speed = Catalog::gSpeed[di];
+	}
+	if (speed <= 0.f)
+		return ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R);
+	float r = speed * T2_HOME_WALK_S;
+	// Never an empty set: the nearest extracting spot always counts.
+	float nearest = -1.f;
+	for (uint i = 0; i < gLSpot.length(); ++i) {
+		if (gLExtract[i] <= 0.f)
+			continue;
+		const float dd = gLPos[i].distance2D(Builder::gHomePos);
+		if ((nearest < 0.f) || (dd < nearest))
+			nearest = dd;
+	}
+	if (nearest > r)
+		r = nearest;
+	return r;
+}
+
 bool T2EconomyStands()
 {
 	const float ceil = BestExtract();
-	const float r = ai.GetTunable("apex_eco_safe_r", TUNE_ECO_SAFE_R);
+	const float r = Builder::gHomeSet ? T2HomeRadius() : 0.f;
 	int up = 0;
 	int low = 0;
 	for (uint i = 0; i < gLSpot.length(); ++i) {
@@ -1309,7 +1341,8 @@ bool T2EconomyStands()
 		if (Catalog::gConvCapacity[di] > 0.f)
 			conv = true;
 	}
-	gT2Missing = "mohos=" + up + "/" + (up + low) + (gen ? " fus" : " NOFUS") + (conv ? " conv" : " NOCONV");
+	gT2Missing = "mohos=" + up + "/" + (up + low) + " r=" + int(r)
+		+ (gen ? " fus" : " NOFUS") + (conv ? " conv" : " NOCONV");
 	gT2NoFus = !gen;
 	return (up > 0) && (low == 0) && gen && conv;
 }
@@ -1342,11 +1375,15 @@ bool T2SwitchEval()
 			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue()));
 		return false;
 	}
-	const bool on = !EcoDangerNear();
+	// Overflowing metal is army the switch would only throw away (his ruling
+	// 2026-09-27); not DONE, so it holds again once the metal is spent.
+	const bool danger = EcoDangerNear();
+	const bool rich = !danger && WealthWaiver();
+	const bool on = !danger && !rich;
 	if ((on != gT2SwitchWas) || (ai.frame >= gT2SwitchLogAt)) {
 		gT2SwitchWas = on;
 		gT2SwitchLogAt = ai.frame + 60 * SECOND;
-		AiLog("apex: t2switch " + (on ? "on" : "danger") + " t=" + ai.teamId
+		AiLog("apex: t2switch " + (on ? "on" : (rich ? "overflow" : "danger")) + " t=" + ai.teamId
 			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue())
 			+ " upD=" + int(UpDemand()) + " " + gT2Missing);
 	}
