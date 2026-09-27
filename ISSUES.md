@@ -1454,6 +1454,18 @@ wave to have ARRIVED before "the bigger force is at home" can be read.
 
 ## INSTRUMENTS, PERF, TREE
 
+### PERF: a hover plant whose units cannot leave reads "open" and is re-checked ~10x/s (2026-09-26)
+
+His live Carrot Mountains 4v4, team 11: `corhp` at 11472,4655 logged
+`plant-walled ... enc=0.04 v=0.002 best=0.000` 2,305 times in ~4 game-minutes,
+and its `corsh` hovers logged `movefail-unit ... n=25` over and over. He
+watched units stuck in the plant. `PlantEnclosure` measures only the building
+crowd on three sides (`PfCrowdAt`), so it cannot see terrain or a water edge at
+the exit, and nothing tests whether a fresh unit can actually path out. Units
+that fail to path re-request paths, which costs every client. Open: a
+per-plant exit test (does its own product path out?), and rate-limit the
+`plant-walled` line.
+
 ### PERF: 16 AIs hold 1x to ~5,600 units; order volume unread since the revert (2026-09-06)
 
 8v8 Isthmus seed 1 on a 5800X3D: 32.5 ms/frame at 5,492 units, breaks at

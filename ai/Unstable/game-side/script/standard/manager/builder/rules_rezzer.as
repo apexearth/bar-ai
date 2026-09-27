@@ -68,6 +68,7 @@ int RezFleeWindow()
 // further toward the enemy than our units' lane; with no lane there is
 // nothing to be in front of.
 int gRzFrontVeto = 0;
+int gRzBlindToRetire = 0;
 int gRzVetoBlocked = 0;
 // The same refusals split by WHAT was refused and counted against what got
 // through, because the rez demand prices damaged units and wrecks as separate
@@ -470,8 +471,16 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 				if (ThreatFor(unit, stretch) > CON_THREAT_VETO)
 					continue;
 				AIFloat3 spoil = BestWreckAt(stretch, WRECK_SEARCH, WRECK_MIN);
-				if (spoil.x < 0.f)
+				if (spoil.x < 0.f) {
+					// A priced obsolete building is known work; a blind sweep
+					// is a guess. Ahead of it in the chain, retire never ran.
+					IUnitTask@ old = RezzerRetire(unit);
+					if (old !is null) {
+						++gRzBlindToRetire;
+						return old;
+					}
 					spoil = stretch;
+				}
 				if (!RezSiteOk(spoil)) {
 					++gRzFrontVeto;
 					++gRzVetoGround;

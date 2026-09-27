@@ -723,6 +723,31 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 array<int> gNextProdRankOf;
 int gNextRezLog = 0;
 
+// His ruling 2026-09-26: rez bots stop at max(20, 2% of the lobby's per-player
+// maxunits), all rezzer types together, standing plus queued. Not
+// GetUnitLimit: BAR's dynamic-maxunits gadget lifts that to ~3,900 in an 8v8.
+int gRezCap = -1;
+int RezFleetCap()
+{
+	if (gRezCap < 0) {
+		int lim = int(parseInt(string(aiSetupMgr.GetModOptions()["maxunits"])));
+		if (lim <= 0)
+			lim = 2000;
+		gRezCap = (lim / 50 > 20) ? lim / 50 : 20;
+	}
+	return gRezCap;
+}
+
+int RezFleetHave()
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (Catalog::gRezzer[d])
+			n += gOwnCount[d] + Brain::PendAnyOf(int(d));
+	}
+	return n;
+}
+
 // `slot` is the position in the line's batch: the facqueue asks repeatedly
 // until the queue is deep enough, and every ask is priced against a ledger
 // that already carries the slots before it.
@@ -1244,6 +1269,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	array<float> rcTgt;
 	array<float> rcVal;
 	const bool metalPath = MetalPathStarved();
+	int rezFleet = -1;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -1265,6 +1291,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":limit";
 			continue;
+		}
+		if (Catalog::gRezzer[d]) {
+			if (rezFleet < 0)
+				rezFleet = RezFleetHave();
+			if (rezFleet >= RezFleetCap()) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":rezcap";
+				continue;
+			}
 		}
 		if (EcoOnly() && !Catalog::gBuilder[d])
 			continue;   // the economy-only benchmark: hands only
@@ -2151,6 +2186,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " stream=" + formatFloat(rezStream, "", 0, 2)
 				+ " cap=" + formatFloat(rezCap, "", 0, 2)
 				+ " have=" + rezHave
+				+ " fleet=" + RezFleetHave() + "/" + RezFleetCap()
 				+ " restore=" + formatFloat(rezRestore, "", 0, 2)
 				+ " pLine=" + formatFloat(pLine, "", 0, 1)
 				+ " pMedic=" + formatFloat(pMedic, "", 0, 1)

@@ -154,7 +154,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 				bots += Market::gOwnCount[d];
 		AiLog(Factory::T() + "apex: rez-time bots=" + bots
 			+ " rescue=" + gRzRule[0] + " medic=" + gRzRule[1] + " salvage=" + gRzRule[2]
-			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " retire=" + gRzRule[8] + " repair=" + gRzRule[5]
+			+ " eat=" + gRzRule[3] + " rez=" + gRzRule[4] + " retire=" + gRzRule[8] + "+" + gRzBlindToRetire + " repair=" + gRzRule[5]
 			+ " idleRule=" + gRzRule[6] + " none=" + gRzRule[7]
 			+ " gate=" + gRzGate + " frontVeto=" + gRzFrontVeto + " blocked=" + gRzVetoBlocked + " handoff=" + gRzHandOff
 			+ " hurtOk=" + gRzOkHurt + "/" + (gRzOkHurt + gRzVetoHurt)
@@ -176,6 +176,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 		gRzGate = 0;
 		gRzPressed = 0;
 		gRzFrontVeto = 0;
+		gRzBlindToRetire = 0;
 		gRzVetoBlocked = 0;
 		gRzHandOff = 0;
 		gRzOkHurt = 0;
