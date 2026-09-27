@@ -1277,7 +1277,7 @@ bool AdvancedOnlyDef(int d)
 	return true;
 }
 
-// Upgraded mexes, a fusion, an advanced converter -- all three standing. The
+// Home mexes upgraded (fusion and converter are reported, not waited for). The
 // mexes that count are the ones a T2 hand walks to from home in
 // T2_HOME_WALK_S (his ruling 2026-09-27: "Once we get our closest advanced
 // metal extractors upgraded, then we can stop... It takes a long time to walk
@@ -1347,7 +1347,9 @@ bool T2EconomyStands()
 	gT2Missing = "mohos=" + up + "/" + (up + low) + " r=" + int(r)
 		+ (gen ? " fus" : " NOFUS") + (conv ? " conv" : " NOCONV");
 	gT2NoFus = !gen;
-	return (up > 0) && (low == 0) && gen && conv;
+	// The mexes alone end it (his call 2026-09-27): a fusion and a converter
+	// come on their own, and waiting on them held one seat to 30 min.
+	return (up > 0) && (low == 0);
 }
 
 // The switch names fusions as what it is FOR, but it only takes army out of
