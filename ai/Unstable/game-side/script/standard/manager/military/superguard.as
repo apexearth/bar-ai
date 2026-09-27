@@ -109,8 +109,6 @@ float SuperMassOwned()
 
 bool SuperReleased()
 {
-	if (ai.frame < int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f)))
-		return true;
 	// TWO TITANS BY A HILL ARE THE ARMY. Holding supers back is right while
 	// they are the spearhead of something bigger; once the held supers are
 	// this share of our whole army value, the wait is the army waiting for

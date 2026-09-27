@@ -514,17 +514,6 @@ GROUPS = [
                   "vision; OFF returns them to solo artillery tasks that "
                   "only shoot buildings and travel alone"),
              ]},
-            {"title": "The push and the killing blow",
-             "what": "The all-in: everything goes forward at once.",
-             "reads": "manager/military/push.as",
-             "knobs": [
-                 ("TUNE_PUSH_TEAM_RATIO", "needs a bigger team advantage "
-                  "before starting the all-in push"),
-                 ("TUNE_PUSH_KEEP", "keeps a running push alive on thinner "
-                  "odds (hysteresis, keep under the ratio above)"),
-                 ("TUNE_PUSH_MIN_ARMY", "no push below this much of our own "
-                  "army value"),
-             ]},
             {"title": "Walking away",
              "what": "Withdrawal, recall and leashing. Every one of these is a "
                      "positioning decision, not a retreat toggle.",
@@ -1308,8 +1297,6 @@ GOALS = [
              "note": "attack on a thinner army advantage"},
             {"ref": "TUNE_MASS_PER_ARMY", "dir": "down",
              "note": "commit smaller groups instead of waiting to mass"},
-            {"ref": "TUNE_PUSH_TEAM_RATIO", "dir": "down",
-             "note": "start the all-in team push on a smaller team advantage"},
             {"ref": "TUNE_STANCE_PRESSURE", "dir": "down",
              "note": "turn AGGRESSIVE on less provocation"},
         ],

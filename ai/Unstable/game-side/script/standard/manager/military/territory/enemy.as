@@ -96,26 +96,6 @@ bool EnemyAfloat()
 	return gAfloat;
 }
 
-// THE WHOLE ENEMY ARMY, INCLUDING THE PART THAT DECIDES GAMES.
-//
-// EnemyArmyCost above sums six roles and counts NEITHER heavy NOR super, so
-// dozens of T3 unit defs -- armbanth, corjugg, corkorg, legeheatraymech and the
-// rest -- are worth exactly zero to us. A declared push sets IsCommitted, so
-// no unit may retreat, and committing while genuinely behind on real standing
-// army (T3 invisible to the estimate) is an army that cannot disengage.
-//
-// Ten defs carry a counted role AND heavy and are double-counted here.
-// Over-counting an enemy is the safe error; reading their Korgoths as absent is
-// not. Only the two commit decisions read this -- LosingGround and the sizing
-// helpers keep the narrower sum, because widening those moves reclaim, rez and
-// the front-tower rule as well.
-float EnemyFieldCost()
-{
-	return EnemyArmyCost()
-	     + EnemyCostOf(Unit::Role::HEAVY.type)
-	     + EnemyCostOf(Unit::Role::SUPER.type);
-}
-
 // Behind on the field: they field more army value than we do.
 const float BEHIND_RATIO = 1.0f;
 
@@ -139,14 +119,6 @@ bool BaseContested()
 bool LosingGround()
 {
 	return EnemyArmyCost() > aiMilitaryMgr.armyCost * BEHIND_RATIO;
-}
-
-float EnemyArmyFloor()
-{
-	// A refused query is "unknown", never "no enemies" -- reading a refusal as a
-	// meaningful zero is what silently disabled slinging once already.
-	const int teams = ai.GetEnemyTeamSize();
-	return PORC_THREAT_PER_ENEMY * float((teams > 0) ? teams : 1);
 }
 
 // The team front, published by dev_team_income.lua at 78% of the way from our

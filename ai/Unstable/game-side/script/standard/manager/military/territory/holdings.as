@@ -26,12 +26,6 @@ namespace Military {
 // not. Sites outside our own footprint bypass that gate; see below for why
 // that is a proxy rather than proximity.
 //------------------------------------------------------------------------------
-// behaviour.json sets quota.attack = 15 -- the group threat at which BARb itself
-// rates a force worth attacking. Read that as one enemy player's worth of fielded
-// army and scale it by the number of enemy teams, because mobileThreat sums the
-// whole enemy team: an unscaled constant is met by one scouting wave in an 8v8
-// and by a genuine push in a 1v1, which is backwards.
-const float PORC_THREAT_PER_ENEMY = 15.f;
 // Deadband on the way back down. Without it the gate flips every time a raider
 // dies and porc tasks get enqueued and aborted in alternation.
 const float PORC_RELEASE = 0.8f;

@@ -255,10 +255,6 @@ const float TUNE_INCOMING_DANGER_COST = 800.f;
 //   whether it already threatens the base edge.
 const float TUNE_INCOMING_DANGER_PAD = 500.f;
 
-// [ratio] -- Team army advantage that KEEPS a running push alive (hysteresis
-//   under apex_push_team_ratio, so one trade at the line does not flap it).
-const float TUNE_PUSH_KEEP = 1.25f;
-
 // [elmos] -- Radius around the base within which enemy groups are evaluated as
 //   a possible incoming push.
 const float TUNE_INCOMING_NOTICE_R = 4500.f;
@@ -443,21 +439,6 @@ const float TUNE_MASS_HOLD_RATIO = 1.5f;
 //   postpone attacking forever.
 const float TUNE_MASS_CAP = 48.f;
 
-// [ratio] -- odds multiplier while the team push is on; 0.55 roughly halves
-//   the surplus the engage test demands.
-const float TUNE_PUSH_BOOST = 0.55f;
-
-// [power] -- attack quota while pushing; keeps the push concentrated instead
-//   of dribbling in.
-const float TUNE_PUSH_QUOTA = 200.f;
-
-// [metal] -- no team push below this much own army value; a "ratio" over two
-//   scouts means nothing.
-const float TUNE_PUSH_MIN_ARMY = 2500.f;
-
-// [ratio] -- team army advantage that STARTS the all-in push. See docs/27.
-const float TUNE_PUSH_TEAM_RATIO = 1.6f;
-
 // [power] -- early-game floor for raiders held home on defence.
 const float TUNE_RAID_MIN_EARLY = 45.f;
 
@@ -468,10 +449,6 @@ const float TUNE_RAID_TAU = 60.f;
 // [ratio] -- how much enemy STATIC defence counts in the massing decision, per
 //   metal. See docs/27.
 const float TUNE_STATIC_DEFENSE_WEIGHT = 0.5f;
-
-// [ratio] -- engage bias while an advanced plant is under construction; above
-//   1 is cautious. See docs/27.
-const float TUNE_T2_HOLD_BOOST = 1.60f;
 
 // ---------------------------------------------------------------------------
 // Defence, towers, AA, insurance

@@ -195,24 +195,6 @@ void Release(const string& in why)
 		+ " cellAA=" + formatFloat(gStrikeAA, "", 0, 1));
 }
 
-// Release the strike because the LAND army is going in right now: the
-// assassin's own triggers (Massed()/AIR_DEADLINE) know nothing about the ground
-// army, but a team push is exactly when the enemy's attention and repair are on
-// the land assault. HalfMassed() rather than Massed(): a coordinated half-strike
-// lands with the push; a full one two minutes later does not. Returns whether it
-// fired so the caller can log it.
-bool ReleaseForPush()
-{
-	if (gStrike || !Armed() || !Committed())
-		return false;
-	// The same frozen bar the deadline uses, not HalfMassed: half of a live
-	// want that tracks income and their AA is a bar the wave never reaches.
-	if (BomberMass() < DeadlineBombBar())
-		return false;
-	Release("team push -- hitting the line with the army");
-	return true;
-}
-
 // Re-arm once the run is over. Two ways it ends, and neither is a clock:
 //
 //  - the wave is spent, or

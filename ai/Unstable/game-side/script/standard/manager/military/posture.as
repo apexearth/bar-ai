@@ -54,148 +54,19 @@ void UpdateRaidCaution()
 		aiMilitaryMgr.quota.raid.min = want;
 }
 
-//------------------------------------------------------------------------------
-// Coordinated team push.
-//
-// The failure this addresses is structural: every instance judges every fight
-// ALONE, since CAttackTask's engage test compares one squad's power against
-// the local defenders. Four allied squads that would each win together
-// therefore each refuse separately, and the team trickles (measured live:
-// 3,973 target groups refused across 492 decisions).
-//
-// So: the elector totals the ALLY TEAM's army, and when the team as a whole
-// clearly outweighs the enemy it declares a push window on the shared
-// blackboard. Every instance reads the same flag and, for that window, accepts
-// worse local odds (SetEngageBoost) and lifts its attack cap. They commit
-// together or not at all -- the army is idle right up until it is not, and the
-// trigger is a STATE (relative army value) rather than a clock, so there is no
-// timing to learn.
-//
-// TV_ARMY and TeamArmyCost() already exist in massing.as (PublishArmy runs
-// every tick); reuse them rather than declaring a second copy.
-const string TV_PUSH = "push";     // elector's answer: frame the window ends
-
-// How far ahead the TEAM must be before committing everything. Deliberately
-// higher than the per-squad engage margin: this spends the whole army at once,
-// and being wrong costs the game rather than a squad.
-float PUSH_TEAM_RATIO() { return ai.GetTunable("apex_push_team_ratio", TUNE_PUSH_TEAM_RATIO); }
-// A STATE, NOT A CLOCK -- apexearth: "why even bother with a time based
-// cooldown here? If we are ready we just push more." The push holds exactly
-// while the team outweighs the enemy: entered at PUSH_TEAM_RATIO, kept while
-// above apex_push_keep (hysteresis, so a trade at the line does not flap it),
-// and renewed a few seconds at a time so it lapses by itself the moment the
-// advantage is gone. Losing the trade IS the exit condition; no cooldown.
-const int   PUSH_RENEW = 5 * SECOND;
-// Odds multiplier while pushing. 0.55 roughly halves the surplus the engage
-// test demands -- squads still refuse a genuinely hopeless fight, but stop
-// refusing the ones the rest of the team is about to join.
-float PUSH_BOOST() { return ai.GetTunable("apex_push_boost", TUNE_PUSH_BOOST); }
-// Engage bias while an advanced plant is going up: a T2 lab is bought with
-// metal that is NOT going into army, so the moment we commit to it is exactly
-// the moment we can least afford to trade the army we already have.
-//
-// Above 1 is cautious (PUSH_BOOST 0.55 is the aggressive direction). This
-// raises only the bar to START an attack: CONTINUE_MARGIN governs fights
-// already joined, and defence runs through CDefendTask, which does not
-// consult this at all -- we still hold ground and finish what we are in, we
-// just stop starting new fights while the lab is unfinished.
-float T2_HOLD_BOOST() { return ai.GetTunable("apex_t2_hold_boost", TUNE_T2_HOLD_BOOST); }
-float PUSH_QUOTA() { return ai.GetTunable("apex_push_quota", TUNE_PUSH_QUOTA); }
-// Nothing to push with. Below this the "ratio" is noise -- two scouts against
-// one is 2.0 and means nothing.
-float PUSH_MIN_ARMY() { return ai.GetTunable("apex_push_min_army", TUNE_PUSH_MIN_ARMY); }
-
-// Personality moved to manager/persona.as -- one identity per instance, more
-// axes than the engage margin, and mid-game adaptation. The engage-margin
-// lever it feeds here is unchanged: the team push still OVERRIDES personality
-// (see UpdateTeamPush) -- when the team commits, everyone commits.
-
-int  gPushUntil   = 0;
-bool gPushLogged  = false;
-
+// The engage margin each instance fights at: its personality, raised by the
+// caution learned from where our metal is dying. The team push that used to
+// override this (team army summed against the enemy we could SEE, entered at
+// 1.6x and armed on all eight seats at 4.2 min of his 8v8) was removed at his
+// call, 2026-09-27, with the killing blow before it.
 void UpdateTeamPush()
 {
 	Persona::Update();
-
-	// One writer, same pattern as the tech-lead and air-lead elections.
-	if (Factory::ElectorTeamId() == ai.teamId) {
-		const float teamArmy = TeamArmyCost();
-		// EnemyArmyCost() only accumulates on EnemyEnterLOS, so an unscouted
-		// enemy reads as ZERO and `army > 0 * 1.6` is true for any army at all --
-		// a push fired on ignorance rather than advantage. EnemyArmyFloor() is
-		// "a refused query is unknown, never no enemies", so it is used as the
-		// floor for the unscouted case. This matters more than an ordinary
-		// threshold: a declared push both halves the engagement bar (PUSH_BOOST)
-		// and sets IsCommitted, which stops every non-commander retreating, so a
-		// push on a bad estimate is an army that cannot disengage.
-		//
-		// The substitution applies ONLY to the unscouted case: raising a SEEN
-		// estimate up to teamArmy as well would make foe >= teamArmy
-		// unconditionally, and the test below would then always read false.
-		const float seen = EnemyFieldCost();
-		const float floorFoe = EnemyArmyFloor();
-		const float foe = (seen > floorFoe) ? seen : teamArmy;
-		float until = ai.ReadTeamValue(ai.teamId, TV_PUSH, 0.f);
-		const bool wasPushing = ai.frame < int(until);
-		const float bar = wasPushing ? ai.GetTunable("apex_push_keep", TUNE_PUSH_KEEP)
-		                             : PUSH_TEAM_RATIO();
-		const bool worth = (teamArmy >= PUSH_MIN_ARMY())
-				&& (teamArmy > foe * bar);
-		if (worth) {
-			until = float(ai.frame + PUSH_RENEW);
-			if (!wasPushing) {
-				AiLog(Factory::T() + "apex: TEAM PUSH -- army "
-					+ formatFloat(teamArmy, "", 0, 0) + " vs enemy "
-					+ formatFloat(foe, "", 0, 0));
-				// Land and air together. Only the air lead has a force to
-				// release, and it no-ops for everyone else.
-				if (Air::ReleaseForPush())
-					AiLog(Factory::T() + "apex: air joins the push");
-			}
-		}
-		ai.PublishTeamValue(TV_PUSH, until);
-	}
-
-	const int until = int(ai.ReadTeamValue(Factory::ElectorTeamId(), TV_PUSH, 0.f));
-	const bool pushing = (ai.frame < until);
-	if (pushing) {
-		ai.SetEngageBoost(PUSH_BOOST());
-		// Units in a declared push stop retreating to heal; see
-		// CCircuitAI::IsCommitted.
-		ai.SetCommitted(true);
-		if (aiMilitaryMgr.quota.attack < PUSH_QUOTA())
-			aiMilitaryMgr.quota.attack = PUSH_QUOTA();
-		if (gTurtle) {
-			gTurtle = false;
-			gPostureUntil = ai.frame;
-		}
-		if (!gPushLogged) {
-			gPushLogged = true;
-			AiLog(Factory::T() + "apex: joining team push");
-		}
-	} else {
-		// Personality is the resting state; the push above overrides it.
-		// Teching overrides personality in the cautious direction only -- a
-		// berserker at 0.82 still holds while its lab is unfinished, and a
-		// cautious 1.18 is not made less careful by this.
-		const bool teching = false;   // no advanced-plant program in the kill phase
-		// Caution learned from where our metal is currently dying: bleeding
-		// on their ground raises the odds we demand before crossing again.
-		float boost = Persona::EngageBias() * BleedCaution();
-		if (teching && (T2_HOLD_BOOST() > boost))
-			boost = T2_HOLD_BOOST();
-		ai.SetEngageBoost(boost);
-		// IsCommitted stops a unit leaving a fight at its 60% health threshold,
-		// and is wired only to the team push (rare) -- so in ordinary fighting a
-		// squad dissolves one unit at a time as each drops below the bar.
-		// Committing outside a declared push was tried and reverted: it made
-		// every bad fight fight to the death (army K/D 0.38 vs stock's 1.73 in
-		// one measured mirror), which is worse than leaving. The real fix is
-		// retreating as a SQUAD rather than per unit, and finishing a nearly-dead
-		// target; both live in the C++ fighter tasks.
-		ai.SetCommitted(false);
-		gPushLogged = false;
-	}
+	ai.SetEngageBoost(Persona::EngageBias() * BleedCaution());
+	// IsCommitted stops a unit leaving a fight at its 60% health threshold.
+	// Committing every fight was tried and reverted: army K/D 0.38 vs stock's
+	// 1.73 in one measured mirror.
+	ai.SetCommitted(false);
 }
 
 //------------------------------------------------------------------------------

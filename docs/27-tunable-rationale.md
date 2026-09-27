@@ -165,23 +165,21 @@ against medium (40 games per side): live curves went 23W-8L-9D against
 on the behaviour that was measured. Re-tuning `SPEND_*` with the curves live is
 the campaign this needs before flipping it.
 
-### `TUNE_PUSH_TEAM_RATIO` = 1.6f
+### `TUNE_PUSH_*`, `TUNE_T2_HOLD_BOOST` -- removed 2026-09-27 with the team push
 
-team army advantage that STARTS the all-in push. Deliberately above the
-per-squad engage margin: this spends the whole army at once. Held while above
-apex_push_keep.
+The push summed OUR WHOLE TEAM's army against the enemy army we could SEE,
+entered at 1.6x and held above 1.25x, renewed every 5 s. In his Carrot
+Mountains 8v8 it armed on all eight seats at 4.2 min on 2,650 vs 918 and
+the intel at 20 min read ours 163k vs 38k seen, so it never lapsed: engage
+odds halved (0.55), retreat-to-heal off, attack quota floored, the air
+strike released with it. Removed at his call; T2_HOLD_BOOST had been dead
+behind `teching = false` since the kill phase.
 
 ### `TUNE_STATIC_DEFENSE_WEIGHT` = 0.5f
 
 how much enemy STATIC defence counts in the massing decision, per metal. Half
 weight: a turret cannot retreat or redeploy; full weight would let a porc base
 pin the quota forever.
-
-### `TUNE_T2_HOLD_BOOST` = 1.60f
-
-engage bias while an advanced plant is under construction; above 1 is cautious.
-Raises only the bar to START a fight -- fights already joined and defence are
-untouched.
 
 ### `apex_standoff_s` = 1.0 (C++ only; no `TUNE_` const)
 
