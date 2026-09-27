@@ -268,6 +268,16 @@ static float BuildMetalRate(CCircuitAI* circuit)
 	return rate;
 }
 
+static float SqDistToSegment2D(const AIFloat3& p, const AIFloat3& a, const AIFloat3& b)
+{
+	const float dx = b.x - a.x, dz = b.z - a.z;
+	const float len2 = dx * dx + dz * dz;
+	const float t = (len2 > 1.f)
+			? utils::clamp(((p.x - a.x) * dx + (p.z - a.z) * dz) / len2, 0.f, 1.f) : 0.f;
+	const float ex = a.x + dx * t - p.x, ez = a.z + dz * t - p.z;
+	return ex * ex + ez * ez;
+}
+
 void CBombTask::FindTarget()
 {
 	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
@@ -325,6 +335,7 @@ void CBombTask::FindTarget()
 	float minHealth = std::numeric_limits<float>::max();
 	float bestScore = 0.f;
 	float bestValue = 0.f;
+	bool bestOnRoute = false;
 
 	COOAICallback* callback = circuit->GetCallback();
 	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
@@ -342,14 +353,35 @@ void CBombTask::FindTarget()
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	CEnemyInfo* bestTarget = nullptr;
 	position = -RgtVector;
+	struct Cand {
+		CEnemyInfo* enemy;
+		AIFloat3 pos;
+		float raw, score, value, health, sqDist;
+	};
+	std::vector<Cand> routeCands;
+	float bestCellRaw = 0.f;
+	auto consider = [&](const Cand& c, bool onRoute) {
+		if (c.score > bestScore) {
+			bestScore = c.score;
+			bestValue = c.value;
+			bestOnRoute = onRoute;
+			minHealth = c.health;
+			if (c.sqDist < sqRange) {
+				bestTarget = c.enemy;
+			} else {
+				position = c.pos;
+				bestTarget = nullptr;
+			}
+		}
+	};
 	threatMap->SetThreatType(leader);
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
 		const AIFloat3& ePos = enemy->GetPos();
-		if (focused && (ePos.SqDistance2D(focusPos) > sqFocusR)) {
-			continue;
-		}
+		// Judged after the loop against the cell's best: a wave flew over a
+		// fusion on its way in and never looked at it (apexearth).
+		const bool onRoute = focused && (ePos.SqDistance2D(focusPos) > sqFocusR);
 		if (enemy->IsHidden()) {
 			++nHidden;
 			continue;
@@ -468,9 +500,9 @@ void CBombTask::FindTarget()
 			const float minValue = circuit->GetTunable("apex_bomb_min_value", 200.f);
 			const float distScale = circuit->GetTunable("apex_bomb_dist_scale", 4000.f);
 			const float dist = math::sqrt(sqDist);
-			float score = (value / std::max(health, 1.f)) / (1.f + dist / distScale);
+			float raw = value / std::max(health, 1.f);
 			if (value < minValue) {
-				score *= 0.1f;   // still allowed, but only if nothing else offers
+				raw *= 0.1f;   // still allowed, but only if nothing else offers
 			}
 			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
 			// bombing the same thing"). A target another squad committed to
@@ -485,20 +517,48 @@ void CBombTask::FindTarget()
 					const float sinceS = float(circuit->GetLastFrame() - lastF) / float(FRAMES_PER_SEC);
 					if ((revisitS > 1.f) && (sinceS < revisitS)) {
 						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
-						score *= disc + (1.f - disc) * (sinceS / revisitS);
+						raw *= disc + (1.f - disc) * (sinceS / revisitS);
 					}
 				}
 			}
-			if (score > bestScore) {
-				bestScore = score;
-				bestValue = value;
-				minHealth = health;
-				if (sqDist < sqRange) {
-					bestTarget = enemy;
-				} else {
-					position = ePos;
-					bestTarget = nullptr;
+			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
+			if (onRoute) {
+				if (value >= minValue) {
+					routeCands.push_back(c);
 				}
+				continue;
+			}
+			bestCellRaw = std::max(bestCellRaw, raw);
+			consider(c, false);
+		}
+	}
+
+	// ON THE WAY: off the cell, a target is taken only if it is worth at least
+	// the best the cell offers on its own merits -- the detour is then pure
+	// gain -- and it lies within sight of the route the wave actually flies
+	// (the threat-routed path, not the straight line).
+	if (!routeCands.empty()) {
+		const float sqReach = SQUARE(cdef->GetLosRadius());
+		const F3Vec& path = pPath->posPath;
+		size_t from = 0;
+		float sqNear = std::numeric_limits<float>::max();
+		for (size_t i = 0; i < path.size(); ++i) {
+			const float d = pos.SqDistance2D(path[i]);
+			if (d < sqNear) {
+				sqNear = d;
+				from = i;
+			}
+		}
+		for (const Cand& c : routeCands) {
+			if (c.raw < bestCellRaw) {
+				continue;
+			}
+			bool onPath = (c.sqDist <= sqReach);
+			for (size_t i = from; !onPath && (i + 1 < path.size()); ++i) {
+				onPath = (SqDistToSegment2D(c.pos, path[i], path[i + 1]) <= sqReach);
+			}
+			if (onPath) {
+				consider(c, true);
 			}
 		}
 	}
@@ -528,13 +588,14 @@ void CBombTask::FindTarget()
 			// worth= is the priced value, mob= says whether the run went at
 			// something that walks: an eco raid reading mob=1 is the doctrine
 			// failing, and that cannot be seen from the def name alone.
-			circuit->LOG("apex: bomb-commit id=%d def=%s worth=%.0f mob=%d antistat=%d last=%d",
+			circuit->LOG("apex: bomb-commit id=%d def=%s worth=%.0f mob=%d antistat=%d last=%d route=%d",
 					bestTarget->GetId(),
 					(bd != nullptr) ? bd->GetDef()->GetName() : "?",
 					bestValue,
 					((bd != nullptr) && bd->IsMobile()) ? 1 : 0,
 					isAntiStatic ? 1 : 0,
-					milMgr->LastBombFrame(bestTarget->GetId()));
+					milMgr->LastBombFrame(bestTarget->GetId()),
+					bestOnRoute ? 1 : 0);
 		}
 		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
 	}

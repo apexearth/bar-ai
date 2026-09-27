@@ -1,8 +1,8 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..6e351521 100644
+index aeea9339..1a1768ee 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
-@@ -18,15 +18,19 @@
+@@ -18,15 +18,20 @@
  #include "module/MilitaryManager.h"
  #include "resource/MetalManager.h"
  #include "terrain/TerrainManager.h"
@@ -12,6 +12,7 @@ index aeea9339..6e351521 100644
  #include "task/PlayerTask.h"
 +#include "task/fighter/FighterTask.h"
  #include "unit/CircuitUnit.h"
++#include "unit/ally/AllyUnit.h"
  #include "unit/enemy/EnemyUnit.h"
 +#include "unit/enemy/EnemyManager.h"
  #include "util/GameAttribute.h"
@@ -23,7 +24,7 @@ index aeea9339..6e351521 100644
  #include "map/ThreatMap.h"
  #include "resource/EnergyGrid.h"
  #endif  // DEBUG_VIS
-@@ -41,9 +45,14 @@
+@@ -41,9 +46,14 @@
  #include "Game.h"
  #include "Lua.h"
  #include "Pathing.h"
@@ -38,7 +39,7 @@ index aeea9339..6e351521 100644
  #include "SkirmishAI.h"
  #include "WrappUnit.h"
  #include "WrappTeam.h"
-@@ -51,9 +60,17 @@
+@@ -51,9 +61,17 @@
  //#include "Info.h"
  #include "Mod.h"
  #include "Cheats.h"
@@ -56,7 +57,7 @@ index aeea9339..6e351521 100644
  
  namespace circuit {
  
-@@ -134,6 +151,52 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
+@@ -134,6 +152,52 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
  	ownerTeamId = teamId = skirmishAI->GetTeamId();
  	team = std::unique_ptr<Team>(WrappTeam::GetInstance(skirmishAIId, teamId));
  	allyTeamId = game->GetMyAllyTeam();
@@ -109,7 +110,7 @@ index aeea9339..6e351521 100644
  }
  
  CCircuitAI::~CCircuitAI()
-@@ -141,6 +204,10 @@ CCircuitAI::~CCircuitAI()
+@@ -141,6 +205,10 @@ CCircuitAI::~CCircuitAI()
  	if (isInitialized) {
  		Release(0);
  	}
@@ -120,7 +121,7 @@ index aeea9339..6e351521 100644
  }
  
  int CCircuitAI::HandleEvent(int topic, const void* data)
-@@ -207,6 +274,25 @@ void CCircuitAI::MobileSlave(int newTeamId)
+@@ -207,6 +275,25 @@ void CCircuitAI::MobileSlave(int newTeamId)
  
  int CCircuitAI::HandleGameEvent(int topic, const void* data)
  {
@@ -146,7 +147,7 @@ index aeea9339..6e351521 100644
  	int ret = ERROR_UNKNOWN;
  
  	switch (topic) {
-@@ -218,16 +304,16 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+@@ -218,16 +305,16 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
  				ret = this->Init(evt->skirmishAIId, evt->callback);
  			} catch (const CException& e) {
  				Release(RELEASE_CORRUPTED);
@@ -166,7 +167,7 @@ index aeea9339..6e351521 100644
  				ret = ERROR_INIT;  // non-zero value deletes AI
  			}
  			return ret;
-@@ -292,6 +378,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+@@ -292,6 +379,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
  			TRACY_TOPIC_UNIT("EVENT_UNIT_DAMAGED", UnitDamaged, evt->unit);
  
  			CCircuitUnit* unit = GetTeamUnit(evt->unit);
@@ -176,7 +177,7 @@ index aeea9339..6e351521 100644
  			ret = (unit != nullptr)
  					? this->UnitDamaged(unit, evt->attacker, evt->weaponDefId, AIFloat3(evt->dir_posF3))
  					: ERROR_UNIT_DAMAGED;
-@@ -369,6 +458,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+@@ -369,6 +459,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
  			TRACY_TOPIC("EVENT_ENEMY_DAMAGED", EnemyDamaged);
  
  			struct SEnemyDamagedEvent* evt = (struct SEnemyDamagedEvent*)data;
@@ -186,7 +187,7 @@ index aeea9339..6e351521 100644
  			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
  			ret = (enemy != nullptr) ? this->EnemyDamaged(enemy) : ERROR_ENEMY_DAMAGED;
  		} break;
-@@ -378,6 +470,11 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
+@@ -378,6 +471,11 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
  			struct SEnemyDestroyedEvent* evt = (struct SEnemyDestroyedEvent*)data;
  			CEnemyInfo* enemy = GetEnemyInfo(evt->enemy);
  			if (enemy != nullptr) {
@@ -198,7 +199,7 @@ index aeea9339..6e351521 100644
  				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
  				ret = 0;
  			} else {
-@@ -548,7 +645,7 @@ void CCircuitAI::CheatPreload()
+@@ -548,7 +646,7 @@ void CCircuitAI::CheatPreload()
  
  int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICallback)
  {
@@ -207,7 +208,7 @@ index aeea9339..6e351521 100644
  	this->skirmishAIId = skirmishAIId;
  	callback->Init(sAICallback);
  	engine = std::unique_ptr<CEngine>(new CEngine(sAICallback, skirmishAIId));
-@@ -590,6 +687,14 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -590,6 +688,14 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  	InitWeaponDefs();
  	float decloakRadius;
  	InitUnitDefs(armor, decloakRadius);  // Inits TerrainData
@@ -222,7 +223,7 @@ index aeea9339..6e351521 100644
  
  	setupManager->DisabledUnits();
  	if (!setupManager->OpenConfig(profile, cfgParts)) {
-@@ -602,6 +707,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -602,6 +708,17 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  //		return ERROR_INIT;
  //	}
  
@@ -240,7 +241,7 @@ index aeea9339..6e351521 100644
  	allyTeam = setupManager->GetAllyTeam();
  	// TODO: isAllyTeamInit is a workaround: when config has issues and exception is thrown between
  	// allyTeam assignment and allyTeam->Init() call then allyTeam->Release() is invoked.
-@@ -700,7 +816,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -700,7 +817,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  				}
  #endif
  			});
@@ -249,7 +250,7 @@ index aeea9339..6e351521 100644
  #if 0
  		} else if (allyTeam->GetAliveSize() > 2) {
  			// FIXME: Follower AI shares all its mobile non-builder-role units to Leader AI.
-@@ -714,7 +830,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
+@@ -714,7 +831,7 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
  					scheduler->RemoveJob(mergeTask);
  				}
  			});
@@ -258,7 +259,7 @@ index aeea9339..6e351521 100644
  #endif
  		}
  	}
-@@ -738,6 +854,11 @@ int CCircuitAI::Release(int reason)
+@@ -738,6 +855,11 @@ int CCircuitAI::Release(int reason)
  		return 0;
  	}
  
@@ -270,7 +271,7 @@ index aeea9339..6e351521 100644
  	scheduler->ProcessRelease();
  	scheduler = nullptr;
  
-@@ -775,6 +896,8 @@ int CCircuitAI::Release(int reason)
+@@ -775,6 +897,8 @@ int CCircuitAI::Release(int reason)
  	enemyManager = nullptr;
  	mapManager = nullptr;
  
@@ -279,7 +280,7 @@ index aeea9339..6e351521 100644
  	for (CCircuitUnit* unit : actionUnits) {
  		if (unit->IsDead()) {  // instance is not in teamUnits
  			delete unit;
-@@ -785,7 +908,14 @@ int CCircuitAI::Release(int reason)
+@@ -785,7 +909,14 @@ int CCircuitAI::Release(int reason)
  		delete kv.second;
  	}
  	teamUnits.clear();
@@ -294,7 +295,7 @@ index aeea9339..6e351521 100644
  	for (auto& kv : enemyInfos) {
  		delete kv.second;
  	}
-@@ -807,9 +937,24 @@ int CCircuitAI::Release(int reason)
+@@ -807,9 +938,24 @@ int CCircuitAI::Release(int reason)
  	return 0;  // signaling: OK
  }
  
@@ -319,7 +320,7 @@ index aeea9339..6e351521 100644
  	lastFrame = frame;
  	if (isResigned) {
  		Release(RELEASE_RESIGN);
-@@ -832,16 +977,28 @@ int CCircuitAI::Update(int frame)
+@@ -832,16 +978,28 @@ int CCircuitAI::Update(int frame)
  		}
  	}
  
@@ -348,7 +349,7 @@ index aeea9339..6e351521 100644
  
  #ifdef DEBUG_VIS
  	if (frame % FRAMES_PER_SEC == 0) {
-@@ -850,11 +1007,286 @@ int CCircuitAI::Update(int frame)
+@@ -850,11 +1008,286 @@ int CCircuitAI::Update(int frame)
  	}
  #endif
  
@@ -635,7 +636,7 @@ index aeea9339..6e351521 100644
  #ifdef DEBUG_VIS
  	const char cmdBreak[]   = "~break";
  	const char cmdReload[]  = "~reload";
-@@ -1131,9 +1563,22 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1131,9 +1564,22 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  	}
  
  	if (unit->IsMoveFailed(lastFrame)) {
@@ -659,7 +660,7 @@ index aeea9339..6e351521 100644
  		)
  //		Garbage(unit, "stuck");
  		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
-@@ -1147,6 +1592,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
+@@ -1147,6 +1593,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
  int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
  {
  	unit->SetDamagedFrame(lastFrame);
@@ -667,7 +668,7 @@ index aeea9339..6e351521 100644
  	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
  
  	if (IsValidWeaponDefId(weaponId)) {
-@@ -1166,14 +1612,36 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
+@@ -1166,14 +1613,36 @@ int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int we
  
  int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -708,7 +709,7 @@ index aeea9339..6e351521 100644
  	return 0;  // signaling: OK
  }
  
-@@ -1250,7 +1718,8 @@ int CCircuitAI::EnemyEnterLOS(CEnemyInfo* enemy)
+@@ -1250,7 +1719,8 @@ int CCircuitAI::EnemyEnterLOS(CEnemyInfo* enemy)
  	for (int fId : friendlies) {
  		CCircuitUnit* unit = GetTeamUnit(fId);
  		if ((unit != nullptr) && (unit->GetTask()->GetType() != IUnitTask::Type::NIL)) {
@@ -718,7 +719,7 @@ index aeea9339..6e351521 100644
  		}
  	}
  
-@@ -1288,6 +1757,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
+@@ -1288,6 +1758,7 @@ int CCircuitAI::EnemyDamaged(CEnemyInfo* enemy)
  
  int CCircuitAI::EnemyDestroyed(CEnemyInfo* enemy)
  {
@@ -726,7 +727,7 @@ index aeea9339..6e351521 100644
  	allyTeam->EnemyDestroyed(enemy->GetData(), this);
  
  	militaryManager->DelPointOfInterest(enemy);
-@@ -1463,7 +1933,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1463,7 +1934,13 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  	std::tie(area, isValid) = terrainManager->GetCurrentMapArea(cdef, unit->GetPos(lastFrame));
  	unit->SetArea(area);
  
@@ -741,7 +742,7 @@ index aeea9339..6e351521 100644
  	cdef->Inc();
  
  	// FIXME: Sometimes area where factory is placed is not suitable for its units.
-@@ -1476,7 +1952,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
+@@ -1476,7 +1953,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
  
  void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  {
@@ -751,7 +752,7 @@ index aeea9339..6e351521 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,172 +1963,1927 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,171 +1964,1951 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -788,13 +789,6 @@ index aeea9339..6e351521 100644
  }
  
 -void CCircuitAI::Garbage(CCircuitUnit* unit, const char* reason)
--{
--	// NOTE: Happens because engine can send EVENT_UNIT_FINISHED after EVENT_UNIT_DESTROYED.
--	//       Engine should not send events with isDead units.
--	garbage.insert(unit);
--#ifdef DEBUG_LOG
--	LOG("AI: %i | Garbage unit: %i | reason: %s", skirmishAIId, unit->GetId(), reason);
--#endif
 +// Metal income of any team, read from a game rules param published by the
 +// dev_team_income gadget.
 +//
@@ -816,7 +810,13 @@ index aeea9339..6e351521 100644
 +// where synced Lua cannot be shipped. The rules param stays as a fallback so a
 +// local run with dev_team_income.lua still answers for non-AI teams.
 +float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
-+{
+ {
+-	// NOTE: Happens because engine can send EVENT_UNIT_FINISHED after EVENT_UNIT_DESTROYED.
+-	//       Engine should not send events with isDead units.
+-	garbage.insert(unit);
+-#ifdef DEBUG_LOG
+-	LOG("AI: %i | Garbage unit: %i | reason: %s", skirmishAIId, unit->GetId(), reason);
+-#endif
 +	if (otherTeamId < 0) {
 +		return -1.f;
 +	}
@@ -832,10 +832,13 @@ index aeea9339..6e351521 100644
 +	}
 +	const std::string key = "ai_minc_" + utils::int_to_string(otherTeamId);
 +	return game->GetRulesParamFloat(key.c_str(), -1.f);
-+}
-+
+ }
+ 
+-CCircuitUnit* CCircuitAI::GetTeamUnit(ICoreUnit::Id unitId) const
 +float CCircuitAI::GetTunable(const char* name, float defVal) const
-+{
+ {
+-	auto it = teamUnits.find(unitId);
+-	return (it != teamUnits.end()) ? it->second : nullptr;
 +	auto it = tunables.find(name);
 +	if (it != tunables.end()) {
 +		return it->second;
@@ -873,10 +876,7 @@ index aeea9339..6e351521 100644
 +	return value;
  }
  
--CCircuitUnit* CCircuitAI::GetTeamUnit(ICoreUnit::Id unitId) const
--{
--	auto it = teamUnits.find(unitId);
--	return (it != teamUnits.end()) ? it->second : nullptr;
+-CAllyUnit* CCircuitAI::GetFriendlyUnit(Unit* u) const
 +// Highest build progress among our own units of `def`, or -1 if we hold none.
 +//
 +// teamUnits carries nanoframes as well as finished units -- other call sites
@@ -884,10 +884,16 @@ index aeea9339..6e351521 100644
 +// "has committed to an advanced plant" is the question the tech-lead election
 +// actually asks, and a plant that is 5% built already answers it yes.
 +float CCircuitAI::GetDefBuildProgress(CCircuitDef* def) const
-+{
+ {
+-	if (u->GetTeam() == teamId) {
+-		return GetTeamUnit(u->GetUnitId());
+-	} else if (u->GetAllyTeam() == allyTeamId) {
+-		return allyTeam->GetFriendlyUnit(u->GetUnitId());
 +	if (def == nullptr) {
 +		return -1.f;
-+	}
+ 	}
+-
+-	return nullptr;
 +	float best = -1.f;
 +	auto bucket = unitsByDef.find(def->GetId());
 +	if (bucket == unitsByDef.end()) {
@@ -905,7 +911,7 @@ index aeea9339..6e351521 100644
 +	return best;
  }
  
--CAllyUnit* CCircuitAI::GetFriendlyUnit(Unit* u) const
+-std::pair<CAllyUnit*, bool> CCircuitAI::GetTeamOrAllyUnit(springai::Unit* u) const
 +// Shared blackboard. Process-wide, so it reaches exactly the AIs this host is
 +// running and nobody else's -- which is the whole scope the team strategy has.
 +//
@@ -919,21 +925,21 @@ index aeea9339..6e351521 100644
 +void CCircuitAI::PublishTeamValue(const std::string& key, float value)
  {
 -	if (u->GetTeam() == teamId) {
--		return GetTeamUnit(u->GetUnitId());
+-		return std::make_pair(GetTeamUnit(u->GetUnitId()), true);
 -	} else if (u->GetAllyTeam() == allyTeamId) {
--		return allyTeam->GetFriendlyUnit(u->GetUnitId());
+-		return std::make_pair(allyTeam->GetFriendlyUnit(u->GetUnitId()), false);
 -	}
 +	teamValues[std::make_pair(teamId, key)] = value;
 +}
  
--	return nullptr;
+-	return std::make_pair(nullptr, false);
 +float CCircuitAI::ReadTeamValue(int otherTeamId, const std::string& key, float defVal) const
 +{
 +	auto it = teamValues.find(std::make_pair(otherTeamId, key));
 +	return (it == teamValues.end()) ? defVal : it->second;
  }
  
--std::pair<CAllyUnit*, bool> CCircuitAI::GetTeamOrAllyUnit(springai::Unit* u) const
+-std::pair<CEnemyInfo*, bool> CCircuitAI::RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS)
 +// Position of the most valuable reclaimable wreck within radius, or -RgtVector
 +// if there is nothing worth the trip.
 +//
@@ -976,25 +982,36 @@ index aeea9339..6e351521 100644
 +// its army were losing fights it never had.
 +void CCircuitAI::NoteTrade(bool isKill, CCircuitDef* cdef)
  {
--	if (u->GetTeam() == teamId) {
--		return std::make_pair(GetTeamUnit(u->GetUnitId()), true);
--	} else if (u->GetAllyTeam() == allyTeamId) {
--		return std::make_pair(allyTeam->GetFriendlyUnit(u->GetUnitId()), false);
+-	CEnemyInfo* unit = GetEnemyInfo(unitId);
+-	if (unit != nullptr) {
+-		if (isInLOS && !allyTeam->EnemyInLOS(unit->GetData(), this)) {
+-			return std::make_pair(nullptr, false);
+-		}
+-		return std::make_pair(unit, true);
 +	if (cdef == nullptr) {
 +		return;
-+	}
+ 	}
+-
+-	CEnemyUnit* data;
+-	bool isReal;
+-	std::tie(data, isReal) = allyTeam->RegisterEnemyUnit(unitId, isInLOS, this);
+-	if (data == nullptr) {
+-		return std::make_pair(nullptr, isReal);
 +	if (!isKill && (!cdef->IsMobile() || cdef->IsRoleComm())) {
 +		return;
-+	}
+ 	}
 +	const float v = cdef->GetCostM();
 +	if (isKill) {
 +		tradeKilled += v;
 +	} else {
 +		tradeLost += v;
- 	}
++	}
 +}
  
--	return std::make_pair(nullptr, false);
+-	unit = new CEnemyInfo(data);
+-	enemyInfos[unitId] = unit;
+-
+-	return std::make_pair(unit, true);
 +// THE EXCHANGE MATRIX. A hit is worth the victim's cost times the share of
 +// its health it took, so the cell (A, B) is metal of B that our A destroyed
 +// against metal of A that their B destroyed; 1 = an even trade. The prior
@@ -1006,15 +1023,12 @@ index aeea9339..6e351521 100644
 +	return (cdef != nullptr) && cdef->IsAttacker() && !cdef->IsRoleBuilder() && !cdef->IsRoleComm();
  }
  
--std::pair<CEnemyInfo*, bool> CCircuitAI::RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS)
+-CEnemyInfo* CCircuitAI::RegisterEnemyInfo(Unit* e)
 +float CCircuitAI::MetalOf(CCircuitDef* cdef, float damage)
  {
--	CEnemyInfo* unit = GetEnemyInfo(unitId);
--	if (unit != nullptr) {
--		if (isInLOS && !allyTeam->EnemyInLOS(unit->GetData(), this)) {
--			return std::make_pair(nullptr, false);
--		}
--		return std::make_pair(unit, true);
+-	CEnemyUnit* data = allyTeam->RegisterEnemyUnit(e, this);
+-	if (data == nullptr) {
+-		return nullptr;
 +	const float hp = cdef->GetHealth();
 +	if (hp <= .0f) {
 +		return .0f;
@@ -1023,39 +1037,28 @@ index aeea9339..6e351521 100644
 +	return ((share > 1.f) ? 1.f : share) * cdef->GetCostM();
 +}
  
--	CEnemyUnit* data;
--	bool isReal;
--	std::tie(data, isReal) = allyTeam->RegisterEnemyUnit(unitId, isInLOS, this);
--	if (data == nullptr) {
--		return std::make_pair(nullptr, isReal);
+-	CEnemyInfo* unit = new CEnemyInfo(data);
+-	enemyInfos[unit->GetId()] = unit;
+-
+-	return unit;
 +int CCircuitAI::RecordTierOf(CCircuitDef::Id id) const
 +{
 +	auto it = recTier.find(id);
 +	if (it == recTier.end()) {
 +		return 0;
- 	}
--
--	unit = new CEnemyInfo(data);
--	enemyInfos[unitId] = unit;
--
--	return std::make_pair(unit, true);
++	}
 +	return std::max(0, std::min(3, it->second));
  }
  
--CEnemyInfo* CCircuitAI::RegisterEnemyInfo(Unit* e)
+-void CCircuitAI::UnregisterEnemyInfo(CEnemyInfo* enemy)
 +void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float damage)
  {
--	CEnemyUnit* data = allyTeam->RegisterEnemyUnit(e, this);
--	if (data == nullptr) {
--		return nullptr;
+-	allyTeam->UnregisterEnemyUnit(enemy->GetData(), this);
+-	enemyInfos.erase(enemy->GetId());
+-	delete enemy;
 +	if (damage <= .0f) {
 +		return;
- 	}
--
--	CEnemyInfo* unit = new CEnemyInfo(data);
--	enemyInfos[unit->GetId()] = unit;
--
--	return unit;
++	}
 +	CCircuitUnit* ours = GetTeamUnit(attacker);
 +	if (ours == nullptr) {
 +		return;
@@ -1074,43 +1077,12 @@ index aeea9339..6e351521 100644
 +	recGame[RecordKey(a->GetId(), b->GetId())].dealt += MetalOf(b, damage);
  }
  
--void CCircuitAI::UnregisterEnemyInfo(CEnemyInfo* enemy)
-+void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
- {
--	allyTeam->UnregisterEnemyUnit(enemy->GetData(), this);
--	enemyInfos.erase(enemy->GetId());
--	delete enemy;
-+	if ((damage <= .0f) || recTweaked || (GetTeamUnit(attacker) != nullptr)) {
-+		return;
-+	}
-+	CCircuitUnit* ours = GetTeamUnit(unit);
-+	CEnemyInfo* e = GetEnemyInfo(attacker);
-+	if ((ours == nullptr) || (e == nullptr)) {
-+		return;
-+	}
-+	CCircuitDef* a = ours->GetCircuitDef();
-+	CCircuitDef* b = e->GetCircuitDef();
-+	if (!RecordCounts(a) || !RecordCounts(b)) {
-+		return;
-+	}
-+	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
- }
- 
 -void CCircuitAI::CreateFakeEnemy(int weaponId, const AIFloat3& startPos, const AIFloat3& dir)
-+// The death line: what this unit dealt over its own health, and what killed
-+// it -- the instrument tools/record.py reads for "what died to what". The
-+// matrix itself is fed per hit above, so nothing is folded here.
-+void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
++void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
  {
 -	const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
 -	if (wuDef.ids.empty()) {
-+	CCircuitDef* cdef = unit->GetCircuitDef();
-+	auto it = recDealt.find(unit->GetId());
-+	const float dealt = (it != recDealt.end()) ? it->second : .0f;
-+	if (it != recDealt.end()) {
-+		recDealt.erase(it);
-+	}
-+	if (!RecordCounts(cdef) || !unit->IsFinished() || !cdef->IsMobile()) {
++	if ((damage <= .0f) || recTweaked || (GetTeamUnit(attacker) != nullptr)) {
  		return;
  	}
 -	float range = weaponDefs[weaponId].GetRange();
@@ -1131,6 +1103,40 @@ index aeea9339..6e351521 100644
 -		enemy->SetBeingBuilt(false);
 -		enemy->SetHealth(enemy->GetCircuitDef()->GetHealth());
 -		GetThreatMap()->SetEnemyUnitThreat(enemy);
++	CCircuitUnit* ours = GetTeamUnit(unit);
++	CEnemyInfo* e = GetEnemyInfo(attacker);
++	if ((ours == nullptr) || (e == nullptr)) {
++		return;
+ 	}
++	CCircuitDef* a = ours->GetCircuitDef();
++	CCircuitDef* b = e->GetCircuitDef();
++	if (!RecordCounts(a) || !RecordCounts(b)) {
++		return;
++	}
++	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
+ }
+ 
+-void CCircuitAI::CheckDecoy(CEnemyInfo* enemy, int weaponId)
++// The death line: what this unit dealt over its own health, and what killed
++// it -- the instrument tools/record.py reads for "what died to what". The
++// matrix itself is fed per hit above, so nothing is folded here.
++void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
+ {
+-	CCircuitDef* edef = enemy->GetCircuitDef();
+-	if ((edef != nullptr) && edef->IsDecoy()) {
+-		const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
+-		if (!wuDef.ids.empty()) {
+-			allyTeam->UpdateInLOS(enemy->GetData(), *wuDef.ids.begin());
+-		}
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	auto it = recDealt.find(unit->GetId());
++	const float dealt = (it != recDealt.end()) ? it->second : .0f;
++	if (it != recDealt.end()) {
++		recDealt.erase(it);
++	}
++	if (!RecordCounts(cdef) || !unit->IsFinished() || !cdef->IsMobile()) {
++		return;
++	}
 +	const float hp = cdef->GetHealth();
 +	if (hp <= .0f) {
 +		return;
@@ -1143,33 +1149,33 @@ index aeea9339..6e351521 100644
 +			RecordRatioVs(cdef, killer), RecordCountVs(cdef, killer));
  }
  
--void CCircuitAI::CheckDecoy(CEnemyInfo* enemy, int weaponId)
+-CEnemyInfo* CCircuitAI::GetEnemyInfo(ICoreUnit::Id unitId) const
 +void CCircuitAI::RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const
  {
--	CCircuitDef* edef = enemy->GetCircuitDef();
--	if ((edef != nullptr) && edef->IsDecoy()) {
--		const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
--		if (!wuDef.ids.empty()) {
--			allyTeam->UpdateInLOS(enemy->GetData(), *wuDef.ids.begin());
+-	auto it = enemyInfos.find(unitId);
+-	return (it != enemyInfos.end()) ? it->second : nullptr;
 +	const long long key = RecordKey(a, b);
 +	for (const auto* m : {&recGame, &recStored}) {
 +		auto f = m->find(key);
 +		if (f != m->end()) {
 +			dealt += f->second.dealt; taken += f->second.taken;
- 		}
- 	}
++		}
++	}
  }
  
--CEnemyInfo* CCircuitAI::GetEnemyInfo(ICoreUnit::Id unitId) const
+-bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
 +// Walks every cell of the row: the set of B's is small (what A has ever
 +// traded with), so this is cheaper than indexing by tier.
 +float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
  {
--	auto it = enemyInfos.find(unitId);
--	return (it != enemyInfos.end()) ? it->second : nullptr;
+-	if ((unit == nullptr)/* || (unit->GetTask()->GetType() == IUnitTask::Type::NIL)*/) {
+-		return false;
 +	if (!RecordCounts(cdef) || recTweaked) {
 +		return 1.f;
-+	}
+ 	}
+-	if (isEnable) {
+-		if (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER) {
+-			return false;
 +	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
 +	float dealt = prior, taken = prior;
 +	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
@@ -1183,22 +1189,25 @@ index aeea9339..6e351521 100644
 +				continue;
 +			}
 +			dealt += kv.second.dealt; taken += kv.second.taken;
-+		}
-+	}
+ 		}
+-		unit->GetTask()->RemoveAssignee(unit);
+-	} else {
+-		ITaskModule* mgr = unit->GetTask()->GetManager();
+-		mgr->AssignTask(unit, new CPlayerTask(mgr));
+ 	}
+-	return true;
 +	return dealt / taken;
  }
  
--bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
+-void CCircuitAI::UpdateActions()
 +int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
  {
--	if ((unit == nullptr)/* || (unit->GetTask()->GetType() == IUnitTask::Type::NIL)*/) {
--		return false;
+-	if (actionIterator >= actionUnits.size()) {
+-		actionIterator = 0;
 +	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
 +		return 0;
  	}
--	if (isEnable) {
--		if (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER) {
--			return false;
+-
 +	float taken = .0f;
 +	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 +	for (const auto* m : {&recGame, &recStored}) {
@@ -1211,27 +1220,19 @@ index aeea9339..6e351521 100644
 +				continue;
 +			}
 +			taken += kv.second.taken;
- 		}
--		unit->GetTask()->RemoveAssignee(unit);
--	} else {
--		ITaskModule* mgr = unit->GetTask()->GetManager();
--		mgr->AssignTask(unit, new CPlayerTask(mgr));
- 	}
--	return true;
++		}
++	}
 +	return int(taken / cdef->GetCostM() + 0.5f);
- }
- 
--void CCircuitAI::UpdateActions()
++}
++
 +// The pair's own exchange, shrunk toward B's tier read: a matchup with no
 +// history prices as its tier does, and earns its own number as the hits
 +// come in.
 +float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const
- {
--	if (actionIterator >= actionUnits.size()) {
--		actionIterator = 0;
++{
 +	if (!RecordCounts(cdef) || recTweaked) {
 +		return 1.f;
- 	}
++	}
 +	const CCircuitDef::Id bid = (foe != nullptr) ? foe->GetId() : 0;
 +	const float base = RecordRatio(cdef, RecordTierOf(bid));
 +	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
@@ -1239,8 +1240,7 @@ index aeea9339..6e351521 100644
 +	RecordSum(cdef->GetId(), bid, dealt, taken);
 +	return dealt / taken;
 +}
- 
--	// stagger the Update's
++
 +int CCircuitAI::RecordCountVs(CCircuitDef* cdef, CCircuitDef* foe) const
 +{
 +	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
@@ -1300,6 +1300,31 @@ index aeea9339..6e351521 100644
 +	for (const auto& kv : recFoe) {
 +		recFoeTotal += kv.second;
 +	}
++}
++
++// Surface power of ALLIED players' ground combat units near pos -- ours are
++// excluded, the script already counts them. The withdraw odds read only our
++// own army, so in a team game every AI saw itself outgunned beside its allies
++// (apexearth 2026-09-26: "maybe our teams just don't fight well together").
++float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
++{
++	const float sqR = radius * radius;
++	float sum = 0.f;
++	for (auto& kv : GetFriendlyUnits()) {
++		CAllyUnit* u = kv.second;
++		if ((u == nullptr) || (GetTeamUnit(kv.first) != nullptr)) {
++			continue;
++		}
++		CCircuitDef* cdef = u->GetCircuitDef();
++		if ((cdef == nullptr) || !cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsAbleToFly()) {
++			continue;
++		}
++		if (u->GetLastPos().SqDistance2D(pos) > sqR) {
++			continue;
++		}
++		sum += cdef->GetSurfThreat();
++	}
++	return sum;
 +}
 +
 +float CCircuitAI::RecordRatioMix(CCircuitDef* cdef)
@@ -2786,11 +2811,10 @@ index aeea9339..6e351521 100644
 +		actionIterator = 0;
 +	}
 +
-+	// stagger the Update's
+ 	// stagger the Update's
  	unsigned int n = (actionUnits.size() / ACTION_UPDATE_RATE) + 1;
  
- 	while ((actionIterator < actionUnits.size()) && (n != 0)) {
-@@ -1751,6 +3984,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+@@ -1751,6 +4010,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -2821,7 +2845,7 @@ index aeea9339..6e351521 100644
  
  void CCircuitAI::BindUnitToWeaponDefs(CCircuitDef::Id unitDefId, const std::set<CWeaponDef::Id>& weaponDefs, bool isMobile)
 diff --git a/src/circuit/CircuitAI.h b/src/circuit/CircuitAI.h
-index b4f4f403..6acc5822 100644
+index b4f4f403..9c45e9e1 100644
 --- a/src/circuit/CircuitAI.h
 +++ b/src/circuit/CircuitAI.h
 @@ -16,8 +16,13 @@
@@ -2860,7 +2884,7 @@ index b4f4f403..6acc5822 100644
  class COOAICallback;
  class CEngine;
  class CMap;
-@@ -148,7 +159,272 @@ private:
+@@ -148,7 +159,273 @@ private:
  	void UnregisterTeamUnit(CCircuitUnit* unit);
  	void DeleteTeamUnit(CCircuitUnit* unit);
  public:
@@ -2942,6 +2966,7 @@ index b4f4f403..6acc5822 100644
 +	// The matchups weighted by what the enemy fields now (our own census of
 +	// known live enemy attackers, refreshed every 10 s); pooled when blind.
 +	float RecordRatioMix(CCircuitDef* cdef);
++	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
 +	// The same matrix read from their side: their B against our A.
 +	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
 +	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
@@ -3133,7 +3158,7 @@ index b4f4f403..6acc5822 100644
  	void Garbage(CCircuitUnit* unit, const char* reason);
  	CCircuitUnit* GetTeamUnit(ICoreUnit::Id unitId) const;
  	const Units& GetTeamUnits() const { return teamUnits; }
-@@ -161,6 +437,13 @@ public:
+@@ -161,6 +438,13 @@ public:
  
  	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
  private:
@@ -3147,7 +3172,7 @@ index b4f4f403..6acc5822 100644
  	std::pair<CEnemyInfo*, bool> RegisterEnemyInfo(ICoreUnit::Id unitId, bool isInLOS = false);
  	CEnemyInfo* RegisterEnemyInfo(springai::Unit* e);
  	void UnregisterEnemyInfo(CEnemyInfo* enemy);
-@@ -175,12 +458,30 @@ public:
+@@ -175,12 +459,30 @@ public:
  	bool UnitControl(CCircuitUnit* unit, bool isEnable);
  	bool UnitControl(ICoreUnit::Id unitId, bool isEnable) { return UnitControl(GetTeamUnit(unitId), isEnable); }
  
@@ -3179,7 +3204,7 @@ index b4f4f403..6acc5822 100644
  	EnemyInfos enemyInfos;  // owner
  	CAllyTeam* allyTeam;
  	bool isAllyTeamInit;
-@@ -189,6 +490,24 @@ private:
+@@ -189,6 +491,24 @@ private:
  	unsigned int actionIterator;
  
  	std::set<CCircuitUnit*> garbage;
@@ -3204,7 +3229,7 @@ index b4f4f403..6acc5822 100644
  // <<< Units ---- END
  
  // >>> AIOptions.lua ---- BEGIN
-@@ -205,6 +524,68 @@ private:
+@@ -205,6 +525,68 @@ private:
  	bool isAllyBaseAvoid;
  // <<< AIOptions.lua ---- END
  
@@ -3273,7 +3298,7 @@ index b4f4f403..6acc5822 100644
  // >>> UnitDefs ---- BEGIN
  public:
  	using CircuitDefs = std::vector<CCircuitDef>;  // UnitDefId=0 is not valid, @see rts/Sim/Units/UnitDefHandler.h
-@@ -268,6 +649,18 @@ public:
+@@ -268,6 +650,18 @@ public:
  	CGameAttribute* GetGameAttribute() const { return gameAttribute.get(); }
  	const std::shared_ptr<CScheduler>& GetScheduler() { return scheduler; }
  	int GetLastFrame()    const { return lastFrame; }
@@ -3292,7 +3317,7 @@ index b4f4f403..6acc5822 100644
  	int GetSkirmishAIId() const { return skirmishAIId; }
  	int GetTeamId()       const { return teamId; }
  	int GetAllyTeamId()   const { return allyTeamId; }
-@@ -278,6 +671,8 @@ public:
+@@ -278,6 +672,8 @@ public:
  	CEngine*              GetEngine()     const { return engine.get(); }
  	springai::Cheats*     GetCheats()     const { return cheats.get(); }
  	springai::Log*        GetLog()        const { return log.get(); }
@@ -3301,7 +3326,7 @@ index b4f4f403..6acc5822 100644
  	springai::Game*       GetGame()       const { return game.get(); }
  	CMap*                 GetMap()        const { return map.get(); }
  	springai::Lua*        GetLua()        const { return lua.get(); }
-@@ -317,6 +712,103 @@ private:
+@@ -317,6 +713,103 @@ private:
  	bool isResigned : 1;
  	bool isSlave : 1;
  	int lastFrame;
@@ -3405,7 +3430,7 @@ index b4f4f403..6acc5822 100644
  	int skirmishAIId;
  	int teamId;
  	int allyTeamId;
-@@ -334,6 +826,11 @@ private:
+@@ -334,6 +827,11 @@ private:
  	std::unique_ptr<springai::Pathing>    pathing;
  	std::unique_ptr<springai::Drawer>     drawer;
  	std::unique_ptr<springai::SkirmishAI> skirmishAI;
@@ -8625,7 +8650,7 @@ index 8de9554c..c6a074b8 100644
  
  CFactoryScript::~CFactoryScript()
 diff --git a/src/circuit/script/InitScript.cpp b/src/circuit/script/InitScript.cpp
-index 2839b72e..fa421416 100644
+index 2839b72e..247248f3 100644
 --- a/src/circuit/script/InitScript.cpp
 +++ b/src/circuit/script/InitScript.cpp
 @@ -10,11 +10,16 @@
@@ -9969,7 +9994,7 @@ index 2839b72e..fa421416 100644
  	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
  
-@@ -490,21 +1740,100 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -490,21 +1740,101 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitAI", "int GetDefCount() const", asMETHOD(CCircuitAI, GetDefCount), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "CCircuitUnit@ GetTeamUnit(Id)", asMETHOD(CCircuitAI, GetTeamUnit), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetMapName() const", asFUNCTION(CCircuitAI_GetMapName), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -10006,6 +10031,7 @@ index 2839b72e..fa421416 100644
 +	r = engine->RegisterObjectMethod("CCircuitAI", "void RecordSetTier(const CCircuitDef@, int)", asMETHOD(CCircuitAI, RecordSetTier), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatioVs(const CCircuitDef@, const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordRatioVs), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatioMix(const CCircuitDef@)", asMETHOD(CCircuitAI, RecordRatioMix), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CCircuitAI", "float GetAllyPowerAt(const AIFloat3& in, float)", asMETHOD(CCircuitAI, GetAllyPowerAt), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordFoeRatio(const CCircuitDef@, const CCircuitDef@) const", asMETHOD(CCircuitAI, RecordFoeRatio), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "bool RecordTweaked() const", asMETHOD(CCircuitAI, RecordTweaked), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CCircuitAI", "double ClockUs() const", asFUNCTION(CCircuitAI_ClockUs), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
@@ -10071,7 +10097,7 @@ index 2839b72e..fa421416 100644
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "string GetGameRulesParam(const string& in, const string& in) const", asFUNCTION(CCircuitAI_GetGameRulesParamString), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetTeamRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
-@@ -556,6 +1885,58 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -556,6 +1886,58 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "float GetWaterThreat() const", asMETHOD(CCircuitDef, GetWaterThreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAbleToFly() const", asMETHOD(CCircuitDef, IsAbleToFly), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMobile() const", asMETHOD(CCircuitDef, IsMobile), asCALL_THISCALL); ASSERT(r >= 0);
@@ -10130,7 +10156,7 @@ index 2839b72e..fa421416 100644
  	r = engine->RegisterObjectProperty("CCircuitDef", "int maxThisUnit", asOFFSET(CCircuitDef, maxThisUnit)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int sinceFrame", asOFFSET(CCircuitDef, sinceFrame)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitDef", "int cooldown", asOFFSET(CCircuitDef, cooldown)); ASSERT(r >= 0);
-@@ -564,6 +1945,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -564,6 +1946,23 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetThreatKernel(float)", asMETHOD(CCircuitDef, SetThreatKernel), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "void SetFireState(int)", asMETHOD(CCircuitDef, SetFireState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFireState() const", asMETHOD(CCircuitDef, GetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -10154,7 +10180,7 @@ index 2839b72e..fa421416 100644
  
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const Id id", asOFFSET(CCircuitUnit, id)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "const CCircuitDef@ circuitDef", asOFFSET(CCircuitUnit, circuitDef)); ASSERT(r >= 0);
-@@ -573,6 +1971,55 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -573,6 +1972,55 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void TglAttribute(Type)", asMETHOD(CCircuitUnit, TglAttribute), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "bool IsAttrAny(Mask) const", asMETHOD(CCircuitUnit, IsAttrAny), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetFireState(int)", asMETHOD(CCircuitUnit, TrySetFireState), asCALL_THISCALL); ASSERT(r >= 0);
@@ -10210,7 +10236,7 @@ index 2839b72e..fa421416 100644
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetMoveState(int)", asMETHOD(CCircuitUnit, TrySetMoveState), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CCircuitUnit", "void SelfDestruct(bool)", asMETHOD(CCircuitUnit, CmdSelfD), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CCircuitUnit", "IUnitTask@ const task", asOFFSET(CCircuitUnit, task)); ASSERT(r >= 0);
-@@ -585,6 +2032,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
+@@ -585,6 +2033,10 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
  	r = engine->RegisterGlobalProperty("CSetupManager aiSetupMgr", setupMgr); ASSERT(r >= 0);
  	// AS docs / "Registering object methods" / "Composite members"
  	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
@@ -10221,7 +10247,7 @@ index 2839b72e..fa421416 100644
  }
  
  CInitScript::~CInitScript()
-@@ -703,6 +2154,25 @@ void CInitScript::RegisterMgr()
+@@ -703,6 +2155,25 @@ void CInitScript::RegisterMgr()
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyThreat(Type) const", asMETHODPR(CEnemyManager, GetEnemyThreat, (CCircuitDef::RoleT) const, float), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("CEnemyManager", "const float mobileThreat", asOFFSET(CEnemyManager, mobileThreat)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEnemyManager", "float GetEnemyCost(Type) const", asMETHOD(CEnemyManager, GetEnemyCost), asCALL_THISCALL); ASSERT(r >= 0);
@@ -10247,7 +10273,7 @@ index 2839b72e..fa421416 100644
  	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
  
  	CThreatMap* thrMap = circuit->GetThreatMap();
-@@ -724,6 +2194,8 @@ bool CInitScript::Init()
+@@ -724,6 +2195,8 @@ bool CInitScript::Init()
  	mainInfo.receiveMessage = script->GetFunc(mod, "void AiMessage(const string& in, int)");
  	mainInfo.unitFinished = script->GetFunc(mod, "void AiUnitFinished(CCircuitUnit@)");
  	mainInfo.unitDestroyed = script->GetFunc(mod, "void AiUnitDestroyed(CCircuitUnit@)");
@@ -10256,7 +10282,7 @@ index 2839b72e..fa421416 100644
  	asIScriptFunction* main = script->GetFunc(mod, "void AiMain()");
  	if (main == nullptr) {
  		return false;
-@@ -740,9 +2212,28 @@ void CInitScript::Update()
+@@ -740,9 +2213,28 @@ void CInitScript::Update()
  	if (mainInfo.update == nullptr) {
  		return;
  	}
@@ -10285,7 +10311,7 @@ index 2839b72e..fa421416 100644
  }
  
  void CInitScript::LuaMessage(const char* inData)
-@@ -779,6 +2270,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
+@@ -779,6 +2271,31 @@ void CInitScript::UnitDestroyed(CCircuitUnit* unit)
  	script->ReturnContext(ctx);
  }
  
@@ -10317,7 +10343,7 @@ index 2839b72e..fa421416 100644
  CMaskHandler::TypeMask CInitScript::AddRole(const std::string& name, int actAsRole)
  {
  	CMaskHandler::TypeMask result = circuit->GetGameAttribute()->GetRoleMasker().GetTypeMask(name);
-@@ -902,7 +2418,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
+@@ -902,7 +2419,7 @@ void CInitScript::Run(asIScriptFunction* exec, CScriptDictionary* arg)
  			}
  			script->ReturnContext(ctx);
  		});
@@ -11979,7 +12005,7 @@ index 275db3ae..0dbc7ea7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..42b4ba98 100644
+index bc8ff11b..6127554f 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -13027,7 +13053,7 @@ index bc8ff11b..42b4ba98 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1347,109 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1347,120 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -13088,6 +13114,17 @@ index bc8ff11b..42b4ba98 100644
 +		unit->GetTravelAct()->StateFinish();  // already there: no road to refuse
 +		return;
 +	}
++	// One far hand's hot road is that hand's problem: a crew already on the job
++	// or a frame already standing keeps the site (16-hand reactors were aborted).
++	if ((target != nullptr) || (units.size() > 1)) {
++		circuit->LOG("apex: hot-road-leave %s by %s at=%.0f,%.0f dist=%.0f crew=%i",
++				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
++				unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
++				sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)),
++				static_cast<int>(units.size()));
++		RemoveAssignee(unit);
++		return;
++	}
 +	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f",
 +			(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 +			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
@@ -13139,7 +13176,7 @@ index bc8ff11b..42b4ba98 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,19 +1513,175 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,19 +1524,175 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  
@@ -13319,7 +13356,7 @@ index bc8ff11b..42b4ba98 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,204 +1697,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,204 +1708,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
@@ -14585,10 +14622,20 @@ index c3f5e98b..c9573aa0 100644
  }
  
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4d..fc9cd426 100644
+index cd063e4d..588f5c55 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
-@@ -319,7 +319,20 @@ void CAttackTask::FindTarget()
+@@ -62,6 +62,9 @@ bool CAttackTask::CanAssignTo(CCircuitUnit* unit) const
+ 	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
+ 		return false;
+ 	}
++	if (!SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef())) {
++		return false;
++	}
+ 	if ((leader->GetCircuitDef()->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
+ 		|| (leader->GetCircuitDef()->IsAmphibious() && unit->GetCircuitDef()->IsAmphibious())
+ 		|| (leader->GetCircuitDef()->IsSurfer() && unit->GetCircuitDef()->IsSurfer())
+@@ -319,7 +322,20 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -14611,7 +14658,7 @@ index cd063e4d..fc9cd426 100644
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd88..0e34350c 100644
+index 9e6bfd88..d75ae5f9 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,7 @@
@@ -14742,7 +14789,7 @@ index 9e6bfd88..0e34350c 100644
  	// Do not retreat if bomber is close to target
  	if (GetTarget() == nullptr) {
  		ISquadTask::OnUnitDamaged(unit, attacker);
-@@ -224,6 +245,29 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -224,6 +245,39 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  	}
  }
  
@@ -14769,10 +14816,20 @@ index 9e6bfd88..0e34350c 100644
 +	return rate;
 +}
 +
++static float SqDistToSegment2D(const AIFloat3& p, const AIFloat3& a, const AIFloat3& b)
++{
++	const float dx = b.x - a.x, dz = b.z - a.z;
++	const float len2 = dx * dx + dz * dz;
++	const float t = (len2 > 1.f)
++			? utils::clamp(((p.x - a.x) * dx + (p.z - a.z) * dz) / len2, 0.f, 1.f) : 0.f;
++	const float ex = a.x + dx * t - p.x, ez = a.z + dz * t - p.z;
++	return ex * ex + ez * ez;
++}
++
  void CBombTask::FindTarget()
  {
  	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
-@@ -236,7 +280,41 @@ void CBombTask::FindTarget()
+@@ -236,7 +290,41 @@ void CBombTask::FindTarget()
  	const bool notAW = !cdef->HasSurfToWater();
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	const float scale = (cdef->GetMinRange() > 300.0f) ? 4.0f : 1.0f;
@@ -14815,16 +14872,17 @@ index 9e6bfd88..0e34350c 100644
  //	const float maxAltitude = cdef->GetAltitude();
  	const float speed = cdef->GetSpeed() / 1.75f;
  	const int canTargetCat = cdef->GetTargetCategory();
-@@ -245,6 +323,8 @@ void CBombTask::FindTarget()
+@@ -245,6 +333,9 @@ void CBombTask::FindTarget()
  //								 cdef->GetLosRadius()) * 2;
  	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
  	float minHealth = std::numeric_limits<float>::max();
 +	float bestScore = 0.f;
 +	float bestValue = 0.f;
++	bool bestOnRoute = false;
  
  	COOAICallback* callback = circuit->GetCallback();
  	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
-@@ -258,6 +338,7 @@ void CBombTask::FindTarget()
+@@ -258,21 +349,52 @@ void CBombTask::FindTarget()
  		};
  	}
  
@@ -14832,14 +14890,35 @@ index 9e6bfd88..0e34350c 100644
  	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
  	CEnemyInfo* bestTarget = nullptr;
  	position = -RgtVector;
-@@ -265,14 +346,23 @@ void CBombTask::FindTarget()
++	struct Cand {
++		CEnemyInfo* enemy;
++		AIFloat3 pos;
++		float raw, score, value, health, sqDist;
++	};
++	std::vector<Cand> routeCands;
++	float bestCellRaw = 0.f;
++	auto consider = [&](const Cand& c, bool onRoute) {
++		if (c.score > bestScore) {
++			bestScore = c.score;
++			bestValue = c.value;
++			bestOnRoute = onRoute;
++			minHealth = c.health;
++			if (c.sqDist < sqRange) {
++				bestTarget = c.enemy;
++			} else {
++				position = c.pos;
++				bestTarget = nullptr;
++			}
++		}
++	};
+ 	threatMap->SetThreatType(leader);
  	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
  	for (auto& kv : enemies) {
  		CEnemyInfo* enemy = kv.second;
 +		const AIFloat3& ePos = enemy->GetPos();
-+		if (focused && (ePos.SqDistance2D(focusPos) > sqFocusR)) {
-+			continue;
-+		}
++		// Judged after the loop against the cell's best: a wave flew over a
++		// fusion on its way in and never looked at it (apexearth).
++		const bool onRoute = focused && (ePos.SqDistance2D(focusPos) > sqFocusR);
  		if (enemy->IsHidden()) {
 +			++nHidden;
  			continue;
@@ -14858,7 +14937,7 @@ index 9e6bfd88..0e34350c 100644
  			continue;
  		}
  
-@@ -281,14 +371,27 @@ void CBombTask::FindTarget()
+@@ -281,14 +403,27 @@ void CBombTask::FindTarget()
  //		float altitude;
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
@@ -14887,11 +14966,18 @@ index 9e6bfd88..0e34350c 100644
  				continue;
  			}
  			health = enemy->GetHealth();
-@@ -318,9 +421,78 @@ void CBombTask::FindTarget()
+@@ -318,26 +453,190 @@ void CBombTask::FindTarget()
  //                }
  //				cost += ei->GetCost();
  //			}
 -			if (minHealth > health) {
+-				minHealth = health;
+-				const float sqDist = pos.SqDistance2D(ePos);
+-				if (sqDist < sqRange) {
+-					bestTarget = enemy;
+-				} else {
+-					position = ePos;
+-					bestTarget = nullptr;
 +			// VALUE, NOT SOFTNESS. Stock picks the lowest-HEALTH target, which is
 +			// why bombers cross the map for a metal extractor and then die to AA
 +			// on the way home. apexearth: "we are not focusing on attacking the
@@ -14939,9 +15025,9 @@ index 9e6bfd88..0e34350c 100644
 +			const float minValue = circuit->GetTunable("apex_bomb_min_value", 200.f);
 +			const float distScale = circuit->GetTunable("apex_bomb_dist_scale", 4000.f);
 +			const float dist = math::sqrt(sqDist);
-+			float score = (value / std::max(health, 1.f)) / (1.f + dist / distScale);
++			float raw = value / std::max(health, 1.f);
 +			if (value < minValue) {
-+				score *= 0.1f;   // still allowed, but only if nothing else offers
++				raw *= 0.1f;   // still allowed, but only if nothing else offers
 +			}
 +			// TARGET VARIANCE (apexearth: "our air tends to repeatedly try
 +			// bombing the same thing"). A target another squad committed to
@@ -14956,19 +15042,49 @@ index 9e6bfd88..0e34350c 100644
 +					const float sinceS = float(circuit->GetLastFrame() - lastF) / float(FRAMES_PER_SEC);
 +					if ((revisitS > 1.f) && (sinceS < revisitS)) {
 +						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
-+						score *= disc + (1.f - disc) * (sinceS / revisitS);
++						raw *= disc + (1.f - disc) * (sinceS / revisitS);
 +					}
 +				}
 +			}
-+			if (score > bestScore) {
-+				bestScore = score;
-+				bestValue = value;
- 				minHealth = health;
--				const float sqDist = pos.SqDistance2D(ePos);
- 				if (sqDist < sqRange) {
- 					bestTarget = enemy;
- 				} else {
-@@ -331,13 +503,79 @@ void CBombTask::FindTarget()
++			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
++			if (onRoute) {
++				if (value >= minValue) {
++					routeCands.push_back(c);
+ 				}
++				continue;
++			}
++			bestCellRaw = std::max(bestCellRaw, raw);
++			consider(c, false);
++		}
++	}
++
++	// ON THE WAY: off the cell, a target is taken only if it is worth at least
++	// the best the cell offers on its own merits -- the detour is then pure
++	// gain -- and it lies within sight of the route the wave actually flies
++	// (the threat-routed path, not the straight line).
++	if (!routeCands.empty()) {
++		const float sqReach = SQUARE(cdef->GetLosRadius());
++		const F3Vec& path = pPath->posPath;
++		size_t from = 0;
++		float sqNear = std::numeric_limits<float>::max();
++		for (size_t i = 0; i < path.size(); ++i) {
++			const float d = pos.SqDistance2D(path[i]);
++			if (d < sqNear) {
++				sqNear = d;
++				from = i;
++			}
++		}
++		for (const Cand& c : routeCands) {
++			if (c.raw < bestCellRaw) {
++				continue;
++			}
++			bool onPath = (c.sqDist <= sqReach);
++			for (size_t i = from; !onPath && (i + 1 < path.size()); ++i) {
++				onPath = (SqDistToSegment2D(c.pos, path[i], path[i + 1]) <= sqReach);
++			}
++			if (onPath) {
++				consider(c, true);
+ 			}
  		}
  	}
  
@@ -14997,13 +15113,14 @@ index 9e6bfd88..0e34350c 100644
 +			// worth= is the priced value, mob= says whether the run went at
 +			// something that walks: an eco raid reading mob=1 is the doctrine
 +			// failing, and that cannot be seen from the def name alone.
-+			circuit->LOG("apex: bomb-commit id=%d def=%s worth=%.0f mob=%d antistat=%d last=%d",
++			circuit->LOG("apex: bomb-commit id=%d def=%s worth=%.0f mob=%d antistat=%d last=%d route=%d",
 +					bestTarget->GetId(),
 +					(bd != nullptr) ? bd->GetDef()->GetName() : "?",
 +					bestValue,
 +					((bd != nullptr) && bd->IsMobile()) ? 1 : 0,
 +					isAntiStatic ? 1 : 0,
-+					milMgr->LastBombFrame(bestTarget->GetId()));
++					milMgr->LastBombFrame(bestTarget->GetId()),
++					bestOnRoute ? 1 : 0);
 +		}
 +		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
  	}
@@ -15048,7 +15165,7 @@ index 9e6bfd88..0e34350c 100644
  void CBombTask::ApplyTargetPath(const CQueryPathSingle* query)
  {
  	pPath = query->GetPathInfo();
-@@ -388,9 +626,11 @@ void CBombTask::Fallback()
+@@ -388,9 +687,11 @@ void CBombTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -15080,6 +15197,22 @@ index 85b30616..2f7f761e 100644
  };
  
  } // namespace circuit
+diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
+index bfc3caf8..2a483740 100644
+--- a/src/circuit/task/fighter/DefendTask.cpp
++++ b/src/circuit/task/fighter/DefendTask.cpp
+@@ -48,6 +48,11 @@ CDefendTask::~CDefendTask()
+ 
+ bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
+ {
++	if ((leader != nullptr)
++		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef()))
++	{
++		return false;
++	}
+ 	return (attackPower < maxPower) && (static_cast<CDefendTask*>(unit->GetTask())->GetPromote() == promote);
+ }
+ 
 diff --git a/src/circuit/task/fighter/DefendTask.h b/src/circuit/task/fighter/DefendTask.h
 index 90c3b71b..28c7d97c 100644
 --- a/src/circuit/task/fighter/DefendTask.h
@@ -15195,11 +15328,117 @@ index b0fd8f04..bae59ad7 100644
  	}
  
  	if (target != nullptr) {
+diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
+index 9af06982..71c68d98 100644
+--- a/src/circuit/task/fighter/RaidTask.cpp
++++ b/src/circuit/task/fighter/RaidTask.cpp
+@@ -17,6 +17,7 @@
+ #include "unit/action/MoveAction.h"
+ #include "unit/action/FightAction.h"
+ #include "unit/enemy/EnemyUnit.h"
++#include "unit/enemy/EnemyManager.h"
+ #include "unit/CircuitUnit.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
+@@ -156,6 +157,7 @@ void CRaidTask::Update()
+ 
+ 	state = State::ROAM;
+ 	if (GetTarget() != nullptr) {
++		noTargetSince = -1;
+ 		state = State::ENGAGE;
+ 		position = GetTarget()->GetPos();
+ 		circuit->GetMilitaryManager()->ClearScoutPosition(this);
+@@ -393,6 +395,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+ 	pPath = query->GetPathInfo();
+ 
+ 	if (!pPath->posPath.empty()) {
++		noTargetSince = -1;
+ 		position = pPath->posPath.back();
+ 		ActivePath();
+ 	} else {
+@@ -400,9 +403,44 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+ 	}
+ }
+ 
++// A raid with nothing it can reach for a minute joins the army instead of
++// wandering the map edges: on a narrow isthmus land raiders found no way in
++// and trickled into the choke (apexearth 2026-09-26). Amphibious raiders keep
++// raiding -- the water is their way round.
++bool CRaidTask::GiveUpRaid()
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	const int frame = circuit->GetLastFrame();
++	if (noTargetSince < 0) {
++		noTargetSince = frame;
++		return false;
++	}
++	if ((leader == nullptr) || leader->GetCircuitDef()->IsAmphibious() || leader->GetCircuitDef()->IsSurfer()
++		|| leader->GetCircuitDef()->IsAbleToFly() || (frame < noTargetSince + FRAMES_PER_SEC * 60))
++	{
++		return false;
++	}
++	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
++	IFighterTask* task = militaryMgr->Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK,
++			std::max(1.f, circuit->GetEnemyManager()->GetPreMaxGroupThreat())));
++	if (task == nullptr) {
++		return false;
++	}
++	circuit->LOG("apex: raid-giveup %s x%i -> army pool", leader->GetCircuitDef()->GetDef()->GetName(),
++			static_cast<int>(units.size()));
++	decltype(units) tmpUnits = units;
++	for (CCircuitUnit* unit : tmpUnits) {
++		manager->AssignTask(unit, task);
++	}
++	return true;
++}
++
+ void CRaidTask::FallbackRaid()
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
++	if (GiveUpRaid()) {
++		return;
++	}
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	CThreatMap* threatMap = circuit->GetThreatMap();
+ 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
+diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
+index ec833e6d..2468b7df 100644
+--- a/src/circuit/task/fighter/RaidTask.h
++++ b/src/circuit/task/fighter/RaidTask.h
+@@ -32,8 +32,10 @@ private:
+ 	void ApplyTargetPath(const CQueryPathMulti* query);
+ 	void FallbackRaid();
+ 	void ApplyRaidPath(const CQueryPathSingle* query);
++	bool GiveUpRaid();
+ 
+ 	float maxPower;
++	int noTargetSince = -1;
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/RallyTask.cpp b/src/circuit/task/fighter/RallyTask.cpp
-index 191de259..46bdfb52 100644
+index 191de259..828dab20 100644
 --- a/src/circuit/task/fighter/RallyTask.cpp
 +++ b/src/circuit/task/fighter/RallyTask.cpp
-@@ -62,7 +62,7 @@ void CRallyTask::Start(CCircuitUnit* unit)
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include "task/fighter/RallyTask.h"
++#include "task/fighter/SquadTask.h"
+ #include "module/MilitaryManager.h"
+ #include "setup/SetupManager.h"
+ #include "terrain/TerrainManager.h"
+@@ -40,6 +41,9 @@ bool CRallyTask::CanAssignTo(CCircuitUnit* unit) const
+ 		return false;
+ 	}
+ 	CCircuitDef* cdef = (*units.begin())->GetCircuitDef();
++	if (!ISquadTask::SameClimb(manager->GetCircuit(), cdef, unit->GetCircuitDef())) {
++		return false;
++	}
+ 	if ((cdef->IsAbleToFly() && unit->GetCircuitDef()->IsAbleToFly())
+ 		|| (cdef->IsAmphibious() && unit->GetCircuitDef()->IsAmphibious())
+ 		|| (cdef->IsSurfer() && unit->GetCircuitDef()->IsSurfer())
+@@ -62,7 +66,7 @@ void CRallyTask::Start(CCircuitUnit* unit)
  		AIFloat3 pos = utils::is_valid(freePos) ? freePos : position;
  
  		TRY_UNIT(circuit, unit,
@@ -15209,10 +15448,36 @@ index 191de259..46bdfb52 100644
  		)
  		return;
 diff --git a/src/circuit/task/fighter/SquadTask.cpp b/src/circuit/task/fighter/SquadTask.cpp
-index 0d59b650..032729a0 100644
+index 0d59b650..200df5d5 100644
 --- a/src/circuit/task/fighter/SquadTask.cpp
 +++ b/src/circuit/task/fighter/SquadTask.cpp
-@@ -485,4 +485,45 @@ void ISquadTask::Log()
+@@ -217,6 +217,25 @@ ISquadTask* ISquadTask::CheckMergeTask()
+ 	return const_cast<ISquadTask*>(task);
+ }
+ 
++// All-terrain walkers never share a squad with units that cannot climb: the
++// leader is the least mobile member, so a Vanguard beside a tank walked the
++// tank's road (apexearth 2026-09-26). The pathfinder's own spider test.
++bool ISquadTask::SameClimb(CCircuitAI* circuit, CCircuitDef* a, CCircuitDef* b)
++{
++	static std::set<CCircuitDef::Id> logged;
++	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
++	auto climbs = [&](CCircuitDef* d) {
++		const SMobileType* mt = terrainMgr->GetMobileType(d->GetId());
++		const bool c = (mt != nullptr) && (mt->maxSlope > 0.99f);
++		if (logged.insert(d->GetId()).second) {
++			circuit->LOG("apex: climb %s allterrain=%i maxSlope=%.3f", d->GetDef()->GetName(),
++					c ? 1 : 0, (mt != nullptr) ? mt->maxSlope : -1.f);
++		}
++		return c;
++	};
++	return climbs(a) == climbs(b);
++}
++
+ ISquadTask* ISquadTask::GetMergeTask()
+ {
+ 	if (updCount % 32 == 1) {
+@@ -485,4 +504,45 @@ void ISquadTask::Log()
  }
  #endif
  
@@ -15259,10 +15524,28 @@ index 0d59b650..032729a0 100644
 +
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/SquadTask.h b/src/circuit/task/fighter/SquadTask.h
-index a058d598..f119a0e8 100644
+index a058d598..4f6cd90f 100644
 --- a/src/circuit/task/fighter/SquadTask.h
 +++ b/src/circuit/task/fighter/SquadTask.h
-@@ -64,6 +64,12 @@ protected:
+@@ -15,6 +15,8 @@
+ 
+ namespace circuit {
+ 
++class CCircuitDef;
++
+ class ISquadTask: public IFighterTask {
+ protected:
+ 	ISquadTask(ITaskModule* mgr, FightType type, float powerMod);
+@@ -31,6 +33,8 @@ public:
+ 	CCircuitUnit* GetLeader() const { return leader; }
+ 	const springai::AIFloat3& GetLeaderPos(int frame) const;
+ 
++	static bool SameClimb(CCircuitAI* circuit, CCircuitDef* a, CCircuitDef* b);
++
+ private:
+ 	void FindLeader(decltype(units)::iterator itBegin, decltype(units)::iterator itEnd);
+ 
+@@ -64,6 +68,12 @@ protected:
  public:
  	virtual void Log() override;
  #endif
