@@ -1201,13 +1201,6 @@ const float TUNE_AA_COVER_FRAC = 0.5f;
 //   relative to an even split. See docs/27.
 const float TUNE_ECO_AA_MULT = 1.5f;
 
-// GIFT_ARMY: master switch for back-to-front army gifting. See docs/27.
-const float TUNE_GIFT_ARMY = 0.f;
-
-// FRONT_N: how many closest-to-enemy allies count as the front line and
-//   receive the team's ground army (his read of this map: 2).
-const float TUNE_FRONT_N = 2.f;
-
 // JOIN_MIN_M: def cost above which a second builder JOINS the standing build
 //   instead of opening a parallel copy (fusion-and-up territory).
 const float TUNE_JOIN_MIN_M = 500.f;
@@ -1561,20 +1554,6 @@ const float TUNE_AFLOAT_STREAK = 3.f;
 //   immediately, whatever the land fraction -- when it also outweighs the
 //   seen land army.
 const float TUNE_AFLOAT_SUB_COST = 400.f;
-
-// [seconds] -- Only ally tower losses fresher than this summon defence aid.
-const float TUNE_AID_FRESH = 60.f;
-
-// [metal] -- Minimum fresh ally loss value before defence aid moves.
-const float TUNE_AID_MIN_LOSS = 300.f;
-
-// AID_RESPOND [metal lost at an ally's hotspot] -- above this the staging lane
-//   moves to that fight (clamped to contested ground). See docs/27.
-const float TUNE_AID_RESPOND = 1000.f;
-
-// [elmos] -- How far defence aid will travel; -1 follows the measured base
-//   separation live (a fixed default would freeze before home is set).
-const float TUNE_AID_REACH = -1.f;
 
 // [toggle 0/1] -- Mobile artillery masses into the squad pool (long-range back
 //   row, allied vision, kite/set-target) instead of soloing on CArtilleryTask,

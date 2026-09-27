@@ -1043,13 +1043,15 @@ defence and keeps no army at home, so it draws more of the air that gets
 through than its headcount share (apexearth: "~50% more anti air than your
 average player").
 
-### `TUNE_GIFT_ARMY` = 0.f
+### `TUNE_GIFT_ARMY`, `TUNE_FRONT_N` -- removed 2026-09-27; gifting is need-based now
 
-GIFT_ARMY: master switch for back-to-front army gifting. DEFAULT OFF (apexearth
-2026-08-24: "we are doing the share logic to send units to teammates. We should
-disable that by default. It only is appropriate on certain maps"). Handing an
-army away is only right where the map makes one player's front the whole team's
-front; everywhere else it disarms us.
+The old gifting shipped EVERY back seat's whole ground army to a front player
+every 30 s, which is why he had it off (2026-08-24: "It only is appropriate on
+certain maps") -- it disarmed the giver. Its replacement (gift.as, his call
+2026-09-27, replacing the aid lane) gives only a hurt ally's shortfall, nearest
+seats first, each keeping the enemy at its own home or its share of their army,
+and gives nothing when the team cannot cover the shortfall. No switch: nothing
+is given unless an ally is short.
 
 ### `TUNE_T2_CON_BASE` = 1.f
 
@@ -1603,11 +1605,12 @@ only one of them.
 
 ## Everything else
 
-### `TUNE_AID_RESPOND` = 1000.f
+### `TUNE_AID_*` -- removed 2026-09-27 with the aid lane
 
-AID_RESPOND [metal lost at an ally's hotspot] -- above this the staging lane
-moves to that fight (clamped to contested ground). 0 disables the response and
-leaves the hotspot publish-only, as it was.
+The aid lane moved every seat's army anchor to the one ally with the heaviest
+recent losses within about a map's width -- winner-take-all, so several seats
+converged on one fight (t1 and t4 onto t3 at 18 min of his 8v8). Replaced by
+need-based gifting (see `TUNE_GIFT_ARMY` above).
 
 ### `TUNE_WAVE_CONC` = 1.f
 

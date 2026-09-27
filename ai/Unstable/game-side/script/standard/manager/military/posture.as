@@ -157,7 +157,6 @@ AIFloat3 gLanePinged;
 float LANE_STICKY() { return ai.GetTunable("apex_lane_sticky", TUNE_LANE_STICKY); }
 bool gTradeHold = false;    // the anchor is pulled back while the trade is bad
 int gNextLaneLostLog = 0;
-int gNextAidLaneLog = 0;
 
 // THE LIGHT T1 STOPS BEING A RAIDER AND BECOMES EYES, BUT ONLY IN T2 PHASE.
 //
@@ -458,38 +457,6 @@ void UpdateLanePos()
 			}
 		}
 	}
-	// GO WHERE THE TEAM IS BLEEDING (his watch, 3v3: the enemy massed a 54k
-	// fist on one doorstep while three allied armies stood near-parity in
-	// aggregate and apart in fact -- "it reads us as having more. feels
-	// absurd"). The aid hotspot has been PUBLISHED since the 4v4 work and
-	// nothing consumed it: gating the defend POOL on it was measured
-	// permanently-defensive, but the LANE is a position, which is exactly
-	// what that experiment lacked. Stage at the worst allied fight in
-	// reach, clamped to contested ground (the attacker's flank, never
-	// ground already lost), when its losses clear the respond bar. Our own
-	// base under attack keeps the lane ours; the sticky-commit below is
-	// the dwell that stops ping-ponging.
-	{
-		const float bar = ai.GetTunable("apex_aid_respond", TUNE_AID_RESPOND);
-		if ((bar > 0.f) && Builder::gHomeSet && !Builder::BaseUnderAttack()) {
-			AIFloat3 aidAt;
-			float aidW = 0.f;
-			int aidWho = -1;
-			if (AllyAidPos(Builder::gHomePos, aidAt, aidW, aidWho)
-				&& (aidW >= bar)) {
-				AIFloat3 go;
-				if (AidClampToContested(Builder::gHomePos, aidAt, go)) {
-					lane = go;
-					if (ai.frame >= gNextAidLaneLog) {
-						gNextAidLaneLog = ai.frame + 30 * SECOND;
-						AiLog(Factory::T() + "apex: aid lane -> ally t=" + aidWho
-							+ " w=" + int(aidW)
-							+ " at=" + int(go.x) + "," + int(go.z));
-					}
-				}
-			}
-		}
-	}
 	if (!OnMap(lane))
 		return;
 
@@ -540,10 +507,10 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); ReleaseHeldSupers(); Perf::Add("post.supers", _t); }   // held titans re-join the army when the wait ends
 	{ double _t = Perf::T0(); UpdateApproach(); Perf::Add("post.approach", _t); }   // is a visible enemy group closing on our home?
 	{ double _t = Perf::T0(); PublishDefence(); Perf::Add("post.pubdef", _t); }   // our front-tower count and income, for the team budget
-	{ double _t = Perf::T0(); LogAidState(); Perf::Add("post.aidlog", _t); }      // read-only: what an ally-aid response would do
 	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
 	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed
 	PublishArmy();
+	{ double _t = Perf::T0(); UpdateGifts(); Perf::Add("post.gifts", _t); }
 	{ double _t = Perf::T0(); UpdateRaidCaution(); Perf::Add("post.raidcaution", _t); }
 	{ double _t = Perf::T0(); UpdateMassing(); Perf::Add("post.massing", _t); }
 	{ double _t = Perf::T0(); ReleaseHold(); Perf::Add("post.hold", _t); }

@@ -448,9 +448,6 @@ GROUPS = [
                  ("TUNE_DEF_SETBACK", "how far behind the contested edge a "
                   "front tower is sited — bigger survives building more "
                   "often but covers less forward ground"),
-                 ("TUNE_AID_RESPOND", "metal an ally must be losing at one "
-                  "hotspot before our army's staging lane moves to that "
-                  "fight — lower helps sooner, 0 never helps"),
                  ("TUNE_SCOUT_OVER_S", "how often an idle air scout overflies "
                   "the enemy base — lower is fresher intel and more dead "
                   "Peepers; 0 disables the overflight"),

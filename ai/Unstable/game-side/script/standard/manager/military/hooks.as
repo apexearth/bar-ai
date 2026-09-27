@@ -323,16 +323,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// whatever is threatening us. It reverts by itself: this only decides the
 		// task a unit is joining now, so once the attack is over, new units pool
 		// into ordinary attack-promoting tasks again.
-		//
-		// An ally being overrun counts as our base being hit: AllyAidPos is the
-		// heaviest fight on our side within reach, our own included, from the
-		// loss-weighted hotspot each player publishes -- a better "under attack"
-		// trigger than BaseUnderAttack(), which only asks about enemy influence
-		// at our own start position. It is not gated on here, though: any ally
-		// losing metal within reach is true almost continuously in a 4v4, so
-		// gating the pool on it kept the army permanently defensive and ground
-		// down in place instead of attacking. Publishing stays; the response
-		// needs a per-task position this layer does not have -- see CHANGES.md.
+		// An ally being overrun is answered by gift.as (army given to it), not
+		// here: gating the pool on "any ally losing metal" kept the army
+		// permanently defensive in a 4v4.
 		// A MELEE-promoting pool never leaves (see above). Three reasons to be
 		// in one: our own base is being hit, buildings of ours are dying on our
 		// own ground, or we are not the aggressor in this game and they are --
