@@ -539,9 +539,6 @@ int gNextPlantDupLog = 0;
 int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
 int gNextWetReachLog = 0;
-// A non-commander hand of ours was elected to a yard and found no water it
-// could build from: the lead's commander may place it.
-bool gConWetUnreach = false;
 
 float DupBpSubstMul(int d)
 {
@@ -1495,20 +1492,14 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			&& (Eco::MInc()
 				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
 			continue;
-		// The water mandate is held, ships-only, and never the commander's
-		// errand -- see the naval election above. The backoff kills the
-		// elect-order-abort churn for every def alike.
+		// The water mandate is held and ships-only -- see the naval election
+		// above. The commander may place it (the old ban on commanders at
+		// water plants was removed at his call 2026-09-28). The backoff kills
+		// the elect-order-abort churn for every def alike.
 		if (Builder::AbortBackoff(d))
 			continue;
 		if (dClass == PC_WATER) {
 			if (!NavalLead())
-				continue;
-			// ...unless the lead's own cons have tried and cannot reach any
-			// water: then the (amphibious) commander places the first yard
-			// (his 2026-09-28 on Supreme Isthmus: "somebody putting a shipyard
-			// in that water").
-			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && !LandLocked()
-				&& !(gConWetUnreach && (OwnedWaterPlants() == 0)))
 				continue;
 			if (!PlantMakesShips(d) && (NavShipyardDef() > 0))
 				continue;   // a hover platform is not a navy
@@ -1525,8 +1516,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			site = WetPlantSiteFor(Catalog::Def(d),
 					Builder::gHomeSet ? Builder::gHomePos : here, uid, here);
 			if (!OnMap(site)) {
-				if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-					gConWetUnreach = true;
 				if (ai.frame >= gNextWetReachLog) {
 					gNextWetReachLog = ai.frame + 60 * SECOND;
 					AiLog("apex: wet-unreach t=" + ai.teamId + " " + unit.circuitDef.GetName()

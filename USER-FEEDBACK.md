@@ -303,9 +303,9 @@ lines of quotes.
 
 - Legion in water made 90% constructors and rez subs; the navy stub is fixed,
   the frigate/sub water-only read is not (ISSUES LEGION CONFIG).
-- From an Isthmus start no bot con can reach a shipyard; the naval lead's
-  commander could at minute 5 and his 2026-08-28 ruling forbids commanders on
-  water plants. Needs his answer.
+- Commanders MAY build water plants: the 2026-08-28 ban was removed at his
+  call 2026-09-28 ("it is not good. We should remove that"), after Supreme
+  Isthmus 8v8 built no shipyard because no bot con could reach the water.
 - Composition follows where the enemy IS: an enemy living on water demands
   ships, seaplanes or advanced air from a land start. Not built.
 - A naval player must contest water mexes, not defend himself and idle; the

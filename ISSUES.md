@@ -1416,9 +1416,9 @@ partly them.
 Legion 1v1 Isthmus seeds 1-2: every wet site is 260 elmos from ground a
 `legck` stands on against 182 reach (`apex: unreach legsy gap=260`,
 `wet-unreach` every minute); the shipyard is elected by the first air con
-(18.7 min) or never. The commander (amphibious) could at minute 5;
-`ProposePlant` refuses it for water plants by his 2026-08-28 ruling -- whether
-the naval LEAD's commander may is his call. Downstream (Nine Metal Islands
+(18.7 min) or never. The commander (amphibious) could at minute 5; the
+08-28 ban on commanders at water plants was removed 2026-09-28 at his call,
+so it now may. Downstream (Nine Metal Islands
 4v4, 08-31): the advanced construction sub is produced and never takes a
 job -- `acsub` appears only as a shipyard producing one, `uwmme` elected zero
 times. Find where a submerged builder falls out of the builder market
