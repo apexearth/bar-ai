@@ -411,6 +411,58 @@ float DefenceValue()
 // The defence target split like the army (docs/24, 2026-09-28): where our
 // land is cut off, the water's share of it is held only by floating guns --
 // torpedo launchers and floating towers out from our shore, so a yard stands.
+// WHERE THE NEXT FLOATING GUN GOES (his watch 2026-09-28: three torpedo
+// launchers side by side, and an enemy mex taken in our water we could
+// neither see nor kill). The yard's front and every water mex spot within the
+// eco leash of home are candidates; one a water gun of ours (standing or
+// ordered) already covers is not. The asker takes the nearest uncovered one.
+bool WaterGunCovers(const AIFloat3& in p, float cover)
+{
+	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i) {
+		const int d = gProtDefId[PROT_DEF][i];
+		if ((Catalog::gFloater[d] || Catalog::gSub[d])
+			&& (gProtPos[PROT_DEF][i].distance2D(p) < cover))
+			return true;
+	}
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if ((ProtClassOf(d) == PROT_DEF) && (Catalog::gFloater[d] || Catalog::gSub[d])
+			&& OnMap(t.GetBuildPos()) && (t.GetBuildPos().distance2D(p) < cover))
+			return true;
+	}
+	return false;
+}
+
+AIFloat3 WaterGunAnchor(int d, const AIFloat3& in yardFront, const AIFloat3& in here)
+{
+	float cover = Catalog::gMaxRange[d];
+	if (cover < 200.f)
+		cover = 200.f;
+	cover *= 0.8f;
+	const float leash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestD = 0.f;
+	for (int k = -1; k < int(gAllSpots.length()); ++k) {
+		const AIFloat3 c = (k < 0) ? yardFront : gAllSpots[k];
+		if (!OnMap(c))
+			continue;
+		if ((k >= 0) && ((ai.GetElevationAt(c) >= 0.f) || !Builder::gHomeSet
+				|| (c.distance2D(Builder::gHomePos) > leash)))
+			continue;
+		if (WaterGunCovers(c, cover))
+			continue;
+		const float dd = c.distance2D(here);
+		if (!OnMap(best) || (dd < bestD)) {
+			best = c;
+			bestD = dd;
+		}
+	}
+	return best;
+}
+
 int WaterTorpHave()
 {
 	int n = 0;

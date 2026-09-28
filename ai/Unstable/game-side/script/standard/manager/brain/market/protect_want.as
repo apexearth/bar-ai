@@ -852,7 +852,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						|| !(Catalog::gFloater[dW] || Catalog::gSub[dW])
 						|| (ProtClassOf(dW) != PROT_DEF))
 						continue;
-					const AIFloat3 sW = WetNanoSite(dW, anchorW, 400.f);
+					const AIFloat3 aW = WaterGunAnchor(dW, anchorW, hereW);
+					if (!OnMap(aW))
+						continue;
+					const AIFloat3 sW = WetNanoSite(dW, aW, 250.f);
 					if (!OnMap(sW) || !ai.CanDefReachAt(Catalog::Def(uidW), hereW,
 							sW, Catalog::gBuildDist[uidW]))
 						continue;
