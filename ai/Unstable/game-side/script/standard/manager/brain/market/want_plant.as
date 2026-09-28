@@ -463,14 +463,14 @@ bool CrosserLine(int d)
 	return any;
 }
 
-int OwnedLandPlants()
+int OwnedCrosserPlants()
 {
 	int n = 0;
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)]
 			|| (Catalog::gBuildsList[int(d)].length() == 0))
 			continue;
-		if (PlantClass(int(d)) == PC_LAND)
+		if (CrosserLine(int(d)))
 			n += gOwnCount[d];
 	}
 	return n;
@@ -1375,14 +1375,9 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// (apexearth). A second shipyard is parallel capacity like anything else,
 	// and pays the marginal-line price again.
 	const bool waterOnly = overLine;
-	// ...and the mirror case: a yard opener past the limit still gets its FIRST
-	// land plant, whose cons build the island economy.
-	const bool firstLand = LandLocked() && (OwnedLandPlants() == 0)
-			&& (OwnedWaterPlants() > 0);
 	// The first-way-into-the-water exemption belongs to the NAVAL LEAD only:
 	// per-player it marched eight commanders to eight beaches.
-	if (overLine && !firstLand
-		&& !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
+	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -1440,7 +1435,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;   // not a factory
 		const int dClass = PlantClass(d);
-		if (waterOnly && (dClass != PC_WATER) && !(firstLand && (dClass == PC_LAND)))
+		if (waterOnly && (dClass != PC_WATER))
+			continue;
+		// Hovers AND ships (his call 2026-09-28): once a yard stands, the next
+		// land plant is the hover lab, whose cons build the land economy too.
+		if (LandLocked() && (OwnedWaterPlants() > 0) && (OwnedCrosserPlants() == 0)
+			&& (dClass == PC_LAND) && !CrosserLine(d))
 			continue;
 		// Cut off from the enemy, the first plant is a way onto the water: a
 		// yard or a hover lab (his standing call, restated 2026-09-28).

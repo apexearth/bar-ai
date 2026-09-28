@@ -1466,6 +1466,12 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   or less. We lost ~70k metal a game in frames started on our own shore under
   their ships. Everyone makes navy -- in his game even BARb's land starts
   walked into the water and built a shipyard.
+- **The water opener, in order** (09-28): the shipyard first. Do NOT rush a
+  hover lab (or any land lab) -- it makes the naval army worse. The commanders
+  walk onto the land and make the mexes and the land eco there; the hover lab
+  comes later, when it can be afforded. Torpedo launchers defend our water
+  areas -- if we are not making them we are doing it wrong. Same for radar:
+  the floating radar/sonar tower on the water.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits

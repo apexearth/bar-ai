@@ -234,8 +234,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hHorizPay = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 		if (hHorizPay <= 1.f)
 			hHorizPay = 300.f;
-		const float dHave = DefenceValue();
-		const float dWant = DefenceTarget();
+		// The land share only: the water share is WaterDefenceGap's, bought
+		// by floating guns below.
+		const float dHave = DefenceValue() - WaterDefenceHave();
+		const float dWant = DefenceTarget() * (1.f - NavyShare());
 		if (PlantFramed())   // see the fill: no wall before a base
 			hGap = dWant - dHave - DefenceInFlightM();
 		hWallUp = WallStands();
@@ -827,6 +829,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				if (horW <= 1.f)
 					horW = TUNE_EXPOSED_LOSS_S;
 				const array<int>@ blW = Catalog::BuildsOf(uidW);
+				Want bestW;
 				for (uint bi = 0; bi < blW.length(); ++bi) {
 					const int dW = blW[bi];
 					if (!Catalog::gAvailable[dW] || Catalog::gMobile[dW]
@@ -841,14 +844,62 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					Want cW;
 					ValueOf(dW, gapW / horW, WalkSecTo(unit, sW),
 							Catalog::gBuildPower[uidW], cW);
-					if (cW.value > w.value) {
-						w = cW;
-						w.kind = WK_PROTECT;
-						@w.def = Catalog::Def(dW);
-						w.pos = sW;
-						w.spotId = PROT_DEF;
+					// Its own budget: while the water share is unfilled the
+					// best floating gun wins, not the best tower overall.
+					if ((bestW.def is null) || (cW.value > bestW.value)) {
+						bestW = cW;
+						bestW.kind = WK_PROTECT;
+						@bestW.def = Catalog::Def(dW);
+						bestW.pos = sW;
+						bestW.spotId = PROT_DEF;
 					}
 				}
+				if (bestW.def !is null)
+					w = bestW;
+			}
+		}
+	}
+	// EYES ON THE WATER (his 2026-09-28: "make sure we make our radar"): where
+	// our land is cut off, one floating radar/sonar out by our yard.
+	if ((half == HALF_SENSE) && (NavyShare() > 0.f)) {
+		bool haveWet = false;
+		for (uint i = 0; (i < gProtDefId[PROT_RADAR].length()) && !haveWet; ++i) {
+			const int rd = gProtDefId[PROT_RADAR][i];
+			haveWet = Catalog::gFloater[rd] || Catalog::gSub[rd];
+		}
+		for (uint i = 0; (i < Requests::gLive.length()) && !haveWet; ++i) {
+			IUnitTask@ t = Requests::gLive[i];
+			if ((t !is null) && (t.buildDef !is null)
+				&& (ProtClassOf(int(t.buildDef.id)) == PROT_RADAR)
+				&& Catalog::gFloater[int(t.buildDef.id)])
+				haveWet = true;
+		}
+		if (!haveWet) {
+			const int uidR = int(unit.circuitDef.id);
+			const AIFloat3 hereR = unit.GetPos(ai.frame);
+			AIFloat3 anchorR = NearestYard(hereR);
+			if (!OnMap(anchorR) && (NavShipyardDef() > 0) && Builder::gHomeSet)
+				anchorR = WetPlantSiteFor(Catalog::Def(NavShipyardDef()),
+						Builder::gHomePos, uidR, hereR);
+			const array<int>@ blR = Catalog::BuildsOf(uidR);
+			for (uint bi = 0; OnMap(anchorR) && (bi < blR.length()); ++bi) {
+				const int dR = blR[bi];
+				if (!Catalog::gAvailable[dR] || Catalog::gMobile[dR]
+					|| !Catalog::gFloater[dR] || (ProtClassOf(dR) != PROT_RADAR))
+					continue;
+				const AIFloat3 sR = WetNanoSite(dR, anchorR, 400.f);
+				if (!OnMap(sR) || !ai.CanDefReachAt(Catalog::Def(uidR), hereR,
+						sR, Catalog::gBuildDist[uidR]))
+					continue;
+				Want cR;
+				ValueOf(dR, Catalog::gCostM[dR] / 60.f, WalkSecTo(unit, sR),
+						Catalog::gBuildPower[uidR], cR);
+				w = cR;
+				w.kind = WK_SENSE;
+				@w.def = Catalog::Def(dR);
+				w.pos = sR;
+				w.spotId = PROT_RADAR;
+				break;
 			}
 		}
 	}
