@@ -316,6 +316,25 @@ int TopOwnLandPlantTier()
 	return gTopLandTier;
 }
 
+int gTopWaterTier = 1;
+int gTopWaterTierAt = -1;
+int TopOwnWaterPlantTier()
+{
+	if (ai.frame < gTopWaterTierAt)
+		return gTopWaterTier;
+	gTopWaterTierAt = ai.frame + 10 * SECOND;
+	gTopWaterTier = 1;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const int fd = int(f.circuitDef.id);
+		if ((PlantClass(fd) == PC_WATER) && (LineTier(fd) > gTopWaterTier))
+			gTopWaterTier = LineTier(fd);
+	}
+	return gTopWaterTier;
+}
+
 bool Outgrown(int d)
 {
 	const int top = TopOwnPlantTier();
@@ -324,6 +343,9 @@ bool Outgrown(int d)
 	if ((Catalog::gAirT[d] > 0.f) && (Catalog::gSurfT[d] <= 0.f))
 		return false;
 	const int tier = DefTier(d);
+	// A land lab replaces nothing on the water: a ship waits for our T2 yard.
+	if ((tier == 1) && (Catalog::gFloater[d] || Catalog::gSub[d]))
+		return TopOwnWaterPlantTier() >= 2;
 	if (tier == 1)
 		return TopOwnLandPlantTier() >= 2;
 	return (top >= 3) && (tier == 2) && (Catalog::gCostM[d] >= Military::FODDER_COST())

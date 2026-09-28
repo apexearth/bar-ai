@@ -1436,6 +1436,24 @@ Shipyards finished 12 -> 20 and were destroyed 15 -> 17. 17 of 20 `corvp` tasks
 died `no-site`, and 34 of 38 `corhp` in his game did too. The first plant is
 still the commander's `corvp`; the vp line reads 0 but the opening does not ask.
 
+Water economy, per game per side (`matches/water-navy-s1..6`, dev_stats
+allBuilt): navy 530 vs BARb 105,905; tidal 0 vs ~7,200; underwater
+fusion/moho 0 vs ~11,000; naval cons 567 vs 13,317. Causes found:
+- `ProposeEnergy` and `ProposeConvert` skip every floater ("land-base v1"),
+  and execute.as re-sites energy onto the land farm. A per-rung wet site
+  (want_energy + execute) builds tidals.
+- Shipyards die within a minute of finishing (threat 23-188 at our shore);
+  BARb's fleet holds the middle by minute 7 (mapframe).
+- Warships read `:losing` from the carried-over record (corpship n=15 raw
+  0.92 < bar 1.00 at minute 3): lone ships die outnumbered, the record
+  says ships lose, no fleet is built. A domain with no alternative is shut.
+- `concap` 40/40 is spent on land cons; no naval con, so no T2 yard and no
+  underwater eco.
+Arms tried on top of the ship Outgrown fix and not kept (inc30, wiped of 6):
+navy fix alone 603, 0; + every seat and the commander may build a shipyard
+after the first plant 318, 2; + tidal 345, 1. Diffs in the session scratchpad
+are not durable -- rebuild from this description.
+
 ## AIR
 
 ### A T3 nuclear bomber reaches the base (2026-09-15)
