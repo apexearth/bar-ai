@@ -2286,14 +2286,22 @@ float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
 	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 	for (const auto* m : {&recGame, &recStored}) {
 		for (const auto& kv : *m) {
-			if ((kv.first < lo) || (kv.first >= hi)) {
-				continue;
+			if ((kv.first >= lo) && (kv.first < hi)) {
+				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
+				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
+					continue;
+				}
+				dealt += kv.second.dealt; taken += kv.second.taken;
+			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
+				// THEIR copies of this type against ours: the same cells
+				// inverted. A type is judged on both sides, so being
+				// outnumbered does not read as a bad unit (his 2026-09-28).
+				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
+				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
+					continue;
+				}
+				dealt += kv.second.taken; taken += kv.second.dealt;
 			}
-			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-				continue;
-			}
-			dealt += kv.second.dealt; taken += kv.second.taken;
 		}
 	}
 	return dealt / taken;
@@ -2308,14 +2316,19 @@ int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
 	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 	for (const auto* m : {&recGame, &recStored}) {
 		for (const auto& kv : *m) {
-			if ((kv.first < lo) || (kv.first >= hi)) {
-				continue;
+			if ((kv.first >= lo) && (kv.first < hi)) {
+				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
+				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
+					continue;
+				}
+				taken += kv.second.taken;
+			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
+				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
+				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
+					continue;
+				}
+				taken += kv.second.dealt;
 			}
-			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-				continue;
-			}
-			taken += kv.second.taken;
 		}
 	}
 	return int(taken / cdef->GetCostM() + 0.5f);
@@ -2334,6 +2347,11 @@ float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const
 	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
 	float dealt = prior * base, taken = prior;
 	RecordSum(cdef->GetId(), bid, dealt, taken);
+	if (bid != 0) {
+		float theirDealt = .0f, theirTaken = .0f;   // their A against our B
+		RecordSum(bid, cdef->GetId(), theirTaken, theirDealt);
+		dealt += theirDealt; taken += theirTaken;
+	}
 	return dealt / taken;
 }
 

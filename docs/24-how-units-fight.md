@@ -1461,6 +1461,11 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   and ability than the best ships. A strong economy can still overwhelm, and
   air combined with hovers is strong. Hovers + air, or economy, are ways to
   win the water BACK once it is lost.
+- **Without the water, the coastline is unsafe.** Land is ~2/5 of that map,
+  and without water control only ~2/3 of our land is safe: a sixth of the map
+  or less. We lost ~70k metal a game in frames started on our own shore under
+  their ships. Everyone makes navy -- in his game even BARb's land starts
+  walked into the water and built a shipyard.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits

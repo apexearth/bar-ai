@@ -1,5 +1,5 @@
 diff --git a/src/circuit/CircuitAI.cpp b/src/circuit/CircuitAI.cpp
-index aeea9339..e4662234 100644
+index aeea9339..a1aae802 100644
 --- a/src/circuit/CircuitAI.cpp
 +++ b/src/circuit/CircuitAI.cpp
 @@ -18,15 +18,20 @@
@@ -753,7 +753,7 @@ index aeea9339..e4662234 100644
  	unit->GetCircuitDef()->Dec();
  
  	/*(unit->GetTask() == nullptr) ? DeleteTeamUnit(unit) : */unit->SetIsDead();
-@@ -1485,168 +1965,1945 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
+@@ -1485,172 +1965,1967 @@ void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
  void CCircuitAI::DeleteTeamUnit(CCircuitUnit* unit)
  {
  	garbage.erase(unit);
@@ -1040,6 +1040,8 @@ index aeea9339..e4662234 100644
  
 -	CEnemyInfo* unit = new CEnemyInfo(data);
 -	enemyInfos[unit->GetId()] = unit;
+-
+-	return unit;
 +int CCircuitAI::RecordTierOf(CCircuitDef::Id id) const
 +{
 +	auto it = recTier.find(id);
@@ -1047,11 +1049,14 @@ index aeea9339..e4662234 100644
 +		return 0;
 +	}
 +	return std::max(0, std::min(3, it->second));
-+}
+ }
  
--	return unit;
+-void CCircuitAI::UnregisterEnemyInfo(CEnemyInfo* enemy)
 +void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float damage)
-+{
+ {
+-	allyTeam->UnregisterEnemyUnit(enemy->GetData(), this);
+-	enemyInfos.erase(enemy->GetId());
+-	delete enemy;
 +	if (damage <= .0f) {
 +		return;
 +	}
@@ -1070,43 +1075,12 @@ index aeea9339..e4662234 100644
 +	recGame[RecordKey(a->GetId(), b->GetId())].dealt += MetalOf(b, damage);
  }
  
--void CCircuitAI::UnregisterEnemyInfo(CEnemyInfo* enemy)
-+void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
- {
--	allyTeam->UnregisterEnemyUnit(enemy->GetData(), this);
--	enemyInfos.erase(enemy->GetId());
--	delete enemy;
-+	if ((damage <= .0f) || (GetTeamUnit(attacker) != nullptr)) {
-+		return;
-+	}
-+	CCircuitUnit* ours = GetTeamUnit(unit);
-+	CEnemyInfo* e = GetEnemyInfo(attacker);
-+	if ((ours == nullptr) || (e == nullptr)) {
-+		return;
-+	}
-+	CCircuitDef* a = ours->GetCircuitDef();
-+	CCircuitDef* b = e->GetCircuitDef();
-+	if (!RecordCounts(a) || !RecordCounts(b)) {
-+		return;
-+	}
-+	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
- }
- 
 -void CCircuitAI::CreateFakeEnemy(int weaponId, const AIFloat3& startPos, const AIFloat3& dir)
-+// The death line: what this unit dealt over its own health, and what killed
-+// it -- the instrument tools/record.py reads for "what died to what". The
-+// matrix itself is fed per hit above, so nothing is folded here.
-+void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
++void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
  {
 -	const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
 -	if (wuDef.ids.empty()) {
-+	CCircuitDef* cdef = unit->GetCircuitDef();
-+	auto it = recDealt.find(unit->GetId());
-+	const float dealt = (it != recDealt.end()) ? it->second : .0f;
-+	if (it != recDealt.end()) {
-+		recDealt.erase(it);
-+	}
-+	if (!RecordCounts(cdef) || !unit->IsFinished() || !cdef->IsMobile()) {
++	if ((damage <= .0f) || (GetTeamUnit(attacker) != nullptr)) {
  		return;
  	}
 -	float range = weaponDefs[weaponId].GetRange();
@@ -1127,6 +1101,40 @@ index aeea9339..e4662234 100644
 -		enemy->SetBeingBuilt(false);
 -		enemy->SetHealth(enemy->GetCircuitDef()->GetHealth());
 -		GetThreatMap()->SetEnemyUnitThreat(enemy);
++	CCircuitUnit* ours = GetTeamUnit(unit);
++	CEnemyInfo* e = GetEnemyInfo(attacker);
++	if ((ours == nullptr) || (e == nullptr)) {
++		return;
++	}
++	CCircuitDef* a = ours->GetCircuitDef();
++	CCircuitDef* b = e->GetCircuitDef();
++	if (!RecordCounts(a) || !RecordCounts(b)) {
++		return;
+ 	}
++	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
+ }
+ 
+-void CCircuitAI::CheckDecoy(CEnemyInfo* enemy, int weaponId)
++// The death line: what this unit dealt over its own health, and what killed
++// it -- the instrument tools/record.py reads for "what died to what". The
++// matrix itself is fed per hit above, so nothing is folded here.
++void CCircuitAI::RecordFold(CCircuitUnit* unit, bool died, CCircuitDef* killer)
+ {
+-	CCircuitDef* edef = enemy->GetCircuitDef();
+-	if ((edef != nullptr) && edef->IsDecoy()) {
+-		const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
+-		if (!wuDef.ids.empty()) {
+-			allyTeam->UpdateInLOS(enemy->GetData(), *wuDef.ids.begin());
+-		}
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	auto it = recDealt.find(unit->GetId());
++	const float dealt = (it != recDealt.end()) ? it->second : .0f;
++	if (it != recDealt.end()) {
++		recDealt.erase(it);
++	}
++	if (!RecordCounts(cdef) || !unit->IsFinished() || !cdef->IsMobile()) {
++		return;
++	}
 +	const float hp = cdef->GetHealth();
 +	if (hp <= .0f) {
 +		return;
@@ -1139,74 +1147,54 @@ index aeea9339..e4662234 100644
 +			RecordRatioVs(cdef, killer), RecordCountVs(cdef, killer));
  }
  
--void CCircuitAI::CheckDecoy(CEnemyInfo* enemy, int weaponId)
+-CEnemyInfo* CCircuitAI::GetEnemyInfo(ICoreUnit::Id unitId) const
 +void CCircuitAI::RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const
  {
--	CCircuitDef* edef = enemy->GetCircuitDef();
--	if ((edef != nullptr) && edef->IsDecoy()) {
--		const SWeaponToUnitDef& wuDef = weaponToUnitDefs[weaponId];
--		if (!wuDef.ids.empty()) {
--			allyTeam->UpdateInLOS(enemy->GetData(), *wuDef.ids.begin());
+-	auto it = enemyInfos.find(unitId);
+-	return (it != enemyInfos.end()) ? it->second : nullptr;
 +	const long long key = RecordKey(a, b);
 +	for (const auto* m : {&recGame, &recStored}) {
 +		auto f = m->find(key);
 +		if (f != m->end()) {
 +			dealt += f->second.dealt; taken += f->second.taken;
- 		}
- 	}
++		}
++	}
  }
  
--CEnemyInfo* CCircuitAI::GetEnemyInfo(ICoreUnit::Id unitId) const
+-bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
 +// Walks every cell of the row: the set of B's is small (what A has ever
 +// traded with), so this is cheaper than indexing by tier.
 +float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
  {
--	auto it = enemyInfos.find(unitId);
--	return (it != enemyInfos.end()) ? it->second : nullptr;
+-	if ((unit == nullptr)/* || (unit->GetTask()->GetType() == IUnitTask::Type::NIL)*/) {
+-		return false;
 +	if (!RecordCounts(cdef)) {
 +		return 1.f;
-+	}
+ 	}
+-	if (isEnable) {
+-		if (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER) {
+-			return false;
 +	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
 +	float dealt = prior, taken = prior;
 +	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
 +	for (const auto* m : {&recGame, &recStored}) {
 +		for (const auto& kv : *m) {
-+			if ((kv.first < lo) || (kv.first >= hi)) {
-+				continue;
++			if ((kv.first >= lo) && (kv.first < hi)) {
++				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
++				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
++					continue;
++				}
++				dealt += kv.second.dealt; taken += kv.second.taken;
++			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
++				// THEIR copies of this type against ours: the same cells
++				// inverted. A type is judged on both sides, so being
++				// outnumbered does not read as a bad unit (his 2026-09-28).
++				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
++				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
++					continue;
++				}
++				dealt += kv.second.taken; taken += kv.second.dealt;
 +			}
-+			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-+			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-+				continue;
-+			}
-+			dealt += kv.second.dealt; taken += kv.second.taken;
-+		}
-+	}
-+	return dealt / taken;
- }
- 
--bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)
-+int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
- {
--	if ((unit == nullptr)/* || (unit->GetTask()->GetType() == IUnitTask::Type::NIL)*/) {
--		return false;
-+	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
-+		return 0;
- 	}
--	if (isEnable) {
--		if (unit->GetTask()->GetType() != IUnitTask::Type::PLAYER) {
--			return false;
-+	float taken = .0f;
-+	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
-+	for (const auto* m : {&recGame, &recStored}) {
-+		for (const auto& kv : *m) {
-+			if ((kv.first < lo) || (kv.first >= hi)) {
-+				continue;
-+			}
-+			const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-+			if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-+				continue;
-+			}
-+			taken += kv.second.taken;
  		}
 -		unit->GetTask()->RemoveAssignee(unit);
 -	} else {
@@ -1214,16 +1202,46 @@ index aeea9339..e4662234 100644
 -		mgr->AssignTask(unit, new CPlayerTask(mgr));
  	}
 -	return true;
-+	return int(taken / cdef->GetCostM() + 0.5f);
++	return dealt / taken;
  }
  
 -void CCircuitAI::UpdateActions()
++int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
+ {
+-	if (actionIterator >= actionUnits.size()) {
+-		actionIterator = 0;
++	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
++		return 0;
+ 	}
+-
+-	// stagger the Update's
++	float taken = .0f;
++	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
++	for (const auto* m : {&recGame, &recStored}) {
++		for (const auto& kv : *m) {
++			if ((kv.first >= lo) && (kv.first < hi)) {
++				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
++				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
++					continue;
++				}
++				taken += kv.second.taken;
++			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
++				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
++				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
++					continue;
++				}
++				taken += kv.second.dealt;
++			}
++		}
++	}
++	return int(taken / cdef->GetCostM() + 0.5f);
++}
++
 +// The pair's own exchange, shrunk toward B's tier read: a matchup with no
 +// history prices as its tier does, and earns its own number as the hits
 +// come in.
 +float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const
- {
--	if (actionIterator >= actionUnits.size()) {
++{
 +	if (!RecordCounts(cdef)) {
 +		return 1.f;
 +	}
@@ -1232,6 +1250,11 @@ index aeea9339..e4662234 100644
 +	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
 +	float dealt = prior * base, taken = prior;
 +	RecordSum(cdef->GetId(), bid, dealt, taken);
++	if (bid != 0) {
++		float theirDealt = .0f, theirTaken = .0f;   // their A against our B
++		RecordSum(bid, cdef->GetId(), theirTaken, theirDealt);
++		dealt += theirDealt; taken += theirTaken;
++	}
 +	return dealt / taken;
 +}
 +
@@ -2802,10 +2825,14 @@ index aeea9339..e4662234 100644
 +void CCircuitAI::UpdateActions()
 +{
 +	if (actionIterator >= actionUnits.size()) {
- 		actionIterator = 0;
- 	}
++		actionIterator = 0;
++	}
++
++	// stagger the Update's
+ 	unsigned int n = (actionUnits.size() / ACTION_UPDATE_RATE) + 1;
  
-@@ -1751,6 +4008,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
+ 	while ((actionIterator < actionUnits.size()) && (n != 0)) {
+@@ -1751,6 +4026,29 @@ void CCircuitAI::InitUnitDefs(const CCircuitDef::SArmorInfo& armor, float& outDc
  	for (CCircuitDef& cdef : GetCircuitDefs()) {
  		cdef.Init(this);
  	}
@@ -6737,7 +6764,7 @@ index e56339eb..4ec8e2f0 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..202dd02c 100644
+index a44c20b0..62999ce6 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -16,10 +16,12 @@
