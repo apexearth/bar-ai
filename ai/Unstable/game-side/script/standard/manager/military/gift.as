@@ -91,7 +91,8 @@ float GiftSpareM()
 	const float share = FreeFoeShareM();
 	if (share > keep)
 		keep = share;
-	const float spare = aiMilitaryMgr.armyCost - keep;
+	// Ships are not spare for a land front: the team counts on what can go.
+	const float spare = aiMilitaryMgr.armyCost - Market::NavyValue() - keep;
 	return (spare > 0.f) ? spare : 0.f;
 }
 
@@ -207,6 +208,13 @@ void UpdateGifts()
 				continue;
 			const AIFloat3 p = u.GetPos(ai.frame);
 			if (!OnMap(p) || (ai.GetUnitThreatAt(u, p) > 0.f))
+				continue;
+			// A gift has to be able to GET there: our water player's boat
+			// went to the frontline land player (his watch 2026-09-28).
+			float reachR = Catalog::gMaxRange[d];
+			if (reachR < 200.f)
+				reachR = 200.f;
+			if (!ai.CanDefReachAt(cdef, p, toHome, reachR))
 				continue;
 			const float dd = p.distance2D(toHome);
 			uint at = 0;

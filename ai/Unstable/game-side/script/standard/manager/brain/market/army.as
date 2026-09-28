@@ -186,7 +186,24 @@ int EscortShortfall()
 // Where our land cannot reach the enemy the army is two budgets, land and navy
 // (docs/24, 2026-09-27), each its share of the map and filled only by its own
 // hulls: amphibious tanks do not hold the water.
+// The navy's share of OUR budgets. Cut off, it is the water's share of the
+// map; where the land connects, the naval lead still commits most of its
+// army to the water until it holds it (his 2026-09-28 on Supreme Isthmus:
+// "an 80% or 70% dedication to water" -- a water player building a gantry
+// "is not prioritizing water").
 float NavyShare()
+{
+	const float cut = WaterMapShare();
+	if (cut > 0.f)
+		return cut;
+	if (MapHasWater() && NavalLead())
+		return 0.75f;
+	return 0.f;
+}
+
+// The water's share of the map where our land cannot reach the enemy, else 0:
+// what a hull that cannot fight at sea is worth less for.
+float WaterMapShare()
 {
 	if (!LandLocked())
 		return 0.f;
@@ -238,7 +255,7 @@ float WaterFightMul(int d)
 	const CCircuitDef@ cd = Catalog::Def(d);
 	if ((cd !is null) && cd.IsRoleAny(Unit::Role::AA.mask))
 		return 1.f;
-	return 1.f - NavyShare();
+	return 1.f - WaterMapShare();
 }
 
 // A HOVER, from the def alone: a ground unit, not amphibious, not a ship,
