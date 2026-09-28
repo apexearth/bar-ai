@@ -692,7 +692,8 @@ int CCircuitAI::Init(int skirmishAIId, const struct SSkirmishAICallback* sAICall
 		const std::string& k = kv.first;
 		if (((k.rfind("tweakunits", 0) == 0) || (k.rfind("tweakdefs", 0) == 0)) && !kv.second.empty()) {
 			recTweaked = true;
-			LOG_ENGINE("apex: record disabled -- %s is set (tweaked stats)", k.c_str());
+			LOG_ENGINE("apex: record this game only -- %s is set (tweaked stats)", k.c_str());
+			break;
 		}
 	}
 	RecordLoad();
@@ -2208,9 +2209,6 @@ void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float 
 		return;
 	}
 	recDealt[attacker] += damage;
-	if (recTweaked) {
-		return;
-	}
 	CEnemyInfo* e = GetEnemyInfo(enemy);
 	CCircuitDef* a = ours->GetCircuitDef();
 	CCircuitDef* b = (e != nullptr) ? e->GetCircuitDef() : nullptr;
@@ -2223,7 +2221,7 @@ void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float 
 
 void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
 {
-	if ((damage <= .0f) || recTweaked || (GetTeamUnit(attacker) != nullptr)) {
+	if ((damage <= .0f) || (GetTeamUnit(attacker) != nullptr)) {
 		return;
 	}
 	CCircuitUnit* ours = GetTeamUnit(unit);
@@ -2280,7 +2278,7 @@ void CCircuitAI::RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, f
 // traded with), so this is cheaper than indexing by tier.
 float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
 {
-	if (!RecordCounts(cdef) || recTweaked) {
+	if (!RecordCounts(cdef)) {
 		return 1.f;
 	}
 	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
@@ -2328,7 +2326,7 @@ int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
 // come in.
 float CCircuitAI::RecordRatioVs(CCircuitDef* cdef, CCircuitDef* foe) const
 {
-	if (!RecordCounts(cdef) || recTweaked) {
+	if (!RecordCounts(cdef)) {
 		return 1.f;
 	}
 	const CCircuitDef::Id bid = (foe != nullptr) ? foe->GetId() : 0;
@@ -2353,7 +2351,7 @@ int CCircuitAI::RecordCountVs(CCircuitDef* cdef, CCircuitDef* foe) const
 // B's whole column.
 float CCircuitAI::RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const
 {
-	if ((edef == nullptr) || recTweaked) {
+	if (edef == nullptr) {
 		return 1.f;
 	}
 	const float prior = GetTunable("apex_record_prior", 10.f) * edef->GetCostM();
@@ -2427,7 +2425,7 @@ float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
 
 float CCircuitAI::RecordRatioMix(CCircuitDef* cdef)
 {
-	if (!RecordCounts(cdef) || recTweaked) {
+	if (!RecordCounts(cdef)) {
 		return 1.f;
 	}
 	RecordFoeRefresh();

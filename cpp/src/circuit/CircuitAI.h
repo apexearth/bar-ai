@@ -536,8 +536,8 @@ private:
 	static long long RecordKey(CCircuitDef::Id a, CCircuitDef::Id b) { return (long long)a * 65536 + b; }
 	int RecordTierOf(CCircuitDef::Id id) const;
 	void RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const;
-	// A game with tweakunits/tweakdefs set plays altered stats: the record
-	// neither learns from it nor prices by it.
+	// A game with tweakunits/tweakdefs set plays altered stats: its record is
+	// built fresh from that game alone, and never loaded or saved.
 	bool recTweaked = false;
 	std::vector<std::pair<CCircuitDef*, float>> recFoe;   // fielded enemy attackers by def
 	float recFoeTotal = .0f;
