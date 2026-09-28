@@ -1017,7 +1017,7 @@ float LineUnitWorth(int pd)
 	if (AmphibDead(pd) || ReachDead(pd))
 		return 0.f;
 	const float tFoeSpeed = FoeSpeedCap();
-	float v = UnitPPC(pd);
+	float v = UnitPPC(pd) * WaterFightMul(pd);
 	if (tFoeSpeed > 0.f)
 		v *= 1.f + (Catalog::gSpeed[pd] / tFoeSpeed)
 				* ai.GetTunable("apex_speed_worth", TUNE_SPEED_WORTH);

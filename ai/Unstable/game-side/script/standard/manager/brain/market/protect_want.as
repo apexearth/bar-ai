@@ -114,6 +114,8 @@ bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 bool gWallEffDiag = false;
 int gNextObsoleteLog = 0;
 
+int gNextWaterDefLog = 0;
+
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
 	Want w;
@@ -802,6 +804,54 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	// answer, and it gets spent. So the hand that cannot build what the team
 	// decided on proposes NOTHING here and goes and does something else; the
 	// want waits for a hand that can fulfil it.
+	// THE WATER'S SHARE: a floating gun out from our yard, or from where the
+	// yard will stand, until the water share of the defence target is held.
+	if (half == HALF_GROUND) {
+		const float wGap = WaterDefenceGap();
+		if ((NavyShare() > 0.f) && (ai.frame >= gNextWaterDefLog)) {
+			gNextWaterDefLog = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: waterdef-gap t=" + ai.teamId + " "
+				+ unit.circuitDef.GetName() + " gap=" + int(wGap)
+				+ " defT=" + int(DefenceTarget()) + " best=" + ((w.def !is null) ? w.def.GetName() : "-")
+				+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2));
+		}
+		if (wGap > 0.f) {
+			const int uidW = int(unit.circuitDef.id);
+			const AIFloat3 hereW = unit.GetPos(ai.frame);
+			AIFloat3 anchorW = NearestYard(hereW);
+			if (!OnMap(anchorW) && (NavShipyardDef() > 0) && Builder::gHomeSet)
+				anchorW = WetPlantSiteFor(Catalog::Def(NavShipyardDef()),
+						Builder::gHomePos, uidW, hereW);
+			if (OnMap(anchorW)) {
+				float horW = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+				if (horW <= 1.f)
+					horW = TUNE_EXPOSED_LOSS_S;
+				const array<int>@ blW = Catalog::BuildsOf(uidW);
+				for (uint bi = 0; bi < blW.length(); ++bi) {
+					const int dW = blW[bi];
+					if (!Catalog::gAvailable[dW] || Catalog::gMobile[dW]
+						|| !(Catalog::gFloater[dW] || Catalog::gSub[dW])
+						|| (ProtClassOf(dW) != PROT_DEF))
+						continue;
+					const AIFloat3 sW = WetNanoSite(dW, anchorW, 400.f);
+					if (!OnMap(sW) || !ai.CanDefReachAt(Catalog::Def(uidW), hereW,
+							sW, Catalog::gBuildDist[uidW]))
+						continue;
+					const float gapW = (wGap < Catalog::gCostM[dW]) ? wGap : Catalog::gCostM[dW];
+					Want cW;
+					ValueOf(dW, gapW / horW, WalkSecTo(unit, sW),
+							Catalog::gBuildPower[uidW], cW);
+					if (cW.value > w.value) {
+						w = cW;
+						w.kind = WK_PROTECT;
+						@w.def = Catalog::Def(dW);
+						w.pos = sW;
+						w.spotId = PROT_DEF;
+					}
+				}
+			}
+		}
+	}
 	if ((w.def !is null) && (half == HALF_GROUND)
 		&& !unit.circuitDef.CanBuild(w.def)) {
 		// ...UNLESS THE SHORTFALL STANDS. apexearth 2026-09-18: "let the T1

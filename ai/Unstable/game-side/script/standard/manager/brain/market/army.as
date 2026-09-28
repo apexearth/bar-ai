@@ -215,6 +215,26 @@ float NavyValue()
 	return have;
 }
 
+// A walker with no underwater weapon fights only once ashore: worth the land
+// share (docs/24).
+float WaterFightMul(int d)
+{
+	if (!Catalog::gAmphib[d] || (Catalog::gWaterT[d] > 0.01f))
+		return 1.f;
+	const CCircuitDef@ cd = Catalog::Def(d);
+	if ((cd !is null) && cd.IsRoleAny(Unit::Role::AA.mask))
+		return 1.f;
+	return 1.f - NavyShare();
+}
+
+// A hull that crosses water and neither walks the bottom nor floats as a ship:
+// the hover. No land lab's T2 replaces it out there.
+bool SurfaceCrosser(int d)
+{
+	return LandLocked() && !Catalog::gAmphib[d] && !IsNavyDef(d)
+		&& !Catalog::gFlyer[d] && Catalog::gMobile[d] && !ReachDead(d);
+}
+
 // The full target: the T2 switch holds land army back, not the fleet.
 float WaterArmyGap(int plantDef)
 {

@@ -346,6 +346,8 @@ bool Outgrown(int d)
 	// A land lab replaces nothing on the water: a ship waits for our T2 yard.
 	if ((tier == 1) && (Catalog::gFloater[d] || Catalog::gSub[d]))
 		return TopOwnWaterPlantTier() >= 2;
+	if ((tier == 1) && SurfaceCrosser(d))
+		return false;
 	if (tier == 1)
 		return TopOwnLandPlantTier() >= 2;
 	return (top >= 3) && (tier == 2) && (Catalog::gCostM[d] >= Military::FODDER_COST())

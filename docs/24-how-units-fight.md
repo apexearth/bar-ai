@@ -1446,6 +1446,15 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   attack the enemy or at least defend against them. Commanders walk the shore
   and make the mexes there. The economy goes on LAND: it is safer, and on this
   map we have that option. (Answering "one water seat like BARb, or all?")
+- **Torpedo launchers and defences IN the water** (09-28): we never build any.
+  Having trouble getting a water presence? Shoreline builders put torpedo
+  launchers out on the water, then further out, to get out there. His game:
+  none of ours made a yard; one enemy opened with a yard and that one player
+  held the water for his whole team.
+- **Build for where the enemy is.** Against an enemy with a lot of water the
+  gantry's hover tank is the pick: it hits land, drops depth charges on subs,
+  and subs cannot shoot it. We made Shivas, and a Shiva underwater can do
+  nothing.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits

@@ -87,6 +87,7 @@ array<float> gShieldR;   // ...and the radius its dome covers
 array<bool> gRezzer;     // can resurrect wrecks
 array<float> gSurfT;     // threat vs surface targets
 array<float> gAirT;      // threat vs air
+array<float> gWaterT;    // threat vs targets IN the water (torpedoes, depth charges)
 array<bool> gAvailable;
 
 array<array<int>> gBuildsList;  // builder def id -> def ids it can build
@@ -120,7 +121,7 @@ void Init()
 	gCombat.resize(n);
 	gDps.resize(n); gAlpha.resize(n); gAoe.resize(n);
 	gAimTrue.resize(n); gDumbFire.resize(n);
-	gSurfT.resize(n); gAirT.resize(n); gRole.resize(n); gKamikaze.resize(n);
+	gSurfT.resize(n); gAirT.resize(n); gWaterT.resize(n); gRole.resize(n); gKamikaze.resize(n);
 	gShield.resize(n); gShieldR.resize(n); gRezzer.resize(n);
 	gAvailable.resize(n);
 	gBuildsList.resize(n); gBuiltBy.resize(n);
@@ -195,6 +196,7 @@ void Init()
 		gRezzer[i]       = cdef.IsRezAble();
 		gSurfT[i]        = cdef.GetSurfThreat();
 		gAirT[i]         = cdef.GetAirThreat();
+		gWaterT[i]       = cdef.GetWaterThreat();
 		// AN ARMED UNIT IS ARMY, however weak: power <= 1 is "unarmed" to
 		// every army test in the market, and a scout's config zeroes its
 		// power, so the Tick never reached the screen axis written for it
@@ -290,6 +292,17 @@ void Init()
 	for (int i = 1; i <= gDefCount; ++i) {
 		if (gAvailable[i])
 			++nAvail;
+	}
+	// What each water-going combat hull is: the water-map pricing reads these.
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (!gMobile[i] || gBuilder[i] || gFlyer[i] || (gPower[i] <= 1.f)
+			|| !(gAmphib[i] || gFloater[i] || gSub[i]))
+			continue;
+		AiLog("apex: waterdef " + Def(i).GetName() + " amph=" + (gAmphib[i] ? 1 : 0)
+			+ " float=" + (gFloater[i] ? 1 : 0) + " sub=" + (gSub[i] ? 1 : 0)
+			+ " surfT=" + formatFloat(gSurfT[i], "", 0, 1)
+			+ " waterT=" + formatFloat(gWaterT[i], "", 0, 1)
+			+ " cost=" + int(gCostM[i]));
 	}
 	const float dump = ai.GetTunable("apex_catalog_dump", TUNE_CATALOG_DUMP);
 	AiLog("apex: catalog init defs=" + gDefCount + " edges=" + gEdges

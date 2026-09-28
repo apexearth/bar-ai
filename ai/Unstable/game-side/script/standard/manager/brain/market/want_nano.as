@@ -119,7 +119,7 @@ array<AIFloat3> gWetNanoYard;
 array<int> gWetNanoDef;
 array<int> gWetNanoUntil;
 
-AIFloat3 WetNanoSite(int d, const AIFloat3& in yard)
+AIFloat3 WetNanoSite(int d, const AIFloat3& in yard, float radius = -1.f)
 {
 	int k = -1;
 	for (uint i = 0; i < gWetNanoDef.length(); ++i) {
@@ -144,7 +144,7 @@ AIFloat3 WetNanoSite(int d, const AIFloat3& in yard)
 	if (ai.frame < gWetNanoUntil[k])
 		return gWetNanoSite[k];
 	gWetNanoUntil[k] = ai.frame + 10 * SECOND;
-	const float bd = Catalog::gBuildDist[d];
+	const float bd = (radius > 0.f) ? radius : Catalog::gBuildDist[d];
 	const AIFloat3 s = ai.FindBuildSiteNear(Catalog::Def(d), yard, bd);
 	gWetNanoSite[k] = (OnMap(s) && (s.distance2D(yard) <= bd))
 			? s : AIFloat3(-1.f, 0.f, -1.f);

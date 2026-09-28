@@ -408,6 +408,32 @@ float DefenceValue()
 
 // Tower metal already ordered. The gap that drives the pull counted only
 // standing towers, so every slot kept asking at full gap while ten were framed.
+// The defence target split like the army (docs/24, 2026-09-28): where our
+// land is cut off, the water's share of it is held only by floating guns --
+// torpedo launchers and floating towers out from our shore, so a yard stands.
+float WaterDefenceGap()
+{
+	const float share = NavyShare();
+	if (share <= 0.f)
+		return 0.f;
+	float have = 0.f;
+	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i) {
+		const int d = gProtDefId[PROT_DEF][i];
+		if (Catalog::gFloater[d] || Catalog::gSub[d])
+			have += Catalog::gCostM[d];
+	}
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if ((ProtClassOf(d) == PROT_DEF) && (Catalog::gFloater[d] || Catalog::gSub[d]))
+			have += Catalog::gCostM[d];
+	}
+	const float gap = DefenceTarget() * share - have;
+	return (gap > 0.f) ? gap : 0.f;
+}
+
 float gDefFlyM = 0.f;
 int   gDefFlyAt = -999999;
 
