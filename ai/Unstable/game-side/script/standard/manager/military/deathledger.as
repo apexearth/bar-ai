@@ -24,6 +24,7 @@ float gLossAll   = 0.f;          // decayed metal: ALL combat deaths, any ground
 float gRezLost   = 0.f;          // decayed metal: rez bots of ours that died
 float gScreenLost = 0.f;         // decayed metal: screen units (the Tick class) of ours that died
 float gKillAll   = 0.f;          // decayed metal: ALL kills by our own units
+float gWreckWet  = 0.f;          // decayed metal: the part of both that fell in water
 // What killed our army, by attacker class -- observability first; consumers
 // get their own measured pass.
 float gDeadToStatic = 0.f;
@@ -46,9 +47,11 @@ array<float> gFoeTierM(4, 0.f);
 int   gBleedLast = 0;
 int   gNextBleedLog = 0;
 
-void NoteCombatLoss(float costM, float fwd)
+void NoteCombatLoss(float costM, float fwd, bool wet)
 {
 	gLossAll += costM;
+	if (wet)
+		gWreckWet += costM;
 	if (fwd >= FWD_DEEP)
 		gBleedFwd += costM;
 	else if (fwd <= FWD_HOME)
@@ -57,11 +60,13 @@ void NoteCombatLoss(float costM, float fwd)
 
 // Only kills by OUR OWN units count (byUs); an identified enemy corpse deep on
 // their ground is the payoff that justifies being there -- eco and army alike.
-void NoteEnemyKill(float costM, float fwd, bool byUs)
+void NoteEnemyKill(float costM, float fwd, bool byUs, bool wet)
 {
 	if (!byUs)
 		return;
 	gKillAll += costM;
+	if (wet)
+		gWreckWet += costM;
 	if (fwd >= FWD_DEEP)
 		gKillFwd += costM;
 }
@@ -143,6 +148,13 @@ float PlasmaLossRate()
 float WreckRateM()
 {
 	return (gLossAll + gKillAll) / BLEED_TAU;
+}
+
+// A boat cannot reach a wreck on land, nor a bot one at sea.
+float WreckWetShare()
+{
+	const float all = gLossAll + gKillAll;
+	return (all > 1.f) ? (gWreckWet / all) : 0.f;
 }
 
 // THE FLEET'S OWN DEATHS ARE THE WRECKS IT CANNOT HAVE. A wreck field
@@ -262,6 +274,7 @@ void UpdateDeathLedger()
 	gRezLost *= k;
 	gScreenLost *= k;
 	gKillAll *= k;
+	gWreckWet *= k;
 	gDeadToStatic *= k;
 	gDeadToAir *= k;
 	gDeadToMobile *= k;

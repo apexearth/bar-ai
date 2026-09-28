@@ -1419,3 +1419,38 @@ have them attack the enemy from different angles."*
 - Built: the seat is the home with the most of the team's own ground between it
   and any enemy-facing or flank edge of the homes' hull (`EcoShelter`,
   `army.as`); `apex: rear-elect` prints every home's shelter.
+
+## 2026-09-27 — water maps: reach the enemy, hold the water, go air
+
+Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
+
+- **A unit that cannot reach the enemy is worth nothing.** Behemoths and
+  Incisors massed on our own coast. Shore defence is towers ("generally more
+  powerful than units"), plus whatever amphibious tanks we already have.
+  Built: `ReachDead` (want_plant.as).
+- **No naval presence is a great way to lose.** Build navy early; whoever
+  holds the water first holds it more easily.
+- **Amphibious tanks have no underwater weapons.** They are only good on land,
+  so they must cross to the enemy's shore to be useful. Walking them into a
+  formation of enemy water units throws them away.
+- **Air is a viable path for a team on a map like this**: it hits both water
+  and land.
+- **On a map like this everyone goes water**, and the team takes complete
+  control of it; then the enemy very likely loses. Not water-only: they keep a
+  land presence, but the water must be theirs. Why: land left, land right,
+  only water in the middle. Whoever holds the water holds the middle plus
+  their own coast, 2/3 to 3/4 of the map.
+- **Take the water hard and fast, early, with enough boats.** Once they have
+  complete control, a shipyard cannot be built at all.
+- **All four players make a shipyard** and each makes some fighting ships, to
+  attack the enemy or at least defend against them. Commanders walk the shore
+  and make the mexes there. The economy goes on LAND: it is safer, and on this
+  map we have that option. (Answering "one water seat like BARb, or all?")
+- **Water lost, no yard possible:** build air power, torpedo bombers,
+  shoreline defences, and shields. Most boats fire plasma, which shields stop.
+- **The mix: surface boats and submarines, by what each can hit.** A sub hits
+  anything that sits in the water but cannot hit a hovercraft. A destroyer
+  hits subs; most other boats cannot. The navy has to understand these
+  matchups, not just count metal.
+- **Land economy is still good to do**, but some maps need the water economy
+  too.

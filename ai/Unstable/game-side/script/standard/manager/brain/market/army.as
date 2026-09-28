@@ -42,7 +42,8 @@ void RoleGrossRefresh()
 	for (uint d = 1; d < gOwnCount.length(); ++d) {
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
-		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f))
+		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
+			|| ReachDead(int(d)))
 			continue;
 		const int r = Catalog::gRole[int(d)];
 		if (r < 0)
@@ -84,6 +85,7 @@ float RoleValue(int role)
 // ai.frame.
 int gExpoAt = -999999;
 int gExpoN = 0;
+int gExpoWetN = 0;   // ...of them standing in water: the only ones a boat can guard
 float gExpoM = 0.f;
 
 // HOW MUCH OF A WORKER THE GROUND IT STANDS ON WRITES OFF, 0..1: the larger
@@ -147,6 +149,7 @@ void ExposeRefresh()
 		return;
 	gExpoAt = ai.frame;
 	gExpoN = 0;
+	gExpoWetN = 0;
 	gExpoM = 0.f;
 	gExpoMax = 0.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
@@ -162,6 +165,8 @@ void ExposeRefresh()
 		if (e < 0.5f)
 			continue;
 		++gExpoN;
+		if (ai.GetElevationAt(wkr.GetPos(ai.frame)) < 0.f)
+			++gExpoWetN;
 		gExpoM += e * Catalog::gCostM[int(wkr.circuitDef.id)];
 	}
 	EscortDiag();
@@ -176,6 +181,56 @@ int EscortShortfall()
 	if (room < 0)
 		room = 0;
 	return (gExpoN < room) ? gExpoN : room;
+}
+
+// Where our land cannot reach the enemy the army is two budgets, land and navy
+// (docs/24, 2026-09-27), each its share of the map and filled only by its own
+// hulls: amphibious tanks do not hold the water.
+float NavyShare()
+{
+	if (!LandLocked())
+		return 0.f;
+	float lp = aiTerrainMgr.GetLandPercent();
+	if (lp <= 1.5f)
+		lp *= 100.f;
+	const float share = 1.f - lp / 100.f;
+	return (share > 0.f) ? share : 0.f;
+}
+
+bool IsNavyDef(int d)
+{
+	return Catalog::gFloater[d] || Catalog::gSub[d];
+}
+
+float NavyValue()
+{
+	float have = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || Catalog::gBuilder[di]
+			|| (Catalog::gPower[di] <= 1.f) || !IsNavyDef(di))
+			continue;
+		have += float(gOwnCount[d]) * Catalog::gCostM[di];
+	}
+	return have;
+}
+
+// The full target: the T2 switch holds land army back, not the fleet.
+float WaterArmyGap(int plantDef)
+{
+	if (PlantClass(plantDef) != PC_WATER)
+		return 0.f;
+	const float share = NavyShare();
+	if (share <= 0.f)
+		return 0.f;
+	const float gap = ArmyTargetFull() * share - NavyValue();
+	return (gap > 0.f) ? gap : 0.f;
+}
+
+int EscortShortfallWet()
+{
+	const int all = EscortShortfall();
+	return (gExpoWetN < all) ? gExpoWetN : all;
 }
 
 // THE METAL STANDING UNESCORTED OUTSIDE SAFE GROUND, and the share of our
@@ -336,7 +391,7 @@ float ArmyValue()
 			continue;
 		// A unit that cannot hit the ground is the AA role's, not the army's:
 		// counted here it closed the army gap with Archangels.
-		if (Catalog::gSurfT[int(d)] <= 0.01f)
+		if ((Catalog::gSurfT[int(d)] <= 0.01f) || ReachDead(int(d)))
 			continue;
 		v += float(gOwnCount[d]) * Catalog::gCostM[int(d)];
 	}

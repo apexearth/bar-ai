@@ -217,7 +217,8 @@ AIFloat3 WetPlantSiteFor(CCircuitDef@ plant, const AIFloat3& in anchor,
 	const float reach = Catalog::gBuildDist[askerDef];
 	const float near = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	AIFloat3 best = WetPlantSite(plant, anchor);
-	if (OnMap(best) && ai.CanDefReachAt(ask, here, best, reach)) {
+	if (OnMap(best) && !NearBlockedFor(best, int(plant.id))
+		&& ai.CanDefReachAt(ask, here, best, reach)) {
 		gWetSiteFor[askerDef] = best;
 		return best;
 	}
@@ -230,7 +231,8 @@ AIFloat3 WetPlantSiteFor(CCircuitDef@ plant, const AIFloat3& in anchor,
 		if (!OnMap(probe))
 			continue;
 		const AIFloat3 wet = ai.FindBuildSiteNear(plant, probe, near * 0.6f);
-		if (!OnMap(wet) || (wet.distance2D(anchor) > near))
+		if (!OnMap(wet) || (wet.distance2D(anchor) > near)
+			|| NearBlockedFor(wet, int(plant.id)))
 			continue;
 		if (!ai.CanDefReachAt(ask, here, wet, reach))
 			continue;
@@ -327,6 +329,10 @@ bool NavalLead()
 	if (ai.frame < gNavLeadAt + 10 * SECOND)
 		return gNavLead;
 	gNavLeadAt = ai.frame;
+	if (LandLocked()) {
+		gNavLead = true;
+		return gNavLead;
+	}
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() <= 1)) {
 		gNavLead = true;   // solo: the mandate is yours if the map has water
@@ -965,6 +971,47 @@ bool ReachDead(int pd)
 	return dead;
 }
 
+// A line with no combat unit to judge (AA answers only what flies to it)
+// reaches by default.
+bool LineReaches(int plantDef)
+{
+	bool any = false;
+	const array<int>@ prods = Catalog::gBuildsList[plantDef];
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int pd = prods[i];
+		if (!Catalog::gAvailable[pd] || !LineCombat(pd))
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(pd);
+		if ((cd is null) || cd.IsRoleAny(Unit::Role::AA.mask))
+			continue;
+		if (!ReachDead(pd))
+			return true;
+		any = true;
+	}
+	return !any;
+}
+
+// A T1 ground line of ours cannot reach the enemy: the island start, where
+// the water has to be taken early (his ruling 2026-09-27).
+bool gLandLocked = false;
+int gLandLockedAt = -999999;
+
+bool LandLocked()
+{
+	if (ai.frame < gLandLockedAt + 10 * SECOND)
+		return gLandLocked;
+	gLandLockedAt = ai.frame;
+	gLandLocked = false;
+	for (int d = 1; (d <= Catalog::gDefCount) && !gLandLocked; ++d) {
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
+			|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) != 1)
+			|| (PlantClass(d) != PC_LAND) || !Producible(d))
+			continue;
+		gLandLocked = !LineReaches(d);
+	}
+	return gLandLocked;
+}
+
 float LineUnitWorth(int pd)
 {
 	if (AmphibDead(pd) || ReachDead(pd))
@@ -1373,7 +1420,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (dClass == PC_WATER) {
 			if (!NavalLead())
 				continue;
-			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && !LandLocked())
+				continue;
+			// Land hands build the island economy; the yard follows the first plant.
+			if ((Factory::gFacUnits.length() == 0) && !AnyPlantInFlight())
 				continue;
 			if (!PlantMakesShips(d) && (NavShipyardDef() > 0))
 				continue;   // a hover platform is not a navy

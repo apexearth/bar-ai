@@ -925,15 +925,30 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// each is a walk of the whole def table -- so every one ran twice per order.
 	const float upD = UpDemand();
 	const float bpGap = BPGap();
-	const float armyT0 = ArmyTarget();
-	const float armyVal0 = ArmyValue();
+	float armyT0 = ArmyTarget();
+	float armyVal0 = ArmyValue();
+	{
+		const float navyShare = NavyShare();
+		if (navyShare > 0.f) {
+			if (PlantClass(int(fac.circuitDef.id)) == PC_WATER) {
+				armyT0 = ArmyTargetFull() * navyShare;
+				armyVal0 = NavyValue();
+			} else {
+				armyT0 *= 1.f - navyShare;
+				armyVal0 -= NavyValue();
+				if (armyVal0 < 0.f)
+					armyVal0 = 0.f;
+			}
+		}
+	}
 	const float armyFlight0 = ArmyInFlightM();
 	const float armyHave = armyVal0 + armyFlight0;
 	const bool ovfHands = OverflowBuysHands();
 	const float richGap = RichArmyGapM();
+	const float waterGap = WaterArmyGap(int(fac.circuitDef.id));
 	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
 		&& (armyT0 - armyHave <= 0.5f)
-		&& (richGap <= 0.5f))
+		&& (richGap <= 0.5f) && (waterGap <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -1055,6 +1070,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		} else {
 			gYieldLog = "";
 		}
+	}
+	if (waterGap > armyGap) {
+		armyGap = waterGap;
+		gapSrc = "water";
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
@@ -1254,6 +1273,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		const float atRisk = EscortMetalAtRisk();
 		const float freeArmy = RoleValue(int(Unit::Role::RAIDER.type));
+		if ((escD >= 0) && (Catalog::gFloater[escD] || Catalog::gSub[escD]))
+			escShort = EscortShortfallWet();
 		if ((escD >= 0) && (escShort - escFly > 0) && (freeArmy < atRisk)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(escD).GetName()
@@ -1321,7 +1342,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		if (EcoOnly() && !Catalog::gBuilder[d])
 			continue;   // the economy-only benchmark: hands only
 		// Metal first: the unlock in flight takes the feed (guards.as).
-		if (metalPath && !Catalog::gBuilder[d]) {
+		// ...except the fleet where our land is cut off: every yard builds
+		// fighting ships from the start (his ruling 2026-09-28).
+		if (metalPath && !Catalog::gBuilder[d]
+			&& !((Catalog::gFloater[d] || Catalog::gSub[d]) && LandLocked())) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";
 			continue;
@@ -1536,6 +1560,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				rezCap = Catalog::gBuildPower[d] * LineMetalPerEffort()
 						* tRezUtil;
 				rezStream = RezRateM();
+				// Only the wrecks its hull can reach (his 09-13 report: land
+				// reclaim bought rez subs and no navy).
+				if (!Catalog::gAmphib[d] && !Catalog::gFlyer[d]) {
+					const float wet = Military::WreckWetShare();
+					const bool boat = Catalog::gFloater[d] || Catalog::gSub[d];
+					rezStream = gRezRepairRate
+							+ gRezWreckRate * (boat ? wet : (1.f - wet));
+				}
 				float unmet = rezStream - float(rezHave) * rezCap;
 				if (unmet > rezCap)
 					unmet = rezCap;
@@ -1615,10 +1647,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// enemy census, so seen SUB value is the readable floor -- an
 			// undercount, never zero when the threat is real).
 			if ((Catalog::gSurfT[d] <= 0.01f) && (Catalog::gAirT[d] <= 0.01f)) {
-				if (floatVal < 0.f)
+				// A sub hits anything sitting in the water, not only subs.
+				if (floatVal < 0.f) {
+					const float subsM = Military::EnemyCostOf(Unit::Role::SUB.type);
+					const float armyM = Military::EnemyArmyCost();
 					floatVal = Military::EnemyAfloat()
-							? (Military::EnemyCostOf(Unit::Role::SUB.type)
-								* AnswerShare()) : 0.f;
+							? (((armyM > subsM) ? armyM : subsM) * AnswerShare()) : 0.f;
+				}
 				if (floatVal <= 1.f) {
 					if (prankNow)
 						prank += " " + Catalog::Def(d).GetName() + ":h2o";
@@ -2234,7 +2269,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		AiLog(Factory::T() + "apex: prodrank fac=" + fac.circuitDef.GetName()
 			+ " t=" + ai.teamId
 			+ " inc=" + formatFloat(Eco::MInc(), "", 0, 0)
-			+ " gap=" + int(armyGap) + " src=" + gapSrc
+			+ " gap=" + int(armyGap) + " src=" + gapSrc + " wgap=" + int(waterGap) + " aT=" + int(armyT0) + " aV=" + int(armyVal0) + " ll=" + (LandLocked() ? 1 : 0)
 			+ " flight=" + int(armyFlight0)
 			+ " cons=" + ConFleetHave() + "/" + RezFleetCap()
 			+ " n=" + candDef.length() + gYieldLog + prank);

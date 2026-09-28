@@ -278,6 +278,11 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	double hkT = Perf::T0();
 	const CCircuitDef@ cdef = unit.circuitDef;
 	const AIFloat3 at = unit.GetPos(ai.frame);
+	// A yard sunk where it stood is not rebuilt there while the mark lives.
+	if ((cdef !is null) && !cdef.IsMobile()
+		&& (Market::PlantClass(int(cdef.id)) == Market::PC_WATER)
+		&& (Catalog::gBuildsList[int(cdef.id)].length() > 0))
+		Market::BlockAdd(at, int(cdef.id));
 	IUnitTask@ t = unit.task;
 	const int tt = (t is null) ? -1 : t.GetType();
 	const int bt = ((t !is null) && (tt == Task::Type::BUILDER)) ? t.GetBuildType() : -1;
@@ -291,7 +296,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	if ((cdef !is null) && cdef.IsMobile() && WasFinished(int(unit.id))
 		&& (Military::WantsMassing(cdef) || Military::IsFodder(cdef)))
 	{
-		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at));
+		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at),
+				ai.GetElevationAt(at) < 0.f);
 		Military::NoteLocalDeath(at, cdef.costM, true);
 	}
 	// OUR COMMANDER'S CORPSE IS A RESURRECTION JOB, not food (apexearth:
@@ -399,7 +405,8 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 		return;
 	Military::NoteFoeDef(edef.costM, edef);
 	double hkT = Perf::T0();
-	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs);
+	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs,
+			ai.GetElevationAt(pos) < 0.f);
 	Military::NoteLocalDeath(pos, edef.costM, false);
 	Air::NoteEnemyDeath(edef, pos, byUs);
 	if (byUs)
