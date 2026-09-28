@@ -1484,6 +1484,13 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   shoreline against the enemy to bombard from boats. Starting on land and
   then building a shipyard to take the water is normal there. Two bodies of
   water mean at least two players going into the water, one from each side.
+- **A lost fight pays the enemy** (09-28, Supreme Isthmus 8v8): our dead
+  leave wrecks worth about half their metal, and whoever holds the ground
+  reclaims them -- 10,000 of army that dies is ~5,000 for them. The middle
+  of that map also starts with ~1,500 metal of reclaim, and they took it.
+  A fight's price is our loss PLUS their gain; losing trades compound.
+- **One eco player carrying the team is bad**: in that game more than half
+  of our team's economy was one player; the others never got to build any.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits
