@@ -624,8 +624,11 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				if ((anchor > 0.f) && (own < anchor))
 					hostMul = (own * own) / (anchor * anchor);
 			}
-			// The NET lane: teammates' reclaim feasts do not license it.
-			teamInc = Military::TeamSum(Military::TV_MINC_NET, teamInc);
+			// OUR OWN PURSE, not the team's: since every player keeps a gantry
+			// (09-27) each pays for its own, and the team sum licensed one at
+			// 50 m/s in an 8v8 (his 2026-09-28: "some of them started a gantry
+			// at like 50 metal income. It's just not enough").
+			teamInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 			const float gsec = ai.GetTunable("apex_gantry_afford_s",
 					TUNE_GANTRY_AFFORD_S);
 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f);
