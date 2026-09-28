@@ -1425,6 +1425,18 @@ times. Find where a submerged builder falls out of the builder market
 (`gWorkers`, `OnMap`/reach guards, an execute path with no water case)
 before pricing anything. Not re-read since.
 
+### ECO SEAT: big builds land away from the nanos; rich team still overflows (2026-09-28, Supreme Isthmus 8v8)
+
+His watch: the eco seat (t6) sited its AFUS at ring BP 2,400 while its fusions
+stood at 7,200 and 6,400 (`apex: energy-site`): LatheSite scores only where the
+footprint FITS, and the dense nano blocks are packed with earlier fusions and
+converters, so the AFUS fit only at the block's edge. Open: keep room in the
+block for the next big build, or send nanos to the big frame on its first
+tick. The team ended at 114k metal excess to BARb's 3.1k -- overflow is shared
+automatically, so EVERY player was full: spend capacity, not sharing. The eco
+seat's air cons: 20 destroyed, replacements held by `:conidle` from idle ground
+cons (fixed: the idle test is per kind, air vs ground).
+
 ### NAVY: water maps after ReachDead -- thin early army, navy kills us at home (2026-09-27, Coast To Coast 4v4)
 
 `ReachDead` (want_plant.as) drops units that cannot reach the enemy from the

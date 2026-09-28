@@ -688,7 +688,7 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 	const int pd = gRedrawDef[pick];
 	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
 		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
-				: ((ConFleetHave() >= RezFleetCap()) || ConStandsIdle()))
+				: ((ConFleetHave() >= RezFleetCap()) || ConStandsIdle(Catalog::gFlyer[pd])))
 			return null;
 	}
 	return Catalog::Def(pd);
@@ -735,7 +735,10 @@ int ConFleetHave()
 
 // No new constructor while one we own stands idle (apexearth 2026-09-27:
 // "don't make constructors when we aren't even using the ones we have").
-bool ConStandsIdle()
+// ...of the same KIND: an idle bot con cannot do an air con's job, and it held
+// the eco seat's lost air cons unreplaced (his watch 2026-09-28: four air
+// cons, all on one build, while the team overflowed 114k).
+bool ConStandsIdle(bool flyer)
 {
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ w = gWorkers[i];
@@ -743,7 +746,8 @@ bool ConStandsIdle()
 			continue;
 		const int wd = int(w.circuitDef.id);
 		if (!Catalog::gMobile[wd] || Catalog::gRezzer[wd] || (Catalog::gCostM[wd] <= 1.f)
-			|| w.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			|| w.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			|| (Catalog::gFlyer[wd] != flyer))
 			continue;
 		IUnitTask@ t = w.task;
 		if ((t is null) || (t.GetType() == Task::Type::IDLE))
@@ -1292,7 +1296,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const bool metalPath = MetalPathStarved();
 	int rezFleet = -1;
 	int conFleet = -1;
-	int conIdle = -1;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -1331,9 +1334,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":concap";
 				continue;
 			}
-			if (conIdle < 0)
-				conIdle = ConStandsIdle() ? 1 : 0;
-			if (conIdle == 1) {
+			if (ConStandsIdle(Catalog::gFlyer[d])) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":conidle";
 				continue;
