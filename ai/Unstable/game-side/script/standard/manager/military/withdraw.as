@@ -247,7 +247,18 @@ bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 			ours += d.GetSurfThreat();
 		}
 	}
-	const float oddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	float oddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	// A LOSS ON THEIR GROUND PAYS THEM (his 2026-09-28: "10,000 army and it
+	// all died, that turns into 5,000 metal for the other team to reclaim").
+	// Forward of home, whoever holds the ground takes the wrecks, so a
+	// losing trade there costs half again; the odds we accept tighten to match.
+	{
+		float fwd = ForwardFraction(p);
+		if (fwd > 1.f)
+			fwd = 1.f;
+		if (fwd > 0.f)
+			oddsK /= 1.f + 0.5f * fwd;
+	}
 	// Our allies' army standing here is our side too; asked only when our own
 	// would already lose, so the scan runs for the few, not the whole army.
 	if (enemyT > ours * oddsK) {
