@@ -584,7 +584,22 @@ Elec@ ElecOpen(CCircuitUnit@ unit)
 		fresh.startFrame = ai.frame;
 		@st = fresh;
 		@gElecOf[uid] = st;
-		gElecQ.insertLast(uid);
+		// THE COSTLIEST WAIT GOES FIRST. Under host lag the slice rations
+		// elections and a hand waited up to two minutes (his watch
+		// 2026-09-28: a nano at the gantry "maybe in 20 minutes"). A waiting
+		// builder wastes its build power, so a new election queues ahead of
+		// every hand with less; equals keep their order. Same work per frame.
+		const float bp = Catalog::gBuildPower[int(unit.circuitDef.id)];
+		uint at = gElecQ.length();
+		for (uint q = 0; q < gElecQ.length(); ++q) {
+			CCircuitUnit@ qu = ai.GetTeamUnit(gElecQ[q]);
+			if ((qu !is null) && (qu.circuitDef !is null)
+				&& (Catalog::gBuildPower[int(qu.circuitDef.id)] < bp)) {
+				at = q;
+				break;
+			}
+		}
+		gElecQ.insertAt(at, uid);
 	}
 	st.askedAt = ai.frame;
 	return st;
@@ -1156,7 +1171,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		@wants = whole;
 	} else {
 		Elec@ st = ElecOpen(unit);
-		ElecPump();   // oldest first, and this set is in the queue
+		ElecPump();   // costliest wait first, and this set is in the queue
 		if ((st.step < ELEC_STEPS - 1) || !ElecAfford(ELEC_STEPS - 1)) {
 			if (st.step < ELEC_STEPS - 1)
 				++gElecPartial;
