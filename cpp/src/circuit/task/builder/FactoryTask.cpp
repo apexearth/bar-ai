@@ -106,8 +106,50 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	auto clearsBuilder = [selfBar, &builderPos](const AIFloat3& p) {
 		return (selfBar <= 0.f) || (p.SqDistance2D(builderPos) >= SQUARE(selfBar));
 	};
+	// apex: THE DOOR MUST OPEN ONTO GROUND ITS UNITS CAN DRIVE (his watched game
+	// 2026-09-28: a hover lab faced into a mountain and nothing got out). The
+	// footprint test below only asks whether the BUILDING could stand ahead.
+	// One and two footprints out, the product's own move type must stand in
+	// one connected area.
+	CTerrainManager* exitTerrain = circuit->GetTerrainManager();
+	terrain::SMobileType* exitMt = nullptr;
+	for (CCircuitDef::Id pid : buildDef->GetBuildOptions()) {
+		CCircuitDef* pd = circuit->GetCircuitDef(pid);
+		if ((pd != nullptr) && pd->IsMobile() && !pd->IsAbleToFly()) {
+			exitMt = exitTerrain->GetMobileTypeById(pd->GetMobileId());
+			if (exitMt != nullptr) {
+				break;
+			}
+		}
+	}
+	const float exitStep = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
+	auto exitOpen = [this, exitTerrain, exitMt, exitStep](const AIFloat3& bp) {
+		if (exitMt == nullptr) {
+			return true;
+		}
+		terrain::SArea* seen[2] = {nullptr, nullptr};
+		for (int k = 1; k <= 2; ++k) {
+			AIFloat3 p = bp;
+			switch (facing) {
+				default:
+				case UNIT_FACING_SOUTH: p.z += exitStep * k; break;
+				case UNIT_FACING_EAST:  p.x += exitStep * k; break;
+				case UNIT_FACING_NORTH: p.z -= exitStep * k; break;
+				case UNIT_FACING_WEST:  p.x -= exitStep * k; break;
+			}
+			const int iS = exitTerrain->GetSectorIndex(p);
+			if ((iS < 0) || (iS >= (int)exitMt->sector.size())) {
+				return false;
+			}
+			seen[k - 1] = exitMt->sector[iS].area;
+			if (seen[k - 1] == nullptr) {
+				return false;
+			}
+		}
+		return seen[0] == seen[1];
+	};
 	if ((facing != UNIT_NO_FACING) && clearsBuilder(pos)
-		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)) {
+		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing) && exitOpen(pos)) {
 		SetBuildPos(pos);
 		return true;
 	}
@@ -130,7 +172,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		};
 	}
 	const float testSize = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
-	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &pos, searchRadius]() {
+	auto checkFacing = [this, map, terrainMgr, testSize, &predicate, &pos, searchRadius, &exitOpen]() {
 		AIFloat3 bp = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate);
 		if (!utils::is_valid(bp)) {
 			return false;
@@ -153,7 +195,7 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 				posOffset.x -= testSize;
 			} break;
 		}
-		if (map->IsPossibleToBuildAt(buildDef->GetDef(), posOffset, facing)) {
+		if (map->IsPossibleToBuildAt(buildDef->GetDef(), posOffset, facing) && exitOpen(bp)) {
 			SetBuildPos(bp);
 			return true;
 		}

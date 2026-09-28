@@ -34,6 +34,55 @@ int gNanoSiteAt = -999999;
 // own committed statics (ordered, framed or standing) inside the lane ahead
 // of the site pushes the site one lattice pitch BACK, twice at most -- the
 // engine's shake still owns the final legal square.
+// A TEAMMATE'S DOORWAY IS A DOORWAY (his watched game 2026-09-28: one of ours
+// walled an ally's T2 lab in and nothing got out). Our ledger sees only our
+// own statics; the ally list is read on the same lane box, along our axis --
+// the facing we cannot read for their plant, and theirs faces the same enemy.
+// laneOf: true tests p standing in an allied plant's lane, false tests an
+// allied static standing in the lane ahead of a plant at p.
+bool AllyLaneHit(const AIFloat3& in p, const AIFloat3& in fwd, bool laneOf)
+{
+	AllyStaticsSync();
+	for (uint i = 0; i < gAllyStPos.length(); ++i) {
+		const int d = gAllyStDef[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d])
+			continue;
+		if (laneOf && (Catalog::gBuildsList[d].length() == 0))
+			continue;
+		const AIFloat3 s = gAllyStPos[i];
+		if (s.distance2D(p) > 242.f)
+			continue;
+		const float rx = laneOf ? (p.x - s.x) : (s.x - p.x);
+		const float rz = laneOf ? (p.z - s.z) : (s.z - p.z);
+		const float ahead = rx * fwd.x + rz * fwd.z;
+		if ((ahead < 40.f) || (ahead > 220.f))
+			continue;
+		const float side = rx * fwd.z - rz * fwd.x;
+		if ((side > -100.f) && (side < 100.f))
+			return true;
+	}
+	return false;
+}
+
+// Only the allied doorway, for placements whose own packing already keeps
+// our lanes (the energy farm): step across the axis while in one.
+AIFloat3 OffAllyExit(const AIFloat3& in pos)
+{
+	if (!Base::Ready() || !OnMap(pos))
+		return pos;
+	AIFloat3 fwd = Base::gFwd;
+	if (Base::AxisIsRearward()) {
+		fwd.x = -fwd.x;
+		fwd.z = -fwd.z;
+	}
+	AIFloat3 p = pos;
+	for (uint tries = 0; (tries < 3) && AllyLaneHit(p, fwd, true); ++tries) {
+		p.x += fwd.z * 140.f;
+		p.z -= fwd.x * 140.f;
+	}
+	return p;
+}
+
 AIFloat3 ClearExitLane(const AIFloat3& in pos)
 {
 	if (!Base::Ready())
@@ -66,6 +115,8 @@ AIFloat3 ClearExitLane(const AIFloat3& in pos)
 				break;
 			}
 		}
+		if (!blocked)
+			blocked = AllyLaneHit(p, fwd, false);
 		if (!blocked)
 			return p;
 		p.x -= fwd.x * 96.f;
@@ -109,6 +160,8 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 				break;
 			}
 		}
+		if (!inLane)
+			inLane = AllyLaneHit(p, fwd, true);
 		if (!inLane)
 			return p;
 		p.x += fwd.z * 140.f;   // across the axis, out of the doorway
@@ -971,7 +1024,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const float clr = (Catalog::gCostM[int(w.def.id)] > 500.f) ? 150.f : 120.f;
 		w.pos = ClearOfSpots(w.pos, clr);
 		if (OnMap(slot))
-			slot = ClearOfSpots(slot, clr);
+			slot = OffAllyExit(ClearOfSpots(slot, clr));
 		// The slot handed over, so a frame that stands elsewhere is traced
 		// to the request or to the engine's search, not guessed.
 		if (BigEcoDef(int(w.def.id)))

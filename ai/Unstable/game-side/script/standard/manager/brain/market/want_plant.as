@@ -441,6 +441,41 @@ float WaterUncontested()
 	return 1.f / (1.f + foe / ((ours > 1.f) ? ours : 1.f));
 }
 
+// A land plant whose whole fighting line (AA aside) crosses water: the hover
+// lab. Where our land is cut off it is a way onto the water.
+bool CrosserLine(int d)
+{
+	if (!LandLocked() || (PlantClass(d) == PC_WATER))
+		return false;
+	bool any = false;
+	const array<int>@ prods = Catalog::gBuildsList[d];
+	for (uint i = 0; i < prods.length(); ++i) {
+		const int pd = prods[i];
+		if (!Catalog::gAvailable[pd] || !LineCombat(pd))
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(pd);
+		if ((cd !is null) && cd.IsRoleAny(Unit::Role::AA.mask))
+			continue;
+		if (!SurfaceCrosser(pd) && !IsNavyDef(pd))
+			return false;
+		any = true;
+	}
+	return any;
+}
+
+int OwnedLandPlants()
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)]
+			|| (Catalog::gBuildsList[int(d)].length() == 0))
+			continue;
+		if (PlantClass(int(d)) == PC_LAND)
+			n += gOwnCount[d];
+	}
+	return n;
+}
+
 int OwnedWaterPlants()
 {
 	int n = 0;
@@ -1340,9 +1375,14 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	// (apexearth). A second shipyard is parallel capacity like anything else,
 	// and pays the marginal-line price again.
 	const bool waterOnly = overLine;
+	// ...and the mirror case: a yard opener past the limit still gets its FIRST
+	// land plant, whose cons build the island economy.
+	const bool firstLand = LandLocked() && (OwnedLandPlants() == 0)
+			&& (OwnedWaterPlants() > 0);
 	// The first-way-into-the-water exemption belongs to the NAVAL LEAD only:
 	// per-player it marched eight commanders to eight beaches.
-	if (overLine && !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
+	if (overLine && !firstLand
+		&& !(MapHasWater() && (OwnedWaterPlants() == 0) && NavalLead()))
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -1400,7 +1440,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;   // not a factory
 		const int dClass = PlantClass(d);
-		if (waterOnly && (dClass != PC_WATER))
+		if (waterOnly && (dClass != PC_WATER) && !(firstLand && (dClass == PC_LAND)))
+			continue;
+		// Cut off from the enemy, the first plant is a way onto the water: a
+		// yard or a hover lab (his standing call, restated 2026-09-28).
+		if (LandLocked() && (Factory::gFacUnits.length() == 0) && !AnyPlantInFlight()
+			&& (dClass != PC_WATER) && !CrosserLine(d))
 			continue;
 		// An air line for a player who is neither the air lead nor the eco
 		// seat waits for his mandatory-air income, the same bar the air
@@ -1421,9 +1466,6 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			if (!NavalLead())
 				continue;
 			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && !LandLocked())
-				continue;
-			// Land hands build the island economy; the yard follows the first plant.
-			if ((Factory::gFacUnits.length() == 0) && !AnyPlantInFlight())
 				continue;
 			if (!PlantMakesShips(d) && (NavShipyardDef() > 0))
 				continue;   // a hover platform is not a navy
