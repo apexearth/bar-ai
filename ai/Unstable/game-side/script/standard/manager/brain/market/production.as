@@ -1018,7 +1018,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	// Before our own T2 lab stands, spare metal is the T2 lab's, not T1 army
 	// (apexearth 2026-09-26: at +100% the T1 window is too short to use).
-	if ((TopOwnPlantTier() < 2) || EcoBehind())
+	// ...and behind them it is the economy's -- unless the economy is not
+	// taking it: metal we are throwing away buys army, idle factory time is
+	// free (his 2026-09-28, Supreme Isthmus: "use the factories, make shit!
+	// Instead, they're all idle", bank 93% and wasting while behind=1).
+	if ((TopOwnPlantTier() < 2) || (EcoBehind() && (OverflowM() <= 0.5f)))
 		richBal = 0.f;
 	if (!ovfHands && (richBal > armyGap)) {
 		armyGap = richBal;
