@@ -889,9 +889,85 @@ bool AmphibDead(int pd)
 	return UnitCore(pd) < 1.f;
 }
 
+// A unit that cannot get to the enemy is worth nothing (his ruling 2026-09-27,
+// Coast To Coast): towers guard our shore. AA is exempt, the air comes to it;
+// a def that cannot stand at home (a ship) is not judged from there.
+array<int> gReachAt;
+array<bool> gReachDead;
+bool gReachProbeLogged = false;
+
+bool ReachDead(int pd)
+{
+	if (!Catalog::gMobile[pd] || Catalog::gFlyer[pd] || !Builder::gHomeSet)
+		return false;
+	if (int(gReachAt.length()) <= Catalog::gDefCount) {
+		const uint was = gReachAt.length();
+		gReachAt.resize(Catalog::gDefCount + 1);
+		gReachDead.resize(Catalog::gDefCount + 1);
+		for (uint i = was; i < gReachAt.length(); ++i) {
+			gReachAt[i] = -999999;
+			gReachDead[i] = false;
+		}
+	}
+	if (ai.frame < gReachAt[pd] + MINUTE)
+		return gReachDead[pd];
+	gReachAt[pd] = ai.frame;
+	CCircuitDef@ cd = Catalog::Def(pd);
+	// The start point itself can sit on a sector the pathfinder gives this
+	// def no area for (half the seats on Coast To Coast), so take the nearest
+	// ground around it that it can stand on.
+	AIFloat3 home = Builder::gHomePos;
+	bool stands = false;
+	for (int ring = 0; (ring <= 8) && !stands && (cd !is null); ++ring) {
+		const int n = (ring == 0) ? 1 : 8;
+		for (int k = 0; (k < n) && !stands; ++k) {
+			const float a = 6.2831853f * float(k) / float(n);
+			const AIFloat3 p(Builder::gHomePos.x + 128.f * ring * cos(a), 0.f,
+					Builder::gHomePos.z + 128.f * ring * sin(a));
+			if (OnMap(p) && ai.CanDefReach(cd, p, p)) {
+				home = p;
+				stands = true;
+			}
+		}
+	}
+	bool dead = false;
+	if (!gReachProbeLogged && (cd !is null) && !Catalog::gAmphib[pd]) {
+		gReachProbeLogged = true;
+		const AIFloat3 fa = Front::FoeAnchor();
+		const AIFloat3 bx = aiSetupMgr.GetEnemyBoxCentre();
+		AiLog("apex: reach-probe t=" + ai.teamId + " " + cd.GetName()
+			+ " home=" + int(home.x) + "," + int(home.z) + " off=" + int(home.distance2D(Builder::gHomePos)) + " stands=" + (stands ? 1 : 0)
+			+ " anchor=" + int(fa.x) + "," + int(fa.z) + ":" + (ai.CanDefReachAt(cd, home, fa, 256.f) ? 1 : 0)
+			+ " box=" + int(bx.x) + "," + int(bx.z) + ":" + (ai.CanDefReachAt(cd, home, bx, 256.f) ? 1 : 0));
+	}
+	if ((cd !is null) && !cd.IsRoleAny(Unit::Role::AA.mask) && stands)
+	{
+		float r = Catalog::gMaxRange[pd];
+		if (r < 256.f)
+			r = 256.f;
+		array<AIFloat3> foe;
+		foe.insertLast(Front::FoeAnchor());
+		foe.insertLast(aiSetupMgr.GetEnemyBoxCentre());
+		foe.insertLast(AIFloat3(float(AiTerrainWidth()) - home.x, 0.f,
+				float(AiTerrainHeight()) - home.z));
+		dead = true;
+		for (uint i = 0; i < foe.length(); ++i) {
+			if (OnMap(foe[i]) && ai.CanDefReachAt(cd, home, foe[i], r)) {
+				dead = false;
+				break;
+			}
+		}
+	}
+	if (dead != gReachDead[pd])
+		AiLog("apex: reach-dead t=" + ai.teamId + " " + cd.GetName()
+			+ " dead=" + (dead ? 1 : 0) + " r=" + int(Catalog::gMaxRange[pd]));
+	gReachDead[pd] = dead;
+	return dead;
+}
+
 float LineUnitWorth(int pd)
 {
-	if (AmphibDead(pd))
+	if (AmphibDead(pd) || ReachDead(pd))
 		return 0.f;
 	const float tFoeSpeed = FoeSpeedCap();
 	float v = UnitPPC(pd);

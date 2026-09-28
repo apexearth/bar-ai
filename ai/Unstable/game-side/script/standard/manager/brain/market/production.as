@@ -1663,6 +1663,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					continue;
 				}
 			}
+			if (ReachDead(d)) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":reach";
+				continue;
+			}
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.

@@ -1425,6 +1425,17 @@ times. Find where a submerged builder falls out of the builder market
 (`gWorkers`, `OnMap`/reach guards, an execute path with no water case)
 before pricing anything. Not re-read since.
 
+### NAVY: water maps after ReachDead -- thin early army, navy kills us at home (2026-09-27, Coast To Coast 4v4)
+
+`ReachDead` (want_plant.as) drops units that cannot reach the enemy from the
+army, the escort pick and the line price. 6 seeds per arm, `matches/water-{ctl,
+treat3}-s1..6`: at 15 min our army is thinner (6-16k vs 10-20k control),
+because the first labs are land labs and their output now reads dead. The
+losses at home are BARb's `corsub`/`corpship`/`corroy` in both arms.
+Shipyards finished 12 -> 20 and were destroyed 15 -> 17. 17 of 20 `corvp` tasks
+died `no-site`, and 34 of 38 `corhp` in his game did too. The first plant is
+still the commander's `corvp`; the vp line reads 0 but the opening does not ask.
+
 ## AIR
 
 ### A T3 nuclear bomber reaches the base (2026-09-15)

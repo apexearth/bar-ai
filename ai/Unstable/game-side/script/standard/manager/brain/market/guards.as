@@ -262,6 +262,8 @@ bool EscortWorthy(int di)
 	if (Catalog::gCostM[di]
 			> ai.GetTunable("apex_escort_max_cost", TUNE_ESCORT_MAX_COST))
 		return false;
+	if (ReachDead(di))
+		return false;
 	CCircuitDef@ cd = Catalog::Def(di);
 	if (cd.IsRoleAny(Unit::Role::SKIRM.mask)
 		|| cd.IsRoleAny(Unit::Role::ARTY.mask))
