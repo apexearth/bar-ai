@@ -1455,6 +1455,12 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   gantry's hover tank is the pick: it hits land, drops depth charges on subs,
   and subs cannot shoot it. We made Shivas, and a Shiva underwater can do
   nothing.
+- **Hovers can win a water map on their own** -- there are a lot of good
+  hover units. Navy ships are generally stronger, though: navy has a T2, hovers
+  go straight to the T3 hovercraft, which can be super good but has less range
+  and ability than the best ships. A strong economy can still overwhelm, and
+  air combined with hovers is strong. Hovers + air, or economy, are ways to
+  win the water BACK once it is lost.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits
