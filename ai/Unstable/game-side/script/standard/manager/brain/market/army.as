@@ -196,9 +196,108 @@ float NavyShare()
 	const float cut = WaterMapShare();
 	if (cut > 0.f)
 		return cut;
-	if (MapHasWater() && NavalLead())
+	if (MapHasWater() && NavalLead()) {
+		// Once we hold the water the fleet is kept, not grown: the budget
+		// is what already floats.
+		if (WaterControlled()) {
+			const float full = ArmyTargetFull();
+			const float held = (full > 1.f) ? (NavyValue() / full) : 0.f;
+			return (held < 0.75f) ? held : 0.75f;
+		}
 		return 0.75f;
+	}
 	return 0.f;
+}
+
+// DO WE CONTROL OUR WATER (his 2026-09-28: "we don't know of any enemy naval
+// base and we've properly scouted all the water ... you need to have
+// confidence the enemy doesn't have control of the water"). Sampled points
+// over the body of water our yard sails in, each remembering when we last had
+// eyes on it (ai.IsPosInLos, sonar under the line), a few per call. Held when
+// nine in ten were seen in the last three minutes, no enemy water plant is
+// known and no enemy warship is known.
+array<AIFloat3> gWcPt;
+array<int> gWcSeen;
+bool gWcBuilt = false;
+uint gWcNext = 0;
+int gWcFrame = -1;
+bool gWcHeld = false;
+int gWcAt = -999999;
+int gWcLogAt = 0;
+
+void WaterSamplesBuild()
+{
+	gWcBuilt = true;
+	const int hull = NavHullDef();
+	AIFloat3 anchor = NearestYard(Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f));
+	if (!OnMap(anchor) && (NavShipyardDef() > 0) && Builder::gHomeSet)
+		anchor = WetPlantSite(Catalog::Def(NavShipyardDef()), Builder::gHomePos);
+	if ((hull <= 0) || !OnMap(anchor)) {
+		gWcBuilt = false;   // no yard site known yet: try again later
+		return;
+	}
+	const float step = 384.f;
+	for (float x = step * 0.5f; x < float(AiTerrainWidth()); x += step) {
+		for (float z = step * 0.5f; z < float(AiTerrainHeight()); z += step) {
+			const AIFloat3 p(x, 0.f, z);
+			if ((ai.GetElevationAt(p) >= 0.f) || !ai.CanDefReach(Catalog::Def(hull), anchor, p))
+				continue;
+			gWcPt.insertLast(p);
+			gWcSeen.insertLast(-999999);
+		}
+	}
+}
+
+bool WaterControlled()
+{
+	if (!gWcBuilt)
+		WaterSamplesBuild();
+	const uint n = gWcPt.length();
+	if (n == 0)
+		return false;
+	if (gWcFrame != ai.frame) {   // one slice a frame, however often asked
+		gWcFrame = ai.frame;
+		for (uint k = 0; k < 16; ++k) {
+			gWcNext = (gWcNext + 1) % n;
+			if (ai.IsPosInLos(gWcPt[gWcNext]))
+				gWcSeen[gWcNext] = ai.frame;
+		}
+	}
+	if (ai.frame < gWcAt + 5 * SECOND)
+		return gWcHeld;
+	gWcAt = ai.frame;
+	uint seen = 0;
+	for (uint i = 0; i < n; ++i) {
+		if (ai.frame - gWcSeen[i] < 3 * MINUTE)
+			++seen;
+	}
+	const float scouted = float(seen) / float(n);
+	const AIFloat3 mid(float(AiTerrainWidth()) * 0.5f, 0.f, float(AiTerrainHeight()) * 0.5f);
+	const float r = float(AiTerrainWidth() + AiTerrainHeight());
+	int foeYards = 0, foeShips = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d])
+			continue;
+		const bool yard = !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)
+				&& (PlantClass(d) == PC_WATER);
+		const bool ship = IsNavyDef(d) && Catalog::gMobile[d] && !Catalog::gBuilder[d]
+				&& (Catalog::gPower[d] > 1.f);
+		if (!yard && !ship)
+			continue;
+		const int c = ai.CountEnemyDefNear(d, mid, r);
+		if (yard)
+			foeYards += c;
+		else
+			foeShips += c;
+	}
+	gWcHeld = (scouted >= 0.9f) && (foeYards == 0) && (foeShips == 0);
+	if (ai.frame >= gWcLogAt) {
+		gWcLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: water-control t=" + ai.teamId
+			+ " held=" + (gWcHeld ? 1 : 0) + " scouted=" + formatFloat(scouted, "", 0, 2)
+			+ " samples=" + n + " foeYards=" + foeYards + " foeShips=" + foeShips);
+	}
+	return gWcHeld;
 }
 
 // The water's share of the map where our land cannot reach the enemy, else 0:

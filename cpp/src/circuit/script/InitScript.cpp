@@ -1388,6 +1388,19 @@ static float CCircuitAI_GetElevationAt(CCircuitAI* circuit, const springai::AIFl
 	return circuit->GetElevationAt(pos);
 }
 
+// apex: do we have eyes on this spot right now (LOS; sonar below the
+// waterline) -- the scouting half of "do we control the water".
+static bool CCircuitAI_IsPosInLos(CCircuitAI* circuit, const springai::AIFloat3& pos)
+{
+	CMapManager* mm = circuit->GetMapManager();
+	if ((mm == nullptr) || (pos.x < 0.f) || (pos.z < 0.f)
+		|| (pos.x >= circuit->GetTerrainManager()->GetTerrainWidth())
+		|| (pos.z >= circuit->GetTerrainManager()->GetTerrainHeight())) {
+		return false;
+	}
+	return mm->IsInLOS(pos);
+}
+
 static float CCircuitAI_GetGameRulesParamFloat(CCircuitAI* circuit, const std::string& key, float defVal)
 {
 	return circuit->GetGame()->GetRulesParamFloat(key.c_str(), defVal);
@@ -1833,6 +1846,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "string CallUI(const string& in)", asFUNCTION(CCircuitAI_CallUI), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// RulesParams accessors on AI (game/team)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetElevationAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetElevationAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsPosInLos(const AIFloat3& in) const", asFUNCTION(CCircuitAI_IsPosInLos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "string ReadVfsFile(const string& in) const", asFUNCTION(CCircuitAI_ReadVfsFile), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetLavaCrest(float)", asMETHOD(CCircuitAI, SetLavaCrest), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetGameRulesParam(const string& in, float) const", asFUNCTION(CCircuitAI_GetGameRulesParamFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
