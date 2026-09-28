@@ -1472,6 +1472,13 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   comes later, when it can be afforded. Torpedo launchers defend our water
   areas -- if we are not making them we are doing it wrong. Same for radar:
   the floating radar/sonar tower on the water.
+- **Every land concept applies on water too** -- economy, defences, placement,
+  budgets, composition. The one new dynamic: a unit is ON the water or IN it
+  (under the waterline), and what can hit what follows from that. A torpedo
+  launcher cannot hit a hovercraft but hits every ship and the subs; a sub
+  hits anything in the water but not a hover; a destroyer hits subs, most
+  boats cannot; an amphibious walker underwater mostly cannot shoot. Whatever
+  logic we have for land and its defences, the same has to work for water.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits
