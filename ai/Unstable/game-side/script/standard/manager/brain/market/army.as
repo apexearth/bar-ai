@@ -202,6 +202,20 @@ bool IsNavyDef(int d)
 	return Catalog::gFloater[d] || Catalog::gSub[d];
 }
 
+// Ships of ours carrying radar/sonar (jam=false) or a jammer (jam=true).
+float NavySupportCount(bool jam)
+{
+	float n = 0.f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !IsNavyDef(di))
+			continue;
+		if (jam ? (Catalog::gJamR[di] > 100.f) : (Catalog::gRadarR[di] > 0.f))
+			n += float(gOwnCount[d]);
+	}
+	return n;
+}
+
 float NavyValue()
 {
 	float have = 0.f;

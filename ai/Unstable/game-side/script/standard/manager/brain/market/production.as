@@ -1391,13 +1391,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// radarDistance > 900 or jam > 100, which is a Commando, a Phantom and
 		// a battleship -- priced here they never entered the army market at
 		// all, and each one drew its own copy of the demand below.
+		// THE FLEET'S OWN EYES AND JAMMER (his 2026-09-28: "put a radar jammer
+		// on them"). Where our land is cut off, a ship carrying radar/sonar --
+		// armed or not, the Herring is both -- or a jammer is fleet support,
+		// sized on our navy, one each per squad of ships.
+		const bool navySup = IsNavyDef(d) && Catalog::gMobile[d] && (NavyShare() > 0.f)
+				&& ((Catalog::gRadarR[d] > 0.f) || (Catalog::gJamR[d] > 100.f));
 		if (Catalog::gMobile[d] && !Catalog::gBuilder[d]
-			&& (Catalog::gSurfT[d] + Catalog::gAirT[d] < 0.01f)
-			&& (Catalog::gRadar[d] || Catalog::gJammer[d]))
+			&& (navySup || ((Catalog::gSurfT[d] + Catalog::gAirT[d] < 0.01f)
+				&& (Catalog::gRadar[d] || Catalog::gJammer[d]))))
 		{
 			SupportCensus();
-			const bool isJamS = !Catalog::gRadar[d];
-			const float haveS = isJamS ? gSupJamN : gSupRadarN;
+			const bool isJamS = navySup ? (Catalog::gJamR[d] > 100.f) : !Catalog::gRadar[d];
+			const float haveS = navySup ? NavySupportCount(isJamS)
+					: (isJamS ? gSupJamN : gSupRadarN);
 			// THE DEMAND IS SQUADS, AND IT IS ONE QUESTION PER CLASS.
 			// It was AdvArmyValue/squadM asked once per DEF: eight sensor defs
 			// each targeting the same fifteen "squads" is a hundred and twenty
@@ -1414,9 +1421,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				need = squads;
 			if ((need < 1.f) && (squads >= 1.f))
 				need = 1.f;
+			if (navySup) {
+				const float navyM = NavyValue();
+				need = navyM / ((squadM > 1.f) ? squadM : 2000.f);
+				if ((need < 1.f) && (navyM > 0.f))
+					need = 1.f;
+			}
 			// One slot, one price: a def that costs many times the cheapest
-			// source of the same sensor fills the slot many times worse.
-			if (ai.GetTunable("apex_support_per_metal", TUNE_SUPPORT_PER_METAL) > 0.f) {
+			// source of the same sensor fills the slot many times worse --
+			// among its own kind: a radar bot cannot sail with the fleet.
+			if (!navySup
+				&& (ai.GetTunable("apex_support_per_metal", TUNE_SUPPORT_PER_METAL) > 0.f)) {
 				const float cheapS = CheapestSupportM(isJamS);
 				const float mineS = Catalog::gCostM[d];
 				if ((cheapS > 0.f) && (mineS > cheapS))
