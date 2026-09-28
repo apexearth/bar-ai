@@ -1449,6 +1449,12 @@ fusion/moho 0 vs ~11,000; naval cons 567 vs 13,317. Causes found:
   says ships lose, no fleet is built. A domain with no alternative is shut.
 - `concap` 40/40 is spent on land cons; no naval con, so no T2 yard and no
   underwater eco.
+14a94326 (yard per seat, land/navy budgets, filters opened) took our navy
+530 -> 18,343 a game at inc30 552 vs 603 -- still ~1/4 of BARb's. Open: yards
+die (up to 25/24 a game) because BARb's water seat opens its yard at minute 2
+and holds our shore before ours stand; T1 ships read `:losing` off records
+learned from outnumbered losses; amphibious tanks walk across the enemy fleet
+(docs/24); water eco (tidal) still unbuilt.
 Arms tried on top of the ship Outgrown fix and not kept (inc30, wiped of 6):
 navy fix alone 603, 0; + every seat and the commander may build a shipyard
 after the first plant 318, 2; + tidal 345, 1. Diffs in the session scratchpad
