@@ -1479,6 +1479,11 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   hits anything in the water but not a hover; a destroyer hits subs, most
   boats cannot; an amphibious walker underwater mostly cannot shoot. Whatever
   logic we have for land and its defences, the same has to work for water.
+- **Mixed maps (Supreme Isthmus, 09-28): someone puts a shipyard in any large
+  water with mexes in it.** It is a win-win: the water mexes, and the whole
+  shoreline against the enemy to bombard from boats. Starting on land and
+  then building a shipyard to take the water is normal there. Two bodies of
+  water mean at least two players going into the water, one from each side.
 - **Water lost, no yard possible:** build air power, torpedo bombers,
   shoreline defences, and shields. Most boats fire plasma, which shields stop.
 - **The mix: surface boats and submarines, by what each can hit.** A sub hits

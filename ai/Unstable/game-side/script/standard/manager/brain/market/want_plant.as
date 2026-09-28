@@ -262,6 +262,8 @@ const int PC_WATER = 2;
 // blackboard (AnswerShare): each team publishes its distance, closest holds.
 
 const string TV_NAVDIST = "navdist";
+const string TV_NAVX = "navx";
+const string TV_NAVZ = "navz";
 
 // A REAL navy floats: a plant counts only if something it builds is a ship
 // or a sub. The hover platform floats but its products do not -- it is the
@@ -315,10 +317,32 @@ void NavalPublish()
 		&& !Builder::AbortBackoff(sd))
 	{
 		const AIFloat3 wet = WetPlantSite(Catalog::Def(sd), Builder::gHomePos);
-		if (OnMap(wet))
+		if (OnMap(wet)) {
 			dist = Builder::gHomePos.distance2D(wet);
+			ai.PublishTeamValue(TV_NAVX, wet.x);
+			ai.PublishTeamValue(TV_NAVZ, wet.z);
+		}
 	}
 	ai.PublishTeamValue(TV_NAVDIST, dist);
+}
+
+// A ship hull the yard makes, for "is that shore the same body of water".
+int gNavHullDef = -1;
+int NavHullDef()
+{
+	if (gNavHullDef > 0)
+		return gNavHullDef;
+	const int sd = NavShipyardDef();
+	if (sd <= 0)
+		return -1;
+	const array<int>@ pr = Catalog::gBuildsList[sd];
+	for (uint i = 0; i < pr.length(); ++i) {
+		if (Catalog::gMobile[pr[i]] && Catalog::gFloater[pr[i]]) {
+			gNavHullDef = pr[i];
+			break;
+		}
+	}
+	return gNavHullDef;
 }
 
 bool gNavLead = false;
@@ -345,6 +369,12 @@ bool NavalLead()
 		gNavLead = false;   // no usable shore of our own
 		return gNavLead;
 	}
+	// PER BODY OF WATER (his 2026-09-28 on Supreme Isthmus: "two bodies of
+	// water, so ideally ... one from each side"): a mate only competes for
+	// the mandate when a ship could sail from its shore to ours.
+	const AIFloat3 myWet(ai.ReadTeamValue(ai.teamId, TV_NAVX, -1.f), 0.f,
+			ai.ReadTeamValue(ai.teamId, TV_NAVZ, -1.f));
+	const int hull = NavHullDef();
 	uint ahead = 0;
 	for (uint i = 0; i < mates.length(); ++i) {
 		const int t = int(mates[i]);
@@ -353,6 +383,11 @@ bool NavalLead()
 		const float d = ai.ReadTeamValue(t, TV_NAVDIST, 1e9f);
 		if (d >= 8e8f)
 			continue;
+		const AIFloat3 theirWet(ai.ReadTeamValue(t, TV_NAVX, -1.f), 0.f,
+				ai.ReadTeamValue(t, TV_NAVZ, -1.f));
+		if ((hull > 0) && OnMap(myWet) && OnMap(theirWet)
+			&& !ai.CanDefReach(Catalog::Def(hull), myWet, theirWet))
+			continue;   // another lake: its own lead
 		if ((d < mine) || ((d == mine) && (t < ai.teamId)))
 			++ahead;
 	}
@@ -504,6 +539,9 @@ int gNextPlantDupLog = 0;
 int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
 int gNextWetReachLog = 0;
+// A non-commander hand of ours was elected to a yard and found no water it
+// could build from: the lead's commander may place it.
+bool gConWetUnreach = false;
 
 float DupBpSubstMul(int d)
 {
@@ -1465,7 +1503,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		if (dClass == PC_WATER) {
 			if (!NavalLead())
 				continue;
-			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && !LandLocked())
+			// ...unless the lead's own cons have tried and cannot reach any
+			// water: then the (amphibious) commander places the first yard
+			// (his 2026-09-28 on Supreme Isthmus: "somebody putting a shipyard
+			// in that water").
+			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && !LandLocked()
+				&& !(gConWetUnreach && (OwnedWaterPlants() == 0)))
 				continue;
 			if (!PlantMakesShips(d) && (NavShipyardDef() > 0))
 				continue;   // a hover platform is not a navy
@@ -1482,6 +1525,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			site = WetPlantSiteFor(Catalog::Def(d),
 					Builder::gHomeSet ? Builder::gHomePos : here, uid, here);
 			if (!OnMap(site)) {
+				if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+					gConWetUnreach = true;
 				if (ai.frame >= gNextWetReachLog) {
 					gNextWetReachLog = ai.frame + 60 * SECOND;
 					AiLog("apex: wet-unreach t=" + ai.teamId + " " + unit.circuitDef.GetName()
