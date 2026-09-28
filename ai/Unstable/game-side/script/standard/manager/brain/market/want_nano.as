@@ -8,15 +8,21 @@ const int NS_LINE = 3;
 const int NS_SINK = 4;
 const int NS_FARM = 5;
 const int NS_FLOOR = 6;
+const int NS_YARD = 7;   // beside a yard, at the exact spot priced: the land probe cannot place it
 
 // BARb's floor (apexearth 2026-09-11, twice: "we have to do at least that
 // good"; "factories with insufficient supporting nanos should have nanos as
 // very important placement by them"): every standing factory keeps 2 / 4 / 9
 // caretakers in reach for a T1 / T2 / T3 plant, as stock counts them. Returns
 // the worst shortfall and that factory; live nano requests in reach count.
+int gFloorYardLoss = 0, gFloorYardAssist = 0, gFloorYardShort = 0;
+
 int FactoryNanoShort(AIFloat3& out at)
 {
 	int worst = 0;
+	gFloorYardLoss = 0;
+	gFloorYardAssist = 0;
+	gFloorYardShort = 0;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if (f is null)
@@ -30,8 +36,12 @@ int FactoryNanoShort(AIFloat3& out at)
 		// past the draw: the floor sent a nano to the same raided row 104
 		// times in one game, every frame killed (watched). Priced like any
 		// other want there, it waits for the gun the loss field is buying.
-		if (LossNearM(fp, NanoMaxReach()) > 200.f)
+		const bool yard = PlantClass(int(f.circuitDef.id)) == PC_WATER;
+		if (LossNearM(fp, NanoMaxReach()) > 200.f) {
+			if (yard)
+				++gFloorYardLoss;
 			continue;
+		}
 		int have = 0;
 		NanoNear(fp, NanoMaxReach());
 		for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
@@ -56,14 +66,89 @@ int FactoryNanoShort(AIFloat3& out at)
 		// 2026-09-22). The income arithmetic that stood here asked 26 m/s for
 		// the first turret and 44 for the second, which at 12-15 m/s per
 		// player held our first plant nano past minute 8.
-		if (!aiFactoryMgr.isAssistRequired)
+		if (!aiFactoryMgr.isAssistRequired) {
+			if (yard)
+				++gFloorYardAssist;
 			continue;
+		}
+		if (yard && (want > have))
+			++gFloorYardShort;
 		if (want - have > worst) {
 			worst = want - have;
 			at = fp;
 		}
 	}
 	return worst;
+}
+
+// A yard stands in water, so its turrets float beside it: a floating turret
+// is a candidate only for a yard, sited on water within its own reach of it.
+bool WaterLineAt(const AIFloat3& in p)
+{
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && (f.circuitDef !is null)
+			&& (PlantClass(int(f.circuitDef.id)) == PC_WATER)
+			&& (f.GetPos(ai.frame).distance2D(p) < 64.f))
+			return true;
+	}
+	return false;
+}
+
+AIFloat3 NearestYard(const AIFloat3& in from)
+{
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestD = 0.f;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null)
+			|| (PlantClass(int(f.circuitDef.id)) != PC_WATER))
+			continue;
+		const AIFloat3 p = f.GetPos(ai.frame);
+		const float dd = p.distance2D(from);
+		if (!OnMap(best) || (dd < bestD)) {
+			best = p;
+			bestD = dd;
+		}
+	}
+	return best;
+}
+
+array<AIFloat3> gWetNanoSite;
+array<AIFloat3> gWetNanoYard;
+array<int> gWetNanoDef;
+array<int> gWetNanoUntil;
+
+AIFloat3 WetNanoSite(int d, const AIFloat3& in yard)
+{
+	int k = -1;
+	for (uint i = 0; i < gWetNanoDef.length(); ++i) {
+		if ((gWetNanoDef[i] == d) && (gWetNanoYard[i].distance2D(yard) < 1.f)) {
+			k = int(i);
+			break;
+		}
+	}
+	if (k < 0) {
+		if (gWetNanoDef.length() >= 16) {
+			gWetNanoDef.removeAt(0);
+			gWetNanoYard.removeAt(0);
+			gWetNanoSite.removeAt(0);
+			gWetNanoUntil.removeAt(0);
+		}
+		k = int(gWetNanoDef.length());
+		gWetNanoDef.insertLast(d);
+		gWetNanoYard.insertLast(yard);
+		gWetNanoSite.insertLast(AIFloat3(-1.f, 0.f, -1.f));
+		gWetNanoUntil.insertLast(0);
+	}
+	if (ai.frame < gWetNanoUntil[k])
+		return gWetNanoSite[k];
+	gWetNanoUntil[k] = ai.frame + 10 * SECOND;
+	const float bd = Catalog::gBuildDist[d];
+	const AIFloat3 s = ai.FindBuildSiteNear(Catalog::Def(d), yard, bd);
+	gWetNanoSite[k] = (OnMap(s) && (s.distance2D(yard) <= bd))
+			? s : AIFloat3(-1.f, 0.f, -1.f);
+	return gWetNanoSite[k];
 }
 
 Want@ ProposeNano(CCircuitUnit@ unit)
@@ -323,6 +408,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
 			+ " floor=" + floorShort
+			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
+				+ "/" + gFloorYardAssist
 			+ " over=" + formatFloat(over, "", 0, 1)
 			+ " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
 	}
@@ -360,10 +447,22 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
+	const bool yardSite = WaterLineAt(site);
+	// A floating turret serves the yard, whichever line is neediest overall.
+	const AIFloat3 yardAt = yardSite ? site : NearestYard(unit.GetPos(ai.frame));
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
 			continue;
+		AIFloat3 dSite = site;
+		if (Catalog::gFloater[d] || yardSite) {
+			if (!OnMap(yardAt))
+				continue;
+			dSite = WetNanoSite(d, yardAt);
+			if (!OnMap(dSite) || !ai.CanDefReachAt(Catalog::Def(uid), unit.GetPos(ai.frame),
+					dSite, Catalog::gBuildDist[uid]))
+				continue;
+		}
 		if ((Catalog::gBuildPower[d] <= 0.f) || (Catalog::gBuildsList[d].length() > 0))
 			continue;
 		// NEVER BUILD WHAT WE WOULD EAT, one family over (apexearth
@@ -390,14 +489,14 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			}
 		}
 		Want c;
-		ValueOf(d, gainN, WalkSecTo(unit, site),
+		ValueOf(d, gainN, WalkSecTo(unit, dSite),
 				Catalog::gBuildPower[uid], c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_NANO;
 			@w.def = Catalog::Def(d);
-			w.pos = site;
-			w.spotId = src;
+			w.pos = dSite;
+			w.spotId = (yardSite || Catalog::gFloater[d]) ? NS_YARD : src;
 		}
 	}
 	return w;

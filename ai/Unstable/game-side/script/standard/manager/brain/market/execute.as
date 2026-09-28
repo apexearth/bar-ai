@@ -516,6 +516,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		return rt;
 	}
 	if (w.kind == WK_NANO) {
+		if (w.spotId == NS_YARD)
+			return OnMap(w.pos)
+					? Requests::Take(unit, w.def, Task::BuildType::NANO,
+						Task::Priority::NORMAL, w.pos, 64.f, SQUARE_SIZE * 4.f)
+					: null;
 		// Nanos serve factories and big frames only (apexearth): the
 		// hungriest working line or the biggest uncovered build site takes
 		// the turret; failing either, it parks beside any factory.
