@@ -1580,7 +1580,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				if (!Catalog::gAmphib[d] && !Catalog::gFlyer[d]) {
 					const float wet = Military::WreckWetShare();
 					const bool boat = Catalog::gFloater[d] || Catalog::gSub[d];
-					rezStream = gRezRepairRate
+					// ...and only the repairs it can reach: a boat mends ships,
+					// not the land army (his 2026-09-28: rez subs first out of
+					// a new yard, priced on our damaged bots).
+					float fleet = 0.f;
+					if (boat) {
+						const float armyV = ArmyValue();
+						fleet = (armyV > 1.f) ? (NavyValue() / armyV) : 0.f;
+						if (fleet > 1.f)
+							fleet = 1.f;
+					}
+					rezStream = gRezRepairRate * (boat ? fleet : (1.f - fleet))
 							+ gRezWreckRate * (boat ? wet : (1.f - wet));
 				}
 				float unmet = rezStream - float(rezHave) * rezCap;
