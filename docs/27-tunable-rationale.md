@@ -1285,7 +1285,10 @@ gantry gain is whole; below it the gain scales by (own/anchor)^2. The team
 purse makes the case, the host's feed times it (apexearth, watching green start
 one at 50 m/s: "that is too early"). Raised 100 -> 150 on his second call,
 2026-08-30: "We should push back Gantry creation to 150m/s or later" -- watched
-while the base had no T2 defence and the enemy arrived thick.
+while the base had no T2 defence and the enemy arrived thick. The code had
+become a hard skip below the anchor; on his Colorado 8v8 (2026-09-27) six of
+eight players sat at 60-130 m/s and had no gantry at 38 minutes ("not ok"), so
+the (own/anchor)^2 scale this entry describes was restored.
 
 ### `TUNE_OFFENSE_DEF_FLOOR` = 0.1f
 
@@ -1913,7 +1916,8 @@ role where they only activate their military once they've hit ~1000 metal
 income... if bonus is +100% then its 2000 metal income. So this would be
 only on an 8v8 map, 1 AI makes almost no defense and makes no military,
 focusing on economy. It should be the player furthest away from the
-enemies." The election (rear-most by margin, teams of 5+) is unchanged; the
+enemies." The election (teams of 5+; since 09-27 the most sheltered home,
+not the rear-most, docs/24) is unchanged; the
 bar is 1000 x handicap on an 8-player team and 250 x handicap below that.
 What changed with it: while the role grows, the cover need, the spilled-metal
 floor and the escort bid buy no army for that player -- measured on his
@@ -2669,7 +2673,8 @@ Off by default, so nothing changes until he asks for it. His ask, 2026-09-22:
 half-length eco".
 
 The eco seat already existed -- the rear specialist, `army.as` -- with its own
-election (rear-most of the team, by a margin) and its own end condition. Two
+election (the most sheltered home of the team, docs/24 2026-09-27) and its own
+end condition. Two
 things stopped it being usable as a setting. The election refuses a team of
 four or fewer outright ("in a 4v4 we just don't want a player in the eco
 role", 2026-09-02), so in his 2v2 and in any 1v1 nobody can be seated at all;

@@ -135,6 +135,9 @@ bool EscortableWorker(CCircuitUnit@ wkr, bool air)
 		return false;
 	if (Catalog::gFlyer[int(wkr.circuitDef.id)] != air)
 		return false;
+	// A 1-metal builder is spawned (assist drones), not bought: nothing to guard.
+	if (Catalog::gCostM[int(wkr.circuitDef.id)] <= 1.f)
+		return false;
 	return !wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask);   // his own escort
 }
 
@@ -164,10 +167,15 @@ void ExposeRefresh()
 	EscortDiag();
 }
 
+// Escorts share the rez-bot cap (apexearth 2026-09-27: one player paired 346
+// and still read 415 short).
 int EscortShortfall()
 {
 	ExposeRefresh();
-	return gExpoN;
+	int room = RezFleetCap() - int(gEscWorker.length());
+	if (room < 0)
+		room = 0;
+	return (gExpoN < room) ? gExpoN : room;
 }
 
 // THE METAL STANDING UNESCORTED OUTSIDE SAFE GROUND, and the share of our
@@ -1026,8 +1034,101 @@ float ShieldShare()
 // (T3, heavy air) instead of T1/T2 it would never deliver in time.
 // Election: allies' homes off the team blackboard; the enemy reference is
 // the ally centroid mirrored through map center (symmetric starts, no
-// sighting needed). Rear-most wins only with a clear margin over #2.
+// sighting needed). The seat is the most SHELTERED home, not the farthest:
+// distance from the enemy point rewards standing out to the side, and the
+// corner is where humans attack (apexearth 2026-09-27, Colorado 8v8).
 bool gEcoRole = false;
+
+float EcoCross(float ox, float oz, float ax, float az, float bx, float bz)
+{
+	return (ax - ox) * (bz - oz) - (az - oz) * (bx - ox);
+}
+
+float EcoSegDist(float px, float pz, float ax, float az, float bx, float bz)
+{
+	const float dx = bx - ax;
+	const float dz = bz - az;
+	const float ll = dx * dx + dz * dz;
+	float t = (ll > 0.f) ? (((px - ax) * dx + (pz - az) * dz) / ll) : 0.f;
+	t = (t < 0.f) ? 0.f : ((t > 1.f) ? 1.f : t);
+	const float qx = ax + t * dx - px;
+	const float qz = az + t * dz - pz;
+	return sqrt(qx * qx + qz * qz);
+}
+
+// How far an attack must come through the team's own ground to reach each
+// home: the distance to the nearest edge of the homes' convex hull that faces
+// the enemy or a flank. Only edges facing away from the enemy (the back) do
+// not count. A line abreast has no inside, so there it is the distance to the
+// nearer end of the line.
+array<float>@ EcoShelter(const array<float>& in hx, const array<float>& in hz,
+		float ex, float ez)
+{
+	const uint n = hx.length();
+	array<float> shel(n, 0.f);
+	array<uint> ord;
+	for (uint i = 0; i < n; ++i) {
+		ord.insertLast(i);
+		uint j = ord.length() - 1;
+		while ((j > 0) && ((hx[ord[j - 1]] > hx[i])
+				|| ((hx[ord[j - 1]] == hx[i]) && (hz[ord[j - 1]] > hz[i])))) {
+			ord[j] = ord[j - 1];
+			--j;
+		}
+		ord[j] = i;
+	}
+	array<uint> h;
+	if (n >= 3) {
+		for (uint k = 0; k < n; ++k) {
+			while ((h.length() >= 2) && (EcoCross(hx[h[h.length() - 2]], hz[h[h.length() - 2]],
+					hx[h[h.length() - 1]], hz[h[h.length() - 1]], hx[ord[k]], hz[ord[k]]) <= 0.f))
+				h.removeLast();
+			h.insertLast(ord[k]);
+		}
+		const uint lower = h.length() + 1;
+		for (int k = int(n) - 2; k >= 0; --k) {
+			while ((h.length() >= lower) && (EcoCross(hx[h[h.length() - 2]], hz[h[h.length() - 2]],
+					hx[h[h.length() - 1]], hz[h[h.length() - 1]], hx[ord[k]], hz[ord[k]]) <= 0.f))
+				h.removeLast();
+			h.insertLast(ord[k]);
+		}
+		h.removeLast();
+	}
+	if (h.length() < 3) {
+		if (n < 2)
+			return shel;
+		const uint a = ord[0];
+		const uint b = ord[n - 1];
+		for (uint i = 0; i < n; ++i) {
+			const float da = sqrt((hx[i] - hx[a]) * (hx[i] - hx[a]) + (hz[i] - hz[a]) * (hz[i] - hz[a]));
+			const float db = sqrt((hx[i] - hx[b]) * (hx[i] - hx[b]) + (hz[i] - hz[b]) * (hz[i] - hz[b]));
+			shel[i] = (da < db) ? da : db;
+		}
+		return shel;
+	}
+	for (uint i = 0; i < n; ++i)
+		shel[i] = -1.f;
+	for (uint e = 0; e < h.length(); ++e) {
+		const uint a = h[e];
+		const uint b = h[(e + 1) % h.length()];
+		// The hull winds counter-clockwise, so (dz, -dx) points shel.
+		const float nx = hz[b] - hz[a];
+		const float nz = hx[a] - hx[b];
+		const float mx = 0.5f * (hx[a] + hx[b]);
+		const float mz = 0.5f * (hz[a] + hz[b]);
+		if (nx * (ex - mx) + nz * (ez - mz) < 0.f)
+			continue;
+		for (uint i = 0; i < n; ++i) {
+			const float d = EcoSegDist(hx[i], hz[i], hx[a], hz[a], hx[b], hz[b]);
+			if ((shel[i] < 0.f) || (d < shel[i]))
+				shel[i] = d;
+		}
+	}
+	for (uint i = 0; i < n; ++i)
+		if (shel[i] < 0.f)
+			shel[i] = 0.f;
+	return shel;
+}
 bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
 
@@ -1074,12 +1175,14 @@ bool EcoRoleActive()
 	if ((mates is null) || (mates.length() <= 4))
 		return false;
 	array<float> hx, hz;
+	array<int> ht;
 	float cx = 0.f, cz = 0.f;
 	for (uint i = 0; i < mates.length(); ++i) {
 		const float x = ai.ReadTeamValue(int(mates[i]), "homex", -1.f);
 		const float z = ai.ReadTeamValue(int(mates[i]), "homez", -1.f);
 		if ((x < 0.f) || (z < 0.f))
 			continue;
+		ht.insertLast(int(mates[i]));
 		hx.insertLast(x);
 		hz.insertLast(z);
 		cx += x;
@@ -1099,39 +1202,44 @@ bool EcoRoleActive()
 	gEcoRefX = ex;
 	gEcoRefZ = ez;
 	array<float> ds;
-	float d1 = 0.f;
 	for (uint i = 0; i < hx.length(); ++i) {
 		const float dx = hx[i] - ex;
 		const float dz = hz[i] - ez;
-		const float dd = dx * dx + dz * dz;
-		ds.insertLast(dd);
-		if (dd > d1)
-			d1 = dd;
+		ds.insertLast(dx * dx + dz * dz);
 	}
+	array<float>@ sh = EcoShelter(hx, hz, ex, ez);
+	// Every ally computes the same roster in the same order, so a strict >
+	// seats exactly one even on a tie.
+	uint seat = 0;
+	for (uint i = 1; i < hx.length(); ++i)
+		if (sh[i] > sh[seat])
+			seat = i;
+	const float seatD = ds[seat];
 	ds.sortAsc();
 	const float dmed = ds[ds.length() / 2];
-	const float mx = Builder::gHomePos.x - ex;
-	const float mz = Builder::gHomePos.z - ez;
-	const float mine = mx * mx + mz * mz;
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
-	// An eight-player team seats its rear-most whatever the margin (docs/24
-	// 2026-09-13); the margin was for the 4v4 line-abreast start, which the
-	// size gate above refuses, and a line-abreast 8v8 never reaches it.
-	gEcoRole = (mine >= d1) && (dmed > 1.f)
-		&& ((mates.length() >= 8) || (mine >= dmed * margin * margin));
+	// An eight-player team seats whatever the margin (docs/24 2026-09-13); the
+	// margin was for the 4v4 line-abreast start, which the size gate above
+	// refuses, and a line-abreast 8v8 never reaches it.
+	gEcoRole = (ht[seat] == ai.teamId) && (sh[seat] > 0.f) && (dmed > 1.f)
+		&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin));
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
-		AiLog("apex: rear-elect homes=" + hx.length() + " mine=" + sqrt(mine)
-				+ " far=" + sqrt(d1) + " median=" + sqrt(dmed));
+		string row = "";
+		for (uint i = 0; i < hx.length(); ++i)
+			row += " t" + ht[i] + "=" + int(sh[i]);
+		AiLog("apex: rear-elect homes=" + hx.length() + " seat=t" + ht[seat]
+				+ " shelter" + row + " seatDist=" + sqrt(seatD)
+				+ " median=" + sqrt(dmed));
 	}
 	if (gEcoRole != was) {
 		AiLog("apex: rear-specialist " + (gEcoRole ? "ON" : "off")
 				+ " team=" + ai.teamId
-				+ " mine=" + sqrt(mine) + " median=" + sqrt(dmed));
+				+ " shelter=" + int(sh[seat]) + " seat=t" + ht[seat]);
 		// A chat line survives on screen; log lines scroll away (apexearth).
 		ai.SendChat(gEcoRole
 				? ("I am the eco specialist (team " + ai.teamId
-					+ ", rear position): scaling economy, no army until T3.")
+					+ ", sheltered position): scaling economy, no army until T3.")
 				: ("Eco specialist role off (team " + ai.teamId + ")."));
 	}
 	return gEcoRole;
@@ -1686,6 +1794,10 @@ float Utilization()
 // bots heal our troops -- they make a big difference" -- the two are one
 // design). Refreshed here as the fleet changes.
 int gNextRetreatRefresh = 73;   // phase offset -- see AiUpdate lockstep note
+// A def the config set to retreat 0 never retreats: the cost scale below gave
+// the Epic Tumbleweed (selfd countdown 10, so not kamikaze) 0.55 and it rolled
+// home to detonate in our base (apexearth 2026-09-27). -1 unread, 0/1 flag.
+array<int> gRetreatNever;
 void RetreatRefresh()
 {
 	if (ai.frame < gNextRetreatRefresh)
@@ -1699,6 +1811,13 @@ void RetreatRefresh()
 	float healBonus = 0.05f * float(rezzers);
 	if (healBonus > 0.25f)
 		healBonus = 0.25f;
+	if (gRetreatNever.length() == 0) {
+		string bombs = "";
+		for (int k = 1; k <= Catalog::gDefCount; ++k)
+			if (Catalog::gAvailable[k] && Catalog::gMobile[k] && Catalog::gKamikaze[k])
+				bombs += " " + Catalog::Def(k).GetName();
+		AiLog("apex: kamikaze-defs" + bombs);
+	}
 	const float scale = ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);
 	const float rfloor = ai.GetTunable("apex_retreat_floor", TUNE_RETREAT_FLOOR);
 	for (Id rd = 1; rd <= Id(Catalog::gDefCount); ++rd) {
@@ -1709,6 +1828,19 @@ void RetreatRefresh()
 			continue;
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
 		if (rdef is null)
+			continue;
+		if (uint(ri) >= gRetreatNever.length()) {
+			const uint was = gRetreatNever.length();
+			gRetreatNever.resize(uint(Catalog::gDefCount + 1));
+			for (uint k = was; k < gRetreatNever.length(); ++k)
+				gRetreatNever[k] = -1;
+		}
+		if (gRetreatNever[ri] < 0) {
+			gRetreatNever[ri] = (rdef.GetRetreat() <= 0.f) ? 1 : 0;
+			if ((gRetreatNever[ri] == 1) && Catalog::gAvailable[ri])
+				AiLog("apex: retreat-never " + rdef.GetName());
+		}
+		if (gRetreatNever[ri] == 1)
 			continue;
 		float rt = rfloor + Catalog::gCostM[ri] / ((scale > 1.f) ? scale : 3000.f)
 				+ healBonus;

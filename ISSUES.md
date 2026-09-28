@@ -1064,6 +1064,18 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### Every builder is priced as if the map's spots were ours to claim (2026-09-27)
+
+`ClaimableSpots` (want_mex.as) excludes only OUR ledger and spots with a
+VISIBLE enemy, so allies' mexes and the unscouted enemy half count as open. His
+8v8 on a 320-spot map read 298 claimable with 13 held, so `share =
+open/(claimers+1)` stays 1 and every new builder's claim term is a full spot
+stream (a Butler read `claim711.5` at `room0.05`). The C++ metal manager already
+marks ally-held spots (`CMetalManager::IsOpenSpot`, set from ally mexes) but no
+script binding reads it. Fix: bind it, use it in `ClaimableSpots`. The assist
+units were taken out of the claim draw separately; constructors still read the
+inflated count.
+
 ### BAR's builder priority cannot carry the split: the shipped gadget barely throttles (2026-09-21)
 
 His proposal for the scarcity split: "everybody building this thing gets

@@ -259,6 +259,16 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	isRezAble = def->IsAbleToResurrect();
 	isKamikazeD = def->IsAbleToKamikaze()
 		|| ((def->GetSelfDCountdown() == 0) && !def->IsBuilder());   // crawling bombs: countdown-0 selfd, no kamikaze flag (corroach)
+	{
+		// BAR's own group for exploding units. The Epic Tumbleweed (armvadert4)
+		// selfds on a 10 s countdown, so the test above missed it: it was priced
+		// as army and retreated home to detonate in our base.
+		auto ug = customParams.find("unitgroup");
+		if ((ug != customParams.end()) && (ug->second == "explo")
+			&& (def->GetSpeed() > 0.f) && !def->IsBuilder()) {
+			isKamikazeD = true;
+		}
+	}
 	areaCells = (def->GetXSize() / 2) * (def->GetZSize() / 2);
 	footX = def->GetXSize() / 2;
 	footZ = def->GetZSize() / 2;

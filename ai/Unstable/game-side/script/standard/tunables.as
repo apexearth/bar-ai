@@ -1349,7 +1349,7 @@ const float TUNE_SCOUT_OVER_S = 45.f;
 const float TUNE_ECO_ROLE = 1.f;
 
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
-//   the ordinary rear-most election alone. Above 0 it takes the seat whatever
+//   the ordinary seat election alone. Above 0 it takes the seat whatever
 //   the team's size or shape, and the value is how FAR it grows before army
 //   and defence come back: 1 the whole eco target, 0.5 half of it, so half the
 //   eco phase. See docs/27.

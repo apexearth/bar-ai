@@ -1959,6 +1959,10 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
 
 bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination, const float range)
 {
+	// Off the map the sector index is outside the grid GetClosestSector indexes.
+	if (!circuit->IsPosOnMap(destination)) {
+		return false;
+	}
 	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
 		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
 	}
@@ -1975,6 +1979,9 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
 
 bool CTerrainManager::CanReachAtSafe(CCircuitUnit* unit, const AIFloat3& destination, const float range, const float threat)
 {
+	if (!circuit->IsPosOnMap(destination)) {
+		return false;
+	}
 	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
 		return false;
 	}

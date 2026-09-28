@@ -368,36 +368,6 @@ int AssistDefOf(int facDef)
 	return best;
 }
 
-// Assist lathe standing and ordered, in metal/s (build power x 7/80).
-float AssistLatheM()
-{
-	float m = 0.f;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
-		if ((gOwnCount[c] > 0) && IsAssistDef(int(c)))
-			m += float(gOwnCount[c]) * Catalog::gBuildPower[int(c)] * (7.f / 80.f);
-	}
-	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
-		CCircuitDef@ pd = Brain::gFQPendDef[i];
-		if ((pd !is null) && IsAssistDef(int(pd.id)))
-			m += Catalog::gBuildPower[int(pd.id)] * (7.f / 80.f);
-	}
-	return m;
-}
-
-// How many of assist def `d` the unspent metal asks for, net of the assist
-// lathe already standing or ordered and of the nano lathe standing idle:
-// idle lathe is a shortage of orders, not hands.
-int AssistNeed(int d)
-{
-	if (d < 0)
-		return 0;
-	const float unspent = UnspentByHands() - AssistLatheM() - IdleNanoLatheM();
-	const float bp = Catalog::gBuildPower[d] * (7.f / 80.f);
-	if ((unspent <= 0.f) || (bp <= 0.f))
-		return 0;
-	return int(unspent / bp);
-}
-
 // Does a standing plant of ours offer a FLYING constructor (of the ceiling
 // tier when asked)? The floors are rules that fill from whichever lab asks
 // first, and the bot lab asks most; a walker's every start costs the walk
@@ -443,9 +413,9 @@ int ConsNeedAny()
 	// ...net of what the hands we have would spend if energy let them: an
 	// e-throttled fleet leaves metal unspent without being too few, and more
 	// hands add energy draw, not metal spend.
-	// ...served by a pure assist unit where a lab offers one (AssistNeed);
-	// as constructors only before that -- a T1 con is also the starter the
-	// full bank needed.
+	// ...never by a pure assist unit (apexearth 2026-09-27: unspent metal
+	// does not buy Butlers); as constructors only while no lab offers one --
+	// a T1 con is also the starter the full bank needed.
 	if (!AnyAssistLab())
 		want += HandsShort();
 	const int have = ConsOwnedAny() + ConsInFlightAny();
@@ -713,7 +683,15 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 		&& (gRedrawV[pick] < gWantEmaV
 			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
 		return null;
-	return Catalog::Def(gRedrawDef[pick]);
+	// The batch refill skips the draw's checks, so the caps are asked again
+	// here: it took a capped fleet to 47/40.
+	const int pd = gRedrawDef[pick];
+	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
+		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
+				: ((ConFleetHave() >= RezFleetCap()) || ConStandsIdle()))
+			return null;
+	}
+	return Catalog::Def(pd);
 }
 
 // The line's own ranking, defrank's pattern (his zero-Titan report at
@@ -737,6 +715,41 @@ int RezFleetCap()
 		gRezCap = (lim / 50 > 20) ? lim / 50 : 20;
 	}
 	return gRezCap;
+}
+
+// Constructors capped like rez bots (apexearth 2026-09-27: "limit those flat
+// out the same way we limit rezbots"): a high-bonus economy cannot be spent
+// by more hands, and every extra con is lag.
+int ConFleetHave()
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if (Catalog::gMobile[di] && Catalog::gBuilder[di] && !Catalog::gRezzer[di]
+			&& (Catalog::gCostM[di] > 1.f)
+			&& !Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
+			n += gOwnCount[d] + Brain::PendAnyOf(di);
+	}
+	return n;
+}
+
+// No new constructor while one we own stands idle (apexearth 2026-09-27:
+// "don't make constructors when we aren't even using the ones we have").
+bool ConStandsIdle()
+{
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ w = gWorkers[i];
+		if ((w is null) || (w.circuitDef is null))
+			continue;
+		const int wd = int(w.circuitDef.id);
+		if (!Catalog::gMobile[wd] || Catalog::gRezzer[wd] || (Catalog::gCostM[wd] <= 1.f)
+			|| w.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		IUnitTask@ t = w.task;
+		if ((t is null) || (t.GetType() == Task::Type::IDLE))
+			return true;
+	}
+	return false;
 }
 
 int RezFleetHave()
@@ -920,8 +933,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float richGap = RichArmyGapM();
 	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
 		&& (armyT0 - armyHave <= 0.5f)
-		&& (richGap <= 0.5f)
-		&& (AssistNeed(AssistDefOf(int(fac.circuitDef.id))) <= 0))
+		&& (richGap <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
 		return null;
@@ -1032,7 +1044,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				left = coverGapKeep;
 			if (left < 0.f)
 				left = 0.f;
-			gYieldLog = " yield=" + int(armyGap - left) + " betterCap=" + int(betterCap);
+			// The spare-metal sink re-enters as its own gap per candidate, so it
+			// yields too, or a full bank kept every T1 lab running beside T2.
+			richBal -= betterCap;
+			if (richBal < 0.f)
+				richBal = 0.f;
+			gYieldLog = " yield=" + int(armyGap - left) + " betterCap=" + int(betterCap)
+				+ " richLeft=" + int(richBal);
 			armyGap = left;
 		} else {
 			gYieldLog = "";
@@ -1217,25 +1235,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	int amphBan = -1;
 	int consNeedA = -1;
 	float bpProt = -1.f;
-	// THE ASSIST FLOOR: the unspent term of the con floors, bought as pure
-	// lathe from a lab that offers it. A rule like the con floors, ahead of
-	// the draw, for the same reason.
-	// Starters first: the T2-con floor still outranks it.
-	if (ceilNeed <= 0) {
-		const int ad = AssistDefOf(fid);
-		if (ad >= 0) {
-			const int an = AssistNeed(ad);
-			if (an > 0) {
-				AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
-					+ " #" + fac.id + " -> produce:" + Catalog::Def(ad).GetName()
-					+ " (assist floor need=" + an
-					+ " latheM=" + formatFloat(AssistLatheM(), "", 0, 0)
-					+ " unspent=" + formatFloat(UnspentByHands(), "", 0, 0)
-					+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");
-				return Catalog::Def(ad);
-			}
-		}
-	}
 	// THE ESCORT FLOOR (his ruling 2026-09-22: "force an escort to be produced
 	// for each constructor in the early game since we have almost no army").
 	// Early = the free army is worth less than the metal walking out alone.
@@ -1271,6 +1270,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	array<float> rcVal;
 	const bool metalPath = MetalPathStarved();
 	int rezFleet = -1;
+	int conFleet = -1;
+	int conIdle = -1;
 	for (uint i = 0; i < prods.length(); ++i) {
 		const int d = prods[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d])
@@ -1299,6 +1300,21 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (rezFleet >= RezFleetCap()) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":rezcap";
+				continue;
+			}
+		} else if (Catalog::gBuilder[d] && Catalog::gMobile[d]) {
+			if (conFleet < 0)
+				conFleet = ConFleetHave();
+			if (conFleet >= RezFleetCap()) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":concap";
+				continue;
+			}
+			if (conIdle < 0)
+				conIdle = ConStandsIdle() ? 1 : 0;
+			if (conIdle == 1) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":conidle";
 				continue;
 			}
 		}
@@ -1461,7 +1477,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
 		Market::EscortFieldCensus();
-		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !OutgrownAtT3(d)) {
+		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !Outgrown(d)) {
 			if (escShort < -1)
 				escShort = EscortShortfall();
 			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
@@ -1570,7 +1586,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
 				continue;
 			}
-			if (OutgrownAtT3(d)) {
+			if (Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
@@ -2028,6 +2044,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 		}
+		// A pure assist unit is not bought for claims or unspent metal: its
+		// claim term was never netted and it is the cheapest fast claimer, so
+		// 53 Butlers walked to far mexes in one game (apexearth 2026-09-27).
+		if (IsAssistDef(d)) {
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":assistfloor";
+			continue;
+		}
 		// >= the game ceiling, not > our own: requiring the next con to
 		// EXCEED what the first one reaches made a second armack impossible
 		// (measured: one T2 con per game, forever).
@@ -2207,6 +2231,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			+ " inc=" + formatFloat(Eco::MInc(), "", 0, 0)
 			+ " gap=" + int(armyGap) + " src=" + gapSrc
 			+ " flight=" + int(armyFlight0)
+			+ " cons=" + ConFleetHave() + "/" + RezFleetCap()
 			+ " n=" + candDef.length() + gYieldLog + prank);
 	}
 	if ((candDef.length() == 0) || (sumV <= 0.f)) {

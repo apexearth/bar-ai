@@ -285,22 +285,49 @@ float T2HpMean()
 	return gT2HpMean;
 }
 
-// Once a gantry stands the lower labs make only fodder and the heavy T2 bodies
-// (apexearth 2026-09-25). A drop, not a price: OwnTierMul only reorders a lab
-// whose whole list is one tier, so the T1 lab still made 367 Thugs at T3.
-// Ground AA is left alone -- it answers air, not the T3 line.
-bool OutgrownAtT3(int d)
+// Once a T2 plant stands no T1 ground unit is made, fodder included -- the
+// count is the lag (apexearth 2026-09-27). Once a gantry stands the T2 labs
+// make only fodder and the heavy bodies (2026-09-25). A drop, not a price:
+// OwnTierMul only reorders a lab whose whole list is one tier, so the T1 lab
+// still made 367 Thugs at T3. Ground AA is left alone -- it answers air.
+// Only a LAND plant replaces the T1 ground line: an advanced air plant or
+// shipyard is T2 too, and counting it would leave no ground army at all.
+int gTopLandTier = 1;
+int gTopLandTierAt = -1;
+int TopOwnLandPlantTier()
 {
-	if (TopOwnPlantTier() < 3)
-		return false;
-	if (Catalog::gFlyer[d] || (Catalog::gCostM[d] < Military::FODDER_COST()))
+	if (ai.frame < gTopLandTierAt)
+		return gTopLandTier;
+	gTopLandTierAt = ai.frame + 10 * SECOND;
+	gTopLandTier = 1;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const int fd = int(f.circuitDef.id);
+		if (PlantClass(fd) != PC_LAND)
+			continue;
+		const int at = Factory::userData[fd].attr;
+		if (((at & Factory::Attr::T3) != 0) && (gTopLandTier < 3))
+			gTopLandTier = 3;
+		else if (((at & Factory::Attr::T2) != 0) && (gTopLandTier < 2))
+			gTopLandTier = 2;
+	}
+	return gTopLandTier;
+}
+
+bool Outgrown(int d)
+{
+	const int top = TopOwnPlantTier();
+	if ((top < 2) || Catalog::gFlyer[d])
 		return false;
 	if ((Catalog::gAirT[d] > 0.f) && (Catalog::gSurfT[d] <= 0.f))
 		return false;
 	const int tier = DefTier(d);
 	if (tier == 1)
-		return true;
-	return (tier == 2) && (Catalog::gHealth[d] < T2HpMean());
+		return TopOwnLandPlantTier() >= 2;
+	return (top >= 3) && (tier == 2) && (Catalog::gCostM[d] >= Military::FODDER_COST())
+		&& (Catalog::gHealth[d] < T2HpMean());
 }
 
 // The score. Raw, before any of the situational multipliers -- this is what

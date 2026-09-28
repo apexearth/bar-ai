@@ -10,9 +10,60 @@ float BestExtract()
 	if (gBestExtract > 0.f)
 		return gBestExtract;
 	gBestExtract = 0.f;
+	int bestDef = -1;
+	// OUR TREE: everything reachable through build lists from what we own (the
+	// commander at the start). The ceiling was read off every def in the game,
+	// and in his lobby that is a scav Legion moho (0.023) or a tweaked
+	// underwater one (0.0126) no con of ours builds: every T2 con read ceil=0,
+	// the t2-con floor never fired and no Butler was an assist unit.
+	array<bool> tree(uint(Catalog::gDefCount + 1), false);
+	array<int> open;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (gOwnCount[d] > 0) {
+			tree[d] = true;
+			open.insertLast(int(d));
+		}
+	}
+	while (open.length() > 0) {
+		const int cur = open[open.length() - 1];
+		open.removeLast();
+		const array<int>@ bl = Catalog::gBuildsList[cur];
+		for (uint q = 0; q < bl.length(); ++q) {
+			if (!tree[bl[q]]) {
+				tree[bl[q]] = true;
+				open.insertLast(bl[q]);
+			}
+		}
+	}
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {
-		if (Catalog::gAvailable[i] && (Catalog::gExtractsM[i] > gBestExtract))
-			gBestExtract = Catalog::gExtractsM[i];
+		if (!Catalog::gAvailable[i] || !tree[i] || (Catalog::gExtractsM[i] <= gBestExtract))
+			continue;
+		// ...and a LAND extractor: one a non-naval con of ours builds.
+		const array<int>@ by = Catalog::gBuiltBy[i];
+		bool land = false;
+		for (uint b = 0; (b < by.length()) && !land; ++b) {
+			const int bd = by[b];
+			land = tree[bd] && Catalog::gAvailable[bd] && Catalog::gMobile[bd]
+				&& Catalog::gBuilder[bd] && !Catalog::gFloater[bd] && !Catalog::gSub[bd]
+				&& !Catalog::Def(bd).IsRoleAny(Unit::Role::COMM.mask);
+		}
+		if (!land)
+			continue;
+		gBestExtract = Catalog::gExtractsM[i];
+		bestDef = i;
+	}
+	if (bestDef > 0) {
+		string who = "";
+		const array<int>@ by = Catalog::gBuiltBy[bestDef];
+		for (uint b = 0; b < by.length(); ++b) {
+			const int bd = by[b];
+			who += " " + Catalog::Def(bd).GetName() + "(a" + (Catalog::gAvailable[bd] ? 1 : 0)
+				+ "m" + (Catalog::gMobile[bd] ? 1 : 0) + "f" + (Catalog::gFloater[bd] ? 1 : 0)
+				+ "s" + (Catalog::gSub[bd] ? 1 : 0)
+				+ "c" + (Catalog::Def(bd).IsRoleAny(Unit::Role::COMM.mask) ? 1 : 0) + ")";
+		}
+		AiLog("apex: best-extract " + Catalog::Def(bestDef).GetName()
+			+ " m=" + formatFloat(gBestExtract, "", 0, 4) + " by" + who);
 	}
 	return gBestExtract;
 }

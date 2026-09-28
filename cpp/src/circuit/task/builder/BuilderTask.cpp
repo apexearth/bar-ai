@@ -812,6 +812,11 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 				circuit->GetTeamId(),
 				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 				int(buildType), position.x, position.z, pos.x, pos.z, searchRadius);
+		// Marked so the script's probe steps around ground no search can fill.
+		if ((buildDef != nullptr)
+			&& (std::max(buildDef->GetFootX(), buildDef->GetFootZ()) * SQUARE_SIZE * 2 >= SQUARE_SIZE * 12)) {
+			circuit->NoteBuildBlocked(position, buildDef);
+		}
 	}
 
 	if (utils::is_valid(buildPos)) {

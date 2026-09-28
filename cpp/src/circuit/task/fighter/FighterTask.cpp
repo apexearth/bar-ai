@@ -113,6 +113,12 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		return;
 	}
 
+	// Retreat 0 means never: a disarmed unit fell through to the no-target
+	// retreat below at full health, and a rolling bomb walked home to blow up.
+	if ((cdef->GetRetreat() <= 0.f) || cdef->IsKamikazeDef()) {
+		return;
+	}
+
 	const float healthPerc = unit->GetHealthPercent();
 
 	if (unit->HasShield()) {

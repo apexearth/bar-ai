@@ -1398,3 +1398,24 @@ have them attack the enemy from different angles."*
   the base." A transport never keeps holding its cargo either.
 - **Build only as many transports as are needed**; a fleet that sits unused is
   waste.
+
+## 2026-09-27 — no T1 army once T2 stands; every player gets a gantry
+
+- **Tiny units are the lag.** Once a player's T2 plant stands, its T1 labs
+  make no ground army at all, fodder included (`Outgrown`, `worth.as`). Ground
+  AA and air are left to their own rules.
+- **A gantry by 38 minutes is not optional.** Watched on Colorado 8v8: two of
+  eight had one. Poorer players now bid for it at a reduced gain instead of
+  never, and a gantry that finds no room marks the ground so the next try goes
+  elsewhere or clears old T1 economy out of the way.
+
+## 2026-09-27 — the eco seat is the middle back, never a corner
+
+- **Enemies attack from the sides.** Humans flank; the corner and the ends of
+  the line are the exposed seats, however far they stand from the enemy.
+- **The eco player is the middle back player**: allies in front of it and on
+  both sides. "Furthest from the enemies" (09-13) meant safest, and straight
+  distance picks the corner.
+- Built: the seat is the home with the most of the team's own ground between it
+  and any enemy-facing or flank edge of the homes' hull (`EcoShelter`,
+  `army.as`); `apex: rear-elect` prints every home's shelter.

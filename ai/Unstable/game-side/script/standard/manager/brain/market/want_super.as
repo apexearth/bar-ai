@@ -609,20 +609,21 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// corgant election 27.8-28.6 min, gain 6-9.5, none ever finished).
 		float teamInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 		float classBudget = budget;
+		float hostMul = 1.f;
 		if (sc == SC_GANTRY) {
 			if (AdvPlantInFlight() && !WealthWaiver()) {
 				AdvDeferLog("gantry");
 				continue;
 			}
-			// WHO hosts, not WHETHER: below the host anchor this player
-			// defers and a richer teammate proposes instead. Was 0.6x the
-			// anchor; apexearth, next day: "We went from making no gantry
-			// at 400m/s to making it at 80m/s - it is too early now" -- the
-			// gate is the FULL anchor, his original "we can have a gantry
-			// at like 100 m/s".
-			if (((gIncEma > 0.f) ? gIncEma : Eco::MInc())
-				< ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC))
-				continue;
+			// Below the host anchor the gain scales by (own/anchor)^2, as the
+			// tunable says: a hard skip left most of an 8v8 at 60-130 m/s
+			// with no gantry at 38 minutes (apexearth 2026-09-27).
+			{
+				const float own = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
+				const float anchor = ai.GetTunable("apex_gantry_host_inc", TUNE_GANTRY_HOST_INC);
+				if ((anchor > 0.f) && (own < anchor))
+					hostMul = (own * own) / (anchor * anchor);
+			}
 			// The NET lane: teammates' reclaim feasts do not license it.
 			teamInc = Military::TeamSum(Military::TV_MINC_NET, teamInc);
 			const float gsec = ai.GetTunable("apex_gantry_afford_s",
@@ -702,6 +703,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					* afford * Persona::WantMult(SuperName(sc));
 			if (insure > gain)
 				gain = insure;
+			gain *= hostMul;
 		}
 		// DEFENCE BEFORE THE BIG GUN (apexearth 2026-08-28: "We consistently
 		// make Basilisk before T3 or even T2 defense - we need better
