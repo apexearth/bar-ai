@@ -993,7 +993,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// (apexearth: "place those next to each other... fusions belong
 		// in the back of the map, furthest from the enemy"). The farm sits in
 		// the rear of the base axis, which is that ground.
-		AIFloat3 slot = gFarmSet ? FarmSlot(int(w.def.id), unit) : BigEnergySite();
+		const bool floats = Catalog::gFloater[int(w.def.id)];
+		AIFloat3 slot = floats ? w.pos
+				: (gFarmSet ? FarmSlot(int(w.def.id), unit) : BigEnergySite());
 		// A DETERMINISTIC SLOT RE-ELECTED INTO REFUSED GROUND IS A DEADLOCK.
 		// FarmSlot is a pure function of the farm, so when the C++ reach-safe
 		// veto refuses that ground the next election computes the same answer
@@ -1005,7 +1007,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Probed ONLY when the mark is near this slot, so the farm's packing --
 		// generators beside their own kind, in the rear -- is untouched in
 		// every other case.
-		if ((unit !is null) && NearBlocked(slot)) {
+		if ((unit !is null) && !floats && NearBlocked(slot)) {
 			slot = ProbedSite(w.def,
 					Catalog::Def(int(unit.circuitDef.id)), slot);
 		}
@@ -1023,7 +1025,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// cleared as well because the stall ladder below falls back to it.
 		const float clr = (Catalog::gCostM[int(w.def.id)] > 500.f) ? 150.f : 120.f;
 		w.pos = ClearOfSpots(w.pos, clr);
-		if (OnMap(slot))
+		if (OnMap(slot) && !floats)
 			slot = OffAllyExit(ClearOfSpots(slot, clr));
 		// The slot handed over, so a frame that stands elsewhere is traced
 		// to the request or to the engine's search, not guessed.

@@ -329,6 +329,11 @@ int ProtClassCompute(int defId)
 		// watching: "we don't make AA when we're getting bombed."
 		if (Catalog::gSurfT[defId] > 0.5f * Catalog::gAirT[defId])
 			return PROT_DEF;   // AA never counts as ground coverage (watched: AA at mexes)
+		// A torpedo launcher's only weapon hits IN the water: surface and air
+		// threat both read 0, so it filed as nothing and was never bought
+		// (his watch 2026-09-28: "why is it so hard to build a torpedo launcher").
+		if ((Catalog::gWaterT[defId] > 0.01f) && (Catalog::gAirT[defId] <= 0.f))
+			return PROT_DEF;
 		if (Catalog::gAirT[defId] > 0.f)
 			return PROT_AA;
 	}

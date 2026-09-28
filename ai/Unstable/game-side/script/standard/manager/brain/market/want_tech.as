@@ -565,7 +565,28 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// tier table: dead level leaves the discount untouched, twice our best
 		// halves it, ten times all but removes it. Never a boost above normal,
 		// and it falls back to nothing the moment we can build their equal.
-		{
+		// A WATER LAB IS FUNDED BY THE NAVY (his watched game 2026-09-28: a T2
+		// yard started with no ship that could fight their subs). The land
+		// target sits at zero under the T2 switch, which read as fully funded,
+		// and their T2 fleet does not lift this floor: no fleet, no yard.
+		// ...and the navy it needs is at least our share of the enemy army we
+		// face, not the early target a couple of gunboats fill (his: a T2
+		// yard at 3.5 minutes, "even with this bonus, way too early").
+		// While we are blind the risk model's own prior stands in for their
+		// fleet (SiegeExpect's basis). Below that navy the yard is not bought
+		// at all -- a discount lost to a T2 gain this large (his: "3 minutes
+		// in ... starting a tier 2 lab").
+		float navyT = ArmyTargetFull() * NavyShare();
+		const float foeShare = Military::EnemyArmyCost() * AnswerShare();
+		if (foeShare > navyT)
+			navyT = foeShare;
+		const float foePrior = (gAssetsM - gProtM + ArmyValue())
+				* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR) * NavyShare();
+		if (foePrior > navyT)
+			navyT = foePrior;
+		if ((PlantClass(d) == PC_WATER) && (navyT > 1.f)) {
+			fundedMul = (NavyValue() >= navyT) ? 1.f : 0.f;
+		} else {
 			const float theirs = ai.GetEnemyMaxMobileCostM();
 			const float ours = OwnedBestMobileCostM();
 			if ((theirs > ours) && (theirs > 0.f)) {

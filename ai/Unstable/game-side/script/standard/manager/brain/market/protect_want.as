@@ -115,6 +115,7 @@ bool gWallEffDiag = false;
 int gNextObsoleteLog = 0;
 
 int gNextWaterDefLog = 0;
+int gNextWaterPickLog = 0;
 
 Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 {
@@ -824,6 +825,21 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			if (!OnMap(anchorW) && (NavShipyardDef() > 0) && Builder::gHomeSet)
 				anchorW = WetPlantSiteFor(Catalog::Def(NavShipyardDef()),
 						Builder::gHomePos, uidW, hereW);
+			// IN FRONT of the yard, toward them, not behind it (his watch).
+			if (OnMap(anchorW)) {
+				const AIFloat3 foeW = Front::FoeAnchor();
+				if (OnMap(foeW)) {
+					const float dxW = foeW.x - anchorW.x;
+					const float dzW = foeW.z - anchorW.z;
+					const float lW = sqrt(dxW * dxW + dzW * dzW);
+					if (lW > 1.f) {
+						const AIFloat3 fwdW(anchorW.x + 300.f * dxW / lW, 0.f,
+								anchorW.z + 300.f * dzW / lW);
+						if (OnMap(fwdW))
+							anchorW = fwdW;
+					}
+				}
+			}
 			if (OnMap(anchorW)) {
 				float horW = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
 				if (horW <= 1.f)
@@ -845,8 +861,22 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					ValueOf(dW, gapW / horW, WalkSecTo(unit, sW),
 							Catalog::gBuildPower[uidW], cW);
 					// Its own budget: while the water share is unfilled the
-					// best floating gun wins, not the best tower overall.
-					if ((bestW.def is null) || (cW.value > bestW.value)) {
+					// best floating gun wins, not the best tower overall --
+					// and one that hits UNDER the waterline first: their subs
+					// and walking commanders are what kill our water (his
+					// watch: Corals and no torpedo launcher).
+					// ...unless they field hovers, which a torpedo cannot hit:
+					// then the laser tower on the water (his refinement).
+					// ...but never before the first torpedo launcher stands:
+					// their subs are always the threat to our water.
+					const bool surfFirst = EnemyHoversSeen() && (WaterTorpHave() > 0);
+					const bool torpW = surfFirst ? (Catalog::gSurfT[dW] > 0.01f)
+							: (Catalog::gWaterT[dW] > 0.01f);
+					const bool bestTorp = (bestW.def !is null) && (surfFirst
+							? (Catalog::gSurfT[int(bestW.def.id)] > 0.01f)
+							: (Catalog::gWaterT[int(bestW.def.id)] > 0.01f));
+					if ((bestW.def is null) || (torpW && !bestTorp)
+						|| ((torpW == bestTorp) && (cW.value > bestW.value))) {
 						bestW = cW;
 						bestW.kind = WK_PROTECT;
 						@bestW.def = Catalog::Def(dW);
@@ -854,8 +884,16 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestW.spotId = PROT_DEF;
 					}
 				}
-				if (bestW.def !is null)
+				if (bestW.def !is null) {
 					w = bestW;
+					if (ai.frame >= gNextWaterPickLog) {
+						gNextWaterPickLog = ai.frame + 10 * SECOND;
+						AiLog(Factory::T() + "apex: waterdef-pick t=" + ai.teamId + " "
+							+ unit.circuitDef.GetName() + " -> " + bestW.def.GetName()
+							+ " torps=" + WaterTorpHave() + " hovers=" + (EnemyHoversSeen() ? 1 : 0)
+							+ " at=" + int(bestW.pos.x) + "," + int(bestW.pos.z));
+					}
+				}
 			}
 		}
 	}

@@ -1653,6 +1653,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					const float armyM = Military::EnemyArmyCost();
 					floatVal = Military::EnemyAfloat()
 							? (((armyM > subsM) ? armyM : subsM) * AnswerShare()) : 0.f;
+					// Where our land is cut off their army has to cross the
+					// water, so it is afloat by construction; blind, the navy
+					// budget stands in (his: "we are not making any submarines").
+					if (NavyShare() > 0.f) {
+						float wetM = ((armyM > subsM) ? armyM : subsM) * AnswerShare();
+						const float navyM = ArmyTargetFull() * NavyShare();
+						if (navyM > wetM)
+							wetM = navyM;
+						if (wetM > floatVal)
+							floatVal = wetM;
+					}
 				}
 				if (floatVal <= 1.f) {
 					if (prankNow)
@@ -1703,7 +1714,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":reach";
 				continue;
 			}
-			ppc *= WaterFightMul(d);
+			ppc *= WaterFightMul(d) * SubImmunityMul(d);
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.

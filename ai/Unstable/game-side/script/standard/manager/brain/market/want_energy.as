@@ -139,13 +139,29 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	int etaD = -1;
 	float etaS = 0.f;
 	Want etaW;
+	AIFloat3 etaSite = eSite;
 	Perf::Add("en.pre", _tPre);
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
-			continue;   // floaters need water; land-base v1 (see armfmkr churn)
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
+			continue;
 		if (Catalog::gMakeE[d] <= 1.f)
 			continue;
+		// A floater is priced at water this hand can build from, and placed
+		// there (execute.as) -- never at the land farm (the armfmkr churn).
+		AIFloat3 site = eSite;
+		if (Catalog::gFloater[d]) {
+			if (!MapHasWater())
+				continue;
+			const AIFloat3 hereE = unit.GetPos(ai.frame);
+			AIFloat3 anchorE = NearestYard(hereE);
+			if (!OnMap(anchorE))
+				anchorE = Builder::gHomeSet ? Builder::gHomePos : eSite;
+			site = WetNanoSite(d, anchorE, 600.f);
+			if (!OnMap(site) || !ai.CanDefReachAt(Catalog::Def(uid), hereE, site,
+					Catalog::gBuildDist[uid]))
+				continue;
+		}
 		// NEVER BUILD WHAT WE WOULD EAT: a rung the per-cell dwarf test
 		// already marks edible is obsolete ON ARRIVAL (his "we should never
 		// want to create obsolete buildings" -- the reclaim-rebuild loop was
@@ -276,7 +292,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		gain *= fReal;
 		if (gain <= 0.f)
 			continue;
-		const float walkSec = WalkSecTo(unit, eSite);
+		const float walkSec = WalkSecTo(unit, site);
 		const double _tVo = Perf::T0();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
 		Perf::Add("en.value", _tVo);
@@ -291,7 +307,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			const float cellsE = float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
 			const double _tBl = Perf::T0();
-			const float blast = BlastCollateralM(eSite, d);   // its fuse, and its neighbours'
+			const float blast = BlastCollateralM(site, d);   // its fuse, and its neighbours'
 			Perf::Add("en.blast", _tBl);
 			const float rent = ((Catalog::gAreaCells[d] > 0)
 						? (genRentCell * float(Catalog::gAreaCells[d])) : 0.f)
@@ -383,7 +399,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			w = c;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(d);
-			w.pos = eSite;
+			w.pos = site;
 		}
 		// WHICH GENERATOR: the one that brings the target soonest, not the one
 		// the multiplier stack rates highest. The ladder already decides which
@@ -407,6 +423,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				etaS = s;
 				etaD = d;
 				etaW = c;
+				etaSite = site;
 			}
 			if (Catalog::gCostM[d] > 3000.f)
 				bigLine += " " + Catalog::Def(d).GetName() + "=" + int(s);
@@ -472,7 +489,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			w = etaW;
 			w.kind = WK_ENERGY;
 			@w.def = Catalog::Def(etaD);
-			w.pos = eSite;
+			w.pos = etaSite;
 		}
 	}
 	// A generator dearer than a minute of metal income is re-priced once with

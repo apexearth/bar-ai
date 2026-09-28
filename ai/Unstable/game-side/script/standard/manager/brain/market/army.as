@@ -227,6 +227,74 @@ float WaterFightMul(int d)
 	return 1.f - NavyShare();
 }
 
+// A HOVER, from the def alone: a ground unit, not amphibious, not a ship,
+// that can move over more of the map than the land is.
+bool IsHoverDef(int d)
+{
+	if (!Catalog::gMobile[d] || Catalog::gFlyer[d] || Catalog::gAmphib[d]
+		|| IsNavyDef(d) || Catalog::gBuilder[d])
+		return false;
+	float lp = aiTerrainMgr.GetLandPercent();
+	if (lp <= 1.5f)
+		lp *= 100.f;
+	return ai.DefMapCoverage(Catalog::Def(d)) > lp + 5.f;
+}
+
+// Have we seen them field hovers: a laser tower on the water is for those,
+// a torpedo launcher for everything under and on it (his 2026-09-28).
+bool gFoeHoverSeen = false;
+int gFoeHoverAt = -999999;
+bool EnemyHoversSeen()
+{
+	if (gFoeHoverSeen || (ai.frame < gFoeHoverAt + 10 * SECOND))
+		return gFoeHoverSeen;
+	gFoeHoverAt = ai.frame;
+	const AIFloat3 mid(float(AiTerrainWidth()) * 0.5f, 0.f, float(AiTerrainHeight()) * 0.5f);
+	const float r = float(AiTerrainWidth() + AiTerrainHeight());
+	for (int d = 1; (d <= Catalog::gDefCount) && !gFoeHoverSeen; ++d) {
+		if (Catalog::gAvailable[d] && (Catalog::gPower[d] > 1.f) && IsHoverDef(d))
+			gFoeHoverSeen = ai.CountEnemyDefNear(d, mid, r) > 0;
+	}
+	return gFoeHoverSeen;
+}
+
+// A SUB IS WORTH WHAT CANNOT SHOOT BACK (his 2026-09-28: lower hp and damage
+// than the rest, but most ships cannot shoot at them). The share of the enemy
+// metal we have seen that can hit under the waterline; a sub's worth is
+// scaled by 2 - that share, so 2x when nothing they field can touch it.
+float gSubHitShare = 1.f;
+int gSubHitAt = -999999;
+float EnemyCanHitSubShare()
+{
+	if (ai.frame < gSubHitAt + 10 * SECOND)
+		return gSubHitShare;
+	gSubHitAt = ai.frame;
+	const AIFloat3 mid(float(AiTerrainWidth()) * 0.5f, 0.f, float(AiTerrainHeight()) * 0.5f);
+	const float r = float(AiTerrainWidth() + AiTerrainHeight());
+	float all = 0.f, hit = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
+			|| (Catalog::gPower[d] <= 1.f))
+			continue;
+		const int n = ai.CountEnemyDefNear(d, mid, r);
+		if (n <= 0)
+			continue;
+		const float m = float(n) * Catalog::gCostM[d];
+		all += m;
+		if (Catalog::gWaterT[d] > 0.01f)
+			hit += m;
+	}
+	gSubHitShare = (all > 1.f) ? (hit / all) : 1.f;
+	return gSubHitShare;
+}
+
+float SubImmunityMul(int d)
+{
+	if (!Catalog::gSub[d] || !Catalog::gMobile[d] || (NavyShare() <= 0.f))
+		return 1.f;
+	return 2.f - EnemyCanHitSubShare();
+}
+
 // A hull that crosses water and neither walks the bottom nor floats as a ship:
 // the hover. No land lab's T2 replaces it out there.
 bool SurfaceCrosser(int d)

@@ -411,6 +411,17 @@ float DefenceValue()
 // The defence target split like the army (docs/24, 2026-09-28): where our
 // land is cut off, the water's share of it is held only by floating guns --
 // torpedo launchers and floating towers out from our shore, so a yard stands.
+int WaterTorpHave()
+{
+	int n = 0;
+	for (uint i = 0; i < gProtDefId[PROT_DEF].length(); ++i) {
+		const int d = gProtDefId[PROT_DEF][i];
+		if ((Catalog::gFloater[d] || Catalog::gSub[d]) && (Catalog::gWaterT[d] > 0.01f))
+			++n;
+	}
+	return n;
+}
+
 float WaterDefenceHave()
 {
 	float have = 0.f;

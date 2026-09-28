@@ -295,8 +295,8 @@ void Init()
 	}
 	// What each water-going combat hull is: the water-map pricing reads these.
 	for (int i = 1; i <= gDefCount; ++i) {
-		if (!gMobile[i] || gBuilder[i] || gFlyer[i] || (gPower[i] <= 1.f)
-			|| !(gAmphib[i] || gFloater[i] || gSub[i]))
+		if (gBuilder[i] || gFlyer[i] || !(gAmphib[i] || gFloater[i] || gSub[i])
+			|| ((gSurfT[i] + gWaterT[i]) <= 0.01f))
 			continue;
 		AiLog("apex: waterdef " + Def(i).GetName() + " amph=" + (gAmphib[i] ? 1 : 0)
 			+ " float=" + (gFloater[i] ? 1 : 0) + " sub=" + (gSub[i] ? 1 : 0)
