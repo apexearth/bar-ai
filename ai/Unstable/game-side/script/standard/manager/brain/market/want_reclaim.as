@@ -88,6 +88,33 @@ void NoteReclaimClaim(Id tgt, Id worker, int untilFrame,
 	gReclaimPos.insertLast(at);
 }
 
+// Converter capacity already condemned: claimed and not yet eaten.
+float gClaimedConvE = 0.f;
+int gClaimedConvAt = -1;
+float ClaimedConvE()
+{
+	if (gClaimedConvAt == ai.frame)
+		return gClaimedConvE;
+	gClaimedConvAt = ai.frame;
+	gClaimedConvE = 0.f;
+	for (uint i = 0; i < gReclaimTgt.length(); ++i) {
+		if (ai.frame >= gReclaimUntil[i])
+			continue;
+		CCircuitUnit@ v = ai.GetTeamUnit(gReclaimTgt[i]);
+		if ((v is null) || (v.circuitDef is null))
+			continue;
+		gClaimedConvE += Catalog::gConvCapacity[int(v.circuitDef.id)];
+	}
+	return gClaimedConvE;
+}
+
+bool BuiltYoung(CCircuitUnit@ tgt)
+{
+	const int born = BuiltFrameOf(tgt);
+	const float win = ai.GetTunable("apex_replant_window_s", TUNE_REPLANT_WINDOW_S);
+	return (born > 0) && (float(ai.frame - born) < win * float(SECOND));
+}
+
 // TURRETS PILE ONTO THE RECLAIM (apexearth: "We have a lot of constructor
 // units & turrets which could be doing this"; 2026-08-28 night: "those guys
 // are great for reclaiming old buildings"). An idle nano in range of a
@@ -220,7 +247,9 @@ float ReclaimHandMul(CCircuitUnit@ unit)
 	return 1.f;
 }
 
-float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
+// lostM: metal the victim's output would have made before its replacement
+// stands -- a one-shot, amortized like the refund.
+float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz, float lostM = 0.f)
 {
 	const int cells = (Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1;
 	// ROOM IS WORTH SOMETHING ONLY WHEN IT IS SCARCE. SpaceRentM prices ground
@@ -280,25 +309,48 @@ float RetireGain(CCircuitUnit@ tgt, int d, float ePM, float hz)
 			: (Catalog::gMakeE[d] * ePM
 				+ Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]   // the metal it converts
 				+ LatheCellBP(d) * float(cells) * (7.f / 80.f));
-	return (Catalog::gCostM[d] + SpaceRentM(at, cells) + room) / hz
+	// The build side charges a converter its BlastCollateralM; standing, it
+	// still carries that expected loss, and retiring it stops the bill.
+	return (Catalog::gCostM[d] + SpaceRentM(at, cells) + room
+				+ RetireBlastM(tgt, d, at) - lostM) / hz
 			+ upside
 			- trickle;
 }
 
+// BlastCollateralM per victim, refreshed a few per frame: the victim walks
+// run over every converter we own, and each refresh is a structure query.
+array<int> gRetBlastAt(32001, -1);
+array<float> gRetBlastM(32001, 0.f);
+int gRetBlastFrame = -1;
+int gRetBlastDone = 0;
+float RetireBlastM(CCircuitUnit@ tgt, int d, const AIFloat3& in at)
+{
+	const int id = int(tgt.id);
+	if ((id < 0) || (id >= int(gRetBlastAt.length())))
+		return 0.f;
+	if ((gRetBlastAt[id] >= 0) && (ai.frame - gRetBlastAt[id] < 30 * SECOND))
+		return gRetBlastM[id];
+	if (gRetBlastFrame != ai.frame) {
+		gRetBlastFrame = ai.frame;
+		gRetBlastDone = 0;
+	}
+	if (gRetBlastDone >= 4)
+		return (gRetBlastAt[id] >= 0) ? gRetBlastM[id] : 0.f;
+	++gRetBlastDone;
+	gRetBlastAt[id] = ai.frame;
+	gRetBlastM[id] = BlastCollateralM(at, d);
+	return gRetBlastM[id];
+}
+
 float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
-		float wage, float hz)
+		float wage, float hz, float lostM = 0.f)
 {
 	// A JUST-BUILT STRUCTURE IS NEVER OBSOLETE -- same law the con path
 	// already applies via apex_reclaim_age_s, at the window the rebuy
 	// discount runs for. Without it the market eats the plant it just built.
-	{
-		const int born = BuiltFrameOf(tgt);
-		const float win = ai.GetTunable("apex_replant_window_s",
-				TUNE_REPLANT_WINDOW_S);
-		if ((born > 0) && (float(ai.frame - born) < win * float(SECOND)))
-			return 0.f;
-	}
-	const float gain = RetireGain(tgt, d, ePM, hz);
+	if (BuiltYoung(tgt))
+		return 0.f;
+	const float gain = RetireGain(tgt, d, ePM, hz, lostM);
 	if (gain <= 0.f)
 		return 0.f;
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
@@ -509,6 +561,28 @@ float ConvTotalE()
 // still made; ten of them at 1,000 m/s can, and no hand makes a basic.
 bool DenserHandsCover(int d)
 {
+	const float s = DenserHandsSecs(d, 0.f);
+	return (s >= 0.f) && (s <= DenserHandsWindow());
+}
+
+float DenserHandsWindow()
+{
+	const float horizon = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return (horizon > 1.f) ? horizon : 180.f;
+}
+
+// Seconds our free denser-capable hands need to put up the unconverted surplus
+// plus `extraE` in their best converter; -1 when no such hand exists.
+int gDhBest = -1;
+float gDhBp = 0.f;
+int gDhDef = -1;
+int gDhAt = -1;
+float DenserHandsSecs(int d, float extraE)
+{
+	if ((gDhAt == ai.frame) && (gDhDef == d))
+		return DenserHandsSecsFrom(extraE);
+	gDhAt = ai.frame;
+	gDhDef = d;
 	const float mine = Catalog::gConvCapacity[d] * Catalog::gConvRatio[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	float bp = 0.f;
@@ -541,10 +615,11 @@ bool DenserHandsCover(int d)
 		if (denser)
 			denserDef.insertLast(di);
 	}
+	gDhBest = best;
+	gDhBp = 0.f;
 	if (best < 0)
-		return false;
-	const float horizon = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-	const float h = (horizon > 1.f) ? horizon : 180.f;
+		return -1.f;
+	const float h = DenserHandsWindow();
 	// ...AND THOSE HANDS MUST BE FREE TO. Nominal build power read one T2
 	// con raising a fusion as able to convert the whole surplus, so every T1
 	// hand refused the basic and nobody converted (apexearth 2026-09-14:
@@ -561,10 +636,28 @@ bool DenserHandsCover(int d)
 		if (HandFreeWithin(u, 0.5f * h))
 			bp += Catalog::gBuildPower[ud];
 	}
+	gDhBp = bp;
 	if (bp <= 0.f)
-		return false;
-	const float n = ConvertibleE() / Catalog::gConvCapacity[best];
-	return n * Catalog::gBuildTime[best] / bp <= h;
+		return -1.f;
+	return DenserHandsSecsFrom(extraE);
+}
+
+float DenserHandsSecsFrom(float extraE)
+{
+	if ((gDhBest < 0) || (gDhBp <= 0.f))
+		return -1.f;
+	const float n = (SpareConvE() + extraE) / Catalog::gConvCapacity[gDhBest];
+	return n * Catalog::gBuildTime[gDhBest] / gDhBp;
+}
+
+// What a converter would actually get: the energy spilling, less converters
+// ordered -- ProposeConvert's surplus. ConvertibleE counts energy the builds
+// are spending and read thousands of E/s over the real spill.
+float SpareConvE()
+{
+	const float spill = (gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma;
+	const float s = spill - ConvCapInFlight();
+	return (s > 0.f) ? s : 0.f;
 }
 
 // Is this hand's current job over within `secs`? Idle is free; a guard or a
@@ -743,14 +836,35 @@ float DenserLatheStandingBP(int d)
 // accessible by ground units so we need to get the ones which are closer"):
 // a victim a ground con's movetype cannot stand at quarter-prices, so the
 // accessible ring wins the election; flyers see no walls.
-float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at)
+//
+// Only a def-less mark on the victim's own footprint counts: a reclaim walk
+// marks its victim's centre when it dies on nopath or hot-road. A mark with a
+// def is mostly "no free slot here" -- a full block -- and a rez bot's failed
+// wreck walk 250 elmos off says nothing about this building; both vetoed the
+// reclaims that make room.
+bool WalkRefusedAt(const AIFloat3& in p, int d)
+{
+	if (!OnMap(p))
+		return false;
+	const int fp = (Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d];
+	const float r = float(fp) * 8.f + SQUARE_SIZE * 2.f;
+	BlockPoll();
+	for (uint i = 0; i < gBlockPos.length(); ++i) {
+		if ((gBlockDef[i] < 0) && (ai.frame - gBlockAt[i] <= BLOCK_TTL)
+			&& (gBlockPos[i].distance2D(p) < r))
+			return true;
+	}
+	return false;
+}
+
+float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at, int d)
 {
 	const int uid = int(unit.circuitDef.id);
 	if (Catalog::gFlyer[uid])
 		return 1.f;
 	// The path query refused this ground already: CanDefReach is the sector
 	// read that said yes while 2,212 walks to one LLT row died on nopath.
-	if (NearBlocked(at))
+	if (WalkRefusedAt(at, d))
 		return 0.f;
 	return ai.CanDefReach(Catalog::Def(uid), at, at) ? 1.f : 0.25f;
 }
@@ -975,6 +1089,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	}
 	int nGen = 0, nGenDwarf = 0, nGenFree = 0, nGenPriced = 0;
 	int nConv = 0, nConvDwarf = 0, nConvDenser = 0, nConvPriced = 0;
+	int nConvSwap = 0, nConvYoung = 0, nConvUnreach = 0;
+	float bestLostM = 0.f;
+	CCircuitUnit@ bestLostFor = null;
+	float logSwapS = -2.f;
 	float bestGenV = 0.f, bestConvV = 0.f;
 	int bestGenDef = -1, bestConvDef = -1;
 	for (uint i = 0; i < gOwnGen.length(); ++i) {
@@ -1002,7 +1120,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// an advanced solar 4.69, so while one T1 panel stands the advanced
 		// solar can never even be the candidate.
 		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, g.GetPos(ai.frame));
+				* ReachVictimMul(unit, g.GetPos(ai.frame), d);
 		if (v > 0.f)
 			++nGenPriced;
 		if (v > bestGenV) {
@@ -1044,19 +1162,39 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (mc <= 0.f)
 			continue;
 		++nConv;
-		if (ownBestMcell < ratio * mc)
+		// Against what our hands can build, as the build side reads it: owned
+		// only, the first advanced waited on surplus the basics were chewing.
+		if (!ConvObsoleteOnArrival(d))
 			continue;   // not dwarfed: still earning its cells
 		++nConvDwarf;
-		// The denser fleet STANDING carries the load actually being converted
-		// plus this one's. Not every joule that could be (waste included) --
-		// no fleet ever covered that; not ordered ones -- they arrive minutes
-		// after the basic is eaten; not the hands test -- it flips as basics
-		// are eaten and rebuilt, and fed a churn.
-		if (DenserConvStandingE(d) < ConvUseE() + Catalog::gConvCapacity[d])
-			continue;
+		// Either the denser fleet standing carries the load plus this one's, or
+		// our free denser hands can put up its replacement (surplus and every
+		// claimed basic ahead of it) inside the fill window. Standing-only
+		// never came: the basics chew the surplus that buys the advanced ones.
+		// The build side refuses the basic on the same number (DenserHandsCover).
+		float lostM = 0.f;
+		const float capD = Catalog::gConvCapacity[d];
+		if (DenserConvStandingE(d) < ConvUseE() + capD) {
+			const float swapS = DenserHandsSecs(d, ClaimedConvE() + capD);
+			logSwapS = swapS;
+			if ((swapS < 0.f) || (swapS > DenserHandsWindow()))
+				continue;
+			// Its output is gone until the replacement stands, except what idle
+			// converter capacity already picks up.
+			float idle = ConvCapE() - ConvUseE();
+			if (idle < 0.f)
+				idle = 0.f;
+			const float uncovered = (capD > idle) ? (capD - idle) : 0.f;
+			lostM = uncovered * Catalog::gConvRatio[d] * swapS;
+			++nConvSwap;
+		}
 		++nConvDenser;
-		const float v = RetireValue(unit, cv, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, cv.GetPos(ai.frame));
+		if (BuiltYoung(cv))
+			++nConvYoung;
+		const float reach = ReachVictimMul(unit, cv.GetPos(ai.frame), d);
+		if (reach <= 0.f)
+			++nConvUnreach;
+		const float v = RetireValue(unit, cv, d, ePM, wageR, hz, lostM) * reach;
 		if (v > 0.f)
 			++nConvPriced;
 		if (v > bestConvV) {
@@ -1067,6 +1205,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			bestValue = v;
 			@best = cv;
 			bestDef = d;
+			bestLostM = lostM;
+			@bestLostFor = cv;
 		}
 	}
 	// Construction turrets, on the same law again: build power per cell of
@@ -1096,7 +1236,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		++nLatheCovered;
 		const float v = RetireValue(unit, nt, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, nt.GetPos(ai.frame));
+				* ReachVictimMul(unit, nt.GetPos(ai.frame), d);
 		if (v > bestLatheV) {
 			bestLatheV = v;
 			bestLatheDef = d;
@@ -1117,6 +1257,10 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			+ " best=" + ((bestGenDef >= 0) ? Catalog::Def(bestGenDef).GetName() : "-")
 			+ ":" + formatFloat(bestGenV * 1000.f, "", 0, 2)
 			+ " conv=" + nConv + "/" + nConvDwarf + "/" + nConvDenser + "/" + nConvPriced
+			+ " swap=" + nConvSwap + " young=" + nConvYoung + " unreach=" + nConvUnreach
+			+ " claimedE=" + int(ClaimedConvE())
+			+ " swapS=" + int(logSwapS) + " handBP=" + int(gDhBp)
+			+ " spareE=" + int(SpareConvE())
 			+ " best=" + ((bestConvDef >= 0) ? Catalog::Def(bestConvDef).GetName() : "-")
 			+ ":" + formatFloat(bestConvV * 1000.f, "", 0, 2)
 			+ " eFree=" + int(eFree) + " eShort=" + (eShort ? 1 : 0)
@@ -1230,7 +1374,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		if (!dominated && !stranded)
 			continue;
 		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, gProtPos[PROT_DEF][i]);
+				* ReachVictimMul(unit, gProtPos[PROT_DEF][i], d);
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
@@ -1499,7 +1643,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	@w.def = Catalog::Def(bestDef);
 	w.pos = gp;
 	w.spotId = int(best.id);
-	w.gain = RetireGain(best, bestDef, ePM, hz);
+	w.gain = RetireGain(best, bestDef, ePM, hz, (best is bestLostFor) ? bestLostM : 0.f);
 	w.mCost = 1.f;
 	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * wageR;
 	w.value = bestValue;
@@ -1567,6 +1711,8 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		} else if (comm) {
 			continue;
 		}
+		if (ReclaimClaimed(eat.id, unit.id))
+			continue;
 		const AIFloat3 ep = eat.GetPos(ai.frame);
 		if (!OnMap(ep))
 			continue;
@@ -1658,7 +1804,8 @@ Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
 		if (us is null)
 			continue;
 		for (uint i = 0; i < us.length(); ++i) {
-			if (us[i] is null)
+			// Claimed: one hand eats it, the rest are not sent to the same one.
+			if ((us[i] is null) || ReclaimClaimed(us[i].id, unit.id))
 				continue;
 			const float dd = us[i].GetPos(ai.frame).distance2D(bp);
 			if (dd < nearest) {
