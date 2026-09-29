@@ -547,13 +547,69 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 	// tCost bills the walk out only; the builder also walks back to base,
 	// so the job pays for however much farther from home it leaves him.
 	const int ud = int(unit.circuitDef.id);
+	w.backM = 0.f;
 	if (Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
 		const float further = w.pos.distance2D(Builder::gHomePos) - up.distance2D(Builder::gHomePos);
 		if (further > 0.f)
-			w.tripM += further / Catalog::gSpeed[ud] * WalkRate(Catalog::gBuildPower[ud]);
+			w.backM = further / Catalog::gSpeed[ud] * WalkRate(Catalog::gBuildPower[ud]);
+		w.tripM += w.backM;
 	}
 	const float denom = FerryReprice(w, unit, c, c + w.tripM);
 	w.value = w.valueRaw * c / denom;
+}
+
+// ONE WALK, SEVERAL JOBS. A trip out to the water serves the yard, the tube
+// and the radar that stand there, not one urchin at a time (his watch
+// 2026-09-28: the commander walked out, built one thing and walked home).
+// Each want's road, out and back, is split with the other wants near its
+// site in proportion to their value; nearness is the share of the walk out
+// the other site saves. Once there, those jobs cost no walk and home does.
+int gOutingN = 0;
+int gNextOutingLog = 0;
+
+void ShareOuting(CCircuitUnit@ unit, array<Want@>@ wants)
+{
+	const int ud = int(unit.circuitDef.id);
+	const float rate = WalkRate(Catalog::gBuildPower[ud]);
+	const AIFloat3 up = unit.GetPos(ai.frame);
+	if ((rate <= 0.f) || !OnMap(up))
+		return;
+	const uint n = wants.length();
+	array<float> mul(n, 1.f);
+	for (uint i = 0; i < n; ++i) {
+		Want@ c = wants[i];
+		if ((c is null) || (c.value <= 0.f) || (c.walkSec <= 0.f) || !OnMap(c.pos))
+			continue;
+		const float far = up.distance2D(c.pos);
+		if (far <= 1.f)
+			continue;
+		float others = 0.f;
+		for (uint j = 0; j < n; ++j) {
+			Want@ o = wants[j];
+			if ((j == i) || (o is null) || (o.value <= 0.f) || !OnMap(o.pos))
+				continue;
+			const float k = 1.f - o.pos.distance2D(c.pos) / far;
+			if (k > 0.f)
+				others += k * o.value;
+		}
+		if (others <= 0.f)
+			continue;
+		const float roadM = c.walkSec * rate + c.backM;
+		const float cost = c.mCost + c.tCost + c.tripM;
+		const float saved = roadM * others / (c.value + others);
+		if ((cost > 0.f) && (saved > 0.f) && (saved < cost))
+			mul[i] = cost / (cost - saved);
+	}
+	for (uint i = 0; i < n; ++i) {
+		if (mul[i] > 1.f) {
+			wants[i].value *= mul[i];
+			++gOutingN;
+		}
+	}
+	if (ai.frame >= gNextOutingLog) {
+		gNextOutingLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: outing t=" + ai.teamId + " shared=" + gOutingN);
+	}
 }
 
 bool ElecIdOk(CCircuitUnit@ unit)
@@ -1259,6 +1315,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 	}
 	Perf::Add("dec.expose", _tExpose);
+	ShareOuting(unit, wants);
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
 	// a builder never idles while a positive want remains executable.

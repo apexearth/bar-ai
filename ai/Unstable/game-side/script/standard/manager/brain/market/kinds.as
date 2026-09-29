@@ -43,6 +43,7 @@ class Want {
 	float walkSec = 0.f;    // the asker's road to pos, so the ladder can charge it
 	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
 	float valueRaw = 0.f;   // value before the trip was charged
+	float backM = 0.f;      // the road back home, inside tripM
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a
