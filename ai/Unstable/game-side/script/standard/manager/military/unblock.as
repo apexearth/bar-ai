@@ -28,20 +28,16 @@ const int   UNBLOCK_RECHECK   = 15 * SECOND;  // ...then again, after a clearing
 const float UNBLOCK_EPS       = 48.f;   // movement under this is standing still
 const int   UNBLOCK_SAMPLE    = 24;     // units whose position is read per tick
 const float UNBLOCK_RING      = 700.f;  // how far out an exit has to reach
-const int   UNBLOCK_RAYS      = 8;      // directions probed around the unit
-// A wall has to be made of something. Below this many structures of ours in the
-// ring there is nothing to blame and the unit is held by terrain, which
-// reclaiming cannot fix.
-const int   UNBLOCK_MIN_WALL  = 4;
-const float UNBLOCK_CORRIDOR  = 96.f;   // half-width of the lane a unit needs
+const int   UNBLOCK_RAYS      = 16;     // directions probed around the unit
+// The pocket: a lane with nothing of ours across it this far out is open.
+const float UNBLOCK_REACH     = UNBLOCK_RING * 0.5f;
 const int   UNBLOCK_PROBE_PERIOD = 3 * SECOND;
 const int   UNBLOCK_ORDER_PERIOD = 10 * SECOND;
 // How long a unit gets to obey the move order before it counts as penned.
 const int   UNBLOCK_TEST_WAIT = 8 * SECOND;
 const int   UNBLOCK_STRIKES   = 1;   // failed orders tolerated before acting
-// Never eat something expensive to answer this. A solar is 155, a wind ~40, a
-// T1 tower 100-350, a converter ~700. Anything dearer is a reactor, a lab or a
-// T2/T3 gun, and a walled-in squad is not worth one.
+// The dearest wall a cheap unit may cost us; a dearer unit may cost its own
+// price, and the market still eats whichever of the two is worth less.
 const float UNBLOCK_MAX_COST  = 800.f;
 
 // The register. Ids, not handles: CCircuitUnit is registered NOCOUNT, so a
@@ -207,6 +203,20 @@ void MarkPenMoved(Id id, const AIFloat3& in at)
 	}
 }
 
+Id gCandId = 0;
+float gCandCost = -1.f;
+AIFloat3 gCandAt;
+bool gSweepDone = false;
+
+bool HasPenVerdict(Id id)
+{
+	for (uint i = 0; i < gPenVictim.length(); ++i) {
+		if (gPenVictim[i] == id)
+			return true;
+	}
+	return false;
+}
+
 bool UnblockAsked(Id id)
 {
 	for (uint i = 0; i < gUnblockAsked.length(); ++i) {
@@ -233,35 +243,92 @@ array<int>      gTestFrame;   // when it went out
 array<AIFloat3> gTestDir;     // direction it was sent, i.e. where the wall is
 array<int>      gTestStrikes; // failed move orders so far
 
-// Where to send it: the eighth of the ring holding the fewest of our own
-// buildings. Pure arithmetic over a list we already have -- the thinnest part of
-// the wall, by the same reasoning the ray probe used, without the engine call.
-AIFloat3 ThinnestDir(const AIFloat3& in at)
+AIFloat3 RayDir(int k)
 {
-	array<int> count(UNBLOCK_RAYS, 0);
-	array<CCircuitUnit@>@ structs = ai.GetOwnStructsNear(at, UNBLOCK_RING);
-	if (structs !is null) {
-		for (uint i = 0; i < structs.length(); ++i) {
-			CCircuitUnit@ s = structs[i];
-			if (s is null)
-				continue;
-			const AIFloat3 rel = s.GetPos(ai.frame) - at;
-			if (rel.SqLength2D() < NEAR_ZERO)
-				continue;
-			float a = atan2(rel.z, rel.x);
-			if (a < 0.f)
-				a += 6.2831853f;
-			int k = int(a / 6.2831853f * float(UNBLOCK_RAYS)) % UNBLOCK_RAYS;
-			++count[k];
+	const float a = 6.2831853f * float(k) / float(UNBLOCK_RAYS);
+	return AIFloat3(cos(a), 0.f, sin(a));
+}
+
+// Half the width a footprint sweeps (gFootX is in 16-elmo cells).
+float HalfOf(const CCircuitDef@ d)
+{
+	const int i = int(d.id);
+	const int f = (Catalog::gFootX[i] > Catalog::gFootZ[i]) ? Catalog::gFootX[i] : Catalog::gFootZ[i];
+	return (f > 0) ? float(f) * 8.f : 8.f;
+}
+
+// Terrain the unit could cross if nothing of ours stood on it. The side of a
+// base with no buildings is usually a cliff or the map edge, so the emptiest
+// lane was the one terrain closes and every unit sent down it read as penned.
+// Where the area map does not hold the unit's own ground (`known` false) it
+// cannot judge, and treating that as shut offered free units for reclaim.
+bool LaneWalkable(CCircuitDef@ def, const AIFloat3& in at, const AIFloat3& in dir, bool known)
+{
+	const AIFloat3 to = at + dir * UNBLOCK_REACH;
+	if (!OnMap(to))
+		return false;
+	if (!known)
+		return true;
+	const AIFloat3 mid = at + dir * (UNBLOCK_REACH * 0.5f);
+	return ai.CanDefReach(def, at, mid) && ai.CanDefReach(def, at, to);
+}
+
+bool TerrainKnown(CCircuitDef@ def, const AIFloat3& in at)
+{
+	return (def !is null) && ai.CanDefReach(def, at, at);
+}
+
+// Our structures whose footprint crosses the strip this unit sweeps walking
+// `dir` out of the pocket; returns the nearest.
+CCircuitUnit@ LaneFirst(array<CCircuitUnit@>@ structs, const AIFloat3& in at,
+	const AIFloat3& in dir, float unitHalf, int& out count)
+{
+	count = 0;
+	if (structs is null)
+		return null;
+	CCircuitUnit@ first = null;
+	float firstAlong = 0.f;
+	for (uint i = 0; i < structs.length(); ++i) {
+		CCircuitUnit@ s = structs[i];
+		if ((s is null) || (s.circuitDef is null))
+			continue;
+		const float sh = HalfOf(s.circuitDef);
+		const AIFloat3 rel = s.GetPos(ai.frame) - at;
+		const float along = rel.x * dir.x + rel.z * dir.z;
+		if ((along <= 0.f) || (along > UNBLOCK_REACH + sh))
+			continue;
+		if (abs(rel.x * dir.z - rel.z * dir.x) > unitHalf + sh)
+			continue;
+		++count;
+		if ((first is null) || (along < firstAlong)) {
+			firstAlong = along;
+			@first = s;
 		}
 	}
-	int best = 0;
-	for (int k = 1; k < UNBLOCK_RAYS; ++k) {
-		if (count[k] < count[best])
+	return first;
+}
+
+// Where to send it: the walkable lane crossing the fewest of our buildings.
+AIFloat3 ThinnestDir(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	array<CCircuitUnit@>@ structs = ai.GetOwnStructsNear(at, UNBLOCK_RING);
+	const float uh = HalfOf(unit.circuitDef);
+	CCircuitDef@ def = Catalog::Def(int(unit.circuitDef.id));
+	const bool known = TerrainKnown(def, at);
+	int best = -1;
+	int bestN = 0;
+	for (int k = 0; k < UNBLOCK_RAYS; ++k) {
+		const AIFloat3 dir = RayDir(k);
+		if (!LaneWalkable(def, at, dir, known))
+			continue;
+		int n = 0;
+		LaneFirst(structs, at, dir, uh, n);
+		if ((best < 0) || (n < bestN)) {
 			best = k;
+			bestN = n;
+		}
 	}
-	const float a = 6.2831853f * float(best) / float(UNBLOCK_RAYS);
-	return AIFloat3(cos(a), 0.f, sin(a));
+	return RayDir((best < 0) ? 0 : best);
 }
 
 bool UnderTest(Id id)
@@ -309,8 +376,8 @@ bool StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 		if (!OnMap(site) || (at.distance2D(site) <= reach + 64.f))
 			return false;
 	}
-	const AIFloat3 dir = ThinnestDir(at);
-	const AIFloat3 to = at + dir * (UNBLOCK_RING * 0.5f);
+	const AIFloat3 dir = ThinnestDir(unit, at);
+	const AIFloat3 to = at + dir * UNBLOCK_REACH;
 	if (!OnMap(to))
 		return false;
 	unit.CmdMoveTo(to);
@@ -322,48 +389,56 @@ bool StartMoveTest(CCircuitUnit@ unit, const AIFloat3& in at)
 	return true;
 }
 
-// The cheapest thing of OURS standing in the lane the unit would leave by.
+// THE CHEAPEST DOOR. Every walkable lane out of the pocket is closed by the
+// first structure of ours across it; the door is the cheapest of those. A lane
+// with nothing across it means the pocket is not ours to open.
 //
 // Never a mex (the metal spot is the reason the base is here), never a factory
-// or a nano (IsBuilder covers both -- eating what produces the unit to free the
-// unit is not a trade), never anything dear.
-CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out wallCount)
-{
-	wallCount = 0;
-	array<CCircuitUnit@>@ structs = ai.GetOwnStructsNear(at, UNBLOCK_RING);
-	if (structs is null)
-		return null;
-	wallCount = int(structs.length());
+// (IsBuilder -- eating what produces the unit to free the unit is not a trade).
+int gLaneWalk = 0, gLaneOpen = 0, gLaneShut = 0;   // the last pocket read
+bool gTerrainKnown = true;
+int gPenBlind = 0;
+AIFloat3 gDoorDir;
 
-	CCircuitUnit@ pick = null;
-	float bestAlong = -1.f;
-	for (uint i = 0; i < structs.length(); ++i) {
-		CCircuitUnit@ s = structs[i];
-		if (s is null)
+CCircuitUnit@ WallToEat(CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	gLaneWalk = 0;
+	gLaneOpen = 0;
+	gLaneShut = 0;
+	array<CCircuitUnit@>@ structs = ai.GetOwnStructsNear(at, UNBLOCK_RING);
+	CCircuitDef@ def = Catalog::Def(int(unit.circuitDef.id));
+	const float uh = HalfOf(unit.circuitDef);
+	const float cap = (unit.circuitDef.costM > UNBLOCK_MAX_COST) ? unit.circuitDef.costM : UNBLOCK_MAX_COST;
+	CCircuitUnit@ door = null;
+	float doorCost = 0.f;
+	gTerrainKnown = TerrainKnown(def, at);
+	if (!gTerrainKnown)
+		++gPenBlind;
+	for (int k = 0; k < UNBLOCK_RAYS; ++k) {
+		const AIFloat3 dir = RayDir(k);
+		if (!LaneWalkable(def, at, dir, gTerrainKnown))
 			continue;
-		const CCircuitDef@ sdef = s.circuitDef;
-		if ((sdef is null) || sdef.IsMex() || sdef.IsBuilder())
+		++gLaneWalk;
+		int n = 0;
+		CCircuitUnit@ first = LaneFirst(structs, at, dir, uh, n);
+		if (first is null) {
+			++gLaneOpen;
 			continue;
-		if (sdef.costM > UNBLOCK_MAX_COST)
+		}
+		const CCircuitDef@ fd = first.circuitDef;
+		if (fd.IsMex() || fd.IsBuilder() || (fd.costM > cap)) {
+			++gLaneShut;
 			continue;
-		if (UnblockAsked(s.id))
-			continue;
-		// In the lane: ahead of the unit along `dir`, and within a corridor wide
-		// enough to walk down.
-		const AIFloat3 rel = s.GetPos(ai.frame) - at;
-		const float along = rel.x * dir.x + rel.z * dir.z;
-		if (along <= 0.f)
-			continue;
-		const float across = abs(rel.x * dir.z - rel.z * dir.x);
-		if (across > UNBLOCK_CORRIDOR)
-			continue;
-		// The first thing in the lane is the wall; a cheaper one behind it opens nothing.
-		if ((bestAlong < 0.f) || (along < bestAlong)) {
-			bestAlong = along;
-			@pick = s;
+		}
+		// A wall already being eaten for another victim opens this pocket too.
+		const float c = UnblockAsked(first.id) ? 0.f : fd.costM;
+		if ((door is null) || (c < doorCost)) {
+			@door = first;
+			doorCost = c;
+			gDoorDir = dir;
 		}
 	}
-	return pick;
+	return door;
 }
 
 // Stuck units already asked for, with a TTL: a reclaim that aborted (no
@@ -371,6 +446,8 @@ CCircuitUnit@ WallToEat(const AIFloat3& in at, const AIFloat3& in dir, int& out 
 array<int> gStuckAsked;
 array<int> gStuckAskedFrame;
 int gStuckOffered = 0;   // units offered to the market as unreachable
+int gPenOpen = 0;        // refused to walk with an open lane: not a pen
+int gPenShut = 0;        // penned, and every door too dear to eat
 
 bool StuckAskedFor(Id id)
 {
@@ -392,10 +469,17 @@ bool StuckAskedFor(Id id)
 // off for UNBLOCK_RECHECK rather than immediately asking for a second building.
 bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in dir)
 {
+	CCircuitUnit@ eat = WallToEat(unit, at);
+	if (gLaneOpen > 0) {
+		// It refused to walk with an open lane beside it: its own task holds it
+		// (a squad re-asserting its post), or units crowd it. Nothing of ours to eat.
+		++gPenOpen;
+		AiLog(Factory::T() + "apex: pen-open " + unit.circuitDef.GetName() + " #" + unit.id
+			+ " lanes=" + gLaneWalk + " open=" + gLaneOpen + " at=" + int(at.x) + "," + int(at.z));
+		return false;
+	}
 	++gPennedSeen;
-	int wall = 0;
-	CCircuitUnit@ eat = WallToEat(at, dir, wall);
-	if (wall < UNBLOCK_MIN_WALL) {
+	if (gLaneWalk == 0) {
 		// Held by TERRAIN: nothing of ours to eat and the unit will never
 		// walk anywhere -- apexearth: "if we have units that are stuck and
 		// can't go anywhere then we should reclaim them." The metal comes
@@ -409,21 +493,31 @@ bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in di
 			++gStuckOffered;
 			NotePenVerdict(unit.id, 0, at, dir);
 			AiLog(Factory::T() + "apex: stuck " + unit.circuitDef.GetName()
-				+ " #" + unit.id + " terrain-penned -> offered to the market");
+				+ " #" + unit.id + " terrain-penned -> offered to the market"
+				+ " at=" + int(at.x) + "," + int(at.z));
 		}
 		return false;
 	}
-	if (eat is null)
+	if (eat is null) {
+		// Every lane out is a mex, a lab or dearer than the unit.
+		++gPenShut;
+		AiLog(Factory::T() + "apex: pen-shut " + unit.circuitDef.GetName() + " #" + unit.id
+			+ " lanes=" + gLaneWalk + " shut=" + gLaneShut
+			+ " at=" + int(at.x) + "," + int(at.z));
 		return false;
+	}
 
-	NotePenVerdict(unit.id, eat.id, eat.GetPos(ai.frame), dir);
-	gUnblockAsked.insertLast(eat.id);
-	if (gUnblockAsked.length() > 64)
-		gUnblockAsked.removeAt(0);
+	if (!UnblockAsked(eat.id)) {
+		gUnblockAsked.insertLast(eat.id);
+		if (gUnblockAsked.length() > 64)
+			gUnblockAsked.removeAt(0);
+	}
+	NotePenVerdict(unit.id, eat.id, eat.GetPos(ai.frame), gDoorDir);
 	gNextUnblockOrder = ai.frame + UNBLOCK_ORDER_PERIOD;
 	++gUnblockOrders;
 	AiLog(Factory::T() + "apex: unblock " + unit.circuitDef.GetName() + " #" + unit.id
-		+ " walled in (" + wall + " of ours in the ring) -> offered "
+		+ " cost=" + formatFloat(unit.circuitDef.costM, "", 0, 0)
+		+ " walled in (" + gLaneWalk + " lanes, " + gLaneShut + " shut) -> offered "
 		+ eat.circuitDef.GetName() + " #" + eat.id
 		+ " cost=" + formatFloat(eat.circuitDef.costM, "", 0, 0)
 		+ " (order " + gUnblockOrders + " of " + gPennedSeen + " penned)");
@@ -444,7 +538,8 @@ void PenDiag()
 	AiLog(Factory::T() + "apex: pendiag watched=" + gPenId.length()
 		+ " testing=" + gTestId.length() + " verdicts=" + gPenVictim.length()
 		+ " | penned=" + gPennedSeen + " ate-wall=" + gUnblockOrders
-		+ " walked=" + gUnblockWalks + " offered-unit=" + gStuckOffered);
+		+ " walked=" + gUnblockWalks + " offered-unit=" + gStuckOffered
+		+ " shut=" + gPenShut + " not-penned=" + gPenOpen + " blind=" + gPenBlind);
 }
 
 void UpdateUnblock()
@@ -462,8 +557,10 @@ void UpdateUnblock()
 	for (uint k = 0; k < scan; ++k) {
 		if (gPenId.length() == 0)
 			return;   // the drop below can empty it mid-walk
-		if (gPenCursor >= gPenId.length())
+		if (gPenCursor >= gPenId.length()) {
 			gPenCursor = 0;
+			gSweepDone = true;
+		}
 		const uint i = gPenCursor;
 		CCircuitUnit@ u = ai.GetTeamUnit(gPenId[i]);
 		if (u is null) {
@@ -484,15 +581,29 @@ void UpdateUnblock()
 		}
 		if (frame - gPenMoved[i] < int(ai.GetTunable("apex_unblock_still", float(UNBLOCK_STILL))))
 			continue;
-		if ((frame < gNextProbe) || (frame < gNextUnblockOrder))
+		if (UnderTest(u.id) || HasPenVerdict(u.id))
 			continue;
-
-		// The probe slot is spent on a test, not on a working builder passed over.
-		if (!UnderTest(u.id) && StartMoveTest(u, at)) {
-			gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
-			return;   // one candidate per tick
+		if (u.circuitDef.costM > gCandCost) {
+			gCandId = u.id;
+			gCandCost = u.circuitDef.costM;
+			gCandAt = at;
 		}
 	}
+
+	// The dearest still unit of the whole sweep is tested first: a gantry's
+	// T3 waits behind no rez bot.
+	if (!gSweepDone || (frame < gNextProbe) || (gCandId == 0))
+		return;
+	CCircuitUnit@ c = ai.GetTeamUnit(gCandId);
+	if ((c !is null) && (c.GetPos(frame).distance2D(gCandAt) <= UNBLOCK_EPS)) {
+		if (StartMoveTest(c, gCandAt))
+			gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
+		else
+			MarkPenMoved(c.id, gCandAt);   // a builder at work: not the top candidate again
+	}
+	gCandId = 0;
+	gCandCost = -1.f;
+	gSweepDone = false;
 }
 
 // The verdict half. A unit that was ordered to move and did is not penned; one
@@ -527,8 +638,12 @@ void UpdateMoveTests()
 			++i;
 			continue;
 		}
-		if (frame >= gNextUnblockOrder)
-			TryUnblock(u, at, gTestDir[i]);
+		if (frame < gNextUnblockOrder) {
+			++i;   // judged when the order slot frees, not thrown away
+			continue;
+		}
+		TryUnblock(u, at, gTestDir[i]);
+		MarkPenMoved(gTestId[i], at);
 		DropTest(i);
 	}
 }
