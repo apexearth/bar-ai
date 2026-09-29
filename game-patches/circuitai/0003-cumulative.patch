@@ -13694,10 +13694,18 @@ index 9e6cec42..174cc252 100644
  	}
  }
 diff --git a/src/circuit/task/builder/FactoryTask.cpp b/src/circuit/task/builder/FactoryTask.cpp
-index 9c2a9cb4..469a02fb 100644
+index 9c2a9cb4..d81deb29 100644
 --- a/src/circuit/task/builder/FactoryTask.cpp
 +++ b/src/circuit/task/builder/FactoryTask.cpp
-@@ -84,9 +84,74 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
+@@ -13,6 +13,7 @@
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
+ 
++#include "spring/SpringCallback.h"
+ #include "spring/SpringMap.h"
+ 
+ #include "AISCommands.h"
+@@ -84,9 +85,120 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
  {
  	CCircuitAI* circuit = manager->GetCircuit();
  	CMap* map = circuit->GetMap();
@@ -13741,7 +13749,53 @@ index 9c2a9cb4..469a02fb 100644
 +		}
 +	}
 +	const float exitStep = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
-+	auto exitOpen = [this, exitTerrain, exitMt, exitStep](const AIFloat3& bp) {
++	// apex: ...AND NO BUILDING OF OURS OR AN ALLY'S STANDS IN IT (his watch
++	// 2026-09-28: a gantry placed facing its own two advanced solars, 128
++	// elmos out). Two footprints ahead, the factory's width, at the facing
++	// the engine will actually build with.
++	auto laneClear = [this, circuit, exitStep](const AIFloat3& bp) {
++		AIFloat3 fwd(0.f, 0.f, 0.f);
++		switch (facing) {
++			default:
++			case UNIT_FACING_SOUTH: fwd.z = 1.f; break;
++			case UNIT_FACING_EAST:  fwd.x = 1.f; break;
++			case UNIT_FACING_NORTH: fwd.z = -1.f; break;
++			case UNIT_FACING_WEST:  fwd.x = -1.f; break;
++		}
++		const float half = exitStep * 0.5f;
++		const AIFloat3 mid = bp + fwd * (half + exitStep * 0.75f);
++		circuit->UpdateFriendlyUnits();
++		auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(mid, exitStep * 1.5f + 64.f);
++		bool clear = true;
++		for (springai::Unit* u : units) {
++			if (!clear) {
++				break;
++			}
++			auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
++			if (cand == nullptr) {
++				continue;
++			}
++			CCircuitDef* cd = cand->GetCircuitDef();
++			if ((cd == nullptr) || cd->IsMobile()) {
++				continue;
++			}
++			const AIFloat3& up = cand->GetPos(circuit->GetLastFrame());
++			const float uh = std::max(cd->GetDef()->GetXSize(), cd->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
++			const float rx = up.x - bp.x;
++			const float rz = up.z - bp.z;
++			const float ahead = rx * fwd.x + rz * fwd.z;
++			const float side = std::fabs(rx * fwd.z - rz * fwd.x);
++			if ((ahead + uh > half) && (ahead - uh < 2.f * exitStep) && (side - uh < half)) {
++				clear = false;
++			}
++		}
++		utils::free(units);
++		return clear;
++	};
++	auto exitOpen = [this, exitTerrain, exitMt, exitStep, &laneClear](const AIFloat3& bp) {
++		if (!laneClear(bp)) {
++			return false;
++		}
 +		if (exitMt == nullptr) {
 +			return true;
 +		}
@@ -13774,24 +13828,27 @@ index 9c2a9cb4..469a02fb 100644
  	}
  
  	FindFacing(pos);
-@@ -94,18 +159,20 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
+@@ -94,18 +206,22 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	CTerrainManager::TerrainPredicate predicate;
  	if (reprDef == nullptr) {
 -		predicate = [terrainMgr, builder](const AIFloat3& p) {
 -			return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
-+		predicate = [terrainMgr, builder, clearsBuilder](const AIFloat3& p) {
++		predicate = [terrainMgr, builder, clearsBuilder, &exitOpen](const AIFloat3& p) {
 +			return clearsBuilder(p)
-+					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
++					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
++					&& exitOpen(p);
  		};
  	} else {
  		CCircuitDef* reprDef = this->reprDef;
 -		predicate = [terrainMgr, builder, reprDef](const AIFloat3& p) {
 -			return terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
-+		predicate = [terrainMgr, builder, reprDef, clearsBuilder](const AIFloat3& p) {
+-					&& terrainMgr->CanBeBuiltAt(reprDef, p);
++		predicate = [terrainMgr, builder, reprDef, clearsBuilder, &exitOpen](const AIFloat3& p) {
 +			return clearsBuilder(p)
 +					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
- 					&& terrainMgr->CanBeBuiltAt(reprDef, p);
++					&& terrainMgr->CanBeBuiltAt(reprDef, p)
++					&& exitOpen(p);
  		};
  	}
  	const float testSize = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
@@ -13800,7 +13857,7 @@ index 9c2a9cb4..469a02fb 100644
  		AIFloat3 bp = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate);
  		if (!utils::is_valid(bp)) {
  			return false;
-@@ -128,7 +195,7 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
+@@ -128,7 +244,7 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
  				posOffset.x -= testSize;
  			} break;
  		}
@@ -13809,7 +13866,7 @@ index 9c2a9cb4..469a02fb 100644
  			SetBuildPos(bp);
  			return true;
  		}
-@@ -136,18 +203,32 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
+@@ -136,18 +252,32 @@ void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, fl
  	};
  
  	if (checkFacing()) {
@@ -14752,7 +14809,7 @@ index cd063e4d..588f5c55 100644
  				minSqDist = sqOEDist;
  				bestTarget = enemy;
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd88..d75ae5f9 100644
+index 9e6bfd88..fdef869f 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,7 @@
@@ -14763,15 +14820,29 @@ index 9e6bfd88..d75ae5f9 100644
  #include "task/fighter/BombTask.h"
  #include "map/ThreatMap.h"
  #include "module/MilitaryManager.h"
-@@ -23,6 +24,7 @@
+@@ -16,6 +17,7 @@
+ #include "unit/action/MoveAction.h"
+ #include "unit/enemy/EnemyUnit.h"
+ #include "unit/CircuitUnit.h"
++#include "unit/CircuitWDef.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
+ 
+@@ -23,6 +25,13 @@
  #include "spring/SpringMap.h"
  
  #include "AISCommands.h"
++#include "WeaponDef.h"
++#include "Damage.h"
++#include "UnitDef.h"
 +#include "Log.h"
++
++#include <cmath>
++#include <string>
  
  namespace circuit {
  
-@@ -39,13 +41,22 @@ CBombTask::~CBombTask()
+@@ -39,13 +48,22 @@ CBombTask::~CBombTask()
  
  bool CBombTask::CanAssignTo(CCircuitUnit* unit) const
  {
@@ -14798,7 +14869,7 @@ index 9e6bfd88..d75ae5f9 100644
  		return false;
  	}
  	return true;
-@@ -58,7 +69,7 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
+@@ -58,7 +76,7 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
  	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
  	CCircuitDef* cdef = unit->GetCircuitDef();
  	ITravelAction* travelAction;
@@ -14807,7 +14878,7 @@ index 9e6bfd88..d75ae5f9 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -82,7 +93,9 @@ void CBombTask::Start(CCircuitUnit* unit)
+@@ -82,7 +100,9 @@ void CBombTask::Start(CCircuitUnit* unit)
  		return;
  	}
  	if (!pPath->posPath.empty()) {
@@ -14818,7 +14889,7 @@ index 9e6bfd88..d75ae5f9 100644
  	}
  }
  
-@@ -127,15 +140,17 @@ void CBombTask::Update()
+@@ -127,15 +147,17 @@ void CBombTask::Update()
  	 * Regroup if required
  	 */
  	bool wasRegroup = (State::REGROUP == state);
@@ -14839,7 +14910,7 @@ index 9e6bfd88..d75ae5f9 100644
  				)
  			}
  		}
-@@ -145,7 +160,7 @@ void CBombTask::Update()
+@@ -145,7 +167,7 @@ void CBombTask::Update()
  	bool isExecute = (updCount % 4 == 0);
  	if (!isExecute) {
  		for (CCircuitUnit* unit : units) {
@@ -14848,20 +14919,29 @@ index 9e6bfd88..d75ae5f9 100644
  		}
  		if (!isExecute) {
  			if (wasRegroup && !pPath->posPath.empty()) {
-@@ -169,6 +184,12 @@ void CBombTask::Update()
- 		return;
- 	}
- 
-+	// A path around the AA from here only turns a committed wave in circles.
-+	if (committed && utils::is_valid(position)) {
-+		Fallback();
+@@ -164,8 +186,19 @@ void CBombTask::Update()
+ 	state = State::ROAM;
+ 	if (GetTarget() != nullptr) {
+ 		state = State::ENGAGE;
+-		Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
+-			|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
++		if (spreadable && (units.size() > 1)) {
++			AttackSpread(frame);
++		} else {
++			aims.clear();
++			Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
++				|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
++		}
 +		return;
 +	}
 +
- 	if (!IsQueryReady(leader)) {
++	// A path around the AA from here only turns a committed wave in circles.
++	if (committed && utils::is_valid(position)) {
++		Fallback();
  		return;
  	}
-@@ -200,10 +221,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+ 
+@@ -200,10 +233,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
  	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
@@ -14873,7 +14953,7 @@ index 9e6bfd88..d75ae5f9 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -213,6 +231,9 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -213,6 +243,9 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  
  void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -14883,7 +14963,7 @@ index 9e6bfd88..d75ae5f9 100644
  	// Do not retreat if bomber is close to target
  	if (GetTarget() == nullptr) {
  		ISquadTask::OnUnitDamaged(unit, attacker);
-@@ -224,6 +245,39 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -224,6 +257,39 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  	}
  }
  
@@ -14923,7 +15003,7 @@ index 9e6bfd88..d75ae5f9 100644
  void CBombTask::FindTarget()
  {
  	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
-@@ -236,7 +290,41 @@ void CBombTask::FindTarget()
+@@ -236,7 +302,41 @@ void CBombTask::FindTarget()
  	const bool notAW = !cdef->HasSurfToWater();
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	const float scale = (cdef->GetMinRange() > 300.0f) ? 4.0f : 1.0f;
@@ -14966,7 +15046,7 @@ index 9e6bfd88..d75ae5f9 100644
  //	const float maxAltitude = cdef->GetAltitude();
  	const float speed = cdef->GetSpeed() / 1.75f;
  	const int canTargetCat = cdef->GetTargetCategory();
-@@ -245,6 +333,9 @@ void CBombTask::FindTarget()
+@@ -245,6 +345,9 @@ void CBombTask::FindTarget()
  //								 cdef->GetLosRadius()) * 2;
  	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
  	float minHealth = std::numeric_limits<float>::max();
@@ -14976,7 +15056,7 @@ index 9e6bfd88..d75ae5f9 100644
  
  	COOAICallback* callback = circuit->GetCallback();
  	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
-@@ -258,21 +349,52 @@ void CBombTask::FindTarget()
+@@ -258,21 +361,55 @@ void CBombTask::FindTarget()
  		};
  	}
  
@@ -14990,6 +15070,9 @@ index 9e6bfd88..d75ae5f9 100644
 +		float raw, score, value, health, sqDist;
 +	};
 +	std::vector<Cand> routeCands;
++	std::vector<Cand> allCands;
++	spreadCands.clear();
++	spreadable = focused;
 +	float bestCellRaw = 0.f;
 +	auto consider = [&](const Cand& c, bool onRoute) {
 +		if (c.score > bestScore) {
@@ -15031,7 +15114,7 @@ index 9e6bfd88..d75ae5f9 100644
  			continue;
  		}
  
-@@ -281,14 +403,27 @@ void CBombTask::FindTarget()
+@@ -281,14 +418,27 @@ void CBombTask::FindTarget()
  //		float altitude;
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
@@ -15060,7 +15143,7 @@ index 9e6bfd88..d75ae5f9 100644
  				continue;
  			}
  			health = enemy->GetHealth();
-@@ -318,26 +453,190 @@ void CBombTask::FindTarget()
+@@ -318,26 +468,387 @@ void CBombTask::FindTarget()
  //                }
  //				cost += ei->GetCost();
  //			}
@@ -15138,20 +15221,23 @@ index 9e6bfd88..d75ae5f9 100644
 +						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
 +						raw *= disc + (1.f - disc) * (sinceS / revisitS);
 +					}
-+				}
-+			}
+ 				}
+ 			}
 +			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
++			if (focused && (value >= minValue)) {
++				allCands.push_back(c);
++			}
 +			if (onRoute) {
 +				if (value >= minValue) {
 +					routeCands.push_back(c);
- 				}
++				}
 +				continue;
 +			}
 +			bestCellRaw = std::max(bestCellRaw, raw);
 +			consider(c, false);
-+		}
-+	}
-+
+ 		}
+ 	}
+ 
 +	// ON THE WAY: off the cell, a target is taken only if it is worth at least
 +	// the best the cell offers on its own merits -- the detour is then pure
 +	// gain -- and it lies within sight of the route the wave actually flies
@@ -15178,10 +15264,10 @@ index 9e6bfd88..d75ae5f9 100644
 +			}
 +			if (onPath) {
 +				consider(c, true);
- 			}
- 		}
- 	}
- 
++			}
++		}
++	}
++
 +	if (committed && overFocus && (bestTarget == nullptr) && !utils::is_valid(position)) {
 +		committed = false;
 +		spent = true;
@@ -15217,10 +15303,204 @@ index 9e6bfd88..d75ae5f9 100644
 +					bestOnRoute ? 1 : 0);
 +		}
 +		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
++		if (focused) {
++			const AIFloat3& bPos = bestTarget->GetPos();
++			for (const Cand& c : allCands) {
++				if (c.pos.SqDistance2D(bPos) <= sqFocusR) {
++					spreadCands.push_back({c.enemy->GetId(), c.pos, c.value, c.health, c.enemy->GetCircuitDef()});
++				}
++			}
++		}
  	}
  	// Return: target, startPos=leader->pos, endPos=position
  }
  
++// One bomber's salvo on one building in one pass. The bombs fall in a line along
++// the track, so only the stretch over the footprint plus the splash radius lands.
++static float PassDamage(CCircuitDef* bdef, CCircuitDef* edef)
++{
++	CWeaponDef* cw = bdef->GetWeaponDef();
++	if ((cw == nullptr) || (edef == nullptr)) {
++		return 0.f;
++	}
++	WeaponDef* wd = cw->GetDef();
++	static std::map<int, std::vector<float>> dmgOf;
++	static std::map<int, int> armorOf;
++	auto it = dmgOf.find(wd->GetWeaponDefId());
++	if (it == dmgOf.end()) {
++		Damage* damage = wd->GetDamage();
++		it = dmgOf.emplace(wd->GetWeaponDefId(), damage->GetTypes()).first;
++		delete damage;
++	}
++	auto ia = armorOf.find(edef->GetId());
++	if (ia == armorOf.end()) {
++		ia = armorOf.emplace(edef->GetId(), edef->GetDef()->GetArmorType()).first;
++	}
++	const std::vector<float>& dm = it->second;
++	if (dm.empty()) {
++		return 0.f;
++	}
++	const float perBomb = ((ia->second >= 0) && (ia->second < (int)dm.size())) ? dm[ia->second] : dm[0];
++	const int salvo = std::max(1, wd->GetSalvoSize());
++	const int shots = salvo * std::max(1, wd->GetProjectilesPerShot());
++	const float track = (salvo - 1) * wd->GetSalvoDelay() * bdef->GetSpeed();
++	const float width = 0.5f * (edef->GetFootX() + edef->GetFootZ()) * 16.f + cw->GetAoe();
++	const float hit = (track > width) ? (width / track) : 1.f;
++	return perBomb * shots * hit;
++}
++
++// apexearth 2026-09-28: eighty bombers all dropped on one building. Each bomber
++// gets its own aim: the primary gets the bombers that kill it after the wave's
++// expected losses, the rest go to the neighbours worth the most metal per bomber
++// needed, and aims are matched to planes across the approach so the drops land
++// on a line instead of in one crater.
++void CBombTask::PlanSpread(int frame)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	CEnemyInfo* primary = GetTarget();
++	CCircuitDef* bdef = leader->GetCircuitDef();
++	const int n = (int)units.size();
++	const float surv = utils::clamp(circuit->ReadTeamValue(circuit->GetTeamId(), "strike_s", 1.f),
++			1.f / n, 1.f);
++	struct Aim {
++		ICoreUnit::Id id;
++		AIFloat3 pos;
++		float value, pass, health;
++		int need, got;
++		CCircuitDef* edef;
++	};
++	auto sizeAim = [&](Aim& a) {
++		a.pass = PassDamage(bdef, a.edef);
++		a.need = (a.pass > 0.f) ? std::max(1, (int)std::ceil(a.health / (a.pass * surv))) : n;
++	};
++	Aim prim{primary->GetId(), primary->GetPos(), 0.f, 0.f, primary->GetHealth(), 0, 0, primary->GetCircuitDef()};
++	sizeAim(prim);
++	std::vector<Aim> cands;
++	for (const SpreadCand& c : spreadCands) {
++		if (c.id == prim.id) {
++			prim.value = c.value;
++			continue;
++		}
++		Aim a{c.id, c.pos, c.value, 0.f, c.health, 0, 0, c.edef};
++		sizeAim(a);
++		cands.push_back(a);
++	}
++	std::sort(cands.begin(), cands.end(), [](const Aim& a, const Aim& b) {
++		return a.value / a.need > b.value / b.need;
++	});
++	std::vector<Aim> plan;
++	int left = n;
++	prim.got = std::min(prim.need, left);
++	left -= prim.got;
++	plan.push_back(prim);
++	for (Aim& a : cands) {
++		if (left <= 0) {
++			break;
++		}
++		if (a.need > left) {
++			continue;
++		}
++		a.got = a.need;
++		left -= a.need;
++		plan.push_back(a);
++	}
++	for (size_t i = 0; left > 0; i = (i + 1) % plan.size()) {
++		++plan[i].got;
++		--left;
++	}
++
++	float mx = 0.f, mz = 0.f;
++	for (CCircuitUnit* u : units) {
++		const AIFloat3& p = u->GetPos(frame);
++		mx += p.x;
++		mz += p.z;
++	}
++	float dx = prim.pos.x - mx / n, dz = prim.pos.z - mz / n;
++	const float len = std::max(math::sqrt(dx * dx + dz * dz), 1.f);
++	dx /= len;
++	dz /= len;
++	auto lateral = [&](const AIFloat3& p) { return (p.x - prim.pos.x) * -dz + (p.z - prim.pos.z) * dx; };
++	std::vector<std::pair<float, size_t>> slots;
++	float lo = 0.f, hi = 0.f, deep = 0.f;
++	for (size_t i = 0; i < plan.size(); ++i) {
++		const float l = lateral(plan[i].pos);
++		lo = std::min(lo, l);
++		hi = std::max(hi, l);
++		deep = std::max(deep, std::fabs((plan[i].pos.x - prim.pos.x) * dx + (plan[i].pos.z - prim.pos.z) * dz));
++		for (int k = 0; k < plan[i].got; ++k) {
++			slots.push_back({l, i});
++		}
++	}
++	std::vector<std::pair<float, CCircuitUnit*>> planes;
++	for (CCircuitUnit* u : units) {
++		planes.push_back({lateral(u->GetPos(frame)), u});
++	}
++	std::sort(slots.begin(), slots.end());
++	std::sort(planes.begin(), planes.end());
++	aims.clear();
++	for (size_t k = 0; k < planes.size() && k < slots.size(); ++k) {
++		aims[planes[k].second->GetId()] = plan[slots[k].second].id;
++	}
++
++	CMilitaryManager* milMgr = circuit->GetMilitaryManager();
++	std::string rest;
++	for (size_t i = 0; i < plan.size(); ++i) {
++		milMgr->NoteBombTarget(plan[i].id, frame);
++		if (i > 0) {
++			rest += utils::string_format("%s:%d/%d ",
++					(plan[i].edef != nullptr) ? plan[i].edef->GetDef()->GetName() : "?", plan[i].got, plan[i].need);
++		}
++	}
++	circuit->LOG("apex: bomb spread units=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
++			n, (int)plan.size(), surv, bdef->GetDef()->GetName(),
++			(prim.edef != nullptr) ? prim.edef->GetDef()->GetName() : "?",
++			prim.health, prim.pass, prim.need, prim.got, hi - lo, deep, (int)spreadCands.size(), rest.c_str());
++}
++
++void CBombTask::AttackSpread(int frame)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	const ICoreUnit::Id pid = GetTarget()->GetId();
++	bool replan = true;
++	for (const auto& kv : aims) {
++		if (kv.second == pid) {
++			replan = false;
++			break;
++		}
++	}
++	// A dead plane does not re-plan: its loss is already in the allotment.
++	for (CCircuitUnit* u : units) {
++		if (replan) {
++			break;
++		}
++		auto it = aims.find(u->GetId());
++		replan = (it == aims.end()) || (circuit->GetEnemyInfo(it->second) == nullptr);
++	}
++	if (!replan && (frame < attackFrame + FRAMES_PER_SEC * 3)) {
++		return;
++	}
++	attackFrame = frame;
++	if (replan) {
++		PlanSpread(frame);
++	}
++	for (CCircuitUnit* u : units) {
++		if (u->Blocker() != nullptr) {
++			continue;
++		}
++		auto it = aims.find(u->GetId());
++		CEnemyInfo* e = (it != aims.end()) ? circuit->GetEnemyInfo(it->second) : nullptr;
++		if (e == nullptr) {
++			e = GetTarget();
++		}
++		const bool isGround = e->NotInRadarAndLOS() || (e->GetCircuitDef() == nullptr)
++				|| !e->GetCircuitDef()->IsMobile() || circuit->IsCheating();
++		if (u->GetTravelAct() != nullptr) {
++			u->GetTravelAct()->StateWait();
++		}
++		u->Attack(e, isGround, frame + FRAMES_PER_SEC * 60);
++	}
++}
++
 +// apex: the point of no return -- once the way home crosses more AA than the way
 +// to the cell, turning back buys nothing, so the wave presses on (docs/24).
 +static float LineThreat(CThreatMap* threatMap, CCircuitUnit* unit, const AIFloat3& a, const AIFloat3& b)
@@ -15259,7 +15539,7 @@ index 9e6bfd88..d75ae5f9 100644
  void CBombTask::ApplyTargetPath(const CQueryPathSingle* query)
  {
  	pPath = query->GetPathInfo();
-@@ -388,9 +687,11 @@ void CBombTask::Fallback()
+@@ -388,9 +899,11 @@ void CBombTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -15274,14 +15554,42 @@ index 9e6bfd88..d75ae5f9 100644
  		)
  	}
 diff --git a/src/circuit/task/fighter/BombTask.h b/src/circuit/task/fighter/BombTask.h
-index 85b30616..2f7f761e 100644
+index 85b30616..83fe6424 100644
 --- a/src/circuit/task/fighter/BombTask.h
 +++ b/src/circuit/task/fighter/BombTask.h
-@@ -33,6 +33,13 @@ private:
+@@ -9,9 +9,15 @@
+ #define SRC_CIRCUIT_TASK_FIGHTER_BOMBTASK_H_
+ 
+ #include "task/fighter/SquadTask.h"
++#include "unit/CoreUnit.h"
++
++#include <map>
++#include <vector>
+ 
+ namespace circuit {
+ 
++class CCircuitDef;
++
+ class CBombTask: public ISquadTask {
+ public:
+ 	CBombTask(ITaskModule* mgr, float powerMod);
+@@ -33,6 +39,25 @@ private:
  	void FallbackBasePos();
  	void ApplyBasePos(const CQueryPathSingle* query);
  	void Fallback();
 +	void CheckCommit(const springai::AIFloat3& pos, const springai::AIFloat3& focusPos, float focusR);
++	void AttackSpread(int frame);
++	void PlanSpread(int frame);
++
++	struct SpreadCand {
++		ICoreUnit::Id id;
++		springai::AIFloat3 pos;
++		float value, health;
++		CCircuitDef* edef;
++	};
++	std::vector<SpreadCand> spreadCands;  // this tick's targets around the primary
++	bool spreadable = false;
++	std::map<ICoreUnit::Id, ICoreUnit::Id> aims;  // our bomber -> the enemy it drops on
 +
 +	// Past the point where going home costs more AA than reaching the cell.
 +	bool committed = false;

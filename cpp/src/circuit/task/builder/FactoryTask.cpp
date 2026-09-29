@@ -13,6 +13,7 @@
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
+#include "spring/SpringCallback.h"
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
@@ -123,7 +124,53 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		}
 	}
 	const float exitStep = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
-	auto exitOpen = [this, exitTerrain, exitMt, exitStep](const AIFloat3& bp) {
+	// apex: ...AND NO BUILDING OF OURS OR AN ALLY'S STANDS IN IT (his watch
+	// 2026-09-28: a gantry placed facing its own two advanced solars, 128
+	// elmos out). Two footprints ahead, the factory's width, at the facing
+	// the engine will actually build with.
+	auto laneClear = [this, circuit, exitStep](const AIFloat3& bp) {
+		AIFloat3 fwd(0.f, 0.f, 0.f);
+		switch (facing) {
+			default:
+			case UNIT_FACING_SOUTH: fwd.z = 1.f; break;
+			case UNIT_FACING_EAST:  fwd.x = 1.f; break;
+			case UNIT_FACING_NORTH: fwd.z = -1.f; break;
+			case UNIT_FACING_WEST:  fwd.x = -1.f; break;
+		}
+		const float half = exitStep * 0.5f;
+		const AIFloat3 mid = bp + fwd * (half + exitStep * 0.75f);
+		circuit->UpdateFriendlyUnits();
+		auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(mid, exitStep * 1.5f + 64.f);
+		bool clear = true;
+		for (springai::Unit* u : units) {
+			if (!clear) {
+				break;
+			}
+			auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+			if (cand == nullptr) {
+				continue;
+			}
+			CCircuitDef* cd = cand->GetCircuitDef();
+			if ((cd == nullptr) || cd->IsMobile()) {
+				continue;
+			}
+			const AIFloat3& up = cand->GetPos(circuit->GetLastFrame());
+			const float uh = std::max(cd->GetDef()->GetXSize(), cd->GetDef()->GetZSize()) * SQUARE_SIZE * 0.5f;
+			const float rx = up.x - bp.x;
+			const float rz = up.z - bp.z;
+			const float ahead = rx * fwd.x + rz * fwd.z;
+			const float side = std::fabs(rx * fwd.z - rz * fwd.x);
+			if ((ahead + uh > half) && (ahead - uh < 2.f * exitStep) && (side - uh < half)) {
+				clear = false;
+			}
+		}
+		utils::free(units);
+		return clear;
+	};
+	auto exitOpen = [this, exitTerrain, exitMt, exitStep, &laneClear](const AIFloat3& bp) {
+		if (!laneClear(bp)) {
+			return false;
+		}
 		if (exitMt == nullptr) {
 			return true;
 		}
@@ -159,16 +206,18 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CTerrainManager::TerrainPredicate predicate;
 	if (reprDef == nullptr) {
-		predicate = [terrainMgr, builder, clearsBuilder](const AIFloat3& p) {
+		predicate = [terrainMgr, builder, clearsBuilder, &exitOpen](const AIFloat3& p) {
 			return clearsBuilder(p)
-					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance());
+					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
+					&& exitOpen(p);
 		};
 	} else {
 		CCircuitDef* reprDef = this->reprDef;
-		predicate = [terrainMgr, builder, reprDef, clearsBuilder](const AIFloat3& p) {
+		predicate = [terrainMgr, builder, reprDef, clearsBuilder, &exitOpen](const AIFloat3& p) {
 			return clearsBuilder(p)
 					&& terrainMgr->CanReachAtSafe(builder, p, builder->GetCircuitDef()->GetBuildDistance())
-					&& terrainMgr->CanBeBuiltAt(reprDef, p);
+					&& terrainMgr->CanBeBuiltAt(reprDef, p)
+					&& exitOpen(p);
 		};
 	}
 	const float testSize = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
