@@ -9,8 +9,14 @@
 #define SRC_CIRCUIT_TASK_FIGHTER_BOMBTASK_H_
 
 #include "task/fighter/SquadTask.h"
+#include "unit/CoreUnit.h"
+
+#include <map>
+#include <vector>
 
 namespace circuit {
+
+class CCircuitDef;
 
 class CBombTask: public ISquadTask {
 public:
@@ -34,6 +40,18 @@ private:
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
 	void CheckCommit(const springai::AIFloat3& pos, const springai::AIFloat3& focusPos, float focusR);
+	void AttackSpread(int frame);
+	void PlanSpread(int frame);
+
+	struct SpreadCand {
+		ICoreUnit::Id id;
+		springai::AIFloat3 pos;
+		float value, health;
+		CCircuitDef* edef;
+	};
+	std::vector<SpreadCand> spreadCands;  // this tick's targets around the primary
+	bool spreadable = false;
+	std::map<ICoreUnit::Id, ICoreUnit::Id> aims;  // our bomber -> the enemy it drops on
 
 	// Past the point where going home costs more AA than reaching the cell.
 	bool committed = false;

@@ -182,6 +182,7 @@ void Release(const string& in why)
 		ai.PublishTeamValue("strike_x", gStrikeAt.x);
 		ai.PublishTeamValue("strike_z", gStrikeAt.z);
 		ai.PublishTeamValue("strike_p", WavePower());
+		ai.PublishTeamValue("strike_s", Throughput(gWaveBombers));
 		ai.PublishTeamValue("strike_r",
 				ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
 	}

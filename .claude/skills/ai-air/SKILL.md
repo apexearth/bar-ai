@@ -98,6 +98,7 @@ ground parity and lets the commitment gate open.
 `apex: air assassin committing, first plant <x>` · `apex: air strike -- <why>` ·
 `apex: air strike over -- <n> of the wave home, <n> built since` ·
 `apex: air run scored def=<x> sent= home= surv= dmg/bomber=` ·
+`apex: bomb spread units= aims= surv= primary= need= got= width= depth= rest=def:got/need` (C++ `CBombTask::PlanSpread`: each bomber of a focused wave gets its own aim; `need` = bombers to kill it at `strike_s` survival, published by `Release()` from `Throughput`) ·
 `apex: intercepting for ally t<n>` · `apex: fighters spread -- ...`
 
 ## Tunables

@@ -17,6 +17,7 @@
 #include "unit/action/MoveAction.h"
 #include "unit/enemy/EnemyUnit.h"
 #include "unit/CircuitUnit.h"
+#include "unit/CircuitWDef.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
@@ -24,7 +25,13 @@
 #include "spring/SpringMap.h"
 
 #include "AISCommands.h"
+#include "WeaponDef.h"
+#include "Damage.h"
+#include "UnitDef.h"
 #include "Log.h"
+
+#include <cmath>
+#include <string>
 
 namespace circuit {
 
@@ -179,8 +186,13 @@ void CBombTask::Update()
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
 		state = State::ENGAGE;
-		Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
-			|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
+		if (spreadable && (units.size() > 1)) {
+			AttackSpread(frame);
+		} else {
+			aims.clear();
+			Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
+				|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
+		}
 		return;
 	}
 
@@ -359,6 +371,9 @@ void CBombTask::FindTarget()
 		float raw, score, value, health, sqDist;
 	};
 	std::vector<Cand> routeCands;
+	std::vector<Cand> allCands;
+	spreadCands.clear();
+	spreadable = focused;
 	float bestCellRaw = 0.f;
 	auto consider = [&](const Cand& c, bool onRoute) {
 		if (c.score > bestScore) {
@@ -522,6 +537,9 @@ void CBombTask::FindTarget()
 				}
 			}
 			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
+			if (focused && (value >= minValue)) {
+				allCands.push_back(c);
+			}
 			if (onRoute) {
 				if (value >= minValue) {
 					routeCands.push_back(c);
@@ -598,8 +616,202 @@ void CBombTask::FindTarget()
 					bestOnRoute ? 1 : 0);
 		}
 		milMgr->NoteBombTarget(bestTarget->GetId(), circuit->GetLastFrame());
+		if (focused) {
+			const AIFloat3& bPos = bestTarget->GetPos();
+			for (const Cand& c : allCands) {
+				if (c.pos.SqDistance2D(bPos) <= sqFocusR) {
+					spreadCands.push_back({c.enemy->GetId(), c.pos, c.value, c.health, c.enemy->GetCircuitDef()});
+				}
+			}
+		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position
+}
+
+// One bomber's salvo on one building in one pass. The bombs fall in a line along
+// the track, so only the stretch over the footprint plus the splash radius lands.
+static float PassDamage(CCircuitDef* bdef, CCircuitDef* edef)
+{
+	CWeaponDef* cw = bdef->GetWeaponDef();
+	if ((cw == nullptr) || (edef == nullptr)) {
+		return 0.f;
+	}
+	WeaponDef* wd = cw->GetDef();
+	static std::map<int, std::vector<float>> dmgOf;
+	static std::map<int, int> armorOf;
+	auto it = dmgOf.find(wd->GetWeaponDefId());
+	if (it == dmgOf.end()) {
+		Damage* damage = wd->GetDamage();
+		it = dmgOf.emplace(wd->GetWeaponDefId(), damage->GetTypes()).first;
+		delete damage;
+	}
+	auto ia = armorOf.find(edef->GetId());
+	if (ia == armorOf.end()) {
+		ia = armorOf.emplace(edef->GetId(), edef->GetDef()->GetArmorType()).first;
+	}
+	const std::vector<float>& dm = it->second;
+	if (dm.empty()) {
+		return 0.f;
+	}
+	const float perBomb = ((ia->second >= 0) && (ia->second < (int)dm.size())) ? dm[ia->second] : dm[0];
+	const int salvo = std::max(1, wd->GetSalvoSize());
+	const int shots = salvo * std::max(1, wd->GetProjectilesPerShot());
+	const float track = (salvo - 1) * wd->GetSalvoDelay() * bdef->GetSpeed();
+	const float width = 0.5f * (edef->GetFootX() + edef->GetFootZ()) * 16.f + cw->GetAoe();
+	const float hit = (track > width) ? (width / track) : 1.f;
+	return perBomb * shots * hit;
+}
+
+// apexearth 2026-09-28: eighty bombers all dropped on one building. Each bomber
+// gets its own aim: the primary gets the bombers that kill it after the wave's
+// expected losses, the rest go to the neighbours worth the most metal per bomber
+// needed, and aims are matched to planes across the approach so the drops land
+// on a line instead of in one crater.
+void CBombTask::PlanSpread(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CEnemyInfo* primary = GetTarget();
+	CCircuitDef* bdef = leader->GetCircuitDef();
+	const int n = (int)units.size();
+	const float surv = utils::clamp(circuit->ReadTeamValue(circuit->GetTeamId(), "strike_s", 1.f),
+			1.f / n, 1.f);
+	struct Aim {
+		ICoreUnit::Id id;
+		AIFloat3 pos;
+		float value, pass, health;
+		int need, got;
+		CCircuitDef* edef;
+	};
+	auto sizeAim = [&](Aim& a) {
+		a.pass = PassDamage(bdef, a.edef);
+		a.need = (a.pass > 0.f) ? std::max(1, (int)std::ceil(a.health / (a.pass * surv))) : n;
+	};
+	Aim prim{primary->GetId(), primary->GetPos(), 0.f, 0.f, primary->GetHealth(), 0, 0, primary->GetCircuitDef()};
+	sizeAim(prim);
+	std::vector<Aim> cands;
+	for (const SpreadCand& c : spreadCands) {
+		if (c.id == prim.id) {
+			prim.value = c.value;
+			continue;
+		}
+		Aim a{c.id, c.pos, c.value, 0.f, c.health, 0, 0, c.edef};
+		sizeAim(a);
+		cands.push_back(a);
+	}
+	std::sort(cands.begin(), cands.end(), [](const Aim& a, const Aim& b) {
+		return a.value / a.need > b.value / b.need;
+	});
+	std::vector<Aim> plan;
+	int left = n;
+	prim.got = std::min(prim.need, left);
+	left -= prim.got;
+	plan.push_back(prim);
+	for (Aim& a : cands) {
+		if (left <= 0) {
+			break;
+		}
+		if (a.need > left) {
+			continue;
+		}
+		a.got = a.need;
+		left -= a.need;
+		plan.push_back(a);
+	}
+	for (size_t i = 0; left > 0; i = (i + 1) % plan.size()) {
+		++plan[i].got;
+		--left;
+	}
+
+	float mx = 0.f, mz = 0.f;
+	for (CCircuitUnit* u : units) {
+		const AIFloat3& p = u->GetPos(frame);
+		mx += p.x;
+		mz += p.z;
+	}
+	float dx = prim.pos.x - mx / n, dz = prim.pos.z - mz / n;
+	const float len = std::max(math::sqrt(dx * dx + dz * dz), 1.f);
+	dx /= len;
+	dz /= len;
+	auto lateral = [&](const AIFloat3& p) { return (p.x - prim.pos.x) * -dz + (p.z - prim.pos.z) * dx; };
+	std::vector<std::pair<float, size_t>> slots;
+	float lo = 0.f, hi = 0.f, deep = 0.f;
+	for (size_t i = 0; i < plan.size(); ++i) {
+		const float l = lateral(plan[i].pos);
+		lo = std::min(lo, l);
+		hi = std::max(hi, l);
+		deep = std::max(deep, std::fabs((plan[i].pos.x - prim.pos.x) * dx + (plan[i].pos.z - prim.pos.z) * dz));
+		for (int k = 0; k < plan[i].got; ++k) {
+			slots.push_back({l, i});
+		}
+	}
+	std::vector<std::pair<float, CCircuitUnit*>> planes;
+	for (CCircuitUnit* u : units) {
+		planes.push_back({lateral(u->GetPos(frame)), u});
+	}
+	std::sort(slots.begin(), slots.end());
+	std::sort(planes.begin(), planes.end());
+	aims.clear();
+	for (size_t k = 0; k < planes.size() && k < slots.size(); ++k) {
+		aims[planes[k].second->GetId()] = plan[slots[k].second].id;
+	}
+
+	CMilitaryManager* milMgr = circuit->GetMilitaryManager();
+	std::string rest;
+	for (size_t i = 0; i < plan.size(); ++i) {
+		milMgr->NoteBombTarget(plan[i].id, frame);
+		if (i > 0) {
+			rest += utils::string_format("%s:%d/%d ",
+					(plan[i].edef != nullptr) ? plan[i].edef->GetDef()->GetName() : "?", plan[i].got, plan[i].need);
+		}
+	}
+	circuit->LOG("apex: bomb spread units=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
+			n, (int)plan.size(), surv, bdef->GetDef()->GetName(),
+			(prim.edef != nullptr) ? prim.edef->GetDef()->GetName() : "?",
+			prim.health, prim.pass, prim.need, prim.got, hi - lo, deep, (int)spreadCands.size(), rest.c_str());
+}
+
+void CBombTask::AttackSpread(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const ICoreUnit::Id pid = GetTarget()->GetId();
+	bool replan = true;
+	for (const auto& kv : aims) {
+		if (kv.second == pid) {
+			replan = false;
+			break;
+		}
+	}
+	// A dead plane does not re-plan: its loss is already in the allotment.
+	for (CCircuitUnit* u : units) {
+		if (replan) {
+			break;
+		}
+		auto it = aims.find(u->GetId());
+		replan = (it == aims.end()) || (circuit->GetEnemyInfo(it->second) == nullptr);
+	}
+	if (!replan && (frame < attackFrame + FRAMES_PER_SEC * 3)) {
+		return;
+	}
+	attackFrame = frame;
+	if (replan) {
+		PlanSpread(frame);
+	}
+	for (CCircuitUnit* u : units) {
+		if (u->Blocker() != nullptr) {
+			continue;
+		}
+		auto it = aims.find(u->GetId());
+		CEnemyInfo* e = (it != aims.end()) ? circuit->GetEnemyInfo(it->second) : nullptr;
+		if (e == nullptr) {
+			e = GetTarget();
+		}
+		const bool isGround = e->NotInRadarAndLOS() || (e->GetCircuitDef() == nullptr)
+				|| !e->GetCircuitDef()->IsMobile() || circuit->IsCheating();
+		if (u->GetTravelAct() != nullptr) {
+			u->GetTravelAct()->StateWait();
+		}
+		u->Attack(e, isGround, frame + FRAMES_PER_SEC * 60);
+	}
 }
 
 // apex: the point of no return -- once the way home crosses more AA than the way
