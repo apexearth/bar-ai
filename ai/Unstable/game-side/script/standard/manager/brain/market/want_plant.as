@@ -1018,7 +1018,10 @@ bool gReachProbeLogged = false;
 
 bool ReachDead(int pd)
 {
-	if (!Catalog::gMobile[pd] || Catalog::gFlyer[pd] || !Builder::gHomeSet)
+	// A ship holds the water and shells the shore; whether it can sail to
+	// their base is not its job (his 2026-09-28: T2 warships read :reach).
+	if (!Catalog::gMobile[pd] || Catalog::gFlyer[pd] || !Builder::gHomeSet
+		|| Catalog::gFloater[pd] || Catalog::gSub[pd])
 		return false;
 	if (int(gReachAt.length()) <= Catalog::gDefCount) {
 		const uint was = gReachAt.length();

@@ -344,8 +344,8 @@ bool Outgrown(int d)
 		return false;
 	const int tier = DefTier(d);
 	// A land lab replaces nothing on the water: a ship waits for our T2 yard.
-	if ((tier == 1) && (Catalog::gFloater[d] || Catalog::gSub[d]))
-		return TopOwnWaterPlantTier() >= 2;
+	if (Catalog::gFloater[d] || Catalog::gSub[d])
+		return TopOwnWaterPlantTier() > tier;   // no gantry unit replaces a ship
 	if ((tier == 1) && SurfaceCrosser(d))
 		return false;
 	if (tier == 1)
