@@ -225,6 +225,19 @@ bool gWcHeld = false;
 int gWcAt = -999999;
 int gWcLogAt = 0;
 
+// A water-only gun is worth its slot only where a ship could come: the census
+// samples are the water our hull sails from the yard, so a cut-off sliver has
+// none (apexearth 2026-09-29: torpedo launchers beside a sliver no ship reaches).
+bool SailableWaterNear(const AIFloat3& in p, float r)
+{
+	const float r2 = r * r;
+	for (uint i = 0; i < gWcPt.length(); ++i) {
+		if (gWcPt[i].SqDistance2D(p) <= r2)
+			return true;
+	}
+	return false;
+}
+
 void WaterSamplesBuild()
 {
 	gWcBuilt = true;
@@ -246,6 +259,33 @@ void WaterSamplesBuild()
 			gWcSeen.insertLast(-999999);
 		}
 	}
+}
+
+// Enemy ships and yards we know of: what a torpedo can hit. Its own count on a
+// slow clock -- the water census runs only for the naval lead.
+int gWcFoeWet = 0;
+int gWetCountAt = -999999;
+int EnemyWetCount()
+{
+	if (ai.frame < gWetCountAt + 10 * SECOND)
+		return gWcFoeWet;
+	gWetCountAt = ai.frame;
+	const AIFloat3 mid(float(AiTerrainWidth()) * 0.5f, 0.f, float(AiTerrainHeight()) * 0.5f);
+	const float r = float(AiTerrainWidth() + AiTerrainHeight());
+	int n = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d])
+			continue;
+		const bool yard = !Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)
+				&& (PlantClass(d) == PC_WATER);
+		if (!yard && !(IsNavyDef(d) && Catalog::gMobile[d]))
+			continue;
+		n += ai.CountEnemyDefNear(d, mid, r);
+	}
+	if (n != gWcFoeWet)
+		AiLog("apex: foewet t=" + ai.teamId + " " + gWcFoeWet + "->" + n);
+	gWcFoeWet = n;
+	return n;
 }
 
 bool WaterControlled()
@@ -291,6 +331,7 @@ bool WaterControlled()
 			foeShips += c;
 	}
 	gWcHeld = (scouted >= 0.9f) && (foeYards == 0) && (foeShips == 0);
+
 	if (ai.frame >= gWcLogAt) {
 		gWcLogAt = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: water-control t=" + ai.teamId
@@ -429,8 +470,11 @@ float SubImmunityMul(int d)
 // the hover. No land lab's T2 replaces it out there.
 bool SurfaceCrosser(int d)
 {
+	// IsHoverDef: without it every walker that reaches the enemy qualified
+	// whenever some other T1 line could not, and T1 bots were never retired.
 	return LandLocked() && !Catalog::gAmphib[d] && !IsNavyDef(d)
-		&& !Catalog::gFlyer[d] && Catalog::gMobile[d] && !ReachDead(d);
+		&& !Catalog::gFlyer[d] && Catalog::gMobile[d] && !ReachDead(d)
+		&& IsHoverDef(d);
 }
 
 // The full target: the T2 switch holds land army back, not the fleet.

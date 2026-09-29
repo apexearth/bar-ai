@@ -499,15 +499,21 @@ bool WingGrowing()
 // player, the economy carries air, and the next plane still pays.
 float StrikeGainFor(int d, float fillSec)
 {
-	if (!IsAirLead() || !IsBomberDef(d))
+	// ANY PLAYER BUYS (his ruling 2026-09-29: there is not always a lead);
+	// ShareWing pools what they hold on one ally, who flies them.
+	if (!IsBomberDef(d))
 		return 0.f;
 	if (!WingBuys())
 		return 0.f;
 	if (IsAtomicDef(d))
-		return AtomicGainFor(fillSec);
+		return IsAirLead() ? AtomicGainFor(fillSec) : 0.f;
 	// Priced against the force AT HOME, so a wave already out neither counts
-	// towards the next one nor stops it being built.
-	const int held = HeldBombers();
+	// towards the next one nor stops it being built -- and against the POOLED
+	// wing, or a donor that gave its planes away reads an empty wing forever.
+	int held = HeldBombers();
+	const int pool = int(TeamWingHeld());
+	if (pool > held)
+		held = pool;
 	if ((ScaledBombers() <= 0) || (held >= ScaledBombers()))
 		return 0.f;
 	if (!MarginalWorth(d, held))

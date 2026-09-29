@@ -169,6 +169,27 @@ float BomberMass()
 		+ float(Have(gBomberH)) * BomberUnits(gBomberH) + float(Have(gBomberN)) * BomberUnits(gBomberN);
 }
 int HeldBombers()  { const float n = BomberMass() - gWaveMass;  return (n < 0.f) ? 0 : int(n); }
+
+// Finished bombers at home, weighed: def.count includes nanoframes, which no
+// wave can take, so one Dragon frame read as 16 bombers home and recalled the
+// wave every second.
+float StandingHeldMass()
+{
+	float m = 0.f;
+	for (int i = 0; i < 4; ++i) {
+		CCircuitDef@ d = StrikeDef(i);
+		if (d is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(d, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && !InWave(us[k].id))
+				m += BomberUnits(d);
+		}
+	}
+	return m;
+}
 int HeldFighters() { const int n = Fighters() - gWaveFighters; return (n < 0) ? 0 : n; }
 
 // The run is over -- bring the survivors back so they mass with what was built

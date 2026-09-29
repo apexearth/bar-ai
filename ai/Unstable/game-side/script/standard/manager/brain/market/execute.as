@@ -913,7 +913,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						PackSlots(int(w.def.id), baseK, anchorK, askK, packK);
 						if (nFacs > 0)
 							NoteNanoDry(anchorK, packK.length() == 0);
-						walkLog += " " + Catalog::Def(anchorK).GetName()
+						// No factory standing leaves the anchor at -1.
+						walkLog += " " + ((Catalog::Def(anchorK) !is null) ? Catalog::Def(anchorK).GetName() : "-")
 								+ ":ask" + askK + "/got" + packK.length()
 								+ "/taken" + gNPTaken + "/lane" + gNPLane
 								+ "/door" + gNPDoor + "/out" + gNPOut;

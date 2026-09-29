@@ -1118,14 +1118,21 @@ bool LandLocked()
 	if (ai.frame < gLandLockedAt + 10 * SECOND)
 		return gLandLocked;
 	gLandLockedAt = ai.frame;
+	const bool was = gLandLocked;
 	gLandLocked = false;
+	int by = -1;
 	for (int d = 1; (d <= Catalog::gDefCount) && !gLandLocked; ++d) {
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
 			|| (Catalog::gBuildsList[d].length() == 0) || (LineTier(d) != 1)
 			|| (PlantClass(d) != PC_LAND) || !Producible(d))
 			continue;
 		gLandLocked = !LineReaches(d);
+		if (gLandLocked)
+			by = d;
 	}
+	if (gLandLocked != was)
+		AiLog("apex: landlocked t=" + ai.teamId + " " + (gLandLocked ? 1 : 0)
+			+ " by=" + ((by > 0) ? Catalog::Def(by).GetName() : "-"));
 	return gLandLocked;
 }
 

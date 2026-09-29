@@ -68,6 +68,85 @@ int RezFleeWindow()
 // further toward the enemy than our units' lane; with no lane there is
 // nothing to be in front of.
 int gRzFrontVeto = 0;
+
+// WHERE THE WRECKS ARE, off the line (apexearth 2026-09-29: a wreck field
+// mid-map, nobody near, no bot sent). The sweep walks our front line and the
+// local search the bot's own radius; neither reaches the middle. Deaths, ours
+// and theirs, merged per reclaim radius, richest kept; a field is spent when a
+// bot is sent to it and refills as the fighting goes on.
+const uint WRECK_FIELDS = 48;
+array<AIFloat3> gFieldPos;
+array<float> gFieldM;
+int gRzFieldSent = 0;
+int gNextFieldLog = 0;
+
+void NoteWreckField(const AIFloat3& in at, float costM)
+{
+	if (!OnMap(at) || (costM <= 0.f))
+		return;
+	for (uint i = 0; i < gFieldPos.length(); ++i) {
+		if (gFieldPos[i].distance2D(at) < WRECK_RADIUS) {
+			gFieldM[i] += costM;
+			return;
+		}
+	}
+	if (gFieldPos.length() < WRECK_FIELDS) {
+		gFieldPos.insertLast(at);
+		gFieldM.insertLast(costM);
+		return;
+	}
+	uint low = 0;
+	for (uint i = 1; i < gFieldM.length(); ++i) {
+		if (gFieldM[i] < gFieldM[low])
+			low = i;
+	}
+	if (gFieldM[low] < costM) {
+		gFieldPos[low] = at;
+		gFieldM[low] = costM;
+	}
+}
+
+// The richest field this bot may be sent to, spent on return; null if none.
+// Asked only after the line offered nothing, eight fields at most a sweep.
+IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
+{
+	for (uint tries = 0; (tries < 8) && (gFieldPos.length() > 0); ++tries) {
+		uint best = 0;
+		for (uint i = 1; i < gFieldM.length(); ++i) {
+			if (gFieldM[i] > gFieldM[best])
+				best = i;
+		}
+		const AIFloat3 at = gFieldPos[best];
+		const float m = gFieldM[best];
+		gFieldPos.removeAt(best);
+		gFieldM.removeAt(best);
+		if (m < WRECK_MIN)
+			return null;
+		if (ThreatFor(unit, at) > CON_THREAT_VETO)
+			continue;
+		AIFloat3 spoil = BestWreckAt(at, WRECK_RADIUS * 2.f, WRECK_MIN);
+		if (spoil.x < 0.f)
+			spoil = at;
+		if (!RezSiteOk(spoil)) {
+			++gRzFrontVeto;
+			++gRzVetoGround;
+			continue;
+		}
+		++gRzOkGround;
+		IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
+				Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+		if (harvest is null)
+			return null;
+		++gRzFieldSent;
+		if (ai.frame >= gNextFieldLog) {
+			gNextFieldLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: rez field " + int(spoil.x) + "," + int(spoil.z)
+				+ " m=" + int(m) + " sent=" + gRzFieldSent + " left=" + gFieldPos.length());
+		}
+		return harvest;
+	}
+	return null;
+}
 int gRzBlindToRetire = 0;
 int gRzVetoBlocked = 0;
 // The same refusals split by WHAT was refused and counted against what got
@@ -184,7 +263,7 @@ bool RezSiteOk(const AIFloat3 &in site)
 	// Ground no builder could path to: the DLL marks a no-path target and
 	// this chain re-picked it every second (7,629 nopath by armrectr in four
 	// minutes of his Carrot 8v8, a task and a path query each).
-	if (Market::NearBlocked(site)) {
+	if (Market::NearPathBlocked(site)) {
 		++gRzVetoBlocked;
 		return false;
 	}
@@ -215,7 +294,7 @@ bool RezRezSiteOk(const AIFloat3 &in site)
 		return false;
 	// The same no-path mark RezSiteOk honours: one unreachable rich corpse
 	// took 1,878 aborted walks in five minutes through this door.
-	if (Market::NearBlocked(site)) {
+	if (Market::NearPathBlocked(site)) {
 		++gRzVetoBlocked;
 		return false;
 	}
@@ -510,6 +589,9 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 					return harvest;
 			}
 		}
+		IUnitTask@ field = RezzerWreckField(unit);
+		if (field !is null)
+			return field;
 	}
 	return null;
 }

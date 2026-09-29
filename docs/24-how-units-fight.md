@@ -1505,3 +1505,38 @@ Watched on Coast To Coast 4v4 (60% water, two coasts, no land path).
   matchups, not just count metal.
 - **Land economy is still good to do**, but some maps need the water economy
   too.
+
+## 2026-09-29 — attack blind; scout in mass
+
+Watched on Pyroclast 8v8: a large army that stays home because it sees
+nothing. *"The game honestly becomes very boring and it's just like wait for
+the humans to kill me."*
+
+- **The enemy base is in their start box.** Humans are aggressive about
+  building jammers, so not seeing the enemy is normal. Not knowing exactly
+  where they are is fine: attack the box anyway.
+- **Mass scouts, then launch them.** Get a whole ton of scouts or radar
+  planes and send them into enemy territory together; what they find decides
+  where the army attacks.
+- **A big army at home is also the lag.** Holding it there while making more
+  lags the humans out.
+- **Use the army.** A massive army that never attacks means nothing happens
+  all game. Send it at the enemy.
+- **Late game is won by gantry units, nuclear missiles, heavy air, and
+  long-range plasma cannons.** Focus production on the gantry and air plants
+  rather than more small units. A Ragnarok (or many LRPCs) shooting directly
+  at the enemy base wears down all their shields, and then they die.
+- **Torpedo bombers are rarely seen doing anything.**
+- **Late game, scouts and raiders go find the enemy buildings and overwhelm
+  their defences.** This is the fodder/spam: it wastes enemy fire. Air scouts
+  do the same against high-value T2 anti-air -- the kind that hits hard but
+  has few shots.
+- **Ruling (2026-09-29): scouts are exempt from the T1 stop; T1 raiders are
+  not.** Not in waves: scouts constantly attack the enemy, taking fire while
+  our main army attacks.
+- **Pool the air on one ally** (2026-09-29). A strike waits for a certain
+  number of planes; share aircraft to the ally who already has the most air
+  so they can launch the next raid sooner.
+- **Ruling (2026-09-29): any player may buy bombers**, not only an elected air
+  lead (there is not always one); idle bombers pool on the ally holding the
+  most, who launches the raids.

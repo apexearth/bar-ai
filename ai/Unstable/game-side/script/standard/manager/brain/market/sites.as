@@ -507,18 +507,43 @@ float IdleNanoLatheM()
 		if (OnMap(lp))
 			rising.insertLast(lp);
 	}
+	// A factory turning out units is lathe work too: its product is no builder
+	// task, so a ring feeding a gantry read idle and cancelled the gantry's own
+	// nano demand.
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && LineWorking(f))
+			rising.insertLast(f.GetPos(ai.frame));
+	}
 	float idle = 0.f;
+	gIdleNanoFlag.resize(gOwnNanoPos.length());
 	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
 		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
 		bool busy = false;
 		for (uint k = 0; (k < rising.length()) && !busy; ++k)
 			busy = gOwnNanoPos[i].distance2D(rising[k]) < r;
+		gIdleNanoFlag[i] = !busy;
 		if (!busy)
 			idle += NANO_ABSORB;
 		else if (i < gOwnNanoBP.length())
 			gBusyNanoBP += gOwnNanoBP[i];
 	}
 	gIdleNanoM = idle;
+	return idle;
+}
+
+// Idle lathe that could serve THIS spot: a turret is static, so an idle one at
+// another line does nothing for the line asking.
+array<bool> gIdleNanoFlag;
+float IdleNanoLatheNear(const AIFloat3& in p)
+{
+	IdleNanoLatheM();
+	float idle = 0.f;
+	for (uint i = 0; (i < gOwnNanoPos.length()) && (i < gIdleNanoFlag.length()); ++i) {
+		const float r = (i < gOwnNanoReach.length()) ? gOwnNanoReach[i] : 400.f;
+		if (gIdleNanoFlag[i] && (gOwnNanoPos[i].distance2D(p) < r))
+			idle += NANO_ABSORB;
+	}
 	return idle;
 }
 
@@ -1311,6 +1336,22 @@ void BlockNote(const AIFloat3& in b)
 bool NearBlocked(const AIFloat3& in p)
 {
 	return NearBlockedFor(p, -1);
+}
+
+// Marks no building type owns: a walk or reclaim that could not get there, or
+// the stuck watch. A footprint refused at a slot says nothing about whether a
+// bot can walk there and eat a wreck.
+bool NearPathBlocked(const AIFloat3& in p)
+{
+	if (!OnMap(p))
+		return false;
+	BlockPoll();
+	for (uint i = 0; i < gBlockPos.length(); ++i) {
+		if ((gBlockDef[i] < 0) && (ai.frame - gBlockAt[i] <= BLOCK_TTL)
+			&& (gBlockPos[i].distance2D(p) < BLOCK_NEAR))
+			return true;
+	}
+	return false;
 }
 
 // Marks for THIS def, and marks with no def: another def's refusal says

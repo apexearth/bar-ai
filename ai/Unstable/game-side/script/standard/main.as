@@ -302,6 +302,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		Military::NoteCombatLoss(cdef.costM, Military::ForwardFraction(at),
 				ai.GetElevationAt(at) < 0.f);
 		Military::NoteLocalDeath(at, cdef.costM, true);
+		Builder::NoteWreckField(at, cdef.costM);
 	}
 	// OUR COMMANDER'S CORPSE IS A RESURRECTION JOB, not food (apexearth:
 	// "make sure we resurrect our commanders instead of reclaiming them").
@@ -411,6 +412,8 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs,
 			ai.GetElevationAt(pos) < 0.f);
 	Military::NoteLocalDeath(pos, edef.costM, false);
+	if (edef.IsMobile())
+		Builder::NoteWreckField(pos, edef.costM);
 	Air::NoteEnemyDeath(edef, pos, byUs);
 	if (byUs)
 		Market::LossNote(int(edef.id));   // their wreck is rez work too

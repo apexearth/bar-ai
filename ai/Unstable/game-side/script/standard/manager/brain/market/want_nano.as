@@ -304,7 +304,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		sinkNeed = spareS;
 	if (armyNeed > spareS)
 		armyNeed = spareS;
-	lineNeed = (lineNeed > idleL) ? (lineNeed - idleL) : 0.f;
+	const float idleAtLine = OnMap(linePos) ? IdleNanoLatheNear(linePos) : idleL;
+	lineNeed = (lineNeed > idleAtLine) ? (lineNeed - idleAtLine) : 0.f;
 	sinkNeed = (sinkNeed > idleL) ? (sinkNeed - idleL) : 0.f;
 	armyNeed = (armyNeed > idleL) ? (armyNeed - idleL) : 0.f;
 	haveLine = (lineNeed > 0.f) && OnMap(linePos);

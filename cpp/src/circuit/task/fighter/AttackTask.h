@@ -29,6 +29,7 @@ public:
 private:
 	void FindTarget();
 	void ApplyTargetPath(const CQueryPathSingle* query);
+	bool MarchEnemyBox();
 	void FallbackFrontPos();
 	void ApplyFrontPos(const CQueryPathMulti* query);
 	void FallbackBasePos();

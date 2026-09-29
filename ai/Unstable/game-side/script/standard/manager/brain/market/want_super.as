@@ -260,6 +260,12 @@ bool SuperInFlight()
 // should build more things at once (his rulings 2026-09-26/27).
 bool SuperPushable(const CCircuitDef@ d)
 {
+	// The push trusts the proposer's budget cut, which a cannon no longer
+	// takes: one the economy cannot pay inside the super horizon wins on
+	// value in the draw or not at all (a Ragnarok pushed at 11 minutes).
+	if ((d !is null) && (SuperClassOf(int(d.id)) == SC_LRPC)
+		&& (SuperBill(int(d.id)) >= SuperBudget()))
+		return false;
 	if ((d is null) || !Catalog::gAntiNuke[int(d.id)])
 		return true;
 	if (Brain::EnemyNukeSilos() > 0)
@@ -540,6 +546,48 @@ int gNextSuperLog = 0;
 int gNextLrpcLog = 0;
 float gLrpcInReach = 0.f;
 
+// Metal per hit point of a structure, read off the defs: what a shell that
+// lands on a building takes away from the owner.
+float gStructMPerHp = -1.f;
+float StructMetalPerHp()
+{
+	if (gStructMPerHp > 0.f)
+		return gStructMPerHp;
+	float m = 0.f, hp = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (Catalog::gMobile[d] || (Catalog::gHealth[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+			continue;
+		m += Catalog::gCostM[d];
+		hp += Catalog::gHealth[d];
+	}
+	if (hp > 0.f)
+		gStructMPerHp = m / hp;
+	return (gStructMPerHp > 0.f) ? gStructMPerHp : 0.1f;
+}
+
+// A GUN IS WORTH THE BASE IT GRINDS DOWN (apexearth 2026-09-29: "if you built a
+// Ragnarok and just shot that directly at the enemy base, you eventually wear
+// down all their shields and then they'll die"). Metal of their structures it
+// destroys per second over the amortisation window, capped by what stands in
+// reach. Affordability priced these on (budget-bill)/budget, which is why no
+// rapid-fire cannon was built in ~60 games. Blind, the start box in reach
+// stands for their base at the nuke's prior (docs/24: they jam; the base is in
+// the box). Returns the in-reach metal through inReachM for the log.
+float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
+{
+	const float reach = Catalog::gMaxRange[d];
+	inReachM = (reach > 1.f) ? aiEnemyMgr.GetEnemyStructCostAt(at, reach) : 0.f;
+	const AIFloat3 box = aiSetupMgr.GetEnemyBoxCentre();
+	if ((inReachM <= 0.f) && OnMap(box) && (box.distance2D(at) <= reach))
+		inReachM = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
+	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float horizon = (hz > 1.f) ? hz : 300.f;
+	float killM = Catalog::gDps[d] * StructMetalPerHp() * horizon;
+	if (killM > inReachM)
+		killM = inReachM;
+	return killM / horizon;
+}
+
 Want@ ProposeSuper(CCircuitUnit@ unit)
 {
 	Want w;
@@ -581,7 +629,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// below, taken first for every class whose budget IS the plain one --
 		// the gantry's team purse is computed further down and keeps its
 		// place.
-		if ((sc != SC_GANTRY) && (SuperBill(d) >= budget))
+		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget))
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;
@@ -633,7 +681,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 					TUNE_GANTRY_AFFORD_S);
 			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f);
 		}
-		if (bill >= classBudget)
+		// A cannon's price is its time to afford (ValueOf), not this cut.
+		if ((sc != SC_LRPC) && (bill >= classBudget))
 			continue;   // cannot afford it; nothing else about it matters
 		AIFloat3 at;
 		if (sc == SC_ANTINUKE) {
@@ -666,6 +715,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const float afford = (classBudget - bill) / classBudget;
 		float gain = power * share * afford
 				* Persona::WantMult(SuperName(sc));
+		float lrpcInM = 0.f;
+		if (sc == SC_LRPC)
+			gain = LrpcGain(d, at, lrpcInM) * Persona::WantMult(SuperName(sc));
 		if (noLines)
 			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone
@@ -736,18 +788,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// REMEMBERED STRUCTURE METAL, not ai.GetEnemyCostAt: that one is a
 		// count of enemies visible right now, which at a gun site behind our
 		// own line is zero all game (inReach=0.00 in every reading).
-		if (sc == SC_LRPC) {
-			const float reach = Catalog::gMaxRange[d];
-			const float ref = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
-			float inReach = (reach > 1.f) && (ref > 1.f)
-					? (aiEnemyMgr.GetEnemyStructCostAt(at, reach) / ref) : 0.f;
-			if (inReach > 1.f)
-				inReach = 1.f;
-			const float dfloor = ai.GetTunable("apex_offense_def_floor",
-					TUNE_OFFENSE_DEF_FLOOR);
-			gain *= dfloor + (1.f - dfloor) * inReach;
-			gLrpcInReach = inReach;
-		}
+		if (sc == SC_LRPC)
+			gLrpcInReach = lrpcInM;   // what it can reach is already inside LrpcGain
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;
@@ -760,7 +802,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				+ " have=" + SuperHave(sc) + "/" + SuperTarget(sc)
 				+ " defFill=" + formatFloat((DefenceTarget() > 1.f)
 					? (DefenceValue() / DefenceTarget()) : 1.f, "", 0, 2)
-				+ " inReach=" + formatFloat(gLrpcInReach, "", 0, 2)
+				+ " inReachM=" + int(gLrpcInReach)
 				+ " at=" + int(at.x) + "," + int(at.z)
 				+ " gain=" + formatFloat(gain, "", 0, 2)
 				+ " m=" + int(c.mCost) + " t=" + int(c.tCost)

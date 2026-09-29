@@ -104,7 +104,27 @@ refused (`apex: atktgt ... backS deadlineS refused`). Open: with home well
 defended nothing counts as a threat and allies still converge (Comet 4v4
 seed 8: all four's top pick one spot, deadlines 87-166 s); seed 7 split
 north/south. A tie-break toward the enemy across from our own base is
-unbuilt, his call.
+unbuilt, his call. 2026-09-29: "too passive" on his Special Creek 8v8 (180-250
+candidates refused per pick); home strength is now the allied influence along
+the threat's path minus the squad's own, and a squad that cannot reach home
+(boats off an inland base) is exempt. With no target a squad marches on the
+enemy start box (`apex: atkbox`, 26-47 a game vs 0). Not yet read from one of
+his games: his logs of that night were overwritten (now kept as .prev.log).
+
+### LATE GAME: what is built but only partly verified (2026-09-29)
+
+- Rapid cannons (Ragnarok/Calamity/Starfall): priced by the metal of their
+  structures they destroy (LrpcGain), and an unaffordable one may not
+  super-push. No rapid cannon finished in any test; the three started before
+  the push guard all died as frames. Open: whether one is ever built at the
+  income his games reach.
+- Torpedo aircraft: released once enemy ships or yards are known
+  (`apex: foewet`, 23-32 on Isthmus v2.1). Only one Lance was built there, at
+  35 min, and dealt nothing: its attack is unconfirmed.
+- Bomber pooling (`apex: air share`): any player buys bombers, priced against
+  the pooled wing; Carrot 4v4 Armada: all four bought, 95 hand-overs, strikes
+  from the lead and a non-lead receiver. Open: the receiver changes as holdings
+  shift, so some planes cross between bases more than once.
 
 ### The attack bar is per-pool, so we rarely attack (2026-09-06)
 

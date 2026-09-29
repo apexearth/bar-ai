@@ -335,6 +335,28 @@ int TopOwnWaterPlantTier()
 	return gTopWaterTier;
 }
 
+// A ground scout that is not also a raider.
+bool IsLateScout(int d)
+{
+	if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d]
+		|| Catalog::gBuilder[d])
+		return false;
+	const CCircuitDef@ cd = Catalog::Def(d);
+	return (cd !is null) && cd.IsRoleAny(Unit::Role::SCOUT.mask)
+		&& !cd.IsRoleAny(Unit::Role::RAIDER.mask);
+}
+
+// Ground scouts standing plus queued, capped like rez bots and constructors.
+int ScoutFleetHave()
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (IsLateScout(int(d)))
+			n += gOwnCount[d] + Brain::PendAnyOf(int(d));
+	}
+	return n;
+}
+
 bool Outgrown(int d)
 {
 	const int top = TopOwnPlantTier();
@@ -347,6 +369,10 @@ bool Outgrown(int d)
 	if (Catalog::gFloater[d] || Catalog::gSub[d])
 		return TopOwnWaterPlantTier() > tier;   // no gantry unit replaces a ship
 	if ((tier == 1) && SurfaceCrosser(d))
+		return false;
+	// Scouts are exempt (his ruling 2026-09-29): they keep taking fire while
+	// the army attacks. T1 raiders are not.
+	if ((tier == 1) && IsLateScout(d))
 		return false;
 	if (tier == 1)
 		return TopOwnLandPlantTier() >= 2;

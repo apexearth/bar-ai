@@ -766,7 +766,9 @@ void RefreshBestLathe()
 bool LatheObsoleteOnArrival(int d)
 {
 	const float bc = LatheCellBP(d);
-	if (bc <= 0.f)
+	// A turret nothing of ours can build is never obsolete: once eaten it is
+	// gone for good (Legion's free Base Builder, whose worth is its radius).
+	if ((bc <= 0.f) || !Producible(d))
 		return false;
 	RefreshBestLathe();
 	return gBestLcell > bc;

@@ -300,6 +300,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			const float reach = (Catalog::gMaxRange[d] > 1.f)
 					? Catalog::gMaxRange[d] : 500.f;
 			const float adds = PfTowerKill(d);
+			const bool waterOnly = (Catalog::gSurfT[d] <= 0.f) && (Catalog::gWaterT[d] > 0.f);
 			// THE WAVE A POST MUST BEAT IS THE ONE THAT ARRIVES TOGETHER, not
 			// the reading at this instant. Under that floor one cheap tower
 			// saturates the shortfall -- measured, `short=1.00->0.00` off a
@@ -361,6 +362,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					if (Gate(GATE_SLOT_DEAD, prev <= 0.f))
 						continue;
 					const AIFloat3 s = AIFloat3(dsX[si], 0.f, dsZ[si]);
+					if (waterOnly && !SailableWaterNear(s, reach))
+						continue;
 					const float wSec = ((hUSpeed > 1.f)
 							? (hUPos.distance2D(s) / hUSpeed) : 60.f) * hWalkW;
 					// AN INTERIOR TOWER PAYS FOR ITS GROUND (apexearth:

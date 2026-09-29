@@ -72,6 +72,7 @@
 #include <limits>
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 
 namespace circuit {
 
@@ -163,6 +164,25 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 		const char* dir = dirs->GetWriteableDir();
 		if (dir != nullptr) {
 			const std::string path = std::string(dir) + "apex-t" + std::to_string(teamId) + ".log";
+			// KEEP THE LAST GAME THAT RAN (apexearth 2026-09-29: a load that died
+			// in pregame truncated the whole previous game's log). A log whose
+			// tail has an in-game frame ("[f=0...", pregame reads "[f=-") moves
+			// to .prev.log; one that never started is simply overwritten.
+			if (FILE* old = fopen(path.c_str(), "rb")) {
+				char tail[4096];
+				fseek(old, 0, SEEK_END);
+				const long size = ftell(old);
+				const long want = std::min<long>(size, sizeof(tail) - 1);
+				fseek(old, size - want, SEEK_SET);
+				const size_t got = fread(tail, 1, want, old);
+				tail[got] = '\0';
+				fclose(old);
+				if (strstr(tail, "[f=0") != nullptr) {
+					const std::string prev = std::string(dir) + "apex-t" + std::to_string(teamId) + ".prev.log";
+					remove(prev.c_str());
+					rename(path.c_str(), prev.c_str());
+				}
+			}
 			logFile = fopen(path.c_str(), "w");
 			if (logFile != nullptr) {
 				setvbuf(logFile, nullptr, _IOFBF, 1 << 16);

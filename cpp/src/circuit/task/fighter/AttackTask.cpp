@@ -199,7 +199,9 @@ void CAttackTask::Update()
 	}
 
 	if (GetTarget() == nullptr) {
-		FallbackFrontPos();
+		if (!MarchEnemyBox()) {
+			FallbackFrontPos();
+		}
 		return;
 	}
 
@@ -217,6 +219,49 @@ void CAttackTask::Update()
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
 		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query));
 	});
+}
+
+// NO TARGET IS NOT NO ENEMY (apexearth 2026-09-29: humans jam, and an army that
+// saw nothing stayed home). Their base is in their start box -- the mirror of
+// ours on a map without boxes: march there and the squad's own eyes find what
+// to fight. Only at the box with nothing in sight does it fall back.
+bool CAttackTask::MarchEnemyBox()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	AIFloat3 box = circuit->GetSetupManager()->GetEnemyBoxCentre();
+	if (box.x < 0.f) {
+		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+		box = AIFloat3(terrainMgr->GetTerrainWidth() - home.x, 0.f, terrainMgr->GetTerrainHeight() - home.z);
+	}
+	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
+	if ((startPos.SqDistance2D(box) < SQUARE(highestRange + DEFAULT_SLACK * 4))
+		|| !terrainMgr->CanMobileReachAt(leader->GetArea(), box, highestRange))
+	{
+		return false;
+	}
+	box.y = circuit->GetMap()->GetElevationAt(box.x, box.z);
+	const AIFloat3 dest = terrainMgr->GetMovePosition(leader->GetArea(), box);
+	if (position.SqDistance2D(dest) > SQUARE(DEFAULT_SLACK)) {
+		circuit->LOG("apex: atkbox t=%i lead=%s n=%i at=%.0f,%.0f from=%.0f",
+			circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(),
+			(int)units.size(), dest.x, dest.z, startPos.distance2D(dest));
+	}
+	position = dest;
+
+	CPathFinder* pathfinder = circuit->GetPathfinder();
+	const float eps = pathfinder->GetSquareSize();
+	const float pathRange = std::max(highestRange - eps, eps);
+	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
+			leader, circuit->GetThreatMap(),
+			startPos, position, pathRange, GetHitTest(),
+			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
+	pathQueries[leader] = query;
+
+	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query));
+	});
+	return true;
 }
 
 void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
@@ -268,20 +313,47 @@ void CAttackTask::FindTarget()
 	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
 
 	// HOME MUST STAY REACHABLE (apexearth 2026-09-28: every ally piling onto one
-	// weak spot makes our own). A ground army stronger than our static defence
-	// at home sets a deadline -- its walk to our base at its slowest member's
-	// speed -- and a target we could not walk home from before then is refused,
-	// unless it belongs to such an army: that is the enemy across from us.
-	const float homeHold = inflMap->GetAllyDefendInflAt(basePos);
+	// weak spot makes our own). A ground army stronger than every friendly force
+	// on its walk to our base sets a deadline -- that walk at its slowest
+	// member's speed -- and a target we could not walk home from before then is
+	// refused, unless it belongs to such an army: the enemy across from us.
+	// Allies and statics block it; this squad does not, since it is what leaves
+	// (counting it let the squad out, then refused it once away: a flap).
 	const float ourSpeed = std::max(lowestSpeed, 1.f);
+	// Only a squad that can come home can defend it: boats off an inland base
+	// were held to our shore by a walk they could never make.
+	const bool canGoHome = terrainMgr->CanMobileReachAt(area, basePos, highestRange);
+	const float inflCell = float(terrainMgr->GetConvertStoP() * 4);
+	const int frame = circuit->GetLastFrame();
+	auto selfInflAt = [&](const AIFloat3& p) {
+		float s = 0.f;
+		for (CCircuitUnit* u : units) {
+			const CCircuitDef* ud = u->GetCircuitDef();
+			int cells = ud->GetThreatRange(CCircuitDef::ThreatType::SURF);
+			if (ud->GetMaxRange() > 1000.f) {
+				cells /= 2;
+			}
+			const float r = float(cells) * inflCell;
+			const float d = u->GetPos(frame).distance2D(p);
+			if ((r > 0.f) && (d < r)) {
+				s += ud->GetPower() * (1.f - d / r);
+			}
+		}
+		return s;
+	};
+	auto blockingFrom = [&](const AIFloat3& from) {
+		float best = 0.f;
+		for (int k = 0; k < 4; ++k) {
+			const AIFloat3 p = basePos + (from - basePos) * (float(k) / 4.f);
+			best = std::max(best, inflMap->GetAllyInflAt(p) - selfInflAt(p));
+		}
+		return best;
+	};
 	float threatS = std::numeric_limits<float>::max();
 	float threatD = 0.f;
 	std::vector<bool> isThreat(groups.size(), false);
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
-		if (group.influence <= homeHold) {
-			continue;
-		}
 		float slowest = std::numeric_limits<float>::max();
 		for (const ICoreUnit::Id eId : group.units) {
 			CEnemyInfo* e = circuit->GetEnemyInfo(eId);
@@ -293,7 +365,9 @@ void CAttackTask::FindTarget()
 			}
 			slowest = std::min(slowest, d->GetSpeed());
 		}
-		if (slowest == std::numeric_limits<float>::max()) {
+		if ((slowest == std::numeric_limits<float>::max())
+			|| (group.influence <= blockingFrom(group.pos)))
+		{
 			continue;
 		}
 		isThreat[i] = true;
@@ -382,7 +456,7 @@ void CAttackTask::FindTarget()
 			const float rawSqBE = ePos.SqDistance2D(basePos);
 			const float sqBE = std::max(rawSqBE, SQUARE(weaponRange));
 			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
-			if (!isThreat[i]) {
+			if (canGoHome && !isThreat[i]) {
 				const float dHome = std::sqrt(rawSqBE);
 				if ((dHome > threatD) && (dHome / ourSpeed > threatS)) {
 					++refusedHome;
@@ -403,12 +477,14 @@ void CAttackTask::FindTarget()
 		position = GetTarget()->GetPos();
 		if (bestTarget != prevTarget) {
 			CCircuitDef* bdef = bestTarget->GetCircuitDef();
-			circuit->LOG("apex: atktgt t=%i def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
-				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i",
-				circuit->GetTeamId(), (bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
+			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
+				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(),
+				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
 				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
-				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome);
+				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
+				canGoHome ? 1 : 0);
 		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position

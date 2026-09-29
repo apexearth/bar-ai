@@ -18,6 +18,8 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// A fighter on cover keeps its guard order; CoverWatch sends it home.
 	if (Covering(unit.id))
 		return true;
+	if (FlightHolds(unit))
+		return true;
 	// A TORPEDO FLYER WITH NO FLOATING TARGET HAS NOTHING TO SHOOT ANYWHERE
 	// ON THE MAP -- its weapons read zero surf and zero air threat -- yet
 	// stock routing gave the ones we owned attack orders against land
@@ -25,8 +27,12 @@ bool HoldsUnit(CCircuitUnit@ unit)
 	// lost). Held at home until enemy SUBS are actually seen -- the same
 	// readable signal production prices them on; then stock naval targeting
 	// may have them.
+	// ...or SHIPS: a torpedo hits anything in the water, and on a water map
+	// production bought them on the navy budget while this held them for want
+	// of subs alone (none of 33 logged deaths was on a fighting task).
 	if ((Catalog::gPower[id] > 1.f) && (Catalog::gSurfT[id] <= 0.01f)
 		&& (Catalog::gAirT[id] <= 0.01f)
+		&& (Market::EnemyWetCount() <= 0)
 		&& (!Military::EnemyAfloat()
 			|| (Military::EnemyCostOf(Unit::Role::SUB.type) <= 1.f)))
 		return true;
@@ -215,8 +221,10 @@ void ReArm()
 	// Spent means half of what launched is gone; an absolute three read a
 	// small wave as spent on the tick it left and Release/ReArm flapped.
 	const int have = gWaveBombers;
-	const int held = HeldBombers();
-	if ((have > 0) && (have * 2 >= gWaveLaunched) && (held <= have))
+	// Weight against weight: a count of 14 Dragons against one Dragon's 16
+	// units at home recalled the wave the moment the next one finished.
+	const int held = int(StandingHeldMass());
+	if ((have > 0) && (have * 2 >= gWaveLaunched) && (float(held) <= gWaveMass))
 		return;
 	RecallWave();
 	ai.PublishTeamValue("strike_r", 0.f);
@@ -461,6 +469,9 @@ void Update()
 	AtomicWatch();
 	AtomicLookWatch();
 	LookWatch();
+	FlightWatch();
+	ShareWing();
+	Market::EnemyWetCount();
 	CoverWatch();
 	StrikeScanStep();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());

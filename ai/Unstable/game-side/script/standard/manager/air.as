@@ -11,5 +11,7 @@
 #include "air/cover.as"     // fighters that fly with a look, a post or a strike
 
 #include "air/update.as"    // holding units back, releasing them, re-arming
+#include "air/flight.as"    // the massed scout flight into enemy territory
+#include "air/share.as"     // pool held bombers on the ally holding the most
 #include "air/station.as"     // spread the wing, spend obsolete fighters
 #include "air/atomic.as"      // the atomic bomber: a strike by itself

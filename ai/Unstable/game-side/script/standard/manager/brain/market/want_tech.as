@@ -293,6 +293,69 @@ int CheapestAdvancedPlant(CCircuitUnit@ unit)
 	return best;
 }
 
+// Does a plant we own or have in flight turn out a builder that lists x?
+bool PlantDeliversBuild(int x)
+{
+	for (uint sk = 1; sk < gOwnCount.length(); ++sk) {
+		const int sd = int(sk);
+		if ((gOwnCount[sk] <= 0) || Catalog::gMobile[sd])
+			continue;
+		const array<int>@ sb = Catalog::gBuildsList[sd];
+		for (uint q = 0; q < sb.length(); ++q) {
+			if (Catalog::gMobile[sb[q]] && Catalog::gBuilder[sb[q]]
+				&& (Catalog::gBuildsList[sb[q]].find(x) >= 0))
+				return true;
+		}
+	}
+	for (uint kl = 0; kl < Requests::gLive.length(); ++kl) {
+		IUnitTask@ kt = Requests::gLive[kl];
+		if ((kt is null) || (kt.buildDef is null) || Catalog::gMobile[int(kt.buildDef.id)])
+			continue;
+		const array<int>@ kb = Catalog::gBuildsList[int(kt.buildDef.id)];
+		for (uint q = 0; q < kb.length(); ++q) {
+			if (Catalog::gMobile[kb[q]] && Catalog::gBuilder[kb[q]]
+				&& (Catalog::gBuildsList[kb[q]].find(x) >= 0))
+				return true;
+		}
+	}
+	return false;
+}
+
+bool OwnedBuilderLists(int x)
+{
+	for (uint dd = 1; dd < gOwnCount.length(); ++dd) {
+		if ((gOwnCount[dd] > 0) && Catalog::gMobile[int(dd)] && Catalog::gBuilder[int(dd)]
+			&& (Catalog::gBuildsList[int(dd)].find(x) >= 0))
+			return true;
+	}
+	return false;
+}
+
+// THE WATER IS ITS OWN LADDER (apexearth 2026-09-28: a player in the water must
+// always be able to reach the T2 yard). The naval moho extracts what the land
+// moho does, so the value test read "nothing new" once T2 stood on land; a water
+// plant unlocks when its builders reach an extractor nothing of ours can build
+// and nothing we own or have ordered will deliver.
+bool WaterPlantUnlocks(int d)
+{
+	if (PlantClass(d) != PC_WATER)
+		return false;
+	const array<int>@ prods = Catalog::gBuildsList[d];
+	for (uint p = 0; p < prods.length(); ++p) {
+		const int pd = prods[p];
+		if (!Catalog::gMobile[pd] || !Catalog::gBuilder[pd])
+			continue;
+		const array<int>@ pb = Catalog::gBuildsList[pd];
+		for (uint q = 0; q < pb.length(); ++q) {
+			const int x = pb[q];
+			if ((Catalog::gExtractsM[x] > 0.f) && Catalog::gAvailable[x]
+				&& !OwnedBuilderLists(x) && !PlantDeliversBuild(x))
+				return true;
+		}
+	}
+	return false;
+}
+
 Want@ ProposeTech(CCircuitUnit@ unit)
 {
 	Want w;
@@ -584,7 +647,10 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				* ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR) * NavyShare();
 		if (foePrior > navyT)
 			navyT = foePrior;
-		if ((PlantClass(d) == PC_WATER) && (navyT > 1.f)) {
+		// The no-fleet-no-yard gate guards the too-early FIRST tier only; with
+		// T2 standing on land it locked the water out for good.
+		const bool firstTier = (prodCeil > ownCeil) || (prodConv > ownConv);
+		if ((PlantClass(d) == PC_WATER) && (navyT > 1.f) && firstTier) {
 			fundedMul = (NavyValue() >= navyT) ? 1.f : 0.f;
 		} else {
 			const float theirs = ai.GetEnemyMaxMobileCostM();
@@ -602,8 +668,11 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		const float lineW = (ai.GetTunable("apex_line_quality", TUNE_LINE_QUALITY) > 0.f)
 				? LineMul(d) : PlantLineWorth(d);
 		float techGain = 0.f;
+		const bool waterUnlock = WaterPlantUnlocks(d);
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
 			techGain = demand * pipe / float(1 + liveKin);
+		else if (waterUnlock)
+			techGain = demand * pipe;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {
 			// MOBILITY BUYS A PLANT ONLY WHEN IT BUYS WINGS. This channel was
 			// written for one case -- the air lab, whose flying constructors are
@@ -666,7 +735,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			// the code claimed the full army gap regardless. A plant our
 			// existing lines can substitute for gets neither the gap nor the
 			// penetration term, and is left with real overflow only.
-			const bool unlocksTier = (prodCeil > ownCeil) || (prodConv > ownConv);
+			const bool unlocksTier = (prodCeil > ownCeil) || (prodConv > ownConv) || waterUnlock;
 			if (prodMax > 2.f * OwnedProdCostCeil()) {
 				// The gantry's value is PENETRATION plus the army gap that
 				// ONLY its products can fill: at 250 m/s nobody built one

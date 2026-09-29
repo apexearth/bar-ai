@@ -270,6 +270,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// map coverage rather than pressure. Routing the raider role through
 		// it after T2 is the second half of why we hold no raid tasks at all;
 		// stock never does this. Scout-role chaff still spreads out.
+		// LATE SCOUTS ATTACK WITH THE ARMY (his ruling 2026-09-29): not map
+		// coverage but bodies in front, taking fire while the army attacks;
+		// with no target the attack task marches on the enemy box, and finds
+		// their buildings on the way.
+		if (SpamPhase() && Market::IsLateScout(int(cdef.id)))
+			return NoteElect("spamattack", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));
 		if (SpamPhase()
 			&& (!cdef.IsRoleAny(Unit::Role::RAIDER.mask)
 				|| (ai.GetTunable("apex_spam_raiders", TUNE_SPAM_RAIDERS) > 0.f)))

@@ -1278,7 +1278,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		int escFly = 0;
 		for (uint i = 0; i < prods.length(); ++i) {
 			const int d = prods[i];
-			if (!EscortWorthy(d))
+			// The T1 stop binds here too: this floor never ends on its own
+			// (free counts raiders only).
+			if (!EscortWorthy(d) || Outgrown(d) || IsLateScout(d))
 				continue;
 			escFly += EscortInFlight(Catalog::Def(d));
 			// The strongest, not the cheapest: one escort has to win the duel
@@ -1378,6 +1380,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName()
 						+ ":look(v" + formatFloat(vL, "", 0, 3) + ")";
+			}
+		}
+		// THE SCOUT FLIGHT: planes massed to see their base (Air::FlightGainFor).
+		if (!Catalog::gBuilder[d] && Air::IsFlightDef(d)) {
+			const float gainF = Air::FlightGainFor(d, fillS) * roleMul;
+			if (gainF > 0.f) {
+				const float vF = gainF / Catalog::gCostM[d];
+				candDef.insertLast(d);
+				candV.insertLast(vF);
+				candGain.insertLast(gainF);
+				sumV += vF;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName()
+						+ ":flight(v" + formatFloat(vF, "", 0, 3) + ")";
 			}
 		}
 		if (!Catalog::gBuilder[d] && IsLiftDef(d)) {
@@ -1658,6 +1674,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (Outgrown(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
+				continue;
+			}
+			if (IsLateScout(d) && (ScoutFleetHave() >= RezFleetCap())) {
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":scoutcap";
 				continue;
 			}
 			// The seat's growth owns metal the economy can use; metal the bank
