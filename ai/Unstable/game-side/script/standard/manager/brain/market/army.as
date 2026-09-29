@@ -2480,6 +2480,18 @@ void StallWatch()
 					+ Catalog::gCostE[int(t.buildDef.id)] * eAt);
 			if (left <= ansM + ansE * eAt)
 				continue;
+			// Leaving also costs the walk to the answer and back to the
+			// frame; finish first when that round trip takes longer.
+			const float spd = Catalog::gSpeed[int(u.circuitDef.id)];
+			const float bpU = Catalog::gBuildPower[int(u.circuitDef.id)];
+			const AIFloat3 tp1 = t.GetBuildPos();
+			if ((spd > 1.f) && (bpU > 0.f) && OnMap(tp1) && OnMap(e.pos)) {
+				const float leftSec = (1.f - done1) * Catalog::gBuildTime[int(t.buildDef.id)] / EffBP(bpU);
+				if (leftSec < 2.f * tp1.distance2D(e.pos) / spd) {
+					++rjNear;
+					continue;
+				}
+			}
 		}
 		Want@ mx = ProposeMex(u);
 		if ((mx !is null) && (mx.value > e.value))

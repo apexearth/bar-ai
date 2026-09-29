@@ -542,7 +542,16 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 		w.valueRaw = w.value;
 	const float worth = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
 			? (gAssetsM + ArmyValue()) : Catalog::gCostM[int(unit.circuitDef.id)];
-	w.tripM = TripRiskFrom(unit.GetPos(ai.frame), w.pos) * worth;
+	const AIFloat3 up = unit.GetPos(ai.frame);
+	w.tripM = TripRiskFrom(up, w.pos) * worth;
+	// tCost bills the walk out only; the builder also walks back to base,
+	// so the job pays for however much farther from home it leaves him.
+	const int ud = int(unit.circuitDef.id);
+	if (Builder::gHomeSet && (Catalog::gSpeed[ud] > 1.f) && OnMap(up)) {
+		const float further = w.pos.distance2D(Builder::gHomePos) - up.distance2D(Builder::gHomePos);
+		if (further > 0.f)
+			w.tripM += further / Catalog::gSpeed[ud] * WalkRate(Catalog::gBuildPower[ud]);
+	}
 	const float denom = FerryReprice(w, unit, c, c + w.tripM);
 	w.value = w.valueRaw * c / denom;
 }
