@@ -406,6 +406,16 @@ float DefenceValue()
 	return m;
 }
 
+// 0 on target, 1 with nothing standing.
+float DefenceShortfall()
+{
+	const float tgt = DefenceTarget();
+	if (tgt <= 0.f)
+		return 0.f;
+	const float f = DefenceValue() / tgt;
+	return (f >= 1.f) ? 0.f : 1.f - f;
+}
+
 // Tower metal already ordered. The gap that drives the pull counted only
 // standing towers, so every slot kept asking at full gap while ten were framed.
 // The defence target split like the army (docs/24, 2026-09-28): where our

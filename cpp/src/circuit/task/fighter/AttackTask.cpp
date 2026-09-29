@@ -258,13 +258,53 @@ void CAttackTask::FindTarget()
 	const int canTargetCat = cdef->GetTargetCategory();
 	const int noChaseCat = cdef->GetNoChaseCategory();
 
+	CEnemyInfo* const prevTarget = GetTarget();
 	CEnemyInfo* bestTarget = nullptr;
+	float bestPull = 0.f;
 	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
 	float minSqDist = std::numeric_limits<float>::max();
 	bool hasGoodTarget = false;
-
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
 	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
+
+	// HOME MUST STAY REACHABLE (apexearth 2026-09-28: every ally piling onto one
+	// weak spot makes our own). A ground army stronger than our static defence
+	// at home sets a deadline -- its walk to our base at its slowest member's
+	// speed -- and a target we could not walk home from before then is refused,
+	// unless it belongs to such an army: that is the enemy across from us.
+	const float homeHold = inflMap->GetAllyDefendInflAt(basePos);
+	const float ourSpeed = std::max(lowestSpeed, 1.f);
+	float threatS = std::numeric_limits<float>::max();
+	float threatD = 0.f;
+	std::vector<bool> isThreat(groups.size(), false);
+	for (unsigned i = 0; i < groups.size(); ++i) {
+		const CEnemyManager::SEnemyGroup& group = groups[i];
+		if (group.influence <= homeHold) {
+			continue;
+		}
+		float slowest = std::numeric_limits<float>::max();
+		for (const ICoreUnit::Id eId : group.units) {
+			CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+			CCircuitDef* d = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+			if ((d == nullptr) || !d->IsMobile() || d->IsAbleToFly() || !d->IsAttacker()
+				|| (d->GetSpeed() <= 0.f))
+			{
+				continue;
+			}
+			slowest = std::min(slowest, d->GetSpeed());
+		}
+		if (slowest == std::numeric_limits<float>::max()) {
+			continue;
+		}
+		isThreat[i] = true;
+		const float d = group.pos.distance2D(basePos);
+		if (d / slowest < threatS) {
+			threatS = d / slowest;
+			threatD = d;
+		}
+	}
+	int refusedHome = 0;
+
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
 		const bool isOverpowered = maxPower * 0.125f > group.influence;
@@ -335,10 +375,24 @@ void CAttackTask::FindTarget()
 				const float ownPow = std::max(cdef->GetPower(), 1.f);
 				pull = std::max(enemy->GetCost(), 1.f) / (edef->GetPower() + ownPow);
 			}
-			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * scale / pull;  // Own to Enemy distance
+			// NEAR OUR OWN BASE, squared like the leader term (apexearth
+			// 2026-09-28): stock's linear distBE let every ally's army walk to
+			// the same far structure. Floored at our range so enemies inside
+			// the base still rank by leader distance and pull.
+			const float rawSqBE = ePos.SqDistance2D(basePos);
+			const float sqBE = std::max(rawSqBE, SQUARE(weaponRange));
+			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
+			if (!isThreat[i]) {
+				const float dHome = std::sqrt(rawSqBE);
+				if ((dHome > threatD) && (dHome / ourSpeed > threatS)) {
+					++refusedHome;
+					continue;
+				}
+			}
 			if (minSqDist > sqOEDist) {
 				minSqDist = sqOEDist;
 				bestTarget = enemy;
+				bestPull = pull;
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -347,6 +401,15 @@ void CAttackTask::FindTarget()
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
+		if (bestTarget != prevTarget) {
+			CCircuitDef* bdef = bestTarget->GetCircuitDef();
+			circuit->LOG("apex: atktgt t=%i def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
+				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i",
+				circuit->GetTeamId(), (bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
+				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
+				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
+				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome);
+		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }

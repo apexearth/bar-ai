@@ -28,19 +28,31 @@ bool BasicHandCan(int d)
 // its crew is short and the feed can carry another. Priced nowhere: the
 // priced assist read the T2 lab at v=0.5 and it rose on one hand for 99 s
 // with ten allowed. Decide hoists this ahead of the draw.
+// A defence gun joins the same way while defence is behind its target; its crew
+// cap grows with the shortfall (FeedableCrew), so the further behind, the more
+// hands (apexearth 2026-09-28).
 int gUnlockAssists = 0;
-Want@ ProposeUnlockAssist(CCircuitUnit@ unit)
+int gDefJoinAssists = 0;
+Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 {
 	Want w;
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) || MetalPathStarved())
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return w;
+	if (defence ? (DefenceShortfall() <= 0.f) : MetalPathStarved())
 		return w;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
 	float bestD = 0.f;
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
-		if ((lt is null) || lt.IsDead() || (lt.buildDef is null)
-			|| !Requests::IsMetalUnlock(lt.buildDef))
+		if ((lt is null) || lt.IsDead() || (lt.buildDef is null))
+			continue;
+		if (defence) {
+			// The peel's own test: a ring-fed frame is trimmed to its founder.
+			if ((ProtClassOf(int(lt.buildDef.id)) != PROT_DEF)
+				|| Requests::NanoFed(lt, Requests::Workers(lt), 0.f, 0.f))
+				continue;
+		} else if (!Requests::IsMetalUnlock(lt.buildDef))
 			continue;
 		const AIFloat3 bp = lt.GetBuildPos();
 		// Guards count against the cap. They never become Workers -- they sit
@@ -82,7 +94,10 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit)
 	@gAssistTarget = boss;
 	gAssistTargetId = boss.id;
 	gAssistGuardS = 60;
-	++gUnlockAssists;
+	if (defence)
+		++gDefJoinAssists;
+	else
+		++gUnlockAssists;
 	return w;
 }
 

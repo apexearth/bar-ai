@@ -198,6 +198,12 @@ this file wins and the other is stale.
   fragile.
 - **Do not bomb a building still under construction** when it is the
   finished one beside it that explodes.
+- **Allies do not all pick the same attack target** (2026-09-28). Attack
+  preference goes to targets near our own base and on our own side of the
+  map. Exploiting a weak spot is good, but doing it so much creates our own.
+  Weigh how long the enemy across from us needs to reach our base against how
+  long we would be walking to the other side of the map; if going leaves us
+  too weak, fight the enemy across from us instead.
 
 ## Taking out a defended building: scout, gauge, call, regroup, strike
 

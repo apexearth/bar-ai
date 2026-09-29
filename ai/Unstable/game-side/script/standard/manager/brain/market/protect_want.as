@@ -263,8 +263,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	}
 	for (uint i = 0; i < cand.length(); ++i) {
 		const int d = cand[i];
+		// A water-only gun on a land map: the wall pull prices the shortfall, not
+		// the kill, so it would win walls it can never defend.
 		if (Gate(GATE_AVAIL, !Catalog::gAvailable[d] || Catalog::gMobile[d]
-			|| Catalog::gFloater[d] || Catalog::gSub[d]))
+			|| Catalog::gFloater[d] || Catalog::gSub[d]
+			|| ((Catalog::gSurfT[d] <= 0.f) && (Catalog::gWaterT[d] > 0.f) && !MapHasWater())))
 			continue;
 		const int cls = ProtClassOf(d);
 		if (Gate(GATE_CLASS, cls < 0))

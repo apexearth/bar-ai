@@ -88,6 +88,24 @@ window (empty-line samples 28% -> 2%), but the per-order cost is the thing;
 lathe-site line prints). The identifier was renamed anyway; the check's regex
 matches comment text and the line numbers are wrong.
 
+### ALL ALLIES PICK THE SAME ATTACK TARGET (2026-09-28)
+
+His report, live Comet 4v4. `CAttackTask::FindTarget` (cpp AttackTask.cpp)
+ranks by leader distance^2 x scale / pull, pull = enemy cost / (enemy power
++ own power). Stock's own-base term `scale = min(distBE / sqOBDist, 1)` is
+linear in distBE once the leader's constant cancels, and flat when the
+leader stands at home; pull outweighs it, and every ally sees the same enemy
+groups, so all squads converge on the same high cost/power structure. His
+directive (docs/24 Targeting): prefer targets near our own base; weigh the
+enemy's walk to our base against ours home. Built 2026-09-28: squared
+own-base distance in the rank, and a target we cannot walk home from before
+the soonest enemy ground army stronger than our home statics arrives is
+refused (`apex: atktgt ... backS deadlineS refused`). Open: with home well
+defended nothing counts as a threat and allies still converge (Comet 4v4
+seed 8: all four's top pick one spot, deadlines 87-166 s); seed 7 split
+north/south. A tie-break toward the enemy across from our own base is
+unbuilt, his call.
+
 ### The attack bar is per-pool, so we rarely attack (2026-09-06)
 
 Stock `CMilitaryManager::UpdateDefenceTasks` (MilitaryManager.cpp:1578) rewrites
@@ -194,6 +212,20 @@ energy side's problem; the defence hole is its shadow. Also unread as metal:
 `ThreatAt` (coverage.as), `foeHere` (protect_fill.as), the shield-far gate,
 gift.as and HoldNeedM all read the same visible-unit count as metal; each
 has a floor that hides it. Not changed.
+
+Raised again 2026-09-28 (his live Comet Catcher 4v4 +100%, `matches/_engine`,
+no extra-units pack so no T3 turrets exist): at 31 min `apex: targets`
+def=250/6929, 4570/43358, 970/34450, 2435/43433 (t0..t3) -- 1-10% of target.
+Defence wins elections (200-400 per team) but mostly Dragon's Teeth
+(armdrag 102/149/236 on t0/t2/t3). t3: 42 Pulsar execs, 2 placed; each
+built by one worker (`latency armanni done=214 workers=1`, 220 s); the
+21-30 min retries hit `interior-gun refused`. Half the towers built die
+(`fronttowers` backBuilt/backLost 24/16, 25/26, 17/10). Enemy T3 on field
+104k (`foetier`). Built the same day: a gun's crew grows with the shortfall
+(FeedableCrew) and free hands join it (`why=defjoin`, 47-187 a team); the
+first cut raised the cap alone and no hand ever joined. Crews at completion
+still mean ~2. Coastal torpedo launchers (Jellyfish/Anemone, 1-9 a team at
+kill=0) are dropped on land maps.
 
 ### THE 10-20 MINUTE HOLE: T1 hands are routed out, the T2 hand's gun loses to eco (2026-09-18)
 

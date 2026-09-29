@@ -264,6 +264,10 @@ uint FeedableCrew(const CCircuitDef@ want)
 	float n = float(InFlightCap()) / float(LiveSiteCount());
 	if (IsEcoDef(want))
 		n *= ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP);
+	// The further defence is behind its target, the more of the pool a gun may
+	// take (apexearth 2026-09-28): the even share read one hand per Pulsar.
+	else if (Market::ProtClassOf(int(want.id)) == Market::PROT_DEF)
+		n += (float(InFlightCap()) - n) * Market::DefenceShortfall();
 	return (n < 1.f) ? 1 : uint(n);
 }
 

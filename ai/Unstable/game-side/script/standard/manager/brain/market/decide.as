@@ -1900,11 +1900,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))
 	{
-		Want@ ua = ProposeUnlockAssist(unit);
+		Want@ ua = ProposeUnlockAssist(unit, false);
+		string uaWhy = "metalfirst";
+		if ((ua is null) || (ua.kind != WK_ASSIST)) {
+			@ua = ProposeUnlockAssist(unit, true);
+			uaWhy = "defjoin";
+		}
 		if ((ua !is null) && (ua.kind == WK_ASSIST)) {
 			ranked.insertAt(0, ua);
 			floorPush = true;
-			why = "metalfirst";
+			why = uaWhy;
 		}
 	}
 	// THE FIRST PLANT IS NOT A DICE ROLL. The draw keeps runners-up alive
