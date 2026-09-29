@@ -472,6 +472,7 @@ void Update()
 	FlightWatch();
 	ShareWing();
 	Market::EnemyWetCount();
+	Market::FoeHalfPoll();
 	CoverWatch();
 	StrikeScanStep();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());

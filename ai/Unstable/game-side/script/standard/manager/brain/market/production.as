@@ -865,6 +865,40 @@ float RichArmyGapM()
 // signal we have for them is the structure metal we have seen; ours is the
 // team's own, summed across allies.
 const string TV_ASSETS = "apexAssetsM";
+// HOW MUCH OF THEIR HALF WE HAVE LOOKED AT: the metal spots on their half that
+// were in our sight within the ghost horizon. One scout's strip over their
+// front is not their base; this is the share the unseen estimate gives way to.
+array<AIFloat3> gFoeHalfPt;
+array<int> gFoeHalfSeen;
+void FoeHalfPoll()
+{
+	if ((gFoeHalfPt.length() == 0) && (gAllSpots.length() > 0)) {
+		for (uint s = 0; s < gAllSpots.length(); ++s) {
+			if (Military::ForwardFraction(gAllSpots[s]) > 0.5f) {
+				gFoeHalfPt.insertLast(gAllSpots[s]);
+				gFoeHalfSeen.insertLast(-999999);
+			}
+		}
+	}
+	for (uint i = 0; i < gFoeHalfPt.length(); ++i) {
+		if (ai.IsPosInLos(gFoeHalfPt[i]))
+			gFoeHalfSeen[i] = ai.frame;
+	}
+}
+
+float FoeHalfCoverage()
+{
+	if (gFoeHalfPt.length() == 0)
+		return 0.f;
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	int n = 0;
+	for (uint i = 0; i < gFoeHalfPt.length(); ++i) {
+		if (float(ai.frame - gFoeHalfSeen[i]) < horizon)
+			++n;
+	}
+	return float(n) / float(gFoeHalfPt.length());
+}
+
 bool gEcoBehind = true;
 int gEcoBehindAt = -999999;
 bool EcoBehind()
@@ -879,9 +913,25 @@ bool EcoBehind()
 		ours += ai.ReadTeamValue(int(mates[i]), TV_ASSETS, 0.f);
 	if (ours < gAssetsM)
 		ours = gAssetsM;
-	const float theirs = aiEnemyMgr.GetEnemyStructCost();
+	// BLIND IS NOT AHEAD. Seen structure metal alone read us far ahead of a
+	// jammed enemy that out-spent us on economy, and the spare metal went to
+	// army while they out-expanded us. What we have not looked at is the
+	// mirror of ours (their economy started equal to ours), giving way to what
+	// we saw as our eyes cover their half (FoeHalfCoverage).
+	// ...and an enemy that is not fielding army is putting it into economy (his
+	// 2026-09-29): what they have not shown us as army, out of a total that
+	// mirrors ours, is theirs as structures.
+	const float seen = aiEnemyMgr.GetEnemyStructCost();
+	const float stale = 1.f - FoeHalfCoverage();
+	float est = ours + Military::TeamArmyCost() - Military::EnemyArmyCost();
+	if (est < ours)
+		est = ours;
+	float theirs = seen;
+	if (est > seen)
+		theirs = seen + (est - seen) * stale;
 	gEcoBehind = (theirs >= ours);
 	AiLog("apex: ecoside t=" + ai.teamId + " ours=" + int(ours) + " theirs=" + int(theirs)
+		+ " seen=" + int(seen) + " est=" + int(est) + " stale=" + formatFloat(stale, "", 0, 2)
 		+ " behind=" + (gEcoBehind ? 1 : 0));
 	return gEcoBehind;
 }
@@ -1357,8 +1407,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			continue;   // the economy-only benchmark: hands only
 		// Metal first: the unlock in flight takes the feed (guards.as).
 		// ...except the fleet where our land is cut off: every yard builds
-		// fighting ships from the start (his ruling 2026-09-28).
-		if (metalPath && !Catalog::gBuilder[d]
+		// fighting ships from the start (his ruling 2026-09-28). A recon scout is
+		// eyes, not army: without it the behind-test reads a jammed base as small.
+		if (metalPath && !Catalog::gBuilder[d] && !Air::IsLookDef(d)
 			&& !((Catalog::gFloater[d] || Catalog::gSub[d]) && LandLocked())) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":metalpath";

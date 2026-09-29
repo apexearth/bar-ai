@@ -593,7 +593,14 @@ float LookStale()
 float LookWorth()
 {
 	const float a = AtomicLookWorth();
-	const float w = WingLookWorth();
+	float w = WingLookWorth();
+	// The scout seat looks at their economy whether or not a wing is buying:
+	// what the look tells EcoBehind is worth the unseen part of their base.
+	if (IsScoutSeat()) {
+		const float e = FlightWorth() * LookDelivery();
+		if (e > w)
+			w = e;
+	}
 	return (a > w) ? a : w;
 }
 

@@ -111,6 +111,24 @@ the threat's path minus the squad's own, and a squad that cannot reach home
 enemy start box (`apex: atkbox`, 26-47 a game vs 0). Not yet read from one of
 his games: his logs of that night were overwritten (now kept as .prev.log).
 
+### SUPREME ISTHMUS trbl 0.45 +100%: out-expanded from minute 12 (2026-09-29)
+
+Four 4v4 games vs BARb hard: 3 losses at 32-38 min, one to the time limit
+(`tools/minutes.py`). Level to minute 8, then minutes 9-12 trade at k/l ~0.2
+(D% 50-64) -- half of it the seat nearest them, to AK raiders and Skuttles --
+and their mexes climb 23 -> 53 by minute 16 while ours stall near 30; their
+income passes ours at 12, energy at 16. Minutes 4-16 they put 40k into
+constructors against our 23k and 13.8k into extractors against our 4.6k.
+Army spend by minute 16: ours 2.7-2.9x our economy spend, theirs 1.1x -- with
+our army TARGET at 0 (the T2 switch) the buyers were cover demand (a guard by
+every building), the navy budget and, in one game, the spare-metal sink.
+Not the nanos: theirs work factories more than ours (31-69% vs 38-45%); ours
+idle 38-46% against their 16-33% late. The EcoBehind blind read is fixed
+(behind=1 there now) without moving the army/eco split. Open: why our mex
+count stalls at ~30 from minute 8 (site vetoes, the con cap, assisting, the
+moho wait under the T2 switch); whether cover demand should bind under the T2
+switch (his call); which basis binds -- output share or holdings (asked).
+
 ### LATE GAME: what is built but only partly verified (2026-09-29)
 
 - Rapid cannons (Ragnarok/Calamity/Starfall): priced by the metal of their

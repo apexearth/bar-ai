@@ -11,6 +11,31 @@ namespace Air {
 // few-shot T2 anti-air (docs/24). The single bomber look is untouched.
 //------------------------------------------------------------------------------
 
+// THE SCOUT SEAT (his 2026-09-29: "at least 1 ai earlier on should make some
+// scout aircraft to see what the enemy is doing"). The air lead when there is
+// one; before one is elected, or if none ever is, the lowest-numbered Apex ally
+// that is not the eco seat -- every seat computes the same answer. Allied
+// vision is shared, so one seat's look serves the team.
+bool IsScoutSeat()
+{
+	if (IsAirLead())
+		return true;
+	if (AirLeadTeamId() >= 0)
+		return false;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return true;
+	int pick = -1;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (ai.ReadTeamValue(t, Military::TV_ECOSEAT, 0.f) > 0.5f)
+			continue;
+		if ((pick < 0) || (t < pick))
+			pick = t;
+	}
+	return (pick < 0) || (pick == ai.teamId);
+}
+
 array<Id> gFlightOut;       // launched, flying to their spot
 array<AIFloat3> gFlightDest;
 int gFlightLaunches = 0;
@@ -120,6 +145,7 @@ void FlightWatch()
 			if (k >= 0) {
 				if (u.GetPos(ai.frame).distance2D(gFlightDest[uint(k)]) <= 400.f) {
 					gFlightDone.insertLast(u.id);
+					gLookAt = ai.frame;   // eyes on their ground: a look delivered
 					gFlightOut.removeAt(uint(k));
 					gFlightDest.removeAt(uint(k));
 				}

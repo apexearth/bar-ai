@@ -121,7 +121,7 @@ CCircuitDef@ IntelPlantToBuild()
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
 		&& (Have(gPlant1) == 0))
 	{
-		if (IsAirLead()
+		if (IsScoutSeat()
 			&& (inc >= ai.GetTunable("apex_intel_air_income", TUNE_INTEL_AIR_INCOME)))
 			return gPlant1;
 		if (inc >= ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME))

@@ -108,7 +108,7 @@ conclusion each one produced.
 | About to… | Read first |
 |---|---|
 | **judge any run** | `review.py <run>` — gate 1 IS the compile/crash/did-it-run check. `bar-benchmark` skill |
-| **say what a batch showed** | `perminute.py <match>` on a WIN and a LOSS of that batch, not an average over games: if we are losing we make less metal *because* we are losing, so an aggregate at minute 12 reports the consequence as the cause (his rule, 2026-09-22). `spendtable.py` is the batch-wide view, read second |
+| **say what a batch showed** | `minutes.py <match>` (any team size; `perminute.py` is 1v1/2v2 only) on a WIN and a LOSS of that batch, not an average over games: if we are losing we make less metal *because* we are losing, so an aggregate at minute 12 reports the consequence as the cause (his rule, 2026-09-22). `spendtable.py` is the batch-wide view, read second |
 | **believe a match result** | **S3** compile error → variant silently near-stock · **S12** duplicate binding → empty stats · **S15** infolog may be days stale · **S16** `teams[].team` is the spec index · **S17** aggregate over the right unit · **S19** the deployed script can change mid-sweep — classify each game from its own log |
 | **run a sweep of a tunable** | **S8** — deploying the AI does NOT deploy the gadget; unpublished modoptions run the default with no error |
 | **launch or kill a run** | `docs/26-working-rules.md` — one match per write-dir, `pgrep`/`pkill` are dead here, `-u` when logging |
@@ -133,7 +133,7 @@ conclusion each one produced.
 | **create or rename a variant** | **S1** without its own shortName it loads stock BARb in every multiplayer game · `docs/03-barb-architecture.md` |
 | **reason about the economy or T3** | `docs/10-bar-game-concepts.md`, `eta-objective`. The same unit is unaffordable at 40 metal/s and trivial at 398 |
 | **work on nukes / air / the commander** | `ai-nukes` · `ai-air` · `ai-commander` |
-| **say why a game was won or lost** | `python tools/story.py <match> --bucket 120` FIRST -- the game in buckets, both sides, and where the mex/army/income leads last changed hands. His rule 2026-09-19: the final numbers are never the story; find the turn |
+| **say why a game was won or lost** | `python tools/story.py <match> --bucket 120` FIRST, then `python tools/minutes.py <match>` -- every game result is read minute by minute (his standard, 2026-09-29): income, energy, waste, mexes, metal lost/killed and k/l, damage in/out. His rule 2026-09-19: the final numbers are never the story; find the turn |
 | **see the game** | `python tools/mapframe.py <match> --minutes 4,8,12,16,20,24` -- a PNG contact sheet (Read it): structures, mexes, towers, army, deaths per frame, both sides. His suggestion 2026-09-19; it shows "we never left the corner" in one look |
 | **diagnose why we lost a fight** | `fight-analysis` skill, `tools/deaths.py`, `tools/battles.py` |
 | **check a game against his complaints** | `game-audit` skill |
@@ -173,6 +173,9 @@ python tools/composition.py <tournament>        # where the metal actually went
 python tools/allies.py <match|run>              # 8v8: the seven non-seat allies as one side vs the enemy
 python tools/spendtable.py <tournament>         # income/mex/army/spend/lost per 4 min, us vs them:
                                                 # where a batch is lost before the win count is read
+python tools/minutes.py <match> [--step 2]      # THE standard read of any game result: per minute,
+                                                # per side, any team size -- income, energy, waste,
+                                                # mexes, lost/killed, k/l, damage in/out
 python tools/ecotimeline.py <tournament|match>  # energy + metal minute by minute per arm;
                                                 # bank pinned at 0 = e-stall, pinned full = waste
 python tools/frametime.py <run>                 # per-section maxMs + the 16-AI verdict.
