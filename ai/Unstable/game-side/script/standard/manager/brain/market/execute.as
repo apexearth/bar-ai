@@ -1026,7 +1026,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const float clr = (Catalog::gCostM[int(w.def.id)] > 500.f) ? 150.f : 120.f;
 		w.pos = ClearOfSpots(w.pos, clr);
 		if (OnMap(slot) && !floats)
-			slot = OffAllyExit(ClearOfSpots(slot, clr));
+			slot = OffFactoryExit(OffAllyExit(ClearOfSpots(slot, clr)));
 		// The slot handed over, so a frame that stands elsewhere is traced
 		// to the request or to the engine's search, not guessed.
 		if (BigEcoDef(int(w.def.id)))
@@ -1098,7 +1098,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// zero built, 91% of its energy thrown away).
 		if ((unit !is null) && NearBlocked(slot))
 			slot = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
-		const AIFloat3 cAt = ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f);
+		const AIFloat3 cAt = OffFactoryExit(ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f));
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
 				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
 		// HOW MANY, NOT WHETHER -- the same law the nano burst already uses,
