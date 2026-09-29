@@ -43,6 +43,28 @@ int gNanoSiteAt = -999999;
 bool AllyLaneHit(const AIFloat3& in p, const AIFloat3& in fwd, bool laneOf)
 {
 	AllyStaticsSync();
+	// An allied plant's own facing, where it is known.
+	if (laneOf) {
+		for (uint i = 0; i < gAllyPlPos.length(); ++i) {
+			const AIFloat3 s = gAllyPlPos[i];
+			if (s.distance2D(p) > 242.f)
+				continue;
+			const int f = gAllyPlFacing[i];
+			const AIFloat3 d = (f == 0) ? AIFloat3(0.f, 0.f, 1.f)
+					: (f == 1) ? AIFloat3(1.f, 0.f, 0.f)
+					: (f == 2) ? AIFloat3(0.f, 0.f, -1.f) : AIFloat3(-1.f, 0.f, 0.f);
+			const float rx = p.x - s.x;
+			const float rz = p.z - s.z;
+			const float ahead = rx * d.x + rz * d.z;
+			if ((ahead < 40.f) || (ahead > 220.f))
+				continue;
+			const float side = rx * d.z - rz * d.x;
+			if ((side > -100.f) && (side < 100.f))
+				return true;
+		}
+		if (gAllyPlKnown)
+			return false;
+	}
 	for (uint i = 0; i < gAllyStPos.length(); ++i) {
 		const int d = gAllyStDef[i];
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d])

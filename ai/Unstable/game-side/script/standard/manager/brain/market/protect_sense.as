@@ -512,6 +512,9 @@ float JamSpacing(int d)
 // is a C++ walk and this is asked per candidate.
 array<AIFloat3> gAllyStPos;
 array<int> gAllyStDef;
+array<AIFloat3> gAllyPlPos;
+array<int> gAllyPlFacing;
+bool gAllyPlKnown = false;
 Grid::Cells gAllyStGrid;
 int gAllyStAt = -999999;
 void AllyStaticsSync()
@@ -529,6 +532,16 @@ void AllyStaticsSync()
 				continue;
 			gAllyStPos.insertLast(AIFloat3(ad[k], 0.f, ad[k + 1]));
 			gAllyStDef.insertLast(d);
+		}
+	}
+	gAllyPlPos.resize(0);
+	gAllyPlFacing.resize(0);
+	const array<float>@ ap = ai.GetAllyPlants();
+	gAllyPlKnown = (ap !is null);
+	if (ap !is null) {
+		for (uint k = 0; k + 3 < ap.length(); k += 4) {
+			gAllyPlPos.insertLast(AIFloat3(ap[k], 0.f, ap[k + 1]));
+			gAllyPlFacing.insertLast(int(ap[k + 3]));
 		}
 	}
 	gAllyStGrid.Begin(256.f, 0.f, 0.f,

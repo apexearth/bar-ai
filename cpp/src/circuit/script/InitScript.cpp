@@ -1237,6 +1237,42 @@ static CScriptArray* CCircuitAI_GetAllyStatics(CCircuitAI* circuit)
 	return CCircuitAI_AllyStatics(circuit, false);
 }
 
+// Allied (not own) factories as (x, z, defId, facing) -- their doorway is
+// where they face, not our base axis (his watch13: an ally's Doomsday stood
+// 130 elmo in front of a gantry that faced across our axis).
+static CScriptArray* CCircuitAI_GetAllyPlants(CCircuitAI* circuit)
+{
+	std::vector<float> out;
+	const int frame = circuit->GetLastFrame();
+	for (const auto& kv : circuit->GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || (u->GetUnit() == nullptr)) {
+			continue;
+		}
+		const CCircuitDef* cdef = u->GetCircuitDef();
+		if (cdef->IsMobile() || !cdef->IsBuilder()) {
+			continue;
+		}
+		if (circuit->GetTeamUnit(kv.first) != nullptr) {
+			continue;
+		}
+		const AIFloat3& pos = u->GetPos(frame);
+		out.push_back(pos.x);
+		out.push_back(pos.z);
+		out.push_back(float(cdef->GetId()));
+		out.push_back(float(u->GetUnit()->GetBuildingFacing()));
+	}
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
+}
+
 // The area a point stands in for one move type, or the nearest one within a
 // few sectors: a point in the sea or on a cliff face belongs to the ground
 // beside it for the question below.
@@ -1824,6 +1860,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStatics()", asFUNCTION(CCircuitAI_GetAllyStatics), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyPlants()", asFUNCTION(CCircuitAI_GetAllyPlants), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetUnsafeSites()", asFUNCTION(CCircuitAI_GetUnsafeSites), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
