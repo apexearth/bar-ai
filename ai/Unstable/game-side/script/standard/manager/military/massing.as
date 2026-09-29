@@ -440,6 +440,50 @@ float HoldNeedM()
 	return need;
 }
 
+// HoldNeedM as one unit type sees it: only the threat at home it can reach.
+// A land army recalled against ships off the shore stands on the beach while
+// the front it left falls (his 8v8 watch, 2026-09-28).
+array<int> gHoldNeedDef;
+array<float> gHoldNeedVal;
+int gHoldNeedFrame = -1;
+
+float HoldNeedFor(int defId)
+{
+	if (!Builder::gHomeSet || !Catalog::ValidId(defId))
+		return 0.f;
+	if (gHoldNeedFrame != ai.frame) {
+		gHoldNeedFrame = ai.frame;
+		gHoldNeedDef.resize(0);
+		gHoldNeedVal.resize(0);
+	}
+	const int k = gHoldNeedDef.find(defId);
+	if (k >= 0)
+		return gHoldNeedVal[k];
+	CCircuitDef@ d = Catalog::Def(defId);
+	const float r = (Catalog::gMaxRange[defId] > 64.f) ? Catalog::gMaxRange[defId] : 64.f;
+	float need = 0.f;
+	bool seen = false;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+		if (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST)
+			continue;
+		seen = true;
+		if ((d !is null) && ai.CanDefReachAt(d, Builder::gHomePos, gp, r))
+			need += aiEnemyMgr.GetEnemyGroupCost(i);
+	}
+	if (!seen && (gRaidM > need))
+		need = gRaidM;
+	if (gHoldWhyLast == 3) {
+		const float foe = FoeMobileMassing();
+		if (foe > need)
+			need = foe;
+	}
+	gHoldNeedDef.insertLast(defId);
+	gHoldNeedVal.insertLast(need);
+	return need;
+}
+
 bool HoldHome()
 {
 	if (!HoldReason())

@@ -395,6 +395,10 @@ void UpdateWithdraw()
 	}
 
 	const int reissue = int(ai.GetTunable("apex_withdraw_reissue", TUNE_WITHDRAW_REISSUE)) * SECOND;
+	// A recall brings home what the threat there needs, not the whole front:
+	// attackers already home-side count first, then each recalled unit.
+	const float recallFwd = ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);
+	float recallHave = -1.f;
 	for (uint j = 0; j < alive.length(); ++j) {
 		CCircuitUnit@ u = alive[j];
 		const int i = aliveSlot[j];
@@ -453,8 +457,26 @@ void UpdateWithdraw()
 			&& Builder::gHomeSet && Builder::BaseUnderAttack()
 			&& HoldHome())
 		{
-			recallHome = Military::ForwardFraction(p)
-				> ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);
+			recallHome = Military::ForwardFraction(p) > recallFwd;
+			if (recallHome && (recallHave < 0.f)) {
+				recallHave = gHoldHeldM;
+				for (uint h = 0; h < alive.length(); ++h) {
+					IUnitTask@ th = alive[h].task;
+					if ((th is null) || (th.GetType() != Task::Type::FIGHTER)
+						|| (alive[h].circuitDef is null))
+						continue;
+					const int fh = th.GetFightType();
+					if (((fh == Task::FightType::ATTACK) || (fh == Task::FightType::RAID))
+						&& (Military::ForwardFraction(allyPos[h]) <= recallFwd))
+						recallHave += alive[h].circuitDef.costM;
+				}
+			}
+			if (recallHome) {
+				if ((u.circuitDef is null) || (recallHave >= HoldNeedFor(int(u.circuitDef.id))))
+					recallHome = false;
+				else
+					recallHave += u.circuitDef.costM;
+			}
 		}
 		float odds = 0.f;
 		const bool outgunned = OutgunnedHere(u, p, allyPos, allyPow, odds);
