@@ -1048,7 +1048,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// fodder is for; a big gap the T2 lab cannot fill is still T1's to fill.
 	// Coverage demand (cheap bodies) is not taken away: the better lines do
 	// not make it.
-	{
+	// ...NOT WHILE METAL IS BEING THROWN AWAY. The better lines' capacity is
+	// nameplate, not spend: a full bank is the proof they are not taking it,
+	// and yielding to them left every air plant of a team idle at 99% bank
+	// (his watch13, 2026-09-28: 677 m/s, one T2 lab building, three idle).
+	const bool wasting = MetalWasting();
+	if (wasting) {
+		gYieldLog = " yield=off(wasting)";
+	} else {
 		const float mine = FacBestPPC(fid);
 		float betterCap = 0.f;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
@@ -1497,7 +1504,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// through to the line pricing: it cannot hold ground, and priced there
 		// by power-per-cost it flies alone to the stock attack.
 		if (!Catalog::gBuilder[d] && Air::IsBomberDef(d)) {
-			const float gainB = ecoGrowing ? 0.f : Air::StrikeGainFor(d, fillS) * roleMul;
+			const float gainB = (ecoGrowing && !wasting) ? 0.f : Air::StrikeGainFor(d, fillS) * roleMul;
 			if (gainB > 0.f) {
 				// THE SAME CURRENCY AS THE ARMY BID. The army candidate's
 				// value below is its demand RATE (gap over the fill window,
@@ -1653,7 +1660,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
 			}
-			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);
+			// The seat's growth owns metal the economy can use; metal the bank
+			// is throwing away costs it nothing.
+			const float sinkGap = (ovfHands || (ecoGrowing && !wasting)) ? 0.f : (richBal * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
