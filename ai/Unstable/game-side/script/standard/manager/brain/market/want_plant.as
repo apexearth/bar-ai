@@ -511,6 +511,47 @@ int OwnedCrosserPlants()
 	return n;
 }
 
+// A hull that can get out onto the water: flies, walks the bottom, floats,
+// or covers more of the map than the land is (a hover).
+bool WaterReachDef(int d)
+{
+	if (Catalog::gFlyer[d] || Catalog::gAmphib[d] || Catalog::gFloater[d])
+		return true;
+	float lp = aiTerrainMgr.GetLandPercent();
+	if (lp <= 1.5f)
+		lp *= 100.f;
+	return ai.DefMapCoverage(Catalog::Def(d)) > lp + 5.f;
+}
+
+// Does a constructor of ours (the commander aside) reach the water?
+bool OwnWaterCon()
+{
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di]
+			|| Catalog::gRezzer[di])
+			continue;
+		const CCircuitDef@ cd = Catalog::Def(di);
+		if ((cd !is null) && !cd.IsRoleAny(Unit::Role::COMM.mask) && WaterReachDef(di))
+			return true;
+	}
+	return false;
+}
+
+// This plant makes a constructor that reaches the water (his 2026-09-28: "a
+// vehicle plant or hover plant will always be able to get a con into that
+// water").
+bool PlantMakesWaterCon(int plant)
+{
+	const array<int>@ pr = Catalog::gBuildsList[plant];
+	for (uint i = 0; i < pr.length(); ++i) {
+		if (Catalog::gAvailable[pr[i]] && Catalog::gMobile[pr[i]] && Catalog::gBuilder[pr[i]]
+			&& !Catalog::gRezzer[pr[i]] && WaterReachDef(pr[i]))
+			return true;
+	}
+	return false;
+}
+
 int OwnedWaterPlants()
 {
 	int n = 0;
@@ -539,6 +580,9 @@ int gNextPlantDupLog = 0;
 int gNextPlantLiftLog = 0;
 int gNextPlantCandLog = 0;
 int gNextWetReachLog = 0;
+int gNextYardHoldLog = 0;
+// When one of our water plants last died (main.as unit-destroyed).
+int gYardLostAt = -999999;
 
 float DupBpSubstMul(int d)
 {
@@ -1472,6 +1516,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const int dClass = PlantClass(d);
 		if (waterOnly && (dClass != PC_WATER))
 			continue;
+		// A naval lead with no hand that can reach its water buys the plant
+		// that makes one before any other land plant.
+		if ((dClass == PC_LAND) && MapHasWater() && NavalLead()
+			&& (OwnedWaterPlants() == 0) && !OwnWaterCon() && !PlantMakesWaterCon(d))
+			continue;
 		// Hovers AND ships (his call 2026-09-28): once a yard stands, the next
 		// land plant is the hover lab, whose cons build the land economy too.
 		if (LandLocked() && (OwnedWaterPlants() > 0) && (OwnedCrosserPlants() == 0)
@@ -1520,6 +1569,20 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 					gNextWetReachLog = ai.frame + 60 * SECOND;
 					AiLog("apex: wet-unreach t=" + ai.teamId + " " + unit.circuitDef.GetName()
 						+ " " + Catalog::Def(d).GetName());
+				}
+				continue;
+			}
+			// A YARD JUST SUNK IS NOT REBUILT INTO THE SAME FLEET (his
+			// 2026-09-28: the south lake's yards died as they finished).
+			// While the loss is fresh the next yard waits for a water gun
+			// covering its shore; the water-defence want sites one there.
+			if ((dClass == PC_WATER) && (ai.frame - gYardLostAt < 3 * MINUTE)
+				&& !WaterGunCovers(site, 500.f)) {
+				if (ai.frame >= gNextYardHoldLog) {
+					gNextYardHoldLog = ai.frame + 30 * SECOND;
+					AiLog(Factory::T() + "apex: yard-hold t=" + ai.teamId + " "
+						+ Catalog::Def(d).GetName() + " at=" + int(site.x) + ","
+						+ int(site.z) + " -- guns first");
 				}
 				continue;
 			}

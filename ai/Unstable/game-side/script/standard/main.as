@@ -282,7 +282,10 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	if ((cdef !is null) && !cdef.IsMobile()
 		&& (Market::PlantClass(int(cdef.id)) == Market::PC_WATER)
 		&& (Catalog::gBuildsList[int(cdef.id)].length() > 0))
+	{
 		Market::BlockAdd(at, int(cdef.id));
+		Market::gYardLostAt = ai.frame;
+	}
 	IUnitTask@ t = unit.task;
 	const int tt = (t is null) ? -1 : t.GetType();
 	const int bt = ((t !is null) && (tt == Task::Type::BUILDER)) ? t.GetBuildType() : -1;
