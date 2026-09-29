@@ -574,6 +574,7 @@ void ShareOuting(CCircuitUnit@ unit, array<Want@>@ wants)
 	const AIFloat3 up = unit.GetPos(ai.frame);
 	if ((rate <= 0.f) || !OnMap(up))
 		return;
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const uint n = wants.length();
 	array<float> mul(n, 1.f);
 	for (uint i = 0; i < n; ++i) {
@@ -581,12 +582,15 @@ void ShareOuting(CCircuitUnit@ unit, array<Want@>@ wants)
 		if ((c is null) || (c.value <= 0.f) || (c.walkSec <= 0.f) || !OnMap(c.pos))
 			continue;
 		const float far = up.distance2D(c.pos);
-		if (far <= 1.f)
+		if ((far <= 1.f) || (isComm && ComFar(c.pos) && (far > HERE_R)))
 			continue;
 		float others = 0.f;
 		for (uint j = 0; j < n; ++j) {
 			Want@ o = wants[j];
 			if ((j == i) || (o is null) || (o.value <= 0.f) || !OnMap(o.pos))
+				continue;
+			// A job the leash will refuse him once he is there shares nothing.
+			if (isComm && ComFar(o.pos) && (o.pos.distance2D(c.pos) > HERE_R))
 				continue;
 			const float k = 1.f - o.pos.distance2D(c.pos) / far;
 			if (k > 0.f)
@@ -2178,7 +2182,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// floor and the chase. Extraction is NOT exempt (a 0.45-value mex
 		// 1900 elmo out won a draw and that walk killed him, watched
 		// 2026-09-05).
-		if (isComm && ComFar(ranked[i].pos)) {
+		// Not a job where he already stands: the leash guards the walk out,
+		// and refusing it sent him home from the water with the tube unbuilt.
+		if (isComm && ComFar(ranked[i].pos)
+			&& (ranked[i].pos.distance2D(unit.GetPos(ai.frame)) > HERE_R)) {
 			if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
 				gComFwdLogAt = ai.frame;
 				AiLog("apex: com-fwd skip t=" + ai.teamId + " "
