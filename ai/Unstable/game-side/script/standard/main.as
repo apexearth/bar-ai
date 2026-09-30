@@ -398,7 +398,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		return;
 	if (!Military::WantsMassing(cdef) && !Military::IsFodder(cdef))
 		return;
-	Military::NoteDeathSource(cdef.costM, attackerDef);
+	Military::NoteDeathSource(cdef.costM, attackerDef, unit.GetPos(ai.frame));
 }
 
 // An enemy death we witnessed. byUs is true only when the killer was one of

@@ -1540,3 +1540,20 @@ the humans to kill me."*
 - **Ruling (2026-09-29): any player may buy bombers**, not only an elected air
   lead (there is not always one); idle bombers pool on the ally holding the
   most, who launches the raids.
+
+## 2026-09-30 — chip away at a turtle from outside its range
+
+- **A player who sees a big air or nuke attack coming turtles.** They build
+  a lot of shields, a lot of anti-air and anti-nukes.
+- **The answer is weapons that outrange their defences.** The long-range
+  plasma cannons out-reach even a Pulsar. Build them within range of the enemy
+  defences.
+- **Long-range cannons shoot buildings, never units.** Targeting units does not
+  work. Target their shields, their buildings, the important things, and those
+  eventually die.
+- **The trigger is our units dying to their defences.** When our attacks keep
+  dying to enemy defences, build long-range guns within range of those
+  defences.
+- **The other ways in are the missile launchers.** Armada can build the EMP
+  launcher (Paralyzer) and Cortex the tactical missile launcher (Catalyst).
+  Build them within range and launch them at the enemy defences.

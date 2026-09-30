@@ -24,7 +24,16 @@ public:
 	virtual void Update() override;
 
 private:
+	void AimAtStructure(CCircuitUnit* unit, int frame);
+	void AimLauncher(CCircuitUnit* unit, int frame);
+
+	enum class Launcher: char {UNKNOWN, NUKE, TACTICAL, EMP, JUNO};
+	Launcher launcher = Launcher::UNKNOWN;
+	float shotDmg = 0.f;
+	int stockCap = 1;
+
 	int targetFrame;
+	int orderFrame = -1;
 	springai::AIFloat3 targetPos;
 };
 

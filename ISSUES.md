@@ -129,6 +129,35 @@ count stalls at ~30 from minute 8 (site vetoes, the con cap, assisting, the
 moho wait under the T2 switch); whether cover demand should bind under the T2
 switch (his call); which basis binds -- output share or holdings (asked).
 
+### SIEGE: the Paralyzer is priced but never bought; allied Junos double up (2026-09-30)
+
+His play (docs/24 2026-09-30): outrange a turtle with long-range cannons,
+EMP launchers (Paralyzer), tactical launchers (Catalyst, Perdition) and the
+Juno, fired at buildings. Built 09-30:
+- Cannons aim at structures only (`apex: lrpc aim`); their count comes from
+  the metal in reach.
+- Target first, then site: `Military::TurretTarget` picks the known enemy
+  group of armed buildings nearest where their turrets kill us
+  (`apex: turret-target`); a launcher stands halfway between that group's
+  reach and its own (`apex: siege t= ... target= targetM= targetR= at=`).
+- Launchers fire a volley sized to kill (health / missile damage), saving for
+  the best target while the stock grows (`apex: launch|launch saving|idle|wait`).
+
+At real prices vs BARb hard +100% (real-51..54, 4 games): Cortex seats built
+Catalysts and Junos, Armada seats Junos and a Basilica. Catalysts hit
+armanni/armamb/armpb and saved for a 2-missile Pulsar; Junos hit only radar,
+jammers and radar vehicles. Open:
+- The Paralyzer is priced (gain 0.02-6.9) but lost every draw; never built or
+  fired in any test, so its squad-in-reach gate is unmeasured.
+- Allied Junos fire at the same target: target de-confliction is per player.
+- Forward Catalyst frames die unfinished when the target group is the one
+  killing our army (siege-force2, volley-41).
+- Choices made without his ruling: a paralyzer counts as answering the whole
+  loss at one spot (one per player); one Juno per player; a missile's bar is
+  its cost (energy at 60 E/M) divided by the missiles already stocked; the
+  site is halfway between the two reaches.
+- The cannon count is untested in a long game.
+
 ### LATE GAME: what is built but only partly verified (2026-09-29)
 
 - Rapid cannons (Ragnarok/Calamity/Starfall): priced by the metal of their

@@ -14,6 +14,10 @@
 #include "unit/ally/AllyUnit.h"
 #include "unit/CircuitDef.h"
 #include "unit/CircuitUnit.h"
+#include "unit/CircuitWDef.h"
+
+#include "Damage.h"
+#include "WeaponDef.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
@@ -23,6 +27,8 @@
 #include "AISCommands.h"
 #include "Log.h"
 #include "Lua.h"
+
+#include <algorithm>
 
 namespace circuit {
 
@@ -147,8 +153,41 @@ void CSuperTask::Update()
 	// antinukes covering a target, which this per-group scorer cannot see.
 	// Stockpiling itself continues (MilitaryManager's finished-handler orders
 	// it); only the targeting is ceded. Non-stock supers (LRPC) stay here.
-	if (cdef->IsAttrStock() && (circuit->GetTunable("apex_brain_nuke", 1.f) > 0.f)) {
-		return;
+	if (cdef->IsAttrStock()) {
+		if (launcher == Launcher::UNKNOWN) {
+			CWeaponDef* cwd = cdef->GetWeaponDef();
+			springai::WeaponDef* wd = (cwd != nullptr) ? cwd->GetDef() : nullptr;
+			if ((wd == nullptr) || (wd->GetTargetable() != 0)) {
+				launcher = Launcher::NUKE;
+			} else if (wd->IsParalyzer()) {
+				launcher = Launcher::EMP;
+			} else {
+				springai::Damage* damage = wd->GetDamage();
+				const std::vector<float>& damages = damage->GetTypes();
+				float most = 0.f;
+				for (float v : damages) {
+					most = std::max(most, v);
+				}
+				delete damage;
+				// the Juno's kill is a gadget; its warhead does 1 damage
+				launcher = (most <= 1.f) ? Launcher::JUNO : Launcher::TACTICAL;
+				shotDmg = most;
+			}
+			if (wd != nullptr) {
+				const std::map<std::string, std::string> params = wd->GetCustomParams();
+				auto it = params.find("stockpilelimit");
+				if (it != params.end()) {
+					stockCap = std::max(1, utils::string_to_int(it->second));
+				}
+			}
+		}
+		if (launcher != Launcher::NUKE) {
+			AimLauncher(unit, frame);
+			return;
+		}
+		if (circuit->GetTunable("apex_brain_nuke", 1.f) > 0.f) {
+			return;
+		}
 	}
 	if (cdef->IsHoldFire()) {
 		if (targetFrame + (cdef->GetReloadTime() + TARGET_DELAY) > frame) {
@@ -161,6 +200,12 @@ void CSuperTask::Update()
 			return;
 		}
 	} else if (targetFrame + TARGET_DELAY > frame) {
+		return;
+	}
+
+	// apex: a cannon shoots buildings, never units (apexearth 2026-09-30).
+	if (!cdef->IsAttrStock()) {
+		AimAtStructure(unit, frame);
 		return;
 	}
 
@@ -357,6 +402,266 @@ void CSuperTask::Update()
 		targetFrame = frame;
 		state = State::ENGAGE;
 	}
+}
+
+// apex: a shield is worth the structures under it, because every shell aimed at
+// them lands on it first.
+void CSuperTask::AimAtStructure(CCircuitUnit* unit, int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	const float maxSqRange = SQUARE(cdef->GetMaxRange());
+	targetFrame = frame;
+
+	auto isStructure = [circuit](CEnemyInfo* e) {
+		CCircuitDef* edef = e->GetCircuitDef();
+		return (edef != nullptr) && !edef->IsMobile() && !e->IsHidden()
+			&& !circuit->GetCircuitDef(edef->GetId())->IsIgnore();
+	};
+
+	CEnemyInfo* keep = GetTarget();
+	if ((keep != nullptr) && isStructure(keep) && (position.SqDistance2D(keep->GetPos()) < maxSqRange)) {
+		if (frame < orderFrame + FRAMES_PER_SEC * 50) {
+			return;  // the order stands; a turret re-aimed mid-volley wastes the volley
+		}
+	} else {
+		keep = nullptr;
+	}
+
+	std::vector<CEnemyInfo*> structs;
+	std::vector<std::pair<float, CEnemyInfo*>> cands;
+	for (auto& kv : circuit->GetEnemyInfos()) {
+		if (isStructure(kv.second)) {
+			structs.push_back(kv.second);
+		}
+	}
+	CEnemyInfo* best = keep;
+	float bestCover = 0.f;
+	if (best == nullptr) {
+		for (CEnemyInfo* e : structs) {
+			if (position.SqDistance2D(e->GetPos()) >= maxSqRange) {
+				continue;
+			}
+			float score = e->GetCost();
+			const float r = e->GetCircuitDef()->GetShieldRadius();
+			if (e->GetCircuitDef()->IsShieldDef() && (r > 0.f)) {
+				const float sqR = SQUARE(r);
+				for (CEnemyInfo* o : structs) {
+					if ((o != e) && (e->GetPos().SqDistance2D(o->GetPos()) < sqR)) {
+						score += o->GetCost();
+					}
+				}
+			}
+			cands.push_back(std::make_pair(score, e));
+		}
+		std::sort(cands.begin(), cands.end(), [](const std::pair<float, CEnemyInfo*>& a,
+				const std::pair<float, CEnemyInfo*>& b) { return a.first > b.first; });
+		const float aoe = cdef->GetAoe() * 1.25f;
+		for (unsigned i = 0; (i < cands.size()) && (i < 4); ++i) {
+			if (FriendlyCostIn(circuit, cands[i].second->GetPos(), aoe) <= 0.f) {
+				best = cands[i].second;
+				bestCover = cands[i].first - best->GetCost();
+				break;
+			}
+		}
+	}
+
+	if (best == nullptr) {
+		if (GetTarget() != nullptr || State::ENGAGE == state) {
+			circuit->LOG("apex: lrpc idle %s structs=%i inRange=%i",
+					cdef->GetDef()->GetName(), (int)structs.size(), (int)cands.size());
+			TRY_UNIT(circuit, unit,
+				unit->CmdStop();
+			)
+			SetTarget(nullptr);
+			state = State::ROAM;
+		}
+		return;
+	}
+
+	const bool kept = (best == keep);
+	SetTarget(best);
+	targetPos = best->GetPos();
+	targetPos.y = circuit->GetMap()->GetElevationAt(targetPos.x, targetPos.z);
+	circuit->LOG("apex: lrpc aim %s -> %s cost=%.0f cover=%.0f shield=%i keep=%i structs=%i inRange=%i at (%.0f,%.0f)",
+			cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(), best->GetCost(),
+			bestCover, best->GetCircuitDef()->IsShieldDef() ? 1 : 0, kept ? 1 : 0,
+			(int)structs.size(), (int)cands.size(), targetPos.x, targetPos.z);
+	TRY_UNIT(circuit, unit,
+		if (best->IsInRadarOrLOS() && !circuit->IsCheating()) {
+			unit->GetUnit()->Attack(best->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+		} else {
+			unit->CmdAttackGround(targetPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+		}
+	)
+	orderFrame = frame;
+	state = State::ENGAGE;
+}
+
+// apex: tactical and EMP launchers go at the turrets, the Juno at radar and
+// jammers (apexearth 2026-09-30). A paralysis wears off, so an EMP is spent only
+// where one of our squads is inside the turret's reach or about to be.
+void CSuperTask::AimLauncher(CCircuitUnit* unit, int frame)
+{
+	if (targetFrame + TARGET_DELAY > frame) {
+		return;
+	}
+	targetFrame = frame;
+	CCircuitAI* circuit = manager->GetCircuit();
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	const int stock = unit->GetUnit()->GetStockpile();
+	if (stock <= 0) {
+		if (frame >= orderFrame + FRAMES_PER_SEC * 60) {
+			orderFrame = frame;
+			circuit->LOG("apex: launch wait %s stock=0", cdef->GetDef()->GetName());
+		}
+		return;
+	}
+	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
+	const float maxSqRange = SQUARE(cdef->GetMaxRange());
+	const float aoe = std::max(cdef->GetAoe(), 64.f);
+	const float sqAoe = SQUARE(aoe);
+
+	std::vector<CEnemyInfo*> pool;
+	for (auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		CCircuitDef* edef = e->GetCircuitDef();
+		if ((edef == nullptr) || e->IsHidden() || circuit->GetCircuitDef(edef->GetId())->IsIgnore()
+			|| (position.SqDistance2D(e->GetPos()) >= maxSqRange))
+		{
+			continue;
+		}
+		bool want;
+		if (launcher == Launcher::JUNO) {
+			// a radar or jammer unit, not a gun or builder carrying a small radar
+			want = !edef->IsAttacker() && !edef->IsAbleToFly()
+				&& ((edef->GetRadarRadius() > edef->GetLosRadius())
+					|| (edef->GetSonarRadius() > edef->GetLosRadius())
+					|| (edef->GetJammerRadius() > 0.f));
+		} else {
+			want = !edef->IsMobile() && edef->IsAttacker();
+		}
+		if (want) {
+			pool.push_back(e);
+		}
+	}
+
+	std::vector<std::pair<AIFloat3, float>> squads;
+	if (launcher == Launcher::EMP) {
+		for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK, IFighterTask::FightType::AH}) {
+			for (const IFighterTask* task : militaryMgr->GetTasks(ft)) {
+				const ISquadTask* sq = static_cast<const ISquadTask*>(task);
+				if (sq->GetLeader() == nullptr) {
+					continue;
+				}
+				squads.push_back(std::make_pair(sq->GetLeaderPos(frame),
+						sq->GetLeader()->GetCircuitDef()->GetMaxRange()));
+			}
+		}
+	}
+
+	// CWeaponDef prices a stockpile weapon per second of stocking; a missile is
+	// that times the stock time, its energy at the converter rate (60 E per M)
+	float shotM = 0.f;
+	if (CWeaponDef* cwd = cdef->GetWeaponDef()) {
+		const float stockS = cwd->GetDef()->GetStockpileTime() / FRAMES_PER_SEC;
+		shotM = (cwd->GetCostM() + cwd->GetCostE() / 60.f) * stockS;
+	}
+	// missiles in the silo are paid for; a growing stock lowers the bar
+	const float bar = shotM / stock;
+
+	// apex: a missile that cannot kill its target alone goes as a volley that
+	// can (apexearth 2026-09-30). Targets are ranked on value per missile; the
+	// best one waits for its volley while the stock is still growing.
+	auto missilesFor = [this](CEnemyInfo* e) {
+		if ((launcher != Launcher::TACTICAL) || (shotDmg <= 0.f)) {
+			return 1;
+		}
+		const float hp = (e->GetHealth() > 0.f) ? e->GetHealth() : e->GetCircuitDef()->GetHealth();
+		return std::max(1, (int)std::ceil(hp / shotDmg));
+	};
+	CEnemyInfo* best = nullptr;
+	CEnemyInfo* bestNow = nullptr;
+	float bestScore = 0.f, bestPer = 0.f, nowScore = 0.f, nowPer = 0.f;
+	int bestNeed = 1, nowNeed = 1;
+	for (CEnemyInfo* c : pool) {
+		const AIFloat3& cp = c->GetPos();
+		if (launcher == Launcher::EMP) {
+			const float reach = c->GetCircuitDef()->GetMaxRange();
+			bool engaged = false;
+			for (auto& sq : squads) {
+				if (sq.first.SqDistance2D(cp) <= SQUARE(reach + sq.second)) {
+					engaged = true;
+					break;
+				}
+			}
+			if (!engaged) {
+				continue;
+			}
+		}
+		float score = 0.f;
+		for (CEnemyInfo* o : pool) {
+			if (cp.SqDistance2D(o->GetPos()) < sqAoe) {
+				score += o->GetCost();
+			}
+		}
+		const int need = missilesFor(c);
+		if ((need > stockCap) || (score < bar * need)
+			|| militaryMgr->IsRecentSuperTarget(cp, sqAoe, frame)
+			|| (FriendlyCostIn(circuit, cp, aoe * 1.25f) > 0.f))
+		{
+			continue;
+		}
+		const float per = score / need;
+		if (per > bestPer) {
+			bestPer = per;
+			bestScore = score;
+			bestNeed = need;
+			best = c;
+		}
+		if ((need <= stock) && (per > nowPer)) {
+			nowPer = per;
+			nowScore = score;
+			nowNeed = need;
+			bestNow = c;
+		}
+	}
+	const char* kind = (launcher == Launcher::JUNO) ? "juno" : (launcher == Launcher::EMP) ? "emp" : "tactical";
+	if ((best != nullptr) && (bestNeed > stock) && (stock < stockCap)) {
+		if (frame >= orderFrame + FRAMES_PER_SEC * 60) {
+			orderFrame = frame;
+			circuit->LOG("apex: launch saving %s %s for %s need=%i stock=%i/%i",
+					kind, cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(),
+					bestNeed, stock, stockCap);
+		}
+		return;
+	}
+	if ((best == nullptr) || (bestNeed > stock)) {
+		best = bestNow;
+		bestScore = nowScore;
+		bestNeed = nowNeed;
+	}
+	if (best == nullptr) {
+		if (frame < orderFrame + FRAMES_PER_SEC * 60) {
+			return;
+		}
+		orderFrame = frame;
+		circuit->LOG("apex: launch idle %s %s stock=%i pool=%i squads=%i bar=%.0f",
+				kind, cdef->GetDef()->GetName(), stock, (int)pool.size(), (int)squads.size(), bar);
+		return;
+	}
+	AIFloat3 at = best->GetPos();
+	at.y = circuit->GetMap()->GetElevationAt(at.x, at.z);
+	militaryMgr->NoteSuperTarget(at, frame);
+	circuit->LOG("apex: launch %s %s -> %s score=%.0f need=%i bar=%.0f stock=%i pool=%i at (%.0f,%.0f)",
+			kind, cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(),
+			bestScore, bestNeed, bar, stock, (int)pool.size(), at.x, at.z);
+	// the order lasts the volley: held longer it empties the stock onto one spot
+	const int reload = std::max(cdef->GetReloadTime(), FRAMES_PER_SEC / 2);
+	const int timeout = frame + reload * bestNeed - reload / 2;
+	TRY_UNIT(circuit, unit,
+		unit->CmdAttackGround(at, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
+	)
 }
 
 } // namespace circuit

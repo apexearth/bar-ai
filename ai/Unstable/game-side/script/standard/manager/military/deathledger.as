@@ -92,16 +92,89 @@ float FoeTierAbove(int tier)
 	return (tot > 1.f) ? (above / tot) : 0.f;
 }
 
-void NoteDeathSource(float costM, const CCircuitDef@ attackerDef)
+// Where their turrets kill us: metal-weighted sums, decayed with the rest of
+// the ledger.
+float gStaticDeathX = 0.f;
+float gStaticDeathZ = 0.f;
+
+void NoteDeathSource(float costM, const CCircuitDef@ attackerDef, const AIFloat3 &in at)
 {
 	if (attackerDef is null)
 		return;
 	if (attackerDef.IsAbleToFly())
 		gDeadToAir += costM;
-	else if (!attackerDef.IsMobile())
+	else if (!attackerDef.IsMobile()) {
 		gDeadToStatic += costM;
-	else
+		gStaticDeathX += costM * at.x;
+		gStaticDeathZ += costM * at.z;
+	} else
 		gDeadToMobile += costM;
+}
+
+float StaticLossRate()
+{
+	return gDeadToStatic / BLEED_TAU;
+}
+
+// THE TURRETS WE MEAN TO HIT: of the enemy groups we know that hold armed
+// buildings, the one nearest where their turrets have been killing us. Its
+// reach is the longest gun in it; its metal is those guns.
+int gTurretAt = -1;
+int gTurretLogAt = 0;
+bool gTurretOk = false;
+AIFloat3 gTurretPos;
+float gTurretReach = 0.f;
+float gTurretM = 0.f;
+bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
+{
+	if (gDeadToStatic < 1.f)
+		return false;
+	if ((gTurretAt < 0) || (ai.frame >= gTurretAt + 5 * SECOND)) {
+		gTurretAt = ai.frame;
+		gTurretOk = false;
+		const AIFloat3 died(gStaticDeathX / gDeadToStatic, 0.f, gStaticDeathZ / gDeadToStatic);
+		float bestD = 1e30f;
+		const int n = aiEnemyMgr.GetEnemyGroupCount();
+		int armed = 0, units = 0;
+		for (int g = 0; g < n; ++g) {
+			float m = 0.f, r = 0.f;
+			const int k = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+			units += k;
+			for (int i = 0; i < k; ++i) {
+				const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, i);
+				if ((d < 1) || (d > Catalog::gDefCount) || Catalog::gMobile[d]
+						|| (Catalog::gMaxRange[d] <= 1.f) || (Catalog::gSurfT[d] <= 0.f)
+						|| (Catalog::gBuildsList[d].length() > 0))
+					continue;
+				m += Catalog::gCostM[d];
+				if (Catalog::gMaxRange[d] > r)
+					r = Catalog::gMaxRange[d];
+			}
+			if (m <= 0.f)
+				continue;
+			++armed;
+			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
+			const float dd = gp.distance2D(died);
+			if (dd < bestD) {
+				bestD = dd;
+				gTurretPos = gp;
+				gTurretReach = r;
+				gTurretM = m;
+				gTurretOk = true;
+			}
+		}
+		if (ai.frame >= gTurretLogAt) {
+			gTurretLogAt = ai.frame + 60 * SECOND;
+			AiLog("apex: turret-target t=" + ai.teamId + " groups=" + n + " units=" + units
+				+ " armed=" + armed + " died=" + int(died.x) + "," + int(died.z)
+				+ " ok=" + (gTurretOk ? 1 : 0) + " at=" + int(gTurretPos.x) + "," + int(gTurretPos.z)
+				+ " m=" + int(gTurretM) + " r=" + int(gTurretReach));
+		}
+	}
+	at = gTurretPos;
+	reach = gTurretReach;
+	metal = gTurretM;
+	return gTurretOk;
 }
 
 // Metal per second we are CURRENTLY losing to aircraft. The ledger decays over
@@ -276,6 +349,8 @@ void UpdateDeathLedger()
 	gKillAll *= k;
 	gWreckWet *= k;
 	gDeadToStatic *= k;
+	gStaticDeathX *= k;
+	gStaticDeathZ *= k;
 	gDeadToAir *= k;
 	gDeadToMobile *= k;
 	gDeadToPlasma *= k;

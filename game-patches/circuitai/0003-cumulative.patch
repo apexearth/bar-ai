@@ -6801,7 +6801,7 @@ index e56339eb..4ec8e2f0 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..b16a1766 100644
+index a44c20b0..b7047344 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -16,10 +16,12 @@
@@ -6940,7 +6940,18 @@ index a44c20b0..b16a1766 100644
  		UnitRemoved(unit, UseAs::FENCE);
  	};
  
-@@ -301,6 +370,9 @@ void CMilitaryManager::InitHandlers()
+@@ -285,7 +354,9 @@ void CMilitaryManager::InitHandlers()
+ 		} else {
+ //			damagedHandler[unitDefId] = structDamagedHandler;
+ 			if (cdef.IsRoleSuper()) {
+-				if (cdef.IsAttacker()) {
++				// apex: the Juno's warhead does 1 damage, so it is no attacker, but it
++				// is a launcher all the same
++				if (cdef.IsAttacker() || cdef.IsAttrStock()) {
+ 					createdHandler[unitDefId] = superCreatedHandler;
+ 					finishedHandler[unitDefId] = superFinishedHandler;
+ 					destroyedHandler[unitDefId] = superDestroyedHandler;
+@@ -301,6 +372,9 @@ void CMilitaryManager::InitHandlers()
  				radarDefs.AddDef(&cdef);
  				cdef.SetIsRadar(true);
  			}
@@ -6950,7 +6961,7 @@ index a44c20b0..b16a1766 100644
  			if (cdef.GetDef()->GetSonarRadius() > 1.f) {
  				sonarDefs.AddDef(&cdef);
  				cdef.SetIsSonar(true);
-@@ -522,13 +594,13 @@ void CMilitaryManager::Init()
+@@ -522,13 +596,13 @@ void CMilitaryManager::Init()
  		CScheduler* scheduler = circuit->GetScheduler().get();
  		const int interval = 4;
  		const int offset = circuit->GetSkirmishAIId() % interval;
@@ -6968,7 +6979,7 @@ index a44c20b0..b16a1766 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -582,7 +654,12 @@ int CMilitaryManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -582,7 +656,12 @@ int CMilitaryManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  
  	auto itgt = guardTasks.find(unit);
  	if (itgt != guardTasks.end()) {
@@ -6982,7 +6993,7 @@ index a44c20b0..b16a1766 100644
  	}
  
  	auto search = destroyedHandler.find(unit->GetCircuitDef()->GetId());
-@@ -612,7 +689,14 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
+@@ -612,7 +691,14 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
  			task = new CFGuardTask(this, ti.vip, 1.0f);
  		} break;
  		case IFighterTask::FightType::DEFEND: {
@@ -6998,7 +7009,7 @@ index a44c20b0..b16a1766 100644
  			if (ti.check == IFighterTask::FightType::_SIZE_) {
  				const float mod = (float)rand() / RAND_MAX * defenceMod.len + defenceMod.min;
  				task = new CDefendTask(this, pos, ti.promote, ti.promote, ti.power, 1.0f / mod);
-@@ -656,15 +740,43 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
+@@ -656,15 +742,43 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
  	}
  
  	fightTasks[static_cast<IFighterTask::FT>(ti.type)].insert(task);
@@ -7044,7 +7055,7 @@ index a44c20b0..b16a1766 100644
  	TaskAdded(task);
  	return task;
  }
-@@ -676,7 +788,16 @@ void CMilitaryManager::DequeueTask(IUnitTask* task, bool done)
+@@ -676,7 +790,16 @@ void CMilitaryManager::DequeueTask(IUnitTask* task, bool done)
  			IFighterTask* taskF = static_cast<IFighterTask*>(task);
  			fightTasks[static_cast<IFighterTask::FT>(taskF->GetFightType())].erase(taskF);
  			if (taskF->GetFightType() == IFighterTask::FightType::GUARD) {
@@ -7062,7 +7073,7 @@ index a44c20b0..b16a1766 100644
  			}
  		} break;
  		default: break;
-@@ -704,186 +825,16 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
+@@ -704,186 +827,16 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
  
  void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  {
@@ -7255,7 +7266,7 @@ index a44c20b0..b16a1766 100644
  	auto checkSensor = [this, frame, maxCost, &backPos, builderMgr, terrainMgr](IBuilderTask::BuildType type,
  			CCircuitDef* cdef, float range, std::function<bool (CCircuitDef*)> isSensor)
  	{
-@@ -909,7 +860,6 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -909,7 +862,6 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  	};
  	// radar
  	if (radarDefs.HasAvail()) {
@@ -7263,7 +7274,7 @@ index a44c20b0..b16a1766 100644
  		radarDefs.GetBestDef([&checkSensor, radiusMod](CCircuitDef* cdef, const SSensorExt& data) {
  			return checkSensor(IBuilderTask::BuildType::RADAR, cdef, data.radius * radiusMod,
  					[](CCircuitDef* cdef) { return cdef->IsRadar(); });
-@@ -924,6 +874,12 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
+@@ -924,6 +876,12 @@ void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
  	}
  }
  
@@ -7276,7 +7287,7 @@ index a44c20b0..b16a1766 100644
  void CMilitaryManager::MarkPorc(CCircuitUnit* unit, int defPointId)
  {
  	porcToPoint[unit] = defPointId;
-@@ -1063,14 +1019,199 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
+@@ -1063,14 +1021,199 @@ void CMilitaryManager::ClearScoutPosition(IUnitTask* task)
  	scoutTasks.erase(it);
  }
  
@@ -7478,7 +7489,7 @@ index a44c20b0..b16a1766 100644
  	const CMetalData::Clusters& clusters = metalMgr->GetClusters();
  
  	CMetalData::PointPredicate predicate = [inflMap, metalMgr, terrainMgr, area, clusters](const int index) {
-@@ -1095,6 +1236,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
+@@ -1095,6 +1238,16 @@ void CMilitaryManager::FillAttackSafePos(CCircuitUnit* unit, F3Vec& outPositions
  {
  	outPositions.clear();
  
@@ -7495,7 +7506,7 @@ index a44c20b0..b16a1766 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1149,6 +1300,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
+@@ -1149,6 +1302,16 @@ void CMilitaryManager::FillSafePos(CCircuitUnit* unit, F3Vec& outPositions)
  {
  	outPositions.clear();
  
@@ -7512,7 +7523,7 @@ index a44c20b0..b16a1766 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1335,6 +1496,42 @@ float CMilitaryManager::ClampMobileCostRatio() const
+@@ -1335,6 +1498,42 @@ float CMilitaryManager::ClampMobileCostRatio() const
  	return (enemyMobileCost > armyCost) ? (armyCost / enemyMobileCost) : 1.f;
  }
  
@@ -7555,7 +7566,7 @@ index a44c20b0..b16a1766 100644
  void CMilitaryManager::UpdateDefenceTasks()
  {
  	/*
-@@ -1429,8 +1626,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1429,8 +1628,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -7570,7 +7581,7 @@ index a44c20b0..b16a1766 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,20 +1648,42 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,20 +1650,42 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -7625,7 +7636,7 @@ index a44c20b0..b16a1766 100644
  }
  
  void CMilitaryManager::AddSensorDefs(const std::set<CCircuitDef*>& buildDefs)
-@@ -1574,7 +1798,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
+@@ -1574,7 +1800,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
  			targetCat = edef->GetCategory();
  			if (((targetCat & canTargetCat) == 0)
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
@@ -7652,7 +7663,7 @@ index a44c20b0..b16a1766 100644
  			{
  				continue;
  			}
-@@ -1665,11 +1907,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1665,11 +1909,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  		if (it != types.end()) {
  			switch (it->second) {
  				case IFighterTask::FightType::RAID: {
@@ -7687,7 +7698,7 @@ index a44c20b0..b16a1766 100644
  						}
  					}
  					if (task == nullptr) {
-@@ -1694,7 +1954,53 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1694,7 +1956,53 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  						}
  					}
  					if (task == nullptr) {
@@ -7742,7 +7753,7 @@ index a44c20b0..b16a1766 100644
  						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
  					}
  				} break;
-@@ -1717,10 +2023,75 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,10 +2025,75 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -16504,10 +16515,10 @@ index 6408f28f..912668ac 100644
  	} else if ((++updCount % 4 == 0) && !units.empty()) {
  		// Check for damaged units
 diff --git a/src/circuit/task/static/SuperTask.cpp b/src/circuit/task/static/SuperTask.cpp
-index e19de07e..971d3c65 100644
+index e19de07e..ad6f7f77 100644
 --- a/src/circuit/task/static/SuperTask.cpp
 +++ b/src/circuit/task/static/SuperTask.cpp
-@@ -9,14 +9,19 @@
+@@ -9,21 +9,102 @@
  #include "task/fighter/SquadTask.h"
  #include "map/InfluenceMap.h"
  #include "module/MilitaryManager.h"
@@ -16516,6 +16527,10 @@ index e19de07e..971d3c65 100644
 +#include "unit/ally/AllyUnit.h"
 +#include "unit/CircuitDef.h"
  #include "unit/CircuitUnit.h"
++#include "unit/CircuitWDef.h"
++
++#include "Damage.h"
++#include "WeaponDef.h"
  #include "CircuitAI.h"
  #include "util/Utils.h"
  
@@ -16526,8 +16541,10 @@ index e19de07e..971d3c65 100644
 +#include "Log.h"
  #include "Lua.h"
  
++#include <algorithm>
++
  namespace circuit {
-@@ -24,6 +29,76 @@ namespace circuit {
+ 
  using namespace springai;
  
  #define TARGET_DELAY	(FRAMES_PER_SEC * 10)
@@ -16604,7 +16621,7 @@ index e19de07e..971d3c65 100644
  
  CSuperTask::CSuperTask(ITaskModule* mgr)
  		: IFighterTask(mgr, IFighterTask::FightType::SUPER, 1.f)
-@@ -67,6 +142,14 @@ void CSuperTask::Update()
+@@ -67,6 +148,47 @@ void CSuperTask::Update()
  	}
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -16613,13 +16630,56 @@ index e19de07e..971d3c65 100644
 +	// antinukes covering a target, which this per-group scorer cannot see.
 +	// Stockpiling itself continues (MilitaryManager's finished-handler orders
 +	// it); only the targeting is ceded. Non-stock supers (LRPC) stay here.
-+	if (cdef->IsAttrStock() && (circuit->GetTunable("apex_brain_nuke", 1.f) > 0.f)) {
-+		return;
++	if (cdef->IsAttrStock()) {
++		if (launcher == Launcher::UNKNOWN) {
++			CWeaponDef* cwd = cdef->GetWeaponDef();
++			springai::WeaponDef* wd = (cwd != nullptr) ? cwd->GetDef() : nullptr;
++			if ((wd == nullptr) || (wd->GetTargetable() != 0)) {
++				launcher = Launcher::NUKE;
++			} else if (wd->IsParalyzer()) {
++				launcher = Launcher::EMP;
++			} else {
++				springai::Damage* damage = wd->GetDamage();
++				const std::vector<float>& damages = damage->GetTypes();
++				float most = 0.f;
++				for (float v : damages) {
++					most = std::max(most, v);
++				}
++				delete damage;
++				// the Juno's kill is a gadget; its warhead does 1 damage
++				launcher = (most <= 1.f) ? Launcher::JUNO : Launcher::TACTICAL;
++				shotDmg = most;
++			}
++			if (wd != nullptr) {
++				const std::map<std::string, std::string> params = wd->GetCustomParams();
++				auto it = params.find("stockpilelimit");
++				if (it != params.end()) {
++					stockCap = std::max(1, utils::string_to_int(it->second));
++				}
++			}
++		}
++		if (launcher != Launcher::NUKE) {
++			AimLauncher(unit, frame);
++			return;
++		}
++		if (circuit->GetTunable("apex_brain_nuke", 1.f) > 0.f) {
++			return;
++		}
 +	}
  	if (cdef->IsHoldFire()) {
  		if (targetFrame + (cdef->GetReloadTime() + TARGET_DELAY) > frame) {
  			if ((State::ENGAGE == state) && (targetFrame + TARGET_DELAY <= frame)) {
-@@ -85,6 +168,13 @@ void CSuperTask::Update()
+@@ -81,10 +203,23 @@ void CSuperTask::Update()
+ 		return;
+ 	}
+ 
++	// apex: a cannon shoots buildings, never units (apexearth 2026-09-30).
++	if (!cdef->IsAttrStock()) {
++		AimAtStructure(unit, frame);
++		return;
++	}
++
+ 	CInfluenceMap* inflMap = circuit->GetInflMap();
  	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
  	const float maxSqRange = SQUARE(cdef->GetMaxRange());
  	const float sqAoe = SQUARE(cdef->GetAoe() * 1.25f);
@@ -16633,7 +16693,7 @@ index e19de07e..971d3c65 100644
  	float cost = 0.f;
  	int groupIdx = -1;
  	const std::array<const std::set<IFighterTask*>*, 3> avoidTasks = {  // NOTE: ISquadTask only
-@@ -92,16 +182,47 @@ void CSuperTask::Update()
+@@ -92,16 +227,47 @@ void CSuperTask::Update()
  		&militaryMgr->GetTasks(IFighterTask::FightType::AH),
  		&militaryMgr->GetTasks(IFighterTask::FightType::AA),
  	};
@@ -16689,7 +16749,7 @@ index e19de07e..971d3c65 100644
  				}
  			}
  		}
-@@ -123,11 +244,12 @@ void CSuperTask::Update()
+@@ -123,11 +289,12 @@ void CSuperTask::Update()
  	if (cdef->IsHoldFire() || (State::ROAM == state)) {
  		for (unsigned i = 0; i < groups.size(); ++i) {
  			const CEnemyManager::SEnemyGroup& group = groups[i];
@@ -16705,7 +16765,7 @@ index e19de07e..971d3c65 100644
  				groupIdx = i;
  			}
  		}
-@@ -141,11 +263,12 @@ void CSuperTask::Update()
+@@ -141,11 +308,12 @@ void CSuperTask::Update()
  			}
  			const AIFloat3& newVec = (group.pos - position).Normalize2D();
  			const float angleMod = M_PI / (2.f * (std::acos(targetVec.dot2D(newVec)) + 1e-2f));
@@ -16721,7 +16781,7 @@ index e19de07e..971d3c65 100644
  				groupIdx = i;
  			}
  		}
-@@ -153,6 +276,11 @@ void CSuperTask::Update()
+@@ -153,6 +321,11 @@ void CSuperTask::Update()
  	const float maxCost = cdef->IsAttrStock() ? cdef->GetWeaponDef()->GetCostM() : cdef->GetCostM() * 0.01f;
  
  	if ((groupIdx < 0) || (cost < maxCost)) {
@@ -16733,7 +16793,7 @@ index e19de07e..971d3c65 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdStop();
  		)
-@@ -204,6 +332,17 @@ void CSuperTask::Update()
+@@ -204,6 +377,17 @@ void CSuperTask::Update()
  		targetPos = GetTarget()->GetPos();
  		targetPos.y = circuit->GetMap()->GetElevationAt(targetPos.x, targetPos.z);
  
@@ -16751,6 +16811,292 @@ index e19de07e..971d3c65 100644
  		std::string cmd = (!cdef->IsAttrStock() || (unit->GetUnit()->GetStockpile() > 0)) ? "ai_super_fire:" : "ai_super_intention:";
  		cmd += utils::int_to_string(unit->GetId()) + "/" + utils::int_to_string(targetPos.x) + "/" + utils::int_to_string(targetPos.z);
  		circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
+@@ -220,4 +404,264 @@ void CSuperTask::Update()
+ 	}
+ }
+ 
++// apex: a shield is worth the structures under it, because every shell aimed at
++// them lands on it first.
++void CSuperTask::AimAtStructure(CCircuitUnit* unit, int frame)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	const float maxSqRange = SQUARE(cdef->GetMaxRange());
++	targetFrame = frame;
++
++	auto isStructure = [circuit](CEnemyInfo* e) {
++		CCircuitDef* edef = e->GetCircuitDef();
++		return (edef != nullptr) && !edef->IsMobile() && !e->IsHidden()
++			&& !circuit->GetCircuitDef(edef->GetId())->IsIgnore();
++	};
++
++	CEnemyInfo* keep = GetTarget();
++	if ((keep != nullptr) && isStructure(keep) && (position.SqDistance2D(keep->GetPos()) < maxSqRange)) {
++		if (frame < orderFrame + FRAMES_PER_SEC * 50) {
++			return;  // the order stands; a turret re-aimed mid-volley wastes the volley
++		}
++	} else {
++		keep = nullptr;
++	}
++
++	std::vector<CEnemyInfo*> structs;
++	std::vector<std::pair<float, CEnemyInfo*>> cands;
++	for (auto& kv : circuit->GetEnemyInfos()) {
++		if (isStructure(kv.second)) {
++			structs.push_back(kv.second);
++		}
++	}
++	CEnemyInfo* best = keep;
++	float bestCover = 0.f;
++	if (best == nullptr) {
++		for (CEnemyInfo* e : structs) {
++			if (position.SqDistance2D(e->GetPos()) >= maxSqRange) {
++				continue;
++			}
++			float score = e->GetCost();
++			const float r = e->GetCircuitDef()->GetShieldRadius();
++			if (e->GetCircuitDef()->IsShieldDef() && (r > 0.f)) {
++				const float sqR = SQUARE(r);
++				for (CEnemyInfo* o : structs) {
++					if ((o != e) && (e->GetPos().SqDistance2D(o->GetPos()) < sqR)) {
++						score += o->GetCost();
++					}
++				}
++			}
++			cands.push_back(std::make_pair(score, e));
++		}
++		std::sort(cands.begin(), cands.end(), [](const std::pair<float, CEnemyInfo*>& a,
++				const std::pair<float, CEnemyInfo*>& b) { return a.first > b.first; });
++		const float aoe = cdef->GetAoe() * 1.25f;
++		for (unsigned i = 0; (i < cands.size()) && (i < 4); ++i) {
++			if (FriendlyCostIn(circuit, cands[i].second->GetPos(), aoe) <= 0.f) {
++				best = cands[i].second;
++				bestCover = cands[i].first - best->GetCost();
++				break;
++			}
++		}
++	}
++
++	if (best == nullptr) {
++		if (GetTarget() != nullptr || State::ENGAGE == state) {
++			circuit->LOG("apex: lrpc idle %s structs=%i inRange=%i",
++					cdef->GetDef()->GetName(), (int)structs.size(), (int)cands.size());
++			TRY_UNIT(circuit, unit,
++				unit->CmdStop();
++			)
++			SetTarget(nullptr);
++			state = State::ROAM;
++		}
++		return;
++	}
++
++	const bool kept = (best == keep);
++	SetTarget(best);
++	targetPos = best->GetPos();
++	targetPos.y = circuit->GetMap()->GetElevationAt(targetPos.x, targetPos.z);
++	circuit->LOG("apex: lrpc aim %s -> %s cost=%.0f cover=%.0f shield=%i keep=%i structs=%i inRange=%i at (%.0f,%.0f)",
++			cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(), best->GetCost(),
++			bestCover, best->GetCircuitDef()->IsShieldDef() ? 1 : 0, kept ? 1 : 0,
++			(int)structs.size(), (int)cands.size(), targetPos.x, targetPos.z);
++	TRY_UNIT(circuit, unit,
++		if (best->IsInRadarOrLOS() && !circuit->IsCheating()) {
++			unit->GetUnit()->Attack(best->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++		} else {
++			unit->CmdAttackGround(targetPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++		}
++	)
++	orderFrame = frame;
++	state = State::ENGAGE;
++}
++
++// apex: tactical and EMP launchers go at the turrets, the Juno at radar and
++// jammers (apexearth 2026-09-30). A paralysis wears off, so an EMP is spent only
++// where one of our squads is inside the turret's reach or about to be.
++void CSuperTask::AimLauncher(CCircuitUnit* unit, int frame)
++{
++	if (targetFrame + TARGET_DELAY > frame) {
++		return;
++	}
++	targetFrame = frame;
++	CCircuitAI* circuit = manager->GetCircuit();
++	CCircuitDef* cdef = unit->GetCircuitDef();
++	const int stock = unit->GetUnit()->GetStockpile();
++	if (stock <= 0) {
++		if (frame >= orderFrame + FRAMES_PER_SEC * 60) {
++			orderFrame = frame;
++			circuit->LOG("apex: launch wait %s stock=0", cdef->GetDef()->GetName());
++		}
++		return;
++	}
++	CMilitaryManager* militaryMgr = circuit->GetMilitaryManager();
++	const float maxSqRange = SQUARE(cdef->GetMaxRange());
++	const float aoe = std::max(cdef->GetAoe(), 64.f);
++	const float sqAoe = SQUARE(aoe);
++
++	std::vector<CEnemyInfo*> pool;
++	for (auto& kv : circuit->GetEnemyInfos()) {
++		CEnemyInfo* e = kv.second;
++		CCircuitDef* edef = e->GetCircuitDef();
++		if ((edef == nullptr) || e->IsHidden() || circuit->GetCircuitDef(edef->GetId())->IsIgnore()
++			|| (position.SqDistance2D(e->GetPos()) >= maxSqRange))
++		{
++			continue;
++		}
++		bool want;
++		if (launcher == Launcher::JUNO) {
++			// a radar or jammer unit, not a gun or builder carrying a small radar
++			want = !edef->IsAttacker() && !edef->IsAbleToFly()
++				&& ((edef->GetRadarRadius() > edef->GetLosRadius())
++					|| (edef->GetSonarRadius() > edef->GetLosRadius())
++					|| (edef->GetJammerRadius() > 0.f));
++		} else {
++			want = !edef->IsMobile() && edef->IsAttacker();
++		}
++		if (want) {
++			pool.push_back(e);
++		}
++	}
++
++	std::vector<std::pair<AIFloat3, float>> squads;
++	if (launcher == Launcher::EMP) {
++		for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK, IFighterTask::FightType::AH}) {
++			for (const IFighterTask* task : militaryMgr->GetTasks(ft)) {
++				const ISquadTask* sq = static_cast<const ISquadTask*>(task);
++				if (sq->GetLeader() == nullptr) {
++					continue;
++				}
++				squads.push_back(std::make_pair(sq->GetLeaderPos(frame),
++						sq->GetLeader()->GetCircuitDef()->GetMaxRange()));
++			}
++		}
++	}
++
++	// CWeaponDef prices a stockpile weapon per second of stocking; a missile is
++	// that times the stock time, its energy at the converter rate (60 E per M)
++	float shotM = 0.f;
++	if (CWeaponDef* cwd = cdef->GetWeaponDef()) {
++		const float stockS = cwd->GetDef()->GetStockpileTime() / FRAMES_PER_SEC;
++		shotM = (cwd->GetCostM() + cwd->GetCostE() / 60.f) * stockS;
++	}
++	// missiles in the silo are paid for; a growing stock lowers the bar
++	const float bar = shotM / stock;
++
++	// apex: a missile that cannot kill its target alone goes as a volley that
++	// can (apexearth 2026-09-30). Targets are ranked on value per missile; the
++	// best one waits for its volley while the stock is still growing.
++	auto missilesFor = [this](CEnemyInfo* e) {
++		if ((launcher != Launcher::TACTICAL) || (shotDmg <= 0.f)) {
++			return 1;
++		}
++		const float hp = (e->GetHealth() > 0.f) ? e->GetHealth() : e->GetCircuitDef()->GetHealth();
++		return std::max(1, (int)std::ceil(hp / shotDmg));
++	};
++	CEnemyInfo* best = nullptr;
++	CEnemyInfo* bestNow = nullptr;
++	float bestScore = 0.f, bestPer = 0.f, nowScore = 0.f, nowPer = 0.f;
++	int bestNeed = 1, nowNeed = 1;
++	for (CEnemyInfo* c : pool) {
++		const AIFloat3& cp = c->GetPos();
++		if (launcher == Launcher::EMP) {
++			const float reach = c->GetCircuitDef()->GetMaxRange();
++			bool engaged = false;
++			for (auto& sq : squads) {
++				if (sq.first.SqDistance2D(cp) <= SQUARE(reach + sq.second)) {
++					engaged = true;
++					break;
++				}
++			}
++			if (!engaged) {
++				continue;
++			}
++		}
++		float score = 0.f;
++		for (CEnemyInfo* o : pool) {
++			if (cp.SqDistance2D(o->GetPos()) < sqAoe) {
++				score += o->GetCost();
++			}
++		}
++		const int need = missilesFor(c);
++		if ((need > stockCap) || (score < bar * need)
++			|| militaryMgr->IsRecentSuperTarget(cp, sqAoe, frame)
++			|| (FriendlyCostIn(circuit, cp, aoe * 1.25f) > 0.f))
++		{
++			continue;
++		}
++		const float per = score / need;
++		if (per > bestPer) {
++			bestPer = per;
++			bestScore = score;
++			bestNeed = need;
++			best = c;
++		}
++		if ((need <= stock) && (per > nowPer)) {
++			nowPer = per;
++			nowScore = score;
++			nowNeed = need;
++			bestNow = c;
++		}
++	}
++	const char* kind = (launcher == Launcher::JUNO) ? "juno" : (launcher == Launcher::EMP) ? "emp" : "tactical";
++	if ((best != nullptr) && (bestNeed > stock) && (stock < stockCap)) {
++		if (frame >= orderFrame + FRAMES_PER_SEC * 60) {
++			orderFrame = frame;
++			circuit->LOG("apex: launch saving %s %s for %s need=%i stock=%i/%i",
++					kind, cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(),
++					bestNeed, stock, stockCap);
++		}
++		return;
++	}
++	if ((best == nullptr) || (bestNeed > stock)) {
++		best = bestNow;
++		bestScore = nowScore;
++		bestNeed = nowNeed;
++	}
++	if (best == nullptr) {
++		if (frame < orderFrame + FRAMES_PER_SEC * 60) {
++			return;
++		}
++		orderFrame = frame;
++		circuit->LOG("apex: launch idle %s %s stock=%i pool=%i squads=%i bar=%.0f",
++				kind, cdef->GetDef()->GetName(), stock, (int)pool.size(), (int)squads.size(), bar);
++		return;
++	}
++	AIFloat3 at = best->GetPos();
++	at.y = circuit->GetMap()->GetElevationAt(at.x, at.z);
++	militaryMgr->NoteSuperTarget(at, frame);
++	circuit->LOG("apex: launch %s %s -> %s score=%.0f need=%i bar=%.0f stock=%i pool=%i at (%.0f,%.0f)",
++			kind, cdef->GetDef()->GetName(), best->GetCircuitDef()->GetDef()->GetName(),
++			bestScore, bestNeed, bar, stock, (int)pool.size(), at.x, at.z);
++	// the order lasts the volley: held longer it empties the stock onto one spot
++	const int reload = std::max(cdef->GetReloadTime(), FRAMES_PER_SEC / 2);
++	const int timeout = frame + reload * bestNeed - reload / 2;
++	TRY_UNIT(circuit, unit,
++		unit->CmdAttackGround(at, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
++	)
++}
++
+ } // namespace circuit
+diff --git a/src/circuit/task/static/SuperTask.h b/src/circuit/task/static/SuperTask.h
+index 89b22472..74bb56e0 100644
+--- a/src/circuit/task/static/SuperTask.h
++++ b/src/circuit/task/static/SuperTask.h
+@@ -24,7 +24,16 @@ public:
+ 	virtual void Update() override;
+ 
+ private:
++	void AimAtStructure(CCircuitUnit* unit, int frame);
++	void AimLauncher(CCircuitUnit* unit, int frame);
++
++	enum class Launcher: char {UNKNOWN, NUKE, TACTICAL, EMP, JUNO};
++	Launcher launcher = Launcher::UNKNOWN;
++	float shotDmg = 0.f;
++	int stockCap = 1;
++
+ 	int targetFrame;
++	int orderFrame = -1;
+ 	springai::AIFloat3 targetPos;
+ };
+ 
 diff --git a/src/circuit/terrain/TerrainData.cpp b/src/circuit/terrain/TerrainData.cpp
 index 8e35f245..a7b63ab9 100644
 --- a/src/circuit/terrain/TerrainData.cpp

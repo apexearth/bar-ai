@@ -24,9 +24,13 @@ const int SC_LRPC = 2;
 const int SC_HEAVY = 3;
 const int SC_GANTRY = 4;
 const int SC_AIRPLANT = 5;
+const int SC_TACTICAL = 6;
+const int SC_JUNO = 7;
 
 string SuperName(int sc)
 {
+	if (sc == SC_TACTICAL) return "tactical";
+	if (sc == SC_JUNO)     return "juno";
 	if (sc == SC_ANTINUKE) return "antinuke";
 	if (sc == SC_SILO)     return "silo";
 	if (sc == SC_LRPC)     return "lrpc";
@@ -138,7 +142,12 @@ int SuperClassOf(int d)
 	if (memo && (gScoAns[d] != -2))
 		return gScoAns[d];
 	int r = -1;
-	if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d])
+	const int lk = Catalog::LauncherKind(d);
+	if (lk == Catalog::LK_JUNO)
+		r = SC_JUNO;
+	else if (lk == Catalog::LK_TACTICAL)
+		r = SC_TACTICAL;
+	else if (Catalog::gAntiNuke[d] && !Catalog::gMobile[d])
 		r = SC_ANTINUKE;
 	else if (IsSuperWeapon(d))
 		r = Catalog::gStock[d] ? SC_SILO : SC_LRPC;
@@ -206,7 +215,7 @@ int SuperTarget(int sc)
 // What we hold of each class, standing plus in flight, counted once a frame --
 // the classifier walks the whole def table, and this is asked once per
 // candidate per election.
-array<int> gSuperHave(5, 0);
+array<int> gSuperHave(8, 0);
 int gSuperFlight = 0;
 int gSuperCensusAt = -1;
 
@@ -544,24 +553,28 @@ void AdvDeferLog(const string& in what)
 
 int gNextSuperLog = 0;
 int gNextLrpcLog = 0;
+array<int> gNextSiegeLog(2, 0);
 float gLrpcInReach = 0.f;
 
 // Metal per hit point of a structure, read off the defs: what a shell that
-// lands on a building takes away from the owner.
+// lands on a building takes away from the owner. The median, because a sum
+// ratio is owned by the cosmetic hats at 5.6M hp.
 float gStructMPerHp = -1.f;
 float StructMetalPerHp()
 {
 	if (gStructMPerHp > 0.f)
 		return gStructMPerHp;
-	float m = 0.f, hp = 0.f;
+	array<float> r;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (Catalog::gMobile[d] || (Catalog::gHealth[d] <= 0.f) || (Catalog::gCostM[d] <= 1.f))
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || (Catalog::gHealth[d] <= 0.f)
+				|| (Catalog::gCostM[d] <= 1.f))
 			continue;
-		m += Catalog::gCostM[d];
-		hp += Catalog::gHealth[d];
+		r.insertLast(Catalog::gCostM[d] / Catalog::gHealth[d]);
 	}
-	if (hp > 0.f)
-		gStructMPerHp = m / hp;
+	if (r.length() > 0) {
+		r.sortAsc();
+		gStructMPerHp = r[r.length() / 2];
+	}
 	return (gStructMPerHp > 0.f) ? gStructMPerHp : 0.1f;
 }
 
@@ -583,9 +596,86 @@ float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float horizon = (hz > 1.f) ? hz : 300.f;
 	float killM = Catalog::gDps[d] * StructMetalPerHp() * horizon;
-	if (killM > inReachM)
-		killM = inReachM;
+	// The next cannon grinds only what the standing ones leave: the count
+	// comes out of what is in reach, not out of a ladder on income.
+	float left = inReachM - float(SuperHave(SC_LRPC)) * killM;
+	if (left < 0.f)
+		left = 0.f;
+	if (killM > left)
+		killM = left;
 	return killM / horizon;
+}
+
+// A LAUNCHER ANSWERS THE TURRETS OUR ARMY DIES TO (apexearth 2026-09-30):
+// worth the metal we are losing to their defences that the standing launchers
+// do not already answer. A paralyzer kills nothing (its dps reads ~0), so one
+// answers the whole loss at that spot.
+float TacticalGain(int d)
+{
+	const float stake = Military::StaticLossRate();
+	if (stake <= 0.f)
+		return 0.f;
+	float cap = Catalog::gDps[d] * StructMetalPerHp();
+	if ((cap <= 0.01f * stake) || (cap > stake))
+		cap = stake;
+	float left = stake - float(SuperHave(SC_TACTICAL)) * cap;
+	return (left < cap) ? ((left > 0.f) ? left : 0.f) : cap;
+}
+
+// Metal of their radar and jammers we know of: what a Juno removes. Summed a
+// few defs per call.
+float gFoeIntelM = 0.f;
+float gFoeIntelAcc = 0.f;
+int gFoeIntelDef = 1;
+float FoeIntelM()
+{
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	for (int k = 0; k < 8; ++k) {
+		if (gFoeIntelDef > Catalog::gDefCount) {
+			gFoeIntelM = gFoeIntelAcc;
+			gFoeIntelAcc = 0.f;
+			gFoeIntelDef = 1;
+		}
+		const int d = gFoeIntelDef++;
+		if ((Catalog::gRadar[d] || Catalog::gJammer[d]) && (Catalog::gCostM[d] > 1.f))
+			gFoeIntelAcc += Catalog::gCostM[d] * float(ai.CountEnemyDefNear(d, mid, r));
+	}
+	return gFoeIntelM;
+}
+
+float JunoGain()
+{
+	if (SuperHave(SC_JUNO) > 0)
+		return 0.f;
+	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	return FoeIntelM() / ((hz > 1.f) ? hz : 300.f);
+}
+
+// THE TARGET FIRST, THEN THE SITE (apexearth 2026-09-30): the turret group we
+// mean to hit, and the gun stands outside its reach, inside the gun's own --
+// halfway between the two. A gun that does not outrange it gets no site.
+bool SiegeSite(CCircuitUnit@ unit, int d, AIFloat3 &out at)
+{
+	const AIFloat3 home = Base::gAnchorSet ? Base::gAnchor : unit.GetPos(ai.frame);
+	AIFloat3 foe;
+	float foeR = 0.f, foeM = 0.f;
+	if (!Military::TurretTarget(foe, foeR, foeM))
+		return false;
+	const float reach = Catalog::gMaxRange[d];
+	if (reach <= foeR)
+		return false;
+	const AIFloat3 back = home - foe;
+	const float len = sqrt(back.x * back.x + back.z * back.z);
+	if (len < 1.f)
+		return false;
+	float stand = (reach + foeR) * 0.5f;
+	if (stand > len)
+		stand = len;
+	at = foe + back * (stand / len);
+	return OnMap(at);
 }
 
 Want@ ProposeSuper(CCircuitUnit@ unit)
@@ -633,7 +723,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;
-		if (SuperHave(sc) >= SuperTarget(sc))
+		if ((sc != SC_LRPC) && (sc != SC_TACTICAL) && (sc != SC_JUNO)
+				&& (SuperHave(sc) >= SuperTarget(sc)))
 			continue;
 		// HIS RULING, the same law as the plant and tech lanes: a super that
 		// is a PRODUCTION LINE (gantry, advanced air plant) and already
@@ -701,8 +792,19 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			}
 			if (!AntiNukeSite(unit, at))
 				continue;
+		} else if (sc == SC_TACTICAL) {
+			if (!SiegeSite(unit, d, at))
+				continue;
 		} else {
 			at = SuperSite(unit, sc, Catalog::Def(d));
+			// The cannon moves up only when its home site cannot reach the
+			// turrets our army dies to.
+			AIFloat3 foe, siege;
+			float foeR = 0.f, foeM = 0.f;
+			if ((sc == SC_LRPC) && Military::TurretTarget(foe, foeR, foeM)
+					&& (at.distance2D(foe) > Catalog::gMaxRange[d])
+					&& SiegeSite(unit, d, siege))
+				at = HighGroundNear(Catalog::Def(d), siege, 600.f);
 		}
 		at = ProbedSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), at);
 		if (!OnMap(at))
@@ -718,6 +820,10 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		float lrpcInM = 0.f;
 		if (sc == SC_LRPC)
 			gain = LrpcGain(d, at, lrpcInM) * Persona::WantMult(SuperName(sc));
+		else if (sc == SC_TACTICAL)
+			gain = TacticalGain(d);
+		else if (sc == SC_JUNO)
+			gain = JunoGain();
 		if (noLines)
 			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone
@@ -795,11 +901,22 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;
 		Want c;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		if (((sc == SC_TACTICAL) || (sc == SC_JUNO)) && (ai.frame >= gNextSiegeLog[sc - SC_TACTICAL])) {
+			gNextSiegeLog[sc - SC_TACTICAL] = ai.frame + 30 * SECOND;
+			AiLog("apex: siege t=" + ai.teamId + " " + Catalog::Def(d).GetName()
+				+ " have=" + SuperHave(sc) + " staticLoss=" + formatFloat(Military::StaticLossRate(), "", 0, 2)
+				+ " foeIntelM=" + int(gFoeIntelM)
+				+ " target=" + int(Military::gTurretPos.x) + "," + int(Military::gTurretPos.z)
+				+ " targetM=" + int(Military::gTurretM) + " targetR=" + int(Military::gTurretReach)
+				+ " at=" + int(at.x) + "," + int(at.z)
+				+ " gain=" + formatFloat(gain, "", 0, 2)
+				+ " v=" + formatFloat(c.value * 1000.f, "", 0, 2));
+		}
 		if ((sc == SC_LRPC) && (ai.frame >= gNextLrpcLog)) {
 			gNextLrpcLog = ai.frame + 30 * SECOND;
 			AiLog("apex: lrpc t=" + ai.teamId + " " + Catalog::Def(d).GetName()
 				+ " bill=" + int(bill) + " budget=" + int(budget)
-				+ " have=" + SuperHave(sc) + "/" + SuperTarget(sc)
+				+ " have=" + SuperHave(sc) + " mPerHp=" + formatFloat(StructMetalPerHp(), "", 0, 3)
 				+ " defFill=" + formatFloat((DefenceTarget() > 1.f)
 					? (DefenceValue() / DefenceTarget()) : 1.f, "", 0, 2)
 				+ " inReachM=" + int(gLrpcInReach)

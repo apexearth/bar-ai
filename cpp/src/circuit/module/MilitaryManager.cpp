@@ -354,7 +354,9 @@ void CMilitaryManager::InitHandlers()
 		} else {
 //			damagedHandler[unitDefId] = structDamagedHandler;
 			if (cdef.IsRoleSuper()) {
-				if (cdef.IsAttacker()) {
+				// apex: the Juno's warhead does 1 damage, so it is no attacker, but it
+				// is a launcher all the same
+				if (cdef.IsAttacker() || cdef.IsAttrStock()) {
 					createdHandler[unitDefId] = superCreatedHandler;
 					finishedHandler[unitDefId] = superFinishedHandler;
 					destroyedHandler[unitDefId] = superDestroyedHandler;

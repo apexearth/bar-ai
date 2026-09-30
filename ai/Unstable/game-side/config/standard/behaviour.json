@@ -512,8 +512,7 @@
 			"role":	["super", "static"] //without "super" it does not shoot
 		},
 		"cortron":{
-			"role":	["super", "static"],
-			"limit":1
+			"role":	["super", "static"]
 		},
 		"armveil":{
 			"role": ["static"]

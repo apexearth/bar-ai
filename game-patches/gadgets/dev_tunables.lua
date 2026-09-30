@@ -91,8 +91,6 @@ local NAMES = {
 	"apex_task_trace",
 	"apex_eco_only",
 	"apex_comm_rules",
-	"apex_allow_juno",
-	"apex_allow_tacmissile",
 	"apex_conv_horizon",
 	"apex_tech_survival",
 	"apex_lava",
