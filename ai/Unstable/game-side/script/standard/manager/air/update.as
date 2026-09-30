@@ -154,6 +154,16 @@ void Release(const string& in why)
 {
 	gStrike = true;
 	BuildWave();
+	// A frame is not a bomber: a wave of none ends on the next tick and is
+	// released again, every few seconds.
+	if (gWaveBombers == 0) {
+		gStrike = false;
+		gWave.resize(0);
+		gRunWave.resize(0);
+		gWaveFighters = 0;
+		gWaveMass = 0.f;
+		return;
+	}
 	gWaveLaunched = gWaveBombers;
 	NoteStrikeLaunched();
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
@@ -191,6 +201,7 @@ void Release(const string& in why)
 		ai.PublishTeamValue("strike_s", Throughput(gWaveBombers));
 		ai.PublishTeamValue("strike_r",
 				ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
+		Vanguard();
 	}
 	AiLog(Factory::T() + "apex: air strike -- " + why
 		+ " bombers=" + Bombers() + " fighters=" + Fighters()
@@ -517,7 +528,8 @@ void Update()
 	// lead's scaled force is a real raid without hoarding a second air army.
 	if (!IsAirLead() && !gStrike
 		&& (ai.GetTunable("apex_air_home_wave", TUNE_AIR_HOME_WAVE) > 0.f)
-		&& (BomberMass() * 2.f >= float(ScaledBombers())))
+		&& (StandingHeldMass() * 2.f >= float(ScaledBombers()))
+		&& (ReadyFighters() >= EscortWant()))
 	{
 		Release("home wave massed");
 	}

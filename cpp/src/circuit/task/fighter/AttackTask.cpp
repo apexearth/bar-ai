@@ -306,6 +306,8 @@ void CAttackTask::FindTarget()
 	CEnemyInfo* const prevTarget = GetTarget();
 	CEnemyInfo* bestTarget = nullptr;
 	float bestPull = 0.f;
+	float bestSup = 0.f;
+	const auto& supSpots = circuit->GetMilitaryManager()->GetSupportSpots();
 	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
 	float minSqDist = std::numeric_limits<float>::max();
 	bool hasGoodTarget = false;
@@ -412,7 +414,7 @@ void CAttackTask::FindTarget()
 					|| ((edef->GetCategory() & noChaseCat) != 0)
 					|| (isAntiStatic && edef->IsMobile())
 					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()  // NOTE: groups are created by leader, ignore flags could be different
-					|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
+					|| (edef->IsAbleToFly() && !cdef->IsAirHunter(IsInWater)))  // notAA
 				{
 					continue;
 				}
@@ -445,9 +447,20 @@ void CAttackTask::FindTarget()
 			// distance of a tower still wins. The overpower gates above are
 			// unchanged: a group we cannot beat is still refused.
 			float pull = 1.f;
+			float sup = 0.f;
 			if (edef != nullptr) {
 				const float ownPow = std::max(cdef->GetPower(), 1.f);
-				pull = std::max(enemy->GetCost(), 1.f) / (edef->GetPower() + ownPow);
+				// An enemy whose threat covers a mex spot we asked support for
+				// also carries that spot's worth.
+				if (!supSpots.empty()) {
+					const float reach = float(edef->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell;
+					for (const auto& s : supSpots) {
+						if (ePos.SqDistance2D(s.first) < SQUARE(reach)) {
+							sup = std::max(sup, s.second);
+						}
+					}
+				}
+				pull = std::max(enemy->GetCost() + sup, 1.f) / (edef->GetPower() + ownPow);
 			}
 			// NEAR OUR OWN BASE, squared like the leader term (apexearth
 			// 2026-09-28): stock's linear distBE let every ally's army walk to
@@ -467,6 +480,7 @@ void CAttackTask::FindTarget()
 				minSqDist = sqOEDist;
 				bestTarget = enemy;
 				bestPull = pull;
+				bestSup = sup;
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -478,13 +492,13 @@ void CAttackTask::FindTarget()
 		if (bestTarget != prevTarget) {
 			CCircuitDef* bdef = bestTarget->GetCircuitDef();
 			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
-				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i",
+				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f",
 				circuit->GetTeamId(), cdef->GetDef()->GetName(),
 				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
 				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
 				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
-				canGoHome ? 1 : 0);
+				canGoHome ? 1 : 0, bestSup);
 		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position

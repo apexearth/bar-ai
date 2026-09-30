@@ -2236,7 +2236,11 @@ void CCircuitAI::RecordDealt(ICoreUnit::Id attacker, ICoreUnit::Id enemy, float 
 	if (!RecordCounts(a) || !RecordCounts(b)) {
 		return;
 	}
-	recGame[RecordKey(a->GetId(), b->GetId())].dealt += MetalOf(b, damage);
+	const float m = MetalOf(b, damage);
+	recGame[RecordKey(a->GetId(), b->GetId())].dealt += m;
+	if (!recAggDirty) {
+		RecordAggAdd(a->GetId(), b->GetId(), m, .0f);
+	}
 }
 
 void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float damage)
@@ -2254,7 +2258,11 @@ void CCircuitAI::RecordTaken(ICoreUnit::Id unit, ICoreUnit::Id attacker, float d
 	if (!RecordCounts(a) || !RecordCounts(b)) {
 		return;
 	}
-	recGame[RecordKey(a->GetId(), b->GetId())].taken += MetalOf(a, damage);
+	const float m = MetalOf(a, damage);
+	recGame[RecordKey(a->GetId(), b->GetId())].taken += m;
+	if (!recAggDirty) {
+		RecordAggAdd(a->GetId(), b->GetId(), .0f, m);
+	}
 }
 
 // The death line: what this unit dealt over its own health, and what killed
@@ -2294,37 +2302,60 @@ void CCircuitAI::RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, f
 	}
 }
 
-// Walks every cell of the row: the set of B's is small (what A has ever
-// traded with), so this is cheaper than indexing by tier.
+// One cell into both rows it belongs to: A's own, and B's inverted -- THEIR
+// copies of a type against ours count for that type, so being outnumbered
+// does not read as a bad unit (his 2026-09-28). A cell with no known opponent
+// counts at every tier.
+void CCircuitAI::RecordAggAdd(CCircuitDef::Id a, CCircuitDef::Id b, float dealt, float taken) const
+{
+	SXch* ra = recAgg[a].s;
+	ra[0].dealt += dealt; ra[0].taken += taken;
+	if (b == 0) {
+		for (int k = 1; k < 5; ++k) {
+			ra[k].dealt += dealt; ra[k].taken += taken;
+		}
+		return;
+	}
+	const int kb = RecordTierOf(b) + 1;
+	ra[kb].dealt += dealt; ra[kb].taken += taken;
+	SXch& col = recAgg[b].col;
+	col.dealt += taken; col.taken += dealt;
+	if (b != a) {
+		SXch* rb = recAgg[b].s;
+		const int ka = RecordTierOf(a) + 1;
+		rb[0].dealt += taken; rb[0].taken += dealt;
+		rb[ka].dealt += taken; rb[ka].taken += dealt;
+	}
+}
+
+const CCircuitAI::SXch& CCircuitAI::RecordAggOf(CCircuitDef::Id id, int tier) const
+{
+	if (recAggDirty) {
+		recAgg.clear();
+		for (const auto* m : {&recGame, &recStored}) {
+			for (const auto& kv : *m) {
+				RecordAggAdd(CCircuitDef::Id(kv.first / 65536), CCircuitDef::Id(kv.first % 65536),
+						kv.second.dealt, kv.second.taken);
+			}
+		}
+		recAggDirty = false;
+	}
+	static const SXch none;
+	auto it = recAgg.find(id);
+	if (it == recAgg.end()) {
+		return none;
+	}
+	return it->second.s[(tier < 0) ? 0 : (std::min(3, tier) + 1)];
+}
+
 float CCircuitAI::RecordRatio(CCircuitDef* cdef, int tier) const
 {
 	if (!RecordCounts(cdef)) {
 		return 1.f;
 	}
 	const float prior = GetTunable("apex_record_prior", 10.f) * cdef->GetCostM();
-	float dealt = prior, taken = prior;
-	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
-	for (const auto* m : {&recGame, &recStored}) {
-		for (const auto& kv : *m) {
-			if ((kv.first >= lo) && (kv.first < hi)) {
-				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-					continue;
-				}
-				dealt += kv.second.dealt; taken += kv.second.taken;
-			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
-				// THEIR copies of this type against ours: the same cells
-				// inverted. A type is judged on both sides, so being
-				// outnumbered does not read as a bad unit (his 2026-09-28).
-				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
-				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
-					continue;
-				}
-				dealt += kv.second.taken; taken += kv.second.dealt;
-			}
-		}
-	}
-	return dealt / taken;
+	const SXch& g = RecordAggOf(cdef->GetId(), tier);
+	return (prior + g.dealt) / (prior + g.taken);
 }
 
 int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
@@ -2332,26 +2363,7 @@ int CCircuitAI::RecordCount(CCircuitDef* cdef, int tier) const
 	if ((cdef == nullptr) || (cdef->GetCostM() <= .0f)) {
 		return 0;
 	}
-	float taken = .0f;
-	const long long lo = RecordKey(cdef->GetId(), 0), hi = RecordKey(cdef->GetId() + 1, 0);
-	for (const auto* m : {&recGame, &recStored}) {
-		for (const auto& kv : *m) {
-			if ((kv.first >= lo) && (kv.first < hi)) {
-				const CCircuitDef::Id bid = CCircuitDef::Id(kv.first - lo);
-				if ((tier >= 0) && (bid != 0) && (RecordTierOf(bid) != tier)) {
-					continue;
-				}
-				taken += kv.second.taken;
-			} else if (CCircuitDef::Id(kv.first % 65536) == cdef->GetId()) {
-				const CCircuitDef::Id oid = CCircuitDef::Id(kv.first / 65536);
-				if ((tier >= 0) && (RecordTierOf(oid) != tier)) {
-					continue;
-				}
-				taken += kv.second.dealt;
-			}
-		}
-	}
-	return int(taken / cdef->GetCostM() + 0.5f);
+	return int(RecordAggOf(cdef->GetId(), tier).taken / cdef->GetCostM() + 0.5f);
 }
 
 // The pair's own exchange, shrunk toward B's tier read: a matchup with no
@@ -2394,16 +2406,16 @@ float CCircuitAI::RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const
 	}
 	const float prior = GetTunable("apex_record_prior", 10.f) * edef->GetCostM();
 	float dealt = prior, taken = prior;   // from B's side: dealt = our taken
-	for (const auto* m : {&recGame, &recStored}) {
-		for (const auto& kv : *m) {
-			if (CCircuitDef::Id(kv.first % 65536) != edef->GetId()) {
-				continue;
-			}
-			if ((ours != nullptr) && (CCircuitDef::Id(kv.first / 65536) != ours->GetId())) {
-				continue;
-			}
-			dealt += kv.second.taken; taken += kv.second.dealt;
-		}
+	if (ours != nullptr) {
+		float ourDealt = .0f, ourTaken = .0f;
+		RecordSum(ours->GetId(), edef->GetId(), ourDealt, ourTaken);
+		dealt += ourTaken; taken += ourDealt;
+		return dealt / taken;
+	}
+	RecordAggOf(edef->GetId(), -1);   // builds the totals if stale
+	auto it = recAgg.find(edef->GetId());
+	if (it != recAgg.end()) {
+		dealt += it->second.col.dealt; taken += it->second.col.taken;
 	}
 	return dealt / taken;
 }
@@ -2508,6 +2520,7 @@ static void RecordRead(const std::string& path, std::map<std::pair<std::string, 
 void CCircuitAI::RecordLoad()
 {
 	recStored.clear();
+	recAggDirty = true;
 	if (recPath.empty() || recTweaked) {
 		return;
 	}

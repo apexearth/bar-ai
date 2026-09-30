@@ -89,6 +89,30 @@ bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
 	return OnMap(at);
 }
 
+// WHERE HOME IS BEING HIT, not a doorway or the base centre (apexearth
+// 2026-09-29: the army waited behind a hill, or walked across the map to its
+// start, while the base died): the building we lost last, the group closing
+// on it, home only when neither is known.
+AIFloat3 HomeFightPos()
+{
+	if (BaseRaided() && OnMap(gRaidPos))
+		return gRaidPos;
+	if ((ai.frame - gIncomingAt < 15 * SECOND) && OnMap(gIncomingPos))
+		return gIncomingPos;
+	return Builder::gHomePos;
+}
+
+// A unit comes home only if it is no further from the fight than their front
+// is: a walk of minutes arrives after the raid and leaves our line empty.
+bool ArrivesInTime(const AIFloat3& in p)
+{
+	const AIFloat3 fight = HomeFightPos();
+	const AIFloat3 foe = Front::FoeAnchor();
+	if (!OnMap(foe) || ((foe.x == 0.f) && (foe.z == 0.f)))
+		return true;
+	return p.distance2D(fight) <= foe.distance2D(fight);
+}
+
 // The nearest gun of ours, stepped back toward home so the unit stands BEHIND
 // it: the tower is between the unit and whatever is chasing it, which is the
 // whole point -- it soaks while we keep shooting.
@@ -457,7 +481,7 @@ void UpdateWithdraw()
 			&& Builder::gHomeSet && Builder::BaseUnderAttack()
 			&& HoldHome())
 		{
-			recallHome = Military::ForwardFraction(p) > recallFwd;
+			recallHome = (Military::ForwardFraction(p) > recallFwd) && ArrivesInTime(p);
 			if (recallHome && (recallHave < 0.f)) {
 				recallHave = gHoldHeldM;
 				for (uint h = 0; h < alive.length(); ++h) {
@@ -588,16 +612,20 @@ void UpdateWithdraw()
 		if (ai.frame - gCombatSent[i] < reissue)
 			continue;
 		AIFloat3 back;
-		// Recall reforms the whole army on ONE point rather than at whatever gun
-		// each unit happens to stand near, so it does not arrive piecemeal. That
-		// point is the doorway we hold, not the base: home is a long walk on a
-		// big map and the walk is what splits the army.
-		if (recallHome || consolidate) {
+		// A recall goes to the fight at home, on one point so it does not
+		// arrive piecemeal; a pack reforms at the doorway we hold.
+		if (recallHome) {
+			back = HomeFightPos();
+		} else if (consolidate) {
 			if (!RallySpot(p, back))
 				continue;
 		} else if (!FallbackSpot(p, back)) {
 			continue;
 		}
+		// A point the unit cannot walk to parks it against the nearest cliff.
+		if ((u.circuitDef !is null)
+			&& !ai.CanDefReachAt(Catalog::Def(int(u.circuitDef.id)), p, back, 64.f))
+			continue;
 		// Already behind the guns: nothing to do but fight.
 		if (back.distance2D(p) < ai.GetTunable("apex_withdraw_near", TUNE_WITHDRAW_NEAR))
 			continue;
@@ -621,6 +649,7 @@ void UpdateWithdraw()
 					: (outgunned ? (" odds=" + formatFloat(odds, "", 0, 2))
 					: (losingFight ? (" trade=" + int(tLost) + ":" + int(tKilled))
 					: (consolidate ? " pack" : " infl")))))
+				+ " -> " + int(back.x) + "," + int(back.z)
 				+ " -- " + gWithdrawn + " orders so far, "
 				+ gCombatId.length() + " tracked");
 		}

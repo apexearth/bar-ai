@@ -116,10 +116,15 @@ float MexFloorFactor(const AIFloat3& in pos)
 // decide wins, 14 towers, none at a mex, in one watched game). The
 // extraction in reach, capitalized over the same amortization horizon
 // reclaim uses, is what a guard actually protects.
-float MexStreamM(const AIFloat3& in s, float reach)
+float MexWorthHorizon()
 {
 	const float hzS = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
-	const float hz = (hzS > 1.f) ? hzS : 300.f;
+	return (hzS > 1.f) ? hzS : 300.f;
+}
+
+float MexStreamM(const AIFloat3& in s, float reach)
+{
+	const float hz = MexWorthHorizon();
 	const float mult = IncomeMult();   // one handicap, not one per spot
 	float m = 0.f;
 	const array<int>@ rows = MexRows();

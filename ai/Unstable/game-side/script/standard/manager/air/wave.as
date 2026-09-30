@@ -192,6 +192,35 @@ float StandingHeldMass()
 }
 int HeldFighters() { const int n = Fighters() - gWaveFighters; return (n < 0) ? 0 : n; }
 
+// Finished fighters free to fly with the next wave: not out on one, not
+// covering, not scouting, not hunting.
+int ReadyFighters()
+{
+	int n = 0;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(fd, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && !InWave(us[k].id) && !Covering(us[k].id)
+				&& (FlightOutIdx(us[k].id) < 0) && !InList(gHunters, us[k].id))
+				++n;
+		}
+	}
+	return n;
+}
+
+// The escort a wave waits for: the lead's whole ratio, a home wave half of
+// it, as the home wave is half the lead's bombers.
+int EscortWant()
+{
+	const int f = ScaledFighters();
+	return IsAirLead() ? f : ((f + 1) / 2);
+}
+
 // The run is over -- bring the survivors back so they mass with what was built
 // while they were away, instead of hovering wherever the last bomb dropped.
 void RecallWave()

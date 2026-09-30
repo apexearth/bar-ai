@@ -381,6 +381,12 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 // reach that is hot for a builder is not walked through, whatever the spot
 // pays. (This compared GetEnemyCostAt, a visible-unit COUNT, against the
 // walker's metal: it never once fired, docs/25 S28.)
+bool SpotHot(const AIFloat3& in p)
+{
+	const float hot = ai.GetThreatAt(p);
+	return (hot > 1.f) && (hot > ai.GetAllyDefendInflAt(p));
+}
+
 bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 {
 	const AIFloat3 here = unit.GetPos(ai.frame);
@@ -389,10 +395,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 		const float f = float(s) / 4.f;
 		p.x += (dest.x - here.x) * f;
 		p.z += (dest.z - here.z) * f;
-		if (!OnMap(p))
-			continue;
-		const float hot = ai.GetThreatAt(p);
-		if ((hot > 1.f) && (hot > ai.GetAllyDefendInflAt(p)))
+		if (OnMap(p) && SpotHot(p))
 			return true;
 	}
 	return false;
@@ -441,7 +444,10 @@ void MexDiag()
 		+ " riskAvg=" + formatFloat((gMexPriced > 0) ? (gMexRiskSum / float(gMexPriced)) : 0.f, "", 0, 2)
 		+ " share=" + formatFloat(TripShare(), "", 0, 2)
 		+ " | sweep " + gSwPast + "risky+" + gSwHot + "hot+" + gSwLedger + "own/" + gSwTotal
-		+ " cand=" + gSwCand + " span=" + int(gSwSpan));
+		+ " cand=" + gSwCand + " span=" + int(gSwSpan)
+		+ " | supCall=" + gSupCalls + " supDone=" + gSupDone + " supOpen=" + gSupWorker.length()
+		+ " supWorth=" + int(SupportWorth()));
+	gSupCalls = 0; gSupDone = 0;
 	gMexNoOpen = 0; gMexDeathWalk = 0; gMexEcoFar = 0; gMexComFar = 0;
 	gMexEcoQuiet = 0; gMexClaimed = 0; gMexPriced = 0;
 	gMexDeep = 0; gMexRiskSum = 0.f;
@@ -539,6 +545,9 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	gSwSpan = sqrt(fex * fex + fez * fez);
 	const array<int>@ lidx = LedgerIdx();
 	const int lidxN = int(lidx.length());
+	const bool supFree = SupportFree();
+	float bestHotScore = 0.f;
+	int bestHot = -1;
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		++gSwTotal;
 		const AIFloat3 sp = gAllSpots[si];
@@ -571,13 +580,21 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// four-minute window died so, our extractor count peaking at
 		// minute 8 while theirs kept climbing. A hot spot is not offered;
 		// the ground it sits on is the defence market's starved-spot stake.
-		{
-			const float hot = ai.GetThreatAt(sp);
-			if ((hot > 1.f) && (hot > ai.GetAllyDefendInflAt(sp))) {
-				++gSwHot;
-				DeadSpotSay(dw, sp, "hot");
-				continue;
+		if (SpotHot(sp)) {
+			++gSwHot;
+			DeadSpotSay(dw, sp, "hot");
+			if (supFree) {
+				const float hw = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
+				const float raw = inc / (hw + 1.f);
+				if (raw > bestHotScore) {
+					const float hs = raw * (1.f - TripRiskWith(sp, share));
+					if (hs > bestHotScore) {
+						bestHotScore = hs;
+						bestHot = int(si);
+					}
+				}
 			}
+			continue;
 		}
 		// The rear-specialist leash is geometry and applied here so a refused
 		// spot does not consume an engine probe; the trip risk is a PRICE, not
@@ -613,6 +630,13 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		gPsScore.insertLast(comPen * inc * (1.f - risk) / (walk + 1.f));
 	}
 	gSwCand = int(gPsCand.length());
+	float bestCand = 0.f;
+	for (uint i = 0; i < gPsScore.length(); ++i) {
+		if (gPsScore[i] > bestCand)
+			bestCand = gPsScore[i];
+	}
+	if ((bestHot >= 0) && (bestHotScore > bestCand))
+		CallSupport(unit, bestHot, gAllSpotInc[bestHot] * incMul * MexWorthHorizon());
 	const int tries = MexTries();
 	for (int k = 0; k < tries; ++k) {
 		int bi = -1;

@@ -61,7 +61,8 @@ int Fighters() { return Have(gFighter) + Have(gFighter1); }
 
 bool Massed()
 {
-	return (Bombers() >= ScaledBombers()) && (Fighters() >= ScaledFighters());
+	// Finished planes: a count with frames in it released waves of none.
+	return (StandingHeldMass() >= float(ScaledBombers())) && (ReadyFighters() >= ScaledFighters());
 }
 
 bool HaveAirCon()

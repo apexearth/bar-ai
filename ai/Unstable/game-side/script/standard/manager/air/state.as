@@ -60,6 +60,9 @@ bool gStrikeCurHas = false;
 float gStrikeCurScore = 0.f, gStrikeCurPrize = 0.f, gStrikeCurAA = 0.f;
 AIFloat3 gStrikeCurAt;
 bool gStrikeHas = false;
+bool gFrontCurHas = false, gStrikeFront = false;
+float gFrontCurScore = 0.f, gFrontCurPrize = 0.f, gFrontCurAA = 0.f;
+AIFloat3 gFrontCurAt;
 float gStrikePrize = 0.f, gStrikeAA = 0.f;
 AIFloat3 gStrikeAt;
 int gStrikeSweeps = 0;
@@ -105,6 +108,9 @@ void StrikeScanStep()
 			return;
 	}
 	CCircuitUnit@ probe = AnyBomber();
+	const AIFloat3 foeAt = Front::FoeAnchor();
+	const bool foeKnown = OnMap(foeAt) && !((foeAt.x == 0.f) && (foeAt.z == 0.f));
+	const float foeFwd = foeKnown ? Military::ForwardFraction(foeAt) : -1.f;
 	for (int step = 0; step < 4; ++step) {
 		const AIFloat3 sp = gStrikeCells[gStrikeCellI];
 		const float prize = aiEnemyMgr.GetEnemyStructCostAt(sp, r);
@@ -117,6 +123,16 @@ void StrikeScanStep()
 				gStrikeCurPrize = prize;
 				gStrikeCurAA = aa;
 				gStrikeCurAt = sp;
+			}
+			// Their front: no deeper than their army stands.
+			if (foeKnown && (Military::ForwardFraction(sp) <= foeFwd)
+				&& (!gFrontCurHas || (score > gFrontCurScore)))
+			{
+				gFrontCurHas = true;
+				gFrontCurScore = score;
+				gFrontCurPrize = prize;
+				gFrontCurAA = aa;
+				gFrontCurAt = sp;
 			}
 			if (gBomberN !is null) {
 				const float sN = Catalog::gHealth[int(gBomberN.id)]
@@ -136,6 +152,25 @@ void StrikeScanStep()
 			gStrikePrize = gStrikeCurPrize;
 			gStrikeAA = gStrikeCurAA;
 			gStrikeAt = gStrikeCurAt;
+			// NO GOOD RUN, THEN THEIR FRONT (apexearth 2026-09-29: past a
+			// hundred of their fighters the back lines are out of reach, the
+			// front is not). A wing expected to lose half of itself -- the bar
+			// that already calls a run spent -- takes the front's best cell.
+			const bool wasFront = gStrikeFront;
+			gStrikeFront = gFrontCurHas && (Throughput(HeldBombers()) < 0.5f)
+					&& (gFrontCurAt.distance2D(gStrikeCurAt) > 1.f);
+			if (gStrikeFront) {
+				gStrikePrize = gFrontCurPrize;
+				gStrikeAA = gFrontCurAA;
+				gStrikeAt = gFrontCurAt;
+			}
+			if (gStrikeFront != wasFront)
+				AiLog(Factory::T() + "apex: air target " + (gStrikeFront ? "front" : "deep")
+					+ " at=" + int(gStrikeAt.x) + "," + int(gStrikeAt.z)
+					+ " prize=" + int(gStrikePrize)
+					+ " through=" + formatFloat(Throughput(HeldBombers()), "", 0, 2));
+			gFrontCurHas = false;
+			gFrontCurScore = 0.f;
 			gStrikeCurHas = false;
 			gStrikeCurScore = 0.f;
 			gAtomCellHas = gAtomCellCurHas;
@@ -521,6 +556,101 @@ float StrikeGainFor(int d, float fillSec)
 	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
+// Every wave waits for its escort (EscortWant), so a missing fighter holds
+// every bomber at home: it earns what the wing's last bomber does, over the
+// share of the escort still missing.
+float EscortFighterGainFor(int d, float fillSec)
+{
+	// Any player whose wing launches here: the lead, or one holding bombers.
+	if (!IsFighterDef(d) || !WingBuys() || (!IsAirLead() && (StandingHeldMass() <= 0.f)))
+		return 0.f;
+	const int want = EscortWant();
+	const int have = Fighters() + Brain::PendAnyOf(d);
+	const int b = BuyableBomberDef();
+	if ((want <= 0) || (have >= want) || (b < 0))
+		return 0.f;
+	int held = HeldBombers();
+	const int pool = int(TeamWingHeld());
+	if (pool > held)
+		held = pool;
+	const int last = ScaledBombers() - 1;
+	const float gain = MarginalGain(b, (held < last) ? held : last);
+	return gain * float(want - have) / float(want) / ((fillSec > 1.f) ? fillSec : 180.f);
+}
+
+// THEIR AIR IS HUNTED (apexearth 2026-09-29: a hundred of their fighters kept
+// every bomber off their back lines). While they fly, fighters past the wing's
+// escort go to the stock anti-air task, which masses against their air and
+// skips any target over flak stronger than itself; one hunter stays a hunter.
+array<Id> gHunters;
+int gHuntPruneAt = -1;
+void HuntPrune()
+{
+	if ((gHuntPruneAt >= 0) && (ai.frame < gHuntPruneAt + 10 * SECOND))
+		return;
+	gHuntPruneAt = ai.frame;
+	array<Id> alive;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(fd, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && InList(gHunters, us[k].id))
+				alive.insertLast(us[k].id);
+		}
+	}
+	gHunters = alive;
+}
+
+bool Hunts(CCircuitUnit@ unit)
+{
+	if (!IsFighterDef(int(unit.circuitDef.id)) || InWave(unit.id) || Covering(unit.id)
+		|| (FlightOutIdx(unit.id) >= 0))
+		return false;
+	if (InList(gHunters, unit.id))
+		return true;
+	if (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) <= 0.f)
+		return false;
+	HuntPrune();
+	if (Fighters() - gWaveFighters - int(gHunters.length()) <= ScaledFighters())
+		return false;
+	gHunters.insertLast(unit.id);
+	if (ai.frame >= gHuntLogAt) {
+		gHuntLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: air hunt hunters=" + gHunters.length()
+			+ " fighters=" + Fighters() + " escort=" + ScaledFighters()
+			+ " foeAir=" + int(aiEnemyMgr.GetEnemyCostFresh(RT::AIR)));
+	}
+	return true;
+}
+int gHuntLogAt = 0;
+
+// ...and bought for it: the AA counter's own match on their fresh air, our
+// share of the team's answer, as fighters rather than any AA -- the ground
+// kind cannot reach the air cover over their back lines.
+float HuntFighterGainFor(int d, float fillSec)
+{
+	if (!IsFighterDef(d))
+		return 0.f;
+	const float team = Military::TeamArmyCost();
+	const float mine = aiMilitaryMgr.armyCost;
+	const float share = (team > mine && team > 1.f) ? (mine / team) : 1.f;
+	const float want = aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
+			* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share;
+	float have = FighterMetalHeld();
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd !is null)
+			have += float(Brain::PendAnyOf(int(fd.id))) * Catalog::gCostM[int(fd.id)];
+	}
+	if (want <= have)
+		return 0.f;
+	return (want - have) / ((fillSec > 1.f) ? fillSec : 180.f);
+}
+
 // Would the wing buy a plane at all right now, prize aside: the economy
 // carries air, and the ground war is not being lost badly before a wing is
 // started (the same gate the commitment waits behind).
@@ -624,9 +754,25 @@ float WingLookWorth()
 // The production draw's price for one more scout of THIS type. A second one
 // in the air delivers the same picture the first will, so it adds nothing
 // while one is pending or flying.
+// Their fighters' metal: the AA role carries them and their ground AA alike,
+// so they are read as their air less its bombers and scouts.
+float FoeFighterM()
+{
+	const float m = aiEnemyMgr.GetEnemyCost(RT::AIR) - aiEnemyMgr.GetEnemyCost(RT::BOMBER)
+			- aiEnemyMgr.GetEnemyCost(RT::SCOUT);
+	return (m > 0.f) ? m : 0.f;
+}
+
+// Behind their fighter wall an unarmed plane dies before it looks. The metal
+// goes to fighters instead, which see what they fly over and shoot back.
+bool ScoutsDie()
+{
+	return (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) > 0.f) && (FoeFighterM() > 0.f);
+}
+
 float LookGainFor(int d, float fillSec)
 {
-	if (!IsLookDef(d))
+	if (!IsLookDef(d) || ScoutsDie())
 		return 0.f;
 	if ((gLookScout >= 0) || (Brain::PendAnyOf(d) > 0))
 		return 0.f;

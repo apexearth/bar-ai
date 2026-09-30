@@ -346,6 +346,12 @@ public:
 	bool HasSurfToLandDGun()  const { return hasSurfToLandDGun; }
 	bool HasSurfToWaterDGun() const { return hasSurfToWaterDGun; }
 	bool HasSubToAirDGun()    const { return hasSubToAirDGun; }
+	// A ground unit is sent after aircraft only when anti-air is its job: a
+	// raider's gun that reaches a plane still fires at one in range, but the
+	// squad does not leave its fight to chase fighters (apexearth 2026-09-29).
+	bool IsAirHunter(bool inWater) const {
+		return (inWater ? hasSubToAir : hasSurfToAir) && (isAbleToFly || IsRoleAA());
+	}
 	bool HasSubToLandDGun()   const { return hasSubToLandDGun; }
 	bool HasSubToWaterDGun()  const { return hasSubToWaterDGun; }
 

@@ -383,6 +383,86 @@ void EscortGone(Id id)
 		}
 		++e;
 	}
+	ClearSupport(id);
+}
+
+// Support, then build: a constructor whose best mex spot is hot hands that
+// spot to the army's target choice (C++ CAttackTask::FindTarget), which prices
+// the enemies covering it at the spot's worth. Once they are gone the spot is
+// no longer hot and is picked like any other, its constructor escorted as any
+// outside the base is. One spot at a time, held until it is claimed, cools,
+// or its constructor dies -- never moved by re-election, so the army is not
+// sent one place and then another, and the fight logic is nudged, not led.
+array<Id> gSupWorker;
+array<int> gSupSpot;
+array<float> gSupWorth;
+bool gSupDirty = false;
+int gSupCalls = 0;
+int gSupDone = 0;
+
+void CallSupport(CCircuitUnit@ wkr, int si, float worth)
+{
+	if ((wkr is null) || (gSupWorker.length() > 0))
+		return;
+	++gSupCalls;
+	AiLog("apex: support call t=" + ai.teamId + " spot=" + si
+		+ " at=" + int(gAllSpots[si].x) + "," + int(gAllSpots[si].z) + " worth=" + int(worth));
+	gSupWorker.insertLast(wkr.id);
+	gSupSpot.insertLast(si);
+	gSupWorth.insertLast(worth);
+	gSupDirty = true;
+}
+
+void ClearSupport(Id wid)
+{
+	for (uint s = 0; s < gSupWorker.length(); ++s) {
+		if (gSupWorker[s] == wid) {
+			AiLog("apex: support done t=" + ai.teamId + " spot=" + gSupSpot[s] + " why=lost");
+			gSupWorker.removeAt(s);
+			gSupSpot.removeAt(s);
+			gSupWorth.removeAt(s);
+			gSupDirty = true;
+			return;
+		}
+	}
+}
+
+void SupportSweep()
+{
+	for (int s = int(gSupWorker.length()) - 1; s >= 0; --s) {
+		const int si = gSupSpot[s];
+		const bool claimed = LedgerFind(si) >= 0;
+		if (claimed || !SpotHot(gAllSpots[si])) {
+			AiLog("apex: support done t=" + ai.teamId + " spot=" + si
+				+ " at=" + int(gAllSpots[si].x) + "," + int(gAllSpots[si].z)
+				+ " why=" + (claimed ? "claimed" : "cooled"));
+			gSupWorker.removeAt(s);
+			gSupSpot.removeAt(s);
+			gSupWorth.removeAt(s);
+			++gSupDone;
+			gSupDirty = true;
+		}
+	}
+	// The army is not given these spots: the nudge pulled every squad onto the
+	// one target beside a spot. Opportunism alone (his 09-30): the spot is
+	// taken when the fighting clears it.
+	if (!gSupDirty)
+		return;
+	gSupDirty = false;
+	aiMilitaryMgr.ClearSupportSpots();
+}
+
+bool SupportFree()
+{
+	return gSupWorker.length() == 0;
+}
+
+float SupportWorth()
+{
+	float w = 0.f;
+	for (uint s = 0; s < gSupWorth.length(); ++s)
+		w += gSupWorth[s];
+	return w;
 }
 
 void GuardSweep()

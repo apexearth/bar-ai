@@ -18,10 +18,10 @@ namespace Air {
 // vision is shared, so one seat's look serves the team.
 bool IsScoutSeat()
 {
-	if (IsAirLead())
-		return true;
-	if (AirLeadTeamId() >= 0)
-		return false;
+	// The eco seat's metal is the economy's, never the look's.
+	const int lead = AirLeadTeamId();
+	if ((lead >= 0) && (ai.ReadTeamValue(lead, Military::TV_ECOSEAT, 0.f) <= 0.5f))
+		return lead == ai.teamId;
 	array<Id>@ mates = ai.GetTeamIds();
 	if (mates is null)
 		return true;
@@ -36,9 +36,86 @@ bool IsScoutSeat()
 	return (pick < 0) || (pick == ai.teamId);
 }
 
+// The cell a raid of ours or an ally's is hitting (Release publishes strike_x/z/r,
+// ReArm clears strike_r).
+bool StrikePoint(AIFloat3& out p, float& out r)
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return false;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		const float sr = ai.ReadTeamValue(t, "strike_r", 0.f);
+		if (sr <= 0.f)
+			continue;
+		p = AIFloat3(ai.ReadTeamValue(t, "strike_x", -1.f), 0.f, ai.ReadTeamValue(t, "strike_z", -1.f));
+		r = sr;
+		if (OnMap(p))
+			return true;
+	}
+	return false;
+}
+
+bool TeamStrikeOut()
+{
+	AIFloat3 p;
+	float r;
+	return gStrike || StrikePoint(p, r);
+}
+
 array<Id> gFlightOut;       // launched, flying to their spot
 array<AIFloat3> gFlightDest;
 int gFlightLaunches = 0;
+
+// Where the i-th of n decoys goes: spread over the raid's cell.
+AIFloat3 DecoyDest(const AIFloat3& in at, float r, uint i, uint n)
+{
+	const float ang = 6.2831853f * float(i) / float((n > 0) ? n : 1);
+	AIFloat3 d = at + AIFloat3(cos(ang), 0.f, sin(ang)) * (0.5f * r);
+	return OnMap(d) ? d : at;
+}
+
+// THE FIGHTERS GO IN FIRST (apexearth 2026-09-29): faster than the bombers,
+// sent at the cell as the wave leaves, they draw the AA -- the expensive AA
+// included -- that would otherwise meet the bombs.
+void Vanguard()
+{
+	AIFloat3 at;
+	float r;
+	if (!StrikePoint(at, r))
+		return;
+	array<CCircuitUnit@> go;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(fd, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if ((us[k] !is null) && InWave(us[k].id) && (FlightOutIdx(us[k].id) < 0))
+				go.insertLast(us[k]);
+		}
+	}
+	// ...but only their share: the rest guard the bombers against fighters
+	// (his 2026-09-16 cover). Decoys answer their ground AA, guards their
+	// fighters -- the AA role carries both, so their fighters come off it.
+	const float foeFig = FoeFighterM();
+	float foeAA = EnemyAACost() - foeFig;
+	if (foeAA < 0.f)
+		foeAA = 0.f;
+	const uint n = (foeAA + foeFig > 1.f)
+			? uint(float(go.length()) * foeAA / (foeAA + foeFig) + 0.5f) : 0;
+	for (uint i = 0; (i < n) && (i < go.length()); ++i) {
+		const AIFloat3 dest = DecoyDest(at, r, i, n);
+		go[i].CmdMoveTo(dest);
+		gFlightOut.insertLast(go[i].id);
+		gFlightDest.insertLast(dest);
+	}
+	AiLog(Factory::T() + "apex: air vanguard decoys=" + n + " of " + go.length()
+		+ " foeAA=" + int(foeAA) + " foeFighters=" + int(foeFig)
+		+ " at=" + int(at.x) + "," + int(at.z));
+}
 
 bool IsFlightDef(int d)
 {
@@ -77,7 +154,14 @@ int FlightHave()
 		if (IsFlightDef(int(d)))
 			n += Market::gOwnCount[d] + Brain::PendAnyOf(int(d));
 	}
-	return n;
+	return n + HeldFighters();
+}
+
+// Fighters at home fly the look too, and come back to the wing after.
+bool FlightFighter(CCircuitUnit@ u)
+{
+	return (u !is null) && IsFighterDef(int(u.circuitDef.id))
+		&& !Covering(u.id) && !InWave(u.id) && (FlightOutIdx(u.id) < 0);
 }
 
 // What seeing their base is worth: the economy the mirror says they have that
@@ -93,6 +177,11 @@ float FlightWorth()
 float FlightGainFor(int d, float fillSec)
 {
 	if (!IsFlightDef(d) || (FlightHave() >= FlightWant()))
+		return 0.f;
+	// Bought by the scout seat when there are bombers to use the look: before
+	// the wing stands the planes only hover at home.
+	if (!IsScoutSeat() || (TeamWingHeld() <= 0.f)
+		|| (ScoutsDie() && !IsFighterDef(d)))
 		return 0.f;
 	return FlightWorth() / ((fillSec > 1.f) ? fillSec : 180.f) / float(FlightWant());
 }
@@ -110,12 +199,12 @@ int FlightOutIdx(Id id)
 bool FlightHolds(CCircuitUnit@ unit)
 {
 	const int id = int(unit.circuitDef.id);
-	if (!IsFlightDef(id) || (int(unit.id) == gLookScout))
+	if (int(unit.id) == gLookScout)
 		return false;
 	const int k = FlightOutIdx(unit.id);
-	if (k < 0)
-		return !FlightArrived(unit.id);
-	return unit.GetPos(ai.frame).distance2D(gFlightDest[uint(k)]) > 400.f;
+	if (k >= 0)
+		return unit.GetPos(ai.frame).distance2D(gFlightDest[uint(k)]) > 400.f;
+	return IsFlightDef(id) && !FlightArrived(unit.id);
 }
 
 // Planes that reached their spot are stock's from then on.
@@ -154,6 +243,35 @@ void FlightWatch()
 			}
 		}
 	}
+	array<CCircuitUnit@> fighters;
+	for (int pass = 0; pass < 2; ++pass) {
+		CCircuitDef@ fd = (pass == 0) ? gFighter : gFighter1;
+		if (fd is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(fd, Builder::gHomePos, 0.f);
+		if (us is null)
+			continue;
+		for (uint i = 0; i < us.length(); ++i) {
+			CCircuitUnit@ u = us[i];
+			if (u is null)
+				continue;
+			const int k = FlightOutIdx(u.id);
+			if (k < 0) {
+				if (FlightFighter(u))
+					fighters.insertLast(u);
+				continue;
+			}
+			alive.insertLast(u.id);
+			if (u.GetPos(ai.frame).distance2D(gFlightDest[uint(k)]) <= 400.f) {
+				gLookAt = ai.frame;
+				gFlightOut.removeAt(uint(k));
+				gFlightDest.removeAt(uint(k));
+				// A vanguard fighter stays over the cell and fights.
+				if (Builder::gHomeSet && !(gStrike && InWave(u.id)))
+					u.CmdMoveTo(Builder::gHomePos);
+			}
+		}
+	}
 	for (uint i = 0; i < gFlightOut.length(); ) {
 		if (!InList(alive, gFlightOut[i])) {
 			gFlightOut.removeAt(i);
@@ -168,32 +286,46 @@ void FlightWatch()
 		else
 			++i;
 	}
+	// Only with a raid: a look with no bombers behind it shows them our air
+	// and buys their AA before the first bomb (apexearth).
+	if (!TeamStrikeOut())
+		return;
+	// What stands goes with the raid, together, over the raid's cell: the look
+	// and the decoys ahead of the bombs. Fighters fill it while there is
+	// something to see.
+	const int want = FlightWant();
+	int nf = 0;
+	for (uint i = 0; (i < fighters.length()) && (int(home.length()) < want); ++i) {
+		home.insertLast(fighters[i]);
+		++nf;
+	}
 	if (home.length() == 0)
 		return;
-	// Full, or nothing left unseen (then they go as fodder): together, never
-	// one at a time.
-	const int want = FlightWant();
-	if ((want > 0) && (int(home.length()) < want))
-		return;
+	AIFloat3 cell;
+	float cellR = 0.f;
+	const bool onCell = StrikePoint(cell, cellR);
 	array<AIFloat3> spots;
-	for (uint s = 0; s < Market::gAllSpots.length(); ++s) {
-		if (Military::ForwardFraction(Market::gAllSpots[s]) > 0.5f)
-			spots.insertLast(Market::gAllSpots[s]);
-	}
-	if (spots.length() == 0) {
-		const AIFloat3 box = aiSetupMgr.GetEnemyBoxCentre();
-		if (OnMap(box))
-			spots.insertLast(box);
-		else
-			return;
+	if (!onCell) {
+		for (uint s = 0; s < Market::gAllSpots.length(); ++s) {
+			if (Military::ForwardFraction(Market::gAllSpots[s]) > 0.5f)
+				spots.insertLast(Market::gAllSpots[s]);
+		}
+		if (spots.length() == 0) {
+			const AIFloat3 box = aiSetupMgr.GetEnemyBoxCentre();
+			if (OnMap(box))
+				spots.insertLast(box);
+			else
+				return;
+		}
 	}
 	for (uint i = 0; i < home.length(); ++i) {
-		const AIFloat3 dest = spots[(uint(gFlightLaunches) + i) % spots.length()];
+		const AIFloat3 dest = onCell ? DecoyDest(cell, cellR, i, home.length())
+				: spots[(uint(gFlightLaunches) + i) % spots.length()];
 		home[i].CmdMoveTo(dest);
 		gFlightOut.insertLast(home[i].id);
 		gFlightDest.insertLast(dest);
 	}
-	AiLog(Factory::T() + "apex: air flight launch n=" + home.length()
+	AiLog(Factory::T() + "apex: air flight launch n=" + home.length() + " fighters=" + nf
 		+ " want=" + FlightWant() + " spots=" + spots.length()
 		+ " worth=" + int(FlightWorth()));
 	gFlightLaunches += int(home.length());

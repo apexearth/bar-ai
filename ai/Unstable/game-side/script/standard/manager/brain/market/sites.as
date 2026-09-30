@@ -1621,7 +1621,13 @@ bool LineWorking(CCircuitUnit@ f)
 // 2026-09-14, on nanos following the spend: "ok on both".
 bool LineWorkingArmy(CCircuitUnit@ f)
 {
-	if ((f is null) || !LineWorking(f))
+	if (f is null)
+		return false;
+	// A gantry is a line whether or not it has a queue: without its ring a T3
+	// unit takes so long that none is ever bought, so it never earns one.
+	if (PlantTier(int(f.circuitDef.id)) >= 3)
+		return true;
+	if (!LineWorking(f))
 		return false;
 	const int line = Brain::FQIndex(f.id);
 	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
@@ -1770,6 +1776,11 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 	bool any = false;
 	const float feed = FreeMetalFlow();
 	const float sumCeil = LineCeilSum();
+	// The line eating least for its weight: the same pick as the largest
+	// shortfall of the ceiling-weighted share, but it holds with no free flow.
+	// Ranked on the raw shortfall, a spent economy picked the line eating
+	// least outright, and a gantry's own arm lost to every T2 lab.
+	float bestLoad = 0.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f is null) || !LineWorkingArmy(f))
@@ -1777,10 +1788,12 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 		const AIFloat3 fp = f.GetPos(ai.frame);
 		if (!OnMap(fp))
 			continue;
-		const float share = (sumCeil > 1.f) ? (feed * LineCostCeil(f) / sumCeil) : feed;
-		const float u = share - LineEat(f, fp);
-		if (!any || (u > net)) {
-			net = u;
+		const float w = LineCostCeil(f);
+		const float eat = LineEat(f, fp);
+		const float load = eat / ((w > 1.f) ? w : 1.f);
+		if (!any || (load < bestLoad)) {
+			bestLoad = load;
+			net = ((sumCeil > 1.f) ? (feed * w / sumCeil) : feed) - eat;
 			at = fp;
 			@line = f;
 			any = true;

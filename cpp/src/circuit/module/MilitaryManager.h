@@ -184,6 +184,7 @@ public:
 	float guardFlipDist = 0.f;
 	int guardFlipLogAt = 0;
 	int mergeLogAt = 0;
+	std::vector<std::pair<springai::AIFloat3, float>> supportSpots;
 	// 0 = off-cadence, 1 = IsMergeSafe refused, 2 = dispatched pool
 	unsigned mergeSkip[3] = {0, 0, 0};
 	unsigned mergeRan = 0;
@@ -203,6 +204,10 @@ public:
 
 	void SetBaseDefRange(float range) { defence->SetBaseRange(range); }
 	float GetBaseDefRange() const { return defence->GetBaseRange(); }
+	// Mex spots our builders asked the army to clear, with the metal each is worth.
+	void ClearSupportSpots() { supportSpots.clear(); }
+	void AddSupportSpot(const springai::AIFloat3& pos, float worth) { supportSpots.emplace_back(pos, worth); }
+	const std::vector<std::pair<springai::AIFloat3, float>>& GetSupportSpots() const { return supportSpots; }
 	// Shared cadence and counters for ISquadTask's merge census. They live on
 	// the manager because the tasks they measure are created and destroyed
 	// constantly, and the question is about the fleet, not one squad.

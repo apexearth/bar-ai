@@ -1963,6 +1963,8 @@ float AnswerShare()
 // our priorities" (his words) is expressible as the two holding equal seconds,
 // and the split is readable rather than buried in two different formulas. It
 // scales with income at every stage, so it needs no cap and no ramp.
+const float T2_DEFENCE_SHARE = 0.5f;
+
 float ArmyTarget()
 {
 	// No `(hold > 0) ? hold : default` guard: GetTunable already returns the
@@ -1976,15 +1978,17 @@ float ArmyTarget()
 	// The switch is meant to keep a DEFENSIVE army and then stop buying, not
 	// to stand the army down: zero holds from frame 18 to the mohos, and the
 	// valve meant to restore it (EcoDangerNear) compares a unit COUNT against
-	// a metal threshold, so it never arms. apex_t2_army_floor > 0 holds the
-	// defensive need instead, capped at the full target. See docs/27.
+	// a metal threshold, so it never arms. "Enough army for a normal defence
+	// of ourselves, then stop" (his 09-21): the defence is a share of the full
+	// target (his choice, 09-29), or what already stands at home if larger.
 	if (T2SwitchOn()) {
+		const float full = ArmyTargetFull();
+		float need = full * T2_DEFENCE_SHARE;
 		const float hold = ai.GetTunable("apex_t2_army_floor",
 				TUNE_T2_ARMY_FLOOR);
-		if (hold <= 0.f)
-			return 0.f;
-		const float need = Military::HoldNeedM() * hold;
-		const float full = ArmyTargetFull();
+		const float atHome = Military::HoldNeedM() * ((hold > 0.f) ? hold : 1.f);
+		if (atHome > need)
+			need = atHome;
 		return (need > full) ? full : need;
 	}
 	return ArmyTargetFull();
@@ -2323,7 +2327,7 @@ void StallWatch()
 	if (ai.frame >= gNextStallSweep) {
 		gNextStallSweep = ai.frame + 5 * SECOND;
 		{ double _t = Perf::T0(); RetreatRefresh(); Perf::Add("think.retreat", _t); }
-		{ double _t = Perf::T0(); GuardSweep(); Perf::Add("think.guard", _t); }
+		{ double _t = Perf::T0(); GuardSweep(); SupportSweep(); Perf::Add("think.guard", _t); }
 	}
 	if (ai.frame < gNextStallDry)
 		return;

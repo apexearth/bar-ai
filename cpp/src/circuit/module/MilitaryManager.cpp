@@ -1798,7 +1798,7 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
 			targetCat = edef->GetCategory();
 			if (((targetCat & canTargetCat) == 0)
 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
-				|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
+				|| (edef->IsAbleToFly() && !cdef->IsAirHunter(IsInWater)))  // notAA
 			{
 				continue;
 			}

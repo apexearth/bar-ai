@@ -263,31 +263,8 @@ float OwnTierMul(int d)
 	return 1.f / (1.f + k * float(above));
 }
 
-// Mean health of the T2 ground combat line the game offers us; recomputed until
-// the catalog is populated so an early zero is never cached.
-float gT2HpMean = 0.f;
-float T2HpMean()
-{
-	if (gT2HpMean > 0.f)
-		return gT2HpMean;
-	float sum = 0.f;
-	int n = 0;
-	for (int i = 1; i <= Catalog::gDefCount; ++i) {
-		if (!Catalog::ValidId(i) || !Catalog::gAvailable[i] || !Catalog::gMobile[i]
-				|| Catalog::gBuilder[i] || Catalog::gFlyer[i] || Catalog::gKamikaze[i]
-				|| (Catalog::gMaxRange[i] <= 0.f) || (DefTier(i) != 2))
-			continue;
-		sum += Catalog::gHealth[i];
-		++n;
-	}
-	if (n > 0)
-		gT2HpMean = sum / float(n);
-	return gT2HpMean;
-}
-
 // Once a T2 plant stands no T1 ground unit is made, fodder included -- the
-// count is the lag (apexearth 2026-09-27). Once a gantry stands the T2 labs
-// make only fodder and the heavy bodies (2026-09-25). A drop, not a price:
+// count is the lag (apexearth 2026-09-27). A drop, not a price:
 // OwnTierMul only reorders a lab whose whole list is one tier, so the T1 lab
 // still made 367 Thugs at T3. Ground AA is left alone -- it answers air.
 // Only a LAND plant replaces the T1 ground line: an advanced air plant or
@@ -374,10 +351,11 @@ bool Outgrown(int d)
 	// the army attacks. T1 raiders are not.
 	if ((tier == 1) && IsLateScout(d))
 		return false;
+	// T2 is not stopped by T3 (his 2026-09-29): fewer of them, through the
+	// gantry's yield and OwnTierMul, never none.
 	if (tier == 1)
 		return TopOwnLandPlantTier() >= 2;
-	return (top >= 3) && (tier == 2) && (Catalog::gCostM[d] >= Military::FODDER_COST())
-		&& (Catalog::gHealth[d] < T2HpMean());
+	return false;
 }
 
 // The score. Raw, before any of the situational multipliers -- this is what

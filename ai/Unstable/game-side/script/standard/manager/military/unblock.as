@@ -470,7 +470,10 @@ bool StuckAskedFor(Id id)
 bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in dir)
 {
 	CCircuitUnit@ eat = WallToEat(unit, at);
-	if (gLaneOpen > 0) {
+	// A unit that refused to walk out is stuck whatever the rays say: a gap
+	// too narrow for it reads as an open lane. Eat the cheapest building around
+	// it (apexearth 2026-09-30: "just reclaim whatever is cheapest").
+	if ((gLaneOpen > 0) && (eat is null)) {
 		// It refused to walk with an open lane beside it: its own task holds it
 		// (a squad re-asserting its post), or units crowd it. Nothing of ours to eat.
 		++gPenOpen;

@@ -323,7 +323,7 @@ bool CRaidTask::FindTarget()
 			if (((targetCat & canTargetCat) == 0)
 				|| (isAntiStatic && edef->IsMobile())
 				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
-				|| (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAir() : cdef->HasSurfToAir())))  // notAA
+				|| (edef->IsAbleToFly() && !cdef->IsAirHunter(IsInWater)))  // notAA
 			{
 				continue;
 			}

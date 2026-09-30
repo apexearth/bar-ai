@@ -1544,6 +1544,29 @@ are not durable -- rebuild from this description.
 
 ## AIR
 
+### The 09-29/30 air rework is unmeasured (2026-09-30)
+
+Everything air from those two nights was seen only in his multiplayer games
+(Ascendancy 8v8, Supreme Isthmus), never in a lane batch, and he is "not
+confident about it". Unverified, each with its log line:
+- decoy fighters lead a wave, the rest guard (`air vanguard decoys=N of M`);
+  in his 09-30 game every wave read `decoys=0 of 0` before the finished-plane
+  fix, so the split itself has never been seen working at scale;
+- waves wait for their escort (`EscortWant`), any bomber-holder buys it
+  (`escortf`), releases count finished planes only;
+- hunters take fighters past the escort to the stock AA task (`air hunt`);
+- no unarmed scouts while their fighters fly (`ScoutsDie`), scout flight only
+  with a raid, bought by the scout seat once bombers stand;
+- wing target switches to their front when throughput < 0.5 (`air target
+  front|deep` -- logs on no-change too: no bombers read throughput 0);
+- bombers keep their aims (`bomb spread ... keep= retarget=`).
+Test on Carrot Mountains (his air map) against BARb before trusting any of it.
+
+Loose ends: the scout flight can still take fighters the escort needs; the
+support-call `worth` is in the wrong units (spot income is not m/s -- read
+926,855 per spot) and is now only a log value since the army no longer reads
+it; army in flight (`PendArmyMWithin`) is still nameplate, not metal-fed.
+
 ### A T3 nuclear bomber reaches the base (2026-09-15)
 
 His 1v1 (54 min, lost to a Ragnarok): one enemy nuclear bomber got through

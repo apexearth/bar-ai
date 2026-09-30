@@ -166,6 +166,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// does nothing when MakeTask gives it nothing, and CIdleTask::Start is a
 	// no-op. The unit keeps no orders and stays where it was built. That is how
 	// the air force is held at home until Air::Release().
+	if (Air::Hunts(unit))
+		return NoteElect("air.hunt", aiMilitaryMgr.DefaultMakeTask(unit));
 	if (Air::HoldsUnit(unit))
 		return null;
 	if (Factory::HoldsLateFighter(unit))

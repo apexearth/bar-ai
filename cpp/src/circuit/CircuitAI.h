@@ -240,7 +240,7 @@ public:
 	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
 	// The same matrix read from their side: their B against our A.
 	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
-	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) recTier[cdef->GetId()] = tier; }
+	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) { recTier[cdef->GetId()] = tier; recAggDirty = true; } }
 	bool RecordTweaked() const { return recTweaked; }
 	// Recent kills/losses by metal value; see NoteTrade in the .cpp.
 	void NoteTrade(bool isKill, CCircuitDef* cdef);
@@ -533,6 +533,13 @@ private:
 	std::unordered_map<long long, SXch> recGame;     // this game, (our def, their def)
 	std::unordered_map<long long, SXch> recStored;   // from the file
 	std::unordered_map<CCircuitDef::Id, int> recTier;   // the script's DefTier
+	// Each type's totals over both tables, both sides: [0] all, [1+t] against
+	// opponent tier t. Read per candidate per enemy def, so never a table walk.
+	struct SAggRow { SXch s[5]; SXch col; };   // col: their copies only, as B
+	mutable std::unordered_map<CCircuitDef::Id, SAggRow> recAgg;
+	mutable bool recAggDirty = true;
+	void RecordAggAdd(CCircuitDef::Id a, CCircuitDef::Id b, float dealt, float taken) const;
+	const SXch& RecordAggOf(CCircuitDef::Id id, int tier) const;
 	static long long RecordKey(CCircuitDef::Id a, CCircuitDef::Id b) { return (long long)a * 65536 + b; }
 	int RecordTierOf(CCircuitDef::Id id) const;
 	void RecordSum(CCircuitDef::Id a, CCircuitDef::Id b, float& dealt, float& taken) const;

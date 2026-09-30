@@ -89,6 +89,8 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
 void CBombTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	ISquadTask::RemoveAssignee(unit);
+	issued.erase(unit->GetId());
+	aims.erase(unit->GetId());
 	if (units.empty()) {
 		manager->AbortTask(this);
 	}
@@ -150,6 +152,7 @@ void CBombTask::Update()
 	bool mustRegroup = !committed && IsMustRegroup();
 	if (State::REGROUP == state) {
 		if (mustRegroup) {
+			issued.clear();
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
@@ -190,11 +193,15 @@ void CBombTask::Update()
 			AttackSpread(frame);
 		} else {
 			aims.clear();
-			Attack(frame, GetTarget()->NotInRadarAndLOS() || (GetTarget()->GetCircuitDef() == nullptr)
-				|| !GetTarget()->GetCircuitDef()->IsMobile() || circuit->IsCheating());
+			for (CCircuitUnit* u : units) {
+				aims[u->GetId()] = GetTarget()->GetId();
+			}
+			IssueAims(frame);
 		}
 		return;
 	}
+	// Any other order replaces the attack, so the next one must be sent.
+	issued.clear();
 
 	// A path around the AA from here only turns a committed wave in circles.
 	if (committed && utils::is_valid(position)) {
@@ -225,6 +232,7 @@ void CBombTask::Update()
 void CBombTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	ISquadTask::OnUnitIdle(unit);
+	issued.erase(unit->GetId());
 	if (units.empty()) {
 		return;
 	}
@@ -336,6 +344,7 @@ void CBombTask::FindTarget()
 	// threat; the veto still shapes the approach.
 	const bool overFocus = focused && (pos.SqDistance2D(focusPos) <= sqFocusR);
 	int nHidden = 0, nPower = 0, nMobile = 0, nCat = 0, nSeen = 0;
+	int nNoDef = 0, nChase = 0, nAlly = 0, nRoute = 0, nCell = 0;
 	float worstPower = 0.f;
 //	const float maxAltitude = cdef->GetAltitude();
 	const float speed = cdef->GetSpeed() / 1.75f;
@@ -372,6 +381,8 @@ void CBombTask::FindTarget()
 	};
 	std::vector<Cand> routeCands;
 	std::vector<Cand> allCands;
+	Cand curCand{nullptr, AIFloat3(), 0.f, 0.f, 0.f, 0.f, 0.f};
+	bool hasCur = false;
 	spreadCands.clear();
 	spreadable = focused;
 	float bestCellRaw = 0.f;
@@ -446,9 +457,15 @@ void CBombTask::FindTarget()
 		} else {
 //			targetCat = ~noChaseCat;
 //			altitude = 0.f;
+			++nNoDef;
 			continue;
 		}
 
+		if ((targetCat & noChaseCat) != 0) {
+			++nChase;
+		} else if (!noAllies(ePos)) {
+			++nAlly;
+		}
 		if (/*enemy->IsInRadarOrLOS() && */((targetCat & noChaseCat) == 0)
 			/*&& (altitude < maxAltitude)*/
 			&& noAllies(ePos))
@@ -537,15 +554,21 @@ void CBombTask::FindTarget()
 				}
 			}
 			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
+			if (enemy == curTarget) {
+				curCand = c;
+				hasCur = true;
+			}
 			if (focused && (value >= minValue)) {
 				allCands.push_back(c);
 			}
 			if (onRoute) {
+				++nRoute;
 				if (value >= minValue) {
 					routeCands.push_back(c);
 				}
 				continue;
 			}
+			++nCell;
 			bestCellRaw = std::max(bestCellRaw, raw);
 			consider(c, false);
 		}
@@ -581,6 +604,15 @@ void CBombTask::FindTarget()
 		}
 	}
 
+	// A target on a run is kept while it lives: a new one mid-approach sends
+	// the planes round a full arc (apexearth).
+	if (hasCur && (bestTarget != curTarget)) {
+		bestTarget = curTarget;
+		position = curCand.pos;
+		bestValue = curCand.value;
+		bestOnRoute = false;
+	}
+
 	if (committed && overFocus && (bestTarget == nullptr) && !utils::is_valid(position)) {
 		committed = false;
 		spent = true;
@@ -591,8 +623,9 @@ void CBombTask::FindTarget()
 		static int nextNoTargetLog = 0;
 		if (overFocus && (circuit->GetLastFrame() >= nextNoTargetLog)) {
 			nextNoTargetLog = circuit->GetLastFrame() + FRAMES_PER_SEC * 5;
-			circuit->LOG("apex: bomb no-target over %.0f,%.0f seen=%d hidden=%d power=%d mobile=%d cat=%d maxPower=%.1f worst=%.1f units=%d",
-					focusPos.x, focusPos.z, nSeen, nHidden, nPower, nMobile, nCat, maxPower, worstPower, (int)units.size());
+			circuit->LOG("apex: bomb no-target over %.0f,%.0f seen=%d hidden=%d power=%d mobile=%d cat=%d nodef=%d chase=%d ally=%d route=%d cell=%d maxPower=%.1f worst=%.1f units=%d",
+					focusPos.x, focusPos.z, nSeen, nHidden, nPower, nMobile, nCat, nNoDef, nChase, nAlly, nRoute, nCell,
+					maxPower, worstPower, (int)units.size());
 		}
 	}
 	if (bestTarget != nullptr) {
@@ -744,15 +777,34 @@ void CBombTask::PlanSpread(int frame)
 			slots.push_back({l, i});
 		}
 	}
+	// Planes already flying at a live aim keep it and fill that aim's slots
+	// first; only the rest are matched to what the plan still wants.
+	std::map<ICoreUnit::Id, ICoreUnit::Id> keep;
+	std::map<ICoreUnit::Id, int> kept;
 	std::vector<std::pair<float, CCircuitUnit*>> planes;
 	for (CCircuitUnit* u : units) {
+		auto it = aims.find(u->GetId());
+		if ((it != aims.end()) && (circuit->GetEnemyInfo(it->second) != nullptr)) {
+			keep[u->GetId()] = it->second;
+			++kept[it->second];
+			continue;
+		}
 		planes.push_back({lateral(u->GetPos(frame)), u});
 	}
 	std::sort(slots.begin(), slots.end());
 	std::sort(planes.begin(), planes.end());
-	aims.clear();
-	for (size_t k = 0; k < planes.size() && k < slots.size(); ++k) {
-		aims[planes[k].second->GetId()] = plan[slots[k].second].id;
+	std::vector<std::pair<float, size_t>> open;
+	for (const auto& s : slots) {
+		auto kt = kept.find(plan[s.second].id);
+		if ((kt != kept.end()) && (kt->second > 0)) {
+			--kt->second;
+			continue;
+		}
+		open.push_back(s);
+	}
+	aims = keep;
+	for (size_t k = 0; k < planes.size(); ++k) {
+		aims[planes[k].second->GetId()] = (k < open.size()) ? plan[open[k].second].id : prim.id;
 	}
 
 	CMilitaryManager* milMgr = circuit->GetMilitaryManager();
@@ -764,8 +816,8 @@ void CBombTask::PlanSpread(int frame)
 					(plan[i].edef != nullptr) ? plan[i].edef->GetDef()->GetName() : "?", plan[i].got, plan[i].need);
 		}
 	}
-	circuit->LOG("apex: bomb spread units=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
-			n, (int)plan.size(), surv, bdef->GetDef()->GetName(),
+	circuit->LOG("apex: bomb spread units=%d keep=%d retarget=%d aims=%d surv=%.2f bomber=%s primary=%s hp=%.0f pass=%.0f need=%d got=%d width=%.0f depth=%.0f cands=%d rest=%s",
+			n, (int)keep.size(), nRetarget, (int)plan.size(), surv, bdef->GetDef()->GetName(),
 			(prim.edef != nullptr) ? prim.edef->GetDef()->GetName() : "?",
 			prim.health, prim.pass, prim.need, prim.got, hi - lo, deep, (int)spreadCands.size(), rest.c_str());
 }
@@ -773,29 +825,27 @@ void CBombTask::PlanSpread(int frame)
 void CBombTask::AttackSpread(int frame)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	const ICoreUnit::Id pid = GetTarget()->GetId();
-	bool replan = true;
-	for (const auto& kv : aims) {
-		if (kv.second == pid) {
-			replan = false;
-			break;
-		}
-	}
-	// A dead plane does not re-plan: its loss is already in the allotment.
+	// Only a plane without a live aim is planned: a bomber turned off its run
+	// flies a full arc to come back round (apexearth). A dead plane does not
+	// re-plan either: its loss is already in the allotment.
+	bool replan = false;
 	for (CCircuitUnit* u : units) {
-		if (replan) {
+		auto it = aims.find(u->GetId());
+		if ((it == aims.end()) || (circuit->GetEnemyInfo(it->second) == nullptr)) {
+			replan = true;
 			break;
 		}
-		auto it = aims.find(u->GetId());
-		replan = (it == aims.end()) || (circuit->GetEnemyInfo(it->second) == nullptr);
 	}
-	if (!replan && (frame < attackFrame + FRAMES_PER_SEC * 3)) {
-		return;
-	}
-	attackFrame = frame;
 	if (replan) {
 		PlanSpread(frame);
 	}
+	IssueAims(frame);
+}
+
+void CBombTask::IssueAims(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int timeout = FRAMES_PER_SEC * 60;
 	for (CCircuitUnit* u : units) {
 		if (u->Blocker() != nullptr) {
 			continue;
@@ -805,12 +855,24 @@ void CBombTask::AttackSpread(int frame)
 		if (e == nullptr) {
 			e = GetTarget();
 		}
+		// A re-issued attack restarts the run: send one only for a new aim or
+		// an order that has run out.
+		auto is = issued.find(u->GetId());
+		if (is != issued.end()) {
+			if ((is->second.first == e->GetId()) && (frame < is->second.second + timeout)) {
+				continue;
+			}
+			if (is->second.first != e->GetId()) {
+				++nRetarget;
+			}
+		}
 		const bool isGround = e->NotInRadarAndLOS() || (e->GetCircuitDef() == nullptr)
 				|| !e->GetCircuitDef()->IsMobile() || circuit->IsCheating();
 		if (u->GetTravelAct() != nullptr) {
 			u->GetTravelAct()->StateWait();
 		}
-		u->Attack(e, isGround, frame + FRAMES_PER_SEC * 60);
+		u->Attack(e, isGround, frame + timeout);
+		issued[u->GetId()] = std::make_pair(e->GetId(), frame);
 	}
 }
 

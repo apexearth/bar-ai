@@ -41,6 +41,7 @@ private:
 	void Fallback();
 	void CheckCommit(const springai::AIFloat3& pos, const springai::AIFloat3& focusPos, float focusR);
 	void AttackSpread(int frame);
+	void IssueAims(int frame);
 	void PlanSpread(int frame);
 
 	struct SpreadCand {
@@ -52,6 +53,9 @@ private:
 	std::vector<SpreadCand> spreadCands;  // this tick's targets around the primary
 	bool spreadable = false;
 	std::map<ICoreUnit::Id, ICoreUnit::Id> aims;  // our bomber -> the enemy it drops on
+	// The order each bomber is flying: a re-issued attack restarts its run.
+	std::map<ICoreUnit::Id, std::pair<ICoreUnit::Id, int>> issued;
+	int nRetarget = 0;
 
 	// Past the point where going home costs more AA than reaching the cell.
 	bool committed = false;

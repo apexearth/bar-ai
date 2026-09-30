@@ -1122,20 +1122,34 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// nameplate, not spend: a full bank is the proof they are not taking it,
 	// and yielding to them left every air plant of a team idle at 99% bank
 	// (his watch13, 2026-09-28: 677 m/s, one T2 lab building, three idle).
+	// ...AND THE GANTRY IS BETTER THAN EVERY LOWER LAB (apexearth 2026-09-29:
+	// fewer T2 units once T3 stands, the gantry's output first), whatever its
+	// units score per metal. Air plants never yield: T2 and T3 air stay full.
 	const bool wasting = MetalWasting();
+	const bool airLine = AirPlant(fid);
 	if (wasting) {
 		gYieldLog = " yield=off(wasting)";
+	} else if (airLine) {
+		gYieldLog = " yield=off(air)";
 	} else {
 		const float mine = FacBestPPC(fid);
+		const int myTier = PlantTier(fid);
 		float betterCap = 0.f;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f2 = Factory::gFacUnits[fi];
 			if ((f2 is null) || (f2.circuitDef is null) || (int(f2.id) == int(fac.id)))
 				continue;
 			const int f2d = int(f2.circuitDef.id);
-			if (FacBestPPC(f2d) <= mine)
+			const bool gantryOver = (PlantTier(f2d) >= 3) && (PlantTier(f2d) > myTier) && !AirPlant(f2d);
+			if ((FacBestPPC(f2d) <= mine) && !gantryOver)
 				continue;
-			betterCap += FacMetalRate(f2) * fillS;
+			// Only the window its own queue leaves free: a gantry holding
+			// minutes of T3 orders would take the whole gap from the T2 lab
+			// and spend none of it.
+			const int l2 = Brain::FQIndex(f2.id);
+			const float busy = (l2 >= 0) ? Brain::LineSeconds(l2, f2, false) : 0.f;
+			if (busy < fillS)
+				betterCap += FacMetalRate(f2) * (fillS - busy);
 		}
 		if (betterCap > 0.f) {
 			const float coverGapKeep = armyGap * coverShare;
@@ -1471,6 +1485,20 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						+ ":flight(v" + formatFloat(vF, "", 0, 3) + ")";
 			}
 		}
+		// THE WING'S ESCORT: fighters the lead's wave waits for.
+		if (Air::IsFighterDef(d)) {
+			const float gainE = (Air::EscortFighterGainFor(d, fillS)
+					+ Air::HuntFighterGainFor(d, fillS)) * roleMul;
+			if (gainE > 0.f) {
+				candDef.insertLast(d);
+				candV.insertLast(gainE);
+				candGain.insertLast(gainE);
+				sumV += gainE;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName()
+						+ ":escortf(v" + formatFloat(gainE, "", 0, 3) + ")";
+			}
+		}
 		if (!Catalog::gBuilder[d] && IsLiftDef(d)) {
 			const float gainT = LiftGainFor(d, fillS) * roleMul;
 			if (gainT > 0.f) {
@@ -1504,6 +1532,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			&& (navySup || ((Catalog::gSurfT[d] + Catalog::gAirT[d] < 0.01f)
 				&& (Catalog::gRadar[d] || Catalog::gJammer[d]))))
 		{
+			if (Catalog::gFlyer[d] && Air::ScoutsDie())
+				continue;
 			SupportCensus();
 			const bool isJamS = navySup ? (Catalog::gJamR[d] > 100.f) : !Catalog::gRadar[d];
 			const float haveS = navySup ? NavySupportCount(isJamS)
