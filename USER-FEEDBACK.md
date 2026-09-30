@@ -443,8 +443,23 @@ the spare-metal floor (`src=rich`, 102 vs 0 from the target). One AI sat at
 48 m/s with no T2 lab at minute 17 (army 49-65% of its spend from minute 6).
 Ruling: spare metal goes to the economy while the enemy out-earns us; to army
 only once we out-earn them (his 09-24 "no starved army when far richer" holds).
-Built 09-25, unverified: `EcoBehind()` compares our team's structure metal with
-the enemy's seen structure metal; `apex: ecoside` logs both every 30 s.
+Built 09-25: `EcoBehind()` compares our team's structure metal with the
+enemy's; `apex: ecoside` logs both every 30 s. 2026-09-29: it read SEEN
+structures only, so a jammed enemy read 5x behind us; the unseen part now
+counts as our total less the army they have shown, giving way to what our
+eyes cover (`fdaee7bf`). Verified: behind=1 on Isthmus. The army/eco split did
+not move there -- cover demand and the navy budget were the buyers (ISSUES.md).
+
+### EXPANSION: SUPPORT UNSAFE MEXES; T2 HANDS UNDER THE CAP (2026-09-29)
+
+Pyroclast and Isthmus 4v4 vs BARb: level at minute 12, out-earned from 12-20,
+our mexes peak ~45 and erode while theirs reach 52-59.
+1. **An unsafe mex is not refused.** The constructor calls for support, then
+   builds it.
+2. **The constructor cap must not leave us with 39 T1 and 1 T2.** Under the
+   cap, the advanced hands come first.
+3. Investigate every cause of the stall: site vetoes, the cap mix, hands busy
+   elsewhere, mohos held by the T2 switch, mexes lost and not rebuilt.
 
 ### NANO TURRETS WHILE OUT OF METAL (2026-09-26)
 

@@ -687,8 +687,10 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 	// here: it took a capped fleet to 47/40.
 	const int pd = gRedrawDef[pick];
 	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
+		const bool advHand = (DefTier(pd) >= 2) && (ConTierHave(1) > ConTierHave(2));
 		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
-				: ((ConFleetHave() >= RezFleetCap()) || ConStandsIdle(Catalog::gFlyer[pd])))
+				: (((ConFleetHave() >= RezFleetCap()) && !advHand)
+					|| ConStandsIdle(Catalog::gFlyer[pd], DefTier(pd))))
 			return null;
 	}
 	return Catalog::Def(pd);
@@ -738,7 +740,9 @@ int ConFleetHave()
 // ...of the same KIND: an idle bot con cannot do an air con's job, and it held
 // the eco seat's lost air cons unreplaced (his watch 2026-09-28: four air
 // cons, all on one build, while the team overflowed 114k).
-bool ConStandsIdle(bool flyer)
+// ...and of at least the same TIER: an idle T1 hand cannot do a T2 hand's job,
+// and blocked every advanced constructor while basic ones stood about.
+bool ConStandsIdle(bool flyer, int tier = 1)
 {
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ w = gWorkers[i];
@@ -747,13 +751,29 @@ bool ConStandsIdle(bool flyer)
 		const int wd = int(w.circuitDef.id);
 		if (!Catalog::gMobile[wd] || Catalog::gRezzer[wd] || (Catalog::gCostM[wd] <= 1.f)
 			|| w.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-			|| (Catalog::gFlyer[wd] != flyer))
+			|| (Catalog::gFlyer[wd] != flyer) || (DefTier(wd) < tier))
 			continue;
 		IUnitTask@ t = w.task;
 		if ((t is null) || (t.GetType() == Task::Type::IDLE))
 			return true;
 	}
 	return false;
+}
+
+// Constructors of this tier (2 = advanced and above), standing plus queued.
+int ConTierHave(int tier)
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if (!Catalog::gMobile[di] || !Catalog::gBuilder[di] || Catalog::gRezzer[di]
+			|| (Catalog::gCostM[di] <= 1.f) || Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		const int t = (DefTier(di) >= 2) ? 2 : 1;
+		if (t == tier)
+			n += gOwnCount[d] + Brain::PendAnyOf(di);
+	}
+	return n;
 }
 
 int RezFleetHave()
@@ -1392,12 +1412,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		} else if (Catalog::gBuilder[d] && Catalog::gMobile[d]) {
 			if (conFleet < 0)
 				conFleet = ConFleetHave();
-			if (conFleet >= RezFleetCap()) {
+			// T2 HANDS FIRST UNDER THE CAP (his 2026-09-29: "con cap should not
+			// cause us to get 39 t1 and only 1 t2"): an advanced constructor is
+			// not refused while the fleet is mostly basic.
+			const bool advHand = (DefTier(d) >= 2) && (ConTierHave(1) > ConTierHave(2));
+			if ((conFleet >= RezFleetCap()) && !advHand) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":concap";
 				continue;
 			}
-			if (ConStandsIdle(Catalog::gFlyer[d])) {
+			if (ConStandsIdle(Catalog::gFlyer[d], DefTier(d))) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":conidle";
 				continue;
