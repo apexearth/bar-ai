@@ -35,8 +35,14 @@ private:
 	void FallbackBasePos();
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
+	void RepairBreak(int frame);
 
 	float minPower;
+	// apex: the building we are hitting and how its health has moved
+	int stallId = -1;
+	float stallHp = 0.f;
+	int stallSince = 0;
+	int repairerId = -1;
 };
 
 } // namespace circuit

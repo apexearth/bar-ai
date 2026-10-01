@@ -1557,3 +1557,33 @@ the humans to kill me."*
 - **The other ways in are the missile launchers.** Armada can build the EMP
   launcher (Paralyzer) and Cortex the tactical missile launcher (Catalyst).
   Build them within range and launch them at the enemy defences.
+
+## 2026-09-30 — kill what is repairing the tower
+
+- **A tower we cannot kill is being repaired.** Enemy construction turrets
+  or constructors behind it heal it faster than we damage it, and we keep
+  shooting the tower.
+- **Go further in and kill the repairers first.** Once nothing repairs it,
+  the tower dies. This means noticing that the repair is happening, then
+  preferring construction turrets and constructors as targets.
+
+## 2026-09-30 — rez bots travel with the army
+
+- **Rez bots support the squads that are fighting.** As a squad takes damage
+  the rez bots heal it.
+- **They clear the wrecks in front of the army.** Our army gets stuck on the
+  wrecks of a fight it is winning; rez bots eat that metal and clear the path
+  so the army can advance.
+- **As close to the army as possible while staying safe.** Behind it, not in
+  the fight.
+
+## 2026-09-30 — push; do not chase ghosts
+
+- **The army pushes at the enemy.** With no significant threat in sight, it
+  keeps going toward their base. It does not wander north and south in the
+  middle of the map after things it saw once.
+- **Not about advantage.** Pushing is the default, not a reward for being
+  stronger.
+- **Small spam is not worth turning around for.** Humans send spam straight at
+  the base; an army that repositions to intercept every small group never
+  grows or does anything valuable.

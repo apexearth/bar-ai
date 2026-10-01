@@ -178,6 +178,7 @@ void CAttackTask::Update()
 //	} else {
 		FindTarget();
 //	}
+	RepairBreak(frame);
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
@@ -380,6 +381,10 @@ void CAttackTask::FindTarget()
 		}
 	}
 	int refusedHome = 0;
+	int skippedSpam = 0;
+	float prevScore = -1.f;
+	const AIFloat3 foeBase = circuit->GetSetupManager()->GetEnemyBoxCentre();
+	const bool pushing = utils::is_valid(foeBase);
 
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
@@ -467,8 +472,30 @@ void CAttackTask::FindTarget()
 			// the same far structure. Floored at our range so enemies inside
 			// the base still rank by leader distance and pull.
 			const float rawSqBE = ePos.SqDistance2D(basePos);
-			const float sqBE = std::max(rawSqBE, SQUARE(weaponRange));
+			// apex: the pull is toward THEIR base, not ours
+			// (apexearth 2026-09-30: "We need to be pushing... there's no
+			// significant threat that we can see. So why don't we just keep going?").
+			// A real army (visible, not a speck) is fought wherever it is: the
+			// nearest one wins, with no pull toward either base -- the push
+			// ranked their army at our gate below their solars.
+			const bool realArmy = (edef != nullptr) && edef->IsMobile() && !isOverpowered;
+			const float sqBE = realArmy ? SQUARE(weaponRange)
+					: std::max(pushing ? ePos.SqDistance2D(foeBase) : rawSqBE, SQUARE(weaponRange));
+			// apex: no chasing ghosts (apexearth 2026-09-30: "we're moving around
+			// not pushing at the enemy"). A unit we cannot see or hear is not
+			// where it was; and a group under an eighth of our power is shot on
+			// the way if it stands in our path, never walked to.
+			if ((edef != nullptr) && edef->IsMobile()
+				&& (!enemy->IsInRadarOrLOS()
+					|| (isOverpowered && (pos.SqDistance2D(ePos) > SQUARE(highestRange * 1.5f)))))
+			{
+				++skippedSpam;
+				continue;
+			}
 			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
+			if (enemy == prevTarget) {
+				prevScore = sqOEDist;
+			}
 			if (canGoHome && !isThreat[i]) {
 				const float dHome = std::sqrt(rawSqBE);
 				if ((dHome > threatD) && (dHome / ourSpeed > threatS)) {
@@ -486,19 +513,26 @@ void CAttackTask::FindTarget()
 		}
 	}
 
+	// apex: keep the target we are walking to unless another is twice as good
+	// (apexearth: consistent orders, no flip-flop). prevScore is set only when
+	// the old target was seen alive in this very pass.
+	if ((prevScore >= 0.f) && (bestTarget != prevTarget) && (minSqDist * 2.f > prevScore)) {
+		bestTarget = prevTarget;
+	}
+
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
 		if (bestTarget != prevTarget) {
 			CCircuitDef* bdef = bestTarget->GetCircuitDef();
 			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
-				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f",
+				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i",
 				circuit->GetTeamId(), cdef->GetDef()->GetName(),
 				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
 				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
 				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
-				canGoHome ? 1 : 0, bestSup);
+				canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0);
 		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position
@@ -596,6 +630,75 @@ void CAttackTask::Fallback()
 			unit->CmdWantedSpeed(lowestSpeed);
 		)
 	}
+}
+
+// apex: a building we cannot bring down is being repaired (apexearth
+// 2026-09-30): after 10 s engaged with its health not falling, the squad
+// switches to the enemy builder standing within build range of it, and stays
+// on it until it dies or is lost.
+void CAttackTask::RepairBreak(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	if (repairerId >= 0) {
+		CEnemyInfo* rep = circuit->GetEnemyInfo(repairerId);
+		if ((rep != nullptr) && !rep->IsHidden()
+			&& (leader->GetPos(frame).SqDistance2D(rep->GetPos()) < SQUARE(highestRange + 1000.f)))
+		{
+			SetTarget(rep);
+			position = rep->GetPos();
+			return;
+		}
+		repairerId = -1;
+	}
+	CEnemyInfo* t = GetTarget();
+	CCircuitDef* tdef = (t != nullptr) ? t->GetCircuitDef() : nullptr;
+	const AIFloat3& lead = leader->GetPos(frame);
+	if ((tdef == nullptr) || tdef->IsMobile()
+		|| (lead.SqDistance2D(t->GetPos()) > SQUARE(highestRange + 300.f)))
+	{
+		stallId = -1;
+		return;
+	}
+	const float hp = t->GetHealth();
+	if ((t->GetId() != stallId) || (hp < stallHp * 0.95f)) {
+		stallId = t->GetId();
+		stallHp = hp;
+		stallSince = frame;
+		return;
+	}
+	if (frame < stallSince + FRAMES_PER_SEC * 10) {
+		return;
+	}
+	const AIFloat3& tp = t->GetPos();
+	CEnemyInfo* best = nullptr;
+	float bestSq = std::numeric_limits<float>::max();
+	for (auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		CCircuitDef* edef = e->GetCircuitDef();
+		if ((e == t) || (edef == nullptr) || e->IsHidden() || !edef->IsBuilder()
+			|| (edef->GetBuildDistance() <= 0.f))
+		{
+			continue;
+		}
+		const float reach = edef->GetBuildDistance() + tdef->GetRadius();
+		if (e->GetPos().SqDistance2D(tp) > SQUARE(reach)) {
+			continue;
+		}
+		const float sq = e->GetPos().SqDistance2D(lead);
+		if (sq < bestSq) {
+			bestSq = sq;
+			best = e;
+		}
+	}
+	stallSince = frame;
+	if (best == nullptr) {
+		return;
+	}
+	repairerId = best->GetId();
+	circuit->LOG("apex: repair-break %s held %.0f hp for 10s -> %s",
+			tdef->GetDef()->GetName(), hp, best->GetCircuitDef()->GetDef()->GetName());
+	SetTarget(best);
+	position = best->GetPos();
 }
 
 } // namespace circuit

@@ -211,7 +211,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		// always carries some enemy influence, and demanding essentially zero
 		// rejected every candidate.
 		bool healPost = false;
-		const float behind = circuit->GetTunable("apex_retreat_behind", 0.f);
+		const float behind = circuit->GetTunable("apex_retreat_behind", 600.f);
 		if (behind > 0.f) {
 			const AIFloat3& front = circuit->GetFrontPos();
 			const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
@@ -221,7 +221,12 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 				const float len = dir.Length2D();
 				if (len > 1.f) {
 					dir /= len;
+					// apex: the script's medic station when it has one: behind
+					// the army, out of the enemy's reach, where the medics stand
 					AIFloat3 spot = front + dir * behind;
+					if (utils::is_valid(circuit->GetHealPos())) {
+						spot = circuit->GetHealPos();
+					}
 					CTerrainManager::CorrectPosition(spot);
 					const AIFloat3& here = unit->GetPos(frame);
 					const float ours = circuit->GetInflMap()->GetInfluenceAt(spot);
@@ -244,6 +249,17 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		// Retreats were the biggest source of unexplained movement on the map:
 		// every other mover pings its intent, so the wounded walk must too.
 		IntentPing(unit->GetPos(frame), healPost ? "RET heal" : "RET home");
+		{
+			// apex: per AI, how many wounded went to the heal post vs home
+			struct Tally { int heal = 0, home = 0, logAt = 0; };
+			static std::map<const CCircuitAI*, Tally> tally;
+			Tally& t = tally[circuit];
+			++(healPost ? t.heal : t.home);
+			if (frame >= t.logAt) {
+				t.logAt = frame + FRAMES_PER_SEC * 60;
+				circuit->LOG("apex: retreat-dest heal=%i home=%i", t.heal, t.home);
+			}
+		}
 
 		// apexearth: "when we're retreating to safe havens, it seems we
 		// clump up into a tight ball, which makes us even more likely to

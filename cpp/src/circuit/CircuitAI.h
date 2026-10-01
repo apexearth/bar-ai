@@ -314,6 +314,9 @@ public:
 	// meant "the line" and orbited bases instead of holding ground.
 	void SetFrontPos(const springai::AIFloat3& pos) { frontPos = pos; }
 	const springai::AIFloat3& GetFrontPos() const { return frontPos; }
+	// apex: where wounded units are healed: the medic station behind the army
+	void SetHealPos(const springai::AIFloat3& pos) { healPos = pos; }
+	const springai::AIFloat3& GetHealPos() const { return healPos; }
 	bool HasFrontPos() const { return frontPos.x >= 0.f; }
 	// The base layout, handed down from script the same way the front line is.
 	//
@@ -577,6 +580,7 @@ private:
 	std::map<int, int> pathTypes;
 	float engageBoost = 1.f;
 	springai::AIFloat3 frontPos = -RgtVector;
+	springai::AIFloat3 healPos = -RgtVector;
 	// Base grid, published by script. cell <= 0 means "no grid yet".
 	springai::AIFloat3 gridAnchor = -RgtVector;
 	springai::AIFloat3 gridFwd = ZeroVector;

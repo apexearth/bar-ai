@@ -408,8 +408,44 @@ int gNextRezLog = 0;
 // units away from enemies". Behind the forward-most of our own combat units by
 // the bot's own build reach -- it still touches the line, and nothing has to
 // walk through it to get there.
+// THE HEAL STATION (apexearth 2026-09-30: "as close to the army as possible
+// while staying safe"): from the forward-most of our combat units, the first
+// point toward home the enemy cannot reach. The medics stand there and the
+// wounded retreat to it (CRetreatTask reads it through SetHealPos).
+int gHealAt = -999999;
+bool gHealOk = false;
+AIFloat3 gHealPos;
+bool HealStation(AIFloat3 &out at)
+{
+	if (ai.frame - gHealAt >= 5 * SECOND) {
+		gHealAt = ai.frame;
+		gHealOk = false;
+		AIFloat3 front;
+		if ((ArmyFront(front) >= 0.f) && Builder::gHomeSet && OnMap(front)) {
+			AIFloat3 dir = Builder::gHomePos - front;
+			const float len = sqrt(dir.SqLength2D());
+			if (len > 1.f) {
+				dir *= (1.f / len);
+				for (float s = 128.f; s < len; s += 128.f) {
+					const AIFloat3 p = front + dir * s;
+					if (OnMap(p) && !InEnemyReach(p) && !Market::NearConDeath(p)) {
+						gHealPos = p;
+						gHealOk = true;
+						break;
+					}
+				}
+			}
+		}
+		ai.SetHealPos(gHealOk ? gHealPos : AIFloat3(-1.f, 0.f, -1.f));
+	}
+	at = gHealPos;
+	return gHealOk;
+}
+
 bool RezStationPos(CCircuitUnit@ unit, AIFloat3 &out at)
 {
+	if (HealStation(at))
+		return true;
 	AIFloat3 lane;
 	if (ArmyFront(lane) < 0.f)
 		lane = Military::LanePos();

@@ -504,6 +504,7 @@ void UpdatePosture()
 		gAttackBase = aiMilitaryMgr.quota.attack;
 
 	{ double _t = Perf::T0(); UpdateStance(); Perf::Add("post.stance", _t); }     // enemy stance: budget lean + scout demand
+	{ double _t = Perf::T0(); AIFloat3 hs; Builder::HealStation(hs); Perf::Add("post.heal", _t); }   // medic station, published for retreats
 	{ double _t = Perf::T0(); ReleaseHeldSupers(); Perf::Add("post.supers", _t); }   // held titans re-join the army when the wait ends
 	{ double _t = Perf::T0(); UpdateApproach(); Perf::Add("post.approach", _t); }   // is a visible enemy group closing on our home?
 	{ double _t = Perf::T0(); PublishDefence(); Perf::Add("post.pubdef", _t); }   // our front-tower count and income, for the team budget

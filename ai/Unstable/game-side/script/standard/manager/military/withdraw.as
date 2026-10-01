@@ -72,6 +72,37 @@ bool Rearward(const AIFloat3& in from, const AIFloat3& in to)
 	return Military::ForwardFraction(to) < Military::ForwardFraction(from);
 }
 
+int gHeldStrong = 0;
+int gNextHeldStrongLog = 0;
+bool SideDwarfs()
+{
+	const float ours = OurArmyNow();
+	return FoeArmySeen() && (ours > 1.f)
+		&& (Market::StrRatio(FoeMobileMassing(), ours) <= 0.5f);
+}
+
+// The nearest ground we hold on the way home: stepping from the unit toward
+// home, the first point where we are not losing (apexearth 2026-09-30: stop at
+// the ground we hold, do not walk to the base).
+bool HeldGroundBack(const AIFloat3& in from, AIFloat3& out at)
+{
+	if (!Builder::gHomeSet)
+		return false;
+	AIFloat3 dir = Builder::gHomePos - from;
+	const float len = sqrt(dir.SqLength2D());
+	if (len < 1.f)
+		return false;
+	dir *= (1.f / len);
+	for (float s = 256.f; s < len; s += 256.f) {
+		const AIFloat3 p = from + dir * s;
+		if (OnMap(p) && (ai.GetNetInflAt(p) > 0.f)) {
+			at = p;
+			return true;
+		}
+	}
+	return false;
+}
+
 bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
 {
 	AIFloat3 cp;
@@ -589,6 +620,21 @@ void UpdateWithdraw()
 			}
 			continue;
 		}
+		// WE ARE FAR STRONGER (apexearth 2026-09-30: "we're so powerful that
+		// it doesn't even matter"): while our side's army is at least twice
+		// theirs, a local deficit is a gap reinforcements close, not a reason
+		// to walk away. His 8v8 read 98k against 7-10k and still pulled units
+		// home from the enemy's side of the map.
+		if (!leash && !recallHome && SideDwarfs()) {
+			++gHeldStrong;
+			if (ai.frame >= gNextHeldStrongLog) {
+				gNextHeldStrongLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: hold-strong at=" + int(p.x) + "," + int(p.z)
+					+ " ours=" + int(OurArmyNow()) + " theirs=" + int(FoeMobileMassing())
+					+ " -- " + gHeldStrong + " held");
+			}
+			continue;
+		}
 		// COMMIT COHERENCE. A unit whose ground the enemy's guns already
 		// cover does not get a solo pull-out: the order is a rout, not a
 		// retreat (wdeaths: 43% die in place ping-ponging the re-asserting
@@ -619,8 +665,13 @@ void UpdateWithdraw()
 		} else if (consolidate) {
 			if (!RallySpot(p, back))
 				continue;
-		} else if (!FallbackSpot(p, back)) {
-			continue;
+		} else {
+			AIFloat3 gun, held;
+			const bool hasGun = FallbackSpot(p, gun);
+			const bool hasHeld = HeldGroundBack(p, held);
+			if (!hasGun && !hasHeld)
+				continue;
+			back = (hasHeld && (!hasGun || (held.distance2D(p) < gun.distance2D(p)))) ? held : gun;
 		}
 		// A point the unit cannot walk to parks it against the nearest cliff.
 		if ((u.circuitDef !is null)

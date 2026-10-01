@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include <map>
 #include "task/fighter/SquadTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -287,7 +288,21 @@ bool ISquadTask::IsMustRegroup()
 	}
 
 	if (State::REGROUP != state) {
-		groupPos = bestPlace->GetLastPos();
+		// apex: the squad gathers at its FRONT, the member nearest the target
+		// (apexearth 2026-09-30: "have the squad stay up towards the front and
+		// wait for the reinforcements to come up").
+		CCircuitUnit* front = bestPlace;
+		if (utils::is_valid(position)) {
+			float frontSq = std::numeric_limits<float>::max();
+			for (CCircuitUnit* unit : validUnits) {
+				const float sq = unit->GetPos(frame).SqDistance2D(position);
+				if (sq < frontSq) {
+					frontSq = sq;
+					front = unit;
+				}
+			}
+		}
+		groupPos = front->GetLastPos();
 		groupFrame = frame;
 	} else if (frame >= groupFrame + FRAMES_PER_SEC * 60) {
 		// eliminate buggy units
@@ -324,12 +339,34 @@ bool ISquadTask::IsMustRegroup()
 	bool wasRegroup = (State::REGROUP == state);
 	state = State::ROAM;
 
+	// apex: wait only while less than half the squad's power stands together at
+	// the front; one reinforcement walking up is not worth stopping for
+	// (apexearth: "10 units turning into 11 -- are you really going to wait?").
 	const float sqMaxDist = SQUARE(std::max<float>(SQUARE_SIZE * 8 * validUnits.size(), highestRange));
+	float powNear = 0.f, powAll = 0.f;
+	bool anyOut = false;
 	for (CCircuitUnit* unit : validUnits) {
-		const float sqDist = groupPos.SqDistance2D(unit->GetLastPos());
-		if (sqDist > sqMaxDist) {
-			state = State::REGROUP;
-			break;
+		const float p = std::max(unit->GetCircuitDef()->GetPower(), 1.f);
+		powAll += p;
+		if (groupPos.SqDistance2D(unit->GetLastPos()) > sqMaxDist) {
+			anyOut = true;
+		} else {
+			powNear += p;
+		}
+	}
+	if (anyOut && (powNear * 2.f < powAll)) {
+		state = State::REGROUP;
+	}
+	{
+		struct Tally { int hold = 0, go = 0, logAt = 0; };
+		static std::map<const CCircuitAI*, Tally> tally;
+		Tally& t = tally[circuit];
+		if (anyOut) {
+			++((State::REGROUP == state) ? t.hold : t.go);
+		}
+		if (frame >= t.logAt) {
+			t.logAt = frame + FRAMES_PER_SEC * 60;
+			circuit->LOG("apex: regroup held=%i kept-going=%i", t.hold, t.go);
 		}
 	}
 

@@ -80,7 +80,7 @@ void DrawHealPost()
 		return;
 	gNextHealDraw = ai.frame + 30 * SECOND;
 
-	const float behind = ai.GetTunable("apex_retreat_behind", 0.f);
+	const float behind = ai.GetTunable("apex_retreat_behind", 600.f);
 	const AIFloat3 lane = Military::LanePos();   // == circuit->GetFrontPos()
 	if ((behind <= 0.f) || !OnMap(lane) || (lane.SqLength2D() < 1.f) || !Builder::gHomeSet)
 		return;
