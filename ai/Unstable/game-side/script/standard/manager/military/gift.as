@@ -251,6 +251,9 @@ void UpdateGifts()
 // One base's cells (256 elmo) at minute 40; the measurement is in the commit.
 const float SEAT_CELL = 256.f;
 const int SEAT_NEED_CELLS = 80;
+// Off (his call 2026-09-30): the kept seat does not yet play its extra
+// commanders -- see TODO.md "Seat merge".
+const bool SEAT_MERGE_ON = false;
 bool gSeatMergeDone = false;
 // A merged seat feeds the seat it joined what that seat has room to store,
 // every second, until it is empty (apexearth 2026-09-30: "give them all our
@@ -281,7 +284,7 @@ void FeedMergedSeat()
 void UpdateSeatMerge()
 {
 	FeedMergedSeat();
-	if (gSeatMergeDone || (ai.frame < 3 * SECOND))
+	if (!SEAT_MERGE_ON || gSeatMergeDone || (ai.frame < 3 * SECOND))
 		return;
 	if (ai.frame > 20 * SECOND) {
 		gSeatMergeDone = true;
@@ -418,6 +421,7 @@ void UpdateSeatMerge()
 		array<CCircuitUnit@> give = {com};
 		ai.GiveUnits(give, giveTo[s]);
 		gMergedTo = giveTo[s];
+		ai.PublishTeamValue("seatout", 1.f);
 		AiLog(Factory::T() + "apex: seatmerge gave commander to t" + giveTo[s]
 			+ " and feeds it m=" + int(aiEconomyMgr.metal.current) + " e=" + int(aiEconomyMgr.energy.current));
 	}
@@ -452,7 +456,8 @@ void UpdateConGift()
 			continue;
 		if (float(ai.frame) - ai.ReadTeamValue(to, TV_GAT, -1000000.f) > 10 * SECOND)
 			continue;
-		if (ai.ReadTeamValue(to, TV_T2CON, -1.f) != 0.f)
+		if ((ai.ReadTeamValue(to, TV_T2CON, -1.f) != 0.f)
+				|| (ai.ReadTeamValue(to, "seatout", 0.f) > 0.f))
 			continue;
 		if ((to == gConGiftTo) && (ai.frame - gConGiftLastAt < 60 * SECOND))
 			continue;

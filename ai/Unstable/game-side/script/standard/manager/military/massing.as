@@ -131,12 +131,25 @@ bool Outmassed()
 // How many of us share the answer to a side-wide reading. quota.attack governs
 // THIS player's pools, so any bar derived from the whole enemy side has to be
 // divided by the roster before it is charged to one pool.
+int gAllyCountAt = -1;
+float gAllyCountVal = 1.f;
 float AllyCount()
 {
+	if (gAllyCountAt == ai.frame)
+		return gAllyCountVal;
+	gAllyCountAt = ai.frame;
+	gAllyCountVal = 1.f;
 	array<Id>@ roster = ai.GetTeamIds();
 	if ((roster is null) || (roster.length() == 0))
 		return 1.f;
-	return float(roster.length());
+	// A seat that merged away (UpdateSeatMerge) holds nothing and answers for nothing.
+	float n = 0.f;
+	for (uint i = 0; i < roster.length(); ++i) {
+		if (ai.ReadTeamValue(int(roster[i]), "seatout", 0.f) <= 0.f)
+			n += 1.f;
+	}
+	gAllyCountVal = (n > 0.f) ? n : 1.f;
+	return gAllyCountVal;
 }
 
 // The biggest enemy group we can currently see, as POWER. Their groups are what

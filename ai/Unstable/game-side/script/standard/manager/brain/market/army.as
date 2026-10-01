@@ -1821,7 +1821,8 @@ bool T2SwitchEval()
 		gT2SwitchLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: t2switch " + (on ? "on" : (rich ? "overflow" : "danger")) + " t=" + ai.teamId
 			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue())
-			+ " upD=" + int(UpDemand()) + " " + gT2Missing);
+			+ " upD=" + int(UpDemand()) + " floor=" + int(ArmyFloor(ArmyTargetFull()))
+			+ " foeArmy=" + int(Military::EnemyArmyCost()) + " seats=" + int(Military::AllyCount()) + " " + gT2Missing);
 	}
 	return on;
 }
@@ -1965,6 +1966,18 @@ float AnswerShare()
 // scales with income at every stage, so it needs no cap and no ramp.
 const float T2_DEFENCE_SHARE = 0.5f;
 
+// THE FLOOR UNDER THE SWITCH AND THE SEAT (apexearth 2026-09-30, a Glacier 8v8
+// merged to two seats -- one the eco seat, one switching to T2 -- made almost no
+// army: "when transitioning to T2, we need some army. We need a floor"): our
+// share of the army they have shown, at his home-defence parity (docs/24,
+// ~1.2x), never above the full target.
+const float ARMY_FLOOR_PARITY = 1.2f;
+float ArmyFloor(float full)
+{
+	const float f = Military::EnemyArmyCost() / Military::AllyCount() * ARMY_FLOOR_PARITY;
+	return (f < full) ? f : full;
+}
+
 float ArmyTarget()
 {
 	// No `(hold > 0) ? hold : default` guard: GetTunable already returns the
@@ -1973,8 +1986,12 @@ float ArmyTarget()
 	// The rear specialist's target names an economy and no war until it has
 	// built one -- see EcoRoleGrowing. Not a suppression multiplier: the want
 	// is simply not part of the state this player is trying to reach.
-	if (EcoRoleGrowing())
-		return ArmyTargetFull() * EcoRoleRamp();
+	if (EcoRoleGrowing()) {
+		const float fullE = ArmyTargetFull();
+		const float seat = fullE * EcoRoleRamp();
+		const float floorE = ArmyFloor(fullE);
+		return (seat > floorE) ? seat : floorE;
+	}
 	// The switch is meant to keep a DEFENSIVE army and then stop buying, not
 	// to stand the army down: zero holds from frame 18 to the mohos, and the
 	// valve meant to restore it (EcoDangerNear) compares a unit COUNT against
@@ -1989,6 +2006,9 @@ float ArmyTarget()
 		const float atHome = Military::HoldNeedM() * ((hold > 0.f) ? hold : 1.f);
 		if (atHome > need)
 			need = atHome;
+		const float floorS = ArmyFloor(full);
+		if (floorS > need)
+			need = floorS;
 		return (need > full) ? full : need;
 	}
 	return ArmyTargetFull();

@@ -520,3 +520,22 @@ The plan when he picks it up:
 His part: BAR bans alt accounts, so the bot account needs the admins'
 approval as a bot, and their word on a custom-AI host bot in public rooms.
 Where it runs matters: on his PC both clients simulate the whole game.
+
+## Seat merge -- fewer, stronger seats on a crowded map (built, switched off 2026-09-30)
+
+His idea: measure our side's buildable space, and on a cramped map share the
+commanders (and resources) into fewer of OUR AIs so each has room. Built in
+`military/gift.as` (`UpdateSeatMerge`, `SEAT_MERGE_ON = false`): space per seat
+by nearest home over `CanBeBuiltAt` ground, need = one base's minute-40
+footprint (80 cells of 256 elmos), commander handed at the start, chains
+resolved, merged seats feed resources up to the receiver's free storage,
+merged seats publish `seatout` (AllyCount and the T2-con gift skip them).
+Glacier 8v8 merged to 2 seats (one holding 6 commanders).
+
+Why it is off: the kept seat did not play six commanders. In his game the six
+spent 19 minutes on assist (7-28 each) and energy (5-19) with 5 extractor
+claims between them; army is sized from income and income from extractors, so
+six times the build power bought nothing. To work, the kept seat must: send
+the extra commanders out to claim the merged seats' territory (the commander
+leash keeps every commander home), size labs and expansion to the hands it
+holds, and drop the eco role (it zeroed the army of half the team).
