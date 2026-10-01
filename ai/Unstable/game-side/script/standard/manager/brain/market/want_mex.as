@@ -81,6 +81,169 @@ float UpDemand()
 	return (d > 0.f) ? d : 0.f;
 }
 
+// HANDS FOR THE UPGRADES (apexearth 2026-09-30: "we got to 500 really fast and
+// then to get to 800 took a really long time" -- one T2 con per seat went round
+// the extractors). Only a ceiling hand upgrades. With h hands a backlog of B
+// upgrades of t seconds each lands on average B*t/(2h) from now, so hand h+1
+// brings the waiting stream U forward by B*t*U/(2h(h+1)) metal: it is worth its
+// cost C while h(h+1) < B*t*U/(2C).
+int gUpHandsAt = -1000;
+int gNextUpHandsLog = 0;
+int gUpHandsN = 0;
+int gUpHandsB = 0;
+float gUpHandsT = 0.f;
+int UpgradeHandsWant()
+{
+	if (ai.frame - gUpHandsAt < 5 * SECOND)
+		return gUpHandsN;
+	gUpHandsAt = ai.frame;
+	gUpHandsN = 0;
+	gUpHandsB = 0;
+	const float ceil = BestExtract();
+	if (ceil <= 0.f)
+		return 0;
+	int con = -1;
+	float conPerBp = 0.f;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d]
+				|| (Catalog::gBuildPower[d] <= 0.f) || !ReachesCeiling(d)
+				|| Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		const float c = (Catalog::gCostM[d] + Catalog::gCostE[d] / 60.f) / Catalog::gBuildPower[d];
+		if ((con < 0) || (c < conPerBp)) {
+			con = d;
+			conPerBp = c;
+		}
+	}
+	if (con < 0)
+		return 0;
+	float upBt = 0.f;
+	const array<int>@ bl = Catalog::gBuildsList[con];
+	for (uint q = 0; q < bl.length(); ++q) {
+		if ((Catalog::gExtractsM[bl[q]] >= ceil) && (Catalog::gBuildTime[bl[q]] > upBt))
+			upBt = Catalog::gBuildTime[bl[q]];
+	}
+	array<AIFloat3> todo;
+	float u = 0.f;
+	for (uint i = 0; i < gLSpot.length(); ++i) {
+		if ((gLExtract[i] > 0.f) && (gLExtract[i] < ceil)) {
+			todo.insertLast(gLSpot[i]);
+			u += gLIncome[i] * IncomeMult() * (ceil - gLExtract[i]);
+		}
+	}
+	const int b = int(todo.length());
+	gUpHandsB = b;
+	if ((b == 0) || (upBt <= 0.f) || (u <= 0.f))
+		return 0;
+	float walk = 0.f;
+	for (uint i = 0; i < todo.length(); ++i) {
+		float nearest = -1.f;
+		for (uint j = 0; j < todo.length(); ++j) {
+			if (i == j)
+				continue;
+			const float dd = todo[i].distance2D(todo[j]);
+			if ((nearest < 0.f) || (dd < nearest))
+				nearest = dd;
+		}
+		if (nearest > 0.f)
+			walk += nearest;
+	}
+	walk /= float(b);
+	const float speed = (Catalog::gSpeed[con] > 1.f) ? Catalog::gSpeed[con] : 40.f;
+	const float t = upBt / Catalog::gBuildPower[con] + walk / speed;
+	gUpHandsT = t;
+	const float cost = Catalog::gCostM[con] + Catalog::gCostE[con] / 60.f;
+	const float x = float(b) * t * u / (2.f * ((cost > 1.f) ? cost : 1.f));
+	int n = 1;
+	while ((n < b) && (float(n) * float(n + 1) < x))
+		++n;
+	gUpHandsN = n;
+	if (ai.frame >= gNextUpHandsLog) {
+		gNextUpHandsLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: uphands want=" + n + " have=" + CeilingConsOwned()
+			+ " backlog=" + b + " t=" + int(t) + "s U=" + formatFloat(u, "", 0, 1)
+			+ " con=" + Catalog::Def(con).GetName() + " outForUp=" + gOutForUp
+			+ " upFirstLifted=" + gUpFirstLifted);
+		gOutForUp = 0;
+		gUpFirstLifted = 0;
+	}
+	return n;
+}
+
+// UPGRADES FIRST (apexearth 2026-09-30: a T2 con walked to a T1 extractor and
+// raised a Pulsar there -- "upgrade the mexes first, then do this other stuff";
+// the economy compounds). A ceiling hand offered an upgrade drops every job but
+// a claim, a reclaim and the home work (generators, converters, assist). A hand
+// OutForUpgrades sent out takes the upgrade outright (true: no draw); the home
+// hand draws it against its home work. A refused upgrade falls to the rest.
+int gUpFirstLifted = 0;
+bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
+{
+	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	int upAt = -1;
+	for (uint i = 0; (i < ranked.length()) && (upAt < 0); ++i)
+		if (ranked[i].kind == WK_MEXUP)
+			upAt = int(i);
+	if (upAt < 0)
+		return false;
+	for (uint i = 0; i < ranked.length(); ) {
+		const int k = ranked[i].kind;
+		if ((k == WK_MEXUP) || (k == WK_MEX) || (k == WK_RECLAIM) || (k == WK_ENERGY)
+				|| (k == WK_CONVERT) || (k == WK_ASSIST) || (k == WK_STORE)) {
+			++i;
+			continue;
+		}
+		ranked.removeAt(i);
+	}
+	++gUpFirstLifted;
+	if (!OutForUpgrades(unit))
+		return false;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (ranked[i].kind != WK_MEXUP)
+			continue;
+		if (i > 0) {
+			Want@ up = ranked[i];
+			ranked.removeAt(i);
+			ranked.insertAt(0, up);
+		}
+		break;
+	}
+	return true;
+}
+
+// ONE ADVANCED HAND STAYS HOME (apexearth 2026-09-30: "one stays home and makes
+// the fusion, the Tier 1 cons help that guy; send more of them out to upgrade").
+// While upgrades wait, a ceiling hand is not offered generators, converters or
+// assist once another ceiling hand is already on a generator or converter.
+int gOutForUp = 0;
+bool OutForUpgrades(CCircuitUnit@ unit)
+{
+	const int ud = int(unit.circuitDef.id);
+	if (!ReachesCeiling(ud) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	UpgradeHandsWant();
+	if (gUpHandsB <= 0)
+		return false;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ u = gWorkers[i];
+		if ((u is null) || (u is unit) || (u.task is null))
+			continue;
+		const int wd = int(u.circuitDef.id);
+		if (!ReachesCeiling(wd) || u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		const CCircuitDef@ bd = u.task.buildDef;
+		if (bd is null)
+			continue;
+		const int b = int(bd.id);
+		if ((Catalog::gMakeE[b] > 0.f) || (Catalog::gConvCapacity[b] > 0.f)) {
+			++gOutForUp;
+			return true;
+		}
+	}
+	return false;
+}
+
 // THE ARMY A LONG BUILD CANNOT AFFORD. apexearth: "during that entire time
 // you're making an AFUS you can afford military better and protect yourself.
 // You're giving yourself options." Two of the three costs he names are already

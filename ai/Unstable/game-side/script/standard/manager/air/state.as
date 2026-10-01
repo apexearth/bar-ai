@@ -154,11 +154,13 @@ void StrikeScanStep()
 			gStrikeAt = gStrikeCurAt;
 			// NO GOOD RUN, THEN THEIR FRONT (apexearth 2026-09-29: past a
 			// hundred of their fighters the back lines are out of reach, the
-			// front is not). A wing expected to lose half of itself -- the bar
-			// that already calls a run spent -- takes the front's best cell.
+			// front is not) -- only when the front is worth more than what gets
+			// through to the economy (2026-09-30: "be a bit more brave"). Priced
+			// on the wing that will fly, not the planes at home.
 			const bool wasFront = gStrikeFront;
-			gStrikeFront = gFrontCurHas && (Throughput(HeldBombers()) < 0.5f)
-					&& (gFrontCurAt.distance2D(gStrikeCurAt) > 1.f);
+			const int flyN = (HeldBombers() > CommitBombers()) ? HeldBombers() : CommitBombers();
+			gStrikeFront = gFrontCurHas && (gFrontCurAt.distance2D(gStrikeCurAt) > 1.f)
+					&& (gStrikeCurPrize * Throughput(flyN) < gFrontCurPrize);
 			if (gStrikeFront) {
 				gStrikePrize = gFrontCurPrize;
 				gStrikeAA = gFrontCurAA;
@@ -168,7 +170,8 @@ void StrikeScanStep()
 				AiLog(Factory::T() + "apex: air target " + (gStrikeFront ? "front" : "deep")
 					+ " at=" + int(gStrikeAt.x) + "," + int(gStrikeAt.z)
 					+ " prize=" + int(gStrikePrize)
-					+ " through=" + formatFloat(Throughput(HeldBombers()), "", 0, 2));
+					+ " through=" + formatFloat(Throughput(flyN), "", 0, 2) + " fly=" + flyN
+					+ " deep=" + int(gStrikeCurPrize) + " front=" + int(gFrontCurPrize));
 			gFrontCurHas = false;
 			gFrontCurScore = 0.f;
 			gStrikeCurHas = false;
@@ -346,6 +349,7 @@ int  gCommitFrame  = -1;
 // ScaledBombers tracks income and their growing AA, so a release gate that
 // compares against the LIVE want chases a treadmill and the wing never flies.
 int  gCommitBombers = 0;
+int CommitBombers() { return gCommitBombers; }
 // HIS CADENCE (2026-08-29): "Maybe an attack every random between 5 and 10
 // minutes for air attacks? We don't want to be too boring." The massing
 // window before the wave goes with what stands is rolled per cycle -- at

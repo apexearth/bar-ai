@@ -765,10 +765,24 @@ void CMilitaryManager::NoteSuperTarget(const AIFloat3& pos, int frame)
 	superShots.push_back(SSuperShot{pos, frame});
 }
 
-bool CMilitaryManager::IsRecentSuperTarget(const AIFloat3& pos, float sqRadius, int frame) const
+bool CMilitaryManager::HasRecentShot(const AIFloat3& pos, float sqRadius, int frame) const
 {
 	for (const SSuperShot& shot : superShots) {
 		if ((shot.frame + SUPER_MEMORY > frame) && (shot.pos.SqDistance2D(pos) < sqRadius)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// apex: an ally's shot counts as ours (apexearth 2026-09-30: both seats' Junos
+// kept landing on one spot).
+bool CMilitaryManager::IsRecentSuperTarget(const AIFloat3& pos, float sqRadius, int frame) const
+{
+	for (CCircuitAI* ai : circuit->GetGameAttribute()->GetCircuits()) {
+		if (ai->IsInitialized() && (ai->GetAllyTeamId() == circuit->GetAllyTeamId())
+			&& ai->GetMilitaryManager()->HasRecentShot(pos, sqRadius, frame))
+		{
 			return true;
 		}
 	}

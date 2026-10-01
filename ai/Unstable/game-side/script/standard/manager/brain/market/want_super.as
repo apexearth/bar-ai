@@ -922,7 +922,11 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// dying faster than they are replaced). A discount, never a gate --
 		// at zero standing defence the gun keeps the floor share -- and the
 		// antinuke (insurance) and gantry (production) are untouched.
-		if ((sc == SC_SILO) || (sc == SC_LRPC)) {
+		// ...except a cannon that already reaches their buildings (apexearth
+		// 2026-09-30, Glacier Pass: "if we were to make an LRPC cannon, we would
+		// just be able to hit their base... we should be making a whole ton").
+		// Its count is what stands in reach, inside LrpcGain.
+		if ((sc == SC_SILO) || ((sc == SC_LRPC) && (lrpcInM <= 0.f))) {
 			const float dt = DefenceTarget();
 			float fill = 1.f;
 			if (dt > 1.f) {

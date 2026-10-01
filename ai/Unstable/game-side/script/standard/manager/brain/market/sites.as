@@ -1129,6 +1129,45 @@ bool ReachableBy(CCircuitDef@ mover, const AIFloat3& in to)
 	return ai.CanDefReachAt(mover, Builder::gHomePos, to, (r > 64.f) ? r : 64.f);
 }
 
+// A LAB WHOSE CONS UPGRADE STANDS BY THE EXTRACTORS (apexearth 2026-09-30: an
+// advanced lab in the map corner, far from every extractor -- each con it made
+// walked the map before it was any use). The middle of the extractors we hold,
+// drawn back toward the base anchor until it is no further forward than it.
+bool UpgradeAnchor(CCircuitDef@ mover, AIFloat3 &out at)
+{
+	if (!Base::gAnchorSet)
+		return false;
+	float sx = 0.f, sz = 0.f;
+	int n = 0;
+	for (uint i = 0; i < gLSpot.length(); ++i) {
+		if (gLExtract[i] > 0.f) {
+			sx += gLPos[i].x;
+			sz += gLPos[i].z;
+			++n;
+		}
+	}
+	if (n < 2)
+		return false;
+	AIFloat3 p(sx / float(n), 0.f, sz / float(n));
+	const float ffA = Military::ForwardFraction(Base::gAnchor);
+	for (int k = 0; (k < 8) && (Military::ForwardFraction(p) > ffA); ++k)
+		p = p + (Base::gAnchor - p) * 0.25f;
+	if (!OnMap(p) || !ReachableBy(mover, p))
+		return false;
+	at = p;
+	return true;
+}
+
+bool MakesUpgradeHands(int plant)
+{
+	const array<int>@ b = Catalog::gBuildsList[plant];
+	for (uint q = 0; q < b.length(); ++q) {
+		if (Catalog::gMobile[b[q]] && Catalog::gBuilder[b[q]] && ReachesCeiling(b[q]))
+			return true;
+	}
+	return false;
+}
+
 AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 {
 	// The first factory rises where the builder stands -- the flank plan is

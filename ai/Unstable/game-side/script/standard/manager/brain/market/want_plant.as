@@ -1527,6 +1527,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool substOn = ai.GetTunable("apex_dup_bp_subst", TUNE_DUP_BP_SUBST) > 0.f;
 	AIFloat3 homeAnchor;
 	bool homeAnchorSet = false;
+	AIFloat3 upAnchor;
+	bool upAnchorOk = false;
 	// The opening plant, term by term: the decide line names only the winner.
 	const bool candLog = (Factory::gFactoryCount == 0)
 			&& (ai.frame >= gNextPlantCandLog);
@@ -1857,10 +1859,12 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			homeAnchorSet = true;
 			homeAnchor = InteriorSite(EcoSiteFor(unit),
 					Catalog::Def(int(unit.circuitDef.id)));
+			upAnchorOk = UpgradeAnchor(Catalog::Def(int(unit.circuitDef.id)), upAnchor);
 		}
 		// ...beside the lathe that will raise it, when any stands.
 		const AIFloat3 lands = OnMap(site) ? site
-				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)), homeAnchor);
+				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)),
+					(upAnchorOk && MakesUpgradeHands(d)) ? upAnchor : homeAnchor);
 		Want c;
 		const float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
 		const float liftG = PlantLiftGain(d);

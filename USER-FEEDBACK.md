@@ -449,6 +449,58 @@ structures only, so a jammed enemy read 5x behind us; the unseen part now
 counts as our total less the army they have shown, giving way to what our
 eyes cover (`fdaee7bf`). Verified: behind=1 on Isthmus. The army/eco split did
 not move there -- cover demand and the navy budget were the buyers (ISSUES.md).
+Raised AGAIN 2026-09-30 (Carrot 8v8): more military than them the whole time
+we fell to half their income. UNRESOLVED.
+
+### UPGRADE THE EXTRACTORS FIRST; LABS BY THE EXTRACTORS (2026-09-30)
+
+- Income reaches ~500 fast, then crawls to 800 while theirs compounds. Our
+  seats had ONE T2 con each at 17 min (the floor read the T1 hands as cover);
+  the eco seat's 11 did energy/radar/converters and no upgrades.
+- One T2 con stays home on the fusion with T1 cons assisting it; the rest go
+  out and upgrade every extractor -- the outer ones too. A few cons cost
+  little against the income. Upgrades come before anything else a T2 con
+  could do there (watched: a T2 con raised a Pulsar at a T1 extractor and
+  walked away without upgrading it).
+- An advanced lab goes near our extractors, not in the map corner (watched:
+  t7's at 72,12168), so its cons are useful without a long walk.
+- Built 2026-09-30 night, unmeasured: `UpgradeHandsWant` (hands from the
+  backlog math, `apex: uphands`), `OutForUpgrades`, `UpgradesFirst`
+  (`why=upfirst`), `UpgradeAnchor`.
+- Upgrade allies' extractors too (BAR gives the new one to the ally), and
+  give a T2 con to an ally that has none when we have several -- the nearest
+  seat gives. Help each other.
+- The upgrade crew must not all walk to the same extractor: one hand per
+  extractor, each priced on its own walk and danger (watched: the whole crew
+  converging on one, which walks them into danger on a hot map).
+- Built, unmeasured: allied spots in `ProposeMexUp` (`apex: mexup ... ally=`),
+  `UpgradeUnderway` skips a spot that already has a hand (`busySkips=`),
+  `UpdateConGift` (`apex: congift`).
+
+### LAUNCHERS, CANNONS, SEATS (2026-09-30 night)
+
+- Junos spread out like nukes, not all onto one spot. Found: five Junos from
+  both seats on one advanced air plant -- the Juno kills only the names in
+  unit_juno_damage.lua and a plant carrying a radar passed our stat test.
+  Built: the kill list by name; allies' recent shots count as ours.
+- On a small map where a long-range plasma cannon reaches their base (Glacier
+  Pass), build a whole ton of them. Found: the defence-fill discount cut the
+  cannon's gain to a third, it never won an election. Built: a cannon that
+  reaches their buildings is exempt; the count still follows the metal in
+  reach. Artillery in the army is the other half of his note -- not touched.
+- On a crowded map, merge our seats: measure our side's buildable ground per
+  seat and hand commanders to fewer of OUR AIs (never another kind). His
+  answers: space, not extractors; commander at game start. Built:
+  `UpdateSeatMerge` (`apex: seatmerge`), need = one base's minute-40
+  footprint (80 cells of 256 elmos). Greenest 8v8 seed 3 kept 5 of 8;
+  Glacier 2v2 kept both.
+
+### AIR: BE BRAVER ABOUT THE ECONOMY (2026-09-30)
+
+- He once said: if the economy cannot be reached, hit what can. Now the wing
+  gives up on the economy at the first sign of rough going. It should be
+  braver. Built, unmeasured: the front is taken only when it is worth more
+  than what gets through to the deep cell (`apex: air target ... deep= front=`).
 
 ### EXPANSION: SUPPORT UNSAFE MEXES; T2 HANDS UNDER THE CAP (2026-09-29)
 

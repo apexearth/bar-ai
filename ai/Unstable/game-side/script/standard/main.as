@@ -159,6 +159,8 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
 	{ double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
 	{ double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
+	{ double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
+	{ double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }
 	{ double _t = Perf::T0(); Air::UpdateFighterStations(); Perf::Add("up.airstations", _t); }
 	{ double _t = Perf::T0(); Air::RecycleOldFighters(); Perf::Add("up.airrecycle", _t); }
 	{ double _t = Perf::T0(); Brain::UpdateNukes(); Perf::Add("up.nukes", _t); }

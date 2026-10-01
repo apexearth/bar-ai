@@ -115,8 +115,59 @@ void LogUpgradeCons()
 	AiLog(Factory::T() + "apex: upcons " + names);
 }
 
+// ONE HAND PER EXTRACTOR (apexearth 2026-09-30: the upgrade crew all walked to
+// the same one -- "they'll just walk themselves into dangerous situations").
+// A spot whose upgrade already has a hand is not offered again; each hand is
+// priced onto its own, with its own walk and its own danger.
+int gUpBusySkips = 0;
+bool UpgradeUnderway(const AIFloat3& in spot)
+{
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null)
+				|| (Catalog::gExtractsM[int(t.buildDef.id)] <= 0.f))
+			continue;
+		if ((Requests::Workers(t) > 0) && (t.GetBuildPos().distance2D(spot) <= Requests::SAME_SITE)) {
+			++gUpBusySkips;
+			return true;
+		}
+	}
+	return false;
+}
+
+// Allied extractors below the best (apexearth 2026-09-30: "be willing to
+// upgrade our allies' mexes"). BAR hands the new extractor to the owner of the
+// one beneath it (unit_mex_upgrade_reclaimer), and CBMexUpTask's reclaim path
+// only ever touches our own units.
+void AllyUpgradeSpots(array<AIFloat3>@ pos, array<int>@ spot, array<float>@ inc, array<float>@ ext)
+{
+	AllyStaticsSync();
+	CacheSpots();
+	for (uint i = 0; i < gAllyStPos.length(); ++i) {
+		const int d = gAllyStDef[i];
+		if (Catalog::gExtractsM[d] <= 0.f)
+			continue;
+		int best = -1;
+		float bestD = 64.f;
+		for (uint s = 0; s < gAllSpots.length(); ++s) {
+			const float dd = gAllSpots[s].distance2D(gAllyStPos[i]);
+			if (dd < bestD) {
+				bestD = dd;
+				best = int(s);
+			}
+		}
+		if (best < 0)
+			continue;
+		pos.insertLast(gAllyStPos[i]);
+		spot.insertLast(best);
+		inc.insertLast(gAllSpotInc[best]);
+		ext.insertLast(Catalog::gExtractsM[d]);
+	}
+}
+
 int gMuDiagAt = 0;
 float gMuSurv = -1.f;
+bool gMuAlly = false;
 float gMuRaw = 0.f;
 Want@ ProposeMexUp(CCircuitUnit@ unit)
 {
@@ -139,10 +190,24 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	// Hoisted for the same reason as everything else here: it does not vary
 	// with the spot or the extractor being priced.
 	const float upBP = EffBP(Catalog::gBuildPower[uid]);
+	array<AIFloat3> uPos;
+	array<int> uSpot;
+	array<float> uInc;
+	array<float> uExt;
 	for (uint li = 0; li < gLSpot.length(); ++li) {
 		if (gLExtract[li] <= 0.f)
 			continue;   // not finished (or already being replaced)
-		if (DeathWalk(unit, gLPos[li]))
+		uPos.insertLast(gLPos[li]);
+		uSpot.insertLast(gLSpot[li]);
+		uInc.insertLast(gLIncome[li]);
+		uExt.insertLast(gLExtract[li]);
+	}
+	const uint nOwn = uPos.length();
+	AllyUpgradeSpots(uPos, uSpot, uInc, uExt);
+	for (uint li = 0; li < uPos.length(); ++li) {
+		if (UpgradeUnderway(uPos[li]))
+			continue;
+		if (DeathWalk(unit, uPos[li]))
 			continue;   // a forward mex we hold can still be a lethal walk
 		// GROUND THE ENGINE HAS ALREADY REFUSED. An upgrade's position IS the
 		// spot -- unlike a plant or a generator it cannot be moved -- so a spot
@@ -152,23 +217,23 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		//
 		// The mark expires, so a spot that becomes reachable -- the front
 		// moves, a wreck clears -- returns to the ladder on its own.
-		if (NearBlocked(gLPos[li]))
+		if (NearBlocked(uPos[li]))
 			continue;
 		float surv = -1.f;
 		const float walkSecU = (speed > 1.f)
-				? (here.distance2D(gLPos[li]) / speed) : 60.f;
+				? (here.distance2D(uPos[li]) / speed) : 60.f;
 		// A spot under water takes a floating or submerged extractor and a
 		// dry one a land extractor: an air con offered a land moho for a
 		// naval mex, reclaimed the mex and could not build (his watch).
-		const bool wet = ai.GetElevationAt(gLPos[li]) < 0.f;
+		const bool wet = ai.GetElevationAt(uPos[li]) < 0.f;
 		for (uint i = 0; i < builds.length(); ++i) {
 			const int d = builds[i];
-			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= gLExtract[li]))
+			if (!Catalog::gAvailable[d] || (Catalog::gExtractsM[d] <= uExt[li]))
 				continue;
 			if (wet != (Catalog::gFloater[d] || Catalog::gSub[d]))
 				continue;
-			float delta = gLIncome[li] * incMulU
-					* (Catalog::gExtractsM[d] - gLExtract[li]);
+			float delta = uInc[li] * incMulU
+					* (Catalog::gExtractsM[d] - uExt[li]);
 			// See want_mex.as: the raw metal/s, before any premium.
 			const float rawUpM = delta;
 			{
@@ -184,7 +249,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			// Quadrupling the yield of a spot we cannot hold quadruples
 			// nothing -- the same discount the claim itself takes.
 			if (surv < 0.f)
-				surv = StreamSurvival(gLPos[li]);
+				surv = StreamSurvival(uPos[li]);
 			delta *= surv;
 			// HIS STATED PREFERENCE, PRICED TO THE MEASURED GAP. apexearth:
 			// "We need to boost the priority on building upgraded metal
@@ -209,8 +274,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				w = c;
 				w.kind = WK_MEXUP;
 				@w.def = Catalog::Def(d);
-				w.pos = gLPos[li];
-				w.spotId = gLSpot[li];
+				w.pos = uPos[li];
+				w.spotId = uSpot[li];
+				gMuAlly = (li >= nOwn);
 				gMuSurv = surv;
 				gMuRaw = rawUpM;
 			}
@@ -242,7 +308,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			// design; loss is RETROSPECTIVE and needs a death here first.
 			+ " grad=" + formatFloat(GradAt(w.pos), "", 0, 3)
 			+ " loss=" + formatFloat(LossRateAt(w.pos), "", 0, 4)
-			+ " haz=" + formatFloat(HazardWith(w.pos, CoverAt(w.pos)), "", 0, 4));
+			+ " haz=" + formatFloat(HazardWith(w.pos, CoverAt(w.pos)), "", 0, 4)
+			+ " ally=" + (gMuAlly ? 1 : 0) + " busySkips=" + gUpBusySkips);
 	}
 	return w;
 }

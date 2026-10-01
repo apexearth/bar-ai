@@ -498,6 +498,26 @@ void CSuperTask::AimAtStructure(CCircuitUnit* unit, int frame)
 	state = State::ENGAGE;
 }
 
+// apex: what the Juno kills is a name list in unit_juno_damage.lua, not a stat:
+// an advanced air plant carries a radar and took five Junos (his Glacier 2v2).
+static bool IsJunoKill(const std::string& name)
+{
+	static const char* const kills[] = {
+		"armarad", "armaser", "armason", "armeyes", "armfrad", "armjam", "armjamt", "armmark",
+		"armrad", "armseer", "armsjam", "armsonar", "armveil", "corarad", "corason", "coreter",
+		"coreyes", "corfrad", "corjamt", "corrad", "legjam", "legrad", "corshroud", "corsjam",
+		"corsonar", "corspec", "corvoyr", "corvrad", "legarad", "legajam", "legavrad", "legavjam",
+		"legaradk", "legajamk", "legfrad",
+		"armmine1", "armmine2", "armmine3", "armfmine3", "cormine1", "cormine2", "cormine3",
+		"cormine4", "corfmine3", "legmine1", "legmine2", "legmine3"};
+	for (const char* k : kills) {
+		if (name == k) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // apex: tactical and EMP launchers go at the turrets, the Juno at radar and
 // jammers (apexearth 2026-09-30). A paralysis wears off, so an EMP is spent only
 // where one of our squads is inside the turret's reach or about to be.
@@ -533,11 +553,7 @@ void CSuperTask::AimLauncher(CCircuitUnit* unit, int frame)
 		}
 		bool want;
 		if (launcher == Launcher::JUNO) {
-			// a radar or jammer unit, not a gun or builder carrying a small radar
-			want = !edef->IsAttacker() && !edef->IsAbleToFly()
-				&& ((edef->GetRadarRadius() > edef->GetLosRadius())
-					|| (edef->GetSonarRadius() > edef->GetLosRadius())
-					|| (edef->GetJammerRadius() > 0.f));
+			want = IsJunoKill(edef->GetDef()->GetName());
 		} else {
 			want = !edef->IsMobile() && edef->IsAttacker();
 		}

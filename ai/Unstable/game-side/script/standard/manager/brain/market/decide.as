@@ -502,10 +502,10 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	const double _t = Perf::T0();
 	Want@ w = null;
 	if (step == 0)       { @w = MemoPropose(8, unit);         Perf::Add("want.mex", _t); }
-	else if (step == 1)  { @w = MemoPropose(0, unit);         Perf::Add("want.energy", _t); }
+	else if (step == 1)  { if (!OutForUpgrades(unit)) @w = MemoPropose(0, unit);  Perf::Add("want.energy", _t); }
 	else if (step == 2)  { @w = ProposeGeo(unit);             Perf::Add("want.geo", _t); }
 	else if (step == 3)  { @w = MemoPropose(7, unit);         Perf::Add("want.plant", _t); }
-	else if (step == 4)  { @w = ProposeConvert(unit);         Perf::Add("want.convert", _t); }
+	else if (step == 4)  { if (!OutForUpgrades(unit)) @w = ProposeConvert(unit);  Perf::Add("want.convert", _t); }
 	else if (step == 5)  { @w = ProposeStore(unit);           Perf::Add("want.store", _t); }
 	// Memoised: unmemoised this one is O(builders x mex spots) and grows all game.
 	else if (step == 6)  { @w = MemoPropose(6, unit);         Perf::Add("want.mexup", _t); }
@@ -515,7 +515,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
 	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
-	else if (step == 13) { @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
+	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
 	else if (step == 14) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
 	else if (step == 15) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
 	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
@@ -1937,8 +1937,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			break;
 		}
 	}
+	bool upFirst = false;
+	if (!aaPanic && !superPush && !coverPush && !firstPlant && UpgradesFirst(unit, ranked)) {
+		upFirst = true;
+		why = "upfirst";
+	}
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant && !upFirst)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
 	Perf::Add("dec.draw", _tDraw);

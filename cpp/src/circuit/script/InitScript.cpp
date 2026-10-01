@@ -644,6 +644,15 @@ static bool CCircuitAI_CanDefReach(CCircuitAI* circuit, CCircuitDef* cdef,
 	return terrainMgr->CanMoveToPos(area, to);
 }
 
+// apex: the sector's ground suits this def (land, height, its units' slope)
+static bool CCircuitAI_CanBeBuiltAt(CCircuitAI* circuit, CCircuitDef* cdef, const AIFloat3& pos)
+{
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return false;
+	}
+	return circuit->GetTerrainManager()->CanBeBuiltAt(cdef, pos);
+}
+
 // apex: the builder veto's own question (CanMobileReachAt): can this def stand
 // within range of pos anywhere in its own area. CanDefReach is exact and says
 // no to every water site for every land con, shore or not.
@@ -1795,6 +1804,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReach(CCircuitDef@, const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanDefReach), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float DefMapCoverage(CCircuitDef@)", asFUNCTION(CCircuitAI_DefMapCoverage), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanDefReachAt(CCircuitDef@, const AIFloat3& in, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_CanDefReachAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "bool CanBeBuiltAt(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_CanBeBuiltAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int ForgetEnemiesNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_ForgetEnemiesNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool IsLoadSave() const", asMETHOD(CCircuitAI, IsLoadSave), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "Type GetBindedRole(Type) const", asMETHOD(CCircuitAI, GetBindedRole), asCALL_THISCALL); ASSERT(r >= 0);

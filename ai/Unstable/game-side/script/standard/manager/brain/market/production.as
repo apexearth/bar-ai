@@ -535,6 +535,9 @@ int CeilingConsNeed()
 				want += unspent / bp;
 		}
 	}
+	const int up = UpgradeHandsWant();
+	if (float(up) > want)
+		want = float(up);
 	const int have = CeilingConsOwned() + CeilingConsInFlight();
 	return (float(have) < want) ? (int(want) - have) : 0;
 }
