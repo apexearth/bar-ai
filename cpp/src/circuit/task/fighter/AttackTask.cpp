@@ -200,7 +200,8 @@ void CAttackTask::Update()
 	}
 
 	if (GetTarget() == nullptr) {
-		if (!MarchEnemyBox()) {
+		forEco = MarchEnemyBox();
+		if (!forEco) {
 			FallbackFrontPos();
 		}
 		return;
@@ -308,6 +309,8 @@ void CAttackTask::FindTarget()
 	CEnemyInfo* bestTarget = nullptr;
 	float bestPull = 0.f;
 	float bestSup = 0.f;
+	float bestInfl = 0.f;
+	bool bestThreat = false;
 	const auto& supSpots = circuit->GetMilitaryManager()->GetSupportSpots();
 	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
 	float minSqDist = std::numeric_limits<float>::max();
@@ -382,6 +385,7 @@ void CAttackTask::FindTarget()
 	}
 	int refusedHome = 0;
 	int skippedSpam = 0;
+	int ignoredSmall = 0;
 	float prevScore = -1.f;
 	const AIFloat3 foeBase = circuit->GetSetupManager()->GetEnemyBoxCentre();
 	const bool pushing = utils::is_valid(foeBase);
@@ -492,6 +496,17 @@ void CAttackTask::FindTarget()
 				++skippedSpam;
 				continue;
 			}
+			// apex: on the way to their buildings, an army under half ours is shot
+			// on the move and never turned for (apexearth 2026-09-30, and his
+			// "armies ignore enemies less than half their strength unless
+			// defending the home base"): Titans swung between a geothermal behind
+			// their base and a Titan blinking in and out of radar for minutes.
+			if (forEco && (edef != nullptr) && edef->IsMobile() && !isThreat[i]
+				&& (group.influence * 2.f < maxPower))
+			{
+				++ignoredSmall;
+				continue;
+			}
 			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
 			if (enemy == prevTarget) {
 				prevScore = sqOEDist;
@@ -508,6 +523,8 @@ void CAttackTask::FindTarget()
 				bestTarget = enemy;
 				bestPull = pull;
 				bestSup = sup;
+				bestInfl = group.influence;
+				bestThreat = isThreat[i];
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -520,19 +537,23 @@ void CAttackTask::FindTarget()
 		bestTarget = prevTarget;
 	}
 
+	const bool wasEco = forEco;
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
+		CCircuitDef* bdef = bestTarget->GetCircuitDef();
+		forEco = (bdef != nullptr) && !bdef->IsMobile();
 		if (bestTarget != prevTarget) {
-			CCircuitDef* bdef = bestTarget->GetCircuitDef();
 			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
-				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i",
+				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i"
+				" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i",
 				circuit->GetTeamId(), cdef->GetDef()->GetName(),
 				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
 				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
 				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
-				canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0);
+				canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
+				wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0);
 		}
 	}
 	// Return: target, startPos=leader->pos, endPos=position

@@ -68,7 +68,9 @@ void PeelSurplus()
 				if (u2 is null)
 					continue;
 				const float d = siteKnown ? u2.GetPos(ai.frame).distance2D(site) : float(u2.id);
-				if (siteKnown && (d < halfTrip)) {
+				// ...while it is still walking: one at the frame is crew, and peelable.
+				if (siteKnown && (d < halfTrip)
+					&& (d > Catalog::gBuildDist[int(u2.circuitDef.id)] + 64.f)) {
 					++gPeelKept;
 					continue;
 				}

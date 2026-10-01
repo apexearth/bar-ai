@@ -49,6 +49,44 @@ measured is in the commit messages; what is not:
   never run in a test before deploy. Whose building pens our units is not
   logged.
 
+### REGRESSION CHECK 2026-09-30 NIGHT: today's five commits vs c2ca8507
+
+Control = c2ca8507 C++ and script in lane `pushctl` (C++ overlaid from
+`git archive`, script copied over both deployed copies). Head = lane
+`neartarget`.
+- 1v1 vs BARb hard +100%, 30 min, Comet Catcher + Supreme Isthmus, 6 seeds
+  per arm: head ahead on metal produced (CC 144k vs 85k, SI 261k vs 228k) and
+  T3 metal (CC 16k vs 2.6k, SI 65k vs 37k); wins 5/6 each. Most games end
+  early on a commander kill, so totals mix with game length.
+- Opening on Supreme Isthmus is behind: mex at 12 min 20 vs 24 pooled over
+  16 seeds per arm (10 of them 12-minute games: 21.3 vs 24.5, income 91 vs
+  96, metal waste min 4-12 19% vs 17%); fewer cons electing by 12 min (19 vs
+  24 per game in the 30-min set). Not significant at this n; cause not
+  found. Comet Catcher shows no gap. Early metal waste is 30-46% on Comet in
+  BOTH arms -- an old problem, not today's.
+- FOUND AND FIXED: the "builders past halfway finish the walk" rule (peel.as
+  and C++ IBuilderTask::Reevaluate) counted a hand standing at its site as
+  past halfway, so surplus crews were never peeled (40 vs 109, 63 vs 139
+  peels on matching seeds). Now only a hand still walking (beyond build reach)
+  is kept. Did not by itself close the opening gap.
+- Greenest 8v8 seed 1 (the perf benchmark): head won at 40 min, control lost
+  at 50; income 893 vs 601 at 30 min.
+- Perf: both FAIL the 16-AI budget (control 0.519, head 0.660 ms/AI/frame at
+  the worst minute). Same AI ms over minutes 20-39 with ~10% fewer units in
+  head: ~10% dearer per unit (rez bots near the front: rz.salvage +76%; path
+  queries +60%/min from the push targeting). Half the AI is the builder
+  election (bld.decide ~1.2 ms a call), unchanged by today.
+- 9eec0da8 let LRPCs skip the affordability skip, so every election sites
+  each cannon through HighGroundNear (up to ~110 FindBuildSiteNear calls,
+  twice); want.super max went 12.7 -> 17.9 ms. HighGroundNear now probes
+  highest-first, stops at the first legal site, cached 10 s per def+spot.
+  Re-measured (same seed, different game): want.super avg 105 -> 106 us,
+  max 17.9 -> 15.4 ms -- the avg is NOT this; the spike moved little.
+  Whole-AI ms over minutes 20-39 fell 15% at more units, spread over every
+  section: game-path variance, not attributable. One seed per tree cannot
+  separate code from game; the late verdict (0.889 at min 46 in a 51-min
+  game vs 0.660 in head's 40-min one) is not comparable either.
+
 ### ARMY SHARE (STALE for the Glacier 2v2 regime -- see the HOLDING FAILURE entry at the end; there we are 53% army to BARb's 43%): we put ~10% of metal into army, BARb 23-32% (2026-09-06, re-read 09-15)
 
 `tournaments/20260906-123343-fixes-on` vs `-123756-fixes-off`, Comet 1v1 vs

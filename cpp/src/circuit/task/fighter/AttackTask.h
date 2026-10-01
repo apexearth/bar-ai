@@ -43,6 +43,8 @@ private:
 	float stallHp = 0.f;
 	int stallSince = 0;
 	int repairerId = -1;
+	// apex: set off for their buildings; small armies on the way are shot, not chased
+	bool forEco = false;
 };
 
 } // namespace circuit

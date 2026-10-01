@@ -1194,8 +1194,10 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
 		const AIFloat3& site = GetPosition();
 		const float sqTrip = home.SqDistance2D(site);
+		const float sqHere = pos.SqDistance2D(site);
 		if (utils::is_valid(site) && (sqTrip > SQUARE(1000.f))
-			&& (pos.SqDistance2D(site) * 4.f < sqTrip)
+			&& (sqHere * 4.f < sqTrip)
+			&& (sqHere > SQUARE(unit->GetCircuitDef()->GetBuildDistance() + 64.f))
 			&& (circuit->GetInflMap()->GetEnemyInflAt(pos) < INFL_EPS))
 		{
 			return true;

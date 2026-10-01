@@ -297,34 +297,78 @@ bool SuperPushable(const CCircuitDef@ d)
 // high ground fire long distances unobstructed; the flat is allowed, hills
 // are preferred). The highest legal ground within a short walk of the
 // chosen site takes it -- height, then nearness on a tie.
+// Highest first, so the engine's site search runs until the first legal one
+// instead of once per higher point; the answer is cached per def and spot.
+array<int> gHgDef;
+array<int> gHgKey;
+array<int> gHgAt;
+array<AIFloat3> gHgPos;
 AIFloat3 HighGroundNear(CCircuitDef@ def, const AIFloat3& in site, float r)
 {
 	if ((def is null) || !OnMap(site))
 		return site;
+	const int key = (int(site.x) / 64) * 4096 + (int(site.z) / 64);
+	for (uint i = 0; i < gHgDef.length(); ++i) {
+		if ((gHgDef[i] == int(def.id)) && (gHgKey[i] == key) && (ai.frame - gHgAt[i] < 10 * SECOND))
+			return gHgPos[i];
+	}
 	const float h0 = ai.GetElevationAt(site);
-	float bestH = h0;
-	float bestD = 0.f;
-	AIFloat3 best = site;
+	array<float> hs;
+	array<float> ds;
+	array<AIFloat3> ps;
 	const float step = 96.f;
 	for (float dz = -r; dz <= r; dz += step) {
 		for (float dx = -r; dx <= r; dx += step) {
-			if (dx * dx + dz * dz > r * r)
+			const float d = dx * dx + dz * dz;
+			if (d > r * r)
 				continue;
 			const AIFloat3 p = site + AIFloat3(dx, 0.f, dz);
 			if (!OnMap(p))
 				continue;
 			const float h = ai.GetElevationAt(p);
-			const float d = dx * dx + dz * dz;
-			if ((h < bestH) || ((h == bestH) && (d >= bestD)))
+			if (h <= h0)
 				continue;
-			const AIFloat3 s = ai.FindBuildSiteNear(def, p, 64.f);
-			if (!OnMap(s) || (s.distance2D(p) > 64.f) || NearBlockedFor(s, int(def.id)))
-				continue;
-			bestH = h;
-			bestD = d;
-			best = s;
+			hs.insertLast(h);
+			ds.insertLast(d);
+			ps.insertLast(p);
 		}
 	}
+	AIFloat3 best = site;
+	array<bool> tried(hs.length(), false);
+	for (uint n = 0; n < hs.length(); ++n) {
+		int k = -1;
+		for (uint j = 0; j < hs.length(); ++j) {
+			if (tried[j])
+				continue;
+			if ((k < 0) || (hs[j] > hs[k]) || ((hs[j] == hs[k]) && (ds[j] < ds[k])))
+				k = int(j);
+		}
+		if (k < 0)
+			break;
+		tried[k] = true;
+		const AIFloat3 s = ai.FindBuildSiteNear(def, ps[k], 64.f);
+		if (OnMap(s) && (s.distance2D(ps[k]) <= 64.f) && !NearBlockedFor(s, int(def.id))) {
+			best = s;
+			break;
+		}
+	}
+	uint slot = gHgDef.length();
+	for (uint i = 0; i < gHgDef.length(); ++i) {
+		if (ai.frame - gHgAt[i] >= 10 * SECOND) {
+			slot = i;
+			break;
+		}
+	}
+	if (slot == gHgDef.length()) {
+		gHgDef.insertLast(0);
+		gHgKey.insertLast(0);
+		gHgAt.insertLast(0);
+		gHgPos.insertLast(best);
+	}
+	gHgDef[slot] = int(def.id);
+	gHgKey[slot] = key;
+	gHgAt[slot] = ai.frame;
+	gHgPos[slot] = best;
 	return best;
 }
 

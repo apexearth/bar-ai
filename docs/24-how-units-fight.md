@@ -1587,3 +1587,13 @@ the humans to kill me."*
 - **Small spam is not worth turning around for.** Humans send spam straight at
   the base; an army that repositions to intercept every small group never
   grows or does anything valuable.
+
+## 2026-09-30 — on the way to their base, keep walking
+
+- **An army going for their base, a flank or their economy is not distracted
+  by their units.** It keeps walking and shoots the units on the way; it gets
+  to the base and blows it up. (Attack squads already travel on move orders,
+  which fire on the move.)
+- Seen on Supreme Isthmus: a game-winning group of Titans walked back and
+  forth for minutes, turning between a geothermal behind their base and an
+  enemy Titan that kept dropping in and out of radar.
