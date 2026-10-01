@@ -11,7 +11,7 @@
 //------------------------------------------------------------------------------
 namespace Grid {
 
-class Cells
+final class Cells
 {
 	float cell = 256.f;
 	float minX = 0.f;

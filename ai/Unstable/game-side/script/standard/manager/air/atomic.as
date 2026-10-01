@@ -385,7 +385,9 @@ void AtomicLookWatch()
 		gAtomLookWant = false;
 	if (!gAtomLookWant || (gAtomId >= 0) || !Builder::gHomeSet)
 		return;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+	const array<int>@ owned = Market::OwnedDefs();
+	for (uint oi = 0; oi < owned.length(); ++oi) {
+		const int d = owned[oi];
 		if (!IsLookDef(d))
 			continue;
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d),

@@ -65,7 +65,9 @@ bool AllyLaneHit(const AIFloat3& in p, const AIFloat3& in fwd, bool laneOf)
 		if (gAllyPlKnown)
 			return false;
 	}
-	for (uint i = 0; i < gAllyStPos.length(); ++i) {
+	gAllyStGrid.Query(p.x, p.z, 242.f);
+	for (uint h = 0; h < gAllyStGrid.hit.length(); ++h) {
+		const uint i = uint(gAllyStGrid.hit[h]);
 		const int d = gAllyStDef[i];
 		if (!Catalog::ValidId(d) || Catalog::gMobile[d])
 			continue;
@@ -205,11 +207,13 @@ AIFloat3 OffAllyBuildings(const AIFloat3& in pos)
 	for (uint tries = 0; tries < 4; ++tries) {
 		int nearI = -1;
 		float nearD = ALLY_CLEAR;
-		for (uint i = 0; i < gAllyStPos.length(); ++i) {
-			const float d = gAllyStPos[i].distance2D(p);
-			if (d < nearD) {
+		gAllyStGrid.Query(p.x, p.z, ALLY_CLEAR);
+		for (uint h = 0; h < gAllyStGrid.hit.length(); ++h) {
+			const int i = gAllyStGrid.hit[h];
+			const float d = gAllyStPos[uint(i)].distance2D(p);
+			if ((d < nearD) || ((d == nearD) && (nearI >= 0) && (i < nearI))) {
 				nearD = d;
-				nearI = int(i);
+				nearI = i;
 			}
 		}
 		if (nearI < 0) {

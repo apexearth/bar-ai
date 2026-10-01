@@ -66,7 +66,7 @@ void NoteStrikeOn(const AIFloat3 &in p)
 // ranked and funded in priority order, a volley spends only its own size,
 // tracks and aborts on its own, and a silo that frees up mid-window can
 // immediately fund the next target instead of idling behind one thought.
-class Volley {
+final class Volley {
 	array<AIFloat3> spots;
 	array<int> siloIds;   // exclusive: a silo serves one volley at a time
 	AIFloat3 at;

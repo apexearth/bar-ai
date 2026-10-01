@@ -1230,6 +1230,15 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	const float range = cdef->GetBuildDistance()
 			+ ((buildDef != nullptr) ? buildDef->GetRadius() : 0.f);
 	const AIFloat3& endPos = GetPosition();
+	// A path for this move type into this sector failed a moment ago: another
+	// query would fail the same way (2,736 rez-bot nopaths in one 20-min 8v8).
+	if (!IsFixedSite(buildType) && circuit->IsNoPath(cdef, endPos)
+		&& (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) > SQUARE(range + SQUARE_SIZE * 4)))
+	{
+		SetDeathNote("no-path-mark");
+		manager->AbortTask(this);
+		return;
+	}
 	// A DEFENCE IS BUILT INTO THE THREAT IT ANSWERS. The safe-reach veto
 	// killed every front tower task ever created (s43: all bt=7 deaths
 	// why=unreach-safe; 960 front elections won, 0 towers built) -- the
@@ -1473,6 +1482,7 @@ void IBuilderTask::OnNoPath(CCircuitUnit* unit)
 			return;
 		}
 		circuit->NoteBuildBlocked(endPos, buildDef);
+		circuit->NoteNoPath(unit->GetCircuitDef(), endPos);
 		circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
 				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 				unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,

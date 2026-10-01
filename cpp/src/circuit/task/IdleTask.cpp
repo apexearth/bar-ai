@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include <algorithm>
 #include "task/IdleTask.h"
 #include "task/RetreatTask.h"
 #include "map/InfluenceMap.h"
@@ -52,9 +53,18 @@ void CIdleTask::Update()
 {
 	if (updateUnits.empty()) {
 		updateUnits = units;  // copy units
-		// apex: run every frame, so a pass still spans TEAM_SLOWUPDATE_RATE x 8
-		// frames; the +1 keeps a small idle set moving every frame.
-		updateSlice = updateUnits.size() / (TEAM_SLOWUPDATE_RATE * 8) + 1;
+	}
+	// apex: a pass spans TEAM_SLOWUPDATE_RATE x 8 frames for a large idle set,
+	// and a small one is asked at most every IDLE_ASK_FRAMES per unit: the old
+	// `+ 1` re-asked five idle builders every five frames, nearly all of them
+	// bounced by the script's own 2 s gate.
+	constexpr float IDLE_ASK_FRAMES = 15.f;
+	const float sz = float(units.size());
+	sliceCredit += std::min(sz / IDLE_ASK_FRAMES, sz / float(TEAM_SLOWUPDATE_RATE * 8) + 1.f);
+	updateSlice = (unsigned int)sliceCredit;
+	sliceCredit -= float(updateSlice);
+	if (updateSlice == 0) {
+		return;
 	}
 
 	const int frame = manager->GetCircuit()->GetLastFrame();

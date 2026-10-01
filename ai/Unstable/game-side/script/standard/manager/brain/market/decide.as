@@ -104,7 +104,9 @@ int MemoTtlMex()
 	const float spot = SpotM() * IncomeMult();
 	const float inc = Eco::MInc();
 	const float n = (spot > 0.f) ? (inc / spot) : 1.f;
-	return MemoTtl() * int((n > 1.f) ? n : 1.f);
+	// On the old 45-frame base, not MemoTtl, and never past 20 s.
+	const int t = 45 * int((n > 1.f) ? n : 1.f);
+	return (t < 20 * SECOND) ? t : (20 * SECOND);
 }
 // A copy this old ALWAYS recomputes, on its own bounded budget. The stack
 // calls the memo slots in one fixed order, so energy+tech drained the whole
@@ -113,7 +115,8 @@ int MemoTtlMex()
 // protect run at 4.4-16 min depending on the game; the commander's never
 // ran at all -- which is why the first mexes stood naked for the tick).
 const int   MEMO_STARVED = 450;   // 15s
-const uint  MEMO_N = 9;
+const uint  MEMO_N = 13;
+const array<string> MEMO_CORE_NAMES = {"mc.energy", "mc.tech", "mc.nano", "mc.sense", "mc.reclobs", "mc.protect", "mc.mexup", "mc.plant", "mc.mex", "mc.airdef", "mc.geo", "mc.teeth", "mc.super"};
 // The mex slot keeps gMexOpen with its answer: a served copy must leave the
 // other proposers reading what the computation read.
 array<bool> gMemoMexOpen;
@@ -153,19 +156,37 @@ int MemoKey(int slot, CCircuitUnit@ unit)
 {
 	// The stall state is an input: a tower priced on a full bank was served
 	// 16 s later with the bank at 10, its 680 E bill still forgiven.
+	// gOwnSetStamp STAYS: left to MemoTtl, stale answers were refused at
+	// execution and all-refused elections doubled (his-settings 8v8, 10-01).
 	int k = gOwnSetStamp * 4 + (HardEStall() ? 1 : 0)
 			+ (aiEconomyMgr.isEnergyFull ? 2 : 0);
-	if ((slot == 3) || (slot == 4) || (slot == 5))
-		k = k * 31 + gPfAt * 7 + Military::gFrontStamp;
+	// Not in the key: the protect field and the front (each re-stamps on a
+	// clock whether or not it moved); MemoTtl bounds their staleness. A FREED
+	// spot is: without it a dead extractor's spot waited out the answer's whole
+	// life and extraction fell a third behind. A claim is not -- the claimed
+	// spot evicts the answers naming it (MemoEvictKind).
 	if (slot == 8)
-		k = k * 31 + gLStamp;
-	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8)) {
+		k = k * 31 + gLFreeStamp;
+	if ((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9)) {
 		if (gMemoCell <= 1.f)
 			gMemoCell = Brain::LightTowerRange();
 		const AIFloat3 p = unit.GetPos(ai.frame);
 		k = k * 31 + int(p.x / gMemoCell) * 4093 + int(p.z / gMemoCell);
 	}
 	return k;
+}
+
+// SEVERAL ANSWERS PER DEF. One row per def made builders of one kind standing
+// in different cells evict each other on every election (27% hits in his-
+// settings 8v8); the asker's cell now picks one of MEMO_WAYS rows.
+const int MEMO_WAYS = 4;
+int MemoWay(int slot, CCircuitUnit@ unit)
+{
+	if (!((slot == 3) || (slot == 4) || (slot == 5) || (slot == 6) || (slot == 8) || (slot >= 9)))
+		return 0;
+	const AIFloat3 p = unit.GetPos(ai.frame);
+	const int h = int(p.x / gMemoCell) * 7 + int(p.z / gMemoCell) * 3;
+	return ((h % MEMO_WAYS) + MEMO_WAYS) % MEMO_WAYS;
 }
 
 Want@ WantCopy(Want@ s)
@@ -185,6 +206,7 @@ Want@ WantCopy(Want@ s)
 	c.value = s.value;
 	c.buildSec = s.buildSec;
 	c.walkSec = s.walkSec;
+	c.src = s.src;
 	return c;
 }
 
@@ -198,6 +220,10 @@ Want@ MemoSlotCall(int slot, CCircuitUnit@ unit)
 	if (slot == 6) return ProposeMexUp(unit);
 	if (slot == 7) return ProposePlant(unit);
 	if (slot == 8) return ProposeMex(unit);
+	if (slot == 9) return ProposeAirDef(unit);
+	if (slot == 10) return ProposeGeo(unit);
+	if (slot == 11) return ProposeTeeth(unit);
+	if (slot == 12) return ProposeSuper(unit);
 	return ProposeProtect(unit);
 }
 
@@ -255,6 +281,14 @@ void MemoLink(int slot, int ud, Want@ w)
 // cached answer was consumed and re-serving it is the stampede bug.
 int gMemoFreshFrame = -1;
 int gMemoFreshN = 0;
+// A recompute every MEMO_FRESH_GAP frames per AI at most; past it a cell serves
+// its stale copy (or nothing, if evicted). Cells never filled always compute.
+const int MEMO_FRESH_GAP = 8;
+int gMemoFreshNext = 0;
+bool MemoBusy()
+{
+	return (gMemoFreshN >= 1) || (ai.frame < gMemoFreshNext);
+}
 int gMemoStarvN = 0;
 
 Want@ MemoPropose(int slot, CCircuitUnit@ unit)
@@ -265,14 +299,15 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		gMemoDeferred.resize(MEMO_N);
 		gMemoKindPos.resize(MEMO_N);
 		gMemoKey.resize(MEMO_N);
-		gMemoStride = Catalog::gDefCount + 1;
-		gMemoMexOpen.resize(uint(Catalog::gDefCount + 1));
+		const uint rows = uint((Catalog::gDefCount + 1) * MEMO_WAYS);
+		gMemoStride = int(rows);
+		gMemoMexOpen.resize(rows);
 		for (uint s = 0; s < MEMO_N; ++s) {
-			array<int> a(uint(Catalog::gDefCount + 1), -30000);
-			array<Want@> ws(uint(Catalog::gDefCount + 1));
-			array<bool> df(uint(Catalog::gDefCount + 1), false);
-			array<int> kp(uint(Catalog::gDefCount + 1), -1);
-			array<int> mk(uint(Catalog::gDefCount + 1), 0);
+			array<int> a(rows, -30000);
+			array<Want@> ws(rows);
+			array<bool> df(rows, false);
+			array<int> kp(rows, -1);
+			array<int> mk(rows, 0);
 			@gMemoAt[s] = a;
 			@gMemoW[s] = ws;
 			@gMemoDeferred[s] = df;
@@ -286,44 +321,59 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	// Valid while nothing it was computed from has moved AND inside the ceiling
 	// the per-frame prices need.
 	const int key = MemoKey(slot, unit);
-	if ((gMemoKey[slot][ud] == key)
-		&& (ai.frame - gMemoAt[slot][ud] < ((slot == 8) ? MemoTtlMex() : MemoTtl()))) {
+	const int r = ud * MEMO_WAYS + MemoWay(slot, unit);
+	if ((gMemoKey[slot][r] == key)
+		&& (ai.frame - gMemoAt[slot][r] < ((slot == 8) ? MemoTtlMex() : MemoTtl()))) {
 		Perf::Note("memo.hit");
 		if (slot == 8)
-			gMexOpen = gMemoMexOpen[ud];
-		return WantCopy(gMemoW[slot][ud]);
+			gMexOpen = gMemoMexOpen[r];
+		return WantCopy(gMemoW[slot][r]);
 	}
 	if (gMemoFreshFrame != ai.frame) {
 		gMemoFreshFrame = ai.frame;
 		gMemoFreshN = 0;
 		gMemoStarvN = 0;
 	}
-	if ((gMemoAt[slot][ud] > -30000) && (gMemoFreshN >= 2)) {
+	// ONE FRESH CORE A FRAME, and an EVICTED cell past it offers nothing this
+	// time rather than recomputing: its kind was just executed, so its old copy
+	// is the stampede and a recompute is the ~1 ms the AI could not afford
+	// (memo cores were a third of all AI time, his-settings 8v8). The asker
+	// takes another of its wants; the next frame recomputes.
+	if ((gMemoAt[slot][r] <= -30000) && (gMemoW[slot][r] !is null) && MemoBusy()) {
+		Perf::Note("memo.embargo");
+		if (slot == 8)
+			gMexOpen = gMemoMexOpen[r];
+		return null;
+	}
+	if ((gMemoAt[slot][r] > -30000) && MemoBusy()) {
 		// Past the normal budget: only a STARVED copy may still recompute,
 		// and at most two of those a frame -- see MEMO_STARVED above --
 		// unless it was starved AND deferred the last time it was asked.
-		const bool starved = ai.frame - gMemoAt[slot][ud] > MEMO_STARVED;
-		if (!starved || ((gMemoStarvN >= 2) && !gMemoDeferred[slot][ud])) {
+		const bool starved = ai.frame - gMemoAt[slot][r] > MEMO_STARVED;
+		if (!starved || ((gMemoStarvN >= 2) && !gMemoDeferred[slot][r])) {
 			Perf::Note("memo.defer");
 			if (starved)
-				gMemoDeferred[slot][ud] = true;
+				gMemoDeferred[slot][r] = true;
 			if (slot == 8)
-				gMexOpen = gMemoMexOpen[ud];
-			return WantCopy(gMemoW[slot][ud]);
+				gMexOpen = gMemoMexOpen[r];
+			return WantCopy(gMemoW[slot][r]);
 		}
 		++gMemoStarvN;
 	}
 	++gMemoFreshN;
+	gMemoFreshNext = ai.frame + MEMO_FRESH_GAP;
 	Perf::Note("memo.miss");
+	const double _tMemo = Perf::T0();
 	Want@ fresh = MemoSlotCall(slot, unit);
+	Perf::Add(MEMO_CORE_NAMES[uint(slot)], _tMemo);
 	if (slot == 8)
-		gMemoMexOpen[ud] = gMexOpen;
-	gMemoAt[slot][ud] = ai.frame;
-	gMemoKey[slot][ud] = key;
-	gMemoDeferred[slot][ud] = false;
-	MemoUnlink(slot, ud);
-	@gMemoW[slot][ud] = fresh;
-	MemoLink(slot, ud, fresh);
+		gMemoMexOpen[r] = gMexOpen;
+	gMemoAt[slot][r] = ai.frame;
+	gMemoKey[slot][r] = key;
+	gMemoDeferred[slot][r] = false;
+	MemoUnlink(slot, r);
+	@gMemoW[slot][r] = fresh;
+	MemoLink(slot, r, fresh);
 	return WantCopy(fresh);
 }
 
@@ -442,7 +492,7 @@ void ElecCharge(int step, double us)
 // One partly-assembled want set. Keyed by unit id and validated by def: a slot
 // whose owner died and whose id the engine handed to a different unit reads as
 // a different def and is thrown away rather than finished for the wrong builder.
-class Elec {
+final class Elec {
 	int defId = -1;
 	int askedAt = -30000;   // last ask; nobody asks for a dead builder's slot
 	int startFrame = 0;     // when this set opened -- its age, and the draw's clock
@@ -497,13 +547,72 @@ int gNextElecLog = 0;
 // That order is load-bearing, not cosmetic: ProposeMex's probe feeds the plant
 // and the three reclaim proposers (see class Elec). Slicing preserves it, so a
 // set assembled over five frames is priced the same way one assembled in one is.
+// WHAT A KIND OF HAND BUYS NOW (2026-10-01). Each def keeps, per step, the
+// election count at which that step last produced the want it executed. A step
+// that has not won in the def's last STEP_STALE elections is priced only every
+// STEP_EXPLORE-th election: an assist drone priced turrets, labs, radars and
+// supers on every election and built extractors, and a late T1 hand that only
+// assists still priced the towers it built at minute five. A win prices the
+// step every time again. Energy and assist always run; the panics
+// keep their steps while they hold.
+const int STEP_LEARN = 40;
+const int STEP_EXPLORE = 12;
+const int STEP_STALE = 30;
+array<int> gStepElec;
+array<int> gStepWin;
+int gStepSkipped = 0;
+int gNextStepLog = 0;
+bool StepSkip(int step, CCircuitUnit@ unit)
+{
+	if ((step == 1) || (step == 13))
+		return false;
+	const int d = int(unit.circuitDef.id);
+	if ((d < 0) || (d > Catalog::gDefCount) || (gStepElec.length() == 0))
+		return false;
+	const int n = gStepElec[d];
+	if ((n < STEP_LEARN) || ((n % STEP_EXPLORE) == 0))
+		return false;
+	if (n - gStepWin[d * ELEC_STEPS + step] <= STEP_STALE)
+		return false;
+	if ((step == 14) && (DefenceValue() <= 0.f))
+		return false;
+	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
+		return false;
+	++gStepSkipped;
+	return true;
+}
+
+void StepWon(CCircuitUnit@ unit, Want@ w)
+{
+	const int d = int(unit.circuitDef.id);
+	if ((w is null) || (w.src < 0) || (w.src >= ELEC_STEPS) || (d < 0) || (d > Catalog::gDefCount)
+		|| (gStepElec.length() == 0))
+		return;
+	gStepWin[d * ELEC_STEPS + w.src] = gStepElec[d];
+	if (ai.frame >= gNextStepLog) {
+		gNextStepLog = ai.frame + 60 * SECOND;
+		AiLog("apex: stepworth t=" + ai.teamId + " skipped=" + gStepSkipped);
+	}
+}
+
 Want@ ProposeStep(int step, CCircuitUnit@ unit)
 {
+	if (step == 0) {
+		if (gStepElec.length() == 0) {
+			gStepElec.resize(uint(Catalog::gDefCount + 1));
+			gStepWin.resize(uint((Catalog::gDefCount + 1) * ELEC_STEPS));
+		}
+		const int d0 = int(unit.circuitDef.id);
+		if ((d0 >= 0) && (d0 <= Catalog::gDefCount))
+			++gStepElec[d0];
+	}
+	if (StepSkip(step, unit))
+		return null;
 	const double _t = Perf::T0();
 	Want@ w = null;
 	if (step == 0)       { @w = MemoPropose(8, unit);         Perf::Add("want.mex", _t); }
 	else if (step == 1)  { if (!OutForUpgrades(unit)) @w = MemoPropose(0, unit);  Perf::Add("want.energy", _t); }
-	else if (step == 2)  { @w = ProposeGeo(unit);             Perf::Add("want.geo", _t); }
+	else if (step == 2)  { @w = MemoPropose(10, unit);        Perf::Add("want.geo", _t); }
 	else if (step == 3)  { @w = MemoPropose(7, unit);         Perf::Add("want.plant", _t); }
 	else if (step == 4)  { if (!OutForUpgrades(unit)) @w = ProposeConvert(unit);  Perf::Add("want.convert", _t); }
 	else if (step == 5)  { @w = ProposeStore(unit);           Perf::Add("want.store", _t); }
@@ -517,11 +626,13 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
 	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
 	else if (step == 14) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
-	else if (step == 15) { if (!EcoOnly()) @w = ProposeTeeth(unit);    Perf::Add("want.teeth", _t); }
+	else if (step == 15) { if (!EcoOnly()) @w = MemoPropose(11, unit);  Perf::Add("want.teeth", _t); }
 	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
-	else if (step == 17) { if (!EcoOnly()) @w = ProposeAirDef(unit);   Perf::Add("want.airdef", _t); }
-	else                 { if (!EcoOnly()) @w = ProposeSuper(unit);    Perf::Add("want.super", _t); }
+	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
+	else                 { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
 	ChargeTrip(w, unit);
+	if (w !is null)
+		w.src = step;
 	return w;
 }
 
@@ -805,7 +916,7 @@ void NoteRefused(CCircuitUnit@ unit, Want@ w)
 			return;
 		}
 	}
-	if (gRefUnit.length() >= 64) {
+	if (gRefUnit.length() >= 128) {
 		gRefUnit.removeAt(0); gRefKind.removeAt(0); gRefDef.removeAt(0);
 		gRefPos.removeAt(0); gRefAt.removeAt(0);
 	}
@@ -816,27 +927,41 @@ void NoteRefused(CCircuitUnit@ unit, Want@ w)
 	gRefAt.insertLast(ai.frame);
 }
 
+// ...and by EVERY hand for a shorter while: the memo serves one answer to all
+// builders of a def, so a site one was refused was handed to the next, executed
+// and refused again (all-refused elections ~30% of the total, each a whole
+// election for nothing). Most refusals are the site's, not the hand's.
+const int REFUSAL_TEAM_S = 15;
 bool RecentlyRefused(CCircuitUnit@ unit, Want@ w)
 {
 	const int did = (w.def is null) ? -1 : int(w.def.id);
+	const int uid = int(unit.id);
 	for (uint i = 0; i < gRefUnit.length(); ++i) {
-		if ((gRefUnit[i] != int(unit.id)) || (gRefKind[i] != w.kind) || (gRefDef[i] != did))
+		if ((gRefKind[i] != w.kind) || (gRefDef[i] != did))
 			continue;
-		if (ai.frame - gRefAt[i] > REFUSAL_MEMO_S * SECOND)
-			return false;
-		return !OnMap(w.pos) || !OnMap(gRefPos[i]) || (w.pos.distance2D(gRefPos[i]) < 160.f);
+		const int age = ai.frame - gRefAt[i];
+		if (age > ((gRefUnit[i] == uid) ? REFUSAL_MEMO_S : REFUSAL_TEAM_S) * SECOND)
+			continue;
+		if (!OnMap(w.pos) || !OnMap(gRefPos[i]) || (w.pos.distance2D(gRefPos[i]) < 160.f))
+			return true;
 	}
 	return false;
 }
 
-void MemoEvictKind(int k)
+void MemoEvictKind(int k, int spot = -1)
 {
 	if ((k < 0) || (uint(k) >= gMemoKindCells.length()) || (gMemoKindCells[k] is null))
 		return;
 	array<int>@ cells = gMemoKindCells[k];
 	for (uint i = 0; i < cells.length(); ++i) {
 		const int cell = cells[i];
-		gMemoAt[cell / gMemoStride][cell % gMemoStride] = -30000;
+		const int s = cell / gMemoStride;
+		const int r = cell % gMemoStride;
+		// A claimed extractor spot stales only the answers naming THAT spot:
+		// the rest name other spots, and the ledger is read live (PickSpot).
+		if ((spot >= 0) && (gMemoW[s][r] !is null) && (gMemoW[s][r].spotId != spot))
+			continue;
+		gMemoAt[s][r] = -30000;
 	}
 }
 
@@ -1319,7 +1444,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
 	}
 	Perf::Add("dec.expose", _tExpose);
-	ShareOuting(unit, wants);
+	{ const double _tSh = Perf::T0(); ShareOuting(unit, wants); Perf::Add("dec.share", _tSh); }
 	// Highest value first; a want the executor refuses (ground taken, request
 	// standing, join out of reach) falls out and the runner-up is tried --
 	// a builder never idles while a positive want remains executable.
@@ -1365,6 +1490,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ranked.insertAt(at, c);
 	}
 	Perf::Add("dec.rank", _tRank);
+	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
 	// want with no rival, and a price cannot steer a decision with nothing to
 	// steer towards -- so count the offers, not just the winner.
@@ -1409,6 +1535,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// bombing: seeing their air is the trigger. While it holds, the airdef
 	// want skips the lottery rather than taking a proportional share of it.
 	// It stops the instant the first tower stands.
+	Perf::Add("dec.need", _tNeed);
 	const double _tPanic = Perf::T0();
 	bool aaPanic = false;
 	// What put ranked[0] there -- logged on the decide line, because a hoist
@@ -1785,6 +1912,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// question, one ticket, weighted by that question's best answer.
 	// Rebuild is a price, not a rule: no hoist of the spot that just died.
 	Perf::Add("dec.panic", _tPanic);
+	const double _tRoles = Perf::T0();
 	// A ROLED HAND ELECTS INSIDE ITS CATEGORY -- see roles.as. Below the
 	// panics, above the draw.
 	// BARb's factory floor outranks the draw: a nano want sourced from a
@@ -1942,6 +2070,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		upFirst = true;
 		why = "upfirst";
 	}
+	Perf::Add("dec.roles", _tRoles);
 	const double _tDraw = Perf::T0();
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant && !upFirst)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
@@ -2070,6 +2199,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				: (" over " + CatName(CategoryOf(next.kind)) + "/" + KindName(next.kind)
 					+ " v=" + formatFloat(next.value * 1000.f, "", 0, 2))));
 	Perf::Add("dec.log", _tLog);
+	const double _tPost = Perf::T0();
 
 	// THE COMMANDER NEVER TAKES EXPOSED WORK: his death is the game, so a
 	// want's exposure is a cost HE pays at game-loss scale (measured: com
@@ -2184,6 +2314,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	const int topKind = (ranked.length() > 0) ? ranked[0].kind : -1;
 	const string topDef = ((ranked.length() > 0) && (ranked[0].def !is null))
 			? ranked[0].def.GetName() : "-";
+	Perf::Add("dec.post", _tPost);
 	const uint rankedN = ranked.length();
 	for (uint depth = 0; ranked.length() > 0; ++depth) {
 		const uint i = 0;
@@ -2220,10 +2351,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (t !is null) {
 			// The execution just changed the counts that priced this kind --
 			// every cached answer of it is stale now, whoever asked.
-			MemoEvictKind(ranked[i].kind);
+			MemoEvictKind(ranked[i].kind, (ranked[i].kind == WK_MEX) ? ranked[i].spotId : -1);
 			// Price tag on the job, so idle hands can later rank what is in
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);
+			StepWon(unit, ranked[i]);
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a

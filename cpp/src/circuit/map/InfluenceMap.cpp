@@ -229,6 +229,7 @@ void CInfluenceMap::DeriveTerritory()
 	terrAllyBar = std::max(1.f, maxAlly * terrAllyFrac);
 	terrFoeBar = std::max(1.f, maxFoe * terrFoeFrac);
 	terrOurs = 0;
+	bool changed = false;
 	for (int i = 0; i < mapSize; ++i) {
 		const float a = allyInfl[i] - INFL_BASE;
 		const float f = enemyInfl[i] - INFL_BASE;
@@ -239,7 +240,13 @@ void CInfluenceMap::DeriveTerritory()
 			t = 1;
 			++terrOurs;
 		}
+		changed |= (terr[i] != t);
 		terr[i] = t;
+	}
+	// apex: the version says the MASK moved; bumped every apply, it re-keyed
+	// every script memo on the front stamp several times a second.
+	if (!changed) {
+		return;
 	}
 	terrEdge.clear();
 	for (int z = 0; z < height; ++z) {

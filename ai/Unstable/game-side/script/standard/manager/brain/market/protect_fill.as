@@ -60,7 +60,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// the fills -- want.protect still ran 1.2s/min at 1700 m/s on the 2s
 	// clock. Defence siting tolerates 4s staleness; the 2-fills-per-frame
 	// cap below still bounds the worst frame.
-	if (Gate(GATE_FILL_CACHE, (gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 4 * SECOND)))
+	// Where a type of tower goes is re-ranked once a minute.
+	if (Gate(GATE_FILL_CACHE, (gDsAt[d] > 0) && (ai.frame - gDsAt[d] < 60 * SECOND)))
 		return;
 	// A bound on WORK per frame, not on defence: one frame refreshes at most
 	// two def fills; a def that already has a cache serves it one election

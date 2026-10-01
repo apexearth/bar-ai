@@ -12,7 +12,9 @@ int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assis
 // Does a standing basic (non-ceiling) constructor of ours build this def?
 bool BasicHandCan(int d)
 {
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own31 = OwnedDefs();
+	for (uint _oi31 = 0; _oi31 < _own31.length(); ++_oi31) {
+		const uint c = uint(_own31[_oi31]);
 		const int hd = int(c);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[hd] || !Catalog::gBuilder[hd]
 			|| ReachesCeiling(hd))

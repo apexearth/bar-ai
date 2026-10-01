@@ -196,7 +196,7 @@ bool CScoutTask::FindTarget(CCircuitUnit* unit, const AIFloat3& pos)
 		int targetCat;
 		float defThreat;
 		bool isBuilder;
-		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+		const float elevation = circuit->GetElevationAt(ePos);
 		const bool IsInWater = cdef->IsPredictInWater(elevation);
 		CCircuitDef* edef = enemy->GetCircuitDef();
 		if (edef != nullptr) {
@@ -208,7 +208,7 @@ bool CScoutTask::FindTarget(CCircuitUnit* unit, const AIFloat3& pos)
 			{
 				continue;
 			}
-			float elevation = map->GetElevationAt(ePos.x, ePos.z);
+			float elevation = circuit->GetElevationAt(ePos);
 			if (edef->IsInWater(elevation, ePos.y)) {
 				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
 					continue;

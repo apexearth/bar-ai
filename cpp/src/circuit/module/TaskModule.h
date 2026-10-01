@@ -67,6 +67,7 @@ public:
 	void AddMetalPull(float value) { metalPull += value; }
 	void DelMetalPull(float value) { metalPull -= value; }
 	float GetMetalPull() const { return metalPull; }
+	void PerfAdd(int key, uint64_t ns) { if ((key >= 0) && (key < 24)) { perfTypeNs[key] += ns; ++perfTypeN[key]; } }
 
 protected:
 	void UpdateIdle();
@@ -87,6 +88,14 @@ protected:
 	}
 	std::vector<IUnitTask*> updateTasks;  // owner
 	unsigned int updateIterator;
+	// apex: frames over which every task is updated once (military re-plans at 45)
+	unsigned int updateRate = 30;  // TEAM_SLOWUPDATE_RATE
+	float updateCredit = 0.f;
+	bool lodQuiet = false;   // apex: fighter tasks out of contact re-plan on alternate passes
+	unsigned lodPass = 0;
+	uint64_t perfTypeNs[24] = {};
+	unsigned perfTypeN[24] = {};
+	int perfTypeNextLog = 0;
 
 	float metalPull;
 };

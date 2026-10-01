@@ -4,12 +4,14 @@ namespace Market {
 // line's quality against the enemy it faces. 10 s memo per factory def.
 array<float> gFacPPC;
 array<int>   gFacPPCAt;
+array<int>   gFacPPCDef;
 string gYieldLog = "";
 float FacBestPPC(int facDef)
 {
 	if (int(gFacPPC.length()) <= Catalog::gDefCount) {
 		gFacPPC.resize(uint(Catalog::gDefCount + 1));
 		gFacPPCAt.resize(uint(Catalog::gDefCount + 1));
+		gFacPPCDef.resize(uint(Catalog::gDefCount + 1));
 		for (uint i = 0; i < gFacPPCAt.length(); ++i)
 			gFacPPCAt[i] = -999999;
 	}
@@ -17,28 +19,8 @@ float FacBestPPC(int facDef)
 		return gFacPPC[facDef];
 	gFacPPCAt[facDef] = ai.frame;
 	float best = 0.f;
-	const array<int>@ pl = Catalog::BuildsOf(facDef);
-	for (uint i = 0; i < pl.length(); ++i) {
-		const int d = pl[i];
-		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
-			|| (Catalog::gPower[d] <= 1.f) || Catalog::gKamikaze[d])
-			continue;
-		const float v = UnitPPC(d);
-		if (v > best)
-			best = v;
-	}
-	gFacPPC[facDef] = best;
-	return best;
-}
-
-// Metal per second a factory turns into its best unit: its own build power
-// plus the lathe on it, over that unit's build effort per metal.
-float FacMetalRate(CCircuitUnit@ f)
-{
-	const int fd = int(f.circuitDef.id);
-	const array<int>@ pl = Catalog::BuildsOf(fd);
-	float best = 0.f;
 	int bd = -1;
+	const array<int>@ pl = Catalog::BuildsOf(facDef);
 	for (uint i = 0; i < pl.length(); ++i) {
 		const int d = pl[i];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gBuilder[d]
@@ -50,6 +32,18 @@ float FacMetalRate(CCircuitUnit@ f)
 			bd = d;
 		}
 	}
+	gFacPPC[facDef] = best;
+	gFacPPCDef[facDef] = bd;
+	return best;
+}
+
+// Metal per second a factory turns into its best unit: its own build power
+// plus the lathe on it, over that unit's build effort per metal.
+float FacMetalRate(CCircuitUnit@ f)
+{
+	const int fd = int(f.circuitDef.id);
+	FacBestPPC(fd);
+	const int bd = gFacPPCDef[fd];
 	if ((bd < 0) || (Catalog::gBuildTime[bd] <= 1.f))
 		return 0.f;
 	const float bp = Catalog::gBuildPower[fd] + RingBPAt(f.GetPos(ai.frame));
@@ -126,7 +120,9 @@ int CeilingConsOwned()
 	// plant produced none).
 	const bool flyLab = FlyingConLab(true);
 	int n = 0;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own18 = OwnedDefs();
+	for (uint _oi18 = 0; _oi18 < _own18.length(); ++_oi18) {
+		const uint c = uint(_own18[_oi18]);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
@@ -208,7 +204,9 @@ int ConsOwnedAny()
 {
 	const bool flyLab = FlyingConLab(false);   // same law as the ceiling count
 	int n = 0;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own19 = OwnedDefs();
+	for (uint _oi19 = 0; _oi19 < _own19.length(); ++_oi19) {
+		const uint c = uint(_own19[_oi19]);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)]
 			|| !Catalog::gBuilder[int(c)]
 			|| Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
@@ -249,7 +247,9 @@ float ConWorkerBP()
 {
 	float bp = 0.f;
 	int n = 0;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own20 = OwnedDefs();
+	for (uint _oi20 = 0; _oi20 < _own20.length(); ++_oi20) {
+		const uint c = uint(_own20[_oi20]);
 		const int d = int(c);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[d] || !Catalog::gBuilder[d]
 			|| Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
@@ -593,7 +593,9 @@ float FastestBuilderSpeed()
 	if (gFastBuilder > 0.f)
 		return gFastBuilder;
 	float top = 0.f;
-	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+	const array<int>@ _own21 = OwnedDefs();
+	for (uint _oi21 = 0; _oi21 < _own21.length(); ++_oi21) {
+		const uint cd = uint(_own21[_oi21]);
 		const int di = int(cd);
 		if ((gOwnCount[cd] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
 			continue;
@@ -963,6 +965,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
 	if (fac is null)
 		return null;
+	const double _tPre = Perf::T0();
 	WorthDiag();      // self-gated, once, and only when asked for
 	LineClassDiag();  // likewise: the class split, once the field is known
 	gNoOrder = "";
@@ -1277,7 +1280,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// advanced airframe. Builders and unarmed scouts keep flowing.
 	bool t1AirMute = false;
 	if ((PlantClass(fid) == PC_AIR) && (PlantTier(fid) == 1)) {
-		for (uint ad = 1; ad < gOwnCount.length(); ++ad) {
+		const array<int>@ _own22 = OwnedDefs();
+		for (uint _oi22 = 0; _oi22 < _own22.length(); ++_oi22) {
+			const uint ad = uint(_own22[_oi22]);
 			const int adi = int(ad);
 			if ((gOwnCount[ad] <= 0) || Catalog::gMobile[adi]
 				|| (Catalog::gBuildsList[adi].length() == 0))
@@ -1311,6 +1316,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	int best = -1;
 	float bestV = 0.f;
 	float bestGain = 0.f;
+	Perf::Add("prod.pre", _tPre);
 	const double _tProds = Perf::T0();
 	// Two fleet counts the candidate loop below used to re-walk the whole def
 	// table for, once per candidate. Negative means "not taken yet".

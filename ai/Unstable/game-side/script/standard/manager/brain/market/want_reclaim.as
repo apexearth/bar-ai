@@ -393,7 +393,9 @@ void RefreshBestCells()
 	// beside eleven T2 hands and no fusion (apexearth 2026-09-26). Reclaim keeps
 	// the standing figure, or it would eat the solars before a fusion stood.
 	gBuildEcell = gBestEcell;
-	for (uint b = 1; b < gOwnCount.length(); ++b) {
+	const array<int>@ _own41 = OwnedDefs();
+	for (uint _oi41 = 0; _oi41 < _own41.length(); ++_oi41) {
+		const uint b = uint(_own41[_oi41]);
 		if ((gOwnCount[b] <= 0) || !Catalog::gMobile[int(b)] || !Catalog::gBuilder[int(b)])
 			continue;
 		const array<int>@ bo = Catalog::BuildsOf(int(b));
@@ -502,7 +504,9 @@ float DenserConvCapE(int d)
 	const float mine = Catalog::gConvCapacity[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	float e = 0.f;
-	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+	const array<int>@ _own42 = OwnedDefs();
+	for (uint _oi42 = 0; _oi42 < _own42.length(); ++_oi42) {
+		const uint cd = uint(_own42[_oi42]);
 		if ((gOwnCount[cd] <= 0) || (Catalog::gConvCapacity[int(cd)] <= 0.f))
 			continue;
 		const float mc = Catalog::gConvCapacity[int(cd)]
@@ -527,12 +531,32 @@ float DenserConvCapE(int d)
 }
 
 // The same, standing units only.
+array<int> gDenserStAt;
+array<float> gDenserStE;
 float DenserConvStandingE(int d)
+{
+	if (int(gDenserStAt.length()) <= d) {
+		const uint n0 = gDenserStAt.length();
+		gDenserStAt.resize(d + 1);
+		gDenserStE.resize(d + 1);
+		for (uint k = n0; k <= uint(d); ++k)
+			gDenserStAt[k] = -1;
+	}
+	if (gDenserStAt[d] == gOwnStamp)
+		return gDenserStE[d];
+	gDenserStAt[d] = gOwnStamp;
+	gDenserStE[d] = DenserConvStandingCount(d);
+	return gDenserStE[d];
+}
+
+float DenserConvStandingCount(int d)
 {
 	const float mine = Catalog::gConvCapacity[d]
 			/ float((Catalog::gAreaCells[d] > 0) ? Catalog::gAreaCells[d] : 1);
 	float e = 0.f;
-	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+	const array<int>@ _own43 = OwnedDefs();
+	for (uint _oi43 = 0; _oi43 < _own43.length(); ++_oi43) {
+		const uint cd = uint(_own43[_oi43]);
 		if ((gOwnCount[cd] <= 0) || (Catalog::gConvCapacity[int(cd)] <= 0.f))
 			continue;
 		const float mc = Catalog::gConvCapacity[int(cd)]
@@ -589,7 +613,9 @@ float DenserHandsSecs(int d, float extraE)
 	int best = -1;
 	float bestPc = 0.f;
 	array<int> denserDef;
-	for (uint cd = 1; cd < gOwnCount.length(); ++cd) {
+	const array<int>@ _own44 = OwnedDefs();
+	for (uint _oi44 = 0; _oi44 < _own44.length(); ++_oi44) {
+		const uint cd = uint(_own44[_oi44]);
 		const int di = int(cd);
 		if ((gOwnCount[cd] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
 			continue;
@@ -868,6 +894,11 @@ float ReachVictimMul(CCircuitUnit@ unit, const AIFloat3& in at, int d)
 	// read that said yes while 2,212 walks to one LLT row died on nopath.
 	if (WalkRefusedAt(at, d))
 		return 0.f;
+	// From where the hand stands: on a world map the victim is often across the sea.
+	const int fp = (Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d];
+	if (!ai.CanDefReachAt(Catalog::Def(uid), unit.GetPos(ai.frame), at,
+			Catalog::gBuildDist[uid] + float(fp) * 8.f))
+		return 0.f;
 	return ai.CanDefReach(Catalog::Def(uid), at, at) ? 1.f : 0.25f;
 }
 
@@ -1121,8 +1152,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		// worst generator we own permanently in front: a solar reads 0.80 and
 		// an advanced solar 4.69, so while one T1 panel stands the advanced
 		// solar can never even be the candidate.
-		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, g.GetPos(ai.frame), d);
+		const float rchG = ReachVictimMul(unit, g.GetPos(ai.frame), d);
+		const float v = (rchG > 0.f) ? RetireValue(unit, g, d, ePM, wageR, hz) * rchG : 0.f;
 		if (v > 0.f)
 			++nGenPriced;
 		if (v > bestGenV) {
@@ -1196,7 +1227,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		const float reach = ReachVictimMul(unit, cv.GetPos(ai.frame), d);
 		if (reach <= 0.f)
 			++nConvUnreach;
-		const float v = RetireValue(unit, cv, d, ePM, wageR, hz, lostM) * reach;
+		const float v = (reach > 0.f) ? RetireValue(unit, cv, d, ePM, wageR, hz, lostM) * reach : 0.f;
 		if (v > 0.f)
 			++nConvPriced;
 		if (v > bestConvV) {
@@ -1237,8 +1268,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				< BusyNanoBP() + Catalog::gBuildPower[d])
 			continue;
 		++nLatheCovered;
-		const float v = RetireValue(unit, nt, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, nt.GetPos(ai.frame), d);
+		const float rchN = ReachVictimMul(unit, nt.GetPos(ai.frame), d);
+		const float v = (rchN > 0.f) ? RetireValue(unit, nt, d, ePM, wageR, hz) * rchN : 0.f;
 		if (v > bestLatheV) {
 			bestLatheV = v;
 			bestLatheDef = d;
@@ -1375,8 +1406,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 		}
 		if (!dominated && !stranded)
 			continue;
-		const float v = RetireValue(unit, g, d, ePM, wageR, hz)
-				* ReachVictimMul(unit, gProtPos[PROT_DEF][i], d);
+		const float rchD = ReachVictimMul(unit, gProtPos[PROT_DEF][i], d);
+		const float v = (rchD > 0.f) ? RetireValue(unit, g, d, ePM, wageR, hz) * rchD : 0.f;
 		if (v > bestValue) {
 			bestValue = v;
 			@best = g;
@@ -1791,7 +1822,9 @@ Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
 	CCircuitUnit@ blk = null;
 	int blkDef = -1;
 	float nearest = 1e9f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own45 = OwnedDefs();
+	for (uint _oi45 = 0; _oi45 < _own45.length(); ++_oi45) {
+		const uint d = uint(_own45[_oi45]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di] || Catalog::gNeedGeo[di])
 			continue;

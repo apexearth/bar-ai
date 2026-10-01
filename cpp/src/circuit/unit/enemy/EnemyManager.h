@@ -168,6 +168,12 @@ private:
 	int dyingFrame;
 	std::set<CEnemyUnit*> enemyDying;
 
+	// apex: the whole-registry aggregates, read many times a frame from script
+	mutable int aggFrame = -1;
+	mutable springai::AIFloat3 aggStructPos;
+	mutable float aggStructCost = 0.f;
+	mutable float aggMaxMobileCostM = 0.f;
+	void FillAggregates() const;
 	std::vector<SEnemyData> hostileDatas;  // immutable during threaded processing
 	std::vector<SEnemyData> peaceDatas;  // immutable during threaded processing
 

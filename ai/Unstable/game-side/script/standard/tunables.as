@@ -771,7 +771,7 @@ const float TUNE_LANE_STICKY = 900.f;
 // [frames] -- Ceiling on a memoised proposer answer. Validity is the stamps of
 //   its inputs; this bounds only the per-frame prices no stamp can reach.
 //   45 = what the clock alone used to be. See docs/27.
-const float TUNE_MEMO_TTL = 45.f;
+const float TUNE_MEMO_TTL = 300.f;
 
 // [microseconds] -- What one sim frame may spend assembling builder elections.
 //   The election is sliced against this between proposers, so it bounds the
@@ -1415,7 +1415,7 @@ const float TUNE_DEF_TRADE = 3.f;
 const float TUNE_DEF_TTD_H = 120.f;
 
 // How often the protection field is rebuilt, in game seconds. See docs/27.
-const float TUNE_PROTECT_FIELD_S = 2.f;
+const float TUNE_PROTECT_FIELD_S = 15.f;
 
 // How often the energy-stall answer re-asks which worker should drop what it
 //   is doing. See docs/27.

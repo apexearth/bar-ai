@@ -613,20 +613,26 @@ int   gEMakeStamp = -1;
 // a stall is a stall the moment the store will run dry before a generator
 // finishes, whatever share of the bank is left. Same filters the generator
 // ladder itself uses, so the two cannot disagree about what a generator is.
+// Every term is buildTime / one build power, so the quickest generator is the
+// catalog's least build time: found once, not over 900 defs per stall check.
+int gEGenFastDef = 0;   // 0 = not looked yet, -1 = none
 float EGenBuildSeconds()
 {
-	float best = -1.f;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
-			|| Catalog::gSub[d] || Catalog::gNeedGeo[d])
-			continue;
-		if (Catalog::gMakeE[d] <= 1.f)
-			continue;
-		const float sec = Catalog::BuildSecondsAt(d, EffBP(0.f));
-		if ((sec > 0.f) && ((best < 0.f) || (sec < best)))
-			best = sec;
+	if ((gEGenFastDef == 0) && (Catalog::gDefCount > 0)) {
+		gEGenFastDef = -1;
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
+				|| Catalog::gSub[d] || Catalog::gNeedGeo[d])
+				continue;
+			if ((Catalog::gMakeE[d] <= 1.f) || (Catalog::gBuildTime[d] <= 0.f))
+				continue;
+			if ((gEGenFastDef < 0) || (Catalog::gBuildTime[d] < Catalog::gBuildTime[gEGenFastDef]))
+				gEGenFastDef = d;
+		}
 	}
-	return best;
+	if (gEGenFastDef <= 0)
+		return -1.f;
+	return Catalog::BuildSecondsAt(gEGenFastDef, EffBP(0.f));
 }
 
 float EMakeInFlight()
@@ -959,7 +965,9 @@ float OwnConvCellCeil()
 	gOccCellFrame = ai.frame;
 	gOccCellOwn = gOwnStamp;
 	float best = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own32 = OwnedDefs();
+	for (uint _oi32 = 0; _oi32 < _own32.length(); ++_oi32) {
+		const uint d = uint(_own32[_oi32]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
 			continue;
@@ -978,7 +986,9 @@ float OwnConvCeil()
 	gOccFrame = ai.frame;
 	gOccOwn = gOwnStamp;
 	float best = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own33 = OwnedDefs();
+	for (uint _oi33 = 0; _oi33 < _own33.length(); ++_oi33) {
+		const uint d = uint(_own33[_oi33]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
 			continue;
@@ -1042,7 +1052,9 @@ float FleetAskE()
 	// priced at the line's rate it bought energy before the second mex).
 	const float lineDens = LineEnergyDensity();
 	const float buildDens = BuildEnergyDensity();
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own34 = OwnedDefs();
+	for (uint _oi34 = 0; _oi34 < _own34.length(); ++_oi34) {
+		const uint d = uint(_own34[_oi34]);
 		if ((gOwnCount[d] <= 0) || (Catalog::gBuildPower[int(d)] <= 0.f))
 			continue;
 		const int id = int(d);
@@ -1097,7 +1109,9 @@ float BPCapacity()
 	gBpCapFrame = ai.frame;
 	gBpCapOwn = gOwnStamp;
 	float cap = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own35 = OwnedDefs();
+	for (uint _oi35 = 0; _oi35 < _own35.length(); ++_oi35) {
+		const uint d = uint(_own35[_oi35]);
 		if (gOwnCount[d] <= 0)
 			continue;
 		if (Catalog::gBuildPower[int(d)] <= 0.f)
@@ -1120,7 +1134,9 @@ float BPCapacity()
 float MobileBPCapacity()
 {
 	float cap = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own36 = OwnedDefs();
+	for (uint _oi36 = 0; _oi36 < _own36.length(); ++_oi36) {
+		const uint d = uint(_own36[_oi36]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)]
 			|| (Catalog::gBuildPower[int(d)] <= 0.f))
 			continue;

@@ -124,6 +124,7 @@ private:
 	std::vector<SClusterInfo> clusterInfos;
 
 	int markFrame;
+	int markVersion = -1;  // apex: the friendly-list version last merged
 	struct SMex {
 		ICoreUnit::Id unitId;
 		int index;

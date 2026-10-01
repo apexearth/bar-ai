@@ -31,7 +31,7 @@ const int   ETA_INF_N = 1000000;
 
 // One rung of the growth ladder: a thing we could build, what it costs, what it
 // adds to economic power, and how many of them the map still has in it.
-class Pool {
+final class Pool {
 	array<int> def;
 	array<float> cost;
 	array<float> gain;
@@ -401,7 +401,9 @@ float MobileBPShareNow()
 {
 	float mobile = 0.f;
 	float all = 0.f;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own16 = OwnedDefs();
+	for (uint _oi16 = 0; _oi16 < _own16.length(); ++_oi16) {
+		const uint c = uint(_own16[_oi16]);
 		const int d = int(c);
 		// A nano turret is not IsBuilder() (no build options), and it is
 		// the static lathe this share exists to see: gated on gBuilder it
@@ -523,7 +525,9 @@ string gLadderTraceS;
 float CeilingHandsBP()
 {
 	float bpc = 0.f;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own17 = OwnedDefs();
+	for (uint _oi17 = 0; _oi17 < _own17.length(); ++_oi17) {
+		const uint c = uint(_own17[_oi17]);
 		const int d = int(c);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[d] || !Catalog::gBuilder[d])
 			continue;

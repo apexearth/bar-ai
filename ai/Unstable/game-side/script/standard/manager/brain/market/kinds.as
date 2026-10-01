@@ -18,7 +18,7 @@ const int WK_AIRDEF = 14;
 const int WK_SUPER = 15;
 const int WK_TEETH = 16;
 
-class Want {
+final class Want {
 	int kind = WK_NONE;
 	CCircuitDef@ def;
 	AIFloat3 pos;
@@ -41,6 +41,7 @@ class Want {
 	// read by the construction-risk charge in Decide.
 	float buildSec = 0.f;
 	float walkSec = 0.f;    // the asker's road to pos, so the ladder can charge it
+	int src = -1;           // the election step that proposed it (StepWorth)
 	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
 	float valueRaw = 0.f;   // value before the trip was charged
 	float backM = 0.f;      // the road back home, inside tripM

@@ -161,7 +161,10 @@ void RebuildFront()
 		ai.SetTerritoryBars(RING_ALLY_FRAC, RING_FOE_FRAC);
 	}
 	const int terrVer = ai.GetTerritoryVersion();
-	if ((gFrontStamp >= 0) && (terrVer == gFrontTerrVer) && (ai.frame - gFrontStamp < 150))
+	// A new mask is taken at most every 2 s: in a fight its edge moves every
+	// apply, and each rebuild re-keys the protect, sense and reclaim memos.
+	if ((gFrontStamp >= 0) && (ai.frame - gFrontStamp < 150)
+		&& ((terrVer == gFrontTerrVer) || (ai.frame - gFrontStamp < 60)))
 		return;
 	gFrontStamp = ai.frame;
 	gFrontTerrVer = terrVer;

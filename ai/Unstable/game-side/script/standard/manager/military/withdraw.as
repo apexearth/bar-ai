@@ -245,28 +245,67 @@ void NoteLocalDeath(const AIFloat3& in at, float costM, bool ours)
 	gTradeFrame.insertLast(ai.frame);
 }
 
+// ONE PASS'S CONSTANTS AND GRIDS. Every unit of the pass summed the whole army,
+// every fence and the whole trade ledger within one radius, and re-read the
+// same tunables; the grids answer each with the cells under the radius and
+// the same distance test.
+float gWdR = 0.f, gWdR2 = 0.f, gWdOddsK = 1.f, gWdFloor = 0.f, gWdLoseTrade = 1.f;
+int gWdKeep = 0;
+Grid::Cells gWdAlly;
+Grid::Cells gWdFence;
+array<int> gWdFenceIdx;
+Grid::Cells gWdTrade;
+array<int> gWdTradeIdx;
+void WdPassPrep(const array<AIFloat3>@ allyPos)
+{
+	gWdR = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
+	gWdR2 = gWdR * gWdR;
+	gWdOddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	gWdFloor = ai.GetTunable("apex_losing_floor", TUNE_LOSING_FLOOR);
+	gWdLoseTrade = ai.GetTunable("apex_losing_trade", TUNE_LOSING_TRADE);
+	gWdKeep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
+	const float w = float(AiTerrainWidth());
+	const float h = float(AiTerrainHeight());
+	const float cell = (gWdR > 64.f) ? gWdR : 64.f;
+	gWdAlly.Begin(cell, 0.f, 0.f, w, h);
+	for (uint i = 0; i < allyPos.length(); ++i)
+		gWdAlly.Add(allyPos[i].x, allyPos[i].z);
+	gWdFence.Begin(cell, 0.f, 0.f, w, h);
+	gWdFenceIdx.resize(0);
+	for (uint i = 0; (i < gFencePos.length()) && (i < gFenceDef.length()); ++i) {
+		const CCircuitDef@ d = gFenceDef[i];
+		if ((d is null) || (d.GetSurfThreat() <= 0.f))
+			continue;
+		gWdFence.Add(gFencePos[i].x, gFencePos[i].z);
+		gWdFenceIdx.insertLast(int(i));
+	}
+	gWdTrade.Begin(cell, 0.f, 0.f, w, h);
+	gWdTradeIdx.resize(0);
+	for (uint i = 0; i < gTradeAt.length(); ++i) {
+		if (ai.frame - gTradeFrame[i] > gWdKeep)
+			continue;
+		gWdTrade.Add(gTradeAt[i].x, gTradeAt[i].z);
+		gWdTradeIdx.insertLast(int(i));
+	}
+}
+
 bool LosingFightHere(const AIFloat3& in p, float& out lost, float& out killed)
 {
 	lost = 0.f;
 	killed = 0.f;
-	const float floor = ai.GetTunable("apex_losing_floor", TUNE_LOSING_FLOOR);
-	if (floor <= 0.f)
+	if (gWdFloor <= 0.f)
 		return false;
-	const int keep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
-	const float r = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
-	const float r2 = r * r;
-	for (uint i = 0; i < gTradeAt.length(); ++i) {
-		if (ai.frame - gTradeFrame[i] > keep)
-			continue;
-		if (gTradeAt[i].SqDistance2D(p) > r2)
+	gWdTrade.Query(p.x, p.z, gWdR);
+	for (uint h = 0; h < gWdTrade.hit.length(); ++h) {
+		const uint i = uint(gWdTradeIdx[uint(gWdTrade.hit[h])]);
+		if (gTradeAt[i].SqDistance2D(p) > gWdR2)
 			continue;
 		if (gTradeOurs[i])
 			lost += gTradeM[i];
 		else
 			killed += gTradeM[i];
 	}
-	return (lost >= floor)
-		&& (lost > killed * ai.GetTunable("apex_losing_trade", TUNE_LOSING_TRADE));
+	return (lost >= gWdFloor) && (lost > killed * gWdLoseTrade);
 }
 
 // The influence test above LAGS: influence is built from standing presence, so
@@ -285,24 +324,22 @@ bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 	oddsFor = 0.f;
 	if (enemyT <= 0.f)
 		return false;
-	const float r = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
-	const float r2 = r * r;
+	const float r = gWdR;
+	const float r2 = gWdR2;
 	float ours = 0.f;
-	for (uint i = 0; i < allyPos.length(); ++i) {
+	gWdAlly.Query(p.x, p.z, r);
+	for (uint h = 0; h < gWdAlly.hit.length(); ++h) {
+		const uint i = uint(gWdAlly.hit[h]);
 		if (allyPos[i].SqDistance2D(p) <= r2)
 			ours += allyPow[i];
 	}
-	for (uint i = 0; i < gFencePos.length(); ++i) {
-		if (i >= gFenceDef.length())
-			break;
-		const CCircuitDef@ d = gFenceDef[i];
-		if ((d !is null) && (d.GetSurfThreat() > 0.f)
-			&& (gFencePos[i].SqDistance2D(p) <= r2))
-		{
-			ours += d.GetSurfThreat();
-		}
+	gWdFence.Query(p.x, p.z, r);
+	for (uint h = 0; h < gWdFence.hit.length(); ++h) {
+		const uint i = uint(gWdFenceIdx[uint(gWdFence.hit[h])]);
+		if (gFencePos[i].SqDistance2D(p) <= r2)
+			ours += gFenceDef[i].GetSurfThreat();
 	}
-	float oddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	float oddsK = gWdOddsK;
 	// A LOSS ON THEIR GROUND PAYS THEM (his 2026-09-28: "10,000 army and it
 	// all died, that turns into 5,000 metal for the other team to reclaim").
 	// Forward of home, whoever holds the ground takes the wrecks, so a
@@ -324,6 +361,15 @@ bool OutgunnedHere(CCircuitUnit@ u, const AIFloat3& in p,
 	}
 	oddsFor = (ours > 0.f) ? (enemyT / ours) : 99.f;
 	return enemyT > ours * oddsK;
+}
+
+// Nothing a withdraw pass does moves the hold, so it is asked once per pass.
+int gHoldHomePass = -1;
+bool HoldHomeOnce()
+{
+	if (gHoldHomePass < 0)
+		gHoldHomePass = HoldHome() ? 1 : 0;
+	return gHoldHomePass > 0;
 }
 
 void UpdateWithdraw()
@@ -449,11 +495,13 @@ void UpdateWithdraw()
 			+ " foeStatic=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::STATIC), "", 0, 0));
 	}
 
+	WdPassPrep(allyPos);
 	const int reissue = int(ai.GetTunable("apex_withdraw_reissue", TUNE_WITHDRAW_REISSUE)) * SECOND;
 	// A recall brings home what the threat there needs, not the whole front:
 	// attackers already home-side count first, then each recalled unit.
 	const float recallFwd = ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);
 	float recallHave = -1.f;
+	gHoldHomePass = -1;
 	for (uint j = 0; j < alive.length(); ++j) {
 		CCircuitUnit@ u = alive[j];
 		const int i = aliveSlot[j];
@@ -510,7 +558,7 @@ void UpdateWithdraw()
 		if (((ft == Task::FightType::ATTACK) || (ft == Task::FightType::RAID))
 			&& (ai.GetTunable("apex_recall_home", TUNE_RECALL_HOME) > 0.f)
 			&& Builder::gHomeSet && Builder::BaseUnderAttack()
-			&& HoldHome())
+			&& HoldHomeOnce())
 		{
 			recallHome = (Military::ForwardFraction(p) > recallFwd) && ArrivesInTime(p);
 			if (recallHome && (recallHave < 0.f)) {
@@ -554,11 +602,11 @@ void UpdateWithdraw()
 		{
 			const float packD = p.distance2D(Military::gIncomingPos);
 			if (packD < ai.GetTunable("apex_consolidate_r", TUNE_CONSOLIDATE_R)) {
-				const float rA2 = ai.GetTunable("apex_withdraw_ally_r",
-						TUNE_WITHDRAW_ALLY_R);
 				float nearM = 0.f;
-				for (uint i2 = 0; i2 < allyPos.length(); ++i2) {
-					if (allyPos[i2].SqDistance2D(p) <= rA2 * rA2)
+				gWdAlly.Query(p.x, p.z, gWdR);
+				for (uint h2 = 0; h2 < gWdAlly.hit.length(); ++h2) {
+					const uint i2 = uint(gWdAlly.hit[h2]);
+					if (allyPos[i2].SqDistance2D(p) <= gWdR2)
 						nearM += allyCost[i2];
 				}
 				consolidate = nearM

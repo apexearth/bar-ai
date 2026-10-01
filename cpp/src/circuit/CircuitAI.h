@@ -186,7 +186,8 @@ public:
 	// The default is returned whenever the publishing gadget is absent, which is
 	// every non-harness game, so behaviour off the bench is unchanged. Values
 	// are cached on first read: this sits inside the per-unit attack loop.
-	float GetTunable(const char* name, float defVal) const;
+	float GetTunable(const char* name, float defVal) const { return GetTunable(std::string(name), defVal); }
+	float GetTunable(const std::string& name, float defVal) const;
 
 	// --- in-process team coordination -----------------------------------
 	// Every AI the host adds lives in ONE process (AIExport.cpp keeps them in
@@ -395,6 +396,11 @@ public:
 	bool GetBlockedBuildPos(springai::AIFloat3& outPos);
 	// The def that failed to place there, -1 when the mark carries none.
 	int GetBlockedBuildDef() const { return blockedBuildDef; }
+	// apex: every mark in order, oldest first; the slot above keeps only the last
+	bool PopBlockedBuild(springai::AIFloat3& outPos, int& outDef);
+	// apex: a path that failed for this move type into this sector, for a minute
+	void NoteNoPath(const CCircuitDef* cdef, const springai::AIFloat3& pos);
+	bool IsNoPath(const CCircuitDef* cdef, const springai::AIFloat3& pos) const;
 	// Our own units of `def` within radius of pos. The script can see a def's
 	// count but has no way to reach the instances.
 	std::vector<CCircuitUnit*> GetOwnUnitsOfDef(CCircuitDef* def, const springai::AIFloat3& pos, float radius);
@@ -441,7 +447,7 @@ public:
 
 	using EnemyInfos = std::map<ICoreUnit::Id, CEnemyInfo*>;
 private:
-	mutable std::map<std::string, float> tunables;  // see GetTunable
+	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options
 	mutable bool aiOptsRead = false;
 	mutable float lavaLevel = NO_LAVA;   // see GetLavaLevel
@@ -487,6 +493,16 @@ private:
 	std::vector<CCircuitUnit*> teamMobiles;  // IsMobile(), likewise for GetOwnDamagedNear
 	void IndexTeamUnit(CCircuitUnit* unit, bool isAdd);
 	EnemyInfos enemyInfos;  // owner
+	std::vector<CEnemyInfo*> enemyById;  // apex: the same map indexed by unit id, for GetEnemyInfo
+	void SetEnemyById(int id, CEnemyInfo* e) {
+		if (id < 0) {
+			return;
+		}
+		if ((size_t)id >= enemyById.size()) {
+			enemyById.resize(id + 1024, nullptr);
+		}
+		enemyById[id] = e;
+	}
 	CAllyTeam* allyTeam;
 	bool isAllyTeamInit;
 
@@ -574,6 +590,11 @@ private:
 	springai::AIFloat3 blockedBuildPos = -RgtVector;
 	int blockedBuildFrame = -1000000;
 	int blockedBuildDef = -1;
+	struct SBlockMark { springai::AIFloat3 pos; int def; int frame; };
+	std::vector<SBlockMark> blockedQueue;
+	std::unordered_map<long long, int> noPathMarks;  // (mobile id, sector) -> frame
+	int allyPowerFrame = -1;
+	std::vector<std::pair<springai::AIFloat3, float>> allyPowerList;
 	std::vector<std::pair<springai::AIFloat3, int>> unsafeSites;
 	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
 	// caller must delete, so the lookup is done once per def.
@@ -739,6 +760,8 @@ private:
 	// apex: the engine events, which run OUTSIDE AiFrame -- not part of the
 	// split's total, and until now counted as engine time. See HandleGameEvent.
 	uint64_t perfEvtNs = 0;
+	uint64_t perfEvtTopicNs[64] = {};
+	unsigned perfEvtTopicN[64] = {};
 	unsigned perfEvtCalls = 0;
 	// apex: a census, not a clock -- how many elements the O(n) helpers walked
 	// this minute. Increments only, so measuring costs nothing; a helper whose
@@ -750,6 +773,8 @@ private:
 	// ...and what it ANSWERED, because a wrong envelope costs nothing to walk.
 	float perfReachWorst = std::numeric_limits<float>::max();
 	float perfReachMax = 0.f;
+	uint64_t perfReachRebuildNs = 0;
+	unsigned perfReachRebuilds = 0;
 	CCircuitDef* perfReachMaxDef = nullptr;
 	uint64_t perfOwnSweep = 0;    // own units visited by GetOwn*Near/OfDef
 	unsigned perfOwnCalls = 0;
@@ -798,18 +823,10 @@ private:
 	std::vector<SFeatDefInfo> featDefInfo;
 	int metalResId = -1;
 	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
-	struct SReachEnemy {
-		float x, z, reach, speed, shell;
-		uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
-	};
+	using SReachEnemy = circuit::SReachEnemy;
 	std::vector<SReachEnemy> reachCache;
 	// apex: bounding-volume tree over reachCache, rebuilt with it. See BuildReachTree.
-	struct SReachNode {
-		float minx, minz, maxx, maxz;
-		float maxReach, maxSpeed;  // envelope bound for everything below
-		int32_t first, count;      // count > 0: leaf range; count == 0: inner node
-		int32_t right;             // inner: right child; the left child is self + 1
-	};
+	using SReachNode = circuit::SReachNode;
 	std::vector<SReachNode> reachNodes;
 	int32_t BuildReachTree(int32_t first, int32_t count);
 	float ReachNodeMinDist(int32_t ni, float px, float pz) const;

@@ -65,7 +65,7 @@ public:
 	void AddBusPath(CCircuitUnit* unit, const springai::AIFloat3& toPos, CCircuitDef* mobileDef);
 	void DelBusPath(CCircuitUnit* unit);
 	springai::AIFloat3 GetBusPos(CCircuitDef* facDef, const springai::AIFloat3& pos, int& outFacing);
-	void ResetBuildFrame() { markFrame = -FRAMES_PER_SEC; }
+	void ResetBuildFrame() { markFrame = -FRAMES_PER_SEC; markVersion = -1; }
 	// TODO: Use IsInBounds test and Bound operation only if mask or search offsets (endr) are out of bounds
 	// TODO: Based on map complexity use BFS or circle to calculate build offset
 	// TODO: Consider abstract task position (any area with builder) and task for certain unit-pos-area
@@ -98,6 +98,7 @@ public:
 
 private:
 	int markFrame;
+	int markVersion = -1;  // apex: the friendly-list version last merged
 	struct SStructure {
 		ICoreUnit::Id unitId;
 		CCircuitDef* cdef;

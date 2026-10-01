@@ -15,6 +15,12 @@
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Profiler.h"
+#include "util/Utils.h"
+#include "task/fighter/FighterTask.h"
+#include "map/InfluenceMap.h"
+
+#include <chrono>
+#include <string>
 
 namespace circuit {
 
@@ -183,11 +189,17 @@ void ITaskModule::Update()
 
 	if (updateIterator >= updateTasks.size()) {
 		updateIterator = 0;
+		++lodPass;
 	}
 
 	int lastFrame = GetCircuit()->GetLastFrame();
 	// stagger the Update's
-	unsigned int n = (updateTasks.size() / TEAM_SLOWUPDATE_RATE) + 1;
+	// apex: a fractional share per frame, so each task is updated once per
+	// updateRate frames; the old `+ 1` updated one task EVERY frame whenever
+	// there were fewer tasks than frames, whatever the rate said.
+	updateCredit += float(updateTasks.size()) / float(updateRate);
+	unsigned int n = (unsigned int)updateCredit;
+	updateCredit -= float(n);
 
 	while ((updateIterator < updateTasks.size()) && (n != 0)) {
 		IUnitTask* task = updateTasks[updateIterator];
@@ -206,10 +218,53 @@ void ITaskModule::Update()
 				}
 				AbortTask(task);
 			} else {
+				// apex: LEVEL OF DETAIL. A fighter task with no enemy influence where
+				// its first unit stands re-plans on alternate passes; one in or near
+				// contact keeps every pass.
+				if (lodQuiet && (task->GetType() == IUnitTask::Type::FIGHTER)
+					&& (((lodPass + (reinterpret_cast<uintptr_t>(task) >> 5)) & 1) != 0))
+				{
+					const std::set<CCircuitUnit*>& us = task->GetAssignees();
+					if (!us.empty() && (GetCircuit()->GetInflMap()->GetEnemyInflAt(
+							(*us.begin())->GetPos(lastFrame)) <= INFL_EPS))
+					{
+						++updateIterator;
+						n--;
+						continue;
+					}
+				}
+				const auto tU0 = std::chrono::steady_clock::now();
+				int key = int(task->GetType());
+				if (task->GetType() == IUnitTask::Type::FIGHTER) {
+					key = 8 + int(static_cast<IFighterTask*>(task)->GetFightType());
+				}
 				task->Update();
+				if ((key >= 0) && (key < 24)) {
+					perfTypeNs[key] += std::chrono::duration_cast<std::chrono::nanoseconds>(
+							std::chrono::steady_clock::now() - tU0).count();
+					++perfTypeN[key];
+				}
 			}
 			++updateIterator;
 			n--;
+		}
+	}
+	// apex: what each kind of task costs to update, once a game-minute
+	if (lastFrame >= perfTypeNextLog) {
+		perfTypeNextLog = lastFrame + 1800;
+		std::string ln;
+		char buf[48];
+		for (int k = 0; k < 24; ++k) {
+			if (perfTypeN[k] == 0) {
+				continue;
+			}
+			snprintf(buf, sizeof(buf), " %i=%.1f/%u", k, perfTypeNs[k] / 1000000.f, perfTypeN[k]);
+			ln += buf;
+			perfTypeNs[k] = 0;
+			perfTypeN[k] = 0;
+		}
+		if (!ln.empty()) {
+			GetCircuit()->LOG("apex: perf taskupd rate=%u (type|8+fight=ms/calls)%s", updateRate, ln.c_str());
 		}
 	}
 }

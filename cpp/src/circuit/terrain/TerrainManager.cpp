@@ -816,6 +816,13 @@ void CTerrainManager::MarkAllyBuildings()
 	markFrame = circuit->GetLastFrame();
 
 	circuit->UpdateFriendlyUnits();
+	// apex: the list only changes on a refresh pass; re-merging it every frame
+	// walked every allied unit with an engine call per structure.
+	const int ver = circuit->GetAllyTeam()->GetFriendlyVersion();
+	if (ver == markVersion) {
+		return;
+	}
+	markVersion = ver;
 	const CAllyTeam::AllyUnits& friendlies = circuit->GetFriendlyUnits();
 	const int teamId = circuit->GetTeamId();
 	const int frame = circuit->GetLastFrame();

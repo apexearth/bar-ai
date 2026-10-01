@@ -457,15 +457,32 @@ bool RimGapSite(int cls, AIFloat3& out at)
 // care enough about capturing mexes early on... we end up trying to do other
 // things even though we're out of metal"). The emergency is meant to end at
 // the FIRST tower, which is what this counts.
+array<int> gPacStamp;
+array<bool> gPacAns;
 bool ProtAnyComing(int cls)
 {
+	if ((cls < 0) || (cls >= PROT_N))
+		return false;
+	if (gPacStamp.length() == 0) {
+		gPacStamp.resize(PROT_N);
+		gPacAns.resize(PROT_N);
+		for (uint k = 0; k < uint(PROT_N); ++k)
+			gPacStamp[k] = -1;
+	}
+	if (gPacStamp[cls] == gComStamp)
+		return gPacAns[cls];
+	gPacStamp[cls] = gComStamp;
 	// One source: the commitment ledger holds standing, framed and ordered
 	// alike.
+	bool any = false;
 	for (uint ci = 0; ci < ComLen(); ++ci) {
-		if (ProtClassOf(gComDef[ci]) == cls)
-			return true;
+		if (ProtClassOf(gComDef[ci]) == cls) {
+			any = true;
+			break;
+		}
 	}
-	return false;
+	gPacAns[cls] = any;
+	return any;
 }
 
 // A jammer's exclusion radius, floored so a dead binding cannot mean "no
@@ -700,7 +717,9 @@ float MobileAACoverM()
 	if (!Builder::gHomeSet)
 		return 0.f;
 	const float r = ai.GetTunable("apex_intercept_r", TUNE_INTERCEPT_R);
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own26 = OwnedDefs();
+	for (uint _oi26 = 0; _oi26 < _own26.length(); ++_oi26) {
+		const uint d = uint(_own26[_oi26]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		CCircuitDef@ cd = ai.GetCircuitDef(Id(d));

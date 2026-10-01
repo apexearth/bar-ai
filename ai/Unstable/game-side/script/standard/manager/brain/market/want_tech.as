@@ -120,14 +120,24 @@ void LogUpgradeCons()
 // A spot whose upgrade already has a hand is not offered again; each hand is
 // priced onto its own, with its own walk and its own danger.
 int gUpBusySkips = 0;
+array<AIFloat3> gUpBusyPos;
+int gUpBusyAt = -1;
 bool UpgradeUnderway(const AIFloat3& in spot)
 {
-	for (uint i = 0; i < Requests::gLive.length(); ++i) {
-		IUnitTask@ t = Requests::gLive[i];
-		if ((t is null) || t.IsDead() || (t.buildDef is null)
-				|| (Catalog::gExtractsM[int(t.buildDef.id)] <= 0.f))
-			continue;
-		if ((Requests::Workers(t) > 0) && (t.GetBuildPos().distance2D(spot) <= Requests::SAME_SITE)) {
+	if (gUpBusyAt != ai.frame) {
+		gUpBusyAt = ai.frame;
+		gUpBusyPos.resize(0);
+		for (uint i = 0; i < Requests::gLive.length(); ++i) {
+			IUnitTask@ t = Requests::gLive[i];
+			if ((t is null) || t.IsDead() || (t.buildDef is null)
+					|| (Catalog::gExtractsM[int(t.buildDef.id)] <= 0.f))
+				continue;
+			if (Requests::Workers(t) > 0)
+				gUpBusyPos.insertLast(t.GetBuildPos());
+		}
+	}
+	for (uint i = 0; i < gUpBusyPos.length(); ++i) {
+		if (gUpBusyPos[i].distance2D(spot) <= Requests::SAME_SITE) {
 			++gUpBusySkips;
 			return true;
 		}
@@ -139,29 +149,53 @@ bool UpgradeUnderway(const AIFloat3& in spot)
 // upgrade our allies' mexes"). BAR hands the new extractor to the owner of the
 // one beneath it (unit_mex_upgrade_reclaimer), and CBMexUpTask's reclaim path
 // only ever touches our own units.
+array<AIFloat3> gAuPos;
+array<int> gAuSpot;
+array<float> gAuExt;
+int gAuSynced = -1;
+dictionary gAuSpotOf;
 void AllyUpgradeSpots(array<AIFloat3>@ pos, array<int>@ spot, array<float>@ inc, array<float>@ ext)
 {
 	AllyStaticsSync();
-	CacheSpots();
-	for (uint i = 0; i < gAllyStPos.length(); ++i) {
-		const int d = gAllyStDef[i];
-		if (Catalog::gExtractsM[d] <= 0.f)
-			continue;
-		int best = -1;
-		float bestD = 64.f;
-		for (uint s = 0; s < gAllSpots.length(); ++s) {
-			const float dd = gAllSpots[s].distance2D(gAllyStPos[i]);
-			if (dd < bestD) {
-				bestD = dd;
-				best = int(s);
+	if (gAuSynced != gAllyStAt) {
+		gAuSynced = gAllyStAt;
+		gAuPos.resize(0);
+		gAuSpot.resize(0);
+		gAuExt.resize(0);
+		CacheSpots();
+		const float ceil = BestExtract();
+		for (uint i = 0; i < gAllyStPos.length(); ++i) {
+			const int d = gAllyStDef[i];
+			if ((Catalog::gExtractsM[d] <= 0.f) || (Catalog::gExtractsM[d] >= ceil))
+				continue;
+			const string key = formatInt(int(gAllyStPos[i].x) * 65536 + int(gAllyStPos[i].z));
+			int best = -1;
+			int64 got;
+			if (gAuSpotOf.get(key, got))
+				best = int(got);
+			else {
+				float bestD = 64.f;
+				for (uint s = 0; s < gAllSpots.length(); ++s) {
+					const float dd = gAllSpots[s].distance2D(gAllyStPos[i]);
+					if (dd < bestD) {
+						bestD = dd;
+						best = int(s);
+					}
+				}
+				gAuSpotOf.set(key, int64(best));
 			}
+			if (best < 0)
+				continue;
+			gAuPos.insertLast(gAllyStPos[i]);
+			gAuSpot.insertLast(best);
+			gAuExt.insertLast(Catalog::gExtractsM[d]);
 		}
-		if (best < 0)
-			continue;
-		pos.insertLast(gAllyStPos[i]);
-		spot.insertLast(best);
-		inc.insertLast(gAllSpotInc[best]);
-		ext.insertLast(Catalog::gExtractsM[d]);
+	}
+	for (uint i = 0; i < gAuPos.length(); ++i) {
+		pos.insertLast(gAuPos[i]);
+		spot.insertLast(gAuSpot[i]);
+		inc.insertLast(gAllSpotInc[gAuSpot[i]]);
+		ext.insertLast(gAuExt[i]);
 	}
 }
 
@@ -204,11 +238,16 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	}
 	const uint nOwn = uPos.length();
 	AllyUpgradeSpots(uPos, uSpot, uInc, uExt);
+	float topExt = 0.f;
+	for (uint i = 0; i < builds.length(); ++i) {
+		if (Catalog::gAvailable[builds[i]] && (Catalog::gExtractsM[builds[i]] > topExt))
+			topExt = Catalog::gExtractsM[builds[i]];
+	}
 	for (uint li = 0; li < uPos.length(); ++li) {
+		if (uExt[li] >= topExt)
+			continue;
 		if (UpgradeUnderway(uPos[li]))
 			continue;
-		if (DeathWalk(unit, uPos[li]))
-			continue;   // a forward mex we hold can still be a lethal walk
 		// GROUND THE ENGINE HAS ALREADY REFUSED. An upgrade's position IS the
 		// spot -- unlike a plant or a generator it cannot be moved -- so a spot
 		// the reach-safe veto refuses can never be upgraded, and re-proposing
@@ -220,6 +259,9 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 		if (NearBlocked(uPos[li]))
 			continue;
 		float surv = -1.f;
+		// A forward mex we hold can still be a lethal walk. Asked only of a
+		// would-be winner: four threat reads, and most spots never lead.
+		int deathWalk = -1;
 		const float walkSecU = (speed > 1.f)
 				? (here.distance2D(uPos[li]) / speed) : 60.f;
 		// A spot under water takes a floating or submerged extractor and a
@@ -271,6 +313,10 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			Want c;
 			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c);
 			if (c.value > w.value) {
+				if (deathWalk < 0)
+					deathWalk = DeathWalk(unit, uPos[li]) ? 1 : 0;
+				if (deathWalk > 0)
+					break;
 				w = c;
 				w.kind = WK_MEXUP;
 				@w.def = Catalog::Def(d);
@@ -363,7 +409,9 @@ int CheapestAdvancedPlant(CCircuitUnit@ unit)
 // Does a plant we own or have in flight turn out a builder that lists x?
 bool PlantDeliversBuild(int x)
 {
-	for (uint sk = 1; sk < gOwnCount.length(); ++sk) {
+	const array<int>@ _own46 = OwnedDefs();
+	for (uint _oi46 = 0; _oi46 < _own46.length(); ++_oi46) {
+		const uint sk = uint(_own46[_oi46]);
 		const int sd = int(sk);
 		if ((gOwnCount[sk] <= 0) || Catalog::gMobile[sd])
 			continue;
@@ -492,7 +540,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	float ownMob = 0.f;
 	{
 		const float ceilX = BestExtract();
-		for (uint dd = 1; dd < gOwnCount.length(); ++dd) {
+		const array<int>@ _own47 = OwnedDefs();
+		for (uint _oi47 = 0; _oi47 < _own47.length(); ++_oi47) {
+			const uint dd = uint(_own47[_oi47]);
 			if ((gOwnCount[dd] <= 0) || !Catalog::gMobile[int(dd)] || !Catalog::gBuilder[int(dd)])
 				continue;
 			const array<int>@ bb = Catalog::gBuildsList[int(dd)];
@@ -610,7 +660,9 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// A standing plant whose constructors already reach this far is serving
 		// the demand just as much as one being built.
 		int liveKin = 0;
-		for (uint sk = 1; sk < gOwnCount.length(); ++sk) {
+		const array<int>@ _own48 = OwnedDefs();
+		for (uint _oi48 = 0; _oi48 < _own48.length(); ++_oi48) {
+			const uint sk = uint(_own48[_oi48]);
 			const int sd = int(sk);
 			if ((gOwnCount[sk] <= 0) || Catalog::gMobile[sd]
 				|| (Catalog::gBuildsList[sd].length() == 0))

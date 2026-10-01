@@ -215,6 +215,7 @@ void CAllyTeam::UpdateFriendlyUnits()
 	}
 
 	lastUpdate = circuit->GetLastFrame();
+	++friendlyVersion;
 	perfFrUs += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - tFr0).count();
 	++perfFrCalls;

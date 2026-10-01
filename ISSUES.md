@@ -15,6 +15,43 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## PERFORMANCE
+
+### HIS MULTIPLAYER GAMES LAG: 1.2-2.0 ms/AI/frame by minute 11-20 (2026-10-01)
+
+His 8-AI games with 7 humans: Center Command (09-30, 1.3 ms at min 11,
+maxMs 26) and Mediterraneum_V1 (10-01, 0.80 at min 11 after the ally-upgrade
+fix, 1.2-1.7 at min 20, sim fell to 0.94x). Budget 0.417. bldIdle (the
+builder election) is nearly all of it; its per-call cost grows 0.26 -> 1.1-1.7
+ms over the game and it runs ~1,900x/min/AI. lagSev=3 throughout, so the
+election slice was already at its floor: the cost is in work the slice does
+not charge.
+- Cause 1, fixed in script: AllyUpgradeSpots walked every allied structure x
+  every map spot per election.
+- Cause 2, fixed in script: on a sea map rez bots were sent to reclaim our
+  own converters on other continents (ReachVictimMul tested reach from the
+  target to itself), nopath, re-sent every ~2 s: 200-2,800 nopath per AI per
+  game; one target 140 times.
+- Cause 3, fixed in C++ (unmeasured): the failure memory was a single slot
+  read at elections, so most marks were overwritten unread.
+- `docs/34-perf-audit.md`: a 20-agent audit of the whole tree, 132 verified
+  findings ranked by cost. Most of the top of the table is fixed.
+- Where it stands (10-01 evening, his settings, Mediterraneum 8v8 vs BARb hard,
+  apex_perf=0): worst game-minute 0.239 / 0.252 ms/AI/frame (seeds 1/2), from
+  0.77-1.12 at the start of the day. Inside the 0.417 budget; NOT at the 0.209
+  (half-budget) stretch goal. Run-to-run spread is ~+-10% on one seed.
+- What is left, late game (min 16-19): builder elections ~33% (memo cores
+  ~18%: mex 0.6 ms/miss, protect 2-5 ms/miss with a 5 ms single-call spike,
+  reclobs 0.6), rez-bot chain ~9% (most runs end with nothing: front veto),
+  raid/attack FindTarget ~6% (memory latency over ~460 enemies a call),
+  periodic up.* passes ~12%.
+- Not kept: MEMO_FRESH_GAP 8 -> 16 read built -10% on two eco-only seeds, but
+  the same tree's built ranges 72k-92k across the day's 18 runs, so it is
+  unresolved, not refuted; 30 earlier cost ~15% of energy. Also not kept
+  (no measured gain): a memo key on the build-only owned set, 8 memo ways.
+- Eco-only check of the final tree vs the deployed slot, seeds 3/4: income
+  438/446 vs 458/437, built 76k/81k vs 82k/76k -- no difference resolvable.
+
 ## ARMY
 
 ### SHIPPED 2026-09-30 EVENING, PARTLY MEASURED

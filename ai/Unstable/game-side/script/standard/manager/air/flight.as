@@ -219,7 +219,9 @@ void FlightWatch()
 {
 	array<CCircuitUnit@> home;
 	array<Id> alive;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+	const array<int>@ owned = Market::OwnedDefs();
+	for (uint oi = 0; oi < owned.length(); ++oi) {
+		const int d = owned[oi];
 		if (!IsFlightDef(d))
 			continue;
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d), Builder::gHomePos, 0.f);

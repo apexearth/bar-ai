@@ -31,6 +31,7 @@ public:
 private:
 	std::set<CCircuitUnit*> updateUnits;
 	unsigned int updateSlice;
+	float sliceCredit = 0.f;
 };
 
 } // namespace circuit

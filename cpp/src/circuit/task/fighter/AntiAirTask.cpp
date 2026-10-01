@@ -396,7 +396,7 @@ void CAntiAirTask::FindTarget()
 		{
 			continue;
 		}
-		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+		const float elevation = circuit->GetElevationAt(ePos);
 		const bool IsInWater = cdef->IsPredictInWater(elevation);
 		if (edef->IsInWater(elevation, ePos.y)) {
 			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW

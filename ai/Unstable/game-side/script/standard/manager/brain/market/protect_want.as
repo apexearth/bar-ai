@@ -323,6 +323,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// in the list. Same symmetric expectation DefenceTarget already
 			// floors on, apportioned by the share of our worth standing in
 			// this post's reach: near zero early, and it grows with the army.
+			// The obsolete test reads nothing the fill makes, and a fill is
+			// ~4.6 ms: an obsolete gun is dropped before it is sited at all.
+			if (Gate(GATE_DEF_OBSOLETE,
+					hDomOn && DefObsoleteOnArrival(builds, d, hAffordM))) {
+				gDwT1[d] = 0.f;
+				continue;
+			}
 			DefSiteFill(d, reach, adds, hMexFloorWave, hSiteWave, hEnemyPrior);
 			const float kCost = Catalog::gCostM[d]
 					+ Catalog::BuildSecondsAt(d, hEffBP) * hWage;
@@ -540,11 +547,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// afford right now: its metal is stranded on arrival.
 			// Both refusals below are counted: they hid 320 of 418
 			// candidates a game and every defwhy read "RUNNERUP none".
-			if (Gate(GATE_DEF_OBSOLETE,
-					hDomOn && DefObsoleteOnArrival(builds, d, hAffordM))) {
-				gDwT1[d] = 0.f;
-				continue;
-			}
 			// ...outclassed by a gun THIS hand can build: a T1 hand filling
 			// the shortfall (below) has no better option to be discounted
 			// against, and a T2 hand's light tower still is.

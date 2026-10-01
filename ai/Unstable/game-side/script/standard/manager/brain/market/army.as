@@ -39,7 +39,9 @@ void RoleGrossRefresh()
 	gRoleGrossStamp = gOwnStamp;
 	for (uint i = 0; i < gRoleGross.length(); ++i)
 		gRoleGross[i] = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own1 = OwnedDefs();
+	for (uint _oi1 = 0; _oi1 < _own1.length(); ++_oi1) {
+		const uint d = uint(_own1[_oi1]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
@@ -363,7 +365,9 @@ bool IsNavyDef(int d)
 float NavySupportCount(bool jam)
 {
 	float n = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own2 = OwnedDefs();
+	for (uint _oi2 = 0; _oi2 < _own2.length(); ++_oi2) {
+		const uint d = uint(_own2[_oi2]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !IsNavyDef(di))
 			continue;
@@ -376,7 +380,9 @@ float NavySupportCount(bool jam)
 float NavyValue()
 {
 	float have = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own3 = OwnedDefs();
+	for (uint _oi3 = 0; _oi3 < _own3.length(); ++_oi3) {
+		const uint d = uint(_own3[_oi3]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || Catalog::gBuilder[di]
 			|| (Catalog::gPower[di] <= 1.f) || !IsNavyDef(di))
@@ -645,7 +651,9 @@ float ArmyValue()
 		return gArmyVal;
 	gArmyValStamp = gOwnStamp;
 	float v = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own4 = OwnedDefs();
+	for (uint _oi4 = 0; _oi4 < _own4.length(); ++_oi4) {
+		const uint d = uint(_own4[_oi4]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
@@ -724,7 +732,9 @@ float AdvArmyValue()
 		return gAdvArmyVal;
 	gAdvArmyStamp = gOwnStamp;
 	float v = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own5 = OwnedDefs();
+	for (uint _oi5 = 0; _oi5 < _own5.length(); ++_oi5) {
+		const uint d = uint(_own5[_oi5]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		if (Catalog::gBuilder[int(d)] || (Catalog::gPower[int(d)] <= 1.f)
@@ -787,7 +797,9 @@ float RezRateM()
 float LineMetalPerEffort()
 {
 	float m = 0.f, e = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own6 = OwnedDefs();
+	for (uint _oi6 = 0; _oi6 < _own6.length(); ++_oi6) {
+		const uint d = uint(_own6[_oi6]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !LineCombat(di) || (Catalog::gBuildTime[di] <= 0.f))
 			continue;
@@ -981,7 +993,9 @@ void TrackLine()
 		gLineM[c] = 0.f;
 		gLineHp[c] = 0.f;
 	}
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own7 = OwnedDefs();
+	for (uint _oi7 = 0; _oi7 < _own7.length(); ++_oi7) {
+		const uint d = uint(_own7[_oi7]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !LineCombat(di))
 			continue;
@@ -1035,7 +1049,9 @@ float ClassCheapestOwned(int cls)
 	gClassCheapAt = ai.frame + 10 * SECOND;
 	for (int c = 0; c < LC_N; ++c)
 		gClassCheap[c] = -1.f;
-	for (uint u = 1; u < gOwnCount.length(); ++u) {
+	const array<int>@ _own8 = OwnedDefs();
+	for (uint _oi8 = 0; _oi8 < _own8.length(); ++_oi8) {
+		const uint u = uint(_own8[_oi8]);
 		const int ui = int(u);
 		if ((gOwnCount[u] <= 0) || Catalog::gMobile[ui])
 			continue;
@@ -1195,7 +1211,9 @@ void PatrolCensus()
 	gPatStamp = gOwnStamp;
 	gPatSites = 0.f;
 	gPatHave = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own9 = OwnedDefs();
+	for (uint _oi9 = 0; _oi9 < _own9.length(); ++_oi9) {
+		const uint d = uint(_own9[_oi9]);
 		const int di = int(d);
 		if (gOwnCount[d] <= 0)
 			continue;
@@ -1716,7 +1734,9 @@ int gNextFusDiag = 0;
 float T2HomeRadius()
 {
 	float speed = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own10 = OwnedDefs();
+	for (uint _oi10 = 0; _oi10 < _own10.length(); ++_oi10) {
+		const uint d = uint(_own10[_oi10]);
 		const int di = int(d);
 		// A hand that can build the moho: the Fark is advanced-only and
 		// faster, and it stretched home to 2,250 (22 spots) in the test game.
@@ -1760,7 +1780,9 @@ bool T2EconomyStands()
 	}
 	bool gen = false;
 	bool conv = false;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own11 = OwnedDefs();
+	for (uint _oi11 = 0; _oi11 < _own11.length(); ++_oi11) {
+		const uint d = uint(_own11[_oi11]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || Catalog::gMobile[di] || !AdvancedOnlyDef(di))
 			continue;
@@ -1972,10 +1994,15 @@ const float T2_DEFENCE_SHARE = 0.5f;
 // share of the army they have shown, at his home-defence parity (docs/24,
 // ~1.2x), never above the full target.
 const float ARMY_FLOOR_PARITY = 1.2f;
+float gArmyFloorRaw = 0.f;
+int gArmyFloorAt = -1;
 float ArmyFloor(float full)
 {
-	const float f = Military::EnemyArmyCost() / Military::AllyCount() * ARMY_FLOOR_PARITY;
-	return (f < full) ? f : full;
+	if (gArmyFloorAt != ai.frame) {
+		gArmyFloorAt = ai.frame;
+		gArmyFloorRaw = Military::EnemyArmyCost() / Military::AllyCount() * ARMY_FLOOR_PARITY;
+	}
+	return (gArmyFloorRaw < full) ? gArmyFloorRaw : full;
 }
 
 float ArmyTarget()
@@ -2468,7 +2495,7 @@ void StallWatch()
 		// Dry-run the market (proposers are pure): interrupt only a unit
 		// whose TOP want right now is energy -- a blind abort thrashed 73
 		// times in one game, re-deciding the same mex it left.
-		Want@ e = ProposeEnergy(u);
+		Want@ e = MemoPropose(0, u);
 		if ((e is null) || (e.value <= 0.f)) {
 			++rjWant;
 			continue;
@@ -2561,7 +2588,7 @@ void StallWatch()
 				}
 			}
 		}
-		Want@ mx = ProposeMex(u);
+		Want@ mx = MemoPropose(8, u);
 		if ((mx !is null) && (mx.value > e.value))
 			continue;
 		picks.insertLast(u);

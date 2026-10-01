@@ -174,7 +174,9 @@ bool SoleAdvancedHand(CCircuitUnit@ unit)
 	if ((uid < int(Catalog::gT1Hand.length())) && Catalog::gT1Hand[uid])
 		return false;
 	int advanced = 0;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own28 = OwnedDefs();
+	for (uint _oi28 = 0; _oi28 < _own28.length(); ++_oi28) {
+		const uint c = uint(_own28[_oi28]);
 		const int ci = int(c);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci] || !Catalog::gBuilder[ci])
 			continue;

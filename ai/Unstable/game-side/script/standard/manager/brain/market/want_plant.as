@@ -501,7 +501,9 @@ bool CrosserLine(int d)
 int OwnedCrosserPlants()
 {
 	int n = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own38 = OwnedDefs();
+	for (uint _oi38 = 0; _oi38 < _own38.length(); ++_oi38) {
+		const uint d = uint(_own38[_oi38]);
 		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)]
 			|| (Catalog::gBuildsList[int(d)].length() == 0))
 			continue;
@@ -526,7 +528,9 @@ bool WaterReachDef(int d)
 // Does a constructor of ours (the commander aside) reach the water?
 bool OwnWaterCon()
 {
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own39 = OwnedDefs();
+	for (uint _oi39 = 0; _oi39 < _own39.length(); ++_oi39) {
+		const uint d = uint(_own39[_oi39]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di]
 			|| Catalog::gRezzer[di])
@@ -555,7 +559,9 @@ bool PlantMakesWaterCon(int plant)
 int OwnedWaterPlants()
 {
 	int n = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own40 = OwnedDefs();
+	for (uint _oi40 = 0; _oi40 < _own40.length(); ++_oi40) {
+		const uint d = uint(_own40[_oi40]);
 		if ((gOwnCount[d] <= 0) || Catalog::gMobile[int(d)]
 			|| (Catalog::gBuildsList[int(d)].length() == 0))
 			continue;
@@ -584,12 +590,23 @@ int gNextYardHoldLog = 0;
 // When one of our water plants last died (main.as unit-destroyed).
 int gYardLostAt = -999999;
 
+float gDupNanoBp = -1.f;   // the catalog's best lathe per metal, found once
 float DupBpSubstMul(int d)
 {
 	const float pm = Catalog::gCostM[d];
 	if (pm <= 1.f)
 		return 1.f;
 	const float pbp = Catalog::gBuildPower[d] / pm;
+	if ((gDupNanoBp < 0.f) && (Catalog::gDefCount > 0))
+		gDupNanoBp = DupNanoBp();
+	const float nbp = gDupNanoBp;
+	if ((nbp <= 0.f) || (pbp >= nbp))
+		return 1.f;
+	return pbp / nbp;
+}
+
+float DupNanoBp()
+{
 	float nbp = 0.f;
 	for (int n = 1; n <= Catalog::gDefCount; ++n) {
 		if (!Catalog::gAvailable[n] || Catalog::gMobile[n])
@@ -602,9 +619,7 @@ float DupBpSubstMul(int d)
 		if (r > nbp)
 			nbp = r;
 	}
-	if ((nbp <= 0.f) || (pbp >= nbp))
-		return 1.f;
-	return pbp / nbp;
+	return nbp;
 }
 
 // THE WEALTH WAIVER. The copy ban and the one-advanced-plant-at-a-time

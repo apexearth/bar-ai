@@ -416,7 +416,9 @@ void ScoutOverflight()
 	// and the ground the silo wants lit ("our nukes don't land in smart
 	// places because we haven't seen those smart places").
 	if (Builder::gHomeSet) {
-		for (int rd = 1; rd <= Catalog::gDefCount; ++rd) {
+		const array<int>@ ownedR = Market::OwnedDefs();
+		for (uint oi = 0; oi < ownedR.length(); ++oi) {
+			const int rd = ownedR[oi];
 			if (!Catalog::gAvailable[rd] || !Catalog::gMobile[rd]
 				|| !Catalog::gFlyer[rd] || Catalog::gBuilder[rd]
 				|| !Catalog::gRadar[rd]
@@ -444,7 +446,9 @@ void ScoutOverflight()
 			}
 		}
 	}
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+	const array<int>@ ownedS = Market::OwnedDefs();
+	for (uint oi = 0; oi < ownedS.length(); ++oi) {
+		const int d = ownedS[oi];
 		if (!Catalog::gAvailable[d] || !Catalog::gMobile[d]
 			|| !Catalog::gFlyer[d] || Catalog::gBuilder[d]
 			|| (Catalog::gPower[d] > 1.f)
@@ -474,21 +478,21 @@ void ScoutOverflight()
 
 void Update()
 {
-	SettleStrike();
-	ResolveDefs();
-	ReArm();
-	AtomicWatch();
-	AtomicLookWatch();
-	LookWatch();
-	FlightWatch();
-	ShareWing();
-	Market::EnemyWetCount();
-	Market::FoeHalfPoll();
-	CoverWatch();
-	StrikeScanStep();
+	{ double _tA = Perf::T0(); SettleStrike(); Perf::Add("air.SettleStrike", _tA); }
+	{ double _tA = Perf::T0(); ResolveDefs(); Perf::Add("air.ResolveDefs", _tA); }
+	{ double _tA = Perf::T0(); ReArm(); Perf::Add("air.ReArm", _tA); }
+	{ double _tA = Perf::T0(); AtomicWatch(); Perf::Add("air.AtomicWatch", _tA); }
+	{ double _tA = Perf::T0(); AtomicLookWatch(); Perf::Add("air.AtomicLookWatch", _tA); }
+	{ double _tA = Perf::T0(); LookWatch(); Perf::Add("air.LookWatch", _tA); }
+	{ double _tA = Perf::T0(); FlightWatch(); Perf::Add("air.FlightWatch", _tA); }
+	{ double _tA = Perf::T0(); ShareWing(); Perf::Add("air.ShareWing", _tA); }
+	{ double _tA = Perf::T0(); Market::EnemyWetCount(); Perf::Add("air.EnemyWetCount", _tA); }
+	{ double _tA = Perf::T0(); Market::FoeHalfPoll(); Perf::Add("air.FoeHalfPoll", _tA); }
+	{ double _tA = Perf::T0(); CoverWatch(); Perf::Add("air.CoverWatch", _tA); }
+	{ double _tA = Perf::T0(); StrikeScanStep(); Perf::Add("air.StrikeScanStep", _tA); }
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
-		RunElection();
+		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }
 	Intercept();
 
 	// BOMBER DOCTRINE, every player, every tick: bombers never hunt armies.

@@ -367,11 +367,25 @@ bool Outgrown(int d)
 // total power of cost 1 + apex_worth_cost: at 1 that is cost^2, the LINEAR law
 // where bodies trade one for one and chaff wins; at 0 it is cost^1, the SQUARE
 // law where a massed army fires at once and quality wins superlinearly.
+array<float> gUcRaw;
 float UnitCoreRaw(int d)
 {
 	WorthMeans();
 	if (gWMDps <= 0.f)
 		return Catalog::gCombat[d] / Catalog::gCostM[d];
+	// Catalog stats over means latched for the game: one answer per def.
+	if (int(gUcRaw.length()) <= Catalog::gDefCount) {
+		gUcRaw.resize(Catalog::gDefCount + 1);
+		for (uint i = 0; i < gUcRaw.length(); ++i)
+			gUcRaw[i] = -1.f;
+	}
+	if (gUcRaw[d] < 0.f)
+		gUcRaw[d] = UnitCoreRawCalc(d);
+	return gUcRaw[d];
+}
+
+float UnitCoreRawCalc(int d)
+{
 	float v = 1.f;
 	const float wDps = ai.GetTunable("apex_worth_dps", TUNE_WORTH_DPS);
 	const float wAlpha = ai.GetTunable("apex_worth_alpha", TUNE_WORTH_ALPHA);
@@ -586,7 +600,9 @@ void UpdateQuality()
 		return;
 	gQualAt = ai.frame;
 	float oS = 0.f, oM = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own49 = OwnedDefs();
+	for (uint _oi49 = 0; _oi49 < _own49.length(); ++_oi49) {
+		const uint d = uint(_own49[_oi49]);
 		if ((gOwnCount[d] <= 0) || !QualityDef(int(d)))
 			continue;
 		oS += float(gOwnCount[d]) * UnitStrength(int(d));

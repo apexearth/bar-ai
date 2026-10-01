@@ -167,7 +167,9 @@ float FreeMetalFlow()
 AIFloat3 BigEnergySite()
 {
 	const float bar = ai.GetTunable("apex_big_e", TUNE_BIG_E);
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own29 = OwnedDefs();
+	for (uint _oi29 = 0; _oi29 < _own29.length(); ++_oi29) {
+		const uint d = uint(_own29[_oi29]);
 		if ((gOwnCount[d] <= 0) || (Catalog::gMakeE[int(d)] < bar))
 			continue;
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(int(d)),
@@ -220,7 +222,9 @@ void RefreshInsureCluster()
 		if (!OnMap(sites[si]) || ProtCovered(PROT_DEF, sites[si], 450.f))
 			continue;
 		float m = 0.f;
-		for (uint dd = 1; dd < gOwnCount.length(); ++dd) {
+		const array<int>@ _own30 = OwnedDefs();
+		for (uint _oi30 = 0; _oi30 < _own30.length(); ++_oi30) {
+			const uint dd = uint(_own30[_oi30]);
 			if ((gOwnCount[dd] <= 0) || Catalog::gMobile[int(dd)])
 				continue;
 			array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(
@@ -586,6 +590,7 @@ AIFloat3 LatticeFit(CCircuitDef@ def, const AIFloat3& in raw)
 array<int> gLSDefs;
 array<AIFloat3> gLSPos;
 array<int> gLSAt;
+array<AIFloat3> gLSFrom;
 // What of ours stands within r of a point, the three commonest defs -- the
 // answer to "no room" being terrain or our own T1 clutter.
 string StandingNear(const AIFloat3& in at, float r)
@@ -707,6 +712,11 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			// A cached cell is re-asked exactly: in a busy blob a turret lands
 			// on it within the cache's life (measured: six of ours on the
 			// asked cell at the commit).
+			// A search that found nothing answered with the ask itself, which
+			// need not be placeable: re-checking it evicted every hit and the
+			// whole probe ran every election.
+			if ((gLSPos[i].distance2D(gLSFrom[i]) < 1.f) && (gLSFrom[i].distance2D(interior) < 1.f))
+				return interior;
 			AIFloat3 chk;
 			if (ai.CanPlaceCell(def, gLSPos[i], chk))
 				return gLSPos[i];
@@ -847,6 +857,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		if (gLSDefs[i] == did) {
 			gLSPos[i] = best;
 			gLSAt[i] = ai.frame;
+			gLSFrom[i] = interior;
 			cached = true;
 			break;
 		}
@@ -855,6 +866,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		gLSDefs.insertLast(did);
 		gLSPos.insertLast(best);
 		gLSAt.insertLast(ai.frame);
+		gLSFrom.insertLast(interior);
 	}
 	return best;
 }
@@ -1270,12 +1282,19 @@ array<int> gBlockAt;
 // marked the nano block; a gantry probe read the mark and refused the block.
 array<int> gBlockDef;
 
+int gBlockPolledAt = -1;
 void BlockPoll()
 {
-	AIFloat3 b(-1.f, 0.f, -1.f);
-	if (!ai.GetBlockedBuildPos(b) || !OnMap(b))
+	// Once a frame: every NearBlocked in a candidate loop polled the engine.
+	if (gBlockPolledAt == ai.frame)
 		return;
-	BlockAdd(b, ai.GetBlockedBuildDef());
+	gBlockPolledAt = ai.frame;
+	AIFloat3 b(-1.f, 0.f, -1.f);
+	int def = -1;
+	for (int n = 0; (n < 16) && ai.PopBlockedBuild(b, def); ++n) {
+		if (OnMap(b))
+			BlockAdd(b, def);
+	}
 }
 
 // WHERE OUR CONSTRUCTORS DIED, for the mark's life: the risk model reads

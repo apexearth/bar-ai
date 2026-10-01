@@ -20,6 +20,24 @@ void OwnAdd(int defId, int delta)
 	}
 }
 
+// The defs we own at least one of, ascending, rebuilt when the set changes:
+// loops over gOwnCount skipped ~860 of ~900 defs to visit the rest, some per
+// candidate per election.
+array<int> gOwnedList;
+int gOwnedListStamp = -1;
+const array<int>@ OwnedDefs()
+{
+	if (gOwnedListStamp != gOwnSetStamp) {
+		gOwnedListStamp = gOwnSetStamp;
+		gOwnedList.resize(0);
+		for (uint d = 1; d < gOwnCount.length(); ++d) {
+			if (gOwnCount[d] > 0)
+				gOwnedList.insertLast(int(d));
+		}
+	}
+	return gOwnedList;
+}
+
 // Assist build power standing over the plants, as a fraction of the plants'
 // own. A factory line's throughput is its workertime plus whatever nano
 // turrets reach it; which turret serves which line is not tracked, so the
@@ -73,7 +91,9 @@ float OwnedBestEPerM()
 		return gBestEPM;
 	gBestEPMAt = ai.frame;
 	gBestEPM = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own12 = OwnedDefs();
+	for (uint _oi12 = 0; _oi12 < _own12.length(); ++_oi12) {
+		const uint d = uint(_own12[_oi12]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)])
 			continue;
 		const array<int>@ builds = Catalog::gBuildsList[int(d)];
@@ -103,7 +123,9 @@ float OwnedBestMobileCostM()
 		return gBestMob;
 	gBestMobAt = ai.frame;
 	gBestMob = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own13 = OwnedDefs();
+	for (uint _oi13 = 0; _oi13 < _own13.length(); ++_oi13) {
+		const uint d = uint(_own13[_oi13]);
 		if (gOwnCount[d] <= 0)
 			continue;
 		const array<int>@ builds = Catalog::gBuildsList[int(d)];
@@ -138,7 +160,9 @@ void RefreshOwnedSet()
 	gOwnedCeil = 0.f;
 	gOwnedMobCeil = 0.f;
 	float prodCeil = 0.f;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own14 = OwnedDefs();
+	for (uint _oi14 = 0; _oi14 < _own14.length(); ++_oi14) {
+		const uint d = uint(_own14[_oi14]);
 		if (gOwnCount[d] <= 0)
 			continue;
 		const array<int>@ builds = Catalog::gBuildsList[int(d)];
@@ -205,7 +229,9 @@ int ServingCons()
 		return gServingCons;
 	gServingStamp = (ceilX > 0.f) ? gOwnStamp : -1;
 	int nServing = 0;
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own15 = OwnedDefs();
+	for (uint _oi15 = 0; _oi15 < _own15.length(); ++_oi15) {
+		const uint d = uint(_own15[_oi15]);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[int(d)] || !Catalog::gBuilder[int(d)])
 			continue;
 		const array<int>@ builds = Catalog::gBuildsList[int(d)];
@@ -658,6 +684,7 @@ void NoteDead(CCircuitUnit@ unit)
 	gLExtract.removeAt(i);
 	gLClaimAt.removeAt(i);
 	++gLStamp;   // rows shifted: LedgerFind's spot->row table must be rebuilt
+	++gLFreeStamp;
 }
 
 

@@ -1346,12 +1346,15 @@ sharper pressure toward quick defences (a Guard at 2500 buildtime over an
 Agitator at 17400); 0 restores the old behaviour, where build time reached the
 price only through the builder's wage.
 
-### `TUNE_PROTECT_FIELD_S` = 2.f
+### `TUNE_PROTECT_FIELD_S` = 15.f
 
 How often the protection field is rebuilt, in game seconds. It walks every team
 unit once and every defence price reads it, so this is the knob between a stale
 stake and a stalled sim -- want.protect was measured at 9.2 ms per call and
-growing before the field existed.
+growing before the field existed. 2 -> 8 -> 15 on 2026-10-01: each rebuild also
+re-keys the protect, sense, airdef and reclaim memos, and mc.protect was 18% of
+all AI time (7.4 ms a miss, one miss per AI every ~3 s) in his-settings 8v8.
+A tower takes 20-60 s to build; 8 s of stake staleness does not move one.
 
 ### `TUNE_STALL_ANSWER_S` = 1.f
 
@@ -1743,7 +1746,7 @@ is the old straight-proportional draw, 2 makes a six-fold value gap one
 election in thirty-six, large approaches argmax. Never a threshold, so nothing
 starves outright.
 
-### `TUNE_MEMO_TTL` = 45.f
+### `TUNE_MEMO_TTL` = 300.f
 
 Frames a memoised proposer answer may be served for. VALIDITY is `MemoKey` — the
 stamps of what the answer was computed from; this is only the ceiling on the half
@@ -1753,7 +1756,9 @@ changes nothing. It is the throughput knob: measured 2026-09-05 the memo hit 593
 / missed 3,135 / deferred 1,760 (11%), because 45 frames is shorter than the 2 s
 per-unit re-election gate, so an entry always expired before the next builder of
 that def asked. Raising it buys recomputes with price staleness — a behaviour
-call, so sweep it against `composition.py`.
+call, so sweep it against `composition.py`. 45 -> 150 -> 300 on 2026-10-01 with eight
+rows per def (MEMO_WAYS): his-settings 8v8 still missed the protect memo once
+per AI every ~3 s at 5.6 ms a miss, the largest single cost in the AI.
 
 ### `TUNE_ELEC_FRAME_US` = 8000.f
 

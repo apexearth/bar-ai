@@ -941,18 +941,27 @@ float SiegeExpect(const AIFloat3& in pos)
 // behind the line instead of scattering.
 // Memoized on a 256-elmo grid with a 3s clock: three field sweeps per call,
 // and the mexup proposer asks per held spot per election.
-array<float> gSsVal(64, 1.f);
-array<int> gSsAt(64, 0);
-array<int> gSsKey(64, 0);
+array<float> gSsVal;
+array<int> gSsAt;
+int gSsCellsZ = 0;
 // The per-second risk a stream at `pos` runs (hazard or siege, times the
 // cover shortfall); cached 3 s per 256-elmo cell.
 float StreamRisk(const AIFloat3& in pos)
 {
 	if (!OnMap(pos))
 		return 0.f;
-	const int key = (int(pos.x) >> 8) * 4096 + (int(pos.z) >> 8) + 1;
-	const uint slot = uint(key) & 63;
-	if ((gSsKey[slot] == key) && (ai.frame - gSsAt[slot] < 3 * SECOND))
+	if (gSsCellsZ == 0) {
+		gSsCellsZ = (AiTerrainHeight() >> 8) + 1;
+		const uint n = uint(((AiTerrainWidth() >> 8) + 1) * gSsCellsZ);
+		gSsVal.resize(n);
+		gSsAt.resize(n);
+		for (uint i = 0; i < n; ++i)
+			gSsAt[i] = -1000000;
+	}
+	const uint slot = uint((int(pos.x) >> 8) * gSsCellsZ + (int(pos.z) >> 8));
+	if (slot >= gSsAt.length())
+		return 0.f;
+	if (ai.frame - gSsAt[slot] < 3 * SECOND)
 		return gSsVal[slot];
 	// Shortfall, hazard and the siege prior all read the cover at this one
 	// point and all three side-wide fills. Read each once.
@@ -981,7 +990,6 @@ float StreamRisk(const AIFloat3& in pos)
 			* (1.f + GradAt(pos));
 	if (siege > risk)
 		risk = siege;
-	gSsKey[slot] = key;
 	gSsAt[slot] = ai.frame;
 	gSsVal[slot] = risk;
 	return risk;

@@ -39,6 +39,19 @@ class CDefenceData;
 class CPathFinder;
 class CFactoryData;
 
+// apex: the enemy reach envelope (CCircuitAI::GetEnemyReachSlack). Kept per ally
+// team as well: every allied AI sees the same enemies, and each was rebuilding it.
+struct SReachEnemy {
+	float x, z, reach, speed, shell;
+	uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
+};
+struct SReachNode {
+	float minx, minz, maxx, maxz;
+	float maxReach, maxSpeed;  // envelope bound for everything below
+	int32_t first, count;      // count > 0: leaf range; count == 0: inner node
+	int32_t right;             // inner: right child; the left child is self + 1
+};
+
 class CAllyTeam {
 public:
 	using Id = int;
@@ -74,6 +87,8 @@ public:
 	void UpdateFriendlyUnits();
 	CAllyUnit* GetFriendlyUnit(ICoreUnit::Id unitId) const;
 	const AllyUnits& GetFriendlyUnits() const { return friendlyUnits; }
+	// apex: bumped on every refresh pass; a merge over the friendlies at the same version is a no-op
+	int GetFriendlyVersion() const { return friendlyVersion; }
 
 	const std::set<CEnemyUnit*>& GetDyingEnemies() const { return enemyManager->GetDyingEnemies(); }
 	void DyingEnemy(CEnemyUnit* enemy, int frame) { enemyManager->DyingEnemy(enemy, frame); }
@@ -121,6 +136,9 @@ public:
 
 	CCircuitAI* GetAuthority() const { return circuit; }
 	void SetAuthority(CCircuitAI* authority);
+	int reachFrame = -1;
+	std::vector<SReachEnemy> reachCache;
+	std::vector<SReachNode> reachNodes;
 private:
 	void DelegateAuthority();
 	void ApplyAuthority(CCircuitAI* newOwner);
@@ -142,6 +160,7 @@ private:
 	int initCount;
 	int resignSize;
 	int lastUpdate;
+	int friendlyVersion = 0;
 	AllyUnits friendlyUnits;  // owner
 	CQuadField quadField;
 

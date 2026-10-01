@@ -46,7 +46,7 @@ bool IsLiftDef(int d)
 }
 
 // A tower built at home for a front slot, waiting for its flight (lift_ferry.as).
-class Ferry {
+final class Ferry {
 	int def = -1;
 	AIFloat3 home;
 	AIFloat3 site;
@@ -57,7 +57,7 @@ class Ferry {
 	int builtAt = 0;
 }
 
-class LiftJob {
+final class LiftJob {
 	CCircuitUnit@ plane;
 	CCircuitUnit@ cargo;
 	Ferry@ ferry;

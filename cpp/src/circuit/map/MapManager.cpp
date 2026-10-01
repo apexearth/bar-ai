@@ -50,8 +50,13 @@ void CWreckField::UpdateSlice(CCircuitAI* ai, int frame)
 	if (cursor >= pending.size()) {
 		if (!pending.empty()) {
 			cur.swap(next);
+			// apex: a pass over an unchanged field is not new information;
+			// idle rez bots re-ran their whole chain on every pass.
+			if ((nextHash != curHash) || (nextCount != count)) {
+				++version;
+			}
+			curHash = nextHash;
 			count = nextCount;
-			++version;
 			pending.clear();
 		}
 		if (frame - lastStart < FRAMES_PER_SEC) {
@@ -63,13 +68,17 @@ void CWreckField::UpdateSlice(CCircuitAI* ai, int frame)
 		pending.assign(ids, ids + n);
 		cursor = 0;
 		nextCount = 0;
+		nextHash = 0;
 		for (auto& bucket : next) {
 			bucket.clear();
 		}
 		if (pending.empty()) {
 			cur.swap(next);
+			if (count != 0) {
+				++version;
+			}
 			count = 0;
-			++version;
+			curHash = 0;
 			return;
 		}
 	}
@@ -102,6 +111,7 @@ void CWreckField::UpdateSlice(CCircuitAI* ai, int frame)
 		cz = std::min(std::max(cz, 0), nz - 1);
 		next[cz * nx + cx].push_back(it);
 		++nextCount;
+		nextHash += (unsigned long long)(unsigned)fId * 0x9E3779B97F4A7C15ull;
 	}
 }
 

@@ -337,7 +337,7 @@ bool CAntiHeavyTask::FindTarget()
 			|| (edef->IsAbleToFly() && notAA)
 			|| (isAntiStatic && edef->IsMobile())
 			|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
-			|| (ePos.y - map->GetElevationAt(ePos.x, ePos.z) > weaponRange))
+			|| (ePos.y - circuit->GetElevationAt(ePos) > weaponRange))
 		{
 			continue;
 		}

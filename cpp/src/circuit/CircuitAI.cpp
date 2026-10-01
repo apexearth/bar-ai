@@ -303,16 +303,22 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 	struct SEvtClock {
 		CCircuitAI* self;
 		bool on;
+		int topic;
 		std::chrono::steady_clock::time_point t0;
 		~SEvtClock() {
 			if (!on) {
 				return;
 			}
-			self->perfEvtNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+			const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
 					std::chrono::steady_clock::now() - t0).count();
+			self->perfEvtNs += ns;
 			++self->perfEvtCalls;
+			if ((topic >= 0) && (topic < 64)) {
+				self->perfEvtTopicNs[topic] += ns;
+				++self->perfEvtTopicN[topic];
+			}
 		}
-	} evtClock{this, topic != EVENT_UPDATE, std::chrono::steady_clock::now()};
+	} evtClock{this, topic != EVENT_UPDATE, topic, std::chrono::steady_clock::now()};
 
 	int ret = ERROR_UNKNOWN;
 
@@ -942,6 +948,7 @@ int CCircuitAI::Release(int reason)
 		delete kv.second;
 	}
 	enemyInfos.clear();
+	enemyById.clear();
 	if (allyTeam != nullptr && isAllyTeamInit) {
 		allyTeam->Release();
 		allyTeam = nullptr;
@@ -1134,6 +1141,20 @@ int CCircuitAI::Update(int frame)
 				perfEvtNs / 1000000.f, perfEvtCalls);
 		perfEvtNs = 0;
 		perfEvtCalls = 0;
+		{
+			std::string ev;
+			char buf[48];
+			for (int t = 0; t < 64; ++t) {
+				if (perfEvtTopicN[t] == 0) {
+					continue;
+				}
+				snprintf(buf, sizeof(buf), " %i=%.1f/%u", t, perfEvtTopicNs[t] / 1000000.f, perfEvtTopicN[t]);
+				ev += buf;
+				perfEvtTopicNs[t] = 0;
+				perfEvtTopicN[t] = 0;
+			}
+			LOG("apex: perf evt (topic=ms/calls)%s", ev.c_str());
+		}
 		// apex: how much WORK the O(n) helpers did, not how long they took --
 		// a visited count that grows faster than the unit count names the
 		// quadratic helper without a clock in the hot loop.
@@ -1153,11 +1174,13 @@ int CCircuitAI::Update(int frame)
 		// inside-an-enemy's-reach any caller was told it stood this minute, and
 		// maxReach the largest envelope in the cache: a strategic launcher
 		// leaking into it reads map-scale in both.
-		LOG("apex: perf reach worst=%.0f maxReach=%.0f def=%s n=%u",
+		LOG("apex: perf reach worst=%.0f maxReach=%.0f def=%s n=%u rebuildMs=%.1f/%u",
 				(perfReachWorst < std::numeric_limits<float>::max()) ? perfReachWorst : 0.f,
 				perfReachMax,
 				(perfReachMaxDef != nullptr) ? perfReachMaxDef->GetDef()->GetName() : "-",
-				(unsigned)reachCache.size());
+				(unsigned)reachCache.size(), perfReachRebuildNs / 1e6, perfReachRebuilds);
+		perfReachRebuildNs = 0;
+		perfReachRebuilds = 0;
 		perfReachWorst = std::numeric_limits<float>::max();
 		perfReachMax = 0.f;
 		perfReachMaxDef = nullptr;
@@ -2045,7 +2068,7 @@ float CCircuitAI::GetTeamMetalIncome(int otherTeamId) const
 	return game->GetRulesParamFloat(key.c_str(), -1.f);
 }
 
-float CCircuitAI::GetTunable(const char* name, float defVal) const
+float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 {
 	auto it = tunables.find(name);
 	if (it != tunables.end()) {
@@ -2079,7 +2102,7 @@ float CCircuitAI::GetTunable(const char* name, float defVal) const
 			return value;
 		} catch (...) {}
 	}
-	const float value = (game != nullptr) ? game->GetRulesParamFloat(name, defVal) : defVal;
+	const float value = (game != nullptr) ? game->GetRulesParamFloat(name.c_str(), defVal) : defVal;
 	tunables[name] = value;
 	return value;
 }
@@ -2454,21 +2477,30 @@ void CCircuitAI::RecordFoeRefresh()
 // (apexearth 2026-09-26: "maybe our teams just don't fight well together").
 float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
 {
+	// The allied armed mobiles, listed once a frame: the withdraw pass asks per
+	// unit, and each ask walked every friendly unit and structure on the team.
+	const int frame = GetLastFrame();
+	if (allyPowerFrame != frame) {
+		allyPowerFrame = frame;
+		allyPowerList.clear();
+		for (auto& kv : GetFriendlyUnits()) {
+			CAllyUnit* u = kv.second;
+			if ((u == nullptr) || (GetTeamUnit(kv.first) != nullptr)) {
+				continue;
+			}
+			CCircuitDef* cdef = u->GetCircuitDef();
+			if ((cdef == nullptr) || !cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsAbleToFly()) {
+				continue;
+			}
+			allyPowerList.emplace_back(u->GetLastPos(), cdef->GetSurfThreat());
+		}
+	}
 	const float sqR = radius * radius;
 	float sum = 0.f;
-	for (auto& kv : GetFriendlyUnits()) {
-		CAllyUnit* u = kv.second;
-		if ((u == nullptr) || (GetTeamUnit(kv.first) != nullptr)) {
-			continue;
+	for (const auto& e : allyPowerList) {
+		if (e.first.SqDistance2D(pos) <= sqR) {
+			sum += e.second;
 		}
-		CCircuitDef* cdef = u->GetCircuitDef();
-		if ((cdef == nullptr) || !cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsAbleToFly()) {
-			continue;
-		}
-		if (u->GetLastPos().SqDistance2D(pos) > sqR) {
-			continue;
-		}
-		sum += cdef->GetSurfThreat();
 	}
 	return sum;
 }
@@ -2801,6 +2833,62 @@ void CCircuitAI::NoteBuildBlocked(const springai::AIFloat3& pos, const CCircuitD
 	blockedBuildPos = pos;
 	blockedBuildFrame = GetLastFrame();
 	blockedBuildDef = (def != nullptr) ? int(def->GetId()) : -1;
+	// The script polled the one slot at elections, so on a world map most marks
+	// were overwritten unread and the same walk was re-sent every few seconds.
+	if (blockedQueue.size() >= 256) {
+		blockedQueue.erase(blockedQueue.begin());
+	}
+	blockedQueue.push_back({pos, blockedBuildDef, blockedBuildFrame});
+}
+
+#define NO_PATH_TTL	(FRAMES_PER_SEC * 60)
+
+void CCircuitAI::NoteNoPath(const CCircuitDef* cdef, const springai::AIFloat3& pos)
+{
+	if ((cdef == nullptr) || (cdef->GetMobileId() < 0)) {
+		return;
+	}
+	const int si = terrainManager->GetSectorIndex(pos);
+	if (si < 0) {
+		return;
+	}
+	const int frame = GetLastFrame();
+	if (noPathMarks.size() > 4096) {
+		for (auto it = noPathMarks.begin(); it != noPathMarks.end(); ) {
+			it = (frame - it->second > NO_PATH_TTL) ? noPathMarks.erase(it) : std::next(it);
+		}
+	}
+	noPathMarks[((long long)cdef->GetMobileId() << 32) | (unsigned)si] = frame;
+}
+
+bool CCircuitAI::IsNoPath(const CCircuitDef* cdef, const springai::AIFloat3& pos) const
+{
+	if ((cdef == nullptr) || (cdef->GetMobileId() < 0) || noPathMarks.empty()) {
+		return false;
+	}
+	const int si = terrainManager->GetSectorIndex(pos);
+	if (si < 0) {
+		return false;
+	}
+	auto it = noPathMarks.find(((long long)cdef->GetMobileId() << 32) | (unsigned)si);
+	return (it != noPathMarks.end()) && (GetLastFrame() - it->second <= NO_PATH_TTL);
+}
+
+bool CCircuitAI::PopBlockedBuild(springai::AIFloat3& outPos, int& outDef)
+{
+	const int frame = GetLastFrame();
+	size_t i = 0;
+	while ((i < blockedQueue.size()) && (frame > blockedQueue[i].frame + BLOCKED_BUILD_TTL)) {
+		++i;
+	}
+	if (i >= blockedQueue.size()) {
+		blockedQueue.clear();
+		return false;
+	}
+	outPos = blockedQueue[i].pos;
+	outDef = blockedQueue[i].def;
+	blockedQueue.erase(blockedQueue.begin(), blockedQueue.begin() + i + 1);
+	return true;
 }
 
 void CCircuitAI::NoteUnsafeSite(const springai::AIFloat3& pos)
@@ -3525,6 +3613,15 @@ void CCircuitAI::RebuildReachCache()
 		return;
 	}
 	reachCacheFrame = lastFrame;
+	const auto tRb0 = std::chrono::steady_clock::now();
+	// An ally built it this frame: the same enemies, so take its copy.
+	if ((allyTeam != nullptr) && (allyTeam->reachFrame == lastFrame)) {
+		reachCache = allyTeam->reachCache;
+		reachNodes = allyTeam->reachNodes;
+		perfReachRebuildNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tRb0).count();
+		++perfReachRebuilds;
+		return;
+	}
 	reachCache.clear();
 	reachCache.reserve(enemyInfos.size());
 	for (const auto& kv : enemyInfos) {
@@ -3560,6 +3657,13 @@ void CCircuitAI::RebuildReachCache()
 		reachNodes.reserve(reachCache.size() / 2 + 2);  // leaves hold >= 4, so <= n/2 nodes
 		BuildReachTree(0, (int32_t)reachCache.size());
 	}
+	if (allyTeam != nullptr) {
+		allyTeam->reachFrame = lastFrame;
+		allyTeam->reachCache = reachCache;
+		allyTeam->reachNodes = reachNodes;
+	}
+	perfReachRebuildNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tRb0).count();
+	++perfReachRebuilds;
 }
 
 // apex: median-split BVH over the cache, rebuilt with it, because the flattened
@@ -3819,6 +3923,7 @@ std::pair<CEnemyInfo*, bool> CCircuitAI::RegisterEnemyInfo(ICoreUnit::Id unitId,
 
 	unit = new CEnemyInfo(data);
 	enemyInfos[unitId] = unit;
+	SetEnemyById(unitId, unit);
 
 	return std::make_pair(unit, true);
 }
@@ -3832,6 +3937,7 @@ CEnemyInfo* CCircuitAI::RegisterEnemyInfo(Unit* e)
 
 	CEnemyInfo* unit = new CEnemyInfo(data);
 	enemyInfos[unit->GetId()] = unit;
+	SetEnemyById(unit->GetId(), unit);
 
 	return unit;
 }
@@ -3840,6 +3946,9 @@ void CCircuitAI::UnregisterEnemyInfo(CEnemyInfo* enemy)
 {
 	allyTeam->UnregisterEnemyUnit(enemy->GetData(), this);
 	enemyInfos.erase(enemy->GetId());
+	if ((enemy->GetId() >= 0) && ((size_t)enemy->GetId() < enemyById.size())) {
+		enemyById[enemy->GetId()] = nullptr;
+	}
 	delete enemy;
 }
 
@@ -3883,8 +3992,7 @@ void CCircuitAI::CheckDecoy(CEnemyInfo* enemy, int weaponId)
 
 CEnemyInfo* CCircuitAI::GetEnemyInfo(ICoreUnit::Id unitId) const
 {
-	auto it = enemyInfos.find(unitId);
-	return (it != enemyInfos.end()) ? it->second : nullptr;
+	return ((unitId >= 0) && ((size_t)unitId < enemyById.size())) ? enemyById[unitId] : nullptr;
 }
 
 bool CCircuitAI::UnitControl(CCircuitUnit* unit, bool isEnable)

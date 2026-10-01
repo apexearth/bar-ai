@@ -217,6 +217,8 @@ bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 // While upgrades wait, a ceiling hand is not offered generators, converters or
 // assist once another ceiling hand is already on a generator or converter.
 int gOutForUp = 0;
+array<int> gHomeHandIds;
+int gHomeHandsAt = -1;
 bool OutForUpgrades(CCircuitUnit@ unit)
 {
 	const int ud = int(unit.circuitDef.id);
@@ -225,23 +227,28 @@ bool OutForUpgrades(CCircuitUnit@ unit)
 	UpgradeHandsWant();
 	if (gUpHandsB <= 0)
 		return false;
-	for (uint i = 0; i < gWorkers.length(); ++i) {
-		CCircuitUnit@ u = gWorkers[i];
-		if ((u is null) || (u is unit) || (u.task is null))
-			continue;
-		const int wd = int(u.circuitDef.id);
-		if (!ReachesCeiling(wd) || u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-			continue;
-		const CCircuitDef@ bd = u.task.buildDef;
-		if (bd is null)
-			continue;
-		const int b = int(bd.id);
-		if ((Catalog::gMakeE[b] > 0.f) || (Catalog::gConvCapacity[b] > 0.f)) {
-			++gOutForUp;
-			return true;
+	if (gHomeHandsAt != ai.frame) {
+		gHomeHandsAt = ai.frame;
+		gHomeHandIds.resize(0);
+		for (uint i = 0; i < gWorkers.length(); ++i) {
+			CCircuitUnit@ u = gWorkers[i];
+			if ((u is null) || (u.task is null))
+				continue;
+			if (!ReachesCeiling(int(u.circuitDef.id)) || u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+				continue;
+			const CCircuitDef@ bd = u.task.buildDef;
+			if (bd is null)
+				continue;
+			const int b = int(bd.id);
+			if ((Catalog::gMakeE[b] > 0.f) || (Catalog::gConvCapacity[b] > 0.f))
+				gHomeHandIds.insertLast(int(u.id));
 		}
 	}
-	return false;
+	const uint n = gHomeHandIds.length();
+	if ((n == 0) || ((n == 1) && (gHomeHandIds[0] == int(unit.id))))
+		return false;
+	++gOutForUp;
+	return true;
 }
 
 // THE ARMY A LONG BUILD CANNOT AFFORD. apexearth: "during that entire time
@@ -269,7 +276,9 @@ float ArmyGapStream()
 float ServableUpDemand()
 {
 	const float ceil = BestExtract();
-	for (uint d = 1; d < gOwnCount.length(); ++d) {
+	const array<int>@ _own37 = OwnedDefs();
+	for (uint _oi37 = 0; _oi37 < _own37.length(); ++_oi37) {
+		const uint d = uint(_own37[_oi37]);
 		const int di = int(d);
 		if ((gOwnCount[d] <= 0) || !Catalog::gMobile[di] || !Catalog::gBuilder[di])
 			continue;
@@ -654,8 +663,15 @@ void NoteMexDeath(const AIFloat3& in at)
 	gDeadSpotAt.insertLast(ai.frame);
 	gDeadSpotLogAt.insertLast(0);
 }
-int DeadSpotWatch(const AIFloat3& in sp)
+// The dead records near each spot, found once per sweep through the spot grid
+// instead of every record against every spot.
+array<int> gDsOf;
+void DeadSpotPrep()
 {
+	const uint n = gAllSpots.length();
+	gDsOf.resize(n);
+	for (uint si = 0; si < n; ++si)
+		gDsOf[si] = -1;
 	for (uint i = 0; i < gDeadSpotPos.length(); ) {
 		if (ai.frame - gDeadSpotAt[i] > 4 * MINUTE) {
 			gDeadSpotPos.removeAt(i);
@@ -663,14 +679,26 @@ int DeadSpotWatch(const AIFloat3& in sp)
 			gDeadSpotLogAt.removeAt(i);
 			continue;
 		}
-		if ((gDeadSpotPos[i].distance2D(sp) < 100.f) && (ai.frame >= gDeadSpotLogAt[i])) {
-			gDeadSpotLogAt[i] = ai.frame + 15 * SECOND;
-			return int(i);
+		gSpotGrid.Query(gDeadSpotPos[i].x, gDeadSpotPos[i].z, 100.f);
+		for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+			const uint si = uint(gSpotGrid.hit[q]);
+			if ((si < n) && (gDsOf[si] < 0) && (gDeadSpotPos[i].distance2D(gAllSpots[si]) < 100.f))
+				gDsOf[si] = int(i);
 		}
 		++i;
 	}
-	return -1;
 }
+int DeadSpotOf(uint si)
+{
+	if (si >= gDsOf.length())
+		return -1;
+	const int i = gDsOf[si];
+	if ((i < 0) || (ai.frame < gDeadSpotLogAt[uint(i)]))
+		return -1;
+	gDeadSpotLogAt[uint(i)] = ai.frame + 15 * SECOND;
+	return i;
+}
+
 void DeadSpotSay(int w, const AIFloat3& in sp, const string& in gate)
 {
 	if (w < 0)
@@ -687,9 +715,78 @@ void DeadSpotSay(int w, const AIFloat3& in sp, const string& in gate)
 // freshly-constructed arrays, every election, was the sweep's own overhead.
 array<int> gPsCand;
 array<float> gPsScore;
+// THE SPOTS' OWN STATE, EVERY 4 S. Everything PickSpot asked per spot but the
+// walk is the same for every asker -- marks, heat, trip risk -- and it was
+// re-read for every spot on every mex election. The ledger is NOT in it: it
+// moves on every claim, and PickSpot reads it live.
+const int PT_OPEN = 0, PT_BLOCKED = 2, PT_CONDEATH = 3, PT_HOT = 4, PT_NONE = 5;
+array<int> gPtState;
+array<float> gPtRisk;
+int gPtAt = -1000;
+float gPtShare = 0.f;
+array<int> gPtMark;
+void PtMarkNear(const AIFloat3& in at, int st)
+{
+	const float nearSq = BLOCK_NEAR * BLOCK_NEAR;
+	gSpotGrid.Query(at.x, at.z, BLOCK_NEAR);
+	for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+		const uint si = uint(gSpotGrid.hit[q]);
+		if ((si >= gPtMark.length()) || (gPtMark[si] == PT_BLOCKED))
+			continue;
+		const float dx = at.x - gAllSpots[si].x, dz = at.z - gAllSpots[si].z;
+		if ((dx * dx + dz * dz) < nearSq)
+			gPtMark[si] = st;
+	}
+}
+void SpotTableFill()
+{
+	if ((ai.frame - gPtAt < 4 * SECOND) && (gPtState.length() == gAllSpots.length()))
+		return;
+	gPtAt = ai.frame;
+	const uint n = gAllSpots.length();
+	gPtState.resize(n);
+	gPtRisk.resize(n);
+	gPtShare = TripShare();
+	const float incMul = IncomeMult();
+	// The live marks, once: NearBlocked/NearConDeath polled the engine and
+	// walked both rings for every spot.
+	BlockPoll();
+	// Each live mark marks the spots near it through the spot grid: every spot
+	// against every mark was the table's whole cost late in a game.
+	gPtMark.resize(n);
+	for (uint si = 0; si < n; ++si)
+		gPtMark[si] = PT_OPEN;
+	for (uint k = 0; k < gBlockPos.length(); ++k) {
+		if (ai.frame - gBlockAt[k] <= BLOCK_TTL)
+			PtMarkNear(gBlockPos[k], PT_BLOCKED);
+	}
+	for (uint k = 0; k < gConDeathPos.length(); ++k) {
+		if (ai.frame - gConDeathAt[k] <= BLOCK_TTL)
+			PtMarkNear(gConDeathPos[k], PT_CONDEATH);
+	}
+	for (uint si = 0; si < n; ++si) {
+		const AIFloat3 sp = gAllSpots[si];
+		gPtRisk[si] = 0.f;
+		if (!OnMap(sp) || (gAllSpotInc[si] * incMul <= 0.f)) {
+			gPtState[si] = PT_NONE;
+			continue;
+		}
+		if (gPtMark[si] != PT_OPEN) {
+			gPtState[si] = gPtMark[si];
+			continue;
+		}
+		gPtRisk[si] = TripRiskWith(sp, gPtShare);
+		gPtState[si] = SpotHot(sp) ? PT_HOT : PT_OPEN;
+	}
+}
+
 int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 {
 	CacheSpots();
+	const double _tTbl = Perf::T0();
+	SpotTableFill();
+	Perf::Add("mx.table", _tTbl);
+	const double _tScan = Perf::T0();
 	gPsCand.resize(0);
 	gPsScore.resize(0);
 	// Everything but the spot is fixed for the sweep -- the army share, the
@@ -698,7 +795,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const AIFloat3 foeAt = Front::FoeAnchor();
 	const float fex = foeAt.x - Builder::gHomePos.x;
 	const float fez = foeAt.z - Builder::gHomePos.z;
-	const float share = TripShare();
+	const float share = gPtShare;
 	const bool ecoOn = EcoQuiet() && Builder::gHomeSet;
 	const bool comm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
@@ -709,12 +806,16 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const array<int>@ lidx = LedgerIdx();
 	const int lidxN = int(lidx.length());
 	const bool supFree = SupportFree();
+	const bool dsOn = gDeadSpotPos.length() > 0;
+	if (dsOn)
+		DeadSpotPrep();
 	float bestHotScore = 0.f;
 	int bestHot = -1;
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		++gSwTotal;
 		const AIFloat3 sp = gAllSpots[si];
-		const int dw = (gDeadSpotPos.length() > 0) ? DeadSpotWatch(sp) : -1;
+		const int dw = dsOn ? DeadSpotOf(si) : -1;
+		const int st = gPtState[si];
 		if ((int(si) < lidxN) ? (lidx[si] >= 0) : (LedgerFind(int(si)) >= 0)) {
 			++gSwLedger;
 			if (dw >= 0) {
@@ -723,17 +824,15 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			}
 			continue;
 		}
-		if (!OnMap(sp))
+		if (st == PT_NONE)
 			continue;
 		const float inc = gAllSpotInc[si] * incMul;
-		if (inc <= 0.f)
-			continue;
 		// A spot a hand could not reach in the last three minutes is not
 		// offered to the next hand (the stuck watch and the C++ path test
 		// both write the mark).
-		if (NearBlocked(sp) || NearConDeath(sp)) {
+		if ((st == PT_BLOCKED) || (st == PT_CONDEATH)) {
 			++gSwPast;
-			DeadSpotSay(dw, sp, NearBlocked(sp) ? "blocked" : "condeath");
+			DeadSpotSay(dw, sp, (st == PT_BLOCKED) ? "blocked" : "condeath");
 			continue;
 		}
 		// THE EXECUTOR'S OWN BAR, ASKED HERE. The builder task refuses a site
@@ -743,14 +842,14 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// four-minute window died so, our extractor count peaking at
 		// minute 8 while theirs kept climbing. A hot spot is not offered;
 		// the ground it sits on is the defence market's starved-spot stake.
-		if (SpotHot(sp)) {
+		if (st == PT_HOT) {
 			++gSwHot;
 			DeadSpotSay(dw, sp, "hot");
 			if (supFree) {
 				const float hw = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
 				const float raw = inc / (hw + 1.f);
 				if (raw > bestHotScore) {
-					const float hs = raw * (1.f - TripRiskWith(sp, share));
+					const float hs = raw * (1.f - gPtRisk[si]);
 					if (hs > bestHotScore) {
 						bestHotScore = hs;
 						bestHot = int(si);
@@ -785,8 +884,9 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 			comPen = cp;
 		}
 		const float walk = (speed > 1.f) ? (here.distance2D(sp) / speed) : 60.f;
-		const float risk = TripRiskWith(sp, share);
-		DeadSpotSay(dw, sp, "priced risk=" + formatFloat(risk, "", 0, 2));
+		const float risk = gPtRisk[si];
+		if (dw >= 0)
+			DeadSpotSay(dw, sp, "priced risk=" + formatFloat(risk, "", 0, 2));
 		if (risk >= 0.5f)
 			++gSwPast;
 		gPsCand.insertLast(int(si));
@@ -800,6 +900,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	}
 	if ((bestHot >= 0) && (bestHotScore > bestCand))
 		CallSupport(unit, bestHot, gAllSpotInc[bestHot] * incMul * MexWorthHorizon());
+	Perf::Add("mx.scan", _tScan);
 	const int tries = MexTries();
 	for (int k = 0; k < tries; ++k) {
 		int bi = -1;
@@ -846,7 +947,9 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	MexDiag();
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 here = unit.GetPos(ai.frame);
+	const double _tPk = Perf::T0();
 	int spot = PickSpot(unit, here, Catalog::gSpeed[uid]);
+	Perf::Add("mx.pick", _tPk);
 	gMexOpen = (spot >= 0);
 	if (spot < 0) {
 		++gMexNoOpen;

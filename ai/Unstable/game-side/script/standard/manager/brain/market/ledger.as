@@ -85,6 +85,7 @@ array<int> gLClaimAt;     // frame of the claim; unfinished claims expire
 // mapSpots x heldSpots -- both of which grow. CacheSpots reads at most 1024
 // spots, so anything past the table falls back to the walk unchanged.
 int gLStamp = 0;
+int gLFreeStamp = 0;   // bumped only when a spot is released: a claim frees nothing
 int gLIdxStamp = -1;
 array<int> gLIdx;
 // The table LedgerFind reads, refreshed under the stamp. Handed out whole to
@@ -142,6 +143,7 @@ void LedgerSweep()
 			gLExtract.removeAt(i);
 			gLClaimAt.removeAt(i);
 			++gLStamp;
+			++gLFreeStamp;
 			continue;
 		}
 		++i;

@@ -32,23 +32,51 @@ namespace circuit {
 using namespace springai;
 using namespace terrain;
 
-AIFloat3 CEnemyManager::GetEnemyStructPos() const
+void CEnemyManager::FillAggregates() const
 {
+	const int frame = circuit->GetLastFrame();
+	if (aggFrame == frame) {
+		return;
+	}
+	aggFrame = frame;
 	AIFloat3 sum(0.f, 0.f, 0.f);
+	float posCost = 0.f;
 	float cost = 0.f;
 	for (const auto& kv : circuit->GetEnemyInfos()) {
 		const CEnemyInfo* e = kv.second;
 		const CCircuitDef* cdef = e->GetCircuitDef();
-		if ((cdef == nullptr) || cdef->IsMobile() || (e->GetCost() <= 0.f)) {
+		if ((cdef == nullptr) || cdef->IsMobile()) {
 			continue;
 		}
-		sum += e->GetPos() * e->GetCost();
 		cost += e->GetCost();
+		if (e->GetCost() > 0.f) {
+			sum += e->GetPos() * e->GetCost();
+			posCost += e->GetCost();
+		}
 	}
-	if (cost <= 0.f) {
-		return AIFloat3(-1.f, -1.f, -1.f);
+	aggStructCost = cost;
+	aggStructPos = (posCost <= 0.f) ? AIFloat3(-1.f, -1.f, -1.f) : (sum / posCost);
+	float best = 0.f;
+	for (CEnemyUnit* e : enemyUpdates) {
+		if ((e == nullptr) || e->IsDying()) {
+			continue;
+		}
+		CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsBuilder()) {
+			continue;
+		}
+		const float c = cdef->GetCostM();
+		if (c > best) {
+			best = c;
+		}
 	}
-	return sum / cost;
+	aggMaxMobileCostM = best;
+}
+
+AIFloat3 CEnemyManager::GetEnemyStructPos() const
+{
+	FillAggregates();
+	return aggStructPos;
 }
 
 // REMEMBERED ENEMY STRUCTURE METAL NEAR A POSITION. The raid director wanted
@@ -83,16 +111,8 @@ float CEnemyManager::GetEnemyStructCostAt(const springai::AIFloat3& pos, float r
 
 float CEnemyManager::GetEnemyStructCost() const
 {
-	float cost = 0.f;
-	for (const auto& kv : circuit->GetEnemyInfos()) {
-		const CEnemyInfo* e = kv.second;
-		const CCircuitDef* cdef = e->GetCircuitDef();
-		if ((cdef == nullptr) || cdef->IsMobile()) {
-			continue;
-		}
-		cost += e->GetCost();
-	}
-	return cost;
+	FillAggregates();
+	return aggStructCost;
 }
 
 CEnemyManager::CEnemyManager(CCircuitAI* circuit)
@@ -477,29 +497,14 @@ void CEnemyManager::DyingEnemy(CEnemyUnit* enemy, int frame)
 // Same guarded walk the air survey uses: the circuit-level map holds wrappers
 // whose data dies before the deferred erase, and iterating it from script
 // crashed at every commander blast.
+// BUILDERS EXCLUDED, COMMANDER ABOVE ALL. It is mobile and costs 2700, so it
+// outranks every T1 combat unit and made this read 2700 from frame one -- a
+// permanent 'they are ahead' that says nothing about tier. The caller's own
+// side excludes builders too. The walk is in FillAggregates.
 float CEnemyManager::GetEnemyMaxMobileCostM() const
 {
-	float best = 0.f;
-	for (CEnemyUnit* e : enemyUpdates) {
-		if ((e == nullptr) || e->IsDying()) {
-			continue;
-		}
-		CCircuitDef* cdef = e->GetCircuitDef();
-		// BUILDERS EXCLUDED, COMMANDER ABOVE ALL. It is mobile and costs 2700,
-		// so it outranks every T1 combat unit and made this read 2700 from
-		// frame one -- a permanent 'they are ahead' that says nothing about
-		// tier. The caller's own side excludes builders too; comparing the
-		// two on different bases is the mismatch this whole reading exists
-		// to avoid.
-		if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsBuilder()) {
-			continue;
-		}
-		const float c = cdef->GetCostM();
-		if (c > best) {
-			best = c;
-		}
-	}
-	return best;
+	FillAggregates();
+	return aggMaxMobileCostM;
 }
 
 float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const

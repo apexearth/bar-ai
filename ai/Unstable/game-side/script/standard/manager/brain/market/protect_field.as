@@ -525,15 +525,20 @@ float PfAlphaPerMetal()
 // needs no contact -- the big gun can be STANDING when the Juggernaut arrives
 // instead of being priced correctly just after it lands.
 float gPfAlphaHi = 0.f;
+int gPfAlphaAt = -1;
 
 float PfAlphaRef()
 {
-	float best = ai.GetEnemyMaxMobileCostM();
-	const float mine = OwnedBestMobileCostM();
-	if (mine > best)
-		best = mine;
-	if (best > gPfAlphaHi)
-		gPfAlphaHi = best;
+	// GetEnemyMaxMobileCostM walks every known enemy; it was asked per site and per tower.
+	if (gPfAlphaAt != ai.frame) {
+		gPfAlphaAt = ai.frame;
+		float best = ai.GetEnemyMaxMobileCostM();
+		const float mine = OwnedBestMobileCostM();
+		if (mine > best)
+			best = mine;
+		if (best > gPfAlphaHi)
+			gPfAlphaHi = best;
+	}
 	if (gPfAlphaHi <= 0.f)
 		return 0.f;
 	return gPfAlphaHi * PfAlphaPerMetal();
@@ -1471,13 +1476,54 @@ void PfStakeShield(const AIFloat3& in pos, float reach, const AIFloat3& in dirIn
 	// point inside it. Conservative in both tests, which is what keeps the
 	// answer identical to the walk.
 	const float cellR = gPfGCell * 0.70711f;
+	const float latR = reach + cellR;
 	for (int cz = cz0; cz <= cz1; ++cz) {
 		const int row = cz * gPfGNX;
 		const bool zIn = (cz >= dz0) && (cz <= dz1);
 		const float rzC = gPfGZ0 + (float(cz) + 0.5f) * gPfGCell - pos.z;
 		const float aRow = rzC * dir.z;
 		const float lRow = rzC * across.z;
-		for (int cx = cx0; cx <= cx1; ++cx) {
+		// The corridor crosses this row in one x-interval (both its tests are
+		// linear in x); only that, and the disc, is walked -- not the row.
+		int rx0 = cx0, rx1 = cx1;
+		if (shield) {
+			float lo = -1e9f, hi = 1e9f;
+			if (dir.x > 1e-6f)
+				hi = (cellR - aRow) / dir.x;
+			else if (dir.x < -1e-6f)
+				lo = (cellR - aRow) / dir.x;
+			else if (aRow > cellR)
+				hi = lo - 1.f;
+			if ((across.x > 1e-6f) || (across.x < -1e-6f)) {
+				float b0 = (-latR - lRow) / across.x;
+				float b1 = (latR - lRow) / across.x;
+				if (b0 > b1) {
+					const float t = b0;
+					b0 = b1;
+					b1 = t;
+				}
+				if (b0 > lo)
+					lo = b0;
+				if (b1 < hi)
+					hi = b1;
+			} else if (abs(lRow) > latR) {
+				hi = lo - 1.f;
+			}
+			int c0 = gPfGNX, c1 = -1;
+			if (hi >= lo) {
+				const float f0 = (pos.x + lo - gPfGX0) / gPfGCell - 1.5f;
+				const float f1 = (pos.x + hi - gPfGX0) / gPfGCell + 0.5f;
+				c0 = (f0 < 0.f) ? 0 : ((f0 > float(gPfGNX)) ? gPfGNX : int(f0));
+				c1 = (f1 < 0.f) ? -1 : ((f1 >= float(gPfGNX - 1)) ? (gPfGNX - 1) : int(f1));
+			}
+			if (zIn) {
+				if (dx0 < c0) c0 = dx0;
+				if (dx1 > c1) c1 = dx1;
+			}
+			rx0 = c0;
+			rx1 = c1;
+		}
+		for (int cx = rx0; cx <= rx1; ++cx) {
 			const bool inDisc = zIn && (cx >= dx0) && (cx <= dx1);
 			bool inCorr = false;
 			if (shield) {

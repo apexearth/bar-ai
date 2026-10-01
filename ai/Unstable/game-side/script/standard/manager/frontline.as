@@ -766,7 +766,19 @@ uint GateChokes(array<AIFloat3>& out gates)
 // inside our base, and the anchor landed on its corpses and stayed there,
 // refusing every mex spot beyond them). Function accessor so include order
 // cannot break a global read.
+AIFloat3 gFoeAnchorPos;
+int gFoeAnchorAt = -1;
 AIFloat3 FoeAnchor()
+{
+	// Both enemy reads walk every known enemy; asked per candidate site.
+	if (gFoeAnchorAt != ai.frame) {
+		gFoeAnchorAt = ai.frame;
+		gFoeAnchorPos = FoeAnchorRead();
+	}
+	return gFoeAnchorPos;
+}
+
+AIFloat3 FoeAnchorRead()
 {
 	if (aiEnemyMgr.GetEnemyStructCost() > 0.f) {
 		const AIFloat3 s = aiEnemyMgr.GetEnemyStructPos();

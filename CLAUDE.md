@@ -64,6 +64,15 @@ ideas. Where code disagrees with it, the code is stale.
   N/frames per frame. Lowering the frequency makes a spike rarer, not smaller.
   A section whose `maxMs` is many times its `avgUs` is batching, and that is the
   bug (`apex_perf=1` + `frametime.py`).
+- **Price the cost BEFORE writing the code.** A proposer, a `decide` step or
+  anything they call runs on every builder election: ~1,000-1,500 calls a
+  minute per AI, times up to 16 AIs. Before adding one, write down what it loops
+  over and how that grows (our units, ALL allies' units, every map spot, live
+  tasks) -- a loop over a growing set inside an election is a bug before it
+  ships. Build such lists once (on a clock or an exact key), filter cheapest
+  first, and check `apex: perf AiMakeTask avgUs` at minute 10+ of an 8v8.
+  2026-09-30: `AllyUpgradeSpots` walked every allied structure and every map
+  spot per election -- his 8v8 went 0.2 -> 1.3-2.0 ms/AI/frame by minute 11.
 - **Never author Python in a Bash heredoc.** `Write` for any script (a
   throwaway goes in the scratchpad, a keeper in `tools/`), `Edit` for changes,
   then `python <path>`. `python -c` only for a one-liner with no backslashes

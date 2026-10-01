@@ -299,6 +299,12 @@ void CMetalManager::MarkAllyMexes()
 	}
 
 	circuit->UpdateFriendlyUnits();
+	// apex: same list, same marks -- the list only changes on a refresh pass
+	const int ver = circuit->GetAllyTeam()->GetFriendlyVersion();
+	if (ver == markVersion) {
+		return;
+	}
+	markVersion = ver;
 	const CAllyTeam::AllyUnits& friendlies = circuit->GetFriendlyUnits();
 	static std::vector<CAllyUnit*> tmpMexes;  // NOTE: micro-opt
 //	tmpMexes.reserve(friendlies.size());

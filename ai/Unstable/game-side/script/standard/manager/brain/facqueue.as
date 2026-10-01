@@ -1,10 +1,10 @@
 namespace Brain {
 
 // The per-election work slice for one factory line's batch, in microseconds.
-// 4 ms keeps the worst factory frame near the cost of a single order instead of
+// 1 ms keeps the worst factory frame near the cost of a single order instead of
 // sixteen of them; the remaining slots are ordered by the next election, a
 // frame or two later, which the build-seconds window cannot notice.
-const int BATCH_SLICE_US = 4000;
+const int BATCH_SLICE_US = 1000;
 
 //------------------------------------------------------------------------------
 // THE PRODUCTION EXECUTOR. KILL PHASE (docs/20-brain-overhaul.md): the quota
@@ -346,9 +346,11 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 	// tail of a FIFO, so the new order's own build seconds are the whole change
 	// -- except for the first entry on an empty line, which becomes the head
 	// skipHead drops.
+	const double _tLb = Perf::T0();
 	const float lineBp = LineBuildPower(fac);
 	int lineHave = pend;
 	float lineSec = LineSecondsBp(line, lineBp, true);
+	Perf::Add("fq.line", _tLb);
 	string stop = "window";
 	// Past the slice the rest of the window is drawn from the election's own
 	// ranked list: the same mix without the pricing walk, and a line that
@@ -362,8 +364,10 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			stop = "slice";
 			redraw = true;
 		}
+		const double _tCo = Perf::T0();
 		CCircuitDef@ o = redraw ? Market::RedrawFor(fac, slot)
 				: Market::ConOrderFor(fac, line, slot);
+		Perf::Add(redraw ? "fq.redraw" : "fq.con", _tCo);
 		if (o is null) {
 			stop = redraw ? "slice" : ("null:" + Market::gNoOrder);
 			break;

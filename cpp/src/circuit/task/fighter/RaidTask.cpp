@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include <chrono>
 #include "task/fighter/RaidTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -153,7 +154,9 @@ void CRaidTask::Update()
 	/*
 	 * Update target
 	 */
+	const auto tFt0 = std::chrono::steady_clock::now();
 	const bool isTargetsFound = FindTarget();
+	manager->PerfAdd(20, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tFt0).count());
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
@@ -290,9 +293,7 @@ bool CRaidTask::FindTarget()
 
 		const AIFloat3& ePos = enemy->GetPos();
 		const bool isEnemyUrgent = isDefender && (inflMap->GetAllyDefendInflAt(ePos) > INFL_EPS);
-		if ((!isEnemyUrgent && !urgentPositions.empty())
-			|| !terrainMgr->CanMobileReachAt(area, ePos, highestRange))
-		{
+		if (!isEnemyUrgent && !urgentPositions.empty()) {
 			continue;
 		}
 
@@ -315,7 +316,7 @@ bool CRaidTask::FindTarget()
 		int targetCat;
 		float defThreat;
 		bool isBuilder;
-		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+		const float elevation = circuit->GetElevationAt(ePos);
 		const bool IsInWater = cdef->IsPredictInWater(elevation);
 		CCircuitDef* edef = enemy->GetCircuitDef();
 		if (edef != nullptr) {
@@ -348,6 +349,11 @@ bool CRaidTask::FindTarget()
 			targetCat = UNKNOWN_CATEGORY;
 			defThreat = enemy->GetInfluence();
 			isBuilder = false;
+		}
+		// apex: the area test last -- every enemy reached it first, before the
+		// threat, speed and category tests that reject most of them.
+		if (!terrainMgr->CanMobileReachAt(area, ePos, highestRange)) {
+			continue;
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);

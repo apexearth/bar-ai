@@ -9,7 +9,9 @@ bool T2DefHandsStanding()
 		return gT2HandUp;
 	gT2HandAt = ai.frame;
 	gT2HandUp = false;
-	for (uint c = 1; c < gOwnCount.length(); ++c) {
+	const array<int>@ _own27 = OwnedDefs();
+	for (uint _oi27 = 0; _oi27 < _own27.length(); ++_oi27) {
+		const uint c = uint(_own27[_oi27]);
 		const int ci = int(c);
 		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[ci])
 			continue;

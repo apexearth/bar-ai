@@ -597,6 +597,10 @@ void CMilitaryManager::Init()
 		const int interval = 4;
 		const int offset = circuit->GetSkirmishAIId() % interval;
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateIdle, this), 1, offset + 0, "milIdle");  // apex: per frame; CIdleTask slices for it
+		// apex: squads re-plan every second in contact, every two out of it
+		// (TaskModule lodQuiet); firing and damage retreats are engine reflexes.
+		updateRate = 30;
+		lodQuiet = true;
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1, "milUpd");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
 

@@ -562,14 +562,17 @@ bool MetalPathStarved()
 
 // Finished upgraded extractors we own: ledger rows extracting more than the
 // basic extractor does.
+float gMohoBasic = 0.f;   // the catalog's least extractor, found once
 int MohoStanding()
 {
-	float basic = 0.f;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		const float e = Catalog::gExtractsM[d];
-		if ((e > 0.f) && !Catalog::gMobile[d] && ((basic <= 0.f) || (e < basic)))
-			basic = e;
+	if (gMohoBasic <= 0.f) {
+		for (int d = 1; d <= Catalog::gDefCount; ++d) {
+			const float e = Catalog::gExtractsM[d];
+			if ((e > 0.f) && !Catalog::gMobile[d] && ((gMohoBasic <= 0.f) || (e < gMohoBasic)))
+				gMohoBasic = e;
+		}
 	}
+	const float basic = gMohoBasic;
 	int n = 0;
 	for (uint i = 0; i < gLExtract.length(); ++i) {
 		if (gLExtract[i] > basic * 1.5f)

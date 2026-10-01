@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include <chrono>
 #include "task/fighter/AttackTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -176,7 +177,9 @@ void CAttackTask::Update()
 //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
 //		SetTarget(nullptr);  // FIXME: back-forths group
 //	} else {
+		const auto tFt0 = std::chrono::steady_clock::now();
 		FindTarget();
+		manager->PerfAdd(21, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tFt0).count());
 //	}
 	RepairBreak(frame);
 
@@ -331,18 +334,28 @@ void CAttackTask::FindTarget()
 	const bool canGoHome = terrainMgr->CanMobileReachAt(area, basePos, highestRange);
 	const float inflCell = float(terrainMgr->GetConvertStoP() * 4);
 	const int frame = circuit->GetLastFrame();
+	// apex: each squad member's position, reach and power, read once per call --
+	// selfInflAt is asked four times per threatening group.
+	struct SSelf { AIFloat3 pos; float r; float power; };
+	std::vector<SSelf> selfUnits;
+	selfUnits.reserve(units.size());
+	for (CCircuitUnit* u : units) {
+		const CCircuitDef* ud = u->GetCircuitDef();
+		int cells = ud->GetThreatRange(CCircuitDef::ThreatType::SURF);
+		if (ud->GetMaxRange() > 1000.f) {
+			cells /= 2;
+		}
+		const float r = float(cells) * inflCell;
+		if (r > 0.f) {
+			selfUnits.push_back({u->GetPos(frame), r, ud->GetPower()});
+		}
+	}
 	auto selfInflAt = [&](const AIFloat3& p) {
 		float s = 0.f;
-		for (CCircuitUnit* u : units) {
-			const CCircuitDef* ud = u->GetCircuitDef();
-			int cells = ud->GetThreatRange(CCircuitDef::ThreatType::SURF);
-			if (ud->GetMaxRange() > 1000.f) {
-				cells /= 2;
-			}
-			const float r = float(cells) * inflCell;
-			const float d = u->GetPos(frame).distance2D(p);
-			if ((r > 0.f) && (d < r)) {
-				s += ud->GetPower() * (1.f - d / r);
+		for (const SSelf& su : selfUnits) {
+			const float d = su.pos.distance2D(p);
+			if (d < su.r) {
+				s += su.power * (1.f - d / su.r);
 			}
 		}
 		return s;
@@ -415,7 +428,7 @@ void CAttackTask::FindTarget()
 				continue;
 			}
 
-			const float elevation = map->GetElevationAt(ePos.x, ePos.z);
+			const float elevation = circuit->GetElevationAt(ePos);
 			const bool IsInWater = cdef->IsPredictInWater(elevation);
 			CCircuitDef* edef = enemy->GetCircuitDef();
 			if (edef != nullptr) {

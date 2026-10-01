@@ -63,6 +63,7 @@ private:
 	int version = 0;
 	int count = 0;
 	int nextCount = 0;
+	unsigned long long nextHash = 0, curHash = 0;  // apex: the version moves only when the wreck set does
 };
 
 class CMapManager {

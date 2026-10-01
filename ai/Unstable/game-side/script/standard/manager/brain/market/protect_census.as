@@ -290,7 +290,9 @@ const array<int>@ TeamDefenceDefs()
 		return gTeamDefDef;
 	gTeamDefAt = ai.frame + 15 * SECOND;
 	gTeamDefDef.resize(0);
-	for (uint u = 1; u < gOwnCount.length(); ++u) {
+	const array<int>@ _own23 = OwnedDefs();
+	for (uint _oi23 = 0; _oi23 < _own23.length(); ++_oi23) {
+		const uint u = uint(_own23[_oi23]);
 		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
 			|| !Catalog::gBuilder[int(u)])
 			continue;
@@ -343,7 +345,9 @@ float TeamBestTowerPower()
 		return gTeamTowerP;
 	gTeamTowerAt = ai.frame + 15 * SECOND;
 	gTeamTowerP = 0.f;
-	for (uint u = 1; u < gOwnCount.length(); ++u) {
+	const array<int>@ _own24 = OwnedDefs();
+	for (uint _oi24 = 0; _oi24 < _own24.length(); ++_oi24) {
+		const uint u = uint(_own24[_oi24]);
 		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
 			|| !Catalog::gBuilder[int(u)])
 			continue;
@@ -392,7 +396,9 @@ void TeamTowerLadder()
 	gTeamLadderAt = ai.frame + 15 * SECOND;
 	gTeamTowerCost.resize(0);
 	gTeamTowerPow.resize(0);
-	for (uint u = 1; u < gOwnCount.length(); ++u) {
+	const array<int>@ _own25 = OwnedDefs();
+	for (uint _oi25 = 0; _oi25 < _own25.length(); ++_oi25) {
+		const uint u = uint(_own25[_oi25]);
 		if ((gOwnCount[u] <= 0) || !Catalog::gMobile[int(u)]
 			|| !Catalog::gBuilder[int(u)])
 			continue;

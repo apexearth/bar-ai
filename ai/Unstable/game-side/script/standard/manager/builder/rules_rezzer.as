@@ -9,6 +9,7 @@ array<int>   gConSlotId;
 array<float> gConHp;
 array<int>   gConHitUntil;
 array<int>   gConNextRepair;
+array<int>   gConNextRetire;
 array<int>   gConNextWreck;
 // The front sweep gets its OWN clock. It shared gConNextWreck with the eat and
 // resurrect rules below it and consumed that clock on every scan, found or not
@@ -127,7 +128,7 @@ IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
 		AIFloat3 spoil = BestWreckAt(at, WRECK_RADIUS * 2.f, WRECK_MIN);
 		if (spoil.x < 0.f)
 			spoil = at;
-		if (!RezSiteOk(spoil)) {
+		if (!RezSiteOk(unit, spoil)) {
 			++gRzFrontVeto;
 			++gRzVetoGround;
 			continue;
@@ -252,9 +253,25 @@ float ArmyFront(AIFloat3 &out pos)
 // sentence UpdateRezGuard already steers its evade fan by. ours == 0 is no
 // cover at all and the old bar still decides it. The exclusion stays on the
 // BOT, in RezzerIdle and that guard, which is where he put it.
-bool RezSiteOk(const AIFloat3 &in site)
+// From where the bot stands: the best wreck is picked by value in a radius, and
+// on a sea map it was often across the water, and each was a task, a path
+// query and an election.
+bool RezReaches(CCircuitUnit@ unit, const AIFloat3 &in site)
+{
+	const int ud = int(unit.circuitDef.id);
+	// The area model says yes to some walks the pathfinder then refuses; a
+	// refusal into that sector is remembered for a minute (C++ NoteNoPath).
+	if (ai.IsNoPath(Catalog::Def(ud), site))
+		return false;
+	return ai.CanDefReachAt(Catalog::Def(ud), unit.GetPos(ai.frame), site,
+			Catalog::gBuildDist[ud] + 64.f);
+}
+
+bool RezSiteOk(CCircuitUnit@ unit, const AIFloat3 &in site)
 {
 	++gRzSiteCalls;
+	if (!RezReaches(unit, site))
+		return false;
 	// Ground a constructor of ours just died on: the reach test reads the
 	// enemies it can see, and 22 rez bots walked into the same Bulls in
 	// one minute where it saw none.
@@ -288,9 +305,9 @@ bool RezSiteOk(const AIFloat3 &in site)
 // reclaim credits as it goes and RezzerRezOrEat falls through to it. Contested
 // cover is enough to work on, not enough to bet a whole timeout on. The
 // commander rescue keeps RezSiteOk: him back on his feet outranks the minute.
-bool RezRezSiteOk(const AIFloat3 &in site)
+bool RezRezSiteOk(CCircuitUnit@ unit, const AIFloat3 &in site)
 {
-	if (Market::NearConDeath(site) || InEnemyReach(site))
+	if (!RezReaches(unit, site) || Market::NearConDeath(site) || InEnemyReach(site))
 		return false;
 	// The same no-path mark RezSiteOk honours: one unreachable rich corpse
 	// took 1,878 aborted walks in five minutes through this door.
@@ -329,6 +346,7 @@ int ConSlot(CCircuitUnit@ unit)
 	gConHp.insertLast(unit.GetHealthPercent());
 	gConHitUntil.insertLast(0);
 	gConNextRepair.insertLast(0);
+	gConNextRetire.insertLast(0);
 	gConNextWreck.insertLast(0);
 	gConNextSweep.insertLast(0);
 	const int slot = int(gConSlotId.length()) - 1;
@@ -507,7 +525,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 				continue;
 			if (!u.circuitDef.IsMobile())
 				continue;
-			if (!RezSiteOk(at)) {
+			if (!RezSiteOk(unit, at)) {
 				++gRzFrontVeto;
 				++gRzVetoHurt;
 				continue;
@@ -537,7 +555,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	// 2200-elmo reach, which would walk the medic off the army it serves.
 	const AIFloat3 spoil = BestWreckAt(here, reach, WRECK_MIN);
 	if ((spoil.x >= 0.f) && (spoil.distance2D(lane) <= reach)
-		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(spoil))
+		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(unit, spoil))
 	{
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::NORMAL, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -580,7 +598,9 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		if (Military::FrontLineSpots(line, WRECK_RADIUS * 1.5f, WRECK_RADIUS)
 			&& (line.length() > 0))
 		{
-			for (uint tryN = 0; tryN < line.length(); ++tryN) {
+			// Four stretches a call: the rotation index carries on from where
+			// this stopped, so the line is still covered, a few at a time.
+			for (uint tryN = 0; (tryN < line.length()) && (tryN < 4); ++tryN) {
 				const AIFloat3 stretch = line[gRezSweepIdx % line.length()];
 				++gRezSweepIdx;
 				if (ThreatFor(unit, stretch) > CON_THREAT_VETO)
@@ -596,7 +616,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 					}
 					spoil = stretch;
 				}
-				if (!RezSiteOk(spoil)) {
+				if (!RezSiteOk(unit, spoil)) {
 					++gRzFrontVeto;
 					++gRzVetoGround;
 					continue;
@@ -618,7 +638,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 		AIFloat3 front;
 		if (Military::FrontLinePos(front)) {
 			const AIFloat3 spoil = BestWreckAt(front, WRECK_SEARCH, WRECK_MIN);
-			if ((spoil.x >= 0.f) && RezSiteOk(spoil)) {
+			if ((spoil.x >= 0.f) && RezSiteOk(unit, spoil)) {
 				IUnitTask@ harvest = aiBuilderMgr.Enqueue(TaskB::Reclaim(
 						Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 				if (harvest !is null)
@@ -683,7 +703,13 @@ IUnitTask@ RezzerEatCorpse(CCircuitUnit@ unit)
 IUnitTask@ RezzerRetire(CCircuitUnit@ unit)
 {
 	// Memoised like the constructors' step: uncached, an idle fleet re-ran the
-	// whole obsolete search every election and found nothing.
+	// whole obsolete search every election and found nothing. And asked once
+	// per bot per REZ_RETIRE_PERIOD: retirement is never urgent, and each miss
+	// was ~750 us (rz.retire, his-settings 8v8).
+	const int slot = ConSlot(unit);
+	if (ai.frame < gConNextRetire[slot])
+		return null;
+	gConNextRetire[slot] = ai.frame + REZ_RETIRE_PERIOD;
 	Market::Want@ w = Market::MemoPropose(4, unit);
 	if ((w is null) || (w.value <= 0.f) || (w.kind != Market::WK_RECLAIM))
 		return null;
@@ -716,7 +742,7 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 		const float dist = here.distance2D(at);
 		if (dist >= bestDist)
 			continue;
-		if (!RezSiteOk(at)) {
+		if (!RezSiteOk(unit, at)) {
 			++gRzFrontVeto;
 			++gRzVetoHurt;
 			continue;
@@ -781,7 +807,7 @@ IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 				ai.ReadTeamValue(t, "comwz", -1.f));
 		if (!OnMap(at))
 			continue;
-		if ((ThreatFor(unit, at) > CON_THREAT_VETO) || !RezSiteOk(at))
+		if ((ThreatFor(unit, at) > CON_THREAT_VETO) || !RezSiteOk(unit, at))
 			continue;
 		IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 				Task::Priority::HIGH, at, 100.f, 120 * SECOND, WRECK_RADIUS));
@@ -838,7 +864,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 			floorM = gRzRichM;
 		}
 		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH, floorM);
-		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(rich)) {
+		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(unit, rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
 			if (rr !is null) {
@@ -868,7 +894,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// ground is 60 seconds of standing still with nothing to show.
 		const AIFloat3 body = BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
 		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
-			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezRezSiteOk(body))
+			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezRezSiteOk(unit, body))
 		{
 			IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
 					body, 100.f, 60 * SECOND, WRECK_RADIUS));

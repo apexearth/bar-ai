@@ -235,7 +235,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// A wreck on ground the reach veto refused is not a job: the best wreck
 	// is deterministic, so every idle con was sent to the same one past the
 	// cliff and aborted there (1,624 of one seat's 2,690 elections).
-	if (Market::NearBlocked(wreck) || Market::NearConDeath(wreck))
+	if (Market::NearBlocked(wreck) || Market::NearConDeath(wreck) || !RezReaches(unit, wreck))
 		return null;
 	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:
 	// neither checked whether the wreck itself sits somewhere safe before
@@ -243,7 +243,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
 		return null;
 	if (IsRezzer(unit)) {
-		if (!RezSiteOk(wreck)) {
+		if (!RezSiteOk(unit, wreck)) {
 			++gRzFrontVeto;
 			++gRzVetoGround;
 			return null;
@@ -302,7 +302,8 @@ IUnitTask@ IdleFeatureReclaim(CCircuitUnit@ unit, bool isComm)
 // The gate is deliberately short. A bot that loses this race is given a
 // resurrect task with a 300-second timeout and is out of the metal business
 // until it expires, which costs far more than the feature scan does.
-const int REZ_WRECK_PERIOD = 1 * SECOND;
+const int REZ_WRECK_PERIOD = 2 * SECOND;
+const int REZ_RETIRE_PERIOD = 10 * SECOND;
 int gNextRezFleeLog = 0;
 
 // Which defs resurrect, learned from the engine rather than named: BuilderManager
