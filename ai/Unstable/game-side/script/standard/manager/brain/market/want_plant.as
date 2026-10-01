@@ -652,21 +652,21 @@ bool NanoBlockFull(int d)
 
 bool CopyWaived(int d)
 {
-	// OVERFLOW BUYS ANOTHER AIR PLANT OR GANTRY (apexearth 2026-09-30: "find
-	// where our idle construction turrets are and build another air plant
-	// around them, or a gantry... I would not be sad to see three or four
-	// advanced air plants"). The counts stay bounded by SuperTarget (gantry)
-	// and the air lead's income curve (IntelPlantToBuild); the eco seat
-	// takes that curve without the overflow test.
-	if (IsGantryDef(d) && WealthWaiver())
-		return true;
+	// NANOS FIRST, ALWAYS (his rule, restated 2026-09-30 after an overflow
+	// waiver skipped it: "make some nanoturrets around the factories before
+	// you even consider making a second factory -- you don't ever break it").
+	// No copy while the standing plant's nano block has room. Once it is full,
+	// overflow (or the eco seat, for the advanced air plant within its income
+	// curve) buys the next line.
+	if (!NanoBlockFull(d) || (GantryShort() !is null))
+		return false;
 	if (AirPlant(d) && (PlantTier(d) >= 2)) {
 		CCircuitDef@ want = Air::IntelPlantToBuild();
 		if ((want !is null) && (int(want.id) == d)
 			&& (WealthWaiver() || EcoRoleActive() || gWasEcoSeat))
 			return true;
 	}
-	return WealthWaiver() && LinesAllWorking(d) && NanoBlockFull(d);
+	return WealthWaiver() && LinesAllWorking(d);
 }
 
 // A copy bought to MOVE a walled-in plant (the reclaim market's move law):

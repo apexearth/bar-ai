@@ -919,8 +919,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					const float bCeil = LineCeilSum();
 					array<float> needK(nFacs, 0.f);
 					float needSum = 0.f;
+					// A gantry under its 50 takes the whole batch.
+					CCircuitUnit@ gShort = GantryShort();
 					for (uint fk = 0; fk < nFacs; ++fk) {
-						needK[fk] = LineUnserved(Factory::gFacUnits[fk], bFeed, bFloor, bCeil);
+						needK[fk] = (gShort !is null)
+								? ((Factory::gFacUnits[fk] is gShort) ? 1.f : 0.f)
+								: LineUnserved(Factory::gFacUnits[fk], bFeed, bFloor, bCeil);
 						needSum += needK[fk];
 					}
 					for (uint fi2 = 0; (fi2 < lines) && (left > 0); ++fi2) {

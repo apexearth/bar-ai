@@ -31,7 +31,12 @@ int FactoryNanoShort(AIFloat3& out at)
 		if (!OnMap(fp))
 			continue;
 		const int tier = PlantTier(int(f.circuitDef.id));
-		const int want = (tier >= 3) ? 9 : ((tier == 2) ? 4 : 2);
+		// A gantry keeps the lathe that spends our income (GantryNanoWant),
+		// whatever the bank reads.
+		const bool gantry = IsGantryDef(int(f.circuitDef.id));
+		const int want = gantry
+				? (NanoBlockFull(int(f.circuitDef.id)) ? 0 : GantryNanoWant(int(f.circuitDef.id)))
+				: ((tier >= 3) ? 9 : ((tier == 2) ? 4 : 2));
 		// A plant whose ground is being raided does not hoist its turret
 		// past the draw: the floor sent a nano to the same raided row 104
 		// times in one game, every frame killed (watched). Priced like any
@@ -66,7 +71,7 @@ int FactoryNanoShort(AIFloat3& out at)
 		// 2026-09-22). The income arithmetic that stood here asked 26 m/s for
 		// the first turret and 44 for the second, which at 12-15 m/s per
 		// player held our first plant nano past minute 8.
-		if (!aiFactoryMgr.isAssistRequired) {
+		if (!gantry && !aiFactoryMgr.isAssistRequired) {
 			if (yard)
 				++gFloorYardAssist;
 			continue;
@@ -398,6 +403,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		float lathe0 = 0.f;
 		AnyLineSite(lp0, lathe0);
 		AiLog(Factory::T() + "apex: nanowant " + unit.circuitDef.GetName()
+			+ " gantry=" + ((GantryShort() !is null) ? ("" + gGantryShortN + "/" + gGantryShortWant) : "ok")
 			+ " feed=" + formatFloat(FreeMetalFlow(), "", 0, 1)
 			+ " spare=" + formatFloat(spareS, "", 0, 1)
 			+ " line=" + formatFloat(lineNeed, "", 0, 1)

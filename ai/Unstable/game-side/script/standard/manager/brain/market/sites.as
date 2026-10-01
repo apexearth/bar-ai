@@ -1767,6 +1767,98 @@ float NeediestLine(AIFloat3& out at)
 	return worst;
 }
 
+// A GANTRY TAKES ITS NANOS BEFORE ANYTHING ELSE GETS ONE (apexearth 2026-09-30:
+// "if I have 500 metal income, how many construction do I want nearby?... I
+// want you to do the math"). Enough lathe to spend our income through the
+// gantries: income over the gantries, over what one of our turrets spends
+// building that gantry's own units. Armada: 0.0415 metal per build-second
+// x 200 build power = 8.3 m/s a turret, so 500 m/s and one gantry is 60.
+// Never under BARb's 9; over it, whatever fits in reach -- a full nano block
+// ends the ask.
+int gGantryWantAt = -1;
+int gGantryWant = 9;
+int GantryNanoWant(int gd)
+{
+	if (gGantryWantAt == ai.frame)
+		return gGantryWant;
+	gGantryWantAt = ai.frame;
+	int nG = 0;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f !is null) && IsGantryDef(int(f.circuitDef.id)))
+			++nG;
+	}
+	float m = 0.f, bt = 0.f;
+	const array<int>@ b = Catalog::gBuildsList[gd];
+	for (uint i = 0; i < b.length(); ++i) {
+		const int u = b[i];
+		if (Catalog::gAvailable[u] && Catalog::gMobile[u] && (Catalog::gBuildTime[u] > 0.f)) {
+			m += Catalog::gCostM[u];
+			bt += Catalog::gBuildTime[u];
+		}
+	}
+	float nanoBp = 0.f;
+	for (uint i = 0; i < gOwnNano.length(); ++i) {
+		if (gOwnNano[i] !is null)
+			nanoBp += Catalog::gBuildPower[int(gOwnNano[i].circuitDef.id)];
+	}
+	nanoBp = (gOwnNano.length() > 0) ? (nanoBp / float(gOwnNano.length())) : 200.f;
+	TrackIncome();
+	const float inc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
+	int want = 9;
+	if ((bt > 0.f) && (nanoBp > 0.f) && (nG > 0)) {
+		const float drain = nanoBp * m / bt;
+		if (drain > 0.f) {
+			const int n = int(ceil(inc / float(nG) / drain));
+			if (n > want)
+				want = n;
+		}
+	}
+	gGantryWant = want;
+	return want;
+}
+
+int gGantryShortAt = -1;
+CCircuitUnit@ gGantryShort = null;
+int gGantryShortN = 0;
+int gGantryShortWant = 0;
+int NanosReaching(const AIFloat3& in p)
+{
+	int n = 0;
+	for (uint i = 0; i < gOwnNanoPos.length(); ++i) {
+		const CCircuitUnit@ u = (i < gOwnNano.length()) ? gOwnNano[i] : null;
+		const float reach = (u !is null) ? Catalog::gBuildDist[int(u.circuitDef.id)] : 400.f;
+		if (gOwnNanoPos[i].distance2D(p) <= reach)
+			++n;
+	}
+	return n;
+}
+CCircuitUnit@ GantryShort()
+{
+	if (gGantryShortAt == ai.frame)
+		return gGantryShort;
+	gGantryShortAt = ai.frame;
+	@gGantryShort = null;
+	int worstGap = 0;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || !IsGantryDef(int(f.circuitDef.id)))
+			continue;
+		const AIFloat3 fp = f.GetPos(ai.frame);
+		if (!OnMap(fp) || NanoBlockFull(int(f.circuitDef.id)))
+			continue;
+		const int want = GantryNanoWant(int(f.circuitDef.id));
+		const int n = NanosReaching(fp);
+		if (want - n > worstGap) {
+			worstGap = want - n;
+			gGantryShortN = n;
+			gGantryShortWant = want;
+			@gGantryShort = f;
+		}
+	}
+	return gGantryShort;
+}
+
 // WHERE the next turret stands: the working army line furthest short of
 // its ceiling-weighted share of the flow, NET of the lathe already on it.
 // NeediestLine's floored number is the count's currency; used for siting it
@@ -1776,6 +1868,13 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 	bool any = false;
 	const float feed = FreeMetalFlow();
 	const float sumCeil = LineCeilSum();
+	CCircuitUnit@ g = GantryShort();
+	if (g !is null) {
+		at = g.GetPos(ai.frame);
+		net = (feed > 1.f) ? feed : 1.f;
+		@line = g;
+		return true;
+	}
 	// The line eating least for its weight: the same pick as the largest
 	// shortfall of the ceiling-weighted share, but it holds with no free flow.
 	// Ranked on the raw shortfall, a spent economy picked the line eating
@@ -1810,6 +1909,12 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 // line asks for the same turret forever.
 bool AnyLineSite(AIFloat3& out at, float& out lathe)
 {
+	CCircuitUnit@ g = GantryShort();
+	if (g !is null) {
+		at = g.GetPos(ai.frame);
+		lathe = LineEat(g, at);
+		return true;
+	}
 	float fewest = -1.f;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
