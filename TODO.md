@@ -491,3 +491,32 @@ losses do not, it is the first thing all night to move the minute-4 wall.
 The loop for all four: `python tools/openloop.py run --name X --games 32`
 (6.5 min), compare against a 32-game control, then `tools/perminute.py` on
 one win and one loss. Anything under ~0.5 mex at n=32 is noise.
+
+## Host the AI from a lobby bot, not from his client (parked 2026-09-30)
+
+His ask: the AI hosted like a server, not by a player who joins and adds it.
+He parked it the same day ("we should not do this yet").
+
+Proven locally (`tools/netproof.py`): `spring-dedicated` as the server, a
+`spring-headless` spectator ("ApexBot") that owns the AI, a second client as
+the human. The game started and the AI played (11 decisions, 5 placements in
+3 game-minutes, no desync). Traps found:
+- `spring-dedicated` has no `--write-dir`; it reads `SPRING_WRITEDIR`, and its
+  config flag is `-config`.
+- A cold client spends 20+ s hashing the game before it answers; the server
+  dropped both clients after ~10 s. A kept write-dir (warm cache) plus
+  `InitialNetworkTimeout`/`NetworkTimeout = 300` fixed it.
+
+The plan when he picks it up:
+1. `tools/lobbybot.py` speaks the SpringLobby protocol (what Chobby and SPADS
+   use today; Tachyon is replacing it): log in, take his PM (`!join`, `!add 2
+   enemy`), JOINBATTLE as a spectator, ADDBOT with itself as owner, and on
+   the host going in-game launch spring-headless with the room's IP/port and
+   its own script password.
+2. Keep the room's engine, game and map installed (pr-downloader) and the
+   Apex AI deployed into that engine; keep the cache warm.
+3. Build and test against BAR-Devtools (Teiserver + SPADS + bar-lobby in
+   Docker) before the live server.
+His part: BAR bans alt accounts, so the bot account needs the admins'
+approval as a bot, and their word on a custom-AI host bot in public rooms.
+Where it runs matters: on his PC both clients simulate the whole game.

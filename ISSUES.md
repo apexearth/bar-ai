@@ -17,6 +17,38 @@ and no game since has been read for it.
 
 ## ARMY
 
+### SHIPPED 2026-09-30 EVENING, PARTLY MEASURED
+
+From his Greenest Fields 8v8s (no T2/T3) and his rulings in them. What is
+measured is in the commit messages; what is not:
+- Squad targeting (push, no ghosts, real armies first, keep the target):
+  A/B 6+6 Greenest 4v4 notech2 lost 18% less metal and stood 0.88 vs 0.72
+  forward at 20 min, but target changes rose 34 -> 56 per seat-minute (the
+  nearest unit of a moving army keeps changing). Squads converging on one
+  army and walking into unseen ones are unmeasured.
+- Regroup at the front, held only under half the squad's power
+  (`apex: regroup held= kept-going=`): his game read 19 held / 97 kept going;
+  whether units now trickle into fights one by one is unmeasured.
+- Withdraw held while our side is twice theirs (`apex: hold-strong`).
+- Heal station (`apex: retreat-dest heal= home=`): heal took the majority on
+  every seat; where the rez bots actually stand is not logged.
+- Repair-break fired 15x in tests, all on factories/mohos repaired by cons;
+  never yet on a tower held up by construction turrets.
+- Room pricing (full-bill per cell, local converter crowding): no clean A/B;
+  wind:advsol 8-10:1 in tests vs 13:1 in his game, different setups.
+- Energy storage band: converters 27-93 per seat at 30 min vs ~180 in his
+  8v8 at 24; 1-2 storages per seat. Working.
+- Builders past halfway finish the walk (C++ re-election skip + peel): the
+  counter counts checks, not hands; walk-backs saved is unmeasured. Open: one
+  far defence site can still draw nearly the whole pool while defence is far
+  behind target (FeedableCrew x DefenceShortfall, his 09-28 rule).
+- Advanced air plant / gantry copies on overflow or the eco seat: no copy
+  appeared in two Glacier 2v2s at ~500 m/s (no overflow, no eco seat); his
+  8v8 is the first test.
+- Ally clearance (OffAllyBuildings) for ground defence and transport drops:
+  never run in a test before deploy. Whose building pens our units is not
+  logged.
+
 ### ARMY SHARE (STALE for the Glacier 2v2 regime -- see the HOLDING FAILURE entry at the end; there we are 53% army to BARb's 43%): we put ~10% of metal into army, BARb 23-32% (2026-09-06, re-read 09-15)
 
 `tournaments/20260906-123343-fixes-on` vs `-123756-fixes-off`, Comet 1v1 vs
