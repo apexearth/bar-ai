@@ -1187,6 +1187,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 		}
 		unit->SetElectFrame(frame);
 	}
+	// apex: a builder past halfway to a far site finishes the walk (apexearth
+	// 2026-09-30: engineers walked half the map to the front and were turned
+	// home nearly there). Still re-elected where the enemy is, so it can flee.
+	{
+		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+		const AIFloat3& site = GetPosition();
+		const float sqTrip = home.SqDistance2D(site);
+		if (utils::is_valid(site) && (sqTrip > SQUARE(1000.f))
+			&& (pos.SqDistance2D(site) * 4.f < sqTrip)
+			&& (circuit->GetInflMap()->GetEnemyInflAt(pos) < INFL_EPS))
+		{
+			return true;
+		}
+	}
 	HideAssignee(unit);
 	sInReelect = true;   // apex: strand census (see RemoveAssignee)
 	IUnitTask* task = manager->MakeTask(unit);

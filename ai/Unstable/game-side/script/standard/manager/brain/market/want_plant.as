@@ -652,6 +652,20 @@ bool NanoBlockFull(int d)
 
 bool CopyWaived(int d)
 {
+	// OVERFLOW BUYS ANOTHER AIR PLANT OR GANTRY (apexearth 2026-09-30: "find
+	// where our idle construction turrets are and build another air plant
+	// around them, or a gantry... I would not be sad to see three or four
+	// advanced air plants"). The counts stay bounded by SuperTarget (gantry)
+	// and the air lead's income curve (IntelPlantToBuild); the eco seat
+	// takes that curve without the overflow test.
+	if (IsGantryDef(d) && WealthWaiver())
+		return true;
+	if (AirPlant(d) && (PlantTier(d) >= 2)) {
+		CCircuitDef@ want = Air::IntelPlantToBuild();
+		if ((want !is null) && (int(want.id) == d)
+			&& (WealthWaiver() || EcoRoleActive() || gWasEcoSeat))
+			return true;
+	}
 	return WealthWaiver() && LinesAllWorking(d) && NanoBlockFull(d);
 }
 

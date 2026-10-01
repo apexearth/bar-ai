@@ -35,6 +35,9 @@ float           gPfTotal = 0.f;
 // with few turrets (apexearth 2026-08-27: "we have wind, advanced solar, and
 // T1 converters all over the place not being reclaimed... we have no space").
 float           gPfCells = 0.f;
+// the full bill (energy at the conversion floor) of everything standing on
+// those cells: a converter is 1 metal and 1,150 energy
+float           gPfBill = 0.f;
 int             gPfAt = -999999;
 
 // WHICH ASSET A SLOT IS, so a cache may be keyed to the asset and not to a
@@ -222,7 +225,7 @@ float PfCrowdAt(const AIFloat3& in pos, float r)
 
 float PfMetalPerCell()
 {
-	return (gPfCells > 1.f) ? (gPfTotal / gPfCells) : 0.f;
+	return (gPfCells > 1.f) ? (gPfBill / gPfCells) : 0.f;
 }
 
 float PfHorizon()
@@ -859,6 +862,7 @@ void PfRebuild()
 	gPfNKey.resize(0);
 	gPfTotal = 0.f;
 	gPfCells = 0.f;
+	gPfBill = 0.f;
 	const float h = PfHorizon();
 
 	// EVERY STANDING BUILDING, not a hand-picked three classes. Extractors are
@@ -875,6 +879,7 @@ void PfRebuild()
 			// take up ground exactly like everything else.
 			gPfCells += float((Catalog::gAreaCells[d] > 0)
 					? Catalog::gAreaCells[d] : 1);
+			gPfBill += Catalog::gCostM[d] + Catalog::gCostE[d] * EPriceFloor();
 			if (Catalog::gExtractsM[d] > 0.f)
 				continue;
 			if (ProtClassOf(d) >= 0)

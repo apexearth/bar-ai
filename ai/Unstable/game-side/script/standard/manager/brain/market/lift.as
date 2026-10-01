@@ -263,6 +263,7 @@ bool LiftDispatch(LiftJob@ jb)
 	array<AIFloat3> slots;
 	PackSlots(cd, lp, AnchorDefAt(lp), 1, slots);
 	AIFloat3 to = (slots.length() > 0) ? slots[0] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
+	to = OffAllyBuildings(OffFactoryExit(to));
 	if (!OnMap(to) || Builder::SiteHot(to))
 		return false;
 	@jb.cargo = cargo;
@@ -392,8 +393,10 @@ void LiftStep(LiftJob@ jb)
 	// ground near the target, then any near the plane, widening each time.
 	jb.retried = true;
 	++jb.drops;
+	// Always around the cleared slot: "anywhere near the plane" set turrets
+	// down in doorways and walkways (apexearth 2026-09-30).
 	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
-	const AIFloat3 at = (jb.drops == 1) ? jb.to : pp;
+	const AIFloat3 at = jb.to;
 	const float r = 300.f * float(jb.drops);
 	jb.plane.CmdUnloadArea(at, r);
 	jb.deadline = ai.frame + 30 * SECOND;

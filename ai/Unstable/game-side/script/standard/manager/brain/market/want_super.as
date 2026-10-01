@@ -275,6 +275,10 @@ bool SuperPushable(const CCircuitDef@ d)
 	if ((d !is null) && (SuperClassOf(int(d.id)) == SC_LRPC)
 		&& (SuperBill(int(d.id)) >= SuperBudget()))
 		return false;
+	// A launcher is a tool of the fight, bought in the draw like one; the
+	// push took a Juno 16 times on one seat of his no-T2 8v8.
+	if ((d !is null) && (Catalog::LauncherKind(int(d.id)) != Catalog::LK_NONE))
+		return false;
 	if ((d is null) || !Catalog::gAntiNuke[int(d.id)])
 		return true;
 	if (Brain::EnemyNukeSilos() > 0)

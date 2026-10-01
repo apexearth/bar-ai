@@ -1374,6 +1374,7 @@ bool EnergyPinned()
 int gCwCalls = 0;      // ProposeConvert entries
 int gCwBank = 0;       // ...refused: the energy bank is not near full
 int gCwNoSurplus = 0;  // ...refused: nothing left after what is ordered
+int gCwBand = 0;       // ...refused: the storage band is full, storage priced instead
 int gCwCand = 0;       // buildable converter defs seen
 int gCwObsolete = 0;   // ...dropped as edible by a better one
 int gCwNoDef = 0;      // reached the loop and priced nothing
@@ -1392,6 +1393,7 @@ void ConvWhyLog()
 		+ " calls=" + gCwCalls
 		+ " bankRefused=" + gCwBank
 		+ " noSurplus=" + gCwNoSurplus
+		+ " bandFull=" + gCwBand + " band=" + int(ConvBandE())
 		+ " cand=" + gCwCand
 		+ " obsolete=" + gCwObsolete
 		+ " nodef=" + gCwNoDef
@@ -1410,6 +1412,75 @@ void ConvWhyLog()
 // Converters: worth exactly the energy surplus they would chew, at their own
 // ratio. Pure catalog arithmetic, no model.
 int gNextConvPriceLog = 0;
+// THE STORAGE BAND (apexearth 2026-09-30: "we can't even store as much energy
+// as those converters want to convert"). game_energy_conversion converts, twice
+// a game second, only what the bank holds above the slider's level, so the
+// fleet can never chew more than 2 x storage x (1 - level) E/s however many
+// converters stand. Past that the answer is storage; an AI cannot move the
+// slider (the gadget takes it only from a player's message).
+const float CONV_TICKS_PER_S = 2.f;
+float ConvLevel()
+{
+	return ai.GetTeamRulesParam("mmLevel", 0.75f);
+}
+float ConvBandE()
+{
+	return CONV_TICKS_PER_S * Eco::EStor() * (1.f - ConvLevel());
+}
+float ConvBandLeftE()
+{
+	return ConvBandE() - ConvCapE() - ConvCapInFlight();
+}
+
+int gNextStoreLog = 0;
+int gStoreProposed = 0;
+
+// Storage worth what the wider band lets us convert: the energy we throw away,
+// up to what one more store opens, at the best ratio we convert at.
+Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
+{
+	Want w;
+	const int uid = int(unit.circuitDef.id);
+	const array<int>@ builds = Catalog::BuildsOf(uid);
+	const float level = ConvLevel();
+	const AIFloat3 site = EcoSiteFor(unit);
+	for (uint i = 0; i < builds.length(); ++i) {
+		const int d = builds[i];
+		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
+			|| Catalog::gSub[d] || (Catalog::gStoreE[d] < 1000.f)
+			|| (Catalog::gStoreM[d] > 1.f)   // metal storage stays off (his 2026-08-27 ruling)
+			|| (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gMakeE[d] >= 1.f))
+			continue;
+		if (Requests::LiveOfDef(Catalog::Def(d)))
+			return w;   // one store at a time: the band it opens is not read yet
+		float useful = CONV_TICKS_PER_S * (1.f - level) * Catalog::gStoreE[d];
+		if (useful > eWasted)
+			useful = eWasted;
+		if (useful <= 0.f)
+			continue;
+		Want c;
+		ValueOf(d, useful * BestConvRatio(), WalkSecTo(unit, site),
+				Catalog::gBuildPower[uid], c);
+		if (c.value > w.value) {
+			w = c;
+			w.kind = WK_CONVERT;
+			@w.def = Catalog::Def(d);
+			w.pos = site;
+		}
+	}
+	if ((w.value > 0.f) && (ai.frame >= gNextStoreLog)) {
+		gNextStoreLog = ai.frame + 30 * SECOND;
+		++gStoreProposed;
+		AiLog("apex: estore t=" + ai.teamId + " " + w.def.GetName()
+			+ " band=" + int(ConvBandE()) + " conv=" + int(ConvCapE() + ConvCapInFlight())
+			+ " wasted=" + int(eWasted) + " stor=" + int(Eco::EStor())
+			+ " level=" + formatFloat(level, "", 0, 2)
+			+ " gain=" + formatFloat(w.gain, "", 0, 2)
+			+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2));
+	}
+	return w;
+}
+
 Want@ ProposeConvert(CCircuitUnit@ unit)
 {
 	Want w;
@@ -1459,6 +1530,13 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		ConvWhyLog();
 		return w;
 	}
+	// The band is full: another converter would stand idle.
+	const float bandLeft = ConvBandLeftE();
+	if (bandLeft < 1.f) {
+		++gCwBand;
+		ConvWhyLog();
+		return ProposeStorage(unit, eWasted);
+	}
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 cSite = EcoSiteFor(unit);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
@@ -1466,7 +1544,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 	const float cvPower = EcoPowerM();
 	const float cvGrowK = ai.GetTunable("apex_energy_growth", TUNE_ENERGY_GROWTH);
 	const float cvRentCell = SpaceRentM(cSite, 1);
-	const float cvCrowdCell = PfCrowd() * PfMetalPerCell()
+	const float cvCrowdCell = PfCrowdAt(cSite, 400.f) * PfMetalPerCell()
 			* ai.GetTunable("apex_room_worth", TUNE_ROOM_WORTH);
 	// INFERIOR WORK IS WORTH LESS here as on the generator side: metal per
 	// cell against the best converter THIS asker can place. Priced per metal
@@ -1522,6 +1600,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		// both maps (ISSUES); the excess is logged beside it, unused.
 		float chew = (eSurplus < Catalog::gConvCapacity[d])
 				? eSurplus : Catalog::gConvCapacity[d];
+		if (chew > bandLeft)
+			chew = bandLeft;
 		if (pinned) {
 			// Capacity standing idle is what the pin is NOT: the bank pinned
 			// full through five idle converters and bought a sixth at full

@@ -33,6 +33,19 @@ float T1TowerStandingM()
 	return m;
 }
 
+// An owned hand past the T1 line. CeilingConsOwned is not this: with tech 2
+// disabled the ceiling IS tier 1, and every T1 hand read as advanced.
+bool AdvancedHandOwned()
+{
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		if ((gOwnCount[c] > 0) && Catalog::gMobile[int(c)] && Catalog::gBuilder[int(c)]
+				&& (int(c) < int(Catalog::gT1Hand.length())) && !Catalog::gT1Hand[int(c)]
+				&& ReachesCeiling(int(c)))
+			return true;
+	}
+	return false;
+}
+
 bool T1Tower(int d)
 {
 	const array<int>@ bb = Catalog::gBuiltBy[d];
@@ -545,7 +558,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// same time as we're slowly upgrading a Mex"). The shortfall
 			// waits for the advanced hand's gun; the basic hand's one
 			// stopgap (own-fill) is the only light tower after T2.
-			if (Gate(GATE_DEF_T1LATE, T1Tower(d) && (CeilingConsOwned() > 0)
+			if (Gate(GATE_DEF_T1LATE, T1Tower(d) && AdvancedHandOwned()
 				&& (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f))) {
 				gDwT1[d] = 0.f;
 				continue;

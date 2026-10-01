@@ -162,7 +162,10 @@ CCircuitDef@ IntelPlantToBuild()
 		// air and using air cons").
 		if (!armyFedA && (Military::AirThreatNow() <= 0.f) && !Market::EcoRoleGrowing())
 			return null;
-		if ((wantN > 1) && !armyFedA)
+		// The eco seat and an overflowing seat take the income curve whole
+		// (apexearth 2026-09-30: three or four advanced air plants on them).
+		if ((wantN > 1) && !armyFedA && !Market::EcoRoleActive() && !Market::gWasEcoSeat
+			&& !Market::WealthWaiver())
 			wantN = 1;
 		// At least one, once air is mandatory at all or the enemy is afloat:
 		// torpedo bombers, fighters and the advanced air constructors all live

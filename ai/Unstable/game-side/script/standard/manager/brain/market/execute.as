@@ -192,6 +192,43 @@ AIFloat3 OffFactoryExit(const AIFloat3& in pos)
 	return p;
 }
 
+// AN ALLY'S BASE IS THEIR WALKWAY (apexearth 2026-09-30: "an ally puts some
+// shit in our base and gets us stuck"). A site flush against an allied
+// building closes the gaps their units walk through, so it slides away from
+// the nearest one, a building width at a time.
+const float ALLY_CLEAR = 160.f;
+int gAllyClearMoved = 0;
+AIFloat3 OffAllyBuildings(const AIFloat3& in pos)
+{
+	AllyStaticsSync();
+	AIFloat3 p = pos;
+	for (uint tries = 0; tries < 4; ++tries) {
+		int nearI = -1;
+		float nearD = ALLY_CLEAR;
+		for (uint i = 0; i < gAllyStPos.length(); ++i) {
+			const float d = gAllyStPos[i].distance2D(p);
+			if (d < nearD) {
+				nearD = d;
+				nearI = int(i);
+			}
+		}
+		if (nearI < 0) {
+			if (tries > 0)
+				++gAllyClearMoved;
+			return p;
+		}
+		AIFloat3 away = p - gAllyStPos[nearI];
+		if (away.SqLength2D() < 1.f)
+			away = AIFloat3(1.f, 0.f, 0.f);
+		away.SafeNormalize2D();
+		const AIFloat3 q = p + away * 96.f;
+		if (!OnMap(q))
+			return pos;
+		p = q;
+	}
+	return pos;   // no clear ground near: the original site stands
+}
+
 AIFloat3 ClearOfLiveFactories(const AIFloat3& in pos)
 {
 	AIFloat3 p = pos;
@@ -471,7 +508,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Ground the C++ reach veto has refused is re-probed, not re-taken:
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
-		AIFloat3 sAt = groundDef ? OffFactoryExit(w.pos) : w.pos;
+		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(w.pos)) : w.pos;
 		// NO GUN IN THE BASE INTERIOR (apexearth 2026-09-19: "imagine you
 		// only have 12 towers and six of them are in the center of your
 		// base... by the time those towers are defending anything you've
@@ -1151,6 +1188,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				// we can start. It self-limits twice over: the bank empties,
 				// and the pin breaks once enough capacity stands.
 				int wantC = EnergyPinned() ? ETA_INF_N : int(spare / capD);
+				// ...and never past the storage band: a pinned bank is also
+				// what a full band looks like, and it bought converters that
+				// could never run (his 8v8: 1,455 converters, 0 storage).
+				const int bandN = int(ConvBandLeftE() / capD);
+				if (wantC > bandN)
+					wantC = bandN;
 				// AFFORDABLE AGAINST INCOME, NOT THE INSTANTANEOUS BANK.
 				//
 				// This read metal.current / price, and we now deliberately run

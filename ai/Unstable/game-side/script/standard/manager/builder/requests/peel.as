@@ -11,6 +11,7 @@ namespace Requests {
 // with a standing nanoframe: walkers already re-elect on their own.
 int gPeeled = 0;
 int gNanoFedPeel = 0;   // sites trimmed to the founder because the ring is on them
+int gPeelKept = 0;      // hands past halfway to their site, kept on it
 int gNextPeelLog = 0;
 void PeelSurplus()
 {
@@ -52,14 +53,29 @@ void PeelSurplus()
 		// A few at a time, largest ids first -- the same stampede guard the
 		// hold rung uses: everyone reads the same pre-order counts.
 		const int PEEL_PER_TICK = 3;
+		// A HAND PAST HALFWAY FINISHES THE WALK (apexearth 2026-09-30: engineers
+		// walked half the map to the front, were peeled nearly there, and
+		// walked home). Only a hand still in the home half of its trip is
+		// peeled, the farthest from the site first.
+		const AIFloat3 site = t.GetBuildPos();
+		const bool siteKnown = OnMap(site) && Builder::gHomeSet;
+		const float halfTrip = siteKnown ? (0.5f * site.distance2D(Builder::gHomePos)) : 0.f;
 		for (int k = 0; (k < surplus) && (k < PEEL_PER_TICK); ++k) {
 			CCircuitUnit@ top = null;
+			float topD = -1.f;
 			for (uint c = 0; c < crew.length(); ++c) {
 				CCircuitUnit@ u2 = crew[c];
 				if (u2 is null)
 					continue;
-				if ((top is null) || (int(u2.id) > int(top.id)))
+				const float d = siteKnown ? u2.GetPos(ai.frame).distance2D(site) : float(u2.id);
+				if (siteKnown && (d < halfTrip)) {
+					++gPeelKept;
+					continue;
+				}
+				if ((top is null) || (d > topD)) {
 					@top = u2;
+					topD = d;
+				}
 			}
 			if (top is null)
 				break;
@@ -75,7 +91,7 @@ void PeelSurplus()
 		gNextPeelLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: peeled " + peeledNow
 			+ " surplus assister(s) back to the auction (total " + gPeeled
-			+ " nanoFed=" + gNanoFedPeel + ")");
+			+ " nanoFed=" + gNanoFedPeel + " keptPastHalf=" + gPeelKept + ")");
 	}
 }
 
