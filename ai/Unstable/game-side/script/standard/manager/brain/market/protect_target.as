@@ -467,6 +467,10 @@ AIFloat3 WaterGunAnchor(int d, const AIFloat3& in yardFront, const AIFloat3& in 
 		if ((k >= 0) && ((ai.GetElevationAt(c) >= 0.f) || !Builder::gHomeSet
 				|| (c.distance2D(Builder::gHomePos) > leash)))
 			continue;
+		// Only water a hull sails into: a mex in a lake beside the base is
+		// guarded by nothing an enemy boat can reach.
+		if ((k >= 0) && gWcBuilt && !SailableWaterNear(c, 400.f))
+			continue;
 		if (WaterGunCovers(c, cover))
 			continue;
 		const float dd = c.distance2D(here);
@@ -503,7 +507,7 @@ float WaterDefenceHave()
 float WaterDefenceGap()
 {
 	const float share = NavyShare();
-	if (share <= 0.f)
+	if ((share <= 0.f) || !WaterReachesFoe())
 		return 0.f;
 	float have = WaterDefenceHave();
 	for (uint i = 0; i < Requests::gLive.length(); ++i) {

@@ -49,6 +49,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
 		inflData->enemyInfl.resize(mapSize, INFL_BASE);
 		inflData->allyInfl.resize(mapSize, INFL_BASE);
 		inflData->allyDefendInfl.resize(mapSize, INFL_BASE);
+		inflData->allyStaticInfl.resize(mapSize, INFL_BASE);
 		inflData->influence.resize(mapSize, INFL_BASE);
 //		inflData->tension.resize(mapSize, INFL_BASE);
 //		inflData->vulnerability.resize(mapSize, INFL_BASE);
@@ -58,6 +59,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
 	enemyInfl = inflData0.enemyInfl.data();
 	allyInfl = inflData0.allyInfl.data();
 	allyDefendInfl = inflData0.allyDefendInfl.data();
+	allyStaticInfl = inflData0.allyStaticInfl.data();
 	influence = inflData0.influence.data();
 //	tension = inflData0.tension.data();
 //	vulnerability = inflData0.vulnerability.data();
@@ -66,6 +68,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
 	drawEnemyInfl = inflData1.enemyInfl.data();
 	drawAllyInfl = inflData1.allyInfl.data();
 	drawAllyDefendInfl = inflData1.allyDefendInfl.data();
+	drawAllyStaticInfl = inflData1.allyStaticInfl.data();
 	drawInfluence = inflData1.influence.data();
 //	drawTension = inflData1.tension.data();
 //	drawVulnerability = inflData1.vulnerability.data();
@@ -110,8 +113,9 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
 	std::fill(inflData.enemyInfl.begin(), inflData.enemyInfl.end(), INFL_BASE);
 	std::fill(inflData.allyInfl.begin(), inflData.allyInfl.end(), INFL_BASE);
 	std::fill(inflData.allyDefendInfl.begin(), inflData.allyDefendInfl.end(), INFL_BASE);
+	std::fill(inflData.allyStaticInfl.begin(), inflData.allyStaticInfl.end(), INFL_BASE);
 	std::fill(inflData.influence.begin(), inflData.influence.end(), INFL_BASE);
-	perfFills.fetch_add(4 * mapSize, std::memory_order_relaxed);
+	perfFills.fetch_add(5 * mapSize, std::memory_order_relaxed);
 //	std::fill(inflData.tension.begin(), inflData.tension.end(), INFL_BASE);
 //	std::fill(inflData.vulnerability.begin(), inflData.vulnerability.end(), INFL_BASE);
 //	std::fill(inflData.featureInfl.begin(), inflData.featureInfl.end(), INFL_BASE);
@@ -119,6 +123,7 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
 	drawEnemyInfl = inflData.enemyInfl.data();
 	drawAllyInfl = inflData.allyInfl.data();
 	drawAllyDefendInfl = inflData.allyDefendInfl.data();
+	drawAllyStaticInfl = inflData.allyStaticInfl.data();
 	drawInfluence = inflData.influence.data();
 //	drawTension = inflData.tension.data();
 //	drawVulnerability = inflData.vulnerability.data();
@@ -207,6 +212,7 @@ void CInfluenceMap::SwapBuffers()
 	enemyInfl = inflData.enemyInfl.data();
 	allyInfl = inflData.allyInfl.data();
 	allyDefendInfl = inflData.allyDefendInfl.data();
+	allyStaticInfl = inflData.allyStaticInfl.data();
 	influence = inflData.influence.data();
 //	tension = inflData.tension.data();
 //	vulnerability = inflData.vulnerability.data();
@@ -296,6 +302,13 @@ float CInfluenceMap::GetAllyDefendInflAt(const AIFloat3& position) const
 	int x, z;
 	PosToXZ(position, x, z);
 	return allyDefendInfl[z * width + x] - INFL_BASE;
+}
+
+float CInfluenceMap::GetAllyStaticInflAt(const AIFloat3& position) const
+{
+	int x, z;
+	PosToXZ(position, x, z);
+	return allyStaticInfl[z * width + x] - INFL_BASE;
 }
 
 float CInfluenceMap::GetInfluenceAt(const AIFloat3& position) const
@@ -410,6 +423,7 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
 			const float infl = val * (1.0f - 1.0f * sqrtf(lenSq) / range);
 			drawAllyInfl[index] += infl;
 			drawAllyDefendInfl[index] += infl;
+			drawAllyStaticInfl[index] += infl;
 		}
 	}
 }

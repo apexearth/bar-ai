@@ -12,6 +12,8 @@
 
 namespace circuit {
 
+class CEnemyInfo;
+
 class CDefendTask: public ISquadTask {
 public:
 	CDefendTask(ITaskModule* mgr, const springai::AIFloat3& position,
@@ -50,6 +52,9 @@ private:
 	FightType check;
 	FightType promote;
 	float maxPower;
+	int pettyLogAt = 0;
+	int detachUntil = 0;  // apex: a squad split off for one raider; no merge, no promote, no recruits
+	int Detach(CEnemyInfo* enemy, float threat);
 };
 
 } // namespace circuit

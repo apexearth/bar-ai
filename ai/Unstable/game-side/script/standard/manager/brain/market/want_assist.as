@@ -9,6 +9,29 @@ int gAssistGuardS = 60;   // the guard stint Execute enqueues for the last assis
 // into a build the market already values at clearing rates; the bill is
 // the walk and the occupied time. That beats a marginal solar and loses to
 // a fresh mex -- the right ordering by construction.
+// Can this builder def raise a nano turret (a static lathe with no build list)?
+array<int> gHandNano;   // per def: 0 unknown, 1 yes, 2 no
+bool HandBuildsNano(int uid)
+{
+	if (int(gHandNano.length()) <= Catalog::gDefCount)
+		gHandNano.resize(Catalog::gDefCount + 1);
+	if ((uid < 0) || (uid > Catalog::gDefCount))
+		return false;
+	if (gHandNano[uid] == 0) {
+		gHandNano[uid] = 2;
+		const array<int>@ b = Catalog::gBuildsList[uid];
+		for (uint i = 0; i < b.length(); ++i) {
+			const int d = b[i];
+			if (Catalog::gAvailable[d] && !Catalog::gMobile[d] && (Catalog::gBuildPower[d] > 0.f)
+				&& (Catalog::gBuildsList[d].length() == 0)) {
+				gHandNano[uid] = 1;
+				break;
+			}
+		}
+	}
+	return gHandNano[uid] == 1;
+}
+
 // Does a standing basic (non-ceiling) constructor of ours build this def?
 bool BasicHandCan(int d)
 {
@@ -57,6 +80,8 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 		} else if (!Requests::IsMetalUnlock(lt.buildDef))
 			continue;
 		const AIFloat3 bp = lt.GetBuildPos();
+		if (CrewSplitOn() && !CrewIsField(unit) && FieldSite(bp))
+			continue;   // the home crew does not walk out to field work
 		// Guards count against the cap. They never become Workers -- they sit
 		// on a Guard task -- so counting only the crew, every free hand saw a
 		// short site and piled on: the priced assist above already folds them
@@ -356,7 +381,10 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	// WASTE IS FREE LATHE -- the nano want's own law: while metal overflows a
 	// hand on the line converts metal being thrown away, so the stint is worth
 	// that rate standing, not a one-off amortised into nothing.
-	float over = OverflowM();
+	// ...but only for a hand that cannot raise a lathe itself: one that can is
+	// worth more raising the nano that turns the waste into builds after it
+	// leaves (a guard's stint adds nothing that stays).
+	float over = HandBuildsNano(uid) ? 0.f : OverflowM();
 	if (over > drain)
 		over = drain;
 	Want g;

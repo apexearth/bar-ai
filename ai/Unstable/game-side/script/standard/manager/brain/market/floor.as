@@ -322,6 +322,9 @@ CCircuitUnit@ BestJobBoss(CCircuitUnit@ unit)
 		@job = (gJobNearBest !is null) ? gJobNearBest : any;
 	if (job is null)
 		return null;
+	if (CrewSplitOn() && !CrewIsField(unit) && FieldSite(job.GetBuildPos())
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return null;   // the home crew does not walk out to field work
 	@gBossJob = job;
 	array<CCircuitUnit@>@ on = job.GetUnits();
 	if ((on is null) || (on.length() == 0))
@@ -344,11 +347,14 @@ CCircuitUnit@ FloorBoss(CCircuitUnit@ unit, bool nearOnly)
 	CCircuitUnit@ any = null;
 	const bool leashed = nearOnly && EcoQuiet() && Builder::gHomeSet;
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	const bool homeCrew = CrewSplitOn() && !CrewIsField(unit) && !isComm;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ w = gWorkers[i];
 		if ((w is null) || (w.id == unit.id) || (w.task is null))
 			continue;
 		if (w.task.GetType() != Task::Type::BUILDER)
+			continue;
+		if (homeCrew && FieldSite(w.task.GetBuildPos()))
 			continue;
 		if (isComm ? ComFar(w.GetPos(ai.frame)) : (leashed && EcoFar(w.GetPos(ai.frame))))
 			continue;

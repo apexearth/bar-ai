@@ -490,8 +490,10 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		{
 			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity();
 			if (askE > 1.f) {
+				// Converters soak up every spare joule and step aside when a
+				// lathe needs it: their draw is spare, not pull.
 				const float spare = Eco::EInc() + EMakeInFlight()
-						- Eco::EPull();
+						- (Eco::EPull() - ConvUseE());
 				gainN *= (spare <= 0.f) ? 0.f : ((spare < askE) ? (spare / askE) : 1.f);
 			}
 		}

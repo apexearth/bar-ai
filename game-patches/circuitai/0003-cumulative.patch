@@ -3634,7 +3634,7 @@ index b4f4f403..0f280951 100644
  
  	static std::unique_ptr<CGameAttribute> gameAttribute;
 diff --git a/src/circuit/map/InfluenceMap.cpp b/src/circuit/map/InfluenceMap.cpp
-index 0af7275b..1c7f3fd5 100644
+index 0af7275b..1e2fcc66 100644
 --- a/src/circuit/map/InfluenceMap.cpp
 +++ b/src/circuit/map/InfluenceMap.cpp
 @@ -18,7 +18,13 @@
@@ -3651,7 +3651,31 @@ index 0af7275b..1c7f3fd5 100644
  
  //#include "Cheats.h"
  #include "Feature.h"
-@@ -96,7 +102,7 @@ void CInfluenceMap::EnqueueUpdate()
+@@ -43,6 +49,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
+ 		inflData->enemyInfl.resize(mapSize, INFL_BASE);
+ 		inflData->allyInfl.resize(mapSize, INFL_BASE);
+ 		inflData->allyDefendInfl.resize(mapSize, INFL_BASE);
++		inflData->allyStaticInfl.resize(mapSize, INFL_BASE);
+ 		inflData->influence.resize(mapSize, INFL_BASE);
+ //		inflData->tension.resize(mapSize, INFL_BASE);
+ //		inflData->vulnerability.resize(mapSize, INFL_BASE);
+@@ -52,6 +59,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
+ 	enemyInfl = inflData0.enemyInfl.data();
+ 	allyInfl = inflData0.allyInfl.data();
+ 	allyDefendInfl = inflData0.allyDefendInfl.data();
++	allyStaticInfl = inflData0.allyStaticInfl.data();
+ 	influence = inflData0.influence.data();
+ //	tension = inflData0.tension.data();
+ //	vulnerability = inflData0.vulnerability.data();
+@@ -60,6 +68,7 @@ CInfluenceMap::CInfluenceMap(CMapManager* manager)
+ 	drawEnemyInfl = inflData1.enemyInfl.data();
+ 	drawAllyInfl = inflData1.allyInfl.data();
+ 	drawAllyDefendInfl = inflData1.allyDefendInfl.data();
++	drawAllyStaticInfl = inflData1.allyStaticInfl.data();
+ 	drawInfluence = inflData1.influence.data();
+ //	drawTension = inflData1.tension.data();
+ //	drawVulnerability = inflData1.vulnerability.data();
+@@ -96,7 +105,7 @@ void CInfluenceMap::EnqueueUpdate()
  	CCircuitAI* circuit = manager->GetCircuit();
  	CEnemyManager* enemyMgr = circuit->GetEnemyManager();
  	rangeScale = circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale();
@@ -3660,15 +3684,25 @@ index 0af7275b..1c7f3fd5 100644
  }
  
  void CInfluenceMap::Prepare(SInfluenceData& inflData)
-@@ -105,6 +111,7 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
+@@ -104,7 +113,9 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
+ 	std::fill(inflData.enemyInfl.begin(), inflData.enemyInfl.end(), INFL_BASE);
  	std::fill(inflData.allyInfl.begin(), inflData.allyInfl.end(), INFL_BASE);
  	std::fill(inflData.allyDefendInfl.begin(), inflData.allyDefendInfl.end(), INFL_BASE);
++	std::fill(inflData.allyStaticInfl.begin(), inflData.allyStaticInfl.end(), INFL_BASE);
  	std::fill(inflData.influence.begin(), inflData.influence.end(), INFL_BASE);
-+	perfFills.fetch_add(4 * mapSize, std::memory_order_relaxed);
++	perfFills.fetch_add(5 * mapSize, std::memory_order_relaxed);
  //	std::fill(inflData.tension.begin(), inflData.tension.end(), INFL_BASE);
  //	std::fill(inflData.vulnerability.begin(), inflData.vulnerability.end(), INFL_BASE);
  //	std::fill(inflData.featureInfl.begin(), inflData.featureInfl.end(), INFL_BASE);
-@@ -124,6 +131,7 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
+@@ -112,6 +123,7 @@ void CInfluenceMap::Prepare(SInfluenceData& inflData)
+ 	drawEnemyInfl = inflData.enemyInfl.data();
+ 	drawAllyInfl = inflData.allyInfl.data();
+ 	drawAllyDefendInfl = inflData.allyDefendInfl.data();
++	drawAllyStaticInfl = inflData.allyStaticInfl.data();
+ 	drawInfluence = inflData.influence.data();
+ //	drawTension = inflData.tension.data();
+ //	drawVulnerability = inflData.vulnerability.data();
+@@ -124,6 +136,7 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
  
  	Prepare(*GetNextInflData());
  
@@ -3676,7 +3710,7 @@ index 0af7275b..1c7f3fd5 100644
  	for (const SEnemyData& e : enemyMgr->GetHostileDatas()) {
  		AddEnemy(e);
  	}
-@@ -133,9 +141,12 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
+@@ -133,9 +146,12 @@ std::shared_ptr<IMainJob> CInfluenceMap::Update(CEnemyManager* enemyMgr)
  
  void CInfluenceMap::Apply()
  {
@@ -3689,7 +3723,7 @@ index 0af7275b..1c7f3fd5 100644
  	for (auto& kv : units) {
  		CAllyUnit* u = kv.second;
  		if (u->GetCircuitDef()->IsAttacker()) {
-@@ -151,6 +162,7 @@ void CInfluenceMap::Apply()
+@@ -151,6 +167,7 @@ void CInfluenceMap::Apply()
  	for (int i = 0; i < mapSize; ++i) {
  		drawInfluence[i] = drawAllyInfl[i] - drawEnemyInfl[i];
  	}
@@ -3697,7 +3731,7 @@ index 0af7275b..1c7f3fd5 100644
  //	for (int i = 0; i < mapSize; ++i) {
  //		drawTension[i] = drawAllyInfl[i] + drawEnemyInfl[i];
  //	}
-@@ -174,10 +186,15 @@ void CInfluenceMap::Apply()
+@@ -174,10 +191,15 @@ void CInfluenceMap::Apply()
  //	cheats->SetEnabled(false);
  
  	SwapBuffers();
@@ -3713,7 +3747,14 @@ index 0af7275b..1c7f3fd5 100644
  #ifdef DEBUG_VIS
  	UpdateVis();
  #endif
-@@ -196,6 +213,70 @@ void CInfluenceMap::SwapBuffers()
+@@ -190,12 +212,77 @@ void CInfluenceMap::SwapBuffers()
+ 	enemyInfl = inflData.enemyInfl.data();
+ 	allyInfl = inflData.allyInfl.data();
+ 	allyDefendInfl = inflData.allyDefendInfl.data();
++	allyStaticInfl = inflData.allyStaticInfl.data();
+ 	influence = inflData.influence.data();
+ //	tension = inflData.tension.data();
+ //	vulnerability = inflData.vulnerability.data();
  //	featureInfl = inflData.featureInfl.data();
  }
  
@@ -3784,7 +3825,21 @@ index 0af7275b..1c7f3fd5 100644
  float CInfluenceMap::GetEnemyInflAt(const AIFloat3& position) const
  {
  	int x, z;
-@@ -280,6 +361,8 @@ void CInfluenceMap::AddMobileArmed(CAllyUnit* u)
+@@ -217,6 +304,13 @@ float CInfluenceMap::GetAllyDefendInflAt(const AIFloat3& position) const
+ 	return allyDefendInfl[z * width + x] - INFL_BASE;
+ }
+ 
++float CInfluenceMap::GetAllyStaticInflAt(const AIFloat3& position) const
++{
++	int x, z;
++	PosToXZ(position, x, z);
++	return allyStaticInfl[z * width + x] - INFL_BASE;
++}
++
+ float CInfluenceMap::GetInfluenceAt(const AIFloat3& position) const
+ {
+ 	int x, z;
+@@ -280,6 +374,8 @@ void CInfluenceMap::AddMobileArmed(CAllyUnit* u)
  	const int endX   = std::min(int(posx + range    ),  width);
  	const int beginZ = std::max(int(posz - range + 1),       0);
  	const int endZ   = std::min(int(posz + range    ), height);
@@ -3793,7 +3848,7 @@ index 0af7275b..1c7f3fd5 100644
  
  	for (int z = beginZ; z < endZ; ++z) {
  		const int dzSq = SQUARE(posz - z);
-@@ -311,6 +394,8 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
+@@ -311,6 +407,8 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
  	const int endX   = std::min(int(posx + range    ),  width);
  	const int beginZ = std::max(int(posz - range + 1),       0);
  	const int endZ   = std::min(int(posz + range    ), height);
@@ -3802,7 +3857,15 @@ index 0af7275b..1c7f3fd5 100644
  
  	for (int z = beginZ; z < endZ; ++z) {
  		const int dzSq = SQUARE(posz - z);
-@@ -343,6 +428,8 @@ void CInfluenceMap::AddUnarmed(CAllyUnit* u)
+@@ -325,6 +423,7 @@ void CInfluenceMap::AddStaticArmed(CAllyUnit* u)
+ 			const float infl = val * (1.0f - 1.0f * sqrtf(lenSq) / range);
+ 			drawAllyInfl[index] += infl;
+ 			drawAllyDefendInfl[index] += infl;
++			drawAllyStaticInfl[index] += infl;
+ 		}
+ 	}
+ }
+@@ -343,6 +442,8 @@ void CInfluenceMap::AddUnarmed(CAllyUnit* u)
  	const int endX   = std::min(int(posx + range    ),  width);
  	const int beginZ = std::max(int(posz - range + 1),       0);
  	const int endZ   = std::min(int(posz + range    ), height);
@@ -3811,7 +3874,7 @@ index 0af7275b..1c7f3fd5 100644
  
  	for (int z = beginZ; z < endZ; ++z) {
  		const int dzSq = SQUARE(posz - z);
-@@ -380,6 +467,8 @@ void CInfluenceMap::AddEnemy(const SEnemyData& e)
+@@ -380,6 +481,8 @@ void CInfluenceMap::AddEnemy(const SEnemyData& e)
  	const int endX   = std::min(int(posx + range    ),  width);
  	const int beginZ = std::max(int(posz - range + 1),       0);
  	const int endZ   = std::min(int(posz + range    ), height);
@@ -3820,7 +3883,7 @@ index 0af7275b..1c7f3fd5 100644
  
  	for (int z = beginZ; z < endZ; ++z) {
  		const int dzSq = SQUARE(posz - z);
-@@ -440,6 +529,53 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
+@@ -440,6 +543,53 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
  	z = (int)pos.z / squareSize;
  }
  
@@ -3874,7 +3937,7 @@ index 0af7275b..1c7f3fd5 100644
  #ifdef DEBUG_VIS
  #define ENEMY(x, i, v) {	\
  	x[i * 3 + 0] = .10f * v;  /*R*/	\
-@@ -455,14 +591,6 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
+@@ -455,14 +605,6 @@ inline void CInfluenceMap::PosToXZ(const AIFloat3& pos, int& x, int& z) const
  void CInfluenceMap::UpdateVis()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -3889,7 +3952,7 @@ index 0af7275b..1c7f3fd5 100644
  	if (sdlWindows.empty()) {
  		return;
  	}
-@@ -558,37 +686,7 @@ void CInfluenceMap::ToggleSDLVis()
+@@ -558,37 +700,7 @@ void CInfluenceMap::ToggleSDLVis()
  	}
  }
  
@@ -3898,7 +3961,7 @@ index 0af7275b..1c7f3fd5 100644
 -	CCircuitAI* circuit = manager->GetCircuit();
 -	std::string cmd("ai_thr_draw:");
 -	std::string result = circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
--
+ 
 -	isWidgetDrawing = (result == "1");
 -	if (isWidgetDrawing) {
 -		cmd = utils::int_to_string(squareSize, "ai_thr_size:%i");
@@ -3914,7 +3977,7 @@ index 0af7275b..1c7f3fd5 100644
 -	CCircuitAI* circuit = manager->GetCircuit();
 -	std::string cmd("ai_thr_print:");
 -	std::string result = circuit->GetLua()->CallRules(cmd.c_str(), cmd.size());
- 
+-
 -	isWidgetPrinting = (result == "1");
 -	if (isWidgetPrinting) {
 -		cmd = utils::int_to_string(squareSize, "ai_thr_size:%i");
@@ -3928,7 +3991,7 @@ index 0af7275b..1c7f3fd5 100644
  void CInfluenceMap::SetMaxThreat(float maxThreat)
  {
 diff --git a/src/circuit/map/InfluenceMap.h b/src/circuit/map/InfluenceMap.h
-index 54e3ac74..9c9d0c49 100644
+index 54e3ac74..7217f790 100644
 --- a/src/circuit/map/InfluenceMap.h
 +++ b/src/circuit/map/InfluenceMap.h
 @@ -11,6 +11,8 @@
@@ -3940,7 +4003,13 @@ index 54e3ac74..9c9d0c49 100644
  #ifdef DEBUG_VIS
  #include <stdint.h>
  #endif
-@@ -47,7 +49,44 @@ public:
+@@ -43,15 +45,55 @@ public:
+ 	float GetEnemyInflAt(const springai::AIFloat3& position) const;
+ 	float GetAllyInflAt(const springai::AIFloat3& position) const;
+ 	float GetAllyDefendInflAt(const springai::AIFloat3& position) const;
++	// apex: armed static defence alone -- the guns a raider walks into.
++	float GetAllyStaticInflAt(const springai::AIFloat3& position) const;
+ 	float GetInfluenceAt(const springai::AIFloat3& position) const;
  
  	int Pos2Index(const springai::AIFloat3& pos) const;
  
@@ -3985,7 +4054,28 @@ index 54e3ac74..9c9d0c49 100644
  	struct SInfluenceData {
  		FloatVec enemyInfl;
  		FloatVec allyInfl;
-@@ -106,16 +145,25 @@ private:
+ 		FloatVec allyDefendInfl;
++		FloatVec allyStaticInfl;
+ 		FloatVec influence;
+ //		FloatVec tension;
+ //		FloatVec vulnerability;
+@@ -89,6 +131,7 @@ private:
+ 	float* drawEnemyInfl;
+ 	float* drawAllyInfl;
+ 	float* drawAllyDefendInfl;
++	float* drawAllyStaticInfl;
+ 	float* drawInfluence;
+ //	float* drawTension;
+ //	float* drawVulnerability;
+@@ -98,6 +141,7 @@ private:
+ 	float* enemyInfl;
+ 	float* allyInfl;
+ 	float* allyDefendInfl;
++	float* allyStaticInfl;
+ 	float* influence;
+ //	float* tension;
+ //	float* vulnerability;
+@@ -106,16 +150,25 @@ private:
  	float rangeScale = 1.f;  // thread var
  	float defRadius = 0.f;
  
@@ -16580,10 +16670,18 @@ index 85b30616..b8d93bf2 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/DefendTask.cpp b/src/circuit/task/fighter/DefendTask.cpp
-index bfc3caf8..7fcaf719 100644
+index bfc3caf8..d46daecc 100644
 --- a/src/circuit/task/fighter/DefendTask.cpp
 +++ b/src/circuit/task/fighter/DefendTask.cpp
-@@ -48,6 +48,11 @@ CDefendTask::~CDefendTask()
+@@ -7,6 +7,7 @@
+ 
+ #include "task/fighter/DefendTask.h"
+ #include "map/InfluenceMap.h"
++#include <algorithm>
+ #include "map/ThreatMap.h"
+ #include "module/MilitaryManager.h"
+ #include "setup/SetupManager.h"
+@@ -48,6 +49,14 @@ CDefendTask::~CDefendTask()
  
  bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
  {
@@ -16592,12 +16690,77 @@ index bfc3caf8..7fcaf719 100644
 +	{
 +		return false;
 +	}
++	if (manager->GetCircuit()->GetLastFrame() < detachUntil) {
++		return false;
++	}
  	return (attackPower < maxPower) && (static_cast<CDefendTask*>(unit->GetTask())->GetPromote() == promote);
  }
  
-@@ -263,18 +268,18 @@ bool CDefendTask::FindTarget()
+@@ -100,11 +109,12 @@ void CDefendTask::Start(CCircuitUnit* unit)
+ void CDefendTask::Update()
+ {
+ 	++updCount;
++	const bool hunting = manager->GetCircuit()->GetLastFrame() < detachUntil;
+ 
+ 	/*
+ 	 * Promote task if possible
+ 	 */
+-	if (updCount % 32 == 1) {
++	if (!hunting && (updCount % 32 == 1)) {
+ 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
+ 		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+ 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
+@@ -120,7 +130,7 @@ void CDefendTask::Update()
+ 	/*
+ 	 * Merge tasks if possible
+ 	 */
+-	ISquadTask* task = GetMergeTask();
++	ISquadTask* task = hunting ? nullptr : GetMergeTask();
+ 	if (task != nullptr) {
+ 		task->Merge(this);
+ 		units.clear();
+@@ -152,6 +162,9 @@ void CDefendTask::Update()
+ 	 * Update target
+ 	 */
+ 	const bool isTargetsFound = FindTarget();
++	if (leader == nullptr) {
++		return;
++	}
+ 
+ 	const AIFloat3& startPos = leader->GetPos(frame);
+ 	state = State::ROAM;
+@@ -241,6 +254,20 @@ bool CDefendTask::FindTarget()
+ 	enemyPositions.clear();
+ 	threatMap->SetThreatType(leader);
+ 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
++	// apex: "armies ignore enemies less than half their strength unless
++	// defending the home base" (docs/24). A raider under half the pool is left
++	// to our guns where they outgun it, and otherwise to a squad of its own size
++	// split off for it (apexearth 2026-10-02: "create a squad of an appropriate
++	// size to chase the little amphibious tanks... if you have defense over
++	// there, then you should just assume that it'll be fine").
++	const int frame = circuit->GetLastFrame();
++	const bool detached = frame < detachUntil;
++	const float pettyBar = attackPower * .5f;
++	int pettySkipped = 0;
++	int pettyCovered = 0;
++	CEnemyInfo* detachFor = nullptr;
++	float detachSq = std::numeric_limits<float>::max();
++	float detachThreat = .0f;
+ 	for (auto& kv : enemies) {
+ 		CEnemyInfo* enemy = kv.second;
+ 		if (enemy->IsHidden() || (enemy->GetTasks().size() > 2)) {
+@@ -259,22 +286,25 @@ bool CDefendTask::FindTarget()
+ 		if (sqEBDist < sqBaseRange) {
+ 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
+ 		}
+-		if (checkPower <= threatMap->GetThreatAt(ePos)) {
++		const float eThreat = threatMap->GetThreatAt(ePos);
++		if (checkPower <= eThreat) {
  			continue;
  		}
++		const bool petty = !detached && (units.size() > 1)
++				&& (sqEBDist >= sqBaseRange) && (eThreat < pettyBar);
  
 -		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
 +		const float elevation = circuit->GetElevationAt(ePos);
@@ -16617,11 +16780,117 @@ index bfc3caf8..7fcaf719 100644
  			if (edef->IsInWater(elevation, ePos.y)) {
  				if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
  					continue;
+@@ -296,6 +326,17 @@ bool CDefendTask::FindTarget()
+ 		}
+ 
+ 		float sqDist = pos.SqDistance2D(ePos);
++		if (petty) {
++			++pettySkipped;
++			if (inflMap->GetAllyStaticInflAt(ePos) >= eThreat) {
++				++pettyCovered;
++			} else if (enemy->GetTasks().empty() && (sqDist < detachSq)) {
++				detachSq = sqDist;
++				detachFor = enemy;
++				detachThreat = eThreat;
++			}
++			continue;
++		}
+ 		if (minSqDist > sqDist) {
+ 			minSqDist = sqDist;
+ 			bestTarget = enemy;
+@@ -303,6 +344,23 @@ bool CDefendTask::FindTarget()
+ 		enemyPositions.push_back(ePos);
+ 	}
+ 
++	if (detached && (bestTarget != nullptr)) {
++		detachUntil = std::max(detachUntil, frame + FRAMES_PER_SEC * 10);
++	}
++	int sent = 0;
++	if (detachFor != nullptr) {
++		sent = Detach(detachFor, detachThreat);
++	}
++	if (((pettySkipped > 0) || (sent > 0)) && (frame >= pettyLogAt)) {
++		pettyLogAt = frame + FRAMES_PER_SEC * 30;
++		circuit->LOG("apex: defend-petty t=%i lead=%s at=%.0f,%.0f n=%u skipped=%i covered=%i power=%.0f sent=%i for=%s target=%s",
++				circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, (unsigned)units.size(),
++				pettySkipped, pettyCovered, attackPower, sent,
++				(detachFor != nullptr) && (detachFor->GetCircuitDef() != nullptr)
++					? detachFor->GetCircuitDef()->GetDef()->GetName() : "-",
++				(bestTarget != nullptr) && (bestTarget->GetCircuitDef() != nullptr)
++					? bestTarget->GetCircuitDef()->GetDef()->GetName() : "-");
++	}
+ 	if (bestTarget != nullptr) {
+ 		SetTarget(bestTarget);
+ 		position = GetTarget()->GetPos();
+@@ -315,6 +373,54 @@ bool CDefendTask::FindTarget()
+ 	// Return: target, startPos=leader->pos, enemyPositions
+ }
+ 
++// apex: split off the members nearest the raider until they carry its threat
++// at home-defence parity (his 1.2x, docs/24), keeping at least half the pool.
++int CDefendTask::Detach(CEnemyInfo* enemy, float threat)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	const int frame = circuit->GetLastFrame();
++	const AIFloat3 ePos = enemy->GetPos();
++	const float need = std::max(threat * 1.2f, 1.f);
++	// Only fighters go, and one always stays: a squad's leader is never a
++	// support unit, so a pool left with only those has no leader at all.
++	std::vector<std::pair<float, CCircuitUnit*>> byDist;
++	for (CCircuitUnit* unit : units) {
++		if (!unit->GetCircuitDef()->IsRoleSupport()) {
++			byDist.push_back(std::make_pair(unit->GetPos(frame).SqDistance2D(ePos), unit));
++		}
++	}
++	std::sort(byDist.begin(), byDist.end(),
++			[](const std::pair<float, CCircuitUnit*>& a, const std::pair<float, CCircuitUnit*>& b) {
++				return a.first < b.first;
++			});
++	std::vector<CCircuitUnit*> pick;
++	float got = .0f;
++	float left = attackPower;
++	for (const auto& du : byDist) {
++		if (got >= need) {
++			break;
++		}
++		const float p = du.second->GetCircuitDef()->GetPower();
++		if ((left - p < attackPower * .5f) || (pick.size() + 1 >= byDist.size())) {
++			break;
++		}
++		pick.push_back(du.second);
++		got += p;
++		left -= p;
++	}
++	if (pick.empty() || (got < need)) {
++		return 0;
++	}
++	CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
++	CDefendTask* det = static_cast<CDefendTask*>(militaryMgr->Enqueue(TaskF::Defend(check, promote, got)));
++	det->position = ePos;
++	det->detachUntil = frame + FRAMES_PER_SEC * 30;
++	for (CCircuitUnit* unit : pick) {
++		manager->AssignTask(unit, det);
++	}
++	return int(pick.size());
++}
++
+ void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)
+ {
+ 	pPath = query->GetPathInfo();
 diff --git a/src/circuit/task/fighter/DefendTask.h b/src/circuit/task/fighter/DefendTask.h
-index 90c3b71b..28c7d97c 100644
+index 90c3b71b..bb22a089 100644
 --- a/src/circuit/task/fighter/DefendTask.h
 +++ b/src/circuit/task/fighter/DefendTask.h
-@@ -30,6 +30,9 @@ public:
+@@ -12,6 +12,8 @@
+ 
+ namespace circuit {
+ 
++class CEnemyInfo;
++
+ class CDefendTask: public ISquadTask {
+ public:
+ 	CDefendTask(ITaskModule* mgr, const springai::AIFloat3& position,
+@@ -30,6 +32,9 @@ public:
  //	void SetWantedTarget(CEnemyInfo* enemy) { SetTarget(enemy); }
  
  	FightType GetPromote() const { return promote; }
@@ -16631,6 +16900,16 @@ index 90c3b71b..28c7d97c 100644
  
  protected:
  	float GetMaxPower() const { return maxPower; }
+@@ -47,6 +52,9 @@ private:
+ 	FightType check;
+ 	FightType promote;
+ 	float maxPower;
++	int pettyLogAt = 0;
++	int detachUntil = 0;  // apex: a squad split off for one raider; no merge, no promote, no recruits
++	int Detach(CEnemyInfo* enemy, float threat);
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
 index 0400f8d6..e1f1f362 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
@@ -16718,10 +16997,18 @@ index e1d90c4f..caa8a623 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/GuardTask.cpp b/src/circuit/task/fighter/GuardTask.cpp
-index b0fd8f04..bae59ad7 100644
+index b0fd8f04..9dde8cdf 100644
 --- a/src/circuit/task/fighter/GuardTask.cpp
 +++ b/src/circuit/task/fighter/GuardTask.cpp
-@@ -84,13 +84,20 @@ void CFGuardTask::Update()
+@@ -7,6 +7,7 @@
+ 
+ #include "task/fighter/GuardTask.h"
+ #include "module/MilitaryManager.h"
++#include "task/builder/BuilderTask.h"
+ #include "CircuitAI.h"
+ #include "util/Utils.h"
+ 
+@@ -84,13 +85,30 @@ void CFGuardTask::Update()
  	CEnemyInfo* target = nullptr;
  	const int frame = circuit->GetLastFrame();
  	const AIFloat3& pos = vip->GetPos(frame);
@@ -16729,6 +17016,10 @@ index b0fd8f04..bae59ad7 100644
 +	// ground target would pull the escort off it for nothing.
 +	const bool airOnly = vip->GetCircuitDef()->IsAbleToFly();
  	const std::vector<ICoreUnit::Id>& enemyIds = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, vip->GetCircuitDef()->GetLosRadius() + 500.f);
++	// The guard answers what can reach the one it guards, nearest first: the
++	// first enemy in sight pulled the escort up to a kilometre off its worker
++	// for a minute (apexearth 2026-10-01: "they stopped guarding him").
++	float bestD = std::numeric_limits<float>::max();
  	for (ICoreUnit::Id enemyId : enemyIds) {
  		CEnemyInfo* ei = circuit->GetEnemyInfo(enemyId);
 -		if (ei != nullptr) {
@@ -16737,14 +17028,61 @@ index b0fd8f04..bae59ad7 100644
 +		if (ei == nullptr) {
 +			continue;
  		}
-+		if (airOnly && ((ei->GetCircuitDef() == nullptr) || !ei->GetCircuitDef()->IsAbleToFly())) {
++		CCircuitDef* ed = ei->GetCircuitDef();
++		if (airOnly && ((ed == nullptr) || !ed->IsAbleToFly())) {
 +			continue;
 +		}
++		const float d = pos.distance2D(ei->GetPos());
++		const float reach = ((ed != nullptr) ? ed->GetMaxRange() : 0.f) + 200.f;
++		if ((d > reach) || (d >= bestD)) {
++			continue;
++		}
++		bestD = d;
 +		target = ei;
-+		break;
  	}
  
  	if (target != nullptr) {
+@@ -99,9 +117,27 @@ void CFGuardTask::Update()
+ 		}
+ 		attackFrame = frame;
+ 		state = State::ENGAGE;
++		if (frame >= engageLogAt) {
++			engageLogAt = frame + FRAMES_PER_SEC * 10;
++			CCircuitDef* td = target->GetCircuitDef();
++			const char* vb = "-";
++			IUnitTask* vt = vip->GetTask();
++			if ((vt != nullptr) && (vt->GetType() == IUnitTask::Type::BUILDER)) {
++				CCircuitDef* bd = static_cast<IBuilderTask*>(vt)->GetBuildDef();
++				if (bd != nullptr) {
++					vb = bd->GetDef()->GetName();
++				}
++			}
++			circuit->LOG("apex: guard-engage vip=%s #%i job=%s guards=%u tgt=%s mobile=%i armed=%i dVip=%.0f",
++					vip->GetCircuitDef()->GetDef()->GetName(), vip->GetId(), vb, (unsigned)units.size(),
++					(td != nullptr) ? td->GetDef()->GetName() : "?",
++					(td != nullptr) ? (int)td->IsMobile() : -1,
++					(td != nullptr) ? (int)td->IsAttacker() : -1,
++					pos.distance2D(target->GetPos()));
++		}
+ 		const bool isGroundAttack = target->GetUnit()->IsCloaked();
+ 		for (CCircuitUnit* unit : units) {
+-			unit->Attack(target, isGroundAttack, frame + FRAMES_PER_SEC * 60);
++			unit->Attack(target, isGroundAttack, frame + FRAMES_PER_SEC * 10);
+ 		}
+ 	} else if (State::ENGAGE == state) {
+ 		state = State::ROAM;
+diff --git a/src/circuit/task/fighter/GuardTask.h b/src/circuit/task/fighter/GuardTask.h
+index db42e8a5..1a8fa0fc 100644
+--- a/src/circuit/task/fighter/GuardTask.h
++++ b/src/circuit/task/fighter/GuardTask.h
+@@ -30,6 +30,7 @@ public:
+ private:
+ 	ICoreUnit::Id vipId;
+ 	float maxPower;
++	int engageLogAt = -1;  // apex: guard-engage is logged at most every 10 s per task
+ };
+ 
+ } // namespace circuit
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
 index 9af06982..86769177 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp

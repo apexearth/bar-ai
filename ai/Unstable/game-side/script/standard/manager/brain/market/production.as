@@ -104,6 +104,7 @@ bool ReachesCeiling(int defId)
 // Once per frame per ownership change, not once per candidate def: prod.cands
 // calls this inside its candidate loop, and the walk carries a Catalog::Def
 // engine call for every one of the 949 slots.
+const int ECO_SEAT_T2_LAND_CONS = 4;
 int gCcoFrame = -30000;
 int gCcoOwn = -1;
 int gCcoVal = 0;
@@ -131,6 +132,40 @@ int CeilingConsOwned()
 			n += gOwnCount[c];
 	}
 	gCcoVal = n;
+	return n;
+}
+
+// Every ceiling con standing, walking or flying -- what an ally reads as "has T2 hands".
+int CeilingConsAny()
+{
+	int n = 0;
+	const array<int>@ own = OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int c = own[i];
+		if ((gOwnCount[uint(c)] > 0) && Catalog::gMobile[c] && Catalog::gBuilder[c]
+			&& ReachesCeiling(c) && !Catalog::Def(c).IsRoleAny(Unit::Role::COMM.mask))
+			n += gOwnCount[uint(c)];
+	}
+	return n;
+}
+
+// Walking ceiling cons, standing and queued, whatever plants exist.
+int CeilingWalkersAll()
+{
+	int n = 0;
+	const array<int>@ own = OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int c = own[i];
+		if ((gOwnCount[uint(c)] > 0) && Catalog::gMobile[c] && Catalog::gBuilder[c]
+			&& !Catalog::gFlyer[c] && ReachesCeiling(c)
+			&& !Catalog::Def(c).IsRoleAny(Unit::Role::COMM.mask))
+			n += gOwnCount[uint(c)];
+	}
+	for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+		CCircuitDef@ pd = Brain::gFQPendDef[i];
+		if ((pd !is null) && !Catalog::gFlyer[int(pd.id)] && ReachesCeiling(int(pd.id)))
+			++n;
+	}
 	return n;
 }
 
@@ -1634,7 +1669,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// through to the line pricing: it cannot hold ground, and priced there
 		// by power-per-cost it flies alone to the stock attack.
 		if (!Catalog::gBuilder[d] && Air::IsBomberDef(d)) {
-			const float gainB = (ecoGrowing && !wasting) ? 0.f : Air::StrikeGainFor(d, fillS) * roleMul;
+			const float gainB = ecoGrowing ? 0.f : Air::StrikeGainFor(d, fillS) * roleMul;
 			if (gainB > 0.f) {
 				// THE SAME CURRENCY AS THE ARMY BID. The army candidate's
 				// value below is its demand RATE (gap over the fill window,
@@ -1795,9 +1830,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":scoutcap";
 				continue;
 			}
-			// The seat's growth owns metal the economy can use; metal the bank
-			// is throwing away costs it nothing.
-			const float sinkGap = (ovfHands || (ecoGrowing && !wasting)) ? 0.f : (richBal * roleMul);
+			// The seat's growth owns metal the economy can use, and what its bank
+			// spills flows to the teammates at the front.
+			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);
 			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
@@ -2269,6 +2304,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += "keep";
 				continue;
 			}
+		}
+		// ...and few advanced LAND cons: walkers block the ground the seat is
+		// building on (his 2026-10-02 ruling). Air cons are not limited here.
+		if (ecoQuietOn && walker && (reach >= bestExt)
+			&& (CeilingWalkersAll() >= ECO_SEAT_T2_LAND_CONS)) {
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":ecokeep";
+			continue;
 		}
 		// A pure assist unit is not bought for claims or unspent metal: its
 		// claim term was never netted and it is the cheapest fast claimer, so

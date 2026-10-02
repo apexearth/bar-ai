@@ -7,6 +7,7 @@
 
 #include "task/fighter/GuardTask.h"
 #include "module/MilitaryManager.h"
+#include "task/builder/BuilderTask.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
@@ -88,16 +89,26 @@ void CFGuardTask::Update()
 	// ground target would pull the escort off it for nothing.
 	const bool airOnly = vip->GetCircuitDef()->IsAbleToFly();
 	const std::vector<ICoreUnit::Id>& enemyIds = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, vip->GetCircuitDef()->GetLosRadius() + 500.f);
+	// The guard answers what can reach the one it guards, nearest first: the
+	// first enemy in sight pulled the escort up to a kilometre off its worker
+	// for a minute (apexearth 2026-10-01: "they stopped guarding him").
+	float bestD = std::numeric_limits<float>::max();
 	for (ICoreUnit::Id enemyId : enemyIds) {
 		CEnemyInfo* ei = circuit->GetEnemyInfo(enemyId);
 		if (ei == nullptr) {
 			continue;
 		}
-		if (airOnly && ((ei->GetCircuitDef() == nullptr) || !ei->GetCircuitDef()->IsAbleToFly())) {
+		CCircuitDef* ed = ei->GetCircuitDef();
+		if (airOnly && ((ed == nullptr) || !ed->IsAbleToFly())) {
 			continue;
 		}
+		const float d = pos.distance2D(ei->GetPos());
+		const float reach = ((ed != nullptr) ? ed->GetMaxRange() : 0.f) + 200.f;
+		if ((d > reach) || (d >= bestD)) {
+			continue;
+		}
+		bestD = d;
 		target = ei;
-		break;
 	}
 
 	if (target != nullptr) {
@@ -106,9 +117,27 @@ void CFGuardTask::Update()
 		}
 		attackFrame = frame;
 		state = State::ENGAGE;
+		if (frame >= engageLogAt) {
+			engageLogAt = frame + FRAMES_PER_SEC * 10;
+			CCircuitDef* td = target->GetCircuitDef();
+			const char* vb = "-";
+			IUnitTask* vt = vip->GetTask();
+			if ((vt != nullptr) && (vt->GetType() == IUnitTask::Type::BUILDER)) {
+				CCircuitDef* bd = static_cast<IBuilderTask*>(vt)->GetBuildDef();
+				if (bd != nullptr) {
+					vb = bd->GetDef()->GetName();
+				}
+			}
+			circuit->LOG("apex: guard-engage vip=%s #%i job=%s guards=%u tgt=%s mobile=%i armed=%i dVip=%.0f",
+					vip->GetCircuitDef()->GetDef()->GetName(), vip->GetId(), vb, (unsigned)units.size(),
+					(td != nullptr) ? td->GetDef()->GetName() : "?",
+					(td != nullptr) ? (int)td->IsMobile() : -1,
+					(td != nullptr) ? (int)td->IsAttacker() : -1,
+					pos.distance2D(target->GetPos()));
+		}
 		const bool isGroundAttack = target->GetUnit()->IsCloaked();
 		for (CCircuitUnit* unit : units) {
-			unit->Attack(target, isGroundAttack, frame + FRAMES_PER_SEC * 60);
+			unit->Attack(target, isGroundAttack, frame + FRAMES_PER_SEC * 10);
 		}
 	} else if (State::ENGAGE == state) {
 		state = State::ROAM;

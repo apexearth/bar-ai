@@ -28,7 +28,9 @@ bool IsMetalUnlock(const CCircuitDef@ d)
 	if ((Catalog::gBuildsList[id].length() > 0)
 		&& ((Factory::userData[id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
 		return true;
-	if (Catalog::gExtractsM[id] <= 0.f)
+	// An extractor upgrade is the unlock until the first one stands; after that
+	// every moho in flight pulled the whole builder pool out to it, all game.
+	if ((Catalog::gExtractsM[id] <= 0.f) || (Market::MohoStanding() > 0))
 		return false;
 	for (int k = 1; k <= Catalog::gDefCount; ++k) {
 		const float e = Catalog::gExtractsM[k];
@@ -205,6 +207,8 @@ void LatencySweep()
 		gLiveStarted[i] = true;
 		if (i < gLiveStartAt.length())
 			gLiveStartAt[i] = ai.frame;
+		if (Catalog::gExtractsM[int(t.buildDef.id)] > 0.f)
+			Market::NoteUpStarted(t.GetBuildPos());
 		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
 		++gStartLatN;
 		const AIFloat3 sAt = t.GetBuildPos();
@@ -388,6 +392,8 @@ void Forget(IUnitTask@ task)
 					+ ((ai.frame - gLiveAt[i]) / SECOND)
 					+ " workers=" + Workers(task)
 					+ " at=" + int(task.GetBuildPos().x) + "," + int(task.GetBuildPos().z));
+				if (!gLiveStarted[i] && (Catalog::gExtractsM[int(task.buildDef.id)] > 0.f))
+					Market::NoteUpDropped(task.GetBuildPos());
 				gLiveAt.removeAt(i);
 				if (gLiveStarted[i] && (i < gLiveStartAt.length()) && (gLiveStartAt[i] > 0)
 					&& (task.target !is null)) {

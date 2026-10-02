@@ -181,6 +181,7 @@ bool MapHasWater()
 AIFloat3 gWetPlantSite(-1.f, 0.f, -1.f);
 int gNextWetCheck = 149;   // phase offset -- see AiUpdate lockstep note
 
+int gNextLakeLog = 0;
 AIFloat3 WetPlantSite(CCircuitDef@ plant, const AIFloat3& in anchor)
 {
 	if (ai.frame < gNextWetCheck)
@@ -188,8 +189,32 @@ AIFloat3 WetPlantSite(CCircuitDef@ plant, const AIFloat3& in anchor)
 	gNextWetCheck = ai.frame + 10 * SECOND;
 	const float near = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const AIFloat3 wet = ai.FindBuildSiteNear(plant, anchor, near);
-	gWetPlantSite = (OnMap(wet) && (wet.distance2D(anchor) <= near))
+	gWetPlantSite = (OnMap(wet) && (wet.distance2D(anchor) <= near) && FoeSailsTo(wet))
 			? wet : AIFloat3(-1.f, 0.f, -1.f);
+	if (OnMap(gWetPlantSite) || !OnMap(wet))
+		return gWetPlantSite;
+	// The nearest water is a lake no enemy hull reaches: other water in reach.
+	float bestD = 0.f;
+	for (int k = 0; k < 8; ++k) {
+		const float a = float(k) * 0.7853982f;
+		const AIFloat3 probe(anchor.x + cos(a) * near * 0.6f, 0.f,
+				anchor.z + sin(a) * near * 0.6f);
+		if (!OnMap(probe))
+			continue;
+		const AIFloat3 w2 = ai.FindBuildSiteNear(plant, probe, near * 0.6f);
+		if (!OnMap(w2) || (w2.distance2D(anchor) > near) || !FoeSailsTo(w2))
+			continue;
+		const float dd = w2.distance2D(anchor);
+		if (!OnMap(gWetPlantSite) || (dd < bestD)) {
+			gWetPlantSite = w2;
+			bestD = dd;
+		}
+	}
+	if (!OnMap(gWetPlantSite) && (ai.frame >= gNextLakeLog)) {
+		gNextLakeLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: lake-yard refused t=" + ai.teamId
+			+ " at=" + int(wet.x) + "," + int(wet.z));
+	}
 	return gWetPlantSite;
 }
 
@@ -232,7 +257,7 @@ AIFloat3 WetPlantSiteFor(CCircuitDef@ plant, const AIFloat3& in anchor,
 			continue;
 		const AIFloat3 wet = ai.FindBuildSiteNear(plant, probe, near * 0.6f);
 		if (!OnMap(wet) || (wet.distance2D(anchor) > near)
-			|| NearBlockedFor(wet, int(plant.id)))
+			|| NearBlockedFor(wet, int(plant.id)) || !FoeSailsTo(wet))
 			continue;
 		if (!ai.CanDefReachAt(ask, here, wet, reach))
 			continue;

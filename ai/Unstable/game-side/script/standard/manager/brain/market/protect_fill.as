@@ -219,59 +219,40 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	}
 	// A BACK PLAYER BUYS ITS DEFENCE AT THE FRONT ALLY'S DOOR (his ruling,
 	// refusing to host the 8v8: turrets belong "in front of their allies
-	// base who is in front of them"). Offered only while an ally actually
-	// shields one of our bearings -- a front player, and every 1v1, adds
-	// nothing here. One candidate: the most exposed teammate's home pushed
-	// one base-edge-plus-reach toward the enemy. Its stake is that ally's
+	// base who is in front of them"). Offered only while a teammate's base
+	// stands between ours and the enemy (ShelterMate) -- a front player, and
+	// every 1v1, adds nothing here. One candidate: that teammate's home pushed
+	// one base-edge toward the enemy. It takes the unmet-target pull our own
+	// rim would otherwise take (below). Its stake is that ally's
 	// PUBLISHED economy (TV_ASSETM, defenceline.as) times our AnswerShare:
 	// each back player buys its SHARE of the team's front guard -- each
 	// instance sees only its own towers, so an unshared stake would stack
 	// N players' full demand on the same door.
 	const uint allyStart = sites.length();
 	float allyStake = 0.f;
+	AIFloat3 mh;
+	const int mate = ShelterMate(mh);
+	const bool sheltered = mate >= 0;
 	if (wallOn)
-		ClosurePrep();   // the ally-front post below reads the ring's ally cones
-	if (gClRingOk && (wallOn
+		ClosurePrep();
+	if (sheltered && gClRingOk && (wallOn
 		|| (ai.GetTunable("apex_def_ring", TUNE_DEF_RING) > 0.f))) {
-		bool behind = false;
-		for (uint sb = 0; !behind && (sb < gClAllyShield.length()); ++sb)
-			behind = gClAllyShield[sb];
 		AIFloat3 foeAt;
-		if (behind && FoeRef(foeAt) && (gShieldMates !is null)) {
-			int mate = -1;
-			float best = -1.f;
-			AIFloat3 mh;
-			for (uint m = 0; m < gShieldMates.length(); ++m) {
-				if (int(gShieldMates[m]) == ai.teamId)
-					continue;
-				const float mx = ai.ReadTeamValue(int(gShieldMates[m]), "homex", -1.f);
-				const float mz = ai.ReadTeamValue(int(gShieldMates[m]), "homez", -1.f);
-				if ((mx < 0.f) || (mz < 0.f))
-					continue;
-				const AIFloat3 h(mx, 0.f, mz);
-				const float mD = h.distance2D(foeAt);
-				if ((best < 0.f) || (mD < best)) {
-					best = mD;
-					mate = int(gShieldMates[m]);
-					mh = h;
-				}
-			}
-			if (mate >= 0) {
-				const float mAssets = ai.ReadTeamValue(mate,
-						Military::TV_ASSETM, 0.f);
-				AIFloat3 dirF = foeAt - mh;
-				if ((mAssets > 1.f) && (dirF.SqLength2D() > 1.f)) {
-					dirF.SafeNormalize2D();
-					// Their perimeter, proxied by our own base extent (the
-					// only extent a player can read), plus the def's reach.
-					float fwdD = gClRingR - Military::FoeReach() + reach;
-					if (fwdD < 256.f)
-						fwdD = 256.f;
-					const AIFloat3 ap = mh + dirF * fwdD;
-					if (OnMap(ap)) {
-						sites.insertLast(ap);
-						allyStake = mAssets * AnswerShare();
-					}
+		if (FoeRef(foeAt)) {
+			const float mAssets = ai.ReadTeamValue(mate,
+					Military::TV_ASSETM, 0.f);
+			AIFloat3 dirF = foeAt - mh;
+			if ((mAssets > 1.f) && (dirF.SqLength2D() > 1.f)) {
+				dirF.SafeNormalize2D();
+				// Their perimeter, proxied by our own base extent (the only
+				// extent a player can read). A gun there reaches out past it.
+				float fwdD = gClRingR - Military::FoeReach();
+				if (fwdD < 256.f)
+					fwdD = 256.f;
+				const AIFloat3 ap = mh + dirF * fwdD;
+				if (OnMap(ap)) {
+					sites.insertLast(ap);
+					allyStake = mAssets * AnswerShare();
 				}
 			}
 		}
@@ -386,6 +367,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
 				continue;
 			++gDbgPulled;
+		}
+		if (isAllyF && Builder::SiteHot(s)) {
+			AIFloat3 back = mh - s;
+			if (back.SqLength2D() > 1.f) {
+				back.SafeNormalize2D();
+				s = Builder::PullBack(s, back, Brain::LightTowerRange() * tuneWallPitch, 3);
+			}
+			if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
+				continue;
 		}
 		// A mex's own gun is part of the standing holding the target asks
 		// for ("1 sentry turret guarding each of our mexes at least"), so
@@ -508,7 +498,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// themselves"). The mark lives in the per-def cache; the tolerance
 		// is the asker's, applied outside it, so a con never inherits a
 		// commander's courage from a shared fill.
-		const bool pullBase = (wallPull > 0.f) && (isWall || isMexG);
+		// A sheltered seat's rim takes no pull: the ally-front post does.
+		const bool pullBase = (wallPull > 0.f)
+				&& ((isWall && !sheltered) || isMexG || isAllyF);
 		float foeHere = -1.f;
 		bool pullHere = false;
 		if (pullBase) {
@@ -521,7 +513,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// site can ever read foeHere -- and only when the ground under
 			// it is hot. Asked unconditionally it was an engine query per
 			// slot per fill for a number the branch below could not use.
-			if (isWall)
+			if (isWall || isAllyF)
 				pullHere = true;
 			else if (Builder::SiteHot(s))
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
@@ -650,7 +642,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// turret guarding each of our mexes at least"). THE LINE FIRST,
 			// THE RING WHEN THE LINE STANDS: while the line has an open slot
 			// a ring slot takes only the rear minimum.
-			const float dirW = WallDirW(si, s, isMexG, foeP, foePOk, lineOpen,
+			const float dirW = isAllyF ? shapeMax : WallDirW(si, s, isMexG, foeP, foePOk, lineOpen,
 					tuneWallLineW, wallRear);
 			// ONE SLOT HOLDS ONE BUILDING, so the shortfall this slot can
 			// answer is that building's cost -- and a mex's guard is its FIRST
@@ -685,7 +677,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// guns already meet the wave carries none of the pull, or the
 			// same enemy-facing slot takes every gun of the shortfall (a
 			// blob of twenty rings at one point, his watch).
-			const float pullPrev = (isWall
+			const float pullPrev = ((isWall || isAllyF)
 					? (slotGap / fillS)
 					: ((horizW > 1.f) ? (slotGap / horizW) : slotGap)) * shape
 					* ((short0 > 0.f) ? short0 : 0.f);

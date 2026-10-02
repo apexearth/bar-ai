@@ -111,8 +111,8 @@ float WorkerExposureNow(CCircuitUnit@ wkr)
 	const float risk = HazardAt(p) * ShortfallAt(p) * ((T > 1.f) ? T : 300.f);
 	const float foe = ai.GetEnemyInflAt(p);
 	float ground = 0.5f;
-	if (Base::Inside(p))
-		ground = 0.f;
+	if (Base::Inside(p) || (CrewSplitOn() && !FieldSite(p) && (foe < 0.01f)))
+		ground = 0.f;   // our own ground, nothing of theirs on it
 	else if (foe >= 0.01f)
 		ground = 1.f;
 	const float e = (ground > risk) ? ground : risk;
@@ -221,6 +221,7 @@ float NavyShare()
 array<AIFloat3> gWcPt;
 array<int> gWcSeen;
 bool gWcBuilt = false;
+AIFloat3 gWcAnchor(-1.f, 0.f, -1.f);   // the water the samples were sailed from
 uint gWcNext = 0;
 int gWcFrame = -1;
 bool gWcHeld = false;
@@ -240,6 +241,81 @@ bool SailableWaterNear(const AIFloat3& in p, float r)
 	return false;
 }
 
+// Water an enemy hull can sail into: some of the water our hull reaches from
+// the yard lies on their half of the map. A lake beside our base is not
+// (apexearth 2026-10-01: an Urchin in a small lake very early on Supreme
+// Isthmus -- "we shouldn't do that"). Unknown -- no hull or no yard site yet --
+// reads true, as before.
+// Water on the enemy's half of the map, found once, and whether a hull from a
+// given site can sail into it. A yard in a lake no enemy hull reaches builds
+// ships that fight nobody (apexearth 2026-10-01: "we shouldn't even make
+// shipyards and ships inside of small lakes").
+array<AIFloat3> gFoeWetPt;
+bool gFoeWetBuilt = false;
+array<int> gFoeSailKey;
+array<int> gFoeSailVal;
+bool FoeSailsTo(const AIFloat3& in site)
+{
+	const int hull = NavHullDef();
+	if ((hull <= 0) || !OnMap(site))
+		return true;   // nothing to judge with: as before
+	if (!gFoeWetBuilt) {
+		gFoeWetBuilt = true;
+		const float step = 512.f;
+		for (float x = step * 0.5f; x < float(AiTerrainWidth()); x += step) {
+			for (float z = step * 0.5f; z < float(AiTerrainHeight()); z += step) {
+				const AIFloat3 p(x, 0.f, z);
+				if ((ai.GetElevationAt(p) < -20.f) && (Military::ForwardFraction(p) >= 0.5f))
+					gFoeWetPt.insertLast(p);
+			}
+		}
+	}
+	if (gFoeWetPt.length() == 0)
+		return false;
+	const int key = int(site.x / 256.f) * 4093 + int(site.z / 256.f);
+	const int at = gFoeSailKey.find(key);
+	if (at >= 0)
+		return gFoeSailVal[uint(at)] == 1;
+	bool ok = false;
+	for (uint i = 0; (i < gFoeWetPt.length()) && !ok; ++i)
+		ok = ai.CanDefReach(Catalog::Def(hull), site, gFoeWetPt[i]);
+	gFoeSailKey.insertLast(key);
+	gFoeSailVal.insertLast(ok ? 1 : 0);
+	return ok;
+}
+
+int gWrf = -1;   // -1 not known, 0 no, 1 yes
+int gWrfCheckAt = -999999;
+bool WaterReachesFoe()
+{
+	// A yard raised on other water moves the anchor the samples sail from.
+	if (gWcBuilt && (ai.frame - gWrfCheckAt >= 10 * SECOND)) {
+		gWrfCheckAt = ai.frame;
+		const AIFloat3 y = NearestYard(Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f));
+		if (OnMap(y) && (y.distance2D(gWcAnchor) > 500.f)) {
+			gWcPt.resize(0);
+			gWcSeen.resize(0);
+			gWcBuilt = false;
+			gWrf = -1;
+		}
+	}
+	if (gWrf >= 0)
+		return gWrf == 1;
+	if (!gWcBuilt)
+		WaterSamplesBuild();
+	if (!gWcBuilt)
+		return true;
+	gWrf = 0;
+	for (uint i = 0; i < gWcPt.length(); ++i) {
+		if (Military::ForwardFraction(gWcPt[i]) >= 0.5f) {
+			gWrf = 1;
+			break;
+		}
+	}
+	AiLog("apex: water-reaches-foe t=" + ai.teamId + " " + gWrf + " samples=" + gWcPt.length());
+	return gWrf == 1;
+}
+
 void WaterSamplesBuild()
 {
 	gWcBuilt = true;
@@ -251,6 +327,7 @@ void WaterSamplesBuild()
 		gWcBuilt = false;   // no yard site known yet: try again later
 		return;
 	}
+	gWcAnchor = anchor;
 	const float step = 384.f;
 	for (float x = step * 0.5f; x < float(AiTerrainWidth()); x += step) {
 		for (float z = step * 0.5f; z < float(AiTerrainHeight()); z += step) {
@@ -2013,12 +2090,10 @@ float ArmyTarget()
 	// The rear specialist's target names an economy and no war until it has
 	// built one -- see EcoRoleGrowing. Not a suppression multiplier: the want
 	// is simply not part of the state this player is trying to reach.
-	if (EcoRoleGrowing()) {
-		const float fullE = ArmyTargetFull();
-		const float seat = fullE * EcoRoleRamp();
-		const float floorE = ArmyFloor(fullE);
-		return (seat > floorE) ? seat : floorE;
-	}
+	// No ArmyFloor here: the seat is sheltered by the team's armies, and
+	// EcoDangerNear ends the growth if the war reaches it.
+	if (EcoRoleGrowing())
+		return ArmyTargetFull() * EcoRoleRamp();
 	// The switch is meant to keep a DEFENSIVE army and then stop buying, not
 	// to stand the army down: zero holds from frame 18 to the mohos, and the
 	// valve meant to restore it (EcoDangerNear) compares a unit COUNT against

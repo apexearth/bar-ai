@@ -445,7 +445,10 @@ void UpdateConGift()
 	if (ai.frame < gConGiftAt)
 		return;
 	gConGiftAt = ai.frame + 5 * SECOND;
-	const int mineN = Market::CeilingConsOwned();
+	// Walkers too: CeilingConsOwned counts only flyers once an advanced air
+	// plant stands, so a seat full of walking T2 cons read zero and drew one
+	// gift after another.
+	const int mineN = Market::CeilingConsAny();
 	ai.PublishTeamValue(TV_T2CON, float(mineN));
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() < 2) || (mineN < 2))
@@ -476,6 +479,10 @@ void UpdateConGift()
 			if (float(ai.frame) - ai.ReadTeamValue(id, TV_GAT, -1000000.f) > 10 * SECOND)
 				continue;
 			if (ai.ReadTeamValue(id, TV_T2CON, 0.f) < 2.f)
+				continue;
+			// The growing eco seat keeps its few ground hands; the front's
+			// losses are the front's to replace.
+			if (ai.ReadTeamValue(id, TV_ECOSEAT, 0.f) > 0.5f)
 				continue;
 			const float gx = ai.ReadTeamValue(id, "homex", -1.f);
 			const float gz = ai.ReadTeamValue(id, "homez", -1.f);

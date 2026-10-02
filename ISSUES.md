@@ -45,6 +45,14 @@ not charge.
   reclobs 0.6), rez-bot chain ~9% (most runs end with nothing: front veto),
   raid/attack FindTarget ~6% (memory latency over ~460 enemies a call),
   periodic up.* passes ~12%.
+- REGRESSION FOUND AND FIXED (10-01 evening): the memo's ONE global refresh
+  per 8 frames starved the rarely-asked proposers -- nano most of all. Supreme
+  Isthmus 1v1 vs BARb hard +100%, 4 seeds: with it 0-1 wins, 3-12 nanos, 40-75%
+  metal wasted; pre-perf script 3 wins + 1 draw, 20-466 nanos, 0-27% waste.
+  Now the gap is per proposer: 4/4 wins, 30-209 nanos; 8v8 worst minute
+  0.282 / 0.303 (was 0.24-0.25 with the starving cap). The eco-only NullAI
+  check did not see this -- it needs a fight to show. Judge memo changes on
+  a 1v1 battery, not eco-only.
 - Not kept: MEMO_FRESH_GAP 8 -> 16 read built -10% on two eco-only seeds, but
   the same tree's built ranges 72k-92k across the day's 18 runs, so it is
   unresolved, not refuted; 30 earlier cost ~15% of energy. Also not kept

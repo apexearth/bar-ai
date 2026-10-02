@@ -149,6 +149,11 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if (mil is null)
 		return null;
+	// Three at most, stock's own cap (apexearth 2026-10-01, approving it; 09-13:
+	// "We have so many escorts in the base it is ludicrous"). A third to half
+	// of each army stood on escort duty in his 8v8.
+	if (gEscWorker.length() >= 3)
+		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
 	const bool air = Catalog::gFlyer[int(mil.circuitDef.id)];
@@ -360,7 +365,47 @@ void EscortDiag()
 		+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0)
-		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy);
+		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy
+		+ " released=" + gEscReleased);
+}
+
+// AN ESCORT THE WORKER NO LONGER NEEDS GOES BACK TO THE ARMY. Pairings only
+// ever grew: a worker that met an enemy army kept every escort it was given
+// after the enemy left and after it walked home, and in his 8v8 (10-01) a third
+// to half of each army followed constructors around our own base while the
+// enemy's stood at the front. The need is EscortNeeded's own: the enemy metal
+// that can reach the worker, floored by its exposure.
+int gEscReleased = 0;
+void EscortSweep()
+{
+	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+	for (int e = int(gEscWorker.length()) - 1; e >= 0; --e) {
+		if (uint(e) >= gEscWorker.length())
+			continue;
+		const Id wid = gEscWorker[uint(e)];
+		const Id uid = gEscUnit[uint(e)];
+		CCircuitUnit@ w = ai.GetTeamUnit(wid);
+		CCircuitUnit@ u = ai.GetTeamUnit(uid);
+		if (u is null) {
+			EscortGone(uid);
+			continue;
+		}
+		const float cost = Catalog::gCostM[gEscDef[uint(e)]];
+		if (w !is null) {
+			float need = WorkerEnemyM(w, (expoR > 1.f) ? expoR : 1200.f);
+			const float floorM = WorkerExposure(w) * cost;
+			if (floorM > need)
+				need = floorM;
+			if (EscortMetalOn(wid) - cost < need)
+				continue;   // still wanted
+		}
+		IUnitTask@ t = u.task;
+		EscortGone(uid);
+		if ((t !is null) && (t.GetType() == Task::Type::FIGHTER)
+			&& (t.GetFightType() == Task::FightType::GUARD))
+			t.RemoveUnit(u);
+		++gEscReleased;
+	}
 }
 
 void EscortGone(Id id)
@@ -650,6 +695,7 @@ void WorkerGone(Id id)
 	for (uint i = 0; i < gWorkerIds.length(); ++i) {
 		if (gWorkerIds[i] == id) {
 			ConRoleForget(int(id));
+			CrewForget(int(id));
 			gWorkerBorn.removeAt(i);
 			gWorkers.removeAt(i);
 			gWorkerIds.removeAt(i);

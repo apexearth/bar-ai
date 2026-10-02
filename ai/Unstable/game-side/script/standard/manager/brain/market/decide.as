@@ -281,13 +281,15 @@ void MemoLink(int slot, int ud, Want@ w)
 // cached answer was consumed and re-serving it is the stampede bug.
 int gMemoFreshFrame = -1;
 int gMemoFreshN = 0;
-// A recompute every MEMO_FRESH_GAP frames per AI at most; past it a cell serves
-// its stale copy (or nothing, if evicted). Cells never filled always compute.
+// A recompute every MEMO_FRESH_GAP frames PER PROPOSER at most; past it a cell
+// serves its stale copy (or nothing, if evicted). Cells never filled always
+// compute. Per proposer, not one budget for all: one shared gap went to the
+// busiest proposers and the nano want, starved of refreshes, all but vanished.
 const int MEMO_FRESH_GAP = 8;
-int gMemoFreshNext = 0;
-bool MemoBusy()
+array<int> gMemoFreshNext(MEMO_N, 0);
+bool MemoBusy(int slot)
 {
-	return (gMemoFreshN >= 1) || (ai.frame < gMemoFreshNext);
+	return ai.frame < gMemoFreshNext[uint(slot)];
 }
 int gMemoStarvN = 0;
 
@@ -339,13 +341,13 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 	// is the stampede and a recompute is the ~1 ms the AI could not afford
 	// (memo cores were a third of all AI time, his-settings 8v8). The asker
 	// takes another of its wants; the next frame recomputes.
-	if ((gMemoAt[slot][r] <= -30000) && (gMemoW[slot][r] !is null) && MemoBusy()) {
+	if ((gMemoAt[slot][r] <= -30000) && (gMemoW[slot][r] !is null) && MemoBusy(slot)) {
 		Perf::Note("memo.embargo");
 		if (slot == 8)
 			gMexOpen = gMemoMexOpen[r];
 		return null;
 	}
-	if ((gMemoAt[slot][r] > -30000) && MemoBusy()) {
+	if ((gMemoAt[slot][r] > -30000) && MemoBusy(slot)) {
 		// Past the normal budget: only a STARVED copy may still recompute,
 		// and at most two of those a frame -- see MEMO_STARVED above --
 		// unless it was starved AND deferred the last time it was asked.
@@ -361,7 +363,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 		++gMemoStarvN;
 	}
 	++gMemoFreshN;
-	gMemoFreshNext = ai.frame + MEMO_FRESH_GAP;
+	gMemoFreshNext[uint(slot)] = ai.frame + MEMO_FRESH_GAP;
 	Perf::Note("memo.miss");
 	const double _tMemo = Perf::T0();
 	Want@ fresh = MemoSlotCall(slot, unit);
@@ -564,7 +566,12 @@ int gStepSkipped = 0;
 int gNextStepLog = 0;
 bool StepSkip(int step, CCircuitUnit@ unit)
 {
-	if ((step == 1) || (step == 13))
+	// Never skipped: energy and assist, and the wants a hoist reaches for in the
+	// list -- plant (first plant), mexup (first T2), nano (the nano floor). A
+	// floor whose want was skipped cannot fire, and losing to the draw is
+	// exactly when a floor is needed: nanos lost to assists, then stopped
+	// being asked for at all.
+	if ((step == 1) || (step == 13) || (step == 3) || (step == 6) || (step == 8))
 		return false;
 	const int d = int(unit.circuitDef.id);
 	if ((d < 0) || (d > Catalog::gDefCount) || (gStepElec.length() == 0))
@@ -1919,6 +1926,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// factory short of its caretakers is taken, not sampled (apexearth
 	// 2026-09-11: "it should be high priority").
 	bool floorPush = false;
+	// The field crew takes field work, the home crew never walks out (crew.as).
+	if (!aaPanic && !superPush && !coverPush && !convertPush && CrewApply(unit, ranked)) {
+		floorPush = true;
+		why = "field";
+	}
 	// A FLOOR THAT FIRES WHILE ITS CATEGORY IS ALREADY OVER TARGET IS NOT A
 	// FLOOR. It guarantees a minimum, and buildpower has run 0.32 against a
 	// 0.15 target while defence sat at 0.09 against 0.29. BudgetMult is

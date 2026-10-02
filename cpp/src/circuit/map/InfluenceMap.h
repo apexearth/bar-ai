@@ -45,6 +45,8 @@ public:
 	float GetEnemyInflAt(const springai::AIFloat3& position) const;
 	float GetAllyInflAt(const springai::AIFloat3& position) const;
 	float GetAllyDefendInflAt(const springai::AIFloat3& position) const;
+	// apex: armed static defence alone -- the guns a raider walks into.
+	float GetAllyStaticInflAt(const springai::AIFloat3& position) const;
 	float GetInfluenceAt(const springai::AIFloat3& position) const;
 
 	int Pos2Index(const springai::AIFloat3& pos) const;
@@ -91,6 +93,7 @@ private:
 		FloatVec enemyInfl;
 		FloatVec allyInfl;
 		FloatVec allyDefendInfl;
+		FloatVec allyStaticInfl;
 		FloatVec influence;
 //		FloatVec tension;
 //		FloatVec vulnerability;
@@ -128,6 +131,7 @@ private:
 	float* drawEnemyInfl;
 	float* drawAllyInfl;
 	float* drawAllyDefendInfl;
+	float* drawAllyStaticInfl;
 	float* drawInfluence;
 //	float* drawTension;
 //	float* drawVulnerability;
@@ -137,6 +141,7 @@ private:
 	float* enemyInfl;
 	float* allyInfl;
 	float* allyDefendInfl;
+	float* allyStaticInfl;
 	float* influence;
 //	float* tension;
 //	float* vulnerability;

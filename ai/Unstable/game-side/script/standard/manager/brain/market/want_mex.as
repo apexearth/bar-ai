@@ -173,7 +173,7 @@ int UpgradeHandsWant()
 // UPGRADES FIRST (apexearth 2026-09-30: a T2 con walked to a T1 extractor and
 // raised a Pulsar there -- "upgrade the mexes first, then do this other stuff";
 // the economy compounds). A ceiling hand offered an upgrade drops every job but
-// a claim, a reclaim and the home work (generators, converters, assist). A hand
+// a claim, a reclaim and the home work (generators, converters, nanos, assist). A hand
 // OutForUpgrades sent out takes the upgrade outright (true: no draw); the home
 // hand draws it against its home work. A refused upgrade falls to the rest.
 int gUpFirstLifted = 0;
@@ -181,6 +181,8 @@ bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return false;
+	if (CrewSplitOn() && !CrewIsField(unit))
+		return false;   // home crew: the upgrades are the field crew's
 	int upAt = -1;
 	for (uint i = 0; (i < ranked.length()) && (upAt < 0); ++i)
 		if (ranked[i].kind == WK_MEXUP)
@@ -190,7 +192,7 @@ bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 	for (uint i = 0; i < ranked.length(); ) {
 		const int k = ranked[i].kind;
 		if ((k == WK_MEXUP) || (k == WK_MEX) || (k == WK_RECLAIM) || (k == WK_ENERGY)
-				|| (k == WK_CONVERT) || (k == WK_ASSIST) || (k == WK_STORE)) {
+				|| (k == WK_CONVERT) || (k == WK_ASSIST) || (k == WK_STORE) || (k == WK_NANO)) {
 			++i;
 			continue;
 		}
@@ -224,6 +226,8 @@ bool OutForUpgrades(CCircuitUnit@ unit)
 	const int ud = int(unit.circuitDef.id);
 	if (!ReachesCeiling(ud) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return false;
+	if (CrewSplitOn())
+		return CrewIsField(unit);
 	UpgradeHandsWant();
 	if (gUpHandsB <= 0)
 		return false;

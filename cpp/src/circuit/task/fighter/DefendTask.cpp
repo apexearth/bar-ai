@@ -7,6 +7,7 @@
 
 #include "task/fighter/DefendTask.h"
 #include "map/InfluenceMap.h"
+#include <algorithm>
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
@@ -51,6 +52,9 @@ bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
 	if ((leader != nullptr)
 		&& !SameClimb(manager->GetCircuit(), leader->GetCircuitDef(), unit->GetCircuitDef()))
 	{
+		return false;
+	}
+	if (manager->GetCircuit()->GetLastFrame() < detachUntil) {
 		return false;
 	}
 	return (attackPower < maxPower) && (static_cast<CDefendTask*>(unit->GetTask())->GetPromote() == promote);
@@ -105,11 +109,12 @@ void CDefendTask::Start(CCircuitUnit* unit)
 void CDefendTask::Update()
 {
 	++updCount;
+	const bool hunting = manager->GetCircuit()->GetLastFrame() < detachUntil;
 
 	/*
 	 * Promote task if possible
 	 */
-	if (updCount % 32 == 1) {
+	if (!hunting && (updCount % 32 == 1)) {
 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
 		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
@@ -125,7 +130,7 @@ void CDefendTask::Update()
 	/*
 	 * Merge tasks if possible
 	 */
-	ISquadTask* task = GetMergeTask();
+	ISquadTask* task = hunting ? nullptr : GetMergeTask();
 	if (task != nullptr) {
 		task->Merge(this);
 		units.clear();
@@ -157,6 +162,9 @@ void CDefendTask::Update()
 	 * Update target
 	 */
 	const bool isTargetsFound = FindTarget();
+	if (leader == nullptr) {
+		return;
+	}
 
 	const AIFloat3& startPos = leader->GetPos(frame);
 	state = State::ROAM;
@@ -246,6 +254,20 @@ bool CDefendTask::FindTarget()
 	enemyPositions.clear();
 	threatMap->SetThreatType(leader);
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
+	// apex: "armies ignore enemies less than half their strength unless
+	// defending the home base" (docs/24). A raider under half the pool is left
+	// to our guns where they outgun it, and otherwise to a squad of its own size
+	// split off for it (apexearth 2026-10-02: "create a squad of an appropriate
+	// size to chase the little amphibious tanks... if you have defense over
+	// there, then you should just assume that it'll be fine").
+	const int frame = circuit->GetLastFrame();
+	const bool detached = frame < detachUntil;
+	const float pettyBar = attackPower * .5f;
+	int pettySkipped = 0;
+	int pettyCovered = 0;
+	CEnemyInfo* detachFor = nullptr;
+	float detachSq = std::numeric_limits<float>::max();
+	float detachThreat = .0f;
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
 		if (enemy->IsHidden() || (enemy->GetTasks().size() > 2)) {
@@ -264,9 +286,12 @@ bool CDefendTask::FindTarget()
 		if (sqEBDist < sqBaseRange) {
 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
 		}
-		if (checkPower <= threatMap->GetThreatAt(ePos)) {
+		const float eThreat = threatMap->GetThreatAt(ePos);
+		if (checkPower <= eThreat) {
 			continue;
 		}
+		const bool petty = !detached && (units.size() > 1)
+				&& (sqEBDist >= sqBaseRange) && (eThreat < pettyBar);
 
 		const float elevation = circuit->GetElevationAt(ePos);
 		const bool IsInWater = cdef->IsPredictInWater(elevation);
@@ -301,6 +326,17 @@ bool CDefendTask::FindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
+		if (petty) {
+			++pettySkipped;
+			if (inflMap->GetAllyStaticInflAt(ePos) >= eThreat) {
+				++pettyCovered;
+			} else if (enemy->GetTasks().empty() && (sqDist < detachSq)) {
+				detachSq = sqDist;
+				detachFor = enemy;
+				detachThreat = eThreat;
+			}
+			continue;
+		}
 		if (minSqDist > sqDist) {
 			minSqDist = sqDist;
 			bestTarget = enemy;
@@ -308,6 +344,23 @@ bool CDefendTask::FindTarget()
 		enemyPositions.push_back(ePos);
 	}
 
+	if (detached && (bestTarget != nullptr)) {
+		detachUntil = std::max(detachUntil, frame + FRAMES_PER_SEC * 10);
+	}
+	int sent = 0;
+	if (detachFor != nullptr) {
+		sent = Detach(detachFor, detachThreat);
+	}
+	if (((pettySkipped > 0) || (sent > 0)) && (frame >= pettyLogAt)) {
+		pettyLogAt = frame + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: defend-petty t=%i lead=%s at=%.0f,%.0f n=%u skipped=%i covered=%i power=%.0f sent=%i for=%s target=%s",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(), pos.x, pos.z, (unsigned)units.size(),
+				pettySkipped, pettyCovered, attackPower, sent,
+				(detachFor != nullptr) && (detachFor->GetCircuitDef() != nullptr)
+					? detachFor->GetCircuitDef()->GetDef()->GetName() : "-",
+				(bestTarget != nullptr) && (bestTarget->GetCircuitDef() != nullptr)
+					? bestTarget->GetCircuitDef()->GetDef()->GetName() : "-");
+	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);
 		position = GetTarget()->GetPos();
@@ -318,6 +371,54 @@ bool CDefendTask::FindTarget()
 
 	return true;
 	// Return: target, startPos=leader->pos, enemyPositions
+}
+
+// apex: split off the members nearest the raider until they carry its threat
+// at home-defence parity (his 1.2x, docs/24), keeping at least half the pool.
+int CDefendTask::Detach(CEnemyInfo* enemy, float threat)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	const AIFloat3 ePos = enemy->GetPos();
+	const float need = std::max(threat * 1.2f, 1.f);
+	// Only fighters go, and one always stays: a squad's leader is never a
+	// support unit, so a pool left with only those has no leader at all.
+	std::vector<std::pair<float, CCircuitUnit*>> byDist;
+	for (CCircuitUnit* unit : units) {
+		if (!unit->GetCircuitDef()->IsRoleSupport()) {
+			byDist.push_back(std::make_pair(unit->GetPos(frame).SqDistance2D(ePos), unit));
+		}
+	}
+	std::sort(byDist.begin(), byDist.end(),
+			[](const std::pair<float, CCircuitUnit*>& a, const std::pair<float, CCircuitUnit*>& b) {
+				return a.first < b.first;
+			});
+	std::vector<CCircuitUnit*> pick;
+	float got = .0f;
+	float left = attackPower;
+	for (const auto& du : byDist) {
+		if (got >= need) {
+			break;
+		}
+		const float p = du.second->GetCircuitDef()->GetPower();
+		if ((left - p < attackPower * .5f) || (pick.size() + 1 >= byDist.size())) {
+			break;
+		}
+		pick.push_back(du.second);
+		got += p;
+		left -= p;
+	}
+	if (pick.empty() || (got < need)) {
+		return 0;
+	}
+	CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
+	CDefendTask* det = static_cast<CDefendTask*>(militaryMgr->Enqueue(TaskF::Defend(check, promote, got)));
+	det->position = ePos;
+	det->detachUntil = frame + FRAMES_PER_SEC * 30;
+	for (CCircuitUnit* unit : pick) {
+		manager->AssignTask(unit, det);
+	}
+	return int(pick.size());
 }
 
 void CDefendTask::ApplyTargetPath(const CQueryPathMulti* query)

@@ -372,6 +372,46 @@ bool HoldHomeOnce()
 	return gHoldHomePass > 0;
 }
 
+// WHICH TASK BALLS UP: per fight type, of our units with enemy influence on
+// them, the mean count of our own within splash range (docs/24, "never a
+// ball"; his 8v8 showed 7-12 to BARb's 3-5).
+int gNextPackLog = 0;
+void PackingCensus(const array<CCircuitUnit@>@ alive, const array<AIFloat3>@ pos)
+{
+	if (ai.frame < gNextPackLog)
+		return;
+	gNextPackLog = ai.frame + 30 * SECOND;
+	array<int> n(16, 0);
+	array<int> k(16, 0);
+	for (uint j = 0; j < alive.length(); ++j) {
+		IUnitTask@ t = alive[j].task;
+		if ((t is null) || (t.GetType() != Task::Type::FIGHTER))
+			continue;
+		const AIFloat3 p = pos[j];
+		if (ai.GetEnemyInflAt(p) <= 0.01f)
+			continue;
+		const int ft = t.GetFightType();
+		if ((ft < 0) || (ft >= 16))
+			continue;
+		int c = 0;
+		gWdAlly.Query(p.x, p.z, 150.f);
+		for (uint h = 0; h < gWdAlly.hit.length(); ++h) {
+			const uint i2 = uint(gWdAlly.hit[h]);
+			if ((i2 != j) && (pos[i2].SqDistance2D(p) <= 150.f * 150.f))
+				++c;
+		}
+		++n[ft];
+		k[ft] += c;
+	}
+	string ln = "";
+	for (int ft = 0; ft < 16; ++ft) {
+		if (n[ft] > 0)
+			ln += " " + FightTypeName(uint(ft)) + "=" + formatFloat(float(k[ft]) / float(n[ft]), "", 0, 1) + "/" + n[ft];
+	}
+	if (ln.length() > 0)
+		AiLog(Factory::T() + "apex: packing t=" + ai.teamId + " (own within 150 / units in contact)" + ln);
+}
+
 void UpdateWithdraw()
 {
 	if ((ai.frame < gNextWithdraw) || !ApexActive())
@@ -496,6 +536,7 @@ void UpdateWithdraw()
 	}
 
 	WdPassPrep(allyPos);
+	PackingCensus(alive, allyPos);
 	const int reissue = int(ai.GetTunable("apex_withdraw_reissue", TUNE_WITHDRAW_REISSUE)) * SECOND;
 	// A recall brings home what the threat there needs, not the whole front:
 	// attackers already home-side count first, then each recalled unit.

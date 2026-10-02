@@ -168,6 +168,64 @@ array<bool> gClAllyShield;
 array<Id>@  gShieldMates = null;
 int gNextAllyFLog = 0;
 
+// THE TEAMMATE WHOSE BASE THE ENEMY MUST CROSS TO REACH OURS: a home within
+// 45 degrees of our bearing to them and nearer to them than we are, the one
+// nearest them if several. None for a front seat.
+int gShelterMate = -1;
+AIFloat3 gShelterHome;
+int gShelterAt = -999999;
+int gNextShelterLog = 0;
+
+int ShelterMate(AIFloat3& out home)
+{
+	if (ai.frame < gShelterAt + 10 * SECOND) {
+		home = gShelterHome;
+		return gShelterMate;
+	}
+	gShelterAt = ai.frame;
+	gShelterMate = -1;
+	AIFloat3 foe;
+	if (Builder::gHomeSet && FoeRef(foe)) {
+		const AIFloat3 me = Builder::gHomePos;
+		AIFloat3 dir = foe - me;
+		const float myD = dir.Length2D();
+		if (myD > 1.f) {
+			dir.SafeNormalize2D();
+			array<Id>@ mates = ai.GetTeamIds();
+			float best = myD;
+			for (uint m = 0; (mates !is null) && (m < mates.length()); ++m) {
+				if (int(mates[m]) == ai.teamId)
+					continue;
+				const float mx = ai.ReadTeamValue(int(mates[m]), "homex", -1.f);
+				const float mz = ai.ReadTeamValue(int(mates[m]), "homez", -1.f);
+				if ((mx < 0.f) || (mz < 0.f))
+					continue;
+				const AIFloat3 h(mx, 0.f, mz);
+				const float vx = h.x - me.x;
+				const float vz = h.z - me.z;
+				const float along = vx * dir.x + vz * dir.z;
+				if (along <= 0.f)
+					continue;
+				if (vx * vx + vz * vz - along * along > along * along)
+					continue;
+				const float hD = h.distance2D(foe);
+				if (hD < best) {
+					best = hD;
+					gShelterMate = int(mates[m]);
+					gShelterHome = h;
+				}
+			}
+		}
+	}
+	if (ai.frame >= gNextShelterLog) {
+		gNextShelterLog = ai.frame + 120 * SECOND;
+		AiLog("apex: shelter t=" + ai.teamId + " mate=" + gShelterMate
+			+ ((gShelterMate >= 0) ? (" at=" + int(gShelterHome.x) + "," + int(gShelterHome.z)) : ""));
+	}
+	home = gShelterHome;
+	return gShelterMate;
+}
+
 float LineClosure(const AIFloat3& in extraAt, float extraReach)
 {
 	PfRebuild();

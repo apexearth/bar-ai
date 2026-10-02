@@ -268,6 +268,68 @@ void UpdateSpamPosture()
 // Where the army stages right now; ZERO vector until the lane is first set.
 AIFloat3 LanePos() { return gLaneAt; }
 
+// ONE TEAM LANE (apexearth 2026-10-01: "The enemy puts all of their army
+// together in the front line... we trickle in one squad at a time"). Each seat
+// staged at the front point nearest its OWN base, so eight seats filled eight
+// pools along one front. The leader -- the lowest allied seat that publishes a
+// home, i.e. one of ours -- takes the lane from the team's centre and publishes
+// it; every other seat stands its pools there. A stale lane falls back to the
+// seat's own, as before.
+int gNextTeamLaneLog = 0;
+const string TV_LANEX = "lanex";
+const string TV_LANEZ = "lanez";
+const string TV_LANEF = "lanef";
+int LaneLeader()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	int lead = ai.teamId;
+	if (mates is null)
+		return lead;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if ((t < lead) && (ai.ReadTeamValue(t, "homex", -1.f) >= 0.f))
+			lead = t;
+	}
+	return lead;
+}
+AIFloat3 TeamHomeRef()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	float cx = 0.f, cz = 0.f;
+	int n = 0;
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i) {
+		const float x = ai.ReadTeamValue(int(mates[i]), "homex", -1.f);
+		const float z = ai.ReadTeamValue(int(mates[i]), "homez", -1.f);
+		if ((x < 0.f) || (z < 0.f))
+			continue;
+		cx += x;
+		cz += z;
+		++n;
+	}
+	if (n == 0)
+		return Builder::gHomePos;
+	return AIFloat3(cx / float(n), 0.f, cz / float(n));
+}
+bool TeamLaneRead(AIFloat3& out p)
+{
+	const int lead = LaneLeader();
+	if (lead == ai.teamId)
+		return false;
+	const float f = ai.ReadTeamValue(lead, TV_LANEF, -1.f);
+	if ((f < 0.f) || (ai.frame - int(f) > 30 * SECOND))
+		return false;
+	p = AIFloat3(ai.ReadTeamValue(lead, TV_LANEX, -1.f), 0.f, ai.ReadTeamValue(lead, TV_LANEZ, -1.f));
+	return OnMap(p);
+}
+void TeamLanePublish()
+{
+	if ((LaneLeader() != ai.teamId) || !OnMap(gLaneAt))
+		return;
+	ai.PublishTeamValue(TV_LANEX, gLaneAt.x);
+	ai.PublishTeamValue(TV_LANEZ, gLaneAt.z);
+	ai.PublishTeamValue(TV_LANEF, float(ai.frame));
+}
+
 void UpdateLanePos()
 {
 	if (ai.frame < gNextLane)
@@ -275,6 +337,19 @@ void UpdateLanePos()
 	gNextLane = ai.frame + 10 * SECOND;
 	if (!Builder::gHomeSet)
 		return;
+	AIFloat3 teamLane;
+	if (TeamLaneRead(teamLane)) {
+		if (ai.frame >= gNextTeamLaneLog) {
+			gNextTeamLaneLog = ai.frame + 60 * SECOND;
+			AiLog(Factory::T() + "apex: team-lane t=" + ai.teamId + " lead=t" + LaneLeader()
+				+ " at=" + int(teamLane.x) + "," + int(teamLane.z));
+		}
+		gLaneAt = teamLane;
+		aiSetupMgr.SetLanePos(teamLane);
+		ai.SetFrontPos(teamLane);
+		return;
+	}
+	const AIFloat3 home = (LaneLeader() == ai.teamId) ? TeamHomeRef() : Builder::gHomePos;
 	// THE FRONT ITSELF, not a fraction of the way to it. FrontNear returns the
 	// nearest perimeter point that is a FRONT edge, preferring ground we hold;
 	// FillFrontPos then picks a cluster there whose influence is ours and which
@@ -289,7 +364,7 @@ void UpdateLanePos()
 	// the deterministic fallback until there is a real front to stand on.
 	AIFloat3 lane;
 	bool onFront = Front::IsFrontKnown()
-		&& Front::FrontNear(Builder::gHomePos, lane)
+		&& Front::FrontNear(home, lane)
 		&& OnMap(lane)
 		&& (ForwardFraction(lane) > 0.f);
 	if (!onFront) {
@@ -297,7 +372,7 @@ void UpdateLanePos()
 		if (!OnMap(foe))
 			return;
 		const float f = ai.GetTunable("apex_lane_forward", TUNE_LANE_FORWARD);
-		lane = Builder::gHomePos + (foe - Builder::gHomePos) * f;
+		lane = home + (foe - home) * f;
 	}
 	// TRADING BADLY -> STAND DEFENSIVELY. When recent combat is a clearly losing
 	// exchange (TradeRatio below the bar on real volume), the regroup anchor
@@ -316,9 +391,9 @@ void UpdateLanePos()
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
 			const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
-			AIFloat3 back = Builder::gHomePos + (e - Builder::gHomePos) * f;
+			AIFloat3 back = home + (e - home) * f;
 			if (OnMap(back)
-				&& (back.SqDistance2D(Builder::gHomePos) < lane.SqDistance2D(Builder::gHomePos)))
+				&& (back.SqDistance2D(home) < lane.SqDistance2D(home)))
 			{
 				lane = back;
 			}
@@ -348,7 +423,7 @@ void UpdateLanePos()
 			const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 			if (OnMap(e)) {
 				const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
-				AIFloat3 back = Builder::gHomePos + (e - Builder::gHomePos) * f;
+				AIFloat3 back = home + (e - home) * f;
 				if (OnMap(back))
 					lane = back;
 			}
@@ -392,8 +467,12 @@ void UpdateLanePos()
 	// turrets and then get healed while we fight"). The army holds the line;
 	// as it wins ground the line steps up and the army with it.
 	AIFloat3 chokeHold;
+	// A choke BEHIND the front is our own wall: the whole team stood in its base
+	// on it (his 8v8, 10-01, choke at the centre of our starts). The army holds
+	// the narrow ground near the enemy, not its own doorstep.
 	const bool chokeOk = !TradeBad() && Market::ChokeOnLane()
-			&& Market::WallLineAnchor(chokeHold);
+			&& Market::WallLineAnchor(chokeHold)
+			&& (!onFront || (ForwardFraction(chokeHold) >= ForwardFraction(lane)));
 	if (chokeOk) {
 		lane = chokeHold;
 		if (!gChokeHeld) {
@@ -437,7 +516,7 @@ void UpdateLanePos()
 	// home until it stands on ground that is actually ours; it advances again
 	// the same way as our influence retakes the lane.
 	if (Builder::gHomeSet && OnMap(lane)) {
-		AIFloat3 toHome = Builder::gHomePos - lane;
+		AIFloat3 toHome = home - lane;
 		const float len = sqrt(toHome.SqLength2D());
 		if (len > 1.f) {
 			toHome *= (1.f / len);
@@ -470,6 +549,7 @@ void UpdateLanePos()
 	{
 		aiSetupMgr.SetLanePos(gLaneAt);   // keep standing where we already stand
 		ai.SetFrontPos(gLaneAt);
+		TeamLanePublish();
 		return;
 	}
 	gLaneAt = lane;
@@ -480,6 +560,7 @@ void UpdateLanePos()
 	// DEFEND task's position is rewritten from it each pass. The guards above were
 	// therefore being applied to the anchor nothing consumed.
 	ai.SetFrontPos(lane);
+	TeamLanePublish();
 
 	// WHY THE ARMY IS THERE, ON THE MAP: this is the anchor FillFrontPos picks
 	// the regroup cluster from, so it is the single most useful thing to see.

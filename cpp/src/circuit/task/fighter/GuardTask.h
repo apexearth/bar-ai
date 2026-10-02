@@ -30,6 +30,7 @@ public:
 private:
 	ICoreUnit::Id vipId;
 	float maxPower;
+	int engageLogAt = -1;  // apex: guard-engage is logged at most every 10 s per task
 };
 
 } // namespace circuit

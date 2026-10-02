@@ -145,6 +145,49 @@ bool UpgradeUnderway(const AIFloat3& in spot)
 	return false;
 }
 
+// AN UPGRADE THAT DIES BEFORE ITS FRAME STANDS is refused at that spot for a
+// while, doubling each time: the owner upgrading its own extractor there, or a
+// spot our hands cannot reach, took one T2 hand 39 elections in a row.
+array<AIFloat3> gUpDropPos;
+array<int> gUpDropN;
+array<int> gUpDropUntil;
+void NoteUpDropped(const AIFloat3& in at)
+{
+	for (uint i = 0; i < gUpDropPos.length(); ++i) {
+		if (gUpDropPos[i].distance2D(at) <= Requests::SAME_SITE) {
+			gUpDropN[i] = gUpDropN[i] + 1;
+			int n = gUpDropN[i];
+			if (n > 5)
+				n = 5;
+			gUpDropUntil[i] = ai.frame + (10 << n) * SECOND;
+			return;
+		}
+	}
+	gUpDropPos.insertLast(at);
+	gUpDropN.insertLast(0);
+	gUpDropUntil.insertLast(ai.frame + 10 * SECOND);
+}
+
+void NoteUpStarted(const AIFloat3& in at)
+{
+	for (uint i = 0; i < gUpDropPos.length(); ++i) {
+		if (gUpDropPos[i].distance2D(at) <= Requests::SAME_SITE) {
+			gUpDropPos.removeAt(i);
+			gUpDropN.removeAt(i);
+			gUpDropUntil.removeAt(i);
+			return;
+		}
+	}
+}
+
+bool UpRefused(const AIFloat3& in spot)
+{
+	for (uint i = 0; i < gUpDropPos.length(); ++i)
+		if ((ai.frame < gUpDropUntil[i]) && (gUpDropPos[i].distance2D(spot) <= Requests::SAME_SITE))
+			return true;
+	return false;
+}
+
 // Allied extractors below the best (apexearth 2026-09-30: "be willing to
 // upgrade our allies' mexes"). BAR hands the new extractor to the owner of the
 // one beneath it (unit_mex_upgrade_reclaimer), and CBMexUpTask's reclaim path
@@ -246,7 +289,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	for (uint li = 0; li < uPos.length(); ++li) {
 		if (uExt[li] >= topExt)
 			continue;
-		if (UpgradeUnderway(uPos[li]))
+		if (UpgradeUnderway(uPos[li]) || UpRefused(uPos[li]))
 			continue;
 		// GROUND THE ENGINE HAS ALREADY REFUSED. An upgrade's position IS the
 		// spot -- unlike a plant or a generator it cannot be moved -- so a spot
@@ -941,22 +984,22 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			}
 		}
 		if (c.value > w.value) {
-			w = c;
-			w.kind = WK_TECH;
-			@w.def = Catalog::Def(d);
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
 			// ...but a FLOATING one cannot stand there at all -- it needs
 			// water within the same rear leash, which WetPlantSite already
-			// answers for the T1 shipyard.
+			// answers for the T1 shipyard. Asked before it takes the slot: a
+			// floater with no water left the want standing at (0,0).
+			AIFloat3 at = lands;
 			if (Catalog::gFloater[d]) {
-				const AIFloat3 wet = WetPlantSite(Catalog::Def(d), lands);
-				if (!OnMap(wet))
+				at = WetPlantSite(Catalog::Def(d), lands);
+				if (!OnMap(at))
 					continue;   // no reachable water: not a candidate here
-				w.pos = wet;
-			} else {
-				w.pos = lands;
 			}
+			w = c;
+			w.kind = WK_TECH;
+			@w.def = Catalog::Def(d);
+			w.pos = at;
 			// WHERE THE LAB ACTUALLY LANDS, and how deep that is toward the
 			// enemy. Reported twice as wrong from a watched game, so it is
 			// measured rather than reasoned about.

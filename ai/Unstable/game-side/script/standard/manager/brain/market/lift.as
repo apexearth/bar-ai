@@ -367,6 +367,9 @@ void LiftStep(LiftJob@ jb)
 			if (jb.ferry !is null)
 				FerryDrop(jb.ferry, "never lifted");
 			LiftEnd(jb);
+			// A pickup landing on the deadline left a plane holding a turret
+			// with no job to set it down (watched, 10-01).
+			jb.plane.CmdUnloadArea(jb.plane.GetPos(ai.frame), 400.f);
 		}
 		return;
 	}
@@ -461,6 +464,12 @@ float LiftGainFor(int d, float fillSec)
 	++gLiftAsk;
 	if (!IsLiftDef(d) || (Brain::PendAnyOf(d) > 0))
 		return 0.f;
+	// A free plane already answers the cargo: ten were bought for jobs two
+	// planes were doing, the rest hovering over the air plant (10-01).
+	for (uint i = 0; i < gLift.length(); ++i) {
+		if ((gLift[i] !is null) && (gLift[i].plane !is null) && (gLift[i].stage == 0))
+			return 0.f;
+	}
 	const float fill = (fillSec > 1.f) ? fillSec : 180.f;
 	float took = 0.f;
 	const float worth = LiftTurretWorth(d, took);

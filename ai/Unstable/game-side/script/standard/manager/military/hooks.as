@@ -222,6 +222,19 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// A unit back in the election is no longer guarding anyone (retreat,
 		// aborted task); its pairing dropped only on death, so its worker
 		// read escorted by nobody for the rest of the game.
+		for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
+			if (Market::gEscUnit[e] != unit.id)
+				continue;
+			CCircuitUnit@ w = ai.GetTeamUnit(Market::gEscWorker[e]);
+			IUnitTask@ ot = unit.task;
+			AiLog(Factory::T() + "apex: escort-off " + cdef.GetName() + " #" + unit.id
+				+ " from #" + Market::gEscWorker[e]
+				+ " task=" + ((ot is null) ? -1 : int(ot.GetType()))
+				+ " dist=" + ((w is null) ? -1 : int(unit.GetPos(ai.frame).distance2D(w.GetPos(ai.frame))))
+				+ " wTask=" + (((w is null) || (w.task is null)) ? -1 : int(w.task.GetType()))
+				+ " wBt=" + (((w is null) || (w.task is null) || (w.task.GetType() != Task::Type::BUILDER)) ? -1 : int(w.task.GetBuildType())));
+			break;
+		}
 		Market::EscortGone(unit.id);
 		CCircuitUnit@ vip = Market::EscortNeeded(unit);
 		if (vip !is null) {
@@ -257,6 +270,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		// The set of defs the spam posture applies to, discovered rather than
 		// listed. See NoteFodderDef.
 		NoteFodderDef(cdef);
+		// FODDER WALKS WITH THE ARMY (apexearth 2026-10-01): sent out alone, a
+		// Pawn dies alone and levels up whatever killed it -- a third of our
+		// army losses in his 8v8 were Pawns fed in one at a time. In the pool
+		// it soaks the shots it is for (his 09-23 ruling). Scout chaff still
+		// spreads to scout.
+		if (!cdef.IsRoleAny(Unit::Role::SCOUT.mask))
+			return MassPoolTask(unit, cdef);
 		// In spam phase they do not form squads: CScoutTask is the only fighter
 		// task in CircuitAI that cannot become a group (derives from IFighterTask,
 		// not ISquadTask, so no CheckMergeTask), and it is used here regardless of
@@ -315,7 +335,14 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// alone. See superguard.as.
 	if (WantsSuperGuard(cdef) && !SuperReleased())
 		return NoteElect("superguard", SuperGuardTask(unit));
-	if (WantsMassing(cdef)) {
+	if (WantsMassing(cdef))
+		return MassPoolTask(unit, cdef);
+	return NoteElect("stock", aiMilitaryMgr.DefaultMakeTask(unit));
+}
+
+IUnitTask@ MassPoolTask(CCircuitUnit@ unit, const CCircuitDef@ cdef)
+{
+	{
 		// Registered so ApplyRetreatPosture can weigh its cost against income.
 		NotePostureDef(cdef, false);
 		// WHILE OUR BASE IS BEING HIT, THE POOL DOES NOT LEAVE.
@@ -369,7 +396,6 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return NoteElect("mass.attack", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::ATTACK,
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack)));
 	}
-	return NoteElect("stock", aiMilitaryMgr.DefaultMakeTask(unit));
 }
 
 // WHAT A COMBAT UNIT WAS DOING BEFORE IT RETREATED.

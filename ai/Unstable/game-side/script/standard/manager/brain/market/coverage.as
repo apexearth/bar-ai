@@ -826,6 +826,8 @@ float HazardWith(const AIFloat3& in pos, float cover)
 // The expectation is apex_enemy_prior. ArmyTarget no longer reads it -- army
 // is sized from our own economy -- and turrets are excluded from our own
 // total, or defence becomes its own justification and the loop runs away.
+int gSiegeArmyAt = -1;
+float gSiegeArmy = 0.f;
 float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 {
 	// ...AND THE EXPECTATION ANCHORS ON OUR ARMY, the same basis RiskFill's
@@ -839,7 +841,14 @@ float SiegeWith(const AIFloat3& in pos, float cover, float priorFrac)
 	const float foe = (gRkSeen > prior) ? gRkSeen : prior;
 	if (foe <= 0.f)
 		return 0.f;
-	const float defended = gRkOurArmy + cover;
+	// Behind a teammate's base, what stands between their army and this ground
+	// is the whole side's army, not ours alone.
+	if (gSiegeArmyAt != ai.frame) {
+		gSiegeArmyAt = ai.frame;
+		AIFloat3 mh;
+		gSiegeArmy = (ShelterMate(mh) >= 0) ? Military::TeamArmyCost() : gRkOurArmy;
+	}
+	const float defended = gSiegeArmy + cover;
 	return (foe / (foe + ((defended > 0.f) ? defended : 0.f)))
 			/ ((gRkTau > 1.f) ? gRkTau : 180.f);
 }
