@@ -67,8 +67,17 @@ float CatGapFrac(int c)
 		const float t = BPCapacity() + g;
 		return ((g <= 0.f) || (t <= 1.f)) ? 0.f : (g / t);
 	}
-	if (c == CAT_ENERGY)
-		return 1.f - EFeedShare();
+	if (c == CAT_ENERGY) {
+		// Energy thrown away is energy work too -- the converters only an
+		// advanced hand can raise (a safe seat wasted two thirds of 15k E/s
+		// while its T2 cons were all on the defence role).
+		const float lack = 1.f - EFeedShare();
+		const float eInc = Eco::EInc();
+		float waste = (eInc > 1.f) ? (gEExcessEma / eInc) : 0.f;
+		if (waste > 1.f)
+			waste = 1.f;
+		return (waste > lack) ? waste : lack;
+	}
 	return 0.f;
 }
 

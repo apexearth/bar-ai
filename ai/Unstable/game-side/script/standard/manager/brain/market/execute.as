@@ -1166,6 +1166,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// zero built, 91% of its energy thrown away).
 		if ((unit !is null) && NearBlocked(slot))
 			slot = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
+		// THE BLOCK GOES WHERE THE LATHE IS (apexearth 2026-10-02: converters
+		// "up on a hill" with no turret in reach took minutes while energy
+		// spilled). The slot is scored against every nano block, the idle
+		// ones first (LatheSite divides by what is already rising there).
+		if ((unit !is null) && OnMap(slot))
+			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		const AIFloat3 cAt = OffFactoryExit(ClearOfSpots(OnMap(slot) ? slot : w.pos, 120.f));
 		IUnitTask@ cFirst = Requests::Take(unit, w.def, Task::BuildType::CONVERT,
 				Task::Priority::NORMAL, cAt, cell, 0.f, crtd, par);
@@ -1274,6 +1280,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
 				? w.pos
 				: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
+		// Told to the team at the order, so the next seat's opening reads it.
+		ai.PublishTeamValue("plant" + int(w.def.id), 1.f);
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
 	}

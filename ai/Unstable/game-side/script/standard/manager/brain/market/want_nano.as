@@ -311,8 +311,13 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		armyNeed = spareS;
 	const float idleAtLine = OnMap(linePos) ? IdleNanoLatheNear(linePos) : idleL;
 	lineNeed = (lineNeed > idleAtLine) ? (lineNeed - idleAtLine) : 0.f;
-	sinkNeed = (sinkNeed > idleL) ? (sinkNeed - idleL) : 0.f;
-	armyNeed = (armyNeed > idleL) ? (armyNeed - idleL) : 0.f;
+	// Only lathe idle WITHIN REACH of the frame answers it: turrets idle at a
+	// quiet lab across the base zeroed a fusion's demand (apexearth 2026-10-02:
+	// "we're overflowing and we don't have enough build power").
+	const float idleAtSink = OnMap(sinkPos) ? IdleNanoLatheNear(sinkPos) : idleL;
+	const float idleAtArmy = OnMap(armyPos) ? IdleNanoLatheNear(armyPos) : idleL;
+	sinkNeed = (sinkNeed > idleAtSink) ? (sinkNeed - idleAtSink) : 0.f;
+	armyNeed = (armyNeed > idleAtArmy) ? (armyNeed - idleAtArmy) : 0.f;
 	haveLine = (lineNeed > 0.f) && OnMap(linePos);
 	float over = (sinkNeed > lineNeed) ? sinkNeed : lineNeed;
 	if (armyNeed > over)

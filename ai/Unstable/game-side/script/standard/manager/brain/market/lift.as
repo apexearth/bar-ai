@@ -226,12 +226,35 @@ void LiftSample()
 	}
 }
 
+// The big frame furthest short of lathe -- a fusion, an afus, a converter block
+// -- when no line wants a turret (apexearth 2026-10-02: idle turrets stood at
+// home while the build they could have fed rose with nobody beside it).
+bool SinkSiteFor(AIFloat3& out at, float& out gap)
+{
+	gap = 0.f;
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null)
+			|| !NanoSinkWorthy(int(t.buildDef.id)))
+			continue;
+		const AIFloat3 p = t.GetBuildPos();
+		if (!OnMap(p) || Builder::SiteHot(p))
+			continue;
+		const float g = NanoGap(p);
+		if (g > gap) {
+			gap = g;
+			at = p;
+		}
+	}
+	return gap > 0.f;
+}
+
 bool LiftDispatch(LiftJob@ jb)
 {
 	AIFloat3 lp;
 	float net = 0.f;
 	CCircuitUnit@ line = null;
-	if (!LineSiteFor(lp, net, line) || (net <= 0.f))
+	if ((!LineSiteFor(lp, net, line) || (net <= 0.f)) && !SinkSiteFor(lp, net))
 		return false;
 	const int pd = int(jb.plane.circuitDef.id);
 	const float speed = LiftSpeed(jb.plane);

@@ -1339,10 +1339,15 @@ float LineQualityMul(int plantDef)
 // tier, so the order moves and the class's total does not.
 array<float> gRecLine;
 int gRecLineAt = -999999;
+// Against its own line class's bar, as RecordRaw reads it: "a tank is judged
+// as a tank" (his 2026-09-19). Read raw, a vehicle plant's tanks scored under a
+// bot lab's skirmishers by construction and no seat ever opened vehicles.
 float UnitRecordAny(int d)
 {
 	const CCircuitDef@ cd = Catalog::Def(d);
-	return 0.5f * (ai.RecordRatio(cd, -1) + ai.RecordFoeRatio(cd, null));
+	const float bar = RecordBar(LineClassOf(d));
+	return 0.5f * (ai.RecordRatio(cd, -1) + ai.RecordFoeRatio(cd, null))
+			/ ((bar > 0.01f) ? bar : 1.f);
 }
 
 float RecordLineMul(int plantDef)
@@ -1426,7 +1431,9 @@ array<int> gTeamPlantN;
 
 void TeamPlantRefresh()
 {
-	if (ai.frame - gTeamPlantAt < 10 * SECOND)
+	// Every seat elects its first lab in the same opening seconds; read on a
+	// 10 s clock, all eight saw an empty team and all eight opened bots.
+	if ((ai.frame - gTeamPlantAt < 10 * SECOND) && (Factory::gFactoryCount > 0))
 		return;
 	gTeamPlantAt = ai.frame;
 	if (int(gTeamPlantN.length()) <= Catalog::gDefCount)

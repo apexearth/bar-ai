@@ -114,10 +114,17 @@ bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
 	}
 	if (Front::FrontNear(from, at) && OnMap(at) && Rearward(from, at))
 		return true;
-	if (!Builder::gHomeSet)
-		return false;
-	at = Builder::gHomePos;
-	return OnMap(at);
+	// The team's rally, never our own start (apexearth 2026-10-02: a back
+	// seat's army walked to the middle of its base while the front bases
+	// died). Already behind it, the pack holds where it stands.
+	AIFloat3 lane;
+	if (!TeamLaneRead(lane))
+		lane = gLaneAt;
+	if (OnMap(lane) && ((lane.x > 1.f) || (lane.z > 1.f)) && Rearward(from, lane)) {
+		at = lane;
+		return true;
+	}
+	return false;
 }
 
 // WHERE HOME IS BEING HIT, not a doorway or the base centre (apexearth

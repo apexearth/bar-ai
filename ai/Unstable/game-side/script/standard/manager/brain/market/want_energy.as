@@ -888,7 +888,13 @@ float EcoPowerM()
 	// use if nothing we own can place it.
 	const float own = OwnConvCeil();
 	const float rate = (own > 0.f) ? own : BestConvRatio();
-	const float eNet = Eco::EInc() - chewed;
+	// SPENT, not made: energy thrown away buys nothing, and the army and
+	// defence targets sized from it took the hands that would convert it.
+	float eUsed = Eco::EInc();
+	const float ePull = Eco::EPull();
+	if (ePull < eUsed)
+		eUsed = ePull;
+	const float eNet = eUsed - chewed;
 	if (eNet > 0.f)
 		p += eNet * rate;
 	return p;
@@ -1465,7 +1471,8 @@ Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d]
 			|| Catalog::gSub[d] || (Catalog::gStoreE[d] < 1000.f)
 			|| (Catalog::gStoreM[d] > 1.f)   // metal storage stays off (his 2026-08-27 ruling)
-			|| (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gMakeE[d] >= 1.f))
+			|| (Catalog::gConvCapacity[d] > 0.f) || (Catalog::gMakeE[d] >= 1.f)
+			|| (Catalog::gPower[d] > 1.f))   // a Pulsar holds energy too: storage is not a gun
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			return w;   // one store at a time: the band it opens is not read yet
