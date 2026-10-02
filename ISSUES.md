@@ -1278,6 +1278,19 @@ preemption is a rule -- his call.
 
 ## ECONOMY AND BUILDERS
 
+### Normal seats do not scale; only the eco seat does (2026-10-02)
+
+Supreme Isthmus 8v8 +100%, 4 seeds at 5716bcea: at minute 24 the seven
+normal seats make 4-220 m/s each (the eco seat 551-745); BARb's seats make
+~200-250 each. Our normal seats hold 12-13 T2 cons like BARb's but raise 0-5
+advanced converters to BARb's 5-14. Each spends 30-55k on army; its energy
+is drawn to 90-99% by production, so the converter want sees little waste
+and prices a converter at 0.1-15 m/s, and pending mex upgrades charge it
+the stream it delays (convprice `rest=` 630-3500 against walk/build terms
+under 100). Their T2 hands go to mexup (77 of 184 jobs), field defence (58),
+Bertha and sensors. Open: the army/economy split on a normal seat; what a
+converter is worth when the bank is pinned but not spilling.
+
 ### Every builder is priced as if the map's spots were ours to claim (2026-09-27)
 
 `ClaimableSpots` (want_mex.as) excludes only OUR ledger and spots with a
