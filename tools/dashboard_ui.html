@@ -774,13 +774,13 @@ function renderMatch(d) {
       it prices deferred wants against — standing mexes and how many a turret
       covers, mean shortfall (the fraction of incoming damage our guns fail to
       stop), and metal lost so far.</div></div>
-  <div class="card"><h2>Brain wants over time — what it wanted to build, and how badly</h2>
+  <div class="card"><h2>Builder elections over time — what the constructors chose</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
-      <label class="f">team / elector<select id="bw-team"></select></label>
+      <label class="f">team<select id="bw-team"></select></label>
       <label class="f">view<select id="bw-mode">
-        <option value="chance">chance to be built next (%)</option>
-        <option value="share">chance, stacked to 100%</option>
-        <option value="raw">raw score (log)</option>
+        <option value="share">share of elections, stacked to 100%</option>
+        <option value="chance">share of elections (%)</option>
+        <option value="raw">mean value of the winner (log)</option>
       </select></label>
       <label class="f">group<select id="bw-group">
         <option value="def">building</option>
@@ -798,26 +798,26 @@ function renderMatch(d) {
       "agree" is how often the ladder and the market's price pick the same
       economy want &mdash; if it is always 100%, the layer is inert.</div>
     <canvas id="c-brain" width="1140" height="300"></canvas>
-    <div class="dim" style="font-size:12px;margin-top:4px">Ticks under the axis
-      are actual picks (a want that got a builder). The draw is
-      score-proportional over the capped scores, so a building's share of the
-      total IS its chance of being the next thing started — a chance of 0 means
-      it was not proposed at all that tick.</div>
+    <div class="dim" style="font-size:12px;margin-top:4px">One point per game
+      minute: of the builder elections that minute, the share each want won
+      (from <code>apex: decide</code>). Ticks under the axis are the individual
+      picks. This is what was <i>chosen</i>, not what was wanted — the per-tick
+      want dump was removed on 2026-08-22.</div>
     <table style="margin-top:8px"><thead><tr><th>building</th><th>category</th>
-      <th>picks</th><th>mean chance</th><th>peak chance</th><th>mean score</th>
+      <th>picks</th><th>mean share</th><th>peak share</th><th>mean value</th>
       </tr></thead>
       <tbody id="bw-table"></tbody></table></div>
-  <div class="card"><h2>Constructors over time — headcount by role</h2>
+  <div class="card"><h2>Builders over time — headcount</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">team<select id="cw-team"></select></label>
       <label class="f">&nbsp;<span class="dim" id="cw-note"></span></label>
     </div>
     <div class="legend" id="cw-legend" style="flex-wrap:wrap"></div>
     <canvas id="c-crew" width="1140" height="260"></canvas>
-    <div class="dim" style="font-size:12px;margin-top:4px">Stacked headcount per
-      role (Crew::Enlist; a role never changes once set). The white line is
-      cumulative constructor deaths. Assist bots are not enrolled, so this is
-      the working crew rather than every unit with a build menu.</div></div>
+    <div class="dim" style="font-size:12px;margin-top:4px">Every unit with a
+      build menu, from the dev_stats gadget's 2-minute samples (every team,
+      BARb's included). Mobile constructors split by tech level; the top band is
+      nano turrets, factories and the commander.</div></div>
   <div class="card"><h2>Factory support — nano turrets in reach of each factory</h2>
     <div class="dim" id="fs-note"></div>
     <div id="fs-table" style="margin-top:8px"></div>
@@ -1219,15 +1219,10 @@ async function loadBrain(dir) {
   catch (e) { BRAIN = null; }
   const teams = BRAIN && BRAIN.teams ? Object.keys(BRAIN.teams) : [];
   if (!teams.length) {
-    $("#bw-note").textContent = "no `brain wants` lines in this infolog";
+    $("#bw-note").textContent = "no `apex: decide` lines in this infolog (apex_decide_log off?)";
     return;
   }
-  // Key is team, or team/class since the adv-con and T1-con auctions split.
-  sel.innerHTML = teams.map(t => {
-    const [tm, cls] = t.split("/");
-    return `<option value="${esc(t)}">team ${esc(tm)}${
-      cls ? " · " + (cls === "adv" ? "advanced cons" : "T1 cons") : ""}</option>`;
-  }).join("");
+  sel.innerHTML = teams.map(t => `<option value="${esc(t)}">team ${esc(t)}</option>`).join("");
   sel.onchange = drawBrain;
   $("#bw-mode").onchange = drawBrain;
   $("#bw-group").onchange = drawBrain;
@@ -1349,7 +1344,7 @@ function drawBrain() {
   $("#bw-legend").innerHTML = labels.map((l, i) =>
     `<span><i style="background:${KIND_COLORS[i % KIND_COLORS.length]}"></i>${esc(l)}</span>`).join("");
   $("#bw-note").textContent =
-    `${N} samples, ${(t.picks || []).length} logged picks (team-wide)`;
+    `${N} minutes, ${(t.picks || []).length} elections`;
   const pickCount = {};
   (t.picks || []).forEach(p => {
     const l = pickLabel(p); pickCount[l] = (pickCount[l] || 0) + 1;
@@ -1437,8 +1432,9 @@ async function loadLift(dir) {
 }
 
 /* ---------- constructor crew ---------- */
-const ROLE_COLORS = {home:"#4fa3e3", mex:"#d9c25e", front:"#e0876c",
-  eco:"#5fbf77", energy:"#c78ce0", metal:"#5fc7c0"};
+const ROLE_COLORS = {conT1:"#4fa3e3", conT2:"#e0876c", other:"#5fbf77"};
+const ROLE_NAMES = {conT1:"T1 constructors", conT2:"T2 constructors",
+  other:"nanos, factories, commander"};
 let CREW = null;
 async function loadCrew(dir) {
   const sel = $("#cw-team"); if (!sel) return;
@@ -1446,7 +1442,7 @@ async function loadCrew(dir) {
   catch (e) { CREW = null; }
   const teams = CREW && CREW.teams ? Object.keys(CREW.teams) : [];
   if (!teams.length) {
-    $("#cw-note").textContent = "no `crew home=` census lines in this infolog";
+    $("#cw-note").textContent = "no periodic [BARAI_STATS] rows for this run";
     return;
   }
   sel.innerHTML = teams.map(t => `<option value="${t}">team ${t}</option>`).join("");
@@ -1460,7 +1456,7 @@ function drawCrew() {
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34, B = 22;
   ctx.clearRect(0, 0, W, H);
   const mt = Math.max(1, ...t.min);
-  const hi = Math.max(4, ...t.tracked, ...t.died);
+  const hi = Math.max(4, ...t.tracked);
   const X = m => P + (W - P - 10) * (m / mt), plotH = H - B - 10;
   const Y = v => H - B - plotH * (v / hi);
   ctx.font = "10px Consolas";
@@ -1480,25 +1476,16 @@ function drawCrew() {
     ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
     ctx.fillText(Math.round(hi * g / 4), 6, y + 3);
   }
-  // Cumulative deaths on the same axis: the crew holding flat while this
-  // climbs is replacement, not growth.
-  ctx.strokeStyle = "#e6ecf2"; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]);
-  ctx.beginPath();
-  t.min.forEach((m, i) => { const x = X(m), y = Y(t.died[i]);
-    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-  ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
   ctx.fillStyle = "#8a96a3";
   for (let g = 0; g <= 6; g++) {
     const x = P + (W - P - 10) * g / 6;
     ctx.fillText(Math.round(mt * g / 6) + "m", x - 8, H - 4);
   }
   $("#cw-legend").innerHTML = roles.map(r =>
-    `<span><i style="background:${ROLE_COLORS[r]}"></i>${r}</span>`).join("")
-    + `<span><i style="background:#e6ecf2"></i>deaths (cumulative)</span>`;
+    `<span><i style="background:${ROLE_COLORS[r]}"></i>${ROLE_NAMES[r]}</span>`).join("");
   const last = N - 1;
   $("#cw-note").textContent = `${N} samples; at ${t.min[last]}m: `
-    + roles.map(r => `${r} ${t[r][last]}`).join(", ")
-    + `, tracked ${t.tracked[last]}, ${t.died[last]} died`;
+    + roles.map(r => `${ROLE_NAMES[r]} ${t[r][last]}`).join(", ");
 }
 
 async function runTool(dir, tool) {

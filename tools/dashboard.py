@@ -133,6 +133,49 @@ def load_result(d):
         return None
 
 
+STATS_LINE_RE = re.compile(r"\[BARAI_STATS\]\s+(.*)")
+_stats_cache = {}
+
+
+def stats_rows(d):
+    """Every [BARAI_STATS] row of a run, periodic and shutdown.
+
+    Since the gadget log sink (2026-09-12) the periodic rows reach only the
+    merged stdout.txt/infolog.txt, and result.json holds the shutdown rows alone.
+    """
+    r = load_result(d) or {}
+    rows = [e for e in (r.get("stats") or []) if isinstance(e, dict)]
+    if any(e.get("reason") == "periodic" for e in rows):
+        return rows
+    for name in ("stdout.txt", "infolog.txt"):
+        f = d / name
+        if not f.is_file():
+            continue
+        key = (str(f), f.stat().st_mtime)
+        if key not in _stats_cache:
+            out = []
+            with f.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if "[BARAI_STATS]" not in line:
+                        continue
+                    m = STATS_LINE_RE.search(line)
+                    row = {}
+                    for tok in m.group(1).split():
+                        k, _, v = tok.partition("=")
+                        if not k:
+                            continue
+                        try:
+                            row[k] = float(v)
+                        except ValueError:
+                            row[k] = v
+                    if "team" in row:
+                        out.append(row)
+            _stats_cache[key] = out
+        if any(e.get("reason") == "periodic" for e in _stats_cache[key]):
+            return _stats_cache[key]
+    return rows
+
+
 def match_summary(d):
     """Light summary of one match dir, cached on result.json mtime."""
     rj = d / "result.json"
@@ -231,12 +274,10 @@ def infolog_health(d):
             "already_registered": dup, "apex_log_lines": apex_lines}
 
 
-# The class tag is optional: the log split into adv/t1 electors on 2026-08-21,
-# and runs from before that carry one untagged list.
-BRAIN_WANT_RE = re.compile(
-    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: brain wants(?:\((\w+)\))?=\d+ \| (.*)")
-BRAIN_PICK_RE = re.compile(
-    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: brain picks ([\w/]+) score=([-\d.]+)")
+# One builder election (decide.as). A factory's `-> produce:` decide is a floor
+# override, not an election, and does not match.
+DECIDE_RE = re.compile(
+    r"\[f=(\d+)\].*apex: decide t=(\d+) \S+ #\d+ -> (\w+)/(\w+):(\S+) v=([-\d.]+)")
 
 _unit_names = {}
 
@@ -255,109 +296,83 @@ def unit_display_names():
 
 
 def brain_wants(d):
-    """Per-team Brain want scores over time, from the 30s `brain wants=` dump.
+    """Builder elections per team, bucketed by game minute, from `apex: decide`.
 
-    A kind absent from a sample was not proposed that tick, and reads 0 --
-    which is the difference between "wanted nothing" and "wanted it least".
+    The per-tick want dump this chart once read was removed on 2026-08-22; what
+    is logged now is every election's winner, so the chart shows what was
+    picked, not what was wanted. Needs apex_decide_log (on by default).
     """
     f = d / "infolog.txt"
     if not f.is_file():
         return {"error": "no infolog"}
     teams = {}
-    team_picks = {}
     kinds = {}
     labels = {}
     with f.open(encoding="utf-8", errors="replace") as fh:
         for line in fh:
-            if "apex: brain " not in line:
+            if "apex: decide t=" not in line:
                 continue
-            m = BRAIN_WANT_RE.search(line)
-            if m:
-                # The adv-con and T1-con auctions rank different lists, so they
-                # are different series -- merging them averages two decisions.
-                key = m.group(2) + ("/" + m.group(3) if m.group(3) else "")
-                t = teams.setdefault(key, {"samples": [], "picks": []})
-                row = {}
-                for part in m.group(4).split("|"):
-                    k, _, v = part.strip().partition("=")
-                    if not k or not v:
-                        continue
-                    try:
-                        f_v = float(v)
-                    except ValueError:
-                        continue
-                    # "kind/def" since 2026-08-21; older logs are kind only, so
-                    # the def column is empty rather than the label being wrong.
-                    kind, _, defname = k.partition("/")
-                    row[k] = f_v
-                    labels[k] = {"kind": kind, "def": defname,
-                                 "name": unit_display_names().get(defname, "")}
-                    kinds[k] = kinds.get(k, 0.0) + f_v
-                t["samples"].append({"min": float(m.group(1)), "w": row})
+            m = DECIDE_RE.search(line)
+            if not m:
                 continue
-            m = BRAIN_PICK_RE.search(line)
-            if m:
-                # A pick line names no elector class, so it belongs to the team
-                # rather than to one of its series.
-                team_picks.setdefault(m.group(2), []).append(
-                    {"min": float(m.group(1)), "kind": m.group(3),
-                     "score": float(m.group(4))})
-    # Series per kind, zero-filled, so share and stacking are well defined.
+            mins = int(m.group(1)) / 1800.0
+            cat, kind, defname = m.group(3), m.group(4), m.group(5)
+            key = cat + "/" + kind + ":" + defname
+            if key not in labels:
+                labels[key] = {"kind": cat + "/" + kind,
+                               "def": "" if defname == "-" else defname,
+                               "name": unit_display_names().get(defname, "")}
+            kinds[key] = kinds.get(key, 0) + 1
+            t = teams.setdefault(m.group(2), {"buckets": {}, "picks": []})
+            b = t["buckets"].setdefault(int(mins), {})
+            n, vs = b.get(key, (0, 0.0))
+            b[key] = (n + 1, vs + float(m.group(6)))
+            t["picks"].append({"min": round(mins, 2), "kind": key})
     order = sorted(kinds, key=lambda k: -kinds[k])
     out = {}
-    for tid, t in sorted(teams.items()):
-        t["picks"] = team_picks.get(tid.split("/")[0], [])
-        mins = [s["min"] for s in t["samples"]]
-        series = {k: [s["w"].get(k, 0.0) for s in t["samples"]] for k in order}
-        # Draw chance: the roulette is score-proportional over the positive
-        # capped scores, so a want's share of the total IS its chance of being
-        # the next thing a builder starts.
+    for tid, t in sorted(teams.items(), key=lambda kv: int(kv[0])):
+        last = max(t["buckets"])
+        idx = list(range(last + 1))
+        series = {k: [] for k in order}
         chance = {k: [] for k in order}
-        for i in range(len(mins)):
-            tot = sum(max(series[k][i], 0.0) for k in order)
+        for i in idx:
+            b = t["buckets"].get(i, {})
+            tot = sum(n for n, _ in b.values())
             for k in order:
-                chance[k].append(100.0 * max(series[k][i], 0.0) / tot if tot > 0 else 0.0)
-        picks = {}
+                n, vs = b.get(k, (0, 0.0))
+                series[k].append(vs / n if n else 0.0)
+                chance[k].append(100.0 * n / tot if tot else 0.0)
+        counts = {}
         for p in t["picks"]:
-            picks[p["kind"]] = picks.get(p["kind"], 0) + 1
-        out[tid] = {"min": mins, "series": series, "chance": chance,
-                    "picks": t["picks"], "pickCounts": picks}
+            counts[p["kind"]] = counts.get(p["kind"], 0) + 1
+        out[tid] = {"min": [i + 0.5 for i in idx], "series": series,
+                    "chance": chance, "picks": t["picks"], "pickCounts": counts}
     return {"kinds": order, "labels": labels, "teams": out}
 
 
-CREW_RE = re.compile(
-    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: crew home=(\d+) mex=(\d+) front=(\d+) "
-    r"eco=(\d+) energy=(\d+) metal=(\d+) tracked=(\d+)"
-    r"(?:.*?died mex/front/eco=(\d+)/(\d+)/(\d+))?")
-CREW_ROLES = ["home", "mex", "front", "eco", "energy", "metal"]
+CREW_ROLES = ["conT1", "conT2", "other"]
 
 
 def crew_roles(d):
-    """Constructor headcount by role over time, from crew.as's 60s census.
+    """Builder headcount per team over time, from the dev_stats periodic rows.
 
-    `tracked` is every constructor the crew enrolled -- assist bots are
-    deliberately excluded (Crew::Enlist), so this is builders, not all units
-    with a build menu.
+    The AI's own role census (`crew home=`) was removed on 2026-08-22. conT1 and
+    conT2 are mobile constructors without the commander; `other` is every other
+    unit with a build menu: nano turrets, factories, the commander.
     """
-    f = d / "infolog.txt"
-    if not f.is_file():
-        return {"error": "no infolog"}
     teams = {}
-    with f.open(encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            if "apex: crew home=" not in line:
-                continue
-            m = CREW_RE.search(line)
-            if not m:
-                continue
-            t = teams.setdefault(m.group(2), {"min": [], "tracked": [],
-                                              "died": [],
-                                              **{r: [] for r in CREW_ROLES}})
-            t["min"].append(float(m.group(1)))
-            for i, r in enumerate(CREW_ROLES):
-                t[r].append(int(m.group(3 + i)))
-            t["tracked"].append(int(m.group(9)))
-            t["died"].append(sum(int(m.group(i) or 0) for i in (10, 11, 12)))
+    for e in stats_rows(d):
+        if e.get("reason") != "periodic":
+            continue
+        t = teams.setdefault(str(int(e.get("team", -1))),
+                             {"min": [], "tracked": [], **{r: [] for r in CREW_ROLES}})
+        t1, t2 = int(e.get("conT1", 0) or 0), int(e.get("conT2", 0) or 0)
+        allb = int(e.get("ownBuilders", 0) or 0)
+        t["min"].append(round((e.get("frame", 0) or 0) / 1800.0, 1))
+        t["conT1"].append(t1)
+        t["conT2"].append(t2)
+        t["other"].append(max(allb - t1 - t2, 0))
+        t["tracked"].append(allb)
     return {"roles": CREW_ROLES, "teams": teams}
 
 
@@ -480,9 +495,8 @@ def economy(d):
     the pull and the stall counters come from GetTeamResources and have no
     cumulative equivalent.
     """
-    r = load_result(d) or {}
     teams = {}
-    for e in r.get("stats", []) or []:
+    for e in stats_rows(d):
         if not isinstance(e, dict) or e.get("reason") != "periodic":
             continue
         tid = str(int(e.get("team", -1)))
@@ -547,9 +561,8 @@ def unit_counts(d):
     Counts, not metal: a metal sum divides out to a count only if you already
     know the cost, and the two game trees disagree on costs.
     """
-    r = load_result(d) or {}
     teams = {}
-    for e in r.get("stats", []) or []:
+    for e in stats_rows(d):
         if not isinstance(e, dict) or e.get("reason") != "periodic":
             continue
         # unitCount is newer than the metal fields, so a run from before it
@@ -647,7 +660,7 @@ def enemy_intel(d):
 BUDGET_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: budget army=([-\d.]+)/([-\d.]+) "
     r"def=([-\d.]+)/([-\d.]+) aa=([-\d.]+)/([-\d.]+) eco=([-\d.]+)/([-\d.]+) "
-    r"bp=([-\d.]+)/([-\d.]+) inc=([-\d.]+) total=([-\d.]+)")
+    r"bp=([-\d.]+)/([-\d.]+) (?:mult=\S+ )?inc=([-\d.]+) total=([-\d.]+)")
 BUDGET_CATS = ["army", "def", "aa", "eco", "bp"]
 RISK_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: risk mex=(\d+) covered=(\d+) "
@@ -732,7 +745,8 @@ def match_detail(d):
     if r is None:
         return {"dir": str(d.relative_to(REPO)).replace(os.sep, "/"),
                 "running": True, "files": [p.name for p in d.iterdir()]}
-    stats = r.pop("stats", []) or []
+    r.pop("stats", None)
+    stats = stats_rows(d)
     # Per-ally periodic series. Each spec's players share allyteam == spec index
     # (result.json's teams[].team is the spec index, NOT a game team).
     series = {}

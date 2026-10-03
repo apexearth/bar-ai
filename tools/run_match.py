@@ -771,6 +771,9 @@ def run(args) -> int:
     if stdout:
         (outdir / "stdout.txt").write_text(stdout, encoding="utf-8")
         apexlog.merge_into(str(outdir / "stdout.txt"), apexlog.apex_files(stdout, str(write_dir)))
+        # The periodic [BARAI_STATS] rows reach only the gadget sink, so the
+        # pipe alone holds just the shutdown rows.
+        stdout = (outdir / "stdout.txt").read_text("utf-8", errors="replace")
         if not infolog_text:
             infolog_text = (outdir / "stdout.txt").read_text("utf-8", errors="replace")
 
