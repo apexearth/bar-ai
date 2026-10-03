@@ -293,6 +293,13 @@ this file wins and the other is stale.
   take some of the damage while we keep shooting.
 - **Retreat to the chokepoints and front-line areas, not the home base.** The
   walk home is long on some maps and splits the army.
+- **Concentrate opposite their army; never split ours to walk home**
+  (2026-10-03, watching a back seat's Fatboys walk to its corner base on
+  Supreme Isthmus 8v8: "we're already outnumbered and then we voluntarily split
+  our entire armies up. That's absolutely catastrophic"). "Wherever the
+  enemy's army is, we need to concentrate our army on the opposite side of that
+  army." Where the only way in is a gap, the whole team holds with the front
+  players at it; on other maps going back to the base may be appropriate.
 - **Retreat logic must not take a unit into new threats.**
 - **Retreating at a very low HP percentage is a symptom**; where the unit
   runs and whether anything covers it is the question. Look at the action

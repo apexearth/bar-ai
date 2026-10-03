@@ -222,24 +222,36 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 				if (len > 1.f) {
 					dir /= len;
 					// apex: the script's medic station when it has one: behind
-					// the army, out of the enemy's reach, where the medics stand
-					AIFloat3 spot = front + dir * behind;
-					if (utils::is_valid(circuit->GetHealPos())) {
-						spot = circuit->GetHealPos();
-					}
-					CTerrainManager::CorrectPosition(spot);
+					// the army, out of the enemy's reach, where the medics stand.
+					// CONCENTRATE OPPOSITE THEIR ARMY, NEVER SPLIT OURS TO WALK
+					// HOME (apexearth 2026-10-03, docs/24): a contested post sent
+					// a back seat's wounded to its corner base, across the map
+					// from the fight. Step back from the front toward home until
+					// the ground is ours; home only if none is within reach.
 					const AIFloat3& here = unit->GetPos(frame);
-					const float ours = circuit->GetInflMap()->GetInfluenceAt(spot);
-					const float foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
-					const bool ourGround = (ours > foe);
-					const bool nearer =
-							here.SqDistance2D(spot) < here.SqDistance2D(endPos);
-					if (ourGround && nearer
-						&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
-					{
-						endPos = spot;
-						healPost = true;
-					} else if (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f) {
+					float ours = 0.f, foe = 0.f;
+					bool nearer = false;
+					for (float b = behind; b <= behind + 3000.f; b += 300.f) {
+						AIFloat3 spot = front + dir * b;
+						if ((b == behind) && utils::is_valid(circuit->GetHealPos())) {
+							spot = circuit->GetHealPos();
+						}
+						CTerrainManager::CorrectPosition(spot);
+						ours = circuit->GetInflMap()->GetInfluenceAt(spot);
+						foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
+						nearer = here.SqDistance2D(spot) < here.SqDistance2D(endPos);
+						if (!nearer) {
+							break;
+						}
+						if ((ours > foe)
+							&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
+						{
+							endPos = spot;
+							healPost = true;
+							break;
+						}
+					}
+					if (!healPost && (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f)) {
 						circuit->LOG("apex: heal-post refused ourInfl=%.2f foeInfl=%.2f nearer=%d",
 								ours, foe, (int)nearer);
 					}

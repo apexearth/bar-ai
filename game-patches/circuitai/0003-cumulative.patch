@@ -11600,7 +11600,7 @@ index a5d683d0..ed1fb46b 100644
  
  void CNilTask::Start(CCircuitUnit* unit)
 diff --git a/src/circuit/task/RetreatTask.cpp b/src/circuit/task/RetreatTask.cpp
-index 7c69263b..03f2fc5e 100644
+index 7c69263b..a0e6369d 100644
 --- a/src/circuit/task/RetreatTask.cpp
 +++ b/src/circuit/task/RetreatTask.cpp
 @@ -11,19 +11,24 @@
@@ -11668,7 +11668,7 @@ index 7c69263b..03f2fc5e 100644
  	}
  
  	bool isNoEndPos = true;
-@@ -148,13 +170,144 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -148,13 +170,156 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  				endPos = circuit->GetSetupManager()->GetBasePos();
  			}
  		}
@@ -11724,24 +11724,36 @@ index 7c69263b..03f2fc5e 100644
 +				if (len > 1.f) {
 +					dir /= len;
 +					// apex: the script's medic station when it has one: behind
-+					// the army, out of the enemy's reach, where the medics stand
-+					AIFloat3 spot = front + dir * behind;
-+					if (utils::is_valid(circuit->GetHealPos())) {
-+						spot = circuit->GetHealPos();
-+					}
-+					CTerrainManager::CorrectPosition(spot);
++					// the army, out of the enemy's reach, where the medics stand.
++					// CONCENTRATE OPPOSITE THEIR ARMY, NEVER SPLIT OURS TO WALK
++					// HOME (apexearth 2026-10-03, docs/24): a contested post sent
++					// a back seat's wounded to its corner base, across the map
++					// from the fight. Step back from the front toward home until
++					// the ground is ours; home only if none is within reach.
 +					const AIFloat3& here = unit->GetPos(frame);
-+					const float ours = circuit->GetInflMap()->GetInfluenceAt(spot);
-+					const float foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
-+					const bool ourGround = (ours > foe);
-+					const bool nearer =
-+							here.SqDistance2D(spot) < here.SqDistance2D(endPos);
-+					if (ourGround && nearer
-+						&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
-+					{
-+						endPos = spot;
-+						healPost = true;
-+					} else if (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f) {
++					float ours = 0.f, foe = 0.f;
++					bool nearer = false;
++					for (float b = behind; b <= behind + 3000.f; b += 300.f) {
++						AIFloat3 spot = front + dir * b;
++						if ((b == behind) && utils::is_valid(circuit->GetHealPos())) {
++							spot = circuit->GetHealPos();
++						}
++						CTerrainManager::CorrectPosition(spot);
++						ours = circuit->GetInflMap()->GetInfluenceAt(spot);
++						foe = circuit->GetInflMap()->GetEnemyInflAt(spot);
++						nearer = here.SqDistance2D(spot) < here.SqDistance2D(endPos);
++						if (!nearer) {
++							break;
++						}
++						if ((ours > foe)
++							&& circuit->GetTerrainManager()->CanMoveToPos(unit->GetArea(), spot))
++						{
++							endPos = spot;
++							healPost = true;
++							break;
++						}
++					}
++					if (!healPost && (circuit->GetTunable("apex_retreat_log", 0.f) > 0.f)) {
 +						circuit->LOG("apex: heal-post refused ourInfl=%.2f foeInfl=%.2f nearer=%d",
 +								ours, foe, (int)nearer);
 +					}
@@ -11814,7 +11826,7 @@ index 7c69263b..03f2fc5e 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -162,6 +315,114 @@ void CRetreatTask::Start(CCircuitUnit* unit)
+@@ -162,6 +327,114 @@ void CRetreatTask::Start(CCircuitUnit* unit)
  	});
  }
  
@@ -11929,7 +11941,7 @@ index 7c69263b..03f2fc5e 100644
  void CRetreatTask::Update()
  {
  	CCircuitAI* circuit = manager->GetCircuit();
-@@ -170,18 +431,89 @@ void CRetreatTask::Update()
+@@ -170,18 +443,89 @@ void CRetreatTask::Update()
  	auto assignees = units;
  	for (CCircuitUnit* unit : assignees) {
  		const float healthPerc = unit->GetHealthPercent();
@@ -12023,7 +12035,7 @@ index 7c69263b..03f2fc5e 100644
  		{
  			Recovered(unit);
  		}
-@@ -214,7 +546,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -214,7 +558,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  			return;
  		}
  		if (unit->GetTravelAct() != nullptr) {
@@ -12034,7 +12046,7 @@ index 7c69263b..03f2fc5e 100644
  		}
  
  		unit->SetTaskFrame(frame);  // avoid UnitIdle on find_pad
-@@ -230,17 +564,63 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -230,17 +576,63 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  	if (!utils::is_valid(haven)) {
  		haven = circuit->GetSetupManager()->GetBasePos();
  	}
@@ -12100,7 +12112,7 @@ index 7c69263b..03f2fc5e 100644
  			&& (circuit->GetBuilderManager()->GetWorkerCount() <= 2))
  		{
  			Recovered(unit);
-@@ -248,7 +628,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -248,7 +640,11 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		}
  
  		// TODO: push WaitAction into unit
@@ -12113,7 +12125,7 @@ index 7c69263b..03f2fc5e 100644
  			AIFloat3 pos = unitPos;
  			if (unit->GetUnit()->IsCloaked()) {
  				pos += AIFloat3(SQUARE_SIZE * 2, 0, SQUARE_SIZE * 2);  // don't move, but assist if required
-@@ -281,7 +665,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -281,7 +677,9 @@ void CRetreatTask::OnUnitIdle(CCircuitUnit* unit)
  		}
  
  		if (unit->GetTravelAct() != nullptr) {
@@ -12124,7 +12136,7 @@ index 7c69263b..03f2fc5e 100644
  		}
  		state = State::REGROUP;
  	}
-@@ -307,7 +693,9 @@ void CRetreatTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -307,7 +705,9 @@ void CRetreatTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		unit->PushTravelAct(travelAction);
  		unit->SetAllowedToJump(cdef->IsAbleToJump() && !cdef->IsAttrNoJump());
  	}
@@ -12135,7 +12147,7 @@ index 7c69263b..03f2fc5e 100644
  
  	Start(unit);
  }
-@@ -319,6 +707,13 @@ void CRetreatTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -319,6 +719,13 @@ void CRetreatTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  
  void CRetreatTask::CheckRepairer(CCircuitUnit* newRep)
  {
@@ -12149,7 +12161,7 @@ index 7c69263b..03f2fc5e 100644
  	CCircuitUnit* unit = *units.begin();
  	if (unit->GetCircuitDef()->IsRoleComm()) {
  		return;
-@@ -368,11 +763,19 @@ void CRetreatTask::ApplyPath(const CQueryPathSingle* query)
+@@ -368,11 +775,19 @@ void CRetreatTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -12170,7 +12182,7 @@ index 7c69263b..03f2fc5e 100644
  }
  
  CCircuitUnit* CRetreatTask::ValidateNewRepairer(const IPathQuery* query, int newRepId) const
-@@ -397,6 +800,12 @@ void CRetreatTask::ApplyCostMap(const CQueryCostMap* query, CCircuitUnit* newRep
+@@ -397,6 +812,12 @@ void CRetreatTask::ApplyCostMap(const CQueryCostMap* query, CCircuitUnit* newRep
  	const int frame = circuit->GetLastFrame();
  	CPathFinder* pathfinder = circuit->GetPathfinder();
  	CCircuitUnit* unit = query->GetUnit();
