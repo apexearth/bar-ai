@@ -35,6 +35,7 @@ array<bool> gNeedGeo;   // must stand on a geo vent (engine UnitDef flag)
 array<bool> gFloater;   // stands on water
 array<bool> gAmphib;    // moves through water and land both
 array<bool> gSub;       // submerged (underwater structures dodge the floater test)
+array<bool> gHitsLand;  // a weapon that can hit a target on land
 array<int>  gLimit;     // the def's own cap (behaviour.json "limit"), the DLL's maxThisUnit
 array<int> gAreaCells;  // footprint in 16-elmo build cells
 array<int> gFootX;      // footprint per axis, in 16-elmo build cells
@@ -111,7 +112,7 @@ void Init()
 	gUpkeepM.resize(n); gUpkeepE.resize(n); gMakeM.resize(n); gMakeE.resize(n);
 	gStoreM.resize(n); gStoreE.resize(n); gConvCapacity.resize(n); gConvRatio.resize(n);
 	gMobile.resize(n); gFlyer.resize(n); gBuilder.resize(n); gWind.resize(n);
-	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
+	gNeedGeo.resize(n); gFloater.resize(n); gSub.resize(n); gHitsLand.resize(n); gAreaCells.resize(n); gAmphib.resize(n); gLimit.resize(n);
 	gFootX.resize(n); gFootZ.resize(n);
 	gBlastR.resize(n); gBlastD.resize(n); gBlastE.resize(n);
 	gBuildDist.resize(n);
@@ -155,6 +156,7 @@ void Init()
 		gFloater[i]      = cdef.IsFloater();
 		gAmphib[i]       = cdef.IsAmphibious();
 		gSub[i]          = cdef.IsSubmarine();
+		gHitsLand[i]     = cdef.HasSurfToLand();
 		gAreaCells[i]    = cdef.GetAreaCells();
 		gFootX[i]        = cdef.GetFootX();
 		gFootZ[i]        = cdef.GetFootZ();
@@ -304,6 +306,13 @@ void Init()
 			+ " waterT=" + formatFloat(gWaterT[i], "", 0, 1)
 			+ " cost=" + int(gCostM[i]));
 	}
+	string waterGuns = "";
+	for (int i = 1; i <= gDefCount; ++i) {
+		if (!gMobile[i] && gAvailable[i] && !gHitsLand[i] && (gAirT[i] <= 0.01f)
+			&& ((gSurfT[i] > 0.01f) || (gWaterT[i] > 0.f)))
+			waterGuns += " " + Def(i).GetName();
+	}
+	AiLog("apex: water-only guns:" + waterGuns);
 	const float dump = ai.GetTunable("apex_catalog_dump", TUNE_CATALOG_DUMP);
 	AiLog("apex: catalog init defs=" + gDefCount + " edges=" + gEdges
 		+ " avail=" + nAvail + " frame=" + ai.frame

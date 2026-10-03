@@ -769,7 +769,11 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		// outgunned (apexearth: "we starve our army production by starting
 		// a T2 lab too early... calculate the cost of making a lab's units
 		// prior to making it"). No timer anywhere.
-		const float aT = ArmyTarget();
+		// ...against the DEFENSIVE share, not the whole target (his T2-switch
+		// ruling 2026-09-21: "enough army for a normal defence of ourselves and
+		// then stop making army to focus on the switch", confirmed 2026-10-02):
+		// read against the full target, the opening army is always short.
+		const float aT = ArmyTargetFull() * T2_DEFENCE_SHARE;
 		const float funded = (aT > 1.f) ? (ArmyValue() / aT) : 1.f;
 		// The quiet rear is EXEMPT: its follow-through is mohos and
 		// fusions, not an army -- gating its lab on the army it was told

@@ -43,9 +43,27 @@ float WallDirW(uint si, const AIFloat3& in s, bool isMexG, const AIFloat3& in fo
 	return dirW;
 }
 
+// Water anywhere a ring of probes inside reach can find it.
+bool WaterInReach(const AIFloat3& in s, float r)
+{
+	if (ai.GetElevationAt(s) < 0.f)
+		return true;
+	for (int k = 0; k < 8; ++k) {
+		const float ang = 6.2831853f * float(k) / 8.f;
+		for (int j = 1; j <= 2; ++j) {
+			const AIFloat3 p = s + AIFloat3(cos(ang), 0.f, sin(ang)) * (r * 0.5f * float(j));
+			if (OnMap(p) && (ai.GetElevationAt(p) < -8.f))
+				return true;
+		}
+	}
+	return false;
+}
+
 void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float siteWave, float siegeFrac)
 {
+	const bool waterOnly = !Catalog::gHitsLand[d] && (Catalog::gAirT[d] <= 0.01f)
+			&& ((Catalog::gSurfT[d] > 0.01f) || (Catalog::gWaterT[d] > 0.f));
 	if (int(gDsAt.length()) <= Catalog::gDefCount) {
 		gDsPrev.resize(uint(Catalog::gDefCount + 1));
 		gDsX.resize(uint(Catalog::gDefCount + 1));
@@ -341,6 +359,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	for (uint si = 0; si < sites.length(); ++si) {
 		AIFloat3 s = sites[si];
 		if (Gate(GATE_SITE_OFFMAP, !OnMap(s)))
+			continue;
+		// A gun that only hits water stands where water is in its reach
+		// (apexearth 2026-10-02: a coastal torpedo launcher on a wall slot
+		// "not even within range of water").
+		if (waterOnly && !WaterInReach(s, reach))
 			continue;
 		const bool isAllyF = (si >= allyStart);
 		const bool isRing = (si >= ringStart) && !isAllyF;
@@ -656,9 +679,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// 0.77 m/s, a 184 s payback) and the target sat unmet until the
 			// first loss. apexearth 2026-09-18: buy the defence shortfall on
 			// its own. The mex guard keeps its one-sentry cap.
+			// ...a sentry per gun the spot EARNS (MexGunsWanted: one at home,
+			// four at their door -- his "more defenses the further from home",
+			// again 2026-10-02: "better protect the metal extractors ...
+			// especially the ones closer to the enemy").
 			float slotGap = wallPull;
-			if (isMexG && (slotGap > LightTowerCostM()))
-				slotGap = LightTowerCostM();
+			const float mexCap = isMexG ? LightTowerCostM() * float(MexGunsWanted(s)) : 0.f;
+			if (isMexG && (slotGap > mexCap))
+				slotGap = mexCap;
 			// NOT A HAZARD ROLL: multiplied by hz as well the pull
 			// double-counted and sent rear slots to zero.
 			// ...AND THE THIN SIDE FIRST. The bearing our own army and guns

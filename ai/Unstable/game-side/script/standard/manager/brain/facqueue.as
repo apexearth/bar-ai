@@ -605,7 +605,29 @@ void FacYardWatch()
 		for (uint i = 0; i < near.length(); ++i) {
 			if (near[i] is null)
 				continue;
-			if (ai.IsPosOnMap(lane))
+			// OUT OF THE YARD, NEVER THROUGH IT (apexearth 2026-10-02: snipers
+			// ordered to the lane walked into a vehicle lab packed with stuck
+			// Rovers). A unit on the build spot leaves by the front; one
+			// outside steps away from the plant, whichever side it stands on.
+			const AIFloat3 up = near[i].GetPos(ai.frame);
+			const AIFloat3 rb = up - fp;
+			const float al = rb.x * dir.x + rb.z * dir.z;
+			const float ac = rb.x * dir.z - rb.z * dir.x;
+			const bool onSpot = (((al < 0.f) ? -al : al) <= halfD) && (((ac < 0.f) ? -ac : ac) <= halfW);
+			AIFloat3 exitTo;
+			if (onSpot) {
+				const float sgn = (ExitSign(fd) < 0) ? -1.f : 1.f;
+				exitTo = fp + dir * (sgn * (halfD + 160.f));
+			} else {
+				AIFloat3 away = rb;
+				if (away.SqLength2D() < 1.f)
+					away = dir;
+				away.SafeNormalize2D();
+				exitTo = up + away * 250.f;
+			}
+			if (ai.IsPosOnMap(exitTo))
+				near[i].CmdMoveTo(exitTo);
+			else if (ai.IsPosOnMap(lane))
 				near[i].CmdMoveTo(lane);
 			if (Catalog::Def(int(cd)) !is gFQBornDef[l])
 				++pushed;

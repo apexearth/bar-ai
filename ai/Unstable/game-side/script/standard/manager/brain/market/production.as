@@ -2226,6 +2226,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		if (prankNow)
 			prank += " " + Catalog::Def(d).GetName() + ":b";
 		float gain = 0.f;
+		float upOnly = 0.f;
 		float reach = 0.f;
 		const array<int>@ pb = Catalog::gBuildsList[d];
 		for (uint q = 0; q < pb.length(); ++q) {
@@ -2347,7 +2348,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// start off"). Dividing by ServingCons counted busy T1 hands
 			// against demand only a T2 con can touch.
 			const int ceilCons = CeilingConsOwned();
-			gain += mob * upD / float(1 + ceilCons);
+			upOnly = mob * upD / float(1 + ceilCons);
 		}
 		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
 		float capG = mob * ((over < drain) ? over : drain);
@@ -2417,6 +2418,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		if (!Catalog::gRezzer[d])
 			gain *= feedRoom;
 		gain += claimGain * bpProt;
+		// ...nor for the upgrade stream only an advanced hand can serve: the
+		// basic fleet that fills the room cannot moho anything (apexearth
+		// 2026-10-02: "we don't have enough constructors").
+		gain += upOnly * bpProt;
 		if (gain <= 0.5f) {
 			// A cut candidate leaves no trace otherwise -- it is absent from
 			// prodrank, so "we stopped making pawns" reads as a lost election

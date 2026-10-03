@@ -1614,6 +1614,15 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 			&& (Eco::MInc()
 				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
 			continue;
+		// ...and a FRONT seat of a team with a rear builds ground (apexearth
+		// 2026-10-02: "they're the first to die to enemies and need strong
+		// ground army and defense to survive").
+		{
+			AIFloat3 smh;
+			if ((dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
+				&& (ShelterMate(smh) < 0) && Military::TeamHasSheltered())
+				continue;
+		}
 		// The water mandate is held and ships-only -- see the naval election
 		// above. The commander may place it (the old ban on commanders at
 		// water plants was removed at his call 2026-09-28). The backoff kills

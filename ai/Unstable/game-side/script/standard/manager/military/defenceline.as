@@ -41,6 +41,18 @@ const string TV_MINC_NET = "mincnet";
 // 1 while this player is the rear specialist still growing: the allies'
 // answer shares and the air-lead election leave it out (it fields nothing).
 const string TV_ECOSEAT = "ecoseat";
+const string TV_SHELTERED = "sheltered";   // a teammate's base stands between ours and theirs
+
+// Some teammate stands behind another's base: the team has a rear to fly from.
+bool TeamHasSheltered()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i) {
+		if (ai.ReadTeamValue(int(mates[i]), TV_SHELTERED, 0.f) > 0.5f)
+			return true;
+	}
+	return false;
+}
 // The player's standing ECONOMIC assets (Market::EconAssetsM) -- what a
 // teammate's forward guard post is protecting when a back player buys
 // defence at the front ally's door instead of its own (the ally-front
@@ -137,6 +149,10 @@ void PublishDefence()
 		ai.PublishTeamValue(TV_MINC, Eco::MInc());
 		ai.PublishTeamValue(TV_MINC_NET, Market::StructuralIncomeEma());
 		ai.PublishTeamValue(TV_ECOSEAT, Market::EcoRoleGrowing() ? 1.f : 0.f);
+		{
+			AIFloat3 mh;
+			ai.PublishTeamValue(TV_SHELTERED, (Market::ShelterMate(mh) >= 0) ? 1.f : 0.f);
+		}
 		ai.PublishTeamValue(TV_ASSETM, Market::EconAssetsM());
 		Perf::Add("pubdef.write", _t);
 	}

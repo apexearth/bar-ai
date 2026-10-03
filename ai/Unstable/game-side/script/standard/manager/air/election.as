@@ -54,20 +54,28 @@ void RunElection()
 	// An airboss persona lowers its own bar; the election shape is unchanged.
 	float bestInc = AIR_MIN_INCOME / Persona::AirEagerness();
 	float bestSeen = 0.f;
-	for (uint i = 0; i < mates.length(); ++i) {
-		const int t = int(mates[i]);
-		if (skipTech && (t == tech))
-			continue;
-		// The growing eco seat is the richest ally and buys no wing: an
-		// assassin that never flies.
-		if (ai.ReadTeamValue(t, Military::TV_ECOSEAT, 0.f) > 0.5f)
-			continue;
-		const float inc = ai.ReadTeamValue(t, TV_AIRINC, -1.f);
-		if (inc > bestSeen)
-			bestSeen = inc;
-		if (inc > bestInc) {
-			bestInc = inc;
-			best = t;
+	// A seat behind a teammate's base first (apexearth 2026-10-02: the front
+	// player making air "is in a way more dangerous spot ... need strong
+	// ground army and defense to survive"); the front only when no rear seat
+	// clears the bar.
+	for (int pass = 0; (pass < 2) && (best < 0); ++pass) {
+		for (uint i = 0; i < mates.length(); ++i) {
+			const int t = int(mates[i]);
+			if (skipTech && (t == tech))
+				continue;
+			// The growing eco seat is the richest ally and buys no wing: an
+			// assassin that never flies.
+			if (ai.ReadTeamValue(t, Military::TV_ECOSEAT, 0.f) > 0.5f)
+				continue;
+			if ((pass == 0) && (ai.ReadTeamValue(t, Military::TV_SHELTERED, 0.f) < 0.5f))
+				continue;
+			const float inc = ai.ReadTeamValue(t, TV_AIRINC, -1.f);
+			if (inc > bestSeen)
+				bestSeen = inc;
+			if (inc > bestInc) {
+				bestInc = inc;
+				best = t;
+			}
 		}
 	}
 	if (best < 0) {
