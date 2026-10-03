@@ -1623,6 +1623,15 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				&& (ShelterMate(smh) < 0) && Military::TeamHasSheltered())
 				continue;
 		}
+		// FOCUS: ONE T1 LINE UNTIL T2 (apexearth 2026-10-03: "focusing on the
+		// factories is good. Later on in the game, you can have multiple types"
+		// -- 5-7 plants a seat against BARb's 4-5). Before our first advanced
+		// plant a second T1 plant is not offered, unless it is the water
+		// mandate or the air lead's air line; the spare goes to nanos and eco.
+		if ((PlantTier(d) < 2) && (TopOwnPlantTier() < 2) && (dClass != PC_WATER)
+			&& !((dClass == PC_AIR) && Air::IsAirLead())
+			&& ((Factory::gFacUnits.length() > 0) || AnyPlantInFlight()))
+			continue;
 		// The water mandate is held and ships-only -- see the naval election
 		// above. The commander may place it (the old ban on commanders at
 		// water plants was removed at his call 2026-09-28). The backoff kills

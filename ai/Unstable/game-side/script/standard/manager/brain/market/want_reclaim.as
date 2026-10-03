@@ -342,6 +342,20 @@ float RetireBlastM(CCircuitUnit@ tgt, int d, const AIFloat3& in at)
 	return gRetBlastM[id];
 }
 
+bool EconReplaced(int d)
+{
+	const float mult = IncomeMult();
+	if (Catalog::gConvCapacity[d] > 0.f) {
+		const float idle = ConvCapE() - ConvUseE() - ClaimedConvE();
+		return idle >= Catalog::gConvCapacity[d];
+	}
+	if (Catalog::gMakeE[d] > 0.f) {
+		const float spare = Eco::EInc() - Eco::EPull();
+		return spare >= Catalog::gMakeE[d] * ((mult > 0.f) ? mult : 1.f);
+	}
+	return true;
+}
+
 float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 		float wage, float hz, float lostM = 0.f)
 {
@@ -349,6 +363,13 @@ float RetireValue(CCircuitUnit@ unit, CCircuitUnit@ tgt, int d, float ePM,
 	// already applies via apex_reclaim_age_s, at the window the rebuy
 	// discount runs for. Without it the market eats the plant it just built.
 	if (BuiltYoung(tgt))
+		return 0.f;
+	// OUR ECONOMY STANDS UNTIL ITS REPLACEMENT DOES (apexearth 2026-10-03: never
+	// reclaim our own economy before the replacement is finished -- "they
+	// really genuinely waste our constructors' time"). A converter goes only
+	// when the others' idle capacity takes its energy; a generator only when the
+	// spare energy covers its output.
+	if (!EconReplaced(d))
 		return 0.f;
 	const float gain = RetireGain(tgt, d, ePM, hz, lostM);
 	if (gain <= 0.f)

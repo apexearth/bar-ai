@@ -1133,7 +1133,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// taking it: metal we are throwing away buys army, idle factory time is
 	// free (his 2026-09-28, Supreme Isthmus: "use the factories, make shit!
 	// Instead, they're all idle", bank 93% and wasting while behind=1).
-	if ((TopOwnPlantTier() < 2) || (EcoBehind() && (OverflowM() <= 0.5f)))
+	// ...and SPARE MONEY GOES INTO THE ECONOMY (apexearth 2026-10-03, again):
+	// army takes it only while it is actually being thrown away. The army
+	// itself is held at their parity by ArmyFloor.
+	if ((TopOwnPlantTier() < 2) || !MetalWasting())
 		richBal = 0.f;
 	if (!ovfHands && (richBal > armyGap)) {
 		armyGap = richBal;
