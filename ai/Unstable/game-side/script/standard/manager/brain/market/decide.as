@@ -1785,8 +1785,45 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
 	// the commander's first-gun rule below covers the lab the moment it is
 	// ordered.
-	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
-	// it is asked first.
+	// THE REAR TECHS FIRST (apexearth 2026-10-03: "the farther we are from the
+	// front line, the more readily we should jump to tier two"; the front seats
+	// upgrade slower and guard their base). A seat a teammate shelters takes the
+	// first T2 lab ahead of the draw once its defensive army stands and the
+	// upgrade stream waiting on T2 is at least its whole income. Forced on every
+	// seat this cost 4v4 scaling (147 -> 124 m/s at 20 min); in 8v8 BARb's T2
+	// lands at ~9 min and ours at ~15.
+	AIFloat3 t2Shelter;
+	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
+		&& (ShelterMate(t2Shelter) >= 0)
+		&& (ArmyValue() + ArmyInFlightM() >= ArmyTarget())
+		&& (UpDemand() >= Eco::MInc())) {
+		int ti = -1;
+		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)
+			if ((ranked[ri].kind == WK_TECH) && (ranked[ri].def !is null)
+				&& (PlantTier(int(ranked[ri].def.id)) >= 2))
+				ti = int(ri);
+		bool coming = false;
+		for (uint li = 0; (li < Requests::gLive.length()) && !coming; ++li) {
+			IUnitTask@ lt = Requests::gLive[li];
+			coming = (lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
+				&& (Catalog::gBuildsList[int(lt.buildDef.id)].length() > 0)
+				&& !Catalog::gMobile[int(lt.buildDef.id)]
+				&& (PlantTier(int(lt.buildDef.id)) >= 2);
+		}
+		if ((ti >= 0) && !coming) {
+			Want@ tw = ranked[ti];
+			if (ti > 0) {
+				ranked.removeAt(uint(ti));
+				ranked.insertAt(0, tw);
+			}
+			why = "t2rear";
+			coverPush = true;
+			AiLog("apex: t2rear t=" + ai.teamId + " " + tw.def.GetName()
+				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " upD=" + formatFloat(UpDemand(), "", 0, 1)
+				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1));
+		}
+	}
 	// EVERY EXTRACTOR HAS A GUN IN REACH (apexearth 2026-10-02: "make sure each
 	// one has some level of coverage ... as long as there's one covering at
 	// least every mex"). The push below only fires for a hand already standing
@@ -1833,6 +1870,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 		}
 	}
+	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
+	// it is asked first.
 	if (!aaPanic && !superPush && !convertPush && !coverPush
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
 		&& PlantFramed())

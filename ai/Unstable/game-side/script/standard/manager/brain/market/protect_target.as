@@ -682,6 +682,15 @@ float DefenceTarget()
 	}
 	if (gMexFloorSum > t)
 		t = gMexFloorSum;
+	// THE FRONT SEAT GUARDS ITS BASE (apexearth 2026-10-03: the seats closest to
+	// the enemy "should upgrade slower. They should focus more on building
+	// defensive turrets ... jammers, to protect their base"). In a team with a
+	// rear, a seat no teammate shelters carries twice the defence holding.
+	{
+		AIFloat3 smh;
+		if ((ShelterMate(smh) < 0) && Military::TeamHasSheltered())
+			t *= 2.f;
+	}
 	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF) * ecoRamp;
 	return gDefTgtM;
 }
