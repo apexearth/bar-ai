@@ -1792,9 +1792,43 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// least every mex"). The push below only fires for a hand already standing
 	// at the mex with a defence want in its list; this one sends the hand to
 	// the nearest gunless extractor. One gun may cover several.
+	// THE FIRST T2 LAB IS THE SWITCH'S JOB (apexearth 2026-10-03, watching:
+	// "8m into the game, enemies already have 2 t2 labs totally up" -- we had
+	// none; the lab was proposed on every seat and won no election in 125). His
+	// 09-21 T2 switch: a defensive army, then the switch. While the switch is
+	// on and no advanced plant stands or is ordered, a hand offered the lab
+	// (ProposeTech's funded gate already passed) takes it ahead of the draw.
+	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()) {
+		int ti = -1;
+		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)
+			if ((ranked[ri].kind == WK_TECH) && (ranked[ri].def !is null)
+				&& (PlantTier(int(ranked[ri].def.id)) >= 2))
+				ti = int(ri);
+		bool coming = false;
+		for (uint li = 0; (li < Requests::gLive.length()) && !coming; ++li) {
+			IUnitTask@ lt = Requests::gLive[li];
+			coming = (lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
+				&& (Catalog::gBuildsList[int(lt.buildDef.id)].length() > 0)
+				&& !Catalog::gMobile[int(lt.buildDef.id)]
+				&& (PlantTier(int(lt.buildDef.id)) >= 2);
+		}
+		if ((ti >= 0) && !coming) {
+			Want@ tw = ranked[ti];
+			if (ti > 0) {
+				ranked.removeAt(uint(ti));
+				ranked.insertAt(0, tw);
+			}
+			why = "t2first";
+			coverPush = true;
+			AiLog("apex: t2first t=" + ai.teamId + " " + tw.def.GetName()
+				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
+				+ " v=" + formatFloat(tw.value * 1000.f, "", 0, 2)
+				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1));
+		}
+	}
 	// Not the growing eco seat: it builds no defence while it grows (his
 	// 2026-09-13), and the raid valve ends the growth when it is not safe.
-	if (!aaPanic && !superPush && !convertPush && !EcoRoleGrowing() && PlantFramed()) {
+	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing() && PlantFramed()) {
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		AIFloat3 gap;
