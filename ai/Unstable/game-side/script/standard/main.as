@@ -230,11 +230,26 @@ void AiUnitFinished(CCircuitUnit@ unit)
 	Perf::Add("hk.finished", _t);
 }
 
-void UnitFinishedInner(CCircuitUnit@ unit)
+// A unit an ally (or a gadget) handed us: everything a finish does but credit a
+// factory order -- it never came off one of our lines.
+void AiUnitGiven(CCircuitUnit@ unit)
 {
 	if (unit is null)
 		return;
-	Brain::NoteProduced(unit);
+	if (gFinishedClearPending == int(unit.id))
+		gFinishedClearPending = -1;   // ours before, given away and back
+	UnitFinishedInner(unit, false);
+	AiLog(Factory::T() + "apex: unit-given "
+		+ ((unit.circuitDef !is null) ? unit.circuitDef.GetName() : "?") + " #" + unit.id
+		+ " t2con=" + Market::CeilingConsAny());
+}
+
+void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
+{
+	if (unit is null)
+		return;
+	if (produced)
+		Brain::NoteProduced(unit);
 	Market::NoteFinished(unit);
 	Market::LiftNoteFinished(unit);
 	Market::ComUnitFinished(unit);

@@ -62,6 +62,7 @@ public:
 	void Update();
 	void LuaMessage(const char* inData);
 	void UnitFinished(CCircuitUnit* unit);
+	void UnitGiven(CCircuitUnit* unit);
 	void UnitDestroyed(CCircuitUnit* unit);
 	void UnitDestroyedBy(CCircuitUnit* unit, CCircuitDef* attackerDef);
 	void EnemyDestroyed(CCircuitDef* edef, const springai::AIFloat3& pos, bool byUs);
@@ -94,6 +95,7 @@ private:
 
 	struct SScriptInfo {
 		asIScriptFunction* unitFinished = nullptr;
+		asIScriptFunction* unitGiven = nullptr;
 		asIScriptFunction* unitDestroyed = nullptr;
 		// Separate optional callbacks so older scripts keep their unchanged
 		// AiUnitDestroyed; both are invoked only with non-null defs.

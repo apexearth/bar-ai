@@ -1722,6 +1722,13 @@ int CCircuitAI::UnitGiven(ICoreUnit::Id unitId, int oldTeamId, int newTeamId)
 		module->UnitGiven(unit, oldTeamId, newTeamId);
 	}
 
+	// The modules run their UnitFinished above; the script never heard of the
+	// unit, so a gifted constructor was missing from our own count and the
+	// giver kept sending more.
+	if (!IsLoadSave() && !unit->IsDead() && !unit->GetUnit()->IsBeingBuilt()) {
+		script->UnitGiven(unit);
+	}
+
 	return 0;  // signaling: OK
 }
 
