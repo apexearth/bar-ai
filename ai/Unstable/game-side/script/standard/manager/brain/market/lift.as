@@ -450,10 +450,84 @@ void LiftSettleStep()
 }
 
 
+// BUILD POWER WHERE IT IS NEEDED (apexearth 2026-10-03: "use the importance
+// option for nano turrets working on what we need more, and set unimportant
+// the items we are over supplied on"). BAR's passive builders draw only what
+// the active ones leave. While the army is at its target, the factories and
+// the turrets that can only reach a factory go passive; a turret with an
+// economy frame rising in reach stays active. A few turrets per pass.
+uint gNpNext = 0;
+int gNpAt = -999999;
+bool gNpOver = false;
+int gNpLow = 0, gNpHigh = 0;
+int gNpLogAt = 0;
+bool NanoEcoFrameNear(const AIFloat3& in p, float r)
+{
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (Catalog::gMobile[d])
+			continue;
+		if ((Catalog::gMakeE[d] <= 0.f) && (Catalog::gConvCapacity[d] <= 0.f)
+			&& (Catalog::gExtractsM[d] <= 0.f) && (Catalog::gStoreE[d] <= 0.f))
+			continue;
+		if (t.GetBuildPos().distance2D(p) < r)
+			return true;
+	}
+	return false;
+}
+void NanoPriorityPass()
+{
+	if (ai.frame - gNpAt < SECOND)
+		return;
+	gNpAt = ai.frame;
+	if (gNpNext == 0) {
+		gNpOver = (ArmyValue() + ArmyInFlightM() >= ArmyTarget()) && !MetalWasting();
+		for (uint f = 0; f < Factory::gFacUnits.length(); ++f) {
+			CCircuitUnit@ fac = Factory::gFacUnits[f];
+			if (fac !is null)
+				fac.CmdBARPriority(gNpOver ? 0.f : 1.f);
+		}
+	}
+	const uint n = gOwnNano.length();
+	for (uint k = 0; (k < 8) && (gNpNext < n); ++k, ++gNpNext) {
+		CCircuitUnit@ u = gOwnNano[gNpNext];
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		const float r = Catalog::gBuildDist[int(u.circuitDef.id)] + 64.f;
+		bool low = false;
+		if (gNpOver && !NanoEcoFrameNear(p, r)) {
+			for (uint f = 0; (f < Factory::gFacUnits.length()) && !low; ++f) {
+				CCircuitUnit@ fac = Factory::gFacUnits[f];
+				low = (fac !is null) && (fac.GetPos(ai.frame).distance2D(p) < r + 64.f);
+			}
+		}
+		u.CmdBARPriority(low ? 0.f : 1.f);
+		if (low)
+			++gNpLow;
+		else
+			++gNpHigh;
+	}
+	if (gNpNext >= n) {
+		gNpNext = 0;
+		if (ai.frame >= gNpLogAt) {
+			gNpLogAt = ai.frame + 60 * SECOND;
+			AiLog("apex: nanoprio t=" + ai.teamId + " over=" + (gNpOver ? 1 : 0)
+				+ " facs=" + Factory::gFacUnits.length() + " low=" + gNpLow + " high=" + gNpHigh);
+		}
+		gNpLow = 0;
+		gNpHigh = 0;
+	}
+}
+
 int gLiftLogAt = 0;
 void LiftUpdate()
 {
 	LiftSample();
+	NanoPriorityPass();
 	FerryUpdate();
 	for (uint j = 0; j < gLift.length(); ++j)
 		LiftStep(gLift[j]);

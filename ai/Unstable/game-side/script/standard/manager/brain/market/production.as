@@ -1011,8 +1011,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// are cover" ruling). Not a share of income -- what the base's own
 	// spread asks for, and it grows with the base, never with a clock.
 	float coverShare = 0.f;   // how much of the gap is coverage, 0..1
+	float coverGapAll = 0.f;
 	{
 		const float coverGap = Military::CoverNeedM() - armyFlight0;
+		coverGapAll = coverGap;
 		if (coverGap > armyGap) {
 			armyGap = coverGap;
 			gapSrc = "cover";
@@ -1062,7 +1064,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// makes army even stronger later"): spare metal is army only while it is
 	// actually being thrown away -- the team-asset test it replaces read us
 	// ahead while their seats out-earned ours.
-	if ((TopOwnPlantTier() < 2) || (OverflowM() <= 0.5f))
+	if ((TopOwnPlantTier() < 2) || !MetalWasting())
 		richBal = 0.f;
 	if (!ovfHands && (richBal > armyGap)) {
 		armyGap = richBal;
@@ -1143,6 +1145,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if (waterGap > armyGap) {
 		armyGap = waterGap;
 		gapSrc = "water";
+	}
+	// OVERSPENT, STOP (apexearth 2026-10-03: "If you have overspent on army, why
+	// not just stop making military units for a little bit?"). Spare metal and
+	// water each reopened the gap past the target; at or over it the labs make
+	// only the cover units ("cover is ok") -- unless metal is actually being
+	// thrown away. Spare metal is the economy's.
+	if ((armyHave >= armyT0) && !wasting) {
+		armyGap = (coverGapAll > 0.f) ? coverGapAll : 0.f;
+		gapSrc = (armyGap > 0.f) ? "cover" : "over";
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is

@@ -1079,6 +1079,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			slot = ProbedSite(w.def,
 					Catalog::Def(int(unit.circuitDef.id)), slot);
 		}
+		// A BIG FRAME GOES WHERE THE BUILD POWER IS (apexearth 2026-10-03: "pick
+		// eco places for buildings which have good buildpower nearby ... the
+		// eco buildings are ill-supported"). The converter branch does the same.
+		if ((unit !is null) && !floats && OnMap(slot) && NanoSinkWorthy(int(w.def.id)))
+			slot = LatheSite(w.def, Catalog::Def(int(unit.circuitDef.id)), slot);
 		// Cross-def: an elected advsol joins the fusion being built. Not a
 		// zero-E rung mid-stall: "make a basic solar" was routed onto a
 		// 5,000-E advanced solar and the whole fleet fed it through a
