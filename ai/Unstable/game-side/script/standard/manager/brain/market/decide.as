@@ -1798,7 +1798,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// 09-21 T2 switch: a defensive army, then the switch. While the switch is
 	// on and no advanced plant stands or is ordered, a hand offered the lab
 	// (ProposeTech's funded gate already passed) takes it ahead of the draw.
-	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()) {
+	// ...ONCE THE DEFENSIVE ARMY STANDS (his 09-21 order; 2026-10-03 without it:
+	// the lab went down at 9-13 m/s and the army never reached its target).
+	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
+		&& (ArmyValue() + ArmyInFlightM() >= ArmyTarget())) {
 		int ti = -1;
 		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)
 			if ((ranked[ri].kind == WK_TECH) && (ranked[ri].def !is null)
