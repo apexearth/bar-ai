@@ -1443,10 +1443,28 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 		RemoveAssignee(unit);
 		return;
 	}
-	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f",
+	// How hot: the worst square on the road that exists, against the bar it
+	// was held to, in units of one Pawn's threat (scout-hot or squad-hot).
+	float roadMax = 0.f;
+	{
+		CThreatMap* tm = circuit->GetThreatMap();
+		tm->SetThreatType(unit);
+		for (const springai::AIFloat3& p : query->GetPathInfo()->posPath) {
+			const float th = tm->GetThreatAt(unit, p);
+			if (th > roadMax) {
+				roadMax = th;
+			}
+		}
+	}
+	const float roadBarLog = std::max(unit->GetCircuitDef()->GetPower(),
+			std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(endPos)));
+	CCircuitDef* pawnDef = circuit->GetCircuitDef("armpw");
+	const float pawn = (pawnDef != nullptr) ? pawnDef->GetPower() : 0.f;
+	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f roadMax=%.1f bar=%.1f pawn=%.1f",
 			(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
-			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)),
+			roadMax, roadBarLog, pawn);
 	circuit->NoteBuildBlocked(endPos, buildDef);
 	SetDeathNote("hot-road");
 	manager->AbortTask(this);

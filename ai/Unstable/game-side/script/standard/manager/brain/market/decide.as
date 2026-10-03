@@ -1787,7 +1787,53 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// ordered.
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
 	// it is asked first.
-	if (!aaPanic && !superPush && !convertPush
+	// EVERY EXTRACTOR HAS A GUN IN REACH (apexearth 2026-10-02: "make sure each
+	// one has some level of coverage ... as long as there's one covering at
+	// least every mex"). The push below only fires for a hand already standing
+	// at the mex with a defence want in its list; this one sends the hand to
+	// the nearest gunless extractor. One gun may cover several.
+	// Not the growing eco seat: it builds no defence while it grows (his
+	// 2026-09-13), and the raid valve ends the growth when it is not safe.
+	if (!aaPanic && !superPush && !convertPush && !EcoRoleGrowing() && PlantFramed()) {
+		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		AIFloat3 gap;
+		if ((light !is null) && (Catalog::BuildsOf(int(unit.circuitDef.id)).find(int(light.id)) >= 0)
+			&& CoverGapNear(uAt, gap)
+			&& !(CrewSplitOn() && FieldSite(gap) && !CrewIsField(unit))
+			&& !MexHasCover(gap, Brain::LightTowerRange()))
+		{
+			const int ld = int(light.id);
+			const float bill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(30.f, Catalog::gCostE[ld]);
+			const float pushCap = EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
+			if (bill <= pushCap) {
+				AIFloat3 site = gap;
+				AIFloat3 foe;
+				if (FoeRef(foe)) {
+					AIFloat3 dir = foe - gap;
+					if (dir.SqLength2D() > 1.f) {
+						dir.SafeNormalize2D();
+						const AIFloat3 s2 = gap + dir * 150.f;
+						if (OnMap(s2))
+							site = s2;
+					}
+				}
+				Want@ cw = Want();
+				cw.kind = WK_PROTECT;
+				cw.spotId = PROT_DEF;
+				@cw.def = light;
+				cw.pos = site;
+				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
+				ValueOf(ld, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
+						Catalog::gBuildPower[int(unit.circuitDef.id)], cw);
+				ranked.insertAt(0, cw);
+				++gCovPicked;
+				why = "coverall";
+				coverPush = true;
+			}
+		}
+	}
+	if (!aaPanic && !superPush && !convertPush && !coverPush
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
 		&& PlantFramed())
 	{

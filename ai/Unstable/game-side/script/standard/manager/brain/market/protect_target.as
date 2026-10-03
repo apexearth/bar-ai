@@ -259,6 +259,68 @@ bool MexUnguardedInReach(const AIFloat3& in pos, float r)
 	return have < wanted;
 }
 
+// SOME GUN COVERS IT (apexearth 2026-10-02: "as long as there's one covering at
+// least every mex"): ours standing or ordered, or an ally's, within reach.
+bool MexHasCover(const AIFloat3& in at, float r)
+{
+	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t)
+		if (gProtPos[PROT_DEF][t].distance2D(at) < r)
+			return true;
+	ComNear(at, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint c = uint(gComGrid.hit[q]);
+		const int cd = gComDef[c];
+		if (Catalog::ValidId(cd) && !Catalog::gMobile[cd] && (ProtClassOf(cd) == PROT_DEF)
+			&& OnMap(gComPos[c]) && (gComPos[c].distance2D(at) < r))
+			return true;
+	}
+	AllyStaticsSync();
+	gAllyStGrid.Query(at.x, at.z, r);
+	for (uint q = 0; q < gAllyStGrid.hit.length(); ++q) {
+		const uint i = uint(gAllyStGrid.hit[q]);
+		if ((i < gAllyStPos.length()) && (ProtClassOf(gAllyStDef[i]) == PROT_DEF)
+			&& (gAllyStPos[i].distance2D(at) < r))
+			return true;
+	}
+	return false;
+}
+
+// Our extractors with no gun in reach, refreshed on a clock: every hand asks.
+array<AIFloat3> gCovGap;
+int gCovGapAt = -999999;
+int gCovGapLogAt = 0;
+int gCovPicked = 0;
+bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex)
+{
+	const float r = Brain::LightTowerRange();
+	if (ai.frame - gCovGapAt >= 2 * SECOND) {
+		gCovGapAt = ai.frame;
+		gCovGap.resize(0);
+		const array<int>@ rows = MexRows();
+		for (uint q = 0; q < rows.length(); ++q) {
+			const AIFloat3 p = gLPos[uint(rows[q])];
+			if (OnMap(p) && !MexHasCover(p, r))
+				gCovGap.insertLast(p);
+		}
+		if (ai.frame >= gCovGapLogAt) {
+			gCovGapLogAt = ai.frame + 60 * SECOND;
+			AiLog("apex: cover-gap t=" + ai.teamId + " mexes=" + rows.length()
+				+ " gunless=" + gCovGap.length() + " picked=" + gCovPicked);
+		}
+	}
+	float best = -1.f;
+	for (uint i = 0; i < gCovGap.length(); ++i) {
+		const float d = gCovGap[i].distance2D(from);
+		if ((best >= 0.f) && (d >= best))
+			continue;
+		if (SpotHot(gCovGap[i]))
+			continue;   // his 2026-10-02: avoid danger, never walk into it
+		best = d;
+		mex = gCovGap[i];
+	}
+	return best >= 0.f;
+}
+
 // WHERE THE ENEMY'S BASE IS, for defence geometry: the mirror of the team's
 // homes about the map centre -- the symmetric-start prior Base::Frame and
 // GradAt already stand on.

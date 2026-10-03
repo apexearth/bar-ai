@@ -12620,7 +12620,7 @@ index 275db3ae..0dbc7ea7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..a05330d6 100644
+index bc8ff11b..8d5285eb 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -13698,7 +13698,7 @@ index bc8ff11b..a05330d6 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1377,121 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1377,139 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -13770,10 +13770,28 @@ index bc8ff11b..a05330d6 100644
 +		RemoveAssignee(unit);
 +		return;
 +	}
-+	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f",
++	// How hot: the worst square on the road that exists, against the bar it
++	// was held to, in units of one Pawn's threat (scout-hot or squad-hot).
++	float roadMax = 0.f;
++	{
++		CThreatMap* tm = circuit->GetThreatMap();
++		tm->SetThreatType(unit);
++		for (const springai::AIFloat3& p : query->GetPathInfo()->posPath) {
++			const float th = tm->GetThreatAt(unit, p);
++			if (th > roadMax) {
++				roadMax = th;
++			}
++		}
++	}
++	const float roadBarLog = std::max(unit->GetCircuitDef()->GetPower(),
++			std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(endPos)));
++	CCircuitDef* pawnDef = circuit->GetCircuitDef("armpw");
++	const float pawn = (pawnDef != nullptr) ? pawnDef->GetPower() : 0.f;
++	circuit->LOG("apex: hot-road %s by %s at=%.0f,%.0f dist=%.0f roadMax=%.1f bar=%.1f pawn=%.1f",
 +			(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 +			unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
-+			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
++			sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)),
++			roadMax, roadBarLog, pawn);
 +	circuit->NoteBuildBlocked(endPos, buildDef);
 +	SetDeathNote("hot-road");
 +	manager->AbortTask(this);
@@ -13822,7 +13840,7 @@ index bc8ff11b..a05330d6 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,19 +1555,175 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,19 +1573,175 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  
@@ -13928,7 +13946,8 @@ index bc8ff11b..a05330d6 100644
 +	const float selfClear = IsSpotSite(buildType) ? 0.f : SelfClearance(builder, buildDef);
 +	auto makePredicate = [this, builder](bool aboveCrest, float selfBar) {
 +		return SitePredicate(builder, selfBar, aboveCrest);
-+	};
+ 	};
+-	SetBuildPos(terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate));
 +	// ABOVE THE HIGH-WATER MARK FIRST. The submerged veto only refuses ground
 +	// the tide is on RIGHT NOW, so at low tide the whole basin reads dry and
 +	// the farm fills it, to burn on the next climb. The crest is the mark it
@@ -13944,8 +13963,7 @@ index bc8ff11b..a05330d6 100644
 +			s = terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, wet);
 +		}
 +		return s;
- 	};
--	SetBuildPos(terrainMgr->FindBuildSite(buildDef, pos, searchRadius, facing, predicate));
++	};
 +	AIFloat3 site = search(selfClear);
 +	// Nowhere in reach BUT under our own feet: take it and step aside, exactly
 +	// as before. Returning nothing here releases the builder to a FallbackTask,
@@ -14002,7 +14020,7 @@ index bc8ff11b..a05330d6 100644
  	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
  
  //	facing = UNIT_NO_FACING;
-@@ -660,204 +1739,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
+@@ -660,204 +1757,9 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
  void IBuilderTask::ExecuteChain(SBuildChain* chain)
  {
  	assert(chain != nullptr);
