@@ -611,7 +611,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float stopped = short0 - short1;
 		if (floored) {
 			const float gained = cover1 - cover0;
-			float step = mexFloorHere - cover0;
+			float gunC = cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", 1.f);
+			if (gunC < 0.f)
+				gunC = 0.f;
+			float step = mexFloorHere - gunC;
 			if (step > gained)
 				step = gained;
 			stopped = (gained > 0.f) ? (step / gained) : 0.f;
@@ -631,7 +634,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// to naked extractors; while NOTHING covers a floored mex slot, the
 		// rate floors at once per exposure window. Any cover at all returns
 		// the slot to the measured rates.
-		if (floored && (cover0 <= 0.f)) {
+		// ...and "covers" means a gun, as in MexUnguardedInReach: a squad
+		// passing by is gone before the raid comes.
+		if (floored && ((cover0 <= 0.f)
+				|| (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", 1.f) <= 1.f))) {
 			const float lossS = horizW;   // same tunable, read once above
 			if ((lossS > 1.f) && (hz < 1.f / lossS))
 				hz = 1.f / lossS;

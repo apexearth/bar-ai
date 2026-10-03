@@ -1291,6 +1291,46 @@ under 100). Their T2 hands go to mexup (77 of 184 jobs), field defence (58),
 Bertha and sensors. Open: the army/economy split on a normal seat; what a
 converter is worth when the bank is pinned but not spilling.
 
+**Measured 2026-10-02 night** (Supreme Isthmus 8v8 +100% vs BARb hard, 20 min,
+4-game batches, `tools/seats.py`, `mexflow.py`, `mexguard.py`, `mexdeaths.py`,
+`jobfate.py`). Per normal seat:
+
+- Standing extractors stay at 4 from minute 8 to 20; BARb's go 4 -> 7-8.
+  (`[BARAI_STATS] mex=` only counts UP -- it is extractors built, not held.)
+- From minute 8 we build 0.5-1.4 extractors per 4 min and lose 0.9-1.9;
+  BARb builds 1.1-2.3 and loses 0.1-0.5. 84% of our claim jobs are dropped:
+  `hot-road` (the 09-21 road bar: any square hotter than our influence at the
+  destination blocks the path) 142/game, no note 94.
+- Our extractors die AT HOME: 18-22 a game in the home band (11-14 with no
+  gun in 450), killed by Pawns, Pincers, Rovers, Flashes. BARb loses 0-1 at
+  home. Home extractors guarded: ours 61-71%, BARb 94-99%. Mid-map: BARb
+  holds 1.0-1.3 (77-88% guarded) and 0.3-1.2 in our half; we hold ~0.1.
+- Guns by minute 20: LLT 1.7-2.9 vs BARb 6.3-6.9, Beamer 0.5-1.7 vs 3.0-3.6,
+  HLT 0.6-1.3 vs 1.6-2.1; missile AA 3.4-4.6 vs 2.4. Defence spend 2.5-3.6k vs
+  4.8-5.1k. DefenceTarget = (assets + army) x TargetShare(DEFENCE), floored at
+  one light tower per extractor (MexFloorFactor) -- the target is the limit.
+- Equal income at minute 12 (53 vs 56 m/s), then minutes 12-16 we put ~13% of
+  spend into eco, BARb ~40%. Army lost by minute 16: 47% of built vs 32%.
+- Energy half of BARb's (1.7k vs 3.8-4.2k E/s at 20): fewer fusions and
+  advanced converters, which follow income, which follows extractors.
+
+Fixed tonight, correct and income-neutral (8 games each, minute 20, normal
+seat / eco seat m/s: baseline 75 / 343, fixes 73 / 357): the displacement
+charge billed every build for a spot per builder (`OpenSpotStream`, 110-216
+m/s on seats making 76-146); an upgrade FRAME dying deleted the ledger row of
+the T1 extractor under it; allied extractors read as open claims (55
+refusals a minute, support never called); energy sent to allies (the 0.95
+share level) never read as waste and `EnergyPinned` waited for 98%; a
+passing squad switched off the unguarded-mex hazard floor.
+
+Measured and dropped: offering an ally's extractor only when that ally has
+no T2 con (84% of our upgrade picks were allies', most dropped at the site
+because BAR hands the moho frame to the ally the instant it starts) cut
+normal seats to 58 m/s. Helping allies upgrade pays even with the aborts.
+
+Open, his calls: the defence share / per-mex floor size, the road bar for
+claims (`hot-road`), the army split on a normal seat.
+
 ### Every builder is priced as if the map's spots were ours to claim (2026-09-27)
 
 `ClaimableSpots` (want_mex.as) excludes only OUR ledger and spots with a

@@ -1389,7 +1389,12 @@ float OverflowM()
 bool EnergyPinned()
 {
 	const float st = Eco::EStor();
-	return (st > 1.f) && (Eco::ECur() >= 0.98f * st)
+	// Full is the share level: above it the engine sends the rest to allies,
+	// so with teammates the bank never reaches 98%.
+	float full = aiEconomyMgr.energy.share - 0.02f;
+	if ((full > 0.98f) || (full < 0.5f))
+		full = 0.98f;
+	return (st > 1.f) && (Eco::ECur() >= full * st)
 			&& (Eco::EInc() >= aiEconomyMgr.energy.usage);
 }
 
@@ -1423,6 +1428,8 @@ void ConvWhyLog()
 		+ " surplus=" + int(gCwSurplus)
 		+ " wasted=" + int((gEExcessEma > gESurplusEma) ? gEExcessEma : gESurplusEma)
 		+ " excess=" + int(aiEconomyMgr.energy.excess)
+		+ " sent=" + int(aiEconomyMgr.energy.sent)
+		+ " share=" + formatFloat(aiEconomyMgr.energy.share, "", 0, 2)
 		+ " ema=" + int(gESurplusEma)
 		+ " inflight=" + int(ConvCapInFlight())
 		+ " standing=" + int(StandingConvCap())
@@ -1591,6 +1598,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 		if (teamCell > cvBestPerCell)
 			cvBestPerCell = teamCell;
 	}
+	float cvDisp = 0.f, cvRisk = 0.f, cvFlow = 0.f;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gFloater[d] || Catalog::gSub[d])
@@ -1725,6 +1733,9 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			w.kind = WK_CONVERT;
 			@w.def = Catalog::Def(d);
 			w.pos = cSite;
+			cvDisp = gPrLastDisp;
+			cvRisk = gPrLastRisk;
+			cvFlow = gPrLastFlow;
 		}
 	}
 	if (w.value > 0.f) {
@@ -1751,7 +1762,10 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 				+ "s wage=" + formatFloat(wage, "", 0, 1)
 				+ " late=" + int(w.gain * w.walkSec) + " lock=" + int(lock)
 				+ " rest=" + int(w.tCost - w.walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage)
-					- w.buildSec * wage - w.gain * w.walkSec - lock) + ")");
+					- w.buildSec * wage - w.gain * w.walkSec - lock)
+				+ " disp=" + int(cvDisp) + " risk=" + int(cvRisk) + " flow=" + int(cvFlow)
+				+ " dstream=" + formatFloat(DisplacedStreamM(), "", 0, 1)
+				+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");
 		}
 	} else {
 		++gCwNoDef;

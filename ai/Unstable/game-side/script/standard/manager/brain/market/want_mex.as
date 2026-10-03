@@ -316,9 +316,12 @@ int ClaimableSpots()
 	gClaimableAt = ai.frame;
 	CacheSpots();
 	const array<int>@ lidx = LedgerIdx();
+	const array<bool>@ allyHeld = AllyHeldSpots();
 	int n = 0;
 	for (uint si = 0; si < gAllSpots.length(); ++si) {
 		if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
+			continue;
+		if ((si < allyHeld.length()) && allyHeld[si])
 			continue;
 		const AIFloat3 sp = gAllSpots[si];
 		if (!OnMap(sp) || NearBlocked(sp) || NearConDeath(sp))
@@ -372,7 +375,8 @@ float DisplacedStreamM()
 	gDsOwn = gOwnStamp;
 	gDsLedger = int(gLSpot.length());
 	gDsSpotM = gLastSpotM;
-	gDsVal = ServableUpDemand() + OpenSpotStream();
+	// Upgrades only: a 50-metal claim waits on a hand, never on income.
+	gDsVal = ServableUpDemand();
 	return gDsVal;
 }
 
@@ -584,7 +588,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 int gMexNoOpen = 0, gMexDeathWalk = 0, gMexEcoFar = 0, gMexComFar = 0;
 // Last single sweep (see PickSpot): total spots, on our ledger, at a trip
 // risk of half or worse, surviving candidates, and the home->FoeAnchor span.
-int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0, gSwHot = 0;
+int gSwTotal = 0, gSwLedger = 0, gSwPast = 0, gSwCand = 0, gSwHot = 0, gSwAlly = 0;
 float gSwSpan = 0.f;
 int gMexEcoQuiet = 0, gMexClaimed = 0, gMexPriced = 0, gNextMexDiag = 0;
 float gMexRiskSum = 0.f;   // TripRisk over priced proposals, for mexdiag
@@ -608,8 +612,32 @@ void MexDiag()
 		if (gg > gMax) gMax = gg;
 	}
 	const float gAvg = (gLPos.length() > 0) ? (gSum / float(gLPos.length())) : 0.f;
+	// The ledger against the census: rows below the ceiling are the upgrade
+	// backlog, and the census is what actually stands.
+	const float ceilD = BestExtract();
+	int ledLow = 0, ledTop = 0, ledClaim = 0, ownLow = 0, ownTop = 0;
+	for (uint li = 0; li < gLExtract.length(); ++li) {
+		if (gLExtract[li] <= 0.f)
+			++ledClaim;
+		else if (gLExtract[li] < ceilD)
+			++ledLow;
+		else
+			++ledTop;
+	}
+	const array<int>@ ownD = OwnedDefs();
+	for (uint oi = 0; oi < ownD.length(); ++oi) {
+		const int od = ownD[oi];
+		if ((gOwnCount[uint(od)] <= 0) || (Catalog::gExtractsM[od] <= 0.f) || Catalog::gMobile[od])
+			continue;
+		if (Catalog::gExtractsM[od] < ceilD)
+			ownLow += gOwnCount[uint(od)];
+		else
+			ownTop += gOwnCount[uint(od)];
+	}
 	AiLog("apex: mexdiag t=" + ai.teamId + " mapSpots=" + gAllSpots.length()
 		+ " held=" + gLSpot.length()
+		+ " ledLow=" + ledLow + " ledTop=" + ledTop + " ledClaim=" + ledClaim
+		+ " ownLow=" + ownLow + " ownTop=" + ownTop
 		+ " depthAvg=" + formatFloat(gAvg, "", 0, 2)
 		+ " depthMax=" + formatFloat(gMax, "", 0, 2)
 		+ " | noOpen=" + gMexNoOpen + " claimed=" + gMexClaimed
@@ -619,7 +647,7 @@ void MexDiag()
 		+ " priced=" + gMexPriced
 		+ " riskAvg=" + formatFloat((gMexPriced > 0) ? (gMexRiskSum / float(gMexPriced)) : 0.f, "", 0, 2)
 		+ " share=" + formatFloat(TripShare(), "", 0, 2)
-		+ " | sweep " + gSwPast + "risky+" + gSwHot + "hot+" + gSwLedger + "own/" + gSwTotal
+		+ " | sweep " + gSwPast + "risky+" + gSwHot + "hot+" + gSwLedger + "own+" + gSwAlly + "ally/" + gSwTotal
 		+ " cand=" + gSwCand + " span=" + int(gSwSpan)
 		+ " | supCall=" + gSupCalls + " supDone=" + gSupDone + " supOpen=" + gSupWorker.length()
 		+ " supWorth=" + int(SupportWorth()));
@@ -723,7 +751,34 @@ array<float> gPsScore;
 // walk is the same for every asker -- marks, heat, trip risk -- and it was
 // re-read for every spot on every mex election. The ledger is NOT in it: it
 // moves on every claim, and PickSpot reads it live.
-const int PT_OPEN = 0, PT_BLOCKED = 2, PT_CONDEATH = 3, PT_HOT = 4, PT_NONE = 5;
+const int PT_OPEN = 0, PT_BLOCKED = 2, PT_CONDEATH = 3, PT_HOT = 4, PT_NONE = 5, PT_ALLY = 6;
+
+// SPOTS AN ALLY ALREADY EXTRACTS: our ledger knows only our own, and an
+// allied spot offered as a claim is refused at the site.
+array<bool> gAllyHeld;
+int gAllyHeldAt = -1;
+const array<bool>@ AllyHeldSpots()
+{
+	AllyStaticsSync();
+	CacheSpots();
+	if ((gAllyHeldAt == gAllyStAt) && (gAllyHeld.length() == gAllSpots.length()))
+		return gAllyHeld;
+	gAllyHeldAt = gAllyStAt;
+	gAllyHeld.resize(gAllSpots.length());
+	for (uint s = 0; s < gAllyHeld.length(); ++s)
+		gAllyHeld[s] = false;
+	for (uint i = 0; i < gAllyStPos.length(); ++i) {
+		if (Catalog::gExtractsM[gAllyStDef[i]] <= 0.f)
+			continue;
+		gSpotGrid.Query(gAllyStPos[i].x, gAllyStPos[i].z, 64.f);
+		for (uint q = 0; q < gSpotGrid.hit.length(); ++q) {
+			const uint si = uint(gSpotGrid.hit[q]);
+			if ((si < gAllyHeld.length()) && (gAllSpots[si].distance2D(gAllyStPos[i]) < 64.f))
+				gAllyHeld[si] = true;
+		}
+	}
+	return gAllyHeld;
+}
 array<int> gPtState;
 array<float> gPtRisk;
 int gPtAt = -1000;
@@ -768,11 +823,16 @@ void SpotTableFill()
 		if (ai.frame - gConDeathAt[k] <= BLOCK_TTL)
 			PtMarkNear(gConDeathPos[k], PT_CONDEATH);
 	}
+	const array<bool>@ allyHeld = AllyHeldSpots();
 	for (uint si = 0; si < n; ++si) {
 		const AIFloat3 sp = gAllSpots[si];
 		gPtRisk[si] = 0.f;
 		if (!OnMap(sp) || (gAllSpotInc[si] * incMul <= 0.f)) {
 			gPtState[si] = PT_NONE;
+			continue;
+		}
+		if ((si < allyHeld.length()) && allyHeld[si]) {
+			gPtState[si] = PT_ALLY;
 			continue;
 		}
 		if (gPtMark[si] != PT_OPEN) {
@@ -805,7 +865,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 	const float ecoLeash = ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH);
 	const float incMul = IncomeMult();
 	// One sweep's composition, kept for mexdiag.
-	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0; gSwHot = 0;
+	gSwTotal = 0; gSwLedger = 0; gSwPast = 0; gSwCand = 0; gSwHot = 0; gSwAlly = 0;
 	gSwSpan = sqrt(fex * fex + fez * fez);
 	const array<int>@ lidx = LedgerIdx();
 	const int lidxN = int(lidx.length());
@@ -830,6 +890,10 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		}
 		if (st == PT_NONE)
 			continue;
+		if (st == PT_ALLY) {
+			++gSwAlly;
+			continue;
+		}
 		const float inc = gAllSpotInc[si] * incMul;
 		// A spot a hand could not reach in the last three minutes is not
 		// offered to the next hand (the stuck watch and the C++ path test

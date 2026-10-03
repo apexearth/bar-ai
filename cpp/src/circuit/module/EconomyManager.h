@@ -317,6 +317,8 @@ private:
 		float income;
 		float usage;   // apex: what was actually consumed last frame (GetUsage); pull is what was ASKED
 		float excess;  // apex: what was thrown away last frame (GetExcess) -- the waste, straight from the engine
+		float share;   // apex: the bank fraction above which the engine sends the rest to allies (GetShare)
+		float sent;    // apex: what went to allies over the last team update (GetSent)
 	} metal, energy;
 	int metalPullCorFrame;
 	float metalPullCor;

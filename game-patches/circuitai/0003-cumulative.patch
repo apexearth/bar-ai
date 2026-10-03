@@ -5182,7 +5182,7 @@ index 42221970..d7ef0434 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/EconomyManager.cpp b/src/circuit/module/EconomyManager.cpp
-index 2b84e900..cfb3b11e 100644
+index 2b84e900..f4bbaa9e 100644
 --- a/src/circuit/module/EconomyManager.cpp
 +++ b/src/circuit/module/EconomyManager.cpp
 @@ -9,6 +9,7 @@
@@ -5223,15 +5223,18 @@ index 2b84e900..cfb3b11e 100644
  const char* RES_NAME_METAL = "Metal";
  const char* RES_NAME_ENERGY = "Energy";
  
-@@ -72,6 +92,7 @@ CEconomyManager::CEconomyManager(CCircuitAI* circuit)
+@@ -72,6 +92,10 @@ CEconomyManager::CEconomyManager(CCircuitAI* circuit)
  	energyRes = circuit->GetCallback()->GetResourceByName(RES_NAME_ENERGY);
  	economy = circuit->GetCallback()->GetEconomy();
  
 +	metal.usage = metal.excess = energy.usage = energy.excess = .0f;  // apex: read before the first pull refresh
++	metal.sent = energy.sent = .0f;
++	metal.share = .99f;
++	energy.share = .95f;
  	metalIncomes.resize(INCOME_SAMPLES, 1.0f);  // Init metal income
  	energyIncomes.resize(INCOME_SAMPLES, 2.0f);  // Init energy income
  
-@@ -87,7 +108,12 @@ CEconomyManager::~CEconomyManager()
+@@ -87,7 +111,12 @@ CEconomyManager::~CEconomyManager()
  	delete energyRes;
  	delete economy;
  
@@ -5245,7 +5248,7 @@ index 2b84e900..cfb3b11e 100644
  }
  
  void CEconomyManager::InitHandlers()
-@@ -652,12 +678,12 @@ void CEconomyManager::Init()
+@@ -652,12 +681,12 @@ void CEconomyManager::Init()
  		const float maxTravel = 7 + rand() % (10 - 7 + 1);  // seconds
  		const int interval = allyTeam->GetSize() * FRAMES_PER_SEC;
  		startFactory = CScheduler::GameJob(&CEconomyManager::StartFactoryJob, this, maxTravel);
@@ -5261,16 +5264,18 @@ index 2b84e900..cfb3b11e 100644
  	};
  
  	circuit->GetSetupManager()->ExecOnFindStart(subinit);
-@@ -875,6 +901,8 @@ float CEconomyManager::GetMetalPull()
+@@ -875,6 +904,10 @@ float CEconomyManager::GetMetalPull()
  	if (metal.pullFrame/* + TEAM_SLOWUPDATE_RATE*/ < circuit->GetLastFrame()) {
  		metal.pullFrame = circuit->GetLastFrame();
  		metal.pull = economy->GetPull(metalRes) + circuit->GetTeam()->GetRulesParamFloat("extraMetalPull", 0.f);
 +		metal.usage = economy->GetUsage(metalRes);
 +		metal.excess = economy->GetExcess(metalRes);
++		metal.share = economy->GetShare(metalRes);
++		metal.sent = economy->GetSent(metalRes);
  		if (metalPullCorFrame + TEAM_SLOWUPDATE_RATE < circuit->GetLastFrame()) {
  			metalPullCorFrame = -1;
  			metalPullCor = 0.f;
-@@ -907,6 +935,12 @@ float CEconomyManager::GetEnergyPull()
+@@ -907,6 +940,14 @@ float CEconomyManager::GetEnergyPull()
  //			numAllies = 1.f;
  //		}
  		energy.pull = economy->GetPull(energyRes) + extraEnergyPull/* + extraChange - teamEnergyWaste / numAllies*/;
@@ -5280,10 +5285,12 @@ index 2b84e900..cfb3b11e 100644
 +		// away 1,400 e/s. The engine knows both; the script now sees both.
 +		energy.usage = economy->GetUsage(energyRes);
 +		energy.excess = economy->GetExcess(energyRes);
++		energy.share = economy->GetShare(energyRes);
++		energy.sent = economy->GetSent(energyRes);
  		if (energyPullCorFrame + TEAM_SLOWUPDATE_RATE < circuit->GetLastFrame()) {
  			energyPullCorFrame = -1;
  			energyPullCor = 0.f;
-@@ -922,11 +956,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
+@@ -922,11 +963,17 @@ bool CEconomyManager::IsAllyOpenMexSpot(int spotId) const
  
  bool CEconomyManager::IsOpenMexSpot(int spotId) const
  {
@@ -5301,7 +5308,7 @@ index 2b84e900..cfb3b11e 100644
  	if (mexSpots[spotId].isOpen == value) {
  		return;
  	}
-@@ -934,6 +974,274 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
+@@ -934,6 +981,274 @@ void CEconomyManager::SetOpenMexSpot(int spotId, bool value)
  	value ? --mexCount : ++mexCount;
  }
  
@@ -5576,7 +5583,7 @@ index 2b84e900..cfb3b11e 100644
  bool CEconomyManager::IsIgnorePull(const IBuilderTask* task) const
  {
  	if (mexMax != std::numeric_limits<decltype(mexMax)>::max()) {
-@@ -994,266 +1302,34 @@ bool CEconomyManager::IsEnoughEnergy(IBuilderTask const* task, CCircuitDef const
+@@ -994,266 +1309,34 @@ bool CEconomyManager::IsEnoughEnergy(IBuilderTask const* task, CCircuitDef const
  IBuilderTask* CEconomyManager::MakeEconomyTasks(const AIFloat3& position, CCircuitUnit* unit)
  {
  	ZoneScoped;
@@ -5854,7 +5861,7 @@ index 2b84e900..cfb3b11e 100644
  	CBuilderManager* builderMgr = circuit->GetBuilderManager();
  	if (!builderMgr->CanEnqueueTask(32)) {
  		return nullptr;
-@@ -1278,6 +1354,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1278,6 +1361,29 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  	const int frame = circuit->GetLastFrame();
  	float bestResDist = std::numeric_limits<float>::max();
  
@@ -5884,7 +5891,7 @@ index 2b84e900..cfb3b11e 100644
  	const auto& infos = energyDefs.GetInfos();
  	const float curWind = circuit->GetMap()->GetCurWind();
  	auto checkWind = [curWind, terrainMgr, position, metalIncome, energyIncome, &infos](unsigned i) {
-@@ -1308,12 +1407,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1308,12 +1414,12 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  				if (engy.cdef->IsWind() && !checkWind(i)) {
  					continue;
  				}
@@ -5899,7 +5906,7 @@ index 2b84e900..cfb3b11e 100644
  					if (bestResDist > resDist) {
  						bestResDist = resDist;
  						bestDef = engy.cdef;
-@@ -1384,215 +1483,14 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
+@@ -1384,215 +1490,14 @@ IBuilderTask* CEconomyManager::UpdateEnergyTasks(const AIFloat3& position, CCirc
  IBuilderTask* CEconomyManager::UpdateGeoTasks(const AIFloat3& position, CCircuitUnit* unit)
  {
  	ZoneScoped;
@@ -6118,7 +6125,7 @@ index 2b84e900..cfb3b11e 100644
  	return nullptr;
  }
  
-@@ -1604,46 +1502,8 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks()
+@@ -1604,46 +1509,8 @@ IBuilderTask* CEconomyManager::UpdateFactoryTasks()
  IBuilderTask* CEconomyManager::UpdateStorageTasks()
  {
  	ZoneScoped;
@@ -6167,7 +6174,7 @@ index 2b84e900..cfb3b11e 100644
  }
  
  IBuilderTask* CEconomyManager::UpdatePylonTasks()
-@@ -1696,33 +1556,18 @@ IBuilderTask* CEconomyManager::UpdatePylonTasks()
+@@ -1696,33 +1563,18 @@ IBuilderTask* CEconomyManager::UpdatePylonTasks()
  
  IBuilderTask* CEconomyManager::CheckMobileAssistRequired(const AIFloat3& position, CCircuitUnit* unit)
  {
@@ -6208,7 +6215,7 @@ index 2b84e900..cfb3b11e 100644
  	CFactoryManager* factoryMgr = circuit->GetFactoryManager();
  	if ((factoryMgr->GetFactoryCount() == 0) && circuit->GetBuilderManager()->GetTasks(IBuilderTask::BuildType::FACTORY).empty()) {
  		CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
-@@ -1771,7 +1616,7 @@ void CEconomyManager::StartFactoryJob(const float seconds)
+@@ -1771,7 +1623,7 @@ void CEconomyManager::StartFactoryJob(const float seconds)
  	const int interval = circuit->GetAllyTeam()->GetSize() * FRAMES_PER_SEC;
  	auto update = static_cast<IBuilderTask* (CEconomyManager::*)(void)>(&CEconomyManager::UpdateFactoryTasks);
  	scheduler->RunJobEvery(CScheduler::GameJob(update, this),
@@ -6217,7 +6224,7 @@ index 2b84e900..cfb3b11e 100644
  }
  
  CBFactoryTask* CEconomyManager::PickNextFactory(const AIFloat3& position, bool isStart)
-@@ -1804,7 +1649,7 @@ void CEconomyManager::AddMorphee(CCircuitUnit* unit)
+@@ -1804,7 +1656,7 @@ void CEconomyManager::AddMorphee(CCircuitUnit* unit)
  	morphees.insert(unit);
  	if (morph == nullptr) {
  		morph = CScheduler::GameJob(&CEconomyManager::UpdateMorph, this);
@@ -6226,7 +6233,7 @@ index 2b84e900..cfb3b11e 100644
  	}
  }
  
-@@ -1859,139 +1704,14 @@ void CEconomyManager::DelFactoryInfo(CCircuitUnit* unit)
+@@ -1859,139 +1711,14 @@ void CEconomyManager::DelFactoryInfo(CCircuitUnit* unit)
  bool CEconomyManager::CheckAirpadRequired(const AIFloat3& position, CCircuitUnit* unit, IBuilderTask*& outTask)
  {
  	outTask = nullptr;
@@ -6368,7 +6375,7 @@ index 2b84e900..cfb3b11e 100644
  	return false;
  }
  
-@@ -2099,78 +1819,14 @@ bool CEconomyManager::HasNoPurpose(const CCircuitDef::Id defId) const
+@@ -2099,78 +1826,14 @@ bool CEconomyManager::HasNoPurpose(const CCircuitDef::Id defId) const
  
  void CEconomyManager::ReclaimOldConvert(const SConvertExt* convertExt)
  {
@@ -6452,7 +6459,7 @@ index 2b84e900..cfb3b11e 100644
  
  } // namespace circuit
 diff --git a/src/circuit/module/EconomyManager.h b/src/circuit/module/EconomyManager.h
-index 2925da70..0724a6d7 100644
+index 2925da70..c7717017 100644
 --- a/src/circuit/module/EconomyManager.h
 +++ b/src/circuit/module/EconomyManager.h
 @@ -107,15 +107,37 @@ public:
@@ -6522,12 +6529,14 @@ index 2925da70..0724a6d7 100644
  
  	struct SConvertExt {
  		float energyUse;
-@@ -282,6 +315,8 @@ private:
+@@ -282,6 +315,10 @@ private:
  		float storage;
  		float pull;
  		float income;
 +		float usage;   // apex: what was actually consumed last frame (GetUsage); pull is what was ASKED
 +		float excess;  // apex: what was thrown away last frame (GetExcess) -- the waste, straight from the engine
++		float share;   // apex: the bank fraction above which the engine sends the rest to allies (GetShare)
++		float sent;    // apex: what went to allies over the last team update (GetSent)
  	} metal, energy;
  	int metalPullCorFrame;
  	float metalPullCor;
@@ -9012,7 +9021,7 @@ index 3838196f..677ac8e8 100644
  
  CBuilderScript::~CBuilderScript()
 diff --git a/src/circuit/script/EconomyScript.cpp b/src/circuit/script/EconomyScript.cpp
-index 193efa90..e6799b8f 100644
+index 193efa90..dc6c5063 100644
 --- a/src/circuit/script/EconomyScript.cpp
 +++ b/src/circuit/script/EconomyScript.cpp
 @@ -8,6 +8,8 @@
@@ -9072,16 +9081,18 @@ index 193efa90..e6799b8f 100644
  CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
  		: IModuleScript(scr, mgr)
  {
-@@ -26,6 +69,8 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
+@@ -26,6 +69,10 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
  	r = engine->RegisterObjectProperty("SResourceInfo", "const float storage", asOFFSET(CEconomyManager::SResourceInfo, storage)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("SResourceInfo", "const float pull", asOFFSET(CEconomyManager::SResourceInfo, pull)); ASSERT(r >= 0);
  	r = engine->RegisterObjectProperty("SResourceInfo", "const float income", asOFFSET(CEconomyManager::SResourceInfo, income)); ASSERT(r >= 0);
 +	r = engine->RegisterObjectProperty("SResourceInfo", "const float usage", asOFFSET(CEconomyManager::SResourceInfo, usage)); ASSERT(r >= 0);
 +	r = engine->RegisterObjectProperty("SResourceInfo", "const float excess", asOFFSET(CEconomyManager::SResourceInfo, excess)); ASSERT(r >= 0);
++	r = engine->RegisterObjectProperty("SResourceInfo", "const float share", asOFFSET(CEconomyManager::SResourceInfo, share)); ASSERT(r >= 0);
++	r = engine->RegisterObjectProperty("SResourceInfo", "const float sent", asOFFSET(CEconomyManager::SResourceInfo, sent)); ASSERT(r >= 0);
  
  	r = engine->RegisterObjectType("CEconomyManager", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);
  	r = engine->RegisterGlobalProperty("CEconomyManager aiEconomyMgr", manager); ASSERT(r >= 0);
-@@ -40,6 +85,19 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
+@@ -40,6 +87,19 @@ CEconomyScript::CEconomyScript(CScriptManager* scr, CEconomyManager* mgr)
  	r = engine->RegisterObjectProperty("CEconomyManager", "float reclEnergyEff", asOFFSET(CEconomyManager, reclEnergyEff)); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEconomyManager", "float GetMetalMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetMetalMake), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CEconomyManager", "float GetEnergyMake(const CCircuitDef@) const", asMETHOD(CEconomyManager, GetEnergyMake), asCALL_THISCALL); ASSERT(r >= 0);

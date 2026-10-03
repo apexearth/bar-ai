@@ -678,6 +678,9 @@ void NoteDead(CCircuitUnit@ unit)
 		NoteMexDeath(unit.GetPos(ai.frame));
 	if (i < 0)
 		return;
+	// An upgrade FRAME dying leaves the extractor under it standing.
+	if (!Main::WasFinished(int(unit.id)) && (gLExtract[i] > 0.f))
+		return;
 	gLSpot.removeAt(i);
 	gLPos.removeAt(i);
 	gLIncome.removeAt(i);

@@ -93,6 +93,9 @@ CEconomyManager::CEconomyManager(CCircuitAI* circuit)
 	economy = circuit->GetCallback()->GetEconomy();
 
 	metal.usage = metal.excess = energy.usage = energy.excess = .0f;  // apex: read before the first pull refresh
+	metal.sent = energy.sent = .0f;
+	metal.share = .99f;
+	energy.share = .95f;
 	metalIncomes.resize(INCOME_SAMPLES, 1.0f);  // Init metal income
 	energyIncomes.resize(INCOME_SAMPLES, 2.0f);  // Init energy income
 
@@ -903,6 +906,8 @@ float CEconomyManager::GetMetalPull()
 		metal.pull = economy->GetPull(metalRes) + circuit->GetTeam()->GetRulesParamFloat("extraMetalPull", 0.f);
 		metal.usage = economy->GetUsage(metalRes);
 		metal.excess = economy->GetExcess(metalRes);
+		metal.share = economy->GetShare(metalRes);
+		metal.sent = economy->GetSent(metalRes);
 		if (metalPullCorFrame + TEAM_SLOWUPDATE_RATE < circuit->GetLastFrame()) {
 			metalPullCorFrame = -1;
 			metalPullCor = 0.f;
@@ -941,6 +946,8 @@ float CEconomyManager::GetEnergyPull()
 		// away 1,400 e/s. The engine knows both; the script now sees both.
 		energy.usage = economy->GetUsage(energyRes);
 		energy.excess = economy->GetExcess(energyRes);
+		energy.share = economy->GetShare(energyRes);
+		energy.sent = economy->GetSent(energyRes);
 		if (energyPullCorFrame + TEAM_SLOWUPDATE_RATE < circuit->GetLastFrame()) {
 			energyPullCorFrame = -1;
 			energyPullCor = 0.f;

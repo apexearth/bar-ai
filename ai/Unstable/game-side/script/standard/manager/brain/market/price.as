@@ -137,7 +137,9 @@ void TrackEPull()
 	// read 600-1,000 and the bank sat at 80-99% (gate games, 13 min of
 	// waste with converters at gain 0.07). The converter prices the larger
 	// of the two, both smoothed the same way.
-	const float exc = aiEconomyMgr.energy.excess;
+	// ...and what the engine SENT to allies: above the share level our unused
+	// energy leaves for a teammate, and excess reads 0.
+	const float exc = aiEconomyMgr.energy.excess + aiEconomyMgr.energy.sent;
 	gEExcessEma = 0.9f * gEExcessEma + 0.1f * ((exc > 0.f) ? exc : 0.f);
 	// REAL DEMAND, WHICH PULL UNDERSTATES. Pull is throttled demand and it
 	// also dips to nothing whenever the fleet is between jobs -- read raw, it
@@ -653,6 +655,9 @@ float MCostScale()
 // priced its walk against that window; charging it again here at the pull
 // rate put a line slot's tCost at 600-900 against a mex's 100-300 and priced
 // the front out of every draw.
+float gPrLastDisp = 0.f;   // the last ValueOf's terms, for the convprice line
+float gPrLastRisk = 0.f;
+float gPrLastFlow = 0.f;
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 		bool lateStart = true, float riskM = 0.f)
 {
@@ -693,14 +698,12 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				float share = Catalog::gCostM[defId] / (mInc * dur);
 				if (share > 1.f)
 					share = 1.f;
-				// Upgrades AND claims: both are extraction this build defers.
-				// See OpenSpotStream in want_mex.as.
+				// The upgrade stream (DisplacedStreamM in want_mex.as).
 				// Bounded by the hands that could actually SERVE the stream:
 				// gAvailable is not tier-gated, so BestExtract names the moho
 				// from frame zero and UpDemand counted a stream no builder we
 				// own can perform -- taxing every T1 solar and tower for
-				// upgrades nobody could have done. OpenSpotStream already
-				// bounds itself this way.
+				// upgrades nobody could have done.
 				// A build that returns more per second than the stream it
 				// holds up displaces nothing: the advanced converter at 16 m/s
 				// was charged 500-2,200 s of "rest" for the mex upgrades its
@@ -813,6 +816,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// across the build throttles EVERY lathe (pull 300 on income 50 = 1/6th
 	// build speed fleet-wide). The inflicted slowdown is charged here as
 	// lost fleet throughput -- arithmetic, not a model.
+	float flowM = 0.f;
 	if ((Catalog::gCostE[defId] > 1.f) && (buildSec > 1.f)) {
 		const float wantDrain = Catalog::gCostE[defId] / buildSec;
 		const float projPull = Eco::EPull() + wantDrain;
@@ -820,8 +824,12 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 		const float unfunded = projPull - Eco::EInc() - bankRate;
 		if ((unfunded > 0.f) && (projPull > 1.f)) {
 			w.tCost += buildSec * Eco::MPull() * (unfunded / projPull);
+			flowM = buildSec * Eco::MPull() * (unfunded / projPull);
 		}
 	}
+	gPrLastDisp = displacedM;
+	gPrLastRisk = riskM;
+	gPrLastFlow = flowM;
 	w.value = gain / (w.mCost + w.tCost);
 	return w.value;
 }
