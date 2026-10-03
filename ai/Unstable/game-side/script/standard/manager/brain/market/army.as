@@ -2069,17 +2069,28 @@ const float T2_DEFENCE_SHARE = 0.5f;
 // merged to two seats -- one the eco seat, one switching to T2 -- made almost no
 // army: "when transitioning to T2, we need some army. We need a floor"): our
 // share of the army they have shown, at his home-defence parity (docs/24,
-// ~1.2x), never above the full target.
+// ~1.2x).
 const float ARMY_FLOOR_PARITY = 1.2f;
 float gArmyFloorRaw = 0.f;
 int gArmyFloorAt = -1;
 float ArmyFloor(float full)
 {
+	// THEIR ARMY, SPLIT AMONG THE SEATS THAT FIGHT, NOT CAPPED BY OUR ECONOMY
+	// (apexearth 2026-10-03: "we have 1/3rd the enemies army size"). Capped at
+	// our own target and shared with the eco seat, which fields nothing, the
+	// floor never asked for parity.
 	if (gArmyFloorAt != ai.frame) {
 		gArmyFloorAt = ai.frame;
-		gArmyFloorRaw = Military::EnemyArmyCost() / Military::AllyCount() * ARMY_FLOOR_PARITY;
+		int fighting = 0;
+		array<Id>@ mates = ai.GetTeamIds();
+		for (uint m = 0; (mates !is null) && (m < mates.length()); ++m)
+			if (ai.ReadTeamValue(int(mates[m]), Military::TV_ECOSEAT, 0.f) < 0.5f)
+				++fighting;
+		if (fighting < 1)
+			fighting = 1;
+		gArmyFloorRaw = Military::EnemyArmyCost() / float(fighting) * ARMY_FLOOR_PARITY;
 	}
-	return (gArmyFloorRaw < full) ? gArmyFloorRaw : full;
+	return gArmyFloorRaw;
 }
 
 float ArmyTarget()
@@ -2108,12 +2119,14 @@ float ArmyTarget()
 		const float atHome = Military::HoldNeedM() * ((hold > 0.f) ? hold : 1.f);
 		if (atHome > need)
 			need = atHome;
+		if (need > full)
+			need = full;
 		const float floorS = ArmyFloor(full);
-		if (floorS > need)
-			need = floorS;
-		return (need > full) ? full : need;
+		return (floorS > need) ? floorS : need;
 	}
-	return ArmyTargetFull();
+	const float fullD = ArmyTargetFull();
+	const float floorD = ArmyFloor(fullD);
+	return (floorD > fullD) ? floorD : fullD;
 }
 
 // The target with NO role suppression: what the war actually asks for.

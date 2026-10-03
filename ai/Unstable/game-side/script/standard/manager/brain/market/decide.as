@@ -1800,8 +1800,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// (ProposeTech's funded gate already passed) takes it ahead of the draw.
 	// ...ONCE THE DEFENSIVE ARMY STANDS (his 09-21 order; 2026-10-03 without it:
 	// the lab went down at 9-13 m/s and the army never reached its target).
+	// The FULL target, not the switch's half: before contact their army reads
+	// zero, the floor with it, and the half target let the lab go down at 3 min.
 	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
-		&& (ArmyValue() + ArmyInFlightM() >= ArmyTarget())) {
+		&& (ArmyValue() + ArmyInFlightM() >= ArmyTargetFull())
+		&& (ArmyValue() + ArmyInFlightM() >= ArmyFloor(0.f))) {
 		int ti = -1;
 		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)
 			if ((ranked[ri].kind == WK_TECH) && (ranked[ri].def !is null)

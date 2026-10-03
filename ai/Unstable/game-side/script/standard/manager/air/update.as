@@ -487,6 +487,7 @@ void Update()
 	{ double _tA = Perf::T0(); FlightWatch(); Perf::Add("air.FlightWatch", _tA); }
 	{ double _tA = Perf::T0(); ShareWing(); Perf::Add("air.ShareWing", _tA); }
 	{ double _tA = Perf::T0(); Market::EnemyWetCount(); Perf::Add("air.EnemyWetCount", _tA); }
+	{ double _tA = Perf::T0(); Market::FoeHalfPoll(); Perf::Add("air.FoeHalfPoll", _tA); }
 	{ double _tA = Perf::T0(); CoverWatch(); Perf::Add("air.CoverWatch", _tA); }
 	{ double _tA = Perf::T0(); StrikeScanStep(); Perf::Add("air.StrikeScanStep", _tA); }
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());

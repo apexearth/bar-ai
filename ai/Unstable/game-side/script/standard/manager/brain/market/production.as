@@ -920,6 +920,81 @@ float RichArmyGapM()
 }
 
 
+// Spare metal becomes army only while we out-build them (apexearth 2026-09-25,
+// Koom 8v8: our army led theirs while they out-earned us 2x). The economy
+// signal we have for them is the structure metal we have seen; ours is the
+// team's own, summed across allies.
+const string TV_ASSETS = "apexAssetsM";
+// HOW MUCH OF THEIR HALF WE HAVE LOOKED AT: the metal spots on their half that
+// were in our sight within the ghost horizon. One scout's strip over their
+// front is not their base; this is the share the unseen estimate gives way to.
+array<AIFloat3> gFoeHalfPt;
+array<int> gFoeHalfSeen;
+void FoeHalfPoll()
+{
+	if ((gFoeHalfPt.length() == 0) && (gAllSpots.length() > 0)) {
+		for (uint s = 0; s < gAllSpots.length(); ++s) {
+			if (Military::ForwardFraction(gAllSpots[s]) > 0.5f) {
+				gFoeHalfPt.insertLast(gAllSpots[s]);
+				gFoeHalfSeen.insertLast(-999999);
+			}
+		}
+	}
+	for (uint i = 0; i < gFoeHalfPt.length(); ++i) {
+		if (ai.IsPosInLos(gFoeHalfPt[i]))
+			gFoeHalfSeen[i] = ai.frame;
+	}
+}
+
+float FoeHalfCoverage()
+{
+	if (gFoeHalfPt.length() == 0)
+		return 0.f;
+	const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+	int n = 0;
+	for (uint i = 0; i < gFoeHalfPt.length(); ++i) {
+		if (float(ai.frame - gFoeHalfSeen[i]) < horizon)
+			++n;
+	}
+	return float(n) / float(gFoeHalfPt.length());
+}
+
+bool gEcoBehind = true;
+int gEcoBehindAt = -999999;
+bool EcoBehind()
+{
+	if (ai.frame < gEcoBehindAt + 30 * SECOND)
+		return gEcoBehind;
+	gEcoBehindAt = ai.frame;
+	ai.PublishTeamValue(TV_ASSETS, gAssetsM);
+	float ours = 0.f;
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint i = 0; (mates !is null) && (i < mates.length()); ++i)
+		ours += ai.ReadTeamValue(int(mates[i]), TV_ASSETS, 0.f);
+	if (ours < gAssetsM)
+		ours = gAssetsM;
+	// BLIND IS NOT AHEAD. Seen structure metal alone read us far ahead of a
+	// jammed enemy that out-spent us on economy, and the spare metal went to
+	// army while they out-expanded us. What we have not looked at is the
+	// mirror of ours (their economy started equal to ours), giving way to what
+	// we saw as our eyes cover their half (FoeHalfCoverage).
+	// ...and an enemy that is not fielding army is putting it into economy (his
+	// 2026-09-29): what they have not shown us as army, out of a total that
+	// mirrors ours, is theirs as structures.
+	const float seen = aiEnemyMgr.GetEnemyStructCost();
+	const float stale = 1.f - FoeHalfCoverage();
+	float est = ours + Military::TeamArmyCost() - Military::EnemyArmyCost();
+	if (est < ours)
+		est = ours;
+	float theirs = seen;
+	if (est > seen)
+		theirs = seen + (est - seen) * stale;
+	gEcoBehind = (theirs >= ours);
+	AiLog("apex: ecoside t=" + ai.teamId + " ours=" + int(ours) + " theirs=" + int(theirs)
+		+ " seen=" + int(seen) + " est=" + int(est) + " stale=" + formatFloat(stale, "", 0, 2)
+		+ " behind=" + (gEcoBehind ? 1 : 0));
+	return gEcoBehind;
+}
 
 CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 {
@@ -1011,10 +1086,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// are cover" ruling). Not a share of income -- what the base's own
 	// spread asks for, and it grows with the base, never with a clock.
 	float coverShare = 0.f;   // how much of the gap is coverage, 0..1
-	float coverGapAll = 0.f;
 	{
 		const float coverGap = Military::CoverNeedM() - armyFlight0;
-		coverGapAll = coverGap;
 		if (coverGap > armyGap) {
 			armyGap = coverGap;
 			gapSrc = "cover";
@@ -1060,11 +1133,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// taking it: metal we are throwing away buys army, idle factory time is
 	// free (his 2026-09-28, Supreme Isthmus: "use the factories, make shit!
 	// Instead, they're all idle", bank 93% and wasting while behind=1).
-	// ...and FAVOUR ECONOMY (apexearth 2026-10-02: "favor economy because that
-	// makes army even stronger later"): spare metal is army only while it is
-	// actually being thrown away -- the team-asset test it replaces read us
-	// ahead while their seats out-earned ours.
-	if ((TopOwnPlantTier() < 2) || !MetalWasting())
+	if ((TopOwnPlantTier() < 2) || (EcoBehind() && (OverflowM() <= 0.5f)))
 		richBal = 0.f;
 	if (!ovfHands && (richBal > armyGap)) {
 		armyGap = richBal;
@@ -1145,15 +1214,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	if (waterGap > armyGap) {
 		armyGap = waterGap;
 		gapSrc = "water";
-	}
-	// OVERSPENT, STOP (apexearth 2026-10-03: "If you have overspent on army, why
-	// not just stop making military units for a little bit?"). Spare metal and
-	// water each reopened the gap past the target; at or over it the labs make
-	// only the cover units ("cover is ok") -- unless metal is actually being
-	// thrown away. Spare metal is the economy's.
-	if ((armyHave >= armyT0) && !wasting) {
-		armyGap = (coverGapAll > 0.f) ? coverGapAll : 0.f;
-		gapSrc = (armyGap > 0.f) ? "cover" : "over";
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
