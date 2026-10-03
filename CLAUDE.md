@@ -19,6 +19,11 @@ The number of extractor spots on a map is fixed and small (19 on Glacier Pass 1.
 so extraction stops growing. Energy does not. Conversion runs at roughly 60
 energy per 1 metal. `docs/10-bar-game-concepts.md`.
 
+**Core tenet (his, 2026-10-03): always be making economy -- energy and
+converters, always.** A seat with one T2 con upgrades its mexes first; after
+that, some hands are always on generators and converters. A seat "chilling"
+with no new fusion for minutes is the bug.
+
 Measure economy growth as energy income, generator capacity and conversion.
 Extractor count describes the early game only. `tools/ecoside.py` reads it per
 side; in a 2v2 both Apex AIs are our side (engine teams 0 and 1), and

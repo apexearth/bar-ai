@@ -2017,6 +2017,33 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		floorPush = true;
 		why = "field";
 	}
+	// THE ADVANCED HANDS AT HOME BUILD ECONOMY (apexearth 2026-10-03, watching
+	// purple: "we don't keep enough advanced constructors at home ... no more
+	// fusions being made for many minutes"; its T2 hands were on Annihilators
+	// and flak). While economy work is on offer, a home advanced hand is not
+	// offered guns, AA, sensors or supers; the field crew and the basic hands
+	// keep building defence.
+	if (!floorPush && !aaPanic && !superPush && CrewSplitOn()
+		&& ReachesCeiling(int(unit.circuitDef.id))
+		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	{
+		bool ecoOn = false;
+		for (uint i = 0; (i < ranked.length()) && !ecoOn; ++i) {
+			const int k = ranked[i].kind;
+			ecoOn = (k == WK_ENERGY) || (k == WK_CONVERT) || (k == WK_MEXUP) || (k == WK_GEO)
+				|| (k == WK_NANO) || (k == WK_STORE) || (k == WK_TECH);
+		}
+		if (ecoOn) {
+			for (uint i = 0; i < ranked.length(); ) {
+				const int k = ranked[i].kind;
+				if ((k == WK_PROTECT) || (k == WK_SENSE) || (k == WK_AIRDEF)
+					|| (k == WK_SUPER) || (k == WK_TEETH))
+					ranked.removeAt(i);
+				else
+					++i;
+			}
+		}
+	}
 	// A FLOOR THAT FIRES WHILE ITS CATEGORY IS ALREADY OVER TARGET IS NOT A
 	// FLOOR. It guarantees a minimum, and buildpower has run 0.32 against a
 	// 0.15 target while defence sat at 0.09 against 0.29. BudgetMult is
