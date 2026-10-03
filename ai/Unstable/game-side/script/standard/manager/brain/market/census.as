@@ -147,6 +147,9 @@ int gCeilStamp = -1;
 float gOwnedCeil = 0.f;
 float gOwnedProdCeil = 1.f;
 float gOwnedMobCeil = 0.f;
+// What OUR OWN production reaches: our plants' builders and the commander,
+// never a constructor an ally handed us (see PlantCeil).
+float gPlantCeil = 0.f;
 array<bool> gCanBuild;
 void RefreshOwnedSet()
 {
@@ -159,6 +162,7 @@ void RefreshOwnedSet()
 		gCanBuild[k] = false;
 	gOwnedCeil = 0.f;
 	gOwnedMobCeil = 0.f;
+	gPlantCeil = 0.f;
 	float prodCeil = 0.f;
 	const array<int>@ _own14 = OwnedDefs();
 	for (uint _oi14 = 0; _oi14 < _own14.length(); ++_oi14) {
@@ -175,6 +179,9 @@ void RefreshOwnedSet()
 					gOwnedCeil = Catalog::gExtractsM[b];
 				if (Catalog::gExtractsM[b] > gOwnedMobCeil)
 					gOwnedMobCeil = Catalog::gExtractsM[b];
+				if (Catalog::Def(int(d)).IsRoleAny(Unit::Role::COMM.mask)
+					&& (Catalog::gExtractsM[b] > gPlantCeil))
+					gPlantCeil = Catalog::gExtractsM[b];
 			}
 			continue;
 		}
@@ -192,6 +199,8 @@ void RefreshOwnedSet()
 					gCanBuild[b2] = true;
 				if (Catalog::gExtractsM[b2] > gOwnedCeil)
 					gOwnedCeil = Catalog::gExtractsM[b2];
+				if (Catalog::gExtractsM[b2] > gPlantCeil)
+					gPlantCeil = Catalog::gExtractsM[b2];
 			}
 		}
 	}
@@ -202,6 +211,14 @@ float OwnedCeil()
 {
 	RefreshOwnedSet();
 	return gOwnedCeil;
+}
+
+// A GIFT IS NOT A LAB: one T2 constructor an ally handed over made every T2
+// lab read as unlocking nothing (prodCeil == OwnedCeil).
+float PlantCeil()
+{
+	RefreshOwnedSet();
+	return gPlantCeil;
 }
 
 // Can anything we own put this def on the ground -- directly, or through a

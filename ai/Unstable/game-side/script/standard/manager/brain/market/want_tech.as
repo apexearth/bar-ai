@@ -417,7 +417,7 @@ int CheapestAdvancedPlant(CCircuitUnit@ unit)
 	const array<int>@ builds = Catalog::BuildsOf(int(unit.circuitDef.id));
 	if (builds is null)
 		return 0;
-	const float ownCeil = OwnedCeil();
+	const float ownCeil = PlantCeil();
 	const float ownConv = OwnConvCeil();
 	int best = 0;
 	for (uint i = 0; i < builds.length(); ++i) {
@@ -577,7 +577,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
 	// price.
 	const int uid = int(unit.circuitDef.id);
-	const float ownCeil = OwnedCeil();
+	const float ownCeil = PlantCeil();   // our own production, not a gifted hand
 	// Best mobility among owned ceiling-reaching cons: a plant whose con
 	// flies (T2 air) is an upgrade even when extraction reach ties.
 	float ownMob = 0.f;
