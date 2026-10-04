@@ -207,7 +207,16 @@ int SuperTarget(int sc)
 			return have + 1;
 		return (have > 1) ? have : 1;
 	}
-	if ((sc == SC_ANTINUKE) || (sc == SC_SILO) || (sc == SC_GANTRY))
+	// MORE OF THEIR NUKES, MORE OF OUR ANTIS (apexearth 2026-10-03: "if we get
+	// really late into the game and the enemy seems to have a lot of nukes, we
+	// should build extra anti-nukes"; 08-19: match their launchers). One past
+	// the silos seen: a silo stockpiles, an anti stops one missile per reload.
+	if (sc == SC_ANTINUKE) {
+		const int byInc = 1 + int(inc / per);
+		const int bySilo = Brain::EnemyNukeSilos() + 1;
+		return (bySilo > byInc) ? bySilo : byInc;
+	}
+	if ((sc == SC_SILO) || (sc == SC_GANTRY))
 		return 1 + int(inc / per);
 	return 1 + int(inc / (per * 2.f));
 }
@@ -512,6 +521,10 @@ bool AntiNukeSite(CCircuitUnit@ unit, AIFloat3& out at)
 		int depth = 1 + int(inc / 400.f);
 		if (depth > 3)
 			depth = 3;
+		// ...and one past their silos, whatever our income (his 2026-10-03).
+		const int bySilo = Brain::EnemyNukeSilos() + 1;
+		if ((Brain::EnemyNukeSilos() > 0) && (bySilo > depth))
+			depth = bySilo;
 		if (ProtCoverCount(PROT_ANTINUKE, core, r) < depth) {
 			at = SuperSite(unit, SC_ANTINUKE);
 			return OnMap(at);
