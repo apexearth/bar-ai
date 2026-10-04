@@ -313,6 +313,7 @@ def build_script(
     map_starts: list | None = None,
     map_size: tuple = (0, 0),
     ai_options: dict | None = None,
+    ai_options_b: dict | None = None,
     extras: list | None = None,
 ) -> str:
     """Emit a Spring start script for N AIs, each alone on its own ally team.
@@ -413,7 +414,7 @@ def build_script(
             body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot], handicap,
                                      drop_ai_version,
                                      pos[slot] if slot < len(pos) else None,
-                                     ai_options if ally == 0 else None))
+                                     ai_options if ally == 0 else ai_options_b if ally == 1 else None))
             team_id += 1
     # Extra teams ride on an existing ally after the real players: a NullAI
     # holder for gadget-driven units (dev_raid.lua), never a side of its own.
@@ -646,6 +647,7 @@ def run(args) -> int:
         extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
         extras=extras,
         ai_options=dict(o.split('=', 1) for o in args.ai_option),
+        ai_options_b=dict(o.split('=', 1) for o in args.ai_option_b),
     )
     script_path = outdir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
@@ -1023,6 +1025,8 @@ def main() -> int:
                          "exactly as a hosted match will load it")
     ap.add_argument("--ai-option", action="append", default=[], metavar="K=V",
                     help="per-AI option on the FIRST ai (side A), repeatable -- the same values the lobby's add-AI dialog sets")
+    ap.add_argument("--ai-option-b", dest="ai_option_b", action="append", default=[], metavar="K=V",
+                    help="per-AI option on side B, repeatable; an apex_* key outranks the modoption for that side only")
     ap.add_argument("--record-seed", action="store_true",
                     help="seed each match's unit record from the live game "
                          "(off by default: it collapsed army spend, see ISSUES.md)")
