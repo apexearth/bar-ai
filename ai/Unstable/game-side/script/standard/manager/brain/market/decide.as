@@ -1791,10 +1791,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// first T2 lab ahead of the draw once its defensive army stands and the
 	// upgrade stream waiting on T2 is at least its whole income. Forced on every
 	// seat this cost 4v4 scaling (147 -> 124 m/s at 20 min); in 8v8 BARb's T2
-	// lands at ~9 min and ours at ~15.
+	// lands at ~9 min and ours at ~15. The eco seat qualifies however it sits:
+	// with no mate inside its cone the draw kept picking solars over the lab.
 	AIFloat3 t2Shelter;
 	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
-		&& (ShelterMate(t2Shelter) >= 0)
+		&& ((ShelterMate(t2Shelter) >= 0) || EcoRoleGrowing())
 		&& (ArmyValue() + ArmyInFlightM() >= ArmyTarget())
 		&& (UpDemand() >= Eco::MInc())) {
 		int ti = -1;
