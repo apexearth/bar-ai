@@ -14,24 +14,28 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-EXEC = re.compile(r"\[f=0*(\d+)\].*apex: exec t=0 (\w+) #(\d+) (\w+):(\w*) pick=\d+ at=(-?[\d.]+),(-?[\d.]+)")
-DECIDE = re.compile(r"\[f=0*(\d+)\].*apex: decide t=0 (\w+) #(\d+) -> ([a-z]+/[a-z]+):?\w* .*?why=(\w+)(?: role=\w+)?(?: over ([a-z]+/[a-z]+))?")
+EXEC = re.compile(r"\[f=0*(\d+)\][^\n]*?<ApexUnstable-([^>]*)>: [^\n]*?apex: exec t=(\d+) (\w+) #(\d+) (\w+):(\w*) "
+                  r"pick=\d+ at=(-?[\d.]+),(-?[\d.]+)")
+DECIDE = re.compile(r"\[f=0*(\d+)\].*apex: decide t=\d+ (\w+) #(\d+) -> ([a-z]+/[a-z]+):?\w* .*?why=(\w+)(?: role=\w+)?(?: over ([a-z]+/[a-z]+))?")
 
 
-def read(path: Path):
+def read(path: Path, ai: str):
+    """Jobs per builder of the AI whose name contains `ai` (any team), and each team's home."""
     txt = (path / "stdout.txt").read_text("utf-8", errors="replace")
     jobs = defaultdict(list)
-    home = None
+    homes = {}
     for m in EXEC.finditer(txt):
-        f, unit, uid, kind, d, x, z = m.groups()
-        if home is None and kind == "plant":
-            home = (float(x), float(z))
-        jobs[uid].append((int(f), unit, kind, d, float(x), float(z)))
+        f, ver, team, unit, uid, kind, d, x, z = m.groups()
+        if ai and ai not in ver:
+            continue
+        if team not in homes and kind == "plant":
+            homes[team] = (float(x), float(z))
+        jobs[uid].append((int(f), unit, kind, d, float(x), float(z), team))
     why = {}
     for m in DECIDE.finditer(txt):
         f, unit, uid, cat, w, over = m.groups()
         why[(uid, int(f))] = (cat, w, over or "-")
-    return home, jobs, why
+    return homes, jobs, why
 
 
 def main():
@@ -39,6 +43,7 @@ def main():
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--far", type=float, default=1500.0)
     ap.add_argument("--home", type=float, default=800.0)
+    ap.add_argument("--ai", default="", help="only the AI whose log name contains this (e.g. v0.1.4)")
     a = ap.parse_args()
     nextjob, reasons, units = Counter(), Counter(), Counter()
     mexfar = backs = 0
@@ -46,11 +51,12 @@ def main():
         p = Path(d)
         if not (p / "stdout.txt").exists():
             continue
-        home, jobs, why = read(p)
-        if home is None:
-            continue
+        homes, jobs, why = read(p, a.ai)
         for uid, seq in jobs.items():
-            for (f0, unit, k0, d0, x0, z0), (f1, _, k1, d1, x1, z1) in zip(seq, seq[1:]):
+            home = homes.get(seq[0][6])
+            if home is None:
+                continue
+            for (f0, unit, k0, d0, x0, z0, _t0), (f1, _, k1, d1, x1, z1, _t1) in zip(seq, seq[1:]):
                 if k0 != "mex" or math.hypot(x0 - home[0], z0 - home[1]) < a.far:
                     continue
                 mexfar += 1
