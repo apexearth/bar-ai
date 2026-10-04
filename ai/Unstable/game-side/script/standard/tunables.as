@@ -123,7 +123,7 @@ const float TUNE_GREED_CONS = 1.7f;
 // [metal] -- Workers allowed on one build site: one more per this much of the
 //   building's cost -- past that another pair of hands beats opening the next
 //   site less.
-const float TUNE_SITE_COST_PER_WORKER = 300.f;
+const float TUNE_SITE_COST_PER_WORKER = 215.8f;
 
 // Buildtime per worker -- the other arm of the site crew, taken as a MAX with
 //   the cost arm so it only ever raises the cap. See docs/27.
@@ -810,7 +810,7 @@ const float TUNE_PLANT_INCOME_PER = 50.f;
 // PIPE_LATENCY_H: the horizon against which a production pipeline's delivery
 //   latency discounts (h/(h+latency)) -- the temporal-consistency law applied to
 //   plants; what makes mex-solar-lab the emergent opening.
-const float TUNE_PIPE_LATENCY_H = 60.f;
+const float TUNE_PIPE_LATENCY_H = 78.1f;
 
 // Discount a tech want's deferred gain by the risk borne over its pipeline.
 //   See docs/27.
@@ -986,7 +986,7 @@ const float TUNE_STALL_SOLAR_E = 300.f;
 //   and afus"): a long window credits the converter with a payback the economy
 //   has already outgrown, which reads back as energy being worth more than it
 //   is.
-const float TUNE_CONV_HORIZON = 300.f;
+const float TUNE_CONV_HORIZON = 417.1f;
 
 // MODEL (flat until base-crowding senses drive it): what makes dense energy
 //   beat a field of solars at equal payback.
@@ -1086,7 +1086,7 @@ const float TUNE_M_REALIZE = 0.f;
 
 // The unspendable band keeps this share, because demand grows and the spot is
 //   still ours when it does -- the same reason E_WASTE_WORTH is not zero.
-const float TUNE_M_WASTE_WORTH = 0.25f;
+const float TUNE_M_WASTE_WORTH = 0.3753f;
 
 // Spatial threat prior: 0 at our start box, 1 at theirs. See docs/27.
 const float TUNE_THREAT_GRADIENT = 1.f;
@@ -1203,7 +1203,7 @@ const float TUNE_ECO_AA_MULT = 1.5f;
 
 // JOIN_MIN_M: def cost above which a second builder JOINS the standing build
 //   instead of opening a parallel copy (fusion-and-up territory).
-const float TUNE_JOIN_MIN_M = 500.f;
+const float TUNE_JOIN_MIN_M = 354.f;
 
 // ECO_LEASH: work radius of the quiet rear's builders from home -- the safe
 //   radius it prices everything else against.
@@ -1218,11 +1218,11 @@ const float TUNE_ECO_CON_KEEP = 3.f;
 //   (apexearth 2026-08-23: "1 T2 con + 1 per 25 metal . See docs/27.
 const float TUNE_T2_CON_BASE = 1.f;
 
-const float TUNE_T2_CON_PER_M = 25.f;
+const float TUNE_T2_CON_PER_M = 31.f;
 
 // [count] -- constructors of ANY TIER the line orders before the draw, the
 //   plain "how many hands" floor. See docs/27.
-const float TUNE_CON_BASE = 2.7f;
+const float TUNE_CON_BASE = 4.38f;
 
 // [count] -- basic air constructors kept once an air lab stands, one in the
 //   queue at a time so the other air keeps coming. See docs/27.
@@ -1328,7 +1328,7 @@ const float TUNE_BLAST_AISLE = 500.f;
 // CON_FEED_HEADROOM -- how many hands the production draw may price toward, as
 //   a multiple of income/apex_request_drain (the hands income keeps fed). See
 //   docs/27.
-const float TUNE_CON_FEED_HEADROOM = 1.5f;
+const float TUNE_CON_FEED_HEADROOM = 1.847f;
 
 // UNIT_AFFORD_S [seconds of income] -- a mobile unit's bid fades as its cost
 //   approaches this much income, dying at the full bill (mass first, T3 from
@@ -1802,7 +1802,7 @@ const float TUNE_PEEL_ECO_KEEP = 2.f;
 const float TUNE_NANO_FED_S = 15.f;
 
 // how sharply the category draw follows value. See docs/27.
-const float TUNE_DRAW_SHARP = 2.f;
+const float TUNE_DRAW_SHARP = 2.903f;
 
 // [ratio] -- share of the constructors that hold a ROLE (elect inside one
 //   category until the split says otherwise); the rest stay open. 0 is off.
@@ -2021,7 +2021,7 @@ const float TUNE_VW_WALK = 1.f;        // builder wage over the walk
 const float TUNE_VW_BUILD = 1.f;       // builder wage over the build
 const float TUNE_VW_DISP = 1.f;        // upgrade stream the build postpones
 const float TUNE_VW_LATE = 1.f;        // the asset's own late start (gain x walk/build)
-const float TUNE_VW_FLOW = 1.f;        // fleet throttle from an unfunded E drain
+const float TUNE_VW_FLOW = 0.6598f;        // fleet throttle from an unfunded E drain
 const float TUNE_VW_ECOST = 1.f;       // the energy bill
 const float TUNE_VW_FEED_BANK = 0.5f;  // share of the metal bank counted toward a build's feed
 const float TUNE_VW_MCS_FROM = 0.35f;  // bank fill where metal-cost forgiveness starts

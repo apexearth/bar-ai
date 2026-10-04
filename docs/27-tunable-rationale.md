@@ -3143,3 +3143,23 @@ build charged 1,209 metal of wage and a 42 s walk's late start. Counting the
 build: Epic ~1.5, AFUS ~4.3, fusion ~4.4 (hand arithmetic from that line).
 No threshold: at high build power the build is short and the big rung
 competes again. 0 is the walk-only control.
+
+## Ten economy defaults from the valuation search (2026-10-04)
+
+TUNE_CON_BASE 2.7 -> 4.38, TUNE_CON_FEED_HEADROOM 1.5 -> 1.847,
+TUNE_CONV_HORIZON 300 -> 417.1, TUNE_DRAW_SHARP 2 -> 2.903, TUNE_JOIN_MIN_M
+500 -> 354, TUNE_M_WASTE_WORTH 0.25 -> 0.3753, TUNE_PIPE_LATENCY_H 60 -> 78.1,
+TUNE_SITE_COST_PER_WORKER 300 -> 215.8, TUNE_T2_CON_PER_M 25 -> 31,
+TUNE_VW_FLOW 1 -> 0.6598.
+
+Found by `tools/ecoclimb.py` (run eco4, 943 games, our full AI vs NullAI on
+Comet Catcher 1v1 at +0/50/100, deathmode=neverend, score mean ln economy at
+minutes 8-20): two head-to-head accepts, x1.166 (t 2.26) and x1.121 (t 2.53),
+both inflated by selection. The one consistent signal is CON_BASE (slope t +2.6
+over 320 games): more constructors, the same lesson as his Within Reason demo.
+Checked against BARb hard before adoption (Carrot Mountains 1v1 +50%, 8 games
+per arm, stopped at his request after 2 of 4 rounds): economy at minutes
+2/4/6/10/14 17/30/41/82/140 against 16/27/38/66/133, +11% (t 2.2), mexes ahead
+at every minute, no slower start; W0 L0 against the defaults' W1 L0. Not yet
+read in team games. The model still read CON_BASE and CONV_HORIZON upward and
+PLANT_PIPE and LOCKUP downward when the run stopped.
