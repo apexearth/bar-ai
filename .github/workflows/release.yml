@@ -33,17 +33,21 @@ jobs:
           git fetch --depth 1 apex "$CIRCUITAI_SHA"
           git checkout --detach FETCH_HEAD
 
-      # cpp/ is the mirror the repo tracks; if it is not exactly the pinned
-      # commit, the release would ship C++ nobody can name.
+      # cpp/ is the mirror the repo tracks; if it is not the pinned commit, the
+      # release would ship C++ nobody can name. Line endings are ignored: bar-ai
+      # stores LF, the fork keeps upstream's CRLF in a few files.
       - name: cpp/ must match CIRCUITAI_SHA
         working-directory: engine/AI/Skirmish/BARb
         run: |
           cp -r "$GITHUB_WORKSPACE/cpp/src/." src/
-          if [ -n "$(git status --porcelain)" ]; then
-            git status --short
+          extra=$(git ls-files --others --exclude-standard src)
+          if [ -n "$extra" ] || ! git diff --ignore-cr-at-eol --quiet; then
+            echo "$extra"
+            git diff --ignore-cr-at-eol --stat
             echo "::error::cpp/src differs from $CIRCUITAI_SHA -- push the fork and bump CIRCUITAI_SHA in .github/release.env"
             exit 1
           fi
+          git checkout -- src
 
       - uses: actions/cache@v4
         with:
