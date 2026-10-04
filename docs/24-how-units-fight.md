@@ -287,6 +287,11 @@ this file wins and the other is stale.
 
 ## Retreat
 
+- **Under lag, all in.** apexearth 2026-10-03: "When we're lagging we really
+  should just full on attack the enemy. If we've got a command delay we
+  really can't properly use our army so we might as well just send them all
+  in to attack." While the game runs behind its set speed, no holds (except
+  a base actually under attack), groups leave at the floor, no retreats.
 - **A squad in a fight it obviously cannot win turns around and retreats
   immediately.** If there are nearby towers or defences to go behind, go
   there, hide behind them and fight the enemy under our towers; the towers

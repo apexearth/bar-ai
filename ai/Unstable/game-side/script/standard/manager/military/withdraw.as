@@ -425,7 +425,7 @@ void UpdateWithdraw()
 		return;
 	gNextWithdraw = ai.frame + 2 * SECOND;
 	{ double _t = Perf::T0(); ArmyCoverSample(); Perf::Add("up.armycover", _t); }
-	if (ai.GetTunable("apex_withdraw", TUNE_WITHDRAW) <= 0.f)
+	if ((ai.GetTunable("apex_withdraw", TUNE_WITHDRAW) <= 0.f) || AllIn())
 		return;
 	if (ai.frame >= gWithdrawAllyLogAt) {
 		gWithdrawAllyLogAt = ai.frame + 60 * SECOND;

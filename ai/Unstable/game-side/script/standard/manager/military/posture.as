@@ -387,7 +387,7 @@ void UpdateLanePos()
 	// ratchet. Standing forward is what protects the income that pays for the
 	// army; only ground the enemy actually holds (the net-influence walk
 	// below) and a measured bad trade may pull the anchor back.
-	if (TradeBad() && Builder::gHomeSet) {
+	if (TradeBad() && Builder::gHomeSet && !AllIn()) {
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
 			const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);

@@ -246,7 +246,7 @@ float MassWant()
 	// unit count or metal value, so it cannot be derived from a metal figure.
 	// ON by default: off, every group commits at the floor whatever the enemy
 	// massed -- the "they kill our smaller masses one by one" report, twice.
-	if (ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f)
+	if ((ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f) || AllIn())
 		return MassFloor();
 
 	const float ours = TeamArmyCost();
@@ -379,6 +379,22 @@ int gHoldFull = 0;      // elections that went to attack because enough already 
 int gHoldWhyLast = -1;
 int gNextHoldRelLog = 0;
 
+// ALL IN UNDER LAG (apexearth 2026-10-03: "if we've got a command delay we
+// really can't properly use our army so we might as well just send them all
+// in to attack"). docs/24.
+bool gAllIn = false;
+bool AllIn()
+{
+	const bool on = Perf::LagSeverity() >= 1.f;
+	if (on != gAllIn) {
+		gAllIn = on;
+		AiLog(Factory::T() + "apex: all-in " + (on ? "ON" : "OFF") + " t=" + ai.teamId
+			+ " speed=" + formatFloat(Perf::SimSpeed(), "", 0, 2)
+			+ " set=" + formatFloat(Perf::SetSpeed(), "", 0, 1));
+	}
+	return on;
+}
+
 bool HoldReason()
 {
 	if (ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) <= 0.f)
@@ -386,6 +402,8 @@ bool HoldReason()
 	int why = -1;
 	if (Builder::BaseUnderAttack())
 		why = 0;
+	else if (AllIn())
+		return false;
 	else if (BaseContested())
 		why = 1;
 	else if (BaseRaided())
