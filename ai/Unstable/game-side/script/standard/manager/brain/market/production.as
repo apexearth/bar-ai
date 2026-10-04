@@ -1218,6 +1218,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		armyGap = waterGap;
 		gapSrc = "water";
 	}
+	// UNDER LAG, FEWER AND BIGGER UNITS (apexearth 2026-10-03: "if we see the FPS
+	// in the game below 30, can we just make less T2 units and focus only on the
+	// T3 units? We can still make airplanes"). While the game runs behind its set
+	// speed, a ground line below our best ground tier makes no army.
+	if (!airLine && (Perf::LagSeverity() >= 1.f) && (PlantTier(fid) < TopGroundPlantTier())) {
+		armyGap = 0.f;
+		gapSrc = "lag";
+	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
 	// already zero here and a second multiplier would apply the same rule

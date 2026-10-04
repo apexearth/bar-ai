@@ -241,6 +241,24 @@ int TopOwnPlantTier()
 	return gTopTier;
 }
 
+// The best tier among our standing GROUND (and water) plants.
+int TopGroundPlantTier()
+{
+	int top = 1;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const int fd = int(f.circuitDef.id);
+		if (AirPlant(fd))
+			continue;
+		const int t = PlantTier(fd);
+		if (t > top)
+			top = t;
+	}
+	return top;
+}
+
 float OwnTierMul(int d)
 {
 	const float k = ai.GetTunable("apex_own_tier_fade", TUNE_OWN_TIER_FADE);

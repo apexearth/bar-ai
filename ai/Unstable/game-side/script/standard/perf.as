@@ -97,18 +97,18 @@ void TickSpeed()
 	// window walks it back down. 0 = fine; past 1 the deeper cuts unlock
 	// (towers anywhere, surplus builders); past 2 the deepest (T2 army stops
 	// when T3 runs). Recovery is measured, not assumed.
-	if (gSimSpeed < ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
+	if (gSimSpeed < SetSpeed() * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
 		gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
 		if (gLagSev > 3.f)
 			gLagSev = 3.f;
-	} else if (gSimSpeed >= 0.995f) {
+	} else if (gSimSpeed >= 0.995f * SetSpeed()) {
 		gLagSev -= 0.2f;
 		if (gLagSev < 0.f)
 			gLagSev = 0.f;
 	}
 	if ((gLagSev > 0.f) && (ai.frame >= gNextLagLog)) {
 		gNextLagLog = ai.frame + 30 * SECOND;
-		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2)
+		AiLog("apex: LAG speed=" + formatFloat(gSimSpeed, "", 0, 2) + " set=" + formatFloat(SetSpeed(), "", 0, 1)
 			+ " severity=" + formatFloat(gLagSev, "", 0, 1));
 	}
 }
@@ -119,6 +119,17 @@ float LagSeverity()
 	return gLagSev;
 }
 
+// THE SPEED THE HOST ASKED FOR, not realtime (apexearth 2026-10-03: watching at
+// 10-20x, the frame rate sank under 30 and the realtime bar never fired). Above
+// 40x is a benchmark asking for "as fast as possible": no lag reads there.
+float SetSpeed()
+{
+	const float s = ai.GetSpeedFactor();
+	if (s > 40.f)
+		return 0.f;
+	return (s > 0.1f) ? s : 1.f;
+}
+
 float SimSpeed()
 {
 	return gSimSpeed;
@@ -126,7 +137,7 @@ float SimSpeed()
 
 bool GameLagging()
 {
-	return gSimSpeed < ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED);
+	return gSimSpeed < SetSpeed() * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED);
 }
 
 void Flush()

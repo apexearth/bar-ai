@@ -1390,6 +1390,13 @@ static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name,
 	return circuit->GetTunable(name, defVal);
 }
 
+// apex: the game speed the host has set (1 = realtime); the script's lag
+// detector measures the sim against this, not against realtime.
+static float CCircuitAI_GetSpeedFactor(CCircuitAI* circuit)
+{
+	return circuit->GetGame()->GetSpeedFactor();
+}
+
 // apex: monotonic microsecond clock so the script can profile its own sections.
 // Host-local wall time — the AI runs only on the host, so reading it cannot
 // desync; still, use it for logging only, never for a gameplay decision.
@@ -1837,6 +1844,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetSpeedFactor() const", asFUNCTION(CCircuitAI_GetSpeedFactor), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatio(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordRatio), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int RecordCount(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordCount), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void RecordSetTier(const CCircuitDef@, int)", asMETHOD(CCircuitAI, RecordSetTier), asCALL_THISCALL); ASSERT(r >= 0);
