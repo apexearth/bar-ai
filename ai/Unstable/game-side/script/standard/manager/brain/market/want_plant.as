@@ -1623,6 +1623,8 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				&& (ShelterMate(smh) < 0) && Military::TeamHasSheltered())
 				continue;
 		}
+		if (DuelAirTechHeld(d))
+			continue;
 		// FOCUS: ONE T1 LINE UNTIL T2 (apexearth 2026-10-03: "focusing on the
 		// factories is good. Later on in the game, you can have multiple types"
 		// -- 5-7 plants a seat against BARb's 4-5). Before our first advanced

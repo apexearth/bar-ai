@@ -1026,6 +1026,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			AdvDeferLog("air:" + ap.GetName());
 			@ap = null;
 		}
+		if ((ap !is null) && DuelAirTechHeld(int(ap.id)))
+			@ap = null;
 		if ((ap !is null) && unit.circuitDef.CanBuild(ap)
 			&& !Requests::LiveOfDef(ap) && !PlantCopyRefusable(int(ap.id)))
 		{

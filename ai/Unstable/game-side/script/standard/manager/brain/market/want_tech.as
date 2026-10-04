@@ -622,6 +622,8 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;   // this def is already requested: help it, not double it
+		if (DuelAirTechHeld(d))
+			continue;
 		// ONE ADVANCED PLANT AT A TIME, PER PLAYER -- the kin division below
 		// only sees the extract/convert axes, so a T2 AIR lab in flight was
 		// invisible to a T2 vehicle candidate and Purple raised both at once

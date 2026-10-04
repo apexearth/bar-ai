@@ -259,6 +259,21 @@ int TopGroundPlantTier()
 	return top;
 }
 
+// IN A 1V1, T2 IS A GROUND LAB FIRST (apexearth 2026-10-03: "when we're doing
+// a one versus one ... we don't flip to tier two with an air lab. Usually we
+// can't defend ourselves properly if we do that").
+int gDuelAirLogAt = 0;
+bool DuelAirTechHeld(int d)
+{
+	const bool held = AirPlant(d) && (PlantTier(d) >= 2) && (Military::AllyCount() <= 1.f)
+		&& !LandLocked() && (TopGroundPlantTier() < 2);
+	if (held && (ai.frame >= gDuelAirLogAt)) {
+		gDuelAirLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: duel-air-held t=" + ai.teamId + " " + Catalog::Def(d).GetName());
+	}
+	return held;
+}
+
 float OwnTierMul(int d)
 {
 	const float k = ai.GetTunable("apex_own_tier_fade", TUNE_OWN_TIER_FADE);
