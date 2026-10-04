@@ -560,6 +560,25 @@ float StrikeGainFor(int d, float fillSec)
 	return MarginalGain(d, held) / ((fillSec > 1.f) ? fillSec : 180.f);
 }
 
+// Which of StrikeGainFor's gates zeroed it -- the prodrank line's wing0 reason.
+string StrikeWhy(int d)
+{
+	if (!WingBuys())
+		return (ai.frame < AIR_FROM) ? "early" : "eco";
+	if (IsAtomicDef(d))
+		return IsAirLead() ? "atomic" : "atomic-notlead";
+	int held = HeldBombers();
+	const int pool = int(TeamWingHeld());
+	if (pool > held)
+		held = pool;
+	if (ScaledBombers() <= 0)
+		return "scaled0";
+	if (held >= ScaledBombers())
+		return "full " + held + "(pool" + pool + ")/" + ScaledBombers();
+	return "worth " + int(MarginalGain(d, held)) + "<" + int(Catalog::gCostM[d]
+			* ai.GetTunable("apex_air_payoff", TUNE_AIR_PAYOFF)) + " obs=" + int(ObsDmg(d));
+}
+
 // Every wave waits for its escort (EscortWant), so a missing fighter holds
 // every bomber at home: it earns what the wing's last bomber does, over the
 // share of the escort still missing.

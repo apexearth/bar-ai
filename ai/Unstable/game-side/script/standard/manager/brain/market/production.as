@@ -1224,6 +1224,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// speed, a ground line below our best ground tier makes no army.
 	if (!airLine && (Perf::LagSeverity() > 0.f) && (PlantTier(fid) < TopGroundPlantTier())) {
 		armyGap = 0.f;
+		richBal = 0.f;   // the spilled-metal sink bought Mammoths past the cut
+		coverShare = 0.f;
 		gapSrc = "lag";
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
@@ -1695,7 +1697,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				candGain.insertLast(gainB);
 				sumV += vB;
 			} else if (prankNow) {
-				prank += " " + Catalog::Def(d).GetName() + ":wing0";
+				prank += " " + Catalog::Def(d).GetName() + ":wing0(" + (ecoGrowing ? "eco-seat" : Air::StrikeWhy(d)) + ")";
 			}
 			continue;
 		}
