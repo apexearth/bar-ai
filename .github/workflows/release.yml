@@ -1,0 +1,97 @@
+name: release
+
+# A v* tag builds SkirmishAI.dll from the pins in .github/release.env and
+# publishes the host-install zip as a GitHub Release. A manual run builds the
+# same zip as a workflow artifact without releasing it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load pins
+        run: grep -E '^[A-Z_]+=' .github/release.env >> "$GITHUB_ENV"
+
+      - name: Fetch engine source
+        run: |
+          git clone --depth 1 --branch "$ENGINE_REF" --recurse-submodules \
+            --shallow-submodules --jobs 8 "$ENGINE_REPO" engine
+
+      - name: Check out the apex C++
+        working-directory: engine/AI/Skirmish/BARb
+        run: |
+          git remote add apex "$CIRCUITAI_REPO"
+          git fetch --depth 1 apex "$CIRCUITAI_SHA"
+          git checkout --detach FETCH_HEAD
+
+      # cpp/ is the mirror the repo tracks; if it is not exactly the pinned
+      # commit, the release would ship C++ nobody can name.
+      - name: cpp/ must match CIRCUITAI_SHA
+        working-directory: engine/AI/Skirmish/BARb
+        run: |
+          cp -r "$GITHUB_WORKSPACE/cpp/src/." src/
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::cpp/src differs from $CIRCUITAI_SHA -- push the fork and bump CIRCUITAI_SHA in .github/release.env"
+            exit 1
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: ccache
+          key: ccache-${{ env.ENGINE_REF }}-${{ env.CIRCUITAI_SHA }}
+          restore-keys: ccache-${{ env.ENGINE_REF }}-
+
+      - name: Build SkirmishAI.dll
+        run: |
+          mkdir -p build ccache
+          docker run --rm \
+            -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD/engine":/build/src:ro \
+            -v "$PWD/ccache":/build/cache \
+            -v "$PWD/build":/build/out \
+            -e CCACHE_DIR=/build/cache \
+            "$BUILD_IMAGE" bash -c '
+              set -e
+              /build/src/docker-build-v2/scripts/configure.sh
+              ninja -C /build/out BARb
+              x86_64-w64-mingw32-strip -o /build/out/SkirmishAI.dll \
+                /build/out/AI/Skirmish/BARb/data/SkirmishAI.dll'
+          ls -la build/SkirmishAI.dll
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Package
+        run: |
+          label="${GITHUB_REF_NAME}"
+          [ "$GITHUB_REF_TYPE" = tag ] || label="${GITHUB_SHA::8}"
+          python tools/package_ai.py "$VARIANT" --out dist \
+            --base-dir engine/AI/Skirmish/BARb/data \
+            --dll build/SkirmishAI.dll \
+            --engine "$ENGINE_NAME" --label "$label"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: dist/*.zip
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Host-only install for BAR engine $ENGINE_NAME. Unzip and follow INSTALL.txt. C++: $CIRCUITAI_SHA"

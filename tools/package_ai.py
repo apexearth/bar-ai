@@ -63,21 +63,35 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("variant", nargs="?", default="Unstable")
     ap.add_argument("--out", default="dist", help="output directory (default dist/)")
+    # CI has no BAR install: these three replace what bar_env reads from it.
+    ap.add_argument("--base-dir", help="stock BARb data folder (default: the installed BARb/stable)")
+    ap.add_argument("--dll", help="SkirmishAI.dll to ship (default: local build, else the repo copy)")
+    ap.add_argument("--engine", help="engine name the zip is for, e.g. recoil_2026.07.04")
+    ap.add_argument("--label", help="replaces <date>-<git> in the zip name, e.g. a release tag")
     args = ap.parse_args()
 
-    env = bar_env.load()
     variant = args.variant
     short = short_name(variant)
     src = REPO / "ai" / variant
     if not (src / "engine-side" / "AIInfo.lua").exists():
         raise SystemExit(f"no such variant: {src}")
 
-    stable = env.skirmish_dir(BASE_SHORT_NAME, "stable")
-    if not (stable / "SkirmishAI.dll").exists():
-        raise SystemExit(
-            f"engine {env.engine_version} has no BARb/stable to derive from:\n"
-            f"  {stable}\nPackaging needs a working local install."
-        )
+    if args.base_dir:
+        if not args.engine:
+            raise SystemExit("--base-dir needs --engine: there is no install to read it from")
+        stable = Path(args.base_dir)
+        engine = args.engine
+        if not (stable / "AIInfo.lua").exists():
+            raise SystemExit(f"--base-dir is not a BARb data folder: {stable}")
+    else:
+        env = bar_env.load()
+        engine = args.engine or env.engine_version
+        stable = env.skirmish_dir(BASE_SHORT_NAME, "stable")
+        if not (stable / "SkirmishAI.dll").exists():
+            raise SystemExit(
+                f"engine {env.engine_version} has no BARb/stable to derive from:\n"
+                f"  {stable}\nPackaging needs a working local install."
+            )
 
     git = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO,
                          capture_output=True, text=True).stdout.strip() or "nogit"
@@ -90,7 +104,7 @@ def main() -> int:
     date = _dt.date.today().isoformat()
     out_dir = REPO / args.out
     out_dir.mkdir(exist_ok=True)
-    zip_path = out_dir / f"{short}-{variant}-{env.engine_version}-{date}-{git}.zip"
+    zip_path = out_dir / f"{short}-{variant}-{engine}-{args.label or date + '-' + git}.zip"
 
     with tempfile.TemporaryDirectory() as tmp:
         target = Path(tmp) / short / variant
@@ -102,7 +116,11 @@ def main() -> int:
         built_dll = REPO / "vendor/engine/build-amd64-windows/AI/Skirmish/BARb/data/SkirmishAI.dll"
         for name in ("AIInfo.lua", "AIOptions.lua", "SkirmishAI.dll"):
             f = engine_side / name
-            if name == "SkirmishAI.dll" and built_dll.exists():
+            if name == "SkirmishAI.dll" and args.dll:
+                f = Path(args.dll)
+                if not f.exists():
+                    raise SystemExit(f"--dll does not exist: {f}")
+            elif name == "SkirmishAI.dll" and built_dll.exists():
                 f = built_dll
             if f.exists():
                 shutil.copy2(f, target / name)
@@ -121,7 +139,7 @@ def main() -> int:
 
         (Path(tmp) / "INSTALL.txt").write_text(INSTALL.format(
             name=short, short=short, variant=variant,
-            engine=env.engine_version, date=date, git=git), encoding="utf-8")
+            engine=engine, date=date, git=git), encoding="utf-8")
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(Path(tmp).rglob("*")):
@@ -130,7 +148,7 @@ def main() -> int:
 
     n_files = sum(1 for _ in zipfile.ZipFile(zip_path).namelist())
     mb = zip_path.stat().st_size / 1e6
-    print(f"packaged {short}:{variant} for engine {env.engine_version}")
+    print(f"packaged {short}:{variant} for engine {engine}")
     print(f"  {zip_path}  ({mb:.1f} MB, {n_files} files)")
     print(f"  host-only install; engine version must match exactly.")
     return 0
