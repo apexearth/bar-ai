@@ -53,6 +53,7 @@ private:
 	FightType promote;
 	float maxPower;
 	int pettyLogAt = 0;
+	int leashLogAt = 0;   // apex: the defend-leash line, at most every 30 s per task
 	int detachUntil = 0;  // apex: a squad split off for one raider; no merge, no promote, no recruits
 	int Detach(CEnemyInfo* enemy, float threat);
 };

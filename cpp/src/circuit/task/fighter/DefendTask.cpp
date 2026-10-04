@@ -264,6 +264,14 @@ bool CDefendTask::FindTarget()
 	const bool detached = frame < detachUntil;
 	const float pettyBar = attackPower * .5f;
 	int pettySkipped = 0;
+	int leashSkipped = 0;
+	float sqLeash = -1.f;
+	{
+		const float leash = circuit->GetTunable("apex_pool_leash", 0.f);
+		if ((leash > 0.f) && !detached && circuit->HasFrontPos()) {
+			sqLeash = SQUARE(basePos.distance2D(circuit->GetFrontPos()) + leash);
+		}
+	}
 	int pettyCovered = 0;
 	CEnemyInfo* detachFor = nullptr;
 	float detachSq = std::numeric_limits<float>::max();
@@ -282,6 +290,12 @@ bool CDefendTask::FindTarget()
 		}
 
 		const float sqEBDist = basePos.SqDistance2D(ePos);
+		// apex_pool_leash: a gathering pool does not chase past its own staging line
+		// (his "units must not trickle"): 79% of the army lost on their side died in this task.
+		if ((sqLeash > 0.f) && (sqEBDist >= sqBaseRange) && (sqEBDist > sqLeash)) {
+			++leashSkipped;
+			continue;
+		}
 		float checkPower = maxPower;
 		if (sqEBDist < sqBaseRange) {
 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
@@ -360,6 +374,11 @@ bool CDefendTask::FindTarget()
 					? detachFor->GetCircuitDef()->GetDef()->GetName() : "-",
 				(bestTarget != nullptr) && (bestTarget->GetCircuitDef() != nullptr)
 					? bestTarget->GetCircuitDef()->GetDef()->GetName() : "-");
+	}
+	if ((leashSkipped > 0) && (frame >= leashLogAt)) {
+		leashLogAt = frame + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: defend-leash t=%i lead=%s n=%u skipped=%i", circuit->GetTeamId(),
+				cdef->GetDef()->GetName(), (unsigned)units.size(), leashSkipped);
 	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);

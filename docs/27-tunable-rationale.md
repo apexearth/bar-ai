@@ -3199,3 +3199,14 @@ v0.1.2: 13-11 / 12-12, then 15-9 / 10-14 with the bigger base front: even.
 Tried and not kept: hold-at-home (attack_edge 0.6, mass_hold_ratio 1.0,
 lane_forward 0.15) did not beat the plain candidate; TUNE_RECORD_BITE=0 went
 10-14 / 10-14.
+
+## TUNE_COM_LAB_EARLY, TUNE_ESCORT_CAP = 8, TUNE_ESCORTS_PER_CON = 2, SPEND_ARMY 6 (2026-10-04, v0.1.4)
+
+His plan after the mirrors stuck at 50%: the commander supports the lab early,
+more escorts so constructors die less, go hard into army. Tournament format
+(records carried, Comet 1v1, 24 games each): vs v0.1.3 12-12, vs v0.1.1 12-12,
+vs v0.1.2 16-8 (40-32 overall, within noise). Mechanism: constructors lost by
+minute 10 0.5 against 0.9-1.0; army at 12 min 4,738 vs v0.1.3's 4,654 -- the
+army weight barely moves army while one lab is the bottleneck. Not kept: a 1v1
+second-lab exception (reverted for being a special case; apex_plant_income_per
+belongs to the search instead). Next: these become prices, not queue-jumps.

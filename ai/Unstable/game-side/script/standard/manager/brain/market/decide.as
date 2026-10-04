@@ -576,6 +576,7 @@ float MexLossShare()
 int gFarHandSkips = 0;
 int gFarClaims = 0;      // far hands sent to their nearest spot, logged on elec-slice
 int gComEscort = 0;      // commander sent to the lab while escorts are owed
+int gComLabNextAt = 0;   // the opening assist alternates: a minute at the lab, a minute of his own work
 bool FarHand(CCircuitUnit@ unit)
 {
 	if (!Builder::gHomeSet)
@@ -1983,7 +1984,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// keeps -- which is why he never assisted early.
 	if (!aaPanic && !superPush && !convertPush && !coverPush
 		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f) && (EscortShortfall() > 0))
+		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f)
+		&& ((EscortShortfall() > 0)
+			|| ((ai.GetTunable("apex_com_lab_early", TUNE_COM_LAB_EARLY) > 0.5f)   // ...and through the opening (his 2026-10-04)
+				&& (ai.frame >= gComLabNextAt) && (TopGroundPlantTier() < 2) && (ArmyValue() < ArmyTarget()))))
 	{
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		CCircuitUnit@ lab = null;
@@ -2014,6 +2018,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++gComEscort;
 			coverPush = true;
 			why = "comescort";
+			if (EscortShortfall() <= 0)
+				gComLabNextAt = ai.frame + 120 * SECOND;
 		}
 	}
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so

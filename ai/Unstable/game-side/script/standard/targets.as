@@ -73,7 +73,7 @@ array<float> INCOME = { 8.f,  20.f,  50.f, 100.f, 300.f};
 // weight moved into SPEND_ECONOMY below (def/airdef/buildpower untouched).
 // The 2026-08-19 raise this replaces was measured against the OLD spend
 // machinery; with the budget deferrals live, the target now actually binds.
-array<float> SPEND_ARMY       = { 4.0f,  4.0f,  5.0f,  5.0f,   5.0f };
+array<float> SPEND_ARMY       = { 6.0f,  6.0f,  6.0f,  6.0f,   6.0f };   // his 2026-10-04: "go hard into a nice army that will protect us" (was 4,4,5,5,5)
 // LOW until T3-scale income, then RISING HARD -- apexearth: pre-T3 "defenses
 // are really only good versus raiders", but "at late game we should be
 // aggressive with flak on our front lines, T3 defense too. Right now we are

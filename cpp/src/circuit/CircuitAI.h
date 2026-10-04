@@ -570,6 +570,7 @@ private:
 	int recFoeFrame = -1;
 	void RecordFoeRefresh();
 	std::string recPath;
+	std::string recLegacyPath;   // apex: the version's own file, read once while the shared one is empty
 	void RecordLoad();
 	void RecordSave();
 	static bool RecordCounts(CCircuitDef* cdef);

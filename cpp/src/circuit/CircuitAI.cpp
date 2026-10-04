@@ -190,7 +190,18 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 				logSteady0 = std::chrono::steady_clock::now();
 				LOG_ENGINE("apex: log file %s", path.c_str());
 			}
-			recPath = std::string(dir) + "apex-record.txt";
+			// ONE RECORD FOR EVERY APEX VERSION (his 2026-10-04): AI/Skirmish/apex-record.txt,
+			// two folders above <short>/<version>/; a version's own file seeds it once.
+			recLegacyPath = std::string(dir) + "apex-record.txt";
+			std::string up(dir);
+			while (!up.empty() && ((up.back() == '/') || (up.back() == '\\'))) {
+				up.pop_back();
+			}
+			for (int i = 0; (i < 2) && !up.empty(); ++i) {
+				const size_t cut = up.find_last_of("/\\");
+				up = (cut == std::string::npos) ? std::string() : up.substr(0, cut);
+			}
+			recPath = up.empty() ? recLegacyPath : (up + "/apex-record.txt");
 		}
 	}
 }
@@ -2571,11 +2582,15 @@ void CCircuitAI::RecordLoad()
 {
 	recStored.clear();
 	recAggDirty = true;
-	if (recPath.empty() || recTweaked) {
+	// apex_record_load 0: learn within the game, start it from a blank record (history not read).
+	if (recPath.empty() || recTweaked || (GetTunable("apex_record_load", 1.f) <= 0.f)) {
 		return;
 	}
 	std::map<std::pair<std::string, std::string>, SXch> byName;
 	RecordRead(recPath, byName);
+	if (byName.empty() && (recLegacyPath != recPath)) {
+		RecordRead(recLegacyPath, byName);
+	}
 	for (auto& kv : byName) {
 		CCircuitDef* a = GetCircuitDef(kv.first.first.c_str());
 		CCircuitDef* b = GetCircuitDef(kv.first.second.c_str());
@@ -2596,6 +2611,9 @@ void CCircuitAI::RecordSave()
 	}
 	std::map<std::pair<std::string, std::string>, SXch> all;
 	RecordRead(recPath, all);
+	if (all.empty() && (recLegacyPath != recPath)) {
+		RecordRead(recLegacyPath, all);
+	}
 	const float window = GetTunable("apex_record_window", 40.f);
 	for (auto& kv : recGame) {
 		CCircuitDef* a = GetCircuitDef(CCircuitDef::Id(kv.first / 65536));

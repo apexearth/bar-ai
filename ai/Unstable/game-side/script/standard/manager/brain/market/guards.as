@@ -115,10 +115,19 @@ float EscortMetalOn(Id wid)
 	return m;
 }
 
+// Guards an exposed constructor is owed (his 2026-10-04: "more escorts on our
+// constructors so they don't die so often"); a worker short of them still counts
+// as exposed, so the escort floor keeps producing.
+float EscortsPerCon()
+{
+	const float n = ai.GetTunable("apex_escorts_per_con", TUNE_ESCORTS_PER_CON);
+	return (n > 1.f) ? n : 1.f;
+}
+
 bool EscortedWorker(Id wid)
 {
 	if (EscIdOk(wid))
-		return gEscHaveN[int(wid)] > 0;
+		return gEscHaveN[int(wid)] >= int(EscortsPerCon());
 	for (uint e = 0; e < gEscWorker.length(); ++e) {
 		if (gEscWorker[e] == wid)
 			return true;
@@ -152,7 +161,7 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	// Three at most, stock's own cap (apexearth 2026-10-01, approving it; 09-13:
 	// "We have so many escorts in the base it is ludicrous"). A third to half
 	// of each army stood on escort duty in his 8v8.
-	if (gEscWorker.length() >= 3)
+	if (gEscWorker.length() >= uint(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP)))
 		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
@@ -172,7 +181,7 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		// A unit takes the duty when at least half of it is still wanted.
 		const float haveM = EscortMetalOn(wkr.id);
 		float needM = WorkerEnemyM(wkr, (expoR > 1.f) ? expoR : 1200.f);
-		const float floorM = expo * mineM;
+		const float floorM = expo * mineM * EscortsPerCon();
 		if (floorM > needM)
 			needM = floorM;
 		if (needM - haveM < 0.5f * mineM)
