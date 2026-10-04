@@ -20,7 +20,7 @@ lines of quotes.
   held 5-7 mexes for 16 minutes on a 19-spot map while BARb's two took the
   strip between our corners by minute 8. Measured: the spot gap is forward
   spots only, and it forms while our hands upgrade home mohos in the 10-12
-  window. The ladder's spot claim is no longer sampled away (64fcb121).
+  window. The ladder's spot claim is no longer sampled away (d726331a).
 - The eco seat should run on nano turrets, not constructors: about 4 advanced
   land cons, ~10 T1 air cons, 5-6 advanced air cons, and turrets for the rest.
   Today the seat's ~120 T2 cons come from the T2-con floor `2 + income/25`
@@ -447,7 +447,7 @@ Built 09-25: `EcoBehind()` compares our team's structure metal with the
 enemy's; `apex: ecoside` logs both every 30 s. 2026-09-29: it read SEEN
 structures only, so a jammed enemy read 5x behind us; the unseen part now
 counts as our total less the army they have shown, giving way to what our
-eyes cover (`fdaee7bf`). Verified: behind=1 on Isthmus. The army/eco split did
+eyes cover (`6ed66841`). Verified: behind=1 on Isthmus. The army/eco split did
 not move there -- cover demand and the navy budget were the buyers (ISSUES.md).
 Raised AGAIN 2026-09-30 (Carrot 8v8): more military than them the whole time
 we fell to half their income. UNRESOLVED.

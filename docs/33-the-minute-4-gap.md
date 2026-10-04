@@ -22,7 +22,7 @@
 > one standing obligation, and `budget.as:13` says it is not implemented.
 >
 > Two things below still stand on their own evidence: the minute-4 spend table
-> (a direct measurement, not a correlation) and `3bb47630`. One thing is
+> (a direct measurement, not a correlation) and `1bf6732c`. One thing is
 > added: by minute 6 we lose 1.41 extractors a game and 0.67 more killed
 > mid-build, against BARb's 0.95 and 0.03 (`tools/mexkill.py`) — about half
 > the minute-4 gap is extractors we started and did not keep.
@@ -98,7 +98,7 @@ energy: 780 metal to their 435, for less energy per metal (solar is 155 for
 
 ## What helped
 
-`3bb47630` — a commander already outside the leash takes the best job
+`1bf6732c` — a commander already outside the leash takes the best job
 within 600 elmo of **himself** rather than the best job near home. Two
 independent 96-game runs: minute-4 gap -1.5 -> -1.0 and -1.1, our
 extractors killed by minute 4 down 42% (0.45 -> 0.26 per side), their units

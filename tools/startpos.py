@@ -3,7 +3,7 @@
     python tools/startpos.py <tournament-dir> [...]
 
 A start box does not fix a start POSITION: the harness picks from the map's
-own starts inside the box and clamps one that falls just outside (ebb33037).
+own starts inside the box and clamps one that falls just outside (21173316).
 If the two boxes are not drawing equally good ground, every side-split number
 is measuring the draw and not the AI.
 """

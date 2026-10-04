@@ -1593,7 +1593,7 @@ const float TUNE_FLOOR_YIELD = 0.f;
 const float TUNE_DEATHWALK_PRICE = 0.f;
 
 // [toggle 0/1] -- A commander already outside his leash finishes the work
-//   around him (3bb47630) instead of walking home for it. 1 is the behaviour
+//   around him (1bf6732c) instead of walking home for it. 1 is the behaviour
 //   since 2026-09-22; forward is also where he dies. See docs/27.
 
 // [0..1] -- What an extractor spot outside the commander's leash is WORTH to
@@ -1604,7 +1604,7 @@ const float TUNE_DEATHWALK_PRICE = 0.f;
 const float TUNE_COM_MEX_PRICE = 0.f;
 
 // [multiplier] -- What the army target is while the T2 switch is on. 0 is the
-//   behaviour since 91d09dd7: literally zero, for ~80% of the game. 1 holds
+//   behaviour since 8aef73b1: literally zero, for ~80% of the game. 1 holds
 //   the defensive need (Military::HoldNeedM) instead, capped at the full
 //   target. The switch's stated purpose is a defensive army, not a stand-down.
 //   See docs/27.

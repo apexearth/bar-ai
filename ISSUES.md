@@ -94,9 +94,9 @@ measured is in the commit messages; what is not:
   never run in a test before deploy. Whose building pens our units is not
   logged.
 
-### REGRESSION CHECK 2026-09-30 NIGHT: today's five commits vs c2ca8507
+### REGRESSION CHECK 2026-09-30 NIGHT: today's five commits vs f51a423f
 
-Control = c2ca8507 C++ and script in lane `pushctl` (C++ overlaid from
+Control = f51a423f C++ and script in lane `pushctl` (C++ overlaid from
 `git archive`, script copied over both deployed copies). Head = lane
 `neartarget`.
 - 1v1 vs BARb hard +100%, 30 min, Comet Catcher + Supreme Isthmus, 6 seeds
@@ -121,7 +121,7 @@ Control = c2ca8507 C++ and script in lane `pushctl` (C++ overlaid from
   head: ~10% dearer per unit (rez bots near the front: rz.salvage +76%; path
   queries +60%/min from the push targeting). Half the AI is the builder
   election (bld.decide ~1.2 ms a call), unchanged by today.
-- 9eec0da8 let LRPCs skip the affordability skip, so every election sites
+- 1366fa22 let LRPCs skip the affordability skip, so every election sites
   each cannon through HighGroundNear (up to ~110 FindBuildSiteNear calls,
   twice); want.super max went 12.7 -> 17.9 ms. HighGroundNear now probes
   highest-first, stops at the first legal site, cached 10 s per def+spot.
@@ -615,7 +615,7 @@ both, 0.2 lr boxes). Control `tournaments/20260921-202615-ctl2v2-gp` 0-8
 and `20260921-200959-*` 1-11 (0.38 boxes). Three agents read the losses
 independently; the census and their corrections:
 
-- Fixed in 64fcb121 (measured per arm in its message): one commander had no
+- Fixed in d726331a (measured per arm in its message): one commander had no
   plant for 2-7 min in 7 of 11 losses; the commander walked out and died in
   3 of the 4 shortest losses (engagements at 2-33x his strength, a leash
   along a base axis that ran perpendicular to the enemy, a retreat hold on
@@ -669,7 +669,7 @@ independently; the census and their corrections:
   `slot.nopull` refuses 44-66% of wall slots and `site.interior` 33-49%,
   and the two uncounted `continue`s at protect_want.as:475-495 hide 320
   of 418 candidates a game. That is the next thing to instrument.
-  INSTRUMENTED (c0497d3e + the two new gates, `def.obsolete` and
+  INSTRUMENTED (b46f9ae6 + the two new gates, `def.obsolete` and
   `def.t1late`, six-game probe `t22-defgates-probe`, cumulative over both
   our players): the defence funnel is
     cand.class   7526/11278 (67%)   -- the def is not this line class
@@ -714,7 +714,7 @@ independently; the census and their corrections:
   at protect_want.as:475-495 are uncounted `continue`s), not at pricing.
   Reverted.
 - THE MINUTE 2-4 STALL IS THE COMMANDER'S LEASH, and it is mine: after
-  the radial half-leash (e72b8775) `apex: mexdiag` reads comFar=63 refused
+  the radial half-leash (dee01107) `apex: mexdiag` reads comFar=63 refused
   spot claims per sample in minutes 2-4, more than every other mex
   refusal combined (priced 7.1, noOpen 2.9, claimed 2.2, deathWalk 1.5),
   and our claims in that window are 0.29 a player against BARb's 2.8.
@@ -777,9 +777,9 @@ independently; the census and their corrections:
   not move (3-13, income at 4 min 23 vs their 32). The rule costs ~900
   metal of opening and buying it back is not what we are missing.
 - THE BASELINE, measured at the same setting as everything else and not
-  before (2026-09-22, `c3-pre-session-s5-16`): 287a6e73, the tree that was
+  before (2026-09-22, `c3-pre-session-s5-16`): e0ecbb21, the tree that was
   on his slot when the night began, reads 1-15 at pinned --speed 5 with
-  six workers. The night's committed tree (e72b8775) reads 6-10 there.
+  six workers. The night's committed tree (dee01107) reads 6-10 there.
   That is the only honest comparison of the two, and it is the one that
   says the session bought something: 4-min army 472 -> 1250, 8-min mexes
   6.2 -> 6.6 against their 9-10, 12-min income 62 -> 75.
@@ -788,8 +788,8 @@ independently; the census and their corrections:
   honest speed (2.1k army and 9.4 mexes at 8 min vs 5.2k/6.9 at 15x); his
   games run at 1x. The same tree read 9-7 at 15x and 4-12 at 4.4x. Every
   number below is at pinned speed 5 unless said otherwise.
-- Standing after the night (e72b8775, on his slot): at 4.4x rung+anchor
-  6-10 vs rung-only 4-12 vs 64fcb121 (no rung) 3-13 at 15x; at 15x
+- Standing after the night (dee01107, on his slot): at 4.4x rung+anchor
+  6-10 vs rung-only 4-12 vs d726331a (no rung) 3-13 at 15x; at 15x
   rung 9-7 vs 3-13. Not the >50% he asked for at honest speed.
 - Measured inert and reverted: the plant-assist want carrying the unmet
   army share (`drain * TargetFill(ArmyValue, ArmyTargetFull)`): 3-13,
@@ -821,7 +821,7 @@ independently; the census and their corrections:
   (the stall hoist fires at 1.0, 1.2, 2.1 min every game) and cons that
   lathe the lab before they leave it -- BARb's opener interleaves builder,
   raider, builder, raider.
-- The 4-minute army, measured to the unit (a2db9356): cons per lab are
+- The 4-minute army, measured to the unit (1d2ad405): cons per lab are
   equal (2.9 vs 3.0 per factory-sample), nanos per plant are equal once
   the caretaker gate is stock's, energy income is equal; the labs' output
   is ~5.4 m/s of units to their ~6.8, and a quarter of ours is rez bots
@@ -1280,7 +1280,7 @@ preemption is a rule -- his call.
 
 ### Normal seats do not scale; only the eco seat does (2026-10-02)
 
-Supreme Isthmus 8v8 +100%, 4 seeds at 5716bcea: at minute 24 the seven
+Supreme Isthmus 8v8 +100%, 4 seeds at 8f924aba: at minute 24 the seven
 normal seats make 4-220 m/s each (the eco seat 551-745); BARb's seats make
 ~200-250 each. Our normal seats hold 12-13 T2 cons like BARb's but raise 0-5
 advanced converters to BARb's 5-14. Each spends 30-55k on army; its energy
@@ -1728,7 +1728,7 @@ fusion/moho 0 vs ~11,000; naval cons 567 vs 13,317. Causes found:
   says ships lose, no fleet is built. A domain with no alternative is shut.
 - `concap` 40/40 is spent on land cons; no naval con, so no T2 yard and no
   underwater eco.
-14a94326 (yard per seat, land/navy budgets, filters opened) took our navy
+c913e855 (yard per seat, land/navy budgets, filters opened) took our navy
 530 -> 18,343 a game at inc30 552 vs 603 -- still ~1/4 of BARb's. Open: yards
 die (up to 25/24 a game) because BARb's water seat opens its yard at minute 2
 and holds our shore before ours stand; T1 ships read `:losing` off records
@@ -2393,14 +2393,14 @@ rebuild capacity gone at once.
 
 The thread back to the start of the session: this is his opening complaint --
 the commander walking away and doing nothing -- and `expect.py`'s "commander
-stays home" ran RED for most of the night. docs/33 records `3bb47630` ("a
+stays home" ran RED for most of the night. docs/33 records `1bf6732c` ("a
 forward commander takes the work around him") as the one change that helped
 the minute-4 extractor metric, measured on a metric later shown to be a coin
 flip (AUC 0.528). That change keeps the commander forward. Forward is where
 he dies.
 
 FIRST TEST FOR THE NEXT SESSION, and it is cheap: does reverting or gating
-3bb47630 drop commander deaths, and does that beat the extractor it was
+1bf6732c drop commander deaths, and does that beat the extractor it was
 bought for? Nothing has measured the commander's survival against the work he
 does while exposed.
 
@@ -2436,7 +2436,7 @@ Those are the same number.
 
 He dies IN OUR OWN BASE, killed by BARb's main battle line -- not forward, and
 not by raiders. That weakens the "forward commander dies" reading of
-3bb47630 that this entry started with, and it points somewhere else entirely:
+1bf6732c that this entry started with, and it points somewhere else entirely:
 BARb's army arrives at our base around minute 21 and there is nothing there.
 
 Which joins the two halves of this file. Defence runs at 0.09-0.17 against a
@@ -2864,7 +2864,7 @@ from the first version and says the opposite thing.
 
 ### The deploy gate is noise-dominated at 2 games
 
-2026-09-23. Ran `gate.py run` twice on the SAME commit (155b91ab), same map,
+2026-09-23. Ran `gate.py run` twice on the SAME commit (ea75891c), same map,
 same two seeds, nothing rebuilt or redeployed between them:
 
   run 1: RED (3) -- refused plant-copy livelock (frozenfo-s5 x97),
@@ -2898,7 +2898,7 @@ Two of the three reds are worth chasing on their own evidence regardless:
 
 #### Third run, same content: RED (2)
 
-Ran a third time (sha 1121153e, ai/ and cpp/ byte-identical to the two runs
+Ran a third time (sha a630d0fe, ai/ and cpp/ byte-identical to the two runs
 above -- only ISSUES.md changed between them):
 
   run 3: RED (2) -- home ground is not discounted (0.59, 13 readings),
@@ -3057,7 +3057,7 @@ reads `on` at FRAME 18 and DONE at frame 42,593 -- minute 0.01 to minute
 23.7 of a 29.4-minute game.
 
 THE SILENT FAILURE. ISSUES.md's own ARMY SHARE entry says "Fixed together
-2026-09-22: switch target = our share of their shown army". Commit b314ada8,
+2026-09-22: switch target = our share of their shown army". Commit 02f6a6c7,
 which carries that message, has a two-file diff: ISSUES.md and
 military/massing.as. army.as IS NOT IN IT. Only HoldNeedM() got the
 group-metal read; `return 0.f` was never edited, and the measured result

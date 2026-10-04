@@ -429,7 +429,7 @@ Six plays, none built as a play today: (1) nuke targeting from scouting
 flank: the army's approach vector off the direct line; (3) air used
 offensively (the bomber wing exists -- ISSUES BOMBERS -- and never flies
 in his games); (4) scouts kept alive as eyes (the Tick is buyable since
-479ab851); (5) a massed single-type strike (50 Marauders from a side);
+80e63bd5); (5) a massed single-type strike (50 Marauders from a side);
 (6) LRPC (HighGroundNear exists, unmeasured) and the Ragnarok never
 priced in -- is it the super-weapon budget or the track record?
 
