@@ -2311,7 +2311,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					}
 				}
 			}
-			if (float(landT1) >= tEcoConKeep + 2.f) {
+			// ...not while metal spills past nanos standing idle: they cannot
+			// start a frame, so the shortage is hands (his 2026-10-03 eco seat:
+			// 157 m/s of nanos idle, bank full from 5.6 to 13 min, lab idle).
+			if ((float(landT1) >= tEcoConKeep + 2.f)
+				&& !(wasting && (IdleNanoLatheM() > 0.f))) {
 				if (prankNow)
 					prank += "keep";
 				continue;
