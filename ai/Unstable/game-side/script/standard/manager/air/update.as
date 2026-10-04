@@ -537,6 +537,12 @@ void Update()
 	{
 		Release("home wave massed");
 	}
+	// ...and whoever holds the pool flies it on the lead's own terms (apexearth
+	// 2026-10-03: "anybody should be able to do this stuff ... what's the use of
+	// piling bombers and then never ever using them"): t11 sat on 39 pooled
+	// bombers for 13 minutes waiting on an escort count.
+	if (!IsAirLead() && !gStrike && (HeldBombers() >= AIR_BOMBERS) && !WingGrowing())
+		Release("pool at its worth -- the next bomber would not pay");
 
 	if (!IsAirLead() || gStrike)
 		return;
