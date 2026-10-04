@@ -58,7 +58,6 @@ PARAMS = {
     "apex_tech_pipe":            (2.0,   0.7,   6.0,    True),
     "apex_plant_pipe":           (2.0,   0.7,   6.0,    True),
     "apex_plant_income_per":     (50.0,  20.0,  150.0,  True),
-    "apex_spot_m":               (2.0,   0.7,   6.0,    True),
     # cost side: ValueOf term weights
     "apex_vw_walk":              (1.0,   0.25,  4.0,    True),
     "apex_vw_build":             (1.0,   0.25,  4.0,    True),
@@ -94,9 +93,6 @@ PARAMS = {
     "apex_nano_sink_m":          (1000., 300.0, 3000.0, True),
     "apex_t2_con_per_m":         (25.0,  10.0,  60.0,   True),
     # tech and big energy
-    "apex_t2_metal":             (30.0,  12.0,  60.0,   True),
-    "apex_t2_energy":            (1200., 400.0, 2400.0, True),
-    "apex_fusion_min_energy":    (1000., 400.0, 2500.0, True),
     "apex_obsolete_ratio":       (4.0,   2.0,   8.0,    True),
 }
 KEYS = sorted(PARAMS)
