@@ -1843,7 +1843,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			const int ld = int(light.id);
 			const float bill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(30.f, Catalog::gCostE[ld]);
 			const float pushCap = EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
-			if (bill <= pushCap) {
+			// ...AND THE ENERGY IS IN THE BANK (apexearth 2026-10-03: "we make our
+			// first factory, then a metal extractor, and then a light laser
+			// turret, but we always run out of energy"; the 680 E gun went down
+			// at 0.8-2 min with the bank at 22/1200). His order is energy, lab,
+			// more energy, then the turrets.
+			const bool eReady = (Eco::ECur() >= Catalog::gCostE[ld]) && !HardEStall()
+					&& !aiEconomyMgr.isEnergyStalling;
+			if ((bill <= pushCap) && eReady) {
 				AIFloat3 site = gap;
 				AIFloat3 foe;
 				if (FoeRef(foe)) {
