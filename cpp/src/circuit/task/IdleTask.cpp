@@ -58,7 +58,11 @@ void CIdleTask::Update()
 	// and a small one is asked at most every IDLE_ASK_FRAMES per unit: the old
 	// `+ 1` re-asked five idle builders every five frames, nearly all of them
 	// bounced by the script's own 2 s gate.
-	constexpr float IDLE_ASK_FRAMES = 15.f;
+	if (askFrames <= 0.f) {
+		askFrames = std::max(1.f, manager->GetCircuit()->GetTunable("apex_idle_ask_f", 15.f));
+		settleFrames = (int)manager->GetCircuit()->GetTunable("apex_idle_settle_f", 20.f);
+	}
+	const float IDLE_ASK_FRAMES = askFrames;
 	const float sz = float(units.size());
 	sliceCredit += std::min(sz / IDLE_ASK_FRAMES, sz / float(TEAM_SLOWUPDATE_RATE * 8) + 1.f);
 	updateSlice = (unsigned int)sliceCredit;
@@ -68,6 +72,19 @@ void CIdleTask::Update()
 	}
 
 	const int frame = manager->GetCircuit()->GetLastFrame();
+	if ((frame >= nextGapLog) && !gapFrames.empty()) {
+		nextGapLog = frame + 60 * FRAMES_PER_SEC;
+		std::sort(gapFrames.begin(), gapFrames.end());
+		long sum = 0;
+		for (int g : gapFrames) {
+			sum += g;
+		}
+		const size_t n = gapFrames.size();
+		manager->GetCircuit()->LOG("apex: idlegap n=%u meanF=%.1f p50F=%i p90F=%i maxF=%i refused=%i",
+			(unsigned)n, float(sum) / n, gapFrames[n / 2], gapFrames[(n * 9) / 10], gapFrames[n - 1], refusedAsks);
+		gapFrames.clear();
+		refusedAsks = 0;
+	}
 	auto it = updateUnits.begin();
 	unsigned int i = 0;
 	while (it != updateUnits.end()) {
@@ -83,7 +100,7 @@ void CIdleTask::Update()
 		}
 
 		// get rid of delayed by engine UnitIdle event from previous task
-		if (frame < ass->GetTaskFrame() + 20) {
+		if (frame < ass->GetTaskFrame() + settleFrames) {
 			++it;
 			continue;
 		}
@@ -97,7 +114,16 @@ void CIdleTask::Update()
 		// previous AddRef bracket around a re-read pointer still crashed
 		// (2026-08-15, frame 47331, null vtable call at Start): AddRef on an
 		// already-freed object protects nothing.
+		const int idleSince = ass->GetTaskFrame();
+		const bool hand = ass->GetCircuitDef()->IsMobile() && ass->GetCircuitDef()->IsBuilder();
 		IUnitTask* task = manager->AssignTask(ass);  // should RemoveAssignee() on AssignTo()
+		if (hand) {
+			if ((task != nullptr) && (task != this)) {
+				gapFrames.push_back(frame - idleSince);
+			} else {
+				++refusedAsks;
+			}
+		}
 		if (task != nullptr) {
 			if (!task->IsDead()) {
 				task->Start(ass);

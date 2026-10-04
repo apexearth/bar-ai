@@ -122,7 +122,8 @@ CCircuitDef@ IntelPlantToBuild()
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
 		&& (Have(gPlant1) == 0))
 	{
-		if (IsScoutSeat()
+		// Not in a 1v1 (his 2026-10-03: an early air lab there is dangerous).
+		if (IsScoutSeat() && (Military::AllyCount() > 1.f)
 			&& (inc >= ai.GetTunable("apex_intel_air_income", TUNE_INTEL_AIR_INCOME)))
 			return gPlant1;
 		if (inc >= ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME))

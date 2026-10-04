@@ -1609,8 +1609,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// mandate keeps: this market bought one at 30 income for half a
 		// team because air cons reach the whole of a cliff map, and the
 		// team fielded air where the enemy walked in with ground.
-		if ((dClass == PC_AIR) && !Air::IsAirLead() && !gEcoRole
-			&& !Military::EnemyAfloat()
+		// A 1v1's lone player is the air lead by default and waits the same (his
+		// 2026-10-03: "we shouldn't be making an air lab early at all").
+		if ((dClass == PC_AIR) && (!Air::IsAirLead() || ((Military::AllyCount() <= 1.f) && !LandLocked()))
+			&& !gEcoRole && !Military::EnemyAfloat()
 			&& (Eco::MInc()
 				< ai.GetTunable("apex_air_mandatory_income", TUNE_AIR_MANDATORY_INCOME)))
 			continue;

@@ -544,6 +544,38 @@ int gElecDropTask = 0;    // put on a build since it opened
 int gElecHeld = 0;        // whole, and the slice could not afford the finish
 int gDecBounce = 0;       // the 2-s re-election gate
 int gNextElecLog = 0;
+// EXTRACTORS THE ENEMY KILLED, decaying over apex_eco_raid_tau. An upgrade's
+// removal and a reclaim carry no attacker and never arrive here.
+float gMexLost = 0.f;
+int gMexLostAt = 0;
+void MexLossDecay()
+{
+	const float tau = ai.GetTunable("apex_eco_raid_tau", TUNE_ECO_RAID_TAU);
+	const float dt = float(ai.frame - gMexLostAt) / float(SECOND);
+	gMexLostAt = ai.frame;
+	if ((tau > 1.f) && (dt > 0.f))
+		gMexLost *= pow(2.718282f, -dt / tau);
+}
+void NoteMexKilled()
+{
+	MexLossDecay();
+	gMexLost += 1.f;
+}
+// Recent losses over what stands plus what was recently lost.
+float MexLossShare()
+{
+	MexLossDecay();
+	if (gMexLost < 0.05f)
+		return 0.f;
+	return gMexLost / (float(OwnMexCount()) + gMexLost);
+}
+int gRedecideFrames = -1;
+int RedecideFrames()
+{
+	if (gRedecideFrames < 0)
+		gRedecideFrames = int(ai.GetTunable("apex_redecide_s", TUNE_REDECIDE_S) * SECOND);
+	return gRedecideFrames;
+}
 
 // The nineteen proposers, one per step, IN THE ORDER THE ATOMIC STACK RAN THEM.
 // That order is load-bearing, not cosmetic: ProposeMex's probe feeds the plant
@@ -886,7 +918,8 @@ void ElecLog()
 		+ " sliceUs=" + int(ElecFrameUs())
 		+ " credit=" + int(gElecCredit)
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
-		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin);
+		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
+		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked);
 	gKeepMin = 0;
 	gOffCrewMin = 0;
 	gElecDone = 0;
@@ -1294,7 +1327,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// than a second are unacceptable" (apexearth, maketask.as).
 	if (!ElecPending(unit)
 		&& (int(unit.id) >= 0) && (int(unit.id) < int(gLastDecideAt.length()))) {
-		if (ai.frame - gLastDecideAt[int(unit.id)] < 2 * SECOND) {
+		if (ai.frame - gLastDecideAt[int(unit.id)] < RedecideFrames()) {
 			if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 				++Builder::gComBounce;   // a task that died within 2 s of being handed out
 			++gDecBounce;
@@ -1832,7 +1865,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// the nearest gunless extractor. One gun may cover several.
 	// Not the growing eco seat: it builds no defence while it grows (his
 	// 2026-09-13), and the raid valve ends the growth when it is not safe.
-	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing() && PlantFramed()) {
+	// ...ONLY WHILE THEY ARE KILLING THEM (his 2026-10-03); otherwise a gun is bought
+	// when the valuation says it is worth more than the next claim.
+	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing()
+		&& (MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
+		&& PlantFramed())
+	{
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		AIFloat3 gap;

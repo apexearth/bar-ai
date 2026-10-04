@@ -1519,6 +1519,16 @@ int CCircuitAI::Message(int playerId, const char* message)
 
 int CCircuitAI::UnitCreated(CCircuitUnit* unit, CCircuitUnit* builder)
 {
+	if (!firstLabLogged && (builder != nullptr) && !unit->GetCircuitDef()->IsMobile()
+		&& unit->GetCircuitDef()->IsBuilder())
+	{
+		firstLabLogged = true;
+		const springai::AIFloat3& s = setupManager->GetStartPos();
+		const springai::AIFloat3 b = builder->GetPos(lastFrame);
+		const springai::AIFloat3 p = unit->GetPos(lastFrame);
+		LOG("apex: firstlab frame=%i def=%s builderFromStart=%.0f siteFromStart=%.0f",
+			lastFrame, unit->GetCircuitDef()->GetDef()->GetName(), s.distance2D(b), s.distance2D(p));
+	}
 	for (auto& module : modules) {
 		module->UnitCreated(unit, builder);
 	}
@@ -2106,6 +2116,7 @@ float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 		try {
 			const float value = std::stof(ov->second);
 			tunables[name] = value;
+			const_cast<CCircuitAI*>(this)->LOG("apex: tunable-opt t=%i %s=%g default=%g", teamId, name.c_str(), value, defVal);
 			return value;
 		} catch (...) {}
 	}

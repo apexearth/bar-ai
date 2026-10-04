@@ -2012,3 +2012,20 @@ const float TUNE_ALLY_COVER = 400.f;
 //   assumes could arrive at our own base before anything has been seen. See
 //   docs/27.
 const float TUNE_DEF_PRIOR_SHARE = 0.35f;
+
+// ---------------------------------------------------------------------------
+// ValueOf term weights -- search scaffolding for tools/ecoclimb.py. Every
+// default reproduces the unweighted formula; delete each once a value is kept.
+// ---------------------------------------------------------------------------
+const float TUNE_VW_WALK = 1.f;        // builder wage over the walk
+const float TUNE_VW_BUILD = 1.f;       // builder wage over the build
+const float TUNE_VW_DISP = 1.f;        // upgrade stream the build postpones
+const float TUNE_VW_LATE = 1.f;        // the asset's own late start (gain x walk/build)
+const float TUNE_VW_FLOW = 1.f;        // fleet throttle from an unfunded E drain
+const float TUNE_VW_ECOST = 1.f;       // the energy bill
+const float TUNE_VW_FEED_BANK = 0.5f;  // share of the metal bank counted toward a build's feed
+const float TUNE_VW_MCS_FROM = 0.35f;  // bank fill where metal-cost forgiveness starts
+const float TUNE_VW_MCS_SPAN = 0.45f;  // bank fill over which it ramps to full
+const float TUNE_VW_MCS_DEPTH = 0.8f;  // forgiveness at full ramp (cost x (1 - this))
+const float TUNE_REDECIDE_S = 2.f;     // [seconds] a builder that decided this recently is bounced (C++ twins: apex_idle_ask_f 15, apex_idle_settle_f 20 frames)
+const float TUNE_MEX_LOSS_COVER = 0.1f;  // [share] extractors killed recently / (standing + killed) at which every extractor's gun jumps the queue (his 2026-10-03)

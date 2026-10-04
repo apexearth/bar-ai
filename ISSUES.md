@@ -17,6 +17,18 @@ and no game since has been read for it.
 
 ## PERFORMANCE
 
+### THE LAG LADDER STARVES BUILDERS FOR MINUTES WHEN THE SIM TRAILS THE ASKED SPEED (2026-10-03)
+
+Since 3afbf402 lag is measured against the host's asked speed. Eight headless
+games at --speed 5, +100%, Comet Catcher vs NullAI
+(`tournaments/cadence-fast2/games/r0-g0`): lagSev 0 to minute 14, then 3 by
+minute 17; slice 8000 -> 417 us; held 624-718 elections a minute, queued
+48-54, worst builder wait 70-150 s. `apex: idlegap` median 202 frames (6.7 s)
+over those games against 26 at +0%, where the ladder never trips. Benchmarks
+now pass apex_lag_speed=0. Open, his call: a watched game at 10-20x that the
+machine cannot hold reads as host lag the same way, and the 417 us floor idles
+builders for minutes rather than seconds.
+
 ### HIS MULTIPLAYER GAMES LAG: 1.2-2.0 ms/AI/frame by minute 11-20 (2026-10-01)
 
 His 8-AI games with 7 humans: Center Command (09-30, 1.3 ms at min 11,
@@ -499,6 +511,25 @@ navy stub was removed 09-12; the towers were not. `legnavyfrigate` /
 `CircuitDef.cpp`), so the shipyard never orders the frigate.
 
 ## EXPANSION AND THE OPENING
+
+### HALF BARb'S GROUND CONSTRUCTORS AT EVERY MINUTE (2026-10-03)
+
+His demo vs another Claude-built AI ("Within Reason", Carrot Mountains 1v1
+Armada +50%, `data/demos/2026-10-04_04-03-49-018_...sdfz`, read with
+`tools/census.py matches/_replay-wreason`): our ground cons sat at 4 from
+minute 4 to our death at 16; mexes 13 at 10 and never more; the builders we
+added were air cons working at home (energy 1.5x theirs). Theirs: 14 vehicle
+cons and 23 mexes at 10, 53 mexes at 15.
+Not a fresh break: current tree vs BARb hard, same setting, 8 games
+(`tournaments/20261003-222042-carrot-now`), ground cons 5.3 vs 10.7 and mexes
+11.6 vs 14.9 at minute 10, income level at 14. The gap is the con count.
+A demo recorded on another game version loads none of our gadgets; the census
+comes from a LuaUI widget in the replay's write dir (see census.py).
+Causes (fixed in the working tree 2026-10-03, his rulings): the con floor
+yielded to the air plant and counted air cons only; the every-extractor gun
+jumped the queue on every election (half of all decisions). After: ground cons
+12.7 at minute 10 (was 5.3), mexes 14.8, income 57 (`tournaments/cadence-lossgate2`,
+24 games). STILL OPEN: their 23 mexes at 10 against our 15.
 
 ### THE MID MEXES ARE LOST IN TRANSIT: THEIR RAIDERS KILL OUR CONS (2026-09-22)
 

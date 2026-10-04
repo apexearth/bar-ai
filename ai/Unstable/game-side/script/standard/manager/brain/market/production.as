@@ -426,7 +426,7 @@ bool FlyingConLab(bool ceiling)
 	return false;
 }
 
-int ConsNeedAny()
+int ConsNeedAny(bool walkers = false)
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
 	float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
@@ -453,8 +453,33 @@ int ConsNeedAny()
 	// a T1 con is also the starter the full bank needed.
 	if (!AnyAssistLab())
 		want += HandsShort();
-	const int have = ConsOwnedAny() + ConsInFlightAny();
+	const int have = walkers ? (ConsWalking(false) + ConsWalking(true)) : (ConsOwnedAny() + ConsInFlightAny());
 	return (float(have) < want) ? (int(want) - have) : 0;
+}
+
+// Ground constructors owned (or ordered): the floor a ground plant answers. Air
+// cons are counted against the same floor only at an air plant, so an air plant
+// adds hands instead of standing in for the ones that walk to the spots.
+int ConsWalking(bool inFlight)
+{
+	int n = 0;
+	if (inFlight) {
+		for (uint i = 0; i < Brain::gFQPendDef.length(); ++i) {
+			CCircuitDef@ pd = Brain::gFQPendDef[i];
+			if ((pd !is null) && pd.IsMobile() && pd.IsBuilder() && !pd.IsAbleToFly()
+				&& !pd.IsRoleAny(Unit::Role::COMM.mask))
+				++n;
+		}
+		return n;
+	}
+	const array<int>@ own = OwnedDefs();
+	for (uint q = 0; q < own.length(); ++q) {
+		const uint c = uint(own[q]);
+		if ((gOwnCount[c] > 0) && Catalog::gMobile[int(c)] && Catalog::gBuilder[int(c)]
+			&& !Catalog::gFlyer[int(c)] && !Catalog::Def(int(c)).IsRoleAny(Unit::Role::COMM.mask))
+			n += gOwnCount[c];
+	}
+	return n;
 }
 
 // The lathe that is spending right now, at the nominal density: every static
@@ -2256,12 +2281,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// same reason the T2 one is: a con priced against army loses whenever
 		// the army gap is open, and the symmetric prior keeps it open by
 		// construction. Any tier counts -- this asks for hands, not reach.
-		if (consNeedA < 0)
-			consNeedA = ConsNeedAny();
-		// A walker yields the floor to a flyer another plant can make.
+		// An air plant adds hands; it never stands in for ground ones (his 2026-10-03):
+		// a ground plant counts only ground cons against the floor.
 		const bool walker = !Catalog::gFlyer[d];
-		if ((consNeedA > 0) && walker && FlyingConLab(false))
-			consNeedA = 0;
+		if (consNeedA < 0)
+			consNeedA = ConsNeedAny(walker);
 		// THE T1 AIR CON FLOOR (his ruling 2026-09-15): once an air lab
 		// stands, keep making basic air cons until ten fly -- they are the
 		// hands that raise nano turrets -- but never the whole lab: one in
@@ -2279,8 +2303,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA
-				+ " have=" + ConsOwnedAny()
-				+ " inflight=" + ConsInFlightAny()
+				+ " have=" + (walker ? ConsWalking(false) : ConsOwnedAny())
+				+ " inflight=" + (walker ? ConsWalking(true) : ConsInFlightAny())
 				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " short=" + formatFloat(HandsShort(), "", 0, 1)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");

@@ -10,6 +10,8 @@
 
 #include "task/UnitTask.h"
 
+#include <vector>
+
 namespace circuit {
 
 class CIdleTask: public IUnitTask {
@@ -32,6 +34,11 @@ private:
 	std::set<CCircuitUnit*> updateUnits;
 	unsigned int updateSlice;
 	float sliceCredit = 0.f;
+	std::vector<int> gapFrames;   // apex: idle-to-task waits of mobile builders, logged per minute
+	int refusedAsks = 0;
+	int nextGapLog = 0;
+	float askFrames = 0.f;     // apex_idle_ask_f, read once
+	int settleFrames = 20;     // apex_idle_settle_f
 };
 
 } // namespace circuit

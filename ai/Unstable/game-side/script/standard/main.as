@@ -416,6 +416,8 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (cdef is null)
 		return;
+	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id)))
+		Market::NoteMexKilled();
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
 	// BUILDINGS, and the mobile-only filter below threw away precisely its
 	// victims -- so the one signal that says "we are being shelled" was

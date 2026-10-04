@@ -745,6 +745,7 @@ private:
 	bool isResigned : 1;
 	bool isSlave : 1;
 	int lastFrame;
+	bool firstLabLogged = false;   // apex: the firstlab line, once
 	// apex: whole-AI frame cost (scheduler jobs, threat/infl maps, task
 	// reevaluation, actions) as one bucket beside the script-only timers.
 	uint64_t perfFrameUs = 0;

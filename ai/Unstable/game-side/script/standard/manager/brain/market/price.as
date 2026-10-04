@@ -23,6 +23,8 @@ bool  gPrERealizeOn = false;
 float gPrEWasteWorth = 0.f;
 bool  gPrMRealizeOn = false;
 float gPrMWasteWorth = 0.f;
+float gVwWalk = 1.f, gVwBuild = 1.f, gVwDisp = 1.f, gVwLate = 1.f, gVwFlow = 1.f, gVwECost = 1.f;
+float gVwFeedBank = 0.5f, gVwMcsFrom = 0.35f, gVwMcsSpan = 0.45f, gVwMcsDepth = 0.8f;
 void PrTuneFill()
 {
 	if (gPrTuneSet)
@@ -41,6 +43,16 @@ void PrTuneFill()
 	gPrEWasteWorth = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
 	gPrMRealizeOn = ai.GetTunable("apex_m_realize", TUNE_M_REALIZE) > 0.f;
 	gPrMWasteWorth = ai.GetTunable("apex_m_waste_worth", TUNE_M_WASTE_WORTH);
+	gVwWalk = ai.GetTunable("apex_vw_walk", TUNE_VW_WALK);
+	gVwBuild = ai.GetTunable("apex_vw_build", TUNE_VW_BUILD);
+	gVwDisp = ai.GetTunable("apex_vw_disp", TUNE_VW_DISP);
+	gVwLate = ai.GetTunable("apex_vw_late", TUNE_VW_LATE);
+	gVwFlow = ai.GetTunable("apex_vw_flow", TUNE_VW_FLOW);
+	gVwECost = ai.GetTunable("apex_vw_ecost", TUNE_VW_ECOST);
+	gVwFeedBank = ai.GetTunable("apex_vw_feed_bank", TUNE_VW_FEED_BANK);
+	gVwMcsFrom = ai.GetTunable("apex_vw_mcs_from", TUNE_VW_MCS_FROM);
+	gVwMcsSpan = ai.GetTunable("apex_vw_mcs_span", TUNE_VW_MCS_SPAN);
+	gVwMcsDepth = ai.GetTunable("apex_vw_mcs_depth", TUNE_VW_MCS_DEPTH);
 }
 
 // The wage of one builder-second: the metal flow each working builder carries.
@@ -640,11 +652,12 @@ float MCostScale()
 	float bank = Eco::MCur() - MOrderedM();
 	if (bank < 0.f)
 		bank = 0.f;
+	PrTuneFill();
 	const float frac = bank / st;
-	if (frac <= 0.35f)
+	if (frac <= gVwMcsFrom)
 		return 1.f;
-	const float f = (frac - 0.35f) / 0.45f;
-	return 1.f - 0.8f * ((f > 1.f) ? 1.f : f);
+	const float f = (frac - gVwMcsFrom) / ((gVwMcsSpan > 0.01f) ? gVwMcsSpan : 0.01f);
+	return 1.f - gVwMcsDepth * ((f > 1.f) ? 1.f : f);
 }
 
 
@@ -680,7 +693,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			// was never actually spoken for. The affordability that works
 			// is on the GAIN side: unserved demand divides among the pipes
 			// in flight.)
-			const float feedSec = (Catalog::gCostM[defId] - mBank * 0.5f) / mInc;
+			const float feedSec = (Catalog::gCostM[defId] - mBank * gVwFeedBank) / mInc;
 			// WHAT IT POSTPONES, WHETHER OR NOT IT IS FEED-BOUND. This charge
 			// used to live entirely inside the feed-bound branch, so a def with
 			// a huge BUILDTIME -- an afus above all -- had a buildSec long
@@ -774,12 +787,12 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			? EPriceFloor()
 			: EPriceCostAt(buildSec, Catalog::gCostE[defId]);
 	w.mCost = Catalog::gCostM[defId] * MCostScale()
-			+ Catalog::gCostE[defId] * ePriceE
+			+ Catalog::gCostE[defId] * ePriceE * gVwECost
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;
 	const float wageNow = Wage();
-	w.tCost = walkSec * WalkRateWith(builderBP, wageNow) + buildSec * wageNow
-			+ displacedM
+	w.tCost = walkSec * WalkRateWith(builderBP, wageNow) * gVwWalk + buildSec * wageNow * gVwBuild
+			+ displacedM * gVwDisp
 			+ riskM;   // the builder's expected loss on the trip, see TripRisk
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
 	// sec is ALSO the amount of metal you'd have lost from all that walk time
@@ -792,7 +805,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// reactor paid one builder's wage for its build and outbid a fusion that
 	// would have been producing for eight of those minutes.
 	if (lateStart)
-		w.tCost += gain * (walkSec + (gPrLateBuild ? buildSec : 0.f));
+		w.tCost += gain * (walkSec + (gPrLateBuild ? buildSec : 0.f)) * gVwLate;
 	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
 	// you're making an AFUS you can afford military better and protect
 	// yourself. You're giving yourself options... you can put a little bit
@@ -823,8 +836,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 		const float bankRate = Eco::ECur() / buildSec;
 		const float unfunded = projPull - Eco::EInc() - bankRate;
 		if ((unfunded > 0.f) && (projPull > 1.f)) {
-			w.tCost += buildSec * Eco::MPull() * (unfunded / projPull);
-			flowM = buildSec * Eco::MPull() * (unfunded / projPull);
+			flowM = buildSec * Eco::MPull() * (unfunded / projPull) * gVwFlow;
+			w.tCost += flowM;
 		}
 	}
 	gPrLastDisp = displacedM;
