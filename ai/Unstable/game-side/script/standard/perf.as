@@ -119,15 +119,18 @@ float LagSeverity()
 	return gLagSev;
 }
 
-// THE SPEED THE HOST ASKED FOR, not realtime (apexearth 2026-10-03: watching at
-// 10-20x, the frame rate sank under 30 and the realtime bar never fired). Above
-// 40x is a benchmark asking for "as fast as possible": no lag reads there.
+// THE SPEED THE HOST ASKED FOR, and never under realtime (apexearth 2026-10-03:
+// watching at 10-20x the realtime bar never fired; "we don't want to let it get
+// that bad"). In multiplayer the server's speed control lowers this factor once
+// the busiest client's CPU passes ~75% (GameServer.cpp), so measured against
+// realtime the first throttle already reads as lag -- before the game is
+// visibly slow. Above 40x is a benchmark asking for "as fast as possible".
 float SetSpeed()
 {
 	const float s = ai.GetSpeedFactor();
 	if (s > 40.f)
 		return 0.f;
-	return (s > 0.1f) ? s : 1.f;
+	return (s > 1.f) ? s : 1.f;
 }
 
 float SimSpeed()

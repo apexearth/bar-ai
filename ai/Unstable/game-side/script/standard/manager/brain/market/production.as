@@ -1222,7 +1222,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// in the game below 30, can we just make less T2 units and focus only on the
 	// T3 units? We can still make airplanes"). While the game runs behind its set
 	// speed, a ground line below our best ground tier makes no army.
-	if (!airLine && (Perf::LagSeverity() >= 1.f) && (PlantTier(fid) < TopGroundPlantTier())) {
+	if (!airLine && (Perf::LagSeverity() > 0.f) && (PlantTier(fid) < TopGroundPlantTier())) {
 		armyGap = 0.f;
 		gapSrc = "lag";
 	}
