@@ -1628,8 +1628,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		// -- 5-7 plants a seat against BARb's 4-5). Before our first advanced
 		// plant a second T1 plant is not offered, unless it is the water
 		// mandate or the air lead's air line; the spare goes to nanos and eco.
+		// The eco seat spilling metal takes its air line too: air cons are the
+		// hands it lacks, and they reach a site faster (his 2026-10-03).
 		if ((PlantTier(d) < 2) && (TopOwnPlantTier() < 2) && (dClass != PC_WATER)
 			&& !((dClass == PC_AIR) && Air::IsAirLead())
+			&& !((dClass == PC_AIR) && gEcoRole && MetalWasting())
 			&& ((Factory::gFacUnits.length() > 0) || AnyPlantInFlight()))
 			continue;
 		// The water mandate is held and ships-only -- see the naval election

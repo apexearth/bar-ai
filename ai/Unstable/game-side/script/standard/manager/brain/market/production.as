@@ -2315,7 +2315,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// start a frame, so the shortage is hands (his 2026-10-03 eco seat:
 			// 157 m/s of nanos idle, bank full from 5.6 to 13 min, lab idle).
 			if ((float(landT1) >= tEcoConKeep + 2.f)
-				&& !(wasting && (IdleNanoLatheM() > 0.f))) {
+				&& !(wasting && (IdleNanoLatheM() > 0.f) && !FlyingConLab(false))) {
 				if (prankNow)
 					prank += "keep";
 				continue;
