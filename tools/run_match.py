@@ -523,7 +523,9 @@ def parse_infolog(text: str, result: MatchResult) -> MatchResult:
         if frames:
             result.game_frames = int(frames[-1])
 
-    if "Sync error" in text or "desync" in text.lower():
+    # A public game ships a "Desync Alarm" widget whose load line says desync.
+    if "Sync error" in text or any("desync" in ln.lower() and "Loading widget" not in ln
+                                   for ln in text.splitlines()):
         result.desync = True
     # An engine crash is not the same as "the AI logged an error", and reading
     # one run's log while believing it is another's is exactly how a crash gets
