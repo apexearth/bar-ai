@@ -81,6 +81,17 @@ about this layer — but respect its failure modes, which are silent or fatal.
        $(git merge-base apex/barbarian HEAD) -- src \
        > <repo>/game-patches/circuitai/0003-cumulative.patch
    ```
+7. **Commit and push the fork too** when you commit the C++ change in bar-ai
+   (apexearth 2026-10-03: "if our AI here requires that code and that code
+   isn't committed and pushed, then we should commit and push it"). The fork
+   went five weeks uncommitted once (993b78d8 08-29 -> c774273b 10-03). In the
+   SHARED tree, after `BARAI_LANE=shared python tools/sync_cpp.py apply` so it
+   matches `cpp/`:
+   ```bash
+   cd vendor/engine/AI/Skirmish/BARb
+   git add -A src && git commit -m "<what changed; see bar-ai <sha>>"
+   git push apex barbarian-apex
+   ```
 
 ## Crash triage
 
