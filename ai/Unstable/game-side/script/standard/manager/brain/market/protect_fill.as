@@ -17,6 +17,18 @@ array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
 int gDsFillN = 0;
+// The base's own front guns (his 2026-10-04: "we protect our metal extractors,
+// but we don't protect our base ... we need medium turrets and the heavy laser
+// turrets"). The push itself is in decide.as.
+int gBaseFrontOn = -1;
+int gBaseFrontHits = 0;   // base-front pushes, logged on elec-slice
+bool BaseFrontOn()
+{
+	if (gBaseFrontOn < 0)
+		gBaseFrontOn = (ai.GetTunable("apex_base_front", TUNE_BASE_FRONT) > 0.5f) ? 1 : 0;
+	return gBaseFrontOn > 0;
+}
+
 // A wall slot's share of the pull by bearing: the line and a mex's first gun
 // at the line weight, a ring slot by its angle to the enemy (the rear
 // minimum while the line has an open slot).

@@ -3163,3 +3163,24 @@ per arm, stopped at his request after 2 of 4 rounds): economy at minutes
 at every minute, no slower start; W0 L0 against the defaults' W1 L0. Not yet
 read in team games. The model still read CON_BASE and CONV_HORIZON upward and
 PLANT_PIPE and LOCKUP downward when the run stopped.
+
+## TUNE_FAR_HAND_S = 45 (2026-10-04)
+
+His complaint, watching a replay: constructors claim a far extractor and walk
+home. `tools/walkback.py` on 70 Carrot games vs BARb: 24% of far extractor jobs
+were followed by a job at home, won by the energy-stall override (~90), the
+builder's role (64), metal-first assists (~27) and the gun push. A builder more
+than 45 s of walk from home now skips those three overrides AND takes the
+nearest spot on its list (why=farclaim). Same 4 seeds vs BARb, Carrot 1v1 +50%:
+walk-backs 22% -> 7%, mexes at 10/12 min 19.5/22.0 -> 22.0/32.5, income
+73/88 -> 86/115. Exemption alone moved walk-backs only 24% -> 22% (the plain
+draw then sent them home for nanos), so the nearest-spot pick is what works.
+
+## TUNE_BASE_FRONT = 1 (2026-10-04)
+
+His "we protect our metal extractors, but we don't protect our base": while
+the stance is AGGRESSIVE, medium and heavy lasers on open base-edge slots within
+60 degrees of the enemy, until filled slots x medium cost x apex_def_trade covers
+the seen enemy army. Measured firing but starved (one 14-min game: 4 pushes,
+wanted 6-10, only 3-6 front slots exist, stance flips every minute, energy-bank
+check rarely clears a 4,700 E heavy). Open, and his defence questions pending.

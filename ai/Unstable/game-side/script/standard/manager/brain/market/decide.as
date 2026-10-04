@@ -569,6 +569,22 @@ float MexLossShare()
 		return 0.f;
 	return gMexLost / (float(OwnMexCount()) + gMexLost);
 }
+// A HAND OUT ON THE MAP KEEPS CLAIMING (his 2026-10-04: "they walk out and then
+// they walk all the way back"). The overrides that put a home job first -- the
+// energy-stall answer, the role, metal-first -- skip a builder more than this
+// walk from home; the ordinary price, which charges the walk, decides for it.
+int gFarHandSkips = 0;
+int gFarClaims = 0;      // far hands sent to their nearest spot, logged on elec-slice
+bool FarHand(CCircuitUnit@ unit)
+{
+	if (!Builder::gHomeSet)
+		return false;
+	const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
+	if (spd < 1.f)
+		return false;
+	return unit.GetPos(ai.frame).distance2D(Builder::gHomePos) / spd
+			> ai.GetTunable("apex_far_hand_s", TUNE_FAR_HAND_S);
+}
 int gRedecideFrames = -1;
 int RedecideFrames()
 {
@@ -919,7 +935,9 @@ void ElecLog()
 		+ " credit=" + int(gElecCredit)
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
-		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked);
+		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
+		+ " farHand=" + gFarHandSkips + " farClaim=" + gFarClaims + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " wallN=" + gWallP.length()
+		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
 	gElecDone = 0;
@@ -1733,7 +1751,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// (Isthmus seed 13, 2026-09-08). Above the bar the market's energy price
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
 	const bool hoistWorth = true;
-	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)) {
+	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)
+		&& !(FarHand(unit) && (++gFarHandSkips > 0))) {
 		// WHAT IS ORDERED COVERS IT ONCE FED: then the stall wants hands on
 		// the crawling frame, not another frame beside it. Watched on Comet
 		// Catcher (2026-09-15): the hoist put up a second and a third fusion
@@ -1912,6 +1931,45 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ranked.insertAt(0, cw);
 				++gCovPicked;
 				why = "coverall";
+				coverPush = true;
+			}
+		}
+	}
+	// THE BASE'S OWN FRONT (his 2026-10-04): while they are coming, medium and
+	// heavy lasers on the open base-edge slots facing them -- as many as the enemy
+	// army we have seen takes to stop (apex_def_trade) -- built by hands at home.
+	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn()
+		&& (Military::Stance() == Military::S_AGGRESSIVE) && PlantFramed())
+	{
+		BaseFrontRefresh();
+		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		if ((gBfSlot >= 0) && (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
+			const array<int>@ builds = Catalog::BuildsOf(int(unit.circuitDef.id));
+			const float pushCap = EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
+			CCircuitDef@ gun = null;
+			if ((gBfHeavy !is null) && (builds.find(int(gBfHeavy.id)) >= 0)
+				&& (Catalog::gCostM[int(gBfHeavy.id)] <= pushCap))
+				@gun = gBfHeavy;
+			else if ((gBfMedium !is null) && (builds.find(int(gBfMedium.id)) >= 0))
+				@gun = gBfMedium;
+			if ((gun !is null) && (Eco::ECur() >= Catalog::gCostE[int(gun.id)]) && !HardEStall()
+				&& !aiEconomyMgr.isEnergyStalling)
+			{
+				const int gd = int(gun.id);
+				const AIFloat3 site = gWallP[uint(gBfSlot)];
+				Want@ bw = Want();
+				bw.kind = WK_PROTECT;
+				bw.spotId = PROT_DEF;
+				@bw.def = gun;
+				bw.pos = site;
+				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
+				ValueOf(gd, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
+						Catalog::gBuildPower[int(unit.circuitDef.id)], bw);
+				ranked.insertAt(0, bw);
+				gBfTakenAt[uint(gBfSlot)] = ai.frame;
+				gBfSlot = -1;
+				++gBaseFrontHits;
+				why = "basefront";
 				coverPush = true;
 			}
 		}
@@ -2169,7 +2227,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	bool roled = false;
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
-		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)) {
+		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)
+		&& !(FarHand(unit) && (++gFarHandSkips > 0))) {
 		roled = ConRoleApply(unit, ranked);
 		if (roled)
 			why = "role";
@@ -2179,7 +2238,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// a T2 plant crawling at share 0.77. Metal, its energy, reclaim and
 	// help stay; the panics above have already had their say.
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
-		&& (ranked.length() > 1) && MetalPathStarved())
+		&& (ranked.length() > 1) && MetalPathStarved()
+		&& !(FarHand(unit) && (++gFarHandSkips > 0)))
 	{
 		for (uint ri = 0; ri < ranked.length(); ) {
 			const int k = ranked[ri].kind;
@@ -2194,6 +2254,35 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	// METAL FIRST: a free hand joins the unlock in flight (want_assist.as).
 	// Not over its own metal work -- a mex, an upgrade or the plant itself.
+	// ...AND TAKES THE NEAREST SPOT ON ITS LIST (his 2026-10-04: "the guys that
+	// are already out there just have them continue moving outwards"). A gun
+	// over what it just claimed still comes first, through the cover pushes.
+	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
+		&& (ranked.length() > 1) && FarHand(unit))
+	{
+		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		int best = -1;
+		float bestD = 1e9f;
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			if (ranked[ri].kind != WK_MEX)
+				continue;
+			const float dd = uAt.distance2D(ranked[ri].pos);
+			if (dd < bestD) {
+				bestD = dd;
+				best = int(ri);
+			}
+		}
+		if (best >= 0) {
+			if (best > 0) {
+				Want@ mw = ranked[uint(best)];
+				ranked.removeAt(uint(best));
+				ranked.insertAt(0, mw);
+			}
+			++gFarClaims;
+			floorPush = true;
+			why = "farclaim";
+		}
+	}
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
 		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))

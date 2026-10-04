@@ -1022,4 +1022,71 @@ float WallAdds(const AIFloat3& in at, float reach)
 	return (inReach > 0) ? (float(open) / float(inReach)) : 0.f;
 }
 
+// THE BASE-FRONT SLOT for decide.as's push: the open ring slot most squarely
+// facing the enemy, while the filled ones in that cone hold less than the
+// seen enemy army over apex_def_trade. Refreshed every 2 s; a slot handed out
+// is held 30 s so the next hands do not walk to the same ground.
+int gBfSlot = -1;
+int gBfAt = -999999;
+int gBfFilled = 0;
+int gBfWanted = 0;
+int gBfOpen = 0;     // open front slots, for the log
+array<int> gBfTakenAt;
+CCircuitDef@ gBfMedium = null;
+CCircuitDef@ gBfHeavy = null;
+void BaseFrontRefresh()
+{
+	if (ai.frame < gBfAt + 2 * SECOND)
+		return;
+	gBfAt = ai.frame;
+	gBfSlot = -1;
+	if (gBfMedium is null)
+		@gBfMedium = SideDef3("armbeamer", "corhllt", "leghlt");
+	if (gBfHeavy is null)
+		@gBfHeavy = SideDef3("armhlt", "corhlt", "leghlt");
+	AIFloat3 foe;
+	if ((gBfMedium is null) || !FoeRef(foe))
+		return;
+	const uint n = gWallP.length();
+	if (gBfTakenAt.length() != n) {
+		gBfTakenAt.resize(n);
+		for (uint i = 0; i < n; ++i)
+			gBfTakenAt[i] = -999999;
+	}
+	AIFloat3 toF = foe - gWallMid;
+	const float lF = sqrt(toF.SqLength2D());
+	if (lF < 1.f)
+		return;
+	int filled = 0;
+	int open = 0;
+	float bestCos = 0.5f;   // a 60-degree cone either side of the enemy's bearing
+	for (uint i = 0; i < n; ++i) {
+		if (WallSlotLine(i))
+			continue;
+		AIFloat3 toS = gWallP[i] - gWallMid;
+		const float lS = sqrt(toS.SqLength2D());
+		if (lS < 1.f)
+			continue;
+		const float c = (toS.x * toF.x + toS.z * toF.z) / (lS * lF);
+		if (c < 0.5f)
+			continue;
+		if (!WallSlotOpen(i)) {
+			++filled;
+		} else if (ai.frame > gBfTakenAt[i] + 30 * SECOND) {
+			++open;
+			if (c <= bestCos)
+				continue;
+			bestCos = c;
+			gBfSlot = int(i);
+		}
+	}
+	const float gunM = Catalog::gCostM[int(gBfMedium.id)];
+	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	gBfFilled = filled;
+	gBfOpen = open;
+	gBfWanted = int(ceil(Military::EnemyArmyCost() / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
+	if (filled >= gBfWanted)
+		gBfSlot = -1;
+}
+
 }  // namespace Market
