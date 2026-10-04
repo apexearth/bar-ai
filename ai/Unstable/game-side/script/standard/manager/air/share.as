@@ -32,7 +32,16 @@ void ShareWing()
 		return;
 	int to = -1;
 	float best = mine;
-	for (uint i = 0; i < mates.length(); ++i) {
+	// The air lead flies the pool: only it releases on the deadline and on
+	// "wing at its worth"; a non-lead holder waits on the home-wave escort.
+	const int lead = AirLeadTeamId();
+	if (lead == ai.teamId)
+		return;
+	if ((lead >= 0) && (ai.ReadTeamValue(lead, TV_AIRBDEF, -1.f) == bdef)) {
+		to = lead;
+		best = ai.ReadTeamValue(lead, TV_AIRHELD, -1.f);
+	}
+	for (uint i = 0; (to < 0) && (i < mates.length()); ++i) {
 		const int t = int(mates[i]);
 		if ((t == ai.teamId) || (ai.ReadTeamValue(t, TV_AIRBDEF, -1.f) != bdef))
 			continue;
