@@ -575,6 +575,7 @@ float MexLossShare()
 // walk from home; the ordinary price, which charges the walk, decides for it.
 int gFarHandSkips = 0;
 int gFarClaims = 0;      // far hands sent to their nearest spot, logged on elec-slice
+int gComEscort = 0;      // commander sent to the lab while escorts are owed
 bool FarHand(CCircuitUnit@ unit)
 {
 	if (!Builder::gHomeSet)
@@ -936,7 +937,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " farHand=" + gFarHandSkips + " farClaim=" + gFarClaims + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " wallN=" + gWallP.length()
+		+ " farHand=" + gFarHandSkips + " farClaim=" + gFarClaims + " comEscort=" + gComEscort + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -1885,9 +1886,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// Not the growing eco seat: it builds no defence while it grows (his
 	// 2026-09-13), and the raid valve ends the growth when it is not safe.
 	// ...ONLY WHILE THEY ARE KILLING THEM (his 2026-10-03); otherwise a gun is bought
-	// when the valuation says it is worth more than the next claim.
+	// when the valuation says it is worth more than the next claim. A hand out on the
+	// map covers what it just claimed before it moves on either way (his 2026-10-04:
+	// chain-claiming without guns lost 2.6x the constructors to v0.1.1).
 	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing()
-		&& (MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
+		&& ((MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
+			|| FarHand(unit))
 		&& PlantFramed())
 	{
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
@@ -1938,23 +1942,21 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// THE BASE'S OWN FRONT (his 2026-10-04): while they are coming, medium and
 	// heavy lasers on the open base-edge slots facing them -- as many as the enemy
 	// army we have seen takes to stop (apex_def_trade) -- built by hands at home.
-	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn()
-		&& (Military::Stance() == Military::S_AGGRESSIVE) && PlantFramed())
-	{
+	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn() && PlantFramed()) {
 		BaseFrontRefresh();
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
-		if ((gBfSlot >= 0) && (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
+		if (gBfActive && (gBfSlot >= 0) && (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
 			const array<int>@ builds = Catalog::BuildsOf(int(unit.circuitDef.id));
 			const float pushCap = EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
 			CCircuitDef@ gun = null;
+			// The heavy only on banked energy; the medium goes up slower in a stall.
 			if ((gBfHeavy !is null) && (builds.find(int(gBfHeavy.id)) >= 0)
-				&& (Catalog::gCostM[int(gBfHeavy.id)] <= pushCap))
+				&& (Catalog::gCostM[int(gBfHeavy.id)] <= pushCap)
+				&& (Eco::ECur() >= Catalog::gCostE[int(gBfHeavy.id)]) && !HardEStall())
 				@gun = gBfHeavy;
 			else if ((gBfMedium !is null) && (builds.find(int(gBfMedium.id)) >= 0))
 				@gun = gBfMedium;
-			if ((gun !is null) && (Eco::ECur() >= Catalog::gCostE[int(gun.id)]) && !HardEStall()
-				&& !aiEconomyMgr.isEnergyStalling)
-			{
+			if (gun !is null) {
 				const int gd = int(gun.id);
 				const AIFloat3 site = gWallP[uint(gBfSlot)];
 				Want@ bw = Want();
@@ -1972,6 +1974,46 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				why = "basefront";
 				coverPush = true;
 			}
+		}
+	}
+	// THE COMMANDER GETS THE ESCORTS OUT (his 2026-10-04, after v0.1.2 lost 2.6x the
+	// constructors to v0.1.1: "a commander assisting the factory to get escorts out
+	// might help a ton"). While constructors are owed escorts he assists the nearest
+	// lab with a queue for a guard period, past the free-metal gate ProposeAssist
+	// keeps -- which is why he never assisted early.
+	if (!aaPanic && !superPush && !convertPush && !coverPush
+		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f) && (EscortShortfall() > 0))
+	{
+		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		CCircuitUnit@ lab = null;
+		float labD = 1500.f;
+		for (uint fi = 0; fi < Brain::gFQFac.length(); ++fi) {
+			CCircuitUnit@ f = Brain::gFQFac[fi];
+			if ((f is null) || (f.CountQueued(null) <= 0))
+				continue;
+			const float fd = uAt.distance2D(f.GetPos(ai.frame));
+			if (fd < labD) {
+				labD = fd;
+				@lab = f;
+			}
+		}
+		if (lab !is null) {
+			Want@ aw = Want();
+			aw.kind = WK_ASSIST;
+			aw.pos = lab.GetPos(ai.frame);
+			aw.spotId = int(lab.id);
+			aw.gain = 1.f;
+			aw.mCost = 1.f;
+			aw.tCost = 1.f;
+			aw.value = 0.5f;
+			@gAssistTarget = lab;
+			gAssistTargetId = lab.id;
+			gAssistGuardS = 60;
+			ranked.insertAt(0, aw);
+			++gComEscort;
+			coverPush = true;
+			why = "comescort";
 		}
 	}
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so

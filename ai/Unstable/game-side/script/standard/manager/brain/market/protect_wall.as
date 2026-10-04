@@ -1031,6 +1031,8 @@ int gBfAt = -999999;
 int gBfFilled = 0;
 int gBfWanted = 0;
 int gBfOpen = 0;     // open front slots, for the log
+int gBfAggroUntil = -1;
+bool gBfActive = false;
 array<int> gBfTakenAt;
 CCircuitDef@ gBfMedium = null;
 CCircuitDef@ gBfHeavy = null;
@@ -1044,8 +1046,13 @@ void BaseFrontRefresh()
 		@gBfMedium = SideDef3("armbeamer", "corhllt", "leghlt");
 	if (gBfHeavy is null)
 		@gBfHeavy = SideDef3("armhlt", "corhlt", "leghlt");
+	// ON while out-massed, and for two minutes after the stance last read
+	// aggressive -- the stance alone flipped every minute (measured).
+	if (Military::Stance() == Military::S_AGGRESSIVE)
+		gBfAggroUntil = ai.frame + 120 * SECOND;
+	gBfActive = Military::Outmassed() || (ai.frame < gBfAggroUntil);
 	AIFloat3 foe;
-	if ((gBfMedium is null) || !FoeRef(foe))
+	if (!gBfActive || (gBfMedium is null) || !FoeRef(foe))
 		return;
 	const uint n = gWallP.length();
 	if (gBfTakenAt.length() != n) {
@@ -1057,9 +1064,10 @@ void BaseFrontRefresh()
 	const float lF = sqrt(toF.SqLength2D());
 	if (lF < 1.f)
 		return;
-	int filled = 0;
 	int open = 0;
+	int fullSlot = -1;     // with every front slot taken, the guns cluster beside the best
 	float bestCos = 0.5f;   // a 60-degree cone either side of the enemy's bearing
+	float bestFull = 0.5f;
 	for (uint i = 0; i < n; ++i) {
 		if (WallSlotLine(i))
 			continue;
@@ -1068,24 +1076,39 @@ void BaseFrontRefresh()
 		if (lS < 1.f)
 			continue;
 		const float c = (toS.x * toF.x + toS.z * toF.z) / (lS * lF);
-		if (c < 0.5f)
+		if ((c < 0.5f) || (ai.frame <= gBfTakenAt[i] + 30 * SECOND))
 			continue;
-		if (!WallSlotOpen(i)) {
-			++filled;
-		} else if (ai.frame > gBfTakenAt[i] + 30 * SECOND) {
+		if (WallSlotOpen(i)) {
 			++open;
-			if (c <= bestCos)
-				continue;
-			bestCos = c;
-			gBfSlot = int(i);
+			if (c > bestCos) {
+				bestCos = c;
+				gBfSlot = int(i);
+			}
+		} else if (c > bestFull) {
+			bestFull = c;
+			fullSlot = int(i);
 		}
 	}
+	if (gBfSlot < 0)
+		gBfSlot = fullSlot;
+	// What we own of the two guns, wherever they stand: a gun raised beside a
+	// full slot fills no slot, and counting slots let the push run forever.
+	int owned = 0;
+	if (uint(gBfMedium.id) < gOwnCount.length())
+		owned += gOwnCount[uint(gBfMedium.id)];
+	if ((gBfHeavy !is null) && (uint(gBfHeavy.id) < gOwnCount.length()))
+		owned += gOwnCount[uint(gBfHeavy.id)];
 	const float gunM = Catalog::gCostM[int(gBfMedium.id)];
 	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
-	gBfFilled = filled;
+	gBfFilled = owned;
 	gBfOpen = open;
-	gBfWanted = int(ceil(Military::EnemyArmyCost() / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
-	if (filled >= gBfWanted)
+	// Their army is mostly fog: the seen cost read 0.6-1.1k when the army that
+	// walked in was 10-20k (measured). A mirror is about our size, so never less.
+	float threatM = Military::EnemyArmyCost();
+	if (Military::OurArmyNow() > threatM)
+		threatM = Military::OurArmyNow();
+	gBfWanted = int(ceil(threatM / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
+	if (owned >= gBfWanted)
 		gBfSlot = -1;
 }
 

@@ -3184,3 +3184,18 @@ the stance is AGGRESSIVE, medium and heavy lasers on open base-edge slots within
 the seen enemy army. Measured firing but starved (one 14-min game: 4 pushes,
 wanted 6-10, only 3-6 front slots exist, stance flips every minute, energy-bank
 check rarely clears a 4,700 E heavy). Open, and his defence questions pending.
+
+## TUNE_COM_ESCORT = 1, and the base front sized to our own army (2026-10-04)
+
+v0.1.2 lost 2.6x the constructors of v0.1.1 in a 6-game head-to-head (5.0 vs
+3.3 per game over 24): far hands chain-claimed without guns. Far hands now take
+the extractor-gun push whatever the loss share, and while constructors are owed
+escorts the commander assists the nearest lab with a queue (his idea). The base
+front fires while Outmassed() or within 2 min of an AGGRESSIVE stance, sizes to
+max(seen enemy army, our own army) -- the seen cost read 0.6-1.1k when 10-20k
+walked in -- counts owned medium/heavy guns, and reuses the best front slot when
+all are full. Tournament format (run_tournament, records carried) vs v0.1.1 /
+v0.1.2: 13-11 / 12-12, then 15-9 / 10-14 with the bigger base front: even.
+Tried and not kept: hold-at-home (attack_edge 0.6, mass_hold_ratio 1.0,
+lane_forward 0.15) did not beat the plain candidate; TUNE_RECORD_BITE=0 went
+10-14 / 10-14.
