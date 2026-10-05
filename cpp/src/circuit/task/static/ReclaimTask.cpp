@@ -26,6 +26,16 @@ CSReclaimTask::CSReclaimTask(ITaskModule* mgr, Priority priority,
 {
 }
 
+CSReclaimTask::CSReclaimTask(ITaskModule* mgr, Priority priority, CCircuitUnit* target, int timeout)
+		: IReclaimTask(mgr, priority, Type::FACTORY, target, timeout)
+{
+}
+
+bool CSReclaimTask::CanAssignTo(CCircuitUnit* unit) const
+{
+	return (target != nullptr) ? unit->GetCircuitDef()->IsAbleToReclaim() : IReclaimTask::CanAssignTo(unit);
+}
+
 CSReclaimTask::~CSReclaimTask()
 {
 }
@@ -54,6 +64,11 @@ void CSReclaimTask::Start(CCircuitUnit* unit)
 
 void CSReclaimTask::Update()
 {
+	// A targeted eat is not traded for a repair job: that trade is what kept a
+	// door blocker standing (repaired by the turrets sent to eat it).
+	if (target != nullptr) {
+		return;
+	}
 	CCircuitAI* circuit = manager->GetCircuit();
 	// A full bank used to abort this task -- and at a hosted game's +100%
 	// the bank is pinned full, so nano reclaim never ran at all ("nano

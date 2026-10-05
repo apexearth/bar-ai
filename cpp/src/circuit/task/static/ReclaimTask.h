@@ -17,8 +17,10 @@ public:
 	CSReclaimTask(ITaskModule* mgr, Priority priority,
 				  const springai::AIFloat3& position,
 				  SResource cost, int timeout, float radius = .0f);
+	CSReclaimTask(ITaskModule* mgr, Priority priority, CCircuitUnit* target, int timeout);
 	virtual ~CSReclaimTask();
 
+	virtual bool CanAssignTo(CCircuitUnit* unit) const override;
 	virtual void AssignTo(CCircuitUnit* unit) override;
 
 	virtual void Start(CCircuitUnit* unit) override;

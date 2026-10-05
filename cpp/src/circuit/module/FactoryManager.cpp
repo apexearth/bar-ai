@@ -766,7 +766,9 @@ IUnitTask* CFactoryManager::Enqueue(const TaskS::SServSTask& ti)
 			task = new CSRepairTask(this, ti.priority, ti.target);
 		} break;
 		case IBuilderTask::BuildType::RECLAIM: {
-			task = new CSReclaimTask(this, ti.priority, ti.position, {0.f, 0.f}, ti.timeout, ti.radius);
+			task = (ti.target != nullptr)
+					? new CSReclaimTask(this, ti.priority, static_cast<CCircuitUnit*>(ti.target), ti.timeout)
+					: new CSReclaimTask(this, ti.priority, ti.position, {0.f, 0.f}, ti.timeout, ti.radius);
 		} break;
 		case IBuilderTask::BuildType::PATROL: {
 			task = new CSPatrolTask(this, ti.priority, ti.position, ti.timeout);

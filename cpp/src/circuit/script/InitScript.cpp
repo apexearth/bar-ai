@@ -12,6 +12,8 @@
 #include "map/ThreatMap.h"
 #include "map/MapManager.h"
 #include "module/EconomyManager.h"
+#include "module/BuilderManager.h"
+#include "module/FactoryManager.h"
 #include "map/InfluenceMap.h"
 #include "scheduler/Scheduler.h"
 #include "setup/SetupManager.h"
@@ -1174,6 +1176,77 @@ static CScriptArray* CCircuitAI_GetOwnUnitsOfDef(CCircuitAI* circuit, CCircuitDe
 	return arr;
 }
 
+// apex: a reclaim the script ordered by hand, so no turret is assigned to
+// repair the target while it is being eaten (CFactoryManager::CreateAssistTask).
+static void CCircuitAI_MarkReclaim(CCircuitAI* circuit, CCircuitUnit* target, int frames)
+{
+	if ((target == nullptr) || target->IsDead()) {
+		return;
+	}
+	circuit->GetBuilderManager()->MarkReclaim(target->GetId(), circuit->GetLastFrame() + frames);
+}
+
+// apex: every turret of ours that reaches `target` is put on one task eating it,
+// so neither its own repair/assist task nor the repair hunt re-commands it.
+// `share` is how many targets this pass still has to serve: the free turrets
+// are split between them, nearest first, and a turret already eating a live
+// target is left on it. Returns how many were sent.
+static int CCircuitAI_TurretsReclaim(CCircuitAI* circuit, CCircuitUnit* target, int frames, int share)
+{
+	if ((target == nullptr) || target->IsDead()) {
+		return 0;
+	}
+	const int frame = circuit->GetLastFrame();
+	circuit->GetBuilderManager()->MarkReclaim(target->GetId(), frame + frames);
+	CFactoryManager* factoryMgr = circuit->GetFactoryManager();
+	const AIFloat3& tp = target->GetPos(frame);
+	const float tr = target->GetCircuitDef()->GetDef()->GetRadius();
+	IUnitTask* task = nullptr;
+	int sent = 0;
+	std::vector<CCircuitUnit*> hands;
+	for (auto& kv : circuit->GetTeamUnits()) {
+		CCircuitUnit* u = kv.second;
+		if ((u == nullptr) || (u == target) || u->IsDead()) {
+			continue;
+		}
+		CCircuitDef* d = u->GetCircuitDef();
+		if (d->IsMobile() || !d->IsAbleToReclaim() || d->IsBuilder() || (d->GetBuildDistance() <= 0.f)) {
+			continue;
+		}
+		IUnitTask* cur = u->GetTask();
+		if ((cur == nullptr) || (cur->GetManager() != factoryMgr)) {
+			continue;
+		}
+		if ((cur->GetType() == IUnitTask::Type::FACTORY)
+			&& (static_cast<IBuilderTask*>(cur)->GetBuildType() == IBuilderTask::BuildType::RECLAIM))
+		{
+			CCircuitUnit* eating = static_cast<IBuilderTask*>(cur)->GetTarget();
+			if ((eating != nullptr) && (circuit->GetTeamUnit(eating->GetId()) == eating)) {
+				continue;
+			}
+		}
+		if (u->GetPos(frame).distance2D(tp) > d->GetBuildDistance() + tr) {
+			continue;
+		}
+		hands.push_back(u);
+	}
+	std::sort(hands.begin(), hands.end(), [frame, &tp](CCircuitUnit* a, CCircuitUnit* b) {
+		return a->GetPos(frame).SqDistance2D(tp) < b->GetPos(frame).SqDistance2D(tp);
+	});
+	const size_t take = (hands.size() + size_t(std::max(1, share)) - 1) / size_t(std::max(1, share));
+	if (hands.size() > take) {
+		hands.resize(take);
+	}
+	for (CCircuitUnit* u : hands) {
+		if (task == nullptr) {
+			task = factoryMgr->Enqueue(TaskS::ReclaimUnit(IBuilderTask::Priority::HIGH, target, frames));
+		}
+		factoryMgr->AssignTask(u, task);
+		++sent;
+	}
+	return sent;
+}
+
 static CScriptArray* CCircuitAI_GetOwnStructsNear(CCircuitAI* circuit, const AIFloat3& pos, float radius)
 {
 	const std::vector<CCircuitUnit*> found = circuit->GetOwnStructsNear(pos, radius);
@@ -1889,6 +1962,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEngageBoost() const", asMETHOD(CCircuitAI, GetEngageBoost), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnUnitsOfDef(CCircuitDef@, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnUnitsOfDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void MarkReclaim(CCircuitUnit@, int)", asFUNCTION(CCircuitAI_MarkReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int TurretsReclaim(CCircuitUnit@, int, int)", asFUNCTION(CCircuitAI_TurretsReclaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStatics()", asFUNCTION(CCircuitAI_GetAllyStatics), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyPlants()", asFUNCTION(CCircuitAI_GetAllyPlants), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

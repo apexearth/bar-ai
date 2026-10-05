@@ -69,9 +69,11 @@ array<Id>  gPenWall;
 array<int> gPenVerdictAt;
 array<AIFloat3> gPenExit;   // where the wall stood: the hole once it is eaten
 array<AIFloat3> gPenDir;    // the way out through it
+array<float> gPenFlow;      // metal/s a jammed plant gets back when it is cleared
 const int PEN_VERDICT_TTL = 120 * SECOND;
 
-void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3& in dir)
+void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3& in dir,
+	float flow = 0.f)
 {
 	for (uint i = 0; i < gPenVictim.length(); ++i) {
 		if (gPenVictim[i] == victim) {
@@ -79,6 +81,7 @@ void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3&
 			gPenVerdictAt[i] = ai.frame;
 			gPenExit[i] = exit;
 			gPenDir[i] = dir;
+			gPenFlow[i] = flow;
 			return;
 		}
 	}
@@ -87,6 +90,7 @@ void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3&
 	gPenVerdictAt.insertLast(ai.frame);
 	gPenExit.insertLast(exit);
 	gPenDir.insertLast(dir);
+	gPenFlow.insertLast(flow);
 }
 
 // The wall standing between this victim and everything else, or 0.
@@ -112,6 +116,7 @@ void DropPenVerdict(Id victim)
 			gPenVerdictAt.removeAt(i);
 			gPenExit.removeAt(i);
 			gPenDir.removeAt(i);
+			gPenFlow.removeAt(i);
 			return;
 		}
 	}
@@ -155,6 +160,7 @@ void SweepPenVerdicts()
 			gPenVerdictAt.removeAt(i);
 			gPenExit.removeAt(i);
 			gPenDir.removeAt(i);
+			gPenFlow.removeAt(i);
 			continue;
 		}
 		++i;

@@ -1629,12 +1629,20 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 	}
 
 	if (unit->IsMoveFailed(lastFrame)) {
-		// The commander is never written off: a permanent stuck flag swallowed
-		// every idle and move-failed event after minute 6.7 while a Reclaim of
-		// himself sat in the queue. The script's pen test frees him.
+		// Never written off. The permanent flag swallowed every later idle, so a
+		// unit stopped here was never given another order, and the Reclaim of
+		// itself it enqueued was never taken: no builder falls through to
+		// DefaultMakeTask. Units stopped this way stood in their factory yards
+		// for the rest of the game. The script's yard watch and pen test free them.
+		unit->ClearStuck();
+		++stuckStops;
+		if (lastFrame >= stuckLogAt) {
+			stuckLogAt = lastFrame + FRAMES_PER_SEC * 60;
+			const AIFloat3& p = unit->GetPos(lastFrame);
+			LOG("apex: move-failed stops=%i last=%s #%d at=%.0f,%.0f",
+					stuckStops, unit->GetCircuitDef()->GetDef()->GetName(), unit->GetId(), p.x, p.z);
+		}
 		if (unit->GetCircuitDef()->IsRoleComm()) {
-			unit->ClearStuck();
-			LOG("apex: move-failed commander #%d", unit->GetId());
 			return 0;  // signaling: OK
 		}
 		// ROAM unsticks a fighter; on a builder it was permanent, and a
@@ -1646,8 +1654,6 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 				unit->CmdSetMoveState(CCircuitDef::MoveType::ROAM);
 			}
 		)
-//		Garbage(unit, "stuck");
-		GetBuilderManager()->Enqueue(TaskB::Reclaim(IBuilderTask::Priority::NORMAL, unit));
 	} else if (unit->GetTask()->GetType() != IUnitTask::Type::NIL) {
 		unit->GetTask()->OnUnitMoveFailed(unit);
 	}

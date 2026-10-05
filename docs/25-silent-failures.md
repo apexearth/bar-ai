@@ -670,3 +670,24 @@ per unit (`gIncTask`) is only the unit's while `GetUnits()` says so; and
 a fix whose mechanism was never instrumented (`keep-job` was counted,
 never characterised) can be "measured working" while doing something
 else entirely.
+
+## S38 — a reclaim the turrets were told to do, undone by the turrets told to repair (2026-10-04)
+
+Every stuck-unit cure logged that it acted, and none of them freed a factory.
+`FacYardWatch` and the DLL's `UnitMoveFailed` `Enqueue`d builder reclaim
+tasks outside any election; since the overhaul no builder falls through to
+`DefaultMakeTask`, so those tasks were never taken (his gantry logged
+`eat=[ armnanotc x3 ]` three times and the nanos stood). `UnitMoveFailed`
+also set a permanent stuck flag that swallowed every later idle, so a unit
+stopped in a yard was never ordered again. The raw `CmdReclaimUnit` sent to
+turrets did go out, and lost: `CFactoryManager::CreateAssistTask` assigns
+every idle turret to repair any damaged friendly in range, skipping only a
+builder-manager reclaim target, so the first bite of the reclaim recruited
+the rest of the block to heal it, and each turret's own task re-commanded it
+within seconds anyway (`dev_yardjam` command census: 77 REPAIR orders in 10 s
+against a full-health seal). Fixed with a timed mark `IsReclaimUnit` honours
+(`ai.MarkReclaim`) and a targeted static reclaim task the turrets are
+assigned to (`ai.TurretsReclaim`). General rule: an order to a unit that
+holds a DLL task is a suggestion; count what the unit is DOING a few seconds
+later, not what was sent. `game-patches/gadgets/dev_yardjam.lua` seals a
+team's doors on demand and is the instrument.

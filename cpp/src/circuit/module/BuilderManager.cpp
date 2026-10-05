@@ -549,6 +549,15 @@ int CBuilderManager::UnitCreated(CCircuitUnit* unit, CCircuitUnit* builder)
 	return 0; //signaling: OK
 }
 
+bool CBuilderManager::IsReclaimUnit(CAllyUnit* unit) const
+{
+	if (reclaimUnits.find(unit) != reclaimUnits.end()) {
+		return true;
+	}
+	auto it = scriptReclaim.find(unit->GetId());
+	return (it != scriptReclaim.end()) && (it->second > circuit->GetLastFrame());
+}
+
 int CBuilderManager::UnitFinished(CCircuitUnit* unit)
 {
 	auto iter = unfinishedUnits.find(unit);
@@ -609,6 +618,7 @@ int CBuilderManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 	if ((itcl != reclaimUnits.end()) && (itcl->second != nullptr)) {
 		DoneTask(itcl->second);
 	}
+	scriptReclaim.erase(unit->GetId());
 
 	auto search = destroyedHandler.find(unit->GetCircuitDef()->GetId());
 	if (search != destroyedHandler.end()) {

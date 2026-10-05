@@ -319,7 +319,11 @@ public:
 	IBuilderTask* GetResurrectTask(const springai::AIFloat3& pos, float radius) const;
 	void RegisterReclaim(CAllyUnit* unit) { reclaimUnits[unit] = nullptr; }
 	void UnregisterReclaim(CAllyUnit* unit) { reclaimUnits.erase(unit); }
-	bool IsReclaimUnit(CAllyUnit* unit) const { return reclaimUnits.find(unit) != reclaimUnits.end(); }
+	bool IsReclaimUnit(CAllyUnit* unit) const;
+	// A reclaim the script ordered directly (turrets have no builder task).
+	// Without it every idle turret is assigned to repair the target the moment
+	// the reclaim damages it, and the reclaim never lands.
+	void MarkReclaim(ICoreUnit::Id id, int untilFrame) { scriptReclaim[id] = untilFrame; }
 	bool IsReclaimFeature(const springai::AIFloat3& pos, float radius) const {
 		return GetReclaimFeatureTask(pos, radius) != nullptr;
 	}
@@ -372,6 +376,7 @@ private:
 	std::map<CAllyUnit*, IBuilderTask*> unfinishedUnits;
 	std::map<ICoreUnit::Id, CBRepairTask*> repairUnits;
 	std::map<CAllyUnit*, CBReclaimTask*> reclaimUnits;
+	std::unordered_map<ICoreUnit::Id, int> scriptReclaim;
 	std::vector<std::set<IBuilderTask*>> buildTasks;  // UnitDef based tasks
 	unsigned int assistCount;  // builders that can assist
 	unsigned int guardCount;  // assist guards

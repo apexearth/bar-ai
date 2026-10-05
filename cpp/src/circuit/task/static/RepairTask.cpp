@@ -76,6 +76,7 @@ void CSRepairTask::Update()
 		const float radius = (*units.begin())->GetCircuitDef()->GetBuildDistance();
 		CAllyUnit* repTarget = circuit->GetFriendlyUnit(targetId);
 		if ((repTarget == nullptr)
+			|| circuit->GetBuilderManager()->IsReclaimUnit(repTarget)
 			|| (position.SqDistance2D(repTarget->GetPos(circuit->GetLastFrame())) > SQUARE(radius * 0.9f)))
 		{
 			manager->AbortTask(this);

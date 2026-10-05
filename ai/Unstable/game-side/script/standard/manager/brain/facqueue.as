@@ -32,10 +32,6 @@ array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
 array<int> gFQSeen;              // ...and the queue depth we last observed
 array<int> gFQAt;                // ...and the frame we last sent one an order
 array<int> gFQEvt;               // ...and the frame the line last did ANYTHING
-array<CCircuitDef@> gFQBornDef;   // ...the def it last finished, until it has left the yard
-array<int> gFQBornAt;            // ...and the frame it finished (-1: yard clear)
-array<int> gFQYardLog;           // ...and the last frame a jam was logged for it
-array<bool> gFQProbeDue;         // ...and whether its latest birth is still to be measured
 
 // EVERY ORDER STILL OUTSTANDING, as a flat FIFO of (line, def) pairs, retired
 // only when the unit is FINISHED. Reads lag sends by a whole order window
@@ -235,10 +231,6 @@ void FQForget(Id id)
 	gFQSeen.removeAt(i);
 	gFQAt.removeAt(i);
 	gFQEvt.removeAt(i);
-	gFQBornDef.removeAt(i);
-	gFQBornAt.removeAt(i);
-	gFQYardLog.removeAt(i);
-	gFQProbeDue.removeAt(i);
 	PendReindex(i);
 }
 
@@ -295,10 +287,6 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQSeen.insertLast(0);
 		gFQAt.insertLast(ai.frame);
 		gFQEvt.insertLast(ai.frame);
-		gFQBornDef.insertLast(null);
-		gFQBornAt.insertLast(-1);
-		gFQYardLog.insertLast(0);
-		gFQProbeDue.insertLast(false);
 		line = int(gFQId.length()) - 1;
 		AbortRecruitsOn(fac);
 		fac.CmdRepeat(false);
@@ -475,233 +463,11 @@ void SweepDeadRecruits()
 	}
 }
 
-// A FINISHED UNIT STILL STANDING IN THE YARD IS A BLOCKED LINE (apexearth
-// 2026-09-12: "I did notice an issue with a gantry being blocked. It might be
-// worth being able to fix that after it's happened"). The engine will not
-// start the next unit while something solid stands on the build spot, and
-// nothing reports it. One line per call; the born def is re-found by
-// position, never by a stored handle (NOCOUNT: see FQForget).
-int gFQYardLine = 0;
-int gFQYardAt = 0;
-const int YARD_SETTLE = 20 * SECOND;
-// Which way out of a plant, per def, MEASURED as votes: +1 for a birth found
-// along the facing 5 s later, -1 against it. Spring's "front" is +z at
-// facing 0, and the T2 labs and the gantry exit that way; the T1 bot labs'
-// open yard rows are on the other side (8 of 8 armalab births along>0, 6 of
-// 8 armlab along<0). A single reading of a fast bot is noise, so the side is
-// known only at three votes' margin.
-array<int> gFQExitVotes;
-int ExitSign(int defId)
-{
-	if (int(gFQExitVotes.length()) <= Catalog::gDefCount)
-		gFQExitVotes.resize(Catalog::gDefCount + 1);
-	const int v = gFQExitVotes[defId];
-	return (v >= 3) ? 1 : ((v <= -3) ? -1 : 0);
-}
-
-void FacYardWatch()
-{
-	if ((gFQFac.length() == 0) || (ai.frame < gFQYardAt))
-		return;
-	gFQYardAt = ai.frame + 2 * SECOND;
-	if (gFQYardLine >= int(gFQFac.length()))
-		gFQYardLine = 0;
-	const int l = gFQYardLine++;
-	if ((gFQBornAt[l] < 0) || (gFQBornDef[l] is null))
-		return;
-	CCircuitUnit@ fac = gFQFac[l];
-	// The facing map is asserted once per line, not trusted: where the first
-	// unit actually stands 5 s after birth, in the frame the doorstep uses.
-	if (gFQProbeDue[l] && (fac !is null) && (fac.circuitDef !is null)
-		&& (ai.frame - gFQBornAt[l] >= 5 * SECOND))
-	{
-		gFQProbeDue[l] = false;
-		const bool first = (gFQYardLog[l] == 0);
-		if (first)
-			gFQYardLog[l] = 1;
-		const int f0 = fac.GetFacing();
-		const AIFloat3 d0 = (f0 == 0) ? AIFloat3(0.f, 0.f, 1.f)
-				: (f0 == 1) ? AIFloat3(1.f, 0.f, 0.f)
-				: (f0 == 2) ? AIFloat3(0.f, 0.f, -1.f) : AIFloat3(-1.f, 0.f, 0.f);
-		const AIFloat3 p0 = fac.GetPos(ai.frame);
-		array<CCircuitUnit@>@ b0 = ai.GetOwnUnitsOfDef(gFQBornDef[l], p0, 600.f);
-		CCircuitUnit@ nb = null;   // the newest: an older one may be guarding
-		if (b0 !is null) {
-			for (uint i = 0; i < b0.length(); ++i) {
-				if ((b0[i] !is null) && ((nb is null) || (int(b0[i].id) > int(nb.id))))
-					@nb = b0[i];
-			}
-		}
-		if (nb !is null) {
-			const AIFloat3 r0 = nb.GetPos(ai.frame) - p0;
-			const float al0 = r0.x * d0.x + r0.z * d0.z;
-			const int fd0 = int(fac.circuitDef.id);
-			const float hd0 = float(((f0 & 1) == 0) ? Catalog::gFootZ[fd0] : Catalog::gFootX[fd0]) * 8.f;
-			ExitSign(fd0);
-			if ((f0 >= 0) && (((al0 < 0.f) ? -al0 : al0) > hd0 + 16.f))
-				gFQExitVotes[fd0] += (al0 > 0.f) ? 1 : -1;
-			if (first)
-				AiLog(Factory::T() + "apex: facyard exit " + fac.circuitDef.GetName()
-					+ " #" + fac.id + " facing=" + f0
-					+ " along=" + int(al0)
-					+ " across=" + int(r0.x * d0.z - r0.z * d0.x)
-					+ " votes=" + gFQExitVotes[fd0]);
-		}
-	}
-	if (ai.frame - gFQBornAt[l] < YARD_SETTLE)
-		return;
-	// Builders are not evidence: a new constructor works beside its plant.
-	if ((fac is null) || (fac.circuitDef is null) || !gFQBornDef[l].IsMobile()
-		|| gFQBornDef[l].IsAbleToFly() || gFQBornDef[l].IsBuilder())
-	{
-		gFQBornAt[l] = -1;
-		return;
-	}
-	const int fd = int(fac.circuitDef.id);
-	const int cells = (Catalog::gFootX[fd] > Catalog::gFootZ[fd])
-			? Catalog::gFootX[fd] : Catalog::gFootZ[fd];
-	const float footR = float(cells) * 8.f + 24.f;
-	const AIFloat3 fp = fac.GetPos(ai.frame);
-	const int facing = fac.GetFacing();
-	const AIFloat3 dir = (facing == 0) ? AIFloat3(0.f, 0.f, 1.f)
-			: (facing == 1) ? AIFloat3(1.f, 0.f, 0.f)
-			: (facing == 2) ? AIFloat3(0.f, 0.f, -1.f) : AIFloat3(-1.f, 0.f, 0.f);
-	const float halfD = float(((facing & 1) == 0) ? Catalog::gFootZ[fd] : Catalog::gFootX[fd]) * 8.f;
-	const float halfW = float(((facing & 1) == 0) ? Catalog::gFootX[fd] : Catalog::gFootZ[fd]) * 8.f;
-	// Jammed means INSIDE the footprint: a blocked unit stays on the build
-	// spot, and a unit that got out cannot stand there. The idle army rallies
-	// beside its plant, so "near" would read every gathering as a jam -- and
-	// a false jam ends in the plant being reclaimed.
-	array<CCircuitUnit@>@ born = ai.GetOwnUnitsOfDef(gFQBornDef[l], fp, footR);
-	bool inside = false;
-	if ((born !is null) && (facing >= 0)) {
-		for (uint i = 0; (i < born.length()) && !inside; ++i) {
-			if (born[i] is null)
-				continue;
-			const AIFloat3 rb = born[i].GetPos(ai.frame) - fp;
-			const float al = rb.x * dir.x + rb.z * dir.z;
-			const float ac = rb.x * dir.z - rb.z * dir.x;
-			inside = (((al < 0.f) ? -al : al) <= halfD) && (((ac < 0.f) ? -ac : ac) <= halfW);
-		}
-	}
-	if (!inside) {
-		gFQBornAt[l] = -1;   // it left; the yard is clear
-		return;
-	}
-	// Jammed. Once per 30 s per line: push everything of ours standing in the
-	// yard toward the lane, eat any wreck in it, and say what else is there.
-	if (ai.frame < gFQYardLog[l])
-		return;
-	gFQYardLog[l] = ai.frame + 30 * SECOND;
-	const AIFloat3 lane = aiSetupMgr.GetLanePos();
-	int pushed = 0;     // units in the yard other than the one just born
-	for (uint cd = 1; cd < Market::gOwnCount.length(); ++cd) {
-		if ((Market::gOwnCount[cd] <= 0) || !Catalog::gMobile[int(cd)]
-			|| Catalog::gBuilder[int(cd)])
-			continue;
-		array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(Catalog::Def(int(cd)), fp, footR * 1.5f);
-		if (near is null)
-			continue;
-		for (uint i = 0; i < near.length(); ++i) {
-			if (near[i] is null)
-				continue;
-			// OUT OF THE YARD, NEVER THROUGH IT (apexearth 2026-10-02: snipers
-			// ordered to the lane walked into a vehicle lab packed with stuck
-			// Rovers). A unit on the build spot leaves by the front; one
-			// outside steps away from the plant, whichever side it stands on.
-			const AIFloat3 up = near[i].GetPos(ai.frame);
-			const AIFloat3 rb = up - fp;
-			const float al = rb.x * dir.x + rb.z * dir.z;
-			const float ac = rb.x * dir.z - rb.z * dir.x;
-			const bool onSpot = (((al < 0.f) ? -al : al) <= halfD) && (((ac < 0.f) ? -ac : ac) <= halfW);
-			AIFloat3 exitTo;
-			if (onSpot) {
-				const float sgn = (ExitSign(fd) < 0) ? -1.f : 1.f;
-				exitTo = fp + dir * (sgn * (halfD + 160.f));
-			} else {
-				AIFloat3 away = rb;
-				if (away.SqLength2D() < 1.f)
-					away = dir;
-				away.SafeNormalize2D();
-				exitTo = up + away * 250.f;
-			}
-			if (ai.IsPosOnMap(exitTo))
-				near[i].CmdMoveTo(exitTo);
-			else if (ai.IsPosOnMap(lane))
-				near[i].CmdMoveTo(lane);
-			if (Catalog::Def(int(cd)) !is gFQBornDef[l])
-				++pushed;
-		}
-	}
-	int wreck = 0;
-	const AIFloat3 wp = ai.GetBestWreckPos(fp, footR * 1.5f, 0.f);
-	if (ai.IsPosOnMap(wp) && (wp.distance2D(fp) <= footR * 1.5f)) {
-		if (aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, wp, 1000.f,
-				60 * SECOND, footR * 0.5f, true)) !is null)
-			wreck = 1;
-	}
-	// OUR OWN BUILDING ON THE DOORSTEP IS RECLAIMED (apexearth: "ideally we
-	// either reclaim that lab or the other thing that is blocking it"). The
-	// doorstep is the strip in front of the plant's facing edge, as deep as
-	// the plant is wide; the engine alone knows which edge is the front.
-	// Our building on the doorstep is reclaimed only on the side the plant
-	// has been SEEN to exit from, and only once the jam has held past a
-	// second look: three nanos behind a vehicle plant were condemned on a
-	// 26 s reading the game ended before it could contradict.
-	int structs = 0;
-	string eaten = "";
-	int sg = ExitSign(fd);
-	// A plant jammed from its first unit never casts an exit vote, so its
-	// blocker was never named; after the long settle the engine's facing map
-	// stands in for the vote.
-	if ((sg == 0) && (ai.frame - gFQBornAt[l] >= 6 * YARD_SETTLE))
-		sg = 1;
-	if ((sg != 0) && (ai.frame - gFQBornAt[l] >= 2 * YARD_SETTLE)) {
-		array<CCircuitUnit@>@ st = ai.GetOwnStructsNear(fp, halfD + 2.f * halfW + 64.f);
-		if (st !is null) {
-			for (uint i = 0; i < st.length(); ++i) {
-				if ((st[i] is null) || (st[i].id == fac.id) || (st[i].circuitDef is null))
-					continue;
-				const AIFloat3 rel = st[i].GetPos(ai.frame) - fp;
-				const float along = (rel.x * dir.x + rel.z * dir.z) * float(sg);
-				const float across = rel.x * dir.z - rel.z * dir.x;
-				const int sd = int(st[i].circuitDef.id);
-				const float sr = float((Catalog::gFootX[sd] > Catalog::gFootZ[sd])
-						? Catalog::gFootX[sd] : Catalog::gFootZ[sd]) * 8.f;
-				if ((along + sr < halfD) || (along - sr > halfD + 2.f * halfW)
-					|| (((across < 0.f) ? -across : across) - sr > halfW))
-					continue;
-				++structs;
-				if (aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, st[i])) !is null)
-					eaten += " " + st[i].circuitDef.GetName();
-			}
-		}
-	}
-	// Nothing in the yard we can name, for long enough: the plant itself goes.
-	// Its metal comes back and the market buys the next one on open ground.
-	bool self = false;
-	if ((structs == 0) && (wreck == 0) && (pushed == 0)
-		&& (ai.frame - gFQBornAt[l] >= 6 * YARD_SETTLE))
-	{
-		self = (aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, fac)) !is null);
-	}
-	{
-		AiLog(Factory::T() + "apex: facyard jammed " + fac.circuitDef.GetName()
-			+ " #" + fac.id + " t=" + ai.teamId
-			+ " unit=" + gFQBornDef[l].GetName()
-			+ " age=" + int((ai.frame - gFQBornAt[l]) / SECOND) + "s"
-			+ " facing=" + facing + " sign=" + sg + " footR=" + int(footR)
-			+ " pushed=" + pushed + " wreck=" + wreck + " structs=" + structs
-			+ " eat=[" + eaten + " ]" + (self ? " self-reclaim" : ""));
-	}
-}
-
 void UpdateFacQueues()
 {
 	if (!FacQueueOn())
 		return;
 	SweepDeadRecruits();
-	FacYardWatch();
 }
 
 // The honest reconcile: the ordered unit APPEARED. CountQueued lags sends by
@@ -716,9 +482,6 @@ void NoteProduced(CCircuitUnit@ unit)
 			const int line = gFQPendLine[i];
 			if ((line >= 0) && (line < int(gFQEvt.length()))) {
 				gFQEvt[line] = ai.frame;
-				@gFQBornDef[line] = Catalog::Def(int(unit.circuitDef.id));
-				gFQBornAt[line] = ai.frame;
-				gFQProbeDue[line] = true;
 			}
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);

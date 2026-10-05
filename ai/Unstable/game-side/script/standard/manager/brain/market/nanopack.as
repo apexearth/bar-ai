@@ -73,6 +73,10 @@ bool AirPlant(int defId)
 // asked beside.
 array<AIFloat3> gNPDoorPos;
 array<float> gNPDoorHalf;
+// The door a standing plant actually has. The engine turns a plant that will not
+// place facing the base axis (FactoryTask::checkFacing), so the axis is only a
+// guess for one not yet framed (zero here).
+array<AIFloat3> gNPDoorDir;
 void NearGround(const AIFloat3& in at, float span,
 		array<AIFloat3>& out pos, array<float>& out hx, array<float>& out hz)
 {
@@ -81,6 +85,7 @@ void NearGround(const AIFloat3& in at, float span,
 	hz.resize(0);
 	gNPDoorPos.resize(0);
 	gNPDoorHalf.resize(0);
+	gNPDoorDir.resize(0);
 	const float sq = span * span;
 	// The ledger's bucket index, not the ledger: this ran once per PackSlots and
 	// the batch runs one PackSlots per factory line, so the walk was
@@ -98,6 +103,9 @@ void NearGround(const AIFloat3& in at, float span,
 		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
 		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
 			gNPDoorPos.insertLast(gComPos[i]);
+			CCircuitUnit@ pu = (gComId[i] > 0) ? ai.GetTeamUnit(gComId[i]) : null;
+			const int pf = (pu !is null) ? pu.GetFacing() : -1;
+			gNPDoorDir.insertLast((pf < 0) ? AIFloat3(0.f, 0.f, 0.f) : Brain::FacingDir(pf));
 			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
 					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
 		}
@@ -118,6 +126,7 @@ void NearGround(const AIFloat3& in at, float span,
 		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
 		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
 			gNPDoorPos.insertLast(p);
+			gNPDoorDir.insertLast(AIFloat3(0.f, 0.f, 0.f));
 			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
 					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
 		}
@@ -130,8 +139,9 @@ bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd)
 	for (uint k = 0; k < gNPDoorPos.length(); ++k) {
 		const float rx = p.x - gNPDoorPos[k].x;
 		const float rz = p.z - gNPDoorPos[k].z;
-		const float ahead = rx * fwd.x + rz * fwd.z;
-		const float side = rx * fwd.z - rz * fwd.x;
+		const AIFloat3 d = (gNPDoorDir[k].SqLength2D() > 0.f) ? gNPDoorDir[k] : fwd;
+		const float ahead = rx * d.x + rz * d.z;
+		const float side = rx * d.z - rz * d.x;
 		if ((ahead > 0.f) && (ahead < 220.f + pitch)
 			&& (abs(side) < gNPDoorHalf[k] + pitch))
 			return true;

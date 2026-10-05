@@ -69,6 +69,18 @@ namespace TaskS {
 		ti.position = position;
 		ti.radius = radius;
 		ti.timeout = timeout;
+		ti.target = nullptr;
+		return ti;
+	}
+	// A turret eating one unit of ours, held off every other task until it is gone.
+	static inline SServSTask ReclaimUnit(IBuilderTask::Priority priority, CCircuitUnit* target, int timeout)
+	{
+		SServSTask ti;
+		ti.type = IBuilderTask::BuildType::RECLAIM;
+		ti.priority = priority;
+		ti.target = target;
+		ti.radius = 0.f;
+		ti.timeout = timeout;
 		return ti;
 	}
 	static inline SServSTask Patrol(IBuilderTask::Priority priority,

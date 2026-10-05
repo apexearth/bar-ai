@@ -187,6 +187,7 @@ void NanoReclaimAssist()
 		const AIFloat3 vp = gReclaimPos[i];
 		if (!OnMap(vp))
 			continue;
+		ai.MarkReclaim(v, gReclaimUntil[i] - ai.frame);
 		for (uint n = 0; (n < gNanoDefs.length()) && (sent < NANO_SEND_MAX); ++n) {
 			array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(
 					Catalog::Def(gNanoDefs[n]), vp, reach);
@@ -1735,6 +1736,7 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 	CCircuitUnit@ best = null;
 	int bestDef = -1;
 	float bestFree = 0.f;
+	float bestFlow = 0.f;
 	for (uint i = 0; i < Military::gPenVictim.length(); ++i) {
 		CCircuitUnit@ victim = ai.GetTeamUnit(Military::gPenVictim[i]);
 		if ((victim is null) || (victim.circuitDef is null))
@@ -1773,7 +1775,9 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		// Metal back plus, when the wall goes, the unit that starts working
 		// again -- both one-shot, so both amortized the same way every other
 		// reclaim here is.
-		const float gain = (Catalog::gCostM[eatDef] + freed) / hz;
+		// A jammed plant's output is a stream, not a refund: it is back the
+		// moment either side of the trade is gone.
+		const float gain = (Catalog::gCostM[eatDef] + freed) / hz + Military::gPenFlow[i];
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(ep) / speed) : 60.f;
@@ -1784,6 +1788,7 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 			@best = eat;
 			bestDef = eatDef;
 			bestFree = freed;
+			bestFlow = Military::gPenFlow[i];
 		}
 	}
 	if (best is null)
@@ -1794,7 +1799,7 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 	@w.def = Catalog::Def(bestDef);
 	w.pos = bp;
 	w.spotId = int(best.id);
-	w.gain = (Catalog::gCostM[bestDef] + bestFree) / hz;
+	w.gain = (Catalog::gCostM[bestDef] + bestFree) / hz + bestFlow;
 	w.mCost = 1.f;
 	w.tCost = (walkSec + Catalog::gCostM[bestDef] / 90.f) * wageP;
 	w.value = bestValue;

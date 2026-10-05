@@ -17,6 +17,7 @@
 #include "manager/role.as"        // the eco/tech role's POLICY, one place
 #include "manager/persona.as"     // per-instance identity: biases, never gates
 #include "manager/brain/facqueue.as"  // the production executor: every line held silent
+#include "manager/brain/yard.as"      // units that cannot leave their factory
 #include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)
 #include "manager/economy.as"
 #include "manager/air.as"
@@ -148,6 +149,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// fix rather than a piece of the team machinery that gate exists for.
 	{ double _t = Perf::T0(); Military::UpdateUnblock(); Perf::Add("up.unblock", _t); }
 	{ double _t = Perf::T0(); Military::UpdateMoveTests(); Perf::Add("up.movetests", _t); }
+	{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
 
 	if (!ApexActive())
 		return;
