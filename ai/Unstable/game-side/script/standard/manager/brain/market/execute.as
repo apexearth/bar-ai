@@ -475,7 +475,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				? w.pos
 				: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, tAt, 256.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, tAt, 256.f, 0.f);
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
 		|| (w.kind == WK_AIRDEF)) {
@@ -566,8 +566,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				return jg;
 			return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
 					Task::Priority::NORMAL,
-					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)), 256.f,
-					SQUARE_SIZE * 16.f);
+					ClearOfLiveFactories(ClearOfSpots(w.pos, 180.f)), 256.f, 0.f);
 		}
 		const int sbt = (w.spotId == SC_HEAVY) ? int(Task::BuildType::DEFENCE)
 				: int(Task::BuildType::BIG_GUN);
@@ -1284,13 +1283,114 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// "a t1 vehicle lab blocked by a T2 vehicle lab").
 		const AIFloat3 at = Catalog::gFloater[int(w.def.id)]
 				? w.pos
-				: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
+				: (Factory::gFacUnits.length() == 0)
+					? FirstPlantSite(w.def, unit, w.pos)
+					: PlantNudge(w.def, Catalog::Def(int(unit.circuitDef.id)), w.pos);
 		// Told to the team at the order, so the next seat's opening reads it.
 		ai.PublishTeamValue("plant" + int(w.def.id), 1.f);
+		// No shake: a random jitter throws away the site just chosen.
 		return Requests::Take(unit, w.def, Task::BuildType::FACTORY,
-				Task::Priority::NORMAL, at, 256.f, SQUARE_SIZE * 16.f);
+				Task::Priority::NORMAL, at, 256.f, 0.f);
 	}
 	return null;
+}
+
+// The first plant: of the lattice cells the builder reaches without walking
+// and the factory task takes as handed, the one whose door is the shortest
+// walk to the open spots its first constructors will claim. Ties go to the
+// nearer cell, then the one further from the mirrored start -- never to a map
+// direction, which is what put side B's lab out of reach and on its mex.
+AIFloat3 FirstPlantSite(CCircuitDef@ def, CCircuitUnit@ unit, const AIFloat3& in ask)
+{
+	const int d = int(def.id);
+	const int md = int(unit.circuitDef.id);
+	const AIFloat3 from = unit.GetPos(ai.frame);
+	const int fd = (Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d];
+	const int fm = (Catalog::gFootX[md] > Catalog::gFootZ[md]) ? Catalog::gFootX[md] : Catalog::gFootZ[md];
+	const float pitch = Lattice::FootPitch(d);
+	const float half = float(fd) * 8.f;
+	const float reach = Catalog::gBuildDist[md] + half;
+	const float selfBar = float(fd + fm) * 8.f;   // CBFactoryTask's SelfClearance
+	const AIFloat3 mirror(float(AiTerrainWidth()) - from.x, 0.f, float(AiTerrainHeight()) - from.z);
+	int k = ConsNeedAny(true);
+	if (k < 1)
+		k = 1;
+	CacheSpots();
+	array<float> open;   // spots no one of ours has claimed and the enemy does not hold
+	array<AIFloat3> openPos;
+	for (uint si = 0; si < gAllSpots.length(); ++si) {
+		if ((LedgerFind(int(si)) >= 0) || (ai.GetEnemyCostAt(gAllSpots[si], 48.f) > 0.f))
+			continue;
+		openPos.insertLast(gAllSpots[si]);
+	}
+	const int n = int(reach / pitch) + 1;
+	array<AIFloat3> seen;
+	AIFloat3 best(-1.f, 0.f, -1.f);
+	float bestS = 0.f, bestD = 0.f, bestM = 0.f;
+	int bestF = -1, nCand = 0, nOk = 0;
+	for (int j = -n; j <= n; ++j) {
+		for (int i = -n; i <= n; ++i) {
+			const AIFloat3 c = ai.SnapToLattice(def, from + AIFloat3(float(i) * pitch, 0.f, float(j) * pitch));
+			const float dist = from.distance2D(c);
+			if (!OnMap(c) || (dist > reach) || (dist < selfBar))
+				continue;
+			bool dup = false;
+			for (uint q = 0; !dup && (q < seen.length()); ++q)
+				dup = seen[q].distance2D(c) < 1.f;
+			if (dup)
+				continue;
+			seen.insertLast(c);
+			++nCand;
+			if (NearBlockedFor(c, d))
+				continue;
+			const int f = ai.FactorySiteFacing(def, c);
+			if (f < 0)
+				continue;
+			const AIFloat3 door = Brain::FacingDir(f);
+			// Our own committed statics in the doorway (ClearExitLane's box).
+			bool lane = false;
+			ComNear(c, 242.f);
+			for (uint q = 0; !lane && (q < gComGrid.hit.length()); ++q) {
+				const uint ci = uint(gComGrid.hit[q]);
+				if (!Catalog::ValidId(gComDef[ci]) || Catalog::gMobile[gComDef[ci]])
+					continue;
+				const float rx = gComPos[ci].x - c.x;
+				const float rz = gComPos[ci].z - c.z;
+				const float ahead = rx * door.x + rz * door.z;
+				const float side = rx * door.z - rz * door.x;
+				lane = (ahead >= 40.f) && (ahead <= 220.f) && (side > -100.f) && (side < 100.f);
+			}
+			if (lane)
+				continue;
+			++nOk;
+			const AIFloat3 exit = c + door * half;
+			open.resize(0);
+			for (uint s = 0; s < openPos.length(); ++s)
+				open.insertLast(exit.distance2D(openPos[s]));
+			open.sortAsc();
+			float score = 0.f;
+			for (int q = 0; (q < k) && (q < int(open.length())); ++q)
+				score += open[uint(q)];
+			const float m = c.distance2D(mirror);
+			const bool better = (bestF < 0) || (score < bestS)
+					|| ((score == bestS) && ((dist < bestD) || ((dist == bestD) && (m > bestM))));
+			if (better) {
+				best = c;
+				bestS = score;
+				bestD = dist;
+				bestM = m;
+				bestF = f;
+			}
+		}
+	}
+	AiLog("apex: firstplant-site t=" + ai.teamId + " " + def.GetName()
+		+ " from=" + int(from.x) + "," + int(from.z)
+		+ " cand=" + nCand + " ok=" + nOk + " k=" + k
+		+ (bestF >= 0 ? (" at=" + int(best.x) + "," + int(best.z) + " facing=" + bestF
+			+ " walk=" + int(bestS) + " fromBuilder=" + int(bestD)) : " none -> nudge"));
+	if (bestF < 0)
+		return PlantNudge(def, Catalog::Def(md), ask);
+	return best;
 }
 
 // The executor's site nudges for a plant, with the step that moved it named

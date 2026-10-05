@@ -1964,6 +1964,73 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
 	return CanBeBuiltAt(cdef, position);
 }
 
+bool CTerrainManager::FootprintOnSpot(CCircuitDef* cdef, const AIFloat3& pos, int facing) const
+{
+	if ((cdef == nullptr) || !utils::is_valid(pos)) {
+		return false;
+	}
+	// FindBuildSiteByMask's own footprint cells, so both answer for one square.
+	UnitDef* unitDef = cdef->GetDef();
+	const bool swap = (facing == UNIT_FACING_EAST) || (facing == UNIT_FACING_WEST);
+	const int xssize = (swap ? unitDef->GetZSize() : unitDef->GetXSize()) / 2;
+	const int zssize = (swap ? unitDef->GetXSize() : unitDef->GetZSize()) / 2;
+	const int x1 = int(pos.x / (SQUARE_SIZE * 2)) - (xssize / 2);
+	const int z1 = int(pos.z / (SQUARE_SIZE * 2)) - (zssize / 2);
+	const SBlockingMap::SM spotMask = STRUCT_BIT(MEX) | STRUCT_BIT(GEO);
+	for (int z = z1; z < z1 + zssize; ++z) {
+		for (int x = x1; x < x1 + xssize; ++x) {
+			if (!blockingMap.IsInBounds(x, z)) {
+				continue;
+			}
+			if (blockingMap.grid[z * blockingMap.columns + x].blockerMask & spotMask) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool CTerrainManager::FactoryExitOpen(CCircuitDef* cdef, const AIFloat3& pos, int facing) const
+{
+	if (cdef == nullptr) {
+		return false;
+	}
+	SMobileType* exitMt = nullptr;
+	for (CCircuitDef::Id pid : cdef->GetBuildOptions()) {
+		CCircuitDef* pd = circuit->GetCircuitDef(pid);
+		if ((pd != nullptr) && pd->IsMobile() && !pd->IsAbleToFly()) {
+			exitMt = GetMobileTypeById(pd->GetMobileId());
+			if (exitMt != nullptr) {
+				break;
+			}
+		}
+	}
+	if (exitMt == nullptr) {
+		return true;
+	}
+	const float exitStep = std::max(cdef->GetDef()->GetXSize(), cdef->GetDef()->GetZSize()) * SQUARE_SIZE;
+	SArea* seen[2] = {nullptr, nullptr};
+	for (int k = 1; k <= 2; ++k) {
+		AIFloat3 p = pos;
+		switch (facing) {
+			default:
+			case UNIT_FACING_SOUTH: p.z += exitStep * k; break;
+			case UNIT_FACING_EAST:  p.x += exitStep * k; break;
+			case UNIT_FACING_NORTH: p.z -= exitStep * k; break;
+			case UNIT_FACING_WEST:  p.x -= exitStep * k; break;
+		}
+		const int iS = GetSectorIndex(p);
+		if ((iS < 0) || (iS >= (int)exitMt->sector.size())) {
+			return false;
+		}
+		seen[k - 1] = exitMt->sector[iS].area;
+		if (seen[k - 1] == nullptr) {
+			return false;
+		}
+	}
+	return seen[0] == seen[1];
+}
+
 bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination, const float range)
 {
 	// Off the map the sector index is outside the grid GetClosestSector indexes.

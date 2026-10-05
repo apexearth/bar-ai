@@ -351,6 +351,14 @@ public:
 	// or UNIT_NO_FACING when the grid does not apply. Factories use it so their
 	// exit apron opens onto the road to the front instead of the map centre.
 	int GetBaseGridFacing(const springai::AIFloat3& pos) const;
+	// The facing a build task gives a building at pos: the grid's, else toward
+	// the map centre along the longer axis (IBuilderTask::FindFacing).
+	int DefaultFacingAt(const springai::AIFloat3& pos) const;
+	// The facing a factory at pos would get, when CBFactoryTask would take the
+	// site exactly as handed (engine footprint, no metal/geo spot under it, the
+	// exit in one area); UNIT_NO_FACING otherwise. The builder's clearance and
+	// the lane of statics ahead are the caller's to check.
+	int FactorySiteFacing(CCircuitDef* def, const springai::AIFloat3& pos);
 	// In-game map markers, for watching what the AI believes. These are ordinary
 	// map points/lines: allies and spectators see them, so anything using these
 	// must stay off by default outside a debug watch.

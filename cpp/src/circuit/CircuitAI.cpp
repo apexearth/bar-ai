@@ -2712,6 +2712,36 @@ int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
 	return (fz >= 0.f) ? UNIT_FACING_SOUTH : UNIT_FACING_NORTH;
 }
 
+int CCircuitAI::DefaultFacingAt(const AIFloat3& pos) const
+{
+	const int gridFacing = GetBaseGridFacing(pos);
+	if (gridFacing != UNIT_NO_FACING) {
+		return gridFacing;
+	}
+	const float terWidth = terrainManager->GetTerrainWidth();
+	const float terHeight = terrainManager->GetTerrainHeight();
+	if (std::fabs(terWidth - 2 * pos.x) > std::fabs(terHeight - 2 * pos.z)) {
+		return (2 * pos.x > terWidth) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
+	}
+	return (2 * pos.z > terHeight) ? UNIT_FACING_NORTH : UNIT_FACING_SOUTH;
+}
+
+int CCircuitAI::FactorySiteFacing(CCircuitDef* def, const AIFloat3& pos)
+{
+	if ((def == nullptr) || !utils::is_valid(pos) || !IsPosOnMap(pos)) {
+		return UNIT_NO_FACING;
+	}
+	const int facing = DefaultFacingAt(pos);
+	CTerrainManager* tm = GetTerrainManager();
+	if (!GetMap()->IsPossibleToBuildAt(def->GetDef(), pos, facing)
+		|| tm->FootprintOnSpot(def, pos, facing)
+		|| !tm->FactoryExitOpen(def, pos, facing))
+	{
+		return UNIT_NO_FACING;
+	}
+	return facing;
+}
+
 // Snap a build position onto the base grid, leaving the walkways empty.
 //
 // Returns false whenever the grid should not apply -- no frame published yet, or

@@ -641,7 +641,10 @@ void CPathFinder::MakePath(IPathQuery* query, NSMicroPather::CMicroPather* micro
 
 	AIFloat3& startPos = q->GetStartPosRef();
 	AIFloat3& endPos = q->GetEndPosRef();
-	const int radius = q->GetMaxRange() / squareSize;
+	// apex: at least one cell. Large maps use 128-elmo cells, so a rez bot's
+	// 96-elmo reach truncated to 0 and the pather failed fast on every walk
+	// (3,627 `nopath ? by armrectr` in one Carrot 4v4, start and end walkable).
+	const int radius = std::max(1, int(q->GetMaxRange() / squareSize));
 	const NSMicroPather::HitFunc& hitTest = q->GetHitTest();
 	const float maxThreat = q->GetMaxThreat();
 

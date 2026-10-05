@@ -113,16 +113,6 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 	// One and two footprints out, the product's own move type must stand in
 	// one connected area.
 	CTerrainManager* exitTerrain = circuit->GetTerrainManager();
-	terrain::SMobileType* exitMt = nullptr;
-	for (CCircuitDef::Id pid : buildDef->GetBuildOptions()) {
-		CCircuitDef* pd = circuit->GetCircuitDef(pid);
-		if ((pd != nullptr) && pd->IsMobile() && !pd->IsAbleToFly()) {
-			exitMt = exitTerrain->GetMobileTypeById(pd->GetMobileId());
-			if (exitMt != nullptr) {
-				break;
-			}
-		}
-	}
 	const float exitStep = std::max(buildDef->GetDef()->GetXSize(), buildDef->GetDef()->GetZSize()) * SQUARE_SIZE;
 	// apex: ...AND NO BUILDING OF OURS OR AN ALLY'S STANDS IN IT (his watch
 	// 2026-09-28: a gantry placed facing its own two advanced solars, 128
@@ -167,38 +157,25 @@ bool CBFactoryTask::TryBuildSite(CCircuitUnit* builder, const AIFloat3& pos,
 		utils::free(units);
 		return clear;
 	};
-	auto exitOpen = [this, exitTerrain, exitMt, exitStep, &laneClear](const AIFloat3& bp) {
-		if (!laneClear(bp)) {
-			return false;
-		}
-		if (exitMt == nullptr) {
-			return true;
-		}
-		terrain::SArea* seen[2] = {nullptr, nullptr};
-		for (int k = 1; k <= 2; ++k) {
-			AIFloat3 p = bp;
-			switch (facing) {
-				default:
-				case UNIT_FACING_SOUTH: p.z += exitStep * k; break;
-				case UNIT_FACING_EAST:  p.x += exitStep * k; break;
-				case UNIT_FACING_NORTH: p.z -= exitStep * k; break;
-				case UNIT_FACING_WEST:  p.x -= exitStep * k; break;
-			}
-			const int iS = exitTerrain->GetSectorIndex(p);
-			if ((iS < 0) || (iS >= (int)exitMt->sector.size())) {
-				return false;
-			}
-			seen[k - 1] = exitMt->sector[iS].area;
-			if (seen[k - 1] == nullptr) {
-				return false;
-			}
-		}
-		return seen[0] == seen[1];
+	auto exitOpen = [this, exitTerrain, &laneClear](const AIFloat3& bp) {
+		return laneClear(bp) && exitTerrain->FactoryExitOpen(buildDef, bp, facing);
 	};
+	// The handed site as is -- but the engine's test passes an unclaimed metal
+	// spot, which the spiral below would refuse (a corlab on its own mex spot).
 	if ((facing != UNIT_NO_FACING) && clearsBuilder(pos)
-		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing) && exitOpen(pos)) {
+		&& map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing)
+		&& !exitTerrain->FootprintOnSpot(buildDef, pos, facing) && exitOpen(pos)) {
+		circuit->LOG("apex: fac-site-taken t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i",
+				circuit->GetTeamId(), buildDef->GetDef()->GetName(), position.x, position.z, buildFails, pos.x, pos.z, facing);
 		SetBuildPos(pos);
 		return true;
+	}
+	if ((facing != UNIT_NO_FACING) && (selfBar > 0.f)) {
+		circuit->LOG("apex: fac-site-moved t=%i %s asked=%.0f,%.0f fails=%i at=%.0f,%.0f facing=%i clears=%i possible=%i spot=%i lane=%i exit=%i",
+				circuit->GetTeamId(), buildDef->GetDef()->GetName(), position.x, position.z, buildFails, pos.x, pos.z, facing,
+				clearsBuilder(pos) ? 1 : 0, map->IsPossibleToBuildAt(buildDef->GetDef(), pos, facing) ? 1 : 0,
+				exitTerrain->FootprintOnSpot(buildDef, pos, facing) ? 1 : 0, laneClear(pos) ? 1 : 0,
+				exitTerrain->FactoryExitOpen(buildDef, pos, facing) ? 1 : 0);
 	}
 
 	FindFacing(pos);

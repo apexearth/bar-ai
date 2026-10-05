@@ -846,6 +846,12 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 
 void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
 {
+	// Idle before any order was given is not a refused order: counted, the
+	// first site search walked a random bearing off the chosen factory site.
+	if ((buildType == BuildType::FACTORY) && (target == nullptr) && !utils::is_valid(buildPos)) {
+		Execute(unit);
+		return;
+	}
 	if (++buildFails <= 2) {  // Workaround due to engine's ability randomly disregard orders
 		Execute(unit);
 	} else if (buildFails <= TASK_RETRIES) {
@@ -1250,10 +1256,14 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// one raider in the neighbourhood -- turned the con around at the mex
 	// (his watch: "walk out and then just turn around more than 80% of the
 	// time"; 62 unreach armmex at gap=36-48 of a 154 range in one game).
+	// A rez bot reads danger from enemies it can see (the script's RezThreat),
+	// not the remembered threat map (apexearth 2026-10-04): 2,190 reclaims a
+	// game died here on fields the script had already cleared.
 	const bool intoThreat = (buildType == BuildType::DEFENCE)
 			|| (buildType == BuildType::BUNKER)
 			|| (buildType == BuildType::BIG_GUN)
-			|| IsFixedSite(buildType);
+			|| IsFixedSite(buildType)
+			|| cdef->IsAbleToResurrect();
 	// THE BAR FOR ECONOMY IS NOT THE BUILDER'S OWN POWER. A constructor's power
 	// is ~0, so a site was refused at threat 0.1 -- the residue of a raider
 	// that passed minutes ago -- and on a raided map the cons built nothing
@@ -1359,7 +1369,8 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// apart from terrain. Defence walks into the threat it answers.
 	const bool roadFree = (buildType == BuildType::DEFENCE)
 			|| (buildType == BuildType::BUNKER)
-			|| (buildType == BuildType::BIG_GUN);
+			|| (buildType == BuildType::BIG_GUN)
+			|| cdef->IsAbleToResurrect();
 	const float roadBar = roadFree ? std::numeric_limits<float>::max()
 			: std::max(cdef->GetPower(), std::max(THREAT_MIN, circuit->GetAllyDefendInflAt(endPos)));
 	CPathFinder* pathfinder = circuit->GetPathfinder();
@@ -1499,12 +1510,20 @@ void IBuilderTask::OnNoPath(CCircuitUnit* unit)
 			}
 			return;
 		}
-		circuit->NoteBuildBlocked(endPos, buildDef);
+		// A rez bot's failed walk is its own: the spot mark is read by every
+		// builder, and rez-bot nopaths banned whole wreck fields for 3 min.
+		if (!unit->GetCircuitDef()->IsAbleToResurrect()) {
+			circuit->NoteBuildBlocked(endPos, buildDef);
+		}
 		circuit->NoteNoPath(unit->GetCircuitDef(), endPos);
-		circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f",
+		const AIFloat3 from = unit->GetPos(circuit->GetLastFrame());
+		CTerrainManager* tmgr = circuit->GetTerrainManager();
+		circuit->LOG("apex: nopath %s by %s at=%.0f,%.0f dist=%.0f from=%.0f,%.0f mv=%i/%i",
 				(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "?",
 				unit->GetCircuitDef()->GetDef()->GetName(), endPos.x, endPos.z,
-				sqrtf(unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos)));
+				sqrtf(from.SqDistance2D(endPos)), from.x, from.z,
+				tmgr->CanMoveToPos(unit->GetArea(), from) ? 1 : 0,
+				tmgr->CanMoveToPos(unit->GetArea(), endPos) ? 1 : 0);
 		SetDeathNote("no-path");
 		manager->AbortTask(this);
 		return;
@@ -1737,21 +1756,7 @@ void IBuilderTask::FindFacing(const springai::AIFloat3& pos)
 	// front) rather than the map centre, so a factory's exit apron opens onto
 	// ground the grid keeps clear. FactoryTask still rotates through all four
 	// facings if this one cannot place.
-	const int gridFacing = manager->GetCircuit()->GetBaseGridFacing(pos);
-	if (gridFacing != UNIT_NO_FACING) {
-		facing = gridFacing;
-		return;
-	}
-	CTerrainManager* terrainMgr = manager->GetCircuit()->GetTerrainManager();
-
-//	facing = UNIT_NO_FACING;
-	float terWidth = terrainMgr->GetTerrainWidth();
-	float terHeight = terrainMgr->GetTerrainHeight();
-	if (std::fabs(terWidth - 2 * pos.x) > std::fabs(terHeight - 2 * pos.z)) {
-		facing = (2 * pos.x > terWidth) ? UNIT_FACING_WEST : UNIT_FACING_EAST;
-	} else {
-		facing = (2 * pos.z > terHeight) ? UNIT_FACING_NORTH : UNIT_FACING_SOUTH;
-	}
+	facing = manager->GetCircuit()->DefaultFacingAt(pos);
 }
 
 void IBuilderTask::ExecuteChain(SBuildChain* chain)

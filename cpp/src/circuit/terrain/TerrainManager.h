@@ -228,6 +228,13 @@ public:
 	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position, const float range);  // NOTE: returns false if the area was too small to be recorded
 	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position);
 	bool CanBeBuiltAtSafe(CCircuitDef* cdef, const springai::AIFloat3& position);
+	// The engine calls an unclaimed metal or geo spot legal ground; the blocking
+	// map does not. True when the footprint at pos/facing covers a spot blocker
+	// or a standing structure.
+	bool FootprintOnSpot(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing) const;
+	// One and two footprints out of the door, the product's own move type stands
+	// in one connected area. True when the def makes nothing that walks.
+	bool FactoryExitOpen(CCircuitDef* cdef, const springai::AIFloat3& pos, int facing) const;
 	bool CanReachAt(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
 	bool CanReachAtSafe(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range, const float threat = THREAT_MIN);
 	bool CanReachAtSafe2(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
