@@ -569,23 +569,60 @@ float MexLossShare()
 		return 0.f;
 	return gMexLost / (float(OwnMexCount()) + gMexLost);
 }
-// A HAND OUT ON THE MAP KEEPS CLAIMING (his 2026-10-04: "they walk out and then
-// they walk all the way back"). The overrides that put a home job first -- the
-// energy-stall answer, the role, metal-first -- skip a builder more than this
-// walk from home; the ordinary price, which charges the walk, decides for it.
-int gFarHandSkips = 0;
-int gFarClaims = 0;      // far hands sent to their nearest spot, logged on elec-slice
 int gComEscort = 0;      // commander sent to the lab while escorts are owed
 int gComLabNextAt = 0;   // the opening assist alternates: a minute at the lab, a minute of his own work
-bool FarHand(CCircuitUnit@ unit)
+// BUILDER TIME AT THIS HAND'S RUNNER-UP, WITH ONE STEP OF FORESIGHT (his
+// 2026-10-04: "the walk might equal the build times" and "use some foresight
+// about what's good to do next after that current build"). Choosing A delays the
+// hand's best other job B by walk(A) + build(A) + walk(A -> B) - walk(B), and B's
+// stream is lost for that long. The fleet-average Wage() already charged for
+// A's walk and build is netted out. A frontier hand weighing a home nano now
+// pays the round trip in the claims around it; a hand at home barely notices.
+// It replaced the 45-s far-hand rule (docs/33).
+int gOppRepriced = 0;
+int gOppFlips = 0;
+void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
-	if (!Builder::gHomeSet)
-		return false;
+	if (ranked.length() < 2)
+		return;
 	const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-	if (spd < 1.f)
-		return false;
-	return unit.GetPos(ai.frame).distance2D(Builder::gHomePos) / spd
-			> ai.GetTunable("apex_far_hand_s", TUNE_FAR_HAND_S);
+	const float wage = Wage();
+	Want@ top0 = ranked[0];
+	const uint n = (ranked.length() < 8) ? ranked.length() : 8;
+	for (uint i = 0; i < n; ++i) {
+		Want@ a = ranked[i];
+		Want@ b = (i == 0) ? ranked[1] : ranked[0];
+		if ((b.gain <= 0.f) || !OnMap(a.pos) || !OnMap(b.pos) || (a.gain <= 0.f))
+			continue;
+		const float walkAB = (spd > 1.f) ? (a.pos.distance2D(b.pos) / spd) : 0.f;
+		const float delay = a.walkSec + a.buildSec + walkAB - b.walkSec;
+		if (delay <= 0.f)
+			continue;
+		const float extra = b.gain * delay - wage * (a.walkSec + a.buildSec);
+		if (extra <= 0.f)
+			continue;
+		// A copy: a want can be cached and handed to more than one hand.
+		Want@ c = Want();
+		c = a;
+		c.tCost += extra;
+		const float cost = c.mCost + c.tCost;
+		if (cost > 0.f)
+			c.value = c.gain / cost;
+		@ranked[i] = c;
+		++gOppRepriced;
+	}
+	// Re-sort what was repriced; the tail below it was never touched.
+	for (uint i = 1; i < n; ++i) {
+		Want@ w = ranked[i];
+		uint j = i;
+		while ((j > 0) && (ranked[j - 1].value < w.value)) {
+			@ranked[j] = ranked[j - 1];
+			--j;
+		}
+		@ranked[j] = w;
+	}
+	if (ranked[0] !is top0)
+		++gOppFlips;
 }
 int gRedecideFrames = -1;
 int RedecideFrames()
@@ -938,7 +975,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " farHand=" + gFarHandSkips + " farClaim=" + gFarClaims + " comEscort=" + gComEscort + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
+		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -1550,6 +1587,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ranked.insertAt(at, c);
 	}
 	Perf::Add("dec.rank", _tRank);
+	OppTimeReprice(unit, ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
 	// want with no rival, and a price cannot steer a decision with nothing to
@@ -1754,7 +1792,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// lost 6 draws in 12 minutes to 37 radars and 36 mexes.
 	const bool hoistWorth = true;
 	if (!aaPanic && hoistWorth && HardEStall() && ((EnergyDeficitNowE() > 0.f) || owedE)
-		&& !(FarHand(unit) && (++gFarHandSkips > 0))) {
+		) {
 		// WHAT IS ORDERED COVERS IT ONCE FED: then the stall wants hands on
 		// the crawling frame, not another frame beside it. Watched on Comet
 		// Catcher (2026-09-15): the hoist put up a second and a third fusion
@@ -1887,12 +1925,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// Not the growing eco seat: it builds no defence while it grows (his
 	// 2026-09-13), and the raid valve ends the growth when it is not safe.
 	// ...ONLY WHILE THEY ARE KILLING THEM (his 2026-10-03); otherwise a gun is bought
-	// when the valuation says it is worth more than the next claim. A hand out on the
-	// map covers what it just claimed before it moves on either way (his 2026-10-04:
-	// chain-claiming without guns lost 2.6x the constructors to v0.1.1).
+	// when the valuation says it is worth more than the next claim.
 	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing()
-		&& ((MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
-			|| FarHand(unit))
+		&& (MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
 		&& PlantFramed())
 	{
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
@@ -2276,7 +2311,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	bool roled = false;
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && (ranked.length() > 1)
 		&& (ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE) > 0.f)
-		&& !(FarHand(unit) && (++gFarHandSkips > 0))) {
+		) {
 		roled = ConRoleApply(unit, ranked);
 		if (roled)
 			why = "role";
@@ -2287,7 +2322,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// help stay; the panics above have already had their say.
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
 		&& (ranked.length() > 1) && MetalPathStarved()
-		&& !(FarHand(unit) && (++gFarHandSkips > 0)))
+		)
 	{
 		for (uint ri = 0; ri < ranked.length(); ) {
 			const int k = ranked[ri].kind;
@@ -2302,35 +2337,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	// METAL FIRST: a free hand joins the unlock in flight (want_assist.as).
 	// Not over its own metal work -- a mex, an upgrade or the plant itself.
-	// ...AND TAKES THE NEAREST SPOT ON ITS LIST (his 2026-10-04: "the guys that
-	// are already out there just have them continue moving outwards"). A gun
-	// over what it just claimed still comes first, through the cover pushes.
-	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
-		&& (ranked.length() > 1) && FarHand(unit))
-	{
-		const AIFloat3 uAt = unit.GetPos(ai.frame);
-		int best = -1;
-		float bestD = 1e9f;
-		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			if (ranked[ri].kind != WK_MEX)
-				continue;
-			const float dd = uAt.distance2D(ranked[ri].pos);
-			if (dd < bestD) {
-				bestD = dd;
-				best = int(ri);
-			}
-		}
-		if (best >= 0) {
-			if (best > 0) {
-				Want@ mw = ranked[uint(best)];
-				ranked.removeAt(uint(best));
-				ranked.insertAt(0, mw);
-			}
-			++gFarClaims;
-			floorPush = true;
-			why = "farclaim";
-		}
-	}
 	if (!aaPanic && !superPush && !coverPush && !floorPush && !convertPush && !roled
 		&& (ranked.length() > 0) && (ranked[0].kind != WK_MEX)
 		&& (ranked[0].kind != WK_MEXUP) && (ranked[0].kind != WK_TECH))

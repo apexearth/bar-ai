@@ -2030,7 +2030,6 @@ const float TUNE_VW_MCS_DEPTH = 0.8f;  // forgiveness at full ramp (cost x (1 - 
 const float TUNE_REDECIDE_S = 2.f;     // [seconds] a builder that decided this recently is bounced (C++ twins: apex_idle_ask_f 15, apex_idle_settle_f 20 frames)
 const float TUNE_MEX_LOSS_COVER = 0.1f;  // [share] extractors killed recently / (standing + killed) at which every extractor's gun jumps the queue (his 2026-10-03)
 const float TUNE_BASE_FRONT = 1.f;      // [toggle 0/1] while the enemy is aggressive, medium/heavy lasers on the base's enemy-facing rim rank with the forward line (his 2026-10-04)
-const float TUNE_FAR_HAND_S = 45.f;     // [seconds of walk] a builder farther than this from home skips the energy-stall, role and metal-first overrides that put a home job first (his 2026-10-04)
 const float TUNE_COM_ESCORT = 1.f;      // [toggle 0/1] while constructors are owed escorts the commander assists the nearest lab with a queue (his 2026-10-04)
 const float TUNE_COM_LAB_EARLY = 1.f;    // [toggle 0/1] before our first T2 lab, while the army is under its target, the commander assists the lab with a queue (his 2026-10-04)
 const float TUNE_ESCORT_CAP = 8.f;       // [count] escorts on duty at once, across all exposed constructors (stock 3; his 2026-10-04 "more escorts")

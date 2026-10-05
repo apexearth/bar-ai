@@ -189,7 +189,6 @@ GROUPS = [
                  ("TUNE_PLANT_COPY", "his 2026-08-27 ruling, on by default: no second plant of a type we already own. 0 lets a copy compete on price, which was measured worse -- -0.67 extractors at minute 4 and THEIRS +0.55 -- so the ruling is exonerated"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
                  ("TUNE_MEX_LOSS_COVER", "share of our extractors the enemy recently killed (kills / standing + kills, fading over the structure-loss memory) at which every extractor's gun jumps the queue. Below it guns are bought only when worth more than the next claim; 0 restores the gun-always rule"),
-                 ("TUNE_FAR_HAND_S", "seconds of walk from home past which a builder ignores the energy-stall, role and metal-first overrides and keeps claiming where it stands. Higher sends more far hands home"),
                  ("TUNE_COM_LAB_EARLY", "before our first T2 lab, while the army is under its target, the commander spends every other minute assisting the lab. 0 turns it off"),
                  ("TUNE_ESCORT_CAP", "escorts on duty at once across all exposed constructors (stock 3)"),
                  ("TUNE_ESCORTS_PER_CON", "guards each exposed constructor is owed before it stops counting as exposed"),
