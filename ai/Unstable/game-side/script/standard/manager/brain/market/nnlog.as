@@ -303,7 +303,7 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 	if (!gNnHeader) {
 		gNnHeader = true;
 		AiLog("apex: nn-schema v5 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
-			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0));
+			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0) + " comb=trust");
 	}
 	const bool here = (gNnDrawAt == ai.frame) && (gNnDrawUnit == int(unit.id));
 	// A ladder hoist or a kept tech lab is not sampled: the top option ran with p=1.
@@ -410,7 +410,8 @@ bool NnWeightsFit()
 		&& (NNW_XM.length() == uint(N)) && (NNW_XS.length() == uint(N))
 		&& (NNW_W1.length() == uint(NNW_H * N)) && (NNW_B1.length() == uint(NNW_H))
 		&& (NNW_W2.length() == uint(NNW_H * NNW_H)) && (NNW_B2.length() == uint(NNW_H))
-		&& (NNW_WO.length() == uint(NNW_H));
+		&& (NNW_WO.length() == uint(NNW_H))
+		&& (NNW_TRUST.length() == NNW_KINDS.length());
 }
 
 void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
@@ -515,12 +516,36 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 			mean += sc;
 		}
 		mean /= float(n);
+		// THE NET'S VOTE IN LOG SPACE, by the trust each kind has earned: a
+		// multiplier capped at e^3 could never swing a market gap of 100x, and
+		// market prices differ by that much between kinds. Each option keeps the
+		// group's mean log value; its deviation from it is the market's at
+		// trust 0 and the net's (in units of outcome spread) at trust 1.
+		float meanLv = 0.f;
+		uint nLv = 0;
 		for (uint r = 0; r < n; ++r) {
+			if (ranked[r].value > 0.f) {
+				meanLv += log(ranked[r].value);
+				++nLv;
+			}
+		}
+		meanLv = (nLv > 0) ? meanLv / float(nLv) : 0.f;
+		for (uint r = 0; r < n; ++r) {
+			if (ranked[r].value <= 0.f)
+				continue;
+			const int kk = ranked[r].kind;
+			const int slot = ((kk >= 0) && (uint(kk) < gNnKindSlot.length())) ? gNnKindSlot[kk] : -1;
+			float t = (slot >= 0) ? blend * NNW_TRUST[slot] : 0.f;
+			t = (t > 1.f) ? 1.f : ((t < 0.f) ? 0.f : t);
+			if (t <= 0.f)
+				continue;
 			float d = score[r] - mean;
 			d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
-			const float m = pow(2.7182818f, blend * d);
+			const float lv = log(ranked[r].value);
+			const float m = pow(2.7182818f, (1.f - t) * (lv - meanLv) + t * d - (lv - meanLv));
 			ranked[r].value *= m;
 			ranked[r].nnMult *= m;
+			ranked[r].nnTilt = t * d;
 		}
 	}
 	// DrawWeights takes the first of each category as its argmax: the whole list

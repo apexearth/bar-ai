@@ -145,6 +145,16 @@
     <div class="dim">Each prediction, averaged over the last 5 unseen games</div>
     <div id="nn-table"></div>
   </div>
+  <div class="card">
+    <div class="dim">How much say the net has, per kind of build (0 = the market price alone, 1 = the net alone).
+      Earned from unseen games: how well the net's view of what a choice adds matches what it actually added.</div>
+    <div id="nn-trust"></div>
+  </div>
+  <div class="card">
+    <div class="dim">The latest decisions: every option the constructor weighed, the market's price, how the net
+      moved it, and its chance in the draw (a decision forced by a role or a panic shows "fixed" -- the draw never ran)</div>
+    <div id="nn-samples"></div>
+  </div>
 </section>
 
 <!-- ================= LAUNCH ================= -->
@@ -1623,6 +1633,31 @@ function nnTable(m) {
   }
   return h + "</tbody></table>";
 }
+function nnTrust(m) {
+  const last = [...m].reverse().find(r => r.trust);
+  if (!last) return "<span class='dim'>not measured yet -- a kind needs a few hundred unseen decisions first</span>";
+  const rows = Object.entries(last.trust).sort((a, b) => b[1] - a[1]);
+  return "<table><thead><tr><th>Kind</th><th>Say</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
+    `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td><div style="background:var(--good);height:8px;width:${
+      Math.round(160 * Math.min(1, t))}px;border-radius:2px"></div></td></tr>`).join("") + "</tbody></table>";
+}
+function nnSamples(s) {
+  if (!s.length) return "<span class='dim'>no decisions yet</span>";
+  return s.slice().reverse().map(d => {
+    const fixed = d.dm !== "draw";
+    const rows = d.opts.map((o, i) => {
+      const mark = i === d.chosen ? "&#9654; " : "";
+      const v = typeof o.value === "number" ? o.value : 0;
+      const nm = typeof o.nm === "number" ? o.nm : 1;
+      return `<tr${i === d.chosen ? ' style="font-weight:bold"' : ""}><td>${mark}${esc(o.kind)}${o.forced ? " (forced)" : ""}</td>`
+        + `<td>${esc(o.def)}</td><td>${v.toFixed(3)}</td><td>${nm === 1 ? "&ndash;" : "&times;" + nm.toFixed(2)}</td>`
+        + `<td>${fixed ? "fixed" : (100 * (o.p || 0)).toFixed(1) + "%"}</td></tr>`;
+    }).join("");
+    return `<div style="margin:8px 0 2px" class="dim">${esc(d.con)} at ${(d.f / 1800).toFixed(1)} min &middot; ${esc(d.why)}`
+      + `${d.pick ? " &middot; fell through to option " + (d.pick + 1) : ""}</div>`
+      + `<table><thead><tr><th>Option</th><th>Building</th><th>Market price</th><th>Net</th><th>Draw chance</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }).join("");
+}
 async function loadNet() {
   clearTimeout(NN_TIMER);
   if (!$("#tab-net").classList.contains("on")) return;
@@ -1653,6 +1688,8 @@ async function loadNet() {
       {xs, ys: m.map(r => r.loss_state), color: NN_LOSS2}], {lo: 0});
     legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
     setHTML($("#nn-table"), nnTable(m));
+    setHTML($("#nn-trust"), nnTrust(m));
+    setHTML($("#nn-samples"), nnSamples(d.samples || []));
   }
   NN_TIMER = setTimeout(loadNet, 5000);
 }

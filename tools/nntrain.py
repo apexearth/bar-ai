@@ -67,6 +67,8 @@ EXPORT_ROWS = 800      # new rows between weight exports
 POLL_S = 5
 LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
 BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
+TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its trust
+TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
@@ -214,7 +216,7 @@ def fmt_arr(vals):
     return "{" + ", ".join("%.7ff" % float(v) for v in vals) + "}"
 
 
-def export_as(net, state_keys, games):
+def export_as(net, state_keys, games, trust):
     """The FULL net as nnweights.as: first layer, second layer, and the output
     layer folded through OBJECTIVE into one score (in units of target spread)."""
     sd = net.model.state_dict()
@@ -239,7 +241,9 @@ def export_as(net, state_keys, games):
         "const array<float> NNW_W2 = %s;" % fmt_arr(w2.reshape(-1)),
         "const array<float> NNW_B2 = %s;" % fmt_arr(b2),
         "const array<float> NNW_WO = %s;" % fmt_arr(wo),
-        "const float NNW_BO = %.7ff;" % bo, "",
+        "const float NNW_BO = %.7ff;" % bo,
+        "// per kind, in NNW_KINDS order: how much say the net gets (0 = the market alone)",
+        "const array<float> NNW_TRUST = %s;" % fmt_arr([trust.get(k, 0.0) for k in KINDS]), "",
         "}  // namespace Market", ""])
 
 
@@ -271,6 +275,7 @@ class Trainer:
         self.since_export = 0
         self.exported = 0
         self.logger = {}
+        self.trust_pairs = {}   # kind -> [(net says the decision adds, it actually added)], unseen games
         self.parsed_at = {}
         self.load()
 
@@ -301,6 +306,7 @@ class Trainer:
         self.full = self.st = None
         self.batches = 0
         self.since_export = 0
+        self.trust_pairs = {}
 
     def save(self, buffer=None):
         """Model every call; the (large) buffer every BUFFER_EVERY batches or
@@ -323,7 +329,8 @@ class Trainer:
                      state_keys=np.array(self.state_keys), batches=self.batches)
             replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
-                    "state_keys": self.state_keys, "kinds": KINDS, "opt_num": OPT_NUM}, OUT / "model.pt.tmp")
+                    "state_keys": self.state_keys, "kinds": KINDS, "opt_num": OPT_NUM,
+                    "trust_pairs": self.trust_pairs}, OUT / "model.pt.tmp")
         replace_retry(OUT / "model.pt.tmp", OUT / "model.pt")
 
     def status(self, phase, **kw):
@@ -430,7 +437,7 @@ class Trainer:
             self.fresh_start("the record's state layout changed")
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
-        xs, xf, ys, ms, decided = [], [], [], [], []
+        xs, xf, ys, ms, decided, kinds = [], [], [], [], [], []
         for _fp, _key, r in items:
             y, m = target_vec(r)
             if not any(m):
@@ -441,6 +448,7 @@ class Trainer:
             ys.append(y)
             ms.append(m)
             ci = r["chosen"]
+            kinds.append(r["opts"][ci].get("kind") if 0 <= ci < len(r["opts"]) else None)
             decided.append(r["dm"] in DECIDED and r["pick"] == 0 and 0 <= ci < len(r["opts"])
                            and not r["opts"][ci].get("forced"))
         if not xs:
@@ -470,6 +478,8 @@ class Trainer:
                 if k.sum() >= 5:
                     rec[name + "_acc"] = float(((pf[k, j] > 0.5) == (Y[k, j] > 0.5)).mean())
                     rec[name + "_base"] = float(max(Y[k, j].mean(), 1 - Y[k, j].mean()))
+            self.note_trust(pf, ps, Y, M, kinds)
+            rec["trust"] = self.trust()
         self.status("training", source=source)
         if self.XF is None:
             new_from = 0
@@ -498,11 +508,61 @@ class Trainer:
             rec["exported"] = self.export()
         with open(OUT / "metrics.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec) + "\n")
+        self.write_samples(source, items)
         self.save()
         return rec
 
+    def write_samples(self, source, items):
+        """The latest few real decisions, every option with its market value,
+        the net's multiplier and its draw odds: the Net tab's decision view."""
+        out = []
+        for _fp, _key, r in items[-40:]:
+            if len(r["opts"]) < 2:
+                continue
+            out.append({"source": source, "f": r["f"], "con": r["con"], "why": r["why"],
+                        "dm": r["dm"], "pick": r["pick"], "chosen": r["chosen"],
+                        "opts": [{k: o.get(k) for k in ("kind", "def", "value", "nm", "p", "forced", "eta")}
+                                 for o in r["opts"]]})
+        if out:
+            tmp = OUT / "samples.json.tmp"
+            tmp.write_text(json.dumps(out[-8:]))
+            replace_retry(tmp, OUT / "samples.json")
+
+    def note_trust(self, pf, ps, Y, M, kinds):
+        """For each chosen option's kind, pair what the DECISION adds in the
+        net's eyes (FULL minus STATE prediction of the objective) with what it
+        actually added (outcome minus the STATE prediction). Their correlation
+        is how well the net knows which option is better -- on unseen games."""
+        w = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
+        ym, ys = self.full.ym, self.full.ys
+        zf, zs, zy = (pf - ym) / ys, (ps - ym) / ys, (Y - ym) / ys
+        for i, kind in enumerate(kinds):
+            m = M[i] * (w != 0)
+            if kind is None or not m.any():
+                continue
+            pred = float(((zf[i] - zs[i]) * w * m).sum())
+            real = float(((zy[i] - zs[i]) * w * m).sum())
+            q = self.trust_pairs.setdefault(kind, [])
+            q.append((pred, real))
+            if len(q) > TRUST_KEEP:
+                del q[: len(q) - TRUST_KEEP]
+
+    def trust(self):
+        out = {}
+        for kind in KINDS:
+            q = self.trust_pairs.get(kind, [])
+            if len(q) < TRUST_MIN:
+                out[kind] = 0.0
+                continue
+            a = np.array(q)
+            if a[:, 0].std() == 0 or a[:, 1].std() == 0:
+                out[kind] = 0.0
+                continue
+            out[kind] = round(max(0.0, float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])), 3)
+        return out
+
     def export(self):
-        text = export_as(self.full, self.state_keys, self.batches)
+        text = export_as(self.full, self.state_keys, self.batches, self.trust())
         n = 0
         for p in export_targets():
             tmp = p.with_suffix(".tmp")
@@ -554,10 +614,11 @@ def stale_ok(p, state_keys):
     an older trainer may have left a net for another record)."""
     try:
         with open(p, encoding="utf-8") as fh:
-            head = fh.read(4000)
+            head = fh.read()
     except OSError:
         return False
-    return "NNW_ON = true" in head and ('NNW_STATE = "%s"' % ",".join(state_keys)) in head
+    return ("NNW_ON = true" in head and ('NNW_STATE = "%s"' % ",".join(state_keys)) in head
+            and "NNW_TRUST" in head)   # a file from before per-kind trust must be rewritten
 
 
 def fresh(root):

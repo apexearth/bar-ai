@@ -17,5 +17,6 @@ const array<float> NNW_W2 = {};
 const array<float> NNW_B2 = {};
 const array<float> NNW_WO = {};
 const float NNW_BO = 0.f;
+const array<float> NNW_TRUST = {};
 
 }  // namespace Market

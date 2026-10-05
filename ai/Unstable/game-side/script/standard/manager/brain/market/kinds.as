@@ -48,6 +48,7 @@ final class Want {
 	float nnMult = 1.f;     // the value net's multiplier, already inside value (nnlog.as)
 	bool nnPriced = false;  // in the list when the net looked; forced wants added after are not
 	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
+	float nnTilt = 0.f;     // trust x the net's verdict, log units: the ETA ladder reads it too
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

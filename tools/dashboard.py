@@ -993,7 +993,11 @@ def nn_state():
     age = time.time() - status.get("at", 0)
     fresh = {"watching": 30, "training": 600}.get(status.get("phase"), 0)
     running = nn_job() is not None or age < fresh
-    return {"metrics": rows, "status": status, "age": age, "running": running}
+    try:
+        samples = json.loads((NN_DIR / "samples.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        samples = []
+    return {"metrics": rows, "status": status, "age": age, "running": running, "samples": samples}
 
 
 def nn_action(act):

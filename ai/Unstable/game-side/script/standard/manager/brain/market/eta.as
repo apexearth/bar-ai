@@ -914,7 +914,7 @@ int EtaTechPick(array<Want@>@ ranked)
 	for (uint i = 0; i < ranked.length(); ++i) {
 		if (ranked[i].kind != WK_TECH)
 			continue;
-		const float e = EtaOfWant(ranked[i]);
+		const float e = EtaOfWant(ranked[i]) * pow(2.7182818f, -ranked[i].nnTilt);
 		if (e < bestEta) {
 			bestEta = e;
 			bestAt = int(i);
@@ -934,7 +934,8 @@ int EtaEcoPick(array<Want@>@ ranked)
 	for (uint i = 0; i < ranked.length(); ++i) {
 		if (!EtaMergedCat(CategoryOf(ranked[i].kind)) || !EtaRanks(ranked[i]))
 			continue;
-		const float e = EtaOfWant(ranked[i]);
+		// a trusted net verdict (nnlog.as) shortens or stretches the time to target
+		const float e = EtaOfWant(ranked[i]) * pow(2.7182818f, -ranked[i].nnTilt);
 		if (e < bestEta) {
 			bestEta = e;
 			bestAt = int(i);
