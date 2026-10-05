@@ -65,6 +65,8 @@ RESET_EVERY = 40       # batches between partial resets (shrink 0.8, perturb 0.2
 EXPORT_ROWS = 800      # new rows between weight exports
 POLL_S = 5
 LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
+BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
+USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
 
@@ -260,6 +262,7 @@ class Trainer:
         seen = json.loads((OUT / "seen.json").read_text()) if (OUT / "seen.json").is_file() else {}
         self.seen_dirs = set(seen.get("dirs", []))
         self.used = {k: set(map(tuple, v)) for k, v in seen.get("used", {}).items()}
+        self.used_at = seen.get("used_at", {k: time.time() for k in self.used})
         self.state_keys = None
         self.XS = self.XF = self.Y = self.M = None
         self.full = self.st = None
@@ -275,7 +278,7 @@ class Trainer:
             import torch
             # closed before anything can archive it: Windows will not move an open file
             with np.load(OUT / "buffer.npz", allow_pickle=True) as b:
-                self.XS, self.XF, self.Y, self.M = b["XS"], b["XF"], b["Y"], b["M"]
+                self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
                 self.state_keys = list(b["state_keys"])
                 self.batches = int(b["batches"])
             ck = torch.load(OUT / "model.pt", weights_only=False)
@@ -298,15 +301,26 @@ class Trainer:
         self.batches = 0
         self.since_export = 0
 
-    def save(self):
+    def save(self, buffer=None):
+        """Model every call; the (large) buffer every BUFFER_EVERY batches or
+        when asked. A game's used-decision list is dropped USED_KEEP_S after it
+        was last touched: by then the game has finished and is in seen_dirs."""
         import torch
-        seen = {"dirs": sorted(self.seen_dirs), "used": {k: sorted(v) for k, v in self.used.items()}}
-        (OUT / "seen.json").write_text(json.dumps(seen))
+        now = time.time()
+        for fp in [k for k, t in self.used_at.items() if now - t > USED_KEEP_S]:
+            self.used.pop(fp, None)
+            self.used_at.pop(fp, None)
+        seen = {"dirs": sorted(self.seen_dirs), "used": {k: sorted(v) for k, v in self.used.items()},
+                "used_at": self.used_at}
+        tmp = OUT / "seen.json.tmp"
+        tmp.write_text(json.dumps(seen))
+        replace_retry(tmp, OUT / "seen.json")
         if self.full is None:
             return
-        np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
-                 state_keys=np.array(self.state_keys), batches=self.batches)
-        replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
+        if buffer or (buffer is None and self.batches % BUFFER_EVERY == 0):
+            np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
+                     state_keys=np.array(self.state_keys), batches=self.batches)
+            replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
                     "state_keys": self.state_keys, "kinds": KINDS, "opt_num": OPT_NUM}, OUT / "model.pt.tmp")
         replace_retry(OUT / "model.pt.tmp", OUT / "model.pt")
@@ -430,8 +444,8 @@ class Trainer:
                            and not r["opts"][ci].get("forced"))
         if not xs:
             return None
-        XS, XF = np.array(xs), np.array(xf)
-        Y, M = np.array(ys), np.array(ms)
+        XS, XF = np.array(xs, dtype=np.float32), np.array(xf, dtype=np.float32)
+        Y, M = np.array(ys, dtype=np.float32), np.array(ms, dtype=np.float32)
         rec = {"source": source, "at": time.time(), "rows": len(xs), "index": self.batches + 1,
                "targets": ["%s:%s" % t for t in TARGETS], "first_touch": first_touch}
         # Accuracy only on the first batch of a game: later batches of the same
@@ -477,6 +491,7 @@ class Trainer:
             rec["reset"] = True
         for fp, key, _r in items:
             self.used.setdefault(fp, set()).add(key)
+            self.used_at[fp] = time.time()
         self.since_export += len(items)
         if self.since_export >= EXPORT_ROWS:
             rec["exported"] = self.export()
@@ -574,6 +589,18 @@ def main(argv):
         dest = reset()
         print("fresh net; the old one is kept in %s" % dest if dest else "no net to archive")
         return 0
+    if "--help" in argv or "-h" in argv:
+        print(__doc__)
+        return 0
+    # one trainer only: two would overwrite each other's net and buffer
+    try:
+        st = json.loads((OUT / "status.json").read_text())
+        if (st.get("phase") in ("watching", "training") and time.time() - st.get("at", 0) < 60
+                and st.get("pid") != os.getpid() and "--force" not in argv):
+            print("another trainer (pid %s) is running; stop it first (or --force)" % st.get("pid"))
+            return 1
+    except (OSError, ValueError):
+        pass
     tr = Trainer()
     if "--export" in argv:
         if tr.full is None:
@@ -603,11 +630,13 @@ def main(argv):
                          "-" if rec.get("head_state") is None else "%.3f" % rec["head_state"],
                          rec["loss_full"], " -> exported" if rec.get("exported") else ""), flush=True)
             if "--once" in argv:
+                tr.save(buffer=True)
                 tr.status("stopped")
                 return 0
             tr.status("watching", live=n_live)
             time.sleep(POLL_S)
     except KeyboardInterrupt:
+        tr.save(buffer=True)
         tr.status("stopped")
         return 0
 
