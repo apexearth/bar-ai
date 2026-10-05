@@ -145,12 +145,15 @@ IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
 			return null;
 		if (RezThreat(unit, at) > CON_THREAT_VETO) {
 			++gRzFldThreat;
+			NoteRezWant(unit, at, m);
 			continue;
 		}
 		AIFloat3 spoil = BestWreckAt(at, WRECK_RADIUS * 2.f, WRECK_MIN);
 		if (spoil.x < 0.f)
 			spoil = at;
 		if (!RezSiteOk(unit, spoil)) {
+			if (gRzSiteDanger)
+				NoteRezWant(unit, spoil, m);
 			++gRzFldSite;
 			++gRzFrontVeto;
 			++gRzVetoGround;
@@ -180,6 +183,7 @@ string RzCensusStr()
 {
 	array<int> bots(4, 0);
 	array<int> held(7, 0);   // idle patrol reclaim rez repair retreat other
+	int stagedNow = 0;
 	const AIFloat3 centre = Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f);
 	for (uint i = 0; i < gRezzerIds.length(); ++i) {
 		CCircuitDef@ d = ai.GetCircuitDef(gRezzerIds[i]);
@@ -208,6 +212,9 @@ string RzCensusStr()
 				++held[5];
 			else
 				++held[6];
+			const int sl = ConSlot(us[k]);
+			if ((sl < int(gRzStagedAt.length())) && (gRzStagedAt[sl] >= 0))
+				++stagedNow;
 		}
 	}
 	float ours = 0.f;
@@ -226,7 +233,7 @@ string RzCensusStr()
 		+ " fldM=" + int(ours) + "/" + int(theirs)
 		+ " heal=" + gRzHealPick + "/" + int((gRzHealPick > 0) ? gRzHealDist / float(gRzHealPick) : 0.f)
 		+ "/" + gRzHealMoving + "/" + gRzHealOutrun + "/" + gRzHealWreckWin + "/" + gRzHealRetreatSkip
-		+ " walkBack=" + gRzMedWalkBack;
+		+ " walkBack=" + gRzMedWalkBack + RzStageStr(stagedNow);
 }
 int gRzBlindToRetire = 0;
 int gRzVetoBlocked = 0;
@@ -350,6 +357,7 @@ bool RezReaches(CCircuitUnit@ unit, const AIFloat3 &in site)
 bool RezSiteOk(CCircuitUnit@ unit, const AIFloat3 &in site)
 {
 	++gRzSiteCalls;
+	gRzSiteDanger = false;
 	if (!RezReaches(unit, site))
 		return false;
 	// Ground a constructor of ours just died on: the reach test reads the
@@ -376,6 +384,7 @@ bool RezSiteOk(CCircuitUnit@ unit, const AIFloat3 &in site)
 	// the enemy the refusals sit. It read 0.00 for whole games because the test
 	// that fed it was short-circuited before it could run.
 	gRzVetoFfSum += Military::ForwardFraction(site);
+	gRzSiteDanger = true;
 	return false;
 }
 
@@ -1117,6 +1126,128 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 	return EnqueueWreckReclaim(unit, Task::Priority::NORMAL);
 }
 
+// WAIT BESIDE THE JOB (apexearth 2026-10-04: "I'd love to be reclaiming all
+// these wrecks here, but it feels a little dangerous right now, so I'll wait
+// right outside them for things to get safe"). The richest job each bot was
+// refused for visible danger alone; it stands on the first ground toward home
+// the visible enemies cannot reach -- the HealStation walk -- and the chain
+// takes the job the moment the refusal lifts.
+bool gRzSiteDanger = false;
+array<float> gRzWantX;
+array<float> gRzWantZ;
+array<float> gRzWantM;
+array<int> gRzStagedAt;
+array<float> gRzStageX;
+array<float> gRzStageZ;
+array<int> gRzStageCalcAt;
+int gRzStageEv = 0;
+int gRzStageTook = 0;
+float gRzStageWaitS = 0.f;
+int gRzStageGone = 0;
+int gRzIdleAtStand = 0;
+
+void RzWantRoom(int slot)
+{
+	while (int(gRzWantX.length()) <= slot) {
+		gRzWantX.insertLast(-1.f);
+		gRzWantZ.insertLast(-1.f);
+		gRzWantM.insertLast(0.f);
+		gRzStagedAt.insertLast(-1);
+		gRzStageX.insertLast(-1.f);
+		gRzStageZ.insertLast(-1.f);
+		gRzStageCalcAt.insertLast(-30000);
+	}
+}
+
+void NoteRezWant(CCircuitUnit@ unit, const AIFloat3 &in at, float m)
+{
+	const int s = ConSlot(unit);
+	RzWantRoom(s);
+	if ((gRzWantX[s] >= 0.f) && (gRzWantM[s] >= m))
+		return;
+	gRzWantX[s] = at.x;
+	gRzWantZ[s] = at.z;
+	gRzWantM[s] = m;
+	gRzStageCalcAt[s] = -30000;
+}
+
+void ClearRezWant(int s)
+{
+	gRzWantX[s] = -1.f;
+	gRzWantM[s] = 0.f;
+	gRzStagedAt[s] = -1;
+}
+
+// Called with the job the chain chose: one at the staged want is the payoff.
+void NoteRezJob(CCircuitUnit@ unit, IUnitTask@ t)
+{
+	const int s = ConSlot(unit);
+	RzWantRoom(s);
+	if ((gRzWantX[s] < 0.f) || (t is null))
+		return;
+	const AIFloat3 want(gRzWantX[s], 0.f, gRzWantZ[s]);
+	CCircuitUnit@ tg = t.target;
+	const AIFloat3 at = (tg !is null) ? tg.GetPos(ai.frame) : t.GetBuildPos();
+	if (!OnMap(at) || (at.distance2D(want) > WRECK_RADIUS * 2.f))
+		return;
+	if (gRzStagedAt[s] >= 0) {
+		++gRzStageTook;
+		gRzStageWaitS += float(ai.frame - gRzStagedAt[s]) / float(SECOND);
+	}
+	ClearRezWant(s);
+}
+
+// First ground from the want toward home that no visible enemy reaches or
+// stands near, at HealStation's step; recomputed once a scan period.
+bool RezStagePos(int s, AIFloat3 &out at)
+{
+	if (ai.frame - gRzStageCalcAt[s] < REZ_WRECK_PERIOD) {
+		at = AIFloat3(gRzStageX[s], 0.f, gRzStageZ[s]);
+		return gRzStageX[s] >= 0.f;
+	}
+	gRzStageCalcAt[s] = ai.frame;
+	gRzStageX[s] = -1.f;
+	if (!Builder::gHomeSet)
+		return false;
+	const AIFloat3 want(gRzWantX[s], 0.f, gRzWantZ[s]);
+	AIFloat3 dir = Builder::gHomePos - want;
+	const float len = sqrt(dir.SqLength2D());
+	if (len < 1.f)
+		return false;
+	dir *= (1.f / len);
+	for (float d = 128.f; d < len; d += 128.f) {
+		const AIFloat3 p = want + dir * d;
+		if (OnMap(p) && !InEnemyReach(p) && (FoesNear(p) < CON_FOE_COUNT)
+			&& !Market::NearConDeath(p))
+		{
+			gRzStageX[s] = p.x;
+			gRzStageZ[s] = p.z;
+			break;
+		}
+	}
+	at = AIFloat3(gRzStageX[s], 0.f, gRzStageZ[s]);
+	return gRzStageX[s] >= 0.f;
+}
+
+string RzStageStr(int now)
+{
+	return " stage=" + gRzStageEv + "/" + now + "/" + gRzStageTook
+		+ "/" + int((gRzStageTook > 0) ? gRzStageWaitS / float(gRzStageTook) : 0.f)
+		+ "/" + gRzStageGone + " atStand=" + gRzIdleAtStand;
+}
+
+// Stand at a point: walk there with the area reclaim (it eats on the way),
+// hold still once inside its circle.
+IUnitTask@ RezHoldAt(CCircuitUnit@ unit, const AIFloat3 &in at, bool &out walking)
+{
+	walking = false;
+	if (unit.GetPos(ai.frame).distance2D(at) <= WRECK_RADIUS)
+		return null;
+	walking = true;
+	return aiBuilderMgr.Enqueue(TaskB::Reclaim(
+			Task::Priority::LOW, at, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+}
+
 // A rez bot with nothing to do standing on hot ground is the worst of both:
 // it is not working and it is being shot. Every rule above vetoes hot work,
 // but a veto only refuses the job -- it never moved the bot. Leave instead.
@@ -1128,28 +1259,47 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	if ((RezThreat(unit, here) > CON_THREAT_VETO) || InEnemyReach(here))
 		return Retreat(unit);
-	// NOTHING TO DO IS NOT A REASON TO STAND HERE. The worst bot in the
-	// rez-front set went 89-215 s without a job, waiting wherever its last one
-	// ended; the corpses and the wounded both appear at the line. Wait behind
-	// our own units instead -- the area reclaim is the move order, and it eats
-	// whatever it finds on the way.
+	const int s = ConSlot(unit);
+	RzWantRoom(s);
+	if (gRzWantX[s] >= 0.f) {
+		const AIFloat3 want(gRzWantX[s], 0.f, gRzWantZ[s]);
+		if (BestWreckAt(want, WRECK_RADIUS * 2.f, WRECK_MIN).x < 0.f) {
+			++gRzStageGone;
+			ClearRezWant(s);
+		} else {
+			AIFloat3 stage;
+			if (RezStagePos(s, stage) && !Market::NearBlocked(stage)) {
+				if (gRzStagedAt[s] < 0) {
+					gRzStagedAt[s] = ai.frame;
+					++gRzStageEv;
+				}
+				bool walking;
+				IUnitTask@ go = RezHoldAt(unit, stage, walking);
+				if ((go !is null) || !walking)
+					return go;
+			}
+		}
+	}
+	// NOTHING TO DO: WAIT AT THE MEDIC STAND (apexearth 2026-10-04), where the
+	// wounded come to be healed and the next fight's corpses are closest. A
+	// stand no bot could path to is not walked to again for the mark's life
+	// (19,325 nopath by armrectr in one Carrot 8v8: the station sat across a
+	// cliff and every bot re-took the walk each second).
 	AIFloat3 station;
-	// A station no bot could path to is not walked to again for the mark's
-	// life (19,325 nopath by armrectr in one Carrot 8v8: the station sat
-	// across a cliff and every bot re-took the walk each second).
 	if (RezStationPos(unit, station) && !InEnemyReach(station)
-		&& (here.distance2D(station) > MedicReach())
 		&& !Market::NearBlocked(station))
 	{
-		IUnitTask@ walk = aiBuilderMgr.Enqueue(TaskB::Reclaim(
-				Task::Priority::LOW, station, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
-		if (walk !is null)
+		bool walking;
+		IUnitTask@ walk = RezHoldAt(unit, station, walking);
+		if (!walking)
+			++gRzIdleAtStand;
+		if ((walk !is null) || !walking)
 			return walk;
 	}
-	// GEOMETRY, NOT THE THREAT READ. ThreatFor is the documented mostly-zero
-	// sensor, so "standing around dangerous areas" (apexearth, watching,
-	// 2026-08-29) read safe to it. Forward of rear-crew ground with no job and
-	// no station to hold, it retires to the haven.
+	// GEOMETRY, NOT THE THREAT READ, and only with no stand to hold: "standing
+	// around dangerous areas" (apexearth, watching, 2026-08-29). Reached before
+	// with a stand inside MedicReach, it sent the bot home and the stand walk
+	// sent it back -- the patrol back and forth.
 	RzTuneFill();
 	if (Military::ForwardFraction(here) > gRzFwdBar)
 		return Retreat(unit);

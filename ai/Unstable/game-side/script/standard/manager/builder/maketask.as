@@ -105,6 +105,7 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 	if (t is null)
 		why = 7;
 	++gRzRule[why];
+	NoteRezJob(unit, t);
 	// A retreat is about the electing bot's own ground, not a job: shared, a
 	// patrol home lands on every bot already standing at home.
 	if ((t !is null) && !((t.GetType() == Task::Type::BUILDER)
@@ -182,6 +183,11 @@ IUnitTask@ RezzerChain(CCircuitUnit@ unit)
 		gRzHealWreckWin = 0;
 		gRzHealRetreatSkip = 0;
 		gRzMedWalkBack = 0;
+		gRzStageEv = 0;
+		gRzStageTook = 0;
+		gRzStageWaitS = 0.f;
+		gRzStageGone = 0;
+		gRzIdleAtStand = 0;
 		for (int k = 0; k < RZ_RULES; ++k)
 			gRzRule[k] = 0;
 		gRzGate = 0;
