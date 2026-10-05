@@ -92,7 +92,8 @@ def _tree_digest(root: Path) -> str:
         return "(absent)"
     h = hashlib.sha256()
     for path in sorted(root.rglob("*")):
-        if path.is_file():
+        # the deployed net is the trainer's to write (tools/nntrain.py), not drift
+        if path.is_file() and path.name != "nnweights.as":
             h.update(path.relative_to(root).as_posix().encode())
             h.update(path.read_bytes())
     return h.hexdigest()[:12]
