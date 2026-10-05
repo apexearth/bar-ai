@@ -46,17 +46,19 @@ OPT_NUM = ("value", "gain", "m", "t", "cm", "ce", "bt", "walk", "risk", "eta", "
 PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear", "lostFar",
          "lostAir", "lostStatic", "lostMobile", "reclaim")
 LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
-SINGLE = ("done", "survived", "lifeS", "lifeKill")    # one value per decision, not per horizon
-TARGETS = [(h, k) for h in (1, 3, 5) for k in PER_H] + [(k, k) for k in SINGLE]
+SINGLE = ("done", "survived", "lifeS", "lifeKill", "won")    # one value per decision, not per horizon
+TARGETS = [(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
 SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
 SCHEMA_STATE = "foeQual"   # a state field only the current record (v6) carries: older rows are skipped, not a reset
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
 DECIDED = ("draw", "ladder")   # rows where an option was chosen on value, not forced
 # What "better" means when the net plays, in units of each outcome's spread.
 # A stated default until he picks one (docs/35).
-OBJECTIVE = {(5, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc"): 0.25, (5, "lnD"): 0.5,
-             (5, "lostNear"): -0.5, ("done", "done"): 0.25, ("survived", "survived"): 0.25,
-             ("lifeS", "lifeS"): 0.25, ("lifeKill", "lifeKill"): 0.25}
+OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc"): 0.25,
+             (5, "lnD"): 0.25, (10, "lnD"): 0.5, (5, "lostNear"): -0.5,
+             ("done", "done"): 0.25, ("survived", "survived"): 0.25,
+             ("lifeS", "lifeS"): 0.25, ("lifeKill", "lifeKill"): 0.25,
+             ("won", "won"): 1.0}   # the game result is the longest horizon
 # the dashboard's headline accuracy: the outcomes the net is steered by
 HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE]
 HIDDEN = 32
@@ -589,7 +591,7 @@ class Trainer:
             if key in self.used.get(fp, ()):
                 continue
             if not final:
-                if r["f"] + 5 * decisions.FPM > g["last"]:
+                if r["f"] + decisions.HORIZONS[-1] * decisions.FPM > g["last"]:
                     continue
                 # survival needs 5 minutes after the FINISH: hold the row until known
                 if r["y"].get("done") == 1 and (r["y"].get("survived") is None or r["y"].get("lifeS") is None):
@@ -759,7 +761,7 @@ class Trainer:
             if key in self.used.get(fp, ()):
                 continue
             if not final:
-                if r["f"] + 5 * decisions.FPM > g["last"]:
+                if r["f"] + decisions.HORIZONS[-1] * decisions.FPM > g["last"]:
                     continue
                 if r["y"].get("done") == 1 and r["y"].get("lifeS") is None:
                     continue

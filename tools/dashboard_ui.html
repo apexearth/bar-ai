@@ -1609,7 +1609,8 @@ const NN_NAMES = {dMInc: "metal income change", dEInc: "energy income change", l
   lostAir: "losses to air", lostStatic: "losses to turrets", lostMobile: "losses to ground units",
   dEco: "economic power change", reclaim: "metal reclaimed per minute", lostPre: "losses in the 5 min before (check)",
   done: "chosen build finished", survived: "chosen build survived",
-  lifeS: "chosen build: seconds it lived", lifeKill: "chosen build: metal it killed"};
+  lifeS: "chosen build: seconds it lived", lifeKill: "chosen build: metal it killed",
+  won: "won the game"};
 function nnTable(m) {
   if (!m.length || !m[0].targets) return "<span class='dim'>no games yet</span>";
   const last = m.filter(r => r.r2_full).slice(-5);
@@ -1621,7 +1622,7 @@ function nnTable(m) {
   let h = "<table><thead><tr><th>Prediction</th><th>Horizon</th><th>With decision</th><th>State only</th></tr></thead><tbody>";
   m[0].targets.forEach((t, j) => {
     const [hz, k] = t.split(":");
-    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${(hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
+    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${hz === "won" ? "end of game" : (hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
       + cell(avg("r2_full", j)) + cell(avg("r2_state", j)) + "</tr>";
   });
   for (const [key, label] of [["done", "chosen build finished"], ["survived", "chosen build survived 5 min"]]) {

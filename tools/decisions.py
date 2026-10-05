@@ -29,7 +29,9 @@ import re
 import sys
 
 FPM = 1800
-HORIZONS = (1, 3, 5)
+HORIZONS = (1, 3, 5, 10)
+DONE_H = 5          # minutes: "the chosen build finished" is judged inside this window
+RESULT = re.compile(r"\[BARAI_RESULT\] reason=(\w+) frame=(\d+) winners=([\d,]*)")
 NN = re.compile(r"\]\[f=(\d+)\] .*?apex: nn t=(\d+) f=\d+ u=(\d+) c=(\S+) pick=(\d+) why=(\S*) dm=(\S+)"
                 r" \| (\S+)(?: \| (.*?))? \| chosen=(-?\d+)")
 SCHEMA = re.compile(r"apex: nn-schema v(\d+) state=(\S+) opt=(\S+)")
@@ -149,6 +151,7 @@ def parse(path, files=None):
     mexev, killev, lostev, builds, dead = {}, {}, {}, {}, {}
     died, killby = {}, {}   # by unit id: frame it died; (frame, metal) of what it killed
     facrows, fac_keys, prods = [], None, {}
+    allyof, winners = {}, None   # engine team -> ally team; winning ally teams (BARAI_RESULT)
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     state_keys, opt_keys = None, None
@@ -181,6 +184,10 @@ def parse(path, files=None):
                 continue
             if "[BARAI_" not in ln:
                 continue
+            m = RESULT.search(ln)
+            if m:
+                winners = {int(w) for w in m.group(3).split(",") if w}
+                continue
             m = STATS.search(ln)
             if m:
                 reclaim.setdefault(int(m.group(1)), Series()).add(int(m.group(2)), float(m.group(3)))
@@ -207,6 +214,7 @@ def parse(path, files=None):
             if m:
                 bx = int(m.group(6)) if m.group(6) is not None else None
                 bz = int(m.group(7)) if m.group(7) is not None else None
+                allyof[int(m.group(1))] = int(m.group(2))
                 uid = int(m.group(8)) if m.group(8) is not None else None
                 builds.setdefault(int(m.group(1)), []).append((int(m.group(3)), m.group(4), bx, bz, uid))
                 if MEX.search(m.group(4)):
@@ -236,7 +244,7 @@ def parse(path, files=None):
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, died=died, killby=killby,
-                facrows=facrows, fac_keys=fac_keys, prods=prods,
+                facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -298,6 +306,9 @@ def labels(g, t, f, site=None):
     # the pressure the state should already have seen: enemy kills of ours in
     # the 5 minutes BEFORE the decision
     y["lostPre"] = sum(e[1] for e in g["lostev"].get(t, []) if f - 5 * FPM < e[0] <= f)
+    # the game's result for the deciding team: the longest horizon there is
+    w = g.get("winners")
+    y["won"] = (1 if g["allyof"].get(t) in w else 0) if w and t in g.get("allyof", {}) else None
     return y
 
 
@@ -345,7 +356,7 @@ def fac_rows_of(path, g):
         y = labels(g, t, f, None)
         y["done"] = y["buildS"] = None
         built = None
-        f1 = f + HORIZONS[-1] * FPM
+        f1 = f + DONE_H * FPM
         if o:
             for i, (pf, name, uid, facid) in enumerate(g["prods"].get(t, [])):
                 if pf > f1:
@@ -385,7 +396,7 @@ def finished(g, t, f, udef, claimed, site=None):
     (None, None) when the game ended first or there is no def."""
     if udef == "-":
         return None, None, None
-    f1 = f + HORIZONS[-1] * FPM
+    f1 = f + DONE_H * FPM
     for i, (bf, name, bx, bz, uid) in enumerate(g["builds"].get(t, [])):
         if bf > f1:
             break
