@@ -272,6 +272,15 @@ float FoesNear(const AIFloat3& in where)
 	return v;
 }
 
+// A rez bot's danger is enemies it can SEE near the spot (apexearth
+// 2026-10-04): the threat map remembers armies long gone and kept the fleet
+// home beside 10k of wrecks. RezSiteOk's reach test still keeps it out of
+// visible guns.
+float RezThreat(CCircuitUnit@ unit, const AIFloat3& in where)
+{
+	return (OnMap(where) && (FoesNear(where) >= CON_FOE_COUNT)) ? (CON_THREAT_VETO + 1.f) : 0.f;
+}
+
 // Site-search radius for script-placed static defence.
 //
 // Every DEFENCE task in this file passed SQUARE_SIZE*2 or *4 -- 16 or 32 elmos

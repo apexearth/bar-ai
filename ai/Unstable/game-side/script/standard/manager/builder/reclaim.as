@@ -240,7 +240,7 @@ IUnitTask@ EnqueueWreckReclaim(CCircuitUnit@ unit, Task::Priority priority,
 	// Shared by the idle-builder fallback and the rezzer-eats-wreck path:
 	// neither checked whether the wreck itself sits somewhere safe before
 	// sending a constructor to it.
-	if (ThreatFor(unit, wreck) > CON_THREAT_VETO)
+	if ((IsRezzer(unit) ? RezThreat(unit, wreck) : ThreatFor(unit, wreck)) > CON_THREAT_VETO)
 		return null;
 	if (IsRezzer(unit)) {
 		if (!RezSiteOk(unit, wreck)) {

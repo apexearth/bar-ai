@@ -107,28 +107,51 @@ void NoteWreckField(const AIFloat3& in at, float costM)
 	}
 }
 
-// The richest field this bot may be sent to, spent on return; null if none.
-// Asked only after the line offered nothing, eight fields at most a sweep.
+// EnqueueWreckReclaim's refusals, without its counters: a local wreck the eat
+// rules will refuse is not local work, and must not hold the bot off the sweep.
+bool LocalWreckTakeable(CCircuitUnit@ unit, const AIFloat3 &in at)
+{
+	return !Market::NearBlocked(at) && !Market::NearPathBlocked(at)
+		&& !Market::NearConDeath(at) && (RezThreat(unit, at) <= CON_THREAT_VETO)
+		&& !InEnemyReach(at) && RezReaches(unit, at);
+}
+int gRzSwLocal = 0;
+int gRzFldNone = 0;
+int gRzFldThreat = 0;
+int gRzFldSite = 0;
+// The richest field this bot may be sent to, spent on SEND; null if none.
+// Asked only after the line offered nothing, eight fields at most a sweep. A
+// refused field is skipped, not dropped: wrecks are born mid-fight, so the
+// first ask nearly always reads hot, and dropping it then lost the field for
+// good once the fight moved on.
 IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
 {
-	for (uint tries = 0; (tries < 8) && (gFieldPos.length() > 0); ++tries) {
-		uint best = 0;
-		for (uint i = 1; i < gFieldM.length(); ++i) {
-			if (gFieldM[i] > gFieldM[best])
-				best = i;
+	if (gFieldPos.length() == 0)
+		++gRzFldNone;
+	array<bool> tried(gFieldPos.length(), false);
+	for (uint tries = 0; tries < 8; ++tries) {
+		int pick = -1;
+		for (uint i = 0; i < gFieldM.length(); ++i) {
+			if (!tried[i] && ((pick < 0) || (gFieldM[i] > gFieldM[uint(pick)])))
+				pick = int(i);
 		}
+		if (pick < 0)
+			return null;
+		const uint best = uint(pick);
+		tried[best] = true;
 		const AIFloat3 at = gFieldPos[best];
 		const float m = gFieldM[best];
-		gFieldPos.removeAt(best);
-		gFieldM.removeAt(best);
 		if (m < WRECK_MIN)
 			return null;
-		if (ThreatFor(unit, at) > CON_THREAT_VETO)
+		if (RezThreat(unit, at) > CON_THREAT_VETO) {
+			++gRzFldThreat;
 			continue;
+		}
 		AIFloat3 spoil = BestWreckAt(at, WRECK_RADIUS * 2.f, WRECK_MIN);
 		if (spoil.x < 0.f)
 			spoil = at;
 		if (!RezSiteOk(unit, spoil)) {
+			++gRzFldSite;
 			++gRzFrontVeto;
 			++gRzVetoGround;
 			continue;
@@ -138,6 +161,8 @@ IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
 				Task::Priority::HIGH, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
 		if (harvest is null)
 			return null;
+		gFieldPos.removeAt(best);
+		gFieldM.removeAt(best);
 		++gRzFieldSent;
 		if (ai.frame >= gNextFieldLog) {
 			gNextFieldLog = ai.frame + 60 * SECOND;
@@ -147,6 +172,61 @@ IUnitTask@ RezzerWreckField(CCircuitUnit@ unit)
 		return harvest;
 	}
 	return null;
+}
+
+// Where the fleet stands (forward-fraction quarters) and what it holds, and the
+// live wreck metal in the remembered fields, our half / theirs. Once a minute.
+string RzCensusStr()
+{
+	array<int> bots(4, 0);
+	array<int> held(7, 0);   // idle patrol reclaim rez repair retreat other
+	const AIFloat3 centre = Builder::gHomeSet ? Builder::gHomePos : AIFloat3(0.f, 0.f, 0.f);
+	for (uint i = 0; i < gRezzerIds.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(gRezzerIds[i]);
+		if (d is null)
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(d, centre, 30000.f);
+		if (us is null)
+			continue;
+		for (uint k = 0; k < us.length(); ++k) {
+			if (us[k] is null)
+				continue;
+			const float ff = Military::ForwardFraction(us[k].GetPos(ai.frame));
+			++bots[(ff < 0.25f) ? 0 : (ff < 0.5f) ? 1 : (ff < 0.75f) ? 2 : 3];
+			IUnitTask@ t = us[k].task;
+			if ((t is null) || (t.GetType() == Task::Type::IDLE))
+				++held[0];
+			else if ((t.GetType() == Task::Type::BUILDER) && (t.GetBuildType() == Task::BuildType::PATROL))
+				++held[1];
+			else if ((t.GetType() == Task::Type::BUILDER) && (t.GetBuildType() == Task::BuildType::RECLAIM))
+				++held[2];
+			else if ((t.GetType() == Task::Type::BUILDER) && (t.GetBuildType() == Task::BuildType::RESURRECT))
+				++held[3];
+			else if ((t.GetType() == Task::Type::BUILDER) && (t.GetBuildType() == Task::BuildType::REPAIR))
+				++held[4];
+			else if (t.GetType() == Task::Type::RETREAT)
+				++held[5];
+			else
+				++held[6];
+		}
+	}
+	float ours = 0.f;
+	float theirs = 0.f;
+	for (uint i = 0; i < gFieldPos.length(); ++i) {
+		const float v = ai.GetWreckValueAt(gFieldPos[i], WRECK_RADIUS);
+		if (Military::ForwardFraction(gFieldPos[i]) < 0.5f)
+			ours += v;
+		else
+			theirs += v;
+	}
+	return " botsFf=" + bots[0] + "/" + bots[1] + "/" + bots[2] + "/" + bots[3]
+		+ " task=" + held[0] + "/" + held[1] + "/" + held[2] + "/" + held[3] + "/" + held[4] + "/" + held[5] + "/" + held[6]
+		+ " swLocal=" + gRzSwLocal + " fld=" + gFieldPos.length() + " fldNone=" + gRzFldNone
+		+ " fldThr=" + gRzFldThreat + " fldSite=" + gRzFldSite + " fldSent=" + gRzFieldSent
+		+ " fldM=" + int(ours) + "/" + int(theirs)
+		+ " heal=" + gRzHealPick + "/" + int((gRzHealPick > 0) ? gRzHealDist / float(gRzHealPick) : 0.f)
+		+ "/" + gRzHealMoving + "/" + gRzHealOutrun + "/" + gRzHealWreckWin + "/" + gRzHealRetreatSkip
+		+ " walkBack=" + gRzMedWalkBack;
 }
 int gRzBlindToRetire = 0;
 int gRzVetoBlocked = 0;
@@ -486,6 +566,146 @@ bool RezStationPos(CCircuitUnit@ unit, AIFloat3 &out at)
 	return true;
 }
 
+// HEALING PRICES THE WALK (apexearth 2026-10-04: rez bots "run past wreckage to
+// chase down a unit to heal it"). A heal and a wreck are both metal -- the
+// health missing, the wreck's content -- over the seconds to get there, and a
+// target walking away is chased at our speed less its own. One that outruns us
+// is no job. The floor is the scan period: the next look comes then anyway.
+const bool RZ_HEAL_PRICE = true;
+float RzMax(float a, float b) { return (a > b) ? a : b; }
+array<float> gMotX(32001, 0.f);
+array<float> gMotZ(32001, 0.f);
+array<int> gMotAt(32001, -1);
+int gRzHealPick = 0;
+float gRzHealDist = 0.f;
+int gRzHealMoving = 0;
+int gRzHealOutrun = 0;
+int gRzHealWreckWin = 0;
+int gRzMedWalkBack = 0;
+int gRzHealRetreatSkip = 0;
+const bool RZ_HEAL_RETREAT = true;
+
+float HealArriveS(CCircuitUnit@ bot, CCircuitUnit@ u, const AIFloat3 &in here,
+		const AIFloat3 &in at, bool &out moving, bool &out known)
+{
+	const int bd = int(bot.circuitDef.id);
+	const float spd = RzMax(Catalog::gSpeed[bd], 1.f);
+	const float gap = RzMax(0.f, here.distance2D(at) - Catalog::gBuildDist[bd]);
+	moving = false;
+	known = false;
+	float away = 0.f;
+	const int id = int(u.id);
+	if ((id >= 0) && (id < int(gMotAt.length()))) {
+		const int dtF = ai.frame - gMotAt[id];
+		if ((gMotAt[id] >= 0) && (dtF >= SECOND / 2) && (dtF <= 6 * SECOND)) {
+			const AIFloat3 prev(gMotX[id], at.y, gMotZ[id]);
+			const float dt = float(dtF) / float(SECOND);
+			known = true;
+			moving = at.distance2D(prev) > 4.f * SQUARE_SIZE;
+			away = (here.distance2D(at) - here.distance2D(prev)) / dt;
+		}
+		if ((gMotAt[id] < 0) || (dtF >= SECOND)) {
+			gMotX[id] = at.x;
+			gMotZ[id] = at.z;
+			gMotAt[id] = ai.frame;
+		}
+	}
+	if (gap <= 0.f)
+		return 0.f;
+	const float closing = spd - RzMax(away, 0.f);
+	if (closing <= 0.f)
+		return -1.f;
+	return gap / closing;
+}
+
+float RzRate(float valueM, float arriveS)
+{
+	return valueM / (arriveS + float(REZ_WRECK_PERIOD) / float(SECOND));
+}
+
+float HealValueM(CCircuitUnit@ u)
+{
+	return Catalog::gCostM[int(u.circuitDef.id)] * RzMax(0.f, 1.f - u.GetHealthPercent());
+}
+
+// The best heal in a hurt list by metal per second of getting there (or the
+// nearest, with pricing off); rate out, null if none.
+CCircuitUnit@ PickHeal(CCircuitUnit@ unit, array<CCircuitUnit@>@ hurt, bool mobileOnly,
+		float maxDist, float &out bestRate, bool &out bestMoving, float &out bestDist)
+{
+	CCircuitUnit@ best = null;
+	bestRate = 0.f;
+	bestMoving = false;
+	bestDist = maxDist;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	for (uint i = 0; i < hurt.length(); ++i) {
+		CCircuitUnit@ u = hurt[i];
+		if ((u is null) || (u is unit))
+			continue;
+		if (mobileOnly && !u.circuitDef.IsMobile())
+			continue;
+		const AIFloat3 at = u.GetPos(ai.frame);
+		const float d = here.distance2D(at);
+		bool moving = false;
+		bool known = false;
+		const float arrive = HealArriveS(unit, u, here, at, moving, known);
+		float rate = 0.f;
+		if (RZ_HEAL_PRICE) {
+			// A unit on its way somewhere is healed where it stops, not chased
+			// (apexearth 2026-10-04); one still in the fight may be.
+			if (RZ_HEAL_RETREAT && (moving || !known)) {
+				IUnitTask@ ut = u.task;
+				const bool leaving = (ut !is null) && (ut.GetType() == Task::Type::RETREAT);
+				if (leaving || (moving && (FoesNear(at) < CON_FOE_COUNT))) {
+					++gRzHealRetreatSkip;
+					continue;
+				}
+			}
+			if (arrive < 0.f) {
+				++gRzHealOutrun;
+				continue;
+			}
+			rate = RzRate(HealValueM(u), arrive);
+			if ((best !is null) && (rate <= bestRate))
+				continue;
+		} else if (d >= bestDist) {
+			continue;
+		}
+		// Ranked first, so the enemy walk inside RezSiteOk is paid only by a
+		// candidate that would win.
+		if (!RezSiteOk(unit, at)) {
+			++gRzFrontVeto;
+			++gRzVetoHurt;
+			continue;
+		}
+		++gRzOkHurt;
+		bestRate = rate;
+		bestDist = d;
+		bestMoving = moving;
+		@best = u;
+	}
+	return best;
+}
+
+// The wreck a medic may take instead: richer per second of walking than the
+// heal on offer, or the only work there is.
+IUnitTask@ MedicWreckInstead(CCircuitUnit@ unit, float reach, float healRate)
+{
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	const AIFloat3 spoil = BestWreckAt(here, reach, WRECK_MIN);
+	if (spoil.x < 0.f)
+		return null;
+	const int bd = int(unit.circuitDef.id);
+	const float walk = RzMax(0.f, here.distance2D(spoil) - Catalog::gBuildDist[bd])
+			/ RzMax(Catalog::gSpeed[bd], 1.f);
+	if (RzRate(ai.GetWreckValueAt(spoil, WRECK_RADIUS), walk) <= healRate)
+		return null;
+	if ((RezThreat(unit, spoil) > CON_THREAT_VETO) || !RezSiteOk(unit, spoil))
+		return null;
+	return aiBuilderMgr.Enqueue(TaskB::Reclaim(
+			Task::Priority::NORMAL, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+}
+
 IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 {
 	if (!IsRezzer(unit) || !MedicBot(unit))
@@ -498,43 +718,29 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 		return null;
 	// The staging anchor is meant to be OUR ground; if it currently is not,
 	// the medic waits rather than walking into what the army retreated from.
-	if (ThreatFor(unit, lane) > CON_THREAT_VETO)
+	if (RezThreat(unit, lane) > CON_THREAT_VETO)
 		return null;
 	gConNextRepair[slot] = ai.frame + REZ_WRECK_PERIOD;
 	const float reach = MedicReach();
 	// The wounded near the fight come first, wherever the medic stands now.
 	array<CCircuitUnit@>@ hurt = ai.GetOwnDamagedNear(lane, reach);
 	if (hurt !is null) {
-		CCircuitUnit@ best = null;
-		float bestDist = 1.0e18f;
-		const AIFloat3 here = unit.GetPos(ai.frame);
-		for (uint i = 0; i < hurt.length(); ++i) {
-			CCircuitUnit@ u = hurt[i];
-			if ((u is null) || (u is unit))
-				continue;
-			// DISTANCE FIRST. Only the nearest survivor is ever taken, and every
-			// test here is a pure predicate, so a candidate already beaten on
-			// distance cannot change the answer whatever else is true of it --
-			// while RezSiteOk is a walk of every enemy we can see and was being
-			// paid for all of them. Same winner, one sweep per running minimum
-			// instead of one per casualty. (gRzFrontVeto therefore counts only
-			// the vetoes that still decided something.)
-			const AIFloat3 at = u.GetPos(ai.frame);
-			const float d = here.distance2D(at);
-			if (d >= bestDist)
-				continue;
-			if (!u.circuitDef.IsMobile())
-				continue;
-			if (!RezSiteOk(unit, at)) {
-				++gRzFrontVeto;
-				++gRzVetoHurt;
-				continue;
-			}
-			++gRzOkHurt;
-			bestDist = d;
-			@best = u;
-		}
+		float rate;
+		bool moving;
+		float dist;
+		CCircuitUnit@ best = PickHeal(unit, hurt, true, 1.0e18f, rate, moving, dist);
 		if (best !is null) {
+			if (RZ_HEAL_PRICE) {
+				IUnitTask@ eat = MedicWreckInstead(unit, reach, rate);
+				if (eat !is null) {
+					++gRzHealWreckWin;
+					return eat;
+				}
+			}
+			++gRzHealPick;
+			gRzHealDist += dist;
+			if (moving)
+				++gRzHealMoving;
 			if (ai.frame >= gNextMedicLog) {
 				gNextMedicLog = ai.frame + 60 * SECOND;
 				AiLog(Factory::T() + "apex: medic moving to repair at the line");
@@ -543,11 +749,19 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 		}
 	}
 	// Nobody hurt: hold station at the lane, eating whatever the last fight
-	// left there. The area reclaim is also the move order.
+	// left there. The area reclaim is also the move order -- but not past a
+	// wreck the medic is standing beside.
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	if (here.distance2D(lane) > reach)
+	if (here.distance2D(lane) > reach) {
+		if (RZ_HEAL_PRICE) {
+			IUnitTask@ eat = MedicWreckInstead(unit, reach, 0.f);
+			if (eat !is null)
+				return eat;
+		}
+		++gRzMedWalkBack;
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::NORMAL, lane, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
+	}
 	// Already on station and nobody is hurt: the aftermath underfoot is the
 	// work. Returning null here left medics standing in a corpse field, because
 	// every rule below is gated on being behind, exposed, or short of metal.
@@ -555,7 +769,7 @@ IUnitTask@ RezzerMedic(CCircuitUnit@ unit)
 	// 2200-elmo reach, which would walk the medic off the army it serves.
 	const AIFloat3 spoil = BestWreckAt(here, reach, WRECK_MIN);
 	if ((spoil.x >= 0.f) && (spoil.distance2D(lane) <= reach)
-		&& (ThreatFor(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(unit, spoil))
+		&& (RezThreat(unit, spoil) <= CON_THREAT_VETO) && RezSiteOk(unit, spoil))
 	{
 		return aiBuilderMgr.Enqueue(TaskB::Reclaim(
 				Task::Priority::NORMAL, spoil, 1000.f, WRECK_TIMEOUT, WRECK_RADIUS, true));
@@ -581,8 +795,14 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 	if (!IsRezzer(unit))
 		return null;
 	const int slot = ConSlot(unit);
-	if (ai.frame >= gConNextSweep[slot]
-			&& (LosingNow() || (BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN).x < 0.f))) {
+	bool sweep = (ai.frame >= gConNextSweep[slot]);
+	if (sweep && !LosingNow()) {
+		const AIFloat3 loc = BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
+		sweep = (loc.x < 0.f) || !LocalWreckTakeable(unit, loc);
+		if (!sweep)
+			++gRzSwLocal;
+	}
+	if (sweep) {
 		gConNextSweep[slot] = ai.frame + RezScanPeriod();
 		// THE WHOLE LINE, NOT ONE POINT -- and blind where vision is missing.
 		// A single FrontLinePos search per period left most of a 10k-elmo
@@ -603,7 +823,7 @@ IUnitTask@ RezzerFrontSalvage(CCircuitUnit@ unit)
 			for (uint tryN = 0; (tryN < line.length()) && (tryN < 4); ++tryN) {
 				const AIFloat3 stretch = line[gRezSweepIdx % line.length()];
 				++gRezSweepIdx;
-				if (ThreatFor(unit, stretch) > CON_THREAT_VETO)
+				if (RezThreat(unit, stretch) > CON_THREAT_VETO)
 					continue;
 				AIFloat3 spoil = BestWreckAt(stretch, WRECK_SEARCH, WRECK_MIN);
 				if (spoil.x < 0.f) {
@@ -730,30 +950,17 @@ IUnitTask@ RezzerRepairNearby(CCircuitUnit@ unit)
 	if ((hurt is null) || (hurt.length() == 0))
 		return null;
 
-	CCircuitUnit@ best = null;
-	float bestDist = WRECK_SEARCH;
-	for (uint i = 0; i < hurt.length(); ++i) {
-		CCircuitUnit@ u = hurt[i];
-		if ((u is null) || (u is unit))
-			continue;
-		// One GetPos, not three: it was read for the distance, again for the
-		// site test, and a third time below for the winner.
-		const AIFloat3 at = u.GetPos(ai.frame);
-		const float dist = here.distance2D(at);
-		if (dist >= bestDist)
-			continue;
-		if (!RezSiteOk(unit, at)) {
-			++gRzFrontVeto;
-			++gRzVetoHurt;
-			continue;
-		}
-		++gRzOkHurt;
-		bestDist = dist;
-		@best = u;
-	}
+	float rate;
+	bool moving;
+	float dist;
+	CCircuitUnit@ best = PickHeal(unit, hurt, false, WRECK_SEARCH, rate, moving, dist);
 	if (best is null)
 		return null;
-	if (ThreatFor(unit, best.GetPos(ai.frame)) > CON_THREAT_VETO)
+	++gRzHealPick;
+	gRzHealDist += dist;
+	if (moving)
+		++gRzHealMoving;
+	if (RezThreat(unit, best.GetPos(ai.frame)) > CON_THREAT_VETO)
 		return null;
 
 	return aiBuilderMgr.Enqueue(TaskB::Repair(Task::Priority::NORMAL, best));
@@ -807,7 +1014,7 @@ IUnitTask@ RezzerComRescue(CCircuitUnit@ unit)
 				ai.ReadTeamValue(t, "comwz", -1.f));
 		if (!OnMap(at))
 			continue;
-		if ((ThreatFor(unit, at) > CON_THREAT_VETO) || !RezSiteOk(unit, at))
+		if ((RezThreat(unit, at) > CON_THREAT_VETO) || !RezSiteOk(unit, at))
 			continue;
 		IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 				Task::Priority::HIGH, at, 100.f, 120 * SECOND, WRECK_RADIUS));
@@ -850,7 +1057,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 	// stage of the economy. GetBestWreckPos with a high floor finds only
 	// such corpses; threat still vetoes.
 	if (!(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
-		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
+		&& (RezThreat(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
 		// Resurrect pays whenever the unit is worth more standing than as
 		// scrap and the army is short (apexearth: "plenty of resurrection
@@ -864,7 +1071,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 			floorM = gRzRichM;
 		}
 		const AIFloat3 rich = BestRezAt(unit.GetPos(ai.frame), WRECK_SEARCH, floorM);
-		if ((rich.x >= 0.f) && (ThreatFor(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(unit, rich)) {
+		if ((rich.x >= 0.f) && (RezThreat(unit, rich) <= CON_THREAT_VETO) && RezRezSiteOk(unit, rich)) {
 			IUnitTask@ rr = aiBuilderMgr.Enqueue(TaskB::Resurrect(
 					Task::Priority::HIGH, rich, 100.f, 90 * SECOND, WRECK_RADIUS));
 			if (rr !is null) {
@@ -880,7 +1087,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 
 	if (!PreferReclaim()
 		&& !(unit.circuitDef.IsFloater() || unit.circuitDef.IsSubmarine())
-		&& (ThreatFor(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
+		&& (RezThreat(unit, unit.GetPos(ai.frame)) <= CON_THREAT_VETO))
 	{
 		// Latched, the same law as Brain::LightTowerRange: SideDef3 is a side-name
 		// read plus a def lookup BY NAME, the answer is constant once the def
@@ -894,7 +1101,7 @@ IUnitTask@ RezzerRezOrEat(CCircuitUnit@ unit)
 		// ground is 60 seconds of standing still with nothing to show.
 		const AIFloat3 body = BestWreckAt(unit.GetPos(ai.frame), WRECK_SEARCH, WRECK_MIN);
 		if ((afus !is null) && (afus.count > 0) && (body.x >= 0.f)
-			&& (ThreatFor(unit, body) <= CON_THREAT_VETO) && RezRezSiteOk(unit, body))
+			&& (RezThreat(unit, body) <= CON_THREAT_VETO) && RezRezSiteOk(unit, body))
 		{
 			IUnitTask@ rez = aiBuilderMgr.Enqueue(TaskB::Resurrect(Task::Priority::NORMAL,
 					body, 100.f, 60 * SECOND, WRECK_RADIUS));
@@ -919,7 +1126,7 @@ IUnitTask@ RezzerIdle(CCircuitUnit@ unit)
 	if (scrap !is null)
 		return scrap;
 	const AIFloat3 here = unit.GetPos(ai.frame);
-	if ((ThreatFor(unit, here) > CON_THREAT_VETO) || InEnemyReach(here))
+	if ((RezThreat(unit, here) > CON_THREAT_VETO) || InEnemyReach(here))
 		return Retreat(unit);
 	// NOTHING TO DO IS NOT A REASON TO STAND HERE. The worst bot in the
 	// rez-front set went 89-215 s without a job, waiting wherever its last one
