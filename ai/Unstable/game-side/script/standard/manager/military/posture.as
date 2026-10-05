@@ -337,6 +337,13 @@ void UpdateLanePos()
 	gNextLane = ai.frame + 10 * SECOND;
 	if (!Builder::gHomeSet)
 		return;
+	AIFloat3 meet;
+	if (PostAnchor(meet)) {
+		gLaneAt = meet;
+		aiSetupMgr.SetLanePos(meet);
+		ai.SetFrontPos(meet);
+		return;
+	}
 	AIFloat3 teamLane;
 	if (TeamLaneRead(teamLane)) {
 		if (ai.frame >= gNextTeamLaneLog) {

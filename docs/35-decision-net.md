@@ -52,6 +52,28 @@ restructure (enemy economy estimate).
   their roulette odds. `apex: nnair` (air/update.as): every bomber launch and
   a 30 s heartbeat while a wing is held. Logged, not yet trained on.
 
+- `apex: nnpost` (`manager/military/nnpost.as`, 2026-10-05): the ARMY'S
+  POSTURE as a decision -- DEFEND (hold home, meet the push on our own ground),
+  HOLD (hold at the lane), ATTACK (pools promote and march on their base),
+  RAID (pools mass to the attack bar, then promote to a raid task). Every 30 s
+  (staggered by team), and when the rule chain's verdict changes or a push
+  starts closing on home. Default weights: 1 on the rule's verdict (turtle or
+  stance hold = HOLD, a hit/contested/raided base = DEFEND, else ATTACK),
+  0.01 on the rest. Outside discovery games with no net trust the rule's pick
+  runs at p=1 and nothing changes; in a discovery game (`gNnExplore`) p mixes
+  half uniform in, and a pick that differs from the rule overrides
+  `HoldReason`/`HoldHome`, the pool's promote type, and the lane anchor until
+  the next decision (a deviation is not cut short by a rule flip; the rule
+  chain flips every few seconds while a base is raided). Fields: the 75 `NN_STATE` values, then `post=` (our ground
+  army metal, forward fraction, metal on attack/raid/defend, distance to their
+  base; their biggest mobile group's metal, forward fraction, net influence and
+  distance from home; incoming push; cover and threat at home; their base's
+  structure metal and influence; separation; strength ratios; quota, held
+  metal, turtle, hold reason), then `name,w,p` per option, `chosen`, `ov`.
+  `NnPostScore` is the stub the trainer's NNP_* weights will fill.
+  `apex: posture` (60 s): picks, rule verdicts and seconds under each
+  posture actually in force, deviations, and the decision's cost in us.
+
 ## The table
 
 `python tools/decisions.py <match|tournament> --out rows.jsonl` joins each

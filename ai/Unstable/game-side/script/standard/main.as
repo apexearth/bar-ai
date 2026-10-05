@@ -19,6 +19,7 @@
 #include "manager/brain/facqueue.as"  // the production executor: every line held silent
 #include "manager/brain/yard.as"      // units that cannot leave their factory
 #include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)
+#include "manager/military/nnpost.as" // the army's posture as a recorded draw; reads Market's net state
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -180,6 +181,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
 	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }

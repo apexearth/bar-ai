@@ -395,21 +395,30 @@ bool AllIn()
 	return on;
 }
 
-bool HoldReason()
+// The rule's reason, without counting it: the posture decision asks too.
+int HoldWhy()
 {
 	if (ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) <= 0.f)
-		return false;
-	int why = -1;
+		return -1;
 	if (Builder::BaseUnderAttack())
-		why = 0;
-	else if (AllIn())
-		return false;
-	else if (BaseContested())
-		why = 1;
-	else if (BaseRaided())
-		why = 2;
-	else if (ConservativeStance())
-		why = 3;
+		return 0;
+	if (AllIn())
+		return -1;
+	if (BaseContested())
+		return 1;
+	if (BaseRaided())
+		return 2;
+	if (ConservativeStance())
+		return 3;
+	return -1;
+}
+
+bool HoldReason()
+{
+	const int ov = PostOverride();
+	if (ov >= 0)
+		return PostHolds(ov);
+	const int why = HoldWhy();
 	if (why < 0)
 		return false;
 	++gHoldWhyN[why];
@@ -519,6 +528,9 @@ bool HoldHome()
 {
 	if (!HoldReason())
 		return false;
+	// A drawn DEFEND/HOLD keeps every new unit: no group leaves this window.
+	if (PostOverride() >= 0)
+		return true;
 	if (gHoldHeldM >= HoldNeedM()) {
 		++gHoldFull;
 		return false;

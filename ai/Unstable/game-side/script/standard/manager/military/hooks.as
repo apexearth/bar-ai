@@ -373,6 +373,11 @@ IUnitTask@ MassPoolTask(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 			return NoteElect("mass.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
+		// A drawn RAID: the pool masses to the attack bar, then leaves as one raid.
+		// check=MELEE (never enqueued) so a live raider pack cannot pull it out early.
+		if (PostOverride() == POST_RAID)
+			return NoteElect("mass.raid", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
+					Task::FightType::RAID, aiMilitaryMgr.quota.attack)));
 		// `check` IS THE REINFORCE HATCH, AND MELEE NAILED IT SHUT.
 		//
 		// TaskF::Defend's three-argument form is Defend(check, promote, power).

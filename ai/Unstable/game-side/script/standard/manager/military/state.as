@@ -63,6 +63,14 @@ int   gTurtleCount   = 0;
 float gArmyAtHold    = 0.f;
 int   gTurtleStarted = 0;
 
+// The army posture decision (nnpost.as), here because hooks and massing read it.
+const int POST_DEFEND = 0;
+const int POST_HOLD   = 1;
+const int POST_ATTACK = 2;
+const int POST_RAID   = 3;
+const int POST_N      = 4;
+int gPostOv = -1;   // the drawn posture where it differs from the rule's, else -1
+
 
 //------------------------------------------------------------------------------
 // Slinging: pool the team's spare metal behind ONE designated player so it
