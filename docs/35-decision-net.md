@@ -101,13 +101,25 @@ a deploy restores it, so the trainer re-exports whenever it finds a target
 empty. Every game loads the latest weights at start; they are fixed within a
 game (host-side, no desync).
 
-`NnScore` (in `Decide`, right after `OppTimeReprice`) scores the top 8 options,
-folds the outputs through OBJECTIVE into one number in units of each outcome's
-spread, and multiplies each value by exp(blend x (score - mean)), clamped to
-+-3 spreads; the whole list is re-sorted because `DrawWeights` takes the first
-of each category. OBJECTIVE (nntrain.py) is a stated default until he picks
-one: +5 min economic power 1.0, metal and energy income 0.25 each, damage trade
-0.5, losses near the site -0.5, finished 0.25, survived 0.25. `apex: nn-score`
+`NnScore` (in `Decide`, right after `OppTimeReprice`) scores the top 8 options
+and folds the outputs through OBJECTIVE into one number in units of each
+outcome's spread. Since 2026-10-05 (aebeab52, `comb=trust` in the schema line)
+the vote is in LOG space with a per-kind TRUST: each option keeps the group's
+mean log value, and its deviation from it is the market's at trust 0 and the
+net's verdict (clamped +-3) at trust 1 -- his point that market prices are so
+lopsided between kinds (nano 15, tech 1.5, assist 0.19) that the old capped
+multiplier could never swing them. Trust per kind is EARNED: on unseen games,
+the correlation of what the net says the decision adds (FULL minus STATE
+prediction of the objective) with what it actually added; 0 under 200
+decisions; exported as NNW_TRUST; apex_nn_blend scales it. The ETA ladder,
+which ranked economy options by time to target alone, divides that time by
+e^(trust x verdict). His rulings stay rules. The whole list is re-sorted
+because `DrawWeights` takes the first of each category. OBJECTIVE
+(nntrain.py) is a stated default until he picks one: +5 min economic power
+1.0, metal and energy income 0.25 each, damage trade 0.5, losses near the
+site -0.5, finished, survived, lifetime and lifetime kills 0.25 each.
+The plan from here (his 2026-10-05): the market value becomes one input and
+the net's score the value, kind by kind, as trust is earned. `apex: nn-score`
 (60 s) proves it fires: scored count, how often it changed the top option,
 perf as `dec.nn` (recording as `dec.nnrec`). NNW_GAMES counts training
 batches, not games.
