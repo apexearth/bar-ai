@@ -1609,3 +1609,25 @@ the humans to kill me."*
 - Seen on Supreme Isthmus: a game-winning group of Titans walked back and
   forth for minutes, turning between a geothermal behind their base and an
   enemy Titan that kept dropping in and out of radar.
+
+## A roaming army cannot be stopped everywhere: make it pay (2026-10-05)
+
+His words, condensed: you ultimately cannot stop a roaming army from killing
+some of your stuff. Defending a concentration of power at every extractor
+area would cost too much. So make them pay for everything they kill: they
+lose part of their army, or take enough damage that they start to retreat.
+
+- Usually the answer is to COUNTERATTACK: if our defences are good enough to
+  stop their attacking army, go destroy their base while they attack ours.
+- Or kill their army and RESURRECT or RECLAIM it, and make our army bigger.
+  An attacker takes the risk that if it dies in our territory, we get all
+  that free reclaim -- and that can be huge.
+- Escorts meet mass with mass when they mass, especially when there are no
+  enemy extractors to raid instead; spread only when the threat is spread.
+- Mex guards scale with how soon the enemy can reach the spot; a mex nearer
+  their base needs more defence. Defences stand just outside the base and
+  stop anyone getting in; a gun inside the base only when it is a mex's only
+  cover.
+- The commander is safe from T1 raiders -- in danger he builds towers around
+  himself -- and takes the most dangerous mexes so constructors take the safe
+  ones. T2 units (usually minute 10+) are what he cannot stay safe against.
