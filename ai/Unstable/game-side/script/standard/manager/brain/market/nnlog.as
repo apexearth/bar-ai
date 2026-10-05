@@ -27,6 +27,36 @@ array<float> gNnHold(6);
 int gNnHoldStamp = -1;
 int gNnHoldAt = -1000;
 
+// One rule, the same as tools/imitate.py classify() on the catalog dump, so the
+// BARb prior means the same thing offline and here. -1 = not a structure.
+const int NC_MEX = 0, NC_ENERGY = 1, NC_CONVERT = 2, NC_STORE = 3, NC_PLANT = 4,
+	NC_NANO = 5, NC_PROTECT = 6, NC_AIRDEF = 7, NC_OTHER = 8, NC_N = 9;
+array<float> gNnClassN(NC_N);   // our finished structures by class (NnHoldings)
+
+int NnClassOf(int d)
+{
+	if ((d < 0) || (d >= int(Catalog::gCostM.length())) || Catalog::gMobile[d])
+		return -1;
+	const array<int>@ bo = Catalog::BuildsOf(d);
+	if ((bo !is null) && (bo.length() > 0))
+		return NC_PLANT;
+	if (Catalog::gBuildPower[d] > 0.f)
+		return NC_NANO;
+	if (Catalog::gExtractsM[d] > 0.f)
+		return NC_MEX;
+	if (Catalog::gConvCapacity[d] > 0.f)
+		return NC_CONVERT;
+	if ((Catalog::gMakeE[d] > 0.f) || Catalog::gWind[d])
+		return NC_ENERGY;
+	if ((Catalog::gMaxRange[d] > 0.f) && (Catalog::gAirT[d] > 0.f) && (Catalog::gSurfT[d] <= 0.f))
+		return NC_AIRDEF;
+	if (Catalog::gMaxRange[d] > 0.f)
+		return NC_PROTECT;
+	if ((Catalog::gStoreM[d] > 0.f) || (Catalog::gStoreE[d] > 0.f))
+		return NC_STORE;
+	return NC_OTHER;
+}
+
 void NnHoldings()
 {
 	if ((gNnHoldStamp == gComStamp) && (ai.frame - gNnHoldAt < 30))
@@ -35,10 +65,15 @@ void NnHoldings()
 	gNnHoldAt = ai.frame;
 	for (uint k = 0; k < gNnHold.length(); ++k)
 		gNnHold[k] = 0.f;
+	for (uint k = 0; k < gNnClassN.length(); ++k)
+		gNnClassN[k] = 0.f;
 	for (uint i = 0; i < ComLen(); ++i) {
 		const int d = gComDef[i];
 		if ((d < 0) || (d >= int(Catalog::gCostM.length())) || ((gComState[i] & CS_COMING) != 0))
 			continue;
+		const int nc = NnClassOf(d);
+		if (nc >= 0)
+			gNnClassN[nc] += 1.f;
 		const float cm = Catalog::gCostM[d];
 		// nano turrets are not IsBuilder(): build power with no build list is the
 		// census's own test (census.as)
@@ -559,12 +594,119 @@ bool NnWeightsFit()
 		&& (NNW_TRUST.length() == NNW_KINDS.length());
 }
 
+// THE BARb PRIOR (tools/imitate.py, NNI_*): how likely BARb, in our situation,
+// would build each class next. Options are tilted toward it in log space by
+// apex_nn_imitate -- what a stronger AI does as a starting point the outcome
+// nets then correct.
+const string NNI_EXPECT = "min,mInc,eInc,mex,energy,convert,store,plant,nano,protect,airdef,army";
+array<float> gNnImitLp;
+int gNnImitAt = -1;
+uint gNnImitN = 0;
+
+bool NnImitLogP()
+{
+	if (gNnImitAt == ai.frame)
+		return gNnImitLp.length() == uint(NNI_C);
+	gNnImitAt = ai.frame;
+	gNnImitLp.resize(0);
+	const int F = NNI_F, H = NNI_H, C = NNI_C;
+	if (!NNI_ON || (NNI_FEATURES != NNI_EXPECT) || (C != NC_N) || (F != 12)
+		|| (NNI_W1.length() != uint(H * F)) || (NNI_W2.length() != uint(H * H))
+		|| (NNI_W3.length() != uint(C * H)))
+		return false;
+	NnHoldings();
+	array<float> x = {float(ai.frame) / 1800.f, Eco::MInc(), Eco::EInc(), gNnClassN[NC_MEX],
+		gNnClassN[NC_ENERGY], gNnClassN[NC_CONVERT], gNnClassN[NC_STORE], gNnClassN[NC_PLANT],
+		gNnClassN[NC_NANO], gNnClassN[NC_PROTECT], gNnClassN[NC_AIRDEF], Military::OurArmyNow()};
+	array<float> h1(H), h2(H);
+	for (int h = 0; h < H; ++h) {
+		float acc = NNI_B1[h];
+		for (int i = 0; i < F; ++i) {
+			float z = (NnSlog(x[i]) - NNI_XM[i]) / NNI_XS[i];
+			z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+			acc += NNI_W1[h * F + i] * z;
+		}
+		h1[h] = (acc > 0.f) ? acc : 0.f;
+	}
+	for (int h = 0; h < H; ++h) {
+		float acc = NNI_B2[h];
+		for (int j = 0; j < H; ++j)
+			acc += NNI_W2[h * H + j] * h1[j];
+		h2[h] = (acc > 0.f) ? acc : 0.f;
+	}
+	gNnImitLp.resize(C);
+	float mx = -1e30f;
+	for (int c = 0; c < C; ++c) {
+		float acc = NNI_B3[c];
+		for (int j = 0; j < H; ++j)
+			acc += NNI_W3[c * H + j] * h2[j];
+		gNnImitLp[c] = acc;
+		mx = (acc > mx) ? acc : mx;
+	}
+	float z = 0.f;
+	for (int c = 0; c < C; ++c)
+		z += pow(2.7182818f, gNnImitLp[c] - mx);
+	for (int c = 0; c < C; ++c)
+		gNnImitLp[c] = gNnImitLp[c] - mx - log(z);
+	return true;
+}
+
+void NnImitate(array<Want@>@ ranked)
+{
+	const float imit = ai.GetTunable("apex_nn_imitate", TUNE_NN_IMITATE);
+	if ((imit <= 0.f) || (ranked.length() < 2) || !NnImitLogP())
+		return;
+	const uint n = (ranked.length() < NN_K) ? ranked.length() : NN_K;
+	array<float> lp(n);
+	array<bool> has(n);
+	float mean = 0.f;
+	uint m = 0;
+	for (uint r = 0; r < n; ++r) {
+		const int c = (ranked[r].def is null) ? -1 : NnClassOf(int(ranked[r].def.id));
+		has[r] = (c >= 0) && (ranked[r].value > 0.f);
+		if (has[r]) {
+			lp[r] = gNnImitLp[c];
+			mean += lp[r];
+			++m;
+		}
+	}
+	if (m < 2)
+		return;
+	mean /= float(m);
+	for (uint r = 0; r < n; ++r) {
+		if (!has[r])
+			continue;
+		const float mult = pow(2.7182818f, imit * (lp[r] - mean));
+		ranked[r].value *= mult;
+		ranked[r].nnMult *= mult;
+	}
+	for (uint r = 1; r < ranked.length(); ++r) {
+		Want@ w = ranked[r];
+		uint at = r;
+		while ((at > 0) && (ranked[at - 1].value < w.value)) {
+			@ranked[at] = ranked[at - 1];
+			--at;
+		}
+		@ranked[at] = w;
+	}
+	++gNnImitN;
+	if (ai.frame >= gNnImitLogAt) {
+		gNnImitLogAt = ai.frame + 60 * SECOND;
+		string ln = "apex: nn-imitate t=" + ai.teamId + " n=" + gNnImitN + " imit=" + NnF(imit, 2) + " p:";
+		for (int c = 0; c < NNI_C; ++c)
+			ln += " " + NnF(pow(2.7182818f, gNnImitLp[c]), 2);
+		AiLog(ln);
+	}
+}
+int gNnImitLogAt = 0;
+
 void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	// what the net could see: wants forced in after this point (escorts, panics,
 	// joins) carry placeholder values the market never priced
 	for (uint r = 0; r < ranked.length(); ++r)
 		ranked[r].nnPriced = true;
+	NnImitate(ranked);
 	if (!NNW_ON || gNnBad || (ranked.length() < 2))
 		return;
 	NnExploreRoll();

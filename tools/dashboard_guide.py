@@ -1044,6 +1044,10 @@ GROUPS = [
                   "more: options it expects to grow the economy and win "
                   "trades get a bigger share of the draw. 0 = it only watches; "
                   "it only plays once the trainer has written its weights"),
+                 ("TUNE_NN_IMITATE", "constructors lean more toward what BARb "
+                  "would build in our situation (learned from ~1,000 games vs "
+                  "BARb by tools/imitate.py): its mexes and defences over our "
+                  "energy. 0 = off"),
                  ("TUNE_NN_EXPLORE", "more discovery games: in this share of "
                   "games with a trained net, every kind of build gets a random "
                   "want-more/want-less for the whole game, so the net learns "

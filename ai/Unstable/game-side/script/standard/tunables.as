@@ -806,6 +806,11 @@ const float TUNE_NN_BLEND = 0.f;
 //   wanting more or less of each thing does. See docs/35.
 const float TUNE_NN_EXPLORE = 0.1f;
 
+// [0..2] -- How strongly constructors lean toward what BARb would build in our
+//   situation (tools/imitate.py prior, NNI_*): an option of the class BARb
+//   favours gets exp(imitate x log-odds) of its value. 0 = off. See docs/35.
+const float TUNE_NN_IMITATE = 0.f;
+
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
 
