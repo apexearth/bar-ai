@@ -35,6 +35,9 @@ RESULT = re.compile(r"\[BARAI_RESULT\] reason=(\w+) frame=(\d+) winners=([\d,]*)
 NN = re.compile(r"\]\[f=(\d+)\] .*?apex: nn t=(\d+) f=\d+ u=(\d+) c=(\S+) pick=(\d+) why=(\S*) dm=(\S+)"
                 r" \| (\S+)(?: \| (.*?))? \| chosen=(-?\d+)")
 SCHEMA = re.compile(r"apex: nn-schema v(\d+) state=(\S+) opt=(\S+)")
+POST_SCHEMA = re.compile(r"apex: nnpost-schema v\d+ state=\S+ post=(\S+) opt=")
+NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule=(\S+) ex=(\d) trust=\S+"
+                    r" \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ fac=\S+"
@@ -152,12 +155,22 @@ def parse(path, files=None):
     died, killby = {}, {}   # by unit id: frame it died; (frame, metal) of what it killed
     facrows, fac_keys, prods = [], None, {}
     allyof, winners = {}, None   # engine team -> ally team; winning ally teams (BARAI_RESULT)
+    postrows, post_keys = [], None
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
+            if "apex: nnpost" in ln:
+                m = POST_SCHEMA.search(ln)
+                if m:
+                    post_keys = m.group(1).split(",")
+                    continue
+                m = NNPOST.search(ln)
+                if m:
+                    postrows.append(m.groups())
+                continue
             if "apex: nnfac" in ln:
                 m = FAC_SCHEMA.search(ln)
                 if m:
@@ -245,6 +258,7 @@ def parse(path, files=None):
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
+                postrows=postrows, post_keys=post_keys,
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -372,6 +386,30 @@ def fac_rows_of(path, g):
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=fid, con=con,
                    pick=0, why="fac", dm="draw", state=dict(zip(sk, (num(x) for x in state.split(",")))),
                    opts=ov, chosen=ci, y=y)
+
+
+POST_OPTS = ("DEFEND", "HOLD", "ATTACK", "RAID")   # military/state.as POST_* order
+
+
+def post_rows_of(path, g):
+    """Army posture decisions (`apex: nnpost`), labelled with the deciding
+    team's outcomes -- trade, losses, economy at +1..+10 min, and the result."""
+    if g["state_keys"] is None or not g.get("post_keys"):
+        return
+    sk, pk = g["state_keys"], g["post_keys"]
+    for frame, t, why, rule, ex, state, post, opts, chosen in sorted(g["postrows"], key=lambda r: int(r[0])):
+        f, t = int(frame), int(t)
+        ov = []
+        for o in opts.split(" ; "):
+            parts = o.split(",")
+            if len(parts) == 3:
+                ov.append({"name": parts[0], "w": num(parts[1]), "p": num(parts[2])})
+        y = labels(g, t, f, None)
+        yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con="army",
+                   why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
+                   state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   post=dict(zip(pk, (num(x) for x in post.split(",")))),
+                   opts=ov, chosen=int(chosen), y=y)
 
 
 def survived(g, t, f, udef, site, build_s):

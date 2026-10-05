@@ -230,31 +230,43 @@ def fold(net):
     return w1, b1, w2, b2, obj @ w3, float(obj @ b3)
 
 
-def fac_block(head):
-    """The factory net's NNF_* fields; the empty net until the factory head has one."""
+def head_block(head, p, layout=None):
+    """A head's <p>_* fields (NNF factory, NNP posture); the empty net until the
+    head has one. `layout` is the string the game compares before trusting it."""
     if head is None or head.full is None:
-        return ["const bool NNF_ON = false;", 'const string NNF_STATE = "";', "const int NNF_S = 0;",
-                "const int NNF_O = 0;", "const int NNF_H = 0;"] + \
-               ["const array<float> NNF_%s = {};" % k for k in ("XM", "XS", "W1", "B1", "W2", "B2", "WO")] + \
-               ["const float NNF_BO = 0.f;", "const float NNF_TRUST = 0.f;"]
+        return ["const bool %s_ON = false;" % p, 'const string %s_STATE = "";' % p,
+                "const int %s_S = 0;" % p, "const int %s_O = 0;" % p, "const int %s_H = 0;" % p] + \
+               ["const array<float> %s_%s = {};" % (p, k) for k in ("XM", "XS", "W1", "B1", "W2", "B2", "WO")] + \
+               ["const float %s_BO = 0.f;" % p, "const float %s_TRUST = 0.f;" % p]
     w1, b1, w2, b2, wo, bo = fold(head.full)
-    s = len(head.state_keys)
-    return ["const bool NNF_ON = true;",
-            'const string NNF_STATE = "%s";' % ",".join(head.state_keys),
-            "const int NNF_S = %d;" % s, "const int NNF_O = %d;" % (w1.shape[1] - s),
-            "const int NNF_H = %d;" % HIDDEN,
-            "const array<float> NNF_XM = %s;" % fmt_arr(head.full.xm),
-            "const array<float> NNF_XS = %s;" % fmt_arr(head.full.xs),
-            "const array<float> NNF_W1 = %s;" % fmt_arr(w1.reshape(-1)),
-            "const array<float> NNF_B1 = %s;" % fmt_arr(b1),
-            "const array<float> NNF_W2 = %s;" % fmt_arr(w2.reshape(-1)),
-            "const array<float> NNF_B2 = %s;" % fmt_arr(b2),
-            "const array<float> NNF_WO = %s;" % fmt_arr(wo),
-            "const float NNF_BO = %.7ff;" % bo,
-            "const float NNF_TRUST = %.7ff;" % head.trust()]
+    n_state = head.XS.shape[1]   # what NnPostScore/NnFacScore feed once per decision
+    return ["const bool %s_ON = true;" % p,
+            'const string %s_STATE = "%s";' % (p, layout or ",".join(head.state_keys)),
+            "const int %s_S = %d;" % (p, n_state), "const int %s_O = %d;" % (p, w1.shape[1] - n_state),
+            "const int %s_H = %d;" % (p, HIDDEN),
+            "const array<float> %s_XM = %s;" % (p, fmt_arr(head.full.xm)),
+            "const array<float> %s_XS = %s;" % (p, fmt_arr(head.full.xs)),
+            "const array<float> %s_W1 = %s;" % (p, fmt_arr(w1.reshape(-1))),
+            "const array<float> %s_B1 = %s;" % (p, fmt_arr(b1)),
+            "const array<float> %s_W2 = %s;" % (p, fmt_arr(w2.reshape(-1))),
+            "const array<float> %s_B2 = %s;" % (p, fmt_arr(b2)),
+            "const array<float> %s_WO = %s;" % (p, fmt_arr(wo)),
+            "const float %s_BO = %.7ff;" % (p, bo),
+            "const float %s_TRUST = %.7ff;" % (p, head.trust())]
 
 
-def export_as(net, state_keys, games, trust, fac=None):
+def fac_block(head):
+    return head_block(head, "NNF")
+
+
+def post_block(head):
+    # the posture fields are known only once a posture game was read since start
+    if head is None or head.full is None or not head.post_keys:
+        return head_block(None, "NNP")
+    return head_block(head, "NNP", ",".join(head.state_keys) + "|" + ",".join(head.post_keys))
+
+
+def export_as(net, state_keys, games, trust, fac=None, post=None):
     """The builder FULL net (NNW_*) and the factory net (NNF_*) as nnweights.as."""
     w1, b1, w2, b2, wo, bo = fold(net)
     s, o = len(state_keys), w1.shape[1] - len(state_keys)
@@ -276,7 +288,8 @@ def export_as(net, state_keys, games, trust, fac=None):
         "const float NNW_BO = %.7ff;" % bo,
         "// per kind, in NNW_KINDS order: how much say the net gets (0 = the market alone)",
         "const array<float> NNW_TRUST = %s;" % fmt_arr([trust.get(k, 0.0) for k in KINDS]),
-        "// the factory net (production.as roulette)"] + fac_block(fac) + ["",
+        "// the factory net (production.as roulette)"] + fac_block(fac) +
+        ["// the posture net (military/nnpost.as)"] + post_block(post) + ["",
         "}  // namespace Market", ""])
 
 
@@ -314,7 +327,13 @@ def featurize_fac(row, state_keys):
 class FacHead:
     """The factory net: what a production order is worth. Its own nets, buffer
     and ONE trust (how well its view of what an order adds matches what the
-    order actually added, on unseen games)."""
+    order actually added, on unseen games). PostHead reuses it for posture."""
+    NAME = "fac"
+    OPTS = FAC_OPT_NUM
+
+    @staticmethod
+    def featurize(row, state_keys):
+        return featurize_fac(row, state_keys)
 
     def __init__(self):
         self.state_keys = None
@@ -325,14 +344,14 @@ class FacHead:
         self.load()
 
     def load(self):
-        if (OUT / "fac_buffer.npz").is_file() and (OUT / "fac_model.pt").is_file():
+        if (OUT / (self.NAME + "_buffer.npz")).is_file() and (OUT / (self.NAME + "_model.pt")).is_file():
             import torch
-            with np.load(OUT / "fac_buffer.npz", allow_pickle=True) as b:
+            with np.load(OUT / (self.NAME + "_buffer.npz"), allow_pickle=True) as b:
                 self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
                 self.state_keys = list(b["state_keys"])
                 self.batches = int(b["batches"])
-            ck = torch.load(OUT / "fac_model.pt", weights_only=False)
-            if list(ck.get("targets", [])) != TARGETS or tuple(ck.get("opt_num", ())) != FAC_OPT_NUM:
+            ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False)
+            if list(ck.get("targets", [])) != TARGETS or tuple(ck.get("opt_num", ())) != self.OPTS:
                 self.__init_empty()
                 return
             self.full = Net(self.XF.shape[1], len(TARGETS))
@@ -353,12 +372,12 @@ class FacHead:
         if self.full is None:
             return
         if buffer or self.batches % BUFFER_EVERY == 0:
-            np.savez(OUT / "fac_buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
+            np.savez(OUT / (self.NAME + "_buffer.tmp.npz"), XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
                      state_keys=np.array(self.state_keys), batches=self.batches)
-            replace_retry(OUT / "fac_buffer.tmp.npz", OUT / "fac_buffer.npz")
+            replace_retry(OUT / (self.NAME + "_buffer.tmp.npz"), OUT / (self.NAME + "_buffer.npz"))
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
-                    "opt_num": FAC_OPT_NUM, "pairs": self.pairs}, OUT / "fac_model.pt.tmp")
-        replace_retry(OUT / "fac_model.pt.tmp", OUT / "fac_model.pt")
+                    "opt_num": self.OPTS, "pairs": self.pairs}, OUT / (self.NAME + "_model.pt.tmp"))
+        replace_retry(OUT / (self.NAME + "_model.pt.tmp"), OUT / (self.NAME + "_model.pt"))
 
     def trust(self):
         if len(self.pairs) < TRUST_MIN:
@@ -378,7 +397,7 @@ class FacHead:
             y, m = target_vec(r)
             if not any(m):
                 continue
-            s, f = featurize_fac(r, self.state_keys)
+            s, f = self.featurize(r, self.state_keys)
             xs.append(s)
             xf.append(f)
             ys.append(y)
@@ -387,7 +406,7 @@ class FacHead:
             return None
         XS, XF = np.array(xs, dtype=np.float32), np.array(xf, dtype=np.float32)
         Y, M = np.array(ys, dtype=np.float32), np.array(ms, dtype=np.float32)
-        rec = {"net": "fac", "source": source, "at": time.time(), "rows": len(xs),
+        rec = {"net": self.NAME, "source": source, "at": time.time(), "rows": len(xs),
                "index": self.batches + 1, "first_touch": first_touch}
         if self.full is not None and first_touch:
             base = self.full.ym
@@ -426,6 +445,31 @@ class FacHead:
         return rec
 
 
+POST_OPTS = ("DEFEND", "HOLD", "ATTACK", "RAID")   # military/state.as POST_* order
+
+
+def featurize_post(row, state_keys, post_keys):
+    """In NnPostScore's order: state, posture fields (both slog), then the
+    option one-hot and the rule's option one-hot (raw 0/1)."""
+    s = [slog(num(row["state"].get(k, 0))) for k in state_keys]
+    s += [slog(num(row["post"].get(k, 0))) for k in post_keys]
+    ci = row["chosen"]
+    rule = POST_OPTS.index(row["rule"]) if row["rule"] in POST_OPTS else -1
+    x = [1.0 if i == ci else 0.0 for i in range(len(POST_OPTS))]
+    x += [1.0 if i == rule else 0.0 for i in range(len(POST_OPTS))]
+    return s, s + x
+
+
+class PostHead(FacHead):
+    """The posture net: defend / hold / attack / raid, scored by what followed."""
+    NAME = "post"
+    OPTS = POST_OPTS
+    post_keys = None
+
+    def featurize(self, row, state_keys):
+        return featurize_post(row, state_keys, self.post_keys)
+
+
 class Trainer:
     def __init__(self):
         OUT.mkdir(parents=True, exist_ok=True)
@@ -442,6 +486,7 @@ class Trainer:
         self.logger = {}
         self.trust_pairs = {}   # kind -> [(net says the decision adds, it actually added)], unseen games
         self.fac = FacHead()
+        self.post = PostHead()
         self.parsed_at = {}
         self.load()
 
@@ -729,7 +774,7 @@ class Trainer:
         return out
 
     def export(self):
-        text = export_as(self.full, self.state_keys, self.batches, self.trust(), self.fac)
+        text = export_as(self.full, self.state_keys, self.batches, self.trust(), self.fac, self.post)
         n = 0
         for p in export_targets():
             tmp = p.with_suffix(".tmp")
@@ -776,6 +821,38 @@ class Trainer:
         self.since_export += len(rows) // 4
         return rec
 
+    def learn_post(self, source, g, path, final):
+        """The army-posture rows of one parsed game, like learn_fac."""
+        if not g.get("post_keys") or g["state_keys"] is None or SCHEMA_STATE not in g["state_keys"]:
+            return None
+        if self.post.post_keys is not None and self.post.post_keys != g["post_keys"]:
+            self.post._FacHead__init_empty()
+        self.post.post_keys = g["post_keys"]
+        first = {}
+        for r in sorted(g["postrows"], key=lambda q: int(q[0])):
+            t = int(r[1])
+            if len(first.setdefault(t, [])) < 3:
+                first[t].append(r[0])
+        fps = {t: "post|%d|%s" % (t, "|".join(v)) for t, v in first.items()}
+        first_touch = not any(self.used.get(fp) for fp in fps.values())
+        rows, keys = [], []
+        for r in decisions.post_rows_of(str(path), g):
+            fp = fps[r["team"]]
+            key = (r["team"], r["f"], -1)
+            if key in self.used.get(fp, ()):
+                continue
+            if not final and r["f"] + decisions.HORIZONS[-1] * decisions.FPM > g["last"]:
+                continue
+            rows.append(r)
+            keys.append((fp, key))
+        if not rows or (not final and len(rows) < MIN_BATCH // 4):
+            return None
+        rec = self.post.learn(source, g, first_touch, rows)
+        for fp, key in keys:
+            self.used.setdefault(fp, set()).add(key)
+            self.used_at[fp] = time.time()
+        return rec
+
     def poll(self):
         did = []
         for _t, key, d in self.finished_games():
@@ -785,6 +862,7 @@ class Trainer:
             if items:
                 did.append(self.learn(key, g, first, items))
             did.append(self.learn_fac(key, g, d, final=True))
+            did.append(self.learn_post(key, g, d, final=True))
         live = self.live_games()
         for wd, files in live:
             self.parsed_at[wd] = time.time()
@@ -793,6 +871,7 @@ class Trainer:
             if len(items) >= MIN_BATCH:
                 did.append(self.learn("live:" + wd.name, g, first, items))
             did.append(self.learn_fac("live:" + wd.name, g, wd, final=False))
+            did.append(self.learn_post("live:" + wd.name, g, wd, final=False))
         if did:
             self.save()
         # a deploy writes the repo's empty net over ours: put it back
@@ -823,7 +902,7 @@ def stale_ok(p, state_keys):
     except OSError:
         return False
     return ("NNW_ON = true" in head and ('NNW_STATE = "%s"' % ",".join(state_keys)) in head
-            and "NNW_TRUST" in head and "NNF_TRUST" in head)   # older layouts get rewritten
+            and "NNW_TRUST" in head and "NNF_TRUST" in head and "NNP_TRUST" in head)   # older layouts get rewritten
 
 
 def fresh(root):
@@ -838,7 +917,7 @@ def reset():
     """Start a fresh net. The old one and its whole history move to
     runtime/nn-archive/<stamp>/, never deleted: copy them back to restore."""
     names = ("metrics.jsonl", "status.json", "model.pt", "buffer.npz", "seen.json",
-             "fac_model.pt", "fac_buffer.npz", "samples.json")
+             "fac_model.pt", "fac_buffer.npz", "post_model.pt", "post_buffer.npz", "samples.json")
     if not any((OUT / n).is_file() for n in names):
         return None
     dest = OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S")

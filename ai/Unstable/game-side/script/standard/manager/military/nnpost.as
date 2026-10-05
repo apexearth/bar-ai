@@ -171,9 +171,70 @@ void PostFields(array<float>& out f)
 
 // The net's hook. The trainer will add NNP_* to nnweights.as; until then the
 // default weights pass through and trust is 0.
+// THE POSTURE NET (Market::NNP_*, written by tools/nntrain.py): it scores each
+// option from the state, the posture fields, the option and what the rules
+// chose, and moves the option weights in log space by the trust it has earned
+// -- the builder and factory nets' rule. Returns that trust (0 = rules alone).
 float NnPostScore(const array<float>& in st, const array<float>& in post, array<float>& w)
 {
-	return 0.f;
+	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * Market::NNP_TRUST;
+	t = (t > 1.f) ? 1.f : t;
+	const int S = Market::NNP_S, O = Market::NNP_O, H = Market::NNP_H, N = S + O;
+	if ((t <= 0.f) || !Market::NNP_ON || (Market::NNP_STATE != Market::NN_STATE + "|" + NNP_POST)
+		|| (O != 2 * POST_N) || (S != int(st.length() + post.length())) || (H <= 0)
+		|| (Market::NNP_XM.length() != uint(N)) || (Market::NNP_W1.length() != uint(H * N))
+		|| (Market::NNP_W2.length() != uint(H * H)) || (Market::NNP_WO.length() != uint(H)))
+		return 0.f;
+	int rule = 0;
+	for (int o = 1; o < POST_N; ++o)
+		rule = (w[o] > w[rule]) ? o : rule;
+	array<float> a(H);
+	for (int h = 0; h < H; ++h)
+		a[h] = Market::NNP_B1[h];
+	for (int i = 0; i < S; ++i) {
+		const float v = (uint(i) < st.length()) ? st[i] : post[i - st.length()];
+		float z = (Market::NnSlog(v) - Market::NNP_XM[i]) / Market::NNP_XS[i];
+		z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+		for (int h = 0; h < H; ++h)
+			a[h] += Market::NNP_W1[h * N + i] * z;
+	}
+	array<float> score(POST_N), h1(H);
+	float mean = 0.f;
+	for (int o = 0; o < POST_N; ++o) {
+		for (int h = 0; h < H; ++h)
+			h1[h] = a[h];
+		for (int i = 0; i < O; ++i) {
+			const float x = (i < POST_N) ? ((i == o) ? 1.f : 0.f) : ((i - POST_N == rule) ? 1.f : 0.f);
+			float z = (x - Market::NNP_XM[S + i]) / Market::NNP_XS[S + i];
+			z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+			for (int h = 0; h < H; ++h)
+				h1[h] += Market::NNP_W1[h * N + S + i] * z;
+		}
+		float sc = Market::NNP_BO;
+		for (int h2 = 0; h2 < H; ++h2) {
+			float acc = Market::NNP_B2[h2];
+			for (int h = 0; h < H; ++h) {
+				if (h1[h] > 0.f)
+					acc += Market::NNP_W2[h2 * H + h] * h1[h];
+			}
+			if (acc > 0.f)
+				sc += Market::NNP_WO[h2] * acc;
+		}
+		score[o] = sc;
+		mean += sc;
+	}
+	mean /= float(POST_N);
+	float meanLw = 0.f;
+	for (int o = 0; o < POST_N; ++o)
+		meanLw += log(w[o]);
+	meanLw /= float(POST_N);
+	for (int o = 0; o < POST_N; ++o) {
+		float d = score[o] - mean;
+		d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
+		const float lw = log(w[o]);
+		w[o] = pow(2.7182818f, meanLw + (1.f - t) * (lw - meanLw) + t * d);
+	}
+	return t;
 }
 
 void PostDecide(int rule, const string& in why)

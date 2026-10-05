@@ -33,5 +33,20 @@ const array<float> NNF_B2 = {};
 const array<float> NNF_WO = {};
 const float NNF_BO = 0.f;
 const float NNF_TRUST = 0.f;
+// the posture net (military/nnpost.as); NNP_STATE = NN_STATE + "|" + the posture fields
+const bool NNP_ON = false;
+const string NNP_STATE = "";
+const int NNP_S = 0;
+const int NNP_O = 0;
+const int NNP_H = 0;
+const array<float> NNP_XM = {};
+const array<float> NNP_XS = {};
+const array<float> NNP_W1 = {};
+const array<float> NNP_B1 = {};
+const array<float> NNP_W2 = {};
+const array<float> NNP_B2 = {};
+const array<float> NNP_WO = {};
+const float NNP_BO = 0.f;
+const float NNP_TRUST = 0.f;
 
 }  // namespace Market
