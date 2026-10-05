@@ -227,11 +227,14 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 			ax, az = px, pz
 		end
 	end
+	-- uid/atkid appended last (prefix parsers unchanged): a building's lifetime
+	-- kills are credited by the killer's unit id (tools/decisions.py)
 	BARAI_Echo(string.format(
-		"[BARAI_DEATH] frame=%d team=%d unit=%s cost=%d x=%d z=%d vx=%.1f vz=%.1f built=%d mob=%d atkteam=%d atk=%s atkx=%d atkz=%d st=%d ffdg=%d",
+		"[BARAI_DEATH] frame=%d team=%d unit=%s cost=%d x=%d z=%d vx=%.1f vz=%.1f built=%d mob=%d atkteam=%d atk=%s atkx=%d atkz=%d st=%d ffdg=%d uid=%d atkid=%d",
 		Spring.GetGameFrame(), unitTeam, (ud and ud.name) or "?", cost, x, z,
 		vx or 0, vz or 0, built, mobileArmed[unitDefID] and 1 or 0,
-		attackerTeam or -1, atkName, ax, az, isStatic[unitDefID] and 1 or 0, ffKill))
+		attackerTeam or -1, atkName, ax, az, isStatic[unitDefID] and 1 or 0, ffKill,
+		unitID, attackerID or -1))
 end
 
 function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,

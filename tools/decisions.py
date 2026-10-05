@@ -36,7 +36,9 @@ SCHEMA = re.compile(r"apex: nn-schema v(\d+) state=(\S+) opt=(\S+)")
 EXEC = re.compile(r"apex: exec t=(\d+) ")
 WASTE = re.compile(r"\[BARAI_WASTE\] frame=(\d+) team=(\d+) mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)")
 BUILT = re.compile(r"\[BARAI_(?:PROD|BUILD)\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)"
-                   r"(?: x=(-?\d+) z=(-?\d+))?")
+                   r"(?: x=(-?\d+) z=(-?\d+))?(?: uid=(\d+))?")
+UIDS = re.compile(r" uid=(\d+) atkid=(-?\d+)")
+LIFE_CAP_S = 1200   # a building's lifetime outcomes are counted for at most 20 minutes
 DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=(\d+) x=(-?\d+) z=(-?\d+)"
                    r" .*? built=(\d) .*? atkteam=(-?\d+) atk=(\S+)")
 STATS = re.compile(r"\[BARAI_STATS\] team=(\d+) .*?frame=(\d+) .*?mReclaim=(\d+)")
@@ -141,6 +143,7 @@ def parse(path, files=None):
     sm, se, wm, we = {}, {}, {}, {}
     dealt, recv = {}, {}
     mexev, killev, lostev, builds, dead = {}, {}, {}, {}, {}
+    died, killby = {}, {}   # by unit id: frame it died; (frame, metal) of what it killed
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     state_keys, opt_keys = None, None
@@ -186,7 +189,8 @@ def parse(path, files=None):
             if m:
                 bx = int(m.group(6)) if m.group(6) is not None else None
                 bz = int(m.group(7)) if m.group(7) is not None else None
-                builds.setdefault(int(m.group(1)), []).append((int(m.group(3)), m.group(4), bx, bz))
+                uid = int(m.group(8)) if m.group(8) is not None else None
+                builds.setdefault(int(m.group(1)), []).append((int(m.group(3)), m.group(4), bx, bz, uid))
                 if MEX.search(m.group(4)):
                     mexev.setdefault(int(m.group(1)), []).append((int(m.group(3)), 1))
                 continue
@@ -205,10 +209,16 @@ def parse(path, files=None):
                         mexev.setdefault(t, []).append((f, -1))
                 if atk >= 0 and atk != t:
                     killev.setdefault(atk, []).append((f, cost))
+                mu = UIDS.search(ln)
+                if mu:
+                    died[int(mu.group(1))] = f
+                    if atk >= 0 and atk != t and int(mu.group(2)) >= 0:
+                        killby.setdefault(int(mu.group(2)), []).append((f, cost))
     return dict(rows=rows, execs=execs, nns=nns, state_keys=state_keys, opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
-                reclaim=reclaim, explore=explore)
+                reclaim=reclaim, explore=explore, died=died, killby=killby,
+                final=files is None)   # a finished game's merged infolog, not live files
 
 
 def window_sum(ev, f0, f1):
@@ -289,7 +299,8 @@ def rows_of(path, g):
         site = (o["x"], o["z"]) if isinstance(o.get("x"), float) and o["x"] > 0 else None
         y = labels(g, t, f, site)
         builds = bool(o) and o["kind"] not in NOT_A_BUILD
-        y["done"], y["buildS"] = finished(g, t, f, o["def"] if builds else "-", claimed, site)
+        y["done"], y["buildS"], built = finished(g, t, f, o["def"] if builds else "-", claimed, site)
+        y["lifeS"], y["lifeKill"] = lifetime(g, built)
         y["survived"] = survived(g, t, f, o.get("def"), site, y["buildS"]) if y["done"] == 1 and site else None
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=int(u), con=con,
                    pick=int(pick), why=why, dm=dm, state=dict(zip(sk, sv)), opts=ov,
@@ -317,9 +328,9 @@ def finished(g, t, f, udef, claimed, site=None):
     (1, seconds) -- or (0, None) when none came within the longest horizon,
     (None, None) when the game ended first or there is no def."""
     if udef == "-":
-        return None, None
+        return None, None, None
     f1 = f + HORIZONS[-1] * FPM
-    for i, (bf, name, bx, bz) in enumerate(g["builds"].get(t, [])):
+    for i, (bf, name, bx, bz, uid) in enumerate(g["builds"].get(t, [])):
         if bf > f1:
             break
         if bf <= f or name != udef or (t, i) in claimed:
@@ -327,8 +338,29 @@ def finished(g, t, f, udef, claimed, site=None):
         if site is not None and bx is not None and (bx - site[0]) ** 2 + (bz - site[1]) ** 2 > SITE_R ** 2:
             continue
         claimed.add((t, i))
-        return 1, round((bf - f) / 30.0, 1)
-    return (None, None) if f1 > g["last"] else (0, None)
+        return 1, round((bf - f) / 30.0, 1), (bf, uid)
+    return (None, None, None) if f1 > g["last"] else (0, None, None)
+
+
+def lifetime(g, built):
+    """The chosen building's own record from its finish: seconds it lived and
+    metal it killed, over at most LIFE_CAP_S. None until the cap has been
+    played out or it died (a building still standing has not finished its
+    record) -- except at the end of a finished game -- and for logs without
+    unit ids."""
+    if built is None or built[1] is None:
+        return None, None
+    bf, uid = built
+    end = bf + LIFE_CAP_S * 30
+    df = g["died"].get(uid)
+    if df is not None and df <= end:
+        end = df
+    elif end > g["last"]:
+        if not g.get("final"):
+            return None, None
+        end = g["last"]   # standing when the game ended: it survived, kills so far
+    kills = sum(c for kf, c in g["killby"].get(uid, []) if bf < kf <= end)
+    return round((end - bf) / 30.0, 1), kills
 
 
 def main(argv):
