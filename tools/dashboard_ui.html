@@ -1673,7 +1673,8 @@ async function loadNet() {
   try { d = await api("/api/nn"); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
   if (d) {
     const all = d.metrics || [], s = d.status || {};
-    const m = all.filter(r => r.net !== "fac"), fm = all.filter(r => r.net === "fac");
+    // builder rows only (the factory and posture nets have their own counters), numbered in order
+    const m = all.filter(r => !r.net), fm = all.filter(r => r.net === "fac");
     const lastGame = m.length ? m[m.length - 1] : null;
     const state = d.running ? `<b style="color:var(--good)">training</b> (${esc(s.phase || "starting")})`
       : `<b>stopped</b>`;
@@ -1682,7 +1683,7 @@ async function loadNet() {
       + `${m.length} batches &middot; ${(s.rows || 0).toLocaleString()} decisions learned`
       + ` &middot; weights written to the game ${s.exported || 0}&times; this session`
       + (lastGame ? ` &middot; last: ${esc(src)} (${lastGame.rows} decisions, trained in ${lastGame.train_s}s)` : ""));
-    const xs = m.map(r => r.index);
+    const xs = m.map((r, i) => i + 1);
     const hf = m.map(r => r.head_full ?? null), hs = m.map(r => r.head_state ?? null);
     nnChart("#nn-c-acc", [
       {xs, ys: hf, color: NN_FULL, dots: true}, {xs, ys: hs, color: NN_STATE, dots: true},
