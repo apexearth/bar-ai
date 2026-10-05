@@ -2,6 +2,11 @@ namespace Market {
 int gNanoHotRefused = 0;
 int gNextNanoHotLog = 0;
 int gInteriorRefused = 0;
+// Ground-gun executions by outcome (apex: coverall-gate prints them).
+int gGunExecGrave = 0;
+int gGunExecFerry = 0;
+int gGunExecNull = 0;
+int gGunExecOk = 0;
 
 // The executor's interior test, shared with the proposers so a site it will
 // refuse is never elected (the refusal fell through to energy every election).
@@ -533,14 +538,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// A gun no stronger than one that just died here is not an answer
 		// here: the ground is outgunned, and the market goes on to its next
 		// want (a stronger gun, or elsewhere).
-		if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)]))
+		if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)])) {
+			++gGunExecGrave;
 			return null;
+		}
 		if (NearBlocked(sAt))
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
 		AIFloat3 fHome;
 		const int fRoute = FerryRoute(unit, w, sAt, fHome);
-		if (fRoute == 0)
+		if (fRoute == 0) {
+			if (groundDef)
+				++gGunExecFerry;
 			return null;
+		}
 		if (fRoute == 1) {
 			IUnitTask@ fTask = Requests::Take(unit, w.def, Task::BuildType(bt),
 					Task::Priority::NORMAL, fHome, 150.f, SQUARE_SIZE * 16.f);
@@ -550,6 +560,12 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		bool sMade = false;
 		IUnitTask@ sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
 				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f, sMade);
+		if (groundDef) {
+			if (sTask is null)
+				++gGunExecNull;
+			else
+				++gGunExecOk;
+		}
 		// The team hears the order now, not when the frame appears.
 		if (sMade && !groundDef)
 			PublishSenseClaim(w.spotId, sAt);
@@ -605,6 +621,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (gt !is null)
 			GuardNote(unit, gAssistTarget);
 		return gt;
+	}
+	if ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)) {
+		if (!OnMap(w.pos))
+			return null;
+		// The wreck's own footprint while the energy bank is full, as EnqueueWreckReclaim does.
+		const float sweep = aiEconomyMgr.isEnergyFull ? (SQUARE_SIZE * 12) : Builder::WRECK_RADIUS;
+		return aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::NORMAL, w.pos,
+				1000.f, Builder::WRECK_TIMEOUT, sweep, true));
 	}
 	if (w.kind == WK_RECLAIM) {
 		CCircuitUnit@ tgt = w.target;

@@ -2002,5 +2002,148 @@ Want@ ProposeReclaimSquatter(CCircuitUnit@ unit)
 	return w;
 }
 
+// METAL ON THE GROUND (his 2026-10-05: "add reclaim"): the richest wreck or
+// metal feature near this hand, or a remembered wreck field, priced as the
+// obsolete reclaim is -- its metal over the reclaim horizon against the walk and
+// the eat time at the wage -- with the road's danger priced as a claim's. Ground
+// a rez bot or another hand is already eating is left to it.
+const int RCM_SPOT = -7;   // spotId of a ground-metal reclaim: no target unit
+array<int> gRcmAskAt(32001, -999999);
+array<AIFloat3> gRcmPos(32001, AIFloat3(-1.f, 0.f, -1.f));
+array<float> gRcmM(32001, 0.f);
+array<float> gRcmFieldM;
+int gRcmFieldAt = -999999;
+array<AIFloat3> gRcmBusy;
+int gRcmBusyAt = -1;
+array<int> gRcmRezId;
+array<AIFloat3> gRcmRezPos;
+array<int> gRcmRezAt;
+
+void RcmNoteRez(CCircuitUnit@ u, IUnitTask@ t)
+{
+	if ((u is null) || (t is null) || (t.GetType() != Task::Type::BUILDER))
+		return;
+	const AIFloat3 p = t.GetBuildPos();
+	if (!OnMap(p))
+		return;
+	const int id = int(u.id);
+	for (uint i = 0; i < gRcmRezId.length(); ++i) {
+		if (gRcmRezId[i] == id) {
+			gRcmRezPos[i] = p;
+			gRcmRezAt[i] = ai.frame;
+			return;
+		}
+	}
+	gRcmRezId.insertLast(id);
+	gRcmRezPos.insertLast(p);
+	gRcmRezAt.insertLast(ai.frame);
+}
+
+bool RcmBusy(const AIFloat3& in p, Id self)
+{
+	if (gRcmBusyAt != ai.frame) {
+		gRcmBusyAt = ai.frame;
+		gRcmBusy.resize(0);
+		for (uint i = 0; i < gWorkers.length(); ++i) {
+			CCircuitUnit@ u = gWorkers[i];
+			if ((u is null) || (u.task is null) || (u.task.GetType() != Task::Type::BUILDER))
+				continue;
+			const int bt = int(u.task.GetBuildType());
+			if ((bt == int(Task::BuildType::RECLAIM)) || (bt == int(Task::BuildType::RESURRECT)))
+				gRcmBusy.insertLast(u.task.GetBuildPos());
+		}
+		// Rez bots never reach Decide, so their jobs are noted as handed out.
+		for (uint i = 0; i < gRcmRezId.length(); ) {
+			if (ai.frame - gRcmRezAt[i] > Builder::WRECK_TIMEOUT) {
+				gRcmRezId.removeAt(i);
+				gRcmRezPos.removeAt(i);
+				gRcmRezAt.removeAt(i);
+				continue;
+			}
+			gRcmBusy.insertLast(gRcmRezPos[i]);
+			++i;
+		}
+	}
+	const float r = 2.f * Builder::WRECK_RADIUS;
+	for (uint i = 0; i < gRcmBusy.length(); ++i) {
+		if (OnMap(gRcmBusy[i]) && (gRcmBusy[i].distance2D(p) < r))
+			return true;
+	}
+	return false;
+}
+
+Want@ ProposeReclaimMetal(CCircuitUnit@ unit)
+{
+	Want w;
+	if (Builder::IsRezzer(unit))
+		return w;
+	const int ud = int(unit.circuitDef.id);
+	const float rate = Catalog::gBuildPower[ud] * (7.f / 80.f);
+	const float speed = Catalog::gSpeed[ud];
+	const int id = int(unit.id);
+	if ((rate <= 0.f) || (speed <= 1.f) || (id < 0) || (id >= int(gRcmAskAt.length())))
+		return w;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	// One feature sweep per hand per ten seconds: the sweep walks every feature
+	// in the radius, trees included.
+	if (ai.frame - gRcmAskAt[id] >= 10 * SECOND) {
+		gRcmAskAt[id] = ai.frame;
+		gRcmPos[id] = Builder::BestWreckAt(here, Builder::WRECK_RICH_R, 1.f);
+		gRcmM[id] = (gRcmPos[id].x >= 0.f)
+				? ai.GetWreckValueAt(gRcmPos[id], Builder::WRECK_RADIUS) : 0.f;
+	}
+	if (ai.frame - gRcmFieldAt >= 10 * SECOND) {
+		gRcmFieldAt = ai.frame;
+		gRcmFieldM.resize(Builder::gFieldPos.length());
+		for (uint i = 0; i < Builder::gFieldPos.length(); ++i)
+			gRcmFieldM[i] = ai.GetWreckValueAt(Builder::gFieldPos[i], Builder::WRECK_RADIUS);
+	}
+	const bool comm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	const float horizon = (hz > 1.f) ? hz : 300.f;
+	const float wage = Wage();
+	const uint nF = (gRcmFieldM.length() < Builder::gFieldPos.length())
+			? gRcmFieldM.length() : Builder::gFieldPos.length();
+	AIFloat3 bestP;
+	float bestV = 0.f;
+	for (uint c = 0; c <= nF; ++c) {
+		const AIFloat3 p = (c == 0) ? gRcmPos[id] : Builder::gFieldPos[c - 1];
+		const float m = (c == 0) ? gRcmM[id] : gRcmFieldM[c - 1];
+		if ((m <= 0.f) || !OnMap(p))
+			continue;
+		const float f = comm ? ComRaidF(unit, p) : 1.f;
+		const float walk = here.distance2D(p) / speed;
+		const float eat = m / rate;
+		float gain = m / horizon;
+		gain *= MRealizeShare(m / (walk + eat), walk + eat);
+		gain *= 1.f - TripRiskFrom(here, p) * f;
+		const float v = gain / (1.f + (walk + eat) * wage);
+		if (v <= bestV)
+			continue;
+		// The engine-backed refusals only for a would-be winner. Hot ground the
+		// executor refuses a constructor; the commander goes where nothing
+		// there can kill him.
+		if (NearBlocked(p) || NearConDeath(p) || RcmBusy(p, unit.id)
+			|| (SpotHot(p) && !(comm && (f < 1.f))))
+			continue;
+		bestV = v;
+		bestP = p;
+		w.gain = gain;
+		w.mCost = 1.f;
+		w.tCost = (walk + eat) * wage;
+		w.walkSec = walk;
+	}
+	if ((bestV <= 0.f) || !Builder::RezReaches(unit, bestP)) {
+		w.value = 0.f;
+		return w;
+	}
+	w.kind = WK_RECLAIM;
+	w.pos = bestP;
+	w.spotId = RCM_SPOT;
+	w.value = bestV * ReclaimHandMul(unit);
+	++gRcmProposed;
+	return w;
+}
+
 
 }  // namespace Market

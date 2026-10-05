@@ -397,7 +397,7 @@ bool gElecFinishing = false;
 // draw, execute. The finish is a step of its own because it is the other half
 // of the frame cost, and a frame with nothing left to spend must be able to
 // hold it over exactly the way it holds a proposer over.
-const int ELEC_STEPS = 20;
+const int ELEC_STEPS = 21;
 // Each step's own measured cost. A step is opened only when what it is EXPECTED
 // to cost still fits the slice -- checking after the fact leaves the frame
 // carrying the overshoot, which is the bug this replaces.
@@ -570,6 +570,9 @@ float MexLossShare()
 	return gMexLost / (float(OwnMexCount()) + gMexLost);
 }
 int gComEscort = 0;      // commander sent to the lab while escorts are owed
+int gComEscMetalSkip = 0; // ...and not sent, because the feed could not cover his lathe there
+int gComMetalAsk = 0;     // commander elections while out of metal
+int gComMetal = 0;        // ...that took a claim or reclaim off his list
 int gComLabNextAt = 0;   // the opening assist alternates: a minute at the lab, a minute of his own work
 // BUILDER TIME AT THIS HAND'S RUNNER-UP, WITH ONE STEP OF FORESIGHT (his
 // 2026-10-04: "the walk might equal the build times" and "use some foresight
@@ -723,7 +726,8 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 15) { if (!EcoOnly()) @w = MemoPropose(11, unit);  Perf::Add("want.teeth", _t); }
 	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
 	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
-	else                 { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
+	else if (step == 18) { if (!EcoOnly()) @w = MemoPropose(12, unit);  Perf::Add("want.super", _t); }
+	else                 { @w = ProposeReclaimMetal(unit);    Perf::Add("want.reclmetal", _t); }
 	ChargeTrip(w, unit);
 	if (w !is null)
 		w.src = step;
@@ -749,6 +753,10 @@ void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 			? (gAssetsM + ArmyValue()) : Catalog::gCostM[int(unit.circuitDef.id)];
 	const AIFloat3 up = unit.GetPos(ai.frame);
 	w.tripM = TripRiskFrom(up, w.pos) * worth;
+	// A metal reclaim is a claim: the commander stakes only what there can kill him.
+	if ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT)
+		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		w.tripM *= ComRaidF(unit, w.pos);
 	// tCost bills the walk out only; the builder also walks back to base,
 	// so the job pays for however much farther from home it leaves him.
 	const int ud = int(unit.circuitDef.id);
@@ -975,7 +983,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
+		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comEscMetalSkip=" + gComEscMetalSkip + " comLabLeft=" + gComLabLeft + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -1931,17 +1939,30 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// 2026-09-13), and the raid valve ends the growth when it is not safe.
 	// ...ONLY WHILE THEY ARE KILLING THEM (his 2026-10-03); otherwise a gun is bought
 	// when the valuation says it is worth more than the next claim.
-	if (!aaPanic && !superPush && !convertPush && !coverPush && !EcoRoleGrowing()
-		&& (MexLossShare() >= ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
-		&& PlantFramed())
+	// The first gate that refused is counted (apex: coverall-gate).
+	int covGate = CG_PICK;
+	if (aaPanic || superPush || convertPush || coverPush)
+		covGate = CG_PUSH;
+	else if (EcoRoleGrowing())
+		covGate = CG_GROW;
+	else if (MexLossShare() < ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
+		covGate = CG_LOSS;
+	else if (!PlantFramed())
+		covGate = CG_FRAMED;
+	if (covGate == CG_PICK)
 	{
 		CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		AIFloat3 gap;
-		if ((light !is null) && (Catalog::BuildsOf(int(unit.circuitDef.id)).find(int(light.id)) >= 0)
-			&& CoverGapNear(uAt, gap)
-			&& !(CrewSplitOn() && FieldSite(gap) && !CrewIsField(unit))
-			&& !MexHasCover(gap, Brain::LightTowerRange()))
+		if ((light is null) || (Catalog::BuildsOf(int(unit.circuitDef.id)).find(int(light.id)) < 0))
+			covGate = CG_LIGHT;
+		else if (!CoverGapNear(uAt, gap))
+			covGate = CG_NOGAP;
+		else if (CrewSplitOn() && FieldSite(gap) && !CrewIsField(unit))
+			covGate = CG_CREW;
+		else if (MexHasCover(gap, Brain::LightTowerRange()))
+			covGate = CG_COVERED;
+		if (covGate == CG_PICK)
 		{
 			const int ld = int(light.id);
 			const float bill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(30.f, Catalog::gCostE[ld]);
@@ -1951,8 +1972,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// turret, but we always run out of energy"; the 680 E gun went down
 			// at 0.8-2 min with the bank at 22/1200). His order is energy, lab,
 			// more energy, then the turrets.
-			const bool eReady = (Eco::ECur() >= Catalog::gCostE[ld]) && !HardEStall()
-					&& !aiEconomyMgr.isEnergyStalling;
+			const bool eBank = Eco::ECur() >= Catalog::gCostE[ld];
+			const bool eStall = HardEStall() || aiEconomyMgr.isEnergyStalling;
+			const bool eReady = eBank && !eStall;
+			CovGateEnergy(bill > pushCap, !eBank, eStall);
+			if (bill > pushCap)
+				covGate = CG_BILL;
+			else if (!eReady)
+				covGate = CG_ENERGY;
 			if ((bill <= pushCap) && eReady) {
 				AIFloat3 site = gap;
 				AIFloat3 foe;
@@ -1980,6 +2007,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 		}
 	}
+	CovGateNote(covGate);
 	// THE BASE'S OWN FRONT (his 2026-10-04): while they are coming, medium and
 	// heavy lasers on the open base-edge slots facing them -- as many as the enemy
 	// army we have seen takes to stop (apex_def_trade) -- built by hands at home.
@@ -2024,8 +2052,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// might help a ton"). While constructors are owed escorts he assists the nearest
 	// lab with a queue for a guard period, past the free-metal gate ProposeAssist
 	// keeps -- which is why he never assisted early.
+	// Not while his best job is a claim, nor while he is out on claims (his
+	// 2026-10-05: he can go out and capture mexes).
 	if (!aaPanic && !superPush && !convertPush && !coverPush
 		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+		&& !ComFar(unit.GetPos(ai.frame))
+		&& !((ranked.length() > 0) && ((ranked[0].kind == WK_MEX)
+			|| ((ranked[0].kind == WK_RECLAIM) && (ranked[0].spotId == RCM_SPOT))))
 		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f)
 		&& ((EscortShortfall() > 0)
 			|| ((ai.GetTunable("apex_com_lab_early", TUNE_COM_LAB_EARLY) > 0.5f)   // ...and through the opening (his 2026-10-04)
@@ -2043,6 +2076,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				labD = fd;
 				@lab = f;
 			}
+		}
+		// Out of metal, his lathe at the lab is waste (his 2026-10-05): he
+		// goes only while the feed covers what he would pull there.
+		if ((lab !is null)
+			&& MetalShort(Catalog::gBuildPower[int(unit.circuitDef.id)] * LineDensity(lab)))
+		{
+			@lab = null;
+			++gComEscMetalSkip;
 		}
 		if (lab !is null) {
 			Want@ aw = Want();
@@ -2184,6 +2225,27 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				+ " walk=" + int(uAt.distance2D(ranked[0].pos))
 				+ " cover=" + int(coverHere)
 				+ "/" + int(floorWave));
+			break;
+		}
+	}
+	// OUT OF METAL THE COMMANDER GETS MORE (his 2026-10-05). His best-priced
+	// claim or reclaim is taken; its risk price and the first-gun rule stand.
+	if (!aaPanic && !superPush && !convertPush && !coverPush
+		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) && MetalShort(0.f))
+	{
+		++gComMetalAsk;
+		for (uint ri = 0; ri < ranked.length(); ++ri) {
+			const int mk = ranked[ri].kind;
+			if (((mk != WK_MEX) && (mk != WK_RECLAIM)) || (ranked[ri].value <= 0.f))
+				continue;
+			if (ri > 0) {
+				Want@ mw = ranked[ri];
+				ranked.removeAt(ri);
+				ranked.insertAt(0, mw);
+			}
+			++gComMetal;
+			coverPush = true;
+			why = "commetal";
 			break;
 		}
 	}
@@ -2647,8 +2709,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// 2026-09-05).
 		// Not a job where he already stands: the leash guards the walk out,
 		// and refusing it sent him home from the water with the tube unbuilt.
+		// ...except a claim where nothing can kill him (his 2026-10-05), escorted.
+		const bool comClaim = isComm && ((ranked[i].kind == WK_MEX)
+				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)));
 		if (isComm && ComFar(ranked[i].pos)
-			&& (ranked[i].pos.distance2D(unit.GetPos(ai.frame)) > HERE_R)) {
+			&& (ranked[i].pos.distance2D(unit.GetPos(ai.frame)) > HERE_R)
+			&& !(comClaim && ComClaimOk(unit, ranked[i].pos))) {
 			if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
 				gComFwdLogAt = ai.frame;
 				AiLog("apex: com-fwd skip t=" + ai.teamId + " "
@@ -2678,6 +2744,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);
 			StepWon(unit, ranked[i]);
+			if ((ranked[i].kind == WK_MEX)
+				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)))
+				NoteClaim(unit, ranked[i]);
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a

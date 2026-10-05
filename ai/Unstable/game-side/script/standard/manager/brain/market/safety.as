@@ -297,6 +297,87 @@ float RingInflMax(const AIFloat3& in pos, float r)
 	return best;
 }
 
+// WHAT A CLAIM AT `pos` RISKS OF THE COMMANDER (his 2026-10-05: raiders cannot
+// kill him, so he takes the dangerous claims and the cons the safe ones). The
+// share of his strength the ground groups that can reach `pos` would cost him,
+// by the square law the T1 fight test below uses; 1 where something there can
+// kill him -- a stronger force, a T2+ group that is not all raiders, his
+// caution, or our own T2 (he stays home from T2).
+array<AIFloat3> gCrGp;
+array<float> gCrReach;
+array<float> gCrStr;
+array<bool> gCrHeavy;
+int gCrAt = -1;
+bool gCrHome = false;
+void ComRaidFill(CCircuitUnit@ unit)
+{
+	if (gCrAt == ai.frame)
+		return;
+	gCrAt = ai.frame;
+	gCrGp.resize(0);
+	gCrReach.resize(0);
+	gCrStr.resize(0);
+	gCrHeavy.resize(0);
+	gCrHome = !OwnEffigyStands() && (Factory::gHaveT2 || CommCaution(unit)
+			|| (unit.GetHealthPercent() < COM_RETREAT_HEALTH));
+	if (gCrHome)
+		return;
+	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int gi = 0; gi < nG; ++gi) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
+		if (!OnMap(gp))
+			continue;
+		int tier = 0, nMob = 0, nRaid = 0;
+		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+		for (int k = 0; k < nU; ++k) {
+			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+			if (!Catalog::ValidId(d) || !Catalog::gMobile[d])
+				continue;
+			++nMob;
+			const int t = DefTier(d);
+			if (t > tier)
+				tier = t;
+			if (Catalog::Def(d).IsRoleAny(Unit::Role::RAIDER.mask | Unit::Role::SCOUT.mask))
+				++nRaid;
+		}
+		if (nMob == 0)
+			continue;
+		gCrGp.insertLast(gp);
+		gCrReach.insertLast(aiEnemyMgr.GetEnemyGroupRange(gi) + r);
+		gCrStr.insertLast(EnemyGroupStrength(gi));
+		gCrHeavy.insertLast((tier >= 2) && (nRaid < nMob));
+	}
+}
+
+float ComRaidF(CCircuitUnit@ unit, const AIFloat3& in pos)
+{
+	ComRaidFill(unit);
+	if (gCrHome)
+		return 1.f;
+	const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
+	if (mine <= 0.f)
+		return 1.f;
+	float theirs = 0.f;
+	for (uint i = 0; i < gCrGp.length(); ++i) {
+		if (gCrGp[i].distance2D(pos) > gCrReach[i])
+			continue;
+		if (gCrHeavy[i])
+			return 1.f;
+		theirs += gCrStr[i];
+	}
+	if (theirs >= mine)
+		return 1.f;
+	const float rr = theirs / mine;
+	return 1.f - sqrt(1.f - rr * rr);
+}
+
+// Past the leash for a claim only where nothing there can kill him.
+bool ComClaimOk(CCircuitUnit@ unit, const AIFloat3& in pos)
+{
+	return ComRaidF(unit, pos) < 1.f;
+}
+
 // Returns a task when the commander should be saving himself instead of
 // working, else null. MUST be consulted before Decide's finish-what's-started
 // early return: a commander with progress on a frame would otherwise never

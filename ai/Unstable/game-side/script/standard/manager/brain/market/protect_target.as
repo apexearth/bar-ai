@@ -190,13 +190,88 @@ bool SiteIsMex(const AIFloat3& in pos)
 // 4: "they always defend their mexes... the further from home the more
 // defenses the mex needs"). One at home, up to 1 + apex_mex_guard_far at the
 // enemy's doorstep, by the spot's forward fraction.
+// HOW SOON THEY CAN REACH IT, not how far it is from home (apexearth
+// 2026-10-05: "mex guards should scale with how soon the enemy can reach a
+// spot"). The walk from their base or from a walking group of theirs that a
+// light gun does not already outweigh, as a share of the walk from their base
+// to ours: 0 when they reach it no sooner than our start, 1 at their door.
+// One speed (FoeSpeedCap) for every walk, so it cancels out of the share.
+int gFoeSrcAt = -999999;
+array<float> gFoeSrcX;
+array<float> gFoeSrcZ;
+float gFoeSpan = 0.f;
+float FoeReachShare(const AIFloat3& in pos)
+{
+	if (gFoeSrcAt != ai.frame) {
+		gFoeSrcAt = ai.frame;
+		gFoeSrcX.resize(0);
+		gFoeSrcZ.resize(0);
+		gFoeSpan = 0.f;
+		const AIFloat3 base = Front::FoeAnchor();
+		if (Builder::gHomeSet && OnMap(base)) {
+			gFoeSpan = base.distance2D(Builder::gHomePos);
+			gFoeSrcX.insertLast(base.x);
+			gFoeSrcZ.insertLast(base.z);
+			RiskFill();
+			const float gunM = LightTowerCostM();
+			for (uint g = 0; g < gRkApM.length(); ++g) {
+				if (gRkApM[g] <= gunM)
+					continue;
+				gFoeSrcX.insertLast(gRkApX[g]);
+				gFoeSrcZ.insertLast(gRkApZ[g]);
+			}
+		}
+	}
+	if (gFoeSpan <= 1.f)
+		return -1.f;
+	float best = -1.f;
+	for (uint i = 0; i < gFoeSrcX.length(); ++i) {
+		const float dx = gFoeSrcX[i] - pos.x;
+		const float dz = gFoeSrcZ[i] - pos.z;
+		const float d = sqrt(dx * dx + dz * dz);
+		if ((best < 0.f) || (d < best))
+			best = d;
+	}
+	float s = 1.f - best / gFoeSpan;
+	if (s < 0.f)
+		s = 0.f;
+	return (s > 1.f) ? 1.f : s;
+}
+
+int gMexGunLogAt = 0;
 int MexGunsWanted(const AIFloat3& in pos)
 {
-	float fwd = Military::ForwardFraction(pos);
-	if (fwd < 0.f)
-		fwd = 0.f;
-	if (fwd > 1.f)
-		fwd = 1.f;
+	float fwd = FoeReachShare(pos);
+	if (fwd < 0.f) {
+		fwd = Military::ForwardFraction(pos);   // before a home or their side is known
+		if (fwd < 0.f)
+			fwd = 0.f;
+		if (fwd > 1.f)
+			fwd = 1.f;
+	}
+	if (ai.frame >= gMexGunLogAt) {
+		gMexGunLogAt = ai.frame + 60 * SECOND;
+		const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
+		string s = "";
+		int nNew = 0;
+		int nOld = 0;
+		const array<int>@ rows = MexRows();
+		for (uint q = 0; q < rows.length(); ++q) {
+			const AIFloat3 mp = gLPos[uint(rows[q])];
+			float r = FoeReachShare(mp);
+			float f = Military::ForwardFraction(mp);
+			f = (f < 0.f) ? 0.f : ((f > 1.f) ? 1.f : f);
+			if (r < 0.f)
+				r = f;
+			nNew += 1 + int(r * far);
+			nOld += 1 + int(f * far);
+			s += " " + formatFloat(r, "", 0, 2) + "/" + formatFloat(f, "", 0, 2);
+		}
+		AiLog("apex: mexguns t=" + ai.teamId + " mexes=" + rows.length()
+			+ " gunsReach=" + nNew + " gunsFwd=" + nOld
+			+ " srcs=" + gFoeSrcX.length() + " span=" + int(gFoeSpan)
+			+ " reach/fwd:" + s);
+	}
 	const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
 	return 1 + int(fwd * ((far > 0.f) ? far : 0.f));
 }
@@ -290,6 +365,51 @@ array<AIFloat3> gCovGap;
 int gCovGapAt = -999999;
 int gCovGapLogAt = 0;
 int gCovPicked = 0;
+// The coverall queue jump's refusals, by the first gate that said no.
+const int CG_PUSH = 0;
+const int CG_GROW = 1;
+const int CG_LOSS = 2;
+const int CG_FRAMED = 3;
+const int CG_LIGHT = 4;
+const int CG_NOGAP = 5;
+const int CG_CREW = 6;
+const int CG_COVERED = 7;
+const int CG_BILL = 8;
+const int CG_ENERGY = 9;
+const int CG_PICK = 10;
+array<int> gCovGateN(11, 0);
+int gCovBillN = 0;
+int gCovEBankN = 0;
+int gCovEStallN = 0;
+int gCovGateLogAt = 0;
+void CovGateEnergy(bool bill, bool bank, bool stall)
+{
+	if (bill)
+		++gCovBillN;
+	if (bank)
+		++gCovEBankN;
+	if (stall)
+		++gCovEStallN;
+}
+void CovGateNote(int g)
+{
+	if ((g >= 0) && (g < int(gCovGateN.length())))
+		++gCovGateN[uint(g)];
+	if (ai.frame < gCovGateLogAt)
+		return;
+	gCovGateLogAt = ai.frame + 60 * SECOND;
+	AiLog("apex: coverall-gate t=" + ai.teamId
+		+ " push=" + gCovGateN[CG_PUSH] + " grow=" + gCovGateN[CG_GROW]
+		+ " loss=" + gCovGateN[CG_LOSS] + " framed=" + gCovGateN[CG_FRAMED]
+		+ " light=" + gCovGateN[CG_LIGHT] + " nogap=" + gCovGateN[CG_NOGAP]
+		+ " crew=" + gCovGateN[CG_CREW] + " covered=" + gCovGateN[CG_COVERED]
+		+ " bill=" + gCovGateN[CG_BILL] + " energy=" + gCovGateN[CG_ENERGY]
+		+ " picked=" + gCovGateN[CG_PICK]
+		+ " | atStage billN=" + gCovBillN + " ebankN=" + gCovEBankN + " estallN=" + gCovEStallN
+		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2)
+		+ " | gunExec interior=" + gInteriorRefused + " grave=" + gGunExecGrave
+		+ " ferry=" + gGunExecFerry + " takeNull=" + gGunExecNull + " ok=" + gGunExecOk);
+}
 bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex)
 {
 	const float r = Brain::LightTowerRange();

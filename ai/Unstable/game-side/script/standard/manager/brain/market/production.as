@@ -426,6 +426,10 @@ bool FlyingConLab(bool ceiling)
 	return false;
 }
 
+int gSpotHandsAt = -1000;
+int gSpotHandsVal = 0;
+int gSpotHandsBind = 0;   // ConsNeedAny calls the open spots decided
+int gNextSpotHandsLog = 0;
 int ConsNeedAny(bool walkers = false)
 {
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
@@ -453,8 +457,125 @@ int ConsNeedAny(bool walkers = false)
 	// a T1 con is also the starter the full bank needed.
 	if (!AnyAssistLab())
 		want += HandsShort();
+	// The income cannot see open ground: the hands that claim it are owed too.
+	const int spotK = SpotHandsOwed();
+	if (float(spotK) > want) {
+		want = float(spotK);
+		++gSpotHandsBind;
+	}
 	const int have = walkers ? (ConsWalking(false) + ConsWalking(true)) : (ConsOwnedAny() + ConsInFlightAny());
 	return (float(have) < want) ? (int(want) - have) : 0;
+}
+
+// THE HANDS OUR OPEN SPOTS OWE: the k that claims them all soonest. Paying for
+// k hands takes k*C/P (C a hand's metal plus energy at the conversion rate, P
+// economic power) and k hands claim N spots in N*c/k (c = one claim's walk plus
+// build), so the sum is least at k = sqrt(N*c*P/C). Our share of the open
+// ground only: nearer our home than a mate's or the mirrored start.
+int SpotHandsOwed()
+{
+	if (ai.frame - gSpotHandsAt < 5 * SECOND)
+		return gSpotHandsVal;
+	gSpotHandsAt = ai.frame;
+	gSpotHandsVal = 0;
+	if (!Builder::gHomeSet)
+		return 0;
+	int con = -1;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if (f is null)
+			continue;
+		const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+		for (uint q = 0; q < pr.length(); ++q) {
+			const int d = pr[q];
+			if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || !Catalog::gBuilder[d]
+				|| Catalog::gFlyer[d] || (Catalog::gBuildPower[d] <= 0.f)
+				|| Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+				continue;
+			if ((con < 0) || (Catalog::gCostM[d] < Catalog::gCostM[con]))
+				con = d;
+		}
+	}
+	const int claimDef = ClaimExtractDef(false);
+	if ((con < 0) || (claimDef <= 0) || (Catalog::gSpeed[con] <= 1.f))
+		return 0;
+	CacheSpots();
+	const AIFloat3 home = Builder::gHomePos;
+	array<AIFloat3> refs;   // the homes that are not ours: mates', and the mirror
+	refs.insertLast(AIFloat3(float(AiTerrainWidth()) - home.x, 0.f, float(AiTerrainHeight()) - home.z));
+	array<Id>@ mates = ai.GetTeamIds();
+	for (uint m = 0; (mates !is null) && (m < mates.length()); ++m) {
+		if (int(mates[m]) == ai.teamId)
+			continue;
+		const float x = ai.ReadTeamValue(int(mates[m]), "homex", -1.f);
+		const float z = ai.ReadTeamValue(int(mates[m]), "homez", -1.f);
+		if ((x >= 0.f) && (z >= 0.f))
+			refs.insertLast(AIFloat3(x, 0.f, z));
+	}
+	const array<int>@ lidx = LedgerIdx();
+	const array<bool>@ allyHeld = AllyHeldSpots();
+	array<AIFloat3> open;
+	for (uint si = 0; si < gAllSpots.length(); ++si) {
+		if ((int(si) < int(lidx.length())) && (lidx[si] >= 0))
+			continue;
+		if ((si < allyHeld.length()) && allyHeld[si])
+			continue;
+		const AIFloat3 sp = gAllSpots[si];
+		if (!OnMap(sp) || NearBlocked(sp) || NearConDeath(sp))
+			continue;
+		if (ai.GetEnemyCostAt(sp, 48.f) > 0.f)
+			continue;
+		const float dh = home.distance2D(sp);
+		bool ours = true;
+		for (uint r = 0; ours && (r < refs.length()); ++r)
+			ours = (dh < refs[r].distance2D(sp));
+		if (ours)
+			open.insertLast(sp);
+	}
+	const uint n = open.length();
+	if (n == 0)
+		return 0;
+	// One claim's walk: the step to the nearest of home, a held spot or another open one.
+	float stepSum = 0.f;
+	for (uint i = 0; i < n; ++i) {
+		float best = home.distance2D(open[i]);
+		for (uint j = 0; j < n; ++j) {
+			if (j != i) {
+				const float dj = open[i].distance2D(open[j]);
+				if (dj < best)
+					best = dj;
+			}
+		}
+		for (uint j = 0; j < gLPos.length(); ++j) {
+			const float dj = open[i].distance2D(gLPos[j]);
+			if (dj < best)
+				best = dj;
+		}
+		stepSum += best;
+	}
+	const float walkS = (stepSum / float(n)) / Catalog::gSpeed[con];
+	const float cycS = walkS + Catalog::BuildSecondsAt(claimDef, Catalog::gBuildPower[con]);
+	const float costC = Catalog::gCostM[con] + Catalog::gCostE[con] * ConvRate();
+	const float pw = EcoPowerM();
+	if ((costC <= 1.f) || (pw <= 0.f))
+		return 0;
+	int k = int(floor(sqrt(float(n) * cycS * pw / costC) + 0.5f));
+	if (k < 1)
+		k = 1;
+	gSpotHandsVal = k;
+	if (ai.frame >= gNextSpotHandsLog) {
+		gNextSpotHandsLog = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " open=" + n
+			+ " walkS=" + formatFloat(walkS, "", 0, 1)
+			+ " cycS=" + formatFloat(cycS, "", 0, 1)
+			+ " S=" + formatFloat(SpotM(), "", 0, 2)
+			+ " C=" + formatFloat(costC, "", 0, 0)
+			+ " P=" + formatFloat(pw, "", 0, 1)
+			+ " k=" + k
+			+ " have=" + (ConsWalking(false) + ConsWalking(true))
+			+ " bind=" + gSpotHandsBind);
+	}
+	return k;
 }
 
 // Ground constructors owned (or ordered): the floor a ground plant answers. Air
@@ -2308,6 +2429,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " inflight=" + (walker ? ConsWalking(true) : ConsInFlightAny())
 				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " short=" + formatFloat(HandsShort(), "", 0, 1)
+				+ " spot=" + SpotHandsOwed()
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
 		}

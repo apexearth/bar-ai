@@ -1,5 +1,6 @@
 namespace Market {
 int gNextNanoWantLog = 0;
+int gNanoMetalCut = 0;   // nano candidates whose gain the metal feed cut
 // Which demand sited the want (w.spotId). Execute honours the first three
 // instead of re-deriving the ground, so a line-bought turret stands at the line.
 const int NS_FORT = 1;
@@ -423,6 +424,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
 				+ "/" + gFloorYardAssist
 			+ " over=" + formatFloat(over, "", 0, 1)
+			+ " mfree=" + formatFloat(MetalFreeRate(), "", 0, 1) + " metalCut=" + gNanoMetalCut
 			+ " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
 	}
 	if (over <= 0.5f)
@@ -462,6 +464,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	const bool yardSite = WaterLineAt(site);
 	// A floating turret serves the yard, whichever line is neediest overall.
 	const AIFloat3 yardAt = yardSite ? site : NearestYard(unit.GetPos(ai.frame));
+	const float nanoFreeM = MetalFreeRate();
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
@@ -501,6 +504,12 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 						- (Eco::EPull() - ConvUseE());
 				gainN *= (spare <= 0.f) ? 0.f : ((spare < askE) ? (spare / askE) : 1.f);
 			}
+		}
+		// ...and no more than the metal feed has left over: while what is asked
+		// already exceeds what income and bank can feed, more lathe adds nothing.
+		if (gainN > nanoFreeM) {
+			gainN = (nanoFreeM > 0.f) ? nanoFreeM : 0.f;
+			++gNanoMetalCut;
 		}
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),

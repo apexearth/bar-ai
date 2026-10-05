@@ -154,6 +154,60 @@ float WorkerEnemyM(CCircuitUnit@ wkr, float r)
 	return gEnMVal[id];
 }
 
+// THEIR BIGGEST WALKING GROUP, in mobile metal, held as a peak that halves over
+// apex_seen_halflife: a pack seen once and then lost in fog has not gone away.
+float gRaidMassPk = 0.f;
+int gRaidMassAt = -1;
+float FoeRaidMassM()
+{
+	if (gRaidMassAt == ai.frame)
+		return gRaidMassPk;
+	RiskFill();
+	float top = 0.f;
+	for (uint g = 0; g < gRkApM.length(); ++g) {
+		if (gRkApM[g] > top)
+			top = gRkApM[g];
+	}
+	const float hl = ai.GetTunable("apex_seen_halflife", TUNE_SEEN_HALFLIFE);
+	const int dt = (gRaidMassAt < 0) ? 0 : (ai.frame - gRaidMassAt);
+	if ((hl > 0.f) && (dt > 0))
+		gRaidMassPk *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
+	if (top > gRaidMassPk)
+		gRaidMassPk = top;
+	gRaidMassAt = ai.frame;
+	return gRaidMassPk;
+}
+
+// SPREAD ONLY WHILE THE THREAT IS SPREAD (apexearth 2026-10-05: "if all of our
+// escorts are spread out and we die to their massed raiders one by one ... you
+// kind of have to meet mass for mass"). One post is what a single worker is
+// owed; once their biggest group outguns a post, every post loses alone, so
+// the escorts gather on one worker until they meet the group.
+bool EscortsPool(float postM)
+{
+	const float g = FoeRaidMassM();
+	return (g > 1.f) && (StrRatio(g, postM) > 1.f);
+}
+
+// What one worker's escort must hold: the enemy that can reach it, floored by
+// its exposure's share of a post -- and, while they mass, by their group.
+float EscortOwedM(CCircuitUnit@ wkr, float expo, float unitM, float expoR, bool air)
+{
+	float needM = WorkerEnemyM(wkr, (expoR > 1.f) ? expoR : 1200.f);
+	const float postM = unitM * EscortsPerCon();
+	const float floorM = expo * postM;
+	if (floorM > needM)
+		needM = floorM;
+	if (!air && (expo > 0.f) && EscortsPool(postM)) {
+		const float g = FoeRaidMassM();
+		if (g > needM)
+			needM = g;
+	}
+	return needM;
+}
+
+int gEscPooled = 0;
+int gEscSpread = 0;
 CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if (mil is null)
@@ -166,6 +220,12 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
 	const bool air = Catalog::gFlyer[int(mil.circuitDef.id)];
+	// Pooled, the escort joins the worker that already holds the most escort,
+	// so one mass grows instead of several pairs; spread, the first in need.
+	const bool pooled = !air && EscortsPool(mineM * EscortsPerCon());
+	CCircuitUnit@ pick = null;
+	float pickHave = -1.f;
+	float pickExpo = -1.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
 		if (!EscortableWorker(wkr, air))
@@ -180,10 +240,7 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		// a forward worker is covered before contact rather than after it.
 		// A unit takes the duty when at least half of it is still wanted.
 		const float haveM = EscortMetalOn(wkr.id);
-		float needM = WorkerEnemyM(wkr, (expoR > 1.f) ? expoR : 1200.f);
-		const float floorM = expo * mineM * EscortsPerCon();
-		if (floorM > needM)
-			needM = floorM;
+		const float needM = EscortOwedM(wkr, expo, mineM, expoR, air);
 		if (needM - haveM < 0.5f * mineM)
 			continue;
 		// Only a NEARBY unit takes the duty: a cross-map death march
@@ -191,9 +248,31 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 		// A far worker's escort comes from the next unit produced closer,
 		// or from its own raider demand (EscortShortfall).
 		const float ms = Catalog::gSpeed[int(mil.circuitDef.id)];
-		if ((ms > 1.f)
-			&& (mil.GetPos(ai.frame).distance2D(wkr.GetPos(ai.frame)) / ms > 45.f))
-			continue;
+		const bool far = (ms > 1.f)
+			&& (mil.GetPos(ai.frame).distance2D(wkr.GetPos(ai.frame)) / ms > 45.f);
+		if (!pooled) {
+			if (far)
+				continue;
+			@pick = wkr;
+			break;
+		}
+		// Pooled, the mass is chosen first and the walk asked of it alone: a
+		// nearer worker would start a second pair the sweep then dissolves.
+		if ((haveM > pickHave) || ((haveM == pickHave) && (expo > pickExpo))) {
+			if (far)
+				@pick = null;
+			else
+				@pick = wkr;
+			pickHave = haveM;
+			pickExpo = expo;
+		}
+	}
+	if (pick !is null) {
+		CCircuitUnit@ wkr = pick;
+		if (pooled)
+			++gEscPooled;
+		else
+			++gEscSpread;
 		gEscWorker.insertLast(wkr.id);
 		gEscUnit.insertLast(mil.id);
 		gEscDef.insertLast(int(mil.circuitDef.id));
@@ -375,7 +454,9 @@ void EscortDiag()
 		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0)
 		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy
-		+ " released=" + gEscReleased);
+		+ " released=" + gEscReleased
+		+ " foeMass=" + formatFloat(FoeRaidMassM(), "", 0, 0)
+		+ " pooled=" + gEscPooled + " spread=" + gEscSpread);
 }
 
 // AN ESCORT THE WORKER NO LONGER NEEDS GOES BACK TO THE ARMY. Pairings only
@@ -388,6 +469,19 @@ int gEscReleased = 0;
 void EscortSweep()
 {
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
+	// Pooled, the pairs left on other workers from the spread phase go back to
+	// the election, which sends them to the worker holding the mass.
+	Id anchor = Id(-1);
+	float anchorM = 0.f;
+	for (uint e = 0; e < gEscWorker.length(); ++e) {
+		if ((e >= gEscDef.length()) || Catalog::gFlyer[gEscDef[e]])
+			continue;
+		const float m = EscortMetalOn(gEscWorker[e]);
+		if (m > anchorM) {
+			anchorM = m;
+			anchor = gEscWorker[e];
+		}
+	}
 	for (int e = int(gEscWorker.length()) - 1; e >= 0; --e) {
 		if (uint(e) >= gEscWorker.length())
 			continue;
@@ -400,11 +494,16 @@ void EscortSweep()
 			continue;
 		}
 		const float cost = Catalog::gCostM[gEscDef[uint(e)]];
-		if (w !is null) {
-			float need = WorkerEnemyM(w, (expoR > 1.f) ? expoR : 1200.f);
-			const float floorM = WorkerExposure(w) * cost;
-			if (floorM > need)
-				need = floorM;
+		const bool airE = Catalog::gFlyer[gEscDef[uint(e)]];
+		const bool offMass = !airE && (w !is null) && (wid != anchor)
+				&& (EscortMetalOn(wid) < anchorM)
+				&& (anchorM + cost <= FoeRaidMassM())   // the mass still has room for it
+				&& EscortsPool(cost * EscortsPerCon());
+		if ((w !is null) && !offMass) {
+			// The owed metal EscortNeeded paired against: a floor of one escort
+			// here released the second of every pair the moment it arrived.
+			const float need = EscortOwedM(w, WorkerExposure(w), cost, expoR,
+					Catalog::gFlyer[gEscDef[uint(e)]]);
 			if (EscortMetalOn(wid) - cost < need)
 				continue;   // still wanted
 		}
@@ -519,6 +618,7 @@ float SupportWorth()
 	return w;
 }
 
+int gComLabLeft = 0;   // commander guard stints at a lab ended because metal ran out
 void GuardSweep()
 {
 	for (uint i = 0; i < gGuardUnit.length(); ) {
@@ -533,6 +633,13 @@ void GuardSweep()
 			if (bossIsFac && (b.CountQueued(null) == 0)) {
 				u.task.Abort();
 				drop = true;
+			}
+			// Out of metal the commander leaves the lab to get more (his 2026-10-05).
+			if (!drop && bossIsFac && u.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+				&& MetalShort(0.f)) {
+				u.task.Abort();
+				drop = true;
+				++gComLabLeft;
 			}
 			// A mobile boss that stopped building releases its guards too.
 			if (!bossIsFac && ((b.task is null)
@@ -612,6 +719,42 @@ bool MetalPathStarved()
 		}
 	}
 	return gMetalPathVal;
+}
+
+// The metal feed with no unlock attached [m/s]: income plus the bank over the
+// stall horizon, less what is asked of it. Smoothed as SlackFrac is, because
+// pull drops to nothing between jobs.
+float gMFreeEma = 0.f;
+int gMFreeAt = -999999;
+float MetalFreeRate()
+{
+	if (ai.frame - gMFreeAt >= SECOND) {
+		const bool first = (gMFreeAt < 0);
+		gMFreeAt = ai.frame;
+		const float h = EGenBuildSeconds();
+		const float raw = Eco::MInc() + Eco::MCur() / ((h > 1.f) ? h : 1.f) - Eco::MPull();
+		gMFreeEma = first ? raw : (0.9f * gMFreeEma + 0.1f * raw);
+	}
+	return gMFreeEma;
+}
+
+// OUT OF METAL: the feed cannot cover what is asked of it plus `addDrain`, and
+// metal is the tighter of the two feeds (HardEStallNow's test, mirrored).
+bool MetalShort(float addDrain)
+{
+	if (MetalFreeRate() >= addDrain)
+		return false;
+	const float mPull = Eco::MPull() + addDrain;
+	const float ePull = Eco::EPull();
+	if (mPull <= 0.01f)
+		return false;
+	if (ePull <= 0.01f)
+		return true;
+	const float sec = EGenBuildSeconds();
+	const float h = (sec > 1.f) ? sec : 1.f;
+	const float mShare = (Eco::MInc() + Eco::MCur() / h) / mPull;
+	const float eShare = (Eco::EInc() + Eco::ECur() / h) / ePull;
+	return mShare <= eShare;
 }
 
 // Finished upgraded extractors we own: ledger rows extracting more than the

@@ -278,6 +278,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		const double _tRz = Perf::T0();
 		IUnitTask@ rz = RezzerChain(unit);
 		Perf::Add("bld.rezzer", _tRz);
+		Market::RcmNoteRez(unit, rz);
 		return rz;
 	}
 

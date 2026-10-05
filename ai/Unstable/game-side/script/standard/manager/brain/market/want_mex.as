@@ -581,6 +581,41 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 	return false;
 }
 
+// Claims started, by who and by the spot's trip risk from home (<0.1, <0.3, more),
+// and the commander's past his leash; with the metal reclaim want's counts.
+array<int> gClaimCom(3, 0);
+array<int> gClaimCon(3, 0);
+int gClaimComFar = 0;
+int gRcmProposed = 0, gRcmWon = 0;
+float gRcmMetal = 0.f;
+int gNextClaimLog = 0;
+void NoteClaim(CCircuitUnit@ unit, Want@ w)
+{
+	if (w.kind == WK_RECLAIM) {
+		++gRcmWon;
+		gRcmMetal += ai.GetWreckValueAt(w.pos, Builder::WRECK_RADIUS);
+	} else {
+		const float r = TripRisk(w.pos);
+		const int b = (r < 0.1f) ? 0 : ((r < 0.3f) ? 1 : 2);
+		if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+			++gClaimCom[b];
+			if (ComFar(w.pos))
+				++gClaimComFar;
+		} else {
+			++gClaimCon[b];
+		}
+	}
+	if (ai.frame >= gNextClaimLog) {
+		gNextClaimLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: claimband t=" + ai.teamId
+			+ " com=" + gClaimCom[0] + "/" + gClaimCom[1] + "/" + gClaimCom[2]
+			+ " comFar=" + gClaimComFar
+			+ " con=" + gClaimCon[0] + "/" + gClaimCon[1] + "/" + gClaimCon[2]
+			+ " rcm=" + gRcmProposed + "/" + gRcmWon + " rcmM=" + int(gRcmMetal)
+			+ " reclaimM=" + int(ai.GetTeamRulesParam("apexReclaimM", -1.f)));
+	}
+}
+
 // WHY A MEX WANT DID NOT HAPPEN. apexearth: "our largest problem is still that
 // we are not making enough mexes. If we aren't capturing half the map worth of
 // mexes in a 1v1 then we're losing the game." Each refusal is counted at its
@@ -910,7 +945,9 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// four-minute window died so, our extractor count peaking at
 		// minute 8 while theirs kept climbing. A hot spot is not offered;
 		// the ground it sits on is the defence market's starved-spot stake.
-		if (st == PT_HOT) {
+		// Hot for a constructor; the commander takes it where nothing there can kill him.
+		const float comF = comm ? ComRaidF(unit, sp) : 1.f;
+		if ((st == PT_HOT) && !(comm && (comF < 1.f))) {
 			++gSwHot;
 			DeadSpotSay(dw, sp, "hot");
 			if (supFree) {
@@ -941,7 +978,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// apex_com_mex_price > 0: as a veto it is the largest single refuser
 		// of extraction and it does not keep him alive. See docs/27.
 		float comPen = 1.f;
-		if (comm && ComFar(sp)) {
+		if (comm && (comF >= 1.f) && ComFar(sp)) {
 			++gMexComFar;
 			const float cp = ai.GetTunable("apex_com_mex_price",
 					TUNE_COM_MEX_PRICE);
@@ -958,7 +995,10 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		if (risk >= 0.5f)
 			++gSwPast;
 		gPsCand.insertLast(int(si));
-		gPsScore.insertLast(comPen * inc * (1.f - risk) / (walk + 1.f));
+		// The commander's edge at a spot is the risk a constructor would carry
+		// there that he does not: he keeps 1 - risk*comF and spares a con risk*(1 - comF).
+		gPsScore.insertLast(comPen * inc * (comm ? (1.f + risk * (1.f - 2.f * comF)) : (1.f - risk))
+				/ (walk + 1.f));
 	}
 	gSwCand = int(gPsCand.length());
 	float bestCand = 0.f;
@@ -999,7 +1039,8 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// price it -- this gate hides the same spot the price would have
 		// discounted, and on Glacier Pass it refuses 6-14 candidates a window
 		// while `priced` reads 0.
-		if (DeathWalk(unit, aiEconomyMgr.GetMexSpotPos(open))) {
+		if (DeathWalk(unit, aiEconomyMgr.GetMexSpotPos(open))
+			&& !(comm && (ComRaidF(unit, aiEconomyMgr.GetMexSpotPos(open)) < 1.f))) {
 			++gMexDeathWalk;
 			if (ai.GetTunable("apex_deathwalk_price", TUNE_DEATHWALK_PRICE) <= 0.f)
 				continue;
@@ -1026,7 +1067,8 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	const AIFloat3 pos = aiEconomyMgr.GetMexSpotPos(spot);
 	// Deadly for THIS walker; the spot itself stays open for a safer angle,
 	// so gMexOpen is not cleared.
-	if (DeathWalk(unit, pos)) {
+	if (DeathWalk(unit, pos) && !(unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
+			&& (ComRaidF(unit, pos) < 1.f))) {
 		++gMexDeathWalk;
 		return w;
 	}
@@ -1052,12 +1094,13 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 	++gMexPriced;
 	// The walker may not arrive: the stream is worth its survival share and
 	// the trip costs the con's expected loss (TripRisk, coverage.as).
-	const float risk = TripRiskFrom(here, pos);
+	const bool isCom = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	// For him only what there can kill him counts (ComRaidF).
+	const float risk = TripRiskFrom(here, pos) * (isCom ? ComRaidF(unit, pos) : 1.f);
 	gMexRiskSum += risk;
 	// What the trip stakes: the hand's price -- or, for the commander,
 	// everything we own, because his death is the game.
-	const float conRiskM = risk * (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-			? (gAssetsM + ArmyValue()) : Catalog::gCostM[uid]);
+	const float conRiskM = risk * (isCom ? (gAssetsM + ArmyValue()) : Catalog::gCostM[uid]);
 	const float spotIncome = aiEconomyMgr.GetMexSpotIncome(spot) * IncomeMult();
 	const float speed = Catalog::gSpeed[uid];
 	const float dist = here.distance2D(pos);

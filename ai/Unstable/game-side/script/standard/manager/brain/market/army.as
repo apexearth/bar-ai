@@ -142,7 +142,12 @@ bool EscortableWorker(CCircuitUnit@ wkr, bool air)
 	// A 1-metal builder is spawned (assist drones), not bought: nothing to guard.
 	if (Catalog::gCostM[int(wkr.circuitDef.id)] <= 1.f)
 		return false;
-	return !wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask);   // his own escort
+	// The commander is escorted only out past his leash on a claim (his 2026-10-05).
+	if (wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return ComFar(wkr.GetPos(ai.frame))
+			|| ((wkr.task.GetType() == Task::Type::BUILDER) && OnMap(wkr.task.GetBuildPos())
+				&& ComFar(wkr.task.GetBuildPos()));
+	return true;
 }
 
 void ExposeRefresh()
