@@ -1893,7 +1893,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	AIFloat3 t2Shelter;
 	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
 		&& ((ShelterMate(t2Shelter) >= 0) || EcoRoleGrowing())
-		&& (ArmyValue() + ArmyInFlightM() >= ArmyTarget())
+		&& (ArmyValue() + ArmyInFlightM() >= T2DefenceArmy())
 		&& (UpDemand() >= Eco::MInc())) {
 		int ti = -1;
 		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)

@@ -13,7 +13,8 @@ const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eE
 	+ "mex,staticLoss,airLoss,mobileLoss,structBleed,airNow,airSeen,incoming,raidP,sinceRaid,"
 	+ "intelFresh,foeSilos,comm,homeD,allies,foeTeam,mapArea,"
 	+ "plantM,nanoBP,convCap,defM,antiN,stockN,"
-	+ "shArmy,shDef,shAirdef,shEco,shBP,tgArmy,tgDef,tgAirdef,tgEco,tgBP";
+	+ "shArmy,shDef,shAirdef,shEco,shBP,tgArmy,tgDef,tgAirdef,tgEco,tgBP,"
+	+ "foeT2,foeHeavy,foeArty,foeRaider,foeStatic,ourQual,foeQual";
 const string NN_OPT = "cat,kind,def,value,gain,m,t,cm,ce,bt,walk,risk,eta,dPow,ownN,tierO,fwd,"
 	+ "siteLoss,persona,x,z,p,nm,forced";
 // value..persona: the net's per-option numbers, in NnOpt order
@@ -205,6 +206,15 @@ void NnStateFull(const AIFloat3& in up, array<float>& out s)
 	s.insertLast(Brain::TargetShare(Brain::AIRDEF));
 	s.insertLast(Brain::TargetShare(Brain::ECONOMY));
 	s.insertLast(Brain::TargetShare(Brain::BUILDPOWER));
+	// what the enemy fields: its share above T1, its heavy/arty/raider/static
+	// metal, and strength per metal of our units against theirs
+	s.insertLast(Military::FoeTierAbove(1));
+	s.insertLast(Military::EnemyCostOf(Unit::Role::HEAVY.type));
+	s.insertLast(Military::EnemyCostOf(Unit::Role::ARTY.type));
+	s.insertLast(Military::EnemyCostOf(Unit::Role::RAIDER.type));
+	s.insertLast(Military::EnemyCostOf(Unit::Role::STATIC.type));
+	s.insertLast(OurQualityM());
+	s.insertLast(FoeQualityM());
 }
 
 // The market's own numbers for one option, every multiplier the net or the
@@ -302,7 +312,7 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 	NnExploreRoll();
 	if (!gNnHeader) {
 		gNnHeader = true;
-		AiLog("apex: nn-schema v5 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
+		AiLog("apex: nn-schema v6 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
 			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0) + " comb=trust");
 	}
 	const bool here = (gNnDrawAt == ai.frame) && (gNnDrawUnit == int(unit.id));
@@ -357,35 +367,170 @@ string NnStateText(CCircuitUnit@ unit)
 // own odds), so production can be learned exactly like the builder record.
 bool gNnFacHeader = false;
 
-void NnFacRecord(CCircuitUnit@ fac, const array<int>& in defs, const array<float>& in vals,
-		const array<float>& in gains, float sum, uint pick)
-{
-	const double _t = Perf::T0();
-	if (!gNnFacHeader) {
-		gNnFacHeader = true;
-		AiLog("apex: nnfac-schema v1 state=" + NN_STATE + " opt=def,value,gain,cm,ce,bt,tierO,ownN,p");
-	}
-	string ln = "apex: nnfac t=" + ai.teamId + " f=" + ai.frame + " u=" + fac.id
-		+ " c=" + fac.circuitDef.GetName() + " | " + NnStateText(fac) + " |";
-	const uint n = (defs.length() < 24) ? defs.length() : 24;
-	for (uint i = 0; i < n; ++i) {
-		const int d = defs[i];
-		ln += ((i == 0) ? " " : " ; ") + Catalog::Def(d).GetName()
-			+ "," + NnF(vals[i] * 1000.f, 3) + "," + NnF(gains[i], 3)
-			+ "," + NnF(Catalog::gCostM[d], 0) + "," + NnF(Catalog::gCostE[d], 0)
-			+ "," + NnF(Catalog::gBuildTime[d], 0) + "," + DefTier(d)
-			+ "," + ((d < int(gOwnCount.length())) ? gOwnCount[d] : 0)
-			+ "," + NnF((sum > 0.f) ? vals[i] / sum : 0.f, 6);
-	}
-	ln += " | chosen=" + ((pick < n) ? int(pick) : -1);
-	AiLog(ln);
-	Perf::Add("fac.nnrec", _t);
-}
-
 float NnSlog(float x)
 {
 	const float a = log(1.f + abs(x));
 	return (x < 0.f) ? -a : a;
+}
+
+// A candidate unit described by what it IS, so the net generalises across defs:
+// value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld (NNF_ONUM).
+const uint NNF_ONUM = 13;
+const uint NNF_K = 24;
+
+void NnFacOpt(int d, float value1000, float gain, array<float>& out o)
+{
+	o.resize(NNF_ONUM);
+	o[0] = value1000;
+	o[1] = gain;
+	o[2] = Catalog::gCostM[d];
+	o[3] = Catalog::gCostE[d];
+	o[4] = Catalog::gBuildTime[d];
+	o[5] = float(DefTier(d));
+	o[6] = (d < int(gOwnCount.length())) ? float(gOwnCount[d]) : 0.f;
+	o[7] = Catalog::gHealth[d];
+	o[8] = Catalog::gSpeed[d];
+	o[9] = Catalog::gMaxRange[d];
+	o[10] = Catalog::gPower[d];
+	o[11] = Catalog::gFlyer[d] ? 1.f : 0.f;
+	o[12] = Catalog::gBuilder[d] ? 1.f : 0.f;
+}
+
+bool NnFacWeightsFit()
+{
+	const int N = NNF_S + NNF_O;
+	return NNF_ON && (NNF_STATE == NN_STATE) && (NNF_S > 0) && (NNF_H > 0)
+		&& (NNF_O == int(NNF_ONUM) + 2)
+		&& (NNF_XM.length() == uint(N)) && (NNF_XS.length() == uint(N))
+		&& (NNF_W1.length() == uint(NNF_H * N)) && (NNF_B1.length() == uint(NNF_H))
+		&& (NNF_W2.length() == uint(NNF_H * NNF_H)) && (NNF_B2.length() == uint(NNF_H))
+		&& (NNF_WO.length() == uint(NNF_H));
+}
+
+// THE FACTORY NET: scores every candidate of a production order and moves its
+// roulette weight in log space by the trust the factory net has earned, as the
+// builder net does. Returns the new weight sum; mult[] carries each move so the
+// record can divide it back out.
+uint gNnFacScored = 0;
+uint gNnFacChanged = 0;
+int gNnFacLogAt = 0;
+
+float NnFacScore(CCircuitUnit@ fac, const array<int>& in defs, array<float>& vals,
+		const array<float>& in gains, array<float>& out mult)
+{
+	mult.resize(defs.length());
+	float sum = 0.f;
+	for (uint i = 0; i < defs.length(); ++i) {
+		mult[i] = 1.f;
+		sum += vals[i];
+	}
+	const float blend = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND);
+	const float t = (blend * NNF_TRUST > 1.f) ? 1.f : blend * NNF_TRUST;
+	if ((t <= 0.f) || (defs.length() < 2) || !NnFacWeightsFit())
+		return sum;
+	const double _t = Perf::T0();
+	const int S = NNF_S, O = NNF_O, H = NNF_H, N = NNF_S + NNF_O;
+	array<float> s;
+	NnState(fac, s);
+	array<float> a(H);
+	for (int h = 0; h < H; ++h)
+		a[h] = NNF_B1[h];
+	for (int i = 0; i < S; ++i) {
+		float z = (NnSlog(s[i]) - NNF_XM[i]) / NNF_XS[i];
+		z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+		for (int h = 0; h < H; ++h)
+			a[h] += NNF_W1[h * N + i] * z;
+	}
+	const uint n = (defs.length() < NNF_K) ? defs.length() : NNF_K;
+	float best = -1e30f;
+	for (uint r = 0; r < n; ++r)
+		best = (vals[r] * 1000.f > best) ? vals[r] * 1000.f : best;
+	array<float> score(n), x(O), h1(H), o;
+	float mean = 0.f, meanLv = 0.f;
+	uint nLv = 0, top0 = 0;
+	for (uint r = 0; r < n; ++r) {
+		top0 = (vals[r] > vals[top0]) ? r : top0;
+		NnFacOpt(defs[r], vals[r] * 1000.f, gains[r], o);
+		for (uint k = 0; k < NNF_ONUM; ++k)
+			x[k] = NnSlog(o[k]);
+		x[NNF_ONUM] = NnSlog(o[0] - best);
+		x[NNF_ONUM + 1] = NnSlog(float(n));
+		for (int h = 0; h < H; ++h)
+			h1[h] = a[h];
+		for (int i = 0; i < O; ++i) {
+			float z = (x[i] - NNF_XM[S + i]) / NNF_XS[S + i];
+			z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+			for (int h = 0; h < H; ++h)
+				h1[h] += NNF_W1[h * N + S + i] * z;
+		}
+		float sc = NNF_BO;
+		for (int h2 = 0; h2 < H; ++h2) {
+			float acc = NNF_B2[h2];
+			for (int h = 0; h < H; ++h) {
+				if (h1[h] > 0.f)
+					acc += NNF_W2[h2 * H + h] * h1[h];
+			}
+			if (acc > 0.f)
+				sc += NNF_WO[h2] * acc;
+		}
+		score[r] = sc;
+		mean += sc;
+		if (vals[r] > 0.f) {
+			meanLv += log(vals[r]);
+			++nLv;
+		}
+	}
+	mean /= float(n);
+	meanLv = (nLv > 0) ? meanLv / float(nLv) : 0.f;
+	sum = 0.f;
+	uint top1 = 0;
+	for (uint r = 0; r < defs.length(); ++r) {
+		if ((r < n) && (vals[r] > 0.f)) {
+			float d = score[r] - mean;
+			d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
+			const float lv = log(vals[r]);
+			mult[r] = pow(2.7182818f, (1.f - t) * (lv - meanLv) + t * d - (lv - meanLv));
+			vals[r] *= mult[r];
+		}
+		sum += vals[r];
+		top1 = (vals[r] > vals[top1]) ? r : top1;
+	}
+	++gNnFacScored;
+	if (top1 != top0)
+		++gNnFacChanged;
+	if (ai.frame >= gNnFacLogAt) {
+		gNnFacLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: nnfac-score t=" + ai.teamId + " trust=" + NnF(t, 2) + " scored=" + gNnFacScored
+			+ " topChanged=" + gNnFacChanged);
+	}
+	Perf::Add("fac.nn", _t);
+	return sum;
+}
+
+void NnFacRecord(CCircuitUnit@ fac, const array<int>& in defs, const array<float>& in vals,
+		const array<float>& in gains, float sum, uint pick, const array<float>& in mult)
+{
+	const double _t = Perf::T0();
+	if (!gNnFacHeader) {
+		gNnFacHeader = true;
+		AiLog("apex: nnfac-schema v2 state=" + NN_STATE
+			+ " opt=def,value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld,p,nm");
+	}
+	string ln = "apex: nnfac t=" + ai.teamId + " f=" + ai.frame + " u=" + fac.id
+		+ " c=" + fac.circuitDef.GetName() + " | " + NnStateText(fac) + " |";
+	const uint n = (defs.length() < NNF_K) ? defs.length() : NNF_K;
+	array<float> o;
+	for (uint i = 0; i < n; ++i) {
+		const float m = ((i < mult.length()) && (mult[i] > 0.f)) ? mult[i] : 1.f;
+		NnFacOpt(defs[i], vals[i] * 1000.f / m, gains[i], o);
+		ln += ((i == 0) ? " " : " ; ") + Catalog::Def(defs[i]).GetName();
+		for (uint k = 0; k < NNF_ONUM; ++k)
+			ln += "," + NnF(o[k], (k < 2) ? 3 : 1);
+		ln += "," + NnF((sum > 0.f) ? vals[i] / sum : 0.f, 6) + "," + NnF(m, 3);
+	}
+	ln += " | chosen=" + ((pick < n) ? int(pick) : -1);
+	AiLog(ln);
+	Perf::Add("fac.nnrec", _t);
 }
 
 // THE NET AS A MODIFIER: it scores the top options and multiplies their market

@@ -42,6 +42,9 @@ array<int> gFQPendLine;
 array<CCircuitDef@> gFQPendDef;
 
 int gFQOrders = 0;               // build orders issued, all lines
+float gFQArmyM = 0.f;            // army metal ordered, all lines
+int gFQConN = 0;                 // constructors ordered
+int gFQCeilConN = 0;             // ...of them reaching the ceiling tier
 int gFQMilReq = 0;               // military task requests, see NoteMilRequest
 int gFQLost = 0;                 // orders presumed lost
 int gNextFQLog = 0;
@@ -406,6 +409,16 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQAt[line] = ai.frame;
 		gFQEvt[line] = ai.frame;
 		gFQOrders += int(batch.length());
+		for (uint bi = 0; bi < batch.length(); ++bi) {
+			const int bd = int(batch[bi].id);
+			if (Catalog::gBuilder[bd]) {
+				++gFQConN;
+				if (Market::ReachesCeiling(bd))
+					++gFQCeilConN;
+			} else if (Catalog::gPower[bd] > 1.f) {
+				gFQArmyM += Catalog::gCostM[bd];
+			}
+		}
 	}
 	// A slice that stopped short comes back next second, not next window:
 	// one order outruns the slice, so the line was fed one unit per window.

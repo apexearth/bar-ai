@@ -1763,16 +1763,12 @@ bool EcoRoleGrowing()
 	return g;
 }
 
-// THE SWITCH (apexearth 2026-09-21): "make enough army for a normal defence
-// of ourselves and then stop making army to focus on the switch to a good T2
-// economy -- upgraded mexes, fusions, advanced converters." BARb's own curve:
-// army spend flat from minute 8 to 14 while its economy spend triples, then
-// the T2 army. While the switch is on the army's share of the economy is not
-// in the target; the cover units, the AA counter and the towers -- the
-// defence of ourselves -- stay, and sustained enemy metal at home restores the
-// full target the way it does for the seat. Done once the T2 economy stands,
-// and done for good: a moho lost to a raid later is a rebuild, not a return
-// to the switch.
+// THE SWITCH to a T2 economy -- upgraded mexes, fusions, advanced converters.
+// The army keeps its full share of the economy through it (apexearth
+// 2026-10-05, replacing the 09-21 "stop making army": a lab making only hands
+// left a window where we lost ground); the T2 hands are paced by the con floor.
+// Done once the T2 economy stands, and done for good: a moho lost to a raid
+// later is a rebuild, not a return to the switch.
 bool gT2SwitchDone = false;
 bool gT2SwitchWas = false;
 bool gT2Rich = false;
@@ -1876,8 +1872,7 @@ bool T2EconomyStands()
 	return (up > 0) && (low == 0);
 }
 
-// The switch names fusions as what it is FOR, but it only takes army out of
-// the target -- the metal it frees goes to the draw, which buys wind.
+// The switch names fusions as what it is FOR; left to the draw, it bought wind.
 bool T2WantsFusion()
 {
 	return T2SwitchOn() && gT2NoFus;
@@ -1919,11 +1914,34 @@ bool T2SwitchEval()
 		gT2SwitchWas = on;
 		gT2SwitchLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: t2switch " + (on ? "on" : (rich ? "overflow" : "danger")) + " t=" + ai.teamId
-			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue())
+			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue()) + "/" + int(ArmyTarget())
 			+ " upD=" + int(UpDemand()) + " floor=" + int(ArmyFloor(ArmyTargetFull()))
-			+ " foeArmy=" + int(Military::EnemyArmyCost()) + " seats=" + int(Military::AllyCount()) + " " + gT2Missing);
+			+ " foeArmy=" + int(Military::EnemyArmyCost()) + " seats=" + int(Military::AllyCount())
+			+ T2SwitchRates() + " " + gT2Missing);
 	}
 	return on;
+}
+
+// Factory output since the last t2switch line, per minute: army metal ordered,
+// constructors ordered (all tiers / ceiling tier).
+float gT2RateArmyM = 0.f;
+int gT2RateCons = 0;
+int gT2RateCeil = 0;
+int gT2RateAt = 0;
+string T2SwitchRates()
+{
+	const float mins = float(ai.frame - gT2RateAt) / (60.f * SECOND);
+	string s = "";
+	if (mins > 0.05f)
+		s = " armyM/min=" + int((Brain::gFQArmyM - gT2RateArmyM) / mins)
+			+ " cons/min=" + formatFloat(float(Brain::gFQConN - gT2RateCons) / mins, "", 0, 1)
+			+ " t2cons/min=" + formatFloat(float(Brain::gFQCeilConN - gT2RateCeil) / mins, "", 0, 1)
+			+ " t2cons=" + CeilingConsOwned() + "+" + CeilingConsInFlight();
+	gT2RateArmyM = Brain::gFQArmyM;
+	gT2RateCons = Brain::gFQConN;
+	gT2RateCeil = Brain::gFQCeilConN;
+	gT2RateAt = ai.frame;
+	return s;
 }
 
 // HOW MUCH OF THE WAR THE GROWING SEAT ALREADY OWES: nothing to half its
@@ -2105,28 +2123,37 @@ float ArmyTarget()
 	// EcoDangerNear ends the growth if the war reaches it.
 	if (EcoRoleGrowing())
 		return ArmyTargetFull() * EcoRoleRamp();
-	// The switch is meant to keep a DEFENSIVE army and then stop buying, not
-	// to stand the army down: zero holds from frame 18 to the mohos, and the
-	// valve meant to restore it (EcoDangerNear) compares a unit COUNT against
-	// a metal threshold, so it never arms. "Enough army for a normal defence
-	// of ourselves, then stop" (his 09-21): the defence is a share of the full
-	// target (his choice, 09-29), or what already stands at home if larger.
-	if (T2SwitchOn()) {
-		const float full = ArmyTargetFull();
-		float need = full * T2_DEFENCE_SHARE;
-		const float hold = ai.GetTunable("apex_t2_army_floor",
-				TUNE_T2_ARMY_FLOOR);
-		const float atHome = Military::HoldNeedM() * ((hold > 0.f) ? hold : 1.f);
-		if (atHome > need)
-			need = atHome;
-		if (need > full)
-			need = full;
-		const float floorS = ArmyFloor(full);
-		return (floorS > need) ? floorS : need;
-	}
+	// No T2-switch branch: the army keeps its share through the switch (his
+	// 2026-10-05, replacing 09-21) -- halved, the lab stood idle and we lost ground.
 	const float fullD = ArmyTargetFull();
 	const float floorD = ArmyFloor(fullD);
 	return (floorD > fullD) ? floorD : fullD;
+}
+
+// The defensive army a sheltered seat holds before it jumps to the T2 lab
+// (decide.as t2rear): a share of the full target, or what stands at home.
+float T2DefenceArmy()
+{
+	const float full = ArmyTargetFull();
+	float need = full * T2_DEFENCE_SHARE;
+	const float hold = ai.GetTunable("apex_t2_army_floor", TUNE_T2_ARMY_FLOOR);
+	const float atHome = Military::HoldNeedM() * ((hold > 0.f) ? hold : 1.f);
+	if (atHome > need)
+		need = atHome;
+	if (need > full)
+		need = full;
+	const float floorS = ArmyFloor(full);
+	return (floorS > need) ? floorS : need;
+}
+
+// Outgrown's T1 cut waits for the switch: until the T2 economy stands the T2
+// lab is making hands, and the T1 lab is the army.
+bool T2SwitchPending()
+{
+	if (gEcoRole)
+		return false;
+	T2SwitchOn();
+	return !gT2SwitchDone;
 }
 
 // The target with NO role suppression: what the war actually asks for.

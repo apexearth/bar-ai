@@ -1472,7 +1472,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	array<int> rcRole;
 	array<float> rcTgt;
 	array<float> rcVal;
-	const bool metalPath = MetalPathStarved();
+	// Metal first takes only army above its share: no window of weakness (his 2026-10-05).
+	const bool metalPath = MetalPathStarved() && (armyHave >= armyT0);
 	int rezFleet = -1;
 	int conFleet = -1;
 	for (uint i = 0; i < prods.length(); ++i) {
@@ -2310,7 +2311,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2) + ")");
 			return Catalog::Def(d);
 		}
-		if ((ceilNeed > 0) && ReachesCeiling(d) && !(walker && FlyingConLab(true))) {
+		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
+		if ((ceilNeed > 0) && ReachesCeiling(d) && !(walker && FlyingConLab(true))
+			&& (CeilingConsInFlight() == 0)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (t2-con floor need=" + ceilNeed
@@ -2660,6 +2663,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 		}
 	}
+	array<float> facMult;
+	sumV = NnFacScore(fac, candDef, candV, candGain, facMult);
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
 			+ uint(slot) * 2246822519;
@@ -2709,7 +2714,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		+ " lathe=" + formatFloat(starterNeed, "", 0, 0) + "/" + formatFloat(BPCapacity(), "", 0, 0)
 		+ " room=" + formatFloat(feedRoom, "", 0, 2) + ")");
 	if (DecideLogOn())
-		NnFacRecord(fac, candDef, candV, candGain, sumV, pick);
+		NnFacRecord(fac, candDef, candV, candGain, sumV, pick, facMult);
 	return Catalog::Def(best);
 }
 

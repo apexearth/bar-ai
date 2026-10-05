@@ -18,5 +18,20 @@ const array<float> NNW_B2 = {};
 const array<float> NNW_WO = {};
 const float NNW_BO = 0.f;
 const array<float> NNW_TRUST = {};
+// the factory net (production.as roulette)
+const bool NNF_ON = false;
+const string NNF_STATE = "";
+const int NNF_S = 0;
+const int NNF_O = 0;
+const int NNF_H = 0;
+const array<float> NNF_XM = {};
+const array<float> NNF_XS = {};
+const array<float> NNF_W1 = {};
+const array<float> NNF_B1 = {};
+const array<float> NNF_W2 = {};
+const array<float> NNF_B2 = {};
+const array<float> NNF_WO = {};
+const float NNF_BO = 0.f;
+const float NNF_TRUST = 0.f;
 
 }  // namespace Market

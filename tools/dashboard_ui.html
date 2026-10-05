@@ -1633,11 +1633,18 @@ function nnTable(m) {
   }
   return h + "</tbody></table>";
 }
-function nnTrust(m) {
+function nnTrust(m, fm) {
   const last = [...m].reverse().find(r => r.trust);
-  if (!last) return "<span class='dim'>not measured yet -- a kind needs a few hundred unseen decisions first</span>";
+  const fl = [...(fm || [])].reverse().find(r => r.trust != null);
+  const fh = (fm || []).filter(r => r.head_full != null).slice(-5);
+  const avg = k => fh.length ? fh.reduce((a, r) => a + r[k], 0) / fh.length : null;
+  const fac = `<div style="margin:6px 0">Factory net: ${(fm || []).length} batches &middot; say `
+    + `<b>${fl ? fl.trust.toFixed(2) : "0.00"}</b>`
+    + (fh.length ? ` &middot; unseen accuracy ${avg("head_full").toFixed(3)} (state only ${avg("head_state").toFixed(3)})` : "")
+    + `</div>`;
+  if (!last) return fac + "<span class='dim'>builder kinds: not measured yet -- a kind needs a few hundred unseen decisions first</span>";
   const rows = Object.entries(last.trust).sort((a, b) => b[1] - a[1]);
-  return "<table><thead><tr><th>Kind</th><th>Say</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
+  return fac + "<table><thead><tr><th>Builder kind</th><th>Say</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
     `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td><div style="background:var(--good);height:8px;width:${
       Math.round(160 * Math.min(1, t))}px;border-radius:2px"></div></td></tr>`).join("") + "</tbody></table>";
 }
@@ -1664,7 +1671,8 @@ async function loadNet() {
   let d;
   try { d = await api("/api/nn"); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
   if (d) {
-    const m = d.metrics || [], s = d.status || {};
+    const all = d.metrics || [], s = d.status || {};
+    const m = all.filter(r => r.net !== "fac"), fm = all.filter(r => r.net === "fac");
     const lastGame = m.length ? m[m.length - 1] : null;
     const state = d.running ? `<b style="color:var(--good)">training</b> (${esc(s.phase || "starting")})`
       : `<b>stopped</b>`;
@@ -1688,7 +1696,7 @@ async function loadNet() {
       {xs, ys: m.map(r => r.loss_state), color: NN_LOSS2}], {lo: 0});
     legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
     setHTML($("#nn-table"), nnTable(m));
-    setHTML($("#nn-trust"), nnTrust(m));
+    setHTML($("#nn-trust"), nnTrust(m, fm));
     setHTML($("#nn-samples"), nnSamples(d.samples || []));
   }
   NN_TIMER = setTimeout(loadNet, 5000);

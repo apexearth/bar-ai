@@ -48,7 +48,8 @@ PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear"
 LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
 SINGLE = ("done", "survived", "lifeS", "lifeKill")    # one value per decision, not per horizon
 TARGETS = [(h, k) for h in (1, 3, 5) for k in PER_H] + [(k, k) for k in SINGLE]
-SCHEMA_OPT = "forced"   # an option field only the current record (v5) carries
+SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
+SCHEMA_STATE = "foeQual"   # a state field only the current record (v6) carries: older rows are skipped, not a reset
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
 DECIDED = ("draw", "ladder")   # rows where an option was chosen on value, not forced
 # What "better" means when the net plays, in units of each outcome's spread.
@@ -216,15 +217,44 @@ def fmt_arr(vals):
     return "{" + ", ".join("%.7ff" % float(v) for v in vals) + "}"
 
 
-def export_as(net, state_keys, games, trust):
-    """The FULL net as nnweights.as: first layer, second layer, and the output
-    layer folded through OBJECTIVE into one score (in units of target spread)."""
+def fold(net):
+    """First layer, second layer, and the output layer folded through OBJECTIVE
+    into one score (in units of target spread)."""
     sd = net.model.state_dict()
     w1, b1 = sd["0.weight"].numpy(), sd["0.bias"].numpy()
     w2, b2 = sd["3.weight"].numpy(), sd["3.bias"].numpy()
     w3, b3 = sd["6.weight"].numpy(), sd["6.bias"].numpy()
     obj = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
-    wo, bo = obj @ w3, float(obj @ b3)
+    return w1, b1, w2, b2, obj @ w3, float(obj @ b3)
+
+
+def fac_block(head):
+    """The factory net's NNF_* fields; the empty net until the factory head has one."""
+    if head is None or head.full is None:
+        return ["const bool NNF_ON = false;", 'const string NNF_STATE = "";', "const int NNF_S = 0;",
+                "const int NNF_O = 0;", "const int NNF_H = 0;"] + \
+               ["const array<float> NNF_%s = {};" % k for k in ("XM", "XS", "W1", "B1", "W2", "B2", "WO")] + \
+               ["const float NNF_BO = 0.f;", "const float NNF_TRUST = 0.f;"]
+    w1, b1, w2, b2, wo, bo = fold(head.full)
+    s = len(head.state_keys)
+    return ["const bool NNF_ON = true;",
+            'const string NNF_STATE = "%s";' % ",".join(head.state_keys),
+            "const int NNF_S = %d;" % s, "const int NNF_O = %d;" % (w1.shape[1] - s),
+            "const int NNF_H = %d;" % HIDDEN,
+            "const array<float> NNF_XM = %s;" % fmt_arr(head.full.xm),
+            "const array<float> NNF_XS = %s;" % fmt_arr(head.full.xs),
+            "const array<float> NNF_W1 = %s;" % fmt_arr(w1.reshape(-1)),
+            "const array<float> NNF_B1 = %s;" % fmt_arr(b1),
+            "const array<float> NNF_W2 = %s;" % fmt_arr(w2.reshape(-1)),
+            "const array<float> NNF_B2 = %s;" % fmt_arr(b2),
+            "const array<float> NNF_WO = %s;" % fmt_arr(wo),
+            "const float NNF_BO = %.7ff;" % bo,
+            "const float NNF_TRUST = %.7ff;" % head.trust()]
+
+
+def export_as(net, state_keys, games, trust, fac=None):
+    """The builder FULL net (NNW_*) and the factory net (NNF_*) as nnweights.as."""
+    w1, b1, w2, b2, wo, bo = fold(net)
     s, o = len(state_keys), w1.shape[1] - len(state_keys)
     return "\n".join([
         "namespace Market {", "",
@@ -243,7 +273,8 @@ def export_as(net, state_keys, games, trust):
         "const array<float> NNW_WO = %s;" % fmt_arr(wo),
         "const float NNW_BO = %.7ff;" % bo,
         "// per kind, in NNW_KINDS order: how much say the net gets (0 = the market alone)",
-        "const array<float> NNW_TRUST = %s;" % fmt_arr([trust.get(k, 0.0) for k in KINDS]), "",
+        "const array<float> NNW_TRUST = %s;" % fmt_arr([trust.get(k, 0.0) for k in KINDS]),
+        "// the factory net (production.as roulette)"] + fac_block(fac) + ["",
         "}  // namespace Market", ""])
 
 
@@ -261,6 +292,138 @@ def export_targets():
     return out
 
 
+FAC_OPT_NUM = ("value", "gain", "cm", "ce", "bt", "tierO", "ownN", "hp", "speed", "range",
+               "power", "fly", "bld")   # nnlog.as NnFacOpt order
+FAC_SCHEMA_OPT = "fly"                   # an option field only the v2 factory record carries
+
+
+def featurize_fac(row, state_keys):
+    """In NnFacScore's order: state, the unit's numbers, value - best, n."""
+    s = [slog(num(row["state"].get(k, 0))) for k in state_keys]
+    opts = row["opts"]
+    ci = row["chosen"]
+    o = opts[ci] if 0 <= ci < len(opts) else {}
+    best = max((num(x.get("value", 0)) for x in opts), default=0.0)
+    x = [slog(num(o.get(k, 0))) for k in FAC_OPT_NUM]
+    x += [slog(num(o.get("value", 0)) - best), slog(float(len(opts)))]
+    return s, s + x
+
+
+class FacHead:
+    """The factory net: what a production order is worth. Its own nets, buffer
+    and ONE trust (how well its view of what an order adds matches what the
+    order actually added, on unseen games)."""
+
+    def __init__(self):
+        self.state_keys = None
+        self.XS = self.XF = self.Y = self.M = None
+        self.full = self.st = None
+        self.pairs = []
+        self.batches = 0
+        self.load()
+
+    def load(self):
+        if (OUT / "fac_buffer.npz").is_file() and (OUT / "fac_model.pt").is_file():
+            import torch
+            with np.load(OUT / "fac_buffer.npz", allow_pickle=True) as b:
+                self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
+                self.state_keys = list(b["state_keys"])
+                self.batches = int(b["batches"])
+            ck = torch.load(OUT / "fac_model.pt", weights_only=False)
+            if list(ck.get("targets", [])) != TARGETS or tuple(ck.get("opt_num", ())) != FAC_OPT_NUM:
+                self.__init_empty()
+                return
+            self.full = Net(self.XF.shape[1], len(TARGETS))
+            self.st = Net(self.XS.shape[1], len(TARGETS))
+            self.full.load(ck["full"])
+            self.st.load(ck["state"])
+            self.pairs = ck.get("pairs", [])
+
+    def __init_empty(self):
+        self.state_keys = None
+        self.XS = self.XF = self.Y = self.M = None
+        self.full = self.st = None
+        self.pairs = []
+        self.batches = 0
+
+    def save(self, buffer=False):
+        import torch
+        if self.full is None:
+            return
+        if buffer or self.batches % BUFFER_EVERY == 0:
+            np.savez(OUT / "fac_buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
+                     state_keys=np.array(self.state_keys), batches=self.batches)
+            replace_retry(OUT / "fac_buffer.tmp.npz", OUT / "fac_buffer.npz")
+        torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
+                    "opt_num": FAC_OPT_NUM, "pairs": self.pairs}, OUT / "fac_model.pt.tmp")
+        replace_retry(OUT / "fac_model.pt.tmp", OUT / "fac_model.pt")
+
+    def trust(self):
+        if len(self.pairs) < TRUST_MIN:
+            return 0.0
+        a = np.array(self.pairs)
+        if a[:, 0].std() == 0 or a[:, 1].std() == 0:
+            return 0.0
+        return round(max(0.0, float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])), 3)
+
+    def learn(self, source, g, first_touch, rows):
+        if self.state_keys is not None and g["state_keys"] != self.state_keys:
+            self.__init_empty()
+        if self.state_keys is None:
+            self.state_keys = g["state_keys"]
+        xs, xf, ys, ms = [], [], [], []
+        for r in rows:
+            y, m = target_vec(r)
+            if not any(m):
+                continue
+            s, f = featurize_fac(r, self.state_keys)
+            xs.append(s)
+            xf.append(f)
+            ys.append(y)
+            ms.append(m)
+        if not xs:
+            return None
+        XS, XF = np.array(xs, dtype=np.float32), np.array(xf, dtype=np.float32)
+        Y, M = np.array(ys, dtype=np.float32), np.array(ms, dtype=np.float32)
+        rec = {"net": "fac", "source": source, "at": time.time(), "rows": len(xs),
+               "index": self.batches + 1, "first_touch": first_touch}
+        if self.full is not None and first_touch:
+            base = self.full.ym
+            pf, ps = self.full.predict(XF), self.st.predict(XS)
+            rec["head_full"] = mean_of(r2(pf, Y, M, base), HEADLINE)
+            rec["head_state"] = mean_of(r2(ps, Y, M, base), HEADLINE)
+            w = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
+            ym, ysd = self.full.ym, self.full.ys
+            zf, zs, zy = (pf - ym) / ysd, (ps - ym) / ysd, (Y - ym) / ysd
+            for i in range(len(Y)):
+                mm = M[i] * (w != 0)
+                if mm.any():
+                    self.pairs.append((float(((zf[i] - zs[i]) * w * mm).sum()),
+                                       float(((zy[i] - zs[i]) * w * mm).sum())))
+            self.pairs = self.pairs[-TRUST_KEEP:]
+            rec["trust"] = self.trust()
+        if self.XF is None:
+            new_from = 0
+            self.XS, self.XF, self.Y, self.M = XS, XF, Y, M
+            self.full = Net(XF.shape[1], len(TARGETS))
+            self.st = Net(XS.shape[1], len(TARGETS))
+        else:
+            new_from = len(self.Y)
+            self.XS, self.XF = np.vstack([self.XS, XS]), np.vstack([self.XF, XF])
+            self.Y, self.M = np.vstack([self.Y, Y]), np.vstack([self.M, M])
+        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW)
+        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW)
+        rec["total_rows"] = int(len(self.Y))
+        self.batches += 1
+        if self.batches % RESET_EVERY == 0:
+            self.full.shrink_perturb()
+            self.st.shrink_perturb()
+        with open(OUT / "metrics.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+        self.save()
+        return rec
+
+
 class Trainer:
     def __init__(self):
         OUT.mkdir(parents=True, exist_ok=True)
@@ -276,6 +439,7 @@ class Trainer:
         self.exported = 0
         self.logger = {}
         self.trust_pairs = {}   # kind -> [(net says the decision adds, it actually added)], unseen games
+        self.fac = FacHead()
         self.parsed_at = {}
         self.load()
 
@@ -408,7 +572,8 @@ class Trainer:
         that has not yet seen one team's log and the finished infolog agree.
         Returns (first_touch, [(team_fp, key, row)]): first_touch when no team
         of this game was learned from before -- the only honest accuracy point."""
-        if g["state_keys"] is None or g["opt_keys"] is None or SCHEMA_OPT not in g["opt_keys"]:
+        if (g["state_keys"] is None or g["opt_keys"] is None or SCHEMA_OPT not in g["opt_keys"]
+                or SCHEMA_STATE not in g["state_keys"]):
             return False, []
         first = {}
         for r in sorted(g["rows"], key=lambda q: int(q[0])):
@@ -562,7 +727,7 @@ class Trainer:
         return out
 
     def export(self):
-        text = export_as(self.full, self.state_keys, self.batches, self.trust())
+        text = export_as(self.full, self.state_keys, self.batches, self.trust(), self.fac)
         n = 0
         for p in export_targets():
             tmp = p.with_suffix(".tmp")
@@ -573,6 +738,42 @@ class Trainer:
         self.exported += 1
         return n
 
+    def learn_fac(self, source, g, path, final):
+        """The factory rows of one parsed game: matured (or all, when final),
+        not used before, keyed per team like the builder rows."""
+        if not g.get("fac_keys") or FAC_SCHEMA_OPT not in g["fac_keys"] or g["state_keys"] is None:
+            return None
+        if SCHEMA_STATE not in g["state_keys"]:
+            return None
+        first = {}
+        for r in sorted(g["facrows"], key=lambda q: int(q[0])):
+            t = int(r[1])
+            if len(first.setdefault(t, [])) < 3:
+                first[t].append("%s.%s" % (r[0], r[2]))
+        fps = {t: "fac|%d|%s" % (t, "|".join(v)) for t, v in first.items()}
+        first_touch = not any(self.used.get(fp) for fp in fps.values())
+        rows, keys = [], []
+        for r in decisions.fac_rows_of(str(path), g):
+            fp = fps[r["team"]]
+            key = (r["team"], r["f"], r["unit"])
+            if key in self.used.get(fp, ()):
+                continue
+            if not final:
+                if r["f"] + 5 * decisions.FPM > g["last"]:
+                    continue
+                if r["y"].get("done") == 1 and r["y"].get("lifeS") is None:
+                    continue
+            rows.append(r)
+            keys.append((fp, key))
+        if not rows or (not final and len(rows) < MIN_BATCH):
+            return None
+        rec = self.fac.learn(source, g, first_touch, rows)
+        for fp, key in keys:
+            self.used.setdefault(fp, set()).add(key)
+            self.used_at[fp] = time.time()
+        self.since_export += len(rows) // 4
+        return rec
+
     def poll(self):
         did = []
         for _t, key, d in self.finished_games():
@@ -581,6 +782,7 @@ class Trainer:
             self.seen_dirs.add(key)
             if items:
                 did.append(self.learn(key, g, first, items))
+            did.append(self.learn_fac(key, g, d, final=True))
         live = self.live_games()
         for wd, files in live:
             self.parsed_at[wd] = time.time()
@@ -588,6 +790,7 @@ class Trainer:
             first, items = self.rows_from(g, wd, final=False)
             if len(items) >= MIN_BATCH:
                 did.append(self.learn("live:" + wd.name, g, first, items))
+            did.append(self.learn_fac("live:" + wd.name, g, wd, final=False))
         if did:
             self.save()
         # a deploy writes the repo's empty net over ours: put it back
@@ -618,7 +821,7 @@ def stale_ok(p, state_keys):
     except OSError:
         return False
     return ("NNW_ON = true" in head and ('NNW_STATE = "%s"' % ",".join(state_keys)) in head
-            and "NNW_TRUST" in head)   # a file from before per-kind trust must be rewritten
+            and "NNW_TRUST" in head and "NNF_TRUST" in head)   # older layouts get rewritten
 
 
 def fresh(root):
@@ -632,7 +835,8 @@ def fresh(root):
 def reset():
     """Start a fresh net. The old one and its whole history move to
     runtime/nn-archive/<stamp>/, never deleted: copy them back to restore."""
-    names = ("metrics.jsonl", "status.json", "model.pt", "buffer.npz", "seen.json")
+    names = ("metrics.jsonl", "status.json", "model.pt", "buffer.npz", "seen.json",
+             "fac_model.pt", "fac_buffer.npz", "samples.json")
     if not any((OUT / n).is_file() for n in names):
         return None
     dest = OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S")

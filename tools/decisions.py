@@ -33,6 +33,10 @@ HORIZONS = (1, 3, 5)
 NN = re.compile(r"\]\[f=(\d+)\] .*?apex: nn t=(\d+) f=\d+ u=(\d+) c=(\S+) pick=(\d+) why=(\S*) dm=(\S+)"
                 r" \| (\S+)(?: \| (.*?))? \| chosen=(-?\d+)")
 SCHEMA = re.compile(r"apex: nn-schema v(\d+) state=(\S+) opt=(\S+)")
+FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
+NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
+PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ fac=\S+"
+                  r" uid=(\d+) facid=(\d+)")
 EXEC = re.compile(r"apex: exec t=(\d+) ")
 WASTE = re.compile(r"\[BARAI_WASTE\] frame=(\d+) team=(\d+) mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)")
 BUILT = re.compile(r"\[BARAI_(?:PROD|BUILD)\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)"
@@ -144,12 +148,22 @@ def parse(path, files=None):
     dealt, recv = {}, {}
     mexev, killev, lostev, builds, dead = {}, {}, {}, {}, {}
     died, killby = {}, {}   # by unit id: frame it died; (frame, metal) of what it killed
+    facrows, fac_keys, prods = [], None, {}
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
+            if "apex: nnfac" in ln:
+                m = FAC_SCHEMA.search(ln)
+                if m:
+                    fac_keys = m.group(2).split(",")
+                    continue
+                m = NNFAC.search(ln)
+                if m:
+                    facrows.append(m.groups())
+                continue
             if "apex: nn" in ln:
                 m = SCHEMA.search(ln)
                 if m:
@@ -185,6 +199,10 @@ def parse(path, files=None):
                 recv.setdefault(t, Series()).add(f, float(m.group(5)) + float(m.group(6)))
                 lastd = max(lastd, f)
                 continue
+            m = PROD.search(ln)
+            if m:
+                prods.setdefault(int(m.group(1)), []).append(
+                    (int(m.group(2)), m.group(3), int(m.group(4)), int(m.group(5))))
             m = BUILT.search(ln)
             if m:
                 bx = int(m.group(6)) if m.group(6) is not None else None
@@ -218,6 +236,7 @@ def parse(path, files=None):
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, died=died, killby=killby,
+                facrows=facrows, fac_keys=fac_keys, prods=prods,
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -305,6 +324,43 @@ def rows_of(path, g):
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=int(u), con=con,
                    pick=int(pick), why=why, dm=dm, state=dict(zip(sk, sv)), opts=ov,
                    chosen=ci, y=y)
+
+
+def fac_rows_of(path, g):
+    """Factory orders (`apex: nnfac`), labelled like builder decisions: team
+    outcomes at +1/+3/+5 min, and the produced unit -- the first unclaimed
+    [BARAI_PROD] of that def from THAT factory -- with its own lifetime."""
+    if g["state_keys"] is None or not g.get("fac_keys"):
+        return
+    sk, ok = g["state_keys"], g["fac_keys"]
+    claimed = set()
+    for frame, t, u, con, state, opts, chosen in sorted(g["facrows"], key=lambda r: int(r[0])):
+        f, t, fid = int(frame), int(t), int(u)
+        ov = []
+        for o in (opts or "").split(" ; "):
+            if o:
+                ov.append(dict(zip(ok, (num(x) for x in o.split(",")))))
+        ci = int(chosen)
+        o = ov[ci] if 0 <= ci < len(ov) else {}
+        y = labels(g, t, f, None)
+        y["done"] = y["buildS"] = None
+        built = None
+        f1 = f + HORIZONS[-1] * FPM
+        if o:
+            for i, (pf, name, uid, facid) in enumerate(g["prods"].get(t, [])):
+                if pf > f1:
+                    break
+                if pf > f and name == o.get("def") and facid == fid and (t, i) not in claimed:
+                    claimed.add((t, i))
+                    y["done"], y["buildS"], built = 1, round((pf - f) / 30.0, 1), (pf, uid)
+                    break
+            else:
+                y["done"] = None if f1 > g["last"] else 0
+        y["lifeS"], y["lifeKill"] = lifetime(g, built)
+        y["survived"] = None
+        yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=fid, con=con,
+                   pick=0, why="fac", dm="draw", state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   opts=ov, chosen=ci, y=y)
 
 
 def survived(g, t, f, udef, site, build_s):

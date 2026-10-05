@@ -322,9 +322,11 @@ function gadget:UnitFromFactory(unitID, unitDefID, unitTeam, factID, factDefID)
 		return
 	end
 	local f = Spring.GetGameFrame()
-	BARAI_Echo(string.format("[BARAI_PROD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d fac=%s",
+	-- uid/facid appended last: the factory net credits each unit's lifetime
+	-- to the order that made it (tools/decisions.py)
+	BARAI_Echo(string.format("[BARAI_PROD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d fac=%s uid=%d facid=%d",
 		unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
-		f, f / 1800, ud.name, ud.metalCost or 0, fd.name))
+		f, f / 1800, ud.name, ud.metalCost or 0, fd.name, unitID, factID))
 end
 
 function gadget:UnitFinished(unitID, unitDefID, unitTeam)

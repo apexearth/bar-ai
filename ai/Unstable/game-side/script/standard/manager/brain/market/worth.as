@@ -387,7 +387,7 @@ bool Outgrown(int d)
 	// T2 is not stopped by T3 (his 2026-09-29): fewer of them, through the
 	// gantry's yield and OwnTierMul, never none.
 	if (tier == 1)
-		return TopOwnLandPlantTier() >= 2;
+		return (TopOwnLandPlantTier() >= 2) && !T2SwitchPending();
 	return false;
 }
 
