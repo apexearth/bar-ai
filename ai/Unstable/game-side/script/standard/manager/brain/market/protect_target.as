@@ -192,15 +192,16 @@ bool SiteIsMex(const AIFloat3& in pos)
 // enemy's doorstep, by the spot's forward fraction.
 // HOW SOON THEY CAN REACH IT, not how far it is from home (apexearth
 // 2026-10-05: "mex guards should scale with how soon the enemy can reach a
-// spot"). The walk from their base or from a walking group of theirs that a
-// light gun does not already outweigh, as a share of the walk from their base
+// spot"). The walk from their base, as a share of the walk from their base
 // to ours: 0 when they reach it no sooner than our start, 1 at their door.
-// One speed (FoeSpeedCap) for every walk, so it cancels out of the share.
+// Not from their walking groups (his 2026-10-05: a roaming army cannot be
+// stopped at every mex; make it pay and counterattack); `walkers` is the
+// mexguns line's comparison only.
 int gFoeSrcAt = -999999;
 array<float> gFoeSrcX;
 array<float> gFoeSrcZ;
 float gFoeSpan = 0.f;
-float FoeReachShare(const AIFloat3& in pos)
+float FoeReachShare(const AIFloat3& in pos, bool walkers = false)
 {
 	if (gFoeSrcAt != ai.frame) {
 		gFoeSrcAt = ai.frame;
@@ -225,7 +226,8 @@ float FoeReachShare(const AIFloat3& in pos)
 	if (gFoeSpan <= 1.f)
 		return -1.f;
 	float best = -1.f;
-	for (uint i = 0; i < gFoeSrcX.length(); ++i) {
+	const uint nSrc = walkers ? gFoeSrcX.length() : 1;
+	for (uint i = 0; i < nSrc; ++i) {
 		const float dx = gFoeSrcX[i] - pos.x;
 		const float dz = gFoeSrcZ[i] - pos.z;
 		const float d = sqrt(dx * dx + dz * dz);
@@ -255,20 +257,25 @@ int MexGunsWanted(const AIFloat3& in pos)
 		string s = "";
 		int nNew = 0;
 		int nOld = 0;
+		int nWalk = 0;
 		const array<int>@ rows = MexRows();
 		for (uint q = 0; q < rows.length(); ++q) {
 			const AIFloat3 mp = gLPos[uint(rows[q])];
 			float r = FoeReachShare(mp);
+			float rw = FoeReachShare(mp, true);
 			float f = Military::ForwardFraction(mp);
 			f = (f < 0.f) ? 0.f : ((f > 1.f) ? 1.f : f);
 			if (r < 0.f)
 				r = f;
+			if (rw < 0.f)
+				rw = f;
 			nNew += 1 + int(r * far);
+			nWalk += 1 + int(rw * far);
 			nOld += 1 + int(f * far);
 			s += " " + formatFloat(r, "", 0, 2) + "/" + formatFloat(f, "", 0, 2);
 		}
 		AiLog("apex: mexguns t=" + ai.teamId + " mexes=" + rows.length()
-			+ " gunsReach=" + nNew + " gunsFwd=" + nOld
+			+ " gunsReach=" + nNew + " gunsWalkers=" + nWalk + " gunsFwd=" + nOld
 			+ " srcs=" + gFoeSrcX.length() + " span=" + int(gFoeSpan)
 			+ " reach/fwd:" + s);
 	}
@@ -407,7 +414,7 @@ void CovGateNote(int g)
 		+ " picked=" + gCovGateN[CG_PICK]
 		+ " | atStage billN=" + gCovBillN + " ebankN=" + gCovEBankN + " estallN=" + gCovEStallN
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2)
-		+ " | gunExec interior=" + gInteriorRefused + " grave=" + gGunExecGrave
+		+ " | gunExec interior=" + gInteriorRefused + " exempt=" + gInteriorExempt + " grave=" + gGunExecGrave
 		+ " ferry=" + gGunExecFerry + " takeNull=" + gGunExecNull + " ok=" + gGunExecOk);
 }
 bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex)

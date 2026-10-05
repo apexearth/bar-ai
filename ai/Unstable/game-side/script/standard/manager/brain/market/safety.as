@@ -151,6 +151,58 @@ void CommWatch()
 		gCwWorst = 0;
 		gCwEngageStill = 0;
 	}
+	ComTaskWatch(u, p);
+}
+
+// HIS RULES ONLY RUN WHEN HE IS ASKED, and a held job is never re-elected.
+// Once a second: let the job go when caution
+// holds on far ground, or when T1 near him calls for a tower he has not got --
+// once per episode of each, so a job the re-election hands back is not dropped
+// again every second.
+int gCtwAt = 0;
+int gCtwCaution = 0;
+int gCtwSelf = 0;
+bool gCtwSelfSpent = false;
+bool gCtwCautSpent = false;
+void ComTaskWatch(CCircuitUnit@ u, const AIFloat3& in p)
+{
+	if (ai.frame < gCtwAt)
+		return;
+	gCtwAt = ai.frame + SECOND;
+	if (!CommRules() || (u.GetHealthPercent() <= 0.f))
+		return;
+	IUnitTask@ t = u.task;
+	if ((t is null) || (t.GetType() != Task::Type::BUILDER))
+		return;
+	const int bt = int(t.GetBuildType());
+	if ((bt == int(Task::BuildType::DEFENCE)) || (bt == int(Task::BuildType::PATROL)))
+		return;
+	string why = "";
+	const bool farCaution = ComFar(p) && CommCaution(u);
+	if (!farCaution)
+		gCtwCautSpent = false;
+	if (farCaution && !gCtwCautSpent) {
+		gCtwCautSpent = true;
+		++gCtwCaution;
+		why = "caution";
+	} else if (farCaution) {
+		return;
+	} else if (!gCtwSelfSpent) {
+		if (ComSelfGun(u, false) !is null) {
+			gCtwSelfSpent = true;
+			++gCtwSelf;
+			why = "selfgun";
+		}
+	} else if (ComSelfGun(u, false) is null) {
+		gCtwSelfSpent = false;
+	}
+	if (why.isEmpty())
+		return;
+	t.RemoveUnit(u);
+	AiLog(Factory::T() + "apex: com-letgo t=" + ai.teamId + " " + why + " bt=" + bt
+		+ " at=" + int(p.x) + "," + int(p.z)
+		+ " fwd=" + formatFloat(Military::ForwardFraction(p), "", 0, 2)
+		+ " caution=" + gCtwCaution + " selfgun=" + gCtwSelf);
 }
 
 bool CommRules()
@@ -268,11 +320,45 @@ bool CommCaution(CCircuitUnit@ unit)
 			+ aiEnemyMgr.GetEnemyCost(RT::SUPER);
 	if (heavies >= mine * ai.GetTunable("apex_comm_heavy_frac", TUNE_COMM_HEAVY_FRAC))
 		return true;
-	// Their metal at his own strength-per-metal: a field of heavier-than-mean
-	// units reads bigger than its bill, a field of scouts smaller.
-	const float commQ = UnitStrength(int(unit.circuitDef.id)) / mine;
-	return Military::FoeMobileMassing() * FoeQualityM() / ((commQ > 0.f) ? commQ : 1.f)
-			>= mine * ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT);
+	// T2 COMING AT HIM, not their whole field (his 2026-10-05: T1 he handles
+	// with towers around himself; T2, from ~minute 10, he cannot).
+	const int cd = int(unit.circuitDef.id);
+	FoeT2Fill(cd);
+	if (gFoeT2Out)
+		return true;
+	return gFoeT2Str >= UnitStrength(cd)
+			* ai.GetTunable("apex_comm_mass_mult", TUNE_COMM_MASS_MULT);
+}
+
+// Their known T2+ ground units that are not raiders or scouts (ComRaidF's
+// "raiders cannot kill him"): summed strength, and whether one outranges and
+// outruns the commander -- his 09-24 "a single tier 2 tank can kill him".
+int gFoeT2At = -1;
+float gFoeT2Str = 0.f;
+bool gFoeT2Out = false;
+void FoeT2Fill(int cd)
+{
+	if (gFoeT2At == ai.frame)
+		return;
+	gFoeT2At = ai.frame;
+	gFoeT2Str = 0.f;
+	gFoeT2Out = false;
+	const float cRng = Catalog::gMaxRange[cd];
+	const float cSpd = Catalog::gSpeed[cd];
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int gi = 0; gi < nG; ++gi) {
+		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+		for (int k = 0; k < nU; ++k) {
+			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+			if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d]
+				|| (Catalog::gSurfT[d] <= 0.f) || (DefTier(d) < 2)
+				|| Catalog::Def(d).IsRoleAny(Unit::Role::RAIDER.mask | Unit::Role::SCOUT.mask))
+				continue;
+			gFoeT2Str += UnitStrength(d);
+			if ((cSpd > 0.f) && (Catalog::gMaxRange[d] > cRng) && (Catalog::gSpeed[d] > cSpd))
+				gFoeT2Out = true;
+		}
+	}
 }
 
 // Influence at the position AND four compass points around it: a cautious
@@ -378,6 +464,154 @@ bool ComClaimOk(CCircuitUnit@ unit, const AIFloat3& in pos)
 	return ComRaidF(unit, pos) < 1.f;
 }
 
+// Our ground guns standing or ordered within r of pos, and allies' standing.
+int GroundGunsNear(const AIFloat3& in pos, float r)
+{
+	int n = 0;
+	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t)
+		if (gProtPos[PROT_DEF][t].distance2D(pos) < r)
+			++n;
+	ComNear(pos, r);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint c = uint(gComGrid.hit[q]);
+		const int cd = gComDef[c];
+		if (Catalog::ValidId(cd) && !Catalog::gMobile[cd] && (ProtClassOf(cd) == PROT_DEF)
+			&& (gComState[c] != CS_FINISHED) && OnMap(gComPos[c])
+			&& (gComPos[c].distance2D(pos) < r))
+			++n;
+	}
+	AllyStaticsSync();
+	gAllyStGrid.Query(pos.x, pos.z, r);
+	for (uint q = 0; q < gAllyStGrid.hit.length(); ++q) {
+		const uint i = uint(gAllyStGrid.hit[q]);
+		if ((i < gAllyStPos.length()) && (ProtClassOf(gAllyStDef[i]) == PROT_DEF)
+			&& (gAllyStPos[i].distance2D(pos) < r))
+			++n;
+	}
+	return n;
+}
+
+// TOWERS AROUND HIMSELF (his 2026-10-05: "if the commander feels like he is in
+// danger, he can just make more towers around himself"). T1 groups whose reach
+// covers him and that are not leaving: a light tower where he works, as many
+// as their metal takes to stop at apex_def_trade, standing or ordered. Once
+// CommCaution holds (T2 coming at him) he leaves instead.
+int gComSelfPick = 0;
+int gComSelfExec = 0;
+int gComSelfInterior = 0;
+int gComSelfBroke = 0;
+int gComSelfLogAt = 0;
+int gComSelfAsk = 0;
+int gComSelfCaut = 0;
+int gComSelfCalm = 0;
+int gComSelfCovered = 0;
+int gComSelfSumAt = 0;
+Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
+{
+	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return null;
+	if (note) ++gComSelfAsk;
+	if (note && (ai.frame >= gComSelfSumAt)) {
+		gComSelfSumAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: com-selfgate t=" + ai.teamId + " ask=" + gComSelfAsk
+			+ " t2orCaution=" + gComSelfCaut + " noT1near=" + gComSelfCalm
+			+ " covered=" + gComSelfCovered + " interior=" + gComSelfInterior
+			+ " broke=" + gComSelfBroke + " picked=" + gComSelfPick + " exec=" + gComSelfExec
+			+ " letgoCaution=" + gCtwCaution + " letgoSelf=" + gCtwSelf);
+	}
+	if (Factory::gHaveT2 || OwnEffigyStands() || CommCaution(unit)) {
+		if (note) ++gComSelfCaut;
+		return null;
+	}
+	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
+	if ((light is null) || (Catalog::BuildsOf(int(unit.circuitDef.id)).find(int(light.id)) < 0))
+		return null;
+	const int ld = int(light.id);
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	if (!OnMap(here))
+		return null;
+	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	float threatM = 0.f;
+	float bestD = -1.f;
+	AIFloat3 foeAt;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int gi = 0; gi < nG; ++gi) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
+		if (!OnMap(gp))
+			continue;
+		const float dd = gp.distance2D(here);
+		if (dd > aiEnemyMgr.GetEnemyGroupRange(gi) + r)
+			continue;
+		int nMob = 0;
+		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
+		for (int k = 0; (k < nU) && (nMob == 0); ++k) {
+			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
+			if (Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d])
+				++nMob;
+		}
+		if (nMob == 0)
+			continue;
+		const AIFloat3 vv = aiEnemyMgr.GetEnemyGroupVelVec(gi);
+		AIFloat3 toMe = here - gp;
+		toMe.SafeNormalize2D();
+		if (vv.x * toMe.x + vv.z * toMe.z < -1.f)
+			continue;
+		threatM += aiEnemyMgr.GetEnemyGroupCost(gi);
+		if ((bestD < 0.f) || (dd < bestD)) {
+			bestD = dd;
+			foeAt = gp;
+		}
+	}
+	if (bestD < 0.f) {
+		if (note) ++gComSelfCalm;
+		return null;
+	}
+	const float lr = Brain::LightTowerRange();
+	const int have = GroundGunsNear(here, lr);
+	const float stopM = Catalog::gCostM[ld] * ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+	const int need = int(ceil(threatM / ((stopM > 1.f) ? stopM : 1.f)));
+	if (have >= need) {
+		if (note) ++gComSelfCovered;
+		return null;
+	}
+	AIFloat3 site = here;
+	AIFloat3 dir = foeAt - here;
+	if (dir.SqLength2D() > 1.f) {
+		dir.SafeNormalize2D();
+		const AIFloat3 s2 = here + dir * 100.f;
+		if (OnMap(s2))
+			site = s2;
+	}
+	if (InteriorGunSite(ld, site)) {
+		if (note) ++gComSelfInterior;
+		return null;
+	}
+	const float bill = Catalog::gCostM[ld] + Catalog::gCostE[ld] * EPriceCostAt(30.f, Catalog::gCostE[ld]);
+	if ((bill > EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S))
+		|| (Eco::ECur() < Catalog::gCostE[ld]) || HardEStall() || aiEconomyMgr.isEnergyStalling)
+	{
+		if (note) ++gComSelfBroke;
+		return null;
+	}
+	Want@ cw = Want();
+	cw.kind = WK_PROTECT;
+	cw.spotId = PROT_DEF;
+	@cw.def = light;
+	cw.pos = site;
+	ValueOf(ld, 1.f, 0.f, Catalog::gBuildPower[int(unit.circuitDef.id)], cw);
+	if (note) ++gComSelfPick;
+	if (note && (ai.frame >= gComSelfLogAt)) {
+		gComSelfLogAt = ai.frame + 10 * SECOND;
+		AiLog(Factory::T() + "apex: com-selfgun t=" + ai.teamId
+			+ " threat=" + int(threatM) + " at " + int(bestD)
+			+ " guns=" + have + "/" + need
+			+ " site=" + int(site.x) + "," + int(site.z)
+			+ " picked=" + gComSelfPick + " exec=" + gComSelfExec
+			+ " interior=" + gComSelfInterior + " broke=" + gComSelfBroke);
+	}
+	return cw;
+}
+
 // Returns a task when the commander should be saving himself instead of
 // working, else null. MUST be consulted before Decide's finish-what's-started
 // early return: a commander with progress on a frame would otherwise never
@@ -403,6 +637,9 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			+ " def=" + unit.circuitDef.GetName()
 			+ " heavies=" + formatFloat(aiEnemyMgr.GetEnemyCost(RT::HEAVY) + aiEnemyMgr.GetEnemyCost(RT::SUPER), "", 0, 0)
 			+ " foeMobile=" + formatFloat(Military::FoeMobileMassing(), "", 0, 0)
+			+ " t2str=" + formatFloat(gFoeT2Str, "", 0, 3)
+			+ " his=" + formatFloat(UnitStrength(int(unit.circuitDef.id)), "", 0, 3)
+			+ " t2out=" + (gFoeT2Out ? 1 : 0)
 			+ " q=" + formatFloat(FoeQualityM(), "", 0, 2));
 	}
 	// "If enemy is running away, fine - let them" (apexearth). Hold position

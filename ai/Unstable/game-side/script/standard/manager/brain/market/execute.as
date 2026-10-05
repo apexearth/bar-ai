@@ -10,11 +10,23 @@ int gGunExecOk = 0;
 
 // The executor's interior test, shared with the proposers so a site it will
 // refuse is never elected (the refusal fell through to energy every election).
-bool InteriorGunSite(int d, const AIFloat3& in at)
+bool InteriorGunGeom(int d, const AIFloat3& in at)
 {
 	return gPfRimOk && Catalog::ValidId(d) && (Catalog::gSurfT[d] > 0.01f)
 		&& (at.distance2D(gPfMid) < PfHullRadius() - 0.5f * Catalog::gMaxRange[d]);
 }
+// ...unless it is a mex's only cover (his 2026-10-05): the nearest of our mexes
+// in its reach has no gun standing or ordered.
+bool SoleMexCover(int d, const AIFloat3& in at)
+{
+	const AIFloat3 m = NearestMex(at, Catalog::gMaxRange[d]);
+	return OnMap(m) && !MexHasCover(m, Brain::LightTowerRange());
+}
+bool InteriorGunSite(int d, const AIFloat3& in at)
+{
+	return InteriorGunGeom(d, at) && !SoleMexCover(d, at);
+}
+int gInteriorExempt = 0;
 int gNextInteriorLog = 0;
 int gNextELadderLog = 0;   // the mid-stall energy fallback, 10s apart
 // The nano placement probe's cache (see the WK_NANO branch).
@@ -524,7 +536,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// already lost half your base"). A gun stands where at least half
 		// its reach lies outside the base's hull; deeper in, it covers
 		// buildings that are already behind everything it could stop.
-		if (groundDef && InteriorGunSite(int(w.def.id), sAt))
+		const bool soleCover = groundDef && InteriorGunGeom(int(w.def.id), sAt)
+				&& SoleMexCover(int(w.def.id), sAt);
+		if (groundDef && !soleCover && InteriorGunGeom(int(w.def.id), sAt))
 		{
 			++gInteriorRefused;
 			if (ai.frame >= gNextInteriorLog) {
@@ -565,6 +579,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 				++gGunExecNull;
 			else
 				++gGunExecOk;
+		}
+		if (soleCover && (sTask !is null)) {
+			++gInteriorExempt;
+			AiLog("apex: interior-gun exempt t=" + ai.teamId + " " + w.def.GetName()
+				+ " at=" + int(sAt.x) + "," + int(sAt.z)
+				+ " depth=" + int(PfHullRadius() - sAt.distance2D(gPfMid))
+				+ " -- the mex's only cover, " + gInteriorExempt + " exempt");
 		}
 		// The team hears the order now, not when the frame appears.
 		if (sMade && !groundDef)

@@ -1930,6 +1930,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1));
 		}
 	}
+	if (!aaPanic && !superPush && !convertPush && !coverPush) {
+		Want@ sg = ComSelfGun(unit);
+		if (sg !is null) {
+			ranked.insertAt(0, sg);
+			why = "comself";
+			coverPush = true;
+		}
+	}
 	// EVERY EXTRACTOR HAS A GUN IN REACH (apexearth 2026-10-02: "make sure each
 	// one has some level of coverage ... as long as there's one covering at
 	// least every mex"). The push below only fires for a hand already standing
@@ -2747,6 +2755,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if ((ranked[i].kind == WK_MEX)
 				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)))
 				NoteClaim(unit, ranked[i]);
+			if ((depth == 0) && (why == "comself"))
+				++gComSelfExec;
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a
