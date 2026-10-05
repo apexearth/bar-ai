@@ -150,6 +150,7 @@ conclusion each one produced.
 | **say why a game was won or lost** | `python tools/story.py <match> --bucket 120` FIRST, then `python tools/minutes.py <match>` -- every game result is read minute by minute (his standard, 2026-09-29): income, energy, waste, mexes, metal lost/killed and k/l, damage in/out. His rule 2026-09-19: the final numbers are never the story; find the turn |
 | **see the game** | `python tools/mapframe.py <match> --minutes 4,8,12,16,20,24` -- a PNG contact sheet (Read it): structures, mexes, towers, army, deaths per frame, both sides. His suggestion 2026-09-19; it shows "we never left the corner" in one look |
 | **diagnose why we lost a fight** | `fight-analysis` skill, `tools/deaths.py`, `tools/battles.py` |
+| **train or feed the decision value net** | `docs/35-decision-net.md` -- `apex: nn` records, `tools/decisions.py` joins them to outcomes |
 | **check a game against his complaints** | `game-audit` skill |
 | **investigate a desync** | `desync-check` skill |
 | **find a path or an engine version** | `python tools/bar_env.py`, `docs/01-local-environment.md` |

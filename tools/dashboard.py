@@ -5,8 +5,7 @@
 
 Stdlib only. Binds 127.0.0.1 only. The page is tools/dashboard_ui.html; this file
 is the API: browse matches/tournaments, run the analysis tools, launch watch or
-headless games as tracked jobs, deploy, and edit tunables (top-level script
-consts in place, config JSON as validated text so the // comments survive).
+headless games as tracked jobs with mod-option overrides, and deploy.
 """
 import argparse
 import json
@@ -21,7 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-import dashboard_guide
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
@@ -969,6 +967,56 @@ def kill_job(jid):
     return {"ok": True}
 
 
+NN_DIR = REPO / "runtime" / "nn"
+NN_DESC = "net trainer"
+
+
+def nn_job():
+    with JOBS_LOCK:
+        for jid, j in JOBS.items():
+            if j["desc"] == NN_DESC and j["proc"].poll() is None:
+                return jid
+    return None
+
+
+def nn_state():
+    rows = []
+    try:
+        with open(NN_DIR / "metrics.jsonl", encoding="utf-8") as fh:
+            rows = [json.loads(ln) for ln in fh if ln.strip()]
+    except OSError:
+        pass
+    try:
+        status = json.loads((NN_DIR / "status.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        status = {}
+    age = time.time() - status.get("at", 0)
+    fresh = {"watching": 30, "training": 600}.get(status.get("phase"), 0)
+    running = nn_job() is not None or age < fresh
+    return {"metrics": rows, "status": status, "age": age, "running": running}
+
+
+def nn_action(act):
+    if act == "start":
+        if nn_job() or nn_state()["running"]:
+            return {"ok": True, "already": True}
+        return {"ok": True, "id": start_job(NN_DESC, ["tools/nntrain.py"])}
+    if act == "stop":
+        jid = nn_job()
+        if not jid:
+            return {"ok": False, "error": "the trainer was not started from this dashboard"}
+        r = kill_job(jid)
+        st = nn_state()["status"]
+        st["phase"] = "stopped"
+        (NN_DIR / "status.json").write_text(json.dumps(st), encoding="utf-8")
+        return r
+    if act == "reset":
+        if nn_state()["running"]:
+            return {"ok": False, "error": "stop the trainer first"}
+        return run_tool(["tools/nntrain.py", "--reset"])
+    raise ValueError("unknown net action")
+
+
 FACTION_CHOICES = {"random", "armada", "cortex", "legion"}
 
 
@@ -1254,72 +1302,6 @@ def parse_targets():
             "groups": [g for g in groups if g["rows"]]}
 
 
-def set_target(lineno, name, old_values, new_values):
-    """Edit floats of one array row in place, preserving alignment."""
-    txt = TARGETS_AS.read_text(encoding="utf-8")
-    lines = txt.split("\n")
-    i = int(lineno) - 1
-    m = ARRAY_RE.match(lines[i]) if 0 <= i < len(lines) else None
-    if not m or m.group(2) != name:
-        raise ValueError("line changed on disk; reload tunables")
-    body = m.group(3)
-    toks = list(re.finditer(r"-?[\d.]+f?", body))
-    cur = [t.group().rstrip("f") for t in toks]
-    if cur != [str(v).strip() for v in old_values] or len(new_values) != len(toks):
-        raise ValueError("row changed on disk; reload tunables")
-    out, last = [], 0
-    for t, nv in zip(toks, new_values):
-        v = float(nv)  # validates
-        s = str(nv).strip()
-        if "." not in s:
-            s += ".0"
-        out.append(body[last:t.start()] + s + "f")
-        last = t.end()
-    out.append(body[last:])
-    lines[i] = m.group(1) + "".join(out) + m.group(4)
-    TARGETS_AS.write_text("\n".join(lines), encoding="utf-8", newline="\n")
-    return {"ok": True}
-
-
-def list_consts():
-    out = []
-    for f in sorted(SCRIPT_DIR.rglob("*.as")):
-        rel = str(f.relative_to(REPO)).replace(os.sep, "/")
-        try:
-            lines = f.read_text(encoding="utf-8", errors="replace").split("\n")
-        except Exception:
-            continue
-        for i, line in enumerate(lines):
-            m = CONST_RE.match(line)
-            if m:
-                tail = m.group(4)
-                cm = tail.split("//", 1)
-                out.append({"file": rel, "line": i + 1, "name": m.group(2),
-                            "value": m.group(3).strip(),
-                            "comment": cm[1].strip() if len(cm) > 1 else ""})
-    return out
-
-
-def set_const(rel, lineno, name, old, new):
-    p = (REPO / rel).resolve()
-    if not str(p).startswith(str(SCRIPT_DIR.resolve()) + os.sep):
-        raise ValueError("outside script dir")
-    txt = p.read_text(encoding="utf-8")
-    lines = txt.split("\n")
-    i = int(lineno) - 1
-    if i < 0 or i >= len(lines):
-        raise ValueError("line out of range")
-    m = CONST_RE.match(lines[i])
-    if not m or m.group(2) != name or m.group(3).strip() != old.strip():
-        raise ValueError("line changed on disk; reload tunables")
-    new = str(new).strip()
-    if not new or any(c in new for c in ";\r\n"):
-        raise ValueError("bad value")
-    lines[i] = m.group(1) + new + m.group(4)
-    p.write_text("\n".join(lines), encoding="utf-8", newline="\n")
-    return {"ok": True}
-
-
 def strip_jsonc(text):
     out, i, n, in_str = [], 0, len(text), False
     while i < n:
@@ -1391,6 +1373,8 @@ class Handler(BaseHTTPRequestHandler):
                             for k, j in JOBS.items()]
                 self.send_json({"processes": running_processes(), "jobs": jobs,
                                 "repo": str(REPO)})
+            elif u.path == "/api/nn":
+                self.send_json(nn_state())
             elif u.path == "/api/games":
                 kind = q.get("kind", "matches")
                 self.send_json(list_matches() if kind == "matches"
@@ -1437,8 +1421,6 @@ class Handler(BaseHTTPRequestHandler):
                     j = JOBS.get(q.get("id"))
                 self.send_json(job_state(q["id"], j) if j
                                else {"error": "unknown job"}, 200 if j else 404)
-            elif u.path == "/api/guide":
-                self.send_json(dashboard_guide.build(parse_tunables()))
             elif u.path == "/api/tunables":
                 secs = parse_tunables()
                 cpp = cpp_tunables()
@@ -1494,14 +1476,10 @@ class Handler(BaseHTTPRequestHandler):
                         p.get("mode", "headless"), p.get("a"), p.get("b"),
                         p.get("map"))
                 self.send_json({"ok": True, "id": start_job(desc, args)})
+            elif u.path == "/api/nn":
+                self.send_json(nn_action(p.get("action")))
             elif u.path == "/api/kill":
                 self.send_json(kill_job(p.get("id")))
-            elif u.path == "/api/const":
-                self.send_json(set_const(p["file"], p["line"], p["name"],
-                                         p["old"], p["new"]))
-            elif u.path == "/api/target":
-                self.send_json(set_target(p["line"], p["name"],
-                                          p["old"], p["new"]))
             elif u.path == "/api/config":
                 path = config_path(p["name"])
                 text = p["text"]

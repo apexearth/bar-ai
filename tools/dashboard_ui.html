@@ -67,134 +67,20 @@
   .legend i { display:inline-block; width:10px; height:10px; border-radius:2px;
               margin-right:5px; }
   #gameback { margin-bottom:10px; }
-  .tunerow td input { width:140px; }
-  .tgl { width:42px; height:22px; border-radius:11px; border:1px solid var(--line);
-         background:var(--panel2); position:relative; cursor:pointer; padding:0;
-         flex:0 0 auto; transition:background .12s; }
-  .tgl i { position:absolute; top:2px; left:2px; width:16px; height:16px;
-           border-radius:50%; background:var(--dim); transition:left .12s, background .12s; }
-  .tgl.on { background:#1e4b2e; border-color:#2f7d49; }
-  .tgl.on i { left:22px; background:var(--good); }
-  #constfilter { width:280px; }
-  .lead { font-size:13px; color:var(--dim); max-width:74ch; }
-  .knob { display:flex; gap:12px; align-items:flex-start; padding:8px 0;
-          border-bottom:1px solid #232b35; }
-  .knob:last-child { border-bottom:none; }
-  .knob .k-txt { flex:1; min-width:0; }
-  .knob .k-up { font-size:12px; color:var(--dim); margin-top:1px; }
-  .knob .k-up b { color:var(--text); font-weight:600; }
-  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(400px,1fr));
-           gap:14px; align-items:start; }
-  .bar { display:flex; height:24px; border-radius:5px; overflow:hidden;
-         border:1px solid var(--line); }
-  .bar span { display:flex; align-items:center; justify-content:center;
-              font-size:11px; color:#0b1016; font-weight:600; overflow:hidden; }
-  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px;
-            margin-right:5px; vertical-align:middle; }
-  .scrub { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  .scrub input[type=range] { flex:1; min-width:220px; accent-color:var(--accent); }
-  .chip { background:var(--panel2); border:1px solid var(--line); color:var(--dim);
-          border-radius:12px; padding:2px 10px; font-size:12px; cursor:pointer; }
-  .chip.on { color:var(--text); border-color:var(--accent); }
-  .goal { background:var(--panel2); border:1px solid var(--line); border-radius:8px;
-          padding:12px; margin-top:12px; }
-  .step { display:flex; gap:10px; align-items:flex-start; padding:8px 0;
-          border-bottom:1px solid #232b35; }
-  .step:last-child { border-bottom:none; }
-  .arrow { flex:0 0 auto; width:24px; height:24px; border-radius:6px;
-           display:flex; align-items:center; justify-content:center;
-           font-weight:700; font-size:13px; }
-  .arrow.up { background:#1e4b2e; color:var(--good); }
-  .arrow.down { background:#4b1e1e; color:var(--bad); }
-  .arrow.either { background:var(--panel); color:var(--dim); }
-  .stepn { flex:0 0 auto; width:20px; color:var(--dim); font-size:12px;
-           text-align:right; padding-top:3px; }
 </style>
 </head>
 <body>
 <header>
   <h1>bar-ai <span>dashboard</span></h1>
   <nav id="nav">
-    <button data-tab="balance">Balance</button>
     <button data-tab="games" class="on">Games</button>
     <button data-tab="launch">Launch</button>
+    <button data-tab="net">Net</button>
     <button data-tab="deploy">Deploy</button>
-    <button data-tab="tunables">Tunables</button>
   </nav>
   <div id="procwarn"></div>
 </header>
 <main>
-
-<!-- ================= BALANCE ================= -->
-<section id="tab-balance" class="tab">
-  <div class="card">
-    <h2>How this AI is balanced</h2>
-    <p class="lead" style="margin:0 0 8px">
-      Everything below is a <b>default the AI ships with</b>, read straight out of
-      <span class="mono">targets.as</span> and <span class="mono">tunables.as</span>.
-      Editing a value writes the file &mdash; press <b>Deploy</b> before the change
-      reaches a game. The small <b>override</b> box beside a knob does not touch the
-      file: it rides along as a modoption on every game launched from this dashboard,
-      which is the cheap way to A/B one number.</p>
-    <p class="lead" style="margin:0">
-      This page is the curated set. <span id="bal-count"></span>
-      Nothing here is a hard cap or a timer &mdash; every number is a ratio against
-      the economy, which is the rule the whole AI is built on.</p>
-  </div>
-
-  <div class="card">
-    <h2>What do you want to change?</h2>
-    <p class="lead" style="margin:0 0 10px">Pick the thing you actually want
-      different. Each one is an ordered recipe &mdash; try the first step alone,
-      redeploy, and look before adding the second. Twelve changes in one session
-      once cut this AI's metal production 4.3&times;, and every one of them had
-      looked reasonable on its own.</p>
-    <div id="goal-chips" class="scrub" style="gap:6px"></div>
-    <div id="goal-body"></div>
-  </div>
-
-  <div class="card">
-    <h2>Read the balance at</h2>
-    <div class="scrub">
-      <input id="bal-inc" type="range" min="0" max="100" value="55" oninput="balIncome()">
-      <b class="mono" id="bal-incval" style="width:90px">50 metal/s</b>
-      <span id="bal-chips"></span>
-    </div>
-    <div class="dim" style="font-size:12px;margin-top:6px">
-      Every share below is a curve over metal income, not a stage or a clock.
-      Slide this to see what the AI aims at once the economy reaches that size.
-      For scale: an opening is ~8, a healthy 1v1 mid-game ~50, a bonused online
-      team game runs 150&ndash;400.</div>
-  </div>
-
-  <div id="bal-panels"></div>
-
-  <div class="card">
-    <h2>What decides what &mdash; the mechanism map</h2>
-    <div class="scrub" style="margin-bottom:4px">
-      <input id="bal-search" placeholder="search these knobs…" style="flex:1"
-             oninput="renderGuideGroups()">
-      <span class="dim" style="font-size:12px">full 300+ list lives in
-        <a href="javascript:void(0)" onclick="ovGoTunables()">Tunables</a></span>
-    </div>
-  </div>
-  <div id="bal-groups"></div>
-
-  <div class="card">
-    <h2>Changed something?</h2>
-    <p class="lead" style="margin:0 0 10px">A value edited above is written to the
-      repo, not to the game. <b>Deploy</b> copies it into the live install, then
-      watch a game and see what it did &mdash; five minutes of watching beats a
-      tournament for finding out whether a change helped.</p>
-    <div class="row">
-      <button class="act primary" onclick="action('deploy')">Deploy &rarr; game</button>
-      <button class="act" onclick="document.querySelector('#nav button[data-tab=&quot;launch&quot;]').click()">Launch a game &rarr;</button>
-      <span class="dim" style="align-self:center;font-size:12px">
-        Only changing one thing at a time tells you which change did it.</span>
-    </div>
-    <pre id="baldeploy" style="display:none"></pre>
-  </div>
-</section>
 
 <!-- ================= GAMES ================= -->
 <section id="tab-games" class="tab on">
@@ -220,6 +106,44 @@
   <div id="gamedetail" style="display:none">
     <button class="act" id="gameback" onclick="showList()">&larr; back to list</button>
     <div id="gamedetailbody"></div>
+  </div>
+</section>
+
+<!-- ================= NET ================= -->
+<section id="tab-net" class="tab">
+  <div class="card">
+    <button class="act" onclick="netAct('start')">Start training</button>
+    <button class="act" onclick="netAct('stop')">Stop</button>
+    <button class="act" onclick="netAct('reset')" style="float:right" title="The current net and its history move to runtime/nn-archive/; nothing is deleted">Start a fresh net (archives this one)</button>
+    <div id="nn-status" style="margin-top:8px"></div>
+    <div class="dim" style="margin-top:6px">The net learns <b>while games are running</b>: every few seconds it
+      reads each running game whose AI records its decisions (the logger build), and once a decision's next
+      5 minutes have been played it becomes trainable. Each batch is predicted <b>before</b> the net trains on
+      it, so every point below is data it had never seen. 1.0 is a perfect prediction; 0 is no better than
+      guessing the average; below 0 is worse than that. All running games feed this one net.</div>
+    <div class="dim" style="margin-top:6px">To let it <b>play</b>: the trainer writes its weights into the logger
+      build every ~800 decisions, and every game started afterwards loads them. Add
+      <code>apex_nn_blend=1</code> to Modoptions on the Launch tab (0 = it only watches; 2 = it steers hard).</div>
+  </div>
+  <div class="card">
+    <div class="dim">How well it predicts the next 3 minutes of decisions it has not seen
+      (income, energy, damage trade, waste, mexes, losses) &mdash; one dot per batch, line = average of the last 5</div>
+    <canvas id="nn-c-acc" width="1140" height="260"></canvas>
+    <div id="nn-leg-acc" class="legend"></div>
+  </div>
+  <div class="card">
+    <div class="dim">Does knowing the decision help? (with the decision minus without it, on decisions chosen on value -- forced ones left out; above 0 means the
+      choice carries information the net can learn to value)</div>
+    <canvas id="nn-c-gain" width="1140" height="180"></canvas>
+  </div>
+  <div class="card">
+    <div class="dim">Training error after each game (lower is better)</div>
+    <canvas id="nn-c-loss" width="1140" height="180"></canvas>
+    <div id="nn-leg-loss" class="legend"></div>
+  </div>
+  <div class="card">
+    <div class="dim">Each prediction, averaged over the last 5 unseen games</div>
+    <div id="nn-table"></div>
   </div>
 </section>
 
@@ -280,7 +204,7 @@
         oninput="drawBoxPreview()"></label>
       <label class="f">&nbsp;<canvas id="l-boxprev" width="72" height="72"
         title="A = green, B = red"></canvas></label>
-      <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v; a name typed here wins over the same name's Tunables-tab override"></label>
+      <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v; a name typed here wins over the same name's Advanced override"></label>
       <button class="act primary" onclick="launch()">Launch</button>
     </div>
     <datalist id="maplist"></datalist>
@@ -327,35 +251,6 @@
   </div>
 </section>
 
-<!-- ================= TUNABLES ================= -->
-<section id="tab-tunables" class="tab">
-  <div class="dim" style="font-size:12px;margin-bottom:10px">
-    <b>This is the full reference &mdash; every default the AI ships with</b>, straight
-    from <span class="mono">tunables.as</span> and <span class="mono">targets.as</span>.
-    If you are here to change how the AI plays rather than to look one number up,
-    start on <a href="javascript:void(0)"
-      onclick="document.querySelector('#nav button[data-tab=&quot;balance&quot;]').click()">Balance</a>,
-    which groups the knobs that actually steer behaviour and says what each one does.
-    Edits write into those files; hit <b>Deploy</b> when done — the game runs the
-    deployed copy, not this repo.
-    The <b>override</b> box next to a knob does NOT edit the file: a non-blank
-    value is passed as a <span class="mono">--modoption</span> on every launch
-    and tournament started here, no deploy needed. Blank = ship default.
-  </div>
-  <div style="display:flex;gap:16px;align-items:flex-start">
-    <div class="card" style="min-width:230px;position:sticky;top:64px">
-      <input id="tunesearch" placeholder="search all knobs…"
-             style="width:100%;margin-bottom:8px" oninput="renderTunables()">
-      <label style="display:flex;gap:6px;align-items:center;font-size:12px;
-             color:var(--dim);margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="tuneshowdead" style="width:auto"
-               onchange="renderTunables()"> show dead knobs
-        <span id="tunedeadn" class="dim"></span></label>
-      <div id="tunecats"></div>
-    </div>
-    <div id="tunebody" style="flex:1;min-width:0"></div>
-  </div>
-</section>
 </main>
 <div id="toast"></div>
 
@@ -420,7 +315,7 @@ function uiBind(id, key) {
 }
 
 /* ---------- tunable overrides ----------
-   Values set in the Tunables tab's override column. Persisted like the launch
+   Values set in the Launch tab's Advanced picker. Persisted like the launch
    form, and appended to EVERY launch/tournament as --modoption name=value; a
    same-name token typed in the Modoptions field wins over the override. */
 const MODOPT_RE = /^[a-z0-9_]+=[-\w.]+$/;      // mirror of dashboard.py's check
@@ -434,9 +329,6 @@ function setTuneOv(name, value) {
   UI.tuneOv = ov; uiSave();
   renderOvSummary();
 }
-function ovGoTunables() {
-  document.querySelector('#nav button[data-tab="tunables"]').click();
-}
 function renderOvSummary() {
   const el = $("#l-ovsum"); if (!el) return;
   const ov = tuneOv(), names = Object.keys(ov).sort();
@@ -447,14 +339,13 @@ function renderOvSummary() {
         return `<span class="mono"${bad
           ? ` style="color:var(--bad)" title="${OV_IGNORED}"` : ""}>${esc(n)}=${esc(ov[n])}</span>`;
       }).join(", ")
-    + ` — <a href="javascript:ovGoTunables()">edit in Tunables</a>`;
+    + " — edit them under Advanced below";
 }
 
 /* ---------- Launch tab: the Advanced mod-option picker ----------
    Every name dev_tunables.lua republishes, with the deployed default beside it
-   and a box to set a launch value. It writes UI.tuneOv, the same store the
-   Tunables tab's override column uses, so the value rides along as
-   --modoption on this launch with no extra plumbing. apexearth 2026-09-23:
+   and a box to set a launch value. It writes UI.tuneOv, so the value rides
+   along as --modoption on this launch with no extra plumbing. apexearth 2026-09-23:
    "a list of mod options we can just choose from". */
 let ADVROWS = null;   // [{name, def, section}] once /api/tunables has been read
 
@@ -536,8 +427,7 @@ $("#nav").addEventListener("click", e => {
   uiSet("tab", b.dataset.tab);
   if (b.dataset.tab === "games") loadGames();
   if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); renderAdvOpts(); }
-  if (b.dataset.tab === "tunables") loadTunables();
-  if (b.dataset.tab === "balance") loadBalance();
+  if (b.dataset.tab === "net") loadNet();
 });
 
 /* ---------- games ---------- */
@@ -1173,7 +1063,7 @@ function drawEta(e) {
   const cv = $("#c-eta"); if (!cv) return;
   if (!e || !e.min || !e.min.length) {
     frame(cv, 1, 1);
-    setHTML("#eta-legend", `<span class="dim">no \`apex: eta\` lines in this infolog</span>`);
+    setHTML($("#eta-legend"), `<span class="dim">no \`apex: eta\` lines in this infolog</span>`);
     return;
   }
   const hi = Math.max(1, ...e.target);
@@ -1183,7 +1073,7 @@ function drawEta(e) {
   line(f, e.min, e.cheap, "#e0876c", null, 1.6);
   const n = e.min.length, l = n - 1;
   const agree = e.agree.reduce((a, b) => a + b, 0);
-  setHTML("#eta-legend",
+  setHTML($("#eta-legend"),
     `<span><i style="background:#5fbf77"></i>economic power ${e.power[l].toFixed(1)}</span>`
     + `<span><i style="background:#94a3ae;opacity:.55"></i>target ${e.target[l].toFixed(1)}</span>`
     + `<span><i style="background:#e0876c"></i>cheap growth left ${e.cheap[l].toFixed(2)} m/s</span>`
@@ -1536,7 +1426,7 @@ async function launch() {
     handicap: $("#l-handicap").value,
   };
   // Tunable overrides first, then the free-text field on top: a same-name
-  // token typed there wins over the Tunables tab.
+  // token typed there wins over the Advanced picker.
   const merged = Object.assign({}, tuneOv());
   for (const t of $("#l-modopt").value.trim().split(/\s+/).filter(Boolean)) {
     if (!MODOPT_RE.test(t))
@@ -1547,7 +1437,7 @@ async function launch() {
   body.modoptions = Object.keys(merged).sort().map(n => n + "=" + merged[n]);
   for (const mo of body.modoptions)
     if (!MODOPT_RE.test(mo))
-      return toast("bad tunable override: " + mo + " — fix it in the Tunables tab", true);
+      return toast("bad tunable override: " + mo + " — fix it under Advanced", true);
   if (!body.map) return toast("pick a map", true);
   try {
     const r = await api("/api/launch", body);
@@ -1641,755 +1531,7 @@ async function action(a, force) {
   } catch (e) { out.textContent = "error: " + e.message; }
 }
 
-/* ---------- tunables ---------- */
-let TUNE = null;
-// tuneCat: -1 = ratios, else section index. Restored from the last visit; the
-// section list can shrink between versions, so renderTunables clamps it.
-let tuneCat = (UI.tuneCat !== undefined) ? UI.tuneCat : 0;
-const WORDS = {ADVSOL:"advanced solar", CONV:"converter", INC:"income",
-  ECO:"economy", DEF:"defence", AA:"anti-air", BP:"build power", CON:"constructor",
-  CONS:"constructors", FAC:"factory", MEX:"mex", T1:"T1", T2:"T2", T3:"T3",
-  MIN:"min", MAX:"max", PER:"per", R:"radius", DIST:"distance", SECS:"seconds",
-  FRAC:"fraction", PCT:"percent", MULT:"multiplier", THR:"threshold",
-  COMM:"commander", NANO:"nano turret", AFUS:"adv fusion", GEO:"geothermal",
-  ARTY:"artillery", AH:"anti-heavy", AHA:"anti-heavy arty", SKIRM:"skirmisher",
-  H:"horizon", S:"seconds", W:"width", N:"count", LOG:"curve",
-  MOHO:"moho", ANTINUKE:"antinuke", MS:"metal/s", E:"energy", M:"metal"};
-const humanize = n => n.replace(/^(TUNE_|SPEND_|ROLE_|DEF_|SCOUT_)/, "")
-  .split("_").map(w => WORDS[w] || w.toLowerCase()).join(" ")
-  .replace(/^./, c => c.toUpperCase());
-let CURATED = new Set();
-async function loadTunables() {
-  TUNE = await api("/api/tunables");
-  GADGET = new Set(TUNE.gadget_tunables || []);
-  if (!CURATED.size) {
-    try { CURATED = new Set((await api("/api/guide")).curated); } catch (e) {}
-  }
-  $("#tuneshowdead").checked = !!UI.tuneShowDead;
-  if (UI.tuneSearch && !$("#tunesearch").value) $("#tunesearch").value = UI.tuneSearch;
-  renderTunables();
-}
-// The per-row override box. Not a file edit: a non-blank value rides along as
-// --modoption on every dashboard launch. Red = dev_tunables.lua won't republish
-// it, so the game reads its compiled/scripted default and says nothing.
-function ovInput(name) {
-  const v = tuneOv()[name] || "";
-  const bad = GADGET && !GADGET.has(name);
-  const style = v ? (bad ? "border-color:var(--bad);color:var(--bad)"
-                         : "border-color:var(--good)") : "";
-  return `<input class="mono" style="width:74px;${style}" value="${esc(v)}"
-    placeholder="override" title="${bad ? OV_IGNORED
-      : "passed as --modoption " + esc(name) + "=… on every launch; blank = default"}"
-    onchange="ovChange('${esc(name)}', this)">`;
-}
-function ovChange(name, el) {
-  const v = el.value.trim();
-  if (v && !MODOPT_VAL_RE.test(v)) {
-    el.style.borderColor = "var(--bad)";
-    return toast("bad override value: " + v + " (letters, digits, _ - . only)", true);
-  }
-  setTuneOv(name, v);
-  renderTunables();
-  toast(v ? name + "=" + v + " overrides every launch from here"
-          : name + " override cleared");
-}
-// Log-curve pairs get a human editor: two anchor points instead of raw
-// coefficients. form "a_ln_b": n = A*ln(inc)+B.  "b_ln_a": n = A + B*ln(inc).
-const CURVES = [
- {label: "T1 constructors wanted", a: "TUNE_CON_LOG_T1_A", b: "TUNE_CON_LOG_T1_B",
-  form: "a_ln_b", what: "T1 constructors"},
- {label: "T2 constructors wanted", a: "TUNE_CON_LOG_T2_A", b: "TUNE_CON_LOG_T2_B",
-  form: "a_ln_b", what: "T2 constructors"},
-];
-const CURVE_NAMES = new Set(CURVES.flatMap(c => [c.a, c.b]));
-const fval = v => parseFloat(String(v).replace(/f$/, ""));
-function curveEval(c, slope, icpt, inc) {
-  return Math.max(1, Math.floor(slope * Math.log(inc) + icpt));
-}
-function curveCoeffs(c, entries) {
-  const A = fval(entries[c.a].value), B = fval(entries[c.b].value);
-  return c.form === "a_ln_b" ? {slope: A, icpt: B} : {slope: B, icpt: A};
-}
-const ANCHORS = [20, 150];
-function renderCurveWidget(c, si, entries) {
-  const {slope, icpt} = curveCoeffs(c, entries);
-  const previews = [10, 20, 50, 100, 200, 300].map(i =>
-    `<td>${curveEval(c, slope, icpt, i)}</td>`).join("");
-  const id = c.a;
-  return `<div style="padding:10px 0;border-bottom:1px solid #232b35">
-    <b>${esc(c.label)}</b>
-    <span class="mono dim" style="font-size:11px">&nbsp;${esc(entries[c.a].tunable)} / ${esc(entries[c.b].tunable)}</span>
-    <div class="dim" style="font-size:12px;margin:3px 0">A smooth curve over metal
-      income. Set how many ${esc(c.what)} you want at two incomes; the
-      coefficients are derived for you.</div>
-    <div class="row" style="align-items:center;margin:6px 0">
-      ${ANCHORS.map((inc, k) => `<label class="f">${esc(c.what)} @ ${inc} m/s
-        <input class="mono" style="width:70px" id="cw-${id}-${k}"
-          value="${curveEval(c, slope, icpt, inc)}"
-          oninput="curvePreview('${id}', ${si})"></label>`).join("")}
-      <button class="act" onclick="saveCurve('${id}', ${si})">Save curve</button>
-    </div>
-    <table style="width:auto"><thead><tr><th>at income</th>
-      <th>10</th><th>20</th><th>50</th><th>100</th><th>200</th><th>300</th></tr></thead>
-      <tbody><tr id="cwp-${id}"><td class="dim">count</td>${previews}</tr></tbody></table>
-  </div>`;
-}
-function curveSolve(id) {
-  const c = CURVES.find(x => x.a === id);
-  const n1 = parseFloat($("#cw-" + id + "-0").value);
-  const n2 = parseFloat($("#cw-" + id + "-1").value);
-  if (!isFinite(n1) || !isFinite(n2)) return null;
-  const slope = (n2 - n1) / Math.log(ANCHORS[1] / ANCHORS[0]);
-  const icpt = n1 - slope * Math.log(ANCHORS[0]);
-  return {c, slope, icpt};
-}
-function curvePreview(id, si) {
-  const s = curveSolve(id);
-  if (!s) return;
-  const row = $("#cwp-" + id);
-  const cells = [10, 20, 50, 100, 200, 300].map(i =>
-    `<td>${curveEval(s.c, s.slope, s.icpt, i)}</td>`).join("");
-  row.innerHTML = `<td class="dim">count</td>` + cells;
-}
-async function saveCurve(id, si) {
-  const s = curveSolve(id);
-  if (!s) return toast("bad anchor values", true);
-  const entries = Object.fromEntries(
-    TUNE.sections[si].entries.map(e => [e.name, e]));
-  const aVal = s.c.form === "a_ln_b" ? s.slope : s.icpt;
-  const bVal = s.c.form === "a_ln_b" ? s.icpt : s.slope;
-  try {
-    for (const [name, v] of [[s.c.a, aVal], [s.c.b, bVal]]) {
-      const e = entries[name];
-      const nv = v.toFixed(3) + "f";
-      if (nv === e.value) continue;
-      await api("/api/const", {file: e.file, line: e.line, name: e.name,
-                               old: e.value, new: nv});
-    }
-    await loadTunables();
-    toast(s.c.label + " saved — remember to Deploy");
-  } catch (err) { toast(err.message + " — reloading", true); loadTunables(); }
-}
-function renderTunables() {
-  if (!TUNE) return;
-  const q = $("#tunesearch").value.trim().toLowerCase();
-  uiSet("tuneSearch", $("#tunesearch").value);
-  const showDead = $("#tuneshowdead").checked;
-  uiSet("tuneShowDead", showDead);
-  const nDead = TUNE.sections.reduce(
-    (a, x) => a + x.entries.filter(e => e.unread).length, 0);
-  $("#tunedeadn").textContent = nDead ? "(" + nDead + ")" : "";
-  // A knob no GetTunable call reads changes nothing when edited. Hidden by
-  // default so the list is what the AI actually consults.
-  const hits = s => s.entries.filter(e => (showDead || !e.unread) && (!q ||
-    (e.name + " " + e.tunable + " " + e.desc + " " + humanize(e.name))
-      .toLowerCase().includes(q)));
-  // sidebar
-  const cats = [{label: "Metal split (targets.as)", idx: -1,
-                 n: TUNE.targets.groups.reduce((a, g) => a + g.rows.length, 0)}]
-    .concat(TUNE.sections.map((s, i) => ({label: s.title, idx: i,
-                                          n: hits(s).length})));
-  $("#tunecats").innerHTML = cats.map(c => `
-    <button data-cat="${c.idx}" style="display:block;width:100%;text-align:left;
-      background:${c.idx === tuneCat ? "var(--panel2)" : "none"};border:none;
-      color:${c.n ? "var(--text)" : "var(--dim)"};padding:7px 10px;font:inherit;
-      font-size:13px;cursor:pointer;border-radius:6px">
-      ${esc(c.label)} <span class="dim">${c.n}</span></button>`).join("");
-  // body
-  if (tuneCat === -1) { renderTargets(); return; }
-  if (!TUNE.sections[tuneCat]) tuneCat = 0;   // a remembered index may be stale
-  const s = TUNE.sections[tuneCat];
-  let rows = hits(s);
-  // curve pairs whose A lives in this section render as a widget instead
-  const entryMap = Object.fromEntries(s.entries.map(e => [e.name, e]));
-  const widgets = CURVES.filter(c => entryMap[c.a] && entryMap[c.b]
-    && (!q || (c.label + " " + entryMap[c.a].tunable).toLowerCase().includes(q)))
-    .map(c => renderCurveWidget(c, tuneCat, entryMap)).join("");
-  rows = rows.filter(e => !CURVE_NAMES.has(e.name));
-  $("#tunebody").innerHTML = `<div class="card"><h2>${esc(s.title)}</h2>
-    ${widgets}
-    ${rows.map(e => {
-      const i = s.entries.indexOf(e);
-      return `<div style="display:flex;gap:12px;align-items:flex-start;
-        padding:9px 0;border-bottom:1px solid #232b35">
-        <div style="flex:1;min-width:0">
-          <b>${esc(humanize(e.name))}</b>
-          ${e.unit ? `<span class="badge">${esc(e.unit)}</span>` : ""}
-          <span class="mono dim" style="font-size:11px">&nbsp;${esc(e.tunable || e.name)}</span>
-          ${/NOT in dev_tunables/.test(e.desc || "")
-             ? `<span class="badge bad">modoption ignored — not in dev_tunables.lua</span>` : ""}
-          ${e.unread
-             ? `<span class="badge bad" title="no GetTunable call reads it — editing this number changes nothing">dead — nothing reads it</span>` : ""}
-          ${CURATED.has(e.name)
-             ? `<span class="badge good" title="explained in plain English on the Balance tab">on Balance</span>` : ""}
-          <div class="dim" style="font-size:12px;margin-top:2px">${esc(e.desc)}
-            ${e.reads ? `<span class="mono" style="font-size:11px"> — ${esc(e.reads)}</span>` : ""}</div>
-        </div>
-        ${e.readonly
-          ? `<span class="mono dim" style="width:110px;text-align:right"
-               title="compiled into SkirmishAI.dll — override with a modoption">${esc(e.value)}</span>
-             <button class="act" onclick="copyModopt('${esc(e.tunable)}')">Copy modoption</button>`
-          : isToggle(e)
-          ? `<button class="tgl${toggleOn(e) ? " on" : ""}" title="saves immediately"
-               onclick="setToggle(${tuneCat},${i})"><i></i></button>
-             <span class="dim mono" style="width:34px;font-size:11px">${toggleOn(e) ? "on" : "off"}</span>`
-          : `<input class="mono" style="width:110px" id="tv-${tuneCat}-${i}" value="${esc(e.value)}"
-               onkeydown="if(event.key==='Enter')saveTune(${tuneCat},${i})">
-             <button class="act" onclick="saveTune(${tuneCat},${i})">Save</button>`}
-        ${e.tunable ? ovInput(e.tunable) : ""}
-      </div>`; }).join("") || (widgets ? "" : `<span class="dim">no matches in this category</span>`)}
-    </div>`;
-}
-function copyModopt(name) {
-  const txt = name + "=";
-  navigator.clipboard ? navigator.clipboard.writeText(txt).then(
-      () => toast("copied " + txt + " — paste into Modoptions and add a value"),
-      () => toast(txt, true))
-    : toast(txt);
-}
-function renderTargets() {
-  const t = TUNE.targets;
-  const q = $("#tunesearch").value.trim().toLowerCase();
-  $("#tunebody").innerHTML = t.groups.map((g, gi) => {
-    const rows = g.rows.filter(r => !q ||
-      (r.name + " " + r.desc + " " + humanize(r.name)).toLowerCase().includes(q));
-    if (!rows.length) return "";
-    return `<div class="card"><h2>${esc(g.title)}</h2>
-      ${rows[0] && rows.some(r => !r.scalar) ? `
-      <div class="dim" style="font-size:12px;margin-bottom:6px">One column per
-        income bracket (metal/s). Values are relative weights interpolated
-        against income — raise one and its neighbours yield by themselves.</div>
-      <table><thead><tr><th>Curve</th>
-        ${t.income.map(x => `<th>@${parseFloat(x)} m/s</th>`).join("")}<th></th></tr></thead>
-      <tbody>` : ""}
-      ${rows.map(r => {
-        const ri = g.rows.indexOf(r);
-        if (r.scalar) return `</tbody></table>
-          <div style="display:flex;gap:12px;align-items:center;padding:8px 0">
-            <div style="flex:1"><b>${esc(humanize(r.name))}</b>
-              <div class="dim" style="font-size:12px">${esc(r.desc)}</div></div>
-            <input class="mono" style="width:90px" id="ts-${gi}-${ri}" value="${esc(r.value)}">
-            <button class="act" onclick="saveTargetScalar(${gi},${ri})">Save</button></div>`;
-        return `<tr><td><b>${esc(humanize(r.name))}</b>
-          <div class="dim" style="font-size:11px;max-width:260px">${esc(r.desc.slice(0, 160))}</div></td>
-          ${r.values.map((v, vi) => `<td><input class="mono" style="width:62px"
-            id="tg-${gi}-${ri}-${vi}" value="${esc(parseFloat(v))}"></td>`).join("")}
-          <td><button class="act" onclick="saveTargetRow(${gi},${ri})">Save</button></td></tr>`;
-      }).join("")}
-      ${rows.some(r => !r.scalar) ? "</tbody></table>" : ""}</div>`;
-  }).join("") || `<span class="dim">no matches</span>`;
-}
-$("#tunecats") && document.addEventListener("click", e => {
-  const b = e.target.closest("#tunecats button[data-cat]");
-  if (b) { tuneCat = +b.dataset.cat; uiSet("tuneCat", tuneCat); renderTunables(); }
-});
-// A tunable whose unit is declared "[toggle 0/1]" in tunables.as is a boolean,
-// and a text box for it is a needless round trip. Rendered as a switch that
-// writes immediately -- apexearth 2026-08-22: "if options are supposed to be a
-// boolean we should have a toggle button (autosave)".
-const isToggle = e => /toggle/i.test(e.unit || "");
-const toggleOn = e => parseFloat(e.value) > 0;
-// Preserve the file's own literal style: these are AngelScript floats, written
-// as 1.f / 0.f, and writing a bare 1 would read oddly next to its neighbours.
-const toggleLiteral = on => (on ? "1.f" : "0.f");
-
-async function setToggle(si, i) {
-  const e = TUNE.sections[si].entries[i];
-  const next = toggleLiteral(!toggleOn(e));
-  try {
-    await api("/api/const", {file: e.file, line: e.line, name: e.name,
-                             old: e.value, new: next});
-    e.value = next;
-    renderTunables();
-    toast(humanize(e.name) + " " + (toggleOn(e) ? "ON" : "OFF") + " — remember to Deploy");
-  } catch (err) { toast(err.message, true); }
-}
-
-async function saveTune(si, i) {
-  const e = TUNE.sections[si].entries[i];
-  const v = $("#tv-" + si + "-" + i).value.trim();
-  if (v === e.value) return toast("unchanged");
-  try {
-    await api("/api/const", {file: e.file, line: e.line, name: e.name,
-                             old: e.value, new: v});
-    e.value = v;
-    toast(humanize(e.name) + " saved — remember to Deploy");
-  } catch (err) { toast(err.message, true); }
-}
-async function saveTargetRow(gi, ri) {
-  const r = TUNE.targets.groups[gi].rows[ri];
-  const nv = r.values.map((_, vi) => $("#tg-" + gi + "-" + ri + "-" + vi).value.trim());
-  if (nv.every((v, k) => parseFloat(v) === parseFloat(r.values[k])))
-    return toast("unchanged");
-  try {
-    await api("/api/target", {line: r.line, name: r.name, old: r.values, new: nv});
-    await loadTunables();
-    toast(humanize(r.name) + " saved — remember to Deploy");
-  } catch (err) { toast(err.message, true); }
-}
-async function saveTargetScalar(gi, ri) {
-  const r = TUNE.targets.groups[gi].rows[ri];
-  const v = $("#ts-" + gi + "-" + ri).value.trim();
-  if (v === r.value) return toast("unchanged");
-  try {
-    await api("/api/const", {file: TUNE.targets.file, line: r.line,
-                             name: r.name, old: r.value, new: v});
-    r.value = v;
-    toast(humanize(r.name) + " saved — remember to Deploy");
-  } catch (err) { toast(err.message, true); }
-}
-
-/* ---------- balance: the guided view ----------
-   Two sources: /api/guide is the curated map (which knobs steer what, in plain
-   words), /api/tunables carries the live values and the spend curves. Every
-   curated name is resolved server-side, so a knob renamed in tunables.as drops
-   out of this page instead of showing a value that is not there. */
-let GUIDE = null;
-let GKNOB = {};          // TUNE_ name -> the resolved entry, for saving
-const SPEND_ROWS = [
-  {key: "SPEND_ARMY",       label: "Army",        c: "#e06c6c",
-   what: "combat units out of the factories"},
-  {key: "SPEND_ECONOMY",    label: "Economy",     c: "#5fbf77",
-   what: "mexes, energy, converters, tech"},
-  {key: "SPEND_BUILDPOWER", label: "Build power", c: "#4fa3e3",
-   what: "constructors and nano turrets"},
-  {key: "SPEND_DEFENCE",    label: "Defence",     c: "#d9a441",
-   what: "ground turrets and walls"},
-  {key: "SPEND_AIRDEF",     label: "Anti-air",    c: "#b98cd9",
-   what: "AA turrets and flak"},
-];
-const BAL_STOPS = [8, 20, 50, 100, 300];
-const balPos2Inc = p => Math.round(8 * Math.pow(300 / 8, p / 100));
-const balInc2Pos = i => Math.round(100 * Math.log(i / 8) / Math.log(300 / 8));
-let balIncomeVal = UI.balIncome || 50;
-
-function balIncome() {
-  balIncomeVal = balPos2Inc(+$("#bal-inc").value);
-  uiSet("balIncome", balIncomeVal);
-  renderBalance();
-}
-function balSetIncome(v) {
-  balIncomeVal = v; uiSet("balIncome", v);
-  $("#bal-inc").value = balInc2Pos(v);
-  renderBalance();
-}
-// Piecewise-linear read of a targets.as row, exactly as Targets::At does it.
-function curveAt(income, xs, ys) {
-  if (!xs.length || !ys.length) return 0;
-  if (income <= xs[0]) return ys[0];
-  for (let i = 1; i < xs.length && i < ys.length; i++) {
-    if (income < xs[i]) {
-      const span = xs[i] - xs[i - 1];
-      if (span <= 0) return ys[i];
-      return ys[i - 1] + (ys[i] - ys[i - 1]) * (income - xs[i - 1]) / span;
-    }
-  }
-  return ys[ys.length - 1];
-}
-const spendRow = key => (TUNE.targets.groups[0] || {rows: []})
-  .rows.find(r => r.name === key);
-const balNum = name => {
-  const e = GKNOB[name];
-  return e ? parseFloat(String(e.value).replace(/f$/, "")) : NaN;
-};
-
-async function loadBalance() {
-  if (!TUNE) TUNE = await api("/api/tunables");
-  if (!GADGET) GADGET = new Set(TUNE.gadget_tunables || []);
-  GUIDE = await api("/api/guide");
-  GKNOB = {};
-  const grab = e => { if (e && e.name) GKNOB[e.name] = e; };
-  GUIDE.panels.forEach(p => {
-    grab(p.switch);
-    (p.shares || []).concat(p.axes || []).forEach(x => grab(x.knob));
-    (p.rows || []).forEach(r => Object.values(r.cells).forEach(grab));
-    (p.extra || []).forEach(grab);
-  });
-  GUIDE.groups.forEach(g => g.cards.forEach(c => c.knobs.forEach(grab)));
-  $("#bal-count").textContent =
-    GUIDE.curated.length + " of the AI's " + GUIDE.total + " knobs are here, "
-    + "chosen because they change what the AI does rather than how it says it.";
-  $("#bal-inc").value = balInc2Pos(balIncomeVal);
-  $("#bal-chips").innerHTML = BAL_STOPS.map(v =>
-    `<button class="chip" onclick="balSetIncome(${v})">${v}</button>`).join(" ");
-  if (UI.balSearch) $("#bal-search").value = UI.balSearch;
-  renderBalance();
-  renderGoals();
-  renderGuideGroups();
-}
-function renderBalance() {
-  if (!GUIDE) return;
-  const inc = balIncomeVal;
-  $("#bal-incval").textContent = inc + " metal/s";
-  $("#bal-chips").querySelectorAll(".chip").forEach(b =>
-    b.classList.toggle("on", +b.textContent === inc));
-  $("#bal-panels").innerHTML = GUIDE.panels.map(p => balPanel(p, inc)).join("");
-  drawSpendCurves(inc);
-}
-
-/* --- the five buckets, and what they are at this income --- */
-function spendShares(inc) {
-  const raw = SPEND_ROWS.map(r => {
-    const row = spendRow(r.key);
-    return row ? curveAt(inc, TUNE.targets.income.map(parseFloat),
-                         row.values.map(parseFloat)) : 0;
-  });
-  const tot = raw.reduce((a, b) => a + b, 0) || 1;
-  return raw.map(v => v / tot);
-}
-function stackedBar(parts) {
-  return `<div class="bar">${parts.map(p => p.f > 0.001
-    ? `<span style="width:${(p.f * 100).toFixed(2)}%;background:${p.c}"
-         title="${esc(p.label)} ${(p.f * 100).toFixed(1)}%">${
-         p.f > 0.07 ? Math.round(p.f * 100) + "%" : ""}</span>` : "").join("")}</div>`;
-}
-function balPanel(p, inc) {
-  const head = `<h2>${esc(p.title)}</h2>
-    ${p.what ? `<p class="lead" style="margin:0 0 10px">${esc(p.what)}</p>` : ""}
-    ${p.switch ? `<div class="knob" style="border-bottom:1px solid var(--line);
-       margin-bottom:8px">${knobRow(p.switch, "master switch for this whole panel")}</div>` : ""}`;
-  let body = "";
-  if (p.kind === "spend") body = panelSpend(inc);
-  else if (p.kind === "stance") body = panelStance(p, inc);
-  else if (p.kind === "shares") body = panelShares(p);
-  else if (p.kind === "worth") body = panelWorth(p);
-  else if (p.kind === "curves") body = panelCurves();
-  // hide_extra: the panel resolved those knobs only so its own widget can read
-  // them (the curve coefficients), and showing the raw pair would undo the point
-  // of the two-anchor editor.
-  const extra = (p.extra || []).length && !p.hide_extra
-    ? `<div style="margin-top:10px">${p.extra.map(e => knobBlock(e)).join("")}</div>` : "";
-  return `<div class="card">${head}${body}${extra}</div>`;
-}
-function panelSpend(inc) {
-  const sh = spendShares(inc);
-  const cols = TUNE.targets.income.map(x => parseFloat(x));
-  const grid = spendRow(SPEND_ROWS[0].key) ? `
-    <table style="margin-top:12px;width:auto">
-      <thead><tr><th>Bucket</th>${cols.map(c =>
-        `<th style="text-align:right">@${c} m/s</th>`).join("")}<th></th></tr></thead>
-      <tbody>${SPEND_ROWS.map(r => {
-        const row = spendRow(r.key);
-        if (!row) return "";
-        return `<tr><td><span class="swatch" style="background:${r.c}"></span>
-          <b>${esc(r.label)}</b>
-          <div class="dim" style="font-size:11px">${esc(r.what)}</div></td>
-          ${row.values.map((v, vi) => `<td style="text-align:right">
-            <input class="mono" style="width:56px;text-align:right"
-              id="bs-${esc(r.key)}-${vi}" value="${esc(parseFloat(v))}"></td>`).join("")}
-          <td><button class="act" onclick="saveSpendRow('${esc(r.key)}')">Save</button></td>
-        </tr>`; }).join("")}</tbody></table>
-    <div class="dim" style="font-size:12px;margin-top:6px">
-      These are <b>relative weights</b>, not percentages &mdash; they do not have to add
-      up to anything. Raise one and every other bucket's share falls by itself.</div>` : "";
-  return `<canvas id="bal-spend" width="880" height="230"
-            style="width:100%;max-width:880px"></canvas>
-    <div class="legend" style="flex-wrap:wrap">${SPEND_ROWS.map((r, i) =>
-      `<span><i style="background:${r.c}"></i>${esc(r.label)}
-        <b class="mono">${(sh[i] * 100).toFixed(0)}%</b></span>`).join("")}</div>
-    <div class="dim" style="font-size:12px">At <b>${inc} metal/s</b>, out of every 100
-      metal the AI decides to spend, that is roughly where it goes.</div>
-    ${grid}`;
-}
-function panelStance(p, inc) {
-  const base = spendShares(inc);
-  const cat = ["army", "economy", "buildpower", "defence", "airdef"];
-  const mk = mults => {
-    const raw = base.map((v, i) => v * (mults[cat[i]] || 1));
-    const tot = raw.reduce((a, b) => a + b, 0) || 1;
-    return SPEND_ROWS.map((r, i) => ({f: raw[i] / tot, c: r.c, label: r.label}));
-  };
-  const rows = [{label: "Neutral", mults: {}, note: "no read on the enemy either way"}]
-    .concat(p.rows.map(r => ({
-      label: r.label,
-      note: Object.entries(r.cells).map(([k, e]) =>
-        k + " x" + parseFloat(e.value)).join(", "),
-      mults: Object.fromEntries(Object.entries(r.cells)
-        .map(([k, e]) => [k, balNum(e.name)])),
-    })));
-  return rows.map(r => `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;font-size:12px">
-        <b>${esc(r.label)}</b><span class="dim mono">${esc(r.note)}</span></div>
-      ${stackedBar(mk(r.mults))}</div>`).join("")
-    + `<div style="margin-top:10px">${p.rows.flatMap(r =>
-        Object.values(r.cells)).map(e => knobBlock(e)).join("")}</div>`;
-}
-function panelShares(p) {
-  const vals = p.shares.map(x => balNum(x.knob.name));
-  const tot = vals.reduce((a, b) => a + b, 0) || 1;
-  const cols = ["#4fa3e3", "#8a96a3", "#5fbf77", "#e06c6c"];
-  return stackedBar(p.shares.map((x, i) =>
-      ({f: vals[i] / tot, c: cols[i % cols.length], label: x.label})))
-    + `<div class="legend" style="flex-wrap:wrap;margin-top:8px">${p.shares.map((x, i) =>
-        `<span><i style="background:${cols[i % cols.length]}"></i>${esc(x.label)}
-          <b class="mono">${(vals[i] / tot * 100).toFixed(0)}%</b></span>`).join("")}</div>`
-    + p.shares.map(x => knobBlock(x.knob, x.note)).join("");
-}
-function panelWorth(p) {
-  const max = Math.max(1, ...p.axes.map(a => Math.abs(balNum(a.knob.name)) || 0));
-  return `<table style="width:auto">${p.axes.map(a => {
-    const v = balNum(a.knob.name);
-    const w = Math.max(0, Math.abs(v) / max) * 160;
-    return `<tr><td style="width:90px"><b>${esc(a.label)}</b></td>
-      <td style="width:180px"><div style="height:14px;width:${w}px;
-        background:${v ? "var(--accent)" : "var(--line)"};border-radius:3px"></div></td>
-      <td class="mono" style="width:50px">${v}</td>
-      <td class="dim" style="font-size:12px">${esc(a.note)}${
-        v === 0 ? ` &mdash; <b style="color:var(--warn)">ignored</b>` : ""}</td></tr>`;
-  }).join("")}</table>`;
-}
-const CURVE_C = ["#4fa3e3", "#5fbf77", "#d9a441", "#b98cd9"];
-function panelCurves() {
-  const live = CURVES.filter(c => GKNOB[c.a] && GKNOB[c.b]);
-  if (!live.length) return `<span class="dim">no growth curves defined</span>`;
-  return `<canvas id="bal-curves" width="880" height="200"
-            style="width:100%;max-width:880px"></canvas>
-    <div class="legend">${live.map((c, i) =>
-      `<span><i style="background:${CURVE_C[i % CURVE_C.length]}"></i>${esc(c.label)}</span>`).join("")}</div>
-    ${live.map(c => balCurveWidget(c)).join("")}`;
-}
-
-/* --- one knob, the way it is shown everywhere on this page --- */
-function knobRow(e, up) {
-  const ov = e.tunable ? ovInput(e.tunable) : "";
-  const ctl = isToggle(e)
-    ? `<button class="tgl${toggleOn(e) ? " on" : ""}" title="saves immediately"
-         onclick="gToggle('${esc(e.name)}')"><i></i></button>
-       <span class="dim mono" style="width:30px;font-size:11px">${toggleOn(e) ? "on" : "off"}</span>`
-    : `<input class="mono" style="width:88px" id="gv-${esc(e.name)}" value="${esc(e.value)}"
-         onkeydown="if(event.key==='Enter')gSave('${esc(e.name)}')">
-       <button class="act" onclick="gSave('${esc(e.name)}')">Save</button>`;
-  return `<div class="k-txt">
-      <b>${esc(humanize(e.name))}</b>
-      ${e.unit && !isToggle(e) ? `<span class="badge">${esc(e.unit)}</span>` : ""}
-      <span class="mono dim" style="font-size:11px">&nbsp;${esc(e.tunable || e.name)}</span>
-      ${e.unread ? `<span class="badge bad" title="no GetTunable call reads it">dead</span>` : ""}
-      ${up ? `<div class="k-up"><b>raise &rarr;</b> ${esc(up)}</div>` : ""}
-    </div>${ctl}${ov}`;
-}
-const knobBlock = (e, up) => `<div class="knob">${knobRow(e, up || e.up)}</div>`;
-
-async function gSave(name) {
-  const e = GKNOB[name];
-  const v = $("#gv-" + name).value.trim();
-  if (v === e.value) return toast("unchanged");
-  try {
-    await api("/api/const", {file: e.file, line: e.line, name: name,
-                             old: e.value, new: v});
-    e.value = v;
-    if (TUNE.sections[e.si]) TUNE.sections[e.si].entries[e.i].value = v;
-    renderBalance(); renderGoals();
-    toast(humanize(name) + " saved — remember to Deploy");
-  } catch (err) { toast(err.message + " — reloading", true); TUNE = null; loadBalance(); }
-}
-async function gToggle(name) {
-  const e = GKNOB[name];
-  const next = toggleLiteral(!toggleOn(e));
-  try {
-    await api("/api/const", {file: e.file, line: e.line, name: name,
-                             old: e.value, new: next});
-    e.value = next;
-    if (TUNE.sections[e.si]) TUNE.sections[e.si].entries[e.i].value = next;
-    renderBalance(); renderGoals(); renderGuideGroups();
-    toast(humanize(name) + " " + (toggleOn(e) ? "ON" : "OFF") + " — remember to Deploy");
-  } catch (err) { toast(err.message + " — reloading", true); TUNE = null; loadBalance(); }
-}
-async function saveSpendRow(key) {
-  const r = spendRow(key);
-  const nv = r.values.map((_, vi) => $("#bs-" + key + "-" + vi).value.trim());
-  if (nv.every((v, k) => parseFloat(v) === parseFloat(r.values[k])))
-    return toast("unchanged");
-  try {
-    await api("/api/target", {line: r.line, name: r.name, old: r.values, new: nv});
-    TUNE = await api("/api/tunables");
-    renderBalance();
-    toast(key + " saved — remember to Deploy");
-  } catch (err) { toast(err.message + " — reloading", true); TUNE = null; loadBalance(); }
-}
-
-/* --- the two-anchor curve editor, reused on this page --- */
-function balCurveWidget(c) {
-  const co = curveCoeffs(c, GKNOB);
-  return `<div class="knob" style="flex-wrap:wrap">
-    <div class="k-txt" style="flex-basis:100%">
-      <b>${esc(c.label)}</b>
-      <span class="mono dim" style="font-size:11px">&nbsp;${esc(GKNOB[c.a].tunable)} / ${esc(GKNOB[c.b].tunable)}</span>
-      <div class="k-up">Say how many you want at two incomes; the curve between
-        and beyond them is solved for you.</div></div>
-    ${ANCHORS.map((i, k) => `<label class="f">at ${i} m/s
-      <input class="mono" style="width:64px" id="bcw-${c.a}-${k}"
-        value="${curveEval(c, co.slope, co.icpt, i)}"></label>`).join("")}
-    <label class="f">&nbsp;<button class="act" onclick="balSaveCurve('${c.a}')">Save curve</button></label>
-    <div class="dim mono" style="font-size:11px;align-self:center">
-      ${[10, 50, 150, 300].map(i =>
-        i + "m/s&rarr;" + curveEval(c, co.slope, co.icpt, i)).join("&nbsp; ")}</div>
-  </div>`;
-}
-async function balSaveCurve(id) {
-  const c = CURVES.find(x => x.a === id);
-  const n1 = parseFloat($("#bcw-" + id + "-0").value);
-  const n2 = parseFloat($("#bcw-" + id + "-1").value);
-  if (!isFinite(n1) || !isFinite(n2)) return toast("bad anchor values", true);
-  const slope = (n2 - n1) / Math.log(ANCHORS[1] / ANCHORS[0]);
-  const icpt = n1 - slope * Math.log(ANCHORS[0]);
-  const aVal = c.form === "a_ln_b" ? slope : icpt;
-  const bVal = c.form === "a_ln_b" ? icpt : slope;
-  try {
-    for (const pair of [[c.a, aVal], [c.b, bVal]]) {
-      const e = GKNOB[pair[0]], nv = pair[1].toFixed(3) + "f";
-      if (nv === e.value) continue;
-      await api("/api/const", {file: e.file, line: e.line, name: pair[0],
-                               old: e.value, new: nv});
-    }
-    TUNE = null; await loadBalance();
-    toast(c.label + " saved — remember to Deploy");
-  } catch (err) { toast(err.message + " — reloading", true); TUNE = null; loadBalance(); }
-}
-
-/* --- goals: the intent-first way in ---
-   Someone arrives wanting "a bigger economy", not wanting apex_mex_growth. A
-   goal names the ordered moves for one intent, each pointing either at a live
-   knob row or at the metal-split panel above it. */
-let goalOpen = UI.goalOpen || "";
-function renderGoals() {
-  if (!GUIDE) return;
-  $("#goal-chips").innerHTML = GUIDE.goals.map(g =>
-    `<button class="chip${g.id === goalOpen ? " on" : ""}"
-       onclick="pickGoal('${esc(g.id)}')">${esc(g.ask)}</button>`).join("");
-  const g = GUIDE.goals.find(x => x.id === goalOpen);
-  if (!g) { $("#goal-body").innerHTML = ""; return; }
-  $("#goal-body").innerHTML = `<div class="goal">
-    <p class="lead" style="margin:0 0 10px;color:var(--text)">${esc(g.why)}</p>
-    ${g.steps.map((st, i) => `<div class="step">
-      <div class="stepn">${i + 1}.</div>
-      <div class="arrow ${esc(st.dir)}" title="${st.dir === "either"
-        ? "either direction, depending on which way you want it"
-        : st.dir === "up" ? "raise this" : "lower this"}">${
-        st.dir === "up" ? "&uarr;" : st.dir === "down" ? "&darr;" : "&#8597;"}</div>
-      ${st.spend ? spendStep(st) : `<div style="flex:1;min-width:0">
-        <div class="knob" style="padding:0;border:none">${knobRow(st.knob)}</div>
-        <div class="k-up" style="margin-left:0">${esc(st.note)}</div></div>`}
-    </div>`).join("")}
-    <div class="dim" style="font-size:12px;margin-top:10px">
-      <b>How to tell it worked:</b> ${esc(g.watch)}</div>
-  </div>`;
-}
-function spendStep(st) {
-  const r = SPEND_ROWS.find(x => x.key === st.spend) || {label: st.spend, c: "#888"};
-  return `<div style="flex:1;min-width:0">
-    <b><span class="swatch" style="background:${r.c}"></span>${esc(r.label)}</b>
-    <span class="dim" style="font-size:12px"> in the metal split</span>
-    <button class="act" style="margin-left:8px;padding:2px 10px"
-      onclick="goToSpend()">edit the split &darr;</button>
-    <div class="k-up" style="margin-left:0">${esc(st.note)}</div></div>`;
-}
-function goToSpend() {
-  const c = $("#bal-panels");
-  if (c && c.scrollIntoView) c.scrollIntoView({behavior: "smooth", block: "start"});
-}
-function pickGoal(id) {
-  goalOpen = (goalOpen === id) ? "" : id;
-  uiSet("goalOpen", goalOpen);
-  renderGoals();
-}
-
-/* --- the mechanism map --- */
-function renderGuideGroups() {
-  if (!GUIDE) return;
-  const q = $("#bal-search").value.trim().toLowerCase();
-  uiSet("balSearch", $("#bal-search").value);
-  const match = k => !q || (k.name + " " + k.tunable + " " + (k.up || "") + " "
-    + humanize(k.name) + " " + (k.desc || "")).toLowerCase().includes(q);
-  const html = GUIDE.groups.map(g => {
-    const cards = g.cards.map(c => {
-      const ks = c.knobs.filter(match);
-      if (!ks.length) return "";
-      return `<div class="card" style="margin:0">
-        <h2 style="text-transform:none;font-size:13px;color:var(--text)">${esc(c.title)}</h2>
-        ${c.what ? `<p class="lead" style="margin:0 0 8px">${esc(c.what)}</p>` : ""}
-        ${c.reads ? `<div class="mono dim" style="font-size:11px;margin-bottom:6px">${esc(c.reads)}</div>` : ""}
-        ${ks.map(k => knobBlock(k)).join("")}</div>`;
-    }).join("");
-    if (!cards) return "";
-    return `<div class="card">
-      <h2>${esc(g.title)}</h2>
-      ${g.what ? `<p class="lead" style="margin:0 0 12px">${esc(g.what)}</p>` : ""}
-      <div class="grid2">${cards}</div></div>`;
-  }).join("");
-  $("#bal-groups").innerHTML = html
-    || `<div class="card dim">no knobs match "${esc(q)}"</div>`;
-}
-
-/* --- charts --- */
-function balAxes(ctx, W, H, P, xs, ylab) {
-  ctx.clearRect(0, 0, W, H);
-  ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
-  ctx.font = "11px Consolas,monospace"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(P, 8); ctx.lineTo(P, H - 20); ctx.lineTo(W - 8, H - 20);
-  ctx.stroke();
-  xs.forEach(v => {
-    const x = P + (W - P - 8) * Math.log(v / 8) / Math.log(300 / 8);
-    ctx.strokeStyle = "#1e2630";
-    ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, H - 20); ctx.stroke();
-    ctx.fillStyle = "#8a96a3"; ctx.fillText(v, x - 8, H - 6);
-  });
-  ctx.fillText(ylab, 4, 14);
-}
-function drawSpendCurves(inc) {
-  const cv = $("#bal-spend");
-  if (!cv || !TUNE.targets.groups.length) return;
-  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34;
-  const N = 160, x0 = P, xw = W - P - 8, y0 = 8, yh = H - 28 - y0;
-  balAxes(ctx, W, H, P, [8, 20, 50, 100, 300], "share of spend");
-  const pts = [];
-  for (let k = 0; k <= N; k++)
-    pts.push({x: x0 + xw * k / N, sh: spendShares(8 * Math.pow(300 / 8, k / N))});
-  let below = pts.map(() => 0);
-  SPEND_ROWS.forEach((r, ri) => {
-    ctx.beginPath();
-    pts.forEach((p, k) => {
-      const y = y0 + yh * (1 - (below[k] + p.sh[ri]));
-      k ? ctx.lineTo(p.x, y) : ctx.moveTo(p.x, y);
-    });
-    for (let k = pts.length - 1; k >= 0; k--)
-      ctx.lineTo(pts[k].x, y0 + yh * (1 - below[k]));
-    ctx.closePath();
-    ctx.fillStyle = r.c + "cc"; ctx.fill();
-    below = below.map((b, k) => b + pts[k].sh[ri]);
-  });
-  const cx = x0 + xw * Math.log(inc / 8) / Math.log(300 / 8);
-  ctx.strokeStyle = "#ffffff"; ctx.setLineDash([4, 3]);
-  ctx.beginPath(); ctx.moveTo(cx, y0); ctx.lineTo(cx, y0 + yh); ctx.stroke();
-  ctx.setLineDash([]);
-  drawGrowthCurves();
-}
-function drawGrowthCurves() {
-  const cv = $("#bal-curves"); if (!cv) return;
-  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34;
-  const live = CURVES.filter(c => GKNOB[c.a] && GKNOB[c.b]);
-  balAxes(ctx, W, H, P, [8, 20, 50, 100, 300], "count wanted");
-  const x0 = P, xw = W - P - 8, y0 = 8, yh = H - 28 - y0;
-  let max = 1;
-  const series = live.map(c => {
-    const co = curveCoeffs(c, GKNOB), ys = [];
-    for (let k = 0; k <= 120; k++) {
-      const v = curveEval(c, co.slope, co.icpt, 8 * Math.pow(300 / 8, k / 120));
-      max = Math.max(max, v); ys.push(v);
-    }
-    return ys;
-  });
-  series.forEach((ys, si) => {
-    ctx.strokeStyle = CURVE_C[si % CURVE_C.length]; ctx.lineWidth = 2;
-    ctx.beginPath();
-    ys.forEach((v, k) => {
-      const x = x0 + xw * k / 120, y = y0 + yh * (1 - v / max);
-      k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    ctx.stroke();
-  });
-  ctx.fillStyle = "#8a96a3"; ctx.font = "11px Consolas,monospace";
-  ctx.fillText(Math.round(max), 4, 26);
-}
+let TUNE = null;   // /api/tunables, read by the Launch tab's mod-option picker
 
 /* ---------- header proc warn ---------- */
 async function pollOverview() {
@@ -2401,9 +1543,135 @@ async function pollOverview() {
   setTimeout(pollOverview, 8000);
 }
 
+/* ---------- net ---------- */
+const NN_FULL = "#5fbf77", NN_STATE = "#6fa8dc", NN_LOSS2 = "#d9c25e";
+let NN_TIMER = null, NN_RESET_ARMED = 0;
+function nnRolling(vals, n) {
+  return vals.map((_, i) => {
+    const w = vals.slice(Math.max(0, i - n + 1), i + 1).filter(v => v != null && isFinite(v));
+    return w.length ? w.reduce((a, b) => a + b, 0) / w.length : null;
+  });
+}
+// x = game number; y may go below zero (R2 does), so the zero line is drawn.
+function nnChart(id, series, o) {
+  const cv = $(id); if (!cv) return;
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 46, B = 22;
+  ctx.clearRect(0, 0, W, H); ctx.font = "10px Consolas";
+  const all = series.flatMap(s => s.ys.filter(v => v != null && isFinite(v)));
+  const xs = series.flatMap(s => s.xs);
+  let lo = Math.min(o.lo ?? 0, ...all), hi = Math.max(o.hi ?? 0, ...all);
+  if (o.floor != null) lo = Math.max(lo, o.floor);
+  if (hi - lo < 1e-6) hi = lo + 1;
+  const xmax = Math.max(2, ...xs), xmin = 1;
+  const X = x => P + (W - P - 10) * (x - xmin) / (xmax - xmin);
+  const Y = v => H - B - (H - B - 10) * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);
+  const fmt = o.fmt || (v => v.toFixed(2));
+  ctx.strokeStyle = "#2c3642"; ctx.fillStyle = "#8a96a3";
+  for (let g = 0; g <= 4; g++) {
+    const v = lo + (hi - lo) * g / 4, y = Y(v);
+    ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - 10, y); ctx.stroke();
+    ctx.fillText(fmt(v), 3, y + 3);
+  }
+  const step = Math.max(1, Math.ceil((xmax - xmin) / 12));
+  for (let x = xmin; x <= xmax; x += step) ctx.fillText("#" + x, X(x) - 6, H - 4);
+  if (lo < 0 && hi > 0) {
+    ctx.strokeStyle = "#8a96a3"; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(P, Y(0)); ctx.lineTo(W - 10, Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (!all.length) { ctx.fillStyle = "#8a96a3"; ctx.fillText(o.empty || "no points yet", P + 10, 20); return; }
+  for (const s of series) {
+    ctx.strokeStyle = ctx.fillStyle = s.color;
+    if (s.dots) {
+      s.xs.forEach((x, i) => { const v = s.ys[i]; if (v == null || !isFinite(v)) return;
+        ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(X(x), Y(v), 2.5, 0, 7); ctx.fill(); });
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.lineWidth = 1.8; ctx.beginPath(); let pen = false;
+      s.xs.forEach((x, i) => { const v = s.ys[i];
+        if (v == null || !isFinite(v)) { pen = false; return; }
+        pen ? ctx.lineTo(X(x), Y(v)) : ctx.moveTo(X(x), Y(v)); pen = true; });
+      ctx.stroke(); ctx.lineWidth = 1;
+    }
+  }
+}
+const NN_NAMES = {dMInc: "metal income change", dEInc: "energy income change", lnD: "damage trade",
+  eWaste: "energy wasted", mWaste: "metal wasted", dMex: "mexes gained", lostNear: "losses near the chosen site", lostFar: "losses elsewhere",
+  lostAir: "losses to air", lostStatic: "losses to turrets", lostMobile: "losses to ground units",
+  dEco: "economic power change", reclaim: "metal reclaimed per minute", lostPre: "losses in the 5 min before (check)",
+  done: "chosen build finished", survived: "chosen build survived"};
+function nnTable(m) {
+  if (!m.length || !m[0].targets) return "<span class='dim'>no games yet</span>";
+  const last = m.filter(r => r.r2_full).slice(-5);
+  if (!last.length) return "<span class='dim'>waiting for a second game to test on</span>";
+  const avg = (key, j) => { const v = last.map(r => r[key][j]).filter(x => x != null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const cell = v => v == null ? "<td class='dim'>&ndash;</td>"
+    : `<td style="color:${v > 0.05 ? "var(--good)" : v < -0.05 ? "var(--bad)" : "inherit"}">${v.toFixed(3)}</td>`;
+  let h = "<table><thead><tr><th>Prediction</th><th>Horizon</th><th>With decision</th><th>State only</th></tr></thead><tbody>";
+  m[0].targets.forEach((t, j) => {
+    const [hz, k] = t.split(":");
+    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${hz === "lostPre" ? "before" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
+      + cell(avg("r2_full", j)) + cell(avg("r2_state", j)) + "</tr>";
+  });
+  for (const [key, label] of [["done", "chosen build finished"], ["survived", "chosen build survived 5 min"]]) {
+    const acc = last.filter(r => r[key + "_acc"] != null);
+    if (!acc.length) continue;
+    const a = acc.reduce((s, r) => s + r[key + "_acc"], 0) / acc.length;
+    const b = acc.reduce((s, r) => s + r[key + "_base"], 0) / acc.length;
+    h += `<tr><td colspan="2">${label}: right / always-guess-the-common-answer</td><td colspan="2">${(100 * a).toFixed(0)}% / ${(100 * b).toFixed(0)}%</td></tr>`;
+  }
+  return h + "</tbody></table>";
+}
+async function loadNet() {
+  clearTimeout(NN_TIMER);
+  if (!$("#tab-net").classList.contains("on")) return;
+  let d;
+  try { d = await api("/api/nn"); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
+  if (d) {
+    const m = d.metrics || [], s = d.status || {};
+    const lastGame = m.length ? m[m.length - 1] : null;
+    const state = d.running ? `<b style="color:var(--good)">training</b> (${esc(s.phase || "starting")})`
+      : `<b>stopped</b>`;
+    const src = lastGame ? String(lastGame.source || lastGame.game || "").split(/[\\/]/).pop() : "";
+    setHTML($("#nn-status"), `${state} &middot; ${d.running ? (s.live || 0) + " running game(s) feeding it &middot; " : ""}`
+      + `${m.length} batches &middot; ${(s.rows || 0).toLocaleString()} decisions learned`
+      + ` &middot; weights written to the game ${s.exported || 0}&times; this session`
+      + (lastGame ? ` &middot; last: ${esc(src)} (${lastGame.rows} decisions, trained in ${lastGame.train_s}s)` : ""));
+    const xs = m.map(r => r.index);
+    const hf = m.map(r => r.head_full ?? null), hs = m.map(r => r.head_state ?? null);
+    nnChart("#nn-c-acc", [
+      {xs, ys: hf, color: NN_FULL, dots: true}, {xs, ys: hs, color: NN_STATE, dots: true},
+      {xs, ys: nnRolling(hf, 5), color: NN_FULL}, {xs, ys: nnRolling(hs, 5), color: NN_STATE}],
+      {lo: -0.2, hi: 0.2, floor: -1, empty: "needs two games: the first one has nothing to be tested against"});
+    legendHTML("#nn-leg-acc", [["with the decision", NN_FULL], ["state only", NN_STATE]]);
+    // decisions chosen on value only: forced paths only tell the net which panic fired
+    const gain = m.map(r => (r.head_full_d != null && r.head_state_d != null) ? r.head_full_d - r.head_state_d : null);
+    nnChart("#nn-c-gain", [{xs, ys: gain, color: NN_FULL, dots: true}, {xs, ys: nnRolling(gain, 5), color: NN_FULL}],
+      {lo: -0.05, hi: 0.05, fmt: v => v.toFixed(3)});
+    nnChart("#nn-c-loss", [{xs, ys: m.map(r => r.loss_full), color: NN_FULL},
+      {xs, ys: m.map(r => r.loss_state), color: NN_LOSS2}], {lo: 0});
+    legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
+    setHTML($("#nn-table"), nnTable(m));
+  }
+  NN_TIMER = setTimeout(loadNet, 5000);
+}
+async function netAct(act) {
+  if (act === "reset" && Date.now() - NN_RESET_ARMED > 4000) {
+    NN_RESET_ARMED = Date.now();
+    toast("click again within 4 s: a new net starts from nothing; this one is kept in runtime/nn-archive", true);
+    return;
+  }
+  try {
+    const r = await api("/api/nn", {action: act});
+    toast(r.ok ? (act === "start" ? (r.already ? "trainer already running" : "trainer started")
+      : act === "stop" ? "trainer stopped" : (r.output || "fresh net started; the old one is archived").trim()) : (r.error || r.output || "failed"), !r.ok);
+  } catch (e) { toast(e.message, true); }
+  setTimeout(loadNet, 600);
+}
+
 // Open on the tab that was last used, not always Games.
 (function restoreTab() {
-  const want = UI.tab || "balance";
+  const want = UI.tab || "games";
   const b = document.querySelector('#nav button[data-tab="' + want + '"]');
   if (b && want !== "games") { b.click(); return; }
   loadGames();

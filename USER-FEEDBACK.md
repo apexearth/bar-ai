@@ -317,6 +317,14 @@ lines of quotes.
   our units in combat; react within a second (reflex built, 1.4 deaths/game).
   Residues in ISSUES REZ.
 - Rez boats are bought from land wrecks they cannot reach (ISSUES REZ).
+- UNRESOLVED (2026-10-04): on large maps 6-12k metal of wrecks lies on the
+  battlefield, on OUR side, and no rez bot or con leaves base for it. Reclaim
+  it, and resurrect the units: that field is an army. Instead the rez bots
+  patrol back and forth at home -- he reads it as a bug. Fixed 10-04 on lane
+  nnlog (uncommitted; pathfinder radius on large maps + visible-only danger):
+  bots now leave base and reclaim 2-3x more. Also 10-04: medics ran past
+  wrecks chasing units that would not stop -- heals now priced by walk and the
+  target's motion. Residue: ISSUES "REZ: the bots never leave base".
 - The commander stays home (docs/24; ruling 2026-09-02); his retreat must not
   end inside enemy influence (ISSUES army residues).
 - Our commander's D-gun must not kill our own buildings behind the target.

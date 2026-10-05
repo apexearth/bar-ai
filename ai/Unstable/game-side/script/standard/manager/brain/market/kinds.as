@@ -45,6 +45,9 @@ final class Want {
 	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
 	float valueRaw = 0.f;   // value before the trip was charged
 	float backM = 0.f;      // the road back home, inside tripM
+	float nnMult = 1.f;     // the value net's multiplier, already inside value (nnlog.as)
+	bool nnPriced = false;  // in the list when the net looked; forced wants added after are not
+	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

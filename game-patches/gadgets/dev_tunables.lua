@@ -47,6 +47,8 @@ local NAMES = {
 	"apex_ord_retry_s",     -- BuilderTask.cpp: seconds a builder's command queue must be empty under a live task before the task re-issues (3; 0 off)
 	"apex_catalog_dump",
 	"apex_decide_log",
+	"apex_nn_blend",
+	"apex_nn_explore",
 	"apex_elec_frame_us",
 	"apex_eta_log",
 	"apex_protect_field_s",

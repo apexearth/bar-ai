@@ -1690,6 +1690,27 @@ hand's role and the draw re-elects it into sense (`fell=2718..4799` against
 `GATE_RADAR_GAP/_FRONT/_HOT` on a site the request layer refuses; read
 `Requests::gLastWhat` on the refusal before pricing anything.
 
+### REZ: the bots never leave base for field wrecks (2026-10-04, his report)
+
+4v4 Carrot +100% (`matches/20261005-013913`): 37-52 bots per seat idle at
+home, t1 reclaimed 38 metal in 26 min. Fixed 10-04 (uncommitted, lane nnlog
+only): the C++ PATHFINDER refused every rez walk on 128-elmo-sector maps
+(`PathFinder.cpp:647` radius = range/cell truncated 96/128 to 0; 3,627 of
+3,643 nopaths had both ends walkable) -- now max(1, ..), which touches every
+short-reach builder task on large maps; danger = visible enemies within 600
+(`RezThreat`, his ruling); rez reclaims test reach only and a rez nopath no
+longer bans the spot for every builder (`BuilderTask.cpp`); a refused local
+wreck no longer blocks the sweep; refused fields are skipped, not deleted;
+heals priced against wrecks as metal per second of travel, chasing a target
+moving away costs its speed, an outrunning one is skipped (`RZ_HEAL_PRICE`).
+After, 3 seeds: idle 62-92% -> 20-27%, bots past ff 0.25 9-22% -> 44-74%,
+Apex reclaim 5.9k -> 10.9-16.2k, nopath 1.2-3.6k -> 0.3-0.6k, unreach 2,190 -> ~0.
+Open, his calls: ~20-29 of ~50 bots on repair (health metal priced equal to
+wreck metal); `TUNE_MEDIC_SHARE` 0.4; idle bots past ff 0.25 still patrol home
+(`TUNE_REZZER_FWD`); short paths of <= 2 nodes count as no path (`ApplyPath`)
+and still mark the bot's sector for a minute. Census on `rez-time`: botsFf,
+task, fld*, heal=picks/avgDist/moving/outrunSkipped/wreckWon, walkBack.
+
 ### REZ: the fleet is sized to a stream it does not convert (2026-09-06, 09-13)
 
 16-AI hour `matches/20260906-105022`: 35 bots per AI at minute 54, nominal 83

@@ -341,9 +341,12 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 	-- built" was unmeasurable, not zero.
 	if ud.isBuilding or ((ud.speed or 0) == 0) then
 		local f = Spring.GetGameFrame()
-		BARAI_Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d",
+		-- x/z appended last so every existing parser still matches the prefix;
+		-- tools/decisions.py ties a finish to the decision that sited it
+		local bx, _, bz = Spring.GetUnitPosition(unitID)
+		BARAI_Echo(string.format("[BARAI_BUILD] team=%d ally=%d frame=%d min=%.2f unit=%s cost=%d x=%d z=%d",
 			unitTeam, select(6, Spring.GetTeamInfo(unitTeam, false)) or 0,
-			f, f / 1800, ud.name, ud.metalCost or 0))
+			f, f / 1800, ud.name, ud.metalCost or 0, math.floor(bx or -1), math.floor(bz or -1)))
 	end
 	if isJammerTower(ud) then
 		jamTowers[unitTeam] = (jamTowers[unitTeam] or 0) + 1

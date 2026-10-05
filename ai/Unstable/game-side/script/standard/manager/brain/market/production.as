@@ -2708,6 +2708,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		+ " hands=" + formatFloat(EtaHandsShare(), "", 0, 2)
 		+ " lathe=" + formatFloat(starterNeed, "", 0, 0) + "/" + formatFloat(BPCapacity(), "", 0, 0)
 		+ " room=" + formatFloat(feedRoom, "", 0, 2) + ")");
+	if (DecideLogOn())
+		NnFacRecord(fac, candDef, candV, candGain, sumV, pick);
 	return Catalog::Def(best);
 }
 

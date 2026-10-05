@@ -1040,6 +1040,14 @@ GROUPS = [
                   "each of the seven personality traits (eco, defence, army, "
                   "T3, air, nukes, LRPC) rolls within 1..1+s, up only, so the "
                   "worst roll is the neutral AI; 0 makes every AI identical"),
+                 ("TUNE_NN_BLEND", "the trained value net (Net tab) steers "
+                  "more: options it expects to grow the economy and win "
+                  "trades get a bigger share of the draw. 0 = it only watches; "
+                  "it only plays once the trainer has written its weights"),
+                 ("TUNE_NN_EXPLORE", "more discovery games: in this share of "
+                  "games with a trained net, every kind of build gets a random "
+                  "want-more/want-less for the whole game, so the net learns "
+                  "what it has never tried. 0 = never experiment"),
                  ("TUNE_DRAW_SHARP", "the draw follows value more sharply — "
                   "higher is closer to winner-takes-all, which has starved "
                   "every non-leading want before"),

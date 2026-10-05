@@ -1303,6 +1303,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 	array<int> catBest;
 	array<float> wt;
 	const float sumV2 = DrawWeights(ranked, catBest, wt);
+	NnNoteDraw(unit, ranked, catBest, wt, sumV2, "draw");
 	gDrawLadderTaken = false;
 	// AN OPEN SPOT IS NOT SAMPLED EITHER (the plan: a rung is reached when
 	// the cheaper growth beneath it is exhausted -- spots taken). The ladder
@@ -1317,10 +1318,12 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 		ranked.removeAt(uint(gDrawLadderMex));
 		ranked.insertAt(0, claim);
 		gDrawLadderTaken = true;
+		gNnDrawMode = "ladder";
 		return true;
 	}
 	if ((gDrawLadderMex == 0) && !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
 		gDrawLadderTaken = true;
+		gNnDrawMode = "ladder";
 		return true;
 	}
 	if (sumV2 > 0.f) {
@@ -1347,6 +1350,7 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 							+ " v=" + formatFloat(ranked[ri].value, "", 0, 2)
 							+ " lead=" + formatFloat(ranked[0].value, "", 0, 2));
 					}
+					gNnDrawMode = "techkept";
 					break;
 				}
 				if (ri > 0) {
@@ -1588,6 +1592,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	Perf::Add("dec.rank", _tRank);
 	OppTimeReprice(unit, ranked);
+	NnScore(unit, ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
 	// want with no rival, and a price cannot steer a decision with nothing to
@@ -1981,7 +1986,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn() && PlantFramed()) {
 		BaseFrontRefresh();
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
-		if (gBfActive && (gBfSlot >= 0) && (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
+		// the wall rebuild empties gWallP while gBfSlot still names an old slot
+		if (gBfActive && (gBfSlot >= 0) && (uint(gBfSlot) < gWallP.length())
+			&& (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
 			const array<int>@ builds = Catalog::BuildsOf(int(unit.circuitDef.id));
 			const float pushCap = EcoPowerM() * ai.GetTunable("apex_cover_push_s", TUNE_COVER_PUSH_S);
 			CCircuitDef@ gun = null;
@@ -2628,6 +2635,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	const string topDef = ((ranked.length() > 0) && (ranked[0].def !is null))
 			? ranked[0].def.GetName() : "-";
 	Perf::Add("dec.post", _tPost);
+	if (DecideLogOn())
+		NnSnapshot(unit, ranked);
 	const uint rankedN = ranked.length();
 	for (uint depth = 0; ranked.length() > 0; ++depth) {
 		const uint i = 0;
@@ -2679,9 +2688,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 					+ ((ranked[i].def is null) ? "-" : ranked[i].def.GetName())
 					+ " pick=" + depth
 					+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z));
+			if (DecideLogOn())
+				NnRecord(unit, ranked[i], depth, why);
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
-				gIncVal[int(unit.id)] = ranked[i].value;
+				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();

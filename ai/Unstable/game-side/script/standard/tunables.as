@@ -795,6 +795,17 @@ const float TUNE_CATALOG_DUMP = 0.f;
 //   and per execution. On: every harness tool parses them. See docs/27.
 const float TUNE_DECIDE_LOG = 1.f;
 
+// [0..2] -- How strongly the value net reweights each builder decision
+//   (nnlog.as): an option the net expects to do one spread better gets
+//   exp(blend) times its market value. 0 = the net only watches. See docs/35.
+const float TUNE_NN_BLEND = 0.f;
+
+// [0..1] -- Share of games (that carry a trained net) played as DISCOVERY
+//   games: every want kind gets a random x0.5..x2 multiplier for the whole
+//   game and the net's output layer gets noise, so the trainer sees what
+//   wanting more or less of each thing does. See docs/35.
+const float TUNE_NN_EXPLORE = 0.1f;
+
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
 
