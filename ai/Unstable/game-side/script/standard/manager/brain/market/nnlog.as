@@ -824,6 +824,7 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	// joins) carry placeholder values the market never priced
 	for (uint r = 0; r < ranked.length(); ++r)
 		ranked[r].nnPriced = true;
+	EcoMexPush(ranked);
 	NnImitate(ranked);
 	if (ranked.length() < 2)
 		return;

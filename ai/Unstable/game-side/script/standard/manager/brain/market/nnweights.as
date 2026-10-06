@@ -141,5 +141,35 @@ const array<float> NNE_B2 = {};
 const array<float> NNE_WO = {};
 const float NNE_BO = 0.f;
 const float NNE_TRUST = 0.f;
+// the constructor-floor net (econet.as)
+const bool NNK_ON = false;
+const string NNK_STATE = "";
+const int NNK_S = 0;
+const int NNK_O = 0;
+const int NNK_H = 0;
+const array<float> NNK_XM = {};
+const array<float> NNK_XS = {};
+const array<float> NNK_W1 = {};
+const array<float> NNK_B1 = {};
+const array<float> NNK_W2 = {};
+const array<float> NNK_B2 = {};
+const array<float> NNK_WO = {};
+const float NNK_BO = 0.f;
+const float NNK_TRUST = 0.f;
+// the expansion net (econet.as)
+const bool NNX_ON = false;
+const string NNX_STATE = "";
+const int NNX_S = 0;
+const int NNX_O = 0;
+const int NNX_H = 0;
+const array<float> NNX_XM = {};
+const array<float> NNX_XS = {};
+const array<float> NNX_W1 = {};
+const array<float> NNX_B1 = {};
+const array<float> NNX_W2 = {};
+const array<float> NNX_B2 = {};
+const array<float> NNX_WO = {};
+const float NNX_BO = 0.f;
+const float NNX_TRUST = 0.f;
 
 }  // namespace Market

@@ -33,6 +33,7 @@
 #include "market/want_nano.as"      // the nano Want
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/escnet.as"         // escort strength net, existing raiders recruited to escort
+#include "market/econet.as"         // constructor-floor and expansion nets
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor

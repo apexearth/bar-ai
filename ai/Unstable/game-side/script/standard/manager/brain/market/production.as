@@ -2399,7 +2399,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
 		if (armyBehind && (consNeedA > 0))
 			++gConFloorYieldN;
-		if ((consNeedA > 0) && !armyBehind) {
+		// The constructor net (econet.as) says which: always, only while the
+		// army holds its share (the rule), or never -- cons then draw like units.
+		const bool floorOn = (gConPolicy == NK_FLOOR) || ((gConPolicy == NK_YIELD) && !armyBehind);
+		if ((consNeedA > 0) && floorOn) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA

@@ -1,0 +1,157 @@
+namespace Market {
+
+// TWO ECONOMY NETS (his 2026-10-06: "let the network discover which is better" --
+// constructors vs army, and how hard we go out for extractors). Same head shape
+// as escnet/nnraid: a team decision on a 30 s clock, today's rule as the prior,
+// discovery draws the others.
+//
+// nncon -- the constructor floor: FLOOR keeps it always (before cca80254),
+//          YIELD lets it step aside while the army is behind its share (the
+//          rule), DRAW drops it so constructors compete in the factory draw.
+// nnmex -- expansion: HOLD lets the forced defence picks fire over an open mex,
+//          YIELD puts an open mex first (the rule), PUSH also doubles the
+//          value of every mex want before the draw.
+const string NNK_CON = "cons,consNeed,armyShare,armyTarget,armyGap,mexes,openSpots,foeRaid,minute";
+const string NNX_MEX = "mexes,openSpots,mexLost,mexKilledRate,defWants,armyShare,foeRaid,bankM,minute";
+const int NK_FLOOR = 0, NK_YIELD = 1, NK_DRAW = 2;
+const int NX_HOLD = 0, NX_YIELD = 1, NX_PUSH = 2;
+const float NE2_EPS = 0.01f;
+int gConPolicy = NK_YIELD;
+int gMexPolicy = NX_YIELD;
+float gMexMul = 1.f;
+int gEcoNetNextAt = 0;
+bool gEcoNetHeader = false;
+float gEcoFlat = -1.f;
+
+string NkName(int o) { return (o == NK_FLOOR) ? "FLOOR" : ((o == NK_DRAW) ? "DRAW" : "YIELD"); }
+string NxName(int o) { return (o == NX_HOLD) ? "HOLD" : ((o == NX_PUSH) ? "PUSH" : "YIELD"); }
+
+int EcoDraw(int rule, float trust, array<float>& w, array<float>& p, float flat)
+{
+	const int n = int(w.length());
+	float sum = 0.f;
+	for (int o = 0; o < n; ++o)
+		sum += w[o];
+	for (int o = 0; o < n; ++o) {
+		if (flat > 0.f)
+			p[o] = (1.f - flat) * w[o] / sum + flat / float(n);
+		else if (trust > 0.f)
+			p[o] = w[o] / sum;
+		else
+			p[o] = (o == rule) ? 1.f : 0.f;
+	}
+	if ((trust <= 0.f) && (flat <= 0.f))
+		return rule;
+	float r = float(AiRandom(0, 10000)) / 10000.f;
+	for (int o = 0; o < n; ++o) {
+		r -= p[o];
+		if (r <= 0.f)
+			return o;
+	}
+	return rule;
+}
+
+string EcoLine(const string tag, const string rule, bool explore, float trust, const array<float>& in st,
+	const array<float>& in f, const array<string>& in names, const array<float>& in w, const array<float>& in p, int chosen)
+{
+	string ln = "apex: " + tag + " t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + rule
+		+ " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
+	for (uint k = 0; k < st.length(); ++k)
+		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
+	ln += " |";
+	for (uint k = 0; k < f.length(); ++k)
+		ln += ((k == 0) ? " " : ",") + NnF(f[k], 3);
+	for (uint o = 0; o < names.length(); ++o)
+		ln += ((o == 0) ? " | " : " ; ") + names[o] + "," + NnF(w[o], 4) + "," + NnF(p[o], 6);
+	return ln + " | chosen=" + chosen;
+}
+
+void EcoNetDecide()
+{
+	if (ai.frame < gEcoNetNextAt)
+		return;
+	gEcoNetNextAt = ai.frame + 30 * SECOND;
+	const bool explore = gNnExploreRolled && gNnExplore;
+	if (explore && (gEcoFlat < 0.f))
+		gEcoFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
+	const float flat = explore ? gEcoFlat : 0.f;
+	array<float> st;
+	NnState(null, st);
+	const float aShare = (Brain::gSpentTotal > 1.f) ? Brain::ShareOf(Brain::ARMY) : 0.f;
+	const float aTgt = Brain::TargetShare(Brain::ARMY);
+	if (!gEcoNetHeader) {
+		gEcoNetHeader = true;
+		AiLog("apex: nncon-schema v1 state=" + NN_STATE + " con=" + NNK_CON + " opt=name,w,p opts=FLOOR,YIELD,DRAW");
+		AiLog("apex: nnmex-schema v1 state=" + NN_STATE + " mex=" + NNX_MEX + " opt=name,w,p opts=HOLD,YIELD,PUSH");
+	}
+	{
+		array<float> f;
+		f.insertLast(float(ConFleetHave()));
+		f.insertLast(float(ConsNeedAny()));
+		f.insertLast(aShare);
+		f.insertLast(aTgt);
+		f.insertLast(ArmyTarget() - ArmyValue());
+		f.insertLast(float(OwnMexCount()));
+		f.insertLast(float(ClaimableSpots()));
+		f.insertLast(FoeRaidMassM());
+		f.insertLast(float(ai.frame) / 1800.f);
+		array<float> w = {NE2_EPS, NE2_EPS, NE2_EPS};
+		w[NK_YIELD] = 1.f;
+		const float trust = NnHeadScore(NNK_ON, NNK_STATE, NNK_CON, NNK_S, NNK_O, NNK_H, NNK_XM, NNK_XS,
+			NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, st, f, w);
+		array<float> p(3);
+		gConPolicy = EcoDraw(NK_YIELD, trust, w, p, flat);
+		array<string> names = {"FLOOR", "YIELD", "DRAW"};
+		AiLog(EcoLine("nncon", "YIELD", explore, trust, st, f, names, w, p, gConPolicy));
+	}
+	{
+		array<float> f;
+		f.insertLast(float(OwnMexCount()));
+		f.insertLast(float(ClaimableSpots()));
+		f.insertLast(float(Military::gNrEcoLostM));
+		f.insertLast(MexLossShare());
+		f.insertLast(float(gDefYieldMex));
+		f.insertLast(aShare);
+		f.insertLast(FoeRaidMassM());
+		f.insertLast(Eco::MCur());
+		f.insertLast(float(ai.frame) / 1800.f);
+		array<float> w = {NE2_EPS, NE2_EPS, NE2_EPS};
+		w[NX_YIELD] = 1.f;
+		const float trust = NnHeadScore(NNX_ON, NNX_STATE, NNX_MEX, NNX_S, NNX_O, NNX_H, NNX_XM, NNX_XS,
+			NNX_W1, NNX_B1, NNX_W2, NNX_B2, NNX_WO, NNX_BO, NNX_TRUST, st, f, w);
+		array<float> p(3);
+		gMexPolicy = EcoDraw(NX_YIELD, trust, w, p, flat);
+		gMexMul = (gMexPolicy == NX_PUSH) ? 2.f : 1.f;
+		array<string> names = {"HOLD", "YIELD", "PUSH"};
+		AiLog(EcoLine("nnmex", "YIELD", explore, trust, st, f, names, w, p, gMexPolicy));
+	}
+}
+
+// PUSH: every mex want counts double before the draw, kept in nnMult so the
+// builder net learns from the market's own value.
+void EcoMexPush(array<Want@>@ ranked)
+{
+	if (gMexMul == 1.f)
+		return;
+	bool any = false;
+	for (uint r = 0; r < ranked.length(); ++r) {
+		if (ranked[r].kind != WK_MEX)
+			continue;
+		ranked[r].value *= gMexMul;
+		ranked[r].nnMult *= gMexMul;
+		any = true;
+	}
+	if (!any)
+		return;
+	for (uint r = 1; r < ranked.length(); ++r) {
+		Want@ w = ranked[r];
+		uint at = r;
+		while ((at > 0) && (ranked[at - 1].value < w.value)) {
+			@ranked[at] = ranked[at - 1];
+			--at;
+		}
+		@ranked[at] = w;
+	}
+}
+
+}  // namespace Market

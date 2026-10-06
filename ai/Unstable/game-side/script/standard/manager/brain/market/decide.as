@@ -570,6 +570,7 @@ float MexLossShare()
 	return gMexLost / (float(OwnMexCount()) + gMexLost);
 }
 int gComEscort = 0;      // commander sent to the lab while escorts are owed
+int gDefYieldMex = 0;     // forced-gun elections that went to the vote: a mex was on the list
 int gComStayKind = -1;    // the job a self-gun was put up to guard
 AIFloat3 gComStayPos;
 int gComStayUntil = 0;
@@ -1870,6 +1871,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// forward in general -- it closes exactly the gap between building a thing
 	// and protecting it.
 	bool coverPush = false;
+	// An open extractor on the list comes before a forced gun (coverall,
+	// basefront, cover, defjoin below); with no mex on offer they fire as
+	// before. The expansion net (econet.as) can turn this off (HOLD).
+	bool mexOnList = false;
+	for (uint ri = 0; (gMexPolicy != NX_HOLD) && (ri < ranked.length()) && !mexOnList; ++ri)
+		mexOnList = (ranked[ri].kind == WK_MEX);   // HOLD: the expansion net lets the guns fire
 	// ...ONCE A PLANT EXISTS. Before the lab the jump put a light tower
 	// ahead of the factory (mex, mex, mex, tower, solar, lab -- and in one
 	// game tower after tower with no factory in 17 minutes). His order:
@@ -1924,6 +1931,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	int covGate = CG_PICK;
 	if (aaPanic || superPush || convertPush || coverPush)
 		covGate = CG_PUSH;
+	else if (mexOnList) {
+		covGate = CG_PUSH;
+		++gDefYieldMex;
+	}
 	else if (EcoRoleGrowing())
 		covGate = CG_GROW;
 	else if (MexLossShare() < ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
@@ -1992,7 +2003,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// THE BASE'S OWN FRONT (his 2026-10-04): while they are coming, medium and
 	// heavy lasers on the open base-edge slots facing them -- as many as the enemy
 	// army we have seen takes to stop (apex_def_trade) -- built by hands at home.
-	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn() && PlantFramed()) {
+	if (!aaPanic && !superPush && !convertPush && !coverPush && !mexOnList && BaseFrontOn() && PlantFramed()) {
 		BaseFrontRefresh();
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		if (gBfActive && (gBfFilled < gBfWanted) && ((gBfSlot < 0) || (uint(gBfSlot) >= gWallP.length())))
@@ -2094,7 +2105,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
 	// it is asked first.
-	if (!aaPanic && !superPush && !convertPush && !coverPush
+	if (!aaPanic && !superPush && !convertPush && !coverPush && !mexOnList
 		&& (ai.GetTunable("apex_cover_push", TUNE_COVER_PUSH) > 0.f)
 		&& PlantFramed())
 	{
@@ -2399,7 +2410,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	{
 		Want@ ua = ProposeUnlockAssist(unit, false);
 		string uaWhy = "metalfirst";
-		if ((ua is null) || (ua.kind != WK_ASSIST)) {
+		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
 			@ua = ProposeUnlockAssist(unit, true);
 			uaWhy = "defjoin";
 		}

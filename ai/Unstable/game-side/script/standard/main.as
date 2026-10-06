@@ -171,7 +171,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
-	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Market::EscNetDecide(); Perf::Add("up.escortrecruit", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Market::EscNetDecide(); Market::EcoNetDecide(); Perf::Add("up.escortrecruit", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }

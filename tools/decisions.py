@@ -39,8 +39,8 @@ POST_SCHEMA = re.compile(r"apex: nnpost-schema v\d+ state=\S+ post=(\S+) opt=")
 NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule=(\S+) ex=(\d) trust=\S+"
                     r" \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 # the commander's and the T2 decisions, one shape: state | own fields | options | chosen
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
@@ -167,7 +167,7 @@ def parse(path, files=None):
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln:
+            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
@@ -295,9 +295,14 @@ def near(x0, z0, x, z):
 def labels(g, t, f, site=None):
     y = {}
     sm, se = g["sm"].get(t), g["se"].get(t)
+    ended = g.get("winners") is not None
     for h in HORIZONS:
         f1 = f + h * FPM
         out = {}
+        # A finished game's horizon runs to its end: blanking it left the long
+        # labels to losses and draws (wins end early).
+        if ended and f1 > g["last"] and g["last"] - f >= FPM:
+            f1 = g["last"]
         if sm is None or f1 > g["last"]:
             y[h] = None
             continue
@@ -342,7 +347,23 @@ def labels(g, t, f, site=None):
     f1 = f + COM_H * FPM
     lost = any(f < df <= f1 and unit.startswith(COMS) for df, unit, _x, _z in g["dead"].get(t, []))
     y["comLost"] = 1 if lost else (None if f1 > g["last"] else 0)
+    # His ruling 2026-10-06: the game's end and the commander's death count,
+    # discounted by how far ahead of this decision they came (e-folding
+    # END_TAU / COM_H minutes), so a game-wide outcome stops being one label
+    # for every row of the game.
+    if ended:
+        mine = g["allyof"].get(t)
+        sign = 0.0 if not w or mine is None else (1.0 if mine in w else -1.0)
+        y["endV"] = sign * math.exp(-max(0, g["last"] - f) / (END_TAU * FPM))
+        dfs = [df for df, unit, _x, _z in g["dead"].get(t, []) if df > f and unit.startswith(COMS)]
+        y["comLostD"] = math.exp(-(min(dfs) - f) / (COM_H * FPM)) if dfs else 0.0
+    else:
+        y["endV"] = None
+        y["comLostD"] = None
     return y
+
+
+END_TAU = 10   # minutes: the longest horizon
 
 
 COM_H = 3

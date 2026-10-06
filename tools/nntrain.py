@@ -37,7 +37,10 @@ import bar_env  # noqa: E402
 import decisions  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-OUT = REPO / "runtime" / "nn"
+# BARAI_NN_OUT: a second trainer (a rebuild on new targets) keeps its own net and buffers
+OUT = Path(os.environ.get("BARAI_NN_OUT", str(REPO / "runtime" / "nn")))
+NO_EXPORT = bool(os.environ.get("BARAI_NN_NOEXPORT"))   # ...and never writes the deployed weights
+NO_LIVE = bool(os.environ.get("BARAI_NN_NOLIVE"))       # ...nor reads running games
 FINISHED = (REPO / "tournaments", REPO / "matches")
 LIVE = ((REPO / "matches", "_engine"), (REPO / "runtime", "engine-w"))
 KINDS = ("mex", "mexup", "energy", "geo", "convert", "store", "plant", "tech", "nano",
@@ -47,7 +50,7 @@ OPT_NUM = ("value", "gain", "m", "t", "cm", "ce", "bt", "walk", "risk", "eta", "
 PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear", "lostFar",
          "lostAir", "lostStatic", "lostMobile", "reclaim")
 LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
-SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost")    # one value per decision, not per horizon
+SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost", "endV", "comLostD")    # one value per decision, not per horizon
 TARGETS = [(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
 SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
 SCHEMA_STATE = "repairM"   # a state field only the current record carries: older rows are skipped, not a reset
@@ -59,8 +62,8 @@ OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc
              (5, "lnD"): 0.25, (10, "lnD"): 0.5, (5, "lostNear"): -0.5,
              ("done", "done"): 0.25, ("survived", "survived"): 0.25,
              ("lifeS", "lifeS"): 0.25, ("lifeKill", "lifeKill"): 0.25,
-             ("won", "won"): 1.0,   # the game result is the longest horizon
-             ("comLost", "comLost"): -2.0}   # his ruling 10-05: the commander must not die
+             ("endV", "endV"): 1.0,   # the game result, discounted by how far ahead it came (his 2026-10-06)
+             ("comLostD", "comLostD"): -2.0}   # the commander must not die (10-05), discounted the same way
 # the dashboard's headline accuracy: the outcomes the net is steered by
 HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE]
 HIDDEN = 32
@@ -69,6 +72,7 @@ HIDDEN = 32
 # lot. Each minibatch of new rows carries REPLAY_OLD times as many old ones.
 EMA_HALF = 5
 REPLAY_OLD = 3
+SCALER_ROWS = 100000   # input/output scalers are fit on a sample this size
 DROPOUT = 0.1
 MIN_BATCH = 150        # matured decisions before a live game is learned from
 STEPS_PER_ROW = 2      # passes over each new batch (each mixed with as many old rows)
@@ -175,7 +179,11 @@ class Net:
 
     def fit_scalers(self, X, Y, M):
         # inputs are log-scaled; the floor stops a feature that never varied in
-        # training from exploding the first time it does
+        # training from exploding the first time it does. A large buffer is
+        # sampled: the full pass cost ~1 s a game on the builder's 800k rows.
+        if len(X) > SCALER_ROWS:
+            k = np.random.default_rng(len(X)).choice(len(X), SCALER_ROWS, replace=False)
+            X, Y, M = X[k], Y[k], M[k]
         self.xm, self.xs = X.mean(0), np.maximum(X.std(0), 0.25)
         w = M.sum(0) + 1e-6
         self.ym = (Y * M).sum(0) / w
@@ -195,24 +203,35 @@ class Net:
         everything before them. Returns the mean loss."""
         t = self.torch
         self.fit_scalers(X, Y, M)
-        Xt, Mt = self._x(X), t.tensor(M, dtype=t.float32)
-        Yt = t.tensor((Y - self.ym) / self.ys, dtype=t.float32)
         n_new = len(X) - new_from
-        self.model.train()
-        tot, cnt = 0.0, 0
+        # the minibatches first, then only their rows are scaled and copied
+        batches = []
         for _ in range(steps):
             perm = t.randperm(n_new) + new_from
             for i in range(0, n_new, 128):
                 b = perm[i:i + 128]
                 if new_from > 0:
                     b = t.cat([b, t.randint(0, new_from, (len(b) * REPLAY_OLD,))])
-                err = ((self.model(Xt[b]) - Yt[b]) ** 2) * Mt[b]
-                loss = err.sum() / (Mt[b].sum() + 1e-6)
-                self.opt.zero_grad()
-                loss.backward()
-                self.opt.step()
-                tot += float(loss)
-                cnt += 1
+                batches.append(b)
+        if not batches:
+            return 0.0
+        rows, inv = t.unique(t.cat(batches), return_inverse=True)
+        ri = rows.numpy()
+        Xt, Mt = self._x(X[ri]), t.tensor(M[ri], dtype=t.float32)
+        Yt = t.tensor((Y[ri] - self.ym) / self.ys, dtype=t.float32)
+        self.model.train()
+        tot, cnt = 0.0, 0
+        at = 0
+        for b0 in batches:
+            b = inv[at:at + len(b0)]
+            at += len(b0)
+            err = ((self.model(Xt[b]) - Yt[b]) ** 2) * Mt[b]
+            loss = err.sum() / (Mt[b].sum() + 1e-6)
+            self.opt.zero_grad()
+            loss.backward()
+            self.opt.step()
+            tot += float(loss)
+            cnt += 1
         self.model.eval()
         self.average()
         return tot / max(cnt, 1)
@@ -357,6 +376,8 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
             ["// the raid net (military/nnraid.as)"] + post_block((heads or {}).get("raid"), "NNR") +
             ["// the air-strike net (air/)"] + post_block((heads or {}).get("air"), "NNA") +
             ["// the escort net (escnet.as)"] + post_block((heads or {}).get("esc"), "NNE") +
+            ["// the constructor-floor net (econet.as)"] + post_block((heads or {}).get("con"), "NNK") +
+            ["// the expansion net (econet.as)"] + post_block((heads or {}).get("mex"), "NNX") +
             ["// the BARb prior (tools/imitate.py)"] + imit_block() + ["", "}  // namespace Market", ""])
     head = ["namespace Market {", "", "// GENERATED by tools/nntrain.py -- the deployed copy only; do not commit."]
     if net is None:
@@ -611,7 +632,21 @@ class EscHead(ComHead):
     PREFIX = "NNE"
 
 
-DEC_HEADS = (ComHead, TechHead, RaidHead, AirHead, EscHead)   # parsed by decisions.head_rows_of(tag)
+class ConHead(ComHead):
+    """The constructor-floor net (econet.as): always, while the army holds its share, or never."""
+    NAME = "con"
+    OPTS = ("FLOOR", "YIELD", "DRAW")
+    PREFIX = "NNK"
+
+
+class MexHead(ComHead):
+    """The expansion net (econet.as): forced guns over an open mex, mex first, or mex first and doubled."""
+    NAME = "mex"
+    OPTS = ("HOLD", "YIELD", "PUSH")
+    PREFIX = "NNX"
+
+
+DEC_HEADS = (ComHead, TechHead, RaidHead, AirHead, EscHead, ConHead, MexHead)   # parsed by decisions.head_rows_of(tag)
 
 
 class Trainer:
@@ -719,6 +754,8 @@ class Trainer:
     def live_games(self):
         now = time.time()
         out = []
+        if NO_LIVE:
+            return out
         for root, prefix in LIVE:
             try:
                 wds = [d for d in root.iterdir() if d.is_dir() and d.name.startswith(prefix)]
@@ -920,6 +957,8 @@ class Trainer:
         return out
 
     def export(self):
+        if NO_EXPORT:
+            return 0
         text = export_as(self.full, self.state_keys, self.batches, self.trust(), self.fac, self.post, self.heads)
         n = 0
         for p in export_targets():
@@ -1016,8 +1055,7 @@ class Trainer:
 
     def poll(self):
         did = []
-        for _t, key, d in self.finished_games():
-            g = decisions.parse(str(d))
+        for key, d, g in parsed_in_order(self.finished_games()):
             first, items = self.rows_from(g, d, final=True)
             self.seen_dirs.add(key)
             if items:
@@ -1043,6 +1081,23 @@ class Trainer:
         return [r for r in did if r], len(live)
 
 
+def parsed_in_order(games):
+    """(key, dir, parsed game) in the given order; with BARAI_NN_PARSE > 1 the
+    parsing runs in worker processes a chunk at a time (a rebuild reads
+    thousands of games; learning stays sequential)."""
+    workers = int(os.environ.get("BARAI_NN_PARSE", "1"))
+    if workers <= 1 or len(games) < 2 * workers:
+        for _t, key, d in games:
+            yield key, d, decisions.parse(str(d))
+        return
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        for i in range(0, len(games), 4 * workers):
+            chunk = games[i:i + 4 * workers]
+            for (_t, key, d), g in zip(chunk, ex.map(decisions.parse, [str(d) for _t, _k, d in chunk])):
+                yield key, d, g
+
+
 def replace_retry(src, dst, tries=20):
     """os.replace that waits out a reader: on Windows the dashboard (status.json)
     or a starting engine (nnweights.as) holding the target makes it fail."""
@@ -1065,7 +1120,7 @@ def stale_ok(p, state_keys, has_net=True):
             head = fh.read()
     except OSError:
         return False
-    if not all(k in head for k in ("NNW_TRUST", "NNF_TRUST", "NNP_TRUST", "NNC_TRUST", "NNT_TRUST", "NNR_TRUST", "NNA_TRUST", "NNE_TRUST", "NNI_ON")):
+    if not all(k in head for k in ("NNW_TRUST", "NNF_TRUST", "NNP_TRUST", "NNC_TRUST", "NNT_TRUST", "NNR_TRUST", "NNA_TRUST", "NNE_TRUST", "NNK_TRUST", "NNX_TRUST", "NNI_ON")):
         return False
     if (OUT / "imitate.npz").is_file() and "NNI_ON = true" not in head:
         return False
@@ -1100,7 +1155,7 @@ def reset():
 
 def main(argv):
     import torch
-    torch.set_num_threads(2)
+    torch.set_num_threads(int(os.environ.get("BARAI_NN_THREADS", "2")))
     if "--reset" in argv:
         dest = reset()
         print("fresh net; the old one is kept in %s" % dest if dest else "no net to archive")
