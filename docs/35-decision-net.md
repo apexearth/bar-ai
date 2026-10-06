@@ -49,8 +49,30 @@ restructure (enemy economy estimate).
   the power it adds (`DPowerOf`), how many we own, tier, forward fraction,
   recent losses at the site, the persona multiplier, and **p**.
 - `apex: nnfac` (production.as): every factory order with all candidates and
-  their roulette odds. `apex: nnair` (air/update.as): every bomber launch and
-  a 30 s heartbeat while a wing is held. Logged, not yet trained on.
+  their roulette odds.
+
+- `apex: nnair` (`manager/air/nnair.as`, v2 2026-10-05): the AIR STRIKE --
+  WAIT or GO -- for two groups on one head: `kind=0` the bombers held at home
+  (not the atomic bomber), `kind=1` the gunships (flyers that hit ground, not
+  a strike def). Every 15 s (staggered by team), plus when the old wing rules
+  (massed / at its worth / deadline / home wave) fire (`legacy=1`) and when a
+  gunship raid clears its cell (`why=arrive`). Every known economy cell of
+  theirs (the 32 richest buildings, everything within `apex_air_cluster_r`)
+  is priced: its metal plus its output (energy at the best converter's rate,
+  metal, extraction, conversion) until a constructor walks out and rebuilds
+  it, against a race over the cell -- group dps falls as the AA we know of
+  (static/ground AA over the cell, fighters that reach it within our flight
+  time) takes planes one by one -- plus the AA crossed on the way in (and out,
+  for bombers); a scored run's survival floors the loss. Rule: GO when the
+  best cell nets positive. Binding: bomber GO = `Release()` at the cell;
+  gunship GO = every gunship raid goaled at the cell, home-pool gunships
+  pulled onto one raid; gunship WAIT = their raids goaled on home ground.
+  The best cell's net, per bomber type, also prices bomber production while
+  the wing is short of the planes that cell takes (`NaTargetGain`).
+  Fields: the `NN_STATE` values, then `air=` (`NNA_AIR`), `WAIT,w,p ; GO,w,p`,
+  `chosen`. Scored by `NnAirScore` (NNA_* weights). `apex: nnair-stat` (60 s),
+  `apex: nnair-go` (gunship goal moved). `tools/airaudit.py` reads the
+  outcome side: planes built by minute, what our air killed, air losses.
 
 - `apex: nnpost` (`manager/military/nnpost.as`, 2026-10-05): the ARMY'S
   POSTURE as a decision -- DEFEND (hold home, meet the push on our own ground),

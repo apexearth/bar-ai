@@ -536,7 +536,14 @@ bool WingGrowing()
 // What one more bomber of THIS type returns, per second, to the wing -- the
 // value the production draw prices it on. Zero unless we are the elected air
 // player, the economy carries air, and the next plane still pays.
-float StrikeGainFor(int d, float fillSec)
+float StrikeGainFor(int d, float fillSec, float armyGap)
+{
+	const float old = StrikeGainWing(d, fillSec);
+	const float tgt = IsAtomicDef(d) ? 0.f : NaTargetGain(d, fillSec, armyGap);
+	return (tgt > old) ? tgt : old;
+}
+
+float StrikeGainWing(int d, float fillSec)
 {
 	// ANY PLAYER BUYS (his ruling 2026-09-29: there is not always a lead);
 	// ShareWing pools what they hold on one ally, who flies them.

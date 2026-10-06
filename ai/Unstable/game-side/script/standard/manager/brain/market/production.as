@@ -1797,7 +1797,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// through to the line pricing: it cannot hold ground, and priced there
 		// by power-per-cost it flies alone to the stock attack.
 		if (!Catalog::gBuilder[d] && Air::IsBomberDef(d)) {
-			const float gainB = ecoGrowing ? 0.f : Air::StrikeGainFor(d, fillS) * roleMul;
+			const float gainB = ecoGrowing ? 0.f : Air::StrikeGainFor(d, fillS, armyGap) * roleMul;
 			if (gainB > 0.f) {
 				// THE SAME CURRENCY AS THE ARMY BID. The army candidate's
 				// value below is its demand RATE (gap over the fill window,

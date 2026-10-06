@@ -15,3 +15,4 @@
 #include "air/share.as"     // pool held bombers on the ally holding the most
 #include "air/station.as"     // spread the wing, spend obsolete fighters
 #include "air/atomic.as"      // the atomic bomber: a strike by itself
+#include "air/nnair.as"       // the strike as a priced WAIT/GO decision (bombers, gunships)

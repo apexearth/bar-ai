@@ -27,6 +27,8 @@ reads them; functions are visible module-wide regardless).
 | Which plant to build next | `FactoryToBuild` (strike) and `IntelPlantToBuild` (intel/mandatory air) | `air/wing.as` |
 | Advanced plant output | **T2 air constructors FIRST**, then the T2 wing. His standing want is "by ~200 metal you should definitely be having one"; the `apex_aca_per_income` knob that encoded it as a rate is GONE, and air-con demand is priced through the market like any other build power — re-derive from `docs/23-the-plan.md` before restoring a per-income rule | facqueue |
 | Whether a plane flies at all | `HoldsUnit` | `air/update.as` |
+| When the held bombers launch, and where the gunships go | `NaDecide` -- a priced WAIT/GO per group (kind 0 bombers, kind 1 gunships), recorded as `apex: nnair`; the old massed/worth/deadline rules are its `legacy` input (`NaLegacy`), not a release. Gunship raids are goaled by it, not by the ground raid decision (`NaAirTask`) | `air/nnair.as` |
+| Bomber demand from the best cell | `NaDemandStep` -> `NaTargetGain` (in `StrikeGainFor`): the smallest wing that finishes the best known cell, priced in the army gap at that run's metal-for-metal return | `air/nnair.as` |
 | The look the wing is priced on | `LookGainFor` prices an air scout at what seeing their economy adds to the first bomber's `PrizeGain` (mirror of our assets vs the census, fading after a look over `apex_ghost_stale_min`); `LookDispatch` flies it across `Front::FoeAnchor()`, the enemy army on a miss | `air/state.as`, `air/update.as`, `market/production.as` `:look` |
 | Which planes a strike owns | the wave roster | `air/wave.as` |
 | Recycling stale T1 air | station recycle (adv standing vs basic count) | `air/station.as` |
@@ -99,7 +101,9 @@ ground parity and lets the commitment gate open.
 `apex: air strike over -- <n> of the wave home, <n> built since` ·
 `apex: air run scored def=<x> sent= home= surv= dmg/bomber=` ·
 `apex: bomb spread units= aims= surv= primary= need= got= width= depth= rest=def:got/need` (C++ `CBombTask::PlanSpread`: each bomber of a focused wave gets its own aim; `need` = bombers to kill it at `strike_s` survival, published by `Release()` from `Throughput`) ·
-`apex: intercepting for ally t<n>` · `apex: fighters spread -- ...`
+`apex: intercepting for ally t<n>` · `apex: fighters spread -- ...` ·
+`apex: nnair t= ... | chosen=` (docs/35) · `apex: nnair-stat` (60 s: decisions, GO by kind, gunships home/out, the wing each bomber type needs for the best cell) · `apex: nnair-go gunships` ·
+`python tools/airaudit.py <match|tournament> [--minutes]` -- planes built, what our air killed, air losses
 
 ## Tunables
 

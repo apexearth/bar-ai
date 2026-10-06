@@ -600,7 +600,7 @@ void UpdateNnRaid()
 		for (uint i = 0; i < gSquads.length(); ++i) {
 			IUnitTask@ t = gSquads[i];
 			if ((t is null) || t.IsDead() || (t is gAskTask)
-				|| (t.GetFightType() != int(Task::FightType::RAID)))
+				|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
 				continue;
 			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);
 			++gNrHeldN;

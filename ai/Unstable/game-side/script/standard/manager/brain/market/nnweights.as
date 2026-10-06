@@ -108,5 +108,20 @@ const array<float> NNR_B2 = {};
 const array<float> NNR_WO = {};
 const float NNR_BO = 0.f;
 const float NNR_TRUST = 0.f;
+// the air-strike net (air/)
+const bool NNA_ON = false;
+const string NNA_STATE = "";
+const int NNA_S = 0;
+const int NNA_O = 0;
+const int NNA_H = 0;
+const array<float> NNA_XM = {};
+const array<float> NNA_XS = {};
+const array<float> NNA_W1 = {};
+const array<float> NNA_B1 = {};
+const array<float> NNA_W2 = {};
+const array<float> NNA_B2 = {};
+const array<float> NNA_WO = {};
+const float NNA_BO = 0.f;
+const float NNA_TRUST = 0.f;
 
 }  // namespace Market

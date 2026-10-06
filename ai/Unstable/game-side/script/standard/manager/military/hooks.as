@@ -168,6 +168,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// the air force is held at home until Air::Release().
 	if (Air::Hunts(unit))
 		return NoteElect("air.hunt", aiMilitaryMgr.DefaultMakeTask(unit));
+	if (Air::NaClaimed(unit))
+		return NoteElect("air.gunraid", Air::NaTask());
 	if (Air::HoldsUnit(unit))
 		return null;
 	if (Factory::HoldsLateFighter(unit))

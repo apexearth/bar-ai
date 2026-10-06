@@ -150,30 +150,6 @@ void Intercept()
 	}
 }
 
-// BOMBER STRIKES, the third decision type for the value net (docs/35): one
-// `apex: nnair` line per launch and one per 30 s of holding a wing back, so
-// "launch now" and "keep massing" both have examples; `apex: air run scored`
-// and the kills near the cell are the outcome.
-bool gNnAirHeader = false;
-int gNnAirHoldAt = 0;
-
-void NnAirRecord(const string& in act, const string& in why)
-{
-	if (!Market::DecideLogOn())
-		return;
-	if (!gNnAirHeader) {
-		gNnAirHeader = true;
-		AiLog("apex: nnair-schema v1 state=" + Market::NN_STATE
-			+ " air=bombers,fighters,enemyAA,tx,tz,prize,cellAA,scaled,structs");
-	}
-	AiLog("apex: nnair t=" + ai.teamId + " f=" + ai.frame + " act=" + act + " why=" + why
-		+ " | " + Market::NnStateText(null) + " | " + Bombers() + "," + Fighters()
-		+ "," + int(EnemyAACost()) + "," + (gStrikeHas ? int(gStrikeAt.x) : -1)
-		+ "," + (gStrikeHas ? int(gStrikeAt.z) : -1) + "," + int(EcoDensity())
-		+ "," + Market::NnF(gStrikeAA, 1) + "," + ScaledBombers()
-		+ "," + int(aiEnemyMgr.GetEnemyStructCost()));
-}
-
 void Release(const string& in why)
 {
 	gStrike = true;
@@ -190,8 +166,6 @@ void Release(const string& in why)
 	}
 	gWaveLaunched = gWaveBombers;
 	NoteStrikeLaunched();
-	NnAirRecord("launch", why);
-	gNnAirHoldAt = ai.frame + 30 * SECOND;
 	Economy::isSwitchAssist = false;   // stop holding build power on the plant
 	// ANTI_STAT makes CBombTask::FindTarget skip enemy army but keep static eco,
 	// builders and commanders. CCircuitDef is owned per CCircuitAI instance, so
@@ -516,10 +490,7 @@ void Update()
 	{ double _tA = Perf::T0(); Market::FoeHalfPoll(); Perf::Add("air.FoeHalfPoll", _tA); }
 	{ double _tA = Perf::T0(); CoverWatch(); Perf::Add("air.CoverWatch", _tA); }
 	{ double _tA = Perf::T0(); StrikeScanStep(); Perf::Add("air.StrikeScanStep", _tA); }
-	if (!gStrike && (Bombers() > 0) && (ai.frame >= gNnAirHoldAt)) {
-		gNnAirHoldAt = ai.frame + 30 * SECOND;
-		NnAirRecord("hold", "massing");
-	}
+	{ double _tA = Perf::T0(); NaUpdate(); Perf::Add("air.NaUpdate", _tA); }
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
 		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }
@@ -565,14 +536,14 @@ void Update()
 		&& (StandingHeldMass() * 2.f >= float(ScaledBombers()))
 		&& (ReadyFighters() >= EscortWant()))
 	{
-		Release("home wave massed");
+		NaLegacy("home wave massed");
 	}
 	// ...and whoever holds the pool flies it on the lead's own terms (apexearth
 	// 2026-10-03: "anybody should be able to do this stuff ... what's the use of
 	// piling bombers and then never ever using them"): t11 sat on 39 pooled
 	// bombers for 13 minutes waiting on an escort count.
 	if (!IsAirLead() && !gStrike && (HeldBombers() >= AIR_BOMBERS) && !WingGrowing())
-		Release("pool at its worth -- the next bomber would not pay");
+		NaLegacy("pool at its worth");
 
 	if (!IsAirLead() || gStrike)
 		return;
@@ -640,13 +611,13 @@ void Update()
 	// What stands must still be a wing: below the floor this threw a spent
 	// run's survivors back out the tick they were recalled, six at a time.
 	if (Massed()) {
-		Release("massed");
+		NaLegacy("massed");
 	} else if (Committed() && !WingGrowing() && (HeldBombers() >= AIR_BOMBERS)) {
-		Release("wing at its worth -- the next bomber would not pay");
+		NaLegacy("wing at its worth");
 	} else if (Committed() && (ai.frame > gCommitFrame + gDeadlineFrames)
 		&& (BomberMass() >= DeadlineBombBar()))
 	{
-		Release("deadline");
+		NaLegacy("deadline");
 	}
 
 	// Why we are NOT armed, when we hold the role -- without this the only
