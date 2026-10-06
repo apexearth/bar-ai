@@ -272,6 +272,8 @@ def main() -> int:
                     help="comma-separated map names or substrings")
     ap.add_argument("--games", type=int, default=4,
                     help="matches per pairing per map (rounded up to even for side balance)")
+    ap.add_argument("--interleave", action="store_true",
+                    help="play the maps round-robin instead of one map at a time")
     ap.add_argument("--minutes", type=int, default=60, help="in-game minute cap")
     ap.add_argument("--speed", type=int, default=0,
                     help="sim speed passed to run_match (S24: at full speed a tail of orders lands late and the stuck watch kills them; 5 is clean)")
@@ -334,12 +336,15 @@ def main() -> int:
 
     jobs: list[Job] = []
     for a, b in pairs:
-        for map_name in maps:
-            for i in range(per_pair):
-                # Swap sides on odd iterations; the seed advances once per swap
-                # pair so both orders see identical starting conditions.
-                first, second = (a, b) if i % 2 == 0 else (b, a)
-                jobs.append(Job(len(jobs), first, second, map_name, 1000 + i // 2))
+        # --interleave walks the maps round-robin, so a long batch reaches every
+        # map early instead of spending its first hours on the first one.
+        order = ([(m, i) for i in range(per_pair) for m in maps] if args.interleave
+                 else [(m, i) for m in maps for i in range(per_pair)])
+        for map_name, i in order:
+            # Swap sides on odd iterations; the seed advances once per swap
+            # pair so both orders see identical starting conditions.
+            first, second = (a, b) if i % 2 == 0 else (b, a)
+            jobs.append(Job(len(jobs), first, second, map_name, 1000 + i // 2))
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     slug = args.name or _safe("_vs_".join(args.ais))[:60]
