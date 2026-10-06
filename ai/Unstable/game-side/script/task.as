@@ -204,7 +204,17 @@ SServBTask Patrol(Task::Priority priority,
 	ti.type = Task::BuildType::PATROL;
 	ti.priority = priority;
 	ti.position = position;
+	ti.isMove = false;
 	ti.timeout = timeout;
+	return ti;
+}
+// A patrol task that walks to the point and stands there: no reclaiming every
+// tree on the way.
+SServBTask Move(Task::Priority priority,
+		const AIFloat3& in position, int timeout)
+{
+	SServBTask ti = Patrol(priority, position, timeout);
+	ti.isMove = true;
 	return ti;
 }
 SServBTask Guard(Task::Priority priority,

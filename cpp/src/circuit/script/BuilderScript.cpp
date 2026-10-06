@@ -95,6 +95,7 @@ CBuilderScript::CBuilderScript(CScriptManager* scr, CBuilderManager* mgr)
 	r = engine->RegisterObjectProperty("SServBTask", "CCircuitUnit@ target", asOFFSET(TaskB::SServBTask, target)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("SServBTask", "float powerMod", asOFFSET(TaskB::SServBTask, powerMod)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("SServBTask", "bool isInterrupt", asOFFSET(TaskB::SServBTask, isInterrupt)); ASSERT(r >= 0);
+	r = engine->RegisterObjectProperty("SServBTask", "bool isMove", asOFFSET(TaskB::SServBTask, isMove)); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("SServBTask", "int timeout", asOFFSET(TaskB::SServBTask, timeout)); ASSERT(r >= 0);
 
 	r = engine->RegisterObjectType("CBuilderManager", 0, asOBJ_REF | asOBJ_NOHANDLE); ASSERT(r >= 0);

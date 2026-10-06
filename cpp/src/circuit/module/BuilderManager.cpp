@@ -781,7 +781,9 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
 
 	switch (ti.type) {
 		case IBuilderTask::BuildType::PATROL: {
-			task = new CBPatrolTask(this, ti.priority, ti.position, ti.timeout);
+			CBPatrolTask* pt = new CBPatrolTask(this, ti.priority, ti.position, ti.timeout);
+			pt->SetMove(ti.isMove);
+			task = pt;
 		} break;
 		case IBuilderTask::BuildType::GUARD: {
 			task = new CBGuardTask(this, ti.priority, ti.target, ti.isInterrupt, ti.timeout);

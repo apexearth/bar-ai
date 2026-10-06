@@ -491,7 +491,7 @@ float NnComScore(const array<float>& in st, const array<float>& in com, array<fl
 
 int gComDec = COM_WORK;       // the decision in force
 float gComFlat = -1.f;        // discovery games: chance a decision goes safer, rolled once
-int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0, gComExpNext = 0, gComMoveAt = 0;
+int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0, gComExpNext = 0;
 int gComDecAt = -999999;
 int gComNextAt = -1;
 int gComAssessAt = -1;
@@ -707,13 +707,6 @@ void ComEnforce(CCircuitUnit@ u)
 			&& (t.GetBuildPos().distance2D(gCsHere) <= u.circuitDef.GetBuildDistance() + 100.f))
 			return;
 		IUnitTask@ pt = ComDecisionTask(u);
-		// The retreat task is a patrol, and a patrolling builder stops for every
-		// tree on the way: walk him there, the patrol only holds him at the end.
-		if ((pt !is null) && (pt is t) && (gComDec == COM_RETREAT) && (ai.frame >= gComMoveAt)
-			&& (gCsHere.distance2D(t.GetBuildPos()) > u.circuitDef.GetBuildDistance())) {
-			gComMoveAt = ai.frame + 5 * SECOND;
-			u.CmdMoveTo(t.GetBuildPos());
-		}
 		if ((pt is null) || (pt is t))
 			return;
 		gComDropAt = ai.frame;
@@ -781,7 +774,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			return held;
 		const float spd = (Catalog::gSpeed[int(u.circuitDef.id)] > 1.f) ? Catalog::gSpeed[int(u.circuitDef.id)] : 1.f;
 		const int dwell = int((here.distance2D(to) / spd + 10.f) * SECOND);
-		IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, to, dwell));
+		IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(Task::Priority::HIGH, to, dwell));
 		if (evade)
 			++gComEvadeN;
 		if ((pt !is null) && (ai.frame >= gComRetLogAt)) {

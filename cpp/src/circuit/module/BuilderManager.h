@@ -67,6 +67,7 @@ namespace TaskB {
 		CCircuitUnit* target;
 		float powerMod;
 		bool isInterrupt;
+		bool isMove;  // PATROL: walk there and stand (apex)
 		int timeout;
 	};
 

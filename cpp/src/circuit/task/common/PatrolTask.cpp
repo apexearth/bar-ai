@@ -80,7 +80,11 @@ bool IPatrolTask::Execute(CCircuitUnit* unit)
 
 	TRY_UNIT(circuit, unit,
 		unit->CmdPriority(0);
-		unit->CmdPatrolTo(position);
+		if (isMove) {
+			unit->CmdMoveTo(position);
+		} else {
+			unit->CmdPatrolTo(position);
+		}
 	)
 	return true;
 }

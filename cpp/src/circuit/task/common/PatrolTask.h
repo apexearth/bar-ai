@@ -24,11 +24,17 @@ public:
 
 	virtual void Start(CCircuitUnit* unit) override;
 	virtual void Update() override;
+
+	// apex: walk to the point and stand, instead of patrolling there -- a
+	// patrolling builder stops for every tree and wreck on the way.
+	void SetMove(bool value) { isMove = value; }
 protected:
 	virtual void Finish() override;
 	virtual void Cancel() override;
 
 	virtual bool Execute(CCircuitUnit* unit) override;
+
+	bool isMove = false;
 };
 
 } // namespace circuit
