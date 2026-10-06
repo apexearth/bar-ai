@@ -74,6 +74,21 @@ not charge.
 
 ## ARMY
 
+### OPEN 2026-10-06: OUR ARMY IS CHEAP FODDER, AND PRICING FACTORY TIME MAKES IT WORSE
+
+Benchmark (24 normal games vs BARb hard/hard_aggressive, 6 maps): at minute
+10 our lines are as busy as BARb's (86-87% vs 82-85%, same build power, 42-46
+units vs 48-50) but our army is Goblins/Pawns/Fleas (leggob 17, armpw 9 a
+game) while BARb fields Hammer/Warrior/Thud/Janus and T2 by min 10; BARb's
+standing army is 2.5-3.3x ours at min 10. Army units are priced by power per
+metal (production.as ConOrderFor, vA = gainA / cost), which favours cheap
+units. TRIED and REVERTED: adding the factory time a unit holds the line
+(buildTime / lineBP x TargetShare(ARMY) x MInc / plants) to its cost --
+cheap units also build FASTEST, so it raised Goblins 17 -> 27 a game and army
+metal 652 -> 890 at min 10, and results fell 6W/17L/1D -> 1W/22L/1D. The
+lever is unit WORTH (cheap units lose fights their power-per-metal says they
+win: Lanchester / the 09-16 exchange-record ruling), not throughput.
+
 ### SHIPPED 2026-09-30 EVENING, PARTLY MEASURED
 
 From his Greenest Fields 8v8s (no T2/T3) and his rulings in them. What is
