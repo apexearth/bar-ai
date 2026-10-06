@@ -16,7 +16,8 @@ const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eE
 	+ "shArmy,shDef,shAirdef,shEco,shBP,tgArmy,tgDef,tgAirdef,tgEco,tgBP,"
 	+ "foeT2,foeHeavy,foeArty,foeRaider,foeStatic,ourQual,foeQual,"
 	+ "dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD,"
-	+ "foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert";
+	+ "foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert,"
+	+ "wreckHome,wreckArmy,wreckRate,rezN,repairM";
 const string NN_OPT = "cat,kind,def,value,gain,m,t,cm,ce,bt,walk,risk,eta,dPow,ownN,tierO,fwd,"
 	+ "siteLoss,persona,x,z,p,nm,forced";
 // value..persona: the net's per-option numbers, in NnOpt order
@@ -161,6 +162,20 @@ int gNnStAt = -1;
 
 // In NN_STATE order. A null unit is a team-level decision (a bomber strike):
 // it stands at home.
+// Wreck metal in sight within half the way to their base: what lies in front
+// of ours. On a 5 s clock -- a feature-field query.
+float gNnWreckHome = 0.f;
+int gNnWreckAt = -1000;
+float NnWreckHome()
+{
+	if (ai.frame - gNnWreckAt < 5 * SECOND)
+		return gNnWreckHome;
+	gNnWreckAt = ai.frame;
+	const float r = 0.5f * Military::FoeBaseDist();
+	gNnWreckHome = (Builder::gHomeSet && (r > 0.f)) ? ai.GetWreckValueAt(Builder::gHomePos, r) : 0.f;
+	return gNnWreckHome;
+}
+
 void NnState(CCircuitUnit@ unit, array<float>& out s)
 {
 	const AIFloat3 up = (unit !is null) ? unit.GetPos(ai.frame)
@@ -268,6 +283,13 @@ void NnStateFull(const AIFloat3& in up, array<float>& out s)
 	s.insertLast(Military::FoeLostM());
 	s.insertLast(Military::FoeRememberedEtaS());
 	s.insertLast(Military::FoeMemCertainty());
+	// reclaim: wreck metal we can see on our half of the map and where the army
+	// stands, how fast new wrecks appear, our rez bots, our repair backlog
+	s.insertLast(NnWreckHome());
+	s.insertLast(Builder::WreckSeenValue());
+	s.insertLast(Military::WreckRateM());
+	s.insertLast(float(Builder::RezCount()));
+	s.insertLast(ai.GetOwnRepairM());
 }
 
 // The market's own numbers for one option, every multiplier the net or the
@@ -365,7 +387,7 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 	NnExploreRoll();
 	if (!gNnHeader) {
 		gNnHeader = true;
-		AiLog("apex: nn-schema v8 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
+		AiLog("apex: nn-schema v9 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
 			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0) + " comb=trust");
 	}
 	const bool here = (gNnDrawAt == ai.frame) && (gNnDrawUnit == int(unit.id));
@@ -427,8 +449,8 @@ float NnSlog(float x)
 }
 
 // A candidate unit described by what it IS, so the net generalises across defs:
-// value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld (NNF_ONUM).
-const uint NNF_ONUM = 13;
+// value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld,rez,bp,radarR (NNF_ONUM).
+const uint NNF_ONUM = 16;
 const uint NNF_K = 24;
 
 void NnFacOpt(int d, float value1000, float gain, array<float>& out o)
@@ -447,6 +469,10 @@ void NnFacOpt(int d, float value1000, float gain, array<float>& out o)
 	o[10] = Catalog::gPower[d];
 	o[11] = Catalog::gFlyer[d] ? 1.f : 0.f;
 	o[12] = Catalog::gBuilder[d] ? 1.f : 0.f;
+	// a rez bot is not a constructor: what it is for is the wreck field
+	o[13] = Catalog::gRezzer[d] ? 1.f : 0.f;
+	o[14] = Catalog::gBuildPower[d];
+	o[15] = Catalog::gRadar[d] ? Catalog::gRadarR[d] : 0.f;
 }
 
 bool NnFacWeightsFit()
@@ -566,8 +592,8 @@ void NnFacRecord(CCircuitUnit@ fac, const array<int>& in defs, const array<float
 	const double _t = Perf::T0();
 	if (!gNnFacHeader) {
 		gNnFacHeader = true;
-		AiLog("apex: nnfac-schema v2 state=" + NN_STATE
-			+ " opt=def,value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld,p,nm");
+		AiLog("apex: nnfac-schema v3 state=" + NN_STATE
+			+ " opt=def,value,gain,cm,ce,bt,tierO,ownN,hp,speed,range,power,fly,bld,rez,bp,radarR,p,nm");
 	}
 	string ln = "apex: nnfac t=" + ai.teamId + " f=" + ai.frame + " u=" + fac.id
 		+ " c=" + fac.circuitDef.GetName() + " | " + NnStateText(fac) + " |";

@@ -50,7 +50,7 @@ LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim
 SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost")    # one value per decision, not per horizon
 TARGETS = [(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
 SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
-SCHEMA_STATE = "foeCert"   # a state field only the current record carries: older rows are skipped, not a reset
+SCHEMA_STATE = "repairM"   # a state field only the current record carries: older rows are skipped, not a reset
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
 DECIDED = ("draw", "ladder")   # rows where an option was chosen on value, not forced
 # What "better" means when the net plays, in units of each outcome's spread.
@@ -354,8 +354,8 @@ def export_targets():
 
 
 FAC_OPT_NUM = ("value", "gain", "cm", "ce", "bt", "tierO", "ownN", "hp", "speed", "range",
-               "power", "fly", "bld")   # nnlog.as NnFacOpt order
-FAC_SCHEMA_OPT = "fly"                   # an option field only the v2 factory record carries
+               "power", "fly", "bld", "rez", "bp", "radarR")   # nnlog.as NnFacOpt order
+FAC_SCHEMA_OPT = "radarR"                # an option field only the v3 factory record carries
 
 
 def featurize_fac(row, state_keys):
