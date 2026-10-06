@@ -39,8 +39,8 @@ POST_SCHEMA = re.compile(r"apex: nnpost-schema v\d+ state=\S+ post=(\S+) opt=")
 NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule=(\S+) ex=(\d) trust=\S+"
                     r" \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 # the commander's and the T2 decisions, one shape: state | own fields | options | chosen
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid)-schema v\d+ state=\S+ (?:com|tech|raid)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air)-schema v\d+ state=\S+ (?:com|tech|raid|air)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
@@ -167,7 +167,7 @@ def parse(path, files=None):
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln:
+            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
