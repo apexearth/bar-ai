@@ -89,6 +89,19 @@ metal 652 -> 890 at min 10, and results fell 6W/17L/1D -> 1W/22L/1D. The
 lever is unit WORTH (cheap units lose fights their power-per-metal says they
 win: Lanchester / the 09-16 exchange-record ruling), not throughput.
 
+Found the actual fodder mechanism (same day): the record cut in ConOrderFor
+(`:losing`, RecordRaw < 1) drops every type under its class bar, fodder is
+exempt, so a lab is left offering fodder only in 8-24% of prodranks at min
+2-14 (one Legion game: 105 Goblins by min 10, every Legion fighter cut).
+TRIED and REVERTED: (a) a screen value for fodder (worth falls once fodder
+outnumbers soldiers + ground guns) -- computed rarely, no effect; (b)
+removing the losing types only after pricing and only when a non-losing
+fighter made the list. (b) worked mechanically (fodder-only 24% -> 0%,
+Goblins 33 -> 15, army metal at min 10 598 -> 998 vs BARb 1,086) but went
+2W/39L/7D over 48 games against 7W/34L/7D for the cut, k/l min 6-10 no
+better. The losing types lose: equal army metal still trades ~0.55-0.7 in
+min 6-10, so the gap is how the army fights, not how big it is.
+
 ### SHIPPED 2026-09-30 EVENING, PARTLY MEASURED
 
 From his Greenest Fields 8v8s (no T2/T3) and his rulings in them. What is
