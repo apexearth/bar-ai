@@ -344,12 +344,12 @@ void NnExploreRoll()
 	for (int h = 0; h < NNW_H; ++h)
 		gNnWO[h] = NNW_WO[h];
 	const float chance = ai.GetTunable("apex_nn_explore", TUNE_NN_EXPLORE);
-	gNnExplore = NNW_ON && (float(AiRandom(0, 10000)) / 10000.f < chance);
+	gNnExplore = float(AiRandom(0, 10000)) / 10000.f < chance;
 	if (!gNnExplore)
 		return;
 	string ln = "apex: nn-explore t=" + ai.teamId + " on |";
 	for (uint k = 0; k < gNnKindMult.length(); ++k) {
-		gNnKindMult[k] = pow(2.7182818f, 0.4f * NnGauss());
+		gNnKindMult[k] = pow(2.7182818f, 0.8f * NnGauss());   // 1 sd: x0.45..x2.2
 		ln += " " + KindName(int(k)) + "=" + NnF(gNnKindMult[k], 2);
 	}
 	for (int h = 0; h < NNW_H; ++h)
@@ -793,9 +793,31 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	for (uint r = 0; r < ranked.length(); ++r)
 		ranked[r].nnPriced = true;
 	NnImitate(ranked);
-	if (!NNW_ON || gNnBad || (ranked.length() < 2))
+	if (ranked.length() < 2)
 		return;
+	// discovery does not wait for a net: a fresh net is when it is needed most
 	NnExploreRoll();
+	if (!NNW_ON || gNnBad) {
+		if (!gNnExplore)
+			return;
+		for (uint r = 0; r < ranked.length(); ++r) {
+			const int k = ranked[r].kind;
+			if ((k >= 0) && (uint(k) < gNnKindMult.length())) {
+				ranked[r].value *= gNnKindMult[k];
+				ranked[r].nnMult *= gNnKindMult[k];
+			}
+		}
+		for (uint r = 1; r < ranked.length(); ++r) {
+			Want@ w = ranked[r];
+			uint at = r;
+			while ((at > 0) && (ranked[at - 1].value < w.value)) {
+				@ranked[at] = ranked[at - 1];
+				--at;
+			}
+			@ranked[at] = w;
+		}
+		return;
+	}
 	const float blend = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND);
 	if ((blend <= 0.f) && !gNnExplore)
 		return;
