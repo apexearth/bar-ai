@@ -61,6 +61,14 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			if (fill <= 1.f)
 				fill = 180.f;
 			gain += Military::EyesSavedM() / fill * unseenFrac;
+			// THE SURPRISE IT PREVENTS: the enemy army we cannot see now, over
+			// the army horizon. Before we have seen any of it, a player assumes
+			// they field about what we do.
+			float foeEst = Military::FoeBelievedM();
+			foeEst = (ArmyValue() > foeEst) ? ArmyValue() : foeEst;
+			float foeUnseen = foeEst - Military::FoeLiveM();
+			foeUnseen = (foeUnseen > 0.f) ? foeUnseen : 0.f;
+			gain += foeUnseen / fill * unseenFrac;
 		}
 	} else if (cls == PROT_JAM) {
 		// Tower concentrations want jamming first (apexearth): find a

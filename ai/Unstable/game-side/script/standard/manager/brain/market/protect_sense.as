@@ -95,9 +95,47 @@ void ComRadarsFill()
 // this gap is watched the nearest remaining one is somewhere else. The unseen
 // share is the diminishing return: cover everything and the want prices itself
 // out without a count anywhere.
+// OUR BUILDINGS WITHOUT RADAR VISION (his 2026-10-05: "if we don't have proper
+// radar vision around our buildings, we should make it"), weighted by metal.
+// The gap used to be sought only at the mexes and the front line, so a base
+// with no radar over its plants and generators read as covered. 5 s clock.
+array<AIFloat3> gRcUnseenPos;
+float gRcUnseenM = 0.f, gRcTotalM = 0.f;
+int gRcAt = -1000;
+void RadarCoverRefresh()
+{
+	if (ai.frame - gRcAt < 5 * SECOND)
+		return;
+	gRcAt = ai.frame;
+	gRcUnseenPos.resize(0);
+	gRcUnseenM = 0.f;
+	gRcTotalM = 0.f;
+	const bool foeKnown = Front::FoeKnown();
+	for (uint i = 0; i < ComLen(); ++i) {
+		const int d = gComDef[i];
+		if ((d < 0) || (d >= int(Catalog::gCostM.length())) || ((gComState[i] & CS_COMING) != 0)
+			|| Catalog::gMobile[d] || !OnMap(gComPos[i]))
+			continue;
+		const float m = Catalog::gCostM[d];
+		gRcTotalM += m;
+		if (RadarSees(gComPos[i]) || (foeKnown && Builder::PastFront(gComPos[i])))
+			continue;
+		gRcUnseenM += m;
+		gRcUnseenPos.insertLast(gComPos[i]);
+	}
+}
+float RadarUnseenShare()
+{
+	RadarCoverRefresh();
+	return (gRcTotalM > 1.f) ? (gRcUnseenM / gRcTotalM) : 0.f;
+}
+
 bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 {
 	array<AIFloat3> pts;
+	RadarCoverRefresh();
+	for (uint i = 0; i < gRcUnseenPos.length(); ++i)
+		pts.insertLast(gRcUnseenPos[i]);
 	if (ai.GetTunable("apex_front_line", TUNE_FRONT_LINE) > 0.f) {
 		array<AIFloat3> line;
 		if (Military::FrontBuildSpots(line)) {
@@ -135,6 +173,8 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 		}
 	}
 	unseenFrac = float(unseen) / float(pts.length());
+	const float byMetal = RadarUnseenShare();
+	unseenFrac = (byMetal > unseenFrac) ? byMetal : unseenFrac;
 	return found;
 }
 
