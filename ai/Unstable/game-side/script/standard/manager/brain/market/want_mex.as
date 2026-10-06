@@ -854,10 +854,9 @@ void SpotTableFill()
 		if (ai.frame - gBlockAt[k] <= BLOCK_TTL)
 			PtMarkNear(gBlockPos[k], PT_BLOCKED);
 	}
-	for (uint k = 0; k < gConDeathPos.length(); ++k) {
-		if (ai.frame - gConDeathAt[k] <= BLOCK_TTL)
-			PtMarkNear(gConDeathPos[k], PT_CONDEATH);
-	}
+	// A constructor's death near a spot no longer bans it for three minutes:
+	// the danger that killed him is read live (PT_HOT, the risk price), and the
+	// ban kept our own home extractors down for minutes after a raid had gone.
 	const array<bool>@ allyHeld = AllyHeldSpots();
 	for (uint si = 0; si < n; ++si) {
 		const AIFloat3 sp = gAllSpots[si];
