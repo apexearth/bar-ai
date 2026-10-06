@@ -411,7 +411,8 @@ def build_script(
     for ally, ai in enumerate(ais):
         pos = spread_starts(rects[ally], per_side, boxes, map_starts or [], map_size)             if spread else []
         for slot in range(per_side):
-            body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot], handicap,
+            body.append(_ai_and_team(ai, team_id, ally, slot, side_of[ally][slot],
+                                     handicap[min(ally, len(handicap) - 1)] if isinstance(handicap, (list, tuple)) else handicap,
                                      drop_ai_version,
                                      pos[slot] if slot < len(pos) else None,
                                      ai_options if ally == 0 else ai_options_b if ally == 1 else None))
@@ -862,11 +863,20 @@ def run(args) -> int:
         rep = audit_mod.Report()
         for check in audit_mod.CHECKS:
             check(text, rep)
+        import contextlib
+        import io
+        import audit_record
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rep.show()
         print()
-        rep.show()
+        print(buf.getvalue())
+        (outdir / "audit.txt").write_text(buf.getvalue(), encoding="utf-8")
         (outdir / "audit.json").write_text(
             json.dumps({"rows": [list(r) for r in rep.rows]}, indent=2),
             encoding="utf-8")
+        # one tally across games, by issue code: python tools/audit_record.py
+        audit_record.record(outdir, rep.rows, "watch" if (args.watch or args.windowed) else "batch")
     except Exception as e:  # noqa: BLE001 -- the match result stands regardless
         print(f"audit    failed to run: {e}")
 
@@ -1014,8 +1024,8 @@ def main() -> int:
                     help="start-box size as a fraction of the map, e.g. 0.35; 0 = the "
                          "map default from MAP_BOXES (Isthmus 0.45), else auto "
                          "(0.38 for <=4 per side, 0.20 above)")
-    ap.add_argument("--handicap", type=int, default=None,
-                    help="percent resource bonus for EVERY AI, e.g. 50. Engine key "
+    ap.add_argument("--handicap", type=lambda v: [int(x) for x in v.split(",")] if "," in v else int(v), default=None,
+                    help="percent resource bonus for EVERY AI, e.g. 50, or per side A,B (100,0). Engine key "
                          "Handicap -> SetAdvantage(pct/100) -> income multiplier, the "
                          "same number BAR's player list shows as '+50%%'. Defaults to 50 "
                          "under --watch, because a hosted multiplayer game is always "

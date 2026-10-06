@@ -29,6 +29,9 @@ def load(path):
     info = p / "infolog.txt"
     if info.exists():
         parts.append(info.read_text(errors="replace"))
+    gad = p / "barai-gadgets.log"
+    if gad.exists() and "[BARAI_" not in (parts[0] if parts else ""):
+        parts.append(gad.read_text(errors="replace"))
     for f in sorted(p.glob("AI/Skirmish/*/*/apex-t*.log")):
         parts.append(f.read_text(errors="replace"))
     return "\n".join(parts)
@@ -48,7 +51,7 @@ class Report:
 
     def show(self):
         flags = 0
-        for section in ("HEALTH", "PRIORITY", "STRUCTURES", "GEOMETRY",
+        for section in ("HEALTH", "NETS", "PRIORITY", "STRUCTURES", "GEOMETRY",
                         "ECONOMY", "MILITARY", "EFFICIENCY", "VS-ENEMY",
                         "PERF"):
             rows = [r for r in self.rows if r[0] == section]
@@ -1492,6 +1495,8 @@ CHECKS = [check_health, check_ledger, check_commitments, check_priority,
           check_economy, check_lab_timing, check_placement_sanity, check_lathe_siting,
           check_military, check_missteps, check_efficiency, check_vs_enemy,
           check_structures, check_geometry, check_perf, check_overflow_spend]
+from audit_extra import EXTRA_CHECKS  # noqa: E402
+CHECKS += EXTRA_CHECKS
 
 
 def main():
@@ -1522,6 +1527,22 @@ def main():
     rep = Report()
     for chk in CHECKS:
         chk(text, rep)
+    if "--record" in sys.argv:
+        import contextlib
+        import io
+        import audit_record
+        kind = sys.argv[sys.argv.index("--kind") + 1] if "--kind" in sys.argv else "batch"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            n = rep.show()
+        if p.is_dir():
+            (p / "audit.txt").write_text(buf.getvalue())
+        audit_record.record(p, rep.rows, kind)
+        flags = [r for r in rep.rows if not r[1]]
+        print("audit: %d flag(s)%s" % (n, " -- full report in audit.txt" if p.is_dir() else ""))
+        for sec, _ok, code, detail in flags:
+            print("  FLAG %-30s %s" % (code, detail[:140]))
+        return 1 if n else 0
     # FAIL, not just report: he asked for a script that can find issues on its
     # own, which means a non-zero exit a runner can act on.
     return 1 if rep.show() else 0
