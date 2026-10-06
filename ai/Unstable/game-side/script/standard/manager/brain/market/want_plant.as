@@ -1482,6 +1482,36 @@ float TeamLineMul(int d)
 	return 1.f / (1.f + w * float(gTeamPlantN[d]));
 }
 
+// DISCOVERY TRIES OTHER PLANTS. The opening plant is an argmax at the first
+// election, before any enemy is seen, and opened with a bot lab in 152 of 152
+// games (BARb: 85 bot / 67 vehicle) -- the nets never saw anything else. In a
+// discovery game each ground plant type carries one multiplier rolled for the
+// whole game (e^(1.5 N)), so openings and T2 plant types vary and their
+// outcomes are recorded; nnMult keeps the market's own value in the record.
+array<float> gPlantExpMult;
+void PlantExpApply(int d, Want& c)
+{
+	NnExploreRoll();
+	if (!gNnExplore || (c.value <= 0.f) || (d < 0) || Catalog::gFlyer[d])
+		return;
+	const array<int>@ made = Catalog::gBuildsList[d];
+	bool fliesOnly = (made.length() > 0);
+	for (uint i = 0; fliesOnly && (i < made.length()); ++i)
+		fliesOnly = Catalog::gFlyer[made[i]] || !Catalog::gMobile[made[i]];
+	if (fliesOnly)
+		return;   // an air plant: no early air lab in 1v1 (his 10-02)
+	if (gPlantExpMult.length() <= uint(d)) {
+		const uint was = gPlantExpMult.length();
+		gPlantExpMult.resize(d + 1);
+		for (uint i = was; i < gPlantExpMult.length(); ++i)
+			gPlantExpMult[i] = 0.f;
+	}
+	if (gPlantExpMult[d] <= 0.f)
+		gPlantExpMult[d] = pow(2.7182818f, 1.5f * NnGauss());
+	c.value *= gPlantExpMult[d];
+	c.nnMult *= gPlantExpMult[d];
+}
+
 Want@ ProposePlant(CCircuitUnit@ unit)
 {
 	Want w;
@@ -1960,6 +1990,7 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				+ ",lat" + formatFloat(PipeLatencyMult(d, Catalog::gBuildPower[uid]), "", 0, 2)
 				+ ")";
 		}
+		PlantExpApply(d, c);
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_PLANT;

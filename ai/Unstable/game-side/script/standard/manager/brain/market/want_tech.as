@@ -993,6 +993,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				c.value = c.gain / (c.mCost + c.tCost);
 			}
 		}
+		PlantExpApply(d, c);
 		if (c.value > w.value) {
 			// The tech lab is the most protection-hungry building we own:
 			// at the base anchor, never at a forward asker (watched).
