@@ -751,6 +751,7 @@ AIFloat3 ComEvadePos(const AIFloat3& in here)
 // What CommanderSafety hands him under the decision; null = no override.
 int gComRetLogAt = 0;
 int gComEvadeN = 0;
+int gComRetKeptN = 0;   // RETREAT kept the engine's own retreat task
 IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 {
 	if (gComDec == COM_RETREAT) {
@@ -772,6 +773,12 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			&& (held.GetBuildType() == Task::BuildType::PATROL)
 			&& (held.GetBuildPos().distance2D(to) < 300.f))
 			return held;
+		// Already on the engine's own retreat (hurt, going for repair): that is a
+		// retreat too, and replacing it each election fights it.
+		if ((held !is null) && (held.GetType() == Task::Type::RETREAT)) {
+			++gComRetKeptN;
+			return held;
+		}
 		const float spd = (Catalog::gSpeed[int(u.circuitDef.id)] > 1.f) ? Catalog::gSpeed[int(u.circuitDef.id)] : 1.f;
 		const int dwell = int((here.distance2D(to) / spd + 10.f) * SECOND);
 		IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(Task::Priority::HIGH, to, dwell));
@@ -783,7 +790,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			ComGunAt(to, gd, gh);
 			AiLog(Factory::T() + "apex: com-retreat t=" + ai.teamId + (evade ? " evade" : "")
 				+ " to=" + int(to.x) + "," + int(to.z)
-				+ " d=" + int(here.distance2D(to)) + " gunDps=" + int(gd) + " evades=" + gComEvadeN);
+				+ " d=" + int(here.distance2D(to)) + " gunDps=" + int(gd) + " evades=" + gComEvadeN + " keptRetreat=" + gComRetKeptN);
 		}
 		return pt;
 	}

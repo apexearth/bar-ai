@@ -68,6 +68,9 @@ void RehomeUpdate()
 		+ " walk=" + int(best.distance2D(from)) + " foeD=" + int(bestScore + best.distance2D(from)));
 	Builder::gHomePos = best;
 	Base::gAnchor = best;
+	// ...and the engine's base: its retreat (a hurt commander going for
+	// repair) still pathed to the lost one.
+	aiSetupMgr.SetBasePos(best);
 	gFarmSet = false;
 }
 

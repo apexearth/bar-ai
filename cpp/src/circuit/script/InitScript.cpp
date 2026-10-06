@@ -2314,6 +2314,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// AS docs / "Registering object methods" / "Composite members"
 	r = engine->RegisterObjectMethod("CSetupManager", "dictionary@ GetModOptions()", asMETHOD(CSetupScript, GetModOptions), asCALL_THISCALL, 0, asOFFSET(CSetupManager, script), true); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetBasePos() const", asFUNCTION(CSetupManager_GetBasePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CSetupManager", "void SetBasePos(const AIFloat3& in)", asMETHOD(CSetupManager, SetBasePos), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "void SetLanePos(const AIFloat3& in)", asFUNCTION(CSetupManager_SetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetLanePos() const", asFUNCTION(CSetupManager_GetLanePos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CSetupManager", "AIFloat3 GetEnemyBoxCentre() const", asFUNCTION(CSetupManager_GetEnemyBoxCentre), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

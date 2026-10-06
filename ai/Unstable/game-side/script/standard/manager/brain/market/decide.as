@@ -1503,6 +1503,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	const double _tExpose = Perf::T0();
 	const float lossH = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
 	const float frameK = ai.GetTunable("apex_frame_risk", TUNE_FRAME_RISK);
+	const bool airBuilder = unit.circuitDef.IsAbleToFly();
 	for (uint i = 0; i < wants.length(); ++i) {
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f) || (c.def is null))
@@ -1531,6 +1532,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (exposed <= 0.f)
 			continue;
 		float charge = (c.kind == WK_PROTECT) ? 0.f : exposed;
+		// An air con pays for its own exposure too, towers included; ground
+		// cons have the C++ road check.
+		if (airBuilder)
+			charge += ExpectedLossAt(c.pos, Catalog::gCostM[int(unit.circuitDef.id)]);
 		if ((frameK > 0.f) && (c.buildSec > 0.f) && (lossH > 1.f))
 			charge += exposed * frameK * (c.buildSec / lossH);
 		if (charge <= 0.f)

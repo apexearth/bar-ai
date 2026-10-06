@@ -1498,8 +1498,10 @@ void PlantExpApply(int d, Want& c)
 	bool fliesOnly = (made.length() > 0);
 	for (uint i = 0; fliesOnly && (i < made.length()); ++i)
 		fliesOnly = Catalog::gFlyer[made[i]] || !Catalog::gMobile[made[i]];
-	if (fliesOnly)
-		return;   // an air plant: no early air lab in 1v1 (his 10-02)
+	// An air plant varies too, once a ground plant stands: the opening stays
+	// ground (his 10-02).
+	if (fliesOnly && (Factory::gFacUnits.length() == 0))
+		return;
 	if (gPlantExpMult.length() <= uint(d)) {
 		const uint was = gPlantExpMult.length();
 		gPlantExpMult.resize(d + 1);
