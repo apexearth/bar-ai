@@ -1556,38 +1556,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	int amphBan = -1;
 	int consNeedA = -1;
 	float bpProt = -1.f;
-	// THE ESCORT FLOOR (his ruling 2026-09-22: "force an escort to be produced
-	// for each constructor in the early game since we have almost no army").
-	// Early = the free army is worth less than the metal walking out alone.
-	{
-		escShort = EscortShortfall();
-		int escD = -1;
-		int escFly = 0;
-		for (uint i = 0; i < prods.length(); ++i) {
-			const int d = prods[i];
-			// The T1 stop binds here too: this floor never ends on its own
-			// (free counts raiders only).
-			if (!EscortWorthy(d) || Outgrown(d) || IsLateScout(d))
-				continue;
-			escFly += EscortInFlight(Catalog::Def(d));
-			// The strongest, not the cheapest: one escort has to win the duel
-			// alone, and a Tick loses to the Pawns that kill most of our cons.
-			if ((escD < 0) || (Catalog::gPower[d] > Catalog::gPower[escD]))
-				escD = d;
-		}
-		const float atRisk = EscortMetalAtRisk();
-		const float freeArmy = RoleValue(int(Unit::Role::RAIDER.type));
-		if ((escD >= 0) && (Catalog::gFloater[escD] || Catalog::gSub[escD]))
-			escShort = EscortShortfallWet();
-		if ((escD >= 0) && (escShort - escFly > 0) && (freeArmy < atRisk)) {
-			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
-				+ " #" + fac.id + " -> produce:" + Catalog::Def(escD).GetName()
-				+ " (escort floor short=" + escShort + " inflight=" + escFly
-				+ " risk=" + formatFloat(atRisk, "", 0, 0)
-				+ " free=" + formatFloat(freeArmy, "", 0, 0) + ")");
-			return Catalog::Def(escD);
-		}
-	}
 	// RoleTarget and RoleValue are per ROLE, and a line offers far more
 	// candidates than roles. Linear over at most a handful of entries.
 	array<int> rcRole;
