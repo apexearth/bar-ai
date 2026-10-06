@@ -180,6 +180,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	{ double _t = Perf::T0(); Market::NanoReclaimAssist(); Perf::Add("up.nanorec", _t); }
 	{ double _t = Perf::T0(); Market::LiftUpdate(); Perf::Add("up.lift", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateSpamPosture(); Perf::Add("up.spamposture", _t); }
+	{ double _t = Perf::T0(); Military::FoeMemStep(); Perf::Add("up.foemem", _t); }
 	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
@@ -442,6 +443,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	if (edef is null)
 		return;
 	Military::NoteFoeDef(edef.costM, edef);
+	Military::FoeMemNoteDeath(int(edef.id), pos);
 	double hkT = Perf::T0();
 	Military::NoteEnemyKill(edef.costM, Military::ForwardFraction(pos), byUs,
 			ai.GetElevationAt(pos) < 0.f);

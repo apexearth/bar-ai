@@ -90,6 +90,12 @@ public:
 	float GetEnemyGroupRange(int idx) const;
 	int GetEnemyGroupUnitCount(int i) const;
 	CCircuitDef::Id GetEnemyGroupUnitDef(int i, int k) const;  // 0 when unknown
+	// apex: the registry by index, for the script's army memory; the order
+	// shifts as units die, so a sweep across frames may skip or repeat one.
+	int GetEnemyUnitTotal() const { return (int)enemyUpdates.size(); }
+	CEnemyUnit* GetEnemyUnitAt(int idx) const {
+		return ((idx >= 0) && (idx < (int)enemyUpdates.size())) ? enemyUpdates[idx] : nullptr;
+	}
 private:
 	void DyingEnemy(CEnemyUnit* enemy);
 	void DeleteEnemyUnit(CEnemyUnit* data);

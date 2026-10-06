@@ -15,7 +15,8 @@ const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eE
 	+ "plantM,nanoBP,convCap,defM,antiN,stockN,"
 	+ "shArmy,shDef,shAirdef,shEco,shBP,tgArmy,tgDef,tgAirdef,tgEco,tgBP,"
 	+ "foeT2,foeHeavy,foeArty,foeRaider,foeStatic,ourQual,foeQual,"
-	+ "dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD";
+	+ "dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD,"
+	+ "foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert";
 const string NN_OPT = "cat,kind,def,value,gain,m,t,cm,ce,bt,walk,risk,eta,dPow,ownN,tierO,fwd,"
 	+ "siteLoss,persona,x,z,p,nm,forced";
 // value..persona: the net's per-option numbers, in NnOpt order
@@ -261,6 +262,12 @@ void NnStateFull(const AIFloat3& in up, array<float>& out s)
 	s.insertLast(Military::DangerGap());
 	s.insertLast(Military::NearestFoeEtaS());
 	s.insertLast(Military::FoeBaseDist());
+	// their army as remembered: in sight, out of sight where we think it is, lost track of
+	s.insertLast(Military::FoeLiveM());
+	s.insertLast(Military::FoeRememberedM());
+	s.insertLast(Military::FoeLostM());
+	s.insertLast(Military::FoeRememberedEtaS());
+	s.insertLast(Military::FoeMemCertainty());
 }
 
 // The market's own numbers for one option, every multiplier the net or the
@@ -358,7 +365,7 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 	NnExploreRoll();
 	if (!gNnHeader) {
 		gNnHeader = true;
-		AiLog("apex: nn-schema v7 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
+		AiLog("apex: nn-schema v8 state=" + NN_STATE + " opt=" + NN_OPT + " k=" + NN_K
 			+ " net=" + (NNW_ON ? NNW_GAMES : -1) + " explore=" + (gNnExplore ? 1 : 0) + " comb=trust");
 	}
 	const bool here = (gNnDrawAt == ai.frame) && (gNnDrawUnit == int(unit.id));

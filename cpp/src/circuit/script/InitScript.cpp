@@ -786,6 +786,56 @@ static int CEnemyManager_GetEnemyGroupUnitDef(CEnemyManager* mgr, int i, int k)
 	return (int)mgr->GetEnemyGroupUnitDef(i, k);
 }
 
+// apex: one registered enemy by registry index (foemem.as). Los is the raw
+// mask: 1 LOS, 2 radar, 4 hidden (its tile seen empty), 8 neutral/ignored,
+// 32 dying, 64 dead; -1 when the slot is gone.
+static int CEnemyManager_GetEnemyUnitTotal(CEnemyManager* mgr)
+{
+	return mgr->GetEnemyUnitTotal();
+}
+
+static int CEnemyManager_GetEnemyUnitIdAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return (e != nullptr) ? (int)e->GetId() : -1;
+}
+
+static int CEnemyManager_GetEnemyUnitLosAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return (e != nullptr) ? (int)e->GetData().losStatus : -1;
+}
+
+static int CEnemyManager_GetEnemyUnitDefAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return ((e != nullptr) && (e->GetCircuitDef() != nullptr)) ? (int)e->GetCircuitDef()->GetId() : 0;
+}
+
+static AIFloat3 CEnemyManager_GetEnemyUnitPosAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return (e != nullptr) ? e->GetPos() : AIFloat3(-RgtVector);
+}
+
+static AIFloat3 CEnemyManager_GetEnemyUnitVelAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return (e != nullptr) ? e->GetVel() * FRAMES_PER_SEC : AIFloat3(0.f, 0.f, 0.f);
+}
+
+static int CEnemyManager_GetEnemyUnitSeenAt(CEnemyManager* mgr, int idx)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnitAt(idx);
+	return (e != nullptr) ? e->GetSeenFrame() : -1;
+}
+
+static int CEnemyManager_GetEnemyUnitLos(CEnemyManager* mgr, int unitId)
+{
+	CEnemyUnit* e = mgr->GetEnemyUnit(unitId);
+	return (e != nullptr) ? (int)e->GetData().losStatus : -1;
+}
+
 static float CEnemyManager_GetEnemyGroupVel(CEnemyManager* mgr, int i)
 {
 	const auto& groups = mgr->GetEnemyGroups();
@@ -2389,6 +2439,14 @@ void CInitScript::RegisterMgr()
 	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyGroupVelVec(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupVelVec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitCount(int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyGroupUnitDef(int, int) const", asFUNCTION(CEnemyManager_GetEnemyGroupUnitDef), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitTotal() const", asFUNCTION(CEnemyManager_GetEnemyUnitTotal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitIdAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitIdAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitLosAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitLosAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitDefAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitDefAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyUnitPosAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitPosAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "AIFloat3 GetEnemyUnitVelAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitVelAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitSeenAt(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitSeenAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CEnemyManager", "int GetEnemyUnitLos(int) const", asFUNCTION(CEnemyManager_GetEnemyUnitLos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CEnemyManager", "float maxAAThreat", asOFFSET(CEnemyManager, maxAAThreat)); ASSERT(r >= 0);
 
 	CThreatMap* thrMap = circuit->GetThreatMap();

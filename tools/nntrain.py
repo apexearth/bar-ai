@@ -50,7 +50,7 @@ LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim
 SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost")    # one value per decision, not per horizon
 TARGETS = [(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
 SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
-SCHEMA_STATE = "foeBaseD"   # a state field only the current record carries: older rows are skipped, not a reset
+SCHEMA_STATE = "foeCert"   # a state field only the current record carries: older rows are skipped, not a reset
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
 DECIDED = ("draw", "ladder")   # rows where an option was chosen on value, not forced
 # What "better" means when the net plays, in units of each outcome's spread.

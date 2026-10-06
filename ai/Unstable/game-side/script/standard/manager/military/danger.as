@@ -11,6 +11,7 @@ const float DG_BIN_S = 5.f;
 const int DG_BINS = 120;    // 600 s; anything slower sits in the last bin
 
 array<float> gDgFoe(DG_BINS + 1, 0.f);    // cumulative: arrives within (i+1)*DG_BIN_S
+array<float> gDgFoeOld(DG_BINS + 1, 0.f);  // the cluster-only reading, logged beside the memory's
 array<float> gDgOurs(DG_BINS + 1, 0.f);
 array<float> gDgStrOf;
 float gDgGuns = 0.f;        // standing guns covering the base, strength
@@ -153,13 +154,19 @@ void DangerUpdate()
 		foe[b] += foe[b - 1];
 		ours[b] += ours[b - 1];
 	}
+	gDgFoeOld = foe;
+	if (FoeMemReady()) {
+		for (int b = 0; b <= DG_BINS; ++b)
+			foe[b] = FoeMemCum(false, float(b) * DG_BIN_S);
+		near = FoeNearLiveS();
+	}
 	gDgFoe = foe;
 	gDgOurs = ours;
 	gDgNearEta = near;
 	gDgUnknown = unknown;
 
-	// contact: armed enemy ground on our edge now
-	const bool contact = gDgFoe[0] > 0.f;
+	// contact: armed enemy ground on our edge now, seen (not remembered)
+	const bool contact = FoeMemReady() ? (FoeMemCum(true, 0.f) > 0.f) : (gDgFoe[0] > 0.f);
 	if (contact && !gDgContact) {
 		++gDgContactN;
 		if (gDgFirstContactAt < 0) {
@@ -174,6 +181,23 @@ void DangerUpdate()
 			+ " gapS=" + formatFloat(DangerGap(), "", 0, 3));
 	}
 	gDgContact = contact;
+	AiLog(Factory::T() + "apex: dgtrace t=" + ai.teamId
+		+ " a60=" + formatFloat(DangerArriveS(60.f), "", 0, 3)
+		+ " a180=" + formatFloat(DangerArriveS(180.f), "", 0, 3)
+		+ " a60o=" + formatFloat(DgCum(gDgFoeOld, 60.f), "", 0, 3)
+		+ " a180o=" + formatFloat(DgCum(gDgFoeOld, 180.f), "", 0, 3)
+		+ " live=" + formatFloat(FoeLiveStr(), "", 0, 3)
+		+ " liveA60=" + formatFloat(FoeMemCum(true, 60.f), "", 0, 3)
+		+ " rem=" + formatFloat(FoeRememberedStr(), "", 0, 3)
+		+ " lost=" + formatFloat(FoeLostStr(), "", 0, 3)
+		+ " remEta=" + formatFloat(FoeRememberedEtaS(), "", 0, 0)
+		+ " cert=" + formatFloat(FoeMemCertainty(), "", 0, 2)
+		+ " liveM=" + formatFloat(FoeLiveM(), "", 0, 0)
+		+ " remM=" + formatFloat(FoeRememberedM(), "", 0, 0)
+		+ " lostM=" + formatFloat(FoeLostM(), "", 0, 0)
+		+ " near=" + formatFloat(gDgNearEta, "", 0, 0)
+		+ " now=" + formatFloat(FoeMemCum(true, 0.f), "", 0, 3)
+		+ " h0=" + formatFloat(HomeStrength(), "", 0, 3));
 	if (ai.frame >= gDgNextLog) {
 		gDgNextLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: danger t=" + ai.teamId
