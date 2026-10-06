@@ -46,6 +46,11 @@ private:
 	// apex: set off for their buildings; small armies on the way are shot, not chased
 	bool forEco = false;
 	int nextStrongLog = 0;
+	int nextNearLog = 0;
+	int nextDropLog = 0;
+	int nextFrontLog = 0;
+	// every group in sight was refused as too strong: we are outgunned, not blind
+	bool outgunned = false;
 };
 
 } // namespace circuit
