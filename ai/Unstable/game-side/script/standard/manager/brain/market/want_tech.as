@@ -572,8 +572,12 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				+ " spots=" + gLSpot.length() + " funded="
 				+ (ArmyValue() / ((ArmyTarget() > 1.f) ? ArmyTarget() : 1.f)));
 	}
+	// No demand still OFFERS the lab, at a value the market never draws: the
+	// next-tier decision (nntech.as) needs it on the table every window to be
+	// recorded and, when it says NOW, to have something to build. On Comet
+	// Catcher it was offered in 1-4 windows a game, so the T2 net saw nothing.
 	if (demand <= 0.f)
-		return w;
+		demand = 1e-4f;
 	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
 	// price.
 	const int uid = int(unit.circuitDef.id);

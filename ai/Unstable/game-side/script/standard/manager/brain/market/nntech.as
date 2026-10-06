@@ -105,6 +105,7 @@ bool GantryKept(CCircuitUnit@ u)
 	return true;
 }
 
+int gTechTierAt = 0, gTechTierSeen = 0;  // the frame our top tier last rose
 int gOwnTierAt = -1, gOwnTier = 0;
 int OwnTopTier()
 {
@@ -119,6 +120,10 @@ int OwnTopTier()
 			gOwnTier = (t > gOwnTier) ? t : gOwnTier;
 		}
 	}
+	if (gOwnTier > gTechTierSeen) {
+		gTechTierSeen = gOwnTier;
+		gTechTierAt = ai.frame;
+	}
 	return gOwnTier;
 }
 
@@ -127,6 +132,7 @@ int gTechLogAt = 0;
 int gTechNextAt = -1;
 bool gTechHeader = false;
 float gTechFlat = -1.f;      // discovery games: share of the uniform draw, rolled once
+int gTechExpTier = -1, gTechExpAt = 0;   // discovery: the tier being timed and the moment drawn for it
 int gTechDecN = 0, gTechDevN = 0, gTechHoistN = 0, gTechHeldN = 0;
 // what the market did since the last decision
 float gTwLabM = 0.f, gTwSeen = 0.f, gTwTop = 0.f, gTwPick = 0.f, gTwEl = 0.f, gTwV = 0.f, gTwTopV = 0.f;
@@ -200,9 +206,23 @@ void NnTechDecide()
 			p[o] = (o == rule) ? 1.f : 0.f;
 	}
 	int chosen = rule;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	if ((trust > 0.f) || ((flat > 0.f) && (gTwNext < 2))) {
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
+	}
+	// DISCOVERY TRIES A TIME, NOT A COIN: a flip every 30 s sent nearly every
+	// discovery game to T2 within two minutes. Each discovery game draws one
+	// moment 2-15 min after reaching its current tier and switches there --
+	// earlier or later than the rule would -- so similar games differ only in
+	// when. Never for the first plant (tier 1): that is never held back.
+	if (explore && (gTwNext >= 2)) {
+		if (gTechExpTier != gTwNext) {
+			gTechExpTier = gTwNext;
+			gTechExpAt = gTechTierAt + int((2.f + 13.f * float(AiRandom(0, 10000)) / 10000.f) * float(MINUTE));
+		}
+		chosen = (ai.frame >= gTechExpAt) ? TECH_NOW : TECH_WAIT;
+		p[TECH_NOW] = (chosen == TECH_NOW) ? 1.f : 0.f;
+		p[TECH_WAIT] = 1.f - p[TECH_NOW];
 	}
 	gTechCur = chosen;
 	++gTechDecN;
