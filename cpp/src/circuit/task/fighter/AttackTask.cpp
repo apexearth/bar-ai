@@ -399,6 +399,7 @@ void CAttackTask::FindTarget()
 	int refusedHome = 0;
 	int skippedSpam = 0;
 	int ignoredSmall = 0;
+	int refusedStrong = 0;
 	float prevScore = -1.f;
 	const AIFloat3 foeBase = circuit->GetSetupManager()->GetEnemyBoxCentre();
 	const bool pushing = utils::is_valid(foeBase);
@@ -409,11 +410,16 @@ void CAttackTask::FindTarget()
 		if (hasGoodTarget && isOverpowered) {
 			continue;
 		}
-		const float distBE = group.pos.distance2D(basePos);  // Base to Enemy distance
-		const float scale = std::min(distBE / sqOBDist, 1.f);
-		if (((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE))
-			|| !terrainMgr->CanMobileReachAt(area, group.pos, highestRange))
-		{
+		// apex: squared over squared, as upstream CircuitAI. The fork base divided
+		// a distance by a squared distance, so scale was ~0 anywhere past a few
+		// hundred elmos from base and squads picked groups up to 20x their power.
+		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
+		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
+		if ((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
+			++refusedStrong;
+			continue;
+		}
+		if (!terrainMgr->CanMobileReachAt(area, group.pos, highestRange)) {
 			continue;
 		}
 
@@ -559,15 +565,21 @@ void CAttackTask::FindTarget()
 		if (bestTarget != prevTarget) {
 			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
 				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i"
-				" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i",
+				" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i strong=%i",
 				circuit->GetTeamId(), cdef->GetDef()->GetName(),
 				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
 				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
 				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
 				canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
-				wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0);
+				wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0,
+				refusedStrong);
 		}
+	} else if ((refusedStrong > 0) && (frame >= nextStrongLog)) {
+		nextStrongLog = frame + FRAMES_PER_SEC * 30;
+		circuit->LOG("apex: atk-wait t=%i lead=%s n=%i pow=%.1f strong=%i groups=%i at=%.0f,%.0f dBase=%.0f",
+			circuit->GetTeamId(), cdef->GetDef()->GetName(), (int)units.size(), maxPower,
+			refusedStrong, (int)groups.size(), pos.x, pos.z, pos.distance2D(basePos));
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }

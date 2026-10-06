@@ -45,6 +45,7 @@ private:
 	int repairerId = -1;
 	// apex: set off for their buildings; small armies on the way are shot, not chased
 	bool forEco = false;
+	int nextStrongLog = 0;
 };
 
 } // namespace circuit
