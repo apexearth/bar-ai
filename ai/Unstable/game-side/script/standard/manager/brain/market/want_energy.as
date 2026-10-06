@@ -350,22 +350,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		}
 		bool wins = !barred && (c.value > w.value);
 		if (!barred && (stallDef > 0.f)) {
+			// A stalled economy shares its income across every build, so an
+			// energy-costing rung builds slower, not never: bSec carries that
+			// (EStretch), and a bill income cannot pay at all is `barred`.
 			float wait = walkSec + ((bSec > c.buildSec) ? bSec : c.buildSec);
-			// An energy-costing rung is fed from the SURPLUS and the bank, and in
-			// a hard stall that is nothing: 37 advsol executions stood one advsol
-			// in 16 minutes at a bank of 6 (canon game 2026-09-08). The zero-E
-			// rung's wait is its build; the others' is their energy bill over
-			// what can actually feed it.
-			if (Catalog::gCostE[d] > 0.f) {
-				float feedE = Eco::EInc() - Eco::EPull();
-				if (feedE < 0.f)
-					feedE = 0.f;   // in-flight make is what is starved, not feed (EStretch)
-				const float lookE = ai.GetTunable("apex_e_lookahead", TUNE_E_LOOKAHEAD);
-				feedE += Eco::ECur() / ((lookE > 1.f) ? lookE : 30.f);
-				const float waitE = walkSec + Catalog::gCostE[d] / ((feedE > 1.f) ? feedE : 1.f);
-				if (waitE > wait)
-					wait = waitE;
-			}
 			const float closes = (Catalog::gMakeE[d] < stallDef) ? Catalog::gMakeE[d] : stallDef;
 			const float close = closes / ((wait > 1.f) ? wait : 1.f);
 			wins = (close > bestClose);
