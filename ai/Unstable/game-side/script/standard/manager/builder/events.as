@@ -252,6 +252,7 @@ void UnitRemovedInner(CCircuitUnit@ unit, Unit::UseAs usage)
 	if (gComm is unit) {
 		AiLog(Factory::T() + "apex: COMMANDER LOST frame=" + ai.frame
 			+ " hp=" + formatFloat(unit.GetHealthPercent() * 100.f, "", 0, 0));
+		Market::ComDeathNote();
 		@gComm = null;
 	}
 }

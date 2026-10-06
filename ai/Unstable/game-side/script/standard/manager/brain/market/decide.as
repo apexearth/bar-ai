@@ -2022,6 +2022,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	if (!aaPanic && !superPush && !convertPush && !coverPush && BaseFrontOn() && PlantFramed()) {
 		BaseFrontRefresh();
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
+		if (gBfActive && (gBfFilled < gBfWanted) && ((gBfSlot < 0) || (uint(gBfSlot) >= gWallP.length())))
+			Military::DangerNoteBfMiss(true);
+		if (gBfActive && (gBfFilled < gBfWanted) && (gBfSlot >= 0) && (uint(gBfSlot) < gWallP.length())
+			&& (uAt.distance2D(gWallP[uint(gBfSlot)]) >= 1500.f))
+			Military::DangerNoteBfMiss(false);
 		// the wall rebuild empties gWallP while gBfSlot still names an old slot
 		if (gBfActive && (gBfSlot >= 0) && (uint(gBfSlot) < gWallP.length())
 			&& (uAt.distance2D(gWallP[uint(gBfSlot)]) < 1500.f)) {
@@ -2050,6 +2055,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				gBfTakenAt[uint(gBfSlot)] = ai.frame;
 				gBfSlot = -1;
 				++gBaseFrontHits;
+				Military::DangerNotePush();
 				why = "basefront";
 				coverPush = true;
 			}

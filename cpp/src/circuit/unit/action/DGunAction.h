@@ -28,6 +28,7 @@ private:
 	bool mayClose;
 	unsigned int updCount;
 	int logFrame = -999999;   // sampled gate trace, see Update
+	int fireLogFrame = -999999;
 };
 
 } // namespace circuit

@@ -265,6 +265,20 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 	if not victimAI and not attackerAI then
 		return
 	end
+	local manual = false
+	if weaponDefID ~= nil and weaponDefID >= 0 then
+		manual = isManual[weaponDefID]
+		if manual == nil then
+			local wd = WeaponDefs[weaponDefID]
+			manual = wd ~= nil and (wd.manualFire == true or wd.type == "DGun")
+			isManual[weaponDefID] = manual
+			if manual and not manualEchoed then
+				manualEchoed = true
+				BARAI_Echo("[BARAI_DGUNWD] " .. tostring(wd.name))
+			end
+		end
+	end
+	lastManual[unitID] = manual or nil
 	defFacts(unitDefID)
 	local hp = Spring.GetUnitHealth(unitID)
 	local eff = damage
@@ -272,7 +286,12 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 		eff = hp
 	end
 	if eff <= 0 then
-		return   -- already dead: a negative health reads as negative damage
+		-- already dead: a negative health reads as negative damage. A D-gun's
+		-- 99999 lands here on every kill, so its hit is counted first.
+		if manual and attackerAI then
+			dmgOf(attackerTeam).dg = dmgOf(attackerTeam).dg + 1
+		end
+		return
 	end
 	local vStatic = isStatic[unitDefID]
 	local aStatic = attackerDefID ~= nil and defFacts(attackerDefID) ~= nil
@@ -300,20 +319,6 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 			conLastHit[unitID] = frame
 		end
 	end
-	local manual = false
-	if weaponDefID ~= nil and weaponDefID >= 0 then
-		manual = isManual[weaponDefID]
-		if manual == nil then
-			local wd = WeaponDefs[weaponDefID]
-			manual = wd ~= nil and (wd.manualFire == true or wd.type == "DGun")
-			isManual[weaponDefID] = manual
-			if manual and not manualEchoed then
-				manualEchoed = true
-				BARAI_Echo("[BARAI_DGUNWD] " .. tostring(wd.name))
-			end
-		end
-	end
-	lastManual[unitID] = manual or nil
 	if attackerAI then
 		local t = dmgOf(attackerTeam)
 		if vStatic then

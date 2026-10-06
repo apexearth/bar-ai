@@ -595,6 +595,7 @@ void UpdatePosture()
 	{ double _t = Perf::T0(); AIFloat3 hs; Builder::HealStation(hs); Perf::Add("post.heal", _t); }   // medic station, published for retreats
 	{ double _t = Perf::T0(); ReleaseHeldSupers(); Perf::Add("post.supers", _t); }   // held titans re-join the army when the wait ends
 	{ double _t = Perf::T0(); UpdateApproach(); Perf::Add("post.approach", _t); }   // is a visible enemy group closing on our home?
+	{ double _t = Perf::T0(); DangerUpdate(); Perf::Add("post.danger", _t); }
 	{ double _t = Perf::T0(); PublishDefence(); Perf::Add("post.pubdef", _t); }   // our front-tower count and income, for the team budget
 	{ double _t = Perf::T0(); Brain::BudgetLog(); Perf::Add("post.budgetlog", _t); }
 	{ double _t = Perf::T0(); IntelDiag(); Perf::Add("post.inteldiag", _t); }       // read-only: the enemy reading every gate above consumed

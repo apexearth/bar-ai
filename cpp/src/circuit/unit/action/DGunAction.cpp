@@ -76,7 +76,7 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	// engine's DGun order on a unit target walks into range, so a target
 	// worth more than the owner itself may be picked slightly beyond range
 	// and walked to. Opt-in per task (mayClose).
-	const float closeMult = mayClose
+	const float closeMult = (mayClose && unit->IsDGunCloseOk())
 			? std::max(1.f, circuit->GetTunable("apex_dgun_close_mult", 2.f)) : 1.f;
 	// A COPY, NOT THE REFERENCE. GetEnemyUnitIdsIn and GetFriendlyUnitIdsIn
 	// both return the callback's single `unitIds` member (SpringCallback.cpp),
@@ -162,6 +162,63 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	CEnemyInfo* bestFar = nullptr;
 	float maxFar = 0.f;
 
+	// THE BEAM KILLS EVERYTHING IT CROSSES, and a raider that sidesteps during
+	// the flight is missed: a shot is worth what stands in its corridor, each
+	// member discounted by how far it can move sideways before the beam
+	// arrives.
+	const float pSpeed = (dgDef != nullptr) ? dgDef->GetDef()->GetProjectileSpeed() : 0.f;  // elmos/frame
+	struct SCorr { float x, z, vx, vz, value, r; };
+	std::vector<SCorr> corr;
+	corr.reserve(enemies.size());
+	for (int eId : enemies) {
+		CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+		if ((e == nullptr) || e->NotInRadarAndLOS()) {
+			continue;
+		}
+		CCircuitDef* ed = e->GetCircuitDef();
+		if ((ed == nullptr) || ed->IsAbleToFly() || (isRoleComm && ed->IsRoleComm())) {
+			continue;
+		}
+		const AIFloat3& ep = e->GetPos();
+		const AIFloat3& ev = e->GetVel();
+		corr.push_back({ep.x, ep.z, ev.x, ev.z, notByCost ? ed->GetPower() : ed->GetCostM(), ed->GetRadius()});
+	}
+	int bestN = 0;
+	float bestLat = 0.f;
+	// Value in the beam fired from `fx,fz` toward `tx,tz`.
+	auto beamValue = [&](float fx, float fz, float tx, float tz, int& nIn, float& tgtLat) {
+		float dx = tx - fx, dz = tz - fz;
+		const float d = std::sqrt(dx * dx + dz * dz);
+		nIn = 0;
+		tgtLat = 0.f;
+		if (d < 1.f) {
+			return 0.f;
+		}
+		dx /= d;
+		dz /= d;
+		float sum = 0.f;
+		for (const SCorr& c : corr) {
+			const float rx = c.x - fx, rz = c.z - fz;
+			const float t = rx * dx + rz * dz;
+			const float reach = wAoe + c.r;
+			if ((t < -reach) || (t > wRange + reach)) {
+				continue;
+			}
+			const float px = rx - dx * t, pz = rz - dz * t;
+			if (px * px + pz * pz > reach * reach) {
+				continue;
+			}
+			const float vLat = std::fabs(c.vx * -dz + c.vz * dx);
+			const float slip = (pSpeed > 0.f) ? vLat * std::max(t, 0.f) / pSpeed : 0.f;
+			sum += c.value * ((slip > reach) ? reach / slip : 1.f);
+			++nIn;
+			if (std::fabs(c.x - tx) + std::fabs(c.z - tz) < 1.f) {
+				tgtLat = slip;
+			}
+		}
+		return sum;
+	};
+
 	for (int eId : enemies) {
 		CEnemyInfo* enemy = circuit->GetEnemyInfo(eId);
 		if ((enemy == nullptr) || enemy->NotInRadarAndLOS()) {
@@ -207,6 +264,13 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			++nFar;
 			continue;
 		}
+		// Nor into a gun that outranges the beam: it fires the whole walk.
+		if (!inRange && !edef->IsMobile() && edef->IsAttacker()
+			&& (edef->GetMaxRange(CCircuitDef::RangeType::LAND) >= wRange))
+		{
+			++nFar;
+			continue;
+		}
 		// The terrain ray still applies, and only in range: a shot into a
 		// hillside is wasted whatever else is true. The old second trace --
 		// for what stands BEHIND the target -- is gone: it read an
@@ -245,11 +309,23 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			}
 		}
 
-		const float defScore = notByCost ? edef->GetPower() : edef->GetCostM();
+		int nIn = 0;
+		float tLat = 0.f;
+		float defScore;
+		if (inRange) {
+			defScore = beamValue(pos.x, pos.z, ePos.x, ePos.z, nIn, tLat);
+		} else {
+			const float ex = ePos.x - pos.x, ez = ePos.z - pos.z;
+			const float d = std::sqrt(ex * ex + ez * ez);
+			const float back = (d > wRange) ? (d - wRange) / d : 0.f;
+			defScore = beamValue(pos.x + ex * back, pos.z + ez * back, ePos.x, ePos.z, nIn, tLat);
+		}
 		if (inRange) {
 			if (maxScore < defScore) {
 				maxScore = defScore;
 				bestTarget = enemy;
+				bestN = nIn;
+				bestLat = tLat;
 			}
 		} else if (maxFar < defScore) {
 			maxFar = defScore;
@@ -272,6 +348,15 @@ void CDGunAction::Update(CCircuitAI* circuit)
 				(bestTarget != nullptr) ? 1 : 0);
 	}
 	if (bestTarget != nullptr) {
+		if (isRoleComm && (frame >= fireLogFrame + FRAMES_PER_SEC)) {
+			fireLogFrame = frame;
+			const AIFloat3& tp = bestTarget->GetPos();
+			circuit->LOG("apex: dgun-fire t=%i %s -> %s d=%.0f inBeam=%d score=%.1f slip=%.0f walk=%d e=%.0f orders=%d",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(),
+					(bestTarget->GetCircuitDef() != nullptr) ? bestTarget->GetCircuitDef()->GetDef()->GetName() : "?",
+					pos.distance2D(tp), bestN, (maxScore > 0.f) ? maxScore : maxFar, bestLat,
+					(maxScore > 0.f) ? 0 : 1, eCur, unit->GetDGunOrders() + 1);
+		}
 		unit->ManualFire(bestTarget, timeout);
 		unit->ClearTarget();
 		isBlocking = true;

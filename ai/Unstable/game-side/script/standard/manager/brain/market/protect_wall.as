@@ -1023,9 +1023,9 @@ float WallAdds(const AIFloat3& in at, float reach)
 }
 
 // THE BASE-FRONT SLOT for decide.as's push: the open ring slot most squarely
-// facing the enemy, while the filled ones in that cone hold less than the
-// seen enemy army over apex_def_trade. Refreshed every 2 s; a slot handed out
-// is held 30 s so the next hands do not walk to the same ground.
+// facing the enemy, while the danger arriving within the army's fill time
+// beats home strength. Refreshed every 2 s; a slot handed out is held 30 s so
+// the next hands do not walk to the same ground.
 int gBfSlot = -1;
 int gBfAt = -999999;
 int gBfFilled = 0;
@@ -1046,11 +1046,17 @@ void BaseFrontRefresh()
 		@gBfMedium = SideDef3("armbeamer", "corhllt", "leghlt");
 	if (gBfHeavy is null)
 		@gBfHeavy = SideDef3("armhlt", "corhlt", "leghlt");
-	// ON while out-massed, and for two minutes after the stance last read
-	// aggressive -- the stance alone flipped every minute (measured).
-	if (Military::Stance() == Military::S_AGGRESSIVE)
-		gBfAggroUntil = ai.frame + 120 * SECOND;
-	gBfActive = Military::Outmassed() || (ai.frame < gBfAggroUntil);
+	// ON while what can reach the base inside the army's fill time beats what
+	// stands there (Military::DangerGap) -- so the guns start while they walk.
+	const bool byDanger = ai.GetTunable("apex_bf_danger", TUNE_BF_DANGER) > 0.5f;
+	const float gapS = Military::DangerGap();
+	if (byDanger) {
+		gBfActive = gapS > 0.f;
+	} else {
+		if (Military::Stance() == Military::S_AGGRESSIVE)
+			gBfAggroUntil = ai.frame + 120 * SECOND;
+		gBfActive = Military::Outmassed() || (ai.frame < gBfAggroUntil);
+	}
 	AIFloat3 foe;
 	if (!gBfActive || (gBfMedium is null) || !FoeRef(foe))
 		return;
@@ -1098,18 +1104,49 @@ void BaseFrontRefresh()
 		owned += gOwnCount[uint(gBfMedium.id)];
 	if ((gBfHeavy !is null) && (uint(gBfHeavy.id) < gOwnCount.length()))
 		owned += gOwnCount[uint(gBfHeavy.id)];
-	const float gunM = Catalog::gCostM[int(gBfMedium.id)];
-	const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
 	gBfFilled = owned;
 	gBfOpen = open;
-	// Their army is mostly fog: the seen cost read 0.6-1.1k when the army that
-	// walked in was 10-20k (measured). A mirror is about our size, so never less.
-	float threatM = Military::EnemyArmyCost();
-	if (Military::OurArmyNow() > threatM)
-		threatM = Military::OurArmyNow();
-	gBfWanted = int(ceil(threatM / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
+	// Guns handed out inside the hold window are not standing yet, so the gap
+	// does not see them.
+	int inFlight = 0;
+	for (uint i = 0; i < n; ++i) {
+		if (ai.frame <= gBfTakenAt[i] + 30 * SECOND)
+			++inFlight;
+	}
+	if (byDanger) {
+		const float gunS = Military::DgStr(int(gBfMedium.id));
+		const int need = int(ceil(gapS / ((gunS > 0.1f) ? gunS : 0.1f))) - inFlight;
+		gBfWanted = owned + ((need > 0) ? need : 0);
+	} else {
+		const float gunM = Catalog::gCostM[int(gBfMedium.id)];
+		const float trade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
+		float threatM = Military::EnemyArmyCost();
+		if (Military::OurArmyNow() > threatM)
+			threatM = Military::OurArmyNow();
+		gBfWanted = int(ceil(threatM / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
+	}
 	if (owned >= gBfWanted)
 		gBfSlot = -1;
+}
+
+// Ground guns that reach our base edge, by Military::DgStr; for the danger pass.
+float HomeGunStrength(int& out n)
+{
+	n = 0;
+	float s = 0.f;
+	const bool wall = WallStands();
+	for (uint i = 0; i < gProtPos[PROT_DEF].length(); ++i) {
+		const int d = (i < gProtDefId[PROT_DEF].length()) ? gProtDefId[PROT_DEF][i] : -1;
+		if ((d <= 0) || (d > Catalog::gDefCount))
+			continue;
+		const AIFloat3 p = gProtPos[PROT_DEF][i];
+		const float rim = wall ? WallRimDist(p) : p.distance2D(Builder::gHomePos);
+		if (rim > Catalog::gMaxRange[d])
+			continue;
+		++n;
+		s += Military::DgStr(d);
+	}
+	return s;
 }
 
 }  // namespace Market

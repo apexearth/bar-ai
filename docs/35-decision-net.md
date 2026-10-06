@@ -74,6 +74,33 @@ restructure (enemy economy estimate).
   `apex: posture` (60 s): picks, rule verdicts and seconds under each
   posture actually in force, deviations, and the decision's cost in us.
 
+- `apex: nncom` (`manager/brain/market/comdecide.as`, 2026-10-05): the
+  COMMANDER'S answer to his situation -- WORK, FIGHT, TURRET, RETREAT. His
+  ruling: "we can't die, that's paramount". Assessed once a second while a
+  threat is in his horizon (5 s otherwise); recorded when the rule's pick
+  changes, every 3 s under threat, every 30 s in peace. The threat is every
+  enemy ground group that can reach him (distance past its range over its
+  fastest member) before he reaches safety (the farm, or a nearer stand of our
+  guns where he would win) or one light tower is built. The fight is read off
+  catalog dps and health: they die one by one, their fire falls linearly, he
+  takes half their dps times the kill time, his share by health against the
+  guns and army beside him; his D-gun removes the kills its energy and reload
+  allow at the odds a sideways-moving unit leaves the beam. FIGHT when that
+  leaves him COM_RETREAT_HEALTH of his health, he is not already below it,
+  and they arrive within a tower's build time (else WORK); TURRET when the
+  towers he can finish before they arrive turn it; else RETREAT (assigned
+  directly -- an idle commander is not re-elected; the engine's own retreat,
+  armed when he is hurt, is left alone). T2 caution on far ground is RETREAT;
+  losing health with no enemy seen is RETREAT. His mex/reclaim claims
+  (`ComRaidF`) run the same fight against what can reach the spot before he
+  is back under our guns. Default weights: 1 on the
+  rule's pick, 0.01 on the rest; NO discovery game flattens it -- the draw
+  runs only once `NnComScore` returns trust (a stub returning 0 until the
+  trainer writes NNC_*). Fields: the 75 `NN_STATE` values, then `com=`
+  (`NNC_COM`), then `name,w,p` per option and `chosen`. `apex: comstat` (60 s),
+  `com-withdraw`, `com-turret`/`com-turret-end`, `com-retreat`, `com-drop`,
+  `com-death`; the C++ D-gun logs every shot as `apex: dgun-fire`.
+
 ## The table
 
 `python tools/decisions.py <match|tournament> --out rows.jsonl` joins each

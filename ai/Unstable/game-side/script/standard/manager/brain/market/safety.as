@@ -152,6 +152,7 @@ void CommWatch()
 		gCwEngageStill = 0;
 	}
 	ComTaskWatch(u, p);
+	ComDecideTick(u);
 }
 
 // HIS RULES ONLY RUN WHEN HE IS ASKED, and a held job is never re-elected.
@@ -390,8 +391,11 @@ float RingInflMax(const AIFloat3& in pos, float r)
 // kill him -- a stronger force, a T2+ group that is not all raiders, his
 // caution, or our own T2 (he stays home from T2).
 array<AIFloat3> gCrGp;
-array<float> gCrReach;
-array<float> gCrStr;
+array<float> gCrRng;
+array<float> gCrSpd;
+array<float> gCrDps;
+array<int> gCrN;
+array<float> gCrHp;
 array<bool> gCrHeavy;
 int gCrAt = -1;
 bool gCrHome = false;
@@ -401,26 +405,33 @@ void ComRaidFill(CCircuitUnit@ unit)
 		return;
 	gCrAt = ai.frame;
 	gCrGp.resize(0);
-	gCrReach.resize(0);
-	gCrStr.resize(0);
+	gCrRng.resize(0);
+	gCrSpd.resize(0);
+	gCrDps.resize(0);
+	gCrN.resize(0);
+	gCrHp.resize(0);
 	gCrHeavy.resize(0);
 	gCrHome = !OwnEffigyStands() && (Factory::gHaveT2 || CommCaution(unit)
 			|| (unit.GetHealthPercent() < COM_RETREAT_HEALTH));
 	if (gCrHome)
 		return;
-	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	for (int gi = 0; gi < nG; ++gi) {
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 		if (!OnMap(gp))
 			continue;
 		int tier = 0, nMob = 0, nRaid = 0;
+		float vmax = 0.f, dps = 0.f, hpS = 0.f;
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
-			if (!Catalog::ValidId(d) || !Catalog::gMobile[d])
+			if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d])
 				continue;
 			++nMob;
+			dps += Catalog::gDps[d];
+			if (Catalog::gDps[d] > 0.f) hpS += Catalog::gHealth[d];
+			if (Catalog::gSpeed[d] > vmax)
+				vmax = Catalog::gSpeed[d];
 			const int t = DefTier(d);
 			if (t > tier)
 				tier = t;
@@ -430,32 +441,32 @@ void ComRaidFill(CCircuitUnit@ unit)
 		if (nMob == 0)
 			continue;
 		gCrGp.insertLast(gp);
-		gCrReach.insertLast(aiEnemyMgr.GetEnemyGroupRange(gi) + r);
-		gCrStr.insertLast(EnemyGroupStrength(gi));
+		gCrRng.insertLast(aiEnemyMgr.GetEnemyGroupRange(gi));
+		gCrSpd.insertLast(vmax);
+		gCrDps.insertLast(dps);
+		gCrN.insertLast(nMob);
+		gCrHp.insertLast(hpS);
 		gCrHeavy.insertLast((tier >= 2) && (nRaid < nMob));
 	}
 }
 
+// What a claim at `pos` costs him: every group that can reach him there
+// before he is back under our guns (comdecide.as), his D-gun counted. 1 where
+// that fight ends below the health the rules send him home at, or a T2+
+// group is among them; else the share of his health it takes.
 float ComRaidF(CCircuitUnit@ unit, const AIFloat3& in pos)
 {
 	ComRaidFill(unit);
 	if (gCrHome)
 		return 1.f;
-	const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
-	if (mine <= 0.f)
+	const float hp = unit.GetHealthPercent();
+	if (hp <= 0.f)
 		return 1.f;
-	float theirs = 0.f;
-	for (uint i = 0; i < gCrGp.length(); ++i) {
-		if (gCrGp[i].distance2D(pos) > gCrReach[i])
-			continue;
-		if (gCrHeavy[i])
-			return 1.f;
-		theirs += gCrStr[i];
-	}
-	if (theirs >= mine)
+	bool heavy = false;
+	const float after = ComClaimHpAfter(unit, pos, heavy);
+	if (heavy || !ComWins(hp, after))
 		return 1.f;
-	const float rr = theirs / mine;
-	return 1.f - sqrt(1.f - rr * rr);
+	return 1.f - after / hp;
 }
 
 // Past the leash for a claim only where nothing there can kill him.
@@ -519,7 +530,10 @@ Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
 			+ " broke=" + gComSelfBroke + " picked=" + gComSelfPick + " exec=" + gComSelfExec
 			+ " letgoCaution=" + gCtwCaution + " letgoSelf=" + gCtwSelf);
 	}
-	if (Factory::gHaveT2 || OwnEffigyStands() || CommCaution(unit)) {
+	// Only while he wins there, or the towers stand before they arrive and
+	// turn it (ComDecision TURRET); a fight the towers cannot turn is left.
+	if (Factory::gHaveT2 || OwnEffigyStands() || CommCaution(unit)
+		|| ComRetreating()) {
 		if (note) ++gComSelfCaut;
 		return null;
 	}
@@ -562,6 +576,12 @@ Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
 			foeAt = gp;
 		}
 	}
+	// The decision saw them coming from farther than this scan's reach.
+	if ((bestD < 0.f) && ComTurreting() && OnMap(ComFoeAt())) {
+		foeAt = ComFoeAt();
+		bestD = foeAt.distance2D(here);
+		threatM = ComFoeM();
+	}
 	if (bestD < 0.f) {
 		if (note) ++gComSelfCalm;
 		return null;
@@ -569,16 +589,19 @@ Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
 	const float lr = Brain::LightTowerRange();
 	const int have = GroundGunsNear(here, lr);
 	const float stopM = Catalog::gCostM[ld] * ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
-	const int need = int(ceil(threatM / ((stopM > 1.f) ? stopM : 1.f)));
+	int need = int(ceil(threatM / ((stopM > 1.f) ? stopM : 1.f)));
+	if (ComTurreting() && (have + ComTowersK() > need))
+		need = have + ComTowersK();
 	if (have >= need) {
 		if (note) ++gComSelfCovered;
 		return null;
 	}
-	AIFloat3 site = here;
-	AIFloat3 dir = foeAt - here;
+	const AIFloat3 anchor = ComGunAnchor(here);
+	AIFloat3 site = anchor;
+	AIFloat3 dir = foeAt - anchor;
 	if (dir.SqLength2D() > 1.f) {
 		dir.SafeNormalize2D();
-		const AIFloat3 s2 = here + dir * 100.f;
+		const AIFloat3 s2 = anchor + dir * 100.f;
 		if (OnMap(s2))
 			site = s2;
 	}
@@ -651,6 +674,12 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		gCommHoldId = int(unit.id);
 		AiLog("apex: commander hold-position t=" + ai.teamId);
 	}
+	{
+		PublishCommanderAlive();
+		IUnitTask@ dt = ComDecisionTask(unit);
+		if (dt !is null)
+			return dt;
+	}
 
 	// HE IS A BADASS, SO LET HIM BE ONE. This file only ever taught the
 	// commander to run (apexearth, twice: "does our commander only have flee
@@ -667,7 +696,8 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	// D-gun excluded reads five T1 as more than him. The tier of what is
 	// attacking is his test, so it is the test here. T2 and up keep the old
 	// bars: not cautious, unhurt, and outweighing them.
-	if (ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f)
+	// Withdrawing or walling himself in: no chase below may walk him out.
+	if ((ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f) && !ComRetreating() && !ComTurreting())
 	{
 		// His strength at his current hp, against theirs -- not metal against
 		// metal (apexearth, docs/24). The kill is still WORTH metal below.

@@ -8,6 +8,7 @@
 #include "military/deathledger.as"  // where our metal dies, fed back into caution
 #include "military/massing.as"      // how much army to hold back and mass
 #include "military/basedefence.as"  // approach threat, porcupines, line jammers
+#include "military/danger.as"       // their army against how soon it reaches our base
 #include "military/stance.as"       // the enemy's stance; budget answer + scout demand
 #include "military/posture.as"      // raid caution, persona, team push, corridors
 #include "military/superguard.as"   // T3 heavies hold the defence line

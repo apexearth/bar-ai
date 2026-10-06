@@ -228,6 +228,7 @@ void CCircuitUnit::ManualFire(CEnemyInfo* target, int timeout)
 	if (circuitDef->HasDGun() && (dgun != nullptr)) {
 		dgunHoldUntil = timeout;
 		dgunHoldReload = dgun->GetReloadFrame();
+		++dgunOrders;
 	}
 	NoteAct("dgn", (manager != nullptr) ? manager->GetCircuit()->GetLastFrame() : timeout);
 	TRY_UNIT(manager->GetCircuit(), this,

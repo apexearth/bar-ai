@@ -22,6 +22,7 @@
 #include "task/fighter/FighterTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/action/DGunAction.h"
+#include "unit/CircuitWDef.h"
 #include "CircuitAI.h"
 #include "util/GameAttribute.h"
 #include "util/MaskHandler.h"
@@ -814,6 +815,53 @@ static void CCircuitUnit_CmdCloak(CCircuitUnit* unit, bool state)
 static void CCircuitUnit_PushDGun(CCircuitUnit* unit, float range)
 {
 	unit->PushDGunAct(new CDGunAction(unit, range));
+}
+
+// apex: what the commander decision reads of his D-gun. All guarded: a unit
+// without one answers "none" (IsDGunReady dereferences the weapon).
+static bool CCircuitUnit_DGunReady(CCircuitUnit* unit, int frame, float energy)
+{
+	return unit->HasDGun() && unit->IsDGunReady(frame, energy);
+}
+
+static float CCircuitUnit_DGunCostE(CCircuitUnit* unit)
+{
+	return unit->HasDGun() ? unit->GetDGunCostE() : 0.f;
+}
+
+static float CCircuitUnit_DGunRange(CCircuitUnit* unit)
+{
+	return unit->HasDGun() ? unit->GetDGunRange() : 0.f;
+}
+
+static float CCircuitUnit_DGunAoe(CCircuitUnit* unit)
+{
+	CWeaponDef* wd = unit->GetCircuitDef()->GetDGunDef();
+	return (unit->HasDGun() && (wd != nullptr)) ? wd->GetAoe() : 0.f;
+}
+
+// elmos per second
+static float CCircuitUnit_DGunSpeed(CCircuitUnit* unit)
+{
+	CWeaponDef* wd = unit->GetCircuitDef()->GetDGunDef();
+	return (unit->HasDGun() && (wd != nullptr)) ? wd->GetDef()->GetProjectileSpeed() * FRAMES_PER_SEC : 0.f;
+}
+
+// seconds between shots
+static float CCircuitUnit_DGunReload(CCircuitUnit* unit)
+{
+	CWeaponDef* wd = unit->GetCircuitDef()->GetDGunDef();
+	return (unit->HasDGun() && (wd != nullptr)) ? wd->GetDef()->GetReload() : 0.f;
+}
+
+static void CCircuitUnit_SetDGunClose(CCircuitUnit* unit, bool v)
+{
+	unit->SetDGunClose(v);
+}
+
+static int CCircuitUnit_DGunOrders(CCircuitUnit* unit)
+{
+	return unit->GetDGunOrders();
 }
 
 static void CCircuitUnit_CmdRepeat(CCircuitUnit* unit, bool repeat)
@@ -2159,6 +2207,14 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// own comment for why script only needs to get close and push once.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdCloak(bool)", asFUNCTION(CCircuitUnit_CmdCloak), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void PushDGun(float)", asFUNCTION(CCircuitUnit_PushDGun), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "bool DGunReady(int, float)", asFUNCTION(CCircuitUnit_DGunReady), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float DGunCostE()", asFUNCTION(CCircuitUnit_DGunCostE), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float DGunRange()", asFUNCTION(CCircuitUnit_DGunRange), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float DGunAoe()", asFUNCTION(CCircuitUnit_DGunAoe), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float DGunSpeed()", asFUNCTION(CCircuitUnit_DGunSpeed), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "float DGunReload()", asFUNCTION(CCircuitUnit_DGunReload), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "void SetDGunClose(bool)", asFUNCTION(CCircuitUnit_SetDGunClose), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitUnit", "int DGunOrders()", asFUNCTION(CCircuitUnit_DGunOrders), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	// A factory told to repeat re-queues what it finishes, so a spam lab keeps
 	// producing instead of waiting to be handed each unit as a separate task.
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdRepeat(bool)", asFUNCTION(CCircuitUnit_CmdRepeat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
