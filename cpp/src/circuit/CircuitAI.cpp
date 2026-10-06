@@ -1664,6 +1664,7 @@ int CCircuitAI::UnitMoveFailed(CCircuitUnit* unit)
 int CCircuitAI::UnitDamaged(CCircuitUnit* unit, ICoreUnit::Id attackerId, int weaponId, AIFloat3 dir)
 {
 	unit->SetDamagedFrame(lastFrame);
+	unit->SetDamagedWeapon(weaponId);
 	unit->SetDamagedDir(dir);  // points toward the shooter (see CreateFakeEnemy)
 	CEnemyInfo* attacker = GetEnemyInfo(attackerId);
 
@@ -1703,11 +1704,10 @@ int CCircuitAI::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 		// The script only does bookkeeping; it needs the task the unit
 		// actually died holding.
 		script->UnitDestroyed(unit);
-		// Attribution rides a separate optional callback; only fired when the
-		// attacker's def is actually known (see CInitScript::UnitDestroyedBy).
-		if (attacker != nullptr) {
-			script->UnitDestroyedBy(unit, attacker->GetCircuitDef());
-		}
+		// Attribution rides a separate optional callback, fired for every death:
+		// with no visible attacker the def is null and the script reads the
+		// weapon that last hit the unit (see CInitScript::UnitDestroyedBy).
+		script->UnitDestroyedBy(unit, (attacker != nullptr) ? attacker->GetCircuitDef() : nullptr);
 	}
 
 	for (auto& module : modules) {

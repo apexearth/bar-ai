@@ -687,6 +687,13 @@ private:
 // <<< WeaponDefs ---- END
 
 public:
+	// The static unit def that fires this weapon, or -1: what shelled us when the
+	// shooter was out of sight (UnitDamaged still names the weapon).
+	int GetWeaponStaticOwner(int weaponDefId) const {
+		if ((weaponDefId < 0) || ((size_t)weaponDefId >= weaponToUnitDefs.size())
+			|| weaponToUnitDefs[weaponDefId].staticIds.empty()) return -1;
+		return *weaponToUnitDefs[weaponDefId].staticIds.begin();
+	}
 	bool IsInitialized() const { return isInitialized; }
 	bool IsSavegame() const { return isSavegame; }
 	bool IsLoadSave() const { return isLoadSave; }

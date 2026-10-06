@@ -203,6 +203,8 @@ public:
 
 	void SetDamagedFrame(int frame) { damagedFrame = frame; }
 	int GetDamagedFrame() const { return damagedFrame; }
+	void SetDamagedWeapon(int weaponDefId) { damagedWeapon = weaponDefId; }
+	int GetDamagedWeapon() const { return damagedWeapon; }
 	void SetDamagedDir(const springai::AIFloat3& dir) { damagedDir = dir; }
 	const springai::AIFloat3& GetDamagedDir() const { return damagedDir; }
 	void SetDodgeFrame(int frame) { dodgeFrame = frame; }
@@ -382,6 +384,7 @@ private:
 	SOrdShadow ordLast[static_cast<int>(OrdKind::_SIZE)];
 	unsigned ordSeq = 0;  // orders of any kind sent to this unit
 	int damagedFrame;
+	int damagedWeapon = -1;
 	int electFrame;
 	springai::AIFloat3 damagedDir;
 	int dodgeFrame;
