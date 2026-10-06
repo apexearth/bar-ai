@@ -955,11 +955,76 @@ def job_state(jid, j):
             "out_dir": out_dir, "result_ready": result_ready, "tail": tail}
 
 
+# Watch games back to back: when the repeating game's job ends, the next one
+# starts with the same settings and the next seed. Killing it or Stop ends it.
+REPEAT = {"on": False, "params": None, "jid": None, "n": 0, "started": 0.0}
+REPEAT_LOCK = threading.Lock()
+REPEAT_MIN_S = 60     # a game that ends sooner failed to start: don't loop on it
+
+
+def repeat_next():
+    with REPEAT_LOCK:
+        p = dict(REPEAT["params"])
+        base = p.get("seed")
+        p["seed"] = (int(base) + REPEAT["n"]) if base not in (None, "") else int(time.time()) % 1000000
+        REPEAT["n"] += 1
+        n = REPEAT["n"]
+    jid = start_job("watch (repeat #%d) %s vs %s on %s" % (n, p.get("a"), p.get("b"), p.get("map")),
+                    build_launch_cmd(p))
+    with REPEAT_LOCK:
+        REPEAT["jid"], REPEAT["started"] = jid, time.time()
+    return jid
+
+
+def repeat_start(p):
+    p = dict(p)
+    p.pop("repeat", None)
+    build_launch_cmd(p)   # refuse bad settings now, not on the second game
+    with REPEAT_LOCK:
+        REPEAT.update(on=True, params=p, n=0, jid=None)
+    return repeat_next()
+
+
+def repeat_stop():
+    with REPEAT_LOCK:
+        REPEAT["on"] = False
+    return {"ok": True}
+
+
+def repeat_status():
+    with REPEAT_LOCK:
+        return {"on": REPEAT["on"], "n": REPEAT["n"], "jid": REPEAT["jid"],
+                "map": (REPEAT["params"] or {}).get("map")}
+
+
+def repeat_loop():
+    while True:
+        time.sleep(3)
+        with REPEAT_LOCK:
+            on, jid, started = REPEAT["on"], REPEAT["jid"], REPEAT["started"]
+        if not on or not jid:
+            continue
+        with JOBS_LOCK:
+            j = JOBS.get(jid)
+        if j is not None and j["proc"].poll() is None:
+            continue
+        if time.time() - started < REPEAT_MIN_S:
+            repeat_stop()
+            continue
+        try:
+            repeat_next()
+        except Exception:
+            repeat_stop()
+
+
 def kill_job(jid):
     with JOBS_LOCK:
         j = JOBS.get(jid)
     if not j:
         return {"ok": False, "error": "unknown job"}
+    with REPEAT_LOCK:
+        if REPEAT["jid"] == jid:
+            REPEAT["on"] = False
     pid = j["proc"].pid
     # /T takes the whole tree so no engine process is orphaned
     subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
@@ -1474,12 +1539,17 @@ class Handler(BaseHTTPRequestHandler):
                     args = build_tournament_cmd(p)
                     desc = "tournament %s vs %s on %s" % (
                         p.get("a"), p.get("b"), p.get("map"))
+                elif p.get("repeat") and p.get("mode") == "watch":
+                    self.send_json({"ok": True, "id": repeat_start(p), "repeat": True})
+                    return
                 else:
                     args = build_launch_cmd(p)
                     desc = "%s %s vs %s on %s" % (
                         p.get("mode", "headless"), p.get("a"), p.get("b"),
                         p.get("map"))
                 self.send_json({"ok": True, "id": start_job(desc, args)})
+            elif u.path == "/api/repeat":
+                self.send_json(repeat_stop() if p.get("action") == "stop" else repeat_status())
             elif u.path == "/api/nn":
                 self.send_json(nn_action(p.get("action")))
             elif u.path == "/api/kill":
@@ -1502,6 +1572,7 @@ def main():
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    threading.Thread(target=repeat_loop, daemon=True).start()
     url = "http://127.0.0.1:%d" % a.port
     print("bar-ai dashboard: %s   (Ctrl+C to stop)" % url)
     if not a.no_browser:

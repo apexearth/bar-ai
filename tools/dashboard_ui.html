@@ -215,8 +215,11 @@
       <label class="f">&nbsp;<canvas id="l-boxprev" width="72" height="72"
         title="A = green, B = red"></canvas></label>
       <label class="f">Modoptions <input id="l-modopt" size="24" placeholder="apex_x=1 apex_y=0.5" title="space-separated k=v; a name typed here wins over the same name's Advanced override"></label>
+      <label class="f" title="Watch mode: when a game ends, start the next one with the same settings and the next seed, until you press Stop or kill the running game.">
+        <span><input id="l-repeat" type="checkbox"> Keep launching</span></label>
       <button class="act primary" onclick="launch()">Launch</button>
     </div>
+    <div id="l-repeatstat" style="margin-top:6px;font-size:12px;display:none"></div>
     <datalist id="maplist"></datalist>
     <datalist id="speclist"></datalist>
     <div id="l-ovsum" style="margin-top:8px;font-size:12px"></div>
@@ -1449,12 +1452,29 @@ async function launch() {
     if (!MODOPT_RE.test(mo))
       return toast("bad tunable override: " + mo + " — fix it under Advanced", true);
   if (!body.map) return toast("pick a map", true);
+  body.repeat = mode === "watch" && $("#l-repeat").checked;
   try {
     const r = await api("/api/launch", body);
-    toast("launched job " + r.id);
+    toast((r.repeat ? "repeating watch games, first job " : "launched job ") + r.id);
     loadJobs();
+    loadRepeat();
   } catch (e) { toast(e.message, true); }
 }
+async function loadRepeat() {
+  const el = $("#l-repeatstat"); if (!el) return;
+  try {
+    const s = await api("/api/repeat", {});
+    if (!s.on) { el.style.display = "none"; return; }
+    el.style.display = "";
+    setHTML(el, "Keep launching: game " + esc(String(s.n)) + " on " + esc(s.map || "?") +
+      ' <button class="act" onclick="stopRepeat()">Stop after this game</button>');
+  } catch (e) { /* the server may be restarting */ }
+}
+async function stopRepeat() {
+  try { await api("/api/repeat", {action: "stop"}); toast("no more games will start"); loadRepeat(); }
+  catch (e) { toast(e.message, true); }
+}
+setInterval(loadRepeat, 5000);
 // Mirror of run_match.py's box math, so the picker shows what the game gets.
 function drawBoxPreview() {
   const cv = $("#l-boxprev"); if (!cv) return;
