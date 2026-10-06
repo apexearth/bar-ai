@@ -429,6 +429,7 @@ bool FlyingConLab(bool ceiling)
 int gSpotHandsAt = -1000;
 int gSpotHandsVal = 0;
 int gSpotHandsBind = 0;   // ConsNeedAny calls the open spots decided
+int gConFloorYieldN = 0;  // con-floor orders that yielded to an army behind its share
 int gNextSpotHandsLog = 0;
 int ConsNeedAny(bool walkers = false)
 {
@@ -565,7 +566,7 @@ int SpotHandsOwed()
 	gSpotHandsVal = k;
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
-		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " open=" + n
+		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " floorYield=" + gConFloorYieldN + " open=" + n
 			+ " walkS=" + formatFloat(walkS, "", 0, 1)
 			+ " cycS=" + formatFloat(cycS, "", 0, 1)
 			+ " S=" + formatFloat(SpotM(), "", 0, 2)
@@ -2389,7 +2390,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " have=" + T1AirConsOwned() + ")");
 			return Catalog::Def(d);
 		}
-		if (consNeedA > 0) {
+		// ...but never past the army's share: forced cons ahead of the draw held
+		// army spend at 0-8% of a 33% target through minute 6 while BARb fielded
+		// 1,750 metal of army and its raiders ate our cons and mexes (91 normal
+		// games, round 4). Behind its share the line prices army and cons in
+		// the draw like everything else.
+		const bool armyBehind = (Brain::gSpentTotal > 1.f)
+			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
+		if (armyBehind && (consNeedA > 0))
+			++gConFloorYieldN;
+		if ((consNeedA > 0) && !armyBehind) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA
