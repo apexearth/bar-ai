@@ -491,7 +491,7 @@ float NnComScore(const array<float>& in st, const array<float>& in com, array<fl
 
 int gComDec = COM_WORK;       // the decision in force
 float gComFlat = -1.f;        // discovery games: chance a decision goes safer, rolled once
-int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0;
+int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0, gComExpNext = 0, gComMoveAt = 0;
 int gComDecAt = -999999;
 int gComNextAt = -1;
 int gComAssessAt = -1;
@@ -560,10 +560,13 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 		gComFlat = float(AiRandom(0, 10000)) / 10000.f * 0.3f;
 	if (explore && (rule != COM_RETREAT) && (ai.frame < gComExpUntil) && (gComExpPick > rule))
 		chosen = gComExpPick;
-	else if (explore && (rule != COM_RETREAT) && (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
+	else if (explore && (rule != COM_RETREAT) && (ai.frame >= gComExpNext)
+		&& (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
 		chosen = ((rule < COM_TURRET) && (gCsTowersK > 0) && (AiRandom(0, 1) == 0)) ? COM_TURRET : COM_RETREAT;
 		gComExpPick = chosen;
 		gComExpUntil = ai.frame + 15 * SECOND;
+		// he decides every second under threat: one trial a minute at most
+		gComExpNext = ai.frame + 60 * SECOND;
 		++gComExpN;
 	} else if (trust > 0.f) {
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
@@ -704,6 +707,13 @@ void ComEnforce(CCircuitUnit@ u)
 			&& (t.GetBuildPos().distance2D(gCsHere) <= u.circuitDef.GetBuildDistance() + 100.f))
 			return;
 		IUnitTask@ pt = ComDecisionTask(u);
+		// The retreat task is a patrol, and a patrolling builder stops for every
+		// tree on the way: walk him there, the patrol only holds him at the end.
+		if ((pt !is null) && (pt is t) && (gComDec == COM_RETREAT) && (ai.frame >= gComMoveAt)
+			&& (gCsHere.distance2D(t.GetBuildPos()) > u.circuitDef.GetBuildDistance())) {
+			gComMoveAt = ai.frame + 5 * SECOND;
+			u.CmdMoveTo(t.GetBuildPos());
+		}
 		if ((pt is null) || (pt is t))
 			return;
 		gComDropAt = ai.frame;
