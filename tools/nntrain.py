@@ -22,6 +22,7 @@ so every game that starts afterwards plays with it (apex_nn_blend > 0).
 
 Writes runtime/nn/: metrics.jsonl, status.json, model.pt, buffer.npz, seen.json.
 """
+import copy
 import json
 import math
 import os
@@ -63,6 +64,11 @@ OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc
 # the dashboard's headline accuracy: the outcomes the net is steered by
 HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE]
 HIDDEN = 32
+# What plays is a running average of the trained weights, half of it from the
+# last EMA_HALF batches: one game moves it a little, a run of games moves it a
+# lot. Each minibatch of new rows carries REPLAY_OLD times as many old ones.
+EMA_HALF = 5
+REPLAY_OLD = 3
 DROPOUT = 0.1
 MIN_BATCH = 150        # matured decisions before a live game is learned from
 STEPS_PER_ROW = 2      # passes over each new batch (each mixed with as many old rows)
@@ -136,7 +142,14 @@ class Net:
             torch.nn.Linear(HIDDEN, HIDDEN), torch.nn.ReLU(), torch.nn.Dropout(DROPOUT),
             torch.nn.Linear(HIDDEN, n_out))
         self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
+        self.slow = copy.deepcopy(self.model)   # the averaged weights: these predict and export
         self.xm = self.xs = self.ym = self.ys = None
+
+    def average(self):
+        d = 0.5 ** (1.0 / EMA_HALF)
+        with self.torch.no_grad():
+            for ps, pf in zip(self.slow.parameters(), self.model.parameters()):
+                ps.mul_(d).add_((1.0 - d) * pf)
 
     def fit_scalers(self, X, Y, M):
         # inputs are log-scaled; the floor stops a feature that never varied in
@@ -150,9 +163,9 @@ class Net:
         return self.torch.tensor(np.clip((X - self.xm) / self.xs, -6, 6), dtype=self.torch.float32)
 
     def predict(self, X):
-        self.model.eval()
+        self.slow.eval()
         with self.torch.no_grad():
-            z = self.model(self._x(X)).numpy()
+            z = self.slow(self._x(X)).numpy()
         return z * self.ys + self.ym
 
     def train(self, X, Y, M, new_from, steps):
@@ -170,7 +183,7 @@ class Net:
             for i in range(0, n_new, 128):
                 b = perm[i:i + 128]
                 if new_from > 0:
-                    b = t.cat([b, t.randint(0, new_from, (len(b),))])
+                    b = t.cat([b, t.randint(0, new_from, (len(b) * REPLAY_OLD,))])
                 err = ((self.model(Xt[b]) - Yt[b]) ** 2) * Mt[b]
                 loss = err.sum() / (Mt[b].sum() + 1e-6)
                 self.opt.zero_grad()
@@ -179,6 +192,7 @@ class Net:
                 tot += float(loss)
                 cnt += 1
         self.model.eval()
+        self.average()
         return tot / max(cnt, 1)
 
     def shrink_perturb(self):
@@ -189,11 +203,12 @@ class Net:
                 p.mul_(0.8).add_(0.2 * q)
 
     def state(self):
-        return {"model": self.model.state_dict(), "opt": self.opt.state_dict(),
+        return {"model": self.model.state_dict(), "slow": self.slow.state_dict(), "opt": self.opt.state_dict(),
                 "xm": self.xm, "xs": self.xs, "ym": self.ym, "ys": self.ys}
 
     def load(self, st):
         self.model.load_state_dict(st["model"])
+        self.slow.load_state_dict(st.get("slow", st["model"]))
         self.opt.load_state_dict(st["opt"])
         self.xm, self.xs, self.ym, self.ys = st["xm"], st["xs"], st["ym"], st["ys"]
 
@@ -223,7 +238,7 @@ def fmt_arr(vals):
 def fold(net):
     """First layer, second layer, and the output layer folded through OBJECTIVE
     into one score (in units of target spread)."""
-    sd = net.model.state_dict()
+    sd = net.slow.state_dict()
     w1, b1 = sd["0.weight"].numpy(), sd["0.bias"].numpy()
     w2, b2 = sd["3.weight"].numpy(), sd["3.bias"].numpy()
     w3, b3 = sd["6.weight"].numpy(), sd["6.bias"].numpy()

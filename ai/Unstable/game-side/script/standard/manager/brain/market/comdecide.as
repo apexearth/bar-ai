@@ -490,6 +490,8 @@ float NnComScore(const array<float>& in st, const array<float>& in com, array<fl
 }
 
 int gComDec = COM_WORK;       // the decision in force
+float gComFlat = -1.f;        // discovery games: chance a decision goes safer, rolled once
+int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0;
 int gComDecAt = -999999;
 int gComNextAt = -1;
 int gComAssessAt = -1;
@@ -550,8 +552,20 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	for (int o = 0; o < COM_N; ++o)
 		p[o] = (trust > 0.f) ? w[o] / sum : ((o == rule) ? 1.f : 0.f);
 	int chosen = rule;
-	// No exploration, ever: the draw happens only once a net has earned trust.
-	if (trust > 0.f) {
+	// Discovery only ever toward SAFER: work or fight may become a turret or a
+	// retreat, a turret a retreat -- held 15 s so what followed is its doing.
+	// Nothing ever explores him into a fight the rule would leave.
+	const bool explore = gNnExploreRolled && gNnExplore;
+	if (explore && (gComFlat < 0.f))
+		gComFlat = float(AiRandom(0, 10000)) / 10000.f * 0.3f;
+	if (explore && (rule != COM_RETREAT) && (ai.frame < gComExpUntil) && (gComExpPick > rule))
+		chosen = gComExpPick;
+	else if (explore && (rule != COM_RETREAT) && (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
+		chosen = ((rule < COM_TURRET) && (gCsTowersK > 0) && (AiRandom(0, 1) == 0)) ? COM_TURRET : COM_RETREAT;
+		gComExpPick = chosen;
+		gComExpUntil = ai.frame + 15 * SECOND;
+		++gComExpN;
+	} else if (trust > 0.f) {
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		float acc = 0.f;
 		chosen = COM_N - 1;
@@ -575,7 +589,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 			+ " opt=name,w,p opts=WORK,FIGHT,TURRET,RETREAT");
 	}
 	string ln = "apex: nncom t=" + ai.teamId + " f=" + ai.frame + " why=" + why
-		+ " rule=" + ComOptName(rule) + " trust=" + NnF(trust, 2) + " |";
+		+ " rule=" + ComOptName(rule) + " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
 	for (uint k = 0; k < st.length(); ++k)
 		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
 	ln += " |";
@@ -661,7 +675,7 @@ void ComDecideTick(CCircuitUnit@ u)
 		}
 		AiLog(Factory::T() + "apex: comstat t=" + ai.teamId + " dec=" + gComDecN
 			+ " chosen(W/F/T/R)=" + cn + " rule=" + rn + " effSec=" + en
-			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN
+			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
 			+ " dgunOrders=" + u.DGunOrders()
 			+ " hp=" + int(gCsHp * 100.f) + " now=" + ComOptName(gComDec)

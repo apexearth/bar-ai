@@ -1,15 +1,108 @@
-// THE T2 DECISION (his 2026-10-05: "is building T2 right now a good idea? and
-// later we discover, was it?"). Until an advanced lab stands, every 30 s:
-// NOW or WAIT. The rule's pick is what the market did in the window (a T2 lab
-// at the top of an election); the T2 net (NNT_*) moves it once it has earned
-// trust, and discovery games mix in a per-game share of the other answer so
-// both timings get seen in similar states. NOW hoists the lab until one is
-// under way; WAIT takes it off the table for the window.
+// THE NEXT-TIER DECISION (his 2026-10-05: "is now the time to make the factory
+// that offers us the next thing? and later we discover, was it?"). While a
+// plant of a higher tier than any we own is on offer, every 30 s: NOW or WAIT.
+// T2, T3, air -- one decision. The rule's pick is what the market did in the
+// window (such a plant at the top of an election, or picked); the net (NNT_*)
+// moves it once it has earned trust, and discovery games mix in a per-game
+// share of the other answer so both timings get seen in similar states. NOW
+// hoists the plant until one is under way; WAIT takes it off the table.
 namespace Market {
 
-const string NNT_TECH = "labM,techSeen,techTop,techPick,elN,techV,topV,minute";
+const string NNT_TECH = "labM,techSeen,techTop,techPick,elN,techV,topV,minute,ownTier,nextTier";
 const int TECH_WAIT = 0, TECH_NOW = 1, TECH_N = 2;
 const float TECH_EPS = 0.01f;
+
+// A plant's tier from the build tree alone, so a faction, mod or unit no
+// config has heard of still has one: what a commander builds is tier 1; a
+// constructor takes the tier of the plant that makes it; a plant no lower
+// hand can build is one above the lowest hand that can. 0 = not a plant.
+array<int> gDefTier;
+int gMaxTier = 0;
+
+bool IsPlantDef(int d)
+{
+	return (d >= 0) && (d < int(Catalog::gCostM.length())) && !Catalog::gMobile[d]
+		&& (Catalog::gBuildsList[d].length() > 0) && (Catalog::gBuildPower[d] > 0.f)
+		&& Catalog::gAvailable[d];
+}
+
+void TreeTierBuild()
+{
+	const int D = int(Catalog::gCostM.length());
+	gDefTier.resize(D);
+	array<int> hand(D);
+	array<int> q;
+	for (int d = 0; d < D; ++d) {
+		gDefTier[d] = 0;
+		hand[d] = 99;
+		if (Catalog::gT1Hand[d] && !Catalog::gT1Line[d] && Catalog::gMobile[d] && (Catalog::gBuildsList[d].length() > 0)) {
+			hand[d] = 0;
+			q.insertLast(d);
+		}
+	}
+	for (uint qi = 0; qi < q.length(); ++qi) {
+		const int u = q[qi];
+		const array<int>@ bl = Catalog::gBuildsList[u];
+		if (Catalog::gMobile[u]) {
+			for (uint k = 0; k < bl.length(); ++k) {
+				const int b = bl[k];
+				if (IsPlantDef(b) && ((gDefTier[b] == 0) || (gDefTier[b] > hand[u] + 1))) {
+					gDefTier[b] = hand[u] + 1;
+					q.insertLast(b);
+				}
+			}
+		} else {
+			for (uint k = 0; k < bl.length(); ++k) {
+				const int b = bl[k];
+				if (Catalog::gMobile[b] && (Catalog::gBuildsList[b].length() > 0) && (hand[b] > gDefTier[u])) {
+					hand[b] = gDefTier[u];
+					q.insertLast(b);
+				}
+			}
+		}
+	}
+	for (int d = 0; d < D; ++d)
+		gMaxTier = (gDefTier[d] > gMaxTier) ? gDefTier[d] : gMaxTier;
+	array<int> per(gMaxTier + 1);
+	string ex = "";
+	int roots = 0;
+	for (int d = 0; d < D; ++d) {
+		per[gDefTier[d]] += 1;
+		roots += (hand[d] == 0) ? 1 : 0;
+		const CCircuitDef@ cd = Catalog::Def(d);
+		if ((gDefTier[d] > 0) && (cd !is null) && (ex.length() < 160))
+			ex += " " + cd.GetName() + "=" + gDefTier[d];
+	}
+	string pt = "";
+	for (int t = 1; t <= gMaxTier; ++t)
+		pt += ((t == 1) ? "" : "/") + per[t];
+	AiLog("apex: def-tier t=" + ai.teamId + " defs=" + D + " roots=" + roots + " maxTier=" + gMaxTier
+		+ " plants=" + pt + " |" + ex);
+}
+
+int TreeTier(int d)
+{
+	if (gDefTier.length() == 0)
+		TreeTierBuild();
+	return ((d >= 0) && (uint(d) < gDefTier.length())) ? gDefTier[d] : 0;
+}
+
+int gOwnTierAt = -1, gOwnTier = 0;
+int OwnTopTier()
+{
+	if (ai.frame < gOwnTierAt)
+		return gOwnTier;
+	gOwnTierAt = ai.frame + 10 * SECOND;
+	gOwnTier = 0;
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ fu = Factory::gFacUnits[fi];
+		if ((fu !is null) && (fu.circuitDef !is null)) {
+			const int t = TreeTier(int(fu.circuitDef.id));
+			gOwnTier = (t > gOwnTier) ? t : gOwnTier;
+		}
+	}
+	return gOwnTier;
+}
 
 int gTechOv = -1;            // the decision in force when it differs from the rule
 int gTechLogAt = 0;
@@ -19,12 +112,15 @@ float gTechFlat = -1.f;      // discovery games: share of the uniform draw, roll
 int gTechDecN = 0, gTechDevN = 0, gTechHoistN = 0, gTechHeldN = 0;
 // what the market did since the last decision
 float gTwLabM = 0.f, gTwSeen = 0.f, gTwTop = 0.f, gTwPick = 0.f, gTwEl = 0.f, gTwV = 0.f, gTwTopV = 0.f;
+int gTwNext = 0;   // the lowest tier above ours on offer
+int gTechSkipN = 0;
 
 string TechName(int o) { return (o == TECH_NOW) ? "NOW" : "WAIT"; }
 
+// the option this decision is about: a plant above every tier we own
 bool IsT2Lab(Want@ w)
 {
-	return (w !is null) && (w.kind == WK_TECH) && (w.def !is null) && (PlantTier(int(w.def.id)) >= 2);
+	return (w !is null) && (w.def !is null) && (TreeTier(int(w.def.id)) > OwnTopTier());
 }
 
 bool T2LabComing()
@@ -32,8 +128,7 @@ bool T2LabComing()
 	for (uint li = 0; li < Requests::gLive.length(); ++li) {
 		IUnitTask@ lt = Requests::gLive[li];
 		if ((lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
-			&& (Catalog::gBuildsList[int(lt.buildDef.id)].length() > 0)
-			&& !Catalog::gMobile[int(lt.buildDef.id)] && (PlantTier(int(lt.buildDef.id)) >= 2))
+			&& (TreeTier(int(lt.buildDef.id)) > OwnTopTier()))
 			return true;
 	}
 	return false;
@@ -41,7 +136,7 @@ bool T2LabComing()
 
 bool TechOpen()
 {
-	return TopOwnPlantTier() < 2;
+	return OwnTopTier() < gMaxTier;
 }
 
 float NnTechScore(const array<float>& in st, const array<float>& in f, array<float>& w)
@@ -69,6 +164,8 @@ void NnTechDecide()
 	tf.insertLast(techV);
 	tf.insertLast(topV);
 	tf.insertLast(float(ai.frame) / 1800.f);
+	tf.insertLast(float(OwnTopTier()));
+	tf.insertLast(float(gTwNext));
 	array<float> w(TECH_N);
 	for (int o = 0; o < TECH_N; ++o)
 		w[o] = (o == rule) ? 1.f : TECH_EPS;
@@ -95,7 +192,7 @@ void NnTechDecide()
 		++gTechDevN;
 	if (!gTechHeader) {
 		gTechHeader = true;
-		AiLog("apex: nntech-schema v1 state=" + NN_STATE + " tech=" + NNT_TECH
+		AiLog("apex: nntech-schema v2 state=" + NN_STATE + " tech=" + NNT_TECH
 			+ " opt=name,w,p opts=WAIT,NOW");
 	}
 	string ln = "apex: nntech t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + TechName(rule)
@@ -110,6 +207,7 @@ void NnTechDecide()
 	ln += " | chosen=" + chosen;
 	AiLog(ln);
 	gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = 0.f;
+	gTwNext = 0;
 }
 
 // After the market and the nets ranked an election: note what it offered, run
@@ -134,12 +232,24 @@ void NnTechNote(array<Want@>@ ranked)
 			if (r == 0)
 				gTwTop += 1.f;
 		}
+		const int nt = TreeTier(int(ranked[r].def.id));
+		gTwNext = ((gTwNext == 0) || (nt < gTwNext)) ? nt : gTwNext;
 	}
 	if (gTechNextAt < 0)
-		gTechNextAt = 60 * SECOND + (ai.teamId % 15) * 2 * SECOND;
+		gTechNextAt = ai.frame + (ai.teamId % 15) * SECOND;
 	if ((ai.frame >= gTechNextAt) && !T2LabComing()) {
 		gTechNextAt = ai.frame + 30 * SECOND;
-		NnTechDecide();
+		// nothing of a higher tier on offer all window: no question to answer
+		if (gTwSeen > 0.f)
+			NnTechDecide();
+		else {
+			if (gTechSkipN++ < 3)
+				AiLog("apex: nntech-skip t=" + ai.teamId + " el=" + int(gTwEl) + " own=" + OwnTopTier()
+					+ " max=" + gMaxTier + " top=" + ((ranked[0].def is null) ? "-" : ranked[0].def.GetName())
+					+ " topTier=" + ((ranked[0].def is null) ? -1 : TreeTier(int(ranked[0].def.id))));
+			gTwLabM = gTwSeen = gTwTop = gTwPick = gTwEl = gTwV = gTwTopV = 0.f;
+			gTwNext = 0;
+		}
 		if (ai.frame >= gTechLogAt) {
 			gTechLogAt = ai.frame + 60 * SECOND;
 			AiLog("apex: nntech-stat t=" + ai.teamId + " dec=" + gTechDecN + " dev=" + gTechDevN
