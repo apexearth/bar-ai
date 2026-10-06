@@ -22,11 +22,23 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 	if (cls == PROT_RADAR) {
 		AIFloat3 gapAt;
 		float unseenFrac = 0.f;
+		float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+		if (fill <= 1.f)
+			fill = 180.f;
+		// THE SURPRISE IT PREVENTS: the enemy army we cannot see now, over the
+		// army horizon. Before we have seen any of it, a player assumes they
+		// field about what we do.
+		float foeEst = Military::FoeBelievedM();
+		foeEst = (ArmyValue() > foeEst) ? ArmyValue() : foeEst;
+		float foeUnseen = foeEst - Military::FoeLiveM();
+		foeUnseen = (foeUnseen > 0.f) ? foeUnseen : 0.f;
+		const float surprise = foeUnseen / fill;
+		// an unwatched line is the approach itself, blind: the whole surprise
 		if (lineUp && (Catalog::gRadarR[d] > 1.f)
 			&& !ProtCovered(PROT_RADAR, lineAt, Catalog::gRadarR[d] * 0.6f))
 		{
 			at = lineAt;
-			gain = (gProtM + ArmyValue()) * rate;
+			gain = (gProtM + ArmyValue()) * rate + surprise;
 			return gain > 0.f;
 		}
 		if (Gate(GATE_RADAR_GAP,
@@ -56,20 +68,8 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// fill horizon, is its gain -- the same currency ArmyGapStream uses
 		// (apexearth: "we need vision and speed in order to properly defend
 		// ourselves"; "it's cheap and we should make it").
-		{
-			float fill = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
-			if (fill <= 1.f)
-				fill = 180.f;
-			gain += Military::EyesSavedM() / fill * unseenFrac;
-			// THE SURPRISE IT PREVENTS: the enemy army we cannot see now, over
-			// the army horizon. Before we have seen any of it, a player assumes
-			// they field about what we do.
-			float foeEst = Military::FoeBelievedM();
-			foeEst = (ArmyValue() > foeEst) ? ArmyValue() : foeEst;
-			float foeUnseen = foeEst - Military::FoeLiveM();
-			foeUnseen = (foeUnseen > 0.f) ? foeUnseen : 0.f;
-			gain += foeUnseen / fill * unseenFrac;
-		}
+		gain += Military::EyesSavedM() / fill * unseenFrac;
+		gain += surprise * unseenFrac;
 	} else if (cls == PROT_JAM) {
 		// Tower concentrations want jamming first (apexearth): find a
 		// cluster of >=3 defenses with no jammer in reach.
