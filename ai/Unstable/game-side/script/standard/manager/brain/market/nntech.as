@@ -104,7 +104,7 @@ int OwnTopTier()
 	return gOwnTier;
 }
 
-int gTechOv = -1;            // the decision in force when it differs from the rule
+int gTechCur = -1;           // the decision in force: binding whichever answer was drawn
 int gTechLogAt = 0;
 int gTechNextAt = -1;
 bool gTechHeader = false;
@@ -186,7 +186,7 @@ void NnTechDecide()
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
 	}
-	gTechOv = (chosen == rule) ? -1 : chosen;
+	gTechCur = chosen;
 	++gTechDecN;
 	if (chosen != rule)
 		++gTechDevN;
@@ -215,7 +215,7 @@ void NnTechDecide()
 void NnTechNote(array<Want@>@ ranked)
 {
 	if (!TechOpen() || (ranked.length() == 0)) {
-		gTechOv = -1;
+		gTechCur = -1;
 		return;
 	}
 	gTwEl += 1.f;
@@ -253,37 +253,41 @@ void NnTechNote(array<Want@>@ ranked)
 		if (ai.frame >= gTechLogAt) {
 			gTechLogAt = ai.frame + 60 * SECOND;
 			AiLog("apex: nntech-stat t=" + ai.teamId + " dec=" + gTechDecN + " dev=" + gTechDevN
-				+ " ov=" + gTechOv + " hoist=" + gTechHoistN + " held=" + gTechHeldN
+				+ " cur=" + gTechCur + " hoist=" + gTechHoistN + " held=" + gTechHeldN
 				+ " flat=" + NnF(gTechFlat, 2));
-		}
-	}
-	if (gTechOv == TECH_WAIT) {
-		for (int r = int(ranked.length()) - 1; r >= 0; --r) {
-			if (IsT2Lab(ranked[r])) {
-				ranked.removeAt(uint(r));
-				++gTechHeldN;
-			}
 		}
 	}
 }
 
-// After the draw: whether the election finally went to a T2 lab.
+// After the draw: whether the market would have built the plant now (the
+// rule's evidence), then WAIT keeps it from being built by any later path --
+// the record must say what actually happened.
 void NnTechPicked(array<Want@>@ ranked)
 {
-	if (TechOpen() && (ranked.length() > 0) && IsT2Lab(ranked[0]))
+	if (!TechOpen() || (ranked.length() == 0))
+		return;
+	if (IsT2Lab(ranked[0]))
 		gTwPick += 1.f;
+	if (gTechCur != TECH_WAIT)
+		return;
+	for (int r = int(ranked.length()) - 1; r >= 0; --r) {
+		if (IsT2Lab(ranked[r])) {
+			ranked.removeAt(uint(r));
+			++gTechHeldN;
+		}
+	}
 }
 
 // Ahead of the draw: NOW puts the lab first until one is under way. Returns
 // true when it did, so the draw keeps it.
 bool NnTechHoist(array<Want@>@ ranked)
 {
-	if (!TechOpen() || (ranked.length() == 0) || (gTechOv != TECH_NOW))
+	if (!TechOpen() || (ranked.length() == 0) || (gTechCur != TECH_NOW))
 		return false;
 	if (IsT2Lab(ranked[0]))
 		return true;
 	if (T2LabComing()) {
-		gTechOv = -1;
+		gTechCur = -1;
 		return false;
 	}
 	for (uint r = 1; r < ranked.length(); ++r) {
