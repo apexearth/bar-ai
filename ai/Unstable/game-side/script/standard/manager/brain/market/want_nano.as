@@ -400,6 +400,23 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	const float floorNeed = ((floorShort > 0) && OnMap(floorPos)) ? 200.f * (7.f / 80.f) : 0.f;
 	if (floorNeed > over)
 		over = floorNeed;
+	// Energy a new lathe could draw: what the standing work commits, not the
+	// momentary pull -- a lull between jobs priced turrets that then ran stalled.
+	float nanoSpareE = Eco::EInc() + EMakeInFlight();
+	{
+		TrackEPull();
+		float dem = Eco::EPull() - ConvUseE();
+		if (dem < gEDemandPk)
+			dem = gEDemandPk;
+		nanoSpareE -= dem + EDrainInFlight() + LineDrainE();
+		// ...but energy spilling from a full bank now is spare whatever the
+		// estimate says: the cut held lathe off while both banks spilled.
+		if (aiEconomyMgr.isEnergyFull) {
+			const float exc = aiEconomyMgr.energy.excess;
+			if (nanoSpareE < exc)
+				nanoSpareE = exc;
+		}
+	}
 	// What the nano want saw, whether or not it bids (sampled 10 s): the
 	// line's free flow against what it eats is the whole "not supporting
 	// the factory" question.
@@ -425,6 +442,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 				+ "/" + gFloorYardAssist
 			+ " over=" + formatFloat(over, "", 0, 1)
 			+ " mfree=" + formatFloat(MetalFreeRate(), "", 0, 1) + " metalCut=" + gNanoMetalCut
+			+ " eSpare=" + int(nanoSpareE) + " eDens=" + formatFloat(LineEnergyDensity(), "", 0, 2)
 			+ " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
 	}
 	if (over <= 0.5f)
@@ -496,14 +514,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// bought the nanos that deepened it (apexearth, watching: "even our
 		// nano turrets... are stalling because we lack energy").
 		{
-			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity();
-			if (askE > 1.f) {
-				// Converters soak up every spare joule and step aside when a
-				// lathe needs it: their draw is spare, not pull.
-				const float spare = Eco::EInc() + EMakeInFlight()
-						- (Eco::EPull() - ConvUseE());
-				gainN *= (spare <= 0.f) ? 0.f : ((spare < askE) ? (spare / askE) : 1.f);
-			}
+			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
+			if (askE > 1.f)
+				gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
 		}
 		// ...and no more than the metal feed has left over: while what is asked
 		// already exceeds what income and bank can feed, more lathe adds nothing.
