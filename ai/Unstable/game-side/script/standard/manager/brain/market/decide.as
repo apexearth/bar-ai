@@ -2676,7 +2676,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)));
 		if (isComm && ComFar(ranked[i].pos)
 			&& (ranked[i].pos.distance2D(unit.GetPos(ai.frame)) > HERE_R)
-			&& !(comClaim && ComClaimOk(unit, ranked[i].pos))) {
+			&& !(comClaim && !gCsT2 && ComClaimOk(unit, ranked[i].pos))) {
 			if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
 				gComFwdLogAt = ai.frame;
 				AiLog("apex: com-fwd skip t=" + ai.teamId + " "

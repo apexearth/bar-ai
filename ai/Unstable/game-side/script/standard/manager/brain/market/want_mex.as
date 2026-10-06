@@ -945,7 +945,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// minute 8 while theirs kept climbing. A hot spot is not offered;
 		// the ground it sits on is the defence market's starved-spot stake.
 		// Hot for a constructor; the commander takes it where nothing there can kill him.
-		const float comF = comm ? ComRaidF(unit, sp) : 1.f;
+		const float comF = (comm && !gCsT2) ? ComRaidF(unit, sp) : 1.f;   // caution (T2) ends his dangerous claims
 		if ((st == PT_HOT) && !(comm && (comF < 1.f))) {
 			++gSwHot;
 			DeadSpotSay(dw, sp, "hot");
