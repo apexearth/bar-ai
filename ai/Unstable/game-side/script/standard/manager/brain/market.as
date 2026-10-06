@@ -52,6 +52,7 @@
 #include "market/lift.as"           // idle turrets flown to the short line
 #include "market/lift_ferry.as"     // front towers built at home and flown up
 #include "market/safety.as"        // commander self-preservation, ahead of the auction
+#include "market/rehome.as"        // a lost base is left: home moves to the safest ground we can reach
 #include "market/eta.as"            // the economy-only ETA target and its ladder
 #include "market/roles.as"          // constructor roles: the split of need, who holds which
 #include "market/crew.as"           // the field crew and the home crew
