@@ -58,12 +58,27 @@ bool BasicHandCan(int d)
 // hands (apexearth 2026-09-28).
 int gUnlockAssists = 0;
 int gDefJoinAssists = 0;
+int gUnlockOrphanJoins = 0;
+int gNextUnlockOrphanLog = 0;
+void UnlockOrphanLog(const CCircuitDef@ d, float done, const string &in kind)
+{
+	if ((d is null) || (ai.frame < gNextUnlockOrphanLog))
+		return;
+	gNextUnlockOrphanLog = ai.frame + 30 * SECOND;
+	AiLog(Factory::T() + "apex: unlock-orphan t=" + ai.teamId + " " + d.GetName()
+		+ " " + kind + " done=" + formatFloat(done, "", 0, 2)
+		+ " total=" + gUnlockOrphanJoins);
+}
+
 Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 {
 	Want w;
 	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return w;
-	if (defence ? (DefenceShortfall() <= 0.f) : MetalPathStarved())
+	// Not withheld while the feed is short: the frame's share of a short feed
+	// is its share of the lathes drawing on it, and the crew stays bounded by
+	// what the income feeds (SiteWorkerCap).
+	if (defence && (DefenceShortfall() <= 0.f))
 		return w;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	IUnitTask@ best = null;
@@ -86,7 +101,11 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 		// on a Guard task -- so counting only the crew, every free hand saw a
 		// short site and piled on: the priced assist above already folds them
 		// in for the same reason.
-		if (!OnMap(bp) || (Requests::Workers(lt) == 0)
+		// An unmanned unlock frame is taken up too: its def's want stands
+		// aside while the request lives (LiveOfDef), so nothing else returns
+		// to it and the frame decays.
+		const bool orphan = !defence && (Requests::Workers(lt) == 0) && (lt.target !is null);
+		if (!OnMap(bp) || ((Requests::Workers(lt) == 0) && !orphan)
 			|| ((Requests::Workers(lt) + uint(GuardsOnJob(lt)))
 				>= Requests::SiteWorkerCap(lt.buildDef)))
 			continue;
@@ -98,6 +117,44 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			bestD = d;
 		}
 	}
+	// ...and an advanced plant frame whose request died with its builder: it
+	// still holds every other advanced plant ask (AdvPlantInFlight), its own
+	// def included, so this is the only way back to it.
+	if ((best is null) && !defence && AdvPlantInFlight() && (gAdvInFlightRow >= 0)
+		&& ComIsOrphan(uint(gAdvInFlightRow)))
+	{
+		const uint row = uint(gAdvInFlightRow);
+		CCircuitUnit@ fr = ai.GetTeamUnit(gComId[row]);
+		if (fr is null)
+			return w;
+		uint onFrame = 0;
+		for (uint g = 0; g < gGuardBId.length(); ++g) {
+			if (gGuardBId[g] == fr.id)
+				++onFrame;
+		}
+		if (onFrame >= Requests::SiteWorkerCap(Catalog::Def(gComDef[row])))
+			return w;
+		const AIFloat3 fp = fr.GetPos(ai.frame);
+		if (!OnMap(fp) || !ai.CanDefReach(Catalog::Def(int(unit.circuitDef.id)), here, fp))
+			return w;
+		float done = fr.GetHealthPercent();
+		done = (done < 0.f) ? 0.f : ((done > 1.f) ? 1.f : done);
+		w.kind = WK_ASSIST;
+		w.pos = fp;
+		w.spotId = int(fr.id);
+		w.gain = 1.f;
+		w.mCost = 1.f;
+		w.tCost = 1.f;
+		w.value = 1.f;
+		@w.def = Catalog::Def(gComDef[row]);
+		@gAssistTarget = fr;
+		gAssistTargetId = fr.id;
+		gAssistGuardS = int(Catalog::gCostM[gComDef[row]] * (1.f - done) / Requests::DRAIN) + 10;
+		++gUnlockOrphanJoins;
+		++gUnlockAssists;
+		UnlockOrphanLog(w.def, done, "frame");
+		return w;
+	}
 	if (best is null)
 		return w;
 	array<CCircuitUnit@>@ on = best.GetUnits();
@@ -107,6 +164,11 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			@boss = on[i];
 			break;
 		}
+	}
+	if ((boss is null) && !defence && (best.target !is null)) {
+		@boss = best.target;   // the frame itself: Execute joins the task, else guards it
+		++gUnlockOrphanJoins;
+		UnlockOrphanLog(best.buildDef, Requests::Progress(best), "task");
 	}
 	if (boss is null)
 		return w;

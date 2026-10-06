@@ -32,7 +32,8 @@ void PeelSurplus()
 		// while SiteWorkerCap admitted against another only cycled them.
 		// Big energy peels to the SAME number the join rung admits (its
 		// cost-derived crew), or the two rungs cycle the same hands.
-		int wantN = IsBigEnergy(t.buildDef)
+		// The metal unlock too: its join rung admits the whole pool.
+		int wantN = (IsBigEnergy(t.buildDef) || IsMetalUnlock(t.buildDef))
 				? int(SiteWorkerCap(t.buildDef))
 				: int(FeedableCrew(t.buildDef));
 		// THE FOUNDER NEVER LEAVES. A ring seen lathing the frame trims the

@@ -630,7 +630,8 @@ void GuardSweep()
 			// A factory boss with nothing queued (and nothing in flight) is
 			// idle: release the guard into the market.
 			const bool bossIsFac = !b.circuitDef.IsMobile();
-			if (bossIsFac && (b.CountQueued(null) == 0)) {
+			// (a frame being raised queues nothing either)
+			if (bossIsFac && (b.CountQueued(null) == 0) && !ComFramedById(b.id)) {
 				u.task.Abort();
 				drop = true;
 			}

@@ -547,6 +547,15 @@ bool ComOrphanById(Id frameId)
 	return false;
 }
 
+bool ComFramedById(Id frameId)
+{
+	for (uint i = 0; i < gComId.length(); ++i) {
+		if ((gComId[i] == frameId) && (gComState[i] == CS_FRAMED))
+			return true;
+	}
+	return false;
+}
+
 // The orphaned frame of `defId` nearest `from` (reach < 0 = anywhere),
 // resolved to the live unit; a row whose unit is gone is ComSweep's business.
 CCircuitUnit@ ComOrphanUnit(int defId, const AIFloat3 &in from, float reach)
