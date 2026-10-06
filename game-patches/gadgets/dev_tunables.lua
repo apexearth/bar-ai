@@ -50,6 +50,7 @@ local NAMES = {
 	"apex_nn_blend",
 	"apex_nn_explore",
 	"apex_nn_imitate",
+	"apex_nnraid",
 	"apex_elec_frame_us",
 	"apex_eta_log",
 	"apex_protect_field_s",

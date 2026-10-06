@@ -187,6 +187,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::ChokeUpdate(); Perf::Add("up.choke", _t); }
+	if (UpEvery(8, 5)) { double _t = Perf::T0(); Market::RehomeUpdate(); Perf::Add("up.rehome", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Market::LogFrontTowers(); Perf::Add("up.fronttowers", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Market::RoleCensus(); Perf::Add("up.rolemix", _t); }
 	Market::IncomeMultProbe();   // once, ~30s in: is the handicap binding real
@@ -198,6 +199,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// one line a game-minute, so the last one is the game-end census.
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
+	{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Perf::Add("up.fightcensus", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
 	++gUpTick;
@@ -418,6 +420,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	// The tier census FIRST: it is about what THEY field, so it must not sit
 	// behind the filters that ask what WE lost.
 	Military::NoteFoeDef(attackerDef.costM, attackerDef);
+	Military::NrNoteOwnLoss(unit, attackerDef);
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (cdef is null)
 		return;
@@ -451,6 +454,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	if (edef.IsMobile())
 		Builder::NoteWreckField(pos, edef.costM);
 	Air::NoteEnemyDeath(edef, pos, byUs);
+	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	if (byUs)
 		Market::LossNote(int(edef.id));   // their wreck is rez work too
 	Perf::Add("hk.enemydead", hkT);

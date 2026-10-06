@@ -808,6 +808,11 @@ const float TUNE_NN_EXPLORE = 0.1f;
 //   favours gets exp(imitate x log-odds) of its value. 0 = off. See docs/35.
 const float TUNE_NN_IMITATE = 0.f;
 
+// [toggle 0/1] -- Raiders go where the raid price (military/nnraid.as) says, as a
+//   recorded WAIT/GO decision a raid net refines; 0 restores the stock raid
+//   pools and the old ask director. A/B switch until judged.
+const float TUNE_NNRAID = 1.f;
+
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
 

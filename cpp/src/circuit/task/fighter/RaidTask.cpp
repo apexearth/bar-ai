@@ -110,7 +110,8 @@ void CRaidTask::Update()
 	/*
 	 * Merge tasks if possible
 	 */
-	ISquadTask* task = GetMergeTask();
+	// apex: a pack sent to a priced target is not folded into another task's roam.
+	ISquadTask* task = (goalR > 0.f) ? nullptr : GetMergeTask();
 	if (task != nullptr) {
 		task->Merge(this);
 		units.clear();
@@ -238,7 +239,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
-	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
+	if ((goalR <= 0.f) && (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist))) {
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		float x = rand() % terrainMgr->GetTerrainWidth();
 		float z = rand() % terrainMgr->GetTerrainHeight();
@@ -377,6 +378,11 @@ bool CRaidTask::FindTarget()
 			continue;
 		}
 
+		// apex: with a goal, only what stands at the goal is worth walking to;
+		// anything in reach on the way is still fought above.
+		if ((goalR > 0.f) && (goalPos.SqDistance2D(ePos) > SQUARE(goalR))) {
+			continue;
+		}
 		if (isEnemyUrgent) {
 			urgentPositions.push_back(ePos);
 		} else {
@@ -444,14 +450,17 @@ bool CRaidTask::GiveUpRaid()
 void CRaidTask::FallbackRaid()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	if (GiveUpRaid()) {
+	const bool hasGoal = goalR > 0.f;
+	if (!hasGoal && GiveUpRaid()) {
 		return;
 	}
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
 	const AIFloat3& threatPos = leader->GetTravelAct()->IsActive() ? position : pos;
-	if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
+	if (hasGoal) {
+		position = terrainMgr->GetMovePosition(leader->GetArea(), goalPos);
+	} else if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
 		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
 		if (utils::is_equal_pos(nextPos, pos)) {
 			return;

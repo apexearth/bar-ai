@@ -20,6 +20,7 @@
 #include "terrain/TerrainManager.h"
 #include "task/builder/BuilderTask.h"
 #include "task/fighter/FighterTask.h"
+#include "task/fighter/RaidTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/action/DGunAction.h"
 #include "unit/CircuitWDef.h"
@@ -1681,6 +1682,16 @@ static int IUnitTask_GetFightType(IUnitTask* task)
 			: int(IFighterTask::FightType::_SIZE_);
 }
 
+// apex: a RAID fight task is always a CRaidTask (MilitaryManager::Enqueue).
+static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
+{
+	if ((task->GetType() == IUnitTask::Type::FIGHTER)
+		&& (static_cast<IFighterTask*>(task)->GetFightType() == IFighterTask::FightType::RAID))
+	{
+		static_cast<CRaidTask*>(task)->SetGoal(pos, r);
+	}
+}
+
 // apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
 // were registered on the base IUnitTask type as raw IBuilderTask field
 // offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
@@ -1974,6 +1985,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "array<CCircuitUnit@>@ GetUnits() const", asFUNCTION(IUnitTask_GetUnits), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asMETHOD(IUnitTask, RemoveAssignee), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void SetRaidGoal(const AIFloat3& in, float)", asFUNCTION(IUnitTask_SetRaidGoal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
 

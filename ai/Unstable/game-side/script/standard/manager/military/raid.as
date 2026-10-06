@@ -58,6 +58,7 @@ IUnitTask@ RaidTaskFor()
 	if ((gAskTask !is null) && !gAskTask.IsDead())
 		return gAskTask;
 	@gAskTask = aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID));
+	NrApplyGoal(gAskTask);
 	return gAskTask;
 }
 
@@ -335,6 +336,8 @@ void UpdateRaidAsk()
 	if (ai.GetTunable("apex_raid_ask", TUNE_RAID_ASK) <= 0.f)
 		return;
 	RaidGridStep();
+	if (NrOn())
+		return;   // nnraid.as prices and pulls instead
 	if ((ai.frame - gAskAt) < 5 * SECOND)
 		return;
 	gAskAt = ai.frame;

@@ -27,6 +27,10 @@ public:
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
 
+	// apex: the script's priced raid target (nnraid.as). r <= 0 clears it.
+	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; }
+	float GetGoalR() const { return goalR; }
+
 private:
 	bool FindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
@@ -36,6 +40,8 @@ private:
 
 	float maxPower;
 	int noTargetSince = -1;
+	springai::AIFloat3 goalPos;
+	float goalR = 0.f;
 };
 
 } // namespace circuit

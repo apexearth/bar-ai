@@ -1043,6 +1043,10 @@ GROUPS = [
                   "more: options it expects to grow the economy and win "
                   "trades get a bigger share of the draw. 0 = it only watches; "
                   "it only plays once the trainer has written its weights"),
+                 ("TUNE_NNRAID", "raiders go after the enemy mexes and "
+                  "constructors the raid price says are worth the trip, as a "
+                  "recorded go/wait decision the raid net refines. 0 = the old "
+                  "stock raid pools"),
                  ("TUNE_NN_IMITATE", "constructors lean more toward what BARb "
                   "would build in our situation (learned from ~1,000 games vs "
                   "BARb by tools/imitate.py): its mexes and defences over our "

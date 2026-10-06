@@ -93,5 +93,20 @@ const array<float> NNT_B2 = {};
 const array<float> NNT_WO = {};
 const float NNT_BO = 0.f;
 const float NNT_TRUST = 0.f;
+// the raid net (military/nnraid.as); NNR_STATE = NN_STATE + "|" + its own fields
+const bool NNR_ON = false;
+const string NNR_STATE = "";
+const int NNR_S = 0;
+const int NNR_O = 0;
+const int NNR_H = 0;
+const array<float> NNR_XM = {};
+const array<float> NNR_XS = {};
+const array<float> NNR_W1 = {};
+const array<float> NNR_B1 = {};
+const array<float> NNR_W2 = {};
+const array<float> NNR_B2 = {};
+const array<float> NNR_WO = {};
+const float NNR_BO = 0.f;
+const float NNR_TRUST = 0.f;
 
 }  // namespace Market
