@@ -79,7 +79,13 @@ def main() -> int:
     # false "validated" reports on 2026-08-20.
     errs = re.findall(r"[^\n]{0,40}\(?\d+, \d+\) : ERR[^\n]{0,90}"
                       r"|Fix compilation errors[^\n]{0,60}", text)
-    loaded = "Load script:" in text
+    # the opponent's "Load script:" passed a game where ours was "not found"
+    # (a deploy landing mid-launch) and never ran
+    loaded = re.search(r"Skirmish AI <(?!BARbarIAn)[^>]*>: Load script:", text) is not None
+    missing = re.findall(r"Error: Skirmish AI (\S+) not found!", text)
+    if missing:
+        print("SMOKE FAIL: the engine could not find " + ", ".join(sorted(set(missing))))
+        return 1
     if errs:
         print(f"SMOKE FAIL: {len(errs)} AngelScript errors")
         for e in sorted(set(errs))[:10]:

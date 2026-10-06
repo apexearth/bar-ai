@@ -1301,7 +1301,6 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	return sumV2;
 }
 
-int gTechNotDrawnAt = 0;
 int gDrawLadderMex = -1;    // the ranked index the ladder chose as a spot claim, this draw
 bool gDrawLadderTaken = false;
 int gDrawLadderTech = -1;   // the ranked index the ladder chose as tech, this draw
@@ -1344,23 +1343,6 @@ bool CategoryDraw(CCircuitUnit@ unit, array<Want@>@ ranked, uint salt, int atFra
 			roll2 -= wt[c];
 			if (roll2 <= 0.f) {
 				const int ri = catBest[c];
-				// A TECH LAB IS NOT SAMPLED (his 09-17 ruling: T2 only once
-				// it can be afforded, and not late). Its price carries the
-				// lab, its first constructor and the time income needs to
-				// pay for both; a lottery re-rolled every election buys any
-				// commitment eventually. It wins when it is the best thing
-				// to do, which is what keeps it from being late.
-				if ((ri > 0) && (ranked[ri].kind == WK_TECH) && (ri != gDrawLadderTech)) {
-					if (ai.frame >= gTechNotDrawnAt) {
-						gTechNotDrawnAt = ai.frame + 60 * SECOND;
-						AiLog("apex: tech-not-drawn t=" + ai.teamId + " "
-							+ ((ranked[ri].def is null) ? "?" : ranked[ri].def.GetName())
-							+ " v=" + formatFloat(ranked[ri].value, "", 0, 2)
-							+ " lead=" + formatFloat(ranked[0].value, "", 0, 2));
-					}
-					gNnDrawMode = "techkept";
-					break;
-				}
 				if (ri > 0) {
 					Want@ drawn = ranked[ri];
 					ranked.removeAt(uint(ri));
@@ -1601,6 +1583,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Perf::Add("dec.rank", _tRank);
 	OppTimeReprice(unit, ranked);
 	NnScore(unit, ranked);
+	NnTechNote(ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
 	// want with no rival, and a price cannot steer a decision with nothing to
@@ -1890,45 +1873,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// "mexes/energy -> T1 lab -> more energy -> 1 or 2 turrets to guard";
 	// the commander's first-gun rule below covers the lab the moment it is
 	// ordered.
-	// THE REAR TECHS FIRST (apexearth 2026-10-03: "the farther we are from the
-	// front line, the more readily we should jump to tier two"; the front seats
-	// upgrade slower and guard their base). A seat a teammate shelters takes the
-	// first T2 lab ahead of the draw once its defensive army stands and the
-	// upgrade stream waiting on T2 is at least its whole income. Forced on every
-	// seat this cost 4v4 scaling (147 -> 124 m/s at 20 min); in 8v8 BARb's T2
-	// lands at ~9 min and ours at ~15. The eco seat qualifies however it sits:
-	// with no mate inside its cone the draw kept picking solars over the lab.
-	AIFloat3 t2Shelter;
-	if (!aaPanic && !superPush && !convertPush && (TopOwnPlantTier() < 2) && T2SwitchOn()
-		&& ((ShelterMate(t2Shelter) >= 0) || EcoRoleGrowing())
-		&& (ArmyValue() + ArmyInFlightM() >= T2DefenceArmy())
-		&& (UpDemand() >= Eco::MInc())) {
-		int ti = -1;
-		for (uint ri = 0; (ri < ranked.length()) && (ti < 0); ++ri)
-			if ((ranked[ri].kind == WK_TECH) && (ranked[ri].def !is null)
-				&& (PlantTier(int(ranked[ri].def.id)) >= 2))
-				ti = int(ri);
-		bool coming = false;
-		for (uint li = 0; (li < Requests::gLive.length()) && !coming; ++li) {
-			IUnitTask@ lt = Requests::gLive[li];
-			coming = (lt !is null) && !lt.IsDead() && (lt.buildDef !is null)
-				&& (Catalog::gBuildsList[int(lt.buildDef.id)].length() > 0)
-				&& !Catalog::gMobile[int(lt.buildDef.id)]
-				&& (PlantTier(int(lt.buildDef.id)) >= 2);
-		}
-		if ((ti >= 0) && !coming) {
-			Want@ tw = ranked[ti];
-			if (ti > 0) {
-				ranked.removeAt(uint(ti));
-				ranked.insertAt(0, tw);
-			}
-			why = "t2rear";
-			coverPush = true;
-			AiLog("apex: t2rear t=" + ai.teamId + " " + tw.def.GetName()
-				+ " by " + unit.circuitDef.GetName() + " #" + unit.id
-				+ " upD=" + formatFloat(UpDemand(), "", 0, 1)
-				+ " inc=" + formatFloat(Eco::MInc(), "", 0, 1));
-		}
+	if (!aaPanic && !superPush && !convertPush && NnTechHoist(ranked)) {
+		why = "nntech";
+		coverPush = true;
 	}
 	if (!aaPanic && !superPush && !convertPush && !coverPush) {
 		Want@ sg = ComSelfGun(unit);
@@ -2472,6 +2419,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
 	Perf::Add("dec.draw", _tDraw);
+	NnTechPicked(ranked);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;
 	Want@ next = (ranked.length() > 1) ? ranked[1] : null;
 	// Only an emergency takes a hand off a job it is on: the stall, the

@@ -605,6 +605,74 @@ bool NnWeightsFit()
 		&& (NNW_TRUST.length() == NNW_KINDS.length());
 }
 
+// A decision head's net (NNC_ commander, NNT_ T2; the posture net has its own
+// copy): scores each option from the state, the head's own fields, the option
+// and the rule's pick, and moves the option weights in log space by the trust
+// it has earned. Returns that trust (0 = the rule alone).
+float NnHeadScore(bool on, const string& in layout, const string& in own, int S, int O, int H,
+	const array<float>& in XM, const array<float>& in XS, const array<float>& in W1,
+	const array<float>& in B1, const array<float>& in W2, const array<float>& in B2,
+	const array<float>& in WO, float BO, float trust0,
+	const array<float>& in st, const array<float>& in f, array<float>& w)
+{
+	const int K = int(w.length()), N = S + O;
+	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * trust0;
+	t = (t > 1.f) ? 1.f : t;
+	if ((t <= 0.f) || !on || (layout != NN_STATE + "|" + own) || (O != 2 * K)
+		|| (S != int(st.length() + f.length())) || (H <= 0) || (XM.length() != uint(N))
+		|| (W1.length() != uint(H * N)) || (W2.length() != uint(H * H)) || (WO.length() != uint(H)))
+		return 0.f;
+	int rule = 0;
+	for (int o = 1; o < K; ++o)
+		rule = (w[o] > w[rule]) ? o : rule;
+	array<float> a(H);
+	for (int h = 0; h < H; ++h)
+		a[h] = B1[h];
+	for (int i = 0; i < S; ++i) {
+		const float v = (uint(i) < st.length()) ? st[i] : f[i - st.length()];
+		float z = (NnSlog(v) - XM[i]) / XS[i];
+		z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+		for (int h = 0; h < H; ++h)
+			a[h] += W1[h * N + i] * z;
+	}
+	array<float> score(K), h1(H);
+	float mean = 0.f;
+	for (int o = 0; o < K; ++o) {
+		for (int h = 0; h < H; ++h)
+			h1[h] = a[h];
+		for (int i = 0; i < O; ++i) {
+			const float x = (i < K) ? ((i == o) ? 1.f : 0.f) : ((i - K == rule) ? 1.f : 0.f);
+			float z = (x - XM[S + i]) / XS[S + i];
+			z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+			for (int h = 0; h < H; ++h)
+				h1[h] += W1[h * N + S + i] * z;
+		}
+		float sc = BO;
+		for (int h2 = 0; h2 < H; ++h2) {
+			float acc = B2[h2];
+			for (int h = 0; h < H; ++h) {
+				if (h1[h] > 0.f)
+					acc += W2[h2 * H + h] * h1[h];
+			}
+			if (acc > 0.f)
+				sc += WO[h2] * acc;
+		}
+		score[o] = sc;
+		mean += sc;
+	}
+	mean /= float(K);
+	float meanLw = 0.f;
+	for (int o = 0; o < K; ++o)
+		meanLw += log(w[o]);
+	meanLw /= float(K);
+	for (int o = 0; o < K; ++o) {
+		float d = score[o] - mean;
+		d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
+		w[o] = pow(2.7182818f, meanLw + (1.f - t) * (log(w[o]) - meanLw) + t * d);
+	}
+	return t;
+}
+
 // THE BARb PRIOR (tools/imitate.py, NNI_*): how likely BARb, in our situation,
 // would build each class next. Options are tilted toward it in log space by
 // apex_nn_imitate -- what a stronger AI does as a starting point the outcome

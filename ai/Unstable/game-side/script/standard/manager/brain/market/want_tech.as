@@ -572,7 +572,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 				+ " spots=" + gLSpot.length() + " funded="
 				+ (ArmyValue() / ((ArmyTarget() > 1.f) ? ArmyTarget() : 1.f)));
 	}
-	if (demand <= 0.5f)
+	if (demand <= 0.f)
 		return w;
 	// Dedup is PER DEF: a T1 rebuild in flight must not zero the T2 lab's
 	// price.

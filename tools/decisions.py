@@ -38,6 +38,10 @@ SCHEMA = re.compile(r"apex: nn-schema v(\d+) state=(\S+) opt=(\S+)")
 POST_SCHEMA = re.compile(r"apex: nnpost-schema v\d+ state=\S+ post=(\S+) opt=")
 NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule=(\S+) ex=(\d) trust=\S+"
                     r" \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
+# the commander's and the T2 decisions, one shape: state | own fields | options | chosen
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech)-schema v\d+ state=\S+ (?:com|tech)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+                      r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ fac=\S+"
@@ -156,12 +160,23 @@ def parse(path, files=None):
     facrows, fac_keys, prods = [], None, {}
     allyof, winners = {}, None   # engine team -> ally team; winning ally teams (BARAI_RESULT)
     postrows, post_keys = [], None
+    heads = {}   # "com" / "tech": {"keys": their own fields, "rows": [...]}
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
+            if "apex: nncom" in ln or "apex: nntech" in ln:
+                m = HEAD_SCHEMA.search(ln)
+                if m:
+                    heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
+                    continue
+                m = HEAD_ROW.search(ln)
+                if m:
+                    heads.setdefault(m.group(2), {"keys": None, "rows": []})["rows"].append(
+                        (m.group(1),) + m.groups()[2:])
+                continue
             if "apex: nnpost" in ln:
                 m = POST_SCHEMA.search(ln)
                 if m:
@@ -258,7 +273,7 @@ def parse(path, files=None):
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
-                postrows=postrows, post_keys=post_keys,
+                postrows=postrows, post_keys=post_keys, heads=heads,
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -323,7 +338,15 @@ def labels(g, t, f, site=None):
     # the game's result for the deciding team: the longest horizon there is
     w = g.get("winners")
     y["won"] = (1 if g["allyof"].get(t) in w else 0) if w and t in g.get("allyof", {}) else None
+    # our commander killed within COM_H minutes: in a 1v1 that is the game
+    f1 = f + COM_H * FPM
+    lost = any(f < df <= f1 and unit.startswith(COMS) for df, unit, _x, _z in g["dead"].get(t, []))
+    y["comLost"] = 1 if lost else (None if f1 > g["last"] else 0)
     return y
+
+
+COM_H = 3
+COMS = ("armcom", "corcom", "legcom")
 
 
 def rows_of(path, g):
@@ -410,6 +433,27 @@ def post_rows_of(path, g):
                    state=dict(zip(sk, (num(x) for x in state.split(",")))),
                    post=dict(zip(pk, (num(x) for x in post.split(",")))),
                    opts=ov, chosen=int(chosen), y=y)
+
+
+def head_rows_of(path, g, tag):
+    """The `apex: nn<tag>` decisions (com, tech) in post_rows_of's shape: the
+    head's own fields under "post", labelled with the team's outcomes."""
+    h = g.get("heads", {}).get(tag)
+    if g["state_keys"] is None or not h or not h["keys"]:
+        return
+    sk, pk = g["state_keys"], h["keys"]
+    for frame, t, why, rule, ex, state, own, opts, chosen in sorted(h["rows"], key=lambda r: int(r[0])):
+        f, t = int(frame), int(t)
+        ov = []
+        for o in opts.split(" ; "):
+            parts = o.split(",")
+            if len(parts) == 3:
+                ov.append({"name": parts[0], "w": num(parts[1]), "p": num(parts[2])})
+        yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con=tag,
+                   why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
+                   state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   post=dict(zip(pk, (num(x) for x in own.split(",")))),
+                   opts=ov, chosen=int(chosen), y=labels(g, t, f, None))
 
 
 def survived(g, t, f, udef, site, build_s):

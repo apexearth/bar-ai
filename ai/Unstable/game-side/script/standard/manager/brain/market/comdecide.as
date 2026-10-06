@@ -485,7 +485,8 @@ void ComFields(array<float>& out f)
 // earned. A stub until the trainer writes NNC_* -- trust 0, rules alone.
 float NnComScore(const array<float>& in st, const array<float>& in com, array<float>& w)
 {
-	return 0.f;
+	return NnHeadScore(NNC_ON, NNC_STATE, NNC_COM, NNC_S, NNC_O, NNC_H, NNC_XM, NNC_XS, NNC_W1,
+		NNC_B1, NNC_W2, NNC_B2, NNC_WO, NNC_BO, NNC_TRUST, st, com, w);
 }
 
 int gComDec = COM_WORK;       // the decision in force

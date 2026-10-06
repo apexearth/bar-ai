@@ -58,6 +58,7 @@
 #include "market/nnweights.as"      // the value net, written by tools/nntrain.py into the deployed copy
 #include "market/nnlog.as"          // the decision record a value net trains on
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
+#include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
 #include "market/decide.as"      // the arbiter: rank the Wants, pick one
 #include "market/execute.as"        // turning a won Want into a task
 #include "market/production.as"     // the production market: con orders, batch demand
