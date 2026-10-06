@@ -355,17 +355,8 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	// A BUILDING OF OURS DYING ON OUR OWN GROUND IS THE INVASION SIGNAL.
 	// Filtered out of the combat ledger above (mobile only) and read by nothing
 	// else, so an enemy could level the base without any defence rule noticing.
-	if ((cdef !is null) && !cdef.IsMobile() && WasFinished(int(unit.id))) {
-		Military::NoteStructureLoss(at, cdef.costM);
-		// The same death, kept by PLACE and with no home-ground filter: the
-		// ledger above drops everything past FWD_HOME, which is where the
-		// outlying mexes die.
-		Market::NoteEcoLoss(at, cdef.costM);
-		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
-			Market::NoteTowerLost(at);
-			Market::NoteTowerGrave(at, cdef.costM);
-		}
-	}
+	// (The structure-loss, eco-loss and tower-grave notes live in
+	// UnitDestroyedByInner: only a death an enemy dealt counts.)
 	// A CONSTRUCTOR'S DEATH IS THE GROUND'S VERDICT. The risk model reads
 	// only enemies it can see, so a spot where a con just died prices as
 	// safe as home and the next con walks the same road. The claim, the
@@ -426,6 +417,20 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		return;
 	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id)))
 		Market::NoteMexKilled();
+	// A BUILDING OF OURS AN ENEMY KILLED ON OUR GROUND IS THE INVASION SIGNAL --
+	// enemy only: our reclaims and the T1 mex BAR removes under a finished moho
+	// read as raids, and held a 430k-metal army home for nine minutes (his game,
+	// Carrot Mountains, 51-60 min) and priced our own upgraded spots as unsafe.
+	if (!cdef.IsMobile() && WasFinished(int(unit.id))) {
+		const AIFloat3 at = unit.GetPos(ai.frame);
+		Military::NoteStructureLoss(at, cdef.costM);
+		// the same death kept by PLACE, with no home-ground filter: outlying mexes
+		Market::NoteEcoLoss(at, cdef.costM);
+		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
+			Market::NoteTowerLost(at);
+			Market::NoteTowerGrave(at, cdef.costM);
+		}
+	}
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
 	// BUILDINGS, and the mobile-only filter below threw away precisely its
 	// victims -- so the one signal that says "we are being shelled" was

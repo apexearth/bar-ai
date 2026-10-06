@@ -68,6 +68,7 @@ final class LiftJob {
 	int deadline = 0;
 	bool retried = false;
 	int drops = 0;
+	int overAt = -1;     // first frame the plane hovered over its drop point still carrying
 }
 array<LiftJob@> gLift;
 
@@ -364,6 +365,7 @@ void LiftEnd(LiftJob@ jb)
 	jb.stage = 0;
 	jb.retried = false;
 	jb.drops = 0;
+	jb.overAt = -1;
 	LiftGoHome(jb);
 }
 
@@ -413,7 +415,14 @@ void LiftStep(LiftJob@ jb)
 		LiftEnd(jb);
 		return;
 	}
-	if (ai.frame <= jb.deadline)
+	// Over the drop point and still holding it: the spot is taken. Waiting out
+	// the deadline (three flights + 30 s) left planes hovering with a turret for
+	// up to 106 s; drop it nearby now.
+	const bool over = jb.plane.GetPos(ai.frame).distance2D(jb.to) < 150.f;
+	if (over && (jb.overAt < 0))
+		jb.overAt = ai.frame;
+	const bool stuckOver = over && (jb.drops == 0) && (ai.frame - jb.overAt > 3 * SECOND);
+	if ((ai.frame <= jb.deadline) && !stuckOver)
 		return;
 	// A refused drop never ends with the cargo still hooked: first any legal
 	// ground near the target, then any near the plane, widening each time.
