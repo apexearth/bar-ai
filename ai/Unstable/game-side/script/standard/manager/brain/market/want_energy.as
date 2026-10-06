@@ -67,33 +67,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	gEAltV.resize(0);
 	gEAltFor = int(unit.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
-	// STALLED AND SMALL MEANS SOLAR, FULL STOP (apexearth: "the best thing to
-	// build for energy when you have 100e/s income is a basic solar because it
-	// costs no energy to make. There's no question about it... if we are
-	// e-stalling and we have less than 300 energy per second, MAKE A BASIC
-	// SOLAR"). Identified by the property that decides it -- a generator whose
-	// own build costs no energy -- not by name, so it holds for all three
-	// factions (armsolar/corsolar/legsolar are 0 E; wind is 175, advanced solar
-	// 5,000). Nothing else can be paid for out of an economy that has no energy.
-	// Above the bar, or with no zero-E generator in this builder's options, the
-	// whole ladder competes on price as before.
-	bool solarOnly = false;
-	if (HardEStall()
-		&& (Eco::EInc()
-			< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E)))
-	{
-		for (uint z = 0; z < builds.length(); ++z) {
-			const int zd = builds[z];
-			if (!Catalog::gAvailable[zd] || Catalog::gMobile[zd]
-				|| Catalog::gFloater[zd] || Catalog::gSub[zd]
-				|| Catalog::gNeedGeo[zd])
-				continue;
-			if ((Catalog::gMakeE[zd] > 1.f) && (Catalog::gCostE[zd] <= 0.f)) {
-				solarOnly = true;
-				break;
-			}
-		}
-	}
+	// Stalled: a generator whose energy bill our income cannot pay within its
+	// own build is held back (a 5,000-E advanced solar at 57 e/s folded the
+	// fleet onto it for minutes); a wind turbine's 175 E is paid in seconds.
+	const bool stalled = HardEStall();
 	// NOTHING IN THIS BLOCK VARIES WITH THE RUNG. Every one of them was re-asked
 	// for each generator in the ladder: two of them walk the def table, one
 	// walks every standing turret, and the tunables build a string and hit a map.
@@ -174,14 +151,14 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// 1v1: 27 basic solars, 10 advanced, one fusion, the enemy at 250
 		// m/s). A deficit is closed by what ARRIVES soonest; the ETA pick
 		// below chooses among all rungs while it lasts.
-		if (GenObsoleteOnArrival(d) && !HardEStall()
-			&& !(solarOnly && (Catalog::gCostE[d] <= 0.f)))
+		if (GenObsoleteOnArrival(d) && !stalled)
 			continue;
 		// A PREFERENCE THAT STILL LEAVES AN ANSWER. The zero-E rung cannot win
 		// ground it has none of -- on a water base solar has nowhere to stand --
 		// so the dearer rungs stay in the ladder below as fallbacks and only
 		// lose their claim on the WINNER.
-		const bool barred = solarOnly && (Catalog::gCostE[d] > 0.f);
+		const bool barred = stalled
+			&& (Catalog::gCostE[d] > Eco::EInc() * Catalog::BuildSecondsAt(d, genBP));
 		if (Catalog::gNeedGeo[d])
 			continue;   // vents are the geo want's ground, not free placement
 		Want c;
@@ -276,7 +253,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// option is the inferior one still takes it when nothing else competes
 		// -- it just loses to assisting the better build first.
 		// Void while the stall bars the better rung: nobody can build it either.
-		if (genInferiorOn && !solarOnly) {
+		if (genInferiorOn && !stalled) {
 			const float mine = (Catalog::gCostM[d] > 0.f)
 					? (Catalog::gMakeE[d] / Catalog::gCostM[d]) : 0.f;
 			if ((genBestEPerM > mine) && (mine > 0.f)) {
@@ -362,7 +339,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 				+ " mPull=" + int(Eco::MPull())
 				+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1)
 				+ " stall=" + (HardEStall() ? 1 : 0)
-				+ " solarOnly=" + (solarOnly ? 1 : 0));
+				+ " barred=" + (barred ? 1 : 0));
 		}
 		if (c.value > 0.f) {
 			uint at = 0;

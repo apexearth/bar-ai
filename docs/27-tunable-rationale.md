@@ -805,15 +805,6 @@ so this only bites in a stall. 0 restores the build-length decay
 (apex_e_response), which was blind to income and priced a 5,000 E bill at the
 conversion floor.
 
-### `TUNE_STALL_SOLAR_E` = 300.f
-
-STALL_SOLAR_E [energy/second] -- while HARD e-stalled below this income, the
-energy want is restricted to generators that cost NO energy to build, i.e. the
-basic solar (apexearth: "if we are e-stalling and we have less than 300 energy
-per second, MAKE A BASIC SOLAR"). His number, stated as a rule, not derived: an
-advanced solar's 5,000 E bill and wind's 175 are both paid out of an economy
-that has none. 0 disables the rule and leaves the ladder to the auction.
-
 ### `TUNE_E_HEADROOM` = 1.75f
 
 E_HEADROOM: energy income target as a multiple of trending pull -- the standing

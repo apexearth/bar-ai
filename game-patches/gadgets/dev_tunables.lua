@@ -64,7 +64,6 @@ local NAMES = {
 	"apex_tech_pipe",
 	"apex_e_response",
 	"apex_e_bill_share",
-	"apex_stall_solar_e",
 	"apex_stock_army",
 	"apex_space_m",
 	"apex_bp_headroom",

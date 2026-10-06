@@ -49,12 +49,10 @@ Want@ ProposeGeo(CCircuitUnit@ unit)
 	}
 	if (geoId < 0)
 		return w;
-	// The stall-solar doctrine covers vents: a geo is paid for in ENERGY
-	// (armgeo: 13,000 E), and while hard-stalled under the solar bar the
-	// zero-E solar is the only rung (same rule as ProposeEnergy's solarOnly).
-	if ((Catalog::gCostE[geoId] > 0.f) && HardEStall()
-		&& (Eco::EInc()
-			< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E)))
+	// A geo is paid for in ENERGY (armgeo: 13,000 E): stalled, it waits until
+	// our income could pay that within its own build (as ProposeEnergy's rungs).
+	if (HardEStall() && (Catalog::gCostE[geoId]
+			> Eco::EInc() * Catalog::BuildSecondsAt(geoId, EffBP(Catalog::gBuildPower[uid]))))
 		return w;
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	const int spot = aiEconomyMgr.FindOpenGeoSpot(unit, here);

@@ -180,7 +180,6 @@ GROUPS = [
                   "biggest converter -- the 9,000-metal Epic at 2,000 e/s of income"),
                  ("TUNE_E_LOOKAHEAD", "prices in energy demand that has not "
                   "arrived yet"),
-                 ("TUNE_STALL_SOLAR_E", "while e-stalled below this energy income, only build generators that cost NO energy to make -- the basic solar. Raise it to hold that rule further up the economy; 0 lets the auction pick the rung during a stall"),
                  ("TUNE_E_BILL_SHARE", "WHILE E-STALLED, prices a building's ENERGY bill against energy INCOME -- an advanced solar costs 5,000 E to make, which a 100 E/s economy cannot afford and a 400 E/s one barely notices. Off prices the bill by build length instead, which ignores income entirely"),
                  ("TUNE_E_COMMITTED", "counts the energy draw of work already ORDERED into the pull that prices energy, so a generator is worth buying BEFORE the stall rather than after it"),
                  ("TUNE_E_PARALLEL", "lets a STALL open parallel energy sites, not only an overflowing bank -- otherwise a big deficit is answered one small turbine at a time"),

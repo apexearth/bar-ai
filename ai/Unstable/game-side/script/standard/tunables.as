@@ -991,12 +991,6 @@ const float TUNE_E_RESPONSE = 45.f;
 //   build runs. See docs/27.
 const float TUNE_E_BILL_SHARE = 1.f;
 
-// STALL_SOLAR_E [energy/second] -- while HARD e-stalled below this income, the
-//   energy want is restricted to generators that cost NO energy to build, i.e.
-//   the basic solar (apexearth: "if we are e-stalling and we have less than 300
-//   energy per second, MAKE A BASIC SOLAR"). See docs/27.
-const float TUNE_STALL_SOLAR_E = 300.f;
-
 // CHOSEN, not derived. Short on purpose (apexearth: "it pays off eventually
 //   and that's fine -- by the time this stuff matters less we're on to fusions
 //   and afus"): a long window credits the converter with a payback the economy

@@ -1168,21 +1168,17 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// of wind turbines, and a builder with no energy job has other work.
 		if (!HardEStall() || (unit is null) || (gEAltFor != int(unit.id)))
 			return null;
-		// Zero-E rungs first whatever they priced: mid-stall the cheap solar is
-		// the answer even when a dearer generator outranks it, and the dear one
-		// is only reached if no solar can be placed at all.
-		// The dear rungs are never the stall answer below the solar bar: this
-		// ladder handed a 5,000-E advanced solar to a builder whose solar was
-		// at its cap, at 57 e/s, and the fleet folded onto it for three
-		// minutes with the bank at 4-22.
-		const bool zeroOnly = Eco::EInc()
-				< ai.GetTunable("apex_stall_solar_e", TUNE_STALL_SOLAR_E);
-		for (uint pass = 0; pass < 2; ++pass) {
+		// Mid-stall a rung whose energy bill our income cannot pay within its own
+		// build is never the answer: this ladder handed a 5,000-E advanced solar
+		// to a builder at 57 e/s and the fleet folded onto it for three minutes.
+		// The affordable rungs, in the order the energy want ranked them.
+		const float stallBP = Catalog::gBuildPower[int(unit.circuitDef.id)];
+		for (uint pass = 0; pass < 1; ++pass) {
 		for (uint k = 0; k < gEAlt.length(); ++k) {
 			const int ad = gEAlt[k];
 			if ((w.def !is null) && (ad == int(w.def.id)))
 				continue;
-			if (((pass == 0) || zeroOnly) && (Catalog::gCostE[ad] > 0.f))
+			if (Catalog::gCostE[ad] > Eco::EInc() * Catalog::BuildSecondsAt(ad, stallBP))
 				continue;
 			CCircuitDef@ adef = Catalog::Def(ad);
 			if (adef is null)
