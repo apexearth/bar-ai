@@ -17,6 +17,9 @@ const int NR_N = 2;
 const float NR_EPS = 0.01f;
 
 int gNrNextAt = -1;
+int gNrNow = -1;           // the decision in force (binding until the next one)
+int gNrHeldN = 0;          // stock raid tasks held home under WAIT
+float gNrHomeR = 600.f;    // the hold radius: twice the group's sight, set at each decision
 int gNrArriveAt = 0;
 bool gNrHeader = false;
 float gNrFlat = -1.f;
@@ -512,6 +515,8 @@ void NrDecide(const string why)
 // pack home, where its goal is our own ground.
 void NrBind(int chosen, NrTarget@ best, float losR)
 {
+	gNrNow = chosen;
+	gNrHomeR = ((losR > 1.f) ? losR : 300.f) * 2.f;
 	const float rP = (losR > 1.f) ? losR : 300.f;
 	if (chosen == NR_GO) {
 		++gNrGoN;
@@ -589,6 +594,18 @@ void UpdateNnRaid()
 	}
 	if (gAskClaim.length() > 32)
 		gAskClaim.removeRange(0, gAskClaim.length() - 32);
+	// WAIT holds every raid, not just ours: a stock raid pool launching on its
+	// own would make the record say WAIT while raiders went out.
+	if ((gNrNow == NR_WAIT) && Builder::gHomeSet) {
+		for (uint i = 0; i < gSquads.length(); ++i) {
+			IUnitTask@ t = gSquads[i];
+			if ((t is null) || t.IsDead() || (t is gAskTask)
+				|| (t.GetFightType() != int(Task::FightType::RAID)))
+				continue;
+			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);
+			++gNrHeldN;
+		}
+	}
 	if (gNrNextAt < 0)
 		gNrNextAt = ai.frame + (ai.teamId % 15) * SECOND;
 	if ((ai.frame >= gNrArriveAt) && NrArrived()) {
@@ -612,7 +629,7 @@ void UpdateNnRaid()
 				gd = ((gd < 0) || (dd < gd)) ? dd : gd;
 			}
 		}
-		AiLog("apex: nnraid-stat t=" + ai.teamId + " dec=" + gNrDecN + " go=" + gNrGoN + " dev=" + gNrDevN
+		AiLog("apex: nnraid-stat t=" + ai.teamId + " dec=" + gNrDecN + " go=" + gNrGoN + " dev=" + gNrDevN + " held=" + gNrHeldN
 			+ " launched=" + gNrLaunchN + " pulled=" + gNrPullN + " live=" + liveN + " goalDist=" + gd
 			+ " goal=" + (gNrGoalHas ? (int(gNrGoal.x) + "," + int(gNrGoal.z) + (gNrGoalHome ? "(home)" : "")) : "-")
 			+ " killM=" + int(gNrKillM) + " killN=" + gNrKillN
