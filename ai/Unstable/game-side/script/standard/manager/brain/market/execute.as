@@ -655,6 +655,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		CCircuitUnit@ tgt = w.target;
 		if ((tgt is null) || (int(tgt.id) != w.spotId))
 			return null;
+		if (GantryKept(tgt))
+			return null;
 		// A condemned unit stands for it -- walking away made the reclaimer
 		// chase it across the base (apexearth).
 		if (tgt.circuitDef.IsMobile())

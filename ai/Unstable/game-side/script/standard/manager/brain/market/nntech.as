@@ -87,6 +87,24 @@ int TreeTier(int d)
 	return ((d >= 0) && (uint(d) < gDefTier.length())) ? gDefTier[d] : 0;
 }
 
+// A GANTRY IS NEVER RECLAIMED (his 2026-10-05: it is the reason for the
+// economy -- reclaiming it for room and building eco in its place means a new
+// gantry, and new converters to feed it, later). A plant at the top of the
+// build tree is refused by every reclaim of a unit of ours.
+int gGantryKeptN = 0;
+bool GantryKept(CCircuitUnit@ u)
+{
+	if ((u is null) || (u.circuitDef is null))
+		return false;
+	const int d = int(u.circuitDef.id);
+	if (!IsPlantDef(d) || (TreeTier(d) < gMaxTier) || (gMaxTier < 3))
+		return false;
+	if ((gGantryKeptN++ % 20) == 0)
+		AiLog("apex: gantry-kept t=" + ai.teamId + " " + u.circuitDef.GetName() + " #" + u.id
+			+ " refused=" + gGantryKeptN);
+	return true;
+}
+
 int gOwnTierAt = -1, gOwnTier = 0;
 int OwnTopTier()
 {

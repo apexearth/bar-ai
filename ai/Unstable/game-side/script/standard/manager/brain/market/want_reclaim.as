@@ -182,7 +182,7 @@ void NanoReclaimAssist()
 		if (ai.frame >= gReclaimUntil[i])
 			continue;
 		CCircuitUnit@ v = gReclaimHand[i];
-		if (v is null)
+		if ((v is null) || GantryKept(v))
 			continue;
 		const AIFloat3 vp = gReclaimPos[i];
 		if (!OnMap(vp))
