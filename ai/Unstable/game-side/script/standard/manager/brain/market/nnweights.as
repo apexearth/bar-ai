@@ -123,5 +123,23 @@ const array<float> NNA_B2 = {};
 const array<float> NNA_WO = {};
 const float NNA_BO = 0.f;
 const float NNA_TRUST = 0.f;
+const array<float> NNR_WO = {};
+const float NNR_BO = 0.f;
+const float NNR_TRUST = 0.f;
+// the escort net (escnet.as)
+const bool NNE_ON = false;
+const string NNE_STATE = "";
+const int NNE_S = 0;
+const int NNE_O = 0;
+const int NNE_H = 0;
+const array<float> NNE_XM = {};
+const array<float> NNE_XS = {};
+const array<float> NNE_W1 = {};
+const array<float> NNE_B1 = {};
+const array<float> NNE_W2 = {};
+const array<float> NNE_B2 = {};
+const array<float> NNE_WO = {};
+const float NNE_BO = 0.f;
+const float NNE_TRUST = 0.f;
 
 }  // namespace Market

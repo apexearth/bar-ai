@@ -171,6 +171,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Market::EscNetDecide(); Perf::Add("up.escortrecruit", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }
@@ -404,9 +405,24 @@ void AiUnitDestroyedBy(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	Perf::Add("hk.destroyedby", _t);
 }
 
+int gShotUnseen = 0;
 void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
-	if ((unit is null) || (attackerDef is null))
+	if (unit is null)
+		return;
+	// A shooter out of sight comes with no attacker, but the shell that hit us
+	// names its weapon -- a static gun's is enough to know what shelled us.
+	if ((attackerDef is null) && (ai.frame - unit.GetDamagedFrame() < 3 * SECOND)) {
+		const int own = ai.GetWeaponStaticOwner(unit.GetDamagedWeapon());
+		if (Catalog::ValidId(own)) {
+			@attackerDef = Catalog::Def(own);
+			++gShotUnseen;
+			if ((gShotUnseen % 20) == 1)
+				AiLog(Factory::T() + "apex: shot-unseen t=" + ai.teamId + " " + unit.circuitDef.GetName()
+					+ " by " + attackerDef.GetName() + " n=" + gShotUnseen);
+		}
+	}
+	if (attackerDef is null)
 		return;
 	// The tier census FIRST: it is about what THEY field, so it must not sit
 	// behind the filters that ask what WE lost.

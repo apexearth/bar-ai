@@ -203,7 +203,7 @@ float EscortOwedM(CCircuitUnit@ wkr, float expo, float unitM, float expoR, bool 
 		if (g > needM)
 			needM = g;
 	}
-	return needM;
+	return needM * gEscMul;   // the escort net's strength (escnet.as)
 }
 
 int gEscPooled = 0;
@@ -215,7 +215,7 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	// Three at most, stock's own cap (apexearth 2026-10-01, approving it; 09-13:
 	// "We have so many escorts in the base it is ludicrous"). A third to half
 	// of each army stood on escort duty in his 8v8.
-	if (gEscWorker.length() >= uint(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP)))
+	if (gEscWorker.length() >= EscortCap())
 		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);
 	const float mineM = Catalog::gCostM[int(mil.circuitDef.id)];
