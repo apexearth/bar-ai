@@ -318,7 +318,6 @@ local NAMES = {
 	"apex_t2_energy",
 	"apex_t2_energy_reactor",
 	"apex_t2_hold_boost",
-	"apex_unseen_hold",
 	"apex_withdraw_ally_r",
 	"apex_withdraw_behind",
 	"apex_withdraw_infl",

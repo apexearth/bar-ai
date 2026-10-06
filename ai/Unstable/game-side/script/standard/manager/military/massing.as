@@ -210,20 +210,13 @@ bool ConservativeStance()
 	if (share >= target)
 		return false;   // we ARE buying army: our army is meant to be used
 	const float ours = OurArmyNow();
-	const float theirs = FoeMobileMassing();
-	// WE CANNOT SEE THEM MOST OF THE TIME. apexearth: "there are a lot of times
-	// in the game when we cannot see any enemy army" -- confirmed by logs where
-	// enemyArmy read 0 for whole stretches. A reading far below our own army is
-	// almost never "they have nothing"; it is "we are looking at fog", and
-	// treating it as weakness is what sends the army out. Unknown holds, the
-	// same rule EnemyMassingThreat's own pre-T2 parity clause applies.
-	const float floorSeen = ours * ai.GetTunable("apex_unseen_hold", TUNE_UNSEEN_HOLD);
-	// A low reading is fog ONLY if they have ever shown an army that size:
-	// gSeenPeak is the most massing threat we ever saw at once (slow decay).
-	// Without this, being 2x ahead is indistinguishable from being blind and
-	// the hold tightens exactly as we pull ahead.
-	if ((theirs < floorSeen) && (gSeenPeak > floorSeen))
-		return true;
+	// What we cannot see is the foe memory's to estimate (foemem.as: seen,
+	// remembered and lost-track units). The old guess -- a low reading is fog
+	// whenever they once showed half our army -- held 25,700 metal of ours at
+	// home against 3,100 of theirs (his watched game, 22 min).
+	float theirs = FoeMobileMassing();
+	const float believed = FoeBelievedM();
+	theirs = (believed > theirs) ? believed : theirs;
 	return (Market::StrRatio(theirs, ours) > 1.f) && (ours >= 0.f);
 }
 

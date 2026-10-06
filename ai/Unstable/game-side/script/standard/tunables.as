@@ -730,9 +730,6 @@ const float TUNE_SCOUT_BLIND_MULT = 2.f;
 //   at once, never the estimate itself -- limited sensor coverage...
 const float TUNE_SEEN_CAP_MULT = 2.5f;
 
-// WE CANNOT SEE THEM MOST OF THE TIME.
-const float TUNE_UNSEEN_HOLD = 0.5f;
-
 // [ratio] -- Pre-T2, an unseen enemy is assumed to field at least our own army
 //   times this, so opening groups commit at real size instead of trickling.
 const float TUNE_UNSEEN_PARITY = 1.2f;
