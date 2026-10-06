@@ -51,6 +51,9 @@ private:
 	int nextFrontLog = 0;
 	// every group in sight was refused as too strong: we are outgunned, not blind
 	bool outgunned = false;
+	// an outgunned fall-back in progress: kept until arrival or a hit
+	bool fallBackActive = false;
+	springai::AIFloat3 fallBackTo;
 };
 
 } // namespace circuit

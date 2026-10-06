@@ -380,8 +380,24 @@ bool PlantCopyRefusable(int d)
 		&& !CopyWaived(d) && !MoveWaived(d);
 }
 
+int gRezSiteRefused = 0;
 IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 {
+	// Never on a wreck our rez bots are raising: the engine's builder reclaims
+	// a wreck in its way, and a rebuild ate a fusion five rez bots had at 60%.
+	if ((w.def !is null) && !w.def.IsMobile() && (w.kind != WK_RECLAIM) && (w.kind != WK_ASSIST)
+		&& OnMap(w.pos))
+	{
+		const float foot = Lattice::FootPitch(int(w.def.id));
+		if ((ai.GetWreckValueAt(w.pos, foot) > 0.f)
+			&& Builder::RezWorkingNear(w.pos, foot))
+		{
+			if ((++gRezSiteRefused % 10) == 1)
+				AiLog("apex: rez-site refused t=" + ai.teamId + " " + w.def.GetName()
+					+ " at=" + int(w.pos.x) + "," + int(w.pos.z) + " n=" + gRezSiteRefused);
+			return null;
+		}
+	}
 	// FINISH BEFORE FOUNDING, for EVERY static kind. The adoption block used
 	// to sit below the branches that return early, so mex, mexup, tech, nano,
 	// sense and protect never reached it -- their orphans rotted while fresh

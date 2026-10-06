@@ -174,6 +174,20 @@ void CAttackTask::Update()
 	}
 
 	const AIFloat3& startPos = leader->GetPos(frame);
+	// AN OUTGUNNED FALL-BACK IS FINISHED BEFORE THE SQUAD RECONSIDERS: re-picking
+	// a target every few updates walked it back into the group it had just
+	// left -- move, stop, move (his game, 2026-10-06). A hit on any unit ends it.
+	if (fallBackActive) {
+		bool hit = false;
+		for (CCircuitUnit* u : units) {
+			hit |= (frame - u->GetDamagedFrame() < FRAMES_PER_SEC * 2);
+		}
+		if (!hit && !pPath->posPath.empty()
+			&& (startPos.SqDistance2D(fallBackTo) > SQUARE(DEFAULT_SLACK * 4))) {
+			return;
+		}
+		fallBackActive = false;
+	}
 //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
 //		SetTarget(nullptr);  // FIXME: back-forths group
 //	} else {
@@ -706,6 +720,10 @@ void CAttackTask::ApplyFrontPos(const CQueryPathMulti* query)
 	if (!pPath->path.empty()) {
 		if (pPath->path.size() > 2) {
 			ActivePath();
+			if (outgunned && !pPath->posPath.empty()) {
+				fallBackActive = true;
+				fallBackTo = pPath->posPath.back();
+			}
 		}
 	} else {
 		FallbackBasePos();

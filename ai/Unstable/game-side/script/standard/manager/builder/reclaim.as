@@ -333,6 +333,21 @@ bool IsRezzer(CCircuitUnit@ unit)
 // raises GetWorkerCount() while contributing nothing to GetBuildPower(). Any
 // cap written against GetWorkerCount() has to take them back out, the same way
 // the nano turrets are taken out.
+// One of our rez bots stands within its build reach (plus r) of `at`: a
+// resurrection in progress there.
+bool RezWorkingNear(const AIFloat3& in at, float r)
+{
+	for (uint i = 0; i < gRezzerIds.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(gRezzerIds[i]);
+		if ((d is null) || (d.count <= 0))
+			continue;
+		array<CCircuitUnit@>@ near = ai.GetOwnUnitsOfDef(d, at, r + d.GetBuildDistance());
+		if ((near !is null) && (near.length() > 0))
+			return true;
+	}
+	return false;
+}
+
 int RezCount()
 {
 	int n = 0;
