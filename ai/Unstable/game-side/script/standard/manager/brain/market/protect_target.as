@@ -888,6 +888,10 @@ int   gLrpcHoldAt = -1;
 
 float LrpcStake()
 {
+	// Shelled by one we never saw: the shell names the gun (a probe game lost
+	// 690 metal to an LRPC in fog and never priced a shield).
+	if ((gLrpcEverCost < Military::gPlasmaGunM) && (Military::PlasmaLossRate() > 0.f))
+		gLrpcEverCost = Military::gPlasmaGunM;
 	if (EnemyLRPCs() > 0) {
 		if (gFoeLrpcCost > gLrpcEverCost)
 			gLrpcEverCost = gFoeLrpcCost;

@@ -664,7 +664,24 @@ float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 		left = 0.f;
 	if (killM > left)
 		killM = left;
-	return killM / horizon;
+	// Counter-battery: killing their cannons stops what they shell us with. The
+	// share of them this one newly removes over the horizon, at half the rate
+	// on average as the kills arrive in turn.
+	float counter = 0.f;
+	const float plasma = Military::PlasmaLossRate();
+	int foeN = EnemyLRPCs();
+	if ((foeN <= 0) && (plasma > 0.f))
+		foeN = 1;
+	if ((plasma > 0.f) && (foeN > 0) && (Catalog::gHealth[d] > 1.f)) {
+		const float kills = Catalog::gDps[d] * horizon / Catalog::gHealth[d];
+		const float have = float(SuperHave(SC_LRPC));
+		float f0 = have * kills / float(foeN);
+		float f1 = (have + 1.f) * kills / float(foeN);
+		f0 = (f0 < 1.f) ? f0 : 1.f;
+		f1 = (f1 < 1.f) ? f1 : 1.f;
+		counter = plasma * (f1 - f0) * 0.5f;
+	}
+	return killM / horizon + counter;
 }
 
 // A LAUNCHER ANSWERS THE TURRETS OUR ARMY DIES TO (apexearth 2026-09-30):

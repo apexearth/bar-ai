@@ -570,6 +570,9 @@ float MexLossShare()
 	return gMexLost / (float(OwnMexCount()) + gMexLost);
 }
 int gComEscort = 0;      // commander sent to the lab while escorts are owed
+int gComStayKind = -1;    // the job a self-gun was put up to guard
+AIFloat3 gComStayPos;
+int gComStayUntil = 0;
 int gComEscMetalSkip = 0; // ...and not sent, because the feed could not cover his lathe there
 int gComMetalAsk = 0;     // commander elections while out of metal
 int gComMetal = 0;        // ...that took a claim or reclaim off his list
@@ -1877,9 +1880,32 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		why = "nntech";
 		coverPush = true;
 	}
+	// The job a self-gun was put up beside comes next, or the gun guards nothing.
+	if (!aaPanic && !superPush && !convertPush && !coverPush && (gComStayUntil > ai.frame)
+		&& unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+	{
+		for (uint si = 0; si < ranked.length(); ++si) {
+			if ((ranked[si].kind == gComStayKind) && (ranked[si].pos.distance2D(gComStayPos) < 150.f)) {
+				Want@ sw = ranked[si];
+				ranked.removeAt(si);
+				ranked.insertAt(0, sw);
+				why = "comstay";
+				coverPush = true;
+				gComStayUntil = 0;
+				break;
+			}
+		}
+	}
 	if (!aaPanic && !superPush && !convertPush && !coverPush) {
 		Want@ sg = ComSelfGun(unit);
 		if (sg !is null) {
+			if ((ranked.length() > 0) && (ranked[0].kind == WK_MEX)
+				&& (ranked[0].pos.distance2D(unit.GetPos(ai.frame)) < 2.f * Brain::LightTowerRange()))
+			{
+				gComStayKind = ranked[0].kind;
+				gComStayPos = ranked[0].pos;
+				gComStayUntil = ai.frame + 90 * SECOND;
+			}
 			ranked.insertAt(0, sg);
 			why = "comself";
 			coverPush = true;

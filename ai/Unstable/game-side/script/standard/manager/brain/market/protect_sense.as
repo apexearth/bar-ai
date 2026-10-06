@@ -100,6 +100,7 @@ void ComRadarsFill()
 // The gap used to be sought only at the mexes and the front line, so a base
 // with no radar over its plants and generators read as covered. 5 s clock.
 array<AIFloat3> gRcUnseenPos;
+array<float> gRcUnseenMet;
 float gRcUnseenM = 0.f, gRcTotalM = 0.f;
 int gRcAt = -1000;
 void RadarCoverRefresh()
@@ -108,6 +109,7 @@ void RadarCoverRefresh()
 		return;
 	gRcAt = ai.frame;
 	gRcUnseenPos.resize(0);
+	gRcUnseenMet.resize(0);
 	gRcUnseenM = 0.f;
 	gRcTotalM = 0.f;
 	const bool foeKnown = Front::FoeKnown();
@@ -122,6 +124,7 @@ void RadarCoverRefresh()
 			continue;
 		gRcUnseenM += m;
 		gRcUnseenPos.insertLast(gComPos[i]);
+		gRcUnseenMet.insertLast(m);
 	}
 }
 float RadarUnseenShare()
@@ -130,7 +133,7 @@ float RadarUnseenShare()
 	return (gRcTotalM > 1.f) ? (gRcUnseenM / gRcTotalM) : 0.f;
 }
 
-bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
+bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out unseenFrac)
 {
 	array<AIFloat3> pts;
 	RadarCoverRefresh();
@@ -172,10 +175,23 @@ bool RadarGap(const AIFloat3& in from, AIFloat3& out at, float& out unseenFrac)
 			found = true;
 		}
 	}
-	unseenFrac = float(unseen) / float(pts.length());
-	const float byMetal = RadarUnseenShare();
+	if (!found)
+		return false;
+	// The share THIS mast newly watches, not everything still unwatched.
+	const float watch = reach * ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
+	int newly = 0;
+	for (uint i = 0; i < pts.length(); ++i)
+		if (OnMap(pts[i]) && (pts[i].distance2D(at) < watch) && !RadarSees(pts[i]))
+			++newly;
+	float newM = 0.f;
+	for (uint i = 0; i < gRcUnseenPos.length(); ++i)
+		if (gRcUnseenPos[i].distance2D(at) < watch)
+			newM += gRcUnseenMet[i];
+	unseenFrac = float(newly) / float(pts.length());
+	RadarCoverRefresh();
+	const float byMetal = (gRcTotalM > 1.f) ? (newM / gRcTotalM) : 0.f;
 	unseenFrac = (byMetal > unseenFrac) ? byMetal : unseenFrac;
-	return found;
+	return true;
 }
 
 // A POST SHIELDS WHAT IS BEHIND IT ONLY IF THE ENEMY CANNOT WALK AROUND IT.

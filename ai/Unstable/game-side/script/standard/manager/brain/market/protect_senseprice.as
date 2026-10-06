@@ -4,6 +4,7 @@ namespace Market {
 // facility. Lifted out of ProposeProtectHalf's candidate loop with the
 // arithmetic untouched; `false` is that loop's `continue`, and every one of
 // them is still counted by the same gate, so the census reads as before.
+int gNextShieldLog = 0;
 bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		float rate, AIFloat3& out at, float& out gain)
 {
@@ -42,7 +43,7 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			return gain > 0.f;
 		}
 		if (Gate(GATE_RADAR_GAP,
-				!RadarGap(unit.GetPos(ai.frame), gapAt, unseenFrac)))
+				!RadarGap(unit.GetPos(ai.frame), Catalog::gRadarR[d], gapAt, unseenFrac)))
 			return false;
 		// The gap is watched FROM SAFETY, never stood in. Gap sites past
 		// the front or on hot ground ate constructors all game (2,069
@@ -223,6 +224,38 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// mex is dead. Exactly AA's use of AirLossRate.
 		const float measuredS = Military::PlasmaLossRate() * stoppedS;
 		gain = (measuredS > gainS) ? measuredS : gainS;
+		// Under LRPC fire a dome is worth the shells that land in it: the
+		// bombardment rate times the share of our recent structure losses inside
+		// its radius, sited on the worst-hit unshielded spot.
+		const float plasma = Military::PlasmaLossRate();
+		if ((lrpc > 0) && (plasma > 0.f)) {
+			float totL = 0.f;
+			for (uint li = 0; li < gLossM.length(); ++li)
+				totL += gLossM[li];
+			float bestL = 0.f;
+			AIFloat3 bestP;
+			for (uint li = 0; (li < gLossPos.length()) && (totL > 1.f); ++li) {
+				if (ProtCovered(PROT_SHIELD, gLossPos[li], shR * 0.5f))
+					continue;
+				const float l = LossNearM(gLossPos[li], shR);
+				if (l > bestL) {
+					bestL = l;
+					bestP = gLossPos[li];
+				}
+			}
+			const float gainL = (totL > 1.f) ? (plasma * bestL / totL) : 0.f;
+			if (gainL > gain) {
+				gain = gainL;
+				at = bestP;
+			}
+			if (ai.frame >= gNextShieldLog) {
+				gNextShieldLog = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: shield-lrpc t=" + ai.teamId + " plasma=" + formatFloat(plasma, "", 0, 2)
+					+ " dome=" + int(bestL) + "/" + int(totL) + " gainL=" + formatFloat(gainL, "", 0, 2)
+					+ " gainS=" + formatFloat(gainS, "", 0, 2) + " measuredS=" + formatFloat(measuredS, "", 0, 2)
+					+ " at=" + int(at.x) + "," + int(at.z));
+			}
+		}
 	} else if (cls == PROT_AA) {
 		// On the perimeter, not the anchor: AA set no position at all, so
 		// every battery landed on the start position.

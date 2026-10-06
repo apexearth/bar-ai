@@ -38,6 +38,7 @@ float gDeadToMobile = 0.f;
 // that it kills buildings, and the army-only filter discarded exactly its
 // victims.
 float gDeadToPlasma = 0.f;
+float gPlasmaGunM = 0.f;   // the dearest static long-range gun that has killed something of ours
 // WHAT TIER THEY ARE FIELDING. The only enemy DEFS script ever holds are the
 // ones the two death hooks hand us -- there is no per-def enemy enumeration
 // binding, only role-aggregated cost -- so this is contact-attested and reads
@@ -203,6 +204,8 @@ void NotePlasmaLoss(float costM, const CCircuitDef@ attackerDef)
 	if (!Market::IsSuperWeapon(ad) || Catalog::gStock[ad])
 		return;
 	gDeadToPlasma += costM;
+	if (Catalog::gCostM[ad] > gPlasmaGunM)
+		gPlasmaGunM = Catalog::gCostM[ad];
 }
 
 // Metal per second we are CURRENTLY losing to bombardment. Same currency as

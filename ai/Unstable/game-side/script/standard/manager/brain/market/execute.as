@@ -556,8 +556,18 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			++gGunExecGrave;
 			return null;
 		}
-		if (NearBlocked(sAt))
+		if (NearBlocked(sAt)) {
+			const AIFloat3 ask = sAt;
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
+			// A radar is worth only if it watches the ask; the probe's fallback
+			// ring round the eco site does not.
+			if ((w.spotId == PROT_RADAR) && (sAt.distance2D(ask) >= Catalog::gRadarR[int(w.def.id)]
+					* ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP))) {
+				AiLog("apex: radar-site refused t=" + ai.teamId + " ask=" + int(ask.x) + "," + int(ask.z)
+					+ " probe=" + int(sAt.x) + "," + int(sAt.z));
+				return null;
+			}
+		}
 		AIFloat3 fHome;
 		const int fRoute = FerryRoute(unit, w, sAt, fHome);
 		if (fRoute == 0) {

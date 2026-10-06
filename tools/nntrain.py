@@ -84,6 +84,28 @@ LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
 
 
+def adopt_keys(obj, keys):
+    """True when a game's state layout can be learned without starting over:
+    the same, an older record missing fields appended since (they read 0), or
+    a newer one appending fields (the net and its buffer grow zero columns)."""
+    old = obj.state_keys
+    if old is None or keys == old or old[:len(keys)] == keys:
+        return True
+    if keys[:len(old)] != old:
+        return False
+    at, n = len(old), len(keys) - len(old)
+    for name in ("XS", "XF"):
+        a = getattr(obj, name)
+        if a is not None:
+            setattr(obj, name, np.insert(a, [at] * n, 0.0, axis=1))
+    for net in (obj.full, obj.st):
+        if net is not None:
+            net.grow(at, n)
+    obj.state_keys = list(keys)
+    print("%s: %d state fields appended (%s); weights kept" % (getattr(obj, "NAME", "builder"), n, ",".join(keys[at:])), flush=True)
+    return True
+
+
 def slog(x):
     return math.copysign(math.log1p(abs(x)), x)
 
@@ -194,6 +216,23 @@ class Net:
         self.model.eval()
         self.average()
         return tot / max(cnt, 1)
+
+    def grow(self, at, n):
+        """n new inputs at column `at`, weighted zero: the net predicts exactly
+        as before until the new fields earn a weight."""
+        t = self.torch
+        for m in (self.model, self.slow):
+            old = m[0]
+            new = t.nn.Linear(old.in_features + n, old.out_features)
+            with t.no_grad():
+                w = old.weight.data
+                new.weight.copy_(t.cat([w[:, :at], t.zeros(w.shape[0], n), w[:, at:]], 1))
+                new.bias.copy_(old.bias.data)
+            m[0] = new
+        self.opt = t.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
+        if self.xm is not None:
+            self.xm = np.insert(self.xm, [at] * n, 0.0)
+            self.xs = np.insert(self.xs, [at] * n, 1.0)
 
     def shrink_perturb(self):
         t = self.torch
@@ -436,7 +475,7 @@ class FacHead:
         return round(max(0.0, float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])), 3)
 
     def learn(self, source, g, first_touch, rows):
-        if self.state_keys is not None and g["state_keys"] != self.state_keys:
+        if not adopt_keys(self, g["state_keys"]):
             self.__init_empty()
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
@@ -740,7 +779,7 @@ class Trainer:
         return first_touch, out
 
     def learn(self, source, g, first_touch, items):
-        if self.state_keys is not None and g["state_keys"] != self.state_keys:
+        if not adopt_keys(self, g["state_keys"]):
             self.fresh_start("the record's state layout changed")
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
