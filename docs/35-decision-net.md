@@ -123,6 +123,24 @@ restructure (enemy economy estimate).
   `com-withdraw`, `com-turret`/`com-turret-end`, `com-retreat`, `com-drop`,
   `com-death`; the C++ D-gun logs every shot as `apex: dgun-fire`.
 
+- `apex: nnplan` (`manager/brain/market/plannet.as`, 2026-10-07): the TEAM's
+  way to win -- NORMAL, T3 (gantry gain, count and saving horizon x4; once a
+  gantry stands, lower ground labs keep only the fodder share), MISSILE (silos,
+  tactical and EMP launchers x4; the turret line becomes a nuke target with a
+  volley sized by its guns), ARTY (LRPCs incl. mega and Starfall x4), MASS (no
+  production change). One plan per ally team on a board the allied AIs of one
+  process share (`ai.SetTeamBoard`), held 8 min; whoever decides logs the row;
+  an explorer always decides and draws the five evenly. Under every plan but
+  NORMAL the TEAM PUSH runs: the owner posts the turret line our army dies to
+  (it holds until broken), each AI posts the attack power it has gathered
+  short of it, and when the team beats the strongest group there every squad
+  goes (C++ `AttackTask` focus: the breach wins the target choice, refused
+  only against the team's power); bombers may strike it (`apex: air-breach`).
+  Allies also co-build: while we own no gantry, an ally's within walking reach
+  stands for ours and the metal-first assist guards it (`TaskB::GuardAlly`,
+  `apex: ally-gantry`). `apex_plan_force` forces one plan (A/B). Instruments:
+  `tools/plancheck.py`, `apex: push` / `push go`.
+
 ## The table
 
 `python tools/decisions.py <match|tournament> --out rows.jsonl` joins each
@@ -167,9 +185,9 @@ look. State in `runtime/nn/`.
 
 Every ~800 learned decisions the trainer writes the FULL net as `nnweights.as`
 into the deployed copies named in `runtime/nn/targets.json` (default the
-`nnlog` lane, both engine- and game-side). The repo copy is the empty net, and
-a deploy restores it, so the trainer re-exports whenever it finds a target
-empty. Every game loads the latest weights at start; they are fixed within a
+`nnlog` lane, both engine- and game-side). The repo copy is the empty net; a
+deploy keeps the deployed weights (S39: until 2026-10-07 it put the stub back,
+and the stub did not compile). Every game loads the latest weights at start; they are fixed within a
 game (host-side, no desync).
 
 `NnScore` (in `Decide`, right after `OppTimeReprice`) scores the top 8 options
