@@ -1084,6 +1084,7 @@ def nn_results(last=None, hours=None):
     elif last:
         games = games[-int(last):]
     out = {}
+    normal = []   # (finished at, opponent, outcome) of each normal game, in order
     for mt, m in games:
         key = str(m)
         hit = NN_RESULT_CACHE.get(key)
@@ -1112,10 +1113,12 @@ def nn_results(last=None, hours=None):
                 continue
             NN_RESULT_CACHE[key] = hit
         _mt, outcome, opp, disc = hit
+        if not disc:
+            normal.append([mt, opp, outcome])
         k = (opp, "discovery" if disc else "normal")
         c = out.setdefault(k, {"win": 0, "loss": 0, "draw": 0})
         c[outcome] += 1
-    return [{"opponent": k[0], "kind": k[1], **v} for k, v in sorted(out.items())]
+    return [{"opponent": k[0], "kind": k[1], **v} for k, v in sorted(out.items())], normal
 
 
 def nn_state(last=None, hours=None):
@@ -1127,6 +1130,7 @@ def nn_state(last=None, hours=None):
         pass
     total = len(rows)
     rows = nn_window(rows, last, hours)
+    res, normal = nn_results(last, hours)
     try:
         status = json.loads((NN_DIR / "status.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -1139,7 +1143,7 @@ def nn_state(last=None, hours=None):
     except (OSError, ValueError):
         samples = []
     return {"metrics": rows, "metrics_total": total, "status": status, "age": age, "running": running,
-            "samples": samples, "results": nn_results(last, hours)}
+            "samples": samples, "results": res, "normal_games": normal}
 
 
 def nn_action(act):

@@ -127,6 +127,10 @@
       </select>
       <span class="dim">-- applies to the results and every chart and table below</span></div>
     <div id="nn-results" style="margin-top:8px"></div>
+    <div class="dim" style="margin-top:8px">Win rate over the last 20 <b>normal</b> training games
+      (discovery games play random choices on purpose and are left out) -- overall and per opponent</div>
+    <canvas id="nn-c-win" width="1140" height="200"></canvas>
+    <div id="nn-leg-win" class="legend"></div>
     <div id="nn-status" style="margin-top:8px"></div>
     <div class="dim" style="margin-top:6px">The net learns <b>while games are running</b>: every few seconds it
       reads each running game whose AI records its decisions (the logger build), and once a decision's next
@@ -1735,11 +1739,36 @@ async function loadNet() {
     setHTML($("#nn-trust"), nnTrust(m, fm));
     setHTML($("#nn-samples"), nnSamples(d.samples || []));
     setHTML($("#nn-results"), nnResults(d.results || []));
+    nnWinChart(d.normal_games || []);
   }
   NN_TIMER = setTimeout(loadNet, 5000);
 }
 // Training games won / lost / drawn over the chosen range, normal vs
 // discovery (discovery plays random choices on purpose, so it loses more).
+// Each line is its own games' last-20 win share, drawn at those games' positions.
+const NN_WIN_N = 20;
+function nnWinChart(games) {
+  const line = (keep, color) => {
+    const xs = [], ys = [], recent = [];
+    games.forEach((g, i) => {
+      if (!keep(g)) return;
+      recent.push(g[2] === "win" ? 100 : 0);
+      if (recent.length > NN_WIN_N) recent.shift();
+      if (recent.length >= Math.min(NN_WIN_N, 5)) {
+        xs.push(i + 1);
+        ys.push(recent.reduce((a, b) => a + b, 0) / recent.length);
+      }
+    });
+    return {xs, ys, color};
+  };
+  const opps = [...new Set(games.map(g => g[1]))].sort();
+  const colors = [NN_STATE, NN_LOSS2, "#c27ba0", "#8e7cc3"];
+  const series = [line(() => true, NN_FULL)];
+  opps.forEach((o, i) => series.push(line(g => g[1] === o, colors[i % colors.length])));
+  nnChart("#nn-c-win", series, {lo: 0, hi: 100, fmt: v => v.toFixed(0) + "%",
+    empty: "no normal training games in this range"});
+  legendHTML("#nn-leg-win", [["all opponents", NN_FULL]].concat(opps.map((o, i) => [o, colors[i % colors.length]])));
+}
 function nnResults(rows) {
   if (!rows.length) return "<span class='dim'>no training games in this range</span>";
   let h = "<table><tr><th>opponent</th><th>games</th><th>won</th><th>lost</th><th>draw</th><th>win %</th></tr>";
