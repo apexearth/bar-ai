@@ -410,7 +410,7 @@ bool FerryDispatch(LiftJob@ jb)
 	if (best is null)
 		return false;
 	AIFloat3 to = ai.FindBuildSiteNear(Catalog::Def(best.def), best.site, 200.f);
-	to = OffAllyBuildings(OffFactoryExit(to));
+	to = ai.FindBuildSiteNear(Catalog::Def(best.def), OffAllyBuildings(OffFactoryExit(to)), 150.f);
 	if (!OnMap(to))
 		to = best.site;
 	@jb.cargo = best.tower;

@@ -285,9 +285,13 @@ bool LiftDispatch(LiftJob@ jb)
 	CCircuitUnit@ cargo = gOwnNano[best];
 	const int cd = int(cargo.circuitDef.id);
 	array<AIFloat3> slots;
-	PackSlots(cd, lp, AnchorDefAt(lp), 1, slots);
-	AIFloat3 to = (slots.length() > 0) ? slots[0] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
+	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
+	int si = 0;
+	while ((si < int(slots.length())) && LiftSlotTaken(slots[si]))
+		++si;
+	AIFloat3 to = (si < int(slots.length())) ? slots[si] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
 	to = OffAllyBuildings(OffFactoryExit(to));
+	to = ai.FindBuildSiteNear(Catalog::Def(cd), to, 150.f);   // the shifts are not checked; an illegal slot is a refused drop
 	if (!OnMap(to) || Builder::SiteHot(to))
 		return false;
 	@jb.cargo = cargo;
@@ -338,6 +342,16 @@ bool Airborne(CCircuitUnit@ u)
 {
 	const AIFloat3 p = u.GetPos(ai.frame);
 	return p.y - ai.GetElevationAt(p) > 30.f;
+}
+
+// Another plane already carries a turret to this slot.
+bool LiftSlotTaken(const AIFloat3& in at)
+{
+	for (uint k = 0; k < gLift.length(); ++k) {
+		if ((gLift[k] !is null) && (gLift[k].stage >= 1) && (gLift[k].to.distance2D(at) < 48.f))
+			return true;
+	}
+	return false;
 }
 
 // A turret the engine would not lift is not asked again.
