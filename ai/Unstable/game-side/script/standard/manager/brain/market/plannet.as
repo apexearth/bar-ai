@@ -77,6 +77,12 @@ void PlanNetDecide()
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
 	array<float> p(5);
 	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
+	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));
+	if ((force >= 0) && (force < 5)) {
+		gPlan = force;
+		for (int o = 0; o < 5; ++o)
+			p[o] = (o == force) ? 1.f : 0.f;
+	}
 	ai.SetTeamBoard(BOARD_PLAN, float(gPlan));
 	ai.SetTeamBoard(BOARD_PLAN_UNTIL, float(gPlanMineUntil));
 	array<string> names = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS"};

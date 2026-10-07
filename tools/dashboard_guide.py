@@ -1055,6 +1055,10 @@ GROUPS = [
                   "games with a trained net, every kind of build gets a random "
                   "want-more/want-less for the whole game, so the net learns "
                   "what it has never tried. 0 = never experiment"),
+                 ("TUNE_PLAN_FORCE", "a test switch: every team plays one "
+                  "plan all game -- 0 normal, 1 mass T3, 2 missiles and nukes, "
+                  "3 long-range artillery, 4 mass and push together. -1 = the "
+                  "plan net chooses (normal play)"),
                  ("TUNE_DRAW_SHARP", "the draw follows value more sharply — "
                   "higher is closer to winner-takes-all, which has starved "
                   "every non-leading want before"),

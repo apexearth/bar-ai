@@ -3210,3 +3210,13 @@ purpose (discovery 0). Training, self-play, benchmarks and watch launches all
 pass their own values (runtime/nn_runs.sh explore 0.25; nn_selfex.sh and
 tools/watch_selfplay.sh apex_nn_explore_team), so they are unchanged. Before:
 blend 0 (nets off) and 0.1 (one lobby game in ten exploring).
+
+## TUNE_PLAN_FORCE = -1 (2026-10-07)
+
+A test switch, not a policy: every team plays one plan all game so an A/B can
+compare a plan (MASS: gather and push at the breach, production unchanged)
+against NORMAL without the discovery noise of an explorer, which randomizes
+every builder kind and every head at once. Off by default; the plan net
+chooses. In 2v2 self-play the pushes traded 2.9-4.5:1 at the breach (218
+calls), while the explorer side still lost 15-30: the A/B separates the push
+from the exploration.
