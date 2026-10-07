@@ -115,6 +115,7 @@ LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
 BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
 TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its trust
 TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
+TRUST_RECENT = 2000     # trust is the CURRENT net's: older pairs scored weights since replaced
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
@@ -580,7 +581,7 @@ class FacHead:
         q = [x for x in self.pairs if len(x) == 3]
         if len(q) < TRUST_MIN:
             return 0.0
-        return round(max(0.0, wcorr(np.array(q))), 3)
+        return round(max(0.0, wcorr(np.array(q[-TRUST_RECENT:]))), 3)
 
     def learn(self, source, g, first_touch, rows):
         if not adopt_keys(self, g["state_keys"]):
@@ -1062,7 +1063,7 @@ class Trainer:
             if len(q) < TRUST_MIN:
                 out[kind] = 0.0
                 continue
-            out[kind] = round(max(0.0, wcorr(np.array(q))), 3)
+            out[kind] = round(max(0.0, wcorr(np.array(q[-TRUST_RECENT:]))), 3)
         return out
 
     def export(self):

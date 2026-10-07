@@ -200,7 +200,9 @@ lopsided between kinds (nano 15, tech 1.5, assist 0.19) that the old capped
 multiplier could never swing them. Trust per kind is EARNED: on unseen games,
 the correlation of what the net says the decision adds (FULL minus STATE
 prediction of the objective) with what it actually added; 0 under 200
-decisions; exported as NNW_TRUST; apex_nn_blend scales it. The ETA ladder,
+decisions, over the most recent 2,000 pairs only (TRUST_RECENT: older pairs
+scored weights since replaced -- the commander net read -0.22 on its oldest
+quarter and +0.17 on its newest); exported as NNW_TRUST; apex_nn_blend scales it. The ETA ladder,
 which ranked economy options by time to target alone, divides that time by
 e^(trust x verdict). His rulings stay rules. The whole list is re-sorted
 because `DrawWeights` takes the first of each category. OBJECTIVE
