@@ -377,6 +377,9 @@ void NnExploreRoll()
 			: (float(AiRandom(0, 10000)) / 10000.f < chance);
 	if (!gNnExplore)
 		return;
+	// Say so in the game, so a watcher knows which side is different (his 2026-10-06).
+	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game (random choices on purpose)");
+	ai.DrawPoint(aiSetupMgr.GetBasePos(), "Discovery explorer: team " + ai.teamId);
 	string ln = "apex: nn-explore t=" + ai.teamId + " on |";
 	for (uint k = 0; k < gNnKindMult.length(); ++k) {
 		gNnKindMult[k] = pow(2.7182818f, 0.5f * NnGauss());   // 1 sd: x0.6..x1.65 (was 0.8: a game skewed past attributing)
