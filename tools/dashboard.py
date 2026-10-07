@@ -1069,7 +1069,8 @@ def nn_results(last=None, hours=None):
     """W/L/D of the nn training tournaments' games over the same range, split
     normal vs discovery and by opponent; each game is read once and cached."""
     games = []
-    for t in (REPO / "tournaments").glob("*-nn-b*"):
+    tours = list((REPO / "tournaments").glob("*-nn-b*")) + list((REPO / "tournaments").glob("*-nn-self*"))
+    for t in tours:
         for m in (t / "matches").glob("*"):
             res = m / "result.json"
             try:
@@ -1093,6 +1094,28 @@ def nn_results(last=None, hours=None):
                 r = json.loads((m / "result.json").read_text(encoding="utf-8"))
                 ours = [x for x in r.get("teams", []) if x.get("spec", "").startswith("Apex")]
                 them = [x for x in r.get("teams", []) if not x.get("spec", "").startswith("Apex")]
+                if len(ours) == 2 and not them:
+                    # Self-play: scored from the NORMAL side against its exploring copy
+                    # (his 2026-10-06: does our natural self beat the discovery self?).
+                    ex = set()
+                    try:
+                        with open(m / "infolog.txt", encoding="utf-8", errors="replace") as fh:
+                            for ln in fh:
+                                mm = re.search(r"nn-explore t=(\d+) on", ln)
+                                if mm:
+                                    ex.add(int(mm.group(1)))
+                    except OSError:
+                        pass
+                    if len(ex) != 1:
+                        continue
+                    winners = (r.get("result") or {}).get("winners") or []
+                    outcome = "draw" if not winners else ("loss" if ex.pop() in winners else "win")
+                    hit = (mt, outcome, "ourselves", "normal vs explorer")
+                    NN_RESULT_CACHE[key] = hit
+                    _mt, outcome, opp, kind = hit
+                    c = out.setdefault((opp, kind), {"win": 0, "loss": 0, "draw": 0})
+                    c[outcome] += 1
+                    continue
                 if len(ours) != 1 or not them:
                     continue
                 us = ours[0]["team"]
@@ -1113,6 +1136,10 @@ def nn_results(last=None, hours=None):
                 continue
             NN_RESULT_CACHE[key] = hit
         _mt, outcome, opp, disc = hit
+        if opp == "ourselves":
+            c = out.setdefault((opp, disc), {"win": 0, "loss": 0, "draw": 0})
+            c[outcome] += 1
+            continue
         if not disc:
             normal.append([mt, opp, outcome])
         k = (opp, "discovery" if disc else "normal")
