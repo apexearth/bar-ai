@@ -186,7 +186,12 @@ float FoeRaidMassM()
 bool EscortsPool(float postM)
 {
 	const float g = FoeRaidMassM();
-	return (g > 1.f) && (StrRatio(g, postM) > 1.f);
+	if ((g <= 1.f) || (StrRatio(g, postM) <= 1.f))
+		return false;
+	// ...only while our raiders together could meet it; short of the mass,
+	// each exposed con keeps its own post.
+	const float ours = RoleValue(int(Unit::Role::RAIDER.type)) + RoleCommitted(int(Unit::Role::RAIDER.type));
+	return StrRatio(g, ours) <= 1.f;
 }
 
 // What one worker's escort must hold: the enemy that can reach it, floored by
@@ -346,6 +351,82 @@ bool FighterEscortWorthy(int di)
 		&& !Air::IsBomberDef(di);
 }
 
+// The median unit strength of the enemy's mobile ground army we know of,
+// counted per def over the map; -1 before any is known. 30 s clock.
+// The strongest unit our standing plants can make that could escort a con:
+// armed ground, keeps pace with our cons, under the escort cost cap, not
+// indirect fire. 30 s clock.
+float gOwnEscPow = -1.f;
+int gOwnEscAt = -100000;
+float OwnEscortPowBest()
+{
+	if (ai.frame - gOwnEscAt < 30 * SECOND)
+		return gOwnEscPow;
+	gOwnEscAt = ai.frame;
+	gOwnEscPow = -1.f;
+	const float conSpd = Military::NrConSpeed();
+	const float capM = ai.GetTunable("apex_escort_max_cost", TUNE_ESCORT_MAX_COST);
+	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+		CCircuitUnit@ f = Factory::gFacUnits[fi];
+		if ((f is null) || (f.circuitDef is null))
+			continue;
+		const array<int>@ bo = Catalog::BuildsOf(int(f.circuitDef.id));
+		for (uint k = 0; (bo !is null) && (k < bo.length()); ++k) {
+			const int d = bo[k];
+			if (!Catalog::gAvailable[d] || !Catalog::gMobile[d] || Catalog::gFlyer[d] || Catalog::gBuilder[d]
+				|| Catalog::gKamikaze[d] || (Catalog::gPower[d] <= 1.f) || (Catalog::gCostM[d] > capM)
+				|| (Catalog::gSpeed[d] < conSpd))
+				continue;
+			CCircuitDef@ cd = Catalog::Def(d);
+			if (cd.IsRoleAny(Unit::Role::SKIRM.mask) || cd.IsRoleAny(Unit::Role::ARTY.mask))
+				continue;
+			if (Catalog::gPower[d] > gOwnEscPow)
+				gOwnEscPow = Catalog::gPower[d];
+		}
+	}
+	return gOwnEscPow;
+}
+
+float gFoePowMed = -1.f;
+int gFoePowAt = -100000;
+float FoeGroundPowMedian()
+{
+	if (ai.frame - gFoePowAt < 30 * SECOND)
+		return gFoePowMed;
+	gFoePowAt = ai.frame;
+	const float w = float(AiTerrainWidth()), h = float(AiTerrainHeight());
+	const AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
+	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	array<float> pw;
+	array<int> n;
+	int tot = 0;
+	for (int d = 1; d <= Catalog::gDefCount; ++d) {
+		if (!Catalog::gMobile[d] || Catalog::gFlyer[d] || Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		const int k = ai.CountEnemyDefNear(d, mid, r);
+		if (k <= 0)
+			continue;
+		pw.insertLast(Catalog::gPower[d]);
+		n.insertLast(k);
+		tot += k;
+	}
+	gFoePowMed = -1.f;
+	if (tot <= 0)
+		return gFoePowMed;
+	int seen = 0;
+	while (seen * 2 < tot) {
+		int lo = 0;
+		for (uint i = 1; i < pw.length(); ++i)
+			if (pw[i] < pw[lo])
+				lo = int(i);
+		seen += n[lo];
+		gFoePowMed = pw[lo];
+		pw.removeAt(lo);
+		n.removeAt(lo);
+	}
+	return gFoePowMed;
+}
+
 bool EscortWorthy(int di)
 {
 	if (!Catalog::gAvailable[di] || !Catalog::gMobile[di] || Catalog::gBuilder[di]
@@ -358,12 +439,24 @@ bool EscortWorthy(int di)
 	if (ReachDead(di))
 		return false;
 	CCircuitDef@ cd = Catalog::Def(di);
+	// An escort beats most of what comes for a con: at least the median
+	// strength of the enemy ground units we know of, capped at the strongest
+	// escort our plants can make, so outclassed we still field our best.
+	const float bestOwn = OwnEscortPowBest();
+	float foeMed = FoeGroundPowMedian();
+	if ((bestOwn > 0.f) && ((foeMed <= 0.f) || (foeMed > bestOwn)))
+		foeMed = bestOwn;
+	if ((foeMed > 0.f) ? (Catalog::gPower[di] < foeMed) : Military::IsFodder(cd))
+		return false;
 	if (cd.IsRoleAny(Unit::Role::SKIRM.mask)
 		|| cd.IsRoleAny(Unit::Role::ARTY.mask))
 		return false;   // indirect fire cannot answer what kills cons
 	EscortMeans();
 	if (gEscMeanSpd <= 0.f)
 		return false;
+	// Strong enough (above), it need only keep pace with the cons it guards.
+	if ((foeMed > 0.f) && (Catalog::gSpeed[di] >= Military::NrConSpeed()))
+		return true;
 	// FAST: above the ground field's own mean speed, so it can stay with a
 	// worker and catch what comes for it.
 	if (Catalog::gSpeed[di] >= gEscMeanSpd
@@ -456,7 +549,7 @@ void EscortDiag()
 		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy
 		+ " released=" + gEscReleased
 		+ " foeMass=" + formatFloat(FoeRaidMassM(), "", 0, 0)
-		+ " pooled=" + gEscPooled + " spread=" + gEscSpread);
+		+ " pooled=" + gEscPooled + " spread=" + gEscSpread + " foePowMed=" + formatFloat(gFoePowMed, "", 0, 1) + " ownBest=" + formatFloat(gOwnEscPow, "", 0, 1));
 }
 
 // AN ESCORT THE WORKER NO LONGER NEEDS GOES BACK TO THE ARMY. Pairings only

@@ -542,8 +542,10 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	NnState(null, st);
 	const int rule = gCsRule;
 	array<float> w(COM_N);
+	// The floor lets the net pick another option; it never draws him out of a
+	// retreat (789 RETREAT->WORK in a day were this floor, not the net).
 	for (int o = 0; o < COM_N; ++o)
-		w[o] = (o == rule) ? 1.f : COM_EPS;
+		w[o] = (o == rule) ? 1.f : ((rule == COM_RETREAT) ? 0.f : COM_EPS);
 	const float trust = NnComScore(st, com, w);
 	float sum = 0.f;
 	for (int o = 0; o < COM_N; ++o)

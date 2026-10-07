@@ -137,6 +137,39 @@ def featurize(row, state_keys):
     return s, s + x
 
 
+RAND_P = 0.95      # a chosen option drawn at odds below this was a chance pick
+RAND_W_MAX = 20.0  # inverse-odds weight cap
+
+
+def rand_weight(row):
+    """The inverse-odds weight of a decision taken by CHANCE -- the logged odds
+    of the chosen option below RAND_P, or a discovery override of the rule --
+    else None. On a decision the rule or the net made, the option is a function
+    of the state, so FULL minus STATE measures how well the net reads the
+    situation, not what the option is worth (the training audit, 2026-10-06)."""
+    opts, ci = row.get("opts") or [], row.get("chosen", -1)
+    if not (0 <= ci < len(opts)):
+        return None
+    pc = num(opts[ci].get("p", 1.0))
+    if 0.0 < pc < RAND_P:
+        return min(1.0 / pc, RAND_W_MAX)
+    rule = row.get("rule")
+    if row.get("explore") and rule and opts[ci].get("name") not in (None, rule):
+        return RAND_W_MAX
+    return None
+
+
+def wcorr(a):
+    """Weighted correlation of the (pred, real, weight) rows of `a`."""
+    w = a[:, 2] / a[:, 2].sum()
+    x, y = a[:, 0], a[:, 1]
+    mx, my = (w * x).sum(), (w * y).sum()
+    vx, vy = (w * (x - mx) ** 2).sum(), (w * (y - my) ** 2).sum()
+    if vx <= 0 or vy <= 0:
+        return 0.0
+    return float((w * (x - mx) * (y - my)).sum() / math.sqrt(vx * vy))
+
+
 def target_vec(row):
     y, m = [], []
     for h, k in TARGETS:
@@ -492,19 +525,17 @@ class FacHead:
         replace_retry(OUT / (self.NAME + "_model.pt.tmp"), OUT / (self.NAME + "_model.pt"))
 
     def trust(self):
-        if len(self.pairs) < TRUST_MIN:
+        q = [x for x in self.pairs if len(x) == 3]
+        if len(q) < TRUST_MIN:
             return 0.0
-        a = np.array(self.pairs)
-        if a[:, 0].std() == 0 or a[:, 1].std() == 0:
-            return 0.0
-        return round(max(0.0, float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])), 3)
+        return round(max(0.0, wcorr(np.array(q))), 3)
 
     def learn(self, source, g, first_touch, rows):
         if not adopt_keys(self, g["state_keys"]):
             self.__init_empty()
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
-        xs, xf, ys, ms = [], [], [], []
+        xs, xf, ys, ms, rw = [], [], [], [], []
         for r in rows:
             y, m = target_vec(r)
             if not any(m):
@@ -514,6 +545,7 @@ class FacHead:
             xf.append(f)
             ys.append(y)
             ms.append(m)
+            rw.append(rand_weight(r))
         if not xs:
             return None
         XS, XF = np.array(xs, dtype=np.float32), np.array(xf, dtype=np.float32)
@@ -530,9 +562,9 @@ class FacHead:
             zf, zs, zy = (pf - ym) / ysd, (ps - ym) / ysd, (Y - ym) / ysd
             for i in range(len(Y)):
                 mm = M[i] * (w != 0)
-                if mm.any():
+                if mm.any() and rw[i] is not None:
                     self.pairs.append((float(((zf[i] - zs[i]) * w * mm).sum()),
-                                       float(((zy[i] - zs[i]) * w * mm).sum())))
+                                       float(((zy[i] - zs[i]) * w * mm).sum()), rw[i]))
             self.pairs = self.pairs[-TRUST_KEEP:]
             rec["trust"] = self.trust()
         if self.XF is None:
@@ -832,7 +864,7 @@ class Trainer:
             self.fresh_start("the record's state layout changed")
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
-        xs, xf, ys, ms, decided, kinds = [], [], [], [], [], []
+        xs, xf, ys, ms, decided, kinds, rw = [], [], [], [], [], [], []
         for _fp, _key, r in items:
             y, m = target_vec(r)
             if not any(m):
@@ -844,6 +876,7 @@ class Trainer:
             ms.append(m)
             ci = r["chosen"]
             kinds.append(r["opts"][ci].get("kind") if 0 <= ci < len(r["opts"]) else None)
+            rw.append(rand_weight(r))
             decided.append(r["dm"] in DECIDED and r["pick"] == 0 and 0 <= ci < len(r["opts"])
                            and not r["opts"][ci].get("forced"))
         if not xs:
@@ -873,7 +906,7 @@ class Trainer:
                 if k.sum() >= 5:
                     rec[name + "_acc"] = float(((pf[k, j] > 0.5) == (Y[k, j] > 0.5)).mean())
                     rec[name + "_base"] = float(max(Y[k, j].mean(), 1 - Y[k, j].mean()))
-            self.note_trust(pf, ps, Y, M, kinds)
+            self.note_trust(pf, ps, Y, M, kinds, rw)
             rec["trust"] = self.trust()
         self.status("training", source=source)
         if self.XF is None:
@@ -923,7 +956,7 @@ class Trainer:
             tmp.write_text(json.dumps(out[-8:]))
             replace_retry(tmp, OUT / "samples.json")
 
-    def note_trust(self, pf, ps, Y, M, kinds):
+    def note_trust(self, pf, ps, Y, M, kinds, rw):
         """For each chosen option's kind, pair what the DECISION adds in the
         net's eyes (FULL minus STATE prediction of the objective) with what it
         actually added (outcome minus the STATE prediction). Their correlation
@@ -933,27 +966,23 @@ class Trainer:
         zf, zs, zy = (pf - ym) / ys, (ps - ym) / ys, (Y - ym) / ys
         for i, kind in enumerate(kinds):
             m = M[i] * (w != 0)
-            if kind is None or not m.any():
+            if kind is None or not m.any() or rw[i] is None:
                 continue
             pred = float(((zf[i] - zs[i]) * w * m).sum())
             real = float(((zy[i] - zs[i]) * w * m).sum())
             q = self.trust_pairs.setdefault(kind, [])
-            q.append((pred, real))
+            q.append((pred, real, rw[i]))
             if len(q) > TRUST_KEEP:
                 del q[: len(q) - TRUST_KEEP]
 
     def trust(self):
         out = {}
         for kind in KINDS:
-            q = self.trust_pairs.get(kind, [])
+            q = [x for x in self.trust_pairs.get(kind, []) if len(x) == 3]
             if len(q) < TRUST_MIN:
                 out[kind] = 0.0
                 continue
-            a = np.array(q)
-            if a[:, 0].std() == 0 or a[:, 1].std() == 0:
-                out[kind] = 0.0
-                continue
-            out[kind] = round(max(0.0, float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])), 3)
+            out[kind] = round(max(0.0, wcorr(np.array(q))), 3)
         return out
 
     def export(self):

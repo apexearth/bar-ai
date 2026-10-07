@@ -377,7 +377,7 @@ void NnExploreRoll()
 		return;
 	string ln = "apex: nn-explore t=" + ai.teamId + " on |";
 	for (uint k = 0; k < gNnKindMult.length(); ++k) {
-		gNnKindMult[k] = pow(2.7182818f, 0.8f * NnGauss());   // 1 sd: x0.45..x2.2
+		gNnKindMult[k] = pow(2.7182818f, 0.5f * NnGauss());   // 1 sd: x0.6..x1.65 (was 0.8: a game skewed past attributing)
 		ln += " " + KindName(int(k)) + "=" + NnF(gNnKindMult[k], 2);
 	}
 	for (int h = 0; h < NNW_H; ++h)

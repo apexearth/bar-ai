@@ -1509,7 +1509,7 @@ void PlantExpApply(int d, Want& c)
 			gPlantExpMult[i] = 0.f;
 	}
 	if (gPlantExpMult[d] <= 0.f)
-		gPlantExpMult[d] = pow(2.7182818f, 1.5f * NnGauss());
+		gPlantExpMult[d] = pow(2.7182818f, 1.0f * NnGauss());
 	c.value *= gPlantExpMult[d];
 	c.nnMult *= gPlantExpMult[d];
 }
