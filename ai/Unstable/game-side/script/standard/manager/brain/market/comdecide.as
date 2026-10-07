@@ -400,6 +400,11 @@ void ComAssess(CCircuitUnit@ u)
 	if (!gCsThreat) {
 		// Losing health with nothing seen is an attacker under the fog.
 		gCsRule = gCsHurtUnseen ? COM_RETREAT : COM_WORK;
+		// A retreat runs to where it was going: the threat drops out of his scan
+		// as he leaves, and turning back then walked him into it again.
+		if ((gComDec == COM_RETREAT) && OnMap(gComRetTo)
+			&& (here.distance2D(gComRetTo) > u.circuitDef.GetBuildDistance()))
+			gCsRule = COM_RETREAT;
 		return;
 	}
 	const float cost = u.DGunCostE();
@@ -439,7 +444,10 @@ void ComAssess(CCircuitUnit@ u)
 	if (gCsT2 && ComFar(here))
 		gCsRule = COM_RETREAT;
 	else if (gCsWin)
-		gCsRule = (gCsArrive <= gCsTowerS) ? COM_FIGHT : COM_WORK;
+		// Engaged and winning, he stays in it while the threat lasts: the arrival
+		// against tower-time test only decides whether to start, and its wobble
+		// stepped him toward them and back to work each second.
+		gCsRule = ((gComDec == COM_FIGHT) || (gCsArrive <= gCsTowerS)) ? COM_FIGHT : COM_WORK;
 	else if (ComWins(gCsHp, gCsHpTower))
 		gCsRule = COM_TURRET;
 	else
@@ -540,6 +548,13 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	ComFields(com);
 	array<float> st;
 	NnState(null, st);
+	// Out of a fight, turret or retreat back to WORK on two assessments in a row:
+	// a threat dropping out of the scan for one second flipped him and back.
+	if ((gCsRule == COM_WORK) && (gComDec != COM_WORK) && (gComDec >= 0)) {
+		if (++gComWorkVotes < 2)
+			gCsRule = gComDec;
+	} else
+		gComWorkVotes = 0;
 	const int rule = gCsRule;
 	array<float> w(COM_N);
 	// The floor lets the net pick another option; it never draws him out of a
@@ -753,12 +768,14 @@ AIFloat3 ComEvadePos(const AIFloat3& in here)
 // What CommanderSafety hands him under the decision; null = no override.
 int gComRetLogAt = 0;
 int gComEvadeN = 0;
+AIFloat3 gComRetTo(-1.f, 0.f, -1.f);   // where the retreat in force is going
+int gComWorkVotes = 0;   // consecutive WORK verdicts while another decision is in force
 int gComRetKeptN = 0;   // RETREAT kept the engine's own retreat task
 IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 {
 	if (gComDec == COM_RETREAT) {
 		const AIFloat3 here = u.GetPos(ai.frame);
-		AIFloat3 to = gCsSafe;
+		AIFloat3 to = (!gCsThreat && OnMap(gComRetTo)) ? gComRetTo : gCsSafe;   // a held retreat keeps its goal
 		bool evade = false;
 		if (!OnMap(to) || (here.distance2D(to) <= u.circuitDef.GetBuildDistance())) {
 			// At the back of the base and still losing: step away from them
@@ -784,6 +801,7 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 		const float spd = (Catalog::gSpeed[int(u.circuitDef.id)] > 1.f) ? Catalog::gSpeed[int(u.circuitDef.id)] : 1.f;
 		const int dwell = int((here.distance2D(to) / spd + 10.f) * SECOND);
 		IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(Task::Priority::HIGH, to, dwell));
+		gComRetTo = to;
 		if (evade)
 			++gComEvadeN;
 		if ((pt !is null) && (ai.frame >= gComRetLogAt)) {

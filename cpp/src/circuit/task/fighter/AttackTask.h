@@ -53,6 +53,9 @@ private:
 	bool outgunned = false;
 	// an outgunned fall-back in progress: kept until arrival or a hit
 	bool fallBackActive = false;
+	// the group that last outgunned the squad beside it, while still stronger
+	bool strongMem = false;
+	springai::AIFloat3 strongPos;
 	springai::AIFloat3 fallBackTo;
 };
 

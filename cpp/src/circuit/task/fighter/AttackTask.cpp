@@ -175,14 +175,11 @@ void CAttackTask::Update()
 
 	const AIFloat3& startPos = leader->GetPos(frame);
 	// AN OUTGUNNED FALL-BACK IS FINISHED BEFORE THE SQUAD RECONSIDERS: re-picking
-	// a target every few updates walked it back into the group it had just
-	// left -- move, stop, move (his game, 2026-10-06). A hit on any unit ends it.
+	// a target every few updates walked it back into the group it had just left.
+	// Only arrival ends it -- a retreat with them on its heels is hit constantly,
+	// and units fire on the move anyway.
 	if (fallBackActive) {
-		bool hit = false;
-		for (CCircuitUnit* u : units) {
-			hit |= (frame - u->GetDamagedFrame() < FRAMES_PER_SEC * 2);
-		}
-		if (!hit && !pPath->posPath.empty()
+		if (!pPath->posPath.empty()
 			&& (startPos.SqDistance2D(fallBackTo) > SQUARE(DEFAULT_SLACK * 4))) {
 			return;
 		}
@@ -440,8 +437,30 @@ void CAttackTask::FindTarget()
 		}
 	};
 
+	// THE GROUP THAT OUTGUNNED US IS REMEMBERED: tracked within the squad's own
+	// reach twice over while it stays stronger; until then no target lies at or
+	// beyond its distance from our base. Re-targeting past it walked the squad
+	// back into it after every fall-back (advance, drop, fall back, advance).
+	if (strongMem) {
+		bool still = false;
+		const float track = SQUARE(2.f * highestRange);
+		for (const CEnemyManager::SEnemyGroup& g : groups) {
+			if ((g.pos.SqDistance2D(strongPos) < track) && (maxPower <= g.influence)) {
+				strongPos = g.pos;
+				still = true;
+				break;
+			}
+		}
+		strongMem = still;
+	}
+	const float sqStrongBase = strongMem ? strongPos.SqDistance2D(basePos) : 0.f;
+
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
+		if (strongMem && (group.pos.SqDistance2D(basePos) >= sqStrongBase)) {
+			countGroupNear(group, NR_STRONG);
+			continue;
+		}
 		const bool isOverpowered = maxPower * 0.125f > group.influence;
 		if (hasGoodTarget && isOverpowered) {
 			countGroupNear(group, NR_OVERP);
@@ -462,6 +481,8 @@ void CAttackTask::FindTarget()
 					&& (pos.SqDistance2D(e->GetPos()) < SQUARE(float(ed->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell)))
 				{
 					outgunnedNear = true;
+					strongMem = true;
+					strongPos = group.pos;
 				}
 			}
 			continue;
