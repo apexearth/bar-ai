@@ -8,8 +8,8 @@ namespace Market {
 // nncon -- the constructor floor: FLOOR keeps it always (before cca80254),
 //          YIELD lets it step aside while the army is behind its share (the
 //          rule), DRAW drops it so constructors compete in the factory draw.
-// nnmex -- expansion: HOLD lets the forced defence picks fire over an open mex,
-//          YIELD puts an open mex first (the rule), PUSH also doubles the
+// nnmex -- expansion: HOLD lets the forced defence picks fire over an open mex (the rule),
+//          YIELD puts an open mex first, PUSH also doubles the
 //          value of every mex want before the draw.
 const string NNK_CON = "cons,consNeed,armyShare,armyTarget,armyGap,mexes,openSpots,foeRaid,minute";
 const string NNX_MEX = "mexes,openSpots,mexLost,mexKilledRate,defWants,armyShare,foeRaid,bankM,minute";
@@ -17,7 +17,7 @@ const int NK_FLOOR = 0, NK_YIELD = 1, NK_DRAW = 2;
 const int NX_HOLD = 0, NX_YIELD = 1, NX_PUSH = 2;
 const float NE2_EPS = 0.01f;
 int gConPolicy = NK_YIELD;
-int gMexPolicy = NX_YIELD;
+int gMexPolicy = NX_HOLD;
 float gMexMul = 1.f;
 int gEcoNetNextAt = 0;
 bool gEcoNetHeader = false;
@@ -116,14 +116,14 @@ void EcoNetDecide()
 		f.insertLast(Eco::MCur());
 		f.insertLast(float(ai.frame) / 1800.f);
 		array<float> w = {NE2_EPS, NE2_EPS, NE2_EPS};
-		w[NX_YIELD] = 1.f;
+		w[NX_HOLD] = 1.f;
 		const float trust = NnHeadScore(NNX_ON, NNX_STATE, NNX_MEX, NNX_S, NNX_O, NNX_H, NNX_XM, NNX_XS,
 			NNX_W1, NNX_B1, NNX_W2, NNX_B2, NNX_WO, NNX_BO, NNX_TRUST, st, f, w);
 		array<float> p(3);
-		gMexPolicy = EcoDraw(NX_YIELD, trust, w, p, flat);
+		gMexPolicy = EcoDraw(NX_HOLD, trust, w, p, flat);
 		gMexMul = (gMexPolicy == NX_PUSH) ? 2.f : 1.f;
 		array<string> names = {"HOLD", "YIELD", "PUSH"};
-		AiLog(EcoLine("nnmex", "YIELD", explore, trust, st, f, names, w, p, gMexPolicy));
+		AiLog(EcoLine("nnmex", "HOLD", explore, trust, st, f, names, w, p, gMexPolicy));
 	}
 }
 
