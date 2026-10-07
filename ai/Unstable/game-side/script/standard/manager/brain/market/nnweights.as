@@ -213,5 +213,20 @@ const array<float> NNG_B2 = {};
 const array<float> NNG_WO = {};
 const float NNG_BO = 0.f;
 const float NNG_TRUST = 0.f;
+// the join-or-new net (joinnet.as)
+const bool NNJ_ON = false;
+const string NNJ_STATE = "";
+const int NNJ_S = 0;
+const int NNJ_O = 0;
+const int NNJ_H = 0;
+const array<float> NNJ_XM = {};
+const array<float> NNJ_XS = {};
+const array<float> NNJ_W1 = {};
+const array<float> NNJ_B1 = {};
+const array<float> NNJ_W2 = {};
+const array<float> NNJ_B2 = {};
+const array<float> NNJ_WO = {};
+const float NNJ_BO = 0.f;
+const float NNJ_TRUST = 0.f;
 
 }  // namespace Market

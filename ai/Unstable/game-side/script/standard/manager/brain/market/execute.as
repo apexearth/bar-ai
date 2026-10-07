@@ -1131,6 +1131,13 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		if (Eco::MCur() < gBill)
 			par = false;
 	}
+	// A parallel site of the same def may already stand near this hand or the spot:
+	// the join-or-new net decides whether it gets these hands (joinnet.as).
+	if (par && ((w.kind == WK_CONVERT) || (w.kind == WK_ENERGY)) && (w.def !is null)) {
+		IUnitTask@ jt = JoinOrNew(unit, w.def, w.pos);
+		if (jt !is null)
+			return jt;
+	}
 	bool crtd = false;
 	// A LATTICE SLOT IS COVERED ONLY BY ITS OWN CELL. Requests::Take joins any
 	// live request for the same def inside the cover radius, and at 96 elmos
