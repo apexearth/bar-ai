@@ -41,6 +41,9 @@ total (1352 us avg, 56.6 ms max), bld.decide 2624 us avg; up.escortrecruit
 1345 us avg / 17.6 ms max; up.escecontnets max 26.3 ms; up.planpush 14 us;
 dec.nn 4 us (the no-trust skip, was 2.4 ms). Needs the same game on an idle
 machine before any verdict, then the perf-review agent on bld.decide.
+From ~07:00 the builder net earned trust on two kinds (reclaim 0.33, convert
+0.14), so NnScore runs again on every election (dec.nn ~2.4 ms): it scores
+all up to 24 options although only trusted kinds are tilted.
 
 ### GATE RED "HOME GROUND IS NOT DISCOUNTED" COMES FROM THE SIEGE PRIOR (2026-10-07)
 
