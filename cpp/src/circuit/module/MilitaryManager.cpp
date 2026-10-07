@@ -1133,7 +1133,7 @@ bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
 // it is already walking to is worth right now. GetGuardAnchor answers only
 // 'which is best', which is why the re-pick had nothing to compare against.
 // apex: the team push -- attack-squad power gathered near a point, and the
-// enemy groups at the breach summed, in the units the squads refuse by.
+// strongest enemy group at the breach, in the units the squads refuse by.
 float CMilitaryManager::GetAttackPowerNear(const AIFloat3& pos, float radius) const
 {
 	const int frame = circuit->GetLastFrame();
@@ -1152,7 +1152,7 @@ float CMilitaryManager::GetEnemyInflNear(const AIFloat3& pos, float radius) cons
 	float best = 0.f;
 	for (const CEnemyManager::SEnemyGroup& g : circuit->GetEnemyManager()->GetEnemyGroups()) {
 		if (g.pos.SqDistance2D(pos) < SQUARE(radius)) {
-			best += g.influence;   // a line is all its groups, not its strongest
+			best = std::max(best, g.influence);
 		}
 	}
 	return best;

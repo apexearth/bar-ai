@@ -242,7 +242,8 @@ void CAttackTask::Update()
 	const AIFloat3& endPos = position;
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const float eps = pathfinder->GetSquareSize();
-	const float pathRange = std::max(highestRange - eps, eps);
+	// to a staging point (no target) the squad walks to the point, not to weapon range of it
+	const float pathRange = (GetTarget() == nullptr) ? DEFAULT_SLACK : std::max(highestRange - eps, eps);
 
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
