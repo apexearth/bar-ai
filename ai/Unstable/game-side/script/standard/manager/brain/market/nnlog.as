@@ -824,6 +824,7 @@ void NnImitate(array<Want@>@ ranked)
 }
 int gNnImitLogAt = 0;
 
+float gNnMaxTrust = -1.f;
 void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	// what the net could see: wants forced in after this point (escorts, panics,
@@ -886,7 +887,13 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 			}
 		}
 	}
-	if (blend > 0.f) {
+	// No kind has earned trust: every score would be discarded below (2.4 ms an election).
+	if (gNnMaxTrust < 0.f) {
+		gNnMaxTrust = 0.f;
+		for (uint k = 0; k < NNW_TRUST.length(); ++k)
+			gNnMaxTrust = (NNW_TRUST[k] > gNnMaxTrust) ? NNW_TRUST[k] : gNnMaxTrust;
+	}
+	if ((blend > 0.f) && (gNnMaxTrust > 0.f)) {
 		const int S = NNW_S, O = NNW_O, H = NNW_H, N = NNW_S + NNW_O;
 		array<float> s;
 		NnState(unit, s);
