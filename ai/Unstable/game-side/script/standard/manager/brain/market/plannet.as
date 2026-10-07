@@ -109,7 +109,12 @@ void TeamPush()
 		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 		return;
 	}
-	if (ai.frame < gPlanMineUntil) {
+	// A breach holds until it is broken: re-reading the turret target every 5 s
+	// moved it across the front and the squads never gathered at any of them.
+	const float hr = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
+	const bool holding = (hr >= 0.f) && (aiMilitaryMgr.GetEnemyInflNear(
+		AIFloat3(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f)), hr + PUSH_STAND) > 0.f);
+	if ((ai.frame < gPlanMineUntil) && !holding) {
 		AIFloat3 at;
 		float r = 0.f, m = 0.f;
 		if (Military::TurretTarget(at, r, m)) {
