@@ -372,6 +372,14 @@ are needed "around the base"; also transports that free a stuck unit. Built
 2026-10-07 he loves the transport code but finds it not active enough: the two
 biggest uses are moving nano turrets to where they are needed (the biggest),
 and carrying a group of units to a place pathing makes hard to reach.
+Measured the same night (2v2 self-play): the first seat of each side does
+nearly all the lifting (~20 turrets, a transport); the second seat had 4
+turrets, no transport and asked=0 -- the lift only moves IDLE turrets, so a
+seat whose few turrets are busy never wants a plane. "Where they are needed"
+means moving a busy turret from a low-value job to a high-value one (a gantry,
+a fusion frame): a price on the move (destination value minus what the turret
+gives up), not an idleness test. Drop-slot fixes landed (slot snapped legal,
+no shared slot, back to the pickup after 3 refusals): landed 61% -> 75%.
 
 ## Escort strength scales with the risk of the trip
 
