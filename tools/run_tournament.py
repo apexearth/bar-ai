@@ -374,8 +374,15 @@ def main() -> int:
         nonlocal done
         wd = pool.get()
         try:
+            # A,B handicaps belong to the AIs as listed, not to the seats: the
+            # swapped game would otherwise hand the bonus to the other AI.
+            hc = args.handicap
+            parts = str(hc).split(",")
+            if len(parts) == len(args.ais) > 1 and len(set(args.ais)) == len(args.ais):
+                hmap = dict(zip(args.ais, parts))
+                hc = "%s,%s" % (hmap[job.first], hmap[job.second])
             row = play(job, args.minutes, args.engine, wd, match_root, args.per_side,
-                       args.sides, args.boxes, args.box_size, args.handicap, args.modoption)
+                       args.sides, args.boxes, args.box_size, hc, args.modoption)
         finally:
             pool.put(wd)
         with _lock:
