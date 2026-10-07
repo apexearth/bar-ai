@@ -795,6 +795,8 @@ class Trainer:
             self.st = Net(self.XS.shape[1], len(TARGETS))
             self.full.load(ck["full"])
             self.st.load(ck["state"])
+            # saved every batch but never read back: each restart wiped the trust evidence
+            self.trust_pairs = {k: [tuple(x) for x in v] for k, v in (ck.get("trust_pairs") or {}).items()}
 
     def fresh_start(self, why):
         """Archive the current net and its history, then learn from nothing.
