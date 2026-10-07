@@ -127,8 +127,13 @@
       </select>
       <span class="dim">-- applies to the results and every chart and table below</span></div>
     <div id="nn-results" style="margin-top:8px"></div>
-    <div class="dim" style="margin-top:8px">Win rate over the last 20 <b>normal</b> training games
-      (discovery games play random choices on purpose and are left out) -- overall and per opponent</div>
+    <div class="dim" style="margin-top:8px">Win rate averaged over the last
+      <select id="nn-win-n" onchange="uiSet('nn-win-n', this.value); loadNet()">
+        <option value="20">20</option><option value="50">50</option>
+        <option value="100">100</option><option value="200">200</option>
+      </select>
+      <b>normal</b> training games (discovery games play random choices on purpose and are left out)
+      -- overall and per opponent</div>
     <canvas id="nn-c-win" width="1140" height="200"></canvas>
     <div id="nn-leg-win" class="legend"></div>
     <div id="nn-status" style="margin-top:8px"></div>
@@ -1524,6 +1529,7 @@ $("#l-perside").addEventListener("change", drawBoxPreview);
 ["l-mode", "l-a", "l-b", "l-sidea", "l-sideb", "l-map", "l-perside", "l-min", "l-speed", "l-games",
  "l-boxes", "l-boxsize", "l-handicap", "l-modopt"].forEach(id => uiBind(id));
 uiBind("nn-range");
+uiBind("nn-win-n");
 // Restoring per-side or the box layout changes the preview; restoring the mode
 // changes which fields are shown.
 $("#l-gameswrap").style.display =
@@ -1746,8 +1752,8 @@ async function loadNet() {
 // Training games won / lost / drawn over the chosen range, normal vs
 // discovery (discovery plays random choices on purpose, so it loses more).
 // Each line is its own games' last-20 win share, drawn at those games' positions.
-const NN_WIN_N = 20;
 function nnWinChart(games) {
+  const NN_WIN_N = parseInt(($("#nn-win-n") && $("#nn-win-n").value) || "20", 10) || 20;
   const line = (keep, color) => {
     const xs = [], ys = [], recent = [];
     games.forEach((g, i) => {
