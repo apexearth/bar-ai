@@ -158,6 +158,19 @@ void TeamPush()
 	}
 }
 
+// Where the team's push is going in, while its go stands.
+bool PushGoAt(AIFloat3 &out at, float &out r)
+{
+	if ((gPlan == NG_NORMAL) || (ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) <= float(ai.frame)))
+		return false;
+	r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
+	if (r < 0.f)
+		return false;
+	at = AIFloat3(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
+	at.y = ai.GetElevationAt(at);
+	return true;
+}
+
 // ALLIES BUILD ONE GANTRY TOGETHER (his 2026-10-07: "why make 8 gantries in an
 // 8v8 when you can notice one of your allies is making one and if it isn't far
 // away you can help them make it and then support what they build"). "Not far"

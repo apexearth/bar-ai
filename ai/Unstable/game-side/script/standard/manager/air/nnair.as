@@ -39,6 +39,9 @@ float gNaE2M = -1.f;
 float gNaObsDmg = -1.f;        // measured metal destroyed per bomber sent, for the type being priced
 
 // the enemy as we know it, one snapshot per decision
+array<AIFloat3> gNaTurP;        // their armed ground statics: the push's breach is made of these
+array<int> gNaTurD;
+int gNaBreachLogAt = 0;
 array<AIFloat3> gNaEcoP;        // their economy: where, what, what its death costs them
 array<int> gNaEcoD;
 array<float> gNaEcoV;
@@ -129,6 +132,7 @@ void NaSnapEnemy(const AIFloat3& in foe)
 	gNaEcoP.resize(0); gNaEcoD.resize(0); gNaEcoV.resize(0);
 	gNaAAP.resize(0); gNaAAR.resize(0); gNaAAV.resize(0);
 	gNaFtP.resize(0); gNaFtS.resize(0); gNaFtV.resize(0);
+	gNaTurP.resize(0); gNaTurD.resize(0);
 	if (gNaSpotInc < 0.f) {
 		float s = 0.f;
 		for (uint i = 0; i < Market::gAllSpotInc.length(); ++i)
@@ -154,6 +158,9 @@ void NaSnapEnemy(const AIFloat3& in foe)
 				gNaAAR.insertLast(Catalog::gMaxRange[d]);
 				gNaAAV.insertLast(aDps);
 			}
+		} else if (!Catalog::gMobile[d] && (Catalog::gMaxRange[d] > 0.f) && (Catalog::gSurfT[d] > 0.f)) {
+			gNaTurP.insertLast(aiEnemyMgr.GetEnemyUnitPosAt(i));
+			gNaTurD.insertLast(d);
 		} else if (!Catalog::gMobile[d] && (Catalog::gMaxRange[d] <= 0.f)
 			&& ((Catalog::gExtractsM[d] > 0.f) || (Catalog::gMakeE[d] > 0.f)
 				|| (Catalog::gMakeM[d] > 0.f) || (Catalog::gConvCapacity[d] > 0.f)
@@ -201,6 +208,31 @@ void NaCands(float r, array<NaCand@>& out cs)
 				c.aaT += gNaAAV[e];
 		}
 		cs.insertLast(c);
+	}
+	// The team push's breach while its go stands: the line's guns, struck as
+	// the ground push lands (his 2026-10-07: combined air and ground).
+	AIFloat3 bAt;
+	float bR = 0.f;
+	if (Market::PushGoAt(bAt, bR)) {
+		NaCand c;
+		c.at = bAt;
+		for (uint e = 0; e < gNaTurP.length(); ++e) {
+			if (gNaTurP[e].distance2D(bAt) <= bR) {
+				c.v += Catalog::gCostM[gNaTurD[e]];
+				c.hp += Catalog::gHealth[gNaTurD[e]];
+				++c.n;
+			}
+		}
+		for (uint e = 0; e < gNaAAP.length(); ++e) {
+			if (gNaAAP[e].distance2D(c.at) <= gNaAAR[e] + r * 0.5f)
+				c.aaT += gNaAAV[e];
+		}
+		if (c.n > 0)
+			cs.insertLast(c);
+		if ((c.n > 0) && (ai.frame >= gNaBreachLogAt)) {
+			gNaBreachLogAt = ai.frame + 30 * SECOND;
+			AiLog("apex: air-breach t=" + ai.teamId + " at=" + int(bAt.x) + "," + int(bAt.z) + " guns=" + c.n + " m=" + int(c.v) + " aa=" + int(c.aaT));
+		}
 	}
 	gNaCs = cs;
 }
