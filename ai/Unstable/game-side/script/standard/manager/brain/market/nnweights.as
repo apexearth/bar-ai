@@ -123,9 +123,6 @@ const array<float> NNA_B2 = {};
 const array<float> NNA_WO = {};
 const float NNA_BO = 0.f;
 const float NNA_TRUST = 0.f;
-const array<float> NNR_WO = {};
-const float NNR_BO = 0.f;
-const float NNR_TRUST = 0.f;
 // the escort net (escnet.as)
 const bool NNE_ON = false;
 const string NNE_STATE = "";

@@ -105,6 +105,26 @@ def _copy_tree(src: Path, dst: Path, skip_dll: bool = False) -> None:
     shutil.copytree(src, dst, dirs_exist_ok=True, ignore=ignore)
 
 
+# A deployed nnweights.as is the trainer's (tools/nntrain.py, nn_release.py), not
+# the repo's empty stub: the wipe-and-copy put the stub over the trained nets on
+# every deploy until the next export (2026-10-07). Kept across a deploy.
+def _keep_weights(*roots: Path) -> dict:
+    kept = {}
+    for r in roots:
+        if r.is_dir():
+            for f in r.rglob("nnweights.as"):
+                kept[f] = f.read_bytes()
+    return kept
+
+
+def _restore_weights(kept: dict) -> None:
+    for f, data in kept.items():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+    if kept:
+        print(f"  weights      kept the deployed nnweights.as ({len(kept)} file(s))")
+
+
 # Anything that holds an open handle on engine/<ver>/AI/Skirmish/**/SkirmishAI.dll.
 LOCKERS = ("spring.exe", "spring-headless.exe", "spring-dedicated.exe",
            "Beyond-All-Reason.exe")
@@ -169,6 +189,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
 
     short = short_name(variant)
     target = env.skirmish_dir(short, variant)
+    kept_weights = _keep_weights(target, env.game_config_dir(short, variant))
 
     # A variant that used to ship as a version of BARb leaves BARb/<variant>
     # behind. Left in place it is a second lobby entry for the same AI that still
@@ -317,6 +338,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
         s = src / "game-side" / sub
         if s.is_dir():
             _copy_tree(s, game_target / sub)
+    _restore_weights(kept_weights)
     print(f"  game-side    {game_target}")
     print(f"               digest {_tree_digest(game_target)}")
 
