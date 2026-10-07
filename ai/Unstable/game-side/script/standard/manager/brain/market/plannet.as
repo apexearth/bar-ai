@@ -107,6 +107,7 @@ void TeamPush()
 		AIFloat3 at;
 		float r = 0.f, m = 0.f;
 		if (Military::TurretTarget(at, r, m)) {
+			r = Military::TurretLineReach();
 			const float ox = ai.GetTeamBoard(BOARD_FOCUS_X, -1.f);
 			const float oz = ai.GetTeamBoard(BOARD_FOCUS_Z, -1.f);
 			if ((ox < 0.f) || (AIFloat3(ox, 0.f, oz).distance2D(at) > r))

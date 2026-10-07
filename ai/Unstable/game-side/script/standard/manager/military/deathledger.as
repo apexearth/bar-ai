@@ -126,6 +126,8 @@ bool gTurretOk = false;
 AIFloat3 gTurretPos;
 float gTurretReach = 0.f;
 float gTurretM = 0.f;
+float gTurretLineReach = 0.f;   // the line's own guns: no supers, no stockpiles
+float TurretLineReach() { return gTurretLineReach; }
 bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
 {
 	if (gDeadToStatic < 1.f)
@@ -138,7 +140,7 @@ bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
 		const int n = aiEnemyMgr.GetEnemyGroupCount();
 		int armed = 0, units = 0;
 		for (int g = 0; g < n; ++g) {
-			float m = 0.f, r = 0.f;
+			float m = 0.f, r = 0.f, lr = 0.f;
 			const int k = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 			units += k;
 			for (int i = 0; i < k; ++i) {
@@ -150,6 +152,8 @@ bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
 				m += Catalog::gCostM[d];
 				if (Catalog::gMaxRange[d] > r)
 					r = Catalog::gMaxRange[d];
+				if (!Market::IsSuperWeapon(d) && !Catalog::gStock[d] && (Catalog::gMaxRange[d] > lr))
+					lr = Catalog::gMaxRange[d];
 			}
 			if (m <= 0.f)
 				continue;
@@ -160,6 +164,7 @@ bool TurretTarget(AIFloat3 &out at, float &out reach, float &out metal)
 				bestD = dd;
 				gTurretPos = gp;
 				gTurretReach = r;
+				gTurretLineReach = lr;
 				gTurretM = m;
 				gTurretOk = true;
 			}
