@@ -691,3 +691,26 @@ assigned to (`ai.TurretsReclaim`). General rule: an order to a unit that
 holds a DLL task is a suggestion; count what the unit is DOING a few seconds
 later, not what was sent. `game-patches/gadgets/dev_yardjam.lua` seals a
 team's doors on demand and is the instrument.
+
+## S39 — every deploy put the empty weight stub over the trained nets (2026-10-07)
+
+`deploy_ai.py` wipes the deployed trees and copies the repo; only its drift
+digest skipped `nnweights.as`, so the copy did not. The repo's stub replaced
+the trained nets on every deploy until the trainer's next export, and from
+8b6a4fd2 (10-06 13:38) the stub itself did not compile (a duplicated
+`NNR_TRUST`), so a game started in that window ran near-stock (S3). It hid
+because the trainer exports every few minutes; it surfaced when the trainer
+was stopped for a backfill and 4 of 6 games went near-stock. Deploy now keeps
+the deployed weight files across the wipe. Rule: a file another process owns
+in a deployed tree must be named in the copy, not only in the checksum.
+
+## S40 — rows keyed by decision frames, which a clocked decision repeats every game (2026-10-07)
+
+The trainer marks a decision head's rows used by head, team and the first
+three decision frames. Builder elections fall on frames unique to each game;
+the escort, constructor, expansion, cap and plan heads decide on a fixed 30 s
+clock, so every game's first three frames were the same and after one game
+the rest read as already learned: 19 batches in hours against T2 timing's
+628, and trust stuck at 0. The key now carries the game's fingerprint;
+`tools/nn_backfill.py` re-read 2,175 games (esc 34,806 rows, con/mex 26,976,
+caps 10,946). Rule: a "seen" key must contain something unique to the game.
