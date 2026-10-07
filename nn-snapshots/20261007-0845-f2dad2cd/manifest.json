@@ -1,0 +1,55 @@
+{
+ "taken": "20261007-0845",
+ "commit": "f2dad2cd",
+ "freeze": {
+  "at": 1791341292.1925535,
+  "commit": "bec28a79",
+  "rows": {
+   "builder": 1109685,
+   "fac": 177542,
+   "tech": 40860,
+   "cap": 0,
+   "acap": 0,
+   "raid": 34801,
+   "post": 6541,
+   "com": 16943,
+   "air": 7164,
+   "esc": 285,
+   "con": 361,
+   "mex": 361,
+   "plan": 0
+  },
+  "batch": {
+   "builder": 3630,
+   "fac": 3350,
+   "tech": 3330,
+   "cap": 0,
+   "acap": 0,
+   "raid": 2140,
+   "post": 390,
+   "com": 550,
+   "air": 390,
+   "esc": 20,
+   "con": 20,
+   "mex": 20,
+   "plan": 0
+  }
+ },
+ "sha256": "0bbb49b9f6705123e855e3b9c691790e25ebeb5f1c5539e9457a44f688b1c49c",
+ "nn_state": "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eExcess,ecoP,slack,eStall,eFeed,ePinned,mStarved,mWasting,hands,idleNanoM,openSpots,upDemand,backlogM,tier,army,teamArmy,foeArmy,foeMass,stance,losing,contested,outmassed,trade,tradeOk,lossPress,mex,staticLoss,airLoss,mobileLoss,structBleed,airNow,airSeen,incoming,raidP,sinceRaid,intelFresh,foeSilos,comm,homeD,allies,foeTeam,mapArea,plantM,nanoBP,convCap,defM,antiN,stockN,shArmy,shDef,shAirdef,shEco,shBP,tgArmy,tgDef,tgAirdef,tgEco,tgBP,foeT2,foeHeavy,foeArty,foeRaider,foeStatic,ourQual,foeQual,dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD,foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert,wreckHome,wreckArmy,wreckRate,rezN,repairM,foeLrpc,plasma,ownLrpc,ownShield,conShare",
+ "trust": {
+  "NNF": 0.0,
+  "NNP": 0.0,
+  "NNC": 0.0,
+  "NNT": 0.115,
+  "NNR": 0.115,
+  "NNA": 0.0,
+  "NNE": 0.066,
+  "NNK": 0.172,
+  "NNX": 0.0,
+  "NNQ": 0.027,
+  "NNZ": 0.0,
+  "NNG": 0.0,
+  "NNW(builder kinds) max": 0.234
+ }
+}
