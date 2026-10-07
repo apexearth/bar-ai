@@ -30,6 +30,15 @@ the threat-map path to staging failed 224-827 times a game (walk anyway,
 (early pushes into BARb's pressure); the staging point sits inside the threat
 map's widened danger; the side's attack power is often small or zero.
 
+Where the minutes go in a WON game (rule arm, Frozen Ford, won at 42 min):
+income led from minute 8 and ran ~1.9x by minute 24, but trades stayed 0.3-0.6
+until minute 28 (then 1.6-5.8). In minutes 12-24 we lost 28.8k: 26.7k of it
+in the retreat task, at home (13.8k) and mid (11.5k) -- AK raiders cycling
+defend -> guard -> raid on our own side at full health, then dying on the
+retreat. A won economy closes ~15 minutes late because the army at home
+bleeds against BARb's pressure; the push cannot help a side that is not
+holding its own ground.
+
 ## PERFORMANCE
 
 ### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)
