@@ -3202,7 +3202,7 @@ army weight barely moves army while one lab is the bottleneck. Not kept: a 1v1
 second-lab exception (reverted for being a special case; apex_plant_income_per
 belongs to the search instead). Next: these become prices, not queue-jumps.
 
-### TUNE_NN_BLEND = 1, TUNE_NN_EXPLORE = 0 (2026-10-06)
+## TUNE_NN_BLEND = 1, TUNE_NN_EXPLORE = 0 (2026-10-06)
 
 The defaults are what a game gets with no modoption set -- his shared slot and
 lobby games. His call: the nets steer (blend 1) and nothing plays random on
