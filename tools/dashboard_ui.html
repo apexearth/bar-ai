@@ -115,6 +115,18 @@
     <button class="act" onclick="netAct('start')">Start training</button>
     <button class="act" onclick="netAct('stop')">Stop</button>
     <button class="act" onclick="netAct('reset')" style="float:right" title="The current net and its history move to runtime/nn-archive/; nothing is deleted">Start a fresh net (archives this one)</button>
+    <div style="margin-top:8px">Show
+      <select id="nn-range" onchange="uiSet('nn-range', this.value); loadNet()">
+        <option value="last=100">last 100 games</option>
+        <option value="last=300">last 300 games</option>
+        <option value="last=1000">last 1,000 games</option>
+        <option value="hours=1">last hour</option>
+        <option value="hours=6">last 6 hours</option>
+        <option value="hours=24">last 24 hours</option>
+        <option value="">everything</option>
+      </select>
+      <span class="dim">-- applies to the results and every chart and table below</span></div>
+    <div id="nn-results" style="margin-top:8px"></div>
     <div id="nn-status" style="margin-top:8px"></div>
     <div class="dim" style="margin-top:6px">The net learns <b>while games are running</b>: every few seconds it
       reads each running game whose AI records its decisions (the logger build), and once a decision's next
@@ -1507,6 +1519,7 @@ $("#l-perside").addEventListener("change", drawBoxPreview);
 // silently repeats a previous run, and "random" is the honest default.
 ["l-mode", "l-a", "l-b", "l-sidea", "l-sideb", "l-map", "l-perside", "l-min", "l-speed", "l-games",
  "l-boxes", "l-boxsize", "l-handicap", "l-modopt"].forEach(id => uiBind(id));
+uiBind("nn-range");
 // Restoring per-side or the box layout changes the preview; restoring the mode
 // changes which fields are shown.
 $("#l-gameswrap").style.display =
@@ -1690,7 +1703,8 @@ async function loadNet() {
   clearTimeout(NN_TIMER);
   if (!$("#tab-net").classList.contains("on")) return;
   let d;
-  try { d = await api("/api/nn"); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
+  const rng = ($("#nn-range") && $("#nn-range").value) || "";
+  try { d = await api("/api/nn" + (rng ? "?" + rng : "")); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
   if (d) {
     const all = d.metrics || [], s = d.status || {};
     // builder rows only (the factory and posture nets have their own counters), numbered in order
@@ -1720,8 +1734,21 @@ async function loadNet() {
     setHTML($("#nn-table"), nnTable(m));
     setHTML($("#nn-trust"), nnTrust(m, fm));
     setHTML($("#nn-samples"), nnSamples(d.samples || []));
+    setHTML($("#nn-results"), nnResults(d.results || []));
   }
   NN_TIMER = setTimeout(loadNet, 5000);
+}
+// Training games won / lost / drawn over the chosen range, normal vs
+// discovery (discovery plays random choices on purpose, so it loses more).
+function nnResults(rows) {
+  if (!rows.length) return "<span class='dim'>no training games in this range</span>";
+  let h = "<table><tr><th>opponent</th><th>games</th><th>won</th><th>lost</th><th>draw</th><th>win %</th></tr>";
+  for (const r of rows) {
+    const n = r.win + r.loss + r.draw;
+    h += `<tr><td>${esc(r.opponent)} <span class="dim">${esc(r.kind)}</span></td><td>${n}</td><td>${r.win}</td>`
+      + `<td>${r.loss}</td><td>${r.draw}</td><td><b>${n ? Math.round(100 * r.win / n) : 0}%</b></td></tr>`;
+  }
+  return h + "</table>";
 }
 async function netAct(act) {
   if (act === "reset" && Date.now() - NN_RESET_ARMED > 4000) {

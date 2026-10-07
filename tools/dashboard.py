@@ -1044,13 +1044,89 @@ def nn_job():
     return None
 
 
-def nn_state():
+def nn_window(rows, last=None, hours=None):
+    """The rows of the last `last` games (distinct sources, in order), or of the
+    last `hours` -- the history grew past what a chart can show (his 2026-10-06)."""
+    if hours:
+        cut = time.time() - float(hours) * 3600
+        return [r for r in rows if r.get("at", 0) >= cut]
+    if last:
+        keep, seen = set(), []
+        for r in reversed(rows):
+            src = r.get("source") or r.get("game")
+            if src not in keep:
+                if len(keep) >= int(last):
+                    continue
+                keep.add(src)
+        return [r for r in rows if (r.get("source") or r.get("game")) in keep]
+    return rows
+
+
+NN_RESULT_CACHE = {}
+
+
+def nn_results(last=None, hours=None):
+    """W/L/D of the nn training tournaments' games over the same range, split
+    normal vs discovery and by opponent; each game is read once and cached."""
+    games = []
+    for t in (REPO / "tournaments").glob("*-nn-b*"):
+        for m in (t / "matches").glob("*"):
+            res = m / "result.json"
+            try:
+                mt = res.stat().st_mtime
+            except OSError:
+                continue
+            games.append((mt, m))
+    games.sort()
+    if hours:
+        cut = time.time() - float(hours) * 3600
+        games = [g for g in games if g[0] >= cut]
+    elif last:
+        games = games[-int(last):]
+    out = {}
+    for mt, m in games:
+        key = str(m)
+        hit = NN_RESULT_CACHE.get(key)
+        if hit is None or hit[0] != mt:
+            try:
+                r = json.loads((m / "result.json").read_text(encoding="utf-8"))
+                ours = [x for x in r.get("teams", []) if x.get("spec", "").startswith("Apex")]
+                them = [x for x in r.get("teams", []) if not x.get("spec", "").startswith("Apex")]
+                if len(ours) != 1 or not them:
+                    continue
+                us = ours[0]["team"]
+                w = (r.get("result") or {}).get("winner_specs") or []
+                outcome = "draw" if not w else ("win" if any(x.startswith("Apex") for x in w) else "loss")
+                disc = False
+                try:
+                    with open(m / "infolog.txt", encoding="utf-8", errors="replace") as fh:
+                        tag = "nn-explore t=%d on" % us
+                        for ln in fh:
+                            if tag in ln:
+                                disc = True
+                                break
+                except OSError:
+                    pass
+                hit = (mt, outcome, them[0].get("profile") or them[0]["spec"], disc)
+            except (OSError, ValueError, KeyError):
+                continue
+            NN_RESULT_CACHE[key] = hit
+        _mt, outcome, opp, disc = hit
+        k = (opp, "discovery" if disc else "normal")
+        c = out.setdefault(k, {"win": 0, "loss": 0, "draw": 0})
+        c[outcome] += 1
+    return [{"opponent": k[0], "kind": k[1], **v} for k, v in sorted(out.items())]
+
+
+def nn_state(last=None, hours=None):
     rows = []
     try:
         with open(NN_DIR / "metrics.jsonl", encoding="utf-8") as fh:
             rows = [json.loads(ln) for ln in fh if ln.strip()]
     except OSError:
         pass
+    total = len(rows)
+    rows = nn_window(rows, last, hours)
     try:
         status = json.loads((NN_DIR / "status.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -1062,7 +1138,8 @@ def nn_state():
         samples = json.loads((NN_DIR / "samples.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         samples = []
-    return {"metrics": rows, "status": status, "age": age, "running": running, "samples": samples}
+    return {"metrics": rows, "metrics_total": total, "status": status, "age": age, "running": running,
+            "samples": samples, "results": nn_results(last, hours)}
 
 
 def nn_action(act):
@@ -1443,7 +1520,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"processes": running_processes(), "jobs": jobs,
                                 "repo": str(REPO)})
             elif u.path == "/api/nn":
-                self.send_json(nn_state())
+                self.send_json(nn_state(q.get("last"), q.get("hours")))
             elif u.path == "/api/games":
                 kind = q.get("kind", "matches")
                 self.send_json(list_matches() if kind == "matches"
