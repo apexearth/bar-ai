@@ -119,16 +119,36 @@ float WorkerExposureNow(CCircuitUnit@ wkr)
 	return (e > 1.f) ? 1.f : e;
 }
 
+// Readers take the last price; ExposeRefresh re-prices a few workers per call
+// (a fleet re-priced in one call was a 7 ms spike every few seconds).
+const uint EXPO_PER_CALL = 6;
+uint gExpoCursor = 0;
 float WorkerExposure(CCircuitUnit@ wkr)
 {
 	const int id = int(wkr.id);
 	if ((id < 0) || (id >= int(gWkExpoAt.length())))
 		return WorkerExposureNow(wkr);
-	if (ai.frame - gWkExpoAt[id] < 3 * SECOND)
+	if ((gWkExpoAt[id] >= 0) && (ai.frame - gWkExpoAt[id] < 30 * SECOND))
 		return gWkExpoVal[id];
-	gWkExpoAt[id] = ai.frame - (id % (2 * SECOND));   // staggered: a shared expiry refreshed every worker in one frame
+	gWkExpoAt[id] = ai.frame;
 	gWkExpoVal[id] = WorkerExposureNow(wkr);
 	return gWkExpoVal[id];
+}
+
+void ExposeReprice()
+{
+	const uint n = gWorkers.length();
+	for (uint k = 0; (k < EXPO_PER_CALL) && (k < n); ++k) {
+		gExpoCursor = (gExpoCursor + 1) % n;
+		CCircuitUnit@ w = gWorkers[gExpoCursor];
+		if (w is null)
+			continue;
+		const int id = int(w.id);
+		if ((id < 0) || (id >= int(gWkExpoAt.length())))
+			continue;
+		gWkExpoAt[id] = ai.frame;
+		gWkExpoVal[id] = WorkerExposureNow(w);
+	}
 }
 
 // A ground escort follows a ground worker; a fighter follows an air con
@@ -155,6 +175,7 @@ void ExposeRefresh()
 	if (gExpoAt == ai.frame)
 		return;
 	gExpoAt = ai.frame;
+	ExposeReprice();
 	gExpoN = 0;
 	gExpoWetN = 0;
 	gExpoM = 0.f;
