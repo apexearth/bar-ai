@@ -72,7 +72,39 @@ HIDDEN = 32
 # lot. Each minibatch of new rows carries REPLAY_OLD times as many old ones.
 EMA_HALF = 5
 REPLAY_OLD = 3
-SCALER_ROWS = 100000   # input/output scalers are fit on a sample this size
+SCALER_ROWS = 100000
+LR0 = 1e-3              # Adam's rate before a freeze
+LR_DECAY = 2000         # batches after the freeze that halve it ...
+LR_FLOOR = 0.2          # ... down to this share of LR0
+
+
+def freeze_info():
+    """runtime/nn/freeze.json: {at, batch, rows: {net: buffer rows at the
+    freeze}} -- a stretch where the game code holds still."""
+    try:
+        return json.loads((OUT / "freeze.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def freeze_note(name, rows, batches):
+    """The first trainer to load after a freeze is declared records where
+    each net's buffer stood; returns (rows at the freeze, batch at the freeze)."""
+    fz = freeze_info()
+    if not fz:
+        return 0, None
+    if name not in fz.setdefault("rows", {}):
+        fz["rows"][name] = int(rows)
+        fz.setdefault("batch", {})[name] = int(batches)
+        (OUT / "freeze.json").write_text(json.dumps(fz), encoding="utf-8")
+    return fz["rows"][name], fz.get("batch", {}).get(name)
+
+
+def lr_now(batches, freeze_batch):
+    if freeze_batch is None:
+        return LR0
+    k = max(0, batches - freeze_batch) / float(LR_DECAY)
+    return LR0 * max(LR_FLOOR, 1.0 / (1.0 + k))   # input/output scalers are fit on a sample this size
 DROPOUT = 0.1
 MIN_BATCH = 150        # matured decisions before a live game is learned from
 STEPS_PER_ROW = 2      # passes over each new batch (each mixed with as many old rows)
@@ -231,12 +263,17 @@ class Net:
             z = self.slow(self._x(X)).numpy()
         return z * self.ys + self.ym
 
-    def train(self, X, Y, M, new_from, steps):
+    def train(self, X, Y, M, new_from, steps, recent_from=0, lr=None):
         """Minibatches of the new rows, each paired with as many rows drawn from
         everything before them. Returns the mean loss."""
         t = self.torch
+        if lr is not None:
+            for g in self.opt.param_groups:
+                g["lr"] = lr
         self.fit_scalers(X, Y, M)
         n_new = len(X) - new_from
+        # half the replay from rows learned since a freeze, when there are any
+        lean = 0 < recent_from < new_from
         # the minibatches first, then only their rows are scaled and copied
         batches = []
         for _ in range(steps):
@@ -244,7 +281,11 @@ class Net:
             for i in range(0, n_new, 128):
                 b = perm[i:i + 128]
                 if new_from > 0:
-                    b = t.cat([b, t.randint(0, new_from, (len(b) * REPLAY_OLD,))])
+                    k = len(b) * REPLAY_OLD
+                    if lean:
+                        b = t.cat([b, t.randint(recent_from, new_from, (k - k // 2,)), t.randint(0, new_from, (k // 2,))])
+                    else:
+                        b = t.cat([b, t.randint(0, new_from, (k,))])
                 batches.append(b)
         if not batches:
             return 0.0
@@ -576,8 +617,11 @@ class FacHead:
             new_from = len(self.Y)
             self.XS, self.XF = np.vstack([self.XS, XS]), np.vstack([self.XF, XF])
             self.Y, self.M = np.vstack([self.Y, Y]), np.vstack([self.M, M])
-        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW)
-        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW)
+        fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
+        lr = lr_now(self.batches, fz_batch)
+        rec["lr"] = lr
+        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
+        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
         rec["total_rows"] = int(len(self.Y))
         self.batches += 1
         if self.batches % RESET_EVERY == 0:
@@ -919,8 +963,11 @@ class Trainer:
             self.XS, self.XF = np.vstack([self.XS, XS]), np.vstack([self.XF, XF])
             self.Y, self.M = np.vstack([self.Y, Y]), np.vstack([self.M, M])
         t0 = time.time()
-        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW)
-        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW)
+        fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
+        lr = lr_now(self.batches, fz_batch)
+        rec["lr"] = lr
+        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
+        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
         rec["train_s"] = round(time.time() - t0, 2)
         rec["total_rows"] = int(len(self.Y))
         self.batches += 1

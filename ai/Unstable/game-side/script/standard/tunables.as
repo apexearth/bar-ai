@@ -802,6 +802,7 @@ const float TUNE_NN_BLEND = 0.f;
 //   game and the net's output layer gets noise, so the trainer sees what
 //   wanting more or less of each thing does. See docs/35.
 const float TUNE_NN_EXPLORE = 0.1f;
+const float TUNE_NN_EXPLORE_TEAM = -1.f;   // [team] >= 0: that team is the explorer, the other plays normally (watched self-play)
 
 // [0..2] -- How strongly constructors lean toward what BARb would build in our
 //   situation (tools/imitate.py prior, NNI_*): an option of the class BARb

@@ -372,7 +372,9 @@ void NnExploreRoll()
 	for (int h = 0; h < NNW_H; ++h)
 		gNnWO[h] = NNW_WO[h];
 	const float chance = ai.GetTunable("apex_nn_explore", TUNE_NN_EXPLORE);
-	gNnExplore = float(AiRandom(0, 10000)) / 10000.f < chance;
+	const int explorer = int(ai.GetTunable("apex_nn_explore_team", TUNE_NN_EXPLORE_TEAM));
+	gNnExplore = (explorer >= 0) ? (explorer == ai.teamId)
+			: (float(AiRandom(0, 10000)) / 10000.f < chance);
 	if (!gNnExplore)
 		return;
 	string ln = "apex: nn-explore t=" + ai.teamId + " on |";
