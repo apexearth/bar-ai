@@ -28,6 +28,8 @@
 #include "task/fighter/ScoutTask.h"
 #include "task/fighter/RaidTask.h"
 #include "task/fighter/AttackTask.h"
+#include "task/fighter/SquadTask.h"
+#include "unit/enemy/EnemyManager.h"
 #include "task/fighter/BombTask.h"
 #include "task/fighter/ArtilleryTask.h"
 #include "task/fighter/AntiAirTask.h"
@@ -1130,6 +1132,32 @@ bool CMilitaryManager::GetGuardAnchor(AIFloat3& outPos) const
 // apex: the same score for a NAMED spot, so a pool can be asked what the place
 // it is already walking to is worth right now. GetGuardAnchor answers only
 // 'which is best', which is why the re-pick had nothing to compare against.
+// apex: the team push -- attack-squad power gathered near a point, and the
+// strongest enemy group at the breach, in the units the squads refuse by.
+float CMilitaryManager::GetAttackPowerNear(const AIFloat3& pos, float radius) const
+{
+	const int frame = circuit->GetLastFrame();
+	float p = 0.f;
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+		CCircuitUnit* lead = static_cast<ISquadTask*>(t)->GetLeader();
+		if ((lead != nullptr) && (lead->GetPos(frame).SqDistance2D(pos) < SQUARE(radius))) {
+			p += t->GetAttackPower();
+		}
+	}
+	return p;
+}
+
+float CMilitaryManager::GetEnemyInflNear(const AIFloat3& pos, float radius) const
+{
+	float best = 0.f;
+	for (const CEnemyManager::SEnemyGroup& g : circuit->GetEnemyManager()->GetEnemyGroups()) {
+		if (g.pos.SqDistance2D(pos) < SQUARE(radius)) {
+			best = std::max(best, g.influence);
+		}
+	}
+	return best;
+}
+
 float CMilitaryManager::GuardSpotScore(const AIFloat3& from, int idx) const
 {
 	const std::vector<CCircuitAI::SHotSpot>& spots = circuit->GetHotSpots();

@@ -742,9 +742,9 @@ class AirCapHead(ComHead):
 
 
 class PlanHead(ComHead):
-    """The team plan net (plannet.as): normal play, mass T3, missiles, artillery."""
+    """The team plan net (plannet.as): normal play, mass T3, missiles, artillery, mass and push."""
     NAME = "plan"
-    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY")
+    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS")
     PREFIX = "NNG"
 
 

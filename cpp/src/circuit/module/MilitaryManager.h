@@ -208,6 +208,30 @@ public:
 	void ClearSupportSpots() { supportSpots.clear(); }
 	void AddSupportSpot(const springai::AIFloat3& pos, float worth) { supportSpots.emplace_back(pos, worth); }
 	const std::vector<std::pair<springai::AIFloat3, float>>& GetSupportSpots() const { return supportSpots; }
+	// apex: the TEAM PUSH -- the breach the allied team masses at, and whether
+	// its gathered power has called the go. Set by the script each tick.
+	void SetFocus(const springai::AIFloat3& pos, float radius, float teamPower, bool go, int until) {
+		focusPos = pos; focusR = radius; focusPow = teamPower; focusGo = go; focusUntil = until;
+	}
+	bool IsFocus(int frame) const { return frame < focusUntil; }
+	const springai::AIFloat3& GetFocusPos() const { return focusPos; }
+	float GetFocusR() const { return focusR; }
+	float GetFocusPow() const { return focusPow; }
+	bool IsFocusGo() const { return focusGo; }
+	float GetAttackPower() const {
+		float p = 0.f;
+		for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+			p += t->GetAttackPower();
+		}
+		return p;
+	}
+	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
+	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
+	springai::AIFloat3 focusPos;
+	float focusR = 0.f;
+	float focusPow = 0.f;
+	bool focusGo = false;
+	int focusUntil = -1;
 	// Shared cadence and counters for ISquadTask's merge census. They live on
 	// the manager because the tasks they measure are created and destroyed
 	// constantly, and the question is about the fleet, not one squad.

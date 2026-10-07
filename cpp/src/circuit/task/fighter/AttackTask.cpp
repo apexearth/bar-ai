@@ -213,7 +213,19 @@ void CAttackTask::Update()
 		return;
 	}
 
-	if (GetTarget() == nullptr) {
+	if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocus(frame)
+		&& !circuit->GetMilitaryManager()->IsFocusGo())
+	{
+		CMilitaryManager* mm = circuit->GetMilitaryManager();
+		const AIFloat3& fp = mm->GetFocusPos();
+		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+		AIFloat3 stage = fp + (home - fp).Normalize2D() * (mm->GetFocusR() + DEFAULT_SLACK * 4);
+		CTerrainManager::CorrectPosition(stage);
+		if (startPos.SqDistance2D(stage) < SQUARE(DEFAULT_SLACK * 4)) {
+			return;
+		}
+		position = stage;
+	} else if (GetTarget() == nullptr) {
 		forEco = !outgunned && MarchEnemyBox();
 		if (!forEco) {
 			if (outgunned && (frame >= nextFrontLog)) {
@@ -351,8 +363,17 @@ void CAttackTask::FindTarget()
 	const bool canGoHome = terrainMgr->CanMobileReachAt(area, basePos, highestRange);
 	const float inflCell = float(terrainMgr->GetConvertStoP() * 4);
 	const int frame = circuit->GetLastFrame();
-	// apex: each squad member's position, reach and power, read once per call --
-	// selfInflAt is asked four times per threatening group.
+	// apex: the team push (script plannet.as). Gathering, only a threat to the
+	// base is taken; on the go, the breach wins the choice and is weighed
+	// against the team's gathered power, not this squad's.
+	CMilitaryManager* milMgr = circuit->GetMilitaryManager();
+	const bool focusOn = milMgr->IsFocus(frame);
+	const bool focusGo = focusOn && milMgr->IsFocusGo();
+	const AIFloat3 focusPos = milMgr->GetFocusPos();
+	const float sqFocusR = SQUARE(milMgr->GetFocusR() + highestRange);
+	auto atFocus = [&](const AIFloat3& p) {
+		return focusGo && (p.SqDistance2D(focusPos) < sqFocusR);
+	};
 	struct SSelf { AIFloat3 pos; float r; float power; };
 	std::vector<SSelf> selfUnits;
 	selfUnits.reserve(units.size());
@@ -457,7 +478,10 @@ void CAttackTask::FindTarget()
 
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
-		if (strongMem && (group.pos.SqDistance2D(basePos) >= sqStrongBase)) {
+		if (focusOn && !focusGo && !isThreat[i]) {
+			continue;
+		}
+		if (strongMem && !atFocus(group.pos) && (group.pos.SqDistance2D(basePos) >= sqStrongBase)) {
 			countGroupNear(group, NR_STRONG);
 			continue;
 		}
@@ -471,7 +495,8 @@ void CAttackTask::FindTarget()
 		// hundred elmos from base and squads picked groups up to 20x their power.
 		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
-		if ((maxPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
+		const float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
+		if ((effPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
 			countGroupNear(group, NR_STRONG);
 			for (const ICoreUnit::Id eId : group.units) {
@@ -565,6 +590,9 @@ void CAttackTask::FindTarget()
 					}
 				}
 				pull = std::max(enemy->GetCost() + sup, 1.f) / (edef->GetPower() + ownPow);
+			}
+			if (atFocus(ePos)) {
+				pull *= 100.f;
 			}
 			// NEAR OUR OWN BASE, squared like the leader term (apexearth
 			// 2026-09-28): stock's linear distBE let every ally's army walk to

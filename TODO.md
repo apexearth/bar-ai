@@ -369,6 +369,10 @@ are needed "around the base"; also transports that free a stuck unit. Built
 - BAR's `unit_transportable_nanos.lua` refuses a lift of an ALLY's turret,
   so in team games each seat only moves its own.
 
+2026-10-07 he loves the transport code but finds it not active enough: the two
+biggest uses are moving nano turrets to where they are needed (the biggest),
+and carrying a group of units to a place pathing makes hard to reach.
+
 ## Escort strength scales with the risk of the trip
 
 apexearth 2026-09-24: the "assumed danger" prior backfired because some cons

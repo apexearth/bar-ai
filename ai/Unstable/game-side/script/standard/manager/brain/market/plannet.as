@@ -7,7 +7,7 @@ namespace Market {
 // row (an explorer always decides, so discovery leads its team). The rule is
 // NORMAL; the net learns which plan ends which game soonest.
 const string NNG_PLAN = "foeStaticM,foeArmyM,ourArmyM,breachM,mInc,eInc,gantries,silos,lrpcs,tacticals,bankFill,minute";
-const int NG_NORMAL = 0, NG_T3 = 1, NG_MISSILE = 2, NG_ARTY = 3;
+const int NG_NORMAL = 0, NG_T3 = 1, NG_MISSILE = 2, NG_ARTY = 3, NG_MASS = 4;
 const float NG_MUL = 4.f;
 const int NG_HOLD_S = 240;
 const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2;
@@ -18,7 +18,7 @@ bool gPlanHeader = false;
 
 string NgName(int o)
 {
-	return (o == NG_T3) ? "T3" : ((o == NG_MISSILE) ? "MISSILE" : ((o == NG_ARTY) ? "ARTY" : "NORMAL"));
+	return (o == NG_T3) ? "T3" : ((o == NG_MISSILE) ? "MISSILE" : ((o == NG_ARTY) ? "ARTY" : ((o == NG_MASS) ? "MASS" : "NORMAL")));
 }
 
 float PlanMul(int sc)
@@ -47,10 +47,10 @@ void PlanNetDecide()
 		return;
 	}
 	gPlanMineUntil = ai.frame + NG_HOLD_S * SECOND;
-	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each a quarter of the time
+	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each a fifth of the time
 	if (!gPlanHeader) {
 		gPlanHeader = true;
-		AiLog("apex: nnplan-schema v1 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY");
+		AiLog("apex: nnplan-schema v2 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS");
 	}
 	array<float> st;
 	NnState(null, st);
@@ -71,16 +71,90 @@ void PlanNetDecide()
 	f.insertLast(float(SuperHave(SC_TACTICAL) + SuperHave(SC_JUNO)));
 	f.insertLast((Eco::MStor() > 1.f) ? (Eco::MCur() / Eco::MStor()) : 0.f);
 	f.insertLast(float(ai.frame) / 1800.f);
-	array<float> w(4, NE2_EPS);
+	array<float> w(5, NE2_EPS);
 	w[NG_NORMAL] = 1.f;
 	const float trust = NnHeadScore(NNG_ON, NNG_STATE, NNG_PLAN, NNG_S, NNG_O, NNG_H, NNG_XM, NNG_XS,
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
-	array<float> p(4);
+	array<float> p(5);
 	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
 	ai.SetTeamBoard(BOARD_PLAN, float(gPlan));
 	ai.SetTeamBoard(BOARD_PLAN_UNTIL, float(gPlanMineUntil));
-	array<string> names = {"NORMAL", "T3", "MISSILE", "ARTY"};
+	array<string> names = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS"};
 	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, names, w, p, gPlan));
+}
+
+// THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the
+// turret line our army dies to; each ally's attack squads gather short of it
+// (AttackTask), and when the team's gathered power beats the strongest group
+// there -- the test a lone squad applies to itself -- all go together.
+const int BOARD_FOCUS_X = 3, BOARD_FOCUS_Z = 4, BOARD_FOCUS_R = 5, BOARD_GO_UNTIL = 6;
+const int BOARD_GATHER = 100, BOARD_GATHER_AT = 200;
+const float PUSH_STAND = 256.f;
+int gPushNextAt = 0;
+int gPushLogAt = 0;
+int gPushGoes = 0;
+
+void TeamPush()
+{
+	if (ai.frame < gPushNextAt)
+		return;
+	gPushNextAt = ai.frame + 5 * SECOND;
+	if (gPlan == NG_NORMAL) {
+		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+		return;
+	}
+	if (ai.frame < gPlanMineUntil) {
+		AIFloat3 at;
+		float r = 0.f, m = 0.f;
+		if (Military::TurretTarget(at, r, m)) {
+			const float ox = ai.GetTeamBoard(BOARD_FOCUS_X, -1.f);
+			const float oz = ai.GetTeamBoard(BOARD_FOCUS_Z, -1.f);
+			if ((ox < 0.f) || (AIFloat3(ox, 0.f, oz).distance2D(at) > r))
+				ai.SetTeamBoard(BOARD_GO_UNTIL, -1.f);
+			ai.SetTeamBoard(BOARD_FOCUS_X, at.x);
+			ai.SetTeamBoard(BOARD_FOCUS_Z, at.z);
+			ai.SetTeamBoard(BOARD_FOCUS_R, r);
+		} else {
+			ai.SetTeamBoard(BOARD_FOCUS_R, -1.f);
+		}
+	}
+	const float r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
+	if (r < 0.f) {
+		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+		return;
+	}
+	AIFloat3 fp(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
+	fp.y = ai.GetElevationAt(fp);
+	const AIFloat3 home = aiSetupMgr.GetBasePos();
+	AIFloat3 dir = home - fp;
+	const float dl = dir.Length2D();
+	if (dl > 1.f)
+		dir = dir / dl;
+	const AIFloat3 stage = fp + dir * (r + PUSH_STAND);
+	const float mine = aiMilitaryMgr.GetAttackPowerNear(stage, 2.f * PUSH_STAND);
+	ai.SetTeamBoard(BOARD_GATHER + ai.teamId, mine);
+	ai.SetTeamBoard(BOARD_GATHER_AT + ai.teamId, float(ai.frame));
+	float team = 0.f;
+	for (int t = 0; t < 64; ++t) {
+		if (float(ai.frame) - ai.GetTeamBoard(BOARD_GATHER_AT + t, -1e9f) < float(15 * SECOND))
+			team += ai.GetTeamBoard(BOARD_GATHER + t, 0.f);
+	}
+	const float foe = aiMilitaryMgr.GetEnemyInflNear(fp, r + PUSH_STAND);
+	bool go = ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) > float(ai.frame);
+	if (!go && (team > 0.f) && (team > foe)) {
+		go = true;
+		++gPushGoes;
+		ai.SetTeamBoard(BOARD_GO_UNTIL, float(ai.frame + 90 * SECOND));
+		AiLog("apex: push go t=" + ai.teamId + " plan=" + NgName(gPlan) + " at=" + int(fp.x) + "," + int(fp.z)
+			+ " foe=" + NnF(foe, 1) + " team=" + NnF(team, 1) + " mine=" + NnF(mine, 1));
+	}
+	aiMilitaryMgr.SetFocus(fp, r, team, go, ai.frame + 10 * SECOND);
+	if (ai.frame >= gPushLogAt) {
+		gPushLogAt = ai.frame + 30 * SECOND;
+		AiLog("apex: push t=" + ai.teamId + " plan=" + NgName(gPlan) + " at=" + int(fp.x) + "," + int(fp.z)
+			+ " r=" + int(r) + " foe=" + NnF(foe, 1) + " team=" + NnF(team, 1) + " mine=" + NnF(mine, 1)
+			+ " all=" + NnF(aiMilitaryMgr.GetAttackPower(), 1) + " go=" + (go ? 1 : 0) + " goes=" + gPushGoes);
+	}
 }
 
 // ALLIES BUILD ONE GANTRY TOGETHER (his 2026-10-07: "why make 8 gantries in an
