@@ -1464,6 +1464,62 @@ static CScriptArray* CCircuitAI_GetAllyPlants(CCircuitAI* circuit)
 	return arr;
 }
 
+// Allied (not own) factories and nanoframes as (x, z, defId, unitId, progress),
+// so a builder can join an ally's gantry instead of starting its own.
+static CScriptArray* CCircuitAI_GetAllyBuilds(CCircuitAI* circuit)
+{
+	std::vector<float> out;
+	const int frame = circuit->GetLastFrame();
+	for (const auto& kv : circuit->GetFriendlyUnits()) {
+		CAllyUnit* u = kv.second;
+		if ((u == nullptr) || (u->GetCircuitDef() == nullptr) || (u->GetUnit() == nullptr)) {
+			continue;
+		}
+		if (circuit->GetTeamUnit(kv.first) != nullptr) {
+			continue;
+		}
+		const CCircuitDef* cdef = u->GetCircuitDef();
+		const bool frameNow = u->GetUnit()->IsBeingBuilt();
+		if (cdef->IsMobile() || (!frameNow && !cdef->IsBuilder())) {
+			continue;
+		}
+		const AIFloat3& pos = u->GetPos(frame);
+		out.push_back(pos.x);
+		out.push_back(pos.z);
+		out.push_back(float(cdef->GetId()));
+		out.push_back(float(kv.first));
+		out.push_back(frameNow ? u->GetUnit()->GetBuildProgress() : 1.f);
+	}
+	asITypeInfo* at = FloatArrayType();
+	if (at == nullptr) {
+		return nullptr;
+	}
+	CScriptArray* arr = CScriptArray::Create(at, out.size());
+	for (asUINT i = 0; i < out.size(); ++i) {
+		arr->SetValue(i, &out[i]);
+	}
+	return arr;
+}
+
+// A board the allied AIs of one process share, keyed by ally team: the team's
+// plan and who is raising what. AIs hosted elsewhere simply never see it.
+static std::map<std::pair<int, int>, float>& TeamBoard()
+{
+	static std::map<std::pair<int, int>, float> board;
+	return board;
+}
+
+static void CCircuitAI_SetTeamBoard(CCircuitAI* circuit, int slot, float v)
+{
+	TeamBoard()[std::make_pair(circuit->GetAllyTeamId(), slot)] = v;
+}
+
+static float CCircuitAI_GetTeamBoard(CCircuitAI* circuit, int slot, float def)
+{
+	auto it = TeamBoard().find(std::make_pair(circuit->GetAllyTeamId(), slot));
+	return (it == TeamBoard().end()) ? def : it->second;
+}
+
 // The area a point stands in for one move type, or the nearest one within a
 // few sectors: a point in the sea or on a cliff face belongs to the ground
 // beside it for the question below.
@@ -2079,6 +2135,9 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyDefences()", asFUNCTION(CCircuitAI_GetAllyDefences), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStatics()", asFUNCTION(CCircuitAI_GetAllyStatics), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyPlants()", asFUNCTION(CCircuitAI_GetAllyPlants), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyBuilds()", asFUNCTION(CCircuitAI_GetAllyBuilds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "void SetTeamBoard(int, float)", asFUNCTION(CCircuitAI_SetTeamBoard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamBoard(int, float)", asFUNCTION(CCircuitAI_GetTeamBoard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetUnsafeSites()", asFUNCTION(CCircuitAI_GetUnsafeSites), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

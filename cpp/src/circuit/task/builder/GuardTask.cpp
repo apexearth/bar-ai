@@ -25,6 +25,25 @@ CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority, CCircuitUnit* vip,
 {
 }
 
+CBGuardTask::CBGuardTask(ITaskModule* mgr, Priority priority,
+		ICoreUnit::Id allyId, const AIFloat3& pos, int timeout)
+		: IBuilderTask(mgr, priority, nullptr, pos, Type::BUILDER, BuildType::GUARD, {0.f, 0.f}, 0.f, timeout)
+		, vipId(allyId)
+		, isAlly(true)
+		, isInterrupt(false)
+		, isFrame(false)
+		, vipTask(nullptr)
+{
+	CAllyUnit* vip = Vip();
+	isFrame = (vip != nullptr) && vip->GetUnit()->IsBeingBuilt();
+}
+
+CAllyUnit* CBGuardTask::Vip() const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	return isAlly ? circuit->GetFriendlyUnit(vipId) : circuit->GetTeamUnit(vipId);
+}
+
 CBGuardTask::~CBGuardTask()
 {
 }
@@ -93,8 +112,14 @@ void CBGuardTask::Stop(bool done)
 // afus by twenty minutes (apexearth 2026-09-08).
 void CBGuardTask::Update()
 {
-	CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
-	if (isFrame) {
+	CAllyUnit* ally = Vip();
+	CCircuitUnit* vip = isAlly ? nullptr : static_cast<CCircuitUnit*>(ally);
+	if (isAlly) {
+		if ((ally == nullptr) || (isFrame && !ally->GetUnit()->IsBeingBuilt())) {
+			manager->AbortTask(this);
+			return;
+		}
+	} else if (isFrame) {
 		if ((vip == nullptr) || vip->IsFinished()) {
 			manager->AbortTask(this);
 			return;
@@ -120,7 +145,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
 	executors.insert(unit);
 
 	CCircuitAI* circuit = manager->GetCircuit();
-	CCircuitUnit* vip = circuit->GetTeamUnit(vipId);
+	CAllyUnit* vip = Vip();
 	if (vip != nullptr) {
 		const int frame = circuit->GetLastFrame();
 		const AIFloat3& vipPos = vip->GetPos(frame);
@@ -151,7 +176,7 @@ bool CBGuardTask::Execute(CCircuitUnit* unit)
 void CBGuardTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	CCircuitUnit* vip = circuit->GetTeamUnit(vipId);
+	CAllyUnit* vip = Vip();
 	if (vip != nullptr) {
 		TRY_UNIT(circuit, unit,
 			unit->GetUnit()->Guard(vip->GetUnit());
@@ -171,7 +196,7 @@ bool CBGuardTask::Reevaluate(CCircuitUnit* unit)
 
 bool CBGuardTask::IsTargetBuilder() const
 {
-	CCircuitUnit* vip = manager->GetCircuit()->GetTeamUnit(vipId);
+	CAllyUnit* vip = Vip();
 	return (vip != nullptr) && vip->GetCircuitDef()->IsBuilder();
 }
 

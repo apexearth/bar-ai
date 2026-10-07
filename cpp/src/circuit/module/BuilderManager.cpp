@@ -786,7 +786,10 @@ IUnitTask* CBuilderManager::Enqueue(const TaskB::SServBTask& ti)
 			task = pt;
 		} break;
 		case IBuilderTask::BuildType::GUARD: {
-			task = new CBGuardTask(this, ti.priority, ti.target, ti.isInterrupt, ti.timeout);
+			// apex: no target = an ally's unit, its id carried in powerMod (TaskB::GuardAlly).
+			task = (ti.target != nullptr)
+				? new CBGuardTask(this, ti.priority, ti.target, ti.isInterrupt, ti.timeout)
+				: new CBGuardTask(this, ti.priority, ICoreUnit::Id(ti.powerMod), ti.position, ti.timeout);
 		} break;
 		case IBuilderTask::BuildType::COMBAT: {
 			task = new CCombatTask(this, ti.powerMod);

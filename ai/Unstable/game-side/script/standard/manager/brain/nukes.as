@@ -307,6 +307,7 @@ void UpdateNukes()
 	int bestAntis = 0;
 	float bestCost = 0.f;
 	bool bestDef = false;
+	bool bestBreach = false;
 	// 10k floor (apexearth: "filter the metal to target areas of 10k metal
 	// or more if possible") -- with no qualifying target the missiles KEEP
 	// SAVING, which is the point; the stockpile only grows.
@@ -424,6 +425,23 @@ void UpdateNukes()
 			}
 		}
 	}
+	// The turret line the team means to break, under its MISSILE plan.
+	if (Market::gPlan == Market::NG_MISSILE) {
+		AIFloat3 line;
+		float lineR = 0.f, lineM = 0.f;
+		if (Military::TurretTarget(line, lineR, lineM) && OnMap(line) && !VolleyServes(line)) {
+			const int antis = AntisCovering(line);
+			const float score = lineM / float(1 + antis) * Market::NG_MUL;
+			if (score > bestScore) {
+				bestScore = score;
+				bestPos = line;
+				bestAntis = antis;
+				bestCost = lineM;
+				bestDef = false;
+				bestBreach = true;
+			}
+		}
+	}
 
 	if (bestScore <= 0.f) {
 		if (ai.frame >= gNukeNextLog) {
@@ -448,6 +466,8 @@ void UpdateNukes()
 	// ground correctly next time.
 	int needed = 1 + AntisCovering(bestPos)
 			* int(ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI));
+	if (bestBreach)
+		needed += int(bestCost / ai.GetTunable("apex_nuke_value_per", TUNE_NUKE_VALUE_PER));
 	if (bestDef) {
 		int extra = int(bestCost / ai.GetTunable("apex_nuke_value_per", TUNE_NUKE_VALUE_PER));
 		if (extra > 3)
@@ -459,7 +479,7 @@ void UpdateNukes()
 			gNukeNextLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: nukes saving " + stock + "/" + needed
 				+ " for a target worth " + formatFloat(bestCost, "", 0, 0)
-				+ " behind " + bestAntis + " antinukes");
+				+ " behind " + bestAntis + " antinukes" + (bestBreach ? " (the line, plan MISSILE)" : ""));
 		}
 		return;
 	}

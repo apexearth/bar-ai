@@ -188,6 +188,7 @@ int SuperTarget(int sc)
 	float per = ai.GetTunable("apex_super_per_income", TUNE_SUPER_PER_INCOME);
 	if (per < 1.f)
 		per = 150.f;
+	per /= PlanMul(sc);
 	// The anti-nuke is the one whose first copy is not optional: an uncovered
 	// nuke is the whole base. Silos share its spacing (apexearth 2026-08-27,
 	// watching: "I like our use of nukes - we could use more"); the other
@@ -797,7 +798,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// below, taken first for every class whose budget IS the plain one --
 		// the gantry's team purse is computed further down and keeps its
 		// place.
-		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget))
+		if ((sc != SC_GANTRY) && (sc != SC_LRPC) && (SuperBill(d) >= budget * PlanMul(sc)))
 			continue;
 		if (Requests::LiveOfDef(Catalog::Def(d)))
 			continue;
@@ -832,6 +833,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				AdvDeferLog("gantry");
 				continue;
 			}
+			{
+				AIFloat3 agAt;
+				int agDef = -1;
+				float agDone = 0.f;
+				if ((SuperHave(SC_GANTRY) == 0) && !MetalWasting()
+					&& (AllyGantryFor(unit, agAt, agDef, agDone) >= 0))
+				{
+					AdvDeferLog("gantry(ally's)");
+					continue;
+				}
+			}
 			// Below the host anchor the gain scales by (own/anchor)^2, as the
 			// tunable says: a hard skip left most of an 8v8 at 60-130 m/s
 			// with no gantry at 38 minutes (apexearth 2026-09-27).
@@ -848,7 +860,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			teamInc = (gIncEma > 0.f) ? gIncEma : Eco::MInc();
 			const float gsec = ai.GetTunable("apex_gantry_afford_s",
 					TUNE_GANTRY_AFFORD_S);
-			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f);
+			classBudget = teamInc * ((gsec > 1.f) ? gsec : 100.f) * PlanMul(sc);
 		}
 		// A cannon's price is its time to afford (ValueOf), not this cut.
 		if ((sc != SC_LRPC) && (bill >= classBudget))
@@ -902,6 +914,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			gain = TacticalGain(d);
 		else if (sc == SC_JUNO)
 			gain = JunoGain();
+		gain *= PlanMul(sc);
 		if (noLines)
 			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
 		// THE GANTRY IS A PRODUCTION LINE, NOT A GUN. Affordability alone

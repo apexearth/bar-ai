@@ -228,6 +228,20 @@ SServBTask Guard(Task::Priority priority,
 	ti.timeout = timeout;
 	return ti;
 }
+// An ally's frame or factory, by unit id (the DLL reads a GUARD with no target this way).
+SServBTask GuardAlly(Task::Priority priority, int allyId, const AIFloat3& in pos, int timeout)
+{
+	SServBTask ti;
+	ti.type = Task::BuildType::GUARD;
+	ti.priority = priority;
+	@ti.target = null;
+	ti.position = pos;
+	ti.powerMod = float(allyId);
+	ti.isInterrupt = false;
+	ti.isMove = false;
+	ti.timeout = timeout;
+	return ti;
+}
 SServBTask Combat(float powerMod)
 {
 	SServBTask ti;

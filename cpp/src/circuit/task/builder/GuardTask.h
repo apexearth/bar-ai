@@ -17,6 +17,9 @@ class CBGuardTask: public IBuilderTask {
 public:
 	CBGuardTask(ITaskModule* mgr, Priority priority,
 				CCircuitUnit* vip, bool isInterrupt, int timeout);
+	// apex: an ALLY's unit -- assist its frame or its factory.
+	CBGuardTask(ITaskModule* mgr, Priority priority,
+				ICoreUnit::Id allyId, const springai::AIFloat3& pos, int timeout);
 	virtual ~CBGuardTask();
 
 	virtual bool CanAssignTo(CCircuitUnit* unit) const override;
@@ -37,8 +40,10 @@ protected:
 
 private:
 	bool IsTargetBuilder() const;
+	CAllyUnit* Vip() const;
 
 	ICoreUnit::Id vipId;
+	bool isAlly = false;
 	bool isInterrupt;
 	bool isFrame;  // vip was a nanoframe when taken; the guard ends with it
 	IUnitTask* vipTask;  // a mobile vip's job when taken; the guard ends when it changes

@@ -201,5 +201,20 @@ const array<float> NNZ_B2 = {};
 const array<float> NNZ_WO = {};
 const float NNZ_BO = 0.f;
 const float NNZ_TRUST = 0.f;
+// the team plan net (plannet.as)
+const bool NNG_ON = false;
+const string NNG_STATE = "";
+const int NNG_S = 0;
+const int NNG_O = 0;
+const int NNG_H = 0;
+const array<float> NNG_XM = {};
+const array<float> NNG_XS = {};
+const array<float> NNG_W1 = {};
+const array<float> NNG_B1 = {};
+const array<float> NNG_W2 = {};
+const array<float> NNG_B2 = {};
+const array<float> NNG_WO = {};
+const float NNG_BO = 0.f;
+const float NNG_TRUST = 0.f;
 
 }  // namespace Market

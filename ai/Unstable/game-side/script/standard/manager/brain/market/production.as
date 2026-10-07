@@ -1364,6 +1364,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const float mine = FacBestPPC(fid);
 		const int myTier = PlantTier(fid);
 		float betterCap = 0.f;
+		bool gantryUp = false;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f2 = Factory::gFacUnits[fi];
 			if ((f2 is null) || (f2.circuitDef is null) || (int(f2.id) == int(fac.id)))
@@ -1372,6 +1373,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const bool gantryOver = (PlantTier(f2d) >= 3) && (PlantTier(f2d) > myTier) && !AirPlant(f2d);
 			if ((FacBestPPC(f2d) <= mine) && !gantryOver)
 				continue;
+			gantryUp = gantryUp || gantryOver;
 			// Only the window its own queue leaves free: a gantry holding
 			// minutes of T3 orders would take the whole gap from the T2 lab
 			// and spend none of it.
@@ -1380,13 +1382,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (busy < fillS)
 				betterCap += FacMetalRate(f2) * (fillS - busy);
 		}
-		if (betterCap > 0.f) {
+		if ((betterCap > 0.f) || ((gPlan == NG_T3) && gantryUp)) {
 			const float coverGapKeep = armyGap * coverShare;
 			float left = armyGap - betterCap;
 			if (left < coverGapKeep)
 				left = coverGapKeep;
 			if (left < 0.f)
 				left = 0.f;
+			if ((gPlan == NG_T3) && gantryUp)
+				left = coverGapKeep;   // the team plan: everything but fodder to the gantry
 			// The spare-metal sink re-enters as its own gap per candidate, so it
 			// yields too, or a full bank kept every T1 lab running beside T2.
 			richBal -= betterCap;

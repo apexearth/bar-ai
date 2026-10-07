@@ -117,6 +117,32 @@ Want@ ProposeUnlockAssist(CCircuitUnit@ unit, bool defence)
 			bestD = d;
 		}
 	}
+	// ...an ally's gantry in reach, while we own none: its frame, and under a
+	// T3 plan its production too (plannet.as).
+	if ((best is null) && !defence && (SuperHave(SC_GANTRY) == 0)) {
+		AIFloat3 agAt;
+		int agDef = -1;
+		float agDone = 0.f;
+		const int ag = AllyGantryFor(unit, agAt, agDef, agDone);
+		if ((ag >= 0) && ((agDone < 1.f) || (gPlan == NG_T3))
+			&& (uint(AllyGuardsOn(ag)) < Requests::SiteWorkerCap(Catalog::Def(agDef))))
+		{
+			w.kind = WK_ASSIST;
+			w.pos = agAt;
+			w.spotId = ag;
+			w.gain = 1.f;
+			w.mCost = 1.f;
+			w.tCost = 1.f;
+			w.value = 1.f;
+			@w.def = Catalog::Def(agDef);
+			@gAssistTarget = null;
+			gAssistTargetId = -1;
+			gAssistAllyId = ag;
+			gAssistGuardS = (agDone < 1.f)
+				? int(Catalog::gCostM[agDef] * (1.f - agDone) / Requests::DRAIN) + 10 : 60;
+			return w;
+		}
+	}
 	// ...and an advanced plant frame whose request died with its builder: it
 	// still holds every other advanced plant ask (AdvPlantInFlight), its own
 	// def included, so this is the only way back to it.
