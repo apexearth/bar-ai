@@ -20,7 +20,10 @@ and no game since has been read for it.
 2v2 vs BARb hard, our side +75% vs +50%, forced plan, no explorer
 (runtime/nn_barb2v2.sh). On the build with the strongest-group bar and the
 staging walk to range (05:40): rule 6-4, wins avg 45.2 min; MASS 6-5, wins
-avg 44.4 min -- a null at n=10 (95% CI 28-83%). Pushes trade 2.2:1 at the
+avg 44.4 min -- a null at n=10 (95% CI 28-83%). On the threat-clear staging
+build (06:59-08:44): rule 15-10 (60%, CI 41-77), wins avg 40.8 min; MASS
+12-7 + 2 draws at 60 min (63%, CI 41-81), wins avg 39.0, 262 pushes trading
+3.4:1 -- still a null. Pushes trade 2.2:1 at the
 breach vs BARb and 2.7-7:1 in self-play, yet games are neither won more nor
 ended sooner. Found along the way and fixed: the breach jumped every 5 s
 (held now), squads stopped at weapon range of the staging point (walk to it),
