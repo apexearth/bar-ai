@@ -244,7 +244,22 @@ lines of quotes.
   against BARb's 23-32% and trade 0.4-0.6 (ISSUES ARMY SHARE). A won economy
   must end the game (ISSUES CLOSING).
 - Multiple groups coordinate an attack; one big squad is not required
-  (ruling 2026-09-06, not built -- ISSUES attack bar).
+  (ruling 2026-09-06). 2026-10-07: across ALLIES too -- his 8v8 had six of
+  ours probing a 37k tower line one 4k squad at a time ("ended up doing
+  nothing"). Built: the team push (plannet.as; squads gather short of the
+  breach, all go when the team beats it); pushes trade 2.2:1 vs BARb, 2.7:1
+  in self-play. Open: the forced-MASS vs NORMAL A/B against BARb, and
+  whether MASS should be the plan net's prior.
+- Break a defended line (2026-10-07): mass T3 (a gantry where the nanos
+  stand, stop T2 units that are not good enough), tactical/EMP missiles,
+  banked nukes dropped together, many LRPCs / mega / Starfall, combined air
+  and ground on one point; allies who see each other's builds help -- one
+  fast shared gantry in an 8v8, not eight. Built as the plan net's options
+  and the ally-gantry co-build; the net learns which. Open: a gantry placed
+  where nanos already stand (a T2 lab replaced); the air strike rarely sees
+  the breach's guns.
+- Games should END (goal 2026-10-07): decisiveness, sooner when possible,
+  still sound in long games.
 - Reach units (Sheldons, Arbiters, snipers) never arrive in numbers: reach
   holds 0.04-0.07 of army metal against a 0.35 target; five pricing changes
   and a draw allocation (`TUNE_LINE_ALLOC`, off) failed. A share cannot come
@@ -284,6 +299,13 @@ lines of quotes.
 
 ## Air
 
+- Transports are good but not active enough (2026-10-07): move nano turrets
+  to where they are needed (the biggest use), and carry a group past ground
+  pathing makes hard. Drop failures fixed (landed 61% -> 75%); the open part
+  is moving BUSY turrets to higher-value work (TODO "Air-lift turrets").
+- A Legion Phoenix (T2 laser bomber) aims straight up and misses (his watch,
+  2026-10-07): BAR's own legphoenix.bos takes sqrt(1 - dy^2) with dy ~6.8, so
+  the engine's POW sanitises to 0. A game-asset bug, not ours; upstream.
 - The seat, once it turns military, makes a lot of air and sends devastating
   bombing raids; late game is LRPC and nukes, not more factories. Bomber
   bidding, cost-weighed wings and the hold-off removal landed 09-13/14 --
