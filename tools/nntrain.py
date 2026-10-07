@@ -138,6 +138,7 @@ def adopt_keys(obj, keys):
         if net is not None:
             net.grow(at, n)
     obj.state_keys = list(keys)
+    obj.grown = True   # the next save must write the buffer, or it no longer fits the net
     print("%s: %d state fields appended (%s); weights kept" % (getattr(obj, "NAME", "builder"), n, ",".join(keys[at:])), flush=True)
     return True
 
@@ -558,7 +559,8 @@ class FacHead:
         import torch
         if self.full is None:
             return
-        if buffer or self.batches % BUFFER_EVERY == 0:
+        if buffer or getattr(self, "grown", False) or self.batches % BUFFER_EVERY == 0:
+            self.grown = False
             np.savez(OUT / (self.NAME + "_buffer.tmp.npz"), XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
                      state_keys=np.array(self.state_keys), batches=self.batches)
             replace_retry(OUT / (self.NAME + "_buffer.tmp.npz"), OUT / (self.NAME + "_buffer.npz"))
@@ -807,7 +809,8 @@ class Trainer:
         replace_retry(tmp, OUT / "seen.json")
         if self.full is None:
             return
-        if buffer or (buffer is None and self.batches % BUFFER_EVERY == 0):
+        if buffer or getattr(self, "grown", False) or (buffer is None and self.batches % BUFFER_EVERY == 0):
+            self.grown = False
             np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
                      state_keys=np.array(self.state_keys), batches=self.batches)
             replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
