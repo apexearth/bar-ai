@@ -1069,7 +1069,8 @@ def nn_results(last=None, hours=None):
     """W/L/D of the nn training tournaments' games over the same range, split
     normal vs discovery and by opponent; each game is read once and cached."""
     games = []
-    tours = list((REPO / "tournaments").glob("*-nn-b*")) + list((REPO / "tournaments").glob("*-nn-self*"))
+    tours = (list((REPO / "tournaments").glob("*-nn-b*")) + list((REPO / "tournaments").glob("*-nn-self*"))
+             + list((REPO / "tournaments").glob("*-nn-team*")))
     for t in tours:
         for m in (t / "matches").glob("*"):
             res = m / "result.json"
@@ -1108,8 +1109,22 @@ def nn_results(last=None, hours=None):
                         pass
                     if len(ex) != 1:
                         continue
+                    # winners are ally teams; in a team game the explorer's engine team is not one
+                    exa = ex.pop()
+                    try:
+                        cur = None
+                        for ln in (m / "script.txt").read_text(encoding="utf-8", errors="replace").splitlines():
+                            mm = re.match(r"\s*\[TEAM(\d+)\]", ln)
+                            if mm:
+                                cur = int(mm.group(1))
+                            mm = re.match(r"\s*AllyTeam=(\d+);", ln)
+                            if mm and cur == exa:
+                                exa = int(mm.group(1))
+                                break
+                    except OSError:
+                        pass
                     winners = (r.get("result") or {}).get("winners") or []
-                    outcome = "draw" if not winners else ("loss" if ex.pop() in winners else "win")
+                    outcome = "draw" if not winners else ("loss" if exa in winners else "win")
                     hit = (mt, outcome, "ourselves", "normal vs explorer")
                     NN_RESULT_CACHE[key] = hit
                     _mt, outcome, opp, kind = hit
