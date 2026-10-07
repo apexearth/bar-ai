@@ -71,7 +71,8 @@ def tree_hashes(root):
     name card (AIInfo.lua), path -> sha."""
     out = {}
     for p in sorted(root.rglob("*")):
-        if p.is_file() and p.suffix in (".as", ".json", ".lua", ".txt", ".ini") and p.name != "nnweights.as" \
+        if p.is_file() and p.suffix in (".as", ".json", ".lua", ".txt", ".ini") \
+                and p.name not in ("nnweights.as", "AIInfo.lua") \
                 and "apex-t" not in p.name and p.name != "apex-record.txt":
             out[str(p.relative_to(root)).replace("\\", "/")] = sha(p)
     return out
