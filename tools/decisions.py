@@ -355,7 +355,11 @@ def labels(g, t, f, site=None):
         mine = g["allyof"].get(t)
         sign = 0.0 if not w or mine is None else (1.0 if mine in w else -1.0)
         y["endV"] = sign * math.exp(-max(0, g["last"] - f) / (END_TAU * FPM))
-        dfs = [df for df, unit, _x, _z in g["dead"].get(t, []) if df > f and unit.startswith(COMS)]
+        # ...only a death the game went on after: in 1v1 the commander's death IS
+        # the loss, already in endV -- counted again it made a loss -3 to a win's
+        # +1 (his 2026-10-06).
+        dfs = [df for df, unit, _x, _z in g["dead"].get(t, [])
+               if df > f and unit.startswith(COMS) and g["last"] - df > COM_END_F]
         y["comLostD"] = math.exp(-(min(dfs) - f) / (COM_H * FPM)) if dfs else 0.0
     else:
         y["endV"] = None
@@ -364,6 +368,7 @@ def labels(g, t, f, site=None):
 
 
 END_TAU = 10   # minutes: the longest horizon
+COM_END_F = 300   # frames: a commander death this close to the end ended the game
 
 
 COM_H = 3
