@@ -15,6 +15,21 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## DECISIVENESS: THE TEAM PUSH AGAINST BARB (2026-10-07)
+
+2v2 vs BARb hard, our side +75% vs +50%, forced plan, no explorer
+(runtime/nn_barb2v2.sh). On the build with the strongest-group bar and the
+staging walk to range (05:40): rule 6-4, wins avg 45.2 min; MASS 6-5, wins
+avg 44.4 min -- a null at n=10 (95% CI 28-83%). Pushes trade 2.2:1 at the
+breach vs BARb and 2.7-7:1 in self-play, yet games are neither won more nor
+ended sooner. Found along the way and fixed: the breach jumped every 5 s
+(held now), squads stopped at weapon range of the staging point (walk to it),
+the threat-map path to staging failed 224-827 times a game (walk anyway,
+`apex: atk-stage-nopath`), a summed-defence bar made pushes rarer and worse
+(reverted). Open: a forced plan pushes from minute 4 with 25-power teams
+(early pushes into BARb's pressure); the staging point sits inside the threat
+map's widened danger; the side's attack power is often small or zero.
+
 ## PERFORMANCE
 
 ### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)
