@@ -735,9 +735,29 @@ void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
 
 	if (!pPath->posPath.empty()) {
 		ActivePath(lowestSpeed);
-	} else {
-		FallbackFrontPos();
+		return;
 	}
+	// apex: no threat-clear path to the team's staging point -- walk there anyway;
+	// the front fallback sent gathering squads anywhere but the gather.
+	CCircuitAI* circuit = manager->GetCircuit();
+	CMilitaryManager* mm = circuit->GetMilitaryManager();
+	const int frame = circuit->GetLastFrame();
+	if ((GetTarget() == nullptr) && mm->IsFocus(frame) && !mm->IsFocusGo() && (leader != nullptr)) {
+		if (frame >= nextStageLog) {
+			nextStageLog = frame + FRAMES_PER_SEC * 10;
+			const AIFloat3& lp = leader->GetPos(frame);
+			circuit->LOG("apex: atk-stage-nopath t=%i lead=%s n=%i at=%.0f,%.0f to=%.0f,%.0f",
+				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
+				lp.x, lp.z, position.x, position.z);
+		}
+		for (CCircuitUnit* u : units) {
+			TRY_UNIT(circuit, u,
+				u->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::RALLY);
+			)
+		}
+		return;
+	}
+	FallbackFrontPos();
 }
 
 void CAttackTask::FallbackFrontPos()

@@ -49,6 +49,7 @@ private:
 	int nextNearLog = 0;
 	int nextDropLog = 0;
 	int nextFrontLog = 0;
+	int nextStageLog = 0;
 	// every group in sight was refused as too strong: we are outgunned, not blind
 	bool outgunned = false;
 	// an outgunned fall-back in progress: kept until arrival or a hit
