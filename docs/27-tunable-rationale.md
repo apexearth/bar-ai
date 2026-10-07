@@ -3201,3 +3201,12 @@ minute 10 0.5 against 0.9-1.0; army at 12 min 4,738 vs v0.1.3's 4,654 -- the
 army weight barely moves army while one lab is the bottleneck. Not kept: a 1v1
 second-lab exception (reverted for being a special case; apex_plant_income_per
 belongs to the search instead). Next: these become prices, not queue-jumps.
+
+### TUNE_NN_BLEND = 1, TUNE_NN_EXPLORE = 0 (2026-10-06)
+
+The defaults are what a game gets with no modoption set -- his shared slot and
+lobby games. His call: the nets steer (blend 1) and nothing plays random on
+purpose (discovery 0). Training, self-play, benchmarks and watch launches all
+pass their own values (runtime/nn_runs.sh explore 0.25; nn_selfex.sh and
+tools/watch_selfplay.sh apex_nn_explore_team), so they are unchanged. Before:
+blend 0 (nets off) and 0.1 (one lobby game in ten exploring).
