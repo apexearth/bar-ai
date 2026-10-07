@@ -189,6 +189,12 @@ def rand_weight(row):
     rule = row.get("rule")
     if row.get("explore") and rule and opts[ci].get("name") not in (None, rule):
         return RAND_W_MAX
+    # a builder pick an explorer's random kind multipliers (nm) moved off the
+    # option the market itself ranked first
+    if row.get("explore") and rule is None and "nm" in opts[ci]:
+        base = [num(o.get("value", 0)) / max(num(o.get("nm", 1)), 1e-6) for o in opts]
+        if base and max(range(len(base)), key=lambda i: base[i]) != ci:
+            return RAND_W_MAX
     return None
 
 

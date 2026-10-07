@@ -49,6 +49,7 @@ final class Want {
 	bool nnPriced = false;  // in the list when the net looked; forced wants added after are not
 	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
 	float nnTilt = 0.f;     // trust x the net's verdict, log units: the ETA ladder reads it too
+	float nnDrawP = -1.f;   // its category's odds in the roulette that drew it; -1 never drawn
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

@@ -132,6 +132,8 @@ void NnNoteDraw(CCircuitUnit@ unit, array<Want@>@ ranked, const array<int>& in c
 	for (int c = 0; c <= CAT_N; ++c) {
 		gNnP[c] = (sum > 0.f) ? (wt[c] / sum) : 0.f;
 		@gNnBest[c] = (catBest[c] >= 0) ? ranked[uint(catBest[c])] : null;
+		if (gNnBest[c] !is null)
+			gNnBest[c].nnDrawP = gNnP[c];
 	}
 }
 
@@ -425,6 +427,9 @@ void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why
 			p = (i == 0) ? 1.f : 0.f;
 		else if ((cat >= 0) && (gNnBest[cat] is w))
 			p = gNnP[cat];
+		// another hand's draw since overwrote the globals: the odds rode on the want
+		if (!here && (why == "draw") && (w.nnDrawP >= 0.f))
+			p = w.nnDrawP;
 		NnOpt(w, up, o);
 		ln += (i == 0 ? " | " : " ; ") + CatName(cat) + "," + KindName(w.kind)
 			+ "," + ((w.def is null) ? "-" : w.def.GetName());

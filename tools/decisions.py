@@ -163,10 +163,15 @@ def parse(path, files=None):
     heads = {}   # "com" / "tech": {"keys": their own fields, "rows": [...]}
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
+    explorers = set()   # engine teams that rolled discovery (apex: nn-explore t=N on)
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
+            if "apex: nn-explore t=" in ln:
+                mx = re.search(r"nn-explore t=(\d+) on", ln)
+                if mx:
+                    explorers.add(int(mx.group(1)))
             if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
@@ -271,7 +276,7 @@ def parse(path, files=None):
     return dict(rows=rows, execs=execs, nns=nns, state_keys=state_keys, opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
-                reclaim=reclaim, explore=explore, died=died, killby=killby,
+                reclaim=reclaim, explore=explore, explorers=explorers, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
                 postrows=postrows, post_keys=post_keys, heads=heads,
                 final=files is None)   # a finished game's merged infolog, not live files
@@ -397,7 +402,7 @@ def rows_of(path, g):
         y["survived"] = survived(g, t, f, o.get("def"), site, y["buildS"]) if y["done"] == 1 and site else None
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=int(u), con=con,
                    pick=int(pick), why=why, dm=dm, state=dict(zip(sk, sv)), opts=ov,
-                   chosen=ci, y=y)
+                   chosen=ci, y=y, explore=t in g.get("explorers", ()))
 
 
 def fac_rows_of(path, g):
