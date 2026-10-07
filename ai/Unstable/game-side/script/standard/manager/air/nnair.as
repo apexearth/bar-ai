@@ -20,6 +20,9 @@ const float NA_EPS = 0.01f;
 const uint NA_CANDS = 32;
 
 bool gNaHeader = false;
+bool gNaCellOn = false;        // the wave in flight was sent at a priced economy cell
+AIFloat3 gNaCellAt;
+int gNaCellCleared = 0;
 float gNaFlat = -1.f;
 int gNaNextAt = -1;
 int gNaPhase = 0;
@@ -545,6 +548,8 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 			gStrikeHas = true;
 			gStrikeAt = best.at;
 			gStrikePrize = best.v;
+			gNaCellAt = best.at;
+			gNaCellOn = true;
 			gStrikeAA = best.aaT;
 		}
 		Release("nnair " + why + " net=" + int(best.netM) + " killF=" + Market::NnF(best.killF, 2)

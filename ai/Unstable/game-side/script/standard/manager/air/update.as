@@ -235,8 +235,27 @@ void ReArm()
 	// Weight against weight: a count of 14 Dragons against one Dragon's 16
 	// units at home recalled the wave the moment the next one finished.
 	const int held = int(StandingHeldMass());
-	if ((have > 0) && (have * 2 >= gWaveLaunched) && (float(held) <= gWaveMass))
+	// ...or the cell it was sent at is cleared and the wave is over it: the run
+	// committed to the cell, and the bomb task otherwise hunts on until half the
+	// wave is dead (two Dragons, 10,200 metal, after a cell worth 9,066).
+	bool cleared = false;
+	if (gNaCellOn) {
+		const float cr = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
+		if (aiEnemyMgr.GetEnemyStructCostAt(gNaCellAt, cr) <= 1.f) {
+			for (uint i = 0; (i < gWave.length()) && !cleared; ++i) {
+				CCircuitUnit@ wu = ai.GetTeamUnit(gWave[i]);
+				cleared = (wu !is null) && (wu.GetPos(ai.frame).distance2D(gNaCellAt) <= cr);
+			}
+		}
+	}
+	if (!cleared && (have > 0) && (have * 2 >= gWaveLaunched) && (float(held) <= gWaveMass))
 		return;
+	if (cleared) {
+		++gNaCellCleared;
+		AiLog(Factory::T() + "apex: wave home -- cell cleared at " + int(gNaCellAt.x) + "," + int(gNaCellAt.z)
+			+ " bombers=" + have + "/" + gWaveLaunched + " n=" + gNaCellCleared);
+	}
+	gNaCellOn = false;
 	RecallWave();
 	ai.PublishTeamValue("strike_r", 0.f);
 	gStrike = false;
