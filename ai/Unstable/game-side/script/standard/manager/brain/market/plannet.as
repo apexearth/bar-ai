@@ -47,9 +47,7 @@ void PlanNetDecide()
 		return;
 	}
 	gPlanMineUntil = ai.frame + NG_HOLD_S * SECOND;
-	if (explore && (gEcoFlat < 0.f))
-		gEcoFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
-	const float flat = explore ? gEcoFlat : 0.f;
+	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each a quarter of the time
 	if (!gPlanHeader) {
 		gPlanHeader = true;
 		AiLog("apex: nnplan-schema v1 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY");
