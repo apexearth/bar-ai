@@ -9,7 +9,7 @@ namespace Market {
 const string NNG_PLAN = "foeStaticM,foeArmyM,ourArmyM,breachM,mInc,eInc,gantries,silos,lrpcs,tacticals,bankFill,minute";
 const int NG_NORMAL = 0, NG_T3 = 1, NG_MISSILE = 2, NG_ARTY = 3, NG_MASS = 4;
 const float NG_MUL = 4.f;
-const int NG_HOLD_S = 240;
+const int NG_HOLD_S = 480;   // a gantry or a battery takes longer than 4 min to pay off
 const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2;
 int gPlan = NG_NORMAL;
 int gPlanNextAt = 0;
