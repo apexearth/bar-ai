@@ -387,6 +387,7 @@ float OwnEscortPowBest()
 	return gOwnEscPow;
 }
 
+array<int> gFpmCnt;
 float gFoePowMed = -1.f;
 int gFoePowAt = -100000;
 float FoeGroundPowMedian()
@@ -394,21 +395,29 @@ float FoeGroundPowMedian()
 	if (ai.frame - gFoePowAt < 30 * SECOND)
 		return gFoePowMed;
 	gFoePowAt = ai.frame;
-	const float w = float(AiTerrainWidth()), h = float(AiTerrainHeight());
-	const AIFloat3 mid(w * 0.5f, 0.f, h * 0.5f);
-	const float r = sqrt(w * w + h * h) * 0.5f + 1.f;
+	// One pass over the enemies we know, tallied by def (a pass per def was a
+	// thousand engine scans in one update).
+	if (int(gFpmCnt.length()) <= Catalog::gDefCount)
+		gFpmCnt.resize(Catalog::gDefCount + 1);
+	array<int> seenDefs;
+	int tot = 0;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if ((d < 1) || (d > Catalog::gDefCount) || !Catalog::gMobile[d] || Catalog::gFlyer[d]
+			|| Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		if (gFpmCnt[d] == 0)
+			seenDefs.insertLast(d);
+		++gFpmCnt[d];
+		++tot;
+	}
 	array<float> pw;
 	array<int> n;
-	int tot = 0;
-	for (int d = 1; d <= Catalog::gDefCount; ++d) {
-		if (!Catalog::gMobile[d] || Catalog::gFlyer[d] || Catalog::gBuilder[d] || (Catalog::gPower[d] <= 1.f))
-			continue;
-		const int k = ai.CountEnemyDefNear(d, mid, r);
-		if (k <= 0)
-			continue;
-		pw.insertLast(Catalog::gPower[d]);
-		n.insertLast(k);
-		tot += k;
+	for (uint k = 0; k < seenDefs.length(); ++k) {
+		pw.insertLast(Catalog::gPower[seenDefs[k]]);
+		n.insertLast(gFpmCnt[seenDefs[k]]);
+		gFpmCnt[seenDefs[k]] = 0;
 	}
 	gFoePowMed = -1.f;
 	if (tot <= 0)

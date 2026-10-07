@@ -939,13 +939,19 @@ bool ConPoolFull(int d)
 	return ConPoolHave(pool) >= ConPoolCap(pool);
 }
 // Constructors as a share of our mobile units, for the nets.
+float gConShareVal = 0.f;
+int gConShareAt = -100000;
 float ConShare()
 {
+	if (ai.frame - gConShareAt < 2 * SECOND)
+		return gConShareVal;
+	gConShareAt = ai.frame;
 	int all = 0;
 	for (uint d = 1; d < gOwnCount.length(); ++d)
 		if (Catalog::gMobile[int(d)] && (gOwnCount[d] > 0))
 			all += gOwnCount[d];
-	return (all > 0) ? (float(ConFleetHave()) / float(all)) : 0.f;
+	gConShareVal = (all > 0) ? (float(ConFleetHave()) / float(all)) : 0.f;
+	return gConShareVal;
 }
 int ConFleetHave()
 {

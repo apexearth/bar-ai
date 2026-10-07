@@ -676,7 +676,19 @@ int EtaBatchN(float gainM, float P)
 // instead of by unspent metal, which bought 470 constructors in twenty
 // minutes of the economy-only canon (2026-09-08).
 int gHandsLogAt = 0;
+float gHandsVal = 0.f;
+int gHandsAt = -100000;
 float EtaHandsShare()
+{
+	// A state reading asked on every election frame; the economy behind it moves slower.
+	if (ai.frame - gHandsAt < 2 * SECOND)
+		return gHandsVal;
+	gHandsAt = ai.frame;
+	gHandsVal = EtaHandsShareNow();
+	return gHandsVal;
+}
+
+float EtaHandsShareNow()
 {
 	PoolRefresh();
 	Pool@ p = gPoolNow;

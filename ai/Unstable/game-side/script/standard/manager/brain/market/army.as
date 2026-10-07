@@ -126,7 +126,7 @@ float WorkerExposure(CCircuitUnit@ wkr)
 		return WorkerExposureNow(wkr);
 	if (ai.frame - gWkExpoAt[id] < 3 * SECOND)
 		return gWkExpoVal[id];
-	gWkExpoAt[id] = ai.frame;
+	gWkExpoAt[id] = ai.frame - (id % (2 * SECOND));   // staggered: a shared expiry refreshed every worker in one frame
 	gWkExpoVal[id] = WorkerExposureNow(wkr);
 	return gWkExpoVal[id];
 }
