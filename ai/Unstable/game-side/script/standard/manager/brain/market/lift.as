@@ -445,8 +445,11 @@ void LiftStep(LiftJob@ jb)
 	// Always around the cleared slot: "anywhere near the plane" set turrets
 	// down in doorways and walkways (apexearth 2026-09-30).
 	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
-	const AIFloat3 at = jb.to;
-	const float r = 300.f * float(jb.drops);
+	// Three refusals at the target and it goes back where it was picked up: that
+	// ground took it once (a ferried tower hovered 10 min widening to 6000 elmo).
+	const bool back = jb.drops > 3;
+	const AIFloat3 at = back ? jb.src : jb.to;
+	const float r = 300.f * float(back ? (jb.drops - 3) : jb.drops);
 	jb.plane.CmdUnloadArea(at, r);
 	jb.deadline = ai.frame + 30 * SECOND;
 	AiLog("apex: lift refused t=" + ai.teamId + " #" + jb.cargo.id
