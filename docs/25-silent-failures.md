@@ -714,3 +714,13 @@ the rest read as already learned: 19 batches in hours against T2 timing's
 628, and trust stuck at 0. The key now carries the game's fingerprint;
 `tools/nn_backfill.py` re-read 2,175 games (esc 34,806 rows, con/mex 26,976,
 caps 10,946). Rule: a "seen" key must contain something unique to the game.
+
+## S41 — saved every batch, never loaded: the builder net's trust evidence (2026-10-07)
+
+`Trainer.save` wrote the builder's per-kind trust pairs into `model.pt`;
+`Trainer.load` restored the nets and not the pairs (the heads' loader did).
+Every trainer restart -- the dashboard's start, a code change -- began the
+evidence from zero, and with the sharp market draw yielding a few chance
+decisions per game no kind reached the 200-pair floor: the builder net, the
+one that prices every build, never earned a say. Rule: for every field a
+save writes, find the line that reads it back.
