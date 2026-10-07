@@ -1136,7 +1136,9 @@ class Trainer:
             t = int(r[1])
             if len(first.setdefault(t, [])) < 3:
                 first[t].append(r[0])
-        fps = {t: "%s|%d|%s" % (head.NAME, t, "|".join(v)) for t, v in first.items()}
+        # clocked heads decide on the same frames every game: the game is part of the key
+        gfp = decisions.fingerprint(g)
+        fps = {t: "%s|%s|%d|%s" % (head.NAME, gfp, t, "|".join(v)) for t, v in first.items()}
         first_touch = not any(self.used.get(fp) for fp in fps.values())
         rows, keys = [], []
         for r in labelled:
