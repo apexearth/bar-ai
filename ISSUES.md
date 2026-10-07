@@ -27,6 +27,17 @@ total (1352 us avg, 56.6 ms max), bld.decide 2624 us avg; up.escortrecruit
 dec.nn 4 us (the no-trust skip, was 2.4 ms). Needs the same game on an idle
 machine before any verdict, then the perf-review agent on bld.decide.
 
+### GATE RED "HOME GROUND IS NOT DISCOUNTED" COMES FROM THE SIEGE PRIOR (2026-10-07)
+
+Gate 0687387c (Frozen Ford 2v2 s5/s6): home mexes (homeD 261-435) read
+surv 0.59-0.69 with haz=0, loss=0, grad=0. StreamRisk is max(hazard x
+shortfall, siege prior x shortfall x (1+grad)); with no hazard the siege prior
+alone discounts any home spot the cover reads short at. The same lines in
+tonight's 2v2 self-play read surv 1.000 at home. Open: why the gate games read
+home cover short (guns gone to the front, or the interior-hole rule not
+reaching these spots), and whether the prior should apply inside the base at
+all -- his call (the check is his ruling that home is not discounted).
+
 ### THE LAG LADDER STARVES BUILDERS FOR MINUTES WHEN THE SIM TRAILS THE ASKED SPEED (2026-10-03)
 
 Since 3afbf402 lag is measured against the host's asked speed. Eight headless
