@@ -7,7 +7,9 @@ ally-gantry help fire, and what did each side play?
 Per game: map, minutes, winner side, the explorer's side, each side's plans
 over time (minute:PLAN), push go count, gather peaks, ally-gantry assists and
 nuke volleys banked at the line. Sides are ally teams from the game's own
-script.txt (result.json winners are ally indices).
+script.txt (result.json winners are ally indices). The total line adds what
+the pushes traded: for each go (one per side, cell and minute), the metal of
+theirs and ours destroyed within 900 elmo of the breach in the next 3 minutes.
 """
 import collections
 import json
@@ -18,7 +20,10 @@ from pathlib import Path
 PLAN_ROW = re.compile(r"\[f=(\d+)\].*apex: nnplan t=(\d+) .* chosen=(\d)")
 FOLLOW = re.compile(r"\[f=(\d+)\].*apex: plan t=(\d+) follows (\w+)")
 PUSH = re.compile(r"apex: push t=(\d+) plan=(\w+) .* foe=([\d.]+) team=([\d.]+) mine=([\d.]+) all=([\d.]+) go=(\d)")
-GO = re.compile(r"\[f=(\d+)\].*apex: push go t=(\d+) plan=(\w+)")
+GO = re.compile(r"\[f=(\d+)\].*apex: push go t=(\d+) plan=(\w+) at=(\d+),(\d+)")
+DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=\S+ cost=(\d+) x=(\d+) z=(\d+)")
+PUSH_WIN = 3 * 60 * 30
+PUSH_R2 = 900.0 * 900.0
 NAMES = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS")
 
 
@@ -47,7 +52,23 @@ def one(m):
     plans = collections.defaultdict(list)
     for f, t, c in PLAN_ROW.findall(log):
         plans[ally.get(int(t), -1)].append("%d:%s" % (int(f) // 1800, NAMES[int(c)]))
-    goes = collections.Counter(ally.get(int(t), -1) for _f, t, _p in GO.findall(log))
+    gl = GO.findall(log)
+    goes = collections.Counter(ally.get(int(t), -1) for _f, t, _p, _x, _z in gl)
+    deaths = [(int(f), int(t), int(c), float(x), float(z)) for f, t, c, x, z in DEATH.findall(log)]
+    theirs = ours = 0
+    seen = set()
+    for f, t, _p, x, z in gl:
+        f, x, z, side = int(f), float(x), float(z), ally.get(int(t), -1)
+        key = (side, round(x / 300), round(z / 300), f // 1800)
+        if key in seen:
+            continue
+        seen.add(key)
+        for df, dt, cost, dx, dz in deaths:
+            if f <= df <= f + PUSH_WIN and (dx - x) ** 2 + (dz - z) ** 2 <= PUSH_R2:
+                if ally.get(dt) == side:
+                    ours += cost
+                else:
+                    theirs += cost
     peak = collections.defaultdict(float)
     foe = collections.defaultdict(float)
     for t, _p, fo, team, _mine, _all, _go in PUSH.findall(log):
@@ -58,7 +79,8 @@ def one(m):
     line = log.count("(the line, plan MISSILE)")
     return {"map": r.get("map", "?")[:18], "min": res.get("game_minutes"), "win": res.get("winners"),
             "ex": [ally.get(t, -1) for t in ex], "plans": dict(plans), "goes": dict(goes),
-            "peak": dict(peak), "foe": dict(foe), "agan": dict(agan), "line": line}
+            "peak": dict(peak), "foe": dict(foe), "agan": dict(agan), "line": line,
+            "pushTheirs": theirs, "pushOurs": ours}
 
 
 def main(argv):
@@ -87,12 +109,16 @@ def main(argv):
             tot["goes"] += g["goes"].get(a, 0)
             tot["agan"] += g["agan"].get(a, 0)
         tot["line"] += g["line"]
+        tot["pushTheirs"] += g["pushTheirs"]
+        tot["pushOurs"] += g["pushOurs"]
         print("%-18s %5.1fm win=%s ex=%s goes=%s gather=%s foe=%s allyGantry=%s line=%d" % (
             g["map"], g["min"] or 0, g["win"], g["ex"], g["goes"],
             {k: round(v) for k, v in g["peak"].items()}, {k: round(v) for k, v in g["foe"].items()},
             g["agan"], g["line"]))
         for a in sorted(g["plans"]):
             print("    side %d: %s" % (a, " ".join(g["plans"][a])))
+    if tot["pushOurs"]:
+        tot["pushTrade"] = round(tot["pushTheirs"] / tot["pushOurs"], 2)
     print(dict(tot))
     return 0
 
