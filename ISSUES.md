@@ -17,6 +17,16 @@ and no game since has been read for it.
 
 ## PERFORMANCE
 
+### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)
+
+`matches/20261007-8v8-mass` (Comet Catcher 8v8, +100%, MASS forced, 30 min)
+read 1.237 ms/AI/frame at minute 28 -- but on a machine running 8 other engines
+and the trainer, and the sections are wall time. hk.maketask.builder 197.7 s
+total (1352 us avg, 56.6 ms max), bld.decide 2624 us avg; up.escortrecruit
+1345 us avg / 17.6 ms max; up.escecontnets max 26.3 ms; up.planpush 14 us;
+dec.nn 4 us (the no-trust skip, was 2.4 ms). Needs the same game on an idle
+machine before any verdict, then the perf-review agent on bld.decide.
+
 ### THE LAG LADDER STARVES BUILDERS FOR MINUTES WHEN THE SIM TRAILS THE ASKED SPEED (2026-10-03)
 
 Since 3afbf402 lag is measured against the host's asked speed. Eight headless
