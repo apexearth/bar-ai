@@ -17,11 +17,27 @@ const int NK_FLOOR = 0, NK_YIELD = 1, NK_DRAW = 2;
 const int NX_HOLD = 0, NX_YIELD = 1, NX_PUSH = 2;
 const float NE2_EPS = 0.01f;
 int gConPolicy = NK_YIELD;
+// The constructor caps: ground pools x1/x2/x4 of the base (rule x1), the air
+// pool x2/x4/x8 (rule x4: air cons take no build space).
+const string NNQ_CAP = "conT1,conT2,conAir,capT1,capT2,capAir,conShare,mInc,mWasting,bankFill,idleCons,minute";
+float gConCapMul = 1.f;
+float gAirCapMul = 4.f;
 int gMexPolicy = NX_HOLD;
 float gMexMul = 1.f;
 int gEcoNetNextAt = 0;
 bool gEcoNetHeader = false;
 float gEcoFlat = -1.f;
+
+int IdleConCount()
+{
+	int n = 0;
+	for (uint i = 0; i < gWorkers.length(); ++i) {
+		CCircuitUnit@ w = gWorkers[i];
+		if ((w !is null) && ((w.task is null) || (w.task.GetType() == Task::Type::IDLE)))
+			++n;
+	}
+	return n;
+}
 
 string NkName(int o) { return (o == NK_FLOOR) ? "FLOOR" : ((o == NK_DRAW) ? "DRAW" : "YIELD"); }
 string NxName(int o) { return (o == NX_HOLD) ? "HOLD" : ((o == NX_PUSH) ? "PUSH" : "YIELD"); }
@@ -83,6 +99,8 @@ void EcoNetDecide()
 		gEcoNetHeader = true;
 		AiLog("apex: nncon-schema v1 state=" + NN_STATE + " con=" + NNK_CON + " opt=name,w,p opts=FLOOR,YIELD,DRAW");
 		AiLog("apex: nnmex-schema v1 state=" + NN_STATE + " mex=" + NNX_MEX + " opt=name,w,p opts=HOLD,YIELD,PUSH");
+		AiLog("apex: nncap-schema v1 state=" + NN_STATE + " cap=" + NNQ_CAP + " opt=name,w,p opts=X1,X2,X4");
+		AiLog("apex: nnacap-schema v1 state=" + NN_STATE + " acap=" + NNQ_CAP + " opt=name,w,p opts=A2,A4,A8");
 	}
 	{
 		array<float> f;
@@ -103,6 +121,39 @@ void EcoNetDecide()
 		gConPolicy = EcoDraw(NK_YIELD, trust, w, p, flat);
 		array<string> names = {"FLOOR", "YIELD", "DRAW"};
 		AiLog(EcoLine("nncon", "YIELD", explore, trust, st, f, names, w, p, gConPolicy));
+	}
+	{
+		array<float> qf;
+		qf.insertLast(float(ConPoolHave(0)));
+		qf.insertLast(float(ConPoolHave(1)));
+		qf.insertLast(float(ConPoolHave(2)));
+		qf.insertLast(float(ConPoolCap(0)));
+		qf.insertLast(float(ConPoolCap(1)));
+		qf.insertLast(float(ConPoolCap(2)));
+		qf.insertLast(ConShare());
+		qf.insertLast(Eco::MInc());
+		qf.insertLast(NnB(MetalWasting()));
+		qf.insertLast((Eco::MStor() > 1.f) ? (Eco::MCur() / Eco::MStor()) : 0.f);
+		qf.insertLast(float(IdleConCount()));
+		qf.insertLast(float(ai.frame) / 1800.f);
+		array<float> qw(3, NE2_EPS);
+		qw[0] = 1.f;
+		const float qtrust = NnHeadScore(NNQ_ON, NNQ_STATE, NNQ_CAP, NNQ_S, NNQ_O, NNQ_H, NNQ_XM, NNQ_XS,
+			NNQ_W1, NNQ_B1, NNQ_W2, NNQ_B2, NNQ_WO, NNQ_BO, NNQ_TRUST, st, qf, qw);
+		array<float> qp(3);
+		const int c = EcoDraw(0, qtrust, qw, qp, flat);
+		gConCapMul = (c == 1) ? 2.f : ((c == 2) ? 4.f : 1.f);
+		array<string> qnames = {"X1", "X2", "X4"};
+		AiLog(EcoLine("nncap", "X1", explore, qtrust, st, qf, qnames, qw, qp, c));
+		array<float> w2(3, NE2_EPS);
+		w2[1] = 1.f;
+		const float trust2 = NnHeadScore(NNZ_ON, NNZ_STATE, NNQ_CAP, NNZ_S, NNZ_O, NNZ_H, NNZ_XM, NNZ_XS,
+			NNZ_W1, NNZ_B1, NNZ_W2, NNZ_B2, NNZ_WO, NNZ_BO, NNZ_TRUST, st, qf, w2);
+		array<float> p2(3);
+		const int c2 = EcoDraw(1, trust2, w2, p2, flat);
+		gAirCapMul = (c2 == 0) ? 2.f : ((c2 == 2) ? 8.f : 4.f);
+		array<string> names2 = {"A2", "A4", "A8"};
+		AiLog(EcoLine("nnacap", "A4", explore, trust2, st, qf, names2, w2, p2, c2));
 	}
 	{
 		array<float> f;

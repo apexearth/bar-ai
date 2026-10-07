@@ -876,7 +876,7 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
 		const bool advHand = (DefTier(pd) >= 2) && (ConTierHave(1) > ConTierHave(2));
 		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
-				: (((ConFleetHave() >= RezFleetCap()) && !advHand)
+				: ((ConPoolFull(pd))
 					|| ConStandsIdle(Catalog::gFlyer[pd], DefTier(pd))))
 			return null;
 	}
@@ -909,6 +909,44 @@ int RezFleetCap()
 // Constructors capped like rez bots (apexearth 2026-09-27: "limit those flat
 // out the same way we limit rezbots"): a high-bonus economy cannot be spent
 // by more hands, and every extra con is lag.
+// The cap is per pool: T1 ground, T2+ ground and air constructors each have
+// their own, sized by the cap nets (econet.as) from the base.
+int ConPoolOf(int d)
+{
+	if (Catalog::gFlyer[d])
+		return 2;
+	return (DefTier(d) >= 2) ? 1 : 0;
+}
+int ConPoolHave(int pool)
+{
+	int n = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		const int di = int(d);
+		if (Catalog::gMobile[di] && Catalog::gBuilder[di] && !Catalog::gRezzer[di]
+			&& (Catalog::gCostM[di] > 1.f) && (ConPoolOf(di) == pool)
+			&& !Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
+			n += gOwnCount[d] + Brain::PendAnyOf(di);
+	}
+	return n;
+}
+int ConPoolCap(int pool)
+{
+	return int(float(RezFleetCap()) * ((pool == 2) ? gAirCapMul : gConCapMul) + 0.5f);
+}
+bool ConPoolFull(int d)
+{
+	const int pool = ConPoolOf(d);
+	return ConPoolHave(pool) >= ConPoolCap(pool);
+}
+// Constructors as a share of our mobile units, for the nets.
+float ConShare()
+{
+	int all = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d)
+		if (Catalog::gMobile[int(d)] && (gOwnCount[d] > 0))
+			all += gOwnCount[d];
+	return (all > 0) ? (float(ConFleetHave()) / float(all)) : 0.f;
+}
 int ConFleetHave()
 {
 	int n = 0;
@@ -1597,13 +1635,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 		} else if (Catalog::gBuilder[d] && Catalog::gMobile[d]) {
-			if (conFleet < 0)
-				conFleet = ConFleetHave();
-			// T2 HANDS FIRST UNDER THE CAP (his 2026-09-29: "con cap should not
-			// cause us to get 39 t1 and only 1 t2"): an advanced constructor is
-			// not refused while the fleet is mostly basic.
-			const bool advHand = (DefTier(d) >= 2) && (ConTierHave(1) > ConTierHave(2));
-			if ((conFleet >= RezFleetCap()) && !advHand) {
+			// each tier and the air have their own pool
+			if (ConPoolFull(d)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":concap";
 				continue;

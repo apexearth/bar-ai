@@ -763,13 +763,11 @@
 		"armack": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
-			"limit": 10,
 			"build_speed": 9.0  //bp 180
 		},
         "corack": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
-			"limit": 10,
 			"build_speed": 9.0  
 		},
 		"armfark": {
@@ -808,13 +806,11 @@
 		"armacv": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
-			"limit": 15,
 			"build_speed": 12.5  //bp 250
 		},
         "coracv": {
 			"role": ["builderT2"],
 			"attribute": ["solo"],
-			"limit": 15,
 			"build_speed": 12.5  //bp 250
 		},
 		"armconsul": {
@@ -859,14 +855,12 @@
 			"role": ["builderT2", "sub"],
 			"attribute": ["solo"],
 			"retreat": 0.5,
-			"limit": 8,
 			"build_speed": 15.0 //bp 300
 		},
 		"coracsub": {
 			"role": ["builderT2", "sub"],
             "attribute": ["solo"],
 			"retreat": 0.3,
-			"limit": 6,
 			"build_speed": 15.0
 		},
         "armmls": {

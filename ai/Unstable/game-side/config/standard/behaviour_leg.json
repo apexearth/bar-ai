@@ -532,7 +532,6 @@
 			"legack": {
 				"role": ["builderT2"],
 				"attribute": ["solo"],
-				"limit": 10,
 				"build_speed": 9.0  
 			},
 			"legcv": {
@@ -555,7 +554,6 @@
 			"legacv": {
 				"role": ["builderT2"],
 				"attribute": ["solo"],
-				"limit": 15,
 				"build_speed": 12.5
 			},
 			"legaceb": {

@@ -171,5 +171,35 @@ const array<float> NNX_B2 = {};
 const array<float> NNX_WO = {};
 const float NNX_BO = 0.f;
 const float NNX_TRUST = 0.f;
+// the ground constructor-cap net (econet.as)
+const bool NNQ_ON = false;
+const string NNQ_STATE = "";
+const int NNQ_S = 0;
+const int NNQ_O = 0;
+const int NNQ_H = 0;
+const array<float> NNQ_XM = {};
+const array<float> NNQ_XS = {};
+const array<float> NNQ_W1 = {};
+const array<float> NNQ_B1 = {};
+const array<float> NNQ_W2 = {};
+const array<float> NNQ_B2 = {};
+const array<float> NNQ_WO = {};
+const float NNQ_BO = 0.f;
+const float NNQ_TRUST = 0.f;
+// the air constructor-cap net (econet.as)
+const bool NNZ_ON = false;
+const string NNZ_STATE = "";
+const int NNZ_S = 0;
+const int NNZ_O = 0;
+const int NNZ_H = 0;
+const array<float> NNZ_XM = {};
+const array<float> NNZ_XS = {};
+const array<float> NNZ_W1 = {};
+const array<float> NNZ_B1 = {};
+const array<float> NNZ_W2 = {};
+const array<float> NNZ_B2 = {};
+const array<float> NNZ_WO = {};
+const float NNZ_BO = 0.f;
+const float NNZ_TRUST = 0.f;
 
 }  // namespace Market

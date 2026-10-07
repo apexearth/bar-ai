@@ -18,7 +18,7 @@ const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eE
 	+ "dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD,"
 	+ "foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert,"
 	+ "wreckHome,wreckArmy,wreckRate,rezN,repairM,"
-	+ "foeLrpc,plasma,ownLrpc,ownShield";
+	+ "foeLrpc,plasma,ownLrpc,ownShield,conShare";
 const string NN_OPT = "cat,kind,def,value,gain,m,t,cm,ce,bt,walk,risk,eta,dPow,ownN,tierO,fwd,"
 	+ "siteLoss,persona,x,z,p,nm,forced";
 // value..persona: the net's per-option numbers, in NnOpt order
@@ -296,6 +296,7 @@ void NnStateFull(const AIFloat3& in up, array<float>& out s)
 	s.insertLast(Military::PlasmaLossRate());
 	s.insertLast(float(SuperHave(SC_LRPC)));
 	s.insertLast(float(gProtIds[PROT_SHIELD].length()));
+	s.insertLast(ConShare());
 }
 
 // The market's own numbers for one option, every multiplier the net or the
