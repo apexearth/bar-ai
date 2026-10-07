@@ -1147,6 +1147,17 @@ float CMilitaryManager::GetAttackPowerNear(const AIFloat3& pos, float radius) co
 	return p;
 }
 
+float CMilitaryManager::GetGatheredPower() const
+{
+	float p = 0.f;
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+		if (static_cast<CAttackTask*>(t)->IsAtStage()) {
+			p += t->GetAttackPower();
+		}
+	}
+	return p;
+}
+
 float CMilitaryManager::GetEnemyInflNear(const AIFloat3& pos, float radius) const
 {
 	float best = 0.f;

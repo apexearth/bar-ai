@@ -26,7 +26,10 @@ public:
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
 
+	bool IsAtStage() const { return atStage; }  // apex: standing at the team push's gather point
+
 private:
+	bool atStage = false;
 	void FindTarget();
 	void ApplyTargetPath(const CQueryPathSingle* query);
 	bool MarchEnemyBox();

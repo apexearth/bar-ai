@@ -137,13 +137,7 @@ void TeamPush()
 	}
 	AIFloat3 fp(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
 	fp.y = ai.GetElevationAt(fp);
-	const AIFloat3 home = aiSetupMgr.GetBasePos();
-	AIFloat3 dir = home - fp;
-	const float dl = dir.Length2D();
-	if (dl > 1.f)
-		dir = dir / dl;
-	const AIFloat3 stage = fp + dir * (r + PUSH_STAND);
-	const float mine = aiMilitaryMgr.GetAttackPowerNear(stage, 2.f * PUSH_STAND);
+	const float mine = aiMilitaryMgr.GetGatheredPower();   // squads standing at their own threat-clear stage
 	ai.SetTeamBoard(BOARD_GATHER + ai.teamId, mine);
 	ai.SetTeamBoard(BOARD_GATHER_AT + ai.teamId, float(ai.frame));
 	float team = 0.f;

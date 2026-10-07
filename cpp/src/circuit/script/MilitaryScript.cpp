@@ -49,6 +49,7 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocus(const AIFloat3& in, float, float, bool, int)", asMETHOD(CMilitaryManager, SetFocus), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPower() const", asMETHOD(CMilitaryManager, GetAttackPower), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPowerNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetAttackPowerNear), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetGatheredPower() const", asMETHOD(CMilitaryManager, GetGatheredPower), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetEnemyInflNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetEnemyInflNear), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
 

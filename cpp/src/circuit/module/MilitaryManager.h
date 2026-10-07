@@ -226,6 +226,7 @@ public:
 		return p;
 	}
 	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
+	float GetGatheredPower() const;
 	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
 	springai::AIFloat3 focusPos;
 	float focusR = 0.f;

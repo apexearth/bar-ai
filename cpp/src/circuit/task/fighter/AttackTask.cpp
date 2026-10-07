@@ -213,15 +213,28 @@ void CAttackTask::Update()
 		return;
 	}
 
+	atStage = false;
 	if ((GetTarget() == nullptr) && circuit->GetMilitaryManager()->IsFocus(frame)
 		&& !circuit->GetMilitaryManager()->IsFocusGo())
 	{
+		// Stage short of the line's reach, then back toward home until the threat
+		// map is clear for this squad: inside the threat no path ends there, and a
+		// squad standing in it is shot while it waits.
 		CMilitaryManager* mm = circuit->GetMilitaryManager();
 		const AIFloat3& fp = mm->GetFocusPos();
 		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
-		AIFloat3 stage = fp + (home - fp).Normalize2D() * (mm->GetFocusR() + DEFAULT_SLACK * 4);
+		const AIFloat3 dir = (home - fp).Normalize2D();
+		const float back = fp.distance2D(home);
+		float d = mm->GetFocusR() + DEFAULT_SLACK * 4;
+		AIFloat3 stage = fp + dir * d;
+		CThreatMap* tm = circuit->GetThreatMap();
+		for (int k = 0; (k < 40) && (d + DEFAULT_SLACK * 2 < back) && (tm->GetThreatAt(leader, stage) > THREAT_MIN); ++k) {
+			d += DEFAULT_SLACK * 2;
+			stage = fp + dir * d;
+		}
 		CTerrainManager::CorrectPosition(stage);
 		if (startPos.SqDistance2D(stage) < SQUARE(DEFAULT_SLACK * 4)) {
+			atStage = true;
 			return;
 		}
 		position = stage;
