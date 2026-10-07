@@ -9,3 +9,4 @@
 *.sd7 binary
 *.sdz binary
 *.sdfz binary
+nn-snapshots/** -text
