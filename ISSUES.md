@@ -23,7 +23,11 @@ staging walk to range (05:40): rule 6-4, wins avg 45.2 min; MASS 6-5, wins
 avg 44.4 min -- a null at n=10 (95% CI 28-83%). On the threat-clear staging
 build (06:59-08:44): rule 15-10 (60%, CI 41-77), wins avg 40.8 min; MASS
 12-7 + 2 draws at 60 min (63%, CI 41-81), wins avg 39.0, 262 pushes trading
-3.4:1 -- still a null. Pushes trade 2.2:1 at the
+3.4:1 -- still a null. At 09:40 the same arms read rule 24-14-1 (63%, CI
+47-77), MASS 15-13-4 (54%, CI 36-70): forcing the push from minute 0 wins no
+more, ends games no sooner (wins 38.5 vs 39.0 min) and stalls four games to
+the 60-min cap against one. The prior stays NORMAL; the plan net (trust 0 at
+200 pairs, wcorr -0.05) is where MASS has to earn its moments. Pushes trade 2.2:1 at the
 breach vs BARb and 2.7-7:1 in self-play, yet games are neither won more nor
 ended sooner. Found along the way and fixed: the breach jumped every 5 s
 (held now), squads stopped at weapon range of the staging point (walk to it),
