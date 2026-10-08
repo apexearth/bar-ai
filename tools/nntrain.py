@@ -758,9 +758,10 @@ class AirCapHead(ComHead):
 
 
 class PlanHead(ComHead):
-    """The team plan net (plannet.as): normal play, mass T3, missiles, artillery, mass and push."""
+    """The team plan net (plannet.as): normal play, mass T3, missiles, artillery, mass and push,
+    mass air, an all-in, greed, turtle."""
     NAME = "plan"
-    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS")
+    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE")
     PREFIX = "NNG"
 
 
@@ -1156,6 +1157,10 @@ class Trainer:
         if not own_keys or g["state_keys"] is None or SCHEMA_STATE not in g["state_keys"]:
             return None
         if head.post_keys is not None and head.post_keys != own_keys:
+            # a game logged before the head's inputs grew: skip it, or every
+            # older game in the queue would wipe the newer head again
+            if head.post_keys[:len(own_keys)] == list(own_keys):
+                return None
             head._FacHead__init_empty()
         head.post_keys = own_keys
         first = {}

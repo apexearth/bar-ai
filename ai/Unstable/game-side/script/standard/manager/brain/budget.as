@@ -64,7 +64,7 @@ void BudgetDecay()
 // contract the ROLE_ rows already had.
 float RawTarget(Cat c)
 {
-	float w = RawBase(c) * Persona::ShareMult(int(c));
+	float w = RawBase(c) * Persona::ShareMult(int(c)) * Market::PlanShareMult(int(c));
 	// Enemy-stance lean: greed against a passive enemy, army/defence against
 	// an aggressive one, neutral while blind. See Military::UpdateStance.
 	w *= Military::StanceShareMult(int(c));

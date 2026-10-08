@@ -128,10 +128,15 @@ restructure (enemy economy estimate).
   gantry stands, lower ground labs keep only the fodder share), MISSILE (silos,
   tactical and EMP launchers x4; the turret line becomes a nuke target with a
   volley sized by its guns), ARTY (LRPCs incl. mega and Starfall x4), MASS (no
-  production change). One plan per ally team on a board the allied AIs of one
-  process share (`ai.SetTeamBoard`), held 8 min; whoever decides logs the row;
-  an explorer always decides and draws the five evenly. Under every plan but
-  NORMAL the TEAM PUSH runs: the owner posts the turret line our army dies to
+  production change), AIR (air plant want and air eagerness x4), RUSH (army
+  budget row x4), GREED (economy row x4), TURTLE (defence and anti-air rows
+  x4). The last four (v3, 2026-10-07) are his strategic spontaneity -- drawn by
+  the net, which sees the stance signals (stance, raid pressure, fresh enemy
+  army), instead of a random personality roll it cannot see. One plan per ally
+  team on a board the allied AIs of one process share (`ai.SetTeamBoard`),
+  held 8 min; whoever decides logs the row; an explorer always decides and
+  draws the nine evenly. Under every plan but NORMAL, GREED and TURTLE the
+  TEAM PUSH runs: the owner posts the turret line our army dies to
   (it holds until broken), each AI posts the attack power it has gathered
   short of it, and when the team beats the strongest group there every squad
   goes (C++ `AttackTask` focus: the breach wins the target choice, refused

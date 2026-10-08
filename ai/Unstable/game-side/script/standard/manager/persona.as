@@ -145,7 +145,7 @@ float EngageBias()
 // the wing size where air/state.as reads them.
 float AirEagerness()
 {
-	return Trait(T_AIR);
+	return Trait(T_AIR) * Market::PlanAirMult();
 }
 
 //------------------------------------------------------------------------------

@@ -5,9 +5,14 @@ namespace Market {
 // LRPCs -- and allies who know what each other build). One plan per ally
 // team on the shared board, held NG_HOLD_S; whoever decides logs an nnplan
 // row (an explorer always decides, so discovery leads its team). The rule is
-// NORMAL; the net learns which plan ends which game soonest.
-const string NNG_PLAN = "foeStaticM,foeArmyM,ourArmyM,breachM,mInc,eInc,gantries,silos,lrpcs,tacticals,bankFill,minute";
+// NORMAL; the net learns which plan ends which game soonest. His 2026-10-07:
+// the spontaneity he wants is strategies -- mass air, an early all-in, greed
+// against a passive enemy, defences against one that is massing -- so those
+// are plans too, drawn by the net, never rolled behind its back.
+const string NNG_PLAN = "foeStaticM,foeArmyM,ourArmyM,breachM,mInc,eInc,gantries,silos,lrpcs,tacticals,bankFill,minute,stance,raidPressure,foeFreshM";
 const int NG_NORMAL = 0, NG_T3 = 1, NG_MISSILE = 2, NG_ARTY = 3, NG_MASS = 4;
+const int NG_AIR = 5, NG_RUSH = 6, NG_GREED = 7, NG_TURTLE = 8, NG_N = 9;
+const array<string> NG_NAMES = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE"};
 const float NG_MUL = 4.f;
 const int NG_HOLD_S = 480;   // a gantry or a battery takes longer than 4 min to pay off
 const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2;
@@ -18,7 +23,31 @@ bool gPlanHeader = false;
 
 string NgName(int o)
 {
-	return (o == NG_T3) ? "T3" : ((o == NG_MISSILE) ? "MISSILE" : ((o == NG_ARTY) ? "ARTY" : ((o == NG_MASS) ? "MASS" : "NORMAL")));
+	return ((o >= 0) && (o < NG_N)) ? NG_NAMES[o] : "NORMAL";
+}
+
+// GREED and TURTLE stay home; every other plan pushes as a team.
+bool PlanPushes()
+{
+	return (gPlan != NG_NORMAL) && (gPlan != NG_GREED) && (gPlan != NG_TURTLE);
+}
+
+// The budget rows (Brain::Cat: 0 ARMY, 1 DEFENCE, 2 AIRDEF, 3 ECONOMY), on the
+// contract Persona::ShareMult uses: normalisation pays for a raise out of the rest.
+float PlanShareMult(int c)
+{
+	if ((gPlan == NG_RUSH) && (c == 0))
+		return NG_MUL;
+	if ((gPlan == NG_TURTLE) && ((c == 1) || (c == 2)))
+		return NG_MUL;
+	if ((gPlan == NG_GREED) && (c == 3))
+		return NG_MUL;
+	return 1.f;
+}
+
+float PlanAirMult()
+{
+	return (gPlan == NG_AIR) ? NG_MUL : 1.f;
 }
 
 float PlanMul(int sc)
@@ -28,6 +57,8 @@ float PlanMul(int sc)
 	if ((gPlan == NG_MISSILE) && ((sc == SC_SILO) || (sc == SC_TACTICAL) || (sc == SC_JUNO)))
 		return NG_MUL;
 	if ((gPlan == NG_ARTY) && (sc == SC_LRPC))
+		return NG_MUL;
+	if ((gPlan == NG_AIR) && (sc == SC_AIRPLANT))
 		return NG_MUL;
 	return 1.f;
 }
@@ -47,10 +78,10 @@ void PlanNetDecide()
 		return;
 	}
 	gPlanMineUntil = ai.frame + NG_HOLD_S * SECOND;
-	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each a fifth of the time
+	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each equally often
 	if (!gPlanHeader) {
 		gPlanHeader = true;
-		AiLog("apex: nnplan-schema v2 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS");
+		AiLog("apex: nnplan-schema v3 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS,AIR,RUSH,GREED,TURTLE");
 	}
 	array<float> st;
 	NnState(null, st);
@@ -71,22 +102,24 @@ void PlanNetDecide()
 	f.insertLast(float(SuperHave(SC_TACTICAL) + SuperHave(SC_JUNO)));
 	f.insertLast((Eco::MStor() > 1.f) ? (Eco::MCur() / Eco::MStor()) : 0.f);
 	f.insertLast(float(ai.frame) / 1800.f);
-	array<float> w(5, NE2_EPS);
+	f.insertLast(float(Military::Stance()));
+	f.insertLast(Military::RaidPressure());
+	f.insertLast(Military::FreshMassingThreat());
+	array<float> w(NG_N, NE2_EPS);
 	w[NG_NORMAL] = 1.f;
 	const float trust = NnHeadScore(NNG_ON, NNG_STATE, NNG_PLAN, NNG_S, NNG_O, NNG_H, NNG_XM, NNG_XS,
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
-	array<float> p(5);
+	array<float> p(NG_N);
 	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));
-	if ((force >= 0) && (force < 5)) {
+	if ((force >= 0) && (force < NG_N)) {
 		gPlan = force;
-		for (int o = 0; o < 5; ++o)
+		for (int o = 0; o < NG_N; ++o)
 			p[o] = (o == force) ? 1.f : 0.f;
 	}
 	ai.SetTeamBoard(BOARD_PLAN, float(gPlan));
 	ai.SetTeamBoard(BOARD_PLAN_UNTIL, float(gPlanMineUntil));
-	array<string> names = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS"};
-	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, names, w, p, gPlan));
+	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, NG_NAMES, w, p, gPlan));
 }
 
 // THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the
@@ -105,7 +138,7 @@ void TeamPush()
 	if (ai.frame < gPushNextAt)
 		return;
 	gPushNextAt = ai.frame + 5 * SECOND;
-	if (gPlan == NG_NORMAL) {
+	if (!PlanPushes()) {
 		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 		return;
 	}
@@ -166,7 +199,7 @@ void TeamPush()
 // Where the team's push is going in, while its go stands.
 bool PushGoAt(AIFloat3 &out at, float &out r)
 {
-	if ((gPlan == NG_NORMAL) || (ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) <= float(ai.frame)))
+	if (!PlanPushes() || (ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) <= float(ai.frame)))
 		return false;
 	r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
 	if (r < 0.f)
