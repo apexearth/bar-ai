@@ -40,8 +40,10 @@ def main() -> int:
     # `deploy && smoke && tournament` can silently keep the old build. Say which
     # of the two it is rather than just "DRIFTED".
     import time
+    # the BAR lobby is a spring.exe too (--menu) and never loads an AI DLL
     busy = subprocess.run(["powershell", "-NoProfile", "-Command",
-                           "@(Get-Process spring-headless,spring -ErrorAction SilentlyContinue).Count"],
+                           "@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^spring(-headless)?\\.exe$' "
+                           "-and $_.CommandLine -notmatch '--menu' }).Count"],
                           capture_output=True, text=True).stdout.strip()
     # A LANE deploys into its own folder, so an engine another lane is running
     # never has this DLL loaded and the refusal does not apply (tools/lane.py).
