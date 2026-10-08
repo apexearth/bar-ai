@@ -3220,3 +3220,14 @@ every builder kind and every head at once. Off by default; the plan net
 chooses. In 2v2 self-play the pushes traded 2.9-4.5:1 at the breach (218
 calls), while the explorer side still lost 15-30: the A/B separates the push
 from the exploration.
+
+## TUNE_NN_VARIETY = 0.2 (2026-10-07)
+
+His call ("we should also be more spontaneous at times ... what works against
+BARb will definitely not work the same against humans"): every AI that is not
+the discovery explorer leans each build kind by e^(0.2 x N(0,1)) for the whole
+game -- about x0.8 to x1.2 at one sd, against the explorer's 0.5 (x0.6 to
+x1.65). Part of yesterday's "discovery 0 for the shared slot" ruling is
+reversed by this on purpose: a mild lean, not random choices. Logged as
+`apex: nn-variety`; decisions.py credits a builder pick the lean moved as a
+chance decision, so his games add trust evidence too.

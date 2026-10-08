@@ -352,6 +352,7 @@ void NnOptFull(Want@ w, const AIFloat3& in up, array<float>& out o)
 // Rolled once per game; the roll is logged so the trainer knows.
 bool gNnExploreRolled = false;
 bool gNnExplore = false;
+bool gNnVaried = false;   // apex_nn_variety leans this AI's kinds (not an explorer)
 array<float> gNnKindMult;
 array<float> gNnWO;
 
@@ -378,8 +379,22 @@ void NnExploreRoll()
 	const int explorer = int(ai.GetTunable("apex_nn_explore_team", TUNE_NN_EXPLORE_TEAM));
 	gNnExplore = (explorer >= 0) ? (explorer == ai.teamId)
 			: (float(AiRandom(0, 10000)) / 10000.f < chance);
-	if (!gNnExplore)
+	if (!gNnExplore) {
+		// VARIETY (his 2026-10-07: "we should also be more spontaneous at times";
+		// what works on BARb will not work the same on humans): every non-explorer
+		// leans each kind of build by a mild random factor for the whole game.
+		const float sd = ai.GetTunable("apex_nn_variety", TUNE_NN_VARIETY);
+		if (sd <= 0.f)
+			return;
+		string lv = "apex: nn-variety t=" + ai.teamId + " sd=" + NnF(sd, 2) + " |";
+		for (uint k = 0; k < gNnKindMult.length(); ++k) {
+			gNnKindMult[k] = pow(2.7182818f, sd * NnGauss());
+			lv += " " + KindName(int(k)) + "=" + NnF(gNnKindMult[k], 2);
+		}
+		gNnVaried = true;
+		AiLog(lv);
 		return;
+	}
 	// Say so in the game, so a watcher knows which side is different (his 2026-10-06).
 	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game (random choices on purpose)");
 	ai.DrawPoint(aiSetupMgr.GetBasePos(), "Discovery explorer: team " + ai.teamId);
@@ -843,7 +858,7 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	// discovery does not wait for a net: a fresh net is when it is needed most
 	NnExploreRoll();
 	if (!NNW_ON || gNnBad) {
-		if (!gNnExplore)
+		if (!gNnExplore && !gNnVaried)
 			return;
 		for (uint r = 0; r < ranked.length(); ++r) {
 			const int k = ranked[r].kind;
@@ -883,7 +898,7 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	}
 	const double _t = Perf::T0();
 	Want@ top0 = ranked[0];
-	if (gNnExplore) {
+	if (gNnExplore || gNnVaried) {
 		for (uint r = 0; r < ranked.length(); ++r) {
 			const int k = ranked[r].kind;
 			if ((k >= 0) && (uint(k) < gNnKindMult.length())) {

@@ -51,6 +51,7 @@ local NAMES = {
 	"apex_nn_explore",
 	"apex_nn_explore_team",
 	"apex_plan_force",
+	"apex_nn_variety",
 	"apex_nn_imitate",
 	"apex_nnraid",
 	"apex_elec_frame_us",

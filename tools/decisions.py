@@ -168,10 +168,11 @@ def parse(path, files=None):
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
-            if "apex: nn-explore t=" in ln:
-                mx = re.search(r"nn-explore t=(\d+) on", ln)
+            if "apex: nn-explore t=" in ln or "apex: nn-variety t=" in ln:
+                # a variety lean is a milder explorer: a pick it moved was chance too
+                mx = re.search(r"nn-(?:explore t=(\d+) on|variety t=(\d+))", ln)
                 if mx:
-                    explorers.add(int(mx.group(1)))
+                    explorers.add(int(mx.group(1) or mx.group(2)))
             if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
