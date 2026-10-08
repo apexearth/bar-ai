@@ -72,6 +72,15 @@ home cover short (guns gone to the front, or the interior-hole rule not
 reaching these spots), and whether the prior should apply inside the base at
 all -- his call (the check is his ruling that home is not discounted).
 
+2026-10-08 bisect: NOT a regression of any one change. The 20:08 green gate
+(4ad808fd) was a lucky pair. Gate pairs red on home ground at survival
+0.56-0.68 with: tonight's code; yesterday's scripts on tonight's DLL;
+yesterday's scripts on yesterday's DLL (the exact green build); nets off
+(apex_nn_blend=0); lag ladder off (apex_lag_speed=0); Docker stopped.
+"First T2 con builds a moho first" flips with machine load (1-2/4 with Docker
+running, 4/4 with it stopped) -- it follows the home discount through the
+moho's value. The gate cannot clear any build until this is decided.
+
 ### THE LAG LADDER STARVES BUILDERS FOR MINUTES WHEN THE SIM TRAILS THE ASKED SPEED (2026-10-03)
 
 Since 3afbf402 lag is measured against the host's asked speed. Eight headless
