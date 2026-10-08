@@ -138,8 +138,7 @@ void PlanNetDecide()
 	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, NG_NAMES, w, p, gPlan));
 }
 
-// HOW MANY AIR PLANTS, while the plan is AIR (his 2026-10-07: more air plants
-// are fine there, the count the net's). The rule is one -- today's plant.
+// HOW MANY AIR PLANTS while the plan is AIR: the net's count.
 const string NNL_PLANT = "airPlants,mInc,eInc,bankFill,foeAirM,foeFighterM,foeAAM,ourBombers,ourFighters,minute";
 int gAirPlantMax = 1;
 int gAirPlantNextAt = 0;

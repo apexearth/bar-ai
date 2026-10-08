@@ -558,8 +558,15 @@ class FacHead:
                 return
             self.full = Net(self.XF.shape[1], len(TARGETS))
             self.st = Net(self.XS.shape[1], len(TARGETS))
-            self.full.load(ck["full"])
-            self.st.load(ck["state"])
+            try:
+                self.full.load(ck["full"])
+                self.st.load(ck["state"])
+            except RuntimeError:
+                # a kill between the buffer save and the model save
+                print("%s: saved net does not fit its buffer (%d columns); starting empty"
+                      % (self.NAME, self.XF.shape[1]), flush=True)
+                self.__init_empty()
+                return
             self.pairs = ck.get("pairs", [])
             if ck.get("post_keys") is not None:
                 self.post_keys = list(ck["post_keys"])
