@@ -98,8 +98,7 @@ void Vanguard()
 			if ((us[k] is null) || !InWave(us[k].id))
 				continue;
 			// A fighter sent on an earlier strike and redirected before it
-			// arrived stayed on the flight list for good, and every later
-			// vanguard went in with none (his 7v7: "decoys=0 of 0").
+			// arrived would stay on the flight list for good.
 			const int old = FlightOutIdx(us[k].id);
 			if (old >= 0) {
 				gFlightOut.removeAt(uint(old));
@@ -108,12 +107,9 @@ void Vanguard()
 			go.insertLast(us[k]);
 		}
 	}
-	// ALL OF THEM, FIRST (his 2026-10-08: "first attack with all their
-	// fighters to make sure that they kill our fighters, and then they send
-	// in a bunch of bombers or gunships ... fighters already get there first
-	// because they're fast"). They clear the sky over the cell and draw its
-	// ground AA; a hunter is taken off its hunt so the stock task cannot
-	// turn it round on the way.
+	// ALL OF THEM, FIRST: faster than the bombers, they clear the sky over the
+	// cell and draw its ground AA before the bombs arrive. A hunter is taken
+	// off its hunt so the stock task cannot turn it round on the way.
 	const float foeFig = FoeFighterM();
 	float foeAA = EnemyAACost() - foeFig;
 	if (foeAA < 0.f)
