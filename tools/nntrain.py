@@ -761,7 +761,7 @@ class PlanHead(ComHead):
     """The team plan net (plannet.as): normal play, mass T3, missiles, artillery, mass and push,
     mass air, an all-in, greed, turtle."""
     NAME = "plan"
-    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE")
+    OPTS = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE", "GREED_DEEP")
     PREFIX = "NNG"
 
 

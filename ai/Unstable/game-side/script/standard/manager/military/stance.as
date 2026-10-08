@@ -128,7 +128,7 @@ float StanceShareMult(int cat)
 	return 1.f;
 }
 
-// Scouting demand: consumed by the facqueue eyes floors. 2x while blind.
+// Scouting demand: the air scouts' watch (Air::WatchGainFor). 2x while blind.
 float ScoutMult()
 {
 	if (ai.GetTunable("apex_stance", TUNE_STANCE) <= 0.f)

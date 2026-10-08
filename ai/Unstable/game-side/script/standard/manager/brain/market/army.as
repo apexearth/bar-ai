@@ -1941,7 +1941,7 @@ bool T2SwitchEval()
 		gT2SwitchLogAt = ai.frame + 60 * SECOND;
 		AiLog("apex: t2switch " + (on ? "on" : (rich ? "overflow" : "danger")) + " t=" + ai.teamId
 			+ " P=" + int(EcoPowerM()) + " army=" + int(ArmyValue()) + "/" + int(ArmyTarget())
-			+ " upD=" + int(UpDemand()) + " floor=" + int(ArmyFloor(ArmyTargetFull()))
+			+ " upD=" + int(UpDemand()) + " floor=" + int(ArmyFloor(ArmyTargetFull())) + " planX=" + NnF(PlanArmyMult(), 2)
 			+ " foeArmy=" + int(Military::EnemyArmyCost()) + " seats=" + int(Military::AllyCount())
 			+ T2SwitchRates() + " " + gT2Missing);
 	}
@@ -2153,7 +2153,7 @@ float ArmyTarget()
 	// 2026-10-05, replacing 09-21) -- halved, the lab stood idle and we lost ground.
 	const float fullD = ArmyTargetFull();
 	const float floorD = ArmyFloor(fullD);
-	return (floorD > fullD) ? floorD : fullD;
+	return ((floorD > fullD) ? floorD : fullD) * PlanArmyMult();
 }
 
 // The defensive army a sheltered seat holds before it jumps to the T2 lab

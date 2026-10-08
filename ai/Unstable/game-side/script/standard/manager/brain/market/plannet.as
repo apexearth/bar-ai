@@ -11,8 +11,8 @@ namespace Market {
 // are plans too, drawn by the net, never rolled behind its back.
 const string NNG_PLAN = "foeStaticM,foeArmyM,ourArmyM,breachM,mInc,eInc,gantries,silos,lrpcs,tacticals,bankFill,minute,stance,raidPressure,foeFreshM";
 const int NG_NORMAL = 0, NG_T3 = 1, NG_MISSILE = 2, NG_ARTY = 3, NG_MASS = 4;
-const int NG_AIR = 5, NG_RUSH = 6, NG_GREED = 7, NG_TURTLE = 8, NG_N = 9;
-const array<string> NG_NAMES = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE"};
+const int NG_AIR = 5, NG_RUSH = 6, NG_GREED = 7, NG_TURTLE = 8, NG_GREED_DEEP = 9, NG_N = 10;
+const array<string> NG_NAMES = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE", "GREED_DEEP"};
 const float NG_MUL = 4.f;
 const int NG_HOLD_S = 480;   // a gantry or a battery takes longer than 4 min to pay off
 const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2;
@@ -29,7 +29,24 @@ string NgName(int o)
 // GREED and TURTLE stay home; every other plan pushes as a team.
 bool PlanPushes()
 {
-	return (gPlan != NG_NORMAL) && (gPlan != NG_GREED) && (gPlan != NG_TURTLE);
+	return (gPlan != NG_NORMAL) && !PlanGreedy() && (gPlan != NG_TURTLE);
+}
+
+bool PlanGreedy()
+{
+	return (gPlan == NG_GREED) || (gPlan == NG_GREED_DEEP);
+}
+
+// The army we mean to hold. Greed (his 2026-10-07: below their army is fine,
+// the net decides how far) holds only while we SEE them passive -- blind or
+// under attack, the full army comes back.
+float PlanArmyMult()
+{
+	if (gPlan == NG_RUSH)
+		return 2.f;
+	if (!PlanGreedy() || (Military::Stance() != int(Military::S_PASSIVE)))
+		return 1.f;
+	return (gPlan == NG_GREED_DEEP) ? 0.25f : 0.5f;
 }
 
 // The budget rows (Brain::Cat: 0 ARMY, 1 DEFENCE, 2 AIRDEF, 3 ECONOMY), on the
@@ -40,7 +57,7 @@ float PlanShareMult(int c)
 		return NG_MUL;
 	if ((gPlan == NG_TURTLE) && ((c == 1) || (c == 2)))
 		return NG_MUL;
-	if ((gPlan == NG_GREED) && (c == 3))
+	if (PlanGreedy() && (c == 3))
 		return NG_MUL;
 	return 1.f;
 }
@@ -81,7 +98,7 @@ void PlanNetDecide()
 	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each equally often
 	if (!gPlanHeader) {
 		gPlanHeader = true;
-		AiLog("apex: nnplan-schema v3 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS,AIR,RUSH,GREED,TURTLE");
+		AiLog("apex: nnplan-schema v4 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS,AIR,RUSH,GREED,TURTLE,GREED_DEEP");
 	}
 	array<float> st;
 	NnState(null, st);

@@ -1675,7 +1675,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// adds to the first bomber's price (Air::LookGainFor). A second demand
 		// beside the support one below, not instead of it.
 		if (!Catalog::gBuilder[d] && Air::IsLookDef(d)) {
-			const float gainL = Air::LookGainFor(d, fillS) * roleMul;
+			const float gainLk = Air::LookGainFor(d, fillS);
+			const float gainW = Air::WatchGainFor(d, fillS);
+			const float gainL = ((gainLk > gainW) ? gainLk : gainW) * roleMul;
 			if (gainL > 0.f) {
 				const float vL = gainL / Catalog::gCostM[d];
 				candDef.insertLast(d);
@@ -1684,7 +1686,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				sumV += vL;
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName()
-						+ ":look(v" + formatFloat(vL, "", 0, 3) + ")";
+						+ ((gainW > gainLk) ? ":watch(v" : ":look(v") + formatFloat(vL, "", 0, 3) + ")";
 			}
 		}
 		// THE SCOUT FLIGHT: planes massed to see their base (Air::FlightGainFor).
@@ -2424,8 +2426,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// stands, keep making basic air cons until ten fly -- they are the
 		// hands that raise nano turrets -- but never the whole lab: one in
 		// the queue at a time, so the other air keeps coming.
+		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
+		// the moment the last one flew, and the lab made nothing else.
 		if (!walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
-			&& (T1AirConsInFlight() == 0))
+			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR))
 		{
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -2807,6 +2811,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				candGain = aG;
 				sumV = aSum;
 			}
+		}
+	}
+	if (gPlan == NG_AIR) {
+		sumV = 0.f;
+		for (uint ci = 0; ci < candV.length(); ++ci) {
+			const int cd = candDef[ci];
+			if (Catalog::gFlyer[cd] && !Catalog::gBuilder[cd] && (Catalog::gPower[cd] > 1.f))
+				candV[ci] *= PlanAirMult();
+			sumV += candV[ci];
 		}
 	}
 	array<float> facMult;

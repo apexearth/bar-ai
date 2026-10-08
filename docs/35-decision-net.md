@@ -128,14 +128,20 @@ restructure (enemy economy estimate).
   gantry stands, lower ground labs keep only the fodder share), MISSILE (silos,
   tactical and EMP launchers x4; the turret line becomes a nuke target with a
   volley sized by its guns), ARTY (LRPCs incl. mega and Starfall x4), MASS (no
-  production change), AIR (air plant want and air eagerness x4), RUSH (army
-  budget row x4), GREED (economy row x4), TURTLE (defence and anti-air rows
-  x4). The last four (v3, 2026-10-07) are his strategic spontaneity -- drawn by
-  the net, which sees the stance signals (stance, raid pressure, fresh enemy
-  army), instead of a random personality roll it cannot see. One plan per ally
+  production change), AIR (air plant want and air eagerness x4; the T1 air-con
+  floor stands aside and armed fliers weigh x4 in the plant's draw), RUSH (the
+  army we hold x2, army row x4), GREED / GREED_DEEP (the army we hold x0.5 /
+  x0.25 -- below their army, his 2026-10-07 -- economy row x4; only while the
+  stance reads PASSIVE, so blind or attacked the full army returns), TURTLE
+  (defence and anti-air rows x4). The last five (v4, 2026-10-07) are his
+  strategic spontaneity -- drawn by the net, which sees the stance signals
+  (stance, raid pressure, fresh enemy army), instead of a random personality
+  roll it cannot see. Forced one 2v2 vs BARb each (Frozen Ford, min 12-16):
+  GREED spent 28.4k at 16% ground army, NORMAL 17.1k at 30%, RUSH 55-64%
+  ground; AIR still 1-3% air (one slow plant, copies refused). One plan per ally
   team on a board the allied AIs of one process share (`ai.SetTeamBoard`),
   held 8 min; whoever decides logs the row; an explorer always decides and
-  draws the nine evenly. Under every plan but NORMAL, GREED and TURTLE the
+  draws the ten evenly. Under every plan but NORMAL, the GREEDs and TURTLE the
   TEAM PUSH runs: the owner posts the turret line our army dies to
   (it holds until broken), each AI posts the attack power it has gathered
   short of it, and when the team beats the strongest group there every squad
