@@ -287,6 +287,28 @@ void YardWatch()
 	// and the plant market rebuys a lab where a door faces open ground --
 	// eating the trapped units only made room for the next one.
 	string ate = "";
+	// Nothing of ours in the strip: a teammate's building there is asked for
+	// before the plant itself goes.
+	if (structs == 0) {
+		array<float>@ al = ai.GetAllyStructsNear(fp, halfD + depth + 2.f * halfW);
+		for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
+			const int bd = int(al[i + 2]);
+			if (!Catalog::ValidId(bd) || (Catalog::gBuildsList[bd].length() > 0))
+				continue;
+			const float sr = float((Catalog::gFootX[bd] > Catalog::gFootZ[bd]) ? Catalog::gFootX[bd] : Catalog::gFootZ[bd]) * 8.f;
+			const float rx = al[i] - fp.x, rz = al[i + 1] - fp.z;
+			const float along = rx * dir.x + rz * dir.z;
+			const float across = abs(rx * dir.z - rz * dir.x);
+			if ((along + sr < halfD) || (along - sr > halfD + depth) || (across - sr > halfW))
+				continue;
+			if (Military::AskAllyReclaim(int(al[i + 3]), int(al[i + 4]), PlantFlowM(fac, res[0]))) {
+				structs = 1;
+				gYpNamedAt[s] = now;
+				eaten += " " + Catalog::Def(bd).GetName() + "@t" + int(al[i + 4]);
+				break;
+			}
+		}
+	}
 	// Twice the crossing limit is seconds for a hover; the plant is a last
 	// resort, so it waits at least as long as a penned unit's test does.
 	const int eatAfter = (2 * limit > Military::UNBLOCK_STILL) ? (2 * limit) : Military::UNBLOCK_STILL;

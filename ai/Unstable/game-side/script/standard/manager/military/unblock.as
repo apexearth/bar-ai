@@ -406,8 +406,84 @@ bool gTerrainKnown = true;
 int gPenBlind = 0;
 AIFloat3 gDoorDir;
 
+// A TEAMMATE'S BUILDING IN THE WAY (his 2026-10-08: another team's
+// extractor penned a gantry's units). Our bots on a team share a board in one
+// process; a bot names the blocker and its owner reclaims it through its own
+// reclaim market. A human's or another AI's building is never touched.
+const int BOARD_APEX = 1000, BOARD_ASK = 1100, BOARD_ASK_AT = 1200, BOARD_ASK_FLOW = 1300;
+int gAllyAsked = 0, gAllyAskTaken = 0;
+int gAllyAskSeen = -1;
+
+bool IsApexTeam(int t)
+{
+	return (t >= 0) && (t < 100) && (ai.GetTeamBoard(BOARD_APEX + t, 0.f) > 0.f);
+}
+
+bool AskAllyReclaim(int unitId, int team, float flow)
+{
+	if (!IsApexTeam(team) || (team == ai.teamId))
+		return false;
+	ai.SetTeamBoard(BOARD_ASK + team, float(unitId));
+	ai.SetTeamBoard(BOARD_ASK_AT + team, float(ai.frame));
+	ai.SetTeamBoard(BOARD_ASK_FLOW + team, flow);
+	++gAllyAsked;
+	return true;
+}
+
+void AllyAskWatch()
+{
+	if (ai.teamId < 100)
+		ai.SetTeamBoard(BOARD_APEX + ai.teamId, 1.f);
+	const int at = int(ai.GetTeamBoard(BOARD_ASK_AT + ai.teamId, -1.f));
+	if ((at < 0) || (at == gAllyAskSeen))
+		return;
+	gAllyAskSeen = at;
+	CCircuitUnit@ u = ai.GetTeamUnit(Id(int(ai.GetTeamBoard(BOARD_ASK + ai.teamId, 0.f))));
+	if ((u is null) || (u.circuitDef is null))
+		return;
+	// the trapped side and the wall are the same building: the market eats it,
+	// priced as its metal back plus the flow it frees
+	NotePenVerdict(u.id, u.id, u.GetPos(ai.frame), AIFloat3(0.f, 0.f, 0.f),
+		ai.GetTeamBoard(BOARD_ASK_FLOW + ai.teamId, 0.f));
+	++gAllyAskTaken;
+	AiLog(Factory::T() + "apex: ally-ask taken t=" + ai.teamId + " " + u.circuitDef.GetName() + " #" + u.id
+		+ " n=" + gAllyAskTaken);
+}
+
+// The first allied structure along a lane, as an index into the flat
+// [x, z, defId, unitId, team] array, or -1.
+int AllyLaneFirst(const array<float>@ al, const AIFloat3& in at, const AIFloat3& in dir, float unitHalf)
+{
+	int first = -1;
+	float firstAlong = 0.f;
+	for (uint i = 0; (al !is null) && (i + 4 < al.length()); i += 5) {
+		const int d = int(al[i + 2]);
+		if (!Catalog::ValidId(d))
+			continue;
+		const float sh = float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]) * 8.f;
+		const float rx = al[i] - at.x, rz = al[i + 1] - at.z;
+		const float along = rx * dir.x + rz * dir.z;
+		if ((along <= 0.f) || (along > UNBLOCK_REACH + sh))
+			continue;
+		if (abs(rx * dir.z - rz * dir.x) > unitHalf + sh)
+			continue;
+		if ((first < 0) || (along < firstAlong)) {
+			firstAlong = along;
+			first = int(i);
+		}
+	}
+	return first;
+}
+
+int gAllyWallId = 0, gAllyWallTeam = -1, gAllyWallDef = -1;
+
 CCircuitUnit@ WallToEat(CCircuitUnit@ unit, const AIFloat3& in at)
 {
+	gAllyWallId = 0;
+	gAllyWallTeam = -1;
+	gAllyWallDef = -1;
+	float allyCost = 0.f;
+	array<float>@ allies = ai.GetAllyStructsNear(at, UNBLOCK_RING);
 	gLaneWalk = 0;
 	gLaneOpen = 0;
 	gLaneShut = 0;
@@ -428,7 +504,23 @@ CCircuitUnit@ WallToEat(CCircuitUnit@ unit, const AIFloat3& in at)
 		int n = 0;
 		CCircuitUnit@ first = LaneFirst(structs, at, dir, uh, n);
 		if (first is null) {
-			++gLaneOpen;
+			const int ai2 = AllyLaneFirst(allies, at, dir, uh);
+			if (ai2 < 0) {
+				++gLaneOpen;
+				continue;
+			}
+			// shut by a teammate's building: the cheapest such wall is asked for
+			++gLaneShut;
+			const int ad = int(allies[ai2 + 2]);
+			const int at2 = int(allies[ai2 + 4]);
+			if (!Catalog::ValidId(ad) || !IsApexTeam(at2))
+				continue;
+			if ((gAllyWallId == 0) || (Catalog::gCostM[ad] < allyCost)) {
+				gAllyWallId = int(allies[ai2 + 3]);
+				gAllyWallTeam = at2;
+				gAllyWallDef = ad;
+				allyCost = Catalog::gCostM[ad];
+			}
 			continue;
 		}
 		const CCircuitDef@ fd = first.circuitDef;
@@ -476,6 +568,14 @@ bool StuckAskedFor(Id id)
 bool TryUnblock(CCircuitUnit@ unit, const AIFloat3& in at, const AIFloat3& in dir)
 {
 	CCircuitUnit@ eat = WallToEat(unit, at);
+	if ((eat is null) && (gAllyWallId != 0)
+		&& AskAllyReclaim(gAllyWallId, gAllyWallTeam, 0.f))
+	{
+		AiLog(Factory::T() + "apex: pen-ally " + unit.circuitDef.GetName() + " #" + unit.id
+			+ " wall=" + Catalog::Def(gAllyWallDef).GetName() + " #" + gAllyWallId + " owner=t" + gAllyWallTeam
+			+ " asked=" + gAllyAsked);
+		return true;
+	}
 	// A unit that refused to walk out is stuck whatever the rays say: a gap
 	// too narrow for it reads as an open lane. Eat the cheapest building around
 	// it (apexearth 2026-09-30: "just reclaim whatever is cheapest").

@@ -2690,6 +2690,20 @@ float CCircuitAI::GetRecentTradeRatio()
 	return tradeKilled / tradeLost;
 }
 
+// ONE WALKWAY SYSTEM FOR THE TEAM (apexearth 2026-09-21, again 10-08: an
+// ally builds in the gap we left open). Every bot's grid is kept by ally team
+// for the whole process -- all our bots on a team run in it -- and the lane
+// test refuses a site in ANY teammate's walkway, not only our own.
+struct STeamLane {
+	AIFloat3 anchor, fwd;
+	float pitch, half, range;
+};
+static std::map<int, std::map<int, STeamLane>>& TeamLanes()
+{
+	static std::map<int, std::map<int, STeamLane>> lanes;
+	return lanes;
+}
+
 void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
 		float cell, float lanePitch, float laneHalf, float range)
 {
@@ -2703,6 +2717,7 @@ void CCircuitAI::SetBaseGrid(const AIFloat3& anchor, const AIFloat3& fwd,
 	gridLanePitch = lanePitch;
 	gridLaneHalf = laneHalf;
 	gridRange = range;
+	TeamLanes()[allyTeamId][teamId] = STeamLane{gridAnchor, fwd, lanePitch, laneHalf, range};
 }
 
 int CCircuitAI::GetBaseGridFacing(const AIFloat3& pos) const
@@ -2788,25 +2803,47 @@ static inline float PushOutOfLane(float u, float cell, float pitch, float half)
 	return u + ((u >= centre) ? push : -push);
 }
 
-bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
+static bool InLaneOf(const AIFloat3& anchor, const AIFloat3& fwd, float pitch, float half, float range,
+		const AIFloat3& pos)
 {
-	if ((gridLanePitch <= .0f) || (gridLaneHalf <= .0f)
-		|| !utils::is_valid(gridAnchor) || !utils::is_valid(pos))
-	{
+	if ((pitch <= .0f) || (half <= .0f) || !utils::is_valid(anchor)) {
 		return false;
 	}
-	const float dx = pos.x - gridAnchor.x;
-	const float dz = pos.z - gridAnchor.z;
-	if ((dx * dx + dz * dz) > (gridRange * gridRange)) {
+	const float dx = pos.x - anchor.x;
+	const float dz = pos.z - anchor.z;
+	if ((dx * dx + dz * dz) > (range * range)) {
 		return false;  // not in the base; the streets are a base layout, not a map one
 	}
-	const float depth = -(dx * gridFwd.x + dz * gridFwd.z);
-	const float lat = dx * -gridFwd.z + dz * gridFwd.x;
+	const float depth = -(dx * fwd.x + dz * fwd.z);
+	const float lat = dx * -fwd.z + dz * fwd.x;
 	if (depth > .0f) {
 		return false;  // behind the anchor is the economy: no streets (script LanesApply)
 	}
-	return (LaneGapAt(lat, gridLanePitch) < gridLaneHalf)
-		|| (LaneGapAt(depth, gridLanePitch) < gridLaneHalf);
+	return (LaneGapAt(lat, pitch) < half) || (LaneGapAt(depth, pitch) < half);
+}
+
+bool CCircuitAI::IsInBaseLane(const AIFloat3& pos) const
+{
+	if (!utils::is_valid(pos)) {
+		return false;
+	}
+	if (InLaneOf(gridAnchor, gridFwd, gridLanePitch, gridLaneHalf, gridRange, pos)) {
+		return true;
+	}
+	auto it = TeamLanes().find(allyTeamId);
+	if (it == TeamLanes().end()) {
+		return false;
+	}
+	for (const auto& kv : it->second) {
+		if (kv.first == teamId) {
+			continue;
+		}
+		const STeamLane& l = kv.second;
+		if (InLaneOf(l.anchor, l.fwd, l.pitch, l.half, l.range, pos)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // THE LATTICE IS PER DEF, IN WORLD AXES, PHASED FROM THE MAP'S CORNER.
