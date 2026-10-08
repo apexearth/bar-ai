@@ -184,7 +184,9 @@ void IFighterTask::Attack(CCircuitUnit* unit, const int frame)
 	if (unit->Blocker() != nullptr) {
 		return;  // Do not interrupt current action
 	}
-	unit->GetTravelAct()->StateWait();
+	if (unit->GetTravelAct() != nullptr) {
+		unit->GetTravelAct()->StateWait();
+	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const AIFloat3& tPos = GetTarget()->GetPos();

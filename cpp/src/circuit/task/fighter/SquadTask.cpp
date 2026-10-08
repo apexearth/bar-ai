@@ -101,15 +101,19 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 void ISquadTask::Merge(ISquadTask* task)
 {
 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
-	IAction::State state = leader->GetTravelAct()->GetState();
-	const std::shared_ptr<CPathInfo>& lPath = leader->GetTravelAct()->GetPath();
+	// a unit cleared to an idle task has no travel action (null after ClearAct)
+	ITravelAction* lTravel = leader->GetTravelAct();
+	const IAction::State state = (lTravel != nullptr) ? lTravel->GetState() : IAction::State::WAIT;
+	const std::shared_ptr<CPathInfo> lPath = (lTravel != nullptr) ? lTravel->GetPath() : nullptr;
 	for (CCircuitUnit* unit : rookies) {
 		unit->SetTask(this);
 		if (unit->GetCircuitDef()->IsRoleSupport()) {
 			continue;
 		}
-		unit->GetTravelAct()->SetPath(lPath);
-		unit->GetTravelAct()->SetState(state);
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->SetPath(lPath);
+			unit->GetTravelAct()->SetState(state);
+		}
 	}
 	units.insert(rookies.begin(), rookies.end());
 	attackPower += task->GetAttackPower();
@@ -389,7 +393,9 @@ bool ISquadTask::IsMustRegroup()
 void ISquadTask::ActivePath(float speed)
 {
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->SetPath(pPath, speed);
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->SetPath(pPath, speed);
+		}
 	}
 }
 
@@ -459,7 +465,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				if (unit->Blocker() != nullptr) {
 					continue;  // Do not interrupt current action
 				}
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {
+					unit->GetTravelAct()->StateWait();
+				}
 
 				unit->Attack(GetTarget(), isGround, frame + FRAMES_PER_SEC * 60);
 			}
@@ -508,7 +516,9 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			if (unit->Blocker() != nullptr) {
 				continue;  // Do not interrupt current action
 			}
-			unit->GetTravelAct()->StateWait();
+			if (unit->GetTravelAct() != nullptr) {
+				unit->GetTravelAct()->StateWait();
+			}
 
 			if (isRepeatAttack
 				|| (unit->GetTarget() != GetTarget())
@@ -534,7 +544,7 @@ void ISquadTask::Log()
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	circuit->LOG("pPath: %i | size: %i | TravelAct: %i", pPath.get(), pPath ? pPath->posPath.size() : 0,
-			leader->GetTravelAct()->GetState());
+			((leader != nullptr) && (leader->GetTravelAct() != nullptr)) ? int(leader->GetTravelAct()->GetState()) : -1);
 	if (leader != nullptr) {
 		circuit->GetDrawer()->AddPoint(leader->GetPos(circuit->GetLastFrame()), leader->GetCircuitDef()->GetDef()->GetName());
 	}

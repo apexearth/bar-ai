@@ -142,7 +142,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 	AIFloat3 endPos;
 	float range;
 
-	if (unit->GetTravelAct()->GetPath() == nullptr) {
+	if ((unit->GetTravelAct() != nullptr) && (unit->GetTravelAct()->GetPath() == nullptr)) {
 		std::shared_ptr<CPathInfo> pPath = std::shared_ptr<CPathInfo>(new CPathInfo());
 		pPath->PushPos(startPos, pathfinder);
 		if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted

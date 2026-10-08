@@ -99,7 +99,9 @@ void CRaidTask::Start(CCircuitUnit* unit)
 		return;
 	}
 	if (!pPath->posPath.empty()) {
-		unit->GetTravelAct()->SetPath(pPath);
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->SetPath(pPath);
+		}
 	}
 }
 
@@ -129,7 +131,9 @@ void CRaidTask::Update()
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
 			for (CCircuitUnit* unit : units) {
-				unit->GetTravelAct()->StateWait();
+				if (unit->GetTravelAct() != nullptr) {
+					unit->GetTravelAct()->StateWait();
+				}
 				unit->Gather(groupPos, frame);
 			}
 		}
@@ -171,7 +175,9 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					unit->GetTravelAct()->StateWait();
+					if (unit->GetTravelAct() != nullptr) {
+						unit->GetTravelAct()->StateWait();
+					}
 
 					const AIFloat3& pos = GetTarget()->GetPos();
 					TRY_UNIT(circuit, unit,
@@ -183,7 +189,9 @@ void CRaidTask::Update()
 					if (unit->Blocker() != nullptr) {
 						continue;  // Do not interrupt current action
 					}
-					unit->GetTravelAct()->StateWait();
+					if (unit->GetTravelAct() != nullptr) {
+						unit->GetTravelAct()->StateWait();
+					}
 
 					TRY_UNIT(circuit, unit,
 						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
@@ -457,7 +465,7 @@ void CRaidTask::FallbackRaid()
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
-	const AIFloat3& threatPos = leader->GetTravelAct()->IsActive() ? position : pos;
+	const AIFloat3& threatPos = ((leader->GetTravelAct() != nullptr) && leader->GetTravelAct()->IsActive()) ? position : pos;
 	if (hasGoal) {
 		position = terrainMgr->GetMovePosition(leader->GetArea(), goalPos);
 	} else if (attackPower * powerMod <= threatMap->GetThreatAt(leader, threatPos)) {
@@ -500,7 +508,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
 	for (CCircuitUnit* unit : units) {
-		unit->GetTravelAct()->StateWait();
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateWait();
+		}
 		TRY_UNIT(circuit, unit,
 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
 		)

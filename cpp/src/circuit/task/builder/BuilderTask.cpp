@@ -1163,7 +1163,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
 			TRY_UNIT(circuit, unit,
 				const bool prio = !ecoMgr->IsEnergyStalling() || (buildType == BuildType::ENERGY) || (buildType == BuildType::GEO);
 				unit->CmdBARPriority(prio ? 1.f : 0.f);
-				if (unit->GetTravelAct()->IsFinished()) {
+				if ((unit->GetTravelAct() == nullptr) || unit->GetTravelAct()->IsFinished()) {
 					unit->CmdWait(stallWait);
 				}
 			)
@@ -1440,7 +1440,9 @@ void IBuilderTask::ApplyPathUnbounded(const CQueryPathSingle* query)
 	if (!utils::is_valid(endPos)
 		|| (unit->GetPos(circuit->GetLastFrame()).SqDistance2D(endPos) <= SQUARE(range + SQUARE_SIZE * 4)))
 	{
-		unit->GetTravelAct()->StateFinish();  // already there: no road to refuse
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateFinish();  // already there: no road to refuse
+		}
 		return;
 	}
 	// One far hand's hot road is that hand's problem: a crew already on the job
