@@ -18,7 +18,7 @@ const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eE
 	+ "dgA60,dgA120,dgA180,homeStr,home60,dgRatio,dgGap,foeEta,foeBaseD,"
 	+ "foeLiveM,foeRemM,foeLostM,foeRemEta,foeCert,"
 	+ "wreckHome,wreckArmy,wreckRate,rezN,repairM,"
-	+ "foeLrpc,plasma,ownLrpc,ownShield,conShare";
+	+ "foeLrpc,plasma,ownLrpc,ownShield,conShare,ourBonus,foeBonus";
 const string NN_OPT = "cat,kind,def,value,gain,m,t,cm,ce,bt,walk,risk,eta,dPow,ownN,tierO,fwd,"
 	+ "siteLoss,persona,x,z,p,nm,forced";
 // value..persona: the net's per-option numbers, in NnOpt order
@@ -179,6 +179,21 @@ float NnWreckHome()
 	return gNnWreckHome;
 }
 
+float gNnOurBonus = 0.f, gNnFoeBonus = 0.f;
+int gNnBonusAt = -1000000;
+void NnBonusRefresh()
+{
+	if (ai.frame - gNnBonusAt < 30 * SECOND)
+		return;
+	const bool first = gNnBonusAt < 0;
+	gNnBonusAt = ai.frame;
+	gNnOurBonus = ai.GetTeamIncomeMult(ai.teamId) - 1.f;
+	const float foe = ai.GetFoeIncomeMultMax();
+	gNnFoeBonus = (foe > 0.f) ? (foe - 1.f) : 0.f;
+	if (first)
+		AiLog("apex: nn-bonus t=" + ai.teamId + " ours=" + gNnOurBonus + " foe=" + gNnFoeBonus);
+}
+
 void NnState(CCircuitUnit@ unit, array<float>& out s)
 {
 	const AIFloat3 up = (unit !is null) ? unit.GetPos(ai.frame)
@@ -299,6 +314,10 @@ void NnStateFull(const AIFloat3& in up, array<float>& out s)
 	s.insertLast(float(SuperHave(SC_LRPC)));
 	s.insertLast(float(gProtIds[PROT_SHIELD].length()));
 	s.insertLast(ConShare());
+	// the lobby bonuses: a +65 game's habits must not read as a +0 game's
+	NnBonusRefresh();
+	s.insertLast(gNnOurBonus);
+	s.insertLast(gNnFoeBonus);
 }
 
 // The market's own numbers for one option, every multiplier the net or the

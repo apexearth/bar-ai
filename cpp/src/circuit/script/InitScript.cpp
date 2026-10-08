@@ -1506,6 +1506,28 @@ static CScriptArray* CCircuitAI_GetAllyBuilds(CCircuitAI* circuit)
 	return arr;
 }
 
+// A team's resource bonus as the engine applies it (Handicap=65 reads 1.65):
+// lobby information every player sees.
+static float CCircuitAI_GetTeamIncomeMult(CCircuitAI* circuit, int team)
+{
+	return circuit->GetGame()->GetTeamIncomeMultiplier(team);
+}
+
+// The largest bonus on any team not allied to ours (gaia reads 1, so a max).
+static float CCircuitAI_GetFoeIncomeMultMax(CCircuitAI* circuit)
+{
+	springai::Game* game = circuit->GetGame();
+	const int n = game->GetTeams();
+	float best = 0.f;
+	for (int t = 0; t < n; ++t) {
+		if (game->IsAllied(game->GetTeamAllyTeam(t), circuit->GetAllyTeamId())) {
+			continue;
+		}
+		best = std::max(best, game->GetTeamIncomeMultiplier(t));
+	}
+	return best;
+}
+
 // Our allies' standing structures near a point, flat [x, z, defId, unitId,
 // team]: what blocks a door or pens a unit when nothing of ours does.
 static CScriptArray* CCircuitAI_GetAllyStructsNear(CCircuitAI* circuit, const AIFloat3& at, float r)
@@ -2179,6 +2201,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyPlants()", asFUNCTION(CCircuitAI_GetAllyPlants), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyBuilds()", asFUNCTION(CCircuitAI_GetAllyBuilds), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetAllyStructsNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetAllyStructsNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamIncomeMult(int)", asFUNCTION(CCircuitAI_GetTeamIncomeMult), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetFoeIncomeMultMax()", asFUNCTION(CCircuitAI_GetFoeIncomeMultMax), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "void SetTeamBoard(int, float)", asFUNCTION(CCircuitAI_SetTeamBoard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTeamBoard(int, float)", asFUNCTION(CCircuitAI_GetTeamBoard), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<float>@ GetUnsafeSites()", asFUNCTION(CCircuitAI_GetUnsafeSites), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
