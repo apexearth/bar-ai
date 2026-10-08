@@ -88,8 +88,11 @@ float AisleW()
 	float aisle = float(widest) * CELL * 2.f;
 	if (aisle < 64.f)
 		aisle = 64.f;
-	if (aisle > gAisle)
+	if (aisle > gAisle) {
+		if (gAisle > 0.f)
+			AiLog("apex: aisle t=" + ai.teamId + " " + int(gAisle) + " -> " + int(aisle) + " widest=" + widest);
 		gAisle = aisle;
+	}
 	return gAisle;
 }
 

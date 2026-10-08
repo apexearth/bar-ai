@@ -188,6 +188,22 @@ bool AirPlantOwed(int d)
 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < gAirPlantMax);
 }
 
+// WHICH AI IS PLAYING, said once per team in chat and by every bot in its log
+// (his 2026-10-07: a whole night of games ran an older version unseen).
+const int BOARD_BANNER = 300;
+bool gVersionLogged = false;
+void VersionBanner()
+{
+	if (!gVersionLogged) {
+		gVersionLogged = true;
+		AiLog("apex: version t=" + ai.teamId + " " + ai.GetAiVersion() + " nets=" + NNW_GAMES);
+	}
+	if ((ai.frame < 3 * SECOND) || (ai.GetTeamBoard(BOARD_BANNER, -1.f) >= 0.f))
+		return;
+	ai.SetTeamBoard(BOARD_BANNER, float(ai.frame));
+	ai.SendChat("Apex " + ai.GetAiVersion() + " - nets " + NNW_GAMES);
+}
+
 // THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the
 // turret line our army dies to; each ally's attack squads gather short of it
 // (AttackTask), and when the team's gathered power beats the strongest group

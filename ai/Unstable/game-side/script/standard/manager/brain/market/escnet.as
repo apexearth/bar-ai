@@ -106,9 +106,12 @@ bool EscortRecruitable(CCircuitUnit@ c)
 		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT));
 }
 
+int gEscCensusLogAt = 0;
 void EscortSpareCensus()
 {
 	int n = 0;
+	array<int> byType(16, 0);
+	int noTask = 0;
 	const array<int>@ own = OwnedDefs();
 	for (uint k = 0; k < own.length(); ++k) {
 		const int d = own[k];
@@ -117,7 +120,16 @@ void EscortSpareCensus()
 		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d), Builder::gHomePos, 0.f);
 		for (uint u = 0; (us !is null) && (u < us.length()); ++u) {
 			CCircuitUnit@ c = us[u];
-			if ((c is null) || !EscortRecruitable(c) || (int(c.task.GetFightType()) == int(Task::FightType::ATTACK)))
+			if (c is null)
+				continue;
+			if ((c.task is null) || (c.task.GetType() != Task::Type::FIGHTER)) {
+				++noTask;
+			} else {
+				const int ft = int(c.task.GetFightType());
+				if ((ft >= 0) && (ft < 16))
+					++byType[ft];
+			}
+			if (!EscortRecruitable(c) || (int(c.task.GetFightType()) == int(Task::FightType::ATTACK)))
 				continue;
 			bool paired = false;
 			for (uint e = 0; (e < gEscUnit.length()) && !paired; ++e)
@@ -127,6 +139,14 @@ void EscortSpareCensus()
 		}
 	}
 	gEscSpare = n;
+	if (ai.frame >= gEscCensusLogAt) {
+		gEscCensusLogAt = ai.frame + 60 * SECOND;
+		string ln = "apex: escort-census t=" + ai.teamId + " spare=" + n + " notask=" + noTask;
+		for (int k = 0; k < 16; ++k)
+			if (byType[k] > 0)
+				ln += " ft" + k + "=" + byType[k];
+		AiLog(ln);
+	}
 }
 
 void EscortRecruit()

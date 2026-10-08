@@ -6,6 +6,7 @@
  */
 
 #include "CircuitAI.h"
+#include <filesystem>
 #include "scheduler/Scheduler.h"
 #include "script/ScriptManager.h"
 #include "script/InitScript.h"
@@ -160,8 +161,30 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 		const char* name = info->GetValueByKey("name");
 		const char* version = info->GetValueByKey("version");
 		logTag = std::string((name != nullptr) ? name : "?") + "-" + ((version != nullptr) ? version : "?");
+		aiVersion = (version != nullptr) ? version : "?";
 		std::unique_ptr<DataDirs> dirs(clb->GetDataDirs());
-		const char* dir = dirs->GetWriteableDir();
+		const char* dirRaw = dirs->GetWriteableDir();
+		// THE LOG LIVES UNDER THE VERSION THAT RUNS. A hosted game names no
+		// version, and the engine handed some bots the folder of an older
+		// version still on disk (his 2026-10-07 7v7: v0.1.7 bots writing
+		// into Apex/v0.1.5/). The loaded library's own AIInfo is the truth.
+		std::string dirFixed = (dirRaw != nullptr) ? std::string(dirRaw) : std::string();
+		if (!dirFixed.empty() && (version != nullptr)) {
+			std::string up = dirFixed;
+			while (!up.empty() && ((up.back() == '/') || (up.back() == '\\'))) {
+				up.pop_back();
+			}
+			const size_t cut = up.find_last_of("/\\");
+			if ((cut != std::string::npos) && (up.substr(cut + 1) != version)) {
+				const std::string mine = up.substr(0, cut + 1) + version + "/";
+				std::error_code ec;
+				std::filesystem::create_directories(mine, ec);
+				if (!ec) {
+					dirFixed = mine;
+				}
+			}
+		}
+		const char* dir = dirFixed.empty() ? nullptr : dirFixed.c_str();
 		if (dir != nullptr) {
 			const std::string path = std::string(dir) + "apex-t" + std::to_string(teamId) + ".log";
 			// KEEP THE LAST GAME THAT RAN (apexearth 2026-09-29: a load that died

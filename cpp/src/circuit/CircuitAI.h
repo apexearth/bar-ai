@@ -876,10 +876,14 @@ private:
 	std::unique_ptr<springai::SkirmishAI> skirmishAI;
 	FILE* logFile;
 	std::string logTag;
+	std::string aiVersion;
 	int64_t logEpochNs;   // process age when logSteady0 was taken
 	std::chrono::steady_clock::time_point logSteady0;
 	std::mutex logMutex;
 	std::unique_ptr<springai::Team>       team;
+public:
+	const std::string& GetAiVersion() const { return aiVersion; }
+private:
 
 	static std::unique_ptr<CGameAttribute> gameAttribute;
 	static unsigned int gaCounter;
