@@ -35,6 +35,8 @@ BUILD = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ 
 DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=\d+ .*? built=(\d)")
 ARMY = re.compile(r"\[BARAI_ARMY\] frame=(\d+) team=(\d+) n=\d+ part=(\d+)/(\d+) (.*)")
 NNREC = re.compile(r"apex: nn t=(\d+) ")
+PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)")
+DEATHC = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=(\d+) .*? built=(\d)")
 
 
 def slog(x):
@@ -76,12 +78,16 @@ def classify(c):
     return "other"
 
 
-def game_samples(infolog, cat):
+def game_samples(infolog, cat, sample_teams=None):
     """Samples for every team that is NOT ours (no `apex: nn` records), plus our
-    own finished-structure classes by phase for the comparison."""
+    own finished-structure classes by phase for the comparison. With
+    sample_teams (a replay's human teams) those teams are sampled whether or
+    not an AI of ours played, and army metal comes from factory output minus
+    mobile losses when the replay has no army census lines."""
     made = collections.defaultdict(list)          # team -> [(frame, mMade, eMade)]
     events = []                                   # (frame, team, unit, +1/-1)
     army = collections.defaultdict(dict)          # team -> frame -> metal
+    flow = collections.defaultdict(list)          # team -> [(frame, +-metal)] mobile army, replays
     ours = set()
     with open(infolog, encoding="utf-8", errors="replace") as fh:
         for ln in fh:
@@ -100,6 +106,17 @@ def game_samples(infolog, cat):
             if m:
                 events.append((int(m.group(2)), int(m.group(1)), m.group(3), 1))
                 continue
+            m = PROD.search(ln)
+            if m:
+                c = cat.get(m.group(3))
+                if c and c.get("mob", 0) > 0 and c.get("bp", 0) <= 0:
+                    flow[int(m.group(1))].append((int(m.group(2)), float(m.group(4))))
+                continue
+            m = DEATHC.search(ln)
+            if m:
+                c = cat.get(m.group(3))
+                if c and c.get("mob", 0) > 0 and c.get("bp", 0) <= 0 and m.group(5) == "1":
+                    flow[int(m.group(2))].append((int(m.group(1)), -float(m.group(4))))
             m = DEATH.search(ln)
             if m and m.group(4) == "1":
                 events.append((int(m.group(1)), int(m.group(2)), m.group(3), -1))
@@ -114,7 +131,7 @@ def game_samples(infolog, cat):
                     if c and c.get("mob", 0) > 0 and c.get("bp", 0) <= 0:
                         tot += c.get("mCost", 0)
                 army[t][f] = army[t].get(f, 0.0) + tot
-    if not ours:
+    if not ours and sample_teams is None:
         return [], {}
     events.sort()
     counts = collections.defaultdict(collections.Counter)
@@ -129,7 +146,9 @@ def game_samples(infolog, cat):
 
     def army_at(t, f):
         fr = [x for x in army[t] if x <= f]
-        return army[t][max(fr)] if fr else 0.0
+        if fr:
+            return army[t][max(fr)]
+        return max(0.0, sum(v for fx, v in flow[t] if fx <= f))
 
     for f, t, unit, d in events:
         cls = classify(cat.get(unit))
@@ -137,8 +156,9 @@ def game_samples(infolog, cat):
             continue
         if d > 0:
             phase = min(int(f / FPM / 4), 5)
-            if t in ours:
-                our_mix[phase][cls] += 1
+            if t in ours or (sample_teams is not None and t not in sample_teams):
+                if t in ours:
+                    our_mix[phase][cls] += 1
             else:
                 c = counts[t]
                 x = [f / FPM, rate(t, f, 1), rate(t, f, 2), c["mex"]] + \
@@ -198,7 +218,51 @@ def train(X, Y, G):
             "w3": sd["6.weight"].numpy(), "b3": sd["6.bias"].numpy()}, acc, base, len(test)
 
 
+def human_main(argv):
+    """--human: the human teams of every extracted replay (runtime/replays/*)."""
+    cat = load_catalog()
+    dirs = [Path(a) for a in argv if not a.startswith("--")] or sorted((REPO / "runtime" / "replays").glob("*"))
+    X, Y, G = [], [], []
+    mix = collections.defaultdict(collections.Counter)
+    games = 0
+    for gi, d in enumerate(dirs):
+        ev, meta = d / "replay_events.txt", d / "replay_meta.json"
+        if not ev.is_file() or not meta.is_file():
+            continue
+        m = json.loads(meta.read_text())
+        ai_teams = {a["team"] for a in (m.get("ais") or [])}
+        humans = {int(t) for t in (m.get("ally") or {}) if int(t) not in ai_teams}
+        if not humans:
+            continue
+        s, _ = game_samples(str(ev), cat, sample_teams=humans)
+        if s:
+            games += 1
+        for x, y, phase in s:
+            X.append(x)
+            Y.append(y)
+            G.append(gi)
+            mix[phase][CLASSES[y]] += 1
+    if not X:
+        print("no human samples")
+        return 1
+    print("%d replays, %d human structures" % (games, len(X)))
+    for ph in sorted(mix):
+        tb = sum(mix[ph].values())
+        print("  min %2d-%2d  " % (ph * 4, ph * 4 + 4) + "  ".join(
+            "%s %2.0f" % (k, 100.0 * mix[ph][k] / tb) for k in CLASSES if mix[ph][k]))
+    w, acc, base, ntest = train(X, Y, G)
+    print("held-out replays %d: predicts a human's next structure class %.1f%% (always-commonest %.1f%%)"
+          % (ntest, 100 * acc, 100 * base))
+    np.savez(OUT / "imitate_human.npz", features=np.array(FEATURES), classes=np.array(CLASSES), **w)
+    (OUT / "imitate_human.json").write_text(json.dumps({"acc": acc, "base": base, "samples": len(X),
+                                                        "games": games}))
+    print("saved", OUT / "imitate_human.npz")
+    return 0
+
+
 def main(argv):
+    if "--human" in argv:
+        return human_main([a for a in argv if a != "--human"])
     cat = load_catalog()
     targets = argv or glob.glob(str(REPO / "tournaments" / "*barb*")) + glob.glob(str(REPO / "tournaments" / "*BARb*"))
     infologs = []

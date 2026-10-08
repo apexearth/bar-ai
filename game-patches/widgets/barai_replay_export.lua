@@ -34,6 +34,9 @@ local dmg = {}       -- team -> {dm, ds, rm, rs}
 local waste = {}     -- team -> {mW, mI, eW, eI}
 local isStatic = {}
 local mobileArmed = {}
+local isComm = {}
+local comms = {}        -- ally -> commanders alive
+local resultSeen = false
 
 local function ally(team)
 	local a = allyOf[team]
@@ -61,9 +64,17 @@ function widget:Initialize()
 	for id, ud in pairs(UnitDefs) do
 		isStatic[id] = ud.isBuilding or ((ud.speed or 0) == 0)
 		mobileArmed[id] = (not isStatic[id]) and (#(ud.weapons or {}) > 0)
+		isComm[id] = (ud.customParams or {}).iscommander ~= nil
 	end
-	-- a replay plays at 1x unless told otherwise
-	Spring.SendCommands("setmaxspeed 200", "setminspeed 200")
+	for _, u in ipairs(Spring.GetAllUnits()) do
+		local def = Spring.GetUnitDefID(u)
+		if def and isComm[def] then
+			local a = ally(Spring.GetUnitTeam(u))
+			comms[a] = (comms[a] or 0) + 1
+		end
+	end
+	-- a replay plays at 1x unless told otherwise; full view sees every attacker
+	Spring.SendCommands("setmaxspeed 200", "setminspeed 200", "specfullview 1")
 	echo("[BARAI_REPLAY] export on")
 end
 
@@ -79,6 +90,10 @@ function widget:UnitFromFactory(unitID, unitDefID, unitTeam, factID, factDefID)
 end
 
 function widget:UnitFinished(unitID, unitDefID, unitTeam)
+	if isComm[unitDefID] then
+		local a = ally(unitTeam)
+		comms[a] = (comms[a] or 0) + 1
+	end
 	local ud = UnitDefs[unitDefID]
 	if ud == nil or not isStatic[unitDefID] then
 		return
@@ -113,6 +128,10 @@ function widget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
 	local ud = UnitDefs[unitDefID]
 	local x, _, z = GetUnitPosition(unitID)
 	fromFactory[unitID] = nil
+	if isComm[unitDefID] then
+		local a = ally(unitTeam)
+		comms[a] = (comms[a] or 1) - 1
+	end
 	if ud == nil or x == nil then
 		return
 	end
@@ -171,10 +190,27 @@ function widget:GameFrame(f)
 end
 
 function widget:GameOver(winners)
+	resultSeen = true
 	local list = {}
 	for _, a in ipairs(winners or {}) do
 		list[#list + 1] = tostring(a)
 	end
 	echo(string.format("[BARAI_RESULT] reason=gameover frame=%d winners=%s", GetGameFrame(), table.concat(list, ",")))
 	Spring.SendCommands("quitforce")
+end
+
+-- A replay that stops without a game-over (the recorder left) still has a
+-- winner by BAR's rule: the one ally team with a commander standing.
+function widget:Shutdown()
+	if resultSeen then
+		return
+	end
+	local alive = {}
+	for a, n in pairs(comms) do
+		if n > 0 then
+			alive[#alive + 1] = tostring(a)
+		end
+	end
+	echo(string.format("[BARAI_RESULT] reason=replayend frame=%d winners=%s", GetGameFrame(),
+		(#alive == 1) and alive[1] or ""))
 end
