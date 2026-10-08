@@ -115,6 +115,8 @@ LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
 BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
 TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its trust
 TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
+HUMAN_TAG = "mp-"         # matches/mp-*: his multiplayer games (tools/mp_archive.py)
+HUMAN_W = 4               # their rows count this many times in training, never in trust
 TRUST_RECENT = 2000     # trust is the CURRENT net's: older pairs scored weights since replaced
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
@@ -190,11 +192,21 @@ def rand_weight(row):
     rule = row.get("rule")
     if row.get("explore") and rule and opts[ci].get("name") not in (None, rule):
         return RAND_W_MAX
-    # a builder pick an explorer's random kind multipliers (nm) moved off the
-    # option the market itself ranked first
-    if row.get("explore") and rule is None and "nm" in opts[ci]:
-        base = [num(o.get("value", 0)) / max(num(o.get("nm", 1)), 1e-6) for o in opts]
-        if base and max(range(len(base)), key=lambda i: base[i]) != ci:
+    # A builder pick a per-game random roll MOVED: the logged value is the
+    # market's with the personality in and the net/explorer multiplier (nm)
+    # out. The explorer's multiplier moved it when value x nm tops at the pick
+    # and value alone does not; the personality (rolled every game, his and
+    # ours) moved it when value tops at the pick and value / persona does not.
+    if rule is None and "nm" in opts[ci]:
+        def top(vals):
+            return max(range(len(vals)), key=lambda i: vals[i])
+        val = [num(o.get("value", 0)) for o in opts]
+        if row.get("explore"):
+            moved = [v * max(num(o.get("nm", 1)), 1e-6) for v, o in zip(val, opts)]
+            if top(moved) == ci and top(val) != ci:
+                return RAND_W_MAX
+        bare = [v / max(num(o.get("persona", 1)), 1e-6) for v, o in zip(val, opts)]
+        if top(val) == ci and top(bare) != ci:
             return RAND_W_MAX
     return None
 
@@ -621,6 +633,8 @@ class FacHead:
                                        float(((zy[i] - zs[i]) * w * mm).sum()), rw[i]))
             self.pairs = self.pairs[-TRUST_KEEP:]
             rec["trust"] = self.trust()
+        if HUMAN_TAG in str(source):
+            XS, XF, Y, M = (np.repeat(a, HUMAN_W, axis=0) for a in (XS, XF, Y, M))
         if self.XF is None:
             new_from = 0
             self.XS, self.XF, self.Y, self.M = XS, XF, Y, M
@@ -997,6 +1011,8 @@ class Trainer:
             self.note_trust(pf, ps, Y, M, kinds, rw)
             rec["trust"] = self.trust()
         self.status("training", source=source)
+        if HUMAN_TAG in str(source):
+            XS, XF, Y, M = (np.repeat(a, HUMAN_W, axis=0) for a in (XS, XF, Y, M))
         if self.XF is None:
             new_from = 0
             self.XS, self.XF, self.Y, self.M = XS, XF, Y, M

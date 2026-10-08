@@ -1055,11 +1055,6 @@ GROUPS = [
                   "games with a trained net, every kind of build gets a random "
                   "want-more/want-less for the whole game, so the net learns "
                   "what it has never tried. 0 = never experiment"),
-                 ("TUNE_NN_VARIETY", "how much each game's AI differs from "
-                  "the last: every kind of build leans by a small random "
-                  "factor for the whole game (0.2 = about x0.8 to x1.2). "
-                  "Makes it less predictable for human players. 0 = the "
-                  "same AI every game"),
                  ("TUNE_PLAN_FORCE", "a test switch: every team plays one "
                   "plan all game -- 0 normal, 1 mass T3, 2 missiles and nukes, "
                   "3 long-range artillery, 4 mass and push together. -1 = the "
