@@ -80,9 +80,11 @@ AIFloat3 DecoyDest(const AIFloat3& in at, float r, uint i, uint n)
 // included -- that would otherwise meet the bombs.
 void Vanguard()
 {
-	AIFloat3 at;
-	float r;
-	if (!StrikePoint(at, r))
+	// Our own strike's cell: StrikePoint reads the first ally with one
+	// published, which sent our fighters to an ally's older target.
+	AIFloat3 at = gStrikeAt;
+	float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
+	if (!gStrikeHas || !OnMap(at))
 		return;
 	array<CCircuitUnit@> go;
 	for (int pass = 0; pass < 2; ++pass) {
@@ -93,24 +95,37 @@ void Vanguard()
 		if (us is null)
 			continue;
 		for (uint k = 0; k < us.length(); ++k) {
-			if ((us[k] !is null) && InWave(us[k].id) && (FlightOutIdx(us[k].id) < 0))
-				go.insertLast(us[k]);
+			if ((us[k] is null) || !InWave(us[k].id))
+				continue;
+			// A fighter sent on an earlier strike and redirected before it
+			// arrived stayed on the flight list for good, and every later
+			// vanguard went in with none (his 7v7: "decoys=0 of 0").
+			const int old = FlightOutIdx(us[k].id);
+			if (old >= 0) {
+				gFlightOut.removeAt(uint(old));
+				gFlightDest.removeAt(uint(old));
+			}
+			go.insertLast(us[k]);
 		}
 	}
-	// ...but only their share: the rest guard the bombers against fighters
-	// (his 2026-09-16 cover). Decoys answer their ground AA, guards their
-	// fighters -- the AA role carries both, so their fighters come off it.
+	// ALL OF THEM, FIRST (his 2026-10-08: "first attack with all their
+	// fighters to make sure that they kill our fighters, and then they send
+	// in a bunch of bombers or gunships ... fighters already get there first
+	// because they're fast"). They clear the sky over the cell and draw its
+	// ground AA; a hunter is taken off its hunt so the stock task cannot
+	// turn it round on the way.
 	const float foeFig = FoeFighterM();
 	float foeAA = EnemyAACost() - foeFig;
 	if (foeAA < 0.f)
 		foeAA = 0.f;
-	const uint n = (foeAA + foeFig > 1.f)
-			? uint(float(go.length()) * foeAA / (foeAA + foeFig) + 0.5f) : 0;
-	for (uint i = 0; (i < n) && (i < go.length()); ++i) {
+	const uint n = go.length();
+	for (uint i = 0; i < n; ++i) {
 		const AIFloat3 dest = DecoyDest(at, r, i, n);
-		go[i].CmdMoveTo(dest);
 		gFlightOut.insertLast(go[i].id);
 		gFlightDest.insertLast(dest);
+		if ((go[i].task !is null) && (go[i].task.GetType() == Task::Type::FIGHTER))
+			go[i].task.RemoveUnit(go[i]);
+		go[i].CmdMoveTo(dest);
 	}
 	AiLog(Factory::T() + "apex: air vanguard decoys=" + n + " of " + go.length()
 		+ " foeAA=" + int(foeAA) + " foeFighters=" + int(foeFig)

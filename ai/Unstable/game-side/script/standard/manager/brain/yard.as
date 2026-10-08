@@ -287,7 +287,10 @@ void YardWatch()
 	// and the plant market rebuys a lab where a door faces open ground --
 	// eating the trapped units only made room for the next one.
 	string ate = "";
-	if ((structs == 0) && (age >= 2 * limit) && (now - gYpNamedAt[s] >= 2 * limit)) {
+	// Twice the crossing limit is seconds for a hover; the plant is a last
+	// resort, so it waits at least as long as a penned unit's test does.
+	const int eatAfter = (2 * limit > Military::UNBLOCK_STILL) ? (2 * limit) : Military::UNBLOCK_STILL;
+	if ((structs == 0) && (age >= eatAfter) && (now - gYpNamedAt[s] >= 2 * limit)) {
 		++gYdTerrain;
 		const int n = NanosEat(fac, 1);
 		if (n > 0) {

@@ -202,6 +202,7 @@ void Release(const string& in why)
 		ai.PublishTeamValue("strike_r",
 				ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
 		Vanguard();
+		NaJoinStrike(gStrikeAt, ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R));
 	}
 	AiLog(Factory::T() + "apex: air strike -- " + why
 		+ " bombers=" + Bombers() + " fighters=" + Fighters()

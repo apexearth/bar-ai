@@ -592,6 +592,19 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 	NaHoldGunships();
 }
 
+// THE SAME CELL, THE SAME MOMENT: a bomber strike takes the gunships with it.
+void NaJoinStrike(const AIFloat3& in at, float r)
+{
+	float m, hp, dps, spd;
+	AIFloat3 ctr;
+	NaSnapGroup(1, m, hp, dps, spd, ctr);
+	if (gNaU.length() == 0)
+		return;
+	NaPrice p;
+	p.at = at;
+	NaBind(1, NA_GO, p, true, "strike", r);
+}
+
 // Gunship raids under WAIT hunt only around home.
 void NaHoldGunships()
 {

@@ -192,6 +192,18 @@ fight's size and how long it has been going, the two sides' strength there.
 Label: arrived while it still raged / arrived after / died on the way, plus
 the trade once there.
 
+## Metal maps: extractors packed where they are safe, tiled for least overlap
+
+apexearth 2026-10-08, watching Full Metal Plate: the whole map is metal, so
+"just make a lot of metal extractors, put them right next to each other".
+Measured: BAR's mex-denier gadget removes itself on a metal map (an extractor
+may stand anywhere); the 249 spots both AIs use are the spot finder's
+synthetic grid, ~505 apart; extraction circles that overlap split the metal
+under them, so packing past touching circles adds nothing. Our bots held
+15-28 each at minute 12. The play: on a metal map, place extractors on our
+own tiling (circles edge to edge) starting at home and growing outward in one
+block, instead of claiming the finder's grid scattered across the map.
+
 ## Bombers hunt the biggest economic prize, not the first extractor
 
 apexearth 2026-10-07: "You really hurt an enemy's economy when you can kill a
