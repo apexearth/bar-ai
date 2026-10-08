@@ -79,7 +79,26 @@ bool CMilitaryScript::Init()
 	int r = mod->SetDefaultNamespace("Military"); ASSERT(r >= 0);
 	InitModule(mod);
 	militaryInfo.makeDefence = script->GetFunc(mod, "void AiMakeDefence(int, const AIFloat3& in)");
+	militaryInfo.joinFight = script->GetFunc(mod, "bool AiJoinFight(const AIFloat3& in, float, float, float, float, int)");
 	return true;
+}
+
+// Go to a fight our side is already in? A script without the function always goes.
+bool CMilitaryScript::JoinFight(const AIFloat3& at, float travelS, float allyPow, float foePow, float ownPow, int leaderId)
+{
+	if (militaryInfo.joinFight == nullptr) {
+		return true;
+	}
+	asIScriptContext* ctx = script->PrepareContext(militaryInfo.joinFight);
+	ctx->SetArgAddress(0, &const_cast<AIFloat3&>(at));
+	ctx->SetArgFloat(1, travelS);
+	ctx->SetArgFloat(2, allyPow);
+	ctx->SetArgFloat(3, foePow);
+	ctx->SetArgFloat(4, ownPow);
+	ctx->SetArgDWord(5, leaderId);
+	const bool go = !script->Exec(ctx) || (ctx->GetReturnByte() != 0);
+	script->ReturnContext(ctx);
+	return go;
 }
 
 void CMilitaryScript::MakeDefence(int cluster, const AIFloat3& pos)

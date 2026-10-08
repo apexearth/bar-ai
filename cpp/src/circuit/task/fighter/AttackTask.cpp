@@ -19,6 +19,7 @@
 #include "unit/action/MoveAction.h"
 #include "unit/action/SupportAction.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/ally/AllyUnit.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
@@ -715,6 +716,41 @@ void CAttackTask::FindTarget()
 					(scoredBest != bestTarget) ? 1 : 0, nearAll,
 					nearWhy[NR_OVERP], nearWhy[NR_STRONG], nearWhy[NR_REACH], nearWhy[NR_HIDDEN], nearWhy[NR_VEL],
 					nearWhy[NR_CAT], nearWhy[NR_SPAM], nearWhy[NR_IGN], nearWhy[NR_HOME], nearWhy[NR_CAND]);
+		}
+	}
+
+	// A FIGHT OUR SIDE IS ALREADY IN (apexearth 2026-10-08: squads walk across
+	// the map to a fight that is won or lost before they arrive). A new target
+	// with our units or an ally's already engaged there is the script's call --
+	// a net scored on whether the squad arrived while it still raged. A refusal
+	// holds for 30 s so the same target is not asked again every update.
+	if ((bestTarget != nullptr) && (bestTarget != prevTarget)) {
+		const AIFloat3& tp = bestTarget->GetPos();
+		if ((bestTarget == joinRefused) && (frame < joinRefusedUntil)) {
+			bestTarget = nullptr;
+		} else {
+			const float fightR = std::max(cdef->GetLosRadius(), 400.f) * 2.f;
+			float allyPow = 0.f;
+			for (const auto& kv : circuit->GetFriendlyUnits()) {
+				CAllyUnit* au = kv.second;
+				if ((au == nullptr) || (au->GetCircuitDef() == nullptr) || !au->GetCircuitDef()->IsMobile()
+					|| (au->GetCircuitDef()->GetPower() <= 1.f) || (au->GetTask() == this))
+				{
+					continue;
+				}
+				if (au->GetPos(frame).SqDistance2D(tp) <= SQUARE(fightR)) {
+					allyPow += au->GetCircuitDef()->GetPower();
+				}
+			}
+			const float foePow = circuit->GetMilitaryManager()->GetEnemyInflNear(tp, fightR);
+			if ((allyPow > 0.f) && (foePow > 0.f)) {
+				const float travelS = pos.distance2D(tp) / ourSpeed;
+				if (!circuit->GetMilitaryManager()->AskJoinFight(tp, travelS, allyPow, foePow, maxPower, leader->GetId())) {
+					joinRefused = bestTarget;
+					joinRefusedUntil = frame + FRAMES_PER_SEC * 30;
+					bestTarget = nullptr;
+				}
+			}
 		}
 	}
 

@@ -845,6 +845,11 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
 	static_cast<CMilitaryScript*>(script)->MakeDefence(cluster, pos);  // DefaultMakeDefence
 }
 
+bool CMilitaryManager::AskJoinFight(const AIFloat3& at, float travelS, float allyPow, float foePow, float ownPow, int leaderId)
+{
+	return static_cast<CMilitaryScript*>(script)->JoinFight(at, travelS, allyPow, foePow, ownPow, leaderId);
+}
+
 void CMilitaryManager::DefaultMakeDefence(int cluster, const AIFloat3& pos)
 {
 	// Brain overhaul 2026-08-22: the DLL originates no economy/build decisions; the script Brain does.

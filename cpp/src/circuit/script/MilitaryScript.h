@@ -27,10 +27,12 @@ public:
 
 public:
 	void MakeDefence(int cluster, const springai::AIFloat3& pos);
+	bool JoinFight(const springai::AIFloat3& at, float travelS, float allyPow, float foePow, float ownPow, int leaderId);
 
 private:
 	struct SScriptInfo {
 		asIScriptFunction* makeDefence = nullptr;
+		asIScriptFunction* joinFight = nullptr;
 	} militaryInfo;
 };
 

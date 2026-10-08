@@ -245,4 +245,20 @@ const array<float> NNL_WO = {};
 const float NNL_BO = 0.f;
 const float NNL_TRUST = 0.f;
 
+// the join-the-fight net (military/joinfight.as)
+const bool NNV_ON = false;
+const string NNV_STATE = "";
+const int NNV_S = 0;
+const int NNV_O = 0;
+const int NNV_H = 0;
+const array<float> NNV_XM = {};
+const array<float> NNV_XS = {};
+const array<float> NNV_W1 = {};
+const array<float> NNV_B1 = {};
+const array<float> NNV_W2 = {};
+const array<float> NNV_B2 = {};
+const array<float> NNV_WO = {};
+const float NNV_BO = 0.f;
+const float NNV_TRUST = 0.f;
+
 }  // namespace Market

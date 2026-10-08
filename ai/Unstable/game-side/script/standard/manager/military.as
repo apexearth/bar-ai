@@ -14,6 +14,7 @@
 #include "military/posture.as"      // raid caution, persona, team push, corridors
 #include "military/superguard.as"   // T3 heavies hold the defence line
 #include "military/unblock.as"      // units walled in by our own buildings
+#include "military/joinfight.as"    // march to a fight already on only if we arrive in time
 #include "military/bombs.as"       // rolling bombs: never squadded, never massed
 #include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
 #include "military/fightcensus.as"  // live fighter pools by fight type, once a game-minute

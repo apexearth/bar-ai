@@ -132,6 +132,7 @@ public:
 	void MakeDefence(const springai::AIFloat3& pos);
 	void MakeDefence(int cluster);
 	void MakeDefence(int cluster, const springai::AIFloat3& pos);
+	bool AskJoinFight(const springai::AIFloat3& at, float travelS, float allyPow, float foePow, float ownPow, int leaderId);
 	void DefaultMakeDefence(int cluster, const springai::AIFloat3& pos);
 	// Sensors only, without any of DefaultMakeDefence's tower placement. The
 	// script's AiMakeDefence returns early on clusters it declines to porc, and

@@ -61,6 +61,8 @@ private:
 	bool strongMem = false;
 	springai::AIFloat3 strongPos;
 	springai::AIFloat3 fallBackTo;
+	CEnemyInfo* joinRefused = nullptr;   // a fight the join decision refused
+	int joinRefusedUntil = 0;
 };
 
 } // namespace circuit
