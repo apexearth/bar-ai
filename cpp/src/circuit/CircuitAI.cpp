@@ -165,9 +165,8 @@ CCircuitAI::CCircuitAI(OOAICallback* clb)
 		std::unique_ptr<DataDirs> dirs(clb->GetDataDirs());
 		const char* dirRaw = dirs->GetWriteableDir();
 		// THE LOG LIVES UNDER THE VERSION THAT RUNS. A hosted game names no
-		// version, and the engine handed some bots the folder of an older
-		// version still on disk (his 2026-10-07 7v7: v0.1.7 bots writing
-		// into Apex/v0.1.5/). The loaded library's own AIInfo is the truth.
+		// version, and the engine can hand a bot the folder of an older
+		// version still on disk; the loaded library's own AIInfo is the truth.
 		std::string dirFixed = (dirRaw != nullptr) ? std::string(dirRaw) : std::string();
 		if (!dirFixed.empty() && (version != nullptr)) {
 			std::string up = dirFixed;

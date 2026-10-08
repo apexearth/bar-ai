@@ -188,8 +188,7 @@ bool AirPlantOwed(int d)
 		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < gAirPlantMax);
 }
 
-// WHICH AI IS PLAYING, said once per team in chat and by every bot in its log
-// (his 2026-10-07: a whole night of games ran an older version unseen).
+// WHICH AI IS PLAYING, said once per team in chat and by every bot in its log.
 const int BOARD_BANNER = 300;
 bool gVersionLogged = false;
 void VersionBanner()

@@ -179,6 +179,19 @@ What his game showed: waves launched 2 bombers at a time (`bomb spread
 units=2 ... need=9-26`), 17-29 bombers held at home, 55-106 fighters hunting
 on their own, strikes priced at kill fraction 0.12-0.23.
 
+## Join a fight only if we get there in time -- a net decides, scored on arrival
+
+apexearth 2026-10-08: "sometimes I see our guys walking across the map just to
+attack with somebody who's already engaged with the enemy. So by the time ...
+they're gonna either win or be dead by the time our units even get there."
+Whether to march to an ally's (or a squad's) fight should be a net decision
+with the walk distance among its inputs, and one of its success metrics should
+be "did we participate in the attack we tried to participate in" -- arrived
+and engaged before the fight ended. Inputs a player sees: our travel time, the
+fight's size and how long it has been going, the two sides' strength there.
+Label: arrived while it still raged / arrived after / died on the way, plus
+the trade once there.
+
 ## Bombers hunt the biggest economic prize, not the first extractor
 
 apexearth 2026-10-07: "You really hurt an enemy's economy when you can kill a

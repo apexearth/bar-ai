@@ -364,14 +364,27 @@ class NrTarget {
 	float hp = 0.f;
 }
 
-bool NrPrice(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in ctr, float spd,
-	float losR, float dps, NrTarget@ best)
+// THE DECISION IN SLICES. Pricing every spot in one frame froze a bot for
+// 30-50 ms on a crowded map; the spots are priced a time budget per update
+// and the decision is made when the last one is.
+const double NR_SLICE_US = 3000.0;
+bool gNrJob = false;
+string gNjWhy = "";
+AIFloat3 gNjFoe, gNjCtr;
+float gNjRP = 0.f, gNjSPerM = 0.f, gNjOcc = 0.f, gNjAlt = 0.f;
+float gNjGrpM = 0.f, gNjGrpS = 0.f, gNjSpd = 0.f, gNjDps = 0.f, gNjLosR = 0.f;
+uint gNjN = 0, gNjS = 0;
+bool gNjHave = false;
+NrTarget@ gNjBest;
+
+bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in ctr, float spd,
+	float losR, float dps)
 {
 	const uint n = Market::gAllSpots.length();
 	if ((n == 0) || (spd <= 0.f))
 		return false;
-	const float rP = (losR > 1.f) ? losR : 300.f;
-	const float sPerM = NrFoeSPerM(grpS, grpM);
+	gNjRP = (losR > 1.f) ? losR : 300.f;
+	gNjSPerM = NrFoeSPerM(grpS, grpM);
 	// their occupancy, as we have looked: their extractors known over their spots seen
 	int seenN = 0, mexN = 0;
 	for (uint s = 0; s < n; ++s) {
@@ -385,95 +398,117 @@ bool NrPrice(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in 
 		if (Catalog::gExtractsM[gNeD[e]] > 0.f)
 			++mexN;
 	}
-	const float occ = float(mexN + 1) / float(((seenN > mexN) ? seenN : mexN) + 2);
-	float altRate = 0.f;
+	gNjOcc = float(mexN + 1) / float(((seenN > mexN) ? seenN : mexN) + 2);
+	gNjAlt = 0.f;
 	for (uint i = 0; i < gNrAltRate.length(); ++i)
-		altRate += gNrAltRate[i];
-	bool have = false;
+		gNjAlt += gNrAltRate[i];
+	gNjFoe = foe;
+	gNjCtr = ctr;
+	gNjGrpM = grpM;
+	gNjGrpS = grpS;
+	gNjSpd = spd;
+	gNjDps = dps;
+	gNjLosR = losR;
+	gNjN = n;
+	gNjS = 0;
+	gNjHave = false;
+	@gNjBest = NrTarget();
+	return true;
+}
+
+// One spot of the job, priced against the job's snapshot.
+void NrPriceSpot(uint s)
+{
+	const AIFloat3 foe = gNjFoe, ctr = gNjCtr;
+	const float rP = gNjRP, sPerM = gNjSPerM, occ = gNjOcc, altRate = gNjAlt;
+	const float grpM = gNjGrpM, grpS = gNjGrpS, spd = gNjSpd, dps = gNjDps;
+	const uint n = gNjN;
+	NrTarget@ best = gNjBest;
+	bool have = gNjHave;
 	array<int> near;
-	for (uint s = 0; s < n; ++s) {
-		const AIFloat3 sp = Market::gAllSpots[s];
-		if (!OnMap(sp) || !NrTheirHalf(sp, foe))
-			continue;
-		NrTarget t;
-		t.at = sp;
-		float hp = 0.f;
-		bool mexKnown = false;
-		NrNear(gNrG1, sp, rP, near);
-		for (uint i = 0; i < near.length(); ++i) {
-			const uint e = uint(near[i]);
-			const int d = gNeD[e];
-			if (gNeP[e].distance2D(sp) <= rP) {
-				t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe);
-				hp += Catalog::gHealth[d];
-				if (Catalog::gExtractsM[d] > 0.f)
-					mexKnown = true;
-			}
-		}
-		NrNear(gNrG2, sp, gNrMaxR2 + rP * 0.5f, near);
-		for (uint i = 0; i < gNrLong2.length(); ++i)
-			near.insertLast(gNrLong2[i]);
-		for (uint i = 0; i < near.length(); ++i) {
-			const uint e = uint(near[i]);
-			const int d = gNeD[e];
-			if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f)
-				t.defS += DgStr(d);
-		}
-		const bool looked = (gNrSpotSeen.length() == n) && (gNrSpotSeen[s] >= 0);
-		if (!mexKnown && !looked) {
-			// a spot we never saw: an extractor there as often as we find them
-			const int md = NrMexDef();
-			if (md > 0) {
-				t.prior = occ * NrPrizeOf(md, sp, Market::gAllSpotInc[s], foe);
-				hp += occ * Catalog::gHealth[md];
-			}
-		}
-		if (t.v + t.prior <= 0.f)
-			continue;
-		t.walkS = ctr.distance2D(sp) / spd;
-		t.killS = (dps > 0.f) ? hp / dps : t.walkS;
-		// their army that can stand on the spot while we work there
-		const float stay = t.killS;
-		NrNear(gNrG3, sp, gNrMaxR3 + gNrMaxSpd3 * stay, near);
-		for (uint i = 0; i < near.length(); ++i) {
-			const uint e = uint(near[i]);
-			const int d = gNeD[e];
-			if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay)
-				t.armyS += DgStr(d);
-		}
-		// the risk model's wave at the target and its approach; the pack's path
-		// is threat-routed, so the open middle is what it walks around. The wave
-		// is there only as often as it arrives (HazardAt, per second) over the
-		// seconds we stand inside their ground.
-		float worstM = 0.f;
-		const float expoS = t.killS + t.walkS * 0.25f;
-		for (int k = 3; k <= 4; ++k) {
-			const float f = float(k) / 4.f;
-			AIFloat3 p(ctr.x + (sp.x - ctr.x) * f, 0.f, ctr.z + (sp.z - ctr.z) * f);
-			if (!OnMap(p))
-				continue;
-			float pr = Market::HazardAt(p) * expoS;
-			pr = (pr > 1.f) ? 1.f : pr;
-			const float m = Market::ThreatM(p) * pr;
-			worstM = (m > worstM) ? m : worstM;
-		}
-		t.pathS = worstM * sPerM;
-		const float army = (t.armyS > t.pathS) ? t.armyS : t.pathS;
-		t.eS = army + t.defS;
-		t.lossF = NrLossFrac(t.eS, grpS);
-		const float tripS = 2.f * t.walkS + t.killS;
-		t.altM = altRate * tripS;
-		t.netM = (t.v + t.prior) * (1.f - t.lossF) - t.lossF * grpM - t.altM;
-		t.hp = hp;
-		if (!have || (t.netM > best.netM)) {
-			best.at = t.at; best.v = t.v; best.prior = t.prior; best.eS = t.eS;
-			best.armyS = t.armyS; best.defS = t.defS; best.pathS = t.pathS;
-			best.lossF = t.lossF; best.walkS = t.walkS; best.killS = t.killS;
-			best.altM = t.altM; best.netM = t.netM; best.hp = t.hp;
-			have = true;
+	{
+	const AIFloat3 sp = Market::gAllSpots[s];
+	if (!OnMap(sp) || !NrTheirHalf(sp, foe))
+		return;
+	NrTarget t;
+	t.at = sp;
+	float hp = 0.f;
+	bool mexKnown = false;
+	NrNear(gNrG1, sp, rP, near);
+	for (uint i = 0; i < near.length(); ++i) {
+		const uint e = uint(near[i]);
+		const int d = gNeD[e];
+		if (gNeP[e].distance2D(sp) <= rP) {
+			t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe);
+			hp += Catalog::gHealth[d];
+			if (Catalog::gExtractsM[d] > 0.f)
+				mexKnown = true;
 		}
 	}
-	return have;
+	NrNear(gNrG2, sp, gNrMaxR2 + rP * 0.5f, near);
+	for (uint i = 0; i < gNrLong2.length(); ++i)
+		near.insertLast(gNrLong2[i]);
+	for (uint i = 0; i < near.length(); ++i) {
+		const uint e = uint(near[i]);
+		const int d = gNeD[e];
+		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f)
+			t.defS += DgStr(d);
+	}
+	const bool looked = (gNrSpotSeen.length() == n) && (gNrSpotSeen[s] >= 0);
+	if (!mexKnown && !looked) {
+		// a spot we never saw: an extractor there as often as we find them
+		const int md = NrMexDef();
+		if (md > 0) {
+			t.prior = occ * NrPrizeOf(md, sp, Market::gAllSpotInc[s], foe);
+			hp += occ * Catalog::gHealth[md];
+		}
+	}
+	if (t.v + t.prior <= 0.f)
+		return;
+	t.walkS = ctr.distance2D(sp) / spd;
+	t.killS = (dps > 0.f) ? hp / dps : t.walkS;
+	// their army that can stand on the spot while we work there
+	const float stay = t.killS;
+	NrNear(gNrG3, sp, gNrMaxR3 + gNrMaxSpd3 * stay, near);
+	for (uint i = 0; i < near.length(); ++i) {
+		const uint e = uint(near[i]);
+		const int d = gNeD[e];
+		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay)
+			t.armyS += DgStr(d);
+	}
+	// the risk model's wave at the target and its approach; the pack's path
+	// is threat-routed, so the open middle is what it walks around. The wave
+	// is there only as often as it arrives (HazardAt, per second) over the
+	// seconds we stand inside their ground.
+	float worstM = 0.f;
+	const float expoS = t.killS + t.walkS * 0.25f;
+	for (int k = 3; k <= 4; ++k) {
+		const float f = float(k) / 4.f;
+		AIFloat3 p(ctr.x + (sp.x - ctr.x) * f, 0.f, ctr.z + (sp.z - ctr.z) * f);
+		if (!OnMap(p))
+			continue;
+		float pr = Market::HazardAt(p) * expoS;
+		pr = (pr > 1.f) ? 1.f : pr;
+		const float m = Market::ThreatM(p) * pr;
+		worstM = (m > worstM) ? m : worstM;
+	}
+	t.pathS = worstM * sPerM;
+	const float army = (t.armyS > t.pathS) ? t.armyS : t.pathS;
+	t.eS = army + t.defS;
+	t.lossF = NrLossFrac(t.eS, grpS);
+	const float tripS = 2.f * t.walkS + t.killS;
+	t.altM = altRate * tripS;
+	t.netM = (t.v + t.prior) * (1.f - t.lossF) - t.lossF * grpM - t.altM;
+	t.hp = hp;
+	if (!have || (t.netM > best.netM)) {
+		best.at = t.at; best.v = t.v; best.prior = t.prior; best.eS = t.eS;
+		best.armyS = t.armyS; best.defS = t.defS; best.pathS = t.pathS;
+		best.lossF = t.lossF; best.walkS = t.walkS; best.killS = t.killS;
+		best.altM = t.altM; best.netM = t.netM; best.hp = t.hp;
+		have = true;
+	}
+	}
+	gNjHave = have;
 }
 
 // Called by RaidTaskFor on the pack it creates: the goal travels with it.
@@ -504,7 +539,7 @@ bool NrLive()
 
 void NrDecide(const string why)
 {
-	if (!Builder::gHomeSet || !Market::gSpotsCached)
+	if (gNrJob || !Builder::gHomeSet || !Market::gSpotsCached)
 		return;
 	AIFloat3 foe = Front::FoeAnchor();
 	if (!OnMap(foe)) {
@@ -518,12 +553,33 @@ void NrDecide(const string why)
 	if (gNrU.length() == 0)
 		return;
 	{ double _t = Perf::T0(); NrSnapEnemy(); Perf::Add("nr.snap", _t); }
-	NrTarget@ best = NrTarget();
-	const double _tP = Perf::T0();
-	const bool priced = NrPrice(foe, grpM, grpS, ctr, spd, losR, dps, best);
-	Perf::Add("nr.price", _tP);
-	if (!priced)
+	if (!NrPriceBegin(foe, grpM, grpS, ctr, spd, losR, dps))
 		return;
+	gNrJob = true;
+	gNjWhy = why;
+	NrStep();
+}
+
+// Price spots until the slice is spent; on the last one, decide.
+void NrStep()
+{
+	if (!gNrJob)
+		return;
+	const double t0 = ai.ClockUs();
+	while ((gNjS < gNjN) && (ai.ClockUs() - t0 < NR_SLICE_US)) {
+		NrPriceSpot(gNjS);
+		++gNjS;
+	}
+	Perf::Add("nr.price", Perf::On() ? t0 : 0.0);
+	if (gNjS < gNjN)
+		return;
+	gNrJob = false;
+	if (gNjHave && (gNrU.length() > 0))
+		NrFinish(gNjWhy, gNjBest, gNjGrpM, gNjGrpS, gNjLosR);
+}
+
+void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float losR)
+{
 	const bool live = NrLive();
 	const int rule = (best.netM > 0.f) ? NR_GO : NR_WAIT;
 	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
@@ -690,7 +746,9 @@ void UpdateNnRaid()
 	}
 	if (gNrNextAt < 0)
 		gNrNextAt = ai.frame + (ai.teamId % 15) * SECOND;
-	if ((ai.frame >= gNrArriveAt) && NrArrived()) {
+	if (gNrJob) {
+		NrStep();
+	} else if ((ai.frame >= gNrArriveAt) && NrArrived()) {
 		gNrArriveAt = ai.frame + 3 * SECOND;
 		NrDecide("arrive");
 	} else if (ai.frame >= gNrNextAt) {
