@@ -1873,7 +1873,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// (EscortWorthy), because anything else ordered here would be produced
 		// and then refuse the duty.
 		Market::EscortFieldCensus();
-		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !Outgrown(d)) {
+		// The scout cap binds an escort buy too, or a lab whose every other unit
+		// is outgrown buys scouts as escorts without end.
+		const bool escCapped = IsLateScout(d) && (ScoutFleetHave() >= RezFleetCap());
+		if (escCapped && prankNow && EscortWorthy(d))
+			prank += " " + Catalog::Def(d).GetName() + ":esc-capped";
+		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !Outgrown(d) && !escCapped) {
 			if (escShort < -1)
 				escShort = EscortShortfall() - gEscSpare;
 			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
