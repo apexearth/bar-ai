@@ -36,9 +36,22 @@ DEMO_WINDOW_S = 900     # the replay is written when the game ends, as the logs 
 MARK = (b"apex: nn-schema", b"apex: nn t=")
 
 
+QUIET_S = 120           # a lobby game's bot logs quiet this long: the game is over
+GAME_SPAN_S = 900       # logs that stopped within this of the last one belong to the same game
+
+
+def bot_logs(env):
+    return [p for p in (env.data / "AI" / "Skirmish").glob("Apex*/*/apex-t*.log") if not p.name.endswith(".prev.log")]
+
+
 def his_game_running():
+    # A lobby game runs INSIDE the lobby's spring.exe, so no process tells it
+    # apart: our bots' logs being written does. A separate non-lobby
+    # spring.exe (a dashboard game) counts too.
     try:
-        # the BAR lobby is a spring.exe too, started with --menu; a game is not
+        env = bar_env.load()
+        if any(time.time() - p.stat().st_mtime < QUIET_S for p in bot_logs(env)):
+            return True
         out = subprocess.run(["powershell", "-NoProfile", "-Command",
                               "(Get-CimInstance Win32_Process -Filter \"Name='spring.exe'\" | "
                               "Where-Object { $_.CommandLine -notmatch '--menu' } | Measure-Object).Count"],
@@ -62,40 +75,38 @@ def load_state():
     try:
         return json.loads(STATE.read_text())
     except (OSError, ValueError):
-        return {"seen": []}
+        return {"last_end": 0.0}
 
 
 def archive(env, state):
-    new = []
-    for vdir in sorted((env.data / "AI" / "Skirmish").glob("Apex*/*")):
-        for kind, pat in (("cur", "apex-t*.log"), ("prev", "apex-t*.prev.log")):
-            files = [p for p in vdir.glob(pat) if (kind == "prev") == p.name.endswith(".prev.log")]
-            if not files:
-                continue
-            sig = "|".join(sorted("%s:%d:%d" % (p.name, p.stat().st_size, int(p.stat().st_mtime)) for p in files))
-            if sig in state["seen"]:
-                continue
-            state["seen"].append(sig)
-            keep = [p for p in files if has_decisions(p)]
-            if not keep:
-                continue
-            end = max(p.stat().st_mtime for p in keep)
-            stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(end))
-            dest = ARCH / ("%s-%s" % (stamp, vdir.name))
-            dest.mkdir(parents=True, exist_ok=True)
-            for p in keep:
-                shutil.copy2(p, dest / p.name.replace(".prev", ""))
-            demos = sorted((env.data / "demos").glob("*.sdfz"), key=lambda q: abs(q.stat().st_mtime - end))
-            demo = demos[0] if demos and abs(demos[0].stat().st_mtime - end) < DEMO_WINDOW_S else None
-            info = env.data / "infolog.txt"
-            if info.is_file() and abs(info.stat().st_mtime - end) < DEMO_WINDOW_S:
-                shutil.copy2(info, dest / "infolog.game.txt")
-            (dest / "game.json").write_text(json.dumps({
-                "version": vdir.name, "short": vdir.parent.name, "ended": stamp,
-                "logs": [p.name for p in keep], "demo": str(demo) if demo else None}, indent=1))
-            new.append(dest)
-            print("archived %s (%d logs, demo %s)" % (dest.name, len(keep), demo.name if demo else "none"), flush=True)
-    return new
+    """The last finished game, once: its bots' logs (whichever version folder
+    each one wrote to) after they have been quiet QUIET_S."""
+    logs = [p for p in bot_logs(env) if p.stat().st_mtime > state.get("last_end", 0.0) + 1]
+    if not logs:
+        return None
+    end = max(p.stat().st_mtime for p in logs)
+    if time.time() - end < QUIET_S:
+        return None
+    state["last_end"] = end
+    keep = [p for p in logs if p.stat().st_mtime >= end - GAME_SPAN_S and has_decisions(p)]
+    if not keep:
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(end))
+    dest = ARCH / stamp
+    dest.mkdir(parents=True, exist_ok=True)
+    for p in keep:
+        shutil.copy2(p, dest / p.name)
+    demos = sorted((env.data / "demos").glob("*.sdfz"), key=lambda q: abs(q.stat().st_mtime - end))
+    demo = demos[0] if demos and abs(demos[0].stat().st_mtime - end) < DEMO_WINDOW_S else None
+    info = env.data / "infolog.txt"
+    if info.is_file() and abs(info.stat().st_mtime - end) < DEMO_WINDOW_S:
+        shutil.copy2(info, dest / "infolog.game.txt")
+    (dest / "game.json").write_text(json.dumps({
+        "versions": sorted({p.parent.name for p in keep}), "short": "Apex", "ended": stamp,
+        "logs": [p.name for p in keep], "demo": str(demo) if demo else None}, indent=1))
+    print("archived %s (%d logs from %s, demo %s)" % (dest.name, len(keep), sorted({p.parent.name for p in keep}),
+                                                   demo.name if demo else "none"), flush=True)
+    return dest
 
 
 def build(gdir):
