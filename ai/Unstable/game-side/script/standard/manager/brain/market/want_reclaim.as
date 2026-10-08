@@ -1569,6 +1569,11 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 				if (!squeezed || RecentCopyWaiver(fd))
 					covered = false;
 			}
+			// A PLANT NOTHING IS WANTED FROM. Idle over the horizon a reclaim
+			// pays back on, with every product priced out, the plant covers
+			// nothing anyone asked for.
+			if (!covered && (Brain::PlantIdleS(f.id) >= int(hz)))
+				covered = true;
 			if (covered) {
 				const float v = RetireValue(unit, f, fd, ePM, wageR, hz);
 				if (v > bestValue) {

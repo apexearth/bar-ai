@@ -49,6 +49,36 @@ int gFQMilReq = 0;               // military task requests, see NoteMilRequest
 int gFQLost = 0;                 // orders presumed lost
 int gNextFQLog = 0;
 int gFQIdleLog = 0;
+
+// Plants idle because nothing they build is wanted, and since when. A stall
+// or a jam is not this: those are not the plant's own uselessness.
+array<Id> gPlantIdleId;
+array<int> gPlantIdleSince;
+
+void NotePlantIdle(Id id, bool idle)
+{
+	for (uint i = 0; i < gPlantIdleId.length(); ++i) {
+		if (gPlantIdleId[i] != id)
+			continue;
+		if (!idle) {
+			gPlantIdleId.removeAt(i);
+			gPlantIdleSince.removeAt(i);
+		}
+		return;
+	}
+	if (idle) {
+		gPlantIdleId.insertLast(id);
+		gPlantIdleSince.insertLast(ai.frame);
+	}
+}
+
+int PlantIdleS(Id id)
+{
+	for (uint i = 0; i < gPlantIdleId.length(); ++i)
+		if (gPlantIdleId[i] == id)
+			return (ai.frame - gPlantIdleSince[i]) / SECOND;
+	return 0;
+}
 int gFQBatchLog = 0;
 
 void PendAdd(int line, CCircuitDef@ d)
@@ -379,6 +409,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 			+ " sec=" + int(lineSec) + "/" + int(window) + " stop=" + stop
 			+ " us=" + int(ai.ClockUs() - _tBatch));
 	}
+	NotePlantIdle(fac.id, (batch.length() == 0) && (fac.CountQueued(null) == 0)
+		&& (Market::gNoOrder == "no-candidate"));
 	if ((batch.length() == 0) && (fac.CountQueued(null) == 0)
 		&& (ai.frame >= gFQIdleLog))
 	{
