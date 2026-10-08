@@ -282,29 +282,21 @@ void YardWatch()
 	gYdOffered += offered;
 
 	// 3. Nothing of ours in the way and pushing has not freed it: terrain or a
-	// crowd holds the door. The trapped unit goes when it is worth less than
-	// the plant it blocks (apexearth: "if we have units that are stuck and
-	// can't go anywhere then we should reclaim them"); never a builder.
+	// crowd holds the door, and the plant itself goes (apexearth: a blocked
+	// plant reclaims its doorstep or itself). Its footprint opens the yard,
+	// and the plant market rebuys a lab where a door faces open ground --
+	// eating the trapped units only made room for the next one.
 	string ate = "";
 	if ((structs == 0) && (age >= 2 * limit) && (now - gYpNamedAt[s] >= 2 * limit)) {
 		++gYdTerrain;
-		for (uint i = 0; i < inside.length(); ++i) {
-			CCircuitUnit@ u = inside[i];
-			const int ud = int(u.circuitDef.id);
-			if (Catalog::gBuilder[ud] || (Catalog::gCostM[ud] >= Catalog::gCostM[fd]))
-				continue;
-			int since = now;
-			for (uint k = 0; k < gYdUnit.length(); ++k) {
-				if ((gYdUnit[k] == u.id) && (gYdPlant[k] == fac.id))
-					since = gYdSince[k];
-			}
-			if (now - since < 2 * limit)
-				continue;
-			const int n = NanosEat(u, 1);
-			if (n > 0) {
-				++gYdUnitEat;
-				ate += " " + u.circuitDef.GetName() + "x" + n;
-			}
+		const int n = NanosEat(fac, 1);
+		if (n > 0) {
+			++gYdUnitEat;
+			ate = " " + fac.circuitDef.GetName() + "x" + n;
+		} else {
+			Military::NotePenVerdict(victim, fac.id, fp, dir, PlantFlowM(fac, res[0]));
+			++gYdOffered;
+			ate = " " + fac.circuitDef.GetName() + "@mkt";
 		}
 	}
 
@@ -312,7 +304,7 @@ void YardWatch()
 		+ " facing=" + facing + " inside=" + inside.length() + " apron=" + apron.length()
 		+ " age=" + (age / SECOND) + "s limit=" + (limit / SECOND) + "s act=" + gYpActs[s]
 		+ " pushed=" + pushed + " strip=" + int(depth) + " eat=[" + eaten + " ]"
-		+ (ate.length() > 0 ? (" unit-eat=[" + ate + " ]") : "")
+		+ (ate.length() > 0 ? (" plant-eat=[" + ate + " ]") : "")
 		+ ((structs == 0) ? " nothing-named" : ""));
 }
 
@@ -337,7 +329,7 @@ void YardCensusLog(uint np)
 	AiLog(Factory::T() + "apex: yard census plants=" + np + " watched=" + gYdUnit.length()
 		+ " jammed-now=" + gYpPlant.length() + " worst=" + gYdWorstS + "s"
 		+ " | jams=" + gYdJams + " pushed=" + gYdPushed + " nano-eat=" + gYdNanoSent
-		+ " offered=" + gYdOffered + " nothing-named=" + gYdTerrain + " unit-eat=" + gYdUnitEat);
+		+ " offered=" + gYdOffered + " nothing-named=" + gYdTerrain + " plant-eat=" + gYdUnitEat);
 	gYdWorstS = 0;
 }
 
