@@ -153,6 +153,36 @@ def fingerprint(g):
     return "|".join("%d.%d.%d" % k for k in first)
 
 
+def script_bonus(path):
+    """Per engine team (our bonus, the highest enemy bonus), as multiplier - 1,
+    read from the match's start script -- what the live state carries as
+    ourBonus/foeBonus since 2026-10-08, filled in for games logged before."""
+    try:
+        txt = open(os.path.join(path, "script.txt"), encoding="utf-8", errors="replace").read()
+    except OSError:
+        return {}
+    hc, ally = {}, {}
+    for m in re.finditer(r"\[team(\d+)\]\s*\{(.*?)\}", txt, re.S | re.I):
+        t = int(m.group(1))
+        h = re.search(r"handicap=(-?[\d.]+);", m.group(2), re.I)
+        a = re.search(r"allyteam=(\d+);", m.group(2), re.I)
+        hc[t] = float(h.group(1)) / 100.0 if h else 0.0
+        if a:
+            ally[t] = int(a.group(1))
+    out = {}
+    for t in hc:
+        foes = [hc[u] for u in hc if ally.get(u) != ally.get(t)]
+        out[t] = (hc[t], max(foes) if foes else 0.0)
+    return out
+
+
+def fill_bonus(g, t, state):
+    b = g.get("bonus", {}).get(t)
+    if b is not None and "ourBonus" not in state:
+        state["ourBonus"], state["foeBonus"] = b
+    return state
+
+
 def parse(path, files=None):
     sm, se, wm, we = {}, {}, {}, {}
     dealt, recv = {}, {}
@@ -280,7 +310,8 @@ def parse(path, files=None):
                     died[int(mu.group(1))] = f
                     if atk >= 0 and atk != t and int(mu.group(2)) >= 0:
                         killby.setdefault(int(mu.group(2)), []).append((f, cost))
-    return dict(rows=rows, execs=execs, nns=nns, state_keys=state_keys, opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
+    return dict(bonus=script_bonus(path),
+                rows=rows, execs=execs, nns=nns, state_keys=state_keys, opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, died=died, killby=killby,
@@ -408,7 +439,7 @@ def rows_of(path, g):
         y["lifeS"], y["lifeKill"] = lifetime(g, built)
         y["survived"] = survived(g, t, f, o.get("def"), site, y["buildS"]) if y["done"] == 1 and site else None
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=int(u), con=con,
-                   pick=int(pick), why=why, dm=dm, state=dict(zip(sk, sv)), opts=ov,
+                   pick=int(pick), why=why, dm=dm, state=fill_bonus(g, t, dict(zip(sk, sv))), opts=ov,
                    chosen=ci, y=y, explore=t in g.get("explorers", ()))
 
 
@@ -445,7 +476,7 @@ def fac_rows_of(path, g):
         y["lifeS"], y["lifeKill"] = lifetime(g, built)
         y["survived"] = None
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=fid, con=con,
-                   pick=0, why="fac", dm="draw", state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   pick=0, why="fac", dm="draw", state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
                    opts=ov, chosen=ci, y=y)
 
 
@@ -468,7 +499,7 @@ def post_rows_of(path, g):
         y = labels(g, t, f, None)
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con="army",
                    why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
-                   state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
                    post=dict(zip(pk, (num(x) for x in post.split(",")))),
                    opts=ov, chosen=int(chosen), y=y)
 
@@ -489,7 +520,7 @@ def head_rows_of(path, g, tag):
                 ov.append({"name": parts[0], "w": num(parts[1]), "p": num(parts[2])})
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con=tag,
                    why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
-                   state=dict(zip(sk, (num(x) for x in state.split(",")))),
+                   state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
                    post=dict(zip(pk, (num(x) for x in own.split(",")))),
                    opts=ov, chosen=int(chosen), y=head_labels(g, t, f, tag))
 
