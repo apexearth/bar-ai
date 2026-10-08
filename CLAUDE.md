@@ -186,6 +186,8 @@ python tools/expect.py <set-dirs...>            # what a big enough battery MUST
                                                 # complaint is back. ab.py prints it for the treated arm
 python tools/composition.py <tournament>        # where the metal actually went
 python tools/allies.py <match|run>              # 8v8: the seven non-seat allies as one side vs the enemy
+python tools/progress.py [--games] [--by day]   # are we getting better vs BARb, win or lose: our/their
+                                                # eco, army, trade, D% per minute, batch over batch
 python tools/spendtable.py <tournament>         # income/mex/army/spend/lost per 4 min, us vs them:
                                                 # where a batch is lost before the win count is read
 python tools/minutes.py <match> [--step 2]      # THE standard read of any game result: per minute,
