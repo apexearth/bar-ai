@@ -406,8 +406,8 @@ bool gTerrainKnown = true;
 int gPenBlind = 0;
 AIFloat3 gDoorDir;
 
-// A TEAMMATE'S BUILDING IN THE WAY (his 2026-10-08: another team's
-// extractor penned a gantry's units). Our bots on a team share a board in one
+// A TEAMMATE'S BUILDING IN THE WAY: an ally's extractor or turret pens our
+// units. Our bots on a team share a board in one
 // process; a bot names the blocker and its owner reclaims it through its own
 // reclaim market. A human's or another AI's building is never touched.
 const int BOARD_APEX = 1000, BOARD_ASK = 1100, BOARD_ASK_AT = 1200, BOARD_ASK_FLOW = 1300;
