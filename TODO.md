@@ -210,6 +210,11 @@ enemy fighters. When we send scouts, bombers or radar planes out on a mission,
 fighters go with them to guard them. (Stage 0 of the track record and this
 are the same session's work.)
 
+Measured 2026-10-08 (Special Creek replay): of our aircraft deaths, enemy
+fighters took 53 of 362 scouts and none of the bombers/gunships; ground AA
+took the rest. Bomber waves fly behind the fighter vanguard (952ca280).
+Cover would save little; AA avoidance on the route is the bigger loss.
+
 ## Never an idle factory while metal goes unspent
 
 apexearth 2026-09-16, from an 8v8 on Isthmus he watched. Our eco player got
@@ -237,6 +242,14 @@ now; ISSUES GANTRIES). The fixes of 09-12/13 did not close it. What is open:
 - The standing obligation ("army stays at its share of the economy we built")
   must not read satisfied while the bank sits full. Metal we are not spending
   is not economy we have built; the share is of what is USED.
+
+Measured 2026-10-08 on his Special Creek 8v8 (v0.1.7): 1,023 'no-candidate'
+idle reports while spilling; the labs idled by rule (T1 outgrown, ground
+lines under the lag rule, T2 yielding to the gantry). The waste (4-23% per
+AI) came from the OUTLET: t17 had one gantry and no air plant under lag, and
+its builders reclaimed wrecks into the full bank (fixed 846ab772). Open:
+under lag with one gantry, spare metal has no sink but nanos -- read his
+next long game for nano and second-gantry decisions while wasting.
 
 ## The jammer ring -- the stall that buys more time than the same metal in army
 
@@ -313,6 +326,13 @@ The `siege` attribute only changes the travel action; it does not keep them
 home. What is wanted is a LEASH: a long-ranged, fragile, expensive unit stays
 within our defended area and shoots outward. Must interact with the killing
 blow, which commits everything when far ahead. Not built.
+
+Measured 2026-10-08 (Special Creek): 75 long guns died (67 Arbiters built);
+53 nearer our buildings (the contested front, 500-700 from both sides), 22
+nearer theirs, a few deep in Annihilator/LLT range. OPEN QUESTION for him:
+this 08-09 leash ('stay home like turrets') against docs/24's later 'stand
+at the enemy border and siege them long range' and the anchored range
+ladder -- which governs?
 
 ## Scout the mex area first, then size the group to what is actually there
 
@@ -427,18 +447,6 @@ transportable; these opt in): LLT (armllt/corllt, mass 5100), Beamer
 and Maw cannot be lifted. Every tower is over the Stork's 750 mass, so this
 is heavy transports only (Abductor/Skyhook). T1 army fits a Stork (mass is
 capped at 750 for units under 751 metal); the heavies take footprint <= 4.
-
-## Do not marry the starting point
-
-apexearth 2026-09-18: "We really shouldn't 'marry' our starting point. If
-we lose our base but have other safe ground to rebuild on then we should
-do that." Today every anchor, farm, lane and leash is measured from the
-start position (Base::gAnchor, Builder::gHomePos, EcoSiteFor's farm); a
-base overrun keeps rebuilding on the same ground under the same guns.
-Unbuilt: a re-anchoring election -- when the home ground reads lost
-(EcoDangerNear sustained, the plants dead) and quieter ground of ours
-exists (a held mex cluster, an ally's rear), the anchor, farm and leash
-move there and the plant want rebuilds at the new anchor.
 
 ## Finish a won game: nukes, flanks, air, scouts, LRPC, Ragnarok
 
