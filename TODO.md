@@ -311,29 +311,6 @@ missing is following a SQUAD and, for this job, RECLAIM not resurrect
 should generally reclaim"). Needs a leash to the squad and must not pull
 bots off base work while the squad idles at home.
 
-## Long-range siege units should hold the base line, not walk into the open
-
-apexearth, 2026-08-09: "Starlights, Ambassadors, these really long range units
-are great for defense. But I typically see us move them out into open ground and
-get destroyed. They should act like defensive turrets and stay home... waiting
-around where I have my nano turrets and my own defensive turrets to help add DPS
-and heal my units if they get hit."
-
-- `armmanni` Starlight: range 950, 1,200 metal, role `anti_heavy_ass`, attribute `siege`
-- `armmerl` Ambassador: range 1,300, 920 metal, role `artillery`, attribute `siege`
-
-The `siege` attribute only changes the travel action; it does not keep them
-home. What is wanted is a LEASH: a long-ranged, fragile, expensive unit stays
-within our defended area and shoots outward. Must interact with the killing
-blow, which commits everything when far ahead. Not built.
-
-Measured 2026-10-08 (Special Creek): 75 long guns died (67 Arbiters built);
-53 nearer our buildings (the contested front, 500-700 from both sides), 22
-nearer theirs, a few deep in Annihilator/LLT range. OPEN QUESTION for him:
-this 08-09 leash ('stay home like turrets') against docs/24's later 'stand
-at the enemy border and siege them long range' and the anchored range
-ladder -- which governs?
-
 ## Scout the mex area first, then size the group to what is actually there
 
 apexearth, 2026-08-09: "you can scout with 1 cheap unit first to see what the
