@@ -527,9 +527,14 @@ void EscortFieldCensus()
 // not be out-ranked by anything, however cheap the alternative or dear the
 // escort, which is the shape docs/23-the-plan.md forbids: "a choice that should
 // not happen is one whose ETA is worse", not one a rule forbids.
+// Escort-capable units standing unpaired in a rally, defence or scout task:
+// the recruiter's pool (EscortSpareCensus, on its clock). A buy is owed only
+// past them.
+int gEscSpare = 0;
+
 float EscortGain(float fillS)
 {
-	const int need = EscortShortfall();
+	const int need = EscortShortfall() - gEscSpare;
 	if (need <= 0)
 		return 0.f;
 	const float risk = EscortMetalAtRisk();
@@ -556,7 +561,7 @@ void EscortDiag()
 		+ " freeRaid=" + formatFloat(RoleValue(int(Unit::Role::RAIDER.type)), "", 0, 0)
 		+ " spdBar=" + formatFloat(gEscMeanSpd, "", 0, 0)
 		+ " top=" + formatFloat(gExpoMax, "", 0, 2) + " " + gExpoMaxWhy
-		+ " released=" + gEscReleased
+		+ " released=" + gEscReleased + " spare=" + gEscSpare
 		+ " foeMass=" + formatFloat(FoeRaidMassM(), "", 0, 0)
 		+ " pooled=" + gEscPooled + " spread=" + gEscSpread + " foePowMed=" + formatFloat(gFoePowMed, "", 0, 1) + " ownBest=" + formatFloat(gOwnEscPow, "", 0, 1));
 }

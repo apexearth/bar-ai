@@ -1869,7 +1869,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		Market::EscortFieldCensus();
 		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !Outgrown(d)) {
 			if (escShort < -1)
-				escShort = EscortShortfall();
+				escShort = EscortShortfall() - gEscSpare;
 			if (escShort - EscortInFlight(Catalog::Def(d)) > 0) {
 				if (escGain < 0.f)
 					escGain = EscortGain(fillS);

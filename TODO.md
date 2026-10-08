@@ -165,6 +165,30 @@ each unit type performs, and discount the ones that keep proving useless:
 - Stage 0 is the instrument: log damage-dealt/health per unit type at death
   and at game end, check the ranking is stable across a battery, THEN price.
 
+## The combined air strike on a front-line defence area
+
+apexearth 2026-10-07, after a 7v7 where our air made no useful raid all late
+game: first send all the fighters to kill the enemy's fighters; then, at the
+same time, bombers, gunships and atomic bombers -- "all the best air" -- on
+one of their front-line defence areas. The fighters arrive first anyway
+because they are fast. "They would totally demolish it -- as long as their
+bombs don't just all land in ONE part of it, gotta pick targets
+intelligently."
+
+What his game showed: waves launched 2 bombers at a time (`bomb spread
+units=2 ... need=9-26`), 17-29 bombers held at home, 55-106 fighters hunting
+on their own, strikes priced at kill fraction 0.12-0.23.
+
+## Bombers hunt the biggest economic prize, not the first extractor
+
+apexearth 2026-10-07: "You really hurt an enemy's economy when you can kill a
+bunch of their wind, or their converters, or a fusion, or an afus. An afus is
+like the biggest prize." The aim should be priced by everything the bomb's
+blast kills (wind farms and converter blocks are packed), the strike area by
+the enemy ECONOMY in it rather than all structure metal, and build power
+should not make commanders and nanos the prize. `BombTask.cpp` has the blast
+sum commented out ("FIXME: Finish").
+
 ## Fighter cover for air missions
 
 apexearth 2026-09-16, watching scouts fly out alone and die to the first

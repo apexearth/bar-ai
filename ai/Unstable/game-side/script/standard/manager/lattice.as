@@ -45,22 +45,43 @@ float FootPitch(int defId)
 // rolls out and not before. Re-read when the fleet changes.
 float gAisle = -1.f;
 int gAisleStamp = -1;
+int gAisleAt = -1;
+
+int WalkerFoot(int i)
+{
+	if (!Catalog::gMobile[i] || Catalog::gFlyer[i] || Catalog::gFloater[i] || Catalog::gSub[i])
+		return 0;
+	return (Catalog::gFootX[i] > Catalog::gFootZ[i]) ? Catalog::gFootX[i] : Catalog::gFootZ[i];
+}
+
+// ...and from what the plants we own or have ordered can MAKE (his
+// 2026-10-07: "size by what the factories behind that opening can make"):
+// a gantry ordered widens the streets before the base fills around them,
+// not after its first experimental is penned.
 float AisleW()
 {
-	if ((gAisle > 0.f) && (gAisleStamp == Market::gOwnStamp))
+	if ((gAisle > 0.f) && (gAisleStamp == Market::gOwnStamp) && (ai.frame < gAisleAt + 10 * SECOND))
 		return gAisle;
 	gAisleStamp = Market::gOwnStamp;
+	gAisleAt = ai.frame;
 	int widest = 0;
 	for (int i = 1; i <= Catalog::gDefCount; ++i) {
-		if ((uint(i) >= Market::gOwnCount.length()) || (Market::gOwnCount[i] <= 0))
+		const bool own = (uint(i) < Market::gOwnCount.length()) && (Market::gOwnCount[i] > 0);
+		if (Catalog::gMobile[i]) {
+			if (own && (WalkerFoot(i) > widest))
+				widest = WalkerFoot(i);
 			continue;
-		if (!Catalog::gMobile[i] || Catalog::gFlyer[i] || Catalog::gFloater[i]
-			|| Catalog::gSub[i])
+		}
+		if ((Catalog::gBuildsList[i].length() == 0) || Market::AirPlant(i))
 			continue;
-		const int f = (Catalog::gFootX[i] > Catalog::gFootZ[i])
-				? Catalog::gFootX[i] : Catalog::gFootZ[i];
-		if (f > widest)
-			widest = f;
+		if (!own && (Market::ComCountManned(i, Market::CS_FRAMED | Market::CS_ORDERED) <= 0))
+			continue;
+		const array<int>@ bl = Catalog::gBuildsList[i];
+		for (uint b = 0; b < bl.length(); ++b) {
+			const int f = WalkerFoot(bl[b]);
+			if (f > widest)
+				widest = f;
+		}
 	}
 	// Room to WALK, not just to fit: a lane exactly one hull wide is a lane
 	// the pathfinder refuses under any crowding. Never narrower than it has

@@ -94,8 +94,44 @@ void EscNetDecide()
 // left alone.
 int gEscRecruitN = 0;
 int gEscRecruitLogAt = 0;
+bool EscortRecruitable(CCircuitUnit@ c)
+{
+	IUnitTask@ t = c.task;
+	if ((t is null) || (t.GetType() != Task::Type::FIGHTER))
+		return false;
+	const int ft = int(t.GetFightType());
+	// a cheap fast scout is what an escort buy produces, and the engine
+	// hands it a scout task the recruiter never looked in
+	return (ft == int(Task::FightType::DEFEND)) || (ft == int(Task::FightType::RALLY))
+		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT));
+}
+
+void EscortSpareCensus()
+{
+	int n = 0;
+	const array<int>@ own = OwnedDefs();
+	for (uint k = 0; k < own.length(); ++k) {
+		const int d = own[k];
+		if (!EscortWorthy(d) || Catalog::gFlyer[d] || (Catalog::gSpeed[d] <= 1.f))
+			continue;
+		array<CCircuitUnit@>@ us = ai.GetOwnUnitsOfDef(Catalog::Def(d), Builder::gHomePos, 0.f);
+		for (uint u = 0; (us !is null) && (u < us.length()); ++u) {
+			CCircuitUnit@ c = us[u];
+			if ((c is null) || !EscortRecruitable(c) || (int(c.task.GetFightType()) == int(Task::FightType::ATTACK)))
+				continue;
+			bool paired = false;
+			for (uint e = 0; (e < gEscUnit.length()) && !paired; ++e)
+				paired = (gEscUnit[e] == c.id);
+			if (!paired)
+				++n;
+		}
+	}
+	gEscSpare = n;
+}
+
 void EscortRecruit()
 {
+	EscortSpareCensus();
 	if (ai.GetTunable("apex_con_escort", TUNE_CON_ESCORT) <= 0.f)
 		return;
 	if (gEscWorker.length() >= EscortCap())
@@ -137,12 +173,7 @@ void EscortRecruit()
 			continue;
 		for (uint u = 0; u < near.length(); ++u) {
 			CCircuitUnit@ c = near[u];
-			IUnitTask@ t = c.task;
-			if ((t is null) || (t.GetType() != Task::Type::FIGHTER))
-				continue;
-			const int ft = int(t.GetFightType());
-			if ((ft != int(Task::FightType::DEFEND)) && (ft != int(Task::FightType::RALLY))
-				&& (ft != int(Task::FightType::ATTACK)))
+			if (!EscortRecruitable(c))
 				continue;
 			if (ai.frame - c.GetDamagedFrame() < 10 * SECOND)
 				continue;

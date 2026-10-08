@@ -45,6 +45,78 @@ array<AIFloat3> gNeP;
 array<int> gNeD;
 array<int> gNeK;             // 1 economy, 2 static gun, 3 mobile army
 
+// THE SNAPSHOT IN CELLS. Pricing every spot against every enemy grew as
+// spots x units and froze a 7v7 frame for ~50 ms per bot; each spot now reads
+// only the cells its own distance tests can reach. A static gun whose reach
+// is past NR_LONG (LRPC-class) is kept in a list every spot reads.
+const float NR_CELL = 512.f;
+const float NR_LONG = 2048.f;
+int gNrGW = 0, gNrGH = 0;
+array<array<int>> gNrG1, gNrG2, gNrG3;
+array<int> gNrLong2;
+float gNrMaxR2 = 0.f, gNrMaxR3 = 0.f, gNrMaxSpd3 = 0.f;
+
+void NrGridBuild()
+{
+	if (gNrGW == 0) {
+		gNrGW = int(float(AiTerrainWidth()) / NR_CELL) + 1;
+		gNrGH = int(float(AiTerrainHeight()) / NR_CELL) + 1;
+		gNrG1.resize(gNrGW * gNrGH);
+		gNrG2.resize(gNrGW * gNrGH);
+		gNrG3.resize(gNrGW * gNrGH);
+	}
+	for (uint c = 0; c < gNrG1.length(); ++c) {
+		gNrG1[c].resize(0);
+		gNrG2[c].resize(0);
+		gNrG3[c].resize(0);
+	}
+	gNrLong2.resize(0);
+	gNrMaxR2 = 0.f;
+	gNrMaxR3 = 0.f;
+	gNrMaxSpd3 = 0.f;
+	for (uint e = 0; e < gNeP.length(); ++e) {
+		int cx = int(gNeP[e].x / NR_CELL), cz = int(gNeP[e].z / NR_CELL);
+		cx = (cx < 0) ? 0 : ((cx >= gNrGW) ? gNrGW - 1 : cx);
+		cz = (cz < 0) ? 0 : ((cz >= gNrGH) ? gNrGH - 1 : cz);
+		const int c = cz * gNrGW + cx;
+		const int d = gNeD[e];
+		if (gNeK[e] == 1) {
+			gNrG1[c].insertLast(int(e));
+		} else if (gNeK[e] == 2) {
+			if (Catalog::gMaxRange[d] > NR_LONG) {
+				gNrLong2.insertLast(int(e));
+			} else {
+				gNrG2[c].insertLast(int(e));
+				gNrMaxR2 = (Catalog::gMaxRange[d] > gNrMaxR2) ? Catalog::gMaxRange[d] : gNrMaxR2;
+			}
+		} else if (gNeK[e] == 3) {
+			gNrG3[c].insertLast(int(e));
+			gNrMaxR3 = (Catalog::gMaxRange[d] > gNrMaxR3) ? Catalog::gMaxRange[d] : gNrMaxR3;
+			gNrMaxSpd3 = (Catalog::gSpeed[d] > gNrMaxSpd3) ? Catalog::gSpeed[d] : gNrMaxSpd3;
+		}
+	}
+}
+
+// The snapshot entries of one kind in every cell within r of p (a superset:
+// the caller's own distance test still decides).
+void NrNear(const array<array<int>>& in g, const AIFloat3& in p, float r, array<int>& res)
+{
+	res.resize(0);
+	int x0 = int((p.x - r) / NR_CELL), x1 = int((p.x + r) / NR_CELL);
+	int z0 = int((p.z - r) / NR_CELL), z1 = int((p.z + r) / NR_CELL);
+	x0 = (x0 < 0) ? 0 : x0;
+	z0 = (z0 < 0) ? 0 : z0;
+	x1 = (x1 >= gNrGW) ? gNrGW - 1 : x1;
+	z1 = (z1 >= gNrGH) ? gNrGH - 1 : z1;
+	for (int z = z0; z <= z1; ++z) {
+		for (int x = x0; x <= x1; ++x) {
+			const array<int>@ cell = g[z * gNrGW + x];
+			for (uint i = 0; i < cell.length(); ++i)
+				res.insertLast(cell[i]);
+		}
+	}
+}
+
 // the group, one snapshot per decision
 array<CCircuitUnit@> gNrU;
 array<IUnitTask@> gNrT;
@@ -160,6 +232,7 @@ void NrSnapEnemy()
 		gNeD.insertLast(d);
 		gNeK.insertLast(k);
 	}
+	NrGridBuild();
 }
 
 // What a dead economy unit costs them: its metal, and for an extractor the
@@ -317,6 +390,7 @@ bool NrPrice(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in 
 	for (uint i = 0; i < gNrAltRate.length(); ++i)
 		altRate += gNrAltRate[i];
 	bool have = false;
+	array<int> near;
 	for (uint s = 0; s < n; ++s) {
 		const AIFloat3 sp = Market::gAllSpots[s];
 		if (!OnMap(sp) || !NrTheirHalf(sp, foe))
@@ -325,20 +399,25 @@ bool NrPrice(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in 
 		t.at = sp;
 		float hp = 0.f;
 		bool mexKnown = false;
-		for (uint e = 0; e < gNeP.length(); ++e) {
+		NrNear(gNrG1, sp, rP, near);
+		for (uint i = 0; i < near.length(); ++i) {
+			const uint e = uint(near[i]);
 			const int d = gNeD[e];
-			const float dist = gNeP[e].distance2D(sp);
-			if (gNeK[e] == 1) {
-				if (dist <= rP) {
-					t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe);
-					hp += Catalog::gHealth[d];
-					if (Catalog::gExtractsM[d] > 0.f)
-						mexKnown = true;
-				}
-			} else if (gNeK[e] == 2) {
-				if (dist <= Catalog::gMaxRange[d] + rP * 0.5f)
-					t.defS += DgStr(d);
+			if (gNeP[e].distance2D(sp) <= rP) {
+				t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe);
+				hp += Catalog::gHealth[d];
+				if (Catalog::gExtractsM[d] > 0.f)
+					mexKnown = true;
 			}
+		}
+		NrNear(gNrG2, sp, gNrMaxR2 + rP * 0.5f, near);
+		for (uint i = 0; i < gNrLong2.length(); ++i)
+			near.insertLast(gNrLong2[i]);
+		for (uint i = 0; i < near.length(); ++i) {
+			const uint e = uint(near[i]);
+			const int d = gNeD[e];
+			if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f)
+				t.defS += DgStr(d);
 		}
 		const bool looked = (gNrSpotSeen.length() == n) && (gNrSpotSeen[s] >= 0);
 		if (!mexKnown && !looked) {
@@ -355,9 +434,9 @@ bool NrPrice(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in 
 		t.killS = (dps > 0.f) ? hp / dps : t.walkS;
 		// their army that can stand on the spot while we work there
 		const float stay = t.killS;
-		for (uint e = 0; e < gNeP.length(); ++e) {
-			if (gNeK[e] != 3)
-				continue;
+		NrNear(gNrG3, sp, gNrMaxR3 + gNrMaxSpd3 * stay, near);
+		for (uint i = 0; i < near.length(); ++i) {
+			const uint e = uint(near[i]);
 			const int d = gNeD[e];
 			if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay)
 				t.armyS += DgStr(d);
@@ -438,9 +517,12 @@ void NrDecide(const string why)
 	NrSnapGroup(grpM, grpS, ctr, spd, losR, dps);
 	if (gNrU.length() == 0)
 		return;
-	NrSnapEnemy();
+	{ double _t = Perf::T0(); NrSnapEnemy(); Perf::Add("nr.snap", _t); }
 	NrTarget@ best = NrTarget();
-	if (!NrPrice(foe, grpM, grpS, ctr, spd, losR, dps, best))
+	const double _tP = Perf::T0();
+	const bool priced = NrPrice(foe, grpM, grpS, ctr, spd, losR, dps, best);
+	Perf::Add("nr.price", _tP);
+	if (!priced)
 		return;
 	const bool live = NrLive();
 	const int rule = (best.netM > 0.f) ? NR_GO : NR_WAIT;

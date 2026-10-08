@@ -465,6 +465,14 @@ void ScoutOverflight()
 			}
 		}
 	}
+	// Every idle scout flies each pass, not one: even ones cross their army,
+	// odd ones their base, each on its own ring offset so two never watch the
+	// same ground.
+	AIFloat3 base = Front::FoeAnchor();
+	if (!OnMap(base))
+		base = foe;
+	int sent = 0;
+	string firstName = "";
 	const array<int>@ ownedS = Market::OwnedDefs();
 	for (uint oi = 0; oi < ownedS.length(); ++oi) {
 		const int d = ownedS[oi];
@@ -478,21 +486,25 @@ void ScoutOverflight()
 		if (us is null)
 			continue;
 		for (uint i = 0; i < us.length(); ++i) {
-			if ((us[i] is null) || (us[i].CmdQueueSize() > 0))
+			if ((us[i] is null) || (us[i].CmdQueueSize() > 0)
+				|| (int(us[i].id) == gLookScout))
 				continue;
-			// A jittered pass so consecutive flights cross different ground.
-			const float ang = float((ai.frame / SECOND) % 8) * 0.785398f;
-			AIFloat3 over = foe
-					+ AIFloat3(cos(ang), 0.f, sin(ang)) * 500.f;
+			const AIFloat3 at = ((sent % 2) == 0) ? foe : base;
+			const float ang = (float((ai.frame / SECOND) % 8) + float(sent) * 2.4f) * 0.785398f;
+			AIFloat3 over = at + AIFloat3(cos(ang), 0.f, sin(ang)) * (500.f * float(1 + (sent / 2) % 3));
 			if (!OnMap(over))
-				over = foe;
+				over = at;
 			us[i].CmdMoveTo(over);
-			Cover(us[i], over, "overflight");
-			AiLog("apex: overflight " + Catalog::Def(d).GetName()
-				+ " #" + us[i].id + " -> " + int(over.x) + "," + int(over.z));
-			return;
+			if (sent == 0) {
+				Cover(us[i], over, "overflight");
+				firstName = Catalog::Def(d).GetName();
+			}
+			++sent;
 		}
 	}
+	if (sent > 0)
+		AiLog("apex: overflight " + firstName + " sent=" + sent
+			+ " army=" + int(foe.x) + "," + int(foe.z) + " base=" + int(base.x) + "," + int(base.z));
 }
 
 void Update()
