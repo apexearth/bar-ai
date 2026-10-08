@@ -158,6 +158,15 @@ AIFloat3 ClearExitLane(const AIFloat3& in pos)
 		}
 		if (!blocked)
 			blocked = AllyLaneHit(p, fwd, false);
+		// A metal spot in the lane is an extractor someone builds there later,
+		// ours or an ally's, and a fixed site ignores every yard.
+		for (uint s = 0; !blocked && (s < gAllSpots.length()); ++s) {
+			const float rx = gAllSpots[s].x - p.x;
+			const float rz = gAllSpots[s].z - p.z;
+			const float ahead = rx * fwd.x + rz * fwd.z;
+			const float side = rx * fwd.z - rz * fwd.x;
+			blocked = (ahead >= 40.f) && (ahead <= 220.f) && (side > -100.f) && (side < 100.f);
+		}
 		if (!blocked)
 			return p;
 		p.x -= fwd.x * 96.f;
