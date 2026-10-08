@@ -1,0 +1,95 @@
+// Mono-space font required
+{
+	"porcupine": {
+		"unit": {
+		//              0           	1         		2        		3           	4          		5     			6				7				8				9   
+			"armada":  ["armllt",		"armtl",   		"armrl",  		"armbeamer", 	"armhlt",  		"armclaw",		"armferret",	"armcir", 		"armpb",   		"armatl",
+						"armflak",   	"armamb",  		"armanni", 		"armguard", 	"armamd", 		"armrad",		"armjamt",		"armestor", 	"armmstor", 	"armadvsol",
+						"armnanotc",	"armarad",		"armtarg",		"armuwadves",  	"armemp",		"armveil",		"armckfus",     "armsolar",     "armgate",      "armfhlt"],
+		//	
+		//              0          		1          		2          		3            	4           	5          		6				7				8				9
+			"cortex":  ["corllt",		"cortl",   		"corrl",  		"corhllt",   	"corhlt",   	"cormaw",  		"cormadsam",  	"corerad",		"corvipe", 		"coratl", 
+						"corflak",   	"cortoast", 	"cordoom", 		"corpun",    	"corfmd",		"corrad",		"corjamt",		"corestor",		"cormstor",		"coradvsol", 
+						"cornanotc",	"corarad",		"cortarg",		"coruwadves",	"cortron", 		"corshroud",	"corfus",       "corsolar",     "corgate",      "corfhlt"]
+		},
+		
+	// Actual number of defences per cluster bounded by income - the order of defenses that should be build with numbers as above.
+	// GROUND ONLY. 6 (cormadsam, SAM) and 10 (corflak, Birdshot) are ANTI-AIR and
+	// this ladder is walked with no air check whatsoever, so once prevent opened
+	// it every cluster started putting up SAMs. apexearth: "we make like 3 AA in
+	// our base early game before we have *ever* seen any enemy air." AA is
+	// demand-driven through Brain::AirCoverWant, which is gated on air actually
+	// being seen; this list is what answers ground.
+	// EMPTY on purpose: this ladder is walked by the DLL on cluster events,
+	// BYPASSING every script gate -- 28 dragon claws on the eco specialist
+	// with the market's defence wants all refusing (measured 2026-08-23).
+	// Defence is the market's job (WK_PROTECT); nothing spends from here.
+	"land":  [],
+	"water": [1, 1, 4, 9, 10, 9, 10],
+	// DefaultMakeDefence walks `num = isPorc ? defenders.size() : preventCount`,
+	// so this is literally how many entries of the "land" order below an ORDINARY
+	// cluster ever receives. At 1 that was index 0 and nothing else -- a Sentry,
+	// 85 metal, forever, however rich we got. apexearth: "we made tons of light
+	// laser turrets this game. Those aren't good enough... need heavy laser
+	// turrets or the medium laser turrets for T1 phase."
+	// At 2 a defended cluster gets the Sentry AND index 3, the Beamer (190) --
+	// which also keeps the other half of the same request, "in early game we
+	// should put a light laser turret near every mex spot", since index 0 is
+	// still what every cluster gets first.
+	// At 2 the Cortex ladder stopped at corhllt: cormaw, cormadsam, corhlt and
+	// then EVERY T2/T3 turret -- corvipe, corflak, cordoom -- were unreachable
+	// outside a porcupine cluster, at any income. apexearth at 300 metal/s: "I
+	// only see like 1 T2 defense... we get pushed back because of a lack of T2 and
+	// T3 defenses." 8 opens the whole ladder; how MANY get built is bound
+	// separately by "amount" against income, so a poor player still builds few.
+	"prevent": 6,  // number of preventive defences: the whole ground ladder above
+	"amount": {  // income bound factor
+		"offset": [-2.0, 2.0],
+		// Amount factor: 10x10 ~ 48.0, 20x20 ~ 32.0
+		"factor": [48.0, 32.0],
+		"map": [10, 20]
+	},
+	"point_range": 600.0,  // maximum distance between 2 points in hierarchical cluster within economy cluster
+
+	// Base defence and time to build it, in seconds
+	// Index 22 (armtarg/cortarg/legtarg) is deliberately absent: this list is
+	// per-player, so it produced one Pinpointer for every AI on the side. The
+	// count that matters is the team's, so Builder::Pinpointer owns them now.
+	// GROUND ONLY, like "land" above. CMilitaryManager::MakeBaseDefence fires once
+	// when the first factory finishes and UpdateDefence builds each entry on an
+	// ABSOLUTE frame, with no air check anywhere in the path. Index 2
+	// (armrl/corrl/legrl) and index 10 (armflak/corflak/legflak) are anti-air, so
+	// every player put up a turret against aircraft on a clock. apexearth: "we make
+	// like 3 AA in our base early game before we have *ever* seen any enemy air."
+	// AA is demand-driven through Brain::AirCoverWant, which will not propose until
+	// air has actually been seen.
+	"base": [
+		[3, 420], [4, 760], [14, 1250], [12, 1600]
+	],
+
+	//superweapons get only build when there is nothing else to do
+	"superweapon": {
+		"unit": {
+			"armada": [ "armbrtha",  "armvulc"], //"armmercury", "armamd", "armemp", "armsilo"
+			"cortex": [ "corint",  "corbuzz" ] //"corscreamer", "corfmd", "cortron", "corsilo"
+		},
+		"weight":     [    0.5,      0.1  ],
+
+		"condition": [40, 600]  // [<Minimum income>, <maximum seconds to build>]
+	},
+
+	// Fallback defence
+	"default": {
+		"armada": "armllt",
+		"cortex": "corllt"
+	}
+},
+
+
+
+// Actions on building finished event
+"build_chain": {
+	// KILL PHASE (docs/20-brain-overhaul.md): hubs emptied -- engine
+	// auto-defence/follow-up chains are off for this variant.
+}
+}

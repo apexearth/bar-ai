@@ -1,0 +1,751 @@
+namespace Military {
+
+// HOLDING MUST BE BOUNDED IN TIME.
+//
+// quota.attack is a MINIMUM attacker count before the engine will form an
+// attack, and MassWant() pins it at MASS_CAP whenever the enemy out-values us
+// by MASS_HOLD_RATIO -- a feedback trap where falling behind economically
+// raises the bar to attack at all, so ground is never contested and the
+// economy falls further behind. The hold itself stays (a trickle just dies for
+// nothing) but gets a deadline: once pinned at the cap this long, fall back to
+// MASS_FLOOR so something goes out and the ratio can change.
+int gHoldSince = -1;
+int gNextFeedLog = 0;
+
+// The enemy mass we SIZE AGAINST, counted pessimistically: raw GetEnemyCost
+// (no ghost discount) over every fighting role INCLUDING heavy and super,
+// plus a discounted share of statics. The 0.3 ghost weight is right for the
+// posture gates -- leaning defensive off dead units loses maps -- and wrong
+// here: a mass seen once and now hidden is exactly the thing that kills our
+// groups one by one, and reading their Korgoths as absent is the unsafe
+// error (see EnemyFieldCost). apexearth: "We don't know how big they are
+// until its too late because we can't see them all" -- unknown must not read
+// as a small army, the same rule air already applies to unseen AA.
+// Rolling peak of RECENTLY-SEEN fighting cost -- apexearth: "if we have
+// seen 100 thugs in/out of fog over 90s but we've only ever seen at max 10
+// at one time... the enemy army is probably sized around ~10." Distinct ids
+// cycling through fog never double-count, so what this catches is units DYING
+// unseen while the raw count remembers them. The peak decays: a real army
+// briefly hidden does not evaporate, a peak from a fight we won stops counting.
+float gSeenPeak = 0.f;
+int gSeenPeakFrame = 0;
+
+float FreshMassingThreat()
+{
+	return aiEnemyMgr.GetEnemyCostFresh(RT::ASSAULT)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::RAIDER)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::RIOT)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::SKIRM)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::ARTY)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::AH)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::HEAVY)
+	     + aiEnemyMgr.GetEnemyCostFresh(RT::SUPER);
+}
+
+// Sticky: once they have fielded anything, ground past our rim is exposed for
+// the rest of the game (ComFar). Before that there is nothing to be exposed to.
+bool gFoeArmySeen = false;
+bool FoeArmySeen()
+{
+	if (!gFoeArmySeen && (EnemyArmyCost() > 0.f))
+		gFoeArmySeen = true;
+	return gFoeArmySeen;
+}
+
+float EnemyMassingThreat()
+{
+	const float fresh = FreshMassingThreat();
+	if (fresh > 0.f)
+		gFoeArmySeen = true;
+	if (fresh > gSeenPeak) {
+		gSeenPeak = fresh;
+	} else {
+		// DECAY PER FRAME, NOT PER CALL. This is read from six places and
+		// several times per update, so the old per-call 0.9999 decayed at a
+		// rate set by how often other code happened to ask -- nowhere near the
+		// half-life the comment above claimed. The peak is the denominator of
+		// the killing blow, so a stale one is what keeps a won game from being
+		// finished: kill their army and the bar to commit is still the biggest
+		// force they ever showed.
+		const float hl = ai.GetTunable("apex_seen_halflife", TUNE_SEEN_HALFLIFE);
+		const int dt = ai.frame - gSeenPeakFrame;
+		if ((hl > 0.f) && (dt > 0))
+			gSeenPeak *= pow(0.5f, (float(dt) / float(SECOND)) / hl);
+	}
+	gSeenPeakFrame = ai.frame;
+	float raw = aiEnemyMgr.GetEnemyCost(RT::ASSAULT)
+	     + aiEnemyMgr.GetEnemyCost(RT::RAIDER)
+	     + aiEnemyMgr.GetEnemyCost(RT::RIOT)
+	     + aiEnemyMgr.GetEnemyCost(RT::SKIRM)
+	     + aiEnemyMgr.GetEnemyCost(RT::ARTY)
+	     + aiEnemyMgr.GetEnemyCost(RT::AH)
+	     + aiEnemyMgr.GetEnemyCost(RT::HEAVY)
+	     + aiEnemyMgr.GetEnemyCost(RT::SUPER)
+	     + STATIC_DEFENSE_WEIGHT() * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	// The sanity ceiling: a GENEROUS multiple of the most we ever saw at
+	// once, never the estimate itself -- limited sensor coverage makes the
+	// peak an undercount, and sizing on an undercount is the 2v6 regression.
+	const float cap = gSeenPeak * ai.GetTunable("apex_seen_cap_mult", TUNE_SEEN_CAP_MULT);
+	if ((gSeenPeak > 1.f) && (raw > cap))
+		raw = cap;
+	return raw;
+}
+
+// THE ARMY WE HAVE ALIVE, AGAINST THE ONE WALKING AT US. 0..1, 1 at parity or
+// better. Every "can we afford this luxury" gate here used to ask Brain::ShareOf
+// (cumulative metal SPENT on army), which stays high after the army it paid for
+// is dead -- so the silo, the extra air lab and the escort floors all opened at
+// the moment we were weakest. This asks what is standing instead.
+//
+// An unscouted enemy reads small, so a small estimate returns 1 and never damps
+// anything -- ignorance is not safety, but it is also not evidence of danger.
+float ArmyStandingRatio()
+{
+	const float theirs = EnemyMassingThreat();
+	if (theirs <= 1.f)
+		return 1.f;
+	const float ours = TeamArmyCost();
+	const float ratio = 1.f / Market::StrRatio(theirs, ours);
+	return (ratio > 1.f) ? 1.f : ratio;
+}
+
+// Their field power outweighs our standing army. The bar is the one already
+// calibrated for the constructor cap below it in facqueue.
+bool Outmassed()
+{
+	// Stated as the comparison, not as 1/ratio: a tunable of 0 -- the obvious
+	// way to switch this off -- divided to infinity and read as permanently
+	// outmassed, and the ratio's clamp at 1 also swallowed multipliers below 1.
+	const float theirs = EnemyMassingThreat();
+	if (theirs <= 1.f)
+		return false;
+	return Market::StrRatio(theirs, TeamArmyCost())
+			> ai.GetTunable("apex_con_outmassed", TUNE_CON_OUTMASSED);
+}
+
+// The size a group commits at, from the armies on the field.
+//
+// CDefendTask is created with maxPower = minAttackers and stops accepting units
+// once it reaches it, then promotes to an attack and leaves. So this number IS
+// the size each group leaves at -- not a threshold it grows past.
+// How many of us share the answer to a side-wide reading. quota.attack governs
+// THIS player's pools, so any bar derived from the whole enemy side has to be
+// divided by the roster before it is charged to one pool.
+int gAllyCountAt = -1;
+float gAllyCountVal = 1.f;
+float AllyCount()
+{
+	if (gAllyCountAt == ai.frame)
+		return gAllyCountVal;
+	gAllyCountAt = ai.frame;
+	gAllyCountVal = 1.f;
+	array<Id>@ roster = ai.GetTeamIds();
+	if ((roster is null) || (roster.length() == 0))
+		return 1.f;
+	// A seat that merged away (UpdateSeatMerge) holds nothing and answers for nothing.
+	float n = 0.f;
+	for (uint i = 0; i < roster.length(); ++i) {
+		if (ai.ReadTeamValue(int(roster[i]), "seatout", 0.f) <= 0.f)
+			n += 1.f;
+	}
+	gAllyCountVal = (n > 0.f) ? n : 1.f;
+	return gAllyCountVal;
+}
+
+// The biggest enemy group we can currently see, as POWER. Their groups are what
+// our group actually walks into, so this is the honest size to match -- unlike
+// their whole army, which answers "can we beat all of them" and is not the
+// question a single attack asks.
+float EnemyGroupPower()
+{
+	float top = 0.f;
+	const int n = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < n; ++i) {
+		const float c = aiEnemyMgr.GetEnemyGroupCost(i);
+		if (c > top)
+			top = c;
+	}
+	return top * 0.017f;   // Grunt-class power per metal, LogUnitPower
+}
+
+// ARE WE THE AGGRESSOR? apexearth 2026-08-19: "we can't be throwing [army]
+// away to a superior force unless we know confidently we're putting most of
+// our resources into army and *should* have a stronger army than our opponent.
+// If we know we're being conservative then we shouldn't ever attack them if
+// they're being aggressive." Two readings, both ours and both already
+// measured: what share of our own metal has gone into army against what we
+// intended to spend there, and what they field against what we field. Below
+// our own army target while they out-field us means we chose economy and they
+// chose offence -- the one case where walking out is giving away the only army
+// we bought. MOBILE against MOBILE, shared by every "may the army leave home"
+// gate. EnemyMassingThreat carries 0.5x their STATIC defence, and by mid-game
+// more than half the figure was towers -- towers cannot walk at us, so
+// counting them here held the army home against an enemy we outfielded. Static
+// still counts fully in MassWant: walking INTO porc needs mass; refusing to
+// leave home because porc exists does not.
+float FoeMobileMassing()
+{
+	const float m = EnemyMassingThreat()
+		- (1.f - ai.GetTunable("apex_feed_static_w", TUNE_FEED_STATIC_W))
+			* STATIC_DEFENSE_WEIGHT() * aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	return (m > 0.f) ? m : 0.f;   // read negative once their army was dead and their towers stood
+}
+
+// TeamArmyCost read ~40% of the field telemetry; the withdraw register's live
+// cost is the honest floor.
+float OurArmyNow()
+{
+	const float ours = TeamArmyCost();
+	return (gTrackedCost > ours) ? gTrackedCost : ours;
+}
+
+bool ConservativeStance()
+{
+	if (ai.GetTunable("apex_conservative_hold", TUNE_CONSERVATIVE_HOLD) <= 0.f)
+		return false;
+	if (Brain::gSpentTotal <= 1.f)
+		return false;   // nothing spent yet: no stance to read
+	const float share = Brain::ShareOf(Brain::ARMY);
+	const float target = Brain::TargetShare(Brain::ARMY);
+	if (share >= target)
+		return false;   // we ARE buying army: our army is meant to be used
+	const float ours = OurArmyNow();
+	// What we cannot see is the foe memory's to estimate (foemem.as: seen,
+	// remembered and lost-track units). The old guess -- a low reading is fog
+	// whenever they once showed half our army -- held 25,700 metal of ours at
+	// home against 3,100 of theirs (his watched game, 22 min).
+	float theirs = FoeMobileMassing();
+	const float believed = FoeBelievedM();
+	theirs = (believed > theirs) ? believed : theirs;
+	return (Market::StrRatio(theirs, ours) > 1.f) && (ours >= 0.f);
+}
+
+float MassWant()
+{
+	// Sized against what the group can actually kill, not against the enemy's
+	// whole army: comparing to their total army answers "can we beat all of
+	// them", but the objective is usually undefended economy, which only needs
+	// enough to kill the extractor. Falling behind on army would otherwise raise
+	// this demand and we never go, losing more ground.
+	//
+	// Safety is not given up, it moves to target selection: the attack task
+	// refuses a target whose local defence outweighs the group (localInfl and
+	// the strength test in CAttackTask::FindTarget), and target selection
+	// prefers UNDEFENDED economy outright (FREE_ECO_PRIORITY). A floor-sized
+	// group can go out and pick something it can actually kill.
+	//
+	// The floor is tunable and calibrated by LogUnitPower() below: quota.attack
+	// is a POWER sum (CFighterTask: attackPower += cdef->GetPower()), not a
+	// unit count or metal value, so it cannot be derived from a metal figure.
+	// ON by default: off, every group commits at the floor whatever the enemy
+	// massed -- the "they kill our smaller masses one by one" report, twice.
+	if ((ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f) || AllIn())
+		return MassFloor();
+
+	const float ours = TeamArmyCost();
+	// MOBILE against MOBILE. EnemyMassingThreat carries 0.5x their STATIC, and
+	// by mid-game that is most of the figure -- so their porcupine raised OUR
+	// bar to leave home, which is backwards. Whether to walk out is a question
+	// about what can walk at us; static still counts in full where the
+	// question is what we are walking INTO, which is target selection, not
+	// this.
+	float theirs = FoeMobileMassing();
+	// Pre-T2 the enemy model is mostly unscouted ground, and GetEnemyCost only
+	// counts what has entered LOS -- "ahead" in the opening is usually
+	// ignorance. Unknown must not read as zero: until T2 (when the radar net
+	// exists and the model is real) assume a peer fields at least our own army
+	// scaled by apex_unseen_parity, so opening groups commit at real size
+	// instead of trickling across at the floor.
+	if (!Factory::gHaveT2) {
+		const float assumed = ours * ai.GetTunable("apex_unseen_parity", TUNE_UNSEEN_PARITY);
+		if (theirs < assumed)
+			theirs = assumed;
+	}
+	if (ours <= 1.f)
+		return MASS_CAP();
+	const float floorNow = MassFloor();
+	// The ceiling scales with the floor: a flat MASS_CAP of 48 sits BELOW the
+	// army-scaled floor past ~14k of standing army, which silently collapsed
+	// the whole outmatched branch back to the floor. Against a bigger enemy
+	// mass the group is a multiple of our normal share, not a constant.
+	float capNow = floorNow * ai.GetTunable("apex_mass_cap_mult", TUNE_MASS_CAP_MULT);
+	if (capNow < MASS_CAP())
+		capNow = MASS_CAP();
+	const float ratio = Market::StrRatio(theirs, ours);
+	// OUTMATCHED IS ABOUT THEM, NOT US. Floor and cap both scale with OUR
+	// army, so losing a big fight collapsed the hold bar exactly when it
+	// should be highest, and the survivors trickled out into the army that
+	// had just won -- apexearth 2026-08-19: "why even bother leaving the base
+	// AT ALL if we just lost a big fight and have very few units?" While they
+	// out-mass us the bar is a share of THEIR army (Grunt-class
+	// power-per-metal ~0.017), which holds the pool home until it is rebuilt
+	// toward parity -- and releases by itself as it does.
+	// Real units, not metal conversions: aiEnemyMgr.mobileThreat is the
+	// engine's own aggregated threat of known mobile enemies, and the bar is
+	// per PLAYER -- the whole enemy side's threat divided by our roster, or an
+	// 8v8 sets a bar no single player's pool could ever fill (the measured
+	// Fatboy-loiter trap).
+	{
+		const float foeBar = (aiEnemyMgr.mobileThreat / AllyCount())
+				* ai.GetTunable("apex_mass_vs_enemy", TUNE_MASS_VS_ENEMY);
+		if ((ratio > 1.f) && (foeBar > capNow))
+			capNow = foeBar;
+	}
+	// Bleeding on their ground also grows the group: the same caution signal
+	// the engage margin uses, applied to how much leaves at once.
+	const float bleed = BleedCaution();
+	if (ratio <= ATTACK_EDGE())
+		return floorNow * bleed;              // ahead: move, but as a group
+	if (ratio >= MASS_HOLD_RATIO())
+		return capNow;                        // outmatched: hold
+	const float t = (ratio - ATTACK_EDGE()) / (MASS_HOLD_RATIO() - ATTACK_EDGE());
+	return (floorNow + t * (capNow - floorNow)) * bleed;
+}
+
+// The floor scales with our own army: a fixed 12-power squad is a real group
+// over a 2k-metal army and a suicide trickle over 100k. Sized as a share of
+// standing army value, converted at Grunt-class power-per-metal (~0.017,
+// LogUnitPower); floored at the old constant so the opening is unchanged.
+// apexearth 2026-08-15: the squad minimum scales with economy/army, not flat.
+float gQuotaConfig = -1.f;   // behaviour.json's quota.attack, read once at start
+
+float MassFloor()
+{
+	if (gQuotaConfig < 0.f)
+		gQuotaConfig = aiMilitaryMgr.quota.attack;
+	// NO FLAT OPENING MINIMUM. The config's 60 exceeded the whole army until
+	// ~3.5k metal, so no pool could legitimately promote in the opening and
+	// every early attack was born through the any-attack-exists bypass as a
+	// solo -- measured 2026-08-17, first-10m squad avg 1.3 vs enemy 2.6.
+	// apexearth: "sizing needs to be dynamic based on what we have." The share
+	// of standing army below is the size; the tunable is only a degenerate-case
+	// guard (~2 Pawns) for an army of nearly nothing.
+	float base = ai.GetTunable("apex_mass_floor", TUNE_MASS_FLOOR);
+	// OWN army, not TeamArmyCost: the promotion quota this feeds is per
+	// PLAYER, and scaling it by the whole ally side's army in an 8v8 set a
+	// bar no single player's pool could fill -- measured live as Fatboys
+	// loitering at the home guard anchor all late game, waiting to promote.
+	// 0.006 is ~35% of standing army metal per group at Grunt-class
+	// power-per-metal. Was 0.0017 (~10%), then 0.0035 (~20%) 2026-08-15 --
+	// apexearth has now said twice that the enemy masses bigger and kills our
+	// smaller groups one by one, so the share rises again; the ratio branch in
+	// MassWant() above is what scales it further when they actually out-mass us.
+	// ~70% of OWN standing army per group (0.012 metal->power at Grunt-class
+	// 0.017): one force that can win the fight it meets, not two that each
+	// lose it. Was 0.006 (~35%) -- measured 2026-08-17 with the solo-stream
+	// fixed, first-10m groups still averaged 1.5 units against the enemy's
+	// 2.3 with 8-stacks; the share was the remaining term.
+	const float scaled = aiMilitaryMgr.armyCost
+			* ai.GetTunable("apex_mass_per_army", TUNE_MASS_PER_ARMY);
+	float want = (scaled > base) ? scaled : base;
+	// THE FLOOR MUST NOT FOLLOW OUR ARMY DOWN.
+	//
+	// A share of OUR standing army is a death spiral once we are losing: the
+	// army dies, the floor falls, smaller groups leave, they die faster, the
+	// floor falls further -- all the way to one or two units, with nothing in
+	// the loop pushing back.
+	//
+	// So the floor is also bounded below by what we would actually MEET -- the
+	// biggest enemy group we can see, at the same power-per-metal the rest of
+	// this file uses. If we cannot reach that, the answer is to not go, which
+	// is what the pool does on its own.
+	//
+	// Divided by the roster for the same reason foeBar is in MassWant: the
+	// biggest group on the map is the whole enemy SIDE's, while this bar is
+	// charged to one player's pool.
+	const float meet = EnemyGroupPower()
+			* ai.GetTunable("apex_mass_meet_frac", TUNE_MASS_MEET_FRAC)
+			/ AllyCount();
+	if (meet > want)
+		want = meet;
+	return want;
+}
+
+// WHY THE POOL HOLDS, one predicate for the election and the release. The
+// MELEE pool never promotes, so a unit elected during a 45-second raid alarm
+// stood at home for the rest of the game. ReleaseHoldPools hands every held
+// pool stock's exit the moment no reason remains.
+array<int> gHoldWhyN(4, 0);
+int gHoldReleased = 0;
+int gHoldPooled = 0;    // standing attack pools turned back into holds
+int gHoldFull = 0;      // elections that went to attack because enough already held
+int gHoldWhyLast = -1;
+int gNextHoldRelLog = 0;
+
+// ALL IN UNDER LAG (apexearth 2026-10-03: "if we've got a command delay we
+// really can't properly use our army so we might as well just send them all
+// in to attack"). docs/24.
+bool gAllIn = false;
+bool AllIn()
+{
+	const bool on = Perf::LagSeverity() >= 1.f;
+	if (on != gAllIn) {
+		gAllIn = on;
+		AiLog(Factory::T() + "apex: all-in " + (on ? "ON" : "OFF") + " t=" + ai.teamId
+			+ " speed=" + formatFloat(Perf::SimSpeed(), "", 0, 2)
+			+ " set=" + formatFloat(Perf::SetSpeed(), "", 0, 1));
+	}
+	return on;
+}
+
+// The rule's reason, without counting it: the posture decision asks too.
+int HoldWhy()
+{
+	if (ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) <= 0.f)
+		return -1;
+	if (Builder::BaseUnderAttack())
+		return 0;
+	if (AllIn())
+		return -1;
+	if (BaseContested())
+		return 1;
+	if (BaseRaided())
+		return 2;
+	if (ConservativeStance())
+		return 3;
+	return -1;
+}
+
+bool HoldReason()
+{
+	const int ov = PostOverride();
+	if (ov >= 0)
+		return PostHolds(ov);
+	const int why = HoldWhy();
+	if (why < 0)
+		return false;
+	++gHoldWhyN[why];
+	gHoldWhyLast = why;
+	return true;
+}
+
+// Metal standing in hold pools, by unit, the same ledger the cover pools keep.
+array<int> gHoldId;
+array<float> gHoldCost;
+float gHoldHeldM = 0.f;
+
+void NoteHold(CCircuitUnit@ unit)
+{
+	gHoldId.insertLast(unit.id);
+	gHoldCost.insertLast(Catalog::gCostM[int(unit.circuitDef.id)]);
+	gHoldHeldM += Catalog::gCostM[int(unit.circuitDef.id)];
+}
+
+void ForgetHold(int id)
+{
+	for (uint i = 0; i < gHoldId.length(); ++i) {
+		if (gHoldId[i] == id) {
+			gHoldHeldM -= gHoldCost[i];
+			gHoldId.removeAt(i);
+			gHoldCost.removeAt(i);
+			return;
+		}
+	}
+}
+
+// WHAT THE HOLD IS FOR: the enemy metal actually on our home ground. The
+// alarms above say whether to hold at all; this says how much, or a base that
+// loses a building every 45 seconds keeps every unit it ever elected at home.
+float HoldNeedM()
+{
+	if (!Builder::gHomeSet)
+		return 0.f;
+	// Group METAL: GetEnemyCostAt is a unit count.
+	float need = 0.f;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		if (aiEnemyMgr.GetEnemyGroupPos(i).distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST)
+			need += aiEnemyMgr.GetEnemyGroupCost(i);
+	}
+	// BUILDINGS DYING AT HOME ARE THE FORCE WE CANNOT SEE: the enemy cost
+	// read 5 while Rockos and Mavericks killed the T2 lab and eleven
+	// generators at 470 elmos from home (the raiders had no LOS entry),
+	// the hold read "covered" and the recall never fired. The metal they
+	// are killing is the least they are worth.
+	if (gRaidM > need)
+		need = gRaidM;
+	// The stance hold answers an army we cannot see: what they have massed.
+	if (gHoldWhyLast == 3) {
+		const float foe = FoeMobileMassing();
+		if (foe > need)
+			need = foe;
+	}
+	return need;
+}
+
+// HoldNeedM as one unit type sees it: only the threat at home it can reach.
+// A land army recalled against ships off the shore stands on the beach while
+// the front it left falls (his 8v8 watch, 2026-09-28).
+array<int> gHoldNeedDef;
+array<float> gHoldNeedVal;
+int gHoldNeedFrame = -1;
+
+float HoldNeedFor(int defId)
+{
+	if (!Builder::gHomeSet || !Catalog::ValidId(defId))
+		return 0.f;
+	if (gHoldNeedFrame != ai.frame) {
+		gHoldNeedFrame = ai.frame;
+		gHoldNeedDef.resize(0);
+		gHoldNeedVal.resize(0);
+	}
+	const int k = gHoldNeedDef.find(defId);
+	if (k >= 0)
+		return gHoldNeedVal[k];
+	CCircuitDef@ d = Catalog::Def(defId);
+	const float r = (Catalog::gMaxRange[defId] > 64.f) ? Catalog::gMaxRange[defId] : 64.f;
+	float need = 0.f;
+	bool seen = false;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+		if (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST)
+			continue;
+		seen = true;
+		if ((d !is null) && ai.CanDefReachAt(d, Builder::gHomePos, gp, r))
+			need += aiEnemyMgr.GetEnemyGroupCost(i);
+	}
+	if (!seen && (gRaidM > need))
+		need = gRaidM;
+	if (gHoldWhyLast == 3) {
+		const float foe = FoeMobileMassing();
+		if (foe > need)
+			need = foe;
+	}
+	gHoldNeedDef.insertLast(defId);
+	gHoldNeedVal.insertLast(need);
+	return need;
+}
+
+bool HoldHome()
+{
+	if (!HoldReason())
+		return false;
+	// A drawn DEFEND/HOLD keeps every new unit: no group leaves this window.
+	if (PostOverride() >= 0)
+		return true;
+	if (gHoldHeldM >= HoldNeedM()) {
+		++gHoldFull;
+		return false;
+	}
+	return true;
+}
+
+void ReleaseHold()
+{
+	if (!HoldReason()) {
+		gHoldReleased += int(aiMilitaryMgr.ReleaseHoldPools());
+		gHoldId.resize(0);
+		gHoldCost.resize(0);
+		gHoldHeldM = 0.f;
+	} else if (HoldHome()) {
+		// The election only decides the task a NEW unit joins; a pool already
+		// standing at home promotes on its own bar and marches out as the
+		// raid arrives.
+		gHoldPooled += int(aiMilitaryMgr.HoldPools());
+	}
+	if (ai.frame >= gNextHoldRelLog) {
+		gNextHoldRelLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: hold t=" + ai.teamId
+			+ " attack=" + gHoldWhyN[0] + " contested=" + gHoldWhyN[1]
+			+ " raided=" + gHoldWhyN[2] + " stance=" + gHoldWhyN[3]
+			+ " released=" + gHoldReleased + " pooled=" + gHoldPooled + " full=" + gHoldFull
+			+ " heldM=" + int(gHoldHeldM) + " needM=" + int(HoldNeedM())
+			+ " | homeInfl=" + formatFloat(Builder::gHomeSet ? ai.GetEnemyInflAt(Builder::gHomePos) : 0.f, "", 0, 2)
+			+ " foeDist=" + int(Builder::gHomeSet ? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : -1.f));
+	}
+}
+
+void UpdateMassing()
+{
+	LogUnitPower();
+	if (gTurtle)
+		return;   // an active hold is stricter; do not loosen it
+
+	// TEAM against team: aiMilitaryMgr.armyCost is THIS player's army while
+	// EnemyArmyCost() sums every enemy, so comparing them directly on a 4v4 is
+	// one player against four and reads far too pessimistic. TeamArmyCost()
+	// sums the ally side over TV_ARMY.
+	const float ours = TeamArmyCost();
+	// The same reading MassWant decides on, so `enemyArmy`/`ratio` in the log
+	// explain the want rather than a different comparison.
+	const float theirs = FoeMobileMassing();
+	float want = MassWant();
+
+	// Bound the hold. MassWant returns MASS_CAP only in the outmatched case, so
+	// that is the signal we are holding rather than committing.
+	const float holdSecs = ai.GetTunable("apex_mass_hold_secs", TUNE_MASS_HOLD_SECS);
+	// Keyed on "demanding more than the floor", not on reaching the cap: the
+	// interpolated want can sit just under MASS_HOLD_RATIO and never touch
+	// MASS_CAP, so a deadline keyed on the cap would never fire.
+	const float floorNow = MassFloor();
+	// THE DEADLINE MUST NOT FIRE INTO AN ARMY WE CANNOT FIGHT. It exists so a
+	// hold cannot last forever "so the ratio can change". At the ratios
+	// actually measured the ratio cannot change -- it fired 55 times in one
+	// game and each firing was a group handed to them. Holding forever is
+	// strictly better than feeding; the outmatched branch already releases by
+	// itself as the pool rebuilds toward parity. See
+	// FoeMobileMassing/OurArmyNow: mobile against mobile, honest self-count. A
+	// MAP-WIDE COMPARISON IS NOT THE FIGHT IN FRONT OF US. Both terms are
+	// side-wide sums, so a group standing on a weakly-held enemy base reads
+	// "outmatched" from armies on the far side of the map and circles instead
+	// of taking it (apexearth 2026-08-21: "we just had the ability to take out
+	// an enemy base... instead we walked around in circles nearby for two or
+	// three minutes until the enemy came, surrounded us, and killed us"). If
+	// our massed pool locally outweighs what is actually defending the ground
+	// it stands on, the suppression does not apply -- that is the definition
+	// of a fight we are winning.
+	bool localEdge = false;
+	if (ai.GetTunable("apex_local_edge_on", TUNE_LOCAL_EDGE_ON) > 0.f) {
+		const AIFloat3 at = gLaneAt;
+		if (OnMap(at)) {
+			// What is actually defending the ground we stand on: enemy group
+			// value within reach of the lane, not every enemy on the map.
+			const float r = ai.GetTunable("apex_local_edge_r", TUNE_LOCAL_EDGE_R);
+			const float r2 = r * r;
+			float foeHere = 0.f;
+			const int nG = aiEnemyMgr.GetEnemyGroupCount();
+			for (int i = 0; i < nG; ++i) {
+				const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+				if (OnMap(gp) && (gp.SqDistance2D(at) <= r2))
+					foeHere += aiEnemyMgr.GetEnemyGroupCost(i);
+			}
+			const float oursNow = OurArmyNow();
+			localEdge = (oursNow > 1.f)
+				&& (Market::StrRatio(foeHere, oursNow)
+					* ai.GetTunable("apex_local_edge", TUNE_LOCAL_EDGE) < 1.f);
+		}
+	}
+	const bool feeding = !localEdge
+			&& (ConservativeStance()
+				|| (Market::StrRatio(FoeMobileMassing(), OurArmyNow())
+					> ai.GetTunable("apex_mass_no_commit_ratio", TUNE_MASS_NO_COMMIT_RATIO)));
+	if (feeding && (gHoldSince >= 0) && (ai.frame >= gNextFeedLog)) {
+		gNextFeedLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: hold deadline suppressed -- outmatched "
+			+ formatFloat(FoeMobileMassing(), "", 0, 0) + " vs "
+			+ formatFloat(OurArmyNow(), "", 0, 0)
+			+ (ConservativeStance() ? ", and we are not the aggressor" : ""));
+	}
+	if (want > floorNow + 1.f) {
+		if (gHoldSince < 0)
+			gHoldSince = ai.frame;
+		if (!feeding && (holdSecs > 0.f) && (ai.frame - gHoldSince > int(holdSecs) * SECOND)) {
+			// Commit partway toward the cap, NOT at the floor: expiring straight
+			// to the floor sent a 20%-of-army group into the exact mass we had
+			// been refusing to fight -- the one-by-one deaths again, on a timer.
+			want = floorNow + ai.GetTunable("apex_mass_commit_frac", TUNE_MASS_COMMIT_FRAC)
+					* (want - floorNow);
+			gHoldSince = ai.frame;   // restart, so we alternate hold and commit
+			AiLog(Factory::T() + "apex: mass hold expired, committing at "
+				+ formatFloat(want, "", 0, 0));
+		}
+	} else {
+		gHoldSince = -1;
+	}
+
+	// A GROUP CANNOT BE BIGGER THAN THE ARMY THAT SUPPLIES IT. capNow is
+	// floored at a flat MASS_CAP, so the interpolation lands past 100% of our
+	// army for any enemy reading over ATTACK_EDGE and no pool can ever promote;
+	// the hold deadline cannot break it either, committing at a fraction of the
+	// same unreachable want. Not below the floor, though: our whole army may BE
+	// one Pawn, and a ceiling alone would walk it out alone.
+	const float ourPower = aiMilitaryMgr.armyCost * 0.017f;
+	if ((ourPower > floorNow) && (want > ourPower))
+		want = ourPower;
+
+	if (ai.frame >= gNextMassLog) {
+		gNextMassLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: mass want=" + formatFloat(want, "", 0, 0)
+			+ " floor=" + formatFloat(floorNow, "", 0, 0)
+			// The ceiling below: a want above this is a group we cannot field.
+			+ " own=" + formatFloat(aiMilitaryMgr.armyCost * 0.017f, "", 0, 0)
+			+ " army=" + formatFloat(ours, "", 0, 0)
+			+ " enemyArmy=" + formatFloat(theirs, "", 0, 0)
+			+ " ratio=" + formatFloat((ours > 0.f) ? theirs / ours : 0.f, "", 0, 2)
+			+ " str=" + formatFloat((ours > 0.f) ? Market::StrRatio(theirs, ours) : 0.f, "", 0, 2)
+			+ " q=" + formatFloat(Market::FoeQualityM() * 1000.f, "", 0, 3)
+			+ "/" + formatFloat(Market::OurQualityM() * 1000.f, "", 0, 3)
+			+ " bleed=" + formatFloat(BleedCaution(), "", 0, 2));
+		// HOW BIG "HOME GROUND" IS: CAttackTask's isHome waives the odds check
+		// wherever net influence >= INFL_SAFE (2.0). Walk the home->enemy axis
+		// and log where that isoline actually ends, against the full distance,
+		// so the exemption's reach is a measured number and not a guess.
+		if (Builder::gHomeSet) {
+			const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+			const float total = Builder::gHomePos.distance2D(foe);
+			if ((total > 1.f) && OnMap(foe)) {
+				float safeDist = 0.f;
+				for (float d = 200.f; d < total; d += 200.f) {
+					AIFloat3 p = Builder::gHomePos + (foe - Builder::gHomePos) * (d / total);
+					if (!OnMap(p) || (ai.GetAllyInflAt(p) - ai.GetEnemyInflAt(p) < 2.f))
+						break;
+					safeDist = d;
+				}
+				AiLog(Factory::T() + "apex: home-edge safe=" + int(safeDist)
+					+ " of " + int(total) + " ("
+					+ formatFloat(100.f * safeDist / total, "", 0, 0) + "%)");
+			}
+		}
+	}
+	// Tracks the want BOTH ways: with an army-scaled floor, a ratchet that only
+	// rises would leave the bar stuck at a dead army's size -- a side that just
+	// lost 30k of army could never form another attack. gTurtle returns early
+	// above, so nothing else owns the quota while this writes it.
+	aiMilitaryMgr.quota.attack = want;
+}
+
+// Our whole side's army value, pooled over the same blackboard the tech lead
+// election uses. Has to be TEAM against TEAM: aiMilitaryMgr.armyCost is one
+// player's army while EnemyArmyCost() sums the entire enemy side, so a direct
+// comparison asks "is one of us worth more than all of them" and is
+// unreachable by construction.
+const string TV_ARMY = "army";
+
+void PublishArmy()
+{
+	ai.PublishTeamValue(TV_ARMY, aiMilitaryMgr.armyCost);
+}
+
+float TeamArmyCost()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return aiMilitaryMgr.armyCost;
+	float total = 0.f;
+	for (uint i = 0; i < mates.length(); ++i)
+		total += ai.ReadTeamValue(int(mates[i]), TV_ARMY, 0.f);
+	return total;
+}
+
+}  // namespace Military
+
+// One-off calibration: quota.attack is a POWER SUM (CFighterTask::attackPower
+// += cdef->GetPower()), not a unit count, so MASS_FLOOR cannot be set without
+// knowing what a unit is worth. Logs a few representative units' power once.
+bool gPowerLogged = false;
+void LogUnitPower()
+{
+	if (gPowerLogged || (ai.frame < 30 * SECOND))
+		return;
+	gPowerLogged = true;
+	array<string> names = {"armpw", "armrock", "armwar", "corak", "corthud", "armzeus", "armjeth",
+	                       "armbanth", "corkorg", "corshiva", "armmanni"};
+	string msg = "apex: unit power --";
+	for (uint i = 0; i < names.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(names[i]);
+		if (d !is null)
+			msg += " " + names[i] + "=" + formatFloat(d.power, "", 0, 1);
+	}
+	AiLog(msg);
+	array<string> sn = {"armcom", "corcom", "armpw", "corak", "armrock", "armwar", "armzeus", "armbanth"};
+	string ms = "apex: unit strength --";
+	for (uint i = 0; i < sn.length(); ++i) {
+		CCircuitDef@ d = ai.GetCircuitDef(sn[i]);
+		if (d !is null)
+			ms += " " + sn[i] + "=" + formatFloat(Market::UnitStrength(int(d.id)), "", 0, 4)
+				+ "(pm" + formatFloat(Market::PowerMod(int(d.id)), "", 0, 2)
+				+ " dps" + int(Catalog::gDps[int(d.id)]) + " hp" + int(Catalog::gHealth[int(d.id)]) + ")";
+	}
+	AiLog(ms);
+}

@@ -1,0 +1,186 @@
+namespace Military {
+
+int  gNextAirLog   = 0;
+bool gAAResolved   = false;
+// The most enemy air seen at once, ever. Discounted for scouts/builders like
+// every other reading here, but never forgotten and never floored.
+float gAirSeen     = 0.f;
+CCircuitDef@ gFlak = null;   // the faction's flak turret
+CCircuitDef@ gHeavy = null;  // its other heavy static AA
+
+void ResolveHeavyAA()
+{
+	if (gAAResolved)
+		return;
+	gAAResolved = true;
+	const string side = ai.GetSideName();
+	if (side == "cortex") {
+		@gFlak = ai.GetCircuitDef("corflak");  @gHeavy = ai.GetCircuitDef("corerad");
+	} else if (side == "legion") {
+		// leglupara is Legion's counterpart to armcir/corerad but is also its
+		// superweapon entry, and DiceBigGun only re-rolls when a big gun finishes:
+		// capping a def it had already picked would deny Legion any superweapon.
+		@gFlak = ai.GetCircuitDef("legflak");
+	} else {
+		@gFlak = ai.GetCircuitDef("armflak");  @gHeavy = ai.GetCircuitDef("armcir");
+	}
+}
+
+// Deliberately wider than EnemyArmyCost(), which omits HEAVY: leaving enemy T3
+// out of the denominator inflates the air share exactly in the late game.
+float EnemyGroundCost()
+{
+	return EnemyArmyCost() + aiEnemyMgr.GetEnemyCost(RT::HEAVY);
+}
+
+int LiveCount(CCircuitDef@ def)
+{
+	return (def is null) ? 0 : def.count;
+}
+
+void CapHeavyAA(CCircuitDef@ def, int spare)
+{
+	if (def !is null)
+		def.maxThisUnit = def.count + spare;
+}
+
+// The enemy air value safe to REACT to. GetEnemyCost(AIR) also counts air
+// builders/scouts (behaviour.json roles, and CFactoryManager gives AIR to
+// anything IsAbleToFly); gAirAvg discounts and time-averages that. Returns 0
+// below AA_IGNORE rather than a small nonzero a normalising caller could round
+// into overreaction.
+float AirThreatSeen()
+{
+	if (gAirAvg < AA_IGNORE)
+		return 0.f;
+	return gAirAvg;
+}
+
+// Gate presence on this, not AirThreatSeen(): it is this tick's reading, not a
+// 240s EMA of it, so a raid is answered as it develops rather than four minutes
+// later. Still floored at AA_IGNORE so a single overflight is not a "threat".
+float AirThreatNow()
+{
+	if (gAirRaw < AA_IGNORE)
+		return 0.f;
+	return gAirRaw;
+}
+
+// THE AIR WE HAVE SEEN, whatever it is doing now (apexearth: "just make the AA
+// if we've seen enemy air... our AA amount should be proportional to the amount
+// of enemy air we've seen"). No AA_IGNORE floor -- a little air still buys a
+// little AA -- and no freshness window: aircraft leave, and having left is not
+// evidence they are gone. This is what static AA is sized against.
+float AirSeenEver()
+{
+	return gAirSeen;
+}
+
+// How seriously to take their air, 0..1. One number, used by both levers.
+float AirScale(float share)
+{
+	float s = share / AA_SHARE_REF;
+	if (s > 1.f)
+		s = 1.f;
+	if (s < AA_SCALE_MIN)
+		s = AA_SCALE_MIN;
+	return s;
+}
+
+// How many heavy static AA the observed air justifies. Consumed only as a
+// maxThisUnit ceiling (CapHeavyAA below); the PURCHASE goes through the
+// protect market's AA branch, which divides the same census by AllyCount.
+int HeavyAAWant()
+{
+	// THE LATE-GAME FLOOR DOES NOT WAIT FOR A SIGHTING. apexearth 2026-08-20:
+	// "It is not unusual for air to show up out of nowhere when it was never
+	// there before. So when you are in the later part of the game you
+	// absolutely need to have flak spread out around your base." Later part
+	// of the game means economy, never clock: one flak above the income bar,
+	// another per flak-per of income beyond it.
+	int floorN = 0;
+	const float inc = Eco::MInc();
+	const float bar = ai.GetTunable("apex_flak_floor_income", TUNE_FLAK_FLOOR_INCOME);
+	if (inc >= bar)
+		floorN = 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));
+	// Sized off what we have SEEN, not what is on screen: heavy AA is a
+	// standing answer to an air force, and the force does not stop existing
+	// while it is rearming.
+	if (gAirSeen < AA_IGNORE)
+		return floorN;
+	const float total = gAirAvg + gGroundAvg;
+	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
+	// OUR SHARE of a side-wide census: gAirSeen is the WHOLE enemy team's
+	// air, and each ally caps its own flak -- the same division the protect
+	// market's AA branch already applies. The income floor above stays whole
+	// on purpose: it is spatial (flak around THIS base).
+	const float heavyBasis = gAirSeen / AllyCount();
+	const int seen = int(heavyBasis * AirScale(share) / AA_HEAVY_PER);
+	return (seen > floorN) ? seen : floorN;
+}
+
+void UpdateAirThreat()
+{
+	ResolveHeavyAA();
+
+	// Fresh, not GetEnemyCost: GetEnemyCost never forgets a unit once registered
+	// (EnemyManager.h/.cpp), so one early air scout, seen once and since dead,
+	// pinned this reading above AA_IGNORE for the rest of the match -- and once
+	// AirThreatNow() (below) started gating presence off this same tick's value,
+	// that stale sighting opened the AA gate permanently the instant it was seen,
+	// not just eventually via the smoothed average. GetEnemyCostFresh only counts
+	// what was seen within the last freshFrames (60s default), so the reading
+	// actually falls back to 0 once the sighting goes stale.
+	const float airRaw = aiEnemyMgr.GetEnemyCostFresh(RT::AIR);
+	const float soft = aiEnemyMgr.GetEnemyCostFresh(Unit::Role::BUILDER.type)
+	                 + aiEnemyMgr.GetEnemyCostFresh(Unit::Role::SCOUT.type);
+	float softAir = (airRaw < soft) ? airRaw : soft;
+	if (softAir > SOFT_AIR_CAP)
+		softAir = SOFT_AIR_CAP;
+	float air = airRaw - softAir * (1.f - SOFT_AIR_WEIGHT);
+	if (air < 0.f)
+		air = 0.f;
+	const float ground = EnemyGroundCost() * GROUND_UNSEEN;
+	gAirRaw = air;
+	if (air > gAirSeen)
+		gAirSeen = air;
+
+	if (gAirAvg < 0.f) {
+		gAirAvg = air;
+		gGroundAvg = ground;
+	} else {
+		const float k = 1.f / AIR_AVG_SECONDS;
+		gAirAvg += (air - gAirAvg) * k;
+		gGroundAvg += (ground - gGroundAvg) * k;
+	}
+
+	const float total = gAirAvg + gGroundAvg;
+	const float share = (total > 0.f) ? gAirAvg / total : 0.f;
+	const float scale = (gAirSeen >= AA_IGNORE) ? AirScale(share) : 0.f;
+
+	// The mobile-AA lever does not exist: GetResponseInfo/SResponseInfo are not
+	// registered on CMilitaryManager, so response.json's anti_air weighting is
+	// unreachable from script. Static AA below is the only lever this can pull.
+
+	// share/scale stay off the smoothed value so a single spike does not swing
+	// the RATIO, only how much of the already-scaled demand counts. count
+	// includes nanoframes, so a turret still building holds its own slot.
+	int heavyWant = HeavyAAWant();
+	const int heavyHave = LiveCount(gFlak) + LiveCount(gHeavy);
+	const int spare = (heavyWant > heavyHave) ? (heavyWant - heavyHave) : 0;
+	CapHeavyAA(gFlak, spare);
+	CapHeavyAA(gHeavy, spare);
+
+	if (ai.frame >= gNextAirLog) {
+		gNextAirLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apexaa: airRaw=" + formatFloat(airRaw, "", 0, 0)
+			+ " seen=" + formatFloat(gAirSeen, "", 0, 0)
+			+ " air=" + formatFloat(gAirAvg, "", 0, 0)
+			+ " ground=" + formatFloat(gGroundAvg, "", 0, 0)
+			+ " share=" + formatFloat(share, "", 0, 3)
+			+ " scale=" + formatFloat(scale, "", 0, 2)
+			+ " heavy=" + heavyHave + "/" + heavyWant);
+	}
+}
+
+}  // namespace Military

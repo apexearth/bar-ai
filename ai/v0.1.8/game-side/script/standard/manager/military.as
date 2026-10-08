@@ -1,0 +1,28 @@
+#include "../../define.as"
+#include "../../unit.as"
+
+// namespace Military, split across military/. THE ORDER BELOW IS LOAD-BEARING
+// -- see builder.as for why.
+#include "military/state.as"        // posture flags and the constants behind them
+#include "military/roles.as"        // rush/eco roles, quotas, metal slinging
+#include "military/deathledger.as"  // where our metal dies, fed back into caution
+#include "military/massing.as"      // how much army to hold back and mass
+#include "military/basedefence.as"  // approach threat, porcupines, line jammers
+#include "military/danger.as"       // their army against how soon it reaches our base
+#include "military/foemem.as"       // their army remembered out of sight, by unit
+#include "military/stance.as"       // the enemy's stance; budget answer + scout demand
+#include "military/posture.as"      // raid caution, persona, team push, corridors
+#include "military/superguard.as"   // T3 heavies hold the defence line
+#include "military/unblock.as"      // units walled in by our own buildings
+#include "military/bombs.as"       // rolling bombs: never squadded, never massed
+#include "military/hooks.as"        // AiMakeTask, task/unit hooks, save/load
+#include "military/fightcensus.as"  // live fighter pools by fight type, once a game-minute
+#include "military/guardposts.as"   // idle home units posted where building cover is missing
+#include "military/raid.as"        // ask for a raid and pull the units to make one
+#include "military/nnraid.as"      // the raid priced and decided: GO at the best target or WAIT
+#include "military/withdraw.as"   // pull a losing squad back under our guns
+#include "military/territory.as"    // what we hold, where the border and front are
+#include "military/defenceline.as"  // the front gun and AiMakeDefence
+#include "military/airthreat.as"    // enemy air scaling and heavy AA caps
+#include "military/intel.as"        // what we believe the enemy has, on a clock
+#include "military/gift.as"          // back players ship ground army to the front
