@@ -586,7 +586,7 @@ bool DeathWalk(CCircuitUnit@ unit, const AIFloat3& in dest)
 array<int> gClaimCom(3, 0);
 array<int> gClaimCon(3, 0);
 int gClaimComFar = 0;
-int gRcmProposed = 0, gRcmWon = 0;
+int gRcmProposed = 0, gRcmWon = 0, gRcmFullSkip = 0;
 float gRcmMetal = 0.f;
 int gNextClaimLog = 0;
 void NoteClaim(CCircuitUnit@ unit, Want@ w)
@@ -611,7 +611,7 @@ void NoteClaim(CCircuitUnit@ unit, Want@ w)
 			+ " com=" + gClaimCom[0] + "/" + gClaimCom[1] + "/" + gClaimCom[2]
 			+ " comFar=" + gClaimComFar
 			+ " con=" + gClaimCon[0] + "/" + gClaimCon[1] + "/" + gClaimCon[2]
-			+ " rcm=" + gRcmProposed + "/" + gRcmWon + " rcmM=" + int(gRcmMetal)
+			+ " rcm=" + gRcmProposed + "/" + gRcmWon + " rcmFull=" + gRcmFullSkip + " rcmM=" + int(gRcmMetal)
 			+ " reclaimM=" + int(ai.GetTeamRulesParam("apexReclaimM", -1.f)));
 	}
 }

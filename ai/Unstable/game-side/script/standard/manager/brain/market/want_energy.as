@@ -220,8 +220,10 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 					ai.GetTunable("apex_energy_growth_flat", TUNE_ENERGY_GROWTH_FLAT) > 0.f;
 			if (growFlat)
 				growNum = EnergyDeficitE() * genRatio;
-			fGrow = 1.f + genGrowK
-					* growNum / ((genPower > growNum) ? genPower : ((growNum > 0.f) ? growNum : 1.f));
+			float growDen = (genPower > growNum) ? genPower : growNum;
+			if (growDen < 1.f)
+				growDen = 1.f;   // a surplus (growNum < 0) with no generation was a divide by zero
+			fGrow = 1.f + genGrowK * growNum / growDen;
 			gain *= fGrow;
 			// The arrival discount rode inside mkEff; with the premium flat it has
 			// to be charged on its own or a ten-minute build pays nothing for the

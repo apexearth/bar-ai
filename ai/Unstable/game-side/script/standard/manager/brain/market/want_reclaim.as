@@ -2082,6 +2082,11 @@ Want@ ProposeReclaimMetal(CCircuitUnit@ unit)
 	Want w;
 	if (Builder::IsRezzer(unit))
 		return w;
+	// A wreck keeps; its metal reclaimed into a spilling bank is thrown away.
+	if (MetalWasting()) {
+		++gRcmFullSkip;
+		return w;
+	}
 	const int ud = int(unit.circuitDef.id);
 	const float rate = Catalog::gBuildPower[ud] * (7.f / 80.f);
 	const float speed = Catalog::gSpeed[ud];

@@ -165,20 +165,6 @@ each unit type performs, and discount the ones that keep proving useless:
 - Stage 0 is the instrument: log damage-dealt/health per unit type at death
   and at game end, check the ranking is stable across a battery, THEN price.
 
-## The combined air strike on a front-line defence area
-
-apexearth 2026-10-07, after a 7v7 where our air made no useful raid all late
-game: first send all the fighters to kill the enemy's fighters; then, at the
-same time, bombers, gunships and atomic bombers -- "all the best air" -- on
-one of their front-line defence areas. The fighters arrive first anyway
-because they are fast. "They would totally demolish it -- as long as their
-bombs don't just all land in ONE part of it, gotta pick targets
-intelligently."
-
-What his game showed: waves launched 2 bombers at a time (`bomb spread
-units=2 ... need=9-26`), 17-29 bombers held at home, 55-106 fighters hunting
-on their own, strikes priced at kill fraction 0.12-0.23.
-
 ## Join a fight only if we get there in time -- a net decides, scored on arrival
 
 apexearth 2026-10-08: "sometimes I see our guys walking across the map just to
@@ -192,6 +178,11 @@ fight's size and how long it has been going, the two sides' strength there.
 Label: arrived while it still raged / arrived after / died on the way, plus
 the trade once there.
 
+Built 2026-10-08 (bd8d3c77): head `reinf` (NNV), asked by CAttackTask when a
+new target is where our side already fights; outcome in/over/late/died is
+its `done`. Open: the trained net -- whether STAY ever beats GO -- is
+unmeasured until the head has rows.
+
 ## Metal maps: extractors packed where they are safe, tiled for least overlap
 
 apexearth 2026-10-08, watching Full Metal Plate: the whole map is metal, so
@@ -204,15 +195,13 @@ under them, so packing past touching circles adds nothing. Our bots held
 own tiling (circles edge to edge) starting at home and growing outward in one
 block, instead of claiming the finder's grid scattered across the map.
 
-## Bombers hunt the biggest economic prize, not the first extractor
-
-apexearth 2026-10-07: "You really hurt an enemy's economy when you can kill a
-bunch of their wind, or their converters, or a fusion, or an afus. An afus is
-like the biggest prize." The aim should be priced by everything the bomb's
-blast kills (wind farms and converter blocks are packed), the strike area by
-the enemy ECONOMY in it rather than all structure metal, and build power
-should not make commanders and nanos the prize. `BombTask.cpp` has the blast
-sum commented out ("FIXME: Finish").
+Why it is not a spot-list change (2026-10-08): on a metal map the finder
+publishes no spots (`mex_count=-1`) and C++ `ParseMetalSpots` thins its own
+packed scan to ~240 by raster stride. The list is shared by every AI in the
+process and walked by ~20 script loops; packing both 20% start strips is
+~1,800 spots, and an AI knows only its OWN start position
+(`Map_getStartPos`). The play needs a per-AI extractor farm near its own
+base, sited and priced like converters -- a new want kind.
 
 ## Fighter cover for air missions
 
@@ -264,20 +253,6 @@ metal-bound"): an army that stands at 1-6k against 12-22k, walks in, dies and
 is rebuilt from zero every ~5 minutes. The trigger is the same reading -- the
 enemy field in reach against our own -- that the class bar and the track record
 already take; the answer is a defence ring priced as time bought, not a unit.
-
-## Allies keep each other's walkways -- one lane system for the team
-
-apexearth 2026-09-21, watching an Isthmus 8v8: we purposely leave certain
-areas open so our units can walk there, and then an ally builds in that gap and
-blocks it. All of us should align to the same system.
-
-What stands: each AI lays its walkways from its OWN anchor and axis
-(`baseplan/state.as`, lanes in world offsets at `LANE_PITCH`), so two adjacent
-bases stripe the ground on unrelated grids, and neither one's site test knows
-the other's gaps. A team frame -- one origin and axis published like the eco
-seat is (`TV_*` team values), lanes as world lines in that frame -- makes the
-gaps the same lines for every base, and a site that lands in any ally's lane
-is refused the way our own is.
 
 ## Nuke Spam!
 
