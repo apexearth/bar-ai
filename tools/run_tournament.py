@@ -35,6 +35,7 @@ import itertools
 import json
 import os
 import queue
+import random
 import shutil
 import subprocess
 import sys
@@ -282,7 +283,8 @@ def main() -> int:
     ap.add_argument("--box-size", dest="box_size", type=float, default=0.0,
                     help="start-box size as a map fraction, e.g. 0.35")
     ap.add_argument("--handicap", type=str, default="0",
-                    help="percent resource bonus, one for every AI or A,B per side; gets 8v8s to game over")
+                    help="percent resource bonus, one for every AI or A,B per side; gets 8v8s to game over. "
+                         "rand:LO-HI draws one bonus per game for every AI (even sides)")
     ap.add_argument("--boxes", choices=["lr", "tb", "trbl", "tlbr"], default="lr",
                     help="start-box axis; Glitters is tb, Comet Catcher lr")
     ap.add_argument("--sides", default="Cortex,Cortex",
@@ -378,7 +380,10 @@ def main() -> int:
             # swapped game would otherwise hand the bonus to the other AI.
             hc = args.handicap
             parts = str(hc).split(",")
-            if len(parts) == len(args.ais) > 1 and len(set(args.ais)) == len(args.ais):
+            if str(hc).startswith("rand:"):
+                lo, hi = (int(x) for x in str(hc)[5:].split("-"))
+                hc = str(random.randint(lo, hi))
+            elif len(parts) == len(args.ais) > 1 and len(set(args.ais)) == len(args.ais):
                 hmap = dict(zip(args.ais, parts))
                 hc = "%s,%s" % (hmap[job.first], hmap[job.second])
             row = play(job, args.minutes, args.engine, wd, match_root, args.per_side,
