@@ -1069,7 +1069,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				if (OnMap(at3)) {
 					const float afford = (budget - bill) / budget;
 					const float gain = power * share * afford
-							* Persona::WantMult(SuperName(SC_AIRPLANT));
+							* Persona::WantMult(SuperName(SC_AIRPLANT)) * PlanMul(SC_AIRPLANT);
 					if (gain > 0.f) {
 						const float wSec3 = (speed > 1.f)
 								? (here.distance2D(at3) / speed) : 60.f;
