@@ -2,12 +2,15 @@
 
     python tools/dashboard.py            # serves http://127.0.0.1:8420 and opens a browser
     python tools/dashboard.py --port N --no-browser
+    python tools/dashboard.py --remote   # view it from his other computers over Tailscale
 
-Stdlib only. Binds 127.0.0.1 only. The page is tools/dashboard_ui.html; this file
+Stdlib only. Binds 127.0.0.1 only; --remote also answers Tailscale devices,
+view-only (no launch, deploy or tool runs). The page is tools/dashboard_ui.html; this file
 is the API: browse matches/tournaments, run the analysis tools, launch watch or
 headless games as tracked jobs with mod-option overrides, and deploy.
 """
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -1531,6 +1534,10 @@ def config_path(name):
 
 # ---------------------------------------------------------------- http
 
+REMOTE = False
+TAILNET = ipaddress.ip_network("100.64.0.0/10")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         pass
@@ -1547,7 +1554,22 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}")
 
+    def allowed(self, write):
+        """This machine may do anything; with --remote a tailnet address may only look."""
+        ip = self.client_address[0]
+        local = ip in ("127.0.0.1", "::1")
+        try:
+            tailnet = ipaddress.ip_address(ip) in TAILNET
+        except ValueError:
+            tailnet = False
+        if local or (REMOTE and tailnet and not write):
+            return True
+        self.send_json({"error": "view-only from another computer" if tailnet else "forbidden"}, 403)
+        return False
+
     def do_GET(self):
+        if not self.allowed(False):
+            return
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
@@ -1630,6 +1652,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(e)}, 400)
 
     def do_POST(self):
+        if not self.allowed(True):
+            return
         u = urlparse(self.path)
         try:
             p = self.read_body()
@@ -1693,11 +1717,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--port", type=int, default=8420)
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--remote", action="store_true",
+                    help="also answer Tailscale devices (100.64.0.0/10), view-only")
     a = ap.parse_args()
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    global REMOTE
+    REMOTE = a.remote
+    srv = ThreadingHTTPServer(("0.0.0.0" if REMOTE else "127.0.0.1", a.port), Handler)
     threading.Thread(target=repeat_loop, daemon=True).start()
     url = "http://127.0.0.1:%d" % a.port
     print("bar-ai dashboard: %s   (Ctrl+C to stop)" % url)
+    if REMOTE:
+        print("  view-only from the tailnet: http://<this machine's tailscale name>:%d" % a.port)
     if not a.no_browser:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:
