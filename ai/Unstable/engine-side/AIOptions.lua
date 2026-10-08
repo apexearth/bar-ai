@@ -103,6 +103,17 @@ local options = {
 		max     = 1,
 		step    = 0.1,
 	},
+	{ -- number
+		key     = 'apex_plan_explore',
+		name    = 'Try strategies',
+		desc    = '1 = this bot picks its team\'s strategy at random (mass T3, nukes, LRPC, mass air, rush, greed, turtle...) and plays everything else normally, so the AI learns which strategies work against people. Tick one bot per team. 0 = off.',
+		type    = 'number',
+		section = 'play',
+		def     = 0,
+		min     = 0,
+		max     = 1,
+		step    = 1,
+	},
 }
 
 return options

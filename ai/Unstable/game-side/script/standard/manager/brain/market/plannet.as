@@ -84,7 +84,10 @@ void PlanNetDecide()
 	if (ai.frame < gPlanNextAt)
 		return;
 	gPlanNextAt = ai.frame + 30 * SECOND;
-	const bool explore = gNnExploreRolled && gNnExplore;
+	// A discovery explorer, or a bot set to try strategies (a lobby option for
+	// his multiplayer games): it draws the plan evenly and leads its team.
+	const bool explore = (gNnExploreRolled && gNnExplore)
+		|| (ai.GetTunable("apex_plan_explore", TUNE_PLAN_EXPLORE) > 0.f);
 	const float until = ai.GetTeamBoard(BOARD_PLAN_UNTIL, -1.f);
 	if ((until > float(ai.frame)) && (!explore || (ai.frame < gPlanMineUntil))) {
 		const int was = gPlan;

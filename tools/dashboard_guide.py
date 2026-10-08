@@ -1057,8 +1057,13 @@ GROUPS = [
                   "what it has never tried. 0 = never experiment"),
                  ("TUNE_PLAN_FORCE", "a test switch: every team plays one "
                   "plan all game -- 0 normal, 1 mass T3, 2 missiles and nukes, "
-                  "3 long-range artillery, 4 mass and push together. -1 = the "
+                  "3 long-range artillery, 4 mass and push together, 5 mass air, "
+                  "6 rush, 7 greed, 8 turtle, 9 deep greed. -1 = the "
                   "plan net chooses (normal play)"),
+                 ("TUNE_PLAN_EXPLORE", "try strategies: this AI picks its team's "
+                  "strategy at random and plays everything else normally, so the "
+                  "strategy net learns what works. Also a per-bot lobby option. "
+                  "0 = off"),
                  ("TUNE_DRAW_SHARP", "the draw follows value more sharply — "
                   "higher is closer to winner-takes-all, which has starved "
                   "every non-leading want before"),

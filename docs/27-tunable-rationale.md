@@ -3219,6 +3219,16 @@ pass their own values (runtime/nn_runs.sh explore 0.25; nn_selfex.sh and
 tools/watch_selfplay.sh apex_nn_explore_team), so they are unchanged. Before:
 blend 0 (nets off) and 0.1 (one lobby game in ten exploring).
 
+## TUNE_PLAN_EXPLORE = 0 (2026-10-07)
+
+His multiplayer games are the training data that matters most, and with the
+plan net untrusted they always play NORMAL, so they say nothing about which
+strategy works against people. The discovery explorer would, but it also
+randomizes every builder kind and the net's output -- worse play beside his
+human teammates. This makes a bot draw only its team's plan evenly (and lead
+the team with it); every pick is a chance decision for the plan net. Off by
+default; a per-bot lobby option ('Try strategies').
+
 ## TUNE_PLAN_FORCE = -1 (2026-10-07)
 
 A test switch, not a policy: every team plays one plan all game so an A/B can
