@@ -113,6 +113,8 @@ EXPORT_ROWS = 800      # new rows between weight exports
 POLL_S = 5
 LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
 BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
+SAVE_S = 120            # seconds between saves; every net is written together, and at idle
+SCALER_GROW = 1.1       # refit input/target scalers when the buffer has grown this much
 TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its trust
 TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
 HUMAN_TAG = "mp-"         # matches/mp-*: his multiplayer games (tools/mp_archive.py)
@@ -121,6 +123,30 @@ TRUST_RECENT = 2000     # trust is the CURRENT net's: older pairs scored weights
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
+
+
+def append_rows(obj, XS, XF, Y, M):
+    """Add a game's rows to obj.XS/XF/Y/M without copying the whole buffer: the
+    arrays are views of the first n rows of buffers with spare room (grown 25% at
+    a time). An array replaced from outside (load, adopt_keys' column insert) is
+    copied into fresh room once."""
+    new = {"XS": XS, "XF": XF, "Y": Y, "M": M}
+    n0, k = len(obj.Y), len(Y)
+    cap = getattr(obj, "_cap", None)
+    fits = cap is not None and all(
+        getattr(obj, a).base is cap[a] and cap[a].shape[0] >= n0 + k
+        and cap[a].shape[1:] == new[a].shape[1:] for a in new)
+    if not fits:
+        room = max(int((n0 + k) * 1.25), n0 + k + 1024)
+        cap = {}
+        for a in new:
+            cur = getattr(obj, a)
+            cap[a] = np.empty((room,) + cur.shape[1:], dtype=cur.dtype)
+            cap[a][:n0] = cur
+        obj._cap = cap
+    for a in new:
+        cap[a][n0:n0 + k] = new[a]
+        setattr(obj, a, cap[a][:n0 + k])
 
 
 def adopt_keys(obj, keys):
@@ -249,6 +275,7 @@ class Net:
         self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
         self.slow = copy.deepcopy(self.model)   # the averaged weights: these predict and export
         self.xm = self.xs = self.ym = self.ys = None
+        self.fit_n = 0
 
     def average(self):
         d = 0.5 ** (1.0 / EMA_HALF)
@@ -284,7 +311,10 @@ class Net:
         if lr is not None:
             for g in self.opt.param_groups:
                 g["lr"] = lr
-        self.fit_scalers(X, Y, M)
+        # Refit only as the buffer grows: one game barely moves the statistics.
+        if self.xm is None or len(self.xm) != X.shape[1] or len(X) >= SCALER_GROW * self.fit_n:
+            self.fit_scalers(X, Y, M)
+            self.fit_n = len(X)
         n_new = len(X) - new_from
         # half the replay from rows learned since a freeze, when there are any
         lean = 0 < recent_from < new_from
@@ -579,12 +609,13 @@ class FacHead:
         self.pairs = []
         self.batches = 0
 
-    def save(self, buffer=False):
+    def save(self, buffer=False, force=False):
         import torch
-        if self.full is None:
+        if self.full is None or not force:
             return
-        if buffer or getattr(self, "grown", False) or self.batches % BUFFER_EVERY == 0:
+        if buffer or getattr(self, "grown", False) or self.batches - getattr(self, "buf_at", -BUFFER_EVERY) >= BUFFER_EVERY:
             self.grown = False
+            self.buf_at = self.batches
             np.savez(OUT / (self.NAME + "_buffer.tmp.npz"), XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
                      state_keys=np.array(self.state_keys), batches=self.batches)
             replace_retry(OUT / (self.NAME + "_buffer.tmp.npz"), OUT / (self.NAME + "_buffer.npz"))
@@ -645,8 +676,7 @@ class FacHead:
             self.st = Net(XS.shape[1], len(TARGETS))
         else:
             new_from = len(self.Y)
-            self.XS, self.XF = np.vstack([self.XS, XS]), np.vstack([self.XF, XF])
-            self.Y, self.M = np.vstack([self.Y, Y]), np.vstack([self.M, M])
+            append_rows(self, XS, XF, Y, M)
         fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
         lr = lr_now(self.batches, fz_batch)
         rec["lr"] = lr
@@ -851,12 +881,18 @@ class Trainer:
         self.since_export = 0
         self.trust_pairs = {}
 
-    def save(self, buffer=None):
+    def save(self, buffer=None, force=False):
         """Model every call; the (large) buffer every BUFFER_EVERY batches or
         when asked. A game's used-decision list is dropped USED_KEEP_S after it
         was last touched: by then the game has finished and is in seen_dirs."""
         import torch
         now = time.time()
+        # On a clock, not every game. Everything is written together, so a kill
+        # loses at most SAVE_S of learning, re-read on restart.
+        if buffer is None and not force and now - getattr(self, "saved_at", 0.0) < SAVE_S:
+            self.dirty = True
+            return
+        self.saved_at, self.dirty = now, False
         for fp in [k for k, t in self.used_at.items() if now - t > USED_KEEP_S]:
             self.used.pop(fp, None)
             self.used_at.pop(fp, None)
@@ -865,10 +901,13 @@ class Trainer:
         tmp = OUT / "seen.json.tmp"
         tmp.write_text(json.dumps(seen))
         replace_retry(tmp, OUT / "seen.json")
+        for h in [self.fac, self.post] + list(self.heads.values()):
+            h.save(buffer=bool(buffer), force=True)
         if self.full is None:
             return
-        if buffer or getattr(self, "grown", False) or (buffer is None and self.batches % BUFFER_EVERY == 0):
+        if buffer or getattr(self, "grown", False) or self.batches - getattr(self, "buf_at", -BUFFER_EVERY) >= BUFFER_EVERY:
             self.grown = False
+            self.buf_at = self.batches
             np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
                      state_keys=np.array(self.state_keys), batches=self.batches)
             replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
@@ -1039,8 +1078,7 @@ class Trainer:
             self.st = Net(XS.shape[1], len(TARGETS))
         else:
             new_from = len(self.Y)
-            self.XS, self.XF = np.vstack([self.XS, XS]), np.vstack([self.XF, XF])
-            self.Y, self.M = np.vstack([self.Y, Y]), np.vstack([self.M, M])
+            append_rows(self, XS, XF, Y, M)
         t0 = time.time()
         fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
         lr = lr_now(self.batches, fz_batch)
@@ -1362,6 +1400,8 @@ def main(argv):
                 tr.save(buffer=True)
                 tr.status("stopped")
                 return 0
+            if not recs and getattr(tr, "dirty", False):
+                tr.save(force=True)
             tr.status("watching", live=n_live)
             time.sleep(POLL_S)
     except KeyboardInterrupt:

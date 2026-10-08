@@ -324,6 +324,30 @@ def window_sum(ev, f0, f1):
     return sum(c for f, c in ev if f0 < f <= f1)
 
 
+def ev_window(g, key, t, f0, f1):
+    """(events with f0 < frame <= f1, the sum of their second field) from g[key][t].
+    Asked per decision per horizon, so the team's events are sorted once per game
+    and a window is two bisects and a difference of running totals."""
+    cache = g.setdefault("_evw", {})
+    if (key, t) not in cache:
+        ev = sorted(g[key].get(t, []), key=lambda e: e[0])
+        run = [0]
+        for e in ev:
+            run.append(run[-1] + e[1])
+        cache[(key, t)] = ([e[0] for e in ev], ev, run)
+    fr, ev, run = cache[(key, t)]
+    i, j = bisect.bisect_right(fr, f0), bisect.bisect_right(fr, f1)
+    return ev[i:j], run[j] - run[i]
+
+
+def com_deaths(g, t):
+    """Frames our commanders died on, sorted, once per game."""
+    cache = g.setdefault("_comd", {})
+    if t not in cache:
+        cache[t] = sorted(df for df, unit, _x, _z in g["dead"].get(t, []) if unit.startswith(COMS))
+    return cache[t]
+
+
 def rate(s, f):
     a, b = s.at(f - FPM), s.at(f)
     if a is None or b is None or f < FPM:
@@ -359,16 +383,14 @@ def labels(g, t, f, site=None):
                 continue
             dm = pts[0] - pts[1]
             out[key] = (pts[2] - pts[3]) / dm if dm > 0 else None
-        mev = g["mexev"].get(t, [])
-        out["dMex"] = sum(d for ff, d in mev if f < ff <= f1)
+        out["dMex"] = ev_window(g, "mexev", t, f, f1)[1]
         d, r = g["dealt"].get(t), g["recv"].get(t)
         if d is not None and r is not None and d.at(f1) is not None and r.at(f1) is not None:
             out["lnD"] = math.log((d.at(f1) - d.at(f) + 1) / (r.at(f1) - r.at(f) + 1))
         else:
             out["lnD"] = None
-        out["kill"] = window_sum(g["killev"].get(t, []), f, f1)
-        lev = [e for e in g["lostev"].get(t, []) if f < e[0] <= f1]
-        out["lost"] = sum(e[1] for e in lev)
+        out["kill"] = ev_window(g, "killev", t, f, f1)[1]
+        lev, out["lost"] = ev_window(g, "lostev", t, f, f1)
         out["lostNear"] = (sum(e[1] for e in lev if near(site[0], site[1], e[2], e[3]))
                            if site else None)
         out["lostFar"] = None if site is None else out["lost"] - out["lostNear"]
@@ -382,13 +404,14 @@ def labels(g, t, f, site=None):
         y[h] = out
     # the pressure the state should already have seen: enemy kills of ours in
     # the 5 minutes BEFORE the decision
-    y["lostPre"] = sum(e[1] for e in g["lostev"].get(t, []) if f - 5 * FPM < e[0] <= f)
+    y["lostPre"] = ev_window(g, "lostev", t, f - 5 * FPM, f)[1]
     # the game's result for the deciding team: the longest horizon there is
     w = g.get("winners")
     y["won"] = (1 if g["allyof"].get(t) in w else 0) if w and t in g.get("allyof", {}) else None
     # our commander killed within COM_H minutes: in a 1v1 that is the game
     f1 = f + COM_H * FPM
-    lost = any(f < df <= f1 and unit.startswith(COMS) for df, unit, _x, _z in g["dead"].get(t, []))
+    cd = com_deaths(g, t)
+    lost = bisect.bisect_right(cd, f1) > bisect.bisect_right(cd, f)
     y["comLost"] = 1 if lost else (None if f1 > g["last"] else 0)
     # His ruling 2026-10-06: the game's end and the commander's death count,
     # discounted by how far ahead of this decision they came (e-folding
@@ -401,8 +424,7 @@ def labels(g, t, f, site=None):
         # ...only a death the game went on after: in 1v1 the commander's death IS
         # the loss, already in endV -- counted again it made a loss -3 to a win's
         # +1 (his 2026-10-06).
-        dfs = [df for df, unit, _x, _z in g["dead"].get(t, [])
-               if df > f and unit.startswith(COMS) and g["last"] - df > COM_END_F]
+        dfs = [df for df in cd[bisect.bisect_right(cd, f):] if g["last"] - df > COM_END_F]
         y["comLostD"] = math.exp(-(min(dfs) - f) / (COM_H * FPM)) if dfs else 0.0
     else:
         y["endV"] = None
