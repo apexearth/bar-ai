@@ -690,6 +690,8 @@ bool NanoBlockFull(int d)
 
 bool CopyWaived(int d)
 {
+	if (AirPlantOwed(d))
+		return true;
 	// NANOS FIRST, ALWAYS (his rule, restated 2026-09-30 after an overflow
 	// waiver skipped it: "make some nanoturrets around the factories before
 	// you even consider making a second factory -- you don't ever break it").

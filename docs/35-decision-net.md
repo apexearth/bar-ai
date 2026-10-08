@@ -123,6 +123,11 @@ restructure (enemy economy estimate).
   `com-withdraw`, `com-turret`/`com-turret-end`, `com-retreat`, `com-drop`,
   `com-death`; the C++ D-gun logs every shot as `apex: dgun-fire`.
 
+- `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
+  basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
+  `AirPlantOwed` raises the plant at once (a duel still waits for the income
+  bars) and waives the nanos-first copy rule for it (his call: more air
+  plants are fine under AIR, the count the net's). Prefix NNL.
 - `apex: nnplan` (`manager/brain/market/plannet.as`, 2026-10-07): the TEAM's
   way to win -- NORMAL, T3 (gantry gain, count and saving horizon x4; once a
   gantry stands, lower ground labs keep only the fodder share), MISSILE (silos,

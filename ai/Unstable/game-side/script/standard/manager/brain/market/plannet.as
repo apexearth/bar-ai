@@ -138,6 +138,54 @@ void PlanNetDecide()
 	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, NG_NAMES, w, p, gPlan));
 }
 
+// HOW MANY AIR PLANTS, while the plan is AIR (his 2026-10-07: more air plants
+// are fine there, the count the net's). The rule is one -- today's plant.
+const string NNL_PLANT = "airPlants,mInc,eInc,bankFill,foeAirM,foeFighterM,foeAAM,ourBombers,ourFighters,minute";
+int gAirPlantMax = 1;
+int gAirPlantNextAt = 0;
+bool gAirPlantHeader = false;
+
+void AirPlantNetDecide()
+{
+	if ((gPlan != NG_AIR) || (ai.frame < gAirPlantNextAt))
+		return;
+	gAirPlantNextAt = ai.frame + 30 * SECOND;
+	const bool explore = gNnExploreRolled && gNnExplore;
+	if (!gAirPlantHeader) {
+		gAirPlantHeader = true;
+		AiLog("apex: nnaplant-schema v1 state=" + NN_STATE + " aplant=" + NNL_PLANT + " opt=name,w,p opts=P1,P2,P4");
+	}
+	array<float> st;
+	NnState(null, st);
+	array<float> f;
+	f.insertLast(float(Air::Have(Air::gPlant1) + Air::Have(Air::gPlant2)));
+	f.insertLast(Eco::MInc());
+	f.insertLast(Eco::EInc());
+	f.insertLast((Eco::MStor() > 1.f) ? (Eco::MCur() / Eco::MStor()) : 0.f);
+	f.insertLast(aiEnemyMgr.GetEnemyCostFresh(RT::AIR));
+	f.insertLast(Air::FoeFighterM());
+	f.insertLast(Air::StrikeAACost());
+	f.insertLast(float(Air::Bombers()));
+	f.insertLast(float(Air::Fighters()));
+	f.insertLast(float(ai.frame) / 1800.f);
+	array<float> w(3, NE2_EPS);
+	w[0] = 1.f;
+	const float trust = NnHeadScore(NNL_ON, NNL_STATE, NNL_PLANT, NNL_S, NNL_O, NNL_H, NNL_XM, NNL_XS,
+		NNL_W1, NNL_B1, NNL_W2, NNL_B2, NNL_WO, NNL_BO, NNL_TRUST, st, f, w);
+	array<float> p(3);
+	const int c = EcoDraw(0, trust, w, p, explore ? 1.f : 0.f);
+	gAirPlantMax = (c == 0) ? 1 : ((c == 1) ? 2 : 4);
+	array<string> names = {"P1", "P2", "P4"};
+	AiLog(EcoLine("nnaplant", "P1", explore, trust, st, f, names, w, p, c));
+}
+
+// Another basic air plant is owed: the plan is AIR and we stand short of the net's count.
+bool AirPlantOwed(int d)
+{
+	return (gPlan == NG_AIR) && AirPlant(d) && (PlantTier(d) == 1)
+		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < gAirPlantMax);
+}
+
 // THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the
 // turret line our army dies to; each ally's attack squads gather short of it
 // (AttackTask), and when the team's gathered power beats the strongest group

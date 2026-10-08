@@ -229,4 +229,20 @@ const array<float> NNJ_WO = {};
 const float NNJ_BO = 0.f;
 const float NNJ_TRUST = 0.f;
 
+// the air plant count net (plannet.as)
+const bool NNL_ON = false;
+const string NNL_STATE = "";
+const int NNL_S = 0;
+const int NNL_O = 0;
+const int NNL_H = 0;
+const array<float> NNL_XM = {};
+const array<float> NNL_XS = {};
+const array<float> NNL_W1 = {};
+const array<float> NNL_B1 = {};
+const array<float> NNL_W2 = {};
+const array<float> NNL_B2 = {};
+const array<float> NNL_WO = {};
+const float NNL_BO = 0.f;
+const float NNL_TRUST = 0.f;
+
 }  // namespace Market
