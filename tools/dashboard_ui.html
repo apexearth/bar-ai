@@ -76,6 +76,7 @@
     <button data-tab="games" class="on">Games</button>
     <button data-tab="launch">Launch</button>
     <button data-tab="net">Net</button>
+    <button data-tab="progress">Progress</button>
     <button data-tab="deploy">Deploy</button>
   </nav>
   <div id="procwarn"></div>
@@ -176,6 +177,29 @@
       moved it, and its chance in the draw (a decision forced by a role or a panic shows "fixed" -- the draw never ran)</div>
     <div id="nn-samples"></div>
   </div>
+</section>
+
+<!-- ================= PROGRESS ================= -->
+<section id="tab-progress" class="tab">
+  <div class="card">
+    <b>Are we getting better against BARb?</b>
+    <span class="dim">Each cell is ours / theirs at that minute: 1.00 level, green ahead, red behind. Median over the games that lasted that long.</span>
+    <div style="margin-top:8px">
+      Since <select id="pg-since" onchange="loadProgress()">
+        <option value="20261008-1232">even random bonus (Oct 8 12:32)</option>
+        <option value="20261007">Oct 7</option>
+        <option value="2026100">all of October</option>
+      </select>
+      Games <select id="pg-all" onchange="loadProgress()">
+        <option value="0">normal only</option><option value="1">with discovery</option>
+      </select>
+      Group by <select id="pg-by" onchange="loadProgress()">
+        <option value="batch">batch</option><option value="day">day</option>
+      </select>
+      <button class="act" onclick="loadProgress()">Refresh</button>
+    </div>
+  </div>
+  <div id="pg-body"><div class="card dim">loading...</div></div>
 </section>
 
 <!-- ================= LAUNCH ================= -->
@@ -462,6 +486,7 @@ $("#nav").addEventListener("click", e => {
   if (b.dataset.tab === "games") loadGames();
   if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); renderAdvOpts(); }
   if (b.dataset.tab === "net") loadNet();
+  if (b.dataset.tab === "progress") loadProgress();
 });
 
 /* ---------- games ---------- */
@@ -1797,6 +1822,42 @@ async function netAct(act) {
       : act === "stop" ? "trainer stopped" : (r.output || "fresh net started; the old one is archived").trim()) : (r.error || r.output || "failed"), !r.ok);
   } catch (e) { toast(e.message, true); }
   setTimeout(loadNet, 600);
+}
+
+/* ---------- progress ---------- */
+const PG_METRICS = [["eco", "Metal income"], ["army", "Standing army"], ["trade", "Metal killed / lost"],
+                    ["dmg", "Damage dealt / taken"], ["energy", "Energy income"]];
+function pgCell(x) {
+  if (x === null || x === undefined) return "<td class='dim'>-</td>";
+  const v = Math.min(x, 9.99), t = Math.max(-1, Math.min(1, Math.log(v) / Math.log(2)));
+  const bg = t >= 0 ? "rgba(95,191,119," + (0.15 + 0.6 * t).toFixed(2) + ")"
+                    : "rgba(224,108,108," + (0.15 + 0.6 * -t).toFixed(2) + ")";
+  return "<td style='background:" + bg + ";text-align:right;font-family:var(--mono)'>" + v.toFixed(2) + "</td>";
+}
+async function loadProgress() {
+  if (!$("#tab-progress").classList.contains("on")) return;
+  const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value;
+  let d;
+  try { d = await api("/api/progress?" + q); }
+  catch (e) { setHTML($("#pg-body"), "<div class='card'><span class='dim'>" + esc(e.message) + "</span></div>"); return; }
+  const head = "<tr><th>Group</th><th>Games</th><th>W-L</th>" + d.minutes.map(m => "<th>min " + m + "</th>").join("") + "</tr>";
+  let html = "";
+  for (const [k, title] of PG_METRICS) {
+    html += "<div class='card'><b>" + title + "</b><table>" + head + d.groups.map(g =>
+      "<tr><td>" + esc(g.name) + "</td><td>" + g.n + "</td><td>" + g.w + "-" + g.l + "</td>" +
+      g[k].map(pgCell).join("") + "</tr>").join("") + "</table></div>";
+  }
+  html += "<div class='card'><b>Recent games</b> <span class='dim'>(newest first; metal income and army edge by minute)</span><table>" +
+    "<tr><th>Batch</th><th>Map</th><th>Bonus</th><th>Result</th><th>Min</th><th></th>" +
+    d.minutes.map(m => "<th>" + m + "</th>").join("") + "<th>Economy turn</th></tr>" +
+    d.games.map(g => {
+      const res = "<span class='" + (g.result === "W" ? "win" : (g.result === "L" ? "loss" : "dim")) + "'>" + g.result + "</span>";
+      const lead = "<td>" + esc(g.tournament.slice(4, 13)) + "</td><td>" + esc(g.map.slice(0, 18)) + "</td><td>" +
+        (g.bonus ?? "-") + "%" + (g.explore ? " <span class='dim'>disc</span>" : "") + "</td><td>" + res + "</td><td>" + g.minutes + "</td>";
+      return "<tr>" + lead + "<td class='dim'>eco</td>" + g.eco.map(pgCell).join("") + "<td class='dim'>" + esc(g.turn) + "</td></tr>" +
+             "<tr><td colspan=5></td><td class='dim'>army</td>" + g.army.map(pgCell).join("") + "<td></td></tr>";
+    }).join("") + "</table></div>";
+  setHTML($("#pg-body"), html);
 }
 
 // Open on the tab that was last used, not always Games.

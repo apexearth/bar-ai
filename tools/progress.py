@@ -184,9 +184,7 @@ def turn(series):
     return "eco best %.2f@%d -> %.2f@%d" % (best, i_best, eco[-1][1], eco[-1][0])
 
 
-def main(argv):
-    opt = lambda k, d=None: argv[argv.index(k) + 1] if k in argv else d
-    since = opt("--since", "20261008-1232")
+def collect(since="20261008-1232", include_explore=False, bonus=None, map_part=None):
     games = []
     for t in sorted(glob.glob(os.path.join(REPO, "tournaments", "*"))):
         if os.path.basename(t)[:len(since)] < since:
@@ -197,13 +195,41 @@ def main(argv):
             g = load(mdir)
             if g and not g.get("skip"):
                 games.append(g)
-    if "--all" not in argv:
+    if not include_explore:
         games = [g for g in games if not g["explore"]]
-    if opt("--bonus"):
-        lo, hi = (int(x) for x in opt("--bonus").split("-"))
+    if bonus:
+        lo, hi = (int(x) for x in bonus.split("-"))
         games = [g for g in games if g["bonus"] is not None and lo <= int(g["bonus"]) <= hi]
-    if opt("--map"):
-        games = [g for g in games if opt("--map").lower() in g["map"].lower()]
+    if map_part:
+        games = [g for g in games if map_part.lower() in g["map"].lower()]
+    return games
+
+
+def summary(games, by="batch", recent=60):
+    """The dashboard's view: per group and metric, medians at MINUTES; the latest games."""
+    groups = defaultdict(list)
+    for g in games:
+        groups[g["tournament"][:8] if by == "day" else g["tournament"][:13]].append(g)
+    out = {"minutes": list(MINUTES), "groups": [], "games": []}
+    for name, gs in sorted(groups.items()) + [("ALL", games)]:
+        row = {"name": name, "n": len(gs),
+               "w": sum(1 for g in gs if g["result"] == "W"), "l": sum(1 for g in gs if g["result"] == "L")}
+        for metric in ("eco", "energy", "army", "trade", "dmg"):
+            row[metric] = [med([g["series"][metric][m] for g in gs if m < len(g["series"][metric])]) for m in MINUTES]
+        out["groups"].append(row)
+    for g in games[-recent:][::-1]:
+        s = g["series"]
+        out["games"].append({k: g[k] for k in ("tournament", "match", "map", "bonus", "result", "minutes", "explore")}
+                            | {"eco": [s["eco"][m] if m < len(s["eco"]) else None for m in MINUTES],
+                               "army": [s["army"][m] if m < len(s["army"]) else None for m in MINUTES],
+                               "turn": turn(s)})
+    return out
+
+
+def main(argv):
+    opt = lambda k, d=None: argv[argv.index(k) + 1] if k in argv else d
+    since = opt("--since", "20261008-1232")
+    games = collect(since, "--all" in argv, opt("--bonus"), opt("--map"))
     kind = "all games" if "--all" in argv else "normal games (no discovery)"
     print("vs BARb, %s, since %s: %d games   edge = ours / theirs, 1.00 = level" % (kind, since, len(games)))
     if not games:
