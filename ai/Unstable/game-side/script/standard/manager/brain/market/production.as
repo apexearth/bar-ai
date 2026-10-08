@@ -1214,9 +1214,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		gNoOrder = "e-stall";
 		return null;
 	}
-	// A plant whose yard is jammed makes nothing until it clears (his
-	// 2026-10-07: "we keep making the same stuck unit"): every unit it adds
-	// stands in the same pen and paths against it.
+	// A plant whose yard is jammed makes nothing until it clears: every unit
+	// it adds stands in the same pen and paths against it.
 	if (Brain::YardSlot(fac.id) >= 0) {
 		gNoOrder = "yard-jammed";
 		return null;
