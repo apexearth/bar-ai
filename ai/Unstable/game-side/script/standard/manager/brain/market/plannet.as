@@ -37,9 +37,8 @@ bool PlanGreedy()
 	return (gPlan == NG_GREED) || (gPlan == NG_GREED_DEEP);
 }
 
-// The army we mean to hold. Greed (his 2026-10-07: below their army is fine,
-// the net decides how far) holds only while we SEE them passive -- blind or
-// under attack, the full army comes back.
+// The army we mean to hold. Greed may go below their army, and holds only
+// while we SEE them passive -- blind or under attack, the full army returns.
 float PlanArmyMult()
 {
 	if (gPlan == NG_RUSH)

@@ -800,8 +800,7 @@ bool ScoutsDie()
 	return (aiEnemyMgr.GetEnemyCostFresh(RT::AIR) > 0.f) && (FoeFighterM() > 0.f);
 }
 
-// THE WATCH (his 2026-10-07: scout their army to see the next attack coming;
-// in his 8v8 one human flew 270 air scouts and four of our six AIs none).
+// THE WATCH: scouting their army to see the next attack coming.
 // Worth the enemy army we cannot see now over the army horizon -- the radar's
 // surprise term -- shared by the scouts already up, twice that while blind.
 // Planes past the look are the stock scout task's.
