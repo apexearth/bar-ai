@@ -54,10 +54,9 @@ int WalkerFoot(int i)
 	return (Catalog::gFootX[i] > Catalog::gFootZ[i]) ? Catalog::gFootX[i] : Catalog::gFootZ[i];
 }
 
-// ...and from what the plants we own or have ordered can MAKE (his
-// 2026-10-07: "size by what the factories behind that opening can make"):
-// a gantry ordered widens the streets before the base fills around them,
-// not after its first experimental is penned.
+// ...and from what the plants we own or have ordered can MAKE: a gantry
+// ordered widens the streets before the base fills around them, not after
+// its first experimental is penned.
 float AisleW()
 {
 	if ((gAisle > 0.f) && (gAisleStamp == Market::gOwnStamp) && (ai.frame < gAisleAt + 10 * SECOND))
