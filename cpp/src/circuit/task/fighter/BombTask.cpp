@@ -6,6 +6,7 @@
  */
 
 #include <algorithm>
+#include <unordered_map>
 #include "task/fighter/BombTask.h"
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
@@ -298,6 +299,8 @@ static float SqDistToSegment2D(const AIFloat3& p, const AIFloat3& a, const AIFlo
 	return ex * ex + ez * ez;
 }
 
+static float PassDamage(CCircuitDef* bdef, CCircuitDef* edef);
+
 void CBombTask::FindTarget()
 {
 	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
@@ -369,6 +372,64 @@ void CBombTask::FindTarget()
 			return !callback->IsFriendlyUnitsIn(pos, allyAoe);
 		};
 	}
+
+	// What a dead building costs them: its metal, the stream it made, the build
+	// power it was (see the candidate loop below for each term's reasoning).
+	const float ecoH = circuit->GetTunable("apex_bomb_eco_h", 300.f);
+	auto valueOf = [&](CEnemyInfo* e, CCircuitDef* ed, float hp) {
+		float v = ed->GetCostM();
+		v += ed->GetMakeE() * (ecoH / 70.f);
+		v += (ed->GetMakeM() + ed->GetConvertCapacity() * ed->GetConvertRatio()) * ecoH;
+		v += ed->GetBuildSpeed() * BuildMetalRate(circuit) * ecoH;
+		if (e->IsBeingBuilt()) {
+			v *= hp / std::max(ed->GetHealth(), 1.f);
+		}
+		return v;
+	};
+	// THE BLAST, NOT THE BUILDING (apexearth 2026-10-07: wind, converters, a
+	// fusion, an afus -- "look for bigger prizes"). A bomb kills everything
+	// packed under it, and farms are packed, so one wind priced alone read as
+	// too small to bomb while twenty under one salvo are the best target on
+	// the map. Every visible enemy building is filed once, by the share of it
+	// one salvo destroys, in cells the size of the blast; a candidate adds the
+	// neighbours within the blast of it.
+	const float blastR = std::max(trueAoe, float(SQUARE_SIZE * 4));
+	struct BlastHit { CEnemyInfo* e; AIFloat3 pos; float val; };
+	std::unordered_map<long long, std::vector<BlastHit>> blast;
+	auto cellOf = [blastR](const AIFloat3& p, int dx, int dz) {
+		return ((long long)(int(p.x / blastR) + dx) << 32) ^ (unsigned int)(int(p.z / blastR) + dz);
+	};
+	for (auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		CCircuitDef* ed = e->GetCircuitDef();
+		if (e->IsHidden() || (ed == nullptr) || ed->IsMobile()) {
+			continue;
+		}
+		const float hp = std::max(e->GetHealth(), 1.f);
+		const float kill = std::min(1.f, PassDamage(cdef, ed) / hp);
+		const float v = valueOf(e, ed, hp) * kill;
+		if (v > 0.f) {
+			blast[cellOf(e->GetPos(), 0, 0)].push_back({e, e->GetPos(), v});
+		}
+	}
+	auto blastAround = [&](const AIFloat3& p, CEnemyInfo* self) {
+		float sum = 0.f;
+		const float sq = blastR * blastR;
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				auto it = blast.find(cellOf(p, dx, dz));
+				if (it == blast.end()) {
+					continue;
+				}
+				for (const BlastHit& h : it->second) {
+					if ((h.e != self) && (h.pos.SqDistance2D(p) <= sq)) {
+						sum += h.val;
+					}
+				}
+			}
+		}
+		return sum;
+	};
 
 	CEnemyInfo* curTarget = GetTarget();  // exempt from the revisit discount below
 	SetTarget(nullptr);  // make adequate enemy->GetTasks().size()
@@ -496,7 +557,7 @@ void CBombTask::FindTarget()
 			// reactor beats an extractor and a near target beats a far one of
 			// equal worth. The floor stops a bomber committing to anything under
 			// apex_bomb_min_value metal while something better exists.
-			float value = (edef != nullptr) ? edef->GetCostM() : 0.f;
+			float value = (edef != nullptr) ? valueOf(enemy, edef, health) : 0.f;
 			// apex: KILLING ENERGY IS WORTH MORE THAN THE BUILDING (apexearth
 			// 2026-08-29: "Killing energy economy is even better than
 			// metal"). A dead generator costs them its metal PLUS the stream
@@ -505,18 +566,11 @@ void CBombTask::FindTarget()
 			// its price at the 300s default, doubling it against any tower of
 			// equal armor. Derived from the def's own make rate; no class
 			// list.
-			if (edef != nullptr) {
-				const float ecoH = circuit->GetTunable("apex_bomb_eco_h", 300.f);
-				value += edef->GetMakeE() * (ecoH / 70.f);
-				// THE OTHER TWO WAYS A BUILDING FEEDS THEM, in the same
-				// currency (apexearth: "find where the enemy converters, build
-				// power, energy production is and bomb that"). A T1 converter
-				// costs ONE metal, so cost alone priced their whole conversion
-				// farm at nothing. Build power is a metal rate too.
-				value += (edef->GetMakeM()
-						+ edef->GetConvertCapacity() * edef->GetConvertRatio()) * ecoH;
-				value += edef->GetBuildSpeed() * BuildMetalRate(circuit) * ecoH;
-			}
+			// THE OTHER TWO WAYS A BUILDING FEEDS THEM, in the same
+			// currency (apexearth: "find where the enemy converters, build
+			// power, energy production is and bomb that"). A T1 converter
+			// costs ONE metal, so cost alone priced their whole conversion
+			// farm at nothing. Build power is a metal rate too.
 			// A NANOFRAME IS NOT THE BUILDING. GetCostM prices the finished
 			// def, and a frame's low health then made it the best-looking
 			// target on the map -- apexearth, watching a raid: "we bombed the
@@ -525,9 +579,7 @@ void CBombTask::FindTarget()
 			// full health, which also kills the low-health score inflation
 			// (value and health shrink together). The finished AFUS beside it
 			// keeps its full price and its death blast.
-			if ((edef != nullptr) && enemy->IsBeingBuilt()) {
-				value *= health / std::max(edef->GetHealth(), 1.f);
-			}
+			value += blastAround(ePos, enemy);
 			const float sqDist = pos.SqDistance2D(ePos);
 			const float minValue = circuit->GetTunable("apex_bomb_min_value", 200.f);
 			const float distScale = circuit->GetTunable("apex_bomb_dist_scale", 4000.f);
