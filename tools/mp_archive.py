@@ -2,7 +2,7 @@
 """His multiplayer games become training games.
 
     python tools/mp_archive.py            # one pass: archive new games, build what has a replay
-    python tools/mp_archive.py --watch    # every 60 s, while no windowed game of his is running
+    python tools/mp_archive.py --watch    # archive only, every 30 s while no game of his is running
 
 1. ARCHIVE. Our AI writes its decisions to data/AI/Skirmish/<short>/<version>/
    apex-tN.log, and the next game overwrites them (one .prev.log is kept). A
@@ -38,8 +38,10 @@ MARK = (b"apex: nn-schema", b"apex: nn t=")
 
 def his_game_running():
     try:
+        # the BAR lobby is a spring.exe too, started with --menu; a game is not
         out = subprocess.run(["powershell", "-NoProfile", "-Command",
-                              "(Get-Process spring -ErrorAction SilentlyContinue | Measure-Object).Count"],
+                              "(Get-CimInstance Win32_Process -Filter \"Name='spring.exe'\" | "
+                              "Where-Object { $_.CommandLine -notmatch '--menu' } | Measure-Object).Count"],
                              capture_output=True, text=True, timeout=30).stdout.strip()
         return out not in ("", "0")
     except (OSError, subprocess.SubprocessError):
@@ -143,10 +145,15 @@ def main(argv):
     if "--watch" not in argv:
         one_pass(env)
         return 0
+    # Watching only archives: the next game overwrites the logs, and a replay
+    # build is a long headless playback that would compete with his next game.
     while True:
         if not his_game_running():
-            one_pass(env)
-        time.sleep(60)
+            state = load_state()
+            ARCH.mkdir(parents=True, exist_ok=True)
+            archive(env, state)
+            STATE.write_text(json.dumps(state))
+        time.sleep(30)
 
 
 if __name__ == "__main__":
