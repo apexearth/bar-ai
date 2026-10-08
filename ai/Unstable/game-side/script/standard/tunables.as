@@ -1794,7 +1794,7 @@ const float TUNE_LAG_STEP = 0.34f;
 // [ratio] -- Each personality trait (eco, def, army, t3, air, nuke, lrpc) is
 //   rolled log-uniform in [1, 1+s] per instance -- up only, never below
 //   neutral; 0 = every instance identical (the A/B arm). See docs/27.
-const float TUNE_PERSONA_SPREAD = 0.35f;
+const float TUNE_PERSONA_SPREAD = 0.f;
 
 // [metal/s] -- In-flight build requests allowed per this much metal income
 //   (min 2) -- the governor on parallel sites.

@@ -192,21 +192,15 @@ def rand_weight(row):
     rule = row.get("rule")
     if row.get("explore") and rule and opts[ci].get("name") not in (None, rule):
         return RAND_W_MAX
-    # A builder pick a per-game random roll MOVED: the logged value is the
-    # market's with the personality in and the net/explorer multiplier (nm)
-    # out. The explorer's multiplier moved it when value x nm tops at the pick
-    # and value alone does not; the personality (rolled every game, his and
-    # ours) moved it when value tops at the pick and value / persona does not.
-    if rule is None and "nm" in opts[ci]:
+    # A builder pick the explorer's random kind multipliers MOVED: the logged
+    # value leaves the multiplier (nm) out, so it moved the pick when value x nm
+    # tops at the pick and value alone does not.
+    if row.get("explore") and rule is None and "nm" in opts[ci]:
         def top(vals):
             return max(range(len(vals)), key=lambda i: vals[i])
         val = [num(o.get("value", 0)) for o in opts]
-        if row.get("explore"):
-            moved = [v * max(num(o.get("nm", 1)), 1e-6) for v, o in zip(val, opts)]
-            if top(moved) == ci and top(val) != ci:
-                return RAND_W_MAX
-        bare = [v / max(num(o.get("persona", 1)), 1e-6) for v, o in zip(val, opts)]
-        if top(val) == ci and top(bare) != ci:
+        moved = [v * max(num(o.get("nm", 1)), 1e-6) for v, o in zip(val, opts)]
+        if top(moved) == ci and top(val) != ci:
             return RAND_W_MAX
     return None
 

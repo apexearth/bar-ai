@@ -1038,7 +1038,7 @@ GROUPS = [
                  ("TUNE_PERSONA_SPREAD", "how different two instances may be: "
                   "each of the seven personality traits (eco, defence, army, "
                   "T3, air, nukes, LRPC) rolls within 1..1+s, up only, so the "
-                  "worst roll is the neutral AI; 0 makes every AI identical"),
+                  "worst roll is the neutral AI; 0 makes every AI identical -- OFF by default since 2026-10-07"),
                  ("TUNE_NN_BLEND", "the trained value net (Net tab) steers "
                   "more: options it expects to grow the economy and win "
                   "trades get a bigger share of the draw. 0 = it only watches; "

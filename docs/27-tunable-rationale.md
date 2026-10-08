@@ -1693,7 +1693,15 @@ ring scan was written around had never once run: measured rays=24/24 with the
 enemy on one bearing, which is the ring closing on itself that its own comment
 warns of.
 
-### `TUNE_PERSONA_SPREAD` = 0.35f
+### `TUNE_PERSONA_SPREAD` = 0.f
+
+OFF since 2026-10-07, his call: personality made us lose more often in his
+games, and a per-game roll the nets cannot see (army share, air eagerness,
+the gantry/silo/LRPC wants) is noise to them -- the same game state answered
+differently game to game. The spontaneity he wants is strategic (whole
+plans: LRPC, nukes, mass air, T3 rush, early all-in, greed, turtle) and comes
+from the plan net's draw, a logged decision the net learns from. Was 0.35:
+
 
 apexearth 2026-09-12: "adding personality to each unique AI randomly. Simple
 high level modifiers affecting an AI's interest in making certain things --
