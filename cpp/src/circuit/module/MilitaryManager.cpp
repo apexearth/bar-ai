@@ -845,6 +845,33 @@ void CMilitaryManager::MakeDefence(int cluster, const AIFloat3& pos)
 	static_cast<CMilitaryScript*>(script)->MakeDefence(cluster, pos);  // DefaultMakeDefence
 }
 
+void CMilitaryManager::NoteSpotWanted(const AIFloat3& pos, int frame)
+{
+	for (auto& s : spotWanted) {
+		if (s.first.SqDistance2D(pos) < SQUARE(500.f)) {
+			s.second = frame;
+			return;
+		}
+	}
+	if (spotWanted.size() < 16) {
+		spotWanted.push_back(std::make_pair(pos, frame));
+	}
+}
+
+int CMilitaryManager::GetSpotWantedCount()
+{
+	const int frame = circuit->GetLastFrame();
+	spotWanted.erase(std::remove_if(spotWanted.begin(), spotWanted.end(),
+			[frame](const std::pair<AIFloat3, int>& s) { return frame - s.second > FRAMES_PER_SEC * 20; }),
+			spotWanted.end());
+	return (int)spotWanted.size();
+}
+
+AIFloat3 CMilitaryManager::GetSpotWantedAt(int i) const
+{
+	return ((i >= 0) && (i < (int)spotWanted.size())) ? spotWanted[i].first : AIFloat3(-1.f, 0.f, -1.f);
+}
+
 bool CMilitaryManager::AskJoinFight(const AIFloat3& at, float travelS, float allyPow, float foePow, float ownPow, int leaderId)
 {
 	return static_cast<CMilitaryScript*>(script)->JoinFight(at, travelS, allyPow, foePow, ownPow, leaderId);

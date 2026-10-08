@@ -51,6 +51,8 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPowerNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetAttackPowerNear), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetGatheredPower() const", asMETHOD(CMilitaryManager, GetGatheredPower), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetEnemyInflNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetEnemyInflNear), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetSpotWantedCount()", asMETHOD(CMilitaryManager, GetSpotWantedCount), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetSpotWantedAt(int) const", asMETHOD(CMilitaryManager, GetSpotWantedAt), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
 
 	// NOTE: Config's "quota" scattered across CMilitaryManager, CEnemyManager, CThreatMap, CFactoryManager, CSetupManager

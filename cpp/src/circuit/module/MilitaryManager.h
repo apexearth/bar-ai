@@ -229,6 +229,13 @@ public:
 	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
 	float GetGatheredPower() const;
 	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
+	// apex: where a long gun holds its ring waiting for someone to see its target
+	void NoteSpotWanted(const springai::AIFloat3& pos, int frame);
+	int GetSpotWantedCount();
+	springai::AIFloat3 GetSpotWantedAt(int i) const;
+private:
+	std::vector<std::pair<springai::AIFloat3, int>> spotWanted;
+public:
 	springai::AIFloat3 focusPos;
 	float focusR = 0.f;
 	float focusPow = 0.f;

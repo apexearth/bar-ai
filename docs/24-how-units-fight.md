@@ -89,7 +89,9 @@ this file wins and the other is stale.
   walking up close get creamed.
 - **Long-range siege units (Starlight, Ambassador, Arbiter) siege enemy
   bases, and stay safe while doing it** (2026-10-08). They are excellent
-  for sieging; they are not home turrets.
+  for sieging; they are not home turrets. An Ambassador outranges a lot of
+  T2 turrets: kept safely at range, with scouts showing it what to shoot,
+  it does not need to die.
 - **Long guns must not run deep into enemy territory to fight from close
   up.** Hounds and rocket bots walking into turrets is the mistake.
 - **Lower-HP units have to be much more careful than high-HP units.**

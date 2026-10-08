@@ -419,6 +419,22 @@ void LookWatch()
 // on purpose: when it completes (or the scout dies) the unit goes idle and
 // stock scouting takes it back.
 int gNextOverflight = 0;
+int gSpotLogAt = 0, gSpotSeen = 0, gSpotPeak = 0;
+
+void SpotCensus()
+{
+	if ((ai.frame % (5 * SECOND)) != 0)
+		return;
+	const int n = aiMilitaryMgr.GetSpotWantedCount();
+	if (n > 0)
+		++gSpotSeen;
+	if (n > gSpotPeak)
+		gSpotPeak = n;
+	if ((ai.frame >= gSpotLogAt) && (gSpotSeen > 0)) {
+		gSpotLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: spot-wanted t=" + ai.teamId + " now=" + n + " samples=" + gSpotSeen + " peak=" + gSpotPeak);
+	}
+}
 
 void ScoutOverflight()
 {
@@ -472,6 +488,8 @@ void ScoutOverflight()
 	AIFloat3 base = Front::FoeAnchor();
 	if (!OnMap(base))
 		base = foe;
+	// The first scouts light what a long gun is holding its ring for.
+	const int spots = aiMilitaryMgr.GetSpotWantedCount();
 	int sent = 0;
 	string firstName = "";
 	const array<int>@ ownedS = Market::OwnedDefs();
@@ -490,11 +508,17 @@ void ScoutOverflight()
 			if ((us[i] is null) || (us[i].CmdQueueSize() > 0)
 				|| (int(us[i].id) == gLookScout))
 				continue;
-			const AIFloat3 at = ((sent % 2) == 0) ? foe : base;
-			const float ang = (float((ai.frame / SECOND) % 8) + float(sent) * 2.4f) * 0.785398f;
-			AIFloat3 over = at + AIFloat3(cos(ang), 0.f, sin(ang)) * (500.f * float(1 + (sent / 2) % 3));
-			if (!OnMap(over))
-				over = at;
+			AIFloat3 over;
+			if (sent < spots) {
+				over = aiMilitaryMgr.GetSpotWantedAt(sent);
+			} else {
+				const int k = sent - spots;
+				const AIFloat3 at = ((k % 2) == 0) ? foe : base;
+				const float ang = (float((ai.frame / SECOND) % 8) + float(k) * 2.4f) * 0.785398f;
+				over = at + AIFloat3(cos(ang), 0.f, sin(ang)) * (500.f * float(1 + (k / 2) % 3));
+				if (!OnMap(over))
+					over = at;
+			}
 			us[i].CmdMoveTo(over);
 			if (sent == 0) {
 				Cover(us[i], over, "overflight");
@@ -504,7 +528,7 @@ void ScoutOverflight()
 		}
 	}
 	if (sent > 0)
-		AiLog("apex: overflight " + firstName + " sent=" + sent
+		AiLog("apex: overflight " + firstName + " sent=" + sent + " spot=" + ((spots < sent) ? spots : sent)
 			+ " army=" + int(foe.x) + "," + int(foe.z) + " base=" + int(base.x) + "," + int(base.z));
 }
 
@@ -527,6 +551,7 @@ void Update()
 	if (Factory::ElectorTeamId() == ai.teamId)
 		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }
 	Intercept();
+	SpotCensus();
 
 	// BOMBER DOCTRINE, every player, every tick: bombers never hunt armies.
 	// ANTI_STAT keeps static economy, builders and commanders as targets; the
