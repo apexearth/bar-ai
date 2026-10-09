@@ -293,6 +293,22 @@ const array<float> NNS_WO = {};
 const float NNS_BO = 0.f;
 const float NNS_TRUST = 0.f;
 
+// the timing-window strike net (military/nnstrike.as)
+const bool NNB_ON = false;
+const string NNB_STATE = "";
+const int NNB_S = 0;
+const int NNB_O = 0;
+const int NNB_H = 0;
+const array<float> NNB_XM = {};
+const array<float> NNB_XS = {};
+const array<float> NNB_W1 = {};
+const array<float> NNB_B1 = {};
+const array<float> NNB_W2 = {};
+const array<float> NNB_B2 = {};
+const array<float> NNB_WO = {};
+const float NNB_BO = 0.f;
+const float NNB_TRUST = 0.f;
+
 // the escort-cap net (escnet.as)
 const bool NNY_ON = false;
 const string NNY_STATE = "";

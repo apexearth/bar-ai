@@ -131,7 +131,8 @@ restructure (enemy economy estimate).
   yields it): squads gather short of the group, go once gathered power beats
   its influence (`apex: hunt go`), and the focus follows the group every 4 s
   until it is lost for 3 looks or 180 s pass (`apex: hunt start` / `hunt end
-  why=gone|time`). Rule NO; discovery games draw half uniform. Label: every
+  why=gone|time`). Rule NO; an untrusted head mixes `NnHeadFlat` in discovery
+  games, like every other head. None while a strike holds the focus. Label: every
   decision, either pick, is watched 180 s -- their metal we killed within
   1200 of the tracked group, ours lost there, and half of every death's metal
   credited (+) or debited (-) by who holds that ground (net influence at the
@@ -147,6 +148,27 @@ restructure (enemy economy estimate).
   30 s clock of their file. The flat base itself stays a ceiling on rez bots
   and on `EscortShortfall`: it came from 564 rez bots taking his 4v4 to 0.65x
   sim speed (c4a489ac), a frame-budget contract, not a prior.
+- `apex: nnstrike` (`manager/military/nnstrike.as`, 2026-10-08): TIMING
+  WINDOWS, his priority #8 -- NO (the rule, today's play) or STRIKE, every 30 s
+  (staggered by team) when we have attack squads, none while a hunt or a strike
+  holds the focus. `apex: window` (every 12 s per AI, staggered) is the census
+  the head reads, all from what a player sees: their seen armed ground metal,
+  its metal-weighted distance from their start box over the base-to-base
+  distance (`foeAwayF`) and the part within a quarter of it (`foeHomeM`); their
+  biggest group's metal, distance from their base and from ours, forward
+  fraction; our kills, our losses, our army's losses and their army seen dying
+  (any killer) over the last 90 s (10 s bins fed by both death hooks);
+  ln(our AIs' army / their seen army) and / their believed army (foemem), the
+  believed ratio's 60 s trend and its gap below its 5-minute peak; the top tier
+  of their seen army and seconds since it rose. STRIKE takes this AI's
+  AttackTask focus exactly as a hunt does (`TeamPush` yields it and posts 0
+  gathered power): the target is their richest economy cell (enemy group by
+  economy metal, structure centroid if none known), squads gather short of it
+  and go once gathered power beats its influence (`apex: strike go`); when a
+  cell is gone the focus moves to the nearest other cell, until 180 s pass,
+  no cell is known or our attack power is 0 (`apex: strike start` / `strike
+  end why=time|gone|army kill= lost=`). Shared labels only (economy, losses,
+  edges vs the enemy, endV, endFast). Prefix NNB. `apex: strike-stat` (60 s).
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income
