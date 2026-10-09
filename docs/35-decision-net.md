@@ -305,8 +305,17 @@ edges from the last whole minute before the decision to the last before f+h
 level: `endV` (result discounted from the decision, END_TAU 10 min) and
 `endFast` = +-e^(-game minutes / 30), the result discounted from the game's
 START, so a win at 25 min beats one at 55 and a loss held off to 55 costs
-less; endV cannot see that for a decision equally far from either end. Both
-masked for a time-capped game. Targets are only appended: a trainer finding a
+less; endV cannot see that for a decision equally far from either end.
+
+A time-capped game (`winners=` empty, 2026-10-09) was STOPPED, not ended: a
+horizon window that runs past its last minute is null, never cut at the cap.
+Its result is where it stood (`capped_result`): 0.5 x tanh of the
+mean of ln(our/their metal produced so far), the army edge and the extractor
+edge at the end -- so a loss held to a draw counts -- giving endV, endFast and
+won = 0.5 + 0.5 x that. comLostD there is labelled only where 9 minutes were
+played after the decision, and never in a 1v1 (his death IS the loss, already
+in endV; it was 0 on every row). The trainer clips mWaste/eWaste to [0, 1].
+Targets are only appended: a trainer finding a
 saved net and buffer with fewer outcomes grows masked columns and
 zero-weighted outputs and logs it (`adopt_targets`), never a reset.
 `won`/`endV`/`endFast`/`comLostD` are one value per game, so they are out of
@@ -379,14 +388,37 @@ game's own files (write dirs `matches/_engine*`, `runtime/engine-w*`: the
 gadget log plus each AI's `apex-t*.log`, flushed every frame). A decision is
 trainable once its 5 minutes have been played; at 150 matured decisions the
 batch is predicted first (the accuracy point, always unseen data), then trained
-on, each minibatch mixed with as many old rows (replay, so it does not drift
-toward the loudest game). Finished games give their remainder; a game is keyed
-by its first records, so nothing counts twice. Dropout 0.1; every 40 batches a
-partial reset (weights x0.8 + fresh x0.2) keeps it able to learn. Two nets:
+on: STEPS_PER_GAME (50) minibatches of 512 rows, up to 128 of them new and the
+rest replay -- half by recency (row age exponential, e-folding at 5% of the
+buffer), half from everything with each script version weighted by how many
+versions back it played (untagged rows 0.1). Finished games give their remainder; a game is keyed by its first
+records, so nothing counts twice. Dropout 0.1; every 40,000 rows learned (per
+net, not per batch) a partial reset (weights x0.8 + fresh x0.2) keeps it able
+to learn. Two nets:
 FULL (state + decision) and STATE (state only); full minus state is the
 evidence that decisions carry learnable value. A live game is re-read at most
 once a minute; logs without the v3 schema (his own build) are skipped after one
 look. State in `runtime/nn/`.
+
+**Buffers** (2026-10-09, `tools/nnstore.py`): `runtime/nn/shards/<net>_rows/`,
+append-only -- a save writes only the rows since the last one plus a small
+`index.json` (the old `buffer.npz` was rewritten whole every ~10 batches,
+~300 GB/h, and filled C: on 10-09). XF float16 (XS is its first `ns` columns,
+not stored), Y float16, M uint8, and a tag per row: the game's script version
+(`apex: version ... script=`, `old` before 2026-10-08) and regime (map | team
+sizes | minute cap). ~517 bytes a builder row instead of 1,567. A buffer keeps
+the newest `REGIME_KEEP` rows per regime on load (`BARAI_NN_REGIME_KEEP`,
+10M: nothing dropped today); `--compact` rewrites without the rest. A legacy
+`*buffer.npz` is migrated once, streaming, its rows tagged from metrics.jsonl
+(`--migrate`), and renamed `*.npz.migrated` -- deleting those is a disk call.
+`python tools/nnstore.py runtime/nn/shards/builder_rows` shows the mix.
+
+**Snapshots and evaluation**: every 6 h the exported weights are copied to
+`runtime/nn/snapshots/<stamp>/`. `tools/nneval.py plan --a snapshot:<stamp>
+--b blend0` prints the lanes, installs and tournaments of a paired held-out
+evaluation (no exploration, bonus 0, fixed seeds, both seats); `nneval.py
+report A B` judges it pair by pair on edge changes at minutes 10/15/20 and
+time to loss, not wins.
 
 ## The net plays (`apex_nn_blend`)
 
@@ -404,12 +436,25 @@ the vote is in LOG space with a per-kind TRUST: each option keeps the group's
 mean log value, and its deviation from it is the market's at trust 0 and the
 net's verdict (clamped +-3) at trust 1 -- his point that market prices are so
 lopsided between kinds (nano 15, tech 1.5, assist 0.19) that the old capped
-multiplier could never swing them. Trust per kind is EARNED: on unseen games,
-the correlation of what the net says the decision adds (FULL minus STATE
-prediction of the objective) with what it actually added; 0 under 200
-decisions, over the most recent 2,000 pairs only (TRUST_RECENT: older pairs
-scored weights since replaced -- the commander net read -0.22 on its oldest
-quarter and +0.17 on its newest); exported as NNW_TRUST; apex_nn_blend scales it. The ETA ladder,
+multiplier could never swing them. Trust per kind (per head) is EARNED, kind 2
+since 2026-10-09 (`NN_TRUST_KIND = 2` in the exported weights; the repo stub
+says 0; the game side is to read trust as 0 below 2 -- not in the scripts
+yet): on a game's first, unseen
+batch, every CHANCE row (logged odds below 0.95, or an explorer's override)
+scores d = FULL(chosen) - FULL(rule) against the realized outcome -
+FULL(rule), both in OBJECTIVE units, weighted 1/p (cap 20). The rule is the
+head's rule option, or for the builder and factory the top-valued priced
+option. Trust is the lower end (2.5th percentile) of a game-clustered
+bootstrap of their correlation PARTIAL on FULL(rule) (both carry it, which
+alone made them correlate), less the net's own placebo reading when positive,
+floored at 0; nothing under 200 chance rows
+or 5 games; the most recent 2,000 pairs (older pairs scored weights since
+replaced). The old trust -- FULL minus STATE against outcome minus STATE --
+read +0.1..0.3 on rows where the pick WAS the rule: it measured the two nets
+disagreeing. metrics.jsonl carries `placebo` (the new statistic on
+rule-following rows, an option not taken standing in for the chosen one: it
+should read ~0) and `placebo_old` (the old statistic on the same rows).
+apex_nn_blend scales trust. The ETA ladder,
 which ranked economy options by time to target alone, divides that time by
 e^(trust x verdict). His rulings stay rules. The whole list is re-sorted
 because `DrawWeights` takes the first of each category. OBJECTIVE

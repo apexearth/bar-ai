@@ -21,7 +21,9 @@ minutes.py reads, for the DECIDING team, at +1/+3/+5 minutes:
                   f+h, progress.py's edges: did the game move our way
   endFast         the result discounted from the game's start (GAME_TAU)
 
-A horizon past the end of the game is null. The summary checks the instrument:
+A horizon past the last logged minute is null, except in a game that ENDED (a
+winner), where it runs to the end; a time-capped game (winners= empty) was
+stopped, not ended, so its late windows stay null. The summary checks the instrument:
 nn lines against exec lines per team, so a decision path that writes no record
 shows up as coverage below 100%.
 """
@@ -165,13 +167,43 @@ def fingerprint(g):
     return "|".join("%d.%d.%d" % k for k in first)
 
 
+def script_text(path):
+    """The start script: script.txt in a match dir, _script.txt in a running write dir."""
+    for name in ("script.txt", "_script.txt"):
+        try:
+            with open(os.path.join(path, name), encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        except OSError:
+            continue
+    return ""
+
+
+def script_regime(path):
+    """'<map>|<team sizes>|<cap>' (e.g. 'Comet Catcher Remake 1.8|1v1|20m'): which
+    kind of game a row came from, so a buffer can be capped per regime."""
+    txt = script_text(path)
+    mp = re.search(r"MapName=([^;\n]+);", txt)
+    if not mp:
+        return None
+    per = {}
+    for m in re.finditer(r"\[team\d+\]\s*\{(.*?)\}", txt, re.S | re.I):
+        a = re.search(r"allyteam=(\d+);", m.group(1), re.I)
+        if a:
+            per[int(a.group(1))] = per.get(int(a.group(1)), 0) + 1
+    cap = re.search(r"dev_maxgameminutes=(\d+);", txt, re.I)
+    return "%s|%s|%s" % (mp.group(1).strip(), "v".join(str(n) for n in sorted(per.values(), reverse=True)) or "?",
+                         "%sm" % cap.group(1) if cap and int(cap.group(1)) > 0 else "nocap")
+
+
+VERSION = re.compile(r"apex: version t=(\d+) .*?script=(.+?)\s*$")   # plannet.as VersionBanner
+
+
 def script_bonus(path):
     """Per engine team (our bonus, the highest enemy bonus), as multiplier - 1,
     read from the match's start script -- what the live state carries as
     ourBonus/foeBonus since 2026-10-08, filled in for games logged before."""
-    try:
-        txt = open(os.path.join(path, "script.txt"), encoding="utf-8", errors="replace").read()
-    except OSError:
+    txt = script_text(path)
+    if not txt:
         return {}
     hc, ally = {}, {}
     for m in re.finditer(r"\[team(\d+)\]\s*\{(.*?)\}", txt, re.S | re.I):
@@ -264,10 +296,16 @@ def parse(path, files=None):
     defsite_done = {}   # (team, decision frame) -> the trade at the chosen gun site (apex: nndefsite-done)
     deftype_done = {}   # ...and at the chosen gun class's site (apex: nndeftype-done)
     state_keys, opt_keys = None, None
+    versions = {}   # engine team -> the script version its AI logged (none before 2026-10-08)
     lastw = lastd = 0
     gadget = []
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
+            if "apex: version t=" in ln:
+                mv = VERSION.search(ln)
+                if mv:
+                    versions[int(mv.group(1))] = mv.group(2)
+                continue
             if "apex: nnreinf-done t=" in ln:
                 mr = REINF_DONE.search(ln)
                 if mr:
@@ -413,6 +451,8 @@ def parse(path, files=None):
                 reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, hunt_done=hunt_done, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
                 postrows=postrows, post_keys=post_keys, heads=heads, defsite_done=defsite_done, deftype_done=deftype_done,
+                versions=versions, regime=script_regime(path),
+                solo=bool(allyof) and len(set(allyof.values())) == len(allyof),   # one team per side: a 1v1
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -483,16 +523,22 @@ def near(x0, z0, x, z):
     return (x - x0) ** 2 + (z - z0) ** 2 <= NEAR * NEAR
 
 
+def ended(g):
+    """The game reached a result. A time-capped game logs `winners=` empty: it
+    was stopped, not ended, so a window past its last minute is unknown."""
+    return bool(g.get("winners"))
+
+
 def labels(g, t, f, site=None):
     y = {}
     sm, se = g["sm"].get(t), g["se"].get(t)
-    ended = g.get("winners") is not None
+    over = ended(g)
     for h in HORIZONS:
         f1 = f + h * FPM
         out = {}
         # A finished game's horizon runs to its end: blanking it left the long
         # labels to losses and draws (wins end early).
-        if ended and f1 > g["last"] and g["last"] - f >= FPM:
+        if over and f1 > g["last"] and g["last"] - f >= FPM:
             f1 = g["last"]
         if sm is None or f1 > g["last"]:
             y[h] = None
@@ -544,7 +590,13 @@ def labels(g, t, f, site=None):
     # discounted by how far ahead of this decision they came (e-folding
     # END_TAU / COM_H minutes), so a game-wide outcome stops being one label
     # for every row of the game.
-    if ended:
+    capped = None if over else capped_result(g, t)
+    if capped is not None:
+        # a time-capped game: its result is where it stood (capped_result)
+        y["won"] = 0.5 + 0.5 * capped
+        y["endV"] = capped * math.exp(-max(0, g["last"] - f) / (END_TAU * FPM))
+        y["endFast"] = capped * math.exp(-g["last"] / (GAME_TAU * FPM))
+    if over:
         mine = g["allyof"].get(t)
         # a game stopped by our time cap has no result: 0 read every such row as "even"
         sign = None if not w or mine is None else (1.0 if mine in w else -1.0)
@@ -560,10 +612,50 @@ def labels(g, t, f, site=None):
         dfs = [df for df in cd[bisect.bisect_right(cd, f):] if g["last"] - df > COM_END_F]
         y["comLostD"] = math.exp(-(min(dfs) - f) / (COM_H * FPM)) if dfs else 0.0
     else:
-        y["endV"] = None
-        y["endFast"] = None
+        if capped is None:
+            y["endV"] = None
+            y["endFast"] = None
+        # a time-capped game: labelled only where the discount has run its course
+        # inside the played minutes -- chosen by time, never by whether he died
+        # (a running game stays unlabelled, as before)
+        dfs = cd[bisect.bisect_right(cd, f):]
+        if not g.get("final") or g["last"] - f < 3 * COM_H * FPM:
+            y["comLostD"] = None
+        else:
+            y["comLostD"] = math.exp(-(dfs[0] - f) / (COM_H * FPM)) if dfs else 0.0
+    if g.get("solo"):
+        # 1v1: his death IS the loss (endV has it), so this was 0 on every row
         y["comLostD"] = None
     return y
+
+
+CAP_RESULT = 0.5   # a time-capped game is worth at most half a decided one
+
+
+def capped_result(g, t):
+    """A time-capped finished game's result for t's side in (-CAP_RESULT,
+    CAP_RESULT): tanh of the mean log edge at the end in metal produced, army
+    and extractors, so a loss held to a draw counts. None for any other game."""
+    if not g.get("final") or g.get("winners") is None or g.get("winners"):
+        return None
+    a = g["allyof"].get(t)
+    cache = g.setdefault("_capped", {})
+    if a in cache:
+        return cache[a]
+    terms = []
+    made = [0.0, 0.0]
+    for tm, s in g["sm"].items():
+        if tm in g["allyof"]:
+            made[0 if g["allyof"][tm] == a else 1] += s.v[-1]
+    if made[0] > 0 and made[1] > 0:
+        terms.append(max(-EDGE_CLIP, min(EDGE_CLIP, math.log(made[0] / made[1]))))
+    ed = g.get("edges", {}).get(a) or {}
+    for k in ("army", "mex"):
+        vals = [v for v in ed.get(k, []) if v is not None]
+        if vals:
+            terms.append(max(-EDGE_CLIP, min(EDGE_CLIP, math.log(max(vals[-1], 1e-9)))))
+    cache[a] = CAP_RESULT * math.tanh(sum(terms) / len(terms)) if a is not None and terms else None
+    return cache[a]
 
 
 END_TAU = 10   # minutes: the longest horizon
