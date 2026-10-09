@@ -10,21 +10,95 @@ int gGunExecOk = 0;
 
 // The executor's interior test, shared with the proposers so a site it will
 // refuse is never elected (the refusal fell through to energy every election).
+// The hull is the one its half-reach disc spans: the longest ray everywhere
+// gave a lopsided base's whole front to the interior, wall slots included.
 bool InteriorGunGeom(int d, const AIFloat3& in at)
 {
-	return gPfRimOk && Catalog::ValidId(d) && (Catalog::gSurfT[d] > 0.01f)
-		&& (at.distance2D(gPfMid) < PfHullRadius() - 0.5f * Catalog::gMaxRange[d]);
+	if (!gPfRimOk || !Catalog::ValidId(d) || (Catalog::gSurfT[d] <= 0.01f))
+		return false;
+	const float h = 0.5f * Catalog::gMaxRange[d];
+	return at.distance2D(gPfMid) < PfLocalHullR(at, h) - h;
 }
-// ...unless it is a mex's only cover (his 2026-10-05): the nearest of our mexes
-// in its reach has no gun standing or ordered.
+// ...unless it is a mex's only cover (his 2026-10-05): some mex of ours in its
+// reach has no gun standing or ordered. The NEAREST mex was asked, and a gun
+// for a gunless mex was refused beside a guarded one.
 bool SoleMexCover(int d, const AIFloat3& in at)
 {
-	const AIFloat3 m = NearestMex(at, Catalog::gMaxRange[d]);
-	return OnMap(m) && !MexHasCover(m, Brain::LightTowerRange());
+	const float r = Catalog::gMaxRange[d];
+	const float lr = Brain::LightTowerRange();
+	const array<int>@ rows = MexRows();
+	for (uint q = 0; q < rows.length(); ++q) {
+		const AIFloat3 m = gLPos[uint(rows[q])];
+		if ((m.distance2D(at) < r) && !MexHasCover(m, lr))
+			return true;
+	}
+	return false;
 }
 bool InteriorGunSite(int d, const AIFloat3& in at)
 {
 	return InteriorGunGeom(d, at) && !SoleMexCover(d, at);
+}
+
+// A refused gun site moved to the nearest one the same checks accept, still in
+// the gun's reach of the post it was asked for; off-map when there is none.
+bool DefSiteOk(int d, const AIFloat3& in p, const AIFloat3& in ask)
+{
+	return OnMap(p) && (p.distance2D(ask) <= Catalog::gMaxRange[d])
+		&& !InteriorGunSite(d, p) && !TowerGraveNear(p, Catalog::gCostM[d])
+		&& !Builder::SiteHot(p);
+}
+// Interior: out along its own bearing to where half its reach clears the hull.
+AIFloat3 DefOutward(int d, const AIFloat3& in at, const AIFloat3& in ask)
+{
+	const AIFloat3 none(-1.f, 0.f, -1.f);
+	AIFloat3 dir = at - gPfMid;
+	if (!gPfRimOk || (dir.SqLength2D() < 1.f))
+		return none;
+	dir.SafeNormalize2D();
+	const float h = 0.5f * Catalog::gMaxRange[d];
+	AIFloat3 p = at;
+	for (int k = 0; k < 3; ++k) {
+		p = gPfMid + dir * (PfLocalHullR(p, h) - h + 16.f);
+		if (!InteriorGunGeom(d, p))
+			return DefSiteOk(d, p, ask) ? p : none;
+	}
+	return none;
+}
+// A grave: back toward the base a half-mark at a time (his "pull back or build
+// further away"), while the gun still reaches the post.
+AIFloat3 DefGraveBack(int d, const AIFloat3& in at, const AIFloat3& in ask)
+{
+	const AIFloat3 none(-1.f, 0.f, -1.f);
+	AIFloat3 dir = (gPfRimOk ? gPfMid : Builder::gHomePos) - at;
+	if (dir.SqLength2D() < 1.f)
+		return none;
+	dir.SafeNormalize2D();
+	const float step = 0.5f * BLOCK_NEAR;
+	for (int k = 1; float(k) * step <= Catalog::gMaxRange[d]; ++k) {
+		const AIFloat3 p = at + dir * (step * float(k));
+		if (InteriorGunSite(d, p))
+			break;
+		if (DefSiteOk(d, p, ask))
+			return p;
+	}
+	return none;
+}
+
+// Every ground-gun execution that met a refusal reason: apex: def-refuse.
+int gGunRelocInterior = 0;
+int gGunRelocGrave = 0;
+int gGunOkOther = 0;
+int gGunT2Exec = 0;
+int gGunT2Ok = 0;
+int gGunT2Ref = 0;
+void DefRefuseLog(Want@ w, const AIFloat3& in at, const string& in reason,
+		const string& in verdict, bool relocated, bool ok)
+{
+	const int d = int(w.def.id);
+	AiLog("apex: def-refuse t=" + ai.teamId + " why=" + gExecWhy + " def=" + w.def.GetName()
+		+ " tier=" + DefTier(d) + " at=" + int(at.x) + "," + int(at.z)
+		+ " rimD=" + int(PfRimDist(at)) + " reason=" + reason
+		+ " verdict=" + verdict + " relocated=" + (relocated ? 1 : 0) + " ok=" + (ok ? 1 : 0));
 }
 int gInteriorExempt = 0;
 int gNextInteriorLog = 0;
@@ -535,6 +609,9 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// allowed, matching the audit's mDefAA split.
 		const bool groundDef = (w.def !is null)
 				&& (Catalog::gSurfT[int(w.def.id)] > 0.01f);
+		const bool isT2 = groundDef && !T1Tower(int(w.def.id));
+		if (isT2)
+			++gGunT2Exec;
 		if (groundDef)
 			AiLog("apex: prot-exec t=" + ai.teamId + " def=" + w.def.GetName()
 					+ " depth=" + (gPfRimOk ? int(PfHullRadius() - w.pos.distance2D(gPfMid)) : -9999)
@@ -562,26 +639,46 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// already lost half your base"). A gun stands where at least half
 		// its reach lies outside the base's hull; deeper in, it covers
 		// buildings that are already behind everything it could stop.
-		const bool soleCover = groundDef && InteriorGunGeom(int(w.def.id), sAt)
-				&& SoleMexCover(int(w.def.id), sAt);
-		if (groundDef && !soleCover && InteriorGunGeom(int(w.def.id), sAt))
-		{
-			++gInteriorRefused;
-			if (ai.frame >= gNextInteriorLog) {
-				gNextInteriorLog = ai.frame + 30 * SECOND;
-				AiLog("apex: interior-gun refused t=" + ai.teamId + " "
-					+ w.def.GetName() + " at=" + int(sAt.x) + "," + int(sAt.z)
-					+ " depth=" + int(PfHullRadius() - sAt.distance2D(gPfMid)) + " -- " + gInteriorRefused + " refused");
+		const AIFloat3 askAt = sAt;
+		string hit = "";
+		if (groundDef && InteriorGunSite(int(w.def.id), sAt)) {
+			hit = "interior";
+			const AIFloat3 o = DefOutward(int(w.def.id), sAt, askAt);
+			if (!OnMap(o)) {
+				++gInteriorRefused;
+				if (ai.frame >= gNextInteriorLog) {
+					gNextInteriorLog = ai.frame + 30 * SECOND;
+					AiLog("apex: interior-gun refused t=" + ai.teamId + " "
+						+ w.def.GetName() + " at=" + int(sAt.x) + "," + int(sAt.z)
+						+ " depth=" + int(PfLocalHullR(sAt, 0.5f * Catalog::gMaxRange[int(w.def.id)])
+							- sAt.distance2D(gPfMid)) + " -- " + gInteriorRefused + " refused");
+				}
+				if (isT2)
+					++gGunT2Ref;
+				DefRefuseLog(w, sAt, hit, "-", false, false);
+				return null;
 			}
-			return null;
+			sAt = o;
+			++gGunRelocInterior;
 		}
 		// A gun no stronger than one that just died here is not an answer
 		// here: the ground is outgunned, and the market goes on to its next
 		// want (a stronger gun, or elsewhere).
 		if (groundDef && TowerGraveNear(sAt, Catalog::gCostM[int(w.def.id)])) {
-			++gGunExecGrave;
-			return null;
+			hit = (hit == "") ? "grave" : (hit + "+grave");
+			const AIFloat3 b = DefGraveBack(int(w.def.id), sAt, askAt);
+			if (!OnMap(b)) {
+				++gGunExecGrave;
+				if (isT2)
+					++gGunT2Ref;
+				DefRefuseLog(w, sAt, hit, "-", false, false);
+				return null;
+			}
+			sAt = b;
+			++gGunRelocGrave;
 		}
+		const bool soleCover = groundDef && InteriorGunGeom(int(w.def.id), sAt)
+				&& SoleMexCover(int(w.def.id), sAt);
 		if (NearBlocked(sAt)) {
 			const AIFloat3 ask = sAt;
 			sAt = ProbedSite(w.def, Catalog::Def(int(unit.circuitDef.id)), sAt);
@@ -597,30 +694,60 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		AIFloat3 fHome;
 		const int fRoute = FerryRoute(unit, w, sAt, fHome);
 		if (fRoute == 0) {
-			if (groundDef)
+			if (groundDef) {
 				++gGunExecFerry;
+				if (isT2)
+					++gGunT2Ref;
+				DefRefuseLog(w, sAt, (hit == "") ? "ferry" : (hit + "+ferry"), "-", hit != "", false);
+			}
 			return null;
 		}
-		if (fRoute == 1) {
-			IUnitTask@ fTask = Requests::Take(unit, w.def, Task::BuildType(bt),
-					Task::Priority::NORMAL, fHome, 150.f, SQUARE_SIZE * 16.f);
-			FerryCommit(fTask !is null);
-			return fTask;
-		}
+		Requests::gLastWhat = "";
+		const int can0 = Requests::gGateRef[Requests::G_CANBUILD];
+		const int back0 = Requests::gGateRef[Requests::G_BACKOFF];
+		IUnitTask@ sTask = null;
 		bool sMade = false;
-		IUnitTask@ sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
-				Task::Priority::NORMAL, sAt, 600.f, SQUARE_SIZE * 16.f, sMade);
-		if (groundDef) {
-			if (sTask is null)
-				++gGunExecNull;
-			else
-				++gGunExecOk;
+		if (fRoute == 1) {
+			@sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
+					Task::Priority::NORMAL, fHome, 150.f, SQUARE_SIZE * 16.f);
+			FerryCommit(sTask !is null);
+		} else {
+			// A hoist's post is distinct by construction (one per gap mex, one
+			// per wall slot), so only the same ground is the same request; 600
+			// folded a cheap gun onto its neighbour's and refused it "covered".
+			@sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
+					Task::Priority::NORMAL, sAt, w.posted ? Requests::SAME_SITE : 600.f,
+					SQUARE_SIZE * 16.f, sMade);
 		}
+		if (groundDef) {
+			string verdict = Requests::gLastWhat;
+			if (verdict == "")
+				verdict = (Requests::gGateRef[Requests::G_CANBUILD] > can0) ? "canbuild"
+					: (Requests::gGateRef[Requests::G_BACKOFF] > back0) ? "backoff" : "enqueue";
+			if (sTask is null) {
+				++gGunExecNull;
+				if (isT2)
+					++gGunT2Ref;
+				DefRefuseLog(w, sAt, (hit == "") ? "takeNull" : (hit + "+takeNull"), verdict, hit != "", false);
+			} else {
+				++gGunExecOk;
+				if (isT2)
+					++gGunT2Ok;
+				// A fold onto other work (concentrate) builds no gun.
+				if ((sTask.buildDef is null) || (sTask.buildDef !is w.def))
+					++gGunOkOther;
+				if (hit != "")
+					DefRefuseLog(w, sAt, hit, verdict, true, true);
+			}
+		}
+		if (fRoute == 1)
+			return sTask;
 		if (soleCover && (sTask !is null)) {
 			++gInteriorExempt;
 			AiLog("apex: interior-gun exempt t=" + ai.teamId + " " + w.def.GetName()
 				+ " at=" + int(sAt.x) + "," + int(sAt.z)
-				+ " depth=" + int(PfHullRadius() - sAt.distance2D(gPfMid))
+				+ " depth=" + int(PfLocalHullR(sAt, 0.5f * Catalog::gMaxRange[int(w.def.id)])
+					- sAt.distance2D(gPfMid))
 				+ " -- the mex's only cover, " + gInteriorExempt + " exempt");
 		}
 		// The team hears the order now, not when the frame appears.

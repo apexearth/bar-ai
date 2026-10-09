@@ -120,8 +120,18 @@ of 45.9k) whose Wants carry no `src`. Fixed by exempting step 14 while
 DefenceShortfall() > 0 -- UNMEASURED; `apex: def-funnel` is the instrument.
 Still open, read off the same funnel:
 - **Executor refuses 68% of ground-gun attempts** (whole games, 43k): grave
-  9.5k, takeNull 9.7k, interior 7.3k, ferry 2.8k, ok 13.8k. Most are coverall
-  LLTs re-elected onto a mex where one just died (grave).
+  9.5k, takeNull 9.7k, interior 7.3k, ferry 2.8k, ok 13.8k. By source (prot-exec
+  joined to its decide line): coverall 30.7k of the refusals (89.6% refused, 26k
+  of them the same site again), basefront 6.4k (58%). Comet 1v1 (156 games):
+  coverall = takeNull 53% / grave 33% / interior 7%; basefront = interior 52% /
+  takeNull 40%; takeNull is the request verdict "covered" (a cheap gun inside
+  600 of another manned request). Mechanisms and fixes (UNMEASURED, `apex:
+  def-refuse`): interior was a circle at the longest ray, so a lopsided base's
+  front wall slots read interior -> the hull the half-reach disc spans; sole
+  cover asked only the nearest mex -> any gunless mex in reach; grave/interior
+  relocate (pull back / out) while the gun still reaches the post; hoisted posts
+  (coverall, basefront) fold only the same ground; coverall skips a gap whose
+  gun was just refused; a ferried gun counts as cover.
 - **Value at min 10-20**: when a defence want IS in a draw list the best rival
   is 6.6x it (median); draw sharpness 2.9 makes that ~1% odds. After min 20
   the ratio is 0.66 and defence wins when present (median p 0.99).

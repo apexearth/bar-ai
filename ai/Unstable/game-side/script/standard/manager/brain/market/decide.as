@@ -200,6 +200,7 @@ Want@ WantCopy(Want@ s)
 	c.spotId = s.spotId;
 	@c.target = s.target;
 	c.retire = s.retire;
+	c.posted = s.posted;
 	c.gain = s.gain;
 	c.mCost = s.mCost;
 	c.tCost = s.tCost;
@@ -2013,7 +2014,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		AIFloat3 gap;
 		if ((light is null) || (Catalog::BuildsOf(int(unit.circuitDef.id)).find(int(light.id)) < 0))
 			covGate = CG_LIGHT;
-		else if (!CoverGapNear(uAt, gap))
+		else if (!CoverGapNear(uAt, gap, unit, light))
 			covGate = CG_NOGAP;
 		else if (CrewSplitOn() && FieldSite(gap) && !CrewIsField(unit))
 			covGate = CG_CREW;
@@ -2038,22 +2039,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			else if (!eReady)
 				covGate = CG_ENERGY;
 			if ((bill <= pushCap) && eReady) {
-				AIFloat3 site = gap;
-				AIFloat3 foe;
-				if (FoeRef(foe)) {
-					AIFloat3 dir = foe - gap;
-					if (dir.SqLength2D() > 1.f) {
-						dir.SafeNormalize2D();
-						const AIFloat3 s2 = gap + dir * 150.f;
-						if (OnMap(s2))
-							site = s2;
-					}
-				}
+				const AIFloat3 site = CoverAllSite(gap);
 				Want@ cw = Want();
 				cw.kind = WK_PROTECT;
 				cw.spotId = PROT_DEF;
 				@cw.def = light;
 				cw.pos = site;
+				cw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
 				ValueOf(ld, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
 						Catalog::gBuildPower[int(unit.circuitDef.id)], cw);
@@ -2097,6 +2089,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				bw.spotId = PROT_DEF;
 				@bw.def = gun;
 				bw.pos = site;
+				bw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
 				ValueOf(gd, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
 						Catalog::gBuildPower[int(unit.circuitDef.id)], bw);
@@ -2730,6 +2723,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			const int g0New = Requests::gGateSeen[Requests::G_BADREQ];
 			const int g0Can = Requests::gGateSeen[Requests::G_CANBUILD];
 			const int g0Back = Requests::gGateSeen[Requests::G_BACKOFF];
+			gExecWhy = "comfirst";
 			IUnitTask@ g = ExecuteWant(unit, ranked[i]);
 			AiLog("apex: comm-first-gun t=" + ai.teamId
 				+ " " + ranked[i].def.GetName()
@@ -2787,6 +2781,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		IUnitTask@ t = null;
 		if (!refused) {
 			const double _tExec = Perf::T0();
+			gExecWhy = (depth == 0) ? why : "fall";
 			@t = ExecuteWant(unit, ranked[i]);
 			Perf::Add("exec.want", _tExec);
 			// The name is built whether or not anyone is profiling, and the

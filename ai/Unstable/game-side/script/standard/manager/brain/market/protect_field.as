@@ -148,6 +148,30 @@ float PfHullRadius()
 	return r;
 }
 
+// The hull as a disc of radius h round p sees it: the longest capped ray over
+// the bearings that disc spans from the middle. A disc over the middle spans
+// every bearing (PfHullRadius); one on the rim spans only its own neighbours.
+float PfLocalHullR(const AIFloat3& in p, float h)
+{
+	if (!gPfRimOk)
+		return 0.f;
+	const float d = p.distance2D(gPfMid);
+	if (d <= h)
+		return PfHullRadius();
+	const float wedge = 6.2831853f / float(PF_RAYS);
+	const int span = int(atan2(h, sqrt(d * d - h * h)) / wedge) + 1;
+	const int b0 = PfRayOf(p);
+	float r = 0.f;
+	for (int k = -span; k <= span; ++k) {
+		float rb = gPfRimR[(b0 + k + PF_RAYS * 4) % PF_RAYS];
+		if ((gPfCapR > 1.f) && (rb > gPfCapR))
+			rb = gPfCapR;
+		if (rb > r)
+			r = rb;
+	}
+	return r;
+}
+
 float PfCoreRimDist(const AIFloat3& in p)
 {
 	if (!gPfRimOk)
