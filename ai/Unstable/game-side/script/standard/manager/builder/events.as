@@ -85,6 +85,15 @@ void AiTaskRemoved(IUnitTask@ task, bool done)
 
 void TaskRemovedInner(IUnitTask@ task, bool done)
 {
+	if ((gComm !is null) && ComIdleOn()) {
+		array<CCircuitUnit@>@ cu = task.GetUnits();
+		if (cu !is null)
+			for (uint i = 0; i < cu.length(); ++i)
+				if (cu[i] is gComm) {
+					ComIdleBegin();
+					break;
+				}
+	}
 	if (task.GetType() != Task::Type::BUILDER)
 		return;
 	if (gGoneOk.length() == 0) {

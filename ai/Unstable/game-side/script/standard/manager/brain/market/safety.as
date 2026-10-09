@@ -151,6 +151,8 @@ void CommWatch()
 		gCwWorst = 0;
 		gCwEngageStill = 0;
 	}
+	Builder::ComIdleTick((tt >= 0) && (tt != int(Task::Type::IDLE)),
+		(tt == int(Task::Type::BUILDER)) && (q > 0) && (moved >= 8.f) && !working);
 	ComTaskWatch(u, p);
 	ComDecideTick(u);
 }

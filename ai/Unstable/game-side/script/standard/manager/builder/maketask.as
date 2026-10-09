@@ -222,19 +222,120 @@ int gComNull = 0;
 int gComRet = 0;
 int gComBounce = 0;
 int gNextComTimeLog = 0;
-void NoteCommDecide(CCircuitUnit@ unit, IUnitTask@ dec)
+
+// The commander's idle gaps, as a census: one opens when his task is removed or
+// he is asked while idle, and closes when he is handed a job. Its cause is what
+// it met: 1 the re-election gate, 2 a sliced election not yet finished, 4 an
+// election that came back empty, none of them the engine's settle-and-ask
+// cadence. Walking is sampled once a second.
+const int COM_IDLE_MINUTES = 10;
+int gCiFrom = -1;
+int gCiMet = 0;
+int gCiIdleF = 0, gCiGaps = 0, gCiWorstF = 0, gCiWalkS = 0;
+array<int> gCiCauseN(4, 0);
+array<int> gCiCauseF(4, 0);
+int gCiTotIdleF = 0, gCiTotGaps = 0, gCiTotWorstF = 0, gCiTotWalkS = 0;
+array<int> gCiTotCauseN(4, 0);
+array<int> gCiTotCauseF(4, 0);
+int gCiMinute = 0;
+
+bool ComIdleOn()
+{
+	return ai.frame <= COM_IDLE_MINUTES * 60 * SECOND;
+}
+void ComIdleBegin()
+{
+	if ((gCiFrom < 0) && ComIdleOn()) {
+		gCiFrom = ai.frame;
+		gCiMet = 0;
+	}
+}
+void ComIdleEnd()
+{
+	if (gCiFrom < 0)
+		return;
+	const int gap = ai.frame - gCiFrom;
+	gCiFrom = -1;
+	const int c = ((gCiMet & 1) != 0) ? 1 : (((gCiMet & 2) != 0) ? 2 : (((gCiMet & 4) != 0) ? 3 : 0));
+	gCiIdleF += gap;
+	++gCiGaps;
+	if (gap > gCiWorstF)
+		gCiWorstF = gap;
+	++gCiCauseN[c];
+	gCiCauseF[c] += gap;
+}
+string ComIdleCauses(const array<int>& in n, const array<int>& in f)
+{
+	return " ask=" + n[0] + "/" + formatFloat(float(f[0]) / float(SECOND), "", 0, 1)
+		+ " gate=" + n[1] + "/" + formatFloat(float(f[1]) / float(SECOND), "", 0, 1)
+		+ " slice=" + n[2] + "/" + formatFloat(float(f[2]) / float(SECOND), "", 0, 1)
+		+ " none=" + n[3] + "/" + formatFloat(float(f[3]) / float(SECOND), "", 0, 1);
+}
+// Once a second, from CommWatch: a job handed to him outside AiMakeTask closes
+// the gap here, a second late at most.
+void ComIdleTick(bool onTask, bool walking)
+{
+	if (gCiMinute >= COM_IDLE_MINUTES)
+		return;
+	if (onTask)
+		ComIdleEnd();
+	if (walking)
+		++gCiWalkS;
+	if (ai.frame < (gCiMinute + 1) * 60 * SECOND)
+		return;
+	++gCiMinute;
+	AiLog(Factory::T() + "apex: com-idle t=" + ai.teamId + " min=" + gCiMinute
+		+ " idleS=" + formatFloat(float(gCiIdleF) / float(SECOND), "", 0, 1)
+		+ " walkS=" + gCiWalkS + " gaps=" + gCiGaps
+		+ " worstS=" + formatFloat(float(gCiWorstF) / float(SECOND), "", 0, 1)
+		+ " open=" + ((gCiFrom >= 0) ? (ai.frame - gCiFrom) : -1)
+		+ ComIdleCauses(gCiCauseN, gCiCauseF));
+	gCiTotIdleF += gCiIdleF;
+	gCiTotGaps += gCiGaps;
+	gCiTotWalkS += gCiWalkS;
+	if (gCiWorstF > gCiTotWorstF)
+		gCiTotWorstF = gCiWorstF;
+	for (uint k = 0; k < 4; ++k) {
+		gCiTotCauseN[k] += gCiCauseN[k];
+		gCiTotCauseF[k] += gCiCauseF[k];
+		gCiCauseN[k] = 0;
+		gCiCauseF[k] = 0;
+	}
+	gCiIdleF = 0;
+	gCiGaps = 0;
+	gCiWorstF = 0;
+	gCiWalkS = 0;
+	if (gCiMinute == COM_IDLE_MINUTES) {
+		AiLog(Factory::T() + "apex: com-idle-sum t=" + ai.teamId + " mins=" + COM_IDLE_MINUTES
+			+ " idleS=" + formatFloat(float(gCiTotIdleF) / float(SECOND), "", 0, 1)
+			+ " walkS=" + gCiTotWalkS + " gaps=" + gCiTotGaps
+			+ " meanS=" + formatFloat((gCiTotGaps > 0) ? float(gCiTotIdleF) / float(gCiTotGaps * SECOND) : 0.f, "", 0, 2)
+			+ " worstS=" + formatFloat(float(gCiTotWorstF) / float(SECOND), "", 0, 1)
+			+ ComIdleCauses(gCiTotCauseN, gCiTotCauseF));
+		gCiFrom = -1;
+	}
+}
+
+void NoteCommDecide(CCircuitUnit@ unit, IUnitTask@ dec, bool bounced)
 {
 	if (dec is null) {
-		if (gComBounce > 0)
+		if (bounced) {
+			gCiMet |= 1;
 			return;   // counted by Decide's rate gate, not an empty election
-		if (Market::ElecPending(unit))
+		}
+		if (Market::ElecPending(unit)) {
+			gCiMet |= 2;
 			return;   // mid-slice, not an empty election
+		}
+		gCiMet |= 4;
 		++gComNull;
 	}
 	else if (dec.GetType() == Task::Type::RETREAT)
 		++gComRet;
 	else
 		++gComJobs;
+	if (dec !is null)
+		ComIdleEnd();
 	if (ai.frame >= gNextComTimeLog) {
 		gNextComTimeLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: com-time jobs=" + gComJobs + " none=" + gComNull
@@ -295,6 +396,13 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// already in build range stays -- a frame half up is worth finishing or
 	// is the C++ retreat's business. The commander keeps his own rules.
 	IUnitTask@ held = unit.task;
+	const bool isCom = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	if (isCom) {
+		if ((held is null) || (held.GetType() == Task::Type::IDLE))
+			ComIdleBegin();
+		else if (held.GetType() == Task::Type::BUILDER)
+			ComIdleEnd();
+	}
 	if ((held !is null) && (held.GetType() == Task::Type::BUILDER)) {
 		const int uidx = int(unit.id);
 		if ((uidx >= 0) && (uidx < int(gHotCheckAt.length()))
@@ -332,11 +440,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	// was never bounded by an 8 ms slice and the frame it landed on carried all
 	// of it. Every return path still counts, and nothing counts twice.
 	const double _tD = ai.ClockUs();
+	const int bounce0 = gComBounce;
 	IUnitTask@ dec = Brain::Decide(unit);
 	Perf::Add("bld.decide", _tD);
 	Market::ElecSpendRest(ai.ClockUs() - _tD);
-	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-		NoteCommDecide(unit, dec);
+	if (isCom)
+		NoteCommDecide(unit, dec, gComBounce != bounce0);
 	return dec;
 }
 

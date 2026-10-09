@@ -884,13 +884,14 @@ bool ElecIdOk(CCircuitUnit@ unit)
 
 // A set this builder has already opened and not yet finished. Read at the door
 // of Decide: a resumption must not be turned away by the re-election rate gate.
+// A WHOLE set waiting for its finish is a resumption too: the pump completes
+// sets between asks, and gating the finish held every sliced election to 2 s.
 bool ElecPending(CCircuitUnit@ unit)
 {
 	if (!ElecIdOk(unit))
 		return false;
 	Elec@ st = gElecOf[int(unit.id)];
 	return (st !is null) && (st.defId == int(unit.circuitDef.id))
-			&& (st.step < ELEC_STEPS - 1)
 			&& (ai.frame - st.askedAt <= ElecLapse());
 }
 
