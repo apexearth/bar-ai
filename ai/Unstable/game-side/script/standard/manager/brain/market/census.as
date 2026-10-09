@@ -319,6 +319,7 @@ int gDfProposed = 0;
 int gDfTopDraw = 0;
 int gDfTopHoist = 0;
 int gDfFinished = 0;
+int gT2GunDone = 0;
 int gDfGone = 0;
 string gExecWhy = "";   // what put the want the executor is on in front (decide's `why`, or "fall")
 float gAssetsM = 0.f;   // summed costM of standing structures
@@ -470,8 +471,11 @@ void NoteFinished(CCircuitUnit@ unit)
 		gProtIds[pc].insertLast(unit.id);
 		gProtUnit[pc].insertLast(unit);
 		gProtDefId[pc].insertLast(defId);
-		if (pc == PROT_DEF)
+		if (pc == PROT_DEF) {
 			++gDfFinished;
+			if (DrAdvancedGun(defId))
+				++gT2GunDone;
+		}
 	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;

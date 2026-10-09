@@ -996,6 +996,7 @@ void WorkerGone(Id id)
 		if (gWorkerIds[i] == id) {
 			ConRoleForget(int(id));
 			CrewForget(int(id));
+			DefRoleForget(int(id));
 			gWorkerBorn.removeAt(i);
 			gWorkers.removeAt(i);
 			gWorkerIds.removeAt(i);
