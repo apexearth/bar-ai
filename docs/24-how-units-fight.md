@@ -236,6 +236,10 @@ to them)
   turrets are massed, fortify that ground and put a shield there.
 - Don't heap defences in the middle while a flank is being raided. Defend the
   raided side, and the map edge.
+- **Jammers over the defence are a nice-to-have that turns into a need**
+  (2026-10-09): they become wanted when a defence emplacement is taking
+  long-range fire from something like an Ambassador or an LRPC. The game has
+  long-range jammer towers too (Veil, Shroud, Erebus).
 - **Keep them out, with room to grow** (2026-10-09). Defence makes complete
   coverage that keeps enemy ground out of the backline, the way stuck units
   are detected: gaps are found continuously and closed. The backline is the
