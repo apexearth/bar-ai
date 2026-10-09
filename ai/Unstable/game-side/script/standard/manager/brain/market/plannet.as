@@ -219,7 +219,7 @@ void AirPlantNetDecide()
 		NNL_W1, NNL_B1, NNL_W2, NNL_B2, NNL_WO, NNL_BO, NNL_TRUST, st, f, w);
 	array<float> p(3);
 	const float flat = NnHeadFlat();
-	const int c = EcoDraw(0, trust, w, p, flat);
+	const int c = EcoDrawBal("nnaplant", 0, trust, w, p, flat);
 	gAirPlantMax = (c == 0) ? 1 : ((c == 1) ? 2 : 4);
 	array<string> names = {"P1", "P2", "P4"};
 	AiLog(EcoLine("nnaplant", "P1", flat > 0.f, trust, st, f, names, w, p, c));

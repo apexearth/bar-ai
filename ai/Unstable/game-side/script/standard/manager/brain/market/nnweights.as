@@ -2,6 +2,8 @@ namespace Market {
 
 // The value net's weights. This repo copy is the empty net: tools/nntrain.py
 // overwrites the DEPLOYED copy between games, so each game loads the latest.
+// 2 = the honest decision-specific trust; below it the decision heads play the rule.
+const int NN_TRUST_KIND = 0;
 const bool NNW_ON = false;
 const int NNW_GAMES = 0;
 const string NNW_STATE = "";

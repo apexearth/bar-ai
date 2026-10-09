@@ -48,11 +48,11 @@ HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]
                        r" lost=(-?\d+) wreck=(-?\d+)")
 HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)=(\S+) opt=")
 HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
-                      r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
+                      r"(?: game=\d)? trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 # static defence (protect_nn.as, protect_nntype.as): amount, and site and gun class with their watch
 DEF_SCHEMA = re.compile(r"apex: nn(defamt|defsite|deftype)-schema v\d+ state=\S+ (?:defamt|defsite|deftype)=(\S+) opt=")
 DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defamt|defsite|deftype) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
-                     r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
+                     r"(?: game=\d)? trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 DEFSITE_DONE = re.compile(r"apex: nndef(site|type)-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) lost=(-?\d+)"
                           r" pre=(-?\d+) base=(-?\d+) m=\d+ at=(-?\d+),(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")

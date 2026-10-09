@@ -405,6 +405,36 @@ float NnHeadFlat()
 	return gNnExplore ? NN_HEAD_FLAT : 0.f;
 }
 
+// BALANCE HEADS (options are an ordered level: con, cap, acap, scap, ecap, esc,
+// mex, mass, odds, defamt, aplant): an explorer holds each, at even odds, at one
+// uniformly drawn option for the whole game, so a level's effect shows between
+// games. -1 = not held (the head draws per decision as usual).
+array<string> gNnBalTag;
+array<int> gNnBalOpt;
+
+int NnBalanceHeld(const string& in tag, int K)
+{
+	const int i = gNnBalTag.find(tag);
+	if (i >= 0)
+		return gNnBalOpt[i];
+	NnExploreRoll();
+	int o = -1;
+	if (gNnExplore && (K > 1) && (AiRandom(0, 1) == 0))
+		o = AiRandom(0, K - 1);
+	gNnBalTag.insertLast(tag);
+	gNnBalOpt.insertLast(o);
+	if (gNnExplore)
+		AiLog("apex: nn-balance t=" + ai.teamId + " head=" + tag + " held=" + ((o >= 0) ? 1 : 0)
+			+ " opt=" + o + " k=" + K);
+	return o;
+}
+
+bool NnBalanceIsHeld(const string& in tag)
+{
+	const int i = gNnBalTag.find(tag);
+	return (i >= 0) && (gNnBalOpt[i] >= 0);
+}
+
 // Said once, when the explorer first knows its strategy, so a watcher knows
 // which side is different and what it tries.
 void NnExploreSay(const string& in plan, const string& in how)
@@ -680,10 +710,48 @@ bool NnWeightsFit()
 
 array<string> gNnOffSaid;
 
+// p = (1-t) rule + t net, the rule's policy being its weights normalised. The
+// score is an OBJECTIVE sum of predicted outcomes in spread units, not a logit:
+// standardised across the options, so the net's policy is its ranking and
+// trust alone says how much of it plays. A zero weight stays zero.
+void NnHeadMix(const array<float>& in score, float t, array<float>& w)
+{
+	const int K = int(w.length());
+	float sw = 0.f, mean = 0.f;
+	int n = 0;
+	for (int o = 0; o < K; ++o) {
+		if (w[o] > 0.f) {
+			sw += w[o];
+			mean += score[o];
+			++n;
+		}
+	}
+	if (n == 0)
+		return;
+	mean /= float(n);
+	float ss = 0.f;
+	for (int o = 0; o < K; ++o) {
+		if (w[o] > 0.f)
+			ss += (score[o] - mean) * (score[o] - mean);
+	}
+	const float sd = sqrt(ss / float(n));
+	array<float> e(K, 0.f);
+	float se = 0.f;
+	for (int o = 0; o < K; ++o) {
+		if (w[o] > 0.f) {
+			e[o] = pow(2.7182818f, (sd > 1e-6f) ? (score[o] - mean) / sd : 0.f);
+			se += e[o];
+		}
+	}
+	for (int o = 0; o < K; ++o)
+		w[o] = (w[o] > 0.f) ? (1.f - t) * w[o] / sw + t * e[o] / se : 0.f;
+}
+
 // A decision head's net (NNC_ commander, NNT_ T2; the posture net has its own
 // copy): scores each option from the state, the head's own fields, the option
-// and the rule's pick, and moves the option weights in log space by the trust
-// it has earned. Returns that trust (0 = the rule alone).
+// and the rule's pick, and mixes its policy into the rule's by the trust it has
+// earned. Returns that trust (0 = the rule alone; so is a trust exported
+// before the honest one, NN_TRUST_KIND < 2).
 float NnHeadScore(bool on, const string& in layout, const string& in own, int S, int O, int H,
 	const array<float>& in XM, const array<float>& in XS, const array<float>& in W1,
 	const array<float>& in B1, const array<float>& in W2, const array<float>& in B2,
@@ -693,7 +761,7 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 	const int K = int(w.length()), N = S + O;
 	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * trust0;
 	t = (t > 1.f) ? 1.f : t;
-	if ((t <= 0.f) || !on)
+	if ((t <= 0.f) || !on || (NN_TRUST_KIND < 2))
 		return 0.f;
 	if ((layout != NN_STATE + "|" + own) || (O != 2 * K)
 		|| (S != int(st.length() + f.length())) || (H <= 0) || (XM.length() != uint(N))
@@ -723,7 +791,6 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 			a[h] += W1[h * N + i] * z;
 	}
 	array<float> score(K), h1(H);
-	float mean = 0.f;
 	for (int o = 0; o < K; ++o) {
 		for (int h = 0; h < H; ++h)
 			h1[h] = a[h];
@@ -745,26 +812,8 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 				sc += WO[h2] * acc;
 		}
 		score[o] = sc;
-		mean += sc;
 	}
-	mean /= float(K);
-	// A zero weight is an option the rules forbid: log(0) made every weight NaN.
-	float meanLw = 0.f;
-	int nPos = 0;
-	for (int o = 0; o < K; ++o) {
-		if (w[o] > 0.f) {
-			meanLw += log(w[o]);
-			++nPos;
-		}
-	}
-	meanLw /= float((nPos > 0) ? nPos : 1);
-	for (int o = 0; o < K; ++o) {
-		if (w[o] <= 0.f)
-			continue;
-		float d = score[o] - mean;
-		d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
-		w[o] = pow(2.7182818f, meanLw + (1.f - t) * (log(w[o]) - meanLw) + t * d);
-	}
+	NnHeadMix(score, t, w);
 	return t;
 }
 

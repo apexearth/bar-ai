@@ -328,6 +328,21 @@ changes behaviour too much. Two rolls, once per game per AI:
   shape: the commander only ever trials SAFER (TURRET/RETREAT, one a minute,
   held 15 s; the trial share is in p and a held trial logs p=1), and the T2
   head draws one moment per tier instead of a coin every 30 s.
+- **Balances held per game** (2026-10-09): a decision's single 30-s pick is
+  buried under between-game variance (76% of the objective's), so the heads
+  whose options are an ordered level -- con, cap, acap, scap, ecap, esc, mex,
+  mass, odds, defamt, aplant -- are each held, at even odds per explorer game
+  and head, at ONE uniformly drawn option all game (`NnBalanceHeld`,
+  `EcoDrawBal`). Every row of a held head carries that option, p = 1/K and
+  `game=1` (non-held balance rows `game=0`); the other half keep the
+  per-decision mix, so the trainer sees both. Situational heads (posture,
+  hunt, strike, raid, air, tech, com, join, reinf, defsite, deftype, open)
+  are never held. `apex: nn-balance t=N head=nncon held=0|1 opt=k k=K` once
+  per head per explorer.
+- **nncon** (schema v2): C05 / C1 / C2 / C3 multiply `ConsNeedAny`'s target
+  (`ConsNeedAt`); C1 is the old YIELD rule (the floor steps aside while the
+  army is behind its share), C05 yields too, C2 and C3 hold the larger floor
+  even while the army is behind. `apex: spothands ... conMul=`.
 - **Strategy** (`apex_nn_plan_explore`, 0.1 of explorers): the explorer
   ALSO leads its team with one drawn plan, below.
 - **The strategy** (`plannet.as`): the strategy explorer draws one plan for its team at
@@ -403,6 +418,17 @@ because `DrawWeights` takes the first of each category. OBJECTIVE
 site -0.5, finished, survived, lifetime and lifetime kills 0.25 each; since
 2026-10-08 also endFast 0.5, land edge +5/+10 0.25/0.5, army edge +5/+10 0.25
 each, eco and mex edge +10 0.25 each.
+**Decision heads** (2026-10-09, `NnHeadScore`/`NnHeadMix`, posture's
+`NnPostScore`): the log-space blend left the rule's 1 vs 0.01 (4.6 log units)
+standing against a verdict clamped +-3, so no head below trust ~0.43 could
+overturn its rule. Now p = (1-t) x rule policy (its weights normalised) +
+t x net policy, the net policy a softmax of the option scores standardised
+across the options (the score is an OBJECTIVE sum of predicted outcomes in
+spread units, not a logit, so its ranking is used and trust alone sets how
+much plays). Only when the trainer exports the honest decision-specific
+trust, `NN_TRUST_KIND = 2` in nnweights.as; below 2 (the stub says 0) every
+head plays its rule. The logged p is the mixture as drawn. The builder and
+factory nets still blend in log space against market values.
 The plan from here (his 2026-10-05): the market value becomes one input and
 the net's score the value, kind by kind, as trust is earned. `apex: nn-score`
 (60 s) proves it fires: scored count, how often it changed the top option,

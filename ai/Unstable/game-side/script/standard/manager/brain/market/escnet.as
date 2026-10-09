@@ -57,7 +57,12 @@ void EscNetDecide()
 			p[o] = (o == rule) ? 1.f : 0.f;
 	}
 	int chosen = rule;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	const int held = NnBalanceHeld("nnesc", NE_N);
+	if (held >= 0) {
+		chosen = held;
+		for (int o = 0; o < NE_N; ++o)
+			p[o] = 1.f / float(NE_N);
+	} else if ((trust > 0.f) || (flat > 0.f)) {
 		float r = float(AiRandom(0, 10000)) / 10000.f;
 		for (int o = 0; o < NE_N; ++o) {
 			r -= p[o];
@@ -75,7 +80,7 @@ void EscNetDecide()
 		AiLog("apex: nnecap-schema v1 state=" + NN_STATE + " ecap=" + NNE_ESC + " opt=name,w,p opts=E1,E2,E4");
 	}
 	string ln = "apex: nnesc t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + NeName(rule)
-		+ " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
+		+ " ex=" + (explore ? 1 : 0) + NnGameField("nnesc") + " trust=" + NnF(trust, 2) + " |";
 	for (uint k = 0; k < st.length(); ++k)
 		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
 	ln += " |";
@@ -91,7 +96,7 @@ void EscNetDecide()
 		NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, st, ef, cw);
 	array<float> cp(3);
 	const float cflat = NnHeadFlat();
-	const int cc = EcoDraw(0, ctrust, cw, cp, cflat);
+	const int cc = EcoDrawBal("nnecap", 0, ctrust, cw, cp, cflat);
 	gEscCapMul = (cc == 1) ? 2.f : ((cc == 2) ? 4.f : 1.f);
 	array<string> cnames = {"E1", "E2", "E4"};
 	AiLog(EcoLine("nnecap", "E1", cflat > 0.f, ctrust, st, ef, cnames, cw, cp, cc));

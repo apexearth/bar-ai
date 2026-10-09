@@ -433,6 +433,12 @@ int gConFloorYieldN = 0;  // con-floor orders that yielded to an army behind its
 int gNextSpotHandsLog = 0;
 int ConsNeedAny(bool walkers = false)
 {
+	return ConsNeedAt(walkers, gConFloorMul);
+}
+
+// mul: the constructor net's floor size (econet.as nncon), 1 = the rule's
+int ConsNeedAt(bool walkers, float mul)
+{
 	const float per = ai.GetTunable("apex_con_per_m", TUNE_CON_PER_M);
 	float want = ai.GetTunable("apex_con_base", TUNE_CON_BASE)
 			+ ConFloorIncomeTerm(per);
@@ -464,6 +470,7 @@ int ConsNeedAny(bool walkers = false)
 		want = float(spotK);
 		++gSpotHandsBind;
 	}
+	want *= mul;
 	const int have = walkers ? (ConsWalking(false) + ConsWalking(true)) : (ConsOwnedAny() + ConsInFlightAny());
 	return (float(have) < want) ? (int(want) - have) : 0;
 }
@@ -566,7 +573,8 @@ int SpotHandsOwed()
 	gSpotHandsVal = k;
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
-		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " floorYield=" + gConFloorYieldN + " open=" + n
+		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " floorYield=" + gConFloorYieldN
+			+ " conMul=" + formatFloat(gConFloorMul, "", 0, 1) + " open=" + n
 			+ " walkS=" + formatFloat(walkS, "", 0, 1)
 			+ " cycS=" + formatFloat(cycS, "", 0, 1)
 			+ " S=" + formatFloat(SpotM(), "", 0, 2)
@@ -2487,11 +2495,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool armyBehind = (Brain::gSpentTotal > 1.f)
 			&& (ConsOwnedAny() + ConsInFlightAny() > 0)
 			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
-		if (armyBehind && (consNeedA > 0))
+		// The constructor net (econet.as) sizes the floor; past the rule's size it holds while the army is behind.
+		const bool floorOn = !armyBehind || (gConFloorMul > 1.f);
+		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
-		// The constructor net (econet.as) says which: always, only while the
-		// army holds its share (the rule), or never -- cons then draw like units.
-		const bool floorOn = (gConPolicy == NK_FLOOR) || ((gConPolicy == NK_YIELD) && !armyBehind);
 		if ((consNeedA > 0) && floorOn) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()

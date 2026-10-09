@@ -86,7 +86,7 @@ def check_nets(text, rep):
                     "net changed the top pick in %d of %d scored elections (%.0f%%), blend %.2f, net %d games" % (
                         changed, len(sc), 100.0 * changed / len(sc), blend, net))
     for head in ("post", "com", "tech", "raid", "air", "esc", "con", "mex", "cap", "acap", "plan", "join", "aplant", "reinf", "hunt", "scap", "ecap", "strike", "mass", "odds", "defamt", "defsite", "deftype", "open"):
-        hr = re.findall(r"apex: nn%s t=%d f=\d+ why=\S+ rule=(\S+)(?: ex=(\d))? trust=(\S+) .*? chosen=(-?\d+)" % (head, t0), text)
+        hr = re.findall(r"apex: nn%s t=%d f=\d+ why=\S+ rule=(\S+)(?: ex=(\d))?(?: game=\d)? trust=(\S+) .*? chosen=(-?\d+)" % (head, t0), text)
         if not hr:
             continue
         trust = [float(x[2]) for x in hr if re.match(r"^[\d.]+$", x[2])]

@@ -80,7 +80,7 @@ void MassOddsDecide()
 		Market::NNM_WO, Market::NNM_BO, Market::NNM_TRUST, st, fm, wm);
 	array<float> pm(3);
 	const float flatM = Market::NnHeadFlat();
-	const int cm = Market::EcoDraw(MO_ONE, tm, wm, pm, flatM);
+	const int cm = Market::EcoDrawBal("nnmass", MO_ONE, tm, wm, pm, flatM);
 	AiLog(Market::EcoLine("nnmass", "X1", flatM > 0.f, tm, st, fm, names, wm, pm, cm));
 	gMassMul = MO_MUL[cm];
 	ai.SetTeamBoard(BOARD_MASS + ai.teamId, gMassMul);
@@ -111,7 +111,7 @@ void MassOddsDecide()
 		Market::NNO_WO, Market::NNO_BO, Market::NNO_TRUST, st, fo, wo);
 	array<float> po(3);
 	const float flatO = Market::NnHeadFlat();
-	const int co = Market::EcoDraw(MO_ONE, to, wo, po, flatO);
+	const int co = Market::EcoDrawBal("nnodds", MO_ONE, to, wo, po, flatO);
 	AiLog(Market::EcoLine("nnodds", "X1", flatO > 0.f, to, st, fo, names, wo, po, co));
 	gOddsMul = MO_MUL[co];
 	ai.SetTeamBoard(BOARD_ODDS + ai.teamId, gOddsMul);

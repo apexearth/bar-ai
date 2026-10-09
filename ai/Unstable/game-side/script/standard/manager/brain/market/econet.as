@@ -5,18 +5,19 @@ namespace Market {
 // as escnet/nnraid: a team decision on a 30 s clock, today's rule as the prior,
 // discovery draws the others.
 //
-// nncon -- the constructor floor: FLOOR keeps it always (before cca80254),
-//          YIELD lets it step aside while the army is behind its share (the
-//          rule), DRAW drops it so constructors compete in the factory draw.
+// nncon -- the constructor floor's size: C05/C1/C2/C3 multiply ConsNeedAny's
+//          target. C1 is the rule (yields while the army is behind its share),
+//          C05 yields too, C2/C3 hold even while the army is behind.
 // nnmex -- expansion: HOLD lets the forced defence picks fire over an open mex (the rule),
 //          YIELD puts an open mex first, PUSH also doubles the
 //          value of every mex want before the draw.
 const string NNK_CON = "cons,consNeed,armyShare,armyTarget,armyGap,mexes,openSpots,foeRaid,minute";
 const string NNX_MEX = "mexes,openSpots,mexLost,mexKilledRate,defWants,armyShare,foeRaid,bankM,minute";
-const int NK_FLOOR = 0, NK_YIELD = 1, NK_DRAW = 2;
+const int NK_C1 = 1, NK_N = 4;
+const array<float> NK_MUL = {0.5f, 1.f, 2.f, 3.f};
 const int NX_HOLD = 0, NX_YIELD = 1, NX_PUSH = 2;
 const float NE2_EPS = 0.01f;
-int gConPolicy = NK_YIELD;
+float gConFloorMul = 1.f;
 // The constructor caps: ground pools x1/x2/x4 of the base (rule x1), the air
 // pool x2/x4/x8 (rule x4: air cons take no build space).
 const string NNQ_CAP = "conT1,conT2,conAir,capT1,capT2,capAir,conShare,mInc,mWasting,bankFill,idleCons,minute";
@@ -41,7 +42,6 @@ int IdleConCount()
 	return n;
 }
 
-string NkName(int o) { return (o == NK_FLOOR) ? "FLOOR" : ((o == NK_DRAW) ? "DRAW" : "YIELD"); }
 string NxName(int o) { return (o == NX_HOLD) ? "HOLD" : ((o == NX_PUSH) ? "PUSH" : "YIELD"); }
 
 int EcoDraw(int rule, float trust, array<float>& w, array<float>& p, float flat)
@@ -69,12 +69,30 @@ int EcoDraw(int rule, float trust, array<float>& w, array<float>& p, float flat)
 	return rule;
 }
 
+// EcoDraw for a balance head: a held option runs with p = 1/K, the odds it was drawn at.
+int EcoDrawBal(const string& in tag, int rule, float trust, array<float>& w, array<float>& p, float flat)
+{
+	const int n = int(w.length());
+	const int held = NnBalanceHeld(tag, n);
+	if (held < 0)
+		return EcoDraw(rule, trust, w, p, flat);
+	for (int o = 0; o < n; ++o)
+		p[o] = 1.f / float(n);
+	return held;
+}
+
+// game=1 on a balance head's row: the option was held all game (NnBalanceHeld).
+string NnGameField(const string& in tag)
+{
+	return (gNnBalTag.find(tag) >= 0) ? (" game=" + (NnBalanceIsHeld(tag) ? 1 : 0)) : "";
+}
+
 string EcoLine(const string tag, const string rule, bool explore, float trust, const array<float>& in st,
 	const array<float>& in f, const array<string>& in names, const array<float>& in w, const array<float>& in p, int chosen,
 	const string why = "clock")
 {
 	string ln = "apex: " + tag + " t=" + ai.teamId + " f=" + ai.frame + " why=" + why + " rule=" + rule
-		+ " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
+		+ " ex=" + (explore ? 1 : 0) + NnGameField(tag) + " trust=" + NnF(trust, 2) + " |";
 	for (uint k = 0; k < st.length(); ++k)
 		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
 	ln += " |";
@@ -96,7 +114,7 @@ void EcoNetDecide()
 	const float aTgt = Brain::TargetShare(Brain::ARMY);
 	if (!gEcoNetHeader) {
 		gEcoNetHeader = true;
-		AiLog("apex: nncon-schema v1 state=" + NN_STATE + " con=" + NNK_CON + " opt=name,w,p opts=FLOOR,YIELD,DRAW");
+		AiLog("apex: nncon-schema v2 state=" + NN_STATE + " con=" + NNK_CON + " opt=name,w,p opts=C05,C1,C2,C3");
 		AiLog("apex: nnmex-schema v1 state=" + NN_STATE + " mex=" + NNX_MEX + " opt=name,w,p opts=HOLD,YIELD,PUSH");
 		AiLog("apex: nncap-schema v1 state=" + NN_STATE + " cap=" + NNQ_CAP + " opt=name,w,p opts=X1,X2,X4");
 		AiLog("apex: nnacap-schema v1 state=" + NN_STATE + " acap=" + NNQ_CAP + " opt=name,w,p opts=A2,A4,A8");
@@ -105,7 +123,7 @@ void EcoNetDecide()
 	{
 		array<float> f;
 		f.insertLast(float(ConFleetHave()));
-		f.insertLast(float(ConsNeedAny()));
+		f.insertLast(float(ConsNeedAt(false, 1.f)));
 		f.insertLast(aShare);
 		f.insertLast(aTgt);
 		f.insertLast(ArmyTarget() - ArmyValue());
@@ -113,15 +131,16 @@ void EcoNetDecide()
 		f.insertLast(float(ClaimableSpots()));
 		f.insertLast(FoeRaidMassM());
 		f.insertLast(float(ai.frame) / 1800.f);
-		array<float> w = {NE2_EPS, NE2_EPS, NE2_EPS};
-		w[NK_YIELD] = 1.f;
+		array<float> w(NK_N, NE2_EPS);
+		w[NK_C1] = 1.f;
 		const float trust = NnHeadScore(NNK_ON, NNK_STATE, NNK_CON, NNK_S, NNK_O, NNK_H, NNK_XM, NNK_XS,
 			NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, st, f, w);
-		array<float> p(3);
+		array<float> p(NK_N);
 		const float flat = NnHeadFlat();
-		gConPolicy = EcoDraw(NK_YIELD, trust, w, p, flat);
-		array<string> names = {"FLOOR", "YIELD", "DRAW"};
-		AiLog(EcoLine("nncon", "YIELD", flat > 0.f, trust, st, f, names, w, p, gConPolicy));
+		const int c = EcoDrawBal("nncon", NK_C1, trust, w, p, flat);
+		gConFloorMul = NK_MUL[c];
+		array<string> names = {"C05", "C1", "C2", "C3"};
+		AiLog(EcoLine("nncon", "C1", flat > 0.f, trust, st, f, names, w, p, c));
 	}
 	{
 		array<float> qf;
@@ -143,7 +162,7 @@ void EcoNetDecide()
 			NNQ_W1, NNQ_B1, NNQ_W2, NNQ_B2, NNQ_WO, NNQ_BO, NNQ_TRUST, st, qf, qw);
 		array<float> qp(3);
 		const float qflat = NnHeadFlat();
-		const int c = EcoDraw(0, qtrust, qw, qp, qflat);
+		const int c = EcoDrawBal("nncap", 0, qtrust, qw, qp, qflat);
 		gConCapMul = (c == 1) ? 2.f : ((c == 2) ? 4.f : 1.f);
 		array<string> qnames = {"X1", "X2", "X4"};
 		AiLog(EcoLine("nncap", "X1", qflat > 0.f, qtrust, st, qf, qnames, qw, qp, c));
@@ -153,7 +172,7 @@ void EcoNetDecide()
 			NNZ_W1, NNZ_B1, NNZ_W2, NNZ_B2, NNZ_WO, NNZ_BO, NNZ_TRUST, st, qf, w2);
 		array<float> p2(3);
 		const float flat2 = NnHeadFlat();
-		const int c2 = EcoDraw(1, trust2, w2, p2, flat2);
+		const int c2 = EcoDrawBal("nnacap", 1, trust2, w2, p2, flat2);
 		gAirCapMul = (c2 == 0) ? 2.f : ((c2 == 2) ? 8.f : 4.f);
 		array<string> names2 = {"A2", "A4", "A8"};
 		AiLog(EcoLine("nnacap", "A4", flat2 > 0.f, trust2, st, qf, names2, w2, p2, c2));
@@ -175,7 +194,7 @@ void EcoNetDecide()
 			NNS_W1, NNS_B1, NNS_W2, NNS_B2, NNS_WO, NNS_BO, NNS_TRUST, st, sf, sw);
 		array<float> sp(3);
 		const float sflat = NnHeadFlat();
-		const int sc = EcoDraw(0, strust, sw, sp, sflat);
+		const int sc = EcoDrawBal("nnscap", 0, strust, sw, sp, sflat);
 		gScoutCapMul = (sc == 1) ? 1.5f : ((sc == 2) ? 2.f : 1.f);   // x4 was 160 scouts an AI: a frame-budget risk at 16 AIs
 		array<string> snames = {"S1", "S15", "S2"};
 		AiLog(EcoLine("nnscap", "S1", sflat > 0.f, strust, st, sf, snames, sw, sp, sc));
@@ -191,13 +210,13 @@ void EcoNetDecide()
 		f.insertLast(FoeRaidMassM());
 		f.insertLast(Eco::MCur());
 		f.insertLast(float(ai.frame) / 1800.f);
-		array<float> w = {NE2_EPS, NE2_EPS, NE2_EPS};
+		array<float> w(3, NE2_EPS);
 		w[NX_HOLD] = 1.f;
 		const float trust = NnHeadScore(NNX_ON, NNX_STATE, NNX_MEX, NNX_S, NNX_O, NNX_H, NNX_XM, NNX_XS,
 			NNX_W1, NNX_B1, NNX_W2, NNX_B2, NNX_WO, NNX_BO, NNX_TRUST, st, f, w);
 		array<float> p(3);
 		const float flat = NnHeadFlat();
-		gMexPolicy = EcoDraw(NX_HOLD, trust, w, p, flat);
+		gMexPolicy = EcoDrawBal("nnmex", NX_HOLD, trust, w, p, flat);
 		gMexMul = (gMexPolicy == NX_PUSH) ? 2.f : 1.f;
 		array<string> names = {"HOLD", "YIELD", "PUSH"};
 		AiLog(EcoLine("nnmex", "HOLD", flat > 0.f, trust, st, f, names, w, p, gMexPolicy));

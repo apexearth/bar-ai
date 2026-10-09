@@ -572,7 +572,7 @@ void DefAmountDecide()
 		NND_W1, NND_B1, NND_W2, NND_B2, NND_WO, NND_BO, NND_TRUST, st, f, wt);
 	array<float> p(3);
 	const float flat = NnHeadFlat();
-	const int c = EcoDraw(DA_RULE, trust, wt, p, flat);
+	const int c = EcoDrawBal("nndefamt", DA_RULE, trust, wt, p, flat);
 	array<string> names = {"D05", "D1", "D2"};
 	AiLog(EcoLine("nndefamt", "D1", flat > 0.f, trust, st, f, names, wt, p, c));
 	++gDaDecN;

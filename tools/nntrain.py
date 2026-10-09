@@ -860,10 +860,15 @@ class EscHead(ComHead):
 
 
 class ConHead(ComHead):
-    """The constructor-floor net (econet.as): always, while the army holds its share, or never."""
+    """The constructor-floor net (econet.as): the floor x0.5 / x1 (the rule) / x2 / x3."""
     NAME = "con"
-    OPTS = ("FLOOR", "YIELD", "DRAW")
+    OPTS = ("C05", "C1", "C2", "C3")
     PREFIX = "NNK"
+
+    def learn(self, source, g, first_touch, rows):
+        # a v1 row (FLOOR/YIELD/DRAW) is another decision: its index would read as C05/C1/C2
+        rows = [r for r in rows if r.get("rule") in self.OPTS]
+        return super().learn(source, g, first_touch, rows) if rows else None
 
 
 class MexHead(ComHead):

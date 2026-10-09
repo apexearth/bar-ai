@@ -171,14 +171,14 @@ void PostFields(array<float>& out f)
 // default weights pass through and trust is 0.
 // THE POSTURE NET (Market::NNP_*, written by tools/nntrain.py): it scores each
 // option from the state, the posture fields, the option and what the rules
-// chose, and moves the option weights in log space by the trust it has earned
-// -- the builder and factory nets' rule. Returns that trust (0 = rules alone).
+// chose, and mixes its policy into the rule's by the trust it has earned
+// (Market::NnHeadMix). Returns that trust (0 = rules alone).
 float NnPostScore(const array<float>& in st, const array<float>& in post, array<float>& w)
 {
 	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * Market::NNP_TRUST;
 	t = (t > 1.f) ? 1.f : t;
 	const int S = Market::NNP_S, O = Market::NNP_O, H = Market::NNP_H, N = S + O;
-	if ((t <= 0.f) || !Market::NNP_ON || (Market::NNP_STATE != Market::NN_STATE + "|" + NNP_POST)
+	if ((t <= 0.f) || (Market::NN_TRUST_KIND < 2) || !Market::NNP_ON || (Market::NNP_STATE != Market::NN_STATE + "|" + NNP_POST)
 		|| (O != 2 * POST_N) || (S != int(st.length() + post.length())) || (H <= 0)
 		|| (Market::NNP_XM.length() != uint(N)) || (Market::NNP_W1.length() != uint(H * N))
 		|| (Market::NNP_W2.length() != uint(H * H)) || (Market::NNP_WO.length() != uint(H)))
@@ -197,7 +197,6 @@ float NnPostScore(const array<float>& in st, const array<float>& in post, array<
 			a[h] += Market::NNP_W1[h * N + i] * z;
 	}
 	array<float> score(POST_N), h1(H);
-	float mean = 0.f;
 	for (int o = 0; o < POST_N; ++o) {
 		for (int h = 0; h < H; ++h)
 			h1[h] = a[h];
@@ -219,19 +218,8 @@ float NnPostScore(const array<float>& in st, const array<float>& in post, array<
 				sc += Market::NNP_WO[h2] * acc;
 		}
 		score[o] = sc;
-		mean += sc;
 	}
-	mean /= float(POST_N);
-	float meanLw = 0.f;
-	for (int o = 0; o < POST_N; ++o)
-		meanLw += log(w[o]);
-	meanLw /= float(POST_N);
-	for (int o = 0; o < POST_N; ++o) {
-		float d = score[o] - mean;
-		d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
-		const float lw = log(w[o]);
-		w[o] = pow(2.7182818f, meanLw + (1.f - t) * (lw - meanLw) + t * d);
-	}
+	Market::NnHeadMix(score, t, w);
 	return t;
 }
 
