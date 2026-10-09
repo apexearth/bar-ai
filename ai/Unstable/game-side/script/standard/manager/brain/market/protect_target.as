@@ -818,7 +818,7 @@ float DefenceTarget()
 		if ((ShelterMate(smh) < 0) && Military::TeamHasSheltered())
 			t *= 2.f;
 	}
-	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF) * ecoRamp;
+	gDefTgtM = ((t > 0.f) ? t : 0.f) * Persona::Trait(Persona::T_DEF) * ecoRamp * DefAmountMult();
 	return gDefTgtM;
 }
 

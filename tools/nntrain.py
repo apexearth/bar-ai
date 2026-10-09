@@ -561,6 +561,8 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
     """Every net as nnweights.as: builder (NNW_*), factory (NNF_*), posture
     (NNP_*) and the BARb prior (NNI_*); a net not trained yet is the empty one."""
     tail = (["// the factory net (production.as roulette)"] + fac_block(fac) +
+            ["// the static defence amount net (protect_nn.as)"] + post_block((heads or {}).get("defamt"), "NND") +
+            ["// the static defence site net (protect_nn.as)"] + post_block((heads or {}).get("defsite"), "NNU") +
             ["// the posture net (military/nnpost.as)"] + post_block(post) +
             ["// the commander net (comdecide.as)"] + post_block((heads or {}).get("com"), "NNC") +
             ["// the T2 net (nntech.as)"] + post_block((heads or {}).get("tech"), "NNT") +
@@ -960,6 +962,25 @@ class OddsHead(ComHead):
 
 
 DEC_HEADS = (ComHead, TechHead, RaidHead, AirHead, EscHead, ConHead, MexHead, CapHead, AirCapHead, PlanHead, JoinHead, AirPlantHead, ReinfHead, HuntHead, ScoutCapHead, EscCapHead, StrikeHead, MassHead, OddsHead)   # parsed by decisions.head_rows_of(tag)
+
+
+class DefAmtHead(ComHead):
+    """The static defence amount net (protect_nn.as): DefenceTarget x0.5 / x1 / x2.
+    No 'done' of its own: the team's per-horizon outcomes (lostMobile, edges, endV)."""
+    NAME = "defamt"
+    OPTS = ("D05", "D1", "D2")
+    PREFIX = "NND"
+
+
+class DefSiteHead(ComHead):
+    """The static defence site net (protect_nn.as): the rule's site or the best
+    slot of another kind. Its 'done' is the trade at the chosen site over 5 min."""
+    NAME = "defsite"
+    OPTS = ("RULE", "WALL", "MEXG", "FRONT", "FLANK", "FORT", "LEAK")
+    PREFIX = "NNU"
+
+
+DEC_HEADS = DEC_HEADS + (DefAmtHead, DefSiteHead)
 
 
 class Trainer:
@@ -1464,6 +1485,8 @@ def stale_ok(p, state_keys, has_net=True):
     except OSError:
         return False
     if not all(k in head for k in ("NNW_TRUST", "NNF_TRUST", "NNP_TRUST", "NNC_TRUST", "NNT_TRUST", "NNR_TRUST", "NNA_TRUST", "NNE_TRUST", "NNK_TRUST", "NNX_TRUST", "NNQ_TRUST", "NNZ_TRUST", "NNG_TRUST", "NNJ_TRUST", "NNL_TRUST", "NNV_TRUST", "NNH_TRUST", "NNS_TRUST", "NNY_TRUST", "NNB_TRUST", "NNM_TRUST", "NNO_TRUST", "NNI_ON")):
+        return False
+    if not all(k in head for k in ("NND_TRUST", "NNU_TRUST")):
         return False
     if (OUT / "imitate.npz").is_file() and "NNI_ON = true" not in head:
         return False

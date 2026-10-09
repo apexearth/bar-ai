@@ -194,6 +194,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
@@ -460,6 +461,9 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 			Market::NoteTowerLost(at);
 			Market::NoteTowerGrave(at, cdef.costM);
 		}
+		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]
+			&& !Catalog::gFlyer[int(attackerDef.id)])
+			Market::DefNoteLeak(at, int(cdef.id), attackerDef);
 	}
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
 	// BUILDINGS, and the mobile-only filter below threw away precisely its
@@ -492,6 +496,8 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
+	if (edef.IsMobile() && Catalog::ValidId(int(edef.id)) && !Catalog::gFlyer[int(edef.id)])
+		Market::DefSiteNoteKill(pos, edef.costM);
 	if (byUs)
 		Market::LossNote(int(edef.id));   // their wreck is rez work too
 	Perf::Add("hk.enemydead", hkT);
