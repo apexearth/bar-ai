@@ -278,10 +278,6 @@ const float TUNE_RAID_ASK = 1.f;
 //   also disengage-and-repair).
 const float TUNE_RETREAT_COST_SECS = 0.f;
 
-// [toggle 0/1] -- Use the explicit siege latch for dig-in decisions; 0 falls
-//   back to BaseContested.
-const float TUNE_SIEGE = 0.f;
-
 // [toggle 0/1] -- Stance (aggressive/passive) moves the budget shares; 0 lets
 //   stance read but never act, for isolation A/Bs.
 const float TUNE_STANCE = 1.f;
@@ -526,14 +522,6 @@ const float TUNE_FLAK_PER = 60.f;
 // [fraction 0-1] -- While trading badly, the army's staging anchor pulls back
 //   to this fraction of the way from home toward the enemy.
 const float TUNE_LANE_DEFENSIVE = 0.15f;
-
-// [ratio] -- A guard tower is obsolete once the top gun costs more than this
-//   times the tower and is affordable -- big guns cover that ground instead.
-const float TUNE_PORC_OBSOLETE_RATIO = 7.f;
-
-// [seconds] -- The top gun counts as affordable for the porc-obsolete test
-//   when it costs at most this many seconds of income.
-const float TUNE_PORC_OBSOLETE_SECS = 20.f;
 
 // Shield metal we aim to have standing per metal of enemy bombardment -- the
 //   plasma twin of AA_COVER_FRAC, and the term that stops dome-stacking without
@@ -1015,10 +1003,6 @@ const float TUNE_BP_HEADROOM = 1.0f;
 //   priced build (Requests::Take joins same-def askers).
 const float TUNE_ASSIST_SHARE = 0.5f;
 
-// E_STALL_BOOST: multiplier on the conversion-floor E price per unit of
-//   pull-above-income (a stall doubles-to-triples what new E is worth).
-const float TUNE_E_STALL_BOOST = 2.0f;
-
 // BP_LOOKAHEAD: seconds of income GROWTH folded into the BP target -- the
 //   compounding term; a flat economy adds nothing.
 const float TUNE_BP_LOOKAHEAD = 60.f;
@@ -1139,10 +1123,6 @@ const float TUNE_ECO_SAFE_R = 2500.f;
 // RECLAIM_AGE_S: a con must be at least this old before the surplus reclaimer
 //   may eat it -- younger is churn against our own buildtime.
 const float TUNE_RECLAIM_AGE_S = 180.f;
-
-// LINE_PULL: unserved line spend (m/s) a factory needs before it pulls a nano
-//   away from the farm block -- two turrets' worth of hunger.
-const float TUNE_LINE_PULL = 35.f;
 
 // NANO_SINK_BANK: bank fraction of storage above which "not empty on metal"
 //   holds and live build sites compete for nano placement by their crew drain.
@@ -1292,10 +1272,6 @@ const float TUNE_MOBILE_BP_EFF = 0.6f;
 //   one modeled risk quantity for eyes and turrets. See docs/27.
 const float TUNE_INSURE_RATE = 0.0003f;   // was 5e-5: radar lost to marginal solars until assets were huge (watched)
 
-// NUKE_RISK: the anti-nuke's own rate; higher, because an uncovered nuke is
-//   total loss. See docs/27.
-const float TUNE_NUKE_RISK = 0.0005f;
-
 // TARGFAC_WANT: pinpointers wanted (apexearth 2026-08-23: "3 wanted max").
 const float TUNE_TARGFAC_WANT = 3.f;
 
@@ -1333,11 +1309,6 @@ const float TUNE_SUPER_FLIGHT_PER = 140.f;
 //   more nanos around our gantry and if we can't do that then make another
 //   gantry"; "multiple adv air are ok if we are crazy wealthy").
 const float TUNE_COPY_OVERFLOW_M = 140.f;
-
-// BLAST_AISLE [elmos] -- gap between a BIG generator's own clusters, so one
-//   death explosion cannot chain the whole farm ("better if only half our
-//   economy blows up"). See docs/27.
-const float TUNE_BLAST_AISLE = 500.f;
 
 // CON_FEED_HEADROOM -- how many hands the production draw may price toward, as
 //   a multiple of income/apex_request_drain (the hands income keeps fed). See
@@ -1526,10 +1497,6 @@ const float TUNE_PLANT_COPY = 0.f;
 // STATIC_GUARD: how much a metal of CORE static defense counts toward the army
 //   when computing the stake -- under 1 because towers cannot chase.
 const float TUNE_STATIC_GUARD = 0.7f;
-
-// WAVE_MEET: metal of standing front turrets per metal of observed enemy
-//   massing (both sides in metal -- the power conversion bought dozens).
-const float TUNE_WAVE_MEET = 0.4f;
 
 // [toggle 0/1] -- Draw the computed front line. Allies and spectators see
 //   every map overlay below, so each ships off unless someone deliberately
@@ -1752,10 +1719,6 @@ const float TUNE_DEFZONE_DYNAMIC = 1.f;
 //   applied (roughly two T1 tower ranges of approach ground).
 const float TUNE_DEFZONE_PAD = 400.f;
 
-// [metal/s] -- Above this income the front-defence want is recomputed every 5s
-//   instead of every 1s -- rich games have more fence to walk.
-const float TUNE_ELECT_RICH_INCOME = 150.f;
-
 // [ratio] -- Minimum forward reach of a territory ray for it to yield a front
 //   spot.
 const float TUNE_FRONT_MIN_REACH = 0.5f;
@@ -1874,10 +1837,6 @@ const float TUNE_SPAM_SUICIDAL = 1.f;
 //   this long.
 const float TUNE_STUCK_RETRY = 120.f;
 
-// [count] -- Lattice slots offered to the engine before a placement gives up
-//   on growing a cluster and seeds a new one. See docs/27.
-const float TUNE_SLOT_TRIES = 12.f;
-
 // [toggle 0/1] -- A GROW slot must keep the cluster aisle to a foreign def,
 //   not just avoid touching it. See docs/27.
 const float TUNE_AISLE_GROW = 1.f;
@@ -1886,19 +1845,9 @@ const float TUNE_AISLE_GROW = 1.f;
 //   cluster elsewhere, so the whole economy is not in one spot. See docs/27.
 const float TUNE_CLUSTER_N = 16.f;
 
-// [count] -- Rows of lattice the farm scan walks rearward before giving up.
-//   See docs/27.
-const float TUNE_FARM_ROWS = 28.f;
-
 // [toggle 0/1] -- Reclaim one of our own economy buildings that is standing in
 //   a lattice slot C++ could not place on. See docs/27.
 const float TUNE_RECLAIM_BLOCKER = 0.f;
-
-// [seconds] -- HOW MUCH STATIC DEFENCE WE MAY OWN, as seconds of total
-//   economic power (EcoPowerM, metal/s incl. See docs/27.
-// SUPERSEDED 2026-09-09 -- DefenceTarget is now the budget's defence row
-//   times standing power. Kept so a config naming it still parses. See docs/27.
-const float TUNE_DEF_ECO_S = 120.f;
 
 // [toggle 0/1] -- THE NO-TURRET TEST (docs/24-how-units-fight.md): 1 proposes
 //   no ground or AA turret at all, so radar and units are the whole defence. See
@@ -2017,10 +1966,6 @@ const float TUNE_FOE_TIER_FADE = 1.f;
 //   ("in late game, aside from spam we should mostly only be putting our
 //   resources into T3 units and advanced air"). See docs/27.
 const float TUNE_OWN_TIER_FADE = 0.8f;
-
-// [metal per unit of ally influence] -- What a teammate holding this ground is
-//   worth as cover, in the same currency as our own towers. See docs/27.
-const float TUNE_ALLY_COVER = 400.f;
 
 // [ratio] -- Share of the SYMMETRIC enemy expectation that the defence target
 //   assumes could arrive at our own base before anything has been seen. See

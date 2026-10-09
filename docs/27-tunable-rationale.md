@@ -2463,6 +2463,9 @@ knowing about, it is simply not what parks builders.
 
 ## `apex_def_eco_s` = 120, `apex_bp_headroom` = 1.0 — MEASURED, both raised, both worse (2026-09-08)
 
+> `apex_def_eco_s` had no reader by 2026-10-09 and was deleted; the defence
+> target is no longer an eco-seconds share. History only.
+
 BARb outspends us badly in two categories, measured over 16 games of
 `reverted-long`, per game:
 
