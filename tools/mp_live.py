@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bar_env  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-NOTE = re.compile(r"apex: (?:nnplan t=\d+ .*?chosen=\S+|plan t=\d+ follows \S+|push go .*|nnaplant t=\d+ .*?chosen=\S+"
+NOTE = re.compile(r"apex: (?:nnplan t=\d+ .*?chosen=\S+|plan t=\d+ follows \S+|push go .*|nnval head=aplant t=\d+ f=\d+ v=\S+"
                   r"|tunable-opt .*|persona t=\d+ rolled.*)")
 ERR = re.compile(r": ERR  :|[Ee]xception|Script error")
 

@@ -405,34 +405,180 @@ float NnHeadFlat()
 	return gNnExplore ? NN_HEAD_FLAT : 0.f;
 }
 
-// BALANCE HEADS (options are an ordered level: con, cap, acap, scap, ecap, esc,
-// mex, mass, odds, defamt, aplant): an explorer holds each, at even odds, at one
-// uniformly drawn option for the whole game, so a level's effect shows between
-// games. -1 = not held (the head draws per decision as usual).
-array<string> gNnBalTag;
-array<int> gNnBalOpt;
-
-int NnBalanceHeld(const string& in tag, int K)
+// AiRandom is rand() % n: with MSVC's RAND_MAX of 32767 a % 10000 favours the low
+// quarter by a third. 32768 divides RAND_MAX + 1 everywhere.
+float NnU01()
 {
-	const int i = gNnBalTag.find(tag);
-	if (i >= 0)
-		return gNnBalOpt[i];
-	NnExploreRoll();
-	int o = -1;
-	if (gNnExplore && (K > 1) && (AiRandom(0, 1) == 0))
-		o = AiRandom(0, K - 1);
-	gNnBalTag.insertLast(tag);
-	gNnBalOpt.insertLast(o);
-	if (gNnExplore)
-		AiLog("apex: nn-balance t=" + ai.teamId + " head=" + tag + " held=" + ((o >= 0) ? 1 : 0)
-			+ " opt=" + o + " k=" + K);
-	return o;
+	return (float(AiRandom(0, 32767)) + float(AiRandom(0, 32767)) / 32768.f) / 32768.f;
 }
 
-bool NnBalanceIsHeld(const string& in tag)
+float NnUniform(float lo, float hi)
 {
-	const int i = gNnBalTag.find(tag);
-	return (i >= 0) && (gNnBalOpt[i] >= 0);
+	return lo + (hi - lo) * NnU01();
+}
+
+// CONTINUOUS HEADS (his 2026-10-09: a quantity is never chopped into steps): con,
+// mex, cap, acap, scap, ecap, esc, mass, odds, defamt, aplant. Each names a range
+// and the rule's value; the net scores a candidate v from the state, the head's
+// fields, v and the rule's value. An explorer holds each head, at even odds, at
+// ONE uniform draw all game (game=1); otherwise it draws uniformly with odds
+// NN_HEAD_FLAT; else trust t plays the net's best v, 1-t the rule.
+const int NNV_GRID = 25;
+const int NNV_FINE = 8;
+array<string> gNnValTag;
+array<bool> gNnValIsHeld;
+array<float> gNnValHeld;
+array<string> gNnValSaid;
+
+int NnValHeldAt(const string& in tag, float lo, float hi)
+{
+	const int i = gNnValTag.find(tag);
+	if (i >= 0)
+		return i;
+	NnExploreRoll();
+	const bool held = gNnExplore && (NnU01() < 0.5f);
+	gNnValTag.insertLast(tag);
+	gNnValIsHeld.insertLast(held);
+	gNnValHeld.insertLast(held ? NnUniform(lo, hi) : 0.f);
+	const int n = int(gNnValTag.length()) - 1;
+	if (gNnExplore)
+		AiLog("apex: nn-balance t=" + ai.teamId + " head=" + tag + " held=" + (held ? 1 : 0)
+			+ " v=" + NnF(gNnValHeld[n], 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4));
+	return n;
+}
+
+float NnValAt(float v, const array<float>& in a, int S, int N, int H, const array<float>& in XM,
+	const array<float>& in XS, const array<float>& in W1, const array<float>& in W2,
+	const array<float>& in B2, const array<float>& in WO, float BO, array<float>& h1)
+{
+	float z = (v - XM[S]) / XS[S];
+	z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+	for (int h = 0; h < H; ++h)
+		h1[h] = a[h] + W1[h * N + S] * z;
+	float sc = BO;
+	for (int h2 = 0; h2 < H; ++h2) {
+		float acc = B2[h2];
+		for (int h = 0; h < H; ++h) {
+			if (h1[h] > 0.f)
+				acc += W2[h2 * H + h] * h1[h];
+		}
+		if (acc > 0.f)
+			sc += WO[h2] * acc;
+	}
+	return sc;
+}
+
+// The net's best v in [lo, hi]: NNV_GRID even points, then NNV_FINE between the
+// best one's neighbours. Inputs in the trainer's order: state, own fields (slog),
+// then v and the rule's value raw.
+float NnValBest(int S, int H, const array<float>& in XM, const array<float>& in XS,
+	const array<float>& in W1, const array<float>& in B1, const array<float>& in W2,
+	const array<float>& in B2, const array<float>& in WO, float BO,
+	const array<float>& in st, const array<float>& in f, float rule, float lo, float hi)
+{
+	const int N = S + 2;
+	array<float> a(H);
+	for (int h = 0; h < H; ++h)
+		a[h] = B1[h];
+	for (int i = 0; i < S; ++i) {
+		const float x = (uint(i) < st.length()) ? st[i] : f[i - st.length()];
+		float z = (NnSlog(x) - XM[i]) / XS[i];
+		z = (z > 6.f) ? 6.f : ((z < -6.f) ? -6.f : z);
+		for (int h = 0; h < H; ++h)
+			a[h] += W1[h * N + i] * z;
+	}
+	float zr = (rule - XM[S + 1]) / XS[S + 1];
+	zr = (zr > 6.f) ? 6.f : ((zr < -6.f) ? -6.f : zr);
+	for (int h = 0; h < H; ++h)
+		a[h] += W1[h * N + S + 1] * zr;
+	array<float> h1(H);
+	const float step = (hi - lo) / float(NNV_GRID - 1);
+	float best = lo, bestSc = -1e30f;
+	for (int g = 0; g < NNV_GRID; ++g) {
+		const float v = lo + step * float(g);
+		const float sc = NnValAt(v, a, S, N, H, XM, XS, W1, W2, B2, WO, BO, h1);
+		if (sc > bestSc) {
+			bestSc = sc;
+			best = v;
+		}
+	}
+	const float c = best;
+	for (int k = 0; k < NNV_FINE; ++k) {
+		const float v = c - step + 2.f * step * float(k + 1) / float(NNV_FINE + 1);
+		if ((v < lo) || (v > hi))
+			continue;
+		const float sc = NnValAt(v, a, S, N, H, XM, XS, W1, W2, B2, WO, BO, h1);
+		if (sc > bestSc) {
+			bestSc = sc;
+			best = v;
+		}
+	}
+	return best;
+}
+
+// One continuous head's decision: the value to play, its `apex: nnval` row logged.
+// nlo/nhi: the range the net was trained on; the sweep stays inside it.
+float NnValDecide(const string& in tag, const string& in own, float lo, float hi, float rule,
+	bool on, const string& in layout, int S, int O, int H, const array<float>& in XM,
+	const array<float>& in XS, const array<float>& in W1, const array<float>& in B1,
+	const array<float>& in W2, const array<float>& in B2, const array<float>& in WO, float BO,
+	float trust0, float nlo, float nhi, const array<float>& in st, const array<float>& in f)
+{
+	if (gNnValSaid.find(tag) < 0) {
+		gNnValSaid.insertLast(tag);
+		AiLog("apex: nnval-schema v1 head=" + tag + " state=" + NN_STATE + " own=" + own
+			+ " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4) + " rule=" + NnF(rule, 4));
+	}
+	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * trust0;
+	t = (t > 1.f) ? 1.f : t;
+	const float sLo = (nlo > lo) ? nlo : lo;
+	const float sHi = (nhi < hi) ? nhi : hi;
+	bool ok = (t > 0.f) && on && (NN_TRUST_KIND >= 2);
+	if (ok && ((layout != NN_STATE + "|" + own) || (O != 2) || (S != int(st.length() + f.length()))
+		|| (H <= 0) || (XM.length() != uint(S + O)) || (XS.length() != uint(S + O))
+		|| (W1.length() != uint(H * (S + O))) || (B1.length() != uint(H)) || (W2.length() != uint(H * H))
+		|| (B2.length() != uint(H)) || (WO.length() != uint(H)) || (sHi <= sLo)))
+	{
+		if (gNnOffSaid.find("val:" + tag) < 0) {
+			gNnOffSaid.insertLast("val:" + tag);
+			AiLog("apex: nn-head OFF t=" + ai.teamId + " head=" + tag + " trust=" + NnF(trust0, 2)
+				+ " layout=" + ((layout == NN_STATE + "|" + own) ? "ok" : "differs")
+				+ " S=" + S + "/" + (st.length() + f.length()) + " O=" + O
+				+ " range=" + NnF(nlo, 2) + "-" + NnF(nhi, 2));
+		}
+		ok = false;
+	}
+	if (!ok)
+		t = 0.f;
+	const float flat = NnHeadFlat();
+	const int hk = NnValHeldAt(tag, lo, hi);
+	float v = rule, vnet = rule;
+	bool rnd = false, game = false, net = false;
+	if (gNnValIsHeld[hk]) {
+		v = gNnValHeld[hk];
+		rnd = true;
+		game = true;
+	} else if ((flat > 0.f) && (NnU01() < flat)) {
+		v = NnUniform(lo, hi);
+		rnd = true;
+	} else if ((t > 0.f) && (NnU01() < t)) {
+		const double _t = Perf::T0();
+		vnet = NnValBest(S, H, XM, XS, W1, B1, W2, B2, WO, BO, st, f, rule, sLo, sHi);
+		Perf::Add("nn.val", _t);
+		v = vnet;
+		net = true;
+	}
+	string ln = "apex: nnval head=" + tag + " t=" + ai.teamId + " f=" + ai.frame + " v=" + NnF(v, 4)
+		+ " rule=" + NnF(rule, 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4) + " rnd=" + (rnd ? 1 : 0)
+		+ " dens=" + NnF(rnd ? 1.f / (hi - lo) : 0.f, 6) + " ex=" + ((flat > 0.f) ? 1 : 0)
+		+ " game=" + (game ? 1 : 0) + " trust=" + NnF(t, 2) + " vnet=" + (net ? NnF(vnet, 4) : "-") + " |";
+	for (uint k = 0; k < st.length(); ++k)
+		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
+	ln += " |";
+	for (uint k = 0; k < f.length(); ++k)
+		ln += ((k == 0) ? " " : ",") + NnF(f[k], 3);
+	AiLog(ln);
+	return v;
 }
 
 // Said once, when the explorer first knows its strategy, so a watcher knows

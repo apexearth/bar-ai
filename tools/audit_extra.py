@@ -85,7 +85,22 @@ def check_nets(text, rep):
             rep.add("NETS", not (blend > 0 and len(sc) >= 50 and changed == 0), "builder-net-moves",
                     "net changed the top pick in %d of %d scored elections (%.0f%%), blend %.2f, net %d games" % (
                         changed, len(sc), 100.0 * changed / len(sc), blend, net))
-    for head in ("post", "com", "tech", "raid", "air", "esc", "con", "mex", "cap", "acap", "plan", "join", "aplant", "reinf", "hunt", "scap", "ecap", "strike", "mass", "odds", "defamt", "defsite", "deftype", "open"):
+    for head in ("esc", "con", "mex", "cap", "acap", "aplant", "scap", "ecap", "mass", "odds", "defamt"):
+        vr = re.findall(r"apex: nnval head=%s t=%d f=\d+ v=(\S+) rule=(\S+) .*? rnd=(\d) .*? trust=(\S+)" % (head, t0), text)
+        if not vr:
+            continue
+        trust = [float(x[3]) for x in vr if re.match(r"^[\d.]+$", x[3])]
+        live = [float(x[0]) for x in vr if x[2] != "1"]
+        moved = sum(1 for x in vr if x[2] != "1" and x[0] != x[1])
+        tmax = max(trust) if trust else 0.0
+        detail = "%d rows, trust %.2f, %d drawn, %d of %d played off the rule%s" % (
+            len(vr), tmax, len(vr) - len(live), moved, len(live),
+            (", played %.2f-%.2f" % (min(live), max(live))) if live else "")
+        if tmax <= 0.0:
+            rep.add("NETS", False, "head-%s-trust" % head, "trust 0 all game -- the rule decides alone; " + detail)
+        else:
+            rep.add("NETS", True, "head-%s" % head, detail)
+    for head in ("post", "com", "tech", "raid", "air", "plan", "join", "reinf", "hunt", "strike", "defsite", "deftype", "open"):
         hr = re.findall(r"apex: nn%s t=%d f=\d+ why=\S+ rule=(\S+)(?: ex=(\d))?(?: game=\d)? trust=(\S+) .*? chosen=(-?\d+)" % (head, t0), text)
         if not hr:
             continue

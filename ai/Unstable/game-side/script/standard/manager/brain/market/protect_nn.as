@@ -3,8 +3,8 @@ namespace Market {
 // STATIC DEFENCE AS TWO RECORDED DECISIONS (apexearth 2026-10-08: "If we don't
 // have a NN governing defense count and placement - we need one. Enemies often
 // find ways into the sensitive parts of our base."). AMOUNT: every 60 s a
-// multiplier on DefenceTarget, rule D1. PLACEMENT: when a ground gun is about
-// to be sited, the rule's site against the best slot of each kind the site
+// continuous multiplier on DefenceTarget, rule 1x. PLACEMENT: when a ground gun
+// is about to be sited, the rule's site against the best slot of each kind the site
 // generators already offer, plus a site on the recent leak path; rule = the
 // rule's site. A LEAK is a building of ours an enemy ground unit killed.
 const string NND_DEF = "defV,defT0,defFly,fill,leak5M,leakSens5M,leakIn5M,leakN5,raidM,foeArmy,"
@@ -18,8 +18,7 @@ const string NNU_SITE = "defM,reach,leak5M,leakSens5M,nCand,minute,"
 	+ "fl_on,fl_prev,fl_stake,fl_leak,fl_cosFoe,fl_cover,fl_threat,fl_haz,fl_fwd,fl_rimD,fl_bp,fl_guns,fl_dRule,"
 	+ "fo_on,fo_prev,fo_stake,fo_leak,fo_cosFoe,fo_cover,fo_threat,fo_haz,fo_fwd,fo_rimD,fo_bp,fo_guns,fo_dRule,"
 	+ "lk_on,lk_prev,lk_stake,lk_leak,lk_cosFoe,lk_cover,lk_threat,lk_haz,lk_fwd,lk_rimD,lk_bp,lk_guns,lk_dRule";
-const array<float> DA_MULT = {0.5f, 1.f, 2.f};
-const int DA_RULE = 1;
+const float DA_LO = 0.25f, DA_HI = 8.f;
 const int DS_RULE = 0, DS_WALL = 1, DS_MEXG = 2, DS_FRONT = 3, DS_FLANK = 4, DS_FORT = 5, DS_LEAK = 6, DS_N = 7;
 const int LEAK_WIN = 300 * SECOND;     // the recent leak window the features and sites read
 const int DS_WATCH_S = 300;            // the placement label's horizon
@@ -36,9 +35,8 @@ int gLkN = 0, gLkSensN = 0, gLkLogAt = 0;
 float gLkAllM = 0.f, gLkSensM = 0.f, gLkInM = 0.f, gLkRimM = 0.f, gLkOutM = 0.f;
 float gLkFrontM = 0.f, gLkFlankM = 0.f, gLkRearM = 0.f, gLkLoneM = 0.f;
 
-int gDaPick = 1;   // DA_RULE
+float gDaMul = 1.f;
 int gDaNextAt = -1;
-bool gDaHeader = false;
 int gDaDecN = 0, gDaOvN = 0;
 
 bool gDsHeader = false;
@@ -65,7 +63,7 @@ array<int> gBwTag;   // 0 the site head, 1 the gun-class head (protect_nntype.as
 
 float DefAmountMult()
 {
-	return DA_MULT[gDaPick];
+	return gDaMul;
 }
 
 string LeakCls(int d)
@@ -530,10 +528,6 @@ void DefAmountDecide()
 	const float mult = DefAmountMult();
 	const float defT0 = DefenceTarget() / mult;
 	const float defV = DefenceValue();
-	if (!gDaHeader) {
-		gDaHeader = true;
-		AiLog("apex: nndefamt-schema v1 state=" + NN_STATE + " defamt=" + NND_DEF + " opt=name,w,p opts=D05,D1,D2");
-	}
 	float la = 0.f, ls = 0.f, li = 0.f;
 	int ln = 0;
 	LeakSums(la, ls, li, ln);
@@ -566,19 +560,11 @@ void DefAmountDecide()
 	f.insertLast(EcoPowerM());
 	f.insertLast(mult);
 	f.insertLast(float(ai.frame) / 1800.f);
-	array<float> wt(3, NE2_EPS);
-	wt[DA_RULE] = 1.f;
-	const float trust = NnHeadScore(NND_ON, NND_STATE, NND_DEF, NND_S, NND_O, NND_H, NND_XM, NND_XS,
-		NND_W1, NND_B1, NND_W2, NND_B2, NND_WO, NND_BO, NND_TRUST, st, f, wt);
-	array<float> p(3);
-	const float flat = NnHeadFlat();
-	const int c = EcoDrawBal("nndefamt", DA_RULE, trust, wt, p, flat);
-	array<string> names = {"D05", "D1", "D2"};
-	AiLog(EcoLine("nndefamt", "D1", flat > 0.f, trust, st, f, names, wt, p, c));
+	gDaMul = NnValDecide("defamt", NND_DEF, DA_LO, DA_HI, 1.f, NND_ON, NND_STATE, NND_S, NND_O, NND_H,
+		NND_XM, NND_XS, NND_W1, NND_B1, NND_W2, NND_B2, NND_WO, NND_BO, NND_TRUST, NND_LO, NND_HI, st, f);
 	++gDaDecN;
-	if (c != DA_RULE)
+	if (gDaMul != 1.f)
 		++gDaOvN;
-	gDaPick = c;
 }
 
 void UpdateDefNet()
@@ -599,15 +585,10 @@ void UpdateDefNet()
 			+ " in=" + int(gLkInM) + " rim=" + int(gLkRimM) + " out=" + int(gLkOutM)
 			+ " sensN=" + gLkSensN + " sens=" + int(gLkSensM) + " front=" + int(gLkFrontM)
 			+ " flank=" + int(gLkFlankM) + " rear=" + int(gLkRearM) + " lone=" + int(gLkLoneM)
-			+ " amt=" + names3(gDaPick) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN
+			+ " amt=" + NnF(gDaMul, 2) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN
 			+ " siteDec=" + gDsDecN + " siteOv=" + gDsOvN + " memo=" + gDsMemoN
 			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length() + DefTypeStat());
 	}
-}
-
-string names3(int c)
-{
-	return (c == 0) ? "D05" : ((c == 2) ? "D2" : "D1");
 }
 
 }  // namespace Market

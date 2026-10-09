@@ -126,11 +126,11 @@ float EscortsPerCon()
 
 bool EscortedWorker(Id wid)
 {
-	// x the escort net's strength: at the flat count a HEAVY draw stopped
-	// recruiting and producing where MATCH did, and ran as MATCH.
+	// x the escort head's v: at the flat count a doubled escort stopped
+	// recruiting and producing where 1x did, and ran as 1x.
 	if (EscIdOk(wid)) {
 		const float n = EscortsPerCon() * gEscMul;
-		return gEscHaveN[int(wid)] >= ((n > 1.f) ? int(n) : 1);
+		return gEscHaveN[int(wid)] >= ((n > 1.f) ? int(ceil(n)) : 1);
 	}
 	for (uint e = 0; e < gEscWorker.length(); ++e) {
 		if (gEscWorker[e] == wid)

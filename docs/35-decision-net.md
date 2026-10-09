@@ -138,16 +138,17 @@ restructure (enemy economy estimate).
   credited (+) or debited (-) by who holds that ground (net influence at the
   death); `apex: nnhunt-done ... done=(kill+wreck-lost)/(kill+lost+grpM)` is
   the head's `done`. Prefix NNH. `apex: hunt-stat` (60 s).
-- `apex: nnscap` (`econet.as`, 2026-10-08) and `apex: nnecap` (`escnet.as`,
-  2026-10-08): count caps in the priors made learnable, the `nncap` pattern.
-  `nnscap` sizes the late ground scout cap (`ScoutFleetCap`, `:scoutcap` and
-  `:esc-capped` in prodrank) at S1 (the rule: the flat base, max(20,
-  maxunits/50)), S1.5 or S2 (x4 dropped: 160 scouts an AI is a frame-budget risk at 16 AIs); prefix NNS. `nnecap` multiplies the escorts-at-once
-  cap (`EscortCap` = TUNE_ESCORT_CAP x the escort net's strength) by E1 (the
-  rule), E2 or E4, reading the escort net's own fields; prefix NNY. Both on the
-  30 s clock of their file. The flat base itself stays a ceiling on rez bots
-  and on `EscortShortfall`: it came from 564 rez bots taking his 4v4 to 0.65x
-  sim speed (c4a489ac), a frame-budget contract, not a prior.
+- `scap` (`econet.as`) and `ecap` (`escnet.as`), continuous heads (below):
+  count caps in the priors made learnable. `scap` multiplies the late ground
+  scout cap (`ScoutFleetCap`, `:scoutcap` and `:esc-capped` in prodrank; 1x =
+  the flat base, max(20, maxunits/50)) by v in 0.25-8 -- the top is his
+  "almost unreasonably high": 8x is 160+ scouts an AI, the frame-budget risk
+  that once dropped x4; prefix NNS. `ecap` multiplies the escorts-at-once cap
+  (`EscortCap` = TUNE_ESCORT_CAP x the escort head's v) by v in 0.25-10,
+  reading the escort head's fields; prefix NNY. Counts take the ceiling. The
+  flat base itself stays a ceiling on rez bots and on `EscortShortfall`: it
+  came from 564 rez bots taking his 4v4 to 0.65x sim speed (c4a489ac), a
+  frame-budget contract, not a prior.
 - `apex: nnstrike` (`manager/military/nnstrike.as`, 2026-10-08): TIMING
   WINDOWS, his priority #8 -- NO (the rule, today's play) or STRIKE, every 30 s
   (staggered by team) when we have attack squads, none while a hunt or a strike
@@ -169,26 +170,27 @@ restructure (enemy economy estimate).
   no cell is known or our attack power is 0 (`apex: strike start` / `strike
   end why=time|gone|army kill= lost=`). Shared labels only (economy, losses,
   edges vs the enemy, endV, endFast). Prefix NNB. `apex: strike-stat` (60 s).
-- `apex: nnmass` / `apex: nnodds` (`manager/military/nnmassodds.as`,
-  2026-10-08): two docs/24 section 7 priors made decisions, every 60 s per
-  team (staggered), options X05 / X1 / X2, rule X1 (today's numbers). MASS
+- `mass` / `odds` (`manager/military/nnmassodds.as`, 2026-10-08; continuous
+  2026-10-09): two docs/24 section 7 priors made decisions, every 60 s per
+  team (staggered), v in 0.25-6, rule 1x (today's numbers). MASS
   multiplies the bar a massing pool must reach before it leaves
   (`quota.attack` after `UpdateMassing`'s hold logic, before the own-army
   ceiling; also the turtle resume/lift writes); with the DLL also the
   biggest-enemy-group term of the C++ promotion bar (`UpdateDefenceTasks`).
   ODDS multiplies the enemy influence `CAttackTask::FindTarget` refuses
-  against (the strong test and the remembered-strong-group test): X05 takes
-  fights at half today's odds, X2 wants twice them. Both ride the team board
+  against (the strong test and the remembered-strong-group test): 0.5 takes
+  fights at half today's odds, 2 wants twice them. Both ride the team board
   (slots 1400+team odds, 1500+team mass); the DLL reads them every 5 s, logs
   `apex: mil-board` on a change and stamps 1600+team, and the odds head
   records nothing until that stamp is fresh (`noDll` in `apex:
-  massodds-stat`), so an old DLL never yields a row whose pick did nothing.
+  massodds-stat`, with `massOv`/`oddsOv`, the decisions played off 1x), so an
+  old DLL never yields a row whose pick did nothing.
   No head-specific label: the shared targets (lnD, lost/kill, army edge,
   endFast) judge both. Prefixes NNM, NNO.
-- `apex: nndefamt` / `apex: nndefsite` (`protect_nn.as`, 2026-10-08): his
-  "a NN governing defense count and placement". AMOUNT (prefix NND): every
-  60 s, D05 / D1 / D2 multiplies `DefenceTarget` (rule D1), held to the next
-  decision; fields are leak metal (5 min, all / eco-nano-lab / inside the
+- `defamt` / `apex: nndefsite` (`protect_nn.as`, 2026-10-08): his
+  "a NN governing defense count and placement". AMOUNT (prefix NND, a
+  continuous head): every 60 s, v in 0.25-8 multiplies `DefenceTarget` (rule
+  1x), held to the next decision; fields are leak metal (5 min, all / eco-nano-lab / inside the
   hull), enemy raid mass and army, army home/away, uncovered post share,
   cover/threat/hazard at home, wall fill and closure, assets. No `done` of its
   own: the team labels (lostMobile, edges, endV). SITE (prefix NNU): in
@@ -252,8 +254,9 @@ restructure (enemy economy estimate).
   row's comM/comE) and `done` = ln(metal made in the next 5 min / comM x 300).
   Prefix NNOP (every single letter was taken). `apex: open-plan`,
   `apex: open-step why=exec|absent`, `apex: open-done why=ordered|plant`.
-- `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
-  basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
+- `aplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
+  basic air plants -- a continuous head over the count itself, 1-8 (the rule
+  1), every 30 s; the game owes ceil(v) plants. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income
   bars) and waives the nanos-first copy rule for it (his call: more air
   plants are fine under AIR, the count the net's). Prefix NNL.
@@ -286,7 +289,55 @@ restructure (enemy economy estimate).
   `apex: ally-gantry`). `apex_plan_force` forces one plan (A/B). Instruments:
   `tools/plancheck.py`, `apex: push` / `push go`.
 
-## The table
+## Continuous heads (2026-10-09)
+
+His ruling: a quantity is never chopped into steps, and an integer count is a
+real value the game takes the ceiling of. Eleven heads are one mechanism,
+`NnValDecide` (nnlog.as), each a value v on a range, the rule's value 1x
+(aplant: the count itself, rule 1). Range tops are "almost unreasonably high"
+so the net sees big variance; draws are uniform, linear, never log.
+
+| head | file | v multiplies | range |
+|---|---|---|---|
+| con | econet | ConsNeedAny's target; above 1x the floor holds while the army is behind (C2/C3 did), at or below it yields (C1's rule) | 0.25-8 |
+| mex | econet | every mex want's value before the draw (PUSH was 2); above 1x an open mex also jumps the forced guns (YIELD's effect); 1x = HOLD, the rule | 0-6 |
+| cap | econet | the ground constructor pools' cap (base x v) | 0.5-12 |
+| acap | econet | the air pool's cap, base x 4v (4 = the rule) | 1-20 |
+| scap | econet | the late scout cap | 0.25-8 |
+| esc | escnet | escorts per constructor, owed escort metal, and the escorts-at-once cap (MATCH = 1x; LIGHT was 0.5, HEAVY 2) | 0-8 |
+| ecap | escnet | the escorts-at-once cap | 0.25-10 |
+| mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
+| defamt | protect_nn | DefenceTarget | 0.25-8 |
+| aplant | plannet | -- the plant count, owed ceil(v) | 1-8 |
+
+**Play.** A held explorer head plays its game-long draw; else an explorer
+draws uniformly with odds NN_HEAD_FLAT; else, with odds t (trust x blend,
+honest trust only: NN_TRUST_KIND >= 2), the net's best v; else the rule's 1x.
+The best v is a sweep: 25 even points over the range clipped to the one the
+net was trained on (`<P>_LO`/`<P>_HI` in nnweights.as), then 8 between the
+best point's neighbours, 33 forward passes of the head's net with the state
+layer done once -- ~37k multiply-adds (H = 32), ~4 ms by the builder net's
+measured rate, as `nn.val` in the perf sections. It runs only on the t share
+of a non-explorer decision. The five econet heads decide a second apart.
+Never rounded: v plays as drawn; only the counts it sizes take a ceiling.
+
+**Row.** `apex: nnval-schema v1 head=con state=.. own=.. lo= hi= rule=` once per
+head, then per decision `apex: nnval head=con t=N f=F v=.. rule=1.0000 lo=..
+hi=.. rnd=0|1 dens=.. ex=0|1 game=0|1 trust=.. vnet=..|- | state | own`.
+`rnd=1` is a uniform draw at density `dens` = 1/(hi-lo) (held or per
+decision); `rnd=0` is the rule or the net (`vnet` = the net's pick when it
+played). A new tag, so the old `apex: nncon`-style option rows never mix in;
+`decisions.val_rows_of` reads it (`chosen` = v).
+
+**Trainer.** `ValHead` (nntrain.py): the inputs are the state and own fields
+(slog) and then v and the rule's value raw (the scaler standardises them), on
+the same targets and labels. Trust is honest_trust on the same test as the
+option heads, read for a value: on a game's first, unseen batch every
+`rnd=1` row (one density per head, so weight 1) scores d = FULL(drawn v) -
+FULL(1x) against outcome - FULL(1x), partial on FULL(1x); the lower end of the
+game-clustered bootstrap, less the placebo (a rule row with one of 9 evenly
+spaced values standing in). The range is saved with the net and exported.
+The old discrete buffers of these heads were archived on the schema change.
 
 `python tools/decisions.py <match|tournament> --out rows.jsonl` joins each
 record to the gadget lines, for the deciding team, at +1/+3/+5 minutes: dMInc,
@@ -338,20 +389,14 @@ changes behaviour too much. Two rolls, once per game per AI:
   held 15 s; the trial share is in p and a held trial logs p=1), and the T2
   head draws one moment per tier instead of a coin every 30 s.
 - **Balances held per game** (2026-10-09): a decision's single 30-s pick is
-  buried under between-game variance (76% of the objective's), so the heads
-  whose options are an ordered level -- con, cap, acap, scap, ecap, esc, mex,
-  mass, odds, defamt, aplant -- are each held, at even odds per explorer game
-  and head, at ONE uniformly drawn option all game (`NnBalanceHeld`,
-  `EcoDrawBal`). Every row of a held head carries that option, p = 1/K and
-  `game=1` (non-held balance rows `game=0`); the other half keep the
-  per-decision mix, so the trainer sees both. Situational heads (posture,
-  hunt, strike, raid, air, tech, com, join, reinf, defsite, deftype, open)
-  are never held. `apex: nn-balance t=N head=nncon held=0|1 opt=k k=K` once
-  per head per explorer.
-- **nncon** (schema v2): C05 / C1 / C2 / C3 multiply `ConsNeedAny`'s target
-  (`ConsNeedAt`); C1 is the old YIELD rule (the floor steps aside while the
-  army is behind its share), C05 yields too, C2 and C3 hold the larger floor
-  even while the army is behind. `apex: spothands ... conMul=`.
+  buried under between-game variance (76% of the objective's), so each
+  continuous head (below) is held, at even odds per explorer game and head,
+  at ONE uniform draw over its range all game (`NnValHeldAt`); its rows carry
+  `game=1 rnd=1`. The other half draw per decision (NN_HEAD_FLAT), so the
+  trainer sees both. Situational heads (posture, hunt, strike, raid, air,
+  tech, com, join, reinf, defsite, deftype, open) are never held.
+  `apex: nn-balance t=N head=con held=0|1 v=.. lo=.. hi=..` once per head per
+  explorer.
 - **Strategy** (`apex_nn_plan_explore`, 0.1 of explorers): the explorer
   ALSO leads its team with one drawn plan, below.
 - **The strategy** (`plannet.as`): the strategy explorer draws one plan for its team at
@@ -369,9 +414,9 @@ changes behaviour too much. Two rolls, once per game per AI:
   (`PlantExpApply`; otherwise every opening is a bot lab).
 - **What ran is what is logged** (2026-10-09): a drawn posture (`nnpost`) is
   held as drawn for its window even when it is the rule's, and none is drawn
-  while all-in (p=1 on the rule; a standing draw re-decides `why=allin`); a
-  HEAVY escort draw raises the per-constructor escort count, not only the
-  metal owed; an air GO with nowhere to go logs WAIT at p=1.
+  while all-in (p=1 on the rule; a standing draw re-decides `why=allin`); the
+  escort head's v raises the per-constructor escort count (its ceiling), not
+  only the metal owed; an air GO with nowhere to go logs WAIT at p=1.
 - **Logs**: `apex: nn-explore t=N on | decide=1 strategy=0|1 headFlat=0.30
   planChance=0.10` at the roll (only explorers print it);
   `apex: nn-explore-plan t=N plan=X p=.. why=first|tier tier=..` at each
@@ -472,8 +517,10 @@ across the options (the score is an OBJECTIVE sum of predicted outcomes in
 spread units, not a logit, so its ranking is used and trust alone sets how
 much plays). Only when the trainer exports the honest decision-specific
 trust, `NN_TRUST_KIND = 2` in nnweights.as; below 2 (the stub says 0) every
-head plays its rule. The logged p is the mixture as drawn. The builder and
-factory nets still blend in log space against market values.
+head plays its rule. The logged p is the mixture as drawn. A continuous head
+mixes the same way over values: t plays the net's best v, 1-t the rule's 1x
+(Continuous heads, above). The builder and factory nets still blend in log
+space against market values.
 The plan from here (his 2026-10-05): the market value becomes one input and
 the net's score the value, kind by kind, as trust is earned. `apex: nn-score`
 (60 s) proves it fires: scored count, how often it changed the top option,

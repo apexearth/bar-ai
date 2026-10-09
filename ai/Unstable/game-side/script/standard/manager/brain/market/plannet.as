@@ -185,21 +185,18 @@ void PlanNetDecide()
 		ai.SendChat("Team " + ai.teamId + " discovery: tier " + tier + " reached, strategy now " + NgName(gPlan));
 }
 
-// HOW MANY AIR PLANTS while the plan is AIR: the net's count.
+// HOW MANY AIR PLANTS while the plan is AIR: a continuous head, an absolute count
+// (the rule's is 1), taken up to the next whole plant where it is used.
 const string NNL_PLANT = "airPlants,mInc,eInc,bankFill,foeAirM,foeFighterM,foeAAM,ourBombers,ourFighters,minute";
-int gAirPlantMax = 1;
+const float NL_LO = 1.f, NL_HI = 8.f;
+float gAirPlantMax = 1.f;
 int gAirPlantNextAt = 0;
-bool gAirPlantHeader = false;
 
 void AirPlantNetDecide()
 {
 	if ((gPlan != NG_AIR) || (ai.frame < gAirPlantNextAt))
 		return;
 	gAirPlantNextAt = ai.frame + 30 * SECOND;
-	if (!gAirPlantHeader) {
-		gAirPlantHeader = true;
-		AiLog("apex: nnaplant-schema v1 state=" + NN_STATE + " aplant=" + NNL_PLANT + " opt=name,w,p opts=P1,P2,P4");
-	}
 	array<float> st;
 	NnState(null, st);
 	array<float> f;
@@ -213,23 +210,15 @@ void AirPlantNetDecide()
 	f.insertLast(float(Air::Bombers()));
 	f.insertLast(float(Air::Fighters()));
 	f.insertLast(float(ai.frame) / 1800.f);
-	array<float> w(3, NE2_EPS);
-	w[0] = 1.f;
-	const float trust = NnHeadScore(NNL_ON, NNL_STATE, NNL_PLANT, NNL_S, NNL_O, NNL_H, NNL_XM, NNL_XS,
-		NNL_W1, NNL_B1, NNL_W2, NNL_B2, NNL_WO, NNL_BO, NNL_TRUST, st, f, w);
-	array<float> p(3);
-	const float flat = NnHeadFlat();
-	const int c = EcoDrawBal("nnaplant", 0, trust, w, p, flat);
-	gAirPlantMax = (c == 0) ? 1 : ((c == 1) ? 2 : 4);
-	array<string> names = {"P1", "P2", "P4"};
-	AiLog(EcoLine("nnaplant", "P1", flat > 0.f, trust, st, f, names, w, p, c));
+	gAirPlantMax = NnValDecide("aplant", NNL_PLANT, NL_LO, NL_HI, 1.f, NNL_ON, NNL_STATE, NNL_S, NNL_O, NNL_H,
+		NNL_XM, NNL_XS, NNL_W1, NNL_B1, NNL_W2, NNL_B2, NNL_WO, NNL_BO, NNL_TRUST, NNL_LO, NNL_HI, st, f);
 }
 
 // Another basic air plant is owed: the plan is AIR and we stand short of the net's count.
 bool AirPlantOwed(int d)
 {
 	return (gPlan == NG_AIR) && AirPlant(d) && (PlantTier(d) == 1)
-		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < gAirPlantMax);
+		&& (ComCountOf(d, CS_FINISHED) + ComCountManned(d, CS_FRAMED | CS_ORDERED) < int(ceil(gAirPlantMax)));
 }
 
 // WHICH AI IS PLAYING, said once per team in chat and by every bot in its log.

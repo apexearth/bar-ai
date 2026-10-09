@@ -574,7 +574,7 @@ int SpotHandsOwed()
 	if (ai.frame >= gNextSpotHandsLog) {
 		gNextSpotHandsLog = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: spothands t=" + ai.teamId + " floorYield=" + gConFloorYieldN
-			+ " conMul=" + formatFloat(gConFloorMul, "", 0, 1) + " open=" + n
+			+ " conMul=" + formatFloat(gConFloorMul, "", 0, 2) + " open=" + n
 			+ " walkS=" + formatFloat(walkS, "", 0, 1)
 			+ " cycS=" + formatFloat(cycS, "", 0, 1)
 			+ " S=" + formatFloat(SpotM(), "", 0, 2)
@@ -939,7 +939,7 @@ int ConPoolHave(int pool)
 }
 int ConPoolCap(int pool)
 {
-	return int(float(RezFleetCap()) * ((pool == 2) ? gAirCapMul : gConCapMul) + 0.5f);
+	return int(ceil(float(RezFleetCap()) * ((pool == 2) ? gAirCapMul : gConCapMul)));
 }
 bool ConPoolFull(int d)
 {
@@ -948,7 +948,7 @@ bool ConPoolFull(int d)
 }
 int ScoutFleetCap()
 {
-	return int(float(RezFleetCap()) * gScoutCapMul + 0.5f);
+	return int(ceil(float(RezFleetCap()) * gScoutCapMul));
 }
 // Constructors as a share of our mobile units, for the nets.
 float gConShareVal = 0.f;
@@ -2495,7 +2495,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool armyBehind = (Brain::gSpentTotal > 1.f)
 			&& (ConsOwnedAny() + ConsInFlightAny() > 0)
 			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
-		// The constructor net (econet.as) sizes the floor; past the rule's size it holds while the army is behind.
+		// The constructor head (econet.as) sizes the floor; above 1x it holds while the army is behind.
 		const bool floorOn = !armyBehind || (gConFloorMul > 1.f);
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;

@@ -1958,10 +1958,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	bool coverPush = false;
 	// An open extractor on the list comes before a forced gun (coverall,
 	// basefront, cover, defjoin below); with no mex on offer they fire as
-	// before. The expansion net (econet.as) can turn this off (HOLD).
+	// before -- only while the expansion head pushes past the rule (econet.as, v > 1).
 	bool mexOnList = false;
-	for (uint ri = 0; (gMexPolicy != NX_HOLD) && (ri < ranked.length()) && !mexOnList; ++ri)
-		mexOnList = (ranked[ri].kind == WK_MEX);   // HOLD: the expansion net lets the guns fire
+	for (uint ri = 0; (gMexMul > 1.f) && (ri < ranked.length()) && !mexOnList; ++ri)
+		mexOnList = (ranked[ri].kind == WK_MEX);
 	// ...ONCE A PLANT EXISTS. Before the lab the jump put a light tower
 	// ahead of the factory (mex, mex, mex, tower, solar, lab -- and in one
 	// game tower after tower with no factory in 17 minutes). His order:

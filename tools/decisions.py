@@ -48,12 +48,17 @@ NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule
 REINF_DONE = re.compile(r"apex: nnreinf-done t=(\d+) f=(\d+) done=(\d)")
 HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) killAll=-?\d+"
                        r" lost=(-?\d+) wreck=(-?\d+)")
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|plan|join|reinf|hunt|strike|open)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r"(?: game=\d)? trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
-# static defence (protect_nn.as, protect_nntype.as): amount, and site and gun class with their watch
-DEF_SCHEMA = re.compile(r"apex: nn(defamt|defsite|deftype)-schema v\d+ state=\S+ (?:defamt|defsite|deftype)=(\S+) opt=")
-DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defamt|defsite|deftype) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_TAG = re.compile(r"apex: nn(?:com|tech|raid|air|plan|join|reinf|hunt|strike|open)")
+# the continuous heads (nnlog.as NnValDecide): the value played, the rule's, the range, how it was drawn
+VAL_SCHEMA = re.compile(r"apex: nnval-schema v\d+ head=(\w+) state=\S+ own=(\S+)")
+VAL_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nnval head=(\w+) t=(\d+) f=\d+ v=(\S+) rule=(\S+) lo=(\S+) hi=(\S+)"
+                     r" rnd=(\d) dens=(\S+) ex=(\d) game=(\d) trust=(\S+) vnet=\S+ \| (\S+) \| (\S+)")
+# static defence (protect_nn.as, protect_nntype.as): site and gun class with their watch
+DEF_SCHEMA = re.compile(r"apex: nn(defsite|deftype)-schema v\d+ state=\S+ (?:defsite|deftype)=(\S+) opt=")
+DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defsite|deftype) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                      r"(?: game=\d)? trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 DEFSITE_DONE = re.compile(r"apex: nndef(site|type)-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) lost=(-?\d+)"
                           r" pre=(-?\d+) base=(-?\d+) m=\d+ at=(-?\d+),(-?\d+)")
@@ -257,6 +262,9 @@ def canon_head_keys(name):
         for m in re.finditer(r'"apex: nn(\w+)-schema v\d+ state=" \+ (?:Market::)?NN_STATE\s*\+\s*" \w+=" \+ (NN\w+)', txt):
             if m.group(2) in consts:
                 _HEAD_CANON[m.group(1)] = consts[m.group(2)].split(",")
+        for m in re.finditer(r'NnValDecide\(\s*"(\w+)",\s*(?:\w+::)?(NN\w+)', txt):
+            if m.group(2) in consts:
+                _HEAD_CANON[m.group(1)] = consts[m.group(2)].split(",")
         _HEAD_CANON.setdefault("", None)
     return _HEAD_CANON.get(name)
 
@@ -288,6 +296,7 @@ def parse(path, files=None):
     allyof, winners = {}, None   # engine team -> ally team; winning ally teams (BARAI_RESULT)
     postrows, post_keys = [], None
     heads = {}   # "com" / "tech": {"keys": their own fields, "rows": [...]}
+    vals = {}    # the continuous heads ("con", "mex", ...), the same shape
     rows, execs, nns, reclaim = [], {}, {}, {}
     explore = False
     explorers = set()   # engine teams that rolled discovery (apex: nn-explore t=N on)
@@ -339,7 +348,17 @@ def parse(path, files=None):
                 mx = re.search(r"nn-explore t=(\d+) on", ln)
                 if mx:
                     explorers.add(int(mx.group(1)))
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln or "apex: nnscap" in ln or "apex: nnecap" in ln or "apex: nnstrike" in ln or "apex: nnmass" in ln or "apex: nnodds" in ln or "apex: nnopen" in ln:
+            if "apex: nnval" in ln:
+                m = VAL_SCHEMA.search(ln)
+                if m:
+                    vals.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
+                    continue
+                m = VAL_ROW.search(ln)
+                if m:
+                    vals.setdefault(m.group(2), {"keys": None, "rows": []})["rows"].append(
+                        (m.group(1),) + m.groups()[2:])
+                continue
+            if "apex: nn" in ln and HEAD_TAG.search(ln):
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
@@ -442,7 +461,7 @@ def parse(path, files=None):
                     if atk >= 0 and atk != t and int(mu.group(2)) >= 0:
                         killby.setdefault(int(mu.group(2)), []).append((f, cost))
     deciders = {int(r[1]) for r in rows} | {int(r[1]) for r in facrows} | {int(r[1]) for r in postrows}
-    for h in heads.values():
+    for h in list(heads.values()) + list(vals.values()):
         deciders |= {int(r[1]) for r in h["rows"]}
     return dict(bonus=script_bonus(path), edges=side_edges(gadget, allyof, deciders, lastw),
                 rows=rows, execs=execs, nns=nns, state_keys=widen_keys(state_keys), opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
@@ -450,7 +469,7 @@ def parse(path, files=None):
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, hunt_done=hunt_done, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
-                postrows=postrows, post_keys=post_keys, heads=heads, defsite_done=defsite_done, deftype_done=deftype_done,
+                postrows=postrows, post_keys=post_keys, heads=heads, vals=vals, defsite_done=defsite_done, deftype_done=deftype_done,
                 versions=versions, regime=script_regime(path),
                 solo=bool(allyof) and len(set(allyof.values())) == len(allyof),   # one team per side: a 1v1
                 final=files is None)   # a finished game's merged infolog, not live files
@@ -772,6 +791,24 @@ def head_rows_of(path, g, tag):
                    why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
                    state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
                    post=post, opts=ov, chosen=int(chosen), y=head_labels(g, t, f, tag, post))
+
+
+def val_rows_of(path, g, tag):
+    """A continuous head's `apex: nnval` decisions in head_rows_of's shape: `chosen`
+    is the value played and `rule` the rule's, with the range, `rnd` (a uniform
+    draw, at density `dens`), `game` (held all game) and the trust it played at."""
+    h = g.get("vals", {}).get(tag)
+    if g["state_keys"] is None or not h or not h["keys"]:
+        return
+    sk, pk = g["state_keys"], h["keys"]
+    for frame, t, v, rule, lo, hi, rnd, dens, ex, game, trust, state, own in sorted(h["rows"], key=lambda r: int(r[0])):
+        f, t = int(frame), int(t)
+        post = dict(zip(pk, (num(x) for x in own.split(","))))
+        yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con=tag,
+                   why="clock", rule=num(rule), explore=ex == "1", game=game == "1", rnd=rnd == "1",
+                   dens=num(dens), lo=num(lo), hi=num(hi), trust=num(trust), pick=0, dm="draw",
+                   state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
+                   post=post, opts=[], chosen=num(v), y=head_labels(g, t, f, tag, post))
 
 
 def open_labels(g, t, f, y, own):

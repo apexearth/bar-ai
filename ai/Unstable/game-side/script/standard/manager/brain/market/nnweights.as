@@ -140,6 +140,8 @@ const array<float> NNE_B2 = {};
 const array<float> NNE_WO = {};
 const float NNE_BO = 0.f;
 const float NNE_TRUST = 0.f;
+const float NNE_LO = 0.f;
+const float NNE_HI = 0.f;
 // the constructor-floor net (econet.as)
 const bool NNK_ON = false;
 const string NNK_STATE = "";
@@ -155,6 +157,8 @@ const array<float> NNK_B2 = {};
 const array<float> NNK_WO = {};
 const float NNK_BO = 0.f;
 const float NNK_TRUST = 0.f;
+const float NNK_LO = 0.f;
+const float NNK_HI = 0.f;
 // the expansion net (econet.as)
 const bool NNX_ON = false;
 const string NNX_STATE = "";
@@ -170,6 +174,8 @@ const array<float> NNX_B2 = {};
 const array<float> NNX_WO = {};
 const float NNX_BO = 0.f;
 const float NNX_TRUST = 0.f;
+const float NNX_LO = 0.f;
+const float NNX_HI = 0.f;
 // the ground constructor-cap net (econet.as)
 const bool NNQ_ON = false;
 const string NNQ_STATE = "";
@@ -185,6 +191,8 @@ const array<float> NNQ_B2 = {};
 const array<float> NNQ_WO = {};
 const float NNQ_BO = 0.f;
 const float NNQ_TRUST = 0.f;
+const float NNQ_LO = 0.f;
+const float NNQ_HI = 0.f;
 // the air constructor-cap net (econet.as)
 const bool NNZ_ON = false;
 const string NNZ_STATE = "";
@@ -200,6 +208,8 @@ const array<float> NNZ_B2 = {};
 const array<float> NNZ_WO = {};
 const float NNZ_BO = 0.f;
 const float NNZ_TRUST = 0.f;
+const float NNZ_LO = 0.f;
+const float NNZ_HI = 0.f;
 // the team plan net (plannet.as)
 const bool NNG_ON = false;
 const string NNG_STATE = "";
@@ -246,6 +256,8 @@ const array<float> NNL_B2 = {};
 const array<float> NNL_WO = {};
 const float NNL_BO = 0.f;
 const float NNL_TRUST = 0.f;
+const float NNL_LO = 0.f;
+const float NNL_HI = 0.f;
 
 // the join-the-fight net (military/joinfight.as)
 const bool NNV_ON = false;
@@ -278,6 +290,8 @@ const array<float> NND_B2 = {};
 const array<float> NND_WO = {};
 const float NND_BO = 0.f;
 const float NND_TRUST = 0.f;
+const float NND_LO = 0.f;
+const float NND_HI = 0.f;
 
 // the static defence site net (protect_nn.as)
 const bool NNU_ON = false;
@@ -358,6 +372,8 @@ const array<float> NNS_B2 = {};
 const array<float> NNS_WO = {};
 const float NNS_BO = 0.f;
 const float NNS_TRUST = 0.f;
+const float NNS_LO = 0.f;
+const float NNS_HI = 0.f;
 
 // the timing-window strike net (military/nnstrike.as)
 const bool NNB_ON = false;
@@ -390,6 +406,8 @@ const array<float> NNY_B2 = {};
 const array<float> NNY_WO = {};
 const float NNY_BO = 0.f;
 const float NNY_TRUST = 0.f;
+const float NNY_LO = 0.f;
+const float NNY_HI = 0.f;
 // the pool-size net (military/nnmassodds.as)
 const bool NNM_ON = false;
 const string NNM_STATE = "";
@@ -405,6 +423,8 @@ const array<float> NNM_B2 = {};
 const array<float> NNM_WO = {};
 const float NNM_BO = 0.f;
 const float NNM_TRUST = 0.f;
+const float NNM_LO = 0.f;
+const float NNM_HI = 0.f;
 
 // the squad-odds net (military/nnmassodds.as)
 const bool NNO_ON = false;
@@ -421,5 +441,7 @@ const array<float> NNO_B2 = {};
 const array<float> NNO_WO = {};
 const float NNO_BO = 0.f;
 const float NNO_TRUST = 0.f;
+const float NNO_LO = 0.f;
+const float NNO_HI = 0.f;
 
 }  // namespace Market

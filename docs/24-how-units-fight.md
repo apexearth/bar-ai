@@ -482,12 +482,12 @@ rule option.
 
 | Tension | Default today | Decided by |
 |---|---|---|
-| Push by default vs go in only with a local edge | push; edge judged per fight | odds net (X05/X1/X2 on the C++ squad odds, rule X1; needs the DLL); join-fight net (GO/STAY) |
+| Push by default vs go in only with a local edge | push; edge judged per fight | odds head (x0.25-6 on the C++ squad odds, rule 1x; needs the DLL); join-fight net (GO/STAY) |
 | Hold and let them come vs pressure on their half | posture from the stance read | posture net (nnpost) |
 | Raid their economy vs kill their army | economy | raid net (GO/WAIT); hunt net (NO/HUNT, rule NO) |
 | Today's push vs hitting their base in a timing window (their army away, a fight just won) | today's push and posture | strike net (NO/STRIKE, rule NO) |
-| Mass the army vs stay spread to react | mass to their group size | mass net (X05/X1/X2 on the pool's leave bar, rule X1) |
-| Escorts mass with mass vs each constructor covered | each exposed constructor's floor first, then mass (his 2026-10-08 game: 8 escorts on one, none on the rest) | escort net (LIGHT/MATCH/HEAVY) |
+| Mass the army vs stay spread to react | mass to their group size | mass head (x0.25-6 on the pool's leave bar, rule 1x) |
+| Escorts mass with mass vs each constructor covered | each exposed constructor's floor first, then mass (his 2026-10-08 game: 8 escorts on one, none on the rest) | escort head (escorts per constructor x0-8, rule 1x) |
 | Army share vs economy share | his share of the economy built (`docs/23`) | team plan net (RUSH/GREED/TURTLE...) |
 
 ## 8. Open questions, his to rule

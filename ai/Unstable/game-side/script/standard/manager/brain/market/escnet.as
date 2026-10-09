@@ -2,23 +2,18 @@ namespace Market {
 
 // THE ESCORT NET (his 2026-10-06: "fix the escorts so existing raiders guard
 // constructors, ensure the strength on that is hooked up to the NN"). How much
-// escort a constructor is owed -- half, the rule's owed metal, or double -- is a
-// team decision on a 30 s clock in the generic head shape (nncom/nnraid), with
-// discovery games drawing the others; EscortOwedM reads the multiplier.
+// escort a constructor is owed is a continuous head on a 30 s clock: the escorts
+// per constructor and the owed metal x v (1x = the rule); the ecap head
+// multiplies the escorts-at-once cap.
 const string NNE_ESC = "workers,short,paired,risk,foeRaid,freeRaid,army,conLost,minute";
-const int NE_LIGHT = 0, NE_MATCH = 1, NE_HEAVY = 2, NE_N = 3;
-const float NE_EPS = 0.01f;
+const float NE_LO = 0.f, NE_HI = 8.f;
+const float NY_LO = 0.25f, NY_HI = 10.f;
 float gEscMul = 1.f;
-int gEscNow = NE_MATCH;
 int gEscNextAt = 0;
-bool gEscHeader = false;
-
-string NeName(int o) { return (o == NE_LIGHT) ? "LIGHT" : ((o == NE_HEAVY) ? "HEAVY" : "MATCH"); }
-float NeMul(int o) { return (o == NE_LIGHT) ? 0.5f : ((o == NE_HEAVY) ? 2.f : 1.f); }
-// The cap on escorts at once scales with the net's strength, and by its own
-// cap net x1/x2/x4 (nnecap): MATCH at E1 keeps his 8.
+// The cap on escorts at once scales with the escort head's v and its own cap
+// head (nnecap): 1x and 1x keep his 8.
 float gEscCapMul = 1.f;
-uint EscortCap() { return uint(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP) * gEscMul * gEscCapMul + 0.5f); }
+uint EscortCap() { return uint(ceil(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP) * gEscMul * gEscCapMul)); }
 
 void EscNetDecide()
 {
@@ -26,7 +21,6 @@ void EscNetDecide()
 		return;
 	gEscNextAt = ai.frame + 30 * SECOND;
 	ExposeRefresh();
-	const int rule = NE_MATCH;
 	array<float> st;
 	NnState(null, st);
 	array<float> ef;
@@ -39,67 +33,10 @@ void EscNetDecide()
 	ef.insertLast(ArmyValue());
 	ef.insertLast(Military::gNrEcoLostM);
 	ef.insertLast(float(ai.frame) / 1800.f);
-	array<float> w(NE_N);
-	for (int o = 0; o < NE_N; ++o)
-		w[o] = (o == rule) ? 1.f : NE_EPS;
-	const float trust = NnHeadScore(NNE_ON, NNE_STATE, NNE_ESC, NNE_S, NNE_O, NNE_H, NNE_XM, NNE_XS,
-		NNE_W1, NNE_B1, NNE_W2, NNE_B2, NNE_WO, NNE_BO, NNE_TRUST, st, ef, w);
-	float sum = 0.f;
-	for (int o = 0; o < NE_N; ++o)
-		sum += w[o];
-	const float flat = NnHeadFlat();
-	const bool explore = flat > 0.f;
-	array<float> p(NE_N);
-	for (int o = 0; o < NE_N; ++o) {
-		if ((trust > 0.f) || (flat > 0.f))
-			p[o] = (1.f - flat) * w[o] / sum + flat / float(NE_N);
-		else
-			p[o] = (o == rule) ? 1.f : 0.f;
-	}
-	int chosen = rule;
-	const int held = NnBalanceHeld("nnesc", NE_N);
-	if (held >= 0) {
-		chosen = held;
-		for (int o = 0; o < NE_N; ++o)
-			p[o] = 1.f / float(NE_N);
-	} else if ((trust > 0.f) || (flat > 0.f)) {
-		float r = float(AiRandom(0, 10000)) / 10000.f;
-		for (int o = 0; o < NE_N; ++o) {
-			r -= p[o];
-			if (r <= 0.f) {
-				chosen = o;
-				break;
-			}
-		}
-	}
-	gEscNow = chosen;
-	gEscMul = NeMul(chosen);
-	if (!gEscHeader) {
-		gEscHeader = true;
-		AiLog("apex: nnesc-schema v1 state=" + NN_STATE + " esc=" + NNE_ESC + " opt=name,w,p opts=LIGHT,MATCH,HEAVY");
-		AiLog("apex: nnecap-schema v1 state=" + NN_STATE + " ecap=" + NNE_ESC + " opt=name,w,p opts=E1,E2,E4");
-	}
-	string ln = "apex: nnesc t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + NeName(rule)
-		+ " ex=" + (explore ? 1 : 0) + NnGameField("nnesc") + " trust=" + NnF(trust, 2) + " |";
-	for (uint k = 0; k < st.length(); ++k)
-		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
-	ln += " |";
-	for (uint k = 0; k < ef.length(); ++k)
-		ln += ((k == 0) ? " " : ",") + NnF(ef[k], 3);
-	for (int o = 0; o < NE_N; ++o)
-		ln += ((o == 0) ? " | " : " ; ") + NeName(o) + "," + NnF(w[o], 4) + "," + NnF(p[o], 6);
-	ln += " | chosen=" + chosen;
-	AiLog(ln);
-	array<float> cw(3, NE_EPS);
-	cw[0] = 1.f;
-	const float ctrust = NnHeadScore(NNY_ON, NNY_STATE, NNE_ESC, NNY_S, NNY_O, NNY_H, NNY_XM, NNY_XS,
-		NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, st, ef, cw);
-	array<float> cp(3);
-	const float cflat = NnHeadFlat();
-	const int cc = EcoDrawBal("nnecap", 0, ctrust, cw, cp, cflat);
-	gEscCapMul = (cc == 1) ? 2.f : ((cc == 2) ? 4.f : 1.f);
-	array<string> cnames = {"E1", "E2", "E4"};
-	AiLog(EcoLine("nnecap", "E1", cflat > 0.f, ctrust, st, ef, cnames, cw, cp, cc));
+	gEscMul = NnValDecide("esc", NNE_ESC, NE_LO, NE_HI, 1.f, NNE_ON, NNE_STATE, NNE_S, NNE_O, NNE_H,
+		NNE_XM, NNE_XS, NNE_W1, NNE_B1, NNE_W2, NNE_B2, NNE_WO, NNE_BO, NNE_TRUST, NNE_LO, NNE_HI, st, ef);
+	gEscCapMul = NnValDecide("ecap", NNE_ESC, NY_LO, NY_HI, 1.f, NNY_ON, NNY_STATE, NNY_S, NNY_O, NNY_H,
+		NNY_XM, NNY_XS, NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, NNY_LO, NNY_HI, st, ef);
 }
 
 // EXISTING RAIDERS TAKE THE DUTY, not only a unit fresh from the factory. One
@@ -234,7 +171,7 @@ void EscortRecruit()
 		gEscRecruitLogAt = ai.frame + 30 * SECOND;
 		AiLog(Factory::T() + "apex: escort-recruit t=" + ai.teamId + " " + best.circuitDef.GetName() + " #" + best.id
 			+ " for " + wk.circuitDef.GetName() + " #" + wk.id + " d=" + int(bestD)
-			+ " expo=" + NnF(wkExpo, 2) + " mul=" + NnF(gEscMul, 1) + " n=" + gEscRecruitN);
+			+ " expo=" + NnF(wkExpo, 2) + " mul=" + NnF(gEscMul, 2) + " n=" + gEscRecruitN);
 	}
 }
 
