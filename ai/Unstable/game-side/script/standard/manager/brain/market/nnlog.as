@@ -388,6 +388,15 @@ void NnExploreRoll()
 		AiLog("apex: nn-explore t=" + ai.teamId + " on | headFlat=" + NnF(NN_HEAD_FLAT, 2));
 }
 
+// A standard normal draw (Irwin-Hall); the explorer's once-per-game plant-type lean uses it.
+float NnGauss()
+{
+	float s = 0.f;
+	for (int i = 0; i < 12; ++i)
+		s += float(AiRandom(0, 10000)) / 10000.f;
+	return s - 6.f;
+}
+
 float NnHeadFlat(float trust)
 {
 	return (gNnExploreRolled && gNnExplore && (trust <= 0.f)) ? NN_HEAD_FLAT : 0.f;
