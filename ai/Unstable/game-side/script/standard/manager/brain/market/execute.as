@@ -713,6 +713,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			const int td = int(tgt.circuitDef.id);
 			if (w.retire && !Catalog::gMobile[td])
 				NoteDefRetired(td);
+			if (!Catalog::gMobile[td] && (ProtClassOf(td) == PROT_DEF)) {
+				const AIFloat3 rp = tgt.GetPos(ai.frame);
+				AiLog("apex: reclaim-def t=" + ai.teamId + " def=" + tgt.circuitDef.GetName()
+					+ " #" + tgt.id + " at=" + int(rp.x) + "," + int(rp.z)
+					+ " retire=" + (w.retire ? 1 : 0)
+					+ " coverLeft=" + int(DefCoverWithout(td, rp)) + " threat=" + int(ThreatAt(rp))
+					+ " have=" + int(DefenceValue()) + " target=" + int(DefenceTarget()));
+			}
 			// The claim's clock is the eat time (cost/90, the same arithmetic
 			// tCost uses) plus a walk pad; expiry frees a dead worker's victim.
 			NoteReclaimClaim(tgt.id, unit.id,

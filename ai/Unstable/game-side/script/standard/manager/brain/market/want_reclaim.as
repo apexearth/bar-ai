@@ -944,6 +944,56 @@ void DefGridBuild()
 	}
 }
 
+// Cover the spot keeps once this gun is gone, on the ring the defence price reads.
+float DefCoverWithout(int d, const AIFloat3& in p)
+{
+	const float c = CoverAt(p) - CoverAddsAt(p, Catalog::gMaxRange[d], PfTowerKill(d));
+	return (c > 0.f) ? c : 0.f;
+}
+
+// A GUN IS NOT OBSOLETE WHILE WE ARE SHORT OF GUNS, nor while its spot needs it
+// (apexearth 2026-10-08: a beamer eaten as dominated, by a Gauntlet 700 elmos
+// off, at 825 of 5,355 defence held). 0 may go, 1 holdings short, 2 exposed.
+array<int> gDefKeptAt(32001, -999999);
+int gDefKeptShort = 0;
+int gDefKeptExposed = 0;
+int DefRetireRefused(CCircuitUnit@ g, int d, const AIFloat3& in p, float dkHave, float dkTgt)
+{
+	int why = 0;
+	float left = -1.f, threat = -1.f;
+	if (dkHave < dkTgt) {
+		why = 1;
+	} else {
+		left = DefCoverWithout(d, p);
+		threat = ThreatAt(p);
+		if (left < threat)
+			why = 2;
+	}
+	if (why == 0)
+		return 0;
+	const int id = int(g.id);
+	if ((id >= 0) && (id < int(gDefKeptAt.length()))
+		&& (ai.frame - gDefKeptAt[id] >= 60 * SECOND))
+	{
+		gDefKeptAt[id] = ai.frame;
+		if (why == 1) {
+			++gDefKeptShort;
+			left = DefCoverWithout(d, p);
+			threat = ThreatAt(p);
+		} else {
+			++gDefKeptExposed;
+		}
+		AiLog(Factory::T() + "apex: reclaim-def-kept t=" + ai.teamId
+			+ " def=" + Catalog::Def(d).GetName() + " #" + id
+			+ " at=" + int(p.x) + "," + int(p.z)
+			+ " why=" + ((why == 1) ? "short" : "exposed")
+			+ " have=" + int(dkHave) + " target=" + int(dkTgt)
+			+ " coverLeft=" + int(left) + " threat=" + int(threat)
+			+ " kept=" + gDefKeptShort + "/" + gDefKeptExposed);
+	}
+	return why;
+}
+
 int gNextReclObsLog = 0;
 
 // How walled in a ground plant stands: the least-filled of the ground beyond
@@ -1335,6 +1385,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	// Neighbours from a grid, not every tower against every other: the
 	// pairwise walk was turrets^2 distance tests per election.
 	DefGridBuild();
+	const float dkHave = DefenceValue();
+	const float dkTgt = DefenceTarget();
 	for (uint i = 0; i < gProtUnit[PROT_DEF].length(); ++i) {
 		CCircuitUnit@ g = gProtUnit[PROT_DEF][i];
 		if (g is null)
@@ -1430,7 +1482,8 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			continue;
 		const float rchD = ReachVictimMul(unit, gProtPos[PROT_DEF][i], d);
 		const float v = (rchD > 0.f) ? RetireValue(unit, g, d, ePM, wageR, hz) * rchD : 0.f;
-		if (v > bestValue) {
+		if ((v > bestValue)
+			&& (DefRetireRefused(g, d, gProtPos[PROT_DEF][i], dkHave, dkTgt) == 0)) {
 			bestValue = v;
 			@best = g;
 			bestDef = d;
