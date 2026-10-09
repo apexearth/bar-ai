@@ -46,6 +46,16 @@ array<float> gKoSCos;
 array<bool> gKoSWalk;
 array<float> gKoSCover;
 int gKoCursor = 0;
+// Growth room: how many sensitive buildings the alliance had when, and the
+// hull scaled to hold what it will build over a gun's payback window.
+array<int> gKoHistF;
+array<int> gKoHistN;
+int gKoPeakN = 0;
+float gKoGrowth = 1.f;               // area factor of the growth zone over today's hull
+float gKoBaseR = 0.f;
+float gKoRingR = 0.f;
+array<float> gKoZoneX;                 // the growth zone: no gun inside it but an extractor's
+array<float> gKoZoneZ;
 float gKoStep = 0.f;
 float gKoPerim = 0.f;
 int gKoHullN = 0;
@@ -96,6 +106,7 @@ int gKoPasses = 0;
 float gKoCovSum = 0.f, gKoHeldSum = 0.f, gKoOpenSum = 0.f, gKoWorstLen = 0.f;
 int gKoLeakN = 0, gKoLeakGap = 0, gKoLeakUncov = 0, gKoLeakOwn = 0;
 float gKoLeakM = 0.f, gKoLeakGapM = 0.f;
+int gKoGrowthRefN = 0, gKoOffer = 0, gKoDeferred = 0;
 int gKoNewGapN = 0, gKoWonN = 0, gKoLateN = 0, gKoT1N = 0, gKoPickN = 0, gKoClaimN = 0;
 
 bool KoSensitive(int d)
@@ -238,6 +249,46 @@ bool KoHullSamples()
 	}
 	const int hn = int(hx.length());
 	gKoHullN = hn;
+	// ROOM TO GROW (apexearth 2026-10-09: the defences go "on the outside and
+	// it should be bigger than our base so that we have a lot of room to
+	// grow"). The alliance's sensitive buildings grew by so many over the last
+	// payback window; the zone is sized for as many again, at today's density.
+	float horiz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
+	if (horiz <= 1.f)
+		horiz = 300.f;
+	if (gKoHistF.length() == 0) {
+		gKoHistF.insertLast(0);
+		gKoHistN.insertLast(0);
+	}
+	uint he = 0;
+	for (uint i = 0; i < gKoHistF.length(); ++i)
+		if (float(ai.frame - gKoHistF[i]) >= horiz * float(SECOND))
+			he = i;
+	const float span = float(ai.frame - gKoHistF[he]) / float(SECOND);
+	float grow = (span > 1.f) ? float(int(n) - gKoHistN[he]) * horiz / span : 0.f;
+	if (grow < 0.f)
+		grow = 0.f;
+	gKoHistF.insertLast(ai.frame);
+	gKoHistN.insertLast(int(n));
+	while ((gKoHistF.length() > 2) && (float(ai.frame - gKoHistF[1]) > 2.f * horiz * float(SECOND))) {
+		gKoHistF.removeAt(0);
+		gKoHistN.removeAt(0);
+	}
+	// What was lost is rebuilt: the room is sized from the largest the
+	// alliance has stood at, not from what a raid left.
+	if (int(n) > gKoPeakN)
+		gKoPeakN = int(n);
+	gKoGrowth = (float(gKoPeakN) + grow) / float(n);
+	const float kg = sqrt(gKoGrowth);
+	float sumR = 0.f;
+	for (int i = 0; i < hn; ++i) {
+		sumR += sqrt((hx[i] - gKoMid.x) * (hx[i] - gKoMid.x) + (hz[i] - gKoMid.z) * (hz[i] - gKoMid.z));
+		hx[i] = gKoMid.x + (hx[i] - gKoMid.x) * kg;
+		hz[i] = gKoMid.z + (hz[i] - gKoMid.z) * kg;
+	}
+	gKoBaseR = sumR / float(hn);
+	gKoZoneX = hx;
+	gKoZoneZ = hz;
 	const float s = gKoStandoff;
 	// Edge normals (outward for a counter-clockwise hull), then the offset
 	// path's length: every edge plus the arc turned at every vertex.
@@ -314,11 +365,28 @@ bool KoHullSamples()
 	}
 	const float ex = gKoFoe.x - gKoMid.x, ez = gKoFoe.z - gKoMid.z;
 	const float ne = sqrt(ex * ex + ez * ez);
+	float ringSum = 0.f;
 	for (uint i = 0; i < gKoSX.length(); ++i) {
-		const float vx = gKoSX[i] - gKoMid.x, vz = gKoSZ[i] - gKoMid.z;
+		float vx = gKoSX[i] - gKoMid.x, vz = gKoSZ[i] - gKoMid.z;
+		// Growth stops halfway to them: past it the ground is theirs. Never
+		// pulled inside today's base, only out of the growth room.
+		const float uf = vx * ex + vz * ez;
+		if (gKoFoeOk && (uf > 0.f)) {
+			float sMax = (ex * ex + ez * ez) / (2.f * uf);
+			if (sMax < 1.f / kg)
+				sMax = 1.f / kg;
+			if (sMax < 1.f) {
+				vx *= sMax;
+				vz *= sMax;
+				gKoSX[i] = gKoMid.x + vx;
+				gKoSZ[i] = gKoMid.z + vz;
+			}
+		}
 		const float nv = sqrt(vx * vx + vz * vz);
+		ringSum += nv;
 		gKoSCos.insertLast((gKoFoeOk && (nv > 1.f) && (ne > 1.f)) ? (vx * ex + vz * ez) / (nv * ne) : 0.f);
 	}
+	gKoRingR = (gKoSX.length() > 0) ? ringSum / float(gKoSX.length()) : 0.f;
 	gKoSWalk.resize(gKoSX.length());
 	gKoSCover.resize(gKoSX.length());
 	return gKoSX.length() > 0;
@@ -571,6 +639,21 @@ void KoFinish()
 		clZ.insertLast(ai.GetTeamBoard(b + 1, -1.f));
 		clT.insertLast(int(ai.GetTeamBoard(b + 2, 0.f)) - 1);
 	}
+	// A RING LONGER THAN THE ECONOMY CAN HOLD is held in order: the pieces
+	// the seats' defence budgets can bring to the wave, less those already
+	// held, worst first; the rest wait and the census says so.
+	const float pieceL = 2.f * Brain::LightTowerRange();
+	float canHold = DefenceTarget() * float(seatT.length()) / gKoNeed
+			- float(nHeld) * gKoStep / pieceL;
+	gKoOffer = (canHold > 1.f) ? int(canHold) : 1;
+	array<int> rank(ng, 0);
+	for (uint g = 0; g < ng; ++g) {
+		for (uint o = 0; o < ng; ++o) {
+			if ((gKoGScore[o] > gKoGScore[g]) || ((gKoGScore[o] == gKoGScore[g]) && (o < g)))
+				++rank[g];
+		}
+	}
+	gKoDeferred = 0;
 	for (uint g = 0; g < ng; ++g) {
 		int owner = -1;
 		const float cr = 0.5f * gKoGLen[g] + gKoStep;
@@ -580,7 +663,11 @@ void KoFinish()
 			if (dx * dx + dz * dz <= cr * cr)
 				owner = clT[c];
 		}
-		if (owner < 0) {
+		if ((owner < 0) && (rank[g] >= gKoOffer)) {
+			owner = -2;
+			++gKoDeferred;
+		}
+		if (owner == -1) {
 			float bd = -1.f;
 			for (uint k = 0; k < seatT.length(); ++k) {
 				const float dx = seatX[k] - gKoGX[g], dz = seatZ[k] - gKoGZ[g];
@@ -698,7 +785,9 @@ void KoFinish()
 			+ " n=" + n + " reach=" + nWalk + " step=" + int(gKoStep) + " standoff=" + int(gKoStandoff)
 			+ " hull=" + gKoHullN + " perim=" + int(gKoPerim) + " pts=" + gKoOwnPts + "+" + gKoAllyPts
 			+ " mid=" + int(gKoMid.x) + "," + int(gKoMid.z) + " own=" + gKoOwnG.length() + "/" + int(ownLen)
-			+ " owners=" + owners);
+			+ " owners=" + owners + " ringR=" + int(gKoRingR) + " baseR=" + int(gKoBaseR)
+			+ " growth=" + int(gKoGrowth * 100.f) + " offer=" + gKoOffer + " deferred=" + gKoDeferred
+			+ " short=" + ((gKoDeferred > 0) ? 1 : 0));
 	}
 	if (ai.frame >= gKoSumAt) {
 		gKoSumAt = ai.frame + 60 * SECOND;
@@ -709,7 +798,8 @@ void KoFinish()
 			+ " newGaps=" + gKoNewGapN + " leakN=" + gKoLeakN + " leakGap=" + gKoLeakGap
 			+ " leakUncov=" + gKoLeakUncov + " leakOwn=" + gKoLeakOwn + " leakM=" + int(gKoLeakM)
 			+ " leakGapM=" + int(gKoLeakGapM) + " best=" + gKoWonN + " late=" + gKoLateN
-			+ " t1refused=" + gKoT1N + " sited=" + gKoPickN + " claims=" + gKoClaimN);
+			+ " t1refused=" + gKoT1N + " sited=" + gKoPickN + " claims=" + gKoClaimN
+			+ " growthRefused=" + gKoGrowthRefN);
 	}
 }
 
@@ -779,6 +869,23 @@ void KoFillSites(array<AIFloat3>& sites, array<int>& ids)
 		sites.insertLast(AIFloat3(gKoGX[g], 0.f, gKoGZ[g]));
 		ids.insertLast(gKoGId[g]);
 	}
+}
+
+// Inside the room the alliance grows into: a gun there would stand in the
+// base it is meant to keep the enemy out of.
+bool KoInsideGrowth(const AIFloat3& in p)
+{
+	const uint zn = gKoZoneX.length();
+	if (!gKoOk || (zn < 3))
+		return false;
+	for (uint i = 0; i < zn; ++i) {
+		const uint j = (i + 1) % zn;
+		if ((gKoZoneX[j] - gKoZoneX[i]) * (p.z - gKoZoneZ[i])
+				- (gKoZoneZ[j] - gKoZoneZ[i]) * (p.x - gKoZoneX[i]) < 0.f)
+			return false;
+	}
+	++gKoGrowthRefN;
+	return true;
 }
 
 int KoOwnedOpen()

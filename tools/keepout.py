@@ -31,6 +31,7 @@ import leaks
 
 LIGHT_R = 430.0
 REACH_CAP = 2.5
+GROW_S = 300   # apex_reclaim_amort: the growth room holds one payback window of building
 SECTOR = re.compile(r"Sector-Map Size: \d+ \(x(\d+), z(\d+)\)")
 KO = re.compile(r"apex: keepout t=(\d+) scope=ally cov=(\d+) held=(\d+) gaps=(\d+)")
 KOSUM = re.compile(r"apex: keepout-sum t=(\d+) passes=(\d+) cov=(\d+) held=(\d+) open=(\d+) .*?"
@@ -164,6 +165,7 @@ def replay(mdir, standoff0):
         maph = max((b[5] for b in blds), default=0) + 512
     our = {ally[t] for t in apex if t in ally}
     rows = []
+    peak = 0
     for d in deaths:
         if d["t"] not in apex or d["mob"] or not d["built"]:
             continue
@@ -200,7 +202,16 @@ def replay(mdir, standoff0):
         ei = min(range(len(ring)), key=lambda i: (ring[i][0] - ax) ** 2 + (ring[i][1] - az) ** 2)
         vi = min(range(len(ring)), key=lambda i: (ring[i][0] - d["x"]) ** 2 + (ring[i][1] - d["z"]) ** 2)
         step = 0.5 * LIGHT_R
-        rows.append(dict(f=f, m=d["cost"], unit=d["unit"], atk=d["atk"], n=len(ring),
+        f0 = f - GROW_S * 30
+        n0 = sum(1 for b in blds if b[0] <= f0 and not (b[6] in died and died[b[6]] < f0)
+                 and b[2] in our and leaks.ucls(b[3]) in SENS) if f0 > 0 else 0
+        span = min(f, GROW_S * 30) / 30.0
+        grow = max(0.0, (len(sens) - n0) * GROW_S / span) if span > 1 else 0.0
+        peak = max(peak, len(sens))
+        kg = math.sqrt((peak + grow) / len(sens))
+        base_r = sum(math.hypot(p[0] - cx, p[1] - cz) for p in h) / len(h)
+        rows.append(dict(baseR=base_r, ringR=base_r * kg + s, growth=kg * kg,
+                         f=f, m=d["cost"], unit=d["unit"], atk=d["atk"], n=len(ring),
                          uncFrac=sum(unc) / len(ring), thinFrac=sum(thin) / len(ring),
                          entUnc=unc[ei], entThin=thin[ei], entGap=rl[ei] * step, vicUnc=unc[vi],
                          gaps=sum(1 for i in range(len(ring)) if unc[i] and not unc[i - 1]) if not all(unc) else 1,
@@ -261,6 +272,12 @@ def main(argv):
         for lo, hi in ((0, 1), (1, 650), (650, 1300), (1300, 2600), (2600, 1e9)):
             v = sum(r["m"] for r in allrows if lo <= r["entGap"] < hi)
             print("    entry in an uncovered arc %5d-%5s long: %5.1f%%" % (lo, "inf" if hi > 1e8 else int(hi), 100 * v / m))
+        for lo, hi in ((0, 10), (10, 20), (20, 99)):
+            sel = [r for r in allrows if lo * 1800 <= r["f"] < hi * 1800]
+            if sel:
+                med = lambda k: sorted(r[k] for r in sel)[len(sel) // 2]
+                print("  minute %2d-%2d: base radius med %5d, growth ring radius med %5d (area x%.2f)" % (
+                    lo, hi, med("baseR"), med("ringR"), med("growth")))
         g = sorted(r["gaps"] for r in allrows)
         print("  uncovered arcs on the ring at a leak: median %d; ring samples median %d" % (
             g[len(g) // 2], sorted(r["n"] for r in allrows)[len(allrows) // 2]))

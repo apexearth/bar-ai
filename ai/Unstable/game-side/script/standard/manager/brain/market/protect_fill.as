@@ -428,6 +428,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// its site takes the same demand pull an open wall slot does. One
 		// gun: the site is only offered while the mex has none.
 		const bool isMexG = (si >= mexG0) && (si < nAsset);
+		// The rim and ring slots inside the alliance's growth room stand
+		// where the base is about to be; an extractor's own gun is exempt.
+		if (!isMexG && !isFront && !isKeep && KoInsideGrowth(s))
+			continue;
 		if (Gate(GATE_SITE_INTERIOR, InteriorGunSite(d, s)))
 			continue;
 		// Only the GUARD-SITE prefix is in the field's slot cache; the mex
