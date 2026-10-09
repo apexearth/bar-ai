@@ -249,9 +249,9 @@ void CAttackTask::Update()
 		if (!forEco) {
 			if (outgunned && (frame >= nextFrontLog)) {
 				nextFrontLog = frame + FRAMES_PER_SEC * 10;
-				circuit->LOG("apex: atk-front t=%i lead=%s n=%i pow=%.1f at=%.0f,%.0f",
+				circuit->LOG("apex: atk-front t=%i lead=%s n=%i pow=%.1f at=%.0f,%.0f odds=%.2f",
 						circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
-						attackPower * powerMod, startPos.x, startPos.z);
+						attackPower * powerMod, startPos.x, startPos.z, circuit->GetMilitaryManager()->GetOddsMul());
 			}
 			FallbackFrontPos();
 		}
@@ -392,6 +392,8 @@ void CAttackTask::FindTarget()
 	const bool focusGo = focusOn && milMgr->IsFocusGo();
 	const AIFloat3 focusPos = milMgr->GetFocusPos();
 	const float sqFocusR = SQUARE(milMgr->GetFocusR() + highestRange);
+	// apex: the odds this squad needs, x0.5 / x1 / x2 on their influence (script nnodds)
+	const float odds = milMgr->GetOddsMul();
 	auto atFocus = [&](const AIFloat3& p) {
 		return focusGo && (p.SqDistance2D(focusPos) < sqFocusR);
 	};
@@ -487,7 +489,7 @@ void CAttackTask::FindTarget()
 		bool still = false;
 		const float track = SQUARE(2.f * highestRange);
 		for (const CEnemyManager::SEnemyGroup& g : groups) {
-			if ((g.pos.SqDistance2D(strongPos) < track) && (maxPower <= g.influence)) {
+			if ((g.pos.SqDistance2D(strongPos) < track) && (maxPower <= g.influence * odds)) {
 				strongPos = g.pos;
 				still = true;
 				break;
@@ -517,7 +519,7 @@ void CAttackTask::FindTarget()
 		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
 		const float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
-		if ((effPower <= group.influence * scale) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
+		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
 			countGroupNear(group, NR_STRONG);
 			for (const ICoreUnit::Id eId : group.units) {

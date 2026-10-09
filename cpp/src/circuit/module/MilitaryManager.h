@@ -219,6 +219,11 @@ public:
 	float GetFocusR() const { return focusR; }
 	float GetFocusPow() const { return focusPow; }
 	bool IsFocusGo() const { return focusGo; }
+	// apex: the odds and mass heads (script military/nnmassodds.as) post their
+	// multipliers on the team board; read every UpdateDefenceTasks.
+	static constexpr int BOARD_ODDS = 1400, BOARD_MASS = 1500, BOARD_MIL_ACK = 1600;
+	float GetOddsMul() const { return oddsMul; }
+	float GetMassMul() const { return massMul; }
 	float GetAttackPower() const {
 		float p = 0.f;
 		for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
@@ -241,6 +246,8 @@ public:
 	float focusPow = 0.f;
 	bool focusGo = false;
 	int focusUntil = -1;
+	float oddsMul = 1.f;
+	float massMul = 1.f;
 	// Shared cadence and counters for ISquadTask's merge census. They live on
 	// the manager because the tasks they measure are created and destroyed
 	// constantly, and the question is about the fleet, not one squad.

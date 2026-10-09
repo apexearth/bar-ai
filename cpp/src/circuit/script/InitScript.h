@@ -110,6 +110,10 @@ private:
 	std::map<asIScriptContext*, CScriptDictionary*> takenContexts;
 };
 
+// The script's team board (SetTeamBoard/GetTeamBoard), for C++ readers.
+float TeamBoardGet(int allyTeam, int slot, float def);
+void TeamBoardSet(int allyTeam, int slot, float v);
+
 } // namespace circuit
 
 #endif // SRC_CIRCUIT_SCRIPT_INITSCRIPT_H_

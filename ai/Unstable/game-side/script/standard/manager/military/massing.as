@@ -11,6 +11,8 @@ namespace Military {
 // MASS_FLOOR so something goes out and the ratio can change.
 int gHoldSince = -1;
 int gNextFeedLog = 0;
+float gMassMul = 1.f;    // the mass head's pick (military/nnmassodds.as)
+float gMassBase = 0.f;   // the bar before it
 
 // The enemy mass we SIZE AGAINST, counted pessimistically: raw GetEnemyCost
 // (no ghost discount) over every fighting role INCLUDING heavy and super,
@@ -643,6 +645,8 @@ void UpdateMassing()
 	} else {
 		gHoldSince = -1;
 	}
+	gMassBase = want;
+	want *= gMassMul;
 
 	// A GROUP CANNOT BE BIGGER THAN THE ARMY THAT SUPPLIES IT. capNow is
 	// floored at a flat MASS_CAP, so the interpolation lands past 100% of our
@@ -666,7 +670,8 @@ void UpdateMassing()
 			+ " str=" + formatFloat((ours > 0.f) ? Market::StrRatio(theirs, ours) : 0.f, "", 0, 2)
 			+ " q=" + formatFloat(Market::FoeQualityM() * 1000.f, "", 0, 3)
 			+ "/" + formatFloat(Market::OurQualityM() * 1000.f, "", 0, 3)
-			+ " bleed=" + formatFloat(BleedCaution(), "", 0, 2));
+			+ " bleed=" + formatFloat(BleedCaution(), "", 0, 2)
+			+ " mul=" + formatFloat(gMassMul, "", 0, 2) + " base=" + formatFloat(gMassBase, "", 0, 0));
 		// HOW BIG "HOME GROUND" IS: CAttackTask's isHome waives the odds check
 		// wherever net influence >= INFL_SAFE (2.0). Walk the home->enemy axis
 		// and log where that isoline actually ends, against the full distance,

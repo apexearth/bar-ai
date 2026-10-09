@@ -677,7 +677,7 @@ void UpdatePosture()
 		// touched it, and the turtle block runs AFTER UpdateMassing in
 		// UpdatePosture -- so every resume slams the commit size back to stock
 		// and the next group leaves at stock size, one small group per cycle.
-		aiMilitaryMgr.quota.attack = MassWant();
+		aiMilitaryMgr.quota.attack = MassWant() * gMassMul;
 		AiLog(Factory::T() + "apexturtle: RESUME frame=" + ai.frame + " army=" + army
 			+ " (held from " + gArmyAtHold + ")");
 	}

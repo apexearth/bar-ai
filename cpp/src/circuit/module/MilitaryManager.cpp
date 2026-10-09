@@ -14,6 +14,7 @@
 #include "resource/MetalManager.h"
 #include "scheduler/Scheduler.h"
 #include "script/MilitaryScript.h"
+#include "script/InitScript.h"
 #include "setup/SetupManager.h"
 #include "setup/DefenceData.h"
 #include "task/UnitTask.h"
@@ -1634,6 +1635,20 @@ void CMilitaryManager::UpdateDefenceTasks()
 		)
 	}
 
+	{
+		const int ally = circuit->GetAllyTeamId();
+		const int tid = circuit->GetTeamId();
+		const float odds = std::max(0.1f, TeamBoardGet(ally, BOARD_ODDS + tid, 1.f));
+		const float mass = std::max(0.1f, TeamBoardGet(ally, BOARD_MASS + tid, 1.f));
+		if ((odds != oddsMul) || (mass != massMul)) {
+			circuit->LOG("apex: mil-board t=%i odds=%.2f mass=%.2f", tid, odds, mass);
+		}
+		oddsMul = odds;
+		massMul = mass;
+		// the script draws a non-rule odds only while this says the DLL reads it
+		TeamBoardSet(ally, BOARD_MIL_ACK + tid, float(circuit->GetLastFrame()));
+	}
+
 	/*
 	 * Defend expansion
 	 */
@@ -1682,7 +1697,7 @@ void CMilitaryManager::UpdateDefenceTasks()
 //		if (groupIdx >= 0) {
 //			dt->SetMaxPower(std::max(minAttackers, enemyGroups[groupIdx].threat));
 //		}
-		dt->SetMaxPower(std::max(minAttackers, circuit->GetEnemyManager()->GetPreMaxGroupThreat()));
+		dt->SetMaxPower(std::max(minAttackers, circuit->GetEnemyManager()->GetPreMaxGroupThreat() * massMul));
 	}
 
 	/*
