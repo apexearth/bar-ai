@@ -168,6 +168,22 @@ lostMobile, from the killer's unit def), dEco (economic power incl. energy),
 reclaim. Plus `done`/`buildS`, `survived`, and `lostPre` -- enemy kills in
 the 5 minutes BEFORE the decision, a check that the state saw the pressure.
 
+Against the enemy (2026-10-08): `edgeArmy`, `edgeEco`, `edgeLand`, `edgeMex`
+at each horizon -- the change in ln(our side / theirs) of `tools/progress.py`'s
+edges from the last whole minute before the decision to the last before f+h
+(the same code, `progress.series_of`, per deciding ally team; ln clipped at
++-ln 10). His "did we do better" per decision, not one bit per game. Game
+level: `endV` (result discounted from the decision, END_TAU 10 min) and
+`endFast` = +-e^(-game minutes / 30), the result discounted from the game's
+START, so a win at 25 min beats one at 55 and a loss held off to 55 costs
+less; endV cannot see that for a decision equally far from either end. Both
+masked for a time-capped game. Targets are only appended: a trainer finding a
+saved net and buffer with fewer outcomes grows masked columns and
+zero-weighted outputs and logs it (`adopt_targets`), never a reset.
+`won`/`endV`/`endFast`/`comLostD` are one value per game, so they are out of
+the per-batch headline R2 (a single game's batch has no spread for them);
+`game_sums` in metrics.jsonl carries their SSE/SST to pool over batches.
+
 ## Discovery games (`apex_nn_explore`, 0.1)
 
 His call: some games play with the net "tweaked randomly" against
@@ -224,7 +240,9 @@ e^(trust x verdict). His rulings stay rules. The whole list is re-sorted
 because `DrawWeights` takes the first of each category. OBJECTIVE
 (nntrain.py) is a stated default until he picks one: +5 min economic power
 1.0, metal and energy income 0.25 each, damage trade 0.5, losses near the
-site -0.5, finished, survived, lifetime and lifetime kills 0.25 each.
+site -0.5, finished, survived, lifetime and lifetime kills 0.25 each; since
+2026-10-08 also endFast 0.5, land edge +5/+10 0.25/0.5, army edge +5/+10 0.25
+each, eco and mex edge +10 0.25 each.
 The plan from here (his 2026-10-05): the market value becomes one input and
 the net's score the value, kind by kind, as trust is earned. `apex: nn-score`
 (60 s) proves it fires: scored count, how often it changed the top option,

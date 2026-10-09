@@ -17,7 +17,7 @@ divided by THEIRS (an "edge"; 1.00 = level, 1.20 = 20% ahead):
          1500 of one -- territorial control (his 2026-10-08: we cede ground)
 A game's edge at minute M exists only if the game lasted to M, so late columns
 are read from the games that got there. Edges are medians over games. Each game
-is read once and cached in runtime/progress/.
+is read once and cached in runtime/progress/ (BARAI_PROGRESS_CACHE moves it).
 
 Why (his 2026-10-08): "we didn't win, but we did better that time" -- a win
 count is one bit per game; the edges say where a game was won or lost and
@@ -33,7 +33,7 @@ import sys
 from collections import defaultdict
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE = os.path.join(REPO, "runtime", "progress")
+CACHE = os.environ.get("BARAI_PROGRESS_CACHE", os.path.join(REPO, "runtime", "progress"))
 FPM = 1800
 MINUTES = (3, 5, 8, 10, 12, 15, 20, 25, 30)
 VERSION = 2
@@ -82,7 +82,26 @@ def read_game(mdir):
         return 1 if ally.get(t, -1) in barb_allies else 0
 
     last = int(r.get("game_frames") or 0) // FPM
-    n = last + 1
+    series = series_of(txt, ally, side, last + 1)
+    winners = " ".join(r.get("winner_specs") or [])
+    hc = res.get("handicap")
+    if isinstance(hc, list):
+        hc = hc[0] if hc else None
+    return {
+        "v": VERSION, "match": os.path.basename(mdir.rstrip("/\\")),
+        "tournament": os.path.basename(os.path.dirname(os.path.dirname(mdir.rstrip("/\\")))),
+        "map": res.get("map", "?"), "bonus": hc, "minutes": round(r.get("game_minutes") or 0, 1),
+        "result": "W" if "Apex" in winners else ("L" if "BARb" in winners else "D"),
+        "explore": "apex: nn-explore t=" in txt,
+        "series": series,
+    }
+
+
+def series_of(txt, ally, side, n):
+    """Per-minute edges (index = the minute; the value as it stood at its end)
+    of side 0 over side 1, from the gadget lines in txt. `ally` maps engine team
+    to ally team; side(team) is 0 or 1. decisions.py calls it once per deciding
+    ally team, so the labels and this report read the same numbers."""
     made = defaultdict(dict)                  # team -> minute -> (mMade, eMade)
     for m in RE_WASTE.finditer(txt):
         made[int(m.group(2))][int(m.group(1)) // FPM] = (int(m.group(4)), int(m.group(6)))
@@ -138,18 +157,7 @@ def read_game(mdir):
         series["army"].append(ratio(standing[0], standing[1]))
         series["trade"].append(ratio(cl[1], cl[0], floor=500.0))
         series["dmg"].append(ratio(dd[0][0], dd[0][1], floor=20000.0))
-    winners = " ".join(r.get("winner_specs") or [])
-    hc = res.get("handicap")
-    if isinstance(hc, list):
-        hc = hc[0] if hc else None
-    return {
-        "v": VERSION, "match": os.path.basename(mdir.rstrip("/\\")),
-        "tournament": os.path.basename(os.path.dirname(os.path.dirname(mdir.rstrip("/\\")))),
-        "map": res.get("map", "?"), "bonus": hc, "minutes": round(r.get("game_minutes") or 0, 1),
-        "result": "W" if "Apex" in winners else ("L" if "BARb" in winners else "D"),
-        "explore": "apex: nn-explore t=" in txt,
-        "series": series,
-    }
+    return series
 
 
 def land_mex(txt, side, n, series):
@@ -179,14 +187,28 @@ def land_mex(txt, side, n, series):
             if len(pts) == 0 or len(cells) == 0:
                 d.append(np.full(len(cells), np.inf))
                 continue
-            dd = ((cells[:, None, :] - pts[None, :, :]) ** 2).sum(-1).min(1)
-            d.append(np.sqrt(dd))
+            d.append(nearest(cells, pts))
         if len(cells):
             ours = int(((d[0] < d[1]) & (d[0] <= CLAIM_R)).sum())
             theirs = int(((d[1] < d[0]) & (d[1] <= CLAIM_R)).sum())
             series["land"].append(ratio(ours, theirs, floor=4.0))
         else:
             series["land"].append(None)
+
+
+def nearest(cells, pts):
+    """Distance from each cell to its nearest point. The decision labels run
+    this every live re-read, on 8v8 bases a dense matrix would not hold."""
+    import numpy as np
+    try:
+        from scipy.spatial import cKDTree
+        return cKDTree(pts).query(cells)[0]
+    except ImportError:
+        out = np.full(len(cells), np.inf)
+        for i in range(0, len(pts), 512):
+            dd = ((cells[:, None, :] - pts[None, i:i + 512, :]) ** 2).sum(-1).min(1)
+            out = np.minimum(out, np.sqrt(dd))
+        return out
 
 
 def ratio(a, b, floor=0.0):

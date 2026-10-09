@@ -1678,9 +1678,12 @@ const NN_NAMES = {dMInc: "metal income change", dEInc: "energy income change", l
   dEco: "economic power change", reclaim: "metal reclaimed per minute", lostPre: "losses in the 5 min before (check)",
   done: "chosen build finished", survived: "chosen build survived",
   lifeS: "chosen build: seconds it lived", lifeKill: "chosen build: metal it killed",
-  won: "won the game"};
+  won: "won the game", endV: "game result, discounted from the decision",
+  endFast: "game result, discounted from the start (sooner wins)", comLostD: "commander lost, discounted",
+  edgeArmy: "army edge vs the enemy (change)", edgeEco: "metal income edge (change)",
+  edgeLand: "land edge (change)", edgeMex: "extractor edge (change)"};
 function nnTable(m) {
-  if (!m.length || !m[0].targets) return "<span class='dim'>no games yet</span>";
+  if (!m.length || !m[m.length - 1].targets) return "<span class='dim'>no games yet</span>";
   const last = m.filter(r => r.r2_full).slice(-5);
   if (!last.length) return "<span class='dim'>waiting for a second game to test on</span>";
   const avg = (key, j) => { const v = last.map(r => r[key][j]).filter(x => x != null);
@@ -1688,9 +1691,9 @@ function nnTable(m) {
   const cell = v => v == null ? "<td class='dim'>&ndash;</td>"
     : `<td style="color:${v > 0.05 ? "var(--good)" : v < -0.05 ? "var(--bad)" : "inherit"}">${v.toFixed(3)}</td>`;
   let h = "<table><thead><tr><th>Prediction</th><th>Horizon</th><th>With decision</th><th>State only</th></tr></thead><tbody>";
-  m[0].targets.forEach((t, j) => {
+  m[m.length - 1].targets.forEach((t, j) => {
     const [hz, k] = t.split(":");
-    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${hz === "won" ? "end of game" : (hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
+    h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${["won", "endV", "endFast", "comLostD"].includes(hz) ? "end of game" : (hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
       + cell(avg("r2_full", j)) + cell(avg("r2_state", j)) + "</tr>";
   });
   for (const [key, label] of [["done", "chosen build finished"], ["survived", "chosen build survived 5 min"]]) {

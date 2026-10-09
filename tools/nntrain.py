@@ -51,7 +51,14 @@ PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear"
          "lostAir", "lostStatic", "lostMobile", "reclaim")
 LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
 SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost", "endV", "comLostD")    # one value per decision, not per horizon
-TARGETS = [(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
+EDGE_H = ("edgeArmy", "edgeEco", "edgeLand", "edgeMex")   # 2026-10-08: did the game move our way
+# Only ever appended to: a saved net and buffer then grow masked columns (adopt_targets).
+TARGETS = ([(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
+           + [(h, k) for h in decisions.HORIZONS for k in EDGE_H] + [("endFast", "endFast")])
+# One value for every row of a game: a single game's batch has no spread to
+# explain, and their R2 there ran to large negatives and swamped the headline.
+GAME_LEVEL = ("won", "endV", "endFast", "comLostD")
+TARGET_NAMES = np.array(["%s:%s" % t for t in TARGETS])   # saved with each buffer: what its columns hold
 SCHEMA_OPT = "forced"   # an option field only the current record (v5+) carries
 SCHEMA_STATE = "repairM"   # a state field only the current record carries: older rows are skipped, not a reset
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
@@ -63,9 +70,13 @@ OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc
              ("done", "done"): 0.25, ("survived", "survived"): 0.25,
              ("lifeS", "lifeS"): 0.25, ("lifeKill", "lifeKill"): 0.25,
              ("endV", "endV"): 1.0,   # the game result, discounted by how far ahead it came (his 2026-10-06)
-             ("comLostD", "comLostD"): -2.0}   # the commander must not die (10-05), discounted the same way
-# the dashboard's headline accuracy: the outcomes the net is steered by
-HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE]
+             ("comLostD", "comLostD"): -2.0,   # the commander must not die (10-05), discounted the same way
+             # half endV's weight: one value per game, so its credit to a decision is noisier
+             ("endFast", "endFast"): 0.5,
+             (5, "edgeArmy"): 0.25, (10, "edgeArmy"): 0.25, (5, "edgeLand"): 0.25, (10, "edgeLand"): 0.5,
+             (10, "edgeEco"): 0.25, (10, "edgeMex"): 0.25}
+# the dashboard's headline accuracy: the per-decision outcomes the net is steered by
+HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE and t[1] not in GAME_LEVEL]
 HIDDEN = 32
 # What plays is a running average of the trained weights, half of it from the
 # last EMA_HALF batches: one game moves it a little, a run of games moves it a
@@ -172,6 +183,36 @@ def adopt_keys(obj, keys):
     return True
 
 
+def saved_targets(ck, buf):
+    """(the targets the saved net predicts, those the saved buffer's columns hold).
+    A buffer written before it recorded its own is read by its width."""
+    net_t = [tuple(t) for t in ck.get("targets", [])]
+    if "targets" in buf:
+        buf_t = [tuple(s.split(":", 1)) for s in buf["targets"]]
+        buf_t = [(int(h) if h.isdigit() else h, k) for h, k in buf_t]
+    else:
+        buf_t = net_t if buf["Y"].shape[1] == len(net_t) else None
+    return net_t, buf_t
+
+
+def adopt_targets(obj, name, net_t, buf_t):
+    """True when the saved net and buffer predict TARGETS or a prefix of them:
+    the buffer grows masked columns (no history for the new outcomes) and the
+    nets grow zero-weighted outputs, so nothing learned is lost. False for any
+    other change; the caller starts over and says so."""
+    if buf_t is None or TARGETS[:len(net_t)] != net_t or TARGETS[:len(buf_t)] != buf_t:
+        return False
+    n = len(TARGETS) - len(buf_t)
+    if n:
+        obj.Y = np.concatenate([obj.Y, np.zeros((len(obj.Y), n), dtype=obj.Y.dtype)], 1)
+        obj.M = np.concatenate([obj.M, np.zeros((len(obj.M), n), dtype=obj.M.dtype)], 1)
+        obj.grown = True   # the next save writes the wider buffer
+    if len(net_t) < len(TARGETS) or n:
+        print("%s: %d outcomes appended (%s); weights kept, earlier rows masked for them"
+              % (name, len(TARGETS) - len(net_t), ",".join("%s:%s" % t for t in TARGETS[len(net_t):])), flush=True)
+    return True
+
+
 def slog(x):
     return math.copysign(math.log1p(abs(x)), x)
 
@@ -245,7 +286,7 @@ def wcorr(a):
 def target_vec(row):
     y, m = [], []
     for h, k in TARGETS:
-        if h in SINGLE:
+        if isinstance(h, str):
             v = row["y"].get(k)
         else:
             hv = row["y"].get(h) or row["y"].get(str(h))
@@ -371,6 +412,25 @@ class Net:
             self.xm = np.insert(self.xm, [at] * n, 0.0)
             self.xs = np.insert(self.xs, [at] * n, 1.0)
 
+    def grow_out(self, n):
+        """n new outputs after the last, weighted zero: every old output predicts
+        exactly as before, and the objective folds them in at zero until trained."""
+        if n <= 0:
+            return
+        t = self.torch
+        for m in (self.model, self.slow):
+            old = m[-1]
+            new = t.nn.Linear(old.in_features, old.out_features + n)
+            with t.no_grad():
+                new.weight.copy_(t.cat([old.weight.data, t.zeros(n, old.in_features)], 0))
+                new.bias.copy_(t.cat([old.bias.data, t.zeros(n)]))
+            m[len(m) - 1] = new
+        self.opt = t.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
+        if self.ym is not None:
+            self.ym = np.concatenate([self.ym, np.zeros(n, dtype=self.ym.dtype)])
+            self.ys = np.concatenate([self.ys, np.ones(n, dtype=self.ys.dtype)])
+        self.fit_n = 0   # refit the target scalers at the next batch
+
     def shrink_perturb(self):
         t = self.torch
         fresh = Net(self.model[0].in_features, self.model[-1].out_features).model
@@ -399,6 +459,19 @@ def r2(pred, y, m, base):
         sse = float(((pred[k, j] - y[k, j]) ** 2).sum())
         sst = float(((base[j] - y[k, j]) ** 2).sum())
         out.append(None if sst <= 0 else 1.0 - sse / sst)
+    return out
+
+
+def game_sums(pf, ps, y, m, base):
+    """Per game-level outcome [SSE full, SSE state, SST, n] of one batch: summed
+    over many batches they give the R2 a single game's batch cannot."""
+    out = {}
+    for name in GAME_LEVEL:
+        j = TARGETS.index((name, name))
+        k = m[:, j] > 0
+        if k.any():
+            out[name] = [float(((pf[k, j] - y[k, j]) ** 2).sum()), float(((ps[k, j] - y[k, j]) ** 2).sum()),
+                         float(((base[j] - y[k, j]) ** 2).sum()), int(k.sum())]
     return out
 
 
@@ -583,12 +656,16 @@ class FacHead:
                 self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
                 self.state_keys = list(b["state_keys"])
                 self.batches = int(b["batches"])
+                buf = {"Y": self.Y, **({"targets": list(b["targets"])} if "targets" in b.files else {})}
             ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False)
-            if list(ck.get("targets", [])) != TARGETS or tuple(ck.get("opt_num", ())) != self.OPTS:
+            net_t, buf_t = saved_targets(ck, buf)
+            if tuple(ck.get("opt_num", ())) != self.OPTS or not adopt_targets(self, self.NAME, net_t, buf_t):
+                print("%s: saved net predicts other outcomes or reads other options; starting empty" % self.NAME,
+                      flush=True)
                 self.__init_empty()
                 return
-            self.full = Net(self.XF.shape[1], len(TARGETS))
-            self.st = Net(self.XS.shape[1], len(TARGETS))
+            self.full = Net(self.XF.shape[1], len(net_t))
+            self.st = Net(self.XS.shape[1], len(net_t))
             try:
                 self.full.load(ck["full"])
                 self.st.load(ck["state"])
@@ -598,6 +675,8 @@ class FacHead:
                       % (self.NAME, self.XF.shape[1]), flush=True)
                 self.__init_empty()
                 return
+            for net in (self.full, self.st):
+                net.grow_out(len(TARGETS) - len(net_t))
             self.pairs = ck.get("pairs", [])
             if ck.get("post_keys") is not None:
                 self.post_keys = list(ck["post_keys"])
@@ -618,7 +697,7 @@ class FacHead:
             self.grown = False
             self.buf_at = self.batches
             np.savez(OUT / (self.NAME + "_buffer.tmp.npz"), XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
-                     state_keys=np.array(self.state_keys), batches=self.batches)
+                     state_keys=np.array(self.state_keys), batches=self.batches, targets=TARGET_NAMES)
             replace_retry(OUT / (self.NAME + "_buffer.tmp.npz"), OUT / (self.NAME + "_buffer.npz"))
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
                     "post_keys": getattr(self, "post_keys", None),
@@ -658,6 +737,7 @@ class FacHead:
             pf, ps = self.full.predict(XF), self.st.predict(XS)
             rec["head_full"] = mean_of(r2(pf, Y, M, base), HEADLINE)
             rec["head_state"] = mean_of(r2(ps, Y, M, base), HEADLINE)
+            rec["game_sums"] = game_sums(pf, ps, Y, M, base)
             w = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
             ym, ysd = self.full.ym, self.full.ys
             zf, zs, zy = (pf - ym) / ysd, (ps - ym) / ysd, (Y - ym) / ysd
@@ -859,14 +939,18 @@ class Trainer:
                 self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
                 self.state_keys = list(b["state_keys"])
                 self.batches = int(b["batches"])
+                buf = {"Y": self.Y, **({"targets": list(b["targets"])} if "targets" in b.files else {})}
             ck = torch.load(OUT / "model.pt", weights_only=False)
-            if list(ck.get("targets", [])) != TARGETS or tuple(ck.get("opt_num", ())) != OPT_NUM:
+            net_t, buf_t = saved_targets(ck, buf)
+            if tuple(ck.get("opt_num", ())) != OPT_NUM or not adopt_targets(self, "builder", net_t, buf_t):
                 self.fresh_start("this trainer predicts different outcomes or reads different options")
                 return
-            self.full = Net(self.XF.shape[1], len(TARGETS))
-            self.st = Net(self.XS.shape[1], len(TARGETS))
+            self.full = Net(self.XF.shape[1], len(net_t))
+            self.st = Net(self.XS.shape[1], len(net_t))
             self.full.load(ck["full"])
             self.st.load(ck["state"])
+            for net in (self.full, self.st):
+                net.grow_out(len(TARGETS) - len(net_t))
             # saved every batch but never read back: each restart wiped the trust evidence
             self.trust_pairs = {k: [tuple(x) for x in v] for k, v in (ck.get("trust_pairs") or {}).items()}
 
@@ -911,7 +995,7 @@ class Trainer:
             self.grown = False
             self.buf_at = self.batches
             np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
-                     state_keys=np.array(self.state_keys), batches=self.batches)
+                     state_keys=np.array(self.state_keys), batches=self.batches, targets=TARGET_NAMES)
             replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
                     "post_keys": getattr(self, "post_keys", None),
@@ -1055,6 +1139,7 @@ class Trainer:
             rec["r2_full"], rec["r2_state"] = r2(pf, Y, M, base), r2(ps, Y, M, base)
             rec["head_full"] = mean_of(rec["r2_full"], HEADLINE)
             rec["head_state"] = mean_of(rec["r2_state"], HEADLINE)
+            rec["game_sums"] = game_sums(pf, ps, Y, M, base)
             # with vs without the decision, on rows where an option was CHOSEN on
             # value -- forced paths tell the net which panic fired, not what a choice is worth
             d = np.array(decided)

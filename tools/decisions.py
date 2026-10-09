@@ -16,6 +16,10 @@ minutes.py reads, for the DECIDING team, at +1/+3/+5 minutes:
                   enemy kills, split into lostNear (within NEAR of the chosen site:
                   the decision's own exposure) and lostFar (the enemy's doing)
   survived        the chosen building still stood SURVIVE_S after it finished
+  edgeArmy / edgeEco / edgeLand / edgeMex
+                  change in ln(our side / theirs) over the whole minutes from f to
+                  f+h, progress.py's edges: did the game move our way
+  endFast         the result discounted from the game's start (GAME_TAU)
 
 A horizon past the end of the game is null. The summary checks the instrument:
 nn lines against exec lines per team, so a decision path that writes no record
@@ -250,6 +254,7 @@ def parse(path, files=None):
     reinf_done = {}     # (team, decision frame) -> arrived while the fight raged (apex: nnreinf-done)
     state_keys, opt_keys = None, None
     lastw = lastd = 0
+    gadget = []
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
         for ln in fh:
             if "apex: nnreinf-done t=" in ln:
@@ -306,6 +311,7 @@ def parse(path, files=None):
                 continue
             if "[BARAI_" not in ln:
                 continue
+            gadget.append(ln)
             m = RESULT.search(ln)
             if m:
                 winners = {int(w) for w in m.group(3).split(",") if w}
@@ -362,7 +368,10 @@ def parse(path, files=None):
                     died[int(mu.group(1))] = f
                     if atk >= 0 and atk != t and int(mu.group(2)) >= 0:
                         killby.setdefault(int(mu.group(2)), []).append((f, cost))
-    return dict(bonus=script_bonus(path),
+    deciders = {int(r[1]) for r in rows} | {int(r[1]) for r in facrows} | {int(r[1]) for r in postrows}
+    for h in heads.values():
+        deciders |= {int(r[1]) for r in h["rows"]}
+    return dict(bonus=script_bonus(path), edges=side_edges(gadget, allyof, deciders, lastw),
                 rows=rows, execs=execs, nns=nns, state_keys=widen_keys(state_keys), opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
@@ -398,6 +407,34 @@ def com_deaths(g, t):
     if t not in cache:
         cache[t] = sorted(df for df, unit, _x, _z in g["dead"].get(t, []) if unit.startswith(COMS))
     return cache[t]
+
+
+EDGES = ("army", "eco", "land", "mex")   # progress.py's edges the labels follow
+EDGE_CLIP = math.log(10.0)   # progress.ratio reads 9.99 when they have none
+
+
+def side_edges(gadget, allyof, deciders, last):
+    """Per deciding ally team: progress.py's per-minute edges of that side over
+    every other, from the game's own gadget lines (ground truth, labels only)."""
+    allies = {allyof[t] for t in deciders if t in allyof}
+    if not allies or len(set(allyof.values())) < 2:
+        return {}
+    import progress
+    txt = "".join(gadget)
+    out = {}
+    for a in allies:
+        s = progress.series_of(txt, allyof, lambda t, a=a: 0 if allyof.get(t) == a else 1, last // FPM + 1)
+        out[a] = {k: s[k] for k in EDGES}
+    return out
+
+
+def edge_delta(series, f0, f1):
+    """ln(edge) at the last whole minute before f1 minus before f0, or None."""
+    i0, i1 = f0 // FPM - 1, f1 // FPM - 1
+    if i0 < 0 or i1 <= i0 or i1 >= len(series) or series[i0] is None or series[i1] is None:
+        return None
+    a, b = (max(-EDGE_CLIP, min(EDGE_CLIP, math.log(max(series[i], 1e-9)))) for i in (i0, i1))
+    return b - a
 
 
 def rate(s, f):
@@ -453,6 +490,9 @@ def labels(g, t, f, site=None):
         rc = g["reclaim"].get(t)
         rc0, rc1 = (rc.at(f), rc.at(f1)) if rc is not None else (None, None)
         out["reclaim"] = (rc1 - rc0) / h if None not in (rc0, rc1) else None
+        ed = g.get("edges", {}).get(g["allyof"].get(t))
+        for k in EDGES:
+            out["edge" + k.capitalize()] = edge_delta(ed[k], f, f1) if ed else None
         y[h] = out
     # the pressure the state should already have seen: enemy kills of ours in
     # the 5 minutes BEFORE the decision
@@ -474,6 +514,11 @@ def labels(g, t, f, site=None):
         # a game stopped by our time cap has no result: 0 read every such row as "even"
         sign = None if not w or mine is None else (1.0 if mine in w else -1.0)
         y["endV"] = None if sign is None else sign * math.exp(-max(0, g["last"] - f) / (END_TAU * FPM))
+        # endV is discounted from the decision, so it cannot tell a win at 25
+        # minutes from one at 55 for a decision 15 minutes before either; this is
+        # the result discounted from the game's start: a win is worth less the
+        # longer it took, a loss costs less the longer it was held off.
+        y["endFast"] = None if sign is None else sign * math.exp(-g["last"] / (GAME_TAU * FPM))
         # ...only a death the game went on after: in 1v1 the commander's death IS
         # the loss, already in endV -- counted again it made a loss -3 to a win's
         # +1 (his 2026-10-06).
@@ -481,11 +526,13 @@ def labels(g, t, f, site=None):
         y["comLostD"] = math.exp(-(min(dfs) - f) / (COM_H * FPM)) if dfs else 0.0
     else:
         y["endV"] = None
+        y["endFast"] = None
         y["comLostD"] = None
     return y
 
 
 END_TAU = 10   # minutes: the longest horizon
+GAME_TAU = 30   # minutes: about a decided 2v2's length vs BARb, where the label spreads most
 COM_END_F = 300   # frames: a commander death this close to the end ended the game
 
 
