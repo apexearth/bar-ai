@@ -15,8 +15,10 @@ bool gEscHeader = false;
 
 string NeName(int o) { return (o == NE_LIGHT) ? "LIGHT" : ((o == NE_HEAVY) ? "HEAVY" : "MATCH"); }
 float NeMul(int o) { return (o == NE_LIGHT) ? 0.5f : ((o == NE_HEAVY) ? 2.f : 1.f); }
-// The cap on escorts at once scales with the net's strength too: MATCH keeps his 8.
-uint EscortCap() { return uint(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP) * gEscMul + 0.5f); }
+// The cap on escorts at once scales with the net's strength, and by its own
+// cap net x1/x2/x4 (nnecap): MATCH at E1 keeps his 8.
+float gEscCapMul = 1.f;
+uint EscortCap() { return uint(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP) * gEscMul * gEscCapMul + 0.5f); }
 
 void EscNetDecide()
 {
@@ -70,6 +72,7 @@ void EscNetDecide()
 	if (!gEscHeader) {
 		gEscHeader = true;
 		AiLog("apex: nnesc-schema v1 state=" + NN_STATE + " esc=" + NNE_ESC + " opt=name,w,p opts=LIGHT,MATCH,HEAVY");
+		AiLog("apex: nnecap-schema v1 state=" + NN_STATE + " ecap=" + NNE_ESC + " opt=name,w,p opts=E1,E2,E4");
 	}
 	string ln = "apex: nnesc t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + NeName(rule)
 		+ " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
@@ -82,6 +85,16 @@ void EscNetDecide()
 		ln += ((o == 0) ? " | " : " ; ") + NeName(o) + "," + NnF(w[o], 4) + "," + NnF(p[o], 6);
 	ln += " | chosen=" + chosen;
 	AiLog(ln);
+	array<float> cw(3, NE_EPS);
+	cw[0] = 1.f;
+	const float ctrust = NnHeadScore(NNY_ON, NNY_STATE, NNE_ESC, NNY_S, NNY_O, NNY_H, NNY_XM, NNY_XS,
+		NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, st, ef, cw);
+	array<float> cp(3);
+	const float cflat = NnHeadFlat(ctrust);
+	const int cc = EcoDraw(0, ctrust, cw, cp, cflat);
+	gEscCapMul = (cc == 1) ? 2.f : ((cc == 2) ? 4.f : 1.f);
+	array<string> cnames = {"E1", "E2", "E4"};
+	AiLog(EcoLine("nnecap", "E1", cflat > 0.f, ctrust, st, ef, cnames, cw, cp, cc));
 }
 
 // EXISTING RAIDERS TAKE THE DUTY, not only a unit fresh from the factory. One

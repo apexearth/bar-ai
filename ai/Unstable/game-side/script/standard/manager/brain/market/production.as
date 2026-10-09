@@ -938,6 +938,10 @@ bool ConPoolFull(int d)
 	const int pool = ConPoolOf(d);
 	return ConPoolHave(pool) >= ConPoolCap(pool);
 }
+int ScoutFleetCap()
+{
+	return int(float(RezFleetCap()) * gScoutCapMul + 0.5f);
+}
 // Constructors as a share of our mobile units, for the nets.
 float gConShareVal = 0.f;
 int gConShareAt = -100000;
@@ -1875,7 +1879,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		Market::EscortFieldCensus();
 		// The scout cap binds an escort buy too, or a lab whose every other unit
 		// is outgrown buys scouts as escorts without end.
-		const bool escCapped = IsLateScout(d) && (ScoutFleetHave() >= RezFleetCap());
+		const bool escCapped = IsLateScout(d) && (ScoutFleetHave() >= ScoutFleetCap());
 		if (escCapped && prankNow && EscortWorthy(d))
 			prank += " " + Catalog::Def(d).GetName() + ":esc-capped";
 		if (!Catalog::gBuilder[d] && EscortWorthy(d) && !ecoGrowing && !Outgrown(d) && !escCapped) {
@@ -2010,7 +2014,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":outgrown";
 				continue;
 			}
-			if (IsLateScout(d) && (ScoutFleetHave() >= RezFleetCap())) {
+			if (IsLateScout(d) && (ScoutFleetHave() >= ScoutFleetCap())) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":scoutcap";
 				continue;

@@ -22,6 +22,9 @@ int gConPolicy = NK_YIELD;
 const string NNQ_CAP = "conT1,conT2,conAir,capT1,capT2,capAir,conShare,mInc,mWasting,bankFill,idleCons,minute";
 float gConCapMul = 1.f;
 float gAirCapMul = 4.f;
+// The late ground scout cap: x1/x2/x4 of the same base (rule x1).
+const string NNS_SCOUT = "scouts,scoutCap,topTier,army,foeLos,foeRadar,screenLost,mInc,minute";
+float gScoutCapMul = 1.f;
 int gMexPolicy = NX_HOLD;
 float gMexMul = 1.f;
 int gEcoNetNextAt = 0;
@@ -97,6 +100,7 @@ void EcoNetDecide()
 		AiLog("apex: nnmex-schema v1 state=" + NN_STATE + " mex=" + NNX_MEX + " opt=name,w,p opts=HOLD,YIELD,PUSH");
 		AiLog("apex: nncap-schema v1 state=" + NN_STATE + " cap=" + NNQ_CAP + " opt=name,w,p opts=X1,X2,X4");
 		AiLog("apex: nnacap-schema v1 state=" + NN_STATE + " acap=" + NNQ_CAP + " opt=name,w,p opts=A2,A4,A8");
+		AiLog("apex: nnscap-schema v1 state=" + NN_STATE + " scap=" + NNS_SCOUT + " opt=name,w,p opts=S1,S2,S4");
 	}
 	{
 		array<float> f;
@@ -153,6 +157,28 @@ void EcoNetDecide()
 		gAirCapMul = (c2 == 0) ? 2.f : ((c2 == 2) ? 8.f : 4.f);
 		array<string> names2 = {"A2", "A4", "A8"};
 		AiLog(EcoLine("nnacap", "A4", flat2 > 0.f, trust2, st, qf, names2, w2, p2, c2));
+	}
+	{
+		array<float> sf;
+		sf.insertLast(float(ScoutFleetHave()));
+		sf.insertLast(float(ScoutFleetCap()));
+		sf.insertLast(float(TopOwnPlantTier()));
+		sf.insertLast(ArmyValue());
+		sf.insertLast(float(Military::gFmNLos));
+		sf.insertLast(float(Military::gFmNRadar));
+		sf.insertLast(Military::ScreenLostM());
+		sf.insertLast(Eco::MInc());
+		sf.insertLast(float(ai.frame) / 1800.f);
+		array<float> sw(3, NE2_EPS);
+		sw[0] = 1.f;
+		const float strust = NnHeadScore(NNS_ON, NNS_STATE, NNS_SCOUT, NNS_S, NNS_O, NNS_H, NNS_XM, NNS_XS,
+			NNS_W1, NNS_B1, NNS_W2, NNS_B2, NNS_WO, NNS_BO, NNS_TRUST, st, sf, sw);
+		array<float> sp(3);
+		const float sflat = NnHeadFlat(strust);
+		const int sc = EcoDraw(0, strust, sw, sp, sflat);
+		gScoutCapMul = (sc == 1) ? 2.f : ((sc == 2) ? 4.f : 1.f);
+		array<string> snames = {"S1", "S2", "S4"};
+		AiLog(EcoLine("nnscap", "S1", sflat > 0.f, strust, st, sf, snames, sw, sp, sc));
 	}
 	{
 		array<float> f;
