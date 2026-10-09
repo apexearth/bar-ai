@@ -66,6 +66,7 @@
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
 #include "market/protect_nn.as"     // leaks, and static defence's amount and site as recorded draws
 #include "market/protect_nntype.as" // which gun class a ground-defence want builds, as a recorded draw
+#include "market/opennet.as"        // the opening order: one recorded draw, followed until the plant
 #include "market/decide.as"      // the arbiter: rank the Wants, pick one
 #include "market/execute.as"        // turning a won Want into a task
 #include "market/production.as"     // the production market: con orders, batch demand

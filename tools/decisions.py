@@ -46,8 +46,8 @@ NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule
 REINF_DONE = re.compile(r"apex: nnreinf-done t=(\d+) f=(\d+) done=(\d)")
 HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) killAll=-?\d+"
                        r" lost=(-?\d+) wreck=(-?\d+)")
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 # static defence (protect_nn.as, protect_nntype.as): amount, and site and gun class with their watch
 DEF_SCHEMA = re.compile(r"apex: nn(defamt|defsite|deftype)-schema v\d+ state=\S+ (?:defamt|defsite|deftype)=(\S+) opt=")
@@ -301,7 +301,7 @@ def parse(path, files=None):
                 mx = re.search(r"nn-explore t=(\d+) on", ln)
                 if mx:
                     explorers.add(int(mx.group(1)))
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln or "apex: nnscap" in ln or "apex: nnecap" in ln or "apex: nnstrike" in ln or "apex: nnmass" in ln or "apex: nnodds" in ln:
+            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln or "apex: nnscap" in ln or "apex: nnecap" in ln or "apex: nnstrike" in ln or "apex: nnmass" in ln or "apex: nnodds" in ln or "apex: nnopen" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
@@ -675,14 +675,37 @@ def head_rows_of(path, g, tag):
             parts = o.split(",")
             if len(parts) == 3:
                 ov.append({"name": parts[0], "w": num(parts[1]), "p": num(parts[2])})
+        post = dict(zip(pk, (num(x) for x in own.split(","))))
         yield dict(match=os.path.basename(path.rstrip("/\\")), team=t, f=f, unit=-1, con=tag,
                    why=why, rule=rule, explore=ex == "1", pick=0, dm="draw",
                    state=fill_bonus(g, t, dict(zip(sk, (num(x) for x in state.split(","))))),
-                   post=dict(zip(pk, (num(x) for x in own.split(",")))),
-                   opts=ov, chosen=int(chosen), y=head_labels(g, t, f, tag))
+                   post=post, opts=ov, chosen=int(chosen), y=head_labels(g, t, f, tag, post))
 
 
-def head_labels(g, t, f, tag):
+def open_labels(g, t, f, y, own):
+    """The opening is decided before minute 1, where labels() has no income to
+    start from: the commander's own income (his make x the bonus, in the row)
+    is the base for dMInc/dEInc/dEco, and 'done' is ln(metal made over the
+    next 5 minutes / what he alone makes in them)."""
+    sm, se = g["sm"].get(t), g["se"].get(t)
+    m0, e0 = own.get("comM") or 0.0, own.get("comE") or 0.0
+    for h in HORIZONS:
+        out = y.get(h)
+        if out is None or sm is None or se is None:
+            continue
+        f1 = min(f + h * FPM, g["last"])
+        m1, e1 = rate(sm, f1), rate(se, f1)
+        out["dMInc"] = math.log(m1 / m0) if m0 > 0 and m1 else None
+        out["dEInc"] = math.log(e1 / e0) if e0 > 0 and e1 else None
+        out["dEco"] = (math.log((m1 + e1 / 60.0) / (m0 + e0 / 60.0))
+                       if None not in (m1, e1) and m0 + e0 > 0 and m1 + e1 > 0 else None)
+    f5 = f + 5 * FPM
+    made = (sm.at(f5) - sm.at(f)) if sm is not None and f5 <= g["last"] else None
+    y["done"] = math.log(made / (m0 * 5 * 60.0)) if made and m0 > 0 else None
+    return y
+
+
+def head_labels(g, t, f, tag, own=None):
     """The team's outcomes; the join-the-fight head's 'done' is whether the squad
     arrived while the fight still raged (apex: nnreinf-done); the hunt head's is
     (kill + wreck - lost) / (kill + lost + army) near the army it weighed."""
@@ -700,6 +723,8 @@ def head_labels(g, t, f, tag):
     elif tag == "hunt":
         y["done"] = None
         y.update(g.get("hunt_done", {}).get((t, f), {}))
+    elif tag == "open":
+        open_labels(g, t, f, y, own or {})
     return y
 
 

@@ -309,6 +309,22 @@ const array<float> NNN_WO = {};
 const float NNN_BO = 0.f;
 const float NNN_TRUST = 0.f;
 
+// the opening order net (opennet.as)
+const bool NNOP_ON = false;
+const string NNOP_STATE = "";
+const int NNOP_S = 0;
+const int NNOP_O = 0;
+const int NNOP_H = 0;
+const array<float> NNOP_XM = {};
+const array<float> NNOP_XS = {};
+const array<float> NNOP_W1 = {};
+const array<float> NNOP_B1 = {};
+const array<float> NNOP_W2 = {};
+const array<float> NNOP_B2 = {};
+const array<float> NNOP_WO = {};
+const float NNOP_BO = 0.f;
+const float NNOP_TRUST = 0.f;
+
 // the hunt-their-army net (military/nnhunt.as)
 const bool NNH_ON = false;
 const string NNH_STATE = "";
