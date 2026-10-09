@@ -277,4 +277,36 @@ const array<float> NNH_WO = {};
 const float NNH_BO = 0.f;
 const float NNH_TRUST = 0.f;
 
+// the pool-size net (military/nnmassodds.as)
+const bool NNM_ON = false;
+const string NNM_STATE = "";
+const int NNM_S = 0;
+const int NNM_O = 0;
+const int NNM_H = 0;
+const array<float> NNM_XM = {};
+const array<float> NNM_XS = {};
+const array<float> NNM_W1 = {};
+const array<float> NNM_B1 = {};
+const array<float> NNM_W2 = {};
+const array<float> NNM_B2 = {};
+const array<float> NNM_WO = {};
+const float NNM_BO = 0.f;
+const float NNM_TRUST = 0.f;
+
+// the squad-odds net (military/nnmassodds.as)
+const bool NNO_ON = false;
+const string NNO_STATE = "";
+const int NNO_S = 0;
+const int NNO_O = 0;
+const int NNO_H = 0;
+const array<float> NNO_XM = {};
+const array<float> NNO_XS = {};
+const array<float> NNO_W1 = {};
+const array<float> NNO_B1 = {};
+const array<float> NNO_W2 = {};
+const array<float> NNO_B2 = {};
+const array<float> NNO_WO = {};
+const float NNO_BO = 0.f;
+const float NNO_TRUST = 0.f;
+
 }  // namespace Market

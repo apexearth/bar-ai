@@ -22,6 +22,7 @@
 #include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)
 #include "manager/military/nnpost.as" // the army's posture as a recorded draw; reads Market's net state
 #include "manager/military/nnhunt.as" // hunt their biggest army, or not: a recorded draw
+#include "manager/military/nnmassodds.as" // pool size and squad odds: recorded draws on today's numbers
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -189,6 +190,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }

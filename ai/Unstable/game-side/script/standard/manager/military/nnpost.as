@@ -391,7 +391,7 @@ void UpdateNnPost()
 	const int ov = PostOverride();
 	if (gTurtle && ((ov == POST_ATTACK) || (ov == POST_RAID))) {
 		gPostTurtleLift = true;
-		aiMilitaryMgr.quota.attack = MassWant();
+		aiMilitaryMgr.quota.attack = MassWant() * gMassMul;
 	} else if (gPostTurtleLift) {
 		gPostTurtleLift = false;
 		if (gTurtle)

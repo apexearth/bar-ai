@@ -137,6 +137,22 @@ restructure (enemy economy estimate).
   credited (+) or debited (-) by who holds that ground (net influence at the
   death); `apex: nnhunt-done ... done=(kill+wreck-lost)/(kill+lost+grpM)` is
   the head's `done`. Prefix NNH. `apex: hunt-stat` (60 s).
+- `apex: nnmass` / `apex: nnodds` (`manager/military/nnmassodds.as`,
+  2026-10-08): two docs/24 section 7 priors made decisions, every 60 s per
+  team (staggered), options X05 / X1 / X2, rule X1 (today's numbers). MASS
+  multiplies the bar a massing pool must reach before it leaves
+  (`quota.attack` after `UpdateMassing`'s hold logic, before the own-army
+  ceiling; also the turtle resume/lift writes); with the DLL also the
+  biggest-enemy-group term of the C++ promotion bar (`UpdateDefenceTasks`).
+  ODDS multiplies the enemy influence `CAttackTask::FindTarget` refuses
+  against (the strong test and the remembered-strong-group test): X05 takes
+  fights at half today's odds, X2 wants twice them. Both ride the team board
+  (slots 1400+team odds, 1500+team mass); the DLL reads them every 5 s, logs
+  `apex: mil-board` on a change and stamps 1600+team, and the odds head
+  records nothing until that stamp is fresh (`noDll` in `apex:
+  massodds-stat`), so an old DLL never yields a row whose pick did nothing.
+  No head-specific label: the shared targets (lnD, lost/kill, army edge,
+  endFast) judge both. Prefixes NNM, NNO.
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income

@@ -1588,6 +1588,17 @@ static float CCircuitAI_GetTeamBoard(CCircuitAI* circuit, int slot, float def)
 	return (it == TeamBoard().end()) ? def : it->second;
 }
 
+float TeamBoardGet(int allyTeam, int slot, float def)
+{
+	auto it = TeamBoard().find(std::make_pair(allyTeam, slot));
+	return (it == TeamBoard().end()) ? def : it->second;
+}
+
+void TeamBoardSet(int allyTeam, int slot, float v)
+{
+	TeamBoard()[std::make_pair(allyTeam, slot)] = v;
+}
+
 // The area a point stands in for one move type, or the nearest one within a
 // few sectors: a point in the sea or on a cliff face belongs to the ground
 // beside it for the question below.
