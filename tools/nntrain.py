@@ -608,6 +608,7 @@ class FacHead:
         self.full = self.st = None
         self.pairs = []
         self.batches = 0
+        self.grown = True   # batches restart at 0, so the every-N buffer save would wait for the old count
 
     def save(self, buffer=False, force=False):
         import torch
@@ -878,6 +879,7 @@ class Trainer:
         self.XS = self.XF = self.Y = self.M = None
         self.full = self.st = None
         self.batches = 0
+        self.grown = True
         self.since_export = 0
         self.trust_pairs = {}
 
