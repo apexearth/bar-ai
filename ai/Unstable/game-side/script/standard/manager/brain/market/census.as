@@ -320,6 +320,7 @@ int gDfTopDraw = 0;
 int gDfTopHoist = 0;
 int gDfFinished = 0;
 int gDfGone = 0;
+string gExecWhy = "";   // what put the want the executor is on in front (decide's `why`, or "fall")
 float gAssetsM = 0.f;   // summed costM of standing structures
 // ...of which this much is PROTECTION. Defence must never be its own reason:
 // the siege prior mirrors our economy into their army, so counting turrets in

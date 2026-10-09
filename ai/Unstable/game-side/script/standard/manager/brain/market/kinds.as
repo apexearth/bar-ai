@@ -33,6 +33,7 @@ final class Want {
 	// blocker or penned reclaim eats a thing that is in the way, which says
 	// nothing about wanting the def again elsewhere.
 	bool retire = false;
+	bool posted = false;    // a hoist's own distinct post: the executor folds only the same ground
 	float gain = 0.f;
 	float mCost = 0.f;
 	float tCost = 0.f;

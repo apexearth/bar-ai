@@ -166,6 +166,10 @@ int gDfLastGrave = 0;
 int gDfLastFerry = 0;
 int gDfLastNull = 0;
 int gDfLastOk = 0;
+int gDfLastOther = 0;
+int gDfLastReloc = 0;
+int gDfLastT2 = 0;
+int gDfLastT2Ok = 0;
 void DefFunnelLog()
 {
 	if (ai.frame < gNextDfLog)
@@ -176,6 +180,10 @@ void DefFunnelLog()
 	const int dFerry = gGunExecFerry - gDfLastFerry;
 	const int dNull = gGunExecNull - gDfLastNull;
 	const int dOk = gGunExecOk - gDfLastOk;
+	const int dOther = gGunOkOther - gDfLastOther;
+	const int dReloc = gGunRelocInterior + gGunRelocGrave - gDfLastReloc;
+	const int dT2 = gGunT2Exec - gDfLastT2;
+	const int dT2Ok = gGunT2Ok - gDfLastT2Ok;
 	const float tgt = DefenceTarget();
 	AiLog(Factory::T() + "apex: def-funnel t=" + ai.teamId
 		+ " elec=" + gDfElec + " asked=" + gDfAsked + " skipped=" + gDfSkipped
@@ -183,6 +191,7 @@ void DefFunnelLog()
 		+ " top=" + (gDfTopDraw + gDfTopHoist) + " draw=" + gDfTopDraw + " hoist=" + gDfTopHoist
 		+ " exec=" + (dInt + dGrave + dFerry + dNull + dOk) + " ok=" + dOk
 		+ " interior=" + dInt + " grave=" + dGrave + " ferry=" + dFerry + " takeNull=" + dNull
+		+ " okOther=" + dOther + " reloc=" + dReloc + " t2exec=" + dT2 + " t2ok=" + dT2Ok
 		+ " finished=" + gDfFinished + " gone=" + gDfGone
 		+ " have=" + int(DefenceValue()) + " target=" + int(tgt)
 		+ " fill=" + formatFloat((tgt > 1.f) ? (DefenceValue() / tgt) : 1.f, "", 0, 2));
@@ -191,6 +200,10 @@ void DefFunnelLog()
 	gDfLastFerry = gGunExecFerry;
 	gDfLastNull = gGunExecNull;
 	gDfLastOk = gGunExecOk;
+	gDfLastOther = gGunOkOther;
+	gDfLastReloc = gGunRelocInterior + gGunRelocGrave;
+	gDfLastT2 = gGunT2Exec;
+	gDfLastT2Ok = gGunT2Ok;
 	gDfElec = 0;
 	gDfAsked = 0;
 	gDfSkipped = 0;

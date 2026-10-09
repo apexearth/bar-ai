@@ -364,7 +364,7 @@ bool MexHasCover(const AIFloat3& in at, float r)
 			&& (gAllyStPos[i].distance2D(at) < r))
 			return true;
 	}
-	return false;
+	return FerryBoundNear(at, r);
 }
 
 // Our extractors with no gun in reach, refreshed on a clock: every hand asks.
@@ -372,6 +372,7 @@ array<AIFloat3> gCovGap;
 int gCovGapAt = -999999;
 int gCovGapLogAt = 0;
 int gCovPicked = 0;
+int gCovRefSkip = 0;   // gaps skipped: their gun was just refused to this hand
 // The coverall queue jump's refusals, by the first gate that said no.
 const int CG_PUSH = 0;
 const int CG_GROW = 1;
@@ -415,9 +416,28 @@ void CovGateNote(int g)
 		+ " | atStage billN=" + gCovBillN + " ebankN=" + gCovEBankN + " estallN=" + gCovEStallN
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2)
 		+ " | gunExec interior=" + gInteriorRefused + " exempt=" + gInteriorExempt + " grave=" + gGunExecGrave
-		+ " ferry=" + gGunExecFerry + " takeNull=" + gGunExecNull + " ok=" + gGunExecOk);
+		+ " ferry=" + gGunExecFerry + " takeNull=" + gGunExecNull + " ok=" + gGunExecOk
+		+ " okOther=" + gGunOkOther + " relocInterior=" + gGunRelocInterior + " relocGrave=" + gGunRelocGrave
+		+ " t2exec=" + gGunT2Exec + " t2ok=" + gGunT2Ok + " t2ref=" + gGunT2Ref + " refSkip=" + gCovRefSkip);
 }
-bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex)
+// Where the coverall gun for a gunless mex stands: a step toward them.
+AIFloat3 CoverAllSite(const AIFloat3& in gap)
+{
+	AIFloat3 foe;
+	if (!FoeRef(foe))
+		return gap;
+	AIFloat3 dir = foe - gap;
+	if (dir.SqLength2D() <= 1.f)
+		return gap;
+	dir.SafeNormalize2D();
+	const AIFloat3 s2 = gap + dir * 150.f;
+	return OnMap(s2) ? s2 : gap;
+}
+// A gap whose gun this hand was just refused is not re-elected: the hoist
+// bypasses the refusal memo every priced want passes.
+Want gCovProbe;
+bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex,
+		CCircuitUnit@ asker = null, CCircuitDef@ gun = null)
 {
 	const float r = Brain::LightTowerRange();
 	if (ai.frame - gCovGapAt >= 2 * SECOND) {
@@ -442,6 +462,15 @@ bool CoverGapNear(const AIFloat3& in from, AIFloat3& out mex)
 			continue;
 		if (SpotHot(gCovGap[i]))
 			continue;   // his 2026-10-02: avoid danger, never walk into it
+		if ((asker !is null) && (gun !is null)) {
+			gCovProbe.kind = WK_PROTECT;
+			@gCovProbe.def = gun;
+			gCovProbe.pos = CoverAllSite(gCovGap[i]);
+			if (RecentlyRefused(asker, gCovProbe)) {
+				++gCovRefSkip;
+				continue;
+			}
+		}
 		best = d;
 		mex = gCovGap[i];
 	}

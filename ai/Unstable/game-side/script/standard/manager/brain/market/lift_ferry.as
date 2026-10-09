@@ -92,11 +92,21 @@ bool LiftServed(int c)
 	return false;
 }
 
-Ferry@ FerryNear(int d, const AIFloat3& in site)
+// A ground gun on its way here by air: built at home or flying.
+bool FerryBoundNear(const AIFloat3& in p, float r)
+{
+	for (uint i = 0; i < gFerries.length(); ++i) {
+		if (gFerries[i].site.distance2D(p) < r)
+			return true;
+	}
+	return false;
+}
+
+Ferry@ FerryNear(int d, const AIFloat3& in site, float r = 600.f)
 {
 	for (uint i = 0; i < gFerries.length(); ++i) {
 		Ferry@ f = gFerries[i];
-		if ((f.def == d) && (f.site.distance2D(site) < 600.f))
+		if ((f.def == d) && (f.site.distance2D(site) < r))
 			return f;
 	}
 	return null;
@@ -230,7 +240,7 @@ int FerryRoute(CCircuitUnit@ unit, Want@ w, const AIFloat3& in site, AIFloat3& o
 	if (w.def is null)
 		return -1;
 	const int d = int(w.def.id);
-	Ferry@ f = FerryNear(d, site);
+	Ferry@ f = FerryNear(d, site, w.posted ? Requests::SAME_SITE : 600.f);
 	if (f !is null) {
 		if (f.stage > 0)
 			return 0;
