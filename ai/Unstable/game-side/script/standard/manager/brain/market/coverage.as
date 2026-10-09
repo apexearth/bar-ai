@@ -712,7 +712,7 @@ float ThreatAt(const AIFloat3& in pos)
 {
 	if (!OnMap(pos))
 		return 0.f;
-	float t = ai.GetEnemyCostAt(pos, gRkThreatR);
+	float t = ai.GetEnemyArmedCostNear(pos, gRkThreatR);   // metal: GetEnemyCostAt is a count (S28)
 	const float implied = LossRateAt(pos) * gRkTau;
 	if (implied > t)
 		t = implied;

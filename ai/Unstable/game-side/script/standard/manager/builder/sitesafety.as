@@ -437,6 +437,22 @@ bool InEnemyReach(const AIFloat3 &in where)
 	return ReachSlack(where) < 0.f;
 }
 
+// Live danger only, for a walker's let-go: SiteHot's con-death memory left mex
+// picking on 10-05 (b7c19934), and with it still in the let-go a spot was
+// offered, the walker dropped and the spot offered again (898 of 6,405 let-gos
+// re-sent to the same ground within 30 s). The reach envelope is the one the
+// DLL's builder guard walks every worker out of.
+bool SiteLiveHot(const AIFloat3& in where)
+{
+	if (!OnMap(where))
+		return false;
+	if (InEnemyReach(where))
+		return true;
+	if (FoesNear(where) < CON_FOE_COUNT)
+		return false;
+	return ai.GetEnemyInflAt(where) > ai.GetAllyInflAt(where);
+}
+
 // A resurrect pays out only on completion, so a bot driven off one has nothing
 // to show for the time; reclaim credits metal continuously and can be abandoned
 // part-done. On ground we may not get to keep, take the one that banks as it

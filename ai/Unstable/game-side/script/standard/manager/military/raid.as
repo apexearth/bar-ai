@@ -265,7 +265,7 @@ bool RaidTarget(AIFloat3& out at, float& out guard)
 float RaidPackNeed(const AIFloat3& in at)
 {
 	const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
-	const float foeM = ai.GetEnemyCostAt(at, r);
+	const float foeM = ai.GetEnemyArmedCostNear(at, r);
 	float need = foeM * 0.017f * ai.GetTunable("apex_local_edge", TUNE_LOCAL_EDGE);
 	const float floorNow = aiMilitaryMgr.quota.raid.min;
 	return (need > floorNow) ? need : floorNow;

@@ -367,6 +367,9 @@ private:
 	unsigned int rezGuardPressed = 0;
 	unsigned int rezGuardMoves = 0;
 	float rezGuardWorst = 0.f;
+	size_t workerGuardNext = 0;                 // the constructor slice the guard reads next
+	unsigned int conGuardPressed = 0;
+	unsigned int conGuardMoves = 0;
 
 	Handlers2 createdHandler;
 	Handlers1 finishedHandler;

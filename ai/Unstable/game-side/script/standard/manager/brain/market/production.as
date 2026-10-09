@@ -2453,7 +2453,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// 1,750 metal of army and its raiders ate our cons and mexes (91 normal
 		// games, round 4). Behind its share the line prices army and cons in
 		// the draw like everything else.
+		// Never before the first con: spend counts at completion and the lab is
+		// excluded, so a commander mex done before the lab's first order read the
+		// army at 0% and the first con waited behind 1-9 combat units (13 of 32
+		// Comet 1v1 seats, up to 5 min).
 		const bool armyBehind = (Brain::gSpentTotal > 1.f)
+			&& (ConsOwnedAny() + ConsInFlightAny() > 0)
 			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
 		if (armyBehind && (consNeedA > 0))
 			++gConFloorYieldN;

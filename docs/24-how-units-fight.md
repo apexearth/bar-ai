@@ -196,6 +196,12 @@ this file wins and the other is stale.
   Do not send the army at the enemy wall to fight; when there is a free
   enemy mex to kill, kill it rather than walking off to fight army in the
   middle.
+- **...but sometimes kill their army, and eat it** (2026-10-08, revising the
+  line above). If we only ever attack their fortifications and let our army be
+  picked off bit by bit, the enemy ends up with a big army and we have very
+  little. So we also seek out their army and destroy it, and "eat" it: reclaim
+  or resurrect the wrecks so our army grows from theirs. Raiding the economy
+  is still the default; fighting their army is a choice we make when it pays.
 - **After a raid on enemy mexes, go further and take out more**, rather than
   turning around and walking home to do nothing.
 - **Cheeky moves win games:** running the edge of the map and popping enemy

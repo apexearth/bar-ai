@@ -61,8 +61,9 @@ private:
 	bool strongMem = false;
 	springai::AIFloat3 strongPos;
 	springai::AIFloat3 fallBackTo;
-	CEnemyInfo* joinRefused = nullptr;   // a fight the join decision refused
+	int joinRefused = -1;   // the enemy id of a fight the join decision refused (a pointer is reused)
 	int joinRefusedUntil = 0;
+	bool joinHeld = false;   // this update's target was refused: hold, don't march on their box
 };
 
 } // namespace circuit

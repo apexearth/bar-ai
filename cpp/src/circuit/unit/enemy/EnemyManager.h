@@ -85,6 +85,8 @@ public:
 	void DyingEnemy(CEnemyUnit* enemy, int frame);
 	void PurgeStaleGhosts(int frame, int confirmedAgeFrames, int unknownAgeFrames);
 	float GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const;
+	// Metal of armed enemy mobiles near pos. GetEnemyCostAt is a unit COUNT (S28).
+	float GetEnemyArmedCostNear(const springai::AIFloat3& pos, float radius);
 	float GetEnemyMaxMobileCostM() const;
 	// apex: longest weapon range in a group -- danger radius depends on it.
 	float GetEnemyGroupRange(int idx) const;
@@ -169,6 +171,9 @@ private:
 	EnemyFakes enemyFakes;  // owner
 
 	std::vector<CEnemyUnit*> enemyUpdates;
+	std::vector<float> armedGrid;   // armed mobile metal per ARMED_CELL square, rebuilt every 15 frames
+	int armedGridW = 0, armedGridH = 0;
+	int armedGridFrame = -1000;
 	unsigned int enemyIterator;
 
 	int dyingFrame;

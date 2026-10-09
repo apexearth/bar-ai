@@ -1648,7 +1648,7 @@ void CBuilderManager::RemoveBuildList(CCircuitUnit* unit, int hiddenDefs)
 // would walk the bot straight back in.
 void CBuilderManager::UpdateRezGuard()
 {
-	if (rezzers.empty()) {
+	if (rezzers.empty() && workers.empty()) {
 		return;
 	}
 	const int frame = circuit->GetLastFrame();
@@ -1656,30 +1656,33 @@ void CBuilderManager::UpdateRezGuard()
 	CInfluenceMap* inflMap = circuit->GetInflMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 
-	for (CCircuitUnit* unit : rezzers) {
+	float worst = 0.f;
+	// 0: out of reach, 1: in reach but ordered within the last half second, 2: walked out
+	auto guard = [&](CCircuitUnit* unit) -> int {
+		int r = 0;
 		if ((unit == nullptr) || unit->IsDead()) {
-			continue;
+			return r;
 		}
 		// One already retreating is already leaving, and CRetreatTask re-issues
 		// its own movement -- two hands on the wheel walks it on the spot.
 		IUnitTask* held = unit->GetTask();
 		if ((held != nullptr) && (held->GetType() == IUnitTask::Type::RETREAT)) {
-			continue;
+			return r;
 		}
 		const AIFloat3 pos = unit->GetPos(frame);
 		AIFloat3 foe(-1.f, 0.f, -1.f);
 		const float slack = circuit->GetEnemyReachSlack(pos, react, &foe);
 		if (slack >= 0.f) {
-			continue;  // nothing can reach this spot before we would see it coming
+			return r;  // nothing can reach this spot before we would see it coming
 		}
-		++rezGuardPressed;
-		rezGuardWorst = std::min(rezGuardWorst, slack);
+		r = 1;
+		worst = std::min(worst, slack);
 
 		// One order every half second per bot: re-pathing on every tick walks
 		// on the spot, and the bot needs to actually cover ground.
 		auto it = rezEvadeAt.find(unit->GetId());
 		if ((it != rezEvadeAt.end()) && (frame < it->second + FRAMES_PER_SEC / 2)) {
-			continue;
+			return r;
 		}
 		rezEvadeAt[unit->GetId()] = frame;
 
@@ -1693,7 +1696,7 @@ void CBuilderManager::UpdateRezGuard()
 			back = circuit->GetSetupManager()->GetBasePos() - pos;
 			back.y = 0.f;
 			if (back.SqLength2D() < 1.f) {
-				continue;
+				return r;
 			}
 		}
 		back.Normalize2D();
@@ -1713,7 +1716,7 @@ void CBuilderManager::UpdateRezGuard()
 					pos.z + (back.x * sn + back.z * c) * need);
 			CTerrainManager::CorrectPosition(p);
 			if (!terrainMgr->CanMoveToPos(unit->GetArea(), p)) {
-				continue;
+				return r;
 			}
 			const float infl = (inflMap != nullptr) ? inflMap->GetEnemyInflAt(p) : 0.f;
 			if (infl < bestInfl) {
@@ -1722,7 +1725,7 @@ void CBuilderManager::UpdateRezGuard()
 			}
 		}
 		if (bestInfl == std::numeric_limits<float>::max()) {
-			continue;  // nowhere behind it we can walk
+			return r;  // nowhere behind it we can walk
 		}
 
 		// Let the job go, or its own travel action pulls the bot back into the
@@ -1737,14 +1740,56 @@ void CBuilderManager::UpdateRezGuard()
 		TRY_UNIT(circuit, unit,
 			unit->CmdMoveTo(dest, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 3, CCircuitUnit::OrdSrc::BUILD);
 		)
-		++rezGuardMoves;
+		return 2;
+	};
+
+	for (CCircuitUnit* unit : rezzers) {
+		if ((unit == nullptr) || unit->IsDead()) {
+			continue;
+		}
+		const int r = guard(unit);
+		rezGuardPressed += (r > 0) ? 1 : 0;
+		rezGuardMoves += (r == 2) ? 1 : 0;
 	}
+	// Every ground constructor too: 82% of their deaths came after the damage
+	// retreat (BuilderTask, 0.80-0.89 hp), 60% within 10 s of it -- they fled
+	// once hit. A third of them per pass, so each is read every 15 frames.
+	const size_t n = workers.size();
+	if (n > 0) {
+		const size_t per = std::max<size_t>(4, (n + 2) / 3);
+		const size_t start = workerGuardNext % n;
+		size_t i = 0, done = 0;
+		for (auto it = workers.begin(); (it != workers.end()) && (done < per); ++it, ++i) {
+			if (i < start) {
+				continue;
+			}
+			++done;
+			CCircuitUnit* unit = *it;
+			if ((unit == nullptr) || unit->IsDead() || (rezzers.find(unit) != rezzers.end())) {
+				continue;
+			}
+			CCircuitDef* cdef = unit->GetCircuitDef();
+			if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsAbleToFly()
+				|| cdef->IsRoleAny(CCircuitDef::RoleMask::COMM))
+			{
+				continue;  // the commander keeps his own rules
+			}
+			const int r = guard(unit);
+			conGuardPressed += (r > 0) ? 1 : 0;
+			conGuardMoves += (r == 2) ? 1 : 0;
+		}
+		workerGuardNext = (start + done >= n) ? 0 : start + done;
+	}
+	rezGuardWorst = std::min(rezGuardWorst, worst);
 
 	if (frame >= rezGuardLogAt) {
 		rezGuardLogAt = frame + FRAMES_PER_SEC * 60;
-		circuit->LOG("apex: rez-guard t=%i bots=%u pressed=%u moves=%u worst=%.0f",
+		circuit->LOG("apex: rez-guard t=%i bots=%u pressed=%u moves=%u worst=%.0f cons=%u cpressed=%u cmoves=%u",
 				circuit->GetTeamId(), (unsigned)rezzers.size(),
-				rezGuardPressed, rezGuardMoves, rezGuardWorst);
+				rezGuardPressed, rezGuardMoves, rezGuardWorst,
+				(unsigned)workers.size(), conGuardPressed, conGuardMoves);
+		conGuardPressed = 0;
+		conGuardMoves = 0;
 		rezGuardPressed = 0;
 		rezGuardMoves = 0;
 		rezGuardWorst = 0.f;

@@ -584,6 +584,11 @@ static float CCircuitAI_GetEnemyAirCostNear(CCircuitAI* circuit, const springai:
 	return circuit->GetEnemyManager()->GetEnemyAirCostNear(pos, radius);
 }
 
+static float CCircuitAI_GetEnemyArmedCostNear(CCircuitAI* circuit, const springai::AIFloat3& pos, float radius)
+{
+	return circuit->GetEnemyManager()->GetEnemyArmedCostNear(pos, radius);
+}
+
 static int CCircuitUnit_GetStockpile(CCircuitUnit* unit)
 {
 	// Same inline guard as CCircuitUnit_CmdPriorityBuild above: TRY_UNIT wants
@@ -2389,6 +2394,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdStop()", asFUNCTION(CCircuitUnit_CmdStop), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitUnit", "void CmdPatrolTo(const AIFloat3& in)", asFUNCTION(CCircuitUnit_CmdPatrolTo), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyAirCostNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetEnemyAirCostNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyArmedCostNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetEnemyArmedCostNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyMaxMobileCostM() const", asFUNCTION(CCircuitAI_GetEnemyMaxMobileCostM), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int GetChokeCount() const", asFUNCTION(CCircuitAI_GetChokeCount), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "AIFloat3 GetChokeCenter(int) const", asFUNCTION(CCircuitAI_GetChokeCenter), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

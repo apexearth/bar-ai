@@ -527,6 +527,48 @@ float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float ra
 	return sum;
 }
 
+static constexpr float ARMED_CELL = 256.f;
+
+float CEnemyManager::GetEnemyArmedCostNear(const springai::AIFloat3& pos, float radius)
+{
+	const int frame = circuit->GetLastFrame();
+	if (frame >= armedGridFrame + 15) {
+		armedGridFrame = frame;
+		armedGridW = (int)(CTerrainManager::GetTerrainWidth() / ARMED_CELL) + 1;
+		armedGridH = (int)(CTerrainManager::GetTerrainHeight() / ARMED_CELL) + 1;
+		armedGrid.assign(armedGridW * armedGridH, 0.f);
+		for (CEnemyUnit* e : enemyUpdates) {
+			if ((e == nullptr) || e->IsDying()) {
+				continue;
+			}
+			CCircuitDef* cdef = e->GetCircuitDef();
+			if ((cdef == nullptr) || !cdef->IsMobile() || (cdef->GetPower() <= 1.f)) {
+				continue;
+			}
+			const springai::AIFloat3& ep = e->GetPos();
+			const int x = std::max(0, std::min(armedGridW - 1, (int)(ep.x / ARMED_CELL)));
+			const int z = std::max(0, std::min(armedGridH - 1, (int)(ep.z / ARMED_CELL)));
+			armedGrid[z * armedGridW + x] += e->GetCost();
+		}
+	}
+	const int x0 = std::max(0, (int)((pos.x - radius) / ARMED_CELL));
+	const int x1 = std::min(armedGridW - 1, (int)((pos.x + radius) / ARMED_CELL));
+	const int z0 = std::max(0, (int)((pos.z - radius) / ARMED_CELL));
+	const int z1 = std::min(armedGridH - 1, (int)((pos.z + radius) / ARMED_CELL));
+	const float sq = radius * radius;
+	float sum = 0.f;
+	for (int z = z0; z <= z1; ++z) {
+		for (int x = x0; x <= x1; ++x) {
+			const float cx = (x + 0.5f) * ARMED_CELL - pos.x;
+			const float cz = (z + 0.5f) * ARMED_CELL - pos.z;
+			if (cx * cx + cz * cz <= sq) {
+				sum += armedGrid[z * armedGridW + x];
+			}
+		}
+	}
+	return sum;
+}
+
 // apex: the longest weapon range among a group's known members. The danger a
 // standing group poses depends on what it can SHELL, not where it walks --
 // artillery reaches ~1500 and must read dangerous from that far out.

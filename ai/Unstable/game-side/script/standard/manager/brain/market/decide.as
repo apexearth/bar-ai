@@ -2425,39 +2425,17 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			why = uaWhy;
 		}
 	}
-	// THE FIRST PLANT IS NOT A DICE ROLL. The draw keeps runners-up alive
-	// over many elections; the one election that unlocks the con floor and
-	// every unit lost the roll twice at 60:40 and the lab came a minute
-	// after theirs, into an energy stall. While no plant stands or is
-	// ordered, a plant anywhere in the list is taken: every target holds
-	// army, and no army arrives through a tower, so the plant's ETA to any
-	// of them is the shortest whatever the per-instant ranking says. Only
-	// the panics above outrank it.
-	bool firstPlant = false;
-	if (!aaPanic && !superPush && !coverPush && (ranked.length() > 0)
-		&& (Factory::gFacUnits.length() == 0) && !AnyPlantInFlight())
-	{
-		for (uint ri = 0; ri < ranked.length(); ++ri) {
-			if (ranked[ri].kind != WK_PLANT)
-				continue;
-			if (ri > 0) {
-				Want@ pw = ranked[ri];
-				ranked.removeAt(ri);
-				ranked.insertAt(0, pw);
-			}
-			firstPlant = true;
-			why = "firstplant";
-			break;
-		}
-	}
+	// No forced first plant (his 2026-10-08): with a high bonus the commander's
+	// income carries factory-first, at +0 it must not come first. The draw orders
+	// the opening and the nets, which see ourBonus/foeBonus, learn which.
 	bool upFirst = false;
-	if (!aaPanic && !superPush && !coverPush && !firstPlant && UpgradesFirst(unit, ranked)) {
+	if (!aaPanic && !superPush && !coverPush && UpgradesFirst(unit, ranked)) {
 		upFirst = true;
 		why = "upfirst";
 	}
 	Perf::Add("dec.roles", _tRoles);
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !firstPlant && !upFirst)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !upFirst)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
 	Perf::Add("dec.draw", _tDraw);

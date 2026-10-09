@@ -146,11 +146,11 @@ float WorkerEnemyM(CCircuitUnit@ wkr, float r)
 {
 	const int id = int(wkr.id);
 	if ((id < 0) || (id >= int(gEnMFrame.length())))
-		return ai.GetEnemyCostAt(wkr.GetPos(ai.frame), r);
+		return ai.GetEnemyArmedCostNear(wkr.GetPos(ai.frame), r);
 	if (gEnMFrame[id] == ai.frame)
 		return gEnMVal[id];
 	gEnMFrame[id] = ai.frame;
-	gEnMVal[id] = ai.GetEnemyCostAt(wkr.GetPos(ai.frame), r);
+	gEnMVal[id] = ai.GetEnemyArmedCostNear(wkr.GetPos(ai.frame), r);   // metal, not the count GetEnemyCostAt gives (S28)
 	return gEnMVal[id];
 }
 
@@ -227,8 +227,9 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 	const bool air = Catalog::gFlyer[int(mil.circuitDef.id)];
 	// Pooled, the escort joins the worker that already holds the most escort,
 	// so one mass grows instead of several pairs; spread, the first in need.
-	const bool pooled = !air && EscortsPool(mineM * EscortsPerCon());
+	bool pooled = !air && EscortsPool(mineM * EscortsPerCon());
 	CCircuitUnit@ pick = null;
+	CCircuitUnit@ floorPick = null;
 	float pickHave = -1.f;
 	float pickExpo = -1.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
@@ -261,6 +262,13 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 			@pick = wkr;
 			break;
 		}
+		// Every exposed worker's own floor before any mass grows: pooled, the
+		// first worker was owed their whole raid group and took all 8 escorts
+		// the cap allows while every other worker walked out with none (his
+		// 2026-10-08 game, once escorts stopped being pulled into raids).
+		if (!far && (floorPick is null)
+			&& (haveM + 0.5f * mineM <= expo * mineM * EscortsPerCon() * gEscMul))
+			@floorPick = wkr;
 		// Pooled, the mass is chosen first and the walk asked of it alone: a
 		// nearer worker would start a second pair the sweep then dissolves.
 		if ((haveM > pickHave) || ((haveM == pickHave) && (expo > pickExpo))) {
@@ -271,6 +279,10 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 			pickHave = haveM;
 			pickExpo = expo;
 		}
+	}
+	if (floorPick !is null) {
+		@pick = floorPick;
+		pooled = false;
 	}
 	if (pick !is null) {
 		CCircuitUnit@ wkr = pick;

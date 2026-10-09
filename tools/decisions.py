@@ -193,6 +193,30 @@ def canon_state():
     return _CANON
 
 
+_HEAD_CANON = {}
+
+
+def canon_head_keys(name):
+    """Today's own-field list of a decision head (the string its `nn<name>-schema`
+    line logs), from the live script; None when the script does not say."""
+    if not _HEAD_CANON:
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "ai", "Unstable", "game-side", "script")
+        txt = ""
+        for dirpath, _, files in os.walk(root):
+            for f in files:
+                if f.endswith(".as"):
+                    with open(os.path.join(dirpath, f), encoding="utf-8", errors="replace") as fh:
+                        txt += fh.read() + "\n"
+        consts = {m.group(1): "".join(re.findall(r'"([^"]*)"', m.group(2)))
+                  for m in re.finditer(r"const string (NN\w+)\s*=\s*(.*?);", txt, re.S)}
+        for m in re.finditer(r'"apex: nn(\w+)-schema v\d+ state=" \+ (?:Market::)?NN_STATE\s*\+\s*" \w+=" \+ (NN\w+)', txt):
+            if m.group(2) in consts:
+                _HEAD_CANON[m.group(1)] = consts[m.group(2)].split(",")
+        _HEAD_CANON.setdefault("", None)
+    return _HEAD_CANON.get(name)
+
+
 def widen_keys(keys):
     """A game logged before fields were appended reads in today's layout: the
     missing fields are absent from its rows (0 to the trainer) unless filled,

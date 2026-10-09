@@ -674,6 +674,8 @@ bool NnWeightsFit()
 		&& (NNW_TRUST.length() == NNW_KINDS.length());
 }
 
+array<string> gNnOffSaid;
+
 // A decision head's net (NNC_ commander, NNT_ T2; the posture net has its own
 // copy): scores each option from the state, the head's own fields, the option
 // and the rule's pick, and moves the option weights in log space by the trust
@@ -687,10 +689,22 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 	const int K = int(w.length()), N = S + O;
 	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * trust0;
 	t = (t > 1.f) ? 1.f : t;
-	if ((t <= 0.f) || !on || (layout != NN_STATE + "|" + own) || (O != 2 * K)
+	if ((t <= 0.f) || !on)
+		return 0.f;
+	if ((layout != NN_STATE + "|" + own) || (O != 2 * K)
 		|| (S != int(st.length() + f.length())) || (H <= 0) || (XM.length() != uint(N))
 		|| (W1.length() != uint(H * N)) || (W2.length() != uint(H * H)) || (WO.length() != uint(H)))
+	{
+		// a trusted net refused for its shape: once per head per game (the com
+		// head sat off three days on a layout mismatch with nothing in the log)
+		if (gNnOffSaid.find(own) < 0) {
+			gNnOffSaid.insertLast(own);
+			AiLog("apex: nn-head OFF t=" + ai.teamId + " trust=" + NnF(trust0, 2)
+				+ " layout=" + ((layout == NN_STATE + "|" + own) ? "ok" : "differs")
+				+ " S=" + S + "/" + (st.length() + f.length()) + " own=" + own.substr(0, 40));
+		}
 		return 0.f;
+	}
 	int rule = 0;
 	for (int o = 1; o < K; ++o)
 		rule = (w[o] > w[rule]) ? o : rule;

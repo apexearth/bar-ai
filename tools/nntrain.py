@@ -1222,9 +1222,14 @@ class Trainer:
             return None
         if head.post_keys is not None and head.post_keys != own_keys:
             # a game logged before the head's inputs grew: skip it, or every
-            # older game in the queue would wipe the newer head again
-            if head.post_keys[:len(own_keys)] == list(own_keys):
+            # older game in the queue would wipe the newer head again -- unless
+            # today's script logs exactly this game's list, and the head holds
+            # fields it no longer has (the com head kept a lane-only `evade` from
+            # 10-05 and skipped every game after, off in game the whole time)
+            canon = decisions.canon_head_keys(head.NAME)
+            if head.post_keys[:len(own_keys)] == list(own_keys) and list(own_keys) != canon:
                 return None
+            print("%s: inputs changed (%d -> %d own fields); starting over" % (head.NAME, len(head.post_keys), len(own_keys)), flush=True)
             head._FacHead__init_empty()
         head.post_keys = own_keys
         first = {}

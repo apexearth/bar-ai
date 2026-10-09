@@ -244,7 +244,8 @@ void CAttackTask::Update()
 		}
 		position = stage;
 	} else if (GetTarget() == nullptr) {
-		forEco = !outgunned && MarchEnemyBox();
+		// a refused fight holds at the front: "no target" marched it on their start box
+		forEco = !outgunned && !joinHeld && MarchEnemyBox();
 		if (!forEco) {
 			if (outgunned && (frame >= nextFrontLog)) {
 				nextFrontLog = frame + FRAMES_PER_SEC * 10;
@@ -341,6 +342,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 
 void CAttackTask::FindTarget()
 {
+	joinHeld = false;
 	CCircuitAI* circuit = manager->GetCircuit();
 	CMap* map = circuit->GetMap();
 	CInfluenceMap* inflMap = circuit->GetInflMap();
@@ -724,10 +726,12 @@ void CAttackTask::FindTarget()
 	// with our units or an ally's already engaged there is the script's call --
 	// a net scored on whether the squad arrived while it still raged. A refusal
 	// holds for 30 s so the same target is not asked again every update.
-	if ((bestTarget != nullptr) && (bestTarget != prevTarget)) {
+	// A fight at our base is defended, never put to the net.
+	if ((bestTarget != nullptr) && (bestTarget != prevTarget) && !bestThreat) {
 		const AIFloat3& tp = bestTarget->GetPos();
-		if ((bestTarget == joinRefused) && (frame < joinRefusedUntil)) {
+		if ((bestTarget->GetId() == joinRefused) && (frame < joinRefusedUntil)) {
 			bestTarget = nullptr;
+			joinHeld = true;
 		} else {
 			const float fightR = std::max(cdef->GetLosRadius(), 400.f) * 2.f;
 			float allyPow = 0.f;
@@ -746,9 +750,10 @@ void CAttackTask::FindTarget()
 			if ((allyPow > 0.f) && (foePow > 0.f)) {
 				const float travelS = pos.distance2D(tp) / ourSpeed;
 				if (!circuit->GetMilitaryManager()->AskJoinFight(tp, travelS, allyPow, foePow, maxPower, leader->GetId())) {
-					joinRefused = bestTarget;
+					joinRefused = bestTarget->GetId();
 					joinRefusedUntil = frame + FRAMES_PER_SEC * 30;
 					bestTarget = nullptr;
+					joinHeld = true;
 				}
 			}
 		}
