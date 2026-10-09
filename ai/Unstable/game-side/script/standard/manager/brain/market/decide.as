@@ -2490,17 +2490,22 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			why = uaWhy;
 		}
 	}
-	// No forced first plant (his 2026-10-08): with a high bonus the commander's
-	// income carries factory-first, at +0 it must not come first. The draw orders
-	// the opening and the nets, which see ourBonus/foeBonus, learn which.
+	// THE OPENING ORDER is one recorded decision (opennet.as), not a per-election
+	// draw: the draw put the lab anywhere from 3 s to 80 s. Only the panics and
+	// the cover hoists above outrank its steps.
+	bool openPush = false;
+	if (!aaPanic && !superPush && !coverPush && OpenHoist(unit, ranked)) {
+		openPush = true;
+		why = "open";
+	}
 	bool upFirst = false;
-	if (!aaPanic && !superPush && !coverPush && UpgradesFirst(unit, ranked)) {
+	if (!aaPanic && !superPush && !coverPush && !openPush && UpgradesFirst(unit, ranked)) {
 		upFirst = true;
 		why = "upfirst";
 	}
 	Perf::Add("dec.roles", _tRoles);
 	const double _tDraw = Perf::T0();
-	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !upFirst)
+	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !upFirst && !openPush)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
 	Perf::Add("dec.draw", _tDraw);
@@ -2802,6 +2807,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				NoteClaim(unit, ranked[i]);
 			if ((depth == 0) && (why == "comself"))
 				++gComSelfExec;
+			OpenNoteExec(isComm, ranked[i].kind);
 			ComFlipNote(unit, ranked[i], t, (depth == 0) ? why : "fall");
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits

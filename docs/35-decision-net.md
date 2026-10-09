@@ -230,6 +230,28 @@ restructure (enemy economy estimate).
   (`typeMiss`). Label: `apex: nndeftype-done`, the site watcher's trade at
   the gun's final site. Prefix NNN. Counters on `apex: leak-stat`: typeDec,
   typeOv, typeT2 (picks that were T2+), typeRuleT2, typeMiss, typeMemo, typeUs.
+- `apex: nnopen` (`opennet.as`, 2026-10-09): the OPENING ORDER, his "learned,
+  not ruled" (docs/24 section 4) -- LAB (plant first), MEX1 / MEX2 / MEX3
+  (that many extractors, then the plant), MEX2E (two extractors, a generator,
+  the plant). Once per AI, at the commander's first election with a plant on
+  offer. Rule: LAB when the bank plus his own income (def make x (1 +
+  ourBonus)) over the lab's build time (his BP) and its first constructor's
+  (the lab's BP) pays for lab + constructor in metal AND energy (`carryM`,
+  `carryE` >= 1), else MEX2. With 1000/1000 banks energy binds: Cortex flips
+  at +0.49, Armada +0.30, Legion +0.43. The plan's step kind is moved to the
+  front of the commander's `ranked` (every want of that kind, value order)
+  below the panics and cover hoists, skipping the draw (`why=open`); a mex or
+  energy step with nothing on offer is skipped, the plant step waits; the
+  commander's exec of the step's kind advances it, any plant ordered (or a
+  plant standing / in flight) ends it. Explorer games draw it uniformly while
+  untrusted, half net / half uniform once trusted. 17 fields (commander make,
+  banks, lab and constructor cost and build seconds, carry ratios, mex offers,
+  walk to the best mex and to the plant, its gain, energy offers). Label: the
+  shared targets, except that a decision before minute 1 has no income base in
+  `labels()`, so dMInc/dEInc/dEco start from the commander's own income (the
+  row's comM/comE) and `done` = ln(metal made in the next 5 min / comM x 300).
+  Prefix NNOP (every single letter was taken). `apex: open-plan`,
+  `apex: open-step why=exec|absent`, `apex: open-done why=ordered|plant`.
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income

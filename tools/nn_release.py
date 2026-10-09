@@ -58,7 +58,7 @@ def nn_state_of_weights(path):
 
 def trusts(path):
     s = Path(path).read_text(encoding="utf-8", errors="replace")
-    out = {k: float(v) for k, v in re.findall(r"const float (NN[A-Z])_TRUST = ([0-9.]+)f?;", s)}
+    out = {k: float(v) for k, v in re.findall(r"const float (NN[A-Z]+)_TRUST = ([0-9.]+)f?;", s)}
     m = re.search(r"const array<float> NNW_TRUST = \{([^}]*)\}", s)
     if m:
         vals = [float(x.strip().rstrip("f")) for x in m.group(1).split(",") if x.strip()]

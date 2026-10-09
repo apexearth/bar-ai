@@ -12,7 +12,7 @@ commander is the main early builder AND the most valuable snipe target.
 
 | Decision | Owner |
 |---|---|
-| Opening build (factory path, first energy) | `misc/commander.as` (`isComm` branches) |
+| Opening order (plant first or extractors first) | `market/opennet.as`: one recorded draw (`apex: nnopen`, docs/35) whose steps lead his elections until the plant is ordered (`why=open`) |
 | Caution posture | `CommCaution`: our T2, fielded HEAVY+SUPER ≥ half his cost, or known T2+ non-raider ground units (`FoeT2Fill`): one that outranges AND outruns him, or their strength ≥ `apex_comm_mass_mult` × his. T1/raider mass alone never (his 2026-10-05) |
 | Towers around himself | `ComSelfGun` (safety.as, hoisted in decide.as as `why=comself`): T1 groups in reach and not leaving → light towers at his position, as many as their metal / (tower × `apex_def_trade`), standing or ordered. Log `apex: com-selfgun` |
 | WORK / FIGHT / TURRET / RETREAT | `comdecide.as` (`ComAssess` → `ComDecide`, from `CommWatch` once a second): what reaches him before he reaches safety, fight read off catalog dps/hp with his D-gun's kills; RETREAT/FIGHT assigned directly (`ComEnforce`), TURRET through `ComSelfGun`; his claims (`ComRaidF`) use the same fight test. Record `apex: nncom` (docs/35); D-gun walk-in only under FIGHT/peaceful WORK (`SetDGunClose`). Win bar `ComBar`: vs T1 the fight must end above his engine retreat line (`circuitDef.GetRetreat()`, 0.6), hurt or not; vs T2 it keeps 85% of what he brings. `ComStands()` (nothing on him he does not beat) zeroes the net's RETREAT floor and exploration, overrides the T2-far retreat, the influence flee and the <85% hp flee. Counters: `apex: com-cower`, comstat `dgOpp/dgMiss/cower/stood`, audit `commander-cowers` |
