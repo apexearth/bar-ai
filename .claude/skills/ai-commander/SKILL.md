@@ -35,7 +35,12 @@ commander is the main early builder AND the most valuable snipe target.
 
 `apex: commander running -- heavies fielded, fwd=...` ·
 `apex: commander leaving, enemy influence ...` ·
-`apex: commander spreading from the pack` · `apex: commander accepted <job>`
+`apex: commander spreading from the pack` · `apex: commander accepted <job>` ·
+`apex: com-flip left=<guard end>><why>><job> jobs= awayS= back= total=` -- one
+line per round trip off a factory assist and back (audit `commander-lab-round-trips`).
+The lab assist (`why=comescort`) defers to a metal shortfall and to an energy
+stall with his own draw added (`comEscStallSkip` on `elec-slice`): in a stall the
+stall interrupt takes the commander first, so the lab was a round trip.
 
 ## Tunables
 

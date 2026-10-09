@@ -1627,6 +1627,24 @@ float LineDensityOf(int d)
 	return dens;
 }
 
+// ...and its energy per buildtime-unit, from the same flagship.
+float LineEDensity(CCircuitUnit@ f)
+{
+	if ((f is null) || (f.circuitDef is null))
+		return 0.f;
+	float dens = 0.f;
+	float best = 0.f;
+	const array<int>@ pr = Catalog::BuildsOf(int(f.circuitDef.id));
+	for (uint q = 0; q < pr.length(); ++q) {
+		if (!Catalog::gMobile[pr[q]] || (Catalog::gCostM[pr[q]] <= best))
+			continue;
+		best = Catalog::gCostM[pr[q]];
+		if (Catalog::gBuildTime[pr[q]] > 1.f)
+			dens = Catalog::gCostE[pr[q]] / Catalog::gBuildTime[pr[q]];
+	}
+	return dens;
+}
+
 float LineDensity(CCircuitUnit@ f)
 {
 	if ((f is null) || (f.circuitDef is null))

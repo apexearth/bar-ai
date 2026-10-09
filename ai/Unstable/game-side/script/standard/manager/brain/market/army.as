@@ -2765,6 +2765,8 @@ void StallWatch()
 			+ " leaves its build to answer the energy stall");
 		DebtNote(p, p.task);   // before Abort(): the task is what holds the frame
 		StallFreedNote(p);
+		if (p.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			gComGuardEnd = "stall";
 		// Abort() ends the job for the whole crew, not just this hand.
 		array<CCircuitUnit@>@ crew = p.task.GetUnits();
 		if ((crew !is null) && (crew.length() > 1))

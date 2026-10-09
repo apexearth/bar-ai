@@ -737,6 +737,7 @@ void ComEnforce(CCircuitUnit@ u)
 	} else {
 		return;
 	}
+	gComGuardEnd = "drop";
 	AiLog(Factory::T() + "apex: com-drop t=" + ai.teamId + " for=" + ComOptName(gComDec)
 		+ " task=" + ty + "/" + bt
 		+ " at=" + int(gCsHere.x) + "," + int(gCsHere.z) + " hp=" + int(gCsHp * 100.f));

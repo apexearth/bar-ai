@@ -189,4 +189,24 @@ def check_bombardment(text, rep):
                 lost, shields, ours, max(plasma) if plasma else 0.0))
 
 
-EXTRA_CHECKS = [check_nets, check_extraction, check_constructors, check_radar_crowd, check_bombardment]
+def check_com_flips(text, rep):
+    # The commander leaving a lab assist for a job and coming back. A guard ended
+    # by a stall or by a queue drained between units is the round trip that
+    # should not happen; any other cause is the market's choice, not flagged.
+    us = our_teams(text)
+    if not us:
+        return
+    flips = re.findall(r"apex: com-flip t=%d #\d+ left=(\S+) jobs=(\d+) awayS=(\d+)" % us[0], text)
+    if not flips and "comFlips=" not in text:
+        return   # a build from before the line existed
+    causes = Counter(f[0].split(">")[0] for f in flips)
+    fixed = causes.get("stall", 0) + causes.get("lab-idle", 0)
+    away = sorted(int(f[2]) for f in flips)
+    med = away[len(away) // 2] if away else 0
+    rep.add("EFFICIENCY", fixed == 0, "commander-lab-round-trips",
+            "%d round trip(s) off the lab and back, median %ds away; ended by %s" % (
+                len(flips), med, dict(causes)))
+
+
+EXTRA_CHECKS = [check_nets, check_extraction, check_constructors, check_radar_crowd, check_bombardment,
+                check_com_flips]
