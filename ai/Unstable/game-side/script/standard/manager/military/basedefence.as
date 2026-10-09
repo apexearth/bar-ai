@@ -1,20 +1,38 @@
 namespace Military {
 
-// A jammer denies the radar siege artillery needs to shoot at range, so it
-// belongs on the defensive line rather than back beside a fusion. There is no
-// T2 jammer tower in this game -- corjamt/armjamt/legjam are the only
-// immobile jammers, so the T1 tower is the answer.
-string armjamt("armjamt");
-string corjamt("corjamt");
-string legjam("legjam");
-
-CCircuitDef@ JammerDef()
+// The widest jammer tower this hand can build: the T1 towers (armjamt, corjamt,
+// legjam) from T1 hands, the long-range ones (armveil Veil, corshroud Shroud,
+// legajam Erebus) from T2 hands. Null when it builds none.
+array<int> gJamBestOf;   // per builder def: -2 not yet asked
+CCircuitDef@ JammerDef(const CCircuitDef@ by)
 {
-	return SideDef3(armjamt, corjamt, legjam);
+	if (by is null)
+		return null;
+	const int bid = int(by.id);
+	if (!Catalog::ValidId(bid))
+		return null;
+	if (int(gJamBestOf.length()) <= bid) {
+		const uint was = gJamBestOf.length();
+		gJamBestOf.resize(uint(bid) + 1);
+		for (uint k = was; k < gJamBestOf.length(); ++k)
+			gJamBestOf[k] = -2;
+	}
+	if (gJamBestOf[bid] == -2) {
+		const array<int>@ b = Catalog::BuildsOf(bid);
+		int best = -1;
+		for (uint i = 0; i < b.length(); ++i) {
+			const int d = b[i];
+			if (!Catalog::gJammer[d] || Catalog::gMobile[d] || !Catalog::gAvailable[d])
+				continue;
+			if ((best < 0) || (Catalog::gJamR[d] > Catalog::gJamR[best]))
+				best = d;
+		}
+		gJamBestOf[bid] = best;
+	}
+	if (gJamBestOf[bid] < 0)
+		return null;
+	return Catalog::Def(gJamBestOf[bid]);
 }
-
-// (The line-jammer placement rule died in the overhaul kill; JammerDef stays
-// as a def lookup.)
 
 // No suicide raids while the army IS the defence: before the advanced plant, a
 // lost raid group is a large share of our whole defence, and losses only

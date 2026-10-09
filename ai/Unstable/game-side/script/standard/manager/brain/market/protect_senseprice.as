@@ -72,6 +72,18 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		gain += Military::EyesSavedM() / fill * unseenFrac;
 		gain += surprise * unseenFrac;
 	} else if (cls == PROT_JAM) {
+		CCircuitDef@ bestJam = Military::JammerDef(unit.circuitDef);
+		if (Gate(GATE_JAM_SHORT, (bestJam !is null) && (int(bestJam.id) != d)
+				&& (JamReach(int(bestJam.id)) > JamReach(d))))
+			return false;
+		AIFloat3 shAt;
+		const float shG = JamShelledGain(d, shAt);
+		if (shG > 0.f) {
+			JamSiteLog(d, shAt, 3, JamReach(d));
+			at = shAt;
+			gain = shG;
+			return true;
+		}
 		// Tower concentrations want jamming first (apexearth): find a
 		// cluster of >=3 defenses with no jammer in reach.
 		//

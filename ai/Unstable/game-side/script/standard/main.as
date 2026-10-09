@@ -196,6 +196,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
 	{ double _t = Perf::T0(); Market::KeepOutUpdate(); Perf::Add("up.keepout", _t); }
+	{ double _t = Perf::T0(); Market::ShelledUpdate(); Perf::Add("up.shelled", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
@@ -422,6 +423,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 {
 	if (unit is null)
 		return;
+	const bool atkSeen = (attackerDef !is null);
 	// A shooter out of sight comes with no attacker, but the shell that hit us
 	// names its weapon -- a static gun's is enough to know what shelled us.
 	if ((attackerDef is null) && (ai.frame - unit.GetDamagedFrame() < 3 * SECOND)) {
@@ -434,6 +436,8 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 					+ " by " + attackerDef.GetName() + " n=" + gShotUnseen);
 		}
 	}
+	if (WasFinished(int(unit.id)))
+		Market::ShelledNoteDeath(unit, attackerDef, atkSeen);
 	if (attackerDef is null)
 		return;
 	// The tier census FIRST: it is about what THEY field, so it must not sit

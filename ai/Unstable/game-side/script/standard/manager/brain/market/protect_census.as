@@ -73,7 +73,8 @@ const int GATE_SITE_BLOCKED = 31;   // the C++ reach veto marked the site
 const int GATE_SITE_INTERIOR = 33;   // the executor's no-gun-in-the-interior rule
 const int GATE_DEF_OBSOLETE = 34;   // dominated on reach and kill by an affordable gun
 const int GATE_DEF_T1LATE  = 35;   // his no-basic-tower-after-T2 rule
-const int GATE_N           = 36;
+const int GATE_JAM_SHORT   = 36;   // this hand builds a longer-reach jammer
+const int GATE_N           = 37;
 
 array<int> gGateSeen;
 array<int> gGateRef;
@@ -117,6 +118,7 @@ string GateName(int g)
 	if (g == GATE_SITE_INTERIOR) return "site.interior";
 	if (g == GATE_DEF_OBSOLETE) return "def.obsolete";
 	if (g == GATE_DEF_T1LATE)  return "def.t1late";
+	if (g == GATE_JAM_SHORT)   return "jam.shorter";
 	return "g" + g;
 }
 
