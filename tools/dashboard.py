@@ -1637,9 +1637,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(nn_state(q.get("last"), q.get("hours")))
             elif u.path == "/api/progress":
                 import progress
-                games = progress.collect(q.get("since") or "20261008-1232", q.get("all") == "1",
-                                         q.get("bonus") or None, q.get("map") or None)
-                self.send_json(progress.summary(games, q.get("by") or "batch"))
+                games = progress.collect(q.get("since") or progress.NEW_NETS, q.get("all") == "1",
+                                         q.get("bonus") or None, q.get("map") or None,
+                                         q.get("regime") or None)
+                self.send_json(progress.summary(games, q.get("by") or "batch") | {"trust": progress.trust()})
             elif u.path == "/api/games":
                 kind = q.get("kind", "matches")
                 self.send_json(list_matches() if kind == "matches"

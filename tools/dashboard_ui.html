@@ -186,9 +186,13 @@
     <span class="dim">Each cell is ours / theirs at that minute: 1.00 level, green ahead, red behind. Median over the games that lasted that long.</span>
     <div style="margin-top:8px">
       Since <select id="pg-since" onchange="loadProgress()">
+        <option value="20261009-1325">new nets (Oct 9 13:25)</option>
         <option value="20261008-1232">even random bonus (Oct 8 12:32)</option>
         <option value="20261007">Oct 7</option>
         <option value="2026100">all of October</option>
+      </select>
+      Loop <select id="pg-regime" onchange="loadProgress()">
+        <option value="">both</option><option value="1v1">1v1 Comet</option><option value="2v2">2v2 three maps</option>
       </select>
       Games <select id="pg-all" onchange="loadProgress()">
         <option value="0">normal only</option><option value="1">with discovery</option>
@@ -1896,12 +1900,19 @@ function pgCell(x) {
 }
 async function loadProgress() {
   if (!$("#tab-progress").classList.contains("on")) return;
-  const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value;
+  const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value
+    + "&regime=" + $("#pg-regime").value;
   let d;
   try { d = await api("/api/progress?" + q); }
   catch (e) { setHTML($("#pg-body"), "<div class='card'><span class='dim'>" + esc(e.message) + "</span></div>"); return; }
   const head = "<tr><th>Group</th><th>Games</th><th>W-L</th>" + d.minutes.map(m => "<th>min " + m + "</th>").join("") + "</tr>";
   let html = "";
+  const tr = d.trust || {nets: []}, says = tr.nets.filter(n => n.trust > 0).sort((a, b) => b.trust - a.trust);
+  html += "<div class='card'><b>Nets with a say</b> <span class='dim'>(honest trust: the share of its decisions a net plays; 0 = the rules play. " +
+    says.length + " of " + tr.nets.length + " nets" + (tr.kind === 2 ? "" : ", <span class='loss'>old trust kind " + tr.kind + ": nets ignored</span>") +
+    ")</span><div style='margin-top:6px'>" + (says.length ? says.map(n =>
+      "<span class='badge' style='margin-right:6px'>" + esc(n.name) + " " + n.trust.toFixed(2) + "</span>").join("")
+      : "<span class='dim'>none yet -- every decision is the rules (plus exploration in discovery games)</span>") + "</div></div>";
   for (const [k, title] of PG_METRICS) {
     html += "<div class='card'><b>" + title + "</b><table>" + head + d.groups.map(g =>
       "<tr><td>" + esc(g.name) + "</td><td>" + g.n + "</td><td>" + g.w + "-" + g.l + "</td>" +
@@ -1912,7 +1923,7 @@ async function loadProgress() {
     d.minutes.map(m => "<th>" + m + "</th>").join("") + "<th>Economy turn</th></tr>" +
     d.games.map(g => {
       const res = "<span class='" + (g.result === "W" ? "win" : (g.result === "L" ? "loss" : "dim")) + "'>" + g.result + "</span>";
-      const lead = "<td>" + esc(g.tournament.slice(4, 13)) + "</td><td>" + esc(g.map.slice(0, 18)) + "</td><td>" +
+      const lead = "<td>" + esc(g.tournament.slice(4, 13)) + "</td><td>" + esc((g.regime || "") + " " + g.map.slice(0, 14)) + "</td><td>" +
         (g.bonus ?? "-") + "%" + (g.explore ? " <span class='dim'>disc</span>" : "") + "</td><td>" + res + "</td><td>" + g.minutes + "</td>";
       return "<tr>" + lead + "<td class='dim'>eco</td>" + g.eco.map(pgCell).join("") + "<td class='dim'>" + esc(g.turn) + "</td></tr>" +
              "<tr><td colspan=5></td><td class='dim'>army</td>" + g.army.map(pgCell).join("") + "<td></td></tr>" +

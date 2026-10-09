@@ -1,6 +1,7 @@
 """Are we getting better against BARb, win or lose? Minute-by-minute edges over time.
 
-    python tools/progress.py                      # batches since the even bonus, normal games
+    python tools/progress.py                      # batches since the new nets (10-09 13:25), normal games
+    python tools/progress.py --regime 1v1         # or 2v2: one training loop only
     python tools/progress.py --games              # one line per game: where each one turned
     python tools/progress.py --all                # discovery games too
     python tools/progress.py --since 20261008 --bonus 0-50 --map Glacier
@@ -252,7 +253,44 @@ def turn(series):
     return "eco best %.2f@%d -> %.2f@%d" % (best, i_best, eco[-1][1], eco[-1][0])
 
 
-def collect(since="20261008-1232", include_explore=False, bonus=None, map_part=None):
+# The nets restarted here (honest trust, continuous balance heads, 75% explorers):
+# earlier games measure a different AI.
+NEW_NETS = "20261009-1325"
+
+
+def regime_of(g):
+    """'1v1' / '2v2' from the training loop's batch name, else the name itself."""
+    name = g["tournament"][16:]
+    return "1v1" if "1v1" in name else ("2v2" if "barbtrain" in name else (name or "?"))
+
+
+TRUST_RE = re.compile(r"const (?:float|array<float>) (NN[A-Z]*)_TRUST = \{?([^;}]*)\}?;")
+
+
+def trust():
+    """Each net's say in the deployed weights: {name, trust} (builder = its best kind)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import bar_env
+    env = bar_env.load()
+    p = env.skirmish_dir("Apexnnlog", "lane-nnlog") / "script/standard/manager/brain/market/nnweights.as"
+    try:
+        txt = p.read_text(encoding="utf-8")
+    except OSError:
+        return {"kind": None, "nets": []}
+    kind = re.search(r"NN_TRUST_KIND = (\d+);", txt)
+    nets, label = [], "?"
+    for line in txt.splitlines():
+        if line.startswith("// the "):
+            label = line[7:].split(" (")[0].replace(" net", "")
+        m = TRUST_RE.match(line)
+        if m:
+            vals = [float(v.strip().rstrip("f")) for v in m.group(2).split(",") if v.strip()]
+            name = "builder" if m.group(1) == "NNW" else label
+            nets.append({"name": name, "trust": max(vals) if vals else 0.0})
+    return {"kind": int(kind.group(1)) if kind else None, "nets": nets}
+
+
+def collect(since=NEW_NETS, include_explore=False, bonus=None, map_part=None, regime=None):
     games = []
     for t in sorted(glob.glob(os.path.join(REPO, "tournaments", "*"))):
         if os.path.basename(t)[:len(since)] < since:
@@ -270,6 +308,8 @@ def collect(since="20261008-1232", include_explore=False, bonus=None, map_part=N
         games = [g for g in games if g["bonus"] is not None and lo <= int(g["bonus"]) <= hi]
     if map_part:
         games = [g for g in games if map_part.lower() in g["map"].lower()]
+    if regime:
+        games = [g for g in games if regime_of(g) == regime]
     return games
 
 
@@ -277,7 +317,7 @@ def summary(games, by="batch", recent=60):
     """The dashboard's view: per group and metric, medians at MINUTES; the latest games."""
     groups = defaultdict(list)
     for g in games:
-        groups[g["tournament"][:8] if by == "day" else g["tournament"][:13]].append(g)
+        groups[(g["tournament"][:8] if by == "day" else g["tournament"][:13]) + " " + regime_of(g)].append(g)
     out = {"minutes": list(MINUTES), "groups": [], "games": []}
     for name, gs in sorted(groups.items()) + [("ALL", games)]:
         row = {"name": name, "n": len(gs),
@@ -288,7 +328,8 @@ def summary(games, by="batch", recent=60):
     for g in games[-recent:][::-1]:
         s = g["series"]
         out["games"].append({k: g[k] for k in ("tournament", "match", "map", "bonus", "result", "minutes", "explore")}
-                            | {"eco": [s["eco"][m] if m < len(s["eco"]) else None for m in MINUTES],
+                            | {"regime": regime_of(g),
+                               "eco": [s["eco"][m] if m < len(s["eco"]) else None for m in MINUTES],
                                "army": [s["army"][m] if m < len(s["army"]) else None for m in MINUTES],
                                "land": [s["land"][m] if m < len(s["land"]) else None for m in MINUTES],
                                "turn": turn(s)})
@@ -297,8 +338,8 @@ def summary(games, by="batch", recent=60):
 
 def main(argv):
     opt = lambda k, d=None: argv[argv.index(k) + 1] if k in argv else d
-    since = opt("--since", "20261008-1232")
-    games = collect(since, "--all" in argv, opt("--bonus"), opt("--map"))
+    since = opt("--since", NEW_NETS)
+    games = collect(since, "--all" in argv, opt("--bonus"), opt("--map"), opt("--regime"))
     kind = "all games" if "--all" in argv else "normal games (no discovery)"
     print("vs BARb, %s, since %s: %d games   edge = ours / theirs, 1.00 = level" % (kind, since, len(games)))
     if not games:
@@ -316,10 +357,10 @@ def main(argv):
     by = opt("--by", "batch")
     groups = defaultdict(list)
     for g in games:
-        groups[g["tournament"][:8] if by == "day" else g["tournament"][:13]].append(g)
+        groups[(g["tournament"][:8] if by == "day" else g["tournament"][:13]) + " " + regime_of(g)].append(g)
     for metric in ("eco", "army", "land", "mex", "trade", "dmg", "energy"):
         print("\n%s edge (median over games that reached the minute)" % metric)
-        print("  %-14s %4s %7s | %s" % ("group", "n", "W-L-D", " ".join("m%-4d" % m for m in MINUTES)))
+        print("  %-18s %4s %7s | %s" % ("group", "n", "W-L-D", " ".join("m%-4d" % m for m in MINUTES)))
         rows = sorted(groups.items()) + [("ALL", games)]
         for name, gs in rows:
             w = sum(1 for g in gs if g["result"] == "W")
@@ -328,7 +369,7 @@ def main(argv):
             cells = []
             for m in MINUTES:
                 cells.append(fmt(med([g["series"][metric][m] for g in gs if m < len(g["series"][metric])])))
-            print("  %-14s %4d %7s | %s" % (name, len(gs), "%d-%d-%d" % (w, l, d), " ".join(cells)))
+            print("  %-18s %4d %7s | %s" % (name, len(gs), "%d-%d-%d" % (w, l, d), " ".join(cells)))
     return 0
 
 
