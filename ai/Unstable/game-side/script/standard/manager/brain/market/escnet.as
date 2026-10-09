@@ -102,8 +102,10 @@ bool EscortRecruitable(CCircuitUnit@ c)
 	const int ft = int(t.GetFightType());
 	// a cheap fast scout is what an escort buy produces, and the engine
 	// hands it a scout task the recruiter never looked in
+	// a raid pack the raid net holds home is idle, and holds most of our raiders
 	return (ft == int(Task::FightType::DEFEND)) || (ft == int(Task::FightType::RALLY))
-		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT));
+		|| (ft == int(Task::FightType::ATTACK)) || (ft == int(Task::FightType::SCOUT))
+		|| ((ft == int(Task::FightType::RAID)) && Military::NrOn() && (Military::gNrNow == Military::NR_WAIT));
 }
 
 int gEscCensusLogAt = 0;

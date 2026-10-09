@@ -320,15 +320,22 @@ float RaidPowerLive()
 // Taking escorts regardless cost metal built 10,732 -> 7,963 over three seeds;
 // taking none at all leaves raids short on a side whose spare army IS the
 // escorts.
-bool EscortSpare(IUnitTask@ t)
+// The worker comes from the escort registry: a fighter task's target handle
+// reads null, which made every escort "spare" and every raid pull strip them.
+bool EscortSpare(Id uid)
 {
-	CCircuitUnit@ vip = t.target;
-	if (vip is null)
-	    return true;   // guarding nothing we can name: no worker to expose
-	const AIFloat3 at = vip.GetPos(ai.frame);
-	if (!OnMap(at))
-	    return false;
-	return Market::CoverAt(at) >= Market::ThreatM(at);
+	for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
+		if (Market::gEscUnit[e] != uid)
+			continue;
+		CCircuitUnit@ vip = ai.GetTeamUnit(Market::gEscWorker[e]);
+		if (vip is null)
+			return true;
+		const AIFloat3 at = vip.GetPos(ai.frame);
+		if (!OnMap(at))
+			return false;
+		return Market::CoverAt(at) >= Market::ThreatM(at);
+	}
+	return true;   // guarding nobody in the registry: no worker to expose
 }
 
 void UpdateRaidAsk()
@@ -384,21 +391,18 @@ void UpdateRaidAsk()
 			if ((t is null) || t.IsDead() || (t is gAskTask))
 				continue;
 			const int ft = t.GetFightType();
-			if (ft == int(Task::FightType::GUARD)) {
-				// An escort is free to take when its worker is standing
-				// somewhere already answered -- cover at the worker meets the
-				// wave that reaches it -- and expensive to take when it is not.
-				if (!EscortSpare(t))
-					continue;
-			} else if (ft != int(Task::FightType::DEFEND)) {
+			// An escort is free to take when its worker is standing somewhere
+			// already answered -- cover at the worker meets the wave that
+			// reaches it -- and expensive to take when it is not.
+			const bool escort = ft == int(Task::FightType::GUARD);
+			if (!escort && (ft != int(Task::FightType::DEFEND)))
 				continue;
-			}
 			array<CCircuitUnit@>@ on = t.GetUnits();
 			if ((on is null) || (on.length() == 0))
 				continue;
 			for (uint j = 0; (j < on.length()) && (pulled < cap); ++j) {
 				CCircuitUnit@ u = on[j];
-				if (!RaidWorthPulling(u))
+				if (!RaidWorthPulling(u) || (escort && !EscortSpare(u.id)))
 					continue;
 				// First pass takes only raiders; second takes anything, so a
 				// raid still happens on a side whose lab makes none.

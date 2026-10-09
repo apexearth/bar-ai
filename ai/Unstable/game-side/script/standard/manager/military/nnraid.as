@@ -281,8 +281,8 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 		const bool guard = ft == int(Task::FightType::GUARD);
 		for (uint j = 0; j < on.length(); ++j) {
 			CCircuitUnit@ u = on[j];
-			if (!NrRaider(u))
-				continue;
+			if (!NrRaider(u) || (guard && !EscortSpare(u.id)))
+				continue;   // a GO pulls the whole group: a needed escort is not in it
 			const int d = int(u.circuitDef.id);
 			const float s = DgStr(d);
 			gNrU.insertLast(u);
