@@ -277,4 +277,20 @@ const array<float> NNH_WO = {};
 const float NNH_BO = 0.f;
 const float NNH_TRUST = 0.f;
 
+// the timing-window strike net (military/nnstrike.as)
+const bool NNS_ON = false;
+const string NNS_STATE = "";
+const int NNS_S = 0;
+const int NNS_O = 0;
+const int NNS_H = 0;
+const array<float> NNS_XM = {};
+const array<float> NNS_XS = {};
+const array<float> NNS_W1 = {};
+const array<float> NNS_B1 = {};
+const array<float> NNS_W2 = {};
+const array<float> NNS_B2 = {};
+const array<float> NNS_WO = {};
+const float NNS_BO = 0.f;
+const float NNS_TRUST = 0.f;
+
 }  // namespace Market

@@ -22,6 +22,7 @@
 #include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)
 #include "manager/military/nnpost.as" // the army's posture as a recorded draw; reads Market's net state
 #include "manager/military/nnhunt.as" // hunt their biggest army, or not: a recorded draw
+#include "manager/military/nnstrike.as" // timing windows, and strike their economy in one or not: a recorded draw
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -189,6 +190,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(4, 1)) { double _t = Perf::T0(); Military::UpdatePosture(); Perf::Add("up.posture", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
@@ -436,8 +438,10 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	const CCircuitDef@ cdef = unit.circuitDef;
 	if (cdef is null)
 		return;
-	if (WasFinished(int(unit.id)))
+	if (WasFinished(int(unit.id))) {
 		Military::HuntNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
+		Military::WindowNoteDeath(int(cdef.id), unit.GetPos(ai.frame), cdef.costM, true, true);
+	}
 	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id)))
 		Market::NoteMexKilled();
 	// A BUILDING OF OURS AN ENEMY KILLED ON OUR GROUND IS THE INVASION SIGNAL --
@@ -484,6 +488,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Air::NoteEnemyDeath(edef, pos, byUs);
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
+	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
 	if (byUs)
 		Market::LossNote(int(edef.id));   // their wreck is rez work too
 	Perf::Add("hk.enemydead", hkT);

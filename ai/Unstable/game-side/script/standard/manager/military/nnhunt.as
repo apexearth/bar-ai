@@ -165,7 +165,6 @@ void HuntDecide()
 		return;
 	}
 	gp.y = ai.GetElevationAt(gp);
-	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
 	if (!gHtHeader) {
 		gHtHeader = true;
 		AiLog("apex: nnhunt-schema v1 state=" + Market::NN_STATE + " hunt=" + NNH_HUNT + " opt=name,w,p opts=NO,HUNT");
@@ -204,11 +203,12 @@ void HuntDecide()
 	w[HT_NO] = 1.f;
 	const float trust = HuntNnScore(st, f, w);
 	array<float> p(2);
-	const int c = Market::EcoDraw(HT_NO, trust, w, p, explore ? 0.5f : 0.f);
+	const float flat = Market::NnHeadFlat(trust);
+	const int c = Market::EcoDraw(HT_NO, trust, w, p, flat);
 	array<string> names = {"NO", "HUNT"};
-	AiLog(Market::EcoLine("nnhunt", "NO", explore, trust, st, f, names, w, p, c));
+	AiLog(Market::EcoLine("nnhunt", "NO", flat > 0.f, trust, st, f, names, w, p, c));
 	++gHtDecN;
-	if (explore)
+	if (flat > 0.f)
 		++gHtExN;
 	gHwF.insertLast(ai.frame);
 	gHwOpt.insertLast(c);
@@ -356,7 +356,7 @@ void UpdateHunt()
 		gHtLookAt = ai.frame + HUNT_LOOK;
 		HuntLook();
 	}
-	if (!gHtOn && (ai.frame >= gHtNextAt)) {
+	if (!gHtOn && !StrikeHoldsFocus() && (ai.frame >= gHtNextAt)) {
 		gHtNextAt = ai.frame + 30 * SECOND;
 		HuntDecide();
 	}

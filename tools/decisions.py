@@ -46,8 +46,8 @@ NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule
 REINF_DONE = re.compile(r"apex: nnreinf-done t=(\d+) f=(\d+) done=(\d)")
 HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) killAll=-?\d+"
                        r" lost=(-?\d+) wreck=(-?\d+)")
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|strike)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|strike)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|strike) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
@@ -276,7 +276,7 @@ def parse(path, files=None):
                 mx = re.search(r"nn-explore t=(\d+) on", ln)
                 if mx:
                     explorers.add(int(mx.group(1)))
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln:
+            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln or "apex: nnstrike" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")

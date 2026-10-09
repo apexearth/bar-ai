@@ -262,10 +262,10 @@ void TeamPush()
 	if (ai.frame < gPushNextAt)
 		return;
 	gPushNextAt = ai.frame + 5 * SECOND;
-	// a hunt (military/nnhunt.as) owns this AI's focus while it lasts
-	const bool hunt = Military::HuntHoldsFocus();
+	// a hunt or a strike (military/nnhunt.as, nnstrike.as) owns this AI's focus while it lasts
+	const bool held = Military::HuntHoldsFocus() || Military::StrikeHoldsFocus();
 	if (!PlanPushes()) {
-		if (!hunt)
+		if (!held)
 			aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 		return;
 	}
@@ -292,13 +292,13 @@ void TeamPush()
 	}
 	const float r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
 	if (r < 0.f) {
-		if (!hunt)
+		if (!held)
 			aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 		return;
 	}
 	AIFloat3 fp(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
 	fp.y = ai.GetElevationAt(fp);
-	const float mine = hunt ? 0.f : aiMilitaryMgr.GetGatheredPower();   // squads standing at their own threat-clear stage
+	const float mine = held ? 0.f : aiMilitaryMgr.GetGatheredPower();   // squads standing at their own threat-clear stage
 	ai.SetTeamBoard(BOARD_GATHER + ai.teamId, mine);
 	ai.SetTeamBoard(BOARD_GATHER_AT + ai.teamId, float(ai.frame));
 	float team = 0.f;
@@ -315,7 +315,7 @@ void TeamPush()
 		AiLog("apex: push go t=" + ai.teamId + " plan=" + NgName(gPlan) + " at=" + int(fp.x) + "," + int(fp.z)
 			+ " foe=" + NnF(foe, 1) + " team=" + NnF(team, 1) + " mine=" + NnF(mine, 1));
 	}
-	if (!hunt)
+	if (!held)
 		aiMilitaryMgr.SetFocus(fp, r, team, go, ai.frame + 10 * SECOND);
 	if (ai.frame >= gPushLogAt) {
 		gPushLogAt = ai.frame + 30 * SECOND;
