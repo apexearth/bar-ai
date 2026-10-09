@@ -261,6 +261,7 @@ string DwSiteName(int k)
 	if (k == 1) return "front";
 	if (k == 2) return "ring";
 	if (k == 3) return "wall";
+	if (k == 4) return "keep";
 	return "asset";
 }
 

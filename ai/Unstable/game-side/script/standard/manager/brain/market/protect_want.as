@@ -167,8 +167,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	}
 	gWhyDef.resize(0);
 	const int uid = int(unit.circuitDef.id);
-	if (half == HALF_GROUND)
+	if (half == HALF_GROUND) {
 		DtReset(uid);
+		++gKoElec;
+	}
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
 	// The no-turret test (docs/24): radar and units are the whole defence.
@@ -356,6 +358,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			bool bestIsRing = false;
 			bool bestIsWall = false;
 			bool bestIsLine = false;
+			bool bestIsKeep = false;
 			// THE ASKER'S OWN GUNS ARE TOLERANCE (his ruling: commanders are
 			// good early wall makers because they can defend themselves). A
 			// negative cached prev is a wall slot the danger gate refused,
@@ -385,6 +388,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				const array<bool>@ dsFront = gDsFront[d];
 				const array<bool>@ dsRing = gDsRing[d];
 				const array<bool>@ dsWall = gDsWall[d];
+				const array<int>@ dsKeep = gDsKeep[d];
 				for (uint si = 0; si < prevs.length(); ++si) {
 					float prev = prevs[si];
 					if (prev < 0.f) {
@@ -400,8 +404,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					const AIFloat3 s = AIFloat3(dsX[si], 0.f, dsZ[si]);
 					if (waterOnly && !SailableWaterNear(s, reach))
 						continue;
-					const float wSec = ((hUSpeed > 1.f)
-							? (hUPos.distance2D(s) / hUSpeed) : 60.f) * hWalkW;
+					const float walkRaw = (hUSpeed > 1.f)
+							? (hUPos.distance2D(s) / hUSpeed) : 60.f;
+					const int kid = ((dsKeep !is null) && (si < dsKeep.length())) ? dsKeep[si] : -1;
+					if ((kid >= 0) && KoWrongGun(kid, d, hEffBP, walkRaw, builds))
+						continue;
+					const float wSec = walkRaw * hWalkW;
 					// AN INTERIOR TOWER PAYS FOR ITS GROUND (apexearth:
 					// "we fill our bases up with tons of turrets... while
 					// they're there we have no room to build a lot of
@@ -450,6 +458,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestIsRing = dsRing[si];
 						bestIsWall = dsWall[si];
 						bestIsLine = bestIsWall && WallSlotLine(si);
+						bestIsKeep = kid >= 0;
 					}
 				}
 			}
@@ -488,7 +497,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			gDwFill[d] = 1.f;
 			gDwTeam[d] = 1.f;
 			gDwVal[d] = 0.f;
-			gDwSite[d] = bestIsWall ? 3 : (bestIsFront ? 1 : (bestIsRing ? 2 : 0));
+			gDwSite[d] = bestIsKeep ? 4 : (bestIsWall ? 3 : (bestIsFront ? 1 : (bestIsRing ? 2 : 0)));
+			if (bestIsKeep)
+				++gKoWonN;
 			// SATURATE. Every other major want has a target it reaches and then
 			// stops asking; ground defence never had one, so it was bought
 			// marginally forever at a value that never decayed -- the hazard it

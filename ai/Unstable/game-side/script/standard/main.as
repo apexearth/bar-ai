@@ -195,6 +195,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
+	{ double _t = Perf::T0(); Market::KeepOutUpdate(); Perf::Add("up.keepout", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Air::Update(); Perf::Add("up.air", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Air::ScoutOverflight(); Perf::Add("up.overfly", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Front::Update(); Perf::Add("up.front", _t); }
