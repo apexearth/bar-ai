@@ -118,7 +118,7 @@ void EcoNetDecide()
 		const float trust = NnHeadScore(NNK_ON, NNK_STATE, NNK_CON, NNK_S, NNK_O, NNK_H, NNK_XM, NNK_XS,
 			NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, st, f, w);
 		array<float> p(3);
-		const float flat = NnHeadFlat(trust);
+		const float flat = NnHeadFlat();
 		gConPolicy = EcoDraw(NK_YIELD, trust, w, p, flat);
 		array<string> names = {"FLOOR", "YIELD", "DRAW"};
 		AiLog(EcoLine("nncon", "YIELD", flat > 0.f, trust, st, f, names, w, p, gConPolicy));
@@ -142,7 +142,7 @@ void EcoNetDecide()
 		const float qtrust = NnHeadScore(NNQ_ON, NNQ_STATE, NNQ_CAP, NNQ_S, NNQ_O, NNQ_H, NNQ_XM, NNQ_XS,
 			NNQ_W1, NNQ_B1, NNQ_W2, NNQ_B2, NNQ_WO, NNQ_BO, NNQ_TRUST, st, qf, qw);
 		array<float> qp(3);
-		const float qflat = NnHeadFlat(qtrust);
+		const float qflat = NnHeadFlat();
 		const int c = EcoDraw(0, qtrust, qw, qp, qflat);
 		gConCapMul = (c == 1) ? 2.f : ((c == 2) ? 4.f : 1.f);
 		array<string> qnames = {"X1", "X2", "X4"};
@@ -152,7 +152,7 @@ void EcoNetDecide()
 		const float trust2 = NnHeadScore(NNZ_ON, NNZ_STATE, NNQ_CAP, NNZ_S, NNZ_O, NNZ_H, NNZ_XM, NNZ_XS,
 			NNZ_W1, NNZ_B1, NNZ_W2, NNZ_B2, NNZ_WO, NNZ_BO, NNZ_TRUST, st, qf, w2);
 		array<float> p2(3);
-		const float flat2 = NnHeadFlat(trust2);
+		const float flat2 = NnHeadFlat();
 		const int c2 = EcoDraw(1, trust2, w2, p2, flat2);
 		gAirCapMul = (c2 == 0) ? 2.f : ((c2 == 2) ? 8.f : 4.f);
 		array<string> names2 = {"A2", "A4", "A8"};
@@ -174,7 +174,7 @@ void EcoNetDecide()
 		const float strust = NnHeadScore(NNS_ON, NNS_STATE, NNS_SCOUT, NNS_S, NNS_O, NNS_H, NNS_XM, NNS_XS,
 			NNS_W1, NNS_B1, NNS_W2, NNS_B2, NNS_WO, NNS_BO, NNS_TRUST, st, sf, sw);
 		array<float> sp(3);
-		const float sflat = NnHeadFlat(strust);
+		const float sflat = NnHeadFlat();
 		const int sc = EcoDraw(0, strust, sw, sp, sflat);
 		gScoutCapMul = (sc == 1) ? 1.5f : ((sc == 2) ? 2.f : 1.f);   // x4 was 160 scouts an AI: a frame-budget risk at 16 AIs
 		array<string> snames = {"S1", "S15", "S2"};
@@ -196,7 +196,7 @@ void EcoNetDecide()
 		const float trust = NnHeadScore(NNX_ON, NNX_STATE, NNX_MEX, NNX_S, NNX_O, NNX_H, NNX_XM, NNX_XS,
 			NNX_W1, NNX_B1, NNX_W2, NNX_B2, NNX_WO, NNX_BO, NNX_TRUST, st, f, w);
 		array<float> p(3);
-		const float flat = NnHeadFlat(trust);
+		const float flat = NnHeadFlat();
 		gMexPolicy = EcoDraw(NX_HOLD, trust, w, p, flat);
 		gMexMul = (gMexPolicy == NX_PUSH) ? 2.f : 1.f;
 		array<string> names = {"HOLD", "YIELD", "PUSH"};

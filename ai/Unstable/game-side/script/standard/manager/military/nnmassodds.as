@@ -79,7 +79,7 @@ void MassOddsDecide()
 		Market::NNM_H, Market::NNM_XM, Market::NNM_XS, Market::NNM_W1, Market::NNM_B1, Market::NNM_W2, Market::NNM_B2,
 		Market::NNM_WO, Market::NNM_BO, Market::NNM_TRUST, st, fm, wm);
 	array<float> pm(3);
-	const float flatM = Market::NnHeadFlat(tm);
+	const float flatM = Market::NnHeadFlat();
 	const int cm = Market::EcoDraw(MO_ONE, tm, wm, pm, flatM);
 	AiLog(Market::EcoLine("nnmass", "X1", flatM > 0.f, tm, st, fm, names, wm, pm, cm));
 	gMassMul = MO_MUL[cm];
@@ -110,7 +110,7 @@ void MassOddsDecide()
 		Market::NNO_H, Market::NNO_XM, Market::NNO_XS, Market::NNO_W1, Market::NNO_B1, Market::NNO_W2, Market::NNO_B2,
 		Market::NNO_WO, Market::NNO_BO, Market::NNO_TRUST, st, fo, wo);
 	array<float> po(3);
-	const float flatO = Market::NnHeadFlat(to);
+	const float flatO = Market::NnHeadFlat();
 	const int co = Market::EcoDraw(MO_ONE, to, wo, po, flatO);
 	AiLog(Market::EcoLine("nnodds", "X1", flatO > 0.f, to, st, fo, names, wo, po, co));
 	gOddsMul = MO_MUL[co];

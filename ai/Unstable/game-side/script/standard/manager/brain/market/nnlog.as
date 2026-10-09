@@ -364,16 +364,14 @@ void NnOptFull(Want@ w, const AIFloat3& in up, array<float>& out o)
 	o[15] = ((w.kind != WK_SUPER) && (cat >= 0)) ? Persona::CategoryMult(cat) : 1.f;
 }
 
-// DISCOVERY GAMES: in apex_nn_explore of games the explorer's team plays ONE
-// whole strategy drawn from the plan net's options (plannet.as) and every
-// other head plays its rule or net as in any game, so the outcome belongs to
-// the strategy (docs/35).
+// DISCOVERY, two rolls (docs/35): an explorer's every head mixes NN_HEAD_FLAT
+// uniform into its odds, trusted or not; a rarer strategy explorer also leads
+// its team with one plan (plannet.as).
 bool gNnExploreRolled = false;
 bool gNnExplore = false;
+bool gNnPlanExplore = false;
 bool gNnExploreSaid = false;
-// A head whose net has no trust plays its rule at p=1 and would never see an
-// alternative: in a discovery game it alone mixes this much uniform in.
-const float NN_HEAD_FLAT = 0.1f;
+const float NN_HEAD_FLAT = 0.3f;
 
 void NnExploreRoll()
 {
@@ -384,8 +382,12 @@ void NnExploreRoll()
 	const int explorer = int(ai.GetTunable("apex_nn_explore_team", TUNE_NN_EXPLORE_TEAM));
 	gNnExplore = (explorer >= 0) ? (explorer == ai.teamId)
 			: (float(AiRandom(0, 10000)) / 10000.f < chance);
-	if (gNnExplore)
-		AiLog("apex: nn-explore t=" + ai.teamId + " on | headFlat=" + NnF(NN_HEAD_FLAT, 2));
+	if (!gNnExplore)
+		return;
+	const float planChance = ai.GetTunable("apex_nn_plan_explore", TUNE_NN_PLAN_EXPLORE);
+	gNnPlanExplore = float(AiRandom(0, 10000)) / 10000.f < planChance;
+	AiLog("apex: nn-explore t=" + ai.teamId + " on | decide=1 strategy=" + (gNnPlanExplore ? 1 : 0)
+		+ " headFlat=" + NnF(NN_HEAD_FLAT, 2) + " planChance=" + NnF(planChance, 2));
 }
 
 // A standard normal draw (Irwin-Hall); the explorer's once-per-game plant-type lean uses it.
@@ -397,16 +399,17 @@ float NnGauss()
 	return s - 6.f;
 }
 
-float NnHeadFlat(float trust)
+float NnHeadFlat()
 {
-	return (gNnExploreRolled && gNnExplore && (trust <= 0.f)) ? NN_HEAD_FLAT : 0.f;
+	NnExploreRoll();
+	return gNnExplore ? NN_HEAD_FLAT : 0.f;
 }
 
 // Said once, when the explorer first knows its strategy, so a watcher knows
 // which side is different and what it tries.
 void NnExploreSay(const string& in plan, const string& in how)
 {
-	if (gNnExploreSaid || !gNnExplore)
+	if (gNnExploreSaid || !gNnPlanExplore)
 		return;
 	gNnExploreSaid = true;
 	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game: strategy " + plan + " (" + how + ")");

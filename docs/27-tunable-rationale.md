@@ -3221,6 +3221,16 @@ pass their own values (runtime/nn_runs.sh explore 0.25; nn_selfex.sh and
 tools/watch_selfplay.sh apex_nn_explore_team), so they are unchanged. Before:
 blend 0 (nets off) and 0.1 (one lobby game in ten exploring).
 
+## TUNE_NN_PLAN_EXPLORE = 0.1 (2026-10-09)
+
+His ruling 2026-10-09: about 75% of training games explore, with many more
+single decisions drawn at random and much LESS whole-team strategy
+exploration, because a forced strategy changes the game too much (RUSH won
+0/21). Discovery is now two rolls: `apex_nn_explore` makes every head mix
+`NN_HEAD_FLAT` (0.3) uniform into its odds whatever its trust, and this one,
+rolled only by an explorer, makes it also lead its team with one plan until
+our tier rises. 0.1 is his "much less": one explorer in ten. Not swept yet.
+
 ## TUNE_PLAN_EXPLORE = 0 (2026-10-07)
 
 His multiplayer games are the training data that matters most, and with the

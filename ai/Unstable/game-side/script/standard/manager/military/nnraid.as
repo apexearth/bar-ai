@@ -613,7 +613,7 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 	float sum = 0.f;
 	for (int o = 0; o < NR_N; ++o)
 		sum += w[o];
-	const float flat = Market::NnHeadFlat(trust);
+	const float flat = Market::NnHeadFlat();
 	const bool explore = flat > 0.f;
 	if (Market::gNnExplore)
 		gNrFlat = flat;

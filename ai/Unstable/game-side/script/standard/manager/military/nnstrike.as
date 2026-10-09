@@ -303,8 +303,7 @@ void StrikeDecide()
 	w[ST_NO] = 1.f;
 	const float trust = StrikeNnScore(st, f, w);
 	array<float> p(2);
-	// a whole-army move is a strategy: discovery tries it as often as not, not at the 10% head mix
-	const float flat = (Market::gNnExploreRolled && Market::gNnExplore) ? 0.5f : Market::NnHeadFlat(trust);
+	const float flat = Market::NnHeadFlat();
 	const int c = Market::EcoDraw(ST_NO, trust, w, p, flat);
 	array<string> names = {"NO", "STRIKE"};
 	AiLog(Market::EcoLine("nnstrike", "NO", flat > 0.f, trust, st, f, names, w, p, c));

@@ -47,7 +47,7 @@ void EscNetDecide()
 	float sum = 0.f;
 	for (int o = 0; o < NE_N; ++o)
 		sum += w[o];
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	const bool explore = flat > 0.f;
 	array<float> p(NE_N);
 	for (int o = 0; o < NE_N; ++o) {
@@ -90,7 +90,7 @@ void EscNetDecide()
 	const float ctrust = NnHeadScore(NNY_ON, NNY_STATE, NNE_ESC, NNY_S, NNY_O, NNY_H, NNY_XM, NNY_XS,
 		NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, st, ef, cw);
 	array<float> cp(3);
-	const float cflat = NnHeadFlat(ctrust);
+	const float cflat = NnHeadFlat();
 	const int cc = EcoDraw(0, ctrust, cw, cp, cflat);
 	gEscCapMul = (cc == 1) ? 2.f : ((cc == 2) ? 4.f : 1.f);
 	array<string> cnames = {"E1", "E2", "E4"};

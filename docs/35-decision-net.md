@@ -313,12 +313,24 @@ zero-weighted outputs and logs it (`adopt_targets`), never a reset.
 the per-batch headline R2 (a single game's batch has no spread for them);
 `game_sums` in metrics.jsonl carries their SSE/SST to pool over batches.
 
-## Discovery games (`apex_nn_explore`, 0.1)
+## Discovery games (`apex_nn_explore`, `apex_nn_plan_explore`)
 
-Each AI rolls `apex_nn_explore` once per game (training passes 0.1). Agreed
-with him 2026-10-08: discovery is a WHOLE STRATEGY, not a coin per decision.
+His ruling 2026-10-09 (replacing 10-08's whole-strategy-only discovery):
+about 75% of training games explore, many more single decisions are drawn
+at random, and whole-team strategy exploration is much rarer, because it
+changes behaviour too much. Two rolls, once per game per AI:
 
-- **The strategy** (`plannet.as`): the explorer draws one plan for its team at
+- **Decisions** (`apex_nn_explore`; the training launch passes the share):
+  every head mixes `NN_HEAD_FLAT` (0.3) uniform into its odds
+  (`NnHeadFlat()`), trusted or not -- builder heads, posture, escorts, raid,
+  air, hunt, strike, tech, opening, the plan net's own 8-minute draw. The
+  logged p includes the mix and `ex=1` marks the row. Exceptions keep their
+  shape: the commander only ever trials SAFER (TURRET/RETREAT, one a minute,
+  held 15 s; the trial share is in p and a held trial logs p=1), and the T2
+  head draws one moment per tier instead of a coin every 30 s.
+- **Strategy** (`apex_nn_plan_explore`, 0.1 of explorers): the explorer
+  ALSO leads its team with one drawn plan, below.
+- **The strategy** (`plannet.as`): the strategy explorer draws one plan for its team at
   its first plan decision (`why=first`) from the plan net's odds mixed with a
   flat share -- uniform while the plan net has no trust (its odds are only
   the NORMAL prior), half net / half uniform once it has. It holds the plan,
@@ -329,17 +341,18 @@ with him 2026-10-08: discovery is a WHOLE STRATEGY, not a coin per decision.
   `nnplan` row carries the mixed p, so the trainer counts it a chance pick
   (weight 1/p, `rand_weight`). `apex_plan_explore` (Try strategies) runs the
   same path.
-- **Every other head** plays its rule or net as in a normal game. Only a head
-  whose net has no trust -- it plays its rule at p=1 and would never see an
-  alternative -- mixes `NN_HEAD_FLAT` (0.1) uniform in (`NnHeadFlat`); its
-  row says `ex=1` only then. A trusted head draws from its own odds in every
-  game and supplies its own chance rows.
-- **Kept**: one plant-type multiplier per game (`PlantExpApply`; otherwise
-  every opening is a bot lab) and the T2 head's single drawn moment per tier
-  while it has no trust. Both are whole-game, not per decision.
-- **Logs**: `apex: nn-explore t=N on | headFlat=0.10` at the roll;
-  `apex: nn-explore-plan t=N plan=X p=.. why=first|tier tier=..` at each draw;
-  chat "Team N is the DISCOVERY explorer this game: strategy X (...)".
+- **Kept**: one plant-type multiplier per game in every decision explorer
+  (`PlantExpApply`; otherwise every opening is a bot lab).
+- **What ran is what is logged** (2026-10-09): a drawn posture (`nnpost`) is
+  held as drawn for its window even when it is the rule's, and none is drawn
+  while all-in (p=1 on the rule; a standing draw re-decides `why=allin`); a
+  HEAVY escort draw raises the per-constructor escort count, not only the
+  metal owed; an air GO with nowhere to go logs WAIT at p=1.
+- **Logs**: `apex: nn-explore t=N on | decide=1 strategy=0|1 headFlat=0.30
+  planChance=0.10` at the roll (only explorers print it);
+  `apex: nn-explore-plan t=N plan=X p=.. why=first|tier tier=..` at each
+  strategy draw; chat "Team N is the DISCOVERY explorer this game: strategy X
+  (...)" for a strategy explorer only.
 
 The trainer archives (never deletes) the net when the record's layout or its
 own outputs change: `runtime/nn-archive/<stamp>/`.

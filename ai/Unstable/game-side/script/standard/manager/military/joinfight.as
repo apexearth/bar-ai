@@ -39,7 +39,7 @@ bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foeP
 		Market::NNV_H, Market::NNV_XM, Market::NNV_XS, Market::NNV_W1, Market::NNV_B1, Market::NNV_W2, Market::NNV_B2,
 		Market::NNV_WO, Market::NNV_BO, Market::NNV_TRUST, st, f, w);
 	array<float> p(2);
-	const float flat = Market::NnHeadFlat(trust);
+	const float flat = Market::NnHeadFlat();
 	const int c = Market::EcoDraw(RF_GO, trust, w, p, flat);
 	array<string> names = {"GO", "STAY"};
 	AiLog(Market::EcoLine("nnreinf", "GO", flat > 0.f, trust, st, f, names, w, p, c));

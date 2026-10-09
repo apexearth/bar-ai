@@ -613,13 +613,26 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	// Discovery only ever toward SAFER: work or fight may become a turret or a
 	// retreat, a turret a retreat -- held 15 s so what followed is its doing.
 	// Nothing ever explores him into a fight the rule would leave.
-	gComFlat = NnHeadFlat(trust);
-	const bool explore = gComFlat > 0.f;
-	const bool trial = explore && (rule != COM_RETREAT) && !stand;
-	if (trial && (ai.frame < gComExpUntil) && (gComExpPick > rule))
+	gComFlat = NnHeadFlat();
+	const bool trial = (gComFlat > 0.f) && (rule != COM_RETREAT) && !stand;
+	const bool held = trial && (ai.frame < gComExpUntil) && (gComExpPick > rule);
+	const bool canTry = trial && !held && (ai.frame >= gComExpNext);
+	const bool explore = canTry;
+	// The logged odds are the ones he ran with: a held trial is certain, and
+	// a trial's share is mixed into the rule's or net's odds.
+	if (held) {
+		for (int o = 0; o < COM_N; ++o)
+			p[o] = (o == gComExpPick) ? 1.f : 0.f;
+	} else if (canTry) {
+		const float toTurret = ((rule < COM_TURRET) && (gCsTowersK > 0)) ? 0.5f : 0.f;
+		for (int o = 0; o < COM_N; ++o)
+			p[o] *= 1.f - gComFlat;
+		p[COM_TURRET] += gComFlat * toTurret;
+		p[COM_RETREAT] += gComFlat * (1.f - toTurret);
+	}
+	if (held)
 		chosen = gComExpPick;
-	else if (trial && (ai.frame >= gComExpNext)
-		&& (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
+	else if (canTry && (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
 		chosen = ((rule < COM_TURRET) && (gCsTowersK > 0) && (AiRandom(0, 1) == 0)) ? COM_TURRET : COM_RETREAT;
 		gComExpPick = chosen;
 		gComExpUntil = ai.frame + 15 * SECOND;
@@ -631,7 +644,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 		float acc = 0.f;
 		chosen = COM_N - 1;
 		for (int o = 0; o < COM_N; ++o) {
-			acc += p[o];
+			acc += w[o] / sum;
 			if (r < acc) {
 				chosen = o;
 				break;

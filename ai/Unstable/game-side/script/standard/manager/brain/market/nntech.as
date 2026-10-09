@@ -194,7 +194,7 @@ void NnTechDecide()
 	float sum = 0.f;
 	for (int o = 0; o < TECH_N; ++o)
 		sum += w[o];
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	const bool explore = flat > 0.f;
 	if (gNnExplore)
 		gTechFlat = flat;
@@ -211,7 +211,7 @@ void NnTechDecide()
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
 	}
 	// DISCOVERY TRIES A TIME, NOT A COIN: a flip every 30 s sent nearly every
-	// discovery game to T2 within two minutes. While the T2 net has no trust, each discovery game draws one
+	// discovery game to T2 within two minutes. Each discovery game, trusted net or not, draws one
 	// moment 2-15 min after reaching its current tier and switches there --
 	// earlier or later than the rule would -- so similar games differ only in
 	// when. Never for the first plant (tier 1): that is never held back.

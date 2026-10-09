@@ -49,6 +49,7 @@ local NAMES = {
 	"apex_decide_log",
 	"apex_nn_blend",
 	"apex_nn_explore",
+	"apex_nn_plan_explore",
 	"apex_nn_explore_team",
 	"apex_plan_force", "apex_plan_explore",
 	"apex_nn_imitate",
