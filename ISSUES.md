@@ -15,6 +15,56 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## SILENT BUGS FROM THE 2026-10-08 CODE REVIEW (unfixed)
+
+Five read-only reviewers, each finding checked against the 2v2 vs BARb batch
+(tournaments/20261008-054849-nn-barbtrain) and the Comet 1v1s (20261008-204630).
+Already fixed from the same review: escort spare test (3a5edd03), time-capped
+games labelled even (2d9d4fd0). Line numbers are as of 2d9d4fd0.
+
+- **First constructor up to 5 min late** (production.as ~2459, budget.as 178/191).
+  `armyBehind` reads 0/target when a commander building finishes before the lab's
+  first order (factory spend excluded), so the YIELD con floor yields. 13 of 32
+  1v1 seats got their first con at f=1918-9249 after 1-9 combat units.
+- **Join-fight STAY marches the squad to the enemy box** (AttackTask.cpp 745-751
+  -> 250 MarchEnemyBox). 67 of 98 STAYs (comet) were fights <1500 from home; the
+  next line is `atkbox` 41/78 times. STAY drawn 6.5-10% against logged p~0.019
+  (EcoDraw, joinfight.as).
+- **Commander net off since 10-05** (nntrain.py ~1226 learn_head, nnlog.as 690).
+  The head adopted lane keys ending `evade`; Unstable logs 29 own fields, so every
+  game is skipped as "older" and NnHeadScore refuses silently. 57k rows skipped.
+- **Raid net GO strips cover and hold pools** (nnraid.as 271-285); the cover/hold
+  ledgers (hooks.as 96, massing.as 427) drop a unit only on death, so they read
+  full. Cover blocked 251 of 564 seat-minutes (1v1).
+- **Held pool promotes under MELEE and poisons every later hold** (DefendTask.cpp
+  116-125, MilitaryManager.cpp 686/750/811): MELEE falls to default (rally) and is
+  filed under MELEE but removed under RALLY, leaving a dead entry forever.
+- **Supers never released** (superguard.as 110-118): 0 "releasing" lines in 21
+  barbtrain games with 228 holds; Legion supers are keyed by cost and never count.
+- **Siege ring backs out of the unit's own range** (SquadTask.cpp 553-608).
+- **Constructors flee only when hit** (BuilderManager.cpp 1649 reflex covers
+  rezzers only): 6,549 of 7,993 2v2 con deaths came after a con-retreat, 4,805 of
+  them within 10 s.
+- **Unit counts read as metal (S28)**: coverage.as 715 ThreatAt, guards.as
+  149/201 WorkerEnemyM -> EscortOwedM, raid.as 268 RaidPackNeed. Live enemy
+  presence never moves a spot price or escort demand.
+- **PickSpot ignores the con-death mark the let-go honours** (want_mex.as 855 vs
+  sitesafety.as 345, maketask.as 303-321): 898 of 6,405 let-gos re-sent to the
+  same ground within 30 s; 31% of con deaths within 250 of another <3 min old.
+- **Generators skipped team-wide once any hand can build fusion** (want_reclaim.as
+  483-490, want_energy.as 154) -- the shape docs/27 TUNE_OBSOLETE_RATIO measured
+  bad for converters. Suspected.
+- **Opening budget reads economy overspent** (budget.as 178-185): eco tickets at
+  the 0.35 floor in 31% of min 0-2 samples; a radar/tower beat a mex 42 times in
+  the first 4 min. Suspected.
+- **Explorer share 54% of training team-games** (doc says 10%); explorer teams win
+  34% vs 50%, and trust pairs come mostly from explorer rows.
+- Smaller: raid decision acts on a 1-5 s old unit snapshot (nnraid.as ~655);
+  stall hoist on a raw pull spike (guards.as 927); factory-floor EMA polluted by
+  placeholder values (decide.as 2569); buffer rows lost on a kill (nntrain.py
+  904/617); exposure cached at the con's position 30 s (army.as 107-136);
+  GetAllyBuilds engine call per allied unit (InitScript.cpp).
+
 ## DECISIVENESS: THE TEAM PUSH AGAINST BARB (2026-10-07)
 
 2v2 vs BARb hard, our side +75% vs +50%, forced plan, no explorer
