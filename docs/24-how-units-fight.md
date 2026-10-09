@@ -236,6 +236,13 @@ to them)
   turrets are massed, fortify that ground and put a shield there.
 - Don't heap defences in the middle while a flank is being raided. Defend the
   raided side, and the map edge.
+- **Keep them out, with room to grow** (2026-10-09). Defence makes complete
+  coverage that keeps enemy ground out of the backline, the way stuck units
+  are detected: gaps are found continuously and closed. The backline is the
+  alliance's (ours plus every ally's), and so is the coverage (every allied
+  gun). The ring stands on the outside, bigger than the base we have, so there
+  is a lot of room to keep building a strong base inside it; defences are not
+  squeezed into our little base.
 - When most of the army is away, the base buys extra defence; the army at home
   counts as cover.
 - Answer incoming long-range plasma fire with shields. Remember the sighting,
