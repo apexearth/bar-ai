@@ -417,7 +417,9 @@ scores d = FULL(chosen) - FULL(rule) against the realized outcome -
 FULL(rule), both in OBJECTIVE units, weighted 1/p (cap 20). The rule is the
 head's rule option, or for the builder and factory the top-valued priced
 option. Trust is the lower end (2.5th percentile) of a game-clustered
-bootstrap of their correlation, floored at 0; nothing under 200 chance rows
+bootstrap of their correlation PARTIAL on FULL(rule) (both carry it, which
+alone made them correlate), less the net's own placebo reading when positive,
+floored at 0; nothing under 200 chance rows
 or 5 games; the most recent 2,000 pairs (older pairs scored weights since
 replaced). The old trust -- FULL minus STATE against outcome minus STATE --
 read +0.1..0.3 on rows where the pick WAS the rule: it measured the two nets

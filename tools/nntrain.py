@@ -779,9 +779,10 @@ def obj_units(p, ym, ys, mm):
     return (((p - ym) / ys) * mm).sum(1)
 
 
-def boot_corr(d, a, w, gid, seed=0):
-    """(point, lower bound) of the weighted correlation of d and a, resampling
-    whole games. None when there is too little to say."""
+def boot_corr(d, a, w, gid, b=None, seed=0):
+    """(point, lower bound) of the weighted correlation of d and a -- partial
+    on b when given (d and a both carry -FULL(rule), which alone made them
+    correlate) -- resampling whole games. None when there is too little to say."""
     games, g = np.unique(np.asarray(gid), return_inverse=True)
     if len(d) < TRUST_MIN or len(games) < TRUST_GAMES_MIN:
         return None
@@ -789,31 +790,45 @@ def boot_corr(d, a, w, gid, seed=0):
     cnt = rng.multinomial(len(games), np.full(len(games), 1.0 / len(games)), size=TRUST_BOOT)
     W = np.vstack([w[None, :], cnt[:, g] * w[None, :]]).astype(np.float64)
     W /= np.maximum(W.sum(1, keepdims=True), 1e-12)
-    md, ma = W @ d, W @ a
-    vd = (W * (d[None, :] - md[:, None]) ** 2).sum(1)
-    va = (W * (a[None, :] - ma[:, None]) ** 2).sum(1)
-    cv = (W * (d[None, :] - md[:, None]) * (a[None, :] - ma[:, None])).sum(1)
-    r = np.where((vd > 0) & (va > 0), cv / np.sqrt(np.maximum(vd * va, 1e-24)), 0.0)
+
+    def cov(x, y):
+        mx, my = W @ x, W @ y
+        return (W * (x[None, :] - mx[:, None]) * (y[None, :] - my[:, None])).sum(1)
+
+    def corr(c, vx, vy):
+        return np.where((vx > 1e-24) & (vy > 1e-24), c / np.sqrt(np.maximum(vx * vy, 1e-24)), 0.0)
+
+    vd, va = cov(d, d), cov(a, a)
+    r = corr(cov(d, a), vd, va)
+    if b is not None:
+        vb = cov(b, b)
+        rdb, rab = corr(cov(d, b), vd, vb), corr(cov(a, b), va, vb)
+        den = np.sqrt(np.maximum((1 - rdb ** 2) * (1 - rab ** 2), 1e-12))
+        r = np.where(den > 1e-6, (r - rdb * rab) / den, 0.0)
     return float(r[0]), float(np.percentile(r[1:], TRUST_LO_Q))
 
 
-def honest_trust(pairs):
-    """Trust from (d, a, w, game) pairs: the bootstrap lower bound, >= 0."""
-    q = [x for x in pairs if len(x) == 4][-TRUST_RECENT:]
+def honest_trust(pairs, placebo=None):
+    """Trust from (d, a, w, game, FULL(rule)) pairs: the bootstrap lower bound
+    less what the same statistic reads where the decision cannot matter (the
+    placebo's point value, when positive), >= 0."""
+    q = [x for x in pairs if len(x) == 5][-TRUST_RECENT:]
     if len(q) < TRUST_MIN:
         return 0.0
-    d, a, w = (np.array([x[i] for x in q], dtype=np.float64) for i in range(3))
-    res = boot_corr(d, a, w, [x[3] for x in q], seed=len(q))
-    return 0.0 if res is None else round(max(0.0, res[1]), 3)
+    d, a, w, b = (np.array([x[i] for x in q], dtype=np.float64) for i in (0, 1, 2, 4))
+    res = boot_corr(d, a, w, [x[3] for x in q], b, seed=len(q))
+    bias = max(0.0, (placebo or {}).get("r", 0.0))
+    return 0.0 if res is None else round(max(0.0, res[1] - bias), 3)
 
 
-def placebo_read(pairs):
-    """{r, lo, n} of the placebo pairs (d, a, game), for metrics.jsonl."""
+def placebo_read(pairs, partial=True):
+    """{r, lo, n} of placebo pairs (d, a, game[, FULL(rule)]), for metrics.jsonl."""
     q = pairs[-TRUST_RECENT:]
     if not q:
         return None
     d, a = (np.array([x[i] for x in q], dtype=np.float64) for i in range(2))
-    res = boot_corr(d, a, np.ones(len(q)), [x[2] for x in q], seed=len(q))
+    b = np.array([x[3] for x in q], dtype=np.float64) if partial and len(q[0]) > 3 else None
+    res = boot_corr(d, a, np.ones(len(q)), [x[2] for x in q], b, seed=len(q))
     return {"n": len(q)} if res is None else {"r": round(res[0], 3), "lo": round(res[1], 3), "n": len(q)}
 
 
@@ -862,16 +877,18 @@ def decision_pairs(rows, feat, rule_of, alts_of, net, XF, Y, M, rw, gid, rng):
         idx = [i for i, _ in chance]
         pr = net.predict(np.array([feat(rows[i], rule) for i, rule in chance], dtype=np.float32))
         pc = net.predict(XF[idx])
-        d = obj_units(pc, ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
-        a = obj_units(Y[idx], ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
-        out_c = [(i, float(dd), float(aa), float(rw[i]), gid) for i, dd, aa in zip(idx, d, a)]
+        b = obj_units(pr, ym, ys, mm[idx])
+        d = obj_units(pc, ym, ys, mm[idx]) - b
+        a = obj_units(Y[idx], ym, ys, mm[idx]) - b
+        out_c = [(i, float(dd), float(aa), float(rw[i]), gid, float(bb)) for i, dd, aa, bb in zip(idx, d, a, b)]
     if plac:
         idx = [i for i, _, _ in plac]
         pa = net.predict(np.array([feat(rows[i], alt) for i, _, alt in plac], dtype=np.float32))
         pr = net.predict(XF[idx])   # chosen IS the rule here
-        d = obj_units(pa, ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
-        a = obj_units(Y[idx], ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
-        out_p = [(i, float(dd), float(aa), gid) for i, dd, aa in zip(idx, d, a)]
+        b = obj_units(pr, ym, ys, mm[idx])
+        d = obj_units(pa, ym, ys, mm[idx]) - b
+        a = obj_units(Y[idx], ym, ys, mm[idx]) - b
+        out_p = [(i, float(dd), float(aa), gid, float(bb)) for i, dd, aa, bb in zip(idx, d, a, b)]
     return out_c, out_p, mm
 
 
@@ -880,22 +897,32 @@ def score_decisions(obj, rows, XF, Y, M, rw, pf, ps, gid, pairs_for, feat, rule_
     `pairs_for(row index)` says) and its placebo lists; the readings into rec."""
     rng = np.random.default_rng(len(rows) * 7919 + obj.batches)
     chance, plac, mm = decision_pairs(rows, feat, rule_of, alts_of, obj.full, XF, Y, M, rw, gid, rng)
-    for i, d, a, w, g in chance:
+    for i, d, a, w, g, b in chance:
         q = pairs_for(i)
-        q.append((d, a, w, g))
+        q.append((d, a, w, g, b))
         if len(q) > TRUST_KEEP:
             del q[: len(q) - TRUST_KEEP]
     ym, ys = obj.full.ym, obj.full.ys
-    for i, d, a, g in plac:
-        obj.placebo.append((d, a, g))
+    for i, d, a, g, b in plac:
+        obj.placebo.append((d, a, g, b))
         # the old statistic on the same rows: FULL minus STATE against outcome minus STATE
         o = lambda p: float(obj_units(p[i:i + 1], ym, ys, mm[i:i + 1])[0])
         obj.placebo_old.append((o(pf) - o(ps), o(Y) - o(ps), g))
     obj.placebo = obj.placebo[-TRUST_KEEP:]
     obj.placebo_old = obj.placebo_old[-TRUST_KEEP:]
     rec["chance_rows"] = len(chance)
-    rec["placebo"] = placebo_read(obj.placebo)
-    rec["placebo_old"] = placebo_read(obj.placebo_old)
+    rec["placebo"] = placebo_of(obj)
+    if obj.batches % 10 == 0:   # the comparisons: each is a bootstrap
+        rec["placebo_old"] = placebo_read(obj.placebo_old, partial=False)
+        rec["placebo_raw"] = placebo_read(obj.placebo, partial=False)   # without the partial on FULL(rule)
+
+
+def placebo_of(obj):
+    """placebo_read(obj.placebo), recomputed only when it has new pairs."""
+    key = (len(obj.placebo), obj.placebo[-1][:2] if obj.placebo else None)
+    if getattr(obj, "_placebo_memo", (None,))[0] != key:
+        obj._placebo_memo = (key, placebo_read(obj.placebo))
+    return obj._placebo_memo[1]
 
 
 def r2(pred, y, m, base):
@@ -1188,9 +1215,10 @@ class FacHead(Buffered):
         replace_retry(OUT / (self.NAME + "_model.pt.tmp"), OUT / (self.NAME + "_model.pt"))
 
     def trust(self):
-        key = (len(self.pairs), self.pairs[-1][:2] if self.pairs else None)
+        key = (len(self.pairs), self.pairs[-1][:2] if self.pairs else None, len(self.placebo),
+               self.placebo[-1][:2] if self.placebo else None)
         if getattr(self, "_trust_memo", (None,))[0] != key:
-            self._trust_memo = (key, honest_trust(self.pairs))
+            self._trust_memo = (key, honest_trust(self.pairs, placebo_of(self)))
         return self._trust_memo[1]
 
     def learn(self, source, g, first_touch, rows):
@@ -1790,9 +1818,11 @@ class Trainer(Buffered):
 
     def trust(self):
         """Per chosen option's kind: honest_trust of its held-out chance rows."""
-        key = tuple((k, len(v), v[-1][:2] if v else None) for k, v in sorted(self.trust_pairs.items(), key=str))
+        key = tuple((k, len(v), v[-1][:2] if v else None) for k, v in sorted(self.trust_pairs.items(), key=str)) + \
+            (len(self.placebo), self.placebo[-1][:2] if self.placebo else None)
         if getattr(self, "_trust_memo", (None,))[0] != key:
-            self._trust_memo = (key, {kind: honest_trust(self.trust_pairs.get(kind, [])) for kind in KINDS})
+            pl = placebo_of(self)
+            self._trust_memo = (key, {kind: honest_trust(self.trust_pairs.get(kind, []), pl) for kind in KINDS})
         return self._trust_memo[1]
 
     def export(self):
