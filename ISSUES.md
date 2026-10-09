@@ -96,6 +96,20 @@ retreat. A won economy closes ~15 minutes late because the army at home
 bleeds against BARb's pressure; the push cannot help a side that is not
 holding its own ground.
 
+## LEAKS: ENEMY GROUND UNITS KILL OUR ECONOMY AT THE BASE EDGE (2026-10-08)
+
+`tools/leaks.py` over the 2v2 vs BARb batch (20261008-054849, 121 games):
+2.86M metal of generators/converters/nanos/labs killed by enemy ground units
+inside our hull or within 250 of its edge, 61% of it outside a loss's final 5
+min. Median per game: wins 4.5k, losses 8.8k, time-capped draws 22k. Almost all
+at the RIM (in 20%, rim 80%); front 51%, flank 35%, rear 13%. 66% fell with at
+most one gun of the team within 600 ("one gun is not a defence"); nearest gun
+<300 in 31%, 300-600 38%, >600 31%. Killers: raiders (<400 m) 40%, heavies
+(>1200 m) 39%; it grows with the game (min 0-10: 35k, 30+: 1.4M). Comet 1v1
+(26 games, 20 min cap): 154k, rim/front 78%. The nets added the same day
+(protect_nn.as, heads defamt/defsite) record against it; `apex: leak-stat` is
+the live census. Unfixed until a trained head or a rule moves these numbers.
+
 ## PERFORMANCE
 
 ### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)

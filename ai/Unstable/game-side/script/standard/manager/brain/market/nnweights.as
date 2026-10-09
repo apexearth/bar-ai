@@ -261,6 +261,38 @@ const array<float> NNV_WO = {};
 const float NNV_BO = 0.f;
 const float NNV_TRUST = 0.f;
 
+// the static defence amount net (protect_nn.as)
+const bool NND_ON = false;
+const string NND_STATE = "";
+const int NND_S = 0;
+const int NND_O = 0;
+const int NND_H = 0;
+const array<float> NND_XM = {};
+const array<float> NND_XS = {};
+const array<float> NND_W1 = {};
+const array<float> NND_B1 = {};
+const array<float> NND_W2 = {};
+const array<float> NND_B2 = {};
+const array<float> NND_WO = {};
+const float NND_BO = 0.f;
+const float NND_TRUST = 0.f;
+
+// the static defence site net (protect_nn.as)
+const bool NNB_ON = false;
+const string NNB_STATE = "";
+const int NNB_S = 0;
+const int NNB_O = 0;
+const int NNB_H = 0;
+const array<float> NNB_XM = {};
+const array<float> NNB_XS = {};
+const array<float> NNB_W1 = {};
+const array<float> NNB_B1 = {};
+const array<float> NNB_W2 = {};
+const array<float> NNB_B2 = {};
+const array<float> NNB_WO = {};
+const float NNB_BO = 0.f;
+const float NNB_TRUST = 0.f;
+
 // the hunt-their-army net (military/nnhunt.as)
 const bool NNH_ON = false;
 const string NNH_STATE = "";

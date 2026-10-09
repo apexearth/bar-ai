@@ -137,6 +137,30 @@ restructure (enemy economy estimate).
   credited (+) or debited (-) by who holds that ground (net influence at the
   death); `apex: nnhunt-done ... done=(kill+wreck-lost)/(kill+lost+grpM)` is
   the head's `done`. Prefix NNH. `apex: hunt-stat` (60 s).
+- `apex: nndefamt` / `apex: nndefsite` (`protect_nn.as`, 2026-10-08): his
+  "a NN governing defense count and placement". AMOUNT (prefix NND): every
+  60 s, D05 / D1 / D2 multiplies `DefenceTarget` (rule D1), held to the next
+  decision; fields are leak metal (5 min, all / eco-nano-lab / inside the
+  hull), enemy raid mass and army, army home/away, uncovered post share,
+  cover/threat/hazard at home, wall fill and closure, assets. No `done` of its
+  own: the team labels (lostMobile, edges, endV). SITE (prefix NNB): in
+  `ExecuteWant`'s WK_PROTECT branch, for a ground gun, seven fixed slots --
+  RULE (the want's site), the def's best WALL, MEXG and FRONT slot from its
+  `DefSiteFill` cache, FLANK (the slot on the recent leak bearing), FORT (the
+  slot nearest the nano mass), LEAK (the heaviest recent leak pushed to just
+  past the rim) -- each with 13 fields (present, auction prevention, stake,
+  leak near, bearing vs enemy, cover, threat, hazard, forward, rim distance,
+  nano BP, guns near, distance to the rule site); an absent slot, one within
+  200 of another, an interior site the executor refuses, or a tower grave is
+  masked (w=0, p=0). A decision holds 90 s for re-elections of the same def
+  and site. Label: `apex: nndefsite-done` 300 s later, done = (enemy ground
+  metal killed within reach+200 - ours lost there to ground units) / (kill +
+  lost + gun metal); decisions.py also gives lostNear at the site. Both heads
+  rule-only at p=1 until trusted; a discovery game mixes NN_HEAD_FLAT.
+  `apex: leak` (every building of ours an enemy ground unit kills: class,
+  depth in the hull, zone in/rim/out, dir front/flank/rear, nearest gun) and
+  `apex: leak-stat` (60 s) are the census; `tools/leaks.py` the same reading
+  from gadget lines for any batch.
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income
