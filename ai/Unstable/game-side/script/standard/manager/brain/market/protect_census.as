@@ -157,6 +157,50 @@ void LogDefGates()
 		+ live + " | DEAD seen=0:" + ((dead == "") ? " none" : dead));
 }
 
+// Per minute, ground defence only: elections, the defence step asked/skipped,
+// a positive want proposed, ranked first (by the draw / by a hoist), the
+// executor's outcomes, towers finished and gone, and the holding vs target.
+int gNextDfLog = 0;
+int gDfLastInterior = 0;
+int gDfLastGrave = 0;
+int gDfLastFerry = 0;
+int gDfLastNull = 0;
+int gDfLastOk = 0;
+void DefFunnelLog()
+{
+	if (ai.frame < gNextDfLog)
+		return;
+	gNextDfLog = ai.frame + 60 * SECOND;
+	const int dInt = gInteriorRefused - gDfLastInterior;
+	const int dGrave = gGunExecGrave - gDfLastGrave;
+	const int dFerry = gGunExecFerry - gDfLastFerry;
+	const int dNull = gGunExecNull - gDfLastNull;
+	const int dOk = gGunExecOk - gDfLastOk;
+	const float tgt = DefenceTarget();
+	AiLog(Factory::T() + "apex: def-funnel t=" + ai.teamId
+		+ " elec=" + gDfElec + " asked=" + gDfAsked + " skipped=" + gDfSkipped
+		+ " proposed=" + gDfProposed
+		+ " top=" + (gDfTopDraw + gDfTopHoist) + " draw=" + gDfTopDraw + " hoist=" + gDfTopHoist
+		+ " exec=" + (dInt + dGrave + dFerry + dNull + dOk) + " ok=" + dOk
+		+ " interior=" + dInt + " grave=" + dGrave + " ferry=" + dFerry + " takeNull=" + dNull
+		+ " finished=" + gDfFinished + " gone=" + gDfGone
+		+ " have=" + int(DefenceValue()) + " target=" + int(tgt)
+		+ " fill=" + formatFloat((tgt > 1.f) ? (DefenceValue() / tgt) : 1.f, "", 0, 2));
+	gDfLastInterior = gInteriorRefused;
+	gDfLastGrave = gGunExecGrave;
+	gDfLastFerry = gGunExecFerry;
+	gDfLastNull = gGunExecNull;
+	gDfLastOk = gGunExecOk;
+	gDfElec = 0;
+	gDfAsked = 0;
+	gDfSkipped = 0;
+	gDfProposed = 0;
+	gDfTopDraw = 0;
+	gDfTopHoist = 0;
+	gDfFinished = 0;
+	gDfGone = 0;
+}
+
 //------------------------------------------------------------------------------
 // THE DECOMPOSITION LOG. A tower's price is a product of a dozen independent
 // terms, so no single one controls the outcome and every change is a nudge whose

@@ -230,6 +230,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	float hTtdH = 0.f;
 	bool  hDomOn = false;
 	bool  hEffOn = false;
+	bool  hT1Out = false;
 	float hLineW = 1.f;     // read inside the slot loop, same for every slot
 	float hBestEff = -1.f;  // the wall-efficiency benchmark, built on first ask
 	if (isGround) {
@@ -274,6 +275,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hTtdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
 		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
+		hT1Out = (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)
+				&& AdvancedHandOwned();
 		hLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
 	}
 	for (uint i = 0; i < cand.length(); ++i) {
@@ -329,6 +332,17 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// ~4.6 ms: an obsolete gun is dropped before it is sited at all.
 			if (Gate(GATE_DEF_OBSOLETE,
 					hDomOn && DefObsoleteOnArrival(builds, d, hAffordM))) {
+				gDwT1[d] = 0.f;
+				continue;
+			}
+			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
+			// 2026-09-19: "spend as much money as it would take to upgrade a
+			// T2 Mex on tier 1 towers in the center of our base... at the
+			// same time as we're slowly upgrading a Mex"). The shortfall
+			// waits for the advanced hand's gun. Refused before the site
+			// fill: a refused tower's sites were priced and thrown away.
+			if (Gate(GATE_DEF_T1LATE, hT1Out && T1Tower(d))) {
+				DwEnsure(d);
 				gDwT1[d] = 0.f;
 				continue;
 			}
@@ -555,17 +569,6 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			if (T1Tower(d) && HandHasT2Tower(builds)) {
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
-			}
-			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
-			// 2026-09-19: "spend as much money as it would take to upgrade a
-			// T2 Mex on tier 1 towers in the center of our base... at the
-			// same time as we're slowly upgrading a Mex"). The shortfall
-			// waits for the advanced hand's gun; the basic hand's one
-			// stopgap (own-fill) is the only light tower after T2.
-			if (Gate(GATE_DEF_T1LATE, T1Tower(d) && AdvancedHandOwned()
-				&& (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f))) {
-				gDwT1[d] = 0.f;
-				continue;
 			}
 			// A WALL SLOT IS DEMAND FOR A WALL, NOT FOR A BIG GUN. Its gain
 			// is the def-INDEPENDENT unmet-target pull, so the only thing

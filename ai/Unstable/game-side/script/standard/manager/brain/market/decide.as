@@ -718,7 +718,10 @@ bool StepSkip(int step, CCircuitUnit@ unit)
 		return false;
 	if (n - gStepWin[d * ELEC_STEPS + step] <= STEP_STALE)
 		return false;
-	if ((step == 14) && (DefenceValue() <= 0.f))
+	// Defence short of its target is an obligation, not a habit to learn: its
+	// executions mostly arrive through hoists (coverall, basefront) that never
+	// credit this step, so learning skipped the question it must keep asking.
+	if ((step == 14) && ((DefenceValue() <= 0.f) || (DefenceShortfall() > 0.f)))
 		return false;
 	if ((step == 17) && (Military::AirSeenEver() > 0.f) && !ProtAnyComing(PROT_AA))
 		return false;
@@ -749,9 +752,14 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		const int d0 = int(unit.circuitDef.id);
 		if ((d0 >= 0) && (d0 <= Catalog::gDefCount))
 			++gStepElec[d0];
+		++gDfElec;
+		DefFunnelLog();
 	}
-	if (StepSkip(step, unit))
+	if (StepSkip(step, unit)) {
+		if (step == 14)
+			++gDfSkipped;
 		return null;
+	}
 	const double _t = Perf::T0();
 	Want@ w = null;
 	if (step == 0)       { @w = MemoPropose(8, unit);         Perf::Add("want.mex", _t); }
@@ -769,7 +777,15 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
 	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
 	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
-	else if (step == 14) { if (!EcoOnly()) @w = MemoPropose(5, unit);  Perf::Add("want.protect", _t); }
+	else if (step == 14) {
+		if (!EcoOnly()) {
+			@w = MemoPropose(5, unit);
+			++gDfAsked;
+			if ((w !is null) && (w.kind == WK_PROTECT) && (w.value > 0.f))
+				++gDfProposed;
+		}
+		Perf::Add("want.protect", _t);
+	}
 	else if (step == 15) { if (!EcoOnly()) @w = MemoPropose(11, unit);  Perf::Add("want.teeth", _t); }
 	else if (step == 16) { @w = MemoPropose(3, unit);         Perf::Add("want.sense", _t); }
 	else if (step == 17) { if (!EcoOnly()) @w = MemoPropose(9, unit);   Perf::Add("want.airdef", _t); }
@@ -2595,6 +2611,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
 			: (0.9f * gWantEmaV + 0.1f * top.value);
+	if ((top.kind == WK_PROTECT) && (top.spotId == PROT_DEF)) {
+		if (why == "draw")
+			++gDfTopDraw;
+		else
+			++gDfTopHoist;
+	}
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.
 	const double _tLog = Perf::T0();

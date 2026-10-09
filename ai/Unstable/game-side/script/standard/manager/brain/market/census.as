@@ -311,6 +311,15 @@ array<array<AIFloat3>> gProtPos(PROT_N);
 array<array<Id>> gProtIds(PROT_N);
 array<array<CCircuitUnit@>> gProtUnit(PROT_N);
 array<array<int>> gProtDefId(PROT_N);
+// apex: def-funnel, per minute: the ground-defence pipeline stage by stage.
+int gDfElec = 0;
+int gDfAsked = 0;
+int gDfSkipped = 0;
+int gDfProposed = 0;
+int gDfTopDraw = 0;
+int gDfTopHoist = 0;
+int gDfFinished = 0;
+int gDfGone = 0;
 float gAssetsM = 0.f;   // summed costM of standing structures
 // ...of which this much is PROTECTION. Defence must never be its own reason:
 // the siege prior mirrors our economy into their army, so counting turrets in
@@ -460,6 +469,8 @@ void NoteFinished(CCircuitUnit@ unit)
 		gProtIds[pc].insertLast(unit.id);
 		gProtUnit[pc].insertLast(unit);
 		gProtDefId[pc].insertLast(defId);
+		if (pc == PROT_DEF)
+			++gDfFinished;
 	}
 	if (Catalog::gExtractsM[defId] <= 0.f)
 		return;
@@ -670,6 +681,8 @@ void NoteDead(CCircuitUnit@ unit)
 	for (int pcl = 0; pcl < PROT_N; ++pcl) {
 		for (uint pi = 0; pi < gProtIds[pcl].length(); ++pi) {
 			if (gProtIds[pcl][pi] == unit.id) {
+				if (pcl == PROT_DEF)
+					++gDfGone;
 				gProtPos[pcl].removeAt(pi);
 				gProtIds[pcl].removeAt(pi);
 				gProtUnit[pcl].removeAt(pi);
