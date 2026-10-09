@@ -15,6 +15,15 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## AiRandom IS BIASED (2026-10-09, ship with the next DLL build)
+
+`InitScript.h:80` `Random(min,max)` is `min + rand() % span`; MSVC's RAND_MAX
+is 32767, so `AiRandom(0,10000)/10000.f < x` over-reads low values (0-2767
+come up 4 times in 32768, the rest 3). Every legacy coin roll carries it --
+`apex_nn_explore=0.75` lands about 0.77. The new continuous heads use the
+unbiased `NnU01` (nnlog.as). Fix: build the span from two rand() calls
+(`(rand() << 15) ^ rand()`, 30 bits) before the modulo.
+
 ## SILENT BUGS FROM THE 2026-10-08 CODE REVIEW (unfixed)
 
 Five read-only reviewers, each finding checked against the 2v2 vs BARb batch
