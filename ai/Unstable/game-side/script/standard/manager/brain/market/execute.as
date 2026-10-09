@@ -521,6 +521,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
 		|| (w.kind == WK_AIRDEF)) {
+		@w = DefTypePick(w, unit);
 		// THE chokepoint, not the proposers: three separate PROT_DEF gain
 		// branches each carried their own ValueOf-and-continue, and gating
 		// two of them still let claws through (measured three times).
@@ -554,7 +555,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Ground the C++ reach veto has refused is re-probed, not re-taken:
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
-		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(DefSitePick(w, unit))) : w.pos;
+		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(DefTypeSited(DefSitePick(w, unit)))) : w.pos;
 		// NO GUN IN THE BASE INTERIOR (apexearth 2026-09-19: "imagine you
 		// only have 12 towers and six of them are in the center of your
 		// base... by the time those towers are defending anything you've

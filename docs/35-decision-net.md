@@ -209,6 +209,27 @@ restructure (enemy economy estimate).
   depth in the hull, zone in/rim/out, dir front/flank/rear, nearest gun) and
   `apex: leak-stat` (60 s) are the census; `tools/leaks.py` the same reading
   from gadget lines for any batch.
+- `apex: nndeftype` (`protect_nntype.as`, 2026-10-09): his "we suck super
+  hard at making T2 defenses" -- WHICH gun a ground-defence want builds,
+  decided in `ExecuteWant`'s WK_PROTECT branch before the site head. Options
+  are the guns the asking hand can build that its last ground proposal
+  priced (the auction's gates -- obsolete, T1-after-T2 -- already applied),
+  in six fixed slots: RULE (the want's gun), T1Q / T1K (T1 quickest to stand
+  with the hand and nanos at its site / most kill), T2Q / T2K / T2R (T2+
+  quickest / most kill / longest reach); absent and duplicate slots masked.
+  A non-RULE pick builds that def at the site the auction priced it at; the
+  site head then runs on it. Flak and torpedo guns are other halves and not
+  here. 16 fields (rule gun, live enemy ground and T2+ metal, nearest T2 ETA
+  to home, T2 mean distance and closing speed -- 10 s sampler --, our T1/T2
+  gun metal, hand BP, ring BP, leaks) and 21 per slot (cost, energy-equal
+  cost, tier, reach, kill, dps, aoe, hp, seconds to stand, auction value,
+  threat, hazard, cover, forward, rim distance, enemy metal and T2 metal that
+  reaches the site before it stands, nearest ETA, owned, distance from the
+  rule site). Held 90 s per rule def + site. A want whose def/site is not in
+  its asker's last proposal (the commander's first gun) is not a decision
+  (`typeMiss`). Label: `apex: nndeftype-done`, the site watcher's trade at
+  the gun's final site. Prefix NNN. Counters on `apex: leak-stat`: typeDec,
+  typeOv, typeT2 (picks that were T2+), typeRuleT2, typeMiss, typeMemo, typeUs.
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income

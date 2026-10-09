@@ -563,6 +563,7 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
     tail = (["// the factory net (production.as roulette)"] + fac_block(fac) +
             ["// the static defence amount net (protect_nn.as)"] + post_block((heads or {}).get("defamt"), "NND") +
             ["// the static defence site net (protect_nn.as)"] + post_block((heads or {}).get("defsite"), "NNU") +
+            ["// the static defence gun-class net (protect_nntype.as)"] + post_block((heads or {}).get("deftype"), "NNN") +
             ["// the posture net (military/nnpost.as)"] + post_block(post) +
             ["// the commander net (comdecide.as)"] + post_block((heads or {}).get("com"), "NNC") +
             ["// the T2 net (nntech.as)"] + post_block((heads or {}).get("tech"), "NNT") +
@@ -980,7 +981,15 @@ class DefSiteHead(ComHead):
     PREFIX = "NNU"
 
 
-DEC_HEADS = DEC_HEADS + (DefAmtHead, DefSiteHead)
+class DefTypeHead(ComHead):
+    """The static defence gun-class net (protect_nntype.as): the rule's gun or the best
+    of another class this hand can build. Its 'done' is the trade at the gun's site over 5 min."""
+    NAME = "deftype"
+    OPTS = ("RULE", "T1Q", "T1K", "T2Q", "T2K", "T2R")
+    PREFIX = "NNN"
+
+
+DEC_HEADS = DEC_HEADS + (DefAmtHead, DefSiteHead, DefTypeHead)
 
 
 class Trainer:
@@ -1486,7 +1495,7 @@ def stale_ok(p, state_keys, has_net=True):
         return False
     if not all(k in head for k in ("NNW_TRUST", "NNF_TRUST", "NNP_TRUST", "NNC_TRUST", "NNT_TRUST", "NNR_TRUST", "NNA_TRUST", "NNE_TRUST", "NNK_TRUST", "NNX_TRUST", "NNQ_TRUST", "NNZ_TRUST", "NNG_TRUST", "NNJ_TRUST", "NNL_TRUST", "NNV_TRUST", "NNH_TRUST", "NNS_TRUST", "NNY_TRUST", "NNB_TRUST", "NNM_TRUST", "NNO_TRUST", "NNI_ON")):
         return False
-    if not all(k in head for k in ("NND_TRUST", "NNU_TRUST")):
+    if not all(k in head for k in ("NND_TRUST", "NNU_TRUST", "NNN_TRUST")):
         return False
     if (OUT / "imitate.npz").is_file() and "NNI_ON = true" not in head:
         return False
