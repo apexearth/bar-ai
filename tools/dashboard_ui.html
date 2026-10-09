@@ -1825,7 +1825,8 @@ async function netAct(act) {
 }
 
 /* ---------- progress ---------- */
-const PG_METRICS = [["eco", "Metal income"], ["army", "Standing army"], ["trade", "Metal killed / lost"],
+const PG_METRICS = [["eco", "Metal income"], ["army", "Standing army"], ["land", "Land held (map nearer our buildings)"],
+                    ["mex", "Extractors standing"], ["trade", "Metal killed / lost"],
                     ["dmg", "Damage dealt / taken"], ["energy", "Energy income"]];
 function pgCell(x) {
   if (x === null || x === undefined) return "<td class='dim'>-</td>";
@@ -1855,7 +1856,8 @@ async function loadProgress() {
       const lead = "<td>" + esc(g.tournament.slice(4, 13)) + "</td><td>" + esc(g.map.slice(0, 18)) + "</td><td>" +
         (g.bonus ?? "-") + "%" + (g.explore ? " <span class='dim'>disc</span>" : "") + "</td><td>" + res + "</td><td>" + g.minutes + "</td>";
       return "<tr>" + lead + "<td class='dim'>eco</td>" + g.eco.map(pgCell).join("") + "<td class='dim'>" + esc(g.turn) + "</td></tr>" +
-             "<tr><td colspan=5></td><td class='dim'>army</td>" + g.army.map(pgCell).join("") + "<td></td></tr>";
+             "<tr><td colspan=5></td><td class='dim'>army</td>" + g.army.map(pgCell).join("") + "<td></td></tr>" +
+             "<tr><td colspan=5></td><td class='dim'>land</td>" + (g.land || []).map(pgCell).join("") + "<td></td></tr>";
     }).join("") + "</table></div>";
   setHTML($("#pg-body"), html);
 }

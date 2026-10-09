@@ -12,6 +12,9 @@ divided by THEIRS (an "edge"; 1.00 = level, 1.20 = 20% ahead):
   army   standing army metal (mobile, non-builder units produced minus lost)
   trade  metal killed / metal lost, cumulative
   dmg    damage dealt / damage taken, cumulative (his D%)
+  mex    extractors standing
+  land   map cells (256 elmos) nearer our standing buildings than theirs, within
+         1500 of one -- territorial control (his 2026-10-08: we cede ground)
 A game's edge at minute M exists only if the game lasted to M, so late columns
 are read from the games that got there. Edges are medians over games. Each game
 is read once and cached in runtime/progress/.
@@ -33,11 +36,16 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(REPO, "runtime", "progress")
 FPM = 1800
 MINUTES = (3, 5, 8, 10, 12, 15, 20, 25, 30)
-VERSION = 1
+VERSION = 2
+CELL = 256.0
+CLAIM_R = 1500.0
 
 RE_WASTE = re.compile(r"\[BARAI_WASTE\] frame=(\d+) team=(\d+) mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)")
 RE_PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)")
 RE_BUILD = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=(\d+) frame=(\d+)")
+RE_BUILT_AT = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ x=(-?\d+) z=(-?\d+) uid=(\d+)")
+RE_DIED_UID = re.compile(r"\[BARAI_DEATH\] frame=(\d+) .*? x=(-?[\d.]+) z=(-?[\d.]+) .*? uid=(\d+)")
+MEX = re.compile(r"(mex|moho|mme)\d*$")
 RE_DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=(\d+) .*? built=(\d) mob=(\d) atkteam=(-?\d+)")
 RE_DMG = re.compile(r"\[BARAI_DMG\] frame=(\d+) team=(\d+) dm=(\d+) ds=(\d+) rm=(\d+) rs=(\d+)")
 BUILDER = re.compile(r"(ck|cv|ca|ack|acv|aca|cs|ch|acsub|fark|consul|rectr|necro|nanotc|com|comlvl\d+)$")
@@ -108,7 +116,8 @@ def read_game(mdir):
     dmg = defaultdict(dict)
     for m in RE_DMG.finditer(txt):
         dmg[int(m.group(2))][int(m.group(1)) // FPM] = (int(m.group(3)) + int(m.group(4)), int(m.group(5)) + int(m.group(6)))
-    series = {k: [] for k in ("eco", "energy", "army", "trade", "dmg")}
+    series = {k: [] for k in ("eco", "energy", "army", "trade", "dmg", "mex", "land")}
+    land_mex(txt, side, n, series)
     standing = [0.0, 0.0]
     cl = [0.0, 0.0]
     for mn in range(n):
@@ -141,6 +150,43 @@ def read_game(mdir):
         "explore": "apex: nn-explore t=" in txt,
         "series": series,
     }
+
+
+def land_mex(txt, side, n, series):
+    """Per minute: our/their standing extractors, and our/their claimed land."""
+    import numpy as np
+    born = []      # (frame, side, x, z, uid, is_mex)
+    died = {}
+    span_x = span_z = 0.0
+    for m in RE_BUILT_AT.finditer(txt):
+        x, z = float(m.group(4)), float(m.group(5))
+        born.append((int(m.group(2)), side(int(m.group(1))), x, z, m.group(6), bool(MEX.search(m.group(3)))))
+        span_x, span_z = max(span_x, x), max(span_z, z)
+    for m in RE_DIED_UID.finditer(txt):
+        died[m.group(4)] = int(m.group(1))
+        span_x, span_z = max(span_x, float(m.group(2))), max(span_z, float(m.group(3)))
+    gx = np.arange(CELL / 2, span_x + CELL, CELL)
+    gz = np.arange(CELL / 2, span_z + CELL, CELL)
+    cells = np.array([(x, z) for x in gx for z in gz]) if len(gx) and len(gz) else np.zeros((0, 2))
+    for mn in range(n):
+        f = (mn + 1) * FPM
+        stand = [b for b in born if b[0] <= f and not (b[4] in died and died[b[4]] <= f)]
+        mex = [sum(1 for b in stand if b[1] == s and b[5]) for s in (0, 1)]
+        series["mex"].append(ratio(mex[0], mex[1]))
+        d = []
+        for s in (0, 1):
+            pts = np.array([(b[2], b[3]) for b in stand if b[1] == s])
+            if len(pts) == 0 or len(cells) == 0:
+                d.append(np.full(len(cells), np.inf))
+                continue
+            dd = ((cells[:, None, :] - pts[None, :, :]) ** 2).sum(-1).min(1)
+            d.append(np.sqrt(dd))
+        if len(cells):
+            ours = int(((d[0] < d[1]) & (d[0] <= CLAIM_R)).sum())
+            theirs = int(((d[1] < d[0]) & (d[1] <= CLAIM_R)).sum())
+            series["land"].append(ratio(ours, theirs, floor=4.0))
+        else:
+            series["land"].append(None)
 
 
 def ratio(a, b, floor=0.0):
@@ -214,7 +260,7 @@ def summary(games, by="batch", recent=60):
     for name, gs in sorted(groups.items()) + [("ALL", games)]:
         row = {"name": name, "n": len(gs),
                "w": sum(1 for g in gs if g["result"] == "W"), "l": sum(1 for g in gs if g["result"] == "L")}
-        for metric in ("eco", "energy", "army", "trade", "dmg"):
+        for metric in ("eco", "energy", "army", "trade", "dmg", "mex", "land"):
             row[metric] = [med([g["series"][metric][m] for g in gs if m < len(g["series"][metric])]) for m in MINUTES]
         out["groups"].append(row)
     for g in games[-recent:][::-1]:
@@ -222,6 +268,7 @@ def summary(games, by="batch", recent=60):
         out["games"].append({k: g[k] for k in ("tournament", "match", "map", "bonus", "result", "minutes", "explore")}
                             | {"eco": [s["eco"][m] if m < len(s["eco"]) else None for m in MINUTES],
                                "army": [s["army"][m] if m < len(s["army"]) else None for m in MINUTES],
+                               "land": [s["land"][m] if m < len(s["land"]) else None for m in MINUTES],
                                "turn": turn(s)})
     return out
 
@@ -248,7 +295,7 @@ def main(argv):
     groups = defaultdict(list)
     for g in games:
         groups[g["tournament"][:8] if by == "day" else g["tournament"][:13]].append(g)
-    for metric in ("eco", "army", "trade", "dmg", "energy"):
+    for metric in ("eco", "army", "land", "mex", "trade", "dmg", "energy"):
         print("\n%s edge (median over games that reached the minute)" % metric)
         print("  %-14s %4s %7s | %s" % ("group", "n", "W-L-D", " ".join("m%-4d" % m for m in MINUTES)))
         rows = sorted(groups.items()) + [("ALL", games)]
