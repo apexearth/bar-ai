@@ -217,9 +217,8 @@ CCircuitUnit@ EscortNeeded(CCircuitUnit@ mil)
 {
 	if (mil is null)
 		return null;
-	// Three at most, stock's own cap (apexearth 2026-10-01, approving it; 09-13:
-	// "We have so many escorts in the base it is ludicrous"). A third to half
-	// of each army stood on escort duty in his 8v8.
+	// EscortCap (escnet.as): without it a third to half of each army stood on
+	// escort duty in his 8v8 (09-13: "so many escorts in the base it is ludicrous").
 	if (gEscWorker.length() >= EscortCap())
 		return null;
 	const float expoR = ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R);

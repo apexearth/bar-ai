@@ -3209,6 +3209,8 @@ minute 10 0.5 against 0.9-1.0; army at 12 min 4,738 vs v0.1.3's 4,654 -- the
 army weight barely moves army while one lab is the bottleneck. Not kept: a 1v1
 second-lab exception (reverted for being a special case; apex_plant_income_per
 belongs to the search instead). Next: these become prices, not queue-jumps.
+Since 2026-10-08 the escort cap's 8 is the E1 base of the `nnecap` net (x1/x2/x4,
+docs/35); `EscortShortfall` still stops at the flat rez-bot cap.
 
 ## TUNE_NN_BLEND = 1, TUNE_NN_EXPLORE = 0 (2026-10-06)
 

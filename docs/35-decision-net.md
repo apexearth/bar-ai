@@ -137,6 +137,16 @@ restructure (enemy economy estimate).
   credited (+) or debited (-) by who holds that ground (net influence at the
   death); `apex: nnhunt-done ... done=(kill+wreck-lost)/(kill+lost+grpM)` is
   the head's `done`. Prefix NNH. `apex: hunt-stat` (60 s).
+- `apex: nnscap` (`econet.as`, 2026-10-08) and `apex: nnecap` (`escnet.as`,
+  2026-10-08): count caps in the priors made learnable, the `nncap` pattern.
+  `nnscap` sizes the late ground scout cap (`ScoutFleetCap`, `:scoutcap` and
+  `:esc-capped` in prodrank) at S1 (the rule: the flat base, max(20,
+  maxunits/50)), S2 or S4; prefix NNS. `nnecap` multiplies the escorts-at-once
+  cap (`EscortCap` = TUNE_ESCORT_CAP x the escort net's strength) by E1 (the
+  rule), E2 or E4, reading the escort net's own fields; prefix NNY. Both on the
+  30 s clock of their file. The flat base itself stays a ceiling on rez bots
+  and on `EscortShortfall`: it came from 564 rez bots taking his 4v4 to 0.65x
+  sim speed (c4a489ac), a frame-budget contract, not a prior.
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income
