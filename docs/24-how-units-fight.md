@@ -473,7 +473,7 @@ rule option.
 |---|---|---|
 | Push by default vs go in only with a local edge | push; edge judged per fight | C++ squad odds; join-fight net (GO/STAY) |
 | Hold and let them come vs pressure on their half | posture from the stance read | posture net (nnpost) |
-| Raid their economy vs kill their army | economy | raid net (GO/WAIT); no army-hunt decision exists yet |
+| Raid their economy vs kill their army | economy | raid net (GO/WAIT); hunt net (NO/HUNT, rule NO) |
 | Mass the army vs stay spread to react | mass to their group size | pool size rules; not a net |
 | Escorts mass with mass vs each constructor covered | each exposed constructor's floor first, then mass (his 2026-10-08 game: 8 escorts on one, none on the rest) | escort net (LIGHT/MATCH/HEAVY) |
 | Army share vs economy share | his share of the economy built (`docs/23`) | team plan net (RUSH/GREED/TURTLE...) |

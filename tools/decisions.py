@@ -40,8 +40,10 @@ NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule
                     r" \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 # the commander's and the T2 decisions, one shape: state | own fields | options | chosen
 REINF_DONE = re.compile(r"apex: nnreinf-done t=(\d+) f=(\d+) done=(\d)")
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) killAll=-?\d+"
+                       r" lost=(-?\d+) wreck=(-?\d+)")
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
@@ -248,6 +250,7 @@ def parse(path, files=None):
     explore = False
     explorers = set()   # engine teams that rolled discovery (apex: nn-explore t=N on)
     reinf_done = {}     # (team, decision frame) -> arrived while the fight raged (apex: nnreinf-done)
+    hunt_done = {}      # (team, decision frame) -> the trade near the watched army (apex: nnhunt-done)
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     with _Chain(files or [os.path.join(path, "infolog.txt")]) as fh:
@@ -257,11 +260,18 @@ def parse(path, files=None):
                 if mr:
                     reinf_done[(int(mr.group(1)), int(mr.group(2)))] = int(mr.group(3))
                 continue
+            if "apex: nnhunt-done t=" in ln:
+                mh = HUNT_DONE.search(ln)
+                if mh:
+                    hunt_done[(int(mh.group(1)), int(mh.group(2)))] = dict(
+                        done=float(mh.group(3)), huntKill=float(mh.group(4)), huntLost=float(mh.group(5)),
+                        huntWreck=float(mh.group(6)))
+                continue
             if "apex: nn-explore t=" in ln:
                 mx = re.search(r"nn-explore t=(\d+) on", ln)
                 if mx:
                     explorers.add(int(mx.group(1)))
-            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln:
+            if "apex: nncom" in ln or "apex: nntech" in ln or "apex: nnraid" in ln or "apex: nnair" in ln or "apex: nnesc" in ln or "apex: nncon" in ln or "apex: nnmex" in ln or "apex: nncap" in ln or "apex: nnacap" in ln or "apex: nnplan" in ln or "apex: nnjoin" in ln or "apex: nnaplant" in ln or "apex: nnreinf" in ln or "apex: nnhunt" in ln:
                 m = HEAD_SCHEMA.search(ln)
                 if m:
                     heads.setdefault(m.group(1), {"keys": None, "rows": []})["keys"] = m.group(2).split(",")
@@ -366,7 +376,7 @@ def parse(path, files=None):
                 rows=rows, execs=execs, nns=nns, state_keys=widen_keys(state_keys), opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
-                reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, died=died, killby=killby,
+                reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, hunt_done=hunt_done, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
                 postrows=postrows, post_keys=post_keys, heads=heads,
                 final=files is None)   # a finished game's merged infolog, not live files
@@ -602,10 +612,14 @@ def head_rows_of(path, g, tag):
 
 def head_labels(g, t, f, tag):
     """The team's outcomes; the join-the-fight head's 'done' is whether the squad
-    arrived while the fight still raged (apex: nnreinf-done)."""
+    arrived while the fight still raged (apex: nnreinf-done); the hunt head's is
+    (kill + wreck - lost) / (kill + lost + army) near the army it weighed."""
     y = labels(g, t, f, None)
     if tag == "reinf":
         y["done"] = g.get("reinf_done", {}).get((t, f))
+    elif tag == "hunt":
+        y["done"] = None
+        y.update(g.get("hunt_done", {}).get((t, f), {}))
     return y
 
 
