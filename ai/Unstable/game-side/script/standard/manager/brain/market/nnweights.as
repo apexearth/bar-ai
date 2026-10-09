@@ -261,4 +261,20 @@ const array<float> NNV_WO = {};
 const float NNV_BO = 0.f;
 const float NNV_TRUST = 0.f;
 
+// the hunt-their-army net (military/nnhunt.as)
+const bool NNH_ON = false;
+const string NNH_STATE = "";
+const int NNH_S = 0;
+const int NNH_O = 0;
+const int NNH_H = 0;
+const array<float> NNH_XM = {};
+const array<float> NNH_XS = {};
+const array<float> NNH_W1 = {};
+const array<float> NNH_B1 = {};
+const array<float> NNH_W2 = {};
+const array<float> NNH_B2 = {};
+const array<float> NNH_WO = {};
+const float NNH_BO = 0.f;
+const float NNH_TRUST = 0.f;
+
 }  // namespace Market

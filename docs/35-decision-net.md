@@ -123,6 +123,20 @@ restructure (enemy economy estimate).
   `com-withdraw`, `com-turret`/`com-turret-end`, `com-retreat`, `com-drop`,
   `com-death`; the C++ D-gun logs every shot as `apex: dgun-fire`.
 
+- `apex: nnhunt` (`manager/military/nnhunt.as`, 2026-10-08): his "kill their
+  army, and eat it" -- NO or HUNT, every 30 s (staggered by team, none while a
+  hunt runs) when we can see a ground army of theirs and have attack squads.
+  The target is their biggest seen group by mobile armed ground metal. HUNT
+  takes this AI's AttackTask focus (the team push's machinery; `TeamPush`
+  yields it): squads gather short of the group, go once gathered power beats
+  its influence (`apex: hunt go`), and the focus follows the group every 4 s
+  until it is lost for 3 looks or 180 s pass (`apex: hunt start` / `hunt end
+  why=gone|time`). Rule NO; discovery games draw half uniform. Label: every
+  decision, either pick, is watched 180 s -- their metal we killed within
+  1200 of the tracked group, ours lost there, and half of every death's metal
+  credited (+) or debited (-) by who holds that ground (net influence at the
+  death); `apex: nnhunt-done ... done=(kill+wreck-lost)/(kill+lost+grpM)` is
+  the head's `done`. Prefix NNH. `apex: hunt-stat` (60 s).
 - `apex: nnaplant` (`plannet.as`, 2026-10-07): while the plan is AIR, how many
   basic air plants -- P1 (the rule), P2, P4, every 30 s. Short of the count,
   `AirPlantOwed` raises the plant at once (a duel still waits for the income

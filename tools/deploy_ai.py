@@ -117,8 +117,24 @@ def _keep_weights(*roots: Path) -> dict:
     return kept
 
 
-def _restore_weights(kept: dict) -> None:
+_CONST = re.compile(r"^const\s+\S+(?:\s+\S+)?\s+(NN\w+)\s*=", re.M)
+
+
+def _restore_weights(kept: dict, stub: Path) -> None:
+    # A head new to the scripts has no constants in weights exported before it:
+    # its empty stub lines go in, or the script does not compile (S3).
+    stub_text = stub.read_text(encoding="utf-8") if stub.is_file() else ""
     for f, data in kept.items():
+        text = data.decode("utf-8")
+        have = set(_CONST.findall(text))
+        missing = [ln for ln in stub_text.splitlines()
+                   if (m := _CONST.match(ln)) and m.group(1) not in have]
+        if missing:
+            cut = text.rfind("}  // namespace Market")
+            if cut >= 0:
+                text = text[:cut] + "\n".join(missing) + "\n\n" + text[cut:]
+                data = text.encode("utf-8")
+                print(f"  weights      {f.name}: added {len(missing)} stub constant(s) the export lacked")
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(data)
     if kept:
@@ -338,7 +354,7 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
         s = src / "game-side" / sub
         if s.is_dir():
             _copy_tree(s, game_target / sub)
-    _restore_weights(kept_weights)
+    _restore_weights(kept_weights, src / "game-side" / "script" / "standard" / "manager" / "brain" / "market" / "nnweights.as")
     stamp = _stamp_scripts(variant, (target / "script", game_target / "script"))
     print(f"  scripts      {stamp}")
     print(f"  game-side    {game_target}")
