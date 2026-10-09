@@ -110,6 +110,22 @@ most one gun of the team within 600 ("one gun is not a defence"); nearest gun
 (protect_nn.as, heads defamt/defsite) record against it; `apex: leak-stat` is
 the live census. Unfixed until a trained head or a rule moves these numbers.
 
+## T2 GUNS STAND AFTER THE T2 PUSH ARRIVES, AND THEY ARE THE SLOW ONES (2026-10-09)
+
+Same batch, per SIDE (two seats each; gadget BUILD/ARMY/DEATH lines, ground
+guns only, AA and LRPC/silos apart). T2 ground guns: us 6.9 / 16.6k metal a
+game, BARb 14.3 / 30.0k (T1: 43 vs 67). Our first T2 gun stands at median
+min 22.4 (none in 35 of 121 games), BARb's at 18.1. Their first armed T2
+ground unit comes within 1500 of a seat's core at median min 15.8; our first
+T2 gun is later than that in 91 of 108 games (BARb, against ours: 44 of 74).
+When 2000+ metal of their T2 is that close, we have ZERO T2 guns standing in
+66 of 92 games (BARb: 19 of 54). Of our structures killed by enemy T2 ground,
+27% stood under a T2 gun's reach (BARb's: 58%). Mix: we build Annihilator /
+Doomsday / Legion popup (2.3/2.1/2.1 a game) and almost never the quick T2
+guns (Pit Bull 0.16, Viper 0.12, Toaster 0.13, Ambusher 0.07); BARb builds
+Viper 2.8, Pit Bull 1.8, Toaster 1.9, Ambusher 1.7. Wins 12.0 T2 guns, losses
+1.0. Head `deftype` (protect_nntype.as) records the class choice against it.
+
 ## PERFORMANCE
 
 ### 8V8 BUILDER ELECTIONS AT 3x THE 16-AI BUDGET, MEASURED UNDER LOAD (2026-10-07)

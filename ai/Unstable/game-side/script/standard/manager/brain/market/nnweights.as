@@ -293,6 +293,22 @@ const array<float> NNU_WO = {};
 const float NNU_BO = 0.f;
 const float NNU_TRUST = 0.f;
 
+// the static defence gun-class net (protect_nntype.as)
+const bool NNN_ON = false;
+const string NNN_STATE = "";
+const int NNN_S = 0;
+const int NNN_O = 0;
+const int NNN_H = 0;
+const array<float> NNN_XM = {};
+const array<float> NNN_XS = {};
+const array<float> NNN_W1 = {};
+const array<float> NNN_B1 = {};
+const array<float> NNN_W2 = {};
+const array<float> NNN_B2 = {};
+const array<float> NNN_WO = {};
+const float NNN_BO = 0.f;
+const float NNN_TRUST = 0.f;
+
 // the hunt-their-army net (military/nnhunt.as)
 const bool NNH_ON = false;
 const string NNH_STATE = "";

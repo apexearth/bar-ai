@@ -167,6 +167,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	}
 	gWhyDef.resize(0);
 	const int uid = int(unit.circuitDef.id);
+	if (half == HALF_GROUND)
+		DtReset(uid);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
 	// The no-turret test (docs/24): radar and units are the whole defence.
@@ -742,6 +744,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			DwEnsure(d);
 			gDwVal[d] = c.value;
 			gWhyDef.insertLast(d);
+			if ((half == HALF_GROUND) && unit.circuitDef.CanBuild(Catalog::Def(d)))
+				DtNote(uid, d, c.value, at);
 		}
 		if (c.value > w.value) {
 			w = c;

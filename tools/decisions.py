@@ -49,11 +49,11 @@ HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]
 HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds)-schema v\d+ state=\S+ (?:com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds)=(\S+) opt=")
 HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|esc|con|mex|cap|acap|plan|join|aplant|reinf|hunt|scap|ecap|strike|mass|odds) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
-# static defence (protect_nn.as): the amount head, and the site head with its watch
-DEF_SCHEMA = re.compile(r"apex: nn(defamt|defsite)-schema v\d+ state=\S+ (?:defamt|defsite)=(\S+) opt=")
-DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defamt|defsite) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+# static defence (protect_nn.as, protect_nntype.as): amount, and site and gun class with their watch
+DEF_SCHEMA = re.compile(r"apex: nn(defamt|defsite|deftype)-schema v\d+ state=\S+ (?:defamt|defsite|deftype)=(\S+) opt=")
+DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defamt|defsite|deftype) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                      r" trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
-DEFSITE_DONE = re.compile(r"apex: nndefsite-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) lost=(-?\d+)"
+DEFSITE_DONE = re.compile(r"apex: nndef(site|type)-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) lost=(-?\d+)"
                           r" pre=(-?\d+) base=(-?\d+) m=\d+ at=(-?\d+),(-?\d+)")
 FAC_SCHEMA = re.compile(r"apex: nnfac-schema v(\d+) state=\S+ opt=(\S+)")
 NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
@@ -262,6 +262,7 @@ def parse(path, files=None):
     reinf_done = {}     # (team, decision frame) -> arrived while the fight raged (apex: nnreinf-done)
     hunt_done = {}      # (team, decision frame) -> the trade near the watched army (apex: nnhunt-done)
     defsite_done = {}   # (team, decision frame) -> the trade at the chosen gun site (apex: nndefsite-done)
+    deftype_done = {}   # ...and at the chosen gun class's site (apex: nndeftype-done)
     state_keys, opt_keys = None, None
     lastw = lastd = 0
     gadget = []
@@ -275,10 +276,10 @@ def parse(path, files=None):
             if "apex: nndef" in ln:
                 md = DEFSITE_DONE.search(ln)
                 if md:
-                    defsite_done[(int(md.group(1)), int(md.group(2)))] = dict(
-                        done=float(md.group(3)), siteKill=float(md.group(4)), siteLost=float(md.group(5)),
-                        sitePre=float(md.group(6)), siteBase=float(md.group(7)),
-                        site=(float(md.group(8)), float(md.group(9))))
+                    (defsite_done if md.group(1) == "site" else deftype_done)[(int(md.group(2)), int(md.group(3)))] = dict(
+                        done=float(md.group(4)), siteKill=float(md.group(5)), siteLost=float(md.group(6)),
+                        sitePre=float(md.group(7)), siteBase=float(md.group(8)),
+                        site=(float(md.group(9)), float(md.group(10))))
                     continue
                 md = DEF_SCHEMA.search(ln)
                 if md:
@@ -411,7 +412,7 @@ def parse(path, files=None):
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, hunt_done=hunt_done, died=died, killby=killby,
                 facrows=facrows, fac_keys=fac_keys, prods=prods, allyof=allyof, winners=winners,
-                postrows=postrows, post_keys=post_keys, heads=heads, defsite_done=defsite_done,
+                postrows=postrows, post_keys=post_keys, heads=heads, defsite_done=defsite_done, deftype_done=deftype_done,
                 final=files is None)   # a finished game's merged infolog, not live files
 
 
@@ -685,10 +686,10 @@ def head_labels(g, t, f, tag):
     """The team's outcomes; the join-the-fight head's 'done' is whether the squad
     arrived while the fight still raged (apex: nnreinf-done); the hunt head's is
     (kill + wreck - lost) / (kill + lost + army) near the army it weighed."""
-    if tag == "defsite":
-        # the site head's own 'done' is the trade at the chosen site over 5 min
+    if tag in ("defsite", "deftype"):
+        # the site and gun-class heads' own 'done' is the trade at the chosen site over 5 min
         # (kill - lost) / (kill + lost + gun metal); lostNear is measured there
-        ds = dict(g.get("defsite_done", {}).get((t, f), {}))
+        ds = dict(g.get(tag + "_done", {}).get((t, f), {}))
         y = labels(g, t, f, ds.pop("site", None))
         y["done"] = None
         y.update(ds)

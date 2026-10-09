@@ -61,6 +61,7 @@ array<float> gBwKill;
 array<float> gBwLost;
 array<float> gBwPre;
 array<float> gBwBase0;
+array<int> gBwTag;   // 0 the site head, 1 the gun-class head (protect_nntype.as)
 
 float DefAmountMult()
 {
@@ -468,6 +469,7 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 	gBwLost.insertLast(0.f);
 	gBwPre.insertLast(LeakNear(site, reach + 200.f, ai.frame - DS_WATCH_S * SECOND, ai.frame + 1, false));
 	gBwBase0.insertLast(gLkAllM);
+	gBwTag.insertLast(0);
 	gDsUs += float(ai.ClockUs() - t0);
 	Perf::Add("dec.defsite", tp);
 	return site;
@@ -499,7 +501,7 @@ void DefSiteWatch()
 			continue;
 		const float k = gBwKill[i], l = gBwLost[i];
 		const float score = (k - l) / (k + l + gBwM[i] + 1.f);
-		AiLog("apex: nndefsite-done t=" + ai.teamId + " f=" + gBwF[i] + " opt=" + gBwOpt[i]
+		AiLog("apex: " + ((gBwTag[i] == 1) ? "nndeftype" : "nndefsite") + "-done t=" + ai.teamId + " f=" + gBwF[i] + " opt=" + gBwOpt[i]
 			+ " done=" + NnF(score, 4) + " kill=" + int(k) + " lost=" + int(l) + " pre=" + int(gBwPre[i])
 			+ " base=" + int(gLkAllM - gBwBase0[i]) + " m=" + int(gBwM[i])
 			+ " at=" + int(gBwPos[i].x) + "," + int(gBwPos[i].z));
@@ -512,6 +514,7 @@ void DefSiteWatch()
 		gBwLost.removeAt(i);
 		gBwPre.removeAt(i);
 		gBwBase0.removeAt(i);
+		gBwTag.removeAt(i);
 	}
 }
 
@@ -581,6 +584,7 @@ void UpdateDefNet()
 		gDaNextAt = ai.frame + 60 * SECOND;
 		DefAmountDecide();
 	}
+	DefTypeTick();
 	DefSiteWatch();
 	if (ai.frame >= gLkLogAt) {
 		gLkLogAt = ai.frame + 60 * SECOND;
@@ -590,7 +594,7 @@ void UpdateDefNet()
 			+ " flank=" + int(gLkFlankM) + " rear=" + int(gLkRearM) + " lone=" + int(gLkLoneM)
 			+ " amt=" + names3(gDaPick) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN
 			+ " siteDec=" + gDsDecN + " siteOv=" + gDsOvN + " memo=" + gDsMemoN
-			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length());
+			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length() + DefTypeStat());
 	}
 }
 
