@@ -18,6 +18,9 @@ const array<float> NNW_B2 = {};
 const array<float> NNW_WO = {};
 const float NNW_BO = 0.f;
 const array<float> NNW_TRUST = {};
+// which trust the *_TRUST values are: 2 = the decision's own held-out advantage
+// test (nntrain.py honest_trust); below 2 the older FULL-minus-STATE reading
+const int NN_TRUST_KIND = 0;
 // the factory net (production.as roulette)
 const bool NNF_ON = false;
 const string NNF_STATE = "";

@@ -4,6 +4,9 @@
     python tools/nntrain.py --once     # take what is waiting, then exit
     python tools/nntrain.py --reset    # start a fresh net; the old one is archived, never deleted
     python tools/nntrain.py --export   # write the current net into the deployed AI now
+    python tools/nntrain.py --migrate  # convert every legacy *buffer.npz to shards, then exit (trainer stopped)
+    python tools/nntrain.py --compact  # rewrite buffers without the rows the per-regime cap drops
+    python tools/nntrain.py --snapshot # copy the exported weights to runtime/nn/snapshots/<stamp>/ now
 
 LIVE: every POLL_S it reads each RUNNING game's own log files (the engine write
 dirs under matches/_engine* and runtime/engine-w*). A decision is trainable
@@ -20,7 +23,10 @@ the net can learn. Every games-worth of data the FULL net is exported as
 nnweights.as into the deployed AI copies listed in runtime/nn/targets.json,
 so every game that starts afterwards plays with it (apex_nn_blend > 0).
 
-Writes runtime/nn/: metrics.jsonl, status.json, model.pt, buffer.npz, seen.json.
+Writes runtime/nn/: metrics.jsonl, status.json, model.pt, seen.json, the
+buffers as append-only shards (shards/<net>_rows/, tools/nnstore.py; every row
+tagged with its game's script version and regime), and every SNAPSHOT_S a copy
+of the exported weights in snapshots/<stamp>/ (tools/nneval.py compares them).
 """
 import copy
 import json
@@ -35,6 +41,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bar_env  # noqa: E402
 import decisions  # noqa: E402
+import nnstore  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 # BARAI_NN_OUT: a second trainer (a rebuild on new targets) keeps its own net and buffers
@@ -49,6 +56,9 @@ OPT_NUM = ("value", "gain", "m", "t", "cm", "ce", "bt", "walk", "risk", "eta", "
            "tierO", "fwd", "siteLoss", "persona")   # nnlog.as NnOpt order
 PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear", "lostFar",
          "lostAir", "lostStatic", "lostMobile", "reclaim")
+# a share of what was made: over a near-empty window it ran to the hundreds and
+# put the 10-minute mWaste R2 at -9.9; clipped to [0, 1] (also on load)
+WASTE = ("mWaste", "eWaste")
 LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
 SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost", "endV", "comLostD")    # one value per decision, not per horizon
 EDGE_H = ("edgeArmy", "edgeEco", "edgeLand", "edgeMex")   # 2026-10-08: did the game move our way
@@ -80,9 +90,8 @@ HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE and t[1] not in G
 HIDDEN = 32
 # What plays is a running average of the trained weights, half of it from the
 # last EMA_HALF batches: one game moves it a little, a run of games moves it a
-# lot. Each minibatch of new rows carries REPLAY_OLD times as many old ones.
+# lot.
 EMA_HALF = 5
-REPLAY_OLD = 3
 SCALER_ROWS = 100000
 LR0 = 1e-3              # Adam's rate before a freeze
 LR_DECAY = 2000         # batches after the freeze that halve it ...
@@ -118,12 +127,29 @@ def lr_now(batches, freeze_batch):
     return LR0 * max(LR_FLOOR, 1.0 / (1.0 + k))   # input/output scalers are fit on a sample this size
 DROPOUT = 0.1
 MIN_BATCH = 150        # matured decisions before a live game is learned from
-STEPS_PER_ROW = 2      # passes over each new batch (each mixed with as many old rows)
-RESET_EVERY = 40       # batches between partial resets (shrink 0.8, perturb 0.2)
+# Each incoming batch (one game's rows; a live game sends a few) gets this many
+# minibatches of MB rows, at most MB_NEW of them new and the rest replay.
+STEPS_PER_GAME = 50
+STEPS_PER_ROW = 2      # ...but never fewer than 2 looks at each new row (a big finished batch)
+MB = 512
+MB_NEW = 128
+# Replay: half recency-weighted (row age ~ exponential, e-folding at REPLAY_TAU
+# of the buffer, at least REPLAY_TAU_MIN rows), half from everything with each
+# script version weighted by how many versions ago it played (VER_HALF halves
+# it, VER_FLOOR the least; untagged pre-banner rows count as OLD_VER_W).
+REPLAY_TAU = 0.05
+REPLAY_TAU_MIN = 20000
+VER_HALF = 4
+VER_FLOOR = 0.1
+OLD_VER_W = 0.1
+RESET_ROWS = 40000     # rows learned between partial resets (shrink 0.8, perturb 0.2): ~40 builder batches
+# Newest rows kept per regime (map | team sizes | minute cap) when a buffer
+# loads; the rest stay on disk until --compact. Generous: nothing is dropped today.
+REGIME_KEEP = int(os.environ.get("BARAI_NN_REGIME_KEEP", "10000000"))
+SNAPSHOT_S = 6 * 3600  # seconds between copies of the exported weights (snapshots/<stamp>/)
 EXPORT_ROWS = 800      # new rows between weight exports
 POLL_S = 5
 LIVE_IDLE_S = 90       # a write dir untouched this long is not a running game
-BUFFER_EVERY = 10       # batches between saves of the training buffer (it grows large)
 SAVE_S = 120            # seconds between saves; every net is written together, and at idle
 SCALER_GROW = 1.1       # refit input/target scalers when the buffer has grown this much
 TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its trust
@@ -136,12 +162,12 @@ LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
 
 
-def append_rows(obj, XS, XF, Y, M):
-    """Add a game's rows to obj.XS/XF/Y/M without copying the whole buffer: the
+def append_rows(obj, XF, Y, M, T):
+    """Add a game's rows to obj.XF/Y/M/T without copying the whole buffer: the
     arrays are views of the first n rows of buffers with spare room (grown 25% at
     a time). An array replaced from outside (load, adopt_keys' column insert) is
     copied into fresh room once."""
-    new = {"XS": XS, "XF": XF, "Y": Y, "M": M}
+    new = {"XF": XF, "Y": Y, "M": M, "T": T}
     n0, k = len(obj.Y), len(Y)
     cap = getattr(obj, "_cap", None)
     fits = cap is not None and all(
@@ -170,15 +196,13 @@ def adopt_keys(obj, keys):
     if keys[:len(old)] != old:
         return False
     at, n = len(old), len(keys) - len(old)
-    for name in ("XS", "XF"):
-        a = getattr(obj, name)
-        if a is not None:
-            setattr(obj, name, np.insert(a, [at] * n, 0.0, axis=1))
+    if obj.XF is not None:
+        obj.XF = np.insert(obj.XF, [at] * n, 0.0, axis=1)
+        obj.ns += n
     for net in (obj.full, obj.st):
         if net is not None:
             net.grow(at, n)
     obj.state_keys = list(keys)
-    obj.grown = True   # the next save must write the buffer, or it no longer fits the net
     print("%s: %d state fields appended (%s); weights kept" % (getattr(obj, "NAME", "builder"), n, ",".join(keys[at:])), flush=True)
     return True
 
@@ -206,7 +230,6 @@ def adopt_targets(obj, name, net_t, buf_t):
     if n:
         obj.Y = np.concatenate([obj.Y, np.zeros((len(obj.Y), n), dtype=obj.Y.dtype)], 1)
         obj.M = np.concatenate([obj.M, np.zeros((len(obj.M), n), dtype=obj.M.dtype)], 1)
-        obj.grown = True   # the next save writes the wider buffer
     if len(net_t) < len(TARGETS) or n:
         print("%s: %d outcomes appended (%s); weights kept, earlier rows masked for them"
               % (name, len(TARGETS) - len(net_t), ",".join("%s:%s" % t for t in TARGETS[len(net_t):])), flush=True)
@@ -298,6 +321,8 @@ def target_vec(row):
         v = float(v)
         if k == "lnD":
             v = max(-4.0, min(4.0, v))
+        elif k in WASTE:
+            v = max(0.0, min(1.0, v))
         elif k in LOGGED:
             v = slog(v)
         y.append(v)
@@ -329,8 +354,10 @@ class Net:
         # training from exploding the first time it does. A large buffer is
         # sampled: the full pass cost ~1 s a game on the builder's 800k rows.
         if len(X) > SCALER_ROWS:
-            k = np.random.default_rng(len(X)).choice(len(X), SCALER_ROWS, replace=False)
+            k = np.sort(np.random.default_rng(len(X)).choice(len(X), SCALER_ROWS, replace=False))
             X, Y, M = X[k], Y[k], M[k]
+        # the buffer is float16/uint8: the statistics are taken in float32
+        X, Y, M = X.astype(np.float32), Y.astype(np.float32), M.astype(np.float32)
         self.xm, self.xs = X.mean(0), np.maximum(X.std(0), 0.25)
         w = M.sum(0) + 1e-6
         self.ym = (Y * M).sum(0) / w
@@ -345,9 +372,9 @@ class Net:
             z = self.slow(self._x(X)).numpy()
         return z * self.ys + self.ym
 
-    def train(self, X, Y, M, new_from, steps, recent_from=0, lr=None):
-        """Minibatches of the new rows, each paired with as many rows drawn from
-        everything before them. Returns the mean loss."""
+    def train(self, X, Y, M, batches, lr=None):
+        """One Adam step per minibatch (index arrays from `minibatches`, the
+        same for both nets). Returns the mean loss."""
         t = self.torch
         if lr is not None:
             for g in self.opt.param_groups:
@@ -356,28 +383,13 @@ class Net:
         if self.xm is None or len(self.xm) != X.shape[1] or len(X) >= SCALER_GROW * self.fit_n:
             self.fit_scalers(X, Y, M)
             self.fit_n = len(X)
-        n_new = len(X) - new_from
-        # half the replay from rows learned since a freeze, when there are any
-        lean = 0 < recent_from < new_from
-        # the minibatches first, then only their rows are scaled and copied
-        batches = []
-        for _ in range(steps):
-            perm = t.randperm(n_new) + new_from
-            for i in range(0, n_new, 128):
-                b = perm[i:i + 128]
-                if new_from > 0:
-                    k = len(b) * REPLAY_OLD
-                    if lean:
-                        b = t.cat([b, t.randint(recent_from, new_from, (k - k // 2,)), t.randint(0, new_from, (k // 2,))])
-                    else:
-                        b = t.cat([b, t.randint(0, new_from, (k,))])
-                batches.append(b)
         if not batches:
             return 0.0
-        rows, inv = t.unique(t.cat(batches), return_inverse=True)
-        ri = rows.numpy()
+        # only the rows the minibatches touch are scaled and copied
+        ri, inv = np.unique(np.concatenate(batches), return_inverse=True)
+        inv = t.from_numpy(inv.astype(np.int64))
         Xt, Mt = self._x(X[ri]), t.tensor(M[ri], dtype=t.float32)
-        Yt = t.tensor((Y[ri] - self.ym) / self.ys, dtype=t.float32)
+        Yt = t.tensor((Y[ri].astype(np.float32) - self.ym) / self.ys, dtype=t.float32)
         self.model.train()
         tot, cnt = 0.0, 0
         at = 0
@@ -449,6 +461,443 @@ class Net:
         self.xm, self.xs, self.ym, self.ys = st["xm"], st["xs"], st["ym"], st["ys"]
 
 
+def minibatches(n, new_from, ver=None, vw=None, recent_from=0, rng=None):
+    """The minibatches one incoming batch (rows new_from..n) trains on, as row
+    index arrays: STEPS_PER_GAME of them (more for a batch too big to see each
+    new row STEPS_PER_ROW times), each MB_NEW new rows round-robin plus replay
+    -- half by recency, half spread over everything by script version (`ver`
+    the rows' version ids, `vw` their weights). Under a freeze half the spread
+    half comes from the rows since it."""
+    rng = rng or np.random.default_rng()
+    n_new = n - new_from
+    if n_new <= 0:
+        return []
+    k_new = min(MB_NEW, n_new)
+    steps = max(STEPS_PER_GAME, -(-STEPS_PER_ROW * n_new // k_new))
+    reps = -(-steps * k_new // n_new)
+    new = (np.concatenate([rng.permutation(n_new) for _ in range(reps)])[:steps * k_new] + new_from).reshape(steps, k_new)
+    if new_from <= 0:
+        return list(new)
+    k_old = MB - k_new
+    tot = steps * k_old
+    n_rec = tot // 2
+    tau = max(REPLAY_TAU_MIN, REPLAY_TAU * new_from)
+    rec = new_from - 1 - (np.floor(rng.exponential(tau, n_rec)).astype(np.int64) % new_from)
+    n_sp = tot - n_rec
+    parts = [rec]
+    lean = 0 < recent_from < new_from
+    for lo, k in (((recent_from, n_sp // 2), (0, n_sp - n_sp // 2)) if lean else ((0, n_sp),)):
+        cand = rng.integers(lo, new_from, 4 * k)
+        if ver is not None and vw is not None and len(vw):
+            cand = cand[rng.random(len(cand)) < vw[np.clip(ver[cand], 0, len(vw) - 1)]]
+        if len(cand) < k:
+            cand = np.concatenate([cand, rng.integers(lo, new_from, k - len(cand))])
+        parts.append(cand[:k])
+    old = np.concatenate(parts)
+    rng.shuffle(old)
+    old = old.reshape(steps, k_old)
+    return [np.concatenate([a, b]) for a, b in zip(new, old)]
+
+
+def regime_keep(T):
+    """The per-regime cap: the newest REGIME_KEEP rows of each regime, or None
+    when nothing goes."""
+    ids, cnt = np.unique(T[:, 1], return_counts=True)
+    over = ids[cnt > REGIME_KEEP]
+    if not len(over):
+        return None
+    keep = np.ones(len(T), bool)
+    for r in over:
+        rows = np.flatnonzero(T[:, 1] == r)
+        keep[rows[:len(rows) - REGIME_KEEP]] = False
+    return keep
+
+
+class Buffered:
+    """A net's training rows: XF (float16; XS is its first `ns` columns), Y
+    (float16), M (uint8) and T (int32: script version id, regime id, batch),
+    held in RAM and appended to runtime/nn/shards/<STORE>/ on each save."""
+    STORE = "builder"
+    LEGACY = "buffer.npz"   # the pre-shard file, migrated once
+
+    def buf_clear(self):
+        self.XF = self.Y = self.M = self.T = None
+        self.ns = 0
+        self.saved_rows = 0
+        self.dropped = 0
+        self.tables = {"ver": [], "regime": []}
+        self.reset_rows = 0
+
+    @property
+    def XS(self):
+        return None if self.XF is None else self.XF[:, :self.ns]
+
+    def store(self):
+        # "<net>_rows": a bare "con" is a reserved device name on Windows
+        root = OUT / "shards" / (self.STORE + "_rows")
+        if getattr(self, "_store", None) is None or self._store.root != root:
+            self._store = nnstore.Store(root)
+        return self._store
+
+    def buf_load(self):
+        """The index of the saved buffer (migrating a legacy .npz once), its
+        rows in RAM; None when there is none."""
+        st = self.store()
+        legacy = OUT / self.LEGACY
+        if not st.exists() and legacy.is_file():
+            migrate_legacy(self, legacy)
+        if not st.exists():
+            return None
+        XF, Y, M, T, idx = st.load(keep=regime_keep)
+        self.dropped = st.rows() - len(XF)
+        if self.dropped:
+            print("%s: %d rows over the per-regime cap left out (on disk until --compact)"
+                  % (self.STORE, self.dropped), flush=True)
+        for j, name in enumerate(idx.get("targets", [])[:Y.shape[1]]):
+            if name.split(":", 1)[-1] in WASTE:
+                np.clip(Y[:, j], 0.0, 1.0, out=Y[:, j])
+        self.XF, self.Y, self.M, self.T = XF, Y, M, T
+        self.ns = int(idx["ns"])
+        self.saved_rows = len(XF)
+        self.tables = {k: list(v) for k, v in idx.get("tables", {}).items()}
+        self.tables.setdefault("ver", [])
+        self.tables.setdefault("regime", [])
+        return idx
+
+    def tag_id(self, kind, name):
+        tab = self.tables.setdefault(kind, [])
+        if name not in tab:
+            tab.append(name)
+        return tab.index(name)
+
+    def tags_for(self, g, teams, batch):
+        """Per row: [script version id, regime id, batch] of its game and team."""
+        reg = self.tag_id("regime", g.get("regime") or nnstore.UNKNOWN)
+        vers = g.get("versions") or {}
+        return np.array([[self.tag_id("ver", vers.get(t, nnstore.OLD_VER)), reg, batch] for t in teams],
+                        dtype=np.int32).reshape(len(teams), 3)
+
+    def ver_weights(self):
+        """Replay weight per version id: the newest version 1, halving every
+        VER_HALF versions back (by the date in the stamp, else first seen),
+        never below VER_FLOOR; untagged rows OLD_VER_W."""
+        import re
+        tab = self.tables.get("ver", [])
+        dated = sorted(((re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", v) or [""])[0], i)
+                       for i, v in enumerate(tab) if v != nnstore.OLD_VER)
+        w = np.full(len(tab), OLD_VER_W, dtype=np.float32)
+        for rank, (_d, i) in enumerate(reversed(dated)):
+            w[i] = max(VER_FLOOR, 0.5 ** (rank / VER_HALF))
+        return w
+
+    def buf_add(self, XF, Y, M, T):
+        """New rows, stored at the buffer's precision. Returns the first new row's index."""
+        XF, Y, M, T = nnstore.f16(XF), nnstore.f16(Y), M.astype(np.uint8), T.astype(np.int32)
+        if self.XF is None:
+            self.XF, self.Y, self.M, self.T = XF, Y, M, T
+            return 0
+        n0 = len(self.Y)
+        append_rows(self, XF, Y, M, T)
+        return n0
+
+    def buf_meta(self):
+        return {"k": len(self.state_keys or []), "ns": int(self.ns), "state_keys": list(self.state_keys or []),
+                "post_keys": list(getattr(self, "post_keys", None) or []), "batches": int(self.batches),
+                "targets": [str(t) for t in TARGET_NAMES], "tables": self.tables}
+
+    def buf_save(self):
+        """Append the rows not yet on disk; the index carries everything else."""
+        if self.XF is None:
+            return
+        n, s = len(self.Y), self.saved_rows
+        self.store().append(self.XF[s:n], self.Y[s:n], self.M[s:n], self.T[s:n], self.buf_meta())
+        self.saved_rows = n
+
+    def buf_archive(self, dest):
+        self.store().archive(dest / (self.STORE + "_rows"))
+        self._store = None
+
+
+def migrate_legacy(obj, legacy):
+    """A legacy <name>buffer.npz into shards, streaming; its rows tagged from
+    metrics.jsonl where the batch records line up with them. The .npz is
+    renamed *.npz.migrated, never deleted."""
+    import zipfile
+    with zipfile.ZipFile(legacy) as zf:
+        fh, shape, _dt = nnstore._npy_member(zf, "Y")
+        fh.close()
+    n = int(shape[0])
+    print("%s: migrating %s (%d rows) to %s" % (obj.STORE, legacy.name, n, obj.store().root), flush=True)
+    tags, tables = legacy_tags(obj.STORE, n)
+    nnstore.migrate(legacy, obj.store(), tags=tags, tables=tables, log=lambda s: print(s, flush=True))
+    replace_retry(legacy, legacy.with_name(legacy.name + ".migrated"))
+
+
+_RESOLVER = None
+
+
+def _table_id(tab, name):
+    if name not in tab:
+        tab.append(name)
+    return tab.index(name)
+
+
+def legacy_tags(net, n):
+    """(tags, tables) for a legacy buffer's n rows, from metrics.jsonl: every
+    batch record names its source and the buffer's size after it, so walking
+    back from the newest record gives each row its game. Rows before a break in
+    the sizes (a reset, a record without them) stay unknown / old."""
+    tags = np.zeros((n, 3), np.int32)
+    tags[:, 2] = -1
+    tables = {"ver": [nnstore.OLD_VER], "regime": [nnstore.UNKNOWN]}
+    recs = []
+    try:
+        with open(OUT / "metrics.jsonl", encoding="utf-8") as fh:
+            for ln in fh:
+                mine = ('"net": "%s"' % net) in ln if net != "builder" else '"net":' not in ln
+                if not mine:
+                    continue
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue
+                if "total_rows" in r and "source" in r and "rows" in r:
+                    added = int(r["rows"]) * (HUMAN_W if HUMAN_TAG in str(r["source"]) else 1)
+                    recs.append((r["source"], int(r["total_rows"]), int(r.get("index", -1)), float(r.get("at", 0)), added))
+    except OSError:
+        return tags, tables
+    global _RESOLVER
+    if _RESOLVER is None:
+        _RESOLVER = SourceResolver()   # shared by every net's migration: each game is read once
+    res = _RESOLVER
+    import bisect
+    # The .npz was saved every few batches, so a restart reloaded it short and
+    # the batches after its last save were lost: the record before the rows of
+    # record i is the newest EARLIER one whose size is where i's rows start.
+    at_size = {}
+    for i, r in enumerate(recs):
+        at_size.setdefault(r[1], []).append(i)
+    end = n
+    cand = at_size.get(n, [])
+    i = cand[-1] if cand else -1
+    while i >= 0:
+        src, total, batch, at, added = recs[i]
+        start = end - added
+        if start < 0:
+            break
+        regime, ver = res.of(src, at)
+        tags[start:end, 0] = _table_id(tables["ver"], ver)
+        tags[start:end, 1] = _table_id(tables["regime"], regime)
+        tags[start:end, 2] = batch
+        end = start
+        cand = at_size.get(end, [])
+        k = bisect.bisect_left(cand, i) - 1
+        i = cand[k] if end > 0 and k >= 0 else -1
+    print("%s: %d of %d rows tagged from metrics.jsonl (%d regimes, %d versions)"
+          % (net, n - end, n, len(tables["regime"]), len(tables["ver"])), flush=True)
+    return tags, tables
+
+
+class SourceResolver:
+    """A batch record's source -> (regime, script version). A finished match
+    dir is read directly; a live write dir ('live:engine-w5-30024') is the
+    finished match that ran in it at the time: the first to finish after the
+    batch, among the matches whose infolog names that write dir."""
+    LIVE_SPAN_S = 3 * 3600   # a match finishing later than this after the batch is not its game
+
+    def __init__(self):
+        self.cache = {}
+        self.by_wd = None
+
+    def of(self, src, at=0.0):
+        if src.startswith("live:"):
+            d = self._live(src[5:], at)
+            return self._match(d) if d is not None else (nnstore.UNKNOWN, nnstore.OLD_VER)
+        return self._match(REPO / src)
+
+    BANNER_SINCE = 1791443040   # 2026-10-08 07:04 UTC: no game before carries the version banner
+
+    def _match(self, d):
+        key = str(d)
+        if key not in self.cache:
+            regime, ver = decisions.script_regime(key) or nnstore.UNKNOWN, nnstore.OLD_VER
+            try:
+                if (d / "infolog.txt").stat().st_mtime >= self.BANNER_SINCE:
+                    # the banner is logged at frame 30, ~250 KB in
+                    with open(d / "infolog.txt", encoding="utf-8", errors="replace") as fh:
+                        head = fh.read(2 << 20)
+                    at = head.find("apex: version t=")
+                    m = decisions.VERSION.search(head[at:head.find("\n", at)]) if at >= 0 else None
+                    if m:
+                        ver = m.group(2)
+            except OSError:
+                pass
+            self.cache[key] = (regime, ver)
+        return self.cache[key]
+
+    def _live(self, wd, at):
+        import bisect
+        import re
+        if self.by_wd is None:
+            self.by_wd = {}
+            tours, matches = FINISHED
+            for d in [m for t in fresh(tours) for m in fresh(t / "matches")] + fresh(matches):
+                try:
+                    with open(d / "infolog.txt", encoding="utf-8", errors="replace") as fh:
+                        head = fh.read(4096)
+                    end = (d / "result.json").stat().st_mtime
+                except OSError:
+                    continue
+                m = re.search(r"[/\\](engine-w[\w-]+|_engine[\w-]*)[/\\\"]", head)
+                if m:
+                    self.by_wd.setdefault(m.group(1), []).append((end, str(d)))
+            for v in self.by_wd.values():
+                v.sort()
+        runs = self.by_wd.get(wd, [])
+        i = bisect.bisect_left(runs, (at, ""))
+        if i < len(runs) and runs[i][0] - at <= self.LIVE_SPAN_S:
+            return Path(runs[i][1])
+        return None
+
+
+# TRUST, kind 2 (docs/35). On a game's first, unseen batch, each CHANCE
+# row (rand_weight) scores d = FULL(chosen) - FULL(rule) against the realized
+# a = outcome - FULL(rule), both in OBJECTIVE units, weighted 1/p; trust is the
+# lower end of a game-clustered bootstrap interval of their correlation,
+# floored at 0. The PLACEBO is the same statistic on rule-following rows with
+# an option NOT taken in place of the chosen one: it must read ~0.
+TRUST_KIND = 2
+TRUST_BOOT = 200        # bootstrap resamples (by game)
+TRUST_LO_Q = 2.5        # percentile taken as the interval's lower end
+TRUST_GAMES_MIN = 5     # fewer games than this: no say
+PLACEBO_PER_BATCH = 64  # rule-following rows scored per batch for the placebo
+
+
+def obj_units(p, ym, ys, mm):
+    """Rows of predictions or outcomes in OBJECTIVE units over each row's
+    labelled targets (mm: the row's mask times the objective's weights)."""
+    return (((p - ym) / ys) * mm).sum(1)
+
+
+def boot_corr(d, a, w, gid, seed=0):
+    """(point, lower bound) of the weighted correlation of d and a, resampling
+    whole games. None when there is too little to say."""
+    games, g = np.unique(np.asarray(gid), return_inverse=True)
+    if len(d) < TRUST_MIN or len(games) < TRUST_GAMES_MIN:
+        return None
+    rng = np.random.default_rng(seed)
+    cnt = rng.multinomial(len(games), np.full(len(games), 1.0 / len(games)), size=TRUST_BOOT)
+    W = np.vstack([w[None, :], cnt[:, g] * w[None, :]]).astype(np.float64)
+    W /= np.maximum(W.sum(1, keepdims=True), 1e-12)
+    md, ma = W @ d, W @ a
+    vd = (W * (d[None, :] - md[:, None]) ** 2).sum(1)
+    va = (W * (a[None, :] - ma[:, None]) ** 2).sum(1)
+    cv = (W * (d[None, :] - md[:, None]) * (a[None, :] - ma[:, None])).sum(1)
+    r = np.where((vd > 0) & (va > 0), cv / np.sqrt(np.maximum(vd * va, 1e-24)), 0.0)
+    return float(r[0]), float(np.percentile(r[1:], TRUST_LO_Q))
+
+
+def honest_trust(pairs):
+    """Trust from (d, a, w, game) pairs: the bootstrap lower bound, >= 0."""
+    q = [x for x in pairs if len(x) == 4][-TRUST_RECENT:]
+    if len(q) < TRUST_MIN:
+        return 0.0
+    d, a, w = (np.array([x[i] for x in q], dtype=np.float64) for i in range(3))
+    res = boot_corr(d, a, w, [x[3] for x in q], seed=len(q))
+    return 0.0 if res is None else round(max(0.0, res[1]), 3)
+
+
+def placebo_read(pairs):
+    """{r, lo, n} of the placebo pairs (d, a, game), for metrics.jsonl."""
+    q = pairs[-TRUST_RECENT:]
+    if not q:
+        return None
+    d, a = (np.array([x[i] for x in q], dtype=np.float64) for i in range(2))
+    res = boot_corr(d, a, np.ones(len(q)), [x[2] for x in q], seed=len(q))
+    return {"n": len(q)} if res is None else {"r": round(res[0], 3), "lo": round(res[1], 3), "n": len(q)}
+
+
+def rule_of_list(row):
+    """The option the market would take without chance: the top value among
+    options that were priced (a forced want carries a placeholder value)."""
+    opts = row.get("opts") or []
+    best, bi = None, None
+    for i, o in enumerate(opts):
+        if num(o.get("forced", 0)):
+            continue
+        v = num(o.get("value", 0))
+        if best is None or v > best:
+            best, bi = v, i
+    return bi
+
+
+def alts_of_list(row, rule):
+    return [i for i, o in enumerate(row.get("opts") or []) if i != rule and not num(o.get("forced", 0))]
+
+
+def decision_pairs(rows, feat, rule_of, alts_of, net, XF, Y, M, rw, gid, rng):
+    """Held-out decision evidence of one batch, predicted before training on
+    it: ([(row, d, a, w, game)] for chance rows, [(row, d, a, game)] for the
+    placebo, the rows' objective weights). `feat(row, i)` is the row's FULL
+    input with option i chosen; `rule_of` / `alts_of` name the rule's option
+    and the others a placebo may stand in."""
+    w_obj = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
+    ym, ys = net.ym, net.ys
+    mm = M * (w_obj != 0) * w_obj
+    chance, plac = [], []
+    for i, r in enumerate(rows):
+        rule = rule_of(r)
+        if rule is None or not mm[i].any():
+            continue
+        if rw[i] is not None:
+            chance.append((i, rule))
+        elif r.get("chosen") == rule:
+            alts = alts_of(r, rule)
+            if alts:
+                plac.append((i, rule, alts[int(rng.integers(len(alts)))]))
+    if len(plac) > PLACEBO_PER_BATCH:
+        plac = [plac[k] for k in sorted(rng.choice(len(plac), PLACEBO_PER_BATCH, replace=False))]
+    out_c, out_p = [], []
+    if chance:
+        idx = [i for i, _ in chance]
+        pr = net.predict(np.array([feat(rows[i], rule) for i, rule in chance], dtype=np.float32))
+        pc = net.predict(XF[idx])
+        d = obj_units(pc, ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
+        a = obj_units(Y[idx], ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
+        out_c = [(i, float(dd), float(aa), float(rw[i]), gid) for i, dd, aa in zip(idx, d, a)]
+    if plac:
+        idx = [i for i, _, _ in plac]
+        pa = net.predict(np.array([feat(rows[i], alt) for i, _, alt in plac], dtype=np.float32))
+        pr = net.predict(XF[idx])   # chosen IS the rule here
+        d = obj_units(pa, ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
+        a = obj_units(Y[idx], ym, ys, mm[idx]) - obj_units(pr, ym, ys, mm[idx])
+        out_p = [(i, float(dd), float(aa), gid) for i, dd, aa in zip(idx, d, a)]
+    return out_c, out_p, mm
+
+
+def score_decisions(obj, rows, XF, Y, M, rw, pf, ps, gid, pairs_for, feat, rule_of, alts_of, rec):
+    """A first-touch batch's decision evidence into obj's trust pairs (where
+    `pairs_for(row index)` says) and its placebo lists; the readings into rec."""
+    rng = np.random.default_rng(len(rows) * 7919 + obj.batches)
+    chance, plac, mm = decision_pairs(rows, feat, rule_of, alts_of, obj.full, XF, Y, M, rw, gid, rng)
+    for i, d, a, w, g in chance:
+        q = pairs_for(i)
+        q.append((d, a, w, g))
+        if len(q) > TRUST_KEEP:
+            del q[: len(q) - TRUST_KEEP]
+    ym, ys = obj.full.ym, obj.full.ys
+    for i, d, a, g in plac:
+        obj.placebo.append((d, a, g))
+        # the old statistic on the same rows: FULL minus STATE against outcome minus STATE
+        o = lambda p: float(obj_units(p[i:i + 1], ym, ys, mm[i:i + 1])[0])
+        obj.placebo_old.append((o(pf) - o(ps), o(Y) - o(ps), g))
+    obj.placebo = obj.placebo[-TRUST_KEEP:]
+    obj.placebo_old = obj.placebo_old[-TRUST_KEEP:]
+    rec["chance_rows"] = len(chance)
+    rec["placebo"] = placebo_read(obj.placebo)
+    rec["placebo_old"] = placebo_read(obj.placebo_old)
+
+
 def r2(pred, y, m, base):
     out = []
     for j in range(y.shape[1]):
@@ -504,7 +953,7 @@ def head_block(head, p, layout=None):
                ["const array<float> %s_%s = {};" % (p, k) for k in ("XM", "XS", "W1", "B1", "W2", "B2", "WO")] + \
                ["const float %s_BO = 0.f;" % p, "const float %s_TRUST = 0.f;" % p]
     w1, b1, w2, b2, wo, bo = fold(head.full)
-    n_state = head.XS.shape[1]   # what NnPostScore/NnFacScore feed once per decision
+    n_state = head.ns   # what NnPostScore/NnFacScore feed once per decision
     return ["const bool %s_ON = true;" % p,
             'const string %s_STATE = "%s";' % (p, layout or ",".join(head.state_keys)),
             "const int %s_S = %d;" % (p, n_state), "const int %s_O = %d;" % (p, w1.shape[1] - n_state),
@@ -586,7 +1035,9 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
             ["// the pool-size net (military/nnmassodds.as)"] + post_block((heads or {}).get("mass"), "NNM") +
             ["// the squad-odds net (military/nnmassodds.as)"] + post_block((heads or {}).get("odds"), "NNO") +
             ["// the BARb prior (tools/imitate.py)"] + imit_block() + ["", "}  // namespace Market", ""])
-    head = ["namespace Market {", "", "// GENERATED by tools/nntrain.py -- the deployed copy only; do not commit."]
+    head = ["namespace Market {", "", "// GENERATED by tools/nntrain.py -- the deployed copy only; do not commit.",
+            "// which trust every *_TRUST below is: 2 = the decision's held-out advantage test",
+            "const int NN_TRUST_KIND = %d;" % TRUST_KIND]
     if net is None:
         return "\n".join(head + NNW_EMPTY + tail)
     w1, b1, w2, b2, wo, bo = fold(net)
@@ -640,12 +1091,20 @@ def featurize_fac(row, state_keys):
     return s, s + x
 
 
-class FacHead:
+class FacHead(Buffered):
     """The factory net: what a production order is worth. Its own nets, buffer
     and ONE trust (how well its view of what an order adds matches what the
     order actually added, on unseen games). PostHead reuses it for posture."""
     NAME = "fac"
     OPTS = FAC_OPT_NUM
+
+    @property
+    def STORE(self):
+        return self.NAME
+
+    @property
+    def LEGACY(self):
+        return self.NAME + "_buffer.npz"
 
     @staticmethod
     def featurize(row, state_keys):
@@ -653,89 +1112,105 @@ class FacHead:
 
     def __init__(self):
         self.state_keys = None
-        self.XS = self.XF = self.Y = self.M = None
+        self.buf_clear()
         self.full = self.st = None
         self.pairs = []
+        self.placebo, self.placebo_old = [], []
         self.batches = 0
         self.load()
 
+    @staticmethod
+    def rule_of(row):
+        return rule_of_list(row)
+
+    @staticmethod
+    def alts_of(row, rule):
+        return alts_of_list(row, rule)
+
     def load(self):
-        if (OUT / (self.NAME + "_buffer.npz")).is_file() and (OUT / (self.NAME + "_model.pt")).is_file():
-            import torch
-            with np.load(OUT / (self.NAME + "_buffer.npz"), allow_pickle=True) as b:
-                self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
-                self.state_keys = list(b["state_keys"])
-                self.batches = int(b["batches"])
-                buf = {"Y": self.Y, **({"targets": list(b["targets"])} if "targets" in b.files else {})}
-            ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False)
-            net_t, buf_t = saved_targets(ck, buf)
-            if tuple(ck.get("opt_num", ())) != self.OPTS or not adopt_targets(self, self.NAME, net_t, buf_t):
-                print("%s: saved net predicts other outcomes or reads other options; starting empty" % self.NAME,
-                      flush=True)
-                self.__init_empty()
-                return
-            self.full = Net(self.XF.shape[1], len(net_t))
-            self.st = Net(self.XS.shape[1], len(net_t))
-            try:
-                self.full.load(ck["full"])
-                self.st.load(ck["state"])
-            except RuntimeError:
-                # a kill between the buffer save and the model save
-                print("%s: saved net does not fit its buffer (%d columns); starting empty"
-                      % (self.NAME, self.XF.shape[1]), flush=True)
-                self.__init_empty()
-                return
-            for net in (self.full, self.st):
-                net.grow_out(len(TARGETS) - len(net_t))
-            self.pairs = ck.get("pairs", [])
-            if ck.get("post_keys") is not None:
-                self.post_keys = list(ck["post_keys"])
+        if not (OUT / (self.NAME + "_model.pt")).is_file():
+            # rows without their net: the next save would append to them
+            if self.store().exists():
+                self.buf_archive(OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S"))
+            return
+        idx = self.buf_load()
+        if idx is None:
+            return
+        import torch
+        self.state_keys = list(idx["state_keys"])
+        self.batches = int(idx.get("batches", 0))
+        ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False)
+        net_t, buf_t = saved_targets(ck, {"Y": self.Y, "targets": idx.get("targets", [])})
+        if tuple(ck.get("opt_num", ())) != self.OPTS or not adopt_targets(self, self.NAME, net_t, buf_t):
+            print("%s: saved net predicts other outcomes or reads other options; starting empty" % self.NAME,
+                  flush=True)
+            self.__init_empty()
+            return
+        self.full = Net(self.XF.shape[1], len(net_t))
+        self.st = Net(self.ns, len(net_t))
+        try:
+            self.full.load(ck["full"])
+            self.st.load(ck["state"])
+        except RuntimeError:
+            # a kill between the buffer save and the model save
+            print("%s: saved net does not fit its buffer (%d columns); starting empty"
+                  % (self.NAME, self.XF.shape[1]), flush=True)
+            self.__init_empty()
+            return
+        for net in (self.full, self.st):
+            net.grow_out(len(TARGETS) - len(net_t))
+        self.pairs = ck.get("pairs", [])   # old (kind 1) 3-tuples are skipped by honest_trust
+        self.placebo, self.placebo_old = list(ck.get("placebo", [])), list(ck.get("placebo_old", []))
+        self.reset_rows = int(ck.get("reset_rows", 0))
+        if ck.get("post_keys") is not None:
+            self.post_keys = list(ck["post_keys"])
 
     def __init_empty(self):
+        """Learn from nothing: the old buffer moves to nn-archive, never deleted."""
+        if self.store().exists():
+            self.buf_archive(OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S"))
         self.state_keys = None
-        self.XS = self.XF = self.Y = self.M = None
+        self.buf_clear()
         self.full = self.st = None
         self.pairs = []
+        self.placebo, self.placebo_old = [], []
         self.batches = 0
-        self.grown = True   # batches restart at 0, so the every-N buffer save would wait for the old count
 
     def save(self, buffer=False, force=False):
         import torch
         if self.full is None or not force:
             return
-        if buffer or getattr(self, "grown", False) or self.batches - getattr(self, "buf_at", -BUFFER_EVERY) >= BUFFER_EVERY:
-            self.grown = False
-            self.buf_at = self.batches
-            np.savez(OUT / (self.NAME + "_buffer.tmp.npz"), XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
-                     state_keys=np.array(self.state_keys), batches=self.batches, targets=TARGET_NAMES)
-            replace_retry(OUT / (self.NAME + "_buffer.tmp.npz"), OUT / (self.NAME + "_buffer.npz"))
+        self.buf_save()
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
-                    "post_keys": getattr(self, "post_keys", None),
-                    "opt_num": self.OPTS, "pairs": self.pairs}, OUT / (self.NAME + "_model.pt.tmp"))
+                    "post_keys": getattr(self, "post_keys", None), "reset_rows": self.reset_rows,
+                    "opt_num": self.OPTS, "pairs": self.pairs, "placebo": self.placebo,
+                    "placebo_old": self.placebo_old}, OUT / (self.NAME + "_model.pt.tmp"))
         replace_retry(OUT / (self.NAME + "_model.pt.tmp"), OUT / (self.NAME + "_model.pt"))
 
     def trust(self):
-        q = [x for x in self.pairs if len(x) == 3]
-        if len(q) < TRUST_MIN:
-            return 0.0
-        return round(max(0.0, wcorr(np.array(q[-TRUST_RECENT:]))), 3)
+        key = (len(self.pairs), self.pairs[-1][:2] if self.pairs else None)
+        if getattr(self, "_trust_memo", (None,))[0] != key:
+            self._trust_memo = (key, honest_trust(self.pairs))
+        return self._trust_memo[1]
 
     def learn(self, source, g, first_touch, rows):
         if not adopt_keys(self, g["state_keys"]):
             self.__init_empty()
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
-        xs, xf, ys, ms, rw = [], [], [], [], []
+        xs, xf, ys, ms, rw, teams, kept = [], [], [], [], [], [], []
         for r in rows:
             y, m = target_vec(r)
             if not any(m):
                 continue
             s, f = self.featurize(r, self.state_keys)
+            kept.append(r)
             xs.append(s)
             xf.append(f)
             ys.append(y)
             ms.append(m)
             rw.append(rand_weight(r))
+            teams.append(r["team"])
         if not xs:
             return None
         XS, XF = np.array(xs, dtype=np.float32), np.array(xf, dtype=np.float32)
@@ -748,40 +1223,45 @@ class FacHead:
             rec["head_full"] = mean_of(r2(pf, Y, M, base), HEADLINE)
             rec["head_state"] = mean_of(r2(ps, Y, M, base), HEADLINE)
             rec["game_sums"] = game_sums(pf, ps, Y, M, base)
-            w = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
-            ym, ysd = self.full.ym, self.full.ys
-            zf, zs, zy = (pf - ym) / ysd, (ps - ym) / ysd, (Y - ym) / ysd
-            for i in range(len(Y)):
-                mm = M[i] * (w != 0)
-                if mm.any() and rw[i] is not None:
-                    self.pairs.append((float(((zf[i] - zs[i]) * w * mm).sum()),
-                                       float(((zy[i] - zs[i]) * w * mm).sum()), rw[i]))
-            self.pairs = self.pairs[-TRUST_KEEP:]
+            score_decisions(self, kept, XF, Y, M, rw, pf, ps, decisions.fingerprint(g) or source,
+                            lambda i: self.pairs,
+                            lambda r, ci: self.featurize(dict(r, chosen=ci), self.state_keys)[1],
+                            self.rule_of, self.alts_of, rec)
             rec["trust"] = self.trust()
+        T = self.tags_for(g, teams, self.batches + 1)
         if HUMAN_TAG in str(source):
-            XS, XF, Y, M = (np.repeat(a, HUMAN_W, axis=0) for a in (XS, XF, Y, M))
+            XF, Y, M, T = (np.repeat(a, HUMAN_W, axis=0) for a in (XF, Y, M, T))
         if self.XF is None:
-            new_from = 0
-            self.XS, self.XF, self.Y, self.M = XS, XF, Y, M
+            self.ns = XS.shape[1]
             self.full = Net(XF.shape[1], len(TARGETS))
-            self.st = Net(XS.shape[1], len(TARGETS))
-        else:
-            new_from = len(self.Y)
-            append_rows(self, XS, XF, Y, M)
-        fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
-        lr = lr_now(self.batches, fz_batch)
-        rec["lr"] = lr
-        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
-        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
-        rec["total_rows"] = int(len(self.Y))
-        self.batches += 1
-        if self.batches % RESET_EVERY == 0:
-            self.full.shrink_perturb()
-            self.st.shrink_perturb()
+            self.st = Net(self.ns, len(TARGETS))
+        new_from = self.buf_add(XF, Y, M, T)
+        rec.update(fit_batch(self, new_from))
         with open(OUT / "metrics.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec) + "\n")
         self.save()
         return rec
+
+
+def fit_batch(obj, new_from):
+    """Train obj's FULL and STATE nets on the rows from new_from (just added),
+    count them toward the next partial reset; the metrics fields."""
+    fz_rows, fz_batch = freeze_note(getattr(obj, "NAME", "builder"), new_from, obj.batches)
+    lr = lr_now(obj.batches, fz_batch)
+    t0 = time.time()
+    bs = minibatches(len(obj.Y), new_from, obj.T[:, 0], obj.ver_weights(), fz_rows)
+    out = {"lr": lr, "steps": len(bs),
+           "loss_full": obj.full.train(obj.XF, obj.Y, obj.M, bs, lr),
+           "loss_state": obj.st.train(obj.XS, obj.Y, obj.M, bs, lr),
+           "train_s": round(time.time() - t0, 2), "total_rows": int(len(obj.Y))}
+    obj.batches += 1
+    obj.reset_rows += len(obj.Y) - new_from
+    if obj.reset_rows >= RESET_ROWS:
+        obj.reset_rows = 0
+        obj.full.shrink_perturb()
+        obj.st.shrink_perturb()
+        out["reset"] = True
+    return out
 
 
 POST_OPTS = ("DEFEND", "HOLD", "ATTACK", "RAID")   # military/state.as POST_* order
@@ -819,6 +1299,18 @@ class PostHead(FacHead):
 
     def featurize(self, row, state_keys):
         return featurize_post(row, state_keys, self.post_keys)
+
+    def rule_of(self, row):
+        return self.OPTS.index(row["rule"]) if row.get("rule") in self.OPTS else None
+
+    def alts_of(self, row, rule):
+        """Options offered (logged weight > 0) other than the rule's, by index."""
+        out = []
+        for o in row.get("opts") or []:
+            n = o.get("name")
+            if n in self.OPTS and self.OPTS.index(n) != rule and num(o.get("w", 0)) > 0:
+                out.append(self.OPTS.index(n))
+        return out
 
 
 class ComHead(PostHead):
@@ -1001,7 +1493,7 @@ class OpenHead(ComHead):
 DEC_HEADS = DEC_HEADS + (DefAmtHead, DefSiteHead, DefTypeHead, OpenHead)
 
 
-class Trainer:
+class Trainer(Buffered):
     def __init__(self):
         OUT.mkdir(parents=True, exist_ok=True)
         seen = json.loads((OUT / "seen.json").read_text()) if (OUT / "seen.json").is_file() else {}
@@ -1009,13 +1501,14 @@ class Trainer:
         self.used = {k: set(map(tuple, v)) for k, v in seen.get("used", {}).items()}
         self.used_at = seen.get("used_at", {k: time.time() for k in self.used})
         self.state_keys = None
-        self.XS = self.XF = self.Y = self.M = None
+        self.buf_clear()
         self.full = self.st = None
         self.batches = 0
         self.since_export = 0
         self.exported = 0
         self.logger = {}
-        self.trust_pairs = {}   # kind -> [(net says the decision adds, it actually added)], unseen games
+        self.trust_pairs = {}   # kind -> [(d, a, 1/p, game)] of held-out chance rows (honest_trust)
+        self.placebo, self.placebo_old = [], []
         self.fac = FacHead()
         self.post = PostHead()
         self.heads = {h.NAME: h() for h in DEC_HEADS}
@@ -1023,27 +1516,32 @@ class Trainer:
         self.load()
 
     def load(self):
-        if (OUT / "buffer.npz").is_file() and (OUT / "model.pt").is_file():
-            import torch
-            # closed before anything can archive it: Windows will not move an open file
-            with np.load(OUT / "buffer.npz", allow_pickle=True) as b:
-                self.XS, self.XF, self.Y, self.M = (b[k].astype(np.float32) for k in ("XS", "XF", "Y", "M"))
-                self.state_keys = list(b["state_keys"])
-                self.batches = int(b["batches"])
-                buf = {"Y": self.Y, **({"targets": list(b["targets"])} if "targets" in b.files else {})}
-            ck = torch.load(OUT / "model.pt", weights_only=False)
-            net_t, buf_t = saved_targets(ck, buf)
-            if tuple(ck.get("opt_num", ())) != OPT_NUM or not adopt_targets(self, "builder", net_t, buf_t):
-                self.fresh_start("this trainer predicts different outcomes or reads different options")
-                return
-            self.full = Net(self.XF.shape[1], len(net_t))
-            self.st = Net(self.XS.shape[1], len(net_t))
-            self.full.load(ck["full"])
-            self.st.load(ck["state"])
-            for net in (self.full, self.st):
-                net.grow_out(len(TARGETS) - len(net_t))
-            # saved every batch but never read back: each restart wiped the trust evidence
-            self.trust_pairs = {k: [tuple(x) for x in v] for k, v in (ck.get("trust_pairs") or {}).items()}
+        if not (OUT / "model.pt").is_file():
+            if self.store().exists():
+                self.buf_archive(OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S"))
+            return
+        idx = self.buf_load()
+        if idx is None:
+            return
+        import torch
+        self.state_keys = list(idx["state_keys"])
+        self.batches = int(idx.get("batches", 0))
+        ck = torch.load(OUT / "model.pt", weights_only=False)
+        net_t, buf_t = saved_targets(ck, {"Y": self.Y, "targets": idx.get("targets", [])})
+        if tuple(ck.get("opt_num", ())) != OPT_NUM or not adopt_targets(self, "builder", net_t, buf_t):
+            self.fresh_start("this trainer predicts different outcomes or reads different options")
+            return
+        self.full = Net(self.XF.shape[1], len(net_t))
+        self.st = Net(self.ns, len(net_t))
+        self.full.load(ck["full"])
+        self.st.load(ck["state"])
+        for net in (self.full, self.st):
+            net.grow_out(len(TARGETS) - len(net_t))
+        # saved every batch but never read back: each restart wiped the trust evidence
+        # pairs of the old (kind 1) trust are 3-tuples: honest_trust skips them
+        self.trust_pairs = {k: [tuple(x) for x in v] for k, v in (ck.get("trust_pairs") or {}).items()}
+        self.placebo, self.placebo_old = list(ck.get("placebo", [])), list(ck.get("placebo_old", []))
+        self.reset_rows = int(ck.get("reset_rows", 0))
 
     def fresh_start(self, why):
         """Archive the current net and its history, then learn from nothing.
@@ -1051,17 +1549,22 @@ class Trainer:
         dest = reset()
         print("fresh net (%s); the old one is kept in %s" % (why, dest), flush=True)
         self.state_keys = None
-        self.XS = self.XF = self.Y = self.M = None
+        self.buf_clear()
+        self._store = None
+        # reset() moved the factory and posture buffers too: they write theirs whole again
+        for h in (self.fac, self.post):
+            h.saved_rows = 0
+            h._store = None
         self.full = self.st = None
         self.batches = 0
-        self.grown = True
         self.since_export = 0
         self.trust_pairs = {}
+        self.placebo, self.placebo_old = [], []
 
     def save(self, buffer=None, force=False):
-        """Model every call; the (large) buffer every BUFFER_EVERY batches or
-        when asked. A game's used-decision list is dropped USED_KEEP_S after it
-        was last touched: by then the game has finished and is in seen_dirs."""
+        """Model and the rows added since the last save (append-only). A game's
+        used-decision list is dropped USED_KEEP_S after it was last touched: by
+        then the game has finished and is in seen_dirs."""
         import torch
         now = time.time()
         # On a clock, not every game. Everything is written together, so a kill
@@ -1082,16 +1585,12 @@ class Trainer:
             h.save(buffer=bool(buffer), force=True)
         if self.full is None:
             return
-        if buffer or getattr(self, "grown", False) or self.batches - getattr(self, "buf_at", -BUFFER_EVERY) >= BUFFER_EVERY:
-            self.grown = False
-            self.buf_at = self.batches
-            np.savez(OUT / "buffer.tmp.npz", XS=self.XS, XF=self.XF, Y=self.Y, M=self.M,
-                     state_keys=np.array(self.state_keys), batches=self.batches, targets=TARGET_NAMES)
-            replace_retry(OUT / "buffer.tmp.npz", OUT / "buffer.npz")
+        self.buf_save()
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
-                    "post_keys": getattr(self, "post_keys", None),
+                    "post_keys": getattr(self, "post_keys", None), "reset_rows": self.reset_rows,
                     "state_keys": self.state_keys, "kinds": KINDS, "opt_num": OPT_NUM,
-                    "trust_pairs": self.trust_pairs}, OUT / "model.pt.tmp")
+                    "trust_pairs": self.trust_pairs, "placebo": self.placebo, "placebo_old": self.placebo_old},
+                   OUT / "model.pt.tmp")
         replace_retry(OUT / "model.pt.tmp", OUT / "model.pt")
 
     def status(self, phase, **kw):
@@ -1201,12 +1700,14 @@ class Trainer:
             self.fresh_start("the record's state layout changed")
         if self.state_keys is None:
             self.state_keys = g["state_keys"]
-        xs, xf, ys, ms, decided, kinds, rw = [], [], [], [], [], [], []
+        xs, xf, ys, ms, decided, kinds, rw, teams, kept = [], [], [], [], [], [], [], [], []
         for _fp, _key, r in items:
             y, m = target_vec(r)
             if not any(m):
                 continue
             s, f = featurize(r, self.state_keys)
+            kept.append(r)
+            teams.append(r["team"])
             xs.append(s)
             xf.append(f)
             ys.append(y)
@@ -1244,32 +1745,21 @@ class Trainer:
                 if k.sum() >= 5:
                     rec[name + "_acc"] = float(((pf[k, j] > 0.5) == (Y[k, j] > 0.5)).mean())
                     rec[name + "_base"] = float(max(Y[k, j].mean(), 1 - Y[k, j].mean()))
-            self.note_trust(pf, ps, Y, M, kinds, rw)
+            score_decisions(self, kept, XF, Y, M, rw, pf, ps, decisions.fingerprint(g) or source,
+                            lambda i: self.trust_pairs.setdefault(kinds[i], []),
+                            lambda r, ci: featurize(dict(r, chosen=ci), self.state_keys)[1],
+                            rule_of_list, alts_of_list, rec)
             rec["trust"] = self.trust()
         self.status("training", source=source)
+        T = self.tags_for(g, teams, self.batches + 1)
         if HUMAN_TAG in str(source):
-            XS, XF, Y, M = (np.repeat(a, HUMAN_W, axis=0) for a in (XS, XF, Y, M))
+            XF, Y, M, T = (np.repeat(a, HUMAN_W, axis=0) for a in (XF, Y, M, T))
         if self.XF is None:
-            new_from = 0
-            self.XS, self.XF, self.Y, self.M = XS, XF, Y, M
+            self.ns = XS.shape[1]
             self.full = Net(XF.shape[1], len(TARGETS))
-            self.st = Net(XS.shape[1], len(TARGETS))
-        else:
-            new_from = len(self.Y)
-            append_rows(self, XS, XF, Y, M)
-        t0 = time.time()
-        fz_rows, fz_batch = freeze_note(getattr(self, "NAME", "builder"), new_from, self.batches)
-        lr = lr_now(self.batches, fz_batch)
-        rec["lr"] = lr
-        rec["loss_full"] = self.full.train(self.XF, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
-        rec["loss_state"] = self.st.train(self.XS, self.Y, self.M, new_from, STEPS_PER_ROW, fz_rows, lr)
-        rec["train_s"] = round(time.time() - t0, 2)
-        rec["total_rows"] = int(len(self.Y))
-        self.batches += 1
-        if self.batches % RESET_EVERY == 0:
-            self.full.shrink_perturb()
-            self.st.shrink_perturb()
-            rec["reset"] = True
+            self.st = Net(self.ns, len(TARGETS))
+        new_from = self.buf_add(XF, Y, M, T)
+        rec.update(fit_batch(self, new_from))
         for fp, key, _r in items:
             self.used.setdefault(fp, set()).add(key)
             self.used_at[fp] = time.time()
@@ -1298,34 +1788,12 @@ class Trainer:
             tmp.write_text(json.dumps(out[-8:]))
             replace_retry(tmp, OUT / "samples.json")
 
-    def note_trust(self, pf, ps, Y, M, kinds, rw):
-        """For each chosen option's kind, pair what the DECISION adds in the
-        net's eyes (FULL minus STATE prediction of the objective) with what it
-        actually added (outcome minus the STATE prediction). Their correlation
-        is how well the net knows which option is better -- on unseen games."""
-        w = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
-        ym, ys = self.full.ym, self.full.ys
-        zf, zs, zy = (pf - ym) / ys, (ps - ym) / ys, (Y - ym) / ys
-        for i, kind in enumerate(kinds):
-            m = M[i] * (w != 0)
-            if kind is None or not m.any() or rw[i] is None:
-                continue
-            pred = float(((zf[i] - zs[i]) * w * m).sum())
-            real = float(((zy[i] - zs[i]) * w * m).sum())
-            q = self.trust_pairs.setdefault(kind, [])
-            q.append((pred, real, rw[i]))
-            if len(q) > TRUST_KEEP:
-                del q[: len(q) - TRUST_KEEP]
-
     def trust(self):
-        out = {}
-        for kind in KINDS:
-            q = [x for x in self.trust_pairs.get(kind, []) if len(x) == 3]
-            if len(q) < TRUST_MIN:
-                out[kind] = 0.0
-                continue
-            out[kind] = round(max(0.0, wcorr(np.array(q[-TRUST_RECENT:]))), 3)
-        return out
+        """Per chosen option's kind: honest_trust of its held-out chance rows."""
+        key = tuple((k, len(v), v[-1][:2] if v else None) for k, v in sorted(self.trust_pairs.items(), key=str))
+        if getattr(self, "_trust_memo", (None,))[0] != key:
+            self._trust_memo = (key, {kind: honest_trust(self.trust_pairs.get(kind, [])) for kind in KINDS})
+        return self._trust_memo[1]
 
     def export(self):
         if NO_EXPORT:
@@ -1339,7 +1807,34 @@ class Trainer:
             n += 1
         self.since_export = 0
         self.exported += 1
+        self.snapshot(text)
         return n
+
+    def snapshot(self, text=None, force=False):
+        """Every SNAPSHOT_S, the exported weights as they played, kept for
+        tools/nneval.py: snapshots/<stamp>/nnweights.as + meta.json."""
+        root = OUT / "snapshots"
+        stamps = sorted(p.name for p in root.glob("*") if (p / "nnweights.as").is_file()) if root.is_dir() else []
+        if stamps and not force:
+            try:
+                last = json.loads((root / stamps[-1] / "meta.json").read_text(encoding="utf-8")).get("at", 0)
+            except (OSError, ValueError):
+                last = (root / stamps[-1] / "nnweights.as").stat().st_mtime
+            if time.time() - last < SNAPSHOT_S:
+                return None
+        if text is None:
+            text = export_as(self.full, self.state_keys, self.batches, self.trust(), self.fac, self.post, self.heads)
+        dest = root / time.strftime("%Y%m%d-%H%M%S")
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "nnweights.as").write_text(text, encoding="utf-8")
+        newest = self.tables.get("ver", [])[-1:]
+        (dest / "meta.json").write_text(json.dumps({
+            "at": time.time(), "batches": self.batches, "rows": 0 if self.Y is None else int(len(self.Y)),
+            "exported": self.exported, "trust": self.trust(), "newest_version": newest,
+            "heads": {k: {"batches": h.batches, "trust": h.trust()} for k, h in
+                      [("fac", self.fac), ("post", self.post)] + list(self.heads.items())}}, indent=1), encoding="utf-8")
+        print("snapshot: %s" % dest, flush=True)
+        return dest
 
     def learn_fac(self, source, g, path, final):
         """The factory rows of one parsed game: matured (or all, when final),
@@ -1506,6 +2001,8 @@ def stale_ok(p, state_keys, has_net=True):
         return False
     if not all(k in head for k in ("NND_TRUST", "NNU_TRUST", "NNN_TRUST", "NNOP_TRUST")):
         return False
+    if ("NN_TRUST_KIND = %d;" % TRUST_KIND) not in head:
+        return False
     if (OUT / "imitate.npz").is_file() and "NNI_ON = true" not in head:
         return False
     if not has_net:
@@ -1526,7 +2023,8 @@ def reset():
     runtime/nn-archive/<stamp>/, never deleted: copy them back to restore."""
     names = ("metrics.jsonl", "status.json", "model.pt", "buffer.npz", "seen.json",
              "fac_model.pt", "fac_buffer.npz", "post_model.pt", "post_buffer.npz", "samples.json")
-    if not any((OUT / n).is_file() for n in names):
+    shards = ("builder_rows", "fac_rows", "post_rows")
+    if not any((OUT / n).is_file() for n in names) and not any((OUT / "shards" / s).is_dir() for s in shards):
         return None
     dest = OUT.parent / "nn-archive" / time.strftime("%Y%m%d-%H%M%S")
     dest.mkdir(parents=True, exist_ok=True)
@@ -1534,6 +2032,9 @@ def reset():
         p = OUT / name
         if p.is_file():
             replace_retry(p, dest / name)
+    for s in shards:
+        if (OUT / "shards" / s).is_dir():
+            replace_retry(OUT / "shards" / s, dest / s)
     return dest
 
 
@@ -1556,7 +2057,20 @@ def main(argv):
             return 1
     except (OSError, ValueError):
         pass
-    tr = Trainer()
+    tr = Trainer()   # loading migrates any legacy *buffer.npz to shards first
+    if "--migrate" in argv:
+        print("buffers: " + ", ".join("%s %d rows" % (h.STORE, 0 if h.Y is None else len(h.Y))
+                                      for h in [tr, tr.fac, tr.post] + list(tr.heads.values())))
+        return 0
+    if "--compact" in argv:
+        for h in [tr, tr.fac, tr.post] + list(tr.heads.values()):
+            if h.dropped and h.XF is not None:
+                h.store().compact(h.XF, h.Y, h.M, h.T, h.buf_meta())
+                print("%s: rewritten without %d capped rows" % (h.STORE, h.dropped), flush=True)
+        return 0
+    if "--snapshot" in argv:
+        print("snapshot in %s" % tr.snapshot(force=True))
+        return 0
     if "--export" in argv:
         print("weights written to %d deployed copies" % tr.export())
         return 0
