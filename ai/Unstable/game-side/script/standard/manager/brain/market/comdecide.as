@@ -16,9 +16,11 @@ namespace Market {
 // his share by health. His D-gun removes the kills its energy buys in that
 // time, at the odds a sideways-moving unit leaves the beam.
 //
-// He fights a fight that leaves him COM_RETREAT_HEALTH of the health he
-// brings (the bar at which the rules send him home anyway); a tower when it
-// stands before they arrive and turns the fight; otherwise he leaves now.
+// Against T1 he fights any fight that ends above his engine retreat line (the
+// health at which the damage retreat pulls him out of it anyway), hurt or not
+// (docs/24); against T2, which outranges and outruns him, only one that
+// leaves him COM_RETREAT_HEALTH of what he brings. A tower when it stands
+// before they arrive and turns the fight; otherwise he leaves now.
 // Recorded as `apex: nncom` for a commander net; the rule's pick carries ~all
 // the weight and NO discovery game ever flattens it.
 //------------------------------------------------------------------------------
@@ -157,6 +159,12 @@ bool ComWins(float hp, float after)
 	return after >= COM_RETREAT_HEALTH * hp;
 }
 
+// The health a fight must leave him for him to take it, by the tier he faces.
+float ComBar(CCircuitUnit@ u, float hp, int tier)
+{
+	return (tier <= 1) ? u.circuitDef.GetRetreat() : COM_RETREAT_HEALTH * hp;
+}
+
 // The assessment, cached per frame.
 int gCsAt = -1;
 bool gCsThreat = false;
@@ -182,6 +190,7 @@ float gCsArmyDps = 0.f;
 float gCsSupHp = 0.f;
 float gCsFightS = 0.f;
 float gCsHpAfter = 1.f;
+float gCsBar = 1.f;
 float gCsHpTower = 0.f;
 float gCsShots = 0.f;
 float gCsKills = 0.f;
@@ -396,6 +405,7 @@ void ComAssess(CCircuitUnit@ u)
 	gCsHpAfter = gCsHp;
 	gCsHpTower = 0.f;
 	gCsTowersK = 0;
+	gCsBar = ComBar(u, gCsHp, gCsTier);
 	gCsWin = true;
 	if (!gCsThreat) {
 		// Losing health with nothing seen is an attacker under the fog.
@@ -417,8 +427,9 @@ void ComAssess(CCircuitUnit@ u)
 	gCsKills = ComDGunKills(u, t0, gCsFoeSpd, rSum / float(gCsN), nClose);
 	gCsHpAfter = ComFightHpAfter(gCsHp, hpMax, gCsMyDps, gCsGunDps + gCsArmyDps, gCsSupHp,
 			gCsFoeDps, gCsFoeHp, gCsKills, gCsN, gCsFightS);
-	// Hurt, he takes no fight at all: the rules already send him home there.
-	gCsWin = ComWins(gCsHp, gCsHpAfter) && (gCsHp >= COM_RETREAT_HEALTH);
+	// Hurt, he takes no fight with T2 at all: the rules send him home there.
+	gCsWin = (gCsHpAfter > 0.f) && (gCsHpAfter >= gCsBar)
+		&& ((gCsTier <= 1) || (gCsHp >= COM_RETREAT_HEALTH));
 	// Towers he can stand before the first of them arrives, as far as the bank
 	// and income pay for them.
 	if ((ld > 0) && !gCsT2 && (gCsTowerS < 1e5f) && (gCsArrive >= gCsTowerS)) {
@@ -441,14 +452,16 @@ void ComAssess(CCircuitUnit@ u)
 					gCsFoeDps, gCsFoeHp, gCsKills, gCsN, s);
 		}
 	}
-	if (gCsT2 && ComFar(here))
+	// Home from T2 is where he works; T1 he beats that reaches him out there is
+	// fought, never fled (a lone Tick sent him home).
+	if (gCsT2 && ComFar(here) && !(gCsWin && (gCsTier <= 1)))
 		gCsRule = COM_RETREAT;
 	else if (gCsWin)
 		// Engaged and winning, he stays in it while the threat lasts: the arrival
 		// against tower-time test only decides whether to start, and its wobble
 		// stepped him toward them and back to work each second.
 		gCsRule = ((gComDec == COM_FIGHT) || (gCsArrive <= gCsTowerS)) ? COM_FIGHT : COM_WORK;
-	else if (ComWins(gCsHp, gCsHpTower))
+	else if ((gCsHpTower > 0.f) && (gCsHpTower >= gCsBar))
 		gCsRule = COM_TURRET;
 	else
 		gCsRule = COM_RETREAT;
@@ -510,6 +523,11 @@ array<int> gComRuleN(COM_N, 0);
 array<int> gComEffF(COM_N, 0);
 int gComTickAt = -1;
 int gComWithdrawN = 0;
+int gComCowerN = 0;     // left a T1 fight he was winning (`apex: com-cower`)
+int gComStandN = 0;     // a withdrawal walk turned back into a stand
+int gComDgOpp = 0;      // seconds with the D-gun ready and a foe group within its range
+int gComDgMiss = 0;     // ... and no D-gun order in that second
+int gComDgSeen = 0;
 int gComDropN = 0;
 int gComDropAt = -999999;
 int gComStatAt = 0;
@@ -522,6 +540,25 @@ float gComTurFoe = 0.f;
 float gComTurGun = 0.f;
 int gComTurN = 0;
 int gComTurHeld = 0;
+
+// He is leaving by `action` while the assessment says he beats what is on him.
+bool ComCowerNote(CCircuitUnit@ u, const string& in action)
+{
+	if (!gCsThreat || !gCsWin || (gCsTier > 1))
+		return false;
+	++gComCowerN;
+	AiLog(Factory::T() + "apex: com-cower t=" + ai.teamId + " action=" + action
+		+ " foeM=" + int(gCsFoeM) + " foeTier=" + gCsTier + " foeN=" + gCsN
+		+ " foeHp=" + int(gCsFoeHp) + " foeDps=" + int(gCsFoeDps)
+		+ " ownHp=" + int(gCsHp * Catalog::gHealth[int(u.circuitDef.id)]) + " ownDps=" + int(gCsMyDps)
+		+ " dgunShots=" + int(gCsShots) + " dgKills=" + formatFloat(gCsKills, "", 0, 1)
+		+ " after=" + int(gCsHpAfter * 100.f) + " bar=" + int(gCsBar * 100.f) + " n=" + gComCowerN);
+	return true;
+}
+
+// Nothing on him he does not beat (no T2, no fight lost, no unseen attacker),
+// and above his engine retreat line.
+bool ComStands() { return gCsWin && (gCsTier <= 1) && !gCsHurtUnseen && (gCsHp >= gCsBar); }
 
 int ComDecision() { return gComDec; }
 bool ComRetreating() { return gComDec == COM_RETREAT; }
@@ -556,11 +593,15 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	} else
 		gComWorkVotes = 0;
 	const int rule = gCsRule;
+	// Nothing near he cannot beat: no draw or trial may send him off.
+	const bool stand = ComStands();
 	array<float> w(COM_N);
 	// The floor lets the net pick another option; it never draws him out of a
-	// retreat (789 RETREAT->WORK in a day were this floor, not the net).
+	// retreat (789 RETREAT->WORK in a day were this floor, not the net), nor
+	// into one he has no cause for.
 	for (int o = 0; o < COM_N; ++o)
-		w[o] = (o == rule) ? 1.f : ((rule == COM_RETREAT) ? 0.f : COM_EPS);
+		w[o] = (o == rule) ? 1.f
+			: (((rule == COM_RETREAT) || (stand && (o == COM_RETREAT))) ? 0.f : COM_EPS);
 	const float trust = NnComScore(st, com, w);
 	float sum = 0.f;
 	for (int o = 0; o < COM_N; ++o)
@@ -574,9 +615,10 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	// Nothing ever explores him into a fight the rule would leave.
 	gComFlat = NnHeadFlat(trust);
 	const bool explore = gComFlat > 0.f;
-	if (explore && (rule != COM_RETREAT) && (ai.frame < gComExpUntil) && (gComExpPick > rule))
+	const bool trial = explore && (rule != COM_RETREAT) && !stand;
+	if (trial && (ai.frame < gComExpUntil) && (gComExpPick > rule))
 		chosen = gComExpPick;
-	else if (explore && (rule != COM_RETREAT) && (ai.frame >= gComExpNext)
+	else if (trial && (ai.frame >= gComExpNext)
 		&& (float(AiRandom(0, 10000)) / 10000.f < gComFlat)) {
 		chosen = ((rule < COM_TURRET) && (gCsTowersK > 0) && (AiRandom(0, 1) == 0)) ? COM_TURRET : COM_RETREAT;
 		gComExpPick = chosen;
@@ -621,6 +663,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	if ((chosen == COM_RETREAT) && (was != COM_RETREAT)) {
 		++gComWithdrawN;
 		AiLog(Factory::T() + "apex: com-withdraw t=" + ai.teamId + " " + ComSitText());
+		ComCowerNote(u, (rule == COM_RETREAT) ? "rule" : "net");
 	}
 	if ((chosen == COM_TURRET) && (was != COM_TURRET)) {
 		gComTurAt = ai.frame;
@@ -661,6 +704,13 @@ void ComDecideTick(CCircuitUnit@ u)
 		return;
 	gComAssessAt = ai.frame;
 	ComAssess(u);
+	const int dgo = u.DGunOrders();
+	if (gCsThreat && gCsDgReady && (gCsNearD >= 0.f) && (gCsNearD <= u.DGunRange())) {
+		++gComDgOpp;
+		if (dgo == gComDgSeen)
+			++gComDgMiss;
+	}
+	gComDgSeen = dgo;
 	// A tower the executor would refuse (interior ground, broke, already
 	// covered) is no plan: then the fight is lost and he leaves.
 	if (gCsRule == COM_TURRET) {
@@ -696,7 +746,8 @@ void ComDecideTick(CCircuitUnit@ u)
 			+ " chosen(W/F/T/R)=" + cn + " rule=" + rn + " effSec=" + en
 			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
-			+ " dgunOrders=" + u.DGunOrders()
+			+ " dgunOrders=" + u.DGunOrders() + " dgOpp=" + gComDgOpp + " dgMiss=" + gComDgMiss
+			+ " cower=" + gComCowerN + " stood=" + gComStandN
 			+ " hp=" + int(gCsHp * 100.f) + " now=" + ComOptName(gComDec)
 			+ " us avg=" + ((gComDecN > 0) ? int(gComUsSum / double(gComDecN)) : 0)
 			+ " max=" + int(gComUsMax));
@@ -815,18 +866,26 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 		return pt;
 	}
 	if (gComDec == COM_FIGHT) {
-		// Close only on what he can catch; a raider comes to him.
-		if (gCsThreat && OnMap(gCsFoeAt) && (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)])
-			&& !ComFar(gCsFoeAt))
-		{
-			IUnitTask@ held = u.task;
-			if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
-				&& (held.GetBuildPos().distance2D(gCsFoeAt) < 300.f)
-				&& (held.GetBuildType() == Task::BuildType::PATROL))
+		IUnitTask@ held = u.task;
+		const bool onPatrol = (held !is null) && (held.GetType() == Task::Type::BUILDER)
+			&& (held.GetBuildType() == Task::BuildType::PATROL);
+		// Close only on what he can catch; a raider comes to him, so a walk still
+		// carrying him off on the last withdrawal becomes a stand.
+		const bool close = gCsThreat && OnMap(gCsFoeAt)
+			&& (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)]) && !ComFar(gCsFoeAt);
+		const bool leaving = !close && onPatrol && OnMap(gComRetTo)
+			&& (held.GetBuildPos().distance2D(gComRetTo) < 300.f);
+		if (close || leaving) {
+			const AIFloat3 at = close ? gCsFoeAt : gCsHere;
+			if (close && onPatrol && (held.GetBuildPos().distance2D(at) < 300.f))
 				return held;
-			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, gCsFoeAt, 15 * SECOND));
+			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, at, 15 * SECOND));
 			if (pt !is null) {
-				gCommEngageAt = ai.frame;
+				if (close)
+					gCommEngageAt = ai.frame;
+				else
+					++gComStandN;
+				gComRetTo = AIFloat3(-1.f, 0.f, -1.f);
 				return pt;
 			}
 		}

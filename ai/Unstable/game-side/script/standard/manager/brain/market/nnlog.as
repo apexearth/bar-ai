@@ -745,11 +745,19 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 		mean += sc;
 	}
 	mean /= float(K);
+	// A zero weight is an option the rules forbid: log(0) made every weight NaN.
 	float meanLw = 0.f;
-	for (int o = 0; o < K; ++o)
-		meanLw += log(w[o]);
-	meanLw /= float(K);
+	int nPos = 0;
 	for (int o = 0; o < K; ++o) {
+		if (w[o] > 0.f) {
+			meanLw += log(w[o]);
+			++nPos;
+		}
+	}
+	meanLw /= float((nPos > 0) ? nPos : 1);
+	for (int o = 0; o < K; ++o) {
+		if (w[o] <= 0.f)
+			continue;
 		float d = score[o] - mean;
 		d = (d > 3.f) ? 3.f : ((d < -3.f) ? -3.f : d);
 		w[o] = pow(2.7182818f, meanLw + (1.f - t) * (log(w[o]) - meanLw) + t * d);
