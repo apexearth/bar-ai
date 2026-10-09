@@ -1072,8 +1072,8 @@ def nn_results(last=None, hours=None):
     """W/L/D of the nn training tournaments' games over the same range, split
     normal vs discovery and by opponent; each game is read once and cached."""
     games = []
-    tours = (list((REPO / "tournaments").glob("*-nn-b*")) + list((REPO / "tournaments").glob("*-nn-self*"))
-             + list((REPO / "tournaments").glob("*-nn-team*")))
+    # every training batch is an nn-* tournament (barbtrain, team, self, comet1v1, 8v8...)
+    tours = list((REPO / "tournaments").glob("*-nn-*"))
     for t in tours:
         for m in (t / "matches").glob("*"):
             res = m / "result.json"
