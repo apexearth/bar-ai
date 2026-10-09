@@ -315,25 +315,31 @@ float RaidPowerLive()
 	return p;
 }
 
-// Is this escort surplus? Only if the worker it guards stands where the cover
-// already up -- turrets and posted guards -- meets the wave that arrives there.
-// Taking escorts regardless cost metal built 10,732 -> 7,963 over three seeds;
-// taking none at all leaves raids short on a side whose spare army IS the
-// escorts.
+// Is this escort surplus? The exact inverse of the test that assigned it
+// (EscortNeeded): the worker is no longer exposed, or what guards it still
+// meets what it is owed without this unit. Taking escorts regardless cost
+// metal built 10,732 -> 7,963 over three seeds; taking none at all leaves
+// raids short on a side whose spare army IS the escorts.
 // The worker comes from the escort registry: a fighter task's target handle
-// reads null, which made every escort "spare" and every raid pull strip them.
+// reads null. "Cover meets the threat seen" was true wherever no enemy was in
+// sight, so a raid GO took the escort a median 17 s after it was assigned.
 bool EscortSpare(Id uid)
 {
 	for (uint e = 0; e < Market::gEscUnit.length(); ++e) {
 		if (Market::gEscUnit[e] != uid)
 			continue;
 		CCircuitUnit@ vip = ai.GetTeamUnit(Market::gEscWorker[e]);
-		if (vip is null)
+		CCircuitUnit@ me = ai.GetTeamUnit(uid);
+		if ((vip is null) || (me is null) || (me.circuitDef is null))
 			return true;
-		const AIFloat3 at = vip.GetPos(ai.frame);
-		if (!OnMap(at))
-			return false;
-		return Market::CoverAt(at) >= Market::ThreatM(at);
+		const float expo = Market::WorkerExposure(vip);
+		if (expo <= 0.f)
+			return true;
+		const int d = int(me.circuitDef.id);
+		const float mineM = Catalog::gCostM[d];
+		const float owedM = Market::EscortOwedM(vip, expo, mineM,
+			ai.GetTunable("apex_expose_r", TUNE_EXPOSE_R), Catalog::gFlyer[d]);
+		return Market::EscortMetalOn(vip.id) - mineM >= owedM;
 	}
 	return true;   // guarding nobody in the registry: no worker to expose
 }
