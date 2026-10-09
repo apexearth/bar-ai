@@ -473,6 +473,34 @@ def lift(d):
     return {"keys": LIFT_KEYS, "teams": teams}
 
 
+COMIDLE_RE = re.compile(
+    r"apex: com-idle t=(\d+) min=(\d+) idleS=([\d.]+) walkS=(\d+) gaps=(\d+) "
+    r"worstS=([\d.]+) open=-?\d+ ask=(\d+)/([\d.]+) gate=(\d+)/([\d.]+) "
+    r"slice=(\d+)/([\d.]+) none=(\d+)/([\d.]+)")
+COMIDLE_KEYS = ["idleS", "walkS", "gaps", "worstS", "askS", "gateS", "sliceS", "noneS"]
+
+
+def com_idle(d):
+    """The commander's idle seconds per minute for the first ten, by cause (maketask.as)."""
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: com-idle t=" not in line:
+                continue
+            m = COMIDLE_RE.search(line)
+            if not m:
+                continue
+            g = m.groups()
+            teams.setdefault(g[0], []).append({
+                "min": int(g[1]), "idleS": float(g[2]), "walkS": int(g[3]),
+                "gaps": int(g[4]), "worstS": float(g[5]), "askS": float(g[7]),
+                "gateS": float(g[9]), "sliceS": float(g[11]), "noneS": float(g[13])})
+    return {"keys": COMIDLE_KEYS, "teams": teams}
+
+
 # Cumulative metal by destination, straight from dev_stats_export's exclusive
 # buckets. Runs from before those fields existed simply read zero everywhere,
 # which is what an absent counter should look like.
@@ -1620,6 +1648,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(front_towers(safe_run_dir(q["dir"])))
             elif u.path == "/api/lift":
                 self.send_json(lift(safe_run_dir(q["dir"])))
+            elif u.path == "/api/comidle":
+                self.send_json(com_idle(safe_run_dir(q["dir"])))
             elif u.path == "/api/facsupport":
                 self.send_json(factory_support(safe_run_dir(q["dir"])))
             elif u.path == "/api/launchmeta":
