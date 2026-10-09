@@ -921,7 +921,9 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 					nearStr += EnemyGroupStrength(g2);
 			}
 		}
-		const bool outgunned = (nearStr <= 0.f) || (nearStr > mineNow);
+		// The fight test with his D-gun outranks a strength sum without it, and
+		// an influence ghost with nothing near is no foe.
+		const bool outgunned = ((nearStr <= 0.f) || (nearStr > mineNow)) && !ComStands();
 		// HE ONLY LEAVES GROUND THAT IS THEIRS (apexearth 2026-09-07, watching
 		// him stand still from 5:20 to 12:10: "He had no good reason to run.
 		// idk what jank stupid logic that is").
@@ -977,7 +979,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	// real -- firing on health alone left him cowering at the back at 50%
 	// (apexearth, watched).
 	const float hp = unit.GetHealthPercent();
-	if (hp < COM_RETREAT_HEALTH) {
+	if ((hp < COM_RETREAT_HEALTH) && !ComStands()) {
 		if (Builder::ThreatFor(unit, here) > Builder::CON_THREAT_VETO) {
 			if (ai.frame >= gNextCommHpLog) {
 				gNextCommHpLog = ai.frame + 20 * SECOND;

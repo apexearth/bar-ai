@@ -208,5 +208,21 @@ def check_com_flips(text, rep):
                 len(flips), med, dict(causes)))
 
 
+def check_com_cower(text, rep):
+    # Withdrawals from T1 his own fight test says he beats, and D-gun seconds lost.
+    us = our_teams(text)
+    if not us:
+        return
+    t0 = us[0]
+    stats = re.findall(r"apex: comstat t=%d .*?dgunOrders=(\d+) dgOpp=(\d+) dgMiss=(\d+) cower=(\d+)" % t0, text)
+    if not stats:
+        return   # a build from before the counters
+    orders, opp, miss, cower = (int(x) for x in stats[-1])
+    acts = Counter(re.findall(r"apex: com-cower t=%d action=(\S+)" % t0, text))
+    rep.add("MILITARY", cower == 0, "commander-cowers",
+            "%d withdrawal(s) from T1 he beats (%s); D-gun %d order(s), %d ready-in-range second(s), %d with no shot" % (
+                cower, dict(acts), orders, opp, miss))
+
+
 EXTRA_CHECKS = [check_nets, check_extraction, check_constructors, check_radar_crowd, check_bombardment,
-                check_com_flips]
+                check_com_flips, check_com_cower]
