@@ -12,7 +12,6 @@ float gEscMul = 1.f;
 int gEscNow = NE_MATCH;
 int gEscNextAt = 0;
 bool gEscHeader = false;
-float gEscFlat = -1.f;
 
 string NeName(int o) { return (o == NE_LIGHT) ? "LIGHT" : ((o == NE_HEAVY) ? "HEAVY" : "MATCH"); }
 float NeMul(int o) { return (o == NE_LIGHT) ? 0.5f : ((o == NE_HEAVY) ? 2.f : 1.f); }
@@ -26,9 +25,6 @@ void EscNetDecide()
 	gEscNextAt = ai.frame + 30 * SECOND;
 	ExposeRefresh();
 	const int rule = NE_MATCH;
-	const bool explore = gNnExploreRolled && gNnExplore;
-	if (explore && (gEscFlat < 0.f))
-		gEscFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
 	array<float> st;
 	NnState(null, st);
 	array<float> ef;
@@ -49,7 +45,8 @@ void EscNetDecide()
 	float sum = 0.f;
 	for (int o = 0; o < NE_N; ++o)
 		sum += w[o];
-	const float flat = explore ? gEscFlat : 0.f;
+	const float flat = NnHeadFlat(trust);
+	const bool explore = flat > 0.f;
 	array<float> p(NE_N);
 	for (int o = 0; o < NE_N; ++o) {
 		if ((trust > 0.f) || (flat > 0.f))

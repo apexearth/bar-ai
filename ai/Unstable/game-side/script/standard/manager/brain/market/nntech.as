@@ -131,7 +131,7 @@ int gTechCur = -1;           // the decision in force: binding whichever answer 
 int gTechLogAt = 0;
 int gTechNextAt = -1;
 bool gTechHeader = false;
-float gTechFlat = -1.f;      // discovery games: share of the uniform draw, rolled once
+float gTechFlat = -1.f;      // discovery games: the head flat last applied (NnHeadFlat)
 int gTechExpTier = -1, gTechExpAt = 0;   // discovery: the tier being timed and the moment drawn for it
 int gTechDecN = 0, gTechDevN = 0, gTechHoistN = 0, gTechHeldN = 0;
 // what the market did since the last decision
@@ -172,9 +172,6 @@ float NnTechScore(const array<float>& in st, const array<float>& in f, array<flo
 void NnTechDecide()
 {
 	const int rule = ((gTwTop > 0.f) || (gTwPick > 0.f)) ? TECH_NOW : TECH_WAIT;
-	const bool explore = gNnExploreRolled && gNnExplore;
-	if (explore && (gTechFlat < 0.f))
-		gTechFlat = float(AiRandom(0, 10000)) / 10000.f * 0.3f;
 	array<float> st;
 	NnState(null, st);
 	const float techV = (gTwSeen > 0.f) ? gTwV / gTwSeen : 0.f;
@@ -197,7 +194,10 @@ void NnTechDecide()
 	float sum = 0.f;
 	for (int o = 0; o < TECH_N; ++o)
 		sum += w[o];
-	const float flat = explore ? gTechFlat : 0.f;
+	const float flat = NnHeadFlat(trust);
+	const bool explore = flat > 0.f;
+	if (gNnExplore)
+		gTechFlat = flat;
 	array<float> p(TECH_N);
 	for (int o = 0; o < TECH_N; ++o) {
 		if ((trust > 0.f) || (flat > 0.f))
@@ -211,7 +211,7 @@ void NnTechDecide()
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
 	}
 	// DISCOVERY TRIES A TIME, NOT A COIN: a flip every 30 s sent nearly every
-	// discovery game to T2 within two minutes. Each discovery game draws one
+	// discovery game to T2 within two minutes. While the T2 net has no trust, each discovery game draws one
 	// moment 2-15 min after reaching its current tier and switches there --
 	// earlier or later than the rule would -- so similar games differ only in
 	// when. Never for the first plant (tier 1): that is never held back.

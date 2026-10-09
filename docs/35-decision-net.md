@@ -82,8 +82,8 @@ restructure (enemy economy estimate).
   starts closing on home. Default weights: 1 on the rule's verdict (turtle or
   stance hold = HOLD, a hit/contested/raided base = DEFEND, else ATTACK),
   0.01 on the rest. Outside discovery games with no net trust the rule's pick
-  runs at p=1 and nothing changes; in a discovery game (`gNnExplore`) p mixes
-  half uniform in, and a pick that differs from the rule overrides
+  runs at p=1 and nothing changes; in a discovery game while the posture net has no trust p mixes
+  `NN_HEAD_FLAT` (0.1) uniform in, and a pick that differs from the rule overrides
   `HoldReason`/`HoldHome`, the pool's promote type, and the lane anchor until
   the next decision (a deviation is not cut short by a rule flip; the rule
   chain flips every few seconds while a base is raided). Fields: the 75 `NN_STATE` values, then `post=` (our ground
@@ -145,8 +145,8 @@ restructure (enemy economy estimate).
   GREED spent 28.4k at 16% ground army, NORMAL 17.1k at 30%, RUSH 55-64%
   ground; AIR still 1-3% air (one slow plant, copies refused). One plan per ally
   team on a board the allied AIs of one process share (`ai.SetTeamBoard`),
-  held 8 min; whoever decides logs the row; an explorer always decides and
-  draws the ten evenly. Under every plan but NORMAL, the GREEDs and TURTLE the
+  held 8 min; whoever decides logs the row; a discovery explorer leads (see
+  Discovery games). Under every plan but NORMAL, the GREEDs and TURTLE the
   TEAM PUSH runs: the owner posts the turret line our army dies to
   (it holds until broken), each AI posts the attack power it has gathered
   short of it, and when the team beats the strongest group there every squad
@@ -168,15 +168,33 @@ lostMobile, from the killer's unit def), dEco (economic power incl. energy),
 reclaim. Plus `done`/`buildS`, `survived`, and `lostPre` -- enemy kills in
 the 5 minutes BEFORE the decision, a check that the state saw the pressure.
 
-## Discovery games (`apex_nn_explore`, 0.1)
+## Discovery games (`apex_nn_explore`)
 
-His call: some games play with the net "tweaked randomly" against
-overfitting and for discovery. Once per game, in a build that carries trained
-weights (so other lanes' experiments and his slot are never randomised by
-accident), 10% of games give every want kind a lognormal multiplier
-(sigma 0.4) for the whole game and put noise on the net's output layer. The
-roll is logged (`apex: nn-explore`, and `explore=1` in the schema line).
-Multipliers live in `nnMult`, outside the logged market value.
+Each AI rolls `apex_nn_explore` once per game (training passes 0.1). Agreed
+with him 2026-10-08: discovery is a WHOLE STRATEGY, not a coin per decision.
+
+- **The strategy** (`plannet.as`): the explorer draws one plan for its team at
+  its first plan decision (`why=first`) from the plan net's odds mixed with a
+  flat share -- uniform while the plan net has no trust (its odds are only
+  the NORMAL prior), half net / half uniform once it has. It holds the plan,
+  renewing the team board's lease every 30 s, and re-draws only when our top
+  tech tier rises and at least `NG_HOLD_S` has passed (`why=tier`; at most
+  two re-draws). If it dies the lease lapses and allies decide as usual. A
+  second explorer on the team follows the first (`BOARD_PLAN_LEAD`). The
+  `nnplan` row carries the mixed p, so the trainer counts it a chance pick
+  (weight 1/p, `rand_weight`). `apex_plan_explore` (Try strategies) runs the
+  same path.
+- **Every other head** plays its rule or net as in a normal game. Only a head
+  whose net has no trust -- it plays its rule at p=1 and would never see an
+  alternative -- mixes `NN_HEAD_FLAT` (0.1) uniform in (`NnHeadFlat`); its
+  row says `ex=1` only then. A trusted head draws from its own odds in every
+  game and supplies its own chance rows.
+- **Kept**: one plant-type multiplier per game (`PlantExpApply`; otherwise
+  every opening is a bot lab) and the T2 head's single drawn moment per tier
+  while it has no trust. Both are whole-game, not per decision.
+- **Logs**: `apex: nn-explore t=N on | headFlat=0.10` at the roll;
+  `apex: nn-explore-plan t=N plan=X p=.. why=first|tier tier=..` at each draw;
+  chat "Team N is the DISCOVERY explorer this game: strategy X (...)".
 
 The trainer archives (never deletes) the net when the record's layout or its
 own outputs change: `runtime/nn-archive/<stamp>/`.

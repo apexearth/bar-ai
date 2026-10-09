@@ -15,8 +15,6 @@ const string NNP_POST = "armyM,armyFwd,atkM,raidM,defM,armyDist,foeGrpM,foeGrpFw
 	+ "quota,heldM,turtle,holdWhy";
 // default weight of each option the rule did not pick: room for a net to tilt
 const float POST_EPS = 0.01f;
-// discovery games mix this much of the uniform draw in
-const float POST_FLAT = 0.5f;
 
 int gPostRule = -1;        // the rule's verdict at the last decision
 int gPostChosen = -1;
@@ -240,8 +238,6 @@ float NnPostScore(const array<float>& in st, const array<float>& in post, array<
 void PostDecide(int rule, const string& in why)
 {
 	const double t0 = ai.ClockUs();
-	// Read, never rolled here: the roll's AiRandom call stays where nnlog puts it.
-	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
 	array<float> st;
 	Market::NnState(null, st);
 	const double t1 = ai.ClockUs();
@@ -254,13 +250,15 @@ void PostDecide(int rule, const string& in why)
 	for (int o = 0; o < POST_N; ++o)
 		w[o] = (o == rule) ? 1.f : POST_EPS;
 	const float trust = NnPostScore(st, post, w);
+	const float flat = Market::NnHeadFlat(trust);
+	const bool explore = flat > 0.f;
 	float sum = 0.f;
 	for (int o = 0; o < POST_N; ++o)
 		sum += w[o];
 	array<float> p(POST_N);
 	for (int o = 0; o < POST_N; ++o) {
 		if (explore)
-			p[o] = (1.f - POST_FLAT) * w[o] / sum + POST_FLAT / float(POST_N);
+			p[o] = (1.f - flat) * w[o] / sum + flat / float(POST_N);
 		else if (trust > 0.f)
 			p[o] = w[o] / sum;
 		else
@@ -297,7 +295,7 @@ void PostDecide(int rule, const string& in why)
 	if (!gPostHeader) {
 		gPostHeader = true;
 		AiLog("apex: nnpost-schema v1 state=" + Market::NN_STATE + " post=" + NNP_POST
-			+ " opt=name,w,p opts=DEFEND,HOLD,ATTACK,RAID explore=" + (explore ? 1 : 0)
+			+ " opt=name,w,p opts=DEFEND,HOLD,ATTACK,RAID explore=" + (Market::gNnExplore ? 1 : 0)
 			+ " net=-1");
 	}
 	string ln = "apex: nnpost t=" + ai.teamId + " f=" + ai.frame + " why=" + why
