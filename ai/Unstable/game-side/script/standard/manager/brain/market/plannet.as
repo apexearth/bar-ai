@@ -159,7 +159,8 @@ void PlanNetDecide()
 	const float trust = NnHeadScore(NNG_ON, NNG_STATE, NNG_PLAN, NNG_S, NNG_O, NNG_H, NNG_XM, NNG_XS,
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
 	// An untrusted net's odds are only the NORMAL prior: the explorer then draws evenly.
-	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : NnHeadFlat();
+	// a whole-team plan is strategy exploration: only its own roll draws one (his 10-09)
+	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : 0.f;
 	array<float> p(NG_N);
 	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));

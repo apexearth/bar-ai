@@ -1321,9 +1321,12 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	const float bitCap = EcoPowerM() * ((payH > 1.f) ? payH : 900.f);
 	const float commitSh = ai.GetTunable("apex_commit_sharp", TUNE_COMMIT_SHARP);
 	float sumV2 = 0.f;
+	array<float> biteC(CAT_N + 1, 1.f);
+	int nTick = 0;
 	for (int c = 0; c <= CAT_N; ++c) {
 		if (catBest[c] < 0)
 			continue;
+		++nTick;
 		const float v = (catV[c] >= 0.f) ? catV[c]
 				: ranked[catBest[c]].value;
 		// A COMMITMENT IS NOT SAMPLED. The cost of drawing a worse option
@@ -1354,6 +1357,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 			bite = tb;
 		if (bite > 1.f)
 			bite = 1.f;
+		biteC[c] = bite;
 		sh += bite * commitSh;
 		float t = v;
 		if ((lead > 0.f) && (sh > 0.f) && (sh != 1.f))
@@ -1362,6 +1366,20 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 			t *= BudgetCatMult(c);
 		wt[c] = t;
 		sumV2 += t;
+	}
+	// An explorer's hand tries the other categories too, but never a commitment
+	// at random -- the share shrinks with the bite ("winner takes all" for afus).
+	const float flat = 0.5f * NnHeadFlat();
+	if ((flat > 0.f) && (nTick > 1) && (sumV2 > 0.f)) {
+		const float u = flat * sumV2 / float(nTick);
+		float sum2 = 0.f;
+		for (int c = 0; c <= CAT_N; ++c) {
+			if (catBest[c] < 0)
+				continue;
+			wt[c] = (1.f - flat) * wt[c] + u * (1.f - biteC[c]);
+			sum2 += wt[c];
+		}
+		sumV2 = sum2;
 	}
 	return sumV2;
 }
