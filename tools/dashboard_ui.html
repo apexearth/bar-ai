@@ -67,6 +67,28 @@
   .legend i { display:inline-block; width:10px; height:10px; border-radius:2px;
               margin-right:5px; }
   #gameback { margin-bottom:10px; }
+  canvas { max-width:100%; height:auto; }
+  @media (max-width: 760px) {
+    header { flex-wrap:wrap; gap:4px 12px; padding:8px 12px; }
+    #nav { order:3; width:100%; overflow-x:auto; scrollbar-width:none; }
+    #nav::-webkit-scrollbar { display:none; }
+    nav button { padding:9px 12px; white-space:nowrap; flex:none; }
+    #procwarn { margin-left:0; }
+    main { padding:12px 10px; }
+    .card { padding:10px; }
+    .row > div { min-width:0; max-width:100%; }
+    label.f { flex:1 1 140px; min-width:0; }
+    label.f input:not([style*="width"]), label.f select { width:100%; }
+    /* a wide table swipes sideways instead of widening the page */
+    table { display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    th, td { padding:5px 7px; }
+    /* under 16px iOS zooms the page on focus */
+    input, select, textarea { font-size:16px; }
+    button.act { padding:8px 14px; }
+    #toast { left:10px; right:10px; bottom:10px; max-width:none; }
+    .legend { flex-wrap:wrap; gap:6px 14px; }
+    pre { max-height:360px; }
+  }
 </style>
 </head>
 <body>
@@ -838,6 +860,7 @@ function drawCharts(d) {
     `<span><i style="background:${SIDE_COLORS[i % 4]}"></i>side ${s} ${esc(specs[s] || "")}</span>`).join("");
   for (const [cid, key] of [["c-metal", "metal"], ["c-army", "army"]]) {
     const cv = $("#" + cid); if (!cv) continue;
+    fitCanvas(cv);
     const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34;
     ctx.clearRect(0, 0, W, H);
     let mx = 1, mt = 1;
@@ -865,11 +888,22 @@ function drawCharts(d) {
     });
   }
 }
+// Draw at the width the card has, not the authored one: CSS-shrinking a 1140 chart on a phone shrank its text to a third.
+function fitCanvas(cv) {
+  const full = +(cv.dataset.w || (cv.dataset.w = cv.width));
+  const card = cv.closest(".card");
+  if (!card || !card.clientWidth) return;
+  const s = getComputedStyle(card);
+  const room = card.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  const w = Math.max(240, Math.min(full, Math.floor(room)));
+  if (cv.width !== w) cv.width = w;
+}
 /* ---------- shared chart plumbing ----------
    Every chart below is time on x and one linear axis on y, so the frame, the
    grid and the stacking are written once. */
 function frame(cv, mt, hi, opts) {
   const o = opts || {};
+  fitCanvas(cv);
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
   const P = o.pad || 46, B = o.bottom || 22;
   ctx.clearRect(0, 0, W, H);
@@ -1253,6 +1287,7 @@ function drawBrain() {
   const t = BRAIN.teams[tid]; if (!t) return;
   const G = bwGrouped(t, group), labels = G.labels, D = G.data;
   const N = t.min.length, mt = Math.max(1, ...t.min);
+  fitCanvas(cv);
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 44, B = 34;
   ctx.clearRect(0, 0, W, H);
   const X = m => P + (W - P - 10) * (m / mt);
@@ -1462,6 +1497,7 @@ function drawCrew() {
   const cv = $("#c-crew"); if (!cv || !CREW) return;
   const t = CREW.teams[$("#cw-team").value]; if (!t) return;
   const roles = CREW.roles, N = t.min.length;
+  fitCanvas(cv);
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 34, B = 22;
   ctx.clearRect(0, 0, W, H);
   const mt = Math.max(1, ...t.min);
@@ -1693,6 +1729,7 @@ function nnRolling(vals, n) {
 // x = game number; y may go below zero (R2 does), so the zero line is drawn.
 function nnChart(id, series, o) {
   const cv = $(id); if (!cv) return;
+  fitCanvas(cv);
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, P = 46, B = 22;
   ctx.clearRect(0, 0, W, H); ctx.font = "10px Consolas";
   const all = series.flatMap(s => s.ys.filter(v => v != null && isFinite(v)));
