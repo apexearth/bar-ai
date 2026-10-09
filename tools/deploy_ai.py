@@ -339,6 +339,8 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
         if s.is_dir():
             _copy_tree(s, game_target / sub)
     _restore_weights(kept_weights)
+    stamp = _stamp_scripts(variant, (target / "script", game_target / "script"))
+    print(f"  scripts      {stamp}")
     print(f"  game-side    {game_target}")
     print(f"               digest {_tree_digest(game_target)}")
 
@@ -358,6 +360,29 @@ def deploy(env: bar_env.BarEnv, variant: str, allow_running: bool = False,
           f"  It is the only thing that proves the AngelScript compiled. A\n"
           f"  compile error disables the variant, plays near-stock, and still\n"
           f"  reports a normal-looking result.\n{bar}")
+
+
+def _stamp_scripts(variant: str, script_dirs) -> str:
+    """Write which scripts these are into every deployed profile's stamp.as, so the
+    bot's start-of-game chat line names the scripts that actually loaded."""
+    import datetime
+    import subprocess
+
+    def git(*args):
+        r = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    # Unstable and the lanes (synced copies of it) are the working tree; a release is its name
+    commit = ""
+    if variant == "Unstable" or variant.startswith("lane-"):
+        commit = " " + (git("rev-parse", "--short", "HEAD") or "nogit")
+        if git("status", "--porcelain", "--", "ai/Unstable"):
+            commit += "+edits"
+    stamp = f"{variant}{commit} {datetime.datetime.now():%Y-%m-%d %H:%M}"
+    for d in script_dirs:
+        for f in Path(d).glob("*/stamp.as"):
+            f.write_text(f'const string APEX_SCRIPT = "{stamp}";\n', encoding="utf-8", newline="\n")
+    return stamp
 
 
 def _a_profile(src: Path) -> str:

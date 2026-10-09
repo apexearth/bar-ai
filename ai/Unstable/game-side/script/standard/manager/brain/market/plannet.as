@@ -195,12 +195,12 @@ void VersionBanner()
 {
 	if (!gVersionLogged) {
 		gVersionLogged = true;
-		AiLog("apex: version t=" + ai.teamId + " " + ai.GetAiVersion() + " nets=" + NNW_GAMES);
+		AiLog("apex: version t=" + ai.teamId + " " + ai.GetAiVersion() + " nets=" + NNW_GAMES + " script=" + APEX_SCRIPT);
 	}
 	if ((ai.frame < 3 * SECOND) || (ai.GetTeamBoard(BOARD_BANNER, -1.f) >= 0.f))
 		return;
 	ai.SetTeamBoard(BOARD_BANNER, float(ai.frame));
-	ai.SendChat("Apex " + ai.GetAiVersion() + " - nets " + NNW_GAMES);
+	ai.SendChat("Apex " + ai.GetAiVersion() + " - scripts " + APEX_SCRIPT + " - nets " + NNW_GAMES);
 }
 
 // THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the

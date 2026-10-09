@@ -1,3 +1,4 @@
+#include "stamp.as"
 #include "tunables.as"       // EVERY default, in one file -- edit here
 #include "eco.as"             // every economy reading, through one seam a test can pose
 #include "../side.as"
