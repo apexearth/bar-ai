@@ -150,6 +150,20 @@ float HuntNnScore(const array<float>& in st, const array<float>& in f, array<flo
 		Market::NNH_WO, Market::NNH_BO, Market::NNH_TRUST, st, f, w);
 }
 
+// No army of theirs in sight to weigh: what the hunt could swing is the part
+// of their army we cannot see, up to what we would meet it with.
+void HuntWantsLook()
+{
+	float unseen = FoeBelievedM() - FoeLiveM();
+	const float ours = Market::ArmyValue();
+	if (ours < unseen)
+		unseen = ours;
+	AIFloat3 at = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(at) || (at.SqLength2D() <= 1.f))
+		at = Front::FoeAnchor();
+	NoteLook(LOOK_HUNT, at, unseen, 40);
+}
+
 void HuntDecide()
 {
 	AIFloat3 gp;
@@ -157,6 +171,7 @@ void HuntDecide()
 	int nG = 0;
 	if (!HuntTarget(gp, gm, slow, tot, nG)) {
 		++gHtNoGrp;
+		HuntWantsLook();
 		return;
 	}
 	const float atkPow = aiMilitaryMgr.GetAttackPower();

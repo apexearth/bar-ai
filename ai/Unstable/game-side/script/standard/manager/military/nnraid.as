@@ -459,8 +459,11 @@ void NrPriceSpot(uint s)
 		// a spot we never saw: an extractor there as often as we find them
 		const int md = NrMexDef();
 		if (md > 0) {
-			t.prior = occ * NrPrizeOf(md, sp, Market::gAllSpotInc[s], foe);
+			const float mexV = NrPrizeOf(md, sp, Market::gAllSpotInc[s], foe);
+			t.prior = occ * mexV;
 			hp += occ * Catalog::gHealth[md];
+			// a look moves this spot's price by 2*occ*(1-occ)*prize, on average
+			NoteLook(LOOK_RAID, sp, 2.f * occ * (1.f - occ) * mexV, 45);
 		}
 	}
 	if (t.v + t.prior <= 0.f)

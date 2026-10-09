@@ -172,6 +172,8 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return NoteElect("air.gunraid", Air::NaTask());
 	if (Air::HoldsUnit(unit))
 		return null;
+	if (LookHolds(unit))
+		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
 	if ((ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)

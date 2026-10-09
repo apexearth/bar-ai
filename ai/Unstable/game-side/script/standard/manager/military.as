@@ -11,6 +11,7 @@
 #include "military/danger.as"       // their army against how soon it reaches our base
 #include "military/foemem.as"       // their army remembered out of sight, by unit
 #include "military/stance.as"       // the enemy's stance; budget answer + scout demand
+#include "military/looks.as"        // wanted looks: what a decision would pay to see, and the scouts sent for it
 #include "military/posture.as"      // raid caution, persona, team push, corridors
 #include "military/superguard.as"   // T3 heavies hold the defence line
 #include "military/unblock.as"      // units walled in by our own buildings
