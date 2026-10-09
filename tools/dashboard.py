@@ -702,6 +702,13 @@ ETA_RE = re.compile(
     r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: eta t=\d+ "
     r"P=([-\d.]+) tgt=([-\d.]+) cheap=([-\d.]+) base=([-\d.]+) "
     r"mkt=(\S+) eta=(\S+)")
+# Ground defence stage by stage (protect_census.as DefFunnelLog), per minute.
+DEFFUNNEL_RE = re.compile(
+    r"\[(\d+(?:\.\d+)?)m t(\d+)\] apex: def-funnel t=\d+ elec=(\d+) asked=(\d+) "
+    r"skipped=(\d+) proposed=(\d+) top=(\d+) draw=(\d+) hoist=(\d+) exec=(\d+) "
+    r"ok=(\d+) .*?finished=(\d+) gone=(\d+) have=(\d+) target=(\d+)")
+DEFFUNNEL_KEYS = ["elec", "asked", "skipped", "proposed", "top", "draw", "hoist",
+                  "exec", "ok", "finished", "gone", "have", "target"]
 
 
 def brain_metrics(d):
@@ -744,6 +751,15 @@ def brain_metrics(d):
                 e["mkt"].append(mkt)
                 e["pick"].append(pick)
                 e["agree"].append(1 if mkt == pick else 0)
+            elif "apex: def-funnel " in line:
+                m = DEFFUNNEL_RE.search(line)
+                if not m:
+                    continue
+                t = teams.setdefault(m.group(2), _brain_team())
+                df = t["deffunnel"]
+                df["min"].append(float(m.group(1)))
+                for i, k in enumerate(DEFFUNNEL_KEYS):
+                    df[k].append(int(m.group(3 + i)))
             elif "apex: risk " in line:
                 m = RISK_RE.search(line)
                 if not m:
@@ -766,7 +782,8 @@ def _brain_team():
             "risk": {k: [] for k in ("min", "mex", "covered", "shortfall",
                                      "lostM", "homeHazard", "homeShort")},
             "eta": {k: [] for k in ("min", "power", "target", "cheap", "base",
-                                    "mkt", "pick", "agree")}}
+                                    "mkt", "pick", "agree")},
+            "deffunnel": {k: [] for k in ["min"] + DEFFUNNEL_KEYS}}
 
 
 def match_detail(d):

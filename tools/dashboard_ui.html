@@ -723,7 +723,15 @@ function renderMatch(d) {
     <div class="dim" style="font-size:12px;margin-top:4px">Below: the risk field
       it prices deferred wants against — standing mexes and how many a turret
       covers, mean shortfall (the fraction of incoming damage our guns fail to
-      stop), and metal lost so far.</div></div>
+      stop), and metal lost so far.</div>
+    <div class="legend" id="df-legend" style="flex-wrap:wrap"></div>
+    <canvas id="c-deffunnel" width="1140" height="180"></canvas>
+    <div class="dim" style="font-size:12px;margin-top:4px">Ground defence, stage
+      by stage, per minute (<code>apex: def-funnel</code>): elections, how many
+      asked the defence question at all, how many got a defence want, how many
+      ranked it first, how many orders the executor placed, towers finished.
+      Holding against target is in the legend. <b>A wide gap between two
+      neighbouring lines is the stage losing the defence.</b></div></div>
   <div class="card"><h2>Builder elections over time — what the constructors chose</h2>
     <div class="row" style="gap:12px;align-items:flex-end">
       <label class="f">team<select id="bw-team"></select></label>
@@ -1129,6 +1137,27 @@ function drawBudget() {
     + `${t.income[l].toFixed(1)} m/s, ${Math.round(t.spent[l]).toLocaleString()} metal committed`;
   drawRisk(t.risk);
   drawEta(t.eta);
+  drawDefFunnel(t.deffunnel);
+}
+function drawDefFunnel(df) {
+  const cv = $("#c-deffunnel"); if (!cv) return;
+  if (!df || !df.min || !df.min.length) {
+    frame(cv, 1, 1);
+    setHTML($("#df-legend"), `<span class="dim">no \`apex: def-funnel\` lines in this infolog</span>`);
+    return;
+  }
+  const stages = [["elec", "elections", "#94a3ae"], ["asked", "asked", "#4fa3e3"],
+    ["proposed", "proposed", "#c78ce0"], ["top", "ranked first", "#d9c25e"],
+    ["ok", "ordered", "#e0876c"], ["finished", "finished", "#5fbf77"]];
+  const hi = Math.max(1, ...df.elec);
+  const f = frame(cv, Math.max(1, ...df.min), hi);
+  stages.forEach(([k, , c]) => line(f, df.min, df[k], c, null, 1.6));
+  const l = df.min.length - 1;
+  const sum = k => df[k].reduce((a, b) => a + b, 0);
+  setHTML($("#df-legend"), stages.map(([k, name, c]) =>
+      `<span><i style="background:${c}"></i>${name} ${sum(k).toLocaleString()}</span>`).join("")
+    + `<span class="dim">ranked first by the draw ${sum("draw")}, by a hoist ${sum("hoist")}; `
+    + `holding ${df.have[l].toLocaleString()} of ${df.target[l].toLocaleString()} at ${df.min[l]}m</span>`);
 }
 function drawEta(e) {
   const cv = $("#c-eta"); if (!cv) return;

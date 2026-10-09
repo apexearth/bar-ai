@@ -110,6 +110,25 @@ most one gun of the team within 600 ("one gun is not a defence"); nearest gun
 (protect_nn.as, heads defamt/defsite) record against it; `apex: leak-stat` is
 the live census. Unfixed until a trained head or a rule moves these numbers.
 
+## GROUND DEFENCE NEVER REACHES ITS TARGET: THE FUNNEL (2026-10-09)
+
+Same batch, all 121 games. The defence question was ASKED in 87% / 35% / 21%
+of elections at min 6-10 / 11-20 / 21-40 (perf calls of step 14 against the
+never-skipped energy/assist steps): StepSkip learned it away, because 84% of
+defence firsts after min 20 come from hoists (coverall 30.2k, basefront 8.3k
+of 45.9k) whose Wants carry no `src`. Fixed by exempting step 14 while
+DefenceShortfall() > 0 -- UNMEASURED; `apex: def-funnel` is the instrument.
+Still open, read off the same funnel:
+- **Executor refuses 68% of ground-gun attempts** (whole games, 43k): grave
+  9.5k, takeNull 9.7k, interior 7.3k, ferry 2.8k, ok 13.8k. Most are coverall
+  LLTs re-elected onto a mex where one just died (grave).
+- **Value at min 10-20**: when a defence want IS in a draw list the best rival
+  is 6.6x it (median); draw sharpness 2.9 makes that ~1% odds. After min 20
+  the ratio is 0.66 and defence wins when present (median p 0.99).
+- **The gap is counted twice on pull-priced slots**: the pull is gap/180 s, and
+  the want is then multiplied by TargetFill = gap/target again (protect_want.as
+  `gDwFill`), so value goes as gap^2/target there.
+
 ## T2 GUNS STAND AFTER THE T2 PUSH ARRIVES, AND THEY ARE THE SLOW ONES (2026-10-09)
 
 Same batch, per SIDE (two seats each; gadget BUILD/ARMY/DEATH lines, ground
