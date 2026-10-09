@@ -922,9 +922,9 @@ class HuntHead(ComHead):
 
 
 class ScoutCapHead(ComHead):
-    """The late ground scout cap net (econet.as): x1 / x2 / x4 of the flat base."""
+    """The late ground scout cap net (econet.as): x1 / x1.5 / x2 of the flat base."""
     NAME = "scap"
-    OPTS = ("S1", "S2", "S4")
+    OPTS = ("S1", "S15", "S2")
     PREFIX = "NNS"
 
 

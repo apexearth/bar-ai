@@ -100,7 +100,7 @@ void EcoNetDecide()
 		AiLog("apex: nnmex-schema v1 state=" + NN_STATE + " mex=" + NNX_MEX + " opt=name,w,p opts=HOLD,YIELD,PUSH");
 		AiLog("apex: nncap-schema v1 state=" + NN_STATE + " cap=" + NNQ_CAP + " opt=name,w,p opts=X1,X2,X4");
 		AiLog("apex: nnacap-schema v1 state=" + NN_STATE + " acap=" + NNQ_CAP + " opt=name,w,p opts=A2,A4,A8");
-		AiLog("apex: nnscap-schema v1 state=" + NN_STATE + " scap=" + NNS_SCOUT + " opt=name,w,p opts=S1,S2,S4");
+		AiLog("apex: nnscap-schema v1 state=" + NN_STATE + " scap=" + NNS_SCOUT + " opt=name,w,p opts=S1,S15,S2");
 	}
 	{
 		array<float> f;
@@ -176,8 +176,8 @@ void EcoNetDecide()
 		array<float> sp(3);
 		const float sflat = NnHeadFlat(strust);
 		const int sc = EcoDraw(0, strust, sw, sp, sflat);
-		gScoutCapMul = (sc == 1) ? 2.f : ((sc == 2) ? 4.f : 1.f);
-		array<string> snames = {"S1", "S2", "S4"};
+		gScoutCapMul = (sc == 1) ? 1.5f : ((sc == 2) ? 2.f : 1.f);   // x4 was 160 scouts an AI: a frame-budget risk at 16 AIs
+		array<string> snames = {"S1", "S15", "S2"};
 		AiLog(EcoLine("nnscap", "S1", sflat > 0.f, strust, st, sf, snames, sw, sp, sc));
 	}
 	{

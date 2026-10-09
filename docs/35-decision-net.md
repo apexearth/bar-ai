@@ -142,7 +142,7 @@ restructure (enemy economy estimate).
   2026-10-08): count caps in the priors made learnable, the `nncap` pattern.
   `nnscap` sizes the late ground scout cap (`ScoutFleetCap`, `:scoutcap` and
   `:esc-capped` in prodrank) at S1 (the rule: the flat base, max(20,
-  maxunits/50)), S2 or S4; prefix NNS. `nnecap` multiplies the escorts-at-once
+  maxunits/50)), S1.5 or S2 (x4 dropped: 160 scouts an AI is a frame-budget risk at 16 AIs); prefix NNS. `nnecap` multiplies the escorts-at-once
   cap (`EscortCap` = TUNE_ESCORT_CAP x the escort net's strength) by E1 (the
   rule), E2 or E4, reading the escort net's own fields; prefix NNY. Both on the
   30 s clock of their file. The flat base itself stays a ceiling on rez bots
