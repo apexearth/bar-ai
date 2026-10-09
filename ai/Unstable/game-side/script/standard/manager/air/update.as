@@ -308,6 +308,7 @@ bool LookDispatch(CCircuitUnit@ unit)
 	gLookTarget = over;
 	gLookSeen0 = aiEnemyMgr.GetEnemyStructCost();
 	++gLookFlown;
+	Military::LookDrop(Military::LOOK_WING);
 	AiLog(Factory::T() + "apex: air look " + unit.circuitDef.GetName()
 		+ " #" + unit.id + " -> " + int(over.x) + "," + int(over.z)
 		+ ((gLookLeg == 0) ? (" via " + int(gLookWay.x) + "," + int(gLookWay.z)) : "")
@@ -488,8 +489,8 @@ void ScoutOverflight()
 	AIFloat3 base = Front::FoeAnchor();
 	if (!OnMap(base))
 		base = foe;
-	// The first scouts light what a long gun is holding its ring for.
-	const int spots = aiMilitaryMgr.GetSpotWantedCount();
+	// The first scouts fly the wanted looks (Military::LookTake), best first.
+	int looked = 0;
 	int sent = 0;
 	string firstName = "";
 	const array<int>@ ownedS = Market::OwnedDefs();
@@ -509,10 +510,11 @@ void ScoutOverflight()
 				|| (int(us[i].id) == gLookScout))
 				continue;
 			AIFloat3 over;
-			if (sent < spots) {
-				over = aiMilitaryMgr.GetSpotWantedAt(sent);
+			const bool trip = IsLookDef(d) && Military::LookTake(us[i], Military::LOOK_AIR, over);
+			if (trip) {
+				++looked;
 			} else {
-				const int k = sent - spots;
+				const int k = sent - looked;
 				const AIFloat3 at = ((k % 2) == 0) ? foe : base;
 				const float ang = (float((ai.frame / SECOND) % 8) + float(k) * 2.4f) * 0.785398f;
 				over = at + AIFloat3(cos(ang), 0.f, sin(ang)) * (500.f * float(1 + (k / 2) % 3));
@@ -520,15 +522,15 @@ void ScoutOverflight()
 					over = at;
 			}
 			us[i].CmdMoveTo(over);
-			if (sent == 0) {
-				Cover(us[i], over, "overflight");
+			if (trip || (sent == 0))
+				Cover(us[i], over, trip ? "look-trip" : "overflight");
+			if (sent == 0)
 				firstName = Catalog::Def(d).GetName();
-			}
 			++sent;
 		}
 	}
 	if (sent > 0)
-		AiLog("apex: overflight " + firstName + " sent=" + sent + " spot=" + ((spots < sent) ? spots : sent)
+		AiLog("apex: overflight " + firstName + " sent=" + sent + " look=" + looked
 			+ " army=" + int(foe.x) + "," + int(foe.z) + " base=" + int(base.x) + "," + int(base.z));
 }
 

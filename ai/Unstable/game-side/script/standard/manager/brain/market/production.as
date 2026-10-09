@@ -1681,9 +1681,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// adds to the first bomber's price (Air::LookGainFor). A second demand
 		// beside the support one below, not instead of it.
 		if (!Catalog::gBuilder[d] && Air::IsLookDef(d)) {
+			// The wanted-look trips are max'd, not summed: the watch and the
+			// wing's look are themselves registered as looks.
 			const float gainLk = Air::LookGainFor(d, fillS);
 			const float gainW = Air::WatchGainFor(d, fillS);
-			const float gainL = ((gainLk > gainW) ? gainLk : gainW) * roleMul;
+			const float gainTrip = Military::LookBuyGain(d, fillS);
+			float gainL = (gainLk > gainW) ? gainLk : gainW;
+			string why = (gainW > gainLk) ? ":watch(v" : ":look(v";
+			if (gainTrip > gainL) {
+				gainL = gainTrip;
+				why = ":trip(v";
+			}
+			gainL *= roleMul;
 			if (gainL > 0.f) {
 				const float vL = gainL / Catalog::gCostM[d];
 				candDef.insertLast(d);
@@ -1691,8 +1700,22 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				candGain.insertLast(gainL);
 				sumV += vL;
 				if (prankNow)
-					prank += " " + Catalog::Def(d).GetName()
-						+ ((gainW > gainLk) ? ":watch(v" : ":look(v") + formatFloat(vL, "", 0, 3) + ")";
+					prank += " " + Catalog::Def(d).GetName() + why + formatFloat(vL, "", 0, 3) + ")";
+			}
+		}
+		// THE WANTED LOOKS, on the ground: a scout bought for the trip no
+		// scout we have can fly (Military::LookBuyGain), under the fleet cap.
+		if (!Catalog::gBuilder[d] && (Military::LookScoutOf(d) == 2)
+			&& (ScoutFleetHave() < RezFleetCap())) {
+			const float gainG = Military::LookBuyGain(d, fillS) * roleMul;
+			if (gainG > 0.f) {
+				const float vG = gainG / Catalog::gCostM[d];
+				candDef.insertLast(d);
+				candV.insertLast(vG);
+				candGain.insertLast(gainG);
+				sumV += vG;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":trip(v" + formatFloat(vG, "", 0, 3) + ")";
 			}
 		}
 		// THE SCOUT FLIGHT: planes massed to see their base (Air::FlightGainFor).

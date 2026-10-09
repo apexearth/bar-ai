@@ -715,6 +715,8 @@ int gLookLeg = 1;         // 0 flying to the waypoint, 1 to the target
 int gLookFlown = 0;
 int gLookDelivered = 0;
 
+bool LookOut() { return gLookScout >= 0; }
+
 // The air SCOUT: a transport is unarmed and cheap too, and flew the first one.
 bool IsLookDef(int d)
 {
