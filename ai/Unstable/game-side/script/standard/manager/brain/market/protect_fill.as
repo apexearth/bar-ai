@@ -13,6 +13,7 @@ array<array<float>@> gDsZ;
 array<array<bool>@> gDsFront;
 array<array<bool>@> gDsRing;
 array<array<bool>@> gDsWall;
+array<array<int>@> gDsKeep;   // keep-out gap id of a site, -1 for every other kind
 array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
@@ -83,6 +84,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsFront.resize(uint(Catalog::gDefCount + 1));
 		gDsRing.resize(uint(Catalog::gDefCount + 1));
 		gDsWall.resize(uint(Catalog::gDefCount + 1));
+		gDsKeep.resize(uint(Catalog::gDefCount + 1));
 		gDsAt.resize(uint(Catalog::gDefCount + 1));
 		gDsLineN.resize(uint(Catalog::gDefCount + 1));
 	}
@@ -287,9 +289,17 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			}
 		}
 	}
+	// THE KEEP-OUT GAPS THIS SEAT OWNS (protect_keepout.as): the alliance
+	// perimeter's open arcs, worst first. While one is open the wall's demand
+	// pull goes to closing it, not to the rim slots.
+	const uint keepStart = sites.length();
+	array<int> keepIds;
+	KoFillSites(sites, keepIds);
+	const bool koOwn = keepIds.length() > 0;
 	Perf::Add("prot.sites", _tSites);
 	const double _tLoop = Perf::T0();
 	array<float> prevA(sites.length(), 0.f);
+	array<int> keepA(sites.length(), -1);
 	array<float> xA(sites.length(), 0.f);
 	array<float> zA(sites.length(), 0.f);
 	array<bool> frontA(sites.length(), false);
@@ -377,9 +387,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// "not even within range of water").
 		if (waterOnly && !WaterInReach(s, reach))
 			continue;
-		const bool isAllyF = (si >= allyStart);
-		const bool isRing = (si >= ringStart) && !isAllyF;
-		const bool isFront = ((si >= nAsset) && !isRing) || isAllyF;
+		const bool isKeep = (si >= keepStart);
+		const bool isAllyF = (si >= allyStart) && !isKeep;
+		const bool isRing = (si >= ringStart) && !isAllyF && !isKeep;
+		const bool isFront = (((si >= nAsset) && !isRing) || isAllyF) && !isKeep;
 		const bool isGate = isFront && !isAllyF && (si < nAsset + nGates);
 		const bool isWall = wallOn && (si < nWall);
 		// AS CLOSE TO THE FRONT AS IS REASONABLY SAFE (apexearth 2026-09-02:
@@ -403,8 +414,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 				continue;
 			++gDbgPulled;
 		}
-		if (isAllyF && Builder::SiteHot(s)) {
-			AIFloat3 back = mh - s;
+		if ((isAllyF || isKeep) && Builder::SiteHot(s)) {
+			AIFloat3 back = (isKeep ? gKoMid : mh) - s;
 			if (back.SqLength2D() > 1.f) {
 				back.SafeNormalize2D();
 				s = Builder::PullBack(s, back, Brain::LightTowerRange() * tuneWallPitch, 3);
@@ -458,6 +469,14 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// wave prior, so a quiet gap is priced, not gated out.
 		if (isWall && (siteWave > threat) && GapWalkableAt(s))
 			threat = siteWave;
+		if (isKeep) {
+			keepA[si] = keepIds[si - keepStart];
+			if (siteWave > threat)
+				threat = siteWave;
+			const float kt = KoThreatM(keepA[si]);
+			if (kt > threat)
+				threat = kt;
+		}
 		// Exposure-scaled both ways -- see MexFloorFactor above.
 		const float mexFloorHere = (mexFloorWave > 0.f)
 				? (mexFloorWave * MexFloorFactor(s)) : 0.f;
@@ -535,7 +554,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// commander's courage from a shared fill.
 		// A sheltered seat's rim takes no pull: the ally-front post does.
 		const bool pullBase = (wallPull > 0.f)
-				&& ((isWall && !sheltered) || isMexG || isAllyF);
+				&& ((isWall && !sheltered && !koOwn) || isMexG || isAllyF || isKeep);
 		float foeHere = -1.f;
 		bool pullHere = false;
 		if (pullBase) {
@@ -548,7 +567,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// site can ever read foeHere -- and only when the ground under
 			// it is hot. Asked unconditionally it was an engine query per
 			// slot per fill for a number the branch below could not use.
-			if (isWall || isAllyF)
+			if (isWall || isAllyF || isKeep)
 				pullHere = true;
 			else if (Builder::SiteHot(s))
 				foeHere = ai.GetEnemyCostAt(s, 900.f);
@@ -591,7 +610,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// A wall slot stands in front of the TEAM's metal an army entering on
 		// its bearing reaches before it meets fire (protect_team.as) -- the
 		// weakest approach is worth what lies behind it, whoever owns it.
-		if (isWall) {
+		if (isWall || isKeep) {
 			const float behind = GapBehindAt(s);
 			if (behind > stake)
 				stake = behind;
@@ -683,8 +702,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// turret guarding each of our mexes at least"). THE LINE FIRST,
 			// THE RING WHEN THE LINE STANDS: while the line has an open slot
 			// a ring slot takes only the rear minimum.
-			const float dirW = isAllyF ? shapeMax : WallDirW(si, s, isMexG, foeP, foePOk, lineOpen,
-					tuneWallLineW, wallRear);
+			const float dirW = isAllyF ? shapeMax : (isKeep ? (KoShape(keepA[si]) * shapeMax)
+					: WallDirW(si, s, isMexG, foeP, foePOk, lineOpen, tuneWallLineW, wallRear));
 			// ONE SLOT HOLDS ONE BUILDING, so the shortfall this slot can
 			// answer is that building's cost -- and a mex's guard is its FIRST
 			// SENTRY ("1 sentry turret guarding each of our mexes at least"),
@@ -723,7 +742,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			// guns already meet the wave carries none of the pull, or the
 			// same enemy-facing slot takes every gun of the shortfall (a
 			// blob of twenty rings at one point, his watch).
-			const float pullPrev = ((isWall || isAllyF)
+			const float pullPrev = ((isWall || isAllyF || isKeep)
 					? (slotGap / fillS)
 					: ((horizW > 1.f) ? (slotGap / horizW) : slotGap)) * shape
 					* ((short0 > 0.f) ? short0 : 0.f);
@@ -781,6 +800,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	@gDsFront[d] = frontA;
 	@gDsRing[d] = ringA;
 	@gDsWall[d] = wallA;
+	@gDsKeep[d] = keepA;
 	gDsLineN[d] = int(ringStart - nAsset);
 	// This def's OWN argmax terms, stamped with the fill: gDbg* are shared
 	// across defs, so reading them after a CACHED fill would report whichever

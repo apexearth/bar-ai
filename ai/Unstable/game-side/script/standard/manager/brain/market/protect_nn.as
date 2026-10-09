@@ -195,6 +195,7 @@ void DefNoteLeak(const AIFloat3& in at, int d, CCircuitDef@ by)
 			gLkLoneM += m;
 	}
 	DefSiteNoteLoss(at, m);
+	KoNoteLeak(at, m);
 	AiLog(Factory::T() + "apex: leak t=" + ai.teamId + " def=" + Catalog::Def(d).GetName() + " cls=" + cls
 		+ " m=" + int(m) + " at=" + int(at.x) + "," + int(at.z) + " depth=" + int(depth) + " zone=" + zone
 		+ " dir=" + dir + " nearestGunD=" + int(gunD) + " guns600=" + guns6
@@ -289,6 +290,9 @@ void DsCandidates(int d, const AIFloat3& in ruleAt, float reach, array<AIFloat3>
 		const array<bool>@ fr = gDsFront[d];
 		const array<bool>@ rg = gDsRing[d];
 		const array<bool>@ wl = gDsWall[d];
+		const array<int>@ kp = null;
+		if (uint(d) < gDsKeep.length())
+			@kp = gDsKeep[d];
 		float bW = -1.f, bM = -1.f, bF = -1.f, bFl = -2.f, bFo = 1e9f;
 		int iW = -1, iM = -1, iF = -1, iFl = -1, iFo = -1;
 		for (uint i = 0; i < pv.length(); ++i) {
@@ -299,7 +303,7 @@ void DsCandidates(int d, const AIFloat3& in ruleAt, float reach, array<AIFloat3>
 				if (pv[i] > bW) { bW = pv[i]; iW = int(i); }
 			} else if (fr[i]) {
 				if (pv[i] > bF) { bF = pv[i]; iF = int(i); }
-			} else if (!rg[i]) {
+			} else if (!rg[i] && ((kp is null) || (i >= kp.length()) || (kp[i] < 0))) {
 				if (pv[i] > bM) { bM = pv[i]; iM = int(i); }
 			}
 			if (gPfRimOk && (lm > 0.f)) {
@@ -456,6 +460,7 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 	if (c != DS_RULE)
 		++gDsOvN;
 	const AIFloat3 site = at[c];
+	KoNoteSited(site);
 	gDsMemoDef.insertLast(d);
 	gDsMemoRule.insertLast(w.pos);
 	gDsMemoAt.insertLast(site);
