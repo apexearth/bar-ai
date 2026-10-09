@@ -1683,6 +1683,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		array<float> wtC;
 		ConRoleCensus(wtC, DrawWeights(ranked, cbC, wtC));
 		ConRoleLog();
+		DefRoleLog();
 	}
 	// THE ETA LAYER. Shadow-logs always; re-ranks the economic categories only
 	// while apex_eta is on. Above the panics on purpose -- those are safety and
@@ -2328,8 +2329,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// factory short of its caretakers is taken, not sampled (apexearth
 	// 2026-09-11: "it should be high priority").
 	bool floorPush = false;
+	const bool defRole = !aaPanic && !superPush && !coverPush && !convertPush
+			&& DefRoleApply(unit, ranked);
+	if (defRole) {
+		floorPush = true;
+		why = "defrole";
+	}
 	// The field crew takes field work, the home crew never walks out (crew.as).
-	if (!aaPanic && !superPush && !coverPush && !convertPush && CrewApply(unit, ranked)) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && CrewApply(unit, ranked)) {
 		floorPush = true;
 		why = "field";
 	}
@@ -2367,7 +2374,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// yields and the election falls through to the priced draw.
 	const bool bpShort = (ai.GetTunable("apex_floor_yield", TUNE_FLOOR_YIELD) <= 0.f)
 			|| (Brain::BudgetMult(Brain::BUILDPOWER) > 1.f);
-	if (!aaPanic && !superPush && !coverPush && !convertPush && bpShort) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && !convertPush && bpShort) {
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if ((ranked[ri].kind != WK_NANO) || (ranked[ri].spotId != NS_FLOOR))
 				continue;
@@ -2487,12 +2494,12 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// draw: the draw put the lab anywhere from 3 s to 80 s. Only the panics and
 	// the cover hoists above outrank its steps.
 	bool openPush = false;
-	if (!aaPanic && !superPush && !coverPush && OpenHoist(unit, ranked)) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && OpenHoist(unit, ranked)) {
 		openPush = true;
 		why = "open";
 	}
 	bool upFirst = false;
-	if (!aaPanic && !superPush && !coverPush && !openPush && UpgradesFirst(unit, ranked)) {
+	if (!defRole && !aaPanic && !superPush && !coverPush && !openPush && UpgradesFirst(unit, ranked)) {
 		upFirst = true;
 		why = "upfirst";
 	}
@@ -2797,6 +2804,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);
 			StepWon(unit, ranked[i]);
+			DefRoleExecuted(unit, ranked[i]);
 			if ((ranked[i].kind == WK_MEX)
 				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)))
 				NoteClaim(unit, ranked[i]);
@@ -2859,7 +2867,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ecoAt = int(e);
 		}
 		const bool eco = (ecoAt >= 0);
-		if (ecoAt > 0) {
+		if ((ecoAt > 0) && !(defRole && DefRoleWant(ranked[0]))) {
 			Want@ ew = ranked[uint(ecoAt)];
 			ranked.removeAt(uint(ecoAt));
 			ranked.insertAt(0, ew);
@@ -2897,6 +2905,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		ConRoleForget(int(unit.id));
 		++gRoleFell;
 	}
+	DefRoleForget(int(unit.id));
 	return IdleFloor(unit, "all wants refused");
 }
 

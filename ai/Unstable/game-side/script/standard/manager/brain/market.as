@@ -60,6 +60,7 @@
 #include "market/eta.as"            // the economy-only ETA target and its ladder
 #include "market/roles.as"          // constructor roles: the split of need, who holds which
 #include "market/crew.as"           // the field crew and the home crew
+#include "market/defrole.as"        // advanced hands held on advanced guns while that gap is open
 #include "market/nnweights.as"      // the value net, written by tools/nntrain.py into the deployed copy
 #include "market/nnlog.as"          // the decision record a value net trains on
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
