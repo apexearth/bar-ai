@@ -176,6 +176,34 @@ def script_bonus(path):
     return out
 
 
+_CANON = []
+
+
+def canon_state():
+    """Today's state field list, from the NN_STATE string in the live script."""
+    if not _CANON:
+        p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "ai", "Unstable", "game-side", "script", "standard", "manager", "brain", "market", "nnlog.as")
+        try:
+            txt = open(p, encoding="utf-8").read()
+            m = re.search(r"const string NN_STATE\s*=\s*(.*?);", txt, re.S)
+            _CANON.extend("".join(re.findall(r'"([^"]*)"', m.group(1))).split(","))
+        except (OSError, AttributeError):
+            pass
+    return _CANON
+
+
+def widen_keys(keys):
+    """A game logged before fields were appended reads in today's layout: the
+    missing fields are absent from its rows (0 to the trainer) unless filled,
+    as ourBonus/foeBonus are from the start script. Without this the trainer
+    took the game's own shorter list and never read a filled field."""
+    canon = canon_state()
+    if keys and canon and len(keys) < len(canon) and canon[:len(keys)] == keys:
+        return list(canon)
+    return keys
+
+
 def fill_bonus(g, t, state):
     b = g.get("bonus", {}).get(t)
     if b is not None and "ourBonus" not in state:
@@ -311,7 +339,7 @@ def parse(path, files=None):
                     if atk >= 0 and atk != t and int(mu.group(2)) >= 0:
                         killby.setdefault(int(mu.group(2)), []).append((f, cost))
     return dict(bonus=script_bonus(path),
-                rows=rows, execs=execs, nns=nns, state_keys=state_keys, opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
+                rows=rows, execs=execs, nns=nns, state_keys=widen_keys(state_keys), opt_keys=opt_keys, last=min(lastw, lastd) if lastd else lastw,
                 sm=sm, se=se, wm=wm, we=we, dealt=dealt, recv=recv,
                 mexev=mexev, killev=killev, lostev=lostev, builds=builds, dead=dead,
                 reclaim=reclaim, explore=explore, explorers=explorers, reinf_done=reinf_done, died=died, killby=killby,
