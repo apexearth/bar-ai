@@ -456,9 +456,6 @@ int NaDecide(int kind, const string why)
 		rule = (best.netM > 0.f) ? NA_GO : NA_WAIT;
 	else
 		rule = legacy ? NA_GO : NA_WAIT;   // nothing of theirs known: the wing's own clock
-	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
-	if (explore && (gNaFlat < 0.f))
-		gNaFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
 	array<float> st;
 	Market::NnState(null, st);
 	const int held = (kind == 0) ? HeldBombers() : n;
@@ -493,7 +490,10 @@ int NaDecide(int kind, const string why)
 	float sum = 0.f;
 	for (int o = 0; o < NA_N; ++o)
 		sum += w[o];
-	const float flat = explore ? gNaFlat : 0.f;
+	const float flat = Market::NnHeadFlat(trust);
+	const bool explore = flat > 0.f;
+	if (Market::gNnExplore)
+		gNaFlat = flat;
 	array<float> pr(NA_N);
 	for (int o = 0; o < NA_N; ++o) {
 		if ((trust > 0.f) || (flat > 0.f))

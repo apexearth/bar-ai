@@ -582,9 +582,6 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 {
 	const bool live = NrLive();
 	const int rule = (best.netM > 0.f) ? NR_GO : NR_WAIT;
-	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
-	if (explore && (gNrFlat < 0.f))
-		gNrFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
 	array<float> st;
 	Market::NnState(null, st);
 	array<float> rf;
@@ -613,7 +610,10 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 	float sum = 0.f;
 	for (int o = 0; o < NR_N; ++o)
 		sum += w[o];
-	const float flat = explore ? gNrFlat : 0.f;
+	const float flat = Market::NnHeadFlat(trust);
+	const bool explore = flat > 0.f;
+	if (Market::gNnExplore)
+		gNrFlat = flat;
 	array<float> p(NR_N);
 	for (int o = 0; o < NR_N; ++o) {
 		if ((trust > 0.f) || (flat > 0.f))

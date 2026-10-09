@@ -797,10 +797,9 @@ const float TUNE_DECIDE_LOG = 1.f;
 //   exp(blend) times its market value. 0 = the net only watches. See docs/35.
 const float TUNE_NN_BLEND = 1.f;
 
-// [0..1] -- Share of games (that carry a trained net) played as DISCOVERY
-//   games: every want kind gets a random x0.5..x2 multiplier for the whole
-//   game and the net's output layer gets noise, so the trainer sees what
-//   wanting more or less of each thing does. See docs/35.
+// [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: its
+//   team plays one whole strategy drawn from the plan net's options, re-drawn
+//   when our tech tier rises; other heads play as usual. See docs/35.
 const float TUNE_NN_EXPLORE = 0.f;
 const float TUNE_PLAN_EXPLORE = 0.f;
 const float TUNE_NN_EXPLORE_TEAM = -1.f;   // [team] >= 0: that team is the explorer, the other plays normally (watched self-play)

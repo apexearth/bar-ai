@@ -4,7 +4,9 @@ namespace Market {
 // tower line one 4k squad at a time: mass T3, missiles and banked nukes, many
 // LRPCs -- and allies who know what each other build). One plan per ally
 // team on the shared board, held NG_HOLD_S; whoever decides logs an nnplan
-// row (an explorer always decides, so discovery leads its team). The rule is
+// row. A discovery explorer leads its team with one strategy, re-drawn only
+// when our tech tier rises -- discovery is a whole strategy, not a coin per
+// decision (docs/35). The rule is
 // NORMAL; the net learns which plan ends which game soonest. His 2026-10-07:
 // the spontaneity he wants is strategies -- mass air, an early all-in, greed
 // against a passive enemy, defences against one that is massing -- so those
@@ -15,10 +17,14 @@ const int NG_AIR = 5, NG_RUSH = 6, NG_GREED = 7, NG_TURTLE = 8, NG_GREED_DEEP = 
 const array<string> NG_NAMES = {"NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE", "GREED_DEEP"};
 const float NG_MUL = 4.f;
 const int NG_HOLD_S = 480;   // a gantry or a battery takes longer than 4 min to pay off
-const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2;
+const int BOARD_PLAN = 1, BOARD_PLAN_UNTIL = 2, BOARD_PLAN_LEAD = 7;   // LEAD: explorer's engine team + 1, 0 none
+// A trusted net's own odds, half flat so a rare plan is still tried.
+const float NG_EX_FLAT = 0.5f;
 int gPlan = NG_NORMAL;
 int gPlanNextAt = 0;
 int gPlanMineUntil = 0;
+int gPlanExAt = -1;     // when the explorer last drew its strategy
+int gPlanExTier = 1;    // our top tier then
 bool gPlanHeader = false;
 
 string NgName(int o)
@@ -79,25 +85,49 @@ float PlanMul(int sc)
 	return 1.f;
 }
 
+void PlanBoardWrite(bool leads)
+{
+	ai.SetTeamBoard(BOARD_PLAN, float(gPlan));
+	ai.SetTeamBoard(BOARD_PLAN_UNTIL, float(gPlanMineUntil));
+	ai.SetTeamBoard(BOARD_PLAN_LEAD, leads ? float(ai.teamId + 1) : 0.f);
+}
+
 void PlanNetDecide()
 {
 	if (ai.frame < gPlanNextAt)
 		return;
 	gPlanNextAt = ai.frame + 30 * SECOND;
+	NnExploreRoll();
 	// A discovery explorer, or a bot set to try strategies (a lobby option for
-	// his multiplayer games): it draws the plan evenly and leads its team.
-	const bool explore = (gNnExploreRolled && gNnExplore)
-		|| (ai.GetTunable("apex_plan_explore", TUNE_PLAN_EXPLORE) > 0.f);
-	const float until = ai.GetTeamBoard(BOARD_PLAN_UNTIL, -1.f);
-	if ((until > float(ai.frame)) && (!explore || (ai.frame < gPlanMineUntil))) {
+	// his multiplayer games), draws ONE strategy and leads its team with it;
+	// a second explorer on the team follows the first.
+	const bool explore = gNnExplore || (ai.GetTunable("apex_plan_explore", TUNE_PLAN_EXPLORE) > 0.f);
+	const bool live = ai.GetTeamBoard(BOARD_PLAN_UNTIL, -1.f) > float(ai.frame);
+	const int lead = int(ai.GetTeamBoard(BOARD_PLAN_LEAD, 0.f)) - 1;
+	const bool leads = explore && (!live || (lead < 0) || (lead == ai.teamId));
+	if (live && !leads) {
 		const int was = gPlan;
 		gPlan = int(ai.GetTeamBoard(BOARD_PLAN, 0.f));
 		if (gPlan != was)
 			AiLog("apex: plan t=" + ai.teamId + " follows " + NgName(gPlan));
+		if (explore)
+			NnExploreSay(NgName(gPlan), "led by explorer team " + lead);
 		return;
 	}
 	gPlanMineUntil = ai.frame + NG_HOLD_S * SECOND;
-	const float flat = explore ? 1.f : 0.f;   // an explorer tries whole plans, each equally often
+	// The explorer's strategy stands until our top tier rises, and at least one
+	// hold; renewing the lease keeps allies on it, and it lapses if we die.
+	const int tier = (OwnTopTier() > 1) ? OwnTopTier() : 1;
+	if (leads && (gPlanExAt >= 0)
+		&& ((tier <= gPlanExTier) || (ai.frame < gPlanExAt + NG_HOLD_S * SECOND))) {
+		PlanBoardWrite(true);
+		return;
+	}
+	const string why = !leads ? "clock" : ((gPlanExAt < 0) ? "first" : "tier");
+	if (leads) {
+		gPlanExAt = ai.frame;
+		gPlanExTier = tier;
+	}
 	if (!gPlanHeader) {
 		gPlanHeader = true;
 		AiLog("apex: nnplan-schema v4 state=" + NN_STATE + " plan=" + NNG_PLAN + " opt=name,w,p opts=NORMAL,T3,MISSILE,ARTY,MASS,AIR,RUSH,GREED,TURTLE,GREED_DEEP");
@@ -128,17 +158,30 @@ void PlanNetDecide()
 	w[NG_NORMAL] = 1.f;
 	const float trust = NnHeadScore(NNG_ON, NNG_STATE, NNG_PLAN, NNG_S, NNG_O, NNG_H, NNG_XM, NNG_XS,
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
+	// An untrusted net's odds are only the NORMAL prior: the explorer then draws evenly.
+	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : 0.f;
 	array<float> p(NG_N);
 	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));
-	if ((force >= 0) && (force < NG_N)) {
+	const bool forced = (force >= 0) && (force < NG_N);
+	if (forced) {
 		gPlan = force;
 		for (int o = 0; o < NG_N; ++o)
 			p[o] = (o == force) ? 1.f : 0.f;
 	}
-	ai.SetTeamBoard(BOARD_PLAN, float(gPlan));
-	ai.SetTeamBoard(BOARD_PLAN_UNTIL, float(gPlanMineUntil));
-	AiLog(EcoLine("nnplan", "NORMAL", explore, trust, st, f, NG_NAMES, w, p, gPlan));
+	PlanBoardWrite(leads);
+	AiLog(EcoLine("nnplan", "NORMAL", leads && !forced, trust, st, f, NG_NAMES, w, p, gPlan, why));
+	if (!leads)
+		return;
+	AiLog("apex: nn-explore-plan t=" + ai.teamId + " plan=" + NgName(gPlan) + " p=" + NnF(p[gPlan], 3)
+		+ " why=" + why + " tier=" + tier + " trust=" + NnF(trust, 2) + " flat=" + NnF(flat, 2)
+		+ " discovery=" + (gNnExplore ? 1 : 0));
+	if (!gNnExplore)
+		return;
+	if (why == "first")
+		NnExploreSay(NgName(gPlan), "drawn at " + int(100.f * p[gPlan] + 0.5f) + "% odds, held until our tech tier rises");
+	else
+		ai.SendChat("Team " + ai.teamId + " discovery: tier " + tier + " reached, strategy now " + NgName(gPlan));
 }
 
 // HOW MANY AIR PLANTS while the plan is AIR: the net's count.
@@ -152,7 +195,6 @@ void AirPlantNetDecide()
 	if ((gPlan != NG_AIR) || (ai.frame < gAirPlantNextAt))
 		return;
 	gAirPlantNextAt = ai.frame + 30 * SECOND;
-	const bool explore = gNnExploreRolled && gNnExplore;
 	if (!gAirPlantHeader) {
 		gAirPlantHeader = true;
 		AiLog("apex: nnaplant-schema v1 state=" + NN_STATE + " aplant=" + NNL_PLANT + " opt=name,w,p opts=P1,P2,P4");
@@ -175,10 +217,11 @@ void AirPlantNetDecide()
 	const float trust = NnHeadScore(NNL_ON, NNL_STATE, NNL_PLANT, NNL_S, NNL_O, NNL_H, NNL_XM, NNL_XS,
 		NNL_W1, NNL_B1, NNL_W2, NNL_B2, NNL_WO, NNL_BO, NNL_TRUST, st, f, w);
 	array<float> p(3);
-	const int c = EcoDraw(0, trust, w, p, explore ? 1.f : 0.f);
+	const float flat = NnHeadFlat(trust);
+	const int c = EcoDraw(0, trust, w, p, flat);
 	gAirPlantMax = (c == 0) ? 1 : ((c == 1) ? 2 : 4);
 	array<string> names = {"P1", "P2", "P4"};
-	AiLog(EcoLine("nnaplant", "P1", explore, trust, st, f, names, w, p, c));
+	AiLog(EcoLine("nnaplant", "P1", flat > 0.f, trust, st, f, names, w, p, c));
 }
 
 // Another basic air plant is owed: the plan is AIR and we stand short of the net's count.

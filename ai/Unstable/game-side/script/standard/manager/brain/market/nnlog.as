@@ -364,52 +364,44 @@ void NnOptFull(Want@ w, const AIFloat3& in up, array<float>& out o)
 	o[15] = ((w.kind != WK_SUPER) && (cat >= 0)) ? Persona::CategoryMult(cat) : 1.f;
 }
 
-// DISCOVERY GAMES (his 2026-10-04): in apex_nn_explore of the games that carry
-// a trained net, every kind of want gets its own random multiplier for the
-// whole game and the net's output layer gets noise, so we see what wanting
-// more or less of each thing does -- against overfitting, for discovery.
-// Rolled once per game; the roll is logged so the trainer knows.
+// DISCOVERY GAMES: in apex_nn_explore of games the explorer's team plays ONE
+// whole strategy drawn from the plan net's options (plannet.as) and every
+// other head plays its rule or net as in any game, so the outcome belongs to
+// the strategy (docs/35).
 bool gNnExploreRolled = false;
 bool gNnExplore = false;
-array<float> gNnKindMult;
-array<float> gNnWO;
-
-float NnGauss()
-{
-	float s = 0.f;
-	for (int i = 0; i < 12; ++i)
-		s += float(AiRandom(0, 10000)) / 10000.f;
-	return s - 6.f;
-}
+bool gNnExploreSaid = false;
+// A head whose net has no trust plays its rule at p=1 and would never see an
+// alternative: in a discovery game it alone mixes this much uniform in.
+const float NN_HEAD_FLAT = 0.1f;
 
 void NnExploreRoll()
 {
 	if (gNnExploreRolled)
 		return;
 	gNnExploreRolled = true;
-	gNnKindMult.resize(WK_TEETH + 1);
-	for (uint k = 0; k < gNnKindMult.length(); ++k)
-		gNnKindMult[k] = 1.f;
-	gNnWO.resize(uint(NNW_H));
-	for (int h = 0; h < NNW_H; ++h)
-		gNnWO[h] = NNW_WO[h];
 	const float chance = ai.GetTunable("apex_nn_explore", TUNE_NN_EXPLORE);
 	const int explorer = int(ai.GetTunable("apex_nn_explore_team", TUNE_NN_EXPLORE_TEAM));
 	gNnExplore = (explorer >= 0) ? (explorer == ai.teamId)
 			: (float(AiRandom(0, 10000)) / 10000.f < chance);
-	if (!gNnExplore)
+	if (gNnExplore)
+		AiLog("apex: nn-explore t=" + ai.teamId + " on | headFlat=" + NnF(NN_HEAD_FLAT, 2));
+}
+
+float NnHeadFlat(float trust)
+{
+	return (gNnExploreRolled && gNnExplore && (trust <= 0.f)) ? NN_HEAD_FLAT : 0.f;
+}
+
+// Said once, when the explorer first knows its strategy, so a watcher knows
+// which side is different and what it tries.
+void NnExploreSay(const string& in plan, const string& in how)
+{
+	if (gNnExploreSaid || !gNnExplore)
 		return;
-	// Say so in the game, so a watcher knows which side is different (his 2026-10-06).
-	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game (random choices on purpose)");
-	ai.DrawPoint(aiSetupMgr.GetBasePos(), "Discovery explorer: team " + ai.teamId);
-	string ln = "apex: nn-explore t=" + ai.teamId + " on |";
-	for (uint k = 0; k < gNnKindMult.length(); ++k) {
-		gNnKindMult[k] = pow(2.7182818f, 0.5f * NnGauss());   // 1 sd: x0.6..x1.65 (was 0.8: a game skewed past attributing)
-		ln += " " + KindName(int(k)) + "=" + NnF(gNnKindMult[k], 2);
-	}
-	for (int h = 0; h < NNW_H; ++h)
-		gNnWO[h] = NNW_WO[h] * (1.f + 0.5f * NnGauss());
-	AiLog(ln);
+	gNnExploreSaid = true;
+	ai.SendChat("Team " + ai.teamId + " is the DISCOVERY explorer this game: strategy " + plan + " (" + how + ")");
+	ai.DrawPoint(aiSetupMgr.GetBasePos(), "Discovery explorer: team " + ai.teamId + " " + plan);
 }
 
 void NnRecord(CCircuitUnit@ unit, Want@ chosen, uint depth, const string& in why)
@@ -873,31 +865,10 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	NnImitate(ranked);
 	if (ranked.length() < 2)
 		return;
-	// discovery does not wait for a net: a fresh net is when it is needed most
-	NnExploreRoll();
-	if (!NNW_ON || gNnBad) {
-		if (!gNnExplore)
-			return;
-		for (uint r = 0; r < ranked.length(); ++r) {
-			const int k = ranked[r].kind;
-			if ((k >= 0) && (uint(k) < gNnKindMult.length())) {
-				ranked[r].value *= gNnKindMult[k];
-				ranked[r].nnMult *= gNnKindMult[k];
-			}
-		}
-		for (uint r = 1; r < ranked.length(); ++r) {
-			Want@ w = ranked[r];
-			uint at = r;
-			while ((at > 0) && (ranked[at - 1].value < w.value)) {
-				@ranked[at] = ranked[at - 1];
-				--at;
-			}
-			@ranked[at] = w;
-		}
+	if (!NNW_ON || gNnBad)
 		return;
-	}
 	const float blend = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND);
-	if ((blend <= 0.f) && !gNnExplore)
+	if (blend <= 0.f)
 		return;
 	if (!NnWeightsFit()) {
 		gNnBad = true;
@@ -916,15 +887,6 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	}
 	const double _t = Perf::T0();
 	Want@ top0 = ranked[0];
-	if (gNnExplore) {
-		for (uint r = 0; r < ranked.length(); ++r) {
-			const int k = ranked[r].kind;
-			if ((k >= 0) && (uint(k) < gNnKindMult.length())) {
-				ranked[r].value *= gNnKindMult[k];
-				ranked[r].nnMult *= gNnKindMult[k];
-			}
-		}
-	}
 	// No kind has earned trust: every score would be discarded below (2.4 ms an election).
 	if (gNnMaxTrust < 0.f) {
 		gNnMaxTrust = 0.f;
@@ -989,7 +951,7 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 						a += NNW_W2[h2 * H + h] * gNnH1[h];
 				}
 				if (a > 0.f)
-					sc += gNnWO[h2] * a;
+					sc += NNW_WO[h2] * a;
 			}
 			score[r] = sc;
 			mean += sc;

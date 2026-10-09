@@ -19,7 +19,6 @@ array<int> gRfDeadline;
 
 bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foePow, float ownPow, int leaderId)
 {
-	const bool explore = Market::gNnExploreRolled && Market::gNnExplore;
 	if (!gRfHeader) {
 		gRfHeader = true;
 		AiLog("apex: nnreinf-schema v1 state=" + Market::NN_STATE + " reinf=" + NNV_REINF + " opt=name,w,p opts=GO,STAY");
@@ -40,9 +39,10 @@ bool AiJoinFight(const AIFloat3& in at, float travelS, float allyPow, float foeP
 		Market::NNV_H, Market::NNV_XM, Market::NNV_XS, Market::NNV_W1, Market::NNV_B1, Market::NNV_W2, Market::NNV_B2,
 		Market::NNV_WO, Market::NNV_BO, Market::NNV_TRUST, st, f, w);
 	array<float> p(2);
-	const int c = Market::EcoDraw(RF_GO, trust, w, p, explore ? 0.5f : 0.f);
+	const float flat = Market::NnHeadFlat(trust);
+	const int c = Market::EcoDraw(RF_GO, trust, w, p, flat);
 	array<string> names = {"GO", "STAY"};
-	AiLog(Market::EcoLine("nnreinf", "GO", explore, trust, st, f, names, w, p, c));
+	AiLog(Market::EcoLine("nnreinf", "GO", flat > 0.f, trust, st, f, names, w, p, c));
 	++gRfAsked;
 	if (c != RF_GO) {
 		++gRfStay;

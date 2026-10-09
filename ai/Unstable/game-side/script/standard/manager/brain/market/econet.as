@@ -26,7 +26,6 @@ int gMexPolicy = NX_HOLD;
 float gMexMul = 1.f;
 int gEcoNetNextAt = 0;
 bool gEcoNetHeader = false;
-float gEcoFlat = -1.f;
 
 int IdleConCount()
 {
@@ -68,9 +67,10 @@ int EcoDraw(int rule, float trust, array<float>& w, array<float>& p, float flat)
 }
 
 string EcoLine(const string tag, const string rule, bool explore, float trust, const array<float>& in st,
-	const array<float>& in f, const array<string>& in names, const array<float>& in w, const array<float>& in p, int chosen)
+	const array<float>& in f, const array<string>& in names, const array<float>& in w, const array<float>& in p, int chosen,
+	const string why = "clock")
 {
-	string ln = "apex: " + tag + " t=" + ai.teamId + " f=" + ai.frame + " why=clock rule=" + rule
+	string ln = "apex: " + tag + " t=" + ai.teamId + " f=" + ai.frame + " why=" + why + " rule=" + rule
 		+ " ex=" + (explore ? 1 : 0) + " trust=" + NnF(trust, 2) + " |";
 	for (uint k = 0; k < st.length(); ++k)
 		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
@@ -87,10 +87,6 @@ void EcoNetDecide()
 	if (ai.frame < gEcoNetNextAt)
 		return;
 	gEcoNetNextAt = ai.frame + 30 * SECOND;
-	const bool explore = gNnExploreRolled && gNnExplore;
-	if (explore && (gEcoFlat < 0.f))
-		gEcoFlat = float(AiRandom(0, 10000)) / 10000.f * 0.5f;
-	const float flat = explore ? gEcoFlat : 0.f;
 	array<float> st;
 	NnState(null, st);
 	const float aShare = (Brain::gSpentTotal > 1.f) ? Brain::ShareOf(Brain::ARMY) : 0.f;
@@ -118,9 +114,10 @@ void EcoNetDecide()
 		const float trust = NnHeadScore(NNK_ON, NNK_STATE, NNK_CON, NNK_S, NNK_O, NNK_H, NNK_XM, NNK_XS,
 			NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, st, f, w);
 		array<float> p(3);
+		const float flat = NnHeadFlat(trust);
 		gConPolicy = EcoDraw(NK_YIELD, trust, w, p, flat);
 		array<string> names = {"FLOOR", "YIELD", "DRAW"};
-		AiLog(EcoLine("nncon", "YIELD", explore, trust, st, f, names, w, p, gConPolicy));
+		AiLog(EcoLine("nncon", "YIELD", flat > 0.f, trust, st, f, names, w, p, gConPolicy));
 	}
 	{
 		array<float> qf;
@@ -141,19 +138,21 @@ void EcoNetDecide()
 		const float qtrust = NnHeadScore(NNQ_ON, NNQ_STATE, NNQ_CAP, NNQ_S, NNQ_O, NNQ_H, NNQ_XM, NNQ_XS,
 			NNQ_W1, NNQ_B1, NNQ_W2, NNQ_B2, NNQ_WO, NNQ_BO, NNQ_TRUST, st, qf, qw);
 		array<float> qp(3);
-		const int c = EcoDraw(0, qtrust, qw, qp, flat);
+		const float qflat = NnHeadFlat(qtrust);
+		const int c = EcoDraw(0, qtrust, qw, qp, qflat);
 		gConCapMul = (c == 1) ? 2.f : ((c == 2) ? 4.f : 1.f);
 		array<string> qnames = {"X1", "X2", "X4"};
-		AiLog(EcoLine("nncap", "X1", explore, qtrust, st, qf, qnames, qw, qp, c));
+		AiLog(EcoLine("nncap", "X1", qflat > 0.f, qtrust, st, qf, qnames, qw, qp, c));
 		array<float> w2(3, NE2_EPS);
 		w2[1] = 1.f;
 		const float trust2 = NnHeadScore(NNZ_ON, NNZ_STATE, NNQ_CAP, NNZ_S, NNZ_O, NNZ_H, NNZ_XM, NNZ_XS,
 			NNZ_W1, NNZ_B1, NNZ_W2, NNZ_B2, NNZ_WO, NNZ_BO, NNZ_TRUST, st, qf, w2);
 		array<float> p2(3);
-		const int c2 = EcoDraw(1, trust2, w2, p2, flat);
+		const float flat2 = NnHeadFlat(trust2);
+		const int c2 = EcoDraw(1, trust2, w2, p2, flat2);
 		gAirCapMul = (c2 == 0) ? 2.f : ((c2 == 2) ? 8.f : 4.f);
 		array<string> names2 = {"A2", "A4", "A8"};
-		AiLog(EcoLine("nnacap", "A4", explore, trust2, st, qf, names2, w2, p2, c2));
+		AiLog(EcoLine("nnacap", "A4", flat2 > 0.f, trust2, st, qf, names2, w2, p2, c2));
 	}
 	{
 		array<float> f;
@@ -171,10 +170,11 @@ void EcoNetDecide()
 		const float trust = NnHeadScore(NNX_ON, NNX_STATE, NNX_MEX, NNX_S, NNX_O, NNX_H, NNX_XM, NNX_XS,
 			NNX_W1, NNX_B1, NNX_W2, NNX_B2, NNX_WO, NNX_BO, NNX_TRUST, st, f, w);
 		array<float> p(3);
+		const float flat = NnHeadFlat(trust);
 		gMexPolicy = EcoDraw(NX_HOLD, trust, w, p, flat);
 		gMexMul = (gMexPolicy == NX_PUSH) ? 2.f : 1.f;
 		array<string> names = {"HOLD", "YIELD", "PUSH"};
-		AiLog(EcoLine("nnmex", "HOLD", explore, trust, st, f, names, w, p, gMexPolicy));
+		AiLog(EcoLine("nnmex", "HOLD", flat > 0.f, trust, st, f, names, w, p, gMexPolicy));
 	}
 }
 

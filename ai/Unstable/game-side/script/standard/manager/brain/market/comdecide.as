@@ -498,7 +498,7 @@ float NnComScore(const array<float>& in st, const array<float>& in com, array<fl
 }
 
 int gComDec = COM_WORK;       // the decision in force
-float gComFlat = -1.f;        // discovery games: chance a decision goes safer, rolled once
+float gComFlat = 0.f;         // discovery games: chance a decision goes safer (NnHeadFlat)
 int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0, gComExpNext = 0;
 int gComDecAt = -999999;
 int gComNextAt = -1;
@@ -572,9 +572,8 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	// Discovery only ever toward SAFER: work or fight may become a turret or a
 	// retreat, a turret a retreat -- held 15 s so what followed is its doing.
 	// Nothing ever explores him into a fight the rule would leave.
-	const bool explore = gNnExploreRolled && gNnExplore;
-	if (explore && (gComFlat < 0.f))
-		gComFlat = float(AiRandom(0, 10000)) / 10000.f * 0.3f;
+	gComFlat = NnHeadFlat(trust);
+	const bool explore = gComFlat > 0.f;
 	if (explore && (rule != COM_RETREAT) && (ai.frame < gComExpUntil) && (gComExpPick > rule))
 		chosen = gComExpPick;
 	else if (explore && (rule != COM_RETREAT) && (ai.frame >= gComExpNext)

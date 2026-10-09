@@ -24,7 +24,7 @@ GO = re.compile(r"\[f=(\d+)\].*apex: push go t=(\d+) plan=(\w+) at=(\d+),(\d+)")
 DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=\S+ cost=(\d+) x=(\d+) z=(\d+)")
 PUSH_WIN = 3 * 60 * 30
 PUSH_R2 = 900.0 * 900.0
-NAMES = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS")
+NAMES = ("NORMAL", "T3", "MISSILE", "ARTY", "MASS", "AIR", "RUSH", "GREED", "TURTLE", "GREED_DEEP")
 
 
 def ally_of(script):
