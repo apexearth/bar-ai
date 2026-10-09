@@ -43,9 +43,11 @@ order or a cap in this AI is a bug in the model wearing a fix's clothing. Read
 operational skill. Where a doc, skill or comment still argues from "above N
 metal/s", the plan wins and the doc is stale.
 
-`docs/24-how-units-fight.md` is the combat counterpart — apexearth's directives
-and ONLY his. A session may add to it from something he said, never from its own
-ideas. Where code disagrees with it, the code is stale.
+`docs/24-how-units-fight.md` is the doctrine — apexearth's directives and ONLY
+his, sorted into goals, facts, contracts and priors. A session may add to it
+from something he said, never from its own ideas. Code that breaks a goal, fact
+or contract is wrong; a prior is a default the nets may overrule where training
+shows it loses (his 2026-10-08).
 
 ## How to work here
 
