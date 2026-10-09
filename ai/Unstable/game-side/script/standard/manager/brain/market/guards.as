@@ -738,6 +738,23 @@ float SupportWorth()
 }
 
 int gComLabLeft = 0;   // commander guard stints at a lab ended because metal ran out
+int gComLabIdle = 0;   // ...because the line went idle
+string gComGuardEnd = "";   // what ended the commander's last guard, for com-flip
+
+// A line between two units is not idle: the queue drains when a unit rolls
+// out and the executor refills it at its next election, within FQ_WAIT of the
+// line's last event.
+bool LineHeld(CCircuitUnit@ f)
+{
+	if (f is null)
+		return false;
+	if (LineWorking(f))
+		return true;
+	const int line = Brain::FQIndex(f.id);
+	return (line >= 0) && (uint(line) < Brain::gFQEvt.length())
+		&& (ai.frame - Brain::gFQEvt[uint(line)] < Brain::FQ_WAIT);
+}
+
 void GuardSweep()
 {
 	for (uint i = 0; i < gGuardUnit.length(); ) {
@@ -749,17 +766,22 @@ void GuardSweep()
 			// A factory boss with nothing queued (and nothing in flight) is
 			// idle: release the guard into the market.
 			const bool bossIsFac = !b.circuitDef.IsMobile();
+			const bool isCom = u.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 			// (a frame being raised queues nothing either)
-			if (bossIsFac && (b.CountQueued(null) == 0) && !ComFramedById(b.id)) {
+			if (bossIsFac && !LineHeld(b) && !ComFramedById(b.id)) {
 				u.task.Abort();
 				drop = true;
+				if (isCom) {
+					++gComLabIdle;
+					gComGuardEnd = "lab-idle";
+				}
 			}
 			// Out of metal the commander leaves the lab to get more (his 2026-10-05).
-			if (!drop && bossIsFac && u.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-				&& MetalShort(0.f)) {
+			if (!drop && bossIsFac && isCom && MetalShort(0.f)) {
 				u.task.Abort();
 				drop = true;
 				++gComLabLeft;
+				gComGuardEnd = "metal";
 			}
 			// A mobile boss that stopped building releases its guards too.
 			if (!bossIsFac && ((b.task is null)
@@ -911,12 +933,19 @@ bool HardEStall()
 
 bool HardEStallNow()
 {
+	return HardEStallWith(0.f, 0.f);
+}
+
+// The same test with a hand's own draw added: whether it would be stalling
+// once that hand is pulling there.
+bool HardEStallWith(float addM, float addE)
+{
 	const float eInc = Eco::EInc();
 	const float eCur = Eco::ECur();
 	const float eStore = Eco::EStor();
 	if (eStore <= 1.f)
 		return false;
-	const float ePull = Eco::EPull();
+	const float ePull = Eco::EPull() + addE;
 	const float sec = EGenBuildSeconds();
 	// ENERGY STALLS ONLY WHEN IT IS THE TIGHTER FEED. A lathe runs at the
 	// smaller of the two feed shares, so with the metal bank also dry more
@@ -925,7 +954,7 @@ bool HardEStallNow()
 	// hoisted onto solars the metal could not pay for while 27 spots stood open.
 	{
 		const float mInc = Eco::MInc();
-		const float mPull = Eco::MPull();
+		const float mPull = Eco::MPull() + addM;
 		const float h = (sec > 1.f) ? sec : 1.f;
 		if ((mPull > 0.01f) && (ePull > 0.01f)) {
 			const float mShare = (mInc + Eco::MCur() / h) / mPull;

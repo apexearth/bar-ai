@@ -575,9 +575,52 @@ int gComStayKind = -1;    // the job a self-gun was put up to guard
 AIFloat3 gComStayPos;
 int gComStayUntil = 0;
 int gComEscMetalSkip = 0; // ...and not sent, because the feed could not cover his lathe there
+int gComEscStallSkip = 0; // ...or because energy would stall with him there
 int gComMetalAsk = 0;     // commander elections while out of metal
 int gComMetal = 0;        // ...that took a claim or reclaim off his list
 int gComLabNextAt = 0;   // the opening assist alternates: a minute at the lab, a minute of his own work
+
+// The commander leaving a factory assist for other work and coming back to it
+// (apexearth 2026-10-08: "walk to some spot of his base momentarily, then walk
+// back to the factory ... a half dozen times").
+int gComFlips = 0;
+int gComLabState = 0;     // 1 on a factory guard, -1 left one, 0 neither yet
+int gComLeftAt = 0;
+string gComLeftFor = "";
+int gComAwayJobs = 0;
+void ComFlipNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, const string& in why)
+{
+	if ((w is null) || (t is null) || !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return;
+	bool atLab = false;
+	if ((w.kind == WK_ASSIST) && (t.GetType() == Task::Type::BUILDER)
+		&& (int(t.GetBuildType()) == int(Task::BuildType::GUARD)))
+	{
+		for (uint fi = 0; (fi < Brain::gFQFac.length()) && !atLab; ++fi)
+			atLab = (Brain::gFQFac[fi] !is null) && (int(Brain::gFQFac[fi].id) == w.spotId);
+	}
+	if (atLab) {
+		if (gComLabState < 0) {
+			++gComFlips;
+			AiLog(Factory::T() + "apex: com-flip t=" + ai.teamId + " #" + unit.id
+				+ " left=" + gComLeftFor + " jobs=" + gComAwayJobs
+				+ " awayS=" + ((ai.frame - gComLeftAt) / SECOND)
+				+ " back=" + why + " total=" + gComFlips);
+		}
+		gComLabState = 1;
+		gComGuardEnd = "";
+		return;
+	}
+	if (gComLabState > 0) {
+		gComLabState = -1;
+		gComLeftAt = ai.frame;
+		gComAwayJobs = 0;
+		gComLeftFor = (gComGuardEnd.isEmpty() ? "stint" : gComGuardEnd) + ">" + why
+				+ ">" + KindName(w.kind) + ":" + ((w.def is null) ? "-" : w.def.GetName());
+	}
+	if (gComLabState < 0)
+		++gComAwayJobs;
+}
 // BUILDER TIME AT THIS HAND'S RUNNER-UP, WITH ONE STEP OF FORESIGHT (his
 // 2026-10-04: "the walk might equal the build times" and "use some foresight
 // about what's good to do next after that current build"). Choosing A delays the
@@ -987,7 +1030,7 @@ void ElecLog()
 		+ " lagSev=" + formatFloat(Perf::LagSeverity(), "", 0, 1)
 		+ " keep=" + gKeepMin + " offCrew=" + gOffCrewMin
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2) + " covPicked=" + gCovPicked
-		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comEscMetalSkip=" + gComEscMetalSkip + " comLabLeft=" + gComLabLeft + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
+		+ " oppRepriced=" + gOppRepriced + " oppFlips=" + gOppFlips + " comEscort=" + gComEscort + " comEscMetalSkip=" + gComEscMetalSkip + " comEscStallSkip=" + gComEscStallSkip + " comLabLeft=" + gComLabLeft + " comLabIdle=" + gComLabIdle + " comFlips=" + gComFlips + " comMetal=" + gComMetal + "/" + gComMetalAsk + " baseFront=" + gBaseFrontHits + " bfFilled=" + gBfFilled + "/" + gBfWanted + " bfOpen=" + gBfOpen + " bfActive=" + (gBfActive ? 1 : 0) + " wallN=" + gWallP.length()
 		+ " stance=" + Military::Stance());
 	gKeepMin = 0;
 	gOffCrewMin = 0;
@@ -2082,11 +2125,16 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		}
 		// Out of metal, his lathe at the lab is waste (his 2026-10-05): he
 		// goes only while the feed covers what he would pull there.
-		if ((lab !is null)
-			&& MetalShort(Catalog::gBuildPower[int(unit.circuitDef.id)] * LineDensity(lab)))
-		{
+		const float comBp = Catalog::gBuildPower[int(unit.circuitDef.id)];
+		if ((lab !is null) && MetalShort(comBp * LineDensity(lab))) {
 			@lab = null;
 			++gComEscMetalSkip;
+		}
+		// ...and the same for energy: in a stall the stall interrupt takes him
+		// off the lab first, so sending him is a round trip to a solar and back.
+		if ((lab !is null) && HardEStallWith(comBp * LineDensity(lab), comBp * LineEDensity(lab))) {
+			@lab = null;
+			++gComEscStallSkip;
 		}
 		if (lab !is null) {
 			Want@ aw = Want();
@@ -2731,6 +2779,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				NoteClaim(unit, ranked[i]);
 			if ((depth == 0) && (why == "comself"))
 				++gComSelfExec;
+			ComFlipNote(unit, ranked[i], t, (depth == 0) ? why : "fall");
 			// What was EXECUTED, not what was drawn -- the decide line above
 			// prints ranked[0] even when the executor refuses it, so audits
 			// counting decides overcount every refused want. pick>0 is a

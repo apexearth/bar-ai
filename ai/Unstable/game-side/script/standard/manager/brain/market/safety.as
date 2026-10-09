@@ -200,6 +200,7 @@ void ComTaskWatch(CCircuitUnit@ u, const AIFloat3& in p)
 	if (why.isEmpty())
 		return;
 	t.RemoveUnit(u);
+	gComGuardEnd = why;
 	AiLog(Factory::T() + "apex: com-letgo t=" + ai.teamId + " " + why + " bt=" + bt
 		+ " at=" + int(p.x) + "," + int(p.z)
 		+ " fwd=" + formatFloat(Military::ForwardFraction(p), "", 0, 2)
