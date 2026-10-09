@@ -249,8 +249,11 @@ void PostDecide(int rule, const string& in why)
 	array<float> w(POST_N);
 	for (int o = 0; o < POST_N; ++o)
 		w[o] = (o == rule) ? 1.f : POST_EPS;
-	const float trust = NnPostScore(st, post, w);
-	const float flat = Market::NnHeadFlat(trust);
+	const float trust0 = NnPostScore(st, post, w);
+	// All in, no posture runs but the rule's (PostOverride): no draw to log.
+	const bool allIn = AllIn();
+	const float trust = allIn ? 0.f : trust0;
+	const float flat = allIn ? 0.f : Market::NnHeadFlat();
 	const bool explore = flat > 0.f;
 	float sum = 0.f;
 	for (int o = 0; o < POST_N; ++o)
@@ -279,7 +282,10 @@ void PostDecide(int rule, const string& in why)
 			}
 		}
 	}
-	gPostOv = (chosen == rule) ? -1 : chosen;
+	// A drawn posture is held as drawn even when it is the rule's: the rule's
+	// own HOLD/DEFEND cap the hold and follow the rule as it flips, so the
+	// same name would run two ways and the row would not say which.
+	gPostOv = (explore || (trust > 0.f)) ? chosen : -1;
 	gPostRule = rule;
 	gPostChosen = chosen;
 	gPostLastAt = ai.frame;
@@ -375,6 +381,8 @@ void UpdateNnPost()
 	string why = "";
 	if (ai.frame >= gPostNextAt)
 		why = "clock";
+	else if ((gPostOv >= 0) && AllIn())
+		why = "allin";
 	else if (ai.frame - gPostLastAt >= 5 * SECOND) {
 		// A drawn deviation keeps its window: the rule chain flips every few
 		// seconds while a base is raided, which cut deviations to 3 s.

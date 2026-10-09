@@ -1052,10 +1052,14 @@ GROUPS = [
                   "BARb by tools/imitate.py): its mexes and defences over our "
                   "energy. 0 = off"),
                  ("TUNE_NN_EXPLORE", "more discovery games: with this chance an "
-                  "AI's team plays one whole strategy picked at random (mass T3, "
-                  "rush, greed, turtle...) until its tech level rises, and plays "
-                  "everything else normally, so the strategy net learns what it "
-                  "has never tried. 0 = never experiment"),
+                  "AI makes a share of its decisions (posture, escorts, raids, "
+                  "tech timing, defence...) at random all game, so the nets see "
+                  "what the alternatives do. 0 = never experiment"),
+                 ("TUNE_NN_PLAN_EXPLORE", "of those discovery games, more also "
+                  "play one whole team strategy picked at random (mass T3, rush, "
+                  "greed, turtle...) until the tech level rises. It changes the "
+                  "whole game, so keep it rare. 0 = discovery never forces a "
+                  "strategy"),
                  ("TUNE_PLAN_FORCE", "a test switch: every team plays one "
                   "plan all game -- 0 normal, 1 mass T3, 2 missiles and nukes, "
                   "3 long-range artillery, 4 mass and push together, 5 mass air, "

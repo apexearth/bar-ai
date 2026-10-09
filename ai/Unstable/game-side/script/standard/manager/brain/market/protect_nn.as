@@ -426,7 +426,7 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 	wt[DS_RULE] = 1.f;
 	const float trust = NnHeadScore(NNU_ON, NNU_STATE, NNU_SITE, NNU_S, NNU_O, NNU_H, NNU_XM, NNU_XS,
 		NNU_W1, NNU_B1, NNU_W2, NNU_B2, NNU_WO, NNU_BO, NNU_TRUST, st, f, wt);
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	float sum = 0.f;
 	for (int k = 0; k < DS_N; ++k) {
 		if (!on[k])
@@ -571,7 +571,7 @@ void DefAmountDecide()
 	const float trust = NnHeadScore(NND_ON, NND_STATE, NND_DEF, NND_S, NND_O, NND_H, NND_XM, NND_XS,
 		NND_W1, NND_B1, NND_W2, NND_B2, NND_WO, NND_BO, NND_TRUST, st, f, wt);
 	array<float> p(3);
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	const int c = EcoDraw(DA_RULE, trust, wt, p, flat);
 	array<string> names = {"D05", "D1", "D2"};
 	AiLog(EcoLine("nndefamt", "D1", flat > 0.f, trust, st, f, names, wt, p, c));

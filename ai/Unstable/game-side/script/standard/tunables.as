@@ -785,10 +785,10 @@ const float TUNE_DECIDE_LOG = 1.f;
 //   exp(blend) times its market value. 0 = the net only watches. See docs/35.
 const float TUNE_NN_BLEND = 1.f;
 
-// [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: its
-//   team plays one whole strategy drawn from the plan net's options, re-drawn
-//   when our tech tier rises; other heads play as usual. See docs/35.
+// [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: every
+//   decision head mixes a uniform share into its odds. See docs/35.
 const float TUNE_NN_EXPLORE = 0.f;
+const float TUNE_NN_PLAN_EXPLORE = 0.1f;   // [0..1] of explorers, the chance it also leads its team with one drawn strategy until our tier rises
 const float TUNE_PLAN_EXPLORE = 0.f;
 const float TUNE_NN_EXPLORE_TEAM = -1.f;   // [team] >= 0: that team is the explorer, the other plays normally (watched self-play)
 const float TUNE_PLAN_FORCE = -1.f;   // [plan] >= 0: every team plays that plan (0 NORMAL 1 T3 2 MISSILE 3 ARTY 4 MASS); an A/B instrument

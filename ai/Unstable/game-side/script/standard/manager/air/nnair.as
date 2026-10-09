@@ -490,7 +490,7 @@ int NaDecide(int kind, const string why)
 	float sum = 0.f;
 	for (int o = 0; o < NA_N; ++o)
 		sum += w[o];
-	const float flat = Market::NnHeadFlat(trust);
+	const float flat = Market::NnHeadFlat();
 	const bool explore = flat > 0.f;
 	if (Market::gNnExplore)
 		gNaFlat = flat;
@@ -507,8 +507,12 @@ int NaDecide(int kind, const string why)
 		chosen = (x < pr[NA_WAIT]) ? NA_WAIT : NA_GO;
 	}
 	// GO needs somewhere to go: with nothing known and no wing clock, WAIT stands
-	if ((chosen == NA_GO) && !have && !((kind == 0) && gStrikeHas))
+	// ...so WAIT ran with certainty, and the row says so
+	if (!have && !((kind == 0) && gStrikeHas)) {
 		chosen = NA_WAIT;
+		pr[NA_WAIT] = 1.f;
+		pr[NA_GO] = 0.f;
+	}
 	++gNaDecN;
 	if (chosen != rule)
 		++gNaDevN;

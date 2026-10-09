@@ -129,10 +129,7 @@ void OpenDecide(CCircuitUnit@ unit, array<Want@>@ ranked)
 	w[rule] = 1.f;
 	const float trust = NnHeadScore(NNOP_ON, NNOP_STATE, NNOP_OPEN, NNOP_S, NNOP_O, NNOP_H, NNOP_XM, NNOP_XS,
 		NNOP_W1, NNOP_B1, NNOP_W2, NNOP_B2, NNOP_WO, NNOP_BO, NNOP_TRUST, st, f, w);
-	// One decision a game: an explorer draws it evenly while the net has no
-	// trust, half net / half even once it has (the plan net's discovery).
-	NnExploreRoll();
-	const float flat = gNnExplore ? ((trust > 0.f) ? 0.5f : 1.f) : 0.f;
+	const float flat = NnHeadFlat();
 	array<float> p(OP_N);
 	gOpenPlan = EcoDraw(rule, trust, w, p, flat);
 	gOpenAt = ai.frame;

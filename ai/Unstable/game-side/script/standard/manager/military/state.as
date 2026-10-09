@@ -69,7 +69,7 @@ const int POST_HOLD   = 1;
 const int POST_ATTACK = 2;
 const int POST_RAID   = 3;
 const int POST_N      = 4;
-int gPostOv = -1;   // the drawn posture where it differs from the rule's, else -1
+int gPostOv = -1;   // the drawn posture, held for its window; -1 while the rule plays at p=1
 
 
 //------------------------------------------------------------------------------

@@ -321,7 +321,7 @@ Want@ DefTypePick(Want@ w, CCircuitUnit@ unit)
 	wt[DT_RULE] = 1.f;
 	const float trust = NnHeadScore(NNN_ON, NNN_STATE, NNN_TYPE, NNN_S, NNN_O, NNN_H, NNN_XM, NNN_XS,
 		NNN_W1, NNN_B1, NNN_W2, NNN_B2, NNN_WO, NNN_BO, NNN_TRUST, st, f, wt);
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	float sum = 0.f;
 	for (int k = 0; k < DT_N; ++k) {
 		if (!on[k])

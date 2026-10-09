@@ -79,7 +79,7 @@ IUnitTask@ JoinOrNew(CCircuitUnit@ unit, CCircuitDef@ def, const AIFloat3& in sp
 	const float trust = NnHeadScore(NNJ_ON, NNJ_STATE, NNJ_JOIN, NNJ_S, NNJ_O, NNJ_H, NNJ_XM, NNJ_XS,
 		NNJ_W1, NNJ_B1, NNJ_W2, NNJ_B2, NNJ_WO, NNJ_BO, NNJ_TRUST, st, f, w);
 	array<float> p(2);
-	const float flat = NnHeadFlat(trust);
+	const float flat = NnHeadFlat();
 	const int c = EcoDraw(rule, trust, w, p, flat);
 	array<string> names = {"JOIN", "NEW"};
 	AiLog(EcoLine("nnjoin", names[rule], flat > 0.f, trust, st, f, names, w, p, c));
