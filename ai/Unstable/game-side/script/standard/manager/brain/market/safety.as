@@ -877,6 +877,10 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 		}
 	}
 
+	// Nothing below may walk him off a base going down that its defence cannot hold.
+	if (ComShip())
+		return null;
+
 	// A CAUTIOUS COMMANDER DOES NOT WORK FORWARD AT ALL. No influence needed:
 	// standing on forward ground while heavies roam is the mistake, not the
 	// contact that follows it.
