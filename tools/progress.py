@@ -37,7 +37,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.environ.get("BARAI_PROGRESS_CACHE", os.path.join(REPO, "runtime", "progress"))
 FPM = 1800
 MINUTES = (2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30)
-VERSION = 2
+VERSION = 3
 CELL = 256.0
 CLAIM_R = 1500.0
 
@@ -63,6 +63,9 @@ def read_game(mdir):
         return None
     r = res.get("result") or {}
     if not r.get("valid", True) or r.get("reason") not in ("gameover", "timelimit"):
+        return None
+    # S3: a variant whose script failed to compile plays near-stock -- not our AI's game
+    if "Warnings are treated as errors" in txt or ": ERR  :" in txt:
         return None
     barb_teams = set()
     for block in re.findall(r"\[ai\d+\]\s*\{(.*?)\}", script, re.S | re.I):
