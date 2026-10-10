@@ -240,8 +240,11 @@ float FoeReachShare(const AIFloat3& in pos, bool walkers = false)
 	return (s > 1.f) ? 1.f : s;
 }
 
-int gMexGunLogAt = 0;
-int MexGunsWanted(const AIFloat3& in pos)
+// The mex-guard head's v (protect_nn.as MexGuardDecide): x the far term here, / the
+// coverall loss gate in decide.as. 1x = the rule.
+float gMexgMul = 1.f;
+
+float MexGunFwd(const AIFloat3& in pos)
 {
 	float fwd = FoeReachShare(pos);
 	if (fwd < 0.f) {
@@ -251,9 +254,16 @@ int MexGunsWanted(const AIFloat3& in pos)
 		if (fwd > 1.f)
 			fwd = 1.f;
 	}
+	return fwd;
+}
+
+int gMexGunLogAt = 0;
+int MexGunsWanted(const AIFloat3& in pos)
+{
+	const float fwd = MexGunFwd(pos);
 	if (ai.frame >= gMexGunLogAt) {
 		gMexGunLogAt = ai.frame + 60 * SECOND;
-		const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
+		const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR) * gMexgMul;
 		string s = "";
 		int nNew = 0;
 		int nOld = 0;
@@ -276,11 +286,11 @@ int MexGunsWanted(const AIFloat3& in pos)
 		}
 		AiLog("apex: mexguns t=" + ai.teamId + " mexes=" + rows.length()
 			+ " gunsReach=" + nNew + " gunsWalkers=" + nWalk + " gunsFwd=" + nOld
-			+ " srcs=" + gFoeSrcX.length() + " span=" + int(gFoeSpan)
+			+ " srcs=" + gFoeSrcX.length() + " span=" + int(gFoeSpan) + " mexg=" + formatFloat(gMexgMul, "", 0, 2)
 			+ " reach/fwd:" + s);
 	}
 	const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
-	return 1 + int(fwd * ((far > 0.f) ? far : 0.f));
+	return 1 + int(fwd * ((far > 0.f) ? far : 0.f) * gMexgMul);
 }
 
 bool MexUnguardedInReach(const AIFloat3& in pos, float r)

@@ -444,4 +444,22 @@ const float NNO_TRUST = 0.f;
 const float NNO_LO = 0.f;
 const float NNO_HI = 0.f;
 
+// the mex-guard net (protect_nn.as)
+const bool NNMG_ON = false;
+const string NNMG_STATE = "";
+const int NNMG_S = 0;
+const int NNMG_O = 0;
+const int NNMG_H = 0;
+const array<float> NNMG_XM = {};
+const array<float> NNMG_XS = {};
+const array<float> NNMG_W1 = {};
+const array<float> NNMG_B1 = {};
+const array<float> NNMG_W2 = {};
+const array<float> NNMG_B2 = {};
+const array<float> NNMG_WO = {};
+const float NNMG_BO = 0.f;
+const float NNMG_TRUST = 0.f;
+const float NNMG_LO = 0.f;
+const float NNMG_HI = 0.f;
+
 }  // namespace Market

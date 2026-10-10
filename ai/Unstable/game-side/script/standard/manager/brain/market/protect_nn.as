@@ -567,10 +567,60 @@ void DefAmountDecide()
 		++gDaOvN;
 }
 
+// Mex protection as a continuous head, every 30 s: MexGunsWanted's far term x v,
+// the coverall push's loss gate / v. 1x = the rule.
+const string NNMG_OWN = "mexes,unguarded,gunsNear,lost3m,lossShare,reach,foeRaid,armyHome,minute";
+const float MG_LO = 0.25f, MG_HI = 8.f;
+int gMgNextAt = -1;
+
+void MexGuardDecide()
+{
+	const float r = Brain::LightTowerRange();
+	const array<int>@ rows = MexRows();
+	const uint n = rows.length();
+	int bare = 0;
+	float reach = 0.f;
+	for (uint q = 0; q < n; ++q) {
+		const AIFloat3 p = gLPos[uint(rows[q])];
+		if (!MexHasCover(p, r))
+			++bare;
+		reach += MexGunFwd(p);
+	}
+	int guns = 0;
+	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t) {
+		for (uint q = 0; q < n; ++q) {
+			if (gProtPos[PROT_DEF][t].distance2D(gLPos[uint(rows[q])]) < r) {
+				++guns;
+				break;
+			}
+		}
+	}
+	array<float> f;
+	f.insertLast(float(n));
+	f.insertLast(float(bare));
+	f.insertLast(float(guns));
+	f.insertLast(float(MexKilledRecent()));
+	f.insertLast(MexLossShare());
+	f.insertLast((n > 0) ? reach / float(n) : 0.f);
+	f.insertLast(FoeRaidMassM());
+	f.insertLast(Military::gArmyHomeM);
+	f.insertLast(float(ai.frame) / 1800.f);
+	array<float> st;
+	NnState(null, st);
+	gMexgMul = NnValDecide("mexg", NNMG_OWN, MG_LO, MG_HI, 1.f, NNMG_ON, NNMG_STATE, NNMG_S, NNMG_O, NNMG_H,
+		NNMG_XM, NNMG_XS, NNMG_W1, NNMG_B1, NNMG_W2, NNMG_B2, NNMG_WO, NNMG_BO, NNMG_TRUST, NNMG_LO, NNMG_HI, st, f);
+}
+
 void UpdateDefNet()
 {
 	if (!Builder::gHomeSet)
 		return;
+	if (gMgNextAt < 0)
+		gMgNextAt = 20 * SECOND + (ai.teamId % 15) * SECOND;
+	if (ai.frame >= gMgNextAt) {
+		gMgNextAt = ai.frame + 30 * SECOND;
+		MexGuardDecide();
+	}
 	if (gDaNextAt < 0)
 		gDaNextAt = 90 * SECOND + (ai.teamId % 15) * 2 * SECOND;
 	if (ai.frame >= gDaNextAt) {
@@ -585,7 +635,7 @@ void UpdateDefNet()
 			+ " in=" + int(gLkInM) + " rim=" + int(gLkRimM) + " out=" + int(gLkOutM)
 			+ " sensN=" + gLkSensN + " sens=" + int(gLkSensM) + " front=" + int(gLkFrontM)
 			+ " flank=" + int(gLkFlankM) + " rear=" + int(gLkRearM) + " lone=" + int(gLkLoneM)
-			+ " amt=" + NnF(gDaMul, 2) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN
+			+ " amt=" + NnF(gDaMul, 2) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN + " mexg=" + NnF(gMexgMul, 2)
 			+ " siteDec=" + gDsDecN + " siteOv=" + gDsOvN + " memo=" + gDsMemoN
 			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length() + DefTypeStat());
 	}

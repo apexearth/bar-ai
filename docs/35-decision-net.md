@@ -292,7 +292,7 @@ restructure (enemy economy estimate).
 ## Continuous heads (2026-10-09)
 
 His ruling: a quantity is never chopped into steps, and an integer count is a
-real value the game takes the ceiling of. Eleven heads are one mechanism,
+real value the game takes the ceiling of. Twelve heads are one mechanism,
 `NnValDecide` (nnlog.as), each a value v on a range, the rule's value 1x
 (aplant: the count itself, rule 1). Range tops are "almost unreasonably high"
 so the net sees big variance; draws are uniform, linear, never log.
@@ -308,6 +308,7 @@ so the net sees big variance; draws are uniform, linear, never log.
 | ecap | escnet | the escorts-at-once cap | 0.25-10 |
 | mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
 | defamt | protect_nn | DefenceTarget | 0.25-8 |
+| mexg | protect_nn | MexGunsWanted's far term (guns a mex earns by its reach from them), and divides the coverall push's loss gate (TUNE_MEX_LOSS_COVER / v); every 30 s; prefix NNMG; own fields: mexes, unguarded (no gun in reach), guns covering a mex, mexes killed in 3 min, loss share, mean reach, enemy raid metal, army at home, minute | 0.25-8 |
 | aplant | plannet | -- the plant count, owed ceil(v) | 1-8 |
 
 **Play.** A held explorer head plays its game-long draw; else an explorer

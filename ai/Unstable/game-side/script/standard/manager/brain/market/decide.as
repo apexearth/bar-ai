@@ -557,10 +557,22 @@ void MexLossDecay()
 	if ((tau > 1.f) && (dt > 0.f))
 		gMexLost *= pow(2.718282f, -dt / tau);
 }
+array<int> gMexKillF;   // frames of the same kills, pruned past MEX_KILL_WIN
+const int MEX_KILL_WIN = 180 * SECOND;
 void NoteMexKilled()
 {
 	MexLossDecay();
 	gMexLost += 1.f;
+	gMexKillF.insertLast(ai.frame);
+}
+int MexKilledRecent()
+{
+	uint k = 0;
+	while ((k < gMexKillF.length()) && (ai.frame - gMexKillF[k] > MEX_KILL_WIN))
+		++k;
+	if (k > 0)
+		gMexKillF.removeRange(0, k);
+	return int(gMexKillF.length());
 }
 // Recent losses over what stands plus what was recently lost.
 float MexLossShare()
@@ -2022,7 +2034,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	else if (EcoRoleGrowing())
 		covGate = CG_GROW;
-	else if (MexLossShare() < ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER))
+	else if (MexLossShare() < ai.GetTunable("apex_mex_loss_cover", TUNE_MEX_LOSS_COVER) / gMexgMul)
 		covGate = CG_LOSS;
 	else if (!PlantFramed())
 		covGate = CG_FRAMED;
