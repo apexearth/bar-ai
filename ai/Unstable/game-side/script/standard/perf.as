@@ -97,11 +97,15 @@ void TickSpeed()
 	// window walks it back down. 0 = fine; past 1 the deeper cuts unlock
 	// (towers anywhere, surplus builders); past 2 the deepest (T2 army stops
 	// when T3 runs). Recovery is measured, not assumed.
-	if (gSimSpeed < SetSpeed() * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
+	// Lag is the game running slower than 1x, not slower than the host's set speed (his
+	// 10-10): a 10x watch game at 97% of its set speed read as lag and cut every lower-tier
+	// army line once T3 stood.
+	const float bar = (SetSpeed() > 0.f) ? 1.f : 0.f;
+	if (gSimSpeed < bar * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED)) {
 		gLagSev += ai.GetTunable("apex_lag_step", TUNE_LAG_STEP);
 		if (gLagSev > 3.f)
 			gLagSev = 3.f;
-	} else if (gSimSpeed >= 0.995f * SetSpeed()) {
+	} else if (gSimSpeed >= 0.995f * bar) {
 		gLagSev -= 0.2f;
 		if (gLagSev < 0.f)
 			gLagSev = 0.f;
@@ -140,7 +144,7 @@ float SimSpeed()
 
 bool GameLagging()
 {
-	return gSimSpeed < SetSpeed() * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED);
+	return gSimSpeed < ((SetSpeed() > 0.f) ? 1.f : 0.f) * ai.GetTunable("apex_lag_speed", TUNE_LAG_SPEED);
 }
 
 void Flush()
