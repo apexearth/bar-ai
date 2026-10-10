@@ -373,6 +373,13 @@ bool gNnPlanExplore = false;
 bool gNnExploreSaid = false;
 const float NN_HEAD_FLAT = 0.3f;
 
+// AiRandom is rand() % n: with MSVC's RAND_MAX of 32767 a % 10000 favours the low
+// quarter by a third. 32768 divides RAND_MAX + 1 everywhere.
+float NnU01()
+{
+	return (float(AiRandom(0, 32767)) + float(AiRandom(0, 32767)) / 32768.f) / 32768.f;
+}
+
 void NnExploreRoll()
 {
 	if (gNnExploreRolled)
@@ -380,8 +387,20 @@ void NnExploreRoll()
 	gNnExploreRolled = true;
 	const float chance = ai.GetTunable("apex_nn_explore", TUNE_NN_EXPLORE);
 	const int explorer = int(ai.GetTunable("apex_nn_explore_team", TUNE_NN_EXPLORE_TEAM));
-	gNnExplore = (explorer >= 0) ? (explorer == ai.teamId)
-			: (float(AiRandom(0, 10000)) / 10000.f < chance);
+	if (explorer >= 0) {
+		gNnExplore = (explorer == ai.teamId);
+	} else {
+		// allied seats share one roll: per seat, a 2v2 had both seats normal 6% of games and
+		// progress (normal games only) read almost no 2v2s; each seat still explores at `chance`
+		float shared = -1.f;
+		array<Id>@ mates = ai.GetTeamIds();
+		for (uint i = 0; (mates !is null) && (i < mates.length()) && (shared < 0.f); ++i) {
+			if (int(mates[i]) != ai.teamId)
+				shared = ai.ReadTeamValue(int(mates[i]), "nnexp", -1.f);
+		}
+		gNnExplore = (shared >= 0.f) ? (shared > 0.5f) : (NnU01() < chance);
+		ai.PublishTeamValue("nnexp", gNnExplore ? 1.f : 0.f);
+	}
 	if (!gNnExplore)
 		return;
 	const float planChance = ai.GetTunable("apex_nn_plan_explore", TUNE_NN_PLAN_EXPLORE);
@@ -403,13 +422,6 @@ float NnHeadFlat()
 {
 	NnExploreRoll();
 	return gNnExplore ? NN_HEAD_FLAT : 0.f;
-}
-
-// AiRandom is rand() % n: with MSVC's RAND_MAX of 32767 a % 10000 favours the low
-// quarter by a third. 32768 divides RAND_MAX + 1 everywhere.
-float NnU01()
-{
-	return (float(AiRandom(0, 32767)) + float(AiRandom(0, 32767)) / 32768.f) / 32768.f;
 }
 
 float NnUniform(float lo, float hi)
