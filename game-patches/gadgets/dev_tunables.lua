@@ -51,6 +51,7 @@ local NAMES = {
 	"apex_nn_explore",
 	"apex_nn_plan_explore",
 	"apex_gunp_rule",
+	"apex_con_rule",
 	"apex_nn_explore_team",
 	"apex_plan_force", "apex_plan_explore",
 	"apex_nn_imitate",

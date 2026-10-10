@@ -121,7 +121,7 @@ void EcoNetDecide()
 		f.insertLast(float(ClaimableSpots()));
 		f.insertLast(FoeRaidMassM());
 		f.insertLast(float(ai.frame) / 1800.f);
-		gConFloorMul = NnValDecide("con", NNK_CON, NK_LO, NK_HI, 1.f, NNK_ON, NNK_STATE, NNK_S, NNK_O, NNK_H,
+		gConFloorMul = NnValDecide("con", NNK_CON, NK_LO, NK_HI, ai.GetTunable("apex_con_rule", TUNE_CON_RULE), NNK_ON, NNK_STATE, NNK_S, NNK_O, NNK_H,
 			NNK_XM, NNK_XS, NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, NNK_LO, NNK_HI, st, f);
 	}
 	if (EcoNetDue(1)) {
