@@ -339,14 +339,31 @@ void CAttackTask::HoldForward(int frame)
 	(void)tm;
 	// straight out of their reach, not toward home: a group to the side or behind kept the
 	// home-ward walk inside it to the 40-step cap, thousands of elmos back
+	// ...but toward our side, never past our base: straight away from a group that kept coming
+	// backed a squad step by step into the map corner behind the base (his 10-10)
 	if (strongMem) {
 		const float need = strongR + DEFAULT_SLACK * 2;
-		AIFloat3 away = from - strongPos;
-		away.y = 0.f;
-		const float at = away.Length2D();
+		const float at = from.distance2D(strongPos);
 		if (at < need) {
-			away = (at > 1.f) ? (away / at) : (home - from).SafeNormalize2D();
-			hold = strongPos + away * need;
+			const float foeHome = home.distance2D(foe);
+			const float grpHome = strongPos.distance2D(home);
+			if (grpHome <= need) {
+				hold = home;   // they stand at our base: hold it with the defences, not a corner
+			} else {
+				float best = std::numeric_limits<float>::max();
+				for (int k = 0; k < 12; ++k) {
+					const float ang = float(k) * (2.f * float(M_PI) / 12.f);
+					AIFloat3 c = strongPos + AIFloat3(std::cos(ang), 0.f, std::sin(ang)) * need;
+					CTerrainManager::CorrectPosition(c);
+					const float behind = std::max(0.f, c.distance2D(foe) - foeHome);
+					const float further = std::max(0.f, c.distance2D(home) - grpHome);
+					const float sc = c.distance2D(from) + 2.f * further + 8.f * behind;
+					if (sc < best) {
+						best = sc;
+						hold = c;
+					}
+				}
+			}
 			d = need - at;
 		}
 	}
