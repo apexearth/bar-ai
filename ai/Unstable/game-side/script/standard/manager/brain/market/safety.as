@@ -592,7 +592,7 @@ Want@ ComSelfGun(CCircuitUnit@ unit, bool note = true)
 	const float lr = Brain::LightTowerRange();
 	const int have = GroundGunsNear(here, lr);
 	const float stopM = Catalog::gCostM[ld] * ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
-	int need = int(ceil(threatM / ((stopM > 1.f) ? stopM : 1.f)));
+	int need = GunpCount(int(ceil(threatM / ((stopM > 1.f) ? stopM : 1.f))));
 	if (ComTurreting() && (have + ComTowersK() > need))
 		need = have + ComTowersK();
 	if (have >= need) {
