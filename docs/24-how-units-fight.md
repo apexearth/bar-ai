@@ -356,7 +356,9 @@ to them)
   round, and route further away when fire comes unexpectedly.
 - Don't be flanked; flank them. Attack round the side, not straight up the
   middle. When they form an encirclement, wrap the edge of their line. Big
-  slow units go straight.
+  units flank too (2026-10-10, replacing "big slow units go straight": "we
+  are very slow pushers, we usually don't try to flank with big units"); a
+  mass of Marauders arriving suddenly from the side wrecks the enemy.
 - Don't walk many times the needed distance round enemy defences, and accept
   more path risk when needed rather than switching the careful logic off.
 

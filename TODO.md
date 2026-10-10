@@ -447,7 +447,8 @@ sudden from the side, you'll really wreck the enemy good. We also lack LRPC
 cannons, and I never see us make anything like a Ragnarok."
 Six plays, none built as a play today: (1) nuke targeting from scouting
 (the silo fires at what radar and scouts have seen -- ai-nukes); (2) a
-flank: the army's approach vector off the direct line; (3) air used
+flank: the army's approach vector off the direct line (built 10-10,
+unmeasured: C++ `CAttackTask::ChooseFlank`, `apex: flank` / `flank-stat`); (3) air used
 offensively (the bomber wing exists -- ISSUES BOMBERS -- and never flies
 in his games); (4) scouts kept alive as eyes (the Tick is buyable since
 80e63bd5); (5) a massed single-type strike (50 Marauders from a side);

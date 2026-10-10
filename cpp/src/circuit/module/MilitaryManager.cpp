@@ -1196,6 +1196,26 @@ float CMilitaryManager::GetSquadPowerNear(const AIFloat3& pos, float radius) con
 	return p;
 }
 
+// Every squad weighing the same enemy group asks the same question within a few
+// frames; the ally walk behind it is over every allied armed mobile.
+float CMilitaryManager::GetSidePowerAt(const AIFloat3& pos, float radius)
+{
+	const int frame = circuit->GetLastFrame();
+	for (const SSideMemo& m : sideMemo) {
+		if ((frame < m.frame + FRAMES_PER_SEC) && (m.radius == radius)
+			&& (m.pos.SqDistance2D(pos) < SQUARE(SQUARE_SIZE * 2)))
+		{
+			return m.power;
+		}
+	}
+	sideMemo.erase(std::remove_if(sideMemo.begin(), sideMemo.end(), [frame](const SSideMemo& m) {
+		return frame >= m.frame + FRAMES_PER_SEC;
+	}), sideMemo.end());
+	const float p = GetSquadPowerNear(pos, radius) + circuit->GetAllySquadPowerAt(pos, radius);
+	sideMemo.push_back({pos, radius, p, frame});
+	return p;
+}
+
 float CMilitaryManager::GetGatheredPower() const
 {
 	float p = 0.f;
@@ -1656,11 +1676,13 @@ void CMilitaryManager::UpdateDefenceTasks()
 		const int tid = circuit->GetTeamId();
 		const float odds = std::max(0.1f, TeamBoardGet(ally, BOARD_ODDS + tid, 1.f));
 		const float mass = std::max(0.1f, TeamBoardGet(ally, BOARD_MASS + tid, 1.f));
-		if ((odds != oddsMul) || (mass != massMul)) {
-			circuit->LOG("apex: mil-board t=%i odds=%.2f mass=%.2f", tid, odds, mass);
+		const float flank = std::max(0.f, TeamBoardGet(ally, BOARD_FLANK + tid, 1.f));
+		if ((odds != oddsMul) || (mass != massMul) || (flank != flankMul)) {
+			circuit->LOG("apex: mil-board t=%i odds=%.2f mass=%.2f flank=%.2f", tid, odds, mass, flank);
 		}
 		oddsMul = odds;
 		massMul = mass;
+		flankMul = flank;
 		// the script draws a non-rule odds only while this says the DLL reads it
 		TeamBoardSet(ally, BOARD_MIL_ACK + tid, float(circuit->GetLastFrame()));
 	}

@@ -6,6 +6,8 @@
  */
 
 #include <chrono>
+#include <cmath>
+#include <map>
 #include "task/fighter/AttackTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -266,11 +268,17 @@ void CAttackTask::Update()
 		return;
 	}
 
-	const AIFloat3& endPos = position;
+	AIFloat3 endPos = position;
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const float eps = pathfinder->GetSquareSize();
 	// to a staging point (no target) the squad walks to the point, not to weapon range of it
-	const float pathRange = (GetTarget() == nullptr) ? DEFAULT_SLACK : std::max(highestRange - eps, eps);
+	float pathRange = (GetTarget() == nullptr) ? DEFAULT_SLACK : std::max(highestRange - eps, eps);
+	AIFloat3 via;
+	const bool viaPath = (GetTarget() != nullptr) && FlankStep(position, GetTarget()->GetId(), frame, via);
+	if (viaPath) {
+		endPos = via;
+		pathRange = DEFAULT_SLACK * 2;
+	}
 
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
@@ -278,8 +286,8 @@ void CAttackTask::Update()
 			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
 
-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query));
+	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this, viaPath](const IPathQuery* query) {
+		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query), viaPath);
 	});
 }
 
@@ -314,27 +322,33 @@ void CAttackTask::HoldForward(int frame)
 	const AIFloat3 foe = EnemyBoxPos();
 	AIFloat3 from = lead;
 	bool front = false;
-	if (circuit->HasFrontPos()) {
+	// a squad in reach of what outgunned it steps out from where it stands: the front
+	// can lie past that group, and walking to it walked through them
+	if (circuit->HasFrontPos() && !strongMem) {
 		const AIFloat3& fp = circuit->GetFrontPos();
 		if ((fp.SqDistance2D(foe) < lead.SqDistance2D(foe)) && terrainMgr->CanMoveToPos(leader->GetArea(), fp)) {
 			from = fp;
 			front = true;
 		}
 	}
-	const AIFloat3 dir = (home - from).Normalize2D();
-	const float back = from.distance2D(home);
-	const float sqStrong = SQUARE(strongR + DEFAULT_SLACK * 2);
 	float d = 0.f;
 	AIFloat3 hold = from;
 	// back only out of the reach of what outgunned us, never off the general threat map: with
 	// their army at our base the map reads hot all the way home and the whole army hid in the
 	// base's back corner (his 10-10; docs/24: concentrate opposite their army)
 	(void)tm;
-	for (int k = 0; (k < 40) && (d + DEFAULT_SLACK * 2 < back)
-		&& strongMem && (hold.SqDistance2D(strongPos) < sqStrong); ++k)
-	{
-		d += DEFAULT_SLACK * 2;
-		hold = from + dir * d;
+	// straight out of their reach, not toward home: a group to the side or behind kept the
+	// home-ward walk inside it to the 40-step cap, thousands of elmos back
+	if (strongMem) {
+		const float need = strongR + DEFAULT_SLACK * 2;
+		AIFloat3 away = from - strongPos;
+		away.y = 0.f;
+		const float at = away.Length2D();
+		if (at < need) {
+			away = (at > 1.f) ? (away / at) : (home - from).SafeNormalize2D();
+			hold = strongPos + away * need;
+			d = need - at;
+		}
 	}
 	CTerrainManager::CorrectPosition(hold);
 	hold = terrainMgr->GetMovePosition(leader->GetArea(), hold);
@@ -387,18 +401,37 @@ bool CAttackTask::MarchEnemyBox()
 			(int)units.size(), dest.x, dest.z, startPos.distance2D(dest));
 	}
 	position = dest;
+	// not straight up the middle either: the march on their box picks its side once
+	const int frame = circuit->GetLastFrame();
+	if (flankKey != FLANK_BOX) {
+		const float R = highestRange * 1.5f + DEFAULT_SLACK * 4;
+		std::vector<SFoePt> foes;
+		for (const CEnemyManager::SEnemyGroup& g : circuit->GetEnemyManager()->GetEnemyGroups()) {
+			if (g.pos.SqDistance2D(dest) < SQUARE(R * 2.f)) {
+				foes.push_back({g.pos, highestRange + DEFAULT_SLACK * 4, g.influence});
+			}
+		}
+		ChooseFlank(dest, FLANK_BOX, -1, foes, SideArrivals(dest, FLANK_BOX, 0.f), "box");
+	}
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
 	const float eps = pathfinder->GetSquareSize();
-	const float pathRange = std::max(highestRange - eps, eps);
+	float pathRange = std::max(highestRange - eps, eps);
+	AIFloat3 endPos = position;
+	AIFloat3 via;
+	const bool viaPath = FlankStep(dest, FLANK_BOX, frame, via);
+	if (viaPath) {
+		endPos = via;
+		pathRange = DEFAULT_SLACK * 2;
+	}
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, circuit->GetThreatMap(),
-			startPos, position, pathRange, GetHitTest(),
+			startPos, endPos, pathRange, GetHitTest(),
 			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
 
-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query));
+	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this, viaPath](const IPathQuery* query) {
+		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query), viaPath);
 	});
 	return true;
 }
@@ -423,6 +456,224 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 	if (units.find(unit) != units.end()) {
 		Start(unit);  // NOTE: Not sure if it has effect
 	}
+}
+
+namespace {
+struct SFlankTally { int dec = 0, straight = 0, side45 = 0, side90 = 0, lost = 0, in = 0, close = 0, late = 0, logAt = 0; };
+std::map<const CCircuitAI*, SFlankTally> flankTally;
+
+void FlankStatLog(CCircuitAI* circuit, SFlankTally& t, int frame)
+{
+	if (frame < t.logAt) {
+		return;
+	}
+	t.logAt = frame + FRAMES_PER_SEC * 60;
+	circuit->LOG("apex: flank-stat t=%i dec=%i straight=%i side45=%i side90=%i lost=%i in=%i close=%i late=%i",
+			circuit->GetTeamId(), t.dec, t.straight, t.side45, t.side90, t.lost, t.in, t.close, t.late);
+}
+}  // namespace
+
+bool CAttackTask::GetArrivalDir(const AIFloat3& at, int key, int frame, AIFloat3& dir) const
+{
+	if (leader == nullptr) {
+		return false;
+	}
+	if (!flankDone && (flankKey == key)) {
+		dir = flankDir;
+		return true;
+	}
+	AIFloat3 d = leader->GetPos(frame) - at;
+	d.y = 0.f;
+	const float len = d.Length2D();
+	if (len < 1.f) {
+		return false;
+	}
+	dir = d / len;
+	return true;
+}
+
+// Our squads already walking onto `at` (key: a target id, or FLANK_BOX), as a
+// power-weighted sum of the bearings they will hit it from. Those within nearR
+// are left to the caller, which counts every friendly unit standing there.
+AIFloat3 CAttackTask::SideArrivals(const AIFloat3& at, int key, float nearR) const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	AIFloat3 sum = ZeroVector;
+	for (IFighterTask* t : circuit->GetMilitaryManager()->GetTasks(IFighterTask::FightType::ATTACK)) {
+		if (t == this) {
+			continue;
+		}
+		const CAttackTask* other = static_cast<const CAttackTask*>(t);
+		CCircuitUnit* ol = other->GetLeader();
+		CEnemyInfo* ot = other->GetTarget();
+		if (ol == nullptr) {
+			continue;
+		}
+		int okey;
+		if (key == FLANK_BOX) {
+			if ((ot != nullptr) || (other->flankKey != FLANK_BOX)) {
+				continue;
+			}
+			okey = FLANK_BOX;
+		} else {
+			if ((ot == nullptr) || ((ot->GetId() != key) && (ot->GetPos().SqDistance2D(at) > SQUARE(nearR)))) {
+				continue;
+			}
+			if (ol->GetPos(frame).SqDistance2D(at) <= SQUARE(nearR)) {
+				continue;
+			}
+			okey = ot->GetId();
+		}
+		AIFloat3 dir;
+		if (other->GetArrivalDir(at, okey, frame, dir)) {
+			sum += dir * other->GetAttackPower();
+		}
+	}
+	return sum;
+}
+
+// DON'T BE FLANKED; FLANK THEM (docs/24; his 10-10: "we usually don't try to flank
+// with big units"). On a new target the squad prices five bearings onto it and walks
+// to the best one's turn-in point before closing. A bearing is worth the engine's
+// flank multiplier against whoever of our side is already on them (Unit.cpp: x1.5 at
+// 90 degrees, x2 from behind), times how much less of their firepower reaches that
+// side than the front, per second of the whole walk, discounted by what else stands
+// at the turn-in. Straight is one of the five, so a short walk or a hot side keeps it.
+void CAttackTask::ChooseFlank(const AIFloat3& tgtPos, int key, int tgtGroup, const std::vector<SFoePt>& foes,
+		const AIFloat3& sideSum, const char* tgtName)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	const int frame = circuit->GetLastFrame();
+	SFlankTally& tally = flankTally[circuit];
+	if (!flankDone && (flankKey != key)) {
+		++tally.lost;
+	}
+	flankKey = key;
+	flankDone = true;
+	flankOff = 0.f;
+	++tally.dec;
+	const AIFloat3& lead = leader->GetPos(frame);
+	AIFloat3 u = lead - tgtPos;
+	u.y = 0.f;
+	const float dLead = u.Length2D();
+	// the turn-in stands outside our reach of the target, so the squad turns before it engages
+	const float R = highestRange * 1.5f + DEFAULT_SLACK * 4;
+	if (dLead < R * 1.5f) {
+		++tally.straight;
+		FlankStatLog(circuit, tally, frame);
+		return;
+	}
+	u = u / dLead;
+	const float speed = std::max(lowestSpeed, 1.f);
+	const float directS = dLead / speed;
+	const float maxPow = std::max(attackPower * powerMod, 1.f);
+	const float sideLen = sideSum.Length2D();
+	const bool engaged = (sideLen > 0.f);
+	const AIFloat3 front = engaged ? AIFloat3(sideSum / sideLen) : u;
+	float foeAll = 0.f;
+	for (const SFoePt& f : foes) {
+		foeAll += f.power;
+	}
+	const float eps = foeAll * 0.1f + 1.f;
+	const float stand = highestRange * 0.9f;
+	auto exposure = [&](const AIFloat3& a) {
+		const AIFloat3 s = tgtPos + a * stand;
+		float e = 0.f;
+		for (const SFoePt& f : foes) {
+			if (f.pos.SqDistance2D(s) < SQUARE(f.reach)) {
+				e += f.power;
+			}
+		}
+		return e;
+	};
+	const std::vector<CEnemyManager::SEnemyGroup>& groups = circuit->GetEnemyManager()->GetEnemyGroups();
+	const float mul = circuit->GetMilitaryManager()->GetFlankMul();
+	static constexpr float OFFS[5] = {0.f, 45.f, -45.f, 90.f, -90.f};
+	const float e0 = exposure(u);
+	int bi = 0;
+	float bestSc = -1.f, sc0 = 0.f, bestExtra = 0.f, bestEng = 1.f, bestLine = 1.f, bestDanger = 0.f;
+	AIFloat3 bestA = u;
+	AIFloat3 bestW = tgtPos + u * R;
+	for (int k = 0; k < 5; ++k) {
+		const float th = OFFS[k] * float(M_PI) / 180.f;
+		const float c = std::cos(th), s = std::sin(th);
+		const AIFloat3 a(u.x * c - u.z * s, 0.f, u.x * s + u.z * c);
+		AIFloat3 w = tgtPos + a * R;
+		CTerrainManager::CorrectPosition(w);
+		if ((k > 0) && !terrainMgr->CanMoveToPos(leader->GetArea(), w)) {
+			continue;
+		}
+		const float extraS = std::max(lead.distance2D(w) + R - dLead, 0.f) / speed;
+		const float eng = engaged ? (1.5f - 0.5f * a.dot2D(front)) : 1.f;
+		const float line = (e0 + eps) / (exposure(a) + eps);
+		float danger = 0.f;
+		for (int gi = 0; gi < (int)groups.size(); ++gi) {
+			if ((gi != tgtGroup) && (groups[gi].pos.SqDistance2D(w) < SQUARE(R))) {
+				danger += groups[gi].influence;
+			}
+		}
+		const float value = std::max(1.f + mul * (eng * line - 1.f), 0.1f);
+		const float sc = value * directS / (directS + extraS) * maxPow / (maxPow + danger);
+		if (k == 0) {
+			sc0 = sc;
+		}
+		if (sc > bestSc) {
+			bestSc = sc;
+			bi = k;
+			bestA = a;
+			bestW = w;
+			bestExtra = extraS;
+			bestEng = eng;
+			bestLine = line;
+			bestDanger = danger;
+		}
+	}
+	if (bi != 0) {
+		flankDir = bestA;
+		flankR = R;
+		flankOff = OFFS[bi];
+		flankDone = false;
+		flankUntil = frame + int((lead.distance2D(bestW) / speed * 1.5f + 10.f) * FRAMES_PER_SEC);
+		++((std::fabs(flankOff) > 60.f) ? tally.side90 : tally.side45);
+	} else {
+		++tally.straight;
+	}
+	circuit->LOG("apex: flank t=%i lead=%s lid=%i n=%i pow=%.1f off=%.0f via=%.0f,%.0f tgt=%s tid=%i at=%.0f,%.0f"
+			" dLead=%.0f extraS=%.0f eng=%.2f line=%.2f danger=%.1f side=%.1f sc0=%.3f sc=%.3f mul=%.2f",
+			circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), leader->GetId(), (int)units.size(),
+			maxPow, flankOff, bestW.x, bestW.z, tgtName, key, tgtPos.x, tgtPos.z, dLead, bestExtra, bestEng,
+			bestLine, bestDanger, sideLen, sc0, bestSc, mul);
+	FlankStatLog(circuit, tally, frame);
+}
+
+// The turn-in point rides with the target. Reached, already close, or overdue,
+// the squad goes straight in from wherever it stands.
+bool CAttackTask::FlankStep(const AIFloat3& tgtPos, int key, int frame, AIFloat3& via)
+{
+	if (flankDone || (flankKey != key)) {
+		return false;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	const AIFloat3& lead = leader->GetPos(frame);
+	via = tgtPos + flankDir * flankR;
+	CTerrainManager::CorrectPosition(via);
+	const bool in = lead.SqDistance2D(via) < SQUARE(std::max(DEFAULT_SLACK * 4.f, flankR * 0.3f));
+	const bool close = lead.SqDistance2D(tgtPos) < SQUARE(flankR * 0.75f);
+	const bool late = (frame > flankUntil);
+	if (!in && !close && !late) {
+		via = circuit->GetTerrainManager()->GetMovePosition(leader->GetArea(), via);
+		return true;
+	}
+	flankDone = true;
+	SFlankTally& tally = flankTally[circuit];
+	++(in ? tally.in : (close ? tally.close : tally.late));
+	circuit->LOG("apex: flank-in t=%i lead=%s lid=%i n=%i off=%.0f tid=%i how=%s dTgt=%.0f",
+			circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), leader->GetId(), (int)units.size(),
+			flankOff, key, in ? "in" : (close ? "close" : "late"), lead.distance2D(tgtPos));
+	FlankStatLog(circuit, tally, frame);
+	return false;
 }
 
 void CAttackTask::FindTarget()
@@ -451,6 +702,7 @@ void CAttackTask::FindTarget()
 	float bestSup = 0.f;
 	float bestInfl = 0.f;
 	bool bestThreat = false;
+	int bestGroup = -1;
 	const auto& supSpots = circuit->GetMilitaryManager()->GetSupportSpots();
 	const float sqOBDist = pos.SqDistance2D(basePos);  // Own to Base distance
 	float minSqDist = std::numeric_limits<float>::max();
@@ -592,14 +844,15 @@ void CAttackTask::FindTarget()
 	// a dozen small squads at home weighed itself alone against the group, read
 	// it as too strong, refused it and stepped out of its reach. Inside the base
 	// radius every squad and home pool of ours and our allies' armies there count.
-	static constexpr float HOME_SIDE_R = 2200.f;  // = script Builder::BASE_DANGER_DIST
+	// AWAY TOO (his 10-10: "we are very slow pushers"): a one- or two-unit squad
+	// weighed alone found every army group too strong, remembered it and held,
+	// while our other squads and the allies stood beside that group. Only asked
+	// once the squad alone falls short.
+	static constexpr float SIDE_R = 2200.f;  // = script Builder::BASE_DANGER_DIST
 	std::vector<float> sidePow(groups.size(), -1.f);
 	auto sideAt = [&](size_t gi) -> float {
 		if (sidePow[gi] < 0.f) {
-			const AIFloat3& gp = groups[gi].pos;
-			sidePow[gi] = (gp.SqDistance2D(basePos) < SQUARE(HOME_SIDE_R))
-					? milMgr->GetSquadPowerNear(gp, HOME_SIDE_R) + circuit->GetAllySquadPowerAt(gp, HOME_SIDE_R)
-					: 0.f;
+			sidePow[gi] = milMgr->GetSidePowerAt(groups[gi].pos, SIDE_R);
 		}
 		return sidePow[gi];
 	};
@@ -608,7 +861,9 @@ void CAttackTask::FindTarget()
 		const float track = SQUARE(2.f * highestRange);
 		for (size_t gi = 0; gi < groups.size(); ++gi) {
 			const CEnemyManager::SEnemyGroup& g = groups[gi];
-			if ((g.pos.SqDistance2D(strongPos) < track) && (std::max(maxPower, sideAt(gi)) <= g.influence * odds)) {
+			if ((g.pos.SqDistance2D(strongPos) < track)
+				&& (maxPower <= g.influence * odds) && (sideAt(gi) <= g.influence * odds))
+			{
 				strongPos = g.pos;
 				still = true;
 				break;
@@ -642,8 +897,10 @@ void CAttackTask::FindTarget()
 		// hundred elmos from base and squads picked groups up to 20x their power.
 		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
-		const float effPower = std::max(atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower,
-				sideAt(i));
+		float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
+		if (effPower <= group.influence * scale * odds) {
+			effPower = std::max(effPower, sideAt(i));
+		}
 		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
 			countGroupNear(group, NR_STRONG);
@@ -803,6 +1060,7 @@ void CAttackTask::FindTarget()
 				bestSup = sup;
 				bestInfl = group.influence;
 				bestThreat = isThreat[i];
+				bestGroup = (int)i;
 				hasGoodTarget |= !isOverpowered;
 			}
 		}
@@ -856,7 +1114,9 @@ void CAttackTask::FindTarget()
 					refusedStrong, pos.x, pos.z);
 		}
 	}
-	outgunned = (refusedStrong > 0);
+	// PUSHING IS THE DEFAULT (docs/24): a stronger group anywhere on the map held every
+	// squad that saw it; only one that can reach us -- the remembered one -- stops the march.
+	outgunned = strongMem;
 	{
 		int nearAll = 0;
 		for (int k = 0; k < NR_N; ++k) {
@@ -885,13 +1145,14 @@ void CAttackTask::FindTarget()
 	// a net scored on whether the squad arrived while it still raged. A refusal
 	// holds for 30 s so the same target is not asked again every update.
 	// A fight at our base is defended, never put to the net.
+	const float fightR = std::max(cdef->GetLosRadius(), 400.f) * 2.f;
+	AIFloat3 sideNear = ZeroVector;  // bearings of our side's units already on the target, for the flank
 	if ((bestTarget != nullptr) && (bestTarget != prevTarget) && !bestThreat) {
 		const AIFloat3& tp = bestTarget->GetPos();
 		if ((bestTarget->GetId() == joinRefused) && (frame < joinRefusedUntil)) {
 			bestTarget = nullptr;
 			joinHeld = true;
 		} else {
-			const float fightR = std::max(cdef->GetLosRadius(), 400.f) * 2.f;
 			float allyPow = 0.f;
 			for (const auto& kv : circuit->GetFriendlyUnits()) {
 				CAllyUnit* au = kv.second;
@@ -900,8 +1161,15 @@ void CAttackTask::FindTarget()
 				{
 					continue;
 				}
-				if (au->GetPos(frame).SqDistance2D(tp) <= SQUARE(fightR)) {
+				const AIFloat3& ap = au->GetPos(frame);
+				if (ap.SqDistance2D(tp) <= SQUARE(fightR)) {
 					allyPow += au->GetCircuitDef()->GetPower();
+					AIFloat3 b = ap - tp;
+					b.y = 0.f;
+					const float bl = b.Length2D();
+					if (bl > 1.f) {
+						sideNear += b * (au->GetCircuitDef()->GetPower() / bl);
+					}
 				}
 			}
 			const float foePow = circuit->GetMilitaryManager()->GetEnemyInflNear(tp, fightR);
@@ -943,6 +1211,28 @@ void CAttackTask::FindTarget()
 					canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
 					wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0,
 					refusedStrong, swWhy, held, keptS, commitS);
+				if (bestThreat || (bestGroup < 0)) {
+					// a threat to our base is met by the shortest walk
+					flankKey = bestTarget->GetId();
+					flankDone = true;
+				} else {
+					std::vector<SFoePt> foes;
+					foes.reserve(groups[bestGroup].units.size());
+					for (const ICoreUnit::Id eId : groups[bestGroup].units) {
+						CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+						CCircuitDef* ed = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+						if ((ed == nullptr) || e->IsHidden()) {
+							continue;
+						}
+						const float reach = float(ed->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell;
+						if (reach > 0.f) {
+							foes.push_back({e->GetPos(), reach, ed->GetPower()});
+						}
+					}
+					const AIFloat3 side = sideNear + SideArrivals(position, bestTarget->GetId(), fightR);
+					ChooseFlank(position, bestTarget->GetId(), bestGroup, foes, side,
+							(bdef != nullptr) ? bdef->GetDef()->GetName() : "-");
+				}
 			}
 		}
 	} else if ((refusedStrong > 0) && (frame >= nextStrongLog)) {
@@ -954,12 +1244,17 @@ void CAttackTask::FindTarget()
 	// Return: target, startPos=leader->pos, endPos=position
 }
 
-void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query)
+void CAttackTask::ApplyTargetPath(const CQueryPathSingle* query, bool viaPath)
 {
 	pPath = query->GetPathInfo();
 
 	if (!pPath->posPath.empty()) {
 		ActivePath(lowestSpeed);
+		return;
+	}
+	// no way round to the side: go straight next update, not back to the front
+	if (viaPath) {
+		flankDone = true;
 		return;
 	}
 	// apex: no threat-clear path to the team's staging point -- walk there anyway;

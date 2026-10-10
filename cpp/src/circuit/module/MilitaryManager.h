@@ -221,9 +221,10 @@ public:
 	bool IsFocusGo() const { return focusGo; }
 	// apex: the odds and mass heads (script military/nnmassodds.as) post their
 	// multipliers on the team board; read every UpdateDefenceTasks.
-	static constexpr int BOARD_ODDS = 1400, BOARD_MASS = 1500, BOARD_MIL_ACK = 1600;
+	static constexpr int BOARD_ODDS = 1400, BOARD_MASS = 1500, BOARD_MIL_ACK = 1600, BOARD_FLANK = 1700;
 	float GetOddsMul() const { return oddsMul; }
 	float GetMassMul() const { return massMul; }
+	float GetFlankMul() const { return flankMul; }  // weight on a side approach's gain; 1 = the rule
 	float GetAttackPower() const {
 		float p = 0.f;
 		for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
@@ -233,6 +234,7 @@ public:
 	}
 	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
 	float GetSquadPowerNear(const springai::AIFloat3& pos, float radius) const;  // attack + defend squads
+	float GetSidePowerAt(const springai::AIFloat3& pos, float radius);  // ours + allies', memoised a second
 	float GetGatheredPower() const;
 	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
 	// apex: where a long gun holds its ring waiting for someone to see its target
@@ -241,6 +243,8 @@ public:
 	springai::AIFloat3 GetSpotWantedAt(int i) const;
 private:
 	std::vector<std::pair<springai::AIFloat3, int>> spotWanted;
+	struct SSideMemo { springai::AIFloat3 pos; float radius; float power; int frame; };
+	std::vector<SSideMemo> sideMemo;
 public:
 	springai::AIFloat3 focusPos;
 	float focusR = 0.f;
@@ -249,6 +253,7 @@ public:
 	int focusUntil = -1;
 	float oddsMul = 1.f;
 	float massMul = 1.f;
+	float flankMul = 1.f;
 	// Shared cadence and counters for ISquadTask's merge census. They live on
 	// the manager because the tasks they measure are created and destroyed
 	// constantly, and the question is about the fleet, not one squad.
