@@ -3274,3 +3274,8 @@ army 1.09/0.86/0.71/0.67; 2.5x eco 0.79/0.89/0.88/0.99, mex 0.71/0.70/0.88/0.72,
 0.58/0.72/0.52/0.42; results 0-0-24 vs 0-1-23. The raid-answer audit had found the mex
 gap is mostly claims (cons by m5 2.4-3.5 vs BARb's 4.1-5.2). The head nudges from here;
 watch the army cost as the curriculum lengthens games.
+Follow-up A/B the same night (24 each): 1.6x eco m5/m7/m11 0.70/0.72/0.67, mex m7/m11
+0.67/0.50, army 0.58/0.35, 0-1-23; a 2.5x rerun 0.73/0.76/0.78, mex 0.71/0.71, army
+0.58/0.38, 1-2-21. 1.6x gives up the eco without buying the army back; two 2.5x runs
+differ by 0.2 eco at m11 (24-game arms are noisy). Kept 2.5. The cost: training-loop 1v1
+losses by m12 went ~9% (8/91) -> ~18% (7/39) after the change.
