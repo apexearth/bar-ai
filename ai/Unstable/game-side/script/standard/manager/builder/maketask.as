@@ -413,7 +413,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			const AIFloat3 at = held.GetBuildPos();
 			const float reach = Catalog::gBuildDist[int(unit.circuitDef.id)] + 64.f;
 			if (OnMap(at) && (unit.GetPos(ai.frame).distance2D(at) > reach)
-				&& SiteLiveHot(at))
+				&& SiteLiveHot(at) && !EscortCovers(unit, at))
 			{
 				held.RemoveUnit(unit);
 				++gLetGo;

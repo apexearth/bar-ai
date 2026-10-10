@@ -462,4 +462,22 @@ const float NNMG_TRUST = 0.f;
 const float NNMG_LO = 0.f;
 const float NNMG_HI = 0.f;
 
+// the con-fear net (escnet.as)
+const bool NNCF_ON = false;
+const string NNCF_STATE = "";
+const int NNCF_S = 0;
+const int NNCF_O = 0;
+const int NNCF_H = 0;
+const array<float> NNCF_XM = {};
+const array<float> NNCF_XS = {};
+const array<float> NNCF_W1 = {};
+const array<float> NNCF_B1 = {};
+const array<float> NNCF_W2 = {};
+const array<float> NNCF_B2 = {};
+const array<float> NNCF_WO = {};
+const float NNCF_BO = 0.f;
+const float NNCF_TRUST = 0.f;
+const float NNCF_LO = 0.f;
+const float NNCF_HI = 0.f;
+
 }  // namespace Market

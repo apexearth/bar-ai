@@ -290,13 +290,36 @@ float RezThreat(CCircuitUnit@ unit, const AIFloat3& in where)
 // so a builder could accept the task and then never complete it.
 const float DEF_SHAKE = SQUARE_SIZE * 32;
 
+// Enemies at `where` that this con's escort outguns (Market::EscortOdds) are not a
+// reason to refuse or drop it. A con with no escort answers false at once.
+int gCovHeld = 0;
+int gCovStood = 0;
+int gCovLone = 0;
+bool EscortCovers(CCircuitUnit@ unit, const AIFloat3& in where)
+{
+	if ((unit is null) || !Market::HasEscort(unit.id)
+		|| unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) || IsRezzer(unit)) {
+		++gCovLone;
+		return false;
+	}
+	if (Market::EscortHolds(unit, where)) {
+		++gCovHeld;
+		return true;
+	}
+	++gCovStood;
+	return false;
+}
+
 float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 {
 	if (!OnMap(where))
 		return 0.f;
 	const float t = ai.GetUnitThreatAt(unit, where);
-	if (t > 0.f)
+	if (t > 0.f) {
+		if ((t > CON_THREAT_VETO) && EscortCovers(unit, where))
+			return PastFront(where) ? (CON_THREAT_VETO + 1.f) : 0.f;
 		return t;
+	}
 
 	// Enemies ACTUALLY near the spot, before falling back to geometry.
 	//
@@ -319,7 +342,7 @@ float ThreatFor(CCircuitUnit@ unit, const AIFloat3& in where)
 			+ " unitThreat=" + formatFloat(t, "", 0, 2)
 			+ " pastFront=" + (PastFront(where) ? "1" : "0"));
 	}
-	if (foes >= CON_FOE_COUNT)
+	if ((foes >= CON_FOE_COUNT) && !EscortCovers(unit, where))
 		return CON_THREAT_VETO + 1.f;
 	// THE THREAT MAP READS ZERO almost everywhere, so a CON_THREAT_VETO test
 	// against it alone passes unconditionally and constructors walk wherever

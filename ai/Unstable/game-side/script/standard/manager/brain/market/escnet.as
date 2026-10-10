@@ -13,6 +13,9 @@ int gEscNextAt = 0;
 // The cap on escorts at once scales with the escort head's v and its own cap
 // head (nnecap): 1x and 1x keep his 8.
 float gEscCapMul = 1.f;
+// cfear: the enemy-to-escort odds an escorted con still works under (EscortHolds); 1x = even.
+const float NCF_LO = 0.25f, NCF_HI = 8.f;
+float gCFearMul = 1.f;
 uint EscortCap() { return uint(ceil(ai.GetTunable("apex_escort_cap", TUNE_ESCORT_CAP) * gEscMul * gEscCapMul)); }
 
 void EscNetDecide()
@@ -37,6 +40,8 @@ void EscNetDecide()
 		NNE_XM, NNE_XS, NNE_W1, NNE_B1, NNE_W2, NNE_B2, NNE_WO, NNE_BO, NNE_TRUST, NNE_LO, NNE_HI, st, ef);
 	gEscCapMul = NnValDecide("ecap", NNE_ESC, NY_LO, NY_HI, 1.f, NNY_ON, NNY_STATE, NNY_S, NNY_O, NNY_H,
 		NNY_XM, NNY_XS, NNY_W1, NNY_B1, NNY_W2, NNY_B2, NNY_WO, NNY_BO, NNY_TRUST, NNY_LO, NNY_HI, st, ef);
+	gCFearMul = NnValDecide("cfear", NNE_ESC, NCF_LO, NCF_HI, 1.f, NNCF_ON, NNCF_STATE, NNCF_S, NNCF_O, NNCF_H,
+		NNCF_XM, NNCF_XS, NNCF_W1, NNCF_B1, NNCF_W2, NNCF_B2, NNCF_WO, NNCF_BO, NNCF_TRUST, NNCF_LO, NNCF_HI, st, ef);
 }
 
 // EXISTING RAIDERS TAKE THE DUTY, not only a unit fresh from the factory. One

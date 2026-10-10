@@ -139,6 +139,104 @@ bool EscortedWorker(Id wid)
 	return false;
 }
 
+bool HasEscort(Id wid)
+{
+	if (EscIdOk(wid))
+		return gEscHaveN[int(wid)] > 0;
+	return gEscWorker.find(wid) >= 0;
+}
+
+// THE ESCORT FIGHTS FOR ITS CON (his 10-09: cons "scared of enemies that are
+// clearly inferior to their own escorts"). Their side over ours at `where`, the
+// worse of two readings: armed mobile metal near it against the escorts standing
+// with the con (StrRatio, the escort pool's currency), and the threat map there
+// -- statics included -- against the escorts' surface threat (OutgunnedHere's).
+// 1e6 for a con with no escort beside it, the commander and rez bots.
+float gEcvR = -1.f;
+int gEcvFrame = -1;
+Id gEcvId = Id(-1);
+float gEcvM = 0.f;
+float gEcvT = 0.f;
+float EscortOdds(CCircuitUnit@ wkr, const AIFloat3& in where)
+{
+	if ((wkr is null) || !HasEscort(wkr.id) || !OnMap(where)
+		|| wkr.circuitDef.IsRoleAny(Unit::Role::COMM.mask) || Builder::IsRezzer(wkr))
+		return 1e6f;
+	if (gEcvR < 0.f)
+		gEcvR = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
+	if ((gEcvFrame != ai.frame) || (gEcvId != wkr.id)) {
+		gEcvFrame = ai.frame;
+		gEcvId = wkr.id;
+		gEcvM = 0.f;
+		gEcvT = 0.f;
+		const AIFloat3 at = wkr.GetPos(ai.frame);
+		for (uint e = 0; e < gEscWorker.length(); ++e) {
+			if (gEscWorker[e] != wkr.id)
+				continue;
+			CCircuitUnit@ u = ai.GetTeamUnit(gEscUnit[e]);
+			if ((u is null) || (u.circuitDef is null))
+				continue;
+			IUnitTask@ t = u.task;
+			if ((t !is null) && (t.GetType() == Task::Type::RETREAT))
+				continue;
+			if (u.GetPos(ai.frame).distance2D(at) > gEcvR)
+				continue;
+			gEcvM += Catalog::gCostM[int(u.circuitDef.id)];
+			gEcvT += u.circuitDef.GetSurfThreat();
+		}
+	}
+	if (gEcvM <= 1.f)
+		return 1e6f;
+	const float byM = StrRatio(ai.GetEnemyArmedCostNear(where, gEcvR), gEcvM);
+	const float foeT = ai.GetUnitThreatAt(wkr, where);
+	const float byT = (foeT <= 0.f) ? 0.f : ((gEcvT > 0.f) ? (foeT / gEcvT) : 1e6f);
+	return (byM > byT) ? byM : byT;
+}
+
+bool EscortHolds(CCircuitUnit@ wkr, const AIFloat3& in where)
+{
+	return EscortOdds(wkr, where) <= gCFearMul;
+}
+
+// The C++ builder guard and damage retreat leave a con flagged RET_FIGHT where it
+// is: a unit-level attribute no C++ path reads for a builder, set through an
+// existing binding so this compiles against a DLL that does not read it yet.
+array<Id> gEcvSet;
+array<Id> gEcvSeen;
+int gEcvLogAt = 0;
+void EscortCoverSweep()
+{
+	gEcvSeen.resize(0);
+	for (int i = int(gEcvSet.length()) - 1; i >= 0; --i) {
+		const Id wid = gEcvSet[uint(i)];
+		gEcvSeen.insertLast(wid);
+		CCircuitUnit@ w = ai.GetTeamUnit(wid);
+		if ((w !is null) && EscortHolds(w, w.GetPos(ai.frame)))
+			continue;
+		if (w !is null)
+			w.DelAttribute(Unit::Attr::RET_FIGHT.type);
+		gEcvSet.removeAt(uint(i));
+	}
+	for (uint e = 0; e < gEscWorker.length(); ++e) {
+		const Id wid = gEscWorker[e];
+		if (gEcvSeen.find(wid) >= 0)
+			continue;
+		gEcvSeen.insertLast(wid);
+		CCircuitUnit@ w = ai.GetTeamUnit(wid);
+		if ((w is null) || Catalog::gFlyer[int(w.circuitDef.id)] || !EscortHolds(w, w.GetPos(ai.frame)))
+			continue;
+		w.AddAttribute(Unit::Attr::RET_FIGHT.type);
+		gEcvSet.insertLast(wid);
+	}
+	if (ai.frame >= gEcvLogAt) {
+		gEcvLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: con-cover t=" + ai.teamId + " covered=" + gEcvSet.length()
+			+ " seen=" + gEcvSeen.length() + " held=" + Builder::gCovHeld
+			+ " stood=" + Builder::gCovStood + " lone=" + Builder::gCovLone
+			+ " cfear=" + NnF(gCFearMul, 2));
+	}
+}
+
 int gEscDiagAt = 0;
 // GetEnemyCostAt is an engine sweep of the enemy registry, and EscortNeeded ran
 // one per exposed worker on EVERY military election -- several elections land
