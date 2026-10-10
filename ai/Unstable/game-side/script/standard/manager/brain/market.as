@@ -45,6 +45,7 @@
 #include "market/protect_sense.as"      // edge/crowd/radar/jammer senses, closure, the class halves
 #include "market/protect_target.as"     // the mex floor, DefenceValue/DefenceTarget, TargetFill
 #include "market/protect_shelled.as"    // the shelled census: long-range fire on our statics, and the jammer under it
+#include "market/protect_knot.as"       // knots of mutual support, and the bearing they face
 #include "market/protect_fill.as"       // DefSiteFill: every site's prevented loss, cached per def
 #include "market/protect_teeth.as"      // the choke-teeth Want
 #include "market/protect_senseprice.as" // radar/jam/shield/AA/targfac prices

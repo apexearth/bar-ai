@@ -13,6 +13,8 @@ int gDefSiteFront = 0;
 int gDefSiteAsset = 0;
 int gDefSiteRing = 0;
 int gDefSiteWall = 0;
+int gDefSiteKnot = 0;
+int gDefSiteJoin = 0;   // wins where standing guns already cover the site (kappa > 1)
 int gNextDefSiteLog = 0;
 int gNextDefFwdLog = 0;
 // EVERY TERM OF THE DEFENCE PRICE, so "why so many turrets" is read rather than
@@ -28,6 +30,7 @@ int gDbgPulled = 0;   // wall slots stepped back from hot ground this minute
 float gDbgAssetBest = 0.f;
 float gDbgRingBest = 0.f;
 float gDbgWallBest = 0.f;
+float gDbgKnotBest = 0.f;
 int gDbgLineN = 0;
 
 //------------------------------------------------------------------------------
@@ -239,7 +242,11 @@ array<float> gDwThreat;
 array<float> gDwCov0;
 array<float> gDwCov1;
 array<float> gDwKill;    // PfTowerKill(d)
-array<int> gDwSite;      // 0 asset, 1 front, 2 ring, 3 wall
+array<int> gDwSite;      // 0 asset, 1 front, 2 ring, 3 wall, 4 keep, 5 knot
+array<float> gDwKappa;   // the knot term at the chosen site, and what fed it
+array<float> gDwFace;
+array<float> gDwSup;
+array<float> gDwWave;
 array<int> gWhyDef;      // the defs priced in the CURRENT election
 int gDefWhyWins = 0;
 int gNextDefWhyLog = 0;
@@ -257,6 +264,7 @@ void DwEnsure(int d)
 	gDwVal.resize(n);   gDwStake.resize(n);  gDwHz.resize(n);  gDwCapM.resize(n);
 	gDwStop.resize(n);  gDwThreat.resize(n); gDwCov0.resize(n);
 	gDwCov1.resize(n);  gDwKill.resize(n);   gDwSite.resize(n);
+	gDwKappa.resize(n); gDwFace.resize(n);   gDwSup.resize(n);  gDwWave.resize(n);
 }
 
 string DwSiteName(int k)
@@ -265,6 +273,7 @@ string DwSiteName(int k)
 	if (k == 2) return "ring";
 	if (k == 3) return "wall";
 	if (k == 4) return "keep";
+	if (k == 5) return "knot";
 	return "asset";
 }
 
@@ -317,6 +326,10 @@ string DefWhyTerms(int d)
 		+ " xWallEff=" + formatFloat(gDwEff[d], "", 0, 3)
 		+ " xFill=" + formatFloat(gDwFill[d], "", 0, 3)
 		+ " xTeamPow=" + formatFloat(gDwTeam[d], "", 0, 3)
+		+ " xKnot=" + formatFloat(gDwKappa[d], "", 0, 3)
+		+ " sup=" + formatFloat(gDwSup[d], "", 0, 0)
+		+ "/wave" + formatFloat(gDwWave[d], "", 0, 0)
+		+ " xFace=" + formatFloat(gDwFace[d], "", 0, 2)
 		+ " kill=" + formatFloat(gDwKill[d], "", 0, 2)
 		+ " (" + PfKillWhy(d) + ")"
 		+ " costM=" + int(Catalog::gCostM[d])
@@ -582,7 +595,7 @@ void LogFrontTowers()
 		+ " wallSlots=" + PfWallSlotCount());
 }
 
-void NoteDefSite(bool isFront, bool isRing, bool isWall)
+void NoteDefSite(bool isFront, bool isRing, bool isWall, bool isKnot, float kappa)
 {
 	if (isWall)
 		++gDefSiteWall;
@@ -590,22 +603,30 @@ void NoteDefSite(bool isFront, bool isRing, bool isWall)
 		++gDefSiteFront;
 	else if (isRing)
 		++gDefSiteRing;
+	else if (isKnot)
+		++gDefSiteKnot;
 	else
 		++gDefSiteAsset;
+	if (kappa > 1.f)
+		++gDefSiteJoin;
 	if (ai.frame < gNextDefSiteLog)
 		return;
 	gNextDefSiteLog = ai.frame + 60 * SECOND;
 	AiLog("apex: defsite front=" + gDefSiteFront + " asset=" + gDefSiteAsset
 		+ " ring=" + gDefSiteRing
 		+ " wall=" + gDefSiteWall
+		+ " knot=" + gDefSiteKnot
+		+ " joined=" + gDefSiteJoin
 		+ " lineSpots=" + gDbgLineN
 		+ " foeReach=" + formatFloat(Military::FoeReach(), "", 0, 0)
 		+ " bestFrontGain=" + formatFloat(gDbgFrontBest, "", 0, 2)
 		+ " bestAssetGain=" + formatFloat(gDbgAssetBest, "", 0, 2)
 		+ " bestRingGain=" + formatFloat(gDbgRingBest, "", 0, 2)
 		+ " bestWallGain=" + formatFloat(gDbgWallBest, "", 0, 2)
+		+ " bestKnotGain=" + formatFloat(gDbgKnotBest, "", 0, 2)
 		+ " pulled=" + gDbgPulled);
 	gDbgPulled = 0;
+	gDbgKnotBest = 0.f;
 	gDbgFrontBest = 0.f;
 	gDbgAssetBest = 0.f;
 	gDbgRingBest = 0.f;
