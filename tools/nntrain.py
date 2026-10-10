@@ -932,6 +932,7 @@ class SourceResolver:
 # placebo is read on the chance window's own games and taken off each bootstrap
 # resample (the same games drawn for both).
 TRUST_KIND = 4
+POLL_GAMES = 8          # finished games learned per poll, newest first; then export and re-scan
 TRUST_BOOT = 200        # bootstrap resamples (by game)
 TRUST_LO_Q = 2.5        # percentile taken as the interval's lower end
 TRUST_GAMES_MIN = 5     # fewer games than this: no say
@@ -2407,7 +2408,9 @@ class Trainer(Buffered):
 
     def poll(self):
         did = []
-        for key, d, g in parsed_in_order(self.finished_games()):
+        # NEWEST FIRST, a few per poll: oldest-first ran a five-hour backlog in one poll, so new
+        # games waited hours and nothing was exported meanwhile (10-10 16:50, exported=0)
+        for key, d, g in parsed_in_order(self.finished_games()[::-1][:POLL_GAMES]):
             first, items = self.rows_from(g, d, final=True)
             self.seen_dirs.add(key)
             if items:
