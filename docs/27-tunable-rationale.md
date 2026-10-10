@@ -3253,3 +3253,13 @@ every builder kind and every head at once. Off by default; the plan net
 chooses. In 2v2 self-play the pushes traded 2.9-4.5:1 at the breach (218
 calls), while the explorer side still lost 15-30: the A/B separates the push
 from the exploration.
+
+## TUNE_GUNP_RULE = 1 (2026-10-10)
+
+The forced-gun head's rule value: the multiplier the forced defence pushes (basefront,
+comself, cover floor, defence role) play at before the net earns a say. Explorer games
+holding gunp at 0-0.75 read mex edge 0.68 at minute 7 against 0.41-0.48 elsewhere (22
+seats), which matched his "early turrets are useless". The normal-game A/B did not
+confirm it: 24 games each, 8-min Comet 1v1 vs BARb hard, at m7 -- 1x eco 0.70 mex 0.50
+land 0.72 army 0.87; 0.35x eco 0.61 mex 0.54 land 0.84 army 0.96. Within noise; left at 1
+for the head to learn.

@@ -638,7 +638,7 @@ void GunPushDecide()
 	f.insertLast(Military::gNrEcoLostM);
 	array<float> st;
 	NnState(null, st);
-	gGunpMul = NnValDecide("gunp", NNGP_OWN, GP_LO, GP_HI, 1.f, NNGP_ON, NNGP_STATE, NNGP_S, NNGP_O, NNGP_H,
+	gGunpMul = NnValDecide("gunp", NNGP_OWN, GP_LO, GP_HI, ai.GetTunable("apex_gunp_rule", TUNE_GUNP_RULE), NNGP_ON, NNGP_STATE, NNGP_S, NNGP_O, NNGP_H,
 		NNGP_XM, NNGP_XS, NNGP_W1, NNGP_B1, NNGP_W2, NNGP_B2, NNGP_WO, NNGP_BO, NNGP_TRUST, NNGP_LO, NNGP_HI, st, f);
 	// drawn only once v leaves the rule, so a rule game's random stream is untouched
 	if (!gGpUSet && (gGunpMul != 1.f)) {
