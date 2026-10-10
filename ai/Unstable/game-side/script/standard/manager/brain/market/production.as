@@ -2494,8 +2494,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// Comet 1v1 seats, up to 5 min).
 		// The constructor head (econet.as) sizes the floor and the army share it yields to,
 		// target / v: a step at 1x left the head two behaviours, all cons or the rule.
+		// v also sets how many cons come before the army may take the factory (1x = the first,
+		// the rule): at share 0 the army always reads behind, so no v could ask for cons first
+		// (held 3.5-8x still made ~2 cons by minute 3; BARb makes 3 straight).
 		const bool armyBehind = (Brain::gSpentTotal > 1.f)
-			&& (ConsOwnedAny() + ConsInFlightAny() > 0)
+			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= ((gConFloorMul > 1.f) ? gConFloorMul : 1.f))
 			&& (Brain::ShareOf(Brain::ARMY) * ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f)
 				< Brain::TargetShare(Brain::ARMY));
 		const bool floorOn = !armyBehind;
