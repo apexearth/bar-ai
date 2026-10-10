@@ -132,7 +132,17 @@ restructure (enemy economy estimate).
   its influence (`apex: hunt go`), and the focus follows the group every 4 s
   until it is lost for 3 looks or 180 s pass (`apex: hunt start` / `hunt end
   why=gone|time`). Rule NO; an untrusted head mixes `NnHeadFlat` in discovery
-  games, like every other head. None while a strike holds the focus. Label: every
+  games, like every other head. None while a strike holds the focus.
+  **Intercept (2026-10-10, his "our army walked past the enemy's army"):** every
+  2 s the biggest ground group on our side of the map (nearer our home than
+  `FoeAnchor`) that the guns there do not cover is looked for; a new one is
+  decided at once (`why=intercept`, ending a non-intercept hunt), the target is
+  that group, and the rule is HUNT unless it is under an eighth of our attack
+  metal (the AttackTask's own pass-over bar: `small`) or outweighs attack squads
+  + home pools on our ground + guns there at his 1.2x home parity
+  (`outweighed`). An intercept hunt also ends `why=left` once the group is back
+  on their side. `apex: intercept ...` per decision; `hunt-stat` adds
+  `ic/icHunt/icSmall/icOut/icLeft`. Label: every
   decision, either pick, is watched 180 s -- their metal we killed within
   1200 of the tracked group, ours lost there, and half of every death's metal
   credited (+) or debited (-) by who holds that ground (net influence at the
