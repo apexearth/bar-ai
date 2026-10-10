@@ -32,6 +32,8 @@ array<CCircuitUnit@> gFQFac;     // ...and their handles, parallel to gFQId
 array<int> gFQSeen;              // ...and the queue depth we last observed
 array<int> gFQAt;                // ...and the frame we last sent one an order
 array<int> gFQEvt;               // ...and the frame the line last did ANYTHING
+array<float> gFQOutM;            // ...and the army metal it delivered, decaying over the fill window
+array<int> gFQOutAt;             // ...as of this frame
 
 // EVERY ORDER STILL OUTSTANDING, as a flat FIFO of (line, def) pairs, retired
 // only when the unit is FINISHED. Reads lag sends by a whole order window
@@ -264,6 +266,8 @@ void FQForget(Id id)
 	gFQSeen.removeAt(i);
 	gFQAt.removeAt(i);
 	gFQEvt.removeAt(i);
+	gFQOutM.removeAt(i);
+	gFQOutAt.removeAt(i);
 	PendReindex(i);
 }
 
@@ -320,6 +324,8 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		gFQSeen.insertLast(0);
 		gFQAt.insertLast(ai.frame);
 		gFQEvt.insertLast(ai.frame);
+		gFQOutM.insertLast(0.f);
+		gFQOutAt.insertLast(ai.frame);
 		line = int(gFQId.length()) - 1;
 		AbortRecruitsOn(fac);
 		fac.CmdRepeat(false);
@@ -515,6 +521,32 @@ void UpdateFacQueues()
 	SweepDeadRecruits();
 }
 
+float LineOutTauS()
+{
+	const float s = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+	return (s > 1.f) ? s : 180.f;
+}
+
+void LineOutDecay(int line)
+{
+	const float dt = float(ai.frame - gFQOutAt[line]) / float(SECOND);
+	if (dt > 0.f)
+		gFQOutM[line] *= pow(2.718282f, -dt / LineOutTauS());
+	gFQOutAt[line] = ai.frame;
+}
+
+// Army metal per second this line has actually delivered over the fill window.
+// A new plant reads zero until its first units appear, whatever its nameplate.
+float LineOutMps(Id facId)
+{
+	const int line = FQIndex(facId);
+	if ((line < 0) || (line >= int(gFQOutM.length())))
+		return 0.f;
+	const float dt = float(ai.frame - gFQOutAt[line]) / float(SECOND);
+	const float tau = LineOutTauS();
+	return gFQOutM[line] * ((dt > 0.f) ? pow(2.718282f, -dt / tau) : 1.f) / tau;
+}
+
 // The honest reconcile: the ordered unit APPEARED. CountQueued lags sends by
 // up to ~45s of game time at bench speed, so ledger-vs-queue comparisons
 // starve the line; the finished event does not lie.
@@ -527,6 +559,13 @@ void NoteProduced(CCircuitUnit@ unit)
 			const int line = gFQPendLine[i];
 			if ((line >= 0) && (line < int(gFQEvt.length()))) {
 				gFQEvt[line] = ai.frame;
+				const int ud = int(unit.circuitDef.id);
+				if (Catalog::gMobile[ud] && !Catalog::gBuilder[ud] && (Catalog::gPower[ud] > 1.f)
+					&& !Catalog::gKamikaze[ud] && (line < int(gFQOutM.length())))
+				{
+					LineOutDecay(line);
+					gFQOutM[line] += Catalog::gCostM[ud];
+				}
 			}
 			gFQPendLine.removeAt(i);
 			gFQPendDef.removeAt(i);

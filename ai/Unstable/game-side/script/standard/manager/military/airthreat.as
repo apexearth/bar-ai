@@ -90,19 +90,24 @@ float AirScale(float share)
 // How many heavy static AA the observed air justifies. Consumed only as a
 // maxThisUnit ceiling (CapHeavyAA below); the PURCHASE goes through the
 // protect market's AA branch, which divides the same census by AllyCount.
-int HeavyAAWant()
+// THE LATE-GAME FLOOR DOES NOT WAIT FOR A SIGHTING. apexearth 2026-08-20:
+// "It is not unusual for air to show up out of nowhere when it was never
+// there before. So when you are in the later part of the game you
+// absolutely need to have flak spread out around your base." Later part
+// of the game means economy, never clock: one flak above the income bar,
+// another per flak-per of income beyond it.
+int FlakFloorN()
 {
-	// THE LATE-GAME FLOOR DOES NOT WAIT FOR A SIGHTING. apexearth 2026-08-20:
-	// "It is not unusual for air to show up out of nowhere when it was never
-	// there before. So when you are in the later part of the game you
-	// absolutely need to have flak spread out around your base." Later part
-	// of the game means economy, never clock: one flak above the income bar,
-	// another per flak-per of income beyond it.
-	int floorN = 0;
 	const float inc = Eco::MInc();
 	const float bar = ai.GetTunable("apex_flak_floor_income", TUNE_FLAK_FLOOR_INCOME);
-	if (inc >= bar)
-		floorN = 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));
+	if (inc < bar)
+		return 0;
+	return 1 + int((inc - bar) / ai.GetTunable("apex_flak_per", TUNE_FLAK_PER));
+}
+
+int HeavyAAWant()
+{
+	const int floorN = FlakFloorN();
 	// Sized off what we have SEEN, not what is on screen: heavy AA is a
 	// standing answer to an air force, and the force does not stop existing
 	// while it is rearming.
