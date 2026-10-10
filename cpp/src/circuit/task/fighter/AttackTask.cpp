@@ -33,6 +33,11 @@ namespace circuit {
 using namespace springai;
 using namespace terrain;
 
+// The target score is a squared distance, so a newcomer must be sqrt(2) nearer
+// on the walk to replace it; the commitment lasts until the walk alone has moved
+// the target's own score by that much.
+static constexpr float TGT_MARGIN = 2.f;
+
 CAttackTask::CAttackTask(ITaskModule* mgr, float minPower, float powerMod)
 		: ISquadTask(mgr, FightType::ATTACK, powerMod)
 		, minPower(minPower)
@@ -145,6 +150,7 @@ void CAttackTask::Update()
 	bool wasRegroup = (State::REGROUP == state);
 	bool mustRegroup = IsMustRegroup();
 	if (State::REGROUP == state) {
+		holding = false;
 		if (mustRegroup) {
 			CCircuitAI* circuit = manager->GetCircuit();
 			int frame = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
@@ -198,6 +204,8 @@ void CAttackTask::Update()
 		manager->PerfAdd(21, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tFt0).count());
 //	}
 	RepairBreak(frame);
+	holdWas = holding;
+	holding = false;
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
@@ -247,13 +255,11 @@ void CAttackTask::Update()
 		// a refused fight holds at the front: "no target" marched it on their start box
 		forEco = !outgunned && !joinHeld && MarchEnemyBox();
 		if (!forEco) {
-			if (outgunned && (frame >= nextFrontLog)) {
-				nextFrontLog = frame + FRAMES_PER_SEC * 10;
-				circuit->LOG("apex: atk-front t=%i lead=%s n=%i pow=%.1f at=%.0f,%.0f odds=%.2f",
-						circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
-						attackPower * powerMod, startPos.x, startPos.z, circuit->GetMilitaryManager()->GetOddsMul());
+			if (outgunned || joinHeld) {
+				HoldForward(frame);
+			} else {
+				FallbackFrontPos();
 			}
-			FallbackFrontPos();
 		}
 		return;
 	}
@@ -279,7 +285,7 @@ void CAttackTask::Update()
 // saw nothing stayed home). Their base is in their start box -- the mirror of
 // ours on a map without boxes: march there and the squad's own eyes find what
 // to fight. Only at the box with nothing in sight does it fall back.
-bool CAttackTask::MarchEnemyBox()
+AIFloat3 CAttackTask::EnemyBoxPos() const
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
@@ -288,6 +294,79 @@ bool CAttackTask::MarchEnemyBox()
 		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
 		box = AIFloat3(terrainMgr->GetTerrainWidth() - home.x, 0.f, terrainMgr->GetTerrainHeight() - home.z);
 	}
+	return box;
+}
+
+// A REFUSED SQUAD WAITS FORWARD (apexearth 2026-10-10: "waiting somewhere closer
+// to the enemy base would be better"): at the leader or our front line, whichever
+// is nearer their box, stepped back toward home only out of the threat and out of
+// reach of the group that outgunned it. The guard anchor it walked to instead was
+// back at our base, and every new target walked it out again.
+void CAttackTask::HoldForward(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	CThreatMap* tm = circuit->GetThreatMap();
+	const AIFloat3& lead = leader->GetPos(frame);
+	const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+	const AIFloat3 foe = EnemyBoxPos();
+	AIFloat3 from = lead;
+	bool front = false;
+	if (circuit->HasFrontPos()) {
+		const AIFloat3& fp = circuit->GetFrontPos();
+		if ((fp.SqDistance2D(foe) < lead.SqDistance2D(foe)) && terrainMgr->CanMoveToPos(leader->GetArea(), fp)) {
+			from = fp;
+			front = true;
+		}
+	}
+	const AIFloat3 dir = (home - from).Normalize2D();
+	const float back = from.distance2D(home);
+	const float sqStrong = SQUARE(strongR + DEFAULT_SLACK * 2);
+	float d = 0.f;
+	AIFloat3 hold = from;
+	for (int k = 0; (k < 40) && (d + DEFAULT_SLACK * 2 < back)
+		&& ((tm->GetThreatAt(leader, hold) > THREAT_MIN) || (strongMem && (hold.SqDistance2D(strongPos) < sqStrong))); ++k)
+	{
+		d += DEFAULT_SLACK * 2;
+		hold = from + dir * d;
+	}
+	CTerrainManager::CorrectPosition(hold);
+	hold = terrainMgr->GetMovePosition(leader->GetArea(), hold);
+	position = hold;
+	holding = true;
+	if (frame >= nextFrontLog) {
+		nextFrontLog = frame + FRAMES_PER_SEC * 10;
+		circuit->LOG("apex: atk-front t=%i lead=%s n=%i pow=%.1f at=%.0f,%.0f odds=%.2f hold=%.0f,%.0f from=%s back=%.0f"
+				" fwd=%.0f join=%i strong=%i",
+				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), (int)units.size(),
+				attackPower * powerMod, lead.x, lead.z, circuit->GetMilitaryManager()->GetOddsMul(),
+				hold.x, hold.z, front ? "front" : "lead", d,
+				lead.distance2D(foe) - hold.distance2D(foe), joinHeld ? 1 : 0, strongMem ? 1 : 0);
+	}
+	if (holdWas && ((int)units.size() == holdN) && (hold.SqDistance2D(holdPos) < SQUARE(DEFAULT_SLACK * 2))
+		&& (frame < holdFrame + FRAMES_PER_SEC * 50))
+	{
+		return;
+	}
+	holdPos = hold;
+	holdFrame = frame;
+	holdN = (int)units.size();
+	// the path to the refused target must not resume after a regroup
+	pPath = std::make_shared<CPathInfo>();
+	const int timeout = frame + FRAMES_PER_SEC * 60;
+	for (CCircuitUnit* unit : units) {
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateWait();
+		}
+		unit->Gather(hold, timeout);
+	}
+}
+
+bool CAttackTask::MarchEnemyBox()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+	AIFloat3 box = EnemyBoxPos();
 	const AIFloat3& startPos = leader->GetPos(circuit->GetLastFrame());
 	if ((startPos.SqDistance2D(box) < SQUARE(highestRange + DEFAULT_SLACK * 4))
 		|| !terrainMgr->CanMobileReachAt(leader->GetArea(), box, highestRange))
@@ -327,7 +406,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
-	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
+	if (!holding && (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist))) {
 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		float x = rand() % terrainMgr->GetTerrainWidth();
 		float z = rand() % terrainMgr->GetTerrainHeight();
@@ -359,6 +438,8 @@ void CAttackTask::FindTarget()
 	const int noChaseCat = cdef->GetNoChaseCategory();
 
 	CEnemyInfo* const prevTarget = GetTarget();
+	const ICoreUnit::Id prevId = (prevTarget != nullptr) ? prevTarget->GetId() : -1;
+	int prevGroup = -1;
 	CEnemyInfo* bestTarget = nullptr;
 	float bestPull = 0.f;
 	float bestSup = 0.f;
@@ -436,6 +517,9 @@ void CAttackTask::FindTarget()
 		const CEnemyManager::SEnemyGroup& group = groups[i];
 		float slowest = std::numeric_limits<float>::max();
 		for (const ICoreUnit::Id eId : group.units) {
+			if (eId == prevId) {
+				prevGroup = (int)i;
+			}
 			CEnemyInfo* e = circuit->GetEnemyInfo(eId);
 			CCircuitDef* d = (e != nullptr) ? e->GetCircuitDef() : nullptr;
 			if ((d == nullptr) || !d->IsMobile() || d->IsAbleToFly() || !d->IsAttacker()
@@ -466,14 +550,26 @@ void CAttackTask::FindTarget()
 	const bool pushing = utils::is_valid(foeBase);
 	// apex: why an armed enemy next to the squad is not its target (atk-near).
 	const float sqNear = SQUARE(highestRange + 300.f);
-	enum { NR_OVERP, NR_STRONG, NR_REACH, NR_HIDDEN, NR_VEL, NR_CAT, NR_SPAM, NR_IGN, NR_HOME, NR_CAND, NR_N };
+	enum { NR_OVERP, NR_STRONG, NR_REACH, NR_HIDDEN, NR_VEL, NR_CAT, NR_SPAM, NR_IGN, NR_HOME, NR_CAND, NR_FOC, NR_N };
+	static const char* const nrName[NR_N] = {"overp", "strong", "reach", "hidden", "vel", "cat", "spam", "ign", "home", "cand", "focus"};
 	int nearWhy[NR_N] = {0};
+	// why the target we are walking to was not a candidate this pass
+	int prevWhy = -1;
 	bool outgunnedNear = false;
 	auto isNear = [&](CEnemyInfo* e) {
 		return (e != nullptr) && (e->GetCircuitDef() != nullptr) && e->GetCircuitDef()->IsMobile()
 				&& e->GetCircuitDef()->IsAttacker() && (pos.SqDistance2D(e->GetPos()) < sqNear);
 	};
+	auto skipNear = [&](CEnemyInfo* e, bool nearE, int why) {
+		nearWhy[why] += nearE ? 1 : 0;
+		if ((prevTarget != nullptr) && (e == prevTarget)) {
+			prevWhy = why;
+		}
+	};
 	auto countGroupNear = [&](const CEnemyManager::SEnemyGroup& g, int why) {
+		if ((prevGroup >= 0) && (&g == &groups[prevGroup])) {
+			prevWhy = why;
+		}
 		for (const ICoreUnit::Id eId : g.units) {
 			if (isNear(circuit->GetEnemyInfo(eId))) {
 				++nearWhy[why];
@@ -502,6 +598,9 @@ void CAttackTask::FindTarget()
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
 		if (focusOn && !focusGo && !isThreat[i]) {
+			if ((int)i == prevGroup) {
+				prevWhy = NR_FOC;
+			}
 			continue;
 		}
 		if (strongMem && !atFocus(group.pos) && (group.pos.SqDistance2D(basePos) >= sqStrongBase)) {
@@ -509,7 +608,9 @@ void CAttackTask::FindTarget()
 			continue;
 		}
 		const bool isOverpowered = maxPower * 0.125f > group.influence;
-		if (hasGoodTarget && isOverpowered) {
+		// the group we are walking to is scored even after a better one: skipping it
+		// left the choice to whichever group the enemy manager listed first
+		if (hasGoodTarget && isOverpowered && ((int)i != prevGroup)) {
 			countGroupNear(group, NR_OVERP);
 			continue;
 		}
@@ -525,12 +626,14 @@ void CAttackTask::FindTarget()
 			for (const ICoreUnit::Id eId : group.units) {
 				CEnemyInfo* e = outgunnedNear ? nullptr : circuit->GetEnemyInfo(eId);
 				CCircuitDef* ed = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+				const float reach = (ed != nullptr) ? float(ed->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell : 0.f;
 				if ((ed != nullptr) && ed->IsMobile() && ed->IsAttacker()
-					&& (pos.SqDistance2D(e->GetPos()) < SQUARE(float(ed->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell)))
+					&& (pos.SqDistance2D(e->GetPos()) < SQUARE(reach)))
 				{
 					outgunnedNear = true;
 					strongMem = true;
 					strongPos = group.pos;
+					strongR = reach + e->GetPos().distance2D(group.pos);
 				}
 			}
 			continue;
@@ -544,13 +647,13 @@ void CAttackTask::FindTarget()
 			CEnemyInfo* enemy = circuit->GetEnemyInfo(eId);
 			const bool nearE = isNear(enemy);
 			if ((enemy == nullptr) || enemy->IsHidden()/* || (enemy->GetTasks().size() > 2)*/) {
-				nearWhy[NR_HIDDEN] += nearE ? 1 : 0;
+				skipNear(enemy, nearE, NR_HIDDEN);
 				continue;
 			}
 			const AIFloat3& ePos = enemy->GetPos();
 			const AIFloat3& eVel = enemy->GetVel();
 			if ((eVel.SqLength2D() >= maxSpeed)/* && (eVel.dot2D(pos - ePos) < 0)*/) {  // speed and direction
-				nearWhy[NR_VEL] += nearE ? 1 : 0;
+				skipNear(enemy, nearE, NR_VEL);
 				continue;
 			}
 
@@ -564,24 +667,24 @@ void CAttackTask::FindTarget()
 					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()  // NOTE: groups are created by leader, ignore flags could be different
 					|| (edef->IsAbleToFly() && !cdef->IsAirHunter(IsInWater)))  // notAA
 				{
-					nearWhy[NR_CAT] += nearE ? 1 : 0;
+					skipNear(enemy, nearE, NR_CAT);
 					continue;
 				}
 				if (edef->IsInWater(elevation, ePos.y)) {
 					if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater())) {  // notAW
-						nearWhy[NR_CAT] += nearE ? 1 : 0;
+						skipNear(enemy, nearE, NR_CAT);
 						continue;
 					}
 				} else {
 					if (!(IsInWater ? cdef->HasSubToLand() : cdef->HasSurfToLand())) {  // notAL
-						nearWhy[NR_CAT] += nearE ? 1 : 0;
+						skipNear(enemy, nearE, NR_CAT);
 						continue;
 					}
 				}
 				if ((ePos.y - elevation > weaponRange)
 					/*|| enemy->IsBeingBuilt()*/)
 				{
-					nearWhy[NR_CAT] += nearE ? 1 : 0;
+					skipNear(enemy, nearE, NR_CAT);
 					continue;
 				}
 			} else {
@@ -640,7 +743,7 @@ void CAttackTask::FindTarget()
 					|| (isOverpowered && (pos.SqDistance2D(ePos) > SQUARE(highestRange * 1.5f)))))
 			{
 				++skippedSpam;
-				nearWhy[NR_SPAM] += nearE ? 1 : 0;
+				skipNear(enemy, nearE, NR_SPAM);
 				continue;
 			}
 			// apex: on the way to their buildings, an army under half ours is shot
@@ -652,20 +755,21 @@ void CAttackTask::FindTarget()
 				&& (group.influence * 2.f < maxPower))
 			{
 				++ignoredSmall;
-				nearWhy[NR_IGN] += nearE ? 1 : 0;
+				skipNear(enemy, nearE, NR_IGN);
 				continue;
 			}
 			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
-			if (enemy == prevTarget) {
-				prevScore = sqOEDist;
-			}
 			if (canGoHome && !isThreat[i]) {
 				const float dHome = std::sqrt(rawSqBE);
 				if ((dHome > threatD) && (dHome / ourSpeed > threatS)) {
 					++refusedHome;
-					nearWhy[NR_HOME] += nearE ? 1 : 0;
+					skipNear(enemy, nearE, NR_HOME);
 					continue;
 				}
+			}
+			// after the home deadline: a target that would strand us is not kept
+			if (enemy == prevTarget) {
+				prevScore = sqOEDist;
 			}
 			nearWhy[NR_CAND] += nearE ? 1 : 0;
 			if (minSqDist > sqOEDist) {
@@ -680,12 +784,38 @@ void CAttackTask::FindTarget()
 		}
 	}
 
-	// apex: keep the target we are walking to unless another is twice as good
-	// (apexearth: consistent orders, no flip-flop). prevScore is set only when
-	// the old target was seen alive in this very pass.
-	CEnemyInfo* const scoredBest = bestTarget;
-	if ((prevScore >= 0.f) && (bestTarget != prevTarget) && (minSqDist * 2.f > prevScore)) {
-		bestTarget = prevTarget;
+	// A TASK DOES NOT KEEP CHANGING ITS MIND (docs/24). The target is kept while
+	// committed and still a candidate (or only outrunning us for now), then until
+	// a newcomer beats it TGT_MARGIN times over. Gone, too strong, unreachable,
+	// the home deadline or the push's gather release it; a threat to our base,
+	// the push's breach or an army already on us may still take over on the margin.
+	const char* swWhy = (prevTarget == nullptr) ? "new" : "-";
+	const char* holdWhy = "-";
+	if ((prevTarget != nullptr) && (bestTarget != prevTarget)) {
+		const bool committed = frame < commitUntil;
+		const bool prevUrgent = (prevGroup >= 0)
+				&& (isThreat[prevGroup] || atFocus(prevTarget->GetPos()) || isNear(prevTarget));
+		const bool urgent = (bestTarget != nullptr) && !prevUrgent
+				&& (bestThreat || atFocus(bestTarget->GetPos()) || isNear(bestTarget));
+		if (prevScore >= 0.f) {
+			if (committed && !urgent) {
+				holdWhy = "commit";
+			} else if (minSqDist * TGT_MARGIN > prevScore) {
+				holdWhy = "margin";
+			} else {
+				swWhy = "margin";
+			}
+		} else if ((prevWhy == NR_VEL) && committed && !urgent && prevTarget->IsInRadarOrLOS()) {
+			holdWhy = "vel";
+		} else if (prevGroup < 0) {
+			swWhy = "gone";
+		} else {
+			swWhy = (prevWhy >= 0) ? nrName[prevWhy] : "skip";
+		}
+		if (holdWhy[0] != '-') {
+			bestTarget = prevTarget;
+			++heldCount;
+		}
 	}
 	// A stronger group that can already hit us is not walked past to a target
 	// beyond it (docs/24: never throw the army at a superior force; concentrate).
@@ -713,13 +843,15 @@ void CAttackTask::FindTarget()
 			nextNearLog = frame + FRAMES_PER_SEC * 10;
 			CCircuitDef* tdef = (bestTarget != nullptr) ? bestTarget->GetCircuitDef() : nullptr;
 			circuit->LOG("apex: atk-near t=%i lead=%s n=%i pow=%.1f tgt=%s dTgt=%.0f sticky=%i near=%i"
-					" overp=%i strong=%i reach=%i hidden=%i vel=%i cat=%i spam=%i ign=%i home=%i cand=%i",
+					" overp=%i strong=%i reach=%i hidden=%i vel=%i cat=%i spam=%i ign=%i home=%i cand=%i"
+					" hold=%s sw=%s commitS=%.0f",
 					circuit->GetTeamId(), cdef->GetDef()->GetName(), (int)units.size(), maxPower,
 					(tdef != nullptr) ? tdef->GetDef()->GetName() : "-",
 					(bestTarget != nullptr) ? pos.distance2D(bestTarget->GetPos()) : -1.f,
-					(scoredBest != bestTarget) ? 1 : 0, nearAll,
+					(holdWhy[0] != '-') ? 1 : 0, nearAll,
 					nearWhy[NR_OVERP], nearWhy[NR_STRONG], nearWhy[NR_REACH], nearWhy[NR_HIDDEN], nearWhy[NR_VEL],
-					nearWhy[NR_CAT], nearWhy[NR_SPAM], nearWhy[NR_IGN], nearWhy[NR_HOME], nearWhy[NR_CAND]);
+					nearWhy[NR_CAT], nearWhy[NR_SPAM], nearWhy[NR_IGN], nearWhy[NR_HOME], nearWhy[NR_CAND],
+					holdWhy, swWhy, std::max(float(commitUntil - frame) / FRAMES_PER_SEC, 0.f));
 		}
 	}
 
@@ -768,17 +900,26 @@ void CAttackTask::FindTarget()
 		CCircuitDef* bdef = bestTarget->GetCircuitDef();
 		forEco = (bdef != nullptr) && !bdef->IsMobile();
 		if (bestTarget != prevTarget) {
-			circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
-				" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i"
-				" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i strong=%i",
-				circuit->GetTeamId(), cdef->GetDef()->GetName(),
-				(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
-				position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
-				bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
-				(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
-				canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
-				wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0,
-				refusedStrong);
+			const float commitS = (1.f - 1.f / std::sqrt(TGT_MARGIN)) * position.distance2D(pos) / ourSpeed;
+			const float keptS = float(frame - targetSince) / FRAMES_PER_SEC;
+			const int held = heldCount;
+			commitUntil = frame + int(commitS * FRAMES_PER_SEC);
+			targetSince = frame;
+			heldCount = 0;
+			// RepairBreak puts the repairer back after every pass; that is not a switch
+			if ((repairerId < 0) || (prevId != repairerId)) {
+				circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
+					" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i"
+					" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i strong=%i sw=%s held=%i keptS=%.0f commitS=%.0f",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(),
+					(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
+					position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
+					bestPull, (int)units.size(), position.distance2D(basePos) / ourSpeed,
+					(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
+					canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
+					wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0,
+					refusedStrong, swWhy, held, keptS, commitS);
+			}
 		}
 	} else if ((refusedStrong > 0) && (frame >= nextStrongLog)) {
 		nextStrongLog = frame + FRAMES_PER_SEC * 30;

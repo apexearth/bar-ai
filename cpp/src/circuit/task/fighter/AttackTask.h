@@ -33,6 +33,8 @@ private:
 	void FindTarget();
 	void ApplyTargetPath(const CQueryPathSingle* query);
 	bool MarchEnemyBox();
+	springai::AIFloat3 EnemyBoxPos() const;
+	void HoldForward(int frame);
 	void FallbackFrontPos();
 	void ApplyFrontPos(const CQueryPathMulti* query);
 	void FallbackBasePos();
@@ -60,7 +62,18 @@ private:
 	// the group that last outgunned the squad beside it, while still stronger
 	bool strongMem = false;
 	springai::AIFloat3 strongPos;
+	float strongR = 0.f;
 	springai::AIFloat3 fallBackTo;
+	// the target is kept until commitUntil unless gone, too strong or unreachable
+	int commitUntil = 0;
+	int targetSince = 0;
+	int heldCount = 0;
+	// a refused squad waiting forward, and the order last given for it
+	bool holding = false;
+	bool holdWas = false;
+	springai::AIFloat3 holdPos;
+	int holdFrame = 0;
+	int holdN = 0;
 	int joinRefused = -1;   // the enemy id of a fight the join decision refused (a pointer is reused)
 	int joinRefusedUntil = 0;
 	bool joinHeld = false;   // this update's target was refused: hold, don't march on their box
