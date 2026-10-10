@@ -34,6 +34,7 @@
 #include "market/guards.as"         // stall sweep, guard/escort ledger, worker ledger
 #include "market/escnet.as"         // escort strength net, existing raiders recruited to escort
 #include "market/econet.as"         // constructor-floor and expansion nets
+#include "market/armynet.as"        // tier-mix and anti-air heads
 #include "market/plannet.as"        // the team plan net; allies build one gantry together
 #include "market/joinnet.as"        // join a same-def site already rising, or open a new one
 #include "market/army.as"           // the army model, eco role, targets, StallWatch

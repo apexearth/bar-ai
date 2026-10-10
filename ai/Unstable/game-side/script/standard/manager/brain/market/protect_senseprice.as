@@ -295,25 +295,8 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 				&& !ProtCovered(PROT_AA, lineAt, Catalog::gMaxRange[d] * 0.8f))
 				at = lineAt;
 		}
-		// AS SOON AS WE HAVE SEEN ANY (apexearth: "just make the AA if
-		// we've seen enemy air... it doesn't have to be a ton"). Sized off
-		// AirSeenEver, which has no AA_IGNORE floor and no freshness
-		// window: a bomber that has flown home is still a bomber, and
-		// AirThreatNow read zero for exactly the moments between raids.
-		// OUR SHARE OF A SIDE-WIDE READING: the enemy census sums what the
-		// whole team can see, and each of us covers our own base, so charging
-		// one player the team's answer builds it once per ally. RoleTarget
-		// already divides the same census on the mobile side.
-		const float allies = Military::AllyCount();
-		float air = Military::AirSeenEver()
-				/ ((allies > 1.f) ? allies : 1.f);
-		// The rear specialist is a FATTER TARGET than its share suggests:
-		// it holds the team's economy, builds no ground defence, and keeps
-		// no army over its base, so bombers that get past the front go
-		// there. It carries a larger share of the same census, which the
-		// saturation point below then turns into proportionally more AA.
-		if (EcoRoleActive())
-			air *= ai.GetTunable("apex_eco_aa_mult", TUNE_ECO_AA_MULT);
+		const float aaTrade = 1.f / AACoverFrac();
+		const float air = StaticAAAirM();
 		if (Gate(GATE_AA_NOAIR, air <= 0.f))
 			return false;
 		// WHAT THE BOMBS ARE ACTUALLY COSTING US, priced like a turret:
@@ -330,10 +313,6 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// No count, no cap. Mobile AA over the base counts here too, so the
 		// two AA budgets saturate against each other instead of both
 		// answering the same bombers.
-		float aaFrac = ai.GetTunable("apex_aa_cover_frac", TUNE_AA_COVER_FRAC);
-		if (aaFrac < 0.01f)
-			aaFrac = 0.01f;
-		const float aaTrade = 1.f / aaFrac;
 		// STATIC AA ONLY covers the base: the mobile AA is where the army is
 		// (his watch: 8 AA posts against 44 heavy guns, the fighters counted
 		// as the base's cover).
@@ -384,6 +363,42 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		gain = gAssetsM * rate * float(want3 - have) / float(want3);
 	}
 	return true;
+}
+
+float AACoverFrac()
+{
+	const float f = ai.GetTunable("apex_aa_cover_frac", TUNE_AA_COVER_FRAC);
+	return (f < 0.01f) ? 0.01f : f;
+}
+
+// The air the static AA is sized against. AS SOON AS WE HAVE SEEN ANY
+// (apexearth: "just make the AA if we've seen enemy air... it doesn't have to be
+// a ton"): AirSeenEver has no AA_IGNORE floor and no freshness window -- a bomber
+// that has flown home is still a bomber. OUR SHARE of a side-wide reading, as
+// RoleTarget divides it on the mobile side. The rear specialist is a fatter
+// target and carries a larger share. LATER BY ECONOMY, FLAK WHETHER OR NOT AIR
+// HAS SHOWN (docs/24): HeavyAAWant's income floor was only a ceiling, never a
+// purchase; here it is the air those flak saturate against at the cover ratio.
+// x the anti-air head.
+float StaticAAAirM()
+{
+	const float allies = Military::AllyCount();
+	float air = Military::AirSeenEver() / ((allies > 1.f) ? allies : 1.f);
+	if (EcoRoleActive())
+		air *= ai.GetTunable("apex_eco_aa_mult", TUNE_ECO_AA_MULT);
+	const float floorAir = (Military::gFlak !is null)
+			? float(Military::FlakFloorN()) * Military::gFlak.costM / AACoverFrac() : 0.f;
+	if (floorAir > air)
+		air = floorAir;
+	return air * gAAMul;
+}
+
+float StaticAAHaveM()
+{
+	float m = 0.f;
+	for (uint i = 0; i < gProtDefId[PROT_AA].length(); ++i)
+		m += Catalog::gCostM[gProtDefId[PROT_AA][i]];
+	return m;
 }
 
 }  // namespace Market

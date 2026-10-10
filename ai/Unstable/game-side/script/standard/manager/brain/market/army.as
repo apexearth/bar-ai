@@ -688,7 +688,7 @@ float RoleTarget(int role, float armyTarget)
 		// Plus the fighters our own mission aircraft need beside them
 		// (apexearth 2026-09-16: scouts flew out alone and died).
 		return aiEnemyMgr.GetEnemyCostFresh(RT::AIR)
-				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share
+				* ai.GetTunable("apex_aa_match", TUNE_AA_MATCH) * share * gAAMul
 				+ Air::CoverDemandM();
 	}
 	const float base = armyTarget / 6.f;   // maximum-entropy prior over combat roles

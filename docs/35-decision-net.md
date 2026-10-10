@@ -302,7 +302,7 @@ restructure (enemy economy estimate).
 ## Continuous heads (2026-10-09)
 
 His ruling: a quantity is never chopped into steps, and an integer count is a
-real value the game takes the ceiling of. Thirteen heads are one mechanism,
+real value the game takes the ceiling of. Sixteen heads are one mechanism,
 `NnValDecide` (nnlog.as), each a value v on a range, the rule's value 1x
 (aplant: the count itself, rule 1). Range tops are "almost unreasonably high"
 so the net has room; EXPLORATION is local (his 10-10: tweak from where it is, never
@@ -324,10 +324,12 @@ clamped to the range (`NnNudge`, NN_NUDGE).
 | mexg | protect_nn | MexGunsWanted's far term (guns a mex earns by its reach from them), and divides the coverall push's loss gate (TUNE_MEX_LOSS_COVER / v); every 30 s; prefix NNMG; own fields: mexes, unguarded (no gun in reach), guns covering a mex, mexes killed in 3 min, loss share, mean reach, enemy raid metal, army at home, minute | 0.25-8 |
 | gunp | protect_nn | the forced defence pushes that bypass the draw: the guns basefront (gBfWanted), comself (ComSelfGun's need) and defrole (gDrQuota) want, as int(c x v + u) with u one uniform held all game (`apex: gunp-dither`), so v = 1 is c and below 1 a lone gun is bought in a share v of games; the cover jump's floor x v and its one gun by the same rounding; the defence role's quota (roles.as) x v. coverall stays mexg's, draw and defpanic stay rules. Every 30 s from 5 s + team stagger; prefix NNGP; own fields: minute, enemy army seen, its decaying peak, enemy army ever seen, raid metal, threat at home, danger gap, army at home, our guns, defence value, mexes, mexes killed in 3 min, eco metal lost | 0-4 |
 | aplant | plannet | -- the plant count, owed ceil(v) | 1-8 |
+| tmix | armynet | the share of the army gap a lower-tier ground line (T2 beside a gantry, any lab beside a better one) keeps beyond what the better lines measurably deliver (Brain::LineOutMps, army metal per line decaying over apex_army_fill_s, capped by FacMetalRate): keep = cover + v x (gap - delivered - cover). 0 = everything past cover waits for the better line; also the T2 keep under lag. Every 30 s; prefix NNTM; own fields: minute, income, army value/target, enemy army seen, top ground tier, BP and delivered m/s of the lower and top lines, nano turrets in reach of the top plant vs NanosDueFor, lag severity. `apex: tiermix` | 0-6 |
+| aa | armynet | the air our AA is sized against: static (StaticAAAirM: our share of AirSeenEver, or the flak floor FlakFloorN x flak cost / apex_aa_cover_frac when higher) and mobile (RoleTarget AA's fresh-air term). Every 30 s; prefix NNAD; own fields: minute, income, air seen ever / averaged / fresh, static AA metal, mobile AA metal, fighters held, air loss rate, enemy army, flak floor. `apex: aa-want` | 0-8 |
 
 **Play.** With odds t (trust x blend, honest trust only: NN_TRUST_KIND >= 2) the
 net's best v, else the rule's 1x; then an explorer nudges it -- a held head (odds 0.2
-per head per explorer game, ~2-3 of 13) by its game-long z, else with odds
+per head per explorer game, ~3 of 16) by its game-long z, else with odds
 NN_HEAD_FLAT by a fresh z. The placebo's stand-ins are the same nudges of the rule
 (nntrain NUDGE_Z).
 The best v is a sweep: 25 even points over the range clipped to the one the

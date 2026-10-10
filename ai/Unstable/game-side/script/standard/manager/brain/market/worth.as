@@ -815,11 +815,21 @@ float RecordBar(int cls)
 // is unchanged and only the order moves.
 float gRecordMean = 1.f;
 int gRecordMeanAt = -1;
+// Fighters, and ground AA that cannot shoot the ground: killed by ground units it
+// could never hit, its dealt/health read "losing" and dropped every flak truck
+// and Archangel from the candidate list after the first death.
+bool AirOnlyAA(int d)
+{
+	const CCircuitDef@ cdef = Catalog::Def(d);
+	if ((cdef is null) || !cdef.IsRoleAny(Unit::Role::AA.mask))
+		return false;
+	return cdef.IsAbleToFly() || (Catalog::gSurfT[d] <= 0.01f);
+}
+
 float RecordRaw(int d)
 {
 	const CCircuitDef@ cdef = Catalog::Def(d);
-	if (Military::IsFodder(cdef)
-		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
+	if (Military::IsFodder(cdef) || AirOnlyAA(d))
 		return 1.f;
 	const float bar = RecordBar(LineClassOf(d));
 	// Uncapped (apexearth 2026-09-20: "we would prefer to try to use the
@@ -854,8 +864,7 @@ float RecordMul(int d)
 	if (ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) <= 0.f)
 		return 1.f;
 	const CCircuitDef@ cdef = Catalog::Def(d);
-	if (Military::IsFodder(cdef)
-		|| (cdef.IsAbleToFly() && cdef.IsRoleAny(Unit::Role::AA.mask)))
+	if (Military::IsFodder(cdef) || AirOnlyAA(d))
 		return 1.f;
 	if (!gRecordTiersSet) {
 		gRecordTiersSet = true;

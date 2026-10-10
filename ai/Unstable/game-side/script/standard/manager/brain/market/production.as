@@ -736,6 +736,58 @@ int CeilingConsNeed()
 // an order takes a whole lag window to become visible, so without this every
 // slot of a batch -- and every election inside the lag window -- prices against
 // the same gap and buys it over again.
+// TWO KINDS OF AA ANSWER TWO QUESTIONS. Ground AA defends the ground it stands
+// on; only a fighter denies the airspace and makes the raids stop. Counted as
+// one role, 21,000 metal of mobile AA closed the gap and the fighters were
+// never bought (apexearth: "not making enough anti-air to convince them to
+// stop. We should have fighters").
+void AASplit(bool flyer, float tIn, float vIn, float& out rTarget, float& out rValue)
+{
+	rTarget = tIn;
+	rValue = vIn;
+	const float fShare = ai.GetTunable("apex_aa_fighter_share", TUNE_AA_FIGHTER_SHARE);
+	const float escort = Air::CoverDemandM();
+	if (fShare > 0.f) {
+		float airPart = rTarget - escort;
+		if (airPart < 0.f)
+			airPart = 0.f;
+		const float fTgt = airPart * fShare + escort;
+		if (flyer) {
+			rTarget = fTgt;
+			rValue = Air::FighterMetalHeld();
+		} else {
+			rTarget -= fTgt;
+			rValue -= Air::FighterMetalHeld();
+		}
+		if (rTarget < 0.f)
+			rTarget = 0.f;
+		if (rValue < 0.f)
+			rValue = 0.f;
+	} else if (!flyer) {
+		rTarget -= escort;
+	}
+}
+
+// Frame-memoised per hull: FighterMetalHeld walks the def table.
+int gAAGapAt = -1;
+array<float> gAAGap = {0.f, 0.f};
+float AARoleGap(bool flyer, float armyT)
+{
+	if (gAAGapAt != ai.frame) {
+		gAAGapAt = ai.frame;
+		gAAGap[0] = -1e9f;
+		gAAGap[1] = -1e9f;
+	}
+	const uint k = flyer ? 1 : 0;
+	if (gAAGap[k] < -1e8f) {
+		const int r = int(Unit::Role::AA.type);
+		float t, v;
+		AASplit(flyer, RoleTarget(r, armyT), RoleValue(r), t, v);
+		gAAGap[k] = t - v;
+	}
+	return gAAGap[k];
+}
+
 float ArmyInFlightM()
 {
 	// The metal a queued unit turns into army within the fill window, not its
@@ -1272,6 +1324,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float waterGap = WaterArmyGap(int(fac.circuitDef.id));
 	if ((ceilNeed <= 0) && !gMexOpen && (upD <= 0.5f) && (bpGap <= 0.5f)
 		&& (armyT0 - armyHave <= 0.5f)
+		&& (AARoleGap(false, armyT0) <= 0.5f) && (AARoleGap(true, armyT0) <= 0.5f)
 		&& (richGap <= 0.5f) && (waterGap <= 0.5f))
 	{
 		gNoOrder = "all-quiet";
@@ -1388,6 +1441,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const float mine = FacBestPPC(fid);
 		const int myTier = PlantTier(fid);
 		float betterCap = 0.f;
+		float plateMps = 0.f, gotMps = 0.f;
 		bool gantryUp = false;
 		for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 			CCircuitUnit@ f2 = Factory::gFacUnits[fi];
@@ -1403,10 +1457,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// and spend none of it.
 			const int l2 = Brain::FQIndex(f2.id);
 			const float busy = (l2 >= 0) ? Brain::LineSeconds(l2, f2, false) : 0.f;
+			// What it has delivered, not its nameplate: the nameplate counts every
+			// nano in reach, shared with this lab, and a gantry with no ring yet.
+			// Read 4x its real output across the switch and left T2 idle.
+			float rate2 = FacMetalRate(f2);
+			plateMps += rate2;
+			const float got2 = Brain::LineOutMps(f2.id);
+			gotMps += got2;
+			if (got2 < rate2)
+				rate2 = got2;
 			if (busy < fillS)
-				betterCap += FacMetalRate(f2) * (fillS - busy);
+				betterCap += rate2 * (fillS - busy);
 		}
-		if ((betterCap > 0.f) || ((gPlan == NG_T3) && gantryUp)) {
+		if ((betterCap > 0.f) || gantryUp) {
 			const float coverGapKeep = armyGap * coverShare;
 			float left = armyGap - betterCap;
 			if (left < coverGapKeep)
@@ -1415,6 +1478,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				left = 0.f;
 			if ((gPlan == NG_T3) && gantryUp)
 				left = coverGapKeep;   // the team plan: everything but fodder to the gantry
+			if (left > coverGapKeep)
+				left = coverGapKeep + gTierMixMul * (left - coverGapKeep);
 			// The spare-metal sink re-enters as its own gap per candidate, so it
 			// yields too, or a full bank kept every T1 lab running beside T2.
 			richBal -= betterCap;
@@ -1422,6 +1487,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				richBal = 0.f;
 			gYieldLog = " yield=" + int(armyGap - left) + " betterCap=" + int(betterCap)
 				+ " richLeft=" + int(richBal);
+			if (gantryUp && (ai.frame >= gTierMixLogAt)) {
+				gTierMixLogAt = ai.frame + 30 * SECOND;
+				AiLog(Factory::T() + "apex: tiermix t=" + ai.teamId + " fac=" + fac.circuitDef.GetName()
+					+ " gap=" + int(armyGap) + " keep=" + int(left) + " cover=" + int(coverGapKeep)
+					+ " plate=" + NnF(plateMps, 1) + " got=" + NnF(gotMps, 1)
+					+ " mineGot=" + NnF(Brain::LineOutMps(fac.id), 1)
+					+ " lag=" + NnF(Perf::LagSeverity(), 1) + " v=" + NnF(gTierMixMul, 2));
+			}
 			armyGap = left;
 		} else {
 			gYieldLog = "";
@@ -1433,13 +1506,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	// UNDER LAG, FEWER AND BIGGER UNITS (apexearth 2026-10-03: "if we see the FPS
 	// in the game below 30, can we just make less T2 units and focus only on the
-	// T3 units? We can still make airplanes"). While the game runs behind its set
-	// speed, a ground line below our best ground tier makes no army.
+	// T3 units? We can still make airplanes"). A T1 line makes no army; a T2 line
+	// keeps only what the top tier does not deliver -- the yield above, at its
+	// measured output (his 09-29: fewer T2 once T3 stands, never none; 10-10: the
+	// zeroed T2 left too few units on the field). No spare-metal sink, no cover.
 	if (!airLine && (Perf::LagSeverity() > 0.f) && (PlantTier(fid) < TopGroundPlantTier())) {
-		armyGap = 0.f;
+		if (PlantTier(fid) < 2)
+			armyGap = 0.f;
 		richBal = 0.f;   // the spilled-metal sink bought Mammoths past the cut
 		coverShare = 0.f;
-		gapSrc = "lag";
+		gapSrc = (armyGap > 0.f) ? "lagkeep" : "lag";
 	}
 	// The eco role no longer DISCOUNTS army production -- it removes army from
 	// this player's target (ArmyTarget returns 0 while growing), so armyGap is
@@ -2028,7 +2104,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// what the enemy fields now is dropped outright (apexearth
 			// 2026-09-20: "when we see the enemy having Tier 2 units on the
 			// field that dominate Tier 1 units ... stop making Tier 1").
-			// Fodder and fighters are never judged (RecordRaw reads 1 for
+			// Fodder and air-only AA are never judged (RecordRaw reads 1 for
 			// them), so spam survives -- the cheap body wastes the same fire.
 			// A type we have never lost one of has no trade to lose: a 90-metal
 			// scratch read the Juggernaut as 0.9997 and dropped it for a game.
@@ -2053,7 +2129,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The seat's growth owns metal the economy can use, and what its bank
 			// spills flows to the teammates at the front.
 			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);
-			const float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
+			float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
+			// AA is not army (ArmyValue leaves it out): it fills its own role gap
+			// even when the ground army is at target or yielded to a better line.
+			if (Catalog::gRole[d] == int(Unit::Role::AA.type)) {
+				const float aaGap = AARoleGap(Catalog::gFlyer[d], armyT0);
+				if (aaGap > effGap)
+					effGap = aaGap;
+			}
 			if ((effGap <= 0.f) || (Catalog::gPower[d] <= 1.f) || (linePPC <= 0.f)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":gap0";
@@ -2294,36 +2377,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			float rValue = rcVal[rSlot];
 			// The cover half of the AA target is FIGHTER demand: a ground AA
 			// unit cannot fly beside a scout (the 23-Crashers-vs-no-air game).
-			if (rIdx == int(Unit::Role::AA.type)) {
-				// TWO KINDS OF AA ANSWER TWO QUESTIONS. Ground AA defends the
-				// ground it stands on; only a fighter denies the airspace and
-				// makes the raids stop. Counted as one role, 21,000 metal of
-				// mobile AA closed the gap and the fighters were never bought
-				// (apexearth: "not making enough anti-air to convince them to
-				// stop. We should have fighters").
-				const float fShare = ai.GetTunable("apex_aa_fighter_share",
-						TUNE_AA_FIGHTER_SHARE);
-				const float escort = Air::CoverDemandM();
-				if (fShare > 0.f) {
-					float airPart = rTarget - escort;
-					if (airPart < 0.f)
-						airPart = 0.f;
-					const float fTgt = airPart * fShare + escort;
-					if (Catalog::gFlyer[d]) {
-						rTarget = fTgt;
-						rValue = Air::FighterMetalHeld();
-					} else {
-						rTarget -= fTgt;
-						rValue -= Air::FighterMetalHeld();
-					}
-					if (rTarget < 0.f)
-						rTarget = 0.f;
-					if (rValue < 0.f)
-						rValue = 0.f;
-				} else if (!Catalog::gFlyer[d]) {
-					rTarget -= escort;
-				}
-			}
+			if (rIdx == int(Unit::Role::AA.type))
+				AASplit(Catalog::gFlyer[d], rcTgt[rSlot], rcVal[rSlot], rTarget, rValue);
 			const float rGap = rTarget - rValue;
 			// AA answers their air and nothing else: at or over its target it is
 			// not bought, whatever its anti-air damage prices it at as army
