@@ -7,6 +7,14 @@ namespace Market {
 // lines and writes nnweights.as, whose inputs must be built exactly as here.
 
 const uint NN_K = 8;
+// Each net is K trained nets side by side (H = K x NN_BLK, the trainer's Ens): layer 2 is
+// block-diagonal, so W2 row h2 holds only the NN_BLK weights from its own block.
+const int NN_BLK = 32;
+
+bool NnBlkOk(int H, uint w2n)
+{
+	return (H > 0) && (H % NN_BLK == 0) && (w2n == uint(H * NN_BLK));
+}
 const string NN_STATE = "min,mInc,eInc,mCur,mStor,eCur,eStor,mPull,ePull,eSur,eExcess,ecoP,slack,"
 	+ "eStall,eFeed,ePinned,mStarved,mWasting,hands,idleNanoM,openSpots,upDemand,backlogM,tier,"
 	+ "army,teamArmy,foeArmy,foeMass,stance,losing,contested,outmassed,trade,tradeOk,lossPress,"
@@ -472,9 +480,10 @@ float NnValAt(float v, const array<float>& in a, int S, int N, int H, const arra
 	float sc = BO;
 	for (int h2 = 0; h2 < H; ++h2) {
 		float acc = B2[h2];
-		for (int h = 0; h < H; ++h) {
-			if (h1[h] > 0.f)
-				acc += W2[h2 * H + h] * h1[h];
+		const int b0 = h2 - h2 % NN_BLK;
+		for (int j = 0; j < NN_BLK; ++j) {
+			if (h1[b0 + j] > 0.f)
+				acc += W2[h2 * NN_BLK + j] * h1[b0 + j];
 		}
 		if (acc > 0.f)
 			sc += WO[h2] * acc;
@@ -550,7 +559,7 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	bool ok = (t > 0.f) && on && (NN_TRUST_KIND >= 2);
 	if (ok && ((layout != NN_STATE + "|" + own) || (O != 2) || (S != int(st.length() + f.length()))
 		|| (H <= 0) || (XM.length() != uint(S + O)) || (XS.length() != uint(S + O))
-		|| (W1.length() != uint(H * (S + O))) || (B1.length() != uint(H)) || (W2.length() != uint(H * H))
+		|| (W1.length() != uint(H * (S + O))) || (B1.length() != uint(H)) || !NnBlkOk(H, W2.length())
 		|| (B2.length() != uint(H)) || (WO.length() != uint(H)) || (sHi <= sLo)))
 	{
 		if (gNnOffSaid.find("val:" + tag) < 0) {
@@ -712,7 +721,7 @@ bool NnFacWeightsFit()
 		&& (NNF_O == int(NNF_ONUM) + 2)
 		&& (NNF_XM.length() == uint(N)) && (NNF_XS.length() == uint(N))
 		&& (NNF_W1.length() == uint(NNF_H * N)) && (NNF_B1.length() == uint(NNF_H))
-		&& (NNF_W2.length() == uint(NNF_H * NNF_H)) && (NNF_B2.length() == uint(NNF_H))
+		&& NnBlkOk(NNF_H, NNF_W2.length()) && (NNF_B2.length() == uint(NNF_H))
 		&& (NNF_WO.length() == uint(NNF_H));
 }
 
@@ -775,9 +784,10 @@ float NnFacScore(CCircuitUnit@ fac, const array<int>& in defs, array<float>& val
 		float sc = NNF_BO;
 		for (int h2 = 0; h2 < H; ++h2) {
 			float acc = NNF_B2[h2];
-			for (int h = 0; h < H; ++h) {
-				if (h1[h] > 0.f)
-					acc += NNF_W2[h2 * H + h] * h1[h];
+			const int b0 = h2 - h2 % NN_BLK;
+			for (int j = 0; j < NN_BLK; ++j) {
+				if (h1[b0 + j] > 0.f)
+					acc += NNF_W2[h2 * NN_BLK + j] * h1[b0 + j];
 			}
 			if (acc > 0.f)
 				sc += NNF_WO[h2] * acc;
@@ -863,7 +873,7 @@ bool NnWeightsFit()
 		&& (NNW_O == int(NNW_KINDS.length() + NN_ONUM) + 4)
 		&& (NNW_XM.length() == uint(N)) && (NNW_XS.length() == uint(N))
 		&& (NNW_W1.length() == uint(NNW_H * N)) && (NNW_B1.length() == uint(NNW_H))
-		&& (NNW_W2.length() == uint(NNW_H * NNW_H)) && (NNW_B2.length() == uint(NNW_H))
+		&& NnBlkOk(NNW_H, NNW_W2.length()) && (NNW_B2.length() == uint(NNW_H))
 		&& (NNW_WO.length() == uint(NNW_H))
 		&& (NNW_TRUST.length() == NNW_KINDS.length());
 }
@@ -925,7 +935,7 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 		return 0.f;
 	if ((layout != NN_STATE + "|" + own) || (O != 2 * K)
 		|| (S != int(st.length() + f.length())) || (H <= 0) || (XM.length() != uint(N))
-		|| (W1.length() != uint(H * N)) || (W2.length() != uint(H * H)) || (WO.length() != uint(H)))
+		|| (W1.length() != uint(H * N)) || !NnBlkOk(H, W2.length()) || (WO.length() != uint(H)))
 	{
 		// a trusted net refused for its shape: once per head per game (the com
 		// head sat off three days on a layout mismatch with nothing in the log)
@@ -964,9 +974,10 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 		float sc = BO;
 		for (int h2 = 0; h2 < H; ++h2) {
 			float acc = B2[h2];
-			for (int h = 0; h < H; ++h) {
-				if (h1[h] > 0.f)
-					acc += W2[h2 * H + h] * h1[h];
+			const int b0 = h2 - h2 % NN_BLK;
+			for (int j = 0; j < NN_BLK; ++j) {
+				if (h1[b0 + j] > 0.f)
+					acc += W2[h2 * NN_BLK + j] * h1[b0 + j];
 			}
 			if (acc > 0.f)
 				sc += WO[h2] * acc;
@@ -1175,9 +1186,10 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 			float sc = NNW_BO;
 			for (int h2 = 0; h2 < H; ++h2) {
 				float a = NNW_B2[h2];
-				for (int h = 0; h < H; ++h) {
-					if (gNnH1[h] > 0.f)
-						a += NNW_W2[h2 * H + h] * gNnH1[h];
+				const int b0 = h2 - h2 % NN_BLK;
+				for (int j = 0; j < NN_BLK; ++j) {
+					if (gNnH1[b0 + j] > 0.f)
+						a += NNW_W2[h2 * NN_BLK + j] * gNnH1[b0 + j];
 				}
 				if (a > 0.f)
 					sc += NNW_WO[h2] * a;

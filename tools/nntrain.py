@@ -346,14 +346,32 @@ def target_vec(row):
     return y, m
 
 
+_DEVICE = []
+
+
+def device():
+    """BARAI_NN_DEVICE, else the GPU when torch sees one."""
+    if not _DEVICE:
+        import torch
+        _DEVICE.append(torch.device(os.environ.get("BARAI_NN_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")))
+    return _DEVICE[0]
+
+
+def ens_k():
+    """FULL nets averaged per decision (BARAI_NN_ENS). One on a CPU: three would
+    triple the training a busy trainer barely keeps up with."""
+    return max(1, int(os.environ.get("BARAI_NN_ENS") or (3 if device().type == "cuda" else 1)))
+
+
 class Net:
     def __init__(self, n_in, n_out):
         import torch
         self.torch = torch
+        self.dev = device()
         self.model = torch.nn.Sequential(
             torch.nn.Linear(n_in, HIDDEN), torch.nn.ReLU(), torch.nn.Dropout(DROPOUT),
             torch.nn.Linear(HIDDEN, HIDDEN), torch.nn.ReLU(), torch.nn.Dropout(DROPOUT),
-            torch.nn.Linear(HIDDEN, n_out))
+            torch.nn.Linear(HIDDEN, n_out)).to(self.dev)
         self.opt = torch.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
         self.slow = copy.deepcopy(self.model)   # the averaged weights: these predict and export
         self.xm = self.xs = self.ym = self.ys = None
@@ -380,12 +398,12 @@ class Net:
         self.ys = np.maximum(np.sqrt((((Y - self.ym) ** 2) * M).sum(0) / w), Y_FLOOR)
 
     def _x(self, X):
-        return self.torch.tensor(np.clip((X - self.xm) / self.xs, -6, 6), dtype=self.torch.float32)
+        return self.torch.tensor(np.clip((X - self.xm) / self.xs, -6, 6), dtype=self.torch.float32, device=self.dev)
 
     def predict(self, X):
         self.slow.eval()
         with self.torch.no_grad():
-            z = self.slow(self._x(X)).numpy()
+            z = self.slow(self._x(X)).cpu().numpy()
         return z * self.ys + self.ym
 
     def train(self, X, Y, M, batches, lr=None):
@@ -403,9 +421,9 @@ class Net:
             return 0.0
         # only the rows the minibatches touch are scaled and copied
         ri, inv = np.unique(np.concatenate(batches), return_inverse=True)
-        inv = t.from_numpy(inv.astype(np.int64))
-        Xt, Mt = self._x(X[ri]), t.tensor(M[ri], dtype=t.float32)
-        Yt = t.tensor((Y[ri].astype(np.float32) - self.ym) / self.ys, dtype=t.float32)
+        inv = t.from_numpy(inv.astype(np.int64)).to(self.dev)
+        Xt, Mt = self._x(X[ri]), t.tensor(M[ri], dtype=t.float32, device=self.dev)
+        Yt = t.tensor((Y[ri].astype(np.float32) - self.ym) / self.ys, dtype=t.float32, device=self.dev)
         self.model.train()
         tot, cnt = 0.0, 0
         at = 0
@@ -429,10 +447,10 @@ class Net:
         t = self.torch
         for m in (self.model, self.slow):
             old = m[0]
-            new = t.nn.Linear(old.in_features + n, old.out_features)
+            new = t.nn.Linear(old.in_features + n, old.out_features).to(self.dev)
             with t.no_grad():
                 w = old.weight.data
-                new.weight.copy_(t.cat([w[:, :at], t.zeros(w.shape[0], n), w[:, at:]], 1))
+                new.weight.copy_(t.cat([w[:, :at], t.zeros(w.shape[0], n, device=self.dev), w[:, at:]], 1))
                 new.bias.copy_(old.bias.data)
             m[0] = new
         self.opt = t.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -448,10 +466,10 @@ class Net:
         t = self.torch
         for m in (self.model, self.slow):
             old = m[-1]
-            new = t.nn.Linear(old.in_features, old.out_features + n)
+            new = t.nn.Linear(old.in_features, old.out_features + n).to(self.dev)
             with t.no_grad():
-                new.weight.copy_(t.cat([old.weight.data, t.zeros(n, old.in_features)], 0))
-                new.bias.copy_(t.cat([old.bias.data, t.zeros(n)]))
+                new.weight.copy_(t.cat([old.weight.data, t.zeros(n, old.in_features, device=self.dev)], 0))
+                new.bias.copy_(t.cat([old.bias.data, t.zeros(n, device=self.dev)]))
             m[len(m) - 1] = new
         self.opt = t.optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-4)
         if self.ym is not None:
@@ -475,6 +493,133 @@ class Net:
         self.slow.load_state_dict(st.get("slow", st["model"]))
         self.opt.load_state_dict(st["opt"])
         self.xm, self.xs, self.ym, self.ys = st["xm"], st["xs"], st["ym"], st["ys"]
+
+
+class Ens:
+    """ens_k() FULL nets on one buffer and one set of scalers, each with its own
+    init and minibatch draw; predicts (and exports, `fold`) their mean (docs/35)."""
+    def __init__(self, n_in, n_out, k=None):
+        self.members = [Net(n_in, n_out) for _ in range(k or ens_k())]
+        self.xm = self.xs = self.ym = self.ys = None
+        self.fit_n = 0
+
+    def _share(self):
+        for m in self.members:
+            m.xm, m.xs, m.ym, m.ys, m.fit_n = self.xm, self.xs, self.ym, self.ys, self.fit_n
+
+    def predict(self, X):
+        return np.mean([m.predict(X) for m in self.members], axis=0)
+
+    def train(self, X, Y, M, batches, lr=None, more=()):
+        """Member 0 steps on `batches`, member i on more[i-1] (its own draw)."""
+        if self.xm is None or len(self.xm) != X.shape[1] or len(X) >= SCALER_GROW * self.fit_n:
+            Net.fit_scalers(self, X, Y, M)
+            self.fit_n = len(X)
+        self._share()
+        more = list(more)
+        per = [more[i - 1] if 0 < i <= len(more) else batches for i in range(len(self.members))]
+        shapes = {tuple(len(b) for b in p) for p in per}
+        if len(self.members) > 1 and per[0] and len(shapes) == 1 and len(set(next(iter(shapes)))) == 1:
+            return self._fused(X, Y, M, per, lr)
+        return float(np.mean([m.train(X, Y, M, b, lr) for m, b in zip(self.members, per)]))
+
+    LAYERS = ((0, "weight"), (0, "bias"), (3, "weight"), (3, "bias"), (6, "weight"), (6, "bias"))
+
+    def _fused(self, X, Y, M, per, lr):
+        """Every member's minibatch steps at once (batched matmuls): the update
+        each member's own Adam makes, its parameters and Adam state written back.
+        Separate steps cost K times the kernel launches, which bound the trainer."""
+        ms = self.members
+        t, dev = ms[0].torch, ms[0].dev
+        ri, inv = np.unique(np.concatenate([np.concatenate(p) for p in per]), return_inverse=True)
+        Xt = ms[0]._x(X[ri])
+        Yt = t.tensor((Y[ri].astype(np.float32) - self.ym) / self.ys, dtype=t.float32, device=dev)
+        Mt = t.tensor(M[ri], dtype=t.float32, device=dev)
+        idx = t.from_numpy(inv.astype(np.int64).reshape(len(ms), len(per[0]), -1)).to(dev)
+        lr = ms[0].opt.param_groups[0]["lr"] if lr is None else lr
+
+        def view(p, w):
+            return p.t() if w == "weight" else p[None, :]
+        P, E1, E2 = [], [], []
+        steps = [float(ms[k].opt.state.get(ms[k].model[0].weight, {}).get("step", 0.0)) for k in range(len(ms))]
+        for layer, w in self.LAYERS:
+            ps = [getattr(m.model[layer], w) for m in ms]
+            P.append(t.stack([view(p.detach(), w) for p in ps]).clone().requires_grad_())
+            sts = [m.opt.state.get(p, {}) for m, p in zip(ms, ps)]
+            E1.append(t.stack([view(s["exp_avg"], w) if "exp_avg" in s else t.zeros_like(view(p.detach(), w))
+                               for s, p in zip(sts, ps)]))
+            E2.append(t.stack([view(s["exp_avg_sq"], w) if "exp_avg_sq" in s else t.zeros_like(view(p.detach(), w))
+                               for s, p in zip(sts, ps)]))
+        stp = t.tensor(steps, dtype=t.float32, device=dev)
+        b1, b2, eps, wd = 0.9, 0.999, 1e-8, 1e-4
+        drop = t.nn.functional.dropout
+        tot = t.zeros(len(ms), device=dev)
+        for s in range(idx.shape[1]):
+            ib = idx[:, s]
+            yb, mb = Yt[ib], Mt[ib]
+            h = drop(t.relu(t.baddbmm(P[1], Xt[ib], P[0])), DROPOUT, True)
+            h = drop(t.relu(t.baddbmm(P[3], h, P[2])), DROPOUT, True)
+            lk = ((((t.baddbmm(P[5], h, P[4]) - yb) ** 2) * mb).sum((1, 2)) / (mb.sum((1, 2)) + 1e-6))
+            grads = t.autograd.grad(lk.sum(), P)
+            stp += 1
+            bc1, bc2 = 1 - b1 ** stp, 1 - b2 ** stp
+            with t.no_grad():
+                tot += lk
+                for p, g, m1, m2 in zip(P, grads, E1, E2):
+                    g = g.add(p, alpha=wd)
+                    m1.lerp_(g, 1 - b1)
+                    m2.mul_(b2).addcmul_(g, g, value=1 - b2)
+                    sh = (-1, 1, 1)
+                    p.sub_(m1 / ((m2.sqrt() / bc2.sqrt().view(sh)).add_(eps)) * (lr / bc1).view(sh))
+        with t.no_grad():
+            for k, m in enumerate(ms):
+                for g in m.opt.param_groups:
+                    g["lr"] = lr
+                for j, (layer, w) in enumerate(self.LAYERS):
+                    p = getattr(m.model[layer], w)
+                    back = (lambda a: a.t()) if w == "weight" else (lambda a: a[0])
+                    p.copy_(back(P[j][k]))
+                    m.opt.state[p] = {"step": t.tensor(float(stp[k])), "exp_avg": back(E1[j][k]).contiguous(),
+                                      "exp_avg_sq": back(E2[j][k]).contiguous()}
+                m.model.eval()
+                m.average()
+        return float(tot.mean()) / max(idx.shape[1], 1)
+
+    def grow(self, at, n):
+        for m in self.members:
+            m.grow(at, n)
+        self.xm, self.xs = self.members[0].xm, self.members[0].xs
+
+    def grow_out(self, n):
+        for m in self.members:
+            m.grow_out(n)
+        self.ym, self.ys, self.fit_n = self.members[0].ym, self.members[0].ys, 0
+
+    def shrink_perturb(self):
+        for m in self.members:
+            m.shrink_perturb()
+
+    def state(self):
+        """Member 0 in the single net's format (an older trainer still loads it)."""
+        return dict(self.members[0].state(), more=[m.state() for m in self.members[1:]])
+
+    def load(self, st):
+        """A saved member each, as far as they go; a member with none (a
+        single-net checkpoint) starts from member 0's weights, shrunk and
+        perturbed like a partial reset -- its averaged weights stay member 0's,
+        so the ensemble predicts exactly as the saved net until it trains."""
+        m0 = self.members[0]
+        m0.load(st)
+        more = list(st.get("more") or [])
+        for i, m in enumerate(self.members[1:]):
+            if i < len(more):
+                m.load(more[i])
+            else:
+                m.model.load_state_dict(m0.model.state_dict())
+                m.slow.load_state_dict(m0.slow.state_dict())
+                m.shrink_perturb()
+        self.xm, self.xs, self.ym, self.ys = m0.xm, m0.xs, m0.ym, m0.ys
+        self._share()
 
 
 def minibatches(n, new_from, ver=None, vw=None, recent_from=0, rng=None):
@@ -783,12 +928,15 @@ class SourceResolver:
 # share of the net's claimed gain that is real), in [0, 1]. Kind 2 used their
 # correlation, which outcome noise (sd(a) 10-20x sd(d)) capped near 0.1 for a
 # perfect net. The PLACEBO is the same statistic on rule-following rows with
-# an option NOT taken in place of the chosen one: it must read ~0.
-TRUST_KIND = 3
+# an option NOT taken in place of the chosen one: it must read ~0. Kind 4: the
+# placebo is read on the chance window's own games and taken off each bootstrap
+# resample (the same games drawn for both).
+TRUST_KIND = 4
 TRUST_BOOT = 200        # bootstrap resamples (by game)
 TRUST_LO_Q = 2.5        # percentile taken as the interval's lower end
 TRUST_GAMES_MIN = 5     # fewer games than this: no say
-PLACEBO_PER_BATCH = 64  # rule-following rows scored per batch for the placebo
+PLACEBO_PER_BATCH = 16  # rule-following rows scored per batch for the placebo
+PLACEBO_KEEP = 20000    # placebo pairs kept: the games of every chance window
 
 
 def obj_units(p, ym, ys, mm):
@@ -836,17 +984,42 @@ def boot_corr(d, a, w, gid, b=None, seed=0, slope=False):
     return float(r[0]), float(np.percentile(r[1:], TRUST_LO_Q))
 
 
-def honest_trust(pairs, placebo=None):
+def _slopes(W, d, a, b):
+    """Per row of W (normalised row weights): a's weighted slope on d, b held fixed."""
+    md, ma, mb = W @ d, W @ a, W @ b
+    vd, vb = W @ (d * d) - md * md, W @ (b * b) - mb * mb
+    cda, cdb, cab = W @ (d * a) - md * ma, W @ (d * b) - md * mb, W @ (a * b) - ma * mb
+    det = vd * vb - cdb ** 2
+    return np.where(det > 1e-24, (cda * vb - cab * cdb) / np.maximum(det, 1e-24), 0.0)
+
+
+def honest_trust(pairs, placebo=()):
     """Trust from (d, a, w, game, FULL(rule)) pairs: the bootstrap lower bound
-    less what the same statistic reads where the decision cannot matter (the
-    placebo's point value, when positive), >= 0."""
+    of the slope less the placebo's slope (when positive) on the same resample,
+    the placebo pairs (d, a, game, FULL(rule)) taken from the window's games."""
     q = [x for x in pairs if len(x) == 5][-TRUST_RECENT:]
     if len(q) < TRUST_MIN:
         return 0.0
+    games, g = np.unique([x[3] for x in q], return_inverse=True)
+    if len(games) < TRUST_GAMES_MIN:
+        return 0.0
+    col = {k: i for i, k in enumerate(games)}
+    rng = np.random.default_rng(len(q))
+    cnt = np.vstack([np.ones((1, len(games))), rng.multinomial(len(games), np.full(len(games), 1.0 / len(games)),
+                                                               size=TRUST_BOOT)])
+
+    def rows(gi, w):
+        W = cnt[:, gi] * w[None, :]
+        return W / np.maximum(W.sum(1, keepdims=True), 1e-12)
     d, a, w, b = (np.array([x[i] for x in q], dtype=np.float64) for i in (0, 1, 2, 4))
-    res = boot_corr(d, a, w, [x[3] for x in q], b, seed=len(q), slope=True)
-    bias = max(0.0, (placebo or {}).get("r", 0.0))
-    return 0.0 if res is None else round(min(1.0, max(0.0, res[1] - bias)), 3)
+    rc = _slopes(rows(g, w), d, a, b)
+    p = [x for x in placebo if len(x) == 4 and x[2] in col]
+    rp = np.zeros_like(rc)
+    if len(p) >= TRUST_MIN and len({x[2] for x in p}) >= TRUST_GAMES_MIN:
+        pd, pa, pb = (np.array([x[i] for x in p], dtype=np.float64) for i in (0, 1, 3))
+        rp = _slopes(rows(np.array([col[x[2]] for x in p]), np.ones(len(p))), pd, pa, pb)
+    lo = np.percentile(rc[1:] - np.maximum(0.0, rp[1:]), TRUST_LO_Q)
+    return round(float(min(1.0, max(0.0, lo))), 3)
 
 
 def placebo_read(pairs, partial=True):
@@ -936,7 +1109,7 @@ def score_decisions(obj, rows, XF, Y, M, rw, pf, ps, gid, pairs_for, feat, rule_
         # the old statistic on the same rows: FULL minus STATE against outcome minus STATE
         o = lambda p: float(obj_units(p[i:i + 1], ym, ys, mm[i:i + 1])[0])
         obj.placebo_old.append((o(pf) - o(ps), o(Y) - o(ps), g))
-    obj.placebo = obj.placebo[-TRUST_KEEP:]
+    obj.placebo = obj.placebo[-PLACEBO_KEEP:]
     obj.placebo_old = obj.placebo_old[-TRUST_KEEP:]
     rec["chance_rows"] = len(chance)
     rec["placebo"] = placebo_of(obj)
@@ -990,13 +1163,21 @@ def fmt_arr(vals):
 
 def fold(net):
     """First layer, second layer, and the output layer folded through OBJECTIVE
-    into one score (in units of target spread)."""
-    sd = net.slow.state_dict()
-    w1, b1 = sd["0.weight"].numpy(), sd["0.bias"].numpy()
-    w2, b2 = sd["3.weight"].numpy(), sd["3.bias"].numpy()
-    w3, b3 = sd["6.weight"].numpy(), sd["6.bias"].numpy()
+    into one score (in units of target spread). An ensemble is exactly one wider
+    net (averaging the members' weights would not be -- ReLU is not linear): the
+    members' hidden units side by side, H = K x HIDDEN; layer 2 is block-diagonal
+    and only its blocks are written, w2 row h2 holding the HIDDEN weights from its
+    own member's units (the game's NN_BLK stride); the output is their mean."""
+    members = getattr(net, "members", [net])
     obj = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS])
-    return w1, b1, w2, b2, obj @ w3, float(obj @ b3)
+    parts = []
+    for m in members:
+        sd = {k: v.detach().cpu().numpy() for k, v in m.slow.state_dict().items()}
+        parts.append((sd["0.weight"], sd["0.bias"], sd["3.weight"], sd["3.bias"], obj @ sd["6.weight"], float(obj @ sd["6.bias"])))
+    k = float(len(parts))
+    return (np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts]),
+            np.concatenate([p[2] for p in parts]), np.concatenate([p[3] for p in parts]),
+            np.concatenate([p[4] for p in parts]) / k, sum(p[5] for p in parts) / k)
 
 
 def head_block(head, p, layout=None):
@@ -1012,7 +1193,7 @@ def head_block(head, p, layout=None):
     return ["const bool %s_ON = true;" % p,
             'const string %s_STATE = "%s";' % (p, layout or ",".join(head.state_keys)),
             "const int %s_S = %d;" % (p, n_state), "const int %s_O = %d;" % (p, w1.shape[1] - n_state),
-            "const int %s_H = %d;" % (p, HIDDEN),
+            "const int %s_H = %d;" % (p, w1.shape[0]),
             "const array<float> %s_XM = %s;" % (p, fmt_arr(head.full.xm)),
             "const array<float> %s_XS = %s;" % (p, fmt_arr(head.full.xs)),
             "const array<float> %s_W1 = %s;" % (p, fmt_arr(w1.reshape(-1))),
@@ -1114,7 +1295,7 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
         "const int NNW_GAMES = %d;" % games,
         'const string NNW_STATE = "%s";' % ",".join(state_keys),
         "const array<string> NNW_KINDS = {%s};" % ", ".join('"%s"' % k for k in KINDS),
-        "const int NNW_S = %d;" % s, "const int NNW_O = %d;" % o, "const int NNW_H = %d;" % HIDDEN,
+        "const int NNW_S = %d;" % s, "const int NNW_O = %d;" % o, "const int NNW_H = %d;" % w1.shape[0],
         "const array<float> NNW_XM = %s;" % fmt_arr(net.xm),
         "const array<float> NNW_XS = %s;" % fmt_arr(net.xs),
         "const array<float> NNW_W1 = %s;" % fmt_arr(w1.reshape(-1)),
@@ -1208,14 +1389,14 @@ class FacHead(Buffered):
         import torch
         self.state_keys = list(idx["state_keys"])
         self.batches = int(idx.get("batches", 0))
-        ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False)
+        ck = torch.load(OUT / (self.NAME + "_model.pt"), weights_only=False, map_location=device())
         net_t, buf_t = saved_targets(ck, {"Y": self.Y, "targets": idx.get("targets", [])})
         if tuple(ck.get("opt_num", ())) != self.OPTS or not adopt_targets(self, self.NAME, net_t, buf_t):
             print("%s: saved net predicts other outcomes or reads other options; starting empty" % self.NAME,
                   flush=True)
             self.__init_empty()
             return
-        self.full = Net(self.XF.shape[1], len(net_t))
+        self.full = Ens(self.XF.shape[1], len(net_t))
         self.st = Net(self.ns, len(net_t))
         try:
             self.full.load(ck["full"])
@@ -1268,7 +1449,7 @@ class FacHead(Buffered):
         key = (len(self.pairs), self.pairs[-1][:2] if self.pairs else None, len(self.placebo),
                self.placebo[-1][:2] if self.placebo else None)
         if getattr(self, "_trust_memo", (None,))[0] != key:
-            self._trust_memo = (key, honest_trust(self.pairs, placebo_of(self)))
+            self._trust_memo = (key, honest_trust(self.pairs, self.placebo))
         return self._trust_memo[1]
 
     def learn(self, source, g, first_touch, rows):
@@ -1311,7 +1492,7 @@ class FacHead(Buffered):
             XF, Y, M, T = (np.repeat(a, HUMAN_W, axis=0) for a in (XF, Y, M, T))
         if self.XF is None:
             self.ns = XS.shape[1]
-            self.full = Net(XF.shape[1], len(TARGETS))
+            self.full = Ens(XF.shape[1], len(TARGETS))
             self.st = Net(self.ns, len(TARGETS))
         new_from = self.buf_add(XF, Y, M, T)
         rec.update(fit_batch(self, new_from))
@@ -1327,9 +1508,11 @@ def fit_batch(obj, new_from):
     fz_rows, fz_batch = freeze_note(getattr(obj, "NAME", "builder"), new_from, obj.batches)
     lr = lr_now(obj.batches, fz_batch)
     t0 = time.time()
-    bs = minibatches(len(obj.Y), new_from, obj.T[:, 0], obj.ver_weights(), fz_rows)
-    out = {"lr": lr, "steps": len(bs),
-           "loss_full": obj.full.train(obj.XF, obj.Y, obj.M, bs, lr),
+    vw = obj.ver_weights()
+    bs = minibatches(len(obj.Y), new_from, obj.T[:, 0], vw, fz_rows)
+    more = [minibatches(len(obj.Y), new_from, obj.T[:, 0], vw, fz_rows) for _ in obj.full.members[1:]]
+    out = {"lr": lr, "steps": len(bs), "ens": len(obj.full.members),
+           "loss_full": obj.full.train(obj.XF, obj.Y, obj.M, bs, lr, more),
            "loss_state": obj.st.train(obj.XS, obj.Y, obj.M, bs, lr),
            "train_s": round(time.time() - t0, 2), "total_rows": int(len(obj.Y))}
     obj.batches += 1
@@ -1657,12 +1840,12 @@ class Trainer(Buffered):
         import torch
         self.state_keys = list(idx["state_keys"])
         self.batches = int(idx.get("batches", 0))
-        ck = torch.load(OUT / "model.pt", weights_only=False)
+        ck = torch.load(OUT / "model.pt", weights_only=False, map_location=device())
         net_t, buf_t = saved_targets(ck, {"Y": self.Y, "targets": idx.get("targets", [])})
         if tuple(ck.get("opt_num", ())) != OPT_NUM or not adopt_targets(self, "builder", net_t, buf_t):
             self.fresh_start("this trainer predicts different outcomes or reads different options")
             return
-        self.full = Net(self.XF.shape[1], len(net_t))
+        self.full = Ens(self.XF.shape[1], len(net_t))
         self.st = Net(self.ns, len(net_t))
         self.full.load(ck["full"])
         self.st.load(ck["state"])
@@ -1893,7 +2076,7 @@ class Trainer(Buffered):
             XF, Y, M, T = (np.repeat(a, HUMAN_W, axis=0) for a in (XF, Y, M, T))
         if self.XF is None:
             self.ns = XS.shape[1]
-            self.full = Net(XF.shape[1], len(TARGETS))
+            self.full = Ens(XF.shape[1], len(TARGETS))
             self.st = Net(self.ns, len(TARGETS))
         new_from = self.buf_add(XF, Y, M, T)
         rec.update(fit_batch(self, new_from))
@@ -1930,8 +2113,7 @@ class Trainer(Buffered):
         key = tuple((k, len(v), v[-1][:2] if v else None) for k, v in sorted(self.trust_pairs.items(), key=str)) + \
             (len(self.placebo), self.placebo[-1][:2] if self.placebo else None)
         if getattr(self, "_trust_memo", (None,))[0] != key:
-            pl = placebo_of(self)
-            self._trust_memo = (key, {kind: honest_trust(self.trust_pairs.get(kind, []), pl) for kind in KINDS})
+            self._trust_memo = (key, {kind: honest_trust(self.trust_pairs.get(kind, []), self.placebo) for kind in KINDS})
         return self._trust_memo[1]
 
     def export(self):
