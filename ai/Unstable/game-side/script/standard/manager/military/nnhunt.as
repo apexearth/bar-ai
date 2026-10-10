@@ -34,6 +34,10 @@ int gHtLast = 0;
 AIFloat3 gHtPos;
 int gHtDecN = 0, gHtHuntN = 0, gHtExN = 0, gHtGoN = 0, gHtGoneN = 0, gHtTimeN = 0, gHtNoGrp = 0, gHtNoArmy = 0;
 float gHtArmyM = 0.f, gHtAtkM = 0.f, gHtAtkD = -1.f, gHtHomeM = 0.f;
+float gHtAtkX = -1.f, gHtAtkZ = -1.f;
+float gHtAllyM = 0.f;   // allied squads and home pools counted against the group
+int gHtAllyN = 0;
+const int HT_PUB_FRESH = 20 * SECOND;
 bool gHtIc = false;      // the live hunt is an intercept
 int gHtIntrAt = -999999;   // when an army of theirs last stood on our ground
 int gHtIcN = 0, gHtIcHunt = 0, gHtIcSmall = 0, gHtIcOut = 0, gHtIcLeft = 0;
@@ -82,7 +86,80 @@ void HuntArmyCensus(const AIFloat3& in gp)
 	gHtArmyM = m;
 	gHtAtkM = atk;
 	gHtHomeM = home;
-	gHtAtkD = (atk > 0.f) ? AIFloat3(cx / atk, 0.f, cz / atk).distance2D(gp) : -1.f;
+	gHtAtkX = (atk > 0.f) ? cx / atk : -1.f;
+	gHtAtkZ = (atk > 0.f) ? cz / atk : -1.f;
+	gHtAtkD = (atk > 0.f) ? AIFloat3(gHtAtkX, 0.f, gHtAtkZ).distance2D(gp) : -1.f;
+}
+
+// THE TEAM MEETS IT TOGETHER (his 10-10: "our armies seem to avoid their
+// armies"). Each of our seats weighed its own squads alone against the whole
+// group: 24k of theirs at two of our bases faced 29k + 8k + 5k of ours and only
+// the 29k answered. Every seat posts its army; each sums the same seats, so they
+// commit together or not at all.
+void HuntPublish()
+{
+	HuntArmyCensus(Builder::gHomePos);
+	ai.PublishTeamValue("htAtkM", gHtAtkM);
+	ai.PublishTeamValue("htAtkX", gHtAtkX);
+	ai.PublishTeamValue("htAtkZ", gHtAtkZ);
+	ai.PublishTeamValue("htHomeM", gHtHomeM);
+	ai.PublishTeamValue("htHomeX", Builder::gHomePos.x);
+	ai.PublishTeamValue("htHomeZ", Builder::gHomePos.z);
+	ai.PublishTeamValue("htAt", float(ai.frame));
+}
+
+// Allied squads placed as near the group as ours (or within the base radius when
+// we have none out), and allied home pools whose base it stands on.
+float HuntAllyM(const AIFloat3& in gp)
+{
+	gHtAllyN = 0;
+	array<Id>@ roster = ai.GetTeamIds();
+	if (roster is null)
+		return 0.f;
+	const float reach = 1.5f * ((gHtAtkD > Builder::BASE_DANGER_DIST) ? gHtAtkD : Builder::BASE_DANGER_DIST);
+	float m = 0.f;
+	for (uint i = 0; i < roster.length(); ++i) {
+		const int t = int(roster[i]);
+		if ((t == ai.teamId) || (ai.ReadTeamValue(t, "seatout", 0.f) > 0.f))
+			continue;
+		const float at = ai.ReadTeamValue(t, "htAt", -1.f);
+		if ((at < 0.f) || (float(ai.frame) - at > float(HT_PUB_FRESH)))
+			continue;
+		float got = 0.f;
+		const float am = ai.ReadTeamValue(t, "htAtkM", 0.f);
+		const AIFloat3 ac(ai.ReadTeamValue(t, "htAtkX", -1.f), 0.f, ai.ReadTeamValue(t, "htAtkZ", -1.f));
+		if ((am > 0.f) && (ac.x >= 0.f) && (ac.distance2D(gp) <= reach))
+			got += am;
+		const AIFloat3 hc(ai.ReadTeamValue(t, "htHomeX", -1.f), 0.f, ai.ReadTeamValue(t, "htHomeZ", -1.f));
+		if ((hc.x >= 0.f) && (hc.distance2D(gp) <= Builder::BASE_DANGER_DIST))
+			got += ai.ReadTeamValue(t, "htHomeM", 0.f);
+		if (got > 0.f) {
+			m += got;
+			++gHtAllyN;
+		}
+	}
+	return m;
+}
+
+// Allies gathered on the same group (their published focus within reach of ours).
+float HuntAllyGathered(const AIFloat3& in fp)
+{
+	array<Id>@ roster = ai.GetTeamIds();
+	if (roster is null)
+		return 0.f;
+	float p = 0.f;
+	for (uint i = 0; i < roster.length(); ++i) {
+		const int t = int(roster[i]);
+		if (t == ai.teamId)
+			continue;
+		const float at = ai.ReadTeamValue(t, "htFocAt", -1.f);
+		if ((at < 0.f) || (float(ai.frame) - at > float(HT_PUB_FRESH)))
+			continue;
+		const AIFloat3 f(ai.ReadTeamValue(t, "htFocX", -1.f), 0.f, ai.ReadTeamValue(t, "htFocZ", -1.f));
+		if ((f.x >= 0.f) && (f.distance2D(fp) <= HUNT_NEAR))
+			p += ai.ReadTeamValue(t, "htGatP", 0.f);
+	}
+	return p;
 }
 
 // A group's mobile armed GROUND metal (air and constructors out) and the
@@ -245,12 +322,19 @@ void HuntDecide(bool intr, const AIFloat3& in ip, float im, float isl)
 	int rule = HT_NO;
 	string icWhy = "";
 	const float guns = intr ? GunsAt(gp) : 0.f;
-	const float str = intr ? Market::StrRatio(gm, gHtAtkM + gHtHomeM + ((guns > 0.f) ? guns : 0.f)) : 0.f;
+	gHtAllyM = intr ? HuntAllyM(gp) : 0.f;
+	const float str = intr ? Market::StrRatio(gm, gHtAtkM + gHtHomeM + gHtAllyM + ((guns > 0.f) ? guns : 0.f)) : 0.f;
+	// On our doorstep there is nothing to wait for (his 10-10: "if they're on our
+	// doorstep what choice do we really have"); a prior the hunt net may overrule.
+	const bool doorstep = intr && (gp.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST);
 	if (intr) {
 		++gHtIcN;
 		if (gm * 8.f < gHtAtkM) {
 			++gHtIcSmall;
 			icWhy = " small";
+		} else if (doorstep) {
+			rule = HT_HUNT;
+			icWhy = " doorstep";
 		} else if (str * ANSWER_PARITY > 1.f) {
 			++gHtIcOut;
 			icWhy = " outweighed";
@@ -299,6 +383,7 @@ void HuntDecide(bool intr, const AIFloat3& in ip, float im, float isl)
 		AiLog(Factory::T() + "apex: intercept t=" + ai.teamId + " at=" + int(gp.x) + "," + int(gp.z)
 			+ " grpM=" + int(gm) + " homeD=" + int(gp.distance2D(Builder::gHomePos))
 			+ " guns=" + int(guns) + " homeM=" + int(gHtHomeM) + " atkM=" + int(gHtAtkM) + " atkD=" + int(gHtAtkD)
+			+ " allyM=" + int(gHtAllyM) + " allyN=" + gHtAllyN
 			+ " atkPow=" + Market::NnF(atkPow, 1) + " foeInfl=" + Market::NnF(infl, 1)
 			+ " str=" + Market::NnF(str, 2)
 			+ " rule=" + names[rule] + icWhy + " chosen=" + names[c]);
@@ -344,11 +429,16 @@ void HuntFocus()
 	fp.y = ai.GetElevationAt(fp);
 	const float foe = aiMilitaryMgr.GetEnemyInflNear(fp, HUNT_R + Market::PUSH_STAND);
 	float mine = aiMilitaryMgr.GetGatheredPower();
-	if (!gHtGo && (mine > 0.f) && (mine > foe)) {
+	ai.PublishTeamValue("htGatP", mine);
+	ai.PublishTeamValue("htFocX", fp.x);
+	ai.PublishTeamValue("htFocZ", fp.z);
+	ai.PublishTeamValue("htFocAt", float(ai.frame));
+	const float allies = HuntAllyGathered(fp);
+	if (!gHtGo && (mine > 0.f) && (mine + allies > foe)) {
 		gHtGo = true;
 		++gHtGoN;
 		AiLog(Factory::T() + "apex: hunt go t=" + ai.teamId + " at=" + int(fp.x) + "," + int(fp.z)
-			+ " foe=" + Market::NnF(foe, 1) + " mine=" + Market::NnF(mine, 1)
+			+ " foe=" + Market::NnF(foe, 1) + " mine=" + Market::NnF(mine, 1) + " allies=" + Market::NnF(allies, 1)
 			+ " s=" + ((ai.frame - gHtFrom) / SECOND));
 	}
 	if (gHtGo)
@@ -360,6 +450,7 @@ void HuntEnd(const string why)
 {
 	gHtOn = false;
 	aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+	ai.PublishTeamValue("htFocAt", -1.f);
 	if (why == "gone")
 		++gHtGoneN;
 	else if (why == "left")
@@ -458,6 +549,7 @@ void UpdateHunt()
 		gHtNextAt = 60 * SECOND + (ai.teamId % 15) * 2 * SECOND;
 	if (ai.frame >= gHtLookAt) {
 		gHtLookAt = ai.frame + HUNT_LOOK;
+		HuntPublish();
 		HuntLook();
 	}
 	// An army newly on our ground is decided now, not on the clock; one unseen

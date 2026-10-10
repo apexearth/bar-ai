@@ -411,6 +411,9 @@ to them)
   Don't keep distance from an army wrecking our base when we have more. Don't
   pull the army out of a base under attack to join a squad elsewhere.
 - Defending at home takes about 1.2× parity (his number).
+- Once they are on our doorstep there is no choice left: meet them there, and
+  weigh the fight with the whole team's armies near it, not one seat's
+  (his 10-10: "our armies seem to avoid their armies").
 - Hold and let them come when they are stronger. Make them bleed on our ground
   at our range, and control where their metal falls so we can reclaim it.
 - After losing a big fight with few units left, don't leave the base until
