@@ -29,23 +29,23 @@ int gShipLogAt = 0;
 int gShipDgAt = 0;
 float gShipRetWas = -1.f;
 CCircuitDef@ gShipDef = null;
-array<float> gShX, gShZ, gShM;
+array<float> gCsX, gCsZ, gCsM;
 
 bool ComShip() { return gShip; }
 
 void ComShipCensus()
 {
-	gShX.resize(0);
-	gShZ.resize(0);
-	gShM.resize(0);
+	gCsX.resize(0);
+	gCsZ.resize(0);
+	gCsM.resize(0);
 	for (uint i = 0; i < Military::gCombatId.length(); ++i) {
 		CCircuitUnit@ c = ai.GetTeamUnit(Id(Military::gCombatId[i]));
 		if ((c is null) || (c.circuitDef is null) || c.circuitDef.IsAbleToFly())
 			continue;
 		const AIFloat3 p = c.GetPos(ai.frame);
-		gShX.insertLast(p.x);
-		gShZ.insertLast(p.z);
-		gShM.insertLast(c.circuitDef.costM);
+		gCsX.insertLast(p.x);
+		gCsZ.insertLast(p.z);
+		gCsM.insertLast(c.circuitDef.costM);
 	}
 }
 
@@ -135,10 +135,10 @@ void ComShipAssess(CCircuitUnit@ u)
 				ComShipCensus();
 			}
 			float army = 0.f;
-			for (uint i = 0; i < gShX.length(); ++i) {
-				const float dx = gShX[i] - gp.x, dz = gShZ[i] - gp.z;
+			for (uint i = 0; i < gCsX.length(); ++i) {
+				const float dx = gCsX[i] - gp.x, dz = gCsZ[i] - gp.z;
 				if (dx * dx + dz * dz <= r2)
-					army += gShM[i];
+					army += gCsM[i];
 			}
 			float guns = Military::GunsAt(gp);
 			if (guns < 0.f)
