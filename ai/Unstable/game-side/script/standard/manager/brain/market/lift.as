@@ -250,6 +250,71 @@ bool SinkSiteFor(AIFloat3& out at, float& out gap)
 	return gap > 0.f;
 }
 
+// A free nano-ring slot by the line at lp, legal for def, off doorways and allies.
+AIFloat3 LiftSlotNear(int cd, const AIFloat3& in lp)
+{
+	array<AIFloat3> slots;
+	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
+	int si = 0;
+	while ((si < int(slots.length())) && LiftSlotTaken(slots[si]))
+		++si;
+	AIFloat3 to = (si < int(slots.length())) ? slots[si] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
+	to = OffAllyBuildings(OffFactoryExit(to));
+	return ai.FindBuildSiteNear(Catalog::Def(cd), to, 150.f);   // the shifts are not checked; an illegal slot is a refused drop
+}
+
+// What this plane has hooked, read off positions: a liftable structure of ours
+// hanging under it.
+CCircuitUnit@ PlaneCargo(CCircuitUnit@ plane)
+{
+	const AIFloat3 pp = plane.GetPos(ai.frame);
+	array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(pp, 48.f);
+	if (near is null)
+		return null;
+	const int pd = int(plane.circuitDef.id);
+	for (uint i = 0; i < near.length(); ++i) {
+		CCircuitUnit@ u = near[i];
+		if ((u is null) || (u.circuitDef is null) || !Airborne(u) || !LiftFits(pd, int(u.circuitDef.id)))
+			continue;
+		return u;
+	}
+	return null;
+}
+
+// A PLANE WITH NO JOB NEVER KEEPS ITS CARGO (his 10-10: "they should always put
+// it back down in the best place available"). A pickup that landed after its
+// deadline left the turret hooked while the next dispatch and the fly-home
+// overwrote the unload. It goes to the neediest line's ring, else beside it.
+void LiftRehome(LiftJob@ jb, CCircuitUnit@ held)
+{
+	const int cd = int(held.circuitDef.id);
+	const AIFloat3 pp = jb.plane.GetPos(ai.frame);
+	AIFloat3 lp;
+	float net = 0.f;
+	CCircuitUnit@ line = null;
+	AIFloat3 to;
+	// a ferried tower's slot died with its job: it goes down near the plane
+	const bool lined = (NanoIndexOf(held.id) >= 0)
+			&& ((LineSiteFor(lp, net, line) && (net > 0.f)) || SinkSiteFor(lp, net));
+	if (lined)
+		to = LiftSlotNear(cd, lp);
+	if (!lined || !OnMap(to) || Builder::SiteHot(to))
+		to = ai.FindBuildSiteNear(Catalog::Def(cd), OffAllyBuildings(OffFactoryExit(pp)), 600.f);
+	if (!OnMap(to))
+		to = pp;
+	@jb.cargo = held;
+	jb.src = pp;
+	jb.to = to;
+	jb.stage = 2;
+	jb.retried = false;
+	jb.drops = 0;
+	jb.overAt = -1;
+	jb.deadline = ai.frame + int((pp.distance2D(to) / LiftSpeed(jb.plane) * 3.f + 30.f) * float(SECOND));
+	jb.plane.CmdUnloadAt(to, held);
+	AiLog("apex: lift rehome t=" + ai.teamId + " #" + jb.plane.id + " holding " + held.circuitDef.GetName()
+			+ " #" + held.id + " -> " + int(to.x) + "," + int(to.z) + (lined ? " line" : " near"));
+}
+
 bool LiftDispatch(LiftJob@ jb)
 {
 	AIFloat3 lp;
@@ -283,15 +348,7 @@ bool LiftDispatch(LiftJob@ jb)
 	if (best < 0)
 		return false;
 	CCircuitUnit@ cargo = gOwnNano[best];
-	const int cd = int(cargo.circuitDef.id);
-	array<AIFloat3> slots;
-	PackSlots(cd, lp, AnchorDefAt(lp), 4, slots);
-	int si = 0;
-	while ((si < int(slots.length())) && LiftSlotTaken(slots[si]))
-		++si;
-	AIFloat3 to = (si < int(slots.length())) ? slots[si] : ai.FindBuildSiteNear(Catalog::Def(cd), lp, 300.f);
-	to = OffAllyBuildings(OffFactoryExit(to));
-	to = ai.FindBuildSiteNear(Catalog::Def(cd), to, 150.f);   // the shifts are not checked; an illegal slot is a refused drop
+	const AIFloat3 to = LiftSlotNear(int(cargo.circuitDef.id), lp);
 	if (!OnMap(to) || Builder::SiteHot(to))
 		return false;
 	@jb.cargo = cargo;
@@ -386,6 +443,11 @@ void LiftEnd(LiftJob@ jb)
 void LiftStep(LiftJob@ jb)
 {
 	if (jb.stage == 0) {
+		CCircuitUnit@ held = PlaneCargo(jb.plane);
+		if (held !is null) {
+			LiftRehome(jb, held);
+			return;
+		}
 		if (!FerryDispatch(jb) && !LiftDispatch(jb))
 			LiftGoHome(jb);
 		return;
@@ -405,10 +467,8 @@ void LiftStep(LiftJob@ jb)
 			AiLog("apex: lift abort t=" + ai.teamId + " #" + jb.cargo.id + " never lifted");
 			if (jb.ferry !is null)
 				FerryDrop(jb.ferry, "never lifted");
+			// a pickup landing after this is caught by PlaneCargo on the next step
 			LiftEnd(jb);
-			// A pickup landing on the deadline left a plane holding a turret
-			// with no job to set it down (watched, 10-01).
-			jb.plane.CmdUnloadArea(jb.plane.GetPos(ai.frame), 400.f);
 		}
 		return;
 	}
@@ -449,12 +509,26 @@ void LiftStep(LiftJob@ jb)
 	// ground took it once (a ferried tower hovered 10 min widening to 6000 elmo).
 	const bool back = jb.drops > 3;
 	const AIFloat3 at = back ? jb.src : jb.to;
-	const float r = 300.f * float(back ? (jb.drops - 3) : jb.drops);
-	jb.plane.CmdUnloadArea(at, r);
-	jb.deadline = ai.frame + 30 * SECOND;
+	const int k = back ? (jb.drops - 3) : jb.drops;
+	const float r = 300.f * float((k < 4) ? k : 4);
+	// THE SITE IS FOUND HERE, not by an area unload: one re-issued every 30 s
+	// restarted a flight that took longer than that, so a turret hovered 15 min
+	// while the radius grew to 8,400 (his 10-10 game, #16506).
+	const int cd = int(jb.cargo.circuitDef.id);
+	AIFloat3 spot = ai.FindBuildSiteNear(Catalog::Def(cd), at, r);
+	if (OnMap(spot))
+		spot = ai.FindBuildSiteNear(Catalog::Def(cd), OffAllyBuildings(OffFactoryExit(spot)), 150.f);
+	if (OnMap(spot)) {
+		jb.plane.CmdUnloadAt(spot, jb.cargo);
+		jb.deadline = ai.frame + int((pp.distance2D(spot) / LiftSpeed(jb.plane) * 3.f + 20.f) * float(SECOND));
+	} else {
+		jb.plane.CmdUnloadArea(at, r);
+		jb.deadline = ai.frame + 30 * SECOND;
+	}
 	AiLog("apex: lift refused t=" + ai.teamId + " #" + jb.cargo.id
 			+ " unloading within " + int(r) + " of " + int(at.x) + "," + int(at.z)
-			+ " cargoY=" + int(cp.y) + " ground=" + int(ai.GetElevationAt(cp))
+			+ (OnMap(spot) ? (" at=" + int(spot.x) + "," + int(spot.z)) : " area")
+			+ " drops=" + jb.drops + " cargoY=" + int(cp.y) + " ground=" + int(ai.GetElevationAt(cp))
 			+ " planeY=" + int(pp.y) + " sep=" + int(cp.distance2D(pp)));
 }
 
