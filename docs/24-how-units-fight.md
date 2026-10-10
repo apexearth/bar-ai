@@ -453,6 +453,9 @@ to them)
 - Retreat to the chokepoints and front, not the home base. Concentrate opposite
   their army; never split ours to walk home. Where the only way in is a gap,
   the whole team holds the gap.
+- A squad that waits to gather waits somewhere closer to the enemy base, not
+  back home: stragglers walk forward to it (2026-10-10, his Titans walking
+  back and forth inside our base).
 - A Titan is never walked home, and never parked at home because shells are
   landing.
 - Retreating at very low health is a symptom: look at the action before it.
