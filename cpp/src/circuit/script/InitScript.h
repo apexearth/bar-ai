@@ -16,6 +16,7 @@
 
 #include <string>
 #include <map>
+#include <random>
 
 namespace springai {
 	class AIFloat3;
@@ -77,7 +78,12 @@ private:
 	int Dice(const CScriptArray* array) const;
 	template<typename T> T Min(T l, T r) const { return std::min(l, r); }
 	template<typename T> T Max(T l, T r) const { return std::max(l, r); }
-	int Random(int min, int max) const { return min + rand() % (max - min + 1); }
+	// rand() % span favoured the low values (MSVC RAND_MAX 32767: a 0.75 chance read 0.77);
+	// seeded from rand() so each game still draws its own stream
+	int Random(int min, int max) const {
+		static thread_local std::mt19937 gen((unsigned)rand() * 32768u + (unsigned)rand());
+		return (max <= min) ? min : std::uniform_int_distribution<int>(min, max)(gen);
+	}
 
 	void SendMessage(const std::string& msg, int toTeamId = -1);
 	void ReceiveMessage(const std::string& msg, int fromTeamId);
