@@ -142,6 +142,31 @@ void NanoSentDrop(CCircuitUnit@ u)
 	}
 }
 
+// A patrolling turret (one command) is fair game -- the patrol is what every
+// turret carries; a longer queue is real work.
+int NanoSendReclaim(CCircuitUnit@ v, const AIFloat3& in vp, float reach, int room)
+{
+	int sent = 0;
+	for (uint n = 0; (n < gNanoDefs.length()) && (sent < room); ++n) {
+		array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(Catalog::Def(gNanoDefs[n]), vp, reach);
+		if (ns is null)
+			continue;
+		for (uint k = 0; (k < ns.length()) && (sent < room); ++k) {
+			if ((ns[k] is null) || (ns[k] is v) || (ns[k].CmdQueueSize() > 1))
+				continue;
+			bool tracked = false;
+			for (uint t = 0; (t < gNanoSent.length()) && !tracked; ++t)
+				tracked = (gNanoSent[t] is ns[k]);
+			if (tracked)
+				continue;
+			ns[k].CmdReclaimUnit(v);
+			gNanoSent.insertLast(ns[k]);
+			++sent;
+		}
+	}
+	return sent;
+}
+
 void NanoReclaimAssist()
 {
 	if (ai.frame < gNanoAssistNext)
@@ -188,29 +213,28 @@ void NanoReclaimAssist()
 		if (!OnMap(vp))
 			continue;
 		ai.MarkReclaim(v, gReclaimUntil[i] - ai.frame);
-		for (uint n = 0; (n < gNanoDefs.length()) && (sent < NANO_SEND_MAX); ++n) {
-			array<CCircuitUnit@>@ ns = ai.GetOwnUnitsOfDef(
-					Catalog::Def(gNanoDefs[n]), vp, reach);
-			if (ns is null)
-				continue;
-			// A patrolling turret (one command) is fair game -- the patrol
-			// is what every turret carries; a longer queue is real work.
-			for (uint k = 0; (k < ns.length()) && (sent < NANO_SEND_MAX); ++k) {
-				if ((ns[k] is null) || (ns[k].CmdQueueSize() > 1))
-					continue;
-				bool tracked = false;
-				for (uint t = 0; (t < gNanoSent.length()) && !tracked; ++t)
-					tracked = (gNanoSent[t] is ns[k]);
-				if (tracked)
-					continue;
-				ns[k].CmdReclaimUnit(v);
-				gNanoSent.insertLast(ns[k]);
-				++sent;
-			}
-		}
+		sent += NanoSendReclaim(v, vp, reach, NANO_SEND_MAX - sent);
+	}
+	// A WALL PENNING A UNIT needs no mobile builder to elect it first: the
+	// turrets around it ARE usually the pen. One reclaimer against patrolling
+	// turrets healing it took 2.6 min to eat a nano off a Juggernaut (his 10-10).
+	int penSent = 0;
+	for (uint i = 0; (i < Military::gPenVictim.length()) && (sent < NANO_SEND_MAX); ++i) {
+		if (Military::gPenWall[i] == 0)
+			continue;
+		CCircuitUnit@ v = ai.GetTeamUnit(Military::gPenWall[i]);
+		if ((v is null) || (v.circuitDef is null) || GantryKept(v))
+			continue;
+		const AIFloat3 vp = v.GetPos(ai.frame);
+		if (!OnMap(vp))
+			continue;
+		ai.MarkReclaim(v, 30 * SECOND);
+		const int k = NanoSendReclaim(v, vp, reach, NANO_SEND_MAX - sent);
+		sent += k;
+		penSent += k;
 	}
 	if (sent > 0)
-		AiLog("apex: nano-assist reclaim x" + sent);
+		AiLog("apex: nano-assist reclaim x" + sent + " pen=" + penSent);
 }
 
 // WHOSE HANDS THESE ARE. apexearth 2026-08-27: "we aren't expanding enough...

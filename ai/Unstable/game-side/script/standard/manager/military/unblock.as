@@ -129,18 +129,24 @@ int gUnblockWalks = 0;
 void SweepPenVerdicts()
 {
 	for (uint i = 0; i < gPenVictim.length(); ) {
-		const bool expired = ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL;
+		bool expired = ai.frame - gPenVerdictAt[i] > PEN_VERDICT_TTL;
 		const bool wallGone = (gPenWall[i] != 0) && (ai.GetTeamUnit(gPenWall[i]) is null);
 		// A victim that got clear of the ring on its own is not penned: the
 		// verdict held a freed commander on a walk back to eat its wall.
 		bool walkedOut = false;
-		if (!wallGone && !expired) {
+		if (!wallGone) {
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
 			walkedOut = (v is null)
 				|| (v.GetPos(ai.frame).distance2D(gPenExit[i]) > 2.f * UNBLOCK_RING);
 			if (walkedOut && (v !is null))
 				AiLog(Factory::T() + "apex: unblock-free " + v.circuitDef.GetName()
 					+ " #" + v.id + " clear of the ring on its own");
+			// still penned by a wall still standing: the verdict is still true. Expiring it
+			// lost the walk when the eat ran past the TTL and the slot was rebuilt (his 10-10 Juggernaut)
+			if (expired && !walkedOut && (gPenWall[i] != 0)) {
+				gPenVerdictAt[i] = ai.frame;
+				expired = false;
+			}
 		}
 		if (wallGone && !expired) {
 			CCircuitUnit@ v = ai.GetTeamUnit(gPenVictim[i]);
