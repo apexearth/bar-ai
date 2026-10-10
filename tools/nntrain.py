@@ -167,6 +167,10 @@ TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
 HUMAN_TAG = "mp-"         # matches/mp-*: his multiplayer games (tools/mp_archive.py)
 HUMAN_W = 4               # their rows count this many times in training, never in trust
 TRUST_RECENT = 5000     # trust is the CURRENT net's: older pairs scored weights since replaced
+# Bump a head's entry when the game-side meaning of its v changes: its trust evidence measured
+# the old lever and is cleared on load (10-10: esc held trust 1.0 on pairs from before
+# EscortGain read it -- last 2,000 pairs slope 0.24 [-0.94, 0.85]).
+LEVER_VER = {"esc": 1, "con": 2}
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
@@ -1224,6 +1228,10 @@ class FacHead(Buffered):
             net.grow_out(len(TARGETS) - len(net_t))
         self.pairs = ck.get("pairs", [])   # old (kind 1) 3-tuples are skipped by honest_trust
         self.placebo, self.placebo_old = list(ck.get("placebo", [])), list(ck.get("placebo_old", []))
+        if ck.get("lever_ver", 0) != LEVER_VER.get(self.NAME, 0):
+            print("%s: lever changed (v%s -> v%s): trust evidence cleared"
+                  % (self.NAME, ck.get("lever_ver", 0), LEVER_VER.get(self.NAME, 0)), flush=True)
+            self.pairs, self.placebo, self.placebo_old = [], [], []
         self.reset_rows = int(ck.get("reset_rows", 0))
         if ck.get("post_keys") is not None:
             self.post_keys = list(ck["post_keys"])
@@ -1249,7 +1257,8 @@ class FacHead(Buffered):
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
                     "post_keys": getattr(self, "post_keys", None), "reset_rows": self.reset_rows,
                     "opt_num": self.OPTS, "pairs": self.pairs, "placebo": self.placebo,
-                    "placebo_old": self.placebo_old, "range": getattr(self, "vrange", None)},
+                    "placebo_old": self.placebo_old, "range": getattr(self, "vrange", None),
+                    "lever_ver": LEVER_VER.get(self.NAME, 0)},
                    OUT / (self.NAME + "_model.pt.tmp"))
         replace_retry(OUT / (self.NAME + "_model.pt.tmp"), OUT / (self.NAME + "_model.pt"))
 

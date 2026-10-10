@@ -568,7 +568,8 @@ def rate(s, f):
     a, b = s.at(f - FPM), s.at(f)
     if a is None or b is None or f < FPM:
         return None
-    return (b - a) / 60.0
+    # energy net of the converters goes negative while they drain the bank faster than income
+    return max(0.0, (b - a) / 60.0)
 
 
 def near(x0, z0, x, z):
