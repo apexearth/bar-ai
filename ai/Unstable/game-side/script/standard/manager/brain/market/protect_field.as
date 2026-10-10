@@ -343,6 +343,7 @@ array<float> gPkRef;     // ...and that reference
 array<float> gPkDur;     // durability weight, -1 when apex_def_alpha_w is off
 array<float> gPkTrade;
 array<float> gPkOut;     // the value returned
+array<float> gPkOk;      // overkill share relative to the light tower's
 array<int> gPkLin;       // 1 dps branch, 0 engine-threat branch, -1 never priced
 
 void PkEnsure(int d)
@@ -355,7 +356,7 @@ void PkEnsure(int d)
 		return;
 	gPkDps.resize(n);  gPkOutr.resize(n);  gPkBase.resize(n);
 	gPkRef.resize(n);  gPkDur.resize(n);   gPkTrade.resize(n);
-	gPkOut.resize(n);  gPkLin.resize(n);
+	gPkOut.resize(n);  gPkLin.resize(n);   gPkOk.resize(n);
 	for (uint q = had; q < n; ++q)
 		gPkLin[q] = -1;
 }
@@ -447,9 +448,50 @@ float PfKillCapM(int d)
 	const float h = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
 	if ((hpm <= 0.f) || (h <= 1.f))
 		return -1.f;
-	return PfSurfDps(d) * h / hpm;
+	return PfSurfDps(d) * PfOverkill(d) * h / hpm;
 }
 
+// The share of a gun's damage that lands as kills on the army we have seen.
+// A shot's damage past its target's hit points is lost, so a 10,800 shot
+// kills one 2,000-hp tank per reload: half a shot wasted on average where
+// several are needed, the whole excess where one is plenty. 1 before any
+// armed ground foe is seen.
+array<float> gPkOkV;
+array<int> gPkOkAt;
+
+float PfOverkill(int d)
+{
+	if (int(gPkOkV.length()) <= d) {
+		const uint had = gPkOkAt.length();
+		gPkOkV.resize(uint(d + 1));
+		gPkOkAt.resize(uint(d + 1));
+		for (uint i = had; i < gPkOkAt.length(); ++i)
+			gPkOkAt[i] = -2;
+	}
+	if (gPkOkAt[d] == Military::gFmPublishedAt)
+		return gPkOkV[d];
+	const float a = Catalog::gAlpha[d];
+	float use = 0.f;
+	float spent = 0.f;
+	if (a > 0.f) {
+		for (int b = 0; b < Military::FM_HP_N; ++b) {
+			const float w = Military::gFmHpW[b];
+			if (w <= 0.f)
+				continue;
+			const float h = Military::FmHpBinCentre(b);
+			float s = h + 0.5f * a;
+			if (s < a)
+				s = a;
+			use += w;
+			spent += w / h * s;
+		}
+	}
+	gPkOkV[d] = (spent > 0.f) ? (use / spent) : 1.f;
+	gPkOkAt[d] = Military::gFmPublishedAt;
+	return gPkOkV[d];
+}
+
+int gPfLightD = -1;
 float gPfKillRef = -1.f;   // surface DPS per metal of the faction's light tower
 float gPfKillRefT = -1.f;  // ...and its surface THREAT per metal, for the A/B
 
@@ -460,6 +502,7 @@ float PfKillRef()
 	CCircuitDef@ light = SideDef3("armllt", "corllt", "leglht");
 	if (light !is null) {
 		const int ld = int(light.id);
+		gPfLightD = ld;
 		const float dps = PfKillRaw(ld);
 		if ((dps > 0.f) && (Catalog::gCostM[ld] > 0.f))
 			gPfKillRef = dps / Catalog::gCostM[ld];
@@ -630,6 +673,16 @@ float PfTowerKill(int d)
 	}
 	gPkBase[d] = base;
 	float m = base / ref;
+	// The reference light tower's dps is discounted the same way, so the
+	// cover stays in light-tower metal.
+	gPkOk[d] = -1.f;
+	if (lin && (gPfLightD > 0)) {
+		const float okL = PfOverkill(gPfLightD);
+		if (okL > 0.f) {
+			gPkOk[d] = PfOverkill(d) / okL;
+			m *= gPkOk[d];
+		}
+	}
 	// apex_def_alpha_w is a WEIGHT on the reference blow, not just a switch:
 	// it was only ever tested > 0, so the dashboard knob could turn durability
 	// off and could not tune it.

@@ -2138,9 +2138,14 @@ the old behaviour, where every player reasons alone.
 ### `TUNE_DEF_DOMINANCE` = 1.f
 
 A defence slot holds ONE building, so a tower beaten on BOTH reach and killing
-power by a gun we can afford right now is not a cheaper option, it is stranded
-metal (apexearth: "why build something that so quickly becomes outdated?"). 1 =
-on, 0 = off, which is the control arm.
+power by a gun we can afford right now delivers only part of what that place
+could hold (apexearth: "why build something that so quickly becomes outdated?").
+Since 2026-10-10 its gain is multiplied by kill/dominator-kill (`DefObsoleteShare`)
+instead of the candidate being refused: as a refusal it dropped the Pit Bull in
+~92% of T2 defence rankings (1,050 of 1,140 `defrank` samples) (176 logged `def-obsolete armpb by armamb` in the
+10-10 nnlog batch), so no draw and no net ever saw it priced (his 10-10: "At -1
+we'd never build it and would never learn its usefulness"). 1 = on, 0 = off,
+which is the control arm.
 
 ### `TUNE_DEF_AFFORD_S` = 30.f
 
