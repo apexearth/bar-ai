@@ -54,7 +54,8 @@ def medians(games, minute):
 def judge(st):
     """{regime: {n, all: medians, recent: medians, ok}} for the current stage's games."""
     minute = st["minutes"] - 1
-    games = progress.collect(since=st["since"][:13])
+    # the rules-only control batches (-b0) are not how the AI plays
+    games = [g for g in progress.collect(since=st["since"][:13]) if not g["tournament"].endswith("-b0")]
     res = {}
     for reg, need in NEED.items():
         gs = [g for g in games if progress.regime_of(g) == reg and g.get("minutes", 0) >= minute][-need:]
