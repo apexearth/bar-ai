@@ -181,7 +181,7 @@ float NnPostScore(const array<float>& in st, const array<float>& in post, array<
 	if ((t <= 0.f) || (Market::NN_TRUST_KIND < 2) || !Market::NNP_ON || (Market::NNP_STATE != Market::NN_STATE + "|" + NNP_POST)
 		|| (O != 2 * POST_N) || (S != int(st.length() + post.length())) || (H <= 0)
 		|| (Market::NNP_XM.length() != uint(N)) || (Market::NNP_W1.length() != uint(H * N))
-		|| (Market::NNP_W2.length() != uint(H * H)) || (Market::NNP_WO.length() != uint(H)))
+		|| !Market::NnBlkOk(H, Market::NNP_W2.length()) || (Market::NNP_WO.length() != uint(H)))
 		return 0.f;
 	int rule = 0;
 	for (int o = 1; o < POST_N; ++o)
@@ -210,9 +210,10 @@ float NnPostScore(const array<float>& in st, const array<float>& in post, array<
 		float sc = Market::NNP_BO;
 		for (int h2 = 0; h2 < H; ++h2) {
 			float acc = Market::NNP_B2[h2];
-			for (int h = 0; h < H; ++h) {
-				if (h1[h] > 0.f)
-					acc += Market::NNP_W2[h2 * H + h] * h1[h];
+			const int b0 = h2 - h2 % Market::NN_BLK;
+			for (int j = 0; j < Market::NN_BLK; ++j) {
+				if (h1[b0 + j] > 0.f)
+					acc += Market::NNP_W2[h2 * Market::NN_BLK + j] * h1[b0 + j];
 			}
 			if (acc > 0.f)
 				sc += Market::NNP_WO[h2] * acc;

@@ -512,6 +512,28 @@ read +0.1..0.3 on rows where the pick WAS the rule: it measured the two nets
 disagreeing. metrics.jsonl carries `placebo` (the new statistic on
 rule-following rows, an option not taken standing in for the chosen one: it
 should read ~0) and `placebo_old` (the old statistic on the same rows).
+**Kind 4 and the ensemble (2026-10-10).** Each FULL net is `ens_k()` nets
+(3 on a GPU, `BARAI_NN_ENS`), each with its own init and minibatch draw on one
+buffer and one set of scalers; d is their mean, and `fold` exports them as one
+net K x 32 wide whose layer 2 is block-diagonal (the game's `NN_BLK` stride),
+so the game plays exactly the mean trust measured. Averaging the weights would
+not be the mean (ReLU). A single-net checkpoint loads as member 0; the others
+start from its weights shrunk and perturbed, their averaged weights still its,
+so a restart predicts exactly as before. Trust kind 4 reads the placebo on the
+chance window's own games and subtracts it (when positive) per bootstrap
+resample. Offline (2,400 nn-open/barbtrain games streamed in time order the
+trainer's way, 15 seeds, checks every 50 games), the builder's trust summed over
+kinds read mean 0.41, sd 0.37 between seeds, 0.27 per check -- the live
+trainer's own 0.40 / 0.37 / 0.26 -- and kind 3's placebo (its last 5,000 pairs:
+~80 builder games against a kind's ~1,000) jumped 0.36 per check where the
+same games read a steady, positive 0.1-0.6. Three nets + kind 4: 0.20 / 0.17 /
+0.13. Outcomes swapped between games leave every variant at trust > 0 on <= 3%
+of checks. A continuous head's window (5,000 pairs) is ~280 games, and the
+window, not the seed, moves it most; 15,000 pairs took the builder to 0.10 /
+0.03 / 0.05 but lagged tech (few chance rows) onto old nets' pairs -- unchanged.
+In game the K-wide net costs K times the forward passes: `nn.val` measured
+2.1 ms a call (~60 ns a multiply-add), so `dec.nn` (3.3 ms, ~1.2 ms of it the
+net) goes to ~5.7 ms at K=3; nnweights.as goes 2.0 -> 5.7 MB.
 apex_nn_blend scales trust. The ETA ladder,
 which ranked economy options by time to target alone, divides that time by
 e^(trust x verdict). His rulings stay rules. The whole list is re-sorted
