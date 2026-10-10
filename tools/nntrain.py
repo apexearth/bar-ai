@@ -1745,6 +1745,13 @@ def centre_step(head, rows, source=None):
     if c is None:
         c = float(np.median([float(r["rule"]) for r in rows]))
     pick = rows if len(rows) <= CENTRE_ROWS else [rows[i] for i in np.linspace(0, len(rows) - 1, CENTRE_ROWS).astype(int)]
+    # where it is played, not the whole range: the nets' argmax over the full range sat at the
+    # range floor for ten heads (10-10 16:00), extrapolating past every game they saw
+    cw = CENTRE_WIN * max(c, 0.25)
+    glo, ghi = max(lo, c - cw), min(hi, c + cw)
+    if ghi <= glo:
+        return
+    lo, hi = glo, ghi
     grid = np.linspace(lo, hi, CENTRE_GRID)
     w_obj = np.array([OBJECTIVE.get(t, 0.0) for t in TARGETS], dtype=np.float32)
     best = []
