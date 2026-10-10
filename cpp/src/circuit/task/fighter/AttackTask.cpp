@@ -324,8 +324,12 @@ void CAttackTask::HoldForward(int frame)
 	const float sqStrong = SQUARE(strongR + DEFAULT_SLACK * 2);
 	float d = 0.f;
 	AIFloat3 hold = from;
+	// back only out of the reach of what outgunned us, never off the general threat map: with
+	// their army at our base the map reads hot all the way home and the whole army hid in the
+	// base's back corner (his 10-10; docs/24: concentrate opposite their army)
+	(void)tm;
 	for (int k = 0; (k < 40) && (d + DEFAULT_SLACK * 2 < back)
-		&& ((tm->GetThreatAt(leader, hold) > THREAT_MIN) || (strongMem && (hold.SqDistance2D(strongPos) < sqStrong))); ++k)
+		&& strongMem && (hold.SqDistance2D(strongPos) < sqStrong); ++k)
 	{
 		d += DEFAULT_SLACK * 2;
 		hold = from + dir * d;
