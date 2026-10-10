@@ -1018,6 +1018,11 @@ def honest_trust(pairs, placebo=()):
     if len(p) >= TRUST_MIN and len({x[2] for x in p}) >= TRUST_GAMES_MIN:
         pd, pa, pb = (np.array([x[i] for x in p], dtype=np.float64) for i in (0, 1, 3))
         rp = _slopes(rows(np.array([col[x[2]] for x in p]), np.ones(len(p))), pd, pa, pb)
+    else:
+        # too few placebo pairs on the window's games (the list fills over ~1,000 games): the
+        # kind-3 guard on what there is, never none -- builder:mex read 1.0 unguarded (10-10)
+        pr = placebo_read([x for x in placebo if len(x) == 4])
+        rp = np.full_like(rc, max(0.0, (pr or {}).get("r", 0.0)))
     lo = np.percentile(rc[1:] - np.maximum(0.0, rp[1:]), TRUST_LO_Q)
     return round(float(min(1.0, max(0.0, lo))), 3)
 
