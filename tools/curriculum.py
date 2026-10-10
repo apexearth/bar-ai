@@ -21,8 +21,8 @@ import progress  # noqa: E402
 
 STAGES = (8, 12, 16, 20, 30, 45, 60)
 # games run this much past the stage so a decision at its judged minute still gets the
-# 5-minute label (his 10-10: 12-minute games for the 8-minute stage)
-PAD = 4
+# 5-minute label and long enough to see their army roam our economy (his 10-10: 20-minute games)
+PAD = 12
 NEED = {"1v1": 30, "2v2": 15}
 METRICS = ("eco", "mex")
 PASS = 1.0
