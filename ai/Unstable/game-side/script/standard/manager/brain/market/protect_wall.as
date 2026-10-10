@@ -1070,33 +1070,23 @@ void BaseFrontRefresh()
 	const float lF = sqrt(toF.SqLength2D());
 	if (lF < 1.f)
 		return;
+	// The slot facing what comes (FaceAt: the start prior plus the raided side),
+	// beside guns already standing until their knot beats the raid.
 	int open = 0;
-	int fullSlot = -1;     // with every front slot taken, the guns cluster beside the best
-	float bestCos = 0.5f;   // a 60-degree cone either side of the enemy's bearing
-	float bestFull = 0.5f;
+	float bestScore = 0.f;
+	const float bfWave = KnotWave(PfTowerKill(int(gBfMedium.id)));
 	for (uint i = 0; i < n; ++i) {
-		if (WallSlotLine(i))
+		if (WallSlotLine(i) || (ai.frame <= gBfTakenAt[i] + 30 * SECOND))
 			continue;
-		AIFloat3 toS = gWallP[i] - gWallMid;
-		const float lS = sqrt(toS.SqLength2D());
-		if (lS < 1.f)
-			continue;
-		const float c = (toS.x * toF.x + toS.z * toF.z) / (lS * lF);
-		if ((c < 0.5f) || (ai.frame <= gBfTakenAt[i] + 30 * SECOND))
-			continue;
-		if (WallSlotOpen(i)) {
+		const float sc = FaceAt(gWallP[i])
+				* KnotKappa(PfCoverPoint(gWallP[i], gWallP[i], -1.f, 0.f), bfWave);
+		if (WallSlotOpen(i))
 			++open;
-			if (c > bestCos) {
-				bestCos = c;
-				gBfSlot = int(i);
-			}
-		} else if (c > bestFull) {
-			bestFull = c;
-			fullSlot = int(i);
+		if (sc > bestScore) {
+			bestScore = sc;
+			gBfSlot = int(i);
 		}
 	}
-	if (gBfSlot < 0)
-		gBfSlot = fullSlot;
 	// What we own of the two guns, wherever they stand: a gun raised beside a
 	// full slot fills no slot, and counting slots let the push run forever.
 	int owned = 0;

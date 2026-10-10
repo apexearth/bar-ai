@@ -14,6 +14,11 @@ array<array<bool>@> gDsFront;
 array<array<bool>@> gDsRing;
 array<array<bool>@> gDsWall;
 array<array<int>@> gDsKeep;   // keep-out gap id of a site, -1 for every other kind
+array<array<bool>@> gDsKnot;  // a site beside one of our gun knots
+array<array<float>@> gDsKappa;
+array<array<float>@> gDsFace;
+array<array<float>@> gDsSup;  // standing gun cover (ours and allies') at the site
+array<float> gDsWave;         // the def's knot wave at its last fill
 array<int> gDsAt;
 array<int> gDsLineN;
 int gDsFillFrame = -1;
@@ -85,6 +90,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		gDsRing.resize(uint(Catalog::gDefCount + 1));
 		gDsWall.resize(uint(Catalog::gDefCount + 1));
 		gDsKeep.resize(uint(Catalog::gDefCount + 1));
+		gDsKnot.resize(uint(Catalog::gDefCount + 1));
+		gDsKappa.resize(uint(Catalog::gDefCount + 1));
+		gDsFace.resize(uint(Catalog::gDefCount + 1));
+		gDsSup.resize(uint(Catalog::gDefCount + 1));
+		gDsWave.resize(uint(Catalog::gDefCount + 1));
 		gDsAt.resize(uint(Catalog::gDefCount + 1));
 		gDsLineN.resize(uint(Catalog::gDefCount + 1));
 	}
@@ -149,6 +159,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		nWall = PfWallSlots(sites);
 	else
 		PfGuardSites(reach, sites);
+	const uint knot0 = sites.length();
+	KnotSites(sites, d);
 	// ...plus the ground beside every mex still without a gun. Rear sites,
 	// so they take the mex floor and the stream stake like any asset site;
 	// see MexGuardSites.
@@ -305,6 +317,12 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	array<bool> frontA(sites.length(), false);
 	array<bool> ringA(sites.length(), false);
 	array<bool> wallA(sites.length(), false);
+	array<bool> knotA(sites.length(), false);
+	array<float> kappaA(sites.length(), 1.f);
+	array<float> faceA(sites.length(), 1.f);
+	array<float> supA(sites.length(), 0.f);
+	FacePrep();
+	const float knotWave = KnotWave(adds);
 	// AN UNMET TARGET IS DEMAND. DefenceTarget is the economic basis he chose
 	// for the standing holding, but insurance pricing alone reads a quiet game
 	// as no demand: threat at an unthreatened slot is ~0, every gate below
@@ -428,14 +446,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// its site takes the same demand pull an open wall slot does. One
 		// gun: the site is only offered while the mex has none.
 		const bool isMexG = (si >= mexG0) && (si < nAsset);
+		const bool isKnot = (si >= knot0) && (si < mexG0);
 		// The rim and ring slots inside the alliance's growth room stand
 		// where the base is about to be; an extractor's own gun is exempt.
 		if (!isMexG && !isFront && !isKeep && KoInsideGrowth(s))
 			continue;
 		if (Gate(GATE_SITE_INTERIOR, InteriorGunSite(d, s)))
 			continue;
-		// Only the GUARD-SITE prefix is in the field's slot cache; the mex
-		// guard sites appended after it are not, and gates, front spots and
+		// Only the GUARD-SITE prefix is in the field's slot cache; the knot and
+		// mex guard sites appended after it are not, and gates, front spots and
 		// ring sites read their senses live. Wall slots have their own stamp
 		// cache -- with the wall on, PfGuardSites never ran and gPfSlot is
 		// stale, so PfSite* must not be indexed at all.
@@ -443,12 +462,13 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		// This read `si < nAsset`, which INCLUDES the mex guard sites: with
 		// apex_wall off and one unguarded mex, PfSiteThreat indexed past the
 		// end of the slot arrays and the script died on the spot.
-		const bool cached = !wallOn && (si < mexG0);
+		const bool cached = !wallOn && (si < knot0);
 		xA[si] = s.x;
 		zA[si] = s.z;
 		frontA[si] = isFront;
 		ringA[si] = isRing;
 		wallA[si] = isWall;
+		knotA[si] = isKnot;
 		float threat = cached ? PfSiteThreat(si)
 				: (isWall ? PfWallThreat(si) : ThreatAt(s));
 		// THE GATE OVERWHELMS OR IT IS A SPEED BUMP (apexearth 2026-08-29:
@@ -677,8 +697,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if ((lossS > 1.f) && (hz < 1.f / lossS))
 				hz = 1.f / lossS;
 		}
-		if (sg > hz)
-			hz = sg;
+		const float face = FaceAt(s);
+		if (sg * face > hz)
+			hz = sg * face;
 		// A POST CANNOT DEFEND MORE THAN IT CAN KILL. stake is everything
 		// inside this def's own reach, which credits a long gun with the
 		// whole economy a short one cannot see; PfKillCapM is the metal its
@@ -765,6 +786,15 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 					prevented += stake * k * (f1 - f0) * hz;
 			}
 		}
+		// A gate deepens past the raid (his concentration ruling), so its knot
+		// is as big as the wave it stands against.
+		const float supG = PfCoverPoint(s, s, -1.f, 0.f);
+		const float wkS = (isGate && (threat > knotWave)) ? threat : knotWave;
+		const float kappa = KnotKappa(supG, wkS);
+		prevented *= kappa;
+		kappaA[si] = kappa;
+		faceA[si] = face;
+		supA[si] = supG;
 		prevA[si] = prevented;
 		if (isAllyF && (ai.frame >= gNextAllyFLog)) {
 			gNextAllyFLog = ai.frame + 60 * SECOND;
@@ -778,6 +808,8 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			if (prevented > gDbgFrontBest) gDbgFrontBest = prevented;
 		} else if (isRing) {
 			if (prevented > gDbgRingBest) gDbgRingBest = prevented;
+		} else if (isKnot) {
+			if (prevented > gDbgKnotBest) gDbgKnotBest = prevented;
 		} else if (prevented > gDbgAssetBest) {
 			gDbgAssetBest = prevented;
 		}
@@ -805,6 +837,11 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	@gDsRing[d] = ringA;
 	@gDsWall[d] = wallA;
 	@gDsKeep[d] = keepA;
+	@gDsKnot[d] = knotA;
+	@gDsKappa[d] = kappaA;
+	@gDsFace[d] = faceA;
+	@gDsSup[d] = supA;
+	gDsWave[d] = knotWave;
 	gDsLineN[d] = int(ringStart - nAsset);
 	// This def's OWN argmax terms, stamped with the fill: gDbg* are shared
 	// across defs, so reading them after a CACHED fill would report whichever

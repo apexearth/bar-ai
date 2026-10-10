@@ -369,6 +369,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			bool bestIsWall = false;
 			bool bestIsLine = false;
 			bool bestIsKeep = false;
+			bool bestIsKnot = false;
+			float bestKappa = 1.f;
+			float bestFace = 1.f;
+			float bestSup = 0.f;
 			// THE ASKER'S OWN GUNS ARE TOLERANCE (his ruling: commanders are
 			// good early wall makers because they can defend themselves). A
 			// negative cached prev is a wall slot the danger gate refused,
@@ -399,6 +403,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				const array<bool>@ dsRing = gDsRing[d];
 				const array<bool>@ dsWall = gDsWall[d];
 				const array<int>@ dsKeep = gDsKeep[d];
+				const array<bool>@ dsKnot = gDsKnot[d];
+				const array<float>@ dsKappa = gDsKappa[d];
+				const array<float>@ dsFace = gDsFace[d];
+				const array<float>@ dsSup = gDsSup[d];
+				const bool dsTerms = (dsKnot !is null) && (dsKappa !is null) && (dsFace !is null)
+						&& (dsSup !is null) && (dsKnot.length() == prevs.length());
 				for (uint si = 0; si < prevs.length(); ++si) {
 					float prev = prevs[si];
 					if (prev < 0.f) {
@@ -469,6 +479,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 						bestIsWall = dsWall[si];
 						bestIsLine = bestIsWall && WallSlotLine(si);
 						bestIsKeep = kid >= 0;
+						bestIsKnot = dsTerms && dsKnot[si];
+						bestKappa = dsTerms ? dsKappa[si] : 1.f;
+						bestFace = dsTerms ? dsFace[si] : 1.f;
+						bestSup = dsTerms ? dsSup[si] : 0.f;
 					}
 				}
 			}
@@ -507,7 +521,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			gDwFill[d] = 1.f;
 			gDwTeam[d] = 1.f;
 			gDwVal[d] = 0.f;
-			gDwSite[d] = bestIsKeep ? 4 : (bestIsWall ? 3 : (bestIsFront ? 1 : (bestIsRing ? 2 : 0)));
+			gDwSite[d] = bestIsKeep ? 4 : (bestIsWall ? 3 : (bestIsFront ? 1
+					: (bestIsRing ? 2 : (bestIsKnot ? 5 : 0))));
+			gDwKappa[d] = bestKappa;
+			gDwFace[d] = bestFace;
+			gDwSup[d] = bestSup;
+			gDwWave[d] = gDsWave[d];
 			if (bestIsKeep)
 				++gKoWonN;
 			// SATURATE. Every other major want has a target it reaches and then
@@ -698,7 +717,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " defHave=" + int(DefenceValue())
 					+ " defTarget=" + int(DefenceTarget()));
 			}
-			NoteDefSite(bestIsFront, bestIsRing, bestIsWall);
+			NoteDefSite(bestIsFront, bestIsRing, bestIsWall, bestIsKnot, bestKappa);
 			// Is the chosen post in FRONT of the base or behind it? He reports
 			// towers landing behind, which the site list alone cannot show.
 			if (ai.frame >= gNextDefFwdLog) {
@@ -713,6 +732,10 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 					+ " ring=" + (bestIsRing ? 1 : 0)
 					+ " wall=" + (bestIsWall ? 1 : 0)
 					+ " line=" + (bestIsLine ? 1 : 0)
+					+ " knot=" + (bestIsKnot ? 1 : 0)
+					+ " kappa=" + formatFloat(bestKappa, "", 0, 2)
+					+ " sup=" + int(bestSup) + "/" + int(gDsWave[d])
+					+ " face=" + formatFloat(bestFace, "", 0, 2)
 					// Distance to the nearest map wall, and the share of the
 					// approach that is real map there. The wall used to PAY.
 					+ " edgeD=" + int(EdgeDist(bestAt))
