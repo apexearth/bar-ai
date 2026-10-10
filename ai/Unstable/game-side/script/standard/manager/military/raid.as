@@ -307,7 +307,7 @@ float RaidPowerLive()
 	float p = 0.f;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		IUnitTask@ t = gSquads[i];
-		if ((t is null) || t.IsDead())
+		if ((t is null) || t.IsDead() || IsAnswerTask(t))
 			continue;
 		if (t.GetFightType() == int(Task::FightType::RAID))
 			p += TaskPower(t);

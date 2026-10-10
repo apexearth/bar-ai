@@ -18,6 +18,7 @@ fighter/` (mirrored in `cpp/`, see the cpp-dll skill).
 | Enemy stance read | `UpdateStance` (AGGRESSIVE/PASSIVE/UNKNOWN, split thresholds, 30s dwell) → budget lean via `StanceShareMult` | `military/stance.as` |
 | Retreat/leash | `OutgunnedHere` odds trigger, DEFEND leash on forward fraction | `military/withdraw.as` |
 | Supers | `SuperGuardTask` holds; released by the team push window, or when held supers > 40% of army value (then held tasks are ABORTED so they re-elect) | `military/superguard.as` |
+| Answer to a building of ours killed on our ground | `NoteRaidOn` (death hook) → nearest spare escorts / DEFEND members / held raid packs within `PostReach`, 1.2× the armed foe metal there or nobody, on a RAID task with `SetRaidGoal` at the spot; ends clear / 45 s. `apex: raid-answer`, `raid-answer-stat` | `military/raidanswer.as` |
 | Raid targets/roam | C++ CRaidTask: idle roam → nearest enemy-influenced mex spot; FindTarget still has no distance bias (open item) | C++ RaidTask.cpp |
 | Idle squad roam | C++ `IFighterTask::RoamPos` — front-anchored scatter (`apex_roam_front`), NOT the uniform-random pick whose mean is map center | C++ FighterTask.cpp |
 | Standoff/kite in squads | rows + kite; SIEGE-attr rows fear proximity (back off at 0.9 range, reopen to full) | C++ SquadTask.cpp |

@@ -80,7 +80,8 @@ STATS = re.compile(r"\[BARAI_STATS\] team=(\d+) .*?frame=(\d+) .*?mReclaim=(\d+)
 NEAR = 600      # elmos: losses this close to the chosen site are the decision's own exposure
 SURVIVE_S = 300
 DMG = re.compile(r"\[BARAI_DMG\] frame=(\d+) team=(\d+) dm=(\d+) ds=(\d+) rm=(\d+) rs=(\d+)")
-MEX = re.compile(r"(mexp?|moho|mme)\d*$")
+# legmext15 (Legion's overcharged extractor) replaces a legmex on the same spot
+MEX = re.compile(r"(mexp?|moho|mme)(t\d+)?\d*$")
 NOT_A_BUILD = {"reclaim", "assist"}   # their def names the target, not something we make
 CANFLY = re.compile(r"\bcanfly\s*=\s*true", re.I)
 SPEED = re.compile(r"\bspeed\s*=\s*([\d.]+)", re.I)

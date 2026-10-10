@@ -214,6 +214,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// one line a game-minute, so the last one is the game-end census.
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
+	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
 	{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Perf::Add("up.fightcensus", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
@@ -468,8 +469,10 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 			Market::NoteTowerGrave(at, cdef.costM);
 		}
 		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]
-			&& !Catalog::gFlyer[int(attackerDef.id)])
+			&& !Catalog::gFlyer[int(attackerDef.id)]) {
 			Market::DefNoteLeak(at, int(cdef.id), attackerDef);
+			Military::NoteRaidOn(at, int(attackerDef.id));
+		}
 	}
 	// BOMBARDMENT LOSSES BEFORE THE ARMY FILTER. An LRPC exists to kill
 	// BUILDINGS, and the mobile-only filter below threw away precisely its
