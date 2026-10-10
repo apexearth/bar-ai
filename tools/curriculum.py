@@ -5,8 +5,8 @@ games, then run longer and longer ones as we improve).
     python tools/curriculum.py --minutes    # the game length the loops use (just the number)
     python tools/curriculum.py --advance    # step up if this stage is passed
 
-A stage of L minutes is judged at minute L-1; its games run L+PAD so decisions up to the
-judged minute carry their 5-minute labels. It is passed when our normal games match BARb there -- median eco and
+A stage of L minutes runs L+PAD-minute games (so decisions up to minute L-1 carry their
+5-minute labels) and is judged on each game's MEAN edge from minute 3 to its end -- a game that falls behind and catches up counts (his 10-10). Passed when the median eco and
 mex edge >= 1.0 -- over the stage's last 30 1v1 and last 15 2v2 games, and again over
 the most recent half of each.
 """
@@ -45,18 +45,45 @@ def save(st):
     os.replace(tmp, STATE)
 
 
-def medians(games, minute):
+WIN_FROM = 3   # the window starts here and runs to the game's last whole minute
+
+
+def at(g, m, minute):
+    s = g["series"][m]
+    return s[minute] if minute < len(s) else None
+
+
+def medians(games, last):
+    """Per metric, the median over games of each game's mean edge across the window --
+    a game that falls behind early and catches up counts (his 10-10)."""
     out = {}
     for m in METRICS:
-        vals = [g["series"][m][minute] for g in games
-                if minute < len(g["series"][m]) and g["series"][m][minute] is not None]
-        out[m] = statistics.median(vals) if vals else None
+        means = []
+        for g in games:
+            vals = [v for v in (at(g, m, k) for k in range(WIN_FROM, last + 1)) if v is not None]
+            if vals:
+                means.append(sum(vals) / len(vals))
+        out[m] = statistics.median(means) if means else None
+    return out
+
+
+def curve(games, last):
+    """Median edge at a few minutes of the window, for reading where we fall behind or catch up."""
+    pts = list(range(WIN_FROM, last + 1, 2))
+    out = {}
+    for m in METRICS:
+        row = []
+        for k in pts:
+            vals = [v for v in (at(g, m, k) for g in games) if v is not None]
+            row.append("m%d=%s" % (k, "%.2f" % statistics.median(vals) if vals else "-"))
+        out[m] = " ".join(row)
     return out
 
 
 def judge(st):
     """{regime: {n, all: medians, recent: medians, ok}} for the current stage's games."""
     minute = st["minutes"] - 1
+    last = st["minutes"] + PAD - 1
     # the rules-only control batches (-b0) are not how the AI plays
     # and only the training loops' batches -- an A/B arm named *1v1* is not how it plays either
     games = [g for g in progress.collect(since=st["since"][:13])
@@ -64,9 +91,9 @@ def judge(st):
     res = {}
     for reg, need in NEED.items():
         gs = [g for g in games if progress.regime_of(g) == reg and g.get("minutes", 0) >= minute][-need:]
-        allm, rec = medians(gs, minute), medians(gs[len(gs) // 2:], minute)
+        allm, rec = medians(gs, last), medians(gs[len(gs) // 2:], last)
         ok = len(gs) >= need and all(v is not None and v >= PASS for d in (allm, rec) for v in d.values())
-        res[reg] = {"n": len(gs), "need": need, "all": allm, "recent": rec, "ok": ok}
+        res[reg] = {"n": len(gs), "need": need, "all": allm, "recent": rec, "ok": ok, "curve": curve(gs, last)}
     return minute, res
 
 
@@ -80,10 +107,12 @@ def main(argv):
         print(st["minutes"] + PAD)
         return 0
     minute, res = judge(st)
-    print("stage %d min (judged at m%d, games run %d) since %s" % (st["minutes"], minute, st["minutes"] + PAD, st["since"]))
+    print("stage %d min (games run %d; judged on each game's mean edge m%d-m%d) since %s" % (st["minutes"], st["minutes"] + PAD, WIN_FROM, st["minutes"] + PAD - 1, st["since"]))
     for reg, r in res.items():
         print("  %s n=%d/%d  last: %s  recent half: %s  %s" % (
             reg, r["n"], r["need"], fmt(r["all"]), fmt(r["recent"]), "PASS" if r["ok"] else "-"))
+        for m, row in r["curve"].items():
+            print("      %-4s %s" % (m, row))
     if "--advance" in argv and all(r["ok"] for r in res.values()):
         i = STAGES.index(st["minutes"]) if st["minutes"] in STAGES else 0
         if i + 1 < len(STAGES):
