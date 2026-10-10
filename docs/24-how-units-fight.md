@@ -260,6 +260,10 @@ to them)
   range, dps, speed), not metal. How careful he is depends on the game mode:
   in default T2 play, careful. Against enemy T3 he can wait cloaked under a
   jammer and surprise it with the D-gun.
+- When the base itself is being destroyed, the commander goes down with his
+  ship (2026-10-10): he does not run and end up the last one standing. A good
+  cloak and D-gun on the few heavy units attacking the base (bulls) usually
+  saves it.
 - **Front line:** the army holds a line where our ground ends, at a narrow
   part of the map if there is one, so nothing goes round it. It fights inside
   nano range so it is healed while fighting. When the forward lane is lost,
