@@ -292,7 +292,7 @@ restructure (enemy economy estimate).
 ## Continuous heads (2026-10-09)
 
 His ruling: a quantity is never chopped into steps, and an integer count is a
-real value the game takes the ceiling of. Twelve heads are one mechanism,
+real value the game takes the ceiling of. Thirteen heads are one mechanism,
 `NnValDecide` (nnlog.as), each a value v on a range, the rule's value 1x
 (aplant: the count itself, rule 1). Range tops are "almost unreasonably high"
 so the net sees big variance; draws are uniform, linear, never log.
@@ -309,6 +309,7 @@ so the net sees big variance; draws are uniform, linear, never log.
 | mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
 | defamt | protect_nn | DefenceTarget | 0.25-8 |
 | mexg | protect_nn | MexGunsWanted's far term (guns a mex earns by its reach from them), and divides the coverall push's loss gate (TUNE_MEX_LOSS_COVER / v); every 30 s; prefix NNMG; own fields: mexes, unguarded (no gun in reach), guns covering a mex, mexes killed in 3 min, loss share, mean reach, enemy raid metal, army at home, minute | 0.25-8 |
+| gunp | protect_nn | the forced defence pushes that bypass the draw: the guns basefront (gBfWanted), comself (ComSelfGun's need) and defrole (gDrQuota) want, as int(c x v + u) with u one uniform held all game (`apex: gunp-dither`), so v = 1 is c and below 1 a lone gun is bought in a share v of games; the cover jump's floor x v and its one gun by the same rounding; the defence role's quota (roles.as) x v. coverall stays mexg's, draw and defpanic stay rules. Every 30 s from 5 s + team stagger; prefix NNGP; own fields: minute, enemy army seen, its decaying peak, enemy army ever seen, raid metal, threat at home, danger gap, army at home, our guns, defence value, mexes, mexes killed in 3 min, eco metal lost | 0-4 |
 | aplant | plannet | -- the plant count, owed ceil(v) | 1-8 |
 
 **Play.** A held explorer head plays its game-long draw; else an explorer

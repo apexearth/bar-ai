@@ -611,10 +611,55 @@ void MexGuardDecide()
 		NNMG_XM, NNMG_XS, NNMG_W1, NNMG_B1, NNMG_W2, NNMG_B2, NNMG_WO, NNMG_BO, NNMG_TRUST, NNMG_LO, NNMG_HI, st, f);
 }
 
+// The forced defence pushes as a continuous head, every 30 s from the first seconds:
+// the guns basefront, comself and defrole want x v (GunpCount), the cover jump's
+// floor x v and its one gun by GunpCount(1), the defence role's quota x v. 0-4, 1x = the rule.
+const string NNGP_OWN = "minute,foeArmy,seenPeak,foeSeen,raidM,threatHome,dangerGap,armyHome,guns,defV,mexes,mexLost3m,ecoLostM";
+const float GP_LO = 0.f, GP_HI = 4.f;
+int gGpNextAt = -1;
+bool gGpUSet = false;
+
+void GunPushDecide()
+{
+	const AIFloat3 home = Builder::gHomePos;
+	array<float> f;
+	f.insertLast(float(ai.frame) / 1800.f);
+	f.insertLast(Military::EnemyArmyCost());
+	f.insertLast(Military::gSeenPeak);
+	f.insertLast(Military::FoeArmySeen() ? 1.f : 0.f);
+	f.insertLast(FoeRaidMassM());
+	f.insertLast(ThreatM(home));
+	f.insertLast(Military::DangerGap());
+	f.insertLast(Military::gArmyHomeM);
+	f.insertLast(float(gProtPos[PROT_DEF].length()));
+	f.insertLast(DefenceValue());
+	f.insertLast(float(MexRows().length()));
+	f.insertLast(float(MexKilledRecent()));
+	f.insertLast(Military::gNrEcoLostM);
+	array<float> st;
+	NnState(null, st);
+	gGunpMul = NnValDecide("gunp", NNGP_OWN, GP_LO, GP_HI, 1.f, NNGP_ON, NNGP_STATE, NNGP_S, NNGP_O, NNGP_H,
+		NNGP_XM, NNGP_XS, NNGP_W1, NNGP_B1, NNGP_W2, NNGP_B2, NNGP_WO, NNGP_BO, NNGP_TRUST, NNGP_LO, NNGP_HI, st, f);
+	// drawn only once v leaves the rule, so a rule game's random stream is untouched
+	if (!gGpUSet && (gGunpMul != 1.f)) {
+		gGpUSet = true;
+		gGunpU = NnU01();
+		if (gGunpU > 0.999f)
+			gGunpU = 0.999f;
+		AiLog("apex: gunp-dither t=" + ai.teamId + " u=" + NnF(gGunpU, 3));
+	}
+}
+
 void UpdateDefNet()
 {
 	if (!Builder::gHomeSet)
 		return;
+	if (gGpNextAt < 0)
+		gGpNextAt = 5 * SECOND + (ai.teamId % 15) * SECOND;
+	if (ai.frame >= gGpNextAt) {
+		gGpNextAt = ai.frame + 30 * SECOND;
+		GunPushDecide();
+	}
 	if (gMgNextAt < 0)
 		gMgNextAt = 20 * SECOND + (ai.teamId % 15) * SECOND;
 	if (ai.frame >= gMgNextAt) {
@@ -636,6 +681,7 @@ void UpdateDefNet()
 			+ " sensN=" + gLkSensN + " sens=" + int(gLkSensM) + " front=" + int(gLkFrontM)
 			+ " flank=" + int(gLkFlankM) + " rear=" + int(gLkRearM) + " lone=" + int(gLkLoneM)
 			+ " amt=" + NnF(gDaMul, 2) + " amtDec=" + gDaDecN + " amtOv=" + gDaOvN + " mexg=" + NnF(gMexgMul, 2)
+			+ " gunp=" + NnF(gGunpMul, 2)
 			+ " siteDec=" + gDsDecN + " siteOv=" + gDsOvN + " memo=" + gDsMemoN
 			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length() + DefTypeStat());
 	}

@@ -85,7 +85,7 @@ def check_nets(text, rep):
             rep.add("NETS", not (blend > 0 and len(sc) >= 50 and changed == 0), "builder-net-moves",
                     "net changed the top pick in %d of %d scored elections (%.0f%%), blend %.2f, net %d games" % (
                         changed, len(sc), 100.0 * changed / len(sc), blend, net))
-    for head in ("esc", "con", "mex", "cap", "acap", "aplant", "scap", "ecap", "mass", "odds", "defamt", "mexg"):
+    for head in ("esc", "con", "mex", "cap", "acap", "aplant", "scap", "ecap", "mass", "odds", "defamt", "mexg", "gunp"):
         vr = re.findall(r"apex: nnval head=%s t=%d f=\d+ v=(\S+) rule=(\S+) .*? rnd=(\d) .*? trust=(\S+)" % (head, t0), text)
         if not vr:
             continue

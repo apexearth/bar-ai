@@ -2254,8 +2254,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
-			const float floorHere = floorWave * MexFloorFactor(cw.pos);
-			if (floorHere <= 1.f)
+			const float floorHere = floorWave * MexFloorFactor(cw.pos) * gGunpMul;
+			if ((floorHere <= 1.f) || (GunpCount(1) < 1))
 				continue;
 			const float coverHere = CoverAt(cw.pos);
 			if (coverHere >= floorHere)

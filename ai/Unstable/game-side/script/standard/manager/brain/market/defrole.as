@@ -120,7 +120,7 @@ void DefRoleCensus()
 	gDrQuota = 0;
 	if ((gDrNeedM > 1.f) && (gDrGapM > 0.f) && (gDrHands > 1)) {
 		const float shareK = ai.GetTunable("apex_role_share", TUNE_ROLE_SHARE);
-		gDrQuota = int(ceil(float(gDrHands) * shareK * gDrGapM / gDrNeedM));
+		gDrQuota = GunpCount(int(ceil(float(gDrHands) * shareK * gDrGapM / gDrNeedM)));
 	}
 }
 

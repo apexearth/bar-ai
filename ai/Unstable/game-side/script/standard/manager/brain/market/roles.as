@@ -108,7 +108,7 @@ void ConRoleRecount()
 	}
 	for (int c = 0; c < CAT_N; ++c)
 		gRoleQuota[c] = (sum > 0.f)
-				? int(gRoleNeed[c] / sum * float(roled) + 0.5f) : 0;
+				? int(gRoleNeed[c] / sum * float(roled) * ((c == CAT_DEFENCE) ? gGunpMul : 1.f) + 0.5f) : 0;
 }
 
 // A ROLE RESERVES A HAND FOR WORK WORTH DOING, NOT FOR ANY WORK. A category

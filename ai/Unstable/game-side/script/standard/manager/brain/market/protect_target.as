@@ -243,6 +243,16 @@ float FoeReachShare(const AIFloat3& in pos, bool walkers = false)
 // The mex-guard head's v (protect_nn.as MexGuardDecide): x the far term here, / the
 // coverall loss gate in decide.as. 1x = the rule.
 float gMexgMul = 1.f;
+// The forced-gun head's v (protect_nn.as GunPushDecide): x the guns the forced
+// defence pushes want (basefront, comself, cover's floor, the defence role, defrole).
+float gGunpMul = 1.f;
+// A count c x v, rounded by one dither held all game: c at v = 1, and below
+// v = 1 a lone gun is bought in a share v of games, not always (ceil) or never (floor).
+float gGunpU = 0.f;
+int GunpCount(int c)
+{
+	return (c <= 0) ? c : int(float(c) * gGunpMul + gGunpU);
+}
 
 float MexGunFwd(const AIFloat3& in pos)
 {

@@ -462,4 +462,22 @@ const float NNMG_TRUST = 0.f;
 const float NNMG_LO = 0.f;
 const float NNMG_HI = 0.f;
 
+// the forced-gun net (protect_nn.as)
+const bool NNGP_ON = false;
+const string NNGP_STATE = "";
+const int NNGP_S = 0;
+const int NNGP_O = 0;
+const int NNGP_H = 0;
+const array<float> NNGP_XM = {};
+const array<float> NNGP_XS = {};
+const array<float> NNGP_W1 = {};
+const array<float> NNGP_B1 = {};
+const array<float> NNGP_W2 = {};
+const array<float> NNGP_B2 = {};
+const array<float> NNGP_WO = {};
+const float NNGP_BO = 0.f;
+const float NNGP_TRUST = 0.f;
+const float NNGP_LO = 0.f;
+const float NNGP_HI = 0.f;
+
 }  // namespace Market

@@ -1115,7 +1115,7 @@ void BaseFrontRefresh()
 	}
 	if (byDanger) {
 		const float gunS = Military::DgStr(int(gBfMedium.id));
-		const int need = int(ceil(gapS / ((gunS > 0.1f) ? gunS : 0.1f))) - inFlight;
+		const int need = GunpCount(int(ceil(gapS / ((gunS > 0.1f) ? gunS : 0.1f)))) - inFlight;
 		gBfWanted = owned + ((need > 0) ? need : 0);
 	} else {
 		const float gunM = Catalog::gCostM[int(gBfMedium.id)];
@@ -1123,7 +1123,7 @@ void BaseFrontRefresh()
 		float threatM = Military::EnemyArmyCost();
 		if (Military::OurArmyNow() > threatM)
 			threatM = Military::OurArmyNow();
-		gBfWanted = int(ceil(threatM / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f)));
+		gBfWanted = GunpCount(int(ceil(threatM / ((gunM * trade > 1.f) ? (gunM * trade) : 1.f))));
 	}
 	if (owned >= gBfWanted)
 		gBfSlot = -1;

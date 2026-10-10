@@ -430,7 +430,7 @@ float NnUniform(float lo, float hi)
 }
 
 // CONTINUOUS HEADS (his 2026-10-09: a quantity is never chopped into steps): con,
-// mex, cap, acap, scap, ecap, esc, mass, odds, defamt, mexg, aplant. Each names a range
+// mex, cap, acap, scap, ecap, esc, mass, odds, defamt, mexg, gunp, aplant. Each names a range
 // and the rule's value; the net scores a candidate v from the state, the head's
 // fields, v and the rule's value. An explorer holds each head, at even odds, at
 // ONE uniform draw all game (game=1); otherwise it draws uniformly with odds
