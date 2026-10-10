@@ -930,6 +930,16 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		&& (circuit->GetTunable("apex_con_scratch_gate", 1.f) > 0.5f)
 		&& (healthPerc > circuit->GetTunable("apex_con_stand_floor", 0.5f)))
 	{
+		// Escort cover (guards.as EscortCoverSweep): above the floor its escort fights this one.
+		if (unit->IsAttrAny(CCircuitDef::AttrMask::RET_FIGHT)) {
+			static int coverLogFrame = 0;
+			if (frame >= coverLogFrame) {
+				coverLogFrame = frame + FRAMES_PER_SEC * 10;
+				circuit->LOG("apex: con-covered t=%i %s hp=%.2f -- escort outguns, working on",
+						circuit->GetTeamId(), cdef->GetDef()->GetName(), healthPerc);
+			}
+			return;
+		}
 		const AIFloat3& pos = unit->GetPos(frame);
 		bool danger = false;
 		if ((attacker != nullptr) && (attacker->GetCircuitDef() != nullptr)

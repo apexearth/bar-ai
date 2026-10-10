@@ -306,6 +306,7 @@ so the net sees big variance; draws are uniform, linear, never log.
 | scap | econet | the late scout cap | 0.25-8 |
 | esc | escnet | escorts per constructor, owed escort metal, the escorts-at-once cap and the escort buy's gain in the factory (MATCH = 1x; LIGHT was 0.5, HEAVY 2) | 0-8 |
 | ecap | escnet | the escorts-at-once cap | 0.25-10 |
+| cfear | escnet | the enemy-to-escort odds (EscortOdds: worse of armed metal by StrRatio and threat map vs escort surface threat) under which an escorted con still takes, keeps and works a site; also flags the con for the C++ guard and damage retreat; prefix NNCF; the esc head's own fields | 0.25-8 |
 | mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
 | defamt | protect_nn | DefenceTarget | 0.25-8 |
 | mexg | protect_nn | MexGunsWanted's far term (guns a mex earns by its reach from them), and divides the coverall push's loss gate (TUNE_MEX_LOSS_COVER / v); every 30 s; prefix NNMG; own fields: mexes, unguarded (no gun in reach), guns covering a mex, mexes killed in 3 min, loss share, mean reach, enemy raid metal, army at home, minute | 0.25-8 |

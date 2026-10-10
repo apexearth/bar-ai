@@ -1675,6 +1675,11 @@ void CBuilderManager::UpdateRezGuard()
 		if (slack >= 0.f) {
 			return r;  // nothing can reach this spot before we would see it coming
 		}
+		// The script's escort cover (guards.as EscortCoverSweep): its escort outguns what is here.
+		if (unit->IsAttrAny(CCircuitDef::AttrMask::RET_FIGHT)) {
+			++conGuardCovered;
+			return r;
+		}
 		r = 1;
 		worst = std::min(worst, slack);
 
@@ -1784,12 +1789,13 @@ void CBuilderManager::UpdateRezGuard()
 
 	if (frame >= rezGuardLogAt) {
 		rezGuardLogAt = frame + FRAMES_PER_SEC * 60;
-		circuit->LOG("apex: rez-guard t=%i bots=%u pressed=%u moves=%u worst=%.0f cons=%u cpressed=%u cmoves=%u",
+		circuit->LOG("apex: rez-guard t=%i bots=%u pressed=%u moves=%u worst=%.0f cons=%u cpressed=%u cmoves=%u ccovered=%u",
 				circuit->GetTeamId(), (unsigned)rezzers.size(),
 				rezGuardPressed, rezGuardMoves, rezGuardWorst,
-				(unsigned)workers.size(), conGuardPressed, conGuardMoves);
+				(unsigned)workers.size(), conGuardPressed, conGuardMoves, conGuardCovered);
 		conGuardPressed = 0;
 		conGuardMoves = 0;
+		conGuardCovered = 0;
 		rezGuardPressed = 0;
 		rezGuardMoves = 0;
 		rezGuardWorst = 0.f;

@@ -370,6 +370,7 @@ private:
 	size_t workerGuardNext = 0;                 // the constructor slice the guard reads next
 	unsigned int conGuardPressed = 0;
 	unsigned int conGuardMoves = 0;
+	unsigned int conGuardCovered = 0;
 
 	Handlers2 createdHandler;
 	Handlers1 finishedHandler;
