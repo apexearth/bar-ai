@@ -1376,6 +1376,10 @@ def nn_results(last=None, hours=None):
         if hit is None or hit[1] is None:
             continue
         _mt, outcome, opp, disc = hit
+        if is_rules_only(m):
+            c = out.setdefault((opp, "rules only (old -b0 control)"), {"win": 0, "loss": 0, "draw": 0})
+            c[outcome] += 1
+            continue
         if opp == "ourselves":
             c = out.setdefault((opp, disc), {"win": 0, "loss": 0, "draw": 0})
             c[outcome] += 1
@@ -1438,12 +1442,359 @@ def nn_state(last=None, hours=None):
     except (OSError, ValueError):
         samples = []
     return view[1] | {"metrics_total": met["n"], "status": status, "age": age,
-                      "running": running, "samples": samples}
+                      "running": running, "samples": samples, "policy": nn_policy(games, gen),
+                      "stage": curriculum_stage()}
+
+
+def is_rules_only(path):
+    """A -b0 batch ran apex_nn_blend=0: the rules alone. The loops stopped running them
+    on 10-10, so they are history, never part of how the AI plays now."""
+    return os.path.basename(os.path.dirname(os.path.dirname(str(path)))).endswith("-b0")
+
+
+def mtime_cached(cache, path, parse):
+    """parse(path) again only when the file's mtime or size changed."""
+    try:
+        st = os.stat(path)
+        sig = (st.st_mtime, st.st_size)
+    except OSError:
+        sig = None
+    if cache.get("sig") != sig or "val" not in cache:
+        try:
+            cache["val"] = parse(path) if sig else None
+            cache["sig"] = sig
+        except (OSError, ValueError):
+            cache.setdefault("val", None)   # caught mid-write: keep the last good read
+    return cache["val"]
+
+
+NN_WEIGHTS_CACHE = {}
+RE_W_LABEL = re.compile(r"^// the (.+?)(?: net)? \(", re.M)
+RE_W_CONST = re.compile(r"^const (?:bool|float|array<float>|array<string>|int) (NN[A-Z_]*?)_(ON|TRUST|LO|HI|KIND|C|TAGS|WIN) = \{?([^;}\n]*)\}?;", re.M)
+RE_W_EARNED = re.compile(r"^// earned (NN[A-Z]*)_TRUST = \{?([^;}\n]*)\}?", re.M)
+
+
+def nn_weights_parse(path):
+    """The deployed nnweights.as, minus its weights: per net whether it decides (ON), the
+    trust it plays with, what it has earned, and the policy centres."""
+    txt = Path(path).read_text(encoding="utf-8", errors="replace")
+    labels = [(m.start(), m.group(1)) for m in RE_W_LABEL.finditer(txt)]
+    nets, order, glob_ = {}, [], {}
+
+    def floats(s):
+        out = []
+        for v in s.split(","):
+            v = v.strip().rstrip("f")
+            try:
+                out.append(float(v))
+            except ValueError:
+                pass
+        return out
+    for m in RE_W_CONST.finditer(txt):
+        pre, key, val = m.group(1), m.group(2), m.group(3)
+        if pre in ("NN_TRUST", "NN_CTR"):
+            glob_[pre + "_" + key] = val
+            continue
+        if pre not in nets:
+            lab = [l for pos, l in labels if pos < m.start()]
+            nets[pre] = {"prefix": pre, "name": "builder" if pre == "NNW" else (lab[-1] if lab else pre)}
+            order.append(pre)
+        n = nets[pre]
+        if key == "ON":
+            n["on"] = val.strip() == "true"
+        elif key == "TRUST":
+            vals = floats(val)
+            n["trust"] = max(vals) if vals else 0.0
+        elif key in ("LO", "HI"):
+            n[key.lower()] = (floats(val) or [None])[0]
+    for pre, val in RE_W_EARNED.findall(txt):
+        vals = floats(val)
+        if pre in nets and vals:
+            nets[pre]["earned"] = max(vals)
+            if len(vals) > 1:
+                nets[pre]["earned_each"] = vals
+    tags = [t.strip().strip('"') for t in glob_.get("NN_CTR_TAGS", "").split(",") if t.strip()]
+    cs = floats(glob_.get("NN_CTR_C", ""))
+    win = floats(glob_.get("NN_CTR_WIN", ""))
+    kind = floats(glob_.get("NN_TRUST_KIND", ""))
+    # a net without a _TRUST (the BARb prior) is not a decision net
+    return {"nets": [nets[p] for p in order if "trust" in nets[p]],
+            "ctr": dict(zip(tags, cs)), "win": win[0] if win else None,
+            "kind": int(kind[0]) if kind else None, "at": os.path.getmtime(path)}
+
+
+def nn_weights():
+    if "path" not in NN_WEIGHTS_CACHE:
+        try:
+            import bar_env
+            NN_WEIGHTS_CACHE["path"] = (bar_env.load().skirmish_dir("Apexnnlog", "lane-nnlog")
+                                        / "script/standard/manager/brain/market/nnweights.as")
+        except Exception:
+            return None
+    return mtime_cached(NN_WEIGHTS_CACHE, NN_WEIGHTS_CACHE["path"], nn_weights_parse)
+
+
+NN_HEADS_CACHE = {}
+
+
+def nn_heads_parse(path):
+    """{tag: {prefix, val}} from nntrain.py's head classes: which net a head tag is, and
+    whether it is a continuous (policy-centre) head."""
+    heads, cls, base = {}, None, None
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for ln in fh:
+            m = re.match(r"class (\w+)\((\w+)\):", ln)
+            if m:
+                cls, base = m.group(1), m.group(2)
+                cur = None
+                continue
+            m = re.match(r"    NAME = \"(\w+)\"", ln)
+            if m and cls:
+                cur = heads.setdefault(m.group(1), {"val": base == "ValHead"})
+                continue
+            m = re.match(r"    PREFIX = \"(\w+)\"", ln)
+            if m and cls and cur is not None:
+                cur["prefix"] = m.group(1)
+    return heads
+
+
+def nn_heads():
+    return mtime_cached(NN_HEADS_CACHE, TOOLS / "nntrain.py", nn_heads_parse) or {}
+
+
+CENTRE_FILE = REPO / "runtime" / "nn" / "centre.json"
+CENTRE_LOG = REPO / "runtime" / "nntrain-loop.log"
+CENTRE_HIST_FILE = REPO / "runtime" / "dashboard" / "centre_history.jsonl"
+CENTRE_CACHE = {}
+RE_CENTRE = re.compile(r"^centre (\w+) (-?[\d.]+) -> (-?[\d.]+) target=(-?[\d.]+) \(q25 (-?[\d.]+) q75 (-?[\d.]+)\) "
+                       r"at-edge=(\d+)% range=(-?[\d.]+)-(-?[\d.]+) src=(\S*)")
+CENTRE_KEYS = ("head", "c0", "c", "target", "q25", "q75", "edge", "lo", "hi", "src")
+CENTRE_HIST = {"loaded": False, "pos": 0, "born": None, "seen": set(), "steps": {}}
+CENTRE_LOCK = threading.Lock()
+
+
+def centre_watch():
+    """The trainer's centre lines, read as they are appended. The log is truncated when
+    the trainer restarts, so every step is kept in CENTRE_HIST_FILE as it is first seen."""
+    h = CENTRE_HIST
+    with CENTRE_LOCK:
+        if not h["loaded"]:
+            h["loaded"] = True
+            try:
+                with open(CENTRE_HIST_FILE, encoding="utf-8") as fh:
+                    for ln in fh:
+                        try:
+                            e = json.loads(ln)
+                        except ValueError:
+                            continue
+                        k = tuple(e.get(x) for x in CENTRE_KEYS)
+                        if k not in h["seen"]:
+                            h["seen"].add(k)
+                            h["steps"].setdefault(e["head"], []).append(e)
+            except OSError:
+                pass
+        try:
+            st = os.stat(CENTRE_LOG)
+            with open(CENTRE_LOG, "rb") as fh:
+                head = fh.read(64)   # a restarted trainer's log can outgrow the old offset between reads
+            size, born = st.st_size, (st.st_ctime, head)
+        except OSError:
+            return h
+        if size < h["pos"] or born != h["born"]:
+            h["pos"], h["born"] = 0, born
+        if size <= h["pos"]:
+            return h
+        with open(CENTRE_LOG, "rb") as fh:
+            fh.seek(h["pos"])
+            data = fh.read(size - h["pos"])
+        end = data.rfind(b"\n") + 1
+        h["pos"] += end
+        new = []
+        for ln in data[:end].decode("utf-8", errors="replace").splitlines():
+            if not ln.startswith("centre "):
+                continue
+            m = RE_CENTRE.match(ln)
+            if not m:
+                continue
+            g = m.groups()
+            e = {"head": g[0], "c0": float(g[1]), "c": float(g[2]), "target": float(g[3]),
+                 "q25": float(g[4]), "q75": float(g[5]), "edge": int(g[6]),
+                 "lo": float(g[7]), "hi": float(g[8]), "src": g[9]}
+            k = tuple(e[x] for x in CENTRE_KEYS)
+            if k in h["seen"]:
+                continue   # re-read after a restart of this dashboard
+            h["seen"].add(k)
+            e["at"] = round(time.time())
+            h["steps"].setdefault(e["head"], []).append(e)
+            new.append(e)
+        if new:
+            try:
+                CENTRE_HIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with open(CENTRE_HIST_FILE, "a", encoding="utf-8") as fh:
+                    fh.write("".join(json.dumps(e) + "\n" for e in new))
+            except OSError:
+                pass
+        return h
+
+
+def centre_loop():
+    while True:
+        try:
+            centre_watch()
+        except Exception:
+            pass
+        time.sleep(20)
+
+
+NN_VAL_GAMES = {}
+NN_VAL_KEEP = 5
+RE_NNVAL_KV = re.compile(r"(\w+)=(\S+)")
+
+
+def nn_val_game(m):
+    """Per head of one game: every decision's rule value, the value played, the net's own
+    pick and the centre it was clamped to. Read once per finished game."""
+    hit = NN_VAL_GAMES.get(m)
+    if hit is not None:
+        return hit
+    heads, off = {}, {}
+    try:
+        with open(os.path.join(m, "infolog.txt"), encoding="utf-8", errors="replace") as fh:
+            for ln in fh:
+                i = ln.find("apex: nnval head=")
+                if i < 0:
+                    j = ln.find("apex: nn-head OFF ")
+                    if j >= 0:
+                        # a net that refused its weights for their shape played the rule all game
+                        kv = dict(RE_NNVAL_KV.findall(ln[j + 18:].split(" own=")[0]))
+                        name = kv.get("head") or ("own=" + ln.split(" own=", 1)[1].strip() if " own=" in ln else "?")
+                        off[name] = "layout %s, inputs %s" % (kv.get("layout", "?"), kv.get("S", "?"))
+                    continue
+                kv = dict(RE_NNVAL_KV.findall(ln[i + 12:ln.find(" |", i)]))
+                try:
+                    d = heads.setdefault(kv["head"], {"rule": [], "v": [], "vnet": [], "ctr": None,
+                                                      "lo": float(kv["lo"]), "hi": float(kv["hi"])})
+                    d["rule"].append(float(kv["rule"]))
+                    d["v"].append(float(kv["v"]))
+                    if kv.get("vnet", "-") != "-":
+                        d["vnet"].append(float(kv["vnet"]))
+                    if kv.get("ctr", "-") != "-":
+                        d["ctr"] = float(kv["ctr"])
+                except (KeyError, ValueError):
+                    continue
+    except OSError:
+        pass
+    hit = {"heads": heads, "off": off}
+    NN_VAL_GAMES[m] = hit
+    return hit
+
+
+def nn_val_recent(games, gen):
+    """{tag: medians} over the last NN_VAL_KEEP finished games the nets played."""
+    if NN_VAL_GAMES.get("_gen") == gen:
+        return NN_VAL_GAMES["_view"]
+    recent = [p for _mt, p in games if not is_rules_only(p)][-NN_VAL_KEEP:]
+    for k in [k for k in NN_VAL_GAMES if k not in recent and not k.startswith("_")]:
+        del NN_VAL_GAMES[k]
+    pool, off = {}, {}
+    for p in recent:
+        g = nn_val_game(p)
+        off.update(g["off"])
+        for tag, d in g["heads"].items():
+            q = pool.setdefault(tag, {"rule": [], "v": [], "vnet": [], "ctr": None, "lo": d["lo"], "hi": d["hi"]})
+            for k in ("rule", "v", "vnet"):
+                q[k] += d[k]
+            if d["ctr"] is not None:
+                q["ctr"] = d["ctr"]
+    w = (nn_weights() or {}).get("win") or 0.25
+    view = {}
+    for tag, q in pool.items():
+        med = lambda xs: sorted(xs)[len(xs) // 2] if xs else None
+        out = None
+        if q["ctr"] is not None and q["vnet"]:
+            cw = w * max(q["ctr"], 0.25)
+            out = sum(1 for v in q["vnet"] if v < q["ctr"] - cw - 1e-4 or v > q["ctr"] + cw + 1e-4) / len(q["vnet"])
+        view[tag] = {"rule": med(q["rule"]), "v": med(q["v"]), "vnet": med(q["vnet"]), "n": len(q["rule"]),
+                     "net_n": len(q["vnet"]), "ctr_game": q["ctr"], "outside": out, "lo": q["lo"], "hi": q["hi"]}
+    NN_VAL_GAMES["_gen"], NN_VAL_GAMES["_view"] = gen, {"games": len(recent), "heads": view, "off": off}
+    return NN_VAL_GAMES["_view"]
+
+
+NN_POLICY_SPARK = 60
+
+
+def nn_policy(games, gen):
+    """The Net tab's policy view: every net's decide/earned row, and per continuous head
+    the rule's value, its centre and clamp window, the net's last target and the centre's path."""
+    w = nn_weights() or {"nets": [], "ctr": {}, "win": None, "kind": None, "at": None}
+    cs = mtime_cached(CENTRE_CACHE, CENTRE_FILE, lambda p: json.loads(Path(p).read_text(encoding="utf-8"))) or {}
+    hist = centre_watch()["steps"]
+    vals = nn_val_recent(games, gen)
+    heads_meta = nn_heads()
+    by_prefix = {n["prefix"]: n for n in w["nets"]}
+    win = w["win"] if w["win"] is not None else 0.25
+    tags = [t for t, h in heads_meta.items() if h.get("val")]
+    tags += [t for t in list(cs) + list(hist) + list(vals["heads"]) if t not in tags and not t.startswith("_")]
+    heads = []
+    for t in tags:
+        net = by_prefix.get((heads_meta.get(t) or {}).get("prefix"), {})
+        steps = hist.get(t, [])
+        last = steps[-1] if steps else None
+        gv = vals["heads"].get(t) or {}
+        c = cs.get(t)
+        lo = last["lo"] if last else gv.get("lo")
+        hi = last["hi"] if last else gv.get("hi")
+        winlo = winhi = None
+        if c is not None:
+            cw = win * max(c, 0.25)
+            winlo, winhi = c - cw, c + cw
+            if lo is not None:
+                winlo = max(lo, winlo)
+            if hi is not None:
+                winhi = min(hi, winhi)
+        b = max(1, -(-len(steps) // NN_POLICY_SPARK))
+        spark = [steps[min(i + b, len(steps)) - 1]["c"] for i in range(0, len(steps), b)]
+        heads.append({"tag": t, "name": net.get("name", t), "on": net.get("on"), "earned": net.get("earned"),
+                      "centre": c, "exported": w["ctr"].get(t), "win": [winlo, winhi], "range": [lo, hi],
+                      "rule": gv.get("rule"), "played": gv.get("v"), "vnet": gv.get("vnet"),
+                      "outside": gv.get("outside"), "decisions": gv.get("n", 0),
+                      "net_n": gv.get("net_n", 0), "off": vals["off"].get(t),
+                      "steps": len(steps), "spark": spark,
+                      "first": steps[0]["c0"] if steps else None,
+                      "last": {k: last[k] for k in ("target", "q25", "q75", "edge", "src", "at")} if last else None})
+    since = cs.get("_since")
+    return {"nets": w["nets"], "kind": w["kind"], "weights_at": w["at"], "win": win,
+            "since": since, "heads": heads, "val_games": vals["games"],
+            "off_other": {k: v for k, v in vals["off"].items() if k.startswith("own=")}}
+
+
+def curriculum_stage():
+    """The training curriculum's current stage (runtime/nn/curriculum.json); cheap."""
+    import curriculum
+    st = curriculum.load()
+    return {"minutes": st["minutes"], "game_minutes": st["minutes"] + curriculum.PAD,
+            "since": st["since"], "judged": [curriculum.WIN_FROM, st["minutes"] + curriculum.PAD - 1],
+            "need": curriculum.NEED, "pass": curriculum.PASS,
+            "history": st.get("history", [])[-6:]}
+
+
+CURRIC_JUDGE = {}
+
+
+def curriculum_judge():
+    """curriculum.judge() for the current stage: again when the Net tab has seen a new game,
+    else at most once a minute (rescanning the batches here would cost every Progress load)."""
+    import curriculum
+    st = curriculum.load()
+    key = (st["since"], st["minutes"], NN_GAMES["gen"], int(time.time() // 60))
+    if CURRIC_JUDGE.get("key") != key:
+        _minute, res = curriculum.judge(st)
+        CURRIC_JUDGE.update(key=key, val=res)
+    return CURRIC_JUDGE["val"]
 
 
 PROGRESS_LOCK = threading.Lock()
 PROGRESS_VIEW = {}
-PROGRESS_TRUST = [0.0, None]
 
 
 def progress_since(since):
@@ -1466,16 +1817,23 @@ def progress_view(q):
         since = progress_since(q.get("since"))
         games = progress.collect(since, q.get("all") == "1", q.get("bonus") or None,
                                  q.get("map") or None, q.get("regime") or None)
+        # the -b0 rules-only control stopped 10-10; it is shown only when asked for, alone
+        b0 = q.get("b0") == "1"
+        games = [g for g in games if g["tournament"].endswith("-b0") == b0]
         groups = int(q["groups"]) if (q.get("groups") or "").isdigit() else None
-        key = (since, q.get("all"), q.get("bonus"), q.get("map"), q.get("regime"), q.get("by"), groups,
+        key = (since, q.get("all"), q.get("bonus"), q.get("map"), q.get("regime"), q.get("by"), groups, b0,
                len(games), (games[-1]["tournament"], games[-1]["match"]) if games else None)
-        hit = PROGRESS_VIEW.get(key[:7])
+        hit = PROGRESS_VIEW.get(key[:8])
         if hit is None or hit[0] != key:
             hit = (key, progress.summary(games, q.get("by") or "batch", last_groups=groups))
-            PROGRESS_VIEW[key[:7]] = hit
-        if time.time() - PROGRESS_TRUST[0] > 30:
-            PROGRESS_TRUST[:] = [time.time(), progress.trust()]
-        return hit[1] | {"trust": PROGRESS_TRUST[1], "since": since}
+            PROGRESS_VIEW[key[:8]] = hit
+        w = nn_weights() or {"nets": [], "kind": None}
+        try:
+            judge = curriculum_judge()
+        except Exception as e:
+            judge = {"error": str(e)}
+        return hit[1] | {"nets": w["nets"], "kind": w["kind"], "since": since, "rules_only": b0,
+                         "stage": curriculum_stage(), "judge": judge}
 
 
 def nn_action(act):
@@ -2015,7 +2373,8 @@ def main():
     REMOTE = a.remote
     srv = ThreadingHTTPServer(("0.0.0.0" if REMOTE else "127.0.0.1", a.port), Handler)
     threading.Thread(target=repeat_loop, daemon=True).start()
-    url = "http://127.0.0.1:%d" % a.port
+    threading.Thread(target=centre_loop, daemon=True).start()
+    url ="http://127.0.0.1:%d" % a.port
     print("bar-ai dashboard: %s   (Ctrl+C to stop)" % url)
     if REMOTE:
         print("  view-only from the tailnet: http://<this machine's tailscale name>:%d" % a.port)

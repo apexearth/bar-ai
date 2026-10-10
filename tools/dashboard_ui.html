@@ -84,6 +84,7 @@
     th, td { padding:5px 7px; }
     /* under 16px iOS zooms the page on focus */
     input, select, textarea { font-size:16px; }
+    select { max-width:100%; }
     button.act { padding:8px 14px; }
     #toast { left:10px; right:10px; bottom:10px; max-width:none; }
     .legend { flex-wrap:wrap; gap:6px 14px; }
@@ -165,9 +166,23 @@
       5 minutes have been played it becomes trainable. Each batch is predicted <b>before</b> the net trains on
       it, so every point below is data it had never seen. 1.0 is a perfect prediction; 0 is no better than
       guessing the average; below 0 is worse than that. All running games feed this one net.</div>
-    <div class="dim" style="margin-top:6px">To let it <b>play</b>: the trainer writes its weights into the logger
-      build every ~800 decisions, and every game started afterwards loads them. Add
-      <code>apex_nn_blend=1</code> to Modoptions on the Launch tab (0 = it only watches; 2 = it steers hard).</div>
+    <div class="dim" style="margin-top:6px">Every trained net <b>decides</b> in every game (since Oct 10 there
+      is no rules-only control). The trainer writes its weights into the logger build every ~800 decisions
+      and every game started afterwards loads them. A net that has not trained yet stays off and the rule plays.</div>
+  </div>
+  <div class="card">
+    <b>Policy centres</b> <span class="dim">&mdash; the continuous choices (how many constructors, how big a
+      pool, how much defence...). Each has a centre the trainer moves 2% per new game toward the value the net
+      rates best; in the game the net may only pick inside the window around it. The rule's value is where
+      every centre started.</span>
+    <div id="nn-stage" class="dim" style="margin-top:6px"></div>
+    <div id="nn-policy" style="margin-top:6px"></div>
+  </div>
+  <div class="card">
+    <b>Every net</b> <span class="dim">&mdash; "decides" is on for every trained net. "Earned" is a quality
+      score from games it had not seen: how well its idea of what a choice adds matched what it actually added
+      (0 = no better than the rule's view yet). It no longer sets how much the net plays.</span>
+    <div id="nn-nets" style="margin-top:6px"></div>
   </div>
   <div class="card">
     <div class="dim">How well it predicts the next 3 minutes of decisions it has not seen
@@ -190,8 +205,9 @@
     <div id="nn-table"></div>
   </div>
   <div class="card">
-    <div class="dim">How much say the net has, per kind of build (0 = the market price alone, 1 = the net alone).
-      Earned from unseen games: how well the net's view of what a choice adds matches what it actually added.</div>
+    <div class="dim">What the builder net has earned, per kind of build: how well its view of what a choice adds
+      matches what it actually added, on games it had not seen. A quality score only &mdash; the net decides
+      every kind it has trained on.</div>
     <div id="nn-trust"></div>
   </div>
   <div class="card">
@@ -210,6 +226,7 @@
       Since <select id="pg-since" onchange="loadProgress()">
         <option value="stage">this curriculum stage</option>
         <option value="24h">last 24 hours</option>
+        <option value="20261010-1535">nets decide + policy centres (Oct 10 15:35)</option>
         <option value="20261009-1325">new nets (Oct 9 13:25)</option>
         <option value="20261008-1232">even random bonus (Oct 8 12:32)</option>
         <option value="20261007">Oct 7</option>
@@ -220,6 +237,9 @@
       </select>
       Games <select id="pg-all" onchange="loadProgress()">
         <option value="0">normal only</option><option value="1">with discovery</option>
+      </select>
+      AI <select id="pg-b0" onchange="loadProgress()">
+        <option value="0">nets deciding</option><option value="1">old rules-only control (-b0)</option>
       </select>
       Group by <select id="pg-by" onchange="loadProgress()">
         <option value="batch">batch</option><option value="day">day</option>
@@ -1812,15 +1832,83 @@ function nnTrust(trust, f) {
   f = f || {n: 0, trust: null, head_full: [], head_state: []};
   const avg = k => { const v = (f[k] || []).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const hf = avg("head_full"), hs = avg("head_state");
-  const fac = `<div style="margin:6px 0">Factory net: ${f.n} batches &middot; say `
+  const fac = `<div style="margin:6px 0">Factory net: ${f.n} batches &middot; earned `
     + `<b>${f.trust != null ? f.trust.toFixed(2) : "0.00"}</b>`
     + (hf != null ? ` &middot; unseen accuracy ${hf.toFixed(3)} (state only ${hs != null ? hs.toFixed(3) : "-"})` : "")
     + `</div>`;
   if (!trust) return fac + "<span class='dim'>builder kinds: not measured yet -- a kind needs a few hundred unseen decisions first</span>";
   const rows = Object.entries(trust).sort((a, b) => b[1] - a[1]);
-  return fac + "<table><thead><tr><th>Builder kind</th><th>Say</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
-    `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td><div style="background:var(--good);height:8px;width:${
-      Math.round(160 * Math.min(1, t))}px;border-radius:2px"></div></td></tr>`).join("") + "</tbody></table>";
+  return fac + "<table><thead><tr><th>Builder kind</th><th>Earned</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
+    `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td>${nnBar(t)}</td></tr>`).join("") + "</tbody></table>";
+}
+function nnBar(t) {
+  return `<div style="background:var(--good);height:8px;width:${Math.round(120 * Math.max(0, Math.min(1, t || 0)))}px;border-radius:2px"></div>`;
+}
+const nnNum = (v, d) => (v == null || !isFinite(v)) ? "&ndash;" : Number(v).toFixed(d == null ? 2 : d);
+function nnSpark(ys, lo, hi) {
+  if (!ys || ys.length < 2) return "<span class='dim'>" + (ys && ys.length ? "1 step" : "no steps yet") + "</span>";
+  const W = 90, H = 22;
+  let a = Math.min(...ys), b = Math.max(...ys);
+  if (b - a < 1e-6) { a -= 0.05; b += 0.05; }
+  const pts = ys.map((v, i) => (W * i / (ys.length - 1)).toFixed(1) + "," + (H - 2 - (H - 4) * (v - a) / (b - a)).toFixed(1)).join(" ");
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"><polyline points="${pts}" fill="none" style="stroke:var(--accent)" stroke-width="1.5"/></svg>`
+    + ` <span class="dim mono">${a.toFixed(2)}&ndash;${b.toFixed(2)}</span>`;
+}
+function nnStage(s) {
+  if (!s) return "";
+  const t = String(s.since || "").replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$2-$3 $4:$5");
+  return `Curriculum: <b>${s.game_minutes}-minute games</b> since ${esc(t)}, judged on each game's mean edge from minute `
+    + `${s.judged[0]} to ${s.judged[1]} (passes at eco and mex edge &ge; ${nnNum(s.pass)} over the last ${s.need["1v1"]} 1v1 and ${s.need["2v2"]} 2v2 games). `
+    + `Standing on the Progress tab.`;
+}
+function nnPolicy(p) {
+  if (!p || !p.heads || !p.heads.length) return "<span class='dim'>no continuous heads found</span>";
+  const ago = s => { if (!s) return ""; const m = Math.round((Date.now() / 1000 - s) / 60);
+    return m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago"; };
+  let h = `<div class="dim" style="margin-bottom:4px">Rule, net and played: medians over the last ${p.val_games} games the nets played. `
+    + `Centres moving since ${p.since ? esc(new Date(p.since * 1000).toLocaleString()) : "&ndash;"}; window = centre &plusmn; ${Math.round(100 * p.win)}%. `
+    + `A target pinned at the edge of the range is the net extrapolating where it has no data, not evidence.</div>`;
+  h += "<table><thead><tr><th>Choice</th><th>Rule</th><th>Centre</th><th>Window</th><th>Net wants</th><th>Played</th>"
+    + "<th>Last target</th><th>At edge</th><th>Centre over steps</th></tr></thead><tbody>";
+  for (const x of p.heads) {
+    const name = `${esc(x.name)} <span class="dim mono">${esc(x.tag)}</span>`;
+    if (x.on === false || x.centre == null) {
+      const why = x.on === false ? "not trained yet: the rule plays" : "no centre yet: the net plays its pick unclamped";
+      h += `<tr><td>${name}</td><td>${nnNum(x.rule)}</td><td colspan="7" class="dim">${why}</td></tr>`;
+      continue;
+    }
+    const exp = (x.exported != null && Math.abs(x.exported - x.centre) > 1e-3)
+      ? ` <span class="dim" title="the deployed weights still carry this centre; the next export brings the new one">(game: ${nnNum(x.exported)})</span>` : "";
+    const want = x.off ? `<span class="loss" title="the net refused its weights in game, so the rule played">off: ${esc(x.off)}</span>`
+      : !x.net_n ? "<span class='dim'>&ndash;</span>"
+      : nnNum(x.vnet) + (x.outside != null ? ` <span class="${x.outside > 0.5 ? "loss" : "dim"}" title="share of the net's picks outside the window (clamped)">${Math.round(100 * x.outside)}% out</span>` : "");
+    const l = x.last;
+    const tgt = l ? `${nnNum(l.target)} <span class="dim">(${nnNum(l.q25)}&ndash;${nnNum(l.q75)}, ${ago(l.at)})</span>` : "<span class='dim'>&ndash;</span>";
+    const edge = l ? `<span class="${l.edge >= 50 ? "loss" : ""}">${l.edge}%</span>` : "<span class='dim'>&ndash;</span>";
+    const moved = (x.first != null && x.steps) ? ` <span class="dim">${x.steps} steps from ${nnNum(x.first)}</span>` : "";
+    h += `<tr><td>${name}</td><td>${nnNum(x.rule)}</td><td><b>${nnNum(x.centre)}</b>${exp}</td>`
+      + `<td class="mono">${nnNum(x.win[0])}&ndash;${nnNum(x.win[1])} <span class="dim">of ${nnNum(x.range[0])}&ndash;${nnNum(x.range[1])}</span></td>`
+      + `<td>${want}</td><td>${nnNum(x.played)}</td><td>${tgt}</td><td>${edge}</td><td>${nnSpark(x.spark)}${moved}</td></tr>`;
+  }
+  return h + "</tbody></table>";
+}
+function nnNets(p) {
+  if (!p || !p.nets || !p.nets.length) return "<span class='dim'>no deployed weights found</span>";
+  const nets = p.nets.slice().sort((a, b) => (b.on - a.on) || ((b.earned || 0) - (a.earned || 0)));
+  const on = nets.filter(n => n.on).length;
+  const other = Object.entries(p.off_other || {});
+  let h = `<div class="dim" style="margin-bottom:4px">${on} of ${nets.length} nets decide`
+    + (p.weights_at ? ` &middot; weights written ${esc(new Date(p.weights_at * 1000).toLocaleTimeString())}` : "")
+    + (p.kind != null && p.kind < 2 ? ` &middot; <span class="loss">old trust kind ${p.kind}: the game ignores these nets</span>` : "") + "</div>";
+  if (other.length)
+    h += `<div class="loss" style="margin-bottom:4px">${other.length} net(s) refused their weights in recent games (the rule played): `
+      + other.map(([k, v]) => esc(k.slice(4)) + " (" + esc(v) + ")").join("; ") + "</div>";
+  h += "<table><thead><tr><th>Net</th><th>Decides</th><th>Earned</th><th></th></tr></thead><tbody>";
+  for (const n of nets)
+    h += `<tr><td>${esc(n.name)} <span class="dim mono">${esc(n.prefix)}</span></td>`
+      + `<td>${n.on ? "<span class='win'>yes</span>" : "<span class='dim'>no &mdash; untrained</span>"}</td>`
+      + `<td>${n.on ? nnNum(n.earned) : "<span class='dim'>&ndash;</span>"}</td><td>${n.on ? nnBar(n.earned) : ""}</td></tr>`;
+  return h + "</tbody></table>";
 }
 function nnSamples(s) {
   if (!s.length) return "<span class='dim'>no decisions yet</span>";
@@ -1873,6 +1961,9 @@ async function loadNet() {
     legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
     setHTML($("#nn-table"), nnTable(d.table));
     setHTML($("#nn-trust"), nnTrust(d.trust, d.fac));
+    setHTML($("#nn-stage"), nnStage(d.stage));
+    setHTML($("#nn-policy"), nnPolicy(d.policy));
+    setHTML($("#nn-nets"), nnNets(d.policy));
     setHTML($("#nn-samples"), nnSamples(d.samples || []));
     setHTML($("#nn-results"), nnResults(d.results || []));
     nnWinChart(d.normal_games || []);
@@ -1940,10 +2031,35 @@ function pgCell(x) {
                     : "rgba(224,108,108," + (0.15 + 0.6 * -t).toFixed(2) + ")";
   return "<td style='background:" + bg + ";text-align:right;font-family:var(--mono)'>" + v.toFixed(2) + "</td>";
 }
+// The curriculum's current stage and where its judged games stand (tools/curriculum.py).
+function pgStage(s, j) {
+  if (!s) return "";
+  const t = String(s.since || "").replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$1-$2-$3 $4:$5");
+  let h = "<div class='card'><b>Curriculum stage: " + s.game_minutes + "-minute games</b> <span class='dim'>since " + esc(t)
+    + ". Each game is scored by its mean edge from minute " + s.judged[0] + " to " + s.judged[1]
+    + "; the stage passes when the median eco and mex edge is at least " + s.pass.toFixed(2)
+    + " over the last games below, and again over the newer half of them.</span>";
+  if (j && j.error) return h + "<div class='loss'>" + esc(j.error) + "</div></div>";
+  h += "<table><tr><th>Loop</th><th>Games</th><th>Eco edge</th><th>Mex edge</th><th>Newer half eco</th><th>Newer half mex</th><th></th></tr>";
+  for (const [reg, r] of Object.entries(j || {})) {
+    h += "<tr><td>" + esc(reg) + "</td><td>" + r.n + " / " + r.need + "</td>"
+      + [r.all.eco, r.all.mex, r.recent.eco, r.recent.mex].map(pgCell).join("")
+      + "<td>" + (r.ok ? "<span class='win'>PASS</span>" : "<span class='dim'>" + (r.n < r.need ? "needs games" : "not yet") + "</span>") + "</td></tr>";
+  }
+  h += "</table>";
+  for (const [reg, r] of Object.entries(j || {}))
+    for (const [m, row] of Object.entries(r.curve || {}))
+      h += "<div class='dim mono' style='overflow-x:auto;white-space:nowrap'>" + esc(reg + " " + m + ": " + row) + "</div>";
+  const pad = s.game_minutes - s.minutes;
+  const hist = (s.history || []).map(x => (x.passed ? (x.minutes + pad) + "-minute games passed"
+      : "set " + (x.minutes + pad) + " &rarr; " + (x.to + pad) + "-minute games")
+    + " " + esc(String(x.passed || x.set || "").replace(/^\d{4}(\d\d)(\d\d)-(\d\d)(\d\d).*$/, "$1-$2 $3:$4"))).join(" &middot; ");
+  return h + (hist ? "<div class='dim' style='margin-top:4px'>Stage history: " + hist + "</div>" : "") + "</div>";
+}
 async function loadProgress() {
   if (!$("#tab-progress").classList.contains("on")) return;
   const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value
-    + "&regime=" + $("#pg-regime").value + "&groups=" + $("#pg-groups").value;
+    + "&regime=" + $("#pg-regime").value + "&groups=" + $("#pg-groups").value + "&b0=" + $("#pg-b0").value;
   let d;
   try { d = await api("/api/progress?" + q); }
   catch (e) { setHTML($("#pg-body"), "<div class='card'><span class='dim'>" + esc(e.message) + "</span></div>"); return; }
@@ -1953,12 +2069,17 @@ async function loadProgress() {
   const shown = d.groups.length - 1, total = d.groups_total ?? shown;
   let html = "<div class='dim' style='margin:0 0 6px 4px'>batches started since " + esc(since)
     + (shown < total ? " &middot; newest " + shown + " of " + total + " groups shown; ALL covers every one" : "") + "</div>";
-  const tr = d.trust || {nets: []}, says = tr.nets.filter(n => n.trust > 0).sort((a, b) => b.trust - a.trust);
-  html += "<div class='card'><b>Nets with a say</b> <span class='dim'>(honest trust: the share of its decisions a net plays; 0 = the rules play. " +
-    says.length + " of " + tr.nets.length + " nets" + (tr.kind === 2 ? "" : ", <span class='loss'>old trust kind " + tr.kind + ": nets ignored</span>") +
-    ")</span><div style='margin-top:6px'>" + (says.length ? says.map(n =>
-      "<span class='badge' style='margin-right:6px'>" + esc(n.name) + " " + n.trust.toFixed(2) + "</span>").join("")
-      : "<span class='dim'>none yet -- every decision is the rules (plus exploration in discovery games)</span>") + "</div></div>";
+  if (d.rules_only)
+    html += "<div class='card loss'>Showing the old rules-only control batches (-b0): the nets were switched off in these games. "
+      + "The loops stopped running them on Oct 10; this is history, not how the AI plays.</div>";
+  html += pgStage(d.stage, d.judge);
+  const nets = d.nets || [], on = nets.filter(n => n.on), earned = on.filter(n => (n.earned || 0) > 0).sort((a, b) => b.earned - a.earned);
+  html += "<div class='card'><b>Nets</b> <span class='dim'>" + on.length + " of " + nets.length + " decide (every trained net does)"
+    + (d.kind != null && d.kind < 2 ? ", <span class='loss'>old trust kind " + d.kind + ": the game ignores these nets</span>" : "")
+    + ". Earned is a quality score from games a net had not seen, not how much it plays.</span><div style='margin-top:6px'>"
+    + (earned.length ? earned.map(n => "<span class='badge' style='margin-right:6px'>" + esc(n.name) + " " + n.earned.toFixed(2) + "</span>").join("")
+      : "<span class='dim'>no net has earned above 0 yet</span>")
+    + (on.length > earned.length ? " <span class='dim'>+ " + (on.length - earned.length) + " deciding at earned 0</span>" : "") + "</div></div>";
   for (const [k, title] of PG_METRICS) {
     html += "<div class='card'><b>" + title + "</b><table>" + head + d.groups.map(g =>
       "<tr><td>" + esc(g.name) + "</td><td>" + g.n + "</td><td>" + g.w + "-" + g.l + "</td>" +
