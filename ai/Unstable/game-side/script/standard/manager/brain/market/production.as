@@ -2492,11 +2492,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// excluded, so a commander mex done before the lab's first order read the
 		// army at 0% and the first con waited behind 1-9 combat units (13 of 32
 		// Comet 1v1 seats, up to 5 min).
+		// The constructor head (econet.as) sizes the floor and the army share it yields to,
+		// target / v: a step at 1x left the head two behaviours, all cons or the rule.
 		const bool armyBehind = (Brain::gSpentTotal > 1.f)
 			&& (ConsOwnedAny() + ConsInFlightAny() > 0)
-			&& (Brain::ShareOf(Brain::ARMY) < Brain::TargetShare(Brain::ARMY));
-		// The constructor head (econet.as) sizes the floor; above 1x it holds while the army is behind.
-		const bool floorOn = !armyBehind || (gConFloorMul > 1.f);
+			&& (Brain::ShareOf(Brain::ARMY) * ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f)
+				< Brain::TargetShare(Brain::ARMY));
+		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
 		if ((consNeedA > 0) && floorOn) {

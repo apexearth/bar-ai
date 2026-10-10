@@ -556,7 +556,9 @@ float EscortGain(float fillS)
 	if (risk <= 0.f)
 		return 0.f;
 	const float horizon = (fillS > 1.f) ? fillS : 180.f;
-	return (risk / float(need)) / horizon;
+	// x the escort head's v (escnet.as), as the duty and the owed metal are: it moved
+	// who escorts but never how many were bought.
+	return gEscMul * (risk / float(need)) / horizon;
 }
 
 void EscortDiag()

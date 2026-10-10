@@ -4,8 +4,8 @@ namespace Market {
 // constructors vs army, and how hard we go out for extractors). Continuous heads
 // (NnValDecide), each a multiplier on today's rule value (1x), on a 30 s clock.
 //
-// con  -- ConsNeedAny's target x v. Above 1x the floor holds even while the army
-//         is behind its share; at or below it yields, as the rule does.
+// con  -- ConsNeedAny's target x v, and the floor yields only while the army's
+//         share is under its target / v (1x = the rule).
 // mex  -- every mex want's value x v before the draw; above 1x an open mex also
 //          comes before the forced guns (HOLD = 1x, the rule).
 // cap  -- the ground constructor pools x v of the base.
