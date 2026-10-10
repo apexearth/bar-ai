@@ -712,11 +712,16 @@ void ComDecideTick(CCircuitUnit@ u)
 	if (gComTickAt >= 0)
 		gComEffF[gComDec] += ai.frame - gComTickAt;
 	gComTickAt = ai.frame;
-	const bool hot = gCsThreat || (gComDec != COM_WORK);
-	if ((gComAssessAt >= 0) && (ai.frame - gComAssessAt < (hot ? SECOND : 5 * SECOND)))
+	const bool shipWas = gShip;
+	ComShipAssess(u);
+	const bool hot = gCsThreat || (gComDec != COM_WORK) || gShip;
+	if ((gComAssessAt >= 0) && (ai.frame - gComAssessAt < (hot ? SECOND : 5 * SECOND))
+		&& (gShip == shipWas))
 		return;
 	gComAssessAt = ai.frame;
 	ComAssess(u);
+	if (gShip)
+		gCsRule = COM_FIGHT;
 	const int dgo = u.DGunOrders();
 	if (gCsThreat && gCsDgReady && (gCsNearD >= 0.f) && (gCsNearD <= u.DGunRange())) {
 		++gComDgOpp;
@@ -760,7 +765,7 @@ void ComDecideTick(CCircuitUnit@ u)
 			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
 			+ " dgunOrders=" + u.DGunOrders() + " dgOpp=" + gComDgOpp + " dgMiss=" + gComDgMiss
-			+ " cower=" + gComCowerN + " stood=" + gComStandN
+			+ " cower=" + gComCowerN + " stood=" + gComStandN + " ship=" + gShipN + "/" + gShipSec
 			+ " hp=" + int(gCsHp * 100.f) + " now=" + ComOptName(gComDec)
 			+ " us avg=" + ((gComDecN > 0) ? int(gComUsSum / double(gComDecN)) : 0)
 			+ " max=" + int(gComUsMax));
@@ -779,11 +784,14 @@ void ComEnforce(CCircuitUnit@ u)
 	const int bt = (ty == int(Task::Type::BUILDER)) ? int(t.GetBuildType()) : -1;
 	if ((gComDec == COM_RETREAT) || (gComDec == COM_FIGHT)) {
 		// The engine's own retreat (he is hurt) heals him; overriding it each
-		// time it re-arms on damage left him standing between the two.
-		if (ty == int(Task::Type::RETREAT))
+		// time it re-arms on damage left him standing between the two. Not
+		// while the base goes down: his retreat line is 0 then, so it cannot re-arm.
+		const bool ship = gShip && (gComDec == COM_FIGHT);
+		if ((ty == int(Task::Type::RETREAT)) && !ship)
 			return;
-		// a fight lets work within his reach go on
+		// a fight lets work within his reach go on; with the base going down, a gun only
 		if ((gComDec == COM_FIGHT) && (bt >= 0) && (bt != int(Task::BuildType::PATROL))
+			&& (!ship || (bt == int(Task::BuildType::DEFENCE)))
 			&& (t.GetBuildPos().distance2D(gCsHere) <= u.circuitDef.GetBuildDistance() + 100.f))
 			return;
 		IUnitTask@ pt = ComDecisionTask(u);
@@ -884,12 +892,14 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			&& (held.GetBuildType() == Task::BuildType::PATROL);
 		// Close only on what he can catch; a raider comes to him, so a walk still
 		// carrying him off on the last withdrawal becomes a stand.
-		const bool close = gCsThreat && OnMap(gCsFoeAt)
-			&& (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)]) && !ComFar(gCsFoeAt);
+		// The base's attackers are on our ground and busy with it: no chase.
+		const bool ship = gShip && OnMap(gShipAt);
+		const bool close = ship || (gCsThreat && OnMap(gCsFoeAt)
+			&& (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)]) && !ComFar(gCsFoeAt));
 		const bool leaving = !close && onPatrol && OnMap(gComRetTo)
 			&& (held.GetBuildPos().distance2D(gComRetTo) < 300.f);
 		if (close || leaving) {
-			const AIFloat3 at = close ? gCsFoeAt : gCsHere;
+			const AIFloat3 at = ship ? gShipAt : (close ? gCsFoeAt : gCsHere);
 			if (close && onPatrol && (held.GetBuildPos().distance2D(at) < 300.f))
 				return held;
 			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, at, 15 * SECOND));
@@ -949,6 +959,11 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 // Called where COMMANDER LOST is logged: what the assessment said last.
 void ComDeathNote()
 {
+	if (gShipDef !is null) {
+		gShipDef.SetRetreat(gShipRetWas);
+		@gShipDef = null;
+	}
+	gShip = false;
 	AiLog(Factory::T() + "apex: com-death t=" + ai.teamId + " dec=" + ComOptName(gComDec)
 		+ " decAgo=" + ((ai.frame - gComDecAt) / SECOND) + "s rule=" + ComOptName(gCsRule)
 		+ " home=" + int(gCsHomeD) + " job=" + gCsJob + " withdraw=" + gComWithdrawN

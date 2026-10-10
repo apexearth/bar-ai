@@ -65,6 +65,7 @@
 #include "market/nnweights.as"      // the value net, written by tools/nntrain.py into the deployed copy
 #include "market/nnlog.as"          // the decision record a value net trains on
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
+#include "market/comship.as"        // the base dying with its defence beaten: he steps in, never runs
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
 #include "market/protect_nn.as"     // leaks, and static defence's amount and site as recorded draws
 #include "market/protect_nntype.as" // which gun class a ground-defence want builds, as a recorded draw
