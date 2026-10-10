@@ -724,3 +724,15 @@ evidence from zero, and with the sharp market draw yielding a few chance
 decisions per game no kind reached the 200-pair floor: the builder net, the
 one that prices every build, never earned a say. Rule: for every field a
 save writes, find the line that reads it back.
+
+## S42 — a strength test that weighs one seat against the whole enemy side (2026-10-10, again)
+
+Fixed 09-26 for the withdraw odds (e68df70f: `GetAllyPowerAt`, "every AI saw
+itself outgunned beside its allies"), then rebuilt into two rules written
+later without it: the intercept (`nnhunt.as`, 10-09) and the commander's
+ship test (`comship.as`). His 8v8, 10-10: NO-outweighed 190 times vs HUNT 54;
+a 32k army at three of our bases met 33k + 15k + 9k of ours and nobody went.
+The fix lived in one function, not in the rule. Now `tools/check.py` fails any
+function that calls `StrRatio` without counting the side (`GetAllyArmyMAt`,
+`TeamArmyCost`, `HuntAllyM`, ...) unless it is marked `// seat-local: <why>`.
+Rule: in a team game, "ours" is the side.

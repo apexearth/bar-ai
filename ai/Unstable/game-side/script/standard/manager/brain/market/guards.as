@@ -157,6 +157,7 @@ int gEcvFrame = -1;
 Id gEcvId = Id(-1);
 float gEcvM = 0.f;
 float gEcvT = 0.f;
+// seat-local: one constructor's own escort against what threatens it
 float EscortOdds(CCircuitUnit@ wkr, const AIFloat3& in where)
 {
 	if ((wkr is null) || !HasEscort(wkr.id) || !OnMap(where)
@@ -285,6 +286,7 @@ float FoeRaidMassM()
 // kind of have to meet mass for mass"). One post is what a single worker is
 // owed; once their biggest group outguns a post, every post loses alone, so
 // the escorts gather on one worker until they meet the group.
+// seat-local: our escorts and raiders, which only we can order
 bool EscortsPool(float postM)
 {
 	const float g = FoeRaidMassM();

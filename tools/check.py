@@ -503,6 +503,38 @@ def check_spend_census(script_root: Path, rep: Report) -> None:
                               f"(docs/20-brain-overhaul.md par.4.1) forbids this")
 
 
+# A fight-or-flee strength test that weighs one seat against a side. Fixed for the
+# withdraw odds 09-26 (e68df70f), back 10-10 in the intercept and the commander's
+# ship test, both written later without it (his: "we found this in the past and
+# fixed it"). Every function that calls StrRatio must count the side, or say why not.
+_SIDE_TOKENS = ("TeamArmyCost", "OurArmyNow", "GetAllyArmyMAt", "GetAllyPowerAt",
+                "HuntAllyM", "gHtAllyM", "AllyCount", "seat-local:")
+
+
+def check_side_strength(script_root: Path, rep: Report) -> None:
+    if not script_root.is_dir():
+        return
+    for path in sorted(script_root.rglob("*.as")):
+        lines = path.read_text(encoding="utf8", errors="replace").splitlines()
+        rel = path.relative_to(script_root.parent).as_posix()
+        for n, raw in enumerate(lines):
+            code = raw.split("//", 1)[0]
+            if "StrRatio(" not in code or "insertLast(" in code or re.match(r"\s*float\s+StrRatio\s*\(", code):
+                continue
+            start = n
+            while start > 0 and lines[start] != "{":
+                start -= 1
+            head = max(start - 3, 0)   # the signature and a comment above it
+            end = n
+            while end < len(lines) - 1 and lines[end] != "}":
+                end += 1
+            body = "\n".join(lines[head:end + 1])
+            if not any(t in body for t in _SIDE_TOKENS):
+                rep.error(f"{rel}:{n + 1}: strength test counts one seat only -- add the "
+                          f"side (GetAllyArmyMAt / TeamArmyCost / ...) or mark the function "
+                          f"'// seat-local: <why>' (09-26 fix lost twice, 10-10)")
+
+
 def check_as_scope(script_root: Path, rep: Report) -> None:
     """Scope and include-order errors, from every root the DLL compiles.
 
@@ -555,6 +587,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_as_scope(script_root, rep)
     check_lazy_caches(script_root, rep)
     check_spend_census(script_root, rep)
+    check_side_strength(script_root, rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

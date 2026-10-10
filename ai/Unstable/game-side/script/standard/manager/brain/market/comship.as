@@ -20,6 +20,7 @@ float gShipFoeM = 0.f;
 float gShipAtM = 0.f;
 float gShipGuns = 0.f;
 float gShipArmyM = 0.f;
+float gShipAllyM = 0.f;
 float gShipStr = 0.f;
 float gShipStrCom = 0.f;
 float gShipDgStr = 0.f;
@@ -148,6 +149,7 @@ void ComShipAssess(CCircuitUnit@ u)
 	gShipAtM = 0.f;
 	gShipGuns = 0.f;
 	gShipArmyM = 0.f;
+	gShipAllyM = 0.f;
 	gShipStr = 0.f;
 	gShipG = -1;
 	if (Builder::gHomeSet && Military::BaseRaided()) {
@@ -180,6 +182,9 @@ void ComShipAssess(CCircuitUnit@ u)
 				if (dx * dx + dz * dz <= r2)
 					army += gCsM[i];
 			}
+			// an ally's army standing at our base defends it too (team games: the side, not the seat)
+			const float allyM = ai.GetAllyArmyMAt(gp, r);
+			army += allyM;
 			float guns = Military::GunsAt(gp);
 			if (guns < 0.f)
 				guns = 0.f;
@@ -198,6 +203,7 @@ void ComShipAssess(CCircuitUnit@ u)
 			gShipG = g;
 			gShipGuns = guns;
 			gShipArmyM = army;
+			gShipAllyM = allyM;
 			gShipStr = str;
 		}
 	}
@@ -238,7 +244,7 @@ void ComShipAssess(CCircuitUnit@ u)
 			+ " decision=" + (gShip ? "STEP-IN" : (gShipHopeless ? "RUN-hopeless" : ((gShipHome > 0) ? "SAFE-held" : "SAFE-gone")))
 			+ " foeM=" + int(gShipFoeM) + " homeGroups=" + gShipHome + " unheld=" + gShipUnheld
 			+ " tgtM=" + int(gShipAtM) + " heavy=" + ShipHeavy()
-			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + ")"
+			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + " ally=" + int(gShipAllyM) + ")"
 			+ " str=" + formatFloat(gShipStr, "", 0, 2) + " strCom=" + formatFloat(gShipStrCom, "", 0, 2)
 			+ " dgStr=" + formatFloat(gShipDgStr, "", 0, 2)
 			+ " parity=" + formatFloat(Military::ANSWER_PARITY, "", 0, 1)

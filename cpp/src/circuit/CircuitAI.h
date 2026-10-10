@@ -241,6 +241,7 @@ public:
 	// known live enemy attackers, refreshed every 10 s); pooled when blind.
 	float RecordRatioMix(CCircuitDef* cdef);
 	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
+	float GetAllyArmyMAt(const springai::AIFloat3& pos, float radius);  // allied armed ground metal
 	// The same matrix read from their side: their B against our A.
 	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) { recTier[cdef->GetId()] = tier; recAggDirty = true; } }
@@ -609,6 +610,7 @@ private:
 	std::unordered_map<long long, int> noPathMarks;  // (mobile id, sector) -> frame
 	int allyPowerFrame = -1;
 	std::vector<std::pair<springai::AIFloat3, float>> allyPowerList;
+	std::vector<float> allyCostList;   // metal, parallel to allyPowerList
 	std::vector<std::pair<springai::AIFloat3, int>> unsafeSites;
 	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
 	// caller must delete, so the lookup is done once per def.
