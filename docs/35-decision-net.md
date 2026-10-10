@@ -299,12 +299,12 @@ so the net sees big variance; draws are uniform, linear, never log.
 
 | head | file | v multiplies | range |
 |---|---|---|---|
-| con | econet | ConsNeedAny's target; above 1x the floor holds while the army is behind (C2/C3 did), at or below it yields (C1's rule) | 0.25-8 |
+| con | econet | ConsNeedAny's target, and the army share the floor yields to: target / v (2026-10-09; it was a step, v > 1 never yielded) | 0.25-8 |
 | mex | econet | every mex want's value before the draw (PUSH was 2); above 1x an open mex also jumps the forced guns (YIELD's effect); 1x = HOLD, the rule | 0-6 |
 | cap | econet | the ground constructor pools' cap (base x v) | 0.5-12 |
 | acap | econet | the air pool's cap, base x 4v (4 = the rule) | 1-20 |
 | scap | econet | the late scout cap | 0.25-8 |
-| esc | escnet | escorts per constructor, owed escort metal, and the escorts-at-once cap (MATCH = 1x; LIGHT was 0.5, HEAVY 2) | 0-8 |
+| esc | escnet | escorts per constructor, owed escort metal, the escorts-at-once cap and the escort buy's gain in the factory (MATCH = 1x; LIGHT was 0.5, HEAVY 2) | 0-8 |
 | ecap | escnet | the escorts-at-once cap | 0.25-10 |
 | mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
 | defamt | protect_nn | DefenceTarget | 0.25-8 |
