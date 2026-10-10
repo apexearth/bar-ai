@@ -223,19 +223,67 @@ def ratio(a, b, floor=0.0):
     return (a + 1e-6) / (b + 1e-6) if b > 0 else 9.99
 
 
+# One open per game is what made collect() slow, so each game is also appended to a
+# per-day index read in one open; _MEM holds what this process has seen.
+_MEM = {}
+_SHARDS = set()
+
+
+def _names(mdir):
+    m = mdir.rstrip("/\\")
+    tname = os.path.basename(os.path.dirname(os.path.dirname(m)))
+    return tname, tname + "__" + os.path.basename(m)
+
+
+def _shard(tname):
+    return os.path.join(CACHE, "_index-v%d-%s.jsonl" % (VERSION, re.sub(r"[^\w-]", "_", tname[:8])))
+
+
+def _read_shard(path):
+    if path in _SHARDS:
+        return
+    _SHARDS.add(path)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for ln in fh:
+                try:
+                    e = json.loads(ln)
+                    if e["g"].get("v") == VERSION:
+                        _MEM[e["k"]] = e["g"]
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    pass   # a torn line: that game falls back to its own file
+    except OSError:
+        pass
+
+
+def _remember(tname, name, g):
+    _MEM[name] = g
+    try:
+        with open(_shard(tname), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"k": name, "g": g}) + "\n")
+    except OSError:
+        pass
+
+
 def load(mdir):
-    key = os.path.join(CACHE, os.path.basename(os.path.dirname(os.path.dirname(mdir.rstrip("/\\"))))
-                       + "__" + os.path.basename(mdir.rstrip("/\\")) + ".json")
+    tname, name = _names(mdir)
+    _read_shard(_shard(tname))
+    if name in _MEM:
+        return _MEM[name]
+    key = os.path.join(CACHE, name + ".json")
     if os.path.exists(key):
         try:
             g = json.load(open(key, encoding="utf-8"))
             if g.get("v") == VERSION:
+                _remember(tname, name, g)
                 return g
         except (OSError, ValueError):
             pass
     g = read_game(mdir)
     os.makedirs(CACHE, exist_ok=True)
-    json.dump(g if g is not None else {"v": VERSION, "skip": True}, open(key, "w", encoding="utf-8"))
+    stored = g if g is not None else {"v": VERSION, "skip": True}
+    json.dump(stored, open(key, "w", encoding="utf-8"))
+    _remember(tname, name, stored)
     return g
 
 
@@ -299,8 +347,10 @@ def collect(since=NEW_NETS, include_explore=False, bonus=None, map_part=None, re
     for t in sorted(glob.glob(os.path.join(REPO, "tournaments", "*"))):
         if os.path.basename(t)[:len(since)] < since:
             continue
+        _read_shard(_shard(os.path.basename(t)))
         for mdir in sorted(glob.glob(os.path.join(t, "matches", "*"))):
-            if not os.path.exists(os.path.join(mdir, "result.json")):
+            # a game in the index had its result.json when it was read
+            if _names(mdir)[1] not in _MEM and not os.path.exists(os.path.join(mdir, "result.json")):
                 continue
             g = load(mdir)
             if g and not g.get("skip"):
@@ -317,13 +367,17 @@ def collect(since=NEW_NETS, include_explore=False, bonus=None, map_part=None, re
     return games
 
 
-def summary(games, by="batch", recent=60):
-    """The dashboard's view: per group and metric, medians at MINUTES; the latest games."""
+def summary(games, by="batch", recent=60, last_groups=None):
+    """The dashboard's view: per group and metric, medians at MINUTES; the latest games.
+    last_groups keeps only the newest groups; the ALL row still covers every game."""
     groups = defaultdict(list)
     for g in games:
         groups[(g["tournament"][:8] if by == "day" else g["tournament"][:13]) + " " + regime_of(g)].append(g)
-    out = {"minutes": list(MINUTES), "groups": [], "games": []}
-    for name, gs in sorted(groups.items()) + [("ALL", games)]:
+    out = {"minutes": list(MINUTES), "groups": [], "games": [], "groups_total": len(groups)}
+    rows = sorted(groups.items())
+    if last_groups:
+        rows = rows[-int(last_groups):]
+    for name, gs in rows + [("ALL", games)]:
         row = {"name": name, "n": len(gs),
                "w": sum(1 for g in gs if g["result"] == "W"), "l": sum(1 for g in gs if g["result"] == "L")}
         for metric in ("eco", "energy", "army", "trade", "dmg", "mex", "land"):

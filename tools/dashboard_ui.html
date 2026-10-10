@@ -139,14 +139,14 @@
     <button class="act" onclick="netAct('stop')">Stop</button>
     <button class="act" onclick="netAct('reset')" style="float:right" title="The current net and its history move to runtime/nn-archive/; nothing is deleted">Start a fresh net (archives this one)</button>
     <div style="margin-top:8px">Show
-      <select id="nn-range" onchange="uiSet('nn-range', this.value); loadNet()">
+      <select id="nn-range" onchange="loadNet()">
         <option value="last=100">last 100 games</option>
         <option value="last=300">last 300 games</option>
         <option value="last=1000">last 1,000 games</option>
         <option value="hours=1">last hour</option>
         <option value="hours=6">last 6 hours</option>
         <option value="hours=24">last 24 hours</option>
-        <option value="">everything</option>
+        <option value="">everything (slow the first time)</option>
       </select>
       <span class="dim">-- applies to the results and every chart and table below</span></div>
     <div id="nn-results" style="margin-top:8px"></div>
@@ -208,6 +208,8 @@
     <span class="dim">Each cell is ours / theirs at that minute: 1.00 level, green ahead, red behind. Median over the games that lasted that long.</span>
     <div style="margin-top:8px">
       Since <select id="pg-since" onchange="loadProgress()">
+        <option value="stage">this curriculum stage</option>
+        <option value="24h">last 24 hours</option>
         <option value="20261009-1325">new nets (Oct 9 13:25)</option>
         <option value="20261008-1232">even random bonus (Oct 8 12:32)</option>
         <option value="20261007">Oct 7</option>
@@ -221,6 +223,9 @@
       </select>
       Group by <select id="pg-by" onchange="loadProgress()">
         <option value="batch">batch</option><option value="day">day</option>
+      </select>
+      Rows <select id="pg-groups" onchange="loadProgress()">
+        <option value="30">newest 30</option><option value="100">newest 100</option><option value="">all</option>
       </select>
       <button class="act" onclick="loadProgress()">Refresh</button>
     </div>
@@ -1649,7 +1654,8 @@ $("#l-perside").addEventListener("change", drawBoxPreview);
 // silently repeats a previous run, and "random" is the honest default.
 ["l-mode", "l-a", "l-b", "l-sidea", "l-sideb", "l-map", "l-perside", "l-min", "l-speed", "l-games",
  "l-boxes", "l-boxsize", "l-handicap", "l-modopt"].forEach(id => uiBind(id));
-uiBind("nn-range");
+// a new key: a remembered "everything" from before the history grew is not kept
+uiBind("nn-range", "nn-window");
 uiBind("nn-win-n");
 // Restoring per-side or the box layout changes the preview; restoring the mode
 // changes which fields are shown.
@@ -1779,17 +1785,17 @@ const NN_NAMES = {dMInc: "metal income change", dEInc: "energy income change", l
   endFast: "game result, discounted from the start (sooner wins)", comLostD: "commander lost, discounted",
   edgeArmy: "army edge vs the enemy (change)", edgeEco: "metal income edge (change)",
   edgeLand: "land edge (change)", edgeMex: "extractor edge (change)"};
-function nnTable(m) {
-  if (!m.length || !m[m.length - 1].targets) return "<span class='dim'>no games yet</span>";
-  const last = m.filter(r => r.r2_full).slice(-5);
+function nnTable(t) {
+  if (!t || !t.targets) return "<span class='dim'>no games yet</span>";
+  const last = (t.rows || []).filter(r => r.r2_full).slice(-5);
   if (!last.length) return "<span class='dim'>waiting for a second game to test on</span>";
   const avg = (key, j) => { const v = last.map(r => r[key][j]).filter(x => x != null);
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const cell = v => v == null ? "<td class='dim'>&ndash;</td>"
     : `<td style="color:${v > 0.05 ? "var(--good)" : v < -0.05 ? "var(--bad)" : "inherit"}">${v.toFixed(3)}</td>`;
   let h = "<table><thead><tr><th>Prediction</th><th>Horizon</th><th>With decision</th><th>State only</th></tr></thead><tbody>";
-  m[m.length - 1].targets.forEach((t, j) => {
-    const [hz, k] = t.split(":");
+  t.targets.forEach((tg, j) => {
+    const [hz, k] = tg.split(":");
     h += `<tr><td>${esc(NN_NAMES[k] || k)}</td><td>${["won", "endV", "endFast", "comLostD"].includes(hz) ? "end of game" : (hz === "lifeS" || hz === "lifeKill") ? "its whole life" : (hz === "done" || hz === "survived") ? "within 5 min" : "+" + esc(hz) + " min"}</td>`
       + cell(avg("r2_full", j)) + cell(avg("r2_state", j)) + "</tr>";
   });
@@ -1802,17 +1808,16 @@ function nnTable(m) {
   }
   return h + "</tbody></table>";
 }
-function nnTrust(m, fm) {
-  const last = [...m].reverse().find(r => r.trust);
-  const fl = [...(fm || [])].reverse().find(r => r.trust != null);
-  const fh = (fm || []).filter(r => r.head_full != null).slice(-5);
-  const avg = k => fh.length ? fh.reduce((a, r) => a + r[k], 0) / fh.length : null;
-  const fac = `<div style="margin:6px 0">Factory net: ${(fm || []).length} batches &middot; say `
-    + `<b>${fl ? fl.trust.toFixed(2) : "0.00"}</b>`
-    + (fh.length ? ` &middot; unseen accuracy ${avg("head_full").toFixed(3)} (state only ${avg("head_state").toFixed(3)})` : "")
+function nnTrust(trust, f) {
+  f = f || {n: 0, trust: null, head_full: [], head_state: []};
+  const avg = k => { const v = (f[k] || []).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const hf = avg("head_full"), hs = avg("head_state");
+  const fac = `<div style="margin:6px 0">Factory net: ${f.n} batches &middot; say `
+    + `<b>${f.trust != null ? f.trust.toFixed(2) : "0.00"}</b>`
+    + (hf != null ? ` &middot; unseen accuracy ${hf.toFixed(3)} (state only ${hs != null ? hs.toFixed(3) : "-"})` : "")
     + `</div>`;
-  if (!last) return fac + "<span class='dim'>builder kinds: not measured yet -- a kind needs a few hundred unseen decisions first</span>";
-  const rows = Object.entries(last.trust).sort((a, b) => b[1] - a[1]);
+  if (!trust) return fac + "<span class='dim'>builder kinds: not measured yet -- a kind needs a few hundred unseen decisions first</span>";
+  const rows = Object.entries(trust).sort((a, b) => b[1] - a[1]);
   return fac + "<table><thead><tr><th>Builder kind</th><th>Say</th><th></th></tr></thead><tbody>" + rows.map(([k, t]) =>
     `<tr><td>${esc(k)}</td><td>${t.toFixed(2)}</td><td><div style="background:var(--good);height:8px;width:${
       Math.round(160 * Math.min(1, t))}px;border-radius:2px"></div></td></tr>`).join("") + "</tbody></table>";
@@ -1841,33 +1846,33 @@ async function loadNet() {
   const rng = ($("#nn-range") && $("#nn-range").value) || "";
   try { d = await api("/api/nn" + (rng ? "?" + rng : "")); } catch (e) { setHTML($("#nn-status"), "<span class='dim'>" + esc(e.message) + "</span>"); }
   if (d) {
-    const all = d.metrics || [], s = d.status || {};
-    // builder rows only (the factory and posture nets have their own counters), numbered in order
-    const m = all.filter(r => !r.net), fm = all.filter(r => r.net === "fac");
-    const lastGame = m.length ? m[m.length - 1] : null;
+    const s = d.status || {}, c = d.charts || {x: [], hf: [], hs: [], gain: [], lf: [], ls: [], bucket: 1};
+    // builder batches only (the factory and posture nets have their own counters), numbered in order;
+    // past ~1,200 batches the server averages neighbours into one point
+    const lastGame = d.last_game;
     const state = d.running ? `<b style="color:var(--good)">training</b> (${esc(s.phase || "starting")})`
       : `<b>stopped</b>`;
-    const src = lastGame ? String(lastGame.source || lastGame.game || "").split(/[\\/]/).pop() : "";
+    const src = lastGame ? String(lastGame.source || "").split(/[\\/]/).pop() : "";
     setHTML($("#nn-status"), `${state} &middot; ${d.running ? (s.live || 0) + " running game(s) feeding it &middot; " : ""}`
-      + `${m.length} batches &middot; ${(s.rows || 0).toLocaleString()} decisions learned`
+      + `${d.batches || 0} batches${c.bucket > 1 ? " (each point averages " + c.bucket + ")" : ""}`
+      + ` &middot; ${(s.rows || 0).toLocaleString()} decisions learned`
       + ` &middot; weights written to the game ${s.exported || 0}&times; this session`
       + (lastGame ? ` &middot; last: ${esc(src)} (${lastGame.rows} decisions, trained in ${lastGame.train_s}s)` : ""));
-    const xs = m.map((r, i) => i + 1);
-    const hf = m.map(r => r.head_full ?? null), hs = m.map(r => r.head_state ?? null);
+    const xs = c.x, hf = c.hf, hs = c.hs;
     nnChart("#nn-c-acc", [
       {xs, ys: hf, color: NN_FULL, dots: true}, {xs, ys: hs, color: NN_STATE, dots: true},
       {xs, ys: nnRolling(hf, 5), color: NN_FULL}, {xs, ys: nnRolling(hs, 5), color: NN_STATE}],
       {lo: -0.2, hi: 0.2, floor: -1, empty: "needs two games: the first one has nothing to be tested against"});
     legendHTML("#nn-leg-acc", [["with the decision", NN_FULL], ["state only", NN_STATE]]);
     // decisions chosen on value only: forced paths only tell the net which panic fired
-    const gain = m.map(r => (r.head_full_d != null && r.head_state_d != null) ? r.head_full_d - r.head_state_d : null);
+    const gain = c.gain;
     nnChart("#nn-c-gain", [{xs, ys: gain, color: NN_FULL, dots: true}, {xs, ys: nnRolling(gain, 5), color: NN_FULL}],
       {lo: -0.05, hi: 0.05, fmt: v => v.toFixed(3)});
-    nnChart("#nn-c-loss", [{xs, ys: m.map(r => r.loss_full), color: NN_FULL},
-      {xs, ys: m.map(r => r.loss_state), color: NN_LOSS2}], {lo: 0});
+    nnChart("#nn-c-loss", [{xs, ys: c.lf, color: NN_FULL},
+      {xs, ys: c.ls, color: NN_LOSS2}], {lo: 0});
     legendHTML("#nn-leg-loss", [["with the decision", NN_FULL], ["state only", NN_LOSS2]]);
-    setHTML($("#nn-table"), nnTable(m));
-    setHTML($("#nn-trust"), nnTrust(m, fm));
+    setHTML($("#nn-table"), nnTable(d.table));
+    setHTML($("#nn-trust"), nnTrust(d.trust, d.fac));
     setHTML($("#nn-samples"), nnSamples(d.samples || []));
     setHTML($("#nn-results"), nnResults(d.results || []));
     nnWinChart(d.normal_games || []);
@@ -1938,12 +1943,16 @@ function pgCell(x) {
 async function loadProgress() {
   if (!$("#tab-progress").classList.contains("on")) return;
   const q = "since=" + $("#pg-since").value + "&all=" + $("#pg-all").value + "&by=" + $("#pg-by").value
-    + "&regime=" + $("#pg-regime").value;
+    + "&regime=" + $("#pg-regime").value + "&groups=" + $("#pg-groups").value;
   let d;
   try { d = await api("/api/progress?" + q); }
   catch (e) { setHTML($("#pg-body"), "<div class='card'><span class='dim'>" + esc(e.message) + "</span></div>"); return; }
   const head = "<tr><th>Group</th><th>Games</th><th>W-L</th>" + d.minutes.map(m => "<th>min " + m + "</th>").join("") + "</tr>";
-  let html = "";
+  const since = String(d.since || "").replace(/^(\d{4})(\d\d)(\d\d)(?:-(\d\d)(\d\d))?.*$/,
+    (_, y, mo, dd, h, mi) => y + "-" + mo + "-" + dd + (h ? " " + h + ":" + mi : ""));
+  const shown = d.groups.length - 1, total = d.groups_total ?? shown;
+  let html = "<div class='dim' style='margin:0 0 6px 4px'>batches started since " + esc(since)
+    + (shown < total ? " &middot; newest " + shown + " of " + total + " groups shown; ALL covers every one" : "") + "</div>";
   const tr = d.trust || {nets: []}, says = tr.nets.filter(n => n.trust > 0).sort((a, b) => b.trust - a.trust);
   html += "<div class='card'><b>Nets with a say</b> <span class='dim'>(honest trust: the share of its decisions a net plays; 0 = the rules play. " +
     says.length + " of " + tr.nets.length + " nets" + (tr.kind === 2 ? "" : ", <span class='loss'>old trust kind " + tr.kind + ": nets ignored</span>") +

@@ -12,6 +12,7 @@ headless games as tracked jobs with mod-option overrides, and deploy.
 import argparse
 import ipaddress
 import json
+import math
 import os
 import re
 import subprocess
@@ -209,13 +210,37 @@ def match_summary(d):
     return s
 
 
-def list_matches(limit=250):
-    if not MATCHES.is_dir():
+def newest_dirs(root, limit, skip_underscore=False):
+    """The `limit` most recently modified subdirs; scandir carries the mtime on Windows."""
+    try:
+        ents = [e for e in os.scandir(root) if e.is_dir()
+                and not (skip_underscore and e.name.startswith("_"))]
+    except OSError:
         return []
-    dirs = sorted((d for d in MATCHES.iterdir()
-                   if d.is_dir() and not d.name.startswith("_")),
-                  key=lambda d: d.stat().st_mtime, reverse=True)[:limit]
-    return [match_summary(d) for d in dirs]
+    ents.sort(key=lambda e: e.stat().st_mtime, reverse=True)
+    return [Path(e.path) for e in ents[:limit]]
+
+
+def list_matches(limit=250):
+    return [match_summary(d) for d in newest_dirs(MATCHES, limit, True)]
+
+
+_winners_cache = {}
+
+
+def match_winners(m):
+    """winner_specs of a finished match, None while it runs; cached on result.json mtime."""
+    try:
+        mt = os.stat(os.path.join(m, "result.json")).st_mtime
+    except OSError:
+        return None
+    hit = _winners_cache.get(m)
+    if hit and hit[0] == mt:
+        return hit[1]
+    r = load_result(Path(m))
+    w = (r.get("result", {}) or {}).get("winner_specs", []) if r else None
+    _winners_cache[m] = (mt, w)
+    return w
 
 
 def tournament_summary(d):
@@ -225,19 +250,19 @@ def tournament_summary(d):
             cfg = json.load(f)
     except Exception:
         pass
-    mdir = d / "matches"
     wins, games, done = {}, 0, 0
-    if mdir.is_dir():
-        for m in sorted(mdir.iterdir()):
-            if not m.is_dir():
-                continue
-            games += 1
-            r = load_result(m)
-            if not r:
-                continue
-            done += 1
-            for w in (r.get("result", {}) or {}).get("winner_specs", []):
-                wins[w] = wins.get(w, 0) + 1
+    try:
+        ms = [e.path for e in os.scandir(d / "matches") if e.is_dir()]
+    except OSError:
+        ms = []
+    for m in ms:
+        games += 1
+        w = match_winners(m)
+        if w is None:
+            continue
+        done += 1
+        for x in w:
+            wins[x] = wins.get(x, 0) + 1
     return {
         "dir": str(d.relative_to(REPO)).replace(os.sep, "/"),
         "name": d.name,
@@ -253,11 +278,7 @@ def tournament_summary(d):
 
 
 def list_tournaments(limit=120):
-    if not TOURNAMENTS.is_dir():
-        return []
-    dirs = sorted((d for d in TOURNAMENTS.iterdir() if d.is_dir()),
-                  key=lambda d: d.stat().st_mtime, reverse=True)[:limit]
-    return [tournament_summary(d) for d in dirs]
+    return [tournament_summary(d) for d in newest_dirs(TOURNAMENTS, limit)]
 
 
 def infolog_health(d):
@@ -1100,35 +1121,249 @@ def nn_window(rows, last=None, hours=None):
         cut = time.time() - float(hours) * 3600
         return [r for r in rows if r.get("at", 0) >= cut]
     if last:
-        keep, seen = set(), []
+        keep = set()
         for r in reversed(rows):
             src = r.get("source") or r.get("game")
             if src not in keep:
                 if len(keep) >= int(last):
-                    continue
+                    break
                 keep.add(src)
         return [r for r in rows if (r.get("source") or r.get("game")) in keep]
     return rows
 
 
+# The Net tab draws only builder rows and the factory net's say; metrics.jsonl is read
+# once, then only what was appended, keeping just those fields.
+NN_KEEP = ("source", "game", "at", "rows", "train_s", "head_full", "head_state",
+           "head_full_d", "head_state_d", "loss_full", "loss_state")
+NN_FAC_KEEP = ("source", "game", "at", "trust", "head_full", "head_state")
+NN_TABLE_KEEP = ("source", "game", "at", "r2_full", "r2_state",
+                 "done_acc", "done_base", "survived_acc", "survived_base")
+NN_MAX_POINTS = 1200
+NN_MET = {"pos": 0, "rows": [], "fac": [], "r2": [], "targets": None, "trust": None, "n": 0}
+NN_MET_LOCK = threading.Lock()
+
+
+def nn_metrics():
+    """The slim builder and factory rows of metrics.jsonl, read incrementally."""
+    p = NN_DIR / "metrics.jsonl"
+    with NN_MET_LOCK:
+        try:
+            st = p.stat()
+            size, born = st.st_size, st.st_ctime
+        except OSError:
+            size, born = 0, None
+        if size < NN_MET["pos"] or born != NN_MET.get("born"):   # a reset archived the file
+            NN_MET.update(pos=0, rows=[], fac=[], r2=[], targets=None, trust=None, n=0, born=born)
+        if size > NN_MET["pos"]:
+            with open(p, "rb") as fh:
+                fh.seek(NN_MET["pos"])
+                data = fh.read(size - NN_MET["pos"])
+            end = data.rfind(b"\n") + 1   # a line still being written waits for the next read
+            NN_MET["pos"] += end
+            for ln in data[:end].decode("utf-8", errors="replace").splitlines():
+                net = ln[9:ln.find('"', 9)] if ln.startswith('{"net": "') else ""
+                if net and net != "fac":
+                    NN_MET["n"] += 1
+                    continue
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue   # a torn line (two writers, or a crash mid-append) must not blank the tab
+                NN_MET["n"] += 1
+                if r.get("net") == "fac":
+                    NN_MET["fac"].append({k: r[k] for k in NN_FAC_KEEP if k in r})
+                    continue
+                if r.get("net"):
+                    continue
+                NN_MET["rows"].append({k: r[k] for k in NN_KEEP if k in r})
+                NN_MET["targets"] = r.get("targets")
+                if r.get("trust"):
+                    NN_MET["trust"] = {"source": r.get("source") or r.get("game"),
+                                       "at": r.get("at", 0), "trust": r["trust"]}
+                if r.get("r2_full"):
+                    NN_MET["r2"] = (NN_MET["r2"] + [{k: r[k] for k in NN_TABLE_KEEP if k in r}])[-5:]
+        return NN_MET
+
+
+def nn_downsample(rows):
+    """Columns for the builder charts; past NN_MAX_POINTS each point is a bucket's mean."""
+    n = len(rows)
+    b = max(1, -(-n // NN_MAX_POINTS))
+    cols = {"x": [], "hf": [], "hs": [], "gain": [], "lf": [], "ls": []}
+
+    def mean(vals):
+        vals = [v for v in vals if isinstance(v, (int, float)) and math.isfinite(v)]
+        return sum(vals) / len(vals) if vals else None
+
+    for i in range(0, n, b):
+        chunk = rows[i:i + b]
+        cols["x"].append(i + len(chunk))
+        cols["hf"].append(mean([r.get("head_full") for r in chunk]))
+        cols["hs"].append(mean([r.get("head_state") for r in chunk]))
+        cols["gain"].append(mean([r["head_full_d"] - r["head_state_d"] for r in chunk
+                                  if r.get("head_full_d") is not None and r.get("head_state_d") is not None]))
+        cols["lf"].append(mean([r.get("loss_full") for r in chunk]))
+        cols["ls"].append(mean([r.get("loss_state") for r in chunk]))
+    cols["bucket"] = b
+    return cols
+
+
+def nn_games():
+    """(result mtime, match dir) of every finished game in the nn-* batches, oldest
+    first. A batch is listed again only while it may still grow."""
+    with NN_GAMES_LOCK:
+        now = time.time()
+        tours, seen, changed = NN_GAMES["tours"], set(), False
+        try:
+            ents = list(os.scandir(TOURNAMENTS))
+        except OSError:
+            ents = []
+        for e in ents:
+            # every training batch is an nn-* tournament (barbtrain, team, self, comet1v1, 8v8...)
+            if "-nn-" not in e.name:
+                continue
+            seen.add(e.name)
+            t = tours.get(e.name)
+            if t and t["closed"]:
+                continue
+            games, pending = {}, False
+            try:
+                ms = list(os.scandir(os.path.join(e.path, "matches")))
+            except OSError:
+                ms = []
+            for m in ms:
+                try:
+                    games[m.path] = os.stat(os.path.join(m.path, "result.json")).st_mtime
+                except OSError:
+                    try:
+                        # still being played, unless its dir has been quiet for hours
+                        pending = pending or now - m.stat().st_mtime < 3 * 3600
+                    except OSError:
+                        pass
+            try:
+                touched = e.stat().st_mtime
+            except OSError:
+                touched = now
+            closed = not pending and now - max(max(games.values(), default=0), touched) > 1800
+            if t is None or t["games"] != games:
+                changed = True
+            tours[e.name] = {"closed": closed, "games": games}
+        for k in [k for k in tours if k not in seen]:
+            del tours[k]
+            changed = True
+        if changed or NN_GAMES["sorted"] is None:
+            NN_GAMES["sorted"] = sorted((mt, p) for t in tours.values() for p, mt in t["games"].items())
+            NN_GAMES["gen"] += 1
+        return NN_GAMES["sorted"], NN_GAMES["gen"]
+
+
+NN_GAMES = {"tours": {}, "sorted": None, "gen": 0}
+NN_GAMES_LOCK = threading.Lock()
 NN_RESULT_CACHE = {}
+RE_EXPLORE = re.compile(r"nn-explore t=(\d+) on")
+RE_LOG_FRAME = re.compile(r"\[t=[^\]]*\]\[f=(-?\d+)\]")
+
+
+def nn_explorers(m):
+    """Engine teams that played this game exploring. The AI announces it at init, so
+    the read stops two game-minutes in instead of walking a 4 MB infolog."""
+    ex = set()
+    try:
+        with open(m / "infolog.txt", encoding="utf-8", errors="replace") as fh:
+            for ln in fh:
+                if "nn-explore t=" in ln:
+                    mm = RE_EXPLORE.search(ln)
+                    if mm:
+                        ex.add(int(mm.group(1)))
+                elif ln.startswith("[t="):
+                    mm = RE_LOG_FRAME.match(ln)
+                    if mm and int(mm.group(1)) > 3600:
+                        break
+    except OSError:
+        pass
+    return ex
+
+
+NN_RESULT_FILE = REPO / "runtime" / "dashboard" / "nn_results.jsonl"
+NN_RESULT_LOADED = []
+
+
+def nn_result_cache():
+    """Each game's outcome outlives a restart: reading it costs an infolog scan."""
+    if not NN_RESULT_LOADED:
+        NN_RESULT_LOADED.append(True)
+        try:
+            with open(NN_RESULT_FILE, encoding="utf-8") as fh:
+                for ln in fh:
+                    try:
+                        e = json.loads(ln)
+                        NN_RESULT_CACHE[e["k"]] = tuple(e["h"])
+                    except (ValueError, KeyError, TypeError):
+                        pass
+        except OSError:
+            pass
+    return NN_RESULT_CACHE
+
+
+def nn_game_result(mt, m):
+    """(mt, outcome, opponent, kind) of one finished training game, or None; cached."""
+    key = str(m)
+    hit = nn_result_cache().get(key)
+    if hit is not None and hit[0] == mt:
+        return hit
+    m = Path(m)
+    try:
+        r = json.loads((m / "result.json").read_text(encoding="utf-8"))
+        ours = [x for x in r.get("teams", []) if x.get("spec", "").startswith("Apex")]
+        them = [x for x in r.get("teams", []) if not x.get("spec", "").startswith("Apex")]
+        if len(ours) == 2 and not them:
+            # Self-play: scored from the NORMAL side against its exploring copy
+            # (his 2026-10-06: does our natural self beat the discovery self?).
+            ex = nn_explorers(m)
+            if len(ex) != 1:
+                hit = (mt, None, None, None)
+            else:
+                # winners are ally teams; in a team game the explorer's engine team is not one
+                exa = ex.pop()
+                try:
+                    cur = None
+                    for ln in (m / "script.txt").read_text(encoding="utf-8", errors="replace").splitlines():
+                        mm = re.match(r"\s*\[TEAM(\d+)\]", ln)
+                        if mm:
+                            cur = int(mm.group(1))
+                        mm = re.match(r"\s*AllyTeam=(\d+);", ln)
+                        if mm and cur == exa:
+                            exa = int(mm.group(1))
+                            break
+                except OSError:
+                    pass
+                winners = (r.get("result") or {}).get("winners") or []
+                outcome = "draw" if not winners else ("loss" if exa in winners else "win")
+                hit = (mt, outcome, "ourselves", "normal vs explorer")
+        elif len(ours) != 1 or not them:
+            hit = (mt, None, None, None)
+        else:
+            us = ours[0]["team"]
+            w = (r.get("result") or {}).get("winner_specs") or []
+            outcome = "draw" if not w else ("win" if any(x.startswith("Apex") for x in w) else "loss")
+            hit = (mt, outcome, them[0].get("profile") or them[0]["spec"], us in nn_explorers(m))
+    except (OSError, ValueError, KeyError):
+        return None
+    NN_RESULT_CACHE[key] = hit
+    try:
+        NN_RESULT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(NN_RESULT_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"k": key, "h": list(hit)}) + "\n")
+    except OSError:
+        pass
+    return hit
 
 
 def nn_results(last=None, hours=None):
     """W/L/D of the nn training tournaments' games over the same range, split
     normal vs discovery and by opponent; each game is read once and cached."""
-    games = []
-    # every training batch is an nn-* tournament (barbtrain, team, self, comet1v1, 8v8...)
-    tours = list((REPO / "tournaments").glob("*-nn-*"))
-    for t in tours:
-        for m in (t / "matches").glob("*"):
-            res = m / "result.json"
-            try:
-                mt = res.stat().st_mtime
-            except OSError:
-                continue
-            games.append((mt, m))
-    games.sort()
+    games, _gen = nn_games()
     if hours:
         cut = time.time() - float(hours) * 3600
         games = [g for g in games if g[0] >= cut]
@@ -1137,68 +1372,9 @@ def nn_results(last=None, hours=None):
     out = {}
     normal = []   # (finished at, opponent, outcome) of each normal game, in order
     for mt, m in games:
-        key = str(m)
-        hit = NN_RESULT_CACHE.get(key)
-        if hit is None or hit[0] != mt:
-            try:
-                r = json.loads((m / "result.json").read_text(encoding="utf-8"))
-                ours = [x for x in r.get("teams", []) if x.get("spec", "").startswith("Apex")]
-                them = [x for x in r.get("teams", []) if not x.get("spec", "").startswith("Apex")]
-                if len(ours) == 2 and not them:
-                    # Self-play: scored from the NORMAL side against its exploring copy
-                    # (his 2026-10-06: does our natural self beat the discovery self?).
-                    ex = set()
-                    try:
-                        with open(m / "infolog.txt", encoding="utf-8", errors="replace") as fh:
-                            for ln in fh:
-                                mm = re.search(r"nn-explore t=(\d+) on", ln)
-                                if mm:
-                                    ex.add(int(mm.group(1)))
-                    except OSError:
-                        pass
-                    if len(ex) != 1:
-                        continue
-                    # winners are ally teams; in a team game the explorer's engine team is not one
-                    exa = ex.pop()
-                    try:
-                        cur = None
-                        for ln in (m / "script.txt").read_text(encoding="utf-8", errors="replace").splitlines():
-                            mm = re.match(r"\s*\[TEAM(\d+)\]", ln)
-                            if mm:
-                                cur = int(mm.group(1))
-                            mm = re.match(r"\s*AllyTeam=(\d+);", ln)
-                            if mm and cur == exa:
-                                exa = int(mm.group(1))
-                                break
-                    except OSError:
-                        pass
-                    winners = (r.get("result") or {}).get("winners") or []
-                    outcome = "draw" if not winners else ("loss" if exa in winners else "win")
-                    hit = (mt, outcome, "ourselves", "normal vs explorer")
-                    NN_RESULT_CACHE[key] = hit
-                    _mt, outcome, opp, kind = hit
-                    c = out.setdefault((opp, kind), {"win": 0, "loss": 0, "draw": 0})
-                    c[outcome] += 1
-                    continue
-                if len(ours) != 1 or not them:
-                    continue
-                us = ours[0]["team"]
-                w = (r.get("result") or {}).get("winner_specs") or []
-                outcome = "draw" if not w else ("win" if any(x.startswith("Apex") for x in w) else "loss")
-                disc = False
-                try:
-                    with open(m / "infolog.txt", encoding="utf-8", errors="replace") as fh:
-                        tag = "nn-explore t=%d on" % us
-                        for ln in fh:
-                            if tag in ln:
-                                disc = True
-                                break
-                except OSError:
-                    pass
-                hit = (mt, outcome, them[0].get("profile") or them[0]["spec"], disc)
-            except (OSError, ValueError, KeyError):
-                continue
-            NN_RESULT_CACHE[key] = hit
+        hit = nn_game_result(mt, m)
+        if hit is None or hit[1] is None:
+            continue
         _mt, outcome, opp, disc = hit
         if opp == "ourselves":
             c = out.setdefault((opp, disc), {"win": 0, "loss": 0, "draw": 0})
@@ -1212,38 +1388,99 @@ def nn_results(last=None, hours=None):
     return [{"opponent": k[0], "kind": k[1], **v} for k, v in sorted(out.items())], normal
 
 
-def nn_state(last=None, hours=None):
-    rows = []
-    try:
-        with open(NN_DIR / "metrics.jsonl", encoding="utf-8", errors="replace") as fh:
-            for ln in fh:
-                try:
-                    rows.append(json.loads(ln))
-                except ValueError:
-                    pass  # a torn line (two writers, or a crash mid-append) must not blank the tab
-    except OSError:
-        pass
-    total = len(rows)
-    rows = nn_window(rows, last, hours)
-    res, normal = nn_results(last, hours)
+def nn_status():
     try:
         status = json.loads((NN_DIR / "status.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         status = {}
     age = time.time() - status.get("at", 0)
     fresh = {"watching": 30, "training": 600}.get(status.get("phase"), 0)
-    running = nn_job() is not None or age < fresh
+    return status, age, nn_job() is not None or age < fresh
+
+
+NN_VIEW_CACHE = {}
+
+
+def nn_state(last=None, hours=None):
+    """The Net tab over a window: chart columns (bucketed past NN_MAX_POINTS), the
+    table's last five tested batches, the latest say per net, and the game results.
+    Windowed parts are cached until a row or a game is added."""
+    met = nn_metrics()
+    games, gen = nn_games()
+    tick = int(time.time() // 30) if hours else 0
+    key = (last, hours, len(met["rows"]), len(met["fac"]), gen, tick)
+    view = NN_VIEW_CACHE.get((last, hours))
+    if view is None or view[0] != key:
+        rows = nn_window(met["rows"], last, hours)
+        fac = nn_window(met["fac"], last, hours)
+        srcs = {r.get("source") or r.get("game") for r in rows} if (last or hours) else None
+        inwin = lambda r: srcs is None or (r.get("source") or r.get("game")) in srcs
+        tr = met["trust"]
+        fh = [r for r in fac if r.get("head_full") is not None][-5:]
+        fl = [r for r in fac if r.get("trust") is not None][-1:]
+        res, normal = nn_results(last, hours)
+        lg = rows[-1] if rows else None
+        body = {"charts": nn_downsample(rows), "batches": len(rows),
+                "last_game": {"source": lg.get("source") or lg.get("game"), "rows": lg.get("rows"),
+                              "train_s": lg.get("train_s")} if lg else None,
+                "table": {"targets": met["targets"] if rows else None,
+                          "rows": [r for r in met["r2"] if inwin(r)]},
+                "trust": tr["trust"] if tr and inwin(tr) else None,
+                "fac": {"n": len(fac), "trust": fl[0]["trust"] if fl else None,
+                        "head_full": [r["head_full"] for r in fh],
+                        "head_state": [r.get("head_state") for r in fh]},
+                "results": res, "normal_games": normal}
+        view = (key, body)
+        NN_VIEW_CACHE[(last, hours)] = view
+    status, age, running = nn_status()
     try:
         samples = json.loads((NN_DIR / "samples.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         samples = []
-    return {"metrics": rows, "metrics_total": total, "status": status, "age": age, "running": running,
-            "samples": samples, "results": res, "normal_games": normal}
+    return view[1] | {"metrics_total": met["n"], "status": status, "age": age,
+                      "running": running, "samples": samples}
+
+
+PROGRESS_LOCK = threading.Lock()
+PROGRESS_VIEW = {}
+PROGRESS_TRUST = [0.0, None]
+
+
+def progress_since(since):
+    """A batch-name prefix from the Progress tab's choice: "stage" is the current
+    curriculum stage's start, "<N>h" the last N hours, anything else is the prefix."""
+    import curriculum
+    import progress
+    if not since:
+        return progress.NEW_NETS
+    if since == "stage":
+        return curriculum.load()["since"][:13]
+    if since.endswith("h") and since[:-1].isdigit():
+        return time.strftime("%Y%m%d-%H%M", time.localtime(time.time() - int(since[:-1]) * 3600))
+    return since
+
+
+def progress_view(q):
+    import progress
+    with PROGRESS_LOCK:
+        since = progress_since(q.get("since"))
+        games = progress.collect(since, q.get("all") == "1", q.get("bonus") or None,
+                                 q.get("map") or None, q.get("regime") or None)
+        groups = int(q["groups"]) if (q.get("groups") or "").isdigit() else None
+        key = (since, q.get("all"), q.get("bonus"), q.get("map"), q.get("regime"), q.get("by"), groups,
+               len(games), (games[-1]["tournament"], games[-1]["match"]) if games else None)
+        hit = PROGRESS_VIEW.get(key[:7])
+        if hit is None or hit[0] != key:
+            hit = (key, progress.summary(games, q.get("by") or "batch", last_groups=groups))
+            PROGRESS_VIEW[key[:7]] = hit
+        if time.time() - PROGRESS_TRUST[0] > 30:
+            PROGRESS_TRUST[:] = [time.time(), progress.trust()]
+        return hit[1] | {"trust": PROGRESS_TRUST[1], "since": since}
 
 
 def nn_action(act):
     if act == "start":
-        if nn_job() or nn_state()["running"]:
+        if nn_job() or nn_status()[2]:
             return {"ok": True, "already": True}
         return {"ok": True, "id": start_job(NN_DESC, ["tools/nntrain.py"])}
     if act == "stop":
@@ -1251,12 +1488,12 @@ def nn_action(act):
         if not jid:
             return {"ok": False, "error": "the trainer was not started from this dashboard"}
         r = kill_job(jid)
-        st = nn_state()["status"]
+        st = nn_status()[0]
         st["phase"] = "stopped"
         (NN_DIR / "status.json").write_text(json.dumps(st), encoding="utf-8")
         return r
     if act == "reset":
-        if nn_state()["running"]:
+        if nn_status()[2]:
             return {"ok": False, "error": "stop the trainer first"}
         return run_tool(["tools/nntrain.py", "--reset"])
     raise ValueError("unknown net action")
@@ -1640,11 +1877,7 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/nn":
                 self.send_json(nn_state(q.get("last"), q.get("hours")))
             elif u.path == "/api/progress":
-                import progress
-                games = progress.collect(q.get("since") or progress.NEW_NETS, q.get("all") == "1",
-                                         q.get("bonus") or None, q.get("map") or None,
-                                         q.get("regime") or None)
-                self.send_json(progress.summary(games, q.get("by") or "batch") | {"trust": progress.trust()})
+                self.send_json(progress_view(q))
             elif u.path == "/api/games":
                 kind = q.get("kind", "matches")
                 self.send_json(list_matches() if kind == "matches"
