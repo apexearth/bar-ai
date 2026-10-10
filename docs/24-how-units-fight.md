@@ -338,6 +338,9 @@ to them)
 - Long-range units stay at maximum range, and don't advance blind: no vision
   or protection, no moving forward. A unit with the range advantage holds and
   *fires*; it does not leave the line.
+- A unit that outranges an enemy's D-gun-like weapon (commander D-gun,
+  Behemoth) stays out of that weapon's range and kills it from outside;
+  only fodder closes in (2026-10-10, on Titans dying to Behemoths).
 - Long-range siege units (Starlight, Ambassador, Arbiter) siege enemy bases
   and stay safe while doing it, with scouts showing them targets. An
   Ambassador outranges many T2 turrets. Siege units fear enemies getting

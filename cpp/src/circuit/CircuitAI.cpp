@@ -3749,12 +3749,14 @@ void CCircuitAI::RebuildReachCache()
 	if ((allyTeam != nullptr) && (allyTeam->reachFrame == lastFrame)) {
 		reachCache = allyTeam->reachCache;
 		reachNodes = allyTeam->reachNodes;
+		dgunThreats = allyTeam->dgunThreats;
 		perfReachRebuildNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tRb0).count();
 		++perfReachRebuilds;
 		return;
 	}
 	reachCache.clear();
 	reachCache.reserve(enemyInfos.size());
+	dgunThreats.clear();
 	for (const auto& kv : enemyInfos) {
 		CEnemyInfo* e = kv.second;
 		if ((e == nullptr) || e->IsHidden()) {
@@ -3763,6 +3765,9 @@ void CCircuitAI::RebuildReachCache()
 		CCircuitDef* edef = e->GetCircuitDef();
 		if ((edef == nullptr) || edef->IsAbleToFly()) {
 			continue;
+		}
+		if (edef->GetDGunReach() > 0.f) {
+			dgunThreats.push_back({e->GetPos().x, e->GetPos().z, edef->GetId()});
 		}
 		// Not GetMaxRange: that is the max over EVERY weapon, so a nuke silo
 		// enters the cache with 72000 of "reach" and vetoes the whole map.
@@ -3792,9 +3797,18 @@ void CCircuitAI::RebuildReachCache()
 		allyTeam->reachFrame = lastFrame;
 		allyTeam->reachCache = reachCache;
 		allyTeam->reachNodes = reachNodes;
+		allyTeam->dgunThreats = dgunThreats;
 	}
 	perfReachRebuildNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tRb0).count();
 	++perfReachRebuilds;
+}
+
+const std::vector<SDGunThreat>& CCircuitAI::GetDGunThreats()
+{
+	if ((reachCacheFrame < 0) || (lastFrame - reachCacheFrame > FRAMES_PER_SEC / 2)) {
+		RebuildReachCache();
+	}
+	return dgunThreats;
 }
 
 // apex: median-split BVH over the cache, rebuilt with it, because the flattened

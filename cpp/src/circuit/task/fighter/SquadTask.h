@@ -48,6 +48,11 @@ protected:
 	NSMicroPather::HitFunc GetHitTest() const;
 	void Attack(const int frame);
 	void Attack(const int frame, const bool isGround);
+	// one task update (1 s) plus the turn to walk away
+	static constexpr float DGUN_REACT_S = 2.f;
+	static float DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold);
+	bool IsInsideDGun(int frame);
+	bool dgunNear = false;  // the last Attack() had a D-gun carrier to keep out of
 
 	float lowestRange;
 	float highestRange;

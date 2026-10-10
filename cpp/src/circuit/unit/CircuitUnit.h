@@ -294,8 +294,8 @@ public:
 	void TrySetMoveState(CCircuitDef::MoveT state);  // safe CmdSetMoveState
 
 	void Attack(CEnemyInfo* enemy, bool isGround, int timeout);
-	void Attack(const springai::AIFloat3& position, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout);
-	void Attack(const springai::AIFloat3& position, CEnemyInfo* enemy, int tile, bool isGround, bool isStatic, int timeout);
+	void Attack(const springai::AIFloat3& position, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout, bool hold = false);
+	void Attack(const springai::AIFloat3& position, CEnemyInfo* enemy, int tile, bool isGround, bool isStatic, int timeout, bool hold = false);
 	void Guard(CCircuitUnit* target, int timeout);
 	void Gather(const springai::AIFloat3& groupPos, int timeout);
 

@@ -974,7 +974,7 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
 	)
 }
 
-void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout)
+void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround, bool isStatic, int timeout, bool hold)
 {
 	NoteAct("atkp", timeout);
 	// `pos` is a standoff point on a ring of this unit's own weapon range, and
@@ -1006,12 +1006,14 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 	const bool longGun = circuitDef->GetMaxRange() > circuitDef->GetLosRadius();
 	// A sniper takes move + set-target unconditionally, cloaked target included:
 	// the attack-ground fallback is an order that halts it under fire.
-	const bool prefer = circuitDef->IsSniper()
+	// `hold`: the point keeps it out of a D-gun's reach, and any queued attack
+	// or fight order would walk it back in (a Titan is tagged melee).
+	const bool prefer = hold || circuitDef->IsSniper()
 			|| ((manager->GetCircuit()->GetTunable("apex_prefer_target", 1.f) > 0.f)
 			&& !isGround && !circuitDef->IsAttrMelee()
 			&& (isStatic || enemy->IsInRadarOrLOS() || longGun));
 	TRY_UNIT(manager->GetCircuit(), this,
-		if (circuitDef->IsAttrMelee() && IsJumpReady()) {
+		if (!hold && circuitDef->IsAttrMelee() && IsJumpReady()) {
 			CmdJumpTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, timeout);
 			CmdFightTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout, OrdSrc::RING);
 		} else {
@@ -1044,11 +1046,11 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
 	)
 }
 
-void CCircuitUnit::Attack(const AIFloat3& position, CEnemyInfo* enemy, int tile, bool isGround, bool isStatic, int timeout)
+void CCircuitUnit::Attack(const AIFloat3& position, CEnemyInfo* enemy, int tile, bool isGround, bool isStatic, int timeout, bool hold)
 {
 	target = enemy;
 	targetTile = tile;
-	Attack(position, enemy, isGround, isStatic, timeout);
+	Attack(position, enemy, isGround, isStatic, timeout, hold);
 }
 
 void CCircuitUnit::Guard(CCircuitUnit* target, int timeout)

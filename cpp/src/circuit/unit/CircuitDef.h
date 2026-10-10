@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include <array>
 #include <algorithm>
+#include <vector>
 
 namespace springai {
 	class WeaponMount;
@@ -268,6 +269,14 @@ public:
 	// product by squaring, never the terms.
 	float GetRawDps() const { return rawDps; }
 	float GetRawDmg() const { return rawDmg; }
+	// apex: the longest surface weapon of engine type "DGun" (commander D-gun,
+	// Behemoth gauss), manual or not; 0 = none. Its shot is per victim armor.
+	float GetDGunReach() const { return dgunReach; }
+	float GetDGunReload() const { return dgunReload; }
+	float GetDGunShotAt(int armor) const {
+		return ((armor >= 0) && ((size_t)armor < dgunShots.size())) ? dgunShots[armor] : 0.f;
+	}
+	int GetArmorType() const { return armorType; }
 	float GetPower() const { return power; }
 	float GetDefThreat() const { return defThreat; }
 	void SetRange(float range);
@@ -526,6 +535,10 @@ private:
 	float aoe;  // radius
 	float rawDps;  // sustained damage/s, before power fuses it
 	float rawDmg;  // per-shot alpha, likewise
+	float dgunReach = 0.f;
+	float dgunReload = 0.f;
+	std::vector<float> dgunShots;
+	int armorType = 0;
 	float power;  // ally max threat
 	float defThreat;  // enemy max threat
 	float minRange;

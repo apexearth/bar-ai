@@ -22,7 +22,7 @@ fighter/` (mirrored in `cpp/`, see the cpp-dll skill).
 | Their army on our ground, out of the raid answer's reach | the hunt's intercept: every 2 s `InterceptTarget` (biggest uncovered ground group nearer our home than `FoeAnchor`); a new one is decided at once with rule HUNT unless `small` (< 1/8 attack metal) or `outweighed` (1.2× vs attack + home pools + guns). HUNT = AttackTask focus: stage between it and home, go when gathered power beats it, end gone / left / 180 s. `apex: intercept`, `hunt start ... ic=1` | `military/nnhunt.as` |
 | Raid targets/roam | C++ CRaidTask: idle roam → nearest enemy-influenced mex spot; FindTarget still has no distance bias (open item) | C++ RaidTask.cpp |
 | Idle squad roam | C++ `IFighterTask::RoamPos` — front-anchored scatter (`apex_roam_front`), NOT the uniform-random pick whose mean is map center | C++ FighterTask.cpp |
-| Standoff/kite in squads | rows + kite; SIEGE-attr rows fear proximity (back off at 0.9 range, reopen to full) | C++ SquadTask.cpp |
+| Standoff/kite in squads | rows at each unit's shortest real weapon range (0-range footstep weapons ignored); long guns slide off known turrets (`siege-ring`); D-gun fear: a unit that outranges and outruns an enemy with a "DGun"-type weapon (commanders, Behemoth) holds midway between its reach and ours unless it is fodder (`ISquadTask::DGunKeepOut`, `apex: dgun-fear`, per-def `apex: dgun-def`) | C++ SquadTask.cpp |
 | Front position | posture publishes the lane via `ai.SetFrontPos` — consumed by C++ roam | `military/posture.as` |
 
 ## How much army — and why it is an ECONOMY quantity
@@ -114,4 +114,5 @@ against that one question.
 
 The 0-6 roam regression is unattributed (front-anchored roam vs serial
 advsol); the universal one-shot-fear rule (any unit kites anything that
-one-shots it and is slower) is scoped but unbuilt — see ISSUES.md.
+one-shots it and is slower) is built only for D-gun-type weapons (2026-10-10);
+corkorg and other brawlers without one are not feared.
