@@ -803,6 +803,7 @@ void CAttackTask::FindTarget()
 	int skippedSpam = 0;
 	int ignoredSmall = 0;
 	int refusedStrong = 0;
+	float refD = -1.f, refInfl = 0.f, refSide = 0.f;   // the refused group nearest our base, for atk-wait
 	float prevScore = -1.f;
 	const AIFloat3 foeBase = circuit->GetSetupManager()->GetEnemyBoxCentre();
 	const bool pushing = utils::is_valid(foeBase);
@@ -903,6 +904,12 @@ void CAttackTask::FindTarget()
 		}
 		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
+			const float bd = std::sqrt(sqBEDist);
+			if ((refD < 0.f) || (bd < refD)) {
+				refD = bd;
+				refInfl = group.influence;
+				refSide = (sidePow[i] >= 0.f) ? sidePow[i] : 0.f;
+			}
 			countGroupNear(group, NR_STRONG);
 			for (const ICoreUnit::Id eId : group.units) {
 				CEnemyInfo* e = outgunnedNear ? nullptr : circuit->GetEnemyInfo(eId);
@@ -1237,9 +1244,10 @@ void CAttackTask::FindTarget()
 		}
 	} else if ((refusedStrong > 0) && (frame >= nextStrongLog)) {
 		nextStrongLog = frame + FRAMES_PER_SEC * 30;
-		circuit->LOG("apex: atk-wait t=%i lead=%s n=%i pow=%.1f strong=%i groups=%i at=%.0f,%.0f dBase=%.0f",
+		circuit->LOG("apex: atk-wait t=%i lead=%s n=%i pow=%.1f strong=%i groups=%i at=%.0f,%.0f dBase=%.0f"
+			" refD=%.0f refInfl=%.1f side=%.1f",
 			circuit->GetTeamId(), cdef->GetDef()->GetName(), (int)units.size(), maxPower,
-			refusedStrong, (int)groups.size(), pos.x, pos.z, pos.distance2D(basePos));
+			refusedStrong, (int)groups.size(), pos.x, pos.z, pos.distance2D(basePos), refD, refInfl, refSide);
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }
