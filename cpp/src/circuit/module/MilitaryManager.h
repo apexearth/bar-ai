@@ -292,11 +292,16 @@ public:
 	// decision needs a SUSTAINED stall, not the boundary flicker of an
 	// economy running used==produced (measured 23 flips in 2 minutes).
 	int commCloakStallTicks = 0;
+	// The script's "comship" team value is fresh: the base is going down.
+	bool IsCommShip() const;
+	int commShipStallTicks = 0;
+	bool commShipCloak = false;
 
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 
 	void UpdateCommCloak();
+	void UpdateCommShipCloak();
 	void Watchdog();
 
 	void AddArmyCost(CCircuitUnit* unit);

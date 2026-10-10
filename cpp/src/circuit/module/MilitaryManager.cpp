@@ -606,6 +606,7 @@ void CMilitaryManager::Init()
 		lodQuiet = true;
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1, "milUpd");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommShipCloak, this), FRAMES_PER_SEC, offset + 3, "comShip");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
@@ -2148,6 +2149,16 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 		return false;
 	}
 	CEconomyManager* economyMgr = circuit->GetEconomyManager();
+	// apex: the base going down with its defence beaten (script comship.as):
+	// cloaked whenever the energy surplus pays the moving cost, so the drain
+	// never eats the bank the D-gun fires from.
+	if (IsCommShip()) {
+		const bool cloakedNow = unit->GetUnit()->IsCloaked();
+		const float surplus = economyMgr->GetAvgEnergyIncome() - economyMgr->GetEnergyPull()
+				+ (cloakedNow ? cdef->GetCloakCost() : 0.f);
+		const bool stalledNow = cloakedNow ? (commShipStallTicks >= 3) : economyMgr->IsEnergyStalling();
+		return !stalledNow && (surplus >= cdef->GetCloakCost());
+	}
 	// apex: the share is the whole rule, and 0.1 against the MOVING cost put
 	// the bar at 10,000 e/s -- an income most games never reach, so "always
 	// cloaked when rich" never happened and commanders stayed visible.
@@ -2189,6 +2200,39 @@ void CMilitaryManager::UpdateCommCloak()
 		TRY_UNIT(circuit, comm,
 			comm->CmdCloak(wantCloak);
 		)
+	}
+}
+
+bool CMilitaryManager::IsCommShip() const
+{
+	const float at = circuit->ReadTeamValue(circuit->GetTeamId(), "comship", -1.f);
+	return (at >= 0.f) && (circuit->GetLastFrame() - (int)at <= FRAMES_PER_SEC * 2);
+}
+
+// Each second while the script says the base is going down, and once after,
+// handing the cloak back to the standing rule.
+void CMilitaryManager::UpdateCommShipCloak()
+{
+	const bool ship = IsCommShip();
+	if (!ship && !commShipCloak) {
+		return;
+	}
+	commShipCloak = ship;
+	CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
+	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
+		return;
+	}
+	CEconomyManager* economyMgr = circuit->GetEconomyManager();
+	commShipStallTicks = economyMgr->IsEnergyStalling() ? (commShipStallTicks + 1) : 0;
+	const bool wantCloak = IsCommCloakWanted(comm);
+	if (wantCloak != comm->GetUnit()->IsCloaked()) {
+		TRY_UNIT(circuit, comm,
+			comm->CmdCloak(wantCloak);
+		)
+		circuit->LOG("apex: com-ship-cloak t=%i on=%d ship=%d e=%.0f inc=%.0f pull=%.0f cost=%.0f",
+				circuit->GetTeamId(), wantCloak ? 1 : 0, ship ? 1 : 0, economyMgr->GetEnergyCur(),
+				economyMgr->GetAvgEnergyIncome(), economyMgr->GetEnergyPull(),
+				comm->GetCircuitDef()->GetCloakCost());
 	}
 }
 
