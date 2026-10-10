@@ -7,6 +7,11 @@ namespace Military {
 // power beats it, the team push's machinery (AttackTask focus). Every decision,
 // either pick, is watched for HUNT_S: their metal we killed near the group, ours
 // lost there, and the wrecks credited to whoever holds the ground they fell on.
+//
+// THEIR ARMY ON OUR GROUND IS MET (docs/24: if the base is pushed, meet that
+// army and destroy it; read their path and intercept). It is decided the moment
+// it appears, the rule picks HUNT when our attack squads outweigh it by the
+// home parity, and the hunt ends once it is back on their side.
 const string NNH_HUNT = "grpM,grpInfl,grpFwd,grpHomeD,grpSpd,grpNet,grpArmed,grpShare,foeMobM,foeGrps,"
 	+ "atkPow,atkM,armyM,atkD,atkNearPow,powRatio,str,rezN,cover,push,holdWhy,incoming,minute";
 const int HT_NO = 0, HT_HUNT = 1;
@@ -28,7 +33,10 @@ int gHtFrom = 0;
 int gHtLast = 0;
 AIFloat3 gHtPos;
 int gHtDecN = 0, gHtHuntN = 0, gHtExN = 0, gHtGoN = 0, gHtGoneN = 0, gHtTimeN = 0, gHtNoGrp = 0, gHtNoArmy = 0;
-float gHtArmyM = 0.f, gHtAtkM = 0.f, gHtAtkD = -1.f;
+float gHtArmyM = 0.f, gHtAtkM = 0.f, gHtAtkD = -1.f, gHtHomeM = 0.f;
+bool gHtIc = false;      // the live hunt is an intercept
+int gHtIntrAt = -999999;   // when an army of theirs last stood on our ground
+int gHtIcN = 0, gHtIcHunt = 0, gHtIcSmall = 0, gHtIcOut = 0, gHtIcLeft = 0;
 
 array<int> gHwF;
 array<int> gHwOpt;
@@ -46,7 +54,7 @@ bool HuntHoldsFocus() { return gHtOn; }
 // Our ground army, and the metal and centre of what stands on attack tasks.
 void HuntArmyCensus(const AIFloat3& in gp)
 {
-	float m = 0.f, atk = 0.f, cx = 0.f, cz = 0.f;
+	float m = 0.f, atk = 0.f, home = 0.f, cx = 0.f, cz = 0.f;
 	for (uint i = 0; i < gCombatId.length(); ++i) {
 		CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
 		if ((u is null) || (u.circuitDef is null) || u.circuitDef.IsAbleToFly())
@@ -57,7 +65,15 @@ void HuntArmyCensus(const AIFloat3& in gp)
 		const float c = u.circuitDef.costM;
 		m += c;
 		IUnitTask@ t = u.task;
-		if ((t is null) || (t.GetType() != Task::Type::FIGHTER) || (t.GetFightType() != int(Task::FightType::ATTACK)))
+		if ((t is null) || (t.GetType() != Task::Type::FIGHTER))
+			continue;
+		const int ft = t.GetFightType();
+		if ((ft == int(Task::FightType::DEFEND)) || (ft == int(Task::FightType::GUARD))) {
+			if (OnOurGround(up))
+				home += c;
+			continue;
+		}
+		if (ft != int(Task::FightType::ATTACK))
 			continue;
 		atk += c;
 		cx += c * up.x;
@@ -65,11 +81,31 @@ void HuntArmyCensus(const AIFloat3& in gp)
 	}
 	gHtArmyM = m;
 	gHtAtkM = atk;
+	gHtHomeM = home;
 	gHtAtkD = (atk > 0.f) ? AIFloat3(cx / atk, 0.f, cz / atk).distance2D(gp) : -1.f;
 }
 
-// Their biggest GROUND army in sight: mobile armed metal per group (air and
-// constructors out), its slowest member's speed, and every group's total.
+// A group's mobile armed GROUND metal (air and constructors out) and the
+// speed of its slowest member.
+float GroundArmyOf(int g, float& out slow)
+{
+	float m = 0.f;
+	slow = 0.f;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int ud = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if ((ud <= 0) || (ud > Catalog::gDefCount) || !Catalog::gMobile[ud] || Catalog::gFlyer[ud]
+			|| Catalog::gBuilder[ud] || (Catalog::gPower[ud] <= 1.f))
+			continue;
+		m += Catalog::gCostM[ud];
+		if ((slow <= 0.f) || (Catalog::gSpeed[ud] < slow))
+			slow = Catalog::gSpeed[ud];
+	}
+	return m;
+}
+
+// Their biggest GROUND army in sight, its slowest member's speed, and every
+// group's total.
 bool HuntTarget(AIFloat3& out at, float& out gm, float& out slow, float& out tot, int& out nG)
 {
 	int best = -1;
@@ -82,17 +118,8 @@ bool HuntTarget(AIFloat3& out at, float& out gm, float& out slow, float& out tot
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
 		if (!OnMap(gp))
 			continue;
-		float m = 0.f, sl = 0.f;
-		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
-		for (int k = 0; k < nU; ++k) {
-			const int ud = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
-			if ((ud <= 0) || (ud > Catalog::gDefCount) || !Catalog::gMobile[ud] || Catalog::gFlyer[ud]
-				|| Catalog::gBuilder[ud] || (Catalog::gPower[ud] <= 1.f))
-				continue;
-			m += Catalog::gCostM[ud];
-			if ((sl <= 0.f) || (Catalog::gSpeed[ud] < sl))
-				sl = Catalog::gSpeed[ud];
-		}
+		float sl = 0.f;
+		const float m = GroundArmyOf(g, sl);
 		if (m <= 0.f)
 			continue;
 		++nG;
@@ -105,6 +132,28 @@ bool HuntTarget(AIFloat3& out at, float& out gm, float& out slow, float& out tot
 		}
 	}
 	return best >= 0;
+}
+
+// Their biggest ground army on our side of the map that the guns there do not
+// already cover (the raid answer's covered test).
+bool InterceptTarget(AIFloat3& out at, float& out gm, float& out slow)
+{
+	gm = 0.f;
+	slow = 0.f;
+	const int n = aiEnemyMgr.GetEnemyGroupCount();
+	for (int g = 0; g < n; ++g) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
+		if (!OnMap(gp) || !OnOurGround(gp))
+			continue;
+		float sl = 0.f;
+		const float m = GroundArmyOf(g, sl);
+		if ((m <= gm) || (GunsAt(gp) >= m))
+			continue;
+		gm = m;
+		slow = sl;
+		at = gp;
+	}
+	return gm > 0.f;
 }
 
 // The mobile group nearest p that could have walked there since lookF.
@@ -164,7 +213,7 @@ void HuntWantsLook()
 	NoteLook(LOOK_HUNT, at, unseen, 40);
 }
 
-void HuntDecide()
+void HuntDecide(bool intr, const AIFloat3& in ip, float im, float isl)
 {
 	AIFloat3 gp;
 	float gm = 0.f, slow = 0.f, tot = 0.f;
@@ -179,12 +228,36 @@ void HuntDecide()
 		++gHtNoArmy;
 		return;
 	}
+	if (intr) {
+		gp = ip;
+		gm = im;
+		slow = isl;
+	}
 	gp.y = ai.GetElevationAt(gp);
 	if (!gHtHeader) {
 		gHtHeader = true;
 		AiLog("apex: nnhunt-schema v1 state=" + Market::NN_STATE + " hunt=" + NNH_HUNT + " opt=name,w,p opts=NO,HUNT");
 	}
 	HuntArmyCensus(gp);
+	// Too small to turn for is the AttackTask's own bar (a group under an
+	// eighth of the squad's power is passed over); outweighed is his home parity
+	// against what fights on our ground: attack squads, home pools, the guns there.
+	int rule = HT_NO;
+	string icWhy = "";
+	const float guns = intr ? GunsAt(gp) : 0.f;
+	const float str = intr ? Market::StrRatio(gm, gHtAtkM + gHtHomeM + ((guns > 0.f) ? guns : 0.f)) : 0.f;
+	if (intr) {
+		++gHtIcN;
+		if (gm * 8.f < gHtAtkM) {
+			++gHtIcSmall;
+			icWhy = " small";
+		} else if (str * ANSWER_PARITY > 1.f) {
+			++gHtIcOut;
+			icWhy = " outweighed";
+		} else {
+			rule = HT_HUNT;
+		}
+	}
 	const float infl = aiMilitaryMgr.GetEnemyInflNear(gp, HUNT_R);
 	AIFloat3 pushAt;
 	float pushR = 0.f;
@@ -215,13 +288,20 @@ void HuntDecide()
 	f.insertLast(PushIncoming() ? 1.f : 0.f);
 	f.insertLast(float(ai.frame) / 1800.f);
 	array<float> w(2, Market::NE2_EPS);
-	w[HT_NO] = 1.f;
+	w[rule] = 1.f;
 	const float trust = HuntNnScore(st, f, w);
 	array<float> p(2);
 	const float flat = Market::NnHeadFlat();
-	const int c = Market::EcoDraw(HT_NO, trust, w, p, flat);
+	const int c = Market::EcoDraw(rule, trust, w, p, flat);
 	array<string> names = {"NO", "HUNT"};
-	AiLog(Market::EcoLine("nnhunt", "NO", flat > 0.f, trust, st, f, names, w, p, c));
+	AiLog(Market::EcoLine("nnhunt", names[rule], flat > 0.f, trust, st, f, names, w, p, c, intr ? "intercept" : "clock"));
+	if (intr)
+		AiLog(Factory::T() + "apex: intercept t=" + ai.teamId + " at=" + int(gp.x) + "," + int(gp.z)
+			+ " grpM=" + int(gm) + " homeD=" + int(gp.distance2D(Builder::gHomePos))
+			+ " guns=" + int(guns) + " homeM=" + int(gHtHomeM) + " atkM=" + int(gHtAtkM) + " atkD=" + int(gHtAtkD)
+			+ " atkPow=" + Market::NnF(atkPow, 1) + " foeInfl=" + Market::NnF(infl, 1)
+			+ " str=" + Market::NnF(str, 2)
+			+ " rule=" + names[rule] + icWhy + " chosen=" + names[c]);
 	++gHtDecN;
 	if (flat > 0.f)
 		++gHtExN;
@@ -236,12 +316,15 @@ void HuntDecide()
 	gHwLost.insertLast(0.f);
 	gHwWreck.insertLast(0.f);
 	if (c == HT_HUNT)
-		HuntStart(gp, gm);
+		HuntStart(gp, gm, intr);
 }
 
-void HuntStart(const AIFloat3& in at, float gm)
+void HuntStart(const AIFloat3& in at, float gm, bool ic)
 {
 	gHtOn = true;
+	gHtIc = ic;
+	if (ic)
+		++gHtIcHunt;
 	gHtGo = false;
 	gHtPos = at;
 	gHtMiss = 0;
@@ -250,7 +333,7 @@ void HuntStart(const AIFloat3& in at, float gm)
 	gHtUntil = ai.frame + HUNT_S * SECOND;
 	++gHtHuntN;
 	AiLog(Factory::T() + "apex: hunt start t=" + ai.teamId + " at=" + int(at.x) + "," + int(at.z)
-		+ " grpM=" + int(gm) + " atkPow=" + Market::NnF(aiMilitaryMgr.GetAttackPower(), 1));
+		+ " grpM=" + int(gm) + " atkPow=" + Market::NnF(aiMilitaryMgr.GetAttackPower(), 1) + " ic=" + (ic ? 1 : 0));
 	HuntFocus();
 }
 
@@ -279,10 +362,14 @@ void HuntEnd(const string why)
 	aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 	if (why == "gone")
 		++gHtGoneN;
+	else if (why == "left")
+		++gHtIcLeft;
 	else
 		++gHtTimeN;
 	AiLog(Factory::T() + "apex: hunt end t=" + ai.teamId + " why=" + why + " go=" + (gHtGo ? 1 : 0)
-		+ " s=" + ((ai.frame - gHtFrom) / SECOND));
+		+ " s=" + ((ai.frame - gHtFrom) / SECOND) + " ic=" + (gHtIc ? 1 : 0)
+		+ " foeLeft=" + int(ai.GetEnemyArmedCostNear(gHtPos, HUNT_NEAR)));
+	gHtIc = false;
 }
 
 void HuntLook()
@@ -298,6 +385,8 @@ void HuntLook()
 		gHtLast = ai.frame;
 		if (gHtMiss >= HUNT_MISS)
 			HuntEnd("gone");
+		else if (gHtIc && !OnOurGround(gHtPos))
+			HuntEnd("left");
 		else if (ai.frame >= gHtUntil)
 			HuntEnd("time");
 		else
@@ -371,9 +460,23 @@ void UpdateHunt()
 		gHtLookAt = ai.frame + HUNT_LOOK;
 		HuntLook();
 	}
-	if (!gHtOn && !StrikeHoldsFocus() && (ai.frame >= gHtNextAt)) {
-		gHtNextAt = ai.frame + 30 * SECOND;
-		HuntDecide();
+	// An army newly on our ground is decided now, not on the clock; one unseen
+	// for as long as the hunt takes to call a group gone is new.
+	if (!StrikeHoldsFocus() && !(gHtOn && gHtIc)) {
+		AIFloat3 ip;
+		float im = 0.f, isl = 0.f;
+		const bool intr = InterceptTarget(ip, im, isl);
+		if (intr && (ai.frame - gHtIntrAt > HUNT_MISS * HUNT_LOOK)) {
+			if (gHtOn)
+				HuntEnd("intercept");
+			gHtNextAt = ai.frame;
+		}
+		if (intr)
+			gHtIntrAt = ai.frame;
+		if (!gHtOn && (ai.frame >= gHtNextAt)) {
+			gHtNextAt = ai.frame + 30 * SECOND;
+			HuntDecide(intr, ip, im, isl);
+		}
 	}
 	if (ai.frame >= gHtLogAt) {
 		gHtLogAt = ai.frame + 60 * SECOND;
@@ -381,7 +484,8 @@ void UpdateHunt()
 			AiLog(Factory::T() + "apex: hunt-stat t=" + ai.teamId + " dec=" + gHtDecN + " ex=" + gHtExN
 				+ " hunt=" + gHtHuntN + " go=" + gHtGoN + " gone=" + gHtGoneN + " time=" + gHtTimeN
 				+ " noGrp=" + gHtNoGrp + " noArmy=" + gHtNoArmy + " on=" + (gHtOn ? 1 : 0)
-				+ " watch=" + gHwF.length());
+				+ " watch=" + gHwF.length() + " ic=" + gHtIcN + " icHunt=" + gHtIcHunt
+				+ " icSmall=" + gHtIcSmall + " icOut=" + gHtIcOut + " icLeft=" + gHtIcLeft);
 	}
 }
 
