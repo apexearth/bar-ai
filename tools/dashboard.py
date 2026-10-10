@@ -1215,8 +1215,12 @@ def nn_results(last=None, hours=None):
 def nn_state(last=None, hours=None):
     rows = []
     try:
-        with open(NN_DIR / "metrics.jsonl", encoding="utf-8") as fh:
-            rows = [json.loads(ln) for ln in fh if ln.strip()]
+        with open(NN_DIR / "metrics.jsonl", encoding="utf-8", errors="replace") as fh:
+            for ln in fh:
+                try:
+                    rows.append(json.loads(ln))
+                except ValueError:
+                    pass  # a torn line (two writers, or a crash mid-append) must not blank the tab
     except OSError:
         pass
     total = len(rows)

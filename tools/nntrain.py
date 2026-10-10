@@ -156,7 +156,7 @@ TRUST_KEEP = 5000       # most recent unseen decisions per kind that set its tru
 TRUST_MIN = 200         # a kind with fewer gets no say (trust 0)
 HUMAN_TAG = "mp-"         # matches/mp-*: his multiplayer games (tools/mp_archive.py)
 HUMAN_W = 4               # their rows count this many times in training, never in trust
-TRUST_RECENT = 2000     # trust is the CURRENT net's: older pairs scored weights since replaced
+TRUST_RECENT = 5000     # trust is the CURRENT net's: older pairs scored weights since replaced
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
@@ -760,13 +760,15 @@ class SourceResolver:
         return None
 
 
-# TRUST, kind 2 (docs/35). On a game's first, unseen batch, each CHANCE
+# TRUST, kind 3 (docs/35). On a game's first, unseen batch, each CHANCE
 # row (rand_weight) scores d = FULL(chosen) - FULL(rule) against the realized
 # a = outcome - FULL(rule), both in OBJECTIVE units, weighted 1/p; trust is the
-# lower end of a game-clustered bootstrap interval of their correlation,
-# floored at 0. The PLACEBO is the same statistic on rule-following rows with
+# lower end of a game-clustered bootstrap interval of the SLOPE of a on d (the
+# share of the net's claimed gain that is real), in [0, 1]. Kind 2 used their
+# correlation, which outcome noise (sd(a) 10-20x sd(d)) capped near 0.1 for a
+# perfect net. The PLACEBO is the same statistic on rule-following rows with
 # an option NOT taken in place of the chosen one: it must read ~0.
-TRUST_KIND = 2
+TRUST_KIND = 3
 TRUST_BOOT = 200        # bootstrap resamples (by game)
 TRUST_LO_Q = 2.5        # percentile taken as the interval's lower end
 TRUST_GAMES_MIN = 5     # fewer games than this: no say
@@ -779,10 +781,11 @@ def obj_units(p, ym, ys, mm):
     return (((p - ym) / ys) * mm).sum(1)
 
 
-def boot_corr(d, a, w, gid, b=None, seed=0):
+def boot_corr(d, a, w, gid, b=None, seed=0, slope=False):
     """(point, lower bound) of the weighted correlation of d and a -- partial
     on b when given (d and a both carry -FULL(rule), which alone made them
-    correlate) -- resampling whole games. None when there is too little to say."""
+    correlate) -- resampling whole games; with slope, of a's regression slope
+    on d (b held fixed) instead. None when there is too little to say."""
     games, g = np.unique(np.asarray(gid), return_inverse=True)
     if len(d) < TRUST_MIN or len(games) < TRUST_GAMES_MIN:
         return None
@@ -799,6 +802,15 @@ def boot_corr(d, a, w, gid, b=None, seed=0):
         return np.where((vx > 1e-24) & (vy > 1e-24), c / np.sqrt(np.maximum(vx * vy, 1e-24)), 0.0)
 
     vd, va = cov(d, d), cov(a, a)
+    if slope:
+        cda = cov(d, a)
+        if b is None:
+            r = np.where(vd > 1e-24, cda / np.maximum(vd, 1e-24), 0.0)
+        else:
+            vb, cdb, cab = cov(b, b), cov(d, b), cov(a, b)
+            det = vd * vb - cdb ** 2
+            r = np.where(det > 1e-24, (cda * vb - cab * cdb) / np.maximum(det, 1e-24), 0.0)
+        return float(r[0]), float(np.percentile(r[1:], TRUST_LO_Q))
     r = corr(cov(d, a), vd, va)
     if b is not None:
         vb = cov(b, b)
@@ -816,9 +828,9 @@ def honest_trust(pairs, placebo=None):
     if len(q) < TRUST_MIN:
         return 0.0
     d, a, w, b = (np.array([x[i] for x in q], dtype=np.float64) for i in (0, 1, 2, 4))
-    res = boot_corr(d, a, w, [x[3] for x in q], b, seed=len(q))
+    res = boot_corr(d, a, w, [x[3] for x in q], b, seed=len(q), slope=True)
     bias = max(0.0, (placebo or {}).get("r", 0.0))
-    return 0.0 if res is None else round(max(0.0, res[1] - bias), 3)
+    return 0.0 if res is None else round(min(1.0, max(0.0, res[1] - bias)), 3)
 
 
 def placebo_read(pairs, partial=True):
@@ -828,7 +840,7 @@ def placebo_read(pairs, partial=True):
         return None
     d, a = (np.array([x[i] for x in q], dtype=np.float64) for i in range(2))
     b = np.array([x[3] for x in q], dtype=np.float64) if partial and len(q[0]) > 3 else None
-    res = boot_corr(d, a, np.ones(len(q)), [x[2] for x in q], b, seed=len(q))
+    res = boot_corr(d, a, np.ones(len(q)), [x[2] for x in q], b, seed=len(q), slope=True)
     return {"n": len(q)} if res is None else {"r": round(res[0], 3), "lo": round(res[1], 3), "n": len(q)}
 
 

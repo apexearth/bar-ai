@@ -489,12 +489,15 @@ batch, every CHANCE row (logged odds below 0.95, or an explorer's override)
 scores d = FULL(chosen) - FULL(rule) against the realized outcome -
 FULL(rule), both in OBJECTIVE units, weighted 1/p (cap 20). The rule is the
 head's rule option, or for the builder and factory the top-valued priced
-option. Trust is the lower end (2.5th percentile) of a game-clustered
-bootstrap of their correlation PARTIAL on FULL(rule) (both carry it, which
-alone made them correlate), less the net's own placebo reading when positive,
-floored at 0; nothing under 200 chance rows
-or 5 games; the most recent 2,000 pairs (older pairs scored weights since
-replaced). The old trust -- FULL minus STATE against outcome minus STATE --
+option. Trust (kind 3, 2026-10-09 evening) is the lower end (2.5th
+percentile) of a game-clustered bootstrap of the SLOPE of the realized gain on
+the predicted one, FULL(rule) held fixed (both carry it, which alone made them
+correlate) -- the share of the net's claimed gain that turns out real -- less
+the net's own placebo slope when positive, in [0, 1]; nothing under 200 chance
+rows or 5 games; the most recent 5,000 pairs. Kind 2 took their CORRELATION,
+and outcome noise is 10-20x the decision's effect (sd(a) 2.3-4.4 against
+sd(d) 0.1-0.6 on every net), so a perfect net read ~0.1: T2's slope was 1.10
+[0.53, 1.71] while its correlation-trust sat at 0.07. The old trust -- FULL minus STATE against outcome minus STATE --
 read +0.1..0.3 on rows where the pick WAS the rule: it measured the two nets
 disagreeing. metrics.jsonl carries `placebo` (the new statistic on
 rule-following rows, an option not taken standing in for the chosen one: it
