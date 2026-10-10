@@ -252,13 +252,16 @@ function gadget:GameFrame(frame)
 				Spring.GetTeamResources(teamID, "energy")
 			local w = waste[teamID]
 			if w == nil then
-				w = { mW = 0, mI = 0, eW = 0, eI = 0 }
+				w = { mW = 0, mI = 0, eW = 0, eI = 0, eC = 0 }
 				waste[teamID] = w
 			end
 			w.mW = w.mW + (mExcess or 0)
 			w.mI = w.mI + income
 			w.eW = w.eW + (eExcess or 0)
 			w.eI = w.eI + (eIncome or 0)
+			-- energy the converters burned (game_energy_conversion's per-second mmUse): eMade
+			-- is gross, so a converter's metal was counted on top of the energy it ate
+			w.eC = w.eC + (Spring.GetTeamRulesParam(teamID, "mmUse") or 0)
 			Spring.SetGameRulesParam("ai_mwaste_" .. teamID, w.mW)
 			Spring.SetGameRulesParam("ai_ewaste_" .. teamID, w.eW)
 		end
@@ -268,8 +271,8 @@ function gadget:GameFrame(frame)
 		next_waste_echo = frame + WASTE_ECHO
 		for teamID, w in pairs(waste) do
 			BARAI_Echo(string.format(
-				"[BARAI_WASTE] frame=%d team=%d mWaste=%.0f mMade=%.0f eWaste=%.0f eMade=%.0f",
-				frame, teamID, w.mW, w.mI, w.eW, w.eI))
+				"[BARAI_WASTE] frame=%d team=%d mWaste=%.0f mMade=%.0f eWaste=%.0f eMade=%.0f eConv=%.0f",
+				frame, teamID, w.mW, w.mI, w.eW, w.eI, w.eC or 0))
 		end
 	end
 

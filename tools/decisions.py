@@ -69,7 +69,7 @@ NNFAC = re.compile(r"\]\[f=(\d+)\] .*?apex: nnfac t=(\d+) f=\d+ u=(\d+) c=(\S+) 
 PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ fac=\S+"
                   r" uid=(\d+) facid=(\d+)")
 EXEC = re.compile(r"apex: exec t=(\d+) ")
-WASTE = re.compile(r"\[BARAI_WASTE\] frame=(\d+) team=(\d+) mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)")
+WASTE = re.compile(r"\[BARAI_WASTE\] frame=(\d+) team=(\d+) mWaste=(\d+) mMade=(\d+) eWaste=(\d+) eMade=(\d+)(?: eConv=(\d+))?")
 BUILT = re.compile(r"\[BARAI_(?:PROD|BUILD)\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.]+ unit=(\w+) cost=(\d+)"
                    r"(?: x=(-?\d+) z=(-?\d+))?(?: uid=(\d+))?")
 UIDS = re.compile(r" uid=(\d+) atkid=(-?\d+)")
@@ -445,8 +445,11 @@ def parse(path, files=None):
             m = WASTE.search(ln)
             if m:
                 f, t = int(m.group(1)), int(m.group(2))
-                for d, k in ((sm, 4), (se, 6), (wm, 3), (we, 5)):
+                for d, k in ((sm, 4), (wm, 3), (we, 5)):
                     d.setdefault(t, Series()).add(f, float(m.group(k)))
+                # net of what the converters burned: their metal is already in mMade, so the
+                # gross energy credited a converter twice in dEco and dEInc (10-09)
+                se.setdefault(t, Series()).add(f, float(m.group(6)) - float(m.group(7) or 0))
                 lastw = max(lastw, f)
                 continue
             m = DMG.search(ln)
