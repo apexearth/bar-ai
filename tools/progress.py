@@ -36,7 +36,7 @@ from collections import defaultdict
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.environ.get("BARAI_PROGRESS_CACHE", os.path.join(REPO, "runtime", "progress"))
 FPM = 1800
-MINUTES = (3, 5, 8, 10, 12, 15, 20, 25, 30)
+MINUTES = (2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30)
 VERSION = 2
 CELL = 256.0
 CLAIM_R = 1500.0
@@ -261,7 +261,7 @@ NEW_NETS = "20261009-1325"
 def regime_of(g):
     """'1v1' / '2v2' from the training loop's batch name, else the name itself."""
     name = g["tournament"][16:]
-    return "1v1" if "1v1" in name else ("2v2" if "barbtrain" in name else (name or "?"))
+    return "1v1" if "1v1" in name else ("2v2" if ("barbtrain" in name or "2v2" in name) else (name or "?"))
 
 
 TRUST_RE = re.compile(r"const (?:float|array<float>) (NN[A-Z]*)_TRUST = \{?([^;}]*)\}?;")

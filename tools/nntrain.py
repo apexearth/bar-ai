@@ -84,7 +84,12 @@ OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc
              # half endV's weight: one value per game, so its credit to a decision is noisier
              ("endFast", "endFast"): 0.5,
              (5, "edgeArmy"): 0.25, (10, "edgeArmy"): 0.25, (5, "edgeLand"): 0.25, (10, "edgeLand"): 0.5,
-             (10, "edgeEco"): 0.25, (10, "edgeMex"): 0.25}
+             (10, "edgeEco"): 0.25, (10, "edgeMex"): 0.25,
+             # the opening (his 10-09): mexes taken and kept, early income; short horizons label
+             # decisions near a short game's end that the 5- and 10-minute ones cannot reach
+             (1, "dMInc"): 0.25, (1, "dMex"): 0.25,
+             (3, "dEco"): 0.5, (3, "dMInc"): 0.25, (3, "dMex"): 0.5, (3, "lostNear"): -0.25,
+             (3, "edgeMex"): 0.25, (3, "edgeLand"): 0.25}
 # the dashboard's headline accuracy: the per-decision outcomes the net is steered by
 HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE and t[1] not in GAME_LEVEL]
 HIDDEN = 32
