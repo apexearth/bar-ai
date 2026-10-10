@@ -113,12 +113,12 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 	const float tFight = u.GetHealthPercent() * Catalog::gHealth[int(u.circuitDef.id)] / dps;
 	float k = ComDGunKills(u, tFight, vmax, rad / float(s.length()), int(s.length()));
 	s.sortAsc();
-	float out = 0.f;
+	float dgOut = 0.f;
 	for (int i = int(s.length()) - 1; (i >= 0) && (k > 0.f); --i) {
-		out += s[i] * ((k >= 1.f) ? 1.f : k);
+		dgOut += s[i] * ((k >= 1.f) ? 1.f : k);
 		k -= 1.f;
 	}
-	return out;
+	return dgOut;
 }
 
 void ShipRetreatLine(CCircuitUnit@ u, bool on)
