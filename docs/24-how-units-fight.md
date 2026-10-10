@@ -263,7 +263,9 @@ to them)
 - When the base itself is being destroyed, the commander goes down with his
   ship (2026-10-10): he does not run and end up the last one standing. A good
   cloak and D-gun on the few heavy units attacking the base (bulls) usually
-  saves it.
+  saves it. Only when the base's own defence cannot win without him (do the
+  math): if guns and army can hold, he stays safe; if we are mostly
+  defenseless, he steps in.
 - **Front line:** the army holds a line where our ground ends, at a narrow
   part of the map if there is one, so nothing goes round it. It fights inside
   nano range so it is healed while fighting. When the forward lane is lost,
