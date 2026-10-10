@@ -1192,6 +1192,17 @@ TRUST_RISE_PER_H = 0.25
 _RAMP = None
 
 
+# THE NETS ALWAYS DECIDE (his 10-10: "I'd rather we always use the neural network so we can
+# eventually find values that work - even if it means horrible play"). A trained net's say is
+# 1; the honest trust is still computed and written beside it as "// earned" for the dashboard.
+# The rules-only control is the -b0 batches (apex_nn_blend=0), which this does not touch.
+FULL_SAY = True
+
+
+def say(earned):
+    return 1.0 if FULL_SAY else earned
+
+
 def ramped(key, v):
     global _RAMP
     if _RAMP is None:
@@ -1232,7 +1243,8 @@ def head_block(head, p, layout=None):
             "const array<float> %s_B2 = %s;" % (p, fmt_arr(b2)),
             "const array<float> %s_WO = %s;" % (p, fmt_arr(wo)),
             "const float %s_BO = %.7ff;" % (p, bo),
-            "const float %s_TRUST = %.7ff;" % (p, ramped(p, head.trust()))]
+            "const float %s_TRUST = %.7ff;" % (p, say(ramped(p, head.trust()))),
+            "// earned %s_TRUST = %.3f" % (p, ramped(p, head.trust()))]
 
 
 def fac_block(head):
@@ -1337,7 +1349,8 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
         "const array<float> NNW_WO = %s;" % fmt_arr(wo),
         "const float NNW_BO = %.7ff;" % bo,
         "// per kind, in NNW_KINDS order: how much say the net gets (0 = the market alone)",
-        "const array<float> NNW_TRUST = %s;" % fmt_arr([ramped("NNW:" + k, trust.get(k, 0.0)) for k in KINDS])] + tail)
+        "const array<float> NNW_TRUST = %s;" % fmt_arr([say(ramped("NNW:" + k, trust.get(k, 0.0))) for k in KINDS]),
+        "// earned NNW_TRUST = {%s}" % ",".join("%.3f" % ramped("NNW:" + k, trust.get(k, 0.0)) for k in KINDS)] + tail)
 
 
 def export_targets():

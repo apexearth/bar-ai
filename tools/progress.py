@@ -317,6 +317,7 @@ def regime_of(g):
 
 
 TRUST_RE = re.compile(r"const (?:float|array<float>) (NN[A-Z]*)_TRUST = \{?([^;}]*)\}?;")
+EARNED_RE = re.compile(r"// earned (NN[A-Z]*)_TRUST = \{?([^;}\n]*)\}?")
 
 
 def trust():
@@ -331,10 +332,14 @@ def trust():
         return {"kind": None, "nets": []}
     kind = re.search(r"NN_TRUST_KIND = (\d+);", txt)
     nets, label = [], "?"
+    # the nets always decide (nntrain FULL_SAY); what they have earned is the "// earned" line
+    earned = dict((k, v) for k, v in EARNED_RE.findall(txt))
     for line in txt.splitlines():
         if line.startswith("// the "):
             label = line[7:].split(" (")[0].replace(" net", "")
         m = TRUST_RE.match(line)
+        if m and m.group(1) in earned:
+            m = EARNED_RE.match("// earned %s_TRUST = %s" % (m.group(1), earned[m.group(1)]))
         if m:
             vals = [float(v.strip().rstrip("f")) for v in m.group(2).split(",") if v.strip()]
             name = "builder" if m.group(1) == "NNW" else label
