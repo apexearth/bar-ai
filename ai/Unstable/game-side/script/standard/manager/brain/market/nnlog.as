@@ -453,12 +453,21 @@ int NnValHeldAt(const string& in tag, float lo, float hi)
 	const bool held = gNnExplore && (NnU01() < 0.2f);
 	gNnValTag.insertLast(tag);
 	gNnValIsHeld.insertLast(held);
-	gNnValHeld.insertLast(held ? NnUniform(lo, hi) : 0.f);
+	gNnValHeld.insertLast(held ? NnGauss() : 0.f);   // the game's nudge, in NnNudge's z
 	const int n = int(gNnValTag.length()) - 1;
 	if (gNnExplore)
 		AiLog("apex: nn-balance t=" + ai.teamId + " head=" + tag + " held=" + (held ? 1 : 0)
-			+ " v=" + NnF(gNnValHeld[n], 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4));
+			+ " z=" + NnF(gNnValHeld[n], 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4));
 	return n;
+}
+
+// A step of NN_NUDGE of the value (at least of 0.25, so a value at 0 still moves) per unit z.
+const float NN_NUDGE = 0.2f;
+float NnNudge(float v, float z, float lo, float hi)
+{
+	const float s = NN_NUDGE * ((v > 0.25f) ? v : 0.25f);
+	const float r = v + s * z;
+	return (r < lo) ? lo : ((r > hi) ? hi : r);
 }
 
 float NnValAt(float v, const array<float>& in a, int S, int N, int H, const array<float>& in XM,
@@ -568,19 +577,21 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	const int hk = NnValHeldAt(tag, lo, hi);
 	float v = rule, vnet = rule;
 	bool rnd = false, game = false, net = false;
-	if (gNnValIsHeld[hk]) {
-		v = gNnValHeld[hk];
-		rnd = true;
-		game = true;
-	} else if ((flat > 0.f) && (NnU01() < flat)) {
-		v = NnUniform(lo, hi);
-		rnd = true;
-	} else if ((t > 0.f) && (NnU01() < t)) {
+	if ((t > 0.f) && (NnU01() < t)) {
 		const double _t = Perf::T0();
 		vnet = NnValBest(S, H, XM, XS, W1, B1, W2, B2, WO, BO, st, f, rule, sLo, sHi);
 		Perf::Add("nn.val", _t);
 		v = vnet;
 		net = true;
+	}
+	// exploration nudges what the policy plays, never leaps across the range (his 10-10)
+	if (gNnValIsHeld[hk]) {
+		v = NnNudge(v, gNnValHeld[hk], lo, hi);
+		rnd = true;
+		game = true;
+	} else if ((flat > 0.f) && (NnU01() < flat)) {
+		v = NnNudge(v, NnGauss(), lo, hi);
+		rnd = true;
 	}
 	string ln = "apex: nnval head=" + tag + " t=" + ai.teamId + " f=" + ai.frame + " v=" + NnF(v, 4)
 		+ " rule=" + NnF(rule, 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4) + " rnd=" + (rnd ? 1 : 0)

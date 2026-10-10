@@ -1422,7 +1422,8 @@ class AirHead(ComHead):
     PREFIX = "NNA"
 
 
-VAL_ALTS = 9   # evenly spaced values a placebo row's stand-in is drawn from
+NUDGE = 0.2    # nnlog.as NN_NUDGE: an explored value is v + NUDGE * max(v, 0.25) * z, z ~ N(0,1)
+NUDGE_Z = (-1.6, -1.0, -0.6, -0.3, 0.3, 0.6, 1.0, 1.6)   # placebo stand-ins at those z
 
 
 def featurize_val(row, state_keys, own_keys):
@@ -1449,8 +1450,11 @@ class ValHead(ComHead):
         return float(row["rule"])
 
     def alts_of(self, row, rule):
+        # the same nudges exploration plays (nnlog.as NnNudge, 10-10): a placebo stand-in
+        # spread over the whole range no longer looks like a chance row
         lo, hi = row["lo"], row["hi"]
-        vals = [lo + (hi - lo) * k / (VAL_ALTS - 1) for k in range(VAL_ALTS)]
+        s = NUDGE * max(rule, 0.25)
+        vals = [min(hi, max(lo, rule + s * z)) for z in NUDGE_Z]
         return [v for v in vals if abs(v - rule) > 1e-6]
 
     @staticmethod

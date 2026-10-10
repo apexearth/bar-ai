@@ -295,7 +295,9 @@ His ruling: a quantity is never chopped into steps, and an integer count is a
 real value the game takes the ceiling of. Thirteen heads are one mechanism,
 `NnValDecide` (nnlog.as), each a value v on a range, the rule's value 1x
 (aplant: the count itself, rule 1). Range tops are "almost unreasonably high"
-so the net sees big variance; draws are uniform, linear, never log.
+so the net has room; EXPLORATION is local (his 10-10: tweak from where it is, never
+leap): an explored value is the policy's v nudged, v + 0.2 x max(v, 0.25) x z, z ~ N(0,1),
+clamped to the range (`NnNudge`, NN_NUDGE).
 
 | head | file | v multiplies | range |
 |---|---|---|---|
@@ -313,9 +315,11 @@ so the net sees big variance; draws are uniform, linear, never log.
 | gunp | protect_nn | the forced defence pushes that bypass the draw: the guns basefront (gBfWanted), comself (ComSelfGun's need) and defrole (gDrQuota) want, as int(c x v + u) with u one uniform held all game (`apex: gunp-dither`), so v = 1 is c and below 1 a lone gun is bought in a share v of games; the cover jump's floor x v and its one gun by the same rounding; the defence role's quota (roles.as) x v. coverall stays mexg's, draw and defpanic stay rules. Every 30 s from 5 s + team stagger; prefix NNGP; own fields: minute, enemy army seen, its decaying peak, enemy army ever seen, raid metal, threat at home, danger gap, army at home, our guns, defence value, mexes, mexes killed in 3 min, eco metal lost | 0-4 |
 | aplant | plannet | -- the plant count, owed ceil(v) | 1-8 |
 
-**Play.** A held explorer head plays its game-long draw; else an explorer
-draws uniformly with odds NN_HEAD_FLAT; else, with odds t (trust x blend,
-honest trust only: NN_TRUST_KIND >= 2), the net's best v; else the rule's 1x.
+**Play.** With odds t (trust x blend, honest trust only: NN_TRUST_KIND >= 2) the
+net's best v, else the rule's 1x; then an explorer nudges it -- a held head (odds 0.2
+per head per explorer game, ~2-3 of 13) by its game-long z, else with odds
+NN_HEAD_FLAT by a fresh z. The placebo's stand-ins are the same nudges of the rule
+(nntrain NUDGE_Z).
 The best v is a sweep: 25 even points over the range clipped to the one the
 net was trained on (`<P>_LO`/`<P>_HI` in nnweights.as), then 8 between the
 best point's neighbours, 33 forward passes of the head's net with the state
@@ -327,8 +331,8 @@ Never rounded: v plays as drawn; only the counts it sizes take a ceiling.
 **Row.** `apex: nnval-schema v1 head=con state=.. own=.. lo= hi= rule=` once per
 head, then per decision `apex: nnval head=con t=N f=F v=.. rule=1.0000 lo=..
 hi=.. rnd=0|1 dens=.. ex=0|1 game=0|1 trust=.. vnet=..|- | state | own`.
-`rnd=1` is a uniform draw at density `dens` = 1/(hi-lo) (held or per
-decision); `rnd=0` is the rule or the net (`vnet` = the net's pick when it
+`rnd=1` is a nudged value (held or per decision; `dens` still prints 1/(hi-lo) and
+nothing reads it); `rnd=0` is the rule or the net (`vnet` = the net's pick when it
 played). A new tag, so the old `apex: nncon`-style option rows never mix in;
 `decisions.val_rows_of` reads it (`chosen` = v).
 
