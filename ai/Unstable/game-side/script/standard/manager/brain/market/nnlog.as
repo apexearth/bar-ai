@@ -490,9 +490,9 @@ float NnValAt(float v, const array<float>& in a, int S, int N, int H, const arra
 	for (int h2 = 0; h2 < H; ++h2) {
 		float acc = B2[h2];
 		const int b0 = h2 - h2 % NN_BLK;
-		for (int j = 0; j < NN_BLK; ++j) {
-			if (h1[b0 + j] > 0.f)
-				acc += W2[h2 * NN_BLK + j] * h1[b0 + j];
+		for (int bj = 0; bj < NN_BLK; ++bj) {
+			if (h1[b0 + bj] > 0.f)
+				acc += W2[h2 * NN_BLK + bj] * h1[b0 + bj];
 		}
 		if (acc > 0.f)
 			sc += WO[h2] * acc;
@@ -796,9 +796,9 @@ float NnFacScore(CCircuitUnit@ fac, const array<int>& in defs, array<float>& val
 		for (int h2 = 0; h2 < H; ++h2) {
 			float acc = NNF_B2[h2];
 			const int b0 = h2 - h2 % NN_BLK;
-			for (int j = 0; j < NN_BLK; ++j) {
-				if (h1[b0 + j] > 0.f)
-					acc += NNF_W2[h2 * NN_BLK + j] * h1[b0 + j];
+			for (int bj = 0; bj < NN_BLK; ++bj) {
+				if (h1[b0 + bj] > 0.f)
+					acc += NNF_W2[h2 * NN_BLK + bj] * h1[b0 + bj];
 			}
 			if (acc > 0.f)
 				sc += NNF_WO[h2] * acc;
@@ -986,9 +986,9 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 		for (int h2 = 0; h2 < H; ++h2) {
 			float acc = B2[h2];
 			const int b0 = h2 - h2 % NN_BLK;
-			for (int j = 0; j < NN_BLK; ++j) {
-				if (h1[b0 + j] > 0.f)
-					acc += W2[h2 * NN_BLK + j] * h1[b0 + j];
+			for (int bj = 0; bj < NN_BLK; ++bj) {
+				if (h1[b0 + bj] > 0.f)
+					acc += W2[h2 * NN_BLK + bj] * h1[b0 + bj];
 			}
 			if (acc > 0.f)
 				sc += WO[h2] * acc;
@@ -1198,9 +1198,9 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 			for (int h2 = 0; h2 < H; ++h2) {
 				float a = NNW_B2[h2];
 				const int b0 = h2 - h2 % NN_BLK;
-				for (int j = 0; j < NN_BLK; ++j) {
-					if (gNnH1[b0 + j] > 0.f)
-						a += NNW_W2[h2 * NN_BLK + j] * gNnH1[b0 + j];
+				for (int bj = 0; bj < NN_BLK; ++bj) {
+					if (gNnH1[b0 + bj] > 0.f)
+						a += NNW_W2[h2 * NN_BLK + bj] * gNnH1[b0 + bj];
 				}
 				if (a > 0.f)
 					sc += NNW_WO[h2] * a;
