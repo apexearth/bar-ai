@@ -2147,9 +2147,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		&& !((ranked.length() > 0) && ((ranked[0].kind == WK_MEX)
 			|| ((ranked[0].kind == WK_RECLAIM) && (ranked[0].spotId == RCM_SPOT))))
 		&& (ai.GetTunable("apex_com_escort", TUNE_COM_ESCORT) > 0.5f)
+		&& (ai.frame >= gComLabNextAt)   // a stint per 2 min: re-pulled on every election he walked lab <-> job (his 10-10)
 		&& ((EscortShortfall() > 0)
 			|| ((ai.GetTunable("apex_com_lab_early", TUNE_COM_LAB_EARLY) > 0.5f)   // ...and through the opening (his 2026-10-04)
-				&& (ai.frame >= gComLabNextAt) && (TopGroundPlantTier() < 2) && (ArmyValue() < ArmyTarget()))))
+				&& (TopGroundPlantTier() < 2) && (ArmyValue() < ArmyTarget()))))
 	{
 		const AIFloat3 uAt = unit.GetPos(ai.frame);
 		CCircuitUnit@ lab = null;
@@ -2193,8 +2194,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++gComEscort;
 			coverPush = true;
 			why = "comescort";
-			if (EscortShortfall() <= 0)
-				gComLabNextAt = ai.frame + 120 * SECOND;
+			gComLabNextAt = ai.frame + 120 * SECOND;
 		}
 	}
 	// PlantFramed walks the commitment ledger; the tunable is a map lookup, so
