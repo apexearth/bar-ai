@@ -448,7 +448,9 @@ int NnValHeldAt(const string& in tag, float lo, float hi)
 	if (i >= 0)
 		return i;
 	NnExploreRoll();
-	const bool held = gNnExplore && (NnU01() < 0.5f);
+	// ~2-3 of the ~13 heads per explorer game (his 10-10): at 0.5 six or seven sat at random
+	// extremes together, and one head's effect in them did not carry to normal play (gunp A/B)
+	const bool held = gNnExplore && (NnU01() < 0.2f);
 	gNnValTag.insertLast(tag);
 	gNnValIsHeld.insertLast(held);
 	gNnValHeld.insertLast(held ? NnUniform(lo, hi) : 0.f);
