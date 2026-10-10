@@ -346,7 +346,10 @@ dEInc, mWaste, eWaste, dMex, lnD, kill, lost (enemy kills only) split into
 lostNear (within 600 elmos of the chosen site: the decision's own exposure)
 and lostFar (the enemy's doing), and by KILLER CLASS (lostAir / lostStatic /
 lostMobile, from the killer's unit def), dEco (economic power incl. energy),
-reclaim. Plus `done`/`buildS`, `survived`, and `lostPre` -- enemy kills in
+reclaim, `lostEco` (2026-10-09: metal of our extractors and mobile
+constructors, not the commander, the enemy killed; its own TARGETS group
+appended after endFast, since a key added to PER_H would land mid-list and
+reset every net). Plus `done`/`buildS`, `survived`, and `lostPre` -- enemy kills in
 the 5 minutes BEFORE the decision, a check that the state saw the pressure.
 
 Against the enemy (2026-10-08): `edgeArmy`, `edgeEco`, `edgeLand`, `edgeMex`
@@ -511,7 +514,8 @@ because `DrawWeights` takes the first of each category. OBJECTIVE
 1.0, metal and energy income 0.25 each, damage trade 0.5, losses near the
 site -0.5, finished, survived, lifetime and lifetime kills 0.25 each; since
 2026-10-08 also endFast 0.5, land edge +5/+10 0.25/0.5, army edge +5/+10 0.25
-each, eco and mex edge +10 0.25 each.
+each, eco and mex edge +10 0.25 each; since 2026-10-09 lostEco +1/+3/+5
+-0.25 each.
 **Decision heads** (2026-10-09, `NnHeadScore`/`NnHeadMix`, posture's
 `NnPostScore`): the log-space blend left the rule's 1 vs 0.01 (4.6 log units)
 standing against a verdict clamped +-3, so no head below trust ~0.43 could

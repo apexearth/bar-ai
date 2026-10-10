@@ -59,12 +59,15 @@ PER_H = ("dMInc", "dEInc", "dEco", "lnD", "eWaste", "mWaste", "dMex", "lostNear"
 # a share of what was made: over a near-empty window it ran to the hundreds and
 # put the 10-minute mWaste R2 at -9.9; clipped to [0, 1] (also on load)
 WASTE = ("mWaste", "eWaste")
-LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill")
+LOGGED = ("lostNear", "lostFar", "lostAir", "lostStatic", "lostMobile", "reclaim", "lifeS", "lifeKill", "lostEco")
 SINGLE = ("done", "survived", "lifeS", "lifeKill", "won", "comLost", "endV", "comLostD")    # one value per decision, not per horizon
 EDGE_H = ("edgeArmy", "edgeEco", "edgeLand", "edgeMex")   # 2026-10-08: did the game move our way
+# per-horizon like PER_H, but a group of its own: a key added to PER_H lands mid-list and resets every net
+ECO_H = ("lostEco",)
 # Only ever appended to: a saved net and buffer then grow masked columns (adopt_targets).
 TARGETS = ([(h, k) for h in decisions.HORIZONS for k in PER_H] + [(k, k) for k in SINGLE]
-           + [(h, k) for h in decisions.HORIZONS for k in EDGE_H] + [("endFast", "endFast")])
+           + [(h, k) for h in decisions.HORIZONS for k in EDGE_H] + [("endFast", "endFast")]
+           + [(h, k) for h in decisions.HORIZONS for k in ECO_H])
 # One value for every row of a game: a single game's batch has no spread to
 # explain, and their R2 there ran to large negatives and swamped the headline.
 GAME_LEVEL = ("won", "endV", "endFast", "comLostD")
@@ -89,7 +92,9 @@ OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc
              # decisions near a short game's end that the 5- and 10-minute ones cannot reach
              (1, "dMInc"): 0.25, (1, "dMex"): 0.25,
              (3, "dEco"): 0.5, (3, "dMInc"): 0.25, (3, "dMex"): 0.5, (3, "lostNear"): -0.25,
-             (3, "edgeMex"): 0.25, (3, "edgeLand"): 0.25}
+             (3, "edgeMex"): 0.25, (3, "edgeLand"): 0.25,
+             # extractors and constructors the enemy killed (his 10-09: keeping mexes is the opening)
+             (1, "lostEco"): -0.25, (3, "lostEco"): -0.25, (5, "lostEco"): -0.25}
 # the dashboard's headline accuracy: the per-decision outcomes the net is steered by
 HEADLINE = [i for i, t in enumerate(TARGETS) if t in OBJECTIVE and t[1] not in GAME_LEVEL]
 HIDDEN = 32

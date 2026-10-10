@@ -15,7 +15,9 @@ minutes.py reads, for the DECIDING team, at +1/+3/+5 minutes:
   kill / lost     metal destroyed by / of this team in (f, f+h]; lost counts only
                   enemy kills, split into lostNear (within NEAR of the chosen site:
                   the decision's own exposure) and lostFar (the enemy's doing)
-  survived        the chosen building still stood SURVIVE_S after it finished
+  lostEco         metal of our extractors and mobile constructors (not the
+                  commander) the enemy killed in (f, f+h]
+  survived       the chosen building still stood SURVIVE_S after it finished
   edgeArmy / edgeEco / edgeLand / edgeMex
                   change in ln(our side / theirs) over the whole minutes from f to
                   f+h, progress.py's edges: did the game move our way
@@ -104,6 +106,34 @@ def killer_class(name):
             cls = "?"
     _KILLER[name] = cls
     return cls
+
+
+BUILDER = re.compile(r"\bbuilder\s*=\s*true", re.I)
+_ECO = {}
+
+
+def eco_kind(name):
+    """'mex' for an extractor, 'con' for a mobile constructor other than the
+    commander (his death is comLost/comLostD), else None."""
+    if name in _ECO:
+        return _ECO[name]
+    kind = None
+    if MEX.search(name):
+        kind = "mex"
+    elif not name.startswith(COMS):
+        try:
+            import bar_env
+            import unitdef
+            p = unitdef.trees(bar_env.load())[0].find(name)
+            if p is not None:
+                text = p.read_text(encoding="utf-8", errors="replace")
+                m = SPEED.search(text)
+                if BUILDER.search(text) and m and float(m.group(1)) > 0:
+                    kind = "con"
+        except Exception:
+            kind = None
+    _ECO[name] = kind
+    return kind
 
 
 class Series:
@@ -450,7 +480,7 @@ def parse(path, files=None):
                     if atk >= 0 and atk != t:
                         dead.setdefault(t, []).append((f, unit, x, z))
                     if atk >= 0 and atk != t:
-                        lostev.setdefault(t, []).append((f, cost, x, z, killer_class(m.group(9))))
+                        lostev.setdefault(t, []).append((f, cost, x, z, killer_class(m.group(9)), unit))
                     if MEX.search(unit):
                         mexev.setdefault(t, []).append((f, -1))
                 if atk >= 0 and atk != t:
@@ -585,6 +615,7 @@ def labels(g, t, f, site=None):
         out["lostFar"] = None if site is None else out["lost"] - out["lostNear"]
         for cls in ("air", "static", "mobile"):
             out["lost" + cls.capitalize()] = sum(e[1] for e in lev if e[4] == cls)
+        out["lostEco"] = sum(e[1] for e in lev if eco_kind(e[5]))
         out["dEco"] = (math.log((m1 + e1 / 60.0) / (m0 + e0 / 60.0))
                        if None not in (m0, m1, e0, e1) and m0 + e0 > 0 and m1 + e1 > 0 else None)
         rc = g["reclaim"].get(t)
