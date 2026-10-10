@@ -4,6 +4,7 @@ games, then run longer and longer ones as we improve).
     python tools/curriculum.py              # the stage, and where we stand at its judged minute
     python tools/curriculum.py --minutes    # the game length the loops use (just the number)
     python tools/curriculum.py --advance    # step up if this stage is passed
+    python tools/curriculum.py --set 40     # set the GAME length by hand (stage = 40 - PAD)
 
 A stage of L minutes runs L+PAD-minute games (so decisions up to minute L-1 carry their
 5-minute labels) and is judged on each game's MEAN edge from minute 3 to its end -- a game that falls behind and catches up counts (his 10-10). Passed when the median eco and
@@ -106,6 +107,15 @@ def main(argv):
     if "--minutes" in argv:
         print(st["minutes"] + PAD)
         return 0
+    if "--set" in argv:
+        # by GAME length, as he asks for it ("try doing 40m"); the stage is that less PAD
+        games = int(argv[argv.index("--set") + 1])
+        st["history"].append({"minutes": st["minutes"], "since": st["since"],
+                              "set": time.strftime("%Y%m%d-%H%M%S"), "to": games - PAD})
+        st["minutes"], st["since"] = games - PAD, time.strftime("%Y%m%d-%H%M%S")
+        save(st)
+        print("SET stage %d min (games run %d)" % (st["minutes"], games))
+        return 0
     minute, res = judge(st)
     print("stage %d min (games run %d; judged on each game's mean edge m%d-m%d) since %s" % (st["minutes"], st["minutes"] + PAD, WIN_FROM, st["minutes"] + PAD - 1, st["since"]))
     for reg, r in res.items():
@@ -114,11 +124,12 @@ def main(argv):
         for m, row in r["curve"].items():
             print("      %-4s %s" % (m, row))
     if "--advance" in argv and all(r["ok"] for r in res.values()):
-        i = STAGES.index(st["minutes"]) if st["minutes"] in STAGES else 0
-        if i + 1 < len(STAGES):
+        # the next LONGER stage: a length set by hand off the list must never step down
+        nxt = [s for s in STAGES if s > st["minutes"]]
+        if nxt:
             st["history"].append({"minutes": st["minutes"], "since": st["since"],
                                   "passed": time.strftime("%Y%m%d-%H%M%S"), "result": res})
-            st["minutes"], st["since"] = STAGES[i + 1], time.strftime("%Y%m%d-%H%M%S")
+            st["minutes"], st["since"] = nxt[0], time.strftime("%Y%m%d-%H%M%S")
             save(st)
             print("ADVANCED to %d minutes" % st["minutes"])
     elif not os.path.exists(STATE):
