@@ -178,22 +178,18 @@
 			},
 			"legmg": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legrl": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legrhapsis": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"leglupara": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 	// T2 Defenses -- Legion
@@ -236,37 +232,30 @@
 			},
 			"legacluster": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legbastion": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"leglrpc": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legministarfall": {
 				"role": ["super", "static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legstarfall": {
 				"role": ["super", "static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legflak": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"leglraa": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legperdition":{
@@ -292,24 +281,20 @@
 			},
 			"legctl": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 			 	"power": 1.0
 			},
 			"legfmg": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 			 	"power": 1.0, 
 				"since": 360,
 				"limit": 3
 			},
 			"legfrl": {
 				"role": ["anti_air"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 				"power": 1.0
 			},
 			"legtl": {
 				"role": ["static"],
-				"threat": {"air": 0.0, "surf": 0.0, "water": 0.0, "default": 0.0},
 			 	"power": 1.0
 			},
 	// T2 Sea Defenses -- Legion
