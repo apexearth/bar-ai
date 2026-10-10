@@ -292,6 +292,7 @@ string PfKillWhy(int d)
 		+ " dps=" + PkF(gPkDps[d], 1)
 		+ " xOutr=" + PkF(gPkOutr[d], 3)
 		+ " /ref=" + PkF(gPkRef[d], 3)
+		+ " xOverkill=" + PkF(gPkOk[d], 3)
 		+ " xDur=" + PkF(gPkDur[d], 3)
 		+ " xTrade=" + PkF(gPkTrade[d], 2)
 		+ " =pk" + PkF(gPkOut[d], 2);

@@ -38,8 +38,28 @@ int gFmNLos = 0, gFmNRadar = 0, gFmNGhost = 0, gFmNGone = 0, gFmNBlip = 0;
 float gFmDeadM = 0.f, gFmEverM = 0.f;
 array<float> gFmLiveD(4, 0.f);                 // live metal by rim distance quarter of the foe-base distance
 array<float> gFmMemD(4, 0.f);
+// Hit points of the known armed ground army by octave (bin b holds 64*2^b
+// to 64*2^(b+1)), summed: how much damage each size class of unit soaks.
+const int FM_HP_N = 12;
+array<float> gFmHpW(FM_HP_N, 0.f);
 int gFmPublishedAt = -1;
 int gFmNextLog = 0;
+
+int FmHpBin(float hp)
+{
+	int b = 0;
+	float top = 128.f;
+	while ((hp >= top) && (b < FM_HP_N - 1)) {
+		top *= 2.f;
+		++b;
+	}
+	return b;
+}
+
+float FmHpBinCentre(int b)
+{
+	return 90.5f * pow(2.f, float(b));
+}
 double gFmUs = 0.0, gFmMaxUs = 0.0;
 int gFmCalls = 0;
 
@@ -175,6 +195,7 @@ void FmPublish()
 {
 	array<float> live(DG_BINS + 1, 0.f);
 	array<float> mem(DG_BINS + 1, 0.f);
+	array<float> hpW(FM_HP_N, 0.f);
 	for (uint q = 0; q < 4; ++q) { gFmLiveD[q] = 0.f; gFmMemD[q] = 0.f; }
 	float liveS = 0.f, liveM = 0.f, memS = 0.f, memM = 0.f, lostS = 0.f, lostM = 0.f;
 	float etaW = 0.f, certW = 0.f, knS = 0.f, knM = 0.f;
@@ -220,6 +241,7 @@ void FmPublish()
 			knS += DgStr(d);
 			knM += Catalog::gCostM[d];
 			++knN;
+			hpW[FmHpBin(Catalog::gHealth[d])] += Catalog::gHealth[d];
 		}
 	}
 	// a death we saw takes out the nearest unregistered unit of its def
@@ -321,6 +343,7 @@ void FmPublish()
 	}
 	gFmLiveBins = live;
 	gFmMemBins = mem;
+	gFmHpW = hpW;
 	gFmLiveS = liveS; gFmLiveM = liveM;
 	gFmMemS = memS; gFmMemM = memM;
 	gFmLostS = lostS; gFmLostM = lostM;

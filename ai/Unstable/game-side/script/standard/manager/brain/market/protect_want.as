@@ -797,6 +797,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			r += " " + Catalog::Def(gDefRankDef[q]).GetName()
 				+ "=" + formatFloat(gDefRankV[q], "", 0, 4)
 				+ "/kill" + formatFloat(PfTowerKill(gDefRankDef[q]), "", 0, 1)
+				+ "/ok" + formatFloat(PfOverkill(gDefRankDef[q]), "", 0, 2)
 				+ "/obs" + formatFloat(gDwObs[gDefRankDef[q]], "", 0, 2);
 		}
 		// ...and what this builder could offer but never did. A candidate list
