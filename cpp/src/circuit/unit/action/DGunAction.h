@@ -26,8 +26,8 @@ public:
 private:
 	float range;
 	bool mayClose;
-	unsigned int updCount;
-	int logFrame = -999999;   // sampled gate trace, see Update
+	int reissueAt = -999999;
+	int logFrame = -999999;
 	int fireLogFrame = -999999;
 };
 

@@ -22,6 +22,7 @@ float gShipGuns = 0.f;
 float gShipArmyM = 0.f;
 float gShipStr = 0.f;
 float gShipStrCom = 0.f;
+float gShipDgStr = 0.f;
 bool gShipHopeless = false;
 int gShipN = 0;
 int gShipSec = 0;
@@ -83,6 +84,41 @@ string ShipHeavy()
 	if (best < 0)
 		return "-";
 	return Catalog::Def(best).GetName() + "/" + n;
+}
+
+// What his D-gun takes out of group g before they could kill him alone: the
+// shots his bank and income allow (ComDGunKills), spent on the strongest
+// members first, as the D-gun picks. Commanders take no D-gun damage.
+float ShipDGunStr(CCircuitUnit@ u, int g)
+{
+	if ((g < 0) || (g >= aiEnemyMgr.GetEnemyGroupCount()))
+		return 0.f;
+	array<float> s;
+	float dps = 0.f, rad = 0.f, vmax = 0.f;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d] || (Catalog::gPower[d] <= 1.f))
+			continue;
+		dps += Catalog::gDps[d];
+		if (Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		s.insertLast(UnitStrength(d));
+		rad += 4.f * float((Catalog::gFootX[d] > Catalog::gFootZ[d]) ? Catalog::gFootX[d] : Catalog::gFootZ[d]);
+		if (Catalog::gSpeed[d] > vmax)
+			vmax = Catalog::gSpeed[d];
+	}
+	if ((s.length() == 0) || (dps <= 0.f))
+		return 0.f;
+	const float tFight = u.GetHealthPercent() * Catalog::gHealth[int(u.circuitDef.id)] / dps;
+	float k = ComDGunKills(u, tFight, vmax, rad / float(s.length()), int(s.length()));
+	s.sortAsc();
+	float out = 0.f;
+	for (int i = int(s.length()) - 1; (i >= 0) && (k > 0.f); --i) {
+		out += s[i] * ((k >= 1.f) ? 1.f : k);
+		k -= 1.f;
+	}
+	return out;
 }
 
 void ShipRetreatLine(CCircuitUnit@ u, bool on)
@@ -164,10 +200,15 @@ void ComShipAssess(CCircuitUnit@ u)
 	}
 	gShip = gShipUnheld > 0;
 	gShipStrCom = 0.f;
+	gShipDgStr = 0.f;
 	if (gShipAtM > 0.f) {
 		const float ours = (gShipGuns + gShipArmyM) * OurQualityM()
 			+ UnitStrength(int(u.circuitDef.id)) * u.GetHealthPercent();
-		gShipStrCom = (ours > 0.f) ? gShipAtM * FoeQualityM() / ours : 1e6f;
+		gShipDgStr = ShipDGunStr(u, gShipG);
+		float theirs = gShipAtM * FoeQualityM() - gShipDgStr;
+		if (theirs < 0.f)
+			theirs = 0.f;
+		gShipStrCom = (ours > 0.f) ? theirs / ours : 1e6f;
 	}
 	// a team game where even with him the base loses: he runs and rebuilds with the team
 	// (his 10-10: "if it looks too hopeless -- run"); in a 1v1 he goes down with the ship
@@ -196,6 +237,7 @@ void ComShipAssess(CCircuitUnit@ u)
 			+ " tgtM=" + int(gShipAtM) + " heavy=" + ShipHeavy()
 			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + ")"
 			+ " str=" + formatFloat(gShipStr, "", 0, 2) + " strCom=" + formatFloat(gShipStrCom, "", 0, 2)
+			+ " dgStr=" + formatFloat(gShipDgStr, "", 0, 2)
 			+ " parity=" + formatFloat(Military::ANSWER_PARITY, "", 0, 1)
 			+ " flips=" + ((gShip && (gShipStrCom * Military::ANSWER_PARITY <= 1.f)) ? 1 : 0)
 			+ " dec=" + ComOptName(gComDec) + " hp=" + int(u.GetHealthPercent() * 100.f)

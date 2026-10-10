@@ -31,7 +31,6 @@ CDGunAction::CDGunAction(CCircuitUnit* owner, float range, bool mayClose)
 		: IUnitAction(owner, Type::DGUN)
 		, range(range)
 		, mayClose(mayClose)
-		, updCount(0)
 {
 }
 
@@ -41,16 +40,19 @@ CDGunAction::~CDGunAction()
 
 void CDGunAction::Update(CCircuitAI* circuit)
 {
-	if (updCount++ % 4 != 0) {
+	CCircuitUnit* unit = static_cast<CCircuitUnit*>(ownerList);
+	const int frame = circuit->GetLastFrame();
+	// An order not yet fired keeps the hands: re-picking each update flipped
+	// a walk-in between targets.
+	if ((frame < reissueAt) && unit->IsDGunHeld(frame)) {
+		isBlocking = true;
 		return;
 	}
 	isBlocking = false;
-	CCircuitUnit* unit = static_cast<CCircuitUnit*>(ownerList);
-	const int frame = circuit->GetLastFrame();
-	// Sampled trace of the gates, once per unit per 10 s while any enemy is
-	// in reach: which of them holds the shot is otherwise invisible.
-	const bool trace = (circuit->GetTunable("apex_dgun_log", 0.f) > 0.f)
-			&& (frame >= logFrame + FRAMES_PER_SEC * 10);
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	const bool isRoleComm = cdef->IsRoleComm();
+	const bool trace = (frame >= logFrame + FRAMES_PER_SEC * 5)
+			&& (isRoleComm || (circuit->GetTunable("apex_dgun_log", 0.f) > 0.f));
 	const float eCur = circuit->GetEconomyManager()->GetEnergyCur();
 	const AIFloat3& pos = unit->GetPos(frame);
 	// NOTE: Paralyzer doesn't increase ReloadFrame beyond currentFrame, but disarmer does.
@@ -61,11 +63,13 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	if (!unit->IsDGunReady(frame, eCur)
 		|| unit->GetUnit()->IsParalyzed()/* || unit->IsDisarmed(frame)*/)
 	{
-		if (trace && !circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range).empty()) {
+		if (trace && (unit->GetDGunReloadFrame() <= frame)
+			&& !circuit->GetCallback()->GetEnemyUnitIdsIn(pos, range).empty())
+		{
 			logFrame = frame;
-			circuit->LOG("apex: dgun %s hold: ready=0 e=%.0f cost=%.0f reload=%d",
-					unit->GetCircuitDef()->GetDef()->GetName(), eCur, unit->GetDGunCostE(),
-					unit->GetDGunReloadFrame() - frame);
+			circuit->LOG("apex: dgun held t=%i %s why=%s e=%.0f cost=%.0f",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(),
+					unit->GetUnit()->IsParalyzed() ? "paralyzed" : "energy", eCur, unit->GetDGunCostE());
 		}
 		return;
 	}
@@ -85,10 +89,9 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	if (enemies.empty()) {
 		return;
 	}
-	int nHid = 0, nWeak = 0, nCat = 0, nRay = 0, nFar = 0, nFF = 0;
+	int nHid = 0, nWeak = 0, nCat = 0, nComm = 0, nAir = 0, nRay = 0, nFar = 0, nFF = 0;
 
 	CMap* map = circuit->GetMap();
-	CCircuitDef* cdef = unit->GetCircuitDef();
 
 	// THE BEAM IS A CORRIDOR, NOT A LINE. The D-gun is noexplode: it does not
 	// stop at the target, it runs to the WEAPON's own range damaging a disc of
@@ -100,13 +103,14 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	const float wAoe = (dgDef != nullptr) ? dgDef->GetAoe() : 0.f;
 	const bool ffOn = (circuit->GetTunable("apex_dgun_ff", 1.f) > 0.f)
 			&& (dgDef != nullptr) && (wAoe > 0.f) && (wRange > 1.f);
-	// One sweep per update, positions cached: the friendly set does not vary
-	// with which enemy is being scored, and a callback per candidate is both
-	// the buffer hazard above and needless cost.
+	// One sweep per update, and only once a candidate reaches the test: a
+	// callback per candidate is both the buffer hazard above and needless cost.
 	// A building is its footprint, not its centre: the disc is far narrower
 	// than a lab, and the beam killed one it missed by that test.
 	std::vector<float> ffX, ffZ, ffR;
-	if (ffOn) {
+	bool ffBuilt = false;
+	auto buildFF = [&]() {
+		ffBuilt = true;
 		const float qR = range * closeMult + wRange + wAoe;
 		const std::vector<int> mine = circuit->GetCallback()->GetFriendlyUnitIdsIn(pos, qR);
 		ffX.reserve(mine.size());
@@ -125,7 +129,7 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			CCircuitDef* fdef = f->GetCircuitDef();
 			ffR.push_back((fdef != nullptr) ? fdef->GetRadius() : 0.f);
 		}
-	}
+	};
 	// True when firing from `fx,fz` along the unit 2D heading `dx,dz` would put
 	// one of ours inside the beam's disc anywhere along its travel.
 	auto beamHitsOwn = [&](float fx, float fz, float dx, float dz, float len) {
@@ -147,10 +151,15 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	};
 
 	const int canTargetCat = cdef->GetTargetCategoryDGun();
-	const bool isRoleComm = cdef->IsRoleComm();
 	const bool IsInWater = cdef->IsInWater(map->GetElevationAt(pos.x, pos.z), pos.y);
-	const bool isLowTraj = !unit->IsDGunHigh();
-	const bool notByCost = !unit->GetCircuitDef()->IsAttrDGCost();
+	// BAR's D-gun hugs the ground (unit_dgun_behaviour.lua) and passes through
+	// wrecks and units, so the terrain ray only refused shots: it hit a bump,
+	// a feature, the enemy in front, or read nothing for a radar-only target.
+	const bool isLowTraj = !unit->IsDGunHigh() && !isRoleComm;
+	const bool notByCost = !cdef->IsAttrDGCost();
+	// Valued by power, as he values himself (docs/24); metal only orders the
+	// unarmed below every armed unit, so a lone builder still draws a shot.
+	const float costTie = notByCost ? 0.f : 1e-4f;
 	const float sqRange = SQUARE(range);
 	// The walk-in used to be bought only for a target worth the owner; apexearth:
 	// "he should just spam d-guns at enemies so long as he has power", so the
@@ -181,7 +190,7 @@ void CDGunAction::Update(CCircuitAI* circuit)
 		}
 		const AIFloat3& ep = e->GetPos();
 		const AIFloat3& ev = e->GetVel();
-		corr.push_back({ep.x, ep.z, ev.x, ev.z, notByCost ? ed->GetPower() : ed->GetCostM(), ed->GetRadius()});
+		corr.push_back({ep.x, ep.z, ev.x, ev.z, ed->GetPower() + ed->GetCostM() * costTie, ed->GetRadius()});
 	}
 	int bestN = 0;
 	float bestLat = 0.f;
@@ -230,17 +239,19 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			continue;
 		}
 		CCircuitDef* edef = enemy->GetCircuitDef();
-		if ((edef == nullptr)
-			|| ((edef->GetCategory() & canTargetCat) == 0)
-			|| (isRoleComm && edef->IsRoleComm()))  // NOTE: BAR, comm kamikaze
-		{
+		if ((edef == nullptr) || ((edef->GetCategory() & canTargetCat) == 0)) {
 			++nCat;
+			continue;
+		}
+		if (isRoleComm && edef->IsRoleComm()) {  // NOTE: BAR, comm kamikaze; the D-gun does 0 to commanders
+			++nComm;
 			continue;
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
 		const float elevation = map->GetElevationAt(ePos.x, ePos.z);
 		if (edef->IsAbleToFly() && !(IsInWater ? cdef->HasSubToAirDGun() : cdef->HasSurfToAirDGun())) {  // notAA
+			++nAir;
 			continue;
 		}
 		if (edef->IsInWater(elevation, ePos.y)) {
@@ -271,12 +282,8 @@ void CDGunAction::Update(CCircuitAI* circuit)
 			++nFar;
 			continue;
 		}
-		// The terrain ray still applies, and only in range: a shot into a
-		// hillside is wasted whatever else is true. The old second trace --
-		// for what stands BEHIND the target -- is gone: it read an
-		// uninitialised out-param as a unit id on any clean ray (the C bridge
-		// only writes it on a hit in LOS), and it looked along a line the
-		// beam is far wider than. The corridor test below replaces it.
+		// The terrain ray, only in range and only for a beam that does not hug
+		// the ground (see isLowTraj).
 		if (isLowTraj && inRange) {
 			AIFloat3 dir = enemy->GetPos() - pos;
 			float rayRange = dir.LengthNormalize();
@@ -294,6 +301,9 @@ void CDGunAction::Update(CCircuitAI* circuit)
 		// actually be taken: the point on the approach at which the target
 		// first enters weapon range.
 		if (ffOn) {
+			if (!ffBuilt) {
+				buildFF();
+			}
 			const float ex = ePos.x - pos.x;
 			const float ez = ePos.z - pos.z;
 			const float d2 = ex * ex + ez * ez;
@@ -333,34 +343,48 @@ void CDGunAction::Update(CCircuitAI* circuit)
 		}
 	}
 
-	// An in-range shot always outranks a walk; the walk gets a longer command
-	// timeout to cover the approach.
-	int timeout = frame + FRAMES_PER_SEC * 5;
-	if (bestTarget == nullptr) {
+	// An in-range shot outranks a walk, unless the bank holds one shot and the
+	// walk's beam is worth more: one charge goes on the heaviest (docs/24).
+	const bool oneShot = eCur < 2.f * unit->GetDGunCostE();
+	const char* why = "range";
+	if ((bestFar != nullptr) && ((bestTarget == nullptr) || (oneShot && (maxFar > maxScore)))) {
+		why = (bestTarget == nullptr) ? "walk" : "walk-heavier";
 		bestTarget = bestFar;
-		timeout = frame + FRAMES_PER_SEC * 10;
+		maxScore = maxFar;
+		bestN = 0;
+		bestLat = 0.f;
 	}
-	if (trace) {
-		logFrame = frame;
-		circuit->LOG("apex: dgun %s e=%.0f cost=%.0f range=%.0f wrange=%.0f aoe=%.0f enemies=%d hid=%d weak=%d cat=%d far=%d ray=%d ff=%d own=%d fire=%d",
-				unit->GetCircuitDef()->GetDef()->GetName(), eCur, unit->GetDGunCostE(), range, wRange, wAoe,
-				(int)enemies.size(), nHid, nWeak, nCat, nFar, nRay, nFF, (int)ffX.size(),
-				(bestTarget != nullptr) ? 1 : 0);
-	}
-	if (bestTarget != nullptr) {
-		if (isRoleComm && (frame >= fireLogFrame + FRAMES_PER_SEC)) {
-			fireLogFrame = frame;
-			const AIFloat3& tp = bestTarget->GetPos();
-			circuit->LOG("apex: dgun-fire t=%i %s -> %s d=%.0f inBeam=%d score=%.1f slip=%.0f walk=%d e=%.0f orders=%d",
-					circuit->GetTeamId(), cdef->GetDef()->GetName(),
-					(bestTarget->GetCircuitDef() != nullptr) ? bestTarget->GetCircuitDef()->GetDef()->GetName() : "?",
-					pos.distance2D(tp), bestN, (maxScore > 0.f) ? maxScore : maxFar, bestLat,
-					(maxScore > 0.f) ? 0 : 1, eCur, unit->GetDGunOrders() + 1);
+	const bool walk = (why[0] == 'w');
+	if (bestTarget == nullptr) {
+		if (trace) {
+			logFrame = frame;
+			const char* names[] = {"hidden", "weak", "category", "commander", "air", "far", "terrain", "friendly"};
+			const int counts[] = {nHid, nWeak, nCat, nComm, nAir, nFar, nRay, nFF};
+			int top = -1;
+			for (int i = 0; i < 8; ++i) {
+				if ((counts[i] > 0) && ((top < 0) || (counts[i] > counts[top]))) {
+					top = i;
+				}
+			}
+			circuit->LOG("apex: dgun held t=%i %s why=%s e=%.0f enemies=%d hid=%d weak=%d cat=%d comm=%d air=%d far=%d ray=%d ff=%d own=%d",
+					circuit->GetTeamId(), cdef->GetDef()->GetName(), (top < 0) ? "none" : names[top], eCur,
+					(int)enemies.size(), nHid, nWeak, nCat, nComm, nAir, nFar, nRay, nFF, (int)ffX.size());
 		}
-		unit->ManualFire(bestTarget, timeout);
-		unit->ClearTarget();
-		isBlocking = true;
+		return;
 	}
+	if ((isRoleComm || trace) && (frame >= fireLogFrame + FRAMES_PER_SEC)) {
+		fireLogFrame = frame;
+		CCircuitDef* tdef = bestTarget->GetCircuitDef();
+		circuit->LOG("apex: dgun fired t=%i %s -> %s why=%s pow=%.2f d=%.0f inBeam=%d score=%.2f slip=%.0f e=%.0f orders=%d",
+				circuit->GetTeamId(), cdef->GetDef()->GetName(),
+				(tdef != nullptr) ? tdef->GetDef()->GetName() : "?", why,
+				(tdef != nullptr) ? tdef->GetPower() : 0.f, pos.distance2D(bestTarget->GetPos()),
+				bestN, maxScore, bestLat, eCur, unit->GetDGunOrders() + 1);
+	}
+	reissueAt = frame + FRAMES_PER_SEC * (walk ? 3 : 1);
+	unit->ManualFire(bestTarget, frame + FRAMES_PER_SEC * (walk ? 10 : 5));
+	unit->ClearTarget();
+	isBlocking = true;
 }
 
 } // namespace circuit
