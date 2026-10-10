@@ -170,7 +170,9 @@ TRUST_RECENT = 5000     # trust is the CURRENT net's: older pairs scored weights
 # Bump a head's entry when the game-side meaning of its v changes: its trust evidence measured
 # the old lever and is cleared on load (10-10: esc held trust 1.0 on pairs from before
 # EscortGain read it -- last 2,000 pairs slope 0.24 [-0.94, 0.85]).
-LEVER_VER = {"esc": 1, "con": 2}
+LEVER_VER = {"esc": 1, "con": 2,
+             # builder kinds by name: convert's evidence was scored with converters counted twice (58c85a97)
+             "builder:convert": 1}
 USED_KEEP_S = 7200      # seconds a game's used-decision list is kept after its last batch
 LIVE_REREAD_S = 15     # a running game is re-read at most this often
 LOGGER_SINCE = 1791160000   # 2026-10-04: no finished game before this carries apex: nn
@@ -1669,6 +1671,11 @@ class Trainer(Buffered):
         # saved every batch but never read back: each restart wiped the trust evidence
         # pairs of the old (kind 1) trust are 3-tuples: honest_trust skips them
         self.trust_pairs = {k: [tuple(x) for x in v] for k, v in (ck.get("trust_pairs") or {}).items()}
+        old = ck.get("lever_ver", {}) or {}
+        for kind in list(self.trust_pairs):
+            if old.get(str(kind), 0) != LEVER_VER.get("builder:" + str(kind), 0):
+                print("builder:%s: lever or label changed: trust evidence cleared" % kind, flush=True)
+                self.trust_pairs[kind] = []
         self.placebo, self.placebo_old = list(ck.get("placebo", [])), list(ck.get("placebo_old", []))
         self.reset_rows = int(ck.get("reset_rows", 0))
 
@@ -1718,7 +1725,8 @@ class Trainer(Buffered):
         torch.save({"full": self.full.state(), "state": self.st.state(), "targets": TARGETS,
                     "post_keys": getattr(self, "post_keys", None), "reset_rows": self.reset_rows,
                     "state_keys": self.state_keys, "kinds": KINDS, "opt_num": OPT_NUM,
-                    "trust_pairs": self.trust_pairs, "placebo": self.placebo, "placebo_old": self.placebo_old},
+                    "trust_pairs": self.trust_pairs, "placebo": self.placebo, "placebo_old": self.placebo_old,
+                    "lever_ver": {str(k): LEVER_VER.get("builder:" + str(k), 0) for k in self.trust_pairs}},
                    OUT / "model.pt.tmp")
         replace_retry(OUT / "model.pt.tmp", OUT / "model.pt")
 
