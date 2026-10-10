@@ -3263,3 +3263,14 @@ seats), which matched his "early turrets are useless". The normal-game A/B did n
 confirm it: 24 games each, 8-min Comet 1v1 vs BARb hard, at m7 -- 1x eco 0.70 mex 0.50
 land 0.72 army 0.87; 0.35x eco 0.61 mex 0.54 land 0.84 army 0.96. Within noise; left at 1
 for the head to learn.
+
+## TUNE_CON_RULE = 2.5 (2026-10-10)
+
+The constructor head's rule value: the multiplier the con floor (ConsNeedAny x v) and its
+army yield (cons >= max(1, v) before the army may take the factory; army share x v under
+its target) play at before the net earns a say. Normal-game A/B, 24 games each, 12-min
+Comet 1v1 vs BARb hard: 1x eco m5/m7/m9/m11 0.63/0.63/0.69/0.69, mex 0.56/0.67/0.64/0.59,
+army 1.09/0.86/0.71/0.67; 2.5x eco 0.79/0.89/0.88/0.99, mex 0.71/0.70/0.88/0.72, army
+0.58/0.72/0.52/0.42; results 0-0-24 vs 0-1-23. The raid-answer audit had found the mex
+gap is mostly claims (cons by m5 2.4-3.5 vs BARb's 4.1-5.2). The head nudges from here;
+watch the army cost as the curriculum lengthens games.
