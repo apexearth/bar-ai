@@ -443,6 +443,9 @@ public:
 	float GetEnemyReachSlack(const springai::AIFloat3& pos, float reactS,
 			springai::AIFloat3* foeOut = nullptr);
 	void RebuildReachCache();
+	// Enemies with a D-gun-type weapon, as of the reach cache (at most half a
+	// second old; a stale cache is rebuilt).
+	const std::vector<circuit::SDGunThreat>& GetDGunThreats();
 	float GetBuilderThreatAt(const springai::AIFloat3& pos) const;
 	float GetUnitThreatAt(CCircuitUnit* unit, const springai::AIFloat3& pos) const;
 	void Garbage(CCircuitUnit* unit, const char* reason);
@@ -844,6 +847,7 @@ private:
 	// apex: GetEnemyReachSlack's input, flattened once per frame. See its .cpp comment.
 	using SReachEnemy = circuit::SReachEnemy;
 	std::vector<SReachEnemy> reachCache;
+	std::vector<circuit::SDGunThreat> dgunThreats;
 	// apex: bounding-volume tree over reachCache, rebuilt with it. See BuildReachTree.
 	using SReachNode = circuit::SReachNode;
 	std::vector<SReachNode> reachNodes;

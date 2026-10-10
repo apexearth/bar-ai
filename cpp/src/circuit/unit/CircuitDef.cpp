@@ -194,6 +194,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 
 //	maxRange[static_cast<RangeT>(RangeType::MAX)] = def->GetMaxWeaponRange();
 	hasDGun         = def->CanManualFire();
+	armorType       = def->GetArmorType();
 	category        = def->GetCategory();
 	noChaseCategory = (def->GetNoChaseCategory() | circuit->GetBadCategory())
 					  & ~circuit->GetGoodCategory();
@@ -444,6 +445,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	float longestLandRange = .0f;
 	bool longestLandDumb = false;
 	int intercept = 0;  // S7: the raw GetInterceptor, logged once per def below
+	bool hasZeroRangeWpn = false;
 	CWeaponDef* bestDGunDef = nullptr;
 	CWeaponDef* bestWpDef = nullptr;
 	WeaponMount* bestDGunMnt = nullptr;
@@ -608,6 +610,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 			airDmg += aD; airDps += aP;
 			surfDmg += sD; surfDps += sP;
 			waterDmg += wD; waterDps += wP;
+			if ((wt == "DGun") && (weaponCat & circuit->GetLandCategory()) && isLandWeapon && (range > dgunReach)) {
+				dgunReach = range;
+				dgunReload = reloadTime;
+				const float mul = std::pow(2.0f, (wd->IsDynDamageInverted() ? 1 : -1) * wd->GetDynDamageExp()) * wd->GetSalvoSize();
+				dgunShots.assign(damages.begin(), damages.end());
+				for (float& s : dgunShots) {
+					s *= mul;
+				}
+			}
 			if (!wd->IsManualFire()) {
 				fireDps += std::max(std::max(aP, sP), wP);
 				fireDmg += std::max(std::max(aD, sD), wD);
@@ -624,7 +635,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		waterDmg += dmg;
 		waterDps += dps;
 
-		minRange = std::min(minRange, range);
+		// a 0-range footstep "weapon" (Titan, Behemoth, Sumo) set the squad ring
+		// radius to 0: the row was ordered onto the target itself
+		if (range > 0.f) {
+			minRange = std::min(minRange, range);
+		} else {
+			hasZeroRangeWpn = true;
+		}
 		// apex: a weapon that only answers a fire COMMAND (D-gun, nuke, Juno) or
 		// that only hits projectiles (antinuke) never shoots a unit walking past,
 		// so its range is not reach. @see GetAutoRange.
@@ -748,6 +765,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	}
 
 	isDumbFire = longestLandDumb;
+	if (hasZeroRangeWpn && (minRange == std::numeric_limits<float>::max())) {
+		minRange = 0.f;
+	}
 
 	// apex/S7: one line for every def whose longest weapon is not reach. Proves
 	// IsManualFire/GetInterceptor read live values, and names the defs that used
@@ -842,6 +862,10 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		circuit->LOG("apex: threat-blind %s water=%.1f cat=0x%x land=0x%x air=0x%x water=0x%x",
 				def->GetName(), waterDps, targetCategory,
 				circuit->GetLandCategory(), circuit->GetAirCategory(), circuit->GetWaterCategory());
+	}
+	if (dgunReach > 0.f) {
+		circuit->LOG("apex: dgun-def %s reach=%.0f reload=%.2f shot=%.0f manual=%i dps=%.0f hp=%.0f m=%.0f speed=%.1f",
+				def->GetName(), dgunReach, dgunReload, GetDGunShotAt(0), (int)hasDGun, rawDps, health, costM, speed);
 	}
 }
 

@@ -45,6 +45,12 @@ struct SReachEnemy {
 	float x, z, reach, speed, shell;
 	uint32_t idx;  // position in the unsorted cache: keeps the tie-break exact
 };
+// An enemy carrying a D-gun-type weapon, collected with the reach cache. By def
+// id: CCircuitDef pointers belong to one AI.
+struct SDGunThreat {
+	float x, z;
+	int defId;
+};
 struct SReachNode {
 	float minx, minz, maxx, maxz;
 	float maxReach, maxSpeed;  // envelope bound for everything below
@@ -139,6 +145,7 @@ public:
 	int reachFrame = -1;
 	std::vector<SReachEnemy> reachCache;
 	std::vector<SReachNode> reachNodes;
+	std::vector<SDGunThreat> dgunThreats;
 private:
 	void DelegateAuthority();
 	void ApplyAuthority(CCircuitAI* newOwner);

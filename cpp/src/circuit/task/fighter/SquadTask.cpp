@@ -445,6 +445,58 @@ NSMicroPather::HitFunc ISquadTask::GetHitTest() const
 	};
 }
 
+// How far `u` keeps from an enemy of def `t`; 0 when it cannot outrange the
+// D-gun or outrun its owner, -1 when it is fodder: the metal of `t` it destroys
+// before it dies pays for itself. `hold` is the ring it stands on, midway
+// between their reach and ours.
+float ISquadTask::DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold)
+{
+	const float reach = t->GetDGunReach();
+	if ((reach <= 0.f) || u->IsAbleToFly() || (t->GetSpeed() >= u->GetSpeed())) {
+		return 0.f;
+	}
+	const float keep = reach + t->GetSpeed() * DGUN_REACT_S + u->GetRadius();
+	const float ours = u->GetAutoRange(CCircuitDef::RangeType::LAND);
+	if (ours <= keep) {
+		return 0.f;
+	}
+	const float shot = t->GetDGunShotAt(u->GetArmorType());
+	const float alive = (shot >= u->GetHealth())
+			? t->GetDGunReload()
+			: u->GetHealth() / std::max(t->GetRawDps(), 1.f);
+	const float worth = u->GetRawDps() * alive * t->GetCostM() / std::max(t->GetHealth(), 1.f);
+	if (worth >= u->GetCostM()) {
+		return -1.f;
+	}
+	hold = 0.5f * (keep + ours);
+	return keep;
+}
+
+bool ISquadTask::IsInsideDGun(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const std::vector<SDGunThreat>& dts = circuit->GetDGunThreats();
+	for (const SDGunThreat& d : dts) {
+		CCircuitDef* tdef = circuit->GetCircuitDefSafe(d.defId);
+		if (tdef == nullptr) {
+			continue;
+		}
+		for (CCircuitUnit* unit : units) {
+			const AIFloat3& p = unit->GetPos(frame);
+			const float sqD = SQUARE(p.x - d.x) + SQUARE(p.z - d.z);
+			if (sqD > SQUARE(highestRange)) {
+				continue;
+			}
+			float hold;
+			const float keep = DGunKeepOut(unit->GetCircuitDef(), tdef, hold);
+			if ((keep > 0.f) && (sqD < SQUARE(keep))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void ISquadTask::Attack(const int frame)
 {
 	Attack(frame, GetTarget()->GetUnit()->IsCloaked());
@@ -528,6 +580,29 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	static std::map<int, int> ringLogAt;
 	std::array<int, 4>& rn = ringN[circuit->GetTeamId()];
 
+	// D-GUN CARRIERS ARE KEPT OUT OF (apexearth 2026-10-10: Titans walked up to
+	// Behemoths and died; held at range they kill it). A unit that outranges and
+	// outruns one near the target stands outside its reach (DGunKeepOut).
+	struct SFear { float x, z; CCircuitDef* tdef; };
+	std::vector<SFear> fears;
+	for (const SDGunThreat& d : circuit->GetDGunThreats()) {
+		CCircuitDef* tdef = circuit->GetCircuitDefSafe(d.defId);
+		if (tdef == nullptr) {
+			continue;
+		}
+		const float relR = highestRange + tdef->GetDGunReach() + tdef->GetSpeed() * DGUN_REACT_S + DEFAULT_SLACK;
+		if (SQUARE(d.x - tPos.x) + SQUARE(d.z - tPos.z) < SQUARE(relR)) {
+			fears.push_back({d.x, d.z, tdef});
+		}
+	}
+	dgunNear = !fears.empty();
+	std::vector<std::pair<float, float>> keepHold(fears.size());
+	static std::map<int, std::array<int, 3>> fearN;  // per team: hold, backoff, fodder
+	static std::map<int, int> fearLogAt;
+	std::array<int, 3>& fn = fearN[circuit->GetTeamId()];
+	int& fearLog = fearLogAt[circuit->GetTeamId()];
+	std::string fearEx;
+
 	int row = 0;
 	for (const auto& kv : rangeUnits) {
 		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -566,7 +641,27 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				unit->GetTravelAct()->StateWait();
 			}
 
+			bool feared = false;
+			bool inside = false;
+			bool fodder = false;
+			int exI = -1;
+			const AIFloat3 uPos = unit->GetPos(frame);
+			for (size_t i = 0; i < fears.size(); ++i) {
+				float h = 0.f;
+				const float keep = DGunKeepOut(unit->GetCircuitDef(), fears[i].tdef, h);
+				keepHold[i] = std::make_pair(keep, h);
+				fodder |= (keep < 0.f);
+				if (keep > 0.f) {
+					feared = true;
+					if (SQUARE(uPos.x - fears[i].x) + SQUARE(uPos.z - fears[i].z) < SQUARE(keep)) {
+						inside = true;
+						exI = (int)i;
+					}
+				}
+			}
+
 			if (isRepeatAttack
+				|| inside
 				|| (unit->GetTarget() != GetTarget())
 				|| (unit->GetTargetTile() != targetTile))
 			{
@@ -606,8 +701,45 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 						}
 					}
 				}
+				bool pushed = false;
+				for (size_t i = 0; feared && (i < fears.size()); ++i) {
+					const float keep = keepHold[i].first;
+					const float h = keepHold[i].second;
+					if (keep <= 0.f) {
+						continue;
+					}
+					float ax = newPos.x - fears[i].x;
+					float az = newPos.z - fears[i].z;
+					float d = std::sqrt(ax * ax + az * az);
+					if (d >= h) {
+						continue;
+					}
+					if (d < 1.f) {
+						ax = uPos.x - fears[i].x;
+						az = uPos.z - fears[i].z;
+						d = std::sqrt(ax * ax + az * az);
+						if (d < 1.f) {
+							ax = cosf(alpha);
+							az = sinf(alpha);
+							d = 1.f;
+						}
+					}
+					newPos.x = fears[i].x + ax * h / d;
+					newPos.z = fears[i].z + az * h / d;
+					pushed = true;
+					exI = (exI < 0) ? (int)i : exI;
+				}
+				if ((exI >= 0) && fearEx.empty() && (frame >= fearLog)) {
+					fearEx = utils::string_format("unit=%s threat=%s ourR=%.0f theirR=%.0f keep=%.0f hold=%.0f act=%s",
+							udef->GetDef()->GetName(), fears[exI].tdef->GetDef()->GetName(),
+							udef->GetAutoRange(CCircuitDef::RangeType::LAND), fears[exI].tdef->GetDGunReach(),
+							keepHold[exI].first, keepHold[exI].second, inside ? "backoff" : "hold");
+				}
+				fn[0] += (pushed && !inside) ? 1 : 0;
+				fn[1] += inside ? 1 : 0;
+				fn[2] += fodder ? 1 : 0;
 				CTerrainManager::CorrectPosition(newPos);
-				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60);
+				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60, feared);
 			}
 
 			beta += delta;
@@ -619,6 +751,11 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 		logAt = frame + FRAMES_PER_SEC * 60;
 		circuit->LOG("apex: siege-ring t=%i ok=%i slid=%i back=%i none=%i guns=%i",
 				circuit->GetTeamId(), rn[0], rn[1], rn[2], rn[3], (int)guns.size());
+	}
+	if (!fearEx.empty()) {
+		fearLog = frame + FRAMES_PER_SEC * 20;
+		circuit->LOG("apex: dgun-fear t=%i %s n_hold=%i n_back=%i n_fodder=%i",
+				circuit->GetTeamId(), fearEx.c_str(), fn[0], fn[1], fn[2]);
 	}
 }
 

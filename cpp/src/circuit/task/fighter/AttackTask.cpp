@@ -171,6 +171,8 @@ void CAttackTask::Update()
 		for (CCircuitUnit* unit : units) {
 			isExecute |= unit->IsForceUpdate(frame);
 		}
+		// a D-gun carrier closing on the ring is answered within the second
+		isExecute = isExecute || (dgunNear && (State::ENGAGE == state) && IsInsideDGun(frame));
 		if (!isExecute) {
 			if (wasRegroup && !pPath->posPath.empty()) {
 				ActivePath(lowestSpeed);
