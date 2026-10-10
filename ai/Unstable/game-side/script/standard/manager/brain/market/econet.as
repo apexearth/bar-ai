@@ -11,7 +11,7 @@ namespace Market {
 // cap  -- the ground constructor pools x v of the base.
 // acap -- the air pool x 4v of the base (4 = the rule: air cons take no build space).
 // scap -- the late ground scout cap x v of the same base.
-const string NNK_CON = "cons,consNeed,armyShare,armyTarget,armyGap,mexes,openSpots,foeRaid,minute";
+const string NNK_CON = "cons,consNeed,armyShare,armyTarget,armyGap,mexes,openSpots,foeRaid,minute,consBare,mexLost3";
 const string NNX_MEX = "mexes,openSpots,mexLost,mexKilledRate,defWants,armyShare,foeRaid,bankM,minute";
 const string NNQ_CAP = "conT1,conT2,conAir,capT1,capT2,capAir,conShare,mInc,mWasting,bankFill,idleCons,minute";
 const string NNS_SCOUT = "scouts,scoutCap,topTier,army,foeLos,foeRadar,screenLost,mInc,minute";
@@ -121,6 +121,9 @@ void EcoNetDecide()
 		f.insertLast(float(ClaimableSpots()));
 		f.insertLast(FoeRaidMassM());
 		f.insertLast(float(ai.frame) / 1800.f);
+		// cons out with no escort, mexes the enemy killed in 3 min: what more cons would cost (his 10-10)
+		f.insertLast(float(EscortShortfall()));
+		f.insertLast(float(MexKilledRecent()));
 		gConFloorMul = NnValDecide("con", NNK_CON, NK_LO, NK_HI, ai.GetTunable("apex_con_rule", TUNE_CON_RULE), NNK_ON, NNK_STATE, NNK_S, NNK_O, NNK_H,
 			NNK_XM, NNK_XS, NNK_W1, NNK_B1, NNK_W2, NNK_B2, NNK_WO, NNK_BO, NNK_TRUST, NNK_LO, NNK_HI, st, f);
 	}
