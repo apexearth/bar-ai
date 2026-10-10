@@ -609,10 +609,12 @@ def labels(g, t, f, site=None):
             out[key] = (pts[2] - pts[3]) / dm if dm > 0 else None
         out["dMex"] = ev_window(g, "mexev", t, f, f1)[1]
         d, r = g["dealt"].get(t), g["recv"].get(t)
-        if d is not None and r is not None and d.at(f1) is not None and r.at(f1) is not None:
-            out["lnD"] = math.log((d.at(f1) - d.at(f) + 1) / (r.at(f1) - r.at(f) + 1))
-        else:
-            out["lnD"] = None
+        out["lnD"] = None
+        if d is not None and r is not None and None not in (d.at(f1), r.at(f1), d.at(f), r.at(f)):
+            # a counter that steps back (a merged or re-read series) made the ratio <= 0: no label
+            num, den = d.at(f1) - d.at(f) + 1, r.at(f1) - r.at(f) + 1
+            if num > 0 and den > 0:
+                out["lnD"] = math.log(num / den)
         out["kill"] = ev_window(g, "killev", t, f, f1)[1]
         lev, out["lost"] = ev_window(g, "lostev", t, f, f1)
         out["lostNear"] = (sum(e[1] for e in lev if near(site[0], site[1], e[2], e[3]))
