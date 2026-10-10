@@ -242,6 +242,7 @@ public:
 	float RecordRatioMix(CCircuitDef* cdef);
 	float GetAllyPowerAt(const springai::AIFloat3& pos, float radius);
 	float GetAllyArmyMAt(const springai::AIFloat3& pos, float radius);  // allied armed ground metal
+	float GetAllySquadPowerAt(const springai::AIFloat3& pos, float radius);  // same, in squad power
 	// The same matrix read from their side: their B against our A.
 	float RecordFoeRatio(CCircuitDef* edef, CCircuitDef* ours) const;
 	void RecordSetTier(CCircuitDef* cdef, int tier) { if (cdef != nullptr) { recTier[cdef->GetId()] = tier; recAggDirty = true; } }
@@ -611,6 +612,7 @@ private:
 	int allyPowerFrame = -1;
 	std::vector<std::pair<springai::AIFloat3, float>> allyPowerList;
 	std::vector<float> allyCostList;   // metal, parallel to allyPowerList
+	std::vector<float> allyPwrList;    // CCircuitDef::GetPower, the squads' own scale
 	std::vector<std::pair<springai::AIFloat3, int>> unsafeSites;
 	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
 	// caller must delete, so the lookup is done once per def.

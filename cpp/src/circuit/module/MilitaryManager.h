@@ -232,6 +232,7 @@ public:
 		return p;
 	}
 	float GetAttackPowerNear(const springai::AIFloat3& pos, float radius) const;
+	float GetSquadPowerNear(const springai::AIFloat3& pos, float radius) const;  // attack + defend squads
 	float GetGatheredPower() const;
 	float GetEnemyInflNear(const springai::AIFloat3& pos, float radius) const;
 	// apex: where a long gun holds its ring waiting for someone to see its target

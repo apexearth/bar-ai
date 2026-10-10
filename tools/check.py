@@ -535,6 +535,30 @@ def check_side_strength(script_root: Path, rep: Report) -> None:
                           f"'// seat-local: <why>' (09-26 fix lost twice, 10-10)")
 
 
+_CPP_SIDE = re.compile(r"[Pp]ower\w*\)?\s*<=?\s*[\w.>()-]*influence")
+_CPP_SIDE_TOKENS = ("sideAt(", "GetAllySquadPowerAt", "GetAllyPowerAt", "seat-local:")
+
+
+def check_cpp_side_strength(rep: Report) -> None:
+    """The same S42 rule in the C++ squads: a squad's power against an enemy
+    group's influence must see the side (10-10: a dozen small squads at home each
+    refused the attacker as too strong and stepped out of its way)."""
+    root = REPO / "cpp" / "src" / "circuit"
+    if not root.is_dir():
+        return
+    for path in sorted(root.rglob("*.cpp")):
+        lines = path.read_text(encoding="utf8", errors="replace").splitlines()
+        for n, raw in enumerate(lines):
+            code = raw.split("//", 1)[0]
+            if not _CPP_SIDE.search(code):
+                continue
+            near = "\n".join(lines[max(n - 80, 0):n + 1])
+            if not any(t in near for t in _CPP_SIDE_TOKENS):
+                rep.error(f"{path.relative_to(REPO).as_posix()}:{n + 1}: squad power vs group "
+                          f"influence counts one squad only -- add the side (sideAt / "
+                          f"GetAllySquadPowerAt) or mark '// seat-local: <why>' (S42)")
+
+
 def check_as_scope(script_root: Path, rep: Report) -> None:
     """Scope and include-order errors, from every root the DLL compiles.
 
@@ -588,6 +612,7 @@ def check_variant(variant: str, units: set[str]) -> Report:
     check_lazy_caches(script_root, rep)
     check_spend_census(script_root, rep)
     check_side_strength(script_root, rep)
+    check_cpp_side_strength(rep)
 
     on_disk = sorted(d.name for d in cfg_root.iterdir() if d.is_dir()) if cfg_root.is_dir() else []
     if declared:

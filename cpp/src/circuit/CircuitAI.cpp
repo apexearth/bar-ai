@@ -2545,6 +2545,19 @@ float CCircuitAI::GetAllyArmyMAt(const AIFloat3& pos, float radius)
 	return sum;
 }
 
+float CCircuitAI::GetAllySquadPowerAt(const AIFloat3& pos, float radius)
+{
+	GetAllyPowerAt(pos, 0.f);   // refreshes the per-frame list
+	const float sqR = radius * radius;
+	float sum = 0.f;
+	for (size_t i = 0; i < allyPowerList.size(); ++i) {
+		if (allyPowerList[i].first.SqDistance2D(pos) <= sqR) {
+			sum += allyPwrList[i];
+		}
+	}
+	return sum;
+}
+
 float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
 {
 	// The allied armed mobiles, listed once a frame: the withdraw pass asks per
@@ -2554,6 +2567,7 @@ float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
 		allyPowerFrame = frame;
 		allyPowerList.clear();
 		allyCostList.clear();
+		allyPwrList.clear();
 		for (auto& kv : GetFriendlyUnits()) {
 			CAllyUnit* u = kv.second;
 			if ((u == nullptr) || (GetTeamUnit(kv.first) != nullptr)) {
@@ -2565,6 +2579,7 @@ float CCircuitAI::GetAllyPowerAt(const AIFloat3& pos, float radius)
 			}
 			allyPowerList.emplace_back(u->GetLastPos(), cdef->GetSurfThreat());
 			allyCostList.push_back(cdef->GetCostM());
+			allyPwrList.push_back(cdef->GetPower());
 		}
 	}
 	const float sqR = radius * radius;

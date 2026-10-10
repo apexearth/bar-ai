@@ -1181,6 +1181,21 @@ float CMilitaryManager::GetAttackPowerNear(const AIFloat3& pos, float radius) co
 	return p;
 }
 
+float CMilitaryManager::GetSquadPowerNear(const AIFloat3& pos, float radius) const
+{
+	const int frame = circuit->GetLastFrame();
+	float p = 0.f;
+	for (IFighterTask::FightType ft : {IFighterTask::FightType::ATTACK, IFighterTask::FightType::DEFEND}) {
+		for (IFighterTask* t : GetTasks(ft)) {
+			CCircuitUnit* lead = static_cast<ISquadTask*>(t)->GetLeader();
+			if ((lead != nullptr) && (lead->GetPos(frame).SqDistance2D(pos) < SQUARE(radius))) {
+				p += t->GetAttackPower();
+			}
+		}
+	}
+	return p;
+}
+
 float CMilitaryManager::GetGatheredPower() const
 {
 	float p = 0.f;

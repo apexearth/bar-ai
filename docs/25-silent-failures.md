@@ -736,3 +736,9 @@ The fix lived in one function, not in the rule. Now `tools/check.py` fails any
 function that calls `StrRatio` without counting the side (`GetAllyArmyMAt`,
 `TeamArmyCost`, `HuntAllyM`, ...) unless it is marked `// seat-local: <why>`.
 Rule: in a team game, "ours" is the side.
+Same day, third copy, in C++: `CAttackTask` weighed each squad's own power
+against a group on our doorstep; a dozen small squads at home (power 0.8-15,
+`atk-wait strong=1`) each refused it and the strong-group memory stepped them out
+of its reach -- "we make room for them to walk in". Inside 2,200 of base the side
+now counts (`GetSquadPowerNear` + `GetAllySquadPowerAt`), and `check.py` also
+scans `cpp/src/circuit` for squad power vs group influence without the side.

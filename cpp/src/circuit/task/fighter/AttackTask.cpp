@@ -587,11 +587,28 @@ void CAttackTask::FindTarget()
 	// reach twice over while it stays stronger; until then no target lies at or
 	// beyond its distance from our base. Re-targeting past it walked the squad
 	// back into it after every fall-back (advance, drop, fall back, advance).
+	// THE SIDE, NOT THE SQUAD, ON OUR DOORSTEP (his 10-10: "we have more army at
+	// our base than an attacking enemy but we make room for them"; S42). Each of
+	// a dozen small squads at home weighed itself alone against the group, read
+	// it as too strong, refused it and stepped out of its reach. Inside the base
+	// radius every squad and home pool of ours and our allies' armies there count.
+	static constexpr float HOME_SIDE_R = 2200.f;  // = script Builder::BASE_DANGER_DIST
+	std::vector<float> sidePow(groups.size(), -1.f);
+	auto sideAt = [&](size_t gi) -> float {
+		if (sidePow[gi] < 0.f) {
+			const AIFloat3& gp = groups[gi].pos;
+			sidePow[gi] = (gp.SqDistance2D(basePos) < SQUARE(HOME_SIDE_R))
+					? milMgr->GetSquadPowerNear(gp, HOME_SIDE_R) + circuit->GetAllySquadPowerAt(gp, HOME_SIDE_R)
+					: 0.f;
+		}
+		return sidePow[gi];
+	};
 	if (strongMem) {
 		bool still = false;
 		const float track = SQUARE(2.f * highestRange);
-		for (const CEnemyManager::SEnemyGroup& g : groups) {
-			if ((g.pos.SqDistance2D(strongPos) < track) && (maxPower <= g.influence * odds)) {
+		for (size_t gi = 0; gi < groups.size(); ++gi) {
+			const CEnemyManager::SEnemyGroup& g = groups[gi];
+			if ((g.pos.SqDistance2D(strongPos) < track) && (std::max(maxPower, sideAt(gi)) <= g.influence * odds)) {
 				strongPos = g.pos;
 				still = true;
 				break;
@@ -625,7 +642,8 @@ void CAttackTask::FindTarget()
 		// hundred elmos from base and squads picked groups up to 20x their power.
 		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
-		const float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
+		const float effPower = std::max(atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower,
+				sideAt(i));
 		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
 			countGroupNear(group, NR_STRONG);
