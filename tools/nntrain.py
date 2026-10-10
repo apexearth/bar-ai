@@ -1694,7 +1694,7 @@ class ValHead(ComHead):
             self.vrange = (rows[-1]["lo"], rows[-1]["hi"])
         rec = super().learn(source, g, first_touch, rows)
         if first_touch and rows and self.full is not None and self.vrange:
-            centre_step(self, rows)
+            centre_step(self, rows, source)
         return rec
 
 
@@ -1720,11 +1720,27 @@ def centres():
     return _CENTRES
 
 
-def centre_step(head, rows):
+def centre_step(head, rows, source=None):
     lo, hi = head.vrange
     if hi <= lo:
         return
     cs = centres()
+    since = cs.setdefault("_since", time.time())
+    if head.NAME not in cs:
+        cs[head.NAME] = round(float(np.median([float(r["rule"]) for r in rows])), 4)
+        try:
+            (OUT / "centre.json").write_text(json.dumps(cs), encoding="utf-8")
+        except OSError:
+            pass
+    # only a game played under the centres moves them: a restart's backlog of older games
+    # stepped every head ~25 times in ten minutes (10-10 15:44)
+    try:
+        played = max(os.path.getmtime(os.path.join(str(source), f)) for f in ("result.json", "infolog.txt")
+                     if os.path.exists(os.path.join(str(source), f)))
+    except (ValueError, OSError, TypeError):
+        return
+    if played < since:
+        return
     c = cs.get(head.NAME)
     if c is None:
         c = float(np.median([float(r["rule"]) for r in rows]))
@@ -1739,8 +1755,13 @@ def centre_step(head, rows):
         best.append(float(grid[int(np.argmax(sc))]))
     target = float(np.median(best))
     step = CENTRE_STEP * max(c, 0.25)
+    c0 = c
     c = min(hi, max(lo, c + max(-step, min(step, target - c))))
     cs[head.NAME] = round(c, 4)
+    edge = sum(1 for b in best if b <= lo + 1e-6 or b >= hi - 1e-6) / max(len(best), 1)
+    print("centre %s %.3f -> %.3f target=%.3f (q25 %.3f q75 %.3f) at-edge=%.0f%% range=%.2f-%.2f src=%s" % (
+        head.NAME, c0, c, target, float(np.percentile(best, 25)), float(np.percentile(best, 75)),
+        100 * edge, lo, hi, os.path.basename(str(source))), flush=True)
     try:
         (OUT / "centre.json").write_text(json.dumps(cs), encoding="utf-8")
     except OSError:
