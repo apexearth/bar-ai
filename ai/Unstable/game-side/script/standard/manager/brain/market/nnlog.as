@@ -586,12 +586,22 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	const int hk = NnValHeldAt(tag, lo, hi);
 	float v = rule, vnet = rule;
 	bool rnd = false, game = false, net = false;
+	float ctr = -1.f;
 	if ((t > 0.f) && (NnU01() < t)) {
 		const double _t = Perf::T0();
 		vnet = NnValBest(S, H, XM, XS, W1, B1, W2, B2, WO, BO, st, f, rule, sLo, sHi);
 		Perf::Add("nn.val", _t);
 		v = vnet;
 		net = true;
+		// the net moves the policy a step per game, never leaps to its favourite (nntrain centre_step)
+		const int ci = NN_CTR_TAGS.find(tag);
+		if (ci >= 0) {
+			const float c = NN_CTR_C[ci];
+			const float cw = NN_CTR_WIN * ((c > 0.25f) ? c : 0.25f);
+			v = (v < c - cw) ? (c - cw) : ((v > c + cw) ? (c + cw) : v);
+			v = (v < lo) ? lo : ((v > hi) ? hi : v);
+			ctr = c;
+		}
 	}
 	// exploration nudges what the policy plays, never leaps across the range (his 10-10)
 	if (gNnValIsHeld[hk]) {
@@ -605,7 +615,8 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	string ln = "apex: nnval head=" + tag + " t=" + ai.teamId + " f=" + ai.frame + " v=" + NnF(v, 4)
 		+ " rule=" + NnF(rule, 4) + " lo=" + NnF(lo, 4) + " hi=" + NnF(hi, 4) + " rnd=" + (rnd ? 1 : 0)
 		+ " dens=" + NnF(rnd ? 1.f / (hi - lo) : 0.f, 6) + " ex=" + ((flat > 0.f) ? 1 : 0)
-		+ " game=" + (game ? 1 : 0) + " trust=" + NnF(t, 2) + " vnet=" + (net ? NnF(vnet, 4) : "-") + " |";
+		+ " game=" + (game ? 1 : 0) + " trust=" + NnF(t, 2) + " vnet=" + (net ? NnF(vnet, 4) : "-")
+		+ " ctr=" + ((ctr >= 0.f) ? NnF(ctr, 4) : "-") + " |";
 	for (uint k = 0; k < st.length(); ++k)
 		ln += ((k == 0) ? " " : ",") + NnF(st[k], 2);
 	ln += " |";

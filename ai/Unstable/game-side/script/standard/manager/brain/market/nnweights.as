@@ -4,6 +4,9 @@ namespace Market {
 // overwrites the DEPLOYED copy between games, so each game loads the latest.
 // 2 = the honest decision-specific trust; below it the decision heads play the rule.
 const int NN_TRUST_KIND = 0;
+const array<string> NN_CTR_TAGS = {};
+const array<float> NN_CTR_C = {};
+const float NN_CTR_WIN = 0.25f;
 const bool NNW_ON = false;
 const int NNW_GAMES = 0;
 const string NNW_STATE = "";
