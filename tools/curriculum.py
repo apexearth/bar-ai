@@ -5,8 +5,8 @@ games, then run longer and longer ones as we improve).
     python tools/curriculum.py --minutes    # the game length the loops use (just the number)
     python tools/curriculum.py --advance    # step up if this stage is passed
 
-A stage of L minutes is judged at minute L-1 (the last minute still labelled at the
-1-minute horizon). It is passed when our normal games match BARb there -- median eco and
+A stage of L minutes is judged at minute L-1; its games run L+PAD so decisions up to the
+judged minute carry their 5-minute labels. It is passed when our normal games match BARb there -- median eco and
 mex edge >= 1.0 -- over the stage's last 30 1v1 and last 15 2v2 games, and again over
 the most recent half of each.
 """
@@ -20,6 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import progress  # noqa: E402
 
 STAGES = (8, 12, 16, 20, 30, 45, 60)
+# games run this much past the stage so a decision at its judged minute still gets the
+# 5-minute label (his 10-10: 12-minute games for the 8-minute stage)
+PAD = 4
 NEED = {"1v1": 30, "2v2": 15}
 METRICS = ("eco", "mex")
 PASS = 1.0
@@ -74,10 +77,10 @@ def fmt(d):
 def main(argv):
     st = load()
     if "--minutes" in argv:
-        print(st["minutes"])
+        print(st["minutes"] + PAD)
         return 0
     minute, res = judge(st)
-    print("stage %d min (judged at m%d) since %s" % (st["minutes"], minute, st["since"]))
+    print("stage %d min (judged at m%d, games run %d) since %s" % (st["minutes"], minute, st["minutes"] + PAD, st["since"]))
     for reg, r in res.items():
         print("  %s n=%d/%d  last: %s  recent half: %s  %s" % (
             reg, r["n"], r["need"], fmt(r["all"]), fmt(r["recent"]), "PASS" if r["ok"] else "-"))
