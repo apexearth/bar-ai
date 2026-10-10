@@ -157,7 +157,10 @@ void ComShipAssess(CCircuitUnit@ u)
 		const int nG = aiEnemyMgr.GetEnemyGroupCount();
 		for (int g = 0; g < nG; ++g) {
 			const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
-			if (!OnMap(gp) || (Military::ForwardFraction(gp) > Military::FWD_HOME))
+			// the base itself, not our end of the map: FWD_HOME reached outlying mexes 3,000+ away
+			// and he walked out to them with his retreat line at 0 (his 10-10: dying a lot more)
+			if (!OnMap(gp) || (Military::ForwardFraction(gp) > Military::FWD_HOME)
+				|| (gp.distance2D(Builder::gHomePos) > Builder::BASE_DANGER_DIST))
 				continue;
 			float sl = 0.f;
 			const float m = Military::GroundArmyOf(g, sl);
