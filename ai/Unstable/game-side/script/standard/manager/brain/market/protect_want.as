@@ -75,8 +75,12 @@ bool T1Tower(int d)
 // The player's rule is DOMINANCE, not efficiency: a Gauntlet reaches 1,220 for
 // 105 dps and a Pulsar reaches 1,400 for 1,091, so the Gauntlet is beaten on
 // both axes at once and its metal is stranded the moment the better gun is
-// affordable. Same shape as ConvObsoleteOnArrival, which already refuses a
-// converter a denser one dwarfs.
+// affordable.
+//
+// A PRICE, NOT A REFUSAL: a refused gun is never priced, so neither the draw
+// nor a net can learn what it is for. The place holds one gun, so the dominated gun keeps
+// the share of the dominator's kill it would put there; what it saves in
+// metal is already in ValueOf's denominator.
 //
 // AFFORDABILITY IS THE WHOLE GUARD. Without it a Pulsar we cannot pay for
 // would make every tower obsolete and we would build nothing at all -- so the
@@ -91,14 +95,16 @@ float TowerCostEq(int d)
 	return Catalog::gCostM[d] + Catalog::gCostE[d] * BestConvRatio();
 }
 
-bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
+float DefObsoleteShare(const array<int>@ b, int d, float affordM)
 {
 	if (b is null)
-		return false;
+		return 1.f;
 	const float myR = Catalog::gMaxRange[d];
 	const float myK = PfTowerKill(d);
-	if ((myR <= 0.f) || (myK <= 0.f))
-		return false;
+	const float myC = TowerCostEq(d);
+	if ((myR <= 0.f) || (myK <= 0.f) || (myC <= 0.f))
+		return 1.f;
+	float share = 1.f;
 	for (uint i = 0; i < b.length(); ++i) {
 		const int o = b[i];
 		if ((o == d) || Catalog::gMobile[o] || !Catalog::gAvailable[o]
@@ -110,18 +116,26 @@ bool DefObsoleteOnArrival(const array<int>@ b, int d, float affordM)
 			continue;   // cannot have it yet: d is not outdated, it is the answer
 		// Beaten on BOTH axes -- reach and killing power. Either alone is a
 		// trade-off; both together is obsolescence.
-		if ((Catalog::gMaxRange[o] >= myR) && (PfTowerKill(o) > myK)) {
-			if (!T1Tower(d) && (ai.frame >= gNextObsoleteLog)) {
-				gNextObsoleteLog = ai.frame + 30 * SECOND;
-				AiLog(Factory::T() + "apex: def-obsolete " + Catalog::Def(d).GetName()
-					+ " by " + Catalog::Def(o).GetName()
-					+ " costEq=" + int(TowerCostEq(o)) + " afford=" + int(affordM)
-					+ " ecoP=" + int(EcoPowerM()));
-			}
-			return true;
+		if (Catalog::gMaxRange[o] < myR)
+			continue;
+		const float oK = PfTowerKill(o);
+		if (oK <= myK)
+			continue;
+		const float oC = TowerCostEq(o);
+		const float s = myK / oK;
+		if (s < share)
+			share = s;
+		if (!T1Tower(d) && (ai.frame >= gNextObsoleteLog)) {
+			gNextObsoleteLog = ai.frame + 30 * SECOND;
+			AiLog(Factory::T() + "apex: def-obsolete " + Catalog::Def(d).GetName()
+				+ " by " + Catalog::Def(o).GetName()
+				+ " share=" + formatFloat(s, "", 0, 3)
+				+ " kill=" + int(myK) + "/" + int(oK)
+				+ " costEq=" + int(myC) + "/" + int(oC) + " afford=" + int(affordM)
+				+ " ecoP=" + int(EcoPowerM()));
 		}
 	}
-	return false;
+	return share;
 }
 
 bool gWallEffDiag = false;
@@ -330,13 +344,9 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// in the list. Same symmetric expectation DefenceTarget already
 			// floors on, apportioned by the share of our worth standing in
 			// this post's reach: near zero early, and it grows with the army.
-			// The obsolete test reads nothing the fill makes, and a fill is
-			// ~4.6 ms: an obsolete gun is dropped before it is sited at all.
-			if (Gate(GATE_DEF_OBSOLETE,
-					hDomOn && DefObsoleteOnArrival(builds, d, hAffordM))) {
-				gDwT1[d] = 0.f;
-				continue;
-			}
+			DwEnsure(d);
+			gDwObs[d] = hDomOn ? DefObsoleteShare(builds, d, hAffordM) : 1.f;
+			Gate(GATE_DEF_OBSOLETE, gDwObs[d] < 1.f);
 			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
 			// 2026-09-19: "spend as much money as it would take to upgrade a
 			// T2 Mex on tier 1 towers in the center of our base... at the
@@ -581,6 +591,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				gDwT1[d] = ai.GetTunable("apex_t1_def_late", TUNE_T1_DEF_LATE);
 				bestGain *= gDwT1[d];
 			}
+			bestGain *= gDwObs[d];
 			// A WALL SLOT IS DEMAND FOR A WALL, NOT FOR A BIG GUN. Its gain
 			// is the def-INDEPENDENT unmet-target pull, so the only thing
 			// separating two towers there is the power scaling further down,
@@ -785,7 +796,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		for (uint q = 0; q < gDefRankDef.length(); ++q) {
 			r += " " + Catalog::Def(gDefRankDef[q]).GetName()
 				+ "=" + formatFloat(gDefRankV[q], "", 0, 4)
-				+ "/kill" + formatFloat(PfTowerKill(gDefRankDef[q]), "", 0, 1);
+				+ "/kill" + formatFloat(PfTowerKill(gDefRankDef[q]), "", 0, 1)
+				+ "/obs" + formatFloat(gDwObs[gDefRankDef[q]], "", 0, 2);
 		}
 		// ...and what this builder could offer but never did. A candidate list
 		// of two out of a T2 constructor is a filter question, not a price one.

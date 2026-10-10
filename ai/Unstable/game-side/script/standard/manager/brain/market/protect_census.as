@@ -71,7 +71,7 @@ const int GATE_SHLD_SAT    = 29;   // appended: renumbering would move every cou
 const int GATE_JAM_SITE    = 30;
 const int GATE_SITE_BLOCKED = 31;   // the C++ reach veto marked the site
 const int GATE_SITE_INTERIOR = 33;   // the executor's no-gun-in-the-interior rule
-const int GATE_DEF_OBSOLETE = 34;   // dominated on reach and kill by an affordable gun
+const int GATE_DEF_OBSOLETE = 34;   // dominated on reach and kill by an affordable gun: discounted, never refused
 const int GATE_DEF_T1LATE  = 35;   // his no-basic-tower-after-T2 rule
 const int GATE_JAM_SHORT   = 36;   // this hand builds a longer-reach jammer
 const int GATE_N           = 37;
@@ -226,6 +226,7 @@ void DefFunnelLog()
 array<float> gDwRaw;     // prevented metal/s at the chosen post, before multipliers
 array<float> gDwTtd;     // time-to-defence discount
 array<float> gDwT1;      // apex_t1_def_late tier discount
+array<float> gDwObs;     // share of an affordable dominating gun's kill
 array<float> gDwEff;     // wall-slot cover-per-metal efficiency
 array<float> gDwFill;    // TargetFill(have, target)
 array<float> gDwTeam;    // mine/team tower power
@@ -251,7 +252,7 @@ void DwEnsure(int d)
 		n = uint(d) + 1;
 	if (gDwRaw.length() >= n)
 		return;
-	gDwRaw.resize(n);   gDwTtd.resize(n);    gDwT1.resize(n);
+	gDwRaw.resize(n);   gDwTtd.resize(n);    gDwT1.resize(n);   gDwObs.resize(n);
 	gDwEff.resize(n);   gDwFill.resize(n);   gDwTeam.resize(n);
 	gDwVal.resize(n);   gDwStake.resize(n);  gDwHz.resize(n);  gDwCapM.resize(n);
 	gDwStop.resize(n);  gDwThreat.resize(n); gDwCov0.resize(n);
@@ -311,6 +312,7 @@ string DefWhyTerms(int d)
 		+ "->" + formatFloat(gDwCov1[d], "", 0, 0) + "]"
 		+ " xTtd=" + formatFloat(gDwTtd[d], "", 0, 3)
 		+ " xT1late=" + formatFloat(gDwT1[d], "", 0, 3)
+		+ " xObs=" + formatFloat(gDwObs[d], "", 0, 3)
 		+ " xWallEff=" + formatFloat(gDwEff[d], "", 0, 3)
 		+ " xFill=" + formatFloat(gDwFill[d], "", 0, 3)
 		+ " xTeamPow=" + formatFloat(gDwTeam[d], "", 0, 3)
@@ -442,9 +444,8 @@ float TeamBestTowerPower()
 // A tower we cannot buy is not an alternative to one we can. Ranking against
 // what is affordable NOW leaves the deferral intact exactly when it is real --
 // the heavy gun is in reach and the light one would waste the window -- and
-// removes it when it is imaginary. DefObsoleteOnArrival already hard-drops a
-// candidate that something affordable outclasses, so this is the same
-// affordability the file already reasons in.
+// removes it when it is imaginary. DefObsoleteShare discounts a candidate
+// that something affordable outclasses by the same affordability.
 array<float> gTeamTowerCost;
 array<float> gTeamTowerPow;
 int gTeamLadderAt = -999999;
