@@ -55,7 +55,9 @@ def judge(st):
     """{regime: {n, all: medians, recent: medians, ok}} for the current stage's games."""
     minute = st["minutes"] - 1
     # the rules-only control batches (-b0) are not how the AI plays
-    games = [g for g in progress.collect(since=st["since"][:13]) if not g["tournament"].endswith("-b0")]
+    # and only the training loops' batches -- an A/B arm named *1v1* is not how it plays either
+    games = [g for g in progress.collect(since=st["since"][:13])
+             if "nn-open" in g["tournament"] and not g["tournament"].endswith("-b0")]
     res = {}
     for reg, need in NEED.items():
         gs = [g for g in games if progress.regime_of(g) == reg and g.get("minutes", 0) >= minute][-need:]
