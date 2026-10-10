@@ -46,7 +46,8 @@ RE_PROD = re.compile(r"\[BARAI_PROD\] team=(\d+) ally=(\d+) frame=(\d+) min=[\d.
 RE_BUILD = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=(\d+) frame=(\d+)")
 RE_BUILT_AT = re.compile(r"\[BARAI_BUILD\] team=(\d+) ally=\d+ frame=(\d+) min=[\d.]+ unit=(\w+) cost=\d+ x=(-?\d+) z=(-?\d+) uid=(\d+)")
 RE_DIED_UID = re.compile(r"\[BARAI_DEATH\] frame=(\d+) .*? x=(-?[\d.]+) z=(-?[\d.]+) .*? uid=(\d+)")
-MEX = re.compile(r"(mex|moho|mme)\d*$")
+# legmext15 (Legion's overcharged extractor) replaces a legmex on the same spot
+MEX = re.compile(r"(mex|moho|mme)(t\d+)?\d*$")
 RE_DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=(\d+) .*? built=(\d) mob=(\d) atkteam=(-?\d+)")
 RE_DMG = re.compile(r"\[BARAI_DMG\] frame=(\d+) team=(\d+) dm=(\d+) ds=(\d+) rm=(\d+) rs=(\d+)")
 BUILDER = re.compile(r"(ck|cv|ca|ack|acv|aca|cs|ch|acsub|fark|consul|rectr|necro|nanotc|com|comlvl\d+)$")

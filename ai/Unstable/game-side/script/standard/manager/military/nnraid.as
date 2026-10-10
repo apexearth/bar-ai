@@ -268,7 +268,7 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 	const float homeS = HomeStrength();
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		IUnitTask@ t = gSquads[i];
-		if ((t is null) || t.IsDead())
+		if ((t is null) || t.IsDead() || IsAnswerTask(t))
 			continue;
 		const int ft = t.GetFightType();
 		const bool ours = (gAskTask !is null) && (t is gAskTask);
@@ -740,7 +740,7 @@ void UpdateNnRaid()
 	if ((gNrNow == NR_WAIT) && Builder::gHomeSet) {
 		for (uint i = 0; i < gSquads.length(); ++i) {
 			IUnitTask@ t = gSquads[i];
-			if ((t is null) || t.IsDead() || (t is gAskTask)
+			if ((t is null) || t.IsDead() || (t is gAskTask) || IsAnswerTask(t)
 				|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
 				continue;
 			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);

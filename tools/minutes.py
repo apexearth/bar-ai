@@ -33,7 +33,8 @@ RE_BUILT = re.compile(r"\[BARAI_(?:PROD|BUILD)\] team=(\d+) ally=(\d+) frame=(\d
 RE_DEATH = re.compile(r"\[BARAI_DEATH\] frame=(\d+) team=(\d+) unit=(\w+) cost=(\d+) .*? built=(\d) .*? atkteam=(-?\d+)")
 RE_DMG = re.compile(r"\[BARAI_DMG\] frame=(\d+) team=(\d+) dm=(\d+) ds=(\d+) rm=(\d+) rs=(\d+)")
 RE_NAME = re.compile(r"\[BARAI_NAME\] team=(\d+) name=(.*)")
-MEX = re.compile(r"(mex|moho|mme)\d*$")
+# legmext15 (Legion's overcharged extractor) replaces a legmex on the same spot
+MEX = re.compile(r"(mex|moho|mme)(t\d+)?\d*$")
 
 
 def main(argv):

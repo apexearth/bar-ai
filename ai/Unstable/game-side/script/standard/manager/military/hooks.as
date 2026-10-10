@@ -206,6 +206,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		DropRaidClaim(int(unit.id));
 		return NoteElect("bomb.solo", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
+	if (AnswerClaimed(int(unit.id))) {
+		IUnitTask@ ans = AnswerTaskFor(int(unit.id));
+		if (ans !is null)
+			return NoteElect("raid.answer", ans);
+	}
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.
 	if (RaidClaimed(int(unit.id))) {
