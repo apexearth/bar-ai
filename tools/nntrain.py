@@ -1185,6 +1185,31 @@ def fold(net):
             np.concatenate([p[4] for p in parts]) / k, sum(p[5] for p in parts) / k)
 
 
+# The say a net PLAYS climbs at most this per hour toward its honest trust and falls to it at
+# once: on 10-10 the builder went 1.0 -> 0.16 and expansion .44 -> .96 -> .26 within an hour,
+# each swing changing play and so the next evidence; never above the honest lower bound.
+TRUST_RISE_PER_H = 0.25
+_RAMP = None
+
+
+def ramped(key, v):
+    global _RAMP
+    if _RAMP is None:
+        try:
+            _RAMP = json.loads((OUT / "ramp.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _RAMP = {}
+    now = time.time()
+    last, at = _RAMP.get(key, (0.0, now))
+    out = round(min(float(v), last + TRUST_RISE_PER_H * max(0.0, now - at) / 3600.0), 3)
+    _RAMP[key] = (out, now)
+    try:
+        (OUT / "ramp.json").write_text(json.dumps(_RAMP), encoding="utf-8")
+    except OSError:
+        pass
+    return out
+
+
 def head_block(head, p, layout=None):
     """A head's <p>_* fields (NNF factory, NNP posture); the empty net until the
     head has one. `layout` is the string the game compares before trusting it."""
@@ -1207,7 +1232,7 @@ def head_block(head, p, layout=None):
             "const array<float> %s_B2 = %s;" % (p, fmt_arr(b2)),
             "const array<float> %s_WO = %s;" % (p, fmt_arr(wo)),
             "const float %s_BO = %.7ff;" % (p, bo),
-            "const float %s_TRUST = %.7ff;" % (p, head.trust())]
+            "const float %s_TRUST = %.7ff;" % (p, ramped(p, head.trust()))]
 
 
 def fac_block(head):
@@ -1310,7 +1335,7 @@ def export_as(net, state_keys, games, trust, fac=None, post=None, heads=None):
         "const array<float> NNW_WO = %s;" % fmt_arr(wo),
         "const float NNW_BO = %.7ff;" % bo,
         "// per kind, in NNW_KINDS order: how much say the net gets (0 = the market alone)",
-        "const array<float> NNW_TRUST = %s;" % fmt_arr([trust.get(k, 0.0) for k in KINDS])] + tail)
+        "const array<float> NNW_TRUST = %s;" % fmt_arr([ramped("NNW:" + k, trust.get(k, 0.0)) for k in KINDS])] + tail)
 
 
 def export_targets():
