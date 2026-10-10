@@ -22,6 +22,7 @@ float gShipGuns = 0.f;
 float gShipArmyM = 0.f;
 float gShipStr = 0.f;
 float gShipStrCom = 0.f;
+bool gShipHopeless = false;
 int gShipN = 0;
 int gShipSec = 0;
 int gShipFrom = -1;
@@ -168,6 +169,11 @@ void ComShipAssess(CCircuitUnit@ u)
 			+ UnitStrength(int(u.circuitDef.id)) * u.GetHealthPercent();
 		gShipStrCom = (ours > 0.f) ? gShipAtM * FoeQualityM() / ours : 1e6f;
 	}
+	// a team game where even with him the base loses: he runs and rebuilds with the team
+	// (his 10-10: "if it looks too hopeless -- run"); in a 1v1 he goes down with the ship
+	gShipHopeless = gShip && (Military::AllyCount() > 0) && (gShipStrCom * Military::ANSWER_PARITY > 1.f);
+	if (gShipHopeless)
+		gShip = false;
 	if (gShip) {
 		++gShipSec;
 		ai.PublishTeamValue("comship", float(ai.frame));
@@ -185,7 +191,7 @@ void ComShipAssess(CCircuitUnit@ u)
 		const int dgo = u.DGunOrders();
 		AiLog(Factory::T() + "apex: com-ship t=" + ai.teamId
 			+ " dying=" + (Military::BaseRaided() ? ("yes raidM=" + int(Military::gRaidM)) : "no")
-			+ " decision=" + (gShip ? "STEP-IN" : ((gShipHome > 0) ? "SAFE-held" : "SAFE-gone"))
+			+ " decision=" + (gShip ? "STEP-IN" : (gShipHopeless ? "RUN-hopeless" : ((gShipHome > 0) ? "SAFE-held" : "SAFE-gone")))
 			+ " foeM=" + int(gShipFoeM) + " homeGroups=" + gShipHome + " unheld=" + gShipUnheld
 			+ " tgtM=" + int(gShipAtM) + " heavy=" + ShipHeavy()
 			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + ")"
