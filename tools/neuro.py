@@ -486,7 +486,9 @@ def mean_score(gen_dir, ci, wts, games, tag):
 
 
 def finish_run(st):
-    final = st["elite"][0]["w"]
+    # the last round's top is often a 4-game newcomer; the run's answer is its lineage's historic best
+    own = [e for e in bests().get("hall", []) if e.get("lineage", 1) == st.get("lineage", 1)]
+    final = own[0]["w"] if own else st["elite"][0]["w"]
     games = list(VALID)
     gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-neuro-run%d-valid" % st["run"])
     os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
