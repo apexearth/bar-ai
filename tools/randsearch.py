@@ -18,7 +18,6 @@ import json, math, os, random, sys, threading, time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
-import cem
 import neuro
 
 STATE = os.path.join(neuro.NN, "rand.json")
@@ -109,9 +108,17 @@ def finish(st, n, gi, sc):
         n["status"] = "out"
 
 
+def workers():
+    """His 10-11: 4 headless games at most, and 4 also while he plays online (not cem's drop to 1)."""
+    try:
+        return max(1, min(4, int(open(os.path.join(neuro.NN, "workers-cem")).read().strip())))
+    except (OSError, ValueError):
+        return 4
+
+
 def worker(slot, st, lay, rng):
     while not os.path.exists(neuro.STOP) and not os.path.exists(RESTART):
-        if slot >= cem.workers():
+        if slot >= workers():
             time.sleep(60)
             continue
         with lock:
