@@ -30,8 +30,9 @@ CENTRE = os.path.join(NN, "centre.json")
 FLAG = os.path.join(NN, "cem_on")
 AI = "Apexnnlog:lane-nnlog:standard"
 FOE = "BARb:stable:hard"
-CANDS = 16
-ELITE = 4
+CANDS = 8            # x 4 games each: re-tested elites ranked at random with 16 x 2 (10-10 20:45)
+ELITE = 3
+SHRINK = 2           # games of the round average mixed into every mean
 SIG0 = 0.35          # log-space spread at a run's start: about +-40%
 SIG_END = 0.06       # a run ends once every head's spread is down to this (about +-6%)
 SIG_KEEP = 0.6       # the new spread is this much of the old plus the rest of the elite's
@@ -44,7 +45,9 @@ BEST = os.path.join(NN, "cem_best.json")
 MINUTES = 40
 GAMES = [  # (per side, map); seeds are drawn per generation and shared by every candidate
     (1, "Comet Catcher Remake 1.8"),
-    (2, None),   # 2v2 map rotates per generation
+    (1, "Comet Catcher Remake 1.8"),
+    (2, None),   # the 2v2 maps rotate per generation, two different ones each round
+    (2, None),
 ]
 MAPS_2V2 = ["Frozen_Ford_V2", "Glacier Pass", "Comet Catcher Remake 1.8"]
 FLOOR = 0.05         # log-space floor for ranges that start at 0
@@ -132,7 +135,7 @@ def score(mdir):
     def mean_log(k):
         xs = [v for v in s.get(k, [])[3:] if v is not None and v > 0]
         return sum(max(-2.3, min(2.3, math.log(v))) for v in xs) / len(xs) if xs else 0.0
-    res = {"W": 1.0, "L": -1.0 + 0.5 * min(g["minutes"], MINUTES) / MINUTES, "D": 0.0}[g["result"]]
+    res = 0.5 * {"W": 1.0, "L": -1.0 + 0.5 * min(g["minutes"], MINUTES) / MINUTES, "D": 0.0}[g["result"]]
     return 0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex") + res, g["result"]
 
 
@@ -195,7 +198,12 @@ def generation(st):
     rng = random.Random(gen * 7919)
     names = sorted(st["heads"])
     cands = sample(st, rng, names)
-    games = [(ps, m or MAPS_2V2[gen % len(MAPS_2V2)], rng.randrange(1, 10 ** 6)) for ps, m in GAMES]
+    games, k2 = [], 0
+    for ps, m in GAMES:
+        if m is None:
+            m = MAPS_2V2[(gen + k2) % len(MAPS_2V2)]
+            k2 += 1
+        games.append((ps, m, rng.randrange(1, 10 ** 6)))
     # a restart resumes this generation's own dir: its candidates and finished games are kept
     old = sorted(glob.glob(os.path.join(REPO, "tournaments", "*-nn-cem-g%d" % gen)))
     cfg = None
@@ -232,7 +240,14 @@ def generation(st):
                 results.setdefault(ci, []).append(sc[1])
             if os.path.exists(os.path.join(REPO, "runtime", "nn_stop")):
                 break
-    ranked = sorted((sum(v) / len(v), ci) for ci, v in scores.items() if len(v) == len(games))
+    # A CARRIED ELITE IS JUDGED ON ALL ITS GAMES, and every mean is pulled SHRINK games' worth toward the
+    # round's average: one lucky game must not crown a set (re-tested elites ranked at random, 10-10)
+    prev = [e.get("scores") or [] for e in st.get("elite", [])]
+    done = {ci: v for ci, v in scores.items() if len(v) == len(games)}
+    flat = [s for v in done.values() for s in v]
+    avg = sum(flat) / len(flat) if flat else 0.0
+    allsc = {ci: (prev[ci] if ci < len(prev) else []) + v for ci, v in done.items()}
+    ranked = sorted(((sum(v) + SHRINK * avg) / (len(v) + SHRINK), ci) for ci, v in allsc.items())
     ranked.reverse()
     if len(ranked) < ELITE:
         log("gen %d: only %d candidates scored -- mean kept" % (gen, len(ranked)))
@@ -249,7 +264,8 @@ def generation(st):
         h["mu"] = m
         h["sig"] = max(SIG_END, min(cap, SIG_KEEP * h["sig"] + (1 - SIG_KEEP) * sd))
     st["round"] = rnd
-    st["elite"] = [{"x": cands[ci], "score": round(s, 4)} for s, ci in ranked[:ELITE]]
+    st["elite"] = [{"x": cands[ci], "score": round(s, 4), "scores": [round(x, 4) for x in allsc[ci]][-24:]}
+                   for s, ci in ranked[:ELITE]]
     st["best_set"] = {n: value(st["heads"][n], cands[ranked[0][1]][n]) for n in names}
     best = ranked[0]
     st["gen"] = gen
