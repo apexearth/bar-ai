@@ -159,6 +159,7 @@ def main(argv):
         status(st)
         return 0
     lay = neuro.load()["layout"]
+    neuro.publish(neuro.load())
     os.makedirs(os.path.join(st["dir"], "matches"), exist_ok=True)
     for n in st["nets"].values():
         n["busy"] = 0

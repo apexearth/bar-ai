@@ -261,7 +261,8 @@ def bests():
 
 def publish(st):
     """The all-time best into every deployed copy (redeploys overwrite it with the empty repo copy)."""
-    b = bests()["best"]
+    bs = bests()
+    b = bs.get("watch") or bs["best"]   # "watch": the network he chose for games with no weights file
     for p in deployed_data_paths():
         write_data(p, st["layout"], b["w"] if b else None)
 
