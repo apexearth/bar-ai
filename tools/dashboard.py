@@ -900,11 +900,18 @@ def rand_view(d):
         res = [x[1] for x in g]
         nets.append({"id": n["id"], "s": n["s"], "games": len(g), "w": res.count("W"), "d": res.count("D"),
                      "l": res.count("L"), "score": sum(x[0] for x in g) / len(g), "target": n.get("target"),
-                     "status": n.get("status"), "playing": n.get("busy", 0)})
+                     "status": n.get("status"), "playing": n.get("busy", 0), "base": n.get("base")})
     nets.sort(key=lambda n: (n["games"] < 4, -(n["w"] + 0.5 * n["d"]) / n["games"], -n["games"]))
     rungs = {t: sum(1 for n in st.get("nets", {}).values() if n.get("target", 0) >= t or n.get("status") == "viable")
              for t in (4, 12, 24)}
-    return {"tried": st.get("next", 0), "explore": 1000, "rungs": rungs,
+    anneal = None
+    if st.get("anneal"):
+        import randsearch
+        a = st["anneal"]
+        kids = [n for n in st["nets"].values() if "base" in n]
+        anneal = {"centre": a["centre"], "t": randsearch.temperature(st), "children": len(kids),
+                  "viable": sum(1 for n in kids if n.get("status") == "viable")}
+    return {"tried": st.get("next", 0), "explore": 1000, "rungs": rungs, "anneal": anneal,
             "viable": sum(1 for n in nets if n["status"] == "viable"), "nets": nets}
 
 

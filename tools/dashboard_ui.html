@@ -660,10 +660,16 @@ function renderRand(r) {
     <div class="dim" style="margin:6px 0">reached 4 games: ${r.rungs[4]} &nbsp; 12 games: ${r.rungs[12]}
       &nbsp; 24 games: ${r.rungs[24]} &nbsp; viable: ${r.viable} &nbsp;
       (against BARb the untrained middle network wins 23%, the current watch network 46%; a game that hits the time limit goes to whoever is ahead on economy and army)</div>
-    <table><thead><tr><th>Net</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Mean score</th>
+    ${r.anneal ? `<div style="margin:6px 0">Annealing around <b>c${String(r.anneal.centre).padStart(2, "0")}</b>:
+      ${r.anneal.children} children so far, ${r.anneal.viable} viable; step size now ${r.anneal.t.toFixed(3)}
+      <span class="dim">(each child is the centre plus that much noise; it shrinks as the search goes on,
+      and a child that beats the centre over 24 games becomes the new centre)</span></div>` : ""}
+    <table><thead><tr><th>Net</th><th>From</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Mean score</th>
       <th>Noise s</th><th>Status</th></tr></thead><tbody>
     ${nets.slice(0, 40).map(n => `<tr>
-      <td>c${String(n.id).padStart(2, "0")}</td><td>${n.games}${n.playing ? " <span class=\"dim\">+playing</span>" : ""}</td>
+      <td>c${String(n.id).padStart(2, "0")}${r.anneal && n.id === r.anneal.centre ? " ★" : ""}</td>
+      <td class="dim">${n.base !== null && n.base !== undefined ? "c" + String(n.base).padStart(2, "0") : "random"}</td>
+      <td>${n.games}${n.playing ? " <span class=\"dim\">+playing</span>" : ""}</td>
       <td>${n.w}-${n.d}-${n.l}</td>
       <td class="${n.w + 0.5 * n.d >= 0.42 * n.games ? "win" : "dim"}">${(100 * (n.w + 0.5 * n.d) / n.games).toFixed(0)}%</td>
       <td class="dim">${n.score.toFixed(2)}</td><td class="dim">${n.s.toFixed(2)}</td>
