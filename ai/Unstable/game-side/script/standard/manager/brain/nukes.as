@@ -84,18 +84,135 @@ array<AIFloat3> gForgetAtQ;
 array<int> gForgetFrameQ;
 array<float> gForgetRQ;
 
+// Every faction's silo: an ally's gift can be another faction's.
 bool IsSiloDef(const CCircuitDef@ d)
 {
 	if (d is null)
 		return false;
-	CCircuitDef@ silo = SideDef3("armsilo", "corsilo", "legsilo");
-	return (silo !is null) && (d.id == silo.id);
+	const string n = d.GetName();
+	return (n == "armsilo") || (n == "corsilo") || (n == "legsilo");
 }
 
-void NoteSiloFinished(CCircuitUnit@ unit)
+void NoteSiloFinished(CCircuitUnit@ unit, bool produced)
 {
-	if ((unit !is null) && IsSiloDef(unit.circuitDef))
-		gSiloIds.insertLast(int(unit.id));
+	if ((unit is null) || !IsSiloDef(unit.circuitDef))
+		return;
+	gSiloIds.insertLast(int(unit.id));
+	if (!produced)
+		gNkRecv.insertLast(int(unit.id));
+}
+
+// ONE NUKE DECISION PER TEAM (his 10-11): our AIs hand every silo to the
+// richest of them, whose director then sizes each volley from the team's whole
+// stockpile and pays for the missiles. Human allies never publish, so nothing
+// goes to a person; a seat silent for 90 s is gone.
+const string TV_NKINC = "nkinc";
+const string TV_NKAT = "nkat";
+const string TV_NKSILOS = "nksilos";
+int gNkShareAt = 0;
+int gNkGiven = 0;      // silos we built and handed over
+float gNkEcoSeen = 0.f;  // the richest economy cell the last ranking found, for the silo want
+array<int> gNkRecv;    // silos an ally handed us
+
+int LiveSilos()
+{
+	int n = 0;
+	for (uint i = 0; i < gSiloIds.length(); ++i) {
+		if (ai.GetTeamUnit(Id(gSiloIds[i])) !is null)
+			++n;
+	}
+	return n;
+}
+
+// For the build decision: a silo we handed over still counts as ours (up to
+// what the holder still stands), one handed to us does not -- pooling moves
+// silos, it does not change how many the team buys.
+int SiloCountAdjust()
+{
+	int recv = 0;
+	for (uint i = 0; i < gNkRecv.length(); ++i) {
+		if ((gSiloIds.find(gNkRecv[i]) >= 0) && (ai.GetTeamUnit(Id(gNkRecv[i])) !is null))
+			++recv;
+	}
+	int held = 0;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates !is null) {
+		for (uint i = 0; i < mates.length(); ++i) {
+			const int t = int(mates[i]);
+			if (t != ai.teamId) {
+				const int h = int(ai.ReadTeamValue(t, TV_NKSILOS, 0.f));
+				if (h > held)
+					held = h;
+			}
+		}
+	}
+	return ((gNkGiven < held) ? gNkGiven : held) - recv;
+}
+
+void ShareSilos()
+{
+	if (ai.frame < gNkShareAt)
+		return;
+	gNkShareAt = ai.frame + 30 * SECOND;
+	const float mine = (Market::gIncEma > 0.f) ? Market::gIncEma : Eco::MInc();
+	const int have = LiveSilos();
+	ai.PublishTeamValue(TV_NKINC, mine);
+	ai.PublishTeamValue(TV_NKAT, float(ai.frame));
+	ai.PublishTeamValue(TV_NKSILOS, float(have));
+	if (have == 0)
+		return;
+	array<Id>@ mates = ai.GetTeamIds();
+	if (mates is null)
+		return;
+	int to = -1;
+	float best = mine;
+	for (uint i = 0; i < mates.length(); ++i) {
+		const int t = int(mates[i]);
+		if (t == ai.teamId)
+			continue;
+		const float inc = ai.ReadTeamValue(t, TV_NKINC, -1.f);
+		if ((inc < 0.f) || (ai.frame - int(ai.ReadTeamValue(t, TV_NKAT, -1.f)) > 90 * SECOND))
+			continue;
+		if ((inc > best) || ((inc == best) && (t < ai.teamId) && ((to < 0) || (t < to)))) {
+			best = inc;
+			to = t;
+		}
+	}
+	if (to < 0)
+		return;
+	array<CCircuitUnit@> give;
+	int own = 0;
+	for (uint i = 0; i < gSiloIds.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(gSiloIds[i]));
+		if (u is null)
+			continue;
+		bool busy = false;
+		for (uint v = 0; v < gVolleys.length(); ++v) {
+			if (gVolleys[v].siloIds.find(gSiloIds[i]) >= 0)
+				busy = true;
+		}
+		if (busy)
+			continue;
+		give.insertLast(u);
+		if (gNkRecv.find(gSiloIds[i]) < 0)
+			++own;
+	}
+	if (give.length() == 0)
+		return;
+	int stock = 0;
+	for (uint i = 0; i < give.length(); ++i) {
+		stock += give[i].GetStockpile();
+		const int k = gSiloIds.find(int(give[i].id));
+		if (k >= 0)
+			gSiloIds.removeAt(k);
+		const int r = gNkRecv.find(int(give[i].id));
+		if (r >= 0)
+			gNkRecv.removeAt(r);
+	}
+	ai.GiveUnits(give, to);
+	gNkGiven += own;
+	AiLog(Factory::T() + "apex: nuke share " + give.length() + " silo(s) with " + stock
+		+ " missiles -> t=" + to + " (income " + int(mine) + " vs " + int(best) + ")");
 }
 
 // Antinukes covering pos, all three factions' defs. 2500 is the interceptor
@@ -150,10 +267,111 @@ bool VolleyServes(const AIFloat3 &in p)
 	return false;
 }
 
+// A target is worth the metal a warhead DESTROYS, not the metal standing there:
+// the centre damage kills a fusion outright and takes a few percent of a T3
+// walker, so a clump of T3 is a poor target and the economy a rich one (his 10-11).
+float gWarheadD = -1.f;
+float gWarheadR = 0.f;
+
+void ReadWarhead(CCircuitUnit@ silo)
+{
+	if (gWarheadD > 0.f)
+		return;
+	const CCircuitDef@ d = silo.circuitDef;
+	gWarheadD = d.GetRawDmg();
+	gWarheadR = d.GetAoe();
+	AiLog(Factory::T() + "apex: nuke warhead " + d.GetName() + " dmg=" + formatFloat(gWarheadD, "", 0, 0)
+		+ " aoe=" + formatFloat(gWarheadR, "", 0, 0));
+}
+
+// Linear falloff to the blast edge; the game's edge effectiveness makes the rim hit harder, so this is the low side.
+float KilledM(int d, float dist)
+{
+	if (!Catalog::ValidId(d) || (gWarheadD <= 0.f) || (dist >= gWarheadR))
+		return 0.f;
+	const float dmg = gWarheadD * (1.f - dist / gWarheadR);
+	const float hp = Catalog::gHealth[d];
+	return Catalog::gCostM[d] * ((hp > dmg) ? dmg / hp : 1.f);
+}
+
+// Buildings by where they stand; a group's mobile members have no positions here, so each is priced at the centre.
+float GroupKilledM(int g, const AIFloat3 &in at)
+{
+	float m = StructsKilledM(at);
+	const int n = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < n; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (Catalog::ValidId(d) && Catalog::gMobile[d])
+			m += KilledM(d, 0.f);
+	}
+	return m;
+}
+
+// Their economy as we last saw it, sighted or remembered: buildings do not
+// move, so out of sight is where the economy most likely still is. Ground a
+// volley already spent is hidden until re-sighted and drops out here.
+const uint NUKE_ECO_CANDS = 16;
+array<AIFloat3> gNkStP;
+array<int> gNkStD;
+array<int> gNkEco;
+
+void ScanEnemyStructs()
+{
+	gNkStP.resize(0);
+	gNkStD.resize(0);
+	gNkEco.resize(0);
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d])
+			continue;
+		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
+		if ((los < 0) || ((los & (4 | 8 | 32 | 64)) != 0))
+			continue;
+		const AIFloat3 p = aiEnemyMgr.GetEnemyUnitPosAt(i);
+		if (!OnMap(p))
+			continue;
+		gNkStP.insertLast(p);
+		gNkStD.insertLast(d);
+		if ((Catalog::gExtractsM[d] > 0.f) || (Catalog::gMakeE[d] > 0.f) || (Catalog::gMakeM[d] > 0.f)
+			|| (Catalog::gConvCapacity[d] > 0.f))
+			gNkEco.insertLast(int(gNkStP.length()) - 1);
+	}
+	// The centres worth trying: the costliest economy buildings.
+	if (gNkEco.length() > NUKE_ECO_CANDS) {
+		array<int> top;
+		for (uint e = 0; e < gNkEco.length(); ++e) {
+			const float c = Catalog::gCostM[gNkStD[gNkEco[e]]];
+			uint at = top.length();
+			while ((at > 0) && (Catalog::gCostM[gNkStD[top[at - 1]]] < c))
+				--at;
+			if (at >= NUKE_ECO_CANDS)
+				continue;
+			top.insertAt(at, gNkEco[e]);
+			if (top.length() > NUKE_ECO_CANDS)
+				top.removeLast();
+		}
+		gNkEco = top;
+	}
+}
+
+float StructsKilledM(const AIFloat3 &in at)
+{
+	float m = 0.f;
+	const float sqR = gWarheadR * gWarheadR;
+	for (uint i = 0; i < gNkStP.length(); ++i) {
+		const float sq = gNkStP[i].SqDistance2D(at);
+		if (sq < sqR)
+			m += KilledM(gNkStD[i], sqrt(sq));
+	}
+	return m;
+}
+
 void UpdateNukes()
 {
 	if (ai.GetTunable("apex_brain_nuke", TUNE_BRAIN_NUKE) <= 0.f)
 		return;
+	ShareSilos();
 	if ((gSiloIds.length() == 0) || (ai.frame < gNukeNextEval))
 		return;
 	gNukeNextEval = ai.frame + 5 * SECOND;
@@ -173,6 +391,7 @@ void UpdateNukes()
 	}
 	if (silos.length() == 0)
 		return;
+	ReadWarhead(silos[0]);
 
 	// The scheduled post-impact forgets, volleys in progress or not.
 	for (uint i = 0; i < gForgetFrameQ.length(); ) {
@@ -308,6 +527,7 @@ void UpdateNukes()
 	float bestCost = 0.f;
 	bool bestDef = false;
 	bool bestBreach = false;
+	string bestKind = "";
 	// 10k floor (apexearth: "filter the metal to target areas of 10k metal
 	// or more if possible") -- with no qualifying target the missiles KEEP
 	// SAVING, which is the point; the stockpile only grows.
@@ -316,6 +536,8 @@ void UpdateNukes()
 	const float missileM = ai.GetTunable("apex_nuke_missile_cost", TUNE_NUKE_MISSILE_COST);
 	const float defMin = missileM * ai.GetTunable("apex_nuke_payoff", TUNE_NUKE_PAYOFF);
 	const float allyMax = ai.GetTunable("apex_nuke_ally_max", TUNE_NUKE_ALLY_MAX);
+	const double _t = Perf::T0();
+	ScanEnemyStructs();
 	for (int i = 0; i < nGroups; ++i) {
 		const AIFloat3 p = aiEnemyMgr.GetEnemyGroupPos(i);
 		if (!OnMap(p))
@@ -326,7 +548,10 @@ void UpdateNukes()
 		const bool defensive = (fwd < 0.35f);
 		if (defensive && (fwd < ai.GetTunable("apex_nuke_def_minfwd", TUNE_NUKE_DEF_MINFWD)))
 			continue;
-		const float cost = aiEnemyMgr.GetEnemyGroupCost(i);
+		const float rawCost = aiEnemyMgr.GetEnemyGroupCost(i);
+		if (rawCost < (defensive ? defMin : minValue))
+			continue;
+		const float cost = GroupKilledM(i, p);
 		if (cost < (defensive ? defMin : minValue))
 			continue;
 		// WHO OWNS THIS GROUND, not "is any of ours near". GetAllyInflAt is
@@ -340,7 +565,7 @@ void UpdateNukes()
 		// is about to kill us." Past this worth, losing some of our own units
 		// to the blast beats losing the base.
 		if (defensive && (ai.GetNetInflAt(p) >= allyMax)
-			&& (cost < ai.GetTunable("apex_nuke_emergency", TUNE_NUKE_EMERGENCY)))
+			&& (rawCost < ai.GetTunable("apex_nuke_emergency", TUNE_NUKE_EMERGENCY)))
 		{
 			continue;
 		}
@@ -385,9 +610,52 @@ void UpdateNukes()
 			bestPos = p;
 			bestAntis = antis;
 			bestCost = cost;
+			bestKind = defensive ? "army" : "group";
 			bestDef = defensive;
 		}
 	}
+	// THEIR ECONOMY, sighted or remembered: each costly economy building is a
+	// centre, worth every structure the blast would kill around it.
+	float ecoBest = 0.f;
+	{
+		const int assumeFromE = int(ai.GetTunable("apex_nuke_assume_from", TUNE_NUKE_ASSUME_FROM)
+				* 60.f) * SECOND;
+		const float decayE = ai.GetTunable("apex_nuke_repeat_decay", TUNE_NUKE_REPEAT_DECAY);
+		for (uint c = 0; c < gNkEco.length(); ++c) {
+			const AIFloat3 p = gNkStP[gNkEco[c]];
+			if (VolleyServes(p) || (ai.GetNetInflAt(p) >= allyMax))
+				continue;
+			if (Military::ForwardFraction(p) < ai.GetTunable("apex_nuke_def_minfwd", TUNE_NUKE_DEF_MINFWD))
+				continue;
+			const float cost = StructsKilledM(p);
+			if (cost > ecoBest)
+				ecoBest = cost;
+			if (cost < minValue)
+				continue;
+			int antis = AntisCovering(p);
+			if (ai.frame >= assumeFromE) {
+				const int assume = int(ai.GetTunable("apex_nuke_assume_antis", TUNE_NUKE_ASSUME_ANTIS));
+				if (antis < assume)
+					antis = assume;
+			}
+			float score = cost / float(1 + antis);
+			int hits = StrikesOn(p);
+			if (hits > 6)
+				hits = 6;
+			for (int h = 0; h < hits; ++h)
+				score *= decayE;
+			if (score > bestScore) {
+				bestScore = score;
+				bestPos = p;
+				bestAntis = antis;
+				bestCost = cost;
+				bestKind = "economy";
+				bestDef = false;
+			}
+		}
+	}
+	gNkEcoSeen = ecoBest;
+	Perf::Add("nuke.rank", _t);
 	// THE MIRRORED BASE, always a candidate. Group targeting is LOS-slaved
 	// (hostileDatas keeps only units currently in LOS), so the enemy MAIN BASE
 	// -- the ground we scout least -- can never win the ranking, and every
@@ -421,6 +689,7 @@ void UpdateNukes()
 				bestPos = mirror;
 				bestAntis = antis;
 				bestCost = cost;
+				bestKind = "base-guess";
 				bestDef = false;
 			}
 		}
@@ -437,6 +706,7 @@ void UpdateNukes()
 				bestPos = line;
 				bestAntis = antis;
 				bestCost = lineM;
+				bestKind = "line";
 				bestDef = false;
 				bestBreach = true;
 			}
@@ -447,7 +717,7 @@ void UpdateNukes()
 		if (ai.frame >= gNukeNextLog) {
 			gNukeNextLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: nukes saving, no target worth a warhead"
-				+ " (stock " + stock + ")");
+				+ " (stock " + stock + ", best economy cell " + formatFloat(ecoBest, "", 0, 0) + " of " + gNkEco.length() + " centres, " + gNkStP.length() + " structures known)");
 		}
 		return;
 	}
@@ -479,7 +749,7 @@ void UpdateNukes()
 			gNukeNextLog = ai.frame + 60 * SECOND;
 			AiLog(Factory::T() + "apex: nukes saving " + stock + "/" + needed
 				+ " for a target worth " + formatFloat(bestCost, "", 0, 0)
-				+ " behind " + bestAntis + " antinukes" + (bestBreach ? " (the line, plan MISSILE)" : ""));
+				+ " behind " + bestAntis + " antinukes" + (bestBreach ? " (the line, plan MISSILE)" : "") + " kind=" + bestKind + " ecoBest=" + formatFloat(ecoBest, "", 0, 0));
 		}
 		return;
 	}
@@ -550,7 +820,7 @@ void UpdateNukes()
 		+ gVolleys.length() + " volleys live) at "
 		+ int(bestPos.x) + "," + int(bestPos.z)
 		+ " worth " + formatFloat(bestCost, "", 0, 0)
-		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : ""));
+		+ " antis=" + bestAntis + (bestDef ? " DEFENSIVE" : "") + " kind=" + bestKind + " ecoBest=" + formatFloat(ecoBest, "", 0, 0));
 }
 
 }  // namespace Brain

@@ -247,6 +247,9 @@ void SuperCensus()
 		if (gComState[ci] != CS_FINISHED)
 			++gSuperFlight;
 	}
+	gSuperHave[SC_SILO] += Brain::SiloCountAdjust();
+	if (gSuperHave[SC_SILO] < 0)
+		gSuperHave[SC_SILO] = 0;
 }
 
 int SuperHave(int sc)
@@ -725,6 +728,43 @@ float FoeIntelM()
 	return gFoeIntelM;
 }
 
+// A SILO IS WORTH WHAT ITS WARHEADS DESTROY (his 10-11: unlimited range, and
+// devastating against too few anti-nukes). A strike's worth -- their base at the
+// director's standing value, or a richer economy cell it knows -- over the missiles
+// the SIGHTED anti-nukes make it cost, net of each missile's own bill, at the rate
+// this market's slice can feed missiles after the silos already standing, never
+// faster than a silo stockpiles. Seen anti-nukes are what make it wait.
+const float NUKE_MISSILE_M = 1000.f;     // armsilo.lua's warhead: metal and energy per shot,
+const float NUKE_MISSILE_E = 125000.f;   // ...and its stockpile time
+const float NUKE_STOCK_S = 120.f;
+
+float SiloGain(float slice)
+{
+	const float bill = NUKE_MISSILE_M + NUKE_MISSILE_E * EPriceFloor();
+	float worth = ai.GetTunable("apex_nuke_base_value", TUNE_NUKE_BASE_VALUE);
+	if (Brain::gNkEcoSeen > worth)
+		worth = Brain::gNkEcoSeen;
+	const AIFloat3 mirror(AiTerrainWidth() - Builder::gHomePos.x, 0.f,
+			AiTerrainHeight() - Builder::gHomePos.z);
+	const int antis = OnMap(mirror) ? Brain::AntisCovering(mirror) : 0;
+	const float per = 1.f + float(antis) * ai.GetTunable("apex_nuke_per_anti", TUNE_NUKE_PER_ANTI);
+	const float net = worth / per - bill;
+	const float spare = slice - float(SuperHave(SC_SILO)) * bill / NUKE_STOCK_S;
+	float rate = (spare > 0.f) ? spare / bill : 0.f;
+	if (rate > 1.f / NUKE_STOCK_S)
+		rate = 1.f / NUKE_STOCK_S;
+	const float gain = (net > 0.f) ? rate * net : 0.f;
+	if (ai.frame >= gSiloGainLogAt) {
+		gSiloGainLogAt = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: silo-gain worth=" + int(worth) + " antis=" + antis
+			+ " per=" + int(per) + " bill=" + int(bill) + " net=" + int(net)
+			+ " slice=" + formatFloat(slice, "", 0, 1) + " have=" + SuperHave(SC_SILO)
+			+ " spare=" + formatFloat(spare, "", 0, 1) + " gain=" + formatFloat(gain, "", 0, 2));
+	}
+	return gain;
+}
+int gSiloGainLogAt = 0;
+
 float JunoGain()
 {
 	if (SuperHave(SC_JUNO) > 0)
@@ -914,6 +954,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			gain = TacticalGain(d);
 		else if (sc == SC_JUNO)
 			gain = JunoGain();
+		else if (sc == SC_SILO)
+			gain = ((gain > 0.f) ? gain : 0.f)
+					+ SiloGain(power * share) * Persona::WantMult(SuperName(sc));
 		gain *= PlanMul(sc);
 		if (noLines)
 			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp

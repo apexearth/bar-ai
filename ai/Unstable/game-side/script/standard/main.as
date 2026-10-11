@@ -277,7 +277,7 @@ void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
 	Market::LiftNoteFinished(unit);
 	Market::ComUnitFinished(unit);
 	Market::NoteFarm(unit);
-	Brain::NoteSiloFinished(unit);
+	Brain::NoteSiloFinished(unit, produced);
 	if ((int(unit.id) >= 0) && (int(unit.id) < int(gFinished.length())))
 		gFinished[int(unit.id)] = true;
 	// A tower that actually FINISHED on the front line. The defsite counters are
