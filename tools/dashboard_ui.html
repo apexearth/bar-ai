@@ -643,6 +643,7 @@ function renderTournament(d) {
     <div style="margin:8px 0">${score || "no results yet"}</div>
     <div class="row">${TOOL_BTNS(d.dir, true)}</div>
     <pre id="toolout" style="display:none"></pre></div>
+    ${d.rand ? renderRand(d.rand) : ""}
     <div class="card"><h2>Games</h2>
     <table><thead><tr><th>Game</th><th>Map</th><th>Winner</th><th>Len</th></tr></thead><tbody>
     ${(d.matches || []).map(m => `<tr class="click" data-dir="${esc(m.dir)}">
@@ -650,6 +651,25 @@ function renderTournament(d) {
       <td class="${/^Apex/.test((m.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((m.winner_specs||[])[0] || m.reason || "…")}</td>
       <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td></tr>`).join("")}
     </tbody></table></div>`;
+}
+function renderRand(r) {
+  const nets = r.nets || [];
+  return `<div class="card"><h2>Random search</h2>
+    <div>${r.tried} of ${r.explore} random networks tried. A network that wins its first game is re-tested
+      over 4, then 12, then 24 games; 5 wins of 12 earns the 24-game rung.</div>
+    <div class="dim" style="margin:6px 0">reached 4 games: ${r.rungs[4]} &nbsp; 12 games: ${r.rungs[12]}
+      &nbsp; 24 games: ${r.rungs[24]} &nbsp; viable: ${r.viable} &nbsp;
+      (the untrained middle network wins about 5 of 24 against BARb)</div>
+    <table><thead><tr><th>Net</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Mean score</th>
+      <th>Noise s</th><th>Status</th></tr></thead><tbody>
+    ${nets.slice(0, 40).map(n => `<tr>
+      <td>c${String(n.id).padStart(2, "0")}</td><td>${n.games}${n.playing ? " <span class=\"dim\">+playing</span>" : ""}</td>
+      <td>${n.w}-${n.d}-${n.l}</td>
+      <td class="${n.w + 0.5 * n.d >= 0.42 * n.games ? "win" : "dim"}">${(100 * (n.w + 0.5 * n.d) / n.games).toFixed(0)}%</td>
+      <td class="dim">${n.score.toFixed(2)}</td><td class="dim">${n.s.toFixed(2)}</td>
+      <td>${esc(n.status === "live" ? "playing up to " + n.target : n.status || "")}</td></tr>`).join("")}
+    </tbody></table>
+    ${nets.length > 40 ? `<div class="dim">and ${nets.length - 40} more, all on one game</div>` : ""}</div>`;
 }
 function renderMatch(d) {
   if (d.running) return `<div class="card"><h2>${esc(d.dir)}</h2>

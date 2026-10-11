@@ -263,6 +263,10 @@ def tournament_summary(d):
         done += 1
         for x in w:
             wins[x] = wins.get(x, 0) + 1
+        if not cfg.get("ais"):
+            # the training searches (neuro, rand) write no config.json; their games say who and where
+            s = match_summary(Path(m))
+            cfg = {"ais": [x for x in s.get("specs", []) if x][:2], "maps": [s["map"]] if s.get("map") else []}
     return {
         "dir": str(d.relative_to(REPO)).replace(os.sep, "/"),
         "name": d.name,
@@ -873,7 +877,35 @@ def tournament_detail(d):
             if m.is_dir():
                 ms.append(match_summary(m))
     out["matches"] = ms
+    out["rand"] = rand_view(d)
     return out
+
+
+RAND_STATE = REPO / "runtime" / "nn" / "rand.json"
+
+
+def rand_view(d):
+    """tools/randsearch.py's standings, when d is its batch: the ladder and one row per network played."""
+    try:
+        st = json.loads(RAND_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if os.path.basename(os.path.normpath(st.get("dir", ""))) != d.name:
+        return None
+    nets = []
+    for n in st.get("nets", {}).values():
+        g = n.get("games", [])
+        if not g:
+            continue
+        res = [x[1] for x in g]
+        nets.append({"id": n["id"], "s": n["s"], "games": len(g), "w": res.count("W"), "d": res.count("D"),
+                     "l": res.count("L"), "score": sum(x[0] for x in g) / len(g), "target": n.get("target"),
+                     "status": n.get("status"), "playing": n.get("busy", 0)})
+    nets.sort(key=lambda n: (n["games"] < 4, -(n["w"] + 0.5 * n["d"]) / n["games"], -n["games"]))
+    rungs = {t: sum(1 for n in st.get("nets", {}).values() if n.get("target", 0) >= t or n.get("status") == "viable")
+             for t in (4, 12, 24)}
+    return {"tried": st.get("next", 0), "explore": 1000, "rungs": rungs,
+            "viable": sum(1 for n in nets if n["status"] == "viable"), "nets": nets}
 
 
 def known_maps():
@@ -2242,7 +2274,7 @@ class Handler(BaseHTTPRequestHandler):
                                else list_tournaments())
             elif u.path == "/api/game":
                 d = safe_run_dir(q["dir"])
-                if (d / "config.json").is_file() and (d / "matches").is_dir():
+                if (d / "matches").is_dir():
                     self.send_json(tournament_detail(d))
                 else:
                     self.send_json(match_detail(d))
