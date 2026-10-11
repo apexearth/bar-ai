@@ -40,6 +40,7 @@ int gNaLogAt = 0;
 int gNaGunN = 0, gNaGunHome = 0, gNaGunOut = 0;
 float gNaE2M = -1.f;
 float gNaObsDmg = -1.f;        // measured metal destroyed per bomber sent, for the type being priced
+float gNaObsLost = -1.f;       // ...and planes lost per run
 
 // the enemy as we know it, one snapshot per decision
 array<AIFloat3> gNaTurP;        // their armed ground statics: the push's breach is made of these
@@ -314,8 +315,15 @@ float NaEval(const NaCand@ c, float pathAAx, float ftrA, int n, float h, float d
 	}
 	float lossN = lostIn + lostT + lostOut;
 	// MEASURED BEATS MODELLED: a scored run of this type carries the AA we never saw
-	if ((obsSurv >= 0.f) && (lossN < N * (1.f - obsSurv)))
-		lossN = N * (1.f - obsSurv);
+	// ...as a number of planes, not a share: AA kills so many per pass, so a wing
+	// bigger than the measured run loses no more than it did (his 10-11: mass and rush)
+	if (obsSurv >= 0.f) {
+		float floorN = N * (1.f - obsSurv);
+		if ((gNaObsLost >= 0.f) && (floorN > gNaObsLost))
+			floorN = gNaObsLost;
+		if (lossN < floorN)
+			lossN = floorN;
+	}
 	lossN = (lossN > N) ? N : lossN;
 	// a building half-shot is repaired: only the ones finished count
 	if ((killF < 1.f) && (c.n > 0))
@@ -438,6 +446,7 @@ int NaDecide(int kind, const string why)
 	const float cost1 = grpM / float(n);
 	const float obs = (kind == 0) ? ObsSurv(DominantBomberDef()) : -1.f;
 	gNaObsDmg = (kind == 0) ? ObsDmg(DominantBomberDef()) : -1.f;
+	gNaObsLost = (kind == 0) ? ObsLost(DominantBomberDef()) : -1.f;
 	NaPrice@ best = NaPrice();
 	bool have = false;
 	for (uint i = 0; i < cs.length(); ++i) {
@@ -704,6 +713,7 @@ void NaDemandStep()
 			continue;
 		const float obs = ObsSurv(d);
 		gNaObsDmg = ObsDmg(d);
+		gNaObsLost = ObsLost(d);
 		for (uint i = 0; i < cs.length(); ++i) {
 			// no wing nets more than the cell holds
 			if (cs[i].v <= gNaNeedV[k])

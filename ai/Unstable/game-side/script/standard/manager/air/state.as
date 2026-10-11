@@ -402,6 +402,7 @@ CCircuitDef@ gCon2    = null;   // T2 air constructor
 //------------------------------------------------------------------------------
 array<float> gObsSurv;   // per def: measured survival fraction, <0 unmeasured
 array<float> gObsDmg;    // per def: measured metal destroyed per bomber sent
+array<float> gObsLost;   // per def: measured planes lost per run, <0 unmeasured
 int   gRunDef      = -1;
 int   gRunSent     = 0;
 float gRunKilled = 0.f;  // enemy structure metal that died in the target cell, by us
@@ -431,9 +432,11 @@ void ObsInit()
 	if (gObsSurv.length() == 0) {
 		gObsSurv.resize(Catalog::gDefCount + 1);
 		gObsDmg.resize(Catalog::gDefCount + 1);
+		gObsLost.resize(Catalog::gDefCount + 1);
 		for (uint i = 0; i < gObsSurv.length(); ++i) {
 			gObsSurv[i] = -1.f;
 			gObsDmg[i] = -1.f;
+			gObsLost[i] = -1.f;
 		}
 	}
 }
@@ -884,6 +887,8 @@ void SettleStrike()
 		return;
 	const float w = ai.GetTunable("apex_air_obs_w", TUNE_AIR_OBS_W);
 	gObsSurv[d] = (gObsSurv[d] < 0.f) ? surv : (1.f - w) * gObsSurv[d] + w * surv;
+	const float lost = float(sent - left);
+	gObsLost[d] = (gObsLost[d] < 0.f) ? lost : (1.f - w) * gObsLost[d] + w * lost;
 	// The first run moves the model's own expectation, as later runs move the
 	// estimate: taken outright, nine Phoenixes over an empty mirrored cell priced
 	// every bomber at 42 metal for the rest of the game (apexearth 2026-09-26).
@@ -903,6 +908,7 @@ void SettleStrike()
 	AiLog(Factory::T() + "apex: air run scored def=" + Catalog::Def(d).GetName()
 		+ " sent=" + sent + " home=" + left
 		+ " surv=" + formatFloat(gObsSurv[d], "", 0, 2)
+		+ " lost=" + formatFloat(gObsLost[d], "", 0, 1)
 		+ " dmg/bomber=" + formatFloat(gObsDmg[d], "", 0, 0));
 }
 
@@ -910,6 +916,12 @@ float ObsSurv(int defId)
 {
 	ObsInit();
 	return ((defId >= 0) && (defId < int(gObsSurv.length()))) ? gObsSurv[defId] : -1.f;
+}
+
+float ObsLost(int defId)
+{
+	ObsInit();
+	return ((defId >= 0) && (defId < int(gObsLost.length()))) ? gObsLost[defId] : -1.f;
 }
 
 float ObsDmg(int defId)
