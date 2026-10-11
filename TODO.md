@@ -183,6 +183,22 @@ new target is where our side already fights; outcome in/over/late/died is
 its `done`. Open: the trained net -- whether STAY ever beats GO -- is
 unmeasured until the head has rows.
 
+## Formation spacing and squad membership by unit type -- a net decides
+
+apexearth 2026-10-11: "formation spacing based on unit types. for example
+snipers bunched up is often a bad idea, way better if they're spread out. Also
+things like whether or not certain unit stats should join squads or not, all
+this could be governed by a NN and I think that would be helpful."
+
+Same day, for air: "our air attacks should fly a bit more spread out, they die
+to splash damage too much." Built for bombers (C++ `CBombTask::AssignSlots`:
+a grid spaced at twice the widest splash radius of the AA we have seen) on
+the `CCircuitUnit` formation slot (lateral + depth), which every travel,
+regroup and rally order passes through. Open: (1) ground squads -- spacing per
+unit from its stats (range, hp, cost, the enemy splash seen) as a continuous
+net head, not a table; (2) whether a unit joins a squad at all, from its stats,
+as a priced net decision with the outcome of the fight it joined as the label.
+
 ## Metal maps: extractors packed where they are safe, tiled for least overlap
 
 apexearth 2026-10-08, watching Full Metal Plate: the whole map is metal, so

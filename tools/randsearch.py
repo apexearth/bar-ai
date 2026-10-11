@@ -13,7 +13,8 @@ played weights plus N(0, s), s log-uniform in [T/4, T], T halving every ANNEAL_H
 ANNEAL_FLOOR; the rest stay random. The centre is owed CENTRE_GAMES games so children are judged
 against a firm record, and a child that clears the ladder with a better win rate takes its place.
 
-Same game as neuro.py: 1v1, Comet Catcher, seed 1, against BARb.
+Same game as neuro.py -- 1v1, Comet Catcher, against BARb -- but every game its own seed (game_seed), so
+the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed 1.
 
     python tools/randsearch.py            # play until EXPLORE networks are tried and every re-test is done
     python tools/randsearch.py --status
@@ -65,6 +66,12 @@ def played_weights(st, nid):
 def temperature(st):
     a = st.get("anneal") or {}
     return max(ANNEAL_FLOOR, ANNEAL_T0 * 0.5 ** (a.get("born", 0) / ANNEAL_HALF))
+
+
+def game_seed(nid, gi):
+    """Every game its own seed (his 10-11: not only the same seeds) -- the engine RNG and the faction draw --
+    fixed by network and game number, so any game can be replayed."""
+    return (nid * 7919 + gi * 104729) % 1000003 + 2
 
 
 def wins(n):
@@ -192,7 +199,7 @@ def worker(slot, st, lay, rng):
             continue
         n, gi = job
         f = os.path.join(st["dir"], "c%02d.json" % n["id"])
-        _, _, sc = neuro.play((st["dir"], n["id"], gi, neuro.GAME[0], neuro.GAME[1], neuro.GAME[2], f, slot))
+        _, _, sc = neuro.play((st["dir"], n["id"], gi, neuro.GAME[0], neuro.GAME[1], game_seed(n["id"], gi), f, slot))
         with lock:
             finish(st, n, gi, sc)
             save(st)
