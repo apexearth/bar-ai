@@ -1697,6 +1697,16 @@ static float CCircuitAI_GetTunable(CCircuitAI* circuit, const std::string& name,
 	return circuit->GetTunable(name, defVal);
 }
 
+static int CCircuitAI_LoadOptionFloats(CCircuitAI* circuit, const std::string& name)
+{
+	return circuit->LoadOptionFloats(name);
+}
+
+static float CCircuitAI_OptionFloat(CCircuitAI* circuit, int i)
+{
+	return circuit->OptionFloat(i);
+}
+
 // apex: the game speed the host has set (1 = realtime); the script's lag
 // detector measures the sim against this, not against realtime.
 static float CCircuitAI_GetSpeedFactor(CCircuitAI* circuit)
@@ -2163,6 +2173,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// adds shares this process, so they can simply read each other.
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetDefBuildProgress(CCircuitDef@) const", asFUNCTION(CCircuitAI_GetDefBuildProgress), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetTunable(const string &in, float) const", asFUNCTION(CCircuitAI_GetTunable), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int LoadOptionFloats(const string &in)", asFUNCTION(CCircuitAI_LoadOptionFloats), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float OptionFloat(int) const", asFUNCTION(CCircuitAI_OptionFloat), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetSpeedFactor() const", asFUNCTION(CCircuitAI_GetSpeedFactor), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float RecordRatio(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordRatio), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "int RecordCount(const CCircuitDef@, int) const", asMETHOD(CCircuitAI, RecordCount), asCALL_THISCALL); ASSERT(r >= 0);

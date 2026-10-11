@@ -649,7 +649,8 @@ def run(args) -> int:
         drop_ai_version=args.drop_ai_version,
         extra_modoptions=dict(kv.split('=', 1) for kv in args.modoption),
         extras=extras,
-        ai_options=dict(o.split('=', 1) for o in args.ai_option),
+        ai_options={**(json.loads(Path(args.ai_options_file).read_text(encoding="utf-8")) if args.ai_options_file else {}),
+                    **dict(o.split('=', 1) for o in args.ai_option)},
         ai_options_b=dict(o.split('=', 1) for o in args.ai_option_b),
     )
     script_path = outdir / "script.txt"
@@ -1037,6 +1038,8 @@ def main() -> int:
                          "exactly as a hosted match will load it")
     ap.add_argument("--ai-option", action="append", default=[], metavar="K=V",
                     help="per-AI option on the FIRST ai (side A), repeatable -- the same values the lobby's add-AI dialog sets")
+    ap.add_argument("--ai-options-file", dest="ai_options_file", default=None, metavar="JSON",
+                    help="a JSON object of per-AI options for side A: a weight vector is too long for a command line")
     ap.add_argument("--ai-option-b", dest="ai_option_b", action="append", default=[], metavar="K=V",
                     help="per-AI option on side B, repeatable; an apex_* key outranks the modoption for that side only")
     ap.add_argument("--record-seed", action="store_true",

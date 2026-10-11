@@ -66,6 +66,8 @@
 #include "market/defrole.as"        // advanced hands held on advanced guns while that gap is open
 #include "market/nnweights.as"      // the value net, written by tools/nntrain.py into the deployed copy
 #include "market/nnlog.as"          // the decision record a value net trains on
+#include "market/policydata.as"      // the policy net's layout and best weights, written by tools/neuro.py
+#include "market/policy.as"          // the policy net: one evolved network decides every head
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
 #include "market/comship.as"        // the base dying with its defence beaten: he steps in, never runs
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net

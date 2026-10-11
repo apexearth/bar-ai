@@ -2136,20 +2136,7 @@ float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 	// (apexearth 2026-09-22: "add one of these AI in multiplayer and check a box
 	// to say I want it to be an eco AI"). Read once, because GetOptionValues
 	// allocates.
-	if (!aiOptsRead) {
-		aiOptsRead = true;
-		springai::SkirmishAI* ai = GetSkirmishAI();
-		if (ai != nullptr) {
-			springai::OptionValues* opts = ai->GetOptionValues();
-			if (opts != nullptr) {
-				const int n = opts->GetSize();
-				for (int i = 0; i < n; ++i) {
-					aiOpts[opts->GetKey(i)] = opts->GetValue(i);
-				}
-				delete opts;
-			}
-		}
-	}
+	ReadAiOpts();
 	auto ov = aiOpts.find(name);
 	if (ov != aiOpts.end()) {
 		try {
@@ -2162,6 +2149,53 @@ float CCircuitAI::GetTunable(const std::string& name, float defVal) const
 	const float value = (game != nullptr) ? game->GetRulesParamFloat(name.c_str(), defVal) : defVal;
 	tunables[name] = value;
 	return value;
+}
+
+void CCircuitAI::ReadAiOpts() const
+{
+	if (aiOptsRead) {
+		return;
+	}
+	aiOptsRead = true;
+	springai::SkirmishAI* ai = GetSkirmishAI();
+	if (ai == nullptr) {
+		return;
+	}
+	springai::OptionValues* opts = ai->GetOptionValues();
+	if (opts != nullptr) {
+		const int n = opts->GetSize();
+		for (int i = 0; i < n; ++i) {
+			aiOpts[opts->GetKey(i)] = opts->GetValue(i);
+		}
+		delete opts;
+	}
+}
+
+const std::string& CCircuitAI::GetAiOption(const std::string& name) const
+{
+	static const std::string none;
+	ReadAiOpts();
+	auto it = aiOpts.find(name);
+	return (it != aiOpts.end()) ? it->second : none;
+}
+
+int CCircuitAI::LoadOptionFloats(const std::string& name)
+{
+	optFloats.clear();
+	const std::string& path = GetAiOption(name);
+	if (path.empty()) {
+		return -1;
+	}
+	std::ifstream in(path);
+	if (!in) {
+		LOG("apex: option-floats t=%i %s: cannot open %s", teamId, name.c_str(), path.c_str());
+		return -1;
+	}
+	float v;
+	while (in >> v) {
+		optFloats.push_back(v);
+	}
+	return (int)optFloats.size();
 }
 
 // Highest build progress among our own units of `def`, or -1 if we hold none.

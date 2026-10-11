@@ -587,7 +587,13 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	float v = rule, vnet = rule;
 	bool rnd = false, game = false, net = false;
 	float ctr = -1.f;
-	if ((t > 0.f) && (NnU01() < t)) {
+	const int pnh = PnHead(tag);
+	if (pnh >= 0) {
+		v = PnValue(pnh, st, f, lo, hi);
+		vnet = v;
+		net = true;
+		t = 1.f;
+	} else if ((t > 0.f) && (NnU01() < t)) {
 		const double _t = Perf::T0();
 		vnet = NnValBest(S, H, XM, XS, W1, B1, W2, B2, WO, BO, st, f, rule, sLo, sHi);
 		Perf::Add("nn.val", _t);
@@ -603,18 +609,17 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 			ctr = c;
 		}
 	}
-	// THE SEARCH'S VALUE FOR THIS GAME (tools/cem.py, his 10-10: big tests on random values, keep the
-	// best, test around them): a per-AI option fixes the head; the row still trains the nets
-	const float fixv = ai.GetTunable("apex_fix_" + tag, -1.f);
+	// a per-AI option fixes the head (tools/cem.py); the policy net's value is never nudged
+	const float fixv = (pnh >= 0) ? -1.f : ai.GetTunable("apex_fix_" + tag, -1.f);
 	if (fixv >= 0.f) {
 		v = (fixv < lo) ? lo : ((fixv > hi) ? hi : fixv);
 		rnd = true;
 		game = true;
-	} else if (gNnValIsHeld[hk]) {
+	} else if ((pnh < 0) && gNnValIsHeld[hk]) {
 		v = NnNudge(v, gNnValHeld[hk], lo, hi);
 		rnd = true;
 		game = true;
-	} else if ((flat > 0.f) && (NnU01() < flat)) {
+	} else if ((pnh < 0) && (flat > 0.f) && (NnU01() < flat)) {
 		v = NnNudge(v, NnGauss(), lo, hi);
 		rnd = true;
 	}
@@ -770,6 +775,9 @@ float NnFacScore(CCircuitUnit@ fac, const array<int>& in defs, array<float>& val
 		mult[i] = 1.f;
 		sum += vals[i];
 	}
+	const int pnf = PnHead("factory");
+	if ((pnf >= 0) && (defs.length() >= 2))
+		return PnFactoryTilt(pnf, fac, defs, vals, gains, mult);
 	const float blend = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND);
 	const float t = (blend * NNF_TRUST > 1.f) ? 1.f : blend * NNF_TRUST;
 	if ((t <= 0.f) || (defs.length() < 2) || !NnFacWeightsFit())
@@ -956,6 +964,11 @@ float NnHeadScore(bool on, const string& in layout, const string& in own, int S,
 	const array<float>& in WO, float BO, float trust0,
 	const array<float>& in st, const array<float>& in f, array<float>& w)
 {
+	const int pnh = PnHead(own);
+	if (pnh >= 0) {
+		PnTilt(pnh, st, f, w);
+		return 1.f;
+	}
 	const int K = int(w.length()), N = S + O;
 	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * trust0;
 	t = (t > 1.f) ? 1.f : t;
@@ -1133,6 +1146,11 @@ void NnScore(CCircuitUnit@ unit, array<Want@>@ ranked)
 	NnImitate(ranked);
 	if (ranked.length() < 2)
 		return;
+	const int pnb = PnHead("builder");
+	if (pnb >= 0) {
+		PnBuilderTilt(pnb, unit, ranked);
+		return;
+	}
 	if (!NNW_ON || gNnBad)
 		return;
 	const float blend = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND);

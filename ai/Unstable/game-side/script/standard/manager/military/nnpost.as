@@ -175,7 +175,12 @@ void PostFields(array<float>& out f)
 // (Market::NnHeadMix). Returns that trust (0 = rules alone).
 float NnPostScore(const array<float>& in st, const array<float>& in post, array<float>& w)
 {
-	float t = ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * Market::NNP_TRUST;
+	const int pnh = Market::PnHead(NNP_POST);
+	if (pnh >= 0) {
+		Market::PnTilt(pnh, st, post, w);
+		return 1.f;
+	}
+	float t =ai.GetTunable("apex_nn_blend", TUNE_NN_BLEND) * Market::NNP_TRUST;
 	t = (t > 1.f) ? 1.f : t;
 	const int S = Market::NNP_S, O = Market::NNP_O, H = Market::NNP_H, N = S + O;
 	if ((t <= 0.f) || (Market::NN_TRUST_KIND < 2) || !Market::NNP_ON || (Market::NNP_STATE != Market::NN_STATE + "|" + NNP_POST)

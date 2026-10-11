@@ -190,6 +190,11 @@ public:
 	// are cached on first read: this sits inside the per-unit attack loop.
 	float GetTunable(const char* name, float defVal) const { return GetTunable(std::string(name), defVal); }
 	float GetTunable(const std::string& name, float defVal) const;
+	const std::string& GetAiOption(const std::string& name) const;
+	// the floats in the file a lobby option names: the policy net's weights (tools/neuro.py),
+	// thousands of them, which no start script holds. -1 = no such option or file
+	int LoadOptionFloats(const std::string& name);
+	float OptionFloat(int i) const { return ((i >= 0) && (i < (int)optFloats.size())) ? optFloats[i] : 0.f; }
 
 	// --- in-process team coordination -----------------------------------
 	// Every AI the host adds lives in ONE process (AIExport.cpp keeps them in
@@ -465,6 +470,8 @@ private:
 	mutable std::unordered_map<std::string, float> tunables;  // see GetTunable
 	mutable std::map<std::string, std::string> aiOpts;  // this bot's lobby options
 	mutable bool aiOptsRead = false;
+	void ReadAiOpts() const;
+	std::vector<float> optFloats;  // see LoadOptionFloats
 	mutable float lavaLevel = NO_LAVA;   // see GetLavaLevel
 	mutable int lavaFrame = -1;
 	float lavaCrest = NO_LAVA;           // see SetLavaCrest
