@@ -306,9 +306,13 @@ def finish_run(st):
     os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
     bs = bests()
     sf = mean_score(gen_dir, 0, final, games, "run %d final" % st.get("run", 1))
-    sb = None
-    if bs["best"] is not None:
-        sb = mean_score(gen_dir, 1, {n: bs["best"]["vals"].get(n, final[n]) for n in names}, games, "all-time best")
+    # with no best yet the bar is the rule values: run 1 was crowned unopposed (10-10 21:41)
+    rule = {n: st["heads"][n]["rule"] for n in names}
+    other = {n: bs["best"]["vals"].get(n, final[n]) for n in names} if bs["best"] is not None else rule
+    sb = mean_score(gen_dir, 1, other, games, "all-time best" if bs["best"] is not None else "rule values")
+    if bs["best"] is None and sb is not None and (sf is None or sb >= sf):
+        bs["best"] = {"vals": rule, "score": sb, "run": 0, "at": time.strftime("%Y-%m-%d %H:%M")}
+        sb = None if sf is None else sb
     rec = {"run": st.get("run", 1), "at": time.strftime("%Y-%m-%d %H:%M"), "rounds": st.get("round", 0),
            "vals": final, "score": sf, "vs_best": sb, "valid_dir": os.path.basename(gen_dir)}
     bs["runs"].append(rec)
