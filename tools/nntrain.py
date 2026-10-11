@@ -1711,9 +1711,14 @@ CENTRE_ROWS = 48
 _CENTRES = None
 
 
+def cem_on():
+    return (OUT / "cem_on").exists()
+
+
 def centres():
     global _CENTRES
-    if _CENTRES is None:
+    # while the value search runs (tools/cem.py) it owns the centres: read them fresh, never step them
+    if _CENTRES is None or cem_on():
         try:
             _CENTRES = json.loads((OUT / "centre.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -1723,7 +1728,7 @@ def centres():
 
 def centre_step(head, rows, source=None, fp=None):
     lo, hi = head.vrange
-    if hi <= lo:
+    if hi <= lo or cem_on():
         return
     cs = centres()
     since = cs.setdefault("_since", time.time())

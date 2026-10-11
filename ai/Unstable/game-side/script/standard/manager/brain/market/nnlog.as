@@ -603,8 +603,14 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 			ctr = c;
 		}
 	}
-	// exploration nudges what the policy plays, never leaps across the range (his 10-10)
-	if (gNnValIsHeld[hk]) {
+	// THE SEARCH'S VALUE FOR THIS GAME (tools/cem.py, his 10-10: big tests on random values, keep the
+	// best, test around them): a per-AI option fixes the head; the row still trains the nets
+	const float fixv = ai.GetTunable("apex_fix_" + tag, -1.f);
+	if (fixv >= 0.f) {
+		v = (fixv < lo) ? lo : ((fixv > hi) ? hi : fixv);
+		rnd = true;
+		game = true;
+	} else if (gNnValIsHeld[hk]) {
 		v = NnNudge(v, gNnValHeld[hk], lo, hi);
 		rnd = true;
 		game = true;
