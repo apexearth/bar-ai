@@ -136,10 +136,20 @@ def score(mdir):
     def mean_log(k):
         xs = [v for v in s.get(k, [])[3:] if v is not None and v > 0]
         return sum(max(-2.3, min(2.3, math.log(v))) for v in xs) / len(xs) if xs else 0.0
+    result = g["result"]
+    if result == "D":
+        # the time limit is not a draw when one side is ahead on both (his 10-11)
+        def end(k):
+            xs = [v for v in s.get(k, []) if v is not None]
+            return xs[-1] if xs else 1.0
+        if end("eco") > 1.0 and end("army") > 1.0:
+            result = "W"
+        elif end("eco") < 1.0 and end("army") < 1.0:
+            result = "L"
     # a loss earns lasting longer; a win earns ending sooner (his 10-11: games ran too big and long)
     t = min(g["minutes"], MINUTES) / MINUTES
-    res = 0.5 * {"W": 1.0 + 0.5 * (1.0 - t), "L": -1.0 + 0.5 * t, "D": 0.0}[g["result"]]
-    return 0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex") + res, g["result"]
+    res = 0.5 * {"W": 1.0 + 0.5 * (1.0 - t), "L": -1.0 + 0.5 * t, "D": 0.0}[result]
+    return 0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex") + res, result
 
 
 def play(job):

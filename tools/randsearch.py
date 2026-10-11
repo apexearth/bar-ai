@@ -149,7 +149,7 @@ def status(st):
         at = [n for n in nets if n["target"] >= t or n["status"] == "viable"]
         print("  reached the %2d-game rung: %d (still playing %d)" % (t, len(at), sum(1 for n in at if n["status"] == "live" and n["target"] == t)))
     ranked = sorted([n for n in nets if len(n["games"]) >= LADDER[1]], key=lambda n: (-(wins(n) / len(n["games"])), -sum(x for x, _ in n["games"]) / len(n["games"])))
-    print("  best re-tested (win rate counts a draw as half; the middle network wins about 5 of 24):")
+    print("  best re-tested (a time-limit game goes to the side ahead on eco and army; the middle network wins 23%, the watch network 46%):")
     for n in ranked[:12]:
         print("    net %4d  %4.1f wins of %2d (%3.0f%%)  mean score %+.2f  s %.2f  %s" % (
             n["id"], wins(n), len(n["games"]), 100 * wins(n) / len(n["games"]),

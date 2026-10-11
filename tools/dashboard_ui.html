@@ -659,7 +659,7 @@ function renderRand(r) {
       over 4, then 12, then 24 games; 5 wins of 12 earns the 24-game rung.</div>
     <div class="dim" style="margin:6px 0">reached 4 games: ${r.rungs[4]} &nbsp; 12 games: ${r.rungs[12]}
       &nbsp; 24 games: ${r.rungs[24]} &nbsp; viable: ${r.viable} &nbsp;
-      (the untrained middle network wins about 5 of 24 against BARb)</div>
+      (against BARb the untrained middle network wins 23%, the current watch network 46%; a game that hits the time limit goes to whoever is ahead on economy and army)</div>
     <table><thead><tr><th>Net</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Mean score</th>
       <th>Noise s</th><th>Status</th></tr></thead><tbody>
     ${nets.slice(0, 40).map(n => `<tr>
