@@ -874,13 +874,25 @@ void CAttackTask::FindTarget()
 		}
 		return sidePow[gi];
 	};
+	// THE ARMY BESIDE US MARCHES TOO (his 10-11, a 1v1 at 45 min: 255k of army at
+	// home against their 80-108k, 46 Fidos, 21 Vanguards and 3 Banthas each waiting
+	// in the base on a group none could beat alone). Our attack squads standing
+	// within SIDE_R of this one leave with it; home pools held by the posture do not.
+	float withUs = -1.f;
+	auto withUsPow = [&]() -> float {
+		if (withUs < 0.f) {
+			withUs = milMgr->GetAttackPowerNear(pos, SIDE_R);
+		}
+		return withUs;
+	};
 	if (strongMem) {
 		bool still = false;
 		const float track = SQUARE(2.f * highestRange);
 		for (size_t gi = 0; gi < groups.size(); ++gi) {
 			const CEnemyManager::SEnemyGroup& g = groups[gi];
 			if ((g.pos.SqDistance2D(strongPos) < track)
-				&& (maxPower <= g.influence * odds) && (sideAt(gi) <= g.influence * odds))
+				&& (maxPower <= g.influence * odds) && (sideAt(gi) <= g.influence * odds)
+				&& (withUsPow() <= g.influence * odds))
 			{
 				strongPos = g.pos;
 				still = true;
@@ -917,7 +929,7 @@ void CAttackTask::FindTarget()
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
 		float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
 		if (effPower <= group.influence * scale * odds) {
-			effPower = std::max(effPower, sideAt(i));
+			effPower = std::max(effPower, std::max(sideAt(i), withUsPow()));
 		}
 		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
@@ -1262,9 +1274,9 @@ void CAttackTask::FindTarget()
 	} else if ((refusedStrong > 0) && (frame >= nextStrongLog)) {
 		nextStrongLog = frame + FRAMES_PER_SEC * 30;
 		circuit->LOG("apex: atk-wait t=%i lead=%s n=%i pow=%.1f strong=%i groups=%i at=%.0f,%.0f dBase=%.0f"
-			" refD=%.0f refInfl=%.1f side=%.1f",
+			" refD=%.0f refInfl=%.1f side=%.1f with=%.1f",
 			circuit->GetTeamId(), cdef->GetDef()->GetName(), (int)units.size(), maxPower,
-			refusedStrong, (int)groups.size(), pos.x, pos.z, pos.distance2D(basePos), refD, refInfl, refSide);
+			refusedStrong, (int)groups.size(), pos.x, pos.z, pos.distance2D(basePos), refD, refInfl, refSide, withUsPow());
 	}
 	// Return: target, startPos=leader->pos, endPos=position
 }

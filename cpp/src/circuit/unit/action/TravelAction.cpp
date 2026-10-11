@@ -161,7 +161,7 @@ static void NoteAtGoal(CCircuitAI* circuit, CCircuitUnit* unit, float dist)
 void ITravelAction::FaceStep(int idx)
 {
 	CCircuitUnit* u = static_cast<CCircuitUnit*>(ownerList);
-	if ((u->GetFormLateral() == 0.f) || (pPath == nullptr) || pPath->posPath.empty()) {
+	if (!u->HasFormSlot() || (pPath == nullptr) || pPath->posPath.empty()) {
 		return;
 	}
 	const int last = int(pPath->posPath.size()) - 1;

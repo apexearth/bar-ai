@@ -6,6 +6,7 @@
  */
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_map>
 #include "task/fighter/BombTask.h"
 #include "map/ThreatMap.h"
@@ -87,8 +88,53 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
 	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
 }
 
+// A wave in one ball dies to splash (his 10-11): planes are spaced by twice the
+// widest splash radius of the anti-air we have seen, so one burst catches one.
+// Under 32 elmos is a direct-hit missile, not splash; none seen, no spacing.
+float CBombTask::SplashSpacing(int frame)
+{
+	if (frame < slotSpacingAt) {
+		return slotSpacing;
+	}
+	slotSpacingAt = frame + FRAMES_PER_SEC * 30;
+	float r = 0.f;
+	for (const auto& kv : manager->GetCircuit()->GetEnemyInfos()) {
+		const CCircuitDef* d = kv.second->GetCircuitDef();
+		if ((d != nullptr) && !d->IsAbleToFly() && d->IsRoleAA() && (d->GetAoe() > r)) {
+			r = d->GetAoe();
+		}
+	}
+	slotSpacing = (r >= 32.f) ? 2.f * r : 0.f;
+	return slotSpacing;
+}
+
+// A grid about as deep as it is wide, centred on the path, rows trailing.
+void CBombTask::AssignSlots(int frame)
+{
+	const float d = SplashSpacing(frame);
+	const int n = (int)units.size();
+	const int cols = (int)std::ceil(std::sqrt((float)std::max(n, 1)));
+	int i = 0;
+	for (CCircuitUnit* u : units) {
+		float lat = 0.f, depth = 0.f;
+		if ((d > 0.f) && (n > 1)) {
+			lat = ((float)(i % cols) - 0.5f * (float)(cols - 1)) * d;
+			depth = (float)(i / cols) * d;
+		}
+		if ((u->GetFormLateral() != lat) || (u->GetFormDepth() != depth)) {
+			u->SetFormSlot(lat, -RgtVector, depth);
+		}
+		++i;
+	}
+	if ((d > 0.f) && (n > 1) && (frame >= slotLogAt)) {
+		slotLogAt = frame + FRAMES_PER_SEC * 30;
+		manager->GetCircuit()->LOG("apex: air formation n=%d cols=%d spacing=%.0f", n, cols, d);
+	}
+}
+
 void CBombTask::RemoveAssignee(CCircuitUnit* unit)
 {
+	unit->ClearFormSlot();
 	ISquadTask::RemoveAssignee(unit);
 	issued.erase(unit->GetId());
 	aims.erase(unit->GetId());
@@ -145,6 +191,8 @@ void CBombTask::Update()
 		manager->AbortTask(this);
 		return;
 	}
+
+	AssignSlots(frame);
 
 	/*
 	 * Regroup if required

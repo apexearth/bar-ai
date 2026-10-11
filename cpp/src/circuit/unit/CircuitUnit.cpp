@@ -564,7 +564,7 @@ AIFloat3 CCircuitUnit::InFormation(const AIFloat3& p, OrdSrc src) const
 			return p;
 	}
 	++sFormAsks;
-	if (formLateral == 0.f) {
+	if (!HasFormSlot()) {
 		return p;
 	}
 	AIFloat3 dir = formDir;
@@ -579,7 +579,7 @@ AIFloat3 CCircuitUnit::InFormation(const AIFloat3& p, OrdSrc src) const
 		}
 	}
 	dir.Normalize2D();
-	AIFloat3 out(p.x - dir.z * formLateral, p.y, p.z + dir.x * formLateral);
+	AIFloat3 out(p.x - dir.z * formLateral - dir.x * formDepth, p.y, p.z + dir.x * formLateral - dir.z * formDepth);
 	CTerrainManager::CorrectPosition(out);
 	++sFormApplied;
 	return out;

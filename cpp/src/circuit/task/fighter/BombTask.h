@@ -43,6 +43,11 @@ private:
 	void AttackSpread(int frame);
 	void IssueAims(int frame);
 	void PlanSpread(int frame);
+	float SplashSpacing(int frame);
+	void AssignSlots(int frame);
+	float slotSpacing = 0.f;
+	int slotSpacingAt = -1;
+	int slotLogAt = -1;
 
 	struct SpreadCand {
 		ICoreUnit::Id id;
