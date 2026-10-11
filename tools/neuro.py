@@ -53,11 +53,16 @@ LGAIN = 8.0          # a choice's or list option's weight moves by up to e^LGAIN
 CANDS = 8
 ELITE = 3
 SHRINK = 2
-SIG0, SIG_END = 0.35, 0.03
-PM0, PM_END = 0.3, 0.05
-DECAY = 0.92
+# his 10-11: still very early -- anneal slowly if at all. 30 rounds take the nudge 0.35 -> 0.22.
+SIG0, SIG_END = 0.35, 0.12
+PM0, PM_END = 0.3, 0.12
+DECAY = 0.985
 GENS_PER_RUN = 30
-FRESH_EVERY = 3
+FRESH_EVERY = 4
+HALL_N = 20          # the historic bests, by mean score over every game each has played
+HALL_PRIOR = -1.3    # a hall mean is pulled SHRINK games toward this (about a round-1 average)
+MERGE_EVERY = 4      # every 4th round two children are merges of same-lineage hall networks
+RESTART = os.path.join(NN, "neuro_restart")   # exit between rounds; keepalive starts the new code
 
 # The shared layer's inputs: what a player can see of the economy, the armies and the danger.
 INPUTS = ["min", "mInc", "eInc", "mCur", "mStor", "eCur", "eStor", "eStall", "mWasting", "tier",
@@ -311,23 +316,86 @@ def cross(a, b, rng, blks):
     return c
 
 
+def lineage_hall(st):
+    """Hall networks descended from the current lineage's start, best first: only these can be averaged
+    (two networks from different starts put the same job on different neurons)."""
+    return [e for e in bests().get("hall", []) if e.get("lineage") == st.get("lineage", 1)]
+
+
+def similarity(st, ws):
+    """Cosine between each pair's change from the lineage start: near 1 = they moved the same way."""
+    o = st.get("origin", {}).get(str(st.get("lineage", 1)), st["middle"])
+    ds = [[a - b for a, b in zip(w, o)] for w in ws]
+    out = []
+    for i in range(len(ds)):
+        for j in range(i + 1, len(ds)):
+            na = math.sqrt(sum(x * x for x in ds[i]))
+            nb = math.sqrt(sum(x * x for x in ds[j]))
+            out.append(sum(x * y for x, y in zip(ds[i], ds[j])) / (na * nb) if na > 0 and nb > 0 else 0.0)
+    return out
+
+
 def sample(st, rng):
+    """(networks, how each was made, nudge, share of weights nudged)."""
     rnd = st["round"]
     sig = max(SIG_END, SIG0 * DECAY ** rnd)
     pm = max(PM_END, PM0 * DECAY ** rnd)
     elite = [e["w"] for e in st["elite"]]
     if not elite:
-        return [st["start"]] + [mutate(st["start"], rng, sig, pm) for _ in range(CANDS - 1)], sig, pm
+        return ([st["start"]] + [mutate(st["start"], rng, sig, pm) for _ in range(CANDS - 1)],
+                ["start"] + ["mutant"] * (CANDS - 1), sig, pm)
     cands = [list(e) for e in elite]
+    made = ["elite"] * len(cands)
     blks = blocks(st["layout"])
-    while len(cands) < CANDS:
+    hall = lineage_hall(st)
+    merges = []
+    if (rnd + 1) % MERGE_EVERY == 0 and len(hall) >= 2:
+        top = [e["w"] for e in hall[:3]]
+        merges.append(([sum(c) / len(top) for c in zip(*top)], "merge-avg%d" % len(top)))
+        merges.append((cross(top[0], top[1], rng, blks), "merge-cross"))
+        sims = similarity(st, top)
+        log("merge round: top %d same-lineage hall networks, similarity %s" % (
+            len(top), " ".join("%.2f" % s for s in sims)))
+    while len(cands) < CANDS - len(merges):
         if len(cands) % 3 == 2 and len(elite) > 1:
             a, b = rng.sample(elite, 2)
             cands.append(mutate(cross(a, b, rng, blks), rng, sig * 0.5, pm))
+            made.append("cross")
         else:
             wts = [len(elite) - i for i in range(len(elite))]
             cands.append(mutate(rng.choices(elite, weights=wts)[0], rng, sig, pm))
-    return cands, sig, pm
+            made.append("mutant")
+    for w, how in merges:
+        cands.append(w)
+        made.append(how)
+    return cands, made, sig, pm
+
+
+def wkey(w):
+    return "%016x" % (hash(tuple(round(x, 5) for x in w)) & 0xFFFFFFFFFFFFFFFF)
+
+
+def hall_update(st, cands, made, allsc, gen):
+    """Every fully played network enters the historic bests by its mean over all its games; a carried
+    elite's games accumulate. The top HALL_N are kept, weights and all."""
+    bs = bests()
+    hall = {e["key"]: e for e in bs.get("hall", [])}
+    for ci, v in allsc.items():
+        k = wkey(cands[ci])
+        e = hall.get(k)
+        if e is None:
+            e = {"key": k, "w": cands[ci], "lineage": st.get("lineage", 1), "run": st["run"], "gen": gen,
+                 "made": made[ci] if ci < len(made) else "?", "scores": []}
+        e["scores"] = list(v) if len(v) >= len(e["scores"]) else e["scores"] + list(v)[-len(GAMES):]
+        e["last"] = gen
+        e["score"] = round((sum(e["scores"]) + SHRINK * HALL_PRIOR) / (len(e["scores"]) + SHRINK), 4)
+        hall[k] = e
+    bs["hall"] = sorted(hall.values(), key=lambda e: -e["score"])[:HALL_N]
+    tmp = BEST + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(bs, fh)
+    os.replace(tmp, BEST)
+    return bs["hall"]
 
 
 def workers():
@@ -363,15 +431,16 @@ def generation(st):
             cfg = None
     if cfg and len(cfg.get("cands", [])) == CANDS:
         gen_dir, cands, games = old[-1], cfg["cands"], [tuple(g) for g in cfg["games"]]
+        made = cfg.get("made") or ["?"] * len(cands)
         sig, pm = cfg["sig"], cfg["pm"]
         log("gen %d: resuming %s" % (gen, os.path.basename(gen_dir)))
     else:
-        cands, sig, pm = sample(st, rng)
+        cands, made, sig, pm = sample(st, rng)
         gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-neuro-g%d" % gen)
         os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
         with open(os.path.join(gen_dir, "config.json"), "w", encoding="utf-8") as fh:
             json.dump({"gen": gen, "run": st["run"], "round": st["round"] + 1, "sig": sig, "pm": pm,
-                       "games": games, "cands": cands}, fh)
+                       "games": games, "made": made, "cands": cands}, fh)
     log("gen %d (run %d round %d): %d networks x %d games, nudge %.3f on %.0f%% of weights -> %s" % (
         gen, st["run"], st["round"] + 1, CANDS, len(games), sig, 100 * pm, os.path.basename(gen_dir)))
     scores, results, w = run_games(gen_dir, cands, games)
@@ -383,6 +452,7 @@ def generation(st):
     allsc = {ci: (prev[ci] if ci < len(prev) else []) + v for ci, v in done.items()}
     ranked = sorted(((sum(v) + SHRINK * avg) / (len(v) + SHRINK), ci) for ci, v in allsc.items())
     ranked.reverse()
+    hall = hall_update(st, cands, made, allsc, gen)
     st["gen"] = gen
     if len(ranked) < ELITE:
         log("gen %d: only %d networks scored -- round repeated" % (gen, len(ranked)))
@@ -397,6 +467,9 @@ def generation(st):
     st["history"] = st["history"][-400:]
     log("gen %d: best %.3f, round average %.3f, elite %s, results by rank %s" % (
         gen, ranked[0][0], avg, [round(s, 2) for s, _ in ranked[:ELITE]], res))
+    log("gen %d: made by rank %s; hall best %.3f over %d games (%s, gen %d)" % (
+        gen, " ".join(made[ci] for _, ci in ranked), hall[0]["score"], len(hall[0]["scores"]), hall[0]["made"],
+        hall[0]["gen"]))
     return st
 
 
@@ -425,7 +498,7 @@ def finish_run(st):
            "vs": sb, "valid_dir": os.path.basename(gen_dir), "w": final}
     bs["runs"].append(rec)
     if sf is not None and (sb is None or sf > sb):
-        bs["best"] = {"w": final, "score": sf, "run": st["run"], "at": rec["at"]}
+        bs["best"] = {"w": final, "score": sf, "run": st["run"], "at": rec["at"], "lineage": st.get("lineage", 1)}
         log("run %d: NEW ALL-TIME BEST (%.3f vs %s)" % (st["run"], sf, "-" if sb is None else "%.3f" % sb))
     else:
         log("run %d: all-time best kept (%s vs final %s)" % (st["run"], "-" if sb is None else "%.3f" % sb,
@@ -439,8 +512,11 @@ def finish_run(st):
     if fresh:
         st["start"] = middle(st["layout"], random.Random(nxt * 31337))
         st["elite"] = []
+        st["lineage"] = max([st.get("lineage", 1)] + [int(k) for k in st.get("origin", {})]) + 1
+        st.setdefault("origin", {})[str(st["lineage"])] = st["start"]
     else:
         st["start"] = bs["best"]["w"]
+        st["lineage"] = bs["best"].get("lineage", 1)
         st["elite"] = [{"w": bs["best"]["w"], "score": None, "scores": []}]
     st["run"], st["round"] = nxt, 0
     log("run %d starts from %s" % (nxt, "a fresh middle network" if fresh else "the all-time best"))
@@ -450,7 +526,8 @@ def finish_run(st):
 def init():
     lay = build_layout()
     mid = middle(lay, random.Random(1))
-    st = {"layout": lay, "gen": 0, "run": 1, "round": 0, "elite": [], "history": [], "middle": mid, "start": mid}
+    st = {"layout": lay, "gen": 0, "run": 1, "round": 0, "elite": [], "history": [], "middle": mid, "start": mid,
+          "lineage": 1, "origin": {"1": mid}}
     write_data(os.path.join(MARKET, "policydata.as"), lay, None)
     if os.path.exists(STATE):
         os.replace(STATE, STATE + ".%s.bak" % time.strftime("%m%d-%H%M"))
@@ -469,6 +546,14 @@ def status(st):
         print("  ALL-TIME BEST: run %d (%s), score %.3f" % (b["best"]["run"], b["best"]["at"], b["best"]["score"]))
     for r in b["runs"][-6:]:
         print("  run %d final %s vs %s" % (r["run"], r["score"], r["vs"]))
+    hall = b.get("hall", [])
+    print("  HALL (historic bests, mean of all games pulled %d games toward %.1f):" % (SHRINK, HALL_PRIOR))
+    for e in hall[:8]:
+        print("    %.3f over %2d games  %s  lineage %d run %d gen %d..%d  %s" % (
+            e["score"], len(e["scores"]), e["key"][:8], e["lineage"], e["run"], e["gen"], e["last"], e["made"]))
+    top = [e["w"] for e in hall if e["lineage"] == st.get("lineage", 1)][:4]
+    if len(top) >= 2:
+        print("  similarity of the top %d (this lineage): %s" % (len(top), " ".join("%.2f" % s for s in similarity(st, top))))
     for e in st["history"][-10:]:
         print("  gen %d r%d.%d best %.3f avg %.3f nudge %.3f/%.0f%% %s" % (
             e["gen"], e["run"], e["round"], e["best"], e["avg"], e["sig"], 100 * e["pm"], e["results"]))
@@ -488,6 +573,10 @@ def main(argv):
     while not os.path.exists(STOP):
         st = generation(st)
         save(st)
+        if os.path.exists(RESTART):
+            os.remove(RESTART)
+            log("restart asked: exiting between rounds")
+            return 0
         if st["round"] >= GENS_PER_RUN:
             st = finish_run(st)
             save(st)
