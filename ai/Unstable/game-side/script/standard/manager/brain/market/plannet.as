@@ -188,7 +188,7 @@ void PlanNetDecide()
 // HOW MANY AIR PLANTS while the plan is AIR: a continuous head, an absolute count
 // (the rule's is 1), taken up to the next whole plant where it is used.
 const string NNL_PLANT = "airPlants,mInc,eInc,bankFill,foeAirM,foeFighterM,foeAAM,ourBombers,ourFighters,minute";
-const float NL_LO = 1.f, NL_HI = 8.f;
+const float NL_LO = 1.f, NL_HI = 3.f;   // his 10-11: 8 let an 8v8 bot stand up 5-8 basic air plants
 float gAirPlantMax = 1.f;
 int gAirPlantNextAt = 0;
 
