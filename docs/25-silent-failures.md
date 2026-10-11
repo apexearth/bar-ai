@@ -742,3 +742,14 @@ against a group on our doorstep; a dozen small squads at home (power 0.8-15,
 of its reach -- "we make room for them to walk in". Inside 2,200 of base the side
 now counts (`GetSquadPowerNear` + `GetAllySquadPowerAt`), and `check.py` also
 scans `cpp/src/circuit` for squad power vs group influence without the side.
+
+## S43 — a field appended to a logged line, and the trainer's parser stopped matching it (2026-10-10)
+
+`nnval ... vnet=X` gained ` ctr=Y` (the policy centre, f90fef42). `decisions.VAL_ROW`
+required `vnet=\S+ \| ` next, so from 15:35 not one continuous-head row parsed:
+16 heads learned nothing for ~2 h, the policy centres could not step, and no
+error appeared anywhere -- the choice heads kept learning, so the trainer
+looked busy. Found by counting per-net metrics records. The pattern now
+accepts extra `key=value` fields before the `|`, and a non-matching nnval line
+prints a WARNING once. Rule: when you append to a logged line, grep tools/ for
+its parser and run it on a fresh game.

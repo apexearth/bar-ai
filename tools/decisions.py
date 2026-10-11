@@ -57,7 +57,10 @@ HEAD_TAG = re.compile(r"apex: nn(?:com|tech|raid|air|plan|join|reinf|hunt|strike
 # the continuous heads (nnlog.as NnValDecide): the value played, the rule's, the range, how it was drawn
 VAL_SCHEMA = re.compile(r"apex: nnval-schema v\d+ head=(\w+) state=\S+ own=(\S+)")
 VAL_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nnval head=(\w+) t=(\d+) f=\d+ v=(\S+) rule=(\S+) lo=(\S+) hi=(\S+)"
-                     r" rnd=(\d) dens=(\S+) ex=(\d) game=(\d) trust=(\S+) vnet=\S+ \| (\S+) \| (\S+)")
+                     r" rnd=(\d) dens=(\S+) ex=(\d) game=(\d) trust=(\S+) vnet=\S+(?: \w+=\S+)* \| (\S+) \| (\S+)")
+# a field appended to the nnval line (ctr=, 10-10 15:35) stopped every row parsing for two hours
+# and no error said so: a line that names nnval but does not match is counted and shouted
+_VAL_MISS_SAID = [False]
 # static defence (protect_nn.as, protect_nntype.as): site and gun class with their watch
 DEF_SCHEMA = re.compile(r"apex: nn(defsite|deftype)-schema v\d+ state=\S+ (?:defsite|deftype)=(\S+) opt=")
 DEF_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(defsite|deftype) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
@@ -388,6 +391,10 @@ def parse(path, files=None):
                 if m:
                     vals.setdefault(m.group(2), {"keys": None, "rows": []})["rows"].append(
                         (m.group(1),) + m.groups()[2:])
+                elif "apex: nnval head=" in ln and not _VAL_MISS_SAID[0]:
+                    _VAL_MISS_SAID[0] = True
+                    print("WARNING decisions: an nnval line does not match VAL_ROW -- continuous heads learn"
+                          " NOTHING until it does: %s" % ln.strip()[:240], flush=True)
                 continue
             if "apex: nn" in ln and HEAD_TAG.search(ln):
                 m = HEAD_SCHEMA.search(ln)
