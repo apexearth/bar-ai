@@ -1694,8 +1694,8 @@ class ValHead(ComHead):
         if rows:
             self.vrange = (rows[-1]["lo"], rows[-1]["hi"])
         rec = super().learn(source, g, first_touch, rows)
-        if first_touch and rows and self.full is not None and self.vrange:
-            centre_step(self, rows, source)
+        if rows and self.full is not None and self.vrange:
+            centre_step(self, rows, source, decisions.fingerprint(g) or None)
         return rec
 
 
@@ -1721,7 +1721,7 @@ def centres():
     return _CENTRES
 
 
-def centre_step(head, rows, source=None):
+def centre_step(head, rows, source=None, fp=None):
     lo, hi = head.vrange
     if hi <= lo:
         return
@@ -1733,15 +1733,25 @@ def centre_step(head, rows, source=None):
             (OUT / "centre.json").write_text(json.dumps(cs), encoding="utf-8")
         except OSError:
             pass
+    # ONE step per game, the first time it is learned -- usually live, mid-game: a finished
+    # game's decisions are already used by then, so stepping only there never stepped
+    if not fp:
+        return
+    done = cs.setdefault("_stepped", {}).setdefault(head.NAME, [])
+    if fp in done:
+        return
     # only a game played under the centres moves them: a restart's backlog of older games
-    # stepped every head ~25 times in ten minutes (10-10 15:44)
-    try:
-        played = max(os.path.getmtime(os.path.join(str(source), f)) for f in ("result.json", "infolog.txt")
-                     if os.path.exists(os.path.join(str(source), f)))
-    except (ValueError, OSError, TypeError):
-        return
-    if played < since:
-        return
+    # stepped every head ~25 times in ten minutes (10-10 15:44); a live game is current
+    if not str(source).startswith("live:"):
+        try:
+            played = max(os.path.getmtime(os.path.join(str(source), f)) for f in ("result.json", "infolog.txt")
+                         if os.path.exists(os.path.join(str(source), f)))
+        except (ValueError, OSError, TypeError):
+            return
+        if played < since:
+            return
+    done.append(fp)
+    del done[:-200]
     c = cs.get(head.NAME)
     if c is None:
         c = float(np.median([float(r["rule"]) for r in rows]))
