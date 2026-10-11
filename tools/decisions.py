@@ -391,7 +391,8 @@ def parse(path, files=None):
                 if m:
                     vals.setdefault(m.group(2), {"keys": None, "rows": []})["rows"].append(
                         (m.group(1),) + m.groups()[2:])
-                elif "apex: nnval head=" in ln and not _VAL_MISS_SAID[0]:
+                # a live log's last line can be half written: judge only complete lines (both | separators)
+                elif "apex: nnval head=" in ln and ln.count(" | ") >= 2 and not _VAL_MISS_SAID[0]:
                     _VAL_MISS_SAID[0] = True
                     print("WARNING decisions: an nnval line does not match VAL_ROW -- continuous heads learn"
                           " NOTHING until it does: %s" % ln.strip()[:240], flush=True)
