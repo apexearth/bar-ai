@@ -39,8 +39,9 @@ SIG_KEEP = 0.6       # the new spread is this much of the old plus the rest of t
 DECAY = 0.85         # ...and never above SIG0 * DECAY^round: the randomness falls as the run goes on
 GENS_PER_RUN = 12
 FRESH_EVERY = 3      # every third run starts from the rule values, the rest from the all-time best
-VALID = [(1, "Comet Catcher Remake 1.8"), (1, "Comet Catcher Remake 1.8"), (1, "Comet Catcher Remake 1.8"),
-         (2, "Frozen_Ford_V2"), (2, "Glacier Pass"), (2, "Comet Catcher Remake 1.8")]
+# the all-time best is the decision that matters most, and one game is a coin flip: 12 games a side
+VALID = [(1, "Comet Catcher Remake 1.8")] * 6 + \
+        [(2, "Frozen_Ford_V2"), (2, "Glacier Pass"), (2, "Comet Catcher Remake 1.8")] * 2
 BEST = os.path.join(NN, "cem_best.json")
 MINUTES = 40
 GAMES = [  # (per side, map); seeds are drawn per generation and shared by every candidate
