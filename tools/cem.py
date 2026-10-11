@@ -7,8 +7,9 @@ other, so they are tried together). Each generation: CANDS value sets drawn arou
 (candidate 0 is the mean itself), each played in the same GAMES (same maps and seeds for every
 candidate, so they are compared fairly) with the AI's per-head option apex_fix_<head> (nnlog.as
 NnValDecide). Score = mean economy/army/mex edge over the game plus the result. The ELITE best re-centre
-the mean; the spread narrows toward theirs, never below SIG_MIN. The mean is published as the policy
-centres (runtime/nn/centre.json) while runtime/nn/cem_on exists; every game still trains the nets.
+the mean; the spread narrows toward theirs and by DECAY each round, down to SIG_END, when the run ends:
+its answer meets the all-time best in VALID games and the better is kept (cem_best.json); that best
+is published as the policy centres while runtime/nn/cem_on exists. Every game still trains the nets.
 
     python tools/cem.py            # run generations until runtime/nn_stop exists
     python tools/cem.py --status   # where the search stands
@@ -31,9 +32,15 @@ AI = "Apexnnlog:lane-nnlog:standard"
 FOE = "BARb:stable:hard"
 CANDS = 16
 ELITE = 4
-SIG0 = 0.35          # log-space spread at the start: about +-40%
-SIG_MIN = 0.08
+SIG0 = 0.35          # log-space spread at a run's start: about +-40%
+SIG_END = 0.06       # a run ends once every head's spread is down to this (about +-6%)
 SIG_KEEP = 0.6       # the new spread is this much of the old plus the rest of the elite's
+DECAY = 0.85         # ...and never above SIG0 * DECAY^round: the randomness falls as the run goes on
+GENS_PER_RUN = 12
+FRESH_EVERY = 3      # every third run starts from the rule values, the rest from the all-time best
+VALID = [(1, "Comet Catcher Remake 1.8"), (1, "Comet Catcher Remake 1.8"), (1, "Comet Catcher Remake 1.8"),
+         (2, "Frozen_Ford_V2"), (2, "Glacier Pass"), (2, "Comet Catcher Remake 1.8")]
+BEST = os.path.join(NN, "cem_best.json")
 MINUTES = 40
 GAMES = [  # (per side, map); seeds are drawn per generation and shared by every candidate
     (1, "Comet Catcher Remake 1.8"),
@@ -84,14 +91,23 @@ def value(h, x):
     return round(min(h["hi"], max(h["lo"], math.exp(x))), 4)
 
 
+def bests():
+    try:
+        return json.load(open(BEST, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"best": None, "runs": []}
+
+
 def publish(st):
-    """The mean as the policy centres the game clamps the nets to (nntrain reads, never writes, while cem_on)."""
+    """The ALL-TIME BEST as the policy centres the game clamps the nets to (the running mean is noisy);
+    the mean until a first run has finished. nntrain reads, never writes, while cem_on."""
     try:
         cs = json.load(open(CENTRE, encoding="utf-8"))
     except (OSError, ValueError):
         cs = {}
+    b = bests()["best"]
     for name, h in st["heads"].items():
-        cs[name] = value(h, h["mu"])
+        cs[name] = b["vals"][name] if b and name in b["vals"] else value(h, h["mu"])
     tmp = CENTRE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cs, fh)
@@ -145,10 +161,24 @@ def generation(st):
         xs = {n: st["heads"][n]["mu"] + (0.0 if ci == 0 else rng.gauss(0, st["heads"][n]["sig"])) for n in names}
         cands.append(xs)
     games = [(ps, m or MAPS_2V2[gen % len(MAPS_2V2)], rng.randrange(1, 10 ** 6)) for ps, m in GAMES]
-    gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-cem-g%d" % gen)
-    os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
-    json.dump({"gen": gen, "cands": [{n: value(st["heads"][n], x[n]) for n in names} for x in cands],
-               "games": games}, open(os.path.join(gen_dir, "config.json"), "w"), indent=1)
+    # a restart resumes this generation's own dir: its candidates and finished games are kept
+    old = sorted(glob.glob(os.path.join(REPO, "tournaments", "*-nn-cem-g%d" % gen)))
+    cfg = None
+    if old:
+        try:
+            cfg = json.load(open(os.path.join(old[-1], "config.json"), encoding="utf-8"))
+        except (OSError, ValueError):
+            cfg = None
+    if cfg and len(cfg.get("cands", [])) == CANDS and all(n in cfg["cands"][0] for n in names):
+        gen_dir = old[-1]
+        cands = [{n: math.log(max(c[n], FLOOR)) for n in names} for c in cfg["cands"]]
+        games = [tuple(g) for g in cfg["games"]]
+        log("gen %d: resuming %s" % (gen, os.path.basename(gen_dir)))
+    else:
+        gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-cem-g%d" % gen)
+        os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
+        json.dump({"gen": gen, "cands": [{n: value(st["heads"][n], x[n]) for n in names} for x in cands],
+                   "games": games}, open(os.path.join(gen_dir, "config.json"), "w"), indent=1)
     w = workers()
     jobs = []
     for ci, x in enumerate(cands):
@@ -174,13 +204,16 @@ def generation(st):
         st["gen"] = gen
         return st
     elite = [ci for _, ci in ranked[:ELITE]]
+    rnd = st.get("round", 0) + 1
+    cap = SIG0 * DECAY ** rnd
     for n in names:
         xs = [cands[ci][n] for ci in elite]
         m = sum(xs) / len(xs)
         sd = math.sqrt(sum((x - m) ** 2 for x in xs) / len(xs))
         h = st["heads"][n]
         h["mu"] = m
-        h["sig"] = max(SIG_MIN, SIG_KEEP * h["sig"] + (1 - SIG_KEEP) * sd)
+        h["sig"] = max(SIG_END, min(cap, SIG_KEEP * h["sig"] + (1 - SIG_KEEP) * sd))
+    st["round"] = rnd
     best = ranked[0]
     st["gen"] = gen
     st["history"].append({"gen": gen, "dir": os.path.basename(gen_dir), "best": round(best[0], 3),
@@ -194,10 +227,71 @@ def generation(st):
     return st
 
 
+def run_over(st):
+    return st.get("round", 0) >= GENS_PER_RUN or all(h["sig"] <= SIG_END * 1.05 for h in st["heads"].values())
+
+
+def mean_score(gen_dir, ci, vals, games, tag):
+    w = workers()
+    jobs = [(gen_dir, ci, gi, ps, mapn, seed, vals, gi % w) for gi, (ps, mapn, seed) in enumerate(games)]
+    with ThreadPoolExecutor(max_workers=w) as ex:
+        got = [sc for _, _, sc in ex.map(play, jobs) if sc is not None]
+    log("validate %s: %d/%d games, results %s, score %s" % (tag, len(got), len(games), "".join(r for _, r in got),
+                                                            "%.3f" % (sum(s for s, _ in got) / len(got)) if got else "-"))
+    return (sum(s for s, _ in got) / len(got)) if len(got) >= len(games) // 2 + 1 else None
+
+
+def finish_run(st):
+    """The run's answer against the all-time best in the same validation games; the better is kept."""
+    names = sorted(st["heads"])
+    final = {n: value(st["heads"][n], st["heads"][n]["mu"]) for n in names}
+    rng = random.Random(st.get("run", 1) * 104729)
+    games = [(ps, m, rng.randrange(1, 10 ** 6)) for ps, m in VALID]
+    gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-cem-run%d-valid" % st.get("run", 1))
+    os.makedirs(os.path.join(gen_dir, "matches"), exist_ok=True)
+    bs = bests()
+    sf = mean_score(gen_dir, 0, final, games, "run %d final" % st.get("run", 1))
+    sb = None
+    if bs["best"] is not None:
+        sb = mean_score(gen_dir, 1, {n: bs["best"]["vals"].get(n, final[n]) for n in names}, games, "all-time best")
+    rec = {"run": st.get("run", 1), "at": time.strftime("%Y-%m-%d %H:%M"), "rounds": st.get("round", 0),
+           "vals": final, "score": sf, "vs_best": sb, "valid_dir": os.path.basename(gen_dir)}
+    bs["runs"].append(rec)
+    if sf is not None and (bs["best"] is None or sb is None or sf > sb):
+        bs["best"] = {"vals": final, "score": sf, "run": rec["run"], "at": rec["at"]}
+        log("run %d: NEW ALL-TIME BEST (%.3f vs %s): %s" % (rec["run"], sf, "-" if sb is None else "%.3f" % sb,
+                                                           " ".join("%s=%.2f" % kv for kv in sorted(final.items()))))
+    else:
+        log("run %d: kept the all-time best (%s vs final %s)" % (rec["run"], "-" if sb is None else "%.3f" % sb,
+                                                                 "-" if sf is None else "%.3f" % sf))
+    tmp = BEST + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(bs, fh, indent=1)
+    os.replace(tmp, BEST)
+    # the next run: wide again, around the all-time best -- or the rule values every FRESH_EVERY runs
+    nxt = st.get("run", 1) + 1
+    fresh = (nxt % FRESH_EVERY == 0) or bs["best"] is None
+    for n, h in st["heads"].items():
+        start = h["rule"] if fresh else bs["best"]["vals"].get(n, h["rule"])
+        h["mu"] = math.log(max(start, FLOOR))
+        h["sig"] = SIG0
+    st["run"], st["round"] = nxt, 0
+    log("run %d starts from %s, spread x%.2f" % (nxt, "the rule values" if fresh else "the all-time best", math.exp(SIG0)))
+    return st
+
+
 def main(argv):
     st = load()
+    st.setdefault("run", 1)
+    st.setdefault("round", st.get("gen", 0))
     if "--status" in argv:
-        print("gen %d" % st["gen"])
+        print("gen %d  run %d round %d/%d" % (st["gen"], st.get("run", 1), st.get("round", 0), GENS_PER_RUN))
+        b = bests()
+        if b["best"]:
+            print("  ALL-TIME BEST (run %d, %s, score %.3f): %s" % (b["best"]["run"], b["best"]["at"], b["best"]["score"],
+                  " ".join("%s=%.2f" % kv for kv in sorted(b["best"]["vals"].items()))))
+        for r in b["runs"][-5:]:
+            print("  run %d final score %s vs best %s" % (r["run"], r["score"], r["vs_best"]))
         for n, h in sorted(st["heads"].items()):
             print("  %-7s rule=%-6g mean=%-7.3f spread=x%.2f range=%g-%g" % (n, h["rule"], value(h, h["mu"]), math.exp(h["sig"]), h["lo"], h["hi"]))
         for e in st["history"][-5:]:
@@ -209,6 +303,9 @@ def main(argv):
     while not os.path.exists(os.path.join(REPO, "runtime", "nn_stop")):
         st = generation(st)
         save(st)
+        if run_over(st):
+            st = finish_run(st)
+            save(st)
         publish(st)
     return 0
 
