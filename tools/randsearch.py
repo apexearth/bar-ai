@@ -28,6 +28,7 @@ S_RANGE = (0.1, 0.8)
 LADDER = [1, 4, 12, 24]
 NEED = [1, 2, 5]
 MAX_FAILS = 3
+MAX_WORKERS = 10
 
 lock = threading.Lock()
 
@@ -109,9 +110,9 @@ def finish(st, n, gi, sc):
 
 
 def workers():
-    """His 10-11: 4 headless games at most, and 4 also while he plays online (not cem's drop to 1)."""
+    """runtime/nn/workers-cem, at most MAX_WORKERS (his 10-11: 8-10 headless games at once)."""
     try:
-        return max(1, min(4, int(open(os.path.join(neuro.NN, "workers-cem")).read().strip())))
+        return max(1, min(MAX_WORKERS, int(open(os.path.join(neuro.NN, "workers-cem")).read().strip())))
     except (OSError, ValueError):
         return 4
 
@@ -147,7 +148,7 @@ def status(st):
     for t in LADDER[1:]:
         at = [n for n in nets if n["target"] >= t or n["status"] == "viable"]
         print("  reached the %2d-game rung: %d (still playing %d)" % (t, len(at), sum(1 for n in at if n["status"] == "live" and n["target"] == t)))
-    ranked = sorted([n for n in nets if len(n["games"]) >= LADDER[1]], key=lambda n: -(wins(n) / len(n["games"])))
+    ranked = sorted([n for n in nets if len(n["games"]) >= LADDER[1]], key=lambda n: (-(wins(n) / len(n["games"])), -sum(x for x, _ in n["games"]) / len(n["games"])))
     print("  best re-tested (win rate counts a draw as half; the middle network wins about 5 of 24):")
     for n in ranked[:12]:
         print("    net %4d  %4.1f wins of %2d (%3.0f%%)  mean score %+.2f  s %.2f  %s" % (
@@ -173,7 +174,7 @@ def main(argv):
     save(st)
     log("random search: %d of %d networks tried, games in %s" % (st["next"], EXPLORE, os.path.basename(st["dir"])))
     rng = random.Random()
-    ts = [threading.Thread(target=worker, args=(i, st, lay, rng)) for i in range(4)]
+    ts = [threading.Thread(target=worker, args=(i, st, lay, rng)) for i in range(MAX_WORKERS)]
     for t in ts:
         t.start()
     for t in ts:

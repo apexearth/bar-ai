@@ -136,7 +136,9 @@ def score(mdir):
     def mean_log(k):
         xs = [v for v in s.get(k, [])[3:] if v is not None and v > 0]
         return sum(max(-2.3, min(2.3, math.log(v))) for v in xs) / len(xs) if xs else 0.0
-    res = 0.5 * {"W": 1.0, "L": -1.0 + 0.5 * min(g["minutes"], MINUTES) / MINUTES, "D": 0.0}[g["result"]]
+    # a loss earns lasting longer; a win earns ending sooner (his 10-11: games ran too big and long)
+    t = min(g["minutes"], MINUTES) / MINUTES
+    res = 0.5 * {"W": 1.0 + 0.5 * (1.0 - t), "L": -1.0 + 0.5 * t, "D": 0.0}[g["result"]]
     return 0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex") + res, g["result"]
 
 
