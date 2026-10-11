@@ -107,7 +107,8 @@ def publish(st):
         cs = {}
     b = bests()["best"]
     for name, h in st["heads"].items():
-        cs[name] = b["vals"][name] if b and name in b["vals"] else value(h, h["mu"])
+        bs_ = st.get("best_set") or {}
+        cs[name] = b["vals"][name] if b and name in b["vals"] else bs_.get(name, value(h, h["mu"]))
     tmp = CENTRE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cs, fh)
@@ -152,14 +153,48 @@ def play(job):
     return ci, gi, score(out)
 
 
+# Heads that balance each other move as one block in a crossover (his 10-10: "some of the nets strongly
+# depend on each other as they are a balance of each other"); a head in no group is its own block.
+GROUPS = [("con", "mex", "cap", "acap", "scap", "aplant"),
+          ("esc", "ecap", "cfear", "mexg", "defamt", "gunp", "aa"),
+          ("mass", "odds", "tmix")]
+
+
+def sample(st, rng, names):
+    """WHOLE SETS, never a head-by-head average of them: the elites come back as they are (re-tested),
+    most candidates are an elite plus a little noise on every head, some cross two elites by whole
+    groups, a few explore around the mean. Before a first round has an elite, the mean plus noise."""
+    def noisy(base, scale=1.0):
+        return {n: base[n] + rng.gauss(0, st["heads"][n]["sig"] * scale) for n in names}
+    mean = {n: st["heads"][n]["mu"] for n in names}
+    elite = [e["x"] for e in st.get("elite", []) if all(n in e["x"] for n in names)]
+    if not elite:
+        return [mean] + [noisy(mean) for _ in range(CANDS - 1)]
+    cands = [dict(e) for e in elite]
+    blocks = [list(g) for g in GROUPS] + [[n] for n in names if not any(n in g for g in GROUPS)]
+    while len(cands) < CANDS:
+        k = len(cands)
+        if k % 4 == 3:
+            cands.append(noisy(mean))
+        elif k % 4 == 2 and len(elite) > 1:
+            a, b = rng.sample(elite, 2)
+            child = {}
+            for blk in blocks:
+                src = a if rng.random() < 0.5 else b
+                child.update({n: src[n] for n in blk if n in src})
+            cands.append(noisy(child, 0.5))
+        else:
+            # rank-weighted: the best elite is the most common parent
+            w = [len(elite) - i for i in range(len(elite))]
+            cands.append(noisy(rng.choices(elite, weights=w)[0], 0.6))
+    return cands[:CANDS]
+
+
 def generation(st):
     gen = st["gen"] + 1
     rng = random.Random(gen * 7919)
     names = sorted(st["heads"])
-    cands = []
-    for ci in range(CANDS):
-        xs = {n: st["heads"][n]["mu"] + (0.0 if ci == 0 else rng.gauss(0, st["heads"][n]["sig"])) for n in names}
-        cands.append(xs)
+    cands = sample(st, rng, names)
     games = [(ps, m or MAPS_2V2[gen % len(MAPS_2V2)], rng.randrange(1, 10 ** 6)) for ps, m in GAMES]
     # a restart resumes this generation's own dir: its candidates and finished games are kept
     old = sorted(glob.glob(os.path.join(REPO, "tournaments", "*-nn-cem-g%d" % gen)))
@@ -214,6 +249,8 @@ def generation(st):
         h["mu"] = m
         h["sig"] = max(SIG_END, min(cap, SIG_KEEP * h["sig"] + (1 - SIG_KEEP) * sd))
     st["round"] = rnd
+    st["elite"] = [{"x": cands[ci], "score": round(s, 4)} for s, ci in ranked[:ELITE]]
+    st["best_set"] = {n: value(st["heads"][n], cands[ranked[0][1]][n]) for n in names}
     best = ranked[0]
     st["gen"] = gen
     st["history"].append({"gen": gen, "dir": os.path.basename(gen_dir), "best": round(best[0], 3),
@@ -244,7 +281,8 @@ def mean_score(gen_dir, ci, vals, games, tag):
 def finish_run(st):
     """The run's answer against the all-time best in the same validation games; the better is kept."""
     names = sorted(st["heads"])
-    final = {n: value(st["heads"][n], st["heads"][n]["mu"]) for n in names}
+    # the best WHOLE set of the last round, never the average of sets (it can break a balance)
+    final = dict(st.get("best_set") or {n: value(st["heads"][n], st["heads"][n]["mu"]) for n in names})
     rng = random.Random(st.get("run", 1) * 104729)
     games = [(ps, m, rng.randrange(1, 10 ** 6)) for ps, m in VALID]
     gen_dir = os.path.join(REPO, "tournaments", time.strftime("%Y%m%d-%H%M%S") + "-nn-cem-run%d-valid" % st.get("run", 1))
@@ -276,6 +314,8 @@ def finish_run(st):
         h["mu"] = math.log(max(start, FLOOR))
         h["sig"] = SIG0
     st["run"], st["round"] = nxt, 0
+    st["elite"] = [] if fresh else [{"x": {n: h["mu"] for n, h in st["heads"].items()}, "score": None}]
+    st["best_set"] = None
     log("run %d starts from %s, spread x%.2f" % (nxt, "the rule values" if fresh else "the all-time best", math.exp(SIG0)))
     return st
 
