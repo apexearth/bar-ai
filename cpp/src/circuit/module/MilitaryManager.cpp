@@ -1663,6 +1663,40 @@ unsigned int CMilitaryManager::HoldPools()
 	return n;
 }
 
+// HoldPools with a budget (his 2026-10-12: "imagine we beat them 4:1, recall only enough to protect
+// home and keep attacking with the rest"). Pools nearest home are held first until the held metal covers
+// needM; the rest keep their attack promotion. Returns the metal held after the pass.
+float CMilitaryManager::HoldPoolsUpTo(float needM)
+{
+	auto poolM = [](IFighterTask* t) {
+		float m = 0.f;
+		for (CCircuitUnit* u : t->GetAssignees()) {
+			m += u->GetCircuitDef()->GetCostM();
+		}
+		return m;
+	};
+	float held = 0.f;
+	std::vector<std::pair<float, CDefendTask*>> free;
+	const AIFloat3& base = circuit->GetSetupManager()->GetBasePos();
+	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
+		CDefendTask* dt = static_cast<CDefendTask*>(task);
+		if (dt->GetPromote() == IFighterTask::FightType::MELEE) {
+			held += poolM(task);
+		} else if (dt->GetPromote() == IFighterTask::FightType::ATTACK) {
+			free.emplace_back(base.SqDistance2D(task->GetPosition()), dt);
+		}
+	}
+	std::sort(free.begin(), free.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+	for (auto& f : free) {
+		if (held >= needM) {
+			break;
+		}
+		f.second->SetPromote(IFighterTask::FightType::MELEE);
+		held += poolM(f.second);
+	}
+	return held;
+}
+
 void CMilitaryManager::UpdateDefenceTasks()
 {
 	/*

@@ -7493,7 +7493,7 @@ index e56339eb..a3905646 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..1f921581 100644
+index a44c20b0..ddabc1e6 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -14,18 +14,23 @@
@@ -8352,7 +8352,7 @@ index a44c20b0..1f921581 100644
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const int frame = circuit->GetLastFrame();
  
-@@ -1335,6 +1627,42 @@ float CMilitaryManager::ClampMobileCostRatio() const
+@@ -1335,6 +1627,76 @@ float CMilitaryManager::ClampMobileCostRatio() const
  	return (enemyMobileCost > armyCost) ? (armyCost / enemyMobileCost) : 1.f;
  }
  
@@ -8392,10 +8392,44 @@ index a44c20b0..1f921581 100644
 +	return n;
 +}
 +
++// HoldPools with a budget (his 2026-10-12: "imagine we beat them 4:1, recall only enough to protect
++// home and keep attacking with the rest"). Pools nearest home are held first until the held metal covers
++// needM; the rest keep their attack promotion. Returns the metal held after the pass.
++float CMilitaryManager::HoldPoolsUpTo(float needM)
++{
++	auto poolM = [](IFighterTask* t) {
++		float m = 0.f;
++		for (CCircuitUnit* u : t->GetAssignees()) {
++			m += u->GetCircuitDef()->GetCostM();
++		}
++		return m;
++	};
++	float held = 0.f;
++	std::vector<std::pair<float, CDefendTask*>> free;
++	const AIFloat3& base = circuit->GetSetupManager()->GetBasePos();
++	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
++		CDefendTask* dt = static_cast<CDefendTask*>(task);
++		if (dt->GetPromote() == IFighterTask::FightType::MELEE) {
++			held += poolM(task);
++		} else if (dt->GetPromote() == IFighterTask::FightType::ATTACK) {
++			free.emplace_back(base.SqDistance2D(task->GetPosition()), dt);
++		}
++	}
++	std::sort(free.begin(), free.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
++	for (auto& f : free) {
++		if (held >= needM) {
++			break;
++		}
++		f.second->SetPromote(IFighterTask::FightType::MELEE);
++		held += poolM(f.second);
++	}
++	return held;
++}
++
  void CMilitaryManager::UpdateDefenceTasks()
  {
  	/*
-@@ -1346,6 +1674,22 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1346,6 +1708,22 @@ void CMilitaryManager::UpdateDefenceTasks()
  		)
  	}
  
@@ -8418,7 +8452,7 @@ index a44c20b0..1f921581 100644
  	/*
  	 * Defend expansion
  	 */
-@@ -1394,7 +1738,7 @@ void CMilitaryManager::UpdateDefenceTasks()
+@@ -1394,7 +1772,7 @@ void CMilitaryManager::UpdateDefenceTasks()
  //		if (groupIdx >= 0) {
  //			dt->SetMaxPower(std::max(minAttackers, enemyGroups[groupIdx].threat));
  //		}
@@ -8427,7 +8461,7 @@ index a44c20b0..1f921581 100644
  	}
  
  	/*
-@@ -1429,8 +1773,13 @@ void CMilitaryManager::UpdateDefence()
+@@ -1429,8 +1807,13 @@ void CMilitaryManager::UpdateDefence()
  		if (frame >= defElem.second) {
  			CCircuitDef* buildDef = defElem.first;
  			if (buildDef->IsAvailable(frame)) {
@@ -8442,7 +8476,7 @@ index a44c20b0..1f921581 100644
  			}
  			ibd->second.pop_back();
  		}
-@@ -1446,20 +1795,42 @@ void CMilitaryManager::UpdateDefence()
+@@ -1446,20 +1829,42 @@ void CMilitaryManager::UpdateDefence()
  	}
  }
  
@@ -8497,7 +8531,7 @@ index a44c20b0..1f921581 100644
  }
  
  void CMilitaryManager::AddSensorDefs(const std::set<CCircuitDef*>& buildDefs)
-@@ -1574,7 +1945,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
+@@ -1574,7 +1979,25 @@ CEnemyInfo* CMilitaryManager::FindBCombatTarget(CCircuitUnit* unit, const AIFloa
  			targetCat = edef->GetCategory();
  			if (((targetCat & canTargetCat) == 0)
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
@@ -8524,7 +8558,7 @@ index a44c20b0..1f921581 100644
  			{
  				continue;
  			}
-@@ -1665,11 +2054,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1665,11 +2088,29 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  		if (it != types.end()) {
  			switch (it->second) {
  				case IFighterTask::FightType::RAID: {
@@ -8559,7 +8593,7 @@ index a44c20b0..1f921581 100644
  						}
  					}
  					if (task == nullptr) {
-@@ -1694,7 +2101,53 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1694,7 +2135,53 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  						}
  					}
  					if (task == nullptr) {
@@ -8614,7 +8648,7 @@ index a44c20b0..1f921581 100644
  						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
  					}
  				} break;
-@@ -1717,18 +2170,181 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,18 +2204,181 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -8798,7 +8832,7 @@ index a44c20b0..1f921581 100644
  
  void CMilitaryManager::AddArmyCost(CCircuitUnit* unit)
 diff --git a/src/circuit/module/MilitaryManager.h b/src/circuit/module/MilitaryManager.h
-index c167603b..f34cd546 100644
+index c167603b..5a5f6bef 100644
 --- a/src/circuit/module/MilitaryManager.h
 +++ b/src/circuit/module/MilitaryManager.h
 @@ -118,10 +118,27 @@ public:
@@ -8867,7 +8901,7 @@ index c167603b..f34cd546 100644
  	void UpdateDefence();
  	void MakeBaseDefence(const springai::AIFloat3& pos);
  
-@@ -165,9 +205,74 @@ public:
+@@ -165,9 +205,75 @@ public:
  
  	void SetBaseDefRange(float range) { defence->SetBaseRange(range); }
  	float GetBaseDefRange() const { return defence->GetBaseRange(); }
@@ -8939,10 +8973,11 @@ index c167603b..f34cd546 100644
  	unsigned int GetGuardTaskNum() const { return defence->GetGuardTaskNum(); }
 +	unsigned int ReleaseHoldPools();
 +	unsigned int HoldPools();
++	float HoldPoolsUpTo(float needM);
  	unsigned int GetGuardsNum() const { return defence->GetGuardsNum(); }
  	int GetGuardFrame() const { return defence->GetGuardFrame(); }
  
-@@ -181,17 +286,52 @@ public:
+@@ -181,17 +287,52 @@ public:
  
  	float GetRangeUnitCountCompensatorScale();
  
@@ -8995,7 +9030,7 @@ index c167603b..f34cd546 100644
  
  	Handlers2 createdHandler;
  	Handlers1 finishedHandler;
-@@ -203,8 +343,31 @@ private:
+@@ -203,8 +344,31 @@ private:
  
  	CDefenceData* defence;
  	unsigned int defenceIdx;
@@ -12320,10 +12355,10 @@ index fe8097b2..4d481aba 100644
  
  #endif // SRC_CIRCUIT_SCRIPT_INITSCRIPT_H_
 diff --git a/src/circuit/script/MilitaryScript.cpp b/src/circuit/script/MilitaryScript.cpp
-index d4ebeadd..979f87ea 100644
+index d4ebeadd..166fc9b9 100644
 --- a/src/circuit/script/MilitaryScript.cpp
 +++ b/src/circuit/script/MilitaryScript.cpp
-@@ -36,7 +36,24 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
+@@ -36,7 +36,25 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
  	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ Enqueue(const SFightTask& in)", asMETHODPR(CMilitaryManager, Enqueue, (const TaskF::SFightTask&), IFighterTask*), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "IUnitTask@+ EnqueueRetreat()", asMETHOD(CMilitaryManager, EnqueueRetreat), asCALL_THISCALL); ASSERT(r >= 0);
  	r = engine->RegisterObjectMethod("CMilitaryManager", "void DefaultMakeDefence(int, const AIFloat3& in)", asMETHOD(CMilitaryManager, DefaultMakeDefence), asCALL_THISCALL); ASSERT(r >= 0);
@@ -12331,6 +12366,7 @@ index d4ebeadd..979f87ea 100644
  	r = engine->RegisterObjectMethod("CMilitaryManager", "uint GetGuardTaskNum() const", asMETHOD(CMilitaryManager, GetGuardTaskNum), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "uint ReleaseHoldPools()", asMETHOD(CMilitaryManager, ReleaseHoldPools), asCALL_THISCALL); ASSERT(r >= 0);
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "uint HoldPools()", asMETHOD(CMilitaryManager, HoldPools), asCALL_THISCALL); ASSERT(r >= 0);
++	r = engine->RegisterObjectMethod("CMilitaryManager", "float HoldPoolsUpTo(float)", asMETHOD(CMilitaryManager, HoldPoolsUpTo), asCALL_THISCALL); ASSERT(r >= 0);
 +	// apex: the base-defence ring DefendTask's fight-at-any-odds boost and the
 +	// defence builder both honor -- bound so the script can DRAW the zone.
 +	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetBaseDefRange() const", asMETHOD(CMilitaryManager, GetBaseDefRange), asCALL_THISCALL); ASSERT(r >= 0);
@@ -12348,7 +12384,7 @@ index d4ebeadd..979f87ea 100644
  	r = engine->RegisterObjectProperty("CMilitaryManager", "const float armyCost", asOFFSET(CMilitaryManager, armyCost)); ASSERT(r >= 0);
  
  	// NOTE: Config's "quota" scattered across CMilitaryManager, CEnemyManager, CThreatMap, CFactoryManager, CSetupManager
-@@ -65,9 +82,28 @@ bool CMilitaryScript::Init()
+@@ -65,9 +83,28 @@ bool CMilitaryScript::Init()
  	int r = mod->SetDefaultNamespace("Military"); ASSERT(r >= 0);
  	InitModule(mod);
  	militaryInfo.makeDefence = script->GetFunc(mod, "void AiMakeDefence(int, const AIFloat3& in)");

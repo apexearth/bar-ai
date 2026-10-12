@@ -273,6 +273,7 @@ public:
 	unsigned int GetGuardTaskNum() const { return defence->GetGuardTaskNum(); }
 	unsigned int ReleaseHoldPools();
 	unsigned int HoldPools();
+	float HoldPoolsUpTo(float needM);
 	unsigned int GetGuardsNum() const { return defence->GetGuardsNum(); }
 	int GetGuardFrame() const { return defence->GetGuardFrame(); }
 

@@ -242,6 +242,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	float hEffBP = 0.f;
 	float hTeamPow = 0.f;
 	float hTeamPowAll = 0.f;
+	float hBehind = 1.f;    // their fielded army over ours, never under 1
 	float hAffordM = 0.f;
 	float hTtdH = 0.f;
 	bool  hDomOn = false;
@@ -288,7 +289,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				: hTeamPowAll;
 		if (hTeamPow <= 0.f)
 			hTeamPow = hTeamPowAll;   // nothing affordable yet: unchanged
-		hTtdH = ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
+		{
+			const float ours = Military::TeamArmyCost();
+			const float theirs = Military::EnemyArmyCost();
+			hBehind = ((ours > 0.f) && (theirs > ours) && (ai.GetTunable("apex_behind_lean", 1.f) > 0.f))
+					? (theirs / ours) : 1.f;
+		}
+		hTtdH =ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
 		hEffOn = ai.GetTunable("apex_wall_efficient", TUNE_WALL_EFFICIENT) > 0.f;
 		hT1Out = (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)
@@ -776,6 +783,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				DwEnsure(d);
 				gDwTeam[d] = mine / team;
 				gain *= gDwTeam[d];
+			} else if (hBehind > 1.f) {
+				// SERIOUSLY BEHIND, THE BEST GUN (his 2026-10-12: lean into T3 defence, the one saving
+				// grace a losing side has): the top tower we can buy is worth as many times more as their
+				// army outweighs ours.
+				DwEnsure(d);
+				gDwTeam[d] = hBehind;
+				gain *= hBehind;
 			}
 			if (Gate(GATE_DEF_TEAM, gain <= 0.f))
 				continue;

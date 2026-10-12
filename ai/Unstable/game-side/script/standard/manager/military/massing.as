@@ -370,6 +370,7 @@ float MassFloor()
 array<int> gHoldWhyN(4, 0);
 int gHoldReleased = 0;
 int gHoldPooled = 0;    // standing attack pools turned back into holds
+float gHoldPoolM = 0.f; // metal in held pools after the last need-capped pass
 int gHoldFull = 0;      // elections that went to attack because enough already held
 int gHoldWhyLast = -1;
 int gNextHoldRelLog = 0;
@@ -519,12 +520,16 @@ float HoldNeedFor(int defId)
 	return need;
 }
 
+bool DefendCapOn() { return ai.GetTunable("apex_defend_cap", 1.f) > 0.f; }
+
 bool HoldHome()
 {
 	if (!HoldReason())
 		return false;
-	// A drawn DEFEND/HOLD keeps every new unit: no group leaves this window.
-	if (PostOverride() >= 0)
+	// A drawn HOLD keeps every new unit. A drawn DEFEND holds what the threat at home needs and the rest
+	// keep attacking (his 2026-10-12: at 4:1, recall only enough to protect home) -- uncapped, 200k of
+	// army stood home against 2k at it.
+	if (DefendCapOn() ? (PostOverride() == POST_HOLD) : (PostOverride() >= 0))
 		return true;
 	if (gHoldHeldM >= HoldNeedM()) {
 		++gHoldFull;
@@ -540,18 +545,21 @@ void ReleaseHold()
 		gHoldId.resize(0);
 		gHoldCost.resize(0);
 		gHoldHeldM = 0.f;
-	} else if (HoldHome()) {
+	} else if (DefendCapOn() ? (PostOverride() == POST_HOLD) : HoldHome()) {
 		// The election only decides the task a NEW unit joins; a pool already
 		// standing at home promotes on its own bar and marches out as the
 		// raid arrives.
 		gHoldPooled += int(aiMilitaryMgr.HoldPools());
+	} else if (DefendCapOn()) {
+		// ...held only up to the need, nearest pools first.
+		gHoldPoolM = aiMilitaryMgr.HoldPoolsUpTo(HoldNeedM());
 	}
 	if (ai.frame >= gNextHoldRelLog) {
 		gNextHoldRelLog = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: hold t=" + ai.teamId
 			+ " attack=" + gHoldWhyN[0] + " contested=" + gHoldWhyN[1]
 			+ " raided=" + gHoldWhyN[2] + " stance=" + gHoldWhyN[3]
-			+ " released=" + gHoldReleased + " pooled=" + gHoldPooled + " full=" + gHoldFull
+			+ " released=" + gHoldReleased + " pooled=" + gHoldPooled + " poolM=" + int(gHoldPoolM) + " full=" + gHoldFull
 			+ " heldM=" + int(gHoldHeldM) + " needM=" + int(HoldNeedM())
 			+ " | homeInfl=" + formatFloat(Builder::gHomeSet ? ai.GetEnemyInflAt(Builder::gHomePos) : 0.f, "", 0, 2)
 			+ " foeDist=" + int(Builder::gHomeSet ? Builder::gHomePos.distance2D(aiEnemyMgr.GetEnemyPos()) : -1.f));
