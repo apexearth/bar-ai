@@ -634,23 +634,34 @@ const TOOL_BTNS = (dir, isTourn) => {
   return tools.map(t =>
     `<button class="act" onclick="runTool('${esc(dir)}','${t}')">${t}</button>`).join(" ");
 };
+function agoTxt(s) {
+  if (!s) return "";
+  const m = Math.round((Date.now() / 1000 - s) / 60);
+  return m < 60 ? m + " min ago" : (m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago");
+}
 function renderTournament(d) {
   const score = Object.entries(d.wins || {}).map(([k, v]) =>
     `<b>${esc(k)}</b>: ${v}`).join(" &nbsp; ");
+  const recent = (d.recent || []).map(r =>
+    `last ${r.n}: <b class="${r.w * 2 >= r.n ? "win" : "loss"}">${r.w} won (${Math.round(100 * r.w / r.n)}%)</b>
+     <span class="dim">since ${agoTxt(r.since)}</span>`).join(" &nbsp;&middot;&nbsp; ");
   return `<div class="card"><h2>${esc(d.name)}</h2>
     <div>${esc((d.ais || []).join(" vs "))} on ${esc((d.maps || []).join(", "))}
       &nbsp; <span class="dim">${d.done}/${d.planned || d.games} done, per-side ${d.per_side || 1}</span></div>
     <div style="margin:8px 0">${score || "no results yet"}</div>
+    ${recent ? `<div style="margin:4px 0 8px">Recent: ${recent}</div>` : ""}
     <div class="row">${TOOL_BTNS(d.dir, true)}</div>
     <pre id="toolout" style="display:none"></pre></div>
     ${d.rand ? renderRand(d.rand) : ""}
-    <div class="card"><h2>Games</h2>
-    <table><thead><tr><th>Game</th><th>Map</th><th>Winner</th><th>Len</th></tr></thead><tbody>
-    ${(d.matches || []).map(m => `<tr class="click" data-dir="${esc(m.dir)}">
-      <td>${esc(m.name.split("-")[0])}</td><td class="dim">${esc(m.map || "")}</td>
-      <td class="${/^Apex/.test((m.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((m.winner_specs||[])[0] || m.reason || "…")}</td>
-      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td></tr>`).join("")}
-    </tbody></table></div>`;
+    <div class="card"><h2>Games <span class="dim" style="font-size:12px">newest first</span></h2>
+    <table><thead><tr><th>Game</th><th>Map</th><th>Winner</th><th>Len</th><th>Finished</th></tr></thead><tbody>
+    ${(d.matches || []).slice(0, 300).map(m => `<tr class="click" data-dir="${esc(m.dir)}">
+      <td>${esc(m.name)}</td><td class="dim">${esc(m.map || "")}</td>
+      <td class="${/^Apex/.test((m.winner_specs||[])[0]||"") ? "win" : "loss"}">${esc((m.winner_specs||[])[0] || m.reason || (m.stalled ? "stalled" : (m.running ? "playing" : "…")))}</td>
+      <td class="dim">${m.minutes ? m.minutes.toFixed(0) + "m" : ""}</td>
+      <td class="dim">${m.mtime ? agoTxt(m.mtime) : ""}</td></tr>`).join("")}
+    </tbody></table>
+    ${(d.matches || []).length > 300 ? `<div class="dim">and ${d.matches.length - 300} older games</div>` : ""}</div>`;
 }
 function renderRand(r) {
   const nets = r.nets || [];
@@ -664,16 +675,22 @@ function renderRand(r) {
       ${r.anneal.children} children so far, ${r.anneal.viable} viable; step size now ${r.anneal.t.toFixed(3)}
       <span class="dim">(each child is the centre plus that much noise; it shrinks as the search goes on,
       and a child that beats the centre over 24 games becomes the new centre)</span></div>` : ""}
-    <table><thead><tr><th>Net</th><th>From</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Mean score</th>
-      <th>Noise s</th><th>Status</th></tr></thead><tbody>
+    <div style="margin:6px 0">Most recently played: ${nets.filter(n => n.last).sort((a, b) => b.last - a.last).slice(0, 15)
+      .map(n => `<span class="${n.w + 0.5 * n.d >= 0.42 * n.games ? "win" : "dim"}">c${n.id} ${n.w}-${n.d}-${n.l}</span>`).join(" &nbsp; ")}</div>
+    <div class="dim" style="margin:4px 0">Until 10-11 15:15 every game was seed 1, which flatters a network that fits one game;
+      <b>Varied seeds</b> is the honest record (time-limit games counted as D there).</div>
+    <table><thead><tr><th>Net</th><th>From</th><th>Games</th><th>W-D-L</th><th>Win rate</th><th>Varied seeds</th><th>Mean score</th>
+      <th>Noise s</th><th>Status</th><th>Last played</th></tr></thead><tbody>
     ${nets.slice(0, 40).map(n => `<tr>
       <td>c${String(n.id).padStart(2, "0")}${r.anneal && n.id === r.anneal.centre ? " ★" : ""}</td>
-      <td class="dim">${n.base !== null && n.base !== undefined ? "c" + String(n.base).padStart(2, "0") : "random"}</td>
+      <td class="dim">${n.label ? esc(n.label) : (n.base !== null && n.base !== undefined ? "c" + String(n.base).padStart(2, "0") : "random")}</td>
       <td>${n.games}${n.playing ? " <span class=\"dim\">+playing</span>" : ""}</td>
       <td>${n.w}-${n.d}-${n.l}</td>
       <td class="${n.w + 0.5 * n.d >= 0.42 * n.games ? "win" : "dim"}">${(100 * (n.w + 0.5 * n.d) / n.games).toFixed(0)}%</td>
+      <td>${n.varied ? `<span class="${n.varied[0] + 0.5 * n.varied[1] >= 0.42 * (n.varied[0] + n.varied[1] + n.varied[2]) ? "win" : ""}">${n.varied.join("-")} (${Math.round(100 * (n.varied[0] + 0.5 * n.varied[1]) / (n.varied[0] + n.varied[1] + n.varied[2]))}%)</span>` : `<span class="dim">seed 1 only</span>`}</td>
       <td class="dim">${n.score.toFixed(2)}</td><td class="dim">${n.s.toFixed(2)}</td>
-      <td>${esc(n.status === "live" ? "playing up to " + n.target : n.status || "")}</td></tr>`).join("")}
+      <td>${esc(n.status === "live" ? "playing up to " + n.target : n.status || "")}</td>
+      <td class="dim">${agoTxt(n.last)}</td></tr>`).join("")}
     </tbody></table>
     ${nets.length > 40 ? `<div class="dim">and ${nets.length - 40} more, all on one game</div>` : ""}</div>`;
 }

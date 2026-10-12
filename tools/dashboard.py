@@ -205,6 +205,7 @@ def match_summary(d):
         "valid": res.get("valid"),
         "mtime": mt,
         "replay": bool(r.get("replay")),
+        "seed": r.get("seed"),
     }
     _summary_cache[key] = (mt, s)
     return s
@@ -876,8 +877,49 @@ def tournament_detail(d):
         for m in sorted(mdir.iterdir()):
             if m.is_dir():
                 ms.append(match_summary(m))
+    # newest first, games still playing on top: a 600-game batch read oldest-first hid how it is going now.
+    # An unfinished game whose dir has been quiet for an hour died; it sorts by its own age.
+    now = time.time()
+    for s in ms:
+        if not s.get("mtime"):
+            try:
+                age = os.stat(REPO / s["dir"]).st_mtime
+            except OSError:
+                age = 0
+            s["stalled"] = (now - age) > 3600
+            s["sortAt"] = age if s["stalled"] else 9e18
+    ms.sort(key=lambda s: -(s.get("mtime") or s.get("sortAt") or 0))
     out["matches"] = ms
+    done = [s for s in ms if s.get("mtime")]
+    out["recent"] = []
+    for n in (25, 50, 100):
+        last = done[:n]
+        if len(last) >= min(n, 10):
+            w = sum(1 for s in last if any(str(x).startswith("Apex") for x in (s.get("winner_specs") or [])))
+            out["recent"].append({"n": len(last), "w": w, "since": last[-1]["mtime"]})
     out["rand"] = rand_view(d)
+    if out["rand"]:
+        lastAt, varied = {}, {}
+        for s in done:
+            m = re.match(r"c(\d+)-g\d+$", s["name"])
+            if not m:
+                continue
+            nid = int(m.group(1))
+            if nid not in lastAt:
+                lastAt[nid] = s["mtime"]
+            # every game until 10-11 15:15 was seed 1; only the others say how a network plays in general
+            if s.get("seed") not in (None, 1):
+                v = varied.setdefault(nid, [0, 0, 0])
+                ws = s.get("winner_specs") or []
+                v[0 if any(str(x).startswith("Apex") for x in ws) else (1 if not ws else 2)] += 1
+        for n in out["rand"]["nets"]:
+            n["last"] = lastAt.get(n["id"])
+            n["varied"] = varied.get(n["id"])
+
+        def vrate(n):
+            v = n["varied"]
+            return (v[0] + 0.5 * v[1]) / sum(v) if v and sum(v) >= 4 else None
+        out["rand"]["nets"].sort(key=lambda n: (vrate(n) is None, -(vrate(n) or 0)))
     return out
 
 
@@ -900,7 +942,7 @@ def rand_view(d):
         res = [x[1] for x in g]
         nets.append({"id": n["id"], "s": n["s"], "games": len(g), "w": res.count("W"), "d": res.count("D"),
                      "l": res.count("L"), "score": sum(x[0] for x in g) / len(g), "target": n.get("target"),
-                     "status": n.get("status"), "playing": n.get("busy", 0), "base": n.get("base")})
+                     "status": n.get("status"), "playing": n.get("busy", 0), "base": n.get("base"), "label": n.get("label")})
     nets.sort(key=lambda n: (n["games"] < 4, -(n["w"] + 0.5 * n["d"]) / n["games"], -n["games"]))
     rungs = {t: sum(1 for n in st.get("nets", {}).values() if n.get("target", 0) >= t or n.get("status") == "viable")
              for t in (4, 12, 24)}
