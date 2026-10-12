@@ -19,6 +19,9 @@ const float NR_EPS = 0.01f;
 int gNrNextAt = -1;
 int gNrNow = -1;           // the decision in force (binding until the next one)
 int gNrHeldN = 0;          // stock raid tasks held home under WAIT
+int gNrFreedN = 0;
+array<IUnitTask@> gNrHeldT;   // raid pools a WAIT sent home, freed when they no longer qualify
+int gNrHoldAt = 0;
 float gNrHomeR = 600.f;    // the hold radius: twice the group's sight, set at each decision
 int gNrArriveAt = 0;
 bool gNrHeader = false;
@@ -702,6 +705,44 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 	}
 }
 
+// WAIT holds every raider pool, not just ours: a stock raid pool launching on its
+// own would make the record say WAIT while raiders went out. Only an all-raider
+// pool is the group the net priced -- the army a RAID posture promotes is a raid
+// task too, and holding it kept 60-80 units at home for the rest of the game,
+// since a goal is never lifted on its own.
+bool NrRaiderPool(IUnitTask@ t)
+{
+	array<CCircuitUnit@>@ on = t.GetUnits();
+	if (on is null)
+		return false;
+	for (uint j = 0; j < on.length(); ++j) {
+		if (!NrRaider(on[j]))
+			return false;
+	}
+	return true;
+}
+
+void NrHoldRaids()
+{
+	const bool wait = (gNrNow == NR_WAIT) && Builder::gHomeSet;
+	array<IUnitTask@> held;
+	for (uint i = 0; i < gSquads.length(); ++i) {
+		IUnitTask@ t = gSquads[i];
+		if ((t is null) || t.IsDead() || (t is gAskTask) || IsAnswerTask(t)
+			|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
+			continue;
+		if (wait && NrRaiderPool(t)) {
+			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);
+			held.insertLast(t);
+			++gNrHeldN;
+		} else if (gNrHeldT.findByRef(t) >= 0) {
+			t.SetRaidGoal(Builder::gHomePos, 0.f);
+			++gNrFreedN;
+		}
+	}
+	gNrHeldT = held;
+}
+
 // The pack is at its goal and nothing of theirs is left there: go further.
 bool NrArrived()
 {
@@ -735,17 +776,9 @@ void UpdateNnRaid()
 	}
 	if (gAskClaim.length() > 32)
 		gAskClaim.removeRange(0, gAskClaim.length() - 32);
-	// WAIT holds every raid, not just ours: a stock raid pool launching on its
-	// own would make the record say WAIT while raiders went out.
-	if ((gNrNow == NR_WAIT) && Builder::gHomeSet) {
-		for (uint i = 0; i < gSquads.length(); ++i) {
-			IUnitTask@ t = gSquads[i];
-			if ((t is null) || t.IsDead() || (t is gAskTask) || IsAnswerTask(t)
-				|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
-				continue;
-			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);
-			++gNrHeldN;
-		}
+	if (ai.frame >= gNrHoldAt) {
+		gNrHoldAt = ai.frame + SECOND;
+		NrHoldRaids();
 	}
 	if (gNrNextAt < 0)
 		gNrNextAt = ai.frame + (ai.teamId % 15) * SECOND;
@@ -772,7 +805,7 @@ void UpdateNnRaid()
 				gd = ((gd < 0) || (dd < gd)) ? dd : gd;
 			}
 		}
-		AiLog("apex: nnraid-stat t=" + ai.teamId + " dec=" + gNrDecN + " go=" + gNrGoN + " dev=" + gNrDevN + " held=" + gNrHeldN
+		AiLog("apex: nnraid-stat t=" + ai.teamId + " dec=" + gNrDecN + " go=" + gNrGoN + " dev=" + gNrDevN + " held=" + gNrHeldN + " freed=" + gNrFreedN
 			+ " launched=" + gNrLaunchN + " pulled=" + gNrPullN + " live=" + liveN + " goalDist=" + gd
 			+ " goal=" + (gNrGoalHas ? (int(gNrGoal.x) + "," + int(gNrGoal.z) + (gNrGoalHome ? "(home)" : "")) : "-")
 			+ " killM=" + int(gNrKillM) + " killN=" + gNrKillN
