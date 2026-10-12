@@ -14021,7 +14021,7 @@ index 275db3ae..0dbc7ea7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..cc928636 100644
+index bc8ff11b..147ffca7 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -14332,7 +14332,7 @@ index bc8ff11b..cc928636 100644
  	}
  	if (unit->GetCircuitDef()->IsAbleToCapture()) {
  		unit->PushBack(new CCaptureAction(unit, 500.f));
-@@ -155,14 +404,21 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
+@@ -155,24 +404,53 @@ void IBuilderTask::AssignTo(CCircuitUnit* unit)
  	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
  }
  
@@ -14357,7 +14357,10 @@ index bc8ff11b..cc928636 100644
  
  	IUnitTask::RemoveAssignee(unit);
  	traveled.erase(unit);
-@@ -171,8 +427,28 @@ void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
+ 	executors.erase(unit);
++	ordSilent.erase(unit);
++	reexecN.erase(unit);
+ 
  	HideAssignee(unit);
  }
  
@@ -14386,7 +14389,7 @@ index bc8ff11b..cc928636 100644
  	Update(unit);
  }
  
-@@ -246,6 +522,11 @@ void IBuilderTask::Cancel()
+@@ -246,6 +524,11 @@ void IBuilderTask::Cancel()
  bool IBuilderTask::Execute(CCircuitUnit* unit)
  {
  	executors.insert(unit);
@@ -14398,7 +14401,7 @@ index bc8ff11b..cc928636 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	TRY_UNIT(circuit, unit,
-@@ -285,14 +566,268 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,14 +568,268 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -14671,7 +14674,7 @@ index bc8ff11b..cc928636 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
  		)
-@@ -302,6 +837,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +839,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -14679,7 +14682,7 @@ index bc8ff11b..cc928636 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -310,13 +846,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -310,13 +848,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  
  void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  {
@@ -14715,7 +14718,7 @@ index bc8ff11b..cc928636 100644
  	}
  }
  
-@@ -333,10 +890,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +892,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -14813,7 +14816,7 @@ index bc8ff11b..cc928636 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +990,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +992,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -14821,7 +14824,7 @@ index bc8ff11b..cc928636 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +1072,34 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +1074,56 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -14859,11 +14862,33 @@ index bc8ff11b..cc928636 100644
 +		ITravelAction* travel = unit->GetTravelAct();
 +		if ((travel != nullptr) && !travel->IsFinished()) {
 +			UpdatePath(unit);  // Execute(unit) within OnTravelEnd
++		} else if (executors.count(unit) > 0) {
++			// A SENT ORDER THE ENGINE DROPPED (his 10-11: the commander stalls). Execute
++			// ran, travel is over, the queue is empty, and nothing would send it again
++			// until the stuck watch aborted the job 30 s later -- 13 of 16 1v1s had it.
++			// Five seconds empty (orders apply late, S13; 4 s seen on a loaded search) and it is sent again, three
++			// times at most; past that the stuck watch decides.
++			CCircuitAI* circuit = manager->GetCircuit();
++			const int frame = circuit->GetLastFrame();
++			if (circuit->GetCallback()->Unit_HasCommands(unit->GetId())) {
++				ordSilent.erase(unit);
++			} else {
++				auto it = ordSilent.find(unit);
++				if (it == ordSilent.end()) {
++					ordSilent[unit] = frame;
++				} else if ((frame - it->second >= FRAMES_PER_SEC * 5) && (reexecN[unit] < 3)) {
++					++reexecN[unit];
++					ordSilent.erase(unit);
++					circuit->LOG("apex: build-resend #%d %s n=%d", unit->GetId(),
++							(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "repair", reexecN[unit]);
++					Execute(unit);
++				}
++			}
 +		}
  	}
  }
  
-@@ -447,13 +1108,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +1132,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -14886,7 +14911,7 @@ index bc8ff11b..cc928636 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -483,7 +1152,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -483,7 +1176,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  				TRY_UNIT(circuit, unit,
  					AIFloat3 awayPos = utils::get_radial_pos(pos, 64.f);
  					CTerrainManager::CorrectPosition(awayPos);
@@ -14895,7 +14920,7 @@ index bc8ff11b..cc928636 100644
  				)
  			}
  			return true;
-@@ -492,12 +1161,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +1185,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -14919,7 +14944,7 @@ index bc8ff11b..cc928636 100644
  				}
  			)
  			return true;
-@@ -508,8 +1185,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,8 +1209,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -14964,7 +14989,7 @@ index bc8ff11b..cc928636 100644
  	ShowAssignee(unit);
  	if ((task != nullptr)
  		&& ((task->GetType() != IUnitTask::Type::BUILDER)
-@@ -527,22 +1240,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -527,22 +1264,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	// TODO: Check IsForceUpdate, shield charge and retreat
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -15103,7 +15128,7 @@ index bc8ff11b..cc928636 100644
  		return;
  	}
  
-@@ -550,10 +1372,21 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -550,10 +1396,21 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		return;
  	}
  
@@ -15126,7 +15151,7 @@ index bc8ff11b..cc928636 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1398,149 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1422,149 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -15278,7 +15303,7 @@ index bc8ff11b..cc928636 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,232 +1604,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,232 +1628,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  
@@ -15667,7 +15692,7 @@ index bc8ff11b..cc928636 100644
  
  #define SERIALIZE(stream, func)	\
 diff --git a/src/circuit/task/builder/BuilderTask.h b/src/circuit/task/builder/BuilderTask.h
-index 13ced8d9..a64462b3 100644
+index 13ced8d9..01f71d6a 100644
 --- a/src/circuit/task/builder/BuilderTask.h
 +++ b/src/circuit/task/builder/BuilderTask.h
 @@ -12,6 +12,7 @@
@@ -15714,7 +15739,7 @@ index 13ced8d9..a64462b3 100644
  	void FindFacing(const springai::AIFloat3& pos);
  
  	void ExecuteChain(SBuildChain* chain);
-@@ -155,11 +167,28 @@ protected:
+@@ -155,11 +167,29 @@ protected:
  
  	SResource savedIncome;
  	int buildFails;
@@ -15741,7 +15766,8 @@ index 13ced8d9..a64462b3 100644
  	std::set<CCircuitUnit*> traveled;
  	std::set<CCircuitUnit*> executors;
 +	static bool sInReelect;  // apex: inside Reevaluate's re-election
-+	std::map<CCircuitUnit*, int> ordSilent;  // apex: frame a sent order was last seen unapplied
++	std::map<CCircuitUnit*, int> ordSilent;  // apex: frame an executor's queue was first seen empty
++	std::map<CCircuitUnit*, int> reexecN;    // apex: orders re-sent to it for this task
  
  #ifdef DEBUG_VIS
  	virtual void Log() override;

@@ -423,6 +423,8 @@ void IBuilderTask::RemoveAssignee(CCircuitUnit* unit)
 	IUnitTask::RemoveAssignee(unit);
 	traveled.erase(unit);
 	executors.erase(unit);
+	ordSilent.erase(unit);
+	reexecN.erase(unit);
 
 	HideAssignee(unit);
 }
@@ -1099,6 +1101,28 @@ void IBuilderTask::Update(CCircuitUnit* unit)
 		ITravelAction* travel = unit->GetTravelAct();
 		if ((travel != nullptr) && !travel->IsFinished()) {
 			UpdatePath(unit);  // Execute(unit) within OnTravelEnd
+		} else if (executors.count(unit) > 0) {
+			// A SENT ORDER THE ENGINE DROPPED (his 10-11: the commander stalls). Execute
+			// ran, travel is over, the queue is empty, and nothing would send it again
+			// until the stuck watch aborted the job 30 s later -- 13 of 16 1v1s had it.
+			// Five seconds empty (orders apply late, S13; 4 s seen on a loaded search) and it is sent again, three
+			// times at most; past that the stuck watch decides.
+			CCircuitAI* circuit = manager->GetCircuit();
+			const int frame = circuit->GetLastFrame();
+			if (circuit->GetCallback()->Unit_HasCommands(unit->GetId())) {
+				ordSilent.erase(unit);
+			} else {
+				auto it = ordSilent.find(unit);
+				if (it == ordSilent.end()) {
+					ordSilent[unit] = frame;
+				} else if ((frame - it->second >= FRAMES_PER_SEC * 5) && (reexecN[unit] < 3)) {
+					++reexecN[unit];
+					ordSilent.erase(unit);
+					circuit->LOG("apex: build-resend #%d %s n=%d", unit->GetId(),
+							(buildDef != nullptr) ? buildDef->GetDef()->GetName() : "repair", reexecN[unit]);
+					Execute(unit);
+				}
+			}
 		}
 	}
 }

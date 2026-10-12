@@ -188,7 +188,8 @@ protected:
 	std::set<CCircuitUnit*> traveled;
 	std::set<CCircuitUnit*> executors;
 	static bool sInReelect;  // apex: inside Reevaluate's re-election
-	std::map<CCircuitUnit*, int> ordSilent;  // apex: frame a sent order was last seen unapplied
+	std::map<CCircuitUnit*, int> ordSilent;  // apex: frame an executor's queue was first seen empty
+	std::map<CCircuitUnit*, int> reexecN;    // apex: orders re-sent to it for this task
 
 #ifdef DEBUG_VIS
 	virtual void Log() override;

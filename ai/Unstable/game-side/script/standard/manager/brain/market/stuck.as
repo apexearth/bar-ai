@@ -214,6 +214,8 @@ void UpdateStuckBuilds()
 			+ "s at " + int(p.x) + "," + int(p.z)
 			+ " from " + int(gStuckX[i]) + "," + int(gStuckZ[i])
 			+ " q=" + u.CmdQueueSize()
+			+ " reach=" + ((OnMap(bp) && ai.CanDefReachAt(Catalog::Def(int(u.circuitDef.id)), p, bp,
+					Catalog::gBuildDist[int(u.circuitDef.id)])) ? 1 : 0)
 			+ (dead ? (" q=0 lagMax=" + gOrderLagMax + " -- no engine order, re-electing") : " -- re-electing"));
 		// A hand that held an order for the whole watch and never got nearer
 		// could not path there (Frozen Ford: 39 mex holds of 30 s each on
