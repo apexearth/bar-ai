@@ -261,7 +261,7 @@ float Throughput(int n)
 
 int ScaledBombers()
 {
-	const int extra = int(Eco::MInc() * Persona::AirEagerness()
+	const int extra = int(Eco::MInc() * Market::PlanAirMult()
 			/ AIR_SCALE_INCOME);
 	const int want = AIR_BOMBERS + extra;
 	// AA RAISES THE MASS NEEDED, it does not forbid the raid: enough bombers
@@ -350,16 +350,15 @@ int  gCommitFrame  = -1;
 // compares against the LIVE want chases a treadmill and the wing never flies.
 int  gCommitBombers = 0;
 int CommitBombers() { return gCommitBombers; }
-// HIS CADENCE (2026-08-29): "Maybe an attack every random between 5 and 10
-// minutes for air attacks? We don't want to be too boring." The massing
-// window before the wave goes with what stands is rolled per cycle -- at
-// commit and again at each ReArm -- so strikes land on that rhythm without
-// being predictable. AIR_DEADLINE remains only as the pre-roll default.
+// HIS CADENCE (2026-08-29): an air attack every 5 to 10 minutes. Fixed at the
+// middle since 2026-10-12 (his call: nothing random from game to game); the
+// held wing goes at this age whatever its price says (NaDecide).
+const int AIR_CADENCE = 450 * SECOND;
 int  gDeadlineFrames = AIR_DEADLINE;
 
 void RollDeadline()
 {
-	gDeadlineFrames = AiRandom(5 * MINUTE, 10 * MINUTE);
+	gDeadlineFrames = AIR_CADENCE;
 }
 
 // The bomber count past which a wave goes anyway: half the force committed

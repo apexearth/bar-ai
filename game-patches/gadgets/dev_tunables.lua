@@ -338,6 +338,7 @@ local NAMES = {
 	"apex_los_standoff",
 	"apex_prefer_target",
 	"apex_siege_fight",
+	"apex_raid_commit",
 	"apex_fight_travel",
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
@@ -395,7 +396,6 @@ local NAMES = {
 	"apex_mass_floor",
 	"apex_unseen_parity",     -- massing.as: pre-T2 enemy-army parity floor (1.2)
 	"apex_press_health",      -- AttackTask: squad HP fraction below which it stops pressing (0.6)
-	"apex_persona",           -- persona.as: -1 roll freely, 0..5 force a Kind
 	"apex_withdraw_odds",     -- withdraw.as: enemy-threat/our-power ratio that pulls a unit back (1.5)
 	"apex_withdraw",          -- withdraw.as: master switch (1)
 	"apex_defend_leash",

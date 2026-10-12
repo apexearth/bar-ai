@@ -1693,37 +1693,12 @@ ring scan was written around had never once run: measured rays=24/24 with the
 enemy on one bearing, which is the ring closing on itself that its own comment
 warns of.
 
-### `TUNE_PERSONA_SPREAD` = 0.f
+### `TUNE_PERSONA_SPREAD` -- deleted 2026-10-12
 
-OFF since 2026-10-07, his call: personality made us lose more often in his
-games, and a per-game roll the nets cannot see (army share, air eagerness,
-the gantry/silo/LRPC wants) is noise to them -- the same game state answered
-differently game to game. The spontaneity he wants is strategic (whole
-plans: LRPC, nukes, mass air, T3 rush, early all-in, greed, turtle) and comes
-from the plan net's draw, a logged decision the net learns from. Was 0.35:
-
-
-apexearth 2026-09-12: "adding personality to each unique AI randomly. Simple
-high level modifiers affecting an AI's interest in making certain things --
-Economy, Defense, Army, T3 Army, Air, Nuke Weapons, LRPC." Seven traits per
-instance, each log-uniform in [1, 1+s] (0.35: 1x to 1.35x), rolled once and
-logged as `apex: persona t=N rolled ...`. They multiply levers that already
-exist -- the army and defence targets, the draw value of eco and defence
-wants, the strategic wants (gantry/silo/big gun/air plant), the air commitment
--- never a gate. 0 makes every instance identical: the A/B arm.
-
-Up only, never below 1 -- apexearth 2026-09-12, on seeing a roll of eco=0.76
-army=0.75: *"we should probably not go below 1 on eco and gantry ... maybe we
-should only ever increase some tendencies and not decrease them. i worry about
-some really bad configs."* The worst roll is now the neutral AI; a lean is
-extra interest in something, never starved interest in something else. The
-budget rows are still shares of one pot, so army=1.35 still buys its army out
-of the other rows -- the floor protects the pricing of eco wants and the
-gantry, not the eco share. The adaptation leans were already all >= 1. In a
-duel nuke and lrpc stay at 1 (was: clamped from above).
-Replaced `TUNE_PERSONA` (the six discrete kinds -- berserker, turtle, greedy,
-airboss, siloist, rearm -- whose budget lever nothing read since f4b8cdcc).
-The default width is his to move; nothing measured it yet.
+Deleted with `persona.as`, his call. OFF since 2026-10-07 (personality lost more of his games, and a
+per-game roll the nets cannot see is noise to them); the 10-12 audit found its adaptation half still
+leaning army/defence/T3 by hand-set multipliers (x1.3 at 1.5:1, x1.35 at 2:1) every game. Spontaneity
+comes from the plan net's logged draw. `git log -S TUNE_PERSONA_SPREAD` has the history.
 
 ### `TUNE_ASSIST_RELEASE` = 1.f
 

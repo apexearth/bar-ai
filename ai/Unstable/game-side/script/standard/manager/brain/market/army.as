@@ -2205,7 +2205,7 @@ float ArmyTargetFull()
 		const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
 		gArmyHold = (hold > 0.f) ? hold : 0.f;
 	}
-	gArmyTgtFull = EcoPowerM() * gArmyHold * Persona::Trait(Persona::T_ARMY);
+	gArmyTgtFull = EcoPowerM() * gArmyHold;
 	return gArmyTgtFull;
 }
 

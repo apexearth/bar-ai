@@ -54,15 +54,14 @@ void UpdateRaidCaution()
 		aiMilitaryMgr.quota.raid.min = want;
 }
 
-// The engage margin each instance fights at: its personality, raised by the
+// The engage margin each instance fights at, raised by the
 // caution learned from where our metal is dying. The team push that used to
 // override this (team army summed against the enemy we could SEE, entered at
 // 1.6x and armed on all eight seats at 4.2 min of his 8v8) was removed at his
 // call, 2026-09-27, with the killing blow before it.
 void UpdateTeamPush()
 {
-	Persona::Update();
-	ai.SetEngageBoost(Persona::EngageBias() * BleedCaution());
+	ai.SetEngageBoost(BleedCaution());
 	// IsCommitted stops a unit leaving a fight at its 60% health threshold.
 	// Committing every fight was tried and reverted: army K/D 0.38 vs stock's
 	// 1.73 in one measured mirror.

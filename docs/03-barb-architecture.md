@@ -77,7 +77,7 @@ CircuitAI logs "Game-side config: missing!" and falls back to the AI data dir.
 config/standard/*.json
 script/standard/{init,main,policy,targets,tunables,perf}.as
 script/standard/manager/{air,baseplan,brain,builder,catalog,economy,factory,
-                         frontline,lattice,military,persona,role}.as
+                         frontline,lattice,military,role}.as
 script/standard/misc/commander.as
 ```
 

@@ -21,7 +21,7 @@ namespace Military {
 //                 it is a demand for scouting, at neutral spend.
 //
 // The stance moves the ARMY/DEFENCE/ECONOMY target weights through the same
-// multiplier contract Persona::ShareMult uses -- normalisation pays for every
+// multiplier contract budget.as's shares use -- normalisation pays for every
 // raise out of the other rows. Held for a minimum dwell so the estimate's
 // fog-noise cannot flap the budget (the killing-blow flicker lesson).
 //------------------------------------------------------------------------------

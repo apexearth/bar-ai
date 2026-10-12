@@ -162,6 +162,16 @@ void CRaidTask::Update()
 	const auto tFt0 = std::chrono::steady_clock::now();
 	const bool isTargetsFound = FindTarget();
 	manager->PerfAdd(20, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tFt0).count());
+	if (IsCommitted() && (frame >= nextCommitLog)) {
+		nextCommitLog = frame + FRAMES_PER_SEC * 20;
+		const AIFloat3& lp = leader->GetPos(frame);
+		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i",
+				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()),
+				lp.x, lp.z, goalPos.x, goalPos.z, lp.distance2D(goalPos),
+				(GetTarget() != nullptr) && (GetTarget()->GetCircuitDef() != nullptr)
+					? GetTarget()->GetCircuitDef()->GetDef()->GetName() : "-",
+				keptN);
+	}
 
 	state = State::ROAM;
 	if (GetTarget() != nullptr) {
@@ -260,9 +270,44 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 	}
 }
 
+// A raid sent at a target off our home ground commits (his 2026-10-12, docs/24 Raids): it goes for the
+// economy, takes the damage on the way, and nobody walks home to be repaired.
+bool CRaidTask::IsCommitted() const
+{
+	if (goalR <= 0.f) {
+		return false;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
+	const float mode = circuit->GetTunable("apex_raid_commit", 0.f);
+	if (mode <= 0.f) {
+		return false;
+	}
+	if (mode >= 2.f) {
+		for (CCircuitUnit* u : units) {
+			if (!u->GetCircuitDef()->IsRoleRaider()) {
+				return false;
+			}
+		}
+	}
+	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
+	return circuit->GetSetupManager()->GetBasePos().SqDistance2D(goalPos) > SQUARE(baseRange);
+}
+
+void CRaidTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	if (IsCommitted()) {
+		unit->ForceUpdate(manager->GetCircuit()->GetLastFrame() + THREAT_UPDATE_RATE);
+		++keptN;
+		return;
+	}
+	ISquadTask::OnUnitDamaged(unit, attacker);
+}
+
 bool CRaidTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
+	const bool committed = IsCommitted();
 	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
@@ -314,7 +359,7 @@ bool CRaidTask::FindTarget()
 			checkSpeed *= 2.f;
 		}
 		const float power = threatMap->GetThreatAt(ePos);
-		if (checkPower <= power) {
+		if (!committed && (checkPower <= power)) {
 			continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
@@ -351,6 +396,10 @@ bool CRaidTask::FindTarget()
 			}
 			defThreat = enemy->GetInfluence();
 			isBuilder = edef->IsEnemyRoleAny(CCircuitDef::RoleMask::BUILDER | CCircuitDef::RoleMask::COMM);
+			// Committed: the economy only. Their army and their guns are walked past (shot in passing).
+			if (committed && !isBuilder && (edef->IsMobile() || edef->IsAttacker())) {
+				continue;
+			}
 		} else {
 			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater()) && (ePos.y < -SQUARE_SIZE * 5)) {  // notAW
 				continue;
@@ -358,6 +407,9 @@ bool CRaidTask::FindTarget()
 			targetCat = UNKNOWN_CATEGORY;
 			defThreat = enemy->GetInfluence();
 			isBuilder = false;
+			if (committed && (goalPos.SqDistance2D(ePos) > SQUARE(goalR))) {
+				continue;
+			}
 		}
 		// apex: the area test last -- every enemy reached it first, before the
 		// threat, speed and category tests that reject most of them.
@@ -366,10 +418,13 @@ bool CRaidTask::FindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
-		if ((minPower > power) && (minSqDist > sqDist)) {
+		if ((committed || (minPower > power)) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {
 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
-					if (isBuilder) {
+					if (committed) {
+						bestTarget = enemy;   // the nearest piece of economy in reach
+						minSqDist = sqDist;
+					} else if (isBuilder) {
 						bestTarget = enemy;
 						minSqDist = sqDist;
 						maxThreat = std::numeric_limits<float>::max();

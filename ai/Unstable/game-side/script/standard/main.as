@@ -16,7 +16,6 @@
 #include "manager/builder.as"
 #include "manager/factory.as"
 #include "manager/role.as"        // the eco/tech role's POLICY, one place
-#include "manager/persona.as"     // per-instance identity: biases, never gates
 #include "manager/brain/facqueue.as"  // the production executor: every line held silent
 #include "manager/brain/yard.as"      // units that cannot leave their factory
 #include "manager/brain/market.as"    // the Want market: proposers + pricing (prototype 1)

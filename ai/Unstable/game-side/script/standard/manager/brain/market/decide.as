@@ -1657,10 +1657,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 			continue;
 		}
-		// This instance's interest in the category (Persona): the strategic
-		// wants carry theirs from their own pricing.
-		if (c.kind != WK_SUPER)
-			c.value *= Persona::CategoryMult(CategoryOf(c.kind));
 		// THE BUDGET IS A LEVER, not a log. BudgetMult is target/actual, bounded
 		// 0.35..2, computed every frame for nobody -- apexearth 2026-09-22: "if
 		// we already see that our build power is high, then we do it even less

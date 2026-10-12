@@ -19979,7 +19979,7 @@ index db42e8a5..1a8fa0fc 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af06982..af32e64b 100644
+index 9af06982..69d68da2 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -5,6 +5,7 @@
@@ -20030,13 +20030,23 @@ index 9af06982..af32e64b 100644
  				unit->Gather(groupPos, frame);
  			}
  		}
-@@ -152,10 +159,13 @@ void CRaidTask::Update()
+@@ -152,10 +159,23 @@ void CRaidTask::Update()
  	/*
  	 * Update target
  	 */
 +	const auto tFt0 = std::chrono::steady_clock::now();
  	const bool isTargetsFound = FindTarget();
 +	manager->PerfAdd(20, std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - tFt0).count());
++	if (IsCommitted() && (frame >= nextCommitLog)) {
++		nextCommitLog = frame + FRAMES_PER_SEC * 20;
++		const AIFloat3& lp = leader->GetPos(frame);
++		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i",
++				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()),
++				lp.x, lp.z, goalPos.x, goalPos.z, lp.distance2D(goalPos),
++				(GetTarget() != nullptr) && (GetTarget()->GetCircuitDef() != nullptr)
++					? GetTarget()->GetCircuitDef()->GetDef()->GetName() : "-",
++				keptN);
++	}
  
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
@@ -20044,7 +20054,7 @@ index 9af06982..af32e64b 100644
  		state = State::ENGAGE;
  		position = GetTarget()->GetPos();
  		circuit->GetMilitaryManager()->ClearScoutPosition(this);
-@@ -165,7 +175,9 @@ void CRaidTask::Update()
+@@ -165,7 +185,9 @@ void CRaidTask::Update()
  					if (unit->Blocker() != nullptr) {
  						continue;  // Do not interrupt current action
  					}
@@ -20055,7 +20065,7 @@ index 9af06982..af32e64b 100644
  
  					const AIFloat3& pos = GetTarget()->GetPos();
  					TRY_UNIT(circuit, unit,
-@@ -177,7 +189,9 @@ void CRaidTask::Update()
+@@ -177,7 +199,9 @@ void CRaidTask::Update()
  					if (unit->Blocker() != nullptr) {
  						continue;  // Do not interrupt current action
  					}
@@ -20066,7 +20076,7 @@ index 9af06982..af32e64b 100644
  
  					TRY_UNIT(circuit, unit,
  						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
-@@ -233,7 +247,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -233,7 +257,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -20075,7 +20085,52 @@ index 9af06982..af32e64b 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -288,9 +302,7 @@ bool CRaidTask::FindTarget()
+@@ -246,9 +270,44 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
+ 	}
+ }
+ 
++// A raid sent at a target off our home ground commits (his 2026-10-12, docs/24 Raids): it goes for the
++// economy, takes the damage on the way, and nobody walks home to be repaired.
++bool CRaidTask::IsCommitted() const
++{
++	if (goalR <= 0.f) {
++		return false;
++	}
++	CCircuitAI* circuit = manager->GetCircuit();
++	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
++	const float mode = circuit->GetTunable("apex_raid_commit", 0.f);
++	if (mode <= 0.f) {
++		return false;
++	}
++	if (mode >= 2.f) {
++		for (CCircuitUnit* u : units) {
++			if (!u->GetCircuitDef()->IsRoleRaider()) {
++				return false;
++			}
++		}
++	}
++	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
++	return circuit->GetSetupManager()->GetBasePos().SqDistance2D(goalPos) > SQUARE(baseRange);
++}
++
++void CRaidTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
++{
++	if (IsCommitted()) {
++		unit->ForceUpdate(manager->GetCircuit()->GetLastFrame() + THREAT_UPDATE_RATE);
++		++keptN;
++		return;
++	}
++	ISquadTask::OnUnitDamaged(unit, attacker);
++}
++
+ bool CRaidTask::FindTarget()
+ {
+ 	CCircuitAI* circuit = manager->GetCircuit();
++	const bool committed = IsCommitted();
+ 	CMap* map = circuit->GetMap();
+ 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+ 	CThreatMap* threatMap = circuit->GetThreatMap();
+@@ -288,9 +347,7 @@ bool CRaidTask::FindTarget()
  
  		const AIFloat3& ePos = enemy->GetPos();
  		const bool isEnemyUrgent = isDefender && (inflMap->GetAllyDefendInflAt(ePos) > INFL_EPS);
@@ -20086,7 +20141,16 @@ index 9af06982..af32e64b 100644
  			continue;
  		}
  
-@@ -313,7 +325,7 @@ bool CRaidTask::FindTarget()
+@@ -302,7 +359,7 @@ bool CRaidTask::FindTarget()
+ 			checkSpeed *= 2.f;
+ 		}
+ 		const float power = threatMap->GetThreatAt(ePos);
+-		if (checkPower <= power) {
++		if (!committed && (checkPower <= power)) {
+ 			continue;
+ 		}
+ 		const AIFloat3& eVel = enemy->GetVel();
+@@ -313,7 +370,7 @@ bool CRaidTask::FindTarget()
  		int targetCat;
  		float defThreat;
  		bool isBuilder;
@@ -20095,7 +20159,7 @@ index 9af06982..af32e64b 100644
  		const bool IsInWater = cdef->IsPredictInWater(elevation);
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
-@@ -321,7 +333,7 @@ bool CRaidTask::FindTarget()
+@@ -321,7 +378,7 @@ bool CRaidTask::FindTarget()
  			if (((targetCat & canTargetCat) == 0)
  				|| (isAntiStatic && edef->IsMobile())
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
@@ -20104,19 +20168,45 @@ index 9af06982..af32e64b 100644
  			{
  				continue;
  			}
-@@ -347,6 +359,11 @@ bool CRaidTask::FindTarget()
+@@ -339,6 +396,10 @@ bool CRaidTask::FindTarget()
+ 			}
+ 			defThreat = enemy->GetInfluence();
+ 			isBuilder = edef->IsEnemyRoleAny(CCircuitDef::RoleMask::BUILDER | CCircuitDef::RoleMask::COMM);
++			// Committed: the economy only. Their army and their guns are walked past (shot in passing).
++			if (committed && !isBuilder && (edef->IsMobile() || edef->IsAttacker())) {
++				continue;
++			}
+ 		} else {
+ 			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater()) && (ePos.y < -SQUARE_SIZE * 5)) {  // notAW
+ 				continue;
+@@ -346,13 +407,24 @@ bool CRaidTask::FindTarget()
+ 			targetCat = UNKNOWN_CATEGORY;
  			defThreat = enemy->GetInfluence();
  			isBuilder = false;
- 		}
++			if (committed && (goalPos.SqDistance2D(ePos) > SQUARE(goalR))) {
++				continue;
++			}
++		}
 +		// apex: the area test last -- every enemy reached it first, before the
 +		// threat, speed and category tests that reject most of them.
 +		if (!terrainMgr->CanMobileReachAt(area, ePos, highestRange)) {
 +			continue;
-+		}
+ 		}
  
  		float sqDist = pos.SqDistance2D(ePos);
- 		if ((minPower > power) && (minSqDist > sqDist)) {
-@@ -369,6 +386,11 @@ bool CRaidTask::FindTarget()
+-		if ((minPower > power) && (minSqDist > sqDist)) {
++		if ((committed || (minPower > power)) && (minSqDist > sqDist)) {
+ 			if (enemy->IsInRadarOrLOS()) {
+ 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
+-					if (isBuilder) {
++					if (committed) {
++						bestTarget = enemy;   // the nearest piece of economy in reach
++						minSqDist = sqDist;
++					} else if (isBuilder) {
+ 						bestTarget = enemy;
+ 						minSqDist = sqDist;
+ 						maxThreat = std::numeric_limits<float>::max();
+@@ -369,6 +441,11 @@ bool CRaidTask::FindTarget()
  			continue;
  		}
  
@@ -20128,7 +20218,7 @@ index 9af06982..af32e64b 100644
  		if (isEnemyUrgent) {
  			urgentPositions.push_back(ePos);
  		} else {
-@@ -393,6 +415,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -393,6 +470,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -20136,7 +20226,7 @@ index 9af06982..af32e64b 100644
  		position = pPath->posPath.back();
  		ActivePath();
  	} else {
-@@ -400,14 +423,52 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -400,14 +478,52 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
  	}
  }
  
@@ -20191,7 +20281,7 @@ index 9af06982..af32e64b 100644
  		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
  		if (utils::is_equal_pos(nextPos, pos)) {
  			return;
-@@ -447,7 +508,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
+@@ -447,7 +563,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -20203,18 +20293,21 @@ index 9af06982..af32e64b 100644
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  		)
 diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
-index ec833e6d..f4767861 100644
+index ec833e6d..5ba4fdc6 100644
 --- a/src/circuit/task/fighter/RaidTask.h
 +++ b/src/circuit/task/fighter/RaidTask.h
-@@ -27,13 +27,21 @@ public:
+@@ -26,14 +26,26 @@ public:
+ 	virtual void Stop(bool done);
  
  	virtual void OnUnitIdle(CCircuitUnit* unit) override;
- 
++	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
++
 +	// apex: the script's priced raid target (nnraid.as). r <= 0 clears it.
 +	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; }
 +	float GetGoalR() const { return goalR; }
-+
+ 
  private:
++	bool IsCommitted() const;
  	bool FindTarget();
  	void ApplyTargetPath(const CQueryPathMulti* query);
  	void FallbackRaid();
@@ -20225,6 +20318,8 @@ index ec833e6d..f4767861 100644
 +	int noTargetSince = -1;
 +	springai::AIFloat3 goalPos;
 +	float goalR = 0.f;
++	int keptN = 0;          // retreats a committed raid did not take
++	int nextCommitLog = 0;
  };
  
  } // namespace circuit

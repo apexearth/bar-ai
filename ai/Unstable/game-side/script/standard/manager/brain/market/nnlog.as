@@ -369,7 +369,7 @@ void NnOptFull(Want@ w, const AIFloat3& in up, array<float>& out o)
 	o[13] = on ? Military::ForwardFraction(w.pos) : 0.f;
 	o[14] = on ? LossRateAt(w.pos) : 0.f;
 	const int cat = CategoryOf(w.kind);
-	o[15] = ((w.kind != WK_SUPER) && (cat >= 0)) ? Persona::CategoryMult(cat) : 1.f;
+	o[15] = 1.f;   // the persona column, kept so old records still line up
 }
 
 // DISCOVERY, two rolls (docs/35): an explorer's every head mixes NN_HEAD_FLAT

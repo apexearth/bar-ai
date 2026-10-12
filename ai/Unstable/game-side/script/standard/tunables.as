@@ -172,7 +172,7 @@ const float TUNE_T2_ARMY_HOLD = 1.f;
 const float TUNE_BASE_ATTACK_INFL = 10.f;
 
 // [ratio] -- How hard bleeding forward (dying on their ground) raises the
-//   engage caution -- multiplies the same margin personality uses.
+//   engage caution -- multiplies the engage margin.
 const float TUNE_BLEED_ENGAGE = 2.f;
 
 // [ratio] -- How much enemy STATIC defence counts when deciding to leave home
@@ -1757,11 +1757,6 @@ const float TUNE_LAG_SPEED = 0.98f;
 //   kick in at severity 1, 2 and 3.
 const float TUNE_LAG_STEP = 0.34f;
 
-// [ratio] -- Each personality trait (eco, def, army, t3, air, nuke, lrpc) is
-//   rolled log-uniform in [1, 1+s] per instance -- up only, never below
-//   neutral; 0 = every instance identical (the A/B arm). See docs/27.
-const float TUNE_PERSONA_SPREAD = 0.f;
-
 // [metal/s] -- In-flight build requests allowed per this much metal income
 //   (min 2) -- the governor on parallel sites.
 const float TUNE_REQUEST_DRAIN = 7.0f;
@@ -1857,7 +1852,6 @@ const float TUNE_RECLAIM_BLOCKER = 0.f;
 //   docs/27.
 const float TUNE_DEF_OFF = 0.f;
 
-// Personality moves it (Persona::Trait(T_ARMY)); this is the neutral baseline.
 const float TUNE_ARMY_ECO_S = 66.f;
 
 // The economy the rear specialist names before it spends anything on war, in

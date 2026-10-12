@@ -55,7 +55,7 @@ float PlanArmyMult()
 }
 
 // The budget rows (Brain::Cat: 0 ARMY, 1 DEFENCE, 2 AIRDEF, 3 ECONOMY), on the
-// contract Persona::ShareMult uses: normalisation pays for a raise out of the rest.
+// contract budget.as's shares use: normalisation pays for a raise out of the rest.
 float PlanShareMult(int c)
 {
 	if ((gPlan == NG_RUSH) && (c == 0))

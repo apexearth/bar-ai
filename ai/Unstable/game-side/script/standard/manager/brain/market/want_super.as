@@ -945,18 +945,17 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// income that can barely pay for it and nearly the full slice at the
 		// income that shrugs it off.
 		const float afford = (classBudget - bill) / classBudget;
-		float gain = power * share * afford
-				* Persona::WantMult(SuperName(sc));
+		float gain = power * share * afford;
 		float lrpcInM = 0.f;
 		if (sc == SC_LRPC)
-			gain = LrpcGain(d, at, lrpcInM) * Persona::WantMult(SuperName(sc));
+			gain = LrpcGain(d, at, lrpcInM);
 		else if (sc == SC_TACTICAL)
 			gain = TacticalGain(d);
 		else if (sc == SC_JUNO)
 			gain = JunoGain();
 		else if (sc == SC_SILO)
 			gain = ((gain > 0.f) ? gain : 0.f)
-					+ SiloGain(power * share) * Persona::WantMult(SuperName(sc));
+					+ SiloGain(power * share);
 		gain *= PlanMul(sc);
 		if (noLines)
 			gain *= EcoRoleRamp();   // the seat's war comes in with its ramp
@@ -978,8 +977,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			if (gapF < 0.f)
 				gapF = 0.f;
 			const float gapStream = gapF / ((fillS > 1.f) ? fillS : 60.f);
-			gain = (OverflowM() + gapStream) * afford
-					* Persona::WantMult(SuperName(sc));
+			gain = (OverflowM() + gapStream) * afford;
 			// CAPABILITY INSURANCE (apexearth: "If the enemy comes at us
 			// with a Behemoth and we do not have one we are in big
 			// trouble"): the answer to enemy T3 has to exist BEFORE one is
@@ -995,7 +993,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 			const float insure = ((gIncEma > 0.f)
 						? gIncEma : Eco::MInc())
 					* ai.GetTunable("apex_gantry_insure", TUNE_GANTRY_INSURE)
-					* afford * Persona::WantMult(SuperName(sc));
+					* afford;
 			if (insure > gain)
 				gain = insure;
 			gain *= hostMul;
@@ -1112,7 +1110,7 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				if (OnMap(at3)) {
 					const float afford = (budget - bill) / budget;
 					const float gain = power * share * afford
-							* Persona::WantMult(SuperName(SC_AIRPLANT)) * PlanMul(SC_AIRPLANT);
+							* PlanMul(SC_AIRPLANT);
 					if (gain > 0.f) {
 						const float wSec3 = (speed > 1.f)
 								? (here.distance2D(at3) / speed) : 60.f;

@@ -26,12 +26,14 @@ public:
 	virtual void Stop(bool done);
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
+	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
 
 	// apex: the script's priced raid target (nnraid.as). r <= 0 clears it.
 	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; }
 	float GetGoalR() const { return goalR; }
 
 private:
+	bool IsCommitted() const;
 	bool FindTarget();
 	void ApplyTargetPath(const CQueryPathMulti* query);
 	void FallbackRaid();
@@ -42,6 +44,8 @@ private:
 	int noTargetSince = -1;
 	springai::AIFloat3 goalPos;
 	float goalR = 0.f;
+	int keptN = 0;          // retreats a committed raid did not take
+	int nextCommitLog = 0;
 };
 
 } // namespace circuit

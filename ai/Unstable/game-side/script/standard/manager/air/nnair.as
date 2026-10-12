@@ -28,6 +28,8 @@ int gNaNextAt = -1;
 int gNaTeamGoSeen = -1;   // the last team-army operation whose GO the strike decision answered
 int gNaPhase = 0;
 int gNaDecN = 0, gNaGoN = 0, gNaDevN = 0, gNaGoB = 0, gNaGoG = 0, gNaPullN = 0;
+int gNaWaitFrom = -1;          // the bombers' last launch, or their first decision
+int gNaLateN = 0;              // launches the cadence forced over a WAIT
 int gNaLegacyNext = 0;
 int gNaLegacyFrame = -1000;
 string gNaLegacyWhy = "";
@@ -531,6 +533,20 @@ int NaDecide(int kind, const string why)
 		pr[NA_WAIT] = 1.f;
 		pr[NA_GO] = 0.f;
 	}
+	// THE WING ALWAYS FLIES (his 2026-10-12): a wing held a whole cadence since its last launch goes at
+	// the best cell it knows, even when heavy AA prices every cell below zero.
+	if (kind == 0) {
+		if (gNaWaitFrom < 0)
+			gNaWaitFrom = ai.frame;
+		if (have && (chosen == NA_WAIT) && (ai.frame - gNaWaitFrom >= AIR_CADENCE)
+			&& (BomberMass() >= DeadlineBombBar()))
+		{
+			chosen = NA_GO;
+			pr[NA_WAIT] = 0.f;
+			pr[NA_GO] = 1.f;
+			++gNaLateN;
+		}
+	}
 	++gNaDecN;
 	if (chosen != rule)
 		++gNaDevN;
@@ -566,6 +582,7 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 			return;
 		++gNaGoN;
 		++gNaGoB;
+		gNaWaitFrom = ai.frame;
 		if (have) {
 			gStrikeHas = true;
 			gStrikeAt = best.at;
@@ -860,7 +877,7 @@ void NaUpdate()
 				need += " " + Catalog::Def(gNaNeedDef[k]).GetName() + ":" + gNaNeedN[k] + "/" + int(gNaNeedV[k]);
 		}
 		AiLog(Factory::T() + "apex: nnair-stat t=" + ai.teamId + " dec=" + gNaDecN + " go=" + gNaGoN
-			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " goG=" + gNaGoG + " pulled=" + gNaPullN
+			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " goG=" + gNaGoG + " pulled=" + gNaPullN
 			+ " gun=" + gn + " home=" + home + " out=" + away + " gunNow=" + gNaGunNow
 			+ " held=" + HeldBombers() + " need" + need + " flat=" + Market::NnF(gNaFlat, 2));
 	}

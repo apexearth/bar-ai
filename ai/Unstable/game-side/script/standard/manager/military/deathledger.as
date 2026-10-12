@@ -276,7 +276,7 @@ float ForwardBleedFrac()
 }
 
 // >1 wants better odds and bigger groups before crossing again. Multiplies
-// the same engage-margin lever personality uses, and the massing want.
+// the engage-margin lever, and the massing want.
 float BleedCaution()
 {
 	float m = 1.f + ForwardBleedFrac() * ai.GetTunable("apex_bleed_engage", TUNE_BLEED_ENGAGE);

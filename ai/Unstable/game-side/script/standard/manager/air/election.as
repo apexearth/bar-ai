@@ -51,8 +51,8 @@ void RunElection()
 	const bool skipTech = false;
 
 	int best = -1;
-	// An airboss persona lowers its own bar; the election shape is unchanged.
-	float bestInc = AIR_MIN_INCOME / Persona::AirEagerness();
+	// An air-leaning plan lowers the bar; the election shape is unchanged.
+	float bestInc = AIR_MIN_INCOME / Market::PlanAirMult();
 	float bestSeen = 0.f;
 	// A seat behind a teammate's base first (apexearth 2026-10-02: the front
 	// player making air "is in a way more dangerous spot ... need strong

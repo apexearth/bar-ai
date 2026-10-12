@@ -1,5 +1,11 @@
 namespace Air {
 
+bool Duel()
+{
+	array<Id>@ mates = ai.GetTeamIds();
+	return ((mates is null) || (mates.length() <= 1)) && (ai.GetEnemyTeamSize() <= 1);
+}
+
 float EnemyAACost()
 {
 	return aiEnemyMgr.GetEnemyCost(RT::AA);
@@ -122,7 +128,7 @@ CCircuitDef@ IntelPlantToBuild()
 	// The AIR plan raises the basic plant now and copies it to the net's
 	// count -- in a duel only past the income bars below.
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
-		&& Market::AirPlantOwed(int(gPlant1.id)) && ((Have(gPlant1) > 0) || !Persona::Duel()))
+		&& Market::AirPlantOwed(int(gPlant1.id)) && ((Have(gPlant1) > 0) || !Duel()))
 		return gPlant1;
 	if ((gPlant1 !is null) && gPlant1.IsAvailable(ai.frame)
 		&& (Have(gPlant1) == 0))

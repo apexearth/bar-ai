@@ -236,6 +236,8 @@ to them)
   turrets are massed, fortify that ground and put a shield there.
 - Don't heap defences in the middle while a flank is being raided. Defend the
   raided side, and the map edge.
+- (2026-10-12) Seriously behind the enemy, lean into T3 defence: it is the one
+  saving grace a losing side has.
 - **Jammers over the defence are a nice-to-have that turns into a need**
   (2026-10-09): they become wanted when a defence emplacement is taking
   long-range fire from something like an Ambassador or an LRPC. The game has
@@ -390,6 +392,15 @@ to them)
 - Cheeky moves win games: run the map edge and pop converters. Marauders and
   their like are raiders: around the line, not through it. Penetrate deeper
   into ground believed empty.
+- (2026-10-12) A raid exists to deal the most economic damage it can, and is
+  usually a suicide mission. Crippled economy often decides the game; every
+  bit of it destroyed is a unit we never have to fight.
+- (2026-10-12) Once we choose to raid, the raid commits. It walks past small
+  things to reach the economy. When every way in costs damage, it takes the
+  damage: some economy destroyed beats a raid that avoids harm and is hurt
+  anyway.
+- (2026-10-12) A raid that is held up calls in support to clear a hole (air,
+  a nuke) and punches through it. The economy sits behind the defences.
 
 ## 6. Priors: when to fight
 
