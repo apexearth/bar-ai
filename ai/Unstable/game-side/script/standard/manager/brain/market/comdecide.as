@@ -515,6 +515,7 @@ float gComFlat = 0.f;         // discovery games: chance a decision goes safer (
 int gComExpUntil = -1, gComExpPick = -1, gComExpN = 0, gComExpNext = 0;
 int gComDecAt = -999999;
 int gComNextAt = -1;
+int gComRuleSeen = -1;   // the rule's choice at the last decision
 int gComAssessAt = -1;
 bool gComHeader = false;
 int gComDecN = 0;
@@ -603,6 +604,13 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 		w[o] = (o == rule) ? 1.f
 			: (((rule == COM_RETREAT) || (stand && (o == COM_RETREAT))) ? 0.f : COM_EPS);
 	const float trust = NnComScore(st, com, w);
+	// No enemy near him: there is no fight, tower or retreat to take, only work -- an
+	// impossibility, not a judgement. Drawn anyway, FIGHT stood him on hold-position
+	// for its 30 s with nothing in sight (10 1v1s, 2 won, 20-125 buildings in 3 min).
+	if (!gCsThreat) {
+		for (int o = 0; o < COM_N; ++o)
+			w[o] = (o == COM_WORK) ? 1.f : 0.f;
+	}
 	float sum = 0.f;
 	for (int o = 0; o < COM_N; ++o)
 		sum += w[o];
@@ -614,7 +622,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	// retreat, a turret a retreat -- held 15 s so what followed is its doing.
 	// Nothing ever explores him into a fight the rule would leave.
 	gComFlat = NnHeadFlat();
-	const bool trial = (gComFlat > 0.f) && (rule != COM_RETREAT) && !stand;
+	const bool trial = (gComFlat > 0.f) && (rule != COM_RETREAT) && !stand && gCsThreat;
 	const bool held = trial && (ai.frame < gComExpUntil) && (gComExpPick > rule);
 	const bool canTry = trial && !held && (ai.frame >= gComExpNext);
 	const bool explore = canTry;
@@ -741,13 +749,18 @@ void ComDecideTick(CCircuitUnit@ u)
 	}
 	if (gComNextAt < 0)
 		gComNextAt = (ai.teamId % 15) * SECOND;
+	// Re-decide when the RULE changes (the situation moved), not whenever the
+	// decision differs from it: a net that chose otherwise was redrawn every tick
+	// until it agreed, and each FIGHT tick between cancelled his build order --
+	// 48-156 such redraws in the first 3 min, the commander stuck, 6 buildings.
 	string why = "";
-	if (gCsRule != gComDec)
+	if (gCsRule != gComRuleSeen)
 		why = "rule";
 	else if (ai.frame >= gComNextAt)
 		why = gCsThreat ? "threat" : "clock";
 	if (why != "") {
 		ComDecide(u, why);
+		gComRuleSeen = gCsRule;
 		gComNextAt = ai.frame + (gCsThreat ? 3 : 30) * SECOND;
 	}
 	u.SetDGunClose((gComDec == COM_FIGHT) || ((gComDec == COM_WORK) && !gCsThreat));
