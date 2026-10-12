@@ -30,7 +30,9 @@ import neuro
 STATE = os.path.join(neuro.NN, "rand.json")
 LOG = os.path.join(neuro.NN, "rand.log")
 RESTART = os.path.join(neuro.NN, "rand_restart")
-EXPLORE = 1000
+# runtime/nn/rand_explore raises it without a code edit: annealing needs room past the first 1000 nets.
+EXPLORE_FILE = os.path.join(neuro.NN, "rand_explore")
+EXPLORE = int(open(EXPLORE_FILE).read().strip()) if os.path.exists(EXPLORE_FILE) else 1000
 S_RANGE = (0.1, 0.8)
 LADDER = [1, 4, 12, 24]
 NEED = [1, 2, 5]
