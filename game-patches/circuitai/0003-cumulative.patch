@@ -20073,7 +20073,7 @@ index db42e8a5..1a8fa0fc 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af06982..cbc21194 100644
+index 9af06982..9440aa82 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -5,6 +5,7 @@
@@ -20215,7 +20215,7 @@ index 9af06982..cbc21194 100644
 +	// A gunship raid commits too (his 10-12: gunships traded with their defences for nothing).
 +	if ((mode >= 2.f) && ((leader == nullptr) || !leader->GetCircuitDef()->IsAbleToFly())) {
 +		for (CCircuitUnit* u : units) {
-+			if (!u->GetCircuitDef()->IsRoleRaider()) {
++			if (!u->GetCircuitDef()->IsRoleRaider() && !u->GetCircuitDef()->IsCharger()) {
 +				return false;
 +			}
 +		}
@@ -20288,7 +20288,7 @@ index 9af06982..cbc21194 100644
 +			// Committed: the economy only. Their army and their guns are walked past (shot in passing).
 +			if (committed && (edef->IsEnemyRoleAny(CCircuitDef::RoleMask::COMM)
 +				|| (!isBuilder && (edef->IsMobile()
-+					|| (edef->IsAttacker() && edef->HasSurfToLand() && !edef->IsAttrStock())))))
++					|| (edef->IsAttacker() && !edef->IsAttrStock())))))
 +			{
 +				continue;
 +			}
@@ -20397,7 +20397,7 @@ index 9af06982..cbc21194 100644
  		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
  		if (utils::is_equal_pos(nextPos, pos)) {
  			return;
-@@ -447,7 +576,9 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
+@@ -447,9 +576,15 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -20406,8 +20406,15 @@ index 9af06982..cbc21194 100644
 +			unit->GetTravelAct()->StateWait();
 +		}
  		TRY_UNIT(circuit, unit,
- 			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			if (IsCommitted()) {
++				unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			} else {
++				unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
++			}
  		)
+ 	}
+ }
 diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
 index ec833e6d..91386467 100644
 --- a/src/circuit/task/fighter/RaidTask.h

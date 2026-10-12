@@ -293,7 +293,7 @@ bool CRaidTask::IsCommitted() const
 	// A gunship raid commits too (his 10-12: gunships traded with their defences for nothing).
 	if ((mode >= 2.f) && ((leader == nullptr) || !leader->GetCircuitDef()->IsAbleToFly())) {
 		for (CCircuitUnit* u : units) {
-			if (!u->GetCircuitDef()->IsRoleRaider()) {
+			if (!u->GetCircuitDef()->IsRoleRaider() && !u->GetCircuitDef()->IsCharger()) {
 				return false;
 			}
 		}
@@ -409,7 +409,7 @@ bool CRaidTask::FindTarget()
 			// Committed: the economy only. Their army and their guns are walked past (shot in passing).
 			if (committed && (edef->IsEnemyRoleAny(CCircuitDef::RoleMask::COMM)
 				|| (!isBuilder && (edef->IsMobile()
-					|| (edef->IsAttacker() && edef->HasSurfToLand() && !edef->IsAttrStock())))))
+					|| (edef->IsAttacker() && !edef->IsAttrStock())))))
 			{
 				continue;
 			}
@@ -580,7 +580,11 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 			unit->GetTravelAct()->StateWait();
 		}
 		TRY_UNIT(circuit, unit,
-			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			if (IsCommitted()) {
+				unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			} else {
+				unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+			}
 		)
 	}
 }

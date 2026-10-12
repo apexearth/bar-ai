@@ -259,6 +259,10 @@ void Init()
 		CCircuitDef@ rdef = ai.GetCircuitDef(rd);
 		if (rdef is null)
 			continue;
+		// a config that says never (retreat 0: the units that detonate on arrival) is not overwritten -- the
+		// curve set the Juggernaut to 0.5 and it walked home at half health (his 10-12)
+		if (rdef.GetRetreat() <= 0.f)
+			continue;
 		float rt = ai.GetTunable("apex_retreat_floor", TUNE_RETREAT_FLOOR)
 				+ gCostM[ri]
 				/ ai.GetTunable("apex_retreat_cost_scale", TUNE_RETREAT_COST_SCALE);

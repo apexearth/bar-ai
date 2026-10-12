@@ -336,6 +336,19 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 			return NoteElect("charger.hold", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::MELEE,
 					Task::FightType::MELEE, aiMilitaryMgr.quota.attack)));
 		}
+		// RAM THE BASE (his 10-12, again: a Juggernaut poked the outskirts, took damage and went home to be
+		// repaired; walked up the side of their base it would have blown up everything). The C++ charge this
+		// once keyed went with the fight layer's revert to stock (09-07), so a solo ATTACK fought the nearest
+		// thing. A committed raid is the charge: economy targets only, walks past guns, no retreat.
+		AIFloat3 ram;
+		float ramM = 0.f;
+		IUnitTask@ rt = StrikeTarget(ram, ramM) ? aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::RAID)) : null;
+		if (rt !is null) {
+			rt.SetRaidGoal(ram, STRIKE_R);
+			AiLog(Factory::T() + "apex: " + cdef.GetName() + " rams the enemy base at " + int(ram.x) + "," + int(ram.z)
+				+ " ecoM=" + int(ramM));
+			return NoteElect("charger", rt);
+		}
 		AiLog(Factory::T() + "apex: " + cdef.GetName() + " charges the enemy base");
 		return NoteElect("charger", aiMilitaryMgr.Enqueue(TaskF::Common(Task::FightType::ATTACK)));
 	}

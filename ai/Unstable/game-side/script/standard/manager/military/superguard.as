@@ -52,10 +52,9 @@ int gSuperHeld = 0;
 // ROLE SUPER COUNTS, NOT ONLY HEAVY. All three carry role super in
 // behaviour.json, so a heavy-only test named them and matched none of them:
 // they fell through to the guard below and stood on our own line all game.
-// C++ CCircuitDef::IsCharger is the same test, and keys CAttackTask's charge
-// (ignore the engage margin, path straight at the target instead of round the
-// map edge). Keeping the two identical is what makes "charger" one behaviour
-// rather than two that disagree.
+// C++ CCircuitDef::IsCharger is the same test and keys the committed raid a charger is
+// sent on (RaidTask::IsCommitted, hooks.as). The CAttackTask charge this once keyed went
+// with the 09-07 revert to stock; keep the two tests identical.
 bool IsChargerDef(const CCircuitDef@ cdef)
 {
 	return (cdef !is null)
