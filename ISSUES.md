@@ -15,6 +15,20 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## THE COMMANDER STANDS WITH A JOB AND NO ENGINE ORDER IN THE OPENING (2026-10-11)
+
+1v1 Comet vs BARb, watch net, after the 9e0b00ba commander fixes (he now chooses WORK in every
+decision without a threat): 3 of 20 games placed under 10 buildings in the first 3 min and lost by
+6-14 min -- the commander, holding a build task, logs `stuck -- armcom ... held <def> progress=0.00
+... still 10s ... q=0 -- no engine order, re-electing` (stuck.as) again and again, and drifts toward
+ever farther sites until something kills him (seed 116: dead at 6.0 min, 1,706 from home, after 7
+such stalls). His action ring reads `mov>mov>mov` with q=0. Ruled out: the D-gun hold
+(IsDGunHeld drops every Cmd*, but s116 has no dgn/hld marks), the 3 s NoteOrder dedupe, the
+commander net (all WORK). Happens in 0-7 of 10 games per arm in any arm, so every A/B in 1v1 so far
+was dominated by it (a "formation off: 0.5 of 10" result flipped on re-run). Identical seeds do not
+reproduce a game; next: apex_order_trace=1 across a batch until one stalls, then read what cleared
+his queue.
+
 ## ARMY AND AA ACROSS THE T3 SWITCH (2026-10-10, open after the tmix/aa commit)
 
 - **Static AA sited forward dies unbuilt.** 175106 watch game: armflak framed at
