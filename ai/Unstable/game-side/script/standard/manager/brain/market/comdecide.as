@@ -779,7 +779,8 @@ void ComDecideTick(CCircuitUnit@ u)
 		gComRuleSeen = gCsRule;
 		gComNextAt = ai.frame + (gCsThreat ? 3 : 30) * SECOND;
 	}
-	u.SetDGunClose((gComDec == COM_FIGHT) || ((gComDec == COM_WORK) && !gCsThreat));
+	// In the trap he waits for them: the D-gun fires at what walks into reach, it does not walk out to them.
+	u.SetDGunClose(((gComDec == COM_FIGHT) && !gShip) || ((gComDec == COM_WORK) && !gCsThreat));
 	ComEnforce(u);
 	if (ai.frame >= gComStatAt) {
 		gComStatAt = ai.frame + 60 * SECOND;
@@ -794,7 +795,7 @@ void ComDecideTick(CCircuitUnit@ u)
 			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
 			+ " dgunOrders=" + u.DGunOrders() + " dgOpp=" + gComDgOpp + " dgMiss=" + gComDgMiss
-			+ " cower=" + gComCowerN + " stood=" + gComStandN + " ship=" + gShipN + "/" + gShipSec
+			+ " cower=" + gComCowerN + " stood=" + gComStandN + " ship=" + gShipN + "/" + gShipSec + " trap=" + gComTrapN
 			+ " hp=" + int(gCsHp * 100.f) + " now=" + ComOptName(gComDec)
 			+ " us avg=" + ((gComDecN > 0) ? int(gComUsSum / double(gComDecN)) : 0)
 			+ " max=" + int(gComUsMax));
@@ -872,6 +873,7 @@ int gComEvadeN = 0;
 AIFloat3 gComRetTo(-1.f, 0.f, -1.f);   // where the retreat in force is going
 int gComWorkVotes = 0;   // consecutive WORK verdicts while another decision is in force
 int gComRetKeptN = 0;   // RETREAT kept the engine's own retreat task
+int gComTrapN = 0;      // step-in fights held as a standing trap
 IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 {
 	if (gComDec == COM_RETREAT) {
@@ -927,8 +929,27 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			&& (gCsFoeSpd <= Catalog::gSpeed[int(u.circuitDef.id)]) && !ComFar(gCsFoeAt));
 		const bool leaving = !close && onPatrol && OnMap(gComRetTo)
 			&& (held.GetBuildPos().distance2D(gComRetTo) < 300.f);
+		if (ship && Builder::gHomeSet) {
+			// THE TRAP (his 10-12): stand cloaked on their way into the base -- standing, the cloak is cheap --
+			// and let them walk into the D-gun. A patrol to them walked him in uncloaked, laser first.
+			AIFloat3 toHome = Builder::gHomePos - gShipAt;
+			toHome.SafeNormalize2D();
+			AIFloat3 trap = gShipAt + toHome * (u.DGunRange() * 0.9f);
+			if (!OnMap(trap) || (gCsHere.distance2D(gShipAt) <= gShipAt.distance2D(trap) + 100.f))
+				trap = gCsHere;   // already on their path, inside reach: hold here
+			if ((held !is null) && (held.GetType() == Task::Type::BUILDER)
+				&& (held.GetBuildType() == Task::BuildType::PATROL) && (held.GetBuildPos().distance2D(trap) < 150.f))
+				return held;
+			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(Task::Priority::HIGH, trap, 15 * SECOND));
+			if (pt !is null) {
+				gCommEngageAt = ai.frame;
+				++gComTrapN;
+				gComRetTo = AIFloat3(-1.f, 0.f, -1.f);
+				return pt;
+			}
+		}
 		if (close || leaving) {
-			const AIFloat3 at = ship ? gShipAt : (close ? gCsFoeAt : gCsHere);
+			const AIFloat3 at = close ? gCsFoeAt : gCsHere;
 			if (close && onPatrol && (held.GetBuildPos().distance2D(at) < 300.f))
 				return held;
 			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, at, 15 * SECOND));

@@ -433,6 +433,7 @@ public:
 	float GetExtractsM()    const { return extractsM; }
 	float GetExtrRangeM()   const { return extrRangeM; }
 	float GetCloakCost()    const { return cloakCost; }
+	float GetCloakCostStill() const { return cloakCostStill; }  // apex: standing still
 	float GetBuildTime()    const { return buildTime; }
 	// Net resource generation at full activity, precomputed at def load;
 	// wind is averaged against the map's (min+max)/2, tidal against map tidal.
@@ -649,6 +650,7 @@ private:
 	float convRatioM;
 	float extrRangeM;
 	float cloakCost;
+	float cloakCostStill = 0.f;
 	float buildTime;
 	float captureSpeed;
 //	float altitude;

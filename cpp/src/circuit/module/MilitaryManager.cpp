@@ -2230,10 +2230,13 @@ bool CMilitaryManager::IsCommCloakWanted(CCircuitUnit* unit) const
 	// never eats the bank the D-gun fires from.
 	if (IsCommShip()) {
 		const bool cloakedNow = unit->GetUnit()->IsCloaked();
+		// He stands in a trap (comdecide.as), so the cost is the standing one -- 100 e/s for a
+		// commander, against the 1,000 moving that kept him visible (his 10-12).
+		const float cost = cdef->GetCloakCostStill();
 		const float surplus = economyMgr->GetAvgEnergyIncome() - economyMgr->GetEnergyPull()
-				+ (cloakedNow ? cdef->GetCloakCost() : 0.f);
+				+ (cloakedNow ? cost : 0.f);
 		const bool stalledNow = cloakedNow ? (commShipStallTicks >= 3) : economyMgr->IsEnergyStalling();
-		return !stalledNow && (surplus >= cdef->GetCloakCost());
+		return !stalledNow && (surplus >= cost);
 	}
 	// apex: the share is the whole rule, and 0.1 against the MOVING cost put
 	// the bar at 10,000 e/s -- an income most games never reach, so "always

@@ -217,6 +217,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 	extractsM    = def->GetExtractsResource(resM);  // FIXME: ZK = 0.001f
 	extrRangeM   = def->GetResourceExtractorRange(resM);
 	cloakCost    = std::max(def->GetCloakCost(), def->GetCloakCostMoving());
+	cloakCostStill = def->GetCloakCost();
 	buildTime    = def->GetBuildTime();
 	captureSpeed = def->IsAbleToCapture() ? def->GetCaptureSpeed() / TEAM_SLOWUPDATE_RATE : 0.f;
 //	altitude     = def->GetWantedHeight();

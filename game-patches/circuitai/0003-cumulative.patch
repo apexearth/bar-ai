@@ -7493,7 +7493,7 @@ index e56339eb..a3905646 100644
  	Handlers1 finishedHandler;
  	Handlers1 idleHandler;
 diff --git a/src/circuit/module/MilitaryManager.cpp b/src/circuit/module/MilitaryManager.cpp
-index a44c20b0..8326be64 100644
+index a44c20b0..866e60fb 100644
 --- a/src/circuit/module/MilitaryManager.cpp
 +++ b/src/circuit/module/MilitaryManager.cpp
 @@ -14,18 +14,23 @@
@@ -8650,7 +8650,7 @@ index a44c20b0..8326be64 100644
  						task = Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, power));
  					}
  				} break;
-@@ -1717,18 +2206,181 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
+@@ -1717,18 +2206,184 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
  	return task;
  }
  
@@ -8678,10 +8678,13 @@ index a44c20b0..8326be64 100644
 +	// never eats the bank the D-gun fires from.
 +	if (IsCommShip()) {
 +		const bool cloakedNow = unit->GetUnit()->IsCloaked();
++		// He stands in a trap (comdecide.as), so the cost is the standing one -- 100 e/s for a
++		// commander, against the 1,000 moving that kept him visible (his 10-12).
++		const float cost = cdef->GetCloakCostStill();
 +		const float surplus = economyMgr->GetAvgEnergyIncome() - economyMgr->GetEnergyPull()
-+				+ (cloakedNow ? cdef->GetCloakCost() : 0.f);
++				+ (cloakedNow ? cost : 0.f);
 +		const bool stalledNow = cloakedNow ? (commShipStallTicks >= 3) : economyMgr->IsEnergyStalling();
-+		return !stalledNow && (surplus >= cdef->GetCloakCost());
++		return !stalledNow && (surplus >= cost);
 +	}
 +	// apex: the share is the whole rule, and 0.1 against the MOVING cost put
 +	// the bar at 10,000 e/s -- an income most games never reach, so "always
@@ -22331,7 +22334,7 @@ index 5eebb710..abf75fc5 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..456445fd 100644
+index a1ac882a..c6a52fb8 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -22392,7 +22395,15 @@ index a1ac882a..456445fd 100644
  	costM        = def->GetCost(resM);
  	costE        = def->GetCost(resE);
  	upkeepM      = def->GetUpkeep(resM);
-@@ -240,9 +249,75 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -208,6 +217,7 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 	extractsM    = def->GetExtractsResource(resM);  // FIXME: ZK = 0.001f
+ 	extrRangeM   = def->GetResourceExtractorRange(resM);
+ 	cloakCost    = std::max(def->GetCloakCost(), def->GetCloakCostMoving());
++	cloakCostStill = def->GetCloakCost();
+ 	buildTime    = def->GetBuildTime();
+ 	captureSpeed = def->IsAbleToCapture() ? def->GetCaptureSpeed() / TEAM_SLOWUPDATE_RATE : 0.f;
+ //	altitude     = def->GetWantedHeight();
+@@ -240,9 +250,75 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	isCapturable      = def->IsCapturable();
  
  	const std::map<std::string, std::string>& customParams = def->GetCustomParams();
@@ -22470,7 +22481,7 @@ index a1ac882a..456445fd 100644
  	}
  
  	it = customParams.find("canjump");
-@@ -252,8 +327,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -252,8 +328,23 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		jumpRange = (it != customParams.end()) ? utils::string_to_float(it->second) : 400.0f;
  	}
  
@@ -22494,7 +22505,7 @@ index a1ac882a..456445fd 100644
  		category |= circuit->GetBadCategory();
  		costM *= 0.1f;  // avoid threat metal
  	}
-@@ -303,6 +393,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -303,6 +394,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		delete stockDef;
  	}
  
@@ -22514,7 +22525,7 @@ index a1ac882a..456445fd 100644
  	if (!def->IsAbleToAttack()) {
  		if (isShield) {
  			auto mounts = def->GetWeaponMounts();
-@@ -330,10 +433,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -330,10 +434,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	float bestWpRange = std::numeric_limits<float>::max();
  	float airDps = .0f;
  	float airDmg = .0f;
@@ -22534,7 +22545,7 @@ index a1ac882a..456445fd 100644
  	CWeaponDef* bestDGunDef = nullptr;
  	CWeaponDef* bestWpDef = nullptr;
  	WeaponMount* bestDGunMnt = nullptr;
-@@ -355,6 +467,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -355,6 +468,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			continue;
  		}
  
@@ -22552,7 +22563,7 @@ index a1ac882a..456445fd 100644
  		float dps = .0f;
  		float dmg = .0f;
  
-@@ -404,12 +527,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -404,12 +528,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		if (minReloadTime > reloadTime) {
  			minReloadTime = reloadTime;
  		}
@@ -22582,7 +22593,7 @@ index a1ac882a..456445fd 100644
  		targetCategory |= weaponCat;
  
  		const float wdAoe = wd->GetAreaOfEffect();
-@@ -420,11 +559,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -420,11 +560,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  //		it = customParams.find("truerange");
  		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
  
@@ -22607,7 +22618,7 @@ index a1ac882a..456445fd 100644
  		canSurfTargetAir |= isAirWeapon;
  
  		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
-@@ -460,16 +607,37 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,16 +608,37 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -22648,7 +22659,7 @@ index a1ac882a..456445fd 100644
  		airDmg += dmg;
  		airDps += dps;
  		surfDmg += dmg;
-@@ -477,20 +645,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -477,20 +646,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		waterDmg += dmg;
  		waterDps += dps;
  
@@ -22708,7 +22719,7 @@ index a1ac882a..456445fd 100644
  		}
  		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
  			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
-@@ -498,6 +703,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -498,6 +704,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::WATER;
  			}
@@ -22718,7 +22729,7 @@ index a1ac882a..456445fd 100644
  		}
  
  		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
-@@ -566,6 +774,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -566,6 +775,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
@@ -22747,7 +22758,7 @@ index a1ac882a..456445fd 100644
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +848,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +849,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -22761,7 +22772,7 @@ index a1ac882a..456445fd 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
-@@ -629,6 +866,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -629,6 +867,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
  			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
  #endif
@@ -22779,7 +22790,7 @@ index a1ac882a..456445fd 100644
  }
  
  CCircuitDef::~CCircuitDef()
-@@ -764,6 +1012,7 @@ void CCircuitDef::SetRange(float range)
+@@ -764,6 +1013,7 @@ void CCircuitDef::SetRange(float range)
  	maxRangeType = RangeType::AIR;
  	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
  		maxRange[rt] = range;
@@ -22787,7 +22798,7 @@ index a1ac882a..456445fd 100644
  	}
  }
  
-@@ -772,6 +1021,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+@@ -772,6 +1022,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
  	// TODO: Asserts >= 0?
  	minRange = std::min(minRange, range);
  	maxRange[static_cast<RangeT>(type)] = range;
@@ -22796,7 +22807,7 @@ index a1ac882a..456445fd 100644
  		maxRangeType = type;
  	}
 diff --git a/src/circuit/unit/CircuitDef.h b/src/circuit/unit/CircuitDef.h
-index cd0b54a9..9c1b61e2 100644
+index cd0b54a9..78bb2763 100644
 --- a/src/circuit/unit/CircuitDef.h
 +++ b/src/circuit/unit/CircuitDef.h
 @@ -15,6 +15,8 @@
@@ -22949,9 +22960,11 @@ index cd0b54a9..9c1b61e2 100644
  	float GetCostM()        const { return costM; }
  	float GetCostE()        const { return costE; }
  	float GetUpkeepM()      const { return upkeepM; }
-@@ -347,6 +434,39 @@ public:
+@@ -346,7 +433,41 @@ public:
+ 	float GetExtractsM()    const { return extractsM; }
  	float GetExtrRangeM()   const { return extrRangeM; }
  	float GetCloakCost()    const { return cloakCost; }
++	float GetCloakCostStill() const { return cloakCostStill; }  // apex: standing still
  	float GetBuildTime()    const { return buildTime; }
 +	// Net resource generation at full activity, precomputed at def load;
 +	// wind is averaged against the map's (min+max)/2, tidal against map tidal.
@@ -22989,7 +23002,7 @@ index cd0b54a9..9c1b61e2 100644
  	float GetCaptureSpeed() const { return captureSpeed; }
  //	float GetAltitude()     const { return altitude; }
  	float GetJumpRange()    const { return jumpRange; }
-@@ -405,17 +525,28 @@ private:
+@@ -405,17 +526,28 @@ private:
  	springai::WeaponMount* shieldMount;
  	springai::WeaponMount* weaponMount;
  	float pwrDmg, pwrMod;  // ally damage
@@ -23018,7 +23031,7 @@ index cd0b54a9..9c1b61e2 100644
  	std::array<int, static_cast<ThreatT>(ThreatType::_SIZE_)> threatRange;
  	float shieldRadius;
  	float maxShield;
-@@ -435,6 +566,7 @@ private:
+@@ -435,6 +567,7 @@ private:
  
  	bool isAttacker : 1;
  	bool isAlwaysHit : 1;  // FIXME: calc per weapon
@@ -23026,7 +23039,7 @@ index cd0b54a9..9c1b61e2 100644
  	bool hasDGun : 1;
  
  	// TODO: std::bitset<2>
-@@ -478,6 +610,7 @@ private:
+@@ -478,6 +611,7 @@ private:
  	bool isPylon : 1;
  	bool isAssist : 1;
  	bool isRadar : 1;
@@ -23034,7 +23047,7 @@ index cd0b54a9..9c1b61e2 100644
  	bool isSonar : 1;
  	bool isDecoy : 1;
  	bool isOnSlow : 1;
-@@ -488,11 +621,32 @@ private:
+@@ -488,13 +622,35 @@ private:
  	float speed;
  	float losRadius;
  	float sonarRadius;
@@ -23066,7 +23079,10 @@ index cd0b54a9..9c1b61e2 100644
 +	float convRatioM;
  	float extrRangeM;
  	float cloakCost;
++	float cloakCostStill = 0.f;
  	float buildTime;
+ 	float captureSpeed;
+ //	float altitude;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
 index 2f597be4..a89b289c 100644
 --- a/src/circuit/unit/CircuitUnit.cpp

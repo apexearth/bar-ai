@@ -211,17 +211,16 @@ void ComShipAssess(CCircuitUnit@ u)
 	gShipStrCom = 0.f;
 	gShipDgStr = 0.f;
 	if (gShipAtM > 0.f) {
-		const float ours = (gShipGuns + gShipArmyM) * OurQualityM()
-			+ UnitStrength(int(u.circuitDef.id)) * u.GetHealthPercent();
+		const float ours = (gShipGuns + gShipArmyM + u.circuitDef.costM * u.GetHealthPercent()) * OurQualityM();
 		gShipDgStr = ShipDGunStr(u, gShipG);
 		float theirs = gShipAtM * FoeQualityM() - gShipDgStr;
 		if (theirs < 0.f)
 			theirs = 0.f;
 		gShipStrCom = (ours > 0.f) ? theirs / ours : 1e6f;
 	}
-	// a team game where even with him the base loses: he runs and rebuilds with the team
-	// (his 10-10: "if it looks too hopeless -- run"); in a 1v1 he goes down with the ship
-	gShipHopeless = gShip && (Military::AllyCount() > 0) && (gShipStrCom * Military::ANSWER_PARITY > 1.f);
+	// even with him the base loses: he runs (his 10-10: "if it looks too hopeless -- run"). In a 1v1 too:
+	// there his death ends the game (his 10-12: he fought straight into armies he could not beat).
+	gShipHopeless = gShip && (gShipStrCom * Military::ANSWER_PARITY > 1.f);
 	if (gShipHopeless)
 		gShip = false;
 	if (gShip) {
