@@ -148,6 +148,13 @@ def save(st):
     tmp = STATE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(st, fh)
+    # Windows refuses the replace while any reader (dashboard, --status) has rand.json open; it killed 3 threads 10-12
+    for i in range(20):
+        try:
+            os.replace(tmp, STATE)
+            return
+        except PermissionError:
+            time.sleep(0.25 * (i + 1))
     os.replace(tmp, STATE)
 
 
