@@ -138,11 +138,17 @@ void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 		return;
 	} else if (healthPerc < 0.2f) {  // stuck units workaround: they don't shoot and don't see distant threat
+		if (!AllowRetreat(unit)) {
+			return;
+		}
 		CRetreatTask* task = manager->EnqueueRetreat();
 		manager->AssignTask(unit, task);
 		return;
 	}
 
+	if (!AllowRetreat(unit)) {
+		return;
+	}
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const float range = cdef->GetMaxRange();
 	if ((target == nullptr) || !target->IsInLOS()) {

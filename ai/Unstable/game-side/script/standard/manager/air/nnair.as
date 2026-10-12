@@ -31,6 +31,8 @@ int gNaDecN = 0, gNaGoN = 0, gNaDevN = 0, gNaGoB = 0, gNaGoG = 0, gNaPullN = 0;
 int gNaWaitFrom = -1;          // the bombers' last launch, or their first decision
 int gNaLateN = 0;              // launches the cadence forced over a WAIT
 int gNaDeepN = 0;              // gunship decisions offered the unseen base
+int gNaDeepLookAt = -1;        // our gunships last stood over it
+bool gNaForced = false;        // this decision's GO was the cadence's, not the net's
 int gNaLegacyNext = 0;
 int gNaLegacyFrame = -1000;
 string gNaLegacyWhy = "";
@@ -458,18 +460,39 @@ int NaDecide(int kind, const string why)
 	// prices their mirrored start as a cell holding the economy we have not found yet.
 	if ((kind == 1) && Builder::gHomeSet) {
 		const AIFloat3 deep(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
-		const float unseen = (MirrorPrize() - aiEnemyMgr.GetEnemyStructCost()) * LookStale();
+		if (OnMap(deep) && (ctr.distance2D(deep) <= r))
+			gNaDeepLookAt = ai.frame;
+		const float seats = (Military::AllyCount() > 1.f) ? Military::AllyCount() : 1.f;
+		float seenHere = 0.f, aaAll = 0.f, ecoM = 0.f;
+		for (uint e = 0; e < gNaEcoP.length(); ++e) {
+			ecoM += Catalog::gCostM[gNaEcoD[e]];
+			if (gNaEcoP[e].distance2D(deep) <= r)
+				seenHere += Catalog::gCostM[gNaEcoD[e]];
+		}
+		for (uint e = 0; e < gNaAAV.length(); ++e)
+			aaAll += gNaAAV[e];
+		float fade = 1.f;
+		if (gNaDeepLookAt >= 0) {
+			const float horizon = ai.GetTunable("apex_ghost_stale_min", 15.f) * float(MINUTE);
+			fade = (horizon > 1.f) ? (float(ai.frame - gNaDeepLookAt) / horizon) : 1.f;
+			if (fade > 1.f)
+				fade = 1.f;
+		}
+		const float unseen = (MirrorPrize() / seats - seenHere) * fade;
 		const float mph = Market::StructureMetalPerHp();
 		if ((unseen > 0.f) && (mph > 0.f) && OnMap(deep)) {
 			NaCand c;
 			c.at = deep;
 			c.v = unseen;
 			c.hp = unseen / mph;
-			c.n = 1;
+			const float per = (gNaEcoP.length() > 0) ? (ecoM / float(gNaEcoP.length())) : unseen;
+			c.n = (per > 1.f) ? int(unseen / per) + 1 : 1;
 			for (uint e = 0; e < gNaAAP.length(); ++e) {
 				if (gNaAAP[e].distance2D(deep) <= gNaAAR[e] + r * 0.5f)
 					c.aaT += gNaAAV[e];
 			}
+			if (c.aaT < aaAll / seats)
+				c.aaT = aaAll / seats;
 			cs.insertLast(c);
 			++gNaDeepN;
 		}
@@ -549,6 +572,7 @@ int NaDecide(int kind, const string why)
 		chosen = (x < pr[NA_WAIT]) ? NA_WAIT : NA_GO;
 	} else if (trust > 0.f) {
 		chosen = Market::NnTop(pr, rule);
+		Market::NnOneHot(pr, chosen);
 	}
 	// GO needs somewhere to go: with nothing known and no wing clock, WAIT stands
 	// ...so WAIT ran with certainty, and the row says so
@@ -569,11 +593,13 @@ int NaDecide(int kind, const string why)
 			pr[NA_WAIT] = 0.f;
 			pr[NA_GO] = 1.f;
 			++gNaLateN;
+			gNaForced = true;
 		}
 	}
 	++gNaDecN;
-	if (chosen != rule)
+	if ((chosen != rule) && !gNaForced)
 		++gNaDevN;
+	gNaForced = false;
 	if (!gNaHeader) {
 		gNaHeader = true;
 		AiLog("apex: nnair-schema v2 state=" + Market::NN_STATE + " air=" + NNA_AIR
@@ -636,7 +662,9 @@ void NaBind(int kind, int chosen, NaPrice@ best, bool have, const string why, fl
 			IUnitTask@ t = gNaT[i];
 			if ((t is null) || t.IsDead())
 				continue;
-			if (t.GetFightType() == int(Task::FightType::RAID)) {
+			// ONE WING, ONE TASK: a gunship goaled in its own raid flew alone and arrived alone (his 10-12:
+			// "they do this with just 1 at a time"), while the GO was priced on all n arriving together.
+			if (t is gNaTask) {
 				t.SetRaidGoal(gNaGunGoal, gNaGunR);
 				continue;
 			}

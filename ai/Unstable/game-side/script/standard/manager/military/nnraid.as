@@ -633,6 +633,7 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 		chosen = (r < p[NR_WAIT]) ? NR_WAIT : NR_GO;
 	} else if (trust > 0.f) {
 		chosen = Market::NnTop(p, rule);
+		Market::NnOneHot(p, chosen);
 	}
 	++gNrDecN;
 	if (chosen != rule)

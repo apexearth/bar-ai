@@ -292,8 +292,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		{
 			const float ours = Military::TeamArmyCost();
 			const float theirs = Military::EnemyArmyCost();
-			hBehind = ((ours > 0.f) && (theirs > ours) && (ai.GetTunable("apex_behind_lean", 1.f) > 0.f))
-					? (theirs / ours) : 1.f;
+			hBehind = ((ours > 0.f) && (theirs > ours)) ? (theirs / ours) : 1.f;
 		}
 		hTtdH =ai.GetTunable("apex_def_ttd_h", TUNE_DEF_TTD_H);
 		hDomOn = ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) > 0.f;
@@ -783,7 +782,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				DwEnsure(d);
 				gDwTeam[d] = mine / team;
 				gain *= gDwTeam[d];
-			} else if (hBehind > 1.f) {
+			} else if ((hBehind > 1.f) && (mine > 0.f) && (TowerCostEq(d) <= hAffordM)) {
 				// SERIOUSLY BEHIND, THE BEST GUN (his 2026-10-12: lean into T3 defence, the one saving
 				// grace a losing side has): the top tower we can buy is worth as many times more as their
 				// army outweighs ours.

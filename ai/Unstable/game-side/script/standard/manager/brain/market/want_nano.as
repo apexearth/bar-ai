@@ -416,6 +416,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// and held every lathe off for minutes with 7,000 metal banked (his 10-12 watch game 8).
 		const float h = EGenBuildSeconds();
 		eBank = Eco::ECur() / ((h > 1.f) ? h : 1.f);
+		if (eBank > -nanoSpareE)
+			eBank = (nanoSpareE < 0.f) ? -nanoSpareE : 0.f;
 		nanoSpareE += eBank;
 		// ...but energy spilling from a full bank now is spare whatever the
 		// estimate says: the cut held lathe off while both banks spilled.

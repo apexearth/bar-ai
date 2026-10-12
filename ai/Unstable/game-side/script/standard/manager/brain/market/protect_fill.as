@@ -351,7 +351,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// a home-ground post is staked by the base it would reach and expects it inside the exposure window,
 	// both by the share of their identified army that is T3. Priced per gun's circle and at the measured
 	// rate, a Pulsar read 2.4 m/s on 3,500 m while 400k of T3 walked in (watch game 26: zero built).
-	const float t3Share = (ai.GetTunable("apex_t3_base_stake", 1.f) > 0.f) ? Military::FoeTierAbove(2) : 0.f;
+	const float t3Share = Military::FoeTierAbove(2);
 	const float t3Stake = gPfTotal * t3Share;
 	const float t3Hz = (horizW > 1.f) ? (t3Share / horizW) : 0.f;
 	// The army's fill time: the shortfall closes at the army gap's urgency.
@@ -720,8 +720,10 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if ((t3Share > 0.f) && Builder::gHomeSet
 			&& (s.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST))
 		{
-			if (stakeK < t3Stake)
-				stakeK = t3Stake;
+			// Every home post claims the base; each only as far as it lives through the T3 blow.
+			const float dur = ((uint(d) < gPkDur.length()) && (gPkDur[d] >= 0.f)) ? gPkDur[d] : 1.f;
+			if (stakeK < t3Stake * dur)
+				stakeK = t3Stake * dur;
 			if (hz < t3Hz)
 				hz = t3Hz;
 		}

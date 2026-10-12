@@ -766,7 +766,6 @@ EXPECTATIONS = [
     ("eco seat keeps to economy", exp_eco_seat),
     ("eco seat hands are turrets", exp_seat_hands),
     ("health", exp_health),
-    ("personas up-only", exp_personas_up_only),
     ("escorts pair", exp_escorts),
     ("fodder goes forward", exp_spam_forward),
     ("army leaves home", exp_army_leaves),

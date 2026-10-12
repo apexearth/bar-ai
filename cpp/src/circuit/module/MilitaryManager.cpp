@@ -1676,23 +1676,25 @@ float CMilitaryManager::HoldPoolsUpTo(float needM)
 		return m;
 	};
 	float held = 0.f;
-	std::vector<std::pair<float, CDefendTask*>> free;
+	std::vector<std::pair<float, CDefendTask*>> pools;
 	const AIFloat3& base = circuit->GetSetupManager()->GetBasePos();
 	for (IFighterTask* task : GetTasks(IFighterTask::FightType::DEFEND)) {
 		CDefendTask* dt = static_cast<CDefendTask*>(task);
-		if (dt->GetPromote() == IFighterTask::FightType::MELEE) {
-			held += poolM(task);
-		} else if (dt->GetPromote() == IFighterTask::FightType::ATTACK) {
-			free.emplace_back(base.SqDistance2D(task->GetPosition()), dt);
+		if ((dt->GetPromote() == IFighterTask::FightType::MELEE)
+			|| (dt->GetPromote() == IFighterTask::FightType::ATTACK))
+		{
+			pools.emplace_back(base.SqDistance2D(task->GetPosition()), dt);
 		}
 	}
-	std::sort(free.begin(), free.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-	for (auto& f : free) {
-		if (held >= needM) {
-			break;
+	std::sort(pools.begin(), pools.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+	// Re-balanced every pass, so a hold left from a drawn HOLD or a bigger need goes back out.
+	for (auto& f : pools) {
+		if (held < needM) {
+			f.second->SetPromote(IFighterTask::FightType::MELEE);
+			held += poolM(f.second);
+		} else if (f.second->GetPromote() == IFighterTask::FightType::MELEE) {
+			f.second->SetPromote(IFighterTask::FightType::ATTACK);
 		}
-		f.second->SetPromote(IFighterTask::FightType::MELEE);
-		held += poolM(f.second);
 	}
 	return held;
 }

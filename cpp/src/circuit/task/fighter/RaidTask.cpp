@@ -234,7 +234,8 @@ void CRaidTask::Update()
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
 			leader, threatMap,
 			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
-			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
+			(IsCommitted() && !cdef->IsAbleToFly()) ? std::numeric_limits<float>::max()
+				: attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -278,6 +279,12 @@ bool CRaidTask::IsCommitted() const
 		return false;
 	}
 	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	if (commitAt == frame) {
+		return commitVal;
+	}
+	commitAt = frame;
+	commitVal = false;
 	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
 	const float mode = circuit->GetTunable("apex_raid_commit", 2.f);
 	if (mode <= 0.f) {
@@ -292,24 +299,25 @@ bool CRaidTask::IsCommitted() const
 		}
 	}
 	const float baseRange = circuit->GetMilitaryManager()->GetBaseDefRange();
-	return circuit->GetSetupManager()->GetBasePos().SqDistance2D(goalPos) > SQUARE(baseRange);
+	commitVal = circuit->GetSetupManager()->GetBasePos().SqDistance2D(goalPos) > SQUARE(baseRange);
+	return commitVal;
 }
 
-void CRaidTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+// ...but aircraft still go to the pad: a repaired gunship comes back for the price of the trip.
+bool CRaidTask::AllowRetreat(CCircuitUnit* unit)
 {
-	// ...but aircraft still go to the pad: a repaired gunship comes back for the price of the trip.
 	if (IsCommitted() && !unit->GetCircuitDef()->IsAbleToFly()) {
-		unit->ForceUpdate(manager->GetCircuit()->GetLastFrame() + THREAT_UPDATE_RATE);
 		++keptN;
-		return;
+		return false;
 	}
-	ISquadTask::OnUnitDamaged(unit, attacker);
+	return true;
 }
 
 bool CRaidTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
 	const bool committed = IsCommitted();
+	const bool flies = leader->GetCircuitDef()->IsAbleToFly();
 	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
@@ -361,7 +369,7 @@ bool CRaidTask::FindTarget()
 			checkSpeed *= 2.f;
 		}
 		const float power = threatMap->GetThreatAt(ePos);
-		if (!committed && (checkPower <= power)) {
+		if (!(committed && !flies) && (checkPower <= power)) {
 			continue;
 		}
 		const AIFloat3& eVel = enemy->GetVel();
@@ -399,7 +407,10 @@ bool CRaidTask::FindTarget()
 			defThreat = enemy->GetInfluence();
 			isBuilder = edef->IsEnemyRoleAny(CCircuitDef::RoleMask::BUILDER | CCircuitDef::RoleMask::COMM);
 			// Committed: the economy only. Their army and their guns are walked past (shot in passing).
-			if (committed && !isBuilder && (edef->IsMobile() || edef->IsAttacker())) {
+			if (committed && (edef->IsEnemyRoleAny(CCircuitDef::RoleMask::COMM)
+				|| (!isBuilder && (edef->IsMobile()
+					|| (edef->IsAttacker() && edef->HasSurfToLand() && !edef->IsAttrStock())))))
+			{
 				continue;
 			}
 		} else {
@@ -420,7 +431,7 @@ bool CRaidTask::FindTarget()
 		}
 
 		float sqDist = pos.SqDistance2D(ePos);
-		if ((committed || (minPower > power)) && (minSqDist > sqDist)) {
+		if (((committed && !flies) || (minPower > power)) && (minSqDist > sqDist)) {
 			if (enemy->IsInRadarOrLOS()) {
 				if (((targetCat & noChaseCat) == 0) && !enemy->IsBeingBuilt()) {
 					if (committed) {

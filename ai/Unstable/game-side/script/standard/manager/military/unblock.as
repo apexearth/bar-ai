@@ -72,9 +72,22 @@ array<AIFloat3> gPenDir;    // the way out through it
 array<float> gPenFlow;      // metal/s a jammed plant gets back when it is cleared
 const int PEN_VERDICT_TTL = 120 * SECOND;
 
+array<Id> gPenEver;   // units penned at least once: a refilled pocket lets them shuffle
+
+bool PennedBefore(Id id)
+{
+	for (uint i = 0; i < gPenEver.length(); ++i) {
+		if (gPenEver[i] == id)
+			return true;
+	}
+	return false;
+}
+
 void NotePenVerdict(Id victim, Id wall, const AIFloat3& in exit, const AIFloat3& in dir,
 	float flow = 0.f)
 {
+	if (!PennedBefore(victim))
+		gPenEver.insertLast(victim);
 	for (uint i = 0; i < gPenVictim.length(); ++i) {
 		if (gPenVictim[i] == victim) {
 			gPenWall[i] = wall;
@@ -689,9 +702,10 @@ void UpdateUnblock()
 		++gPenCursor;
 
 		const AIFloat3 at = u.GetPos(frame);
-		// Confined, not motionless: a two-cell pocket lets a penned unit shuffle 170 elmos, and at
-		// UNBLOCK_EPS that reset the clock for 8.5 minutes (10-12 watch game, commander re-penned).
-		if (at.distance2D(gPenPos[i]) > UNBLOCK_REACH) {
+		// Confined, not motionless, once a unit has been penned: a two-cell pocket lets it shuffle 170
+		// elmos, and at UNBLOCK_EPS that reset the clock for 8.5 minutes (10-12 watch game, commander
+		// re-penned). For everything else the wide circle tested working builders and home pools.
+		if (at.distance2D(gPenPos[i]) > (PennedBefore(u.id) ? UNBLOCK_REACH : UNBLOCK_EPS)) {
 			gPenPos[i] = at;
 			gPenMoved[i] = frame;
 			continue;
@@ -712,7 +726,8 @@ void UpdateUnblock()
 	if (!gSweepDone || (frame < gNextProbe) || (gCandId == 0))
 		return;
 	CCircuitUnit@ c = ai.GetTeamUnit(gCandId);
-	if ((c !is null) && (c.GetPos(frame).distance2D(gCandAt) <= UNBLOCK_REACH)) {
+	if ((c !is null) && (c.GetPos(frame).distance2D(gCandAt)
+			<= (PennedBefore(c.id) ? UNBLOCK_REACH : UNBLOCK_EPS))) {
 		if (StartMoveTest(c, gCandAt))
 			gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
 		else
@@ -744,6 +759,8 @@ void UpdateMoveTests()
 			walked = UNBLOCK_REACH * 0.5f;
 		if (walked < UNBLOCK_EPS)
 			walked = UNBLOCK_EPS;
+		if (PennedBefore(gTestId[i]))
+			walked = UNBLOCK_REACH * 0.5f;
 		if (at.distance2D(gTestFrom[i]) > walked) {
 			MarkPenMoved(gTestId[i], at);   // it walked; it was parked, not penned
 			DropTest(i);

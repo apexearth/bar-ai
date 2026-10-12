@@ -418,10 +418,17 @@ void CAttackTask::HoldForward(int frame)
 				hold = home;   // they stand at our base: hold it with the defences, not a corner
 			} else {
 				float best = std::numeric_limits<float>::max();
+				hold = home;   // every point off the map: hold the base
 				for (int k = 0; k < 12; ++k) {
 					const float ang = float(k) * (2.f * float(M_PI) / 12.f);
 					AIFloat3 c = strongPos + AIFloat3(std::cos(ang), 0.f, std::sin(ang)) * need;
-					CTerrainManager::CorrectPosition(c);
+					// Off the map is not a place: clamped, those points piled onto the edge and the
+					// squad held against it (his 10-12 watch: an army clinging to the bottom edge).
+					if ((c.x < 0.f) || (c.z < 0.f) || (c.x > terrainMgr->GetTerrainWidth())
+						|| (c.z > terrainMgr->GetTerrainHeight()))
+					{
+						continue;
+					}
 					const float behind = std::max(0.f, c.distance2D(foe) - foeHome);
 					const float further = std::max(0.f, c.distance2D(home) - grpHome);
 					const float sc = c.distance2D(from) + 2.f * further + 8.f * behind;

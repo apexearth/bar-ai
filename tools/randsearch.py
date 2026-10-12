@@ -155,7 +155,7 @@ def save(st):
             return
         except PermissionError:
             time.sleep(0.25 * (i + 1))
-    os.replace(tmp, STATE)
+    log("save: rand.json still locked after 20 tries; kept in memory, written next save")
 
 
 def owed(n):
@@ -278,9 +278,13 @@ def work(slot, st, lay, rng):
             continue
         n, gi = job
         f = os.path.join(st["dir"], "c%02d.json" % n["id"])
-        _, _, sc = neuro.play((st["dir"], n["id"], gi, neuro.GAME[0], neuro.GAME[1], game_seed(n["id"], gi), f, slot))
+        sc = None
+        try:
+            _, _, sc = neuro.play((st["dir"], n["id"], gi, neuro.GAME[0], neuro.GAME[1], game_seed(n["id"], gi), f, slot))
+        except Exception:
+            log("worker %d game c%d-g%d raised: %s" % (slot, n["id"], gi, traceback.format_exc().strip().replace("\n", " | ")))
         with lock:
-            finish(st, n, gi, sc)
+            finish(st, n, gi, sc)   # a raised game is a failed game, never a stuck `busy`
             save(st)
 
 

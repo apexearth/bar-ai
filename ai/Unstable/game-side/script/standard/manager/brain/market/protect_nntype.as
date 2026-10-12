@@ -345,6 +345,7 @@ Want@ DefTypePick(Want@ w, CCircuitUnit@ unit)
 			if (on[k] && (!on[c] || (p[k] > p[c])))
 				c = k;
 		}
+		NnOneHot(p, c);
 	} else if (flat > 0.f) {
 		float r = float(AiRandom(0, 10000)) / 10000.f;
 		for (int k = 0; k < DT_N; ++k) {

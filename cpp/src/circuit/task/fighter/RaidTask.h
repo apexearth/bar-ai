@@ -26,7 +26,7 @@ public:
 	virtual void Stop(bool done);
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
-	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+	virtual bool AllowRetreat(CCircuitUnit* unit) override;
 
 	// apex: the script's priced raid target (nnraid.as). r <= 0 clears it.
 	void SetGoal(const springai::AIFloat3& pos, float r) { goalPos = pos; goalR = r; }
@@ -46,6 +46,8 @@ private:
 	float goalR = 0.f;
 	int keptN = 0;          // retreats a committed raid did not take
 	int nextCommitLog = 0;
+	mutable int commitAt = -1;   // IsCommitted is asked per damage event: once a frame
+	mutable bool commitVal = false;
 };
 
 } // namespace circuit

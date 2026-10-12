@@ -439,6 +439,13 @@ int NnTop(const array<float>& in p, int rule)
 	return best;
 }
 
+// ...and its record says so: nntrain weights a chosen option logged under 0.95 as a chance pick.
+void NnOneHot(array<float>& p, int chosen)
+{
+	for (uint o = 0; o < p.length(); ++o)
+		p[o] = (int(o) == chosen) ? 1.f : 0.f;
+}
+
 float NnHeadFlat()
 {
 	NnExploreRoll();

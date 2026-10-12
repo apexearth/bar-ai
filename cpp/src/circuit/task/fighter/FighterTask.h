@@ -34,6 +34,8 @@ public:
 
 	virtual void OnUnitIdle(CCircuitUnit* unit) override;
 	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+	// apex: false keeps a damaged unit in the task where it would retreat; everything else still runs.
+	virtual bool AllowRetreat(CCircuitUnit* unit) { return true; }
 	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
 
 	FightType GetFightType() const { return fightType; }

@@ -520,7 +520,11 @@ float HoldNeedFor(int defId)
 	return need;
 }
 
-bool DefendCapOn() { return ai.GetTunable("apex_defend_cap", 1.f) > 0.f; }
+bool HoldsAll()
+{
+	const int ov = PostOverride();
+	return (ov >= 0) ? (ov == POST_HOLD) : (PostRule() == POST_HOLD);
+}
 
 bool HoldHome()
 {
@@ -529,9 +533,9 @@ bool HoldHome()
 	// A drawn HOLD keeps every new unit. A drawn DEFEND holds what the threat at home needs and the rest
 	// keep attacking (his 2026-10-12: at 4:1, recall only enough to protect home) -- uncapped, 200k of
 	// army stood home against 2k at it.
-	if (DefendCapOn() ? (PostOverride() == POST_HOLD) : (PostOverride() >= 0))
+	if (HoldsAll())
 		return true;
-	if (gHoldHeldM >= HoldNeedM()) {
+	if (((gHoldHeldM > gHoldPoolM) ? gHoldHeldM : gHoldPoolM) >= HoldNeedM()) {
 		++gHoldFull;
 		return false;
 	}
@@ -545,13 +549,13 @@ void ReleaseHold()
 		gHoldId.resize(0);
 		gHoldCost.resize(0);
 		gHoldHeldM = 0.f;
-	} else if (DefendCapOn() ? (PostOverride() == POST_HOLD) : HoldHome()) {
+	} else if (HoldsAll()) {
 		// The election only decides the task a NEW unit joins; a pool already
 		// standing at home promotes on its own bar and marches out as the
 		// raid arrives.
 		gHoldPooled += int(aiMilitaryMgr.HoldPools());
-	} else if (DefendCapOn()) {
-		// ...held only up to the need, nearest pools first.
+	} else {
+		// ...held only up to the need, nearest pools first, the rest released.
 		gHoldPoolM = aiMilitaryMgr.HoldPoolsUpTo(HoldNeedM());
 	}
 	if (ai.frame >= gNextHoldRelLog) {

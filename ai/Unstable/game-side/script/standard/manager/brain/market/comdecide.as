@@ -346,9 +346,14 @@ void ComAssess(CCircuitUnit@ u)
 		// A group walking into our base walks into his D-gun whatever its range: it is coming for the
 		// buildings, not standing off him, and cloaked he is not there to stand off (his 10-12: a Lobber
 		// rush read zero D-gun kills and he fled the base).
-		if ((app > 0.f) && Builder::gHomeSet
-			&& (here.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST))
-			nCl = nMob;
+		if (Builder::gHomeSet && (here.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST)
+			&& (gp.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST))
+		{
+			AIFloat3 toHome = Builder::gHomePos - gp;
+			toHome.SafeNormalize2D();
+			if (vv.x * toHome.x + vv.z * toHome.z > 1.f)
+				nCl = nMob;
+		}
 		gi2.insertLast(gi);
 		gArr.insertLast(arr);
 		gHp.insertLast(hpS);
@@ -655,8 +660,20 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 		// he decides every second under threat: one trial a minute at most
 		gComExpNext = ai.frame + 60 * SECOND;
 		++gComExpN;
+	} else if ((trust > 0.f) && (gComFlat > 0.f)) {
+		const float r = float(AiRandom(0, 10000)) / 10000.f;
+		float acc = 0.f;
+		chosen = COM_N - 1;
+		for (int o = 0; o < COM_N; ++o) {
+			acc += w[o] / sum;
+			if (r < acc) {
+				chosen = o;
+				break;
+			}
+		}
 	} else if (trust > 0.f) {
 		chosen = NnTop(w, rule);
+		NnOneHot(p, chosen);
 	}
 	const int was = gComDec;
 	gComDec = chosen;

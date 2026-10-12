@@ -431,7 +431,9 @@ function applySort(table) {
 }
 document.addEventListener("click", e => {
   const th = e.target.closest("thead th"); if (!th) return;
-  const table = th.closest("table"), col = th.cellIndex, k = sortKeyOf(table);
+  const table = th.closest("table"), col = th.cellIndex;
+  if (!table || !table.tBodies.length) return;
+  const k = sortKeyOf(table);
   const cur = (UI.sorts || {})[k];
   let dir;
   if (!cur || cur.col !== col) {
@@ -625,15 +627,16 @@ const routeScroll = {};
 function go(hash) {
   if (location.hash === hash) route(); else location.hash = hash;
 }
+const runRoute = dir => "#/run/" + String(dir).split("/").map(encodeURIComponent).join("/");
 // One level up: a game inside a tournament goes back to that tournament, not to the list.
 function parentRoute(dir) {
   const m = (dir || "").match(/^(.*)\/matches\/[^/]+$/);
-  if (m && m[1].startsWith("tournaments/")) return "#/run/" + m[1];
+  if (m && m[1].startsWith("tournaments/")) return runRoute(m[1]);
   return "#/games/" + ((dir || "").startsWith("tournaments/") ? "tournaments" : "matches");
 }
 function backLabel(dir) {
   const p = parentRoute(dir);
-  return p.startsWith("#/run/") ? "back to " + p.slice(6).split("/").pop().replace(/^\d{8}-\d{6}-/, "")
+  return p.startsWith("#/run/") ? "back to " + decodeURIComponent(p.slice(6).split("/").pop()).replace(/^\d{8}-\d{6}-/, "")
                                 : "back to " + p.split("/").pop();
 }
 function restoreScroll(hash) {
@@ -712,7 +715,7 @@ async function loadGames() {
 }
 document.addEventListener("click", e => {
   const tr = e.target.closest("tr.click[data-dir]");
-  if (tr) go("#/run/" + tr.dataset.dir);
+  if (tr) go(runRoute(tr.dataset.dir));
 });
 let openDir = null, openTimer = null;
 async function openGame(dir, isRefresh) {
@@ -1858,7 +1861,7 @@ drawBoxPreview();
 renderOvSummary();
 let jobTimer = null, aliveJobs = new Set();
 function viewRun(dir) {
-  go("#/run/" + dir);
+  go(runRoute(dir));
 }
 async function loadJobs() {
   try {

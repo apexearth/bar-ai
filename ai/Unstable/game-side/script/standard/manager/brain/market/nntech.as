@@ -211,6 +211,7 @@ void NnTechDecide()
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
 	} else if (trust > 0.f) {
 		chosen = NnTop(p, rule);
+		NnOneHot(p, chosen);
 	}
 	// DISCOVERY TRIES A TIME, NOT A COIN: a flip every 30 s sent nearly every
 	// discovery game to T2 within two minutes. Each discovery game, trusted net or not, draws one
