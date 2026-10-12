@@ -206,9 +206,11 @@ void NnTechDecide()
 			p[o] = (o == rule) ? 1.f : 0.f;
 	}
 	int chosen = rule;
-	if ((trust > 0.f) || ((flat > 0.f) && (gTwNext < 2))) {
+	if ((flat > 0.f) && (gTwNext < 2)) {
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		chosen = (r < p[TECH_WAIT]) ? TECH_WAIT : TECH_NOW;
+	} else if (trust > 0.f) {
+		chosen = NnTop(p, rule);
 	}
 	// DISCOVERY TRIES A TIME, NOT A COIN: a flip every 30 s sent nearly every
 	// discovery game to T2 within two minutes. Each discovery game, trusted net or not, draws one

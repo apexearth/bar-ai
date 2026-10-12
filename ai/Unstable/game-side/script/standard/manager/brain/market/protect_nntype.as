@@ -340,7 +340,12 @@ Want@ DefTypePick(Want@ w, CCircuitUnit@ unit)
 			p[k] = (k == DT_RULE) ? 1.f : 0.f;
 	}
 	int c = DT_RULE;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	if ((flat <= 0.f) && (trust > 0.f)) {
+		for (int k = 0; k < DT_N; ++k) {
+			if (on[k] && (!on[c] || (p[k] > p[c])))
+				c = k;
+		}
+	} else if (flat > 0.f) {
 		float r = float(AiRandom(0, 10000)) / 10000.f;
 		for (int k = 0; k < DT_N; ++k) {
 			if (!on[k])

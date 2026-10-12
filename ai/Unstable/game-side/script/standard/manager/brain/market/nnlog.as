@@ -426,6 +426,19 @@ float NnGauss()
 	return s - 6.f;
 }
 
+// NETS TAKE THEIR TOP OPTION IN PLAY (his 2026-10-12): the weighted draw sent the same seed and
+// build to T2 at 10.8 or at 17.8 min, and the posture net off its rule on 42-56% of decisions. Only a
+// discovery game (flat > 0) rolls. A tie goes to the rule.
+int NnTop(const array<float>& in p, int rule)
+{
+	int best = rule;
+	for (int o = 0; o < int(p.length()); ++o) {
+		if (p[o] > p[best])
+			best = o;
+	}
+	return best;
+}
+
 float NnHeadFlat()
 {
 	NnExploreRoll();

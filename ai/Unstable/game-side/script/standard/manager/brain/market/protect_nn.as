@@ -443,7 +443,12 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 			p[k] = (k == DS_RULE) ? 1.f : 0.f;
 	}
 	int c = DS_RULE;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	if ((flat <= 0.f) && (trust > 0.f)) {
+		for (int k = 0; k < DS_N; ++k) {
+			if (on[k] && (!on[c] || (p[k] > p[c])))
+				c = k;
+		}
+	} else if (flat > 0.f) {
 		float r = float(AiRandom(0, 10000)) / 10000.f;
 		for (int k = 0; k < DS_N; ++k) {
 			if (!on[k])

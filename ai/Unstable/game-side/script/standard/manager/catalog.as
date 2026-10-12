@@ -211,6 +211,11 @@ void Init()
 		// (leaf-era policy the market must not inherit) and ai.frame is -2 at
 		// AiMain anyway. Available = the game ships it and no zero limit.
 		gAvailable[i]    = (cdef.maxThisUnit > 0) && !BlockedDef(cdef.GetName());
+		// BAR's build menu takes wind away from players where the map's average wind is under 5
+		// (common/wind_functions.lua isWindDisabled); a wind def's makeE is that average below its cap.
+		// Comet Catcher (1-4): small e-stalls kept buying 2.5 E windmills over solars.
+		if (gWind[i] && (gMakeE[i] < 5.f))
+			gAvailable[i] = false;
 		gLimit[i]        = cdef.maxThisUnit;
 		// A screen unit (the Tick and its kin) is a handful, not a line: the
 		// screen axis prices it 100x the line's best and it dies at the post

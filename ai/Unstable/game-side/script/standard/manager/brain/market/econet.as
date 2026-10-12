@@ -57,6 +57,8 @@ int EcoDraw(int rule, float trust, array<float>& w, array<float>& p, float flat)
 	}
 	if ((trust <= 0.f) && (flat <= 0.f))
 		return rule;
+	if (flat <= 0.f)
+		return NnTop(p, rule);
 	float r = float(AiRandom(0, 10000)) / 10000.f;
 	for (int o = 0; o < n; ++o) {
 		r -= p[o];

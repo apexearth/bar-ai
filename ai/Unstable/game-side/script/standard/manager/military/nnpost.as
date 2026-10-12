@@ -263,7 +263,9 @@ void PostDecide(int rule, const string& in why)
 	}
 	int chosen = rule;
 	// No AiRandom on the rule's own one-hot: the shared RNG stream stays as it was.
-	if (explore || (trust > 0.f)) {
+	if (!explore && (trust > 0.f)) {
+		chosen = Market::NnTop(p, rule);
+	} else if (explore) {
 		// AiRandom is rand() underneath: RAND_MAX is 32767 on Windows
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		float acc = 0.f;

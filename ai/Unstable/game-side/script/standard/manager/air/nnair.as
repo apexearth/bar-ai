@@ -30,6 +30,7 @@ int gNaPhase = 0;
 int gNaDecN = 0, gNaGoN = 0, gNaDevN = 0, gNaGoB = 0, gNaGoG = 0, gNaPullN = 0;
 int gNaWaitFrom = -1;          // the bombers' last launch, or their first decision
 int gNaLateN = 0;              // launches the cadence forced over a WAIT
+int gNaDeepN = 0;              // gunship decisions offered the unseen base
 int gNaLegacyNext = 0;
 int gNaLegacyFrame = -1000;
 string gNaLegacyWhy = "";
@@ -452,6 +453,27 @@ int NaDecide(int kind, const string why)
 	const float r = ai.GetTunable("apex_air_cluster_r", TUNE_AIR_CLUSTER_R);
 	array<NaCand@> cs;
 	NaCands(r, cs);
+	// THE BASE NOBODY HAS SEEN (his 2026-10-12: the gunships never got deep enough to find the fusions,
+	// and with no air scout bought for them they hit edge mexes or flew at cells worth 0). A gunship wing
+	// prices their mirrored start as a cell holding the economy we have not found yet.
+	if ((kind == 1) && Builder::gHomeSet) {
+		const AIFloat3 deep(AiTerrainWidth() - Builder::gHomePos.x, 0.f, AiTerrainHeight() - Builder::gHomePos.z);
+		const float unseen = (MirrorPrize() - aiEnemyMgr.GetEnemyStructCost()) * LookStale();
+		const float mph = Market::StructureMetalPerHp();
+		if ((unseen > 0.f) && (mph > 0.f) && OnMap(deep)) {
+			NaCand c;
+			c.at = deep;
+			c.v = unseen;
+			c.hp = unseen / mph;
+			c.n = 1;
+			for (uint e = 0; e < gNaAAP.length(); ++e) {
+				if (gNaAAP[e].distance2D(deep) <= gNaAAR[e] + r * 0.5f)
+					c.aaT += gNaAAV[e];
+			}
+			cs.insertLast(c);
+			++gNaDeepN;
+		}
+	}
 	const float h = hpSum / float(n);
 	const float dps1 = dpsSum / float(n);
 	const float cost1 = grpM / float(n);
@@ -522,9 +544,11 @@ int NaDecide(int kind, const string why)
 			pr[o] = (o == rule) ? 1.f : 0.f;
 	}
 	int chosen = rule;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	if (flat > 0.f) {
 		const float x = float(AiRandom(0, 10000)) / 10000.f;
 		chosen = (x < pr[NA_WAIT]) ? NA_WAIT : NA_GO;
+	} else if (trust > 0.f) {
+		chosen = Market::NnTop(pr, rule);
 	}
 	// GO needs somewhere to go: with nothing known and no wing clock, WAIT stands
 	// ...so WAIT ran with certainty, and the row says so
@@ -877,7 +901,7 @@ void NaUpdate()
 				need += " " + Catalog::Def(gNaNeedDef[k]).GetName() + ":" + gNaNeedN[k] + "/" + int(gNaNeedV[k]);
 		}
 		AiLog(Factory::T() + "apex: nnair-stat t=" + ai.teamId + " dec=" + gNaDecN + " go=" + gNaGoN
-			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " goG=" + gNaGoG + " pulled=" + gNaPullN
+			+ " dev=" + gNaDevN + " goB=" + gNaGoB + " late=" + gNaLateN + " deep=" + gNaDeepN + " goG=" + gNaGoG + " pulled=" + gNaPullN
 			+ " gun=" + gn + " home=" + home + " out=" + away + " gunNow=" + gNaGunNow
 			+ " held=" + HeldBombers() + " need" + need + " flat=" + Market::NnF(gNaFlat, 2));
 	}

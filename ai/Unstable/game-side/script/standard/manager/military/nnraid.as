@@ -628,9 +628,11 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 			p[o] = (o == rule) ? 1.f : 0.f;
 	}
 	int chosen = rule;
-	if ((trust > 0.f) || (flat > 0.f)) {
+	if (flat > 0.f) {
 		const float r = float(AiRandom(0, 10000)) / 10000.f;
 		chosen = (r < p[NR_WAIT]) ? NR_WAIT : NR_GO;
+	} else if (trust > 0.f) {
+		chosen = Market::NnTop(p, rule);
 	}
 	++gNrDecN;
 	if (chosen != rule)

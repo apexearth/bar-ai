@@ -283,7 +283,8 @@ bool CRaidTask::IsCommitted() const
 	if (mode <= 0.f) {
 		return false;
 	}
-	if (mode >= 2.f) {
+	// A gunship raid commits too (his 10-12: gunships traded with their defences for nothing).
+	if ((mode >= 2.f) && ((leader == nullptr) || !leader->GetCircuitDef()->IsAbleToFly())) {
 		for (CCircuitUnit* u : units) {
 			if (!u->GetCircuitDef()->IsRoleRaider()) {
 				return false;
@@ -296,7 +297,8 @@ bool CRaidTask::IsCommitted() const
 
 void CRaidTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 {
-	if (IsCommitted()) {
+	// ...but aircraft still go to the pad: a repaired gunship comes back for the price of the trip.
+	if (IsCommitted() && !unit->GetCircuitDef()->IsAbleToFly()) {
 		unit->ForceUpdate(manager->GetCircuit()->GetLastFrame() + THREAT_UPDATE_RATE);
 		++keptN;
 		return;

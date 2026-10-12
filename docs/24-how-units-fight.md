@@ -494,6 +494,9 @@ to them)
 - A raid past the point of no return commits.
 - (2026-10-12) A Dragon (very heavy air) against the AI goes straight for
   their economy -- converters and fusions -- and that all but wins the game.
+- (2026-10-12) Gunship raids go for the economy, not the defences: trading
+  with their guns yields almost nothing. Getting deep enough to have seen
+  where the fusions are is part of the raid.
 - An early atomic bomber is a strike by itself: scouts find the gap in their
   AA, and it flies round the AA, not through it.
 - A gunship's role follows the enemy's AA: it fights units under an empty sky

@@ -656,16 +656,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 		gComExpNext = ai.frame + 60 * SECOND;
 		++gComExpN;
 	} else if (trust > 0.f) {
-		const float r = float(AiRandom(0, 10000)) / 10000.f;
-		float acc = 0.f;
-		chosen = COM_N - 1;
-		for (int o = 0; o < COM_N; ++o) {
-			acc += w[o] / sum;
-			if (r < acc) {
-				chosen = o;
-				break;
-			}
-		}
+		chosen = NnTop(w, rule);
 	}
 	const int was = gComDec;
 	gComDec = chosen;
