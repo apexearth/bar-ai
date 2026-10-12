@@ -279,7 +279,7 @@ bool CRaidTask::IsCommitted() const
 	}
 	CCircuitAI* circuit = manager->GetCircuit();
 	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
-	const float mode = circuit->GetTunable("apex_raid_commit", 0.f);
+	const float mode = circuit->GetTunable("apex_raid_commit", 2.f);
 	if (mode <= 0.f) {
 		return false;
 	}

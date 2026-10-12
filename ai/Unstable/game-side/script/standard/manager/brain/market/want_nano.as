@@ -403,12 +403,20 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	// Energy a new lathe could draw: what the standing work commits, not the
 	// momentary pull -- a lull between jobs priced turrets that then ran stalled.
 	float nanoSpareE = Eco::EInc() + EMakeInFlight();
+	float eDem = 0.f, eFlight = 0.f, eBank = 0.f;
 	{
 		TrackEPull();
 		float dem = Eco::EPull() - ConvUseE();
 		if (dem < gEDemandPk)
 			dem = gEDemandPk;
-		nanoSpareE -= dem + EDrainInFlight() + LineDrainE();
+		eDem = dem;
+		eFlight = EDrainInFlight() + LineDrainE();
+		nanoSpareE -= dem + eFlight;
+		// The bank over the stall horizon, as MetalFreeRate counts metal's: 11,000 stored read as nothing
+		// and held every lathe off for minutes with 7,000 metal banked (his 10-12 watch game 8).
+		const float h = EGenBuildSeconds();
+		eBank = Eco::ECur() / ((h > 1.f) ? h : 1.f);
+		nanoSpareE += eBank;
 		// ...but energy spilling from a full bank now is spare whatever the
 		// estimate says: the cut held lathe off while both banks spilled.
 		if (aiEconomyMgr.isEnergyFull) {
@@ -442,7 +450,8 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 				+ "/" + gFloorYardAssist
 			+ " over=" + formatFloat(over, "", 0, 1)
 			+ " mfree=" + formatFloat(MetalFreeRate(), "", 0, 1) + " metalCut=" + gNanoMetalCut
-			+ " eSpare=" + int(nanoSpareE) + " eDens=" + formatFloat(LineEnergyDensity(), "", 0, 2)
+			+ " eSpare=" + int(nanoSpareE) + "(inc " + int(Eco::EInc()) + " dem " + int(eDem)
+				+ " flight " + int(eFlight) + " bank " + int(eBank) + ")" + " eDens=" + formatFloat(LineEnergyDensity(), "", 0, 2)
 			+ " bank=" + int(Eco::MCur()) + "/" + int(Eco::MStor()));
 	}
 	if (over <= 0.5f)

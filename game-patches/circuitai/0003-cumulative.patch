@@ -19979,7 +19979,7 @@ index db42e8a5..1a8fa0fc 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af06982..69d68da2 100644
+index 9af06982..2617f7de 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -5,6 +5,7 @@
@@ -20098,7 +20098,7 @@ index 9af06982..69d68da2 100644
 +	}
 +	CCircuitAI* circuit = manager->GetCircuit();
 +	// 1: every raid -- the RAID posture puts the main army in raid tasks too, and it lost. 2: only raiders.
-+	const float mode = circuit->GetTunable("apex_raid_commit", 0.f);
++	const float mode = circuit->GetTunable("apex_raid_commit", 2.f);
 +	if (mode <= 0.f) {
 +		return false;
 +	}

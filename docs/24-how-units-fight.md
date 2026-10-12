@@ -492,6 +492,8 @@ to them)
   While a strike is being held, the plants make bombers without pause. Scouts
   are bought for the wing so it knows what to hit.
 - A raid past the point of no return commits.
+- (2026-10-12) A Dragon (very heavy air) against the AI goes straight for
+  their economy -- converters and fusions -- and that all but wins the game.
 - An early atomic bomber is a strike by itself: scouts find the gap in their
   AA, and it flies round the AA, not through it.
 - A gunship's role follows the enemy's AA: it fights units under an empty sky

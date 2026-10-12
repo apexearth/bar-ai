@@ -343,6 +343,12 @@ void ComAssess(CCircuitUnit@ u)
 		// a group walking away is let go, unless it is already on him
 		if ((app < -1.f) && (arr > 0.f))
 			continue;
+		// A group walking into our base walks into his D-gun whatever its range: it is coming for the
+		// buildings, not standing off him, and cloaked he is not there to stand off (his 10-12: a Lobber
+		// rush read zero D-gun kills and he fled the base).
+		if ((app > 0.f) && Builder::gHomeSet
+			&& (here.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST))
+			nCl = nMob;
 		gi2.insertLast(gi);
 		gArr.insertLast(arr);
 		gHp.insertLast(hpS);
