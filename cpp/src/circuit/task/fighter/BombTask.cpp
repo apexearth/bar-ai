@@ -111,7 +111,7 @@ float CBombTask::SplashSpacing(int frame)
 // A grid about as deep as it is wide, centred on the path, rows trailing.
 void CBombTask::AssignSlots(int frame)
 {
-	const float d = SplashSpacing(frame);
+	const float d = (manager->GetCircuit()->GetTunable("apex_air_form", 1.f) > 0.f) ? SplashSpacing(frame) : 0.f;
 	const int n = (int)units.size();
 	const int cols = (int)std::ceil(std::sqrt((float)std::max(n, 1)));
 	int i = 0;

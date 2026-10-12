@@ -54,6 +54,7 @@ local NAMES = {
 	"apex_con_rule",
 	"apex_nn_explore_team",
 	"apex_plan_force", "apex_plan_explore",
+	"apex_team_army", "apex_squad_form", "apex_air_form", "apex_side_with",
 	"apex_nn_imitate",
 	"apex_nnraid",
 	"apex_elec_frame_us",

@@ -581,6 +581,10 @@ AIFloat3 CCircuitUnit::InFormation(const AIFloat3& p, OrdSrc src) const
 	dir.Normalize2D();
 	AIFloat3 out(p.x - dir.z * formLateral - dir.x * formDepth, p.y, p.z + dir.x * formLateral - dir.z * formDepth);
 	CTerrainManager::CorrectPosition(out);
+	// a slot over a cliff or in water is no slot: walk the shared point instead
+	if ((manager != nullptr) && !manager->GetCircuit()->GetTerrainManager()->CanMoveToPos(area, out)) {
+		return p;
+	}
 	++sFormApplied;
 	return out;
 }

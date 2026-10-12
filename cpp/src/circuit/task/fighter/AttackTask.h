@@ -34,6 +34,7 @@ public:
 
 private:
 	bool atStage = false;
+	void AssignSlots(int frame);
 	struct SFoePt { springai::AIFloat3 pos; float reach; float power; };
 	void ChooseFlank(const springai::AIFloat3& tgtPos, int key, int tgtGroup, const std::vector<SFoePt>& foes,
 			const springai::AIFloat3& sideSum, const char* tgtName);

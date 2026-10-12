@@ -5,6 +5,7 @@
  *      Author: rlcevg
  */
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -108,8 +109,69 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
 }
 
+// SPACING BY UNIT TYPE (his 10-11: "snipers bunched up is often a bad idea, way
+// better if they're spread out"). A unit wants the larger of its own body and a
+// quarter of its reach -- a long gun need not stand shoulder to shoulder to focus
+// fire, a brawler must arrive with the rest. Short range in front, long range in
+// the back rows; each row as wide as its widest member wants.
+void CAttackTask::AssignSlots(int frame)
+{
+	if (manager->GetCircuit()->GetTunable("apex_squad_form", 1.f) <= 0.f) {   // A/B switch
+		for (CCircuitUnit* u : units) {
+			u->ClearFormSlot();
+		}
+		return;
+	}
+	std::vector<std::pair<float, CCircuitUnit*>> byRange;
+	for (CCircuitUnit* u : units) {
+		if (!u->GetCircuitDef()->IsAbleToFly()) {
+			byRange.push_back({u->GetCircuitDef()->GetMaxRange(), u});
+		}
+	}
+	const int n = (int)byRange.size();
+	if (n < 2) {
+		for (auto& ru : byRange) {
+			ru.second->ClearFormSlot();
+		}
+		return;
+	}
+	std::sort(byRange.begin(), byRange.end(), [](const std::pair<float, CCircuitUnit*>& a,
+			const std::pair<float, CCircuitUnit*>& b) { return a.first < b.first; });
+	const int cols = (int)std::ceil(std::sqrt((float)n));
+	float depth = 0.f, prevRow = 0.f;
+	for (int row = 0; row * cols < n; ++row) {
+		float rowS = 0.f;
+		for (int i = row * cols; (i < n) && (i < (row + 1) * cols); ++i) {
+			const CCircuitDef* d = byRange[i].second->GetCircuitDef();
+			const float s = std::min(400.f, std::max(16.f * d->GetFootX(), 0.25f * byRange[i].first));
+			rowS = std::max(rowS, s);
+		}
+		if (row > 0) {
+			depth += std::max(prevRow, rowS);
+		}
+		prevRow = rowS;
+		const int inRow = std::min(cols, n - row * cols);
+		for (int c = 0; c < inRow; ++c) {
+			CCircuitUnit* u = byRange[row * cols + c].second;
+			const float lat = ((float)c - 0.5f * (float)(inRow - 1)) * rowS;
+			// depth grows toward the back rows; the front row walks the path itself
+			if ((u->GetFormLateral() != lat) || (u->GetFormDepth() != depth)) {
+				u->SetFormSlot(lat, -RgtVector, depth);
+			}
+		}
+	}
+	static int sLogAt = 0;
+	if (frame >= sLogAt) {
+		sLogAt = frame + FRAMES_PER_SEC * 60;
+		manager->GetCircuit()->LOG("apex: squad formation n=%d cols=%d front=%s back=%s depth=%.0f",
+				n, cols, byRange.front().second->GetCircuitDef()->GetDef()->GetName(),
+				byRange.back().second->GetCircuitDef()->GetDef()->GetName(), depth);
+	}
+}
+
 void CAttackTask::RemoveAssignee(CCircuitUnit* unit)
 {
+	unit->ClearFormSlot();
 	ISquadTask::RemoveAssignee(unit);
 	if ((attackPower < minPower) || (leader == nullptr)) {
 		manager->AbortTask(this);
@@ -144,6 +206,10 @@ void CAttackTask::Update()
 		// TODO: Deal with cowards?
 		manager->AbortTask(this);
 		return;
+	}
+
+	if (updCount % 8 == 1) {
+		AssignSlots(manager->GetCircuit()->GetLastFrame());
 	}
 
 	/*
@@ -239,7 +305,8 @@ void CAttackTask::Update()
 		// squad standing in it is shot while it waits.
 		CMilitaryManager* mm = circuit->GetMilitaryManager();
 		const AIFloat3& fp = mm->GetFocusPos();
-		const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();
+		const AIFloat3 home = utils::is_valid(mm->GetFocusHome()) ? mm->GetFocusHome()
+				: circuit->GetSetupManager()->GetBasePos();
 		const AIFloat3 dir = (home - fp).Normalize2D();
 		const float back = fp.distance2D(home);
 		float d = mm->GetFocusR() + DEFAULT_SLACK * 4;
@@ -881,7 +948,7 @@ void CAttackTask::FindTarget()
 	float withUs = -1.f;
 	auto withUsPow = [&]() -> float {
 		if (withUs < 0.f) {
-			withUs = milMgr->GetAttackPowerNear(pos, SIDE_R);
+			withUs = (circuit->GetTunable("apex_side_with", 1.f) > 0.f) ? milMgr->GetAttackPowerNear(pos, SIDE_R) : 0.f;
 		}
 		return withUs;
 	};

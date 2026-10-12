@@ -794,6 +794,7 @@ const float TUNE_NN_EXPLORE_TEAM = -1.f;   // [team] >= 0: that team is the expl
 const float TUNE_GUNP_RULE = 1.f;   // [0..4] the forced-gun head's rule value (protect_nn.as); A/B 10-10
 const float TUNE_CON_RULE = 2.5f;   // [0.25..8] the constructor head's rule value (econet.as); docs/27
 const float TUNE_PLAN_FORCE = -1.f;   // [plan] >= 0: every team plays that plan (0 NORMAL 1 T3 2 MISSILE 3 ARTY 4 MASS); an A/B instrument
+const float TUNE_TEAM_ARMY = 1.f;    // [plan] 0: no team-army operation (A/B instrument for the 10-11 team army)
 
 // [0..2] -- How strongly constructors lean toward what BARb would build in our
 //   situation (tools/imitate.py prior, NNI_*): an option of the class BARb

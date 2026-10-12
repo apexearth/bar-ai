@@ -346,13 +346,15 @@ void StrikeFocus()
 	}
 	if (gStGo)
 		mine = aiMilitaryMgr.GetAttackPowerNear(fp, STRIKE_NEAR);
-	aiMilitaryMgr.SetFocus(fp, STRIKE_R, mine, gStGo, ai.frame + 10 * SECOND);
+	if (!Market::TeamOpOn())   // the team army owns every seat's focus while it stands
+		aiMilitaryMgr.SetFocus(fp, STRIKE_R, mine, gStGo, ai.frame + 10 * SECOND);
 }
 
 void StrikeEnd(const string why)
 {
 	gStOn = false;
-	aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+	if (!Market::TeamOpOn())
+		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 	if (why == "gone")
 		++gStGoneN;
 	else if (why == "army")

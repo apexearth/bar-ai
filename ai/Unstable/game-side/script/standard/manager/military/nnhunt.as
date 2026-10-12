@@ -443,13 +443,15 @@ void HuntFocus()
 	}
 	if (gHtGo)
 		mine = aiMilitaryMgr.GetAttackPowerNear(fp, HUNT_NEAR);
-	aiMilitaryMgr.SetFocus(fp, HUNT_R, mine, gHtGo, ai.frame + 10 * SECOND);
+	if (!Market::TeamOpOn())   // the team army owns every seat's focus while it stands
+		aiMilitaryMgr.SetFocus(fp, HUNT_R, mine, gHtGo, ai.frame + 10 * SECOND);
 }
 
 void HuntEnd(const string why)
 {
 	gHtOn = false;
-	aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+	if (!Market::TeamOpOn())
+		aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
 	ai.PublishTeamValue("htFocAt", -1.f);
 	if (why == "gone")
 		++gHtGoneN;

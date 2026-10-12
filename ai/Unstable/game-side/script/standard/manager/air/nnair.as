@@ -25,6 +25,7 @@ AIFloat3 gNaCellAt;
 int gNaCellCleared = 0;
 float gNaFlat = -1.f;
 int gNaNextAt = -1;
+int gNaTeamGoSeen = -1;   // the last team-army operation whose GO the strike decision answered
 int gNaPhase = 0;
 int gNaDecN = 0, gNaGoN = 0, gNaDevN = 0, gNaGoB = 0, gNaGoG = 0, gNaPullN = 0;
 int gNaLegacyNext = 0;
@@ -224,6 +225,14 @@ void NaCands(float r, array<NaCand@>& out cs)
 			if (gNaTurP[e].distance2D(bAt) <= bR) {
 				c.v += Catalog::gCostM[gNaTurD[e]];
 				c.hp += Catalog::gHealth[gNaTurD[e]];
+				++c.n;
+			}
+		}
+		// the team army's target need not be a turret line: its economy counts too
+		for (uint e = 0; e < gNaEcoP.length(); ++e) {
+			if (gNaEcoP[e].distance2D(bAt) <= bR) {
+				c.v += gNaEcoV[e];
+				c.hp += Catalog::gHealth[gNaEcoD[e]];
 				++c.n;
 			}
 		}
@@ -797,6 +806,14 @@ void NaUpdate()
 		return;
 	if (gNaGunNow == NA_WAIT)
 		NaHoldGunships();
+	// AIR AND LAND TOGETHER (his 10-11): a team-army operation entering GO asks the
+	// strike decision now, with the operation's target among the cells, not on its clock
+	const int goOp = Market::TeamGoOp();
+	if ((goOp > 0) && (goOp != gNaTeamGoSeen)) {
+		gNaTeamGoSeen = goOp;
+		NaDecide(0, "teamgo");
+		NaDecide(1, "teamgo");
+	}
 	if (gNaNextAt < 0)
 		gNaNextAt = ai.frame + (ai.teamId % 15) * SECOND;
 	if ((ai.frame >= gNaArriveAt) && NaArrived()) {

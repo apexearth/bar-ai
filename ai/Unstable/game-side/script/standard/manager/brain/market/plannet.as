@@ -236,96 +236,264 @@ void VersionBanner()
 	ai.SendChat("Apex " + ai.GetAiVersion() + " - scripts " + APEX_SCRIPT + " - nets " + NNW_GAMES);
 }
 
-// THE TEAM PUSH, under every plan but NORMAL: the plan's owner posts the
-// turret line our army dies to; each ally's attack squads gather short of it
-// (AttackTask), and when the team's gathered power beats the strongest group
-// there -- the test a lone squad applies to itself -- all go together.
-const int BOARD_FOCUS_X = 3, BOARD_FOCUS_Z = 4, BOARD_FOCUS_R = 5, BOARD_GO_UNTIL = 6;
+// THE TEAM ARMY (his 10-11: mass at the front, then all attack together -- and it
+// must not be able to flip-flop). One operation on the shared board, written only
+// by the leader (lowest live team id), read by every seat. It only moves forward,
+// MASS -> GO -> END; a new target or a re-mass is a NEW operation id, cancelling
+// the old one. MASS: squads stage on one line toward the team's home centroid,
+// out of the threat; GO when the gathered beat what stands there. GO ends only on
+// an outcome held two reads: CLEARED (next goes straight on if still stronger) or
+// SPENT (under half of them; next re-masses). The leader's hunt/strike picks the
+// target; while an operation stands no seat's hunt or strike takes the focus.
 const int BOARD_GATHER = 100, BOARD_GATHER_AT = 200;
+const int BOARD_TA_OP = 2000, BOARD_TA_PHASE = 2001, BOARD_TA_X = 2002, BOARD_TA_Z = 2003, BOARD_TA_R = 2004;
+const int BOARD_TA_HX = 2005, BOARD_TA_HZ = 2006, BOARD_TA_SINCE = 2007, BOARD_TA_KIND = 2008, BOARD_TA_STRIKES = 2009, BOARD_TA_SPENT = 2010, BOARD_TA_SEEN = 2011, BOARD_TA_NEED = 2012, BOARD_TA_ARRIVED = 2013;
+const int BOARD_TA_HOMEX = 2100, BOARD_TA_HOMEZ = 2200, BOARD_TA_ATK = 2300, BOARD_TA_NEAR = 2400;
+const int TA_NONE = 0, TA_MASS = 1, TA_GO = 2;
+const array<string> TA_PHASES = {"NONE", "MASS", "GO"};
+const array<string> TA_KINDS = {"-", "hunt", "strike", "line", "front"};
 const float PUSH_STAND = 256.f;
 int gPushNextAt = 0;
 int gPushLogAt = 0;
-int gPushGoes = 0;
+int gTaOpsMade = 0;
+
+bool TaFresh(int t)
+{
+	return float(ai.frame) - ai.GetTeamBoard(BOARD_GATHER_AT + t, -1e9f) < float(15 * SECOND);
+}
+
+int TaLeader()
+{
+	for (int t = 0; t < 64; ++t) {
+		if (TaFresh(t))
+			return t;
+	}
+	return ai.teamId;
+}
+
+int TaPhase() { return int(ai.GetTeamBoard(BOARD_TA_PHASE, 0.f)); }
+int TaOp()    { return int(ai.GetTeamBoard(BOARD_TA_OP, 0.f)); }
+bool TeamOpOn() { return TaPhase() != TA_NONE; }
+
+AIFloat3 TaTarget(float &out r)
+{
+	r = ai.GetTeamBoard(BOARD_TA_R, 0.f);
+	AIFloat3 fp(ai.GetTeamBoard(BOARD_TA_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_TA_Z, 0.f));
+	fp.y = ai.GetElevationAt(fp);
+	return fp;
+}
+
+float TaSum(int base)
+{
+	float s = 0.f;
+	for (int t = 0; t < 64; ++t) {
+		if (TaFresh(t))
+			s += ai.GetTeamBoard(base + t, 0.f);
+	}
+	return s;
+}
+
+// The leader's own nets name the target; then the line our army dies to; then their front.
+int TaPick(AIFloat3 &out at, float &out r)
+{
+	if (Military::gHtOn) {
+		at = Military::gHtPos; r = Military::HUNT_R;
+		return 1;
+	}
+	if (Military::gStOn) {
+		at = Military::gStPos; r = Military::STRIKE_R;
+		return 2;
+	}
+	float m = 0.f;
+	if (Military::TurretTarget(at, r, m)) {
+		r = Military::TurretLineReach();
+		return 3;
+	}
+	at = Front::FoeAnchor(); r = Military::HUNT_R;
+	return OnMap(at) ? 4 : 0;
+}
+
+void TaOpen(int phase, const string why)
+{
+	AIFloat3 at;
+	float r = 0.f;
+	const int kind = (phase == TA_NONE) ? 0 : TaPick(at, r);
+	const int op = TaOp() + 1;
+	if (kind == 0)
+		phase = TA_NONE;
+	float hx = 0.f, hz = 0.f, hn = 0.f;
+	for (int t = 0; t < 64; ++t) {
+		if (TaFresh(t) && (ai.GetTeamBoard(BOARD_TA_HOMEX + t, -1.f) >= 0.f)) {
+			hx += ai.GetTeamBoard(BOARD_TA_HOMEX + t, 0.f);
+			hz += ai.GetTeamBoard(BOARD_TA_HOMEZ + t, 0.f);
+			hn += 1.f;
+		}
+	}
+	ai.SetTeamBoard(BOARD_TA_X, at.x);
+	ai.SetTeamBoard(BOARD_TA_Z, at.z);
+	ai.SetTeamBoard(BOARD_TA_R, r);
+	ai.SetTeamBoard(BOARD_TA_HX, (hn > 0.f) ? hx / hn : -1.f);
+	ai.SetTeamBoard(BOARD_TA_HZ, (hn > 0.f) ? hz / hn : -1.f);
+	ai.SetTeamBoard(BOARD_TA_SINCE, float(ai.frame));
+	ai.SetTeamBoard(BOARD_TA_KIND, float(kind));
+	ai.SetTeamBoard(BOARD_TA_STRIKES, 0.f);
+	ai.SetTeamBoard(BOARD_TA_SEEN, 0.f);
+	ai.SetTeamBoard(BOARD_TA_ARRIVED, 0.f);
+	ai.SetTeamBoard(BOARD_TA_SPENT, 0.f);
+	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
+	ai.SetTeamBoard(BOARD_TA_OP, float(op));   // last: a reader that sees the new id sees its fields
+	++gTaOpsMade;
+	AiLog(Factory::T() + "apex: team-op " + op + " " + TA_PHASES[phase] + " (" + why + ") " + TA_KINDS[kind]
+		+ " at=" + int(at.x) + "," + int(at.z) + " r=" + int(r) + " plan=" + NgName(gPlan));
+}
+
+void TaAdvance(int phase, const string why)
+{
+	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
+	ai.SetTeamBoard(BOARD_TA_SINCE, float(ai.frame));
+	ai.SetTeamBoard(BOARD_TA_STRIKES, 0.f);
+	ai.SetTeamBoard(BOARD_TA_SPENT, 0.f);
+	float r = 0.f;
+	const AIFloat3 fp = TaTarget(r);
+	AiLog(Factory::T() + "apex: team-op " + TaOp() + " " + TA_PHASES[phase] + " (" + why + ") at="
+		+ int(fp.x) + "," + int(fp.z));
+}
+
+// Two reads running before an outcome counts: one noisy sample ends nothing.
+bool TaTwice(int slot, bool cond)
+{
+	if (!cond) {
+		ai.SetTeamBoard(slot, 0.f);
+		return false;
+	}
+	const float s = ai.GetTeamBoard(slot, 0.f) + 1.f;
+	ai.SetTeamBoard(slot, s);
+	return s >= 2.f;
+}
+
+void TaLead()
+{
+	const int phase = TaPhase();
+	if (!PlanPushes() || (ai.GetTunable("apex_team_army", TUNE_TEAM_ARMY) <= 0.f)) {
+		if (phase != TA_NONE)
+			TaOpen(TA_NONE, "plan holds");
+		return;
+	}
+	if (phase == TA_NONE) {
+		TaOpen(TA_MASS, "plan pushes");
+		return;
+	}
+	// a hunted army moves: the operation follows it while the leader's hunt lasts,
+	// and that hunt ending is what ends it -- a position update, never a new phase
+	const bool hunting = (int(ai.GetTeamBoard(BOARD_TA_KIND, 0.f)) == 1);
+	if (hunting && Military::gHtOn) {
+		ai.SetTeamBoard(BOARD_TA_X, Military::gHtPos.x);
+		ai.SetTeamBoard(BOARD_TA_Z, Military::gHtPos.z);
+	}
+	float r = 0.f;
+	const AIFloat3 fp = TaTarget(r);
+	const float foe = aiMilitaryMgr.GetEnemyInflNear(fp, r + PUSH_STAND);
+	// an unscouted target is unknown, not gone: only ground once seen held can clear
+	const bool occupied = (foe > 0.f) || (aiEnemyMgr.GetEnemyStructCostAt(fp, r) > 0.f);
+	if (occupied)
+		ai.SetTeamBoard(BOARD_TA_SEEN, 1.f);
+	const bool gone = hunting ? !Military::gHtOn
+			: (!occupied && (ai.GetTeamBoard(BOARD_TA_SEEN, 0.f) > 0.f));
+	if (phase == TA_MASS) {
+		if (TaTwice(BOARD_TA_STRIKES, gone)) {
+			TaOpen(TA_MASS, "target gone");
+			return;
+		}
+		// what stands there, or their strongest group anywhere -- what can meet us at once (unknown is not small)
+		const float strongest = aiMilitaryMgr.GetEnemyInflNear(fp, 1e7f);
+		const float need = (foe > strongest) ? foe : strongest;
+		ai.SetTeamBoard(BOARD_TA_NEED, need);
+		const float team = TaSum(BOARD_GATHER);
+		if ((team > 0.f) && (team > need))
+			TaAdvance(TA_GO, "gathered " + int(team) + " > " + int(need) + " (there " + int(foe) + ")");
+		return;
+	}
+	// GO: an outcome, never a timer -- judged on the army AT the target, not the team's total
+	// (3v3 tests: the total kept the go alive while squads trickled in and traded 0.25-0.39)
+	const float atk = TaSum(BOARD_TA_ATK);
+	const float near = TaSum(BOARD_TA_NEAR);
+	if (near > 0.f)
+		ai.SetTeamBoard(BOARD_TA_ARRIVED, 1.f);
+	const bool arrived = ai.GetTeamBoard(BOARD_TA_ARRIVED, 0.f) > 0.f;
+	// or our army stands on it and nothing of theirs is there: an empty box is cleared too
+	if (TaTwice(BOARD_TA_STRIKES, gone || (!occupied && (near > 0.f)))) {
+		AIFloat3 nx;
+		float nr = 0.f;
+		TaPick(nx, nr);
+		const float nextFoe = aiMilitaryMgr.GetEnemyInflNear(nx, nr + PUSH_STAND);
+		TaOpen((near > nextFoe) ? TA_GO : TA_MASS, "cleared, there " + int(near) + " vs next " + int(nextFoe));
+		return;
+	}
+	// spent: what reached the target is under half of what stands there (before arrival, only the
+	// whole team falling under half can say so -- the army dying on the way)
+	if (TaTwice(BOARD_TA_SPENT, arrived ? (near * 2.f < foe) : (atk * 2.f < foe)))
+		TaOpen(TA_MASS, "spent, there " + int(near) + " team " + int(atk) + " vs " + int(foe));
+}
 
 void TeamPush()
 {
 	if (ai.frame < gPushNextAt)
 		return;
 	gPushNextAt = ai.frame + 5 * SECOND;
-	// a hunt or a strike (military/nnhunt.as, nnstrike.as) owns this AI's focus while it lasts
-	const bool held = Military::HuntHoldsFocus() || Military::StrikeHoldsFocus();
-	if (!PlanPushes()) {
-		if (!held)
-			aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
-		return;
-	}
-	// A breach holds until it is broken: re-reading the turret target every 5 s
-	// moved it across the front and the squads never gathered at any of them.
-	const float hr = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
-	const bool holding = (hr >= 0.f) && (aiMilitaryMgr.GetEnemyInflNear(
-		AIFloat3(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f)), hr + PUSH_STAND) > 0.f);
-	if ((ai.frame < gPlanMineUntil) && !holding) {
-		AIFloat3 at;
-		float r = 0.f, m = 0.f;
-		if (Military::TurretTarget(at, r, m)) {
-			r = Military::TurretLineReach();
-			const float ox = ai.GetTeamBoard(BOARD_FOCUS_X, -1.f);
-			const float oz = ai.GetTeamBoard(BOARD_FOCUS_Z, -1.f);
-			if ((ox < 0.f) || (AIFloat3(ox, 0.f, oz).distance2D(at) > r))
-				ai.SetTeamBoard(BOARD_GO_UNTIL, -1.f);
-			ai.SetTeamBoard(BOARD_FOCUS_X, at.x);
-			ai.SetTeamBoard(BOARD_FOCUS_Z, at.z);
-			ai.SetTeamBoard(BOARD_FOCUS_R, r);
-		} else {
-			ai.SetTeamBoard(BOARD_FOCUS_R, -1.f);
-		}
-	}
-	const float r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
-	if (r < 0.f) {
-		if (!held)
-			aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
-		return;
-	}
-	AIFloat3 fp(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
-	fp.y = ai.GetElevationAt(fp);
-	const float mine = held ? 0.f : aiMilitaryMgr.GetGatheredPower();   // squads standing at their own threat-clear stage
-	ai.SetTeamBoard(BOARD_GATHER + ai.teamId, mine);
+	const int phase = TaPhase();
+	ai.SetTeamBoard(BOARD_GATHER + ai.teamId, (phase == TA_MASS) ? aiMilitaryMgr.GetGatheredPower() : 0.f);
 	ai.SetTeamBoard(BOARD_GATHER_AT + ai.teamId, float(ai.frame));
-	float team = 0.f;
-	for (int t = 0; t < 64; ++t) {
-		if (float(ai.frame) - ai.GetTeamBoard(BOARD_GATHER_AT + t, -1e9f) < float(15 * SECOND))
-			team += ai.GetTeamBoard(BOARD_GATHER + t, 0.f);
+	ai.SetTeamBoard(BOARD_TA_ATK + ai.teamId, aiMilitaryMgr.GetAttackPower());
+	{
+		float tr = 0.f;
+		const AIFloat3 tp = TaTarget(tr);
+		ai.SetTeamBoard(BOARD_TA_NEAR + ai.teamId, (phase != TA_NONE)
+				? aiMilitaryMgr.GetAttackPowerNear(tp, tr + PUSH_STAND) : 0.f);
 	}
-	const float foe = aiMilitaryMgr.GetEnemyInflNear(fp, r + PUSH_STAND);
-	bool go = ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) > float(ai.frame);
-	if (!go && (team > 0.f) && (team > foe)) {
-		go = true;
-		++gPushGoes;
-		ai.SetTeamBoard(BOARD_GO_UNTIL, float(ai.frame + 90 * SECOND));
-		AiLog("apex: push go t=" + ai.teamId + " plan=" + NgName(gPlan) + " at=" + int(fp.x) + "," + int(fp.z)
-			+ " foe=" + NnF(foe, 1) + " team=" + NnF(team, 1) + " mine=" + NnF(mine, 1));
+	if (Builder::gHomeSet) {
+		ai.SetTeamBoard(BOARD_TA_HOMEX + ai.teamId, Builder::gHomePos.x);
+		ai.SetTeamBoard(BOARD_TA_HOMEZ + ai.teamId, Builder::gHomePos.z);
 	}
-	if (!held)
-		aiMilitaryMgr.SetFocus(fp, r, team, go, ai.frame + 10 * SECOND);
+	if (TaLeader() == ai.teamId)
+		TaLead();
+	const int now = TaPhase();
+	if (now == TA_NONE) {
+		aiMilitaryMgr.SetFocusHome(AIFloat3(-1.f, 0.f, 0.f));
+		if (!Military::HuntHoldsFocus() && !Military::StrikeHoldsFocus())
+			aiMilitaryMgr.SetFocus(AIFloat3(0.f, 0.f, 0.f), 0.f, 0.f, false, -1);
+		return;
+	}
+	float r = 0.f;
+	const AIFloat3 fp = TaTarget(r);
+	const float team = TaSum(BOARD_GATHER);
+	const float hx = ai.GetTeamBoard(BOARD_TA_HX, -1.f);
+	aiMilitaryMgr.SetFocusHome((hx >= 0.f) ? AIFloat3(hx, 0.f, ai.GetTeamBoard(BOARD_TA_HZ, 0.f)) : AIFloat3(-1.f, 0.f, 0.f));
+	aiMilitaryMgr.SetFocus(fp, r, team, now == TA_GO, ai.frame + 10 * SECOND);
 	if (ai.frame >= gPushLogAt) {
 		gPushLogAt = ai.frame + 30 * SECOND;
-		AiLog("apex: push t=" + ai.teamId + " plan=" + NgName(gPlan) + " at=" + int(fp.x) + "," + int(fp.z)
-			+ " r=" + int(r) + " foe=" + NnF(foe, 1) + " team=" + NnF(team, 1) + " mine=" + NnF(mine, 1)
-			+ " all=" + NnF(aiMilitaryMgr.GetAttackPower(), 1) + " go=" + (go ? 1 : 0) + " goes=" + gPushGoes);
+		AiLog(Factory::T() + "apex: team-army t=" + ai.teamId + " op=" + TaOp() + " " + TA_PHASES[now]
+			+ " " + TA_KINDS[int(ai.GetTeamBoard(BOARD_TA_KIND, 0.f))] + " at=" + int(fp.x) + "," + int(fp.z)
+			+ " r=" + int(r) + " foe=" + NnF(aiMilitaryMgr.GetEnemyInflNear(fp, r + PUSH_STAND), 1)
+			+ " gathered=" + NnF(team, 1) + " need=" + NnF(ai.GetTeamBoard(BOARD_TA_NEED, 0.f), 1)
+			+ " mine=" + NnF(aiMilitaryMgr.GetGatheredPower(), 1)
+			+ " teamAtk=" + NnF(TaSum(BOARD_TA_ATK), 1) + " lead=" + TaLeader()
+			+ " age=" + int((float(ai.frame) - ai.GetTeamBoard(BOARD_TA_SINCE, 0.f)) / float(SECOND)) + "s");
 	}
 }
 
-// Where the team's push is going in, while its go stands.
+// Where the team army is going in, while its operation is in GO.
 bool PushGoAt(AIFloat3 &out at, float &out r)
 {
-	if (!PlanPushes() || (ai.GetTeamBoard(BOARD_GO_UNTIL, -1.f) <= float(ai.frame)))
+	if (TaPhase() != TA_GO)
 		return false;
-	r = ai.GetTeamBoard(BOARD_FOCUS_R, -1.f);
-	if (r < 0.f)
-		return false;
-	at = AIFloat3(ai.GetTeamBoard(BOARD_FOCUS_X, 0.f), 0.f, ai.GetTeamBoard(BOARD_FOCUS_Z, 0.f));
-	at.y = ai.GetElevationAt(at);
-	return true;
+	at = TaTarget(r);
+	return r > 0.f;
+}
+
+// The id of the operation in GO, or -1: the air strikes with the land army (his 10-11).
+int TeamGoOp()
+{
+	return (TaPhase() == TA_GO) ? TaOp() : -1;
 }
 
 // ALLIES BUILD ONE GANTRY TOGETHER (his 2026-10-07: "why make 8 gantries in an

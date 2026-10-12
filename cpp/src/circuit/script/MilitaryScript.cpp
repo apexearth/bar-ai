@@ -47,6 +47,7 @@ CMilitaryScript::CMilitaryScript(CScriptManager* scr, CMilitaryManager* mgr)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void ClearSupportSpots()", asMETHOD(CMilitaryManager, ClearSupportSpots), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void AddSupportSpot(const AIFloat3& in, float)", asMETHOD(CMilitaryManager, AddSupportSpot), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocus(const AIFloat3& in, float, float, bool, int)", asMETHOD(CMilitaryManager, SetFocus), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetFocusHome(const AIFloat3& in)", asMETHOD(CMilitaryManager, SetFocusHome), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPower() const", asMETHOD(CMilitaryManager, GetAttackPower), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetAttackPowerNear(const AIFloat3& in, float) const", asMETHOD(CMilitaryManager, GetAttackPowerNear), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetGatheredPower() const", asMETHOD(CMilitaryManager, GetGatheredPower), asCALL_THISCALL); ASSERT(r >= 0);

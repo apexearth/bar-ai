@@ -219,6 +219,10 @@ public:
 	float GetFocusR() const { return focusR; }
 	float GetFocusPow() const { return focusPow; }
 	bool IsFocusGo() const { return focusGo; }
+	// apex: the team's home centroid -- every AI's squads stage on the one line from
+	// the focus toward it, so a team masses as one army, not one clump per seat
+	void SetFocusHome(const springai::AIFloat3& pos) { focusHome = pos; }
+	const springai::AIFloat3& GetFocusHome() const { return focusHome; }
 	// apex: the odds and mass heads (script military/nnmassodds.as) post their
 	// multipliers on the team board; read every UpdateDefenceTasks.
 	static constexpr int BOARD_ODDS = 1400, BOARD_MASS = 1500, BOARD_MIL_ACK = 1600, BOARD_FLANK = 1700;
@@ -251,6 +255,7 @@ public:
 	float focusPow = 0.f;
 	bool focusGo = false;
 	int focusUntil = -1;
+	springai::AIFloat3 focusHome = -RgtVector;
 	float oddsMul = 1.f;
 	float massMul = 1.f;
 	float flankMul = 1.f;
