@@ -35,6 +35,9 @@
        border-bottom:1px solid var(--line); white-space:nowrap; }
   td { padding:5px 10px; border-bottom:1px solid #232b35; vertical-align:top; }
   tr.click { cursor:pointer; } tr.click:hover td { background:var(--panel2); }
+  thead th { cursor:pointer; user-select:none; } thead th:hover { color:var(--text); }
+  th[data-dir="asc"]::after { content:" \25B2"; font-size:10px; }
+  th[data-dir="desc"]::after { content:" \25BC"; font-size:10px; }
   .win  { color:var(--good); font-weight:600; }
   .loss { color:var(--bad); }
   .dim  { color:var(--dim); }
@@ -128,7 +131,7 @@
     </div>
   </div>
   <div id="gamedetail" style="display:none">
-    <button class="act" id="gameback" onclick="showList()">&larr; back to list</button>
+    <button class="act" id="gameback" onclick="go(parentRoute(openDir))">&larr; back</button>
     <div id="gamedetailbody"></div>
   </div>
 </section>
@@ -386,6 +389,75 @@ function setHTML(el, html) {
   el.scrollTop = st;
   return true;
 }
+/* ---------- sortable tables ----------
+   Any table with a <thead>: a header click sorts by that column, again reverses, a third time puts the
+   page's own order back. The choice is remembered per table and re-applied when a poller repaints rows. */
+function sortKeyOf(table) {
+  return table.id || [...table.tHead.rows[0].cells].map(c => c.textContent.trim()).join("|");
+}
+function cellVal(td) {
+  if (!td) return "";
+  const s = (td.dataset.sort !== undefined ? td.dataset.sort : td.textContent).trim();
+  const ago = s.match(/^(\d+) (min|h|d) ago$/);
+  if (ago) return -parseInt(ago[1], 10) * {min: 1, h: 60, d: 1440}[ago[2]];
+  const n = s.match(/^[+-]?\d+(\.\d+)?(?=\s*[%a-z]?(\s|\(|$))/i);   // 42%, 12m, "24 +playing", 0.42
+  return n ? parseFloat(n[0]) : s;
+}
+const isBlank = v => v === "" || v === "—" || v === "…" || v === "?";
+function cmpVal(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "number") return -1;
+  if (typeof b === "number") return 1;
+  return a.localeCompare(b, undefined, {numeric: true, sensitivity: "base"});
+}
+function applySort(table) {
+  if (!table.tHead || !table.tHead.rows.length || !table.tBodies.length) return;
+  const st = (UI.sorts || {})[sortKeyOf(table)];
+  [...table.tHead.rows[0].cells].forEach((th, i) => {
+    const d = st && st.col === i ? st.dir : "";
+    if ((th.dataset.dir || "") !== d) th.dataset.dir = d;
+  });
+  const tb = table.tBodies[0], rows = [...tb.rows];
+  rows.forEach((r, i) => { if (r._o === undefined) r._o = i; });
+  const vals = new Map(st ? rows.map(r => [r, cellVal(r.cells[st.col])]) : []);
+  const sorted = rows.slice().sort((a, b) => {
+    if (!st) return a._o - b._o;
+    const va = vals.get(a), vb = vals.get(b);
+    if (isBlank(va) !== isBlank(vb)) return isBlank(va) ? 1 : -1;   // blanks last either way
+    const c = cmpVal(va, vb);
+    return (st.dir === "asc" ? c : -c) || a._o - b._o;
+  });
+  if (sorted.some((r, i) => r !== rows[i])) sorted.forEach(r => tb.appendChild(r));
+}
+document.addEventListener("click", e => {
+  const th = e.target.closest("thead th"); if (!th) return;
+  const table = th.closest("table"), col = th.cellIndex, k = sortKeyOf(table);
+  const cur = (UI.sorts || {})[k];
+  let dir;
+  if (!cur || cur.col !== col) {
+    // numbers start biggest-first, words A-Z
+    const first = [...table.tBodies[0].rows].map(r => cellVal(r.cells[col])).find(v => !isBlank(v));
+    dir = typeof first === "number" ? "desc" : "asc";
+  } else if (cur.dir === (cur.first || "desc")) {
+    dir = cur.dir === "desc" ? "asc" : "desc";
+  }
+  UI.sorts = Object.assign({}, UI.sorts);
+  if (dir) UI.sorts[k] = {col, dir, first: cur && cur.col === col ? cur.first : dir};
+  else delete UI.sorts[k];
+  uiSave();
+  applySort(table);
+});
+let sortQueued = false;
+new MutationObserver(() => {
+  if (sortQueued || !UI.sorts || !Object.keys(UI.sorts).length) return;
+  sortQueued = true;
+  setTimeout(() => {   // not requestAnimationFrame: a background tab never runs it
+    sortQueued = false;
+    document.querySelectorAll("table").forEach(t => {
+      if (t.tHead && t.tHead.rows.length && UI.sorts[sortKeyOf(t)]) applySort(t);
+    });
+  });
+}).observe(document.body, {childList: true, subtree: true});
 function toast(msg, bad) {
   const t = $("#toast");
   t.textContent = msg; t.style.display = "block";
@@ -530,24 +602,81 @@ document.addEventListener("input", e => {
 /* ---------- tabs ---------- */
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
-  document.querySelectorAll(".tab").forEach(x =>
-    x.classList.toggle("on", x.id === "tab-" + b.dataset.tab));
-  uiSet("tab", b.dataset.tab);
-  if (b.dataset.tab === "games") loadGames();
-  if (b.dataset.tab === "launch") { loadLaunchMeta(); loadJobs(); renderAdvOpts(); }
-  if (b.dataset.tab === "net") loadNet();
-  if (b.dataset.tab === "progress") loadProgress();
+  go(b.dataset.tab === "games" ? "#/games/" + (UI.gamesKind || "matches") : "#/" + b.dataset.tab);
 });
+let curTab = null;
+function showTab(tab) {
+  const changed = tab !== curTab;
+  curTab = tab;
+  document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.id === "tab-" + tab));
+  uiSet("tab", tab);
+  if (!changed) return;
+  if (tab === "launch") { loadLaunchMeta(); loadJobs(); renderAdvOpts(); }
+  if (tab === "net") loadNet();
+  if (tab === "progress") loadProgress();
+}
+
+/* ---------- routing ----------
+   The page lives in the location hash, so a reload, a bookmark and the browser's back button all land on
+   what was being looked at:  #/games/matches  #/games/tournaments  #/run/<dir>  #/launch  #/net ... */
+const TABS = ["games", "launch", "net", "progress", "deploy"];
+const routeScroll = {};
+function go(hash) {
+  if (location.hash === hash) route(); else location.hash = hash;
+}
+// One level up: a game inside a tournament goes back to that tournament, not to the list.
+function parentRoute(dir) {
+  const m = (dir || "").match(/^(.*)\/matches\/[^/]+$/);
+  if (m && m[1].startsWith("tournaments/")) return "#/run/" + m[1];
+  return "#/games/" + ((dir || "").startsWith("tournaments/") ? "tournaments" : "matches");
+}
+function backLabel(dir) {
+  const p = parentRoute(dir);
+  return p.startsWith("#/run/") ? "back to " + p.slice(6).split("/").pop().replace(/^\d{8}-\d{6}-/, "")
+                                : "back to " + p.split("/").pop();
+}
+function restoreScroll(hash) {
+  window.scrollTo(0, routeScroll[hash] || 0);
+}
+window.addEventListener("hashchange", e => {
+  try { routeScroll[new URL(e.oldURL).hash] = window.scrollY; } catch (err) {}
+  route();
+});
+async function route() {
+  const hash = location.hash;
+  const parts = hash.replace(/^#\/?/, "").split("/");
+  const head = parts[0];
+  if (head === "run") {
+    const dir = decodeURIComponent(parts.slice(1).join("/"));
+    showTab("games");
+    uiSet("route", hash);
+    await openGame(dir);
+    if (location.hash === hash) restoreScroll(hash);
+    return;
+  }
+  const tab = TABS.includes(head) ? head : "games";
+  showTab(tab);
+  uiSet("route", hash);
+  if (tab !== "games") { restoreScroll(hash); return; }
+  showGamesKind(parts[1] === "tournaments" ? "tournaments" : "matches");
+  showList();
+  await loadGames();
+  if (location.hash === hash) restoreScroll(hash);
+}
 
 /* ---------- games ---------- */
 $("#gamesnav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll("#gamesnav button").forEach(x =>
-    x.classList.toggle("on", x === b));
-  $("#pane-matches").style.display = b.dataset.kind === "matches" ? "" : "none";
-  $("#pane-tournaments").style.display = b.dataset.kind === "tournaments" ? "" : "none";
+  go("#/games/" + b.dataset.kind);
 });
+function showGamesKind(kind) {
+  uiSet("gamesKind", kind);
+  document.querySelectorAll("#gamesnav button").forEach(x =>
+    x.classList.toggle("on", x.dataset.kind === kind));
+  $("#pane-matches").style.display = kind === "matches" ? "" : "none";
+  $("#pane-tournaments").style.display = kind === "tournaments" ? "" : "none";
+}
 function showList() {
   $("#gamelist").style.display = ""; $("#gamedetail").style.display = "none";
   clearTimeout(openTimer); openDir = null;
@@ -583,12 +712,13 @@ async function loadGames() {
 }
 document.addEventListener("click", e => {
   const tr = e.target.closest("tr.click[data-dir]");
-  if (tr) openGame(tr.dataset.dir);
+  if (tr) go("#/run/" + tr.dataset.dir);
 });
 let openDir = null, openTimer = null;
 async function openGame(dir, isRefresh) {
   openDir = dir; clearTimeout(openTimer);
   $("#gamelist").style.display = "none"; $("#gamedetail").style.display = "";
+  $("#gameback").innerHTML = "&larr; " + esc(backLabel(dir));
   const body = $("#gamedetailbody");
   // The loading flash belongs to a NEW open only. On the 5s auto-refresh it
   // repainted the whole panel through a placeholder every cycle -- scroll,
@@ -687,7 +817,7 @@ function renderRand(r) {
       <td>${n.games}${n.playing ? " <span class=\"dim\">+playing</span>" : ""}</td>
       <td>${n.w}-${n.d}-${n.l}</td>
       <td class="${n.w + 0.5 * n.d >= 0.42 * n.games ? "win" : "dim"}">${(100 * (n.w + 0.5 * n.d) / n.games).toFixed(0)}%</td>
-      <td>${n.varied ? `<span class="${n.varied[0] + 0.5 * n.varied[1] >= 0.42 * (n.varied[0] + n.varied[1] + n.varied[2]) ? "win" : ""}">${n.varied.join("-")} (${Math.round(100 * (n.varied[0] + 0.5 * n.varied[1]) / (n.varied[0] + n.varied[1] + n.varied[2]))}%)</span>` : `<span class="dim">seed 1 only</span>`}</td>
+      <td data-sort="${n.varied ? ((n.varied[0] + 0.5 * n.varied[1]) / (n.varied[0] + n.varied[1] + n.varied[2])).toFixed(4) : ""}">${n.varied ? `<span class="${n.varied[0] + 0.5 * n.varied[1] >= 0.42 * (n.varied[0] + n.varied[1] + n.varied[2]) ? "win" : ""}">${n.varied.join("-")} (${Math.round(100 * (n.varied[0] + 0.5 * n.varied[1]) / (n.varied[0] + n.varied[1] + n.varied[2]))}%)</span>` : `<span class="dim">seed 1 only</span>`}</td>
       <td class="dim">${n.score.toFixed(2)}</td><td class="dim">${n.s.toFixed(2)}</td>
       <td>${esc(n.status === "live" ? "playing up to " + n.target : n.status || "")}</td>
       <td class="dim">${agoTxt(n.last)}</td></tr>`).join("")}
@@ -1728,8 +1858,7 @@ drawBoxPreview();
 renderOvSummary();
 let jobTimer = null, aliveJobs = new Set();
 function viewRun(dir) {
-  document.querySelector('#nav button[data-tab="games"]').click();
-  openGame(dir);
+  go("#/run/" + dir);
 }
 async function loadJobs() {
   try {
@@ -2142,12 +2271,11 @@ async function loadProgress() {
   setHTML($("#pg-body"), html);
 }
 
-// Open on the tab that was last used, not always Games.
-(function restoreTab() {
-  const want = UI.tab || "games";
-  const b = document.querySelector('#nav button[data-tab="' + want + '"]');
-  if (b && want !== "games") { b.click(); return; }
-  loadGames();
+// Open where the last visit was: the URL's own route, else the remembered one.
+(function restoreRoute() {
+  if (!location.hash && UI.route) history.replaceState(null, "", UI.route);
+  else if (!location.hash && UI.tab && UI.tab !== "games") history.replaceState(null, "", "#/" + UI.tab);
+  route();
 })();
 loadLaunchMeta(); pollOverview();
 </script>
