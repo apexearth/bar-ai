@@ -261,6 +261,10 @@ def worker(slot, st, lay, rng):
 def work(slot, st, lay, rng):
     while not os.path.exists(neuro.STOP) and not os.path.exists(RESTART):
         if slot >= workers():
+            # a spare slot must also see the search end, or join() waits on it forever (10-12 07:21 -> 08:28)
+            with lock:
+                if not any(n["busy"] or owed(n) for n in st["nets"].values()) and st["next"] >= EXPLORE:
+                    return
             time.sleep(60)
             continue
         with lock:
