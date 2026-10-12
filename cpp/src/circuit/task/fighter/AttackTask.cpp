@@ -667,6 +667,19 @@ void CAttackTask::ChooseFlank(const AIFloat3& tgtPos, int key, int tgtGroup, con
 	for (const SFoePt& f : foes) {
 		foeAll += f.power;
 	}
+	// OVERWHELMING NEEDS NO WAY ROUND (his 10-12: "trying to find a way around their defenses, but we're so
+	// much more powerful we don't have to"): a squad that outguns everything around the target at the
+	// answer parity, or one sent by a strike that has gone, walks straight in.
+	{
+		CMilitaryManager* mm = circuit->GetMilitaryManager();
+		const bool focusGo = mm->IsFocus(frame) && mm->IsFocusGo()
+				&& (tgtPos.SqDistance2D(mm->GetFocusPos()) < SQUARE(mm->GetFocusR() + highestRange));
+		if (focusGo || (maxPow >= 1.2f * foeAll)) {
+			++tally.straight;
+			FlankStatLog(circuit, tally, frame);
+			return;
+		}
+	}
 	const float eps = foeAll * 0.1f + 1.f;
 	const float stand = highestRange * 0.9f;
 	auto exposure = [&](const AIFloat3& a) {
@@ -692,6 +705,12 @@ void CAttackTask::ChooseFlank(const AIFloat3& tgtPos, int key, int tgtGroup, con
 		const float c = std::cos(th), s = std::sin(th);
 		const AIFloat3 a(u.x * c - u.z * s, 0.f, u.x * s + u.z * c);
 		AIFloat3 w = tgtPos + a * R;
+		// off the map is not a way round: clamped, it became a waypoint on the edge (via 5588,1)
+		if ((k > 0) && ((w.x < 0.f) || (w.z < 0.f) || (w.x > terrainMgr->GetTerrainWidth())
+			|| (w.z > terrainMgr->GetTerrainHeight())))
+		{
+			continue;
+		}
 		CTerrainManager::CorrectPosition(w);
 		if ((k > 0) && !terrainMgr->CanMoveToPos(leader->GetArea(), w)) {
 			continue;

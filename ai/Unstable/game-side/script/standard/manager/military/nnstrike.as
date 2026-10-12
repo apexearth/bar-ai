@@ -299,14 +299,20 @@ void StrikeDecide()
 	f.insertLast(float(HoldWhy()));
 	f.insertLast(PushIncoming() ? 1.f : 0.f);
 	f.insertLast(float(ai.frame) / 1800.f);
+	// THE RULE STRIKES WHEN WE OUTWEIGH WHAT COULD STOP IT (his 10-12: 194k of army on us, under 3k on
+	// them, and we walked wide arcs round what little they had). It was NO always, and with nets taking
+	// their top option nothing ever struck: our attack army against their whole known army plus their
+	// static defence, at the answer parity -- the bar every other fight here is held to.
+	const float theirs = EnemyArmyCost() + aiEnemyMgr.GetEnemyCost(RT::STATIC);
+	const int rule = ((gHtAtkM > 0.f) && (Market::StrRatio(theirs, gHtAtkM) * ANSWER_PARITY <= 1.f)) ? ST_STRIKE : ST_NO;
 	array<float> w(2, Market::NE2_EPS);
-	w[ST_NO] = 1.f;
+	w[rule] = 1.f;
 	const float trust = StrikeNnScore(st, f, w);
 	array<float> p(2);
 	const float flat = Market::NnHeadFlat();
-	const int c = Market::EcoDraw(ST_NO, trust, w, p, flat);
+	const int c = Market::EcoDraw(rule, trust, w, p, flat);
 	array<string> names = {"NO", "STRIKE"};
-	AiLog(Market::EcoLine("nnstrike", "NO", flat > 0.f, trust, st, f, names, w, p, c));
+	AiLog(Market::EcoLine("nnstrike", names[rule], flat > 0.f, trust, st, f, names, w, p, c));
 	++gStDecN;
 	if (flat > 0.f)
 		++gStExN;

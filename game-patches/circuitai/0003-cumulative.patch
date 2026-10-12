@@ -17097,7 +17097,7 @@ index c3f5e98b..c9573aa0 100644
  }
  
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4d..2c680ae8 100644
+index cd063e4d..85db4d6c 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -5,6 +5,10 @@
@@ -17346,7 +17346,7 @@ index cd063e4d..2c680ae8 100644
  
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
-@@ -211,9 +353,178 @@ void CAttackTask::Update()
+@@ -211,11 +353,180 @@ void CAttackTask::Update()
  			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
  	pathQueries[leader] = query;
  
@@ -17354,9 +17354,9 @@ index cd063e4d..2c680ae8 100644
 -		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query));
 +	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this, viaPath](const IPathQuery* query) {
 +		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query), viaPath);
-+	});
-+}
-+
+ 	});
+ }
+ 
 +// NO TARGET IS NOT NO ENEMY (apexearth 2026-09-29: humans jam, and an army that
 +// saw nothing stayed home). Their base is in their start box -- the mirror of
 +// ours on a map without boxes: march there and the squad's own eyes find what
@@ -17522,11 +17522,13 @@ index cd063e4d..2c680ae8 100644
 +
 +	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this, viaPath](const IPathQuery* query) {
 +		this->ApplyTargetPath(static_cast<const CQueryPathSingle*>(query), viaPath);
- 	});
++	});
 +	return true;
- }
- 
++}
++
  void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+ {
+ 	ISquadTask::OnUnitIdle(unit);
 @@ -225,7 +536,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
@@ -17536,7 +17538,7 @@ index cd063e4d..2c680ae8 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -238,8 +549,227 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,8 +549,246 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -17658,6 +17660,19 @@ index cd063e4d..2c680ae8 100644
 +	for (const SFoePt& f : foes) {
 +		foeAll += f.power;
 +	}
++	// OVERWHELMING NEEDS NO WAY ROUND (his 10-12: "trying to find a way around their defenses, but we're so
++	// much more powerful we don't have to"): a squad that outguns everything around the target at the
++	// answer parity, or one sent by a strike that has gone, walks straight in.
++	{
++		CMilitaryManager* mm = circuit->GetMilitaryManager();
++		const bool focusGo = mm->IsFocus(frame) && mm->IsFocusGo()
++				&& (tgtPos.SqDistance2D(mm->GetFocusPos()) < SQUARE(mm->GetFocusR() + highestRange));
++		if (focusGo || (maxPow >= 1.2f * foeAll)) {
++			++tally.straight;
++			FlankStatLog(circuit, tally, frame);
++			return;
++		}
++	}
 +	const float eps = foeAll * 0.1f + 1.f;
 +	const float stand = highestRange * 0.9f;
 +	auto exposure = [&](const AIFloat3& a) {
@@ -17683,6 +17698,12 @@ index cd063e4d..2c680ae8 100644
 +		const float c = std::cos(th), s = std::sin(th);
 +		const AIFloat3 a(u.x * c - u.z * s, 0.f, u.x * s + u.z * c);
 +		AIFloat3 w = tgtPos + a * R;
++		// off the map is not a way round: clamped, it became a waypoint on the edge (via 5588,1)
++		if ((k > 0) && ((w.x < 0.f) || (w.z < 0.f) || (w.x > terrainMgr->GetTerrainWidth())
++			|| (w.z > terrainMgr->GetTerrainHeight())))
++		{
++			continue;
++		}
 +		CTerrainManager::CorrectPosition(w);
 +		if ((k > 0) && !terrainMgr->CanMoveToPos(leader->GetArea(), w)) {
 +			continue;
@@ -17764,7 +17785,7 @@ index cd063e4d..2c680ae8 100644
  	CCircuitAI* circuit = manager->GetCircuit();
  	CMap* map = circuit->GetMap();
  	CInfluenceMap* inflMap = circuit->GetInflMap();
-@@ -255,39 +785,270 @@ void CAttackTask::FindTarget()
+@@ -255,39 +804,270 @@ void CAttackTask::FindTarget()
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
  
@@ -18043,7 +18064,7 @@ index cd063e4d..2c680ae8 100644
  			const bool IsInWater = cdef->IsPredictInWater(elevation);
  			CCircuitDef* edef = enemy->GetCircuitDef();
  			if (edef != nullptr) {
-@@ -295,22 +1056,26 @@ void CAttackTask::FindTarget()
+@@ -295,22 +1075,26 @@ void CAttackTask::FindTarget()
  					|| ((edef->GetCategory() & noChaseCat) != 0)
  					|| (isAntiStatic && edef->IsMobile())
  					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()  // NOTE: groups are created by leader, ignore flags could be different
@@ -18071,7 +18092,7 @@ index cd063e4d..2c680ae8 100644
  					continue;
  				}
  			} else {
-@@ -319,31 +1084,311 @@ void CAttackTask::FindTarget()
+@@ -319,31 +1103,311 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -18357,7 +18378,7 @@ index cd063e4d..2c680ae8 100644
 -	} else {
 -		FallbackFrontPos();
 +		return;
- 	}
++	}
 +	// no way round to the side: go straight next update, not back to the front
 +	if (viaPath) {
 +		flankDone = true;
@@ -18382,12 +18403,12 @@ index cd063e4d..2c680ae8 100644
 +			)
 +		}
 +		return;
-+	}
+ 	}
 +	FallbackFrontPos();
  }
  
  void CAttackTask::FallbackFrontPos()
-@@ -376,6 +1421,10 @@ void CAttackTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -376,6 +1440,10 @@ void CAttackTask::ApplyFrontPos(const CQueryPathMulti* query)
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
  			ActivePath();
@@ -18398,7 +18419,7 @@ index cd063e4d..2c680ae8 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -421,7 +1470,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1489,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -18409,7 +18430,7 @@ index cd063e4d..2c680ae8 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
-@@ -429,4 +1480,73 @@ void CAttackTask::Fallback()
+@@ -429,4 +1499,73 @@ void CAttackTask::Fallback()
  	}
  }
  
