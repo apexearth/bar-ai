@@ -607,7 +607,9 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	// No enemy near him: there is no fight, tower or retreat to take, only work -- an
 	// impossibility, not a judgement. Drawn anyway, FIGHT stood him on hold-position
 	// for its 30 s with nothing in sight (10 1v1s, 2 won, 20-125 buildings in 3 min).
-	if (!gCsThreat) {
+	// Only when the RULE says work: a rule retreat with nothing in the scan (shelled from
+	// out of sight, health falling) masked to WORK killed 27 of 84 commanders working.
+	if (!gCsThreat && (rule == COM_WORK)) {
 		for (int o = 0; o < COM_N; ++o)
 			w[o] = (o == COM_WORK) ? 1.f : 0.f;
 	}

@@ -278,14 +278,20 @@ def save(st):
     os.replace(tmp, STATE)
 
 
+FACTIONS = ("Armada", "Cortex", "Legion")
+
+
 def play(job):
     gen_dir, ci, gi, per_side, mapn, seed, opt_file, slot = job
     out = os.path.join(gen_dir, "matches", "c%02d-g%d" % (ci, gi))
     if os.path.exists(os.path.join(out, "result.json")):
         return ci, gi, cem.score(out)
+    # a mirror (his 10-11: identical factions is more fair), the faction from the seed so the
+    # three come up equally; each side used to draw its own, two thirds of games unequal
+    side = FACTIONS[seed % len(FACTIONS)]
     cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_match.py"), "--a", AI, "--b", FOE,
            "--map", mapn, "--minutes", str(MINUTES), "--seed", str(seed), "--speed", "20",
-           "--per-side", str(per_side), "--sides", "random,random", "--out", out,
+           "--per-side", str(per_side), "--sides", "%s,%s" % (side, side), "--out", out,
            "--write-dir", os.path.join("runtime", "engine-cem-%d" % slot),
            "--modoption", "apex_lag_speed=0", "--modoption", "apex_nn_explore=0",
            "--ai-options-file", opt_file]

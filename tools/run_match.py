@@ -201,7 +201,7 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
 MAP_BOXES = {
     # key (substring)        boxes,  size
     "supreme isthmus":      ("trbl", 0.45),
-    "comet catcher":        ("lr",   0.0),
+    "comet catcher":        ("lr",   0.2),    # his 10-11: the lobby's end boxes; auto gave 0.38 and starts near mid
     "red comet":            ("lr",   0.0),
     "glitters":             ("tb",   0.0),
     "nine_metal_islands":   ("trbl", 0.45),
