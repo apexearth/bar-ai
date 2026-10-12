@@ -21,7 +21,7 @@ the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed
     python tools/randsearch.py --anneal 99   # (while stopped) anneal around net 99
 State: runtime/nn/rand.json; log: runtime/nn/rand.log; games: tournaments/<stamp>-nn-rand/.
 """
-import json, math, os, random, shutil, subprocess, sys, threading, time
+import json, math, os, random, shutil, subprocess, sys, threading, time, traceback
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
@@ -242,6 +242,16 @@ def workers():
 
 
 def worker(slot, st, lay, rng):
+    # 10-12: nine of ten threads ended without a trace and the search ran one game at a time for hours
+    try:
+        work(slot, st, lay, rng)
+        log("worker %d ended: stop=%s restart=%s" % (slot, os.path.exists(neuro.STOP), os.path.exists(RESTART)))
+    except BaseException:
+        log("worker %d DIED: %s" % (slot, traceback.format_exc().strip().replace("\n", " | ")))
+        raise
+
+
+def work(slot, st, lay, rng):
     while not os.path.exists(neuro.STOP) and not os.path.exists(RESTART):
         if slot >= workers():
             time.sleep(60)
