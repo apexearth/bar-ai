@@ -269,6 +269,10 @@ to them)
   math): if guns and army can hold, he stays safe; if we are mostly
   defenseless, he steps in. In a team game he steps in only if he believes he
   can actually defeat the attacking army; if it looks too hopeless, he runs.
+- (2026-10-12) When he is the only thing that can save the base, he fights,
+  and fights as a trap: cloak costs little standing still, so he waits cloaked
+  where the attack is coming, lets it walk up to him, and D-guns it from the
+  inside. Played that way he annihilates an army a player would expect to win.
 - **Front line:** the army holds a line where our ground ends, at a narrow
   part of the map if there is one, so nothing goes round it. It fights inside
   nano range so it is healed while fighting. When the forward lane is lost,
