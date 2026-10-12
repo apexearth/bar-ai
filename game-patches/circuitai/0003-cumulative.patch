@@ -20073,7 +20073,7 @@ index db42e8a5..1a8fa0fc 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/RaidTask.cpp b/src/circuit/task/fighter/RaidTask.cpp
-index 9af06982..9440aa82 100644
+index 9af06982..158fe775 100644
 --- a/src/circuit/task/fighter/RaidTask.cpp
 +++ b/src/circuit/task/fighter/RaidTask.cpp
 @@ -5,6 +5,7 @@
@@ -20124,7 +20124,7 @@ index 9af06982..9440aa82 100644
  				unit->Gather(groupPos, frame);
  			}
  		}
-@@ -152,10 +159,23 @@ void CRaidTask::Update()
+@@ -152,10 +159,51 @@ void CRaidTask::Update()
  	/*
  	 * Update target
  	 */
@@ -20134,21 +20134,49 @@ index 9af06982..9440aa82 100644
 +	if (IsCommitted() && (frame >= nextCommitLog)) {
 +		nextCommitLog = frame + FRAMES_PER_SEC * 20;
 +		const AIFloat3& lp = leader->GetPos(frame);
-+		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i",
++		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i aaSet=%i",
 +				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()),
 +				lp.x, lp.z, goalPos.x, goalPos.z, lp.distance2D(goalPos),
 +				(GetTarget() != nullptr) && (GetTarget()->GetCircuitDef() != nullptr)
 +					? GetTarget()->GetCircuitDef()->GetDef()->GetName() : "-",
-+				keptN);
++				keptN, aaSetN);
 +	}
  
  	state = State::ROAM;
++	// SHOOT WHAT SHOOTS YOU, KEEP FLYING (his 10-12): a committed gunship wing on its way to the economy
++	// set-targets the nearest AA in reach -- the move order stands, so it fires going past, not stopping.
++	if ((GetTarget() == nullptr) && (frame >= nextAaPick) && leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()) {
++		nextAaPick = frame + FRAMES_PER_SEC;
++		const AIFloat3& lp = leader->GetPos(frame);
++		float best = SQUARE(leader->GetCircuitDef()->GetMaxRange());
++		CEnemyInfo* aa = nullptr;
++		for (auto& kv : circuit->GetEnemyInfos()) {
++			CEnemyInfo* e = kv.second;
++			CCircuitDef* ed = e->GetCircuitDef();
++			if (e->IsHidden() || !e->IsInRadarOrLOS() || (ed == nullptr) || !ed->HasSurfToAir()) {
++				continue;
++			}
++			const float d2 = lp.SqDistance2D(e->GetPos());
++			if (d2 < best) {
++				best = d2;
++				aa = e;
++			}
++		}
++		if (aa != nullptr) {
++			++aaSetN;
++			for (CCircuitUnit* unit : units) {
++				TRY_UNIT(circuit, unit,
++					unit->CmdSetTarget(aa);
++				)
++			}
++		}
++	}
  	if (GetTarget() != nullptr) {
 +		noTargetSince = -1;
  		state = State::ENGAGE;
  		position = GetTarget()->GetPos();
  		circuit->GetMilitaryManager()->ClearScoutPosition(this);
-@@ -165,7 +185,9 @@ void CRaidTask::Update()
+@@ -165,7 +213,9 @@ void CRaidTask::Update()
  					if (unit->Blocker() != nullptr) {
  						continue;  // Do not interrupt current action
  					}
@@ -20159,7 +20187,7 @@ index 9af06982..9440aa82 100644
  
  					const AIFloat3& pos = GetTarget()->GetPos();
  					TRY_UNIT(circuit, unit,
-@@ -177,7 +199,9 @@ void CRaidTask::Update()
+@@ -177,7 +227,9 @@ void CRaidTask::Update()
  					if (unit->Blocker() != nullptr) {
  						continue;  // Do not interrupt current action
  					}
@@ -20170,7 +20198,7 @@ index 9af06982..9440aa82 100644
  
  					TRY_UNIT(circuit, unit,
  						unit->GetUnit()->Attack(GetTarget()->GetUnit(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
-@@ -210,7 +234,8 @@ void CRaidTask::Update()
+@@ -210,7 +262,8 @@ void CRaidTask::Update()
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
  			leader, threatMap,
  			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
@@ -20180,7 +20208,7 @@ index 9af06982..9440aa82 100644
  	pathQueries[leader] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -233,7 +258,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -233,7 +286,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -20189,7 +20217,7 @@ index 9af06982..9440aa82 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -246,9 +271,53 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -246,9 +299,53 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -20243,7 +20271,7 @@ index 9af06982..9440aa82 100644
  	CMap* map = circuit->GetMap();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	CThreatMap* threatMap = circuit->GetThreatMap();
-@@ -288,9 +357,7 @@ bool CRaidTask::FindTarget()
+@@ -288,9 +385,7 @@ bool CRaidTask::FindTarget()
  
  		const AIFloat3& ePos = enemy->GetPos();
  		const bool isEnemyUrgent = isDefender && (inflMap->GetAllyDefendInflAt(ePos) > INFL_EPS);
@@ -20254,7 +20282,7 @@ index 9af06982..9440aa82 100644
  			continue;
  		}
  
-@@ -302,7 +369,7 @@ bool CRaidTask::FindTarget()
+@@ -302,7 +397,7 @@ bool CRaidTask::FindTarget()
  			checkSpeed *= 2.f;
  		}
  		const float power = threatMap->GetThreatAt(ePos);
@@ -20263,7 +20291,7 @@ index 9af06982..9440aa82 100644
  			continue;
  		}
  		const AIFloat3& eVel = enemy->GetVel();
-@@ -313,7 +380,7 @@ bool CRaidTask::FindTarget()
+@@ -313,7 +408,7 @@ bool CRaidTask::FindTarget()
  		int targetCat;
  		float defThreat;
  		bool isBuilder;
@@ -20272,7 +20300,7 @@ index 9af06982..9440aa82 100644
  		const bool IsInWater = cdef->IsPredictInWater(elevation);
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
-@@ -321,7 +388,7 @@ bool CRaidTask::FindTarget()
+@@ -321,7 +416,7 @@ bool CRaidTask::FindTarget()
  			if (((targetCat & canTargetCat) == 0)
  				|| (isAntiStatic && edef->IsMobile())
  				|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()
@@ -20281,7 +20309,7 @@ index 9af06982..9440aa82 100644
  			{
  				continue;
  			}
-@@ -339,6 +406,13 @@ bool CRaidTask::FindTarget()
+@@ -339,6 +434,13 @@ bool CRaidTask::FindTarget()
  			}
  			defThreat = enemy->GetInfluence();
  			isBuilder = edef->IsEnemyRoleAny(CCircuitDef::RoleMask::BUILDER | CCircuitDef::RoleMask::COMM);
@@ -20295,7 +20323,7 @@ index 9af06982..9440aa82 100644
  		} else {
  			if (!(IsInWater ? cdef->HasSubToWater() : cdef->HasSurfToWater()) && (ePos.y < -SQUARE_SIZE * 5)) {  // notAW
  				continue;
-@@ -346,13 +420,24 @@ bool CRaidTask::FindTarget()
+@@ -346,13 +448,24 @@ bool CRaidTask::FindTarget()
  			targetCat = UNKNOWN_CATEGORY;
  			defThreat = enemy->GetInfluence();
  			isBuilder = false;
@@ -20322,7 +20350,7 @@ index 9af06982..9440aa82 100644
  						bestTarget = enemy;
  						minSqDist = sqDist;
  						maxThreat = std::numeric_limits<float>::max();
-@@ -369,6 +454,11 @@ bool CRaidTask::FindTarget()
+@@ -369,6 +482,11 @@ bool CRaidTask::FindTarget()
  			continue;
  		}
  
@@ -20334,7 +20362,7 @@ index 9af06982..9440aa82 100644
  		if (isEnemyUrgent) {
  			urgentPositions.push_back(ePos);
  		} else {
-@@ -393,6 +483,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -393,6 +511,7 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
  	pPath = query->GetPathInfo();
  
  	if (!pPath->posPath.empty()) {
@@ -20342,7 +20370,7 @@ index 9af06982..9440aa82 100644
  		position = pPath->posPath.back();
  		ActivePath();
  	} else {
-@@ -400,14 +491,52 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
+@@ -400,14 +519,52 @@ void CRaidTask::ApplyTargetPath(const CQueryPathMulti* query)
  	}
  }
  
@@ -20397,7 +20425,7 @@ index 9af06982..9440aa82 100644
  		AIFloat3 nextPos = circuit->GetMilitaryManager()->GetScoutPosition(leader);
  		if (utils::is_equal_pos(nextPos, pos)) {
  			return;
-@@ -447,9 +576,15 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
+@@ -447,9 +604,15 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -20416,10 +20444,10 @@ index 9af06982..9440aa82 100644
  	}
  }
 diff --git a/src/circuit/task/fighter/RaidTask.h b/src/circuit/task/fighter/RaidTask.h
-index ec833e6d..91386467 100644
+index ec833e6d..75c68dca 100644
 --- a/src/circuit/task/fighter/RaidTask.h
 +++ b/src/circuit/task/fighter/RaidTask.h
-@@ -26,14 +26,28 @@ public:
+@@ -26,14 +26,30 @@ public:
  	virtual void Stop(bool done);
  
  	virtual void OnUnitIdle(CCircuitUnit* unit) override;
@@ -20443,6 +20471,8 @@ index ec833e6d..91386467 100644
 +	float goalR = 0.f;
 +	int keptN = 0;          // retreats a committed raid did not take
 +	int nextCommitLog = 0;
++	int nextAaPick = 0;      // a committed gunship wing re-aims at the nearest AA once a second
++	int aaSetN = 0;          // AA set-targets issued (raid-commit log)
 +	mutable int commitAt = -1;   // IsCommitted is asked per damage event: once a frame
 +	mutable bool commitVal = false;
  };

@@ -165,15 +165,43 @@ void CRaidTask::Update()
 	if (IsCommitted() && (frame >= nextCommitLog)) {
 		nextCommitLog = frame + FRAMES_PER_SEC * 20;
 		const AIFloat3& lp = leader->GetPos(frame);
-		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i",
+		circuit->LOG("apex: raid-commit t=%i %s x%i at=%.0f,%.0f goal=%.0f,%.0f d=%.0f target=%s kept=%i aaSet=%i",
 				circuit->GetTeamId(), leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()),
 				lp.x, lp.z, goalPos.x, goalPos.z, lp.distance2D(goalPos),
 				(GetTarget() != nullptr) && (GetTarget()->GetCircuitDef() != nullptr)
 					? GetTarget()->GetCircuitDef()->GetDef()->GetName() : "-",
-				keptN);
+				keptN, aaSetN);
 	}
 
 	state = State::ROAM;
+	// SHOOT WHAT SHOOTS YOU, KEEP FLYING (his 10-12): a committed gunship wing on its way to the economy
+	// set-targets the nearest AA in reach -- the move order stands, so it fires going past, not stopping.
+	if ((GetTarget() == nullptr) && (frame >= nextAaPick) && leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()) {
+		nextAaPick = frame + FRAMES_PER_SEC;
+		const AIFloat3& lp = leader->GetPos(frame);
+		float best = SQUARE(leader->GetCircuitDef()->GetMaxRange());
+		CEnemyInfo* aa = nullptr;
+		for (auto& kv : circuit->GetEnemyInfos()) {
+			CEnemyInfo* e = kv.second;
+			CCircuitDef* ed = e->GetCircuitDef();
+			if (e->IsHidden() || !e->IsInRadarOrLOS() || (ed == nullptr) || !ed->HasSurfToAir()) {
+				continue;
+			}
+			const float d2 = lp.SqDistance2D(e->GetPos());
+			if (d2 < best) {
+				best = d2;
+				aa = e;
+			}
+		}
+		if (aa != nullptr) {
+			++aaSetN;
+			for (CCircuitUnit* unit : units) {
+				TRY_UNIT(circuit, unit,
+					unit->CmdSetTarget(aa);
+				)
+			}
+		}
+	}
 	if (GetTarget() != nullptr) {
 		noTargetSince = -1;
 		state = State::ENGAGE;
