@@ -142,14 +142,19 @@ def score(mdir):
         def end(k):
             xs = [v for v in s.get(k, []) if v is not None]
             return xs[-1] if xs else 1.0
-        if end("eco") > 1.0 and end("army") > 1.0:
+        # ...but a hoard is not a lead: ahead on eco and army while losing the trade and the ground
+        # adjudicated as a win (c510 took 16 of 24 so), so the fight -- damage and land -- must agree
+        fight = end("dmg") > 1.0 and end("land") > 1.0
+        if end("eco") > 1.0 and end("army") > 1.0 and fight:
             result = "W"
-        elif end("eco") < 1.0 and end("army") < 1.0:
+        elif (end("eco") < 1.0 and end("army") < 1.0) or (end("dmg") < 1.0 and end("land") < 1.0):
             result = "L"
     # a loss earns lasting longer; a win earns ending sooner (his 10-11: games ran too big and long)
     t = min(g["minutes"], MINUTES) / MINUTES
     res = 0.5 * {"W": 1.0 + 0.5 * (1.0 - t), "L": -1.0 + 0.5 * t, "D": 0.0}[result]
-    return 0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex") + res, result
+    # aggression (his 10-11: penalize a passive game hard): the damage trade and the ground held
+    return (0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex")
+            + 0.5 * mean_log("dmg") + 0.5 * mean_log("land") + res), result
 
 
 def play(job):
