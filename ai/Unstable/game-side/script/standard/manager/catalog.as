@@ -95,6 +95,7 @@ array<array<int>> gBuildsList;  // builder def id -> def ids it can build
 array<array<int>> gBuiltBy;     // def id -> builder def ids able to build it
 array<bool> gT1Hand;            // def is the commander or a builder its factories produce
 array<bool> gT1Line;            // gT1Hand MINUS the commander: what the T1 line alone fields
+array<bool> gAdvHand;    // a mobile builder that can raise economy no T1 hand can (fusion, T2 extractor)
 
 bool gInited = false;
 
@@ -293,6 +294,44 @@ void Init()
 				}
 			}
 		}
+	}
+
+	// ADVANCED HANDS BY WHAT THEY BUILD, not by the plant they came from: an economy a T1 hand cannot
+	// raise (a generator or extractor above any T1-buildable one). The Proteus combat engineer leaves the
+	// T2 lab but builds T1 economy; counted as an advanced hand, 25 idle ones held the lab's advanced
+	// constructor off for 13 minutes and no fusion stood until 29.5 m (his 10-12 watch, Legion).
+	gAdvHand.resize(uint(gDefCount + 1));
+	{
+		float t1E = 0.f, t1M = 0.f;
+		for (int i = 1; i <= gDefCount; ++i) {
+			if (!gT1Line[i])
+				continue;
+			const array<int>@ bl = gBuildsList[i];
+			for (uint k = 0; k < bl.length(); ++k) {
+				if (gMakeE[bl[k]] > t1E)
+					t1E = gMakeE[bl[k]];
+				if (gExtractsM[bl[k]] > t1M)
+					t1M = gExtractsM[bl[k]];
+			}
+		}
+		for (int i = 0; i <= gDefCount; ++i) {
+			gAdvHand[i] = false;
+			if ((i == 0) || !gMobile[i] || gT1Line[i])
+				continue;
+			const array<int>@ bl = gBuildsList[i];
+			for (uint k = 0; k < bl.length(); ++k) {
+				if ((gMakeE[bl[k]] > t1E) || (gExtractsM[bl[k]] > t1M)) {
+					gAdvHand[i] = true;
+					break;
+				}
+			}
+		}
+		string adv = "";
+		for (int i = 1; i <= gDefCount; ++i) {
+			if (gAdvHand[i] && gAvailable[i])
+				adv += " " + Def(i).GetName();
+		}
+		AiLog("apex: advhand t1E=" + int(t1E) + " t1M=" + formatFloat(t1M, "", 0, 4) + " |" + adv);
 	}
 
 	int nAvail = 0;

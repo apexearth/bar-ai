@@ -934,10 +934,10 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 	// here: it took a capped fleet to 47/40.
 	const int pd = gRedrawDef[pick];
 	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
-		const bool advHand = (DefTier(pd) >= 2) && (ConTierHave(1) > ConTierHave(2));
+		const bool advHand = Catalog::gAdvHand[pd] && (ConTierHave(1) > ConTierHave(2));
 		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
 				: ((ConPoolFull(pd))
-					|| ConStandsIdle(Catalog::gFlyer[pd], DefTier(pd))))
+					|| ConStandsIdle(Catalog::gFlyer[pd], Catalog::gAdvHand[pd] ? 2 : 1)))
 			return null;
 	}
 	return Catalog::Def(pd);
@@ -975,7 +975,7 @@ int ConPoolOf(int d)
 {
 	if (Catalog::gFlyer[d])
 		return 2;
-	return (DefTier(d) >= 2) ? 1 : 0;
+	return Catalog::gAdvHand[d] ? 1 : 0;
 }
 int ConPoolHave(int pool)
 {
@@ -1046,7 +1046,7 @@ bool ConStandsIdle(bool flyer, int tier = 1)
 		const int wd = int(w.circuitDef.id);
 		if (!Catalog::gMobile[wd] || Catalog::gRezzer[wd] || (Catalog::gCostM[wd] <= 1.f)
 			|| w.circuitDef.IsRoleAny(Unit::Role::COMM.mask)
-			|| (Catalog::gFlyer[wd] != flyer) || (DefTier(wd) < tier))
+			|| (Catalog::gFlyer[wd] != flyer) || ((tier >= 2) && !Catalog::gAdvHand[wd]))
 			continue;
 		IUnitTask@ t = w.task;
 		if ((t is null) || (t.GetType() == Task::Type::IDLE))
@@ -1064,7 +1064,7 @@ int ConTierHave(int tier)
 		if (!Catalog::gMobile[di] || !Catalog::gBuilder[di] || Catalog::gRezzer[di]
 			|| (Catalog::gCostM[di] <= 1.f) || Catalog::Def(di).IsRoleAny(Unit::Role::COMM.mask))
 			continue;
-		const int t = (DefTier(di) >= 2) ? 2 : 1;
+		const int t = Catalog::gAdvHand[di] ? 2 : 1;
 		if (t == tier)
 			n += gOwnCount[d] + Brain::PendAnyOf(di);
 	}
@@ -1745,7 +1745,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					prank += " " + Catalog::Def(d).GetName() + ":concap";
 				continue;
 			}
-			if (ConStandsIdle(Catalog::gFlyer[d], DefTier(d))) {
+			if (ConStandsIdle(Catalog::gFlyer[d], Catalog::gAdvHand[d] ? 2 : 1)) {
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":conidle";
 				continue;
