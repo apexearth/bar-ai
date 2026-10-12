@@ -21,7 +21,7 @@ the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed
     python tools/randsearch.py --anneal 99   # (while stopped) anneal around net 99
 State: runtime/nn/rand.json; log: runtime/nn/rand.log; games: tournaments/<stamp>-nn-rand/.
 """
-import json, math, os, random, sys, threading, time
+import json, math, os, random, shutil, subprocess, sys, threading, time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
@@ -56,6 +56,62 @@ def log(msg):
 def weights(lay, seed, s):
     rng = random.Random(seed)
     return [x + rng.gauss(0, s) for x in neuro.middle(lay, rng)]
+
+
+# ONE BASE FOR EVERY NEW NETWORK (his 10-11: mine which weights go with winning, merge them). Each
+# network used to draw its own random middle, so hidden neuron k meant something different in every
+# network and no block could be compared or merged. Since then every new random network is this one
+# middle (the one evolution started from) plus its own noise: a family whose neurons line up.
+FAMILY = "mid1ea92a42"
+FAMILY_SRC = os.path.join(REPO, "tournaments", "20261010-225137-nn-neuro-g1", "c00.weights")
+_family_w = None
+
+
+def family_middle(st):
+    global _family_w
+    if _family_w is None:
+        keep = os.path.join(st["dir"], FAMILY + ".weights")
+        if not os.path.exists(keep):
+            shutil.copy(FAMILY_SRC, keep)
+        _family_w = [float(x) for x in open(keep, encoding="utf-8").read().split()]
+    return _family_w
+
+
+def family_weights(st, seed, s):
+    rng = random.Random(seed)
+    return [x + rng.gauss(0, s) for x in family_middle(st)]
+
+
+# MERGES: tools/weightmine.py, run in the background every MERGE_EVERY new family networks, writes merged
+# networks to runtime/nn/merge-inbox/; each is adopted here as a family network owed the 4-game rung.
+MERGE_EVERY = 50
+INBOX = os.path.join(neuro.NN, "merge-inbox")
+
+
+def adopt_merges(st):
+    if not os.path.isdir(INBOX):
+        return
+    for name in sorted(os.listdir(INBOX)):
+        if not name.endswith(".weights"):
+            continue
+        f = os.path.join(INBOX, name)
+        w = [float(x) for x in open(f, encoding="utf-8").read().split()]
+        os.remove(f)
+        i = st["next"]
+        st["next"] += 1
+        neuro.opt_file(st["dir"], i, w)
+        st["nets"][str(i)] = {"id": i, "seed": 0, "s": 0.0, "family": FAMILY, "label": name[:-8], "games": [],
+                              "busy": 0, "tries": 0, "fails": 0, "target": LADDER[1], "status": "live"}
+        log("net %d adopted from %s, owed %d games" % (i, name, LADDER[1]))
+
+
+def spawn_miner(st):
+    st["family_born"] = st.get("family_born", 0) + 1
+    if st["family_born"] % MERGE_EVERY == 0:
+        with open(os.path.join(neuro.NN, "weightmine.log"), "a", encoding="utf-8") as fh:
+            subprocess.Popen([sys.executable, "-u", os.path.join(REPO, "tools", "weightmine.py"), "--write", "3"],
+                             cwd=REPO, stdout=fh, stderr=subprocess.STDOUT)
+        log("weightmine started after %d family networks" % st["family_born"])
 
 
 def played_weights(st, nid):
@@ -110,6 +166,7 @@ def next_job(st, lay, rng):
             a["born"], c["id"], wins(c), len(c["games"]), 100 * rate(c)))
         st.setdefault("anneal_done", []).append(dict(a, at=time.strftime("%Y-%m-%d %H:%M")))
         del st["anneal"]
+    adopt_merges(st)
     live = [n for n in st["nets"].values() if owed(n)]
     if live:
         n = max(live, key=lambda n: (n["target"], -n["id"]))
@@ -127,9 +184,10 @@ def next_job(st, lay, rng):
             w = [x + child.gauss(0, n["s"]) for x in played_weights(st, a["centre"])]
         else:
             s = math.exp(rng.uniform(math.log(S_RANGE[0]), math.log(S_RANGE[1])))
-            n = {"id": i, "seed": rng.randrange(1 << 30), "s": round(s, 4), "games": [], "busy": 0, "tries": 0,
-                 "fails": 0, "target": LADDER[0], "status": "live"}
-            w = weights(lay, n["seed"], n["s"])
+            n = {"id": i, "seed": rng.randrange(1 << 30), "s": round(s, 4), "family": FAMILY, "games": [],
+                 "busy": 0, "tries": 0, "fails": 0, "target": LADDER[0], "status": "live"}
+            w = family_weights(st, n["seed"], n["s"])
+            spawn_miner(st)
         st["nets"][str(i)] = n
         neuro.opt_file(st["dir"], i, w)
     else:
