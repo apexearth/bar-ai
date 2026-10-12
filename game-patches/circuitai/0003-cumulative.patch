@@ -14090,7 +14090,7 @@ index 275db3ae..0dbc7ea7 100644
  public:
  	virtual void Log();
 diff --git a/src/circuit/task/builder/BuilderTask.cpp b/src/circuit/task/builder/BuilderTask.cpp
-index bc8ff11b..147ffca7 100644
+index bc8ff11b..c049bd28 100644
 --- a/src/circuit/task/builder/BuilderTask.cpp
 +++ b/src/circuit/task/builder/BuilderTask.cpp
 @@ -13,6 +13,7 @@
@@ -14470,7 +14470,7 @@ index bc8ff11b..147ffca7 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	TRY_UNIT(circuit, unit,
-@@ -285,14 +568,268 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -285,14 +568,275 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  	}
  
@@ -14713,6 +14713,13 @@ index bc8ff11b..147ffca7 100644
 +	} else {
 +		FindBuildSite(unit, pos, searchRadius);
 +	}
++	// A turret stood at the map corner (51,64) with no spot near it (10-12 watch game 3): which step moved it.
++	if (utils::is_valid(buildPos) && (buildPos.SqDistance2D(position) > SQUARE(1000.f))) {
++		circuit->LOG("apex: site-far t=%i %s bt=%i asked=%.0f,%.0f origin=%.0f,%.0f search=%.0f,%.0f at=%.0f,%.0f fails=%i grid=%i r=%.0f",
++				circuit->GetTeamId(), buildDef->GetDef()->GetName(), static_cast<int>(buildType),
++				position.x, position.z, origin.x, origin.z, pos.x, pos.z, buildPos.x, buildPos.z,
++				buildFails, onGrid ? 1 : 0, searchRadius);
++	}
 +
 +	// WHY A TASK NEVER BECOMES A BUILDING. Everything upstream is logged --
 +	// the want, the price, the request -- and this step, where the site search
@@ -14743,7 +14750,7 @@ index bc8ff11b..147ffca7 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdBuild(buildDef, buildPos, facing, 0, frame + FRAMES_PER_SEC * 60);
  		)
-@@ -302,6 +839,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -302,6 +846,7 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  		}
  
  		// Fallback to Guard/Assist/Patrol
@@ -14751,7 +14758,7 @@ index bc8ff11b..147ffca7 100644
  		manager->FallbackTask(unit);
  		return false;
  	}
-@@ -310,13 +848,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
+@@ -310,13 +855,34 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
  
  void IBuilderTask::OnUnitIdle(CCircuitUnit* unit)
  {
@@ -14787,7 +14794,7 @@ index bc8ff11b..147ffca7 100644
  	}
  }
  
-@@ -333,10 +892,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -333,10 +899,97 @@ void IBuilderTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  		return;
  	}
  
@@ -14885,7 +14892,7 @@ index bc8ff11b..147ffca7 100644
  		manager->AbortTask(this);  // Doesn't call RemoveAssignee
  	}
  }
-@@ -346,6 +992,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -346,6 +999,7 @@ void IBuilderTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
  	RemoveAssignee(unit);
  	// NOTE: AbortTask usually does not call RemoveAssignee for each unit
  	if (((target == nullptr) || units.empty()) && !unit->IsMorphing()) {
@@ -14893,7 +14900,7 @@ index bc8ff11b..147ffca7 100644
  		manager->AbortTask(this);
  	}
  }
-@@ -427,18 +1074,56 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
+@@ -427,18 +1081,56 @@ CCircuitUnit* IBuilderTask::GetNextAssignee()
  	if (units.empty()) {
  		return nullptr;
  	}
@@ -14957,7 +14964,7 @@ index bc8ff11b..147ffca7 100644
  	}
  }
  
-@@ -447,13 +1132,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -447,13 +1139,21 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  	CCircuitAI* circuit = manager->GetCircuit();
  
  	// FIXME: Replace const 1000.0f with build time?
@@ -14980,7 +14987,7 @@ index bc8ff11b..147ffca7 100644
  		manager->AbortTask(this);
  		return false;
  	}
-@@ -483,7 +1176,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -483,7 +1183,7 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  				TRY_UNIT(circuit, unit,
  					AIFloat3 awayPos = utils::get_radial_pos(pos, 64.f);
  					CTerrainManager::CorrectPosition(awayPos);
@@ -14989,7 +14996,7 @@ index bc8ff11b..147ffca7 100644
  				)
  			}
  			return true;
-@@ -492,12 +1185,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -492,12 +1192,20 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  		if ((buildType != BuildType::GUARD)
  			&& ((executors.size() < 2) || !unit->IsAttrBase()))
  		{
@@ -15013,7 +15020,7 @@ index bc8ff11b..147ffca7 100644
  				}
  			)
  			return true;
-@@ -508,8 +1209,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
+@@ -508,8 +1216,44 @@ bool IBuilderTask::Reevaluate(CCircuitUnit* unit)
  			unit->CmdWait(false);
  		)
  	}
@@ -15058,7 +15065,7 @@ index bc8ff11b..147ffca7 100644
  	ShowAssignee(unit);
  	if ((task != nullptr)
  		&& ((task->GetType() != IUnitTask::Type::BUILDER)
-@@ -527,22 +1264,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -527,22 +1271,131 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  	// TODO: Check IsForceUpdate, shield charge and retreat
  
  	CCircuitDef* cdef = unit->GetCircuitDef();
@@ -15197,7 +15204,7 @@ index bc8ff11b..147ffca7 100644
  		return;
  	}
  
-@@ -550,10 +1396,21 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
+@@ -550,10 +1403,21 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
  		return;
  	}
  
@@ -15220,7 +15227,7 @@ index bc8ff11b..147ffca7 100644
  	pathQueries[unit] = query;
  
  	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-@@ -565,10 +1422,149 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
+@@ -565,10 +1429,149 @@ void IBuilderTask::ApplyPath(const CQueryPathSingle* query)
  {
  	const std::shared_ptr<CPathInfo>& pPath = query->GetPathInfo();
  	CCircuitUnit* unit = query->GetUnit();
@@ -15372,7 +15379,7 @@ index bc8ff11b..147ffca7 100644
  		unit->GetTravelAct()->StateFinish();
  	}
  }
-@@ -632,232 +1628,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
+@@ -632,232 +1635,179 @@ CAllyUnit* IBuilderTask::FindSameAlly(CCircuitUnit* builder, const std::vector<U
  	return nullptr;
  }
  
@@ -22135,7 +22142,7 @@ index 5eebb710..abf75fc5 100644
  
  } // namespace circuit
 diff --git a/src/circuit/unit/CircuitDef.cpp b/src/circuit/unit/CircuitDef.cpp
-index a1ac882a..1a8ca592 100644
+index a1ac882a..d1750879 100644
 --- a/src/circuit/unit/CircuitDef.cpp
 +++ b/src/circuit/unit/CircuitDef.cpp
 @@ -11,6 +11,7 @@
@@ -22263,13 +22270,13 @@ index a1ac882a..1a8ca592 100644
 +	}
 +
 +	it = customParams.find("energyconv_capacity");
-+	if (it != customParams.end()) {
+ 	if (it != customParams.end()) {
+-		upkeepE += utils::string_to_float(it->second);
 +		convCapacityE = utils::string_to_float(it->second);
 +		upkeepE += convCapacityE;
 +	}
 +	it = customParams.find("energyconv_efficiency");
- 	if (it != customParams.end()) {
--		upkeepE += utils::string_to_float(it->second);
++	if (it != customParams.end()) {
 +		convRatioM = utils::string_to_float(it->second);
  	}
  
@@ -22356,7 +22363,21 @@ index a1ac882a..1a8ca592 100644
  		float dps = .0f;
  		float dmg = .0f;
  
-@@ -409,7 +532,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -404,12 +527,27 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+ 		if (minReloadTime > reloadTime) {
+ 			minReloadTime = reloadTime;
+ 		}
++		// A sweepfire weapon (Bastion's heat ray) fires continuously once locked; BAR's own unit info
++		// reads its rate as damage x sweepfire per second. Per reload it read a 12th of that.
++		it = customParams.find("sweepfire");
++		if (it != customParams.end()) {
++			const float sweep = utils::string_to_float(it->second);
++			if (sweep > 0.f) {
++				reloadTime = wd->GetSalvoSize() / sweep;
++			}
++		}
+ 		if (extraDmg > 0.1f) {
+ 			dmg += extraDmg;
  			dps += extraDmg * wd->GetSalvoSize() / reloadTime * scale;
  		}
  
@@ -22371,7 +22392,7 @@ index a1ac882a..1a8ca592 100644
  		targetCategory |= weaponCat;
  
  		const float wdAoe = wd->GetAreaOfEffect();
-@@ -420,11 +549,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -420,11 +558,19 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  //		it = customParams.find("truerange");
  		const float range = /*(it != customParams.end()) ? utils::string_to_float(it->second) : */wd->GetRange();
  
@@ -22396,7 +22417,7 @@ index a1ac882a..1a8ca592 100644
  		canSurfTargetAir |= isAirWeapon;
  
  		const bool isLandWeapon = ((wt != "TorpedoLauncher") || wd->IsSubMissile());
-@@ -460,16 +597,37 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -460,16 +606,37 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  				// factor in stockpile weapons that take a long time to build, use their build time and assume thats their 'reload' time
  				outDps += localDmg * wd->GetSalvoSize() / (std::max(reloadTime, wd->IsStockpileable() ? wd->GetStockpileTime() : 0)) * scale;
  			};
@@ -22437,7 +22458,7 @@ index a1ac882a..1a8ca592 100644
  		airDmg += dmg;
  		airDps += dps;
  		surfDmg += dmg;
-@@ -477,20 +635,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -477,20 +644,57 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		waterDmg += dmg;
  		waterDps += dps;
  
@@ -22497,7 +22518,7 @@ index a1ac882a..1a8ca592 100644
  		}
  		if ((weaponCat & circuit->GetWaterCategory()) && isWaterWeapon) {
  			float& mr = maxRange[static_cast<RangeT>(RangeType::WATER)];
-@@ -498,6 +693,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -498,6 +702,9 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			if (mr > maxRange[static_cast<RangeT>(maxRangeType)]) {
  				maxRangeType = RangeType::WATER;
  			}
@@ -22507,7 +22528,7 @@ index a1ac882a..1a8ca592 100644
  		}
  
  		// FIXME: hasDGun is actually "manual command to fire required". There's "DGun" weapon type,
-@@ -566,6 +764,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -566,6 +773,28 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  		weaponMount = bestWpMnt;
  	}
  
@@ -22536,7 +22557,7 @@ index a1ac882a..1a8ca592 100644
  	isAttacker = (airDps > .1f) || (surfDps > .1f) || (waterDps > .1f);
  	if (IsMobile() && !IsAttacker()) {  // mobile bomb?
  		WeaponDef* wd = def->GetDeathExplosion();
-@@ -618,6 +838,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -618,6 +847,13 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  	//       health /= def->GetArmoredMultiple();
  	const float dmg = std::max(std::max(waterDmg, surfDmg), airDmg);
  	const float dps = std::max(std::max(waterDps, surfDps), airDps);
@@ -22550,7 +22571,7 @@ index a1ac882a..1a8ca592 100644
  	defThrDmg = pwrDmg = sqrtf(dps) * std::pow(dmg, 0.25f) * THREAT_MOD;
  	defThreat = power = defThrDmg * sqrtf(health + maxShield * SHIELD_MOD);
  	airThrDmg = sqrtf(airDps) * std::pow(airDmg, 0.25f) * THREAT_MOD;
-@@ -629,6 +856,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
+@@ -629,6 +865,17 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
  			surfThrDmg * sqrtf(health + maxShield * SHIELD_MOD),
  			waterThrDmg * sqrtf(health + maxShield * SHIELD_MOD));
  #endif
@@ -22568,7 +22589,7 @@ index a1ac882a..1a8ca592 100644
  }
  
  CCircuitDef::~CCircuitDef()
-@@ -764,6 +1002,7 @@ void CCircuitDef::SetRange(float range)
+@@ -764,6 +1011,7 @@ void CCircuitDef::SetRange(float range)
  	maxRangeType = RangeType::AIR;
  	for (RangeT rt = 0; rt < static_cast<RangeT>(RangeType::_SIZE_); ++rt) {
  		maxRange[rt] = range;
@@ -22576,7 +22597,7 @@ index a1ac882a..1a8ca592 100644
  	}
  }
  
-@@ -772,6 +1011,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
+@@ -772,6 +1020,7 @@ void CCircuitDef::SetRange(RangeType type, float range)
  	// TODO: Asserts >= 0?
  	minRange = std::min(minRange, range);
  	maxRange[static_cast<RangeT>(type)] = range;

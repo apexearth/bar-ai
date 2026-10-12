@@ -803,6 +803,13 @@ bool IBuilderTask::Execute(CCircuitUnit* unit)
 	} else {
 		FindBuildSite(unit, pos, searchRadius);
 	}
+	// A turret stood at the map corner (51,64) with no spot near it (10-12 watch game 3): which step moved it.
+	if (utils::is_valid(buildPos) && (buildPos.SqDistance2D(position) > SQUARE(1000.f))) {
+		circuit->LOG("apex: site-far t=%i %s bt=%i asked=%.0f,%.0f origin=%.0f,%.0f search=%.0f,%.0f at=%.0f,%.0f fails=%i grid=%i r=%.0f",
+				circuit->GetTeamId(), buildDef->GetDef()->GetName(), static_cast<int>(buildType),
+				position.x, position.z, origin.x, origin.z, pos.x, pos.z, buildPos.x, buildPos.z,
+				buildFails, onGrid ? 1 : 0, searchRadius);
+	}
 
 	// WHY A TASK NEVER BECOMES A BUILDING. Everything upstream is logged --
 	// the want, the price, the request -- and this step, where the site search

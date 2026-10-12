@@ -527,6 +527,15 @@ CCircuitDef::CCircuitDef(CCircuitAI* circuit, UnitDef* def, std::unordered_set<I
 		if (minReloadTime > reloadTime) {
 			minReloadTime = reloadTime;
 		}
+		// A sweepfire weapon (Bastion's heat ray) fires continuously once locked; BAR's own unit info
+		// reads its rate as damage x sweepfire per second. Per reload it read a 12th of that.
+		it = customParams.find("sweepfire");
+		if (it != customParams.end()) {
+			const float sweep = utils::string_to_float(it->second);
+			if (sweep > 0.f) {
+				reloadTime = wd->GetSalvoSize() / sweep;
+			}
+		}
 		if (extraDmg > 0.1f) {
 			dmg += extraDmg;
 			dps += extraDmg * wd->GetSalvoSize() / reloadTime * scale;

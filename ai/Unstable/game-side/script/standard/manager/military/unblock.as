@@ -689,7 +689,9 @@ void UpdateUnblock()
 		++gPenCursor;
 
 		const AIFloat3 at = u.GetPos(frame);
-		if (at.distance2D(gPenPos[i]) > UNBLOCK_EPS) {
+		// Confined, not motionless: a two-cell pocket lets a penned unit shuffle 170 elmos, and at
+		// UNBLOCK_EPS that reset the clock for 8.5 minutes (10-12 watch game, commander re-penned).
+		if (at.distance2D(gPenPos[i]) > UNBLOCK_REACH) {
 			gPenPos[i] = at;
 			gPenMoved[i] = frame;
 			continue;
@@ -710,7 +712,7 @@ void UpdateUnblock()
 	if (!gSweepDone || (frame < gNextProbe) || (gCandId == 0))
 		return;
 	CCircuitUnit@ c = ai.GetTeamUnit(gCandId);
-	if ((c !is null) && (c.GetPos(frame).distance2D(gCandAt) <= UNBLOCK_EPS)) {
+	if ((c !is null) && (c.GetPos(frame).distance2D(gCandAt) <= UNBLOCK_REACH)) {
 		if (StartMoveTest(c, gCandAt))
 			gNextProbe = frame + int(ai.GetTunable("apex_unblock_period", float(UNBLOCK_PROBE_PERIOD)));
 		else
@@ -735,7 +737,14 @@ void UpdateMoveTests()
 			continue;
 		}
 		const AIFloat3 at = u.GetPos(frame);
-		if (at.distance2D(gTestFrom[i]) > UNBLOCK_EPS) {
+		// Half the walk a free unit makes in the wait, up to half the ordered distance: inside a two-cell
+		// pocket a penned unit covers more than UNBLOCK_EPS and read as free.
+		float walked = 0.5f * Catalog::gSpeed[int(u.circuitDef.id)] * float(wait) / float(SECOND);
+		if (walked > UNBLOCK_REACH * 0.5f)
+			walked = UNBLOCK_REACH * 0.5f;
+		if (walked < UNBLOCK_EPS)
+			walked = UNBLOCK_EPS;
+		if (at.distance2D(gTestFrom[i]) > walked) {
 			MarkPenMoved(gTestId[i], at);   // it walked; it was parked, not penned
 			DropTest(i);
 			continue;
