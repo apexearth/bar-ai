@@ -347,6 +347,13 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// not this floor, is what closes it.
 	const float horizW = ai.GetTunable("apex_exposed_loss_s",
 			TUNE_EXPOSED_LOSS_S);
+	// T3 WALKS THROUGH (his 2026-10-12, docs/24): an enemy T3 army is not stopped at one gun's circle, so
+	// a home-ground post is staked by the base it would reach and expects it inside the exposure window,
+	// both by the share of their identified army that is T3. Priced per gun's circle and at the measured
+	// rate, a Pulsar read 2.4 m/s on 3,500 m while 400k of T3 walked in (watch game 26: zero built).
+	const float t3Share = (ai.GetTunable("apex_t3_base_stake", 1.f) > 0.f) ? Military::FoeTierAbove(2) : 0.f;
+	const float t3Stake = gPfTotal * t3Share;
+	const float t3Hz = (horizW > 1.f) ? (t3Share / horizW) : 0.f;
 	// The army's fill time: the shortfall closes at the army gap's urgency.
 	float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	if (fillS <= 1.f)
@@ -708,6 +715,16 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		float stakeK = stake;
 		if ((capM > 0.f) && (stakeK > capM))
 			stakeK = capM;
+		// After the kill cap: against a breach the post protects the base, and `stopped` already holds the
+		// gun to its own share of the wave.
+		if ((t3Share > 0.f) && Builder::gHomeSet
+			&& (s.distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST))
+		{
+			if (stakeK < t3Stake)
+				stakeK = t3Stake;
+			if (hz < t3Hz)
+				hz = t3Hz;
+		}
 		float prevented = stakeK * hz * stopped;
 		// THE PULL FACES THE ENEMY. Uniform, it grew the wall by walk
 		// distance -- toward builder convenience, not the war (measured over

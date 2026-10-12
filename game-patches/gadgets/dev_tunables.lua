@@ -341,6 +341,7 @@ local NAMES = {
 	"apex_raid_commit",
 	"apex_defend_cap",
 	"apex_behind_lean",
+	"apex_t3_base_stake",
 	"apex_fight_travel",
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
