@@ -471,6 +471,18 @@ in his games); (4) scouts kept alive as eyes (the Tick is buyable since
 (6) LRPC (HighGroundNear exists, unmeasured) and the Ragnarok never
 priced in -- is it the super-weapon budget or the track record?
 
+apexearth 2026-10-12, watching 19 Marauders at 1.5x their income (watch game
+Armada mirror, a time-limit draw at 2.5x their metal built): "We can go around
+the side of the map and kill this AI easily. But usually we run away if we get
+close to doing something like that. Whatevers making them afraid, why not call
+for air support? They totally have the ability to win the game on their own if
+they were aggressive enough. Instead they run in, attack some, run back to a
+forward area for repairs maybe, and then try to run back into the base, getting
+stuck on new building creations in the process... We are dominant in many
+games, we just don't capitalize on it." A seventh play: (7) when a push is
+about to break off, the air wing is called to it instead of the push turning
+home.
+
 ## Building as he would think it (2026-09-20)
 
 His model, offered as perspective while the election was being measured at
