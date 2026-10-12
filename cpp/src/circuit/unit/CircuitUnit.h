@@ -225,6 +225,7 @@ public:
 	bool IsDGunReady(int frame, float energy);
 	float GetDGunCostE() const;
 	int GetDGunReloadFrame() const;
+	int GetWeaponReloadFrame() const;  // the main weapon's; 0 with none
 	// apex: the script's commander decision says whether a D-gun may walk him
 	// in on a target beyond range; a withdrawing commander must not walk back.
 	void SetDGunClose(bool v) { dgunMayClose = v; }

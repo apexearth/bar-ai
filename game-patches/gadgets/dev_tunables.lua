@@ -339,6 +339,7 @@ local NAMES = {
 	"apex_prefer_target",
 	"apex_siege_fight",
 	"apex_raid_commit",
+	"apex_bomb_enroute",
 	"apex_fight_travel",
 	"apex_defend_engage_margin",
 	"apex_defend_muster",

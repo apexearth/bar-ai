@@ -45,6 +45,15 @@ private:
 	void PlanSpread(int frame);
 	float SplashSpacing(int frame);
 	void AssignSlots(int frame);
+	// apex: drops on the way to the cell while the reload still beats the arrival (his 10-12)
+	bool EnRouteDrops(int frame);
+	std::map<ICoreUnit::Id, int> dropUntil;  // our bomber -> the latest frame its en-route pass may run
+	// our bomber -> the ground it drops on, and the heading it was given
+	std::map<ICoreUnit::Id, std::pair<springai::AIFloat3, springai::AIFloat3>> dropAt;
+	std::map<ICoreUnit::Id, int> dropClaim;  // their structure -> the frame our pass on it is done
+	int nEnRoute = 0;
+	int enRouteLogAt = 0;
+	int nextEnRouteScan = 0;
 	float slotSpacing = 0.f;
 	int slotSpacingAt = -1;
 	int slotLogAt = -1;

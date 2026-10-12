@@ -138,6 +138,8 @@ void CBombTask::RemoveAssignee(CCircuitUnit* unit)
 	ISquadTask::RemoveAssignee(unit);
 	issued.erase(unit->GetId());
 	aims.erase(unit->GetId());
+	dropUntil.erase(unit->GetId());
+	dropAt.erase(unit->GetId());
 	if (units.empty()) {
 		manager->AbortTask(this);
 	}
@@ -252,6 +254,11 @@ void CBombTask::Update()
 	// Any other order replaces the attack, so the next one must be sent.
 	issued.clear();
 
+	// A pass on the way is in flight: a new path would turn it off its drop.
+	if (EnRouteDrops(frame)) {
+		return;
+	}
+
 	// A path around the AA from here only turns a committed wave in circles.
 	if (committed && utils::is_valid(position)) {
 		Fallback();
@@ -278,6 +285,138 @@ void CBombTask::Update()
 	});
 }
 
+// EN-ROUTE DROPS (his 2026-10-12): "drop on the first thing on the way, then keep going, bomb the next
+// thing... the ultimate target is the most important." A bomber whose bomb is loaded makes one pass on the
+// dearest unarmed structure under the wing's own track to the cell -- no detour -- when the leg from it to
+// the cell is long enough to reload: an attack on the GROUND (the engine ends it after one drop because a
+// move is queued behind) and the move to the cell. True while a pass is in flight, so the caller leaves
+// the path alone.
+bool CBombTask::EnRouteDrops(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	// a pass is over once the plane is past its drop point along the heading it was given, or its clock ran out
+	bool inFlight = false;
+	for (CCircuitUnit* u : units) {
+		auto du = dropUntil.find(u->GetId());
+		if ((du == dropUntil.end()) || (frame >= du->second)) {
+			continue;
+		}
+		auto da = dropAt.find(u->GetId());
+		if (da != dropAt.end()) {
+			const AIFloat3 from = u->GetPos(frame) - da->second.first;
+			if (from.x * da->second.second.x + from.z * da->second.second.z > 0.f) {
+				du->second = frame;
+				continue;
+			}
+		}
+		inFlight = true;
+	}
+	if ((circuit->GetTunable("apex_bomb_enroute", 0.f) <= 0.f) || !utils::is_valid(position)) {
+		return inFlight;
+	}
+	// a path reply landing after the pass is issued would replace it
+	if ((frame < nextEnRouteScan) || !IsQueryReady(leader)) {
+		return inFlight;
+	}
+	nextEnRouteScan = frame + FRAMES_PER_SEC;
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	// the wing's own track: as wide as its formation front, and a bomb's splash either side
+	const int cols = (int)std::ceil(std::sqrt((float)std::max((int)units.size(), 1)));
+	const float halfW = 0.5f * (float)cols * SplashSpacing(frame) + leader->GetCircuitDef()->GetAoe();
+	const AIFloat3 lp = leader->GetPos(frame);
+	const float leadThreat = threatMap->GetThreatAt(leader, lp);
+	struct Cand { CEnemyInfo* e; AIFloat3 pos; float costM; };
+	std::vector<Cand> cands;
+	for (auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		CCircuitDef* ed = e->GetCircuitDef();
+		if (e->IsHidden() || (ed == nullptr) || ed->IsMobile() || ed->IsAttacker() || (ed->GetCostM() <= 1.f)) {
+			continue;
+		}
+		auto cl = dropClaim.find(e->GetId());
+		if ((cl != dropClaim.end()) && (frame < cl->second)) {
+			continue;   // a plane of this wing is already on its way to it
+		}
+		const AIFloat3& ep = e->GetPos();
+		if (!utils::is_in_map(ep) || (threatMap->GetThreatAt(leader, ep) > leadThreat)) {
+			continue;   // off the AA-routed track's safety
+		}
+		cands.push_back({e, ep, ed->GetCostM()});
+	}
+	if (cands.empty()) {
+		return inFlight;
+	}
+	const float speed = std::max(lowestSpeed, 1.f);   // elmos per second
+	const int timeout = FRAMES_PER_SEC * 60;
+	for (CCircuitUnit* u : units) {
+		if (u->Blocker() != nullptr) {
+			continue;
+		}
+		const int rl = u->GetCircuitDef()->GetReloadTime();   // frames
+		if ((rl <= 0) || (u->GetWeaponReloadFrame() > frame)) {
+			continue;   // the bomb is not loaded
+		}
+		const AIFloat3 pos = u->GetPos(frame);
+		AIFloat3 toT = position - pos;
+		toT.y = 0.f;
+		const float dist = toT.Length2D();
+		const float reloadD = float(rl) / FRAMES_PER_SEC * speed;   // elmos flown while it reloads
+		if (dist <= reloadD) {
+			continue;   // a drop now would not reload before the cell
+		}
+		const AIFloat3 dir = toT / dist;
+		int bi = -1;
+		float bestV = 0.f, bestAlong = 0.f, bestLat = 0.f;
+		for (int ci = 0; ci < (int)cands.size(); ++ci) {
+			const Cand& c = cands[ci];
+			if (c.e == nullptr) {
+				continue;
+			}
+			const AIFloat3 rel = c.pos - pos;
+			const float along = rel.x * dir.x + rel.z * dir.z;
+			if ((along <= 0.f) || (dist - along < reloadD)) {
+				continue;   // behind it, or too near the cell to reload after
+			}
+			const float lat = std::sqrt(std::max(rel.SqLength2D() - along * along, 0.f));
+			if ((lat > halfW) || (lat > along)) {
+				continue;   // off the track, or a turn rather than a pass
+			}
+			if (c.costM > bestV) {
+				bestV = c.costM;
+				bi = ci;
+				bestAlong = along;
+				bestLat = lat;
+			}
+		}
+		if (bi < 0) {
+			continue;
+		}
+		CEnemyInfo* best = cands[bi].e;
+		cands[bi].e = nullptr;
+		const int passF = int(bestAlong / speed * FRAMES_PER_SEC);
+		if (u->GetTravelAct() != nullptr) {
+			u->GetTravelAct()->StateWait();
+		}
+		TRY_UNIT(circuit, u,
+			u->CmdAttackGround(cands[bi].pos, 0, frame + timeout);
+			u->CmdMoveTo(position, UNIT_COMMAND_OPTION_SHIFT_KEY, frame + timeout);
+		)
+		dropUntil[u->GetId()] = frame + 2 * passF + 2 * FRAMES_PER_SEC;   // past the drop point ends it sooner
+		dropAt[u->GetId()] = std::make_pair(cands[bi].pos, dir);
+		dropClaim[best->GetId()] = frame + 2 * passF + 2 * FRAMES_PER_SEC;
+		inFlight = true;
+		++nEnRoute;
+		if (frame >= enRouteLogAt) {
+			enRouteLogAt = frame + FRAMES_PER_SEC * 10;
+			circuit->LOG("apex: bomb enroute t=%i %s -> %s cost=%.0f along=%.0f lat=%.0f halfW=%.0f toCell=%.0f reloadD=%.0f n=%i",
+					circuit->GetTeamId(), u->GetCircuitDef()->GetDef()->GetName(),
+					best->GetCircuitDef()->GetDef()->GetName(), bestV, bestAlong, bestLat, halfW,
+					dist, reloadD, nEnRoute);
+		}
+	}
+	return inFlight;
+}
+
 void CBombTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	ISquadTask::OnUnitIdle(unit);
@@ -289,7 +428,6 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
 	CCircuitAI* circuit = manager->GetCircuit();
 	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
 	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
-		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		position = RoamPos(leader);
 	}
 

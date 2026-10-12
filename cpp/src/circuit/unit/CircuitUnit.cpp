@@ -307,6 +307,11 @@ int CCircuitUnit::GetDGunReloadFrame() const
 	return (dgun != nullptr) ? dgun->GetReloadFrame() : 0;
 }
 
+int CCircuitUnit::GetWeaponReloadFrame() const
+{
+	return (weapon != nullptr) ? weapon->GetReloadFrame() : 0;
+}
+
 bool CCircuitUnit::IsDGunReady(int frame, float energy)
 {
 	return (dgun->GetReloadFrame() <= frame) && (dgunDef->GetCostE() <= energy)

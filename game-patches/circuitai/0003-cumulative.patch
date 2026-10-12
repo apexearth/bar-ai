@@ -18593,7 +18593,7 @@ index 8585fc29..82be80d8 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/BombTask.cpp b/src/circuit/task/fighter/BombTask.cpp
-index 9e6bfd88..029d3e17 100644
+index 9e6bfd88..7fca3bea 100644
 --- a/src/circuit/task/fighter/BombTask.cpp
 +++ b/src/circuit/task/fighter/BombTask.cpp
 @@ -5,6 +5,9 @@
@@ -18664,7 +18664,7 @@ index 9e6bfd88..029d3e17 100644
  		travelAction = new CFightAction(unit, squareSize);
  	} else {
  		travelAction = new CMoveAction(unit, squareSize);
-@@ -68,9 +88,56 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
+@@ -68,9 +88,58 @@ void CBombTask::AssignTo(CCircuitUnit* unit)
  	unit->SetAllowedToJump(cdef->IsAbleToJump() && cdef->IsAttrJump());
  }
  
@@ -18718,10 +18718,12 @@ index 9e6bfd88..029d3e17 100644
  	ISquadTask::RemoveAssignee(unit);
 +	issued.erase(unit->GetId());
 +	aims.erase(unit->GetId());
++	dropUntil.erase(unit->GetId());
++	dropAt.erase(unit->GetId());
  	if (units.empty()) {
  		manager->AbortTask(this);
  	}
-@@ -82,7 +149,9 @@ void CBombTask::Start(CCircuitUnit* unit)
+@@ -82,7 +151,9 @@ void CBombTask::Start(CCircuitUnit* unit)
  		return;
  	}
  	if (!pPath->posPath.empty()) {
@@ -18732,7 +18734,7 @@ index 9e6bfd88..029d3e17 100644
  	}
  }
  
-@@ -123,19 +192,24 @@ void CBombTask::Update()
+@@ -123,19 +194,24 @@ void CBombTask::Update()
  		return;
  	}
  
@@ -18760,7 +18762,7 @@ index 9e6bfd88..029d3e17 100644
  				)
  			}
  		}
-@@ -145,7 +219,7 @@ void CBombTask::Update()
+@@ -145,7 +221,7 @@ void CBombTask::Update()
  	bool isExecute = (updCount % 4 == 0);
  	if (!isExecute) {
  		for (CCircuitUnit* unit : units) {
@@ -18769,7 +18771,7 @@ index 9e6bfd88..029d3e17 100644
  		}
  		if (!isExecute) {
  			if (wasRegroup && !pPath->posPath.empty()) {
-@@ -164,8 +238,23 @@ void CBombTask::Update()
+@@ -164,8 +240,28 @@ void CBombTask::Update()
  	state = State::ROAM;
  	if (GetTarget() != nullptr) {
  		state = State::ENGAGE;
@@ -18789,13 +18791,153 @@ index 9e6bfd88..029d3e17 100644
 +	// Any other order replaces the attack, so the next one must be sent.
 +	issued.clear();
 +
++	// A pass on the way is in flight: a new path would turn it off its drop.
++	if (EnRouteDrops(frame)) {
++		return;
++	}
++
 +	// A path around the AA from here only turns a committed wave in circles.
 +	if (committed && utils::is_valid(position)) {
 +		Fallback();
  		return;
  	}
  
-@@ -192,6 +281,7 @@ void CBombTask::Update()
+@@ -189,9 +285,142 @@ void CBombTask::Update()
+ 	});
+ }
+ 
++// EN-ROUTE DROPS (his 2026-10-12): "drop on the first thing on the way, then keep going, bomb the next
++// thing... the ultimate target is the most important." A bomber whose bomb is loaded makes one pass on the
++// dearest unarmed structure under the wing's own track to the cell -- no detour -- when the leg from it to
++// the cell is long enough to reload: an attack on the GROUND (the engine ends it after one drop because a
++// move is queued behind) and the move to the cell. True while a pass is in flight, so the caller leaves
++// the path alone.
++bool CBombTask::EnRouteDrops(int frame)
++{
++	CCircuitAI* circuit = manager->GetCircuit();
++	// a pass is over once the plane is past its drop point along the heading it was given, or its clock ran out
++	bool inFlight = false;
++	for (CCircuitUnit* u : units) {
++		auto du = dropUntil.find(u->GetId());
++		if ((du == dropUntil.end()) || (frame >= du->second)) {
++			continue;
++		}
++		auto da = dropAt.find(u->GetId());
++		if (da != dropAt.end()) {
++			const AIFloat3 from = u->GetPos(frame) - da->second.first;
++			if (from.x * da->second.second.x + from.z * da->second.second.z > 0.f) {
++				du->second = frame;
++				continue;
++			}
++		}
++		inFlight = true;
++	}
++	if ((circuit->GetTunable("apex_bomb_enroute", 0.f) <= 0.f) || !utils::is_valid(position)) {
++		return inFlight;
++	}
++	// a path reply landing after the pass is issued would replace it
++	if ((frame < nextEnRouteScan) || !IsQueryReady(leader)) {
++		return inFlight;
++	}
++	nextEnRouteScan = frame + FRAMES_PER_SEC;
++	CThreatMap* threatMap = circuit->GetThreatMap();
++	// the wing's own track: as wide as its formation front, and a bomb's splash either side
++	const int cols = (int)std::ceil(std::sqrt((float)std::max((int)units.size(), 1)));
++	const float halfW = 0.5f * (float)cols * SplashSpacing(frame) + leader->GetCircuitDef()->GetAoe();
++	const AIFloat3 lp = leader->GetPos(frame);
++	const float leadThreat = threatMap->GetThreatAt(leader, lp);
++	struct Cand { CEnemyInfo* e; AIFloat3 pos; float costM; };
++	std::vector<Cand> cands;
++	for (auto& kv : circuit->GetEnemyInfos()) {
++		CEnemyInfo* e = kv.second;
++		CCircuitDef* ed = e->GetCircuitDef();
++		if (e->IsHidden() || (ed == nullptr) || ed->IsMobile() || ed->IsAttacker() || (ed->GetCostM() <= 1.f)) {
++			continue;
++		}
++		auto cl = dropClaim.find(e->GetId());
++		if ((cl != dropClaim.end()) && (frame < cl->second)) {
++			continue;   // a plane of this wing is already on its way to it
++		}
++		const AIFloat3& ep = e->GetPos();
++		if (!utils::is_in_map(ep) || (threatMap->GetThreatAt(leader, ep) > leadThreat)) {
++			continue;   // off the AA-routed track's safety
++		}
++		cands.push_back({e, ep, ed->GetCostM()});
++	}
++	if (cands.empty()) {
++		return inFlight;
++	}
++	const float speed = std::max(lowestSpeed, 1.f);   // elmos per second
++	const int timeout = FRAMES_PER_SEC * 60;
++	for (CCircuitUnit* u : units) {
++		if (u->Blocker() != nullptr) {
++			continue;
++		}
++		const int rl = u->GetCircuitDef()->GetReloadTime();   // frames
++		if ((rl <= 0) || (u->GetWeaponReloadFrame() > frame)) {
++			continue;   // the bomb is not loaded
++		}
++		const AIFloat3 pos = u->GetPos(frame);
++		AIFloat3 toT = position - pos;
++		toT.y = 0.f;
++		const float dist = toT.Length2D();
++		const float reloadD = float(rl) / FRAMES_PER_SEC * speed;   // elmos flown while it reloads
++		if (dist <= reloadD) {
++			continue;   // a drop now would not reload before the cell
++		}
++		const AIFloat3 dir = toT / dist;
++		int bi = -1;
++		float bestV = 0.f, bestAlong = 0.f, bestLat = 0.f;
++		for (int ci = 0; ci < (int)cands.size(); ++ci) {
++			const Cand& c = cands[ci];
++			if (c.e == nullptr) {
++				continue;
++			}
++			const AIFloat3 rel = c.pos - pos;
++			const float along = rel.x * dir.x + rel.z * dir.z;
++			if ((along <= 0.f) || (dist - along < reloadD)) {
++				continue;   // behind it, or too near the cell to reload after
++			}
++			const float lat = std::sqrt(std::max(rel.SqLength2D() - along * along, 0.f));
++			if ((lat > halfW) || (lat > along)) {
++				continue;   // off the track, or a turn rather than a pass
++			}
++			if (c.costM > bestV) {
++				bestV = c.costM;
++				bi = ci;
++				bestAlong = along;
++				bestLat = lat;
++			}
++		}
++		if (bi < 0) {
++			continue;
++		}
++		CEnemyInfo* best = cands[bi].e;
++		cands[bi].e = nullptr;
++		const int passF = int(bestAlong / speed * FRAMES_PER_SEC);
++		if (u->GetTravelAct() != nullptr) {
++			u->GetTravelAct()->StateWait();
++		}
++		TRY_UNIT(circuit, u,
++			u->CmdAttackGround(cands[bi].pos, 0, frame + timeout);
++			u->CmdMoveTo(position, UNIT_COMMAND_OPTION_SHIFT_KEY, frame + timeout);
++		)
++		dropUntil[u->GetId()] = frame + 2 * passF + 2 * FRAMES_PER_SEC;   // past the drop point ends it sooner
++		dropAt[u->GetId()] = std::make_pair(cands[bi].pos, dir);
++		dropClaim[best->GetId()] = frame + 2 * passF + 2 * FRAMES_PER_SEC;
++		inFlight = true;
++		++nEnRoute;
++		if (frame >= enRouteLogAt) {
++			enRouteLogAt = frame + FRAMES_PER_SEC * 10;
++			circuit->LOG("apex: bomb enroute t=%i %s -> %s cost=%.0f along=%.0f lat=%.0f halfW=%.0f toCell=%.0f reloadD=%.0f n=%i",
++					circuit->GetTeamId(), u->GetCircuitDef()->GetDef()->GetName(),
++					best->GetCircuitDef()->GetDef()->GetName(), bestV, bestAlong, bestLat, halfW,
++					dist, reloadD, nEnRoute);
++		}
++	}
++	return inFlight;
++}
++
  void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  {
  	ISquadTask::OnUnitIdle(unit);
@@ -18803,10 +18945,11 @@ index 9e6bfd88..029d3e17 100644
  	if (units.empty()) {
  		return;
  	}
-@@ -200,10 +290,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -199,11 +428,7 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+ 	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
  	if (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)) {
- 		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
+-		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 -		float x = rand() % terrainMgr->GetTerrainWidth();
 -		float z = rand() % terrainMgr->GetTerrainHeight();
 -		position = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
@@ -18815,7 +18958,7 @@ index 9e6bfd88..029d3e17 100644
  	}
  
  	if (units.find(unit) != units.end()) {
-@@ -213,6 +300,9 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -213,6 +438,9 @@ void CBombTask::OnUnitIdle(CCircuitUnit* unit)
  
  void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  {
@@ -18825,7 +18968,7 @@ index 9e6bfd88..029d3e17 100644
  	// Do not retreat if bomber is close to target
  	if (GetTarget() == nullptr) {
  		ISquadTask::OnUnitDamaged(unit, attacker);
-@@ -224,6 +314,41 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+@@ -224,6 +452,41 @@ void CBombTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
  	}
  }
  
@@ -18867,7 +19010,7 @@ index 9e6bfd88..029d3e17 100644
  void CBombTask::FindTarget()
  {
  	// TODO: 1) Bombers should constantly harass undefended targets and not suicide.
-@@ -236,7 +361,42 @@ void CBombTask::FindTarget()
+@@ -236,7 +499,42 @@ void CBombTask::FindTarget()
  	const bool notAW = !cdef->HasSurfToWater();
  	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());
  	const float scale = (cdef->GetMinRange() > 300.0f) ? 4.0f : 1.0f;
@@ -18911,7 +19054,7 @@ index 9e6bfd88..029d3e17 100644
  //	const float maxAltitude = cdef->GetAltitude();
  	const float speed = cdef->GetSpeed() / 1.75f;
  	const int canTargetCat = cdef->GetTargetCategory();
-@@ -245,6 +405,9 @@ void CBombTask::FindTarget()
+@@ -245,6 +543,9 @@ void CBombTask::FindTarget()
  //								 cdef->GetLosRadius()) * 2;
  	const float sqRange = (GetTarget() != nullptr) ? pos.SqDistance2D(GetTarget()->GetPos()) + 1.f : SQUARE(2000.0f);
  	float minHealth = std::numeric_limits<float>::max();
@@ -18921,7 +19064,7 @@ index 9e6bfd88..029d3e17 100644
  
  	COOAICallback* callback = circuit->GetCallback();
  	const float trueAoe = cdef->GetAoe() + SQUARE_SIZE;
-@@ -258,21 +421,115 @@ void CBombTask::FindTarget()
+@@ -258,21 +559,115 @@ void CBombTask::FindTarget()
  		};
  	}
  
@@ -19039,7 +19182,7 @@ index 9e6bfd88..029d3e17 100644
  			continue;
  		}
  
-@@ -281,14 +538,27 @@ void CBombTask::FindTarget()
+@@ -281,14 +676,27 @@ void CBombTask::FindTarget()
  //		float altitude;
  		CCircuitDef* edef = enemy->GetCircuitDef();
  		if (edef != nullptr) {
@@ -19068,7 +19211,7 @@ index 9e6bfd88..029d3e17 100644
  				continue;
  			}
  			health = enemy->GetHealth();
-@@ -296,9 +566,15 @@ void CBombTask::FindTarget()
+@@ -296,9 +704,15 @@ void CBombTask::FindTarget()
  		} else {
  //			targetCat = ~noChaseCat;
  //			altitude = 0.f;
@@ -19084,7 +19227,7 @@ index 9e6bfd88..029d3e17 100644
  		if (/*enemy->IsInRadarOrLOS() && */((targetCat & noChaseCat) == 0)
  			/*&& (altitude < maxAltitude)*/
  			&& noAllies(ePos))
-@@ -318,26 +594,423 @@ void CBombTask::FindTarget()
+@@ -318,26 +732,423 @@ void CBombTask::FindTarget()
  //                }
  //				cost += ei->GetCost();
  //			}
@@ -19153,8 +19296,8 @@ index 9e6bfd88..029d3e17 100644
 +						const float disc = circuit->GetTunable("apex_bomb_revisit_disc", 0.2f);
 +						raw *= disc + (1.f - disc) * (sinceS / revisitS);
 +					}
-+				}
-+			}
+ 				}
+ 			}
 +			const Cand c{enemy, ePos, raw, raw / (1.f + dist / distScale), value, health, sqDist};
 +			if (enemy == curTarget) {
 +				curCand = c;
@@ -19167,15 +19310,15 @@ index 9e6bfd88..029d3e17 100644
 +				++nRoute;
 +				if (value >= minValue) {
 +					routeCands.push_back(c);
- 				}
++				}
 +				continue;
 +			}
 +			++nCell;
 +			bestCellRaw = std::max(bestCellRaw, raw);
 +			consider(c, false);
-+		}
-+	}
-+
+ 		}
+ 	}
+ 
 +	// ON THE WAY: off the cell, a target is taken only if it is worth at least
 +	// the best the cell offers on its own merits -- the detour is then pure
 +	// gain -- and it lies within sight of the route the wave actually flies
@@ -19202,10 +19345,10 @@ index 9e6bfd88..029d3e17 100644
 +			}
 +			if (onPath) {
 +				consider(c, true);
- 			}
- 		}
- 	}
- 
++			}
++		}
++	}
++
 +	// A target on a run is kept while it lives: a new one mid-approach sends
 +	// the planes round a full arc (apexearth).
 +	if (hasCur && (bestTarget != curTarget)) {
@@ -19516,7 +19659,7 @@ index 9e6bfd88..029d3e17 100644
  void CBombTask::ApplyTargetPath(const CQueryPathSingle* query)
  {
  	pPath = query->GetPathInfo();
-@@ -388,9 +1061,11 @@ void CBombTask::Fallback()
+@@ -388,9 +1199,11 @@ void CBombTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -19531,7 +19674,7 @@ index 9e6bfd88..029d3e17 100644
  		)
  	}
 diff --git a/src/circuit/task/fighter/BombTask.h b/src/circuit/task/fighter/BombTask.h
-index 85b30616..a40e4972 100644
+index 85b30616..2f8110fd 100644
 --- a/src/circuit/task/fighter/BombTask.h
 +++ b/src/circuit/task/fighter/BombTask.h
 @@ -9,9 +9,15 @@
@@ -19550,7 +19693,7 @@ index 85b30616..a40e4972 100644
  class CBombTask: public ISquadTask {
  public:
  	CBombTask(ITaskModule* mgr, float powerMod);
-@@ -33,6 +39,34 @@ private:
+@@ -33,6 +39,43 @@ private:
  	void FallbackBasePos();
  	void ApplyBasePos(const CQueryPathSingle* query);
  	void Fallback();
@@ -19560,6 +19703,15 @@ index 85b30616..a40e4972 100644
 +	void PlanSpread(int frame);
 +	float SplashSpacing(int frame);
 +	void AssignSlots(int frame);
++	// apex: drops on the way to the cell while the reload still beats the arrival (his 10-12)
++	bool EnRouteDrops(int frame);
++	std::map<ICoreUnit::Id, int> dropUntil;  // our bomber -> the latest frame its en-route pass may run
++	// our bomber -> the ground it drops on, and the heading it was given
++	std::map<ICoreUnit::Id, std::pair<springai::AIFloat3, springai::AIFloat3>> dropAt;
++	std::map<ICoreUnit::Id, int> dropClaim;  // their structure -> the frame our pass on it is done
++	int nEnRoute = 0;
++	int enRouteLogAt = 0;
++	int nextEnRouteScan = 0;
 +	float slotSpacing = 0.f;
 +	int slotSpacingAt = -1;
 +	int slotLogAt = -1;
@@ -23142,7 +23294,7 @@ index cd0b54a9..78bb2763 100644
  	float captureSpeed;
  //	float altitude;
 diff --git a/src/circuit/unit/CircuitUnit.cpp b/src/circuit/unit/CircuitUnit.cpp
-index 2f597be4..a89b289c 100644
+index 2f597be4..8c8e009f 100644
 --- a/src/circuit/unit/CircuitUnit.cpp
 +++ b/src/circuit/unit/CircuitUnit.cpp
 @@ -6,6 +6,7 @@
@@ -23296,7 +23448,7 @@ index 2f597be4..a89b289c 100644
  				CmdManualFire(UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);  // Krow
  			}
  		}
-@@ -206,9 +278,38 @@ bool CCircuitUnit::IsWeaponReady(int frame)
+@@ -206,9 +278,43 @@ bool CCircuitUnit::IsWeaponReady(int frame)
  	return isWeaponReady;
  }
  
@@ -23329,6 +23481,11 @@ index 2f597be4..a89b289c 100644
 +	return (dgun != nullptr) ? dgun->GetReloadFrame() : 0;
 +}
 +
++int CCircuitUnit::GetWeaponReloadFrame() const
++{
++	return (weapon != nullptr) ? weapon->GetReloadFrame() : 0;
++}
++
  bool CCircuitUnit::IsDGunReady(int frame, float energy)
  {
 -	return (dgun->GetReloadFrame() <= frame) && (dgunDef->GetCostE() < energy)
@@ -23336,7 +23493,7 @@ index 2f597be4..a89b289c 100644
  		&& (!dgunDef->IsStockpile() || (unit->GetStockpile() > 0));
  }
  
-@@ -271,7 +372,20 @@ float CCircuitUnit::GetDGunRange()
+@@ -271,7 +377,20 @@ float CCircuitUnit::GetDGunRange()
  
  float CCircuitUnit::GetHealthPercent()
  {
@@ -23358,7 +23515,7 @@ index 2f597be4..a89b289c 100644
  }
  
  /*
-@@ -283,37 +397,322 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
+@@ -283,37 +402,322 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
  	unit->ExecuteCustomCommand(CMD_REMOVE, params, options);
  }
  
@@ -23683,7 +23840,7 @@ index 2f597be4..a89b289c 100644
  void CCircuitUnit::CmdWantedSpeed(float speed)
  {
  //	unit->SetWantedMaxSpeed(speed / FRAMES_PER_SEC, true);
-@@ -323,12 +722,57 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
+@@ -323,12 +727,57 @@ void CCircuitUnit::CmdWantedSpeed(float speed)
  
  void CCircuitUnit::CmdStop(short options, int timeout)
  {
@@ -23742,7 +23899,7 @@ index 2f597be4..a89b289c 100644
  }
  
  void CCircuitUnit::CmdCloak(bool state)
-@@ -415,34 +859,52 @@ bool CCircuitUnit::IsWaiting() const
+@@ -415,34 +864,52 @@ bool CCircuitUnit::IsWaiting() const
  
  void CCircuitUnit::CmdRepair(CAllyUnit* target, short options, int timeout)
  {
@@ -23795,7 +23952,7 @@ index 2f597be4..a89b289c 100644
  	unit->ResurrectInArea(pos, radius, options, timeout);
  }
  
-@@ -474,7 +936,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
+@@ -474,7 +941,17 @@ void CCircuitUnit::TrySetMoveState(CCircuitDef::MoveT state)
  
  void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  {
@@ -23813,7 +23970,7 @@ index 2f597be4..a89b289c 100644
  	TRY_UNIT(manager->GetCircuit(), this,
  		const AIFloat3& pos = enemy->GetPos();
  		if (circuitDef->IsAttrMelee()) {
-@@ -483,48 +955,93 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
+@@ -483,48 +960,93 @@ void CCircuitUnit::Attack(CEnemyInfo* enemy, bool isGround, int timeout)
  				if (isGround) {  // los-cheat related
  					CmdAttackGround(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
  				} else {
@@ -23927,7 +24084,7 @@ index 2f597be4..a89b289c 100644
  		CmdWantedSpeed(NO_SPEED_LIMIT);
  		CmdSetTarget(target);
  		if (circuitDef->IsAttrOnOff()) {
-@@ -533,11 +1050,11 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
+@@ -533,11 +1055,11 @@ void CCircuitUnit::Attack(const AIFloat3& pos, CEnemyInfo* enemy, bool isGround,
  	)
  }
  
@@ -23941,7 +24098,7 @@ index 2f597be4..a89b289c 100644
  }
  
  void CCircuitUnit::Guard(CCircuitUnit* target, int timeout)
-@@ -553,7 +1070,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
+@@ -553,7 +1075,7 @@ void CCircuitUnit::Gather(const AIFloat3& groupPos, int timeout)
  {
  //	const AIFloat3& pos = utils::get_radial_pos(groupPos, SQUARE_SIZE * 8);
  	TRY_UNIT(manager->GetCircuit(), this,
@@ -23951,7 +24108,7 @@ index 2f597be4..a89b289c 100644
  //		CmdPatrolTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY | UNIT_COMMAND_OPTION_SHIFT_KEY, timeout);
  	)
 diff --git a/src/circuit/unit/CircuitUnit.h b/src/circuit/unit/CircuitUnit.h
-index cfe59bcc..705f7157 100644
+index cfe59bcc..6a8c733e 100644
 --- a/src/circuit/unit/CircuitUnit.h
 +++ b/src/circuit/unit/CircuitUnit.h
 @@ -87,6 +87,12 @@ public:
@@ -24085,12 +24242,13 @@ index cfe59bcc..705f7157 100644
  
  	bool HasDGun() const { return dgun != nullptr; }
  	bool HasWeapon() const { return weapon != nullptr; }
-@@ -118,6 +223,20 @@ public:
+@@ -118,6 +223,21 @@ public:
  	bool IsDisarmed(int frame);
  	bool IsWeaponReady(int frame);
  	bool IsDGunReady(int frame, float energy);
 +	float GetDGunCostE() const;
 +	int GetDGunReloadFrame() const;
++	int GetWeaponReloadFrame() const;  // the main weapon's; 0 with none
 +	// apex: the script's commander decision says whether a D-gun may walk him
 +	// in on a target beyond range; a withdrawing commander must not walk back.
 +	void SetDGunClose(bool v) { dgunMayClose = v; }
@@ -24106,7 +24264,7 @@ index cfe59bcc..705f7157 100644
  	bool IsShieldCharged(float percent);
  	bool IsJumpReady();
  	bool IsJumping();
-@@ -130,14 +249,24 @@ public:
+@@ -130,14 +250,24 @@ public:
  	float GetHealthPercent();
  
  	void CmdRemove(std::vector<float>&& params, short options = 0);
@@ -24133,7 +24291,7 @@ index cfe59bcc..705f7157 100644
  	void CmdCloak(bool state);
  	void CmdFireAtRadar(bool state);
  	void CmdFindPad(int timeout = INT_MAX);
-@@ -165,11 +294,31 @@ public:
+@@ -165,11 +295,31 @@ public:
  	void TrySetMoveState(CCircuitDef::MoveT state);  // safe CmdSetMoveState
  
  	void Attack(CEnemyInfo* enemy, bool isGround, int timeout);
@@ -24167,7 +24325,7 @@ index cfe59bcc..705f7157 100644
  	void Morph();
  	void StopMorph();
  	bool IsUpgradable();
-@@ -184,6 +333,9 @@ public:
+@@ -184,6 +334,9 @@ public:
  
  	void ClearTarget() { target = nullptr; }
  	CEnemyInfo* GetTarget() const { return target; }
@@ -24177,7 +24335,7 @@ index cfe59bcc..705f7157 100644
  	int GetTargetTile() const { return targetTile; }
  
  	void AddAttribute(CCircuitDef::AttrType type) { attr |= CCircuitDef::GetMask(static_cast<CCircuitDef::AttrT>(type)); }
-@@ -198,6 +350,18 @@ private:
+@@ -198,6 +351,18 @@ private:
  	// NOTE: taskFrame assigned on task change and OnUnitIdle to workaround idle spam.
  	//       Proper fix: do not issue any commands OnUnitIdle, delay them until next frame?
  	int taskFrame;
@@ -24196,7 +24354,7 @@ index cfe59bcc..705f7157 100644
  	ETaskState taskState;
  	ITaskModule* manager;
  	terrain::SArea* area;  // = nullptr if a unit flies
-@@ -207,8 +371,30 @@ private:
+@@ -207,8 +372,30 @@ private:
  
  	int moveFails;
  	int failFrame;
@@ -24227,7 +24385,7 @@ index cfe59bcc..705f7157 100644
  	int disarmFrame;
  	int ammoFrame;
  
-@@ -228,10 +414,16 @@ private:
+@@ -228,10 +415,16 @@ private:
  	springai::Command* command;  // current top command
  	CWeaponDef* dgunDef;
  	springai::Weapon* dgun;
