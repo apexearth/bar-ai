@@ -405,10 +405,17 @@ void TaLead()
 			return;
 		}
 		// what stands there, or their strongest group anywhere -- what can meet us at once (unknown is not small)
-		const float strongest = aiMilitaryMgr.GetEnemyInflNear(fp, 1e7f);
+		// Only a group nearer the target than we are can meet us there: their strongest anywhere
+		// (base defence included) held a strike on 84 at need 1,100 for five minutes, army at home.
+		const float hx = ai.GetTeamBoard(BOARD_TA_HX, -1.f);
+		const float reach = (hx >= 0.f) ? fp.distance2D(AIFloat3(hx, 0.f, ai.GetTeamBoard(BOARD_TA_HZ, 0.f))) : 1e7f;
+		const float strongest = aiMilitaryMgr.GetEnemyInflNear(fp, reach);
 		const float need = (foe > strongest) ? foe : strongest;
 		ai.SetTeamBoard(BOARD_TA_NEED, need);
-		const float team = TaSum(BOARD_GATHER);
+		// A squad with a target never stands at the stage, so gathered read 0 all game: the army counts.
+		const float gath = TaSum(BOARD_GATHER);
+		const float atk = TaSum(BOARD_TA_ATK);
+		const float team = (gath > atk) ? gath : atk;
 		if ((team > 0.f) && (team > need))
 			TaAdvance(TA_GO, "gathered " + int(team) + " > " + int(need) + " (there " + int(foe) + ")");
 		return;

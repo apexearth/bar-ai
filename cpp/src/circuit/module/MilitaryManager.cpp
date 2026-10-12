@@ -42,6 +42,8 @@
 #include "terrain/path/QueryPathMulti.h"
 #include "unit/enemy/EnemyUnit.h"
 #include <algorithm>
+#include <map>
+#include <string>
 #include "CircuitAI.h"
 #include "util/GameAttribute.h"
 #include "util/Utils.h"
@@ -2304,14 +2306,45 @@ void CMilitaryManager::Watchdog()
 
 	UpdateCommCloak();
 
+	// Where the army stands and on what task: a big army parked at home was watched (his 10-11) and
+	// no line said which task held it.
+	const AIFloat3& base = circuit->GetSetupManager()->GetBasePos();
+	const int frame = circuit->GetLastFrame();
+	std::map<std::string, std::pair<int, float>> home;
+	float homeM = 0.f, awayM = 0.f;
 	for (CCircuitUnit* unit : army) {
-		if (unit->GetTask()->GetType() == IUnitTask::Type::PLAYER) {
+		const float m = unit->GetCircuitDef()->GetCostM();
+		IUnitTask* task = unit->GetTask();
+		if (unit->GetPos(frame).SqDistance2D(base) > SQUARE(2000.f)) {
+			awayM += m;
+		} else {
+			homeM += m;
+			std::string key = "t" + std::to_string(static_cast<int>(task->GetType()));
+			if (task->GetType() == IUnitTask::Type::FIGHTER) {
+				key += "f" + std::to_string(static_cast<int>(static_cast<IFighterTask*>(task)->GetFightType()));
+			}
+			key += ":" + std::string(unit->GetCircuitDef()->GetDef()->GetName());
+			auto& e = home[key];
+			e.first += 1;
+			e.second += m;
+		}
+		if (task->GetType() == IUnitTask::Type::PLAYER) {
 			continue;
 		}
 		if (!circuit->GetCallback()->Unit_HasCommands(unit->GetId())) {
 			UnitIdle(unit);
 		}
 	}
+	std::vector<std::pair<float, std::string>> top;
+	for (auto& kv : home) {
+		top.push_back({kv.second.second, kv.first + "x" + std::to_string(kv.second.first)});
+	}
+	std::sort(top.begin(), top.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+	std::string s;
+	for (size_t i = 0; (i < top.size()) && (i < 8); ++i) {
+		s += " " + top[i].second;
+	}
+	circuit->LOG("apex: home-army t=%i home=%.0f away=%.0f |%s", circuit->GetTeamId(), homeM, awayM, s.c_str());
 }
 
 void CMilitaryManager::AddArmyCost(CCircuitUnit* unit)
