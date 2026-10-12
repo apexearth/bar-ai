@@ -307,12 +307,14 @@ public:
 	bool IsCommShip() const;
 	int commShipStallTicks = 0;
 	bool commShipCloak = false;
+	bool commHoldFire = false;
 
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
 
 	void UpdateCommCloak();
 	void UpdateCommShipCloak();
+	void UpdateCommHoldFire();
 	void Watchdog();
 
 	void AddArmyCost(CCircuitUnit* unit);

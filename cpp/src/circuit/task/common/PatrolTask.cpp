@@ -11,6 +11,7 @@
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
+#include "spring/SpringCallback.h"
 
 #include "Map.h"
 
@@ -78,9 +79,13 @@ bool IPatrolTask::Execute(CCircuitUnit* unit)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 
+	// A cloaked commander closing on enemies walks: a patrol reclaims and shoots on the way,
+	// and the laser uncloaks him before the D-gun is in range.
+	const bool sneak = unit->GetCircuitDef()->IsRoleComm() && unit->GetUnit()->IsCloaked()
+			&& !circuit->GetCallback()->GetEnemyUnitIdsIn(position, 400.f).empty();
 	TRY_UNIT(circuit, unit,
 		unit->CmdPriority(0);
-		if (isMove) {
+		if (isMove || sneak) {
 			unit->CmdMoveTo(position);
 		} else {
 			unit->CmdPatrolTo(position);

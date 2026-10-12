@@ -607,6 +607,7 @@ void CMilitaryManager::Init()
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Update, this), 1/*interval / 2*/, offset + 1, "milUpd");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommShipCloak, this), FRAMES_PER_SEC, offset + 3, "comShip");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommHoldFire, this), FRAMES_PER_SEC, offset + 5, "comHold");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
@@ -2271,6 +2272,30 @@ void CMilitaryManager::UpdateCommShipCloak()
 				economyMgr->GetAvgEnergyIncome(), economyMgr->GetEnergyPull(),
 				comm->GetCircuitDef()->GetCloakCost());
 	}
+}
+
+// A cloaked commander holds fire (his 10-11: the laser uncloaked him walking in to D-gun);
+// the D-gun is a manual-fire order and ignores the fire state. Re-sent each second while
+// cloaked because the retreat task sets RETURN on entry.
+void CMilitaryManager::UpdateCommHoldFire()
+{
+	CCircuitUnit* comm = circuit->GetSetupManager()->GetCommander();
+	if ((comm == nullptr) || comm->IsDead() || !comm->GetCircuitDef()->IsAbleToCloak()) {
+		return;
+	}
+	const bool cloaked = comm->GetUnit()->IsCloaked();
+	if (!cloaked && !commHoldFire) {
+		return;
+	}
+	const bool retreating = (comm->GetTask()->GetType() == IUnitTask::Type::RETREAT);
+	TRY_UNIT(circuit, comm,
+		comm->CmdSetFireState(cloaked ? CCircuitDef::FireType::HOLD
+				: (retreating ? CCircuitDef::FireType::RETURN : comm->GetCircuitDef()->GetFireState()));
+	)
+	if (cloaked != commHoldFire) {
+		circuit->LOG("apex: com-hold-fire t=%i on=%d", circuit->GetTeamId(), cloaked ? 1 : 0);
+	}
+	commHoldFire = cloaked;
 }
 
 void CMilitaryManager::Watchdog()
