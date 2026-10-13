@@ -1612,12 +1612,21 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 	const bool candLog = (Factory::gFactoryCount == 0)
 			&& (ai.frame >= gNextPlantCandLog);
 	string cand = "";
+	// his 10-13 test of the opening lab: 1 vehicles first, 2 bots first, 0 the market
+	const int firstLab = (Factory::gFactoryCount == 0) ? int(ai.GetTunable("apex_first_lab", 0.f)) : 0;
 	for (uint i = 0; i < builds.length(); ++i) {
 		const int d = builds[i];
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d] || Catalog::gSub[d])
 			continue;   // submerged plants have no placement model
 		if (Catalog::gBuildsList[d].length() == 0)
 			continue;   // not a factory
+		if (firstLab > 0) {
+			const string nm = Catalog::Def(d).GetName();
+			const bool veh = (nm == Factory::armvp) || (nm == Factory::corvp) || (nm == Factory::legvp);
+			const bool bot = (nm == Factory::armlab) || (nm == Factory::corlab) || (nm == Factory::leglab);
+			if (!((firstLab == 1) ? veh : bot))
+				continue;
+		}
 		const int dClass = PlantClass(d);
 		if (waterOnly && (dClass != PC_WATER))
 			continue;

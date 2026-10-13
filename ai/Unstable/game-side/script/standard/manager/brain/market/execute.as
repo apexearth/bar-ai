@@ -761,6 +761,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// engine's own build type for one, which the anti-nuke already used.
 		// The mandated air plant is a factory the same way.
 		if ((w.spotId == SC_GANTRY) || (w.spotId == SC_AIRPLANT)) {
+			if (w.spotId == SC_GANTRY)
+				NotePlantAsk(int(w.def.id), w.gain, w.value);
 			IUnitTask@ jg = JoinBig(w.def);
 			if (jg !is null)
 				return jg;

@@ -650,6 +650,30 @@ void WorkingLathe()
 // stood on a full bank for its first six minutes (1.3k metal spilled each,
 // BARb's cons 2x ours) with this term at zero. The lab is not the converter
 // of that metal either: its line was fed the whole time.
+// The army standing is short of the enemy army we have seen, at the match ratio.
+int gFoeOutgunsAt = -1;
+bool gFoeOutguns = false;
+int gFoeOutgunsN = 0;
+int gFoeOutgunsLogAt = 0;
+bool ArmyShortOfFoe()
+{
+	if (gFoeOutgunsAt == ai.frame)
+		return gFoeOutguns;
+	gFoeOutgunsAt = ai.frame;
+	const float need = Military::EnemyArmyCost() * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+	const float have = ArmyValue();
+	gFoeOutguns = need > have;
+	if (gFoeOutguns) {
+		++gFoeOutgunsN;
+		if (ai.frame >= gFoeOutgunsLogAt) {
+			gFoeOutgunsLogAt = ai.frame + 30 * SECOND;
+			AiLog("apex: confloor-yield t=" + ai.teamId + " n=" + gFoeOutgunsN
+				+ " need=" + int(need) + " army=" + int(have));
+		}
+	}
+	return gFoeOutguns;
+}
+
 float HandsShort()
 {
 	TrackIncome();
@@ -1997,14 +2021,16 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					escGain = EscortGain(fillS);
 				const float gainE = escGain * roleMul;
 				if (gainE > 0.f) {
-					const float vE = gainE / Catalog::gCostM[d];
+					// on the army bid's footing (rate x power per metal against the
+					// line's best); gain / cost put it 1e5 under every army bid
+					const float vE = gainE * ((linePPC > 0.f) ? (UnitCore(d) / linePPC) : 1.f);
 					candDef.insertLast(d);
 					candV.insertLast(vE);
 					candGain.insertLast(gainE);
 					sumV += vE;
 					if (prankNow)
 						prank += " " + Catalog::Def(d).GetName()
-							+ ":esc(v" + formatFloat(vE, "", 0, 3) + ")";
+							+ ":esc=" + formatFloat(vE * 1000.f, "", 0, 2) + "(g" + formatFloat(gainE, "", 0, 2) + ")";
 					// NO `continue`. This bid used to END the def's evaluation,
 					// so a cheap fast unit left the army market entirely and --
 					// unlike :cut, :eco and :gap0 -- said nothing on its way
@@ -2250,6 +2276,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// flat 100 elmos/s: the bar is what may be raiding us, and we
 			// assume they built the fastest thing they could (apexearth).
 			ppc *= 1.f + (Catalog::gSpeed[d] / tFoeSpeed) * tSpeedWorth;
+			ppc *= SplashMul(d);
 			// AND COVERAGE: ground patrolled per metal, worth something only
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per
@@ -2552,10 +2579,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// v also sets how many cons come before the army may take the factory (1x = the first,
 		// the rule): at share 0 the army always reads behind, so no v could ask for cons first
 		// (held 3.5-8x still made ~2 cons by minute 3; BARb makes 3 straight).
-		const bool armyBehind = (Brain::gSpentTotal > 1.f)
+		// ...and never while the army cannot answer the army we have seen (his
+		// 10-13: the base never dies; the floors bought 38 cons while 216 metal
+		// of army stood against thousands).
+		const bool foeOutguns = ArmyShortOfFoe();
+		const bool armyBehind = foeOutguns || ((Brain::gSpentTotal > 1.f)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= ((gConFloorMul > 1.f) ? gConFloorMul : 1.f))
 			&& (Brain::ShareOf(Brain::ARMY) * ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f)
-				< Brain::TargetShare(Brain::ARMY));
+				< Brain::TargetShare(Brain::ARMY)));
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
@@ -2572,7 +2603,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			return Catalog::Def(d);
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
-		if ((ceilNeed > 0) && ReachesCeiling(d) && !(walker && FlyingConLab(true))
+		if ((ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
 			&& (CeilingConsInFlight() == 0)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()

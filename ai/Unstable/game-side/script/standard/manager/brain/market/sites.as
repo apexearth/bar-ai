@@ -707,6 +707,11 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
 		return interior;
 	const int did = int(def.id);
+	{
+		AIFloat3 ps;
+		if (PlotSite(did, ps))
+			return ps;
+	}
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
 		if ((gLSDefs[i] == did) && (ai.frame - gLSAt[i] < 10 * SECOND)) {
 			// A cached cell is re-asked exactly: in a busy blob a turret lands
@@ -852,6 +857,8 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		+ " dens=" + formatFloat(LineDensityOf(did), "", 0, 4)
 		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused
 		+ " doorRefused=" + doorRefused + why);
+	if ((bestBP < 0.f) && (interiorBP < 0.f))
+		NoteNoRoom(did);
 	bool cached = false;
 	for (uint i = 0; i < gLSDefs.length(); ++i) {
 		if (gLSDefs[i] == did) {

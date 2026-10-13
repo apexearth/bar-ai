@@ -301,6 +301,23 @@ bool RaidWorthPulling(CCircuitUnit@ u)
 	return d.power > 1.f;
 }
 
+// Army metal over their seen army at the match ratio, less what is already
+// raiding: what a raid may take without the main body falling short.
+float RaidSurplusM()
+{
+	float raiding = 0.f;
+	for (uint i = 0; i < gCombatId.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
+		if ((u is null) || (u.circuitDef is null) || (u.task is null))
+			continue;
+		if ((u.task.GetType() == int(Task::Type::FIGHTER))
+			&& (u.task.GetFightType() == int(Task::FightType::RAID)))
+			raiding += u.circuitDef.costM;
+	}
+	const float need = EnemyArmyCost() * ai.GetTunable("apex_match_ratio", TUNE_MATCH_RATIO);
+	return Market::ArmyValue() - raiding - need;
+}
+
 // Power standing in every live RAID task, whoever assembled it.
 float RaidPowerLive()
 {

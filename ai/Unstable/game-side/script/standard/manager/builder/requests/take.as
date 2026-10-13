@@ -346,7 +346,12 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// ...and converters, which are the income when energy is wasted (a T1
 	// converter is one metal) -- a yard opens as many sites as the waste
 	// needs, never one at a time.
-	if (!spotWork && (bt != Task::BuildType::CONVERT) && (TotalLive() >= InFlightCap())) {
+	// ...and a defence short of its target (his 10-13: the base never dies): one
+	// LLT was re-ordered 49 times and each asker sent to help some other frame.
+	const bool defShort = (bt == Task::BuildType::DEFENCE) && (Market::DefenceShortfall() > 0.f);
+	if (defShort && (TotalLive() >= InFlightCap()))
+		++gDefExempt;
+	if (!spotWork && !defShort && (bt != Task::BuildType::CONVERT) && (TotalLive() >= InFlightCap())) {
 		if (unit !is null) {
 			IUnitTask@ any = JoinAny(unit);
 			if (any !is null) {

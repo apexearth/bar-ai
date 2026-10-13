@@ -18,6 +18,7 @@
 // production side.
 #include "market/kinds.as"          // the Want record, the kind ids, their names
 #include "market/worth.as"          // what a combat unit is worth: the golden metrics
+#include "market/splash.as"         // splash against the enemy ball: extra hits a shell catches
 #include "market/price.as"          // the two live prices, and ValueOf
 #include "market/ledger.as"         // spot-value senses; the claimed-spot ledger
 #include "market/census.as"         // what we own: counts, protection classes, unit events
@@ -28,6 +29,7 @@
 #include "market/want_energy.as"    // energy/convert/store Wants; the BP senses behind them
 #include "market/want_plant.as"     // geothermal and factory-plant Wants
 #include "market/want_tech.as"      // mex upgrade and tech-plant Wants
+#include "market/plot.as"           // room for a gantry: spare labs reclaimed, the ground held for it
 #include "market/sites.as"          // where a build goes: farm rows, spot clearance, eco sites
 #include "market/nanopack.as"       // where an ASSIST nano stands: the packed lattice
 #include "market/want_nano.as"      // the nano Want

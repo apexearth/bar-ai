@@ -744,6 +744,18 @@ void ComDecideTick(CCircuitUnit@ u)
 		return;
 	gComAssessAt = ai.frame;
 	ComAssess(u);
+	// The ship's test counts his 2,700 metal as army; his own read of the fight
+	// (dps and hp, the base's guns and army with him) is the one that says he dies.
+	if (gShip && gCsThreat && (gCsHpAfter <= 0.f)) {
+		gShip = false;
+		gShipHopeless = true;
+		++gShipOverruled;
+		if (ai.frame >= gShipOverruledLogAt) {
+			gShipOverruledLogAt = ai.frame + 10 * SECOND;
+			AiLog("apex: com-ship-hopeless t=" + ai.teamId + " n=" + gShipOverruled
+				+ " strCom=" + formatFloat(gShipStrCom, "", 0, 2) + " " + ComSitText());
+		}
+	}
 	if (gShip)
 		gCsRule = COM_FIGHT;
 	const int dgo = u.DGunOrders();

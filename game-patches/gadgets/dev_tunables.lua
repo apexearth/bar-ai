@@ -645,6 +645,8 @@ local NAMES = {
 	-- refused a baseline share by RoleTarget; the floor put it back, and the
 	-- draw bought 1,500 metal of AA against an empty sky. 0 restores the floor.
 	"apex_role_floor_zero",
+	-- the opening lab test (2026-10-13): 1 vehicle plant first, 2 bot lab first, 0 the market
+	"apex_first_lab",
 }
 
 local pending = {}

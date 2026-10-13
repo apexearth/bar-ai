@@ -652,7 +652,8 @@ float EscortGain(float fillS)
 	const int need = EscortShortfall() - gEscSpare;
 	if (need <= 0)
 		return 0.f;
-	const float risk = EscortMetalAtRisk();
+	ExposeRefresh();
+	const float risk = gExpoLossM;
 	if (risk <= 0.f)
 		return 0.f;
 	const float horizon = (fillS > 1.f) ? fillS : 180.f;
@@ -672,6 +673,7 @@ void EscortDiag()
 		+ " short=" + gExpoN
 		+ " paired=" + gEscWorker.length()
 		+ " risk=" + formatFloat(gExpoM, "", 0, 0)
+		+ " loss=" + formatFloat(gExpoLossM, "", 0, 0)
 		// What escort duty has taken out of the free army, and what is
 		// left standing for everything else.
 		+ " committed=" + formatFloat(RoleCommitted(int(Unit::Role::RAIDER.type)), "", 0, 0)

@@ -51,9 +51,11 @@ bool WantsMassing(const CCircuitDef@ cdef)
 	// matches the elected-fight-type ledger held ZERO raid tasks and zero
 	// attack tasks -- every raider became line army the moment our advanced
 	// lab stood. apex_raider_massing restores the old behaviour at 1.
+	// ...but raids go on top of a main body that matches their army (his 10-13):
+	// while ours is short of it, a new raider joins the body.
 	if (role == RT::RAIDER)
-		return Factory::gHaveT2
-			&& (ai.GetTunable("apex_raider_massing", TUNE_RAIDER_MASSING) > 0.f);
+		return Market::ArmyShortOfFoe()
+			|| (Factory::gHaveT2 && (ai.GetTunable("apex_raider_massing", TUNE_RAIDER_MASSING) > 0.f));
 	// Mobile artillery fights as the squads' back row: rows stand each def at
 	// its own weapon range, siege attr fears proximity, and the front rows ARE
 	// the allied vision a long gun needs (the whole family outranges its own

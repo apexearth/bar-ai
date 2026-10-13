@@ -570,8 +570,76 @@ void ReleaseHold()
 	}
 }
 
+// WHERE THE ARMY IS, by task (his 10-13: "we spread out and go all over the
+// place, they have everything in their 1 attack ball"): metal per fight type,
+// at home, and the largest share one task holds.
+int gArmyTaskLogAt = 0;
+void LogArmyTasks()
+{
+	if (ai.frame < gArmyTaskLogAt)
+		return;
+	gArmyTaskLogAt = ai.frame + 60 * SECOND;
+	array<float> byFt(14, 0.f);
+	float idle = 0.f, retreat = 0.f, other = 0.f, home = 0.f, total = 0.f;
+	array<IUnitTask@> tid;
+	array<float> tm;
+	for (uint i = 0; i < gCombatId.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(gCombatId[i]));
+		if ((u is null) || (u.circuitDef is null) || u.circuitDef.IsAbleToFly())
+			continue;
+		const float m = u.circuitDef.costM;
+		total += m;
+		if (Builder::gHomeSet && (u.GetPos(ai.frame).distance2D(Builder::gHomePos) < Builder::BASE_DANGER_DIST))
+			home += m;
+		IUnitTask@ t = u.task;
+		if (t is null) {
+			idle += m;
+			continue;
+		}
+		const int tt = t.GetType();
+		if (tt == int(Task::Type::IDLE))
+			idle += m;
+		else if (tt == int(Task::Type::RETREAT))
+			retreat += m;
+		else if (tt == int(Task::Type::FIGHTER)) {
+			const int ft = t.GetFightType();
+			if ((ft >= 0) && (ft < 14))
+				byFt[ft] += m;
+		} else
+			other += m;
+		if (tt == int(Task::Type::FIGHTER)) {
+			// one squad = one task object; its metal is the squad's mass
+			int k = -1;
+			for (uint j = 0; j < tid.length(); ++j) {
+				if (tid[j] is t)
+					k = int(j);
+			}
+			if (k < 0) {
+				tid.insertLast(t);
+				tm.insertLast(m);
+			} else
+				tm[k] += m;
+		}
+	}
+	float biggest = 0.f;
+	for (uint j = 0; j < tm.length(); ++j) {
+		if (tm[j] > biggest)
+			biggest = tm[j];
+	}
+	const array<string> names = {"rally", "guard", "defend", "scout", "raid", "attack", "bomb", "melee", "arty", "aa", "ah", "support", "super"};
+	string ln = "";
+	for (uint k = 0; k < names.length(); ++k) {
+		if (byFt[k] > 0.f)
+			ln += " " + names[k] + "=" + int(byFt[k]);
+	}
+	AiLog(Factory::T() + "apex: armytask t=" + ai.teamId + " total=" + int(total) + " home=" + int(home)
+		+ " squads=" + tm.length() + " biggest=" + int(biggest) + " idle=" + int(idle) + " retreat=" + int(retreat)
+		+ " other=" + int(other) + " |" + ln);
+}
+
 void UpdateMassing()
 {
+	LogArmyTasks();
 	LogUnitPower();
 	if (gTurtle)
 		return;   // an active hold is stricter; do not loosen it

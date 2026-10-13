@@ -1199,6 +1199,12 @@ float BudgetCatMult(int c)
 // their sum; catBest carries each ticket's want.
 int gEtaPickLogAt = 0;
 int gEtaPickTraceAt = 0;
+// his 10-13: only close picks are drawn -- a 9.9 never beats a 113.
+const float DRAW_CLOSE = 0.5f;
+int gDrawCloseLadder = 0;
+int gDrawCloseCat = 0;
+int gDrawCloseLogAt = 0;
+
 float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& out wt)
 {
 	catBest.resize(CAT_N + 1);
@@ -1303,6 +1309,16 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 						gLadderTrace = false;
 					}
 				}
+				if ((vb >= 0) && (vb != pick) && (ranked[pick].value < DRAW_CLOSE * ranked[vb].value)) {
+					++gDrawCloseLadder;
+					catBest[pc] = -1;
+					pick = vb;
+					pc = CategoryOf(ranked[pick].kind);
+					catBest[pc] = pick;
+					catV[pc] = EtaEcoWeight(ranked);
+					gDrawLadderMex = (ranked[pick].kind == WK_MEX) ? pick : -1;
+					gDrawLadderTech = -1;
+				}
 			}
 			// A converter, a store or an assist has no rung, and clearing their
 			// category's ticket above deleted them from the draw: they keep
@@ -1326,6 +1342,17 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	// one election in thirty-six, which keeps a never-first category from
 	// starving without letting it outbid arithmetic.
 	const float lead = ranked[0].value;
+	for (int c = 0; c <= CAT_N; ++c) {
+		if ((catBest[c] >= 0) && (ranked[catBest[c]].value < DRAW_CLOSE * lead)) {
+			catBest[c] = -1;
+			++gDrawCloseCat;
+		}
+	}
+	if (ai.frame >= gDrawCloseLogAt) {
+		gDrawCloseLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: draw-close t=" + ai.teamId + " ladderOverruled=" + gDrawCloseLadder
+			+ " ticketsDropped=" + gDrawCloseCat);
+	}
 	const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
 	// The horizon's whole output and the commitment exponent do not vary with
 	// the category; both were re-read for each of the nine.
@@ -2672,106 +2699,6 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// died at 15:00 building an LLT at a naked forward mex, medium anchor
 	// t000 -- the insurance priced the mex's risk and forgot the asker's).
 	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
-	// ONE GUN BEFORE HE LEAVES. apexearth, four times tonight and finally in
-	// one sentence: "If the com wants to walk away they should make an LLT
-	// first." The opening cluster's only builder is the commander, so the
-	// moment he takes a job elsewhere the lab, the solars and the first mexes
-	// stand with nothing covering them -- and the panic that follows is a game
-	// every time.
-	//
-	// The cover floor (PlantInReach, 2026-09-01) made the turret WORTH
-	// building; it did not make it worth building FIRST, and measured on this
-	// seed the lab went up at 0.75 min while the first LLT waited until 1.61.
-	//
-	// Narrow on purpose, and self-limiting: it fires only while we own NO
-	// ground defence at all, and the first tower ends it -- DefenceValue turns
-	// positive and ordinary pricing resumes. It is one turret, not a wall.
-	// AND HE DOES NOT LEAVE UNTIL IT IS THERE. apexearth: "just refuse to
-	// leave our stuff unguarded". Choosing the gun first was not enough on its
-	// own -- he still walked off to the next mex while the order sat unbuilt --
-	// so while the opening cluster has no gun, work OUTSIDE it is not on the
-	// menu at all. The moment one tower stands, DefenceValue turns positive and
-	// this whole branch stops existing.
-	if (isComm && (DefenceValue() <= 0.f)) {
-		for (uint i = 0; i < ranked.length(); ++i) {
-			if ((ranked[i].kind != WK_PROTECT) || (ranked[i].def is null))
-				continue;
-			if (Catalog::gSurfT[int(ranked[i].def.id)] <= 0.01f)
-				continue;   // must be a gun that shoots the ground
-			// WHY IT DID NOT GET BUILT. The rule fired six times from 0.89
-			// min and the LLT still did not land until 1.54 -- the DECISION
-			// was never the problem, something downstream refused to place
-			// it. Requests::Gate counts every refusal reason, so the deltas
-			// across this one call name the gate instead of a fourth guess.
-			// AT THE PLANT, NOT ON THE WALL RIM. Measured: the gun was sited
-			// at 2465,3623 while the lab stood at 2112,4624 -- a kilometre in
-			// front of the thing it was meant to cover, so the base stayed
-			// naked and the commander walked out of position to build it. The
-			// wall generator is the only site source with traffic and at
-			// minute one the building rim runs through the forward mexes.
-			//
-			// The first gun's job is this plant. Site it beside the nearest
-			// one to the commander, a step toward the enemy so it covers the
-			// approach rather than hiding behind the building.
-			{
-				const AIFloat3 here = unit.GetPos(ai.frame);
-				AIFloat3 best;
-				float bestD = -1.f;
-				for (uint pi = 0; pi < ComLen(); ++pi) {
-					const int pd = gComDef[pi];
-					if (!Catalog::ValidId(pd) || Catalog::gMobile[pd]
-						|| (Catalog::gBuildsList[pd].length() == 0)
-						|| (Catalog::gBuildPower[pd] <= 0.f))
-						continue;
-					// A plant that is only ORDERED is not there to guard, and
-					// the gun would take him off it: measured, the lab's
-					// order sat unplaced, the rule pulled him to a tower at
-					// minute three, and the lab died unframed at minute eight.
-					if (gComState[pi] == CS_ORDERED)
-						continue;
-					if (!OnMap(gComPos[pi]))
-						continue;
-					const float dd = here.distance2D(gComPos[pi]);
-					if ((bestD < 0.f) || (dd < bestD)) {
-						bestD = dd;
-						best = gComPos[pi];
-					}
-				}
-				// No plant yet means nothing to leave: the gun is not
-				// forced ahead of the lab, and the auction prices it as
-				// usual.
-				if (bestD < 0.f)
-					break;
-				AIFloat3 at = best;
-				if (Base::Ready()) {
-					AIFloat3 f = Base::gFwd;
-					if (Base::AxisIsRearward()) { f.x = -f.x; f.z = -f.z; }
-					at.x += f.x * 220.f;
-					at.z += f.z * 220.f;
-				}
-				if (OnMap(at))
-					ranked[i].pos = ProbedSite(ranked[i].def,
-							Catalog::Def(int(unit.circuitDef.id)), at);
-			}
-			const int g0New = Requests::gGateSeen[Requests::G_BADREQ];
-			const int g0Can = Requests::gGateSeen[Requests::G_CANBUILD];
-			const int g0Back = Requests::gGateSeen[Requests::G_BACKOFF];
-			gExecWhy = "comfirst";
-			IUnitTask@ g = ExecuteWant(unit, ranked[i]);
-			AiLog("apex: comm-first-gun t=" + ai.teamId
-				+ " " + ranked[i].def.GetName()
-				+ " at=" + int(ranked[i].pos.x) + "," + int(ranked[i].pos.z)
-				+ " placed=" + ((g !is null) ? 1 : 0)
-				+ " badreq=" + (Requests::gGateSeen[Requests::G_BADREQ] - g0New)
-				+ " canbuild=" + (Requests::gGateSeen[Requests::G_CANBUILD] - g0Can)
-				+ " backoff=" + (Requests::gGateSeen[Requests::G_BACKOFF] - g0Back)
-				+ " posOnMap=" + (OnMap(ranked[i].pos) ? 1 : 0)
-				+ " canDef=" + (unit.circuitDef.CanBuild(ranked[i].def) ? 1 : 0));
-			if (g !is null)
-				return g;
-			break;   // could not place it; fall through rather than idle
-		}
-	}
 	// A refused winner is removed; then his adage (2026-09-11): "if you
 	// don't know what to do, make energy... or converters". The best economy
 	// want left is hoisted, and only a list with none rolls the draw again --

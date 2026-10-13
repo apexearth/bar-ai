@@ -873,6 +873,9 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 				AdvDeferLog("gantry");
 				continue;
 			}
+			// its ground is still being cleared: the hands that would die on no-site reclaim it
+			if ((gPlotDef == d) && (PlotLeft() > 0))
+				continue;
 			{
 				AIFloat3 agAt;
 				int agDef = -1;
@@ -1037,6 +1040,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;
 		Want c;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		if (sc == SC_GANTRY)
+			NotePlantAsk(d, gain, c.value);
 		if (((sc == SC_TACTICAL) || (sc == SC_JUNO)) && (ai.frame >= gNextSiegeLog[sc - SC_TACTICAL])) {
 			gNextSiegeLog[sc - SC_TACTICAL] = ai.frame + 30 * SECOND;
 			AiLog("apex: siege t=" + ai.teamId + " " + Catalog::Def(d).GetName()

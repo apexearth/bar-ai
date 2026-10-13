@@ -89,6 +89,30 @@ int gExpoAt = -999999;
 int gExpoN = 0;
 int gExpoWetN = 0;   // ...of them standing in water: the only ones a boat can guard
 float gExpoM = 0.f;
+float gExpoLossM = 0.f;   // ...and what losing them costs, WorkerLossM
+
+// What a dead worker costs (his 10-13: price the real loss): itself, and what
+// its job returns until a replacement is built and walks back out to it.
+float WorkerLossM(CCircuitUnit@ wkr)
+{
+	const int d = int(wkr.circuitDef.id);
+	float loss = Catalog::gCostM[d];
+	if (wkr.task is null)
+		return loss;
+	const float jg = JobGain(wkr.task);
+	if (jg <= 0.f)
+		return loss;
+	float bp = 0.f;
+	const array<int>@ by = Catalog::gBuiltBy[d];
+	for (uint i = 0; i < by.length(); ++i) {
+		if (!Catalog::gMobile[by[i]] && (Catalog::gBuildPower[by[i]] > bp))
+			bp = Catalog::gBuildPower[by[i]];
+	}
+	float sec = (bp > 0.f) ? Catalog::BuildSecondsAt(d, bp) : 60.f;
+	if (Builder::gHomeSet && (Catalog::gSpeed[d] > 1.f))
+		sec += wkr.GetPos(ai.frame).distance2D(Builder::gHomePos) / Catalog::gSpeed[d];
+	return loss + jg * sec;
+}
 
 // HOW MUCH OF A WORKER THE GROUND IT STANDS ON WRITES OFF, 0..1: the larger
 // of the risk field's expected loss over the stake horizon and where it is --
@@ -179,6 +203,7 @@ void ExposeRefresh()
 	gExpoN = 0;
 	gExpoWetN = 0;
 	gExpoM = 0.f;
+	gExpoLossM = 0.f;
 	gExpoMax = 0.f;
 	for (uint i = 0; i < gWorkers.length(); ++i) {
 		CCircuitUnit@ wkr = gWorkers[i];
@@ -196,6 +221,7 @@ void ExposeRefresh()
 		if (ai.GetElevationAt(wkr.GetPos(ai.frame)) < 0.f)
 			++gExpoWetN;
 		gExpoM += e * Catalog::gCostM[int(wkr.circuitDef.id)];
+		gExpoLossM += e * WorkerLossM(wkr);
 	}
 	EscortDiag();
 }

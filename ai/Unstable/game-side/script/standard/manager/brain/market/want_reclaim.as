@@ -1077,6 +1077,26 @@ float PlantEnclosure(CCircuitUnit@ f)
 Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 {
 	Want w;
+	RefreshPlot();
+	{
+		float pv = 0.f, pg = 0.f;
+		CCircuitUnit@ pt = PlotVictim(unit, pv, pg);
+		if ((pt !is null) && (pv > 0.f)) {
+			const int pd = int(pt.circuitDef.id);
+			const AIFloat3 pp = pt.GetPos(ai.frame);
+			w.kind = WK_RECLAIM;
+			@w.def = Catalog::Def(pd);
+			w.pos = pp;
+			w.spotId = int(pt.id);
+			w.gain = pg;
+			w.mCost = 1.f;
+			w.tCost = 0.f;
+			w.value = pv * ReclaimHandMul(unit);
+			@w.target = pt;
+			w.retire = true;
+			return w;
+		}
+	}
 	// SURPLUS CONS (apexearth: "made too many t1 cons... we should reclaim
 	// them"): the quiet rear with no claimable safe ground and no BP deficit
 	// turns constructor metal back into ladder money. Only a con a standing

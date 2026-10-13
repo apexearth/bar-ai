@@ -1,5 +1,6 @@
 namespace Market {
 int gNextNanoWantLog = 0;
+float gArmyLinesOut = 0.f;   // army metal/s the lines delivered, at the last army-branch read
 int gNanoMetalCut = 0;   // nano candidates whose gain the metal feed cut
 // Which demand sited the want (w.spotId). Execute honours the first three
 // instead of re-deriving the ground, so a line-bought turret stands at the line.
@@ -289,9 +290,17 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			// and the turret, being a structure, raised gAssetsM and so raised
 			// ArmyTarget, while builders are excluded from ArmyValue and so can
 			// never close the gap. Build power demanding build power.
+			// ...and the lathe is what the lines DELIVER, not their nameplate:
+			// 22.5 m/s of nameplate stood against ~4 m/s delivered, and no
+			// turret went up at a lab from minute 3 to 19 (his 10-13 watch game).
 			float lathe = 0.f;
 			if ((wantRate > 0.f) && AnyLineSite(armyPos, lathe)) {
-				armyNeed = wantRate - lathe;
+				gArmyLinesOut = 0.f;
+				for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
+					if (Factory::gFacUnits[fi] !is null)
+						gArmyLinesOut += Brain::LineOutMps(Factory::gFacUnits[fi].id);
+				}
+				armyNeed = wantRate - gArmyLinesOut;
 				if (armyNeed < 0.f)
 					armyNeed = 0.f;
 			}
@@ -443,7 +452,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " shift=" + formatFloat(gLineShift, "", 0, 1)
 			+ " lathe=" + formatFloat(lathe0, "", 0, 1)
 			+ " sink=" + formatFloat(sinkNeed, "", 0, 1)
-			+ " army=" + formatFloat(armyNeed, "", 0, 1)
+			+ " army=" + formatFloat(armyNeed, "", 0, 1) + " delivered=" + formatFloat(gArmyLinesOut, "", 0, 1)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)

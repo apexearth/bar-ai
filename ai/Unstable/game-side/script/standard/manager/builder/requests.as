@@ -66,7 +66,7 @@ void Log(CCircuitDef@ want, const string& in what)
 		+ " live=" + gLive.length()
 		+ " new=" + gCreated + " join=" + gJoined
 		+ " covered=" + gCovered + " full=" + gFull + " tooFar=" + gTooFar
-		+ " held=" + gConcentrated);
+		+ " held=" + gConcentrated + " defExempt=" + gDefExempt);
 }
 
 }  // namespace Requests
