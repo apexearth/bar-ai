@@ -4,14 +4,20 @@ good, and end with a list of viable weight sets that can later play each other).
 
 Every new network is the middle network (neuro.py) with EVERY weight nudged by N(0, s), s drawn per
 network log-uniformly from S_RANGE, so mild and wild networks are both tried. It plays one game. A
-network climbs the ladder while it keeps winning: at LADDER[i] games it needs NEED[i] wins (a draw is
-half) to be owed games up to LADDER[i+1]. Networks that reach the top are the viable list. Re-tests
-are played before new networks. A network is stored as its seed and s, so it can be rebuilt exactly.
+network climbs the ladder while its mean score (his 10-13: the score, not the win rate, which agreed
+with itself half as well) is at least the reference -- the centre's, else the best viable's: at
+LADDER[i] games that earns games up to LADDER[i+1] (a standard error of slack passed half of all
+first games).
+Networks that reach the top are the viable list. Re-tests are played before new networks. A network
+is stored as its seed and s, so it can be rebuilt exactly.
 
-ANNEALING (his 10-11, once net 99 proved out): with a centre set, most new networks are the centre's
-played weights plus N(0, s), s log-uniform in [T/4, T], T halving every ANNEAL_HALF children down to
-ANNEAL_FLOOR; the rest stay random. The centre is owed CENTRE_GAMES games so children are judged
-against a firm record, and a child that clears the ladder with a better win rate takes its place.
+ANNEALING (his 10-11, once net 99 proved out): with a centre set, new networks are the centre's played
+weights changed two ways (his 10-13), half each: every weight plus N(0, s), s log-uniform in [T/4, T],
+T halving every ANNEAL_HALF children down to ANNEAL_FLOOR; or SPARSE -- only a share p of the weights
+(SPARSE_P), each by N(0, s) with s about one typical weight (SPARSE_S), so one useful change is not
+drowned by thousands. The centre is owed CENTRE_GAMES games so children are judged against a firm
+record, and a viable child takes its place when its mean score beats the centre's by more than one
+standard error of the difference.
 
 Same game as neuro.py -- 1v1, Comet Catcher, against BARb -- but every game its own seed (game_seed), so
 the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed 1.
@@ -35,11 +41,13 @@ EXPLORE_FILE = os.path.join(neuro.NN, "rand_explore")
 EXPLORE = int(open(EXPLORE_FILE).read().strip()) if os.path.exists(EXPLORE_FILE) else 1000
 S_RANGE = (0.1, 0.8)
 LADDER = [1, 4, 12, 24]
-NEED = [1, 2, 5]
 MAX_FAILS = 3
 MAX_WORKERS = 10
 ANNEAL_SHARE = 1.0
-ANNEAL_CHILDREN = 450
+ANNEAL_CHILDREN = 900
+SPARSE_SHARE = 0.5
+SPARSE_P = (0.02, 0.05)
+SPARSE_S = (0.1, 0.3)
 ANNEAL_T0 = 0.2
 ANNEAL_HALF = 150
 ANNEAL_FLOOR = 0.03
@@ -140,6 +148,30 @@ def rate(n):
     return wins(n) / len(n["games"]) if n["games"] else 0.0
 
 
+def mscore(n):
+    return sum(x for x, _ in n["games"]) / len(n["games"]) if n["games"] else float("-inf")
+
+
+def score_sd(st):
+    """One game's score spread, pooled over every network's own mean: a 1-game record has no spread of its own."""
+    dev = [(x - mscore(n)) ** 2 for n in st["nets"].values() if len(n["games"]) > 1 for x, _ in n["games"]]
+    k = sum(1 for n in st["nets"].values() if len(n["games"]) > 1)
+    return math.sqrt(sum(dev) / max(1, len(dev) - k)) if dev else 1.0
+
+
+def se(st, n):
+    return score_sd(st) / math.sqrt(max(1, len(n["games"])))
+
+
+def reference(st):
+    """The score a climber must be able to match: the centre's, else the best viable network's."""
+    a = st.get("anneal")
+    if a:
+        return mscore(st["nets"][str(a["centre"])])
+    v = [mscore(n) for n in st["nets"].values() if n["status"] == "viable" and len(n["games"]) >= LADDER[-1]]
+    return max(v) if v else float("-inf")
+
+
 def load():
     if os.path.exists(STATE):
         return json.load(open(STATE, encoding="utf-8"))
@@ -171,8 +203,8 @@ def next_job(st, lay, rng):
             "base" in n and (owed(n) or n["busy"]) for n in st["nets"].values()):
         # his 10-11: find the best version, deploy it if it is better, then back to searching
         c = st["nets"][str(a["centre"])]
-        log("ANNEAL DONE after %d children: best is net %d, %.1f wins of %d (%.0f%%) -- random search resumes" % (
-            a["born"], c["id"], wins(c), len(c["games"]), 100 * rate(c)))
+        log("ANNEAL DONE after %d children: best is net %d, score %+.2f, %.1f wins of %d (%.0f%%) -- random search resumes" % (
+            a["born"], c["id"], mscore(c), wins(c), len(c["games"]), 100 * rate(c)))
         st.setdefault("anneal_done", []).append(dict(a, at=time.strftime("%Y-%m-%d %H:%M")))
         del st["anneal"]
     adopt_merges(st)
@@ -184,13 +216,21 @@ def next_job(st, lay, rng):
         st["next"] += 1
         a = st.get("anneal")
         if a and a.get("born", 0) < ANNEAL_CHILDREN and rng.random() < ANNEAL_SHARE:
-            t = temperature(st)
-            s = math.exp(rng.uniform(math.log(t / 4), math.log(t)))
+            sparse = rng.random() < SPARSE_SHARE
+            if sparse:
+                p = math.exp(rng.uniform(math.log(SPARSE_P[0]), math.log(SPARSE_P[1])))
+                s = math.exp(rng.uniform(math.log(SPARSE_S[0]), math.log(SPARSE_S[1])))
+            else:
+                t = temperature(st)
+                p, s = 1.0, math.exp(rng.uniform(math.log(t / 4), math.log(t)))
             n = {"id": i, "seed": rng.randrange(1 << 30), "s": round(s, 4), "base": a["centre"], "games": [],
                  "busy": 0, "tries": 0, "fails": 0, "target": LADDER[0], "status": "live"}
+            if sparse:
+                n["p"] = round(p, 4)
             a["born"] = a.get("born", 0) + 1
             child = random.Random(n["seed"])
-            w = [x + child.gauss(0, n["s"]) for x in played_weights(st, a["centre"])]
+            w = [x + child.gauss(0, n["s"]) if (not sparse or child.random() < n["p"]) else x
+                 for x in played_weights(st, a["centre"])]
         else:
             s = math.exp(rng.uniform(math.log(S_RANGE[0]), math.log(S_RANGE[1])))
             n = {"id": i, "seed": rng.randrange(1 << 30), "s": round(s, 4), "family": FAMILY, "games": [],
@@ -220,24 +260,29 @@ def finish(st, n, gi, sc):
     a = st.get("anneal")
     if n["target"] not in LADDER:   # the centre's extra games
         n["status"] = "viable"
-        log("centre net %d: %.1f wins of %d (%.0f%%)" % (n["id"], wins(n), len(n["games"]), 100 * rate(n)))
+        log("centre net %d: score %+.2f +-%.2f, %.1f wins of %d (%.0f%%)" % (
+            n["id"], mscore(n), se(st, n), wins(n), len(n["games"]), 100 * rate(n)))
         return
     rung = LADDER.index(n["target"])
+    kind = (" (child of %d%s)" % (n["base"], ", sparse %.3f" % n["p"] if "p" in n else "")) if "base" in n else ""
     if rung == len(LADDER) - 1:
         n["status"] = "viable"
-        log("net %d VIABLE: %.1f wins of %d, s %.2f%s" % (n["id"], wins(n), len(n["games"]), n["s"],
-                                                         (" (child of %d)" % n["base"]) if "base" in n else ""))
+        log("net %d VIABLE: score %+.2f +-%.2f, %.1f wins of %d, s %.2f%s" % (
+            n["id"], mscore(n), se(st, n), wins(n), len(n["games"]), n["s"], kind))
         c = st["nets"].get(str(a["centre"])) if a else None
-        if c is not None and c is not n and len(c["games"]) >= LADDER[-1] and rate(n) > rate(c):
-            log("ANNEAL: net %d takes the centre from net %d (%.0f%% of %d vs %.0f%% of %d)" % (
-                n["id"], c["id"], 100 * rate(n), len(n["games"]), 100 * rate(c), len(c["games"])))
-            a["centre"] = n["id"]
-            n["target"] = CENTRE_GAMES
-            n["status"] = "live"
-    elif wins(n) >= NEED[rung]:
+        if c is not None and c is not n and len(c["games"]) >= LADDER[-1]:
+            gap = math.sqrt(se(st, n) ** 2 + se(st, c) ** 2)
+            if mscore(n) - mscore(c) > gap:
+                log("ANNEAL: net %d takes the centre from net %d (score %+.2f of %d vs %+.2f of %d, noise %.2f)" % (
+                    n["id"], c["id"], mscore(n), len(n["games"]), mscore(c), len(c["games"]), gap))
+                a["centre"] = n["id"]
+                n["target"] = CENTRE_GAMES
+                n["status"] = "live"
+    elif mscore(n) >= reference(st):
         n["target"] = LADDER[rung + 1]
         if rung:
-            log("net %d up to %d games: %.1f wins of %d, s %.2f" % (n["id"], n["target"], wins(n), len(n["games"]), n["s"]))
+            log("net %d up to %d games: score %+.2f +-%.2f vs %+.2f, %.1f wins of %d, s %.2f%s" % (
+                n["id"], n["target"], mscore(n), se(st, n), reference(st), wins(n), len(n["games"]), n["s"], kind))
     else:
         n["status"] = "out"
 
@@ -299,19 +344,20 @@ def status(st):
     for t in LADDER[1:]:
         at = [n for n in nets if n["target"] >= t or n["status"] == "viable"]
         print("  reached the %2d-game rung: %d (still playing %d)" % (t, len(at), sum(1 for n in at if n["status"] == "live" and n["target"] == t)))
-    ranked = sorted([n for n in nets if len(n["games"]) >= LADDER[1]], key=lambda n: (-(wins(n) / len(n["games"])), -sum(x for x, _ in n["games"]) / len(n["games"])))
-    print("  best re-tested (a time-limit game goes to the side ahead on eco and army; the middle network wins 23%, the watch network 46%):")
+    ranked = sorted([n for n in nets if len(n["games"]) >= LADDER[1]], key=lambda n: -mscore(n))
+    print("  best re-tested by mean score (one game's spread %.2f; a time-limit game goes to the side ahead on eco and army):" % score_sd(st))
     for n in ranked[:12]:
-        print("    net %4d  %4.1f wins of %2d (%3.0f%%)  mean score %+.2f  s %.2f  %s" % (
-            n["id"], wins(n), len(n["games"]), 100 * wins(n) / len(n["games"]),
-            sum(x for x, _ in n["games"]) / len(n["games"]), n["s"], n["status"]))
+        print("    net %4d  score %+.2f +-%.2f  %4.1f wins of %2d (%3.0f%%)  s %.2f%s  %s" % (
+            n["id"], mscore(n), se(st, n), wins(n), len(n["games"]), 100 * rate(n), n["s"],
+            "  p %.3f" % n["p"] if "p" in n else "", n["status"]))
     a = st.get("anneal")
     if a:
         c = st["nets"][str(a["centre"])]
         kids = [n for n in nets if "base" in n]
-        print("  annealing around net %d (%.1f wins of %d, %.0f%%): T %.3f, %d children, %d past one game, %d viable" % (
-            c["id"], wins(c), len(c["games"]), 100 * rate(c), temperature(st), len(kids),
-            sum(1 for n in kids if len(n["games"]) > 1), sum(1 for n in kids if n["status"] == "viable")))
+        print("  annealing around net %d (score %+.2f, %.1f wins of %d, %.0f%%): T %.3f, %d children (%d sparse), %d past one game, %d viable" % (
+            c["id"], mscore(c), wins(c), len(c["games"]), 100 * rate(c), temperature(st), len(kids),
+            sum(1 for n in kids if "p" in n), sum(1 for n in kids if len(n["games"]) > 1),
+            sum(1 for n in kids if n["status"] == "viable")))
     played = [n for n in played if "base" not in n]   # the noise-size split below is for random networks
     lo = [n for n in played if n["s"] < 0.28]
     hi = [n for n in played if n["s"] >= 0.28]
