@@ -1647,6 +1647,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
 	return std::make_pair(area, area != nullptr);
 }
 
+bool CTerrainManager::IsAreaLive(const SArea* area, const char* where)
+{
+	// pointer compares only: a dead area must not be read
+	for (const SMobileType& mt : areaData->mobileType) {
+		if (!mt.area.empty() && (area >= &mt.area.front()) && (area <= &mt.area.back())) {
+			return true;
+		}
+	}
+	if ((++staleAreaN <= 5) || (staleAreaN % 100 == 0)) {
+		circuit->LOG("apex: stale-area at=%s n=%i frame=%i", where, staleAreaN, circuit->GetLastFrame());
+	}
+	return false;
+}
+
 bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
 {
 	const int iS = GetSectorIndex(destination);
@@ -1655,6 +1669,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
 	}
 	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
 		return true;
+	}
+	if (!IsAreaLive(area, "move")) {
+		return false;
 	}
 	if (area == GetSectorList(area)[iS].area) {
 		return true;
@@ -1690,8 +1707,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
 	AIFloat3 pos = position;
 //	CorrectPosition(pos);
 	const int iS = GetSectorIndex(pos);
-
-	return (sourceArea == nullptr) ? pos : GetClosestSector(sourceArea, iS)->S->position;
+	if ((sourceArea == nullptr) || !circuit->IsPosOnMap(pos) || !IsAreaLive(sourceArea, "movepos")) {
+		return pos;
+	}
+	SAreaSector* closest = GetClosestSector(sourceArea, iS);
+	return (closest == nullptr) ? pos : closest->S->position;
 }
 
 AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
@@ -2044,11 +2064,15 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
 	if (area == nullptr) {  // A flying unit
 		return true;
 	}
+	if (!IsAreaLive(area, "reachunit")) {
+		return false;
+	}
 	const int iS = GetSectorIndex(destination);
 	if (area->sector.find(iS) != area->sector.end()) {
 		return true;
 	}
-	return GetClosestSector(area, iS)->S->position.SqDistance2D(destination) < SQUARE(range);
+	SAreaSector* closest = GetClosestSector(area, iS);
+	return (closest != nullptr) && (closest->S->position.SqDistance2D(destination) < SQUARE(range));
 }
 
 bool CTerrainManager::CanReachAtSafe(CCircuitUnit* unit, const AIFloat3& destination, const float range, const float threat)
@@ -2075,11 +2099,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
 	if (area == nullptr) {  // A flying unit
 		return true;
 	}
+	// Off the map the sector index is outside the grid GetClosestSector indexes.
+	if (!circuit->IsPosOnMap(destination) || !IsAreaLive(area, "reach")) {
+		return false;
+	}
 	const int iS = GetSectorIndex(destination);
 	if (area->sector.find(iS) != area->sector.end()) {
 		return true;
 	}
-	return GetClosestSector(area, iS)->S->position.SqDistance2D(destination) < SQUARE(range);
+	SAreaSector* closest = GetClosestSector(area, iS);  // null for an area with no sectors
+	return (closest != nullptr) && (closest->S->position.SqDistance2D(destination) < SQUARE(range));
 }
 
 bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)

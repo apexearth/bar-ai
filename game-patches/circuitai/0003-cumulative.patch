@@ -22130,7 +22130,7 @@ index 8e35f245..a7b63ab9 100644
  
  std::shared_ptr<IMainJob> CTerrainData::UpdateAreas()
 diff --git a/src/circuit/terrain/TerrainManager.cpp b/src/circuit/terrain/TerrainManager.cpp
-index 78713628..bc19f6ed 100644
+index 78713628..f9930b07 100644
 --- a/src/circuit/terrain/TerrainManager.cpp
 +++ b/src/circuit/terrain/TerrainManager.cpp
 @@ -816,6 +816,13 @@ void CTerrainManager::MarkAllyBuildings()
@@ -22147,7 +22147,52 @@ index 78713628..bc19f6ed 100644
  	const CAllyTeam::AllyUnits& friendlies = circuit->GetFriendlyUnits();
  	const int teamId = circuit->GetTeamId();
  	const int frame = circuit->GetLastFrame();
-@@ -1957,8 +1964,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
+@@ -1640,6 +1647,20 @@ std::pair<SArea*, bool> CTerrainManager::GetCurrentMapArea(CCircuitDef* cdef, co
+ 	return std::make_pair(area, area != nullptr);
+ }
+ 
++bool CTerrainManager::IsAreaLive(const SArea* area, const char* where)
++{
++	// pointer compares only: a dead area must not be read
++	for (const SMobileType& mt : areaData->mobileType) {
++		if (!mt.area.empty() && (area >= &mt.area.front()) && (area <= &mt.area.back())) {
++			return true;
++		}
++	}
++	if ((++staleAreaN <= 5) || (staleAreaN % 100 == 0)) {
++		circuit->LOG("apex: stale-area at=%s n=%i frame=%i", where, staleAreaN, circuit->GetLastFrame());
++	}
++	return false;
++}
++
+ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+ {
+ 	const int iS = GetSectorIndex(destination);
+@@ -1649,6 +1670,9 @@ bool CTerrainManager::CanMoveToPos(SArea* area, const AIFloat3& destination)
+ 	if (area == nullptr) {  // either a flying unit or a unit was somehow created at an impossible position
+ 		return true;
+ 	}
++	if (!IsAreaLive(area, "move")) {
++		return false;
++	}
+ 	if (area == GetSectorList(area)[iS].area) {
+ 		return true;
+ 	}
+@@ -1683,8 +1707,11 @@ AIFloat3 CTerrainManager::GetMovePosition(SArea* sourceArea, const AIFloat3& pos
+ 	AIFloat3 pos = position;
+ //	CorrectPosition(pos);
+ 	const int iS = GetSectorIndex(pos);
+-
+-	return (sourceArea == nullptr) ? pos : GetClosestSector(sourceArea, iS)->S->position;
++	if ((sourceArea == nullptr) || !circuit->IsPosOnMap(pos) || !IsAreaLive(sourceArea, "movepos")) {
++		return pos;
++	}
++	SAreaSector* closest = GetClosestSector(sourceArea, iS);
++	return (closest == nullptr) ? pos : closest->S->position;
+ }
+ 
+ AIFloat3 CTerrainManager::ShiftPos(CCircuitDef* cdef, const AIFloat3& position, float range, bool isOrtho)
+@@ -1957,8 +1984,79 @@ bool CTerrainManager::CanBeBuiltAtSafe(CCircuitDef* cdef, const AIFloat3& positi
  	return CanBeBuiltAt(cdef, position);
  }
  
@@ -22227,7 +22272,21 @@ index 78713628..bc19f6ed 100644
  	if (unit->GetCircuitDef()->GetImmobileId() != -1) {  // A hub or factory
  		return unit->GetPos(circuit->GetLastFrame()).SqDistance2D(destination) < SQUARE(range);
  	}
-@@ -1975,6 +2053,9 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+@@ -1966,15 +2064,22 @@ bool CTerrainManager::CanReachAt(CCircuitUnit* unit, const AIFloat3& destination
+ 	if (area == nullptr) {  // A flying unit
+ 		return true;
+ 	}
++	if (!IsAreaLive(area, "reachunit")) {
++		return false;
++	}
+ 	const int iS = GetSectorIndex(destination);
+ 	if (area->sector.find(iS) != area->sector.end()) {
+ 		return true;
+ 	}
+-	return GetClosestSector(area, iS)->S->position.SqDistance2D(destination) < SQUARE(range);
++	SAreaSector* closest = GetClosestSector(area, iS);
++	return (closest != nullptr) && (closest->S->position.SqDistance2D(destination) < SQUARE(range));
+ }
  
  bool CTerrainManager::CanReachAtSafe(CCircuitUnit* unit, const AIFloat3& destination, const float range, const float threat)
  {
@@ -22237,8 +22296,26 @@ index 78713628..bc19f6ed 100644
  	if (circuit->GetThreatMap()->GetThreatAt(destination) > threat) {
  		return false;
  	}
+@@ -1994,11 +2099,16 @@ bool CTerrainManager::CanMobileReachAt(SArea* area, const AIFloat3& destination,
+ 	if (area == nullptr) {  // A flying unit
+ 		return true;
+ 	}
++	// Off the map the sector index is outside the grid GetClosestSector indexes.
++	if (!circuit->IsPosOnMap(destination) || !IsAreaLive(area, "reach")) {
++		return false;
++	}
+ 	const int iS = GetSectorIndex(destination);
+ 	if (area->sector.find(iS) != area->sector.end()) {
+ 		return true;
+ 	}
+-	return GetClosestSector(area, iS)->S->position.SqDistance2D(destination) < SQUARE(range);
++	SAreaSector* closest = GetClosestSector(area, iS);  // null for an area with no sectors
++	return (closest != nullptr) && (closest->S->position.SqDistance2D(destination) < SQUARE(range));
+ }
+ 
+ bool CTerrainManager::CanMobileReachAtSafe(SArea* area, const AIFloat3& destination, const float range, const float threat)
 diff --git a/src/circuit/terrain/TerrainManager.h b/src/circuit/terrain/TerrainManager.h
-index 67097de0..e5ce0d1b 100644
+index 67097de0..2f3378c7 100644
 --- a/src/circuit/terrain/TerrainManager.h
 +++ b/src/circuit/terrain/TerrainManager.h
 @@ -65,7 +65,7 @@ public:
@@ -22258,7 +22335,16 @@ index 67097de0..e5ce0d1b 100644
  	struct SStructure {
  		ICoreUnit::Id unitId;
  		CCircuitDef* cdef;
-@@ -192,6 +193,12 @@ private:
+@@ -178,6 +179,8 @@ public:
+ 	std::pair<terrain::SArea*, bool> GetCurrentMapArea(CCircuitDef* cdef, const int indexSector);
+ 	int GetSectorIndex(const springai::AIFloat3& position) const { return terrainData->GetSectorIndex(position); }
+ 	bool CanMoveToPos(terrain::SArea* area, const springai::AIFloat3& destination);
++	// apex: false for an area outside this AI's buffer (logged): a task holding a dead pointer
++	bool IsAreaLive(const terrain::SArea* area, const char* where);
+ 	springai::AIFloat3 GetBuildPosition(CCircuitDef* cdef, const springai::AIFloat3& position);
+ 	springai::AIFloat3 GetMovePosition(terrain::SArea* sourceArea, const springai::AIFloat3& position);
+ 	springai::AIFloat3 ShiftPos(CCircuitDef* cdef, const springai::AIFloat3& position, float range, bool isOrtho = false);
+@@ -192,6 +195,12 @@ private:
  	terrain::SSector* GetAlternativeSector(terrain::SArea* destinationArea, const int sourceSIndex, terrain::SImmobileType* destinationIT); // can return 0
  	const terrain::SSector& GetSector(int sIndex) const { return areaData->sector[sIndex]; }
  public:
@@ -22271,7 +22357,7 @@ index 67097de0..e5ce0d1b 100644
  	const std::vector<terrain::SMobileType>& GetMobileTypes() const {
  		return areaData->mobileType;
  	}
-@@ -221,6 +228,13 @@ public:
+@@ -221,6 +230,13 @@ public:
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position, const float range);  // NOTE: returns false if the area was too small to be recorded
  	bool CanBeBuiltAt(CCircuitDef* cdef, const springai::AIFloat3& position);
  	bool CanBeBuiltAtSafe(CCircuitDef* cdef, const springai::AIFloat3& position);
@@ -22285,6 +22371,14 @@ index 67097de0..e5ce0d1b 100644
  	bool CanReachAt(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
  	bool CanReachAtSafe(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range, const float threat = THREAT_MIN);
  	bool CanReachAtSafe2(CCircuitUnit* unit, const springai::AIFloat3& destination, const float range);
+@@ -255,6 +271,7 @@ private:
+ 	float minLandPercent;
+ 
+ 	std::unordered_set<const terrain::SArea*> enemyAreas;
++	int staleAreaN = 0;
+ 
+ #ifdef DEBUG_VIS
+ private:
 diff --git a/src/circuit/terrain/path/PathFinder.cpp b/src/circuit/terrain/path/PathFinder.cpp
 index aef6e1ed..47b5cd34 100644
 --- a/src/circuit/terrain/path/PathFinder.cpp

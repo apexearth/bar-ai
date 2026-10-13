@@ -179,6 +179,8 @@ public:
 	std::pair<terrain::SArea*, bool> GetCurrentMapArea(CCircuitDef* cdef, const int indexSector);
 	int GetSectorIndex(const springai::AIFloat3& position) const { return terrainData->GetSectorIndex(position); }
 	bool CanMoveToPos(terrain::SArea* area, const springai::AIFloat3& destination);
+	// apex: false for an area outside this AI's buffer (logged): a task holding a dead pointer
+	bool IsAreaLive(const terrain::SArea* area, const char* where);
 	springai::AIFloat3 GetBuildPosition(CCircuitDef* cdef, const springai::AIFloat3& position);
 	springai::AIFloat3 GetMovePosition(terrain::SArea* sourceArea, const springai::AIFloat3& position);
 	springai::AIFloat3 ShiftPos(CCircuitDef* cdef, const springai::AIFloat3& position, float range, bool isOrtho = false);
@@ -269,6 +271,7 @@ private:
 	float minLandPercent;
 
 	std::unordered_set<const terrain::SArea*> enemyAreas;
+	int staleAreaN = 0;
 
 #ifdef DEBUG_VIS
 private:
