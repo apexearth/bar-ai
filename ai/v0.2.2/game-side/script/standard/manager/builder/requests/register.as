@@ -1,0 +1,689 @@
+namespace Requests {
+
+// -- the big-energy class -----------------------------------------------------
+//
+// EVERY GATE ABOVE KEYS ON DEF ID, AND THE ENERGY LADDER IS SIX DEFS. Measured
+// live 2026-08-30 (4v4 Comet, t2 12.6m): "request full armfus" -- the per-def
+// duplicate gate refusing correctly -- followed immediately by "request new
+// armckfus" and "request new armafus", two more four-thousand-metal reactors,
+// because each is a different def with its own cap. apexearth, four times now:
+// "there's no reason we should ever make two identical, really expensive
+// things right next to each other at the same time."
+//
+// So expensive energy is governed as ONE CLASS at the chokepoint every
+// entrance passes through -- the market's rung, the stall ladder's alternate,
+// and C++ build_chain alike.
+const float BIG_E_COST = 300.f;   // above solar (155) and wind; advsol 370 up
+
+// The metal unlock: an advanced plant, or an extractor above the basic one.
+// apexearth 2026-09-19: "to get more metal, you just need to focus everything
+// on the thing that gets you more metal."
+bool IsMetalUnlock(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id) || Catalog::gMobile[id])
+		return false;
+	if ((Catalog::gBuildsList[id].length() > 0)
+		&& ((Factory::userData[id].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0))
+		return true;
+	// An extractor upgrade is the unlock until the first one stands; after that
+	// every moho in flight pulled the whole builder pool out to it, all game.
+	if ((Catalog::gExtractsM[id] <= 0.f) || (Market::MohoStanding() > 0))
+		return false;
+	for (int k = 1; k <= Catalog::gDefCount; ++k) {
+		const float e = Catalog::gExtractsM[k];
+		if ((e > 0.f) && !Catalog::gMobile[k] && (e < Catalog::gExtractsM[id]))
+			return true;   // something extracts less: this is an upgrade
+	}
+	return false;
+}
+
+bool IsBigEnergy(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id) || Catalog::gMobile[id])
+		return false;
+	// A REACTOR IS UNARMED. "Costs a lot and makes energy" also describes a
+	// Cerberus (corbhmth: 3100 metal, energymake 450, and a gun), so the
+	// serialization meant for reactors was refusing heavy turrets against
+	// fusions -- measured live, `bigE-held corbhmth` 53 times in one game,
+	// while apexearth watched a mid-map cluster go undefended. A power
+	// building has no weapon; that is the whole distinction and it needs no
+	// list and no threshold.
+	if (Catalog::gSurfT[id] > 0.f || Catalog::gAirT[id] > 0.f)
+		return false;
+	return (Catalog::gCostM[id] >= BIG_E_COST) && (Catalog::gMakeE[id] > 1.f);
+}
+
+// IS ONE ALREADY RISING. Asked of the COMMITMENT LEDGER, not gLive: a frame
+// whose request died holds no task, and a gate blind to it founds another
+// beside it (measured: peak 7 advanced solars with the gLive-based test in).
+//
+// NO WEALTH EXEMPTION. Three were tried in one session -- bank-covers-the-bill,
+// then saturated-or-rich, then saturated-and-rich -- and every one of them was
+// the clause the overlaps came back through, because a cheap-enough class
+// member saturates at whatever crew the arithmetic allows and a mid-game bank
+// covers the rest. The older "more than 1 of any building at one time if we
+// are wealthy enough" ruling stands for buildings at large; it never meant
+// reactors, which is the class he has now objected to four times. Converters,
+// nanos, defence, and the sub-bar generators keep their parallelism.
+bool BigEnergyRising()
+{
+	uint room = 0;
+	return Market::ComBigEnergyRising(room) > 0;
+}
+
+// THE SLOT BELONGS TO THE BEST REACTOR WANTED, NOT THE FIRST ASKER.
+//
+// One-at-a-time refused the LATER request, whoever it was, so a 370-metal
+// advanced solar routinely held the door shut against a 4,500-metal fusion:
+// measured live 2026-08-30, `bigE-held corfus` 99 times in one game, while
+// T1 cons executed coradvsol 391 times against 55 fusions (apexearth: "a lot
+// of T1 cons are taking up the request to make energy and they're making the
+// dramatically inferior advsol when fusions should get made instead").
+//
+// So a want may open a second site only if it produces STRICTLY MORE energy
+// than anything of its class already rising. That is a comparison, not a
+// threshold, and it cannot bring back the original bug -- seven advanced
+// solars all make 75 e/s, so no member of an equal-output group can ever
+// preempt another, and the ladder's depth bounds the overlap.
+// ...AND SOONER, NOT ONLY BIGGER. Output alone let an advanced fusion open
+// beside a fusion at 93% and take its hands (his watch, 2026-09-16: "switches
+// all build power to an AFUS before the fusion completes... has only 500
+// energy income"). The bar is energy per unit of build time REMAINING on the
+// best reactor rising: a nearly finished fusion is seconds from its 1,000
+// e/s and nothing outbids that; a fresh one is fair game for an afus.
+bool BigEnergyBetterThanRising(const CCircuitDef@ d)
+{
+	if (d is null)
+		return false;
+	const int id = int(d.id);
+	if (!Catalog::ValidId(id))
+		return false;
+	float risingRate = 0.f;
+	if (!Market::ComBigEnergyBestRate(risingRate, id))
+		return true;
+	const float bt = Catalog::gBuildTime[id];
+	if (bt <= 1.f)
+		return false;
+	return (Catalog::gMakeE[id] / bt) > risingRate;
+}
+
+// "Multiple reactors if we can afford it" (apexearth 2026-09-25). The bank is
+// never the test late: the army spends it to zero at 1,300 m/s. Afford means
+// the income over one full-crew build pays for every reactor rising plus this.
+bool IncomeCoversReactors(const CCircuitDef@ want)
+{
+	if (want is null)
+		return false;
+	const int wd = int(want.id);
+	if (!Catalog::ValidId(wd))
+		return false;
+	const float bp = Market::ConWorkerBP() * (80.f / 7.f) * float(SiteWorkerCap(want));
+	if (bp <= 1.f)
+		return false;
+	uint room = 0;
+	const uint n = Market::ComBigEnergyRising(room);
+	return Eco::MInc() * (Catalog::gBuildTime[wd] / bp) >= float(n + 1) * want.costM;
+}
+
+int gBigEFold = 0;   // cross-def folds onto the standing reactor
+int gBigEHeld = 0;   // refusals: something big is rising and has room
+int gBigEPre  = 0;   // a strictly better rung opened its own site
+
+// -- the register ------------------------------------------------------------
+
+array<IUnitTask@> gLive;
+int gLiveStamp = 0;   // bumped on every insert and removal of gLive
+// THE WAIT BETWEEN DECIDING AND BREAKING GROUND, per request, parallel to
+// gLive (apexearth: "if you build 1 wind -- what's the time between wanting
+// to create one and it actually starting? track those timelines"). Nothing
+// prices this yet; the log line is the instrument.
+array<int> gLiveAt;          // frame Register saw it
+array<bool> gLiveStarted;    // its nanoframe has been logged
+// The fleet's running mean of that wait, in seconds -- measured, not chosen,
+// so the ladder can charge every building the walk it actually costs.
+float gStartLatSum = 0.f;
+int gStartLatN = 0;
+float StartLatencyS()
+{
+	return (gStartLatN > 0) ? (gStartLatSum / float(gStartLatN)) : 0.f;
+}
+// What a start is worth in metal right now: the mean price of the sites
+// standing in the register. 0 with none.
+float LiveSiteMeanCost()
+{
+	float sum = 0.f;
+	int n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.buildDef is null))
+			continue;
+		sum += t.buildDef.costM;
+		++n;
+	}
+	return (n > 0) ? (sum / float(n)) : 0.f;
+}
+// THE LATHE A BUILDING ACTUALLY GOT, per def: build time over the seconds from
+// its nanoframe to its finish, averaged over what we have finished. The crew
+// the request layer would admit is not the crew that shows up -- an advanced
+// fusion the cap allowed seven hands took 817 s, which is two -- and the
+// simulator's build times were wrong by that ratio. 0 until one has finished.
+array<int> gLiveStartAt;          // frame the nanoframe was first seen
+array<float> gLiveProg;           // progress last seen rising
+array<int> gLiveProgAt;           // ...and when
+array<float> gLiveSample;         // progress at the last rate sample
+array<int> gLiveSampleAt;
+array<float> gLiveRingBP;         // lathe SEEN on the frame beyond its crew
+array<float> gEffBPSum(ai.GetDefCount() + 1, 0.f);
+array<float> gEffBPN(ai.GetDefCount() + 1, 0.f);
+// ...and for the reactor CLASS as a whole, so the first advanced fusion is
+// priced at the lathe the fusions actually got rather than at the crew the cap
+// would admit.
+float gEffBPBigSum = 0.f;
+float gEffBPBigN = 0.f;
+float EffBPFor(int defId)
+{
+	if ((defId < 0) || (defId >= int(gEffBPN.length())))
+		return 0.f;
+	if (gEffBPN[defId] > 0.f)
+		return gEffBPSum[defId] / gEffBPN[defId];
+	if ((gEffBPBigN > 0.f) && IsBigEnergy(Catalog::Def(defId)))
+		return gEffBPBigSum / gEffBPBigN;
+	return 0.f;
+}
+
+void LatencySweep()
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((i >= gLiveStarted.length()) || gLiveStarted[i] || (t is null)
+			|| t.IsDead() || (t.target is null) || (t.buildDef is null))
+			continue;
+		gLiveStarted[i] = true;
+		if (i < gLiveStartAt.length())
+			gLiveStartAt[i] = ai.frame;
+		if (Catalog::gExtractsM[int(t.buildDef.id)] > 0.f)
+			Market::NoteUpStarted(t.GetBuildPos());
+		gStartLatSum += float(ai.frame - gLiveAt[i]) / float(SECOND);
+		++gStartLatN;
+		const AIFloat3 sAt = t.GetBuildPos();
+		uint arrived = 0;
+		ArrivedLathe(t, arrived);
+		AiLog(Factory::T() + "apex: latency " + t.buildDef.GetName()
+			+ " start=" + ((ai.frame - gLiveAt[i]) / SECOND)
+			+ " workers=" + Workers(t)
+			+ " arrived=" + arrived
+			+ " cap=" + SiteWorkerCap(t.buildDef)
+			+ " banked=" + (BankCovers(t.buildDef) ? 1 : 0)
+			+ " m=" + int(t.buildDef.costM)
+			+ " at=" + int(sAt.x) + "," + int(sAt.z));
+	}
+}
+
+// HOW MANY HANDS ONE SITE CAN ACTUALLY BE FED. A lathe pulls a roughly constant
+// DRAIN whatever it is building, so the hands an economy can keep working at
+// once is income/DRAIN -- that is InFlightCap. Split across the sites actually
+// standing, it is the crew past which another pair of hands adds no progress
+// here and only absence somewhere else. Cost decides how LONG a site drains,
+// never how many may drain it at once; keying crew size on cost is what let a
+// ~10k afus authorise 22 workers while defences and open spots went unbuilt.
+// Scales with income and with how much else is in flight -- no flat number.
+uint LiveSiteCount()
+{
+	uint n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER))
+			continue;
+		++n;
+	}
+	return (n > 0) ? n : 1;
+}
+
+// Income buildings keep a bigger crew: they finish fast on purpose and pay for
+// everything downstream (apexearth, after the first peeled game: "we a little
+// bit do not focus enough on eco now"). The multiplier is the eco-vs-rest
+// balance knob, now applied to a rate rather than to a cost.
+bool IsEcoDef(const CCircuitDef@ want)
+{
+	if (want is null)
+		return false;
+	const int d = int(want.id);
+	return (Catalog::gMakeE[d] > 1.f) || (Catalog::gExtractsM[d] > 0.f)
+			|| (Catalog::gConvCapacity[d] > 0.f);
+}
+
+uint FeedableCrew(const CCircuitDef@ want)
+{
+	// Same exemption as SiteWorkerCap, and the same number: a banked job's
+	// crew is bounded by cost, so the peel rung cannot trim what the join
+	// rung admitted (peeling against a different number only cycles them).
+	if (BankCovers(want))
+		return CostCrew(want);
+	float n = float(InFlightCap()) / float(LiveSiteCount());
+	if (IsEcoDef(want))
+		n *= ai.GetTunable("apex_peel_eco_keep", TUNE_PEEL_ECO_KEEP);
+	// The further defence is behind its target, the more of the pool a gun may
+	// take (apexearth 2026-09-28): the even share read one hand per Pulsar.
+	else if (Market::ProtClassOf(int(want.id)) == Market::PROT_DEF)
+		n += (float(InFlightCap()) - n) * Market::DefenceShortfall();
+	return (n < 1.f) ? 1 : uint(n);
+}
+
+// LATHE IS CREW (apexearth: "avoid having cons assist making nanos which are
+// near other nanos which can already assist it"). A join spends the one thing
+// the ring cannot supply -- a hand that can FOUND the next frame -- so it is
+// refused when the ring already on the site clears the remaining bill within
+// the joiner's walk plus apex_nano_fed_s. The ring is what was SEEN lathing
+// the frame, never the turrets in reach: a patrolling turret works its
+// nearest target, and a lab's pad is nearer and never empties.
+bool NanoFed(IUnitTask@ cand, uint busy, float dist, float speed)
+{
+	if ((cand is null) || (busy == 0) || (cand.target is null) || (cand.buildDef is null))
+		return false;
+	const float fedS = ai.GetTunable("apex_nano_fed_s", TUNE_NANO_FED_S);
+	if (fedS <= 0.f)
+		return false;
+	const float ring = RingSeen(cand);
+	if (ring <= 0.f)
+		return false;
+	const int bd = int(cand.buildDef.id);
+	if (!Catalog::ValidId(bd))
+		return false;
+	const float remainBt = Catalog::gBuildTime[bd] * (1.f - Progress(cand));
+	const float v = (speed > 1.f) ? speed : ASSUMED_CON_SPEED;
+	return remainBt / ring <= dist / v + fedS;
+}
+
+int gDupLog = 0;
+int gCreated = 0;
+int gJoined = 0;
+int gCovered = 0;    // refused: this ground is already requested
+int gFull = 0;       // refused: the income cannot feed another of this def
+int gConcentrated = 0;   // held: the income cannot feed another site of anything
+
+// PER-DEF, NOT GLOBAL. A single shared cooldown meant a burst on one def (say
+// six armadvsol requested close together) could be silenced by an unrelated
+// def's log resetting the same timer moments earlier -- exactly the failure
+// mode apexearth asked to diagnose (multiple advanced solars appearing to
+// build at once with nothing in the log explaining why). Sized and indexed
+// like gNextFactoryRequest in sitesafety.as.
+array<int> gNextDefLog(ai.GetDefCount() + 1);
+
+// IUnitTask is refcounted, so a held handle stays valid, and every removal
+// funnels through DequeueTask -> AiTaskRemoved.
+void Register(IUnitTask@ task)
+{
+	if (task is null)
+		return;
+	const int bt = task.GetBuildType();
+	if (!Governed(bt))
+		return;
+	if (task.buildDef is null)
+		return;
+	gLive.insertLast(task);
+	++gLiveStamp;
+	gLiveAt.insertLast(ai.frame);
+	gLiveStarted.insertLast(false);
+	gLiveStartAt.insertLast(-1);
+	gLiveProg.insertLast(0.f);
+	gLiveProgAt.insertLast(ai.frame);
+	gLiveSample.insertLast(0.f);
+	gLiveSampleAt.insertLast(ai.frame);
+	gLiveRingBP.insertLast(0.f);
+	if (IsBigEnergy(task.buildDef))
+		Market::ComBigEInvalidate();
+	// WHERE THE EXPENSIVE THING ACTUALLY LANDED. The exec line prints the
+	// Want's pos, which the executor's own siting then overrides, so nothing
+	// reported whether a build worth parking lathe on ended up inside the
+	// lathe we already own.
+	if (Market::NanoSinkWorthy(int(task.buildDef.id))) {
+		const AIFloat3 sp = task.GetBuildPos();
+		if (OnMap(sp))
+			AiLog("apex: sink-site " + task.buildDef.GetName()
+				+ " at=" + int(sp.x) + "," + int(sp.z)
+				+ " ringbp=" + int(Market::RingBPAt(sp))
+				+ " gap=" + int(Market::NanoGap(sp)));
+	}
+}
+
+// Live FACTORY tasks by the synchronous registry -- unlike the builder
+// manager's pool count (assignment empties it) or def counts (need a
+// nanoframe), this covers a task through its whole walk-and-build window,
+// whoever holds it and whoever created it (AiTaskAdded registers engine-made
+// tasks too). The plant-ask sweep keys on this so a factory ask can never
+// expire while its task is still alive in the commander's hands.
+// MANNED only, on purpose: CEconomyManager also keeps a HELD, INACTIVE
+// factory task while it waits for income (BuilderManager.cpp:734-740 keeps
+// it out of buildTasks for exactly this reason), and AiTaskAdded registers
+// that one too. Counting it read "a factory is in flight" from frame ~500 of
+// every game, the ask never expired, and no factory was EVER approved --
+// facCount=0 at 10 minutes, 2 of 3 smokes. A worker on the task is what
+// separates the commander's real walk-and-build from the engine's parked
+// placeholder; the unassigned-active ones are the pool count's job.
+uint FactoryManned()
+{
+	uint n = 0;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if ((gLive[i] !is null) && !gLive[i].IsDead()
+			&& (gLive[i].GetBuildType() == Task::BuildType::FACTORY)
+			&& (Workers(gLive[i]) > 0))
+			++n;
+	}
+	return n;
+}
+
+void Forget(IUnitTask@ task)
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] is task) {
+			if ((gLive[i].buildDef !is null) && IsBigEnergy(gLive[i].buildDef))
+				Market::ComBigEInvalidate();
+			if ((i < gLiveAt.length()) && (task.buildDef !is null)) {
+				// A request that ends with a nanoframe was built; one that
+				// ends without one was walked away from.
+				AiLog(Factory::T() + "apex: latency " + task.buildDef.GetName()
+					+ (gLiveStarted[i] ? " done=" : " dropped=")
+					+ ((ai.frame - gLiveAt[i]) / SECOND)
+					+ " workers=" + Workers(task)
+					+ " at=" + int(task.GetBuildPos().x) + "," + int(task.GetBuildPos().z));
+				if (!gLiveStarted[i] && (Catalog::gExtractsM[int(task.buildDef.id)] > 0.f))
+					Market::NoteUpDropped(task.GetBuildPos());
+				gLiveAt.removeAt(i);
+				if (gLiveStarted[i] && (i < gLiveStartAt.length()) && (gLiveStartAt[i] > 0)
+					&& (task.target !is null)) {
+					const float secs = float(ai.frame - gLiveStartAt[i]) / float(SECOND);
+					const int did = int(task.buildDef.id);
+					if ((secs > 1.f) && (did >= 0) && (did < int(gEffBPN.length()))) {
+						// RECENT builds, not the lifetime mean: the hands a
+						// reactor got at minute eight said nothing about the
+						// pool at minute thirty, and the advanced reactor was
+						// priced on it (apexearth: "we keep building fusion
+						// for too long"). Each sample halves what came before.
+						gEffBPSum[did] = gEffBPSum[did] * 0.5f + Catalog::gBuildTime[did] / secs;
+						gEffBPN[did] = gEffBPN[did] * 0.5f + 1.f;
+						if (IsBigEnergy(task.buildDef)) {
+							gEffBPBigSum = gEffBPBigSum * 0.5f + Catalog::gBuildTime[did] / secs;
+							gEffBPBigN = gEffBPBigN * 0.5f + 1.f;
+						}
+					}
+				}
+				if (i < gLiveStartAt.length())
+					gLiveStartAt.removeAt(i);
+				if (i < gLiveProg.length())
+					gLiveProg.removeAt(i);
+				if (i < gLiveProgAt.length())
+					gLiveProgAt.removeAt(i);
+				if (i < gLiveSample.length())
+					gLiveSample.removeAt(i);
+				if (i < gLiveSampleAt.length())
+					gLiveSampleAt.removeAt(i);
+				if (i < gLiveRingBP.length())
+					gLiveRingBP.removeAt(i);
+				gLiveStarted.removeAt(i);
+			}
+			gLive.removeAt(i);
+			++gLiveStamp;
+			return;
+		}
+	}
+}
+
+uint Workers(IUnitTask@ t)
+{
+	if (t is null)
+		return 0;
+	array<CCircuitUnit@>@ busy = t.GetUnits();
+	return (busy is null) ? 0 : busy.length();
+}
+
+// Build power [BP] from the hands that have ARRIVED -- inside their own build
+// reach of the site -- with the count in `arrived`. A hand still walking is on
+// the roster and lathes nothing yet, so a remaining-time estimate that counts
+// it reads the site as closer to done than it is. `aheadOf` > 0 also counts
+// the walkers nearer the site than that distance: they will be lathing by the
+// time a hand that far out gets there, and a stampede of forty onto a reactor
+// nobody has reached yet is the one case pure arrival cannot see.
+float ArrivedLathe(IUnitTask@ t, uint& out arrived, float aheadOf = -1.f)
+{
+	arrived = 0;
+	if ((t is null) || (t.buildDef is null))
+		return 0.f;
+	array<CCircuitUnit@>@ busy = t.GetUnits();
+	if (busy is null)
+		return 0.f;
+	const AIFloat3 site = t.GetBuildPos();
+	if (!OnMap(site))
+		return 0.f;
+	const int bd = int(t.buildDef.id);
+	const float half = Catalog::ValidId(bd)
+			? 8.f * float((Catalog::gFootX[bd] > Catalog::gFootZ[bd])
+				? Catalog::gFootX[bd] : Catalog::gFootZ[bd])
+			: 0.f;
+	float bp = 0.f;
+	for (uint i = 0; i < busy.length(); ++i) {
+		CCircuitUnit@ u = busy[i];
+		if (u is null)
+			continue;
+		const int ud = int(u.circuitDef.id);
+		if (!Catalog::ValidId(ud))
+			continue;
+		const float d = u.GetPos(ai.frame).distance2D(site);
+		if (d <= Catalog::gBuildDist[ud] + half + 32.f) {
+			++arrived;
+			bp += Catalog::gBuildPower[ud];
+		} else if ((aheadOf > 0.f) && (d < aheadOf)) {
+			bp += Catalog::gBuildPower[ud];
+		}
+	}
+	return bp;
+}
+
+// HOW CLOSE TO DONE. `target` is the nanoframe (IBuilderTask::SetTarget,
+// null until it exists) and a unit under construction reports its build
+// percentage through health percent -- 0 for nothing yet, 1 for finished.
+// apexearth: "if we are in progress on more than one, we reassign ourselves
+// to focus on the one that is more close to being complete... focus as much
+// build power as we can on just the one building". This is the signal that
+// lets JoinFor/ClaimFor do that instead of picking on distance
+// alone -- a half-built nanoframe should win over a fresh one within reach.
+float Progress(IUnitTask@ t)
+{
+	if (t is null)
+		return 0.f;
+	CCircuitUnit@ nano = t.target;
+	return (nano is null) ? 0.f : nano.GetHealthPercent();
+}
+
+// A framed task with no hand on it and no progress for STALL_S is starved,
+// whatever lathe stands in reach; an idle frame decays.
+const int STALL_S = 20;
+bool FrameStalled(IUnitTask@ t)
+{
+	if ((t is null) || (t.target is null))
+		return false;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] !is t)
+			continue;
+		if (i >= gLiveProgAt.length())
+			return false;
+		return (Workers(t) == 0) && (ai.frame - gLiveProgAt[i] >= STALL_S * SECOND);
+	}
+	return false;
+}
+
+// The crewless frame of this def nearest `spot`. The orphan register only
+// knows frames whose REQUEST died; a live task with no crew is not in it.
+IUnitTask@ EmptyFrameOf(const CCircuitDef@ want, const AIFloat3& in spot)
+{
+	if (want is null)
+		return null;
+	IUnitTask@ best = null;
+	float bestD = 0.f;
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.target is null)
+			|| (t.buildDef is null) || (t.buildDef.id != want.id))
+			continue;
+		if ((Workers(t) > 0) || (Progress(t) >= 1.f))
+			continue;
+		if ((RingSeen(t) > 0.f) && !FrameStalled(t))
+			continue;   // the ring is on it and it is moving
+		const float d = OnMap(spot) ? spot.distance2D(t.GetBuildPos()) : 0.f;
+		if ((best is null) || (d < bestD)) {
+			@best = t;
+			bestD = d;
+		}
+	}
+	return best;
+}
+
+float RingSeen(IUnitTask@ t)
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		if (gLive[i] is t)
+			return (i < gLiveRingBP.length()) ? gLiveRingBP[i] : 0.f;
+	}
+	return 0.f;
+}
+
+const int RING_SAMPLE_S = 5;
+array<int> gNextStallLog;
+void StallSweep()
+{
+	for (uint i = 0; i < gLive.length(); ++i) {
+		IUnitTask@ t = gLive[i];
+		if ((t is null) || t.IsDead() || (t.target is null) || (t.buildDef is null)
+			|| (i >= gLiveRingBP.length()))
+			continue;
+		const float p = Progress(t);
+		// Build power the frame received beyond its own crew: what the ring
+		// actually does here, as opposed to what stands in reach.
+		if (ai.frame - gLiveSampleAt[i] >= RING_SAMPLE_S * SECOND) {
+			const float secs = float(ai.frame - gLiveSampleAt[i]) / float(SECOND);
+			const int bd = int(t.buildDef.id);
+			const float gotBP = (p - gLiveSample[i]) * Catalog::gBuildTime[bd] / secs;
+			uint arrived = 0;
+			const float crewBP = ArrivedLathe(t, arrived);
+			const float ring = (gotBP > crewBP) ? gotBP - crewBP : 0.f;
+			gLiveRingBP[i] = 0.5f * gLiveRingBP[i] + 0.5f * ring;
+			gLiveSample[i] = p;
+			gLiveSampleAt[i] = ai.frame;
+		}
+		if (p > gLiveProg[i] + 0.002f) {
+			gLiveProg[i] = p;
+			gLiveProgAt[i] = ai.frame;
+			continue;
+		}
+		if (!FrameStalled(t))
+			continue;
+		if (gNextStallLog.length() < gLive.length())
+			gNextStallLog.resize(gLive.length());
+		if (ai.frame < gNextStallLog[i])
+			continue;
+		gNextStallLog[i] = ai.frame + 60 * SECOND;
+		const AIFloat3 at = t.GetBuildPos();
+		AiLog(Factory::T() + "apex: frame-stalled " + t.buildDef.GetName()
+			+ " at=" + int(at.x) + "," + int(at.z)
+			+ " done=" + formatFloat(p, "", 0, 2)
+			+ " idle=" + ((ai.frame - gLiveProgAt[i]) / SECOND)
+			+ " ring=" + int(Market::RingBPAt(at))
+			+ " seen=" + int(gLiveRingBP[i]));
+	}
+}
+
+// -- buildings of ours already standing half-finished -------------------------
+//
+// A NANOFRAME OUTLIVES ITS REQUEST. IBuilderTask::OnUnitDestroyed aborts on
+// `(target == nullptr) || units.empty()`, so losing the one builder mid-build
+// removes the task while the frame stays up; nothing else remembers it, because
+// the census credits a structure at AiUnitFinished. Between the two the market
+// reads "none standing, none coming", sites another, and a nano turret in range
+// quietly finishes the first -- two anti-nukes for one decision.
+//
+// Ids, not handles: every entry is re-read through ai.GetTeamUnit, so a frame
+// that dies between events cannot leave a dangling pointer behind.
+// The orphan register LIVES IN THE COMMITMENT LEDGER now (a frame whose
+// request died is a FRAMED row with no task -- Market::ComIsOrphan). These
+// keep the Requests:: API surface; PendNote keeps only the frame-orphan log
+// line the audit reads.
+void PendNote(IUnitTask@ task)
+{
+	if (task is null)
+		return;
+	CCircuitUnit@ frame = task.target;
+	if ((frame is null) || (frame.circuitDef is null))
+		return;
+	if (frame.circuitDef.IsMobile())
+		return;
+	const AIFloat3 at = frame.GetPos(ai.frame);
+	AiLog(Factory::T() + "apex: frame-orphan " + frame.circuitDef.GetName()
+		+ " at=" + int(at.x) + "," + int(at.z)
+		+ " done=" + formatFloat(frame.GetHealthPercent(), "", 0, 2));
+}
+
+// How many of this def stand unfinished with no request of their own.
+uint PendCount(const CCircuitDef@ want)
+{
+	if (want is null)
+		return 0;
+	return Market::ComOrphanCount(int(want.id));
+}
+
+// The abandoned frame of this def nearest `spot`, within `reach`.
+CCircuitUnit@ PendNear(const CCircuitDef@ want, const AIFloat3& in spot, float reach)
+{
+	if ((want is null) || !OnMap(spot))
+		return null;
+	return Market::ComOrphanUnit(int(want.id), spot, reach);
+}
+
+// ...and the same frame WHEREVER it stands. PendNear answers "is one already
+// here", which is the right question when the market has picked a site; it is
+// the wrong one when the market has picked a DIFFERENT site, because the
+// abandoned frame is then never near anything and is orphaned for good
+// (apexearth: "when we e-stall we think to do something else... instead of
+// choosing to finish the original lab afterwards we just start making a new
+// one"). Nearest to `from` so a fleet of frames is worked in a sane order.
+CCircuitUnit@ PendAnyOfDef(const CCircuitDef@ want, const AIFloat3& in from)
+{
+	if (want is null)
+		return null;
+	return Market::ComOrphanUnit(int(want.id), from, -1.f);
+}
+
+// The same job, for matching purposes. Same def always; and one reactor rung
+// counts as another, because HomeEnergy re-ranks fusion against advanced fusion
+// every call and each rung was otherwise blind to the other rung's work. Only a
+// request somebody is ALREADY on may match across defs: assisting a live
+// nanoframe needs no build option, starting one does, and a commander that can
+// build armfus cannot build armafus.
+bool SameJob(const CCircuitDef@ has, const CCircuitDef@ want, uint busy)
+{
+	if ((has is null) || (want is null))
+		return false;
+	if (has.id == want.id)
+		return true;
+	if (busy == 0)
+		return false;
+	if (Builder::IsFusion(has) && Builder::IsFusion(want))
+		return true;
+	// AN ENERGY JOB IS AN ENERGY JOB once hands are on it (apexearth
+	// 2026-08-28: T1 cons "go make an advanced solar instead of going to
+	// help the T2 fusion being made. Our join logic seems to only care
+	// about assisting our own tier"). A T1 con's energy want is the advsol
+	// it can place; the standing fusion is the better home for those hands.
+	// One direction only -- the standing job must be at least as big as the
+	// want it absorbs, or a T2 con's fusion want would downgrade into
+	// assisting someone's solar.
+	return (has.costM >= want.costM)
+		&& (aiEconomyMgr.GetEnergyMake(has) > 1.f)
+		&& (aiEconomyMgr.GetEnergyMake(want) > 1.f);
+}
+
+}  // namespace Requests
