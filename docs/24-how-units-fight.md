@@ -46,6 +46,11 @@ decisions the nets are for.
 - **Win by killing them** (2026-10-12). The one reason we lose is that they
   kill us and we never kill them. Without going hard on offence a game is
   never won.
+- **The base never dies: plan for the worst case** (2026-10-13). If they
+  choose to attack with everything, can we withstand it? Army and defence at
+  home are sized to absorb their whole army's punch, as one body (they bring
+  one attack ball; ours spread out and went all over the place). Raids on
+  their economy, nukes and air are welcome, but only on top of that.
 - **Use the army; make the game worth watching.** A big army that never
   attacks means nothing happens all game ("just wait for the humans to kill
   me"). The late game should be exciting: bombing raids, nukes, long-range

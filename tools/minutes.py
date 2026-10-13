@@ -50,7 +50,8 @@ def main(argv):
     for m in RE_BUILT.finditer(txt):
         ally[int(m.group(1))] = int(m.group(2))
     # The start script names each AI seat's short name; BARb's alliance is them.
-    barb_teams = set()
+    # Against another AI (WRDistilled) there is no BARb: our alliance is the Apex one.
+    barb_teams, apex_teams = set(), set()
     try:
         with open(path.rstrip("/\\") + "/script.txt", encoding="utf-8", errors="replace") as fh:
             script = fh.read()
@@ -58,10 +59,16 @@ def main(argv):
             tm = re.search(r"team=(\d+);", block, re.I)
             if tm and re.search(r"shortname=BARb;", block, re.I):
                 barb_teams.add(int(tm.group(1)))
+            if tm and re.search(r"shortname=Apex[^;]*;", block, re.I):
+                apex_teams.add(int(tm.group(1)))
     except OSError:
         pass
     barb_allies = {ally[t] for t in barb_teams if t in ally}
-    side = lambda t: "them" if ally.get(t, -1) in barb_allies else "us"
+    apex_allies = {ally[t] for t in apex_teams if t in ally}
+    if apex_allies and len(apex_allies) < len(set(ally.values())):
+        side = lambda t: "us" if ally.get(t, -1) in apex_allies else "them"
+    else:
+        side = lambda t: "them" if ally.get(t, -1) in barb_allies else "us"
 
     last_min = 0
     made = collections.defaultdict(dict)   # (side, minute) -> summed cumulative per team
@@ -128,7 +135,7 @@ def main(argv):
         return out
 
     hdr = (" min | side |  inc  eInc  mW%  eW% | built  mex |  lost  kill   k/l   K/L | dmgOut dmgIn   D%  cD%")
-    print(f"{path}  (us = the alliance without BARb)")
+    print(f"{path}  (us = the Apex alliance, else the one without BARb)")
     print(hdr)
     print("-" * len(hdr))
     mexn = collections.Counter()
