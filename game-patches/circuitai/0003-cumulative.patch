@@ -17150,7 +17150,7 @@ index c3f5e98b..c9573aa0 100644
  }
  
 diff --git a/src/circuit/task/fighter/AttackTask.cpp b/src/circuit/task/fighter/AttackTask.cpp
-index cd063e4d..0f58a910 100644
+index cd063e4d..368a63e9 100644
 --- a/src/circuit/task/fighter/AttackTask.cpp
 +++ b/src/circuit/task/fighter/AttackTask.cpp
 @@ -5,6 +5,10 @@
@@ -17399,7 +17399,7 @@ index cd063e4d..0f58a910 100644
  
  	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
  			leader, circuit->GetThreatMap(),
-@@ -211,9 +353,178 @@ void CAttackTask::Update()
+@@ -211,9 +353,182 @@ void CAttackTask::Update()
  			attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
  	pathQueries[leader] = query;
  
@@ -17460,6 +17460,10 @@ index cd063e4d..0f58a910 100644
 +	// home-ward walk inside it to the 40-step cap, thousands of elmos back
 +	// ...but toward our side, never past our base: straight away from a group that kept coming
 +	// backed a squad step by step into the map corner behind the base (his 10-10)
++	// "hold the base" is its front, where the defences face them: the start position is the base's back
++	// corner, and every refused squad parked there for minutes (his 10-12 watch: Arbiters, then Sheldons)
++	const AIFloat3 baseHold = (circuit->HasFrontPos()
++			&& terrainMgr->CanMoveToPos(leader->GetArea(), circuit->GetFrontPos())) ? circuit->GetFrontPos() : home;
 +	if (strongMem) {
 +		const float need = strongR + DEFAULT_SLACK * 2;
 +		const float at = from.distance2D(strongPos);
@@ -17467,10 +17471,10 @@ index cd063e4d..0f58a910 100644
 +			const float foeHome = home.distance2D(foe);
 +			const float grpHome = strongPos.distance2D(home);
 +			if (grpHome <= need) {
-+				hold = home;   // they stand at our base: hold it with the defences, not a corner
++				hold = baseHold;   // they stand at our base: hold it with the defences, not a corner
 +			} else {
 +				float best = std::numeric_limits<float>::max();
-+				hold = home;   // every point off the map: hold the base
++				hold = baseHold;   // every point off the map: hold the base
 +				for (int k = 0; k < 12; ++k) {
 +					const float ang = float(k) * (2.f * float(M_PI) / 12.f);
 +					AIFloat3 c = strongPos + AIFloat3(std::cos(ang), 0.f, std::sin(ang)) * need;
@@ -17580,7 +17584,7 @@ index cd063e4d..0f58a910 100644
  }
  
  void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
-@@ -225,7 +536,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -225,7 +540,7 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const float maxDist = std::max<float>(lowestRange, circuit->GetPathfinder()->GetSquareSize());
@@ -17589,7 +17593,7 @@ index cd063e4d..0f58a910 100644
  		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  		float x = rand() % terrainMgr->GetTerrainWidth();
  		float z = rand() % terrainMgr->GetTerrainHeight();
-@@ -238,10 +549,247 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
+@@ -238,10 +553,247 @@ void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
  	}
  }
  
@@ -17838,7 +17842,7 @@ index cd063e4d..0f58a910 100644
  	CInfluenceMap* inflMap = circuit->GetInflMap();
  	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
  	const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
-@@ -255,39 +803,294 @@ void CAttackTask::FindTarget()
+@@ -255,39 +807,294 @@ void CAttackTask::FindTarget()
  	const int canTargetCat = cdef->GetTargetCategory();
  	const int noChaseCat = cdef->GetNoChaseCategory();
  
@@ -18141,7 +18145,7 @@ index cd063e4d..0f58a910 100644
  			const bool IsInWater = cdef->IsPredictInWater(elevation);
  			CCircuitDef* edef = enemy->GetCircuitDef();
  			if (edef != nullptr) {
-@@ -295,22 +1098,26 @@ void CAttackTask::FindTarget()
+@@ -295,22 +1102,26 @@ void CAttackTask::FindTarget()
  					|| ((edef->GetCategory() & noChaseCat) != 0)
  					|| (isAntiStatic && edef->IsMobile())
  					|| circuit->GetCircuitDef(edef->GetId())->IsIgnore()  // NOTE: groups are created by leader, ignore flags could be different
@@ -18169,7 +18173,7 @@ index cd063e4d..0f58a910 100644
  					continue;
  				}
  			} else {
-@@ -319,31 +1126,325 @@ void CAttackTask::FindTarget()
+@@ -319,31 +1130,325 @@ void CAttackTask::FindTarget()
  				}
  			}
  
@@ -18499,7 +18503,7 @@ index cd063e4d..0f58a910 100644
  }
  
  void CAttackTask::FallbackFrontPos()
-@@ -376,6 +1477,10 @@ void CAttackTask::ApplyFrontPos(const CQueryPathMulti* query)
+@@ -376,6 +1481,10 @@ void CAttackTask::ApplyFrontPos(const CQueryPathMulti* query)
  	if (!pPath->path.empty()) {
  		if (pPath->path.size() > 2) {
  			ActivePath();
@@ -18510,7 +18514,7 @@ index cd063e4d..0f58a910 100644
  		}
  	} else {
  		FallbackBasePos();
-@@ -421,7 +1526,9 @@ void CAttackTask::Fallback()
+@@ -421,7 +1530,9 @@ void CAttackTask::Fallback()
  	CCircuitAI* circuit = manager->GetCircuit();
  	const int frame = circuit->GetLastFrame();
  	for (CCircuitUnit* unit : units) {
@@ -18521,7 +18525,7 @@ index cd063e4d..0f58a910 100644
  		TRY_UNIT(circuit, unit,
  			unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
  			unit->CmdWantedSpeed(lowestSpeed);
-@@ -429,4 +1536,73 @@ void CAttackTask::Fallback()
+@@ -429,4 +1540,73 @@ void CAttackTask::Fallback()
  	}
  }
  
@@ -20105,7 +20109,7 @@ index 90c3b71b..ed6d9a50 100644
  
  } // namespace circuit
 diff --git a/src/circuit/task/fighter/FighterTask.cpp b/src/circuit/task/fighter/FighterTask.cpp
-index 0400f8d6..f0c0a8f0 100644
+index 0400f8d6..613abb80 100644
 --- a/src/circuit/task/fighter/FighterTask.cpp
 +++ b/src/circuit/task/fighter/FighterTask.cpp
 @@ -18,6 +18,7 @@
@@ -20158,7 +20162,7 @@ index 0400f8d6..f0c0a8f0 100644
  
  	CCircuitAI* circuit = manager->GetCircuit();
  	const AIFloat3& tPos = GetTarget()->GetPos();
-@@ -223,4 +238,41 @@ void IFighterTask::Log()
+@@ -223,4 +238,45 @@ void IFighterTask::Log()
  }
  #endif
  
@@ -20170,10 +20174,14 @@ index 0400f8d6..f0c0a8f0 100644
 +	if ((circuit->GetTunable("apex_roam_front", 1.f) > 0.f) && circuit->HasFrontPos()) {
 +		const int r = (int)circuit->GetTunable("apex_roam_r", 1200.f);
 +		const AIFloat3& fp = circuit->GetFrontPos();
-+		float x = fp.x + (float)(rand() % (2 * r)) - (float)r;
-+		float z = fp.z + (float)(rand() % (2 * r)) - (float)r;
-+		x = utils::clamp(x, 0.f, (float)terrainMgr->GetTerrainWidth() - 1.f);
-+		z = utils::clamp(z, 0.f, (float)terrainMgr->GetTerrainHeight() - 1.f);
++		// drawn from the part of the square on the map: clamping a point drawn off it piled every such
++		// draw onto the edge line (the bottom-edge holding area, his 10-12)
++		const float W = (float)terrainMgr->GetTerrainWidth() - 1.f;
++		const float H = (float)terrainMgr->GetTerrainHeight() - 1.f;
++		const float x0 = std::max(fp.x - (float)r, 0.f), x1 = std::min(fp.x + (float)r, W);
++		const float z0 = std::max(fp.z - (float)r, 0.f), z1 = std::min(fp.z + (float)r, H);
++		const float x = (x1 > x0) ? x0 + (x1 - x0) * (float)(rand() % 10000) / 10000.f : utils::clamp(fp.x, 0.f, W);
++		const float z = (z1 > z0) ? z0 + (z1 - z0) * (float)(rand() % 10000) / 10000.f : utils::clamp(fp.z, 0.f, H);
 +		pos = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
 +	} else {
 +		float x = rand() % terrainMgr->GetTerrainWidth();

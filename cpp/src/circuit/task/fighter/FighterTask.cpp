@@ -246,10 +246,14 @@ AIFloat3 IFighterTask::RoamPos(CCircuitUnit* unit) const
 	if ((circuit->GetTunable("apex_roam_front", 1.f) > 0.f) && circuit->HasFrontPos()) {
 		const int r = (int)circuit->GetTunable("apex_roam_r", 1200.f);
 		const AIFloat3& fp = circuit->GetFrontPos();
-		float x = fp.x + (float)(rand() % (2 * r)) - (float)r;
-		float z = fp.z + (float)(rand() % (2 * r)) - (float)r;
-		x = utils::clamp(x, 0.f, (float)terrainMgr->GetTerrainWidth() - 1.f);
-		z = utils::clamp(z, 0.f, (float)terrainMgr->GetTerrainHeight() - 1.f);
+		// drawn from the part of the square on the map: clamping a point drawn off it piled every such
+		// draw onto the edge line (the bottom-edge holding area, his 10-12)
+		const float W = (float)terrainMgr->GetTerrainWidth() - 1.f;
+		const float H = (float)terrainMgr->GetTerrainHeight() - 1.f;
+		const float x0 = std::max(fp.x - (float)r, 0.f), x1 = std::min(fp.x + (float)r, W);
+		const float z0 = std::max(fp.z - (float)r, 0.f), z1 = std::min(fp.z + (float)r, H);
+		const float x = (x1 > x0) ? x0 + (x1 - x0) * (float)(rand() % 10000) / 10000.f : utils::clamp(fp.x, 0.f, W);
+		const float z = (z1 > z0) ? z0 + (z1 - z0) * (float)(rand() % 10000) / 10000.f : utils::clamp(fp.z, 0.f, H);
 		pos = AIFloat3(x, circuit->GetMap()->GetElevationAt(x, z), z);
 	} else {
 		float x = rand() % terrainMgr->GetTerrainWidth();

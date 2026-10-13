@@ -340,6 +340,7 @@ local NAMES = {
 	"apex_siege_fight",
 	"apex_raid_commit",
 	"apex_bomb_enroute",
+	"apex_mstall_prem",
 	"apex_fight_travel",
 	"apex_defend_engage_margin",
 	"apex_defend_muster",

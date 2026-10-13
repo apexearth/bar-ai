@@ -660,6 +660,32 @@ float MCostScale()
 	return 1.f - gVwMcsDepth * ((f > 1.f) ? 1.f : f);
 }
 
+// A METAL STALL MAKES METAL DEAR (his 10-12: a commander built a tower through minutes of +3 income against
+// 15 of spend -- "15/3 = 5x metal importance"). Spend over income, at full weight on an empty bank and none on
+// a full one, net of what is already promised. Builds that make metal never pay it (ValueOf), so they win.
+float MStallPremium()
+{
+	const float inc = Eco::MInc();
+	const float pull = Eco::MPull();
+	if ((pull <= inc) || (ai.GetTunable("apex_mstall_prem", 1.f) <= 0.f))
+		return 1.f;
+	const float st = Eco::MStor();
+	float frac = 0.f;
+	if (st > 1.f) {
+		frac = (Eco::MCur() - MOrderedM()) / st;
+		frac = (frac < 0.f) ? 0.f : ((frac > 1.f) ? 1.f : frac);
+	}
+	const float prem = 1.f + (pull / ((inc > 0.5f) ? inc : 0.5f) - 1.f) * (1.f - frac);
+	if ((prem > 1.5f) && (ai.frame >= gMStallLogAt)) {
+		gMStallLogAt = ai.frame + 30 * SECOND;
+		AiLog(Factory::T() + "apex: mstall t=" + ai.teamId + " prem=" + formatFloat(prem, "", 0, 2)
+			+ " inc=" + formatFloat(inc, "", 0, 1) + " pull=" + formatFloat(pull, "", 0, 1)
+			+ " bank=" + formatFloat(frac, "", 0, 2));
+	}
+	return prem;
+}
+int gMStallLogAt = 0;
+
 
 // `lateStart`: whether the walk also delays a STREAM worth `gain` a second
 // (an extractor's income, a generator's E). A defence want's gain is the
@@ -786,7 +812,8 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	const float ePriceE = (Catalog::gMakeE[defId] > 0.f)
 			? EPriceFloor()
 			: EPriceCostAt(buildSec, Catalog::gCostE[defId]);
-	w.mCost = Catalog::gCostM[defId] * MCostScale()
+	const bool makesM = (Catalog::gExtractsM[defId] > 0.f) || (Catalog::gConvRatio[defId] > 0.f);
+	w.mCost = Catalog::gCostM[defId] * MCostScale() * (makesM ? 1.f : MStallPremium())
 			+ Catalog::gCostE[defId] * ePriceE * gVwECost
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;

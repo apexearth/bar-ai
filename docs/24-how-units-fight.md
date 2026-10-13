@@ -244,6 +244,10 @@ to them)
 - (2026-10-12) Strong defence every game, never skimped -- the gap he sees
   between BARb and us -- and standing at every angle the enemy can come from,
   not only some of them.
+- (2026-10-12) How much a seat invests in defence follows how much danger it
+  is in. Some maps spread everyone evenly; on others one seat sits right in
+  the line of the enemy's attack and should invest far more than the rest.
+  In a 1v1 every seat is in the line.
 - **Jammers over the defence are a nice-to-have that turns into a need**
   (2026-10-09): they become wanted when a defence emplacement is taking
   long-range fire from something like an Ambassador or an LRPC. The game has

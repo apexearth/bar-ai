@@ -408,6 +408,10 @@ void CAttackTask::HoldForward(int frame)
 	// home-ward walk inside it to the 40-step cap, thousands of elmos back
 	// ...but toward our side, never past our base: straight away from a group that kept coming
 	// backed a squad step by step into the map corner behind the base (his 10-10)
+	// "hold the base" is its front, where the defences face them: the start position is the base's back
+	// corner, and every refused squad parked there for minutes (his 10-12 watch: Arbiters, then Sheldons)
+	const AIFloat3 baseHold = (circuit->HasFrontPos()
+			&& terrainMgr->CanMoveToPos(leader->GetArea(), circuit->GetFrontPos())) ? circuit->GetFrontPos() : home;
 	if (strongMem) {
 		const float need = strongR + DEFAULT_SLACK * 2;
 		const float at = from.distance2D(strongPos);
@@ -415,10 +419,10 @@ void CAttackTask::HoldForward(int frame)
 			const float foeHome = home.distance2D(foe);
 			const float grpHome = strongPos.distance2D(home);
 			if (grpHome <= need) {
-				hold = home;   // they stand at our base: hold it with the defences, not a corner
+				hold = baseHold;   // they stand at our base: hold it with the defences, not a corner
 			} else {
 				float best = std::numeric_limits<float>::max();
-				hold = home;   // every point off the map: hold the base
+				hold = baseHold;   // every point off the map: hold the base
 				for (int k = 0; k < 12; ++k) {
 					const float ang = float(k) * (2.f * float(M_PI) / 12.f);
 					AIFloat3 c = strongPos + AIFloat3(std::cos(ang), 0.f, std::sin(ang)) * need;
