@@ -474,6 +474,9 @@ public:
 
 	void SetRetreat(float value) { retreat = value; }
 	float GetRetreat() const { return retreat; }
+	// apex: a T3 combat unit -- script knows the tier (Market::DefTier), C++ does not
+	void SetSpearhead(bool value) { isSpearhead = value; }
+	bool IsSpearhead() const { return isSpearhead; }
 	void SetSelfDHP(float value) { selfDHP = value; }
 	float GetSelfDHP() const { return selfDHP; }
 
@@ -656,6 +659,7 @@ private:
 //	float altitude;
 	float jumpRange;
 	float retreat;
+	bool isSpearhead = false;
 	float selfDHP;
 
 	int moveXSize;

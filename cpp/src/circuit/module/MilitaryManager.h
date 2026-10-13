@@ -16,6 +16,7 @@
 
 #include <vector>
 #include <set>
+#include <map>
 
 namespace circuit {
 
@@ -259,6 +260,9 @@ public:
 	float oddsMul = 1.f;
 	float massMul = 1.f;
 	float flankMul = 1.f;
+	static constexpr int HOME_CLAIM_STALE = 300;  // frames: a claim not renewed in 10 s has lapsed
+	struct SHomeClaim { const void* task; float power; float rank; int frame; };
+	std::map<int, std::vector<SHomeClaim>> homeClaims;  // enemy group key (its lowest unit id) -> claims
 	// Shared cadence and counters for ISquadTask's merge census. They live on
 	// the manager because the tasks they measure are created and destroyed
 	// constantly, and the question is about the fleet, not one squad.
@@ -274,6 +278,12 @@ public:
 	unsigned int ReleaseHoldPools();
 	unsigned int HoldPools();
 	float HoldPoolsUpTo(float needM);
+	// apex: RECALL ONLY WHAT HOME NEEDS (his 10-12). An attack squad that turns for a threat to our base
+	// claims its power against that enemy group; a squad ranked after the claimants (rank: T3 last, then
+	// distance to the threat) treats the group as covered once home plus their claims meet it.
+	float HomeCoveredBefore(int key, const void* task, float rank, int frame);
+	void HomeClaim(int key, const void* task, float power, float rank, int frame);
+	void HomeRelease(const void* task);
 	unsigned int GetGuardsNum() const { return defence->GetGuardsNum(); }
 	int GetGuardFrame() const { return defence->GetGuardFrame(); }
 

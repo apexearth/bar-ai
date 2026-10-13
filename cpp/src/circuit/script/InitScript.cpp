@@ -2376,6 +2376,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	// unlike behaviour.json's retreat, which applies to every player.
 	r = engine->RegisterObjectMethod("CCircuitDef", "void SetRetreat(float)", asMETHOD(CCircuitDef, SetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetRetreat() const", asMETHOD(CCircuitDef, GetRetreat), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "void SetSpearhead(bool)", asMETHOD(CCircuitDef, SetSpearhead), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsSpearhead() const", asMETHOD(CCircuitDef, IsSpearhead), asCALL_THISCALL); ASSERT(r >= 0);
 	// Rule a def out entirely. IsAvailable() is maxThisUnit > count, so zero makes
 	// every availability check fail wherever it is asked -- factory weights, build
 	// chains, role lookups -- rather than needing each of them taught a new rule.

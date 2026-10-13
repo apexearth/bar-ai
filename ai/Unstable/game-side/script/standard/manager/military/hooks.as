@@ -152,6 +152,28 @@ void ElectCensus()
 	AiLog(Factory::T() + msg);
 }
 
+// T3 combat units lead as spearheads in C++ CAttackTask: they never turn back for what lies behind them
+// (his 10-12). The tier is script's knowledge; marked once per def, the first time one is tasked.
+array<int8> gSpearSeen;
+
+void MarkSpearhead(const CCircuitDef@ cdef)
+{
+	const int d = int(cdef.id);
+	if (int(gSpearSeen.length()) <= d)
+		gSpearSeen.resize(d + 1);
+	if (gSpearSeen[d] != 0)
+		return;
+	const bool spear = cdef.IsMobile() && !cdef.IsAbleToFly() && (Catalog::gPower[d] > 1.f)
+		&& !Catalog::gBuilder[d] && (Market::DefTier(d) >= 3);
+	gSpearSeen[d] = spear ? 1 : -1;
+	if (!spear)
+		return;
+	CCircuitDef@ md = ai.GetCircuitDef(cdef.id);
+	if (md !is null)
+		md.SetSpearhead(true);
+	AiLog(Factory::T() + "apex: spearhead " + cdef.GetName());
+}
+
 IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 {
 
@@ -162,6 +184,7 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 	Brain::NoteMilRequest();
 
 	const CCircuitDef@ cdef = unit.circuitDef;
+	MarkSpearhead(cdef);
 	// Returning null leaves the unit in the idle task -- ITaskModule::AssignTask
 	// does nothing when MakeTask gives it nothing, and CIdleTask::Start is a
 	// no-op. The unit keeps no orders and stays where it was built. That is how

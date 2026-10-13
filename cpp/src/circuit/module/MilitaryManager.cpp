@@ -1666,6 +1666,40 @@ unsigned int CMilitaryManager::HoldPools()
 // HoldPools with a budget (his 2026-10-12: "imagine we beat them 4:1, recall only enough to protect
 // home and keep attacking with the rest"). Pools nearest home are held first until the held metal covers
 // needM; the rest keep their attack promotion. Returns the metal held after the pass.
+float CMilitaryManager::HomeCoveredBefore(int key, const void* task, float rank, int frame)
+{
+	auto it = homeClaims.find(key);
+	if (it == homeClaims.end()) {
+		return 0.f;
+	}
+	float sum = 0.f;
+	for (const SHomeClaim& c : it->second) {
+		if ((c.task != task) && (c.rank < rank) && (frame - c.frame < HOME_CLAIM_STALE)) {
+			sum += c.power;
+		}
+	}
+	return sum;
+}
+
+void CMilitaryManager::HomeClaim(int key, const void* task, float power, float rank, int frame)
+{
+	HomeRelease(task);
+	std::vector<SHomeClaim>& v = homeClaims[key];
+	v.erase(std::remove_if(v.begin(), v.end(), [frame](const SHomeClaim& c) {
+		return frame - c.frame >= HOME_CLAIM_STALE;
+	}), v.end());
+	v.push_back({task, power, rank, frame});
+}
+
+void CMilitaryManager::HomeRelease(const void* task)
+{
+	for (auto it = homeClaims.begin(); it != homeClaims.end(); ) {
+		std::vector<SHomeClaim>& v = it->second;
+		v.erase(std::remove_if(v.begin(), v.end(), [task](const SHomeClaim& c) { return c.task == task; }), v.end());
+		it = v.empty() ? homeClaims.erase(it) : std::next(it);
+	}
+}
+
 float CMilitaryManager::HoldPoolsUpTo(float needM)
 {
 	auto poolM = [](IFighterTask* t) {

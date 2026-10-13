@@ -43,6 +43,9 @@ decisions the nets are for.
   beside and against humans.
 - **No hidden information.** Live decisions use only what a player could see.
   Ground truth may train the nets; it never steers a game.
+- **Win by killing them** (2026-10-12). The one reason we lose is that they
+  kill us and we never kill them. Without going hard on offence a game is
+  never won.
 - **Use the army; make the game worth watching.** A big army that never
   attacks means nothing happens all game ("just wait for the humans to kill
   me"). The late game should be exciting: bombing raids, nukes, long-range
@@ -238,6 +241,9 @@ to them)
   raided side, and the map edge.
 - (2026-10-12) Seriously behind the enemy, lean into T3 defence: it is the one
   saving grace a losing side has.
+- (2026-10-12) Strong defence every game, never skimped -- the gap he sees
+  between BARb and us -- and standing at every angle the enemy can come from,
+  not only some of them.
 - **Jammers over the defence are a nice-to-have that turns into a need**
   (2026-10-09): they become wanted when a defence emplacement is taking
   long-range fire from something like an Ambassador or an LRPC. The game has
@@ -376,6 +382,16 @@ to them)
 - Big T3 units ignore small ones and go for bases and economy. Near the enemy
   base, dive for the economy: advanced converters and fusions over military
   and towers.
+- (2026-10-12) Get to T3 fast and send it straight into the heart of their
+  base. A T3 army that turns around, walks across the field and back again
+  several times is the bug -- BARb does not do this, and that is half of why
+  it wins.
+- (2026-10-12) When their army comes at our base, pull back only as much as
+  the defence needs, T3 included -- T3 defending is fine, and every enemy
+  killed in front of our base is reclaim for our own army and economy. The
+  rest keeps going: walked past their defences, a unit often finds its way
+  into their economy, so at least one T3 carries on to destroy what it can.
+  The same holds for ordinary armies.
 - Economy priority: energy, then metal, then build power. There is no
   commander-hunting doctrine.
 - A tower we can't kill is being repaired: kill the repairers first.
