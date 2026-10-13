@@ -1356,6 +1356,36 @@ void PatrolCensus()
 	}
 }
 
+// Cells of side apex_threat_r holding a claimed spot or a plant, the home cell
+// always; recounted on the census stamp.
+int gPatCellStamp = -1;
+float gPatCells = 0.f;
+int gPatLogAt = 0;
+float PatrolCells()
+{
+	if (gPatCellStamp == gOwnStamp)
+		return gPatCells;
+	gPatCellStamp = gOwnStamp;
+	float cell = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
+	if (cell < 100.f)
+		cell = 900.f;
+	array<int> keys;
+	array<AIFloat3> at = gLPos;
+	for (uint i = 0; i < Factory::gFacUnits.length(); ++i) {
+		if (Factory::gFacUnits[i] !is null)
+			at.insertLast(Factory::gFacUnits[i].GetPos(ai.frame));
+	}
+	if (Builder::gHomeSet)
+		at.insertLast(Builder::gHomePos);
+	for (uint i = 0; i < at.length(); ++i) {
+		const int k = int(at[i].x / cell) * 4096 + int(at[i].z / cell);
+		if (keys.find(k) < 0)
+			keys.insertLast(k);
+	}
+	gPatCells = float(keys.length());
+	return gPatCells;
+}
+
 // The patrol half alone: ground-seen against ground-to-see, which the
 // screen units bought against it fill and so saturate. The posted-guard
 // share (CoverShort) never fell for them -- a scout escorting a constructor
@@ -1363,7 +1393,9 @@ void PatrolCensus()
 float PatrolMiss()
 {
 	PatrolCensus();
-	const float sites = float(gLSpot.length()) + gPatSites;
+	// A guard patrols an area, not one building (his 10-13: 235 Rovers on
+	// Carrot at one per site): sites sharing an apex_threat_r cell count once.
+	const float sites = PatrolCells();
 	if (sites < 1.f)
 		return 0.f;
 	const float have = gPatHave;
@@ -1371,7 +1403,14 @@ float PatrolMiss()
 	if (need <= 0.f)
 		return 0.f;
 	float miss = 1.f - have / need;
-	return (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+	miss = (miss > 0.f) ? ((miss > 1.f) ? 1.f : miss) : 0.f;
+	if (ai.frame >= gPatLogAt) {
+		gPatLogAt = ai.frame + 60 * SECOND;
+		AiLog("apex: patrol t=" + ai.teamId + " cells=" + int(sites)
+			+ " oldSites=" + int(float(gLSpot.length()) + gPatSites)
+			+ " have=" + int(have) + " need=" + int(need) + " miss=" + formatFloat(miss, "", 0, 2));
+	}
+	return miss;
 }
 
 float PatrolShort()

@@ -650,6 +650,38 @@ void WorkingLathe()
 // stood on a full bank for its first six minutes (1.3k metal spilled each,
 // BARb's cons 2x ours) with this term at zero. The lab is not the converter
 // of that metal either: its line was fed the whole time.
+// Our standing extraction against theirs as we know it: every extractor of
+// theirs identified (seen once, remembered), by its extraction rate. Their
+// energy is unseen on both sides of the comparison.
+int gEarnAt = -999999;
+bool gOutEarn = true;
+float gEarnOurs = 0.f, gEarnTheirs = 0.f;
+bool WeOutEarnThem()
+{
+	if (ai.frame < gEarnAt + 10 * SECOND)
+		return gOutEarn;
+	gEarnAt = ai.frame;
+	gEarnTheirs = 0.f;
+	const int total = aiEnemyMgr.GetEnemyUnitTotal();
+	for (int i = 0; i < total; ++i) {
+		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (Catalog::gExtractsM[d] <= 0.f))
+			continue;
+		if (aiEnemyMgr.GetEnemyUnitLosAt(i) < 0)
+			continue;
+		gEarnTheirs += Catalog::gExtractsM[d];
+	}
+	gEarnOurs = 0.f;
+	const array<int>@ own = OwnedDefs();
+	for (uint k = 0; k < own.length(); ++k) {
+		const int d = own[k];
+		if ((gOwnCount[d] > 0) && !Catalog::gMobile[d] && (Catalog::gExtractsM[d] > 0.f))
+			gEarnOurs += float(gOwnCount[d]) * Catalog::gExtractsM[d];
+	}
+	gOutEarn = gEarnOurs >= gEarnTheirs;
+	return gOutEarn;
+}
+
 // The army standing is short of the enemy army we have seen, at the match ratio.
 int gFoeOutgunsAt = -1;
 bool gFoeOutguns = false;
@@ -668,7 +700,7 @@ bool ArmyShortOfFoe()
 		if (ai.frame >= gFoeOutgunsLogAt) {
 			gFoeOutgunsLogAt = ai.frame + 30 * SECOND;
 			AiLog("apex: confloor-yield t=" + ai.teamId + " n=" + gFoeOutgunsN
-				+ " need=" + int(need) + " army=" + int(have));
+				+ " need=" + int(need) + " army=" + int(have) + " earn=" + formatFloat(gEarnOurs, "", 0, 3) + "/" + formatFloat(gEarnTheirs, "", 0, 3));
 		}
 	}
 	return gFoeOutguns;
@@ -1025,6 +1057,43 @@ bool ConPoolFull(int d)
 int ScoutFleetCap()
 {
 	return int(ceil(float(RezFleetCap()) * gScoutCapMul));
+}
+
+// A patrol must beat the raider it finds (his 10-13: 98-235 Rovers bought on
+// the coverage and screen terms): a scout patrols nothing. Raiders keep it.
+bool PatrolFodder(int d)
+{
+	const CCircuitDef@ cd = Catalog::Def(d);
+	return (cd !is null) && cd.IsRoleAny(Unit::Role::SCOUT.mask);
+}
+
+// THE SCOUT FLEET GROWS WITH THE WAR (his 10-13: "in the late game a swarm is
+// delightfully distracting for enemy fire - early game we definitely don't need
+// a ton of these"; docs/24: late, fodder runs at their base for vision and
+// distraction). The screen term buys scouts while their metal is under a share
+// of the army -- two for sight at least -- and stops there.
+const float SCOUT_ARMY_SHARE = 0.05f;
+int gScreenHaveAt = -1;
+bool gScreenRoom = true;
+bool ScreenFleetRoom()
+{
+	if (gScreenHaveAt == ai.frame)
+		return gScreenRoom;
+	gScreenHaveAt = ai.frame;
+	float have = 0.f, cheapest = 1e9f;
+	for (uint d = 1; d < gOwnCount.length(); ++d) {
+		if (!IsLateScout(int(d)))
+			continue;
+		const float c = Catalog::gCostM[int(d)];
+		if (Catalog::gAvailable[int(d)] && (c > 0.f) && (c < cheapest))
+			cheapest = c;
+		have += float(gOwnCount[d] + Brain::PendAnyOf(int(d))) * c;
+	}
+	float capM = SCOUT_ARMY_SHARE * ArmyValue();
+	if ((cheapest < 1e9f) && (capM < 2.f * cheapest))
+		capM = 2.f * cheapest;
+	gScreenRoom = have < capM;
+	return gScreenRoom;
 }
 // Constructors as a share of our mobile units, for the nets.
 float gConShareVal = 0.f;
@@ -1763,6 +1832,23 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 		} else if (Catalog::gBuilder[d] && Catalog::gMobile[d]) {
+			// A DRY MAP BUYS NO AMPHIBIOUS HANDS while the line has land ones (his
+			// 10-13: "why do we make beavers"): BuildsOf is in def order, so the
+			// floor took armbeaver -- 65% longer to build -- before armcv every time.
+			if (Catalog::gAmphib[d] && !Catalog::gFlyer[d] && !MapHasWater()) {
+				bool landCon = false;
+				for (uint q = 0; (q < prods.length()) && !landCon; ++q) {
+					const int qd = prods[q];
+					landCon = (qd != d) && Catalog::gAvailable[qd] && Catalog::gBuilder[qd]
+						&& Catalog::gMobile[qd] && !Catalog::gAmphib[qd] && !Catalog::gFlyer[qd]
+						&& (Catalog::gAdvHand[qd] == Catalog::gAdvHand[d]);
+				}
+				if (landCon) {
+					if (prankNow)
+						prank += " " + Catalog::Def(d).GetName() + ":dry";
+					continue;
+				}
+			}
 			// each tier and the air have their own pool
 			if (ConPoolFull(d)) {
 				if (prankNow)
@@ -2134,9 +2220,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// them), so spam survives -- the cheap body wastes the same fire.
 			// A type we have never lost one of has no trade to lose: a 90-metal
 			// scratch read the Juggernaut as 0.9997 and dropped it for a game.
+			// ...only where they field a tier above it, his ruling's case (most of
+			// their identified metal); elsewhere RecordMul prices the record (his
+			// 10-13: Flash and Stout dropped while the exempt Rover was bought 165x).
 			if ((ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) > 0.f)
 				&& (RecordRaw(d) < 1.f)
-				&& (ai.RecordCount(Catalog::Def(d), -1) > 0))
+				&& (ai.RecordCount(Catalog::Def(d), -1) > 0)
+				&& (Military::FoeTierAbove(DefTier(d)) > 0.5f))
 			{
 				if (prankNow)
 					prank += " " + Catalog::Def(d).GetName() + ":losing";
@@ -2156,6 +2246,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// spills flows to the teammates at the front.
 			const float sinkGap = (ovfHands || ecoGrowing) ? 0.f : (richBal * roleMul);
 			float effGap = (armyGap > sinkGap) ? armyGap : sinkGap;
+			// THE ESCORT GAP IS ARMY GAP (his 10-13: "the flash is a good escort for
+			// cons"; "rovers are not good escorts"): an escort-worthy unit bids for
+			// the cons short of a guard at its own cost, priced like the rest of
+			// the army -- the separate loss-rate bid sat 75x under it.
+			if (!Catalog::gBuilder[d] && EscortWorthy(d)) {
+				if (escShort < -1)
+					escShort = EscortShortfall() - gEscSpare;
+				const int owed = escShort - EscortInFlight(Catalog::Def(d));
+				if (owed > 0)
+					effGap += float(owed) * Catalog::gCostM[d];
+			}
 			// AA is not army (ArmyValue leaves it out): it fills its own role gap
 			// even when the ground army is at target or yielded to a better line.
 			if (Catalog::gRole[d] == int(Unit::Role::AA.type)) {
@@ -2281,7 +2382,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per
 			// metal there is -- and it fades as the fleet fills.
-			if (CoverCapable(d))
+			if (CoverCapable(d) && !PatrolFodder(d))
 				// ...on the patrol reading, which the units bought here fill: the
 				// posted-guard share never fell (see PatrolMiss) and this term
 				// alone bought a plant's worth of Darts every minute.
@@ -2308,7 +2409,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// and the base's raider-coverage gap is not their gap. Measured
 			// 2026-09-08: a Freedom Fighter reached p=16515 against the line
 			// mean and scored v=357672 where the Banshee beside it scored 3057.
-			const float covD = CoverCapable(d) ? coverShare : 0.f;
+			const float covD = (CoverCapable(d) && !PatrolFodder(d)) ? coverShare : 0.f;
 			if (covD > 0.f)
 				ppc *= pow(CoverPerMetal(d), covD);
 			// EYES (apexearth: "we tend to lack scouts... need some kind of
@@ -2334,7 +2435,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				const float mineM = Catalog::gCostM[d];
 				const float kS = tScreenWorth;
 				if ((kS > 0.f) && (mineM > 1.f) && (gWMCost > 1.f)
-					&& !Catalog::gFlyer[d])
+					&& !Catalog::gFlyer[d] && ScreenFleetRoom())
 				{
 					const float dash = 1.f + Catalog::gSpeed[d] / tFoeSpeed;
 					const float screen = kS * (Catalog::gLosR[d] / 1000.f)
@@ -2582,7 +2683,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// ...and never while the army cannot answer the army we have seen (his
 		// 10-13: the base never dies; the floors bought 38 cons while 216 metal
 		// of army stood against thousands).
-		const bool foeOutguns = ArmyShortOfFoe();
+		// ...but only while we out-earn them (his 10-13): out-earned, expansion is
+		// the only way to close their lead, and yielding starved the cons for a
+		// whole game (Comet 40 min: 4-11 extractors against their 59).
+		const bool foeOutguns = ArmyShortOfFoe() && WeOutEarnThem();
 		const bool armyBehind = foeOutguns || ((Brain::gSpentTotal > 1.f)
 			&& (float(ConsOwnedAny() + ConsInFlightAny()) >= ((gConFloorMul > 1.f) ? gConFloorMul : 1.f))
 			&& (Brain::ShareOf(Brain::ARMY) * ((gConFloorMul > 0.01f) ? gConFloorMul : 0.01f)

@@ -647,6 +647,8 @@ local NAMES = {
 	"apex_role_floor_zero",
 	-- the opening lab test (2026-10-13): 1 vehicle plant first, 2 bot lab first, 0 the market
 	"apex_first_lab",
+	-- the posture test (2026-10-13): 0 lets the rule pick the army posture instead of the policy net
+	"apex_pn_post",
 }
 
 local pending = {}

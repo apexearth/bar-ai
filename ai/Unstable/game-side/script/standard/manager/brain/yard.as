@@ -27,11 +27,13 @@ array<Id>  gYpEating;  // ...a blocker the last act named, until it is gone
 array<bool> gYpNamed;  // ...whether the last act found anything of ours in the strip
 array<int> gYpNamedAt; // ...last frame an act found something of ours to eat
 array<bool> gYpPushed; // ...whether this jam has had its first act, a push alone
+array<int> gYpWreckAt; // ...earliest frame of its next wreck sweep
 
 uint gYdCursor = 0;
 int  gYdLogAt = 0;
 int  gYdJams = 0, gYdPushed = 0, gYdNanoSent = 0, gYdOffered = 0, gYdUnitEat = 0;
 int  gYdTerrain = 0;
+int  gYdWreck = 0;      // wreck sweeps ordered at a jammed door
 int  gYdWorstS = 0;
 
 int YardSlot(Id plant)
@@ -54,6 +56,7 @@ void YardClear(Id plant)
 	gYpEating.removeAt(uint(s));
 	gYpNamed.removeAt(uint(s));
 	gYpNamedAt.removeAt(uint(s));
+	gYpWreckAt.removeAt(uint(s));
 	gYpPushed.removeAt(uint(s));
 }
 
@@ -185,6 +188,7 @@ void YardWatch()
 		gYpEating.insertLast(0);
 		gYpNamed.insertLast(false);
 		gYpNamedAt.insertLast(0);
+		gYpWreckAt.insertLast(0);
 		gYpPushed.insertLast(false);
 		s = int(gYpPlant.length()) - 1;
 		++gYdJams;
@@ -275,6 +279,38 @@ void YardWatch()
 			gYpEating[s] = b.id;
 		eaten += " " + b.circuitDef.GetName() + (n > 0 ? ("x" + n) : "@mkt");
 	}
+	// WRECKS IN THE DOOR (his 10-13: the vehicle lab stuck behind wrecks): a
+	// tank cannot cross one, and nothing above names a feature. The nearest
+	// hand sweeps the strip, at most every 15 s.
+	string swept = "";
+	if ((structs == 0) && (now >= gYpWreckAt[s])) {
+		const AIFloat3 sc = fp + dir * (halfD + 0.5f * depth + halfW);
+		const float sr = halfW + 0.5f * depth + halfW;
+		if (OnMap(sc) && (ai.GetWreckValueAt(sc, sr) > 0.f)) {
+			CCircuitUnit@ hand = null;
+			float best = 1e30f;
+			for (uint i = 0; i < Market::gWorkers.length(); ++i) {
+				CCircuitUnit@ w = Market::gWorkers[i];
+				if ((w is null) || w.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+					continue;
+				const float dd = w.GetPos(now).distance2D(sc);
+				if (dd < best) {
+					best = dd;
+					@hand = w;
+				}
+			}
+			if (hand !is null) {
+				IUnitTask@ t = aiBuilderMgr.Enqueue(TaskB::Reclaim(Task::Priority::HIGH, sc,
+						1000.f, 30 * SECOND, sr, true));
+				if (t !is null) {
+					aiBuilderMgr.AssignTask(hand, t);
+					++gYdWreck;
+					gYpWreckAt[s] = now + 15 * SECOND;
+					swept = " wreck-sweep=" + hand.circuitDef.GetName() + "#" + hand.id + " d=" + int(best);
+				}
+			}
+		}
+	}
 	gYpNamed[s] = (structs > 0);
 	if (structs > 0)
 		gYpNamedAt[s] = now;
@@ -330,7 +366,7 @@ void YardWatch()
 		+ " age=" + (age / SECOND) + "s limit=" + (limit / SECOND) + "s act=" + gYpActs[s]
 		+ " pushed=" + pushed + " strip=" + int(depth) + " eat=[" + eaten + " ]"
 		+ (ate.length() > 0 ? (" plant-eat=[" + ate + " ]") : "")
-		+ ((structs == 0) ? " nothing-named" : ""));
+		+ ((structs == 0) ? " nothing-named" : "") + swept);
 }
 
 // What a jammed plant stops putting into the field each second: its own build
@@ -354,7 +390,7 @@ void YardCensusLog(uint np)
 	AiLog(Factory::T() + "apex: yard census plants=" + np + " watched=" + gYdUnit.length()
 		+ " jammed-now=" + gYpPlant.length() + " worst=" + gYdWorstS + "s"
 		+ " | jams=" + gYdJams + " pushed=" + gYdPushed + " nano-eat=" + gYdNanoSent
-		+ " offered=" + gYdOffered + " nothing-named=" + gYdTerrain + " plant-eat=" + gYdUnitEat);
+		+ " offered=" + gYdOffered + " nothing-named=" + gYdTerrain + " plant-eat=" + gYdUnitEat + " wreck-sweep=" + gYdWreck);
 	gYdWorstS = 0;
 }
 

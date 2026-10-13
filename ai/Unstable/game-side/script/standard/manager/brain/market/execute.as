@@ -59,11 +59,20 @@ AIFloat3 DefOutward(int d, const AIFloat3& in at, const AIFloat3& in ask)
 	AIFloat3 p = at;
 	for (int k = 0; k < 3; ++k) {
 		p = gPfMid + dir * (PfLocalHullR(p, h) - h + 16.f);
-		if (!InteriorGunGeom(d, p))
+		if (!InteriorGunGeom(d, p)) {
+			// the half of its reach outside the hull must be ground: on the rim
+			// that is the map edge it covers nothing (his 10-13: a row of nine
+			// along the bottom edge behind the base)
+			if (!OnMap(p + dir * h)) {
+				++gDefOutwardOffMap;
+				return none;
+			}
 			return DefSiteOk(d, p, ask) ? p : none;
+		}
 	}
 	return none;
 }
+int gDefOutwardOffMap = 0;
 // A grave: back toward the base a half-mark at a time (his "pull back or build
 // further away"), while the gun still reaches the post.
 AIFloat3 DefGraveBack(int d, const AIFloat3& in at, const AIFloat3& in ask)

@@ -829,7 +829,7 @@ bool AirOnlyAA(int d)
 float RecordRaw(int d)
 {
 	const CCircuitDef@ cdef = Catalog::Def(d);
-	if (Military::IsFodder(cdef) || AirOnlyAA(d))
+	if (AirOnlyAA(d))   // fodder is judged too (his 10-13): a Rover trades like anything else
 		return 1.f;
 	const float bar = RecordBar(LineClassOf(d));
 	// Uncapped (apexearth 2026-09-20: "we would prefer to try to use the
@@ -864,7 +864,7 @@ float RecordMul(int d)
 	if (ai.GetTunable("apex_record_bite", TUNE_RECORD_BITE) <= 0.f)
 		return 1.f;
 	const CCircuitDef@ cdef = Catalog::Def(d);
-	if (Military::IsFodder(cdef) || AirOnlyAA(d))
+	if (AirOnlyAA(d))
 		return 1.f;
 	if (!gRecordTiersSet) {
 		gRecordTiersSet = true;

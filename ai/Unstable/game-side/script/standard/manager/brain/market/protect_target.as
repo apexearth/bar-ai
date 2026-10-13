@@ -437,7 +437,7 @@ void CovGateNote(int g)
 		+ " mexLoss=" + formatFloat(MexLossShare(), "", 0, 2)
 		+ " | gunExec interior=" + gInteriorRefused + " exempt=" + gInteriorExempt + " grave=" + gGunExecGrave
 		+ " ferry=" + gGunExecFerry + " takeNull=" + gGunExecNull + " ok=" + gGunExecOk
-		+ " okOther=" + gGunOkOther + " relocInterior=" + gGunRelocInterior + " relocGrave=" + gGunRelocGrave
+		+ " okOther=" + gGunOkOther + " relocInterior=" + gGunRelocInterior + " edgeRefused=" + gDefOutwardOffMap + " relocGrave=" + gGunRelocGrave
 		+ " t2exec=" + gGunT2Exec + " t2ok=" + gGunT2Ok + " t2ref=" + gGunT2Ref + " refSkip=" + gCovRefSkip);
 }
 // Where the coverall gun for a gunless mex stands: a step toward them.

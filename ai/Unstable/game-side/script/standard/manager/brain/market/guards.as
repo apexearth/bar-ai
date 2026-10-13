@@ -575,6 +575,10 @@ bool EscortWorthy(int di)
 	if (cd.IsRoleAny(Unit::Role::SKIRM.mask)
 		|| cd.IsRoleAny(Unit::Role::ARTY.mask))
 		return false;   // indirect fire cannot answer what kills cons
+	// his 10-13: "rovers are not good escorts" -- a scout passed the median bar
+	// against an enemy that fields scouts itself
+	if (Military::IsFodder(cd) || cd.IsRoleAny(Unit::Role::SCOUT.mask))
+		return false;
 	EscortMeans();
 	if (gEscMeanSpd <= 0.f)
 		return false;

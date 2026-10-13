@@ -175,7 +175,8 @@ void PostFields(array<float>& out f)
 // (Market::NnHeadMix). Returns that trust (0 = rules alone).
 float NnPostScore(const array<float>& in st, const array<float>& in post, array<float>& w)
 {
-	const int pnh = Market::PnHead(NNP_POST);
+	// apex_pn_post=0 (test, his 10-13 "bad NN weight or dumb logic?"): the rule picks the posture
+	const int pnh = (ai.GetTunable("apex_pn_post", 1.f) > 0.f) ? Market::PnHead(NNP_POST) : -1;
 	if (pnh >= 0) {
 		Market::PnTilt(pnh, st, post, w);
 		return 1.f;

@@ -380,6 +380,9 @@ to them)
   units flank too (2026-10-10, replacing "big slow units go straight": "we
   are very slow pushers, we usually don't try to flank with big units"); a
   mass of Marauders arriving suddenly from the side wrecks the enemy.
+  Against a ball (2026-10-13): "a ball doesn't flank well but gets flanked
+  well" -- our body holds its front while a second group takes their ball
+  from the side, so their units eat the 1.5-2.0x flank bonus.
 - Don't walk many times the needed distance round enemy defences, and accept
   more path risk when needed rather than switching the careful logic off.
 
