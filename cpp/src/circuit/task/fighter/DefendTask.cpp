@@ -231,7 +231,6 @@ void CDefendTask::Merge(ISquadTask* task)
 bool CDefendTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	CInfluenceMap* inflMap = circuit->GetInflMap();

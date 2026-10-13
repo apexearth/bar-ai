@@ -272,7 +272,6 @@ void CAntiHeavyTask::OnUnitIdle(CCircuitUnit* unit)
 	if ((GetTarget() == nullptr)
 		&& (position.SqDistance2D(leader->GetPos(circuit->GetLastFrame())) < SQUARE(maxDist)))
 	{
-		CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 		position = RoamPos(leader);
 	}
 
@@ -300,7 +299,6 @@ void CAntiHeavyTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
 bool CAntiHeavyTask::FindTarget()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	const AIFloat3& pos = leader->GetPos(circuit->GetLastFrame());

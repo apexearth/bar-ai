@@ -84,7 +84,6 @@ void CBFactoryTask::Activate()
 void CBFactoryTask::FindBuildSite(CCircuitUnit* builder, const AIFloat3& pos, float searchRadius)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	CMap* map = circuit->GetMap();
 	// A FACTORY IS THE WORST THING TO PARK ON TOP OF ITS OWN BUILDER: the
 	// biggest footprint we place, and nothing can start until whoever ordered
 	// it has been pushed off the whole apron. Same rule as

@@ -2053,6 +2053,9 @@ CCircuitUnit* CCircuitAI::RegisterTeamUnit(ICoreUnit::Id unitId, Unit* u)
 
 void CCircuitAI::UnregisterTeamUnit(CCircuitUnit* unit)
 {
+	if (unit->IsDead()) {
+		return;  // the def count was already decremented
+	}
 	IndexTeamUnit(unit, false);
 	teamUnits.erase(unit->GetId());
 	tgtHeld.erase(unit);  // the gadget's UnitDestroyed does the same on its side
@@ -3440,7 +3443,7 @@ std::string CCircuitAI::ReadVfsFile(const std::string& name) const
 	if ((size <= 0) || (size > MAX_VFS_READ)) {
 		return std::string();
 	}
-	std::string buf(size_t(size), ' ');
+	std::string buf(size_t(size), '\0');
 	if (!file->GetContent(name.c_str(), &buf[0], size)) {
 		return std::string();
 	}
@@ -4079,6 +4082,9 @@ void CCircuitAI::Garbage(CCircuitUnit* unit, const char* reason)
 {
 	// NOTE: Happens because engine can send EVENT_UNIT_FINISHED after EVENT_UNIT_DESTROYED.
 	//       Engine should not send events with isDead units.
+	if (unit->IsDead()) {
+		return;  // given away or destroyed already: a second UnitDestroyed re-counts it
+	}
 	garbage.insert(unit);
 #ifdef DEBUG_LOG
 	LOG("AI: %i | Garbage unit: %i | reason: %s", skirmishAIId, unit->GetId(), reason);

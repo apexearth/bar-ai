@@ -1389,6 +1389,8 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 	CEconomyManager* economyMgr = circuit->GetEconomyManager();
 	bool isMetalEmpty = economyMgr->IsMetalEmpty();
 	CAllyUnit* repairTarget = nullptr;
+	CAllyUnit* armedRepair = nullptr;
+	float armedMissing = 0.f;
 	CAllyUnit* buildTarget = nullptr;
 	bool haveMobile = false;   // a factory's own output has claimed this turret
 	const AIFloat3& pos = unit->GetPos(circuit->GetLastFrame());
@@ -1444,14 +1446,29 @@ IUnitTask* CFactoryManager::CreateAssistTask(CCircuitUnit* unit)
 				buildTarget = cand;
 				haveMobile = candMobile;
 			}
-		} else if ((repairTarget == nullptr) && (u->GetHealth() < u->GetMaxHealth())) {
-			repairTarget = cand;
-			if (isMetalEmpty) {
-				break;
+		} else if (u->GetHealth() < u->GetMaxHealth()) {
+			const CCircuitDef* cdef = cand->GetCircuitDef();
+			if ((cdef != nullptr) && (cdef->IsAttacker() || (cdef->GetSurfThreat() > 0.f))) {
+				const float missing = u->GetMaxHealth() - u->GetHealth();
+				if (missing > armedMissing) {
+					armedMissing = missing;
+					armedRepair = cand;
+				}
+			} else if (repairTarget == nullptr) {
+				repairTarget = cand;
+				if (isMetalEmpty) {
+					break;
+				}
 			}
 		}
 	}
 	utils::free(units);
+	// apex: a hurt gun or fighter in reach outranks any construction (his
+	// 2026-10-13: nanos behind the defences healing them while they're attacked)
+	if (armedRepair != nullptr) {
+		++nanoArmedRepair;
+		return Enqueue(TaskS::Repair(IBuilderTask::Priority::HIGH, armedRepair));
+	}
 	if (/*!isMetalEmpty && */(buildTarget != nullptr)) {
 		// Construction task
 		IBuilderTask::Priority priority = buildTarget->GetCircuitDef()->IsMobile() ?
@@ -1519,9 +1536,9 @@ void CFactoryManager::PullNanoOffBuilding()
 	const int frame = circuit->GetLastFrame();
 	if (frame >= nanoPullLogAt) {
 		nanoPullLogAt = frame + FRAMES_PER_SEC * 30;
-		circuit->LOG("apex: nanopull turrets=%d seen=%d repair=%d static=%d"
+		circuit->LOG("apex: nanopull turrets=%d seen=%d repair=%d static=%d armedRepair=%d armedPull=%d"
 				" hasOutput=%d pulled=%d",
-				(int)assists.size(), nanoSeen, nanoOnRepair, nanoOnStatic,
+				(int)assists.size(), nanoSeen, nanoOnRepair, nanoOnStatic, nanoArmedRepair, nanoArmedPull,
 				nanoHasOut, nanoPulled);
 	}
 
@@ -1558,10 +1575,21 @@ void CFactoryManager::PullNanoOffBuilding()
 		continue;
 	}
 	++nanoOnStatic;
+	// apex: already healing a hurt gun is where it should be
+	const CCircuitDef* tdef = tgt->GetCircuitDef();
+	const bool tgtArmed = (tdef->IsAttacker() || (tdef->GetSurfThreat() > 0.f))
+			&& !tgt->GetUnit()->IsBeingBuilt();
+	if (tgtArmed) {
+		continue;
+	}
 	// ...and only when there is somewhere better to go, or the re-election
 	// hands it straight back and the pair of us thrash.
-	if (!HasFactoryOutputInRange(nano)) {
+	const bool armedHurt = HasArmedHurtInRange(nano);
+	if (!armedHurt && !HasFactoryOutputInRange(nano)) {
 		continue;
+	}
+	if (armedHurt) {
+		++nanoArmedPull;
 	}
 	++nanoHasOut;
 	++nanoPulled;
@@ -1586,6 +1614,28 @@ bool CFactoryManager::HasFactoryOutputInRange(CCircuitUnit* nano)
 			continue;
 		}
 		if (u->IsBeingBuilt() && cand->GetCircuitDef()->IsMobile()) {
+			found = true;
+			break;
+		}
+	}
+	utils::free(units);
+	return found;
+}
+
+bool CFactoryManager::HasArmedHurtInRange(CCircuitUnit* nano)
+{
+	const AIFloat3& pos = nano->GetPos(circuit->GetLastFrame());
+	const float radius = nano->GetCircuitDef()->GetBuildDistance();
+	circuit->UpdateFriendlyUnits();
+	auto& units = circuit->GetCallback()->GetFriendlyUnitsIn(pos, radius * 0.9f);
+	bool found = false;
+	for (Unit* u : units) {
+		auto [cand, isTeam] = circuit->GetTeamOrAllyUnit(u);
+		if ((cand == nullptr) || (cand == nano) || (cand->GetCircuitDef() == nullptr) || u->IsBeingBuilt()) {
+			continue;
+		}
+		const CCircuitDef* cdef = cand->GetCircuitDef();
+		if ((cdef->IsAttacker() || (cdef->GetSurfThreat() > 0.f)) && (u->GetHealth() < u->GetMaxHealth())) {
 			found = true;
 			break;
 		}

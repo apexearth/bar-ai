@@ -37,6 +37,8 @@ public:
 	// apex: false keeps a damaged unit in the task where it would retreat; everything else still runs.
 	virtual bool AllowRetreat(CCircuitUnit* unit) { return true; }
 	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+	// apex: true when dropping members that are dead or tasked elsewhere left the task empty.
+	virtual bool PurgeStrays() { return false; }
 
 	FightType GetFightType() const { return fightType; }
 	const springai::AIFloat3& GetPosition() const { return position; }

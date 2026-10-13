@@ -349,7 +349,6 @@ void CArtilleryTask::Fallback(CCircuitUnit* unit, bool proceed)
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
-	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 
 	position = RoamPos(unit);
 	if (unit->GetTravelAct() != nullptr) {  // null after ClearAct: path unwanted

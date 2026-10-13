@@ -27,6 +27,7 @@ public:
 	virtual void RemoveAssignee(CCircuitUnit* unit) override;
 
 	virtual void Merge(ISquadTask* task);
+	virtual bool PurgeStrays() override;
 
 	const std::map<float, std::set<CCircuitUnit*>>& GetRangeUnits() const { return rangeUnits; }
 

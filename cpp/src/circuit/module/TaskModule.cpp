@@ -238,7 +238,13 @@ void ITaskModule::Update()
 				if (task->GetType() == IUnitTask::Type::FIGHTER) {
 					key = 8 + int(static_cast<IFighterTask*>(task)->GetFightType());
 				}
-				task->Update();
+				if ((task->GetType() == IUnitTask::Type::FIGHTER)
+					&& static_cast<IFighterTask*>(task)->PurgeStrays())
+				{
+					AbortTask(task);
+				} else {
+					task->Update();
+				}
 				if ((key >= 0) && (key < 24)) {
 					perfTypeNs[key] += std::chrono::duration_cast<std::chrono::nanoseconds>(
 							std::chrono::steady_clock::now() - tU0).count();

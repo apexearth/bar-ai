@@ -234,10 +234,12 @@ private:
 	// reach is producing (apexearth 2026-09-06); see the definitions.
 	void PullNanoOffBuilding();
 	bool HasFactoryOutputInRange(CCircuitUnit* nano);
+	bool HasArmedHurtInRange(CCircuitUnit* nano);
 	// (round-robin index removed: the whole assist set is swept each pass)
 	int nanoPulled = 0;
 	int nanoPullLogAt = 0;
 	int nanoSeen = 0, nanoOnRepair = 0, nanoOnStatic = 0, nanoHasOut = 0;
+	int nanoArmedRepair = 0, nanoArmedPull = 0;   // apex: hurt guns and fighters repaired first
 
 	Handlers2 createdHandler;
 	Handlers1 finishedHandler;

@@ -156,7 +156,6 @@ void CScoutTask::Execute(CCircuitUnit* unit, bool isUpdating)
 bool CScoutTask::FindTarget(CCircuitUnit* unit, const AIFloat3& pos)
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	SArea* area = unit->GetArea();

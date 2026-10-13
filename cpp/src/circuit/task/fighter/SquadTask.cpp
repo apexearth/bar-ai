@@ -99,6 +99,48 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 	FindLeader(units.begin(), units.end());
 }
 
+bool ISquadTask::PurgeStrays()
+{
+	// a unit given to an ally is dead to us, but could come back into a squad
+	// whose removal never ran; RemoveAssignee would re-task it, so erase only
+	std::vector<CCircuitUnit*> strays;
+	for (CCircuitUnit* unit : units) {
+		if (unit->IsDead() || (unit->GetTask() != this)) {
+			strays.push_back(unit);
+		}
+	}
+	if (strays.empty()) {
+		return false;
+	}
+	int nDead = 0;
+	for (CCircuitUnit* unit : strays) {
+		nDead += unit->IsDead() ? 1 : 0;
+		units.erase(unit);
+		pathQueries.erase(unit);
+		cowards.erase(unit);
+		shields.erase(unit);
+		attackPower -= unit->GetCircuitDef()->GetPower();
+		auto it = rangeUnits.find(unit->GetCircuitDef()->GetMinRange());
+		if (it != rangeUnits.end()) {
+			it->second.erase(unit);
+			if (it->second.empty()) {
+				rangeUnits.erase(it);
+			}
+		}
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	circuit->LOG("apex: squad-purge fight=%s strays=%i dead=%i left=%i",
+			FightTypeName(static_cast<int>(GetFightType())), (int)strays.size(), nDead, (int)units.size());
+	leader = nullptr;
+	lowestRange = lowestSpeed = std::numeric_limits<float>::max();
+	highestRange = highestSpeed = .0f;
+	if (units.empty()) {
+		return true;
+	}
+	FindLeader(units.begin(), units.end());
+	return false;
+}
+
 void ISquadTask::Merge(ISquadTask* task)
 {
 	const std::set<CCircuitUnit*>& rookies = task->GetAssignees();
@@ -272,6 +314,14 @@ bool ISquadTask::IsMustRegroup()
 	float minSqDist = std::numeric_limits<float>::max();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();;
 	for (CCircuitUnit* unit : units) {
+		if ((unit->GetArea() != nullptr) && !terrainMgr->IsAreaLive(unit->GetArea(), "squad")) {
+			const ICoreUnit::Id uid = unit->GetId();
+			circuit->LOG("apex: stale-area-unit id=%i dead=%i registered=%i ownTask=%i leader=%i fight=%s units=%i",
+					uid, unit->IsDead() ? 1 : 0, (circuit->GetTeamUnit(uid) == unit) ? 1 : 0,
+					(unit->GetTask() == this) ? 1 : 0, (unit == leader) ? 1 : 0,
+					FightTypeName(static_cast<int>(GetFightType())), (int)units.size());
+			continue;
+		}
 		const AIFloat3& unitPos = unit->GetPos(frame);
 		if (!unit->GetCircuitDef()->IsPlane() &&
 			terrainMgr->CanMoveToPos(unit->GetArea(), unitPos))

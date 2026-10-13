@@ -346,7 +346,6 @@ bool CRaidTask::FindTarget()
 	CCircuitAI* circuit = manager->GetCircuit();
 	const bool committed = IsCommitted();
 	const bool flies = leader->GetCircuitDef()->IsAbleToFly();
-	CMap* map = circuit->GetMap();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
 	CThreatMap* threatMap = circuit->GetThreatMap();
 	CInfluenceMap* inflMap = circuit->GetInflMap();
