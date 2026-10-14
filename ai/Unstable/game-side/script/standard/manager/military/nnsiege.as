@@ -59,9 +59,9 @@ bool SgSupportDef(int d, bool jam)
 }
 
 // What our standing labs can turn out that outranges `reach`.
-void SgBuildable(float reach, array<int>& out)
+void SgBuildable(float reach, array<int>& defs)
 {
-	out.resize(0);
+	defs.resize(0);
 	const array<int>@ own = Market::OwnedDefs();
 	for (uint i = 0; i < own.length(); ++i) {
 		const int ld = own[i];
@@ -69,8 +69,8 @@ void SgBuildable(float reach, array<int>& out)
 			continue;
 		const array<int>@ bl = Catalog::gBuildsList[ld];
 		for (uint q = 0; q < bl.length(); ++q) {
-			if (SgCarry(bl[q], reach) && (out.find(bl[q]) < 0))
-				out.insertLast(bl[q]);
+			if (SgCarry(bl[q], reach) && (defs.find(bl[q]) < 0))
+				defs.insertLast(bl[q]);
 		}
 	}
 }
