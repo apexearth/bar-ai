@@ -28,7 +28,7 @@ the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed
     python tools/randsearch.py --anneal 1239 --range 2716:3126,7590:7858   # ...varying only those heads
 State: runtime/nn/rand.json; log: runtime/nn/rand.log; games: tournaments/<stamp>-nn-rand/.
 """
-import json, math, os, random, shutil, subprocess, sys, threading, time, traceback
+import json, math, os, random, re, shutil, subprocess, sys, threading, time, traceback
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
@@ -154,7 +154,7 @@ def game_seed(nid, gi):
 
 
 def wins(n):
-    return sum({"W": 1.0, "D": 0.5}.get(r, 0.0) for _, r in n["games"])
+    return sum({"W": 1.0, "D": 0.5}.get(g[1], 0.0) for g in n["games"])
 
 
 def rate(n):
@@ -162,12 +162,12 @@ def rate(n):
 
 
 def mscore(n):
-    return sum(x for x, _ in n["games"]) / len(n["games"]) if n["games"] else float("-inf")
+    return sum(g[0] for g in n["games"]) / len(n["games"]) if n["games"] else float("-inf")
 
 
 def score_sd(st):
     """One game's score spread, pooled over every network's own mean: a 1-game record has no spread of its own."""
-    dev = [(x - mscore(n)) ** 2 for n in st["nets"].values() if len(n["games"]) > 1 for x, _ in n["games"]]
+    dev = [(g[0] - mscore(n)) ** 2 for n in st["nets"].values() if len(n["games"]) > 1 for g in n["games"]]
     k = sum(1 for n in st["nets"].values() if len(n["games"]) > 1)
     return math.sqrt(sum(dev) / max(1, len(dev) - k)) if dev else 1.0
 
@@ -270,14 +270,44 @@ def next_job(st, lay, rng):
     return n, gi
 
 
-def finish(st, n, gi, sc):
+VERSION_RX = re.compile(r"apex: version t=\d+ .*? script=(\S+ \S+)")
+
+
+def game_version(st, nid, gi):
+    """The deployed scripts' stamp (variant, commit, +edits) as the game logged it: a record that
+    mixes code versions cannot tell a code regression from a bad network (10-14, one army)."""
+    p = os.path.join(st["dir"], "matches", "c%02d-g%d" % (nid, gi), "infolog.txt")
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                m = VERSION_RX.search(line)
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return None
+
+
+def by_version(n):
+    """[(version, games, wins, mean score)] in the order each version first played."""
+    out = {}
+    for g in n["games"]:
+        v = g[2] if len(g) > 2 else "?"
+        r = out.setdefault(v, [0, 0.0, 0.0])
+        r[0] += 1
+        r[1] += {"W": 1.0, "D": 0.5}.get(g[1], 0.0)
+        r[2] += g[0]
+    return [(v, k, w, s / k) for v, (k, w, s) in out.items()]
+
+
+def finish(st, n, gi, sc, ver=None):
     n["busy"] -= 1
     if sc is None:
         n["fails"] += 1
         if n["fails"] >= MAX_FAILS:
             n["status"] = "failed"
         return
-    n["games"].append([round(sc[0], 4), sc[1]])
+    n["games"].append([round(sc[0], 4), sc[1], ver or "?"])
     if len(n["games"]) < n["target"] or n["busy"]:
         return
     a = st.get("anneal")
@@ -355,7 +385,7 @@ def work(slot, st, lay, rng):
         except Exception:
             log("worker %d game c%d-g%d raised: %s" % (slot, n["id"], gi, traceback.format_exc().strip().replace("\n", " | ")))
         with lock:
-            finish(st, n, gi, sc)   # a raised game is a failed game, never a stuck `busy`
+            finish(st, n, gi, sc, game_version(st, n["id"], gi))   # a raised game is a failed game, never a stuck `busy`
             save(st)
 
 
@@ -382,6 +412,8 @@ def status(st):
             c["id"], mscore(c), wins(c), len(c["games"]), 100 * rate(c), temperature(st), len(kids),
             sum(1 for n in kids if "p" in n), sum(1 for n in kids if len(n["games"]) > 1),
             sum(1 for n in kids if n["status"] == "viable")))
+        for v, k, w, s in by_version(c):
+            print("    centre on %-34s %3d games  %5.1f wins (%3.0f%%)  score %+.2f" % (v, k, w, 100 * w / k, s))
     played = [n for n in played if "base" not in n]   # the noise-size split below is for random networks
     lo = [n for n in played if n["s"] < 0.28]
     hi = [n for n in played if n["s"] >= 0.28]
