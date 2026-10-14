@@ -182,7 +182,9 @@ void SiegeDecide()
 		const float worth = fortM + ecoM + routeM;
 		const float haveF = (need > 0.f) ? sqrt(hH * hD / need) : 1.f;
 		const float lackM = forceM * ((haveF < 1.f) ? (1.f - haveF) : 0.f);
-		const float ratio = worth / ((forceM > 1.f) ? forceM : 1.f);
+		// An outranging force is not spent by the siege -- it outlives the guns and rejoins the army --
+		// so the price is the part still to buy.
+		const float ratio = worth / ((lackM > 1.f) ? lackM : 1.f);
 		if (ratio <= bestRatio)
 			continue;
 		bestRatio = ratio;
@@ -228,7 +230,7 @@ void SiegeDecide()
 	f.insertLast(float(ai.frame) / 1800.f);
 	// THE RULE SIEGES WHEN THE FORTIFICATION IS WORTH THE FORCE THAT KILLS IT: its metal, the economy
 	// inside its reach and, when it stands on the road to their richest economy, that economy too,
-	// against the metal of the cheapest outranging force that beats its guns at the answer parity.
+	// against the metal still to buy of the cheapest outranging force that beats its guns at the answer parity.
 	const int rule = (bestRatio >= 1.f) ? SG_SIEGE : SG_NO;
 	array<float> w(2, Market::NE2_EPS);
 	w[rule] = 1.f;
