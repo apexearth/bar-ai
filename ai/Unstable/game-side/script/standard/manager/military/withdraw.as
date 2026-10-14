@@ -67,6 +67,24 @@ void NoteCombatUnit(int id)
 // ping-ponging, median hp at the order 100%). Rearward-only is the
 // constraint that was implicit in his ruling all along: hide BEHIND our
 // defenses, not under the front's.
+// The move ends nearer the closest enemy group than it starts.
+int gWdIntoThem = 0;
+bool WalksIntoThem(const AIFloat3& in from, const AIFloat3& in to)
+{
+	float best = -1.f;
+	AIFloat3 g;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(i);
+		const float d = gp.distance2D(from);
+		if ((best < 0.f) || (d < best)) {
+			best = d;
+			g = gp;
+		}
+	}
+	return (best >= 0.f) && (to.distance2D(g) < best);
+}
+
 bool Rearward(const AIFloat3& in from, const AIFloat3& in to)
 {
 	return Military::ForwardFraction(to) < Military::ForwardFraction(from);
@@ -769,6 +787,13 @@ void UpdateWithdraw()
 				continue;
 			back = (hasHeld && (!hasGun || (held.distance2D(p) < gun.distance2D(p)))) ? held : gun;
 		}
+		// A retreat never walks into a threat (docs/24): "rearward" is the map axis, and with
+		// their army inside our base a rally or gun behind us on that axis lay through them --
+		// full-health defenders walked into the blob under a bare move (his 10-13, watchloop-814).
+		if (!recallHome && WalksIntoThem(p, back)) {
+			++gWdIntoThem;
+			continue;
+		}
 		// A point the unit cannot walk to parks it against the nearest cliff.
 		if ((u.circuitDef !is null)
 			&& !ai.CanDefReachAt(Catalog::Def(int(u.circuitDef.id)), p, back, 64.f))
@@ -798,7 +823,7 @@ void UpdateWithdraw()
 					: (consolidate ? " pack" : " infl")))))
 				+ " -> " + int(back.x) + "," + int(back.z)
 				+ " -- " + gWithdrawn + " orders so far, "
-				+ gCombatId.length() + " tracked");
+				+ gCombatId.length() + " tracked, " + gWdIntoThem + " refused into them");
 		}
 	}
 }
