@@ -110,14 +110,21 @@ void CSiegeTask::OnUnitIdle(CCircuitUnit* unit)
 	lastOrder.erase(unit);
 }
 
+// Reach by the longest weapon, as the script's claim (Catalog gMaxRange) measures it.
+static float SiegeReach(CCircuitDef* cdef)
+{
+	return std::max(cdef->HasSurfToLand() ? cdef->GetMaxRange(CCircuitDef::RangeType::LAND) : 0.f,
+			cdef->GetMaxRange());
+}
+
 CSiegeTask::Row CSiegeTask::RowOf(CCircuitUnit* unit, float reach) const
 {
 	CCircuitDef* cdef = unit->GetCircuitDef();
-	if (cdef->IsRoleSupport() || (!cdef->HasSurfToLand() && ((cdef->GetRadarRadius() > 0.f) || (cdef->GetJammerRadius() > 0.f)))) {
+	const float r = SiegeReach(cdef);
+	if (r <= 0.f) {  // not IsRoleSupport: anti_heavy_ass (the Sharpshooter) is a SUPPORT-type role (unit.as)
 		return Row::SUPPORT;
 	}
-	const float r = cdef->HasSurfToLand() ? cdef->GetMaxRange(CCircuitDef::RangeType::LAND) : 0.f;
-	return (r * RANGE_MOD > reach) ? Row::CARRY : Row::SCREEN;
+	return (r > reach) ? Row::CARRY : Row::SCREEN;
 }
 
 // The ring point at r round tPos, nearest the bearing to `from`, that no known gun reaches.
@@ -186,7 +193,7 @@ CEnemyInfo* CSiegeTask::PickTarget(const AIFloat3& goal, float area, const AIFlo
 			break;
 		}
 	}
-	const float standR = carryR * RANGE_MOD;
+	const float standR = 0.5f * (static_cast<CMilitaryManager*>(manager)->GetFortCensus()->GetSiege().reach + carryR);
 	AIFloat3 stand;
 	int best = -1;
 	for (size_t i = 0; i < cands.size(); ++i) {
@@ -228,7 +235,7 @@ void CSiegeTask::Execute()
 		switch (RowOf(unit, reach)) {
 			case Row::CARRY: {
 				++nCarry;
-				carryR = std::min(carryR, unit->GetCircuitDef()->GetMaxRange(CCircuitDef::RangeType::LAND));
+				carryR = std::min(carryR, SiegeReach(unit->GetCircuitDef()));
 			} break;
 			case Row::SCREEN: {
 				++nScreen;
@@ -243,7 +250,7 @@ void CSiegeTask::Execute()
 	}
 	from /= (float)n;
 	if (nCarry == 0) {
-		carryR = (reach + DEFAULT_SLACK) / RANGE_MOD;  // no long gun yet: hold just outside the guns
+		carryR = reach + 2.f * DEFAULT_SLACK;  // no long gun yet: hold just outside the guns
 	}
 
 	// one long gun walked out alone dies on the way: the squad gathers at our front until it can win
@@ -287,7 +294,7 @@ void CSiegeTask::Execute()
 		militaryMgr->NoteSpotWanted(tPos, frame);
 	}
 
-	const float carryStand = carryR * RANGE_MOD;
+	const float carryStand = 0.5f * (reach + carryR);
 	const float screenStand = std::max(reach + DEFAULT_SLACK, 0.5f * (reach + carryStand));
 
 	// far away: walk the threat-aware path to the carry row's stand, at the slowest member's pace
@@ -320,8 +327,8 @@ void CSiegeTask::Execute()
 		const Row row = RowOf(unit, reach);
 		AIFloat3 pos;
 		if (row == Row::CARRY) {
-			const float ur = unit->GetCircuitDef()->GetMaxRange(CCircuitDef::RangeType::LAND);
-			float d = ur * RANGE_MOD;
+			const float ur = SiegeReach(unit->GetCircuitDef());
+			float d = 0.5f * (reach + ur);
 			// their mobiles closing on a long gun: it steps back as far behind its stand as the screen stands ahead
 			const AIFloat3& uPos = unit->GetPos(frame);
 			threatMap->SetThreatType(unit);

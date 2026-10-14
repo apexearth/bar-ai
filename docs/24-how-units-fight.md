@@ -369,7 +369,9 @@ to them)
 - **Siege a fortification on purpose** (2026-10-14). When enemy defences near
   us are protected by shields and jammers, decide to destroy that emplacement,
   build the units that do it (long range: Ambassadors and the like), and give
-  them a squad that exists only to take it out.
+  them a squad that exists only to take it out. Any unit that outranges a
+  gun sieges it: a rocket bot (475) kills a basic LLT (430) without taking
+  damage.
 - Indirect fire is the exception: rocket-style enemies can be stood inside,
   moving.
 - A stronger unit doesn't run from a longer-ranged weaker one. Short-range

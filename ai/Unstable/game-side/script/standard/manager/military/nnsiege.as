@@ -11,7 +11,6 @@ const int SG_NO = 0, SG_SIEGE = 1;
 // CFortCensus::Field
 const int FV_GUN_N = 0, FV_GUN_H = 1, FV_GUN_D = 2, FV_REACH = 3, FV_RADIUS = 4, FV_SHIELD_N = 5;
 const int FV_SHIELD_H = 6, FV_JAM_N = 7, FV_JAM_M = 8, FV_RADAR_N = 9, FV_METAL_M = 10, FV_ECO_M = 11, FV_KEY = 12;
-const float SG_RANGE_MOD = 0.8f;   // C++ RANGE_MOD: a long gun's row stands at 0.8 of its range
 const int SG_EVERY = 30 * SECOND;
 const int SG_LOOK = 4 * SECOND;
 const int SG_PULL_PER_LOOK = 4;     // raid.as's pace: one look cannot strip the line at once
@@ -48,7 +47,7 @@ bool SgCarry(int d, float reach)
 {
 	return Catalog::gMobile[d] && !Catalog::gFlyer[d] && !Catalog::gBuilder[d] && Catalog::gHitsLand[d]
 		&& !Catalog::gKamikaze[d] && (Catalog::gPower[d] > 1.f) && (Catalog::gSurfT[d] > 0.01f)
-		&& (Catalog::gMaxRange[d] * SG_RANGE_MOD > reach);
+		&& (Catalog::gMaxRange[d] > reach);
 }
 
 bool SgSupportDef(int d, bool jam)

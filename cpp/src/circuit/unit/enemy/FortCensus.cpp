@@ -98,7 +98,7 @@ void CFortCensus::Walk()
 		const float landR = edef->HasSurfToLand() ? edef->GetMaxRange(CCircuitDef::RangeType::LAND) : 0.f;
 		if ((landR > 0.f) && (landR <= GUN_REACH_MAX)) {
 			const float h = std::max(edef->GetHealth(), 1.f);
-			guns.push_back(SGun{e->GetPos(), landR + GUN_SLACK, h, edef->GetSurfThreat() / std::sqrt(h),
+			guns.push_back(SGun{e->GetPos(), landR, h, edef->GetSurfThreat() / std::sqrt(h),
 					e->GetCost(), e->GetId(), -1});
 			continue;
 		}

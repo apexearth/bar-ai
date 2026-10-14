@@ -27,7 +27,7 @@ class CFortCensus {
 public:
 	struct SGun {
 		springai::AIFloat3 pos;
-		float reach;  // land range + slack, as SquadTask's turret ring uses it
+		float reach;  // land range
 		float h;      // health
 		float d;      // surf threat / sqrt(health): the Lanchester damage term
 		float cost;
