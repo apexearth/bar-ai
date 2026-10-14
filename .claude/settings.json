@@ -17,5 +17,15 @@
     "deny": [],
     "ask": []
   },
-  "worktree": { "bgIsolation": "none" }
+  "worktree": { "bgIsolation": "none" },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/command_guard.py\"" }
+        ]
+      }
+    ]
+  }
 }

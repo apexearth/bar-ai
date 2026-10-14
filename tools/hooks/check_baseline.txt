@@ -1,0 +1,26 @@
+ERROR dashboard_guide.py names TUNE_BLAST_AISLE, which tunables.as no longer has -- the dashboard drops it silently
+ERROR dashboard_guide.py names TUNE_DEF_ECO_S, which tunables.as no longer has -- the dashboard drops it silently
+ERROR dashboard_guide.py names TUNE_FARM_ROWS, which tunables.as no longer has -- the dashboard drops it silently
+ERROR dashboard_guide.py names TUNE_LAVA, which tunables.as no longer has -- the dashboard drops it silently
+ERROR dashboard_guide.py names TUNE_SLOT_TRIES, which tunables.as no longer has -- the dashboard drops it silently
+ERROR dashboard_guide.py offers TUNE_AISLE_GROW, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_CON_LOG_T1_A, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_CON_LOG_T1_B, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_CON_LOG_T2_A, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_CON_LOG_T2_B, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_ECO_TARGET_BASE_8, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_E_PER_METAL, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_GREED_CONS, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_RECLAIM_GEN_E, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_RECLAIM_PAD, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_SCREEN_GAP, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_T2_ENERGY, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_T2_ENERGY_REACTOR, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR dashboard_guide.py offers TUNE_T2_METAL, which no GetTunable call reads -- editing it on the Balance tab changes nothing
+ERROR script/standard/manager/brain/market/army.as: lazy cache 'gCheapScoutM' guards on >= 0, so a zero computed before defs are available is cached forever and silently disables everything downstream -- use '> 0.f'
+ERROR script/standard/manager/brain/market/comdecide.as: leaf spend call 'Enqueue(TaskB::' outside the arbiter's executors -- the overhaul kill census (docs/20-brain-overhaul.md par.4.1) forbids this
+ERROR script/standard/manager/brain/market/safety.as: leaf spend call 'Enqueue(TaskB::' outside the arbiter's executors -- the overhaul kill census (docs/20-brain-overhaul.md par.4.1) forbids this
+ERROR script/standard/manager/brain/yard.as: leaf spend call 'Enqueue(TaskB::' outside the arbiter's executors -- the overhaul kill census (docs/20-brain-overhaul.md par.4.1) forbids this
+ERROR script/standard/manager/military/nnraid.as: lazy cache 'gNrMexDef' guards on >= 0, so a zero computed before defs are available is cached forever and silently disables everything downstream -- use '> 0.f'
+ERROR script/standard/manager/military/nnstrike.as: strength test counts one seat only -- add the side (GetAllyArmyMAt / TeamArmyCost / ...) or mark the function '// seat-local: <why>' (09-26 fix lost twice, 10-10)
+ERROR standard/behaviour_leg.json: 'legcs' is not a unit def in ANY tree -- requests for it are silently dropped

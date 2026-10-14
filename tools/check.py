@@ -350,14 +350,17 @@ BASELINE = REPO / "reference" / "barb-stable" / "game-side"
 # 2026-08-13: the compiler emitted 60 errors, the variant was disabled, and the
 # match still finished and reported a normal-looking loss. Nothing else in this
 # repo compiles the script, so this is the only pre-deploy chance to catch it.
+# Contextual words (abstract, explicit, external, final, from, function, get, override, property,
+# set, shared, super) are legal names -- nnair.as names a local `from` and compiles -- so listing
+# them kept the check permanently red and unread.
 AS_RESERVED = {
-    "and", "abstract", "auto", "bool", "break", "case", "cast", "class",
-    "const", "continue", "default", "do", "double", "else", "enum", "explicit",
-    "external", "false", "final", "float", "for", "from", "funcdef", "function",
-    "get", "if", "import", "in", "inout", "int", "int8", "int16", "int32",
+    "and", "auto", "bool", "break", "case", "cast", "catch", "class",
+    "const", "continue", "default", "do", "double", "else", "enum",
+    "false", "float", "for", "funcdef",
+    "if", "import", "in", "inout", "int", "int8", "int16", "int32",
     "int64", "interface", "is", "mixin", "namespace", "not", "null", "or",
-    "out", "override", "private", "property", "protected", "return", "set",
-    "shared", "super", "switch", "this", "true", "try", "typedef", "uint",
+    "out", "private", "protected", "return",
+    "switch", "this", "true", "try", "typedef", "uint",
     "uint8", "uint16", "uint32", "uint64", "void", "while", "xor",
 }
 
@@ -375,6 +378,15 @@ _AS_DECL = re.compile(
     r"(?P<type>array\s*<[^>]*>|[A-Za-z_][A-Za-z0-9_:]*)\s*@?\s*"
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^=]|;|\))"
 )
+# A parameter, `(array<int>& out)` or `, float& out h`: the line-start pattern above never saw one,
+# and an agent's `array<int>& out` reached a game on 10-14. The in/out/inout modifier is skipped
+# only when a name follows it.
+_AS_PARAM = re.compile(
+    r"[(,]\s*(?:const\s+)?"
+    r"(?P<type>array\s*<[^>]*>|[A-Za-z_][A-Za-z0-9_:]*)\s*[@&]?\s*"
+    r"(?:(?:in|out|inout)\s+(?=[A-Za-z_]))?"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?=[,)=])"
+)
 
 
 def _as_type_ok(tok: str) -> bool:
@@ -391,12 +403,14 @@ def check_angelscript(script_root: Path, rep: Report) -> None:
         for n, raw in enumerate(path.read_text(encoding="utf8",
                                                errors="replace").splitlines(), 1):
             line = raw.split("//", 1)[0]
-            m = _AS_DECL.match(line)
-            if (m and m.group("name") in AS_RESERVED
-                    and _as_type_ok(m.group("type"))):
-                rep.error(f"{rel}:{n}: '{m.group('name')}' is an AngelScript "
-                          f"reserved word -- this is a compile error, and a "
-                          f"compile error disables the whole variant silently")
+            hits = [m for m in [_AS_DECL.match(line)] if m]
+            hits += list(_AS_PARAM.finditer(line))
+            for m in hits:
+                if m.group("name") in AS_RESERVED and _as_type_ok(m.group("type")):
+                    rep.error(f"{rel}:{n}: '{m.group('name')}' is an AngelScript "
+                              f"reserved word -- this is a compile error, and a "
+                              f"compile error disables the whole variant silently")
+                    break
 
 
 # -- lazy caches that can latch a non-positive value -------------------------
@@ -667,6 +681,8 @@ def main() -> int:
     ap.add_argument("variants", nargs="*", help="variant names (default: all in ai/)")
     ap.add_argument("--all", action="store_true",
                     help="also list findings inherited unchanged from stock BARb")
+    ap.add_argument("--fast", action="store_true",
+                    help="skip the docs audit (75 s, warnings only): the pre-commit gate's mode")
     args = ap.parse_args()
 
     units = load_units()
@@ -684,9 +700,9 @@ def main() -> int:
     try:
         import subprocess
         _da = Path(__file__).parent / 'docs_audit.py'
-        _r = subprocess.run([sys.executable, str(_da), '--quiet'],
-                            capture_output=True, text=True)
-        if _r.returncode == 1:
+        _r = None if args.fast else subprocess.run([sys.executable, str(_da), '--quiet'],
+                                                   capture_output=True, text=True)
+        if (_r is not None) and (_r.returncode == 1):
             print('')
             print('docs')
             print('  warn    stale references -- run '
