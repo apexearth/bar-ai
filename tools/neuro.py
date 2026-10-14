@@ -282,14 +282,15 @@ FACTIONS = ("Armada", "Cortex", "Legion")
 
 
 def play(job):
-    gen_dir, ci, gi, per_side, mapn, seed, opt_file, slot = job
+    gen_dir, ci, gi, per_side, mapn, seed, opt_file, slot = job[:8]
+    foe = job[8] if len(job) > 8 else FOE
     out = os.path.join(gen_dir, "matches", "c%02d-g%d" % (ci, gi))
     if os.path.exists(os.path.join(out, "result.json")):
         return ci, gi, cem.score(out)
     # a mirror (his 10-11: identical factions is more fair), the faction from the seed so the
     # three come up equally; each side used to draw its own, two thirds of games unequal
     side = FACTIONS[seed % len(FACTIONS)]
-    cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_match.py"), "--a", AI, "--b", FOE,
+    cmd = [sys.executable, "-u", os.path.join(REPO, "tools", "run_match.py"), "--a", AI, "--b", foe,
            "--map", mapn, "--minutes", str(MINUTES), "--seed", str(seed), "--speed", "20",
            "--per-side", str(per_side), "--sides", "%s,%s" % (side, side), "--out", out,
            "--write-dir", os.path.join("runtime", "engine-cem-%d" % slot),

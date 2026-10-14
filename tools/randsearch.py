@@ -37,8 +37,17 @@ import neuro
 STATE = os.path.join(neuro.NN, "rand.json")
 LOG = os.path.join(neuro.NN, "rand.log")
 RESTART = os.path.join(neuro.NN, "rand_restart")
-# his 10-13: the search plays WRDistilled at 0% bonus (the BARb-hard record is rand-barb-20261013.json)
-neuro.FOE = "WRDistilled:0.2"
+# his 10-14: three opponents and 1v1/2v2/4v4 ("variation here is good", team games bring air); WRDistilled
+# is built for 1v1 only. Game i of every network plays SETUPS[i % 12], so each rung's record is the same
+# mix for every network. Records before 10-14 played WRDistilled 1v1 only (rand-barb-20261013.json: BARb hard 1v1).
+WRD, HARD, AGG = "WRDistilled:0.2", "BARb:stable:hard", "BARb:stable:hard_aggressive"
+SETUPS = [
+    (1, "Comet Catcher Remake 1.8", WRD), (2, "Glacier Pass", HARD), (4, "Greenest Fields", AGG),
+    (1, "Comet Catcher Remake 1.8", HARD), (2, "Frozen_Ford_V2", AGG), (4, "Ice Scream v2.5.2", HARD),
+    (1, "Comet Catcher Remake 1.8", WRD), (2, "Comet Catcher Remake 1.8", HARD), (4, "Carrot Mountains", AGG),
+    (1, "Comet Catcher Remake 1.8", AGG), (2, "Glacier Pass", AGG), (4, "Greenest Fields", HARD),
+]
+neuro.FOE = WRD
 neuro.FACTIONS = ("Armada", "Cortex")   # his 10-13: WRDistilled plays Legion badly, its wins say nothing
 # runtime/nn/rand_explore raises it without a code edit: annealing needs room past the first 1000 nets.
 EXPLORE_FILE = os.path.join(neuro.NN, "rand_explore")
@@ -341,7 +350,8 @@ def work(slot, st, lay, rng):
         f = os.path.join(st["dir"], "c%02d.json" % n["id"])
         sc = None
         try:
-            _, _, sc = neuro.play((st["dir"], n["id"], gi, neuro.GAME[0], neuro.GAME[1], game_seed(n["id"], gi), f, slot))
+            per_side, mapn, foe = SETUPS[gi % len(SETUPS)]
+            _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, game_seed(n["id"], gi), f, slot, foe))
         except Exception:
             log("worker %d game c%d-g%d raised: %s" % (slot, n["id"], gi, traceback.format_exc().strip().replace("\n", " | ")))
         with lock:
