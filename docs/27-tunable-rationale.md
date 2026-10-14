@@ -3261,3 +3261,12 @@ Follow-up A/B the same night (24 each): 1.6x eco m5/m7/m11 0.70/0.72/0.67, mex m
 0.58/0.38, 1-2-21. 1.6x gives up the eco without buying the army back; two 2.5x runs
 differ by 0.2 eco at m11 (24-game arms are noisy). Kept 2.5. The cost: training-loop 1v1
 losses by m12 went ~9% (8/91) -> ~18% (7/39) after the change.
+
+## TUNE_SIEGE = 0 (2026-10-14)
+
+Siege a fortification on purpose (`military/nnsiege.as`, `SiegeTask.cpp`, `FortCensus.cpp`). Off by
+his ruling: the search moved onto the one-army code with siege off until the siege squad works in
+test games, then on. Smoke so far: census and decision fire; Sharpshooters were produced for a siege
+and joined its squad, but the squad counted no long gun and never marched (one 2v2); the per-member
+row log on `apex: siege-squad` is there to find why. Deleted with its gate once siege is on and
+measured.

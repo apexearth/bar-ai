@@ -544,7 +544,7 @@ void UpdateSiege()
 		gSgLookAt = ai.frame + SG_LOOK;
 		SiegeLook();
 	}
-	if (!gSgOn && (ai.frame >= gSgNextAt)) {
+	if (!gSgOn && (ai.frame >= gSgNextAt) && (ai.GetTunable("apex_siege", TUNE_SIEGE) > 0.f)) {
 		gSgNextAt = ai.frame + SG_EVERY;
 		SiegeDecide();
 	}

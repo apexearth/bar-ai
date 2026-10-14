@@ -167,6 +167,10 @@ const float TUNE_T2_ARMY_HOLD = 1.f;
 // ---------------------------------------------------------------------------
 // Military — stance, engagement, squads
 // ---------------------------------------------------------------------------
+// [toggle 0/1] -- Siege a fortification on purpose (nnsiege.as). Off until the
+//   siege squad is fixed (his 10-14: search on the one-army code, siege off).
+const float TUNE_SIEGE = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
