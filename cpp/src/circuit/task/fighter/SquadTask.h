@@ -28,6 +28,8 @@ public:
 
 	virtual void Merge(ISquadTask* task);
 	virtual bool PurgeStrays() override;
+	// apex: a ground member of a squad of two or more does not walk home alone
+	virtual bool AllowRetreat(CCircuitUnit* unit) override;
 
 	const std::map<float, std::set<CCircuitUnit*>>& GetRangeUnits() const { return rangeUnits; }
 

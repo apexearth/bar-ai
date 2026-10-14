@@ -8,6 +8,7 @@
 #include "task/fighter/DefendTask.h"
 #include "map/InfluenceMap.h"
 #include <algorithm>
+#include <map>
 #include "map/ThreatMap.h"
 #include "module/MilitaryManager.h"
 #include "setup/SetupManager.h"
@@ -116,7 +117,29 @@ void CDefendTask::Update()
 	 */
 	if (!hunting && (updCount % 32 == 1)) {
 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
-		if ((attackPower >= maxPower) || !militaryMgr->GetTasks(check).empty()) {
+		// JOIN THE SQUAD, NOT THE TARGET (docs/24; his 10-13: "We make 1 fuckin unit and are
+		// charging out to meet these guys on our doorstep", Tzars sent alone): under its bar a
+		// pool walks to the strongest live squad of its kind; only a full bar opens a new one.
+		if ((attackPower < maxPower) && !units.empty() && !militaryMgr->GetTasks(check).empty()) {
+			IFighterTask* best = militaryMgr->BestSquadToJoin(check, *units.begin(), this);
+			if (best != nullptr) {
+				static std::map<const CCircuitAI*, std::pair<int, int>> joined;   // count, next log frame
+				CCircuitAI* circuit = manager->GetCircuit();
+				auto& j = joined[circuit];
+				j.first += (int)units.size();
+				if (circuit->GetLastFrame() >= j.second) {
+					j.second = circuit->GetLastFrame() + FRAMES_PER_SEC * 60;
+					circuit->LOG("apex: pool-joins-squad n=%i pool=%.1f bar=%.1f squad=%.1f", j.first,
+							attackPower, maxPower, best->GetAttackPower());
+				}
+				decltype(units) tmpUnits = units;
+				for (CCircuitUnit* unit : tmpUnits) {
+					manager->AssignTask(unit, best);
+				}
+				return;
+			}
+		}
+		if (attackPower >= maxPower) {
 			IFighterTask* task = militaryMgr->Enqueue(TaskF::Common(promote));
 			decltype(units) tmpUnits = units;
 			for (CCircuitUnit* unit : tmpUnits) {

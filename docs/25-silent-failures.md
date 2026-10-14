@@ -753,3 +753,15 @@ looked busy. Found by counting per-net metrics records. The pattern now
 accepts extra `key=value` fields before the `|`, and a non-matching nnval line
 prints a WARNING once. Rule: when you append to a logged line, grep tools/ for
 its parser and run it on a fresh game.
+
+## S44 — a guard named in a comment that no longer existed, and a task set that holds freed tasks (2026-10-13)
+
+hooks.as said `apex_reinforce_frac` "still demands half a bar before a pool leaves". No code read
+that name: CDefendTask promoted ANY pool, one Tzar included, to a fresh ATTACK task of its own the
+moment any attack existed -- his "we make 1 unit and charge out to meet them on our doorstep". The
+fix iterated `GetTasks(check)` for a squad to join and crashed (dynamic_cast on a freed task): a
+`fightTasks` set can hold dangling pointers, and upstream only ever asked `.empty()`, so nothing
+had dereferenced one before. The search played the crashing build for 8 minutes and scored the
+crashes; the window was purged by rebuilding each net's games from its surviving match folders.
+Rule: scan `updateTasks` (the owner) for live tasks, never a fightTasks set; grep a guard's name
+before trusting a comment that cites it.

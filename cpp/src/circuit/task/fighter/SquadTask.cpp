@@ -99,6 +99,28 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 	FindLeader(units.begin(), units.end());
 }
 
+// NEVER SPLIT OURS TO WALK HOME (docs/24 Retreat; his 10-13: "suicide dive mode where we
+// just kept running in close to enemies and dying one by one"): 75 of 79 fighters dead after
+// minute 15 of one Comet game held a RETREAT task, picked off on the way to the heal point.
+// The squad disengages as one (its own regroup and turn-back); a lone member or a flyer still goes.
+bool ISquadTask::AllowRetreat(CCircuitUnit* unit)
+{
+	if (unit->GetCircuitDef()->IsAbleToFly() || (units.size() <= 1)) {
+		return true;
+	}
+	CCircuitAI* circuit = manager->GetCircuit();
+	static std::map<const CCircuitAI*, std::pair<int, int>> kept;   // count, next log frame
+	auto& k = kept[circuit];
+	++k.first;
+	const int frame = circuit->GetLastFrame();
+	if (frame >= k.second) {
+		k.second = frame + FRAMES_PER_SEC * 60;
+		circuit->LOG("apex: squad-keeps-hurt n=%i fight=%s units=%i", k.first,
+				FightTypeName(static_cast<int>(GetFightType())), (int)units.size());
+	}
+	return false;
+}
+
 bool ISquadTask::PurgeStrays()
 {
 	// a unit given to an ally is dead to us, but could come back into a squad
@@ -591,8 +613,10 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	// known enemy static reaches it, else backs off along its bearing. Turrets
 	// whose reach covers half the map (LRPC) cannot be stood outside of.
 	CCircuitAI* circuit = manager->GetCircuit();
-	std::vector<std::pair<AIFloat3, float>> guns;
+	struct SGun { AIFloat3 pos; float reach; float h; float d; };
+	std::vector<SGun> guns;
 	bool gunsBuilt = false;
+	float squadHD = -1.f;
 	auto buildGuns = [&]() {
 		gunsBuilt = true;
 		const float reachSq = SQUARE(highestRange + 2000.f);
@@ -606,16 +630,22 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 			if ((gr <= 0.f) || (gr > 2500.f) || (e->GetPos().SqDistance2D(tPos) > reachSq)) {
 				continue;
 			}
-			guns.push_back(std::make_pair(e->GetPos(), gr + 100.f));
+			const float gh = std::max(gd->GetHealth(), 1.f);
+			guns.push_back(SGun{e->GetPos(), gr + 100.f, gh, gd->GetSurfThreat() / std::sqrt(gh)});
 		}
 	};
-	auto safeAt = [&](const AIFloat3& p) {
+	// Guns the squad beats are no reason to stand off (his 10-13: a Tzar hesitating at an LLT's
+	// reach; "if two janus went in and just launched at it - it would die immediately"). Every
+	// gun reaching the point counts together, Lanchester-style, against the whole squad.
+	auto safeAt = [&](const AIFloat3& p, float squadHDNow) {
+		float gh = 0.f, gdm = 0.f;
 		for (const auto& g : guns) {
-			if (p.SqDistance2D(g.first) < SQUARE(g.second)) {
-				return false;
+			if (p.SqDistance2D(g.pos) < SQUARE(g.reach)) {
+				gh += g.h;
+				gdm += g.d;
 			}
 		}
-		return true;
+		return gh * gdm < squadHDNow;
 	};
 	if (!GetTarget()->IsInRadarOrLOS()) {
 		for (const auto& kv : rangeUnits) {
@@ -720,10 +750,20 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
 				CCircuitDef* udef = unit->GetCircuitDef();
 				if ((udef->IsAttrSiege() || (udef->GetMaxRange() > udef->GetLosRadius())) && !udef->IsAttrMelee()) {
+					if (squadHD < 0.f) {
+						float sh = 0.f, sd = 0.f;
+						for (CCircuitUnit* m : units) {
+							const float mh = std::max(m->GetCircuitDef()->GetHealth(), 1.f);
+							sh += mh;
+							sd += m->GetCircuitDef()->GetSurfThreat() / std::sqrt(mh);
+						}
+						squadHD = sh * sd;   // Lanchester: the squad together, not one unit
+					}
+					const float unitHD = squadHD;
 					if (!gunsBuilt) {
 						buildGuns();
 					}
-					if (safeAt(newPos)) {
+					if (safeAt(newPos, unitHD)) {
 						++rn[0];
 					} else {
 						bool found = false;
@@ -731,7 +771,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 							for (int sgn = -1; (sgn <= 1) && !found; sgn += 2) {
 								const float a2 = angle + sgn * k * 0.17f;
 								const AIFloat3 p(tPos.x + r * cosf(a2), tPos.y, tPos.z + r * sinf(a2));
-								if (safeAt(p)) {
+								if (safeAt(p, unitHD)) {
 									newPos = p;
 									found = true;
 								}
@@ -745,7 +785,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 								rr += 100.f;
 								const AIFloat3 p(tPos.x + rr * cosf(angle), tPos.y, tPos.z + rr * sinf(angle));
 								newPos = p;
-								found = safeAt(p);
+								found = safeAt(p, unitHD);
 							}
 							++rn[found ? 2 : 3];
 						}

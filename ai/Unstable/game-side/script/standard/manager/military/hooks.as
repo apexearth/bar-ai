@@ -51,11 +51,10 @@ bool WantsMassing(const CCircuitDef@ cdef)
 	// matches the elected-fight-type ledger held ZERO raid tasks and zero
 	// attack tasks -- every raider became line army the moment our advanced
 	// lab stood. apex_raider_massing restores the old behaviour at 1.
-	// ...but raids go on top of a main body that matches their army (his 10-13):
-	// while ours is short of it, a new raider joins the body.
+	// Raiders raid, the line holds (his 10-13): a raider is never held back to the body.
 	if (role == RT::RAIDER)
-		return Market::ArmyShortOfFoe()
-			|| (Factory::gHaveT2 && (ai.GetTunable("apex_raider_massing", TUNE_RAIDER_MASSING) > 0.f));
+		return Factory::gHaveT2
+			&& (ai.GetTunable("apex_raider_massing", TUNE_RAIDER_MASSING) > 0.f);
 	// Mobile artillery fights as the squads' back row: rows stand each def at
 	// its own weapon range, siege attr fears proximity, and the front rows ARE
 	// the allied vision a long gun needs (the whole family outranges its own
@@ -442,9 +441,9 @@ IUnitTask@ MassPoolTask(CCircuitUnit@ unit, const CCircuitDef@ cdef)
 		// how BARb arrives at our base while we hold 2,000 metal of DEFEND at
 		// home with attack=0/0/0 (fightcensus, 20260907-202519, final samples).
 		//
-		// The guard the author actually wanted is untouched and now reachable:
-		// apex_reinforce_frac still demands half a bar before a pool leaves, so
-		// this is not the old any-attack-exists shortcut that fed solos.
+		// Under its bar the pool joins a live squad near it (C++ BestSquadToJoin), never a target
+		// of its own: the apex_reinforce_frac guard this once named no longer existed, and every
+		// pool, one Tzar included, left alone the moment any attack existed (10-13).
 		return NoteElect("mass.attack", aiMilitaryMgr.Enqueue(TaskF::Defend(Task::FightType::ATTACK,
 				Task::FightType::ATTACK, aiMilitaryMgr.quota.attack)));
 	}

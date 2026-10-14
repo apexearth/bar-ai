@@ -338,7 +338,7 @@ bool CRaidTask::AllowRetreat(CCircuitUnit* unit)
 		++keptN;
 		return false;
 	}
-	return true;
+	return ISquadTask::AllowRetreat(unit);
 }
 
 bool CRaidTask::FindTarget()

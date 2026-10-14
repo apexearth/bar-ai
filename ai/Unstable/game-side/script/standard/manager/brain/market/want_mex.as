@@ -163,9 +163,10 @@ int UpgradeHandsWant()
 		AiLog(Factory::T() + "apex: uphands want=" + n + " have=" + CeilingConsOwned()
 			+ " backlog=" + b + " t=" + int(t) + "s U=" + formatFloat(u, "", 0, 1)
 			+ " con=" + Catalog::Def(con).GetName() + " outForUp=" + gOutForUp
-			+ " upFirstLifted=" + gUpFirstLifted);
+			+ " upFirstLifted=" + gUpFirstLifted + " contested=" + gUpFirstContested);
 		gOutForUp = 0;
 		gUpFirstLifted = 0;
+		gUpFirstContested = 0;
 	}
 	return n;
 }
@@ -177,12 +178,31 @@ int UpgradeHandsWant()
 // OutForUpgrades sent out takes the upgrade outright (true: no draw); the home
 // hand draws it against its home work. A refused upgrade falls to the rest.
 int gUpFirstLifted = 0;
+int gUpFirstContested = 0;
+// Net influence at home reads ours until they are inside it; a group in the base ring counts.
+bool FoeGroupAtHome()
+{
+	if (!Builder::gHomeSet)
+		return false;
+	const int nG = aiEnemyMgr.GetEnemyGroupCount();
+	for (int i = 0; i < nG; ++i) {
+		if (aiEnemyMgr.GetEnemyGroupPos(i).distance2D(Builder::gHomePos) <= Builder::BASE_DANGER_DIST)
+			return true;
+	}
+	return false;
+}
 bool UpgradesFirst(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
 	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return false;
 	if (CrewSplitOn() && !CrewIsField(unit))
 		return false;   // home crew: the upgrades are the field crew's
+	// the base never dies (his 10-13): with their army at our base this hoist stripped every
+	// defence want and sent the T2 hands to mohos while the blob stood at the door
+	if (Military::BaseContested() || FoeGroupAtHome()) {
+		++gUpFirstContested;
+		return false;
+	}
 	int upAt = -1;
 	for (uint i = 0; (i < ranked.length()) && (upAt < 0); ++i)
 		if (ranked[i].kind == WK_MEXUP)

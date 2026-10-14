@@ -1023,8 +1023,35 @@ void CAttackTask::FindTarget()
 	}
 	const float sqStrongBase = strongMem ? strongPos.SqDistance2D(basePos) : 0.f;
 
+	// THE WHOLE THREAT AROUND A TARGET (his 10-13: "they don't consider the entire threat around
+	// that target"): a ball the clustering cut in pieces read as several small groups, each
+	// beaten alone. A group counts with every other group whose guns reach where we stand to
+	// shoot it -- within that group's reach plus ours. Unseen units stay in at their last spot.
+	std::vector<float> reachG(groups.size(), 0.f);
+	for (size_t j = 0; j < groups.size(); ++j) {
+		for (const ICoreUnit::Id eId : groups[j].units) {
+			CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+			CCircuitDef* ed = (e != nullptr) ? e->GetCircuitDef() : nullptr;
+			if ((ed != nullptr) && ed->IsAttacker()) {
+				reachG[j] = std::max(reachG[j], float(ed->GetThreatRange(CCircuitDef::ThreatType::SURF)) * inflCell);
+			}
+		}
+	}
+	std::vector<float> nearInfl(groups.size(), 0.f);
+	int pooledN = 0;
+	for (size_t i = 0; i < groups.size(); ++i) {
+		nearInfl[i] = groups[i].influence;
+		for (size_t j = 0; j < groups.size(); ++j) {
+			if ((j != i) && (groups[j].pos.SqDistance2D(groups[i].pos) < SQUARE(reachG[j] + highestRange))) {
+				nearInfl[i] += groups[j].influence;
+			}
+		}
+		pooledN += (nearInfl[i] > groups[i].influence) ? 1 : 0;
+	}
+
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
+		const float groupInfl = nearInfl[i];
 		if (focusOn && !focusGo && !isThreat[i]) {
 			if ((int)i == prevGroup) {
 				prevWhy = NR_FOC;
@@ -1035,7 +1062,7 @@ void CAttackTask::FindTarget()
 			countGroupNear(group, NR_STRONG);
 			continue;
 		}
-		const bool isOverpowered = maxPower * 0.125f > group.influence;
+		const bool isOverpowered = maxPower * 0.125f > groupInfl;
 		// the group we are walking to is scored even after a better one: skipping it
 		// left the choice to whichever group the enemy manager listed first
 		if (hasGoodTarget && isOverpowered && ((int)i != prevGroup)) {
@@ -1048,15 +1075,15 @@ void CAttackTask::FindTarget()
 		const float sqBEDist = group.pos.SqDistance2D(basePos);  // Base to Enemy distance
 		const float scale = std::min(sqBEDist / std::max(sqOBDist, 1.f), 1.f);
 		float effPower = atFocus(group.pos) ? std::max(maxPower, milMgr->GetFocusPow()) : maxPower;
-		if (effPower <= group.influence * scale * odds) {
+		if (effPower <= groupInfl * scale * odds) {
 			effPower = std::max(effPower, std::max(sideAt(i), withUsPow()));
 		}
-		if ((effPower <= group.influence * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
+		if ((effPower <= groupInfl * scale * odds) && (inflMap->GetInfluenceAt(group.pos) < INFL_SAFE)) {
 			++refusedStrong;
 			const float bd = std::sqrt(sqBEDist);
 			if ((refD < 0.f) || (bd < refD)) {
 				refD = bd;
-				refInfl = group.influence;
+				refInfl = groupInfl;
 				refSide = (sidePow[i] >= 0.f) ? sidePow[i] : 0.f;
 			}
 			countGroupNear(group, NR_STRONG);
@@ -1189,7 +1216,7 @@ void CAttackTask::FindTarget()
 			// defending the home base"): Titans swung between a geothermal behind
 			// their base and a Titan blinking in and out of radar for minutes.
 			if (forEco && (edef != nullptr) && edef->IsMobile() && !isThreat[i]
-				&& (group.influence * 2.f < maxPower))
+				&& (groupInfl * 2.f < maxPower))
 			{
 				++ignoredSmall;
 				skipNear(enemy, nearE, NR_IGN);
@@ -1219,7 +1246,7 @@ void CAttackTask::FindTarget()
 				bestTarget = enemy;
 				bestPull = pull;
 				bestSup = sup;
-				bestInfl = group.influence;
+				bestInfl = groupInfl;
 				bestThreat = isThreat[i];
 				bestGroup = (int)i;
 				hasGoodTarget |= !isOverpowered;
@@ -1372,7 +1399,7 @@ void CAttackTask::FindTarget()
 			if ((repairerId < 0) || (prevId != repairerId)) {
 				circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"
 					" backS=%.0f deadlineS=%.0f threatD=%.0f refused=%i home=%i sup=%.0f spam=%i push=%i"
-					" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i strong=%i sw=%s held=%i keptS=%.0f commitS=%.0f spear=%i behind=%i covered=%i",
+					" eco=%i ign=%i lid=%i grp=%.1f pow=%.1f thr=%i strong=%i sw=%s held=%i keptS=%.0f commitS=%.0f spear=%i behind=%i covered=%i pooled=%i/%i",
 					circuit->GetTeamId(), cdef->GetDef()->GetName(),
 					(bdef != nullptr) ? bdef->GetDef()->GetName() : "-",
 					position.x, position.z, position.distance2D(basePos), position.distance2D(pos),
@@ -1380,7 +1407,7 @@ void CAttackTask::FindTarget()
 					(threatS < std::numeric_limits<float>::max()) ? threatS : -1.f, threatD, refusedHome,
 					canGoHome ? 1 : 0, bestSup, skippedSpam, pushing ? 1 : 0,
 					wasEco ? 1 : 0, ignoredSmall, leader->GetId(), bestInfl, maxPower, bestThreat ? 1 : 0,
-					refusedStrong, swWhy, held, keptS, commitS, spear ? 1 : 0, skippedBehind, homeCovered);
+					refusedStrong, swWhy, held, keptS, commitS, spear ? 1 : 0, skippedBehind, homeCovered, pooledN, (int)groups.size());
 				if (bestThreat || (bestGroup < 0)) {
 					// a threat to our base is met by the shortest walk
 					flankKey = bestTarget->GetId();

@@ -683,6 +683,30 @@ int CMilitaryManager::UnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 	return 0; //signaling: OK
 }
 
+IFighterTask* CMilitaryManager::BestSquadToJoin(IFighterTask::FightType type, CCircuitUnit* unit, const IUnitTask* self) const
+{
+	IFighterTask* best = nullptr;
+	for (IUnitTask* task : updateTasks) {
+		if ((task == self) || task->IsDead() || (task->GetType() != IUnitTask::Type::FIGHTER)) {
+			continue;
+		}
+		IFighterTask* t = static_cast<IFighterTask*>(task);
+		if (t->GetFightType() != type) {
+			continue;
+		}
+		ISquadTask* sq = dynamic_cast<ISquadTask*>(t);
+		if ((sq == nullptr) || (sq->GetLeader() == nullptr) || t->GetAssignees().empty()
+			|| !t->CanAssignTo(unit))
+		{
+			continue;
+		}
+		if ((best == nullptr) || (t->GetAttackPower() > best->GetAttackPower())) {
+			best = t;
+		}
+	}
+	return best;
+}
+
 IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
 {
 	IFighterTask* task;

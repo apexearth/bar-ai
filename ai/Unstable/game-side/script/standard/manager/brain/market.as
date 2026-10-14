@@ -18,7 +18,6 @@
 // production side.
 #include "market/kinds.as"          // the Want record, the kind ids, their names
 #include "market/worth.as"          // what a combat unit is worth: the golden metrics
-#include "market/splash.as"         // splash against the enemy ball: extra hits a shell catches
 #include "market/price.as"          // the two live prices, and ValueOf
 #include "market/ledger.as"         // spot-value senses; the claimed-spot ledger
 #include "market/census.as"         // what we own: counts, protection classes, unit events

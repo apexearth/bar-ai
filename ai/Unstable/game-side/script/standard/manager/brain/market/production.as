@@ -682,6 +682,32 @@ bool WeOutEarnThem()
 	return gOutEarn;
 }
 
+// THE RAID GAP (his 10-13: "we aren't making raiders anymore so no raids are slowing their
+// income"; raiders raid, the line holds): the pack the raid director wants at its best
+// target, less the raid power already out, in this raider's units at its cost -- priced like
+// the army gap. Nothing while no raid target is known. Read every 2 s.
+int gRaidGapAt = -999999;
+float gRaidGapP = 0.f;
+float RaidGapM(int d)
+{
+	const CCircuitDef@ cd = Catalog::Def(d);
+	if ((cd is null) || !cd.IsRoleAny(Unit::Role::RAIDER.mask) || cd.IsRoleAny(Unit::Role::SCOUT.mask)
+		|| Catalog::gFlyer[d] || (Catalog::gPower[d] <= 1.f))
+		return 0.f;
+	if (ai.frame >= gRaidGapAt + 2 * SECOND) {
+		gRaidGapAt = ai.frame;
+		gRaidGapP = 0.f;
+		AIFloat3 at;
+		float guard = 0.f;
+		if (Military::RaidTarget(at, guard)) {
+			gRaidGapP = Military::RaidPackNeed(at) - Military::RaidPowerLive();
+			if (gRaidGapP < 0.f)
+				gRaidGapP = 0.f;
+		}
+	}
+	return gRaidGapP / Catalog::gPower[d] * Catalog::gCostM[d];
+}
+
 // The army standing is short of the enemy army we have seen, at the match ratio.
 int gFoeOutgunsAt = -1;
 bool gFoeOutguns = false;
@@ -2257,6 +2283,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				if (owed > 0)
 					effGap += float(owed) * Catalog::gCostM[d];
 			}
+			if (!Catalog::gBuilder[d])
+				effGap += RaidGapM(d);
 			// AA is not army (ArmyValue leaves it out): it fills its own role gap
 			// even when the ground army is at target or yielded to a better line.
 			if (Catalog::gRole[d] == int(Unit::Role::AA.type)) {
@@ -2377,7 +2405,6 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// flat 100 elmos/s: the bar is what may be raiding us, and we
 			// assume they built the fastest thing they could (apexearth).
 			ppc *= 1.f + (Catalog::gSpeed[d] / tFoeSpeed) * tSpeedWorth;
-			ppc *= SplashMul(d);
 			// AND COVERAGE: ground patrolled per metal, worth something only
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per

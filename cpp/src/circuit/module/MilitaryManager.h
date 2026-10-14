@@ -109,6 +109,10 @@ public:
 		return fightTasks[static_cast<IFighterTask::FT>(type)];
 	}
 
+	// apex: the strongest live squad of this type that takes the unit; scans the owning task
+	// list, since a fightTasks set may hold a freed task
+	IFighterTask* BestSquadToJoin(IFighterTask::FightType type, CCircuitUnit* unit, const IUnitTask* self) const;
+
 	IFighterTask* Enqueue(const TaskF::SFightTask& ti);
 	virtual CRetreatTask* EnqueueRetreat() override;
 private:

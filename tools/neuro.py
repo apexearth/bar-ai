@@ -295,6 +295,13 @@ def play(job):
            "--write-dir", os.path.join("runtime", "engine-cem-%d" % slot),
            "--modoption", "apex_lag_speed=0", "--modoption", "apex_nn_explore=0",
            "--ai-options-file", opt_file]
+    # runtime/nn/watch-slot names the worker whose games open a window (his 10-13: he watches
+    # the search's own games, never an outdated build)
+    try:
+        if int(open(os.path.join(NN, "watch-slot")).read().strip()) == slot:
+            cmd.append("--watch")
+    except (OSError, ValueError):
+        pass
     with open(os.path.join(gen_dir, "c%02d-g%d.log" % (ci, gi)), "w", encoding="utf-8") as fh:
         subprocess.run(cmd, cwd=REPO, stdout=fh, stderr=subprocess.STDOUT, timeout=3600)
     return ci, gi, cem.score(out)

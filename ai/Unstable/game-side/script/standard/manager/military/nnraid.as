@@ -32,7 +32,6 @@ AIFloat3 gNrGoal;
 float gNrGoalR = 0.f;
 int gNrGoalSince = 0;
 int gNrDecN = 0, gNrGoN = 0, gNrDevN = 0, gNrLaunchN = 0, gNrPullN = 0, gNrRegoalN = 0;
-int gNrKeptHome = 0;   // raiders a GO left with the main body: no surplus over their army
 float gNrKillM = 0.f, gNrKillEcoM = 0.f;
 int gNrKillN = 0, gNrKillEcoN = 0;
 float gNrLostM = 0.f;
@@ -684,8 +683,8 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 			gAskTask.SetRaidGoal(gNrGoal, gNrGoalR);
 			++gNrRegoalN;
 		}
-		// his 10-13: raids go on top of a main body that matches their army, from the surplus only
-		float surplus = RaidSurplusM();
+		// Raiders raid, the line holds (his 10-13): every unit here is a raider (NrRaider), so a
+		// GO takes them all; line units never enter a raid pack.
 		for (uint i = 0; i < gNrU.length(); ++i) {
 			IUnitTask@ t = gNrT[i];
 			CCircuitUnit@ u = gNrU[i];
@@ -693,12 +692,6 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 				continue;
 			if (RaidClaimed(int(u.id)))
 				continue;
-			const float um = (u.circuitDef !is null) ? u.circuitDef.costM : 0.f;
-			if (um > surplus) {
-				++gNrKeptHome;
-				continue;
-			}
-			surplus -= um;
 			// the claim routes it to the pack before the escort branch could unpair it
 			Market::EscortGone(u.id);
 			t.RemoveUnit(u);
@@ -818,7 +811,7 @@ void UpdateNnRaid()
 			}
 		}
 		AiLog("apex: nnraid-stat t=" + ai.teamId + " dec=" + gNrDecN + " go=" + gNrGoN + " dev=" + gNrDevN + " held=" + gNrHeldN + " freed=" + gNrFreedN
-			+ " launched=" + gNrLaunchN + " pulled=" + gNrPullN + " keptHome=" + gNrKeptHome + " live=" + liveN + " goalDist=" + gd
+			+ " launched=" + gNrLaunchN + " pulled=" + gNrPullN + " live=" + liveN + " goalDist=" + gd
 			+ " goal=" + (gNrGoalHas ? (int(gNrGoal.x) + "," + int(gNrGoal.z) + (gNrGoalHome ? "(home)" : "")) : "-")
 			+ " killM=" + int(gNrKillM) + " killN=" + gNrKillN
 			+ " ecoKillM=" + int(gNrKillEcoM) + " ecoKillN=" + gNrKillEcoN
