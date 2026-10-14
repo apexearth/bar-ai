@@ -171,6 +171,11 @@ const float TUNE_T2_ARMY_HOLD = 1.f;
 //   siege squad is fixed (his 10-14: search on the one-army code, siege off).
 const float TUNE_SIEGE = 0.f;
 
+// [toggle 0/1] -- One army: ground attack squads walk to and follow the main
+//   army, which stages short of each new target (AttackTask ArmyStep). Off: the
+//   search measured 4/41 on it vs 12/48 without (his 10-14: back to old code).
+const float TUNE_ONE_ARMY = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;

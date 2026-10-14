@@ -1659,6 +1659,10 @@ void CAttackTask::ArmyStep(int frame)
 	staging = false;
 	CCircuitAI* circuit = manager->GetCircuit();
 	CMilitaryManager* mm = circuit->GetMilitaryManager();
+	if (!mm->IsOneArmy()) {
+		stageKey = -1;
+		return;
+	}
 	CAttackTask* army = (mm->IsFocus(frame) || (repairerId >= 0) || leader->GetCircuitDef()->IsAbleToFly())
 			? nullptr : mm->GetMainArmy();
 	if (army == this) {

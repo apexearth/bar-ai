@@ -31,6 +31,7 @@ const float RT_LO = 0.25f, RT_HI = 4.f;
 // slots mirrored in C++ CMilitaryManager
 const int BOARD_SPLIT = 1800, BOARD_COMMIT = 1900, BOARD_STAGE = 2500, BOARD_RETREAT = 2600;
 const int BOARD_ARMY_N = 2700, BOARD_ARMY_MAIN = 2800, BOARD_ARMY_SPREAD = 2900, BOARD_ARMY_SW = 3000;
+const int BOARD_ONE_ARMY = 3100;
 const int AH_EVERY = 30 * SECOND;
 // these heads have no per-head net of their own: only the policy net decides them
 const array<float> AH_NONE = {};
@@ -153,6 +154,7 @@ void UpdateArmyHeads()
 {
 	if (!Builder::gHomeSet)
 		return;
+	ai.SetTeamBoard(BOARD_ONE_ARMY + ai.teamId, ai.GetTunable("apex_one_army", TUNE_ONE_ARMY));
 	if (gAhNextAt < 0)
 		gAhNextAt = 60 * SECOND + (ai.teamId % 15) * 4 * SECOND + 2 * SECOND;
 	if (ai.frame >= gAhNextAt) {

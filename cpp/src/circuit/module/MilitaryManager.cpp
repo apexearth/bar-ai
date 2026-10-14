@@ -1876,6 +1876,11 @@ void CMilitaryManager::UpdateDefenceTasks()
 		commitMul = commit;
 		stageMul = stage;
 		retreatMul = retreat;
+		const bool one = TeamBoardGet(ally, BOARD_ONE_ARMY + tid, 0.f) > 0.f;
+		if (one != oneArmy) {
+			circuit->LOG("apex: army-board t=%i oneArmy=%i", tid, one ? 1 : 0);
+		}
+		oneArmy = one;
 		UpdateArmyBoard();
 	}
 

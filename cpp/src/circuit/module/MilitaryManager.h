@@ -242,6 +242,8 @@ public:
 	// here for the heads' features: ground attack squads, the main army's power, their spread.
 	static constexpr int BOARD_SPLIT = 1800, BOARD_COMMIT = 1900, BOARD_STAGE = 2500, BOARD_RETREAT = 2600;
 	static constexpr int BOARD_ARMY_N = 2700, BOARD_ARMY_MAIN = 2800, BOARD_ARMY_SPREAD = 2900, BOARD_ARMY_SW = 3000;
+	static constexpr int BOARD_ONE_ARMY = 3100;  // script TUNE_ONE_ARMY: squads follow and stage with the main army
+	bool IsOneArmy() const { return oneArmy; }
 	float GetSplitMul() const { return splitMul; }
 	float GetCommitMul() const { return commitMul; }
 	float GetStageMul() const { return stageMul; }
@@ -283,6 +285,7 @@ public:
 	float massMul = 1.f;
 	float flankMul = 1.f;
 	float splitMul = 1.f;
+	bool oneArmy = false;
 	float commitMul = 1.f;
 	float stageMul = 1.f;
 	float retreatMul = 1.f;

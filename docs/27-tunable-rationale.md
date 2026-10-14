@@ -3270,3 +3270,13 @@ test games, then on. Smoke so far: census and decision fire; Sharpshooters were 
 and joined its squad, but the squad counted no long gun and never marched (one 2v2); the per-member
 row log on `apex: siege-squad` is there to find why. Deleted with its gate once siege is on and
 measured.
+
+## TUNE_ONE_ARMY = 0 (2026-10-14)
+
+One army (his 10-14 ruling "default to one big army"): every ground attack squad walks to the
+strongest one and shares its target, and the main army stages short of each new target. Moved into
+the search with siege off, the centre network (mixed-record net 40) went 4 of 41 (10%, score -1.32)
+against its 12 of 48 (25%, -0.77) on the code before -- WRDistilled 1v1 7/9 -> 3/8, BARb 5/39 ->
+1/33. Two standard errors, no A/B first. He chose to return the search to the old behaviour while
+each piece (follow, staging, the heads at 1x) is A/B'd in a test lane. The split/commit/stage/stand/
+retreat heads stay in the layout; at 1x commit, stand and retreat reproduce the old constants.
