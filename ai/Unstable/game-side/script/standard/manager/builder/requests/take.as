@@ -164,6 +164,11 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 		// bar or another want entirely, never a second reactor.
 		++gBigEHeld;
 		Log(want, "bigE-held");
+		if (ai.frame >= gNextBigEDiag) {
+			gNextBigEDiag = ai.frame + 15 * SECOND;
+			AiLog("apex: bigE-hold t=" + ai.teamId + " " + want.GetName()
+				+ " rising:" + Market::ComBigEnergyRisingDesc());
+		}
 		return null;
 	}
 
@@ -348,10 +353,13 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	// needs, never one at a time.
 	// ...and a defence short of its target (his 10-13: the base never dies): one
 	// LLT was re-ordered 49 times and each asker sent to help some other frame.
-	const bool defShort = (bt == Task::BuildType::DEFENCE) && (Market::DefenceShortfall() > 0.f);
-	if (defShort && (TotalLive() >= InFlightCap()))
+	// Its exempt frames are not counted against everything else: they filled
+	// every slot and each fusion was sent to help a tower (his 10-14 watch).
+	const bool defBehind = (Market::DefenceShortfall() > 0.f);
+	const bool defShort = (bt == Task::BuildType::DEFENCE) && defBehind;
+	if (defShort && (TotalLive(false) >= InFlightCap()))
 		++gDefExempt;
-	if (!spotWork && !defShort && (bt != Task::BuildType::CONVERT) && (TotalLive() >= InFlightCap())) {
+	if (!spotWork && !defShort && (bt != Task::BuildType::CONVERT) && (TotalLive(defBehind) >= InFlightCap())) {
 		if (unit !is null) {
 			IUnitTask@ any = JoinAny(unit);
 			if (any !is null) {
@@ -370,7 +378,7 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 }
 
 // Live requests that are spending, spot claims aside.
-uint TotalLive()
+uint TotalLive(bool skipDefence)
 {
 	uint n = 0;
 	for (uint i = 0; i < gLive.length(); ++i) {
@@ -379,7 +387,8 @@ uint TotalLive()
 			continue;
 		const int bt = t.GetBuildType();
 		if ((bt == int(Task::BuildType::MEX)) || (bt == int(Task::BuildType::MEXUP))
-			|| (bt == int(Task::BuildType::CONVERT)))
+			|| (bt == int(Task::BuildType::CONVERT))
+			|| (skipDefence && (bt == int(Task::BuildType::DEFENCE))))
 			continue;
 		++n;
 	}

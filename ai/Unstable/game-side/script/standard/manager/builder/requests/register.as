@@ -133,6 +133,7 @@ bool IncomeCoversReactors(const CCircuitDef@ want)
 
 int gBigEFold = 0;   // cross-def folds onto the standing reactor
 int gBigEHeld = 0;   // refusals: something big is rising and has room
+int gNextBigEDiag = 0;
 int gBigEPre  = 0;   // a strictly better rung opened its own site
 
 // -- the register ------------------------------------------------------------

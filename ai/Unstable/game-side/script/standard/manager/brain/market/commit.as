@@ -519,6 +519,28 @@ uint ComBigEnergyRising(uint &out room)
 	return n;
 }
 
+string ComBigEnergyRisingDesc()
+{
+	string s = "";
+	for (uint i = 0; i < gComDef.length(); ++i) {
+		if (gComState[i] == CS_FINISHED)
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d))
+			continue;
+		CCircuitDef@ def = ai.GetCircuitDef(d);
+		if (!Requests::IsBigEnergy(def))
+			continue;
+		IUnitTask@ t = gComTask[i];
+		const uint busy = ((t is null) || t.IsDead()) ? 0 : Requests::Workers(t);
+		s += " " + def.GetName() + "/" + ((gComState[i] == CS_FRAMED) ? "framed" : "ordered")
+			+ "/w" + busy + ((t is null) ? "/noTask" : "")
+			+ "/age" + ((ai.frame - gComAt[i]) / SECOND) + "s"
+			+ "@" + int(gComPos[i].x) + "," + int(gComPos[i].z);
+	}
+	return s;
+}
+
 // The orphan register: a frame whose request died is FRAMED with no task.
 bool ComIsOrphan(uint i)
 {
