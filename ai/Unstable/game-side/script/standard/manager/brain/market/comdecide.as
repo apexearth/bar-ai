@@ -185,6 +185,9 @@ float gCsFoeSpd = 0.f;
 float gCsNearD = -1.f;
 float gCsApp = 0.f;
 float gCsArrive = -1.f;
+int gCsOutrun = 0;   // groups he walks away from before they could catch him
+float gComRetFoeD = 0.f;   // the nearest threat when last seen
+int gComRetCancelN = 0;   // retreats called off: what sent him died, left or fell behind
 float gCsGunDps = 0.f;
 float gCsArmyDps = 0.f;
 float gCsSupHp = 0.f;
@@ -301,7 +304,7 @@ void ComAssess(CCircuitUnit@ u)
 	// safe point.
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	array<int> gi2;
-	array<float> gArr, gHp, gDps, gSpd, gD, gApp, gCost, gR;
+	array<float> gArr, gHp, gDps, gSpd, gD, gApp, gCost, gR, gRg;
 	array<int> gTier, gN, gNc;
 	float nearAll = -1.f;
 	AIFloat3 nearAt;
@@ -356,6 +359,7 @@ void ComAssess(CCircuitUnit@ u)
 		}
 		gi2.insertLast(gi);
 		gArr.insertLast(arr);
+		gRg.insertLast(rng);
 		gHp.insertLast(hpS);
 		gDps.insertLast(dps);
 		gSpd.insertLast(vmax);
@@ -383,9 +387,21 @@ void ComAssess(CCircuitUnit@ u)
 	gCsTier = 0; gCsN = 0; gCsNearD = -1.f; gCsApp = 0.f; gCsArrive = -1.f;
 	int nClose = 0;
 	float rSum = 0.f;
+	// A chase, not a stationary target (his 10-13: out claiming mexes, walked home for a parked
+	// army 3,770 away "for no good reason"): walking for safety he is caught only at their speed
+	// less his own along the escape line. A tower is built standing still, so it keeps the
+	// straight arrival.
+	AIFloat3 esc = gCsSafe - here;
+	esc.SafeNormalize2D();
 	for (uint i = 0; i < gi2.length(); ++i) {
-		if (gArr[i] > gCsHorizon)
+		AIFloat3 away = here - aiEnemyMgr.GetEnemyGroupPos(gi2[i]);
+		away.SafeNormalize2D();
+		const float gain = gSpd[i] - spd * (esc.x * away.x + esc.z * away.z);
+		const float caught = (gD[i] <= gRg[i]) ? 0.f : ((gain > 1.f) ? (gD[i] - gRg[i]) / gain : 1e6f);
+		if ((caught > gCsSafeS) && (gArr[i] > gCsTowerS)) {
+			++gCsOutrun;
 			continue;
+		}
 		gCsFoeHp += gHp[i];
 		gCsFoeM += gCost[i];
 		gCsFoeDps += gDps[i];
@@ -421,13 +437,21 @@ void ComAssess(CCircuitUnit@ u)
 	if (!gCsThreat) {
 		// Losing health with nothing seen is an attacker under the fog.
 		gCsRule = gCsHurtUnseen ? COM_RETREAT : COM_WORK;
-		// A retreat runs to where it was going: the threat drops out of his scan
-		// as he leaves, and turning back then walked him into it again.
-		if ((gComDec == COM_RETREAT) && OnMap(gComRetTo)
+		// A retreat runs to where it was going while what sent him still chases: the threat drops
+		// out of his scan as he leaves, and turning back walked him into it again. Dead, walking
+		// off, or left behind, it no longer does (his 10-13: "cancel the walk home if they're
+		// defeated or move away").
+		bool chased = false;
+		for (uint i = 0; (i < gi2.length()) && !chased; ++i)
+			chased = (gApp[i] > 1.f) || (gD[i] <= gComRetFoeD);
+		if ((gComDec == COM_RETREAT) && OnMap(gComRetTo) && chased
 			&& (here.distance2D(gComRetTo) > u.circuitDef.GetBuildDistance()))
 			gCsRule = COM_RETREAT;
+		else if ((gComDec == COM_RETREAT) && !gCsHurtUnseen)
+			++gComRetCancelN;
 		return;
 	}
+	gComRetFoeD = gCsNearD;
 	const float cost = u.DGunCostE();
 	if (cost > 0.f)
 		gCsShots = floor(Eco::ECur() / cost);
@@ -584,7 +608,7 @@ string ComSitText()
 		+ " vs dps=" + int(gCsMyDps) + "+" + int(gCsGunDps + gCsArmyDps)
 		+ " fight=" + formatFloat(gCsFightS, "", 0, 1) + "s"
 		+ " near=" + int(gCsNearD) + " arrive=" + formatFloat(gCsArrive, "", 0, 1) + "s"
-		+ " safe=" + int(gCsSafeD) + "/" + formatFloat(gCsSafeS, "", 0, 1) + "s"
+		+ " safe=" + int(gCsSafeD) + "/" + formatFloat(gCsSafeS, "", 0, 1) + "s outrun=" + gCsOutrun + " called-off=" + gComRetCancelN
 		+ " dg=" + (gCsDgReady ? 1 : 0) + "/" + formatFloat(gCsKills, "", 0, 1)
 		+ " fwd=" + formatFloat(gCsFwd, "", 0, 2) + " t2=" + (gCsT2 ? 1 : 0)
 		+ " unseen=" + (gCsHurtUnseen ? 1 : 0);
@@ -804,7 +828,7 @@ void ComDecideTick(CCircuitUnit@ u)
 		}
 		AiLog(Factory::T() + "apex: comstat t=" + ai.teamId + " dec=" + gComDecN
 			+ " chosen(W/F/T/R)=" + cn + " rule=" + rn + " effSec=" + en
-			+ " withdraw=" + gComWithdrawN + " drop=" + gComDropN + " explored=" + gComExpN
+			+ " withdraw=" + gComWithdrawN + " outrun=" + gCsOutrun + " calledOff=" + gComRetCancelN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
 			+ " dgunOrders=" + u.DGunOrders() + " dgOpp=" + gComDgOpp + " dgMiss=" + gComDgMiss
 			+ " cower=" + gComCowerN + " stood=" + gComStandN + " ship=" + gShipN + "/" + gShipSec + " trap=" + gComTrapN
