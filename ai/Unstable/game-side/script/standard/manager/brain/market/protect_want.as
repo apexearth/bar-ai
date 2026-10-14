@@ -805,6 +805,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		if (cls == PROT_DEF) {
 			DwEnsure(d);
 			gDwVal[d] = c.value;
+			EdDefGainNote(d, gain);
 			gWhyDef.insertLast(d);
 			if ((half == HALF_GROUND) && unit.circuitDef.CanBuild(Catalog::Def(d)))
 				DtNote(uid, d, c.value, at);

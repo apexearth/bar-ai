@@ -623,6 +623,10 @@ void NoteDead(CCircuitUnit@ unit)
 		@gAssistTarget = null;
 		gAssistTargetId = -1;
 	}
+	if (gDjTargetId == unit.id) {
+		@gDjTarget = null;
+		gDjTargetId = -1;
+	}
 	Lattice::NoteDead(unit.id);
 	LossNote(int(unit.circuitDef.id));
 	for (uint gi = 0; gi < gOwnGenIds.length(); ++gi) {

@@ -3280,3 +3280,59 @@ against its 12 of 48 (25%, -0.77) on the code before -- WRDistilled 1v1 7/9 -> 3
 1/33. Two standard errors, no A/B first. He chose to return the search to the old behaviour while
 each piece (follow, staging, the heads at 1x) is A/B'd in a test lane. The split/commit/stage/stand/
 retreat heads stay in the layout; at 1x commit, stand and retreat reproduce the old constants.
+
+## TUNE_RADAR_PRICE, TUNE_DEFJOIN_PRICE, TUNE_FIELD_PRICED, TUNE_COVER_PRICED, TUNE_DEF_DANGER = 0 (2026-10-14)
+
+Defence as a crutch (his 10-14, docs/24 "Defending the base": "we depend on defenses right now, like
+it's a crutch ... how the hell are we spending 10 to 13% on radar"; approved "price them all", each
+A/B'd alone before it sticks). Measured over ~800 search games (`tools/conjobs.py`): from minute 15
+constructors spend 21-28% of their time on defence and 10-13% on radar. Each switch turns one rule
+that bypassed the draw into a priced offer; all five at 0 are the code before, exactly. All five
+count on `apex: ecodef-stat` (once a minute per team, game totals) and the dashboard card
+"Defence as a crutch".
+
+- **RADAR_PRICE** (`SenseGainOf`, radar branch). Old gain: `(gAssetsM + ArmyValue) * rate *
+  unseenFrac + EyesSavedM/fill * unseenFrac + surprise * unseenFrac`, where unseenFrac is the larger
+  of a POINT share (mexes and front posts) and a metal share -- a share of everything we own
+  whenever any gap is open, so it grew all game (watched: `sense:armrad v=9.00 gain=26.11` over
+  `energy/convert v=5.10`). New: `(armyNew + groundNew) * rate + EyesSavedM/fill * groundShare +
+  surprise * armyShare` -- the metal of our combat units and of our buildings the mast NEWLY
+  watches (army binned per 512-elmo cell on the 5 s radar clock), and the surprise term scaled by
+  the share of our army standing in that blind ground. The line branch gets the same stake at the
+  line. No new constant (`rate` = apex_insure_rate, watch = radar range x apex_radar_overlap). The
+  trip was already charged: `t=2827` in that line is metal (wage x walk plus gain x walk), not
+  seconds; with a 26 m/s gain the gain-scaled late-start charge could never separate near from far.
+  ecodef-stat prints the mean old and new gain.
+- **DEFJOIN_PRICE** (`DefJoinOffer`, decide.as). Old: a free hand sent to a tower in flight at
+  v=1000 (skipping the draw) whenever `DefenceShortfall() > 0`. New: offered to the draw at
+  `gain = towerGain * b/B` (our build power b on a crew of B brings completion forward by
+  rem*b/(B(B+b)) over a stint rem/(B+b)); towerGain is the gain the founder's want was elected at
+  (`gIncGain`), else the going rate of that def in this election. Cost: walk + stint at the wage,
+  plus the gain over the walk. Its boss is held in `gDjTarget` so a losing offer does not break
+  the priced assist's `gAssistTarget`.
+- **FIELD_PRICED** (`CrewApply`, crew.as). Old: a field-crew hand's list was cut to field work and
+  its top taken with no draw. New: when that top is a tower or a radar, the hand keeps its whole
+  list and goes to the draw; extractor, upgrade and reclaim field work keep the hoist.
+- **COVER_PRICED** (decide.as coverall / base front). Old: the light tower on an uncovered mex and
+  the base-front gun were inserted at the head of the list at a placeholder gain of 1 and skipped
+  the draw. New: they bid at the going rate of that def -- the gain the defence market last priced
+  it at (`EdDefGainNow`, 10 s window); no rate, no offer (`covNoPrice`). A base-front slot is
+  marked taken only when the gun is executed.
+- **DEF_DANGER** (`DefDangerShare`, protect_target.as). The economic share of `DefenceTarget` is
+  multiplied by the share of the danger our army cannot meet: threat = `EnemyMassingThreat()` (seen,
+  peak-decayed) x `TeamExposure()` (1 in a 1v1, 0 for the seat furthest back); meet = our army
+  (`gArmyHomeM + gArmyFieldM`) + allied army within the eco leash of our home
+  (`GetAllyArmyMAt`, the side); unmet = 1 - 1/StrRatio. 1 until their army is first seen. Fast up,
+  slow down with half-life `LossTau()` -- FLAGGED: the decay horizon is borrowed from the loss
+  field, not derived for this. The per-mex floor is not scaled, so a seat nobody threatens still
+  guards its extractors; DEF PANIC is untouched.
+
+Offline estimate (not a measurement; scratch script over the `apex: nn` decision records of the 60
+most recent games of 20261014-020717-nn-rand, minute 10+, roulette at apex_draw_sharp=2 over the
+record's top wants, field rivals from the team's other bids in the last 30 s): coverall 2,707
+hoists, ~52% would lose the draw; base front 1,355, ~62%; field towers 4,475, ~87%; field radars
+3,656, ~48%; radar picks won in the draw 3,549, ~16/30/44% lost if its gain fell to 1/2, 1/4,
+1/10. The largest single destination of the freed field and cover decisions is RADAR, so 3 and 4
+alone shift time into sense: test them with RADAR_PRICE on as well as alone. 2,560 radar picks
+(26%) come through the constructor-role rule, which none of the five touches. DEFJOIN cannot be
+estimated from the log (the new value needs the crew's build power).

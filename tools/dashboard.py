@@ -501,6 +501,37 @@ def lift(d):
     return {"keys": LIFT_KEYS, "teams": teams}
 
 
+ECODEF_RE = re.compile(
+    r"\[f=(\d+)\].*apex: ecodef-stat t=(\d+) on=(\d+) radar=(\d+) gOld=([\d.]+) gNew=([\d.]+) "
+    r"djOffer=(\d+) djWin=(\d+) djNoGain=(\d+) djV=([\d.]+) fieldDraw=(\d+) fieldWin=(\d+) "
+    r"covOffer=(\d+) covWin=(\d+) bfOffer=(\d+) bfWin=(\d+) covNoPrice=(\d+) danger=([\d.]+) "
+    r"threat=(-?\d+) meet=(-?\d+)")
+ECODEF_KEYS = ["on", "radar", "gOld", "gNew", "djOffer", "djWin", "djNoGain", "djV",
+               "fieldDraw", "fieldWin", "covOffer", "covWin", "bfOffer", "bfWin", "covNoPrice",
+               "danger", "threat", "meet"]
+
+
+def ecodef(d):
+    """The five defence-pricing switches (ecodef.as): what each offered the draw and won."""
+    f = d / "infolog.txt"
+    if not f.is_file():
+        return {"error": "no infolog"}
+    teams = {}
+    with f.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "apex: ecodef-stat " not in line:
+                continue
+            m = ECODEF_RE.search(line)
+            if not m:
+                continue
+            g = m.groups()
+            row = {"min": round(int(g[0]) / 1800.0, 1)}
+            for i, k in enumerate(ECODEF_KEYS):
+                row[k] = g[2 + i]
+            teams[g[1]] = row
+    return {"keys": ECODEF_KEYS, "teams": teams}
+
+
 COMIDLE_RE = re.compile(
     r"apex: com-idle t=(\d+) min=(\d+) idleS=([\d.]+) walkS=(\d+) gaps=(\d+) "
     r"worstS=([\d.]+) open=-?\d+ ask=(\d+)/([\d.]+) gate=(\d+)/([\d.]+) "
@@ -2344,6 +2375,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(front_towers(safe_run_dir(q["dir"])))
             elif u.path == "/api/lift":
                 self.send_json(lift(safe_run_dir(q["dir"])))
+            elif u.path == "/api/ecodef":
+                self.send_json(ecodef(safe_run_dir(q["dir"])))
             elif u.path == "/api/comidle":
                 self.send_json(com_idle(safe_run_dir(q["dir"])))
             elif u.path == "/api/facsupport":

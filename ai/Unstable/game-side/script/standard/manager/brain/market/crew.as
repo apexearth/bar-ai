@@ -125,8 +125,10 @@ bool FieldWant(Want@ w)
 
 // Join, keep or leave the field crew, then shape this hand's list. True when
 // the hand is field crew and takes a field job; the list then holds only those.
+bool gCrewDrawn = false;   // the last CrewApply sent a field hand's tower or radar to the draw
 bool CrewApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 {
+	gCrewDrawn = false;
 	const int id = int(unit.id);
 	if ((id < 0) || (id >= int(gCrewOf.length())) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 		return false;
@@ -152,6 +154,19 @@ bool CrewApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 		++gCrewFieldN;
 	}
 	if (gCrewOf[id] == 1) {
+		// apex_field_priced: its best field job a tower or a radar, the hand
+		// takes the draw over the whole list, where energy and army bid too.
+		if (FieldPricedOn()) {
+			for (uint i = 0; i < ranked.length(); ++i) {
+				if (!FieldWant(ranked[i]))
+					continue;
+				if ((ranked[i].kind == WK_PROTECT) || (ranked[i].kind == WK_SENSE)) {
+					gCrewDrawn = true;
+					return false;
+				}
+				break;
+			}
+		}
 		for (uint i = 0; i < ranked.length(); ) {
 			if (FieldWant(ranked[i]))
 				++i;

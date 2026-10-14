@@ -133,6 +133,7 @@ float RadarUnseenShare()
 	return (gRcTotalM > 1.f) ? (gRcUnseenM / gRcTotalM) : 0.f;
 }
 
+float gRgNewM = 0.f;   // our structure metal the last RadarGap mast newly watches
 bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out unseenFrac)
 {
 	array<AIFloat3> pts;
@@ -191,7 +192,79 @@ bool RadarGap(const AIFloat3& in from, float reach, AIFloat3& out at, float& out
 	RadarCoverRefresh();
 	const float byMetal = (gRcTotalM > 1.f) ? (newM / gRcTotalM) : 0.f;
 	unseenFrac = (byMetal > unseenFrac) ? byMetal : unseenFrac;
+	gRgNewM = newM;
 	return true;
+}
+
+// OUR ARMY'S BLIND GROUND (apex_radar_price): combat metal no radar watches,
+// binned per 512-elmo cell on the radar-cover clock, and the whole army's metal.
+array<float> gRaX, gRaZ, gRaM;
+float gRaAllM = 0.f;
+int gRaAt = -1000;
+void RadarArmyRefresh()
+{
+	if (ai.frame - gRaAt < 5 * SECOND)
+		return;
+	gRaAt = ai.frame;
+	gRaX.resize(0);
+	gRaZ.resize(0);
+	gRaM.resize(0);
+	gRaAllM = 0.f;
+	array<int> keys;
+	for (uint i = 0; i < Military::gCombatId.length(); ++i) {
+		CCircuitUnit@ u = ai.GetTeamUnit(Id(Military::gCombatId[i]));
+		if ((u is null) || (u.circuitDef is null))
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		if (!OnMap(p))
+			continue;
+		const float m = Catalog::gCostM[int(u.circuitDef.id)];
+		gRaAllM += m;
+		if (RadarSees(p))
+			continue;
+		const int key = int(p.x / 512.f) * 4096 + int(p.z / 512.f);
+		const int at = keys.find(key);
+		if (at < 0) {
+			keys.insertLast(key);
+			gRaX.insertLast(p.x * m);
+			gRaZ.insertLast(p.z * m);
+			gRaM.insertLast(m);
+		} else {
+			gRaX[uint(at)] += p.x * m;
+			gRaZ[uint(at)] += p.z * m;
+			gRaM[uint(at)] += m;
+		}
+	}
+	for (uint c = 0; c < gRaM.length(); ++c) {
+		gRaX[c] /= gRaM[c];
+		gRaZ[c] /= gRaM[c];
+	}
+}
+
+// What a mast at `at` newly watches: our unseen army metal, and the share of
+// the whole army that is.
+float RadarArmyNewM(const AIFloat3& in at, float watch, float& out share)
+{
+	RadarArmyRefresh();
+	float m = 0.f;
+	const float w2 = watch * watch;
+	for (uint c = 0; c < gRaM.length(); ++c) {
+		const float dx = gRaX[c] - at.x, dz = gRaZ[c] - at.z;
+		if (dx * dx + dz * dz < w2)
+			m += gRaM[c];
+	}
+	share = (gRaAllM > 1.f) ? (m / gRaAllM) : 0.f;
+	return m;
+}
+
+float RadarGroundNewM(const AIFloat3& in at, float watch)
+{
+	RadarCoverRefresh();
+	float m = 0.f;
+	for (uint i = 0; i < gRcUnseenPos.length(); ++i)
+		if (gRcUnseenPos[i].distance2D(at) < watch)
+			m += gRcUnseenMet[i];
+	return m;
 }
 
 // A POST SHIELDS WHAT IS BEHIND IT ONLY IF THE ENEMY CANNOT WALK AROUND IT.

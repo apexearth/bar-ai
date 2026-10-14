@@ -802,6 +802,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			}
 			return ga;
 		}
+		if ((gDjTarget !is null) && (int(gDjTargetId) == w.spotId) && (int(gAssistTargetId) != w.spotId)) {
+			@gAssistTarget = gDjTarget;
+			gAssistTargetId = gDjTargetId;
+			gAssistGuardS = gDjGuardS;
+		}
 		// The ID, never the handle, decides whether this is still the boss
 		// the want priced -- reading .id off a destroyed unit IS the crash
 		// this pattern causes (see gAssistTargetId).
