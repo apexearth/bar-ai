@@ -54,7 +54,7 @@ BUILDER = re.compile(r"(ck|cv|ca|ack|acv|aca|cs|ch|acsub|fark|consul|rectr|necro
 
 
 def read_game(mdir):
-    """Per-minute series for one match, or None if it is not a finished game vs BARb."""
+    """Per-minute series for one match, or None if it is not a finished game vs an opponent AI."""
     try:
         res = json.load(open(os.path.join(mdir, "result.json"), encoding="utf-8"))
         script = open(os.path.join(mdir, "script.txt"), encoding="utf-8", errors="replace").read()
@@ -68,10 +68,14 @@ def read_game(mdir):
     if "Warnings are treated as errors" in txt or ": ERR  :" in txt:
         return None
     barb_teams = set()
+    foe = "BARb"
     for block in re.findall(r"\[ai\d+\]\s*\{(.*?)\}", script, re.S | re.I):
         tm = re.search(r"team=(\d+);", block, re.I)
-        if tm and re.search(r"shortname=BARb;", block, re.I):
+        # the opponent is any AI that is not ours (BARb, WRDistilled -- the search plays both)
+        sn = re.search(r"shortname=([^;]+);", block, re.I)
+        if tm and sn and not sn.group(1).strip().lower().startswith("apex"):
             barb_teams.add(int(tm.group(1)))
+            foe = sn.group(1).strip()
     if not barb_teams:
         return None
     ally = {}
@@ -96,7 +100,8 @@ def read_game(mdir):
         "v": VERSION, "match": os.path.basename(mdir.rstrip("/\\")),
         "tournament": os.path.basename(os.path.dirname(os.path.dirname(mdir.rstrip("/\\")))),
         "map": res.get("map", "?"), "bonus": hc, "minutes": round(r.get("game_minutes") or 0, 1),
-        "result": "W" if "Apex" in winners else ("L" if "BARb" in winners else "D"),
+        "result": "W" if "Apex" in winners else ("L" if winners.strip() else "D"),
+        "foe": foe,
         "explore": "apex: nn-explore t=" in txt,
         "series": series,
     }
@@ -360,6 +365,7 @@ def collect(since=NEW_NETS, include_explore=False, bonus=None, map_part=None, re
             g = load(mdir)
             if g and not g.get("skip"):
                 games.append(g)
+    games = [g for g in games if g.get("foe", "BARb") == "BARb"]   # this report is the BARb trend
     if not include_explore:
         games = [g for g in games if not g["explore"]]
     if bonus:
