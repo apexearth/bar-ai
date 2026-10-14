@@ -125,7 +125,7 @@ bool RallySpot(const AIFloat3& in from, AIFloat3& out at)
 {
 	AIFloat3 cp;
 	if (Front::FrontChoke(from, cp)
-		&& Front::BehindChoke(cp, ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND), at)
+		&& Front::BehindChoke(cp, ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND) * gRetreatMul, at)
 		&& OnMap(at) && Rearward(from, at))
 	{
 		return true;
@@ -212,7 +212,7 @@ bool FallbackSpot(const AIFloat3& in from, AIFloat3& out at)
 		return OnMap(at);
 	}
 	toHome *= (1.f / len);
-	at = tower + toHome * ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND);
+	at = tower + toHome * ai.GetTunable("apex_withdraw_behind", TUNE_WITHDRAW_BEHIND) * gRetreatMul;
 	return OnMap(at);
 }
 
@@ -285,9 +285,9 @@ void WdPassPrep(const array<AIFloat3>@ allyPos)
 {
 	gWdR = ai.GetTunable("apex_withdraw_ally_r", TUNE_WITHDRAW_ALLY_R);
 	gWdR2 = gWdR * gWdR;
-	gWdOddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS);
+	gWdOddsK = ai.GetTunable("apex_withdraw_odds", TUNE_WITHDRAW_ODDS) / gRetreatMul;   // the retreat head (nnarmy.as)
 	gWdFloor = ai.GetTunable("apex_losing_floor", TUNE_LOSING_FLOOR);
-	gWdLoseTrade = ai.GetTunable("apex_losing_trade", TUNE_LOSING_TRADE);
+	gWdLoseTrade = ai.GetTunable("apex_losing_trade", TUNE_LOSING_TRADE) / gRetreatMul;
 	gWdKeep = int(ai.GetTunable("apex_trade_window", TUNE_TRADE_WINDOW)) * SECOND;
 	const float w = float(AiTerrainWidth());
 	const float h = float(AiTerrainHeight());

@@ -23,6 +23,7 @@
 #include "manager/military/nnhunt.as" // hunt their biggest army, or not: a recorded draw
 #include "manager/military/nnstrike.as" // timing windows, and strike their economy in one or not: a recorded draw
 #include "manager/military/nnmassodds.as" // pool size and squad odds: recorded draws on today's numbers
+#include "manager/military/nnarmy.as"     // split, commit, stage, stand, retreat: the army's shape on the net
 #include "manager/economy.as"
 #include "manager/air.as"
 #include "manager/frontline.as"
@@ -193,6 +194,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateArmyHeads(); Perf::Add("up.armyheads", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
 	{ double _t = Perf::T0(); Market::KeepOutUpdate(); Perf::Add("up.keepout", _t); }

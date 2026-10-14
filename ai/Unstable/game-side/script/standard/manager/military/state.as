@@ -29,6 +29,10 @@ float gBaseExtent = 0.f;
 // The lane the army masses on (posture.as maintains it; massing.as reads it
 // for the local-odds override, and include order forces the declaration here).
 AIFloat3 gLaneAt;
+// the army heads' picks (nnarmy.as, included after every reader), 1 = the rule
+float gStandMul = 1.f;
+float gRetreatMul = 1.f;
+float gStageMul = 1.f;
 
 const int   POSTURE_SAMPLE  = 20 * SECOND;   // how far back we compare army value
 const float LOSING_RATIO    = 0.82f;         // army fell to this share -> turtle

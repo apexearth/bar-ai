@@ -248,7 +248,9 @@ ISquadTask* ISquadTask::CheckMergeTask()
 	const AIFloat3& pos = leader->GetPos(frame);
 	SArea* area = leader->GetArea();
 	CTerrainManager* terrainMgr = circuit->GetTerrainManager();
-	const float sqMaxDistCost = SQUARE(MAX_TRAVEL_SEC * lowestSpeed);
+	const float travelS = (FightType::ATTACK == fightType)
+			? MAX_TRAVEL_SEC * std::max(1.f, static_cast<CMilitaryManager*>(manager)->GetSplitMul()) : MAX_TRAVEL_SEC;
+	const float sqMaxDistCost = SQUARE(travelS * lowestSpeed);
 	float metric = std::numeric_limits<float>::max();
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();

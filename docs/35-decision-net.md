@@ -320,6 +320,17 @@ clamped to the range (`NnNudge`, NN_NUDGE).
 | ecap | escnet | the escorts-at-once cap | 0.25-10 |
 | cfear | escnet | the enemy-to-escort odds (EscortOdds: worse of armed metal by StrRatio and threat map vs escort surface threat) under which an escorted con still takes, keeps and works a site; also flags the con for the C++ guard and damage retreat; prefix NNCF; the esc head's own fields | 0.25-8 |
 | mass / odds | nnmassodds | the pool's leave bar / the squad's refused enemy influence | 0.25-6 |
+| split | nnarmy | how far the main army (the strongest ground attack squad) pulls the others: v x the map's diagonal; above 1 also the merge reach (1000 elmos, MAX_TRAVEL_SEC). 1x = one army (his 10-14), small = every squad its own. C++ via BOARD_SPLIT | 0.125-8 |
+| commit | nnarmy | the target hysteresis TGT_MARGIN (AttackTask.cpp), and through it the commit window. C++ via BOARD_COMMIT | 0.25-4 |
+| stage | nnarmy | the stand-off short of a target (the main army's and the push's) and the go odds there and in the hunt (nnhunt.as) | 0.25-4 |
+| stand | nnarmy | the lane fractions (apex_lane_forward 0.35, apex_lane_defensive 0.15) and the front lane's distance from home (posture.as) | 0.4-2.5 |
+| retreat | nnarmy | x v the fall-back distances (C++ heal post apex_retreat_behind 600, withdraw 220); / v the outgunned odds (1.5) and losing-trade ratio (3). Above 1 retreats sooner and further | 0.25-4 |
+
+The five nnarmy heads (2026-10-14) have no per-head net: only the policy net decides them, and
+their ranges are log-symmetric about 1 so a policy head at output 0 plays the rule. Every 30 s per
+team; `apex: armyheads-stat` once a minute; C++ `apex: army-stat` (squads, the main army's share,
+spread, walk / shared / stage / go / merge / sw events) once a minute; `tools/armyheads.py <match>`
+prints both per minute. `tools/pn_migrate.py` carries every network into the larger layout.
 | defamt | protect_nn | DefenceTarget | 0.25-8 |
 | mexg | protect_nn | MexGunsWanted's far term (guns a mex earns by its reach from them), and divides the coverall push's loss gate (TUNE_MEX_LOSS_COVER / v); every 30 s; prefix NNMG; own fields: mexes, unguarded (no gun in reach), guns covering a mex, mexes killed in 3 min, loss share, mean reach, enemy raid metal, army at home, minute | 0.25-8 |
 | gunp | protect_nn | the forced defence pushes that bypass the draw: the guns basefront (gBfWanted), comself (ComSelfGun's need) and defrole (gDrQuota) want, as int(c x v + u) with u one uniform held all game (`apex: gunp-dither`), so v = 1 is c and below 1 a lone gun is bought in a share v of games; the cover jump's floor x v and its one gun by the same rounding; the defence role's quota (roles.as) x v. coverall stays mexg's, draw and defpanic stay rules. Every 30 s from 5 s + team stagger; prefix NNGP; own fields: minute, enemy army seen, its decaying peak, enemy army ever seen, raid metal, threat at home, danger gap, army at home, our guns, defence value, mexes, mexes killed in 3 min, eco metal lost | 0-4 |

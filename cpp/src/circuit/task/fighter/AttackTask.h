@@ -51,6 +51,21 @@ private:
 	void ApplyBasePos(const CQueryPathSingle* query);
 	void Fallback();
 	void RepairBreak(int frame);
+	// apex: the one army (his 10-14) -- a squad walks to the main army and fights its target;
+	// the main army stages short of a new target until what walks to it has come
+	void ArmyStep(int frame);
+	bool FollowArmy(CAttackTask* army, int frame);
+	void StageArmy(int frame);
+	bool CanShareTarget(CEnemyInfo* t) const;
+	bool walkOn = false;     // this update moves to walkPos instead of the target
+	springai::AIFloat3 walkPos;
+	bool following = false;  // walking to the main army or beside it
+	bool staging = false;    // the main army holding short of its target
+	bool tgtThreat = false;  // the target is a threat to our base: never traded for the army's
+	int stageKey = -1;
+	int stageUntil = -1;
+	bool stageGo = false;
+	int nextArmyLog = 0;
 
 	float minPower;
 	// apex: the building we are hitting and how its health has moved
