@@ -23,7 +23,7 @@ ROW = re.compile(r"apex: nnsiege t=(\d+) f=\d+ why=\S+ rule=(\S+) ex=(\d) trust=
 CENSUS = re.compile(r"apex: fort-census t=(\d+) forts=(\d+) guns=(\d+)")
 SHOW = ("worthM", "forceM", "ratio", "gunN", "gunHD", "reach", "shieldN", "jamN", "fortM", "ecoM", "routeM",
         "haveM", "homeD", "fwd")
-EVENTS = ("apex: siege start", "apex: siege end", "apex: siege look", "apex: siege-squad", "apex: nnsiege-done",
+EVENTS = ("apex: siege start", "apex: siege ready", "apex: siege end", "apex: siege look", "apex: siege-squad", "apex: nnsiege-done",
           "apex: siege-stat")
 
 

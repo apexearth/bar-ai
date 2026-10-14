@@ -50,7 +50,7 @@ private:
 	int targetCls = -1;
 	int fromFrame = -1;
 	int logAt = 0;
-	int nCarry = 0, nScreen = 0, nSupport = 0, nFear = 0, nDark = 0, nSlid = 0, nCommit = 0;
+	int nCarry = 0, nScreen = 0, nSupport = 0, nFear = 0, nDark = 0, nSlid = 0, nCommit = 0, nGather = 0;
 };
 
 } // namespace circuit

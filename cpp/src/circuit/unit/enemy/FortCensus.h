@@ -70,6 +70,7 @@ public:
 		int key = -1;
 		int fort = -1;        // index in the published list, -1 once it is gone
 		int setFrame = -1;
+		bool ready = false;   // the script's verdict: the squad holds the strength the guns need
 	};
 
 	CFortCensus(CMilitaryManager* mgr);
@@ -86,6 +87,7 @@ public:
 
 	void SetSiege(const springai::AIFloat3& pos, float radius, float reach, int key);
 	void ClearSiege();
+	void SetSiegeReady(bool ready) { siege.ready = ready; }
 	const SSiege& GetSiege() const { return siege; }
 
 	static void RegisterScript(asIScriptEngine* engine);

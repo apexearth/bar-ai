@@ -6,7 +6,7 @@ namespace Military {
 // (SiegeGapM, production.as), and gives them a squad (C++ CSiegeTask) that exists
 // only for that target until it is gone or the siege is lost.
 const string NNSG_SIEGE = "fortM,ecoM,routeM,worthM,gunN,gunHD,reach,radius,shieldN,shieldH,jamN,radarN,"
-	+ "homeD,fwd,blocks,forceM,haveM,lackM,ratio,defRange,defCost,forts,atkPow,armyM,minute";
+	+ "homeD,fwd,blocks,forceM,haveM,lackM,foeM,ratio,defRange,defCost,forts,atkPow,armyM,minute";
 const int SG_NO = 0, SG_SIEGE = 1;
 // CFortCensus::Field
 const int FV_GUN_N = 0, FV_GUN_H = 1, FV_GUN_D = 2, FV_REACH = 3, FV_RADIUS = 4, FV_SHIELD_N = 5;
@@ -16,7 +16,7 @@ const int SG_EVERY = 30 * SECOND;
 const int SG_LOOK = 4 * SECOND;
 const int SG_PULL_PER_LOOK = 4;     // raid.as's pace: one look cannot strip the line at once
 
-bool gSgOn = false;
+bool gSgOn = false, gSgReady = false;
 int gSgKey = -1;
 AIFloat3 gSgPos;
 float gSgReach = 0.f, gSgRadius = 0.f, gSgWatchR = 0.f;
@@ -183,8 +183,11 @@ void SiegeDecide()
 		const float haveF = (need > 0.f) ? sqrt(hH * hD / need) : 1.f;
 		const float lackM = forceM * ((haveF < 1.f) ? (1.f - haveF) : 0.f);
 		// An outranging force is not spent by the siege -- it outlives the guns and rejoins the army --
-		// so the price is the part still to buy.
-		const float ratio = worth / ((lackM > 1.f) ? lackM : 1.f);
+		// so the price is the part still to buy and what their army there can kill.
+		const float watchR = radius + reach + ((pick > 0) ? Catalog::gMaxRange[pick] : reach);
+		const float foeM = SgFoeNearM(fp, watchR + reach);
+		const float cost = lackM + foeM;
+		const float ratio = worth / ((cost > 1.f) ? cost : 1.f);
 		if (ratio <= bestRatio)
 			continue;
 		bestRatio = ratio;
@@ -209,6 +212,7 @@ void SiegeDecide()
 		bf.insertLast(forceM);
 		bf.insertLast(haveM);
 		bf.insertLast(lackM);
+		bf.insertLast(foeM);
 		bf.insertLast(ratio);
 		bf.insertLast((pick > 0) ? Catalog::gMaxRange[pick] : 0.f);
 		bf.insertLast((pick > 0) ? Catalog::gCostM[pick] : 0.f);
@@ -250,6 +254,7 @@ void SiegeDecide()
 void SiegeStart(int i, int def, float worth, float forceM)
 {
 	gSgOn = true;
+	gSgReady = false;
 	gSgKey = int(aiMilitaryMgr.GetFortVal(i, FV_KEY));
 	gSgPos = aiMilitaryMgr.GetFortPos(i);
 	gSgReach = aiMilitaryMgr.GetFortVal(i, FV_REACH);
@@ -269,6 +274,7 @@ void SiegeStart(int i, int def, float worth, float forceM)
 	gSgClaim.resize(0);
 	++gSgHitN;
 	aiMilitaryMgr.SetSiege(gSgPos, gSgRadius, gSgReach, gSgKey);
+	aiMilitaryMgr.SetSiegeReady(false);
 	AiLog(Factory::T() + "apex: siege start t=" + ai.teamId + " key=" + gSgKey + " at=" + int(gSgPos.x) + "," + int(gSgPos.z)
 		+ " guns=" + int(aiMilitaryMgr.GetFortVal(i, FV_GUN_N)) + " needHD=" + int(gSgNeedHD)
 		+ " reach=" + int(gSgReach) + " r=" + int(gSgRadius)
@@ -369,14 +375,13 @@ void SgSquad(float& out h, float& out dsum, float& out screenM, int& out radars,
 }
 
 // Their armed ground metal within reach of the fortification: what the screen is there to meet.
-float SgFoeNearM()
+float SgFoeNearM(const AIFloat3 &in at, float r)
 {
 	float m = 0.f;
-	const float r = gSgWatchR + gSgReach;
 	const int n = aiEnemyMgr.GetEnemyGroupCount();
 	for (int g = 0; g < n; ++g) {
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(g);
-		if (!OnMap(gp) || (gp.distance2D(gSgPos) > r))
+		if (!OnMap(gp) || (gp.distance2D(at) > r))
 			continue;
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
 		for (int k = 0; k < nU; ++k) {
@@ -421,7 +426,7 @@ IUnitTask@ SiegeTaskForUnit(CCircuitUnit@ unit)
 // Long guns, then a screen against their army near the fort, out of the home and attack pools.
 void SiegePull(float h, float dsum, float screenM)
 {
-	float needScreen = SgFoeNearM() * ANSWER_PARITY;
+	float needScreen = SgFoeNearM(gSgPos, gSgWatchR + gSgReach) * ANSWER_PARITY;
 	int pulled = 0;
 	for (uint s = 0; (s < gSquads.length()) && (pulled < SG_PULL_PER_LOOK); ++s) {
 		IUnitTask@ t = gSquads[s];
@@ -480,6 +485,13 @@ void SiegeLook()
 	SgSquad(h, dsum, screenM, radars, jams, n, dist);
 	if (n > gSgPeakN)
 		gSgPeakN = n;
+	// it marches once the long guns beat the guns and the screen matches their army there, and stays committed after
+	if (!gSgReady && (h * dsum >= gSgNeedHD) && (screenM >= SgFoeNearM(gSgPos, gSgWatchR + gSgReach) * ANSWER_PARITY)) {
+		gSgReady = true;
+		aiMilitaryMgr.SetSiegeReady(true);
+		AiLog(Factory::T() + "apex: siege ready t=" + ai.teamId + " key=" + gSgKey + " n=" + n
+			+ " hd=" + int(h * dsum) + "/" + int(gSgNeedHD) + " s=" + ((ai.frame - gSgFrom) / SECOND));
+	}
 	if ((n == 0) && (gSgClaim.length() == 0)) {
 		array<int> defs;
 		SgBuildable(gSgReach, defs);

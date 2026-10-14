@@ -402,6 +402,11 @@ static void Fort_ClearSiege(CMilitaryManager* mgr)
 	mgr->GetFortCensus()->ClearSiege();
 }
 
+static void Fort_SetSiegeReady(CMilitaryManager* mgr, bool ready)
+{
+	mgr->GetFortCensus()->SetSiegeReady(ready);
+}
+
 static int Fort_SiegeFort(CMilitaryManager* mgr)
 {
 	const CFortCensus::SSiege& s = mgr->GetFortCensus()->GetSiege();
@@ -421,6 +426,7 @@ void CFortCensus::RegisterScript(asIScriptEngine* engine)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetFortVal(int, int)", asFUNCTION(Fort_Val), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetSiege(const AIFloat3& in, float, float, int)", asFUNCTION(Fort_SetSiege), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void ClearSiege()", asFUNCTION(Fort_ClearSiege), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetSiegeReady(bool)", asFUNCTION(Fort_SetSiegeReady), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetSiegeFort()", asFUNCTION(Fort_SiegeFort), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetGunHDAt(const AIFloat3& in)", asFUNCTION(Fort_GunHDAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 }

@@ -246,6 +246,34 @@ void CSiegeTask::Execute()
 		carryR = (reach + DEFAULT_SLACK) / RANGE_MOD;  // no long gun yet: hold just outside the guns
 	}
 
+	// one long gun walked out alone dies on the way: the squad gathers at our front until it can win
+	if (!s.ready) {
+		++nGather;
+		AIFloat3 rally = circuit->GetFrontPos();
+		if (rally == ZeroVector) {
+			rally = leader->GetPos(frame);
+		}
+		CTerrainManager::CorrectPosition(rally);
+		for (CCircuitUnit* unit : units) {
+			if (unit->Blocker() == nullptr) {
+				Order(unit, rally, nullptr, false, frame);
+			}
+		}
+		if (frame >= logAt) {
+			logAt = frame + FRAMES_PER_SEC * 30;
+			std::string who;
+			for (CCircuitUnit* unit : units) {
+				const Row row = RowOf(unit, reach);
+				who += std::string(" ") + unit->GetCircuitDef()->GetDef()->GetName()
+						+ ((row == Row::CARRY) ? ":c" : (row == Row::SCREEN) ? ":s" : ":p");
+			}
+			circuit->LOG("apex: siege-squad t=%i n=%i carry=%i screen=%i support=%i gather=%i rallyD=%.0f s=%i |%s",
+					circuit->GetTeamId(), n, nCarry, nScreen, nSupport, nGather,
+					std::sqrt(from.SqDistance2D(rally)), (frame - fromFrame) / FRAMES_PER_SEC, who.c_str());
+		}
+		return;
+	}
+
 	int cls = -1;
 	CEnemyInfo* tgt = PickTarget(s.pos, area, from, carryR, cls);
 	if (tgt != GetTarget()) {
