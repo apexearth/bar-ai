@@ -377,8 +377,13 @@ void UpdateLanePos()
 		const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
 		if (!OnMap(foe))
 			return;
-		const float f = ai.GetTunable("apex_lane_forward", TUNE_LANE_FORWARD);
+		const float f = ai.GetTunable("apex_lane_forward", TUNE_LANE_FORWARD) * gStandMul;
 		lane = home + (foe - home) * f;
+	} else if (gStandMul != 1.f) {
+		// the stand head (nnarmy.as): how far toward the front the army holds
+		const AIFloat3 scaled = home + (lane - home) * gStandMul;
+		if (OnMap(scaled))
+			lane = scaled;
 	}
 	// TRADING BADLY -> STAND DEFENSIVELY. When recent combat is a clearly losing
 	// exchange (TradeRatio below the bar on real volume), the regroup anchor
@@ -396,7 +401,7 @@ void UpdateLanePos()
 	if (TradeBad() && Builder::gHomeSet && !AllIn()) {
 		const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 		if (OnMap(e)) {
-			const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
+			const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE) * gStandMul;
 			AIFloat3 back = home + (e - home) * f;
 			if (OnMap(back)
 				&& (back.SqDistance2D(home) < lane.SqDistance2D(home)))
@@ -428,7 +433,7 @@ void UpdateLanePos()
 		} else {
 			const AIFloat3 e = aiEnemyMgr.GetEnemyPos();
 			if (OnMap(e)) {
-				const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE);
+				const float f = ai.GetTunable("apex_lane_defensive", TUNE_LANE_DEFENSIVE) * gStandMul;
 				AIFloat3 back = home + (e - home) * f;
 				if (OnMap(back))
 					lane = back;

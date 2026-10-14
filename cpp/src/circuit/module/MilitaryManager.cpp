@@ -1269,6 +1269,84 @@ float CMilitaryManager::GetEnemyInflNear(const AIFloat3& pos, float radius) cons
 	return best;
 }
 
+CAttackTask* CMilitaryManager::GetMainArmy()
+{
+	const int frame = circuit->GetLastFrame();
+	const std::set<IFighterTask*>& tasks = GetTasks(IFighterTask::FightType::ATTACK);
+	if ((frame == mainArmyFrame)
+		&& ((mainArmy == nullptr) || ((tasks.find(mainArmy) != tasks.end()) && (mainArmy->GetLeader() != nullptr))))
+	{
+		return mainArmy;
+	}
+	mainArmyFrame = frame;
+	CAttackTask* best = nullptr;
+	for (IFighterTask* t : tasks) {
+		CAttackTask* at = dynamic_cast<CAttackTask*>(t);
+		if ((at == nullptr) || t->IsDead() || (at->GetLeader() == nullptr) || t->GetAssignees().empty()
+			|| at->GetLeader()->GetCircuitDef()->IsAbleToFly())
+		{
+			continue;
+		}
+		// a tie keeps the army it had: the squads walking to it are not turned round
+		if ((best == nullptr) || (t->GetAttackPower() > best->GetAttackPower())
+			|| ((t->GetAttackPower() == best->GetAttackPower()) && (at == mainArmy)))
+		{
+			best = at;
+		}
+	}
+	mainArmy = best;
+	return best;
+}
+
+float CMilitaryManager::GetArmyPullR() const
+{
+	const float w = float(CTerrainManager::GetTerrainWidth());
+	const float h = float(CTerrainManager::GetTerrainHeight());
+	return splitMul * std::sqrt(w * w + h * h);
+}
+
+void CMilitaryManager::UpdateArmyBoard()
+{
+	const int frame = circuit->GetLastFrame();
+	const int ally = circuit->GetAllyTeamId();
+	const int tid = circuit->GetTeamId();
+	CAttackTask* army = GetMainArmy();
+	const AIFloat3 ap = (army != nullptr) ? army->GetLeader()->GetPos(frame) : ZeroVector;
+	int n = 0;
+	float all = 0.f, spread = 0.f;
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::ATTACK)) {
+		ISquadTask* sq = dynamic_cast<ISquadTask*>(t);
+		CCircuitUnit* lead = (sq != nullptr) ? sq->GetLeader() : nullptr;
+		if ((lead == nullptr) || lead->GetCircuitDef()->IsAbleToFly()) {
+			continue;
+		}
+		++n;
+		all += t->GetAttackPower();
+		if (army != nullptr) {
+			spread += t->GetAttackPower() * lead->GetPos(frame).distance2D(ap);
+		}
+	}
+	const float mainPow = (army != nullptr) ? army->GetAttackPower() : 0.f;
+	spread = (all > 0.f) ? spread / all : 0.f;
+	TeamBoardSet(ally, BOARD_ARMY_N + tid, float(n));
+	TeamBoardSet(ally, BOARD_ARMY_MAIN + tid, mainPow);
+	TeamBoardSet(ally, BOARD_ARMY_SPREAD + tid, spread);
+	TeamBoardSet(ally, BOARD_ARMY_SW + tid, float(armySwSeen + armyEv[AE_SWITCH]));
+	if (frame < armyLogAt) {
+		return;
+	}
+	armyLogAt = frame + FRAMES_PER_SEC * 60;
+	circuit->LOG("apex: army-stat t=%i squads=%i main=%.1f all=%.1f share=%.2f spread=%.0f walk=%u shared=%u"
+			" stage=%u go=%u merge=%u sw=%u split=%.2f commit=%.2f stageMul=%.2f retreat=%.2f",
+			tid, n, mainPow, all, (all > 0.f) ? mainPow / all : 0.f, spread, armyEv[AE_WALK], armyEv[AE_SHARE],
+			armyEv[AE_STAGE], armyEv[AE_GO], armyEv[AE_MERGE], armyEv[AE_SWITCH], splitMul, commitMul, stageMul,
+			retreatMul);
+	armySwSeen += armyEv[AE_SWITCH];
+	for (unsigned& e : armyEv) {
+		e = 0;
+	}
+}
+
 float CMilitaryManager::GuardSpotScore(const AIFloat3& from, int idx) const
 {
 	const std::vector<CCircuitAI::SHotSpot>& spots = circuit->GetHotSpots();
@@ -1786,6 +1864,19 @@ void CMilitaryManager::UpdateDefenceTasks()
 		flankMul = flank;
 		// the script draws a non-rule odds only while this says the DLL reads it
 		TeamBoardSet(ally, BOARD_MIL_ACK + tid, float(circuit->GetLastFrame()));
+		const float split = std::max(0.f, TeamBoardGet(ally, BOARD_SPLIT + tid, 1.f));
+		const float commit = std::max(0.f, TeamBoardGet(ally, BOARD_COMMIT + tid, 1.f));
+		const float stage = std::max(0.f, TeamBoardGet(ally, BOARD_STAGE + tid, 1.f));
+		const float retreat = std::max(0.05f, TeamBoardGet(ally, BOARD_RETREAT + tid, 1.f));
+		if ((split != splitMul) || (commit != commitMul) || (stage != stageMul) || (retreat != retreatMul)) {
+			circuit->LOG("apex: army-board t=%i split=%.2f commit=%.2f stage=%.2f retreat=%.2f",
+					tid, split, commit, stage, retreat);
+		}
+		splitMul = split;
+		commitMul = commit;
+		stageMul = stage;
+		retreatMul = retreat;
+		UpdateArmyBoard();
 	}
 
 	/*

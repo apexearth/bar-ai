@@ -434,7 +434,7 @@ void HuntFocus()
 	ai.PublishTeamValue("htFocZ", fp.z);
 	ai.PublishTeamValue("htFocAt", float(ai.frame));
 	const float allies = HuntAllyGathered(fp);
-	if (!gHtGo && (mine > 0.f) && (mine + allies > foe)) {
+	if (!gHtGo && (mine > 0.f) && (mine + allies > foe * gStageMul)) {
 		gHtGo = true;
 		++gHtGoN;
 		AiLog(Factory::T() + "apex: hunt go t=" + ai.teamId + " at=" + int(fp.x) + "," + int(fp.z)

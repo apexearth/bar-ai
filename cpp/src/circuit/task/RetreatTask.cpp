@@ -211,7 +211,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 		// always carries some enemy influence, and demanding essentially zero
 		// rejected every candidate.
 		bool healPost = false;
-		const float behind = circuit->GetTunable("apex_retreat_behind", 600.f);
+		const float behind = circuit->GetTunable("apex_retreat_behind", 600.f) * circuit->GetMilitaryManager()->GetRetreatMul();
 		if (behind > 0.f) {
 			const AIFloat3& front = circuit->GetFrontPos();
 			const AIFloat3& home = circuit->GetSetupManager()->GetBasePos();

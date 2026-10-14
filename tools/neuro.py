@@ -73,10 +73,24 @@ INPUTS = ["min", "mInc", "eInc", "mCur", "mStor", "eCur", "eStor", "eStall", "mW
 # (key the game looks the head up by, the trained net whose input scaling it borrows, kind)
 # kind: "val" = continuous (key = its tag), "pick" = fixed choice (key = its own-feature layout),
 # "list" = builder/factory.
+# A head with no trained net (None) takes its scaling from UNTRAINED below.
 CONT = [("esc", "NNE"), ("ecap", "NNY"), ("cfear", "NNCF"), ("con", "NNK"), ("cap", "NNQ"),
         ("acap", "NNZ"), ("scap", "NNS"), ("mex", "NNX"), ("aplant", "NNL"), ("defamt", "NND"),
         ("mexg", "NNMG"), ("gunp", "NNGP"), ("mass", "NNM"), ("odds", "NNO"), ("tmix", "NNTM"),
-        ("aa", "NNAD")]
+        ("aa", "NNAD"), ("split", None), ("commit", None), ("stage", None), ("stand", None),
+        ("retreat", None)]
+# Heads no trained net ever saw (his 10-14 army heads): tag -> (file under manager/, own-feature constant).
+# A feature named like one of BORROW's borrows that head's scaling (ALIAS maps a new name onto an old
+# one); else FEATURE_SCALE's (slog mean, spread); else 0, 1.
+UNTRAINED = {"split": ("military/nnarmy.as", "NNSP_SPLIT"), "commit": ("military/nnarmy.as", "NNCM_COMMIT"),
+             "stage": ("military/nnarmy.as", "NNSG_STAGE"), "stand": ("military/nnarmy.as", "NNSD_STAND"),
+             "retreat": ("military/nnarmy.as", "NNRT_RETREAT")}
+BORROW = [("mass", "military/nnmassodds.as", "NNM_MASS"), ("odds", "military/nnmassodds.as", "NNO_ODDS")]
+ALIAS = {"mainPow": "atkPow"}
+FEATURE_SCALE = {"squads": (1.2, 0.6), "mainShare": (0.5, 0.25), "spread": (6.5, 1.5), "mapD": (9.4, 0.4),
+                 "switches": (1.0, 0.8), "trade": (0.6, 0.4), "tradeBad": (0.1, 0.3), "laneFwd": (0.25, 0.25),
+                 "allIn": (0.05, 0.25)}
+MANAGER = os.path.join(REPO, "ai", "Unstable", "game-side", "script", "standard", "manager")
 PICK = [("plan", "NNG"), ("tech", "NNT"), ("open", "NNOP"), ("hunt", "NNH"), ("strike", "NNB"),
         ("reinf", "NNV"), ("join", "NNJ"), ("raid", "NNR"), ("air", "NNA"), ("com", "NNC"),
         ("defsite", "NNU"), ("deftype", "NNN"), ("post", "NNP"), ("siege", "NNSG")]
@@ -108,6 +122,56 @@ def declared_own(rel, name):
     if not m:
         raise SystemExit("%s has no %s" % (rel, name))
     return "".join(re.findall(r'"([^"]*)"', m.group(1)))
+
+
+def as_string_const(rel, name):
+    """A string constant built from pieces, as the .as source under manager/ declares it."""
+    src = open(os.path.join(MANAGER, rel), encoding="utf-8").read()
+    m = re.search(r'const string %s = (.*?);\n' % re.escape(name), src, re.S)
+    if not m:
+        raise SystemExit("%s declares no %s" % (rel, name))
+    return "".join(re.findall(r'"([^"]*)"', m.group(1)))
+
+
+def untrained_head(tag, built):
+    """A continuous head with no trained net: its own features' scaling borrowed by name from the
+    heads in BORROW (`built`: key -> head already in the layout), else declared here."""
+    rel, const = UNTRAINED[tag]
+    names = as_string_const(rel, const).split(",")
+    known = {}
+    for key, brel, bconst in BORROW:
+        h = built.get(key)
+        if h is None:
+            continue
+        for n, m, s in zip(as_string_const(brel, bconst).split(","), h["m"], h["s"]):
+            known.setdefault(n, (m, s))
+    m, s = [], []
+    for n in names:
+        mm, ss = known.get(ALIAS.get(n, n)) or FEATURE_SCALE.get(n) or (0.0, 1.0)
+        m.append(mm)
+        s.append(max(ss, 0.05))
+    return {"key": tag, "kind": "val", "K": 0, "F": len(names), "m": m, "s": s}
+
+
+def extend_layout(lay):
+    """`lay` with every CONT head it lacks added after its last continuous head -- where build_layout
+    puts them -- without the deployed nets build_layout needs. Existing heads are kept as they are."""
+    heads = list(lay["heads"])
+    have = {h["key"] for h in heads}
+    built = {h["key"]: h for h in heads}
+    at = max([i for i, h in enumerate(heads) if h["kind"] == "val"] or [-1]) + 1
+    for tag, px in CONT:
+        if tag in have:
+            continue
+        if px is not None:
+            raise SystemExit("the layout lacks %s, a head with a trained net: run --init instead" % tag)
+        h = untrained_head(tag, built)
+        heads.insert(at, h)
+        built[tag] = h
+        at += 1
+    out = dict(lay)
+    out["heads"] = heads
+    return out
 
 
 def deployed_weights():
@@ -155,6 +219,9 @@ def build_layout():
         m, s = as_const(w, px + "_XM"), as_const(w, px + "_XS")
         return st[len(state) + 1:], S - S0, m[S0:S], [max(v, 0.05) for v in s[S0:S]], as_const(w, px + "_O")
     for tag, px in CONT:
+        if px is None:
+            lay["heads"].append(untrained_head(tag, {h["key"]: h for h in lay["heads"]}))
+            continue
         own, F, m, s, _ = own_scaling(px)
         lay["heads"].append({"key": tag, "kind": "val", "K": 0, "F": F, "m": m, "s": s})
     for tag, px in PICK:
