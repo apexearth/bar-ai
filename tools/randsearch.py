@@ -223,7 +223,9 @@ def next_job(st, lay, rng):
     adopt_merges(st)
     live = [n for n in st["nets"].values() if owed(n)]
     if live:
-        n = max(live, key=lambda n: (n["target"], -n["id"]))
+        # the least-played first within a rung: an A/B pair fills side by side, so its paired readout grows
+        # as it goes instead of arm B starting only once arm A is done
+        n = max(live, key=lambda n: (n["target"], -(len(n["games"]) + n["busy"]), -n["id"]))
     elif st["next"] < EXPLORE:
         i = st["next"]
         st["next"] += 1
