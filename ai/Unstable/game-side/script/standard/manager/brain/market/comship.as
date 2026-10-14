@@ -24,6 +24,7 @@ float gShipAllyM = 0.f;
 float gShipStr = 0.f;
 float gShipStrCom = 0.f;
 float gShipDgStr = 0.f;
+float gShipComM = 0.f;   // his fight in their metal
 bool gShipHopeless = false;
 int gShipOverruled = 0;
 int gShipOverruledLogAt = 0;
@@ -124,6 +125,21 @@ float ShipDGunStr(CCircuitUnit@ u, int g)
 	return dgOut;
 }
 
+// Metal per strength in group g: m over the summed strength of its fighters (0 when none).
+float ShipMetalPerStr(int g, float m)
+{
+	if ((g < 0) || (g >= aiEnemyMgr.GetEnemyGroupCount()))
+		return 0.f;
+	float s = 0.f;
+	const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(g);
+	for (int k = 0; k < nU; ++k) {
+		const int d = aiEnemyMgr.GetEnemyGroupUnitDef(g, k);
+		if (Catalog::ValidId(d) && Catalog::gMobile[d] && !Catalog::gFlyer[d] && (Catalog::gPower[d] > 1.f))
+			s += UnitStrength(d);
+	}
+	return (s > 0.f) ? m / s : 0.f;
+}
+
 void ShipRetreatLine(CCircuitUnit@ u, bool on)
 {
 	if (on) {
@@ -213,9 +229,16 @@ void ComShipAssess(CCircuitUnit@ u)
 	gShipStrCom = 0.f;
 	gShipDgStr = 0.f;
 	if (gShipAtM > 0.f) {
-		const float ours = (gShipGuns + gShipArmyM + u.circuitDef.costM * u.GetHealthPercent()) * OurQualityM();
-		gShipDgStr = ShipDGunStr(u, gShipG);
-		float theirs = gShipAtM * FoeQualityM() - gShipDgStr;
+		// His fight in THEIR metal (his 10-13: "our commander makes bad decisions to join very
+		// risky fights"): his price, 2,700, read as fighting strength, and he stepped into 2,700 of
+		// tanks beside 43 of army. Strength (and the D-gun's kills, in strength) is converted at
+		// the metal per strength of the group he would fight.
+		const float perS = ShipMetalPerStr(gShipG, gShipAtM);
+		const float comM = UnitStrength(int(u.circuitDef.id)) * u.GetHealthPercent() * perS;
+		gShipComM = comM;
+		const float ours = (gShipGuns + gShipArmyM + comM) * OurQualityM();
+		gShipDgStr = ShipDGunStr(u, gShipG) * perS;
+		float theirs = (gShipAtM - gShipDgStr) * FoeQualityM();   // the kills leave before quality scales what stays
 		if (theirs < 0.f)
 			theirs = 0.f;
 		gShipStrCom = (ours > 0.f) ? theirs / ours : 1e6f;
@@ -246,7 +269,7 @@ void ComShipAssess(CCircuitUnit@ u)
 			+ " foeM=" + int(gShipFoeM) + " homeGroups=" + gShipHome + " unheld=" + gShipUnheld
 			+ " tgtM=" + int(gShipAtM) + " heavy=" + ShipHeavy()
 			+ " defM=" + int(gShipGuns + gShipArmyM) + " (guns=" + int(gShipGuns) + " army=" + int(gShipArmyM) + " ally=" + int(gShipAllyM) + ")"
-			+ " str=" + formatFloat(gShipStr, "", 0, 2) + " strCom=" + formatFloat(gShipStrCom, "", 0, 2)
+			+ " str=" + formatFloat(gShipStr, "", 0, 2) + " strCom=" + formatFloat(gShipStrCom, "", 0, 2) + " comM=" + int(gShipComM)
 			+ " dgStr=" + formatFloat(gShipDgStr, "", 0, 2)
 			+ " parity=" + formatFloat(Military::ANSWER_PARITY, "", 0, 1)
 			+ " flips=" + ((gShip && (gShipStrCom * Military::ANSWER_PARITY <= 1.f)) ? 1 : 0)

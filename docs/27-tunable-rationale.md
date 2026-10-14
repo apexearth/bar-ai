@@ -1976,9 +1976,11 @@ nothing standing `OwnedBestUnitWorth()` is 0 and the ratio is 1.
 `apex: plantdup` line at either setting, so the ratio can be read for every
 line before it is allowed to decide anything.
 
-### `TUNE_T1_TOWER_LATE` = 1.f
+### `TUNE_T1_TOWER_LATE` = 0.f
 
-His 2026-09-19 rule, kept as the default: once an advanced hand exists, no
+OFF since 2026-10-13 (his ruling: towers compete on kills per metal, splash counted -- the ban
+refused the Dragon's Maw and Claw, T1-built, exactly when tank blobs arrive). Was his 2026-09-19
+rule: once an advanced hand exists, no
 basic tower at all. 0 is the arm that measures it. Measured 2026-09-22,
 Glacier Pass 2v2 +100% 0.2 boxes vs BARb hard, 16 games at pinned
 --speed 5: the refusal is real but it is NOT the defence-share gap. With

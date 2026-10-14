@@ -683,6 +683,11 @@ float PfTowerKill(int d)
 			m *= gPkOk[d];
 		}
 	}
+	// SPLASH INTO THE CLUMP (his 10-13: Dragon's Maw against bunched tanks): a tower's blast
+	// catches the neighbours of what it hits, read from their ball as it stands; the blob walks
+	// into a tower, unlike the shells of a mobile gun, which land late on moving targets.
+	if (gPfLightD > 0)
+		m *= SplashMul(d) / SplashMul(gPfLightD);
 	// apex_def_alpha_w is a WEIGHT on the reference blow, not just a switch:
 	// it was only ever tested > 0, so the dashboard knob could turn durability
 	// off and could not tune it.

@@ -384,6 +384,36 @@ bool ValidId(int defId)
 // (armdrag 3200hp/12m; a solar is ~2 hp/m), buildable by a T1 hand. Lazy,
 // and NEVER caches a miss -- availability is frame-dependent.
 int gWallDef = -1;
+// The wall piece THIS builder can raise: WallDef answers across every faction, and a Cortex
+// hand handed armdrag was refused at the take every time (no tooth ever stood, 10-13).
+array<int> gWallFor;
+int WallDefFor(int builder)
+{
+	if (!ValidId(builder))
+		return -1;
+	if (gWallFor.length() <= uint(builder))
+		gWallFor.resize(uint(builder) + 1);
+	const int c = gWallFor[builder];
+	if ((c > 0) && gAvailable[c])
+		return c;
+	int pick = -1;
+	float best = 0.f;
+	const array<int>@ b = gBuildsList[builder];
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (!gAvailable[d] || gMobile[d] || (gSurfT[d] > 0.f) || (gAirT[d] > 0.f) || (gCostM[d] <= 0.f)
+			|| (gBuildsList[d].length() > 0) || (gMakeE[d] > 0.f) || (gExtractsM[d] > 0.f))
+			continue;
+		const float hpm = gHealth[d] / gCostM[d];
+		if ((hpm >= 50.f) && (hpm > best)) {
+			best = hpm;
+			pick = d;
+		}
+	}
+	gWallFor[builder] = (pick > 0) ? pick : 0;   // a miss re-reads: availability is frame-dependent
+	return pick;
+}
+
 int WallDef()
 {
 	if ((gWallDef > 0) && gAvailable[gWallDef])

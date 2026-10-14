@@ -23,6 +23,7 @@
 #include "market/census.as"         // what we own: counts, protection classes, unit events
 #include "market/commit.as"         // the commitment ledger: ordered/framed/finished structures
 #include "market/coverage.as"       // measured risk: what reaches an asset, what is dying
+#include "market/splash.as"         // splash against the enemy ball: extra hits a tower's blast catches
 #include "market/protect_field.as"  // what we own, what guards it, where a guard could go
 #include "market/want_mex.as"       // upgrade demand, walk safety, the mex Want
 #include "market/want_energy.as"    // energy/convert/store Wants; the BP senses behind them

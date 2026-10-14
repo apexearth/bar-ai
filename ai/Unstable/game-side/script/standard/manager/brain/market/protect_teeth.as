@@ -38,6 +38,68 @@ bool T2DefHandsStanding()
 // apex_mexup_boost -- his ruling is the basis -- and each tooth is cheap
 // enough that the walk is the real cost.
 int gTeethNextScan = 103;   // phase offset -- see AiUpdate lockstep note
+// TEETH AROUND A TOWER (his 10-13: "if you make dragons defense turrets and put dragons teeth
+// around them the teeth can block some of the hits"). Slots in an arc on the tower's enemy side;
+// a tooth is worth the share of the tower's guarding (the stake in its reach at the expected
+// siege) that its health takes off the tower, halved per tooth already standing there.
+// Scanned with the gates, every 10 s; at most a few towers by a few slots.
+AIFloat3 gRingPoint(-1.f, 0.f, -1.f);
+float gRingGain = 0.f;
+int gRingBuilt = 0;   // teeth standing in ring slots, at the last scan
+void ScanTowerRing(int wd)
+{
+	gRingPoint = AIFloat3(-1.f, 0.f, -1.f);
+	gRingGain = 0.f;
+	gRingBuilt = 0;
+	const AIFloat3 foe = aiEnemyMgr.GetEnemyPos();
+	if (!OnMap(foe))
+		return;
+	const float wallHp = Catalog::gHealth[wd];
+	for (uint t = 0; t < gProtPos[PROT_DEF].length(); ++t) {
+		const int td = gProtDefId[PROT_DEF][t];
+		const AIFloat3 tp = gProtPos[PROT_DEF][t];
+		const float thp = Catalog::gHealth[td];
+		if ((thp <= 0.f) || (Catalog::gMaxRange[td] <= 1.f) || !OnMap(tp))
+			continue;
+		AIFloat3 dir = foe - tp;
+		dir.SafeNormalize2D();
+		const AIFloat3 side(-dir.z, 0.f, dir.x);
+		const float r = 8.f * float((Catalog::gFootX[td] > Catalog::gFootZ[td]) ? Catalog::gFootX[td] : Catalog::gFootZ[td]) + 40.f;
+		int have = 0;
+		AIFloat3 free(-1.f, 0.f, -1.f);
+		for (int k = -2; k <= 2; ++k) {
+			const AIFloat3 p = tp + dir * r + side * (40.f * float(k));
+			if (!OnMap(p))
+				continue;
+			array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(p, 20.f);
+			bool wall = false, other = false;
+			for (uint q = 0; (near !is null) && (q < near.length()); ++q) {
+				if ((near[q] !is null) && (near[q].circuitDef !is null) && (int(near[q].circuitDef.id) == wd))
+					wall = true;
+				else
+					other = true;
+			}
+			if (wall)
+				++have;
+			else if (!other && !OnMap(free))
+				free = p;
+		}
+		gRingBuilt += have;
+		if (!OnMap(free))
+			continue;
+		float hz = HazardAt(tp);
+		const float sg = SiegeExpect(tp);
+		if (sg > hz)
+			hz = sg;
+		const float g = StakeAt(tp, Catalog::gMaxRange[td]) * hz
+				* (wallHp / (wallHp + thp)) / float(1 << have);
+		if (g > gRingGain) {
+			gRingGain = g;
+			gRingPoint = free;
+		}
+	}
+}
+
 AIFloat3 gTeethPoint(-1.f, 0.f, -1.f);
 int gDEnds = 0;
 int gDLen = 0;
@@ -50,7 +112,7 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 		return w;
 	if (!Builder::gHomeSet)
 		return w;
-	const int wd = Catalog::WallDef();
+	const int wd = Catalog::WallDefFor(int(unit.circuitDef.id));
 	if (wd <= 0)
 		return w;
 	if (ai.frame >= gTeethNextScan) {
@@ -131,21 +193,22 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 				+ " gates=" + gidx.length()
 				+ " towers=" + gProtPos[PROT_DEF].length()
 				+ " point=" + int(gTeethPoint.x) + "," + int(gTeethPoint.z)
-				+ " endsF=" + gDEnds + " lenF=" + gDLen + " blkF=" + gDBlocked);
+				+ " endsF=" + gDEnds + " lenF=" + gDLen + " blkF=" + gDBlocked
+				+ " ring=" + int(gRingPoint.x) + "," + int(gRingPoint.z) + "/" + formatFloat(gRingGain, "", 0, 2)
+				+ " ringBuilt=" + gRingBuilt);
+		ScanTowerRing(wd);
 	}
-	if (!OnMap(gTeethPoint))
+	if (!OnMap(gTeethPoint) && !OnMap(gRingPoint))
 		return w;
 	const int uid = int(unit.circuitDef.id);
 	const float speed = Catalog::gSpeed[uid];
-	const float walkSec = (speed > 1.f)
-			? (unit.GetPos(ai.frame).distance2D(gTeethPoint) / speed) : 60.f;
 	// PRICED AS THE SOAK IT IS, not a preference: the same prevented loss a
 	// front-row slot earns (protect_fill.as) -- the team metal behind the
 	// gap, the hazard there, and the share of the wave this tooth's health
 	// absorbs for the guns behind it. A fixed gain of 40 outbid every real
 	// gun (1517 of 1548 defence elections were teeth, guns priced 2-15).
 	float gain = 0.f;
-	{
+	if (OnMap(gTeethPoint)) {
 		const float wave = ArmyTargetFull()
 				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
 				* TeamExposure();
@@ -168,14 +231,20 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 			gain = stake * HazardWith(gTeethPoint, cover0) * (short0 - short1);
 		}
 	}
+	AIFloat3 at = gTeethPoint;
+	if (gRingGain > gain) {
+		gain = gRingGain;
+		at = gRingPoint;
+	}
 	if (gain <= 0.f)
 		return w;
+	const float walkSec = (speed > 1.f) ? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
 	Want c;
 	ValueOf(wd, gain, walkSec, Catalog::gBuildPower[uid], c);
 	w = c;
 	w.kind = WK_TEETH;
 	@w.def = Catalog::Def(wd);
-	w.pos = gTeethPoint;
+	w.pos = at;
 	return w;
 }
 }  // namespace Market

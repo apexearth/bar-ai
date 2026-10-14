@@ -1488,7 +1488,7 @@ const float TUNE_STAKE_WEIGHT = 1.f;
 //   basic tower at all. 1 is his behaviour and the default; 0 is the arm that
 //   measures what the rule costs against an enemy that laps the map in
 //   85-metal turrets. See docs/27.
-const float TUNE_T1_TOWER_LATE = 1.f;
+const float TUNE_T1_TOWER_LATE = 0.f;
 
 // [toggle 0/1] -- His 2026-08-27 ruling: a copy of a line we already run is
 //   INELIGIBLE and the want forwards to a nano at the standing lab. 0 is that
