@@ -25,6 +25,7 @@ the engine RNG and the faction draw vary; games before 10-11 15:00 were all seed
     python tools/randsearch.py            # play until EXPLORE networks are tried and every re-test is done
     python tools/randsearch.py --status
     python tools/randsearch.py --anneal 99   # (while stopped) anneal around net 99
+    python tools/randsearch.py --anneal 1239 --range 2716:3126,7590:7858   # ...varying only those heads
 State: runtime/nn/rand.json; log: runtime/nn/rand.log; games: tournaments/<stamp>-nn-rand/.
 """
 import json, math, os, random, shutil, subprocess, sys, threading, time, traceback
@@ -230,10 +231,16 @@ def next_job(st, lay, rng):
             a["born"] = a.get("born", 0) + 1
             child = random.Random(n["seed"])
             base = played_weights(st, a["centre"])
-            lo, hi = a.get("range", [0, len(base)])
+            rng_ = a.get("range", [[0, len(base)]])
+            if rng_ and not isinstance(rng_[0], list):
+                rng_ = [rng_]   # a single [lo, hi] from before ranges were lists
             if "range" in a:
-                n["range"] = a["range"]
-            w = [x + child.gauss(0, n["s"]) if ((lo <= k < hi) and (not sparse or child.random() < n["p"])) else x
+                n["range"] = rng_
+            inr = [False] * len(base)
+            for lo, hi in rng_:
+                for k in range(max(0, lo), min(hi, len(base))):
+                    inr[k] = True
+            w = [x + child.gauss(0, n["s"]) if (inr[k] and (not sparse or child.random() < n["p"])) else x
                  for k, x in enumerate(base)]
         else:
             s = math.exp(rng.uniform(math.log(S_RANGE[0]), math.log(S_RANGE[1])))
@@ -392,11 +399,12 @@ def main(argv):
         c = st["nets"][argv[argv.index("--anneal") + 1]]
         a0 = st.get("anneal") or {}
         st["anneal"] = {"centre": c["id"], "born": a0.get("born", 0)}
-        # --range lo hi: children vary only those weights -- one head (his 10-13: "target that
-        # logic center"); a new range starts its temperature over
+        # --range lo:hi[,lo:hi...]: children vary only those weights -- chosen heads (his 10-13:
+        # "target that logic center"; "discover the right squad/army management weights");
+        # a new range starts its temperature over
         if "--range" in argv:
-            k = argv.index("--range")
-            st["anneal"]["range"] = [int(argv[k + 1]), int(argv[k + 2])]
+            spec = argv[argv.index("--range") + 1]
+            st["anneal"]["range"] = [[int(p.split(":")[0]), int(p.split(":")[1])] for p in spec.split(",")]
             st["anneal"]["born"] = 0
         if len(c["games"]) < CENTRE_GAMES:
             c["target"] = CENTRE_GAMES
