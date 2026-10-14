@@ -39,6 +39,7 @@ LOG = os.path.join(neuro.NN, "rand.log")
 RESTART = os.path.join(neuro.NN, "rand_restart")
 # his 10-13: the search plays WRDistilled at 0% bonus (the BARb-hard record is rand-barb-20261013.json)
 neuro.FOE = "WRDistilled:0.2"
+neuro.FACTIONS = ("Armada", "Cortex")   # his 10-13: WRDistilled plays Legion badly, its wins say nothing
 # runtime/nn/rand_explore raises it without a code edit: annealing needs room past the first 1000 nets.
 EXPLORE_FILE = os.path.join(neuro.NN, "rand_explore")
 EXPLORE = int(open(EXPLORE_FILE).read().strip()) if os.path.exists(EXPLORE_FILE) else 1000
