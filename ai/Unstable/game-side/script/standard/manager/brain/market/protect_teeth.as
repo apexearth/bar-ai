@@ -43,6 +43,37 @@ int gTeethNextScan = 103;   // phase offset -- see AiUpdate lockstep note
 // a tooth is worth the share of the tower's guarding (the stake in its reach at the expected
 // siege) that its health takes off the tower, halved per tooth already standing there.
 // Scanned with the gates, every 10 s; at most a few towers by a few slots.
+// Inside the base, teeth only clutter it (his 10-13: "found its way into the center of our base
+// and it's not very good there"): a point with our own buildings around it, guns, walls and
+// extractors aside, is base.
+bool TeethInBase(const AIFloat3& in p, int wd)
+{
+	array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(p, 400.f);
+	int n = 0;
+	for (uint q = 0; (near !is null) && (q < near.length()); ++q) {
+		if ((near[q] is null) || (near[q].circuitDef is null))
+			continue;
+		const int d = int(near[q].circuitDef.id);
+		if ((d != wd) && (ProtClassOf(d) < 0) && (Catalog::gExtractsM[d] <= 0.f))
+			++n;
+	}
+	return n >= 3;
+}
+
+// Each tooth takes a unit slot (his 10-13): worth falls with the share of the limit we fill.
+float TeethCapRoom()
+{
+	int lim = int(parseInt(string(aiSetupMgr.GetModOptions()["maxunits"])));
+	if (lim <= 0)
+		lim = 2000;
+	int have = 0;
+	for (uint d = 1; d < gOwnCount.length(); ++d)
+		have += gOwnCount[d];
+	const float room = 1.f - float(have) / float(lim);
+	return (room > 0.f) ? room : 0.f;
+}
+
+float gTeethCapRoom = 1.f;   // TeethCapRoom at the last scan
 AIFloat3 gRingPoint(-1.f, 0.f, -1.f);
 float gRingGain = 0.f;
 int gRingBuilt = 0;   // teeth standing in ring slots, at the last scan
@@ -59,7 +90,7 @@ void ScanTowerRing(int wd)
 		const int td = gProtDefId[PROT_DEF][t];
 		const AIFloat3 tp = gProtPos[PROT_DEF][t];
 		const float thp = Catalog::gHealth[td];
-		if ((thp <= 0.f) || (Catalog::gMaxRange[td] <= 1.f) || !OnMap(tp))
+		if ((thp <= 0.f) || (Catalog::gMaxRange[td] <= 1.f) || !OnMap(tp) || TeethInBase(tp, wd))
 			continue;
 		AIFloat3 dir = foe - tp;
 		dir.SafeNormalize2D();
@@ -188,6 +219,9 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 			if (WallTeethPoint(lp))
 				gTeethPoint = lp;
 		}
+		gTeethCapRoom = TeethCapRoom();
+		if (OnMap(gTeethPoint) && (TeethInBase(gTeethPoint, wd) || Builder::PastFront(gTeethPoint)))
+			gTeethPoint = AIFloat3(-1.f, 0.f, -1.f);
 		if (diag || (ai.frame % (60 * SECOND) < 10 * SECOND))
 			AiLog(Factory::T() + "apex: teeth-scan wall=" + wd
 				+ " gates=" + gidx.length()
@@ -236,6 +270,7 @@ Want@ ProposeTeeth(CCircuitUnit@ unit)
 		gain = gRingGain;
 		at = gRingPoint;
 	}
+	gain *= gTeethCapRoom;
 	if (gain <= 0.f)
 		return w;
 	const float walkSec = (speed > 1.f) ? (unit.GetPos(ai.frame).distance2D(at) / speed) : 60.f;
