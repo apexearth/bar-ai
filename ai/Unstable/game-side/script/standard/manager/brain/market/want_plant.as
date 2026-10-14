@@ -1584,6 +1584,11 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 		const float spare = SpareMetalRate();
 		if (prodTerm > spare)
 			prodTerm = spare;
+		// With no line standing, the metal nothing spends is what a lab turns into army: the gap
+		// read zero while the army was still alive, and a lost lab priced 0.01 for 3.5 minutes
+		// while 70% of income was wasted (his 10-13).
+		if ((lines0 == 0) && Base::gAnchorFinal && (spare > prodTerm))
+			prodTerm = spare;
 	}
 	const float pipe = ai.GetTunable("apex_plant_pipe", TUNE_PLANT_PIPE)
 			* Utilization();

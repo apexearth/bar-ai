@@ -1223,7 +1223,9 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 {
 	// The first factory rises where the builder stands -- the flank plan is
 	// for a base that exists (watched: a long opening walk to lab #1).
-	if (Factory::gFactoryCount == 0)
+	// ...but a lab rebuilt after ours died is not the opening: it went up where a con stood,
+	// 2,800 out along the map edge (his 10-13)
+	if ((Factory::gFactoryCount == 0) && !Base::gAnchorFinal)
 		return fallback;
 	if (gFarmSet && Base::gAxisSet) {
 		// TAKE THE SAFER FLANK, DO NOT ALTERNATE BLINDLY. gFwd is snapped to a
