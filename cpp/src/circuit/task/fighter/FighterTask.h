@@ -19,7 +19,7 @@ class CEnemyInfo;
 
 class IFighterTask: public IUnitTask {
 public:
-	enum class FightType: char {RALLY = 0, GUARD, DEFEND, SCOUT, RAID, ATTACK, BOMB, MELEE, ARTY, AA, AH, SUPPORT, SUPER, _SIZE_};
+	enum class FightType: char {RALLY = 0, GUARD, DEFEND, SCOUT, RAID, ATTACK, BOMB, MELEE, ARTY, AA, AH, SUPPORT, SUPER, SIEGE, _SIZE_};
 	using FT = std::underlying_type<FightType>::type;
 
 protected:

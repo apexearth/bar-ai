@@ -58,6 +58,7 @@ ANALYSIS_TOOLS = {
     "keepout": ("keepout.py", False),
     "earlyfight": ("test_earlyfight.py", False),
     "raid": ("test_raid.py", False),
+    "siege": ("siege.py", False),
 }
 
 DEPLOY_ACTIONS = {

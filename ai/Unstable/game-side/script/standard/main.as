@@ -22,6 +22,7 @@
 #include "manager/military/nnpost.as" // the army's posture as a recorded draw; reads Market's net state
 #include "manager/military/nnhunt.as" // hunt their biggest army, or not: a recorded draw
 #include "manager/military/nnstrike.as" // timing windows, and strike their economy in one or not: a recorded draw
+#include "manager/military/nnsiege.as" // siege a fortification with units that outrange it, or not: a recorded draw
 #include "manager/military/nnmassodds.as" // pool size and squad odds: recorded draws on today's numbers
 #include "manager/economy.as"
 #include "manager/air.as"
@@ -192,6 +193,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateNnPost(); Perf::Add("up.nnpost", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateHunt(); Perf::Add("up.hunt", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateStrike(); Perf::Add("up.strike", _t); }
+	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateSiege(); Perf::Add("up.siege", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateMassOdds(); Perf::Add("up.massodds", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateLooks(); Perf::Add("up.looks", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::UpdateDefNet(); Perf::Add("up.defnet", _t); }
@@ -451,6 +453,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	if (WasFinished(int(unit.id))) {
 		Military::HuntNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
 		Military::WindowNoteDeath(int(cdef.id), unit.GetPos(ai.frame), cdef.costM, true, true);
+		Military::SiegeNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
 	}
 	if ((Catalog::gExtractsM[int(cdef.id)] > 0.f) && WasFinished(int(unit.id)))
 		Market::NoteMexKilled();
@@ -504,6 +507,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
+	Military::SiegeNoteDeath(pos, edef.costM, false, byUs);
 	if (edef.IsMobile() && Catalog::ValidId(int(edef.id)) && !Catalog::gFlyer[int(edef.id)])
 		Market::DefSiteNoteKill(pos, edef.costM);
 	if (byUs)

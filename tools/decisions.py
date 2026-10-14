@@ -50,10 +50,10 @@ NNPOST = re.compile(r"\]\[f=(\d+)\] .*?apex: nnpost t=(\d+) f=\d+ why=(\S+) rule
 REINF_DONE = re.compile(r"apex: nnreinf-done t=(\d+) f=(\d+) done=(\d)")
 HUNT_DONE = re.compile(r"apex: nnhunt-done t=(\d+) f=(\d+) opt=\d+ done=(-?[\d.]+) kill=(-?\d+) killAll=-?\d+"
                        r" lost=(-?\d+) wreck=(-?\d+)")
-HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|plan|join|reinf|hunt|strike|open)=(\S+) opt=")
-HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
+HEAD_SCHEMA = re.compile(r"apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|siege|open)-schema v\d+ state=\S+ (?:com|tech|raid|air|plan|join|reinf|hunt|strike|siege|open)=(\S+) opt=")
+HEAD_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nn(com|tech|raid|air|plan|join|reinf|hunt|strike|siege|open) t=(\d+) f=\d+ why=(\S+) rule=(\S+)(?: ex=(\d))?"
                       r"(?: game=\d)? trust=\S+ \| (\S+) \| (\S+) \| (.*?) \| chosen=(-?\d+)")
-HEAD_TAG = re.compile(r"apex: nn(?:com|tech|raid|air|plan|join|reinf|hunt|strike|open)")
+HEAD_TAG = re.compile(r"apex: nn(?:com|tech|raid|air|plan|join|reinf|hunt|strike|siege|open)")
 # the continuous heads (nnlog.as NnValDecide): the value played, the rule's, the range, how it was drawn
 VAL_SCHEMA = re.compile(r"apex: nnval-schema v\d+ head=(\w+) state=\S+ own=(\S+)")
 VAL_ROW = re.compile(r"\]\[f=(\d+)\] .*?apex: nnval head=(\w+) t=(\d+) f=\d+ v=(\S+) rule=(\S+) lo=(\S+) hi=(\S+)"

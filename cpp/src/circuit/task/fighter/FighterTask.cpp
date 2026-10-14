@@ -267,7 +267,7 @@ const char* IFighterTask::FightTypeName(int ft)
 {
 	static const char* NAMES[] = {
 		"RALLY", "GUARD", "DEFEND", "SCOUT", "RAID", "ATTACK", "BOMB",
-		"MELEE", "ARTY", "AA", "AH", "SUPPORT", "SUPER"
+		"MELEE", "ARTY", "AA", "AH", "SUPPORT", "SUPER", "SIEGE"
 	};
 	// Unlike script/task.as's hand-maintained copy of this enum, this table is
 	// checked: add or reorder a FightType and the build stops here.

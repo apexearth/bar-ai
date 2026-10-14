@@ -2016,7 +2016,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// number of groups CSupportTask will actually attach one to.
 			const float squadM = tSquadM;
 			if (supSquads < 0.f) {
-				supSquads = float(int(Military::EscortSquadCount()));
+				supSquads = float(int(Military::EscortSquadCount())) + Military::SiegeSupportSlots();
 				supAdvArmy = AdvArmyValue();
 			}
 			const float squads = supSquads;
@@ -2284,7 +2284,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					effGap += float(owed) * Catalog::gCostM[d];
 			}
 			if (!Catalog::gBuilder[d])
-				effGap += RaidGapM(d);
+				effGap += RaidGapM(d) + Military::SiegeGapM(d);
 			// AA is not army (ArmyValue leaves it out): it fills its own role gap
 			// even when the ground army is at target or yielded to a better line.
 			if (Catalog::gRole[d] == int(Unit::Role::AA.type)) {
