@@ -457,7 +457,8 @@ def main(argv):
         # A DEFAULT CHANGE RUNS AS A PAIRED ARM BEFORE IT BECOMES THE DEFAULT (10-14: one army went into
         # the search unmeasured and cost 25% -> 10%). Two networks with the centre's weights, one as
         # deployed and one with the option set, on the same seeds and setups game for game.
-        key, val = argv[argv.index("--ab") + 1].split("=", 1)
+        spec = argv[argv.index("--ab") + 1]
+        kv = dict(p.split("=", 1) for p in spec.split(","))
         games = int(argv[argv.index("--ab-games") + 1]) if "--ab-games" in argv else LADDER[-1]
         a = st.get("anneal")
         src = st["nets"][argv[argv.index("--of") + 1]] if "--of" in argv else (st["nets"][str(a["centre"])] if a else None)
@@ -468,17 +469,17 @@ def main(argv):
         st["next"] += 2
         for k, arm in enumerate(("A", "B")):
             nid = i + k
-            st["nets"][str(nid)] = {"id": nid, "seed": 0, "s": 0.0, "arm": arm, "ab": "%s=%s" % (key, val),
+            st["nets"][str(nid)] = {"id": nid, "seed": 0, "s": 0.0, "arm": arm, "ab": spec,
                                     "pair": [i, i + 1], "of": src["id"], "seed_id": i, "games": [], "busy": 0,
                                     "tries": 0, "fails": 0, "target": games, "status": "live"}
             p = neuro.opt_file(st["dir"], nid, w)
             if arm == "B":
                 opts = json.load(open(p, encoding="utf-8"))
-                opts[key] = val
+                opts.update(kv)
                 json.dump(opts, open(p, "w", encoding="utf-8"))
         save(st)
-        log("A/B %s=%s on net %d's weights: arms %d (as deployed) and %d (option set), %d paired games each" % (
-            key, val, src["id"], i, i + 1, games))
+        log("A/B %s on net %d's weights: arms %d (as deployed) and %d (option set), %d paired games each" % (
+            spec, src["id"], i, i + 1, games))
         return 0
     if "--add-net" in argv:
         # a hand-edited weights file joins the search as a network (his 10-13: 736 with its
