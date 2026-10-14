@@ -366,6 +366,10 @@ to them)
   and stay safe while doing it, with scouts showing them targets. An
   Ambassador outranges many T2 turrets. Siege units fear enemies getting
   close.
+- **Siege a fortification on purpose** (2026-10-14). When enemy defences near
+  us are protected by shields and jammers, decide to destroy that emplacement,
+  build the units that do it (long range: Ambassadors and the like), and give
+  them a squad that exists only to take it out.
 - Indirect fire is the exception: rocket-style enemies can be stood inside,
   moving.
 - A stronger unit doesn't run from a longer-ranged weaker one. Short-range
@@ -471,6 +475,10 @@ to them)
   find decide where to hit.
 - On the way to their base, a flank or their economy, don't be distracted by
   their units: shoot them on the move and keep going.
+- Don't probe for the weakest spot and switch each time it gets backup
+  (2026-10-14, on AIs against humans). Every change of mind gives the
+  defender time to build. BARb wins with one big, simple army that moves and
+  fights together.
 - Be the aggressor only when we have built for it. If we chose economy and they
   chose offence, our army is for holding. If they turtle, scale up and scout.
 - If the front moves back into us, build army and push it back. If it shifts
