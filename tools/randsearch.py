@@ -37,6 +37,8 @@ import neuro
 STATE = os.path.join(neuro.NN, "rand.json")
 LOG = os.path.join(neuro.NN, "rand.log")
 RESTART = os.path.join(neuro.NN, "rand_restart")
+# his 10-13: the search plays WRDistilled at 0% bonus (the BARb-hard record is rand-barb-20261013.json)
+neuro.FOE = "WRDistilled:0.2"
 # runtime/nn/rand_explore raises it without a code edit: annealing needs room past the first 1000 nets.
 EXPLORE_FILE = os.path.join(neuro.NN, "rand_explore")
 EXPLORE = int(open(EXPLORE_FILE).read().strip()) if os.path.exists(EXPLORE_FILE) else 1000
@@ -391,6 +393,7 @@ def main(argv):
         st["next"] += 1
         st["nets"][str(i)] = {"id": i, "seed": 0, "s": 0.0, "base": -1, "file": os.path.abspath(src), "games": [],
                               "busy": 0, "tries": 0, "fails": 0, "target": LADDER[0], "status": "live"}
+        os.makedirs(st["dir"], exist_ok=True)   # a fresh record has no folder until the first run
         neuro.opt_file(st["dir"], i, w)
         save(st)
         log("net %d added from %s (%d weights)" % (i, src, len(w)))
