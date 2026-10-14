@@ -229,8 +229,12 @@ def next_job(st, lay, rng):
                 n["p"] = round(p, 4)
             a["born"] = a.get("born", 0) + 1
             child = random.Random(n["seed"])
-            w = [x + child.gauss(0, n["s"]) if (not sparse or child.random() < n["p"]) else x
-                 for x in played_weights(st, a["centre"])]
+            base = played_weights(st, a["centre"])
+            lo, hi = a.get("range", [0, len(base)])
+            if "range" in a:
+                n["range"] = a["range"]
+            w = [x + child.gauss(0, n["s"]) if ((lo <= k < hi) and (not sparse or child.random() < n["p"])) else x
+                 for k, x in enumerate(base)]
         else:
             s = math.exp(rng.uniform(math.log(S_RANGE[0]), math.log(S_RANGE[1])))
             n = {"id": i, "seed": rng.randrange(1 << 30), "s": round(s, 4), "family": FAMILY, "games": [],
@@ -371,9 +375,29 @@ def main(argv):
     if "--status" in argv:
         status(st)
         return 0
+    if "--add-net" in argv:
+        # a hand-edited weights file joins the search as a network (his 10-13: 736 with its
+        # posture head zeroed, so the rule picks the posture)
+        src = argv[argv.index("--add-net") + 1]
+        w = [float(x) for x in open(src, encoding="utf-8").read().split()]
+        i = st["next"]
+        st["next"] += 1
+        st["nets"][str(i)] = {"id": i, "seed": 0, "s": 0.0, "base": -1, "file": os.path.abspath(src), "games": [],
+                              "busy": 0, "tries": 0, "fails": 0, "target": LADDER[0], "status": "live"}
+        neuro.opt_file(st["dir"], i, w)
+        save(st)
+        log("net %d added from %s (%d weights)" % (i, src, len(w)))
+        return 0
     if "--anneal" in argv:
         c = st["nets"][argv[argv.index("--anneal") + 1]]
-        st["anneal"] = {"centre": c["id"], "born": (st.get("anneal") or {}).get("born", 0)}
+        a0 = st.get("anneal") or {}
+        st["anneal"] = {"centre": c["id"], "born": a0.get("born", 0)}
+        # --range lo hi: children vary only those weights -- one head (his 10-13: "target that
+        # logic center"); a new range starts its temperature over
+        if "--range" in argv:
+            k = argv.index("--range")
+            st["anneal"]["range"] = [int(argv[k + 1]), int(argv[k + 2])]
+            st["anneal"]["born"] = 0
         if len(c["games"]) < CENTRE_GAMES:
             c["target"] = CENTRE_GAMES
             c["status"] = "live"
