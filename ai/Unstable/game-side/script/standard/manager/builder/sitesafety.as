@@ -53,8 +53,11 @@ IUnitTask@ Retreat(CCircuitUnit@ unit)
 			return null;
 		}
 		if (OnMap(rear)) {
-			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(
-					Task::Priority::LOW, rear, 20 * SECOND));
+			// The commander flees by move: repairing on the way out uncloaks him (his 10-14).
+			const bool com = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+			IUnitTask@ pt = aiBuilderMgr.Enqueue(com
+					? TaskB::Move(Task::Priority::LOW, rear, 20 * SECOND)
+					: TaskB::Patrol(Task::Priority::LOW, rear, 20 * SECOND));
 			if (pt !is null) {
 				if (ai.frame >= gNextRetireLog) {
 					gNextRetireLog = ai.frame + 20 * SECOND;

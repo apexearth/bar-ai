@@ -988,7 +988,9 @@ IUnitTask@ ComDecisionTask(CCircuitUnit@ u)
 			const AIFloat3 at = close ? gCsFoeAt : gCsHere;
 			if (close && onPatrol && (held.GetBuildPos().distance2D(at) < 300.f))
 				return held;
-			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(Task::Priority::HIGH, at, 15 * SECOND));
+			// A move, not a patrol: a patrolling builder repairs whatever is in reach, which
+			// uncloaks him beside them (his 10-14). The move task carries the D-gun just the same.
+			IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(Task::Priority::HIGH, at, 15 * SECOND));
 			if (pt !is null) {
 				if (close)
 					gCommEngageAt = ai.frame;

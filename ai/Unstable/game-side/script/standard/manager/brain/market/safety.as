@@ -855,7 +855,8 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 					return held;
 				}
 				const int dwell = int((bestD / ((spd > 1.f) ? spd : 1.f) + 15.f) * SECOND);
-				IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Patrol(
+				// TaskB::Move: same task and D-gun, but a patrol repairs on the way and uncloaks him.
+				IUnitTask@ pt = aiBuilderMgr.Enqueue(TaskB::Move(
 						Task::Priority::HIGH, foeAt, dwell));
 				if (pt !is null) {
 					if (ai.frame >= gNextCommFightLog) {
