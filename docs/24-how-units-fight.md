@@ -214,6 +214,11 @@ to them)
   constructor. A front-line site belongs to the ground crew.
 
 **Defending the base**
+- (2026-10-14) Defences are a crutch. Metal goes into units, military
+  vehicles, army -- that does better overall than towers. Radar is a small
+  cost, never a tenth of the constructors' time (measured 10-13%).
+  Defences are the fallback, the last line: ideally the army kills the
+  enemy army before it gets that close.
 - Military exists early. Three constructors before any army was an issue.
 - See threats coming. A push is visible long before it reaches the base.
 - Size a squad for each threat and hunt it down. Read their path and
