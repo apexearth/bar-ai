@@ -42,10 +42,10 @@ RESTART = os.path.join(neuro.NN, "rand_restart")
 # mix for every network. Records before 10-14 played WRDistilled 1v1 only (rand-barb-20261013.json: BARb hard 1v1).
 WRD, HARD, AGG = "WRDistilled:0.2", "BARb:stable:hard", "BARb:stable:hard_aggressive"
 SETUPS = [
-    (1, "Comet Catcher Remake 1.8", WRD), (2, "Glacier Pass", HARD), (4, "Greenest Fields", AGG),
+    (1, "Comet Catcher Remake 1.8", WRD), (2, "Glacier Pass", HARD), (4, "Comet Catcher Remake 1.8", AGG),
     (1, "Comet Catcher Remake 1.8", HARD), (2, "Frozen_Ford_V2", AGG), (4, "Ice Scream v2.5.2", HARD),
     (1, "Comet Catcher Remake 1.8", WRD), (2, "Comet Catcher Remake 1.8", HARD), (4, "Carrot Mountains", AGG),
-    (1, "Comet Catcher Remake 1.8", AGG), (2, "Glacier Pass", AGG), (4, "Greenest Fields", HARD),
+    (1, "Comet Catcher Remake 1.8", AGG), (2, "Glacier Pass", AGG), (4, "Comet Catcher Remake 1.8", HARD),
 ]
 neuro.FOE = WRD
 neuro.FACTIONS = ("Armada", "Cortex")   # his 10-13: WRDistilled plays Legion badly, its wins say nothing
