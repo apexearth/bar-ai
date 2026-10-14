@@ -73,7 +73,6 @@ float FarmRowW()
 }
 // How far back the farm has actually been used. Read by InteriorSite to keep
 // factories clear of the block.
-float gFarmDepth = 0.f;
 
 // Every metal spot on the map, cached on first use -- planned placements
 // must never stand on one (watched: buildings over mexes).
@@ -702,6 +701,21 @@ float RoomBPAt(int did, int nanoDef, int due, const AIFloat3& in s)
 	return float(n) * Catalog::gBuildPower[nanoDef];
 }
 
+// Labs in front, fusions behind (his 10-13: "stop making fusions in the front of our base and
+// factories in the back"), measured from the middle of what we own -- the first lab stands in the
+// spawn corner, so everything is in front of it. Both still take the richest lathe on their side.
+// Depth is toward the enemy (ForwardFraction): the doorway axis is flipped on some layouts.
+bool LatheDepthOk(int did, bool plant, const AIFloat3& in s)
+{
+	AIFloat3 c;
+	float extent;
+	if ((!plant && !BigEcoDef(did)) || !BaseCentroid(c, extent))
+		return true;
+	const float d = Military::ForwardFraction(s) - Military::ForwardFraction(c);
+	return plant ? (d >= 0.f) : (d <= 0.f);
+}
+
+int gLatheDepthRefused = 0;
 AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in interior)
 {
 	if ((def is null) || (gOwnNanoPos.length() == 0) || !Base::gAnchorSet)
@@ -770,6 +784,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 	// the site backs out of the block until its lane is clear (the same
 	// step the executor takes), and is refused only when it cannot.
 	const bool doorway = !AirPlant(did) && (Catalog::gBuildsList[did].length() > 0);
+	const bool plant = doorway;   // an air plant may stand at the back, on the eco nanos (his 10-13)
 	int doorRefused = 0;
 	AIFloat3 exitDir(0.f, 0.f, 0.f);
 	if (Base::Ready()) {
@@ -779,13 +794,23 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 			exitDir.z = -exitDir.z;
 		}
 	}
-	if (OnMap(interior)) {
-		AIFloat3 s0 = ai.FindBuildSiteNear(def, interior, NanoRange() * 2.f);
+	// The ask and then steps along the flank: an unplaceable ask went to the C++ square search,
+	// which put an advanced lab in the spawn corner past every depth rule (10-13).
+	for (int k = 0; (k < 7) && (interiorBP < 0.f) && OnMap(interior); ++k) {
+		AIFloat3 ask0 = interior;
+		if ((k > 0) && Base::gAxisSet)
+			ask0 = interior + Base::gAcross * (NanoRange() * float((k + 1) / 2) * (((k % 2) == 1) ? 1.f : -1.f));
+		else if (k > 0)
+			break;
+		if (!OnMap(ask0))
+			continue;
+		AIFloat3 s0 = ai.FindBuildSiteNear(def, ask0, NanoRange() * 2.f);
 		if (OnMap(s0))
 			s0 = LatticeFit(def, ClearOfSpots(s0, 180.f));
 		if (doorway && OnMap(s0))
 			s0 = LatticeFit(def, ClearExitLane(s0));
-		if (OnMap(s0) && !NearBlockedFor(s0, did) && ReachableBy(mover, s0)
+		if (OnMap(s0) && !NearBlockedFor(s0, did) && ReachableBy(mover, s0) && LatheDepthOk(did, plant, s0)
+			&& (s0.distance2D(Base::gAnchor) <= leash) && !Builder::PastFront(s0)
 			&& !(doorway && (ClearExitLane(s0).distance2D(s0) > 1.f))) {
 			best = s0;
 			bestStand = RingBPAt(s0);
@@ -808,6 +833,9 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		AIFloat3 ask = gOwnNanoPos[i];
 		if (doorway)
 			ask = ask + exitDir * r;
+		else if (BigEcoDef(did))
+			ask = (Military::ForwardFraction(ask - exitDir * r) <= Military::ForwardFraction(ask + exitDir * r))
+				? ask - exitDir * r : ask + exitDir * r;   // a generator takes the block's back edge
 		AIFloat3 raw = ai.FindBuildSiteNear(def, ask, r * 2.f);
 		// The front edge can be a cliff or the map's edge; the block itself
 		// is asked next, and the exit lane backs the site out of it.
@@ -826,6 +854,10 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		}
 		if ((s.distance2D(Base::gAnchor) > leash) || Builder::PastFront(s)) {
 			++fwdRefused;
+			continue;
+		}
+		if (!LatheDepthOk(did, plant, s)) {
+			++gLatheDepthRefused;
 			continue;
 		}
 		if (doorway && (ClearExitLane(s).distance2D(s) > 1.f)) {
@@ -856,7 +888,7 @@ AIFloat3 LatheSite(CCircuitDef@ def, CCircuitDef@ mover, const AIFloat3& in inte
 		+ " share=" + int(EcoPowerM() * LineCostCeilOf(did) / (LineCeilSum() + LineCostCeilOf(did)))
 		+ " dens=" + formatFloat(LineDensityOf(did), "", 0, 4)
 		+ " probed=" + top.length() + " fwdRefused=" + fwdRefused
-		+ " doorRefused=" + doorRefused + why);
+		+ " doorRefused=" + doorRefused + " depthRefused=" + gLatheDepthRefused + why);
 	if ((bestBP < 0.f) && (interiorBP < 0.f))
 		NoteNoRoom(did);
 	bool cached = false;
@@ -1214,10 +1246,15 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 		// The flank still alternates per PLANT -- it just reads the count we
 		// already own instead of mutating on every price check.
 		const float side = ((Factory::gFactoryCount % 2) == 0) ? 1.f : -1.f;
-		const AIFloat3 back = Base::gFwd * (gFarmDepth * 0.5f);
+		// beside the middle of the base (his 10-13: no factories at the back of the base; the
+		// flank keeps them off the attack path)
 		const AIFloat3 lat = Base::gAcross * (FarmRowW() * 0.5f + 300.f);
-		AIFloat3 pA = gFarmPos + lat * side - back;
-		AIFloat3 pB = gFarmPos - lat * side - back;
+		AIFloat3 mid = Base::gAnchor, cen;
+		float ext;
+		if (BaseCentroid(cen, ext))   // an out param is written back even on false
+			mid = cen;
+		AIFloat3 pA = mid + lat * side;
+		AIFloat3 pB = mid - lat * side;
 		const bool okA = OnMap(pA) && ReachableBy(mover, pA);
 		const bool okB = OnMap(pB) && ReachableBy(mover, pB);
 		if (okA && okB) {
@@ -1235,17 +1272,15 @@ AIFloat3 InteriorSite(const AIFloat3& in fallback, CCircuitDef@ mover)
 	// walked forward to claim a mex put the T2 lab up on the front line
 	// (apexearth, watched: "we just started T2 lab in a dangerous area...
 	// off to the side is a smarter location than in the direct path the enemy
-	// would take to attack us"). Behind the anchor and off the attack axis is
-	// that location, and it is the same rear-flank shape the farm branch uses.
+	// would take to attack us"). Off the attack axis, beside the anchor, is
+	// that location, and it is the same flank shape the farm branch uses.
 	if (Base::gAnchorSet && Base::gAxisSet) {
 		const float side2 = ((Factory::gFactoryCount % 2) == 0) ? 1.f : -1.f;
 		AIFloat3 a = Base::gAnchor
-				+ Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
-				- Base::gFwd * 300.f;
+				+ Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f));
 		if (OnMap(a) && ReachableBy(mover, a))
 			return a;
-		a = Base::gAnchor - Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f))
-				- Base::gFwd * 300.f;
+		a = Base::gAnchor - Base::gAcross * (side2 * (FarmRowW() * 0.5f + 300.f));
 		if (OnMap(a) && ReachableBy(mover, a))
 			return a;
 	}
