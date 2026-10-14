@@ -307,8 +307,13 @@ def finish(st, n, gi, sc, ver=None):
         if n["fails"] >= MAX_FAILS:
             n["status"] = "failed"
         return
-    n["games"].append([round(sc[0], 4), sc[1], ver or "?"])
+    n["games"].append([round(sc[0], 4), sc[1], ver or "?", gi])
     if len(n["games"]) < n["target"] or n["busy"]:
+        return
+    if "arm" in n:
+        n["status"] = "done"
+        log("A/B %s arm %s (net %d) done: %.1f wins of %d, score %+.2f" % (
+            n["ab"], n["arm"], n["id"], wins(n), len(n["games"]), mscore(n)))
         return
     a = st.get("anneal")
     if n["target"] not in LADDER:   # the centre's extra games
@@ -381,7 +386,7 @@ def work(slot, st, lay, rng):
         sc = None
         try:
             per_side, mapn, foe = SETUPS[gi % len(SETUPS)]
-            _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, game_seed(n["id"], gi), f, slot, foe))
+            _, _, sc = neuro.play((st["dir"], n["id"], gi, per_side, mapn, game_seed(n.get("seed_id", n["id"]), gi), f, slot, foe))
         except Exception:
             log("worker %d game c%d-g%d raised: %s" % (slot, n["id"], gi, traceback.format_exc().strip().replace("\n", " | ")))
         with lock:
@@ -389,8 +394,29 @@ def work(slot, st, lay, rng):
             save(st)
 
 
+def ab_report(st):
+    """Each A/B: arm B minus arm A, game for game on the same seed (a pair counts once both played)."""
+    seen = set()
+    for n in st["nets"].values():
+        if "pair" not in n or tuple(n["pair"]) in seen:
+            continue
+        seen.add(tuple(n["pair"]))
+        A, B = (st["nets"].get(str(x)) for x in n["pair"])
+        if A is None or B is None:
+            continue
+        ga = {g[3]: g for g in A["games"] if len(g) > 3}
+        d = [(g[0] - ga[g[3]][0]) for g in B["games"] if len(g) > 3 and g[3] in ga]
+        k = len(d)
+        mean = sum(d) / k if k else 0.0
+        sd = math.sqrt(sum((x - mean) ** 2 for x in d) / (k - 1)) if k > 1 else float("nan")
+        print("A/B %s on net %d: %d pairs, B - A score %+.2f +-%.2f; A %.1f of %d wins, B %.1f of %d" % (
+            n["ab"], n["of"], k, mean, sd / math.sqrt(k) if k > 1 else float("nan"),
+            wins(A), len(A["games"]), wins(B), len(B["games"])))
+
+
 def status(st):
-    nets = list(st["nets"].values())
+    ab_report(st)
+    nets = [n for n in st["nets"].values() if "arm" not in n]
     played = [n for n in nets if n["games"]]
     first = [n["games"][0][1] for n in played]
     print("networks tried %d of %d, games %d; first games W %d D %d L %d" % (
@@ -426,6 +452,33 @@ def main(argv):
     st = load()
     if "--status" in argv:
         status(st)
+        return 0
+    if "--ab" in argv:
+        # A DEFAULT CHANGE RUNS AS A PAIRED ARM BEFORE IT BECOMES THE DEFAULT (10-14: one army went into
+        # the search unmeasured and cost 25% -> 10%). Two networks with the centre's weights, one as
+        # deployed and one with the option set, on the same seeds and setups game for game.
+        key, val = argv[argv.index("--ab") + 1].split("=", 1)
+        games = int(argv[argv.index("--ab-games") + 1]) if "--ab-games" in argv else LADDER[-1]
+        a = st.get("anneal")
+        src = st["nets"][argv[argv.index("--of") + 1]] if "--of" in argv else (st["nets"][str(a["centre"])] if a else None)
+        if src is None:
+            raise SystemExit("--ab needs an anneal centre or --of <net>")
+        w = played_weights(st, src["id"])
+        i = st["next"]
+        st["next"] += 2
+        for k, arm in enumerate(("A", "B")):
+            nid = i + k
+            st["nets"][str(nid)] = {"id": nid, "seed": 0, "s": 0.0, "arm": arm, "ab": "%s=%s" % (key, val),
+                                    "pair": [i, i + 1], "of": src["id"], "seed_id": i, "games": [], "busy": 0,
+                                    "tries": 0, "fails": 0, "target": games, "status": "live"}
+            p = neuro.opt_file(st["dir"], nid, w)
+            if arm == "B":
+                opts = json.load(open(p, encoding="utf-8"))
+                opts[key] = val
+                json.dump(opts, open(p, "w", encoding="utf-8"))
+        save(st)
+        log("A/B %s=%s on net %d's weights: arms %d (as deployed) and %d (option set), %d paired games each" % (
+            key, val, src["id"], i, i + 1, games))
         return 0
     if "--add-net" in argv:
         # a hand-edited weights file joins the search as a network (his 10-13: 736 with its
