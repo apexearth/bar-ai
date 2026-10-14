@@ -146,7 +146,21 @@ public:
 	std::vector<SReachEnemy> reachCache;
 	std::vector<SReachNode> reachNodes;
 	std::vector<SDGunThreat> dgunThreats;
+
+	// apex: the fort (census key) each ally is sieging, so two allies do not siege one fort
+	void ClaimSiege(int key, int teamId) { ReleaseSiege(teamId); siegeClaims[key] = teamId; }
+	void ReleaseSiege(int teamId) {
+		for (auto it = siegeClaims.begin(); it != siegeClaims.end();) {
+			it = (it->second == teamId) ? siegeClaims.erase(it) : std::next(it);
+		}
+	}
+	int SiegeClaimant(int key) const {
+		auto it = siegeClaims.find(key);
+		return (it != siegeClaims.end()) ? it->second : -1;
+	}
 private:
+	std::map<int, int> siegeClaims;
+
 	void DelegateAuthority();
 	void ApplyAuthority(CCircuitAI* newOwner);
 

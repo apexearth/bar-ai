@@ -151,6 +151,8 @@ void SiegeDecide()
 	float bestRatio = -1.f;
 	array<float> bf;
 	for (int i = 0; i < nF; ++i) {
+		if (aiMilitaryMgr.GetFortAllyClaim(i) >= 0)
+			continue;   // an ally is sieging it
 		const float reach = aiMilitaryMgr.GetFortVal(i, FV_REACH);
 		SgBuildable(reach, defs);
 		float hH = 0.f, hD = 0.f, haveM = 0.f;

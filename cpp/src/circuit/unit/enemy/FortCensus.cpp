@@ -341,11 +341,13 @@ void CFortCensus::SetSiege(const AIFloat3& pos, float radius, float reach, int k
 	siege.key = key;
 	siege.setFrame = circuit->GetLastFrame();
 	MatchSiege();
+	circuit->GetAllyTeam()->ClaimSiege(key, circuit->GetTeamId());
 }
 
 void CFortCensus::ClearSiege()
 {
 	siege = SSiege();
+	circuit->GetAllyTeam()->ReleaseSiege(circuit->GetTeamId());
 }
 
 static int Fort_Count(CMilitaryManager* mgr)
@@ -365,6 +367,18 @@ static AIFloat3 Fort_Pos(CMilitaryManager* mgr, int i)
 		return AIFloat3(-RgtVector);
 	}
 	return forts[i].pos;
+}
+
+// The ally sieging fort i, -1 when none or it is ours.
+static int Fort_AllyClaim(CMilitaryManager* mgr, int i)
+{
+	const std::vector<CFortCensus::SFort>& forts = mgr->GetFortCensus()->GetForts();
+	if ((i < 0) || (i >= (int)forts.size())) {
+		return -1;
+	}
+	CCircuitAI* circuit = mgr->GetCircuit();
+	const int team = circuit->GetAllyTeam()->SiegeClaimant(forts[i].key);
+	return (team == circuit->GetTeamId()) ? -1 : team;
 }
 
 static float Fort_Val(CMilitaryManager* mgr, int i, int field)
@@ -424,6 +438,7 @@ void CFortCensus::RegisterScript(asIScriptEngine* engine)
 	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetFortStamp()", asFUNCTION(Fort_Stamp), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "AIFloat3 GetFortPos(int)", asFUNCTION(Fort_Pos), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "float GetFortVal(int, int)", asFUNCTION(Fort_Val), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CMilitaryManager", "int GetFortAllyClaim(int)", asFUNCTION(Fort_AllyClaim), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetSiege(const AIFloat3& in, float, float, int)", asFUNCTION(Fort_SetSiege), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void ClearSiege()", asFUNCTION(Fort_ClearSiege), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CMilitaryManager", "void SetSiegeReady(bool)", asFUNCTION(Fort_SetSiegeReady), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
