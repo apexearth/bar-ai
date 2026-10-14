@@ -243,6 +243,10 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (pack !is null)
 			return NoteElect("raid.pull", pack);
 	}
+	// A unit the siege claimed or still lacks goes to the squad that exists for that fortification.
+	IUnitTask@ sg = SiegeTaskForUnit(unit);
+	if (sg !is null)
+		return NoteElect("siege", sg);
 	// ESCORT DUTY outranks the pools for cheap ground army: an exposed
 	// constructor without an escort claims one guard (Market keeps the
 	// one-per-worker registry).

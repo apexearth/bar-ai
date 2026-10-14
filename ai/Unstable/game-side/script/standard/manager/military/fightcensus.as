@@ -33,6 +33,7 @@ string FightTypeName(uint ft)
 	if (ft == uint(Task::FightType::AH))      return "ah";
 	if (ft == uint(Task::FightType::SUPPORT)) return "support";
 	if (ft == uint(Task::FightType::SUPER))   return "super";
+	if (ft == uint(Task::FightType::SIEGE))   return "siege";
 	return "?";
 }
 

@@ -23,6 +23,7 @@ namespace circuit {
 class IMainJob;
 class CBDefenceTask;
 class CFGuardTask;
+class CFortCensus;
 
 namespace TaskF {
 	struct SFightTask {
@@ -115,6 +116,8 @@ public:
 
 	IFighterTask* Enqueue(const TaskF::SFightTask& ti);
 	virtual CRetreatTask* EnqueueRetreat() override;
+	// apex: their fortifications and our siege goal; created on first use (unit/enemy/FortCensus.cpp)
+	CFortCensus* GetFortCensus();
 private:
 	virtual void DequeueTask(IUnitTask* task, bool done = false) override;
 
@@ -447,6 +450,8 @@ private:
 
 	std::shared_ptr<IMainJob> defend;
 	std::vector<std::pair<springai::AIFloat3, BuildVector>> buildDefence;  // pos: defences
+
+	std::shared_ptr<CFortCensus> fortCensus;
 };
 
 } // namespace circuit

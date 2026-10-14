@@ -79,7 +79,10 @@ CONT = [("esc", "NNE"), ("ecap", "NNY"), ("cfear", "NNCF"), ("con", "NNK"), ("ca
         ("aa", "NNAD")]
 PICK = [("plan", "NNG"), ("tech", "NNT"), ("open", "NNOP"), ("hunt", "NNH"), ("strike", "NNB"),
         ("reinf", "NNV"), ("join", "NNJ"), ("raid", "NNR"), ("air", "NNA"), ("com", "NNC"),
-        ("defsite", "NNU"), ("deftype", "NNN"), ("post", "NNP")]
+        ("defsite", "NNU"), ("deftype", "NNN"), ("post", "NNP"), ("siege", "NNSG")]
+# Heads no trained net ever scaled: (script file under manager/, its own-feature const, options).
+# Their inputs take the declared default scaling m=0, s=1.
+DECLARED = {"NNSG": ("military/nnsiege.as", "NNSG_SIEGE", 2)}
 WK_KINDS = 17        # kinds.as WK_TEETH + 1
 
 
@@ -94,6 +97,16 @@ def nn_state_source():
     """NN_STATE exactly as nnlog.as builds it from its string pieces."""
     src = open(os.path.join(MARKET, "nnlog.as"), encoding="utf-8").read()
     m = re.search(r'const string NN_STATE = (.*?);\n', src, re.S)
+    return "".join(re.findall(r'"([^"]*)"', m.group(1)))
+
+
+def declared_own(rel, name):
+    """A head's own-feature layout exactly as its script builds it from string pieces."""
+    path = os.path.join(os.path.dirname(MARKET), "..", rel)
+    src = open(os.path.normpath(path), encoding="utf-8").read()
+    m = re.search(r'const string %s = (.*?);\n' % re.escape(name), src, re.S)
+    if not m:
+        raise SystemExit("%s has no %s" % (rel, name))
     return "".join(re.findall(r'"([^"]*)"', m.group(1)))
 
 
@@ -130,6 +143,11 @@ def build_layout():
            "heads": []}
 
     def own_scaling(px):
+        if px in DECLARED:
+            rel, name, k = DECLARED[px]
+            own = declared_own(rel, name)
+            F = len(own.split(","))
+            return own, F, [0.0] * F, [1.0] * F, 2 * k
         st = as_const(w, px + "_STATE")
         if not st.startswith(state + "|"):
             raise SystemExit("%s was laid out against another NN_STATE" % px)

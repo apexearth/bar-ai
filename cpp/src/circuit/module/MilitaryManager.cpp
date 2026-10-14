@@ -36,6 +36,7 @@
 #include "task/fighter/AntiAirTask.h"
 #include "task/fighter/AntiHeavyTask.h"
 #include "task/fighter/SupportTask.h"
+#include "task/fighter/SiegeTask.h"
 #include "task/static/SuperTask.h"
 #include "terrain/TerrainManager.h"
 #include "terrain/path/PathFinder.h"
@@ -773,6 +774,9 @@ IFighterTask* CMilitaryManager::Enqueue(const TaskF::SFightTask& ti)
 		} break;
 		case IFighterTask::FightType::SUPER: {
 			task = new CSuperTask(this);
+		} break;
+		case IFighterTask::FightType::SIEGE: {
+			task = new CSiegeTask(this);
 		} break;
 	}
 

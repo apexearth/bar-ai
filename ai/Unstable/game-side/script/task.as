@@ -54,6 +54,7 @@ enum FightType {
 	AH,
 	SUPPORT,
 	SUPER,
+	SIEGE,
 	_SIZE_
 }
 

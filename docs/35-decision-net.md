@@ -180,6 +180,30 @@ restructure (enemy economy estimate).
   no cell is known or our attack power is 0 (`apex: strike start` / `strike
   end why=time|gone|army kill= lost=`). Shared labels only (economy, losses,
   edges vs the enemy, endV, endFast). Prefix NNB. `apex: strike-stat` (60 s).
+- `apex: nnsiege` (`manager/military/nnsiege.as`, 2026-10-14, his "siege a
+  fortification on purpose"): NO or SIEGE, every 30 s while no siege runs.
+  The C++ fort census (`unit/enemy/FortCensus.cpp`, a walk of known enemy
+  statics sliced 64 a frame, every 10 s) links guns that cover each other
+  into clusters: Lanchester terms (sum hp, sum surf threat / sqrt hp, as
+  SquadTask's turret ring), longest reach, shields (live power), jammers,
+  radars, its metal, and the unarmed economy inside its reach (`apex:
+  fort-census`, once a minute). Per cluster the head prices worth = its metal
+  + that economy + their richest economy cell when the cluster stands on the
+  road to it, against force = the cheapest force of one outranging def our
+  labs can build that beats its guns at the answer parity (n = sqrt(need /
+  (hp x d))). The best ratio is the option; rule SIEGE when worth >= force.
+  SIEGE sets the C++ siege goal; units that outrange it are demanded as army
+  gap (`SiegeGapM` in production.as: the lack in this def's units, less what
+  we own and have ordered), one radar and one jammer are owed to the squad,
+  and `CSiegeTask` (FightType SIEGE) holds them: shields, jammers, radars,
+  then guns, each long gun on a ring at 0.8 of its range where no known gun
+  reaches, a screen of tanks pulled to meet their army near the fort halfway
+  between the guns' reach and the long guns, a jammed target shot at its
+  remembered position. Ends `gone` (the census no longer finds it), `lost`
+  (we lost more metal near it than it was worth) or `nounits`. `apex: siege
+  start/look/end`, `siege-squad` (C++, 30 s), `nnsiege-done ... done=(kill -
+  lost)/(worth + lost)`, `siege-stat` (60 s). `tools/siege.py` prints it.
+  Policy key `siege` (neuro.py PICK, declared default scaling m=0 s=1).
 - `mass` / `odds` (`manager/military/nnmassodds.as`, 2026-10-08; continuous
   2026-10-09): two docs/24 section 7 priors made decisions, every 60 s per
   team (staggered), v in 0.25-6, rule 1x (today's numbers). MASS
