@@ -1948,6 +1948,14 @@ const float TUNE_PLANT_INFLIGHT = 1.f;
 //   docs/27.
 const float TUNE_COVER_PUSH_S = 10.f;
 
+// [toggle 0/1] x5 -- Defence as a crutch (his 10-14): each prices one rule that
+//   bypassed the draw. 0 = before. See docs/27; counted on `apex: ecodef-stat`.
+const float TUNE_RADAR_PRICE = 0.f;    // radar worth what the eyes give our army and the ground it holds
+const float TUNE_DEFJOIN_PRICE = 0.f;  // the defence assist offered to the draw at its price, not hoisted
+const float TUNE_FIELD_PRICED = 0.f;   // the field crew's towers and radar go to the draw
+const float TUNE_COVER_PRICED = 0.f;   // the coverall and base-front towers go to the draw
+const float TUNE_DEF_DANGER = 0.f;     // the defence target follows the danger our army cannot meet
+
 // [multiplier] -- What a mex UPGRADE'S extra metal stream is worth, over its
 //   honest arithmetic. See docs/27.
 const float TUNE_MEXUP_BOOST = 1.f;

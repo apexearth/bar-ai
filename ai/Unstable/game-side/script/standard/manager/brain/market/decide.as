@@ -1759,6 +1759,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// What put ranked[0] there -- logged on the decide line, because a hoist
 	// and a draw look identical from outside and were read as a broken draw.
 	string why = "draw";
+	// the wants the ecodef switches sent to the draw instead of hoisting
+	Want@ edDj = null;
+	Want@ edCov = null;
+	Want@ edBf = null;
+	bool edFieldDraw = false;
+	int edBfSlot = -1;
+	EcoDefLog();
 	// A WALLED-IN UNIT CAN REACH NOTHING BUT ITS WALL. The pen reclaim
 	// held v=143-148 and still lost the commander's election to the stall
 	// hoist twice and to the draw once (gate, Frozen Ford s5): two minutes
@@ -2101,12 +2108,24 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				cw.pos = site;
 				cw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-				ValueOf(ld, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
-						Catalog::gBuildPower[int(unit.circuitDef.id)], cw);
-				ranked.insertAt(0, cw);
-				++gCovPicked;
-				why = "coverall";
-				coverPush = true;
+				const bool covPriced = CoverPricedOn();
+				const float covG = covPriced ? EdDefGainNow(ld) : 1.f;
+				ValueOf(ld, covG, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
+						Catalog::gBuildPower[int(unit.circuitDef.id)], cw, !covPriced);
+				if (covPriced) {
+					if (covG > 0.f) {
+						EdInsertByValue(ranked, cw);
+						@edCov = cw;
+						++gEdCovOffer;
+					} else {
+						++gEdCovNoPrice;
+					}
+				} else {
+					ranked.insertAt(0, cw);
+					++gCovPicked;
+					why = "coverall";
+					coverPush = true;
+				}
 			}
 		}
 	}
@@ -2145,15 +2164,28 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				bw.pos = site;
 				bw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-				ValueOf(gd, 1.f, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
-						Catalog::gBuildPower[int(unit.circuitDef.id)], bw);
-				ranked.insertAt(0, bw);
-				gBfTakenAt[uint(gBfSlot)] = ai.frame;
-				gBfSlot = -1;
-				++gBaseFrontHits;
-				Military::DangerNotePush();
-				why = "basefront";
-				coverPush = true;
+				const bool bfPriced = CoverPricedOn();
+				const float bfG = bfPriced ? EdDefGainNow(gd) : 1.f;
+				ValueOf(gd, bfG, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
+						Catalog::gBuildPower[int(unit.circuitDef.id)], bw, !bfPriced);
+				if (bfPriced) {
+					if (bfG > 0.f) {
+						EdInsertByValue(ranked, bw);
+						@edBf = bw;
+						edBfSlot = gBfSlot;
+						++gEdBfOffer;
+					} else {
+						++gEdCovNoPrice;
+					}
+				} else {
+					ranked.insertAt(0, bw);
+					gBfTakenAt[uint(gBfSlot)] = ai.frame;
+					gBfSlot = -1;
+					++gBaseFrontHits;
+					Military::DangerNotePush();
+					why = "basefront";
+					coverPush = true;
+				}
 			}
 		}
 	}
@@ -2393,13 +2425,18 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		floorPush = true;
 		why = "field";
 	}
+	if (gCrewDrawn) {
+		gCrewDrawn = false;
+		edFieldDraw = true;
+		++gEdFieldDraw;
+	}
 	// THE ADVANCED HANDS AT HOME BUILD ECONOMY (apexearth 2026-10-03, watching
 	// purple: "we don't keep enough advanced constructors at home ... no more
 	// fusions being made for many minutes"; its T2 hands were on Annihilators
 	// and flak). While economy work is on offer, a home advanced hand is not
 	// offered guns, AA, sensors or supers; the field crew and the basic hands
 	// keep building defence.
-	if (!floorPush && !aaPanic && !superPush && CrewSplitOn()
+	if (!floorPush && !aaPanic && !superPush && !edFieldDraw && CrewSplitOn()
 		&& ReachesCeiling(int(unit.circuitDef.id))
 		&& !unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
 	{
@@ -2534,8 +2571,13 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Want@ ua = ProposeUnlockAssist(unit, false);
 		string uaWhy = "metalfirst";
 		if (((ua is null) || (ua.kind != WK_ASSIST)) && !mexOnList) {
-			@ua = ProposeUnlockAssist(unit, true);
-			uaWhy = "defjoin";
+			if (DefJoinPriceOn()) {
+				@ua = null;
+				@edDj = DefJoinOffer(unit, ranked);
+			} else {
+				@ua = ProposeUnlockAssist(unit, true);
+				uaWhy = "defjoin";
+			}
 		}
 		if ((ua !is null) && (ua.kind == WK_ASSIST)) {
 			ranked.insertAt(0, ua);
@@ -2763,6 +2805,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				NoteClaim(unit, ranked[i]);
 			if ((depth == 0) && (why == "comself"))
 				++gComSelfExec;
+			EdExecNote(ranked[i], edDj, edCov, edBf, edFieldDraw, edBfSlot);
 			OpenNoteExec(isComm, ranked[i].kind);
 			ComFlipNote(unit, ranked[i], t, (depth == 0) ? why : "fall");
 			// What was EXECUTED, not what was drawn -- the decide line above
@@ -2780,6 +2823,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			if ((int(unit.id) >= 0) && (int(unit.id) < int(gIncTask.length()))) {
 				@gIncTask[int(unit.id)] = t;
 				gIncVal[int(unit.id)] = ranked[i].value / ranked[i].nnMult;
+				gIncGain[int(unit.id)] = ranked[i].gain;
 				// The walk this job started with, so a later election can ask
 				// how much of it has already been paid.
 				const AIFloat3 tp0 = t.GetBuildPos();
@@ -2860,6 +2904,119 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	}
 	DefRoleForget(int(unit.id));
 	return IdleFloor(unit, "all wants refused");
+}
+
+void EdInsertByValue(array<Want@>@ ranked, Want@ w)
+{
+	uint at = 0;
+	while ((at < ranked.length()) && (ranked[at].value >= w.value))
+		++at;
+	ranked.insertAt(at, w);
+}
+
+// apex_defjoin_price: the assist to a tower in flight, priced at what finishing
+// it sooner is worth. Our hand b on a crew of B brings the tower forward by
+// rem*b/(B(B+b)) over a stint of rem/(B+b): a rate of towerGain*b/B.
+Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
+{
+	CCircuitUnit@ saveT = gAssistTarget;
+	const Id saveId = gAssistTargetId;
+	const int saveS = gAssistGuardS;
+	Want@ w = ProposeUnlockAssist(unit, true);
+	CCircuitUnit@ boss = gAssistTarget;
+	const Id bossId = gAssistTargetId;
+	const int bossS = gAssistGuardS;
+	@gAssistTarget = saveT;
+	gAssistTargetId = saveId;
+	gAssistGuardS = saveS;
+	if ((w is null) || (w.kind != WK_ASSIST) || (boss is null) || (w.def is null))
+		return null;
+	const int bi = int(bossId);
+	const int td = int(w.def.id);
+	IUnitTask@ job = null;
+	float towerG = 0.f;
+	if ((bi >= 0) && (bi < int(gIncTask.length())) && (gIncTask[bi] !is null)
+		&& !gIncTask[bi].IsDead() && (gIncTask[bi].buildDef !is null)
+		&& (int(gIncTask[bi].buildDef.id) == td)) {
+		@job = gIncTask[bi];
+		towerG = gIncGain[bi];
+	}
+	if ((job is null) && (boss.task !is null) && (boss.task.GetType() == Task::Type::BUILDER))
+		@job = boss.task;
+	if (towerG <= 0.f) {
+		// the founder's price is unknown: what a tower of that kind is worth now
+		float anyG = 0.f;
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if ((ranked[i].kind != WK_PROTECT) || (ranked[i].def is null))
+				continue;
+			if (int(ranked[i].def.id) == td) {
+				towerG = ranked[i].gain;
+				break;
+			}
+			if (ranked[i].gain > anyG)
+				anyG = ranked[i].gain;
+		}
+		if (towerG <= 0.f)
+			towerG = anyG;
+	}
+	if (towerG <= 0.f) {
+		++gEdDjNoGain;
+		return null;
+	}
+	const int uid = int(unit.circuitDef.id);
+	const float b = Catalog::gBuildPower[uid];
+	float crewB = 0.f;
+	float prog = 0.f;
+	if (job !is null) {
+		array<CCircuitUnit@>@ on = job.GetUnits();
+		for (uint i = 0; (on !is null) && (i < on.length()); ++i)
+			if ((on[i] !is null) && (on[i].id != unit.id))
+				crewB += Catalog::gBuildPower[int(on[i].circuitDef.id)];
+		crewB += float(GuardsOnJob(job)) * b;
+		prog = Requests::Progress(job);
+	}
+	if (crewB <= 1.f)
+		crewB = Catalog::gBuildPower[int(boss.circuitDef.id)];
+	if ((b <= 0.f) || (crewB <= 0.f))
+		return null;
+	const float remSec = Catalog::BuildSecondsAt(td, crewB + b) * (1.f - prog);
+	const float spd = Catalog::gSpeed[uid];
+	const float walkSec = (spd > 1.f) ? (unit.GetPos(ai.frame).distance2D(w.pos) / spd) : 30.f;
+	w.gain = towerG * b / crewB;
+	w.mCost = 1.f;
+	w.tCost = (walkSec + remSec) * Wage() + w.gain * walkSec;
+	w.walkSec = walkSec;
+	w.value = w.gain / (w.mCost + w.tCost);
+	EdInsertByValue(ranked, w);
+	@gDjTarget = boss;
+	gDjTargetId = bossId;
+	gDjGuardS = bossS;
+	++gEdDjOffer;
+	gEdDjV += w.value * 1000.f;
+	return w;
+}
+
+void EdExecNote(Want@ w, Want@ dj, Want@ cov, Want@ bf, bool fieldDraw, int bfSlot)
+{
+	if (w is null)
+		return;
+	if ((dj !is null) && (w is dj))
+		++gEdDjWin;
+	if ((cov !is null) && (w is cov)) {
+		++gEdCovWin;
+		++gCovPicked;
+	}
+	if ((bf !is null) && (w is bf)) {
+		++gEdBfWin;
+		if ((bfSlot >= 0) && (uint(bfSlot) < gBfTakenAt.length()))
+			gBfTakenAt[uint(bfSlot)] = ai.frame;
+		if (gBfSlot == bfSlot)
+			gBfSlot = -1;
+		++gBaseFrontHits;
+		Military::DangerNotePush();
+	}
+	if (fieldDraw && ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)) && FieldSite(w.pos))
+		++gEdFieldWin;
 }
 
 

@@ -747,6 +747,7 @@ async function openGame(dir, isRefresh) {
     if ((changed || !isRefresh) && !d.matches && d.chart) loadCrew(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadFrontTowers(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadLift(dir);
+    if ((changed || !isRefresh) && !d.matches && d.chart) loadEcoDef(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadComIdle(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadFacSupport(dir);
     if ((changed || !isRefresh) && !d.matches && d.chart) loadUnits(dir);
@@ -1022,6 +1023,20 @@ function renderMatch(d) {
       up by a transport and set down beside the working factory furthest short
       of build power. Transports are bought only when such turrets exist.
       Last sample per team.</div></div>
+  <div class="card"><h2>Defence as a crutch — the five pricing switches</h2>
+    <div class="dim" id="ed-note"></div>
+    <table style="margin-top:8px"><thead><tr><th>team</th><th>on (radar, join,
+      field, cover, danger)</th><th>radars priced</th><th>old gain</th><th>new gain</th>
+      <th>tower assists offered</th><th>won</th><th>no price</th><th>mean v</th>
+      <th>field tower/radar drawn</th><th>won</th><th>mex cover offered</th><th>won</th>
+      <th>base front offered</th><th>won</th><th>tower unpriced</th><th>danger share</th><th>threat</th>
+      <th>army meeting it</th></tr></thead><tbody id="ed-table"></tbody></table>
+    <div class="dim" style="font-size:12px;margin-top:4px">Each switch turns a
+      rule that skipped the lottery into a priced offer in it (his 10-14: "we depend
+      on defenses right now, like it's a crutch"). Offered against won is how often
+      the tower or radar still beat energy and army at its price. Danger share is
+      the part of the seen enemy army our army cannot meet; the defence target is
+      scaled by it. Counts are game totals; last sample per team.</div></div>
   <div class="card"><h2>Commander idle — first ten minutes</h2>
     <div class="dim" id="ci-note"></div>
     <table style="margin-top:8px"><thead><tr><th>team</th><th>minute</th>
@@ -1659,6 +1674,21 @@ async function loadLift(dir) {
   setHTML(tb, teams.map(k => { const t = L.teams[k];
     return `<tr><td>${esc(k)} <span class="dim">(${esc(t.min)}m)</span></td>` +
       L.keys.map(c => `<td>${esc(t[c])}</td>`).join("") + "</tr>"; }).join(""));
+}
+
+async function loadEcoDef(dir) {
+  const tb = $("#ed-table"); if (!tb) return;
+  let E = null;
+  try { E = await api("/api/ecodef?dir=" + encodeURIComponent(dir)); } catch (e) {}
+  const teams = E && E.teams ? Object.keys(E.teams) : [];
+  if (!teams.length) {
+    $("#ed-note").textContent = "no `apex: ecodef-stat` lines in this infolog";
+    setHTML(tb, ""); return;
+  }
+  $("#ed-note").textContent = "";
+  setHTML(tb, teams.map(k => { const t = E.teams[k];
+    return `<tr><td>${esc(k)} <span class="dim">(${esc(t.min)}m)</span></td>` +
+      E.keys.map(c => `<td>${esc(t[c])}</td>`).join("") + "</tr>"; }).join(""));
 }
 
 async function loadComIdle(dir) {

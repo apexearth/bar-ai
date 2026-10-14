@@ -833,6 +833,33 @@ GROUPS = [
                   "a standing T2 builder can make defence. Low = the newer "
                   "guns win the auction; 1 prices tiers equally"),
              ]},
+            {"title": "Defence as a crutch (his 10-14)",
+             "what": "Five rules that put a tower or a radar ahead of the "
+                     "lottery instead of letting it bid. Each switch makes one "
+                     "of them a priced offer that energy and army can outbid. "
+                     "All off is the old behaviour; A/B each one alone.",
+             "reads": "brain/market/ecodef.as, decide.as, crew.as, protect_senseprice.as",
+             "knobs": [
+                 ("TUNE_RADAR_PRICE", "radar worth only what it shows our ARMY "
+                  "and the buildings it newly watches, not a share of "
+                  "everything we own. On = fewer radars, built where the army "
+                  "is blind; the stat line prints the old and new gain"),
+                 ("TUNE_DEFJOIN_PRICE", "a free constructor helps a tower "
+                  "being built only when finishing it sooner is worth more "
+                  "than its other jobs. On = fewer hands pulled onto towers"),
+                 ("TUNE_FIELD_PRICED", "the constructors out at the far "
+                  "extractors build a tower or radar only when it beats "
+                  "everything else in the lottery. On = the field crew builds "
+                  "fewer towers and more of the rest"),
+                 ("TUNE_COVER_PRICED", "the light tower on an unguarded "
+                  "extractor and the guns on the base's front edge bid in the "
+                  "lottery instead of jumping it. On = fewer towers, watch "
+                  "extractors lost"),
+                 ("TUNE_DEF_DANGER", "how much defence a seat holds follows "
+                  "the part of the enemy army we have seen that our own army "
+                  "cannot meet. On = a seat our army protects buys only its "
+                  "extractor guards; a seat the enemy outweighs buys towers"),
+             ]},
             {"title": "Cost of thinking",
              "what": "The protection field is rebuilt on a timer and every "
                      "defence price reads it. Rebuilding it more often tracks "
@@ -1244,6 +1271,29 @@ GOALS = [
                  "Stock BARb runs a 39.9% median (measured over 122 games, "
                  "2026-08-31); the baseline target is 40%, so under ~30% is "
                  "the symptom this fixes.",
+    },
+    {
+        "id": "crutch",
+        "ask": "Less on towers and radar, more on units",
+        "why": "From minute 15 our constructors spend 21-28% of their time on "
+               "defence and 10-13% on radar, because five rules let a tower or "
+               "a radar skip the lottery. Each step makes one of them bid at "
+               "its price. Try them one at a time.",
+        "steps": [
+            {"ref": "TUNE_RADAR_PRICE", "dir": "up",
+             "note": "radar priced by what our army sees through it"},
+            {"ref": "TUNE_FIELD_PRICED", "dir": "up",
+             "note": "the far crew's towers and radar bid like everything else"},
+            {"ref": "TUNE_COVER_PRICED", "dir": "up",
+             "note": "extractor and base-front towers bid instead of jumping the queue"},
+            {"ref": "TUNE_DEFJOIN_PRICE", "dir": "up",
+             "note": "helping a tower go up is priced, not automatic"},
+            {"ref": "TUNE_DEF_DANGER", "dir": "up",
+             "note": "a seat's tower budget follows the danger our army cannot meet"},
+        ],
+        "watch": "python tools/conjobs.py on the batch: defence and sense time "
+                 "should fall and energy and army rise; the dashboard's "
+                 "'Defence as a crutch' card shows each switch offered and won.",
     },
     {
         "id": "mexdef",

@@ -17,6 +17,7 @@
 // Want proposers, then the two spenders (Decide, ExecuteWant), then the
 // production side.
 #include "market/kinds.as"          // the Want record, the kind ids, their names
+#include "market/ecodef.as"         // defence as a crutch: the five pricing switches and their stat line
 #include "market/worth.as"          // what a combat unit is worth: the golden metrics
 #include "market/price.as"          // the two live prices, and ValueOf
 #include "market/ledger.as"         // spot-value senses; the claimed-spot ledger

@@ -841,6 +841,8 @@ float DefenceTarget()
 	// turrets count inside the total they are measured against, so defence
 	// cannot become its own reason.
 	float t = (gAssetsM + ArmyValue()) * Brain::TargetShare(Brain::DEFENCE);
+	if (DefDangerOn())
+		t *= DefDangerShare();
 	// ...and the per-mex floor is a target too. The site loop will not buy a
 	// turret the global target says we already have enough of, so the two must
 	// agree about the floor or it never gets built -- and the floor applies to
@@ -869,6 +871,44 @@ float DefenceTarget()
 	}
 	gDefTgtM = ((t > 0.f) ? t : 0.f) * ecoRamp * DefAmountMult();
 	return gDefTgtM;
+}
+
+// THE DANGER OUR ARMY CANNOT MEET (apex_def_danger; his 10-14: defences are the
+// last line, the army should kill them before they get close; 10-12: a seat's
+// defence follows its danger). The enemy army seen, times this seat's place in
+// their line, against our army and the allied army standing at our home; the
+// share left over is what towers are for. Unscouted is not absent: 1 until
+// their army has been seen. Fast up, slow down (half-life LossTau): a tower
+// takes minutes to stand and a beaten push comes back.
+int gDdAt = -999999;
+float gDdShare = 1.f;
+float DefDangerShare()
+{
+	if (ai.frame < gDdAt + 5 * SECOND)
+		return gDdShare;
+	const int dt = (gDdAt < 0) ? 0 : (ai.frame - gDdAt);
+	gDdAt = ai.frame;
+	if (!Military::FoeArmySeen() || !Builder::gHomeSet) {
+		gDdShare = 1.f;
+		gEdDangerShare = gDdShare;
+		return gDdShare;
+	}
+	const float threat = Military::EnemyMassingThreat() * TeamExposure();
+	const float meet = Military::gArmyHomeM + Military::gArmyFieldM
+			+ ai.GetAllyArmyMAt(Builder::gHomePos, ai.GetTunable("apex_eco_leash", TUNE_ECO_LEASH));
+	float unmet = 0.f;
+	if (threat > 0.f) {
+		const float r = StrRatio(threat, meet);
+		unmet = (r > 1.f) ? (1.f - 1.f / r) : 0.f;
+	}
+	const float tau = LossTau();
+	const float keep = (tau > 1.f) ? pow(0.5f, (float(dt) / float(SECOND)) / tau) : 0.f;
+	const float held = gDdShare * keep;
+	gDdShare = (unmet > held) ? unmet : held;
+	gEdDangerShare = gDdShare;
+	gEdThreat = threat;
+	gEdMeet = meet;
+	return gDdShare;
 }
 
 // How much of each target is still unmet, as a fraction. The want's gain is

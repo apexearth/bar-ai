@@ -35,11 +35,19 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		foeUnseen = (foeUnseen > 0.f) ? foeUnseen : 0.f;
 		const float surprise = foeUnseen / fill;
 		// an unwatched line is the approach itself, blind: the whole surprise
+		const float watch = Catalog::gRadarR[d] * ai.GetTunable("apex_radar_overlap", TUNE_RADAR_OVERLAP);
 		if (lineUp && (Catalog::gRadarR[d] > 1.f)
 			&& !ProtCovered(PROT_RADAR, lineAt, Catalog::gRadarR[d] * 0.6f))
 		{
 			at = lineAt;
 			gain = (gProtM + ArmyValue()) * rate + surprise;
+			if (RadarPriceOn()) {
+				float armyShare = 0.f;
+				const float armyNew = RadarArmyNewM(lineAt, watch, armyShare);
+				const float g = (armyNew + RadarGroundNewM(lineAt, watch)) * rate + surprise * armyShare;
+				RadarPriceNote(gain, g);
+				gain = g;
+			}
 			return gain > 0.f;
 		}
 		if (Gate(GATE_RADAR_GAP,
@@ -71,6 +79,19 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		// ourselves"; "it's cheap and we should make it").
 		gain += Military::EyesSavedM() / fill * unseenFrac;
 		gain += surprise * unseenFrac;
+		// WHAT THE EYES ARE WORTH TO THE ARMY (his 10-14: 10-13% of constructor
+		// time went on radar): the army and the buildings this mast newly
+		// watches, not a share of everything we own wherever any gap is open.
+		if (RadarPriceOn()) {
+			float armyShare = 0.f;
+			const float armyNew = RadarArmyNewM(gapAt, watch, armyShare);
+			const float groundShare = (gRcTotalM > 1.f) ? (gRgNewM / gRcTotalM) : 0.f;
+			const float g = (armyNew + gRgNewM) * rate
+					+ Military::EyesSavedM() / fill * groundShare
+					+ surprise * armyShare;
+			RadarPriceNote(gain, g);
+			gain = g;
+		}
 	} else if (cls == PROT_JAM) {
 		CCircuitDef@ bestJam = Military::JammerDef(unit.circuitDef);
 		if (Gate(GATE_JAM_SHORT, (bestJam !is null) && (int(bestJam.id) != d)
