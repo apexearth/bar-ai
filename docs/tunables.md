@@ -192,6 +192,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 - `TUNE_SCOUT_OVER_S` = 45. One idle cheap air scout crosses the enemy position this often (his "I don't see any scouts flying over their base").
 - `TUNE_ECO_ROLE` = 1. The eco role, re-armed at his ask 08-31 with the mechanism replaced: it names a different target (EcoRoleTargetM) instead of crushing army and defence targets.
 - `TUNE_ECO_FORCE` = 0. Force this AI to be the eco seat (his ask): the value is the share of the eco target it grows to before army and defence return. A modoption seats every Apex AI in the game.
+- `TUNE_ECO_LATCH` = 1. His ruling 10-15 ("just have 1 eco"): the eco seat is elected once and keeps the role while its heartbeat (team board `ecohb`) lives. Before it, his 8v8 moved the role t6 -> t2 at 18 min when t7 died beside t6.
 - `TUNE_ECO_SEAT_STRICT` = 0. While the eco seat grows, its hands and labs take only economy (plus AA while air kills us); the seat held 4 mexes all game in his 10-15 8v8. Off until an A/B; `apex: ecoseat-stat`.
 - `TUNE_GANTRY_AFFORD_S` = 100. Gantry affordability over team income: the ~9.3k bill clears at ~100 team m/s (his "we can have a gantry at like 100 m/s").
 - `TUNE_GANTRY_HOST_INC` = 150. The proposer's own income at which the gantry gain is whole, scaling (own/anchor)^2 below: 100 -> 150 at his call; a hard skip below it left six of eight 8v8 players gantry-less at 38 min ("not ok"), so the scale was restored.

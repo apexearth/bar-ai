@@ -508,6 +508,10 @@ GROUPS = [
                   "eco target before army and defence come back, 0.5 half "
                   "as far. Unlike the switch above it needs no big team — "
                   "it seats this AI in a 1v1 or a 2v2 as well"),
+                 ("TUNE_ECO_LATCH", "ON keeps ONE eco player for the whole "
+                  "game: elected at the start, it keeps the role unless it is "
+                  "eliminated. OFF re-elects every 10 s by shelter, so a "
+                  "neighbour's death can move the role mid-game"),
                  ("TUNE_ECO_SEAT_STRICT", "ON makes the eco player only "
                   "build economy while it grows: no towers, radar, army or "
                   "big guns from its constructors or labs; its labs make "

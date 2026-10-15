@@ -1634,6 +1634,7 @@ array<float>@ EcoShelter(const array<float>& in hx, const array<float>& in hz,
 }
 bool gEcoDiagDone = false;
 int gEcoRoleAt = -999999;
+int gEcoLatch = -1;   // the team elected eco seat, kept while its heartbeat lives
 
 // How much of the eco seat this AI has been told to play, 0 = decide normally.
 // Clamped so a value above 1 cannot ask for more eco than the seat's own
@@ -1726,6 +1727,24 @@ bool EcoRoleActive()
 	// refuses, and a line-abreast 8v8 never reaches it.
 	gEcoRole = (ht[seat] == ai.teamId) && (sh[seat] > 0.f) && (dmed > 1.f)
 		&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin));
+	// ONE ECO FOR THE GAME (his 10-15): a neighbour's death moved the role mid-game and the eco seat
+	// went back to towers while another started from nothing. Elected once; moves only when the
+	// seat's heartbeat stops.
+	if (ai.GetTunable("apex_eco_latch", TUNE_ECO_LATCH) > 0.f) {
+		ai.PublishTeamValue("ecohb", float(ai.frame));
+		bool latchAlive = false;
+		if (gEcoLatch >= 0) {
+			const float hb = ai.ReadTeamValue(gEcoLatch, "ecohb", -1.f);
+			latchAlive = (hb >= 0.f) && (float(ai.frame) - hb < float(60 * SECOND));
+		}
+		if (!latchAlive) {
+			gEcoLatch = -1;
+			if ((sh[seat] > 0.f) && (dmed > 1.f)
+					&& ((mates.length() >= 8) || (seatD >= dmed * margin * margin)))
+				gEcoLatch = ht[seat];
+		}
+		gEcoRole = (gEcoLatch >= 0) && (gEcoLatch == ai.teamId);
+	}
 	if (!gEcoDiagDone) {
 		gEcoDiagDone = true;
 		string row = "";

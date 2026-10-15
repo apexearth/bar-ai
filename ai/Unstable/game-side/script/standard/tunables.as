@@ -1414,6 +1414,10 @@ const float TUNE_SCOUT_OVER_S = 45.f;
 // RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. See docs/tunables.md.
 const float TUNE_ECO_ROLE = 1.f;
 
+// [toggle 0/1] -- The eco seat is elected once and keeps the role until its heartbeat stops (his
+//   10-15: "just have 1 eco"). See docs/tunables.md.
+const float TUNE_ECO_LATCH = 1.f;
+
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
 //   the ordinary seat election alone. Above 0 it takes the seat whatever
 //   the team's size or shape, and the value is how FAR it grows before army

@@ -7,6 +7,17 @@ phrased as a bar ("at 150 metal/s, build a gantry") it is a symptom at the incom
 not a number to code. The fight layer is stock BARb since 2026-09-07, so squad behaviour below is
 C++ work on top of stock. Older text: `git log -p TODO.md`.
 
+# Next big job (his 10-15: "we'll do it later")
+
+## Replace the overrides with one pricing scale
+
+Hoists jump the auction at fixed values and keep beating priced work: defjoin (v=1000, pulled the eco
+seat onto Ambusher/Annihilator builds), the advanced-defence role (72 of 600 T2-con decisions to
+towers), the field crew (narrows a hand's list to field jobs), roles, estall (sent a T2 con to a
+9-minute AFUS at v=0.00), basefront and coverall (unpriced T1 guns). Price every job on one scale --
+income added, losses prevented (measured attack rate x what it covers), builder time forgone at its
+real rate -- then delete each hoist the pricing makes redundant, one A/B at a time.
+
 # Strategies
 
 ## Abuse the BARb AI the way humans do
