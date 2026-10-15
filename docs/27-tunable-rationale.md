@@ -3399,6 +3399,38 @@ into it. Order census of his 1v1: travel (move) 2,086 orders vs fightwalk 86. Wi
 tasks travel with CFightAction, which stops at weapon range and fights what it meets. Raid and scout keep
 moves (doctrine: a raid walks past small stuff).
 
+## apex_target_value = 0 (C++ only, 2026-10-14)
+
+His 10-14 watch: our units shot the spam sent at them instead of hunting the targets that matter.
+Doctrine (docs/24 Targets): lowest-HP enemies in lethal doses, finish the nearly dead, long range
+and artillery first. Off pending A/B; 0 leaves every order as before.
+
+- Worth of an enemy (ISquadTask::TargetWorth): a building, its metal x ownPow / (its power +
+  ownPow) -- FindTarget's old pull, so the wall is still walked past to the economy. A mobile unit
+  that can hit us, its metal + its raw dps x our squad's metal per hp x (the engagement's clear
+  time + the walk in when its range exceeds our shortest armed range). Kill time = its hp (live,
+  last seen in LOS) / our squad dps against its domain (air or surface; armour is not modelled).
+- Group choice (AttackTask::FindTarget): score = sqBE x (distance + group clear time x our
+  speed)^2 / (group worth + support)^2 -- worth per second of walk and fire, squared so the
+  TGT_MARGIN hysteresis and the commit window keep their meaning. DefendTask: the same per enemy
+  (no groups there).
+- Fire (ISquadTask::AllocateFire): enemies in LOS within the squad's reach of the target, ranked by
+  worth / kill time; each takes the members in range whose fire kills it in one re-issue (3 s, the
+  existing repeat), smallest finishing dose first; leftovers go to the best target they reach.
+  Set-target only: the ring position around the squad's target is unchanged. Re-allocated on the
+  3 s repeat, a new target, or a dosed target dying / leaving LOS (at most once a second).
+- `apex: target-stat` per team per minute, in both arms: eng, alloc, tgts, asg, asgM vs nearM
+  (the metal each member was given vs the nearest enemy it could hit), ord/split (ring orders, and
+  those at a target other than the squad's), picks pickM vs pickNearM (group metal chosen vs the
+  nearest candidate group), kills spam/mid/high (<100, <1000, more; all our kills), overkill (dose
+  fire beyond the target's hp / dose fire).
+- Offline, 1,013 20261014-020717-nn-rand games, BARAI_DEATH: of 232,732 enemy units we killed 43%
+  by count were under 100 metal (13% of the metal), 1% were 1,000+ (15%); the enemy's kills of ours
+  were 3% 1,000+ (34% of the metal). BARAI_ARMY in 102 of them: of our armed units within 800 of an
+  enemy, 21% had spam nearest; 24% had an enemy of 3x the nearest's metal (and 300+) within 800
+  more; 21% had an enemy at 30% hp or less within 800. Not measurable from the logs: what was
+  shot at (no damage events), and overkill.
+
 ## TUNE_DEF_REFILL = 0 (2026-10-14)
 
 His 10-14: heavy attacks were answered with towers somewhere else, so the holes where we were hit

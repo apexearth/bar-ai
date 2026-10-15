@@ -297,6 +297,10 @@ bool CDefendTask::FindTarget()
 	int pettyCovered = 0;
 	CEnemyInfo* detachFor = nullptr;
 	float detachSq = std::numeric_limits<float>::max();
+	// apex_target_value: worth over the time to reach and kill it, as AttackTask weighs a group
+	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	const SFire fire = tv ? SquadFire() : SFire();
+	const float ourSpeed = std::max(lowestSpeed, 1.f);
 	float detachThreat = .0f;
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
@@ -373,8 +377,13 @@ bool CDefendTask::FindTarget()
 			}
 			continue;
 		}
-		if (minSqDist > sqDist) {
-			minSqDist = sqDist;
+		float score = sqDist;
+		if (tv && (edef != nullptr) && (FireAt(fire, edef) > 0.f)) {
+			const float killS = EnemyHp(enemy) / FireAt(fire, edef);
+			score = SQUARE((std::sqrt(sqDist) + killS * ourSpeed) / std::max(TargetWorth(fire, enemy, killS), 1.f));
+		}
+		if (minSqDist > score) {
+			minSqDist = score;
 			bestTarget = enemy;
 		}
 		enemyPositions.push_back(ePos);
