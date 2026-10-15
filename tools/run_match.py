@@ -201,7 +201,10 @@ def _ai_and_team(ai: AISpec, team_id: int, ally: int, slot: int, side: str,
 MAP_BOXES = {
     # key (substring)        boxes,  size
     "supreme isthmus":      ("trbl", 0.45),
-    "comet catcher":        ("lr",   0.2),    # his 10-11: the lobby's end boxes; auto gave 0.38 and starts near mid
+    # his 10-11: the lobby's end boxes; his 10-14: 4v4 at 0.2 holds only two of a side's four map starts,
+    # the other two were invented on the map edge and two commanders started stuck. 0.47 holds all four
+    # (left x <= 3604, right x >= 4407 of 8192).
+    "comet catcher":        ("lr",   {2: 0.2, 8: 0.47}),
     "red comet":            ("lr",   0.0),
     "glitters":             ("tb",   0.0),
     "nine_metal_islands":   ("trbl", 0.45),
@@ -573,6 +576,10 @@ def run(args) -> int:
             # The size is PAIRED with the axis -- 0.45 is a corner box for trbl
             # and a half-map strip for lr -- so it only rides along when the
             # map's own axis is the one being used.
+            if isinstance(mz, dict):
+                # {max players per side: size}, the smallest key that holds this team size
+                fits = [k for k in sorted(mz) if args.per_side <= k]
+                mz = mz[fits[0]] if fits else mz[max(mz)]
             if (args.box_size <= 0.0) and (mz > 0.0):
                 args.box_size = mz
                 print("box-size %.2f (map default)" % mz)
