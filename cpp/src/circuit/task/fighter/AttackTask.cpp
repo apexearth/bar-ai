@@ -100,9 +100,7 @@ void CAttackTask::AssignTo(CCircuitUnit* unit)
 
 	int squareSize = manager->GetCircuit()->GetPathfinder()->GetSquareSize();
 	ITravelAction* travelAction;
-	// his 10-14: a squad sent at a pack in our base walked straight into it on a move order;
-	// fight-travel stops at its own range and fights what it meets
-	if (cdef->IsAttrSiege() || (manager->GetCircuit()->GetTunable("apex_fight_travel", 0.f) > 0.f)) {
+	if (cdef->IsAttrSiege()) {
 		travelAction = new CFightAction(unit, squareSize);
 	} else {
 		travelAction = new CMoveAction(unit, squareSize);

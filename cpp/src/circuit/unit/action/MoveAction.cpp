@@ -7,6 +7,8 @@
 
 #include "unit/action/MoveAction.h"
 #include "unit/CircuitUnit.h"
+#include "unit/enemy/EnemyManager.h"
+#include "task/fighter/FighterTask.h"
 #include "CircuitAI.h"
 #include "terrain/TerrainManager.h"
 #include "util/Utils.h"
@@ -32,6 +34,28 @@ CMoveAction::~CMoveAction()
 {
 }
 
+// His 10-14: a squad sent at a pack in our base walked straight into it on a move order. A travel
+// order whose point already has an armed enemy within this unit's range is a fight order instead,
+// so the unit stops at range and fights. Raids and scouts keep walking (a raid passes small stuff);
+// fighting everywhere lost a same-seed 2v2 outright.
+static void TravelTo(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& pos, short options, int timeout)
+{
+	if (circuit->GetTunable("apex_fight_travel", 0.f) > 0.f) {
+		IUnitTask* task = unit->GetTask();
+		bool walker = (task == nullptr) || (task->GetType() != IUnitTask::Type::FIGHTER);
+		if (!walker) {
+			const IFighterTask::FightType ft = static_cast<IFighterTask*>(task)->GetFightType();
+			walker = (ft == IFighterTask::FightType::RAID) || (ft == IFighterTask::FightType::SCOUT);
+		}
+		const float range = unit->GetCircuitDef()->GetMaxRange();
+		if (!walker && (range > 0.f) && (circuit->GetEnemyManager()->GetEnemyArmedCostNear(pos, range) > 0.f)) {
+			unit->CmdFightTo(pos, options, timeout, CCircuitUnit::OrdSrc::FWALK);
+			return;
+		}
+	}
+	unit->CmdMoveTo(pos, options, timeout, CCircuitUnit::OrdSrc::TRAVEL);
+}
+
 void CMoveAction::Update(CCircuitAI* circuit)
 {
 	if (lastFrame + FRAMES_PER_SEC > circuit->GetLastFrame()) {
@@ -48,7 +72,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 	switch (pathMaxIndex) {
 		case -2:  // arrived
 			TRY_UNIT(circuit, unit,
-				unit->CmdMoveTo(pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
+				TravelTo(circuit, unit, pPath->posPath.back(), UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 			)
 			return;
 		case -1: return;  // continue with current waypoints
@@ -76,12 +100,12 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			if (isBadJump) {
 				FaceStep(step);
 				const AIFloat3& pos = pPath->posPath[step];
-				unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
+				TravelTo(circuit, unit, pos, options, lastFrame + FRAMES_PER_SEC * 60);
 			}
 		} else {
 			FaceStep(step);
 			const AIFloat3& pos = pPath->posPath[step];
-			unit->CmdMoveTo(pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::TRAVEL);
+			TravelTo(circuit, unit, pos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, lastFrame + FRAMES_PER_SEC * 60);
 		}
 		unit->CmdWantedSpeed(stepSpeed);
 
@@ -89,7 +113,7 @@ void CMoveAction::Update(CCircuitAI* circuit)
 			step = std::min(step + increment, pathMaxIndex);
 			FaceStep(step);
 			const AIFloat3& pos = pPath->posPath[step];
-			unit->CmdMoveTo(pos, options, lastFrame + FRAMES_PER_SEC * 60 * i, CCircuitUnit::OrdSrc::TRAVEL);
+			TravelTo(circuit, unit, pos, options, lastFrame + FRAMES_PER_SEC * 60 * i);
 		}
 	)
 }

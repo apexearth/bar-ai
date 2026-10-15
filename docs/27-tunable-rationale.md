@@ -3426,3 +3426,5 @@ back the same way because they know the hole is there. Off pending A/B.
   416 lost, 45%, median 23 s, 916 near vs 8,757 elsewhere, first order near 17%.
 - Constants with no derivation: 16 live refills, a 48-order ledger, 300 elmos to match an order to
   a death, one refresh per election at most every 5 s per refill (cost only).
+- (10-14, his ruling) A refill only raises demand at the gap: the tower-type and site nets still choose
+  what is built and exactly where (execute.as always runs DefTypePick and DefSitePick).
