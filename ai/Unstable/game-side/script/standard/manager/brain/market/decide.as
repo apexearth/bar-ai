@@ -2032,11 +2032,31 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// Catcher (2026-09-15): the hoist put up a second and a third fusion
 		// while the first crawled, and all three then starved on one moho.
 		const bool ordered = (EnergyDeficitNowE() - EMakeOrderedE() <= 0.f);
+		// A stall wants energy SOON: the generator that delivers fastest, never one that cannot
+		// stand within the payback horizon (his 10-15: a T2 con sent to a 9-minute AFUS at v=0.00
+		// on 23 m/s, over a 132-value want).
+		int fastE = -1;
+		float fastRate = 0.f;
+		if (!ordered) {
+			const float hz = (gPrPaybackH > 1.f) ? gPrPaybackH : 900.f;
+			for (uint rj = 0; rj < ranked.length(); ++rj) {
+				if (ranked[rj].kind != WK_ENERGY)
+					continue;
+				const float s = ranked[rj].walkSec + ranked[rj].buildSec;
+				if ((s <= 0.f) || (s > hz))
+					continue;
+				const float rate = ranked[rj].gain / s;
+				if (rate > fastRate) {
+					fastRate = rate;
+					fastE = int(rj);
+				}
+			}
+		}
 		for (uint ri = 0; ri < ranked.length(); ++ri) {
 			if (ordered) {
 				if (ranked[ri].kind != WK_ASSIST)
 					continue;
-			} else if (ranked[ri].kind != WK_ENERGY) {
+			} else if (int(ri) != fastE) {
 				// "MAKE A BASIC SOLAR" -- not a 900-metal geothermal
 				// (watched on Altored: the hoist sent the opening's cons to
 				// the vents while the mexes stood unclaimed).
