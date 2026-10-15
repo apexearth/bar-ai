@@ -37,6 +37,8 @@ decisions the nets are for.
 
 ## 1. Goals
 
+- **Fun to play against, first** (2026-10-14). Surprise and challenge keep
+  it fun and refreshing; the goals below serve this one.
 - **Beat BARb, and win decisively.** In even games (the same bonus for both
   sides), above 80%, and end the game when it can be ended.
 - **Multiplayer is the target.** The AI runs on the host, in real lobbies,
