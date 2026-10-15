@@ -1235,7 +1235,7 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 						AiLog("apex: nano batch t=" + ai.teamId
 							+ " +" + opened + " want=" + wantN
 							+ " over=" + int(OverflowM())
-							+ " bank=" + int(bankN) + walkLog);
+							+ " bank=" + int(bankN) + " armyGap=" + gLineArmyGapN + walkLog);
 					}
 				}
 			}

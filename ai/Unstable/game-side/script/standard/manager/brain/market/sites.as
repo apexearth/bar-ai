@@ -1766,6 +1766,7 @@ bool LineWorkingArmy(CCircuitUnit@ f)
 	return false;
 }
 
+int gLineArmyGapN = 0;
 float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
 {
 	if ((f is null) || !LineWorkingArmy(f))
@@ -1778,6 +1779,19 @@ float LineUnserved(CCircuitUnit@ f, float feed, float spendFloor, float sumCeil)
 	const float floorCapped = (spendFloor < feed) ? spendFloor : feed;
 	if (floorCapped > share)
 		share = floorCapped;
+	// THE ARMY'S BUDGET SHORTFALL IS UNSERVED TOO (his 10-14 1v1: 171 m/s, the army 8-12k under its own
+	// target, 5 nanos all game and none at the T2 labs). Free flow alone read 0 while the eco spent
+	// every metal first, so the lines looked served at any throughput.
+	if ((ai.GetTunable("apex_line_army_gap", TUNE_LINE_ARMY_GAP) > 0.f) && (Brain::gSpentTotal > 1.f)) {
+		float gap = (Brain::TargetShare(Brain::ARMY) - Brain::ShareOf(Brain::ARMY)) * Eco::MInc();
+		if (gap > 0.f) {
+			gap = (sumCeil > 1.f) ? (gap * LineCostCeil(f) / sumCeil) : gap;
+			if (gap > share) {
+				share = gap;
+				++gLineArmyGapN;
+			}
+		}
+	}
 	const AIFloat3 fp = f.GetPos(ai.frame);
 	if (!OnMap(fp))
 		return 0.f;

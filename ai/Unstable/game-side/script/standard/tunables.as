@@ -195,6 +195,12 @@ const float TUNE_PN_RULE_CENTRE = 0.f;
 //   building's lifetime of travel. His 10-14; A/B before default.
 const float TUNE_RAID_REACH = 0.f;
 
+// [toggle 0/1] -- A factory line's unserved spend counts the army's budget
+//   shortfall (target share - actual share) x metal income, so nanos are bought
+//   for the lines when the eco spends all the free flow (sites.as LineUnserved).
+//   His 10-14; A/B before default.
+const float TUNE_LINE_ARMY_GAP = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
