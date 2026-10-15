@@ -219,6 +219,9 @@ to them)
   cost, never a tenth of the constructors' time (measured 10-13%).
   Defences are the fallback, the last line: ideally the army kills the
   enemy army before it gets that close.
+- (2026-10-14) Refill defences quickly where we just lost them, not
+  elsewhere. A tower protects everything behind it, and the enemy will likely
+  attack again by the route they just took: they know they blasted a hole.
 - (2026-10-14) Guard the flanks. Raiders that go round the towers must not
   eat the economy freely: answer them, and stand guards where no tower
   covers the economy's approaches.
