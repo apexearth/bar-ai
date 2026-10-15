@@ -193,7 +193,7 @@ const float TUNE_PN_RULE_CENTRE = 0.f;
 // [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
 //   clear our structures in their reach (raidanswer.as), not only units within one
 //   building's lifetime of travel. His 10-14; A/B before default.
-const float TUNE_RAID_REACH = 0.f;
+const float TUNE_RAID_ANSWER_REACH = 0.f;
 
 // [toggle 0/1] -- Flank guards (flankguard.as): groups from the home pools stand
 //   on stock GUARD tasks at the economy's approaches no tower covers. His 10-14;

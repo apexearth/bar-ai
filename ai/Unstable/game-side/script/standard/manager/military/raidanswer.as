@@ -139,7 +139,7 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 	// wind fields; every answer read have=0/0 because only units within one building's lifetime of
 	// travel counted). The raiders need the hp of our structures in their reach over the raid's dps.
 	float raidS = -1.f;
-	if (ai.GetTunable("apex_raid_reach", TUNE_RAID_REACH) > 0.f) {
+	if (ai.GetTunable("apex_raid_answer_reach", TUNE_RAID_ANSWER_REACH) > 0.f) {
 		array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(at, r);
 		float hp = 0.f;
 		for (uint i = 0; (near !is null) && (i < near.length()); ++i)
