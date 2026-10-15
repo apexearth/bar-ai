@@ -19,6 +19,7 @@
 #include "unit/action/FightAction.h"
 #include "unit/action/MoveAction.h"
 #include "unit/action/SupportAction.h"
+#include "unit/enemy/EnemyManager.h"
 #include "unit/enemy/EnemyUnit.h"
 #include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
@@ -55,7 +56,7 @@ bool CDefendTask::CanAssignTo(CCircuitUnit* unit) const
 	{
 		return false;
 	}
-	if (manager->GetCircuit()->GetLastFrame() < detachUntil) {
+	if (birth || (manager->GetCircuit()->GetLastFrame() < detachUntil)) {
 		return false;
 	}
 	return (attackPower < maxPower) && (static_cast<CDefendTask*>(unit->GetTask())->GetPromote() == promote);
@@ -85,6 +86,15 @@ void CDefendTask::AssignTo(CCircuitUnit* unit)
 
 void CDefendTask::RemoveAssignee(CCircuitUnit* unit)
 {
+	if (birth) {
+		auto it = birthJoined.find(unit);
+		if (it != birthJoined.end()) {
+			if (!releasing && (manager->GetCircuit()->GetLastFrame() - it->second < FRAMES_PER_SEC * 10)) {
+				static_cast<CMilitaryManager*>(manager)->NoteBirthPulled(unit == damagedNow);
+			}
+			birthJoined.erase(it);
+		}
+	}
 	ISquadTask::RemoveAssignee(unit);
 	if (leader == nullptr) {
 		manager->AbortTask(this);
@@ -107,9 +117,103 @@ void CDefendTask::Start(CCircuitUnit* unit)
 	)
 }
 
+void CDefendTask::SetBirth(const AIFloat3& at, float reach)
+{
+	birth = true;
+	anchor = at;
+	position = at;
+	birthReach = reach;
+	lastThreat = manager->GetCircuit()->GetLastFrame();
+}
+
+void CDefendTask::AddBirthUnit(CCircuitUnit* unit, float reach)
+{
+	birthJoined[unit] = manager->GetCircuit()->GetLastFrame();
+	birthReach = std::max(birthReach, reach);
+}
+
+void CDefendTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	damagedNow = unit;
+	ISquadTask::OnUnitDamaged(unit, attacker);
+	damagedNow = nullptr;
+}
+
+void CDefendTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
+{
+	birthJoined.erase(unit);
+	ISquadTask::OnUnitDestroyed(unit, attacker);
+}
+
+void CDefendTask::BirthUpdate()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	if (circuit->GetEnemyManager()->GetEnemyEngagingCostNear(anchor, birthReach) > 0.f) {
+		lastThreat = frame;
+	} else if (frame - lastThreat >= FRAMES_PER_SEC * 5) {
+		static_cast<CMilitaryManager*>(manager)->NoteBirthReleased((int)units.size());
+		releasing = true;
+		manager->AbortTask(this);
+		return;
+	}
+
+	IFighterTask::Update();
+	if (leader == nullptr) {
+		return;
+	}
+	const bool isTargetsFound = FindTarget();
+	if (leader == nullptr) {
+		return;
+	}
+	const AIFloat3& startPos = leader->GetPos(frame);
+	state = State::ROAM;
+	if ((GetTarget() != nullptr) || isTargetsFound) {
+		if (position.SqDistance2D(startPos) < SQUARE(highestRange + 300.f)) {
+			state = State::ENGAGE;
+			Attack(frame);
+			return;
+		}
+	}
+	if (!IsQueryReady(leader)) {
+		return;
+	}
+	if (!isTargetsFound) {
+		position = anchor;
+		if (anchor.SqDistance2D(startPos) > SQUARE(DEFAULT_SLACK * 2)) {
+			Fallback();
+		}
+		return;
+	}
+	PathToEnemies(frame);
+}
+
+void CDefendTask::PathToEnemies(int frame)
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const AIFloat3& startPos = leader->GetPos(frame);
+	CThreatMap* threatMap = circuit->GetThreatMap();
+	const float eps = threatMap->GetSquareSize() * 2.f;
+	const float pathRange = std::max(highestRange - eps, eps);
+
+	CPathFinder* pathfinder = circuit->GetPathfinder();
+	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
+			leader, threatMap,
+			startPos, pathRange, enemyPositions);
+	pathQueries[leader] = query;
+
+	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
+		this->ApplyTargetPath(static_cast<const CQueryPathMulti*>(query));
+	});
+}
+
 void CDefendTask::Update()
 {
 	++updCount;
+	if (birth) {
+		BirthUpdate();
+		return;
+	}
 	const bool hunting = manager->GetCircuit()->GetLastFrame() < detachUntil;
 
 	/*
@@ -209,19 +313,7 @@ void CDefendTask::Update()
 		return;
 	}
 
-	CThreatMap* threatMap = circuit->GetThreatMap();
-	const float eps = threatMap->GetSquareSize() * 2.f;
-	const float pathRange = std::max(highestRange - eps, eps);
-
-	CPathFinder* pathfinder = circuit->GetPathfinder();
-	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
-			leader, threatMap,
-			startPos, pathRange, enemyPositions);
-	pathQueries[leader] = query;
-
-	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
-		this->ApplyTargetPath(static_cast<const CQueryPathMulti*>(query));
-	});
+	PathToEnemies(frame);
 }
 
 void CDefendTask::Merge(ISquadTask* task)
@@ -301,6 +393,7 @@ bool CDefendTask::FindTarget()
 	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
 	const SFire fire = tv ? SquadFire() : SFire();
 	const float ourSpeed = std::max(lowestSpeed, 1.f);
+	const float threatSq = (float)threatMap->GetSquareSize();
 	float detachThreat = .0f;
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
@@ -309,7 +402,14 @@ bool CDefendTask::FindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
-		if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
+		if (birth) {
+			// the odds were read when the unit was given the task; here only who engages the anchor
+			const CCircuitDef* ed = enemy->GetCircuitDef();
+			const float r = birthReach + ((ed != nullptr) ? ed->GetThreatRange(CCircuitDef::ThreatType::SURF) * threatSq : 0.f);
+			if ((anchor.SqDistance2D(ePos) > SQUARE(r)) || !terrainMgr->CanMoveToPos(area, ePos)) {
+				continue;
+			}
+		} else if ((inflMap->GetAllyDefendInflAt(ePos) < INFL_EPS)
 			|| !terrainMgr->CanMoveToPos(area, ePos))
 		{
 			continue;
@@ -318,7 +418,7 @@ bool CDefendTask::FindTarget()
 		const float sqEBDist = basePos.SqDistance2D(ePos);
 		// apex_pool_leash: a gathering pool does not chase past its own staging line
 		// (his "units must not trickle"): 79% of the army lost on their side died in this task.
-		if ((sqLeash > 0.f) && (sqEBDist >= sqBaseRange) && (sqEBDist > sqLeash)) {
+		if (!birth && (sqLeash > 0.f) && (sqEBDist >= sqBaseRange) && (sqEBDist > sqLeash)) {
 			++leashSkipped;
 			continue;
 		}
@@ -327,10 +427,10 @@ bool CDefendTask::FindTarget()
 			checkPower *= 4.0f - 3.0f / baseRange * sqrtf(sqEBDist);  // 400% near base
 		}
 		const float eThreat = threatMap->GetThreatAt(ePos);
-		if (checkPower <= eThreat) {
+		if (!birth && (checkPower <= eThreat)) {
 			continue;
 		}
-		const bool petty = !detached && (units.size() > 1)
+		const bool petty = !birth && !detached && (units.size() > 1)
 				&& (sqEBDist >= sqBaseRange) && (eThreat < pettyBar);
 
 		const float elevation = circuit->GetElevationAt(ePos);

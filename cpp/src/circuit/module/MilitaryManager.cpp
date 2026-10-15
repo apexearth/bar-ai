@@ -611,6 +611,7 @@ void CMilitaryManager::Init()
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateDefenceTasks, this), FRAMES_PER_SEC * 5, offset + 2, "milDef");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommShipCloak, this), FRAMES_PER_SEC, offset + 3, "comShip");
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::UpdateCommHoldFire, this), FRAMES_PER_SEC, offset + 5, "comHold");
+		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::LogBirthStat, this), FRAMES_PER_SEC * 60, offset + 6, "birthStat");
 
 		scheduler->RunJobEvery(CScheduler::GameJob(&CMilitaryManager::Watchdog, this),
 								FRAMES_PER_SEC * 60,
@@ -2362,6 +2363,172 @@ IUnitTask* CMilitaryManager::DefaultMakeTask(CCircuitUnit* unit)
 	}
 
 	return task;
+}
+
+IUnitTask* CMilitaryManager::MakeTask(CCircuitUnit* unit)
+{
+	if (circuit->GetTunable("apex_birth_defend", 0.f) > 0.f) {
+		IUnitTask* task = BirthDefendTask(unit);
+		if (task != nullptr) {
+			return task;
+		}
+	}
+	return ITaskModule::MakeTask(unit);
+}
+
+// Its own longest ground range plus the threat map's slack for it.
+float CMilitaryManager::BirthReach(const CCircuitDef* cdef) const
+{
+	return (float)cdef->GetThreatRange(CCircuitDef::ThreatType::SURF) * circuit->GetThreatMap()->GetSquareSize();
+}
+
+IUnitTask* CMilitaryManager::BirthDefendTask(CCircuitUnit* unit)
+{
+	CCircuitDef* cdef = unit->GetCircuitDef();
+	if (!cdef->IsMobile() || !cdef->IsAttacker() || cdef->IsRoleBuilder() || cdef->IsAbleToFly()
+		|| cdef->IsRoleScout() || cdef->IsRoleSupport() || cdef->IsRoleMine() || !cdef->HasSurfToLand())
+	{
+		return nullptr;
+	}
+	const float reach = BirthReach(cdef);
+	if (reach <= 0.f) {
+		return nullptr;
+	}
+	const int frame = circuit->GetLastFrame();
+	const AIFloat3& pos = unit->GetPos(frame);
+	if (!utils::is_valid(pos) || (circuit->GetEnemyManager()->GetEnemyEngagingCostNear(pos, reach) <= 0.f)) {
+		return nullptr;
+	}
+	const bool first = birthElected.insert(unit->GetId()).second;
+	++(first ? birthStat.born : birthStat.retask);
+
+	// the withdraw pass's own odds, on the influence map: friendly armed power (allies and guns
+	// included) plus this unit, against the enemy's
+	CInfluenceMap* inflMap = circuit->GetInflMap();
+	const float foe = inflMap->GetEnemyInflAt(pos);
+	const float ours = inflMap->GetAllyInflAt(pos) + cdef->GetPower();
+	if (foe > ours * circuit->GetTunable("apex_withdraw_odds", 1.5f)) {
+		++birthStat.hopeless;
+		return nullptr;
+	}
+
+	CDefendTask* best = nullptr;
+	float bestSq = std::numeric_limits<float>::max();
+	for (IFighterTask* t : GetTasks(IFighterTask::FightType::DEFEND)) {
+		CDefendTask* dt = static_cast<CDefendTask*>(t);
+		if (!dt->IsBirth() || dt->IsDead()) {
+			continue;
+		}
+		const float sq = dt->GetAnchor().SqDistance2D(pos);
+		if ((sq < SQUARE(std::max(reach, dt->GetBirthReach()))) && (sq < bestSq)) {
+			bestSq = sq;
+			best = dt;
+		}
+	}
+	if (best == nullptr) {
+		best = static_cast<CDefendTask*>(Enqueue(TaskF::Defend(IFighterTask::FightType::ATTACK, cdef->GetPower())));
+		best->SetBirth(pos, reach);
+		++birthStat.created;
+	} else {
+		++birthStat.joined;
+	}
+	best->AddBirthUnit(unit, reach);
+	return best;
+}
+
+bool CMilitaryManager::IsBirthDefender(CCircuitUnit* unit) const
+{
+	IUnitTask* t = (unit != nullptr) ? unit->GetTask() : nullptr;
+	if ((t == nullptr) || (t->GetType() != IUnitTask::Type::FIGHTER)
+		|| (static_cast<IFighterTask*>(t)->GetFightType() != IFighterTask::FightType::DEFEND))
+	{
+		return false;
+	}
+	return static_cast<CDefendTask*>(t)->IsBirth();
+}
+
+float CMilitaryManager::AssetHold(CCircuitUnit* unit, float arriveS, AIFloat3& at)
+{
+	if ((unit == nullptr) || unit->IsDead()) {
+		return -1.f;
+	}
+	const int frame = circuit->GetLastFrame();
+	if (assetsFrame != frame) {
+		assetsFrame = frame;
+		assets.clear();
+		const CFactoryManager::FactoryDefs& facDefs = circuit->GetFactoryManager()->GetFactoryDefs();
+		for (auto& kv : circuit->GetTeamUnits()) {
+			CCircuitUnit* u = kv.second;
+			if ((u == nullptr) || u->IsDead() || !u->IsFinished() || u->GetCircuitDef()->IsMobile()) {
+				continue;
+			}
+			CCircuitDef* d = u->GetCircuitDef();
+			SAsset a;
+			a.pos = u->GetPos(frame);
+			a.gunM = (d->IsAttacker() && d->HasSurfToLand()) ? d->GetCostM() : 0.f;
+			a.factory = facDefs.find(d->GetId()) != facDefs.end();
+			a.prodMps = 0.f;
+			IUnitTask* t = u->GetTask();
+			if (a.factory && (t != nullptr) && (t->GetType() == IUnitTask::Type::FACTORY)
+				&& (static_cast<IBuilderTask*>(t)->GetBuildType() == IBuilderTask::BuildType::RECRUIT))
+			{
+				CCircuitDef* bd = static_cast<IBuilderTask*>(t)->GetBuildDef();
+				if ((bd != nullptr) && bd->IsAttacker() && !bd->IsRoleBuilder() && (bd->GetBuildTime() > 0.f)) {
+					a.prodMps = d->GetBuildSpeed() * bd->GetCostM() / bd->GetBuildTime();
+				}
+			}
+			assets.push_back(a);
+		}
+	}
+	const AIFloat3& p = unit->GetPos(frame);
+	const float sqR = SQUARE(BirthReach(unit->GetCircuitDef()));
+	// stand at its nearest gun there, else its nearest factory, else the nearest structure
+	const float none = std::numeric_limits<float>::max();
+	float hold = -1.f;
+	float bestSq[3] = {none, none, none};
+	AIFloat3 bestAt[3];
+	for (const SAsset& a : assets) {
+		const float sq = a.pos.SqDistance2D(p);
+		if (sq > sqR) {
+			continue;
+		}
+		hold = std::max(hold, 0.f) + a.gunM + a.prodMps * std::max(arriveS, 0.f);
+		const int k = (a.gunM > 0.f) ? 0 : (a.factory ? 1 : 2);
+		if (sq < bestSq[k]) {
+			bestSq[k] = sq;
+			bestAt[k] = a.pos;
+		}
+	}
+	for (int k = 0; k < 3; ++k) {
+		if (bestSq[k] < none) {
+			at = bestAt[k];
+			break;
+		}
+	}
+	return hold;
+}
+
+void CMilitaryManager::NoteBirthScript(int kind)
+{
+	switch (kind) {
+		case 0: ++birthStat.wdSkip; break;
+		case 1: ++birthStat.consSkip; break;
+		case 2: ++birthStat.consRedir; break;
+		case 3: ++birthStat.ansSkip; break;
+		default: break;
+	}
+}
+
+void CMilitaryManager::LogBirthStat()
+{
+	if (circuit->GetTunable("apex_birth_defend", 0.f) <= 0.f) {
+		return;
+	}
+	const SBirthStat& s = birthStat;
+	circuit->LOG("apex: birth-defend-stat t=%i born=%i retask=%i hopeless=%i assigned=%i (new=%i joined=%i)"
+			" released=%i pulled10s=%i (retreat=%i) wdSkip=%i consolSkip=%i consolRedirect=%i answerSkip=%i",
+			circuit->GetTeamId(), s.born, s.retask, s.hopeless, s.created + s.joined, s.created, s.joined,
+			s.released, s.pulled + s.pulledRet, s.pulledRet, s.wdSkip, s.consSkip, s.consRedir, s.ansSkip);
 }
 
 // Share of energy income the commander's cloak may consume.

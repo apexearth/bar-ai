@@ -529,28 +529,74 @@ float CEnemyManager::GetEnemyAirCostNear(const springai::AIFloat3& pos, float ra
 
 static constexpr float ARMED_CELL = 256.f;
 
-float CEnemyManager::GetEnemyArmedCostNear(const springai::AIFloat3& pos, float radius)
+void CEnemyManager::FillArmedGrid()
 {
 	const int frame = circuit->GetLastFrame();
-	if (frame >= armedGridFrame + 15) {
-		armedGridFrame = frame;
-		armedGridW = (int)(CTerrainManager::GetTerrainWidth() / ARMED_CELL) + 1;
-		armedGridH = (int)(CTerrainManager::GetTerrainHeight() / ARMED_CELL) + 1;
-		armedGrid.assign(armedGridW * armedGridH, 0.f);
-		for (CEnemyUnit* e : enemyUpdates) {
-			if ((e == nullptr) || e->IsDying()) {
+	if (frame < armedGridFrame + 15) {
+		return;
+	}
+	armedGridFrame = frame;
+	armedGridW = (int)(CTerrainManager::GetTerrainWidth() / ARMED_CELL) + 1;
+	armedGridH = (int)(CTerrainManager::GetTerrainHeight() / ARMED_CELL) + 1;
+	armedGrid.assign(armedGridW * armedGridH, 0.f);
+	groundGrid.assign(armedGridW * armedGridH, 0.f);
+	groundReach.assign(armedGridW * armedGridH, 0.f);
+	groundReachMax = 0.f;
+	const float sq = (float)circuit->GetThreatMap()->GetSquareSize();
+	for (CEnemyUnit* e : enemyUpdates) {
+		if ((e == nullptr) || e->IsDying()) {
+			continue;
+		}
+		CCircuitDef* cdef = e->GetCircuitDef();
+		if ((cdef == nullptr) || !cdef->IsMobile() || (cdef->GetPower() <= 1.f)) {
+			continue;
+		}
+		const springai::AIFloat3& ep = e->GetPos();
+		const int x = std::max(0, std::min(armedGridW - 1, (int)(ep.x / ARMED_CELL)));
+		const int z = std::max(0, std::min(armedGridH - 1, (int)(ep.z / ARMED_CELL)));
+		const int i = z * armedGridW + x;
+		armedGrid[i] += e->GetCost();
+		// a ghost we no longer see would hold a defender at its post forever
+		if (cdef->IsAbleToFly() || e->IsHidden()) {
+			continue;
+		}
+		groundGrid[i] += e->GetCost();
+		const float reach = e->GetRange(CCircuitDef::ThreatType::SURF) * sq;
+		groundReach[i] = std::max(groundReach[i], reach);
+		groundReachMax = std::max(groundReachMax, reach);
+	}
+}
+
+float CEnemyManager::GetEnemyEngagingCostNear(const springai::AIFloat3& pos, float reach)
+{
+	FillArmedGrid();
+	const float radius = reach + groundReachMax + ARMED_CELL;
+	const int x0 = std::max(0, (int)((pos.x - radius) / ARMED_CELL));
+	const int x1 = std::min(armedGridW - 1, (int)((pos.x + radius) / ARMED_CELL));
+	const int z0 = std::max(0, (int)((pos.z - radius) / ARMED_CELL));
+	const int z1 = std::min(armedGridH - 1, (int)((pos.z + radius) / ARMED_CELL));
+	float sum = 0.f;
+	for (int z = z0; z <= z1; ++z) {
+		for (int x = x0; x <= x1; ++x) {
+			const int i = z * armedGridW + x;
+			if (groundGrid[i] <= 0.f) {
 				continue;
 			}
-			CCircuitDef* cdef = e->GetCircuitDef();
-			if ((cdef == nullptr) || !cdef->IsMobile() || (cdef->GetPower() <= 1.f)) {
-				continue;
+			// the cell centre can sit half a diagonal from the unit
+			const float r = reach + groundReach[i] + ARMED_CELL * 0.71f;
+			const float cx = (x + 0.5f) * ARMED_CELL - pos.x;
+			const float cz = (z + 0.5f) * ARMED_CELL - pos.z;
+			if (cx * cx + cz * cz <= r * r) {
+				sum += groundGrid[i];
 			}
-			const springai::AIFloat3& ep = e->GetPos();
-			const int x = std::max(0, std::min(armedGridW - 1, (int)(ep.x / ARMED_CELL)));
-			const int z = std::max(0, std::min(armedGridH - 1, (int)(ep.z / ARMED_CELL)));
-			armedGrid[z * armedGridW + x] += e->GetCost();
 		}
 	}
+	return sum;
+}
+
+float CEnemyManager::GetEnemyArmedCostNear(const springai::AIFloat3& pos, float radius)
+{
+	FillArmedGrid();
 	const int x0 = std::max(0, (int)((pos.x - radius) / ARMED_CELL));
 	const int x1 = std::min(armedGridW - 1, (int)((pos.x + radius) / ARMED_CELL));
 	const int z0 = std::max(0, (int)((pos.z - radius) / ARMED_CELL));

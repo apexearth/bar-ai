@@ -10,6 +10,8 @@
 
 #include "task/fighter/SquadTask.h"
 
+#include <map>
+
 namespace circuit {
 
 class CEnemyInfo;
@@ -26,6 +28,15 @@ public:
 
 	virtual void Start(CCircuitUnit* unit) override;
 	virtual void Update() override;
+	virtual void OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+
+	// apex_birth_defend: hold `at` against what engages it, released once nothing has for a few seconds.
+	void SetBirth(const springai::AIFloat3& at, float reach);
+	void AddBirthUnit(CCircuitUnit* unit, float reach);
+	bool IsBirth() const { return birth; }
+	const springai::AIFloat3& GetAnchor() const { return anchor; }
+	float GetBirthReach() const { return birthReach; }
 
 	void SetPosition(const springai::AIFloat3& pos) { position = pos; }
 	void SetMaxPower(float power) { maxPower = power * powerMod; }
@@ -56,6 +67,16 @@ private:
 	int leashLogAt = 0;   // apex: the defend-leash line, at most every 30 s per task
 	int detachUntil = 0;  // apex: a squad split off for one raider; no merge, no promote, no recruits
 	int Detach(CEnemyInfo* enemy, float threat);
+
+	void BirthUpdate();
+	void PathToEnemies(int frame);
+	bool birth = false;
+	bool releasing = false;
+	springai::AIFloat3 anchor;
+	float birthReach = 0.f;
+	int lastThreat = 0;
+	CCircuitUnit* damagedNow = nullptr;
+	std::map<CCircuitUnit*, int> birthJoined;
 };
 
 } // namespace circuit

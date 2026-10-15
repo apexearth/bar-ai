@@ -173,6 +173,11 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 		array<CCircuitUnit@>@ on = t.GetUnits();
 		if (on is null)
 			continue;
+		// a squad holding where its units were born under fire is already the answer there
+		if ((ft == int(Task::FightType::DEFEND)) && (on.length() > 0) && aiMilitaryMgr.IsBirthDefender(on[0])) {
+			aiMilitaryMgr.NoteBirthScript(3);
+			continue;
+		}
 		for (uint j = 0; j < on.length(); ++j) {
 			CCircuitUnit@ u = on[j];
 			if (!RaidWorthPulling(u) || IsRollingBomb(u.circuitDef))

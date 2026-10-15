@@ -355,8 +355,35 @@ public:
 	bool commShipCloak = false;
 	bool commHoldFire = false;
 
+	// apex_birth_defend: a fighter given a task while armed enemies engage where it stands fights there.
+	virtual IUnitTask* MakeTask(CCircuitUnit* unit) override;
+	float BirthReach(const CCircuitDef* cdef) const;
+	bool IsBirthDefender(CCircuitUnit* unit) const;
+	// Metal standing at the structure of ours nearest `unit` within its reach: armed statics there plus
+	// what the factories there finish within arriveS. -1 when it stands beside nothing of ours.
+	float AssetHold(CCircuitUnit* unit, float arriveS, springai::AIFloat3& at);
+	void NoteBirthPulled(bool retreat) { ++(retreat ? birthStat.pulledRet : birthStat.pulled); }
+	void NoteBirthReleased(int n) { birthStat.released += n; }
+	// 0 a withdraw order skipped, 1 a consolidation skipped, 2 one redirected to the asset, 3 a raid answer skipped
+	void NoteBirthScript(int kind);
+
 private:
 	virtual IUnitTask* DefaultMakeTask(CCircuitUnit* unit) override;
+	IUnitTask* BirthDefendTask(CCircuitUnit* unit);
+	void LogBirthStat();
+	struct SBirthStat {
+		int born = 0, retask = 0, joined = 0, created = 0, released = 0, hopeless = 0;
+		int pulled = 0, pulledRet = 0, wdSkip = 0, consSkip = 0, consRedir = 0, ansSkip = 0;
+	} birthStat;
+	std::set<int> birthElected;
+	struct SAsset {
+		springai::AIFloat3 pos;
+		float gunM;
+		float prodMps;
+		bool factory;
+	};
+	std::vector<SAsset> assets;
+	int assetsFrame = -1;
 
 	void UpdateCommCloak();
 	void UpdateCommShipCloak();
