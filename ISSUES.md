@@ -15,6 +15,42 @@ SafeStandoff) is gone: that code was reverted to stock BARb on 2026-09-07
 The fight layer is stock since 09-07; "unverified" below means a fix landed
 and no game since has been read for it.
 
+## VALIDATION LIST: WHAT 10-14/10-15 CHANGED AND NO GAME HAS PROVEN (2026-10-15)
+
+His 10-15: "a lot of what you've tried to implement hasn't really worked". Every item stays here until a
+game log shows the DECISION moved (the instrument named), not just that the code ran. Status: BROKEN =
+seen failing in his game; INERT = applied but the behaviour did not change; FIRES = the code path logs,
+effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his slot and the release.
+
+| # | What he asked for | Change | Instrument | Status |
+|---|---|---|---|---|
+| 1 | Bombers stop bombing ticks; Dragons keep advancing | fliers never get the fight-travel order (MoveAction.cpp) | `fight-travel flier-kept`; watch a strike | UNTESTED (built, not in v0.2.5 yet) |
+| 2 | Gunships spread, not one point | attack squads give fliers a grid (AttackTask AssignFlierSlots) | `squad air-formation`; mapframe | UNTESTED (not compiled). Gunship RAIDS (RaidTask) still have no formation |
+| 3 | Late game: economy + T3, T2 ground mostly useless | tmix head 0.1 (watch/v0.2.5) | `nnval head=tmix` reads 0.1 in 828/830; produce: by tier after min 30 | INERT -- T2 units still built in his 10-15 game. Find what decides lab output |
+| 4 | No T1 hover AA late | none yet | `produce:armah/corah` | BROKEN -- 49 built from hover plants in his 10-15 8v8 |
+| 5 | Late towers T2/T3, not T1.5 | TUNE_DEF_TEAM_OBSOLETE (watch/v0.2.5) | `advobs-stat` cut=6427/6482; tower tally by tier after min 30 | FIRES -- tier tally not yet read |
+| 6 | No dragon's teeth | TUNE_TEETH=0 (default, watch, v0.2.5) | defence/teeth wants = 0 | UNVERIFIED |
+| 7 | Commander not reckless | COM_BOLD off on watch, COM_STEP on | commander deaths and where; `comstat step=` | UNVERIFIED |
+| 8 | T2 air plant and T3 gantry get built | tech head NOW 0.8 (watch/v0.2.5) | `nntech` chosen; plant start minute per seat | FIRES (10/10 WAIT->NOW in a test); plant timing unread |
+| 9 | Big bombing raids, more air | AIR_PAYOFF=1, factory head to market | bombers built; `nnair-stat` go vs launched | UNVERIFIED -- 10-14 game: 48 GO, 1 launched, bombers never built |
+| 10 | Hunt what matters, not spam | apex_target_value=1 (watch/v0.2.5) | `target-stat` asgM/nearM, kill classes | FIRES -- effect on fights unmeasured; needs A/B |
+| 11 | Don't walk into packs on move orders | apex_fight_travel=1 (watch/v0.2.5) | fights won/lost; same-seed A/B | 1 game only; it broke air (#1) |
+| 12 | Odds: willingness to attack | odds head 2.0 (watch/v0.2.5) | `nnval head=odds`; trade per fight | FIRES -- same-seed control lost too; not shown better |
+| 13 | Mexes upgraded once T2 (his maroon seat) | TUNE_T2CON_UNLOCK, UPGRADE_FIRST, MEXUP_HORIZON (off) | `mexup-stat`, `why=uphand`, prodrank `,up` | UNTESTED (not compiled) |
+| 14 | An eco player in 8v8 | eco role exists (t16 held it 10-15) | `eco-status` P vs target | BROKEN -- P 114/500 at min 20, income like any seat |
+| 15 | No late-game lag | none yet | lagcurve: wall s/min vs moves, nopath, builders | OPEN -- 50 move orders/s/AI, ~1,100 nopath/seat/game, 70-260 builders/seat |
+| 16 | AA when bombed | TUNE_TEAM_AIRLOSS (watch/v0.2.5) | AA built within 2 min of air losses | UNVERIFIED |
+| 17 | Refill towers where they died | TUNE_DEF_REFILL (watch/v0.2.5) | `refill-stat`, deflag.py | FIRES; lag not re-measured |
+| 18 | Guard the flanks | TUNE_FLANK_GUARD (watch/v0.2.5) | `flank-stat`, flankstat.py | UNVERIFIED |
+| 19 | Some hands always on economy | TUNE_ECO_HAND (watch/v0.2.5) | roles `ecoHand` kept/lent; fusion gap | FIRES; minutes with no eco build unread |
+| 20 | Army fills line gap | TUNE_LINE_ARMY_GAP (watch/v0.2.5) | nano batch `armyGap` | UNVERIFIED |
+| 21 | Fewer defences, more units; radar not 10-13% | 5 defence price switches (off; all-five A/B -1.28) | spend shares | OPEN -- per-switch A/Bs never run |
+| 22 | Air scouts find armies in jammers | lost-army looks branch | `lost-stat` | UNMERGED (worktree-agent-a9165e14d9953e66b) |
+| 23 | Energy and converters, always | proposal only | converter count, e-waste | OPEN -- 430-500 e/s wasted in watched games |
+| 24 | Early army share | none | army spend 24% vs 32% target | OPEN |
+| 25 | Siege fortifications | TUNE_SIEGE (off) | siege.py | OFF; never A/B'd after the fixes |
+| 26 | One big army | TUNE_ONE_ARMY (off) | armyheads.py | OFF; lost 25%->10% unmeasured once |
+
 ## THE COMMANDER STANDS WITH A JOB AND NO ENGINE ORDER IN THE OPENING (2026-10-11)
 
 1v1 Comet vs BARb, watch net, after the 9e0b00ba commander fixes (he now chooses WORK in every
