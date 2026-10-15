@@ -649,7 +649,7 @@ float StructMetalPerHp()
 // destroys per second over the amortisation window, capped by what stands in
 // reach. Affordability priced these on (budget-bill)/budget, which is why no
 // rapid-fire cannon was built in ~60 games. Blind, the start box in reach
-// stands for their base at the nuke's prior (docs/24: they jam; the base is in
+// stands for their base at the nuke's prior (docs/doctrine.md: they jam; the base is in
 // the box). Returns the in-reach metal through inReachM for the log.
 float LrpcGain(int d, const AIFloat3& in at, float &out inReachM)
 {

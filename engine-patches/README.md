@@ -40,4 +40,4 @@ One line in `vendor/engine` itself (base commit
 no TTY in a non-interactive shell, so `-it` aborts the build with
 "the input device is not a TTY". Only needed if you build via
 `docker-build-v2/build.sh` rather than invoking `ninja` in the container
-directly, which is what the commands in `docs/06-building-the-dll.md` do.
+directly, which is what the commands in `docs/working.md` do.

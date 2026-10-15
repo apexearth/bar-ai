@@ -1,6 +1,6 @@
 namespace Military {
 
-// TWO PRIORS AS CONTINUOUS HEADS (docs/24 section 7), each on a 60 s clock per
+// TWO PRIORS AS CONTINUOUS HEADS (docs/doctrine.md section 7), each on a 60 s clock per
 // team, 1x being today's play.
 // mass -- how big a pool must be before it leaves: x v on the bar UpdateMassing
 //         sets (quota.attack); with the DLL also on the biggest-enemy-group term

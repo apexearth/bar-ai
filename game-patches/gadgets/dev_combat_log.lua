@@ -59,7 +59,7 @@ local startX, startZ = {}, {}  -- teamID -> start position, for retreat headings
 local costOf, mobileArmed, isCommander = {}, {}, {}
 local isStatic, isConstructor = {}, {}
 
--- Damage accounting for docs/24's first-five-minute test, per team and
+-- Damage accounting for docs/doctrine.md's first-five-minute test, per team and
 -- cumulative: damage DEALT and RECEIVED split by whether the victim was a
 -- building, damage received FROM buildings, and the constructor
 -- interruptions the test scores. An interruption is a constructor taking

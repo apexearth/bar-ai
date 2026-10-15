@@ -1,4 +1,4 @@
-"""Append-only training buffers for tools/nntrain.py (docs/35-decision-net.md).
+"""Append-only training buffers for tools/nntrain.py (docs/how-it-works.md).
 
 A net's buffer is a directory: index.json plus segments, each segment four flat
 files of rows (xf float16, y float16, m uint8, tag int32 [version, regime,

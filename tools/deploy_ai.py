@@ -655,7 +655,7 @@ def main() -> int:
             # A lane NAMED on the command line is materialised too. Without
             # this it shipped the snapshot from the last unnamed deploy and
             # still printed "Deployed": four batteries and two watched games
-            # ran one stale tree on 2026-09-08 (docs/25, S22).
+            # ran one stale tree on 2026-09-08 (docs/traps.md, S22).
             v = _lane.sync_variant(v[len("lane-"):])
         deploy(env, v, args.allow_running, args.repo_dll)
     elif args.cmd == "pull":

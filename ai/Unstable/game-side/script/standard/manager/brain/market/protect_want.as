@@ -306,7 +306,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	}
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const float rate = ai.GetTunable("apex_insure_rate", TUNE_INSURE_RATE);
-	// The no-turret test (docs/24): radar and units are the whole defence.
+	// The no-turret test (docs/doctrine.md): radar and units are the whole defence.
 	const bool defOff = ai.GetTunable("apex_def_off", TUNE_DEF_OFF) > 0.f;
 	// (Normalising the TTD discount against the quickest buildable turret --
 	// so defence as a category paid nothing and only the ordering inside it

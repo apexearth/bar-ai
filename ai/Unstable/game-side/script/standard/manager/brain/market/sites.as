@@ -1818,7 +1818,7 @@ float LineCeilSum()
 // What the lines BELOW a line's tier are eating: metal a higher line's
 // lathe would take from them. With the T1 lab eating the whole flow on
 // pawns, the T2 lab read "no free metal" and got no turrets, and the T1
-// pawns died to their T2 (his watch, docs/33). The free flow is what the
+// pawns died to their T2 (his watch). The free flow is what the
 // higher line's turrets shift, not what they wait for.
 // ...LATHE THIS LINE ALREADY REACHES IS NOT FLOW IT HAS YET TO TAKE. A
 // turret in reach of a lab and of the advanced plant beside it was counted

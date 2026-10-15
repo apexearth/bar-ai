@@ -1370,7 +1370,7 @@ void IBuilderTask::UpdatePath(CCircuitUnit* unit)
 	// Every stuck builder measured sat 500-1,175 elmos from its site with
 	// progress 0.00 and no move failure, because no move was ever ordered.
 	// Pathing every in-base build was measured and bought nothing; the pathless
-	// builders are not the parked ones. Off by default, table in docs/27.
+	// builders are not the parked ones. Off by default, table in docs/tunables.md.
 	const bool skipPath = inRange || (bothInBase
 			&& (circuit->GetTunable("apex_inbase_path", 0.f) <= 0.f));
 	if (TaskTraceOn(circuit)) {

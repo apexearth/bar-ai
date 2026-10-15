@@ -460,7 +460,7 @@ def check_lazy_caches(script_root: Path, rep: Report) -> None:
                           f"downstream -- use '> 0.f'")
 
 
-# -- the overhaul-kill census (docs/20-brain-overhaul.md par.4.1) -------------
+# -- the overhaul-kill census (docs/how-it-works.md, The kill census) -------------
 #
 # No leaf rule may spend on its own: every path that turns constructor time or
 # a factory line into work must go through the arbiter's executors. The
@@ -478,7 +478,7 @@ _SPEND_PATTERNS = (
 _SPEND_ALLOWED = {
     # the request plumbing's own enqueue
     "manager/builder/requests.as": {"Enqueue(TaskB::"},
-    # kept rez-bot unit thoughts (docs/20 par.2): repair/reclaim of what exists
+    # kept rez-bot unit thoughts (docs/how-it-works.md): repair/reclaim of what exists
     "manager/builder/rules_rezzer.as": {"Enqueue(TaskB::"},
     "manager/builder/reclaim.as": {"Enqueue(TaskB::"},
     # the arbiter itself (empty market during the kill; the rebuild's executor)
@@ -514,7 +514,7 @@ def check_spend_census(script_root: Path, rep: Report) -> None:
                 if pat in line and pat not in allowed:
                     rep.error(f"{rel}:{n}: leaf spend call '{pat}' outside the "
                               f"arbiter's executors -- the overhaul kill census "
-                              f"(docs/20-brain-overhaul.md par.4.1) forbids this")
+                              f"(docs/how-it-works.md, The kill census) forbids this")
 
 
 # A fight-or-flee strength test that weighs one seat against a side. Fixed for the

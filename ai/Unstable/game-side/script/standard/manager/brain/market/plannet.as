@@ -6,7 +6,7 @@ namespace Market {
 // team on the shared board, held NG_HOLD_S; whoever decides logs an nnplan
 // row. A strategy explorer (apex_nn_plan_explore of discovery games) leads its
 // team with one strategy, re-drawn only when our tech tier rises; any other
-// explorer mixes the head flat into each draw (docs/35). The rule is
+// explorer mixes the head flat into each draw (docs/how-it-works.md). The rule is
 // NORMAL; the net learns which plan ends which game soonest. His 2026-10-07:
 // the spontaneity he wants is strategies -- mass air, an early all-in, greed
 // against a passive enemy, defences against one that is massing -- so those

@@ -4,7 +4,7 @@ namespace Market {
 // finished gun of ours killed by an enemy leaves a refill: the same gun on the
 // same ground, priced by what the hole exposes behind it on the way to our
 // base, at the exposure window's arrival rate while the loss is fresh.
-// TUNE_DEF_REFILL; docs/27.
+// TUNE_DEF_REFILL; docs/tunables.md.
 
 const int RF_MAX = 16;
 const int RF_LEDGER = 48;

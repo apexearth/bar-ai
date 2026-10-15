@@ -117,7 +117,7 @@ void CDefendTask::Update()
 	 */
 	if (!hunting && (updCount % 32 == 1)) {
 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
-		// JOIN THE SQUAD, NOT THE TARGET (docs/24; his 10-13: "We make 1 fuckin unit and are
+		// JOIN THE SQUAD, NOT THE TARGET (docs/doctrine.md; his 10-13: "We make 1 fuckin unit and are
 		// charging out to meet these guys on our doorstep", Tzars sent alone): under its bar a
 		// pool walks to the strongest live squad of its kind; only a full bar opens a new one.
 		if ((attackPower < maxPower) && !units.empty() && !militaryMgr->GetTasks(check).empty()) {
@@ -277,7 +277,7 @@ bool CDefendTask::FindTarget()
 	threatMap->SetThreatType(leader);
 	const CCircuitAI::EnemyInfos& enemies = circuit->GetEnemyInfos();
 	// apex: "armies ignore enemies less than half their strength unless
-	// defending the home base" (docs/24). A raider under half the pool is left
+	// defending the home base" (docs/doctrine.md). A raider under half the pool is left
 	// to our guns where they outgun it, and otherwise to a squad of its own size
 	// split off for it (apexearth 2026-10-02: "create a squad of an appropriate
 	// size to chase the little amphibious tanks... if you have defense over
@@ -424,7 +424,7 @@ bool CDefendTask::FindTarget()
 }
 
 // apex: split off the members nearest the raider until they carry its threat
-// at home-defence parity (his 1.2x, docs/24), keeping at least half the pool.
+// at home-defence parity (his 1.2x, docs/doctrine.md), keeping at least half the pool.
 int CDefendTask::Detach(CEnemyInfo* enemy, float threat)
 {
 	CCircuitAI* circuit = manager->GetCircuit();

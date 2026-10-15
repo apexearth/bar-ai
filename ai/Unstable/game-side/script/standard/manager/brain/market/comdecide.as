@@ -18,7 +18,7 @@ namespace Market {
 //
 // Against T1 he fights any fight that ends above his engine retreat line (the
 // health at which the damage retreat pulls him out of it anyway), hurt or not
-// (docs/24); against T2, which outranges and outruns him, only one that
+// (docs/doctrine.md); against T2, which outranges and outruns him, only one that
 // leaves him COM_RETREAT_HEALTH of what he brings. A tower when it stands
 // before they arrive and turns the fight; otherwise he leaves now.
 // Recorded as `apex: nncom` for a commander net; the rule's pick carries ~all

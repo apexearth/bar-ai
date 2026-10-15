@@ -1,6 +1,6 @@
 namespace Market {
 
-// TOWERS FLOWN FORWARD (apexearth 2026-09-24, docs/24): a front tower slot is
+// TOWERS FLOWN FORWARD (apexearth 2026-09-24, docs/doctrine.md): a front tower slot is
 // filled either by building on site or by building at home and flying the
 // finished tower up. Each is charged what the market already charges a build
 // -- ExpectedLossAt over the frame's build seconds, frame and crew -- and the

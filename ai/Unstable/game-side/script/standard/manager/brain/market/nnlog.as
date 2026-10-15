@@ -372,7 +372,7 @@ void NnOptFull(Want@ w, const AIFloat3& in up, array<float>& out o)
 	o[15] = 1.f;   // the persona column, kept so old records still line up
 }
 
-// DISCOVERY, two rolls (docs/35): an explorer's every head mixes NN_HEAD_FLAT
+// DISCOVERY, two rolls (docs/how-it-works.md): an explorer's every head mixes NN_HEAD_FLAT
 // uniform into its odds, trusted or not; a rarer strategy explorer also leads
 // its team with one plan (plannet.as).
 bool gNnExploreRolled = false;

@@ -46,8 +46,7 @@ TUNE_REF = re.compile(r"`(apex_[a-z0-9_]+)`")
 # auditor with a 40% false-positive rate gets ignored, which is worse than no
 # auditor (the as_scope undeclared-symbol pass was reverted the same day for
 # exactly this).
-SURVEYS = {"docs/13-other-ais.md", "docs/14-bar-ai-landscape.md",
-           "docs/02-ai-landscape.md", "docs/09-resources.md"}
+SURVEYS = set()
 
 # Files owned by the game, the lobby or the ENGINE INSTALL, not by us. A path
 # under the Beyond-All-Reason install is supposed to be absent from this repo --

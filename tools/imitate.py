@@ -1,4 +1,4 @@
-"""Learn what BARb builds, as a prior for our builder net (docs/35).
+"""Learn what BARb builds, as a prior for our builder net (docs/how-it-works.md).
 
     python tools/imitate.py [tournament or match dirs ...]   # default: every tournament vs BARb
 

@@ -446,7 +446,7 @@ float UnitCoreRawCalc(int d)
 // A DEF THE MODEL HAS NO EVIDENCE ABOUT IS PRICED AT ITS CLASS, NOT AT ITS
 // STATS -- the fallback RecordRatioVs already applies to a matchup with no
 // history, moved onto the SCORE, because the record cannot reach a def nobody
-// has fought with yet. docs/27 `TUNE_EVIDENCE_SHRINK` has the measurement.
+// has fought with yet. docs/tunables.md `TUNE_EVIDENCE_SHRINK` has the measurement.
 //
 // Median and interquartile range, never a mean and a deviation: a mean over a
 // population containing the outlier is the outlier's own average, which is the

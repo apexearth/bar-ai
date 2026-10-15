@@ -1,6 +1,6 @@
 namespace Military {
 
-// TIMING WINDOWS (docs/35 nnstrike): a 12 s census of the moments attacking pays
+// TIMING WINDOWS (docs/how-it-works.md): a 12 s census of the moments attacking pays
 // more -- their army away, a fight just won, theirs thinned or mid tech switch,
 // ours at a peak -- and a head that picks NO (today's play) or STRIKE, which
 // takes this AI's attack focus to their economy the way a hunt takes it.

@@ -523,7 +523,7 @@ bool GenObsoleteOnArrival(int d)
 // of our conversion throughput doing it, because nothing replaces what those
 // hands can no longer make. The ground was cheaper than the energy then thrown
 // away, so a builder is refused the basic only when it could have made the
-// better one itself. Team-wide refusal: docs/27, TUNE_OBSOLETE_RATIO.
+// better one itself. Team-wide refusal: docs/tunables.md, TUNE_OBSOLETE_RATIO.
 // THE TRANSITION OFF THE BASIC CONVERTER (apexearth 2026-09-08: "we stop
 // wanting to build and then ... we start wanting to reclaim... you remove
 // them once you have more than enough advanced converters"). Denser
@@ -627,7 +627,7 @@ float ConvTotalE()
 // constructors: the seconds those hands need to build the whole convertible
 // surplus's worth of their best converter, against the fill window the rest
 // of the economy plans in. One T2 con beside three fusions cannot, so the
-// basics that carried the 2026-09-08 arm (docs/27, TUNE_OBSOLETE_RATIO) are
+// basics that carried the 2026-09-08 arm (docs/tunables.md, TUNE_OBSOLETE_RATIO) are
 // still made; ten of them at 1,000 m/s can, and no hand makes a basic.
 bool DenserHandsCover(int d)
 {
@@ -803,7 +803,7 @@ bool ConvObsoleteOnArrival(int d)
 // apex_obsolete_ratio is NOT applied -- it is 4x, calibrated on the energy
 // ladder, and the lathe rung is 1.69x, so the whole law would be a silent
 // no-op. The successor does the same job on the same ground, so strictly
-// denser is the test and RetireGain's room term decides the swap. docs/27.
+// denser is the test and RetireGain's room term decides the swap. docs/tunables.md.
 float LatheCellBP(int d)
 {
 	if (!IsLatheDef(d))

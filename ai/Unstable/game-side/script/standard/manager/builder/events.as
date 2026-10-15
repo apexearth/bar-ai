@@ -1,6 +1,6 @@
 namespace Builder {
 
-// KILL PHASE (docs/20-brain-overhaul.md): the hooks keep only senses and the
+// KILL PHASE (docs/how-it-works.md): the hooks keep only senses and the
 // Requests plumbing's bookkeeping. All spend-side ledgers died with their
 // rules.
 

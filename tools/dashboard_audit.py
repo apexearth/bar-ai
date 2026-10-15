@@ -5,13 +5,13 @@
     python tools/dashboard_audit.py --stale    # tunables no run has ever swept
 
 `--stale` answers a different question, and it is the cull list for
-docs/21-simplification.md Phase 3. It cross-references every tunable declared in
+docs/working.md. It cross-references every tunable declared in
 `tunables.as` against every `apex_*` modoption that appears in a recorded run's
 `script.txt`, and lists the ones that have never been overridden even once.
 
 A tunable nobody has ever swept is a named constant carrying four registration
 sites (tunables.as, dev_tunables.lua, dashboard_guide.py, the waiver here) and
-an experiment's clothing. It is also, per docs/21 root cause 1, one more
+an experiment's clothing. It is also, per docs/working.md, one more
 multiplicative term in a product where no single term controls the outcome.
 `reads=1` marks the ones that fold back into a constant at their single call
 site with no argument about which caller wins.
@@ -150,7 +150,7 @@ def report_stale() -> int:
         print()
     single = sum(1 for _, rows in sections for _, _, k in rows if k == 1)
     print(f"{single} of those are read at exactly one call site -- "
-          f"docs/21-simplification.md Phase 3 takes these first.\n")
+          f"docs/working.md takes these first.\n")
     return 0
 
 

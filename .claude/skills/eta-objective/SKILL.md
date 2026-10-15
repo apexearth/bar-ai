@@ -5,14 +5,14 @@ description: How the AI answers "what is the fastest path to the state I am tryi
 
 # The ETA objective
 
-`docs/23-the-plan.md` is the intent and comes first. This skill is the mechanism:
+`docs/how-it-works.md` ("The one idea") is the intent and comes first. This skill is the mechanism:
 what the code actually computes, what it deliberately refuses to compute, and how
 to tell whether it is working. It describes **`manager/brain/market/eta.as`** and
 the one block it added to `market/decide.as`.
 
 Status, 2026-09-08: **ON by default (`apex_eta=1`) since the Carrot Mountains
 battery: minute-30 metal income 188 -> 236 m/s against a flat BARb, 12 games;
-see docs/27 `TUNE_ETA`.** Still economy-only, and the army half is not built. The target
+see docs/tunables.md `TUNE_ETA`.** Still economy-only, and the army half is not built. The target
 names a level of economic power and nothing else. Everything below is scoped to
 that; do not read it as a description of how the AI values army or defence.
 
@@ -245,7 +245,7 @@ constant.
 ## Rules for working on this
 
 - **Do not add a term to make an outcome happen.** The failure mode of the
-  paradigm is term count (`docs/21-simplification.md`): twelve multipliers and no
+  paradigm is term count (`docs/traps.md`): twelve multipliers and no
   single one controls anything. This file has three moving parts on purpose.
 - **A threshold here is a bug, not a fix.** If the ladder picks wrong, the pool's
   arithmetic is wrong — a missing rung, a dishonest gain, a count that does not
@@ -258,4 +258,4 @@ constant.
   economy-only and must not be described otherwise.
 
 Related: `value-paradigm` (the pricing frame this serves), `ai-eco-pricing` (the
-per-step gains the ladder consumes), `docs/23-the-plan.md` (the intent).
+per-step gains the ladder consumes), `docs/how-it-works.md` (the intent).

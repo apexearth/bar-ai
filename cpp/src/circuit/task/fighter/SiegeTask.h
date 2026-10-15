@@ -1,7 +1,7 @@
 /*
  * SiegeTask.h
  *
- * apex: a squad that exists for one enemy fortification (docs/24 "Siege a
+ * apex: a squad that exists for one enemy fortification (docs/doctrine.md "Siege a
  * fortification on purpose"). The goal lives in CFortCensus; the task ends
  * when the script clears it.
  */

@@ -1,5 +1,5 @@
 namespace Market {
-// DEFENCE AS A CRUTCH (his 2026-10-14, docs/24 "Defending the base"): five
+// DEFENCE AS A CRUTCH (his 2026-10-14, docs/doctrine.md "Defending the base"): five
 // switches, each turning one rule that bypassed the draw into a priced offer.
 // The counters below are what `apex: ecodef-stat` prints once a minute.
 

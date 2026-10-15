@@ -1,6 +1,6 @@
 namespace Military {
 
-// FLANK GUARDS (his 10-14, docs/24 "Defending the base": raiders go round the
+// FLANK GUARDS (his 10-14, docs/doctrine.md "Defending the base": raiders go round the
 // towers and eat the economy freely). The closure ring's open bearings
 // (Market::ClosurePrep: on the map, no ally ahead, no tower reaching) are the
 // approaches; the economy behind each one that our guns do not cover against

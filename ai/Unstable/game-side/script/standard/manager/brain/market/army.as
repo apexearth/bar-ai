@@ -238,7 +238,7 @@ int EscortShortfall()
 }
 
 // Where our land cannot reach the enemy the army is two budgets, land and navy
-// (docs/24, 2026-09-27), each its share of the map and filled only by its own
+// (docs/doctrine.md, 2026-09-27), each its share of the map and filled only by its own
 // hulls: amphibious tanks do not hold the water.
 // The navy's share of OUR budgets. Cut off, it is the water's share of the
 // map; where the land connects, the naval lead still commits most of its
@@ -522,7 +522,7 @@ float NavyValue()
 }
 
 // A walker with no underwater weapon fights only once ashore: worth the land
-// share (docs/24).
+// share (docs/doctrine.md).
 float WaterFightMul(int d)
 {
 	if (!Catalog::gAmphib[d] || (Catalog::gWaterT[d] > 0.01f))
@@ -1721,7 +1721,7 @@ bool EcoRoleActive()
 	ds.sortAsc();
 	const float dmed = ds[ds.length() / 2];
 	const float margin = ai.GetTunable("apex_eco_rear_margin", TUNE_ECO_REAR_MARGIN);
-	// An eight-player team seats whatever the margin (docs/24 2026-09-13); the
+	// An eight-player team seats whatever the margin (docs/doctrine.md 2026-09-13); the
 	// margin was for the 4v4 line-abreast start, which the size gate above
 	// refuses, and a line-abreast 8v8 never reaches it.
 	gEcoRole = (ht[seat] == ai.teamId) && (sh[seat] > 0.f) && (dmed > 1.f)
@@ -2155,7 +2155,7 @@ float AnswerShare()
 // nothing else.
 //
 // apexearth chose the basis outright (2026-08-31, asked what sets the army
-// share: "Own economy only"), and docs/23-the-plan.md states it as the standing
+// share: "Own economy only"), and docs/how-it-works.md states it as the standing
 // obligation the whole ETA objective runs under: "army and defence stay at
 // their proper share of the economy we have built."
 //
@@ -2177,7 +2177,7 @@ const float T2_DEFENCE_SHARE = 0.5f;
 // THE FLOOR UNDER THE SWITCH AND THE SEAT (apexearth 2026-09-30, a Glacier 8v8
 // merged to two seats -- one the eco seat, one switching to T2 -- made almost no
 // army: "when transitioning to T2, we need some army. We need a floor"): our
-// share of the army they have shown, at his home-defence parity (docs/24,
+// share of the army they have shown, at his home-defence parity (docs/doctrine.md,
 // ~1.2x).
 const float ARMY_FLOOR_PARITY = 1.2f;
 float gArmyFloorRaw = 0.f;

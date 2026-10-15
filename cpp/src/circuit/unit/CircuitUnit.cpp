@@ -415,7 +415,7 @@ void CCircuitUnit::CmdRemove(std::vector<float>&& params, short options)
 // disagree about which call site an index means.
 // retreat > dodge > standoff > guard is apexearth's standing ruling; the rest
 // follow the same principle and his max-range rule. The derivation and what
-// it is for are in docs/24-how-units-fight.md.
+// it is for are in docs/doctrine.md.
 //
 // TRAVEL and FWALK are deliberately UNRANKED (-1): the unit-action layer
 // executes whatever was decided, so blocking it would freeze the very

@@ -600,7 +600,7 @@ bool EscortWorthy(int di)
 // from a mean is only as good as the field it averages, and the field is not
 // knowable from the source -- it depends on which factory is standing. Printed
 // before anything is enforced so the bar can be read off real data instead of
-// guessed (docs/25: the silent no-op is this repo's only real bug class).
+// guessed (docs/traps.md: the silent no-op is this repo's only real bug class).
 bool gEscFieldLogged = false;
 void EscortFieldCensus()
 {
@@ -644,7 +644,7 @@ void EscortFieldCensus()
 //
 // This replaces a FLOOR that returned before the auction ran. The floor could
 // not be out-ranked by anything, however cheap the alternative or dear the
-// escort, which is the shape docs/23-the-plan.md forbids: "a choice that should
+// escort, which is the shape docs/how-it-works.md forbids: "a choice that should
 // not happen is one whose ETA is worse", not one a rule forbids.
 // Escort-capable units standing unpaired in a rally, defence or scout task:
 // the recruiter's pool (EscortSpareCensus, on its clock). A buy is owed only

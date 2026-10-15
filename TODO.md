@@ -1,606 +1,143 @@
-# Strategies and behaviours he has asked for, not yet built
+# Plays and behaviours he has asked for, not yet built
 
-This file is the third list, and the narrowest. `ISSUES.md` is what is wrong
-now; `USER-FEEDBACK.md` is the standing brief of what he wants; this is the
-sketchbook -- named plays and unbuilt behaviours in his own words, kept because
-nothing else records them.
-
-Same lifecycle as the other two: **an entry is DELETED when it is built and
-measured, never marked done.** Pruned 2026-09-15: constructor roles by share
-(built, `roles.as`), dedicated energy builders (a role category), the eco base
-layout (rows, no rear lanes, flush packing -- 09-14) and the C++ refactor list
-(the six fight classes went back to stock BARb on 09-07, `docs/30`) are gone.
-
-Read `docs/23-the-plan.md` before coding anything here. Where one of these is
-phrased as a bar ("at 150 metal/s, build a gantry"), that is him reporting a
-symptom at the income he happened to be watching -- it is not a number to code.
-The AI reaches a play when the arithmetic says the play is the fastest path.
-
-The fight layer is stock since 2026-09-07; every play below that needs squad
-behaviour is C++ work on top of stock, not a re-tune of deleted code.
+The sketchbook: named plays and unbuilt behaviours in his own words, kept because nothing else
+records them. `ISSUES.md` is what is wrong now; `USER-FEEDBACK.md` his open asks;
+`docs/doctrine.md` the principles. An entry is deleted when built and measured. Where a play is
+phrased as a bar ("at 150 metal/s, build a gantry") it is a symptom at the income he was watching,
+not a number to code. The fight layer is stock BARb since 2026-09-07, so squad behaviour below is
+C++ work on top of stock. Older text: `git log -p TODO.md`.
 
 # Strategies
 
-## Abuse the BARb AI the way humans do -- the standing doctrine
-
-apexearth 2026-09-01, offered as frame of mind rather than a spec:
-
-  "I want to see this AI abuse the Barb AI the same we humans do :-P
-   - make them attack us when they're more powerful
-   - eat their wrecks
-   - keep making more military
-   - don't waste it
-   - grow
-   - overwhelm the enemy
-   - use cheeky strategies/squads like i mentioned
-   - stand at enemy border and siege them long range
-   - let them come at our army while we stand still and defend, using rezbots,
-     twitchers, etc to heal our tanks."
-
-These are one doctrine, not eight wishes. Every item is a way of NOT walking
-into their guns.
-
-  hold, do not charge   they attack us; we fight on our ground at our range
-  heal in place         rezbots and twitchers repair the screen mid-fight, so
-                        the same metal fights several times
-  eat the wrecks        their dead army funds ours; the battlefield is the
-                        richest reclaim on the map and it is where we already
-                        are
-  never idle production the line keeps running while the ball holds
-  siege the border      the anchored range ladder, parked at their edge
-
-WHAT IS MISSING: the POSTURE that ties them together -- a deliberate "hold and
-let them come" mode distinct from attack, with the healers inside the ball
-rather than following it, and battlefield reclaim treated as a first-class
-income stream after a won fight. "Make them attack us when they're more
-powerful" is a bait, and this AI has no way to express "I am deliberately not
-attacking because their coming to me is worth more than my going to them."
-
-## Two squad doctrines: the siege screen, and the deep raid
-
-apexearth 2026-09-01, on what a short-range unit should do in a squad that has
-artillery behind it:
-
-  "the tanks should just stand around in front of the sheldons. They'll take
-  hits if they have to, but they won't walk up to enemies to shoot at them.
-  They're just protecting the ranged units. If they walk closer they'll take a
-  lot more damage. They are there as a shield. This is how all our units should
-  behave when in a squad with ranged units. The squad should seek to remain at
-  max range, tanks should try not to get hit but still protect their ranged
-  units. It's a bit of a siege mentality really."
-
-  "But that's not the only option we have. We can also just YOLO attack deep
-  into the enemy. The goal can be to just blast through the front line and make
-  it into unguarded economy in the backlines and then run around dealing free
-  damage."
-
-### A. SIEGE SCREEN
-
-    escort (no weapon):  hold at  highestRange + standoff
-    carry  (longest):    hold at  ownRange
-    screen (shorter):    hold at  carryRange - screenGap
-
-The squad sits at the carry row's range ("remain at max range") and the screen
-stands between the enemy and the guns rather than out ahead of them. A
-short-range unit in a mixed squad is bought as a SHIELD, so it is worth
-absorbing HP and body size there, not its own dps (the range-ladder valuation
-below). `TUNE_SCREEN_GAP` (200) is still declared in `tunables.as` and read by
-nothing since the 09-07 revert.
-
-### B. DEEP RAID
-
-Break the front line, get into unguarded economy, stay mobile dealing free
-damage. Stock `CRaidTask` picks the target; what is missing is the DECISION to
-spend a squad this way rather than on the front, and the target choice once
-through. He knows: "These changes would require some updates to our C++ code.
-We should keep working on this though as fixing our military composition is
-very important."
-
-## The anchored range ladder -- one Mammoth, everyone guards it
-
-apexearth 2026-09-01: "I can take 1 mammoth, 1 radar, jammer, 10 sheldons, 5
-arbiters... and have everyone guard the mammoth, and then give the mammoth a
-fight order towards the enemy base. This army can literally take out the entire
-enemy base."
-
-"It just happens that the mammoth range keeps it far enough away from enemies
-that usually only the mammoth is seen. The rest of the army behind it stays
-hidden but can still shoot at enemies up front. The jammer keeps them off
-radar. The radar gives LOS/radar. Arbiters give the extra anti-building damage.
-If the AI doesn't actually form a squad like this then its much less valuable.
-And when the mammoth dies well the whole squad breaks down fast."
-
-    corsumo  Mammoth  2,200m  15,600hp  spd 22.5  range   650
-    cormort  Sheldon    410m     940hp  spd 50.4  range   850
-    corhrk   Arbiter    600m     610hp  spd 54    range 1,210
-
-THE MECHANISM IS A RANGE LADDER: each rank stands behind the one in front and
-still reaches, because its range is LONGER than the anchor's. Only the anchor
-is inside the enemy's range. A reach unit is protected when an anchor with a
-SHORTER range and enough HP stands in front of it -- not when the army holds a
-given metal fraction of "meat". `ShieldShare()` = (tankM + midM)/totalM scores
-his ball 0.24 and a homogeneous Thug ball ~1.0; metal share is the wrong
-currency.
-
-Squads already pace to lowestSpeed, so the engine does not refuse the mix.
-Missing: (1) the range-ladder valuation; (2) the FORMATION -- everyone guards
-the anchor, the anchor gets the fight order; (3) radar and jammer as squad
-MEMBERS; (4) anchor fragility -- his answer "just add more mammoths :-P": the
-anchor requirement is absorbing HP against what is incoming, so a bigger ball
-wants MORE anchors, and the redundancy falls out of the arithmetic. No
-single-point-of-failure rule.
-
-## Surprise Air Eco attack! (special temporary strategy to swap to in the middle of a game)
-
-Surprise the enemy by building up a force of 20+ fighters and 20+ bombers (T2), or T3 Dragons, invade enemy territory by ***avoiding*** enemy army (go around them, don't retreat!!!!) and attack constructors, economy, and keep going until dead. This is a suicide attack strategy for the units involved and the goal is to inflict maximum damage on their economy and build power.
-
-## Tick Spam! (late game additive strategy)
-
-In late game, like 20-30m+ in time, when theres lots of big bois or annoying long range units attacking you, you can distract them very well by spamming ticks at the enemy. Alternatives are grunts, pawns, rascals, wheelies, the cheap but fast units - we don't care about grouping up these units. They go straight to the front and run as far into the enemy base as they can. Their purpose is to provide vision and to be a distraction. These shouldn't get swept up into groups, or treated like normal army - they are fodder. (`TUNE_SPAM_RAIDERS` is on since 09-13 for the raider class; the deliberate late-game fodder wave is not built.)
-
-## Stop buying what keeps dying for nothing (unit track record)
-
-apexearth 2026-09-16. Keep a record, across games and within one, of how
-each unit type performs, and discount the ones that keep proving useless:
-
-- A unit has justified its existence when the damage it dealt equals its own
-  health. Five times its health is a 5x. A 1,000-metal unit that dealt 50
-  metal of damage is almost useless.
-- Keep it simple: a moving average per unit type. It has to read bad
-  continuously for some duration before the AI says "you're not worth it".
-- **Fodder is never judged.** Its whole purpose is distraction; we know it will
-  die. Keep making it. (In code that is the raider class the spam path sends,
-  `hooks.as` / `TUNE_SPAM_RAIDERS`.)
-- Open, his idea 2026-09-19: judge a squad, not a unit -- "this was our
-  squad, and based on our squad's composition, how did we do against this
-  unit?" -- so a tank is credited with what its squadmates dealt while it
-  absorbed. Fuzzy by his own account; the class bar (a tank judged as a
-  tank) is the simple form built instead.
-- **Fighters are never discounted.** You always need fighters with aircraft.
-  At most, T1 fighters may be discounted in favour of T2 ones.
-- The engine tracks unit experience already; the AI can read damage dealt per
-  unit through the damage callbacks, so no new bookkeeping in the game.
-- Where it lands: the per-def worth multiplier (`worth.as` `UnitWorthMod`,
-  hand-set today) becomes the measured ratio. A price term, not a ban.
-- Stage 0 is the instrument: log damage-dealt/health per unit type at death
-  and at game end, check the ranking is stable across a battery, THEN price.
-
-## Join a fight only if we get there in time -- a net decides, scored on arrival
-
-apexearth 2026-10-08: "sometimes I see our guys walking across the map just to
-attack with somebody who's already engaged with the enemy. So by the time ...
-they're gonna either win or be dead by the time our units even get there."
-Whether to march to an ally's (or a squad's) fight should be a net decision
-with the walk distance among its inputs, and one of its success metrics should
-be "did we participate in the attack we tried to participate in" -- arrived
-and engaged before the fight ended. Inputs a player sees: our travel time, the
-fight's size and how long it has been going, the two sides' strength there.
-Label: arrived while it still raged / arrived after / died on the way, plus
-the trade once there.
-
-Built 2026-10-08 (bd8d3c77): head `reinf` (NNV), asked by CAttackTask when a
-new target is where our side already fights; outcome in/over/late/died is
-its `done`. Open: the trained net -- whether STAY ever beats GO -- is
-unmeasured until the head has rows.
-
-## Formation spacing and squad membership by unit type -- a net decides
-
-apexearth 2026-10-11: "formation spacing based on unit types. for example
-snipers bunched up is often a bad idea, way better if they're spread out. Also
-things like whether or not certain unit stats should join squads or not, all
-this could be governed by a NN and I think that would be helpful."
-
-Same day, for air: "our air attacks should fly a bit more spread out, they die
-to splash damage too much." Built for bombers (C++ `CBombTask::AssignSlots`:
-a grid spaced at twice the widest splash radius of the AA we have seen) on
-the `CCircuitUnit` formation slot (lateral + depth), which every travel,
-regroup and rally order passes through. Open: (1) ground squads -- spacing per
-unit from its stats (range, hp, cost, the enemy splash seen) as a continuous
-net head, not a table; (2) whether a unit joins a squad at all, from its stats,
-as a priced net decision with the outcome of the fight it joined as the label.
-
-## Metal maps: extractors packed where they are safe, tiled for least overlap
-
-apexearth 2026-10-08, watching Full Metal Plate: the whole map is metal, so
-"just make a lot of metal extractors, put them right next to each other".
-Measured: BAR's mex-denier gadget removes itself on a metal map (an extractor
-may stand anywhere); the 249 spots both AIs use are the spot finder's
-synthetic grid, ~505 apart; extraction circles that overlap split the metal
-under them, so packing past touching circles adds nothing. Our bots held
-15-28 each at minute 12. The play: on a metal map, place extractors on our
-own tiling (circles edge to edge) starting at home and growing outward in one
-block, instead of claiming the finder's grid scattered across the map.
-
-Why it is not a spot-list change (2026-10-08): on a metal map the finder
-publishes no spots (`mex_count=-1`) and C++ `ParseMetalSpots` thins its own
-packed scan to ~240 by raster stride. The list is shared by every AI in the
-process and walked by ~20 script loops; packing both 20% start strips is
-~1,800 spots, and an AI knows only its OWN start position
-(`Map_getStartPos`). The play needs a per-AI extractor farm near its own
-base, sited and priced like converters -- a new want kind.
-
-## Fighter cover for air missions
-
-apexearth 2026-09-16, watching scouts fly out alone and die to the first
-enemy fighters. When we send scouts, bombers or radar planes out on a mission,
-fighters go with them to guard them. (Stage 0 of the track record and this
-are the same session's work.)
-
-Measured 2026-10-08 (Special Creek replay): of our aircraft deaths, enemy
-fighters took 53 of 362 scouts and none of the bombers/gunships; ground AA
-took the rest. Bomber waves fly behind the fighter vanguard (952ca280).
-Cover would save little; AA avoidance on the route is the bigger loss.
-
-## Never an idle factory while metal goes unspent
-
-apexearth 2026-09-16, from an 8v8 on Isthmus he watched. Our eco player got
-very strong and stood about ten advanced air labs -- and they sat idle much of
-the time while we spent only about half the metal we were making. There was no
-excuse: with that bank and that income the labs should have been pumping out
-air without pause. An idle factory next to unspent metal is UNACCEPTABLE, not
-a tuning question.
-
-This is the third report of the same class (gantries 09-12 and 09-13, air labs
-now; ISSUES GANTRIES). The fixes of 09-12/13 did not close it. What is open:
-
-- Nothing yet says WHY a standing lab is idle -- army target reached, a want
-  that never elects, a `gap0` on every candidate, a jammed yard. `FacYardWatch`
-  reads a blocked plant only. Stage 0 is the instrument: per lab, per minute,
-  idle time and the reason the auction gave it nothing.
-  Found 09-21 (his Isthmus 8v8, fourth report: "we still have a lot of idle
-  time on our airlabs... we need to be making longer queues"): `apex: facqueue
-  short <lab> ordered=1 pend=0 sec=0/15 stop=slice us=16000-79000` on every
-  seat lab after minute 30 -- one ConOrderFor costs 16-79 ms, the 4 ms batch
-  slice ends after slot 0, and a nano'd line that builds a unit in 2 s gets
-  one unit per 10 s election. Built 09-21: past the slice the window is
-  filled by re-drawing the election's own ranked list (`RedrawFor`).
-  Unmeasured in a rich game yet.
-- The standing obligation ("army stays at its share of the economy we built")
-  must not read satisfied while the bank sits full. Metal we are not spending
-  is not economy we have built; the share is of what is USED.
-
-Measured 2026-10-08 on his Special Creek 8v8 (v0.1.7): 1,023 'no-candidate'
-idle reports while spilling; the labs idled by rule (T1 outgrown, ground
-lines under the lag rule, T2 yielding to the gantry). The waste (4-23% per
-AI) came from the OUTLET: t17 had one gantry and no air plant under lag, and
-its builders reclaimed wrecks into the full bank (fixed 846ab772). Open:
-under lag with one gantry, spare metal has no sink but nanos -- read his
-next long game for nano and second-gantry decisions while wasting.
-
-## The jammer ring -- the stall that buys more time than the same metal in army
-
-apexearth 2026-09-21: when we cannot match their army, the right choice can be
-to make a jammer, put a bunch of HLT turrets inside its ring, some nano turrets
-there too, and make sure we have radar; with T2, T2 defence goes in the ring.
-The best choice is the T3 turret -- that is what costs the ~4,000 metal -- with
-a bunch of crappy turrets in front of it to take the enemy fire, all under the
-jammer. Against a bonused enemy AI coming down with really tough stuff, that
-holds; it buys more time than 4,000 metal of army would.
-
-The situation it answers is the 8v8 ally's (ISSUES "the allies' mohos are
-metal-bound"): an army that stands at 1-6k against 12-22k, walks in, dies and
-is rebuilt from zero every ~5 minutes. The trigger is the same reading -- the
-enemy field in reach against our own -- that the class bar and the track record
-already take; the answer is a defence ring priced as time bought, not a unit.
-
-## Nuke Spam!
-
-- prefer a docile enemy, likely wait until we have a rush to T2 and based on observed enemy strength *maybe* enable this strategy
-- not a good strategy versus aggressive enemies
-
-Before the enemy is ready, have the entire team go straight for nukes. Build up and SAVE multiple nukes and then at around 18m in launch all the nukes we've got on all the different enemy bases. Spread them out. After this reclaim all the nuke launchers and turn off the strategy to play normally or with a different strategy.
-
-## Three detectors from one hosted night (apexearth 2026-08-19)
-
-1. **Exploit enemy complacency.** "If enemy is not attacking us but just being
-   defensive, we should form our own defense a bit more and take the time to
-   scale our army." A passivity read (near-zero recent losses, base
-   uncontested, static front) under which we greed eco AND scale army on our
-   own timeline.
-2. **Push back when pushed.** "If the front line is moving back into us then we
-   need to make more army and push it back." Front-position memory; sustained
-   shrink raises the army share until the line recovers.
-3. **Defend the flank the front is wrapping around.** "If we know the
-   frontline is shifting like that we should work hard to make defense in our
-   base." The same memory's BEARING: a swing means a flank forming; the
-   team-front gap price (docs/32) reads open bearings but not a moving one.
-
-# Tips
-
-- in late game take advantage of air constructors - they allow you to scale everything much faster, because ground cons move slowly. HOWEVER - air cons are easily shot down near the front line - this requires intelligence so that air cons aren't used when enemy AA is nearby. You have to hook this into their behavior, choice of where to build, AND whether they even get constructed. Complex. (Fighter escort for air cons built 09-13, unverified; the AA-aware siting is not.)
-- AI should hover under a jammer and stay cloaked, when enemy T3 comes and attacks it should try to do surprise D-guns to kill all the T3 without dying itself.
-- Build artillery on hilltops to attack enemies below (2026-08-27). No elevation binding; `ai.GetPathLength` detour sampling is the available proxy.
-
-# Unbuilt behaviours (2026-08-09)
-
-## Rezbots follow the attack group and eat what it kills
-
-apexearth, 2026-08-09, watching an 8v8: "we should have this group followed by
-rezbots which will reclaim everything they kill... this is a nice to have, but
-would be great, and prevent enemy from just resurrecting all their stuff."
-
-Two payoffs: the metal from a won fight comes back, and the enemy loses the
-option to resurrect its losses. Rez bots now station behind `ArmyFront` (the
-forward-most tenth of our combat units) and salvage from there; what is
-missing is following a SQUAD and, for this job, RECLAIM not resurrect
-("rezzing takes MUCH LONGER than reclaiming... if in a dangerous area you
-should generally reclaim"). Needs a leash to the squad and must not pull
-bots off base work while the squad idles at home.
-
-## Scout the mex area first, then size the group to what is actually there
-
-apexearth, 2026-08-09: "you can scout with 1 cheap unit first to see what the
-enemy has in these areas... then you can build your attack size based on how
-strong the mex area is."
-
-Replaces a global quota with a per-target decision. Stock
-`GetScoutPosition` only counts a cluster scoutable when a spot reads
-`threat < THREAT_MIN`, so we never look where they are; enemy groups are built
-from what we have SEEN, so an unscouted extractor is not a candidate at all.
-`CAttackTask::FindTarget` already computes the local influence of a candidate;
-what is missing is using it to SET the group size rather than accept or refuse.
-Not built.
-
-## A single T3 assault unit should raid on its own, around the rim
-
-apexearth, 2026-08-09: "Once we have units like the 'Titan' they can do these
-attack orders all on their own. Through the edge of the map they'll be very
-good."
-
-Titan is `armbanth` (13,500 metal), Korgoth `corkorg` (29,000); either is worth
-more than the whole massing floor, so waiting to bundle one with Pawns spends
-the wrong resource. It may already work -- a Titan's power may fill
-`quota.attack` alone; never read. The "through the edge" half is ROUTING: the
-stock path crosses whatever the threat map allows, and no lever for a rim
-route survives the 09-07 revert. Not built. Unmeasured.
-
-## A basemap: defend territory, not a plethora of buildings
-
-apexearth 2026-09-05, asked whether the defence target should stay 1.82x the
-army target:
-
-  "Just like we have a threatmap we need a basemap or something like that.
-   Instead of coding towards a whole plethora of buildings we can instead code
-   towards what we consider our base or friendly territory which we want to
-   defend. Should reduce the complexity I'd say. If we use our army to defend
-   structures then we don't need as much defense - and if we make more defense
-   on our structures then we don't need as much army there. It should be a
-   balance between the two - and a choice - mobility vs concentrated power."
-
-The territory mask (09-12) and the team hull (docs/32) are the map. Not built:
-defence and army as two ways of buying the same hold -- substitutes in one
-balance, priced against each other, not two independent targets
-(`TUNE_DEF_ECO_S` 120 vs `TUNE_ARMY_ECO_S` 66 is the framing he rejected).
-
-## Behemoths when the enemy is encroaching (defence by unit choice)
-
-apexearth 2026-09-16, Cortex losing ground on Supreme Isthmus: build
-Behemoths (`corjugg`) -- "super duper defensive" -- when the enemy is winning
-on our ground. Asks for a store of what each unit is good FOR (the Behemoth:
-defence) that composition can read. Built 09-16 as `UnitHoldMod` /
-`apex_hold_<unit>` (tunables.as, worth.as): a worth multiplier live only
-while `LosingGround()` or the base is contested, corjugg 2x. Unmeasured --
-needs a losing Cortex game with a gantry standing.
-
-## LRPC on high ground
-
-apexearth 2026-09-16: long-range cannons go up on hills so they fire long
-distances unobstructed; the ground is allowed, hills are preferred. Supreme
-Isthmus has them. Built 09-16: `HighGroundNear` in want_super.as takes the
-highest legal ground within 600 elmos of the gate site. Unmeasured -- no LRPC
-went up in the 32-minute test games.
-
-
-## Air-lift turrets: what is still unbuilt
-
-apexearth 2026-09-18 and 09-24: idle turrets flown by transport to where they
-are needed "around the base"; also transports that free a stuck unit. Built
-2026-09-24 (`market/lift.as`, DLL `CmdLoadUnit`/`CmdUnloadAt`/`CanLift`/
-`GetResUse`/`UnitRelocated`): idle turrets to the working line furthest short
-(`LineSiteFor`) only. Still unbuilt:
-- other destinations -- a big frame being built (the nano-sink sites
-  execute.as already scores), the held front line (`WallSupportSlot`);
-- the stuck unit: `UnitMoveFailed` reaches the DLL, nothing asks for a lift;
-- more than one transport per turret class (`LiftGainFor` prices a second
-  plane at zero while one that fits stands);
-- BAR's `unit_transportable_nanos.lua` refuses a lift of an ALLY's turret,
-  so in team games each seat only moves its own.
-
-2026-10-07 he loves the transport code but finds it not active enough: the two
-biggest uses are moving nano turrets to where they are needed (the biggest),
-and carrying a group of units to a place pathing makes hard to reach.
-Measured the same night (2v2 self-play): the first seat of each side does
-nearly all the lifting (~20 turrets, a transport); the second seat had 4
-turrets, no transport and asked=0 -- the lift only moves IDLE turrets, so a
-seat whose few turrets are busy never wants a plane. "Where they are needed"
-means moving a busy turret from a low-value job to a high-value one (a gantry,
-a fusion frame): a price on the move (destination value minus what the turret
-gives up), not an idleness test. Drop-slot fixes landed (slot snapped legal,
-no shared slot, back to the pickup after 3 refusals): landed 61% -> 75%.
-
-## Escort strength scales with the risk of the trip
-
-apexearth 2026-09-24: the "assumed danger" prior backfired because some cons
-were allowed no risk and never walked out to build; perhaps boost the escort
-considerably based on the risk instead. Today an escort is binary: exposure
->= 0.5 asks for one (army.as ExposeRefresh), and one escort of any size makes
-the worker "escorted" (guards.as EscortedWorker). Nothing sizes it to what
-could arrive. Unbuilt: escort metal per worker against the threat expected at
-its site, and the build's danger priced as min(expected loss, escort cost) so
-risk buys protection instead of cancelling the trip.
-
-## Air-lift towers forward, army to raid or flank, a hidden base
-
-apexearth 2026-09-24: build light towers (beamers) in the safety of the base
-and fly them up toward the front line; transport army to raid or to flank
-("a place the enemy will not expect"); sneak a constructor behind enemy lines
-to make a base there (docs/24). Transportable towers (engine default for a building is NOT
-transportable; these opt in): LLT (armllt/corllt, mass 5100), Beamer
-(armbeamer 7500), corhllt (10200), armrl/corrl, radars. HLT, Dragon's Claw
-and Maw cannot be lifted. Every tower is over the Stork's 750 mass, so this
-is heavy transports only (Abductor/Skyhook). T1 army fits a Stork (mass is
-capped at 750 for units under 751 metal); the heavies take footprint <= 4.
-
-## Finish a won game: nukes, flanks, air, scouts, LRPC, Ragnarok
-
-THE LENS (apexearth 2026-09-18): "I'm just trying to think what a human
-would do to beat us in this particular game. And the answer would be mass
-nukes, naval attacks from the side, or some big air attacks. Those are the
-things that they would be able to do to kill us. We finally won because we
-finally landed a nuke in their base." Judge every play below by that: is
-it what a human would do to us at this economy, from a direction we do not
-hold.
-
-apexearth 2026-09-18, watching a game at three times the enemy's economy
-that took "forever" to win: "we don't use our nukes very smart. We're not
-attacking the enemy from the sides pretty much ever. We don't use air
-against the enemy... We don't even use scouts, so we don't really know
-where we should be nuking... if we just built nukes and consistently nuked
-the enemy, that would probably be the easiest way to win, but I would like
-to see us be able to do a variety of strategies. Like if we made a whole
-lot of marauders, if you attack the enemy with like 50 marauders, all of a
-sudden from the side, you'll really wreck the enemy good. We also lack LRPC
-cannons, and I never see us make anything like a Ragnarok."
-Six plays, none built as a play today: (1) nuke targeting from scouting
-(the silo fires at what radar and scouts have seen -- ai-nukes); (2) a
-flank: the army's approach vector off the direct line (built 10-10,
-unmeasured: C++ `CAttackTask::ChooseFlank`, `apex: flank` / `flank-stat`); (3) air used
-offensively (the bomber wing exists -- ISSUES BOMBERS -- and never flies
-in his games); (4) scouts kept alive as eyes (the Tick is buyable since
-80e63bd5); (5) a massed single-type strike (50 Marauders from a side);
-(6) LRPC (HighGroundNear exists, unmeasured) and the Ragnarok never
-priced in -- is it the super-weapon budget or the track record?
-
-apexearth 2026-10-12, watching 19 Marauders at 1.5x their income (watch game
-Armada mirror, a time-limit draw at 2.5x their metal built): "We can go around
-the side of the map and kill this AI easily. But usually we run away if we get
-close to doing something like that. Whatevers making them afraid, why not call
-for air support? They totally have the ability to win the game on their own if
-they were aggressive enough. Instead they run in, attack some, run back to a
-forward area for repairs maybe, and then try to run back into the base, getting
-stuck on new building creations in the process... We are dominant in many
-games, we just don't capitalize on it." A seventh play: (7) when a push is
-about to break off, the air wing is called to it instead of the push turning
-home.
-
-## Building as he would think it (2026-09-20)
-
-His model, offered as perspective while the election was being measured at
-121-236 runs per player-minute: the thought starts from the WANT, not the
-hand. "I want a fusion" -> "do I have a spare T2 con, or what are they
-doing?" -> if none is free, drop it and come back a second or two later.
-Only when every hand is on a job worth more than the want does the hard
-question run: "if I take one off the moho, how much does that cost, and is
-the fusion worth it?" Later in the game that collapses to "which hands are
-free or just guarding someone -- take one", because a guard's lathe is
-what the nanos give anyway and we rarely build many things in parallel.
-Today's market is the inverse: every idle hand re-asks all nineteen
-proposers. The demand-first shape is a ranked want list computed once per
-team on its own cadence, with a hand's election a lookup into it.
-
-## 2v2 Glacier Pass: the one arm left unmeasured (2026-09-22)
-
-The commander's WORK leash is what stalls the expansion at minutes 2-4
-(`mexdiag comFar=63` per sample, everything else under 8). Widening it back
-to the full `apex_eco_leash` while the chase keeps its own 0.5-leash bound
-in safety.as ran 3 of 16 games before the batch was reaped for memory:
-mexes at 12 min 6.1 -> 9.3, army at 4 min ahead of BARb for the first time,
-0-3 with 9.3k lost in the 8-12 bucket. To finish it:
-
-    # in floor.as ComFar: `> 0.5f * leash` -> `> leash`
-    BARAI_LANE=winrate python tools/deploy_ai.py deploy
-    BARAI_LANE=winrate python tools/run_tournament.py \
-      --a Apexwinrate:lane-winrate:standard --b BARb:stable:hard \
-      --maps "Glacier Pass" --games 16 --minutes 60 --speed 5 --per-side 2 \
-      --sides Armada,Armada --handicap 100 --box-size 0.2 --boxes lr \
-      --workers 4 --name t27b-comleash-s5-16
-
-Read: `tools/spendtable.py` (mexes at 8/12 min, the 8-12 loss bucket),
-`mexdiag comFar`, and commander death times. If the mexes hold and the
-losses do not, it is the first thing all night to move the minute-4 wall.
-
-## His four early-game directives (2026-09-22), with what is measured so far
-
-1. **Guard our mexes with a turret.** At minute 4 we are at parity (59% vs
-   60%) and by minute 6 we are not (62% vs 88%) -- their tower count nearly
-   doubles between 4 and 6, ours is flat. `apex_t1_tower_late=0` and
-   `apex_mex_cover_floor=2` both read inside the noise, so it is not the
-   rule or the floor: it is hands and metal in that window.
-2. **Harass their engineers and mexes with pawns/ticks.** The raid director
-   was DEAD: `RaidTarget` needs a remembered enemy STRUCTURE near a spot and
-   we scout nothing early, so it refused 128 of 130 asks ("no enemy ground
-   seen"). Given a geometric target (nearest spot on their half when nothing
-   has been seen) it asks 50 times and forms raid tasks -- but the packs are
-   1-3 units because the director wants ~5 Pawns and our whole early army is
-   defending. Neutral at 8 minutes (32 games each); full-length arm running.
-3. **Minimize walk time; fortify what the commander walks to.** Not built.
-   The walk is priced twice today (see ISSUES: a 34 s walk costs a mex claim
-   609 metal and an assist 37) and making them equal did not help.
-4. **Keep enemies off our energy and converters.** Not built, not measured.
-
-The loop for all four: `python tools/openloop.py run --name X --games 32`
-(6.5 min), compare against a 32-game control, then `tools/perminute.py` on
-one win and one loss. Anything under ~0.5 mex at n=32 is noise.
-
-## Host the AI from a lobby bot, not from his client (parked 2026-09-30)
-
-His ask: the AI hosted like a server, not by a player who joins and adds it.
-He parked it the same day ("we should not do this yet").
-
-Proven locally (`tools/netproof.py`): `spring-dedicated` as the server, a
-`spring-headless` spectator ("ApexBot") that owns the AI, a second client as
-the human. The game started and the AI played (11 decisions, 5 placements in
-3 game-minutes, no desync). Traps found:
-- `spring-dedicated` has no `--write-dir`; it reads `SPRING_WRITEDIR`, and its
-  config flag is `-config`.
-- A cold client spends 20+ s hashing the game before it answers; the server
-  dropped both clients after ~10 s. A kept write-dir (warm cache) plus
-  `InitialNetworkTimeout`/`NetworkTimeout = 300` fixed it.
-
-The plan when he picks it up:
-1. `tools/lobbybot.py` speaks the SpringLobby protocol (what Chobby and SPADS
-   use today; Tachyon is replacing it): log in, take his PM (`!join`, `!add 2
-   enemy`), JOINBATTLE as a spectator, ADDBOT with itself as owner, and on
-   the host going in-game launch spring-headless with the room's IP/port and
-   its own script password.
-2. Keep the room's engine, game and map installed (pr-downloader) and the
-   Apex AI deployed into that engine; keep the cache warm.
-3. Build and test against BAR-Devtools (Teiserver + SPADS + bar-lobby in
-   Docker) before the live server.
-His part: BAR bans alt accounts, so the bot account needs the admins'
-approval as a bot, and their word on a custom-AI host bot in public rooms.
-Where it runs matters: on his PC both clients simulate the whole game.
-
-## Seat merge -- fewer, stronger seats on a crowded map (built, switched off 2026-09-30)
-
-His idea: measure our side's buildable space, and on a cramped map share the
-commanders (and resources) into fewer of OUR AIs so each has room. Built in
-`military/gift.as` (`UpdateSeatMerge`, `SEAT_MERGE_ON = false`): space per seat
-by nearest home over `CanBeBuiltAt` ground, need = one base's minute-40
-footprint (80 cells of 256 elmos), commander handed at the start, chains
-resolved, merged seats feed resources up to the receiver's free storage,
-merged seats publish `seatout` (AllyCount and the T2-con gift skip them).
-Glacier 8v8 merged to 2 seats (one holding 6 commanders).
-
-Why it is off: the kept seat did not play six commanders. In his game the six
-spent 19 minutes on assist (7-28 each) and energy (5-19) with 5 extractor
-claims between them; army is sized from income and income from extractors, so
-six times the build power bought nothing. To work, the kept seat must: send
-the extra commanders out to claim the merged seats' territory (the commander
-leash keeps every commander home), size labs and expansion to the hands it
-holds, and drop the eco role (it zeroed the army of half the team).
-
-## Spread the economy by the share we can afford to lose at once (his 10-14)
-
-"We build a tremendous amount of our energy all in one massive ball, it all explodes together too.
-We need logic to think 'if the eco blows up, what % of my eco am I willing to lose all at once?' It is
-a space-efficiency/risk kinda algorithm." Fusions and AFUS explode on death and chain through a packed
-field; one raid or one bomber run takes the lot. Placement prices the cluster a building joins: the
-share of our energy already within blast/raid reach of the site, against the walking and space cost of
-starting another cluster. Not built.
-
-## Flank guards (his 10-14)
-
-"We also aren't guarding our flanks at all. Enemies go around our defense towers and attack our economy
-freely." Part one (reactive answer reaches as far as the raid lasts) is TUNE_RAID_REACH; part two, standing
-guard groups at the economy's approaches no tower covers, is not built.
+## Abuse the BARb AI the way humans do
+
+His frame of mind (2026-09-01): *"make them attack us when they're more powerful; eat their
+wrecks; keep making more military; don't waste it; grow; overwhelm the enemy; use cheeky
+strategies/squads; stand at enemy border and siege them long range; let them come at our army
+while we stand still and defend, using rezbots, twitchers, etc to heal our tanks."* One doctrine:
+every item is a way of not walking into their guns. Missing: a deliberate "hold and let them come"
+posture distinct from attack (the bait), healers inside the ball, and battlefield reclaim after a
+won fight treated as an income stream.
+
+## Two squad doctrines: the siege screen and the deep raid
+
+*"The tanks should just stand around in front of the sheldons. They'll take hits if they have
+to, but they won't walk up to enemies to shoot at them... It's a bit of a siege mentality
+really."* And: *"We can also just YOLO attack deep into the enemy... blast through the front line
+and make it into unguarded economy in the backlines and then run around dealing free damage."*
+Siege screen: carry at its own range, screen between enemy and guns, a short-range unit bought as a
+shield (`TUNE_SCREEN_GAP` is read by nothing since the revert). Deep raid: the decision to spend a
+squad this way, and the target once through. C++ work.
+
+## The anchored range ladder: one Mammoth, everyone guards it
+
+*"I can take 1 mammoth, 1 radar, jammer, 10 sheldons, 5 arbiters... and have everyone guard the
+mammoth, and then give the mammoth a fight order towards the enemy base. This army can literally
+take out the entire enemy base."* Each rank outranges the anchor in front of it, so only the
+anchor is seen. Missing: the range-ladder valuation (a reach unit is protected by a shorter-range,
+high-HP anchor, not by a metal share of "meat"), the formation (guard the anchor, anchor gets the
+fight order), radar and jammer as squad members, and more anchors for a bigger ball (*"just add
+more mammoths"*).
+
+## Surprise air eco attack (a strategy to swap to mid-game)
+
+20+ fighters and 20+ T2 bombers, or T3 Dragons, invade by going around their army (*"don't
+retreat!!!!"*) and hit constructors, economy and build power until dead. A suicide attack for
+maximum economic damage.
+
+## Tick spam (late game)
+
+At 20-30 min+, against big or long-range units, spam Ticks (or Grunts, Pawns, Rascals): ungrouped,
+straight to the front and as deep into their base as they get, for vision and distraction. Fodder,
+not army. (`TUNE_SPAM_RAIDERS` covers the raider class; the deliberate late wave is not built.)
+
+## Nuke spam
+
+Before the enemy is ready the whole team goes for nukes, saves several, and around minute 18
+launches them all on different enemy bases; then reclaims the launchers and plays normally.
+Prefer a docile enemy; not against aggressive ones.
+
+## Finish a won game: what a human would do to us
+
+*"What a human would do to beat us in this particular game... mass nukes, naval attacks from the
+side, or some big air attacks."* And: *"if you attack the enemy with like 50 marauders, all of a
+sudden from the side, you'll really wreck the enemy good. We also lack LRPC cannons, and I never
+see us make anything like a Ragnarok."* Plays: (1) nuke targeting from scouting; (2) the flank
+(built 10-10, `CAttackTask::ChooseFlank`, unmeasured); (3) air used offensively; (4) scouts kept
+alive as eyes; (5) a massed single-type strike from a side; (6) LRPCs and the Ragnarok priced in;
+(7) (10-12) *"Whatevers making them afraid, why not call for air support? They totally have the
+ability to win the game on their own if they were aggressive enough... We are dominant in many
+games, we just don't capitalize on it"*: a push about to break off calls the air wing.
+
+## The jammer ring: a stall that buys more time than the same metal in army
+
+(09-21) When we cannot match their army: a jammer, HLTs inside its ring, nano turrets there, radar;
+with T2, T2 defence in the ring; best a T3 turret with cheap turrets in front, all under the
+jammer. Priced as time bought, triggered by the enemy field in reach against our own.
+
+## Three detectors from one hosted night (08-19)
+
+1. Exploit complacency: *"If enemy is not attacking us but just being defensive, we should form
+   our own defense a bit more and take the time to scale our army."*
+2. Push back when pushed: *"If the front line is moving back into us then we need to make more
+   army and push it back."*
+3. Defend the flank the front wraps around: a front-position memory whose bearing swings.
+
+# Unbuilt behaviours
+
+- **Stop buying what keeps dying for nothing** (09-16): a unit justifies itself when its damage
+  dealt equals its health; fodder never judged; fighters never discounted. Built as the exchange
+  matrix (`TUNE_RECORD_BITE`). Open, his idea: judge a squad, not a unit (*"based on our squad's
+  composition, how did we do against this unit?"*).
+- **Join a fight only if we get there in time** (10-08): *"by the time... they're gonna either win
+  or be dead by the time our units even get there."* Built as the `reinf` head; unmeasured.
+- **Formation spacing and squad membership by unit type, decided by a net** (10-11): *"snipers
+  bunched up is often a bad idea"*; *"our air attacks should fly a bit more spread out."* Bombers
+  built; ground spacing per unit and whether a unit joins a squad are open.
+- **Metal maps** (10-08, Full Metal Plate): *"just make a lot of metal extractors, put them right
+  next to each other."* Needs a per-AI extractor farm near its base, a new want kind; the shared
+  spot list cannot carry it.
+- **Fighter cover for air missions** (09-16): scouts, bombers and radar planes fly with fighters.
+  Ground AA on the route is the bigger loss.
+- **Never an idle factory while metal goes unspent** (09-16, four reports): *"UNACCEPTABLE, not a
+  tuning question."* `RedrawFor` built; open: why a standing lab is idle, per lab per minute, and
+  the share obligation read against metal USED, not built.
+- **Tips:** late game, use air constructors (not near enemy AA: siting and whether to build them);
+  the commander hovers cloaked under a jammer and D-guns enemy T3; artillery on hilltops.
+- **Rez bots follow the attack group and RECLAIM what it kills** (08-09): *"prevent enemy from just
+  resurrecting all their stuff."* A leash to the squad, not pulling bots off base work.
+- **Scout the mex area first, then size the group to what is there** (08-09): the group size from
+  the target's local influence, not a global quota.
+- **A single T3 assault unit raids on its own around the rim** (08-09): *"Through the edge of the
+  map they'll be very good."* Routing lever missing since the revert.
+- **A basemap: defend territory, not a plethora of buildings** (09-05): *"If we use our army to
+  defend structures then we don't need as much defense... a choice - mobility vs concentrated
+  power."* Defence and army priced as substitutes for one hold.
+- **Behemoths when the enemy is encroaching** (09-16): built as `apex_hold_corjugg` 2x; unmeasured.
+- **LRPC on high ground** (09-16): built (`HighGroundNear`); unmeasured.
+- **Air-lift turrets**: other destinations (a big frame, the held front line), freeing a stuck
+  unit, more than one transport per class, and (10-07) moving BUSY turrets from a low-value job to a
+  high-value one, priced by the move.
+- **Escort strength scales with the trip's risk** (09-24): escort metal per worker against the
+  threat expected at its site; danger priced as min(expected loss, escort cost) so risk buys
+  protection instead of cancelling the trip.
+- **Air-lift towers forward, army to raid or flank, a hidden base** (09-24): heavy transports only
+  for towers (every tower is over the Stork's 750 mass; HLT, Claw and Maw cannot be lifted).
+- **Building as he would think it** (09-20): start from the WANT: *"I want a fusion" -> "do I have
+  a spare T2 con?"*; only when every hand is busy ask what taking one off costs. A team want list
+  on its own cadence, a hand's election a lookup. (`TUNE_CREW_ELECT` is a step toward it.)
+- **His four early-game directives** (09-22): guard our mexes with a turret; harass their
+  engineers and mexes with Pawns/Ticks; minimize walk time and fortify what the commander walks to;
+  keep enemies off our energy and converters. The last two are not built.
+- **Spread the economy by the share we can afford to lose at once** (10-14): *"if the eco blows
+  up, what % of my eco am I willing to lose all at once? It is a space-efficiency/risk kinda
+  algorithm."* Not built.
+- **Flank guards** (10-14): *"Enemies go around our defense towers and attack our economy
+  freely."* Built as `TUNE_FLANK_GUARD`, off pending A/B.
+- **Seat merge** (built, off): on a crowded map, fewer and stronger seats. Off because the kept
+  seat did not play six commanders; it must send them out to claim, size labs and expansion to the
+  hands it holds, and drop the eco role.
+- **Host the AI from a lobby bot** (parked by him 09-30, *"we should not do this yet"*): proven
+  locally with `tools/netproof.py` (dedicated server, a headless spectator owning the AI). Needs a
+  SpringLobby bot, the room's engine and game installed, a warm cache, and the BAR admins' approval
+  of a bot account.

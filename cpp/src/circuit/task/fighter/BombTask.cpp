@@ -1115,7 +1115,7 @@ void CBombTask::IssueAims(int frame)
 }
 
 // apex: the point of no return -- once the way home crosses more AA than the way
-// to the cell, turning back buys nothing, so the wave presses on (docs/24).
+// to the cell, turning back buys nothing, so the wave presses on (docs/doctrine.md).
 static float LineThreat(CThreatMap* threatMap, CCircuitUnit* unit, const AIFloat3& a, const AIFloat3& b)
 {
 	const float w = CTerrainManager::GetTerrainWidth();

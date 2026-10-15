@@ -28,7 +28,7 @@
 
 // Actions on building finished event
 "build_chain": {
-	// KILL PHASE (docs/20-brain-overhaul.md): hubs emptied -- engine
+	// KILL PHASE (docs/how-it-works.md): hubs emptied -- engine
 	// auto-defence/follow-up chains are off for this variant.
 }
 }

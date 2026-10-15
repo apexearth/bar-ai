@@ -1,6 +1,6 @@
 namespace Military {
 
-// SIEGE A FORTIFICATION ON PURPOSE (his 10-14, docs/24): the C++ fort census
+// SIEGE A FORTIFICATION ON PURPOSE (his 10-14, docs/doctrine.md): the C++ fort census
 // (unit/enemy/FortCensus.cpp) groups their known guns into fortifications; this
 // head picks NO or SIEGE on the best-priced one, demands units that outrange it
 // (SiegeGapM, production.as), and gives them a squad (C++ CSiegeTask) that exists

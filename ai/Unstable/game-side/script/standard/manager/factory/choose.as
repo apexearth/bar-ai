@@ -1,6 +1,6 @@
 namespace Factory {
 
-// KILL PHASE stubs (docs/20-brain-overhaul.md). These three signatures are
+// KILL PHASE stubs (docs/how-it-works.md). These three signatures are
 // looked up by the engine (FactoryScript.cpp); a MISSING AiGetFactoryToBuild
 // falls back to the engine's native DefaultGetFactoryToBuild -- a leaf
 // spender -- so the stub must exist and answer null. Plant choice returns as

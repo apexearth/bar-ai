@@ -394,7 +394,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 	// what the heck is going on?"
 	//
 	// The discount is real and IS applied (delta *= surv above). The suspect is
-	// its input: StreamRisk reads HazardWith, and docs/24 already records that
+	// its input: StreamRisk reads HazardWith, and docs/doctrine.md already records that
 	// reporting the FLOOR on our own ground while that ground was being taken
 	// apart. If surv is the same at every spot, the discount cannot distinguish
 	// a forward mex from a rear one and the pick is income-only. Nothing in the

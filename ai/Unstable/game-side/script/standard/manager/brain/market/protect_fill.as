@@ -347,7 +347,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	// not this floor, is what closes it.
 	const float horizW = ai.GetTunable("apex_exposed_loss_s",
 			TUNE_EXPOSED_LOSS_S);
-	// T3 WALKS THROUGH (his 2026-10-12, docs/24): an enemy T3 army is not stopped at one gun's circle, so
+	// T3 WALKS THROUGH (his 2026-10-12, docs/doctrine.md): an enemy T3 army is not stopped at one gun's circle, so
 	// a home-ground post is staked by the base it would reach and expects it inside the exposure window,
 	// both by the share of their identified army that is T3. Priced per gun's circle and at the measured
 	// rate, a Pulsar read 2.4 m/s on 3,500 m while 400k of T3 walked in (watch game 26: zero built).

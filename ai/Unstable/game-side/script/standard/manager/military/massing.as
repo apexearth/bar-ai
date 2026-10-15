@@ -377,7 +377,7 @@ int gNextHoldRelLog = 0;
 
 // ALL IN UNDER LAG (apexearth 2026-10-03: "if we've got a command delay we
 // really can't properly use our army so we might as well just send them all
-// in to attack"). docs/24.
+// in to attack"). docs/doctrine.md.
 bool gAllIn = false;
 bool AllIn()
 {

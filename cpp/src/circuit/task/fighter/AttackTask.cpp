@@ -410,7 +410,7 @@ void CAttackTask::HoldForward(int frame)
 	AIFloat3 hold = from;
 	// back only out of the reach of what outgunned us, never off the general threat map: with
 	// their army at our base the map reads hot all the way home and the whole army hid in the
-	// base's back corner (his 10-10; docs/24: concentrate opposite their army)
+	// base's back corner (his 10-10; docs/doctrine.md: concentrate opposite their army)
 	(void)tm;
 	// straight out of their reach, not toward home: a group to the side or behind kept the
 	// home-ward walk inside it to the 40-step cap, thousands of elmos back
@@ -636,7 +636,7 @@ AIFloat3 CAttackTask::SideArrivals(const AIFloat3& at, int key, float nearR) con
 	return sum;
 }
 
-// DON'T BE FLANKED; FLANK THEM (docs/24; his 10-10: "we usually don't try to flank
+// DON'T BE FLANKED; FLANK THEM (docs/doctrine.md; his 10-10: "we usually don't try to flank
 // with big units"). On a new target the squad prices five bearings onto it and walks
 // to the best one's turn-in point before closing. A bearing is worth the engine's
 // flank multiplier against whoever of our side is already on them (Unit.cpp: x1.5 at
@@ -1295,7 +1295,7 @@ void CAttackTask::FindTarget()
 		}
 	}
 
-	// A TASK DOES NOT KEEP CHANGING ITS MIND (docs/24). The target is kept while
+	// A TASK DOES NOT KEEP CHANGING ITS MIND (docs/doctrine.md). The target is kept while
 	// committed and still a candidate (or only outrunning us for now), then until
 	// a newcomer beats it TGT_MARGIN times over. Gone, too strong, unreachable,
 	// the home deadline or the push's gather release it; a threat to our base,
@@ -1330,7 +1330,7 @@ void CAttackTask::FindTarget()
 		}
 	}
 	// A stronger group that can already hit us is not walked past to a target
-	// beyond it (docs/24: never throw the army at a superior force; concentrate).
+	// beyond it (docs/doctrine.md: never throw the army at a superior force; concentrate).
 	CEnemyInfo* const dropped = outgunnedNear ? bestTarget : nullptr;
 	if (outgunnedNear) {
 		bestTarget = nullptr;
@@ -1344,7 +1344,7 @@ void CAttackTask::FindTarget()
 					refusedStrong, pos.x, pos.z);
 		}
 	}
-	// PUSHING IS THE DEFAULT (docs/24): a stronger group anywhere on the map held every
+	// PUSHING IS THE DEFAULT (docs/doctrine.md): a stronger group anywhere on the map held every
 	// squad that saw it; only one that can reach us -- the remembered one -- stops the march.
 	outgunned = strongMem;
 	{
@@ -1683,7 +1683,7 @@ void CAttackTask::RepairBreak(int frame)
 	position = best->GetPos();
 }
 
-// ONE BIG ARMY (his 10-14, docs/24): every ground attack squad but the strongest walks to it and
+// ONE BIG ARMY (his 10-14, docs/doctrine.md): every ground attack squad but the strongest walks to it and
 // fights its target, so the army moves and fights together instead of probing one spot per squad.
 // The split head scales the pull (x the map's diagonal) and, above 1, the merge reach; near 0 every
 // squad is its own, as before 10-14. A threat to our base keeps its own answer; a team push owns everyone.
@@ -1776,7 +1776,7 @@ bool CAttackTask::FollowArmy(CAttackTask* army, int frame)
 	return true;
 }
 
-// THE ARMY ARRIVES TOGETHER (docs/24: no trickling in one at a time). Short of a new target the main
+// THE ARMY ARRIVES TOGETHER (docs/doctrine.md: no trickling in one at a time). Short of a new target the main
 // army stands until the squads walking to it have come, or what stands with it beats what guards the
 // target, or the farthest of them has had its walk. The stage head scales the stand-off and that odds.
 void CAttackTask::StageArmy(int frame)

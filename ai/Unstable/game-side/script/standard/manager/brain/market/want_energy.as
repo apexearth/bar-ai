@@ -103,7 +103,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 	// growth premium below is linear in a generator's output and so is its
 	// cost, so value rises with size and the biggest reactor on the list wins
 	// for being big. Charged instead on the share of the plan's own horizon
-	// the generator would be paying over (docs/27 TUNE_ENERGY_GROWTH_ARRIVE).
+	// the generator would be paying over (docs/tunables.md TUNE_ENERGY_GROWTH_ARRIVE).
 	const bool genArriveOn = ai.GetTunable("apex_energy_growth_arrive",
 			TUNE_ENERGY_GROWTH_ARRIVE) > 0.f;
 	// One number for every rung; the ETA arm below asked the turret grid for it

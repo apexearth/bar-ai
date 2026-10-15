@@ -5,7 +5,7 @@
  * only), grouped into clusters of mutually covering guns, with the shields,
  * jammers and radars that protect them and the economy they cover. The walk is
  * sliced across frames; a finished walk replaces the published list at once.
- * Also holds the one siege goal the script has chosen (docs/24 "Siege a
+ * Also holds the one siege goal the script has chosen (docs/doctrine.md "Siege a
  * fortification on purpose").
  */
 

@@ -1,6 +1,6 @@
 namespace Market {
 //------------------------------------------------------------------------------
-// HE GOES DOWN WITH HIS SHIP (his 2026-10-10, docs/24): while the base is being
+// HE GOES DOWN WITH HIS SHIP (his 2026-10-10, docs/doctrine.md): while the base is being
 // destroyed and what defends it cannot win without him, he does not run -- he
 // fights the attackers at the base, the D-gun on the heaviest. If the guns and
 // army there hold on their own, he stays safe.
