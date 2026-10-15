@@ -3337,6 +3337,32 @@ alone shift time into sense: test them with RADAR_PRICE on as well as alone. 2,5
 (26%) come through the constructor-role rule, which none of the five touches. DEFJOIN cannot be
 estimated from the log (the new value needs the crew's build power).
 
+## TUNE_DEF_MEASURED = 0 (2026-10-15)
+
+His 10-15: defence is valued because it protects what is behind it, "but we also have to consider
+whether or not our enemy is being aggressive at all. If they aren't pushing we can put our efforts
+into smarter places like economy and army." Agreed: value defence on the measured attack rate.
+
+Where the gain of the ground-defence wins came from (dev 4v4 `army-smoke/wdwatch1`, all four
+seats, 166 `apex: defwhy` wins, raw gain summed): the unguarded-mex floor `hz = 1/apex_exposed_loss_s`
+(1/120 s) 47 wins / 1,587; the `DefenceTarget` shortfall pull on wall and keep slots (no hazard in
+it at all) 90 / 1,522; the siege expectation (`apex_enemy_prior`) x face 27 / 265; the measured
+hazard 2 / 11. Re-priced at the measured hazard of the same minute the wins would have carried
+1.4-7.6% of that gain. Measured arrival ran 0.0005-0.0028/s against the 0.0083 prior.
+
+On, every rate that was assumed is replaced by `DefMeasuredAt(pos)` (protect_measured.as):
+arrivals (rising edges of seen armed enemy metal, `GetEnemyArmedCostNear`, within apex_threat_r of
+home or a standing mex; probes swept a fifth per update) or our structure deaths, whichever is
+more, within 2x LOSS_MERGE_R, decayed over `LossTau()`; plus a floor of every arrival spread over
+the probes and their seen army's share against ours over (tau + nearest ETA). Replaced: the mex
+floor hazard, the siege term in `DefSiteFill` and the teeth, the T3 rate (`t3Share x rate`).
+`DefenceTarget` (so the wall/keep pull and the mex floor sum) and the mex cover push's floor are
+scaled by `(1 - e^-rH)/(1 - e^-1)`, H = apex_exposed_loss_s: 1 at the prior's rate. Wave
+MAGNITUDE floors (hSiteWave, mexFloorWave) are untouched -- magnitude is not frequency. HazardWith's
+gradient term still floors their mass at our army x apex_enemy_prior; it is shared with every
+survival discount and is left alone. `apex: defmeasured-stat` prints prior vs measured rates,
+the target before/after, arrivals, losses and defence offered/won/built. Unmeasured.
+
 ## TUNE_ECO_HAND, TUNE_TEAM_AIRLOSS, TUNE_PN_RULE_CENTRE = 0 (2026-10-14)
 
 All three default off until a paired A/B in the search (randsearch --ab) wins.

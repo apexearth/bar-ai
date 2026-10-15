@@ -798,6 +798,7 @@ float DefenceTarget()
 		return gDefTgtM;
 	gDefTgtAt = ai.frame;
 	gDefTgtM = 0.f;
+	gDmTgtRaw = 0.f;
 	if (!Builder::gHomeSet)
 		return 0.f;
 	// HOW MUCH DEFENCE WE MAY OWN IS AN ECONOMIC QUESTION. Where a post goes
@@ -870,6 +871,12 @@ float DefenceTarget()
 			t *= 2.f;
 	}
 	gDefTgtM = ((t > 0.f) ? t : 0.f) * ecoRamp * DefAmountMult();
+	// The share-of-economy holding and the mex floor both assume the prior's
+	// attack rate; apex_def_measured sizes them by the rate seen instead.
+	gDmTgtRaw = gDefTgtM;
+	gDmTgtK = DefMeasuredPressure(DefMeasuredMean());
+	if (DefMeasuredOn())
+		gDefTgtM *= gDmTgtK;
 	return gDefTgtM;
 }
 

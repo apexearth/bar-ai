@@ -319,6 +319,7 @@ int gDfProposed = 0;
 int gDfTopDraw = 0;
 int gDfTopHoist = 0;
 int gDfFinished = 0;
+int gDmOffered = 0, gDmWon = 0, gDmBuilt = 0;   // never reset: apex: defmeasured-stat
 int gT2GunDone = 0;
 int gDfGone = 0;
 string gExecWhy = "";   // what put the want the executor is on in front (decide's `why`, or "fall")
@@ -473,6 +474,7 @@ void NoteFinished(CCircuitUnit@ unit)
 		gProtDefId[pc].insertLast(defId);
 		if (pc == PROT_DEF) {
 			++gDfFinished;
+			++gDmBuilt;
 			if (DrAdvancedGun(defId))
 				++gT2GunDone;
 		}

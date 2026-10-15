@@ -190,6 +190,7 @@ local NAMES = {
 	"apex_field_priced",
 	"apex_cover_priced",
 	"apex_def_danger",
+	"apex_def_measured",
 	"apex_mexup_boost",
 	"apex_foe_tier_fade",
 	"apex_own_tier_fade",

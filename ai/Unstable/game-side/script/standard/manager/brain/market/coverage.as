@@ -376,6 +376,7 @@ void NoteEcoLoss(const AIFloat3& in at, float costM)
 {
 	if ((costM <= 0.f) || !OnMap(at))
 		return;
+	DmNoteLoss(at);
 	DecayLossField();
 	gLrAt = -1;   // the field is about to move: the frame memo below is void
 	for (uint i = 0; i < gLossPos.length(); ++i) {

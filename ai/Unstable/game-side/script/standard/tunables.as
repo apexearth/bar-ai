@@ -2025,6 +2025,7 @@ const float TUNE_DEFJOIN_PRICE = 0.f;  // the defence assist offered to the draw
 const float TUNE_FIELD_PRICED = 0.f;   // the field crew's towers and radar go to the draw
 const float TUNE_COVER_PRICED = 0.f;   // the coverall and base-front towers go to the draw
 const float TUNE_DEF_DANGER = 0.f;     // the defence target follows the danger our army cannot meet
+const float TUNE_DEF_MEASURED = 0.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/27
 
 // [multiplier] -- What a mex UPGRADE'S extra metal stream is worth, over its
 //   honest arithmetic. See docs/27.
