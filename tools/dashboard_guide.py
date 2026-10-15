@@ -122,6 +122,10 @@ PANELS = [
              "only the share of the payback horizon its walk and build take, "
              "so a 1-2 minute walk no longer prices it below a fusion at "
              "home. apex: mexup line shows the cost breakdown"),
+            ("TUNE_ECO_HORIZON", "ON prices fusions, generators and "
+             "converters the same way: a long build costs its share of the "
+             "payback horizon, not its whole gain for every second, so one "
+             "slow constructor no longer prices a fusion at zero"),
             ("TUNE_ASSIST_ECO", "ON lets any constructor help the economy "
              "buildings already rising -- fusions, advanced converters, mex "
              "upgrades, the T2 lab, the gantry -- priced by how much sooner "

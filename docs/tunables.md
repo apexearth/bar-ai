@@ -43,6 +43,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 - `TUNE_REZ_LIFE` = 0. Price a rez bot over its expected life, net of its cost (his 10-15: 404 rez bots in 55 min, fleets dying and rebuilt). Off until an A/B; `apex: rezlife-stat`.
 - `TUNE_T2CON_UNLOCK` = 0. Price an advanced constructor by the mex upgrades it brings forward (his 10-15: T2 seats with T1 mexes; 95% of T2 seats held more T1 than T2 mexes at 20 min). Also fixes the upgrade-hand walk. Off until an A/B.
 - `TUNE_UPGRADE_FIRST` = 0. His tenet "a seat with one T2 con upgrades its mexes first": the oldest advanced hands hoist the best upgrade over guns, sensors and roles while T1 extractors wait. Off until an A/B.
+- `TUNE_ECO_HORIZON` = 0. Energy and converter wants use the same horizon-share pricing (his 10-15 eco seat: `ewant corfus v=0.00 gain=66.5 t=17254` of which late=14431 -- one con's 772 s solo build billed the whole gain per second). Off until an A/B.
 - `TUNE_MEXUP_HORIZON` = 0. Charge a mex upgrade's walk and build as their share of the payback horizon, not gain x seconds (a moho 1-2 min out read below a fusion at home). Off until an A/B.
 - `TUNE_ASSIST_ECO` = 0. Price an assist on an economy frame at the frame's gain x the seconds this hand saves it; basic hands' assists priced at gain 0.00 while a fusion carried 65-86 m/s. Off until an A/B; `apex: assisteco-stat`.
 - `TUNE_LINE_ARMY_GAP` = 0. A line short of nanos reads the army gap, not only free metal flow (his 1v1: army 8-12k under target, no nanos at the T2 labs). Off until an A/B.

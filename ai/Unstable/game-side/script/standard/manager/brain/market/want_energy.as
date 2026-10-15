@@ -1,4 +1,14 @@
 namespace Market {
+// A fusion priced at v=0.00 because one con's 13-minute solo build was billed its whole gain per second
+// (his 10-15 eco seat): energy and converters take the horizon-share pricing mex upgrades use.
+int gEcoHzOn = -1;
+bool EcoHorizonOn()
+{
+	if (gEcoHzOn < 0)
+		gEcoHzOn = (ai.GetTunable("apex_eco_horizon", TUNE_ECO_HORIZON) > 0.f) ? 1 : 0;
+	return gEcoHzOn > 0;
+}
+
 // EVERY GENERATOR THIS ASKER PRICED, best value first. The proposer returns one
 // rung, and the executor can be refused exactly that rung -- an advanced solar
 // is strictly serial, a def at its in-flight cap is "full" -- with nothing to
@@ -273,7 +283,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 			continue;
 		const float walkSec = WalkSecTo(unit, site);
 		const double _tVo = Perf::T0();
-		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c);
+		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
 		Perf::Add("en.value", _tVo);
 		// Rent on the defended ground this footprint would occupy -- PLUS the
 		// measured scarcity of base room, the same term RetireGain charges.
@@ -1457,7 +1467,7 @@ Want@ ProposeStorage(CCircuitUnit@ unit, float eWasted)
 			continue;
 		Want c;
 		ValueOf(d, useful * BestConvRatio(), WalkSecTo(unit, site),
-				Catalog::gBuildPower[uid], c);
+				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
 		if (c.value > w.value) {
 			w = c;
 			w.kind = WK_CONVERT;
@@ -1677,7 +1687,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 					* growC / ((cvPower > growC) ? cvPower : ((growC > 0.f) ? growC : 1.f));
 		}
 		ValueOf(d, cGain, WalkSecTo(unit, cSite),
-				Catalog::gBuildPower[uid], c);
+				Catalog::gBuildPower[uid], c, true, 0.f, EcoHorizonOn());
 		// SPACE IS WHAT THE ADVANCED CONVERTER BUYS. Ratio alone says T1 is
 		// nearly as good and far cheaper; what T2 actually buys is ten times
 		// the throughput behind the same guns, and a body that does not die to
