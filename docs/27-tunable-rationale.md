@@ -3390,3 +3390,11 @@ and p90 over 150 search games, so only towers and the raid answer guard a flank.
   count (28% by metal) died on an open bearing with no tower in reach; 38% had a tower in reach,
   27% sat on a bearing whose ring point is off the map (closed, as ClosurePrep counts it).
   Approximate: rebuilt from BARAI_BUILD/DEATH, tower reach = longest non-AA weapon range.
+
+## apex_fight_travel = 0 (C++ only, 2026-10-14)
+
+AttackTask and DefendTask travel with CMoveAction (plain move orders) unless the unit has the siege
+attribute; his 10-14 watch: a squad sent at a pack in our base switched from fight to a move straight
+into it. Order census of his 1v1: travel (move) 2,086 orders vs fightwalk 86. With the option the two
+tasks travel with CFightAction, which stops at weapon range and fights what it meets. Raid and scout keep
+moves (doctrine: a raid walks past small stuff).
