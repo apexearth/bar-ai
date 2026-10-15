@@ -111,12 +111,19 @@ def find_dupes():
     return out
 
 
+KEEP_SUFFIXES = (".sh", ".ps1", ".py", ".bat", ".cmd", ".json", ".md")
+
+
 def find_runtime(cutoff):
     out = []
     base = REPO / "runtime"
     if not base.is_dir():
         return out
     for p in base.iterdir():
+        # 10-15: an idle script is still a live one -- this deleted nn_keepalive.sh and nn_running.ps1
+        # while the keepalive ran, and the search sat stopped for an hour
+        if p.is_file() and p.suffix.lower() in KEEP_SUFFIXES:
+            continue
         try:
             t = newest(p) if p.is_dir() else p.stat().st_mtime
         except OSError:
