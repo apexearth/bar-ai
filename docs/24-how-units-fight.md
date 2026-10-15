@@ -141,6 +141,10 @@ to them)
   never stands in fire turning in circles.
 - Check that an order survives before crediting a movement fix: a unit
   re-ordered every few seconds never reaches its position.
+- (2026-10-15) Late-game lag spikes come from unit quantity plus pathfinding:
+  every new destination is a path search, so constantly giving units new
+  places to go keeps the pathfinder busy. Stuck or trapped units, and orders
+  to places a unit cannot reach, cost pathfinding too.
 
 **Movement**
 - Standoff, dodge and retreat moves never walk into a new threat.
@@ -197,6 +201,8 @@ to them)
   the standard game's.
 
 **Expansion and constructors**
+- (2026-10-15) Lots of T1 air constructors is fine, late as well; don't
+  count it against us.
 - Rebuild a lost extractor, even at home. Don't behave as if afraid.
 - Escort constructors that go out to build extractors or anything outside
   the base. Even air constructors get a little fighter escort.
