@@ -3474,6 +3474,17 @@ hand's own list, so a T1 hand's tower was never outdated. ON compares it also wi
 owned advanced hands can build and afford (the same dominance and affordability rules): a price, not a
 ban, so the Maw and Claw keep their 10-13 standing. `apex: advobs-stat`. Off until an A/B.
 
+His 10-15 8v8 ran it ON: advobs-stat cut 9,149 of 9,273 asks, and the T1 towers that still won carried
+xObs 0.2-0.4 after minute 20, yet ~2,960 T1 towers were ordered. Of 3,678 T1-tower decides: `field` 2,563
+(the field crew's list holds only field jobs, so a cut tower only had to beat mex/radar/reclaim), `basefront`
+584 (armbeamer/armhlt, corhllt/corhlt hard-coded and hoisted at gain 1, never priced), `draw` 395, `role` 108
+(the defence role elects inside its category), `coverall` 20 (the LLT, unpriced); the refill (766 wins, ~75%
+T1) priced the dead tower without the share. ON now also: the field crew and the defence role send a cut
+tower to the draw for that election, base-front and coverall take the priced path (`EdDefGainNow`, which
+carries the share) for a cut gun, and the refill gain takes the share. `apex: t1tower-path` counts T1-tower
+picks per path a minute, `/cutN` those carrying the cut, and fieldLent/roleLent/bfPriced/covPriced/refillCut.
+DefTypePick can still swap a rule's T1 gun for another T1 option (T1Q 64 of 571 picks).
+
 ### `TUNE_T2CON_UNLOCK` = 0.f
 
 His 10-15 8v8 watch: a seat T2 for minutes with its mexes still T1. t10's coralab made one corack and

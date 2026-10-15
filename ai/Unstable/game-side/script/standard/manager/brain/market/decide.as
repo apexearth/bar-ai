@@ -2114,7 +2114,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				cw.pos = site;
 				cw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-				const bool covPriced = CoverPricedOn();
+				const bool covCut = !CoverPricedOn() && TeamObsCut(cw);
+				if (covCut)
+					++gTobCovPriced;
+				const bool covPriced = CoverPricedOn() || covCut;
 				const float covG = covPriced ? EdDefGainNow(ld) : 1.f;
 				ValueOf(ld, covG, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
 						Catalog::gBuildPower[int(unit.circuitDef.id)], cw, !covPriced);
@@ -2170,7 +2173,10 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				bw.pos = site;
 				bw.posted = true;
 				const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-				const bool bfPriced = CoverPricedOn();
+				const bool bfCut = !CoverPricedOn() && TeamObsCut(bw);
+				if (bfCut)
+					++gTobBfPriced;
+				const bool bfPriced = CoverPricedOn() || bfCut;
 				const float bfG = bfPriced ? EdDefGainNow(gd) : 1.f;
 				ValueOf(gd, bfG, (spd > 1.f) ? (uAt.distance2D(site) / spd) : 30.f,
 						Catalog::gBuildPower[int(unit.circuitDef.id)], bw, !bfPriced);
@@ -2722,7 +2728,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			++gDfTopDraw;
 		else
 			++gDfTopHoist;
+		TobPathNote(why, top);
 	}
+	TobPathLog();
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.
 	const double _tLog = Perf::T0();

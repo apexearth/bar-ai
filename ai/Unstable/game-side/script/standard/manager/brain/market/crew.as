@@ -156,16 +156,21 @@ bool CrewApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if (gCrewOf[id] == 1) {
 		// apex_field_priced: its best field job a tower or a radar, the hand
 		// takes the draw over the whole list, where energy and army bid too.
-		if (FieldPricedOn()) {
-			for (uint i = 0; i < ranked.length(); ++i) {
-				if (!FieldWant(ranked[i]))
-					continue;
-				if ((ranked[i].kind == WK_PROTECT) || (ranked[i].kind == WK_SENSE)) {
-					gCrewDrawn = true;
-					return false;
-				}
-				break;
+		// A basic tower outdated by our advanced guns goes to the draw too, or its cut
+		// share is only ever compared with the other field jobs.
+		const bool fieldPriced = FieldPricedOn();
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if (!FieldWant(ranked[i]))
+				continue;
+			if (fieldPriced && ((ranked[i].kind == WK_PROTECT) || (ranked[i].kind == WK_SENSE))) {
+				gCrewDrawn = true;
+				return false;
 			}
+			if (!fieldPriced && TeamObsCut(ranked[i])) {
+				++gTobFieldLent;
+				return false;
+			}
+			break;
 		}
 		for (uint i = 0; i < ranked.length(); ) {
 			if (FieldWant(ranked[i]))

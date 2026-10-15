@@ -276,9 +276,14 @@ Want@ RefillPropose(CCircuitUnit@ unit, bool t1Out)
 		const int d = RefillDefFor(unit, uid, gRfDef[i], t1Out);
 		if (d < 0)
 			continue;
-		const float gain = RefillGain(i, d, horizS);
+		float gain = RefillGain(i, d, horizS);
 		if (gain <= 0.f)
 			continue;
+		const float obs = TeamObsShare(d);
+		if (obs < 1.f) {
+			gain *= obs;
+			++gTobRefillCut;
+		}
 		Want c;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(gRfPos[i]) / speed) : 60.f;
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, false);

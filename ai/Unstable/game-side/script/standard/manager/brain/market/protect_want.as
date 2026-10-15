@@ -191,6 +191,72 @@ float DefTeamObsolete(int d, float affordM)
 	return s;
 }
 
+// The same share where a basic hand's tower is picked outside the proposer: refill, the
+// base-front and cover hoists, the field crew and the defence role.
+int gTobAffAt = -1;
+float gTobAff = 0.f;
+float TeamObsShare(int d)
+{
+	if ((d <= 0) || (d > Catalog::gDefCount) || !T1Tower(d)
+		|| (ai.GetTunable("apex_def_team_obsolete", TUNE_DEF_TEAM_OBSOLETE) <= 0.f)
+		|| (ai.GetTunable("apex_def_dominance", TUNE_DEF_DOMINANCE) <= 0.f))
+		return 1.f;
+	const array<int>@ adv = AdvGuns();
+	if (adv.length() == 0)
+		return 1.f;
+	if (gTobAffAt != ai.frame) {
+		gTobAffAt = ai.frame;
+		const float affS = ai.GetTunable("apex_def_afford_s", TUNE_DEF_AFFORD_S);
+		gTobAff = EcoPowerM() * ((affS > 1.f) ? affS : 30.f);
+	}
+	return DefObsoleteShare(adv, d, gTobAff);
+}
+
+bool TeamObsCut(Want@ w)
+{
+	return (w !is null) && (w.kind == WK_PROTECT) && (w.def !is null)
+		&& (TeamObsShare(int(w.def.id)) < 1.f);
+}
+
+// apex: t1tower-path -- basic towers chosen per decide path a minute, and how
+// many of each carried the team-obsolete cut; lent/priced are the hoists that
+// sent a cut tower to be priced instead.
+array<string> gTobWhy;
+array<int> gTobN;
+array<int> gTobCutN;
+int gTobFieldLent = 0, gTobRoleLent = 0, gTobBfPriced = 0, gTobCovPriced = 0, gTobRefillCut = 0;
+int gTobNextLog = 0;
+void TobPathNote(const string& in why, Want@ top)
+{
+	if ((top is null) || (top.kind != WK_PROTECT) || (top.def is null) || !T1Tower(int(top.def.id)))
+		return;
+	const string k = (top.refill >= 0) ? ("refill/" + why) : why;
+	int i = gTobWhy.find(k);
+	if (i < 0) {
+		gTobWhy.insertLast(k);
+		gTobN.insertLast(0);
+		gTobCutN.insertLast(0);
+		i = int(gTobWhy.length()) - 1;
+	}
+	++gTobN[i];
+	if (TeamObsCut(top))
+		++gTobCutN[i];
+}
+
+void TobPathLog()
+{
+	if (ai.frame < gTobNextLog)
+		return;
+	gTobNextLog = ai.frame + 60 * SECOND;
+	string ln = Factory::T() + "apex: t1tower-path t=" + ai.teamId
+		+ " fieldLent=" + gTobFieldLent + " roleLent=" + gTobRoleLent
+		+ " bfPriced=" + gTobBfPriced + " covPriced=" + gTobCovPriced
+		+ " refillCut=" + gTobRefillCut + " |";
+	for (uint i = 0; i < gTobWhy.length(); ++i)
+		ln += " " + gTobWhy[i] + "=" + gTobN[i] + "/cut" + gTobCutN[i];
+	AiLog(ln);
+}
+
 bool gWallEffDiag = false;
 int gNextObsoleteLog = 0;
 

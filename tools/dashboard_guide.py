@@ -785,7 +785,10 @@ GROUPS = [
                   "filling late slots with T1 towers once our advanced "
                   "constructors can build and afford a gun that outreaches and "
                   "outkills it: the T1 tower keeps only its share of that gun's "
-                  "kill, so the basic hand goes to economy. apex: advobs-stat "
+                  "kill, so the basic hand goes to economy. The share also "
+                  "reaches the refill, the base-front and cover pushes, the "
+                  "field crew and the defence role, which used to pick the "
+                  "tower without it. apex: advobs-stat and t1tower-path "
                   "each minute"),
                  ("TUNE_STANDOFF_COVER", "measure cover on the ring the enemy "
                   "can shoot from, not just whether a turret reaches"),

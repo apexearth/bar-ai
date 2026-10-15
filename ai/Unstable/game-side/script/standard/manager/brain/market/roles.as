@@ -340,6 +340,18 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 		++gRoleCount[r];
 		++gRoleTaken;
 	}
+	// The role keeps the hand; an outdated basic tower is priced in the draw this election.
+	if (r == CAT_DEFENCE) {
+		for (uint i = 0; i < ranked.length(); ++i) {
+			if (CategoryOf(ranked[i].kind) != r)
+				continue;
+			if (TeamObsCut(ranked[i])) {
+				++gTobRoleLent;
+				return false;
+			}
+			break;
+		}
+	}
 	uint at = 0;
 	for (uint i = 0; i < ranked.length(); ++i) {
 		if (CategoryOf(ranked[i].kind) != r)
