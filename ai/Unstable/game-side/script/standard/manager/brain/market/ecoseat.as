@@ -51,8 +51,15 @@ bool EcoSeatKeeps(Want@ w)
 		|| (k == WK_CONVERT) || (k == WK_STORE) || (k == WK_NANO) || (k == WK_TECH)
 		|| (k == WK_RECLAIM))
 		return true;
-	if (k == WK_PLANT)
-		return Factory::gFacUnits.length() == 0;   // no lab, no hands
+	if (k == WK_PLANT) {
+		if (Factory::gFacUnits.length() == 0)
+			return true;   // no lab, no hands
+		// air cons spend an overflowing bank in parallel where walkers crowd the ground (his 10-15)
+		if (w.def is null)
+			return false;
+		const int pd = int(w.def.id);
+		return AirPlant(pd) && (!FlyingConLab(false) || ((PlantTier(pd) >= 2) && !FlyingConLab(true)));
+	}
 	if (k == WK_ASSIST) {
 		const CCircuitDef@ ad = w.def;
 		if (ad is null) {

@@ -2837,8 +2837,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// ...not while metal spills past nanos standing idle: they cannot
 			// start a frame, so the shortage is hands (his 2026-10-03 eco seat:
 			// 157 m/s of nanos idle, bank full from 5.6 to 13 min, lab idle).
+			// the strict seat answers overflow with air cons and its air plant, never more walkers
 			if ((float(landT1) >= tEcoConKeep + 2.f)
-				&& !(wasting && (IdleNanoLatheM() > 0.f) && !FlyingConLab(false))) {
+				&& (EcoSeatStrict() || !(wasting && (IdleNanoLatheM() > 0.f) && !FlyingConLab(false)))) {
 				if (prankNow)
 					prank += "keep";
 				continue;
