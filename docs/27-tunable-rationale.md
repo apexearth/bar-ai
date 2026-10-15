@@ -3350,3 +3350,12 @@ All three default off until a paired A/B in the search (randsearch --ab) wins.
   rule for an uneven range: aa 0.63x, esc 0.63x, tmix 0.55x, defamt/gunp 0.45x, mass/odds 1.22x, acap
   4.47x. Net 40 played aa at 0.37-0.89x in its games. On, output 0 is the rule and +-1 the range ends.
   It shifts every trained network, hence the A/B.
+
+## TUNE_LINE_ARMY_GAP, TUNE_COM_BOLD = 0 (2026-10-14)
+
+- LINE_ARMY_GAP: his 1v1 at 171 m/s had the army 8-12k under target, 5 nanos all game (all at armlab,
+  none at the T2 labs): LineUnserved read only the free metal flow, which the eco spent first.
+- COM_BOLD: he fled 5 T1 units an estimate said he beat with 45% left. Predicted vs actual health over
+  2,708 search turret episodes (com-turret after= vs com-turret-end hp->): median 27 points pessimistic,
+  p95 0, worst 18 optimistic. The 0.2 buffer clears the worst measured optimism; episodes where he died
+  cannot be paired, so the tail may be undercounted. T2 and above keep the old bar.

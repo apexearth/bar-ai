@@ -201,6 +201,10 @@ const float TUNE_RAID_REACH = 0.f;
 //   His 10-14; A/B before default.
 const float TUNE_LINE_ARMY_GAP = 0.f;
 
+// [toggle 0/1] -- Against T1 the commander takes any fight his estimate says he
+//   ends above 0.2 of his health (comdecide.as ComBar). His 10-14; A/B first.
+const float TUNE_COM_BOLD = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
