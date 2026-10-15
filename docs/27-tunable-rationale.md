@@ -3512,3 +3512,26 @@ flow stay. Measured cause of the low v in that game is NOT settled: printed v / 
 0.36-0.56 for mexup against 0.71-0.75 for energy, so a value-only multiplier after ValueOf (the policy
 net's builder tilt; the budget lever is shared by both) halves the upgrade too. The `apex: mexup` line
 now carries the breakdown (grow, real, hz, walkC, buildC, lateC, lockC, flowC). Off until an A/B.
+
+### `TUNE_ECO_SEAT_STRICT` = 0.f
+
+His 10-15 8v8 ("we don't seem to have any eco player"), seat t16, read from its log. The role only
+SUBTRACTS: `ArmyTarget`/`DefenceTarget` read zero while growing and ramp back from half the target
+(`EcoRoleRamp`, P 250 of 500, ~minute 22); nothing prices energy, converters, fusions or upgrades
+differently for the seat. Its builder jobs while growing (exec lines to f=46000): reclaim 33%, assist
+23%, nano 16%, mexup 7%, sense 5%, energy 4.5%, protect 4%, convert 3.5%, airdef 2%, mex 0.6%. Mexes
+held: 4 all game (mexdiag `ecoFar=` 190-1,071 refusals; the other seats held 13-21). Power (eta P) at
+minute 12: 60 against 101-141 for the other seats, the lowest; from minute 16 it led (386 at m24, 500 at
+m28). Leaks while growing in production: the escort gap, `RaidGapM`, `SiegeGapM` and `AARoleGap` ignore
+the role (cortermite m4-m14, corvamp m16, corape/corhrk/corsumo from m20). 41 tower jobs m20-m28 came
+as the ramp opened (growth ended between m24 and m28). Most of his 117 towers and the air army came AFTER P crossed 500 (~f=48000), when the
+seat is ordinary again and leads the air through `gWasEcoSeat`.
+ON (`market/ecoseat.as`), while `EcoRoleGrowing`: the seat's elections keep only mex, mexup, energy,
+geo, convert, store, nano, tech and reclaim; a plant only while it owns no lab; an assist only of an
+economy, storage, nano or lab def (a lab here makes only hands); an anti-nuke always; AA only while
+`AirLossRate() > 0`. Applied at ranking and again before execution, because the hoists insert later.
+Its labs offer only builders, plus AA under the same air test. `EcoDangerNear` still ends the growth,
+and the other seats already drop it from their parity and answer shares (`TV_ECOSEAT`).
+`apex: ecoseat-stat` once a minute on the seat, also with the switch off as the control: P/target,
+ramp, job shares, towerM/armyM ordered while growing (minute/total), refused by kind, facRefused.
+Off until an A/B.

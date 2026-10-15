@@ -1404,6 +1404,7 @@ const float TUNE_ECO_ROLE = 1.f;
 //   and defence come back: 1 the whole eco target, 0.5 half of it, so half the
 //   eco phase. See docs/27.
 const float TUNE_ECO_FORCE = 0.f;
+const float TUNE_ECO_SEAT_STRICT = 0.f;  // the growing eco seat's hands and labs take only economy (+AA while air kills us); see docs/27
 
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse. See

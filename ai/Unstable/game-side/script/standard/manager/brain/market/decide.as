@@ -1491,6 +1491,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	if ((unit is null) || !unit.circuitDef.IsBuilder() || !unit.circuitDef.IsMobile())
 		return null;
 	WantTestOffer(unit);
+	EcoSeatStat();
 	gElecCallUs = 0.0;
 	// A unit whose task keeps dying young re-enters every frame; 2s per
 	// unit caps the global decide rate without touching legit elections
@@ -1669,10 +1670,15 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// a builder never idles while a positive want remains executable.
 	const double _tRank = Perf::T0();
 	array<Want@> ranked;
+	const bool esStrict = EcoSeatStrict();
 	for (uint i = 0; i < wants.length(); ++i) {
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f))
 			continue;
+		if (esStrict && !EcoSeatKeeps(c)) {
+			EcoSeatRefuse(c);
+			continue;
+		}
 		if (RecentlyRefused(unit, c)) {
 			++gRefDropped;
 			if (ai.frame >= gNextRefLog) {
@@ -2786,6 +2792,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			}
 			refused = true;
 		}
+		// The hoists insert after the ranking filtered; the seat's limit holds for them too.
+		if (!refused && EcoSeatStrict() && !EcoSeatKeeps(ranked[i])) {
+			EcoSeatRefuse(ranked[i]);
+			refused = true;
+		}
 		IUnitTask@ t = null;
 		if (!refused) {
 			const double _tExec = Perf::T0();
@@ -2806,6 +2817,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			// Price tag on the job, so idle hands can later rank what is in
 			// flight by what the market paid for it (floor.as).
 			NoteJob(t, ranked[i]);
+			EcoSeatNoteJob(ranked[i]);
 			StepWon(unit, ranked[i]);
 			DefRoleExecuted(unit, ranked[i]);
 			if ((ranked[i].kind == WK_MEX)
