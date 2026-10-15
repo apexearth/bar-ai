@@ -526,7 +526,7 @@ const float TUNE_GATE_DEPTH = 2.f;
 // [toggle 0/1] -- The teeth line: one wall piece per election across the
 //   strongest defended gate's span, a step enemy-ward of the doorway ("slow them
 //   down with some walls outside"). See docs/27.
-const float TUNE_TEETH = 1.f;
+const float TUNE_TEETH = 0.f;   // his 10-14: "lets stop making walls, we make too many"
 
 // [ratio] -- HOW HARD A BUILDER PREFERS THE GROUND IT IS ALREADY STANDING ON.
 //   See docs/27.

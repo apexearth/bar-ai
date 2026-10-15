@@ -3428,3 +3428,8 @@ back the same way because they know the hole is there. Off pending A/B.
   a death, one refresh per election at most every 5 s per refill (cost only).
 - (10-14, his ruling) A refill only raises demand at the gap: the tower-type and site nets still choose
   what is built and exactly where (execute.as always runs DefTypePick and DefSitePick).
+
+## TUNE_TEETH = 0 (2026-10-14, his ruling)
+
+"Lets stop making walls, we make too many, it's too crazy." In his watch games defence/teeth came up in
+240 draws in one 4v4 (constructor time on dragon's teeth). Off by his call, not by an A/B.
