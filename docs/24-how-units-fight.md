@@ -201,6 +201,11 @@ to them)
   the standard game's.
 
 **Expansion and constructors**
+- (2026-10-15) Walking is not free. A builder walking halfway across the map
+  is not building; the AI is far more efficient when its builders work near
+  where they are. A commander that spent minutes walking to a far shipyard,
+  stopping for an LLT that protected nothing, lost its base while the enemy
+  commanders built army and economy.
 - (2026-10-15) Lots of T1 air constructors is fine, late as well; don't
   count it against us.
 - Rebuild a lost extractor, even at home. Don't behave as if afraid.
