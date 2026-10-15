@@ -354,6 +354,7 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 	const float t3Share = Military::FoeTierAbove(2);
 	const float t3Stake = gPfTotal * t3Share;
 	const float t3Hz = (horizW > 1.f) ? (t3Share / horizW) : 0.f;
+	const bool dmOn = DefMeasuredOn();
 	// The army's fill time: the shortfall closes at the army gap's urgency.
 	float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
 	if (fillS <= 1.f)
@@ -686,8 +687,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		const float hazard = cached ? PfSiteHz(si)
 				: (isWall ? PfWallHz(si) : HazardWith(s, cover0));
 		float hz = hazard;
-		const float sg = cached ? PfSiteSiege(si)
-				: (isWall ? PfWallSiege(si) : SiegeWith(s, cover0, siegeFrac));
+		const float dmRate = dmOn ? DefMeasuredAt(s) : 0.f;
+		const float sg = dmOn ? dmRate : (cached ? PfSiteSiege(si)
+				: (isWall ? PfWallSiege(si) : SiegeWith(s, cover0, siegeFrac)));
 		// AN UNGUARDED MEX IS EXPECTED TO DIE WITHIN THE EXPOSURE WINDOW --
 		// his prior, watched happen again 2026-08-30: "if we don't guard a
 		// mex then it will 100% die in the early game... a tick... costs us
@@ -701,8 +703,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 		if (floored && ((cover0 <= 0.f)
 				|| (cover0 - Military::UnitCoverAt(s) * ai.GetTunable("apex_unit_cover", 1.f) <= 1.f))) {
 			const float lossS = horizW;   // same tunable, read once above
-			if ((lossS > 1.f) && (hz < 1.f / lossS))
-				hz = 1.f / lossS;
+			const float mexHz = dmOn ? dmRate : ((lossS > 1.f) ? (1.f / lossS) : 0.f);
+			if (hz < mexHz)
+				hz = mexHz;
 		}
 		const float face = FaceAt(s);
 		if (sg * face > hz)
@@ -724,8 +727,9 @@ void DefSiteFill(int d, float reach, float adds, float mexFloorWave,
 			const float dur = ((uint(d) < gPkDur.length()) && (gPkDur[d] >= 0.f)) ? gPkDur[d] : 1.f;
 			if (stakeK < t3Stake * dur)
 				stakeK = t3Stake * dur;
-			if (hz < t3Hz)
-				hz = t3Hz;
+			const float t3HzHere = dmOn ? (t3Share * dmRate) : t3Hz;
+			if (hz < t3HzHere)
+				hz = t3HzHere;
 		}
 		float prevented = stakeK * hz * stopped;
 		// THE PULL FACES THE ENEMY. Uniform, it grew the wall by walk

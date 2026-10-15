@@ -795,8 +795,10 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 		if (!EcoOnly()) {
 			@w = MemoPropose(5, unit);
 			++gDfAsked;
-			if ((w !is null) && (w.kind == WK_PROTECT) && (w.value > 0.f))
+			if ((w !is null) && (w.kind == WK_PROTECT) && (w.value > 0.f)) {
 				++gDfProposed;
+				++gDmOffered;
+			}
 		}
 		Perf::Add("want.protect", _t);
 	}
@@ -2337,7 +2339,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				continue;
 			// The same exposure-scaled floor the site loop asks for -- a
 			// rear mex's floor is ~zero and the jump must not out-buy it.
-			const float floorHere = floorWave * MexFloorFactor(cw.pos) * gGunpMul;
+			float floorHere = floorWave * MexFloorFactor(cw.pos) * gGunpMul;
+			if (DefMeasuredOn())
+				floorHere *= DefMeasuredPressure(DefMeasuredAt(cw.pos));
 			if ((floorHere <= 1.f) || (GunpCount(1) < 1))
 				continue;
 			const float coverHere = CoverAt(cw.pos);
@@ -2740,6 +2744,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	gWantEmaV = (gWantEmaV <= 0.f) ? top.value
 			: (0.9f * gWantEmaV + 0.1f * top.value);
 	if ((top.kind == WK_PROTECT) && (top.spotId == PROT_DEF)) {
+		++gDmWon;
 		if (why == "draw")
 			++gDfTopDraw;
 		else

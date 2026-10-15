@@ -921,6 +921,13 @@ GROUPS = [
                   "the part of the enemy army we have seen that our own army "
                   "cannot meet. On = a seat our army protects buys only its "
                   "extractor guards; a seat the enemy outweighs buys towers"),
+                 ("TUNE_DEF_MEASURED", "towers are valued on how often the "
+                  "enemy has actually come near our extractors and base, not "
+                  "on the assumption that an unguarded extractor is attacked "
+                  "every two minutes. On = an enemy that is not pushing gets "
+                  "few towers built against it and the metal goes to economy "
+                  "and army; one that pushes raises the demand where it came. "
+                  "Read apex: defmeasured-stat"),
              ]},
             {"title": "Cost of thinking",
              "what": "The protection field is rebuilt on a timer and every "
@@ -1380,6 +1387,8 @@ GOALS = [
              "note": "helping a tower go up is priced, not automatic"},
             {"ref": "TUNE_DEF_DANGER", "dir": "up",
              "note": "a seat's tower budget follows the danger our army cannot meet"},
+            {"ref": "TUNE_DEF_MEASURED", "dir": "up",
+             "note": "towers valued on how often the enemy has actually come"},
             {"ref": "TUNE_FLANK_GUARD", "dir": "up",
              "note": "units, not towers, on the flanks raiders walk round to "
                      "the wind and converters"},

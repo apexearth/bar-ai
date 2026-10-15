@@ -119,7 +119,7 @@ void ScanTowerRing(int wd)
 		if (!OnMap(free))
 			continue;
 		float hz = HazardAt(tp);
-		const float sg = SiegeExpect(tp);
+		const float sg = DefMeasuredOn() ? DefMeasuredAt(tp) : SiegeExpect(tp);
 		if (sg > hz)
 			hz = sg;
 		const float g = StakeAt(tp, Catalog::gMaxRange[td]) * hz
