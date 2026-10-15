@@ -36,8 +36,8 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 10 | Hunt what matters, not spam | apex_target_value=1 (watch/v0.2.5) | `target-stat` asgM/nearM, kill classes | FIRES -- effect on fights unmeasured; needs A/B |
 | 11 | Don't walk into packs on move orders | apex_fight_travel=1 (watch/v0.2.5) | fights won/lost; same-seed A/B | 1 game only; it broke air (#1) |
 | 12 | Odds: willingness to attack | odds head 2.0 (watch/v0.2.5) | `nnval head=odds`; trade per fight | FIRES -- same-seed control lost too; not shown better |
-| 13 | Mexes upgraded once T2 (his maroon seat) | TUNE_T2CON_UNLOCK, UPGRADE_FIRST, MEXUP_HORIZON (off) | `mexup-stat`, `why=uphand`, prodrank `,up` | UNTESTED (not compiled) |
-| 14 | An eco player in 8v8 | `TUNE_ECO_SEAT_STRICT` (ecoseat.as): while growing, hands and labs take economy only | `ecoseat-stat` P vs target, towerM/armyM, refused | UNTESTED (not compiled, default 0). 10-15 t16: most towers and the air came after P passed 500 (~m27, seat ordinary again); while growing it held 4 mexes (eco leash, `ecoFar=`), was the weakest seat at m12 (P 60 vs 101-141), spent its hands on reclaim 33% / assist 23%, and its labs leaked army via raid/siege/escort/AA gaps. docs/27 |
+| 13 | Mexes upgraded once T2 (his maroon seat) | TUNE_T2CON_UNLOCK, UPGRADE_FIRST, MEXUP_HORIZON (off) | `mexup-stat`, `why=uphand`, prodrank `,up` | FIRES -- three switches compiled (dev 8v8 10-15: mexup-stat unlock priced, horizon priced). Search A/Bs at 3-4 pairs: unlock -0.25, upgrade_first +0.28, horizon +0.10 (noise) |
+| 14 | An eco player in 8v8 | `TUNE_ECO_SEAT_STRICT` (ecoseat.as): while growing, hands and labs take economy only | `ecoseat-stat` P vs target, towerM/armyM, refused | BROKEN -- his 10-15 8v8: t16 held the role (eco-status growing=1) yet ran 117 tower jobs, 21% of its ordered metal on towers, energy 49% vs 21-45% for other seats -- not distinct. EcoRoleGrowing is meant to drop army and defence from its target |
 | 15 | No late-game lag | none yet | lagcurve: wall s/min vs moves, nopath, builders | MEASURED -- dev 8v8 Comet 10-15 (lost 36 min): 12-15 s wall per game minute mid-game at speed 20, our script ~4 s of it (~30%), builder elections ~0.65 s (~5%) with 11 ms single-election spikes; the rest is engine + BARb. That game reached ~4,000 moves/min for 8 AIs vs ~3,000/min PER SEAT in his 8v8, so his scale is untested. His idea: elect per crew of constructors, split off for danger |
 | 16 | AA when bombed | TUNE_TEAM_AIRLOSS (watch/v0.2.5) | AA built within 2 min of air losses | UNVERIFIED |
 | 17 | Refill towers where they died | TUNE_DEF_REFILL (watch/v0.2.5) | `refill-stat`, deflag.py | FIRES; lag not re-measured |
@@ -50,7 +50,7 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 24 | Early army share | none | army spend 24% vs 32% target | OPEN |
 | 25 | Siege fortifications | TUNE_SIEGE (off) | siege.py | OFF; never A/B'd after the fixes |
 | 26 | One big army | TUNE_ONE_ARMY (off) | armyheads.py | OFF; lost 25%->10% unmeasured once |
-| 27 | (seen 10-15) Rez bots | none | `produce:armrectr/cornecro`, `rezwant` | BROKEN -- his 10-15 8v8: 404 rez bots built (128 in min 30-40); fleet capped at 40 per seat but they walk into live fights for wrecks, die and are rebuilt at v=6,000-166,000 each. Metal and pathfinding |
+| 27 | (seen 10-15) Rez bots | none | `produce:armrectr/cornecro`, `rezwant` | FIX BUILT -- TUNE_REZ_LIFE (off): price = reclaim over expected life minus cost. Dev 8v8: priced 78, cut 56; loss rate small there (44 rez deaths/8 seats), so life rarely binds; needs his 8v8 scale |
 | 28 | (seen 10-15) Late base lost to long-range plasma | none | `shelled ... by=corint`, deaths of gantries/coms | OPEN -- his 10-15 8v8: from min 47 our gantries then commanders died, several to corint (range 4,950), while our army stood ~3x theirs |
 
 ## THE COMMANDER STANDS WITH A JOB AND NO ENGINE ORDER IN THE OPENING (2026-10-11)
