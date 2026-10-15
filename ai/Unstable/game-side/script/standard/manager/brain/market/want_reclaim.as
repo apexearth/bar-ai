@@ -1174,7 +1174,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 			w.spotId = int(rc.id);
 			w.gain = Catalog::gCostM[rcDef] / ((hz0 > 1.f) ? hz0 : 300.f);
 			w.mCost = 1.f;
-			w.tCost = (Catalog::gCostM[rcDef] / 90.f) * Wage();
+			w.tCost = (Catalog::gCostM[rcDef] / 90.f) * WageOf(unit);
 			w.value = w.gain / (w.mCost + w.tCost);
 			{
 				const float hm = ReclaimHandMul(unit);
@@ -1216,7 +1216,7 @@ Want@ ProposeReclaimObsolete(CCircuitUnit@ unit)
 	const bool eShort = (Eco::EPull() - ConvUseE())
 			* ai.GetTunable("apex_e_headroom", TUNE_E_HEADROOM)
 			> Eco::EInc();
-	const float wageR = Wage();
+	const float wageR = WageOf(unit);
 	// Converters are an elastic sink, not demand -- they are sized against
 	// income by construction, so counting their chew as pull makes a
 	// structural surplus read as fully spent while excess energy piles up.
@@ -1831,7 +1831,7 @@ Want@ ProposeReclaimPenned(CCircuitUnit@ unit)
 		return w;
 	const float hzP = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float hz = (hzP > 1.f) ? hzP : 300.f;
-	const float wageP = Wage();
+	const float wageP = WageOf(unit);
 	const float speed = Catalog::gSpeed[int(unit.circuitDef.id)];
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	float bestValue = 0.f;
@@ -1998,7 +1998,7 @@ Want@ ProposeReclaimBlocker(CCircuitUnit@ unit)
 	w.gain = Catalog::gCostM[blkDef] / ((horizon > 1.f) ? horizon : 300.f)
 			+ (bestEcell - ecell) * float(cells) * EPriceFloor();
 	w.mCost = 1.f;
-	w.tCost = (walkSec + Catalog::gCostM[blkDef] / 90.f) * Wage();
+	w.tCost = (walkSec + Catalog::gCostM[blkDef] / 90.f) * WageOf(unit);
 	w.value = (w.gain > 0.f) ? (w.gain / (w.mCost + w.tCost)) : 0.f;
 	{
 		const float hm = ReclaimHandMul(unit);
@@ -2087,7 +2087,7 @@ Want@ ProposeReclaimSquatter(CCircuitUnit@ unit)
 		// The spot's stream, freed, plus the metal back over the horizon.
 		c.gain = inc * incMul + Catalog::gCostM[d] / horizon;
 		c.mCost = 1.f;
-		c.tCost = (walkSec + Catalog::gCostM[d] / 90.f) * Wage();
+		c.tCost = (walkSec + Catalog::gCostM[d] / 90.f) * WageOf(unit);
 		c.value = c.gain / (c.mCost + c.tCost);
 		if (c.value > bestValue) {
 			bestValue = c.value;
@@ -2208,7 +2208,7 @@ Want@ ProposeReclaimMetal(CCircuitUnit@ unit)
 	const bool comm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
 	const float hz = ai.GetTunable("apex_reclaim_amort", TUNE_RECLAIM_AMORT);
 	const float horizon = (hz > 1.f) ? hz : 300.f;
-	const float wage = Wage();
+	const float wage = WageOf(unit);
 	const uint nF = (gRcmFieldM.length() < Builder::gFieldPos.length())
 			? gRcmFieldM.length() : Builder::gFieldPos.length();
 	AIFloat3 bestP;

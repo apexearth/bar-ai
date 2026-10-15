@@ -487,6 +487,7 @@ local NAMES = {
 	"apex_crew_elect",        -- crewelect.as: 1 = nearby hands of one def share one election's job and list (0)
 	"apex_mexup_horizon",     -- price.as: 1 = a mex upgrade's walk/build cost its share of apex_payback_h (0)
 	"apex_assist_eco",        -- want_assist.as: 1 = an assist on an economy frame is priced at its gain x the seconds saved (0)
+	"apex_walk_forgone",      -- price.as: 1 = a builder's walk/build seconds cost its own BP x the fed metal per BP-second, not income / workers (0)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
 	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
 	"apex_attack_break",      -- AttackTask.cpp: power fraction of task peak below which the attack aborts (0.4)

@@ -1272,7 +1272,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 				+ "+A" + Catalog::gAreaCells[d] + ")"
 				+ " t=" + formatFloat(c.tCost, "", 0, 0)
 				+ "(walk" + formatFloat(walkSec * WalkRate(Catalog::gBuildPower[uid]), "", 0, 0)
-				+ "+build" + formatFloat(c.buildSec * Wage(), "", 0, 0)
+				+ "+build" + formatFloat(c.buildSec * BuildRateWith(Catalog::gBuildPower[uid], Wage()), "", 0, 0)
 				+ "+risk" + formatFloat(conRiskM, "", 0, 0)
 				+ "+late" + formatFloat(gain * walkSec, "", 0, 0) + ")"
 				+ " v=" + formatFloat(c.value * 1000.f, "", 0, 2));

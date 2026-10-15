@@ -208,6 +208,7 @@ Want@ WantCopy(Want@ s)
 	c.value = s.value;
 	c.buildSec = s.buildSec;
 	c.walkSec = s.walkSec;
+	c.wfDelta = s.wfDelta;
 	c.src = s.src;
 	return c;
 }
@@ -639,7 +640,7 @@ void ComFlipNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, const string& in why
 // 2026-10-04: "the walk might equal the build times" and "use some foresight
 // about what's good to do next after that current build"). Choosing A delays the
 // hand's best other job B by walk(A) + build(A) + walk(A -> B) - walk(B), and B's
-// stream is lost for that long. The fleet-average Wage() already charged for
+// stream is lost for that long. The wage (WageOf) already charged for
 // A's walk and build is netted out. A frontier hand weighing a home nano now
 // pays the round trip in the claims around it; a hand at home barely notices.
 // It replaced the 45-s far-hand rule (docs/33).
@@ -650,7 +651,9 @@ void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if (ranked.length() < 2)
 		return;
 	const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
-	const float wage = Wage();
+	const float wage = WageOf(unit);
+	const bool wf = WalkForgoneOn();
+	const float wageOld = wf ? Wage() : wage;
 	Want@ top0 = ranked[0];
 	const uint n = (ranked.length() < 8) ? ranked.length() : 8;
 	for (uint i = 0; i < n; ++i) {
@@ -669,6 +672,12 @@ void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 		Want@ c = Want();
 		c = a;
 		c.tCost += extra;
+		if (wf) {
+			float extraOld = b.gain * delay - wageOld * (a.walkSec + a.buildSec);
+			if (extraOld < 0.f)
+				extraOld = 0.f;
+			c.wfDelta += extra - extraOld;
+		}
 		const float cost = c.mCost + c.tCost;
 		if (cost > 0.f)
 			c.value = c.gain / cost;
@@ -688,6 +697,64 @@ void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if (ranked[0] !is top0)
 		++gOppFlips;
 }
+
+// apex: walkforgone-stat -- the best want by value under the builder's own rate
+// against the best under the old wage (wfDelta taken back out), per election.
+int gWfElec = 0, gWfFlip = 0, gWfComElec = 0, gWfComFlip = 0;
+float gWfWalkNew = 0.f, gWfWalkOld = 0.f, gWfComWalkNew = 0.f, gWfComWalkOld = 0.f;
+float gWfComRate = 0.f;
+int gWfLogAt = 0;
+void WalkForgoneStat(CCircuitUnit@ unit, array<Want@>@ ranked)
+{
+	if (!WalkForgoneOn() || (ranked.length() == 0))
+		return;
+	const int ud = int(unit.circuitDef.id);
+	const float spd = Catalog::gSpeed[ud];
+	const AIFloat3 up = unit.GetPos(ai.frame);
+	int iNew = -1, iOld = -1;
+	float vNew = 0.f, vOld = 0.f;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		Want@ w = ranked[i];
+		const float c = w.mCost + w.tCost;
+		const float c0 = c - w.wfDelta;
+		const float v0 = (c0 > 0.f) ? (w.value * c / c0) : w.value;
+		if ((iNew < 0) || (w.value > vNew)) { iNew = int(i); vNew = w.value; }
+		if ((iOld < 0) || (v0 > vOld)) { iOld = int(i); vOld = v0; }
+	}
+	const AIFloat3 pn = ranked[iNew].pos;
+	const AIFloat3 po = ranked[iOld].pos;
+	const float wn = ((spd > 1.f) && OnMap(pn)) ? (up.distance2D(pn) / spd) : 0.f;
+	const float wo = ((spd > 1.f) && OnMap(po)) ? (up.distance2D(po) / spd) : 0.f;
+	const bool flip = (iNew != iOld);
+	++gWfElec;
+	gWfWalkNew += wn;
+	gWfWalkOld += wo;
+	if (flip)
+		++gWfFlip;
+	if (unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask)) {
+		++gWfComElec;
+		gWfComWalkNew += wn;
+		gWfComWalkOld += wo;
+		if (flip)
+			++gWfComFlip;
+		gWfComRate = BuilderRate(Catalog::gBuildPower[ud]);
+	}
+	if (ai.frame < gWfLogAt)
+		return;
+	gWfLogAt = ai.frame + 60 * SECOND;
+	const float n = float((gWfElec > 0) ? gWfElec : 1);
+	const float nc = float((gWfComElec > 0) ? gWfComElec : 1);
+	AiLog(Factory::T() + "apex: walkforgone-stat t=" + ai.teamId
+		+ " share=" + formatFloat(BuilderShare(), "", 0, 2)
+		+ " wage=" + formatFloat(Wage(), "", 0, 2)
+		+ " rate80=" + formatFloat(BuilderRate(80.f), "", 0, 2)
+		+ " comRate=" + formatFloat(gWfComRate, "", 0, 2)
+		+ " elec=" + gWfElec + " flips=" + gWfFlip
+		+ " walkS=" + formatFloat(gWfWalkNew / n, "", 0, 1) + "/" + formatFloat(gWfWalkOld / n, "", 0, 1)
+		+ " com=" + gWfComFlip + "/" + gWfComElec
+		+ " comWalkS=" + formatFloat(gWfComWalkNew / nc, "", 0, 1) + "/" + formatFloat(gWfComWalkOld / nc, "", 0, 1));
+}
+
 int gRedecideFrames = -1;
 int RedecideFrames()
 {
@@ -1723,6 +1790,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	Perf::Add("dec.rank", _tRank);
 	OppTimeReprice(unit, ranked);
 	NnScore(unit, ranked);
+	WalkForgoneStat(unit, ranked);
 	NnTechNote(ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
@@ -3028,7 +3096,7 @@ Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
 	const float walkSec = (spd > 1.f) ? (unit.GetPos(ai.frame).distance2D(w.pos) / spd) : 30.f;
 	w.gain = towerG * b / crewB;
 	w.mCost = 1.f;
-	w.tCost = (walkSec + remSec) * Wage() + w.gain * walkSec;
+	w.tCost = (walkSec + remSec) * WageOf(unit) + w.gain * walkSec;
 	w.walkSec = walkSec;
 	w.value = w.gain / (w.mCost + w.tCost);
 	EdInsertByValue(ranked, w);

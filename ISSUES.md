@@ -53,6 +53,21 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 27 | (seen 10-15) Rez bots | none | `produce:armrectr/cornecro`, `rezwant` | FIX BUILT -- TUNE_REZ_LIFE (off): price = reclaim over expected life minus cost. Dev 8v8: priced 78, cut 56; loss rate small there (44 rez deaths/8 seats), so life rarely binds; needs his 8v8 scale |
 | 28 | (seen 10-15) Late base lost to long-range plasma | none | `shelled ... by=corint`, deaths of gantries/coms | OPEN -- his 10-15 8v8: from min 47 our gantries then commanders died, several to corint (range 4,950), while our army stood ~3x theirs |
 
+## A SITE MOVED AFTER PRICING IS A WALK NOBODY PRICED (2026-10-15)
+
+His watch game (army-smoke wdwatch1, t0, home 7600,4897): at 8.51 min `com-selfgun` hoisted an
+LLT at 7801,5336, ~480 elmos from the commander (`decide ... why=comself`, v=6.10, t=34). In the
+executor the defence-site net drew WALL (`nndefsite` p: WALL 0.734, RULE 0.147), the best wall slot
+on the map, 11968,3776 -- 4,450 elmos from the priced site. No `site-far` line, so the C++ search did
+not move it; `stuck-com dSite=4585` six seconds later. He walked 2.3 min, built the LLT at 10.9 min
+(`placed armllt at=11968,3776`) while the base fell (armvp 10.3 min, mexes/solars 11.4-11.9), and
+`rehome` then made that corner home. Two holes: (1) `DefSitePick` relocates after `ValueOf`, and its
+features carry the distance from the rule's site but not the asker's walk; (2) the commander leash in
+the decide loop (`ComFar(ranked[i].pos)`) tests the priced pos, not the executed one, so a moved site
+escapes it. A self-defence gun is defined by where he stands; whether the site net may move one, and
+how far, is his call. The 8.3-min shipyard decide (v=72.8) never walked: the leash refused it and he
+built a converter at home.
+
 ## THE COMMANDER STANDS WITH A JOB AND NO ENGINE ORDER IN THE OPENING (2026-10-11)
 
 1v1 Comet vs BARb, watch net, after the 9e0b00ba commander fixes (he now chooses WORK in every

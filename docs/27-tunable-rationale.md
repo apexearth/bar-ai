@@ -3605,3 +3605,23 @@ offer replaces the priced assist when it is worth more. The list is rebuilt once
 priced jobs; a taken offer adds its hand to the cached crew. `apex: assisteco-stat` each minute
 (offered/won/taken by kind, mean value against the best non-assist want, towers beaten). Off until an
 A/B.
+### `TUNE_WALK_FORGONE` = 0.f
+
+10-15 watch game (army-smoke wdwatch1, t0). `Wage()` is metal income / `GetWorkerCount()`: 3.4 m/s
+at minute 8 with four builders, and near zero with 50-120 builders in an 8v8. `ValueOf` charged the
+walk at max(wage, the light tower's metal per BP-second x this builder's BP), 10.6 m/s for a 300-BP
+commander, but the BUILD seconds at the bare wage, and the assist, reclaim, defence-join and
+commander-chase prices billed even the walk at the bare wage. With the metal bank at 99% the
+economy could feed every lathe, so a commander-second was worth his whole lathe. ON: a builder's
+second is `BuilderRate(bp) = bp * 7/80 * share`, `share = min(1, (income + bank /
+apex_e_lookahead) / BPCapacity())` -- EPrice's flow over the fleet's spend capacity. At that moment:
+commander 26.3 m/s, T1 constructor 7.0 m/s (wage 3.4). Applied to ValueOf's walk and build seconds,
+OppTimeReprice's netting, and every proposer that bills a named hand through `WageOf(unit)`. Reprice
+of that game's minute-8.3 election: shipyard 72.8 -> ~73.6, home mex 45.2 -> ~46.8 (both carry net
+multipliers x6.0 and x21.9); the decisive terms there are the shipyard's late-start charge (86.5 x
+~59 s of its 6,641 tCost) and OppTimeReprice billing the mex the shipyard's stream (~5,400 of its
+6,238). The commander's trip that game was not this election: the leash refused the shipyard, and
+the trip was a self-defence LLT the site net moved 4,450 elmos (ISSUES.md). `apex: walkforgone-stat`
+each minute while on: share, wage, rate per 80 BP, the commander's rate, elections whose best want
+changed against the old wage, mean walk seconds of the best want new/old, the commander's share.
+Off until an A/B.

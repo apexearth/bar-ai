@@ -23,6 +23,7 @@ bool  gPrERealizeOn = false;
 float gPrEWasteWorth = 0.f;
 bool  gPrMRealizeOn = false;
 float gPrMWasteWorth = 0.f;
+bool  gPrWalkForgone = false;
 float gVwWalk = 1.f, gVwBuild = 1.f, gVwDisp = 1.f, gVwLate = 1.f, gVwFlow = 1.f, gVwECost = 1.f;
 float gVwFeedBank = 0.5f, gVwMcsFrom = 0.35f, gVwMcsSpan = 0.45f, gVwMcsDepth = 0.8f;
 void PrTuneFill()
@@ -43,6 +44,7 @@ void PrTuneFill()
 	gPrEWasteWorth = ai.GetTunable("apex_e_waste_worth", TUNE_E_WASTE_WORTH);
 	gPrMRealizeOn = ai.GetTunable("apex_m_realize", TUNE_M_REALIZE) > 0.f;
 	gPrMWasteWorth = ai.GetTunable("apex_m_waste_worth", TUNE_M_WASTE_WORTH);
+	gPrWalkForgone = ai.GetTunable("apex_walk_forgone", TUNE_WALK_FORGONE) > 0.f;
 	gVwWalk = ai.GetTunable("apex_vw_walk", TUNE_VW_WALK);
 	gVwBuild = ai.GetTunable("apex_vw_build", TUNE_VW_BUILD);
 	gVwDisp = ai.GetTunable("apex_vw_disp", TUNE_VW_DISP);
@@ -78,9 +80,66 @@ float Wage()
 float gWalkTowerM = 0.f;
 float gWalkTowerBT = 0.f;
 
+// apex_walk_forgone: a builder-second is its own BP at what one BP-second pulls
+// (the 7/80 of Requests::DRAIN that BPCapacity uses), times the share of the
+// fleet's capacity the economy can feed -- EPrice's own flow. Income / worker
+// count priced every hand's second, the commander's included, near zero in a
+// big fleet, and a full bank priced it at income spread over idle hands.
+int gBrFrame = -1;
+float gBrShare = 1.f;
+float BuilderShare()
+{
+	if (gBrFrame != ai.frame) {
+		gBrFrame = ai.frame;
+		PrTuneFill();
+		const float cap = BPCapacity();
+		const float la = (gPrELookahead > 1.f) ? gPrELookahead : 30.f;
+		const float feed = Eco::MInc() + Eco::MCur() / la;
+		gBrShare = (cap > 0.01f) ? (feed / cap) : 1.f;
+		if (gBrShare > 1.f)
+			gBrShare = 1.f;
+		else if (gBrShare < 0.f)
+			gBrShare = 0.f;
+	}
+	return gBrShare;
+}
+
+float BuilderRate(float bp)
+{
+	return bp * (7.f / 80.f) * BuilderShare();
+}
+
+bool WalkForgoneOn()
+{
+	PrTuneFill();
+	return gPrWalkForgone;
+}
+
+// The build seconds' rate: this builder's own when the switch is on.
+float BuildRateWith(float builderBP, float wage)
+{
+	return (WalkForgoneOn() && (builderBP > 0.f)) ? BuilderRate(builderBP) : wage;
+}
+
+// A wage for a named hand -- the proposers that bill a builder's time without ValueOf.
+float WageOf(CCircuitUnit@ unit)
+{
+	if (!WalkForgoneOn() || (unit is null))
+		return Wage();
+	const float bp = Catalog::gBuildPower[int(unit.circuitDef.id)];
+	return (bp > 0.f) ? BuilderRate(bp) : Wage();
+}
+
+float WalkRateWith(float builderBP, float wage)
+{
+	if (WalkForgoneOn() && (builderBP > 0.f))
+		return BuilderRate(builderBP);
+	return WalkRateOld(builderBP, wage);
+}
+
 // Wage is an engine worker-count query plus two economy reads, and ValueOf
 // wanted it twice on one line -- here and again for the build's own seconds.
-float WalkRateWith(float builderBP, float wage)
+float WalkRateOld(float builderBP, float wage)
 {
 	if (builderBP <= 0.f)
 		return wage;
@@ -824,7 +883,11 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 				* gPrSpaceM;
 	const float wageNow = Wage();
 	gPrLastWalkC = walkSec * WalkRateWith(builderBP, wageNow) * gVwWalk;
-	gPrLastBuildC = buildSec * wageNow * gVwBuild;
+	gPrLastBuildC = buildSec * BuildRateWith(builderBP, wageNow) * gVwBuild;
+	w.wfDelta = 0.f;
+	if (gPrWalkForgone)
+		w.wfDelta = gPrLastWalkC + gPrLastBuildC
+				- (walkSec * WalkRateOld(builderBP, wageNow) * gVwWalk + buildSec * wageNow * gVwBuild);
 	gPrLastLateC = 0.f;
 	gPrLastLockC = 0.f;
 	gPrLastHzShare = 1.f;

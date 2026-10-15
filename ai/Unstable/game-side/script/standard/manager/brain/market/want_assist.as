@@ -409,7 +409,7 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	w.mCost = 1.f;
 	// The seconds this actually commits, not a flat stint: a lonely 9,000
 	// metal reactor is a ten-minute posting and has to be priced as one.
-	w.tCost = (walkSec + occupiedSec) * Wage();
+	w.tCost = (walkSec + occupiedSec) * WageOf(unit);
 	w.value = w.gain / (w.mCost + w.tCost);
 	@gAssistTarget = boss;
 	gAssistTargetId = (boss !is null) ? boss.id : -1;
@@ -549,7 +549,7 @@ Want@ AssistEcoPick(CCircuitUnit@ unit, Want@ priced)
 	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
 	if (H < 1.f)
 		H = 900.f;
-	const float wage = Wage();
+	const float wage = WageOf(unit);
 	array<float> val(gAeTask.length());
 	array<float> gn(gAeTask.length());
 	array<float> tc(gAeTask.length());
@@ -725,7 +725,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	g.spotId = int(fac.id);
 	g.gain = drain * 10.f / H + over;
 	g.mCost = drain * 10.f * MCostScale();
-	g.tCost = (walkSec + 10.f) * Wage();
+	g.tCost = (walkSec + 10.f) * WageOf(unit);
 	g.value = g.gain / (g.mCost + g.tCost);
 	++gFacGuardBids;
 	if (g.value <= w.value)

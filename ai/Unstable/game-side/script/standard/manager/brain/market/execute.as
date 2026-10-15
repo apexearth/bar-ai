@@ -412,7 +412,7 @@ bool AdoptWorthDetour(CCircuitUnit@ unit, Want@ w, const AIFloat3 &in at,
 	float d0 = done;
 	if (d0 < 0.f) d0 = 0.f;
 	else if (d0 > 1.f) d0 = 1.f;
-	return extraSec * Wage() <= d0 * ((w.def is null) ? 0.f : w.def.costM);
+	return extraSec * WageOf(unit) <= d0 * ((w.def is null) ? 0.f : w.def.costM);
 }
 
 // PAYING BACK THE STALL INTERRUPT (army.as carries the ledger; this is the

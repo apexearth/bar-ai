@@ -377,7 +377,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 				* ai.GetTunable("apex_def_prior_share", TUNE_DEF_PRIOR_SHARE)
 				* TeamExposure();
 		hEnemyPrior = ai.GetTunable("apex_enemy_prior", TUNE_ENEMY_PRIOR);
-		hWage = Wage();
+		hWage = WageOf(unit);
 		hWalkRate = WalkRate(Catalog::gBuildPower[uid]);
 		hWalkW = ai.GetTunable("apex_def_site_walk", TUNE_DEF_SITE_WALK);
 		hUGuardM = (PfKillRef() > 0.f)

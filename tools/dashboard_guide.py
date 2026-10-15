@@ -1124,6 +1124,12 @@ GROUPS = [
              "knobs": [
                  ("TUNE_BUDGET", "OFF stops the category budget scaling wants "
                   "by target-vs-actual share"),
+                 ("TUNE_WALK_FORGONE", "ON prices every builder's walk and "
+                  "build time at what its own build power would turn out "
+                  "with the metal we can feed, so the commander's minute "
+                  "costs about four constructors' and a long walk loses to "
+                  "work beside him. OFF is income split over every hand. "
+                  "apex: walkforgone-stat each minute"),
                  ("TUNE_NN_BLEND", "the trained value net (Net tab) steers "
                   "more: options it expects to grow the economy and win "
                   "trades get a bigger share of the draw. 0 = it only watches; "
@@ -1328,6 +1334,9 @@ GOALS = [
             {"ref": "TUNE_ASSIST_ECO", "dir": "up",
              "note": "late basic constructors help finish fusions, converters "
                      "and upgrades instead of building towers (his 10-15)"},
+            {"ref": "TUNE_WALK_FORGONE", "dir": "up",
+             "note": "builders, the commander most, stop walking far for "
+                     "work that pays less than staying put (his 10-15)"},
         ],
         "watch": "python tools/composition.py <tournament> — mex count, mex "
                  "upgrades and metal produced. If mex upgrades fall while metal "

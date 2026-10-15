@@ -301,7 +301,7 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		if (genDiag) {
 			const float wage = Wage();
 			const float walkM = walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage);
-			const float buildM = c.buildSec * wage;
+			const float buildM = c.buildSec * BuildRateWith(Catalog::gBuildPower[uid], wage);
 			const float lateM = c.gain * (walkSec + (gPrLateBuild ? c.buildSec : 0.f));
 			AiLog("apex: ewant t=" + ai.teamId + " " + unit.circuitDef.GetName()
 				+ " #" + unit.id + " " + Catalog::Def(d).GetName()
@@ -1729,7 +1729,7 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 				+ "s wage=" + formatFloat(wage, "", 0, 1)
 				+ " late=" + int(w.gain * w.walkSec) + " lock=" + int(lock)
 				+ " rest=" + int(w.tCost - w.walkSec * WalkRateWith(Catalog::gBuildPower[uid], wage)
-					- w.buildSec * wage - w.gain * w.walkSec - lock)
+					- w.buildSec * BuildRateWith(Catalog::gBuildPower[uid], wage) - w.gain * w.walkSec - lock)
 				+ " disp=" + int(cvDisp) + " risk=" + int(cvRisk) + " flow=" + int(cvFlow)
 				+ " dstream=" + formatFloat(DisplacedStreamM(), "", 0, 1)
 				+ " mInc=" + formatFloat(Eco::MInc(), "", 0, 1) + ")");

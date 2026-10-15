@@ -826,7 +826,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			// walk denies is the raiders AND what they destroy while he walks:
 			// their damage per second in metal, so five artillery pieces shelling
 			// the base outweigh the trip and a flea sitting in a corner does not.
-			// No new constant: Wage() is the market's own price for his time.
+			// No new constant: WageOf() is the market's own price for his time.
 			const float spd = Catalog::gSpeed[int(unit.circuitDef.id)];
 			// The trip is the CATCH at closing speed plus the walk back; a group
 			// moving as fast as he does is never caught (apexearth: "enemy pawns
@@ -838,7 +838,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 			// the walk: unbounded, a far group read as the richer target.
 			const float denied = bestDpsM * tripS;
 			const float theirs = bestCost + ((denied < bestStake) ? denied : bestStake);
-			const float worthIt = Wage() * tripS;
+			const float worthIt = WageOf(unit) * tripS;
 			if (theirs > worthIt) {
 				// A TASK, NOT A MOVE ORDER. CmdMoveTo from here was overridden by
 				// the build task Decide handed back on the same election -- three

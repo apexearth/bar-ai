@@ -43,6 +43,7 @@ final class Want {
 	// read by the construction-risk charge in Decide.
 	float buildSec = 0.f;
 	float walkSec = 0.f;    // the asker's road to pos, so the ladder can charge it
+	float wfDelta = 0.f;    // tCost apex_walk_forgone added over the old wage, so the stat can price the old winner
 	int src = -1;           // the election step that proposed it (StepWorth)
 	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
 	float valueRaw = 0.f;   // value before the trip was charged
