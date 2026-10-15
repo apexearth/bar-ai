@@ -1563,6 +1563,14 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (debt !is null)
 			return debt;
 	}
+	CrewElectLog();
+	if (!aaEmerg) {
+		const double _tCe = Perf::T0();
+		IUnitTask@ crewJob = CrewTake(unit);
+		Perf::Add("dec.crew", _tCe);
+		if (crewJob !is null)
+			return crewJob;
+	}
 
 	// THE SLICED ELECTION -- see the budget header above. The set is assembled a
 	// few proposers at a time and Decide holds the builder at null until it is
@@ -1598,6 +1606,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		++gElecDone;
 	}
 	gElecFinishing = true;   // maketask.as charges the finish through ElecSpendRest
+	CrewNoteRun();
 	// EXPOSURE IS A COST THE ASSET ITSELF PAYS. A want's return is reduced by
 	// the rate at which the thing is expected to be destroyed where it would
 	// stand, so an expensive structure on uninsured ground prices itself down
@@ -2852,6 +2861,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				ConRoleForget(int(unit.id));
 				++gRoleFell;
 			}
+			CrewPublish(unit, ranked);
 			return t;
 		}
 		if (!refused && (uint(ranked[i].kind) < gExecFail.length()))

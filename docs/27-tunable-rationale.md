@@ -3523,3 +3523,24 @@ flow stay. Measured cause of the low v in that game is NOT settled: printed v / 
 0.36-0.56 for mexup against 0.71-0.75 for energy, so a value-only multiplier after ValueOf (the policy
 net's builder tilt; the budget lever is shared by both) halves the upgrade too. The `apex: mexup` line
 now carries the breakdown (grow, real, hz, walkC, buildC, lateC, lockC, flowC). Off until an A/B.
+
+### `TUNE_CREW_ELECT` = 0.f
+
+His 10-15: constructor logic runs one market per hand; split a fleet into a few groups, decide once
+per group, and break a hand off when its job is somewhere dangerous. ON (crewelect.as): a full
+election that executes publishes its job and its ranked list (the job first, the rest re-sorted by
+value, so the leader's role and hoist order is undone but its crew-side and economy filters stay).
+For MemoTtl frames, a hand of the SAME def (same build options and speed, S5) and the same crew side
+(field/home), within speed x MemoTtl of where the leader stood, takes the job, or the next want once
+a want has the hands it absorbs (a building: Requests::SiteWorkerCap; anything else: one hand). A
+refused want is closed for the crew. Crew size is therefore what the list absorbs, not a constant.
+Breaks off to its own election: the site is live-hot (Builder::SiteLiveHot, not escort-covered), the
+hand holds a role whose category the list lacks (the eco hand keeps economy work), or the list is used
+up. Never shared: the commander, a held advanced-defence hand, an upgrade hand, the AA-panic claimant.
+Members write exec lines (`crew=#<leader>`) but no nn decision rows. Cost, from the dev 8v8 Comet
+10-15 at minutes 34-35 (apex_perf=1): bld.decide 583-641 ms over ~120 finished elections across 8
+seats, ~5 ms each with the slice pump inside; exec.want 0.40-0.46 ms. A shared hand pays the lookup
+over live shares (one per election in the window), one SiteLiveHot and one ExecuteWant: ~0.5 ms,
+about 90% saved per shared election. The worst single election (maxMs 11) is unchanged: this makes
+full elections rarer, the slice bounds their size. `apex: crew-elect-stat` (run shared breakoff
+danger/role/spent pub crew live) and perf `dec.crew`. Off until an A/B.

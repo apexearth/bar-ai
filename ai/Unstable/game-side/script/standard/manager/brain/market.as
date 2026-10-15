@@ -81,5 +81,6 @@
 #include "market/opennet.as"        // the opening order: one recorded draw, followed until the plant
 #include "market/decide.as"      // the arbiter: rank the Wants, pick one
 #include "market/execute.as"        // turning a won Want into a task
+#include "market/crewelect.as"      // one election per crew: nearby hands of a def share its answer
 #include "market/production.as"     // the production market: con orders, batch demand
 #include "market/wanttest.as"       // apex_wanttest: the energy ladder under posed economies

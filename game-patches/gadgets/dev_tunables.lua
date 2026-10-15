@@ -484,6 +484,7 @@ local NAMES = {
 	"apex_def_refill",        -- protect_refill.as: 1 = a gun the enemy killed is re-offered on its gap (0)
 	"apex_t2con_unlock",      -- production.as: 1 = an advanced con is priced by the upgrades it brings forward (0)
 	"apex_upgrade_first",     -- roles.as: 1 = the oldest advanced hands take the best mex upgrade first (0)
+	"apex_crew_elect",        -- crewelect.as: 1 = nearby hands of one def share one election's job and list (0)
 	"apex_mexup_horizon",     -- price.as: 1 = a mex upgrade's walk/build cost its share of apex_payback_h (0)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
 	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
