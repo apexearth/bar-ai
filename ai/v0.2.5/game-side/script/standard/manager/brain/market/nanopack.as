@@ -1,0 +1,548 @@
+namespace Market {
+//------------------------------------------------------------------------------
+// PACKING: the next free cell on a def's own lattice, next to what it serves.
+//
+// Used by two callers with the same problem -- a turret that must touch the
+// line it lathes, and a converter fleet that must open many sites at once
+// without each ask landing on the cell the last one took.
+//
+// apexearth 2026-08-31: "We tend to space our nano turrets too much. They use
+// too much room. Nanos can be placed right next to the back and sides of all
+// factories, and all sides of air factories. Nano turrets should prefer to be
+// placed right next to each other. However, defense oriented emplacements of
+// nano turrets are better when they're spread out so they don't all get blown
+// up at the same time."
+//
+// So an ASSIST turret packs and a DEFENCE turret spreads, and the two answers
+// live apart. This file is only the packed one: a lattice walk outward from
+// the thing being served, taking the nearest cell nothing has claimed, so the
+// turrets touch instead of sitting on their own private ring.
+//
+// The one piece of ground it refuses is a ground plant's EXIT LANE -- units
+// roll out of a lab along the base's forward axis and a turret in the doorway
+// blocks them. An air plant has no doorway, so it packs on all four sides.
+//------------------------------------------------------------------------------
+
+// Half the engine build cell, which is what a footprint count is measured in:
+// a def of gFootX cells reaches gFootX * 16 / 2 elmos from its own centre.
+const float NP_HALFCELL = 8.f;
+// A WORK SLICE, not a reach limit. The walk stops at the first free cell, so
+// this only bites on ground that is already full -- and an election that
+// scanned every cell inside a nano's 500-elmo reach would be a frame spike of
+// exactly the shape the frame-budget rule forbids. The next election resumes
+// from the same rings with one more turret standing.
+const int NP_MAX_CELLS = 96;
+
+// The occupied ground of ONE walk, bucketed. Global so a walk reuses the last
+// one's arrays instead of allocating per election.
+Grid::Cells gNPOcc;
+// The last walk's refusals, so the batch log can say why it placed so few.
+int gNPTaken = 0;
+int gNPLane = 0;
+const int STRIP_W = 8;   // a converter row, cells across
+int gNPDoor = 0;
+int gNPFar = 0;
+int gNPOut = 0;   // rings the budget never reached
+
+// Nothing this plant produces rolls: every mobile thing it builds flies, so it
+// has no doorway and every side of it is packable.
+bool AirPlant(int defId)
+{
+	if (!Catalog::ValidId(defId))
+		return false;
+	const array<int>@ b = Catalog::gBuildsList[defId];
+	bool anyMobile = false;
+	for (uint i = 0; i < b.length(); ++i) {
+		const int d = b[i];
+		if (!Catalog::gMobile[d])
+			continue;
+		anyMobile = true;
+		if (!Catalog::gFlyer[d])
+			return false;
+	}
+	return anyMobile;
+}
+
+// The ground already spoken for near `at`: every committed structure (ordered,
+// framed or standing) plus every live request, as centre + half-extent. Built
+// once per walk so the cell loop is a short array scan instead of a full
+// ledger pass per cell.
+// EVERY GROUND PLANT'S DOORWAY, not only the anchor's: an ordered plant next
+// door had its lane filled by this plant's turrets before its frame stood,
+// and the executor then backed it three cells out of the block it was
+// asked beside.
+array<AIFloat3> gNPDoorPos;
+array<float> gNPDoorHalf;
+// The door a standing plant actually has. The engine turns a plant that will not
+// place facing the base axis (FactoryTask::checkFacing), so the axis is only a
+// guess for one not yet framed (zero here).
+array<AIFloat3> gNPDoorDir;
+void NearGround(const AIFloat3& in at, float span,
+		array<AIFloat3>& out pos, array<float>& out hx, array<float>& out hz)
+{
+	pos.resize(0);
+	hx.resize(0);
+	hz.resize(0);
+	gNPDoorPos.resize(0);
+	gNPDoorHalf.resize(0);
+	gNPDoorDir.resize(0);
+	const float sq = span * span;
+	// The ledger's bucket index, not the ledger: this ran once per PackSlots and
+	// the batch runs one PackSlots per factory line, so the walk was
+	// (lines) x (rows) every nano execution.
+	ComNear(at, span);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || !OnMap(gComPos[i]))
+			continue;
+		if (at.SqDistance2D(gComPos[i]) > sq)
+			continue;
+		pos.insertLast(gComPos[i]);
+		hx.insertLast(float(Catalog::gFootX[d]) * NP_HALFCELL);
+		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
+		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
+			gNPDoorPos.insertLast(gComPos[i]);
+			CCircuitUnit@ pu = (gComId[i] > 0) ? ai.GetTeamUnit(gComId[i]) : null;
+			const int pf = (pu !is null) ? pu.GetFacing() : -1;
+			gNPDoorDir.insertLast((pf < 0) ? AIFloat3(0.f, 0.f, 0.f) : Brain::FacingDir(pf));
+			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
+					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
+		}
+	}
+	// A request enqueued this tick has no ledger row yet -- and the whole point
+	// of the nano burst is that several asks resolve inside one window, so
+	// reading only the ledger would hand them all the same cell.
+	for (uint i = 0; i < Requests::gLive.length(); ++i) {
+		IUnitTask@ t = Requests::gLive[i];
+		if ((t is null) || (t.buildDef is null))
+			continue;
+		const AIFloat3 p = t.GetBuildPos();
+		if (!OnMap(p) || (at.SqDistance2D(p) > sq))
+			continue;
+		const int d = int(t.buildDef.id);
+		pos.insertLast(p);
+		hx.insertLast(float(Catalog::gFootX[d]) * NP_HALFCELL);
+		hz.insertLast(float(Catalog::gFootZ[d]) * NP_HALFCELL);
+		if ((Catalog::gBuildsList[d].length() > 0) && !AirPlant(d)) {
+			gNPDoorPos.insertLast(p);
+			gNPDoorDir.insertLast(AIFloat3(0.f, 0.f, 0.f));
+			gNPDoorHalf.insertLast(float((Catalog::gFootX[d] > Catalog::gFootZ[d])
+					? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL);
+		}
+	}
+}
+
+// Is this cell in the doorway of any ground plant NearGround saw?
+bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd)
+{
+	for (uint k = 0; k < gNPDoorPos.length(); ++k) {
+		const float rx = p.x - gNPDoorPos[k].x;
+		const float rz = p.z - gNPDoorPos[k].z;
+		const AIFloat3 d = (gNPDoorDir[k].SqLength2D() > 0.f) ? gNPDoorDir[k] : fwd;
+		const float ahead = rx * d.x + rz * d.z;
+		const float side = rx * d.z - rz * d.x;
+		if ((ahead > 0.f) && (ahead < 220.f + pitch)
+			&& (abs(side) < gNPDoorHalf[k] + pitch))
+			return true;
+	}
+	return false;
+}
+
+// WHAT THE TURRET IS BEING PACKED AGAINST. Every siting branch in the nano
+// executor names a POSITION -- a line, a build frame, a factory -- and none of
+// them carries the def whose footprint and doorway decide where the ring can
+// go. The ledger already knows what stands there.
+int AnchorDefAt(const AIFloat3& in at)
+{
+	if (!OnMap(at))
+		return -1;
+	int best = -1;
+	int bestI = -1;
+	float bestD = 0.f;
+	// The reach is the CANDIDATE's own footprint, so the query has to be the
+	// largest footprint in the ledger; the test below is unchanged.
+	ComNear(at, ComMaxHalf() + 16.f);
+	for (uint q = 0; q < gComGrid.hit.length(); ++q) {
+		const uint i = uint(gComGrid.hit[q]);
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || !OnMap(gComPos[i]))
+			continue;
+		const float dist = at.distance2D(gComPos[i]);
+		// Its own footprint plus a cell: the anchor is the thing the position
+		// IS, not the nearest building in the base.
+		const float own = float((Catalog::gFootX[d] > Catalog::gFootZ[d])
+				? Catalog::gFootX[d] : Catalog::gFootZ[d]) * NP_HALFCELL + 16.f;
+		if (dist > own)
+			continue;
+		// The row index breaks a tie, because the walk this replaces took the
+		// earliest row and the bucket order is not ledger order.
+		if ((best < 0) || (dist < bestD)
+			|| ((dist == bestD) && (int(i) < bestI)))
+		{
+			best = d;
+			bestD = dist;
+			bestI = int(i);
+		}
+	}
+	return best;
+}
+
+// The ring a walk from this origin should start on next time.
+const int NP_RESUME_TTL = 2 * MINUTE;
+array<int> gNPResumeKey;
+array<int> gNPResumeRing;
+array<int> gNPResumeAt;
+int PackKey(const AIFloat3& in o)
+{
+	return int(o.x / 16.f) * 4096 + int(o.z / 16.f);
+}
+void PackResume(const AIFloat3& in o, int ring)
+{
+	const int key = PackKey(o);
+	for (uint k = 0; k < gNPResumeKey.length(); ++k) {
+		if (gNPResumeKey[k] == key) {
+			gNPResumeRing[k] = ring;
+			gNPResumeAt[k] = ai.frame;
+			return;
+		}
+	}
+	gNPResumeKey.insertLast(key);
+	gNPResumeRing.insertLast(ring);
+	gNPResumeAt.insertLast(ai.frame);
+	while (gNPResumeKey.length() > 64) {
+		gNPResumeKey.removeAt(0);
+		gNPResumeRing.removeAt(0);
+		gNPResumeAt.removeAt(0);
+	}
+}
+
+// Where the anchor's turrets should lean: the lathe-weighted centre of the
+// turrets already standing within two reaches, else the ground behind it.
+AIFloat3 PackHeart(const AIFloat3& in at, float reach, float flush, bool lane,
+		const AIFloat3& in fwd)
+{
+	AIFloat3 sum(0.f, 0.f, 0.f);
+	float w = 0.f;
+	NanoNear(at, reach * 2.f);
+	for (uint q = 0; q < gNanoGrid.hit.length(); ++q) {
+		const uint i = uint(gNanoGrid.hit[q]);
+		if (at.distance2D(gOwnNanoPos[i]) > reach * 2.f)
+			continue;
+		const float bp = (i < gOwnNanoBP.length()) ? gOwnNanoBP[i] : 200.f;
+		sum.x += gOwnNanoPos[i].x * bp;
+		sum.z += gOwnNanoPos[i].z * bp;
+		w += bp;
+	}
+	if (w > 0.f)
+		return AIFloat3(sum.x / w, 0.f, sum.z / w);
+	if (lane)
+		return at - fwd * flush;
+	return at;
+}
+
+// Up to `n` packed slots for turrets of `nanoDef` beside `at`, nearest first.
+//
+// ONE WALK FOR THE WHOLE BURST. A nano execution opens several sites at once,
+// and asking this per site would re-scan the same rings once per turret -- the
+// bulk-work-in-one-frame shape the frame-budget rule forbids. The walk stops
+// as soon as it has `n`, so the common single-slot ask still ends on ring one.
+// probe: the anchor is a site being SCORED, not a standing building -- its
+// footprint is taken and the walk leaves no resume mark behind.
+int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
+		array<AIFloat3>& out slots, bool probe = false)
+{
+	slots.resize(0);
+	if (!Catalog::ValidId(nanoDef) || !OnMap(atRaw) || (n < 1))
+		return 0;
+	const float pitch = Lattice::FootPitch(nanoDef);
+	if (pitch < 1.f)
+		return 0;
+	// ON THE DEF'S OWN LATTICE. The walk stepped its pitch from the anchor's
+	// centre, and C++ then snapped every cell to the base lattice -- half a
+	// cell away, onto ground this walk had read as taken or as free. Start
+	// from the cell C++ will keep and every step lands on one it keeps.
+	const AIFloat3 at = ai.SnapToLattice(Catalog::Def(nanoDef), atRaw);
+	const float nhx = float(Catalog::gFootX[nanoDef]) * NP_HALFCELL;
+	const float nhz = float(Catalog::gFootZ[nanoDef]) * NP_HALFCELL;
+
+	// A turret that cannot lathe what it stands beside is not packing, it is
+	// sprawl -- so the walk never leaves the reach that bought it.
+	float reach = Catalog::gBuildDist[nanoDef];
+	if (reach < pitch)
+		reach = pitch * 6.f;
+
+	// Start outside the anchor's own footprint: the interior rings are all
+	// refused anyway (the anchor is in the ledger) and walking them is the
+	// most expensive part of a walk that usually ends on the first free cell.
+	float ah = 0.f;
+	if (Catalog::ValidId(anchorDef)) {
+		ah = float(Catalog::gFootX[anchorDef]) * NP_HALFCELL;
+		const float az = float(Catalog::gFootZ[anchorDef]) * NP_HALFCELL;
+		if (az > ah)
+			ah = az;
+	}
+	int ring0 = int((ah + nhx) / pitch);
+	if (ring0 < 1)
+		ring0 = 1;
+	int ringN = int(reach / pitch);
+	if (ringN < ring0)
+		return 0;
+
+	// THE DOORWAY. A ground plant's units roll out along the base axis; an air
+	// plant's take off, so it has no lane to keep clear.
+	AIFloat3 fwd(0.f, 0.f, 0.f);
+	AIFloat3 exitDir(0.f, 0.f, 0.f);
+	if (Base::Ready()) {
+		exitDir = Base::gFwd;
+		if (Base::AxisIsRearward()) {
+			exitDir.x = -exitDir.x;
+			exitDir.z = -exitDir.z;
+		}
+	}
+	bool lane = false;
+	const bool plantAnchor = Catalog::ValidId(anchorDef)
+		&& (Catalog::gBuildsList[anchorDef].length() > 0);
+	if (plantAnchor && Base::Ready() && !AirPlant(anchorDef)) {
+		fwd = exitDir;
+		lane = true;
+	}
+
+	array<AIFloat3> op;
+	array<float> ohx;
+	array<float> ohz;
+	const float span = reach + pitch * 2.f;
+	NearGround(at, span, op, ohx, ohz);
+	if (probe && Catalog::ValidId(anchorDef)) {
+		op.insertLast(at);
+		ohx.insertLast(float(Catalog::gFootX[anchorDef]) * NP_HALFCELL);
+		ohz.insertLast(float(Catalog::gFootZ[anchorDef]) * NP_HALFCELL);
+	}
+
+	// THE OCCUPANCY TEST, BUCKETED. It ran once per candidate cell against every
+	// occupied footprint in the span, so a packed base paid (cells) x
+	// (buildings in reach) per walk and the walk runs once per factory line.
+	// The query box is the widest overlap any entry can have, so a footprint the
+	// full scan would have found cannot fall outside it -- and a slot handed out
+	// during the walk goes into the same grid, keeping the ids aligned with op.
+	float qr = 0.f;
+	for (uint k = 0; k < op.length(); ++k) {
+		const float rx = nhx + ohx[k];
+		const float rz = nhz + ohz[k];
+		if (rx > qr) qr = rx;
+		if (rz > qr) qr = rz;
+	}
+	{   // the slots this walk hands out are entries too
+		const float sx = nhx + nhx;
+		const float sz = nhz + nhz;
+		if (sx > qr) qr = sx;
+		if (sz > qr) qr = sz;
+	}
+	gNPOcc.Begin(qr, at.x - span - qr, at.z - span - qr,
+			at.x + span + qr, at.z + span + qr);
+	for (uint k = 0; k < op.length(); ++k)
+		gNPOcc.Add(op[k].x, op[k].z);
+
+	int budget = NP_MAX_CELLS;
+	gNPTaken = 0; gNPLane = 0; gNPDoor = 0; gNPFar = 0; gNPOut = 0;
+	// A CONVERTER YARD IS ROWS, NOT RINGS. Rings from the anchor grow a blob;
+	// the yard is laid as rows of STRIP_W across the base, the next row
+	// behind the last, every cell on the lattice -- the work planned ahead
+	// (apexearth 2026-09-14: "add converters in blocks of 2x8, like long
+	// queues of what we want to build... It is like planning ahead").
+	if (!Catalog::ValidId(anchorDef) && (Catalog::gConvCapacity[nanoDef] > 0.f)
+		&& Base::Ready())
+	{
+		for (int j = 0; j <= ringN; ++j) {
+			for (int i = 0; i < STRIP_W; ++i) {
+				if (budget <= 0)
+					return int(slots.length());
+				--budget;
+				const AIFloat3 p = at + Base::gAcross * (float(i) * pitch)
+						- Base::gFwd * (float(j) * pitch);
+				if (!OnMap(p) || (p.distance2D(at) > reach + float(STRIP_W) * pitch)) {
+					++gNPFar;
+					continue;
+				}
+				{
+					float pd = 0.f, pl = 0.f;
+					Base::Coords(p, pd, pl);
+					const float lh = Base::LaneHalf() + pitch * 0.5f;
+					if (Base::LanesApply(pd) && ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))) {
+						++gNPLane;
+						continue;
+					}
+				}
+				bool taken = false;
+				gNPOcc.Query(p.x, p.z, qr);
+				for (uint q = 0; q < gNPOcc.hit.length(); ++q) {
+					const uint k = uint(gNPOcc.hit[q]);
+					if ((abs(p.x - op[k].x) < (nhx + ohx[k]))
+						&& (abs(p.z - op[k].z) < (nhz + ohz[k])))
+					{
+						taken = true;
+						break;
+					}
+				}
+				if (taken) {
+					++gNPTaken;
+					continue;
+				}
+				if (NearBlocked(p))
+					continue;
+				slots.insertLast(p);
+				op.insertLast(p);
+				ohx.insertLast(nhx);
+				ohz.insertLast(nhz);
+				gNPOcc.Add(p.x, p.z);
+				if (int(slots.length()) >= n)
+					return int(slots.length());
+			}
+		}
+		return int(slots.length());
+	}
+	// ONE CORE, PLANTS ON ITS RIM (apexearth 2026-09-16: rings on every side
+	// of every plant merged into "one single massive blob" with the plants
+	// inside it; "if you make all your factories on the outside of that
+	// blob... you don't need any walking room there"). The walk starts flush
+	// against the anchor on the side facing the standing turrets -- behind
+	// it when none stand yet -- and grows from there to meet them, so the
+	// anchor stays on the block's edge. Reach is still measured from the
+	// anchor: every cell handed out lathes what bought it.
+	const AIFloat3 heart = PackHeart(at, reach, ah + nhx, lane, fwd);
+	AIFloat3 origin = at;
+	{
+		const float hx = heart.x - at.x;
+		const float hz = heart.z - at.z;
+		const float hl = sqrt(hx * hx + hz * hz);
+		if (hl > 1.f) {
+			origin.x += hx / hl * (ah + nhx);
+			origin.z += hz / hl * (ah + nhx);
+			origin = ai.SnapToLattice(Catalog::Def(nanoDef), origin);
+			ring0 = 0;
+			// The anchor's far side is still in its reach, one offset further.
+			ringN = int((reach + ah + nhx) / pitch);
+		}
+	}
+	// RESUME, DON'T RESTART: a slice that ends inside a full block is
+	// re-read from the start by the next walk, which ends there again. The
+	// rings a walk found full stay full until something dies, so the next
+	// walk starts where this one stopped.
+	if (!probe) {
+		const int key = PackKey(origin);
+		for (uint k = 0; k < gNPResumeKey.length(); ++k) {
+			if (gNPResumeKey[k] != key)
+				continue;
+			if ((ai.frame - gNPResumeAt[k] < NP_RESUME_TTL) && (gNPResumeRing[k] > ring0))
+				ring0 = gNPResumeRing[k];
+			break;
+		}
+	}
+	for (int ring = ring0; ring <= ringN; ++ring) {
+		for (int i = -ring; i <= ring; ++i) {
+			for (int j = -ring; j <= ring; ++j) {
+				// The ring's own edge only -- the interior was walked already.
+				if ((i > -ring) && (i < ring) && (j > -ring) && (j < ring))
+					continue;
+				if (budget <= 0) {
+					gNPOut = ringN - ring + 1;
+					if (!probe)
+						PackResume(origin, ring);
+					return int(slots.length());
+				}
+				--budget;
+				AIFloat3 p = origin;
+				p.x += float(i) * pitch;
+				p.z += float(j) * pitch;
+				if (!OnMap(p) || (p.distance2D(at) > reach)) {
+					++gNPFar;
+					continue;
+				}
+				// LEAVE THE WALKWAYS EMPTY. FarmSlot drops every slot whose
+				// footprint crowds a lane because a solid slab across the
+				// base's central corridor once walled the commander in --
+				// it held a task, could not move, and burned every retry.
+				// A packed block is exactly the shape that does that, so it
+				// asks the same question.
+				// ...EXCEPT THE RING TOUCHING A PLANT, air plants included
+				// (apexearth 2026-09-13: "we keep distance on the side -- we
+				// don't need to keep distance on the side"; "We aren't
+				// building nanos completely adjacent to air labs. We should
+				// be"). The walkways' half-width refused most of a plant's
+				// first ring; the cells hugging its flanks are its nano
+				// block, not a corridor. The doorway test below still holds
+				// a ground plant's front open.
+				// ...AND EVERY RING OF IT (apexearth 2026-09-14, "ok on
+				// both"): with only the first ring exempt, the eco seat's
+				// batch asked 16 and got 0-1 a pass -- 14 taken, 78 refused
+				// as lanes -- and stood 42 turrets against 118 constructors.
+				if (Base::Ready() && !plantAnchor) {
+					float pd = 0.f, pl = 0.f;
+					Base::Coords(p, pd, pl);
+					const float lh = Base::LaneHalf() + pitch * 0.5f;
+					if (Base::LanesApply(pd) && ((Base::LaneGap(pl) < lh) || (Base::LaneGap(pd) < lh))) {
+						++gNPLane;
+						continue;
+					}
+				}
+				if (lane) {
+					// Ahead of the plant and within the width units roll
+					// through: that is the doorway, whatever ring it is on.
+					const float rx = p.x - at.x;
+					const float rz = p.z - at.z;
+					const float ahead = rx * fwd.x + rz * fwd.z;
+					const float side = rx * fwd.z - rz * fwd.x;
+					if ((ahead > 0.f) && (abs(side) < ah + pitch)) {
+						++gNPDoor;
+						continue;
+					}
+				}
+				if (Base::Ready() && InAnyDoorway(p, pitch, exitDir)) {
+					++gNPDoor;
+					continue;
+				}
+				bool taken = false;
+				gNPOcc.Query(p.x, p.z, qr);
+				for (uint q = 0; q < gNPOcc.hit.length(); ++q) {
+					const uint k = uint(gNPOcc.hit[q]);
+					if ((abs(p.x - op[k].x) < (nhx + ohx[k]))
+						&& (abs(p.z - op[k].z) < (nhz + ohz[k])))
+					{
+						taken = true;
+						break;
+					}
+				}
+				if (taken) {
+					++gNPTaken;
+					continue;
+				}
+				// Ground the reach veto refused is not a slot (the ring
+				// re-elected the same unreachable cell twelve times a game).
+				if (NearBlocked(p))
+					continue;
+				slots.insertLast(p);
+				// A slot just handed out is ground the next one must not take.
+				op.insertLast(p);
+				ohx.insertLast(nhx);
+				ohz.insertLast(nhz);
+				gNPOcc.Add(p.x, p.z);
+				if (!probe)
+					PackResume(origin, ring);
+				if (int(slots.length()) >= n)
+					return int(slots.length());
+			}
+		}
+	}
+	return int(slots.length());
+}
+
+// The single packed slot, or an off-map vector when nothing in reach is free.
+AIFloat3 PackSlot(int nanoDef, const AIFloat3& in at, int anchorDef)
+{
+	array<AIFloat3> one;
+	if (PackSlots(nanoDef, at, anchorDef, 1, one) > 0)
+		return one[0];
+	return AIFloat3(-1.f, 0.f, -1.f);
+}
+
+}  // namespace Market

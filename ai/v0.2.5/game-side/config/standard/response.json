@@ -1,0 +1,7 @@
+// Mono-space font required
+// KILL PHASE (docs/20-brain-overhaul.md par.6): the response weight tables are
+// dead -- production is priced Wants in the rebuild, and the facqueue sweep
+// suppresses the DLL's native recruit re-enqueues meanwhile. The file exists
+// because init.as lists it in the profile; its content is deliberately empty.
+{
+}

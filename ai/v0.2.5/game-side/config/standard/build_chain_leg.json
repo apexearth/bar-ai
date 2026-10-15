@@ -1,0 +1,34 @@
+// Mono-space font required
+{
+	"porcupine": {
+		"unit": {
+		//              0           	1         		2        		3           	4          		5     			6				7				8				9   
+			"legion":  ["leglht",		"legtl",   		"legrl",  		"legmg", 		"leghive",  	"legdtr",		"legrhapsis",	"leglupara", 	"legapopupdef", "leghive",
+						"legflak",   	"legacluster",  "legbastion", 	"legcluster", 	"legabm", 		"legrad",		"legjam",		"legestor", 	"legmstor", 	"legadvsol",
+						"legnanotc",	"legarad",		"legtarg",		"legadvestore", "legperdition",	"legajam",		"legfus",     	"legsolar",     "legdeflector", "legfmg"]
+		},
+		
+	//superweapons get only build when there is nothing else to do
+	"superweapon": {
+		"unit": {
+			"legion": [ "leglrpc",  "legstarfall"] //"leglupara", "legperdition", "legabm", "legsilo"
+		},
+		"weight":     [    0.5,      0.1  ],
+
+		"condition": [40, 600]  // [<Minimum income>, <maximum seconds to build>]
+	},
+
+	// Fallback defence
+	"default": {
+		"legion": "leglht"
+	}
+},
+
+
+
+// Actions on building finished event
+"build_chain": {
+	// KILL PHASE (docs/20-brain-overhaul.md): hubs emptied -- engine
+	// auto-defence/follow-up chains are off for this variant.
+}
+}
