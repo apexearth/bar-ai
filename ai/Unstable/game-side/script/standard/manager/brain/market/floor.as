@@ -20,6 +20,7 @@ array<IUnitTask@> gJobTask;
 array<float> gJobVal;
 array<float> gJobGain;   // metal/s the finished thing returns -- what an
                          // assist on it is actually accelerating
+array<int> gJobKind;
 // The job BestJobBoss ranked first, for callers that need to price the help
 // rather than just walk to it.
 IUnitTask@ gBossJob;
@@ -34,12 +35,14 @@ void NoteJob(IUnitTask@ t, Want@ w)
 		if (gJobTask[i] is t) {
 			gJobVal[i] = w.value;
 			gJobGain[i] = w.gain;
+			gJobKind[i] = w.kind;
 			return;
 		}
 	}
 	gJobTask.insertLast(t);
 	gJobVal.insertLast(w.value);
 	gJobGain.insertLast(w.gain);
+	gJobKind.insertLast(w.kind);
 }
 
 void JobSweep()
@@ -49,6 +52,7 @@ void JobSweep()
 			gJobTask.removeAt(i);
 			gJobVal.removeAt(i);
 			gJobGain.removeAt(i);
+			gJobKind.removeAt(i);
 			++gJobStamp;
 			continue;
 		}

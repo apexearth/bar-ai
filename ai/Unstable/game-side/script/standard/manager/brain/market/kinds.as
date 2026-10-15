@@ -52,6 +52,7 @@ final class Want {
 	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
 	float nnTilt = 0.f;     // trust x the net's verdict, log units: the ETA ladder reads it too
 	float nnDrawP = -1.f;   // its category's odds in the roulette that drew it; -1 never drawn
+	int assistEcoS = 0;     // > 0: an eco assist (AssistEcoPick) and its guard stint, s
 }
 
 // Wants compete as CATEGORIES, not as kinds. A kind is one proposer; a

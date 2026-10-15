@@ -485,6 +485,7 @@ local NAMES = {
 	"apex_t2con_unlock",      -- production.as: 1 = an advanced con is priced by the upgrades it brings forward (0)
 	"apex_upgrade_first",     -- roles.as: 1 = the oldest advanced hands take the best mex upgrade first (0)
 	"apex_mexup_horizon",     -- price.as: 1 = a mex upgrade's walk/build cost its share of apex_payback_h (0)
+	"apex_assist_eco",        -- want_assist.as: 1 = an assist on an economy frame is priced at its gain x the seconds saved (0)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
 	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
 	"apex_attack_break",      -- AttackTask.cpp: power fraction of task peak below which the attack aborts (0.4)
