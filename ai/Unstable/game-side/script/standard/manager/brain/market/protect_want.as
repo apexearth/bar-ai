@@ -179,7 +179,8 @@ float DefTeamObsolete(int d, float affordM)
 	const float s = DefObsoleteShare(adv, d, affordM);
 	if (s < 1.f) {
 		++gAdvObsN;
-		gAdvObsMin = min(gAdvObsMin, s);
+		if (s < gAdvObsMin)
+			gAdvObsMin = s;
 	}
 	if (ai.frame >= gNextAdvObsLog) {
 		gNextAdvObsLog = ai.frame + 60 * SECOND;
@@ -407,8 +408,11 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// this post's reach: near zero early, and it grows with the army.
 			DwEnsure(d);
 			gDwObs[d] = hDomOn ? DefObsoleteShare(builds, d, hAffordM) : 1.f;
-			if (hDomOn && hTeamObs)
-				gDwObs[d] = min(gDwObs[d], DefTeamObsolete(d, hAffordM));
+			if (hDomOn && hTeamObs) {
+				const float teamObs = DefTeamObsolete(d, hAffordM);
+				if (teamObs < gDwObs[d])
+					gDwObs[d] = teamObs;
+			}
 			Gate(GATE_DEF_OBSOLETE, gDwObs[d] < 1.f);
 			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
 			// 2026-09-19: "spend as much money as it would take to upgrade a
