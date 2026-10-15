@@ -315,6 +315,8 @@ to them)
 ## 5. Priors: the army
 
 **What to build**
+- (2026-10-14) By the mid-to-late game (30 minutes in) spend on economy and
+  T3. T2 ground units are mostly useless by then; T2 air is the exception.
 - The line is chosen for the map: vehicles where vehicles are stronger.
 - Facing a high-dps unit that outranges us, build a longer-range answer at the
   T2 lab.
