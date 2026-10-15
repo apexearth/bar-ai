@@ -218,6 +218,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Requests::GateCensus(); Perf::Add("up.gatecensus", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateRaidAsk(); Perf::Add("up.raidask", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
+	{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
 	{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Perf::Add("up.fightcensus", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
@@ -466,6 +467,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	if (!cdef.IsMobile() && WasFinished(int(unit.id))) {
 		const AIFloat3 at = unit.GetPos(ai.frame);
 		Military::NoteStructureLoss(at, cdef.costM);
+		Military::FlankNoteLoss(at, int(cdef.id));
 		// the same death kept by PLACE, with no home-ground filter: outlying mexes
 		Market::NoteEcoLoss(at, cdef.costM);
 		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
@@ -510,6 +512,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
 	Military::SiegeNoteDeath(pos, edef.costM, false, byUs);
+	Military::FlankNoteKill(pos, edef.costM, byUs);
 	if (edef.IsMobile() && Catalog::ValidId(int(edef.id)) && !Catalog::gFlyer[int(edef.id)])
 		Market::DefSiteNoteKill(pos, edef.costM);
 	if (byUs)

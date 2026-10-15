@@ -59,6 +59,7 @@ ANALYSIS_TOOLS = {
     "earlyfight": ("test_earlyfight.py", False),
     "raid": ("test_raid.py", False),
     "siege": ("siege.py", False),
+    "flank": ("flankstat.py", False),
 }
 
 DEPLOY_ACTIONS = {

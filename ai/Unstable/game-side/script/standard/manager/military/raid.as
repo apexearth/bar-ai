@@ -411,7 +411,7 @@ void UpdateRaidAsk()
 	for (uint pass = 0; pass < 2; ++pass) {
 		for (uint i = 0; (i < gSquads.length()) && (pulled < cap); ++i) {
 			IUnitTask@ t = gSquads[i];
-			if ((t is null) || t.IsDead() || (t is gAskTask))
+			if ((t is null) || t.IsDead() || (t is gAskTask) || IsFlankTask(t))
 				continue;
 			const int ft = t.GetFightType();
 			// An escort is free to take when its worker is standing somewhere
