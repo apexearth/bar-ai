@@ -645,7 +645,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Ground the C++ reach veto has refused is re-probed, not re-taken:
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
-		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(DefTypeSited(DefSitePick(w, unit)))) : w.pos;
+		const AIFloat3 pickAt = groundDef ? DefSitePick(w, unit) : w.pos;
+		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(DefTypeSited(pickAt))) : w.pos;
 		// NO GUN IN THE BASE INTERIOR (apexearth 2026-09-19: "imagine you
 		// only have 12 towers and six of them are in the center of your
 		// base... by the time those towers are defending anything you've
@@ -703,6 +704,19 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 					+ " probe=" + int(sAt.x) + "," + int(sAt.z));
 				return null;
 			}
+		}
+		// The relocations above, past the ground a request folds on (600, below), are priced too.
+		if ((sAt.distance2D(pickAt) > 600.f) && !SiteMoveKeeps(w, unit, sAt, false)) {
+			if (groundDef) {
+				if (isT2)
+					++gGunT2Ref;
+				DefRefuseLog(w, sAt, (hit == "") ? "moved" : (hit + "+moved"), "-", hit != "", false);
+			}
+			return null;
+		}
+		if ((sAt.distance2D(w.pos) > 1.f) && ComLeashed(unit, w, sAt)) {
+			++gSmLeash;
+			return null;
 		}
 		AIFloat3 fHome;
 		const int fRoute = FerryRoute(unit, w, sAt, fHome);

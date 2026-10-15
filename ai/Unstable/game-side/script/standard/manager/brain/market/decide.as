@@ -54,6 +54,7 @@ int gDefClaimAt = -30000;
 array<int> gExecFail(32, 0);
 int gExecNone = 0;
 int gComFwdLogAt = -999999;   // see the commander forward skip in the exec loop
+float gExecRunnerV = -1.f;    // the runner-up's value while the exec loop runs ExecuteWant; -1 none known
 int gNextExecLog = 0;
 int gNextComRefuseLog = 0;
 
@@ -809,6 +810,33 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	if (w !is null)
 		w.src = step;
 	return w;
+}
+
+// The exposure Decide charges an immobile want's gain at `at`.
+float ExposeCharge(Want@ c, const AIFloat3& in at, bool airBuilder, float unitM, float lossH, float frameK)
+{
+	const float exposed = ExpectedLossAt(at, c.def.costM);
+	if (exposed <= 0.f)
+		return 0.f;
+	float charge = (c.kind == WK_PROTECT) ? 0.f : exposed;
+	// An air con pays for its own exposure too, towers included; ground
+	// cons have the C++ road check.
+	if (airBuilder)
+		charge += ExpectedLossAt(at, unitM);
+	if ((frameK > 0.f) && (c.buildSec > 0.f) && (lossH > 1.f))
+		charge += exposed * frameK * (c.buildSec / lossH);
+	return charge;
+}
+
+// The commander's leash on one job site: the exec loop's test, and the executor's on a moved site.
+bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
+{
+	if (!unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	const bool comClaim = (w.kind == WK_MEX)
+			|| ((w.kind == WK_RECLAIM) && (w.spotId == RCM_SPOT));
+	return ComFar(at) && (at.distance2D(unit.GetPos(ai.frame)) > HERE_R)
+		&& !(comClaim && !gCsT2 && ComClaimOk(unit, at));
 }
 
 // EVERY WANT PAYS THE ASKER'S ROAD, not only the mex want: a T2 con walked
@@ -1658,16 +1686,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// that forgot to name a site.
 		if ((c.pos.x < 1.f) && (c.pos.z < 1.f))
 			continue;
-		const float exposed = ExpectedLossAt(c.pos, c.def.costM);
-		if (exposed <= 0.f)
-			continue;
-		float charge = (c.kind == WK_PROTECT) ? 0.f : exposed;
-		// An air con pays for its own exposure too, towers included; ground
-		// cons have the C++ road check.
-		if (airBuilder)
-			charge += ExpectedLossAt(c.pos, Catalog::gCostM[int(unit.circuitDef.id)]);
-		if ((frameK > 0.f) && (c.buildSec > 0.f) && (lossH > 1.f))
-			charge += exposed * frameK * (c.buildSec / lossH);
+		const float charge = ExposeCharge(c, c.pos, airBuilder,
+				Catalog::gCostM[int(unit.circuitDef.id)], lossH, frameK);
 		if (charge <= 0.f)
 			continue;
 		c.gain -= charge;
@@ -2794,11 +2814,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		// Not a job where he already stands: the leash guards the walk out,
 		// and refusing it sent him home from the water with the tube unbuilt.
 		// ...except a claim where nothing can kill him (his 2026-10-05), escorted.
-		const bool comClaim = isComm && ((ranked[i].kind == WK_MEX)
-				|| ((ranked[i].kind == WK_RECLAIM) && (ranked[i].spotId == RCM_SPOT)));
-		if (isComm && ComFar(ranked[i].pos)
-			&& (ranked[i].pos.distance2D(unit.GetPos(ai.frame)) > HERE_R)
-			&& !(comClaim && !gCsT2 && ComClaimOk(unit, ranked[i].pos))) {
+		if (isComm && ComLeashed(unit, ranked[i], ranked[i].pos)) {
 			if (ai.frame >= gComFwdLogAt + 30 * SECOND) {
 				gComFwdLogAt = ai.frame;
 				AiLog("apex: com-fwd skip t=" + ai.teamId + " "
@@ -2819,7 +2835,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		if (!refused) {
 			const double _tExec = Perf::T0();
 			gExecWhy = (depth == 0) ? why : "fall";
+			gExecRunnerV = (ranked.length() > 1) ? ranked[1].value : 0.f;
 			@t = ExecuteWant(unit, ranked[i]);
+			gExecRunnerV = -1.f;
 			Perf::Add("exec.want", _tExec);
 			// The name is built whether or not anyone is profiling, and the
 			// concat plus KindName ran on every execution at apex_perf=0.
