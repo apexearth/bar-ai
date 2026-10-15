@@ -399,6 +399,18 @@ GROUPS = [
                   "FEWER rez bots (each one is credited with more), lower it "
                   "if wrecks rot uncollected. This is the knob that ended "
                   "the 256-rezbot fleet"),
+                 ("TUNE_REZ_LIFE", "ON prices a rez bot by the wrecks it "
+                  "will eat before it dies, not over a whole 15 minutes: the "
+                  "faster the fleet is dying where it works, the shorter that "
+                  "life, and a bot that will not eat its own cost is not "
+                  "built. apex: rezlife-stat each minute"),
+                 ("TUNE_LINE_OBSOLETE", "ON makes a lower plant's fighting "
+                  "unit (a T1 hover AA, a T1 fighter) worth only its share of "
+                  "what the best unit of the same job from our higher plant "
+                  "gives for the same metal, when we can afford that one; the "
+                  "rest of its turn goes to the better plant, so it is made "
+                  "that much less often. Constructors, rez bots and scouts are "
+                  "never judged. apex: lineobs-stat each minute"),
                  ("TUNE_FAC_QUEUE", "keeps each line queued deeper, so it "
                   "idles less and reacts slower"),
                  ("TUNE_LINE_FLOOR", "a factory order must be worth more of "
@@ -1320,6 +1332,12 @@ GOALS = [
                      "army. This is the whole size of the standing army now — "
                      "it is sized from OUR economy and never from what we can "
                      "see of theirs, so it works the same while blind"},
+            {"ref": "TUNE_LINE_OBSOLETE", "dir": "up",
+             "note": "late, the army comes from the best plant we own, not "
+                     "T1 hover AA and T1 fighters (his 10-15)"},
+            {"ref": "TUNE_REZ_LIFE", "dir": "up",
+             "note": "rez bots are not rebuilt by the dozen into a fight that "
+                     "keeps killing them (his 10-15)"},
         ],
         "watch": "python tools/composition.py — army as a share of our metal. "
                  "Stock BARb runs a 39.9% median (measured over 122 games, "

@@ -214,6 +214,16 @@ const float TUNE_DEF_REFILL = 0.f;
 //   hands can build and afford, not only its own list: beaten on reach and kill
 //   by one, it keeps that share of its price. His 10-14; A/B before default.
 const float TUNE_DEF_TEAM_OBSOLETE = 0.f;
+
+// [toggle 0/1] -- A lower plant's combat unit keeps the share of per-metal worth
+//   the best unit of its role (AA, bomber, other) from a higher plant we own and
+//   can afford delivers; the rest of its ticket defers to that line. His 10-15.
+const float TUNE_LINE_OBSOLETE = 0.f;
+
+// [toggle 0/1] -- A rez bot is priced by the wreck stream it banks over its
+//   expected life (fleet metal / the fleet's death rate), net of its cost,
+//   instead of over the whole payback horizon. His 10-15.
+const float TUNE_REZ_LIFE = 0.f;
 const float TUNE_T2CON_UNLOCK = 0.f;     // an advanced con is priced by the mex upgrades it brings forward (UpgradeUnlockM), not the room
 const float TUNE_UPGRADE_FIRST = 0.f;    // the oldest advanced hands UpgradeHandsWant licenses take the best upgrade, not guns (roles.as)
 const float TUNE_MEXUP_HORIZON = 0.f;    // a mex upgrade's walk and build cost their share of apex_payback_h, not gain x seconds

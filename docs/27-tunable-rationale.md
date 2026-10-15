@@ -3484,6 +3484,29 @@ tower to the draw for that election, base-front and coverall take the priced pat
 carries the share) for a cut gun, and the refill gain takes the share. `apex: t1tower-path` counts T1-tower
 picks per path a minute, `/cutN` those carrying the cut, and fieldLent/roleLent/bfPriced/covPriced/refillCut.
 DefTypePick can still swap a rule's T1 gun for another T1 option (T1Q 64 of 571 picks).
+### `TUNE_LINE_OBSOLETE` = 0.f
+
+His 10-15 8v8: T1 hover AA (armah/corah) from hover plants in 6 of 8 seats at minutes 27-54. Every
+production term normalises on the asking plant's own best unit (`linePPC`), and AA's demand is
+`AARoleGap`, which skips the tier yield and `Outgrown`; the hover plant's prodrank read
+`gap=0 src=lag yield=off(wasting) corah=7794(p0.213,pc0.055)` with every other product `:outgrown`,
+so corah was the lab's only candidate and won every draw. A multiplier alone only reorders one lab's
+draw, so ON (lineobs.as) scales each candidate by `UnitCore(d) / UnitCore(best)` -- best of the same
+role (AA, bomber, other) from a HIGHER-tier plant we own, under the aff0 bar, that covers the ground
+d covers (fliers vs fliers, ships vs ships) -- and leaves the lost share in the draw's sum as the
+better line's ticket: drawn, the lab orders nothing that election. Output of a dominated unit falls
+to its share. Builders, rez bots and ground scouts are never judged (doctrine: scouts exempt).
+`apex: lineobs-stat` (shadow shares while off). Off until an A/B.
+
+### `TUNE_REZ_LIFE` = 0.f
+
+His 10-15 8v8: 404 rez bots in 55 min, fleets falling 31 -> 7 around minute 39 and rebuilt at
+`rezwant ... wreckPs=157.88 v=16051` -- the bot was the T1 lab's only candidate (`sumV=16051`). The
+wreck term paid `apex_payback_h` (900 s) of reclaim whatever the bot's survival. ON prices it over
+its expected life, fleet metal (plus the new bot) / `RezLostRateM`, capped at the horizon, net of its
+own cost, and cuts the medic term by life over the fill window. A bot that will not eat its cost
+before dying prices at zero and is not a candidate. `apex: rezlife-stat` (computed while off too).
+Off until an A/B.
 
 ### `TUNE_T2CON_UNLOCK` = 0.f
 
