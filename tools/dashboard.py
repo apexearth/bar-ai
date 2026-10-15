@@ -1018,13 +1018,24 @@ def default_spec():
     return "%s:%s:%s" % (short_name(), VARIANT, PROFILE)
 
 
+def undash_spec(x):
+    """A run dir's dash-joined spec back to name:variant:profile. A variant may hold dashes itself
+    (lane-watch), so only the first and last dash are separators."""
+    if ":" in x or "-" not in x:
+        return x
+    name, rest = x.split("-", 1)
+    if "-" not in rest:
+        return "%s:%s" % (name, rest)
+    variant, profile = rest.rsplit("-", 1)
+    return "%s:%s:%s" % (name, variant, profile)
+
+
 def known_ai_specs():
     specs = {default_spec(), "BARb:stable:hard"}
     for s in list_matches(200):
         # Run dirs store the spec dash-joined; normalize before deduping or the
         # same AI shows up twice in the list.
-        specs.update(x.replace("-", ":") if ":" not in x else x
-                     for x in s.get("specs", []) if x)
+        specs.update(undash_spec(x) for x in s.get("specs", []) if x)
     return sorted(specs)
 
 
