@@ -219,6 +219,12 @@ to them)
   cost, never a tenth of the constructors' time (measured 10-13%).
   Defences are the fallback, the last line: ideally the army kills the
   enemy army before it gets that close.
+- (2026-10-14) Guard the flanks. Raiders that go round the towers must not
+  eat the economy freely: answer them, and stand guards where no tower
+  covers the economy's approaches.
+- (2026-10-14) Don't put all the energy in one ball -- it explodes together.
+  Ask what share of the economy we are willing to lose at once, and spread
+  it accordingly: a space-efficiency against risk trade.
 - Military exists early. Three constructors before any army was an issue.
 - See threats coming. A push is visible long before it reaches the base.
 - Size a squad for each threat and hunt it down. Read their path and

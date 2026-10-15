@@ -589,3 +589,18 @@ six times the build power bought nothing. To work, the kept seat must: send
 the extra commanders out to claim the merged seats' territory (the commander
 leash keeps every commander home), size labs and expansion to the hands it
 holds, and drop the eco role (it zeroed the army of half the team).
+
+## Spread the economy by the share we can afford to lose at once (his 10-14)
+
+"We build a tremendous amount of our energy all in one massive ball, it all explodes together too.
+We need logic to think 'if the eco blows up, what % of my eco am I willing to lose all at once?' It is
+a space-efficiency/risk kinda algorithm." Fusions and AFUS explode on death and chain through a packed
+field; one raid or one bomber run takes the lot. Placement prices the cluster a building joins: the
+share of our energy already within blast/raid reach of the site, against the walking and space cost of
+starting another cluster. Not built.
+
+## Flank guards (his 10-14)
+
+"We also aren't guarding our flanks at all. Enemies go around our defense towers and attack our economy
+freely." Part one (reactive answer reaches as far as the raid lasts) is TUNE_RAID_REACH; part two, standing
+guard groups at the economy's approaches no tower covers, is not built.

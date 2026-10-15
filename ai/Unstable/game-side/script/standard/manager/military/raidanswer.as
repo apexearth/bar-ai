@@ -85,10 +85,19 @@ float GunsAt(const AIFloat3& in at)
 }
 
 // From the death hook: a finished structure of ours killed by a ground unit.
+int gAnsDropNoKiller = 0, gAnsDropFar = 0, gAnsReachWide = 0;
 void NoteRaidOn(const AIFloat3& in at, int killerDef)
 {
-	if (!OnMap(at) || !Catalog::ValidId(killerDef) || !OnOurGround(at))
+	if (!OnMap(at))
 		return;
+	if (!Catalog::ValidId(killerDef)) {
+		++gAnsDropNoKiller;
+		return;
+	}
+	if (!OnOurGround(at)) {
+		++gAnsDropFar;
+		return;
+	}
 	++gAnsEvents;
 	for (uint i = 0; i < gAnsPos.length(); ++i) {
 		if (gAnsPos[i].distance2D(at) <= gAnsR[i]) {
@@ -125,6 +134,17 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 	if (foeM < Catalog::gCostM[kd])
 		foeM = Catalog::gCostM[kd];
 	const float need = foeM * ANSWER_PARITY;
+	// HOW LONG THE RAID LASTS, NOT ONE BUILDING (his 10-14: raiders went round the towers and ate the
+	// wind fields; every answer read have=0/0 because only units within one building's lifetime of
+	// travel counted). The raiders need the hp of our structures in their reach over the raid's dps.
+	float raidS = -1.f;
+	if (ai.GetTunable("apex_raid_reach", TUNE_RAID_REACH) > 0.f) {
+		array<CCircuitUnit@>@ near = ai.GetOwnStructsNear(at, r);
+		float hp = 0.f;
+		for (uint i = 0; (near !is null) && (i < near.length()); ++i)
+			hp += Catalog::gHealth[int(near[i].circuitDef.id)];
+		raidS = hp / ((gPostRaidDps > 1.f) ? gPostRaidDps : 20.f);
+	}
 	const float guns = GunsAt(at);
 	if (guns >= foeM) {
 		++gAnsCovered;
@@ -160,8 +180,12 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 			if (RaidClaimed(uid) || AnswerClaimed(uid))
 				continue;
 			const float d = u.GetPos(ai.frame).distance2D(at);
-			if (d > PostReach(int(u.circuitDef.id)))
-				continue;
+			const int ud = int(u.circuitDef.id);
+			if (d > PostReach(ud)) {
+				if ((raidS <= 0.f) || (Catalog::gSpeed[ud] <= 0.f) || (d / Catalog::gSpeed[ud] > raidS))
+					continue;
+				++gAnsReachWide;
+			}
 			if (escort && !EscortSpare(u.id))
 				continue;
 			uint k = cd.length();
@@ -267,7 +291,7 @@ void UpdateRaidAnswer()
 	if (ai.frame >= gAnsStatAt) {
 		gAnsStatAt = ai.frame + 60 * SECOND;
 		AiLog(Factory::T() + "apex: raid-answer-stat t=" + ai.teamId + " events=" + gAnsEvents
-			+ " sent=" + gAnsSentN + " pulled=" + gAnsPulled + " short=" + gAnsShort
+			+ " sent=" + gAnsSentN + " pulled=" + gAnsPulled + " short=" + gAnsShort + " dropNoKiller=" + gAnsDropNoKiller + " dropFar=" + gAnsDropFar + " reachWide=" + gAnsReachWide
 			+ " covered=" + gAnsCovered + " merged=" + gAnsMerged
 			+ " clear=" + gAnsClear + " timeout=" + gAnsTimeout + " gone=" + gAnsGone
 			+ " live=" + gAnsId.length());

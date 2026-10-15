@@ -190,6 +190,11 @@ const float TUNE_TEAM_AIRLOSS = 0.f;
 //   0.63x, gunp 0.45x, mass 1.22x). His 10-14; A/B before default.
 const float TUNE_PN_RULE_CENTRE = 0.f;
 
+// [toggle 0/1] -- A raid answer counts every unit that arrives before the raiders
+//   clear our structures in their reach (raidanswer.as), not only units within one
+//   building's lifetime of travel. His 10-14; A/B before default.
+const float TUNE_RAID_REACH = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
