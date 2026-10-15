@@ -23,6 +23,7 @@
 #include "military/raid.as"        // ask for a raid and pull the units to make one
 #include "military/nnraid.as"      // the raid priced and decided: GO at the best target or WAIT
 #include "military/raidanswer.as"  // a raider that kills a building of ours gets a squad its size
+#include "military/flankguard.as"  // groups stand at the economy's untowered approaches
 #include "military/withdraw.as"   // pull a losing squad back under our guns
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence

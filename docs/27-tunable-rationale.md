@@ -3366,3 +3366,27 @@ A withdrawing commander stepped back to RetirePos (the farm, else home) unless a
 beat the threat: on his 1v1 the walk was 2,800 home from a claim and all the way out again. With the
 switch the nearest point straight away from the threat where GetUnitThreatAt reads 0 (128-elmo steps,
 the threat map's resolution) is taken when it is nearer. Counted as step= on comstat.
+
+## TUNE_FLANK_GUARD = 0 (2026-10-14)
+
+His 10-14: raiders walk round the towers and eat the economy (Greenest Fields 4v4: 319 wind, 170
+converters lost). Guard posts were cut 09-08 for park-order churn; `apex: posts units=0` at median
+and p90 over 150 search games, so only towers and the raid answer guard a flank. Off pending A/B.
+
+- Sectors: the closure ring's open bearings (ClosurePrep: on the map, no ally ahead, no tower
+  reaching), economy worth on them times 1 - turret cover / raid wave, cut into arcs of twice the
+  cover unit's PostReach at the exposed economy's mean radius.
+- Wave: the biggest armed metal the raid answer saw at a building of ours, halving like
+  FoeRaidMassM; before any raid, their raider metal times AnswerShare. A group is 1.2x the wave
+  (ANSWER_PARITY); a sector qualifies when its exposed worth is at least that (no more metal
+  stationed than it guards); groups <= max(their raider metal x AnswerShare, wave) / wave.
+- A group is units out of DEFEND pools only, all or none, on a stock GUARD task around the
+  outermost exposed economy building within one reach of the sector's exposed centre. One Guard
+  order per unit; re-sited only when its building dies or no qualifying sector lies within one
+  reach of it. raid.as, nnraid.as and the raid answer do not pull from it.
+- Constants with no derivation: 64 assets per tick (cost only), a re-sweep at least once a minute
+  for raid-size and budget drift, a 64-elmo search for the mex under a ledger slot.
+- Offline, 40 recent nn-rand games, 2,034 of our economy buildings killed by enemies: 47% by
+  count (28% by metal) died on an open bearing with no tower in reach; 38% had a tower in reach,
+  27% sat on a bearing whose ring point is off the map (closed, as ClosurePrep counts it).
+  Approximate: rebuilt from BARAI_BUILD/DEATH, tower reach = longest non-AA weapon range.

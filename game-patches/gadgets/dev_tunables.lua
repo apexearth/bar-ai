@@ -479,6 +479,7 @@ local NAMES = {
 	"apex_flank_pct",         -- AttackTask.cpp: percent of attack squads that route around a side (35)
 	"apex_flank_frac",        -- AttackTask.cpp: lateral offset as fraction of the approach distance (0.45)
 	"apex_flank_min_dist",    -- AttackTask.cpp: extra floor on the flank's approach length; 0 = the squad's own weapon range rules (0)
+	"apex_flank_guard",       -- flankguard.as: 1 = groups stand guard at the economy's untowered approaches (0)
 	"apex_merge_threat",      -- SquadTask.cpp: merge-line threat ceiling as fraction of combined squad power (0.5)
 	"apex_merge_every",       -- SquadTask.cpp: task updates between merge attempts (8, was 32)
 	"apex_attack_break",      -- AttackTask.cpp: power fraction of task peak below which the attack aborts (0.4)

@@ -689,6 +689,13 @@ GROUPS = [
                  ("TUNE_COVER_BY_RAID", "post no more metal to base cover than "
                   "our share of the raider metal they have fielded. 0 = the "
                   "coverage need alone decides (at scale it never closed)"),
+                 ("TUNE_FLANK_GUARD", "ON stands small groups from the home "
+                  "pools at the edge of the economy on each approach no tower "
+                  "covers -- one group per flank, sized 1.2x the biggest raid "
+                  "seen on our ground, no more groups than their raider metal "
+                  "pays for. They fight what reaches their building and walk "
+                  "back; they move only when the flanks change. Trap: that "
+                  "metal is not in the attack army. apex: flank-stat each minute"),
                  ("TUNE_LINE_QUALITY", "weigh a production line -- its whole "
                   "price, and the tech want -- by its units (median army-per-"
                   "metal) times the ground they can cross, against the best line "
@@ -1290,6 +1297,9 @@ GOALS = [
              "note": "helping a tower go up is priced, not automatic"},
             {"ref": "TUNE_DEF_DANGER", "dir": "up",
              "note": "a seat's tower budget follows the danger our army cannot meet"},
+            {"ref": "TUNE_FLANK_GUARD", "dir": "up",
+             "note": "units, not towers, on the flanks raiders walk round to "
+                     "the wind and converters"},
         ],
         "watch": "python tools/conjobs.py on the batch: defence and sense time "
                  "should fall and energy and army rise; the dashboard's "

@@ -235,6 +235,9 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		if (ans !is null)
 			return NoteElect("raid.answer", ans);
 	}
+	IUnitTask@ flank = FlankTaskFor(unit);
+	if (flank !is null)
+		return NoteElect("flank", flank);
 	// A UNIT THE RAID DIRECTOR PULLED goes to the pack, ahead of every duty
 	// below -- it was taken off one of them on purpose. See raid.as.
 	if (RaidClaimed(int(unit.id))) {

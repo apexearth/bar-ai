@@ -271,7 +271,7 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 	const float homeS = HomeStrength();
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		IUnitTask@ t = gSquads[i];
-		if ((t is null) || t.IsDead() || IsAnswerTask(t))
+		if ((t is null) || t.IsDead() || IsAnswerTask(t) || IsFlankTask(t))
 			continue;
 		const int ft = t.GetFightType();
 		const bool ours = (gAskTask !is null) && (t is gAskTask);

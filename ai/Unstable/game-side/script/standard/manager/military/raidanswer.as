@@ -134,6 +134,7 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 	if (foeM < Catalog::gCostM[kd])
 		foeM = Catalog::gCostM[kd];
 	const float need = foeM * ANSWER_PARITY;
+	FlankNoteRaid(foeM);
 	// HOW LONG THE RAID LASTS, NOT ONE BUILDING (his 10-14: raiders went round the towers and ate the
 	// wind fields; every answer read have=0/0 because only units within one building's lifetime of
 	// travel counted). The raiders need the hp of our structures in their reach over the raid's dps.
@@ -160,7 +161,7 @@ void AnswerRaid(const AIFloat3& in at, int kd)
 	array<bool> ce;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		IUnitTask@ t = gSquads[i];
-		if ((t is null) || t.IsDead() || IsAnswerTask(t))
+		if ((t is null) || t.IsDead() || IsAnswerTask(t) || IsFlankTask(t))
 			continue;
 		const int ft = t.GetFightType();
 		const bool escort = ft == int(Task::FightType::GUARD);
