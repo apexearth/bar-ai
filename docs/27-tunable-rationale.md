@@ -3473,3 +3473,42 @@ His 10-14 watch: past minute 30 our basic constructors still raised 248 Heavy La
 hand's own list, so a T1 hand's tower was never outdated. ON compares it also with the ground guns our
 owned advanced hands can build and afford (the same dominance and affordability rules): a price, not a
 ban, so the Maw and Claw keep their 10-13 standing. `apex: advobs-stat`. Off until an A/B.
+
+### `TUNE_T2CON_UNLOCK` = 0.f
+
+His 10-15 8v8 watch: a seat T2 for minutes with its mexes still T1. t10's coralab made one corack and
+then sat idle (prodrank `corack:b=50(g23.6,claim25.3,room0.06)` against cortermite 1259): a con's gain
+is m/s while an army unit's is the gap it fills, and the upgrade term `upD/(1+ceilCons)` was m/s too.
+ON prices a ceiling con by `UpgradeUnlockM`: UpgradeHandsWant's own model in metal -- the first hand
+brings the waiting stream U over `apex_payback_h` less half the backlog's work, hand h+1 brings it
+forward by B*t*U/(2h(h+1)) (h counts owned and ordered) -- so v > 1 exactly where UpgradeHandsWant
+says the hand pays. Not scaled by the build-power room; bpProt still applies. Spots under upgrade are
+out. ON also fixes UpgradeHandsWant's walk: it stored the spot id as a position (AIFloat3(id)), so
+the walk read ~0 and t was build time alone (t=104-105 s on every uphands line). The t2-con floor
+already takes max(base, UpgradeHandsWant), so it follows the same model; with the walk fixed it asks
+for more hands where spots are spread. Offline, nn-rand 10-14 (1,013 games): of seats T2 for 3+
+minutes, 95% held more T1 than T2 mexes at minute 20 and 30% had upgraded none. `apex: mexup-stat`
+(`unlock priced= lastM=`), prodrank `,up`. Off until an A/B.
+
+### `TUNE_UPGRADE_FIRST` = 0.f
+
+His 10-03 tenet: a seat with one T2 con upgrades its mexes first. In the 10-15 watch the advanced
+hands lost the upgrade to `defrole` (cordoom), `role role=energy`, `field` (armpb) and `estall`; the
+existing firstT2/upfirst hoists sit below defrole, the crew split and the roles. ON (roles.as
+`UpgradeHandHold`): while T1 extractors wait, the oldest ceiling hands, as many as UpgradeHandsWant
+licenses (at least one), hoist the best mexup and drop guns, sensors, AA, supers and teeth from their
+list; economy stays as the fallback for a refused upgrade. Below the AA/E-stall/defence panics and the
+commander's hoists, above every gun hoist, the crew split, the roles and the draw. Off while the base
+is contested (UpgradesFirst's own exception). A hand already on a job keeps it. `apex: mexup-stat`
+(`upfirst held= noUp= contested=`), `why=uphand`. Off until an A/B.
+
+### `TUNE_MEXUP_HORIZON` = 0.f
+
+ValueOf charges a stream's late start as `gain x (walk + build)` in tCost, so value tends to 1/(walk +
+build) as the gain grows: a moho 1-2 minutes out read v 0.003-0.006 against a fusion's 0.0066 at home
+(t14, 10-15). ON, for mex upgrades only, credits the gain for the share of `apex_payback_h` it still
+collects, `1 - (walk + build)/H`, with no late term; the builder's walk wage, build wage, lockup and
+flow stay. Measured cause of the low v in that game is NOT settled: printed v / (gain/(m+t)) was
+0.36-0.56 for mexup against 0.71-0.75 for energy, so a value-only multiplier after ValueOf (the policy
+net's builder tilt; the budget lever is shared by both) halves the upgrade too. The `apex: mexup` line
+now carries the breakdown (grow, real, hz, walkC, buildC, lateC, lockC, flowC). Off until an A/B.

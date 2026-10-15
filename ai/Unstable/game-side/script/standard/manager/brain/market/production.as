@@ -1419,6 +1419,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// The all-quiet gate and the block below asked the same six questions, and
 	// each is a walk of the whole def table -- so every one ran twice per order.
 	const float upD = UpDemand();
+	const bool unlockOn = ai.GetTunable("apex_t2con_unlock", TUNE_T2CON_UNLOCK) > 0.f;
 	const float bpGap = BPGap();
 	float armyT0 = ArmyTarget();
 	float armyVal0 = ArmyValue();
@@ -2806,7 +2807,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (unmetB > 0.f)
 				gain += unmetB;
 		}
-		if ((upD > 0.5f) && (reach >= bestExt)) {
+		if (unlockOn && (reach >= bestExt)) {
+			upOnly = mob * UpgradeUnlockM(CeilingConsOwned() + CeilingConsInFlight());
+			if (upOnly > 0.f) {
+				++gUnlockPriced;
+				gUnlockLastM = upOnly;
+			}
+		} else if ((upD > 0.5f) && (reach >= bestExt)) {
 			// The upgrade stream divides among cons who can REACH it -- a
 			// T1 fleet cannot moho anything, so the first T2 con serves
 			// the whole 4x stream alone and prices like it (apexearth,
@@ -2906,7 +2913,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const float v = gain / Catalog::gCostM[d];
 		if (prankNow)
 			prank += "=" + formatFloat(v * 1000.f, "", 0, 2) + "(g" + formatFloat(gain, "", 0, 2)
-				+ ",claim" + formatFloat(claimGain, "", 0, 1) + ",room" + formatFloat(feedRoom, "", 0, 2) + ")";
+				+ ",claim" + formatFloat(claimGain, "", 0, 1) + ",room" + formatFloat(feedRoom, "", 0, 2)
+				+ ",up" + formatFloat(upOnly, "", 0, 1) + ")";
 		candDef.insertLast(d);
 		candV.insertLast(v);
 		candGain.insertLast(gain);

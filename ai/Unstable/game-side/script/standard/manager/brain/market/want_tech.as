@@ -246,10 +246,13 @@ int gMuDiagAt = 0;
 float gMuSurv = -1.f;
 bool gMuAlly = false;
 float gMuRaw = 0.f;
+float gMuGrow = 1.f, gMuReal = 1.f, gMuWalkS = 0.f, gMuWalkC = 0.f, gMuBuildC = 0.f;
+float gMuLateC = 0.f, gMuLockC = 0.f, gMuFlowC = 0.f, gMuHz = 1.f;
 Want@ ProposeMexUp(CCircuitUnit@ unit)
 {
 	Want w;
 	LogUpgradeCons();
+	const bool hzOn = ai.GetTunable("apex_mexup_horizon", TUNE_MEXUP_HORIZON) > 0.f;
 	const int uid = int(unit.circuitDef.id);
 	const array<int>@ builds = Catalog::BuildsOf(uid);
 	const AIFloat3 here = unit.GetPos(ai.frame);
@@ -321,6 +324,7 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 					* (Catalog::gExtractsM[d] - uExt[li]);
 			// See want_mex.as: the raw metal/s, before any premium.
 			const float rawUpM = delta;
+			float growF = 1.f;
 			{
 				// Share of TOTAL economic power, the same denominator the
 				// energy premium uses -- see want_energy.as.
@@ -328,8 +332,8 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 					inc1 = EcoPowerM();
 					incOk = true;
 				}
-				delta *= 1.f + growK
-						* delta / ((inc1 > delta) ? inc1 : delta);
+				growF = 1.f + growK * delta / ((inc1 > delta) ? inc1 : delta);
+				delta *= growF;
 			}
 			// Quadrupling the yield of a spot we cannot hold quadruples
 			// nothing -- the same discount the claim itself takes.
@@ -352,9 +356,12 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			delta *= upBoost;
 			// An upgrade is extraction too: same share, or the discount on
 			// plain mexes would simply be arbitraged into mohos.
-			delta *= MRealizeShare(rawUpM, walkSecU + Catalog::BuildSecondsAt(d, upBP));
+			const float realF = MRealizeShare(rawUpM, walkSecU + Catalog::BuildSecondsAt(d, upBP));
+			delta *= realF;
 			Want c;
-			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c);
+			ValueOf(d, delta, walkSecU, Catalog::gBuildPower[uid], c, true, 0.f, hzOn);
+			if (hzOn)
+				++gMuHzPriced;
 			if (c.value > w.value) {
 				if (deathWalk < 0)
 					deathWalk = DeathWalk(unit, uPos[li]) ? 1 : 0;
@@ -368,6 +375,15 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 				gMuAlly = (li >= nOwn);
 				gMuSurv = surv;
 				gMuRaw = rawUpM;
+				gMuGrow = growF;
+				gMuReal = realF;
+				gMuWalkS = walkSecU;
+				gMuWalkC = gPrLastWalkC;
+				gMuBuildC = gPrLastBuildC;
+				gMuLateC = gPrLastLateC;
+				gMuLockC = gPrLastLockC;
+				gMuFlowC = gPrLastFlow;
+				gMuHz = gPrLastHzShare;
 			}
 		}
 	}
@@ -398,7 +414,13 @@ Want@ ProposeMexUp(CCircuitUnit@ unit)
 			+ " grad=" + formatFloat(GradAt(w.pos), "", 0, 3)
 			+ " loss=" + formatFloat(LossRateAt(w.pos), "", 0, 4)
 			+ " haz=" + formatFloat(HazardWith(w.pos, CoverAt(w.pos)), "", 0, 4)
-			+ " ally=" + (gMuAlly ? 1 : 0) + " busySkips=" + gUpBusySkips);
+			+ " ally=" + (gMuAlly ? 1 : 0) + " busySkips=" + gUpBusySkips
+			// gain = raw x grow x surv x boost x real (x hz); t = walk + build + late + lock + flow (+ disp, risk)
+			+ " | gain=" + formatFloat(w.gain, "", 0, 2) + " grow=" + formatFloat(gMuGrow, "", 0, 2)
+			+ " real=" + formatFloat(gMuReal, "", 0, 2) + " hz=" + formatFloat(gMuHz, "", 0, 2)
+			+ " m=" + int(w.mCost) + " t=" + int(w.tCost) + " walkS=" + int(gMuWalkS)
+			+ " buildS=" + int(w.buildSec) + " walkC=" + int(gMuWalkC) + " buildC=" + int(gMuBuildC)
+			+ " lateC=" + int(gMuLateC) + " lockC=" + int(gMuLockC) + " flowC=" + int(gMuFlowC));
 	}
 	return w;
 }

@@ -210,6 +210,9 @@ const float TUNE_DEF_REFILL = 0.f;
 //   hands can build and afford, not only its own list: beaten on reach and kill
 //   by one, it keeps that share of its price. His 10-14; A/B before default.
 const float TUNE_DEF_TEAM_OBSOLETE = 0.f;
+const float TUNE_T2CON_UNLOCK = 0.f;     // an advanced con is priced by the mex upgrades it brings forward (UpgradeUnlockM), not the room
+const float TUNE_UPGRADE_FIRST = 0.f;    // the oldest advanced hands UpgradeHandsWant licenses take the best upgrade, not guns (roles.as)
+const float TUNE_MEXUP_HORIZON = 0.f;    // a mex upgrade's walk and build cost their share of apex_payback_h, not gain x seconds
 
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought

@@ -205,6 +205,76 @@ bool SoleAdvancedHand(CCircuitUnit@ unit)
 	return advanced <= 1;
 }
 
+// THE UPGRADE HANDS (TUNE_UPGRADE_FIRST; his 10-03 tenet: one T2 con upgrades the mexes first).
+// While our T1 extractors wait, the oldest ceiling hands -- as many as UpgradeHandsWant licenses --
+// take the best upgrade on their list; guns, sensors and supers leave it, the economy stays behind
+// it for a refused upgrade. Not while their army is at our base (UpgradesFirst's own exception).
+int gUhAt = -1;
+array<int> gUhIds;
+int gUhHeld = 0;
+int gUhNoUp = 0;
+int gUhContested = 0;
+int gUhOn = -1;
+bool UpgradeHandHold(CCircuitUnit@ unit, array<Want@>@ ranked)
+{
+	if (gUhOn < 0)
+		gUhOn = (ai.GetTunable("apex_upgrade_first", TUNE_UPGRADE_FIRST) > 0.f) ? 1 : 0;
+	if (gUhOn == 0)
+		return false;
+	if (!ReachesCeiling(int(unit.circuitDef.id)) || unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+		return false;
+	if (gUhAt != ai.frame) {
+		gUhAt = ai.frame;
+		gUhIds.resize(0);
+		const int n = UpgradeHandsWant();
+		if (n > 0) {
+			for (uint i = 0; i < gWorkers.length(); ++i) {
+				CCircuitUnit@ u = gWorkers[i];
+				if ((u !is null) && ReachesCeiling(int(u.circuitDef.id))
+						&& !u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+					gUhIds.insertLast(int(u.id));
+			}
+			gUhIds.sortAsc();
+			if (int(gUhIds.length()) > n)
+				gUhIds.resize(uint(n));
+		}
+	}
+	if (gUhIds.find(int(unit.id)) < 0)
+		return false;
+	if (Military::BaseContested() || FoeGroupAtHome()) {
+		++gUhContested;
+		return false;
+	}
+	bool hasUp = false;
+	for (uint i = 0; (i < ranked.length()) && !hasUp; ++i)
+		hasUp = (ranked[i].kind == WK_MEXUP);
+	if (!hasUp) {
+		++gUhNoUp;
+		return false;
+	}
+	for (uint i = 0; i < ranked.length(); ) {
+		const int k = ranked[i].kind;
+		if ((k == WK_MEXUP) || (k == WK_MEX) || (k == WK_RECLAIM) || (k == WK_ENERGY) || (k == WK_GEO)
+				|| (k == WK_CONVERT) || (k == WK_ASSIST) || (k == WK_STORE) || (k == WK_NANO)) {
+			++i;
+			continue;
+		}
+		ranked.removeAt(i);
+	}
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if (ranked[i].kind != WK_MEXUP)
+			continue;
+		if (i > 0) {
+			Want@ up = ranked[i];
+			ranked.removeAt(i);
+			ranked.insertAt(0, up);
+		}
+		break;
+	}
+	++gUhHeld;
+	return true;
+}
+
 int ConRoleOf(CCircuitUnit@ unit)
 {
 	const int id = int(unit.id);

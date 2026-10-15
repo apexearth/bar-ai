@@ -107,6 +107,21 @@ PANELS = [
             ("TUNE_MEXUP_BOOST", "what a mex UPGRADE's extra metal stream is "
              "worth over its honest arithmetic -- raise to make advanced cons "
              "upgrade extractors before energy and assist"),
+            ("TUNE_T2CON_UNLOCK", "ON prices an advanced constructor by the "
+             "extractor upgrades it brings forward -- the waiting upgrades, "
+             "their walk and build time, and how many advanced hands already "
+             "work them -- instead of by spare build power, so a seat at T2 "
+             "with T1 mexes makes the hands to upgrade them. apex: mexup-stat "
+             "each minute"),
+            ("TUNE_UPGRADE_FIRST", "ON keeps our oldest advanced constructors "
+             "(as many as the waiting upgrades are worth) on extractor "
+             "upgrades while any T1 mex waits: towers, radar and supers leave "
+             "their list. Not while the enemy army is at our base. "
+             "apex: mexup-stat 'upfirst held'"),
+            ("TUNE_MEXUP_HORIZON", "ON makes a far extractor upgrade lose "
+             "only the share of the payback horizon its walk and build take, "
+             "so a 1-2 minute walk no longer prices it below a fusion at "
+             "home. apex: mexup line shows the cost breakdown"),
             ("TUNE_DUP_BP_SUBST", "prices a SECOND lab's throughput against "
              "nano turrets on the first, which are ~9x the build power per "
              "metal. On, a duplicate line only wins when no line is short of "
@@ -1264,6 +1279,14 @@ GOALS = [
             {"ref": "TUNE_PAYBACK_H", "dir": "up",
              "note": "a longer payback horizon favours big compounding builds "
                      "(fusion, moho) over small immediate ones"},
+            {"ref": "TUNE_T2CON_UNLOCK", "dir": "up",
+             "note": "a seat at T2 makes the advanced constructors its T1 mexes "
+                     "are waiting for (his 10-15)"},
+            {"ref": "TUNE_UPGRADE_FIRST", "dir": "up",
+             "note": "the first advanced constructors upgrade the mexes before "
+                     "towers (his 10-03 / 10-15)"},
+            {"ref": "TUNE_MEXUP_HORIZON", "dir": "up",
+             "note": "a far mex upgrade is no longer priced out by its walk"},
         ],
         "watch": "python tools/composition.py <tournament> — mex count, mex "
                  "upgrades and metal produced. If mex upgrades fall while metal "

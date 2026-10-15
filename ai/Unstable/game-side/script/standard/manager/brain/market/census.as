@@ -496,6 +496,8 @@ void NoteFinished(CCircuitUnit@ unit)
 	}
 	if (i >= 0)
 		gLExtract[i] = Catalog::gExtractsM[defId];
+	if (Catalog::gExtractsM[defId] >= BestExtract())
+		++gMuTopDone;
 }
 // Fallback anchor: the first finished nano, only if no plan latched first.
 array<AIFloat3> gOwnNanoPos;

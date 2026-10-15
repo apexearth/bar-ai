@@ -76,9 +76,90 @@ float UpDemand()
 	float d = 0.f;
 	for (uint i = 0; i < gLSpot.length(); ++i) {
 		if (gLExtract[i] > 0.f)
-			d += gLIncome[i] * IncomeMult() * (ceil - gLExtract[i]);
+			d += UpgradeGainM(i, ceil);
 	}
 	return (d > 0.f) ? d : 0.f;
+}
+
+// One held extractor's upgrade to `ext`, in metal/s.
+float UpgradeGainM(uint li, float ext)
+{
+	return gLIncome[li] * IncomeMult() * (ext - gLExtract[li]);
+}
+
+// THE UPGRADES A CEILING HAND UNLOCKS, in metal (TUNE_T2CON_UNLOCK). UpgradeHandsWant's own model:
+// the first hand brings the waiting stream U, landing on average half the backlog's work from now,
+// over the payback horizon; hand h+1 brings it forward by B*t*U/(2h(h+1)). Spots already under
+// upgrade are not waiting.
+int gUnlockAt = -1000;
+int gUnlockB = 0;
+float gUnlockU = 0.f;
+int gUnlockPriced = 0;
+float gUnlockLastM = 0.f;
+float UpgradeUnlockM(int h)
+{
+	if (UpgradeHandsWant() <= 0)
+		return 0.f;
+	if (ai.frame - gUnlockAt >= 5 * SECOND) {
+		gUnlockAt = ai.frame;
+		gUnlockB = 0;
+		gUnlockU = 0.f;
+		const float ceil = BestExtract();
+		for (uint i = 0; i < gLSpot.length(); ++i) {
+			if ((gLExtract[i] > 0.f) && (gLExtract[i] < ceil) && !UpgradeUnderway(gLPos[i])) {
+				gUnlockU += UpgradeGainM(i, ceil);
+				++gUnlockB;
+			}
+		}
+	}
+	if ((gUnlockB <= 0) || (gUnlockU <= 0.f) || (gUpHandsT <= 0.f))
+		return 0.f;
+	const float work = float(gUnlockB) * gUpHandsT;
+	if (h <= 0) {
+		const float hz = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+		const float left = ((hz > 1.f) ? hz : 900.f) - 0.5f * work;
+		return (left > 0.f) ? (gUnlockU * left) : 0.f;
+	}
+	return work * gUnlockU / (2.f * float(h) * float(h + 1));
+}
+
+// ONE LINE A MINUTE ON THE UPGRADE BACKLOG AND THE THREE SWITCHES.
+int gMuStatAt = 0;
+int gMuStarted = 0;
+int gMuTopDone = 0;
+int gMuHzPriced = 0;
+void MexUpStat()
+{
+	if (ai.frame < gMuStatAt)
+		return;
+	gMuStatAt = ai.frame + 60 * SECOND;
+	const float ceil = BestExtract();
+	int held = 0, low = 0, busy = 0;
+	for (uint i = 0; i < gLSpot.length(); ++i) {
+		if (gLExtract[i] <= 0.f)
+			continue;
+		++held;
+		if (gLExtract[i] < ceil) {
+			++low;
+			if (UpgradeUnderway(gLPos[i]))
+				++busy;
+		}
+	}
+	AiLog(Factory::T() + "apex: mexup-stat t=" + ai.teamId + " held=" + held + " t1=" + low
+		+ " upgradable=" + (low - busy) + " underway=" + busy
+		+ " taken=" + gMuStarted + " topDone=" + gMuTopDone
+		+ " adv=" + CeilingConsOwned() + " advInFlight=" + CeilingConsInFlight()
+		+ " upHands=" + UpgradeHandsWant()
+		+ " | unlock priced=" + gUnlockPriced + " lastM=" + int(gUnlockLastM)
+		+ " | upfirst held=" + gUhHeld + " noUp=" + gUhNoUp + " contested=" + gUhContested
+		+ " | horizon priced=" + gMuHzPriced);
+	gMuStarted = 0;
+	gMuTopDone = 0;
+	gUnlockPriced = 0;
+	gUhHeld = 0;
+	gUhNoUp = 0;
+	gUhContested = 0;
+	gMuHzPriced = 0;
 }
 
 // HANDS FOR THE UPGRADES (apexearth 2026-09-30: "we got to 500 really fast and
@@ -125,10 +206,15 @@ int UpgradeHandsWant()
 	}
 	array<AIFloat3> todo;
 	float u = 0.f;
+	// gLSpot is the spot's id: as an AIFloat3 it is (id,id,id), and the walk below read ~0.
+	const bool realWalk = ai.GetTunable("apex_t2con_unlock", TUNE_T2CON_UNLOCK) > 0.f;
 	for (uint i = 0; i < gLSpot.length(); ++i) {
 		if ((gLExtract[i] > 0.f) && (gLExtract[i] < ceil)) {
-			todo.insertLast(gLSpot[i]);
-			u += gLIncome[i] * IncomeMult() * (ceil - gLExtract[i]);
+			if (realWalk)
+				todo.insertLast(gLPos[i]);
+			else
+				todo.insertLast(gLSpot[i]);
+			u += UpgradeGainM(i, ceil);
 		}
 	}
 	const int b = int(todo.length());
@@ -1073,6 +1159,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 {
 	Want w;
 	MexDiag();
+	MexUpStat();
 	const int uid = int(unit.circuitDef.id);
 	const AIFloat3 here = unit.GetPos(ai.frame);
 	const double _tPk = Perf::T0();

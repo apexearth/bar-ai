@@ -2046,6 +2046,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			coverPush = true;
 		}
 	}
+	// Ahead of the gun hoists, the roles and the draw: coverPush is the flag that skips them.
+	if (!aaPanic && !superPush && !convertPush && !coverPush && UpgradeHandHold(unit, ranked)) {
+		why = "uphand";
+		coverPush = true;
+	}
 	// EVERY EXTRACTOR HAS A GUN IN REACH (apexearth 2026-10-02: "make sure each
 	// one has some level of coverage ... as long as there's one covering at
 	// least every mex"). The push below only fires for a hand already standing
@@ -2793,6 +2798,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				Perf::Add("xk." + KindName(ranked[i].kind), _tExec);
 		}
 		if (t !is null) {
+			if (ranked[i].kind == WK_MEXUP)
+				++gMuStarted;
 			// The execution just changed the counts that priced this kind --
 			// every cached answer of it is stale now, whoever asked.
 			MemoEvictKind(ranked[i].kind, (ranked[i].kind == WK_MEX) ? ranked[i].spotId : -1);

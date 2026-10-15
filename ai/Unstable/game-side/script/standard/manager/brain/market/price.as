@@ -697,8 +697,13 @@ int gMStallLogAt = 0;
 float gPrLastDisp = 0.f;   // the last ValueOf's terms, for the convprice line
 float gPrLastRisk = 0.f;
 float gPrLastFlow = 0.f;
+float gPrLastWalkC = 0.f;
+float gPrLastBuildC = 0.f;
+float gPrLastLateC = 0.f;
+float gPrLastLockC = 0.f;
+float gPrLastHzShare = 1.f;
 float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
-		bool lateStart = true, float riskM = 0.f)
+		bool lateStart = true, float riskM = 0.f, bool horizonLate = false)
 {
 	PrTuneFill();
 	float buildSec = Catalog::BuildSecondsAt(defId, EffBP(builderBP));
@@ -818,7 +823,12 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 			+ float(Catalog::gAreaCells[defId])
 				* gPrSpaceM;
 	const float wageNow = Wage();
-	w.tCost = walkSec * WalkRateWith(builderBP, wageNow) * gVwWalk + buildSec * wageNow * gVwBuild
+	gPrLastWalkC = walkSec * WalkRateWith(builderBP, wageNow) * gVwWalk;
+	gPrLastBuildC = buildSec * wageNow * gVwBuild;
+	gPrLastLateC = 0.f;
+	gPrLastLockC = 0.f;
+	gPrLastHzShare = 1.f;
+	w.tCost = gPrLastWalkC + gPrLastBuildC
 			+ displacedM * gVwDisp
 			+ riskM;   // the builder's expected loss on the trip, see TripRisk
 	// THE INCOME THE WALK ITSELF FORGOES (apexearth: "the cost in that walk
@@ -831,8 +841,19 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// The build delays the stream exactly as the walk does: a nine-minute
 	// reactor paid one builder's wage for its build and outbid a fusion that
 	// would have been producing for eight of those minutes.
-	if (lateStart)
-		w.tCost += gain * (walkSec + (gPrLateBuild ? buildSec : 0.f)) * gVwLate;
+	// horizonLate: the stream runs for what is left of the payback horizon, so the delay costs that
+	// share of the gain -- gain x seconds in the bill drove a moho 1-2 min out to v=1/walk whatever it paid.
+	if (lateStart) {
+		const float lateS = walkSec + (gPrLateBuild ? buildSec : 0.f);
+		if (horizonLate && (gPrPaybackH > 1.f)) {
+			gPrLastHzShare = (lateS < gPrPaybackH) ? (1.f - lateS / gPrPaybackH) : 0.f;
+			gain *= gPrLastHzShare;
+			w.gain = gain;
+		} else {
+			gPrLastLateC = gain * lateS * gVwLate;
+			w.tCost += gPrLastLateC;
+		}
+	}
 	// THE OPTIONS A LONG BUILD COSTS YOU. apexearth: "during that entire time
 	// you're making an AFUS you can afford military better and protect
 	// yourself. You're giving yourself options... you can put a little bit
@@ -848,8 +869,10 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	{
 		const float H = gPrPaybackH;
 		const float k = gPrLockup;
-		if ((H > 1.f) && (k > 0.f))
-			w.tCost += Catalog::gCostM[defId] * (buildSec / H) * k;
+		if ((H > 1.f) && (k > 0.f)) {
+			gPrLastLockC = Catalog::gCostM[defId] * (buildSec / H) * k;
+			w.tCost += gPrLastLockC;
+		}
 	}
 	// The FLOW bill (apexearth 2026-08-23): this build's E drain is a rate,
 	// costE/buildSec, and any part of it that income + the bank cannot fund
