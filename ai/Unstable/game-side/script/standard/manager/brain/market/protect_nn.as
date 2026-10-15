@@ -370,6 +370,84 @@ void DsSiteFeatures(int d, const AIFloat3& in s, bool present, float pv, const A
 	f.insertLast(s.distance2D(ruleAt));
 }
 
+// A MOVED SITE IS PRICED WHERE IT WILL BE BUILT (his 10-15 watch: the site net
+// sent the commander's own LLT 4,450 elmos off, priced at his feet).
+int gSmMoves = 0, gSmKept = 0, gSmReverted = 0, gSmDropped = 0, gSmLeash = 0, gSmLogAt = 0;
+float gSmMaxWalkS = 0.f;
+
+// The want's value at `at` by the market's own terms; gain is the site's pull, so only the
+// road, the trip and the exposure move.
+float SmValueAt(Want@ w, CCircuitUnit@ unit, const AIFloat3& in at)
+{
+	const int ud = int(unit.circuitDef.id);
+	const bool air = unit.circuitDef.IsAbleToFly();
+	const float lossH = ai.GetTunable("apex_exposed_loss_s", TUNE_EXPOSED_LOSS_S);
+	const float frameK = ai.GetTunable("apex_frame_risk", TUNE_FRAME_RISK);
+	Want c;
+	c.kind = w.kind;
+	@c.def = w.def;
+	c.spotId = w.spotId;
+	c.posted = w.posted;
+	c.pos = at;
+	c.buildSec = w.buildSec;
+	const float gain = w.gain + ExposeCharge(w, w.pos, air, Catalog::gCostM[ud], lossH, frameK);
+	ValueOf(int(w.def.id), gain, WalkSecTo(unit, at), Catalog::gBuildPower[ud], c, w.spotId != PROT_DEF);
+	c.gain -= ExposeCharge(c, at, air, Catalog::gCostM[ud], lossH, frameK);
+	c.value = (c.gain > 0.f) ? (c.gain / (c.mCost + c.tCost)) : 0.f;
+	ChargeTrip(c, unit);
+	return c.value;
+}
+
+// Whether the move from w.pos to `at` stands. A want that out-valued its runner-up may lose
+// value down to it; one that won by hoist or draw may not lose value at all.
+bool SiteMoveKeeps(Want@ w, CCircuitUnit@ unit, const AIFloat3& in at, bool net)
+{
+	if (w.def is null)
+		return true;
+	++gSmMoves;
+	string verdict = "keep";
+	float v = w.value, bar = w.value;
+	if (ComLeashed(unit, w, at)) {
+		++gSmLeash;
+		verdict = "leash";
+	} else {
+		const float v0 = SmValueAt(w, unit, w.pos);
+		const float v1 = SmValueAt(w, unit, at);
+		v = (v0 > 0.f) ? (w.value * v1 / v0) : v1;
+		if ((gExecRunnerV >= 0.f) && (gExecRunnerV < bar))
+			bar = gExecRunnerV;
+		if (v < bar) {
+			verdict = net ? "revert" : "drop";
+			if (net)
+				++gSmReverted;
+			else
+				++gSmDropped;
+		} else {
+			++gSmKept;
+			const float extra = WalkSecTo(unit, at) - WalkSecTo(unit, w.pos);
+			if (extra > gSmMaxWalkS)
+				gSmMaxWalkS = extra;
+		}
+	}
+	if ((verdict != "keep") && (ai.frame >= gSmLogAt)) {
+		gSmLogAt = ai.frame + 5 * SECOND;
+		AiLog("apex: sitemove t=" + ai.teamId + " " + unit.circuitDef.GetName() + " #" + unit.id
+			+ " " + w.def.GetName() + " by=" + (net ? "net" : "rule") + " " + verdict
+			+ " from=" + int(w.pos.x) + "," + int(w.pos.z) + " to=" + int(at.x) + "," + int(at.z)
+			+ " walkS=" + int(WalkSecTo(unit, w.pos)) + ">" + int(WalkSecTo(unit, at))
+			+ " v=" + NnF(v * 1000.f, 2) + " was=" + NnF(w.value * 1000.f, 2) + " bar=" + NnF(bar * 1000.f, 2)
+			+ " why=" + gExecWhy);
+	}
+	return verdict == "keep";
+}
+
+void SiteMoveStat()
+{
+	AiLog(Factory::T() + "apex: sitemove-stat t=" + ai.teamId + " moves=" + gSmMoves + " kept=" + gSmKept
+		+ " reverted=" + gSmReverted + " dropped=" + gSmDropped + " leash=" + gSmLeash
+		+ " maxWalkS=" + int(gSmMaxWalkS));
+}
+
 // The site this ground gun goes to: the rule's unless the head draws another.
 AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 {
@@ -388,7 +466,10 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 		}
 		if ((gDsMemoDef[i] == d) && (gDsMemoRule[i].distance2D(w.pos) < 300.f)) {
 			++gDsMemoN;
-			return (gDsMemoAt[i].distance2D(gDsMemoRule[i]) < 1.f) ? w.pos : gDsMemoAt[i];
+			const AIFloat3 ms = gDsMemoAt[i];
+			if ((ms.distance2D(gDsMemoRule[i]) < 1.f) || !SiteMoveKeeps(w, unit, ms, true))
+				return w.pos;
+			return ms;
 		}
 	}
 	const double t0 = ai.ClockUs();
@@ -460,6 +541,13 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 				break;
 		}
 	}
+	// The net's pick holds for the next hand in the memo; this hand builds what it can afford to reach.
+	const AIFloat3 netAt = at[c];
+	if ((c != DS_RULE) && !SiteMoveKeeps(w, unit, netAt, true)) {
+		c = DS_RULE;
+		if (flat <= 0.f)
+			NnOneHot(p, c);
+	}
 	array<string> names = {"RULE", "WALL", "MEXG", "FRONT", "FLANK", "FORT", "LEAK"};
 	AiLog(EcoLine("nndefsite", "RULE", flat > 0.f, trust, st, f, names, wt, p, c, "exec"));
 	++gDsDecN;
@@ -469,7 +557,7 @@ AIFloat3 DefSitePick(Want@ w, CCircuitUnit@ unit)
 	KoNoteSited(site);
 	gDsMemoDef.insertLast(d);
 	gDsMemoRule.insertLast(w.pos);
-	gDsMemoAt.insertLast(site);
+	gDsMemoAt.insertLast(netAt);
 	gDsMemoUntil.insertLast(ai.frame + DS_HOLD);
 	gBwF.insertLast(ai.frame);
 	gBwOpt.insertLast(c);
@@ -690,6 +778,7 @@ void UpdateDefNet()
 			+ " gunp=" + NnF(gGunpMul, 2)
 			+ " siteDec=" + gDsDecN + " siteOv=" + gDsOvN + " memo=" + gDsMemoN
 			+ " siteUs=" + int((gDsDecN > 0) ? gDsUs / float(gDsDecN) : 0.f) + " watch=" + gBwF.length() + DefTypeStat());
+		SiteMoveStat();
 	}
 }
 
