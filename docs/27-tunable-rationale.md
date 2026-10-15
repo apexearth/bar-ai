@@ -3589,3 +3589,19 @@ and the other seats already drop it from their parity and answer shares (`TV_ECO
 `apex: ecoseat-stat` once a minute on the seat, also with the switch off as the control: P/target,
 ramp, job shares, towerM/armyM ordered while growing (minute/total), refused by kind, facRefused.
 Off until an A/B.
+### `TUNE_ASSIST_ECO` = 0.f
+
+10-15, same-seed 4v4 Carrot Mountains (army-smoke wdobs1, frames > 45000): of 324 priced-assist
+elections by basic hands, the median gain was 0.00 and the 90th percentile 0.28; another 124 were the
+factory guard's flat floor (gain 0.08). Towers won the draw "over nothing" at v=2.5. Two causes in
+`ProposeAssist`: the target is `BestJobBoss`'s, which ranks jobs by the value-per-cost the market paid
+divided by hands on site, so a cheap tower outranks a fusion (v 0.9-8 with three hands on it); and the
+hand's drain is capped at `FreeMetalFlow`, near zero while the economy spends what it makes. A fusion
+then in flight carried gain 65-86 m/s. ON adds `AssistEcoPick`: every economy frame in flight (energy,
+geo, converter, storage, mex, upgrade, tech, plant, a super that builds) is priced at its recorded gain
+times the seconds this hand's full drain saves it, `G * R*d/(B*(B+d)) / apex_payback_h`, with R net of
+what lands during the walk and d bounded by the crew `SiteWorkerCap` lets the site absorb; the best
+offer replaces the priced assist when it is worth more. The list is rebuilt once a second from the
+priced jobs; a taken offer adds its hand to the cached crew. `apex: assisteco-stat` each minute
+(offered/won/taken by kind, mean value against the best non-assist want, towers beaten). Off until an
+A/B.

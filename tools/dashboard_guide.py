@@ -122,6 +122,11 @@ PANELS = [
              "only the share of the payback horizon its walk and build take, "
              "so a 1-2 minute walk no longer prices it below a fusion at "
              "home. apex: mexup line shows the cost breakdown"),
+            ("TUNE_ASSIST_ECO", "ON lets any constructor help the economy "
+             "buildings already rising -- fusions, advanced converters, mex "
+             "upgrades, the T2 lab, the gantry -- priced by how much sooner "
+             "its build power finishes them, so late basic constructors join "
+             "those instead of laying towers. apex: assisteco-stat each minute"),
             ("TUNE_DUP_BP_SUBST", "prices a SECOND lab's throughput against "
              "nano turrets on the first, which are ~9x the build power per "
              "metal. On, a duplicate line only wins when no line is short of "
@@ -1320,6 +1325,9 @@ GOALS = [
             {"ref": "TUNE_ECO_SEAT_STRICT", "dir": "up",
              "note": "the 8v8 eco player spends its hands and labs on economy "
                      "only until it reaches its target (his 10-15)"},
+            {"ref": "TUNE_ASSIST_ECO", "dir": "up",
+             "note": "late basic constructors help finish fusions, converters "
+                     "and upgrades instead of building towers (his 10-15)"},
         ],
         "watch": "python tools/composition.py <tournament> — mex count, mex "
                  "upgrades and metal produced. If mex upgrades fall while metal "

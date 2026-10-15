@@ -818,6 +818,14 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			gAssistTargetId = gDjTargetId;
 			gAssistGuardS = gDjGuardS;
 		}
+		if (IsAssistEco(w)) {
+			CCircuitUnit@ eb = ai.GetTeamUnit(Id(w.spotId));
+			if (eb is null)
+				return null;
+			@gAssistTarget = eb;
+			gAssistTargetId = eb.id;
+			gAssistGuardS = w.assistEcoS;
+		}
 		// The ID, never the handle, decides whether this is still the boss
 		// the want priced -- reading .id off a destroyed unit IS the crash
 		// this pattern causes (see gAssistTargetId).

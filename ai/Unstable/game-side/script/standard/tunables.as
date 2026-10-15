@@ -227,6 +227,7 @@ const float TUNE_REZ_LIFE = 0.f;
 const float TUNE_T2CON_UNLOCK = 0.f;     // an advanced con is priced by the mex upgrades it brings forward (UpgradeUnlockM), not the room
 const float TUNE_UPGRADE_FIRST = 0.f;    // the oldest advanced hands UpgradeHandsWant licenses take the best upgrade, not guns (roles.as)
 const float TUNE_MEXUP_HORIZON = 0.f;    // a mex upgrade's walk and build cost their share of apex_payback_h, not gain x seconds
+const float TUNE_ASSIST_ECO = 0.f;       // an assist on an economy frame is priced at the frame's gain x the seconds this hand saves it (want_assist.as)
 
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought

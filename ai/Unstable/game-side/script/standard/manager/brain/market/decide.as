@@ -790,7 +790,7 @@ Want@ ProposeStep(int step, CCircuitUnit@ unit)
 	else if (step == 10) { @w = ProposeReclaimBlocker(unit);  Perf::Add("want.reclblk", _t); }
 	else if (step == 11) { @w = ProposeReclaimPenned(unit);   Perf::Add("want.reclpen", _t); }
 	else if (step == 12) { @w = ProposeReclaimSquatter(unit); Perf::Add("want.reclsqt", _t); }
-	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, ProposeAssist(unit));  Perf::Add("want.assist", _t); }
+	else if (step == 13) { if (!OutForUpgrades(unit)) @w = ProposeFactoryGuard(unit, AssistEcoPick(unit, ProposeAssist(unit)));  Perf::Add("want.assist", _t); }
 	else if (step == 14) {
 		if (!EcoOnly()) {
 			@w = MemoPropose(5, unit);
@@ -1386,7 +1386,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 		// effectively argmax.
 		float sh = sharp;
 		float bite = 0.f;
-		if ((bitCap > 1.f) && (ranked[catBest[c]].def !is null))
+		if ((bitCap > 1.f) && (ranked[catBest[c]].def !is null) && !IsAssistEco(ranked[catBest[c]]))
 			bite = ranked[catBest[c]].def.costM / bitCap;
 		// The hand's time is the other thing a wrong draw spends: a 1,984-metal
 		// geo read a 4% bite and took the only T2 con for five minutes over a
@@ -1637,7 +1637,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		Want@ c = wants[i];
 		if ((c is null) || (c.value <= 0.f) || (c.def is null))
 			continue;
-		if (c.def.IsMobile() || !OnMap(c.pos))
+		// An eco assist's def is the frame it joins, whose own price already paid this.
+		if (c.def.IsMobile() || !OnMap(c.pos) || IsAssistEco(c))
 			continue;
 		// A def we RETIRED ON PURPOSE is not re-bought at full price while
 		// the window runs -- applied here so every buyer (plant, tech, super,
@@ -2833,7 +2834,11 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			MemoEvictKind(ranked[i].kind, (ranked[i].kind == WK_MEX) ? ranked[i].spotId : -1);
 			// Price tag on the job, so idle hands can later rank what is in
 			// flight by what the market paid for it (floor.as).
-			NoteJob(t, ranked[i]);
+			// An eco assist's join returns the frame's own task: its price stays the frame's.
+			if (IsAssistEco(ranked[i]))
+				AssistEcoTaken(ranked[i], ranked);
+			else
+				NoteJob(t, ranked[i]);
 			EcoSeatNoteJob(ranked[i]);
 			StepWon(unit, ranked[i]);
 			DefRoleExecuted(unit, ranked[i]);

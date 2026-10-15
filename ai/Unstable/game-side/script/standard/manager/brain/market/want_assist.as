@@ -417,6 +417,250 @@ Want@ ProposeAssist(CCircuitUnit@ unit)
 	return w;
 }
 
+// THE ECONOMY BUILD A HAND SPEEDS (TUNE_ASSIST_ECO). The priced assist above
+// joins the job BestJobBoss ranks by value per cost per hand -- a cheap tower
+// beats a fusion there -- and bounds the hand by FreeMetalFlow, which a
+// spending economy holds near zero: late basic hands priced it ~0 and laid
+// towers. Here each economy frame in flight is offered at its own gain times
+// the seconds this hand's drain saves it (the arithmetic above), bounded by
+// the crew the site can absorb (SiteWorkerCap).
+bool AssistEcoOn() { return ai.GetTunable("apex_assist_eco", TUNE_ASSIST_ECO) > 0.f; }
+
+array<IUnitTask@> gAeTask;
+array<int> gAeKind;
+array<float> gAeG;
+array<float> gAeR;
+array<float> gAeRing;
+array<int> gAeHands;
+array<int> gAeCap;
+array<bool> gAeBasicCan;
+array<bool> gAeField;
+array<AIFloat3> gAePos;
+int gAeBuiltAt = -1;
+
+bool AeEcoKind(int k, int d)
+{
+	if ((k == WK_ENERGY) || (k == WK_GEO) || (k == WK_CONVERT) || (k == WK_MEX)
+		|| (k == WK_MEXUP) || (k == WK_TECH) || (k == WK_PLANT) || (k == WK_STORE))
+		return true;
+	return (k == WK_SUPER) && Catalog::ValidId(d) && (Catalog::gBuildsList[d].length() > 0);
+}
+
+// Our economy frames in flight, once a second.
+void AssistEcoList()
+{
+	if ((gAeBuiltAt >= 0) && (ai.frame < gAeBuiltAt + SECOND))
+		return;
+	gAeBuiltAt = ai.frame;
+	JobSweep();
+	gAeTask.resize(0); gAeKind.resize(0); gAeG.resize(0); gAeR.resize(0);
+	gAeRing.resize(0); gAeHands.resize(0); gAeCap.resize(0); gAeBasicCan.resize(0);
+	gAeField.resize(0); gAePos.resize(0);
+	for (uint i = 0; i < gJobTask.length(); ++i) {
+		IUnitTask@ t = gJobTask[i];
+		if ((t is null) || t.IsDead() || (t.GetType() != Task::Type::BUILDER)
+			|| (t.buildDef is null) || (gJobGain[i] <= 0.f))
+			continue;
+		const int d = int(t.buildDef.id);
+		if (!AeEcoKind(gJobKind[i], d))
+			continue;
+		const uint workers = Requests::Workers(t);
+		if ((workers == 0) && (t.target is null))
+			continue;   // nobody there and no frame: nothing to lathe yet
+		const AIFloat3 bp = t.GetBuildPos();
+		if (!OnMap(bp))
+			continue;
+		float R = Catalog::gCostM[d] * (1.f - Requests::Progress(t));
+		if (R < 1.f)
+			continue;
+		gAeTask.insertLast(t);
+		gAeKind.insertLast(gJobKind[i]);
+		gAeG.insertLast(gJobGain[i]);
+		gAeR.insertLast(R);
+		gAeRing.insertLast(NanoLatheReaching(bp));
+		int hands = int(workers) + GuardsOnJob(t);
+		if (t.target !is null) {
+			for (uint g = 0; g < gGuardBId.length(); ++g) {
+				if (gGuardBId[g] == t.target.id)
+					++hands;
+			}
+		}
+		gAeHands.insertLast(hands);
+		gAeCap.insertLast(int(Requests::SiteWorkerCap(t.buildDef)));
+		gAeBasicCan.insertLast(!ReachesCeiling(d) && BasicHandCan(d));
+		gAeField.insertLast(FieldSite(bp));
+		gAePos.insertLast(bp);
+	}
+}
+
+int gAeOffered = 0, gAeWon = 0, gAeTaken = 0, gAeTowersBeat = 0, gAeListN = 0;
+float gAeOfferV = 0.f, gAeTakenV = 0.f, gAeAltV = 0.f;
+array<int> gAeOfferK(WK_TEETH + 1);
+array<int> gAeTakenK(WK_TEETH + 1);
+int gAeStatAt = 0;
+
+void AssistEcoStat()
+{
+	if (ai.frame < gAeStatAt)
+		return;
+	gAeStatAt = ai.frame + 60 * SECOND;
+	string byOff = "", byTak = "";
+	for (int k = 0; k <= WK_TEETH; ++k) {
+		if (gAeOfferK[k] > 0)
+			byOff += " " + KindName(k) + "=" + gAeOfferK[k];
+		if (gAeTakenK[k] > 0)
+			byTak += " " + KindName(k) + "=" + gAeTakenK[k];
+		gAeOfferK[k] = 0;
+		gAeTakenK[k] = 0;
+	}
+	AiLog(Factory::T() + "apex: assisteco-stat t=" + ai.teamId + " frames=" + gAeListN
+		+ " offered=" + gAeOffered + " won=" + gAeWon + " taken=" + gAeTaken
+		+ " vOffer=" + formatFloat((gAeOffered > 0) ? 1000.f * gAeOfferV / gAeOffered : 0.f, "", 0, 2)
+		+ " vTaken=" + formatFloat((gAeTaken > 0) ? 1000.f * gAeTakenV / gAeTaken : 0.f, "", 0, 2)
+		+ " vAlt=" + formatFloat((gAeTaken > 0) ? 1000.f * gAeAltV / gAeTaken : 0.f, "", 0, 2)
+		+ " towersBeat=" + gAeTowersBeat + " |offer" + byOff + " |taken" + byTak);
+	gAeOffered = 0; gAeWon = 0; gAeTaken = 0; gAeTowersBeat = 0;
+	gAeOfferV = 0.f; gAeTakenV = 0.f; gAeAltV = 0.f;
+}
+
+bool IsAssistEco(Want@ w)
+{
+	return (w !is null) && (w.kind == WK_ASSIST) && (w.assistEcoS > 0);
+}
+
+Want@ AssistEcoPick(CCircuitUnit@ unit, Want@ priced)
+{
+	if (!AssistEcoOn())
+		return priced;
+	AssistEcoStat();
+	AssistEcoList();
+	gAeListN = int(gAeTask.length());
+	if (gAeTask.length() == 0)
+		return priced;
+	const int uid = int(unit.circuitDef.id);
+	const bool isComm = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask);
+	const bool ceil = ReachesCeiling(uid);
+	const bool homeCrew = CrewSplitOn() && !CrewIsField(unit) && !isComm;
+	const float myDrain = Catalog::gBuildPower[uid] * (7.f / 80.f);
+	if (myDrain <= 0.f)
+		return priced;
+	const AIFloat3 here = unit.GetPos(ai.frame);
+	const float speed = Catalog::gSpeed[uid];
+	float H = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	if (H < 1.f)
+		H = 900.f;
+	const float wage = Wage();
+	array<float> val(gAeTask.length());
+	array<float> gn(gAeTask.length());
+	array<float> tc(gAeTask.length());
+	array<float> occ(gAeTask.length());
+	for (uint i = 0; i < gAeTask.length(); ++i) {
+		val[i] = 0.f;
+		IUnitTask@ t = gAeTask[i];
+		if (t.IsDead() || (t is unit.task) || (gAeHands[i] >= gAeCap[i]))
+			continue;
+		if (homeCrew && gAeField[i])
+			continue;
+		if (ceil && gAeBasicCan[i])
+			continue;   // a ceiling hand leaves to basic hands what they can do
+		if ((t.target is null) && !unit.circuitDef.CanBuild(t.buildDef))
+			continue;
+		if (isComm && ComFar(gAePos[i]))
+			continue;
+		float d = myDrain;
+		const float room = float(gAeCap[i] - gAeHands[i]) * Requests::DRAIN;
+		if (room < d)
+			d = room;
+		const float B = float((gAeHands[i] > 0) ? gAeHands[i] : 1) * Requests::DRAIN + gAeRing[i];
+		const float walkSec = (speed > 1.f) ? (here.distance2D(gAePos[i]) / speed) : 60.f;
+		const float R = gAeR[i] - B * walkSec;
+		if (R <= 0.f)
+			continue;   // it lands before this hand arrives
+		const float savedSec = R * d / (B * (B + d));
+		occ[i] = R / (B + d);
+		gn[i] = gAeG[i] * savedSec / H;
+		tc[i] = (walkSec + occ[i]) * wage;
+		val[i] = gn[i] / (1.f + tc[i]);
+	}
+	for (uint tries = 0; tries < gAeTask.length(); ++tries) {
+		int bi = -1;
+		for (uint i = 0; i < val.length(); ++i) {
+			if ((val[i] > 0.f) && ((bi < 0) || (val[i] > val[uint(bi)])))
+				bi = int(i);
+		}
+		if (bi < 0)
+			return priced;
+		const uint b = uint(bi);
+		const float v = val[b];
+		val[b] = 0.f;
+		IUnitTask@ t = gAeTask[b];
+		const AIFloat3 bp = gAePos[b];
+		if (!ai.CanDefReach(Catalog::Def(uid), here, bp)
+			|| (Builder::ThreatFor(unit, bp) > Builder::CON_THREAT_VETO))
+			continue;
+		CCircuitUnit@ boss = null;
+		array<CCircuitUnit@>@ on = t.GetUnits();
+		for (uint k = 0; (on !is null) && (k < on.length()); ++k) {
+			if ((on[k] !is null) && (on[k].id != unit.id)) {
+				@boss = on[k];
+				break;
+			}
+		}
+		if (boss is null)
+			@boss = t.target;
+		if (boss is null)
+			continue;
+		++gAeOffered;
+		gAeOfferV += v;
+		++gAeOfferK[gAeKind[b]];
+		if ((priced !is null) && (priced.kind == WK_ASSIST) && (priced.value >= v))
+			return priced;
+		++gAeWon;
+		Want w;
+		w.kind = WK_ASSIST;
+		w.pos = bp;
+		w.spotId = int(boss.id);
+		@w.def = t.buildDef;
+		w.gain = gn[b];
+		w.mCost = 1.f;
+		w.tCost = tc[b];
+		w.value = v;
+		// Elections are staged across frames, so the executor resolves the
+		// boss from spotId rather than the shared gAssistTarget.
+		const float walkSec = (speed > 1.f) ? (here.distance2D(bp) / speed) : 60.f;
+		w.assistEcoS = int(walkSec + occ[b]) + 10;
+		return w;
+	}
+	return priced;
+}
+
+// A taken eco assist: one more hand on its frame until the list is rebuilt.
+void AssistEcoTaken(Want@ w, array<Want@>@ ranked)
+{
+	if (!IsAssistEco(w))
+		return;
+	++gAeTaken;
+	gAeTakenV += w.value;
+	for (uint i = 0; i < gAePos.length(); ++i) {
+		if (gAePos[i].distance2D(w.pos) < 1.f) {
+			++gAeHands[i];
+			++gAeTakenK[gAeKind[i]];
+			break;
+		}
+	}
+	float alt = 0.f;
+	int altK = WK_NONE;
+	for (uint i = 0; i < ranked.length(); ++i) {
+		if ((ranked[i] !is null) && (ranked[i].kind != WK_ASSIST) && (ranked[i].value > alt)) {
+			alt = ranked[i].value;
+			altK = ranked[i].kind;
+		}
+	}
+	gAeAltV += alt;
+	if ((altK == WK_PROTECT) || (altK == WK_TEETH))
+		++gAeTowersBeat;
+}
+
 // BARb'S FLOOR, the other half (apexearth 2026-09-11: "OK"): a constructor
 // within 600 elmos of a factory that is recruiting guards it for 10 s while
 // the bank is above 20% of storage and energy is not stalling -- stock
