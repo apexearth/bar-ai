@@ -105,6 +105,14 @@ bool ReachesCeiling(int defId)
 // calls this inside its candidate loop, and the walk carries a Catalog::Def
 // engine call for every one of the 949 slots.
 const int ECO_SEAT_T2_LAND_CONS = 4;
+// The strict seat keeps the advanced hands its upgrades can use (his 10-15: four T2 cons and 97 T1 walkers).
+int EcoSeatT2LandCons()
+{
+	if (!EcoSeatStrict())
+		return ECO_SEAT_T2_LAND_CONS;
+	const int up = UpgradeHandsWant();
+	return (up > ECO_SEAT_T2_LAND_CONS) ? up : ECO_SEAT_T2_LAND_CONS;
+}
 int gCcoFrame = -30000;
 int gCcoOwn = -1;
 int gCcoVal = 0;
@@ -2809,7 +2817,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// attrition): the bank-driven BP gap must buy nanos and air cons,
 		// not a walking crowd the reclaimer eats back (watched churn; conT1
 		// hit 24 at 15m on the bank term).
-		if (ecoQuietOn && !Catalog::gFlyer[d] && (reach < bestExt)) {
+		// ...and the strict seat once it has a lab past T1: its labs make only constructors, so without
+		// this the basic lab poured out 97 walkers onto assists while the advanced line waited (his 10-15).
+		if ((ecoQuietOn || (EcoSeatStrict() && AdvancedHandOwned()))
+				&& !Catalog::gFlyer[d] && (reach < bestExt)) {
 			// Nothing in this walk depends on the candidate `d`, and it sat
 			// inside the candidate loop -- 949 slots per candidate. Taken at
 			// most once per pass, on first use, so the count is the same.
@@ -2836,7 +2847,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// ...and few advanced LAND cons: walkers block the ground the seat is
 		// building on (his 2026-10-02 ruling). Air cons are not limited here.
 		if (ecoQuietOn && walker && (reach >= bestExt)
-			&& (CeilingWalkersAll() >= ECO_SEAT_T2_LAND_CONS)) {
+			&& (CeilingWalkersAll() >= EcoSeatT2LandCons())) {
 			if (prankNow)
 				prank += " " + Catalog::Def(d).GetName() + ":ecokeep";
 			continue;
