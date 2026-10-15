@@ -853,6 +853,52 @@ void AASplit(bool flyer, float tIn, float vIn, float& out rTarget, float& out rV
 // Frame-memoised per hull: FighterMetalHeld walks the def table.
 int gAAGapAt = -1;
 array<float> gAAGap = {0.f, 0.f};
+// TUNE_REZ_LIFE: a rez bot banks its share of the wreck stream for as long as
+// it lives, and the fleet's own death rate says how long that is; it pays for
+// itself only past its cost. The medic half is cut by the same life over its
+// fill window.
+int gNextRezLifeLog = 0, gRezLifeN = 0, gRezLifeCut = 0;
+float RezLifeGain(int d, float eatPs, float medicG, float hFill, float hRez)
+{
+	const float h = (hRez > 1.f) ? hRez : 900.f;
+	const float costM = Catalog::gCostM[d];
+	float fleetM = costM;
+	const array<int>@ own = OwnedDefs();
+	for (uint i = 0; i < own.length(); ++i) {
+		const int o = own[i];
+		if ((gOwnCount[o] > 0) && Catalog::gRezzer[o])
+			fleetM += float(gOwnCount[o]) * Catalog::gCostM[o];
+	}
+	const float lostPs = Military::RezLostRateM();
+	float life = h;
+	if ((lostPs > 0.f) && (fleetM / lostPs < life))
+		life = fleetM / lostPs;
+	const float wreck = eatPs * life - costM;
+	float medicK = (hFill > 1.f) ? (life / hFill) : 1.f;
+	if (medicK > 1.f)
+		medicK = 1.f;
+	const float medic = medicG * medicK;
+	float g = (wreck > medic) ? wreck : medic;
+	if (g < 0.f)
+		g = 0.f;
+	++gRezLifeN;
+	if (g <= 0.01f)
+		++gRezLifeCut;
+	if (ai.frame >= gNextRezLifeLog) {
+		gNextRezLifeLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: rezlife-stat t=" + ai.teamId
+			+ " lostPs=" + formatFloat(lostPs, "", 0, 2)
+			+ " fleetM=" + int(fleetM)
+			+ " life=" + int(life) + "/" + int(h)
+			+ " eat=" + formatFloat(eatPs, "", 0, 2)
+			+ " wreckNet=" + int(wreck)
+			+ " medic=" + int(medic) + "/" + int(medicG)
+			+ " gain=" + int(g)
+			+ " priced=" + gRezLifeN + " cut=" + gRezLifeCut);
+	}
+	return g;
+}
+
 float AARoleGap(bool flyer, float armyT)
 {
 	if (gAAGapAt != ai.frame) {
@@ -893,6 +939,7 @@ string gNoOrder = "";
 array<int> gRedrawDef;
 array<float> gRedrawV;
 float gRedrawSum = 0.f;
+float gRedrawObsM = 0.f;
 int gRedrawFac = -1;
 int gRedrawAt = -1;
 
@@ -1001,12 +1048,18 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 	h ^= (h >> 13);
 	float roll = float(h % 10000) / 10000.f * gRedrawSum;
 	uint pick = 0;
+	bool hit = false;
 	for (uint ci = 0; ci < gRedrawV.length(); ++ci) {
 		roll -= gRedrawV[ci];
 		if (roll <= 0.f) {
 			pick = ci;
+			hit = true;
 			break;
 		}
+	}
+	if (!hit && (gRedrawObsM > 0.f)) {
+		++gLoDefer;
+		return null;
 	}
 	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
 		&& (gRedrawV[pick] < gWantEmaV
@@ -2940,7 +2993,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// field and fourteen bots standing (his watch: "we are lacking
 		// rezbots").
 		const float hRez = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
-		if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
+		const float lifeG = RezLifeGain(rezDef, rezEat * eFeedA, gainM, hM, hRez);
+		if (ai.GetTunable("apex_rez_life", TUNE_REZ_LIFE) > 0.f)
+			gainM = lifeG;
+		else if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
 			gainM = rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f);
 		const float vM = gainM / Catalog::gCostM[rezDef];
 		if (gainM > 0.01f) {
@@ -3104,18 +3160,43 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	array<float> facMult;
 	sumV = NnFacScore(fac, candDef, candV, candGain, facMult);
+	// The share a dominated unit loses stays in sumV as the better line's
+	// ticket: drawn, this line orders nothing and the better line spends it.
+	// Off, the shares are still taken so lineobs-stat reads the shadow.
+	float obsM = 0.f;
+	{
+		const bool loOn = LineObsOn();
+		const int askTier = PlantTier(fid);
+		for (uint ci = 0; ci < candV.length(); ++ci) {
+			const float s = LineObsShare(candDef[ci], askTier);
+			if (loOn && (s < 1.f)) {
+				obsM += candV[ci] * (1.f - s);
+				candV[ci] *= s;
+			}
+		}
+		++gLoOrders;
+		LineObsLog();
+	}
+	gRedrawObsM = obsM;
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
 			+ uint(slot) * 2246822519;
 	h ^= (h >> 13);
 	float roll = float(h % 10000) / 10000.f * sumV;
 	uint pick = 0;
+	bool hit = false;
 	for (uint ci = 0; ci < candV.length(); ++ci) {
 		roll -= candV[ci];
 		if (roll <= 0.f) {
 			pick = ci;
+			hit = true;
 			break;
 		}
+	}
+	if (!hit && (obsM > 0.f)) {
+		++gLoDefer;
+		gNoOrder = "line-obsolete";
+		return null;
 	}
 	best = candDef[pick];
 	bestV = candV[pick];
