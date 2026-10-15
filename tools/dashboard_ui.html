@@ -763,8 +763,8 @@ async function openGame(dir, isRefresh) {
   }
 }
 const TOOL_BTNS = (dir, isTourn) => {
-  const tools = isTourn ? ["diagnose", "review", "composition", "tl", "scaling", "audit", "wallmap", "keepout", "siege", "flank"]
-                        : ["diagnose", "review", "audit", "fight1v1", "tl", "trace_flow", "deaths", "record", "wall", "wallmap", "keepout", "siege", "flank"];
+  const tools = isTourn ? ["diagnose", "review", "composition", "tl", "scaling", "audit", "wallmap", "keepout", "siege", "flank", "deflag"]
+                        : ["diagnose", "review", "audit", "fight1v1", "tl", "trace_flow", "deaths", "record", "wall", "wallmap", "keepout", "siege", "flank", "deflag"];
   return tools.map(t =>
     `<button class="act" onclick="runTool('${esc(dir)}','${t}')">${t}</button>`).join(" ");
 };

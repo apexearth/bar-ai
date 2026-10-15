@@ -201,6 +201,7 @@ Want@ WantCopy(Want@ s)
 	@c.target = s.target;
 	c.retire = s.retire;
 	c.posted = s.posted;
+	c.refill = s.refill;
 	c.gain = s.gain;
 	c.mCost = s.mCost;
 	c.tCost = s.tCost;

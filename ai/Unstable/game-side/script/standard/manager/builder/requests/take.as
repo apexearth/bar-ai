@@ -359,7 +359,10 @@ IUnitTask@ Take(CCircuitUnit@ unit, CCircuitDef@ want, Task::BuildType bt,
 	const bool defShort = (bt == Task::BuildType::DEFENCE) && defBehind;
 	if (defShort && (TotalLive(false) >= InFlightCap()))
 		++gDefExempt;
-	if (!spotWork && !defShort && (bt != Task::BuildType::CONVERT) && (TotalLive(defBehind) >= InFlightCap())) {
+	const bool refill = gRefillAsk && (bt == Task::BuildType::DEFENCE);
+	if (refill && !defShort && (TotalLive(defBehind) >= InFlightCap()))
+		++gRefillExempt;
+	if (!spotWork && !defShort && !refill && (bt != Task::BuildType::CONVERT) && (TotalLive(defBehind) >= InFlightCap())) {
 		if (unit !is null) {
 			IUnitTask@ any = JoinAny(unit);
 			if (any !is null) {

@@ -604,7 +604,11 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 	}
 	if ((w.kind == WK_PROTECT) || (w.kind == WK_SENSE)
 		|| (w.kind == WK_AIRDEF)) {
-		@w = DefTypePick(w, unit);
+		const bool refillW = RefillLive(w.refill);
+		if (refillW)
+			RefillNoteWon();
+		else
+			@w = DefTypePick(w, unit);
 		// THE chokepoint, not the proposers: three separate PROT_DEF gain
 		// branches each carried their own ValueOf-and-continue, and gating
 		// two of them still let claws through (measured three times).
@@ -641,7 +645,8 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 		// Ground the C++ reach veto has refused is re-probed, not re-taken:
 		// a targeting facility was elected into the same unreachable corner
 		// 21 times in a row, eating a fifth of the eco seat's elections.
-		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(DefTypeSited(DefSitePick(w, unit)))) : w.pos;
+		AIFloat3 sAt = groundDef ? OffAllyBuildings(OffFactoryExit(refillW ? w.pos
+				: DefTypeSited(DefSitePick(w, unit)))) : w.pos;
 		// NO GUN IN THE BASE INTERIOR (apexearth 2026-09-19: "imagine you
 		// only have 12 towers and six of them are in the center of your
 		// base... by the time those towers are defending anything you've
@@ -724,9 +729,16 @@ IUnitTask@ ExecuteWant(CCircuitUnit@ unit, Want@ w)
 			// A hoist's post is distinct by construction (one per gap mex, one
 			// per wall slot), so only the same ground is the same request; 600
 			// folded a cheap gun onto its neighbour's and refused it "covered".
+			Requests::SetRefillAsk(refillW);
 			@sTask = Requests::Take(unit, w.def, Task::BuildType(bt),
 					Task::Priority::NORMAL, sAt, w.posted ? Requests::SAME_SITE : 600.f,
 					SQUARE_SIZE * 16.f, sMade);
+			Requests::SetRefillAsk(false);
+		}
+		if (groundDef && (sTask !is null) && (sTask.buildDef is w.def)) {
+			RefillNoteOrder(int(w.def.id), sAt, w.gain);
+			if (refillW)
+				RefillNoteOrdered();
 		}
 		if (groundDef) {
 			string verdict = Requests::gLastWhat;

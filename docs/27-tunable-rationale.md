@@ -3398,3 +3398,31 @@ attribute; his 10-14 watch: a squad sent at a pack in our base switched from fig
 into it. Order census of his 1v1: travel (move) 2,086 orders vs fightwalk 86. With the option the two
 tasks travel with CFightAction, which stops at weapon range and fights what it meets. Raid and scout keep
 moves (doctrine: a raid walks past small stuff).
+
+## TUNE_DEF_REFILL = 0 (2026-10-14)
+
+His 10-14: heavy attacks were answered with towers somewhere else, so the holes where we were hit
+never filled back up. Then: those guns protected everything behind them, and the enemy will come
+back the same way because they know the hole is there. Off pending A/B.
+
+- Record: a finished, armed ground gun of ours (PROT_DEF, surface weapon) killed by an enemy, with
+  the gain the market ordered it at when an order of that def stood within 300 elmos.
+- Price (prevented loss per second, the fill's own form `stake x hz x stopped`): stake = our metal
+  in the dead gun's reach plus everything on the corridor behind the gap toward the base middle
+  (PfStakeShield along the outward bearing, beyond-reach share uncut), capped by PfKillCapM; hz =
+  max(HazardAt, fade / apex_exposed_loss_s) -- the breach is the likeliest next approach, once per
+  exposure window while fresh; stopped = the shortfall the gun closes there. Then max with the
+  recorded gain x fade, plus the loss field within reach / LossTau x stopped. fade =
+  exp(-age / LossTau).
+- Site and def: the dead gun's own def at its spot when the hand can build it (no basic tower once
+  an advanced hand exists), else the hand's cheapest gun at least as dear. The type and site nets
+  are skipped for it; TowerGraveNear / DefGraveBack still pull a same-strength gun back.
+- Drops: a gun of ours finishes within the dead gun's reach (stood); 3 x LossTau old (faded); still
+  hot (Builder::SiteHot: their units there and stronger) past LossTau (hot). Not offered while hot.
+- Exempt from Requests::Take's in-flight cap like a defence shortfall, counted apart (`exempt=`).
+- Baseline, switch off (tools/deflag.py, near 400, window 180 s): watch-all-95 1v1 -- 89 guns lost,
+  45% re-ordered near the loss, median lag 47 s, 86 orders near vs 1,656 elsewhere, the first
+  defence order after a loss went near it 10% of the time. Six 20261014-020717-nn-rand games --
+  416 lost, 45%, median 23 s, 916 near vs 8,757 elsewhere, first order near 17%.
+- Constants with no derivation: 16 live refills, a 48-order ledger, 300 elmos to match an order to
+  a death, one refresh per election at most every 5 s per refill (cost only).

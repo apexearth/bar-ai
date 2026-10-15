@@ -34,6 +34,7 @@ final class Want {
 	// nothing about wanting the def again elsewhere.
 	bool retire = false;
 	bool posted = false;    // a hoist's own distinct post: the executor folds only the same ground
+	int refill = -1;        // a refill's id (protect_refill.as): its def and site skip the nets' picks
 	float gain = 0.f;
 	float mCost = 0.f;
 	float tCost = 0.f;
