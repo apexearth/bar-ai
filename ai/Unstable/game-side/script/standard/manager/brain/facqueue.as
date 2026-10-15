@@ -401,6 +401,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		}
 		batch.insertLast(o);
 		PendAdd(line, o);
+		Market::EcoSeatNoteOrder(o);
 		if (lineHave > 0)
 			lineSec += Catalog::BuildSecondsAt(int(o.id), lineBp);
 		++lineHave;

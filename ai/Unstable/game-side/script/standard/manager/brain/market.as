@@ -41,6 +41,7 @@
 #include "market/plannet.as"        // the team plan net; allies build one gantry together
 #include "market/joinnet.as"        // join a same-def site already rising, or open a new one
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
+#include "market/ecoseat.as"        // the strict eco seat: what its hands and labs may take while it grows
 #include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
 // want_protect, split (order load-bearing -- see manager/builder.as):

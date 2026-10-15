@@ -503,6 +503,13 @@ GROUPS = [
                   "eco target before army and defence come back, 0.5 half "
                   "as far. Unlike the switch above it needs no big team — "
                   "it seats this AI in a 1v1 or a 2v2 as well"),
+                 ("TUNE_ECO_SEAT_STRICT", "ON makes the eco player only "
+                  "build economy while it grows: no towers, radar, army or "
+                  "big guns from its constructors or labs; its labs make "
+                  "constructors, and anti-air only while aircraft are "
+                  "killing its things. The other players already cover it. "
+                  "Sustained enemies at its base still end the growth. "
+                  "apex: ecoseat-stat each minute"),
                  ("TUNE_ANTINUKE_INCOME", "the income at which insurance "
                   "(antinuke, shields) starts being worth buying"),
              ]},
@@ -1310,6 +1317,9 @@ GOALS = [
                      "towers (his 10-03 / 10-15)"},
             {"ref": "TUNE_MEXUP_HORIZON", "dir": "up",
              "note": "a far mex upgrade is no longer priced out by its walk"},
+            {"ref": "TUNE_ECO_SEAT_STRICT", "dir": "up",
+             "note": "the 8v8 eco player spends its hands and labs on economy "
+                     "only until it reaches its target (his 10-15)"},
         ],
         "watch": "python tools/composition.py <tournament> — mex count, mex "
                  "upgrades and metal produced. If mex upgrades fall while metal "

@@ -1839,6 +1839,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float tFoeSpeed = FoeSpeedCap();
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
+	const bool ecoStrictOn = EcoSeatStrict();
 	const float bestExt = BestExtract();
 	const float incA = Eco::MInc();
 	const float tLineBite = ai.GetTunable("apex_line_bite", TUNE_LINE_BITE);
@@ -1943,6 +1944,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		if (EcoOnly() && !Catalog::gBuilder[d])
 			continue;   // the economy-only benchmark: hands only
+		if (ecoStrictOn && !EcoSeatFacKeeps(d)) {
+			++gEsFacRef;
+			if (prankNow)
+				prank += " " + Catalog::Def(d).GetName() + ":ecoseat";
+			continue;
+		}
 		// Metal first: the unlock in flight takes the feed (guards.as).
 		// ...except the fleet where our land is cut off: every yard builds
 		// fighting ships from the start (his ruling 2026-09-28). A recon scout is
