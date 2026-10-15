@@ -1038,6 +1038,12 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		Want@ rf = RefillPropose(unit, hT1Out);
 		if ((rf !is null) && ((w.def is null) || !unit.circuitDef.CanBuild(w.def) || (rf.value > w.value))) {
 			RefillNoteOffered();
+			if (ai.frame >= gRfOfferLogAt) {
+				gRfOfferLogAt = ai.frame + 10 * SECOND;
+				AiLog(Factory::T() + "apex: refill-offer t=" + ai.teamId + " def=" + rf.def.GetName()
+					+ " v=" + formatFloat(rf.value, "", 0, 2) + " gain=" + formatFloat(rf.gain, "", 0, 3)
+					+ " ownV=" + formatFloat(w.value, "", 0, 2) + " at=" + int(rf.pos.x) + "," + int(rf.pos.z));
+			}
 			return rf;
 		}
 	}

@@ -21,6 +21,7 @@ array<float> gRfThreat;
 array<float> gRfHz;
 array<bool>  gRfHot;
 array<int>   gRfFresh;
+int gRfOfferLogAt = 0;
 int gRfNextId = 0;
 
 array<AIFloat3> gRoPos;
