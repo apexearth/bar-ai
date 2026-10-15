@@ -109,7 +109,16 @@ void ConRoleRecount()
 	for (int c = 0; c < CAT_N; ++c)
 		gRoleQuota[c] = (sum > 0.f)
 				? int(gRoleNeed[c] / sum * float(roled) * ((c == CAT_DEFENCE) ? gGunpMul : 1.f) + 0.5f) : 0;
+	if (EcoHandOn() && (gWorkerIds.length() >= 2) && (gRoleQuota[CAT_ENERGY] < 1))
+		gRoleQuota[CAT_ENERGY] = 1;
 }
+
+// THE ECONOMY HAND (his 10-14: "you need to have at least one of them always building something for
+// the economy... a dedicated role restricts what a con is willing to do"): with two hands or more one
+// holds the energy role, and the draw's ticket share never releases it -- that share is lowest exactly
+// when energy is starved.
+bool EcoHandOn() { return ai.GetTunable("apex_eco_hand", TUNE_ECO_HAND) > 0.f; }
+int gEcoHandKept = 0, gEcoHandLent = 0;
 
 // A ROLE RESERVES A HAND FOR WORK WORTH DOING, NOT FOR ANY WORK. A category
 // earns one of the R roled hands when the draw itself would hand it at least
@@ -221,7 +230,14 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 	ConRoleRecount();
 	RoleWorthPrep(ranked);
 	int r = gRoleOf[id];
-	if (r >= 0) {
+	if ((r == CAT_ENERGY) && EcoHandOn() && (gRoleCount[r] <= gRoleQuota[r])) {
+		// kept whatever the draw thinks; with no energy work on offer it lends itself to this one election
+		if (!RankedHas(ranked, r)) {
+			++gEcoHandLent;
+			return false;
+		}
+		++gEcoHandKept;
+	} else if (r >= 0) {
 		if ((gRoleCount[r] > gRoleQuota[r]) || !RankedHas(ranked, r)
 			|| !RoleWorthDoing(r)) {
 			gRoleOf[id] = -1;
@@ -235,6 +251,11 @@ bool ConRoleApply(CCircuitUnit@ unit, array<Want@>@ ranked)
 		int bestGap = 0;
 		for (int c = 0; c < CAT_N; ++c) {
 			const int gap = gRoleQuota[c] - gRoleCount[c];
+			const bool eco = (c == CAT_ENERGY) && EcoHandOn();
+			if (eco && (gap > 0) && RankedHas(ranked, c)) {
+				best = c;
+				break;
+			}
 			if (ai.frame < gCatFellAt[c] + CAT_FELL_HOLD)
 				continue;
 			if ((gap > bestGap) && RankedHas(ranked, c) && RoleWorthDoing(c)) {
@@ -275,7 +296,7 @@ void ConRoleLog()
 	string ln = Factory::T() + "apex: roles t=" + ai.teamId
 			+ " workers=" + gWorkerIds.length() + " roled=" + roled
 			+ " taken=" + gRoleTaken + " dropped=" + gRoleDropped
-			+ " fell=" + gRoleFell + " |";
+			+ " fell=" + gRoleFell + " ecoHand=" + (EcoHandOn() ? 1 : 0) + " kept=" + gEcoHandKept + " lent=" + gEcoHandLent + " |";
 	for (int c = 0; c < CAT_N; ++c) {
 		if ((gRoleNeed[c] < 0.005f) && (gRoleCount[c] == 0))
 			continue;

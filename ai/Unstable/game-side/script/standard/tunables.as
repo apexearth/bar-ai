@@ -176,6 +176,11 @@ const float TUNE_SIEGE = 0.f;
 //   search measured 4/41 on it vs 12/48 without (his 10-14: back to old code).
 const float TUNE_ONE_ARMY = 0.f;
 
+// [toggle 0/1] -- The economy hand: with two constructors or more, one always
+//   holds the energy role (generators, converters) and is never released by the
+//   draw's ticket share (roles.as EcoHandOn). His 10-14; A/B before default.
+const float TUNE_ECO_HAND = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;
