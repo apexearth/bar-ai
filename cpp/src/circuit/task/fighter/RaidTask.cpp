@@ -84,6 +84,7 @@ void CRaidTask::AssignTo(CCircuitUnit* unit)
 
 void CRaidTask::RemoveAssignee(CCircuitUnit* unit)
 {
+	unit->ClearFormSlot();
 	ISquadTask::RemoveAssignee(unit);
 	if (leader == nullptr) {
 		manager->AbortTask(this);
@@ -119,6 +120,10 @@ void CRaidTask::Update()
 		units.clear();
 		manager->AbortTask(this);
 		return;
+	}
+
+	if (updCount % 8 == 1) {
+		AssignFlierSlots(manager->GetCircuit()->GetLastFrame());
 	}
 
 	/*

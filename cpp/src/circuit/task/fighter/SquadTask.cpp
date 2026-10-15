@@ -661,6 +661,52 @@ float ISquadTask::FireAt(const SFire& f, const CCircuitDef* edef)
 	return edef->IsAbleToFly() ? f.dpsAir : f.dpsSurf;
 }
 
+// Gunships sent to one point stack on it (his 10-15): the ground rule's spacing per unit, widened to
+// twice the splash of the enemy's ground AA as the bombers' grid is.
+void ISquadTask::AssignFlierSlots(int frame)
+{
+	std::vector<CCircuitUnit*> fliers;
+	for (CCircuitUnit* u : units) {
+		if (u->GetCircuitDef()->IsAbleToFly()) {
+			fliers.push_back(u);
+		}
+	}
+	const int n = (int)fliers.size();
+	if (n < 2 || (manager->GetCircuit()->GetTunable("apex_air_form", 1.f) <= 0.f)) {
+		for (CCircuitUnit* u : fliers) {
+			u->ClearFormSlot();
+		}
+		return;
+	}
+	if (frame >= flierSplashAt) {
+		flierSplashAt = frame + FRAMES_PER_SEC * 30;
+		flierSplash = 0.f;
+		for (const auto& kv : manager->GetCircuit()->GetEnemyInfos()) {
+			const CCircuitDef* d = kv.second->GetCircuitDef();
+			if ((d != nullptr) && !d->IsAbleToFly() && d->IsRoleAA() && (d->GetAoe() > flierSplash)) {
+				flierSplash = d->GetAoe();
+			}
+		}
+	}
+	float s = 2.f * flierSplash;
+	for (CCircuitUnit* u : fliers) {
+		const CCircuitDef* d = u->GetCircuitDef();
+		s = std::max(s, std::min(400.f, std::max(16.f * d->GetFootX(), 0.25f * d->GetMaxRange())));
+	}
+	const int cols = (int)std::ceil(std::sqrt((float)n));
+	for (int i = 0; i < n; ++i) {
+		const float lat = ((float)(i % cols) - 0.5f * (float)(cols - 1)) * s;
+		const float depth = (float)(i / cols) * s;
+		if ((fliers[i]->GetFormLateral() != lat) || (fliers[i]->GetFormDepth() != depth)) {
+			fliers[i]->SetFormSlot(lat, -RgtVector, depth);
+		}
+	}
+	if (frame >= flierLogAt) {
+		flierLogAt = frame + FRAMES_PER_SEC * 60;
+		manager->GetCircuit()->LOG("apex: squad air-formation n=%d cols=%d spacing=%.0f splash=%.0f", n, cols, s, flierSplash);
+	}
+}
+
 float ISquadTask::EnemyHp(CEnemyInfo* e)
 {
 	float h = e->GetHealth();

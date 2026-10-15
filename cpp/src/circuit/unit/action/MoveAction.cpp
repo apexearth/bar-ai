@@ -49,6 +49,15 @@ static void TravelTo(CCircuitAI* circuit, CCircuitUnit* unit, const AIFloat3& po
 		}
 		const float range = unit->GetCircuitDef()->GetMaxRange();
 		if (!walker && (range > 0.f) && (circuit->GetEnemyManager()->GetEnemyArmedCostNear(pos, range) > 0.f)) {
+			// a flier on a fight order drops its load on whatever it passes (bombers on ticks, his 10-15)
+			if (unit->GetCircuitDef()->IsAbleToFly()) {
+				static int fliersKept = 0;
+				if ((++fliersKept % 50) == 1) {
+					circuit->LOG("apex: fight-travel flier-kept n=%i def=%s", fliersKept, unit->GetCircuitDef()->GetDef()->GetName());
+				}
+				unit->CmdMoveTo(pos, options, timeout, CCircuitUnit::OrdSrc::TRAVEL);
+				return;
+			}
 			unit->CmdFightTo(pos, options, timeout, CCircuitUnit::OrdSrc::FWALK);
 			return;
 		}

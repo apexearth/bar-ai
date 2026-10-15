@@ -129,6 +129,7 @@ void CAttackTask::AssignSlots(int frame)
 			byRange.push_back({u->GetCircuitDef()->GetMaxRange(), u});
 		}
 	}
+	AssignFlierSlots(frame);
 	const int n = (int)byRange.size();
 	if (n < 2) {
 		for (auto& ru : byRange) {

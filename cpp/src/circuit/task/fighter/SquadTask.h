@@ -69,6 +69,10 @@ protected:
 	float TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) const;
 	void AllocateFire(int frame, const springai::AIFloat3& tPos, bool apply);
 	bool FireStale() const;
+	void AssignFlierSlots(int frame);
+	float flierSplash = 0.f;
+	int flierSplashAt = -1;
+	int flierLogAt = 0;
 	std::map<int, int> fireAt;  // member -> the enemy its dose goes to
 	int engTgt = -1;
 	int allocFrame = -1;
