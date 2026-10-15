@@ -1178,6 +1178,14 @@ GROUPS = [
                   "past the cost of a whole election and nothing is sliced at "
                   "all. Watch `apex: elec-slice` for the worst wait, and "
                   "frametime.py's hk.maketask.builder maxMs for the hitch"),
+                 ("TUNE_CREW_ELECT", "1 = constructors of one kind standing "
+                  "together share one election: the first runs the market, "
+                  "the others join its build or take the next job on its "
+                  "list, and one heading somewhere dangerous decides alone. "
+                  "Far fewer full elections in a big constructor fleet; the "
+                  "trap is that the rest of the crew acts on one hand's "
+                  "list, priced from where that hand stood. Watch `apex: "
+                  "crew-elect-stat` (run, shared, breakoff, crew)"),
              ]},
         ],
     },

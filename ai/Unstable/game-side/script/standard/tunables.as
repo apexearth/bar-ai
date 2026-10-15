@@ -181,6 +181,10 @@ const float TUNE_ONE_ARMY = 0.f;
 //   draw's ticket share (roles.as EcoHandOn). His 10-14; A/B before default.
 const float TUNE_ECO_HAND = 0.f;
 
+// [toggle 0/1] -- One election per crew: a hand of the same def and crew side near a hand that
+//   just ran the market takes its job or the next want of its list (crewelect.as). His 10-15.
+const float TUNE_CREW_ELECT = 0.f;
+
 // [toggle 0/1] -- AA counts what the whole side loses to aircraft, not only this
 //   seat (deathledger.as TeamAirLossRate). His 10-14; A/B before default.
 const float TUNE_TEAM_AIRLOSS = 0.f;
