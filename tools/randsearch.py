@@ -309,7 +309,7 @@ def finish(st, n, gi, sc, ver=None):
         if n["fails"] >= MAX_FAILS:
             n["status"] = "failed"
         return
-    n["games"].append([round(sc[0], 4), sc[1], ver or "?", gi])
+    n["games"].append([round(sc[0], 4), sc[1], "%s s%d" % (ver or "?", neuro.cem.SCORE_VERSION), gi])
     if len(n["games"]) < n["target"] or n["busy"]:
         return
     if "arm" in n:

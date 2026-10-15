@@ -145,16 +145,21 @@ def score(mdir):
         # ...but a hoard is not a lead: ahead on eco and army while losing the trade and the ground
         # adjudicated as a win (c510 took 16 of 24 so), so the fight -- damage and land -- must agree
         fight = end("dmg") > 1.0 and end("land") > 1.0
-        if end("eco") > 1.0 and end("army") > 1.0 and fight:
+        # his 10-14: the metal trade, not the army left standing -- a kept army scored, so the policy
+        # net learned to avoid ATTACK (3 of 67 postures in his watch, the rule asked 33 times)
+        if end("eco") > 1.0 and end("trade") > 1.0 and fight:
             result = "W"
-        elif (end("eco") < 1.0 and end("army") < 1.0) or (end("dmg") < 1.0 and end("land") < 1.0):
+        elif (end("eco") < 1.0 and end("trade") < 1.0) or (end("dmg") < 1.0 and end("land") < 1.0):
             result = "L"
     # a loss earns lasting longer; a win earns ending sooner (his 10-11: games ran too big and long)
     t = min(g["minutes"], MINUTES) / MINUTES
     res = 0.5 * {"W": 1.0 + 0.5 * (1.0 - t), "L": -1.0 + 0.5 * t, "D": 0.0}[result]
-    # aggression (his 10-11: penalize a passive game hard): the damage trade and the ground held
-    return (0.5 * mean_log("eco") + 0.5 * mean_log("army") + 0.25 * mean_log("mex")
+    # aggression (his 10-11: penalize a passive game hard): the metal trade, the damage and the ground
+    return (0.5 * mean_log("eco") + 0.5 * mean_log("trade") + 0.25 * mean_log("mex")
             + 0.5 * mean_log("dmg") + 0.5 * mean_log("land") + res), result
+
+
+SCORE_VERSION = 2   # 2026-10-14: trade replaced army standing (score and time-limit verdict)
 
 
 def play(job):
