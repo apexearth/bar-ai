@@ -611,11 +611,16 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 		if (unit->GetTravelAct() != nullptr) {
 			unit->GetTravelAct()->StateWait();
 		}
+		// fliers take their formation slot around the target, not the target itself (his 10-15: gunships
+		// re-ordered onto a mex clump there and die to flak)
+		const bool flier = unit->GetCircuitDef()->IsAbleToFly();
 		TRY_UNIT(circuit, unit,
 			if (IsCommitted()) {
-				unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+				unit->CmdMoveTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60,
+						flier ? CCircuitUnit::OrdSrc::TRAVEL : CCircuitUnit::OrdSrc::OTHER);
 			} else {
-				unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60);
+				unit->CmdFightTo(position, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60,
+						flier ? CCircuitUnit::OrdSrc::FWALK : CCircuitUnit::OrdSrc::OTHER);
 			}
 		)
 	}
