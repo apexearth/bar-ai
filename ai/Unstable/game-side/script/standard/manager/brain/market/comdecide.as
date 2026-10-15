@@ -216,6 +216,7 @@ AIFloat3 gCsSafe;
 AIFloat3 gCsFoeAt;
 AIFloat3 gCsHere;
 
+int gComStepN = 0;
 // Where he withdraws to: the back of our base (the farm, else home), or a
 // nearer stand of our guns, not toward the threat, where he would win.
 AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool haveFoe,
@@ -227,6 +228,23 @@ AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool have
 		best = here;
 	float bestD = here.distance2D(best);
 	const float hereFoe = haveFoe ? here.distance2D(foe) : 0.f;
+	// STEP BACK, DON'T GO HOME (his 10-14: he walked 2,800 home from a claim and all the way out
+	// again, "a very huge waste of a good resource"): the nearest ground straight away from the threat
+	// where it no longer reaches him, sampled at the threat map's resolution.
+	if (haveFoe && (ai.GetTunable("apex_com_step", TUNE_COM_STEP) > 0.f) && (hereFoe > 1.f)) {
+		const AIFloat3 away = (here - foe) / hereFoe;
+		for (float d = 128.f; d < bestD; d += 128.f) {
+			AIFloat3 p = here + away * d;
+			if (!OnMap(p))
+				break;
+			if (ai.GetUnitThreatAt(u, p) <= 0.f) {
+				best = p;
+				bestD = d;
+				++gComStepN;
+				break;
+			}
+		}
+	}
 	const int cd = int(u.circuitDef.id);
 	const float hp = u.GetHealthPercent();
 	for (uint i = 0; i < gCdTwPos.length(); ++i) {
@@ -834,7 +852,7 @@ void ComDecideTick(CCircuitUnit@ u)
 		}
 		AiLog(Factory::T() + "apex: comstat t=" + ai.teamId + " dec=" + gComDecN
 			+ " chosen(W/F/T/R)=" + cn + " rule=" + rn + " effSec=" + en
-			+ " withdraw=" + gComWithdrawN + " outrun=" + gCsOutrun + " calledOff=" + gComRetCancelN + " drop=" + gComDropN + " explored=" + gComExpN
+			+ " withdraw=" + gComWithdrawN + " step=" + gComStepN + " outrun=" + gCsOutrun + " calledOff=" + gComRetCancelN + " drop=" + gComDropN + " explored=" + gComExpN
 			+ " turret=" + gComTurN + " turretGunUp=" + gComTurHeld
 			+ " dgunOrders=" + u.DGunOrders() + " dgOpp=" + gComDgOpp + " dgMiss=" + gComDgMiss
 			+ " cower=" + gComCowerN + " stood=" + gComStandN + " ship=" + gShipN + "/" + gShipSec + " trap=" + gComTrapN

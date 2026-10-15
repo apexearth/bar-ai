@@ -205,6 +205,11 @@ const float TUNE_LINE_ARMY_GAP = 0.f;
 //   ends above 0.2 of his health (comdecide.as ComBar). His 10-14; A/B first.
 const float TUNE_COM_BOLD = 0.f;
 
+// [toggle 0/1] -- A withdrawing commander steps back to the nearest ground the
+//   threat no longer reaches, not the back of the base (comdecide.as
+//   ComSafePoint). His 10-14; A/B first.
+const float TUNE_COM_STEP = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;

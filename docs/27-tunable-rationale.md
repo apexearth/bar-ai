@@ -3359,3 +3359,10 @@ All three default off until a paired A/B in the search (randsearch --ab) wins.
   2,708 search turret episodes (com-turret after= vs com-turret-end hp->): median 27 points pessimistic,
   p95 0, worst 18 optimistic. The 0.2 buffer clears the worst measured optimism; episodes where he died
   cannot be paired, so the tail may be undercounted. T2 and above keep the old bar.
+
+## TUNE_COM_STEP = 0 (2026-10-14)
+
+A withdrawing commander stepped back to RetirePos (the farm, else home) unless a nearer tower stand
+beat the threat: on his 1v1 the walk was 2,800 home from a claim and all the way out again. With the
+switch the nearest point straight away from the threat where GetUnitThreatAt reads 0 (128-elmo steps,
+the threat map's resolution) is taken when it is nearer. Counted as step= on comstat.
