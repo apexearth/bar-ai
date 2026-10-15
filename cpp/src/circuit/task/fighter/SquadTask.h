@@ -11,11 +11,14 @@
 #include "task/fighter/FighterTask.h"
 #include "terrain/path/MicroPather.h"
 
+#include <map>
 #include <memory>
 
 namespace circuit {
 
+class CCircuitAI;
 class CCircuitDef;
+class CEnemyInfo;
 
 class ISquadTask: public IFighterTask {
 protected:
@@ -56,6 +59,23 @@ protected:
 	static float DGunKeepOut(CCircuitDef* u, CCircuitDef* t, float& hold);
 	bool IsInsideDGun(int frame);
 	bool dgunNear = false;  // the last Attack() had a D-gun carrier to keep out of
+
+	// apex_target_value: an enemy's worth in metal to this squad -- its cost, plus for a mobile
+	// one the metal of ours it destroys while it lives (horizonS, longer when it outranges us)
+	struct SFire { float dpsSurf = 0.f, dpsAir = 0.f, mph = 0.f, ownPow = 1.f, armedRange = 0.f; bool air = false; };
+	SFire SquadFire() const;
+	static float FireAt(const SFire& f, const CCircuitDef* edef);
+	static float EnemyHp(CEnemyInfo* e);
+	float TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) const;
+	void AllocateFire(int frame, const springai::AIFloat3& tPos, bool apply);
+	bool FireStale() const;
+	std::map<int, int> fireAt;  // member -> the enemy its dose goes to
+	int engTgt = -1;
+	int allocFrame = -1;
+public:
+	static void NoteTargetKill(CCircuitAI* circuit, CCircuitDef* edef);
+	static void NoteTargetPick(CCircuitAI* circuit, float pickM, float nearM);
+protected:
 
 	float lowestRange;
 	float highestRange;

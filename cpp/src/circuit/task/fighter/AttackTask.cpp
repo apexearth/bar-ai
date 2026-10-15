@@ -1056,6 +1056,31 @@ void CAttackTask::FindTarget()
 		pooledN += (nearInfl[i] > groups[i].influence) ? 1 : 0;
 	}
 
+	// apex_target_value: a group is the metal it holds over the time to reach and clear it
+	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	std::vector<std::pair<float, float>> grpWorth(tv ? groups.size() : 0, {0.f, 0.f});  // worth, clear s
+	if (tv) {
+		const SFire f = SquadFire();
+		for (size_t i = 0; i < groups.size(); ++i) {
+			for (int pass = 0; pass < 2; ++pass) {
+				for (const ICoreUnit::Id eId : groups[i].units) {
+					CEnemyInfo* e = circuit->GetEnemyInfo(eId);
+					if ((e == nullptr) || e->IsHidden() || (e->GetCircuitDef() == nullptr)) {
+						continue;
+					}
+					const float dps = FireAt(f, e->GetCircuitDef());
+					if (pass == 0) {
+						grpWorth[i].second += (dps > 0.f) ? EnemyHp(e) / dps : 0.f;
+					} else {
+						grpWorth[i].first += TargetWorth(f, e, grpWorth[i].second);
+					}
+				}
+			}
+		}
+	}
+	float nearSq = std::numeric_limits<float>::max();
+	float nearGrpM = 0.f;
+
 	for (unsigned i = 0; i < groups.size(); ++i) {
 		const CEnemyManager::SEnemyGroup& group = groups[i];
 		const float groupInfl = nearInfl[i];
@@ -1234,7 +1259,11 @@ void CAttackTask::FindTarget()
 				skipNear(enemy, nearE, NR_IGN);
 				continue;
 			}
-			const float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
+			float sqOEDist = group.vagueMetric * pos.SqDistance2D(ePos) * sqBE / pull;  // Own to Enemy distance
+			if (tv) {
+				const float v = std::max(grpWorth[i].first + sup, 1.f) * (atFocus(ePos) ? 10.f : 1.f);
+				sqOEDist = group.vagueMetric * SQUARE(pos.distance2D(ePos) + grpWorth[i].second * ourSpeed) * sqBE / SQUARE(v);
+			}
 			if (canGoHome && !isThreat[i]) {
 				const float dHome = std::sqrt(rawSqBE);
 				if ((dHome > threatD) && (dHome / ourSpeed > threatS)) {
@@ -1248,6 +1277,10 @@ void CAttackTask::FindTarget()
 				prevScore = sqOEDist;
 			}
 			nearWhy[NR_CAND] += nearE ? 1 : 0;
+			if (pos.SqDistance2D(ePos) < nearSq) {
+				nearSq = pos.SqDistance2D(ePos);
+				nearGrpM = group.cost;
+			}
 			if (minSqDist > sqOEDist) {
 				minSqDist = sqOEDist;
 				bestTarget = enemy;
@@ -1407,6 +1440,7 @@ void CAttackTask::FindTarget()
 			if (prevTarget != nullptr) {
 				milMgr->NoteArmy(CMilitaryManager::AE_SWITCH);
 			}
+			NoteTargetPick(circuit, (bestGroup >= 0) ? groups[bestGroup].cost : 0.f, nearGrpM);
 			// RepairBreak puts the repairer back after every pass; that is not a switch
 			if ((repairerId < 0) || (prevId != repairerId)) {
 				circuit->LOG("apex: atktgt t=%i lead=%s def=%s at=%.0f,%.0f dBase=%.0f dLead=%.0f pull=%.2f n=%i"

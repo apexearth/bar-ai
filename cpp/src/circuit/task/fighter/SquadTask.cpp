@@ -7,6 +7,7 @@
 
 #include <map>
 #include <array>
+#include <algorithm>
 #include "task/fighter/SquadTask.h"
 #include "map/InfluenceMap.h"
 #include "map/ThreatMap.h"
@@ -79,6 +80,7 @@ void ISquadTask::AssignTo(CCircuitUnit* unit)
 void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 {
 	IFighterTask::RemoveAssignee(unit);
+	fireAt.erase(unit->GetId());
 
 	CCircuitDef* cdef = unit->GetCircuitDef();
 	const float range = cdef->GetMinRange();
@@ -571,6 +573,277 @@ bool ISquadTask::IsInsideDGun(int frame)
 	return false;
 }
 
+namespace {
+struct STgtStat {
+	int eng = 0, alloc = 0, tgts = 0, asg = 0, picks = 0, ord = 0, ordSplit = 0;
+	float asgM = 0.f, nearM = 0.f, pickM = 0.f, pickNearM = 0.f, doseF = 0.f, overF = 0.f;
+	int killN[3] = {0, 0, 0};
+	float killM[3] = {0.f, 0.f, 0.f};
+	int logAt = -1;
+};
+std::map<int, STgtStat> tgtStats;  // per team
+
+STgtStat& TgtStat(CCircuitAI* circuit)
+{
+	STgtStat& s = tgtStats[circuit->GetTeamId()];
+	const int frame = circuit->GetLastFrame();
+	if ((s.logAt >= 0) && (frame >= s.logAt)) {
+		circuit->LOG("apex: target-stat t=%i tv=%.2f eng=%i alloc=%i tgts=%i asg=%i asgM=%.0f nearM=%.0f"
+				" ord=%i split=%i picks=%i pickM=%.0f pickNearM=%.0f kills=%i/%i/%i killM=%.0f/%.0f/%.0f overkill=%.2f",
+				circuit->GetTeamId(), circuit->GetTunable("apex_target_value", 0.f), s.eng, s.alloc, s.tgts, s.asg,
+				s.asgM, s.nearM, s.ord, s.ordSplit, s.picks, s.pickM, s.pickNearM,
+				s.killN[0], s.killN[1], s.killN[2], s.killM[0], s.killM[1], s.killM[2],
+				(s.doseF > 0.f) ? s.overF / s.doseF : 0.f);
+		s = STgtStat();
+	}
+	if (s.logAt < 0) {
+		s.logAt = frame + FRAMES_PER_SEC * 60;
+	}
+	return s;
+}
+}  // namespace
+
+void ISquadTask::NoteTargetKill(CCircuitAI* circuit, CCircuitDef* edef)
+{
+	if (edef == nullptr) {
+		return;
+	}
+	const float m = edef->GetCostM();
+	const int k = (m < 100.f) ? 0 : (m < 1000.f) ? 1 : 2;
+	STgtStat& s = TgtStat(circuit);
+	++s.killN[k];
+	s.killM[k] += m;
+}
+
+void ISquadTask::NoteTargetPick(CCircuitAI* circuit, float pickM, float nearM)
+{
+	STgtStat& s = TgtStat(circuit);
+	++s.picks;
+	s.pickM += pickM;
+	s.pickNearM += nearM;
+}
+
+ISquadTask::SFire ISquadTask::SquadFire() const
+{
+	SFire f;
+	float cost = 0.f;
+	float hp = 0.f;
+	f.armedRange = std::numeric_limits<float>::max();
+	for (CCircuitUnit* u : units) {
+		CCircuitDef* d = u->GetCircuitDef();
+		cost += d->GetCostM();
+		hp += d->GetHealth();
+		const float dps = d->GetRawDps();
+		if (dps <= 0.f) {
+			continue;
+		}
+		if (d->HasSurfToAir() || d->HasSubToAir()) {
+			f.dpsAir += dps;
+		}
+		if (d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater()) {
+			f.dpsSurf += dps;
+		}
+		f.armedRange = std::min(f.armedRange, d->GetMaxRange());
+	}
+	if (f.armedRange == std::numeric_limits<float>::max()) {
+		f.armedRange = 0.f;
+	}
+	f.mph = cost / std::max(hp, 1.f);
+	if (leader != nullptr) {
+		f.ownPow = std::max(leader->GetCircuitDef()->GetPower(), 1.f);
+		f.air = leader->GetCircuitDef()->IsAbleToFly();
+	}
+	return f;
+}
+
+float ISquadTask::FireAt(const SFire& f, const CCircuitDef* edef)
+{
+	return edef->IsAbleToFly() ? f.dpsAir : f.dpsSurf;
+}
+
+float ISquadTask::EnemyHp(CEnemyInfo* e)
+{
+	float h = e->GetHealth();
+	if ((h <= 0.f) && (e->GetCircuitDef() != nullptr)) {
+		h = e->GetCircuitDef()->GetHealth();
+	}
+	return std::max(h, 1.f);
+}
+
+// A building is worth its metal over the threat faced to take it (FindTarget's pull, so the wall
+// is still walked past to the economy); an army unit, its metal plus what it kills of ours while
+// it lives -- longer by the walk in when it outranges our shortest gun (docs/24: long range first).
+float ISquadTask::TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) const
+{
+	CCircuitDef* ed = e->GetCircuitDef();
+	if (ed == nullptr) {
+		return std::max(e->GetCost(), 1.f);
+	}
+	const float cost = std::max(ed->GetCostM(), 1.f);
+	if (!ed->IsMobile()) {
+		return cost * f.ownPow / (ed->GetPower() + f.ownPow);
+	}
+	const bool hitsUs = f.air ? (ed->HasSurfToAir() || ed->HasSubToAir())
+			: (ed->HasSurfToLand() || ed->HasSurfToWater() || ed->HasSubToLand() || ed->HasSubToWater());
+	if (!hitsUs) {
+		return cost;
+	}
+	const float approachS = std::max(ed->GetMaxRange() - f.armedRange, 0.f) / std::max(lowestSpeed, 1.f);
+	return cost + ed->GetRawDps() * f.mph * (horizonS + approachS);
+}
+
+bool ISquadTask::FireStale() const
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	for (const auto& kv : fireAt) {
+		CEnemyInfo* e = circuit->GetEnemyInfo(kv.second);
+		if ((e == nullptr) || !e->IsInLOS()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// LETHAL DOSES (docs/24 Targets): the targets in reach of the engagement, best metal per second
+// of our fire first; each takes the members whose fire kills it within one re-issue (3 s), the
+// smallest that finishes it, and the rest go on to the next. apply=false only measures the
+// squad as it fights today, every member on the squad's one target.
+void ISquadTask::AllocateFire(int frame, const AIFloat3& tPos, bool apply)
+{
+	static constexpr float DOSE_S = 3.f;  // = Attack's repeat cadence
+	CCircuitAI* circuit = manager->GetCircuit();
+	allocFrame = frame;
+	fireAt.clear();
+	const SFire f = SquadFire();
+	struct SCand { CEnemyInfo* e; AIFloat3 pos; float hp, cost, w, got; bool air; int cat; };
+	std::vector<SCand> cands;
+	const float sqR = SQUARE(highestRange + DEFAULT_SLACK);
+	float clearS = 0.f;
+	for (const auto& kv : circuit->GetEnemyInfos()) {
+		CEnemyInfo* e = kv.second;
+		CCircuitDef* ed = e->GetCircuitDef();
+		if ((ed == nullptr) || e->IsHidden() || !e->IsInLOS() || ed->IsIgnore()
+			|| (e->GetPos().SqDistance2D(tPos) > sqR))
+		{
+			continue;
+		}
+		const float dps = FireAt(f, ed);
+		if (dps <= 0.f) {
+			continue;
+		}
+		const float hp = EnemyHp(e);
+		clearS += hp / dps;
+		cands.push_back({e, e->GetPos(), hp, ed->GetCostM(), dps / hp, 0.f, ed->IsAbleToFly(), ed->GetCategory()});
+	}
+	if (cands.empty()) {
+		return;
+	}
+	for (SCand& c : cands) {
+		c.w *= TargetWorth(f, c.e, clearS);
+	}
+	std::sort(cands.begin(), cands.end(), [](const SCand& a, const SCand& b) { return a.w > b.w; });
+
+	struct SMem { CCircuitUnit* u; AIFloat3 pos; float dps, range; int cat; bool air, surf; int tgt; };
+	std::vector<SMem> mem;
+	for (CCircuitUnit* u : units) {
+		CCircuitDef* d = u->GetCircuitDef();
+		if ((u->Blocker() != nullptr) || (d->GetRawDps() <= 0.f)) {
+			continue;
+		}
+		mem.push_back({u, u->GetPos(frame), d->GetRawDps(), d->GetMaxRange(), d->GetTargetCategory(),
+				d->HasSurfToAir() || d->HasSubToAir(),
+				d->HasSurfToLand() || d->HasSurfToWater() || d->HasSubToLand() || d->HasSubToWater(), -1});
+	}
+	auto canHit = [](const SMem& m, const SCand& c) {
+		return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0) && (m.pos.SqDistance2D(c.pos) <= SQUARE(m.range));
+	};
+
+	STgtStat& st = TgtStat(circuit);
+	++st.alloc;
+	int mainIdx = -1;
+	for (size_t i = 0; i < cands.size(); ++i) {
+		if (cands[i].e == GetTarget()) {
+			mainIdx = (int)i;
+		}
+	}
+	CCircuitDef* mainDef = GetTarget()->GetCircuitDef();
+	const float mainCost = (mainDef != nullptr) ? mainDef->GetCostM() : 0.f;
+	for (SMem& m : mem) {
+		float best = std::numeric_limits<float>::max();
+		float bestM = -1.f;
+		for (const SCand& c : cands) {
+			const float d = canHit(m, c) ? m.pos.SqDistance2D(c.pos) : best;
+			if (d < best) {
+				best = d;
+				bestM = c.cost;
+			}
+		}
+		if (bestM < 0.f) {
+			continue;
+		}
+		st.nearM += bestM;
+		if (!apply) {
+			++st.asg;
+			st.asgM += mainCost;
+			if ((mainIdx >= 0) && canHit(m, cands[mainIdx])) {
+				cands[mainIdx].got += m.dps;
+			}
+		}
+	}
+
+	if (apply) {
+		for (size_t i = 0; i < cands.size(); ++i) {
+			SCand& c = cands[i];
+			float need = c.hp;
+			while (need > 0.f) {
+				int pick = -1;
+				for (size_t k = 0; k < mem.size(); ++k) {
+					if ((mem[k].tgt >= 0) || !canHit(mem[k], c)) {
+						continue;
+					}
+					if (pick < 0) {
+						pick = (int)k;
+						continue;
+					}
+					const float dk = mem[k].dps * DOSE_S;
+					const float dp = mem[pick].dps * DOSE_S;
+					const bool kFin = dk >= need;
+					const bool pFin = dp >= need;
+					if ((kFin && (!pFin || (dk < dp))) || (!kFin && !pFin && (dk > dp))) {
+						pick = (int)k;
+					}
+				}
+				if (pick < 0) {
+					break;
+				}
+				mem[pick].tgt = (int)i;
+				c.got += mem[pick].dps;
+				need -= mem[pick].dps * DOSE_S;
+			}
+		}
+		for (SMem& m : mem) {
+			for (size_t i = 0; (m.tgt < 0) && (i < cands.size()); ++i) {
+				if (canHit(m, cands[i])) {
+					m.tgt = (int)i;
+					cands[i].got += m.dps;
+				}
+			}
+			if (m.tgt >= 0) {
+				fireAt[m.u->GetId()] = cands[m.tgt].e->GetId();
+				++st.asg;
+				st.asgM += cands[m.tgt].cost;
+			}
+		}
+	}
+	for (const SCand& c : cands) {
+		if (c.got > 0.f) {
+			++st.tgts;
+			st.doseF += c.got * DOSE_S;
+			st.overF += std::max(c.got * DOSE_S - c.hp, 0.f);
+		}
+	}
+}
+
 void ISquadTask::Attack(const int frame)
 {
 	Attack(frame, GetTarget()->GetUnit()->IsCloaked());
@@ -685,6 +958,17 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 	int& fearLog = fearLogAt[circuit->GetTeamId()];
 	std::string fearEx;
 
+	const bool tv = circuit->GetTunable("apex_target_value", 0.f) > 0.f;
+	const bool newEng = GetTarget()->GetId() != engTgt;
+	STgtStat& tst = TgtStat(circuit);
+	if (newEng) {
+		engTgt = GetTarget()->GetId();
+		++tst.eng;
+	}
+	if (isRepeatAttack || newEng || (tv && (frame >= allocFrame + FRAMES_PER_SEC) && FireStale())) {
+		AllocateFire(frame, tPos, tv && !isGround);
+	}
+
 	int row = 0;
 	for (const auto& kv : rangeUnits) {
 		CCircuitDef* rowDef = (*kv.second.begin())->GetCircuitDef();
@@ -742,11 +1026,19 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				}
 			}
 
+			CEnemyInfo* uTgt = GetTarget();
+			const auto fa = fireAt.find(unit->GetId());
+			if (fa != fireAt.end()) {
+				CEnemyInfo* a = circuit->GetEnemyInfo(fa->second);
+				uTgt = (a != nullptr) ? a : uTgt;
+			}
 			if (isRepeatAttack
 				|| inside
-				|| (unit->GetTarget() != GetTarget())
+				|| (unit->GetTarget() != uTgt)
 				|| (unit->GetTargetTile() != targetTile))
 			{
+				++tst.ord;
+				tst.ordSplit += (uTgt != GetTarget()) ? 1 : 0;
 				const float angle = alpha + beta;
 				const float r = (iterNum == 0) ? range0 : range;
 				AIFloat3 newPos(tPos.x + r * cosf(angle), tPos.y, tPos.z + r * sinf(angle));
@@ -831,7 +1123,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				fn[1] += inside ? 1 : 0;
 				fn[2] += fodder ? 1 : 0;
 				CTerrainManager::CorrectPosition(newPos);
-				unit->Attack(newPos, GetTarget(), targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60, feared);
+				unit->Attack(newPos, uTgt, targetTile, isGround, isStatic, frame + FRAMES_PER_SEC * 60, feared);
 			}
 
 			beta += delta;

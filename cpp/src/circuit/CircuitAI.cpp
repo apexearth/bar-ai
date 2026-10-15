@@ -24,6 +24,7 @@
 #include "terrain/path/PathFinder.h"
 #include "task/PlayerTask.h"
 #include "task/fighter/FighterTask.h"
+#include "task/fighter/SquadTask.h"
 #include "unit/CircuitUnit.h"
 #include "unit/ally/AllyUnit.h"
 #include "unit/enemy/EnemyUnit.h"
@@ -535,6 +536,9 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 				// allied with us -- ours iff it is one of our team units.
 				script->EnemyDestroyed(enemy->GetCircuitDef(), enemy->GetPos(),
 						GetTeamUnit(evt->attacker) != nullptr);
+				if (GetTeamUnit(evt->attacker) != nullptr) {
+					ISquadTask::NoteTargetKill(this, enemy->GetCircuitDef());
+				}
 				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
 				ret = 0;
 			} else {
