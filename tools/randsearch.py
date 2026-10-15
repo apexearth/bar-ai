@@ -347,6 +347,10 @@ def finish(st, n, gi, sc, ver=None):
         n["status"] = "out"
 
 
+MIN_FREE_GB = 5
+_disk_logged = 0.0
+
+
 def workers():
     """runtime/nn/workers-cem, at most MAX_WORKERS (his 10-11: 8-10 headless games at once)."""
     try:
@@ -367,6 +371,15 @@ def worker(slot, st, lay, rng):
 
 def work(slot, st, lay, rng):
     while not os.path.exists(neuro.STOP) and not os.path.exists(RESTART):
+        # 10-15 04:27: C: full, every game died at unitsync Init and 1,597 networks were born and failed in a minute
+        if shutil.disk_usage(REPO).free < MIN_FREE_GB * (1 << 30):
+            global _disk_logged
+            if time.time() - _disk_logged > 600:
+                _disk_logged = time.time()
+                log("worker %d waiting: %.1f GB free on the repo drive, under %d" % (
+                    slot, shutil.disk_usage(REPO).free / (1 << 30), MIN_FREE_GB))
+            time.sleep(60)
+            continue
         if slot >= workers():
             # a spare slot must also see the search end, or join() waits on it forever (10-12 07:21 -> 08:28)
             with lock:
