@@ -331,7 +331,7 @@ float ArmyFront(AIFloat3 &out pos)
 	return gArmyFrontFf;
 }
 // COVER, NOT A NO-GO MAP. This asked !InEnemyReach(site), refusing every spot
-// an enemy weapon covers -- the ground docs/24 sends the bot to ("heal units
+// an enemy weapon covers -- the ground docs/doctrine.md sends the bot to ("heal units
 // while they fight", "eat their wrecks"), since a unit that is fighting is
 // inside enemy reach by definition. The question is his other one: "stand
 // behind allied units away from enemies." Only ARMED allies paint allyInfl
@@ -373,7 +373,7 @@ bool RezSiteOk(CCircuitUnit@ unit, const AIFloat3 &in site)
 		return false;
 	}
 	// THE COVER BRANCH IS REVERTED, ON THE BATTERY. Letting a bot take work
-	// wherever our influence merely matched theirs -- docs/24's "heal units
+	// wherever our influence merely matched theirs -- docs/doctrine.md's "heal units
 	// while they fight" read literally -- collapsed army from 11.7% to 5.6% of
 	// spend over 18 games while metal produced fell 37,432 -> 33,975. His
 	// doctrine stands; this reading of it does not, and the veto is not what

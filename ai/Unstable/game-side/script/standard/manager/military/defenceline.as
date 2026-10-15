@@ -186,7 +186,7 @@ float TeamAA()
 	return TeamSum(TV_AA, float(OwnStaticAA()));
 }
 
-// KILL PHASE (docs/20-brain-overhaul.md): the engine consults this hook for
+// KILL PHASE (docs/how-it-works.md): the engine consults this hook for
 // every threatened cluster; a MISSING function would fall through to the
 // DLL's native DefaultMakeDefence -- a spender -- so the stub must exist and
 // spend nothing. Sensors are structures too, so DefaultMakeSensors is not

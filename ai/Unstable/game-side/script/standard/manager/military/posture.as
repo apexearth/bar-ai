@@ -225,7 +225,7 @@ void ApplyRetreatPosture()
 	const float bar = (secs > 0.f) ? (Eco::MInc() * secs) : 0.f;
 	uint zeroed = 0;
 	for (uint i = 0; i < gPostureDef.length(); ++i) {
-		// A charger is never pulled back (docs/24); the walk home is what kills it.
+		// A charger is never pulled back (docs/doctrine.md); the walk home is what kills it.
 		const bool zero = (gPostureFodder[i] && gRaiderSuicidal)
 			|| (gPostureDef[i].costM < bar) || IsChargerDef(gPostureDef[i]);
 		// WRITE ON THE EDGE, NOT EVERY FRAME. gPostureRetreat is a snapshot
@@ -502,7 +502,7 @@ void UpdateLanePos()
 			haveGuns = true;
 		}
 		// Our own perimeter is never "forward of our guns": the front is
-		// where our holdings end (docs/24), and the forward mexes are
+		// where our holdings end (docs/doctrine.md), and the forward mexes are
 		// holdings. Pulled back to the rim towers the army stood at 0.18
 		// while every spot past 0.3 went to the enemy; the pull-back keeps
 		// its meaning for the fallback lane, which is a guess at a front.

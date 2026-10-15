@@ -8,7 +8,7 @@
 // Functions are visible module-wide regardless of file, so only globals,
 // consts and types constrain where code may move.
 //
-// KILL PHASE (docs/20-brain-overhaul.md): every leaf spending rule is removed.
+// KILL PHASE (docs/how-it-works.md): every leaf spending rule is removed.
 // What remains is senses, the Requests plumbing, rez-bot unit thoughts, and
 // the hollowed ladder.
 #include "builder/reclaim.as"     // wreck valuation, rez bots, reclaim-vs-resurrect

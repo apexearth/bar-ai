@@ -1,6 +1,6 @@
 namespace Builder {
 
-// KILL PHASE (docs/20-brain-overhaul.md): the ladder is holds -> Brain::Decide
+// KILL PHASE (docs/how-it-works.md): the ladder is holds -> Brain::Decide
 // -> idle. Every leaf spending rule is gone, and there is deliberately NO
 // fall-through to aiBuilderMgr.DefaultMakeTask -- the engine's native economy
 // is leaf logic too. A constructor the Brain has no answer for idles visibly.

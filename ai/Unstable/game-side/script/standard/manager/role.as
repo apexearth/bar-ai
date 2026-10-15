@@ -1,6 +1,6 @@
 namespace Role {
 
-// THE ROLE LAYER, kill phase (docs/20-brain-overhaul.md): the policy methods
+// THE ROLE LAYER, kill phase (docs/how-it-works.md): the policy methods
 // and objective machinery died with their consumers. What survives is the
 // SENSE the rebuild will price Wants from -- the build-power measurement --
 // and the two answers kept callers still ask.

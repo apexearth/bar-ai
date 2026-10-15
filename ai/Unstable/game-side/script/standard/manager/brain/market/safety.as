@@ -703,7 +703,7 @@ IUnitTask@ CommanderSafety(CCircuitUnit@ unit)
 	if ((ai.GetTunable("apex_comm_fight", TUNE_COMM_FIGHT) > 0.f) && !ComRetreating() && !ComTurreting())
 	{
 		// His strength at his current hp, against theirs -- not metal against
-		// metal (apexearth, docs/24). The kill is still WORTH metal below.
+		// metal (apexearth, docs/doctrine.md). The kill is still WORTH metal below.
 		const float mine = UnitStrength(int(unit.circuitDef.id)) * unit.GetHealthPercent();
 		const float r = ai.GetTunable("apex_threat_r", TUNE_THREAT_R);
 		const bool heavyOk = !caution && (unit.GetHealthPercent() >= COM_RETREAT_HEALTH);

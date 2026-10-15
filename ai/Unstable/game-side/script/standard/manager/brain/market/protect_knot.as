@@ -1,5 +1,5 @@
 namespace Market {
-// docs/24: one gun is not a defence; the lines face the front; defend the
+// docs/doctrine.md: one gun is not a defence; the lines face the front; defend the
 // raided side. Prices for DefSiteFill, not gates. Guns fight together (strength
 // goes with the square of the guns firing at once), so a gun is priced at its
 // share of finishing the knot it joins; the siege hazard is spread over

@@ -661,7 +661,7 @@ float DefenceShortfall()
 
 // Tower metal already ordered. The gap that drives the pull counted only
 // standing towers, so every slot kept asking at full gap while ten were framed.
-// The defence target split like the army (docs/24, 2026-09-28): where our
+// The defence target split like the army (docs/doctrine.md, 2026-09-28): where our
 // land is cut off, the water's share of it is held only by floating guns --
 // torpedo launchers and floating towers out from our shore, so a yard stands.
 // WHERE THE NEXT FLOATING GUN GOES (his watch 2026-09-28: three torpedo

@@ -157,7 +157,7 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	// a feature, the enemy in front, or read nothing for a radar-only target.
 	const bool isLowTraj = !unit->IsDGunHigh() && !isRoleComm;
 	const bool notByCost = !cdef->IsAttrDGCost();
-	// Valued by power, as he values himself (docs/24); metal only orders the
+	// Valued by power, as he values himself (docs/doctrine.md); metal only orders the
 	// unarmed below every armed unit, so a lone builder still draws a shot.
 	const float costTie = notByCost ? 0.f : 1e-4f;
 	const float sqRange = SQUARE(range);
@@ -344,7 +344,7 @@ void CDGunAction::Update(CCircuitAI* circuit)
 	}
 
 	// An in-range shot outranks a walk, unless the bank holds one shot and the
-	// walk's beam is worth more: one charge goes on the heaviest (docs/24).
+	// walk's beam is worth more: one charge goes on the heaviest (docs/doctrine.md).
 	const bool oneShot = eCur < 2.f * unit->GetDGunCostE();
 	const char* why = "range";
 	if ((bestFar != nullptr) && ((bestTarget == nullptr) || (oneShot && (maxFar > maxScore)))) {

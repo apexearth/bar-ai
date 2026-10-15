@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// THE BUILDER MARKET, prototype 1 (docs/20-brain-overhaul.md, value-paradigm
+// THE BUILDER MARKET, prototype 1 (docs/how-it-works.md, value-paradigm
 // skill). Every choice is a priced Want in one currency:
 //
 //   value = gain / (mCost + tCost)          [ (metal/s) per metal = 1/s ]

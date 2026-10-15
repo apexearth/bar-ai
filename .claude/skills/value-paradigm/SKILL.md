@@ -27,11 +27,11 @@ So the frame carries an obligation: **when a price grows past a handful of
 terms, the fix is to DELETE terms, not to add a better one.** Before repricing
 anything, log the decomposition of the winning choice and the runner-up, and
 find which three or four terms actually carry it. See
-`docs/21-simplification.md`.
+`docs/traps.md`.
 
 ## The objective: FASTEST PATH TO A TARGET STATE
 
-**`docs/23-the-plan.md` states this in two paragraphs and is the source. Read
+**`docs/how-it-works.md` ("The one idea") states this in a paragraph and is the source. Read
 it first.** What follows is the operational detail — do not restate the intent
 here, or the two will drift apart.
 
@@ -284,7 +284,7 @@ gates that jointly imply a value.
 - Multipliers change how much, never whether. A role's "no army" is a 0x
   multiplier on the army value, not thirteen early returns.
 
-Design record: docs/20-brain-overhaul.md and the session design page
+Design record: docs/how-it-works.md and the session design page
 ("The Brain Rebuild" artifact). Related memories: economy-over-static-numbers,
 build-power-closed-loop, brain-overhaul-mandate.
 

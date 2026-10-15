@@ -956,7 +956,7 @@ static void CCircuitUnit_CmdBARPriority(CCircuitUnit* unit, float value)
 // order is applied when that message is consumed, and at benchmark sim speed
 // that is ~45 sim-seconds later. This call answers what the engine has APPLIED,
 // never what we have SENT. Anything throttling on it must keep its own count of
-// what is outstanding. See docs/19-factory-through-brain.md.
+// what is outstanding. See docs/traps.md (S45).
 // THE WHOLE COMMAND QUEUE, not just the build orders. CountQueued below filters
 // to negative cmdIds, which is right for a factory and blind for a builder: a
 // constructor walking to a site holds a MOVE, and a positive id is invisible to
@@ -2316,7 +2316,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildDistance() const", asMETHOD(CCircuitDef, GetBuildDistance), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsMex() const", asMETHOD(CCircuitDef, IsMex), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsBuilder() const", asMETHOD(CCircuitDef, IsBuilder), asCALL_THISCALL); ASSERT(r >= 0);
-	// Def-property senses for the Catalog (docs/20-brain-overhaul.md step 0).
+	// Def-property senses for the Catalog (docs/how-it-works.md).
 	// costM/costE/health/speed/power are already object properties above.
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildTime() const", asMETHOD(CCircuitDef, GetBuildTime), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetBuildSpeed() const", asMETHOD(CCircuitDef, GetBuildSpeed), asCALL_THISCALL); ASSERT(r >= 0);

@@ -398,7 +398,7 @@ bool HoldHomeOnce()
 }
 
 // WHICH TASK BALLS UP: per fight type, of our units with enemy influence on
-// them, the mean count of our own within splash range (docs/24, "never a
+// them, the mean count of our own within splash range (docs/doctrine.md, "never a
 // ball"; his 8v8 showed 7-12 to BARb's 3-5).
 int gNextPackLog = 0;
 void PackingCensus(const array<CCircuitUnit@>@ alive, const array<AIFloat3>@ pos)
@@ -787,7 +787,7 @@ void UpdateWithdraw()
 				continue;
 			back = (hasHeld && (!hasGun || (held.distance2D(p) < gun.distance2D(p)))) ? held : gun;
 		}
-		// A retreat never walks into a threat (docs/24): "rearward" is the map axis, and with
+		// A retreat never walks into a threat (docs/doctrine.md): "rearward" is the map axis, and with
 		// their army inside our base a rally or gun behind us on that axis lay through them --
 		// full-health defenders walked into the blob under a bare move (his 10-13, watchloop-814).
 		if (!recallHome && WalksIntoThem(p, back)) {

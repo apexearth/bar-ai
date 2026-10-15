@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The raid-defence regression test: scripted raids, no turrets, judged per wave.
 
-docs/24-how-units-fight.md: "A player should be able to respond to radar
+docs/doctrine.md: "A player should be able to respond to radar
 sightings to position units properly for defending buildings... we need to be
 extremely good at detecting enemy threats in our areas, creating appropriately
 sized squads, and hunting down those enemies."

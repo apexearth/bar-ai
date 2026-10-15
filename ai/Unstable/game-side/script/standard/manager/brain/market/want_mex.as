@@ -666,7 +666,7 @@ IUnitTask@ JoinBigEnergy(CCircuitUnit@ unit, CCircuitDef@ want)
 // every con death -- against the hot gate's own bar: ground our guns do not
 // reach that is hot for a builder is not walked through, whatever the spot
 // pays. (This compared GetEnemyCostAt, a visible-unit COUNT, against the
-// walker's metal: it never once fired, docs/25 S28.)
+// walker's metal: it never once fired, docs/traps.md S28.)
 bool SpotHot(const AIFloat3& in p)
 {
 	const float hot = ai.GetThreatAt(p);
@@ -1081,7 +1081,7 @@ int PickSpot(CCircuitUnit@ unit, const AIFloat3& in here, float speed)
 		// buys energy while the next spot in stands unclaimed.
 		// ...but as the SAME price the two gates above are, when
 		// apex_com_mex_price > 0: as a veto it is the largest single refuser
-		// of extraction and it does not keep him alive. See docs/27.
+		// of extraction and it does not keep him alive. See docs/tunables.md.
 		float comPen = 1.f;
 		if (comm && (comF >= 1.f) && ComFar(sp)) {
 			++gMexComFar;
@@ -1242,7 +1242,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// Survival over the mex's own delivery time, the horizon energy
 		// pays (TechSurvival), not a fixed 300 s: the longer horizon priced
 		// a home mex at half of a solar standing beside it. The trip risk
-		// is his distance-and-army-share model (docs/24 era directives).
+		// is his distance-and-army-share model (docs/doctrine.md era directives).
 		const float surv = StreamSurvivalOver(pos, walkSec + Catalog::BuildSecondsAt(d, mxBP));
 		gain *= surv * (1.f - risk);
 		// Metal we cannot spend scales nothing, so it is not priced as though

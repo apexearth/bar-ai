@@ -18,8 +18,8 @@
 //
 // One line per entry: its units where the name implies them, then what the
 // knob does. The reasoning behind a default -- the measurement, the A/B that
-// failed, the ruling -- is in docs/27-tunable-rationale.md under the same
-// TUNE_ name; "See docs/27" on an entry means there is more there. Where the
+// failed, the ruling -- is in docs/tunables.md under the same
+// TUNE_ name; "See docs/tunables.md" on an entry means there is more there. Where the
 // knob is READ is not written down, because it rots: grep the apex_ name, or
 // read the dashboard's Balance tab, which derives it from the source tree.
 //
@@ -43,12 +43,12 @@ const float TUNE_DUP_BANK = 1.f;
 const float TUNE_ENERGY_HEADROOM = 1.35f;
 
 // [toggle 0/1] -- THE ECONOMY-ONLY ETA OBJECTIVE. 0 changes nothing; 1 lets the
-//   ETA re-rank wants WITHIN the four economic categories. See docs/27.
+//   ETA re-rank wants WITHIN the four economic categories. See docs/tunables.md.
 const float TUNE_ETA = 1.f;
 
 // [switch] -- economy-only benchmark: no army products, no defence, AA or
 //   superweapon wants. For measuring how fast the economy alone scales against
-//   an inactive opponent (apexearth's canon scenario, 2026-09-08). See docs/27.
+//   an inactive opponent (apexearth's canon scenario, 2026-09-08). See docs/tunables.md.
 const float TUNE_ECO_ONLY = 0.f;
 
 // [toggle 0/1] -- The `apex: eta` shadow log with the ETA layer OFF. One line
@@ -77,7 +77,7 @@ const float TUNE_RECLAIM_PAD = 1.5f;
 const float TUNE_RECLAIM_SOLAR_E = 500.f;
 
 // [metal/s] -- Metal income required before committing to T2 (techlead.as
-//   RushReady, and the rear plant-siting rule reads the same knob). See docs/27.
+//   RushReady, and the rear plant-siting rule reads the same knob). See docs/tunables.md.
 const float TUNE_T2_METAL = 30.f;
 
 // [energy/s] -- Energy income required before starting T2 (techlead.as
@@ -101,7 +101,7 @@ const float TUNE_T2_ENERGY_REACTOR = 400.f;
 const float TUNE_CONSERVATIVE_HOLD = 1.f;
 
 // [curve] -- T1 constructor curve slope: cons wanted = A x ln(income) + B. At
-//   A=4.6/B=-6.55 that is ~4 cons at 10 m/s, ~14 at 100. See docs/27.
+//   A=4.6/B=-6.55 that is ~4 cons at 10 m/s, ~14 at 100. See docs/tunables.md.
 const float TUNE_CON_LOG_T1_A = 4.6f;
 
 // [curve] -- T1 constructor curve intercept -- see apex_con_log_t1_a.
@@ -126,7 +126,7 @@ const float TUNE_GREED_CONS = 1.7f;
 const float TUNE_SITE_COST_PER_WORKER = 215.8f;
 
 // Buildtime per worker -- the other arm of the site crew, taken as a MAX with
-//   the cost arm so it only ever raises the cap. See docs/27.
+//   the cost arm so it only ever raises the cap. See docs/tunables.md.
 const float TUNE_SITE_BT_PER_WORKER = 4700.f;
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ const float TUNE_EXTRA_PLANT_ARMY = 0.85f;
 
 // [ratio] -- How deep the facqueue keeps each driven line, as a multiple of
 //   the line's re-election gap, measured in that line's own build seconds. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_FAC_QUEUE = 1.5f;
 
 // [toggle 0/1] -- The Brain drives every factory line (quota-based orders,
@@ -294,7 +294,7 @@ const float TUNE_MASS_FLOOR = 5.f;
 // [seconds] -- Bound the hold. A pool commits when it reaches its want or a
 //   killing blow opens, never on a clock: the expiry sent under-strength
 //   pushes into the enemy's T2 wave ("committing at 78" of 110 wanted, then
-//   the army halved in two minutes). See docs/27.
+//   the army halved in two minutes). See docs/tunables.md.
 const float TUNE_MASS_HOLD_SECS = 100000.f;
 
 // [ratio] -- The massing floor is also bounded below by the biggest enemy
@@ -348,7 +348,7 @@ const float TUNE_RAID_PER_INCOME = 0.2f;
 // RAID_ASK [0/1] -- 1 = the raid director ASKS for a raid: it finds enemy
 //   ground nothing is holding, sizes a pack against what does hold it, and
 //   pulls units out of their current tasks to make it. 0 = the stock pool
-//   only, which waits for raiders to trickle in and merge. See docs/27.
+//   only, which waits for raiders to trickle in and merge. See docs/tunables.md.
 const float TUNE_RAID_ASK = 1.f;
 
 // [seconds] -- EXPERIMENT, default off. A no-retreat bar at units cheaper
@@ -426,7 +426,7 @@ const float TUNE_RECALL_HOME = 1.f;
 
 // [fraction 0-1] -- Only squads this far past our own territory
 //   (ForwardFraction) are recalled -- units already fighting near home need no
-//   order, they are already where they are needed. See docs/27.
+//   order, they are already where they are needed. See docs/tunables.md.
 const float TUNE_RECALL_HOME_FWD = 0.5f;
 
 // [toggle 0/1] -- ForwardFraction takes its bearing from the REMEMBERED enemy
@@ -465,7 +465,7 @@ const float TUNE_WITHDRAW_ODDS = 1.5f;
 // [flag] -- A unit standing within its own range of a mex spot we hold or could
 //   claim ignores the influence and incoming-group withdrawals while the odds
 //   are not against it; the outgunned, losing-trade, leash and base-attacked
-//   pull-backs still apply. 0 restores the withdrawals. See docs/27.
+//   pull-backs still apply. 0 restores the withdrawals. See docs/tunables.md.
 const float TUNE_HOLD_MEX_GROUND = 0.f;
 
 // [seconds] -- A withdrawing unit's pull-back order is re-issued at most once
@@ -485,7 +485,7 @@ const float TUNE_LOSING_TRADE = 3.f;
 const float TUNE_LOSING_FLOOR = 250.f;
 
 // [toggle 0/1] -- Abort a losing ATTACK/RAID task outright so the squad
-//   re-pools together. See docs/27.
+//   re-pools together. See docs/tunables.md.
 const float TUNE_FIGHT_ABORT = 0.f;
 
 // [ratio] -- metal-vs-metal army ratio (ours/theirs) at which the massed pool
@@ -494,15 +494,15 @@ const float TUNE_FIGHT_ABORT = 0.f;
 const float TUNE_ATTACK_EDGE = 0.95f;
 
 // [metal] -- units at or under this cost are fodder: exempt from massing,
-//   always sent forward (their job is vision and pulled fire). See docs/27.
+//   always sent forward (their job is vision and pulled fire). See docs/tunables.md.
 const float TUNE_FODDER_COST = 100.f;
 
 // [seconds] -- half-life of gSeenPeak, the largest enemy massing threat ever
-//   seen at once. See docs/27.
+//   seen at once. See docs/tunables.md.
 const float TUNE_SEEN_HALFLIFE = 300.f;
 
 // [toggle 0/1] -- evaluate the SPEND_* target curves against live income (1)
-//   or against the frame-0 column (0). See docs/27.
+//   or against the frame-0 column (0). See docs/tunables.md.
 const float TUNE_BUDGET_LIVE = 0.f;
 
 // [ratio] -- enemy/our army ratio at or above which we stop attacking entirely
@@ -521,7 +521,7 @@ const float TUNE_RAID_MIN_EARLY = 45.f;
 const float TUNE_RAID_TAU = 60.f;
 
 // [ratio] -- how much enemy STATIC defence counts in the massing decision, per
-//   metal. See docs/27.
+//   metal. See docs/tunables.md.
 const float TUNE_STATIC_DEFENSE_WEIGHT = 0.5f;
 
 // ---------------------------------------------------------------------------
@@ -534,33 +534,33 @@ const float TUNE_ANTINUKE_INCOME = 60.f;
 // [light towers] -- MINIMUM PROTECTION PER MEX, per gun the spot earns
 //   (MexGunsWanted): 1.0 is one light tower's cover per wanted gun. A mex
 //   nothing has attacked yet reads a wave of zero and was skipped outright
-//   until something came for it. See docs/27.
+//   until something came for it. See docs/tunables.md.
 const float TUNE_MEX_COVER_FLOOR = 1.0f;
 
 // [metal] -- Fielded army value at which the mobile screen, not per-mex
-//   towers, takes over answering leaks. See docs/27.
+//   towers, takes over answering leaks. See docs/tunables.md.
 const float TUNE_LEAK_SCREEN_M = 800.f;
 
 // [ratio] -- A choke-gate site's threat floor as a multiple of the arriving
 //   wave: the gate keeps deepening until its cover OVERWHELMS the push, not
 //   merely matches it ("Have an unusual amount of tower at some spots. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_GATE_DEPTH = 2.f;
 
 // [toggle 0/1] -- The teeth line: one wall piece per election across the
 //   strongest defended gate's span, a step enemy-ward of the doorway ("slow them
-//   down with some walls outside"). See docs/27.
+//   down with some walls outside"). See docs/tunables.md.
 const float TUNE_TEETH = 0.f;   // his 10-14: "lets stop making walls, we make too many"
 
 // [ratio] -- HOW HARD A BUILDER PREFERS THE GROUND IT IS ALREADY STANDING ON.
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_DEF_SITE_WALK = 1.f;
 
 // [toggle 0/1] -- COVER WHAT YOU JUST BUILT. The category draw is
 //   proportional, not argmax, so a tower worth twice the mex beside it still
 //   loses the roll about half the time -- which is what "we don't immediately
 //   make the light tower" looks like from the outside (apexearth, twice). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_COVER_PUSH = 1.f;
 
 // [metal] -- Bombers join home-base defence only while seen enemy AA value is
@@ -573,12 +573,12 @@ const float TUNE_DEFEND_HOME = 1.f;
 
 // [fraction 0-1] -- A DEFEND-task unit farther forward than this (on losing
 //   ground) is recalled first -- it is in the wrong place by the task's own
-//   meaning. See docs/27.
+//   meaning. See docs/tunables.md.
 const float TUNE_DEFEND_LEASH = 0.55f;
 
 // apex_hold_committed: units standing on ground the enemy's guns cover are
 //   never given solo pull-out orders -- the split (half fights, half runs) loses
-//   the fight twice. See docs/27.
+//   the fight twice. See docs/tunables.md.
 const float TUNE_HOLD_COMMITTED = 1.f;
 
 // [ratio] -- A tower's counted reach is capped at the light tower's range
@@ -603,11 +603,11 @@ const float TUNE_LANE_DEFENSIVE = 0.15f;
 
 // Shield metal we aim to have standing per metal of enemy bombardment -- the
 //   plasma twin of AA_COVER_FRAC, and the term that stops dome-stacking without
-//   a cap or a count. See docs/27.
+//   a cap or a count. See docs/tunables.md.
 const float TUNE_SHIELD_COVER_FRAC = 0.5f;
 
 // SHIELD_URGENCY: multiplier on the bombardment arrival rate, the plasma twin
-//   of AA_URGENCY. Replaces an undocumented literal x4. See docs/27.
+//   of AA_URGENCY. Replaces an undocumented literal x4. See docs/tunables.md.
 const float TUNE_SHIELD_URGENCY = 1.f;
 
 // [toggle 0/1] -- Stuck units get an unblock nudge (reclaim/move of what pins
@@ -656,16 +656,16 @@ const float TUNE_NUKE_SPREAD = 450.f;
 // Air eco-assassination (manager/air/state.as)
 // ---------------------------------------------------------------------------
 // [elmos] -- Radius around the enemy centroid sampled for how packed their
-//   base is. See docs/27.
+//   base is. See docs/tunables.md.
 const float TUNE_AIR_CLUSTER_R = 900.f;
 
 // [AA metal soaked per point of bomber health] -- Wing HEALTH is what absorbs
-//   AA, so a 16,700 hp Dragon soaks 25x what a 670 hp Thunder does. See docs/27.
+//   AA, so a 16,700 hp Dragon soaks 25x what a 670 hp Thunder does. See docs/tunables.md.
 const float TUNE_AIR_AA_SOAK = 0.05f;
 
 // [toggle 0/1] -- The strike sizes against the enemy AA census divided by
 //   their base count (mirrored from our own team size): a raid overflies ONE
-//   base and static AA cannot concentrate. See docs/27.
+//   base and static AA cannot concentrate. See docs/tunables.md.
 const float TUNE_AIR_AA_SPLIT = 1.f;
 
 // [multiple] -- Expected damage a raid must return against its own metal
@@ -673,7 +673,7 @@ const float TUNE_AIR_AA_SPLIT = 1.f;
 const float TUNE_AIR_PAYOFF = 1.5f;
 
 // [seconds] -- How long after a strike launches before it is scored. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_AIR_SETTLE_S = 90.f;
 
 // [weight 0-1] -- How much one scored run moves the running estimate of a
@@ -688,7 +688,7 @@ const float TUNE_AIR_OBS_W = 0.5f;
 const float TUNE_COMM_RULES = 1.f;
 
 // [fraction of his own cost] -- Fielded enemy HEAVY+SUPER mass at this
-//   fraction of the commander's value makes him cautious. See docs/27.
+//   fraction of the commander's value makes him cautious. See docs/tunables.md.
 const float TUNE_COMM_HEAVY_FRAC = 0.5f;
 
 // [multiple of his own cost] -- Post-T2, enemy mobile massing at this multiple
@@ -702,7 +702,7 @@ const float TUNE_COMM_FWD_CAP = 0.25f;
 const float TUNE_STUCK_SECS = 30.f;   // build task held, still, no progress -> re-elect
 
 // [influence] -- Enemy influence at his tile (or on the ring, while cautious)
-//   above which he leaves. See docs/27.
+//   above which he leaves. See docs/tunables.md.
 const float TUNE_COMM_FLEE_INFLUENCE = 0.01f;
 
 // [elmos] -- While cautious he reads the WORST influence on a ring this size
@@ -728,7 +728,7 @@ const float TUNE_AIR_HOME_WAVE = 1.f;
 // [ratio] -- Enemy AA under this fraction of our own team army counts as
 //   DOMINATED: the assassin's absolute AA ceiling waives and a standing abort
 //   un-latches, so a beaten enemy's leftover flak cannot veto the one weapon
-//   that targets the win condition. See docs/27.
+//   that targets the win condition. See docs/tunables.md.
 const float TUNE_AIR_DOMINANCE_AA = 0.15f;
 
 // [ratio] -- Enemy field army under this fraction of ours counts as gone for
@@ -737,7 +737,7 @@ const float TUNE_AIR_DOMINANCE_ARMY = 0.2f;
 
 // [metal/s] -- Metal income at which the first air plant becomes mandatory for
 //   a player who is NOT the air lead (the lead builds at apex_intel_air_income,
-//   25). See docs/27.
+//   25). See docs/tunables.md.
 const float TUNE_AIR_MANDATORY_INCOME = 200.f;
 
 // [toggle 0/1] -- Obsolete T1 fighters are recycled once T2 fighters produce;
@@ -762,7 +762,7 @@ const float TUNE_INTERCEPT_MIN_FIGHTERS = 4.f;
 
 // 1 = held fighters guard every scout, radar plane and bomber sent out
 //   (enough to match the route's air threat, never none); 0 = they fly alone.
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_AIR_COVER = 1.f;
 
 // [ratio] -- One-shot bombers (Legion Martyr) get their wanted count scaled by
@@ -774,7 +774,7 @@ const float TUNE_ONESHOT_BOMBER_SCALE = 0.4f;
 // ---------------------------------------------------------------------------
 // [toggle 0/1] -- The sentinel: the brain checks its own concepts every 45s
 //   and logs a verdict per check ("apex: thought <name> CONCERN ...");
-//   observer-first, each enforcement earned separately. See docs/27.
+//   observer-first, each enforcement earned separately. See docs/tunables.md.
 const float TUNE_BRAIN_NUKE = 1.f;
 
 // ---------------------------------------------------------------------------
@@ -800,7 +800,7 @@ const float TUNE_SEEN_CAP_MULT = 2.5f;
 //   times this, so opening groups commit at real size instead of trickling.
 const float TUNE_UNSEEN_PARITY = 1.2f;
 
-// squad metal value above which it is owed a sensor escort. See docs/27.
+// squad metal value above which it is owed a sensor escort. See docs/tunables.md.
 const float TUNE_ESCORT_SQUAD_VALUE = 2000.f;
 
 // ---------------------------------------------------------------------------
@@ -810,7 +810,7 @@ const float TUNE_ESCORT_SQUAD_VALUE = 2000.f;
 const float TUNE_FRONT_BAND = 0.18f;
 
 // [ratio] -- Width of the front band as a fraction of the territory radius
-//   (floored at one influence-grid cell). See docs/27.
+//   (floored at one influence-grid cell). See docs/tunables.md.
 const float TUNE_FRONT_BAND_FRAC = 0.35f;
 
 // [elmos] -- Step size of the staging anchor's walk back toward home while the
@@ -833,12 +833,12 @@ const float TUNE_LANE_STICKY = 900.f;
 // ---------------------------------------------------------------------------
 // [frames] -- Ceiling on a memoised proposer answer. Validity is the stamps of
 //   its inputs; this bounds only the per-frame prices no stamp can reach.
-//   45 = what the clock alone used to be. See docs/27.
+//   45 = what the clock alone used to be. See docs/tunables.md.
 const float TUNE_MEMO_TTL = 300.f;
 
 // [microseconds] -- What one sim frame may spend assembling builder elections.
 //   The election is sliced against this between proposers, so it bounds the
-//   frame it is checked on. Lower = smaller hitch, slower orders. See docs/27.
+//   frame it is checked on. Lower = smaller hitch, slower orders. See docs/tunables.md.
 const float TUNE_ELEC_FRAME_US = 8000.f;
 
 // [toggle 0/1] -- The perf governor (lag-severity measures and its production
@@ -851,32 +851,32 @@ const float TUNE_PERF = 0.f;
 const float TUNE_PING = 0.f;
 
 // [toggle 0/1] -- Dump every available def's catalog row at init (one log line
-//   per def, parsed by tools/check_catalog.py). See docs/27.
+//   per def, parsed by tools/check_catalog.py). See docs/tunables.md.
 const float TUNE_CATALOG_DUMP = 0.f;
 
 // [toggle 0/1] -- The `apex: decide` and `apex: exec` lines, one per election
-//   and per execution. On: every harness tool parses them. See docs/27.
+//   and per execution. On: every harness tool parses them. See docs/tunables.md.
 const float TUNE_DECIDE_LOG = 1.f;
 
 // [0..2] -- How strongly the value net reweights each builder decision
 //   (nnlog.as): an option the net expects to do one spread better gets
-//   exp(blend) times its market value. 0 = the net only watches. See docs/35.
+//   exp(blend) times its market value. 0 = the net only watches. See docs/how-it-works.md.
 const float TUNE_NN_BLEND = 1.f;
 
 // [0..1] -- Chance per AI that it is a DISCOVERY explorer this game: every
-//   decision head mixes a uniform share into its odds. See docs/35.
+//   decision head mixes a uniform share into its odds. See docs/how-it-works.md.
 const float TUNE_NN_EXPLORE = 0.f;
 const float TUNE_NN_PLAN_EXPLORE = 0.1f;   // [0..1] of explorers, the chance it also leads its team with one drawn strategy until our tier rises
 const float TUNE_PLAN_EXPLORE = 0.f;
 const float TUNE_NN_EXPLORE_TEAM = -1.f;   // [team] >= 0: that team is the explorer, the other plays normally (watched self-play)
 const float TUNE_GUNP_RULE = 1.f;   // [0..4] the forced-gun head's rule value (protect_nn.as); A/B 10-10
-const float TUNE_CON_RULE = 2.5f;   // [0.25..8] the constructor head's rule value (econet.as); docs/27
+const float TUNE_CON_RULE = 2.5f;   // [0.25..8] the constructor head's rule value (econet.as); docs/tunables.md
 const float TUNE_PLAN_FORCE = -1.f;   // [plan] >= 0: every team plays that plan (0 NORMAL 1 T3 2 MISSILE 3 ARTY 4 MASS); an A/B instrument
 const float TUNE_TEAM_ARMY = 1.f;    // [plan] 0: no team-army operation (A/B instrument for the 10-11 team army)
 
 // [0..2] -- How strongly constructors lean toward what BARb would build in our
 //   situation (tools/imitate.py prior, NNI_*): an option of the class BARb
-//   favours gets exp(imitate x log-odds) of its value. 0 = off. See docs/35.
+//   favours gets exp(imitate x log-odds) of its value. 0 = off. See docs/how-it-works.md.
 const float TUNE_NN_IMITATE = 0.f;
 
 // [toggle 0/1] -- Raiders go where the raid price (military/nnraid.as) says, as a
@@ -887,7 +887,7 @@ const float TUNE_NNRAID = 1.f;
 // Replace with a spot-income binding.
 const float TUNE_SPOT_M = 2.0f;
 
-// PLANT_PIPE: the constructor pipeline's return in spot-streams. See docs/27.
+// PLANT_PIPE: the constructor pipeline's return in spot-streams. See docs/tunables.md.
 const float TUNE_PLANT_PIPE = 2.0f;
 
 // Income one production line is worth: apexearth 2026-08-23, "below 50 metal
@@ -902,23 +902,23 @@ const float TUNE_PLANT_INCOME_PER = 50.f;
 const float TUNE_PIPE_LATENCY_H = 78.1f;
 
 // Discount a tech want's deferred gain by the risk borne over its pipeline.
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_TECH_SURVIVAL = 1.f;
 
 // The same survival discount on the ENERGY want, so a long-payback generator
 //   (afus, fusion) is priced on the base it needs to still be standing. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_ECO_SURVIVAL = 1.f;
 
 // The siege prior: what share of our OWN total economy we assume the enemy has
 //   converted into army and may be walking at us right now, seen or not. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_SIEGE_PRIOR = 1.f;
 
 // ARMY COMPOSITION TARGET, shares of army metal (apexearth 2026-08-24:
 //   30/25/25/20; re-ruled 2026-08-29 to 28/20/35/17 -- "build up these guys
 //   [snipers/hounds/arty] in unit numbers so our army can grow very powerful",
-//   "Rocket bots, artillery. See docs/27.
+//   "Rocket bots, artillery. See docs/tunables.md.
 const float TUNE_LINE_TANK = 0.28f;
 
 const float TUNE_LINE_MID = 0.20f;
@@ -928,11 +928,11 @@ const float TUNE_LINE_REACH = 0.35f;
 const float TUNE_LINE_DPS = 0.17f;
 
 // [ratio] -- How hard the enemy's observed STATIC share of fielded metal bends
-//   the reach target up (renormalized). See docs/27.
+//   the reach target up (renormalized). See docs/tunables.md.
 const float TUNE_LINE_ADAPT = 0.f;
 
 // [guns] -- Light towers a mex earns beyond its first, at the enemy's
-//   doorstep (forward fraction 1); linear in between, one at home. See docs/27.
+//   doorstep (forward fraction 1); linear in between, one at home. See docs/tunables.md.
 const float TUNE_MEX_GUARD_FAR = 3.f;
 
 // [forward fraction] -- An IDLE rezzer past this retires to the haven
@@ -963,34 +963,34 @@ const float TUNE_WORTH_RANGE = 0.f;
 
 const float TUNE_WORTH_AOE = 0.f;
 
-// COST IS A CHOICE OF LANCHESTER LAW. See docs/27.
+// COST IS A CHOICE OF LANCHESTER LAW. See docs/tunables.md.
 const float TUNE_WORTH_COST = 1.f;
 
 // 1 = print the exponents and field means once; 2 = also dump the ranked
-//   field. See docs/27.
+//   field. See docs/tunables.md.
 const float TUNE_WORTH_DIAG = 0.f;
 
 // 1 = a unit type's measured damage-dealt/health record discounts its price
-//   (fodder and fighters exempt); 0 = record only. See docs/27.
+//   (fodder and fighters exempt); 0 = record only. See docs/tunables.md.
 const float TUNE_RECORD_BITE = 1.f;
 
 // How hard a def scoring outside its line class's own spread, with no exchange
-//   record of its own, is priced back toward that class. 0 = off. See docs/27.
+//   record of its own, is priced back toward that class. 0 = off. See docs/tunables.md.
 const float TUNE_EVIDENCE_SHRINK = 0.f;
 
 // What a weapon's reach is worth when it CANNOT hit a moving target -- a slow
-//   un-tracked rocket. See docs/27.
+//   un-tracked rocket. See docs/tunables.md.
 const float TUNE_AIM_MISS = 1.f;
 
 // Judge each class axis against the field MEDIAN rather than its mean. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_LINE_MEDIAN = 1.f;
 
 // Read the tank and dps axes PER BODY rather than per metal (see LineAbs in
-//   market/army.as). See docs/27.
+//   market/army.as). See docs/tunables.md.
 const float TUNE_LINE_ABS = 1.f;
 
-// Exponent on the range axis of the class argmax. See docs/27.
+// Exponent on the range axis of the class argmax. See docs/tunables.md.
 const float TUNE_LINE_RANGE_EXP = 1.f;
 
 // How far above the field's REFERENCE an axis must stand for a unit to count
@@ -999,60 +999,60 @@ const float TUNE_LINE_EDGE = 1.15f;
 
 // [0/1] -- 1 = the factory draw runs among the LINE CLASS the team owes the
 //   most metal to, instead of over every candidate weighted by apex_line_bite.
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_LINE_ALLOC = 0.f;
 
 const float TUNE_LINE_BITE = 1.5f;
 
 // How much ground-covered-per-metal is worth while the fleet is short of the
-//   sites it must watch. See docs/27.
+//   sites it must watch. See docs/tunables.md.
 const float TUNE_COVER_WORTH = 1.5f;
 
 // Discount a mex/upgrade's income stream by the share of it we expect to still
-//   be collecting over the stake horizon. See docs/27.
+//   be collecting over the stake horizon. See docs/tunables.md.
 const float TUNE_STREAM_SURVIVAL = 1.f;
 
 // Rent a building pays for standing on DEFENDED ground: covering turrets'
-//   metal spread over the area they cover, per cell of footprint. See docs/27.
+//   metal spread over the area they cover, per cell of footprint. See docs/tunables.md.
 const float TUNE_SPACE_RENT = 2.f;
 
 // A gain is credited only for the share of this horizon it will actually be
 //   collecting, so a build that delivers nothing for most of it is discounted
-//   against the small compounding steps that deliver now. See docs/27.
+//   against the small compounding steps that deliver now. See docs/tunables.md.
 const float TUNE_PAYBACK_H = 900.f;
 
 // the option cost of tying capital up in an unfinished frame, as a multiple of
-//   (cost x duration / payback horizon). See docs/27.
+//   (cost x duration / payback horizon). See docs/tunables.md.
 const float TUNE_LOCKUP = 0.5f;
 
 // [toggle 0/1] -- the late-start charge (gain x seconds before the asset pays)
-//   counts the BUILD as well as the walk. See docs/27.
+//   counts the BUILD as well as the walk. See docs/tunables.md.
 const float TUNE_LATE_BUILD = 1.f;
 
 // How much sharper the category draw gets for a COMMITMENT -- added to
 //   apex_draw_sharp in proportion to the candidate's cost as a share of what the
-//   economy can produce over the payback horizon. See docs/27.
+//   economy can produce over the payback horizon. See docs/tunables.md.
 const float TUNE_COMMIT_SHARP = 12.f;
 
-// elmos one farm row runs before the next stacks behind it. See docs/27.
+// elmos one farm row runs before the next stacks behind it. See docs/tunables.md.
 const float TUNE_FARM_ROW_W = 320.f;
 
 // Matches the bank clause's horizon in BPGap; 0 disables the term.
 const float TUNE_BP_BACKLOG_S = 60.f;
 
 // Offer the spaced front posts (Military::FrontBuildSpots) to the defence
-//   auction alongside mexes and big structures. See docs/27.
+//   auction alongside mexes and big structures. See docs/tunables.md.
 const float TUNE_FRONT_LINE = 1.f;
 
 // Measure turret coverage on the ring the enemy can SHOOT FROM (their observed
 //   weapon range), taking the weakest bearing, instead of asking only whether a
-//   turret reaches the target itself. See docs/27.
+//   turret reaches the target itself. See docs/tunables.md.
 const float TUNE_STANDOFF_COVER = 1.f;
 
-// Let the commander fight while he still outclasses the field. See docs/27.
+// Let the commander fight while he still outclasses the field. See docs/tunables.md.
 const float TUNE_COMM_FIGHT = 1.f;
 
-// TECH_PIPE: discount on a tech plant's unlock demand. See docs/27.
+// TECH_PIPE: discount on a tech plant's unlock demand. See docs/tunables.md.
 const float TUNE_TECH_PIPE = 2.0f;
 
 // E_RESPONSE: seconds for the market's own energy supply to answer a scarcity
@@ -1061,7 +1061,7 @@ const float TUNE_E_RESPONSE = 45.f;
 
 // E_BILL_SHARE [toggle 0/1] -- WHILE E-STALLED, price a build's ENERGY bill by
 //   the share of energy INCOME its own drain eats, instead of by how long the
-//   build runs. See docs/27.
+//   build runs. See docs/tunables.md.
 const float TUNE_E_BILL_SHARE = 1.f;
 
 // CHOSEN, not derived. Short on purpose (apexearth: "it pays off eventually
@@ -1103,12 +1103,12 @@ const float TUNE_E_LOOKAHEAD = 30.f;
 // E_FEED_BOUND: 1 = the standing fleet's energy ask is bounded by the metal
 //   feed that would actually run those hands, the same bound EPrice already
 //   puts on the same fleet. 0 = the ask stands at full nominal speed (the
-//   behaviour before 2026-09-22). Measured flat and left OFF; see docs/27.
+//   behaviour before 2026-09-22). Measured flat and left OFF; see docs/tunables.md.
 const float TUNE_E_FEED_BOUND = 0.f;
 
 // E_HEADROOM: energy income target as a multiple of trending pull -- the
 //   standing reserve that keeps the bank from ever being raced to zero. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_E_HEADROOM = 1.75f;   // 1.5 still read 'not that great' in a watched war game
 
 // CON_ESCORT: exposed constructors claim one army guard each (master).
@@ -1116,7 +1116,7 @@ const float TUNE_CON_ESCORT = 1.f;
 
 // STOCK_ARMY: 1 hands every armed ground unit to BARb's own task pools and
 // switches off our withdraw orders -- the A/B for "is our assignment layer
-// what loses the fights" (docs/27).
+// what loses the fights".
 const float TUNE_STOCK_ARMY = 0.f;
 
 // ESCORT_MAX_COST: only cheap T1 takes escort duty (apexearth) -- a Bull
@@ -1125,17 +1125,17 @@ const float TUNE_ESCORT_MAX_COST = 120.f;
 
 // ESCORT_SPEED: an escort must CATCH a raider or be a riot unit (apexearth:
 //   "we want fast or tough units on escort, rocket bots die in a 1v1 vs a
-//   pawn/grunt"). See docs/27.
+//   pawn/grunt"). See docs/tunables.md.
 const float TUNE_ESCORT_SPEED = 1.f;
 
 // A spot is worth what it RAISES us by, not what it yields (apexearth: "when a
-//   mex would double our income it is very important. See docs/27.
+//   mex would double our income it is very important. See docs/tunables.md.
 const float TUNE_MEX_GROWTH = 8.f;
 
 // [toggle 0/1] -- Discount a generator by how much better a one any
 //   constructor we own could build instead, so a worker restricted to the
 //   inferior option prefers to spend its build power on the better one. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_INFERIOR_DISCOUNT = 1.f;
 
 const float TUNE_ENERGY_GROWTH = 8.f;
@@ -1143,31 +1143,31 @@ const float TUNE_ENERGY_GROWTH = 8.f;
 // [toggle 0/1] DEFAULT OFF -- charge the energy growth premium above on the
 //   share of the plan's own horizon a generator would actually be paying over,
 //   so a reactor that lands after the target is due stops out-valuing one that
-//   lands before it. See docs/27.
+//   lands before it. See docs/tunables.md.
 const float TUNE_ENERGY_GROWTH_ARRIVE = 0.f;
 
 // E_REALIZE [toggle 0/1]: the overflow-aware half of the energy market --
 //   generation priced by the share of it anything would actually use (real
 //   demand at E_HEADROOM plus standing converter capacity), the converter want
 //   reading the true remaining waste, and the same eco-compounding premium on
-//   both halves of the generator/converter pair. See docs/27.
+//   both halves of the generator/converter pair. See docs/tunables.md.
 const float TUNE_E_REALIZE = 1.f;
 
 // So an overflow makes a generator LOSE to the converter that realizes it, and
 //   never makes it unbuildable (apexearth 2026-08-26; his standing ruling is
-//   that the generator ladder never pauses on waste). See docs/27.
+//   that the generator ladder never pauses on waste). See docs/tunables.md.
 const float TUNE_E_WASTE_WORTH = 0.25f;
 
 // M_REALIZE [toggle 0/1]: the metal twin of E_REALIZE -- extraction priced by
 //   the share of its metal we could actually spend. DEFAULT OFF: inert where it
-//   was measured and its premise is unproven. See docs/27.
+//   was measured and its premise is unproven. See docs/tunables.md.
 const float TUNE_M_REALIZE = 0.f;
 
 // The unspendable band keeps this share, because demand grows and the spot is
 //   still ours when it does -- the same reason E_WASTE_WORTH is not zero.
 const float TUNE_M_WASTE_WORTH = 0.3753f;
 
-// Spatial threat prior: 0 at our start box, 1 at theirs. See docs/27.
+// Spatial threat prior: 0 at our start box, 1 at theirs. See docs/tunables.md.
 const float TUNE_THREAT_GRADIENT = 1.f;
 
 // RANGE_WORTH: standing weight of weapon reach in unit selection (reach = free
@@ -1182,15 +1182,15 @@ const float TUNE_LOS_WORTH = 1.f;
 
 // SCREEN_WORTH: the scout/screen axis in production.as -- sight and dash per
 //   metal, read INSTEAD OF combat worth when it is the larger of the two, so a
-//   unit that is a hopeless soldier can still be a good screen. See docs/27.
+//   unit that is a hopeless soldier can still be a good screen. See docs/tunables.md.
 const float TUNE_SCREEN_WORTH = 0.2f;
 
 // [count] -- Standing units of a screen class (power at the Tick floor) a
-//   player fields at once; the screen axis stops buying past it. See docs/27.
+//   player fields at once; the screen axis stops buying past it. See docs/tunables.md.
 const float TUNE_SCREEN_MAX = 5.f;
 
 // MEDIC_FRAC: standing rez/repair fleet as a fraction of army value per minute
-//   (apexearth: "3 times more rezbots" -- was 0.04). See docs/27.
+//   (apexearth: "3 times more rezbots" -- was 0.04). See docs/tunables.md.
 const float TUNE_MEDIC_FRAC = 0.12f;
 
 // ECO_REAR_MARGIN: how much farther from the enemy than the #2 ally the
@@ -1225,7 +1225,7 @@ const float TUNE_WATER_PCT = 15.f;
 // WATER_FIRST: MODEL. What land-locked metal is worth ON TOP of its own stream
 //   while the water is still uncontested -- the denial half of taking it first
 //   ("the earlier you get into the water the more likely you are to own it").
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_WATER_FIRST = 1.0f;
 
 // BIG_E: E/s of generation that makes a def "fusion-tier" -- packs in the deep
@@ -1264,16 +1264,16 @@ float UnitHoldMod(const string &in name)
 	if (name == "corjugg") return 2.f;     // Behemoth: the answer when losing
 	return 1.f;
 }
-// AA_URGENCY: multiplier on the insurance rate for anti-air. See docs/27.
+// AA_URGENCY: multiplier on the insurance rate for anti-air. See docs/tunables.md.
 const float TUNE_AA_URGENCY = 1.f;
 
 // AA metal we are aiming to have standing per metal of enemy air we have seen
 //   (apexearth: "if the enemy rolls up with 100k metal worth of air. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_AA_COVER_FRAC = 0.5f;
 
 // ECO_AA_MULT: the share of the air census the rear eco specialist answers,
-//   relative to an even split. See docs/27.
+//   relative to an even split. See docs/tunables.md.
 const float TUNE_ECO_AA_MULT = 1.5f;
 
 // JOIN_MIN_M: def cost above which a second builder JOINS the standing build
@@ -1290,17 +1290,17 @@ const float TUNE_ECO_CON_KEEP = 3.f;
 
 // T2_CON_BASE / T2_CON_PER_M: how many cons able to build the game's best
 //   extractor we always want standing -- BASE plus one per PER_M of metal income
-//   (apexearth 2026-08-23: "1 T2 con + 1 per 25 metal . See docs/27.
+//   (apexearth 2026-08-23: "1 T2 con + 1 per 25 metal . See docs/tunables.md.
 const float TUNE_T2_CON_BASE = 1.f;
 
 const float TUNE_T2_CON_PER_M = 31.f;
 
 // [count] -- constructors of ANY TIER the line orders before the draw, the
-//   plain "how many hands" floor. See docs/27.
+//   plain "how many hands" floor. See docs/tunables.md.
 const float TUNE_CON_BASE = 4.38f;
 
 // [count] -- basic air constructors kept once an air lab stands, one in the
-//   queue at a time so the other air keeps coming. See docs/27.
+//   queue at a time so the other air keeps coming. See docs/tunables.md.
 const float TUNE_T1_AIR_CON_MIN = 10.f;
 
 // [metal/s per extra constructor] --
@@ -1329,20 +1329,20 @@ const float TUNE_RECLAIM_AMORT = 300.f;
 // [multiplier] -- How much more a reclaim is worth in the hands of a dedicated
 //   reclaimer (rezbot: builds nothing, so it has no expansion to be pulled off)
 //   than in the hands of a constructor that could be claiming open ground
-//   instead. See docs/27.
+//   instead. See docs/tunables.md.
 const float TUNE_RECLAIM_REZ_BIAS = 3.f;
 
 // [share] -- How much of the metal nothing is spending one build site may
-//   claim as nano demand. See docs/27.
+//   claim as nano demand. See docs/tunables.md.
 const float TUNE_NANO_SITE_SHARE = 1.f;
 
 // [count] -- Ranked metal spots offered to the engine per election before
-//   extraction gives up for that tick. See docs/27.
+//   extraction gives up for that tick. See docs/tunables.md.
 const float TUNE_MEX_TRIES = 10.f;
 
 // [multiplier] -- What the ROOM under an obsolete building is worth, as a
 //   multiple of (base fill x metal per build cell x the building's own cells).
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_ROOM_WORTH = 1.f;
 
 // MOBILE_BP_EFF: fraction of a mobile builder's workertime that is real
@@ -1350,7 +1350,7 @@ const float TUNE_ROOM_WORTH = 1.f;
 const float TUNE_MOBILE_BP_EFF = 0.6f;
 
 // INSURE_RATE: protection value per metal of covered assets, per second -- the
-//   one modeled risk quantity for eyes and turrets. See docs/27.
+//   one modeled risk quantity for eyes and turrets. See docs/tunables.md.
 const float TUNE_INSURE_RATE = 0.0003f;   // was 5e-5: radar lost to marginal solars until assets were huge (watched)
 
 // TARGFAC_WANT: pinpointers wanted (apexearth 2026-08-23: "3 wanted max").
@@ -1360,29 +1360,29 @@ const float TUNE_TARGFAC_WANT = 3.f;
 // Strategic structures -- manager/brain/market/want_super.as
 // ---------------------------------------------------------------------------
 // SUPER_WANT: master switch for the strategic want (gantry, nuke silo,
-//   anti-nuke, long-range gun). See docs/27.
+//   anti-nuke, long-range gun). See docs/tunables.md.
 const float TUNE_SUPER_WANT = 1.f;
 
 // SUPER_PUSH: 1 = an affordable strategic want skips the category lottery
-//   rather than taking a proportional share of it. See docs/27.
+//   rather than taking a proportional share of it. See docs/tunables.md.
 const float TUNE_SUPER_PUSH = 1.f;
 
 // SUPER_AFFORD_S [seconds] -- the whole affordability test: the bill (metal
 //   plus energy at the conversion floor) must be smaller than what the economy
-//   makes in this many seconds. See docs/27.
+//   makes in this many seconds. See docs/tunables.md.
 const float TUNE_SUPER_AFFORD_S = 60.f;
 
 // SUPER_PER_INCOME [metal/s] -- income per additional anti-nuke; the offensive
-//   classes (silo, long-range gun) space at twice this. See docs/27.
+//   classes (silo, long-range gun) space at twice this. See docs/tunables.md.
 const float TUNE_SUPER_PER_INCOME = 150.f;
 
 // SUPER_SHARE: the slice of total economic power the strategic market may
-//   claim as a want's gain. See docs/27.
+//   claim as a want's gain. See docs/tunables.md.
 const float TUNE_SUPER_SHARE = 0.25f;
 
 // SUPER_FLIGHT_PER [metal/s of overflow] -- one strategic frame may stand
 //   half-built per this much structural overflow, on top of the base one. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_SUPER_FLIGHT_PER = 140.f;
 
 // COPY_OVERFLOW_M [metal/s] -- the wealth waiver: overflow above this lifts
@@ -1393,12 +1393,12 @@ const float TUNE_COPY_OVERFLOW_M = 140.f;
 
 // CON_FEED_HEADROOM -- how many hands the production draw may price toward, as
 //   a multiple of income/apex_request_drain (the hands income keeps fed). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_CON_FEED_HEADROOM = 1.847f;
 
 // UNIT_AFFORD_S [seconds of income] -- a mobile unit's bid fades as its cost
 //   approaches this much income, dying at the full bill (mass first, T3 from
-//   surplus -- the supers' 60s affordability bar applied to units). See docs/27.
+//   surplus -- the supers' 60s affordability bar applied to units). See docs/tunables.md.
 const float TUNE_UNIT_AFFORD_S = 120.f;
 
 // DEF_SETBACK [elmos] -- front defence sites step this far back from the
@@ -1408,23 +1408,23 @@ const float TUNE_DEF_SETBACK = 250.f;
 
 // SCOUT_OVER_S [seconds] -- one idle cheap air scout is sent across the enemy
 //   position this often ("I don't see any scouts flying over their base"). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_SCOUT_OVER_S = 45.f;
 
-// RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. See docs/27.
+// RE-ARMED 2026-08-31 on his ask, with the mechanism replaced. See docs/tunables.md.
 const float TUNE_ECO_ROLE = 1.f;
 
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
 //   the ordinary seat election alone. Above 0 it takes the seat whatever
 //   the team's size or shape, and the value is how FAR it grows before army
 //   and defence come back: 1 the whole eco target, 0.5 half of it, so half the
-//   eco phase. See docs/27.
+//   eco phase. See docs/tunables.md.
 const float TUNE_ECO_FORCE = 0.f;
-const float TUNE_ECO_SEAT_STRICT = 0.f;  // the growing eco seat's hands and labs take only economy (+AA while air kills us); see docs/27
+const float TUNE_ECO_SEAT_STRICT = 0.f;  // the growing eco seat's hands and labs take only economy (+AA while air kills us); see docs/tunables.md
 
 // GANTRY_AFFORD_S [seconds] -- the gantry's affordability horizon, over TEAM
 //   income: one shared line the whole team's nanos man, so one team purse. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_GANTRY_AFFORD_S = 100.f;
 
 // GANTRY_INSURE: the gantry's capability-insurance gain as a share of team
@@ -1435,13 +1435,13 @@ const float TUNE_GANTRY_INSURE = 0.5f;
 
 // GANTRY_HOST_INC [metal/s] -- the proposing player's OWN income at which the
 //   gantry gain is whole; below it the gain scales by (own/anchor)^2. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_GANTRY_HOST_INC = 150.f;
 
 // OFFENSE_DEF_FLOOR: the share of its gain an offensive super (silo, LRPC)
 //   keeps at ZERO standing defence; the rest scales in with the defence target's
 //   fill ("we consistently make Basilisk before T3 or even T2 defense"). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_OFFENSE_DEF_FLOOR = 0.1f;
 
 // ANTINUKE_R [elmos] -- an anti-nuke's assumed umbrella, for deciding whether
@@ -1455,11 +1455,11 @@ const float TUNE_OBSOLETE_RATIO = 4.f;
 
 // LATHE_OBSOLETE: 1 = a construction turret a denser one per cell of ground
 //   replaces is obsolete on arrival and a candidate for retirement; 0 = the
-//   basic turret is built and kept forever. See docs/27.
+//   basic turret is built and kept forever. See docs/tunables.md.
 
 // NANO_SHIFT_IDLE [share] -- how much of the lathe standing with nothing to
 //   lathe is netted off a line's shift demand. 0 = the shift is bid whole.
-//   See docs/27.
+//   See docs/tunables.md.
 
 // EXPOSE_R: elmos from the core at which a structure counts fully exposed (a
 //   walk away from where the army lives).
@@ -1467,56 +1467,56 @@ const float TUNE_EXPOSE_R = 1200.f;
 
 // EXPOSED_LOSS_S: seconds over which a fully exposed, unguarded asset is
 //   expected to be lost against a real opponent -- his "almost guaranteed". See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_EXPOSED_LOSS_S = 120.f;
 
-// DEFAULT 0 -- the mechanism is wired but priced out. See docs/27.
+// DEFAULT 0 -- the mechanism is wired but priced out. See docs/tunables.md.
 const float TUNE_FRAME_RISK = 0.0f;
 
 // DEF_TRADE: metal of enemy wave a standing turret is expected to stop, per
-//   metal of its own cost. See docs/27.
+//   metal of its own cost. See docs/tunables.md.
 const float TUNE_DEF_TRADE = 3.f;
 
 // A defence is discounted by H/(H+buildSec), so a slow turret keeps only the
-//   share of the threat window it will actually cover. See docs/27.
+//   share of the threat window it will actually cover. See docs/tunables.md.
 const float TUNE_DEF_TTD_H = 120.f;
 
-// How often the protection field is rebuilt, in game seconds. See docs/27.
+// How often the protection field is rebuilt, in game seconds. See docs/tunables.md.
 const float TUNE_PROTECT_FIELD_S = 15.f;
 
 // How often the energy-stall answer re-asks which worker should drop what it
-//   is doing. See docs/27.
+//   is doing. See docs/tunables.md.
 const float TUNE_STALL_ANSWER_S = 1.f;
 
-// Energy income above which the stall answer stops asking at all. See docs/27.
+// Energy income above which the stall answer stops asking at all. See docs/tunables.md.
 const float TUNE_STALL_ANSWER_MAX_E = 400.f;
 
 // WHAT A BUILDING IS WORTH WHILE NOTHING GUARDS IT (apexearth: "give buildings
-//   a ~20% reduced value when they are unprotected. See docs/27.
+//   a ~20% reduced value when they are unprotected. See docs/tunables.md.
 const float TUNE_UNPROT_DISCOUNT = 0.20f;
 
-// A TURRET ONLY SHOOTS WHILE IT IS ALIVE. See docs/27.
+// A TURRET ONLY SHOOTS WHILE IT IS ALIVE. See docs/tunables.md.
 const float TUNE_DEF_ALPHA_W = 1.f;
 
-// ECO_RAID_TAU: seconds of memory in the structure-loss field. See docs/27.
+// ECO_RAID_TAU: seconds of memory in the structure-loss field. See docs/tunables.md.
 const float TUNE_ECO_RAID_TAU = 180.f;
 
-// THREAT_R: radius the enemy-mass prior is sampled over. See docs/27.
+// THREAT_R: radius the enemy-mass prior is sampled over. See docs/tunables.md.
 const float TUNE_THREAT_R = 900.f;
 
 // STAKE_HORIZON_S: seconds of a mex's stream that count as the stake standing
-//   on it. See docs/27.
+//   on it. See docs/tunables.md.
 const float TUNE_STAKE_HORIZON_S = 300.f;
 
 // RISK_FLOOR: a flat hazard every asset carries whether or not anything has
 //   been seen. 0 since 2026-09-11: the blind floor is the siege prior, a
-//   mirror of our own army, so it is an output. See docs/27.
+//   mirror of our own army, so it is an output. See docs/tunables.md.
 const float TUNE_RISK_FLOOR = 0.f;
 
 // HZ_APPROACH [weight]: hazard floor from enemy formations WALKING at this
 //   ground -- horizon/ETA, weighed by their metal against what defends it.
 //   Measured (LOS-slaved) and a floor only, so it never fires where nothing
-//   was seen. See docs/27.
+//   was seen. See docs/tunables.md.
 const float TUNE_HZ_APPROACH = 0.f;
 
 // ENEMY_PRIOR: pre-contact estimate of enemy army as a share of OUR total
@@ -1528,7 +1528,7 @@ const float TUNE_MATCH_RATIO = 1.2f;
 
 // ALLY_SHARE: 1 = scale the SEEN census in ArmyTarget by our income share of
 //   the team (the census is side-wide; the answer is split by the roster). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_ALLY_SHARE = 1.f;
 
 // ARMY_FILL_S: seconds over which an army-value gap counts as a stream.
@@ -1539,7 +1539,7 @@ const float TUNE_ARMY_FILL_S = 180.f;   // the 120 compensation was fighting the
 const float TUNE_REZ_HORIZON = 120.f;
 
 // [ratio] -- Share of a rez bot's work rate it actually delivers (the rest is
-//   walking between wrecks). See docs/27.
+//   walking between wrecks). See docs/tunables.md.
 const float TUNE_REZ_UTIL = 0.35f;
 
 // REZ_RICH_M [metal]: a corpse at least this rich is RESURRECTED whatever the
@@ -1556,7 +1556,7 @@ const float TUNE_AA_MATCH = 0.7f;
 const float TUNE_RETREAT_COST_SCALE = 3000.f;
 
 // RETREAT_FLOOR: the HP fraction where the cheapest unit starts to flee. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_RETREAT_FLOOR = 0.08f;
 
 // STAKE_WEIGHT: how strongly an army DEFICIT borrows urgency from the total
@@ -1566,14 +1566,14 @@ const float TUNE_STAKE_WEIGHT = 1.f;
 // [toggle 0/1] -- Keep his 2026-09-19 rule: once an advanced hand exists, no
 //   basic tower at all. 1 is his behaviour and the default; 0 is the arm that
 //   measures what the rule costs against an enemy that laps the map in
-//   85-metal turrets. See docs/27.
+//   85-metal turrets. See docs/tunables.md.
 const float TUNE_T1_TOWER_LATE = 0.f;
 
 // [toggle 0/1] -- His 2026-08-27 ruling: a copy of a line we already run is
 //   INELIGIBLE and the want forwards to a nano at the standing lab. 0 is that
 //   ruling and the default; 1 lets the copy compete on price, which is the arm
 //   that measures what the ruling costs in the opening (BARb stands on ~1.5
-//   plants per player at minute 4, we stand on 1). See docs/27.
+//   plants per player at minute 4, we stand on 1). See docs/tunables.md.
 const float TUNE_PLANT_COPY = 0.f;
 
 // STATIC_GUARD: how much a metal of CORE static defense counts toward the army
@@ -1587,15 +1587,15 @@ const float TUNE_DRAW_FRONT = 0.f;
 
 // [toggle 0/1] -- Draw the defense zone on the map: the inner ring is the C++
 //   base-defence range (the army fights at any odds inside it), the outer ring
-//   the incoming-push alarm radius. See docs/27.
+//   the incoming-push alarm radius. See docs/tunables.md.
 const float TUNE_DRAW_DEFZONE = 0.f;
 
 // [toggle 0/1] -- Draw the army's staging anchor and, when apex_medic_setback
-//   is set, the medic station behind it plus the step between them. See docs/27.
+//   is set, the medic station behind it plus the step between them. See docs/tunables.md.
 const float TUNE_DRAW_LANE = 0.f;
 
 // [toggle 0/1] -- Ping the heal post: the exact point CRetreatTask sends
-//   wounded units to (front + apex_retreat_behind toward home). See docs/27.
+//   wounded units to (front + apex_retreat_behind toward home). See docs/tunables.md.
 const float TUNE_DRAW_HEAL = 0.f;
 
 // ---------------------------------------------------------------------------
@@ -1640,44 +1640,43 @@ const float TUNE_BUDGET = 1.f;
 
 // [toggle 0/1] -- Whether the category budget's target/actual multiplier
 //   actually SCALES wants, as opposed to only being logged. Measured off:
-//   32 games with it on won 3.1% against 48 games off at 12.5%. See docs/27.
+//   32 games with it on won 3.1% against 48 games off at 12.5%. See docs/tunables.md.
 const float TUNE_BUDGET_LEVER = 0.f;
 
 // [toggle 0/1] -- A category FLOOR stands down while its own category is
 //   already above its target share, so the election falls through to the
 //   priced draw. The budget multiplier scaled want VALUES and could not reach
-//   the hoists, which is where the floors decide. See docs/27.
+//   the hoists, which is where the floors decide.
 const float TUNE_FLOOR_YIELD = 0.f;
 
 // [toggle 0/1] -- A spot whose straight-line walk crosses hot ground is
 //   PRICED through TripRisk rather than refused outright. The refusal is a
 //   binary gate on four samples and contradicts the loop's own comment that a
-//   contested spot is priced, not hidden. See docs/27.
+//   contested spot is priced, not hidden. See docs/tunables.md.
 const float TUNE_DEATHWALK_PRICE = 0.f;
 
 // [toggle 0/1] -- A commander already outside his leash finishes the work
 //   around him (1bf6732c) instead of walking home for it. 1 is the behaviour
-//   since 2026-09-22; forward is also where he dies. See docs/27.
+//   since 2026-09-22; forward is also where he dies. See docs/tunables.md.
 
 // [0..1] -- What an extractor spot outside the commander's leash is WORTH to
 //   him, as a multiplier on its score. 0 keeps the veto (the behaviour before
 //   2026-09-23); 0.35 ranks a far spot below a near one of equal yield instead
 //   of hiding it. The veto is the largest single refuser of extraction and
-//   does not keep the commander alive. See docs/27.
+//   does not keep the commander alive. See docs/tunables.md.
 const float TUNE_COM_MEX_PRICE = 0.f;
 
 // [multiplier] -- What the army target is while the T2 switch is on. 0 is the
 //   behaviour since 8aef73b1: literally zero, for ~80% of the game. 1 holds
 //   the defensive need (Military::HoldNeedM) instead, capped at the full
 //   target. The switch's stated purpose is a defensive army, not a stand-down.
-//   See docs/27.
 const float TUNE_T2_ARMY_FLOOR = 0.f;
 
 // [toggle 0/1] -- The spare-metal army floor is damped by the ARMY row's own
 //   budget multiplier. 0 is the behaviour before 2026-09-23: production.as
 //   never consults the budget at all, so every metal the other categories fail
 //   to absorb becomes army regardless of the army target, and the corrector
-//   can only ever amplify the starved side. See docs/27.
+//   can only ever amplify the starved side. See docs/tunables.md.
 const float TUNE_ARMY_RICH_BALANCE = 0.f;
 const float TUNE_BUDGET_AFTER = 1.f;
 const float TUNE_RETREAT_SCALE = 1.f;
@@ -1693,18 +1692,18 @@ const float TUNE_UNLOCK_AFFORD = 1.f;
 //   consolidate, con-letgo) instead of crew membership. The engine detaches a
 //   hand before every re-election, so the crew test is false every time and
 //   the hold has never fired: keeps=0 against offCrew=7,370 over 32 games.
-//   See docs/27.
+//   See docs/tunables.md.
 
 // [0..1] -- A hand already this fraction of the way to its site KEEPS the job
 //   even when the site reads hot. 0 is the behaviour before 2026-09-23: any
 //   hot site drops the incumbency, which is every contested site, which is
 //   where 70-99% of our builds are abandoned mid-walk. 0.6 = past 60% of the
-//   original walk. See docs/27.
+//   original walk. See docs/tunables.md.
 
 // [toggle 0/1] -- A defence def that has NEVER had its site list built gets one
 //   extra fill slot per frame, until it has been filled once. Without it the
 //   one-fill-per-frame throttle returns an empty site array and the caller
-//   reads it as "nowhere worth a gun". See docs/27.
+//   reads it as "nowhere worth a gun". See docs/tunables.md.
 
 // [toggle 0/1] -- THE SAFE GROUND CLOSEST TO THE LINE: the FURTHEST workable
 //   sample, not the first threatened one.
@@ -1727,12 +1726,12 @@ const float TUNE_DEF_RING = 1.f;
 // [toggle 0/1] -- A defence site prices against the enemy's whole fielded army
 //   (capped by the stake behind the site), not a per-site share of it: their
 //   mass all takes one approach, and the rate term already says how often. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_WAVE_CONC = 1.f;
 
 // [toggle 0/1] -- Ground defence sites are slots along the WALL: the rim of
 //   our own buildings plus a standoff, sampled at tower pitch so filled slots
-//   form a contiguous line that grows with the base. See docs/27.
+//   form a contiguous line that grows with the base. See docs/tunables.md.
 const float TUNE_WALL = 1.f;
 
 // [fraction of light-tower range] -- How far outside the outermost building on
@@ -1746,22 +1745,22 @@ const float TUNE_WALL_PITCH = 1.2f;
 
 // [count] -- guns per wall CLUSTER. The wall's slots are grouped this many at
 //   a time, tight enough to cover each other, with the saved space taken as a
-//   gap before the next cluster. 1 restores the old even spread. See docs/27.
+//   gap before the next cluster. 1 restores the old even spread.
 const float TUNE_WALL_CLUSTER = 3.f;
-// [ratio of the pitch] -- how tightly a cluster's guns pack. See docs/27.
+// [ratio of the pitch] -- how tightly a cluster's guns pack.
 const float TUNE_WALL_CLUSTER_TIGHT = 0.5f;
 
 // [ratio] -- Cap on how far one bearing's buildings can drag the wall, as a
-//   multiple of the worth-weighted RMS radius of everything we own. See docs/27.
+//   multiple of the worth-weighted RMS radius of everything we own. See docs/tunables.md.
 const float TUNE_WALL_REACH = 2.5f;
 
 // [ratio] -- Share of the wall pull a slot DIRECTLY BEHIND the base keeps
-//   (enemy-facing slots get the full pull, tapering by bearing). See docs/27.
+//   (enemy-facing slots get the full pull, tapering by bearing). See docs/tunables.md.
 const float TUNE_WALL_REAR = 0.08f;
 
 // [ratio] -- The front LINE's pull relative to the ring: his completeness
 //   ruling (a wall the enemy can walk around is useless) makes an extending
-//   section worth more than a redundant deepening. See docs/27.
+//   section worth more than a redundant deepening. See docs/tunables.md.
 const float TUNE_WALL_LINE_W = 2.f;
 
 // [fraction of tower reach] -- Asset guard sites stand this far enemy-ward of
@@ -1770,26 +1769,26 @@ const float TUNE_WALL_LINE_W = 2.f;
 const float TUNE_GUARD_FORWARD = 0.5f;
 
 // [0/1] -- 1 = a WALL slot, whose gain is the def-independent unmet-target
-//   pull, ranks candidate towers by cover per metal. See docs/27.
+//   pull, ranks candidate towers by cover per metal. See docs/tunables.md.
 const float TUNE_WALL_EFFICIENT = 1.f;
 
 const float TUNE_DEF_OUTRANGE = 1.f;
 
 // [0/1] -- Cap a defence site's stake at the metal of attackers the candidate
-//   turret can actually destroy over apex_exposed_loss_s. See docs/27.
+//   turret can actually destroy over apex_exposed_loss_s. See docs/tunables.md.
 const float TUNE_DEF_KILL_CAP = 1.f;
 
 // [0/1] -- Price a turret's cover on its SURFACE DPS (linear) instead of the
-//   engine's sqrt(dps)-compressed threat. See docs/27.
+//   engine's sqrt(dps)-compressed threat. See docs/tunables.md.
 const float TUNE_DEF_DPS_LINEAR = 1.f;
 
 // [ratio] -- A T1 tower's gain once our own advanced lab stands; 1 prices
-//   tiers equally. See docs/27.
+//   tiers equally. See docs/tunables.md.
 const float TUNE_T1_DEF_LATE = 0.02f;
 
 // [fraction of radar radius] -- A gap must sit outside this share of every
 //   standing radar's reach before a new mast is blocked; lower = more
-//   overlapping radars, sturdier intel. See docs/27.
+//   overlapping radars, sturdier intel. See docs/tunables.md.
 const float TUNE_RADAR_OVERLAP = 0.45f;
 
 // [toggle 0/1] -- The base-defence ring follows the BUILT base (farthest
@@ -1806,7 +1805,7 @@ const float TUNE_DEFZONE_PAD = 400.f;
 const float TUNE_FRONT_MIN_REACH = 0.5f;
 
 // [toggle 0/1] -- NOTHING BEHIND US IS FRONT. 1 is the ESCAPE HATCH -- the
-//   full ring, for a genuinely surrounded base. See docs/27.
+//   full ring, for a genuinely surrounded base. See docs/tunables.md.
 const float TUNE_FRONT_REAR_ARC = 0.f;
 
 // [toggle 0/1] -- Front spots are pulled back to the safe side of the
@@ -1841,7 +1840,7 @@ const float TUNE_LAG_STEP = 0.34f;
 const float TUNE_REQUEST_DRAIN = 7.0f;
 
 // Assisters beyond a site's ETA-derived worker count fall back into the
-//   auction instead of being held to completion. See docs/27.
+//   auction instead of being held to completion. See docs/tunables.md.
 const float TUNE_ASSIST_RELEASE = 1.f;
 
 // Eco builds (energy, converter, mex, moho) keep this multiple of the
@@ -1852,60 +1851,60 @@ const float TUNE_PEEL_ECO_KEEP = 2.f;
 // NANO_FED_S [seconds] -- a join is refused when standing-nano lathe alone
 //   clears the site's remaining bill within the joiner's walk plus this many
 //   seconds; the freed constructor founds a new frame instead (a nano can assist
-//   a frame but never place one). See docs/27.
+//   a frame but never place one). See docs/tunables.md.
 const float TUNE_NANO_FED_S = 15.f;
 
-// how sharply the category draw follows value. See docs/27.
+// how sharply the category draw follows value. See docs/tunables.md.
 const float TUNE_DRAW_SHARP = 2.903f;
 
 // [ratio] -- share of the constructors that hold a ROLE (elect inside one
 //   category until the split says otherwise); the rest stay open. 0 is off.
-//   See docs/27.
+//   See docs/tunables.md.
 const float TUNE_ROLE_SHARE = 0.5f;
 
 // T2_FUSION_PULL: [toggle 0/1] -- while the T2 switch is on and no advanced
 //   generator stands, a fusion in the ranked list is TAKEN rather than drawn.
 //   The switch already names fusions as its purpose and only removes army from
-//   the target. 0 = the behaviour before 2026-09-22. See docs/27.
+//   the target. 0 = the behaviour before 2026-09-22. See docs/tunables.md.
 const float TUNE_T2_FUSION_PULL = 0.f;
-// [seconds] -- how far back the split of need is averaged. See docs/27.
+// [seconds] -- how far back the split of need is averaged. See docs/tunables.md.
 const float TUNE_ROLE_TAU = 120.f;
 
 // [seconds] -- how far back the SPEND budget's realised share is averaged
 //   (brain/budget.as). Lifetime totals compare a whole game against a
-//   steady-state target, so the opening reads 100% build power. See docs/27.
+//   steady-state target, so the opening reads 100% build power. See docs/tunables.md.
 const float TUNE_BUDGET_TAU = 240.f;
 
 // [ratio] -- share of the rez fleet that serves as battlefield medics: they
 //   stay with the army's staging anchor, repair the wounded during fights and
-//   reclaim the aftermath there. See docs/27.
+//   reclaim the aftermath there. See docs/tunables.md.
 const float TUNE_MEDIC_SHARE = 0.4f;
 
 // [elmos] -- how far around the staging anchor a medic looks for wounded
 //   units, and how close it holds station.
 const float TUNE_MEDIC_R = 1200.f;
 
-// [elmos] -- how far BEHIND the lane a medic holds station. See docs/27.
+// [elmos] -- how far BEHIND the lane a medic holds station. See docs/tunables.md.
 const float TUNE_MEDIC_SETBACK = 0.f;
 
-// [seconds] -- how long one hit keeps a rez bot retreating. See docs/27.
+// [seconds] -- how long one hit keeps a rez bot retreating. See docs/tunables.md.
 const float TUNE_REZ_FLEE_S = 20.f;
 
 // [seconds] -- spacing on ONE bot's own wreck and resurrect scans. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_REZ_SCAN_S = 1.f;
 
 // [seconds] -- how much of the enemy's own walking counts as being in range
 //   already: a rez bot backs away while the nearest enemy is still this long
-//   short of its firing envelope, and refuses work inside it. See docs/27.
+//   short of its firing envelope, and refuses work inside it. See docs/tunables.md.
 const float TUNE_REZ_REACT_S = 1.f;
 
 // [0/1] -- 1 = raiders join the massing pool once our advanced lab stands and
-//   fight as line army (the pre-2026-08-30 behaviour). See docs/27.
+//   fight as line army (the pre-2026-08-30 behaviour). See docs/tunables.md.
 const float TUNE_RAIDER_MASSING = 0.f;
 
 // [0/1] -- 1 = cheap RAIDER-role units are routed to solo scout tasks in spam
-//   phase, spreading over unscouted clusters. See docs/27.
+//   phase, spreading over unscouted clusters. See docs/tunables.md.
 const float TUNE_SPAM_RAIDERS = 1.f;
 
 const float TUNE_SPAM_SUICIDAL = 1.f;
@@ -1915,68 +1914,68 @@ const float TUNE_SPAM_SUICIDAL = 1.f;
 const float TUNE_STUCK_RETRY = 120.f;
 
 // [toggle 0/1] -- A GROW slot must keep the cluster aisle to a foreign def,
-//   not just avoid touching it. See docs/27.
+//   not just avoid touching it. See docs/tunables.md.
 const float TUNE_AISLE_GROW = 1.f;
 
 // [count] -- How many of one def stand together before the next starts a fresh
-//   cluster elsewhere, so the whole economy is not in one spot. See docs/27.
+//   cluster elsewhere, so the whole economy is not in one spot. See docs/tunables.md.
 const float TUNE_CLUSTER_N = 16.f;
 
 // [toggle 0/1] -- Reclaim one of our own economy buildings that is standing in
-//   a lattice slot C++ could not place on. See docs/27.
+//   a lattice slot C++ could not place on. See docs/tunables.md.
 const float TUNE_RECLAIM_BLOCKER = 0.f;
 
-// [toggle 0/1] -- THE NO-TURRET TEST (docs/24-how-units-fight.md): 1 proposes
+// [toggle 0/1] -- THE NO-TURRET TEST (docs/doctrine.md): 1 proposes
 //   no ground or AA turret at all, so radar and units are the whole defence. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_DEF_OFF = 0.f;
 
 const float TUNE_ARMY_ECO_S = 66.f;
 
 // The economy the rear specialist names before it spends anything on war, in
 //   metal/s of economic power AT NO BONUS -- EcoRoleTargetM multiplies by the
-//   game's own handicap, so 250 here is 500 in a +100% game. See docs/27.
+//   game's own handicap, so 250 here is 500 in a +100% game. See docs/tunables.md.
 const float TUNE_ECO_TARGET_BASE = 250.f;
 
 // The same economy for an EIGHT-player team, where the rear seat is far enough
 //   from the war to spend the whole early game on it. 2026-09-14: "just let
 //   it go full military and normal behavior at 1k metal instead of 2k" --
-//   500 x the +100% handicap is his 1k. See docs/27.
+//   500 x the +100% handicap is his 1k. See docs/tunables.md.
 const float TUNE_ECO_TARGET_BASE_8 = 500.f;
 
 // Economic power, at NO-BONUS scale, before the bomber raid is worth mounting
 //   at all -- the game's handicap multiplies it, so 100 here is apexearth's "200
-//   m/s" in a +100% game. See docs/27.
+//   m/s" in a +100% game. See docs/tunables.md.
 const float TUNE_AIR_ECO_BASE = 100.f;
 
 // Weigh a production line by how much of the map its ARMY can move around in
 //   (ai.DefMapCoverage, the engine's own per-movement-type partition). See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_LINE_TERRAIN = 1.f;
 
 // How far IN FRONT of the squad's longest row a short-range row holds, elmos.
-//   This number is the dive depth; 96 measured worse three ways. See docs/27.
+//   This number is the dive depth; 96 measured worse three ways. See docs/tunables.md.
 const float TUNE_SCREEN_GAP = 200.f;
 
 // The production half is divided by (1 + this * matesWithIt), so at 1.0 the
-//   second team copy is worth half and the third a third. See docs/27.
+//   second team copy is worth half and the third a third. See docs/tunables.md.
 const float TUNE_TEAM_LINE = 1.f;
 
 // [toggle 0/1] -- A cover pool promotes to ATTACK like stock's massing pool, so
 //   a full pool leaves and home keeps what is still filling. 0: the pool never
-//   converts (the pre-2026-09-12 hold). See docs/27.
+//   converts (the pre-2026-09-12 hold). See docs/tunables.md.
 const float TUNE_COVER_LEAVES = 1.f;
 
 // [toggle 0/1] -- No more metal is posted to cover than our share of the raider
 //   metal they have fielded (the AA counter's answer law). 0: the coverage
-//   need alone decides, which at scale never closed. See docs/27.
+//   need alone decides, which at scale never closed. See docs/tunables.md.
 const float TUNE_COVER_BY_RAID = 1.f;
 
 // [toggle 0/1] -- Weigh a production line, on its WHOLE price and in the tech
 //   want, by its units (median army-per-metal) times the ground they can cross
 //   (LineCoverage), against the best line of its class and tier. 0 restores
 //   the old pricing: terrain on the production half only. Measured worse
-//   2026-09-12 (docs/27); off until the line factor is strong enough to be
+//   2026-09-12 (docs/tunables.md); off until the line factor is strong enough to be
 //   the decision rather than a 17% nudge under the plant's own cost.
 const float TUNE_LINE_QUALITY = 0.f;
 
@@ -1984,77 +1983,77 @@ const float TUNE_LINE_QUALITY = 0.f;
 //   is worth at least this share of the best one we already produce, and a
 //   product the unit market refuses on this map (the amphib x0) prices its line
 //   at nothing. 1 is parity with what we field; 0 restores the old test, which
-//   asked only whether the product was new. See docs/27.
+//   asked only whether the product was new. See docs/tunables.md.
 
 // A defence slot holds ONE building, so a tower beaten on BOTH reach and
 //   killing power by a gun we can afford right now is not a cheaper option, it
 //   is stranded metal (apexearth: "why build something that so quickly becomes
-//   outdated?"). See docs/27.
+//   outdated?"). See docs/tunables.md.
 const float TUNE_DEF_DOMINANCE = 1.f;
 
 // Seconds of total economic power a defence building may cost and still count
 //   as affordable -- the guard that stops a Pulsar we cannot pay for making
-//   every tower obsolete and leaving us with nothing. See docs/27.
+//   every tower obsolete and leaving us with nothing. See docs/tunables.md.
 const float TUNE_DEF_AFFORD_S = 30.f;
 
 // Seconds of economic power the converter burst may commit at once. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_CONV_AFFORD_S = 30.f;
 
 // [toggle 0/1] -- Count the energy draw of work already ORDERED into the pull
-//   that prices energy. See docs/27.
+//   that prices energy. See docs/tunables.md.
 const float TUNE_E_COMMITTED = 1.f;
 
 // [toggle 0/1] -- Let a STALL open parallel energy sites, not only an
-//   overflowing bank. See docs/27.
+//   overflowing bank. See docs/tunables.md.
 const float TUNE_E_PARALLEL = 0.f;
 
 // [toggle 0/1] -- Discount a plant want by the plants of ANOTHER domain
-//   already under construction. See docs/27.
+//   already under construction. See docs/tunables.md.
 const float TUNE_PLANT_INFLIGHT = 1.f;
 
 // [seconds of economic power] -- The mex-cover QUEUE JUMP only fires once the
 //   tower costs less than this many seconds of total economic power. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_COVER_PUSH_S = 10.f;
 
 // [toggle 0/1] x5 -- Defence as a crutch (his 10-14): each prices one rule that
-//   bypassed the draw. 0 = before. See docs/27; counted on `apex: ecodef-stat`.
+//   bypassed the draw. 0 = before. See docs/tunables.md; counted on `apex: ecodef-stat`.
 const float TUNE_RADAR_PRICE = 0.f;    // radar worth what the eyes give our army and the ground it holds
 const float TUNE_DEFJOIN_PRICE = 0.f;  // the defence assist offered to the draw at its price, not hoisted
 const float TUNE_FIELD_PRICED = 0.f;   // the field crew's towers and radar go to the draw
 const float TUNE_COVER_PRICED = 0.f;   // the coverall and base-front towers go to the draw
 const float TUNE_DEF_DANGER = 0.f;     // the defence target follows the danger our army cannot meet
-const float TUNE_DEF_MEASURED = 0.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/27
+const float TUNE_DEF_MEASURED = 0.f;   // [toggle 0/1] defence demand on the measured attack rate, not the 1/120 s prior (his 10-15); docs/tunables.md
 
 // [multiplier] -- What a mex UPGRADE'S extra metal stream is worth, over its
-//   honest arithmetic. See docs/27.
+//   honest arithmetic. See docs/tunables.md.
 const float TUNE_MEXUP_BOOST = 1.f;
 
 // [toggle 0/1] -- Price a DUPLICATE line's throughput against the cheaper way
-//   to buy the same build power. See docs/27.
+//   to buy the same build power. See docs/tunables.md.
 const float TUNE_DUP_BP_SUBST = 1.f;
 
 // [multiplier] -- What a plant def we RECLAIMED ON PURPOSE prices at while the
-//   window below runs. See docs/27.
+//   window below runs. See docs/tunables.md.
 const float TUNE_REPLANT_DISCOUNT = 0.15f;
 
-// [seconds] -- How long the retirement memory above holds. See docs/27.
+// [seconds] -- How long the retirement memory above holds. See docs/tunables.md.
 const float TUNE_REPLANT_WINDOW_S = 600.f;
 
 // [ratio] -- How fast a unit's -- and a plant's PRODUCTION -- value fades as
-//   the share of identified enemy metal above its own tier rises. See docs/27.
+//   the share of identified enemy metal above its own tier rises. See docs/tunables.md.
 const float TUNE_FOE_TIER_FADE = 1.f;
 
 // [ratio] -- The same fade against OUR OWN fielded tier: once a T2 lab or
 //   gantry stands, lower-tier units lose 1/(1+this*tiersBelow) of their worth
 //   ("in late game, aside from spam we should mostly only be putting our
-//   resources into T3 units and advanced air"). See docs/27.
+//   resources into T3 units and advanced air"). See docs/tunables.md.
 const float TUNE_OWN_TIER_FADE = 0.8f;
 
 // [ratio] -- Share of the SYMMETRIC enemy expectation that the defence target
 //   assumes could arrive at our own base before anything has been seen. See
-//   docs/27.
+//   docs/tunables.md.
 const float TUNE_DEF_PRIOR_SHARE = 0.35f;
 
 // ---------------------------------------------------------------------------

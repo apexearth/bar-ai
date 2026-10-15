@@ -1,6 +1,6 @@
 namespace Military {
 
-// HUNT THEIR ARMY, AND EAT IT (apexearth 2026-10-08, docs/24 section 6). Every
+// HUNT THEIR ARMY, AND EAT IT (apexearth 2026-10-08, docs/doctrine.md section 6). Every
 // 30 s the biggest ground army of theirs we can see is weighed against our
 // attack squads. NO keeps today's play (the rule); HUNT puts our squads' focus
 // on that army -- they gather short of it and go in together once the gathered
@@ -8,7 +8,7 @@ namespace Military {
 // either pick, is watched for HUNT_S: their metal we killed near the group, ours
 // lost there, and the wrecks credited to whoever holds the ground they fell on.
 //
-// THEIR ARMY ON OUR GROUND IS MET (docs/24: if the base is pushed, meet that
+// THEIR ARMY ON OUR GROUND IS MET (docs/doctrine.md: if the base is pushed, meet that
 // army and destroy it; read their path and intercept). It is decided the moment
 // it appears, the rule picks HUNT when our attack squads outweigh it by the
 // home parity, and the hunt ends once it is back on their side.

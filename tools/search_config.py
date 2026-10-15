@@ -9,7 +9,7 @@ one parameter at a time from the current best, screen it, keep it if it wins.
 Screening is deliberately cheap and therefore noisy. A 40-game screen has a CI
 around +/-15 points, so it cannot confirm a small gain -- it is a filter, not a
 verdict. Anything that survives the search must be re-run at n>=200 across
-multiple maps before it is believed. See docs/07-headless-testing.md.
+multiple maps before it is believed. See docs/working.md.
 
 The parameters below are the ones with a documented meaning in the shipped
 config comments, so a perturbation has an interpretable effect rather than being

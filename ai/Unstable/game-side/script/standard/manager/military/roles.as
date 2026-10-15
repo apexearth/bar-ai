@@ -1,6 +1,6 @@
 namespace Military {
 
-// KILL PHASE (docs/20-brain-overhaul.md): the rush/eco team roles, ally aid
+// KILL PHASE (docs/how-it-works.md): the rush/eco team roles, ally aid
 // and metal slinging died with the leaf election machinery. The massing
 // constants below are army-USE policy and stay.
 

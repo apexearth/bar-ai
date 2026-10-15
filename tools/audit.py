@@ -484,7 +484,7 @@ def check_priority(text, rep):
         return
 
     picks = defaultdict(int)
-    # docs/20-brain-overhaul.md: the arbiter's ranking IS a log line, so the useful
+    # docs/how-it-works.md: the arbiter's ranking IS a log line, so the useful
     # assertion is "a moho was available and something beat it" rather than
     # inferring starvation from outcomes three layers downstream.
     beat = defaultdict(int)

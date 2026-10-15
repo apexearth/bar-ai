@@ -1045,7 +1045,7 @@ float LineTerrainMul(int plantDef)
 // reach for the line (LineCoverage). Their product, against the best line of
 // the class and tier, multiplies the WHOLE plant price -- the opening plant
 // is bought at minute 1 for its constructor, and a production-half term
-// moved nothing there (docs/27).
+// moved nothing there (docs/tunables.md).
 array<float> gLineQual;
 array<float> gLineMulV;
 int gLineQualAt = -999999;

@@ -98,7 +98,7 @@ A 1v1 or 2v2 cannot FAIL this verdict and proves nothing about it.
 
 - A behavioural cap ("only consider 20 candidates", "skip defence every other
   election", "no more than N nanos") is not a perf fix; it is policy, and
-  policy is his (docs/26). If the arithmetic says edits cannot get there, say
+  policy is his (docs/working.md). If the arithmetic says edits cannot get there, say
   so and propose the restructure — that is approved.
 - Turning a section off "because it's slow". Measure what it decides first
   (`deadcheck.py`); a section that decides nothing is deleted, not silenced.
@@ -120,7 +120,7 @@ A 1v1 or 2v2 cannot FAIL this verdict and proves nothing about it.
    worst spike before/after, and the per-section table for what you touched.
    A change that did not move the number is reverted, not kept as "cleaner".
 6. Record the arc in the commit message (as `ad82faac` did); the verdict line
-   goes in `docs/27` only if a default changed.
+   goes in `docs/tunables.md` only if a default changed.
 
 Previous reviews, for the arc: `208a82b3` (worker pool seen), `e6e842c7`
 (order census closed), `011f3b04` (idle pass sliced), `ad82faac` (first PASS,

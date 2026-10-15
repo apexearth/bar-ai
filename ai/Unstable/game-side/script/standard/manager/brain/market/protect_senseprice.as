@@ -398,7 +398,7 @@ float AACoverFrac()
 // that has flown home is still a bomber. OUR SHARE of a side-wide reading, as
 // RoleTarget divides it on the mobile side. The rear specialist is a fatter
 // target and carries a larger share. LATER BY ECONOMY, FLAK WHETHER OR NOT AIR
-// HAS SHOWN (docs/24): HeavyAAWant's income floor was only a ceiling, never a
+// HAS SHOWN (docs/doctrine.md): HeavyAAWant's income floor was only a ceiling, never a
 // purchase; here it is the air those flak saturate against at the cover ratio.
 // x the anti-air head.
 float StaticAAAirM()

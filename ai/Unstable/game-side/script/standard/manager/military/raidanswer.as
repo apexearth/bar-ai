@@ -1,6 +1,6 @@
 namespace Military {
 
-// A RAIDER THAT KILLS A BUILDING ON OUR GROUND GETS A SQUAD ITS SIZE (docs/24:
+// A RAIDER THAT KILLS A BUILDING ON OUR GROUND GETS A SQUAD ITS SIZE (docs/doctrine.md:
 // size a squad for each threat and hunt it down; home defence at 1.2x parity;
 // guns there mean it will be fine). CDefendTask::Detach does it only inside a
 // DEFEND pool, which in a 1v1 holds about one unit. The nearest units within

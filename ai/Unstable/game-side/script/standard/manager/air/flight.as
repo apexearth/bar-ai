@@ -8,7 +8,7 @@ namespace Air {
 // unarmed radar planes hold at home until the flight is full, then leave
 // together, one to each metal spot on the enemy half -- where their economy
 // stands -- and are handed to stock scouting there, where they also draw the
-// few-shot T2 anti-air (docs/24). The single bomber look is untouched.
+// few-shot T2 anti-air (docs/doctrine.md). The single bomber look is untouched.
 //------------------------------------------------------------------------------
 
 // THE SCOUT SEAT (his 2026-09-29: "at least 1 ai earlier on should make some

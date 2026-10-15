@@ -578,7 +578,7 @@ float ERealizeShare(float addE, float buildSec)
 // spilled. Orthogonal to apex_mexup_boost, which still decides extraction
 // against energy whenever the metal can be spent at all. The horizon knobs are
 // the energy side's on purpose -- a lookahead is a property of the question,
-// not of the resource. See docs/27.
+// not of the resource. See docs/tunables.md.
 int gMRealLogAt = 0;
 float MRealizeShare(float addM, float buildSec)
 {

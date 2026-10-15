@@ -1,7 +1,7 @@
 namespace Catalog {
 
 //------------------------------------------------------------------------------
-// THE CATALOG (docs/20-brain-overhaul.md step 0). Every def's economics and the
+// THE CATALOG (docs/how-it-works.md). Every def's economics and the
 // who-builds-what graph, read ONCE at init from the engine's own def table.
 // Data + accessors only: nothing here decides, spends, or enqueues. The Want
 // market prices choices by arithmetic over these arrays plus live income.

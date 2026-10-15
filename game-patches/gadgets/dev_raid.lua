@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 -- dev_raid.lua -- scripted enemy raids at fixed minutes, so the first minutes
--- of a harness game contain the fight docs/24 wants judged.
+-- of a harness game contain the fight docs/doctrine.md wants judged.
 --
 -- Stock BARb on the benchmark makes first contact at 8-12 minutes, so a test
 -- judged at five minutes measured nothing. This gadget spawns waves for a

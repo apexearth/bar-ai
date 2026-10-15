@@ -53,7 +53,7 @@ const float AIR_SCALE_INCOME = 30.f;   // extra metal/s per extra bomber above t
 // few cells per update; a cell's prize is the metal of the structures in it
 // and its cover the air-threat map read for one of our own bombers. The best
 // cell of the last complete sweep is the target, and its prize is what the
-// wing is worth. Not GetEnemyCostAt, which is a unit COUNT (docs/25 S28).
+// wing is worth. Not GetEnemyCostAt, which is a unit COUNT (docs/traps.md S28).
 array<AIFloat3> gStrikeCells;
 uint gStrikeCellI = 0;
 bool gStrikeCurHas = false;
@@ -414,7 +414,7 @@ int   gWaveLaunched = 0; // bombers the current wave left with
 // killing 3.6k -- they rebuild, and the registry lags -- so the deaths are
 // counted as they happen. Not gated on byUs: a bomb whose plane is already
 // dead when it lands reports no attacker, which is most of a wave's kills
-// (docs/25 S30); the cell and the run's window are the attribution.
+// (docs/traps.md S30); the cell and the run's window are the attribution.
 void NoteEnemyDeath(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
 	if ((gRunDef < 0) || (edef is null) || edef.IsMobile())

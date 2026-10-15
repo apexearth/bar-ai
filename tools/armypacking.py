@@ -1,6 +1,6 @@
 """How tightly each side packs its army: the splash test.
 
-His directive (docs/24): "curves and lines, never a ball" -- splash makes a ball
+His directive (docs/doctrine.md): "curves and lines, never a ball" -- splash makes a ball
 pay. Per sampled minute, per side (ally 0 = us), over units within FIGHT elmos of
 any enemy unit (so only armies near contact count): the mean number of own
 units within SPLASH elmos of each unit, and the share of units with 4+ there.

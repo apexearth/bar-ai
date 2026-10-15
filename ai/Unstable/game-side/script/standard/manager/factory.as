@@ -8,7 +8,7 @@
 // see builder.as for why. Functions may move freely between these files;
 // globals, consts and types may not move earlier than their first use.
 //
-// KILL PHASE (docs/20-brain-overhaul.md): production rules, plant choice and
+// KILL PHASE (docs/how-it-works.md): production rules, plant choice and
 // the quota machinery are removed. What remains is senses (income, phase,
 // election, enemy-tech sightings), the gQTask bookkeeping the facqueue's
 // recruit abort needs, and stubs for the three engine-looked-up choice hooks.

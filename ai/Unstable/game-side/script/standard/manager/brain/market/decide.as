@@ -141,7 +141,7 @@ int gMemoStride = 0;
 // be fixed from here: six of the seven slots read the commitment ledger or
 // Requests::gLive and NOTHING stamps either, so an order by another builder
 // moves an input this key cannot see. MemoEvictKind covers the executed kind
-// only. See docs/27, apex_memo_ttl.
+// only. See docs/tunables.md, apex_memo_ttl.
 array<array<int>@> gMemoKey;   // per slot: per-askerDef validity key
 
 // FOUR OF THE SEVEN PICK THEIR SITE FROM THE ASKER'S OWN POSITION -- protect and
@@ -389,7 +389,7 @@ Want@ MemoPropose(int slot, CCircuitUnit@ unit)
 // returned, so it stopped the next builder and never this one. Everything else
 // here follows from that -- the set is assembled a few steps at a time and
 // Decide holds the builder at null until it is whole.
-// The trade, the numbers and how to move it: docs/27, apex_elec_frame_us.
+// The trade, the numbers and how to move it: docs/tunables.md, apex_elec_frame_us.
 int gElecFrame = -1;
 double gElecSpentUs = 0.0;
 double gElecPumpUs = 0.0;   // of gElecSpentUs, what the pump's steps took
@@ -644,7 +644,7 @@ void ComFlipNote(CCircuitUnit@ unit, Want@ w, IUnitTask@ t, const string& in why
 // stream is lost for that long. The wage (WageOf) already charged for
 // A's walk and build is netted out. A frontier hand weighing a home nano now
 // pays the round trip in the claims around it; a hand at home barely notices.
-// It replaced the 45-s far-hand rule (docs/33).
+// It replaced the 45-s far-hand rule.
 int gOppRepriced = 0;
 int gOppFlips = 0;
 void OppTimeReprice(CCircuitUnit@ unit, array<Want@>@ ranked)
@@ -2795,7 +2795,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 				// ...but the ENGINE detaches the hand before every re-election
 				// too, so onCrew is false every time and this hold has never
 				// once fired. Testing our own removals instead reached only 7%
-				// of the cases and lost every game of an arm; see docs/27.
+				// of the cases and lost every game of an arm; see docs/tunables.md.
 				const bool dropped = !onCrew;
 				if (dropped) {
 					@gIncTask[uidk] = null;

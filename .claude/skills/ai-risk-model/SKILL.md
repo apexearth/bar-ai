@@ -29,7 +29,7 @@ tech or energy price.
   reach, on the true enemy bearing; credited in proportion to the closure the
   post adds (`protect_sense.as`, `LineClosure`). Used by front and gate sites.
 - **Wall slots are priced by the TEAM's gap, not by this** (2026-09-15,
-  `protect_team.as`, docs/32): each bearing of the team hull carries whether
+  `protect_team.as`, docs/how-it-works.md): each bearing of the team hull carries whether
   their ground can walk in, the cover meeting it (ours and allies' guns),
   the metal behind it, the interior shared among the open holes, and the
   mex spots raids through it starve; `GapBehindAt` is the slot's stake and a
@@ -74,7 +74,7 @@ risk follows elevation, which that cell cannot carry) and **never multiplied by
 that field drives defence gain, and a hazard turrets cannot answer would read
 there as a reason to buy turrets. `PfRebuild` discounts each asset's defence
 worth by `Lava::Survival` over the stake horizon, which is what makes the
-basin earn a light gun and the shelf a real one. `apex_lava`, docs/27.
+basin earn a light gun and the shelf a real one. `apex_lava`, docs/tunables.md.
 
 ## Traps
 

@@ -2,7 +2,7 @@
 """A/B battery, run in parallel, read as per-player means.
 
 apexearth 2026-09-11: "Your 12 game batteries take too long to run. You should
-just run six games all in parallel." One engine per write-dir (docs/26), so
+just run six games all in parallel." One engine per write-dir (docs/working.md), so
 each parallel slot gets matches/_engine_ab<slot>; six 30-minute 2v2s finish in
 the wall time of one and a half. 16 logical cores and 96 GB here; the default
 of 6 leaves room for a watched game beside it.

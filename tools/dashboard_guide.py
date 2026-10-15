@@ -203,7 +203,7 @@ GROUPS = [
                  ("TUNE_E_BILL_SHARE", "WHILE E-STALLED, prices a building's ENERGY bill against energy INCOME -- an advanced solar costs 5,000 E to make, which a 100 E/s economy cannot afford and a 400 E/s one barely notices. Off prices the bill by build length instead, which ignores income entirely"),
                  ("TUNE_E_COMMITTED", "counts the energy draw of work already ORDERED into the pull that prices energy, so a generator is worth buying BEFORE the stall rather than after it"),
                  ("TUNE_E_PARALLEL", "lets a STALL open parallel energy sites, not only an overflowing bank -- otherwise a big deficit is answered one small turbine at a time"),
-                 ("TUNE_E_FEED_BOUND", "stops the standing fleet asking for the energy of hands the METAL feed cannot run. Off (the default) the ask is the fleet's full nominal speed, which rises with our own build power and holds the 'would anything absorb this?' term at 1.00 even with the bank full. On, it was measured to move the e-stall and change no outcome -- see docs/27"),
+                 ("TUNE_E_FEED_BOUND", "stops the standing fleet asking for the energy of hands the METAL feed cannot run. Off (the default) the ask is the fleet's full nominal speed, which rises with our own build power and holds the 'would anything absorb this?' term at 1.00 even with the bank full. On, it was measured to move the e-stall and change no outcome -- see docs/tunables.md"),
                  ("TUNE_PLANT_INFLIGHT", "discounts a new lab by the labs of other domains already under construction -- stops the bot/vehicle/air rotation leaving three unfinished frames"),
                  ("TUNE_PLANT_COPY", "his 2026-08-27 ruling, on by default: no second plant of a type we already own. 0 lets a copy compete on price, which was measured worse -- -0.67 extractors at minute 4 and THEIRS +0.55 -- so the ruling is exonerated"),
                  ("TUNE_COVER_PUSH_S", "how affordable a mex sentry must be before it may JUMP the auction queue -- seconds of economic power. Lower delays the first turrets further"),
@@ -709,7 +709,7 @@ GROUPS = [
                   "to spend the metal on army instead"),
                  ("TUNE_DEF_OFF", "1 builds NO turrets at all, ground or AA: "
                   "radar, jammers and units are the whole defence. This is the "
-                  "no-turret fighting test from docs/24 -- override it on a "
+                  "no-turret fighting test from docs/doctrine.md -- override it on a "
                   "launch (tools/test_earlyfight.py does), do not edit the "
                   "default"),
                  ("TUNE_DEF_PRIOR_SHARE", "how much of the symmetric enemy "

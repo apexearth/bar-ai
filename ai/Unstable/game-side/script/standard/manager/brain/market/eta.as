@@ -1,6 +1,6 @@
 namespace Market {
 //------------------------------------------------------------------------------
-// THE ETA OBJECTIVE, ECONOMY-ONLY (docs/23-the-plan.md, the `eta-objective`
+// THE ETA OBJECTIVE, ECONOMY-ONLY (docs/how-it-works.md, the `eta-objective`
 // skill).
 //
 // The market prices ONE STEP: gain per metal-second, compared now. A per-instant

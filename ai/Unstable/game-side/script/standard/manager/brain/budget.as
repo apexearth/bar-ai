@@ -91,7 +91,7 @@ float ShareOverride(const string &in name)
 // The curve, read live -- or reproducing the cached frame-0 reading the bug
 // produced, which is what every game to date actually played. Turning it on is
 // an UNTUNED CHANGE, not just a fix: the targets.as numbers have never been
-// exercised past column 0. The A/B is in docs/27 under TUNE_BUDGET_LIVE.
+// exercised past column 0. The A/B is in docs/tunables.md under TUNE_BUDGET_LIVE.
 float CurveAt(const array<float>& in curve)
 {
 	if (ai.GetTunable("apex_budget_live", TUNE_BUDGET_LIVE) > 0.f)

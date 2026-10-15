@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The early-fight test: no turrets, a tight 1v1 map, judged at five minutes.
 
-docs/24-how-units-fight.md: "a good way to gauge how well our fighting is doing
+docs/doctrine.md: "a good way to gauge how well our fighting is doing
 is to not make any turret defenses... gauge our performance in fighting in the
 first 5 minutes of the game. Metrics that matter are damage efficiency, units
 killed/lost, count of builder interruptions, building damage received/dealt."

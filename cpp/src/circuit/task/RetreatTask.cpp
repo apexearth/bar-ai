@@ -224,7 +224,7 @@ void CRetreatTask::Start(CCircuitUnit* unit)
 					// apex: the script's medic station when it has one: behind
 					// the army, out of the enemy's reach, where the medics stand.
 					// CONCENTRATE OPPOSITE THEIR ARMY, NEVER SPLIT OURS TO WALK
-					// HOME (apexearth 2026-10-03, docs/24): a contested post sent
+					// HOME (apexearth 2026-10-03, docs/doctrine.md): a contested post sent
 					// a back seat's wounded to its corner base, across the map
 					// from the fight. Step back from the front toward home until
 					// the ground is ours; home only if none is within reach.

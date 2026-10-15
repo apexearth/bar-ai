@@ -25,15 +25,15 @@ about this layer — but respect its failure modes, which are silent or fatal.
 - **Another session may be editing the same tree.** If one might be, claim a
   lane first: `python tools/lane.py init <name>` gives you a private
   `BARb-<name>` source, a private build output and a private deploy slot, then
-  every tool here follows it with no flags. `docs/28-parallel-sessions.md`.
+  every tool here follows it with no flags. `docs/working.md`.
   Without one, two sessions build a single DLL containing both their changes
   and each measures the other's work as its own.
 - Key files: `task/fighter/SquadTask.cpp` (wall, regroup, standoff ring,
   kite), `task/fighter/AttackTask.cpp` (engage decision, DEPLOY_SLACK,
   assembly gate, flanking, attack-break), `module/MilitaryManager.cpp`,
   `script/InitScript.cpp` + `script/*Script.cpp` (AngelScript bindings).
-- `docs/06-building-the-dll.md` is the full walkthrough; this skill is the
-  working summary.
+- `docs/working.md` (Building the DLL) has the toolchain and crash-address
+  notes; this skill is the working summary.
 
 ## The loop
 

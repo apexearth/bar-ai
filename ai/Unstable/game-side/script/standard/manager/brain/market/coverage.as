@@ -741,7 +741,7 @@ float ThreatAt(const AIFloat3& in pos)
 // LOS-slaved, so it reads zero where nothing was seen and can only ever raise.
 // Mobile metal only: group cost counts buildings and velVec is the fastest
 // member, so a group on their base would walk its economy at us at scout speed.
-// MEASURED INERT, kept at 0 as an instrument -- docs/27.
+// MEASURED INERT, kept at 0 as an instrument -- docs/tunables.md.
 float ApproachP(const AIFloat3& in pos, float defended)
 {
 	RiskFill();   // stamped per frame; never reached from inside RiskFill
@@ -981,7 +981,7 @@ float StreamRisk(const AIFloat3& in pos)
 	float shortP = ShortWith(pos, cover, ThreatAt(pos));
 	// INSIDE THE TEAM'S LINE, THE LINE IS THE COVER. Ground behind a held
 	// front is exposed only through the worst open hole, whatever gun stands
-	// beside the building: the guns went to the front (docs/32) and every
+	// beside the building: the guns went to the front (docs/how-it-works.md) and every
 	// home mex read a 45% chance of loss with hazard 0 -- halving every
 	// economy want at home. The hole rule prices the hole; the interior
 	// carries its open share, not a shortfall of its own.

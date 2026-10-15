@@ -60,7 +60,7 @@ COMMENT = re.compile(r"^\s*(?://|#)")
 SRC = (".as", ".py", ".cpp", ".h", ".lua")
 
 # PROSE FILES get the same question, because the same habit fills them.
-# apexearth 2026-09-05, on a docs/27 entry: "It's so black and white... This is
+# apexearth 2026-09-05, on a docs/tunables.md entry: "It's so black and white... This is
 # a good example of comments/content being added to our docs, blowing up our
 # context, and causing baggage we carry down the road."
 PROSE = ("docs/", "ISSUES.md", "USER-FEEDBACK.md", "TODO.md", "CLAUDE.md",

@@ -120,7 +120,7 @@ def name() -> str:
     is the shared slot by name). Otherwise the answer is this session's own
     claim and nothing else: the legacy checkout-wide `.barai-lane` is ignored,
     because a session that never claimed a lane read another session's there
-    and wrote into its tree (docs/25, S25).
+    and wrote into its tree (docs/traps.md, S25).
     """
     env = os.environ.get("BARAI_LANE", "").strip()
     if env:

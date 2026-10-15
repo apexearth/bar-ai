@@ -304,7 +304,7 @@ void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 	}
 }
 
-// A raid sent at a target off our home ground commits (his 2026-10-12, docs/24 Raids): it goes for the
+// A raid sent at a target off our home ground commits (his 2026-10-12, docs/doctrine.md Raids): it goes for the
 // economy, takes the damage on the way, and nobody walks home to be repaired.
 bool CRaidTask::IsCommitted() const
 {

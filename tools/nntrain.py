@@ -1,4 +1,4 @@
-"""Live trainer for the decision value net (docs/35-decision-net.md).
+"""Live trainer for the decision value net (docs/how-it-works.md).
 
     python tools/nntrain.py            # learn from running and finished games until stopped
     python tools/nntrain.py --once     # take what is waiting, then exit
@@ -77,7 +77,7 @@ SCHEMA_STATE = "repairM"   # a state field only the current record carries: olde
 Y_FLOOR = 0.1           # a rare outcome must not get a near-zero spread and swamp the loss
 DECIDED = ("draw", "ladder")   # rows where an option was chosen on value, not forced
 # What "better" means when the net plays, in units of each outcome's spread.
-# A stated default until he picks one (docs/35).
+# A stated default until he picks one (docs/how-it-works.md).
 OBJECTIVE = {(5, "dEco"): 0.5, (10, "dEco"): 1.0, (5, "dMInc"): 0.25, (5, "dEInc"): 0.25,
              (5, "lnD"): 0.25, (10, "lnD"): 0.5, (5, "lostNear"): -0.5,
              ("done", "done"): 0.25, ("survived", "survived"): 0.25,
@@ -497,7 +497,7 @@ class Net:
 
 class Ens:
     """ens_k() FULL nets on one buffer and one set of scalers, each with its own
-    init and minibatch draw; predicts (and exports, `fold`) their mean (docs/35)."""
+    init and minibatch draw; predicts (and exports, `fold`) their mean (docs/how-it-works.md)."""
     def __init__(self, n_in, n_out, k=None):
         self.members = [Net(n_in, n_out) for _ in range(k or ens_k())]
         self.xm = self.xs = self.ym = self.ys = None
@@ -921,7 +921,7 @@ class SourceResolver:
         return None
 
 
-# TRUST, kind 3 (docs/35). On a game's first, unseen batch, each CHANCE
+# TRUST, kind 3 (docs/how-it-works.md). On a game's first, unseen batch, each CHANCE
 # row (rand_weight) scores d = FULL(chosen) - FULL(rule) against the realized
 # a = outcome - FULL(rule), both in OBJECTIVE units, weighted 1/p; trust is the
 # lower end of a game-clustered bootstrap interval of the SLOPE of a on d (the

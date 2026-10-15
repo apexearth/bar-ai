@@ -397,7 +397,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	// position safe" test in the AI reads the threat map, and nothing has ever
 	// checked it against ground truth. A death spot reading 0 means the test
 	// that should have refused the move could not have refused it.
-	// OnMap first: GetUnitThreatAt off-map is the crash in docs/25 S9.
+	// OnMap first: GetUnitThreatAt off-map is the crash in docs/traps.md S9.
 	const float deathThr = (OnMap(at) && (cdef !is null))
 			? ai.GetUnitThreatAt(unit, at) : -1.f;
 	AiLog(Factory::T() + "apex: unit-destroyed " + ((cdef !is null) ? cdef.GetName() : "?")

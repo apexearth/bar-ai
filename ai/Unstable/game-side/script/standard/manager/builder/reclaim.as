@@ -398,7 +398,7 @@ bool PreferReclaim()
 	if (gComm is null)
 		return false;
 	// (The pre-T2 reclaim default is gone: RezzerRezOrEat judges resurrect
-	// by the unit it returns against the army gap -- apexearth, docs/24.)
+	// by the unit it returns against the army gap -- apexearth, docs/doctrine.md.)
 	// Behind on the field, the completion risk is the whole argument: a resurrect
 	// credits nothing until it finishes, so a bot pushed off one has spent the
 	// time for no metal, while reclaim banks continuously and survives being

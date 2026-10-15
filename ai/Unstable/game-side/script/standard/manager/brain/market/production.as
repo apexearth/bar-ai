@@ -1148,7 +1148,7 @@ bool PatrolFodder(int d)
 
 // THE SCOUT FLEET GROWS WITH THE WAR (his 10-13: "in the late game a swarm is
 // delightfully distracting for enemy fire - early game we definitely don't need
-// a ton of these"; docs/24: late, fodder runs at their base for vision and
+// a ton of these"; docs/doctrine.md: late, fodder runs at their base for vision and
 // distraction). The screen term buys scouts while their metal is under a share
 // of the army -- two for sight at least -- and stops there.
 const float SCOUT_ARMY_SHARE = 0.05f;

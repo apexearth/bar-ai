@@ -625,7 +625,7 @@ local NAMES = {
 	"apex_arc_sticky",
 	-- SquadTask.cpp: seconds between standoff-ring re-issues (1 = shipped).
 	-- Every re-issue is a forced engine re-path; this prices that against
-	-- ms/frame. See docs/27-tunable-rationale.md.
+	-- ms/frame. See docs/tunables.md.
 	"apex_standoff_s",
 	-- SquadTask::HoldGoal: 1 = a squad keeps the destination it is still
 	-- closing on unless something is actually THERE. 0 restores the old

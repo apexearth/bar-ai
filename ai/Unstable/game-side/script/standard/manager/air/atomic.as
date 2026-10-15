@@ -1,6 +1,6 @@
 namespace Air {
 
-// THE ATOMIC BOMBER IS A STRIKE BY ITSELF (apexearth 2026-09-20, docs/24): its
+// THE ATOMIC BOMBER IS A STRIKE BY ITSELF (apexearth 2026-09-20, docs/doctrine.md): its
 // bomb takes the cell alone, so it waits for no mass. A scout flies the route
 // first -- where the AA is not is the question the run is priced on -- then
 // the plane goes when the cell pays for one plane's risk, hunts inside it

@@ -7,7 +7,7 @@ namespace Brain {
 const int BATCH_SLICE_US = 1000;
 
 //------------------------------------------------------------------------------
-// THE PRODUCTION EXECUTOR. KILL PHASE (docs/20-brain-overhaul.md): the quota
+// THE PRODUCTION EXECUTOR. KILL PHASE (docs/how-it-works.md): the quota
 // machinery is gone; what remains is the line MECHANICS -- adoption, the
 // Wait-hold, the recruit abort and sweep, and the sent-ledger. Every factory
 // line is taken and held; Market::ConOrderFor hands this executor its orders.

@@ -101,7 +101,7 @@ void ISquadTask::RemoveAssignee(CCircuitUnit* unit)
 	FindLeader(units.begin(), units.end());
 }
 
-// NEVER SPLIT OURS TO WALK HOME (docs/24 Retreat; his 10-13: "suicide dive mode where we
+// NEVER SPLIT OURS TO WALK HOME (docs/doctrine.md Retreat; his 10-13: "suicide dive mode where we
 // just kept running in close to enemies and dying one by one"): 75 of 79 fighters dead after
 // minute 15 of one Comet game held a RETREAT task, picked off on the way to the heal point.
 // The squad disengages as one (its own regroup and turn-back); a lone member or a flyer still goes.
@@ -718,7 +718,7 @@ float ISquadTask::EnemyHp(CEnemyInfo* e)
 
 // A building is worth its metal over the threat faced to take it (FindTarget's pull, so the wall
 // is still walked past to the economy); an army unit, its metal plus what it kills of ours while
-// it lives -- longer by the walk in when it outranges our shortest gun (docs/24: long range first).
+// it lives -- longer by the walk in when it outranges our shortest gun (docs/doctrine.md: long range first).
 float ISquadTask::TargetWorth(const SFire& f, CEnemyInfo* e, float horizonS) const
 {
 	CCircuitDef* ed = e->GetCircuitDef();
@@ -750,7 +750,7 @@ bool ISquadTask::FireStale() const
 	return false;
 }
 
-// LETHAL DOSES (docs/24 Targets): the targets in reach of the engagement, best metal per second
+// LETHAL DOSES (docs/doctrine.md Targets): the targets in reach of the engagement, best metal per second
 // of our fire first; each takes the members whose fire kills it within one re-issue (3 s), the
 // smallest that finishes it, and the rest go on to the next. apply=false only measures the
 // squad as it fights today, every member on the squad's one target.
