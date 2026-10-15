@@ -1034,6 +1034,13 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			}
 		}
 	}
+	if ((half == HALF_GROUND) && !defOff) {
+		Want@ rf = RefillPropose(unit, hT1Out);
+		if ((rf !is null) && ((w.def is null) || !unit.circuitDef.CanBuild(w.def) || (rf.value > w.value))) {
+			RefillNoteOffered();
+			return rf;
+		}
+	}
 	if ((w.def !is null) && (half == HALF_GROUND)
 		&& !unit.circuitDef.CanBuild(w.def)) {
 		// ...UNLESS THE SHORTFALL STANDS. apexearth 2026-09-18: "let the T1

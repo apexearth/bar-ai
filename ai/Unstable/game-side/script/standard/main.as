@@ -291,6 +291,7 @@ void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
 		&& (Market::ProtClassOf(int(unit.circuitDef.id)) == Market::PROT_DEF))
 	{
 		Market::NoteTowerBuilt(unit.GetPos(ai.frame), unit.circuitDef.costM);
+		Market::RefillNoteBuilt(unit.GetPos(ai.frame));
 	}
 	// The defense zone follows the BUILT base: every finished rear structure
 	// can stretch the ring, forward fences and mex guards never do (a front
@@ -473,6 +474,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 		if (Market::ProtClassOf(int(cdef.id)) == Market::PROT_DEF) {
 			Market::NoteTowerLost(at);
 			Market::NoteTowerGrave(at, cdef.costM);
+			Market::RefillNoteDeath(int(cdef.id), at);
 		}
 		if (Catalog::ValidId(int(attackerDef.id)) && Catalog::gMobile[int(attackerDef.id)]
 			&& !Catalog::gFlyer[int(attackerDef.id)]) {

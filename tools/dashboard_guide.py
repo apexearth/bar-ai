@@ -759,6 +759,13 @@ GROUPS = [
                   "they field something that erases the latter in one pass. "
                   "0 prices every turret on raw damage per metal, which is why "
                   "the T3 guns were never built"),
+                 ("TUNE_DEF_REFILL", "ON puts a tower the enemy killed back "
+                  "on the same gap: priced by everything behind the hole on "
+                  "the way to our base, as if they will come straight back "
+                  "through it, fading over a few minutes; skips the in-flight "
+                  "cap. A grave still pulls the new gun back; it waits while "
+                  "their units stand there and gives up if they stay. "
+                  "apex: refill-stat each minute; 'deflag' button on a run"),
                  ("TUNE_STANDOFF_COVER", "measure cover on the ring the enemy "
                   "can shoot from, not just whether a turret reaches"),
                  ("TUNE_DEFZONE_DYNAMIC", "the base-defence ring follows the "
@@ -1357,6 +1364,9 @@ GOALS = [
              "note": "makes every unguarded building worth measurably less "
                      "until something covers it, so the auction chases the "
                      "buildings we actually own rather than a perimeter"},
+            {"ref": "TUNE_DEF_REFILL", "dir": "up",
+             "note": "a tower knocked out is rebuilt on the same gap first, "
+                     "not somewhere still standing (his 10-14)"},
         ],
         "watch": "python tools/deaths.py <run> — where our buildings died. If "
                  "losses move from mexes to the front line, it worked.",

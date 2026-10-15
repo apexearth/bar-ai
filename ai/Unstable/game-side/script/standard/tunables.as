@@ -200,6 +200,12 @@ const float TUNE_RAID_ANSWER_REACH = 0.f;
 //   A/B before default.
 const float TUNE_FLANK_GUARD = 0.f;
 
+// [toggle 0/1] -- Tower refill (protect_refill.as): a finished gun an enemy killed
+//   is offered back on its gap, priced by the stake behind the breach at the
+//   exposure window's rate while the loss is fresh, exempt from the in-flight
+//   cap. His 10-14; A/B before default.
+const float TUNE_DEF_REFILL = 0.f;
+
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought
 //   for the lines when the eco spends all the free flow (sites.as LineUnserved).

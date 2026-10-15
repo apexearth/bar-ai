@@ -60,6 +60,7 @@ ANALYSIS_TOOLS = {
     "raid": ("test_raid.py", False),
     "siege": ("siege.py", False),
     "flank": ("flankstat.py", False),
+    "deflag": ("deflag.py", False),
 }
 
 DEPLOY_ACTIONS = {
