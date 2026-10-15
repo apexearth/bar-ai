@@ -950,6 +950,11 @@ const float TUNE_CONSOLIDATE_R = 2000.f;
 //   guns.
 const float TUNE_CONSOLIDATE_EDGE = 1.f;
 
+// [0/1] -- A fighter tasked while armed enemies engage where it stands defends that spot
+//   until they are gone (C++ MakeTask), and a defender beside our structures does not
+//   consolidate away from them.
+const float TUNE_BIRTH_DEFEND = 0.f;
+
 // The defaults below reproduce the previous gCombat/costM ranking EXACTLY --
 //   dps * sqrt(alpha) * hp / cost is what power^2/cost expands to -- so the
 //   first deploy is a no-op and every later setting is a clean A/B against it.

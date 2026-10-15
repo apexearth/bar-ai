@@ -87,6 +87,9 @@ public:
 	float GetEnemyAirCostNear(const springai::AIFloat3& pos, float radius) const;
 	// Metal of armed enemy mobiles near pos. GetEnemyCostAt is a unit COUNT (S28).
 	float GetEnemyArmedCostNear(const springai::AIFloat3& pos, float radius);
+	// Armed ground mobiles we have seen that reach pos or are within reach of it: each counts when
+	// its distance is under reach plus its own threat-map range.
+	float GetEnemyEngagingCostNear(const springai::AIFloat3& pos, float reach);
 	float GetEnemyMaxMobileCostM() const;
 	// apex: longest weapon range in a group -- danger radius depends on it.
 	float GetEnemyGroupRange(int idx) const;
@@ -172,8 +175,12 @@ private:
 
 	std::vector<CEnemyUnit*> enemyUpdates;
 	std::vector<float> armedGrid;   // armed mobile metal per ARMED_CELL square, rebuilt every 15 frames
+	std::vector<float> groundGrid;  // the ground share of armedGrid
+	std::vector<float> groundReach; // longest threat range among them, per cell
+	float groundReachMax = 0.f;
 	int armedGridW = 0, armedGridH = 0;
 	int armedGridFrame = -1000;
+	void FillArmedGrid();
 	unsigned int enemyIterator;
 
 	int dyingFrame;

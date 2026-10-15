@@ -298,6 +298,7 @@ An override reaches a game only through the deployed `dev_tunables.lua` gadget (
 - `TUNE_COM_LAB_EARLY` = 1. The commander supports the lab early (his plan after mirrors stuck at 50%): constructors lost by minute 10 0.9 -> 0.5. To become a price, not a queue jump.
 - `TUNE_ESCORT_CAP` = 8. Escorts at once; the 1x base of the `ecap` head. `EscortShortfall` still stops at the flat rez-bot cap.
 - `TUNE_ESCORTS_PER_CON` = 2. Escorts per exposed constructor (his plan for fewer constructor deaths); the `esc` head scales it.
+- `TUNE_BIRTH_DEFEND` = 0 (`apex_birth_defend`, also read in C++). His 10-15 watch: two units out of a T2 lab under attack ran instead of defending it, and the lab died. A fighter tasked while seen armed ground enemies engage its spot (its reach plus theirs) defends there unless the influence odds are past `apex_withdraw_odds`, released 5 s after nothing engages it; a defender beside our structures counts their guns and the labs' output before the pack arrives, and regroups at them instead of a rally. `apex: birth-defend-stat`. Unmeasured.
 
 ## C++-only options (read through `GetTunable` in the DLL; no `TUNE_` constant)
 

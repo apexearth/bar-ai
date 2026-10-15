@@ -568,6 +568,7 @@ void UpdateWithdraw()
 	const float recallFwd = ai.GetTunable("apex_recall_home_fwd", TUNE_RECALL_HOME_FWD);
 	float recallHave = -1.f;
 	gHoldHomePass = -1;
+	const bool birthOn = ai.GetTunable("apex_birth_defend", TUNE_BIRTH_DEFEND) > 0.f;
 	for (uint j = 0; j < alive.length(); ++j) {
 		CCircuitUnit@ u = alive[j];
 		const int i = aliveSlot[j];
@@ -662,6 +663,8 @@ void UpdateWithdraw()
 		// and meet them as a group or behind guns. Metal against metal, the
 		// tracker's own currency.
 		bool consolidate = false;
+		bool atAsset = false;
+		AIFloat3 assetAt;
 		if ((ft == Task::FightType::DEFEND)
 			&& (ai.frame - Military::gIncomingAt < 15 * SECOND)
 			&& OnMap(Military::gIncomingPos))
@@ -675,9 +678,21 @@ void UpdateWithdraw()
 					if (allyPos[i2].SqDistance2D(p) <= gWdR2)
 						nearM += allyCost[i2];
 				}
-				consolidate = nearM
-						* ai.GetTunable("apex_consolidate_edge", TUNE_CONSOLIDATE_EDGE)
-						< Military::gIncomingCost;
+				const float edge = ai.GetTunable("apex_consolidate_edge", TUNE_CONSOLIDATE_EDGE);
+				consolidate = nearM * edge < Military::gIncomingCost;
+				// A defender beside our structures counts their guns and what the labs there finish
+				// before the pack arrives, and regroups at them, not at a rally further from the threat
+				// (his 10-15: lab defenders left and the lab died).
+				if (consolidate && birthOn) {
+					const float arriveS = (Military::gIncomingSpeed > 1.f) ? (packD / Military::gIncomingSpeed) : 0.f;
+					const float hold = aiMilitaryMgr.AssetHold(u, arriveS, assetAt);
+					if (hold >= 0.f) {
+						atAsset = true;
+						consolidate = (nearM + hold) * edge < Military::gIncomingCost;
+						if (!consolidate)
+							aiMilitaryMgr.NoteBirthScript(1);
+					}
+				}
 			}
 		}
 		// A LOST FIGHT ENDS AS A TASK, NOT AS A CROWD OF ORDERS. The per-unit
@@ -777,7 +792,9 @@ void UpdateWithdraw()
 		if (recallHome) {
 			back = HomeFightPos();
 		} else if (consolidate) {
-			if (!RallySpot(p, back))
+			if (atAsset)
+				back = assetAt;
+			else if (!RallySpot(p, back))
 				continue;
 		} else {
 			AIFloat3 gun, held;
@@ -801,6 +818,13 @@ void UpdateWithdraw()
 		// Already behind the guns: nothing to do but fight.
 		if (back.distance2D(p) < ai.GetTunable("apex_withdraw_near", TUNE_WITHDRAW_NEAR))
 			continue;
+		// A unit holding the spot it was born under fire at stays until its task releases it.
+		if ((ft == Task::FightType::DEFEND) && birthOn && aiMilitaryMgr.IsBirthDefender(u)) {
+			aiMilitaryMgr.NoteBirthScript(0);
+			continue;
+		}
+		if (consolidate && atAsset && !recallHome)
+			aiMilitaryMgr.NoteBirthScript(2);
 		u.CmdMoveTo(back);
 		gCombatSent[i] = ai.frame;
 		++gWithdrawn;

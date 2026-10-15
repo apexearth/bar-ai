@@ -65,6 +65,7 @@ array<int>      gAppSeen;
 AIFloat3 gIncomingPos;
 float    gIncomingCost = 0.f;
 int      gIncomingAt = -999999;
+float    gIncomingSpeed = 0.f;   // elmo/s it closed over the last pass; 0 when already in reach
 int      gNextApproach = 0;
 int      gNextApproachLog = 0;
 // THE STANDOFF AN ATTACKER SHOOTS FROM.
@@ -153,6 +154,7 @@ void UpdateApproach()
 				gIncomingPos = p;
 				gIncomingCost = cost;
 				gIncomingAt = ai.frame;
+				gIncomingSpeed = 0.f;
 				if (ai.frame >= gNextApproachLog) {
 					gNextApproachLog = ai.frame + 30 * SECOND;
 					AiLog(Factory::T() + "apex: DANGER IN REACH -- "
@@ -189,6 +191,7 @@ void UpdateApproach()
 			gIncomingPos = p;
 			gIncomingCost = cost;
 			gIncomingAt = ai.frame;
+			gIncomingSpeed = closed / 5.f;
 			if (ai.frame >= gNextApproachLog) {
 				gNextApproachLog = ai.frame + 30 * SECOND;
 				AiLog(Factory::T() + "apex: PUSH INCOMING -- "
@@ -264,6 +267,7 @@ void NoteStructureLoss(const AIFloat3& in at, float costM)
 		gIncomingPos = gRaidPos;
 		gIncomingCost = gRaidM;
 		gIncomingAt = ai.frame;
+		gIncomingSpeed = 0.f;
 	}
 	if (ai.frame >= gNextRaidLog) {
 		gNextRaidLog = ai.frame + 20 * SECOND;

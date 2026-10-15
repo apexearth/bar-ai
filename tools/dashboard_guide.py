@@ -585,6 +585,12 @@ GROUPS = [
                   "incoming-group withdrawals while the odds are not against it "
                   "— the contested middle mexes are held, not handed over. OFF "
                   "restores the withdrawals"),
+                 ("TUNE_BIRTH_DEFEND", "ON: a unit that comes out of a lab (or "
+                  "is re-tasked) while enemies are attacking where it stands "
+                  "defends that spot until they are gone, unless the odds there "
+                  "are hopeless; and a defender next to our buildings counts "
+                  "their guns and what the lab will finish, and regroups at "
+                  "them instead of walking off to a rally point"),
                  ("TUNE_HOLD_COMMITTED", "units already under enemy fire are "
                   "never given solo pull-out orders — the force stands or was "
                   "never engaged. OFF restores per-unit withdrawal everywhere, "
