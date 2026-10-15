@@ -193,6 +193,24 @@ float AirLossRate()
 	return gDeadToAir / BLEED_TAU;
 }
 
+// What our whole side is losing to aircraft (his 10-14: a teammate was bombed for minutes and no seat
+// built AA as a precaution -- each counted only its own losses). Allies publish on the team board.
+const int BOARD_AIRLOSS = 3200;
+float gTeamAirLoss = 0.f;
+int gTeamAirLossAt = -1;
+float TeamAirLossRate()
+{
+	if (ai.GetTunable("apex_team_airloss", TUNE_TEAM_AIRLOSS) <= 0.f)
+		return AirLossRate();
+	if (ai.frame >= gTeamAirLossAt + SECOND) {
+		gTeamAirLossAt = ai.frame;
+		gTeamAirLoss = 0.f;
+		for (int t = 0; t < 32; ++t)
+			gTeamAirLoss += (t == ai.teamId) ? AirLossRate() : ai.GetTeamBoard(BOARD_AIRLOSS + t, 0.f);
+	}
+	return gTeamAirLoss;
+}
+
 // ANYTHING OF OURS KILLED BY A STATIC LONG-RANGE GUN, structures included.
 // Called before the army filters, so it sees the mexes and generators an LRPC
 // exists to remove.
@@ -360,6 +378,7 @@ void UpdateDeathLedger()
 	gStaticDeathX *= k;
 	gStaticDeathZ *= k;
 	gDeadToAir *= k;
+	ai.SetTeamBoard(BOARD_AIRLOSS + ai.teamId, AirLossRate());
 	gDeadToMobile *= k;
 	gDeadToPlasma *= k;
 	for (uint fi = 0; fi < gFoeTierM.length(); ++fi)

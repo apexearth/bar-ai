@@ -609,7 +609,8 @@ float NnValDecide(const string& in tag, const string& in own, float lo, float hi
 	float ctr = -1.f;
 	const int pnh = PnHead(tag);
 	if (pnh >= 0) {
-		v = PnValue(pnh, st, f, lo, hi);
+		v = (ai.GetTunable("apex_pn_rule_centre", TUNE_PN_RULE_CENTRE) > 0.f)
+			? PnValueRule(pnh, st, f, lo, hi, rule) : PnValue(pnh, st, f, lo, hi);
 		vnet = v;
 		net = true;
 		t = 1.f;

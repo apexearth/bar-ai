@@ -94,7 +94,7 @@ void AAWantLog()
 	const float statAir = StaticAAAirM();
 	AiLog(Factory::T() + "apex: aa-want t=" + ai.teamId
 		+ " seen=" + int(Military::AirSeenEver()) + " fresh=" + int(aiEnemyMgr.GetEnemyCostFresh(RT::AIR))
-		+ " airLoss=" + NnF(Military::AirLossRate(), 2)
+		+ " airLoss=" + NnF(Military::AirLossRate(), 2) + " teamAirLoss=" + NnF(Military::TeamAirLossRate(), 2)
 		+ " static=" + int(StaticAAHaveM()) + "/" + int(statAir * AACoverFrac())
 		+ " flakFloor=" + Military::FlakFloorN()
 		+ " mobile=" + int(RoleValue(aaRole)) + "/" + int(RoleTarget(aaRole, ArmyTarget()))

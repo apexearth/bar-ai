@@ -155,6 +155,22 @@ float PnValue(int h, const array<float>& in st, const array<float>& in f, float 
 	return (v < lo) ? lo : ((v > hi) ? hi : v);
 }
 
+// Output 0 is the rule's own value, +1 the top of [lo, hi] and -1 the bottom, in log steps. The
+// log-middle above is not the rule for an uneven range: aa [0, 8] played 0.63x and gunp [0, 4] 0.45x
+// at output 0, so every network sized AA below the rule (his 10-14: "we used to respond to air promptly").
+float PnValueRule(int h, const array<float>& in st, const array<float>& in f, float lo, float hi, float rule)
+{
+	array<float> o;
+	PnHeadOut(h, st, f, o);
+	const float l0 = log((lo > PN_FLOOR) ? lo : PN_FLOOR);
+	const float l1 = log(hi);
+	float lr = log((rule > PN_FLOOR) ? rule : PN_FLOOR);
+	lr = (lr < l0) ? l0 : ((lr > l1) ? l1 : lr);
+	const float x = (o[0] > 1.f) ? 1.f : ((o[0] < -1.f) ? -1.f : o[0]);
+	const float v = pow(2.718282f, lr + ((x >= 0.f) ? (l1 - lr) : (lr - l0)) * x);
+	return (v < lo) ? lo : ((v > hi) ? hi : v);
+}
+
 // The rule's weights tilted by exp(PN_LGAIN x output): all outputs 0 leaves the rule's own
 // odds; an option the rule gave no weight (impossible) stays at none.
 void PnTilt(int h, const array<float>& in st, const array<float>& in f, array<float>& w)

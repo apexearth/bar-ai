@@ -181,6 +181,15 @@ const float TUNE_ONE_ARMY = 0.f;
 //   draw's ticket share (roles.as EcoHandOn). His 10-14; A/B before default.
 const float TUNE_ECO_HAND = 0.f;
 
+// [toggle 0/1] -- AA counts what the whole side loses to aircraft, not only this
+//   seat (deathledger.as TeamAirLossRate). His 10-14; A/B before default.
+const float TUNE_TEAM_AIRLOSS = 0.f;
+
+// [toggle 0/1] -- A policy network's output 0 plays each continuous head at the
+//   rule's value (policy.as PnValueRule), not the log-middle of its range (aa
+//   0.63x, gunp 0.45x, mass 1.22x). His 10-14; A/B before default.
+const float TUNE_PN_RULE_CENTRE = 0.f;
+
 // [influence] -- Enemy influence at our own base above which the base counts
 //   as under attack (converter placement pauses).
 const float TUNE_BASE_ATTACK_INFL = 10.f;

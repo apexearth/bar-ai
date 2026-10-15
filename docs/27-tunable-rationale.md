@@ -3336,3 +3336,17 @@ hoists, ~52% would lose the draw; base front 1,355, ~62%; field towers 4,475, ~8
 alone shift time into sense: test them with RADAR_PRICE on as well as alone. 2,560 radar picks
 (26%) come through the constructor-role rule, which none of the five touches. DEFJOIN cannot be
 estimated from the log (the new value needs the crew's build power).
+
+## TUNE_ECO_HAND, TUNE_TEAM_AIRLOSS, TUNE_PN_RULE_CENTRE = 0 (2026-10-14)
+
+All three default off until a paired A/B in the search (randsearch --ab) wins.
+- ECO_HAND: his Greenest Fields watch -- minutes with no one building economy. Roles held 0 of 1
+  energy hand most of the game: RoleWorthDoing released a role when the draw's ticket share for the
+  category fell below 1/R, lowest exactly when energy is starved. Canon board seed 1, minute 20:
+  1,812 m/s / 46.4k e/s on, 1,644 / 37.7k off (one seed).
+- TEAM_AIRLOSS: a teammate bombed for minutes, no seat built AA -- each seat priced AA on its own air
+  losses (aa-want airLoss=0.00 in three of four seats).
+- PN_RULE_CENTRE: PnValue maps output 0 to the log-middle of [max(lo, PN_FLOOR), hi], which is not the
+  rule for an uneven range: aa 0.63x, esc 0.63x, tmix 0.55x, defamt/gunp 0.45x, mass/odds 1.22x, acap
+  4.47x. Net 40 played aa at 0.37-0.89x in its games. On, output 0 is the rule and +-1 the range ends.
+  It shifts every trained network, hence the A/B.

@@ -373,7 +373,7 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 		float gainA = econA * airHz * stopped;
 		// Measured losses are a FLOOR, not the whole price: they are what
 		// air has already cost us, which arrives after the mex is dead.
-		const float measured = Military::AirLossRate() * stopped;
+		const float measured = Military::TeamAirLossRate() * stopped;
 		gain = (measured > gainA) ? measured : gainA;
 	} else if (cls == PROT_TARGFAC) {
 		// apexearth's spec: three wanted, diminishing.
