@@ -138,6 +138,58 @@ float DefObsoleteShare(const array<int>@ b, int d, float affordM)
 	return share;
 }
 
+// The ground guns our owned advanced hands can build, rebuilt on a clock.
+array<int> gAdvGuns;
+int gAdvGunsAt = -999999;
+int gAdvObsN = 0, gAdvObsAsk = 0, gNextAdvObsLog = 0;
+float gAdvObsMin = 1.f;
+
+const array<int>@ AdvGuns()
+{
+	if (ai.frame < gAdvGunsAt + 10 * SECOND)
+		return gAdvGuns;
+	gAdvGunsAt = ai.frame;
+	gAdvGuns.resize(0);
+	for (uint c = 1; c < gOwnCount.length(); ++c) {
+		if ((gOwnCount[c] <= 0) || !Catalog::gMobile[int(c)] || !Catalog::gBuilder[int(c)]
+				|| (int(c) >= int(Catalog::gT1Hand.length())) || Catalog::gT1Hand[int(c)])
+			continue;
+		const array<int>@ b = Catalog::gBuildsList[int(c)];
+		if (b is null)
+			continue;
+		for (uint i = 0; i < b.length(); ++i) {
+			const int o = b[i];
+			if (Catalog::gMobile[o] || !Catalog::gAvailable[o] || (ProtClassOf(o) != PROT_DEF)
+					|| T1Tower(o) || (gAdvGuns.find(o) >= 0))
+				continue;
+			gAdvGuns.insertLast(o);
+		}
+	}
+	return gAdvGuns;
+}
+
+float DefTeamObsolete(int d, float affordM)
+{
+	if (!T1Tower(d))
+		return 1.f;
+	const array<int>@ adv = AdvGuns();
+	if (adv.length() == 0)
+		return 1.f;
+	++gAdvObsAsk;
+	const float s = DefObsoleteShare(adv, d, affordM);
+	if (s < 1.f) {
+		++gAdvObsN;
+		gAdvObsMin = min(gAdvObsMin, s);
+	}
+	if (ai.frame >= gNextAdvObsLog) {
+		gNextAdvObsLog = ai.frame + 60 * SECOND;
+		AiLog(Factory::T() + "apex: advobs-stat guns=" + adv.length() + " ask=" + gAdvObsAsk
+			+ " cut=" + gAdvObsN + " minShare=" + formatFloat(gAdvObsMin, "", 0, 3)
+			+ " afford=" + int(affordM));
+	}
+	return s;
+}
+
 bool gWallEffDiag = false;
 int gNextObsoleteLog = 0;
 
@@ -248,7 +300,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 	bool  hDomOn = false;
 	bool  hEffOn = false;
 	bool  hT1Out = false;
-	float hLineW = 1.f;     // read inside the slot loop, same for every slot
+	bool  hTeamObs = false;
+	float hLineW = 1.f;    // read inside the slot loop, same for every slot
 	float hBestEff = -1.f;  // the wall-efficiency benchmark, built on first ask
 	if (isGround) {
 		hTrade = ai.GetTunable("apex_def_trade", TUNE_DEF_TRADE);
@@ -300,6 +353,7 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 		hT1Out = (ai.GetTunable("apex_t1_tower_late", TUNE_T1_TOWER_LATE) > 0.f)
 				&& AdvancedHandOwned();
 		hLineW = ai.GetTunable("apex_wall_line_w", TUNE_WALL_LINE_W);
+		hTeamObs = ai.GetTunable("apex_def_team_obsolete", TUNE_DEF_TEAM_OBSOLETE) > 0.f;
 	}
 	for (uint i = 0; i < cand.length(); ++i) {
 		const int d = cand[i];
@@ -353,6 +407,8 @@ Want@ ProposeProtectHalf(CCircuitUnit@ unit, int half)
 			// this post's reach: near zero early, and it grows with the army.
 			DwEnsure(d);
 			gDwObs[d] = hDomOn ? DefObsoleteShare(builds, d, hAffordM) : 1.f;
+			if (hDomOn && hTeamObs)
+				gDwObs[d] = min(gDwObs[d], DefTeamObsolete(d, hAffordM));
 			Gate(GATE_DEF_OBSOLETE, gDwObs[d] < 1.f);
 			// ONCE AN ADVANCED HAND EXISTS, NO BASIC TOWER AT ALL (apexearth
 			// 2026-09-19: "spend as much money as it would take to upgrade a

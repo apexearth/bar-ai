@@ -766,6 +766,12 @@ GROUPS = [
                   "cap. A grave still pulls the new gun back; it waits while "
                   "their units stand there and gives up if they stay. "
                   "apex: refill-stat each minute; 'deflag' button on a run"),
+                 ("TUNE_DEF_TEAM_OBSOLETE", "ON stops basic constructors "
+                  "filling late slots with T1 towers once our advanced "
+                  "constructors can build and afford a gun that outreaches and "
+                  "outkills it: the T1 tower keeps only its share of that gun's "
+                  "kill, so the basic hand goes to economy. apex: advobs-stat "
+                  "each minute"),
                  ("TUNE_STANDOFF_COVER", "measure cover on the ring the enemy "
                   "can shoot from, not just whether a turret reaches"),
                  ("TUNE_DEFZONE_DYNAMIC", "the base-defence ring follows the "
@@ -1367,6 +1373,9 @@ GOALS = [
             {"ref": "TUNE_DEF_REFILL", "dir": "up",
              "note": "a tower knocked out is rebuilt on the same gap first, "
                      "not somewhere still standing (his 10-14)"},
+            {"ref": "TUNE_DEF_TEAM_OBSOLETE", "dir": "up",
+             "note": "late towers come from the advanced hands, T2 and T3, "
+                     "not a ring of T1 ones (his 10-14)"},
         ],
         "watch": "python tools/deaths.py <run> — where our buildings died. If "
                  "losses move from mexes to the front line, it worked.",

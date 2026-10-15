@@ -206,6 +206,11 @@ const float TUNE_FLANK_GUARD = 0.f;
 //   cap. His 10-14; A/B before default.
 const float TUNE_DEF_REFILL = 0.f;
 
+// [toggle 0/1] -- A basic hand's tower is outdated against the guns our ADVANCED
+//   hands can build and afford, not only its own list: beaten on reach and kill
+//   by one, it keeps that share of its price. His 10-14; A/B before default.
+const float TUNE_DEF_TEAM_OBSOLETE = 0.f;
+
 // [toggle 0/1] -- A factory line's unserved spend counts the army's budget
 //   shortfall (target share - actual share) x metal income, so nanos are bought
 //   for the lines when the eco spends all the free flow (sites.as LineUnserved).

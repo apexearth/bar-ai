@@ -3433,3 +3433,11 @@ back the same way because they know the hole is there. Off pending A/B.
 
 "Lets stop making walls, we make too many, it's too crazy." In his watch games defence/teeth came up in
 240 draws in one 4v4 (constructor time on dragon's teeth). Off by his call, not by an A/B.
+
+### `TUNE_DEF_TEAM_OBSOLETE` = 0.f
+
+His 10-14 watch: past minute 30 our basic constructors still raised 248 Heavy Laser Towers (armhlt) in one
+4v4 while the advanced hands put up ~100 T2 guns. DefObsoleteShare compared a tower only with the asking
+hand's own list, so a T1 hand's tower was never outdated. ON compares it also with the ground guns our
+owned advanced hands can build and afford (the same dominance and affordability rules): a price, not a
+ban, so the Maw and Claw keep their 10-13 standing. `apex: advobs-stat`. Off until an A/B.
