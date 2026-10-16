@@ -1347,7 +1347,8 @@ void PatrolCensus()
 		if (gOwnCount[d] <= 0)
 			continue;
 		if (Catalog::gMobile[di]) {
-			if (LineCombat(di) && !Catalog::gFlyer[di])
+			// a scout patrols nothing (PatrolFodder), so it fills no patrol either
+			if (LineCombat(di) && !Catalog::gFlyer[di] && !(EarlyBallOn() && PatrolFodder(di)))
 				gPatHave += float(gOwnCount[d]) * Catalog::gSpeed[di];
 			continue;
 		}

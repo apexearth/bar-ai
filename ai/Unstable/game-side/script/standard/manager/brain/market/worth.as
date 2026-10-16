@@ -396,10 +396,10 @@ bool Outgrown(int d)
 //
 // THE COST EXPONENT IS A CHOICE OF LANCHESTER LAW, not a taste for expensive
 // things. gCombat is quadratic in quality (dps and hp both rise with cost), so
-// combat/cost rises with cost. The caller divides by cost once more, making the
-// total power of cost 1 + apex_worth_cost: at 1 that is cost^2, the LINEAR law
-// where bodies trade one for one and chaff wins; at 0 it is cost^1, the SQUARE
-// law where a massed army fires at once and quality wins superlinearly.
+// combat/cost rises with cost. The draw does NOT divide by cost again (production.as
+// multiplies gainA by cost and divides it back out), so at 1 the price is
+// dps x sqrt(alpha) x hp / cost; the square-law per-metal index would be / cost^2
+// (docs/tunables.md TUNE_EARLY_BALL has the Pawn/Centurion arithmetic).
 array<float> gUcRaw;
 float UnitCoreRaw(int d)
 {

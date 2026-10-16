@@ -185,6 +185,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::RushUpdate(); Market::PressUpdate(); Perf::Add("up.rush", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::MapShareUpdate(); Perf::Add("up.mapshare", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::SmallHardUpdate(); Perf::Add("up.smallhard", _t); }
+	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EarlyBallUpdate(); Perf::Add("up.earlyball", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
 	{ double _t = Perf::T0(); Market::TeamTechTick(); Market::TeamTechStat(); Perf::Add("up.teamtech", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
@@ -329,6 +330,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	if (unit is null)
 		return;
 	Market::ComUnitDead(unit);
+	Market::EarlyBallNoteLoss(unit);
 	// The PREVIOUS death's flag is cleared now, so this id can be reused
 	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.
 	if ((gFinishedClearPending >= 0)

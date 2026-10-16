@@ -46,6 +46,7 @@
 #include "market/pressure.as"       // short contact: shorter horizon, team push, contest their expansions
 #include "market/mapshare.as"       // under our share of the extractor spots: army nudge, aggression, claim value
 #include "market/smallhard.as"      // short path contact: army to their strength at arrival, starve their extractors
+#include "market/earlyball.as"      // short contact: the cheap fast ball priced by the base it razes, sent whole; field watch; air scouts
 #include "market/ecoseat.as"        // the strict eco seat: what its hands and labs may take while it grows
 #include "market/teamtech.as"       // one seat techs and hands out advanced cons; the others price their own lab down
 #include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement

@@ -403,6 +403,7 @@ IUnitTask@ FactoryQueueTask(CCircuitUnit@ fac)
 		PendAdd(line, o);
 		Market::EcoSeatNoteOrder(o);
 		Market::SmallHardNoteOrder(o);
+		Market::EarlyBallNoteOrder(o);
 		if (lineHave > 0)
 			lineSec += Catalog::BuildSecondsAt(int(o.id), lineBp);
 		++lineHave;

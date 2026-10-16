@@ -1852,6 +1852,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float tPatrolMiss = PatrolMiss();   // the cover and screen terms saturate on this half alone
 	const float tFoeSpeed = FoeSpeedCap();
 	const float tShRaidW = SmallHardRaidW();
+	const bool ebOn = EarlyBallOn();
+	const bool ebLogNow = ebOn && !AirPlant(fid) && EarlyBallPpcDue(int(fac.id));
+	array<uint> ebIdx;
+	array<float> ebNoV;
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
 	const bool ecoStrictOn = EcoSeatStrict();
@@ -1988,7 +1992,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The wanted-look trips are max'd, not summed: the watch and the
 			// wing's look are themselves registered as looks.
 			const float gainLk = Air::LookGainFor(d, fillS);
-			const float gainW = Air::WatchGainFor(d, fillS);
+			const float gainW = ebOn ? EarlyBallScoutGain(d, fillS) : Air::WatchGainFor(d, fillS);
 			const float gainTrip = Military::LookBuyGain(d, fillS);
 			float gainL = (gainLk > gainW) ? gainLk : gainW;
 			string why = (gainW > gainLk) ? ":watch(v" : ":look(v";
@@ -2023,7 +2027,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 		}
 		// THE SCOUT FLIGHT: planes massed to see their base (Air::FlightGainFor).
-		if (!Catalog::gBuilder[d] && Air::IsFlightDef(d)) {
+		if (!Catalog::gBuilder[d] && Air::IsFlightDef(d) && !(ebOn && Air::IsLookDef(d))) {
 			const float gainF = Air::FlightGainFor(d, fillS) * roleMul;
 			if (gainF > 0.f) {
 				const float vF = gainF / Catalog::gCostM[d];
@@ -2382,6 +2386,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// and the reach-answers-reach response with it.
 			float ppc = UnitPPC(d);
 			const float ppcCore = ppc;   // before the sight, screen and afford terms
+			gEbPrev = ppc;
+			string ebS = "";
+			bool ebScr = false;
 			// A WEAPON THAT ONLY FIRES INTO WATER answers what FLOATS.
 			// Surf/air threat are the DLL's own read of what a def can hit
 			// -- a plain torpedo contributes to neither, so a torpedo
@@ -2462,6 +2469,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				continue;
 			}
 			ppc *= WaterFightMul(d) * SubImmunityMul(d);
+			if (ebLogNow)
+				ebS += EbF("wet", ppc);
 			// The rear specialist buys quality: weight by unit size so the
 			// draw lands on the biggest thing the lab offers, not spam that
 			// arrives late or never.
@@ -2477,6 +2486,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
 			ppc *= 1.f + tLineBite * LineShortfall(LineClassOf(d));
+			if (ebLogNow)
+				ebS += EbF("ls", ppc);
 			float aoeH = 0.f;
 			float aoeMul = 1.f;
 			if (aoeOn) {
@@ -2496,6 +2507,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			ppc *= 1.f + (Catalog::gSpeed[d] / tFoeSpeed) * tSpeedWorth;
 			// Short contact: their income a fast unit can deny before their army answers (smallhard.as).
 			ppc *= 1.f + tShRaidW * Catalog::gSpeed[d] / tFoeSpeed;
+			if (ebLogNow)
+				ebS += EbF("spd", ppc);
+			const float ebMul = ebOn ? EarlyBallMul(d) : 1.f;
+			ppc *= ebMul;
+			if (ebLogNow)
+				ebS += EbF("eb", ppc);
 			// AND COVERAGE: ground patrolled per metal, worth something only
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per
@@ -2530,6 +2547,12 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			const float covD = (CoverCapable(d) && !PatrolFodder(d)) ? coverShare : 0.f;
 			if (covD > 0.f)
 				ppc *= pow(CoverPerMetal(d), covD);
+			if (ebLogNow)
+				ebS += EbF("cov", ppc);
+			const float ebCov = ebOn ? EarlyBallCoverMul(d, incA, fillS) : 1.f;
+			ppc *= ebCov;
+			if (ebLogNow)
+				ebS += EbF("field", ppc);
 			// EYES (apexearth: "we tend to lack scouts... need some kind of
 			// value requirement on raider style units and scouts"). Sight is
 			// what every other sense in this AI is built on -- the danger
@@ -2537,6 +2560,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// zero while we are blind (EnemyArmyCost logged 0 for entire
 			// games). A unit's LOS is therefore worth something on its own.
 			ppc *= 1.f + (Catalog::gLosR[d] / 1000.f) * tLosWorth;
+			if (ebLogNow)
+				ebS += EbF("los", ppc);
 			// A SCOUT IS NOT A BAD SOLDIER. UnitCore prices dps and hp against
 			// cost, and on that yardstick a Tick -- 60 hp, 50 dps, 21 metal --
 			// scores far below a Pawn, a gap no speed or sight multiplier on
@@ -2558,10 +2583,14 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					const float dash = 1.f + Catalog::gSpeed[d] / tFoeSpeed;
 					const float screen = kS * (Catalog::gLosR[d] / 1000.f)
 							* dash * tPatrolMiss / (mineM / gWMCost);
-					if (screen > ppc)
+					if (screen > ppc) {
 						ppc = screen;
+						ebScr = true;
+					}
 				}
 			}
+			if (ebLogNow)
+				ebS += EbF("scr", ppc);
 			// AFFORDABLE NOW BEATS STRONG LATER WHILE WE ARE POOR (apexearth:
 			// "pawns are good early game when we cannot afford much stronger
 			// things"). Seconds of income the unit costs, against the window
@@ -2592,6 +2621,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					ppc *= affM;
 				}
 			}
+			if (ebLogNow)
+				ebS += EbF("aff", ppc);
 			const float have = float((int(d) < int(gOwnCount.length()))
 					? gOwnCount[d] : 0);
 			// The gap is a STREAM the line fills; clamping the gain to one
@@ -2729,6 +2760,17 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			if (aoeH > 0.f)
 				AoeRecord(d, aoeMul, roleW, roleWNo, vA,
 					vA / aoeMul * ((gainViaRole && (roleW > 0.f)) ? (roleWNo / roleW) : 1.f));
+			if (ebOn) {
+				const float ebM = ebScr ? 1.f : (ebMul * ebCov);
+				ebIdx.insertLast(candV.length());
+				ebNoV.insertLast(vA / ebM);
+				EarlyBallNoteCand(d, ppcCore / linePPC, ppc / linePPC, ebMul, ebCov);
+			}
+			if (ebLogNow)
+				AiLog(Factory::T() + "apex: earlyball-ppc t=" + ai.teamId + " fac=" + fac.circuitDef.GetName()
+					+ " " + Catalog::Def(d).GetName() + EarlyBallPpcParts(d, linePPC) + " |" + ebS
+					+ " p=" + NnF(ppc / linePPC, 3) + " r=" + NnF(roleW, 2) + " have=" + int(have)
+					+ " v=" + NnF(vA * 1000.f, 1));
 			candDef.insertLast(d);
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
@@ -3028,6 +3070,22 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		candV.insertLast(v);
 		candGain.insertLast(gain);
 		sumV += v;
+	}
+	// The early ball reorders the army, it does not outbid constructors: the army's total ticket stays.
+	if (ebIdx.length() > 0) {
+		float ebSumW = 0.f, ebSumN = 0.f;
+		for (uint ebi = 0; ebi < ebIdx.length(); ++ebi) {
+			ebSumW += candV[ebIdx[ebi]];
+			ebSumN += ebNoV[ebi];
+		}
+		if ((ebSumW > 0.f) && (ebSumN > 0.f)) {
+			const float ebFr = ebSumN / ebSumW;
+			for (uint ebi = 0; ebi < ebIdx.length(); ++ebi) {
+				sumV += candV[ebIdx[ebi]] * (ebFr - 1.f);
+				candV[ebIdx[ebi]] *= ebFr;
+				candGain[ebIdx[ebi]] *= ebFr;
+			}
+		}
 	}
 	if (rezDef >= 0) {
 		const float pLine = (pLineN > 0) ? (pLineSum / float(pLineN)) : 1.f;
