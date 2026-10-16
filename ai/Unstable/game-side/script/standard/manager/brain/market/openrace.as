@@ -142,11 +142,18 @@ float OpenRaceConV(int cd, float lineBp, float H, float tR, float hold0, string 
 	const float dI = SpotM();
 	float t = tB;
 	float V = 0.f;
-	float left = (mex > 0) ? share : 0.f;
-	for (int j = 0; (j < 64) && (left > 0.f) && (t < H); ++j) {
-		t += walk + btMex;
-		V += ((left < 1.f) ? left : 1.f) * dI * OrcSurv(t, H, tR, hold0);
-		left -= 1.f;
+	string sT = "";
+	if (SpotRaceOn()) {
+		float tFree = tB;
+		V = SpotRaceConM(cd, tB, H, tR, hold0, tFree, sT);
+		t = tFree;
+	} else {
+		float left = (mex > 0) ? share : 0.f;
+		for (int j = 0; (j < 64) && (left > 0.f) && (t < H); ++j) {
+			t += walk + btMex;
+			V += ((left < 1.f) ? left : 1.f) * dI * OrcSurv(t, H, tR, hold0);
+			left -= 1.f;
+		}
 	}
 	const float vSpot = V;
 	int gd = 0;
@@ -172,7 +179,7 @@ float OpenRaceConV(int cd, float lineBp, float H, float tR, float hold0, string 
 		}
 	}
 	terms = " tB=" + int(tB) + " walk=" + int(walk) + " share=" + NnF(share, 1) + " dI=" + NnF(dI, 2)
-		+ " spot=" + int(vSpot) + " gen=" + ((gd > 0) ? Catalog::Def(gd).GetName() : "-") + "x" + NnF(hs, 2);
+		+ " spot=" + int(vSpot) + sT + " gen=" + ((gd > 0) ? Catalog::Def(gd).GetName() : "-") + "x" + NnF(hs, 2);
 	return V;
 }
 
@@ -187,9 +194,10 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 	const float walkE = (gSmhWalk > 0.f) ? gSmhWalk : ((gSmhTc > 0.f) ? gSmhTc * gRushSpd : -1.f);
 	if (walkE < 0.f)
 		return 0.f;
-	// strength in basic-fighter metal on today's scale: gSmhMps can be latched before WorthMeans settles
+	// basic-fighter metal by the square law: UnitStrength is dps x hp, so one unit of k times a basic
+	// one's strength fights like sqrt(k) of them (linear, a Centurion read 3143 m for 270)
 	const float sBasic = (gSmhWalkDef > 0) ? UnitStrength(gSmhWalkDef) : 0.f;
-	const float c = (sBasic > 0.f) ? UnitStrength(fd) / sBasic * Catalog::gCostM[gSmhWalkDef] : Catalog::gCostM[fd];
+	const float c = (sBasic > 0.f) ? sqrt(UnitStrength(fd) / sBasic) * Catalog::gCostM[gSmhWalkDef] : Catalog::gCostM[fd];
 	const float bs = Catalog::gBuildTime[fd] / lineBp;
 	const float tB = bs / OpenRaceFeed(fd, bs);
 	const float tA = tB + walkE / spd;
@@ -218,6 +226,28 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 	return deny + prot;
 }
 
+// The race's clock: horizon, their raiders' arrival, our army and its hold against what arrives.
+void OpenRaceClock(int fid, float &out H, float &out tR, float &out A, float &out arrive, float &out hold0)
+{
+	const int labAt = (gOrcLabAt >= 0) ? gOrcLabAt : ai.frame;
+	PrTuneFill();
+	H = PayH();
+	arrive = gSmhArrive;
+	A = Military::TeamArmyCost() + ArmyInFlightM();
+	if (A < 0.f)
+		A = 0.f;
+	hold0 = (A + arrive > 1.f) ? A / (A + arrive) : 1.f;
+	tR = H;
+	if (gSmhSeen > 1.f) {
+		tR = 0.f;
+	} else if ((gSmhTc >= 0.f) && (gSmhWalkDef > 0) && (fid > 0) && (Catalog::gBuildPower[fid] > 0.f)) {
+		tR = float(labAt - ai.frame) / float(SECOND)
+				+ Catalog::gBuildTime[gSmhWalkDef] / Catalog::gBuildPower[fid] + gSmhTc;
+		if (tR < 0.f)
+			tR = 0.f;
+	}
+}
+
 // The con floor asks: the lab's best fighter by the race, or -1 when the con pays more.
 int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef, int slot)
 {
@@ -233,22 +263,8 @@ int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef
 		gOrcLabAt = ai.frame;
 	OpenRaceGround();
 	const float lineBp = Brain::LineBuildPower(fac);
-	PrTuneFill();
-	const float H = PayH();
-	const float arrive = gSmhArrive;
-	float A = Military::TeamArmyCost() + ArmyInFlightM();
-	if (A < 0.f)
-		A = 0.f;
-	const float hold0 = (A + arrive > 1.f) ? A / (A + arrive) : 1.f;
-	float tR = H;
-	if (gSmhSeen > 1.f) {
-		tR = 0.f;
-	} else if ((gSmhTc >= 0.f) && (gSmhWalkDef > 0) && (Catalog::gBuildPower[fid] > 0.f)) {
-		tR = float(gOrcLabAt - ai.frame) / float(SECOND)
-				+ Catalog::gBuildTime[gSmhWalkDef] / Catalog::gBuildPower[fid] + gSmhTc;
-		if (tR < 0.f)
-			tR = 0.f;
-	}
+	float H, tR, A, arrive, hold0;
+	OpenRaceClock(fid, H, tR, A, arrive, hold0);
 	array<Id>@ mates = ai.GetTeamIds();
 	const int ours = ((mates is null) || (mates.length() < 1)) ? 1 : int(mates.length());
 	const float iTeam = Eco::MInc() * float(ours);
@@ -279,6 +295,7 @@ int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef
 		gOrcPick = best;
 		++gOrcFighterN;
 	}
+	SpotRaceNoteAsk(rC, rBest, gOrcPick > 0);
 	gOrcCostUs += float(ai.ClockUs() - _t0);
 	if (ai.frame < 10 * MINUTE)
 		AiLog(Factory::T() + "apex: openrace-stat t=" + ai.teamId + " fac=" + fac.circuitDef.GetName()
@@ -326,11 +343,15 @@ void OpenRaceNoteOrder(const CCircuitDef@ o)
 		return;
 	const int d = int(o.id);
 	Brain::BudgetHoldNoteOrder(Catalog::gCostM[d], Catalog::gBuilder[d] || Catalog::gRezzer[d]);
+	SpotRaceNoteOrder(d);
 }
 
 void OpenRaceUpdate()
 {
-	if (!OpenRaceOn() || (ai.frame < gOrcStatAt))
+	if (!OpenRaceOn())
+		return;
+	SpotRaceUpdate();
+	if (ai.frame < gOrcStatAt)
 		return;
 	gOrcStatAt = ai.frame + 60 * SECOND;
 	AiLog(Factory::T() + "apex: openrace-sum t=" + ai.teamId + " asked=" + gOrcAsk + " fighter=" + gOrcFighterN

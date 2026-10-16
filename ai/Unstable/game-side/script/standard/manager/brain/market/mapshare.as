@@ -77,6 +77,7 @@ void MsBegin()
 	gMsAChunk = int(gAllyStPos.length()) / 5 + 1;
 	gMsAIdx = 0;
 	gMsSweeping = true;
+	SprFoeBegin();
 }
 
 void MsStep()
@@ -84,7 +85,14 @@ void MsStep()
 	const int end = (gMsIdx + gMsChunk < gMsTotal) ? gMsIdx + gMsChunk : gMsTotal;
 	for (int i = gMsIdx; i < end; ++i) {
 		const int d = aiEnemyMgr.GetEnemyUnitDefAt(i);
-		if ((d <= 0) || (d > Catalog::gDefCount) || Catalog::gMobile[d] || (Catalog::gExtractsM[d] <= 0.f))
+		if ((d <= 0) || (d > Catalog::gDefCount))
+			continue;
+		if (Catalog::gMobile[d]) {
+			if (gOrcOn && Catalog::gBuilder[d])
+				SprFoeNote(i, d);
+			continue;
+		}
+		if (Catalog::gExtractsM[d] <= 0.f)
 			continue;
 		const int los = aiEnemyMgr.GetEnemyUnitLosAt(i);
 		if ((los < 0) || ((los & (4 | 8 | 32 | 64)) != 0))
@@ -177,6 +185,7 @@ void MsFinish()
 			++foe;
 	}
 	gMsHeld = gMsMark;
+	SprFoeFinish();
 	gMsOurs = ours;
 	gMsFoe = foe;
 	gMsSpots = int(n);

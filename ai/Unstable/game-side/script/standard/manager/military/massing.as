@@ -790,7 +790,8 @@ void UpdateMassing()
 	// rises would leave the bar stuck at a dead army's size -- a side that just
 	// lost 30k of army could never form another attack. gTurtle returns early
 	// above, so nothing else owns the quota while this writes it.
-	aiMilitaryMgr.quota.attack = Market::EarlyBallBar(want);
+	const float contestBar = Market::SpotRaceBar(want, floorNow);
+	aiMilitaryMgr.quota.attack = (contestBar >= 0.f) ? contestBar : Market::EarlyBallBar(want);
 }
 
 // Our whole side's army value, pooled over the same blackboard the tech lead
