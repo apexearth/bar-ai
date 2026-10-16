@@ -176,6 +176,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(4, 0)) { double _t = Perf::T0(); Military::UpdateLanePos(); Perf::Add("up.lanepos", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
+	{ double _t = Perf::T0(); Military::UpdateComFight(); Perf::Add("up.comfight", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
 	{ double _t = Perf::T0(); Market::EscortCoverSweep(); Perf::Add("up.esccover", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Perf::Add("up.escortrecruit", _t); }
@@ -453,8 +454,10 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 					+ " by " + attackerDef.GetName() + " n=" + gShotUnseen);
 		}
 	}
-	if (WasFinished(int(unit.id)))
+	if (WasFinished(int(unit.id))) {
 		Market::ShelledNoteDeath(unit, attackerDef, atkSeen);
+		Military::CfNoteDeath(unit, attackerDef);
+	}
 	if (attackerDef is null)
 		return;
 	// The tier census FIRST: it is about what THEY field, so it must not sit
@@ -522,6 +525,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Air::NoteEnemyDeath(edef, pos, byUs);
 	Air::TairNoteKill(edef, pos);
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
+	Military::CfNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
 	Military::SiegeNoteDeath(pos, edef.costM, false, byUs);

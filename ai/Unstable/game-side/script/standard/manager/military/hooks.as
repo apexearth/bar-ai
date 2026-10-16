@@ -230,6 +230,12 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		DropRaidClaim(int(unit.id));
 		return NoteElect("bomb.solo", aiMilitaryMgr.DefaultMakeTask(unit));
 	}
+	// split off a group by a threat that counters it: round it, to their economy (comfight.as)
+	if (CfClaimed(int(unit.id))) {
+		IUnitTask@ ct = CfEcoTaskFor(int(unit.id));
+		if (ct !is null)
+			return NoteElect("comfight.eco", ct);
+	}
 	if (AnswerClaimed(int(unit.id))) {
 		IUnitTask@ ans = AnswerTaskFor(int(unit.id));
 		if (ans !is null)

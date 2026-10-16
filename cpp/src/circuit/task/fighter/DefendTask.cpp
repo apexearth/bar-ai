@@ -215,6 +215,9 @@ void CDefendTask::Update()
 		BirthUpdate();
 		return;
 	}
+	if (ScriptMoveUpdate()) {
+		return;
+	}
 	const bool hunting = manager->GetCircuit()->GetLastFrame() < detachUntil;
 
 	/*
@@ -405,6 +408,9 @@ bool CDefendTask::FindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
+		if (InKeepOut(ePos)) {
+			continue;
+		}
 		if (birth) {
 			// the odds were read when the unit was given the task; here only who engages the anchor
 			const CCircuitDef* ed = enemy->GetCircuitDef();

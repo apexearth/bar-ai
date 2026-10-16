@@ -1847,6 +1847,27 @@ static void IUnitTask_SetRaidGoal(IUnitTask* task, const AIFloat3& pos, float r)
 	}
 }
 
+// apex: comfight.as -- read by RAID, ATTACK and DEFEND tasks (FighterTask.cpp ScriptMoveUpdate).
+static void IUnitTask_SetScriptMove(IUnitTask* task, const AIFloat3& pos, int until, bool fight)
+{
+	if (task->GetType() == IUnitTask::Type::FIGHTER) {
+		static_cast<IFighterTask*>(task)->SetScriptMove(pos, until, fight);
+	}
+}
+
+static void IUnitTask_SetKeepOut(IUnitTask* task, const AIFloat3& pos, float r, int until)
+{
+	if (task->GetType() == IUnitTask::Type::FIGHTER) {
+		static_cast<IFighterTask*>(task)->SetKeepOut(pos, r, until);
+	}
+}
+
+// hp per second (the engine stores it per slow update, UnitDef.cpp)
+static float CCircuitDef_GetAutoHealPerSec(CCircuitDef* cdef)
+{
+	return cdef->GetDef()->GetAutoHeal() * (FRAMES_PER_SEC / 16.f);
+}
+
 // apex: the builder-only members (buildDef, target, GetBuildType, GetBuildPos)
 // were registered on the base IUnitTask type as raw IBuilderTask field
 // offsets and THISCALLs -- so a script read on a FIGHTER, WAIT or IDLE task
@@ -2141,6 +2162,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "void RemoveUnit(CCircuitUnit@)", asMETHOD(IUnitTask, RemoveAssignee), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "int GetFightType() const", asFUNCTION(IUnitTask_GetFightType), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetRaidGoal(const AIFloat3& in, float)", asFUNCTION(IUnitTask_SetRaidGoal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void SetScriptMove(const AIFloat3& in, int, bool)", asFUNCTION(IUnitTask_SetScriptMove), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "void SetKeepOut(const AIFloat3& in, float, int)", asFUNCTION(IUnitTask_SetKeepOut), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
 
@@ -2345,6 +2368,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootX() const", asMETHOD(CCircuitDef, GetFootX), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "int GetFootZ() const", asMETHOD(CCircuitDef, GetFootZ), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetHealth() const", asMETHOD(CCircuitDef, GetHealth), asCALL_THISCALL); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAutoHealPerSec() const", asFUNCTION(CCircuitDef_GetAutoHealPerSec), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "float GetAoe() const", asMETHOD(CCircuitDef, GetAoe), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsAlwaysHitDef() const", asMETHOD(CCircuitDef, IsAlwaysHit), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitDef", "bool IsDumbFireDef() const", asMETHOD(CCircuitDef, IsDumbFire), asCALL_THISCALL); ASSERT(r >= 0);
