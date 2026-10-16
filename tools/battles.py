@@ -106,7 +106,7 @@ def parse(log_text):
         units = snaps[int(frame)].setdefault(int(team), [])
         for tok in data.split(","):
             p = tok.split(":")
-            if len(p) == 5:
+            if len(p) >= 5:
                 units.append((int(p[0]), p[1], int(p[2]), int(p[3]), int(p[4])))
     return deaths, starts, costs, dict(snaps)
 

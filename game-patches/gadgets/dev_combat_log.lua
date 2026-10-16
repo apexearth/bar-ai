@@ -82,6 +82,7 @@ end
 local manualEchoed = false     -- the D-gun weapon's name, echoed once when first seen
 local isManual = {}            -- weaponDefID -> manual fire (the D-gun)
 local lastManual = {}          -- unitID -> its last hit was a D-gun
+local lastShot = {}            -- unitID -> last frame it damaged an enemy: [BARAI_ARMY] field 6
 local lastManualFF = {}        -- unitID -> that D-gun was OURS (kept apart so a
                                -- later enemy kill is not credited as a D-gun)
 
@@ -184,6 +185,7 @@ function gadget:GameStart()
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam)
+	lastShot[unitID] = nil
 	if not aiTeam[unitTeam] then
 		return
 	end
@@ -260,6 +262,9 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer,
 	end
 	if attackerTeam == nil or attackerTeam == unitTeam then
 		return   -- own D-gun, crashes, decay: not the fight
+	end
+	if attackerID ~= nil then
+		lastShot[attackerID] = Spring.GetGameFrame()
 	end
 	local victimAI, attackerAI = aiTeam[unitTeam], aiTeam[attackerTeam]
 	if not victimAI and not attackerAI then
@@ -353,9 +358,11 @@ local function snapshot(frame)
 					local hp, maxhp = Spring.GetUnitHealth(uid)
 					if x and hp and maxhp and maxhp > 0 then
 						local ud = UnitDefs[udid]
-						out[#out + 1] = string.format("%d:%s:%d:%d:%d",
+						local shot = lastShot[uid]
+						out[#out + 1] = string.format("%d:%s:%d:%d:%d:%d",
 							uid, ud.name, x, z,
-							math.floor(hp / maxhp * 100 + 0.5))
+							math.floor(hp / maxhp * 100 + 0.5),
+							(shot ~= nil and frame - shot <= 300) and 1 or 0)
 					end
 				end
 			end
