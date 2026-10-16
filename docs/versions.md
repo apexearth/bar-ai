@@ -12,5 +12,5 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | cand-2 | `cand-0.2.7-2` | cand-1 + map share (army nudge and aggression while under our fair share of the map) | 7W 0D 4L | 11W 1D 0L | 3W 2D 7L (worse) |
 | cand-3 | `cand-0.2.7-3` | cand-1 + small-map hard military (path contact, strength at arrival, starve their mexes, commander at the factory); map share off | 7W 0D 5L | - | 5W 1D 6L |
 | cand-4 | `cand-0.2.7-4` | cand-3 + budget hold (builder floors/hoists yield while army is under its share) + fixed T1-plant tag (walk flood, enemy commanders and rush speed prior now real) | 7W 1D 4L | 10W 0D 2L | 7W 1D 4L |
-| cand-5 | `cand-0.2.7-5` | cand-4 + large-map walk fix (box ring widens) + map share on | **9W 0D 3L** | **11W 1D 0L** | **6W 5D 1L** |
-| cand-6 | `cand-0.2.7-6` | cand-5 + commander stays home (far jobs pay for lost factory help, base attack seen and answered, D-gun/fire-factor fight fixes, no blind walk-in) | 6W 1D 5L | 9W 3D 0L | 4W 6D 2L (not better; small re-test on seeds 600+ running) |
+| cand-5 | `cand-0.2.7-5` | cand-4 + large-map walk fix (box ring widens) + map share on | **21W 0D 3L** (24: seeds 500+ 9-0-3, 600+ 12-0-0) | **11W 1D 0L** | **6W 5D 1L** |
+| cand-6 | `cand-0.2.7-6` | cand-5 + commander stays home (far jobs pay for lost factory help, base attack seen and answered, D-gun/fire-factor fight fixes, no blind walk-in) | 14W 2D 8L (24: 500+ 6-1-5, 600+ 8-1-3) -- worse than cand-5 | 9W 3D 0L | 4W 6D 2L |
