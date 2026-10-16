@@ -160,6 +160,13 @@ most plans the **team push** runs: the turret line our army dies to is posted, e
 short of it, and all squads go when the team's power beats it. Allies co-build one gantry, share
 upgrade work and constructor gifts, and may merge seats on a crowded map (switched off).
 
+**Team air** (`air/teamair.as`, `TUNE_TEAM_AIR`, off): the team leader prices AIR against NORMAL
+every 30 s from what has been seen (a square-law ground fight with and without the hold's army
+spend, plus one air sortie through their known AA, blended with the scored strikes) and that
+verdict is the plan rule. Under AIR every seat holds its bombers, gunships and escorts at one rally
+behind our lines, production prices them on the team target's shortfall, and every seat launches
+on the same board op when the gathered wing finishes the target (`docs/tunables.md`).
+
 ## The script API in brief
 
 - Hooks: `AiInit` (init.as: which JSON basenames load; Legion and extra-unit files are added

@@ -2167,6 +2167,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 			continue;
 		}
+		// THE TEAM AIR PLAN'S GUNSHIPS: the team's shortfall against its target, at their return there.
+		if (!Catalog::gBuilder[d] && !ecoGrowing && Air::IsGunshipDef(d)) {
+			const float gainTa = Air::TairGainFor(d, fillS) * roleMul;
+			if (gainTa > 0.f) {
+				candDef.insertLast(d);
+				candV.insertLast(gainTa);
+				candGain.insertLast(gainTa);
+				sumV += gainTa;
+				if (prankNow)
+					prank += " " + Catalog::Def(d).GetName() + ":teamair(v" + formatFloat(gainTa, "", 0, 3) + ")";
+				continue;
+			}
+		}
 		// THE ASSASSIN'S WING. The air eco-raid is the one demand the army gap
 		// cannot express: these bombers are bought to delete an enemy economy in
 		// one pass, not to hold a line. Priced per bomber over the whole raid its

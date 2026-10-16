@@ -542,7 +542,9 @@ float StrikeGainFor(int d, float fillSec, float armyGap)
 {
 	const float old = StrikeGainWing(d, fillSec);
 	const float tgt = IsAtomicDef(d) ? 0.f : NaTargetGain(d, fillSec, armyGap);
-	return (tgt > old) ? tgt : old;
+	const float g = (tgt > old) ? tgt : old;
+	const float team = TairGainFor(d, fillSec);
+	return (team > g) ? team : g;
 }
 
 float StrikeGainWing(int d, float fillSec)
@@ -593,6 +595,8 @@ string StrikeWhy(int d)
 // share of the escort still missing.
 float EscortFighterGainFor(int d, float fillSec)
 {
+	if (TairOn())
+		return TairEscortGainFor(d, fillSec);
 	// Any player whose wing launches here: the lead, or one holding bombers.
 	if (!IsFighterDef(d) || !WingBuys() || (!IsAirLead() && (StandingHeldMass() <= 0.f)))
 		return 0.f;

@@ -45,7 +45,7 @@ bool HoldsUnit(CCircuitUnit@ unit)
 		}
 	}
 	if (!strikeDef)
-		return false;
+		return TairHolds(unit);
 	// The base itself is under attack: everything flies, and nothing about the
 	// strike plan applies.
 	if (gDefendHome)
@@ -57,6 +57,8 @@ bool HoldsUnit(CCircuitUnit@ unit)
 		return !InWave(unit.id);
 	if (IsAtomicDef(id))
 		return AtomicHold(unit);
+	if (TairOn())
+		return true;
 	// The lead HOLDS, armed or not: this returned Armed(), so an unarmed lead
 	// handed every plane to the stock attack as it left the pad -- 91 Thunders
 	// built, 91 dead one at a time, no strike flown (apexearth 2026-09-11:
@@ -549,6 +551,7 @@ void Update()
 	{ double _tA = Perf::T0(); CoverWatch(); Perf::Add("air.CoverWatch", _tA); }
 	{ double _tA = Perf::T0(); StrikeScanStep(); Perf::Add("air.StrikeScanStep", _tA); }
 	{ double _tA = Perf::T0(); NaUpdate(); Perf::Add("air.NaUpdate", _tA); }
+	TairUpdate();
 	ai.PublishTeamValue(TV_AIRINC, Eco::MInc());
 	if (Factory::ElectorTeamId() == ai.teamId)
 		{ double _tA = Perf::T0(); RunElection(); Perf::Add("air.RunElection", _tA); }

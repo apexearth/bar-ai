@@ -358,6 +358,7 @@ local NAMES = {
 	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
 	"apex_com_home",         -- comhome.as + decide.as ChargeTrip + want_assist.as + comdecide.as + comship.as + safety.as: the commander's time off the lab priced as army owed, his fight estimate fixed, the base he defends, his walk-ins priced (0)
+	"apex_team_air",         -- air/teamair.as + plannet.as rule/PlanSet + production.as gunships + air/state.as + air/update.as HoldsUnit + nnair.as: priced team AIR plan, one rally, joint launch (0)
 	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",

@@ -436,7 +436,7 @@ AIFloat3 NaFoe()
 // One decision for one group. Returns the option chosen, -1 when there was no group.
 int NaDecide(int kind, const string why)
 {
-	if (!Builder::gHomeSet)
+	if (!Builder::gHomeSet || TairOn())
 		return -1;
 	if ((kind == 0) && gStrike)
 		return -1;
@@ -873,7 +873,7 @@ void NaUpdate()
 {
 	if (!Builder::gHomeSet || !ApexActive())
 		return;
-	if (gNaGunNow == NA_WAIT)
+	if ((gNaGunNow == NA_WAIT) && !TairOn())
 		NaHoldGunships();
 	// AIR AND LAND TOGETHER (his 10-11): a team-army operation entering GO asks the
 	// strike decision now, with the operation's target among the cells, not on its clock
