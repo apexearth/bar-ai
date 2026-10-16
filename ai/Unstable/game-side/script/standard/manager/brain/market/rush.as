@@ -195,11 +195,12 @@ float RushMul(float costM)
 	if (extra <= 0.f)
 		return 1.f;
 	const float base = gRushSeen * gRushParity;
-	const float have = gRushOnHand;
-	float with = have / (base + extra);
+	// one second of income on both sides: no army is a very low price, never a zero (no hard vetoes)
+	const float have = gRushOnHand + gRushMInc;
+	float with = have / (base + extra + gRushMInc);
 	if (with >= 1.f)
 		return 1.f;
-	float without = (base > 0.f) ? (have / base) : 1.f;
+	float without = (base > 0.f) ? (have / (base + gRushMInc)) : 1.f;
 	if (without > 1.f)
 		without = 1.f;
 	const float mul = (without > 0.f) ? (with / without) : 0.f;
