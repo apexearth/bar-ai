@@ -1156,6 +1156,8 @@ int ScoutFleetCap()
 bool PatrolFodder(int d)
 {
 	const CCircuitDef@ cd = Catalog::Def(d);
+	if (EarlyBallOn())   // pawn and grunt carry "scout" as an attribute, which the loader adds as a role
+		return Catalog::gRole[d] == int(Unit::Role::SCOUT.type);
 	return (cd !is null) && cd.IsRoleAny(Unit::Role::SCOUT.mask);
 }
 
