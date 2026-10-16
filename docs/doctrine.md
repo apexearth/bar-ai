@@ -46,6 +46,8 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Gantries scale with wealth, each heavily supported; in a team game allies share one nearby gantry; every player has one by about 38 minutes of an 8v8.
 - The gantry comes when the economy can carry it, before a second T2 lab and before the enemy's T3 arrives.
 - Upgrade allies' extractors too, and give a T2 constructor to an ally that has none.
+- In a team game one seat goes T2 a little sooner and hands out T2 constructors as allies' extractors need them; the others stay T1 with a strong army, upgrade their extractors with the handouts, and build their own advanced lab later, not never.
+- When the enemy can reach us soon (small or crowded maps), army comes before tech: build the economy and a strong T1 army first, then the T2 lab.
 - Spilling metal and short of hands: an air plant and many air constructors; lots of T1 air constructors is fine, late too.
 - An air constructor starts a safe big build; a front-line site belongs to the ground crew.
 - Builders work near where they are.
