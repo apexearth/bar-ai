@@ -63,6 +63,7 @@
 #include "market/protect_fill.as"       // DefSiteFill: every site's prevented loss, cached per def
 #include "market/protect_teeth.as"      // the choke-teeth Want
 #include "market/protect_senseprice.as" // radar/jam/shield/AA/targfac prices
+#include "market/aathreat.as"       // apex_aa_threat: AA sized and sited where their air hurts us
 #include "market/protect_refill.as"     // a gun the enemy killed: the same gun back on its gap
 #include "market/protect_want.as"       // ProposeProtectHalf: the defence election itself
 #include "market/protect_choke.as"  // the choke: the narrowest crossing the line stands on

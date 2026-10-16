@@ -228,6 +228,7 @@ void ComTaskAdded(IUnitTask@ task)
 		return;
 	if (ComFindTask(task) >= 0)
 		return;
+	AatNoteComOrder(d);
 	gComDef.insertLast(d);
 	gComState.insertLast(CS_ORDERED);
 	gComId.insertLast(Id(-1));

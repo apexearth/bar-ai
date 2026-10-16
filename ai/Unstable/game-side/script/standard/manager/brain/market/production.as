@@ -857,6 +857,11 @@ void AASplit(bool flyer, float tIn, float vIn, float& out rTarget, float& out rV
 	} else if (!flyer) {
 		rTarget -= escort;
 	}
+	if (!flyer && AatOn()) {
+		const float t = rValue + AatGroundShortM();
+		if (t > rTarget)
+			rTarget = t;
+	}
 }
 
 // Frame-memoised per hull: FighterMetalHeld walks the def table.
@@ -1524,6 +1529,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	}
 	const int fid = int(fac.circuitDef.id);
 	const array<int>@ prods = Catalog::BuildsOf(fid);
+	if (AatOn()) {
+		const int aad = AatLabOrder(prods);
+		if (aad > 0) {
+			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+				+ " #" + fac.id + " -> produce:" + Catalog::Def(aad).GetName()
+				+ " (aa-threat short=" + int(AatGroundShortM()) + ")");
+			return Catalog::Def(aad);
+		}
+	}
 	// Each product priced, best value ordered. A constructor's gain: the
 	// tier-unique upgrade demand it unlocks, at DIMINISHING returns per con
 	// already serving (the binary version stopped at exactly one T2 con);

@@ -66,6 +66,8 @@ void BudgetDecay()
 // contract the ROLE_ rows already had.
 float RawTarget(Cat c)
 {
+	if ((c == AIRDEF) && Market::AatOn() && (ShareOverride("apex_share_airdef") < 0.f))
+		return (RawTarget(ARMY) + RawTarget(DEFENCE)) * Market::AatShareRatio();
 	float w = RawBase(c) * Market::PlanShareMult(int(c));
 	// Enemy-stance lean: greed against a passive enemy, army/defence against
 	// an aggressive one, neutral while blind. See Military::UpdateStance.

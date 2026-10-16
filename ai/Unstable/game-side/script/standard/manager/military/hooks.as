@@ -200,6 +200,11 @@ IUnitTask@ MakeTaskInner(CCircuitUnit@ unit)
 		return null;
 	if (Factory::HoldsLateFighter(unit))
 		return null;
+	if (Market::AatOn() && Market::AatGroundAADef(int(cdef.id))) {
+		CCircuitUnit@ vip = Market::AatGuardVip(unit);
+		if (vip !is null)
+			return NoteElect("aa.guard", aiMilitaryMgr.Enqueue(TaskF::Guard(vip)));
+	}
 	if ((ai.GetTunable("apex_stock_army", TUNE_STOCK_ARMY) > 0.f)
 		&& !cdef.IsAbleToFly() && !cdef.IsRoleAny(Unit::Role::COMM.mask)
 		&& !Catalog::gBuilder[int(cdef.id)] && (Catalog::gPower[int(cdef.id)] > 1.f))
