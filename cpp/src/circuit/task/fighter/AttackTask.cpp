@@ -272,6 +272,11 @@ void CAttackTask::Update()
 		}
 		fallBackActive = false;
 	}
+	if (FocusHold(frame)) {
+		state = State::ENGAGE;
+		Attack(frame);
+		return;
+	}
 //	if (circuit->GetInflMap()->GetInfluenceAt(startPos) < -INFL_EPS) {
 //		SetTarget(nullptr);  // FIXME: back-forths group
 //	} else {

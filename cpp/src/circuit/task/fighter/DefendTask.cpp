@@ -289,6 +289,12 @@ void CDefendTask::Update()
 		}
 	}
 
+	if (FocusHold(frame)) {
+		state = State::ENGAGE;
+		Attack(frame);
+		return;
+	}
+
 	/*
 	 * Update target
 	 */

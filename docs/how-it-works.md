@@ -137,7 +137,14 @@ destroys) plus the walk out and back, and a verdict moves only past the measured
 it falls back to the nearest friendly strength where the pooled estimate pays, onto one shared
 point against their largest group; attack groups out of contact walk onto the enemy group they beat
 by more than the band (defeat in detail); `nnraid.as` packs and split-off packs price their loss
-with the same calibrated fight. `ai-military`, `ai-army-composition`, `fight-analysis`.
+with the same calibrated fight. Who a squad member shoots: the task picks ONE target (raid: nearest
+economy when committed, else builders then highest influence; attack/defend: group worth) and
+`ISquadTask::Attack` gives each member a ring move plus set-target on it (refused beyond the
+member's own range, so out-of-range members fire at whatever the engine auto-targets); under a
+comfight engage every member fight-walks with no set-target, so the engine's CMD_FIGHT attacks
+the closest enemy. Under `TUNE_FOCUS_FIRE` (off) a ground squad in contact sets targets by enemy
+damage removed per second of our fire, in lethal doses, through both paths (`SquadTask.cpp`
+`FocusTick`). `ai-military`, `ai-army-composition`, `fight-analysis`.
 
 **Air** (`manager/air/`): the wing masses bombers and gunships, `nnair.as` decides WAIT or GO on
 priced enemy economy cells against the AA in the way, fighters are elected for cover and air

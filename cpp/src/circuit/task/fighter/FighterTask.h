@@ -59,6 +59,9 @@ public:
 
 protected:
 	bool ScriptMoveUpdate();
+	// apex_focus_fire (ISquadTask): set targets during a fight-walk, and the members walking onto theirs
+	virtual void FocusScript(int frame) {}
+	virtual bool FocusMoving(CCircuitUnit* unit, int frame) const { return false; }
 	springai::AIFloat3 scriptPos;
 	int scriptUntil = -1;
 	int scriptIssued = -1;

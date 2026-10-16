@@ -164,6 +164,13 @@ void CRaidTask::Update()
 	}
 	lastTouched = frame;
 
+	if (FocusHold(frame)) {
+		noTargetSince = -1;
+		state = State::ENGAGE;
+		Attack(frame);
+		return;
+	}
+
 	/*
 	 * Update target
 	 */

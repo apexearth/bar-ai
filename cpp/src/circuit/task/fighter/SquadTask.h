@@ -13,6 +13,7 @@
 
 #include <map>
 #include <memory>
+#include <vector>
 
 namespace circuit {
 
@@ -79,6 +80,29 @@ protected:
 public:
 	static void NoteTargetKill(CCircuitAI* circuit, CCircuitDef* edef);
 	static void NoteTargetPick(CCircuitAI* circuit, float pickM, float nearM);
+
+	// apex_focus_fire: in contact, each member's fire goes to the enemy whose death removes the most of
+	// their damage per second of ours, in lethal doses; what deals us no damage comes last
+	virtual void OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker) override;
+	bool IsFocusFight() const;
+	static void NoteFocusKill(CCircuitAI* circuit, CCircuitUnit* killer, CEnemyInfo* enemy);
+protected:
+	virtual void FocusScript(int frame) override;
+	virtual bool FocusMoving(CCircuitUnit* unit, int frame) const override;
+	bool FocusTick(int frame, bool issue);
+	bool FocusHold(int frame);
+	bool FocusLive(int frame) const;
+	struct SWalk { int eid; int seen; springai::AIFloat3 at; };
+	std::map<int, int> focusAt;  // member -> enemy
+	std::map<int, SWalk> focusWalk;  // member -> the enemy it walks into range of
+	std::vector<int> focusOrder;
+	int focusNext = -1;
+	int focusSeen = -1;
+	int focusEp = -1;
+	int focusKillN = 0;
+	bool focusArmedKilled = false;
+	bool focusOn = false;
+	bool focusOrdered = false;
 protected:
 
 	float lowestRange;
