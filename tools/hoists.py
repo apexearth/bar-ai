@@ -20,7 +20,7 @@ from pathlib import Path
 DECIDE = re.compile(r"apex: decide t=(?P<team>\d+) (?P<con>\S+) #\d+ -> (?P<job>\S+?) v=(?P<v>-?[\d.]+)")
 WHY = re.compile(r" why=(?P<why>\S+)")
 OVER = re.compile(r" over (?P<over>\S+) v=(?P<ov>-?[\d.]+)")
-AUCTION = {"draw", "ladder"}
+AUCTION = {"draw", "ladder", "held", "held-ladder"}  # held: a hoist the budget hold sent to the draw
 
 
 def kind_of(job: str) -> str:

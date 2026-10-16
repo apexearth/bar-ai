@@ -1866,6 +1866,9 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// What put ranked[0] there -- logged on the decide line, because a hoist
 	// and a draw look identical from outside and were read as a broken draw.
 	string why = "draw";
+	array<Want@> bdhSnap;
+	if (Brain::BudgetHoldOn())
+		bdhSnap = ranked;
 	// the wants the ecodef switches sent to the draw instead of hoisting
 	Want@ edDj = null;
 	Want@ edCov = null;
@@ -2745,6 +2748,29 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	if ((ranked.length() > 1) && !aaPanic && !superPush && !coverPush && !floorPush && !roled && !convertPush && !upFirst && !openPush)
 		if (CategoryDraw(unit, ranked, 0, elecAt))
 			why = gDrawLadderTaken ? "ladder" : "draw";
+	// A hoisted nano or defence want pays the budget hold; held, the election is the draw.
+	// An assist commits no metal of its own: it pays the row of what it lathes, which only
+	// defjoin names. The emergencies stand.
+	if ((bdhSnap.length() > 1) && (ranked.length() > 0) && (why != "draw") && (why != "ladder")
+		&& (why != "estall") && (why != "aa") && (why != "defpanic") && (why != "penned")
+		&& (why != "cover"))
+	{
+		const int hk = ranked[0].kind;
+		if (((hk == WK_NANO) && !Brain::BudgetHoldPasses(Brain::BDH_BPHOIST, Brain::BUILDPOWER, uint(unit.id)))
+			|| (((CategoryOf(hk) == CAT_DEFENCE) || ((hk == WK_ASSIST) && (why == "defjoin")))
+				&& !Brain::BudgetHoldPasses(Brain::BDH_DEFHOIST, Brain::DEFENCE, uint(unit.id))))
+		{
+			ranked = bdhSnap;
+			floorPush = false;
+			coverPush = false;
+			roled = false;
+			upFirst = false;
+			openPush = false;
+			why = "held";
+			if (CategoryDraw(unit, ranked, 1, elecAt))
+				why = gDrawLadderTaken ? "held-ladder" : "held";
+		}
+	}
 	Perf::Add("dec.draw", _tDraw);
 	NnTechPicked(ranked);
 	Want@ top = (ranked.length() > 0) ? ranked[0] : null;

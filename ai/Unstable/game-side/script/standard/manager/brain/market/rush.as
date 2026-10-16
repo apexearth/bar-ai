@@ -52,7 +52,7 @@ float RushSpeedPrior()
 	int n = 0;
 	for (int d = 1; d <= Catalog::gDefCount; ++d) {
 		if (!Catalog::gAvailable[d] || Catalog::gMobile[d]
-			|| ((Factory::userData[d].attr & Factory::Attr::T1) == 0)
+			|| (PlantTier(d) != 1)
 			|| (PlantClass(d) != PC_LAND))
 			continue;
 		const array<int>@ pr = Catalog::gBuildsList[d];

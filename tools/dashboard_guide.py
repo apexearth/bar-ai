@@ -168,6 +168,19 @@ PANELS = [
              "arrival, the army floor before and after, units ordered by "
              "kind, raids and kills on their extractors and the commander's "
              "jobs"),
+            ("TUNE_BUDGET_HOLD", "ON: while the army is below its share of "
+             "what we spend, the purchases that used to skip the spending "
+             "plan pay it like everything else: the factory's 'make a "
+             "constructor now' rule fires only part of the time, constructors "
+             "and rez bots at the factory are worth less, and builders sent "
+             "straight to nano turrets, to defence or to help build defence "
+             "are sometimes sent back to the normal choice instead -- each by how far "
+             "their own row is over its share against how far the army is "
+             "under. When the army is at its share, or the row is not over "
+             "its own, nothing changes. `apex: budgethold-stat` each minute "
+             "shows every row's actual and target share, how often each of "
+             "those paths was held back, and the metal of army finished that "
+             "minute"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "
