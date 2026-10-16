@@ -286,6 +286,9 @@ void NrSnapGroup(float& out grpM, float& out grpS, AIFloat3& out ctr, float& out
 		if (!ours && (ft != int(Task::FightType::DEFEND)) && (ft != int(Task::FightType::GUARD))
 			&& (ft != int(Task::FightType::RAID)))
 			continue;
+		// gathered raiders and the pack in the field are never priced as one group
+		if (GthOn() && (((gGthMode == 0) != ours) || (!ours && (ft == int(Task::FightType::RAID)))))
+			continue;
 		array<CCircuitUnit@>@ on = t.GetUnits();
 		if (on is null)
 			continue;
@@ -373,6 +376,8 @@ class NrTarget {
 	float altM = 0.f;
 	float netM = 0.f;
 	float hp = 0.f;
+	float armyT = -1.f;   // seconds their nearest armed mobile needs to reach it (gather: within walk + work)
+	bool armed = false;
 }
 
 // THE DECISION IN SLICES. Pricing every spot in one frame froze a bot for
@@ -389,6 +394,7 @@ bool gNjHave = false;
 NrTarget@ gNjBest;
 bool gNjSpr = false;
 bool gNjCfOn = false;
+bool gNjGth = false;
 float gNjCfN = 0.f, gNjCfD = 0.f, gNjCfH = 0.f, gNjCfM = 0.f, gNjCfSpr = 0.f, gNjCfRng = 0.f;
 bool gNjOldHave = false;
 float gNjOldBest = 0.f;
@@ -438,6 +444,7 @@ bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3
 	gNjOldHave = false;
 	gNjOldBest = 0.f;
 	gNjCfOn = CfOn();
+	gNjGth = GthOn();
 	if (gNjCfOn)
 		CfPackOf(gNrU, gNjCfN, gNjCfD, gNjCfH, gNjCfM, gNjCfSpr, gNjCfRng);
 	return true;
@@ -502,17 +509,21 @@ void NrPriceSpot(uint s)
 		return;
 	t.walkS = ctr.distance2D(sp) / spd;
 	t.killS = (dps > 0.f) ? hp / dps : t.walkS;
-	// their army that can stand on the spot while we work there
-	const float stay = t.killS;
+	// their army that can stand on the spot while we work there; gathering, also while we walk there
+	const float stay = gNjGth ? t.killS + t.walkS : t.killS;
 	NrNear(gNrG3, sp, gNrMaxR3 + gNrMaxSpd3 * stay, near);
 	for (uint i = 0; i < near.length(); ++i) {
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
-		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay) {
+		const float gap = gNeP[e].distance2D(sp) - Catalog::gMaxRange[d];
+		if (gap <= Catalog::gSpeed[d] * stay) {
 			t.armyS += DgStr(d);
 			cfI.insertLast(int(e));
+			const float ta = (gap <= 0.f) ? 0.f : ((Catalog::gSpeed[d] > 0.f) ? gap / Catalog::gSpeed[d] : stay);
+			t.armyT = ((t.armyT < 0.f) || (ta < t.armyT)) ? ta : t.armyT;
 		}
 	}
+	t.armed = cfI.length() > 0;
 	AIFloat3 cfComAt;
 	int cfComDef = 0;
 	float cfComW = 0.f;
@@ -589,6 +600,7 @@ void NrPriceSpot(uint s)
 		best.armyS = t.armyS; best.defS = t.defS; best.pathS = t.pathS;
 		best.lossF = t.lossF; best.walkS = t.walkS; best.killS = t.killS;
 		best.altM = t.altM; best.netM = t.netM; best.hp = t.hp;
+		best.armyT = t.armyT; best.armed = t.armed;
 		have = true;
 	}
 	}
@@ -742,12 +754,24 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 // pack home, where its goal is our own ground.
 void NrBind(int chosen, NrTarget@ best, float losR)
 {
-	gNrNow = chosen;
+	const bool gth = GthOn();
+	const bool gathered = gth && (gGthMode == 1);
+	if (gathered) {
+		gGthWait = chosen != NR_GO;
+		GthNoteGathered(int(gNrU.length()), chosen == NR_GO, NrLive());
+	} else {
+		gNrNow = chosen;
+	}
 	gNrHomeR = ((losR > 1.f) ? losR : 300.f) * 2.f;
 	const float rP = (losR > 1.f) ? losR : 300.f;
 	if (chosen == NR_GO) {
 		++gNrGoN;
-		const bool moved = !gNrGoalHas || gNrGoalHome || (gNrGoal.distance2D(best.at) > rP);
+		// the gathered group launches whole as a new pack; the one in the field keeps its members and its goal
+		if (gathered)
+			GthRetire();
+		const bool moved = gathered || !gNrGoalHas || gNrGoalHome || (gNrGoal.distance2D(best.at) > rP);
+		if (gth && !gathered && moved)
+			++gGthRegoal;
 		gNrGoalHas = true;
 		gNrGoalHome = false;
 		gNrGoal = best.at;
@@ -780,9 +804,15 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 			t.RemoveUnit(u);
 			gAskClaim.insertLast(int(u.id));
 			++gNrPullN;
+			if (gathered)
+				gGthRoster.insertLast(int(u.id));
 		}
+		if (gathered)
+			GthNoteLaunch(int(gNrU.length()), best.netM, gNjGrpM, best.armed, best.armyT, best.netM <= 0.f);
 		return;
 	}
+	if (gathered)
+		return;
 	if (NrLive() && !gNrGoalHome) {
 		gNrGoalHas = true;
 		gNrGoalHome = true;
@@ -812,12 +842,15 @@ bool NrRaiderPool(IUnitTask@ t)
 
 void NrHoldRaids()
 {
-	const bool wait = (gNrNow == NR_WAIT) && Builder::gHomeSet;
+	const bool gth = GthOn();
+	const bool wait = (gth ? gGthWait : (gNrNow == NR_WAIT)) && Builder::gHomeSet;
 	array<IUnitTask@> held;
 	for (uint i = 0; i < gSquads.length(); ++i) {
 		IUnitTask@ t = gSquads[i];
 		if ((t is null) || t.IsDead() || (t is gAskTask) || IsAnswerTask(t)
 			|| (t.GetFightType() != int(Task::FightType::RAID)) || Air::NaAirTask(t))
+			continue;
+		if (gth && (GthIsOut(t) || (gCfEcoT.findByRef(t) >= 0)))
 			continue;
 		if (wait && NrRaiderPool(t)) {
 			t.SetRaidGoal(Builder::gHomePos, gNrHomeR);
@@ -874,9 +907,19 @@ void UpdateNnRaid()
 		NrStep();
 	} else if ((ai.frame >= gNrArriveAt) && NrArrived()) {
 		gNrArriveAt = ai.frame + 3 * SECOND;
+		gGthMode = 0;
 		NrDecide("arrive");
+	} else if (gGthQueue1) {
+		gGthQueue1 = false;
+		gGthMode = 1;
+		NrDecide("gather");
 	} else if (ai.frame >= gNrNextAt) {
 		gNrNextAt = ai.frame + 15 * SECOND;
+		// gathering: a pack in the field is priced alone, then the raiders gathered at home
+		if (GthOn())
+			GthRotate();
+		gGthMode = (GthOn() && NrLive()) ? 0 : 1;
+		gGthQueue1 = gGthMode == 0;
 		NrDecide("clock");
 	}
 	if (ai.frame >= gNrLogAt) {

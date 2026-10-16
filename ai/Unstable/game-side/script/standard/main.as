@@ -230,6 +230,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateRaidAnswer(); Perf::Add("up.raidanswer", _t); }
 	{ double _t = Perf::T0(); Military::UpdateFlankGuard(); Perf::Add("up.flank", _t); }
 	{ double _t = Perf::T0(); Military::UpdateNnRaid(); Perf::Add("up.nnraid", _t); }
+	{ double _t = Perf::T0(); Military::UpdateGather(); Perf::Add("up.gather", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::FightCensus(); Military::ElectCensus(); Perf::Add("up.fightcensus", _t); }
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Military::UpdateGuardPosts(); Perf::Add("up.guardposts", _t); }
 	++gUpTick;
@@ -458,6 +459,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	if (WasFinished(int(unit.id))) {
 		Market::ShelledNoteDeath(unit, attackerDef, atkSeen);
 		Military::CfNoteDeath(unit, attackerDef);
+		Military::GthNoteDeath(unit);
 	}
 	if (attackerDef is null)
 		return;

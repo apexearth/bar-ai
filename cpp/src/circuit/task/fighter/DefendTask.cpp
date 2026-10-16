@@ -223,12 +223,22 @@ void CDefendTask::Update()
 	/*
 	 * Promote task if possible
 	 */
-	if (!hunting && (updCount % 32 == 1)) {
+	// apex_gather: a pool never walks out to a squad already launched, and an all-raider pool leaves only when
+	// nnraid.as launches it whole on its fight estimate (gather.as)
+	const bool gather = manager->GetCircuit()->GetTunable("apex_gather", 0.f) > 0.f;
+	bool scriptLaunch = false;
+	if (gather && (promote == FightType::RAID) && (manager->GetCircuit()->GetTunable("apex_nnraid", 1.f) > 0.f)) {
+		scriptLaunch = true;
+		for (CCircuitUnit* unit : units) {
+			scriptLaunch = scriptLaunch && unit->GetCircuitDef()->IsRoleRaider();
+		}
+	}
+	if (!hunting && !scriptLaunch && (updCount % 32 == 1)) {
 		CMilitaryManager* militaryMgr = static_cast<CMilitaryManager*>(manager);
 		// JOIN THE SQUAD, NOT THE TARGET (docs/doctrine.md; his 10-13: "We make 1 fuckin unit and are
 		// charging out to meet these guys on our doorstep", Tzars sent alone): under its bar a
 		// pool walks to the strongest live squad of its kind; only a full bar opens a new one.
-		if ((attackPower < maxPower) && !units.empty() && !militaryMgr->GetTasks(check).empty()) {
+		if (!gather && (attackPower < maxPower) && !units.empty() && !militaryMgr->GetTasks(check).empty()) {
 			IFighterTask* best = militaryMgr->BestSquadToJoin(check, *units.begin(), this);
 			if (best != nullptr) {
 				static std::map<const CCircuitAI*, std::pair<int, int>> joined;   // count, next log frame

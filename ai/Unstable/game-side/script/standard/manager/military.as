@@ -27,6 +27,7 @@
 #include "military/flankguard.as"  // groups stand at the economy's untowered approaches
 #include "military/withdraw.as"   // pull a losing squad back under our guns
 #include "military/comfight.as"   // one fight estimate per group: engage what it beats, else fall back and pool
+#include "military/gather.as"     // raid packs launch whole from the gathered raiders and keep their members
 #include "military/territory.as"    // what we hold, where the border and front are
 #include "military/defenceline.as"  // the front gun and AiMakeDefence
 #include "military/airthreat.as"    // enemy air scaling and heavy AA caps

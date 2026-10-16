@@ -45,6 +45,7 @@ private:
 	springai::AIFloat3 goalPos;
 	float goalR = 0.f;
 	int keptN = 0;          // retreats a committed raid did not take
+	int blockedSince = -1;   // apex_gather: frame the bounded path to the goal first failed
 	int nextCommitLog = 0;
 	int nextAaPick = 0;      // a committed gunship wing re-aims at the nearest AA once a second
 	int aaSetN = 0;          // AA set-targets issued (raid-commit log)
