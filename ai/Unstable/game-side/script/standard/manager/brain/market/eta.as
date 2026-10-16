@@ -867,9 +867,27 @@ float EtaOfWant(Want@ w)
 	const int d = int(w.def.id);
 	if (w.kind == WK_NANO)
 		return w.walkSec + EtaWith(d, 0.f, Catalog::gBuildPower[d], false);
-	if (w.kind == WK_TECH)
-		return w.walkSec + EtaWith(d, 0.f, 0.f, true);
+	if (w.kind == WK_TECH) {
+		// TUNE_TEAM_TECH: handouts already bring part of what the lab saves; it keeps the rest.
+		const float m = TeamTechMul(d, false);
+		const float b = (m < 1.f) ? EtaBaseThisFrame() : 0.f;
+		const float e = EtaWith(d, 0.f, 0.f, true);
+		if ((m < 1.f) && (e < b) && (b < ETA_BIG))
+			return w.walkSec + b - (b - e) * m;
+		return w.walkSec + e;
+	}
 	return w.walkSec + EtaWith(d, DPowerOf(w, d), 0.f, false);
+}
+
+int gEtaBaseAt = -1;
+float gEtaBase = 0.f;
+float EtaBaseThisFrame()
+{
+	if (gEtaBaseAt != ai.frame) {
+		gEtaBaseAt = ai.frame;
+		gEtaBase = EtaWith(0, 0.f, 0.f, false);
+	}
+	return gEtaBase;
 }
 
 // ONE ECONOMIC QUESTION, ONE ANSWER. Extraction, generation and build power are

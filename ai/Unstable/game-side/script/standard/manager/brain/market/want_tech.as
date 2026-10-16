@@ -864,7 +864,7 @@ Want@ ProposeTech(CCircuitUnit@ unit)
 		float techGain = 0.f;
 		const bool waterUnlock = WaterPlantUnlocks(d);
 		if ((prodCeil > ownCeil) || (prodConv > ownConv))
-			techGain = demand * pipe / float(1 + liveKin);
+			techGain = demand * pipe / float(1 + liveKin) * TeamTechMul(d, true);
 		else if (waterUnlock)
 			techGain = demand * pipe;
 		else if ((ownMob > 0.f) && (prodMob > ownMob * 1.2f)) {

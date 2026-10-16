@@ -1431,6 +1431,12 @@ const float TUNE_ECO_ROLE = 1.f;
 //   10-15: "just have 1 eco"). See docs/tunables.md.
 const float TUNE_ECO_LATCH = 1.f;
 
+// [toggle 0/1] -- Team games (3+ of our seats): one seat, elected once, takes its advanced lab
+//   at the normal time and hands out advanced constructors in proportion to the allies'
+//   uncovered upgrade hands; the others price their own first advanced lab down by the share
+//   of those hands the handouts cover. His 10-15. See docs/tunables.md.
+const float TUNE_TEAM_TECH = 0.f;
+
 // [0..1 of the eco target] -- FORCE THIS AI TO PLAY THE ECO PLAYER. 0 leaves
 //   the ordinary seat election alone. Above 0 it takes the seat whatever
 //   the team's size or shape, and the value is how FAR it grows before army
