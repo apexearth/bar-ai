@@ -355,6 +355,7 @@ local NAMES = {
 	"apex_rush_aware",       -- rush.as + army.as ArmyFloor + want_tech/plant/super/energy: army floor and tech price from their walk time vs our next tier's lock (0)
 	"apex_small_pressure",   -- pressure.as + army.as + price.as PayH + massing.as HoldWhy + plannet.as TaPick + protect_target.as: short contact shortens the horizon, team push, contest their expansions (0)
 	"apex_map_share",        -- mapshare.as + army.as + massing.as + plannet.as TaPick + nnraid.as + want_mex.as: under our seat share of the extractor spots, army nudge, aggression and claim value (0)
+	"apex_budget_hold",      -- budget.as + production.as con floors/builder price + decide.as hoists: orders that skip the budget's draw pay mult(row)/mult(army) while army is under its share (0)
 	"apex_small_hard",       -- smallhard.as + army.as ArmyFloor + production.as + nnraid.as + plannet.as TaPick + want_assist.as + comdecide.as: short path contact prices army to their strength at arrival, starves their extractors (0)
 	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",

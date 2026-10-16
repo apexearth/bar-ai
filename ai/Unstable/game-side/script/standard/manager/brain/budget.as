@@ -181,8 +181,11 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 	if (m <= 0.f)
 		return;
 	BudgetDecay();
-	gSpent[CatOf(unit.circuitDef, usage)] += m;
+	const Cat cat = CatOf(unit.circuitDef, usage);
+	gSpent[cat] += m;
 	gSpentTotal += m;
+	if (cat == ARMY)
+		gBdhArmyM += m;
 }
 
 float ShareOf(Cat c)
@@ -218,11 +221,89 @@ float BudgetMult(Cat c)
 	return mult;
 }
 
+// BUDGET HOLD: an order that skips the draw pays the draw's price. While army is
+// under its share, a row over its own keeps mult(row) / mult(army) of an order --
+// the relative weight the two would carry in one draw.
+enum BdhPath { BDH_CON = 0, BDH_AIRCON = 1, BDH_T2CON = 2, BDH_BPHOIST = 3, BDH_DEFHOIST = 4, BDH_N = 5 };
+const array<string> BDH_NAMES = {"conFloor", "airConFloor", "t2ConFloor", "bpHoist", "defHoist"};
+bool gBdhOn = false;
+bool gBdhRead = false;
+array<int> gBdhAsk(BDH_N, 0);
+array<int> gBdhSkip(BDH_N, 0);
+int gBdhFacN = 0;
+float gBdhFacKeep = 0.f;
+float gBdhArmyM = 0.f;
+
+bool BudgetHoldOn()
+{
+	if (!gBdhRead) {
+		gBdhRead = true;
+		gBdhOn = ai.GetTunable("apex_budget_hold", TUNE_BUDGET_HOLD) > 0.f;
+	}
+	return gBdhOn;
+}
+
+float BudgetHoldKeep(Cat c)
+{
+	if (!BudgetHoldOn() || (c == ARMY))
+		return 1.f;
+	const float a = BudgetMult(ARMY);
+	if (a <= 1.f)
+		return 1.f;
+	const float m = BudgetMult(c);
+	return (m < 1.f) ? (m / a) : 1.f;
+}
+
+// A floor or hoist on `path` fires with probability BudgetHoldKeep; seeded like the line's draw.
+bool BudgetHoldPasses(int path, Cat c, uint salt)
+{
+	++gBdhAsk[path];
+	const float k = BudgetHoldKeep(c);
+	if (k >= 1.f)
+		return true;
+	uint h = uint(ai.frame) * 2654435761 + salt * 40503 + uint(path) * 2246822519;
+	h ^= (h >> 13);
+	if (float(h % 10000) / 10000.f < k)
+		return true;
+	++gBdhSkip[path];
+	return false;
+}
+
+void BudgetHoldNoteFac(float keep)
+{
+	++gBdhFacN;
+	gBdhFacKeep += keep;
+}
+
+void BudgetHoldLog()
+{
+	string rows = "";
+	const array<string> names = {"army", "def", "aa", "eco", "bp"};
+	for (int i = 0; i < int(CATS); ++i)
+		rows += " " + names[i] + "=" + formatFloat(ShareOf(Cat(i)), "", 0, 2)
+			+ "/" + formatFloat(TargetShare(Cat(i)), "", 0, 2)
+			+ "k" + formatFloat(BudgetHoldKeep(Cat(i)), "", 0, 2);
+	string paths = "";
+	for (int p = 0; p < int(BDH_N); ++p) {
+		paths += " " + BDH_NAMES[p] + "=" + gBdhSkip[p] + "/" + gBdhAsk[p];
+		gBdhAsk[p] = 0;
+		gBdhSkip[p] = 0;
+	}
+	AiLog(Factory::T() + "apex: budgethold-stat t=" + ai.teamId + " on=" + (BudgetHoldOn() ? 1 : 0)
+		+ rows + " skipped/asked:" + paths
+		+ " facBuilders=" + gBdhFacN + "@" + formatFloat((gBdhFacN > 0) ? gBdhFacKeep / float(gBdhFacN) : 1.f, "", 0, 2)
+		+ " armyM/min=" + int(gBdhArmyM));
+	gBdhFacN = 0;
+	gBdhFacKeep = 0.f;
+	gBdhArmyM = 0.f;
+}
+
 void BudgetLog()
 {
 	if (ai.frame < gNextBudgetLog)
 		return;
 	gNextBudgetLog = ai.frame + 60 * SECOND;
+	BudgetHoldLog();
 	AiLog(Factory::T() + "apex: budget army=" + formatFloat(ShareOf(ARMY), "", 0, 2)
 		+ "/" + formatFloat(TargetShare(ARMY), "", 0, 2)
 		+ " def=" + formatFloat(ShareOf(DEFENCE), "", 0, 2)

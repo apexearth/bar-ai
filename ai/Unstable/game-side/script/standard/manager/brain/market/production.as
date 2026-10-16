@@ -1845,6 +1845,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// table for, once per candidate. Negative means "not taken yet".
 	int landT1 = -1;
 	float claimers = -1.f;
+	const float bdhKeep = Brain::BudgetHoldKeep(Brain::BUILDPOWER);
 	// EVERYTHING BELOW IS THE SAME ANSWER FOR EVERY CANDIDATE. PatrolShort
 	// alone walks the whole def table twice and was called twice per
 	// candidate; RoleTarget/RoleValue walk it once each per candidate.
@@ -2785,7 +2786,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
 		if (!walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
-			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot))
+			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot)
+			&& Brain::BudgetHoldPasses(Brain::BDH_AIRCON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97))
 		{
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -2821,7 +2823,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
-		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)) {
+		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
+			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA
@@ -2835,7 +2838,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
 		if ((ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
-			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)) {
+			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)
+			&& Brain::BudgetHoldPasses(Brain::BDH_T2CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (t2-con floor need=" + ceilNeed
@@ -3013,7 +3017,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 						+ " upD=" + formatFloat(upD, "", 0, 1)) : "") + ")";
 			continue;
 		}
-		const float v = gain / Catalog::gCostM[d];
+		const float v = gain / Catalog::gCostM[d] * bdhKeep;
+		if (bdhKeep < 1.f)
+			Brain::BudgetHoldNoteFac(bdhKeep);
 		if (prankNow)
 			prank += "=" + formatFloat(v * 1000.f, "", 0, 2) + "(g" + formatFloat(gain, "", 0, 2)
 				+ ",claim" + formatFloat(claimGain, "", 0, 1) + ",room" + formatFloat(feedRoom, "", 0, 2)
@@ -3048,7 +3054,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			gainM = lifeG;
 		else if (rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f) > gainM)
 			gainM = rezEat * eFeedA * ((hRez > 1.f) ? hRez : 900.f);
-		const float vM = gainM / Catalog::gCostM[rezDef];
+		const float vM = gainM / Catalog::gCostM[rezDef] * bdhKeep;
 		if (gainM > 0.01f) {
 			candDef.insertLast(rezDef);
 			candV.insertLast(vM);
