@@ -286,7 +286,6 @@ PANELS = [
              "are made moves. `apex: countermix-stat` each minute: their mix, "
              "their economy and our raiders, our candidates' values split into "
              "fight and raid, and the units ordered"),
-             "comparison"),
             ("TUNE_FOCUS_FIRE", "ON: a ground group under enemy fire (an armed "
              "enemy whose range, plus three seconds of walking, covers one of "
              "ours) sets its targets together every second: first the enemy "
