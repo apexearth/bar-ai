@@ -345,7 +345,7 @@ void TaOpen(int phase, const string why)
 	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
 	ai.SetTeamBoard(BOARD_TA_OP, float(op));   // last: a reader that sees the new id sees its fields
 	++gTaOpsMade;
-	if ((kind == 5) && (gMsPickAt != ai.frame) && (gShPickAt != ai.frame))
+	if ((kind == 5) && (gMsPickAt != ai.frame) && (gSmhPickAt != ai.frame))
 		++gPressExpOps;
 	MapShareNoteOp(kind);
 	SmallHardNoteOp(kind);

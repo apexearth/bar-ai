@@ -16,89 +16,89 @@ namespace Market {
 //   hold   = our side's army / (ours + arrive)        phi = foeExtr x Tc / (that + arrive)
 // Mex and expansion pricing, and the payback horizon, are untouched (the 10-15 lesson).
 
-bool gShOn = false;
-bool gShOnRead = false;
-int gShAt = -999999;
-int gShLogAt = 1800;
-float gShK = 0.f;
-float gShTc = -1.f, gShTcLine = -1.f, gShRho = 1.f;
-float gShWalk = -1.f, gShLine = 0.f;
-int gShWalkId = -1;
-int gShWalkAt = -999999;
-int gShWalkDef = 0;
-float gShTA = 0.f;
-float gShFoeExtr = 0.f, gShFoeInc = 0.f, gShR = 0.f, gShOcc = 0.f;
-int gShFoeSeenN = 0, gShFoeLikelyN = 0;
-float gShSeen = 0.f, gShComM = 0.f, gShArrive = 0.f;
-float gShFloorX = 0.f;
-float gShHold = 0.f, gShPhi = 0.f;
-float gShGapFrac = 0.f;
-int gShFoes = 1;
-int gShComDef = 0;
-float gShMps = 0.f;          // metal per unit of strength, basic fighters
-int gShComSeen = 0;
-AIFloat3 gShBox;
-bool gShHasTgt = false;
-AIFloat3 gShTgt;
-float gShTgtNet = 0.f;
-int gShCand = 0, gShPickAt = -1, gShOps = 0;
-int gShRaidFoe = 0, gShMexKilled = 0, gShComPriced = 0, gShRaidPriced = 0;
-array<int> gShMixN = {0, 0, 0, 0};       // scout, raider, main, con
-array<float> gShMixM = {0.f, 0.f, 0.f, 0.f};
-array<int> gShJobN = {0, 0, 0, 0, 0, 0, 0, 0};  // assist, mex, eco, plant, defence, fight, retreat, other
+bool gSmhOn = false;
+bool gSmhOnRead = false;
+int gSmhAt = -999999;
+int gSmhLogAt = 1800;
+float gSmhK = 0.f;
+float gSmhTc = -1.f, gSmhTcLine = -1.f, gSmhRho = 1.f;
+float gSmhWalk = -1.f, gSmhLine = 0.f;
+int gSmhWalkId = -1;
+int gSmhWalkAt = -999999;
+int gSmhWalkDef = 0;
+float gSmhTA = 0.f;
+float gSmhFoeExtr = 0.f, gSmhFoeInc = 0.f, gSmhR = 0.f, gSmhOcc = 0.f;
+int gSmhFoeSeenN = 0, gSmhFoeLikelyN = 0;
+float gSmhSeen = 0.f, gSmhComM = 0.f, gSmhArrive = 0.f;
+float gSmhFloorX = 0.f;
+float gSmhHold = 0.f, gSmhPhi = 0.f;
+float gSmhGapFrac = 0.f;
+int gSmhFoes = 1;
+int gSmhComDef = 0;
+float gSmhMps = 0.f;          // metal per unit of strength, basic fighters
+int gSmhComSeen = 0;
+AIFloat3 gSmhBox;
+bool gSmhHasTgt = false;
+AIFloat3 gSmhTgt;
+float gSmhTgtNet = 0.f;
+int gSmhCand = 0, gSmhPickAt = -1, gSmhOps = 0;
+int gSmhRaidFoe = 0, gSmhMexKilled = 0, gSmhComPriced = 0, gSmhRaidPriced = 0;
+array<int> gSmhMixN = {0, 0, 0, 0};       // scout, raider, main, con
+array<float> gSmhMixM = {0.f, 0.f, 0.f, 0.f};
+array<int> gSmhJobN = {0, 0, 0, 0, 0, 0, 0, 0};  // assist, mex, eco, plant, defence, fight, retreat, other
 const array<string> SH_JOBS = {"assist", "mex", "eco", "plant", "def", "fight", "retreat", "other"};
 
 bool SmallHardOn()
 {
-	if (!gShOnRead) {
-		gShOnRead = true;
-		gShOn = ai.GetTunable("apex_small_hard", TUNE_SMALL_HARD) > 0.f;
+	if (!gSmhOnRead) {
+		gSmhOnRead = true;
+		gSmhOn = ai.GetTunable("apex_small_hard", TUNE_SMALL_HARD) > 0.f;
 	}
-	return gShOn;
+	return gSmhOn;
 }
 
-float SmallHardK() { return gShK; }
-float SmallHardFloorExtra() { return gShFloorX; }
-float SmallHardRaidW() { return gShK * gShPhi; }
-float SmallHardComArmyW() { return gShK * gShGapFrac; }
+float SmallHardK() { return gSmhK; }
+float SmallHardFloorExtra() { return gSmhFloorX; }
+float SmallHardRaidW() { return gSmhK * gSmhPhi; }
+float SmallHardComArmyW() { return gSmhK * gSmhGapFrac; }
 
 // Seconds of their income an extractor kill denies beyond their rebuild: the rest of the
 // horizon, as often as we hold the ground.
 float SmallHardDenyS(float rebuildS)
 {
-	if (gShK <= 0.f)
+	if (gSmhK <= 0.f)
 		return 0.f;
 	PrTuneFill();
 	const float left = gPrPaybackH - rebuildS;
-	return (left > 0.f) ? gShK * gShHold * left : 0.f;
+	return (left > 0.f) ? gSmhK * gSmhHold * left : 0.f;
 }
 
 // Their commanders we do not see, as a presence weight at their box (0 on long contact).
 float SmallHardComPrior(AIFloat3 &out at, int &out def)
 {
-	def = gShComDef;
-	at = gShBox;
-	if ((gShK <= 0.f) || (gShComDef <= 0))
+	def = gSmhComDef;
+	at = gSmhBox;
+	if ((gSmhK <= 0.f) || (gSmhComDef <= 0))
 		return 0.f;
-	const int n = gShFoes - gShComSeen;
-	return (n > 0) ? gShK * float(n) : 0.f;
+	const int n = gSmhFoes - gSmhComSeen;
+	return (n > 0) ? gSmhK * float(n) : 0.f;
 }
 
 // Our own commander's def stands in for theirs; its strength in the metal of the
 // cheapest ground fighter each basic land plant makes. Never cache a zero.
 void ShPriorsFill()
 {
-	if (gShComDef <= 0) {
+	if (gSmhComDef <= 0) {
 		const array<int>@ own = OwnedDefs();
 		for (uint i = 0; i < own.length(); ++i) {
 			const int d = own[i];
 			if ((gOwnCount[d] > 0) && Catalog::gMobile[d] && Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask)) {
-				gShComDef = d;
+				gSmhComDef = d;
 				break;
 			}
 		}
 	}
-	if ((gShMps > 0.f) && (gShWalkDef > 0))
+	if ((gSmhMps > 0.f) && (gSmhWalkDef > 0))
 		return;
 	float sumM = 0.f, sumS = 0.f, cheapest = 0.f;
 	int walkDef = 0;
@@ -127,27 +127,27 @@ void ShPriorsFill()
 		}
 	}
 	if (sumS > 0.f)
-		gShMps = sumM / sumS;
-	gShWalkDef = walkDef;
+		gSmhMps = sumM / sumS;
+	gSmhWalkDef = walkDef;
 }
 
 // Their box to our home over our own pathfinder's grid, re-flooded each minute.
 void ShWalkStep(const AIFloat3& in box)
 {
 	const float ring = 256.f;
-	if (gShWalkId >= 0) {
-		const float c = ai.WalkMapCost(gShWalkId, Builder::gHomePos, ring);
+	if (gSmhWalkId >= 0) {
+		const float c = ai.WalkMapCost(gSmhWalkId, Builder::gHomePos, ring);
 		if (c > -1.5f) {
-			gShLine = box.distance2D(Builder::gHomePos);
-			gShWalk = (c >= 0.f) ? (c + ring) : -1.f;
-			float rho = ((c >= 0.f) && (gShLine > 1.f)) ? (gShWalk / gShLine) : 1.f;
-			gShRho = (rho > 1.f) ? rho : 1.f;   // a walk is never shorter than the line
-			gShWalkId = -1;
+			gSmhLine = box.distance2D(Builder::gHomePos);
+			gSmhWalk = (c >= 0.f) ? (c + ring) : -1.f;
+			float rho = ((c >= 0.f) && (gSmhLine > 1.f)) ? (gSmhWalk / gSmhLine) : 1.f;
+			gSmhRho = (rho > 1.f) ? rho : 1.f;   // a walk is never shorter than the line
+			gSmhWalkId = -1;
 		}
 	}
-	if ((gShWalkId < 0) && (gShWalkDef > 0) && (ai.frame >= gShWalkAt + 60 * SECOND)) {
-		gShWalkAt = ai.frame;
-		gShWalkId = ai.WalkMapStart(Catalog::Def(gShWalkDef), box);
+	if ((gSmhWalkId < 0) && (gSmhWalkDef > 0) && (ai.frame >= gSmhWalkAt + 60 * SECOND)) {
+		gSmhWalkAt = ai.frame;
+		gSmhWalkId = ai.WalkMapStart(Catalog::Def(gSmhWalkDef), box);
 	}
 }
 
@@ -155,9 +155,9 @@ void ShWalkStep(const AIFloat3& in box)
 // plus their side's open spots at the share of our own side we hold.
 void ShFoeIncome(const AIFloat3& in box)
 {
-	gShFoeExtr = 0.f;
-	gShFoeSeenN = 0;
-	gShFoeLikelyN = 0;
+	gSmhFoeExtr = 0.f;
+	gSmhFoeSeenN = 0;
+	gSmhFoeLikelyN = 0;
 	if ((gMsHeld.length() == 0) || (gMsHeld.length() != gAllSpots.length()))
 		return;
 	int ourSide = 0, ourHeld = 0;
@@ -168,12 +168,12 @@ void ShFoeIncome(const AIFloat3& in box)
 		const AIFloat3 p = gAllSpots[s];
 		const bool theirs = p.distance2D(box) < p.distance2D(home);
 		if (m == 2) {
-			gShFoeExtr += gAllSpotInc[s] * Catalog::gExtractsM[gMsFoeDef[s]];
-			++gShFoeSeenN;
+			gSmhFoeExtr += gAllSpotInc[s] * Catalog::gExtractsM[gMsFoeDef[s]];
+			++gSmhFoeSeenN;
 		} else if (theirs) {
 			if (m == 0) {
 				openInc += gAllSpotInc[s];
-				++gShFoeLikelyN;
+				++gSmhFoeLikelyN;
 			}
 		} else {
 			++ourSide;
@@ -181,20 +181,20 @@ void ShFoeIncome(const AIFloat3& in box)
 				++ourHeld;
 		}
 	}
-	gShOcc = (ourSide > 0) ? float(ourHeld) / float(ourSide) : 0.f;
-	gShFoeExtr += gShOcc * openInc * LeastExtract();
+	gSmhOcc = (ourSide > 0) ? float(ourHeld) / float(ourSide) : 0.f;
+	gSmhFoeExtr += gSmhOcc * openInc * LeastExtract();
 }
 
 void ShComSeenScan()
 {
-	gShComSeen = 0;
+	gSmhComSeen = 0;
 	const int nG = aiEnemyMgr.GetEnemyGroupCount();
 	for (int gi = 0; gi < nG; ++gi) {
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
 			if (Catalog::ValidId(d) && Catalog::gMobile[d] && Catalog::Def(d).IsRoleAny(Unit::Role::COMM.mask))
-				++gShComSeen;
+				++gSmhComSeen;
 		}
 	}
 }
@@ -203,10 +203,10 @@ void ShComSeenScan()
 // the ground, plus the structures there, best beats the expected loss of taking it.
 void ShPickTarget(const AIFloat3& in box)
 {
-	gShHasTgt = false;
-	gShTgtNet = 0.f;
-	gShCand = 0;
-	if ((gShK <= 0.f) || (gMsHeld.length() != gAllSpots.length()))
+	gSmhHasTgt = false;
+	gSmhTgtNet = 0.f;
+	gSmhCand = 0;
+	if ((gSmhK <= 0.f) || (gMsHeld.length() != gAllSpots.length()))
 		return;
 	PrTuneFill();
 	const float H = gPrPaybackH;
@@ -223,81 +223,81 @@ void ShPickTarget(const AIFloat3& in box)
 		if (gMsHeld[s] != 2)
 			continue;
 		const AIFloat3 p = gMsFoePos[s];
-		++gShCand;
+		++gSmhCand;
 		const float prize = aiEnemyMgr.GetEnemyStructCostAt(p, Military::HUNT_R)
-				+ gAllSpotInc[s] * Catalog::gExtractsM[gMsFoeDef[s]] * H * gShHold;
+				+ gAllSpotInc[s] * Catalog::gExtractsM[gMsFoeDef[s]] * H * gSmhHold;
 		float E = aiMilitaryMgr.GetEnemyInflNear(p, Military::HUNT_R + PUSH_STAND);
 		if ((cw > 0.f) && (cAt.distance2D(p) <= Military::HUNT_R + PUSH_STAND + Catalog::gMaxRange[cDef]))
 			E += cw * Catalog::gPower[cDef];
 		const float lossF = Military::NrLossFrac(E, F);
 		const float net = prize * (1.f - lossF) - lossF * teamM;
-		if ((net > 0.f) && (!gShHasTgt || (net > gShTgtNet))) {
-			gShTgtNet = net;
-			gShTgt = p;
-			gShHasTgt = true;
+		if ((net > 0.f) && (!gSmhHasTgt || (net > gSmhTgtNet))) {
+			gSmhTgtNet = net;
+			gSmhTgt = p;
+			gSmhHasTgt = true;
 		}
 	}
 }
 
 void ShRefresh()
 {
-	gShAt = ai.frame;
-	gShK = 0.f;
-	gShFloorX = 0.f;
+	gSmhAt = ai.frame;
+	gSmhK = 0.f;
+	gSmhFloorX = 0.f;
 	if (!Builder::gHomeSet)
 		return;
 	ShPriorsFill();
 	const AIFloat3 box = aiSetupMgr.GetEnemyBoxCentre();
 	if (!OnMap(box))
 		return;
-	gShBox = box;
+	gSmhBox = box;
 	ShWalkStep(box);
 	ShComSeenScan();
 	ShFoeIncome(box);
-	gShTcLine = gRushTc;
-	gShTc = (gRushTc >= 0.f) ? gRushTc * gShRho : -1.f;
+	gSmhTcLine = gRushTc;
+	gSmhTc = (gRushTc >= 0.f) ? gRushTc * gSmhRho : -1.f;
 	array<Id>@ mates = ai.GetTeamIds();
 	const int ours = ((mates is null) || (mates.length() < 1)) ? 1 : int(mates.length());
-	gShFoes = int(ai.GetEnemyTeamSize());
-	if (gShFoes < 1)
-		gShFoes = ours;
+	gSmhFoes = int(ai.GetEnemyTeamSize());
+	if (gSmhFoes < 1)
+		gSmhFoes = ours;
 	float ourExtr = 0.f;
 	for (uint i = 0; i < gLSpot.length(); ++i)
 		ourExtr += gLIncome[i] * gLExtract[i];
 	ourExtr *= IncomeMult();
 	const float mInc = Eco::MInc();
 	const float other = mInc - ourExtr;
-	gShFoeInc = gShFoeExtr + ((other > 0.f) ? other : 0.f) * float(gShFoes) / float(ours);
+	gSmhFoeInc = gSmhFoeExtr + ((other > 0.f) ? other : 0.f) * float(gSmhFoes) / float(ours);
 	// their energy carried at our own power-to-metal ratio, the currency ArmyTargetBase is in
 	const float powPerM = (mInc > 0.1f) ? EcoPowerM() / mInc : 1.f;
-	gShR = gShFoeInc * ((powPerM > 1.f) ? powPerM : 1.f) * gRushShare;
+	gSmhR = gSmhFoeInc * ((powPerM > 1.f) ? powPerM : 1.f) * gRushShare;
 	const int fighting = (gRushFighting > 0) ? gRushFighting : 1;
-	gShSeen = Military::EnemyArmyCost();
-	gShComM = ((gShComDef > 0) && (gShMps > 0.f)) ? UnitStrength(gShComDef) * gShMps * float(gShFoes) : 0.f;
-	const float prod = (gShTc > 0.f) ? gShR * gShTc : 0.f;
-	gShArrive = gShSeen + gShComM + prod;
-	const float rSeat = gShR / float(fighting);
-	gShTA = (rSeat > 0.f) ? ArmyTargetBase() * ARMY_FLOOR_PARITY / rSeat : 0.f;
-	if ((gShTc >= 0.f) && (gShTA > gShTc))
-		gShK = (gShTA - gShTc) / (gShTA + gShTc);
-	gShFloorX = gShK * (gShComM + prod) * ARMY_FLOOR_PARITY / float(fighting);
+	gSmhSeen = Military::EnemyArmyCost();
+	gSmhComM = ((gSmhComDef > 0) && (gSmhMps > 0.f)) ? UnitStrength(gSmhComDef) * gSmhMps * float(gSmhFoes) : 0.f;
+	const float prod = (gSmhTc > 0.f) ? gSmhR * gSmhTc : 0.f;
+	gSmhArrive = gSmhSeen + gSmhComM + prod;
+	const float rSeat = gSmhR / float(fighting);
+	gSmhTA = (rSeat > 0.f) ? ArmyTargetBase() * ARMY_FLOOR_PARITY / rSeat : 0.f;
+	if ((gSmhTc >= 0.f) && (gSmhTA > gSmhTc))
+		gSmhK = (gSmhTA - gSmhTc) / (gSmhTA + gSmhTc);
+	gSmhFloorX = gSmhK * (gSmhComM + prod) * ARMY_FLOOR_PARITY / float(fighting);
 	const float A = Military::TeamArmyCost();
-	gShHold = (A + gShArrive > 1.f) ? A / (A + gShArrive) : 0.f;
-	const float U = gShFoeExtr * ((gShTc > 0.f) ? gShTc : 0.f);
-	gShPhi = (U + gShArrive > 1.f) ? U / (U + gShArrive) : 0.f;
+	gSmhHold = (A + gSmhArrive > 1.f) ? A / (A + gSmhArrive) : 0.f;
+	const float U = gSmhFoeExtr * ((gSmhTc > 0.f) ? gSmhTc : 0.f);
+	gSmhPhi = (U + gSmhArrive > 1.f) ? U / (U + gSmhArrive) : 0.f;
 	const float tgt = ArmyTarget();
 	const float gap = tgt - ArmyValue();
-	gShGapFrac = ((tgt > 1.f) && (gap > 0.f)) ? gap / tgt : 0.f;
+	gSmhGapFrac = ((tgt > 1.f) && (gap > 0.f)) ? gap / tgt : 0.f;
 	ShPickTarget(box);
 }
 
 bool SmallHardExpansion(AIFloat3 &out at, float &out r)
 {
-	if (!gShHasTgt || (gShK <= 0.f))
+	if (!gSmhHasTgt || (gSmhK <= 0.f))
 		return false;
-	at = gShTgt;
+	at = gSmhTgt;
 	r = Military::HUNT_R;
-	gShPickAt = ai.frame;
+	gSmhPickAt = ai.frame;
 	return true;
 }
 
@@ -305,35 +305,35 @@ bool SmallHardExpansion(AIFloat3 &out at, float &out r)
 // operation under way is let finish.
 bool SmallHardPush()
 {
-	if (!gShOn)
+	if (!gSmhOn)
 		return false;
-	return (gShHasTgt && (gShK > 0.f)) || (TeamOpOn() && (int(ai.GetTeamBoard(BOARD_TA_KIND, 0.f)) == 5));
+	return (gSmhHasTgt && (gSmhK > 0.f)) || (TeamOpOn() && (int(ai.GetTeamBoard(BOARD_TA_KIND, 0.f)) == 5));
 }
 
 void SmallHardNoteOp(int kind)
 {
-	if ((kind == 5) && (gShPickAt == ai.frame))
-		++gShOps;
+	if ((kind == 5) && (gSmhPickAt == ai.frame))
+		++gSmhOps;
 }
 
 void SmallHardNoteRaid(const AIFloat3& in at)
 {
-	if (!gShOn || (gShK <= 0.f))
+	if (!gSmhOn || (gSmhK <= 0.f))
 		return;
 	const int s = MsSpotOf(at);
 	if ((s >= 0) && (uint(s) < gMsHeld.length()) && (gMsHeld[s] != 1))
-		++gShRaidFoe;
+		++gSmhRaidFoe;
 }
 
 void SmallHardNoteDeath(int d, bool byUs)
 {
-	if (byUs && gShOn && Catalog::ValidId(d) && !Catalog::gMobile[d] && (Catalog::gExtractsM[d] > 0.f))
-		++gShMexKilled;
+	if (byUs && gSmhOn && Catalog::ValidId(d) && !Catalog::gMobile[d] && (Catalog::gExtractsM[d] > 0.f))
+		++gSmhMexKilled;
 }
 
 void SmallHardNoteOrder(const CCircuitDef@ o)
 {
-	if (!gShOn || (o is null))
+	if (!gSmhOn || (o is null))
 		return;
 	const int d = int(o.id);
 	int c = 2;
@@ -343,13 +343,13 @@ void SmallHardNoteOrder(const CCircuitDef@ o)
 		c = 0;
 	else if (o.IsRoleAny(Unit::Role::RAIDER.mask))
 		c = 1;
-	++gShMixN[c];
-	gShMixM[c] += Catalog::gCostM[d];
+	++gSmhMixN[c];
+	gSmhMixM[c] += Catalog::gCostM[d];
 }
 
 void SmallHardComTick(CCircuitUnit@ u)
 {
-	if (!gShOn || (u is null))
+	if (!gSmhOn || (u is null))
 		return;
 	int c = 7;
 	if (gComDec == COM_FIGHT)
@@ -370,55 +370,55 @@ void SmallHardComTick(CCircuitUnit@ u)
 		else if (bt == int(Task::BuildType::DEFENCE))
 			c = 4;
 	}
-	++gShJobN[c];
+	++gSmhJobN[c];
 }
 
-void SmallHardNoteComPriced() { ++gShComPriced; }
-void SmallHardNoteRaidPriced() { ++gShRaidPriced; }
+void SmallHardNoteComPriced() { ++gSmhComPriced; }
+void SmallHardNoteRaidPriced() { ++gSmhRaidPriced; }
 
 void SmallHardUpdate()
 {
 	if (!SmallHardOn())
 		return;
-	if (ai.frame >= gShAt + 5 * SECOND)
+	if (ai.frame >= gSmhAt + 5 * SECOND)
 		ShRefresh();
-	if (ai.frame < gShLogAt)
+	if (ai.frame < gSmhLogAt)
 		return;
-	gShLogAt = ai.frame + 60 * SECOND;
+	gSmhLogAt = ai.frame + 60 * SECOND;
 	string mix = "";
 	const array<string> names = {"scout", "raider", "main", "con"};
 	for (uint i = 0; i < 4; ++i) {
-		mix += " " + names[i] + "=" + gShMixN[i] + "/" + int(gShMixM[i]);
-		gShMixN[i] = 0;
-		gShMixM[i] = 0.f;
+		mix += " " + names[i] + "=" + gSmhMixN[i] + "/" + int(gSmhMixM[i]);
+		gSmhMixN[i] = 0;
+		gSmhMixM[i] = 0.f;
 	}
 	string jobs = "";
-	for (uint i = 0; i < gShJobN.length(); ++i) {
-		jobs += ((i == 0) ? "" : ",") + SH_JOBS[i] + "=" + gShJobN[i];
-		gShJobN[i] = 0;
+	for (uint i = 0; i < gSmhJobN.length(); ++i) {
+		jobs += ((i == 0) ? "" : ",") + SH_JOBS[i] + "=" + gSmhJobN[i];
+		gSmhJobN[i] = 0;
 	}
 	AiLog(Factory::T() + "apex: smallhard-stat t=" + ai.teamId
-		+ " Tc=" + formatFloat(gShTc, "", 0, 0) + " line=" + formatFloat(gShTcLine, "", 0, 0)
-		+ " rho=" + formatFloat(gShRho, "", 0, 2)
-		+ " walk=" + formatFloat(gShWalk, "", 0, 0) + "/" + formatFloat(gShLine, "", 0, 0)
-		+ " TA=" + formatFloat(gShTA, "", 0, 0) + " k=" + formatFloat(gShK, "", 0, 2)
-		+ " foeInc=" + formatFloat(gShFoeInc, "", 0, 1) + " extr=" + formatFloat(gShFoeExtr, "", 0, 1)
-		+ " mex=" + gShFoeSeenN + "+" + gShFoeLikelyN + "x" + formatFloat(gShOcc, "", 0, 2)
-		+ " R=" + formatFloat(gShR, "", 0, 2)
-		+ " arrive=" + formatFloat(gShArrive, "", 0, 0) + "(seen " + formatFloat(gShSeen, "", 0, 0)
-		+ " com " + formatFloat(gShComM, "", 0, 0) + " comSeen " + gShComSeen + ")"
-		+ " floor=" + formatFloat(gArmyFloorRaw, "", 0, 0) + "->" + formatFloat(gArmyFloorRaw + RushFloorExtra() + gShFloorX, "", 0, 0)
+		+ " Tc=" + formatFloat(gSmhTc, "", 0, 0) + " line=" + formatFloat(gSmhTcLine, "", 0, 0)
+		+ " rho=" + formatFloat(gSmhRho, "", 0, 2)
+		+ " walk=" + formatFloat(gSmhWalk, "", 0, 0) + "/" + formatFloat(gSmhLine, "", 0, 0)
+		+ " TA=" + formatFloat(gSmhTA, "", 0, 0) + " k=" + formatFloat(gSmhK, "", 0, 2)
+		+ " foeInc=" + formatFloat(gSmhFoeInc, "", 0, 1) + " extr=" + formatFloat(gSmhFoeExtr, "", 0, 1)
+		+ " mex=" + gSmhFoeSeenN + "+" + gSmhFoeLikelyN + "x" + formatFloat(gSmhOcc, "", 0, 2)
+		+ " R=" + formatFloat(gSmhR, "", 0, 2)
+		+ " arrive=" + formatFloat(gSmhArrive, "", 0, 0) + "(seen " + formatFloat(gSmhSeen, "", 0, 0)
+		+ " com " + formatFloat(gSmhComM, "", 0, 0) + " comSeen " + gSmhComSeen + ")"
+		+ " floor=" + formatFloat(gArmyFloorRaw, "", 0, 0) + "->" + formatFloat(gArmyFloorRaw + RushFloorExtra() + gSmhFloorX, "", 0, 0)
 		+ " full=" + formatFloat(ArmyTargetFull(), "", 0, 0)
 		+ " tgt=" + formatFloat(ArmyTarget(), "", 0, 0) + " army=" + formatFloat(ArmyValue(), "", 0, 0)
-		+ " hold=" + formatFloat(gShHold, "", 0, 2) + " phi=" + formatFloat(gShPhi, "", 0, 2)
+		+ " hold=" + formatFloat(gSmhHold, "", 0, 2) + " phi=" + formatFloat(gSmhPhi, "", 0, 2)
 		+ " comArmyW=" + formatFloat(SmallHardComArmyW(), "", 0, 2)
 		+ " mix:" + mix
-		+ " cand=" + gShCand + " tgtNet=" + formatFloat(gShTgtNet, "", 0, 0) + " ops=" + gShOps
-		+ " raidFoe=" + gShRaidFoe + " mexKilled=" + gShMexKilled
-		+ " comPrior=" + gShComPriced + "/" + gShRaidPriced
+		+ " cand=" + gSmhCand + " tgtNet=" + formatFloat(gSmhTgtNet, "", 0, 0) + " ops=" + gSmhOps
+		+ " raidFoe=" + gSmhRaidFoe + " mexKilled=" + gSmhMexKilled
+		+ " comPrior=" + gSmhComPriced + "/" + gSmhRaidPriced
 		+ " comJobs=" + jobs);
-	gShComPriced = 0;
-	gShRaidPriced = 0;
+	gSmhComPriced = 0;
+	gSmhRaidPriced = 0;
 }
 
 }  // namespace Market
