@@ -133,6 +133,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - Concentrate: meet their main army with ours whole, never in pieces, and destroy their separated groups one at a time with overwhelming force.
 - Focus fire: a committed group shoots together, killing whatever deals the most damage first, armed targets before structures that do not shoot.
 - A raid is a group that goes around their army to their economy: gather to the size the target needs, launch whole, and strike their flanks -- targets their army cannot reach before the work is done, along a path that skirts it. Units never trickle in after it.
+- Every squad has a join window: open while it forms, closed the moment it commits -- raids, the main army's attacks, bombing runs, air wings, team strikes alike. Nothing joins a committed squad; a unit that missed it waits for the next one. Strict, no exceptions.
 - Some of the army is always on their half, and we want them chasing us on their side.
 - Default: attack their economy and defend against their army; sometimes seek out their army, destroy it and eat the wrecks.
 - Go in only with enough power in the area, judged on real health; after losses demand better odds and build more army.
