@@ -1035,6 +1035,8 @@ Want@ ProposeSuper(CCircuitUnit@ unit)
 		// own line is zero all game (inReach=0.00 in every reading).
 		if (sc == SC_LRPC)
 			gLrpcInReach = lrpcInM;   // what it can reach is already inside LrpcGain
+		if ((sc == SC_GANTRY) && !EcoQuiet())
+			gain *= RushMul(Catalog::gCostM[d]);
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = (speed > 1.f) ? (here.distance2D(at) / speed) : 60.f;

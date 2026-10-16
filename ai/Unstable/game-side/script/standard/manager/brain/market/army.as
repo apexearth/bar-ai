@@ -2218,7 +2218,7 @@ float ArmyFloor(float full)
 			fighting = 1;
 		gArmyFloorRaw = Military::EnemyArmyCost() / float(fighting) * ARMY_FLOOR_PARITY;
 	}
-	return gArmyFloorRaw;
+	return gArmyFloorRaw + RushFloorExtra();
 }
 
 float ArmyTarget()
