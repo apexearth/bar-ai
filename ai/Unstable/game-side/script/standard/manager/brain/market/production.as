@@ -110,7 +110,7 @@ int EcoSeatT2LandCons()
 {
 	if (!EcoSeatStrict())
 		return ECO_SEAT_T2_LAND_CONS;
-	const int up = UpgradeHandsWant();
+	const int up = UpgradeHandsWant() + int(TeamTechOwed() + 0.5f);
 	return (up > ECO_SEAT_T2_LAND_CONS) ? up : ECO_SEAT_T2_LAND_CONS;
 }
 int gCcoFrame = -30000;
@@ -815,9 +815,10 @@ int CeilingConsNeed()
 				want += unspent / bp;
 		}
 	}
-	const int up = UpgradeHandsWant();
-	if (float(up) > want)
-		want = float(up);
+	// The tech seat's lab also makes the hands its allies' upgrades are short of (TUNE_TEAM_TECH).
+	const float up = float(UpgradeHandsWant()) + TeamTechOwed();
+	if (up > want)
+		want = up;
 	const int have = CeilingConsOwned() + CeilingConsInFlight();
 	return (float(have) < want) ? (int(want) - have) : 0;
 }

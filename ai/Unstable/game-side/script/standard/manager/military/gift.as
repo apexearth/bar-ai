@@ -440,6 +440,103 @@ int gConGiftAt = 0;
 int gConGiftTo = -1;
 int gConGiftLastAt = -1000000;
 int gConGiftShipped = 0;
+
+// The advanced hand nearest the ally's home that is safe, can get there and is not mid-build.
+CCircuitUnit@ ConToGive(const AIFloat3& in toHome, float &out bestD)
+{
+	CCircuitUnit@ best = null;
+	bestD = 0.f;
+	for (uint w = 0; w < Market::gWorkers.length(); ++w) {
+		CCircuitUnit@ u = Market::gWorkers[w];
+		if (u is null)
+			continue;
+		const int d = int(u.circuitDef.id);
+		if (!Market::ReachesCeiling(d) || u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
+			continue;
+		if ((u.task !is null) && (Requests::Progress(u.task) > 0.01f))
+			continue;
+		const AIFloat3 p = u.GetPos(ai.frame);
+		if (!OnMap(p) || (ai.GetUnitThreatAt(u, p) > 0.f))
+			continue;
+		if (!Catalog::gFlyer[d] && !ai.CanDefReachAt(Catalog::Def(d), p, toHome, 200.f))
+			continue;
+		const float dd = p.distance2D(toHome);
+		if ((best is null) || (dd < bestD)) {
+			@best = u;
+			bestD = dd;
+		}
+	}
+	return best;
+}
+
+// THE TECH SEAT HANDS OUT (TUNE_TEAM_TECH). It keeps its own share of the hands it
+// holds, in proportion to its own upgrade hands against the allies' uncovered ones,
+// and gives the rest one at a time: smooth weighted round robin on each ally's
+// uncovered hands, so each is served in proportion, the nearest first on a tie.
+void TeamTechGift(int mineN)
+{
+	const array<int>@ roster = Market::TeamTechRoster();
+	const float hx = ai.ReadTeamValue(ai.teamId, "homex", -1.f);
+	const float hz = ai.ReadTeamValue(ai.teamId, "homez", -1.f);
+	const AIFloat3 myHome(hx, 0.f, hz);
+	array<int> ids;
+	array<float> u;
+	float total = 0.f;
+	for (uint i = 0; i < roster.length(); ++i) {
+		const int id = roster[i];
+		if (id == ai.teamId)
+			continue;
+		float need = Market::TtUncovered(id);
+		// An ally republishes its count every few seconds; a hand just given is not in it yet.
+		Market::TtSlot(id);
+		if (ai.frame - Market::gTtGivenAt[id] < 10 * SECOND)
+			need -= 1.f;
+		if (need <= 0.f)
+			continue;
+		ids.insertLast(id);
+		u.insertLast(need);
+		total += need;
+	}
+	if (total <= 0.f)
+		return;
+	const float own = float(Market::UpgradeHandsWant());
+	int keep = int(ceil(float(mineN) * own / (own + total)));
+	if (keep < 1)
+		keep = 1;
+	if (mineN <= keep)
+		return;
+	int pick = -1;
+	float pickC = 0.f, pickD = 0.f;
+	for (uint i = 0; i < ids.length(); ++i) {
+		const int id = ids[i];
+		Market::gTtCredit[id] += u[i];
+		const AIFloat3 h(ai.ReadTeamValue(id, "homex", 0.f), 0.f, ai.ReadTeamValue(id, "homez", 0.f));
+		const float dd = h.distance2D(myHome);
+		if ((pick < 0) || (Market::gTtCredit[id] > pickC)
+				|| ((Market::gTtCredit[id] == pickC) && (dd < pickD))) {
+			pick = id;
+			pickC = Market::gTtCredit[id];
+			pickD = dd;
+		}
+	}
+	const AIFloat3 toHome(ai.ReadTeamValue(pick, "homex", 0.f), 0.f, ai.ReadTeamValue(pick, "homez", 0.f));
+	float bestD = 0.f;
+	CCircuitUnit@ best = ConToGive(toHome, bestD);
+	if (best is null) {
+		for (uint i = 0; i < ids.length(); ++i)
+			Market::gTtCredit[ids[i]] -= u[i];
+		return;
+	}
+	Market::gTtCredit[pick] -= total;
+	array<CCircuitUnit@> give = {best};
+	ai.GiveUnits(give, pick);
+	Market::TeamTechNoteGift(pick);
+	++gConGiftShipped;
+	AiLog(Factory::T() + "apex: congift -> t=" + pick + " " + best.circuitDef.GetName()
+		+ " #" + best.id + " dist=" + int(bestD) + " mine=" + mineN + " keep=" + keep
+		+ " owed=" + int(total) + " teamtech (total " + gConGiftShipped + ")");
+}
+
 void UpdateConGift()
 {
 	if (ai.frame < gConGiftAt)
@@ -450,6 +547,10 @@ void UpdateConGift()
 	// gift after another.
 	const int mineN = Market::CeilingConsAny();
 	ai.PublishTeamValue(TV_T2CON, float(mineN));
+	if (Market::TeamTechIsSeat()) {
+		TeamTechGift(mineN);
+		return;
+	}
 	array<Id>@ mates = ai.GetTeamIds();
 	if ((mates is null) || (mates.length() < 2) || (mineN < 2))
 		return;
@@ -482,7 +583,7 @@ void UpdateConGift()
 				continue;
 			// The growing eco seat keeps its few ground hands; the front's
 			// losses are the front's to replace.
-			if (ai.ReadTeamValue(id, TV_ECOSEAT, 0.f) > 0.5f)
+			if ((ai.ReadTeamValue(id, TV_ECOSEAT, 0.f) > 0.5f) && (id != Market::TeamTechSeat()))
 				continue;
 			const float gx = ai.ReadTeamValue(id, "homex", -1.f);
 			const float gz = ai.ReadTeamValue(id, "homez", -1.f);
@@ -496,28 +597,8 @@ void UpdateConGift()
 		}
 		if (giver != ai.teamId)
 			continue;
-		CCircuitUnit@ best = null;
 		float bestD = 0.f;
-		for (uint w = 0; w < Market::gWorkers.length(); ++w) {
-			CCircuitUnit@ u = Market::gWorkers[w];
-			if (u is null)
-				continue;
-			const int d = int(u.circuitDef.id);
-			if (!Market::ReachesCeiling(d) || u.circuitDef.IsRoleAny(Unit::Role::COMM.mask))
-				continue;
-			if ((u.task !is null) && (Requests::Progress(u.task) > 0.01f))
-				continue;
-			const AIFloat3 p = u.GetPos(ai.frame);
-			if (!OnMap(p) || (ai.GetUnitThreatAt(u, p) > 0.f))
-				continue;
-			if (!Catalog::gFlyer[d] && !ai.CanDefReachAt(Catalog::Def(d), p, toHome, 200.f))
-				continue;
-			const float dd = p.distance2D(toHome);
-			if ((best is null) || (dd < bestD)) {
-				@best = u;
-				bestD = dd;
-			}
-		}
+		CCircuitUnit@ best = ConToGive(toHome, bestD);
 		if (best is null)
 			continue;
 		array<CCircuitUnit@> give = {best};

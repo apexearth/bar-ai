@@ -44,6 +44,7 @@
 #include "market/army.as"           // the army model, eco role, targets, StallWatch
 #include "market/rush.as"           // their army racing a big investment of ours: floor and tech price
 #include "market/ecoseat.as"        // the strict eco seat: what its hands and labs may take while it grows
+#include "market/teamtech.as"       // one seat techs and hands out advanced cons; the others price their own lab down
 #include "market/stuck.as"          // the stuck-builder watchdog: no progress, no movement
 #include "market/floor.as"          // the job ledger, the value ranking, the never-idle floor
 // want_protect, split (order load-bearing -- see manager/builder.as):

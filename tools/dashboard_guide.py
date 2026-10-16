@@ -550,6 +550,12 @@ GROUPS = [
                   "game: elected at the start, it keeps the role unless it is "
                   "eliminated. OFF re-elects every 10 s by shelter, so a "
                   "neighbour's death can move the role mid-game"),
+                 ("TUNE_TEAM_TECH", "ON (team games, 3+ of our players): "
+                  "one player goes T2 and hands its T2 constructors to the "
+                  "others as their mexes need them; the others hold off their "
+                  "own T2 lab while those handouts cover their upgrades, and "
+                  "spend on army and economy instead. They still build their "
+                  "own lab later. apex: teamtech-stat each minute"),
                  ("TUNE_ECO_SEAT_STRICT", "ON makes the eco player only "
                   "build economy while it grows: no towers, radar, army or "
                   "big guns from its constructors or labs; its labs make "
