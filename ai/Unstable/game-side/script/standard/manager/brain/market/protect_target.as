@@ -300,7 +300,7 @@ int MexGunsWanted(const AIFloat3& in pos)
 			+ " reach/fwd:" + s);
 	}
 	const float far = ai.GetTunable("apex_mex_guard_far", TUNE_MEX_GUARD_FAR);
-	return 1 + int(fwd * ((far > 0.f) ? far : 0.f) * gMexgMul);
+	return 1 + int(fwd * ((far > 0.f) ? far : 0.f) * gMexgMul * gPressGunMul);
 }
 
 bool MexUnguardedInReach(const AIFloat3& in pos, float r)

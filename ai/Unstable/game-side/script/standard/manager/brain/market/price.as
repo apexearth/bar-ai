@@ -908,8 +908,9 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// share of the gain -- gain x seconds in the bill drove a moho 1-2 min out to v=1/walk whatever it paid.
 	if (lateStart) {
 		const float lateS = walkSec + (gPrLateBuild ? buildSec : 0.f);
-		if (horizonLate && (gPrPaybackH > 1.f)) {
-			gPrLastHzShare = (lateS < gPrPaybackH) ? (1.f - lateS / gPrPaybackH) : 0.f;
+		const float payH = PayH();
+		if (horizonLate && (payH > 1.f)) {
+			gPrLastHzShare = (lateS < payH) ? (1.f - lateS / payH) : 0.f;
 			gain *= gPrLastHzShare;
 			w.gain = gain;
 		} else {
@@ -930,7 +931,7 @@ float ValueOf(int defId, float gain, float walkSec, float builderBP, Want@ w,
 	// pays ~17; an afus at 9700 and 1097 pays thousands. Nothing is forbidden:
 	// the same afus at high build power is short and pays little.
 	{
-		const float H = gPrPaybackH;
+		const float H = PayH();
 		const float k = gPrLockup;
 		if ((H > 1.f) && (k > 0.f)) {
 			gPrLastLockC = Catalog::gCostM[defId] * (buildSec / H) * k;

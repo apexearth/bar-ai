@@ -251,7 +251,7 @@ const int BOARD_TA_HX = 2005, BOARD_TA_HZ = 2006, BOARD_TA_SINCE = 2007, BOARD_T
 const int BOARD_TA_HOMEX = 2100, BOARD_TA_HOMEZ = 2200, BOARD_TA_ATK = 2300, BOARD_TA_NEAR = 2400;
 const int TA_NONE = 0, TA_MASS = 1, TA_GO = 2;
 const array<string> TA_PHASES = {"NONE", "MASS", "GO"};
-const array<string> TA_KINDS = {"-", "hunt", "strike", "line", "front"};
+const array<string> TA_KINDS = {"-", "hunt", "strike", "line", "front", "expand"};
 const float PUSH_STAND = 256.f;
 int gPushNextAt = 0;
 int gPushLogAt = 0;
@@ -304,6 +304,8 @@ int TaPick(AIFloat3 &out at, float &out r)
 		at = Military::gStPos; r = Military::STRIKE_R;
 		return 2;
 	}
+	if (PressExpansion(at, r))
+		return 5;
 	float m = 0.f;
 	if (Military::TurretTarget(at, r, m)) {
 		r = Military::TurretLineReach();
@@ -343,6 +345,8 @@ void TaOpen(int phase, const string why)
 	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
 	ai.SetTeamBoard(BOARD_TA_OP, float(op));   // last: a reader that sees the new id sees its fields
 	++gTaOpsMade;
+	if (kind == 5)
+		++gPressExpOps;
 	AiLog(Factory::T() + "apex: team-op " + op + " " + TA_PHASES[phase] + " (" + why + ") " + TA_KINDS[kind]
 		+ " at=" + int(at.x) + "," + int(at.z) + " r=" + int(r) + " plan=" + NgName(gPlan));
 }
@@ -374,7 +378,8 @@ bool TaTwice(int slot, bool cond)
 void TaLead()
 {
 	const int phase = TaPhase();
-	if (!PlanPushes() || (ai.GetTunable("apex_team_army", TUNE_TEAM_ARMY) <= 0.f)) {
+	const bool pushes = PlanPushes() || ((gPlan == NG_NORMAL) && PressShort());
+	if (!pushes || (ai.GetTunable("apex_team_army", TUNE_TEAM_ARMY) <= 0.f)) {
 		if (phase != TA_NONE)
 			TaOpen(TA_NONE, "plan holds");
 		return;

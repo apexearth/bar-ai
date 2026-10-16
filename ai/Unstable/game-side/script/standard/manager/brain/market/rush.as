@@ -20,6 +20,7 @@ float gRushRate = 0.f;
 float gRushShare = 0.f;
 float gRushNextLock = 0.f;
 float gRushParity = 0.f;    // parity / fighting seats: team threat -> this seat's share
+int gRushFighting = 1;
 float gRushMInc = 0.f;
 float gRushBank = 0.f;
 float gRushOnHand = 0.f;
@@ -151,6 +152,7 @@ void RushRefresh()
 			++fighting;
 	if (fighting < 1)
 		fighting = 1;
+	gRushFighting = fighting;
 	gRushParity = ARMY_FLOOR_PARITY / float(fighting);
 
 	gRushMInc = Eco::MInc();
@@ -212,11 +214,11 @@ float RushMul(float costM)
 
 void RushUpdate()
 {
-	if (!RushOn())
+	if (!RushOn() && !PressureOn())
 		return;
 	if (ai.frame >= gRushAt + 5 * SECOND)
 		RushRefresh();
-	if (ai.frame < gRushLogAt)
+	if (!RushOn() || (ai.frame < gRushLogAt))
 		return;
 	gRushLogAt = ai.frame + 60 * SECOND;
 	const float raw = gArmyFloorRaw;

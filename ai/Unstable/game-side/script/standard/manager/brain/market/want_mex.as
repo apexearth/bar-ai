@@ -116,7 +116,7 @@ float UpgradeUnlockM(int h)
 		return 0.f;
 	const float work = float(gUnlockB) * gUpHandsT;
 	if (h <= 0) {
-		const float hz = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+		const float hz = PayH();
 		const float left = ((hz > 1.f) ? hz : 900.f) - 0.5f * work;
 		return (left > 0.f) ? (gUnlockU * left) : 0.f;
 	}

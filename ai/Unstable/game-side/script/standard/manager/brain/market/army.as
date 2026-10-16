@@ -2278,18 +2278,23 @@ float gArmyTgtFull = 0.f;
 int gArmyTgtAt = -999999;
 int gArmyTgtStamp = -1;
 
+float ArmyTargetBase()
+{
+	if (!gArmyHoldSet) {
+		gArmyHoldSet = true;
+		const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
+		gArmyHold = (hold > 0.f) ? hold : 0.f;
+	}
+	return EcoPowerM() * gArmyHold;
+}
+
 float ArmyTargetFull()
 {
 	if ((gArmyTgtAt == ai.frame) && (gArmyTgtStamp == gOwnStamp))
 		return gArmyTgtFull;
 	gArmyTgtAt = ai.frame;
 	gArmyTgtStamp = gOwnStamp;
-	if (!gArmyHoldSet) {
-		gArmyHoldSet = true;
-		const float hold = ai.GetTunable("apex_army_eco_s", TUNE_ARMY_ECO_S);
-		gArmyHold = (hold > 0.f) ? hold : 0.f;
-	}
-	gArmyTgtFull = EcoPowerM() * gArmyHold;
+	gArmyTgtFull = ArmyTargetBase() * gPressHoldMul;
 	return gArmyTgtFull;
 }
 

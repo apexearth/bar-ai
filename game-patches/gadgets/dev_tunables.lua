@@ -353,6 +353,7 @@ local NAMES = {
 	"apex_aoe_vs_blob",      -- production.as + splash.as: ground splash units priced by the enemy their shell catches; splash demand tracks their clumped army (0)
 	"apex_unit_upkeep",      -- upkeep.as + production.as: under lag every mobile unit ordered pays a slot price; cheap bodies order less (0)
 	"apex_rush_aware",       -- rush.as + army.as ArmyFloor + want_tech/plant/super/energy: army floor and tech price from their walk time vs our next tier's lock (0)
+	"apex_small_pressure",   -- pressure.as + army.as + price.as PayH + massing.as HoldWhy + plannet.as TaPick + protect_target.as: short contact shortens the horizon, team push, contest their expansions (0)
 	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",

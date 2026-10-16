@@ -241,7 +241,7 @@ float MassWant()
 	// unit count or metal value, so it cannot be derived from a metal figure.
 	// ON by default: off, every group commits at the floor whatever the enemy
 	// massed -- the "they kill our smaller masses one by one" report, twice.
-	if ((ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f) || AllIn())
+	if ((ai.GetTunable("apex_mass_vs_army", TUNE_MASS_VS_ARMY) <= 0.f) || AllIn() || Market::PressGo())
 		return MassFloor();
 
 	const float ours = TeamArmyCost();
@@ -396,7 +396,8 @@ int HoldWhy()
 {
 	if (ai.GetTunable("apex_defend_home", TUNE_DEFEND_HOME) <= 0.f)
 		return -1;
-	if (Builder::BaseUnderAttack())
+	// The team push (Market::PressGo) is never true while this seat is raided or contested.
+	if (Builder::BaseUnderAttack() && (!Market::PressGo() || BaseRaided()))
 		return 0;
 	if (AllIn())
 		return -1;
@@ -404,7 +405,7 @@ int HoldWhy()
 		return 1;
 	if (BaseRaided())
 		return 2;
-	if (ConservativeStance())
+	if (ConservativeStance() && !Market::PressGo())
 		return 3;
 	return -1;
 }

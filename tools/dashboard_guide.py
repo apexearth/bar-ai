@@ -126,6 +126,19 @@ PANELS = [
              "changes. OFF: the army floor is only the enemy army we have seen. "
              "`apex: rush-stat` each minute shows the walk time, the threat, "
              "the floor before and after, and how hard tech was marked down"),
+            ("TUNE_SMALL_PRESSURE", "ON: on a map where their army can walk "
+             "to us faster than it could outbuild the army we keep, the AI "
+             "plans for a shorter game: economy is valued over a shorter "
+             "horizon and the army it keeps grows (up to double). Whether to "
+             "leave home is judged on the whole team's army against theirs, "
+             "not each player's own group, and the team marches together; "
+             "only a player whose own base is being hit stays to defend. The "
+             "team attack goes for their outer extractors when taking them "
+             "pays, and our outer extractors lean on the army rather than "
+             "extra towers. On a big map nothing changes. "
+             "`apex: pressure-stat` each minute shows the walk time, the "
+             "horizon, the army target before and after, team vs their army, "
+             "pushes, players joined and their extractors taken"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "

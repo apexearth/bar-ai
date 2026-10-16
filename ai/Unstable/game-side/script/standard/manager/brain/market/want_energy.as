@@ -1724,8 +1724,8 @@ Want@ ProposeConvert(CCircuitUnit@ unit)
 			gNextConvPriceLog = ai.frame + 30 * SECOND;
 			const int cd2 = int(w.def.id);
 			const float wage = Wage();
-			const float lock = (gPrPaybackH > 1.f)
-					? (Catalog::gCostM[cd2] * (w.buildSec / gPrPaybackH) * gPrLockup) : 0.f;
+			const float lock = (PayH() > 1.f)
+					? (Catalog::gCostM[cd2] * (w.buildSec / PayH()) * gPrLockup) : 0.f;
 			AiLog("apex: convprice t=" + ai.teamId + " " + w.def.GetName()
 				+ " v=" + formatFloat(w.value * 1000.f, "", 0, 2)
 				+ " gain=" + formatFloat(w.gain, "", 0, 2)

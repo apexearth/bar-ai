@@ -1454,7 +1454,7 @@ float DrawWeights(array<Want@>@ ranked, array<int>& out catBest, array<float>& o
 	const float sharp = ai.GetTunable("apex_draw_sharp", TUNE_DRAW_SHARP);
 	// The horizon's whole output and the commitment exponent do not vary with
 	// the category; both were re-read for each of the nine.
-	const float payH = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+	const float payH = PayH();
 	const float bitCap = EcoPowerM() * ((payH > 1.f) ? payH : 900.f);
 	const float commitSh = ai.GetTunable("apex_commit_sharp", TUNE_COMMIT_SHARP);
 	float sumV2 = 0.f;
@@ -2038,7 +2038,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		int fastE = -1;
 		float fastRate = 0.f;
 		if (!ordered) {
-			const float hz = (gPrPaybackH > 1.f) ? gPrPaybackH : 900.f;
+			const float hz = (PayH() > 1.f) ? PayH() : 900.f;
 			for (uint rj = 0; rj < ranked.length(); ++rj) {
 				if (ranked[rj].kind != WK_ENERGY)
 					continue;

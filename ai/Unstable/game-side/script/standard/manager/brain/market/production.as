@@ -2967,7 +2967,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				share = 1.f;
 			// Over the payback horizon every other economic buy is amortised
 			// on: a claimed spot streams for the game, not for one fill window.
-			const float hClaim = ai.GetTunable("apex_payback_h", TUNE_PAYBACK_H);
+			const float hClaim = PayH();
 			claimGain = mob * util * SpotM() * (((hClaim > 1.f) ? hClaim : 900.f) / 60.f)
 					* share;
 		}

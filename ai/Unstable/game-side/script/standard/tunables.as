@@ -962,6 +962,7 @@ const float TUNE_CONSOLIDATE_EDGE = 1.f;
 const float TUNE_BIRTH_DEFEND = 0.f;
 const float TUNE_AOE_VS_BLOB = 0.f;   // [toggle 0/1] factory prices ground splash units by the enemy units their shell catches in the ball they bring, and splash demand tracks their clumped army (his 2026-10-15)
 const float TUNE_RUSH_AWARE = 0.f;   // [toggle 0/1] the army floor covers the enemy army that can walk in while our next tier is being paid for, and T2/T3 plants, the gantry and long energy builds are priced by the share of that rush we can hold (his 2026-10-15, small maps)
+const float TUNE_SMALL_PRESSURE = 0.f;   // [toggle 0/1] where their army walks to us faster than it can outbuild our holding army: shorter payback horizon and up to 2x army target, the team's combined army decides whether the seats leave home together, the team operation contests their outer extractors, and outer extractors want fewer extra guns (his 2026-10-15, small maps)
 const float TUNE_UNSTICK = 0.f;   // [toggle 0/1] ordered combat units that do not move are nudged to open ground, pen-tested, their wall self-destructed once the trapped metal's lost service exceeds it; nanos and converters keep ground plants' door lanes and never split open ground (his 2026-10-15)
 
 // The defaults below reproduce the previous gCombat/costM ranking EXACTLY --

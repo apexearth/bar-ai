@@ -823,6 +823,7 @@ void UpdateNnRaid()
 // An enemy death our raid pack was in reach of is the pack's kill.
 void NrNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
+	Market::PressNoteDeath(int(edef.id), pos, byUs);
 	if (!byUs || (edef is null) || !NrLive())
 		return;
 	array<CCircuitUnit@>@ on = gAskTask.GetUnits();
