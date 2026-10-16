@@ -428,6 +428,14 @@ GROUPS = [
                   "rest of its turn goes to the better plant, so it is made "
                   "that much less often. Constructors, rez bots and scouts are "
                   "never judged. apex: lineobs-stat each minute"),
+                 ("TUNE_UNIT_UPKEEP", "ON: while the game lags, every unit a "
+                  "factory makes pays rent for the space it takes in the "
+                  "game, the same for a fighter as for a T3 walker, so cheap "
+                  "fighters, rez bots and extra constructors are made less "
+                  "often and the metal goes to fewer, bigger units. The rent "
+                  "is zero while the game runs at its set speed and grows "
+                  "with the lag and with how close the team is to its unit "
+                  "limit. apex: upkeep-stat each minute"),
                  ("TUNE_FAC_QUEUE", "keeps each line queued deeper, so it "
                   "idles less and reacts slower"),
                  ("TUNE_LINE_FLOOR", "a factory order must be worth more of "
@@ -1623,6 +1631,9 @@ GOALS = [
                      "record of its own is priced back toward that class — the "
                      "scavenger Epics and drone carriers are what it is for "
                      "(0 = off)"},
+            {"ref": "TUNE_UNIT_UPKEEP", "dir": "up",
+             "note": "the game lags: fewer, bigger units instead of swarms of "
+                     "fighters, rez bots and constructors (his 10-15)"},
         ],
         "watch": "python tools/army_mix.py / composition.py, and the "
                  "`apex: worth` lines with apex_worth_diag=1. Per unit: "

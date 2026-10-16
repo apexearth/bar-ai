@@ -948,6 +948,7 @@ array<int> gRedrawDef;
 array<float> gRedrawV;
 float gRedrawSum = 0.f;
 float gRedrawObsM = 0.f;
+float gRedrawUpM = 0.f;
 int gRedrawFac = -1;
 int gRedrawAt = -1;
 
@@ -1065,8 +1066,11 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 			break;
 		}
 	}
-	if (!hit && (gRedrawObsM > 0.f)) {
-		++gLoDefer;
+	if (!hit && (gRedrawObsM + gRedrawUpM > 0.f)) {
+		if (roll > gRedrawUpM)
+			++gLoDefer;
+		else
+			++gUkNone;
 		return null;
 	}
 	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
@@ -2777,7 +2781,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		// Under the AIR plan the lab is an army plant: the floor re-ordered a con
 		// the moment the last one flew, and the lab made nothing else.
 		if (!walker && !ReachesCeiling(d) && (T1AirConsNeed() > 0)
-			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR))
+			&& (T1AirConsInFlight() == 0) && (gPlan != NG_AIR) && UpkeepFloorPasses(d, fac, slot))
 		{
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
@@ -2813,7 +2817,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
-		if ((consNeedA > 0) && floorOn) {
+		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (con floor need=" + consNeedA
@@ -2827,7 +2831,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		}
 		// One at a time, like the air-con floor; past one, cons are priced (his 2026-10-05).
 		if ((ceilNeed > 0) && !foeOutguns && ReachesCeiling(d) && !(walker && FlyingConLab(true))
-			&& (CeilingConsInFlight() == 0)) {
+			&& (CeilingConsInFlight() == 0) && UpkeepFloorPasses(d, fac, slot)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
 				+ " #" + fac.id + " -> produce:" + Catalog::Def(d).GetName()
 				+ " (t2-con floor need=" + ceilNeed
@@ -3219,12 +3223,18 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		++gLoOrders;
 		LineObsLog();
 	}
+	// Like the obsolete share, the upkeep charge stays in sumV as a no-order ticket.
+	const float upM0 = UpkeepCharge(candDef, candV);
+	const float upM = UpkeepOn() ? upM0 : 0.f;
 	gRedrawObsM = obsM;
+	gRedrawUpM = upM;
 	// Deterministic weighted pick: seeded from frame+line so replays hold.
 	uint h = uint(ai.frame) * 2654435761 + uint(fac.id) * 40503
 			+ uint(slot) * 2246822519;
 	h ^= (h >> 13);
-	float roll = float(h % 10000) / 10000.f * sumV;
+	const float rollF = float(h % 10000) / 10000.f;
+	UpkeepNote(candDef, sumV, rollF);
+	float roll = rollF * sumV;
 	uint pick = 0;
 	bool hit = false;
 	for (uint ci = 0; ci < candV.length(); ++ci) {
@@ -3235,9 +3245,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			break;
 		}
 	}
-	if (!hit && (obsM > 0.f)) {
-		++gLoDefer;
-		gNoOrder = "line-obsolete";
+	if (!hit && (obsM + upM > 0.f)) {
+		if (roll > upM) {
+			++gLoDefer;
+			gNoOrder = "line-obsolete";
+		} else {
+			gNoOrder = "unit-upkeep";
+		}
 		return null;
 	}
 	best = candDef[pick];

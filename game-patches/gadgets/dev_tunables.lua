@@ -351,6 +351,7 @@ local NAMES = {
 	"apex_target_value",     -- Attack/DefendTask + SquadTask: targets by worth per second of fire, fire split in lethal doses (0)
 	"apex_birth_defend",     -- MilitaryManager MakeTask + withdraw.as: fighters tasked under fire defend that spot; defenders hold our structures (0)
 	"apex_aoe_vs_blob",      -- production.as + splash.as: ground splash units priced by the enemy their shell catches; splash demand tracks their clumped army (0)
+	"apex_unit_upkeep",      -- upkeep.as + production.as: under lag every mobile unit ordered pays a slot price; cheap bodies order less (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
 	"apex_defend_solo_deep",

@@ -220,6 +220,11 @@ const float TUNE_DEF_TEAM_OBSOLETE = 0.f;
 //   can afford delivers; the rest of its ticket defers to that line. His 10-15.
 const float TUNE_LINE_OBSOLETE = 0.f;
 
+// [toggle 0/1] -- Under measured lag every mobile unit a factory orders pays a slot
+//   price (lag x team metal per body / (1 - team bodies / team maxunits)); its draw
+//   weight keeps cost/(cost+price), the rest orders nothing. His 10-15.
+const float TUNE_UNIT_UPKEEP = 0.f;
+
 // [toggle 0/1] -- A rez bot is priced by the wreck stream it banks over its
 //   expected life (fleet metal / the fleet's death rate), net of its cost,
 //   instead of over the whole payback horizon. His 10-15.

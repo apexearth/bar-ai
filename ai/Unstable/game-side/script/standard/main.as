@@ -180,6 +180,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscortRecruit(); Perf::Add("up.escortrecruit", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::EscNetDecide(); Market::EcoNetDecide(); Market::ArmyNetDecide(); Perf::Add("up.escecontnets", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Market::PlanNetDecide(); Market::TeamPush(); Market::AirPlantNetDecide(); Market::VersionBanner(); Military::AllyAskWatch(); Military::JoinFightWatch(); Perf::Add("up.planpush", _t); }
+	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::UpkeepTick(); Perf::Add("up.upkeep", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateGifts(); Perf::Add("up.gifts", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateConGift(); Perf::Add("up.congift", _t); }
 	if (UpEvery(4, 2)) { double _t = Perf::T0(); Military::UpdateSeatMerge(); Perf::Add("up.seatmerge", _t); }
