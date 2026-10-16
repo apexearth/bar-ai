@@ -9,7 +9,7 @@ lines. Sources, all in the match infolog: [BARAI_WASTE] (cumulative metal and
 energy made/wasted, once a minute), [BARAI_BUILD]/[BARAI_PROD] (finished
 structures and units, with cost), [BARAI_DEATH] (cost, owner, killer; built=0
 is a frame destroyed unfinished), [BARAI_DMG] (cumulative hit points dealt to
-mobile/static and received, every 10 s). "us" is the alliance without BARb.
+mobile/static and received, every 10 s). "us" is the alliance without BARb. --us <shortName> names it (Apex vs Apex).
 
 Columns per side:
   inc     metal made per second over the minute;  eInc  energy made per second
@@ -43,6 +43,7 @@ def main(argv):
         return 2
     path = argv[0]
     step = int(argv[argv.index("--step") + 1]) if "--step" in argv else 1
+    us_name = argv[argv.index("--us") + 1] if "--us" in argv else "Apex[^;]*"
     with open(path.rstrip("/\\") + "/infolog.txt", encoding="utf-8", errors="replace") as fh:
         txt = fh.read()
 
@@ -59,7 +60,7 @@ def main(argv):
             tm = re.search(r"team=(\d+);", block, re.I)
             if tm and re.search(r"shortname=BARb;", block, re.I):
                 barb_teams.add(int(tm.group(1)))
-            if tm and re.search(r"shortname=Apex[^;]*;", block, re.I):
+            if tm and re.search(r"shortname=" + us_name + ";", block, re.I):
                 apex_teams.add(int(tm.group(1)))
     except OSError:
         pass
