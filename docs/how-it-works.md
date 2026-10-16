@@ -126,8 +126,14 @@ attack; `raid.as` asks for raids on scored enemy spots; `withdraw.as` recalls; `
 `nnstrike.as`, `nnsiege.as`, `nnraid.as` are the decisions to hunt their army, strike a timing
 window, siege a fort, raid. Under `TUNE_COM_FIGHT` (off) `comfight.as` fights every ground squad
 in reach of an armed enemy out on paper each second and overrides its task through
-`SetScriptMove`: onto the nearest armed enemy when it wins, else back to the nearest friendly
-strength where the pooled estimate wins. `ai-military`, `ai-army-composition`, `fight-analysis`.
+`SetScriptMove`. The estimate is scaled by the team's running real/predicted metal (lost and killed
+apart, team board); a group fights while calibrated loss minus kill is under the stake falling back
+abandons (our metal and open spots in the threat's reach, times the share of their force the fight
+destroys) plus the walk out and back, and a verdict moves only past the measured error band. Else
+it falls back to the nearest friendly strength where the pooled estimate pays, onto one shared
+point against their largest group; attack groups out of contact walk onto the enemy group they beat
+by more than the band (defeat in detail); `nnraid.as` packs and split-off packs price their loss
+with the same calibrated fight. `ai-military`, `ai-army-composition`, `fight-analysis`.
 
 **Air** (`manager/air/`): the wing masses bombers and gunships, `nnair.as` decides WAIT or GO on
 priced enemy economy cells against the AA in the way, fighters are elected for cover and air

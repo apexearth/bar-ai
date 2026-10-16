@@ -388,6 +388,10 @@ uint gNjN = 0, gNjS = 0;
 bool gNjHave = false;
 NrTarget@ gNjBest;
 bool gNjSpr = false;
+bool gNjCfOn = false;
+float gNjCfN = 0.f, gNjCfD = 0.f, gNjCfH = 0.f, gNjCfM = 0.f, gNjCfSpr = 0.f, gNjCfRng = 0.f;
+bool gNjOldHave = false;
+float gNjOldBest = 0.f;
 float gNjH = 0.f, gNjTR = 0.f, gNjHold0 = 0.f;
 
 bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in ctr, float spd,
@@ -431,6 +435,11 @@ bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3
 		Market::OpenRaceClock(0, gNjH, gNjTR, a, arr, gNjHold0);
 	}
 	@gNjBest = NrTarget();
+	gNjOldHave = false;
+	gNjOldBest = 0.f;
+	gNjCfOn = CfOn();
+	if (gNjCfOn)
+		CfPackOf(gNrU, gNjCfN, gNjCfD, gNjCfH, gNjCfM, gNjCfSpr, gNjCfRng);
 	return true;
 }
 
@@ -444,6 +453,7 @@ void NrPriceSpot(uint s)
 	NrTarget@ best = gNjBest;
 	bool have = gNjHave;
 	array<int> near;
+	array<int> cfI;
 	{
 	const AIFloat3 sp = Market::gAllSpots[s];
 	if (!OnMap(sp) || !NrPriced(sp, foe))
@@ -469,8 +479,10 @@ void NrPriceSpot(uint s)
 	for (uint i = 0; i < near.length(); ++i) {
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
-		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f)
+		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + rP * 0.5f) {
 			t.defS += DgStr(d);
+			cfI.insertLast(int(e));
+		}
 	}
 	const bool looked = (gNrSpotSeen.length() == n) && (gNrSpotSeen[s] >= 0);
 	if (gNjSpr)
@@ -496,9 +508,14 @@ void NrPriceSpot(uint s)
 	for (uint i = 0; i < near.length(); ++i) {
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
-		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay)
+		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay) {
 			t.armyS += DgStr(d);
+			cfI.insertLast(int(e));
+		}
 	}
+	AIFloat3 cfComAt;
+	int cfComDef = 0;
+	float cfComW = 0.f;
 	{
 		AIFloat3 cAt;
 		int cDef = 0;
@@ -506,6 +523,9 @@ void NrPriceSpot(uint s)
 		if ((cw > 0.f) && (cAt.distance2D(sp) <= Catalog::gMaxRange[cDef] + Catalog::gSpeed[cDef] * stay)) {
 			t.armyS += cw * DgStr(cDef);
 			Market::SmallHardNoteRaidPriced();
+			cfComAt = cAt;
+			cfComDef = cDef;
+			cfComW = (cw > 1.f) ? 1.f : cw;
 		}
 	}
 	// the risk model's wave at the target and its approach; the pack's path
@@ -531,6 +551,38 @@ void NrPriceSpot(uint s)
 	const float tripS = 2.f * t.walkS + t.killS;
 	t.altM = altRate * tripS;
 	t.netM = (t.v + t.prior) * (1.f - t.lossF) - t.lossF * grpM - t.altM;
+	if (gNjCfOn) {
+		// the pack's size is an output of the calibrated fight at its target: what holds it, the towers on the
+		// last stretch of the path, the army that arrives while it works, a commander where it may stand
+		if (!gNjOldHave || (t.netM > gNjOldBest)) {
+			gNjOldHave = true;
+			gNjOldBest = t.netM;
+		}
+		AIFloat3 p34(ctr.x + (sp.x - ctr.x) * 0.75f, 0.f, ctr.z + (sp.z - ctr.z) * 0.75f);
+		NrNear(gNrG2, p34, gNrMaxR2, near);
+		for (uint i = 0; i < near.length(); ++i) {
+			const uint e = uint(near[i]);
+			if ((gNeP[e].distance2D(p34) <= Catalog::gMaxRange[gNeD[e]]) && (cfI.find(int(e)) < 0))
+				cfI.insertLast(int(e));
+		}
+		array<int> cfD;
+		array<float> cfX, cfZ;
+		for (uint i = 0; i < cfI.length(); ++i) {
+			cfD.insertLast(gNeD[cfI[i]]);
+			cfX.insertLast(gNeP[cfI[i]].x);
+			cfZ.insertLast(gNeP[cfI[i]].z);
+		}
+		float lf = CfPackLossF(gNjCfN, gNjCfD, gNjCfH, gNjCfM, gNjCfSpr, gNjCfRng, cfD, cfX, cfZ, sp.x, sp.z);
+		if (cfComW > 0.f) {
+			cfD.insertLast(cfComDef);
+			cfX.insertLast(cfComAt.x);
+			cfZ.insertLast(cfComAt.z);
+			const float lfC = CfPackLossF(gNjCfN, gNjCfD, gNjCfH, gNjCfM, gNjCfSpr, gNjCfRng, cfD, cfX, cfZ, sp.x, sp.z);
+			lf = (1.f - cfComW) * lf + cfComW * lfC;
+		}
+		t.lossF = lf;
+		t.netM = (t.v + t.prior) * (1.f - lf) - lf * grpM - t.altM;
+	}
 	t.hp = hp;
 	if (!have || (t.netM > best.netM)) {
 		best.at = t.at; best.v = t.v; best.prior = t.prior; best.eS = t.eS;
@@ -680,6 +732,8 @@ void NrFinish(const string why, NrTarget@ best, float grpM, float grpS, float lo
 		ln += ((o == 0) ? " | " : " ; ") + NrName(o) + "," + Market::NnF(w[o], 4) + "," + Market::NnF(p[o], 6);
 	ln += " | chosen=" + chosen;
 	AiLog(ln);
+	if (gNjCfOn)
+		CfNotePack(int(gNrU.length()), gNjOldHave && (gNjOldBest > 0.f), rule == NR_GO);
 	NrBind(chosen, best, losR);
 }
 
