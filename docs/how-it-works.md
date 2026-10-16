@@ -139,7 +139,7 @@ economy when committed, else builders then highest influence; attack/defend: gro
 member's own range, so out-of-range members fire at whatever the engine auto-targets); under a
 comfight engage every member fight-walks with no set-target, so the engine's CMD_FIGHT attacks
 the closest enemy. Under `TUNE_FOCUS_FIRE` (off) a ground squad in contact sets targets by enemy
-damage removed per second of our fire, in lethal doses, through both paths (`SquadTask.cpp`
+damage removed per second of our fire, in lethal doses, set-target only (no moves), through both paths (`SquadTask.cpp`
 `FocusTick`). `ai-military`, `ai-army-composition`, `fight-analysis`.
 
 **Air** (`manager/air/`): the wing masses bombers and gunships, `nnair.as` decides WAIT or GO on

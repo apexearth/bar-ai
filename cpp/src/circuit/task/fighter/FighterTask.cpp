@@ -141,9 +141,6 @@ bool IFighterTask::ScriptMoveUpdate()
 	scriptIssued = frame;
 	SetTarget(nullptr);
 	for (CCircuitUnit* unit : units) {
-		if (scriptFight && FocusMoving(unit, frame)) {
-			continue;
-		}
 		if (unit->GetTravelAct() != nullptr) {
 			unit->GetTravelAct()->StateWait();
 		}

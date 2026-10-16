@@ -88,13 +88,10 @@ public:
 	static void NoteFocusKill(CCircuitAI* circuit, CCircuitUnit* killer, CEnemyInfo* enemy);
 protected:
 	virtual void FocusScript(int frame) override;
-	virtual bool FocusMoving(CCircuitUnit* unit, int frame) const override;
 	bool FocusTick(int frame, bool issue);
 	bool FocusHold(int frame);
 	bool FocusLive(int frame) const;
-	struct SWalk { int eid; int seen; springai::AIFloat3 at; };
 	std::map<int, int> focusAt;  // member -> enemy
-	std::map<int, SWalk> focusWalk;  // member -> the enemy it walks into range of
 	std::vector<int> focusOrder;
 	int focusNext = -1;
 	int focusSeen = -1;

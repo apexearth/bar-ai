@@ -22,8 +22,6 @@
 #include "CircuitAI.h"
 #include "util/Utils.h"
 
-#include "AISCommands.h"
-
 #include <cmath>
 
 namespace circuit {
@@ -903,7 +901,8 @@ constexpr int FOCUS_TICK = FRAMES_PER_SEC;
 constexpr int FOCUS_END = FRAMES_PER_SEC * 5;
 
 struct SFocusStat {
-	int ticks = 0, eps = 0, epsOrd = 0, ended = 0, asg = 0, oneShot = 0, idle = 0, setN = 0, walkN = 0, held = 0;
+	int ticks = 0, eps = 0, epsOrd = 0, ended = 0, asg = 0, oneShot = 0, idle = 0, setN = 0, pend = 0, held = 0;
+	int firing = 0, contactN = 0;
 	int killN[FC_N] = {}, killOrd[FC_N] = {}, firstN[FC_N] = {}, topN[FC_N] = {};
 	int ttkN = 0, lostInN = 0, lostOutN = 0;
 	float ttkS = 0.f, epS = 0.f, lostInM = 0.f, lostOutM = 0.f;
@@ -939,11 +938,12 @@ SFocusStat& FocusStat(CCircuitAI* circuit)
 			top += utils::string_format("%s%s:%i", (c > 0) ? "," : "", FC_NAME[c], s.topN[c]);
 		}
 		circuit->LOG("apex: focus-stat t=%i on=%i ticks=%i fights=%i ordered=%i ended=%i meanS=%.1f held=%i asg=%i"
-				" oneShot=%i idle=%i set=%i walk=%i kills%s first=%s top=%s firstArmedS=%.1f/%i"
+				" oneShot=%i idle=%i set=%i pend=%i shotShare=%.2f kills%s first=%s top=%s firstArmedS=%.1f/%i"
 				" lostIn=%i/%.0f lostOut=%i/%.0f us=%.0f usTick=%.1f",
 				circuit->GetTeamId(), (circuit->GetTunable("apex_focus_fire", 0.f) > 0.f) ? 1 : 0,
 				s.ticks, s.eps, s.epsOrd, s.ended, (s.ended > 0) ? s.epS / s.ended : 0.f, s.held, s.asg,
-				s.oneShot, s.idle, s.setN, s.walkN, kills.c_str(), first.c_str(), top.c_str(),
+				s.oneShot, s.idle, s.setN, s.pend, (s.contactN > 0) ? float(s.firing) / s.contactN : 0.f,
+				kills.c_str(), first.c_str(), top.c_str(),
 				(s.ttkN > 0) ? s.ttkS / s.ttkN : 0.f, s.ttkN,
 				s.lostInN, s.lostInM, s.lostOutN, s.lostOutM,
 				s.ns * 1e-3, (s.ticks > 0) ? s.ns * 1e-3 / s.ticks : 0.0);
@@ -971,19 +971,13 @@ void ISquadTask::FocusScript(int frame)
 	FocusTick(frame, true);
 }
 
-bool ISquadTask::FocusMoving(CCircuitUnit* unit, int frame) const
-{
-	const auto w = focusWalk.find(unit->GetId());
-	return focusOn && (w != focusWalk.end()) && (frame - w->second.seen <= FOCUS_TICK * 2);
-}
-
 // FOCUS FIRE, THEIR DAMAGE FIRST (docs/doctrine.md When to fight, his 10-16). Contact = an armed enemy whose
 // reach, plus 3 s of its walk and ours, covers one of us. Each enemy we can hit is ranked by the damage it
 // deals us (splash over our clump, overkill capped at our mean hp, one D-gun kill per reload) over the time
 // our group takes to kill it (hp + shield over the fire that can reach it, plus the walk into range); what
-// deals us none comes after every armed one, by metal per second. Doses as AllocateFire: the nearest
-// members until the target dies within one re-issue, the rest to the next. A member the target kills in
-// one hit, or that cannot reach it, takes the next one it can.
+// deals us none comes after every armed one, by metal per second. Doses among the members in range: the
+// nearest until the target dies within one re-issue, the rest to the next. A member the target kills in
+// one hit takes the next one it can. Set-target only (his 10-16): nobody is moved.
 bool ISquadTask::FocusTick(int frame, bool issue)
 {
 	if (frame < focusNext) {
@@ -1085,29 +1079,23 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 				std::max(ed->GetCostM(), 1.f), 0.f, FocusClass(ed), ed->GetCategory(), ed->IsAbleToFly(), engaging});
 	}
 	if (!contact) {
-		focusWalk.clear();
 		st.ns += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
 		return false;
 	}
 
-	// travel seconds into range, or < 0 when it cannot hit it; walking only onto what has us in reach
-	auto reachS = [](const SMem& m, const SCand& c) {
-		if (!(c.air ? m.air : m.surf) || ((c.cat & m.cat) == 0)) {
-			return -1.f;
-		}
-		const float d = m.pos.distance2D(c.pos);
-		if (d <= m.range) {
-			return 0.f;
-		}
-		return (c.engaging && (d <= m.range + FOCUS_TRAVEL_S * m.speed)) ? (d - m.range) / std::max(m.speed, 1.f) : -1.f;
-	};
+	auto canHit = [](const SMem& m, const SCand& c) { return (c.air ? m.air : m.surf) && ((c.cat & m.cat) != 0); };
+	auto inRange = [](const SMem& m, const SCand& c) { return m.pos.SqDistance2D(c.pos) <= SQUARE(m.range); };
+	// kill time counts the fire already in range and the fire 3 s of walking brings (the task's own movement)
 	for (SCand& c : cands) {
 		float dps = 0.f, trav = 0.f;
 		for (const SMem& m : mem) {
-			const float tr = reachS(m, c);
-			if (tr >= 0.f) {
+			if (!canHit(m, c)) {
+				continue;
+			}
+			const float d = m.pos.distance2D(c.pos);
+			if (d <= m.range + FOCUS_TRAVEL_S * m.speed) {
 				dps += m.dps;
-				trav += m.dps * tr;
+				trav += m.dps * std::max(d - m.range, 0.f) / std::max(m.speed, 1.f);
 			}
 		}
 		if (dps <= 0.f) {
@@ -1127,18 +1115,15 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 		return (aa != ba) ? aa : (a.key > b.key);
 	});
 
+	// doses only among the members already in range of the target; the rest wait on the first one they can hit
 	auto oneShot = [](const SMem& m, const SCand& c) { return (c.threat > 0.f) && (c.alpha >= m.hp); };
 	std::vector<std::pair<float, int>> elig;
 	for (size_t i = 0; i < cands.size(); ++i) {
 		const SCand& c = cands[i];
 		elig.clear();
 		for (size_t k = 0; k < mem.size(); ++k) {
-			if (mem[k].tgt >= 0 || oneShot(mem[k], c)) {
-				continue;
-			}
-			const float tr = reachS(mem[k], c);
-			if (tr >= 0.f) {
-				elig.push_back({tr, (int)k});
+			if ((mem[k].tgt < 0) && canHit(mem[k], c) && inRange(mem[k], c) && !oneShot(mem[k], c)) {
+				elig.push_back({mem[k].pos.SqDistance2D(c.pos), (int)k});
 			}
 		}
 		std::sort(elig.begin(), elig.end());
@@ -1153,15 +1138,29 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 	}
 	for (SMem& m : mem) {
 		bool sawOneShot = false;
-		for (size_t i = 0; (m.tgt < 0) && (i < cands.size()); ++i) {
-			if (reachS(m, cands[i]) < 0.f) {
+		bool firing = false;
+		int wait = -1;
+		for (size_t i = 0; i < cands.size(); ++i) {
+			if (!canHit(m, cands[i])) {
 				continue;
 			}
+			const bool in = inRange(m, cands[i]);
+			firing |= in;
 			if (oneShot(m, cands[i])) {
 				sawOneShot = true;
 				continue;
 			}
-			m.tgt = (int)i;
+			if ((m.tgt < 0) && in) {
+				m.tgt = (int)i;
+			}
+			if (wait < 0) {
+				wait = (int)i;
+			}
+		}
+		st.firing += firing ? 1 : 0;
+		if (m.tgt < 0) {
+			m.tgt = wait;
+			st.pend += (wait >= 0) ? 1 : 0;
 		}
 		if (m.tgt < 0) {
 			++st.idle;
@@ -1171,6 +1170,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 		focusAt[m.u->GetId()] = cands[m.tgt].e->GetId();
 		++st.asg;
 	}
+	st.contactN += (int)mem.size();
 	for (const SCand& c : cands) {
 		focusOrder.push_back(c.e->GetId());
 	}
@@ -1184,44 +1184,16 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 	}
 	focusSeen = frame;
 
+	// set-target only: it moves nobody, and a member out of range keeps the engine's pick until it walks in
 	if (focusOn && issue) {
 		for (const SMem& m : mem) {
-			const int id = m.u->GetId();
-			if (m.tgt < 0) {
-				focusWalk.erase(id);
+			if ((m.tgt < 0) || !inRange(m, cands[m.tgt]) || (m.u->GetTgtHeldId() == cands[m.tgt].e->GetId())) {
 				continue;
-			}
-			const SCand& c = cands[m.tgt];
-			const float sqD = m.pos.SqDistance2D(c.pos);
-			if (sqD <= SQUARE(m.range)) {
-				focusWalk.erase(id);
-				if (m.u->GetTgtHeldId() != c.e->GetId()) {
-					TRY_UNIT(circuit, m.u,
-						m.u->CmdSetTarget(c.e);
-					)
-					++st.setN;
-					st.epsOrd += focusOrdered ? 0 : 1;
-					focusOrdered = true;
-				}
-				continue;
-			}
-			const auto w = focusWalk.find(id);
-			if ((w != focusWalk.end()) && (w->second.eid == c.e->GetId()) && (w->second.at.SqDistance2D(c.pos) < SQUARE(64.f))) {
-				w->second.seen = frame;
-				continue;
-			}
-			const float len = std::max(std::sqrt(sqD), 1.f);
-			AIFloat3 stand(c.pos.x + (m.pos.x - c.pos.x) * m.range * RANGE_MOD / len, c.pos.y,
-					c.pos.z + (m.pos.z - c.pos.z) * m.range * RANGE_MOD / len);
-			CTerrainManager::CorrectPosition(stand);
-			if (m.u->GetTravelAct() != nullptr) {
-				m.u->GetTravelAct()->StateWait();
 			}
 			TRY_UNIT(circuit, m.u,
-				m.u->CmdMoveTo(stand, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60, CCircuitUnit::OrdSrc::RING);
+				m.u->CmdSetTarget(cands[m.tgt].e);
 			)
-			focusWalk[id] = SWalk{c.e->GetId(), frame, c.pos};
-			++st.walkN;
+			++st.setN;
 			st.epsOrd += focusOrdered ? 0 : 1;
 			focusOrdered = true;
 		}
@@ -1229,6 +1201,7 @@ bool ISquadTask::FocusTick(int frame, bool issue)
 	st.ns += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
 	return !focusAt.empty();
 }
+
 
 // COMMIT (docs/doctrine.md: commit with enough to win or stay out of reach): under apex_com_fight the fight
 // estimate is the only thing that takes a group out of contact -- its fall-back is a script move, which
@@ -1272,7 +1245,6 @@ void ISquadTask::OnUnitDestroyed(CCircuitUnit* unit, CEnemyInfo* attacker)
 		}
 	}
 	focusAt.erase(unit->GetId());
-	focusWalk.erase(unit->GetId());
 	IFighterTask::OnUnitDestroyed(unit, attacker);
 }
 
@@ -1488,16 +1460,19 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 				CEnemyInfo* a = circuit->GetEnemyInfo(fa->second);
 				uTgt = (a != nullptr) ? a : uTgt;
 			}
+			// focus: only the set-target changes, and only onto an enemy already in this member's range; the
+			// ring move stays the squad's (melee and dark targets would get a walking attack order instead)
 			bool own = false;
 			bool reTgt = false;
-			if (focus) {
+			if (focus && !unit->GetCircuitDef()->IsAttrMelee()) {
 				const auto fo = focusAt.find(unit->GetId());
 				CEnemyInfo* a = (fo != focusAt.end()) ? circuit->GetEnemyInfo(fo->second) : nullptr;
-				if (a != nullptr) {
+				if ((a != nullptr) && a->IsInRadarOrLOS()
+					&& (uPos.SqDistance2D(a->GetPos()) <= SQUARE(unit->GetCircuitDef()->GetMaxRange())))
+				{
 					own = (a != GetTarget());
 					uTgt = a;
-					reTgt = (unit->GetTgtHeldId() != a->GetId())
-							&& (uPos.SqDistance2D(a->GetPos()) <= SQUARE(unit->GetCircuitDef()->GetMaxRange()));
+					reTgt = unit->GetTgtHeldId() != a->GetId();
 				}
 			}
 			if (isRepeatAttack
@@ -1518,13 +1493,7 @@ void ISquadTask::Attack(const int frame, const bool isGround)
 					fst.epsOrd += focusOrdered ? 0 : 1;
 					focusOrdered = true;
 				}
-				if (own) {
-					// a member dosed onto another enemy stands at its own reach from that one
-					const AIFloat3& ap = uTgt->GetPos();
-					const float len = std::sqrt(SQUARE(uPos.x - ap.x) + SQUARE(uPos.z - ap.z));
-					const float k = (len > 1.f) ? std::min(len, udef->GetMaxRange() * RANGE_MOD) / len : 0.f;
-					newPos = AIFloat3(ap.x + (uPos.x - ap.x) * k, ap.y, ap.z + (uPos.z - ap.z) * k);
-				} else if ((udef->IsAttrSiege() || (udef->GetMaxRange() > udef->GetLosRadius())) && !udef->IsAttrMelee()) {
+				if ((udef->IsAttrSiege() || (udef->GetMaxRange() > udef->GetLosRadius())) && !udef->IsAttrMelee()) {
 					if (squadHD < 0.f) {
 						float sh = 0.f, sd = 0.f;
 						for (CCircuitUnit* m : units) {
