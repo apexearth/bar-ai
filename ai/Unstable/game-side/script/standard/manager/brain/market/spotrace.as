@@ -326,6 +326,25 @@ float SprHoldPrize(int s, float H, float tR, float hold0)
 	return gSprY[i] * (1.f - P) * (OrcSurv(t0, H, tR, hold0) + den);
 }
 
+// The open spots within r of p: what holding that ground is worth in the race.
+float SprHoldPrizeNear(const AIFloat3& in p, float r)
+{
+	if (!SpotRaceOn())
+		return 0.f;
+	SprEnsure();
+	if (!gSprHave)
+		return 0.f;
+	float H, tR, A, arrive, hold0;
+	OpenRaceClock(0, H, tR, A, arrive, hold0);
+	float v = 0.f;
+	for (uint k = 0; k < gSprS.length(); ++k) {
+		const int s = gSprS[k];
+		if ((s >= 0) && (uint(s) < gAllSpots.length()) && (gAllSpots[s].distance2D(p) <= r))
+			v += SprHoldPrize(s, H, tR, hold0);
+	}
+	return v;
+}
+
 // One of their constructors at `p`: its metal, and the claims its side loses while one walks out
 // from their box to replace it.
 float SprConPrize(int d, const AIFloat3& in p, float H)
