@@ -282,7 +282,8 @@ int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef
 	const float vC = OpenRaceConV(conDef, lineBp, H, tR, hold0, cT);
 	const float rC = vC / OpenRaceCostEq(conDef);
 	int best = -1;
-	float rBest = 0.f, vBest = 0.f;
+	float rBest = 0.f, vBest = 0.f, rRankBest = 0.f;
+	const bool cmOn = CounterMixOn();
 	string fT = "";
 	for (uint i = 0; (prods !is null) && (i < prods.length()); ++i) {
 		const int pd = prods[i];
@@ -292,13 +293,18 @@ int OpenRacePick(CCircuitUnit@ fac, int fid, const array<int>@ prods, int conDef
 		string t;
 		const float vF = OpenRaceFighterV(pd, lineBp, H, tR, A, arrive, hold0, iTeam, conDef, t);
 		const float rF = vF / OpenRaceCostEq(pd);
-		if (rF > rBest) {
+		// the counter mix picks WHICH fighter; the con is still weighed against the fighter's own value
+		const float rRank = cmOn ? rF * CounterMixFactor(pd) : rF;
+		if (rRank > rRankBest) {
+			rRankBest = rRank;
 			rBest = rF;
 			vBest = vF;
 			best = pd;
 			fT = t;
 		}
 	}
+	if (cmOn && (best > 0))
+		++gCmApplied;
 	if ((gSmhWalk <= 0.f) && (gSmhTc <= 0.f))
 		++gOrcNoWalk;
 	if ((best > 0) && (rBest > rC)) {
