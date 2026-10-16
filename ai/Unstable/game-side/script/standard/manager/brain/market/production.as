@@ -1862,6 +1862,10 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const float tIntelRate = ai.GetTunable("apex_intel_rate", TUNE_INTEL_RATE);
 	const float tWaterPct = ai.GetTunable("apex_water_pct", TUNE_WATER_PCT);
 	const float uBudget = incA * ai.GetTunable("apex_unit_afford_s", TUNE_UNIT_AFFORD_S);
+	const bool aoeOn = AoeOn();
+	const float tWDps = aoeOn ? ai.GetTunable("apex_worth_dps", TUNE_WORTH_DPS) : 0.f;
+	const float aoeOwnV = aoeOn ? AoeOwnValue() : 0.f;
+	AoeStatLog(armyT0);
 	// The energy-feed throttle reads two economy scalars and nothing about the
 	// candidate at all.
 	float eFeedA = 1.f;
@@ -2466,6 +2470,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// as shares of army metal, each class worth more per metal the
 			// further below its share it is. Proportional, never a veto.
 			ppc *= 1.f + tLineBite * LineShortfall(LineClassOf(d));
+			float aoeH = 0.f;
+			float aoeMul = 1.f;
+			if (aoeOn) {
+				aoeH = AoeHits(d);
+				if (aoeH > 0.f) {
+					aoeMul = pow(1.f + aoeH, tWDps);
+					ppc *= aoeMul;
+				}
+			}
 			// SPEED IS VALUE (apexearth: "they're fast, we need to properly
 			// value speed"). A fast unit reaches the fight, catches raiders,
 			// and disengages -- none of which shows up in combat-per-metal.
@@ -2651,6 +2664,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// Same predicate as the price axis: a unit that cannot hold a post
 			// gets no coverage share, and its role model answer stands.
 			const float covR = CoverCapable(d) ? coverShare : 0.f;
+			const float roleWNo = covR + (1.f - covR) * roleW;
+			if (aoeH > 0.f) {
+				const float sW = AoeRoleW(aoeH, armyT0, aoeOwnV);
+				roleW = sW + (1.f - sW) * roleW;
+			}
 			roleW = covR + (1.f - covR) * roleW;
 			float gainA = (effGap / ((fillS > 1.f) ? fillS : 60.f))
 					* (ppc / linePPC) * roleW * stakeMul
@@ -2658,7 +2676,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// The quiet rear's fighters ignore the suppressed army gap and
 			// price straight off their own AA gap -- the air census is not
 			// role-suppressed, so the guard fleet tracks REAL enemy air.
-			if ((roleMul < 1.f) && airGuard) {
+			const bool gainViaRole = !((roleMul < 1.f) && airGuard);
+			if (!gainViaRole) {
 				gainA = ((rGap > 0.f) ? rGap : 0.f)
 						/ ((fillS > 1.f) ? fillS : 60.f)
 						* (ppc / linePPC) / (1.f + have * 0.05f) * eFeedA;
@@ -2698,6 +2717,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// was not before.
 			gainA *= Catalog::gCostM[d];
 			const float vA = gainA / Catalog::gCostM[d];
+			if (aoeH > 0.f)
+				AoeRecord(d, aoeMul, roleW, roleWNo, vA,
+					vA / aoeMul * ((gainViaRole && (roleW > 0.f)) ? (roleWNo / roleW) : 1.f));
 			candDef.insertLast(d);
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
@@ -2714,7 +2736,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ ",p" + formatFloat(ppc / linePPC, "", 0, 3)
 					+ ",pc" + formatFloat(ppcCore / linePPC, "", 0, 3)
 					+ ",r" + formatFloat(roleW, "", 0, 2)
-					+ ",a" + formatFloat(affM, "", 0, 2) + ")";
+					+ ",a" + formatFloat(affM, "", 0, 2)
+					+ ((aoeMul > 1.f) ? (",s" + formatFloat(aoeMul, "", 0, 2)) : "") + ")";
 			continue;
 		}
 		// An ARMED producible builder is a decoy-class unit: it pays for a
