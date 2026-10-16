@@ -540,6 +540,7 @@ int CCircuitAI::HandleGameEvent(int topic, const void* data)
 						GetTeamUnit(evt->attacker) != nullptr);
 				if (GetTeamUnit(evt->attacker) != nullptr) {
 					ISquadTask::NoteTargetKill(this, enemy->GetCircuitDef());
+					ISquadTask::NoteFocusKill(this, GetTeamUnit(evt->attacker), enemy);
 				}
 				allyTeam->DyingEnemy(enemy->GetData(), lastFrame);
 				ret = 0;

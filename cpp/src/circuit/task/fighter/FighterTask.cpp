@@ -132,12 +132,18 @@ bool IFighterTask::ScriptMoveUpdate()
 	if (frame >= scriptUntil) {
 		return false;
 	}
+	if (scriptFight) {
+		FocusScript(frame);
+	}
 	if ((scriptIssued >= 0) && (frame < scriptIssued + FRAMES_PER_SEC * 2)) {
 		return true;
 	}
 	scriptIssued = frame;
 	SetTarget(nullptr);
 	for (CCircuitUnit* unit : units) {
+		if (scriptFight && FocusMoving(unit, frame)) {
+			continue;
+		}
 		if (unit->GetTravelAct() != nullptr) {
 			unit->GetTravelAct()->StateWait();
 		}

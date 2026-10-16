@@ -1855,6 +1855,13 @@ static void IUnitTask_SetScriptMove(IUnitTask* task, const AIFloat3& pos, int un
 	}
 }
 
+// apex_focus_fire: the squad is in contact and its fire is focused (SquadTask.cpp FocusTick)
+static bool IUnitTask_IsFocusFight(IUnitTask* task)
+{
+	ISquadTask* sq = (task->GetType() == IUnitTask::Type::FIGHTER) ? dynamic_cast<ISquadTask*>(task) : nullptr;
+	return (sq != nullptr) && sq->IsFocusFight();
+}
+
 static void IUnitTask_SetKeepOut(IUnitTask* task, const AIFloat3& pos, float r, int until)
 {
 	if (task->GetType() == IUnitTask::Type::FIGHTER) {
@@ -2164,6 +2171,7 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetRaidGoal(const AIFloat3& in, float)", asFUNCTION(IUnitTask_SetRaidGoal), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetScriptMove(const AIFloat3& in, int, bool)", asFUNCTION(IUnitTask_SetScriptMove), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void SetKeepOut(const AIFloat3& in, float, int)", asFUNCTION(IUnitTask_SetKeepOut), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("IUnitTask", "bool IsFocusFight() const", asFUNCTION(IUnitTask_IsFocusFight), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Abort()", asMETHOD(IUnitTask, Abort), asCALL_THISCALL); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("IUnitTask", "void Done()", asMETHOD(IUnitTask, Done), asCALL_THISCALL); ASSERT(r >= 0);
 
