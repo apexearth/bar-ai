@@ -187,7 +187,9 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 	const float walkE = (gSmhWalk > 0.f) ? gSmhWalk : ((gSmhTc > 0.f) ? gSmhTc * gRushSpd : -1.f);
 	if (walkE < 0.f)
 		return 0.f;
-	const float c = (gSmhMps > 0.f) ? UnitStrength(fd) * gSmhMps : Catalog::gCostM[fd];
+	// strength in basic-fighter metal on today's scale: gSmhMps can be latched before WorthMeans settles
+	const float sBasic = (gSmhWalkDef > 0) ? UnitStrength(gSmhWalkDef) : 0.f;
+	const float c = (sBasic > 0.f) ? UnitStrength(fd) / sBasic * Catalog::gCostM[gSmhWalkDef] : Catalog::gCostM[fd];
 	const float bs = Catalog::gBuildTime[fd] / lineBp;
 	const float tB = bs / OpenRaceFeed(fd, bs);
 	const float tA = tB + walkE / spd;
