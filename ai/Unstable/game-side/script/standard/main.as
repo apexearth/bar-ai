@@ -155,6 +155,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	// fix rather than a piece of the team machinery that gate exists for.
 	{ double _t = Perf::T0(); Military::UpdateUnblock(); Perf::Add("up.unblock", _t); }
 	{ double _t = Perf::T0(); Military::UpdateMoveTests(); Perf::Add("up.movetests", _t); }
+	{ double _t = Perf::T0(); Military::UpdateUnstick(); Perf::Add("up.unstick", _t); }
 	{ double _t = Perf::T0(); Brain::YardWatch(); Perf::Add("up.yard", _t); }
 
 	if (!ApexActive())

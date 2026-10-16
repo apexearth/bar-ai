@@ -182,6 +182,7 @@ void SweepPenVerdicts()
 			gPenFlow.removeAt(i);
 			continue;
 		}
+		UnstickSelfD(i);
 		++i;
 	}
 }
@@ -202,6 +203,7 @@ void NotePenned(CCircuitUnit@ unit)
 	gPenId.insertLast(unit.id);
 	gPenPos.insertLast(unit.GetPos(ai.frame));
 	gPenMoved.insertLast(ai.frame);
+	UsAdd(unit.GetPos(ai.frame));
 }
 
 void ForgetPenned(Id id)
@@ -211,6 +213,7 @@ void ForgetPenned(Id id)
 			gPenId.removeAt(i);
 			gPenPos.removeAt(i);
 			gPenMoved.removeAt(i);
+			UsDrop(i);
 			return;
 		}
 	}
@@ -697,6 +700,7 @@ void UpdateUnblock()
 			gPenId.removeAt(i);
 			gPenPos.removeAt(i);
 			gPenMoved.removeAt(i);
+			UsDrop(i);
 			continue;
 		}
 		++gPenCursor;

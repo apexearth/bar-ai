@@ -134,7 +134,7 @@ void NearGround(const AIFloat3& in at, float span,
 }
 
 // Is this cell in the doorway of any ground plant NearGround saw?
-bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd)
+bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd, float depth = 220.f)
 {
 	for (uint k = 0; k < gNPDoorPos.length(); ++k) {
 		const float rx = p.x - gNPDoorPos[k].x;
@@ -142,11 +142,62 @@ bool InAnyDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd)
 		const AIFloat3 d = (gNPDoorDir[k].SqLength2D() > 0.f) ? gNPDoorDir[k] : fwd;
 		const float ahead = rx * d.x + rz * d.z;
 		const float side = rx * d.z - rz * d.x;
-		if ((ahead > 0.f) && (ahead < 220.f + pitch)
+		if ((ahead > 0.f) && (ahead < depth + pitch)
 			&& (abs(side) < gNPDoorHalf[k] + pitch))
 			return true;
 	}
 	return false;
+}
+
+// apex_unstick: a door lane 220 deep ended in the next block, a pocket units
+// rolled into and stood in. Past the old depth it runs as far as the walk can
+// place anything.
+bool InDeepDoorway(const AIFloat3& in p, float pitch, const AIFloat3& in fwd, float span)
+{
+	return Military::UnstickOn() && InAnyDoorway(p, pitch, fwd, span * 2.f);
+}
+
+// apex_unstick: would a footprint here split the open ground around it? Eight
+// probes, each an aisle wide, just outside its edges; two or more open runs
+// round the ring means this cell is the only local link between them -- the
+// corridor a unit walks through, or the mouth of a pocket. A blob growing at
+// its rim always has one run, so it still packs flush.
+bool CutsLane(const AIFloat3& in p, float nh, array<AIFloat3>@ op, array<float>@ ohx,
+		array<float>@ ohz, float qr)
+{
+	if (!Military::UnstickOn())
+		return false;
+	const float h = Base::LaneHalf();
+	const float off = nh + h;
+	const float r = qr + h;
+	int runs = 0;
+	bool first = false;
+	bool prev = false;
+	for (int k = 0; k < 8; ++k) {
+		const int dx = (k == 0 || k == 1 || k == 7) ? 1 : ((k >= 3 && k <= 5) ? -1 : 0);
+		const int dz = (k >= 1 && k <= 3) ? 1 : ((k >= 5) ? -1 : 0);
+		const float qx = p.x + float(dx) * off;
+		const float qz = p.z + float(dz) * off;
+		bool open = OnMap(AIFloat3(qx, 0.f, qz));
+		if (open) {
+			gNPOcc.Query(qx, qz, r);
+			for (uint q = 0; q < gNPOcc.hit.length(); ++q) {
+				const uint j = uint(gNPOcc.hit[q]);
+				if ((abs(qx - op[j].x) < (h + ohx[j])) && (abs(qz - op[j].z) < (h + ohz[j]))) {
+					open = false;
+					break;
+				}
+			}
+		}
+		if (k == 0)
+			first = open;
+		else if (open && !prev)
+			++runs;
+		prev = open;
+	}
+	if (first && !prev)
+		++runs;
+	return runs >= 2;
 }
 
 // WHAT THE TURRET IS BEING PACKED AGAINST. Every siting branch in the nano
@@ -390,6 +441,16 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 				}
 				if (NearBlocked(p))
 					continue;
+				if (InDeepDoorway(p, pitch, exitDir, span)) {
+					if (!probe)
+						++Military::gUsSiteDoor;
+					continue;
+				}
+				if (CutsLane(p, nhx, op, ohx, ohz, qr)) {
+					if (!probe)
+						++Military::gUsSiteCut;
+					continue;
+				}
 				slots.insertLast(p);
 				op.insertLast(p);
 				ohx.insertLast(nhx);
@@ -520,6 +581,16 @@ int PackSlots(int nanoDef, const AIFloat3& in atRaw, int anchorDef, int n,
 				// re-elected the same unreachable cell twelve times a game).
 				if (NearBlocked(p))
 					continue;
+				if (InDeepDoorway(p, pitch, exitDir, span)) {
+					if (!probe)
+						++Military::gUsSiteDoor;
+					continue;
+				}
+				if (CutsLane(p, nhx, op, ohx, ohz, qr)) {
+					if (!probe)
+						++Military::gUsSiteCut;
+					continue;
+				}
 				slots.insertLast(p);
 				// A slot just handed out is ground the next one must not take.
 				op.insertLast(p);

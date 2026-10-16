@@ -961,6 +961,7 @@ const float TUNE_CONSOLIDATE_EDGE = 1.f;
 //   consolidate away from them.
 const float TUNE_BIRTH_DEFEND = 0.f;
 const float TUNE_AOE_VS_BLOB = 0.f;   // [toggle 0/1] factory prices ground splash units by the enemy units their shell catches in the ball they bring, and splash demand tracks their clumped army (his 2026-10-15)
+const float TUNE_UNSTICK = 0.f;   // [toggle 0/1] ordered combat units that do not move are nudged to open ground, pen-tested, their wall self-destructed once the trapped metal's lost service exceeds it; nanos and converters keep ground plants' door lanes and never split open ground (his 2026-10-15)
 
 // The defaults below reproduce the previous gCombat/costM ranking EXACTLY --
 //   dps * sqrt(alpha) * hp / cost is what power^2/cost expands to -- so the
