@@ -304,7 +304,7 @@ int TaPick(AIFloat3 &out at, float &out r)
 		at = Military::gStPos; r = Military::STRIKE_R;
 		return 2;
 	}
-	if (PressExpansion(at, r) || MapShareExpansion(at, r))
+	if (PressExpansion(at, r) || MapShareExpansion(at, r) || SmallHardExpansion(at, r))
 		return 5;
 	float m = 0.f;
 	if (Military::TurretTarget(at, r, m)) {
@@ -345,9 +345,10 @@ void TaOpen(int phase, const string why)
 	ai.SetTeamBoard(BOARD_TA_PHASE, float(phase));
 	ai.SetTeamBoard(BOARD_TA_OP, float(op));   // last: a reader that sees the new id sees its fields
 	++gTaOpsMade;
-	if ((kind == 5) && (gMsPickAt != ai.frame))
+	if ((kind == 5) && (gMsPickAt != ai.frame) && (gShPickAt != ai.frame))
 		++gPressExpOps;
 	MapShareNoteOp(kind);
+	SmallHardNoteOp(kind);
 	AiLog(Factory::T() + "apex: team-op " + op + " " + TA_PHASES[phase] + " (" + why + ") " + TA_KINDS[kind]
 		+ " at=" + int(at.x) + "," + int(at.z) + " r=" + int(r) + " plan=" + NgName(gPlan));
 }
@@ -379,7 +380,7 @@ bool TaTwice(int slot, bool cond)
 void TaLead()
 {
 	const int phase = TaPhase();
-	const bool pushes = PlanPushes() || ((gPlan == NG_NORMAL) && (PressShort() || MapSharePush()));
+	const bool pushes = PlanPushes() || ((gPlan == NG_NORMAL) && (PressShort() || MapSharePush() || SmallHardPush()));
 	if (!pushes || (ai.GetTunable("apex_team_army", TUNE_TEAM_ARMY) <= 0.f)) {
 		if (phase != TA_NONE)
 			TaOpen(TA_NONE, "plan holds");

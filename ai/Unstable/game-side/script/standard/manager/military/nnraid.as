@@ -246,7 +246,7 @@ float NrPrizeOf(int d, const AIFloat3& in at, float spotInc, const AIFloat3& in 
 	if (Catalog::gExtractsM[d] > 0.f) {
 		// one of their constructors walks out from their base and builds it again
 		const float rebuildS = at.distance2D(foe) / NrConSpeed() + Catalog::gBuildTime[d] / gNrConBP;
-		v += spotInc * Catalog::gExtractsM[d] * rebuildS;
+		v += spotInc * Catalog::gExtractsM[d] * (rebuildS + Market::SmallHardDenyS(rebuildS));
 	}
 	return v;
 }
@@ -482,6 +482,15 @@ void NrPriceSpot(uint s)
 		if (gNeP[e].distance2D(sp) <= Catalog::gMaxRange[d] + Catalog::gSpeed[d] * stay)
 			t.armyS += DgStr(d);
 	}
+	{
+		AIFloat3 cAt;
+		int cDef = 0;
+		const float cw = Market::SmallHardComPrior(cAt, cDef);
+		if ((cw > 0.f) && (cAt.distance2D(sp) <= Catalog::gMaxRange[cDef] + Catalog::gSpeed[cDef] * stay)) {
+			t.armyS += cw * DgStr(cDef);
+			Market::SmallHardNoteRaidPriced();
+		}
+	}
 	// the risk model's wave at the target and its approach; the pack's path
 	// is threat-routed, so the open middle is what it walks around. The wave
 	// is there only as often as it arrives (HazardAt, per second) over the
@@ -679,6 +688,7 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 				+ " n=" + gNrU.length() + " v=" + int(best.v + best.prior) + " lossF=" + Market::NnF(best.lossF, 2)
 				+ " walkS=" + int(best.walkS));
 			Market::MapShareNoteRaid(best.at);
+			Market::SmallHardNoteRaid(best.at);
 		}
 		if (NrLive()) {
 			gAskTask.SetRaidGoal(gNrGoal, gNrGoalR);
@@ -825,6 +835,7 @@ void UpdateNnRaid()
 void NrNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 {
 	Market::PressNoteDeath(int(edef.id), pos, byUs);
+	Market::SmallHardNoteDeath(int(edef.id), byUs);
 	if (!byUs || (edef is null) || !NrLive())
 		return;
 	array<CCircuitUnit@>@ on = gAskTask.GetUnits();

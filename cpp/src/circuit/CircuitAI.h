@@ -63,6 +63,7 @@ class CMapManager;
 class CThreatMap;
 class CInfluenceMap;
 class CPathFinder;
+class IPathQuery;
 class CTerrainManager;
 class CBuilderManager;
 class CFactoryManager;
@@ -442,6 +443,12 @@ public:
 	// path manager reads the synced blocking map, structures included, which is
 	// the only oracle here that can see one.
 	float GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to);
+	// Our own pathfinder's walk flood from `from` for cdef's move type, on a worker
+	// thread (no engine call, so nothing host-only touches sim state). Returns a
+	// handle, -1 when refused; WalkMapCost reads elmos to the nearest of 8 points
+	// `radius` around `to`: -2 still running or unknown handle, -1 unreachable.
+	int WalkMapStart(CCircuitDef* cdef, const springai::AIFloat3& from);
+	float WalkMapCost(int handle, const springai::AIFloat3& to, float radius);
 	float GetEnemyCostAt(const springai::AIFloat3& pos, float radius) const;
 	// How close the nearest enemy is to being able to shoot this spot: the
 	// smallest (distance - its weapon reach - `reactS` seconds of its own
@@ -624,6 +631,8 @@ private:
 	// def id -> engine pathType. UnitDef::GetMoveData() allocates a wrapper the
 	// caller must delete, so the lookup is done once per def.
 	std::map<int, int> pathTypes;
+	std::map<int, std::shared_ptr<IPathQuery>> walkMaps;
+	int walkMapNext = 0;
 	float engageBoost = 1.f;
 	springai::AIFloat3 frontPos = -RgtVector;
 	springai::AIFloat3 healPos = -RgtVector;

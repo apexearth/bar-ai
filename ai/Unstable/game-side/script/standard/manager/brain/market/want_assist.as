@@ -672,7 +672,10 @@ void AssistEcoTaken(Want@ w, array<Want@>@ ranked)
 Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 {
 	Want w = priced;
-	if (!aiFactoryMgr.isAssistRequired || (Brain::gFQFac.length() == 0))
+	// Short contact: the commander's lathe at the lab is army owed now, a standing rate
+	// while the gap is open; FreeMetalFlow below still bounds it (smallhard.as).
+	const float comArmyW = unit.circuitDef.IsRoleAny(Unit::Role::COMM.mask) ? SmallHardComArmyW() : 0.f;
+	if ((!aiFactoryMgr.isAssistRequired && (comArmyW <= 0.f)) || (Brain::gFQFac.length() == 0))
 		return w;
 	const AIFloat3 me = unit.GetPos(ai.frame);
 	CCircuitUnit@ fac = null;
@@ -723,7 +726,7 @@ Want@ ProposeFactoryGuard(CCircuitUnit@ unit, const Want& in priced)
 	g.kind = WK_ASSIST;
 	g.pos = fac.GetPos(ai.frame);
 	g.spotId = int(fac.id);
-	g.gain = drain * 10.f / H + over;
+	g.gain = drain * 10.f / H + over + comArmyW * drain;
 	g.mCost = drain * 10.f * MCostScale();
 	g.tCost = (walkSec + 10.f) * WageOf(unit);
 	g.value = g.gain / (g.mCost + g.tCost);

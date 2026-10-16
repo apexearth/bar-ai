@@ -22,6 +22,8 @@
 #include "map/GridAnalyzer.h"
 #include "map/InfluenceMap.h"   // unconditionally: the DEBUG_VIS include below is gated
 #include "terrain/path/PathFinder.h"
+#include "terrain/path/QueryCostMap.h"
+#include "terrain/TerrainData.h"
 #include "task/PlayerTask.h"
 #include "task/fighter/FighterTask.h"
 #include "task/fighter/SquadTask.h"
@@ -3297,6 +3299,48 @@ float CCircuitAI::GetPathLength(CCircuitUnit* unit, const springai::AIFloat3& to
 	// goalRadius 0 asks for the exact square and fails on anything standing on
 	// it; SQUARE_SIZE * 8 is the granularity the estimator works at anyway.
 	return GetPathing()->GetApproximateLength(unit->GetPos(GetLastFrame()), to, it->second, 64.f);
+}
+
+int CCircuitAI::WalkMapStart(CCircuitDef* cdef, const springai::AIFloat3& from)
+{
+	if ((cdef == nullptr) || !cdef->IsMobile() || cdef->IsAbleToFly() || (pathfinder == nullptr)) {
+		return -1;
+	}
+	// a running query is owned by its job too, but only finished ones are dropped
+	int running = 0;
+	for (auto it = walkMaps.begin(); it != walkMaps.end();) {
+		if (it->second->GetState() != IPathQuery::State::READY) {
+			++running;
+			++it;
+		} else if (walkMaps.size() > 4) {
+			it = walkMaps.erase(it);
+		} else {
+			++it;
+		}
+	}
+	if (running >= 2) {
+		return -1;
+	}
+	springai::AIFloat3 pos = from;
+	CTerrainData::CorrectPosition(pos);
+	std::shared_ptr<IPathQuery> query = pathfinder->CreateWalkMapQuery(cdef, pos);
+	const int handle = walkMapNext++;
+	walkMaps[handle] = query;
+	pathfinder->RunQuery(scheduler.get(), query);
+	return handle;
+}
+
+float CCircuitAI::WalkMapCost(int handle, const springai::AIFloat3& to, float radius)
+{
+	auto it = walkMaps.find(handle);
+	if ((it == walkMaps.end()) || (it->second->GetState() != IPathQuery::State::READY)) {
+		return -2.f;
+	}
+	springai::AIFloat3 pos = to;
+	CTerrainData::CorrectPosition(pos);
+	const CQueryCostMap* q = static_cast<const CQueryCostMap*>(it->second.get());
+	const float cells = q->GetCostAt(pos, int(std::max(radius, 0.f)));
+	return (cells < 0.f) ? -1.f : cells * pathfinder->GetSquareSize();
 }
 
 // Ask the terrain manager for a site `def` can be placed on near `pos`.
