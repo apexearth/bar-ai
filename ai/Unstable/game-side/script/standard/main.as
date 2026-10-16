@@ -175,6 +175,7 @@ void AiUpdate()  // SlowUpdate, every 30 frames with initial offset of skirmishA
 	if (UpEvery(4, 3)) { double _t = Perf::T0(); Brain::LogFacQueues(); Perf::Add("up.facqueuelog", _t); }
 	if (UpEvery(4, 0)) { double _t = Perf::T0(); Military::UpdateLanePos(); Perf::Add("up.lanepos", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Military::UpdateDeathLedger(); Perf::Add("up.deathledger", _t); }
+	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::AatUpdate(); Perf::Add("up.aathreat", _t); }
 	if (UpEvery(2, 1)) { double _t = Perf::T0(); Military::UpdateWithdraw(); Perf::Add("up.withdraw", _t); }
 	{ double _t = Perf::T0(); Military::UpdateComFight(); Perf::Add("up.comfight", _t); }
 	if (UpEvery(2, 0)) { double _t = Perf::T0(); Market::EscortSweep(); Perf::Add("up.escortsweep", _t); }
@@ -469,6 +470,7 @@ void UnitDestroyedByInner(CCircuitUnit@ unit, CCircuitDef@ attackerDef)
 	if (cdef is null)
 		return;
 	if (WasFinished(int(unit.id))) {
+		Market::AatNoteLoss(unit.GetPos(ai.frame), cdef, attackerDef);
 		Military::HuntNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
 		Military::WindowNoteDeath(int(cdef.id), unit.GetPos(ai.frame), cdef.costM, true, true);
 		Military::SiegeNoteDeath(unit.GetPos(ai.frame), cdef.costM, true, true);
@@ -524,6 +526,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	if (edef.IsMobile())
 		Builder::NoteWreckField(pos, edef.costM);
 	Air::NoteEnemyDeath(edef, pos, byUs);
+	Market::AatNoteEnemyDeath(edef, byUs);
 	Air::TairNoteKill(edef, pos);
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::CfNoteEnemyDeath(edef, pos, byUs);

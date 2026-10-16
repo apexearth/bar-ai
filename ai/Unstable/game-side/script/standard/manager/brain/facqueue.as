@@ -87,6 +87,7 @@ void PendAdd(int line, CCircuitDef@ d)
 {
 	gFQPendLine.insertLast(line);
 	gFQPendDef.insertLast(d);
+	Market::AatNotePend(d);
 }
 
 int PendCount(int line, CCircuitDef@ d)

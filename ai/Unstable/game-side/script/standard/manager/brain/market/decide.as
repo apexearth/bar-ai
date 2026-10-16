@@ -887,7 +887,7 @@ float ExposeCharge(Want@ c, const AIFloat3& in at, bool airBuilder, float unitM,
 	const float exposed = ExpectedLossAt(at, c.def.costM);
 	if (exposed <= 0.f)
 		return 0.f;
-	float charge = (c.kind == WK_PROTECT) ? 0.f : exposed;
+	float charge = ((c.kind == WK_PROTECT) || ((c.kind == WK_AIRDEF) && AatOn())) ? 0.f : exposed;
 	// An air con pays for its own exposure too, towers included; ground
 	// cons have the C++ road check.
 	if (airBuilder)
@@ -1642,8 +1642,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	// builder. AA coverage is cheap and easy"). The panic below only reorders
 	// an election, and a builder with progress on a frame returns under this
 	// and never has one. Ends the moment the first tower stands.
-	bool aaEmerg = !ProtAnyComing(PROT_AA)
-			&& (Military::AirSeenEver() > 0.f);
+	bool aaEmerg = AatOn() ? AatPanic()
+			: (!ProtAnyComing(PROT_AA) && (Military::AirSeenEver() > 0.f));
 	if (aaEmerg) {
 		const bool stale = (ai.frame - gAaClaimAt) > 20 * SECOND;
 		if ((gAaClaim == int(unit.id)) || (gAaClaim < 0) || stale) {

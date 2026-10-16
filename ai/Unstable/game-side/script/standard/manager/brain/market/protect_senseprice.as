@@ -290,6 +290,15 @@ bool SenseGainOf(CCircuitUnit@ unit, int d, int cls, const AIFloat3& in core,
 			}
 		}
 	} else if (cls == PROT_AA) {
+		if (AatOn()) {
+			AIFloat3 pAt;
+			float pGain = 0.f;
+			if (AatStaticPrice(d, pAt, pGain)) {
+				at = pAt;
+				gain = pGain;
+				return true;
+			}
+		}
 		// On the perimeter, not the anchor: AA set no position at all, so
 		// every battery landed on the start position.
 		{
