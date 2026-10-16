@@ -97,7 +97,10 @@ Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it.
 `TUNE_OPEN_RACE` (off) a con-floor order is first raced against the lab's best fighter on one
 clock (`market/openrace.as`), and a lab short of energy prices its units by feed share instead of
 idling; on short contact the con is worth the open spots it reaches before their cons
-(`market/spotrace.as`), which also gives the team army and raiders their contest targets.
+(`market/spotrace.as`), which also gives the team army and raiders their contest targets. Under
+`TUNE_COUNTER_MIX` (off) each ground fighter's draw value is multiplied by its square-law fight
+value per metal against the enemy army we have seen, and by a raid value against their economy
+where it outruns what it cannot fight, renormalised over the army candidates (`market/countermix.as`).
 
 **The budget** (`brain/budget.as`, `targets.as`): spend is counted from what finishes, in five
 rows (army, defence, air defence, economy, build power), against target shares of what we hold.
@@ -127,7 +130,8 @@ attack; `raid.as` asks for raids on scored enemy spots; `withdraw.as` recalls; `
 window, siege a fort, raid. Under `TUNE_COM_FIGHT` (off) `comfight.as` fights every ground squad
 in reach of an armed enemy out on paper each second and overrides its task through
 `SetScriptMove`. The estimate is scaled by the team's running real/predicted metal (lost and killed
-apart, team board); a group fights while calibrated loss minus kill is under the stake falling back
+apart, team board; a prediction covers one engaged segment, retaken when the group or the enemy in
+reach moves past its band, and outcomes count only while engaged); a group fights while calibrated loss minus kill is under the stake falling back
 abandons (our metal and open spots in the threat's reach, times the share of their force the fight
 destroys) plus the walk out and back, and a verdict moves only past the measured error band. Else
 it falls back to the nearest friendly strength where the pooled estimate pays, onto one shared

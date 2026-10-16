@@ -657,9 +657,14 @@ array<bool> gCfEpKo;
 array<float> gCfEpKoX, gCfEpKoZ, gCfEpKoR, gCfEpKoM, gCfEpFX, gCfEpFZ;
 array<int> gCfEpKoN, gCfEpKoOurN;
 array<bool> gCfEpOut;
-// a fight taken: predicted shares recorded at its first engage, what was lost before (falling back)
+// a fight taken: predicted shares summed over its segments, what was lost while not engaged
 array<bool> gCfEpRec, gCfEpMain;
 array<float> gCfEpLostF;
+// the open segment: its estimate (loss, kill, seconds), contact seconds so far, the group and foe metal it was
+// taken at and its error band
+array<bool> gCfEpSOn;
+array<float> gCfEpSL, gCfEpSK, gCfEpST, gCfEpSA, gCfEpSGM, gCfEpSFM, gCfEpSB;
+array<int> gCfEpSAt;
 
 int CfEpSlot(IUnitTask@ t)
 {
@@ -679,6 +684,9 @@ int CfEpNew(IUnitTask@ t)
 	gCfEpKoM.insertLast(0.f); gCfEpFX.insertLast(0.f); gCfEpFZ.insertLast(0.f); gCfEpKoN.insertLast(0);
 	gCfEpKoOurN.insertLast(0); gCfEpOut.insertLast(false);
 	gCfEpRec.insertLast(false); gCfEpMain.insertLast(false); gCfEpLostF.insertLast(0.f);
+	gCfEpSOn.insertLast(false); gCfEpSL.insertLast(0.f); gCfEpSK.insertLast(0.f); gCfEpST.insertLast(0.f);
+	gCfEpSA.insertLast(0.f); gCfEpSGM.insertLast(0.f); gCfEpSFM.insertLast(0.f); gCfEpSB.insertLast(0.f);
+	gCfEpSAt.insertLast(ai.frame);
 	return int(gCfEpT.length()) - 1;
 }
 
@@ -690,6 +698,85 @@ void CfEpDrop(int i)
 	gCfEpKoZ.removeAt(i); gCfEpKoR.removeAt(i); gCfEpKoM.removeAt(i); gCfEpFX.removeAt(i); gCfEpFZ.removeAt(i);
 	gCfEpKoN.removeAt(i); gCfEpKoOurN.removeAt(i); gCfEpOut.removeAt(i);
 	gCfEpRec.removeAt(i); gCfEpMain.removeAt(i); gCfEpLostF.removeAt(i);
+	gCfEpSOn.removeAt(i); gCfEpSL.removeAt(i); gCfEpSK.removeAt(i); gCfEpST.removeAt(i); gCfEpSA.removeAt(i);
+	gCfEpSGM.removeAt(i); gCfEpSFM.removeAt(i); gCfEpSB.removeAt(i); gCfEpSAt.removeAt(i);
+}
+
+// ---- segments: a prediction covers the fight from the state it was taken in. While engaged, a change in our
+// group's metal or the enemy metal in reach beyond the estimate's error band closes the segment at the share of
+// its predicted duration spent in contact and opens a new one; an episode that ends engaged counts its open
+// segment whole. Outcomes count only while engaged, so both sides cover the same fight. ----
+int gCfSegOpen = 0, gCfSegCut = 0;
+float gCfSegCutL = 0.f, gCfSegCutK = 0.f;
+
+void CfSegOpen(int s, float pl, float pk, float T, float gm, float fm)
+{
+	gCfEpSOn[s] = true;
+	gCfEpSL[s] = pl;
+	gCfEpSK[s] = pk;
+	gCfEpST[s] = T;
+	gCfEpSA[s] = 0.f;
+	gCfEpSGM[s] = gm;
+	gCfEpSFM[s] = fm;
+	gCfEpSB[s] = sqrt(gCfSL * gCfRL * pl * gCfSL * gCfRL * pl + gCfSK * gCfRK * pk * gCfSK * gCfRK * pk);
+	gCfEpSAt[s] = ai.frame;
+	++gCfSegOpen;
+}
+
+void CfSegStep(int s, bool contact)
+{
+	float dt = float(ai.frame - gCfEpSAt[s]) / float(SECOND);
+	if (dt > 2.f * CF_REACT_S)
+		dt = 2.f * CF_REACT_S;
+	if (contact && (dt > 0.f))
+		gCfEpSA[s] += dt;
+	gCfEpSAt[s] = ai.frame;
+}
+
+void CfSegClose(int s, bool whole)
+{
+	if (!gCfEpSOn[s])
+		return;
+	float f = 1.f;
+	if (!whole && (gCfEpST[s] > 0.f)) {
+		f = gCfEpSA[s] / gCfEpST[s];
+		if (f > 1.f)
+			f = 1.f;
+	}
+	gCfEpPL[s] += f * gCfEpSL[s];
+	gCfEpPK[s] += f * gCfEpSK[s];
+	if (!whole) {
+		++gCfSegCut;
+		gCfSegCutL += (1.f - f) * gCfEpSL[s];
+		gCfSegCutK += (1.f - f) * gCfEpSK[s];
+	}
+	gCfEpSOn[s] = false;
+}
+
+bool CfSegStale(int s, float gm, float fm)
+{
+	return !gCfEpSOn[s] || (abs(gm - gCfEpSGM[s]) + abs(fm - gCfEpSFM[s]) > gCfEpSB[s]);
+}
+
+float CfFoeMetal(const array<int>@ foe)
+{
+	float m = 0.f;
+	for (uint i = 0; i < foe.length(); ++i)
+		m += Catalog::gCostM[gCfEDef[foe[i]]];
+	return m;
+}
+
+// in contact: some foe within the longer of the two ranges of the group's edge
+bool CfContact(int g, const array<int>@ foe)
+{
+	for (uint i = 0; i < foe.length(); ++i) {
+		const int k = foe[i];
+		const float er = Catalog::gMaxRange[gCfEDef[k]];
+		const float rr = ((er > gCfGRng[g]) ? er : gCfGRng[g]) + gCfGSpr[g];
+		if (CfDist(gCfEX[k], gCfEZ[k], gCfGX[g], gCfGZ[g]) <= rr)
+			return true;
+	}
+	return false;
 }
 
 // minute counters
@@ -732,8 +819,10 @@ bool CfIsEngage(int v)
 	return (v == CF_ENGAGE) || (v == CF_BASE_ENGAGE);
 }
 
-// pl, pk: this group's share of the pooled fight's predicted loss and kill, recorded at its first engage
-void CfVerdict(int g, int v, float tx, float tz, bool predWin, float r, float pl, float pk, bool vsMain)
+// pl, pk: this group's share of the pooled fight's predicted loss and kill over segT seconds (segT < 0: no fresh
+// estimate this pass); fm: the enemy metal in reach
+void CfVerdict(int g, int v, float tx, float tz, bool predWin, float r, float pl, float pk, bool vsMain,
+		float segT = -1.f, float fm = 0.f, bool contact = true)
 {
 	IUnitTask@ t = gCfGT[g];
 	AIFloat3 to(tx, 0.f, tz);
@@ -752,17 +841,28 @@ void CfVerdict(int g, int v, float tx, float tz, bool predWin, float r, float pl
 	if (CfIsEngage(v) && !gCfEpRec[s]) {
 		gCfEpRec[s] = true;
 		gCfEpPW[s] = predWin;
-		gCfEpPL[s] = pl;
-		gCfEpPK[s] = pk;
+		gCfEpPL[s] = 0.f;
+		gCfEpPK[s] = 0.f;
 		gCfEpMain[s] = vsMain;
 		gCfEpLost[s] = 0.f;
 		gCfEpKill[s] = 0.f;
+		if (segT >= 0.f)
+			CfSegOpen(s, pl, pk, segT, gCfGM[g], fm);
 		if (vsMain) {
 			++gCfTakenMain;
 			gCfTakenMainM += gCfGM[g];
 		} else {
 			++gCfTakenIso;
 			gCfTakenIsoM += gCfGM[g];
+		}
+	} else if (gCfEpRec[s]) {
+		if (gCfEpSOn[s])
+			CfSegStep(s, contact && CfIsEngage(gCfEpV[s]));
+		if (!CfIsEngage(v)) {
+			CfSegClose(s, false);
+		} else if ((segT >= 0.f) && CfSegStale(s, gCfGM[g], fm)) {
+			CfSegClose(s, false);
+			CfSegOpen(s, pl, pk, segT, gCfGM[g], fm);
 		}
 	}
 	gCfEpV[s] = v;
@@ -1416,21 +1516,23 @@ void CfBasePull()
 		const bool win = CfPoolFight(foe, cx, cz);
 		const bool vsMain = CfHasBlob(foe);
 		const float poolD = gCfPDps + gCfPTwD;
+		const float fm = CfFoeMetal(foe);
 		for (uint i = 0; i < pool.length(); ++i) {
 			const int g = pool[i];
 			if (win)
 				CfVerdict(g, CF_BASE_ENGAGE, cx, cz, true, baseR,
 					(gCfPM > 0.f) ? gCfLostO * gCfGM[g] / gCfPM : 0.f,
-					(poolD > 0.f) ? gCfLostT * gCfGDps[g] / poolD : 0.f, vsMain);
+					(poolD > 0.f) ? gCfLostT * gCfGDps[g] / poolD : 0.f, vsMain, gCfSimT, fm, CfContact(g, foe));
 			else
 				CfVerdict(g, CF_BASE_HOLD, home.x, home.z, false, baseR, 0.f, 0.f, vsMain);
 		}
 	}
 }
 
-void CfEngageAt(int g, float tx, float tz, bool win, float r, float pl, float pk, bool vsMain)
+void CfEngageAt(int g, float tx, float tz, bool win, float r, float pl, float pk, bool vsMain, float segT, float fm,
+		bool contact)
 {
-	CfVerdict(g, CF_ENGAGE, tx, tz, win, r, pl, pk, vsMain);
+	CfVerdict(g, CF_ENGAGE, tx, tz, win, r, pl, pk, vsMain, segT, fm, contact);
 	const int s = CfEpSlot(gCfGT[g]);
 	if ((s >= 0) && (CfDist(tx, tz, gCfGX[g], gCfGZ[g]) <= gCfGRng[g] + gCfGSpr[g]))
 		gCfEpLatch[s] = true;
@@ -1472,9 +1574,21 @@ void CfDecide(int g)
 		++gCfComReach;
 	const float r = gCfGRng[g] + gCfGSpd[g] * CF_REACT_S + gCfGSpr[g];
 	const bool vsMain = CfHasBlob(foe);
-	// engaged and in contact, the fight is fought out (doctrine: a committed push punches through)
+	const float fm = CfFoeMetal(foe);
+	const bool contact = CfContact(g, foe);
+	// engaged and in contact, the fight is fought out (doctrine: a committed push punches through); its
+	// estimate is taken again only when the fight changed past its band
 	if ((s >= 0) && gCfEpLatch[s] && (gCfEpV[s] == CF_ENGAGE)) {
-		CfVerdict(g, CF_ENGAGE, tx, tz, gCfEpPW[s], r, 0.f, 0.f, vsMain);
+		float lpl = 0.f, lpk = 0.f, lT = -1.f;
+		if (gCfEpRec[s] && CfSegStale(s, gCfGM[g], fm)) {
+			CfPoolAt(x, z, g);
+			CfPoolFight(foe, x, z);
+			const float lpD = gCfPDps + gCfPTwD;
+			lpl = (gCfPM > 0.f) ? gCfLostO * gCfGM[g] / gCfPM : 0.f;
+			lpk = (lpD > 0.f) ? gCfLostT * gCfGDps[g] / lpD : 0.f;
+			lT = gCfSimT;
+		}
+		CfVerdict(g, CF_ENGAGE, tx, tz, gCfEpPW[s], r, lpl, lpk, vsMain, lT, fm, contact);
 		return;
 	}
 	// decided once per approach: a ring that still holds keeps the group out of it
@@ -1495,7 +1609,7 @@ void CfDecide(int g)
 		return;
 	CfPoolAt(x, z, g);
 	const bool win = CfPoolFight(foe, x, z);
-	const float L = gCfLostO, K = gCfLostT, KMob = gCfLostTMob;
+	const float L = gCfLostO, K = gCfLostT, KMob = gCfLostTMob, segT = gCfSimT;
 	const float poolD = gCfPDps + gCfPTwD;
 	const float pl = (gCfPM > 0.f) ? L * gCfGM[g] / gCfPM : 0.f;
 	const float pk = (poolD > 0.f) ? K * gCfGDps[g] / poolD : 0.f;
@@ -1508,7 +1622,7 @@ void CfDecide(int g)
 			++gCfBandHeld;
 		if (!CfIsEngage(prev))
 			CfDecLog(g, CF_ENGAGE, prev, Lc, Kc, net, -1.f, 0.f, 0.f, band, win, vsMain, tx, tz);
-		CfEngageAt(g, tx, tz, win, r, pl, pk, vsMain);
+		CfEngageAt(g, tx, tz, win, r, pl, pk, vsMain, segT, fm, contact);
 		return;
 	}
 	// where it would fall back to
@@ -1631,7 +1745,7 @@ void CfDecide(int g)
 		++gCfByStake;
 		if (!CfIsEngage(prev))
 			CfDecLog(g, CF_ENGAGE, prev, Lc, Kc, net, stake, q, retake, band, win, vsMain, tx, tz);
-		CfEngageAt(g, tx, tz, win, r, pl, pk, vsMain);
+		CfEngageAt(g, tx, tz, win, r, pl, pk, vsMain, segT, fm, contact);
 		return;
 	}
 	if (v == 0) {
@@ -1736,6 +1850,7 @@ void CfEndEpisodes()
 			continue;
 		++gCfEpN;
 		if (gCfEpRec[i]) {
+			CfSegClose(i, CfIsEngage(gCfEpV[i]));
 			++gCfRecEp;
 			if (gCfEpPW[i])
 				++gCfEpPredW;
@@ -1746,8 +1861,8 @@ void CfEndEpisodes()
 			CfCalAdd(gCfEpPL[i], gCfEpLost[i], gCfEpPK[i], gCfEpKill[i]);
 		} else {
 			++gCfFallEp;
-			gCfFallLostM += gCfEpLostF[i];
 		}
+		gCfFallLostM += gCfEpLostF[i];
 		CfEpDrop(i);
 	}
 }
@@ -1827,7 +1942,7 @@ void CfNoteDeath(CCircuitUnit@ unit, const CCircuitDef@ atk)
 	const int s = CfEpSlot(t);
 	if (s < 0)
 		return;
-	if (gCfEpRec[s])
+	if (gCfEpRec[s] && CfIsEngage(gCfEpV[s]))
 		gCfEpLost[s] += Catalog::gCostM[d];
 	else
 		gCfEpLostF[s] += Catalog::gCostM[d];
@@ -1839,7 +1954,7 @@ void CfNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs
 		return;
 	if (byUs) {
 		for (uint i = 0; i < gCfEpT.length(); ++i) {
-			if (gCfEpRec[i] && (CfDist(gCfEpX[i], gCfEpZ[i], pos.x, pos.z) <= gCfEpR[i])) {
+			if (gCfEpRec[i] && CfIsEngage(gCfEpV[i]) && (CfDist(gCfEpX[i], gCfEpZ[i], pos.x, pos.z) <= gCfEpR[i])) {
 				gCfEpKill[i] += edef.costM;
 				break;
 			}
@@ -1886,6 +2001,7 @@ void CfLog()
 		+ " | settled taken=" + gCfRecEp + " predL=" + int(gCfEpPredL) + " realL=" + int(gCfEpLostM)
 		+ " predK=" + int(gCfEpPredK) + " realK=" + int(gCfEpKillM)
 		+ " fallEp=" + gCfFallEp + " fallLost=" + int(gCfFallLostM)
+		+ " seg open=" + gCfSegOpen + " cut=" + gCfSegCut + " cutL=" + int(gCfSegCutL) + " cutK=" + int(gCfSegCutK)
 		+ " | dec engage=" + gCfEngDec + " fall=" + gCfFallDec + " byStake=" + gCfByStake + " bandHeld=" + gCfBandHeld
 		+ " flipsEF=" + gCfFlipEF + " net=" + int(gCfDecNet) + " stake=" + int(gCfDecStake)
 		+ " retake=" + int(gCfDecRetake) + " save=" + int(gCfDecSave)
@@ -1906,6 +2022,7 @@ void CfLog()
 	gCfFlipEF = 0; gCfBandHeld = 0; gCfByStake = 0; gCfFallDec = 0; gCfEngDec = 0; gCfAsmSet = 0; gCfAsmJoin = 0;
 	gCfTakenMain = 0; gCfTakenIso = 0; gCfHunts = 0; gCfFallEp = 0; gCfRecEp = 0;
 	gCfTakenMainM = 0.f; gCfTakenIsoM = 0.f; gCfFallLostM = 0.f;
+	gCfSegOpen = 0; gCfSegCut = 0; gCfSegCutL = 0.f; gCfSegCutK = 0.f;
 	gCfDecNet = 0.f; gCfDecStake = 0.f; gCfDecRetake = 0.f; gCfDecSave = 0.f;
 	gCfTheirMaxM = 0.f; gCfOurMaxM = 0.f;
 	for (uint b = 0; b < 6; ++b) {

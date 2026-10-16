@@ -1862,6 +1862,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	const bool ebLogNow = ebOn && !AirPlant(fid) && EarlyBallPpcDue(int(fac.id));
 	array<uint> ebIdx;
 	array<float> ebNoV;
+	const bool cmOn = CounterMixOn();
+	array<uint> cmIdx;
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
 	const bool ecoStrictOn = EcoSeatStrict();
@@ -2790,6 +2792,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					+ " " + Catalog::Def(d).GetName() + EarlyBallPpcParts(d, linePPC) + " |" + ebS
 					+ " p=" + NnF(ppc / linePPC, 3) + " r=" + NnF(roleW, 2) + " have=" + int(have)
 					+ " v=" + NnF(vA * 1000.f, 1));
+			if (cmOn && !ebScr && CmGround(d) && !Catalog::gFloater[d] && !Catalog::gSub[d])
+				cmIdx.insertLast(candV.length());
 			candDef.insertLast(d);
 			candV.insertLast(vA);
 			candGain.insertLast(gainA);
@@ -3123,6 +3127,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			}
 		}
 	}
+	CounterMixApply(candV, candGain, candDef, cmIdx);
 	if (rezDef >= 0) {
 		const float pLine = (pLineN > 0) ? (pLineSum / float(pLineN)) : 1.f;
 		const float hM = (fillS > 1.f) ? fillS : 60.f;
