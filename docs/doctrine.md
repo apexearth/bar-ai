@@ -126,12 +126,12 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 
 **When to fight**
 - Push by default: with no significant threat in sight the army keeps going toward their base, even blind; there is no cooldown.
-- An army is only worth what it does: with that much army, push. Built and waiting at home is waste; early, small groups take their expansions and contest the spots rather than waiting for a ball big enough for their base (his 10-16).
-- Commit with enough to win or stay out of reach: never walk into tower range, turn back, and walk in again; decide once (his 10-16).
-- A unit does not engage what kills it in one hit (Janus and Pounders against Pawns and Grunts); the army that can beat it does, and production answers what they field (bots against a vehicle army lose) (his 10-16).
-- Split by matchup: when they field a splash unit (a Janus), the units that survive and beat it (Thugs) fight it while the fast light ones (Pawns, Grunts) go around for their mexes and economy. Grunts are good against plenty, but not against splash (his 10-16).
-- Concentrate, defeat in detail (his 10-16, Napoleon): match their blob with one army, never meet it in pieces; and hit their separated groups one at a time with more than each can answer.
-- Focus fire, enemy damage first (his 10-16): a committed group sets its targets together and kills what deals the damage (the HLLT, the MLT, their riot unit) before anything else; 10-20 grunts that do this take a mex area with an HLLT and MLT in it.
+- Army is worth only what it does: an army that is not fighting or taking ground is waste. Use it as soon as a group can win somewhere, against the target it can beat now, not the one it might beat later.
+- Decide once whether to fight a defended point: commit with enough to win, or keep out of its reach. Re-decide only when something real changes.
+- A unit never fights what kills it in one hit or what its class loses to; the units that win that matchup fight it, and production answers the army they field.
+- Split a group by matchup: units that beat a threat fight it, units it counters go around it to their economy.
+- Concentrate: meet their main army with ours whole, never in pieces, and destroy their separated groups one at a time with overwhelming force.
+- Focus fire: a committed group shoots together, killing whatever deals the most damage first, armed targets before structures that do not shoot.
 - Some of the army is always on their half, and we want them chasing us on their side.
 - Default: attack their economy and defend against their army; sometimes seek out their army, destroy it and eat the wrecks.
 - Go in only with enough power in the area, judged on real health; after losses demand better odds and build more army.
