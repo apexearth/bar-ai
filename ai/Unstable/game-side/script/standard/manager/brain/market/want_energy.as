@@ -279,6 +279,8 @@ Want@ ProposeEnergy(CCircuitUnit@ unit)
 		// converter were free and standing. See ERealizeShare in price.as.
 		fReal = ERealizeShare(Catalog::gMakeE[d], bSec);
 		gain *= fReal;
+		if (!EcoQuiet())
+			gain *= RushMul(Catalog::gCostM[d]);
 		if (gain <= 0.f)
 			continue;
 		const float walkSec = WalkSecTo(unit, site);

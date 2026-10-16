@@ -117,6 +117,15 @@ PANELS = [
              "stop filling a lab's exit lane and stop closing the gaps between "
              "blocks. OFF: only the slower walled-in watch runs. "
              "`apex: unstick-stat` each minute counts both, on or off"),
+            ("TUNE_RUSH_AWARE", "ON: the AI works out how soon their army can "
+             "walk to our base. While we save for the next lab tier, the enemy "
+             "keeps making army, so on a small map the army we keep at home is "
+             "raised to meet what could arrive in that time. T2/T3 labs, the "
+             "gantry and big energy builds are worth less until that army "
+             "stands. On a big map their walk outlasts the saving and nothing "
+             "changes. OFF: the army floor is only the enemy army we have seen. "
+             "`apex: rush-stat` each minute shows the walk time, the threat, "
+             "the floor before and after, and how hard tech was marked down"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "

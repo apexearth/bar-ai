@@ -1984,7 +1984,10 @@ Want@ ProposePlant(CCircuitUnit@ unit)
 				: LatheSite(Catalog::Def(d), Catalog::Def(int(unit.circuitDef.id)),
 					(upAnchorOk && MakesUpgradeHands(d)) ? upAnchor : homeAnchor);
 		Want c;
-		const float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
+		float plantG = dupGain * bestMob * PipeLatencyMult(d, Catalog::gBuildPower[uid]);
+		if (((Factory::userData[d].attr & (Factory::Attr::T2 | Factory::Attr::T3)) != 0)
+			&& !EcoQuiet())
+			plantG *= RushMul(Catalog::gCostM[d]);
 		const float liftG = PlantLiftGain(d);
 		if ((liftG > 0.f) && (ai.frame >= gNextPlantLiftLog)) {
 			gNextPlantLiftLog = ai.frame + 30 * SECOND;
