@@ -112,7 +112,7 @@ void ShPriorsFill()
 		for (uint q = 0; q < pr.length(); ++q) {
 			const int pd = pr[q];
 			if (!Catalog::gAvailable[pd] || !LineCombat(pd) || Catalog::gFlyer[pd]
-				|| (Catalog::gSpeed[pd] <= 1.f))
+				|| (Catalog::gSpeed[pd] <= 1.f) || (Catalog::gRole[pd] == int(Unit::Role::SCOUT.type)))
 				continue;
 			if ((best < 0) || (Catalog::gCostM[pd] < Catalog::gCostM[best]))
 				best = pd;

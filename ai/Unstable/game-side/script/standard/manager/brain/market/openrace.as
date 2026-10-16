@@ -196,8 +196,10 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 		return 0.f;
 	// basic-fighter metal by the square law: UnitStrength is dps x hp, so one unit of k times a basic
 	// one's strength fights like sqrt(k) of them (linear, a Centurion read 3143 m for 270)
-	const float sBasic = (gSmhWalkDef > 0) ? UnitStrength(gSmhWalkDef) : 0.f;
-	const float c = (sBasic > 0.f) ? sqrt(UnitStrength(fd) / sBasic) * Catalog::gCostM[gSmhWalkDef] : Catalog::gCostM[fd];
+	// Speed is not strength here: it is already in tA and tau below.
+	const int bd = gSmhWalkDef;
+	const float sBasic = (bd > 0) ? Catalog::gDps[bd] * Catalog::gHealth[bd] : 0.f;
+	const float c = (sBasic > 0.f) ? sqrt(dps * Catalog::gHealth[fd] / sBasic) * Catalog::gCostM[bd] : Catalog::gCostM[fd];
 	const float bs = Catalog::gBuildTime[fd] / lineBp;
 	const float tB = bs / OpenRaceFeed(fd, bs);
 	const float tA = tB + walkE / spd;
@@ -207,7 +209,15 @@ float OpenRaceFighterV(int fd, float lineBp, float H, float tR, float A, float a
 	const int mex = OpenRaceMex();
 	if ((mex > 0) && (tA < H)) {
 		const float tau = Catalog::gHealth[mex] / dps + gOrcSpotD / spd;
-		kills = (tau > 0.1f) ? (H - tA) * holdF / tau : 0.f;
+		// It kills only while alive: their army there and their commander, fire spread by count.
+		float win = H - tA;
+		const float eDps = (gEbArmyAt + gEbRs * tA) * gEbQD + gEbComDps;
+		if (eDps > 0.f) {
+			const float life = Catalog::gHealth[fd] * (A + c) / (Catalog::gCostM[fd] * eDps);
+			if (life < win)
+				win = life;
+		}
+		kills = (tau > 0.1f) ? win * holdF / tau : 0.f;
 		const float nF = float(gSmhFoeSeenN) + float(gSmhFoeLikelyN) * gSmhOcc;
 		const float cap = nF * c / (A + c);
 		if (kills > cap)
