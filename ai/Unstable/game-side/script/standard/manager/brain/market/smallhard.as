@@ -131,12 +131,17 @@ void ShPriorsFill()
 	gSmhWalkDef = walkDef;
 }
 
-// Their box to our home over our own pathfinder's grid, re-flooded each minute.
+// Our home to their box over our own pathfinder grid. The box centre can sit on high
+// ground no unit reaches, so the ring widens until it touches ground the flood reached.
 void ShWalkStep(const AIFloat3& in box)
 {
-	const float ring = 256.f;
 	if (gSmhWalkId >= 0) {
-		const float c = ai.WalkMapCost(gSmhWalkId, Builder::gHomePos, ring);
+		float ring = 256.f;
+		float c = ai.WalkMapCost(gSmhWalkId, box, ring);
+		while ((c > -1.5f) && (c < 0.f) && (ring < 2048.f)) {
+			ring *= 2.f;
+			c = ai.WalkMapCost(gSmhWalkId, box, ring);
+		}
 		if (c > -1.5f) {
 			gSmhLine = box.distance2D(Builder::gHomePos);
 			gSmhWalk = (c >= 0.f) ? (c + ring) : -1.f;
@@ -147,7 +152,7 @@ void ShWalkStep(const AIFloat3& in box)
 	}
 	if ((gSmhWalkId < 0) && (gSmhWalkDef > 0) && (ai.frame >= gSmhWalkAt + 60 * SECOND)) {
 		gSmhWalkAt = ai.frame;
-		gSmhWalkId = ai.WalkMapStart(Catalog::Def(gSmhWalkDef), box);
+		gSmhWalkId = ai.WalkMapStart(Catalog::Def(gSmhWalkDef), Builder::gHomePos);
 	}
 }
 
