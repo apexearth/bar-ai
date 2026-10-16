@@ -354,8 +354,16 @@ void SmallHardNoteOrder(const CCircuitDef@ o)
 
 void SmallHardComTick(CCircuitUnit@ u)
 {
-	if (!gSmhOn || (u is null))
+	if (u is null)
 		return;
+	const int c = ShComJob(u);
+	ComHomeTick(u, c);
+	if (gSmhOn)
+		++gSmhJobN[c];
+}
+
+int ShComJob(CCircuitUnit@ u)
+{
 	int c = 7;
 	if (gComDec == COM_FIGHT)
 		c = 5;
@@ -375,7 +383,7 @@ void SmallHardComTick(CCircuitUnit@ u)
 		else if (bt == int(Task::BuildType::DEFENCE))
 			c = 4;
 	}
-	++gSmhJobN[c];
+	return c;
 }
 
 void SmallHardNoteComPriced() { ++gSmhComPriced; }

@@ -150,7 +150,8 @@ float ComFightHpAfter(float hp, float hpMax, float myDps, float supDps, float su
 	secs = fHp / ours;
 	const float mine = hpMax * hp;
 	const float share = (mine + supHp > 0.f) ? mine / (mine + supHp) : 1.f;
-	const float after = hp - 0.5f * fDps * secs * share / ((hpMax > 1.f) ? hpMax : 1.f);
+	const float fall = ComHomeOn() ? ComHomeFire(float(n) * keep) : 0.5f;
+	const float after = hp - fall * fDps * secs * share / ((hpMax > 1.f) ? hpMax : 1.f);
 	return (after > 0.f) ? after : 0.f;
 }
 
@@ -228,10 +229,13 @@ AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool have
 		best = here;
 	float bestD = here.distance2D(best);
 	const float hereFoe = haveFoe ? here.distance2D(foe) : 0.f;
+	const bool homeward = ComHomeRetreatHome();
+	const AIFloat3 retire = best;
+	const float hereHome = here.distance2D(retire);
 	// STEP BACK, DON'T GO HOME (his 10-14: he walked 2,800 home from a claim and all the way out
 	// again, "a very huge waste of a good resource"): the nearest ground straight away from the threat
 	// where it no longer reaches him, sampled at the threat map's resolution.
-	if (haveFoe && (ai.GetTunable("apex_com_step", TUNE_COM_STEP) > 0.f) && (hereFoe > 1.f)) {
+	if (haveFoe && !homeward && (ai.GetTunable("apex_com_step", TUNE_COM_STEP) > 0.f) && (hereFoe > 1.f)) {
 		const AIFloat3 away = (here - foe) / hereFoe;
 		for (float d = 128.f; d < bestD; d += 128.f) {
 			AIFloat3 p = here + away * d;
@@ -250,7 +254,8 @@ AIFloat3 ComSafePoint(const AIFloat3& in here, const AIFloat3& in foe, bool have
 	for (uint i = 0; i < gCdTwPos.length(); ++i) {
 		const AIFloat3 c = gCdTwPos[i];
 		const float d = here.distance2D(c);
-		if ((d >= bestD) || (haveFoe && (c.distance2D(foe) < hereFoe) && (d > gCdTwRng[i])))
+		if ((d >= bestD) || (haveFoe && (c.distance2D(foe) < hereFoe) && (d > gCdTwRng[i]))
+			|| (homeward && (c.distance2D(retire) >= hereHome)))
 			continue;
 		float gd = 0.f, gh = 0.f, s = 0.f;
 		ComGunAt(c, gd, gh);
@@ -338,7 +343,7 @@ void ComAssess(CCircuitUnit@ u)
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 		if (!OnMap(gp))
 			continue;
-		int tier = 0, nMob = 0, nCl = 0;
+		int tier = 0, nMob = 0, nCl = 0, nKill = 0;
 		float vmax = 0.f, dps = 0.f, hpS = 0.f, rad = 0.f;
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 		for (int k = 0; k < nU; ++k) {
@@ -347,7 +352,10 @@ void ComAssess(CCircuitUnit@ u)
 				|| (Catalog::gSurfT[d] <= 0.f) || (Catalog::gDps[d] <= 0.f))
 				continue;
 			++nMob;
-			if (Catalog::gMaxRange[d] <= dgR)
+			const bool dgk = ComHomeDgKills(d);
+			if (dgk)
+				++nKill;
+			if (dgk && (Catalog::gMaxRange[d] <= dgR))
 				++nCl;
 			dps += Catalog::gDps[d];
 			hpS += Catalog::gHealth[d];
@@ -379,7 +387,7 @@ void ComAssess(CCircuitUnit@ u)
 			AIFloat3 toHome = Builder::gHomePos - gp;
 			toHome.SafeNormalize2D();
 			if (vv.x * toHome.x + vv.z * toHome.z > 1.f)
-				nCl = nMob;
+				nCl = nKill;
 		}
 		gi2.insertLast(gi);
 		gArr.insertLast(arr);
@@ -725,6 +733,7 @@ void ComDecide(CCircuitUnit@ u, const string& in why)
 	}
 	const int was = gComDec;
 	gComDec = chosen;
+	ComHomeNoteDec(was, chosen);
 	gComDecAt = ai.frame;
 	++gComDecN;
 	++gComChosenN[chosen];
@@ -841,7 +850,7 @@ void ComDecideTick(CCircuitUnit@ u)
 		gComNextAt = ai.frame + (gCsThreat ? 3 : 30) * SECOND;
 	}
 	// In the trap he waits for them: the D-gun fires at what walks into reach, it does not walk out to them.
-	u.SetDGunClose(((gComDec == COM_FIGHT) && !gShip) || ((gComDec == COM_WORK) && !gCsThreat));
+	u.SetDGunClose(((gComDec == COM_FIGHT) && !gShip) || ((gComDec == COM_WORK) && !gCsThreat && ComHomeWalkOk(u)));
 	ComEnforce(u);
 	if (ai.frame >= gComStatAt) {
 		gComStatAt = ai.frame + 60 * SECOND;
@@ -1045,7 +1054,7 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 	const float tBack = back / spd;
 	const float hp = u.GetHealthPercent();
 	float fHp = 0.f, fDps = 0.f, vmax = 0.f;
-	int n = 0;
+	int n = 0, nk = 0;
 	for (uint i = 0; i < gCrGp.length(); ++i) {
 		const float dd = gCrGp[i].distance2D(pos);
 		const float arr = (gCrSpd[i] > 0.f) ? ((dd > gCrRng[i]) ? (dd - gCrRng[i]) / gCrSpd[i] : 0.f)
@@ -1057,6 +1066,7 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 		fHp += gCrHp[i];
 		fDps += gCrDps[i];
 		n += gCrN[i];
+		nk += gCrNk[i];
 		if (gCrSpd[i] > vmax)
 			vmax = gCrSpd[i];
 	}
@@ -1072,6 +1082,8 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 				fHp += cw * Catalog::gHealth[cDef];
 				fDps += cw * Catalog::gDps[cDef];
 				++n;
+				if (ComHomeDgKills(cDef))
+					++nk;
 				if (cs > vmax)
 					vmax = cs;
 				SmallHardNoteComPriced();
@@ -1083,7 +1095,7 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 	float gd = 0.f, gh = 0.f, s = 0.f;
 	ComGunAt(pos, gd, gh);
 	ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd, gh, fDps, fHp, 0.f, n, s);
-	const float kills = ComDGunKills(u, s, vmax, 12.f, n);
+	const float kills = ComDGunKills(u, s, vmax, 12.f, nk);
 	return ComFightHpAfter(hp, Catalog::gHealth[cd], Catalog::gDps[cd], gd, gh, fDps, fHp, kills, n, s);
 }
 

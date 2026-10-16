@@ -52,6 +52,7 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 29 | (10-16) Small maps: go really hard into military, starve their mexes, commander at the factory | TUNE_SMALL_HARD (path contact, strength at arrival, mex denial, factory guard) | `smallhard-stat` k/rho/floor/mix | FIRES -- cand-5 vs v0.2.6 small 9-0-3; raider count still ~0, untested whether he sees "really hard" |
 | 30 | (10-16) Army gets its share; fewer floor-built cons | TUNE_BUDGET_HOLD (floors/hoists yield while army is under its share) | `budgethold-stat` actual/target, skipped/asked | FIRES -- smoke: conFloor 0/1 skipped; effect on cons count not yet read |
 | 31 | (10-15) Hold at least half the map before eco | TUNE_MAP_SHARE | `mapshare` gap | FIRES -- cand-2 mid 11-1-0, cand-5 all sizes ahead; watch slot on |
+| 32 | (10-16) Small maps: commander supports the factory, is not lost to their commander | TUNE_COM_HOME (off): time off the lab priced as army, guard earns it; no D-gun kill on a commander; their commanders are a base attack; walk-ins price seen guns | `comhome-stat` jobS assist, fwdS, guard/won, alt, walk no | UNTESTED -- cand-5 small-s504 t2: assist=0 every minute, guard v 11 vs mex 155, 13 FIGHT/RETREAT swaps 2.0-3.8m, 0 com-ship lines while a corcom took 1730 m of base |
 
 ## A SITE MOVED AFTER PRICING IS A WALK NOBODY PRICED (2026-10-15)
 

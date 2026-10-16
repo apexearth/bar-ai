@@ -916,7 +916,22 @@ bool ComLeashed(CCircuitUnit@ unit, Want@ w, const AIFloat3& in at)
 // wants come back as the same object.
 void ChargeTrip(Want@ w, CCircuitUnit@ unit)
 {
-	if ((w is null) || (w.kind == WK_NONE) || (w.kind == WK_MEX) || !OnMap(w.pos))
+	if ((w is null) || (w.kind == WK_NONE) || !OnMap(w.pos) || (w.value <= 0.f))
+		return;
+	// The lab he is not at, on the commander's every other job (comhome.as): a time cost, so the
+	// exposure reprice below keeps it.
+	{
+		const float away = ComHomeAwayM(unit, w);
+		if (away != w.awayM) {
+			const float c0 = w.mCost + w.tCost;
+			w.tCost += away - w.awayM;
+			w.awayM = away;
+			const float c1 = w.mCost + w.tCost;
+			if ((c0 > 0.f) && (c1 > 0.f))
+				w.value *= c0 / c1;
+		}
+	}
+	if (w.kind == WK_MEX)
 		return;
 	const float c = w.mCost + w.tCost;
 	if ((c <= 0.f) || (w.value <= 0.f))
@@ -2888,6 +2903,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		TobPathNote(why, top);
 	}
 	TobPathLog();
+	ComHomeNoteElection(unit, top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.
 	const double _tLog = Perf::T0();

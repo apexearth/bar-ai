@@ -81,6 +81,7 @@
 #include "market/policy.as"          // the policy net: one evolved network decides every head
 #include "market/comdecide.as"      // the commander's situation and answer, recorded for a commander net
 #include "market/comship.as"        // the base dying with its defence beaten: he steps in, never runs
+#include "market/comhome.as"        // small maps: his time away from the lab priced as army, the base he defends, his walk-ins
 #include "market/nntech.as"         // the T2 decision: now or wait, recorded for a T2 net
 #include "market/protect_nn.as"     // leaks, and static defence's amount and site as recorded draws
 #include "market/protect_nntype.as" // which gun class a ground-defence want builds, as a recorded draw

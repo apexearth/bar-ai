@@ -398,6 +398,7 @@ array<float> gCrRng;
 array<float> gCrSpd;
 array<float> gCrDps;
 array<int> gCrN;
+array<int> gCrNk;   // ...of them the D-gun can kill
 array<float> gCrHp;
 array<bool> gCrHeavy;
 int gCrAt = -1;
@@ -412,6 +413,7 @@ void ComRaidFill(CCircuitUnit@ unit)
 	gCrSpd.resize(0);
 	gCrDps.resize(0);
 	gCrN.resize(0);
+	gCrNk.resize(0);
 	gCrHp.resize(0);
 	gCrHeavy.resize(0);
 	gCrHome = !OwnEffigyStands() && (Factory::gHaveT2 || CommCaution(unit)
@@ -423,14 +425,23 @@ void ComRaidFill(CCircuitUnit@ unit)
 		const AIFloat3 gp = aiEnemyMgr.GetEnemyGroupPos(gi);
 		if (!OnMap(gp))
 			continue;
-		int tier = 0, nMob = 0, nRaid = 0;
-		float vmax = 0.f, dps = 0.f, hpS = 0.f;
+		int tier = 0, nMob = 0, nRaid = 0, nKill = 0;
+		float vmax = 0.f, dps = 0.f, hpS = 0.f, rng = 0.f;
+		const bool guns = ComHomeOn();
 		const int nU = aiEnemyMgr.GetEnemyGroupUnitCount(gi);
 		for (int k = 0; k < nU; ++k) {
 			const int d = aiEnemyMgr.GetEnemyGroupUnitDef(gi, k);
-			if (!Catalog::ValidId(d) || !Catalog::gMobile[d] || Catalog::gFlyer[d])
+			if (!Catalog::ValidId(d) || Catalog::gFlyer[d])
 				continue;
+			// their standing guns, seen: what a claim or a walk-in stands under (apex_com_home)
+			if (!Catalog::gMobile[d]) {
+				if (!guns || (Catalog::gDps[d] <= 0.f) || (Catalog::gSurfT[d] <= 0.f))
+					continue;
+				rng = (Catalog::gMaxRange[d] > rng) ? Catalog::gMaxRange[d] : rng;
+			}
 			++nMob;
+			if (ComHomeDgKills(d))
+				++nKill;
 			dps += Catalog::gDps[d];
 			if (Catalog::gDps[d] > 0.f) hpS += Catalog::gHealth[d];
 			if (Catalog::gSpeed[d] > vmax)
@@ -444,10 +455,12 @@ void ComRaidFill(CCircuitUnit@ unit)
 		if (nMob == 0)
 			continue;
 		gCrGp.insertLast(gp);
-		gCrRng.insertLast(aiEnemyMgr.GetEnemyGroupRange(gi));
+		const float gr = aiEnemyMgr.GetEnemyGroupRange(gi);
+		gCrRng.insertLast((rng > gr) ? rng : gr);
 		gCrSpd.insertLast(vmax);
 		gCrDps.insertLast(dps);
 		gCrN.insertLast(nMob);
+		gCrNk.insertLast(nKill);
 		gCrHp.insertLast(hpS);
 		gCrHeavy.insertLast((tier >= 2) && (nRaid < nMob));
 	}

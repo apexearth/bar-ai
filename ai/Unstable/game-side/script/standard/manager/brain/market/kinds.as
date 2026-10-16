@@ -48,6 +48,7 @@ final class Want {
 	float tripM = 0.f;      // the asker's expected loss on that road (TripRisk x its worth)
 	float valueRaw = 0.f;   // value before the trip was charged
 	float backM = 0.f;      // the road back home, inside tripM
+	float awayM = 0.f;      // the commander's absence from the lab, inside tCost (comhome.as)
 	float nnMult = 1.f;     // the value net's multiplier, already inside value (nnlog.as)
 	bool nnPriced = false;  // in the list when the net looked; forced wants added after are not
 	array<float>@ nnOpt;    // the net's inputs for this option, computed once per election
