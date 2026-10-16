@@ -126,6 +126,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 
 **When to fight**
 - Push by default: with no significant threat in sight the army keeps going toward their base, even blind; there is no cooldown.
+- An army is only worth what it does: with that much army, push. Built and waiting at home is waste; early, small groups take their expansions and contest the spots rather than waiting for a ball big enough for their base (his 10-16).
 - Some of the army is always on their half, and we want them chasing us on their side.
 - Default: attack their economy and defend against their army; sometimes seek out their army, destroy it and eat the wrecks.
 - Go in only with enough power in the area, judged on real health; after losses demand better odds and build more army.
