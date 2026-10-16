@@ -56,6 +56,10 @@ bool CRaidTask::CanAssignTo(CCircuitUnit* unit) const
 	if (attackPower > maxPower) {
 		return false;
 	}
+	// apex_gather: a pack sent at a priced target keeps the members it launched with
+	if ((goalR > 0.f) && (manager->GetCircuit()->GetTunable("apex_gather", 0.f) > 0.f)) {
+		return false;
+	}
 	const int frame = manager->GetCircuit()->GetLastFrame();
 	if (leader->GetPos(frame).SqDistance2D(unit->GetPos(frame)) > SQUARE(1000.f)) {
 		return false;
@@ -277,8 +281,9 @@ void CRaidTask::Update()
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
 			leader, threatMap,
 			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
-			// apex_com_fight: a committed pack still paths around the guns it loses to (comfight.as)
-			(IsCommitted() && !cdef->IsAbleToFly() && (circuit->GetTunable("apex_com_fight", 0.f) <= 0.f))
+			// apex_com_fight / apex_gather: a committed pack still paths around the guns and army it loses to
+			(IsCommitted() && !cdef->IsAbleToFly() && (circuit->GetTunable("apex_com_fight", 0.f) <= 0.f)
+				&& (circuit->GetTunable("apex_gather", 0.f) <= 0.f))
 				? std::numeric_limits<float>::max()
 				: attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
@@ -600,9 +605,13 @@ void CRaidTask::FallbackRaid()
 	}
 
 	CPathFinder* pathfinder = circuit->GetPathfinder();
+	const bool bounded = hasGoal && !leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()
+			&& (circuit->GetTunable("apex_gather", 0.f) > 0.f);
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathSingleQuery(
 			leader, threatMap,
-			pos, position, pathfinder->GetSquareSize());
+			pos, position, pathfinder->GetSquareSize(), nullptr,
+			bounded ? attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale()
+				: std::numeric_limits<float>::max());
 	pathQueries[leader] = query;
 
 	pathfinder->RunQuery(circuit->GetScheduler().get(), query, [this](const IPathQuery* query) {
@@ -616,12 +625,36 @@ void CRaidTask::ApplyRaidPath(const CQueryPathSingle* query)
 
 	if (pPath->path.size() > 2) {
 //		position = path.back();
+		blockedSince = -1;
 		ActivePath();
 		return;
 	}
 
 	CCircuitAI* circuit = manager->GetCircuit();
 	const int frame = circuit->GetLastFrame();
+	// apex_gather: no way to the goal outside the reach of what beats us -- hold, and after 20 s go home
+	if (pPath->path.empty() && (goalR > 0.f) && !leader->GetCircuitDef()->IsAbleToFly() && IsCommitted()
+		&& (circuit->GetTunable("apex_gather", 0.f) > 0.f))
+	{
+		if (blockedSince < 0) {
+			blockedSince = frame;
+		}
+		if (frame - blockedSince > FRAMES_PER_SEC * 20) {
+			const AIFloat3& basePos = circuit->GetSetupManager()->GetBasePos();
+			circuit->LOG("apex: raid-blocked t=%i %s x%i goal=%.0f,%.0f -> home", circuit->GetTeamId(),
+					leader->GetCircuitDef()->GetDef()->GetName(), static_cast<int>(units.size()), goalPos.x, goalPos.z);
+			goalPos = basePos;
+			goalR = circuit->GetMilitaryManager()->GetBaseDefRange();
+			blockedSince = -1;
+		}
+		for (CCircuitUnit* unit : units) {
+			if (unit->GetTravelAct() != nullptr) {
+				unit->GetTravelAct()->StateWait();
+			}
+		}
+		return;
+	}
+	blockedSince = -1;
 	for (CCircuitUnit* unit : units) {
 		if (unit->GetTravelAct() != nullptr) {
 			unit->GetTravelAct()->StateWait();

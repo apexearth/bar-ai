@@ -137,7 +137,11 @@ destroys) plus the walk out and back, and a verdict moves only past the measured
 it falls back to the nearest friendly strength where the pooled estimate pays, onto one shared
 point against their largest group; attack groups out of contact walk onto the enemy group they beat
 by more than the band (defeat in detail); `nnraid.as` packs and split-off packs price their loss
-with the same calibrated fight. Who a squad member shoots: the task picks ONE target (raid: nearest
+with the same calibrated fight. A raid GO pulls every raider in the home pools and spare escorts
+onto the one live pack, wherever it is; under `TUNE_GATHER` (off, `gather.as`) the pack in the
+field and the raiders at home are priced as two groups, a GO launches the home group whole as a new
+pack whose members never change, and their army counts at the target if it can arrive while the
+pack walks and works. Who a squad member shoots: the task picks ONE target (raid: nearest
 economy when committed, else builders then highest influence; attack/defend: group worth) and
 `ISquadTask::Attack` gives each member a ring move plus set-target on it (refused beyond the
 member's own range, so out-of-range members fire at whatever the engine auto-targets); under a
