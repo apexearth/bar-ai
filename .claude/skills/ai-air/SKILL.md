@@ -18,6 +18,7 @@ reads them; functions are visible module-wide regardless).
 | `air/wave.as` | the roster one strike owns — see below |
 | `air/update.as` | `HoldsUnit`, `LookDispatch`/`LookWatch`, `Intercept`, `Release`, `ReArm`, `Update` |
 | `air/station.as` | spreading fighters over the fence ledger, spending obsolete T1 fighters |
+| `air/teamair.as` | `TUNE_TEAM_AIR` (off): the leader prices the AIR plan vs NORMAL; under AIR every seat holds strike planes at one rally and launches on the board's op. While it runs, `NaDecide` releases nothing |
 
 ## Ownership
 
@@ -103,6 +104,7 @@ ground parity and lets the commitment gate open.
 `apex: bomb spread units= aims= surv= primary= need= got= width= depth= rest=def:got/need` (C++ `CBombTask::PlanSpread`: each bomber of a focused wave gets its own aim; `need` = bombers to kill it at `strike_s` survival, published by `Release()` from `Throughput`) ·
 `apex: intercepting for ally t<n>` · `apex: fighters spread -- ...` ·
 `apex: nnair t= ... | chosen=` (docs/how-it-works.md) · `apex: nnair-stat` (60 s: decisions, GO by kind, gunships home/out, the wing each bomber type needs for the best cell) · `apex: nnair-go gunships` ·
+`apex: teamair-stat` (60 s, every seat: vAir/vNorm and their terms, gathered wing, target, need, ledger) · `teamair-plan` · `teamair-go` · `teamair-launch` · `teamair-gun-home` · `teamair-settled` ·
 `python tools/airaudit.py <match|tournament> [--minutes]` -- planes built, what our air killed, air losses
 
 ## Tunables

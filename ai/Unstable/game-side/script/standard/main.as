@@ -331,6 +331,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 		return;
 	Market::ComUnitDead(unit);
 	Market::EarlyBallNoteLoss(unit);
+	Air::TairNoteDeath(unit);
 	// The PREVIOUS death's flag is cleared now, so this id can be reused
 	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.
 	if ((gFinishedClearPending >= 0)
@@ -519,6 +520,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	if (edef.IsMobile())
 		Builder::NoteWreckField(pos, edef.costM);
 	Air::NoteEnemyDeath(edef, pos, byUs);
+	Air::TairNoteKill(edef, pos);
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);

@@ -92,6 +92,17 @@ void PlanBoardWrite(bool leads)
 	ai.SetTeamBoard(BOARD_PLAN_LEAD, leads ? float(ai.teamId + 1) : 0.f);
 }
 
+// The team-air leader's ruling (Air::TairPlanEval): the plan and a fresh lease for every seat.
+void PlanSet(int plan, const string why)
+{
+	const int was = gPlan;
+	gPlan = plan;
+	gPlanMineUntil = ai.frame + NG_HOLD_S * SECOND;
+	PlanBoardWrite(false);
+	if (was != plan)
+		AiLog("apex: plan t=" + ai.teamId + " sets " + NgName(plan) + " (" + why + ")");
+}
+
 void PlanNetDecide()
 {
 	if (ai.frame < gPlanNextAt)
@@ -155,14 +166,15 @@ void PlanNetDecide()
 	f.insertLast(Military::RaidPressure());
 	f.insertLast(Military::FreshMassingThreat());
 	array<float> w(NG_N, NE2_EPS);
-	w[NG_NORMAL] = 1.f;
+	const int ruleO = Air::TairRulePlan();
+	w[ruleO] = 1.f;
 	const float trust = NnHeadScore(NNG_ON, NNG_STATE, NNG_PLAN, NNG_S, NNG_O, NNG_H, NNG_XM, NNG_XS,
 		NNG_W1, NNG_B1, NNG_W2, NNG_B2, NNG_WO, NNG_BO, NNG_TRUST, st, f, w);
 	// An untrusted net's odds are only the NORMAL prior: the explorer then draws evenly.
 	// a whole-team plan is strategy exploration: only its own roll draws one (his 10-09)
 	const float flat = leads ? ((trust > 0.f) ? NG_EX_FLAT : 1.f) : 0.f;
 	array<float> p(NG_N);
-	gPlan = EcoDraw(NG_NORMAL, trust, w, p, flat);
+	gPlan = EcoDraw(ruleO, trust, w, p, flat);
 	const int force = int(ai.GetTunable("apex_plan_force", TUNE_PLAN_FORCE));
 	const bool forced = (force >= 0) && (force < NG_N);
 	if (forced) {
@@ -171,7 +183,7 @@ void PlanNetDecide()
 			p[o] = (o == force) ? 1.f : 0.f;
 	}
 	PlanBoardWrite(leads);
-	AiLog(EcoLine("nnplan", "NORMAL", (flat > 0.f) && !forced, trust, st, f, NG_NAMES, w, p, gPlan, why));
+	AiLog(EcoLine("nnplan", NgName(ruleO), (flat > 0.f) && !forced, trust, st, f, NG_NAMES, w, p, gPlan, why));
 	if (!leads)
 		return;
 	AiLog("apex: nn-explore-plan t=" + ai.teamId + " plan=" + NgName(gPlan) + " p=" + NnF(p[gPlan], 3)
