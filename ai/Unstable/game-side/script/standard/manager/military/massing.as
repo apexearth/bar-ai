@@ -203,14 +203,20 @@ float OurArmyNow()
 
 bool ConservativeStance()
 {
+	return StanceRatio() > Market::MapShareMul();
+}
+
+// Their mobile strength over ours while we under-buy army; 0 when there is no stance to read.
+float StanceRatio()
+{
 	if (ai.GetTunable("apex_conservative_hold", TUNE_CONSERVATIVE_HOLD) <= 0.f)
-		return false;
+		return 0.f;
 	if (Brain::gSpentTotal <= 1.f)
-		return false;   // nothing spent yet: no stance to read
+		return 0.f;   // nothing spent yet: no stance to read
 	const float share = Brain::ShareOf(Brain::ARMY);
 	const float target = Brain::TargetShare(Brain::ARMY);
 	if (share >= target)
-		return false;   // we ARE buying army: our army is meant to be used
+		return 0.f;   // we ARE buying army: our army is meant to be used
 	const float ours = OurArmyNow();
 	// What we cannot see is the foe memory's to estimate (foemem.as: seen,
 	// remembered and lost-track units). The old guess -- a low reading is fog
@@ -219,10 +225,16 @@ bool ConservativeStance()
 	float theirs = FoeMobileMassing();
 	const float believed = FoeBelievedM();
 	theirs = (believed > theirs) ? believed : theirs;
-	return (Market::StrRatio(theirs, ours) > 1.f) && (ours >= 0.f);
+	return (ours >= 0.f) ? Market::StrRatio(theirs, ours) : 0.f;
 }
 
+// Under our share of the map the bar to leave home falls with the gap (apex_map_share).
 float MassWant()
+{
+	return MassWantRaw() / Market::MapShareMul();
+}
+
+float MassWantRaw()
 {
 	// Sized against what the group can actually kill, not against the enemy's
 	// whole army: comparing to their total army answers "can we beat all of

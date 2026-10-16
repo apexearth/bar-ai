@@ -139,6 +139,18 @@ PANELS = [
              "`apex: pressure-stat` each minute shows the walk time, the "
              "horizon, the army target before and after, team vs their army, "
              "pushes, players joined and their extractors taken"),
+            ("TUNE_MAP_SHARE", "ON: while our team holds fewer of the map's "
+             "metal spots than its fair share (our players over all players, "
+             "half in an even game), the AI keeps a somewhat bigger army (up "
+             "to 1 + the shortfall), groups leave home sooner and are less "
+             "easily held back by a stronger enemy army, raids and the team "
+             "attack go for their extractors on the ground between the bases, "
+             "and a constructor values grabbing a free spot more. A base "
+             "under attack still defends. The payback horizon and every other "
+             "economy price are unchanged. Once we hold our share nothing "
+             "changes. `apex: mapshare-stat` each minute shows our spots, "
+             "theirs seen, the share, the gap, the army target before and "
+             "after, how often the hold was lifted and contest targets taken"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "

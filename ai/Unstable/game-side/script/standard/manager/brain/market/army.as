@@ -2294,7 +2294,7 @@ float ArmyTargetFull()
 		return gArmyTgtFull;
 	gArmyTgtAt = ai.frame;
 	gArmyTgtStamp = gOwnStamp;
-	gArmyTgtFull = ArmyTargetBase() * gPressHoldMul;
+	gArmyTgtFull = ArmyTargetBase() * gPressHoldMul * MapShareMul();
 	return gArmyTgtFull;
 }
 

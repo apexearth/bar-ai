@@ -442,7 +442,7 @@ void NrPriceSpot(uint s)
 		const uint e = uint(near[i]);
 		const int d = gNeD[e];
 		if (gNeP[e].distance2D(sp) <= rP) {
-			t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe);
+			t.v += NrPrizeOf(d, gNeP[e], Market::gAllSpotInc[s], foe) * ((Catalog::gExtractsM[d] > 0.f) ? Market::MapShareMul() : 1.f);
 			hp += Catalog::gHealth[d];
 			if (Catalog::gExtractsM[d] > 0.f)
 				mexKnown = true;
@@ -463,7 +463,7 @@ void NrPriceSpot(uint s)
 		const int md = NrMexDef();
 		if (md > 0) {
 			const float mexV = NrPrizeOf(md, sp, Market::gAllSpotInc[s], foe);
-			t.prior = occ * mexV;
+			t.prior = occ * mexV * Market::MapShareMul();
 			hp += occ * Catalog::gHealth[md];
 			// a look moves this spot's price by 2*occ*(1-occ)*prize, on average
 			NoteLook(LOOK_RAID, sp, 2.f * occ * (1.f - occ) * mexV, 45);
@@ -678,6 +678,7 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 			AiLog("apex: nnraid-go t=" + ai.teamId + " at=" + int(best.at.x) + "," + int(best.at.z)
 				+ " n=" + gNrU.length() + " v=" + int(best.v + best.prior) + " lossF=" + Market::NnF(best.lossF, 2)
 				+ " walkS=" + int(best.walkS));
+			Market::MapShareNoteRaid(best.at);
 		}
 		if (NrLive()) {
 			gAskTask.SetRaidGoal(gNrGoal, gNrGoalR);

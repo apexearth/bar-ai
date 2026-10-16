@@ -1248,6 +1248,7 @@ Want@ ProposeMex(CCircuitUnit@ unit)
 		// Metal we cannot spend scales nothing, so it is not priced as though
 		// it did -- the twin of the share energy has always had to prove.
 		gain *= MRealizeShare(rawAddM, walkSec + Catalog::BuildSecondsAt(d, mxBP));
+		gain *= MapShareMul();
 		ValueOf(d, gain, walkSec, Catalog::gBuildPower[uid], c, true, conRiskM);
 		// A spot with a recent loss near it is a rebuild: say what it is
 		// priced at and why (sampled 10 s).
