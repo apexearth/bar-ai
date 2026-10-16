@@ -197,6 +197,9 @@ void CAttackTask::Start(CCircuitUnit* unit)
 void CAttackTask::Update()
 {
 	++updCount;
+	if (ScriptMoveUpdate()) {
+		return;
+	}
 
 	/*
 	 * Merge tasks if possible
@@ -542,7 +545,7 @@ bool CAttackTask::MarchEnemyBox()
 void CAttackTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	ISquadTask::OnUnitIdle(unit);
-	if (units.empty()) {
+	if (units.empty() || ScriptMoveActive()) {
 		return;
 	}
 
@@ -1148,6 +1151,9 @@ void CAttackTask::FindTarget()
 				continue;
 			}
 			const AIFloat3& ePos = enemy->GetPos();
+			if (InKeepOut(ePos)) {
+				continue;
+			}
 			const AIFloat3& eVel = enemy->GetVel();
 			if ((eVel.SqLength2D() >= maxSpeed)/* && (eVel.dot2D(pos - ePos) < 0)*/) {  // speed and direction
 				skipNear(enemy, nearE, NR_VEL);

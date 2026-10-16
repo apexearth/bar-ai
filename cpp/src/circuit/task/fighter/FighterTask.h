@@ -49,7 +49,24 @@ public:
 
 	const std::set<CCircuitUnit*>& GetShields() const { return shields; }
 
+	// apex (comfight.as, apex_com_fight): the script's fight verdict for the group. Until `until` every member
+	// walks (fight false) or fight-walks (fight true) to pos, and the task's own targeting and travel wait.
+	void SetScriptMove(const springai::AIFloat3& pos, int until, bool fight);
+	bool ScriptMoveActive() const;
+	// ...and the defended point it decided not to take: targets inside the ring are not picked until `until`
+	void SetKeepOut(const springai::AIFloat3& pos, float r, int until) { keepPos = pos; keepR = r; keepUntil = until; }
+	bool InKeepOut(const springai::AIFloat3& p) const;
+
 protected:
+	bool ScriptMoveUpdate();
+	springai::AIFloat3 scriptPos;
+	int scriptUntil = -1;
+	int scriptIssued = -1;
+	bool scriptFight = false;
+	springai::AIFloat3 keepPos;
+	float keepR = 0.f;
+	int keepUntil = -1;
+
 	void SetTarget(CEnemyInfo* enemy);
 	void Attack(CCircuitUnit* unit, const int frame);
 

@@ -16,9 +16,12 @@
 #include "unit/action/DGunAction.h"
 #include "unit/action/TravelAction.h"
 #include "unit/enemy/EnemyUnit.h"
+#include "unit/CircuitUnit.h"
 #include "CircuitAI.h"
 #include "util/Utils.h"
 #include "spring/SpringMap.h"   // RoamPos: GetElevationAt
+
+#include "AISCommands.h"
 
 namespace circuit {
 
@@ -99,6 +102,56 @@ void IFighterTask::OnUnitIdle(CCircuitUnit* unit)
 	} else {
 		unit->SetTaskFrame(manager->GetCircuit()->GetLastFrame());
 	}
+}
+
+void IFighterTask::SetScriptMove(const AIFloat3& pos, int until, bool fight)
+{
+	if ((fight != scriptFight) || (pos.SqDistance2D(scriptPos) > SQUARE(64.f))) {
+		scriptIssued = -1;
+	}
+	scriptPos = pos;
+	scriptUntil = until;
+	scriptFight = fight;
+}
+
+bool IFighterTask::ScriptMoveActive() const
+{
+	return manager->GetCircuit()->GetLastFrame() < scriptUntil;
+}
+
+bool IFighterTask::InKeepOut(const AIFloat3& p) const
+{
+	return (keepR > 0.f) && (manager->GetCircuit()->GetLastFrame() < keepUntil)
+		&& (keepPos.SqDistance2D(p) < SQUARE(keepR));
+}
+
+bool IFighterTask::ScriptMoveUpdate()
+{
+	CCircuitAI* circuit = manager->GetCircuit();
+	const int frame = circuit->GetLastFrame();
+	if (frame >= scriptUntil) {
+		return false;
+	}
+	if ((scriptIssued >= 0) && (frame < scriptIssued + FRAMES_PER_SEC * 2)) {
+		return true;
+	}
+	scriptIssued = frame;
+	SetTarget(nullptr);
+	for (CCircuitUnit* unit : units) {
+		if (unit->GetTravelAct() != nullptr) {
+			unit->GetTravelAct()->StateWait();
+		}
+		TRY_UNIT(circuit, unit,
+			if (scriptFight) {
+				unit->CmdFightTo(scriptPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60,
+						CCircuitUnit::OrdSrc::SCRIPT);
+			} else {
+				unit->CmdMoveTo(scriptPos, UNIT_COMMAND_OPTION_RIGHT_MOUSE_KEY, frame + FRAMES_PER_SEC * 60,
+						CCircuitUnit::OrdSrc::SCRIPT);
+			}
+		)
+	}
+	return true;
 }
 
 void IFighterTask::OnUnitDamaged(CCircuitUnit* unit, CEnemyInfo* attacker)

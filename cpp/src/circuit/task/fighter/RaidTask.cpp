@@ -109,6 +109,9 @@ void CRaidTask::Start(CCircuitUnit* unit)
 void CRaidTask::Update()
 {
 	++updCount;
+	if (ScriptMoveUpdate()) {
+		return;
+	}
 
 	/*
 	 * Merge tasks if possible
@@ -267,7 +270,9 @@ void CRaidTask::Update()
 	std::shared_ptr<IPathQuery> query = pathfinder->CreatePathMultiQuery(
 			leader, threatMap,
 			startPos, pathRange, !urgentPositions.empty() ? urgentPositions : enemyPositions, GetHitTest(), true,
-			(IsCommitted() && !cdef->IsAbleToFly()) ? std::numeric_limits<float>::max()
+			// apex_com_fight: a committed pack still paths around the guns it loses to (comfight.as)
+			(IsCommitted() && !cdef->IsAbleToFly() && (circuit->GetTunable("apex_com_fight", 0.f) <= 0.f))
+				? std::numeric_limits<float>::max()
 				: attackPower / circuit->GetMilitaryManager()->GetRangeUnitCountCompensatorScale());
 	pathQueries[leader] = query;
 
@@ -285,7 +290,7 @@ void CRaidTask::Stop(bool done)
 void CRaidTask::OnUnitIdle(CCircuitUnit* unit)
 {
 	ISquadTask::OnUnitIdle(unit);
-	if (units.empty()) {
+	if (units.empty() || ScriptMoveActive()) {
 		return;
 	}
 
@@ -388,6 +393,9 @@ bool CRaidTask::FindTarget()
 		}
 
 		const AIFloat3& ePos = enemy->GetPos();
+		if (InKeepOut(ePos)) {
+			continue;
+		}
 		const bool isEnemyUrgent = isDefender && (inflMap->GetAllyDefendInflAt(ePos) > INFL_EPS);
 		if (!isEnemyUrgent && !urgentPositions.empty()) {
 			continue;
@@ -558,7 +566,7 @@ bool CRaidTask::GiveUpRaid()
 void CRaidTask::FallbackRaid()
 {
 	CCircuitAI* circuit = manager->GetCircuit();
-	const bool hasGoal = goalR > 0.f;
+	const bool hasGoal = (goalR > 0.f) && !InKeepOut(goalPos);
 	if (!hasGoal && GiveUpRaid()) {
 		return;
 	}

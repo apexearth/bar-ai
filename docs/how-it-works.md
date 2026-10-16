@@ -124,7 +124,10 @@ the bomber formation. The script side (`manager/military/`) decides **use**, not
 charger); `massing.as` sets the pool's leave bar; `posture.as`/`stance.as` hold, defend or
 attack; `raid.as` asks for raids on scored enemy spots; `withdraw.as` recalls; `nnhunt.as`,
 `nnstrike.as`, `nnsiege.as`, `nnraid.as` are the decisions to hunt their army, strike a timing
-window, siege a fort, raid. `ai-military`, `ai-army-composition`, `fight-analysis`.
+window, siege a fort, raid. Under `TUNE_COM_FIGHT` (off) `comfight.as` fights every ground squad
+in reach of an armed enemy out on paper each second and overrides its task through
+`SetScriptMove`: onto the nearest armed enemy when it wins, else back to the nearest friendly
+strength where the pooled estimate wins. `ai-military`, `ai-army-composition`, `fight-analysis`.
 
 **Air** (`manager/air/`): the wing masses bombers and gunships, `nnair.as` decides WAIT or GO on
 priced enemy economy cells against the AA in the way, fighters are elected for cover and air
