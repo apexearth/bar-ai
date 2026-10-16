@@ -25,3 +25,4 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | cand-14 | `cand-0.2.7-14` | cand-13 + counter mix (production by matchup vs the army seen) + calibration fix (prediction per fight segment) | vs BARb Red Comet, mean score: Armada A -1.03, Armada B -0.12, Cortex A -1.84, Cortex B -1.74 (avg -1.18; cand-13 avg -0.54) -- worse | - | - |
 | cal | (lane-c9 arm) | cand-13 + calibration fix only | vs BARb: Armada A +0.32, Armada B +0.52, Cortex A -2.31, Cortex B -2.06 (avg -0.88) | - | - |
 | cand-15 | `cand-0.2.7-15` | cal + focus fire (TUNE_FOCUS_FIRE) | vs BARb: -0.69 / -0.89 / -2.56 / -2.46 (avg -1.65) -- WORSE in every cell; off in the watch slot | - | - |
+| cand-15b | (lane-c9) | cal + focus fire, set-target only (no walks) | vs BARb: Armada A +0.28, Armada B +0.51, Cortex A -1.84, Cortex B -1.37 (avg -0.61 vs cal -0.88); our kills before min 10 67.3k vs 62.7k -- KEPT | - | - |
