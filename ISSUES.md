@@ -49,6 +49,9 @@ effect unmeasured; UNTESTED = never ran in a game. "watch/v0.2.5" = on in his sl
 | 26 | One big army | TUNE_ONE_ARMY (off) | armyheads.py | OFF; lost 25%->10% unmeasured once |
 | 27 | (seen 10-15) Rez bots | none | `produce:armrectr/cornecro`, `rezwant` | FIX BUILT -- TUNE_REZ_LIFE (off): price = reclaim over expected life minus cost. Dev 8v8: priced 78, cut 56; loss rate small there (44 rez deaths/8 seats), so life rarely binds; needs his 8v8 scale |
 | 28 | (seen 10-15) Late base lost to long-range plasma | none | `shelled ... by=corint`, deaths of gantries/coms | OPEN -- his 10-15 8v8: from min 47 our gantries then commanders died, several to corint (range 4,950), while our army stood ~3x theirs |
+| 29 | (10-16) Small maps: go really hard into military, starve their mexes, commander at the factory | TUNE_SMALL_HARD (path contact, strength at arrival, mex denial, factory guard) | `smallhard-stat` k/rho/floor/mix | FIRES -- cand-5 vs v0.2.6 small 9-0-3; raider count still ~0, untested whether he sees "really hard" |
+| 30 | (10-16) Army gets its share; fewer floor-built cons | TUNE_BUDGET_HOLD (floors/hoists yield while army is under its share) | `budgethold-stat` actual/target, skipped/asked | FIRES -- smoke: conFloor 0/1 skipped; effect on cons count not yet read |
+| 31 | (10-15) Hold at least half the map before eco | TUNE_MAP_SHARE | `mapshare` gap | FIRES -- cand-2 mid 11-1-0, cand-5 all sizes ahead; watch slot on |
 
 ## A SITE MOVED AFTER PRICING IS A WALK NOBODY PRICED (2026-10-15)
 
