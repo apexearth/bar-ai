@@ -183,6 +183,12 @@ bool NrTheirHalf(const AIFloat3& in p, const AIFloat3& in foe)
 	return p.distance2D(foe) < p.distance2D(Builder::gHomePos);
 }
 
+// The spot race prices their economy wherever it stands, and the contested open spots.
+bool NrPriced(const AIFloat3& in p, const AIFloat3& in foe)
+{
+	return Market::SpotRaceOn() || NrTheirHalf(p, foe);
+}
+
 // A spot looked at: a few a second, the whole list in seconds.
 void NrSpotLook()
 {
@@ -243,6 +249,8 @@ void NrSnapEnemy()
 float NrPrizeOf(int d, const AIFloat3& in at, float spotInc, const AIFloat3& in foe)
 {
 	float v = Catalog::gCostM[d];
+	if (Catalog::gMobile[d] && Catalog::gBuilder[d] && Market::SpotRaceOn())
+		return Market::SprConPrize(d, at, Market::PayH());
 	if (Catalog::gExtractsM[d] > 0.f) {
 		// one of their constructors walks out from their base and builds it again
 		const float rebuildS = at.distance2D(foe) / NrConSpeed() + Catalog::gBuildTime[d] / gNrConBP;
@@ -379,6 +387,8 @@ float gNjGrpM = 0.f, gNjGrpS = 0.f, gNjSpd = 0.f, gNjDps = 0.f, gNjLosR = 0.f;
 uint gNjN = 0, gNjS = 0;
 bool gNjHave = false;
 NrTarget@ gNjBest;
+bool gNjSpr = false;
+float gNjH = 0.f, gNjTR = 0.f, gNjHold0 = 0.f;
 
 bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3& in ctr, float spd,
 	float losR, float dps)
@@ -415,6 +425,11 @@ bool NrPriceBegin(const AIFloat3& in foe, float grpM, float grpS, const AIFloat3
 	gNjN = n;
 	gNjS = 0;
 	gNjHave = false;
+	gNjSpr = Market::SpotRaceOn();
+	if (gNjSpr) {
+		float a, arr;
+		Market::OpenRaceClock(0, gNjH, gNjTR, a, arr, gNjHold0);
+	}
 	@gNjBest = NrTarget();
 	return true;
 }
@@ -431,7 +446,7 @@ void NrPriceSpot(uint s)
 	array<int> near;
 	{
 	const AIFloat3 sp = Market::gAllSpots[s];
-	if (!OnMap(sp) || !NrTheirHalf(sp, foe))
+	if (!OnMap(sp) || !NrPriced(sp, foe))
 		return;
 	NrTarget t;
 	t.at = sp;
@@ -458,7 +473,9 @@ void NrPriceSpot(uint s)
 			t.defS += DgStr(d);
 	}
 	const bool looked = (gNrSpotSeen.length() == n) && (gNrSpotSeen[s] >= 0);
-	if (!mexKnown && !looked) {
+	if (gNjSpr)
+		t.v += Market::SprHoldPrize(int(s), gNjH, gNjTR, gNjHold0);
+	if (!mexKnown && !looked && NrTheirHalf(sp, foe)) {
 		// a spot we never saw: an extractor there as often as we find them
 		const int md = NrMexDef();
 		if (md > 0) {
@@ -689,6 +706,7 @@ void NrBind(int chosen, NrTarget@ best, float losR)
 				+ " walkS=" + int(best.walkS));
 			Market::MapShareNoteRaid(best.at);
 			Market::SmallHardNoteRaid(best.at);
+			Market::SpotRaceNoteGo(gNjGrpS, best.eS, true);
 		}
 		if (NrLive()) {
 			gAskTask.SetRaidGoal(gNrGoal, gNrGoalR);
@@ -837,6 +855,7 @@ void NrNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs
 	Market::PressNoteDeath(int(edef.id), pos, byUs);
 	Market::SmallHardNoteDeath(int(edef.id), byUs);
 	Market::EarlyBallNoteKill(int(edef.id), pos, byUs);
+	Market::SpotRaceNoteKill(edef.costM, byUs);
 	if (!byUs || (edef is null) || !NrLive())
 		return;
 	array<CCircuitUnit@>@ on = gAskTask.GetUnits();

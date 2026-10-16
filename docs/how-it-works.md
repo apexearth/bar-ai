@@ -96,7 +96,8 @@ and matchup), counter roles, scouts, rez bots, escorts and fodder. Which factory
 Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it. Under
 `TUNE_OPEN_RACE` (off) a con-floor order is first raced against the lab's best fighter on one
 clock (`market/openrace.as`), and a lab short of energy prices its units by feed share instead of
-idling.
+idling; on short contact the con is worth the open spots it reaches before their cons
+(`market/spotrace.as`), which also gives the team army and raiders their contest targets.
 
 **The budget** (`brain/budget.as`, `targets.as`): spend is counted from what finishes, in five
 rows (army, defence, air defence, economy, build power), against target shares of what we hold.

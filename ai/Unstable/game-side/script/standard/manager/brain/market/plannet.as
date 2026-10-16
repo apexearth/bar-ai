@@ -316,6 +316,9 @@ int TaPick(AIFloat3 &out at, float &out r)
 		at = Military::gStPos; r = Military::STRIKE_R;
 		return 2;
 	}
+	// the spot race prices their extractors, their cons and the contested spots on one list
+	if (SpotRaceOn() && SmallHardExpansion(at, r))
+		return 5;
 	if (PressExpansion(at, r) || MapShareExpansion(at, r) || SmallHardExpansion(at, r))
 		return 5;
 	float m = 0.f;
@@ -435,8 +438,10 @@ void TaLead()
 		const float gath = TaSum(BOARD_GATHER);
 		const float atk = TaSum(BOARD_TA_ATK);
 		const float team = (gath > atk) ? gath : atk;
-		if ((team > 0.f) && (team > need))
+		if ((team > 0.f) && (team > need)) {
 			TaAdvance(TA_GO, "gathered " + int(team) + " > " + int(need) + " (there " + int(foe) + ")");
+			SpotRaceNoteGo(team, need, false);
+		}
 		return;
 	}
 	// GO: an outcome, never a timer -- judged on the army AT the target, not the team's total
@@ -453,6 +458,8 @@ void TaLead()
 		TaPick(nx, nr);
 		const float nextFoe = aiMilitaryMgr.GetEnemyInflNear(nx, nr + PUSH_STAND);
 		TaOpen((near > nextFoe) ? TA_GO : TA_MASS, "cleared, there " + int(near) + " vs next " + int(nextFoe));
+		if (near > nextFoe)
+			SpotRaceNoteGo(near, nextFoe, false);
 		return;
 	}
 	// spent: what reached the target is under half of what stands there (before arrival, only the

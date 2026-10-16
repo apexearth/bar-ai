@@ -211,6 +211,7 @@ void ShPickTarget(const AIFloat3& in box)
 	gSmhHasTgt = false;
 	gSmhTgtNet = 0.f;
 	gSmhCand = 0;
+	SprPickBegin();
 	if ((gSmhK <= 0.f) || (gMsHeld.length() != gAllSpots.length()))
 		return;
 	PrTuneFill();
@@ -240,8 +241,11 @@ void ShPickTarget(const AIFloat3& in box)
 			gSmhTgtNet = net;
 			gSmhTgt = p;
 			gSmhHasTgt = true;
+			gSprKE = E;
+			gSprKPrize = prize;
 		}
 	}
+	SprContestPick(F, teamM, H, cw, cAt, cDef);
 }
 
 void ShRefresh()
@@ -358,6 +362,7 @@ void SmallHardComTick(CCircuitUnit@ u)
 		return;
 	const int c = ShComJob(u);
 	ComHomeTick(u, c);
+	SprNoteComJob(c);
 	if (gSmhOn)
 		++gSmhJobN[c];
 }
