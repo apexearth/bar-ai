@@ -31,6 +31,8 @@ private:
 	ICoreUnit::Id vipId;
 	float maxPower;
 	int engageLogAt = -1;  // apex: guard-engage is logged at most every 10 s per task
+	int chaseFrame = -1;   // apex: chase-stat, the last engage of a target faster than the guards
+	springai::AIFloat3 chasePos;
 };
 
 } // namespace circuit

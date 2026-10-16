@@ -1461,9 +1461,13 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// stalls; muted, we read factory duty 38-45% with 28% of all metal
 	// made wasted through the decisive midgame (nanofix-s3). eFeedA below
 	// still prices the stall into every army gain.
-	if (HardEStall() && (OverflowM() <= 0.5f)) {
-		gNoOrder = "e-stall";
-		return null;
+	const bool orcStall = HardEStall() && (OverflowM() <= 0.5f);
+	if (orcStall) {
+		if (!OpenRaceOn()) {
+			gNoOrder = "e-stall";
+			return null;
+		}
+		OpenRaceNoteStall();
 	}
 	// A plant whose yard is jammed makes nothing until it clears: every unit
 	// it adds stands in the same pen and paths against it.
@@ -2880,6 +2884,15 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 		const bool floorOn = !armyBehind;
 		if (!floorOn && (consNeedA > 0))
 			++gConFloorYieldN;
+		if ((consNeedA > 0) && floorOn && walker && OpenRaceOn()) {
+			const int orcF = OpenRacePick(fac, fid, prods, d, slot);
+			if (orcF > 0) {
+				AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
+					+ " #" + fac.id + " -> produce:" + Catalog::Def(orcF).GetName()
+					+ " (open race over " + Catalog::Def(d).GetName() + " need=" + consNeedA + ")");
+				return Catalog::Def(orcF);
+			}
+		}
 		if ((consNeedA > 0) && floorOn && UpkeepFloorPasses(d, fac, slot)
 			&& Brain::BudgetHoldPasses(Brain::BDH_CON, Brain::BUILDPOWER, uint(fac.id) + uint(slot) * 97)) {
 			AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName()
@@ -3156,6 +3169,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " sumV=" + formatFloat(sumV * 1000.f, "", 0, 0));
 		}
 	}
+	if (OpenRaceOn() && (candDef.length() > 0))
+		sumV = OpenRaceFeedPrice(fac, candDef, candV, candGain, sumV, eFeedA, rezDef, orcStall);
 	Perf::Add("prod.cands", _tProds);
 	if (prankNow && (prank.length() > 0)) {
 		gNextProdRankOf[prankUid] = ai.frame + 60 * SECOND;

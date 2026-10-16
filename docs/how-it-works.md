@@ -93,7 +93,10 @@ little deeper than the re-election gap (`TUNE_FAC_QUEUE`), inserting orders with
 floors (derived from income and the hands' backlog), then army priced against the army target
 and the enemy's army, the unit track record (`worth.as`: damage dealt over own health, per type
 and matchup), counter roles, scouts, rez bots, escorts and fodder. Which factory to build is a
-Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it.
+Want of kind plant/tech. Nano turrets are owed to a plant before any copy of it. Under
+`TUNE_OPEN_RACE` (off) a con-floor order is first raced against the lab's best fighter on one
+clock (`market/openrace.as`), and a lab short of energy prices its units by feed share instead of
+idling.
 
 **The budget** (`brain/budget.as`, `targets.as`): spend is counted from what finishes, in five
 rows (army, defence, air defence, economy, build power), against target shares of what we hold.

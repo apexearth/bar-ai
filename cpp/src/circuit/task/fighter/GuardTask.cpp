@@ -6,6 +6,7 @@
  */
 
 #include "task/fighter/GuardTask.h"
+#include "task/fighter/Catch.h"
 #include "module/MilitaryManager.h"
 #include "task/builder/BuilderTask.h"
 #include "CircuitAI.h"
@@ -89,6 +90,20 @@ void CFGuardTask::Update()
 	// ground target would pull the escort off it for nothing.
 	const bool airOnly = vip->GetCircuitDef()->IsAbleToFly();
 	const std::vector<ICoreUnit::Id>& enemyIds = circuit->GetCallback()->GetEnemyUnitIdsIn(pos, vip->GetCircuitDef()->GetLosRadius() + 500.f);
+	// apex_open_race: the guards' slowest speed, their reach and whether any can shoot up
+	const bool catchOn = circuit->GetTunable("apex_open_race", 0.f) > 0.f;
+	SChaseStat& chase = ChaseStat(circuit);
+	float gSpeed = std::numeric_limits<float>::max();
+	float gReach = 0.f;
+	bool gAir = false;
+	springai::AIFloat3 gPos = pos;
+	for (CCircuitUnit* u : units) {
+		const CCircuitDef* ud = u->GetCircuitDef();
+		gSpeed = std::min(gSpeed, ud->GetSpeed());
+		gReach = std::max(gReach, ud->GetMaxRange() * 0.9f);
+		gAir = gAir || ud->HasSurfToAir() || ud->HasSubToAir();
+		gPos = u->GetPos(frame);
+	}
 	// The guard answers what can reach the one it guards, nearest first: the
 	// first enemy in sight pulled the escort up to a kilometre off its worker
 	// for a minute (apexearth 2026-10-01: "they stopped guarding him").
@@ -107,6 +122,20 @@ void CFGuardTask::Update()
 		if ((d > reach) || (d >= bestD)) {
 			continue;
 		}
+		if (!units.empty()) {
+			if (!airOnly && (ed != nullptr) && ed->IsAbleToFly() && !gAir) {
+				if (catchOn) {
+					++chase.air;
+					continue;
+				}
+			} else if (CatchP(gPos, gSpeed, gReach, ei) <= 0.f) {
+				++chase.unreach;
+				if (catchOn) {
+					++chase.refused;
+					continue;
+				}
+			}
+		}
 		bestD = d;
 		target = ei;
 	}
@@ -116,6 +145,22 @@ void CFGuardTask::Update()
 			return;
 		}
 		attackFrame = frame;
+		{
+			const CCircuitDef* td = target->GetCircuitDef();
+			++chase.picks;
+			if (!units.empty() && (td != nullptr) && (td->GetSpeed() > gSpeed)) {
+				++chase.fast;
+				if (chaseFrame >= 0) {
+					chase.sec += float(frame - chaseFrame) / FRAMES_PER_SEC;
+					chase.dist += gPos.distance2D(chasePos);
+				}
+				chaseFrame = frame;
+				chasePos = gPos;
+			} else {
+				chaseFrame = -1;
+			}
+			ChaseStatLog(circuit, frame);
+		}
 		state = State::ENGAGE;
 		if (frame >= engageLogAt) {
 			engageLogAt = frame + FRAMES_PER_SEC * 10;

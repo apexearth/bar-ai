@@ -6,6 +6,7 @@
  */
 
 #include "task/fighter/DefendTask.h"
+#include "task/fighter/Catch.h"
 #include "map/InfluenceMap.h"
 #include <algorithm>
 #include <map>
@@ -395,6 +396,8 @@ bool CDefendTask::FindTarget()
 	const float ourSpeed = std::max(lowestSpeed, 1.f);
 	const float threatSq = (float)threatMap->GetSquareSize();
 	float detachThreat = .0f;
+	const bool catchOn = circuit->GetTunable("apex_open_race", 0.f) > 0.f;
+	SChaseStat& chase = ChaseStat(circuit);
 	for (auto& kv : enemies) {
 		CEnemyInfo* enemy = kv.second;
 		if (enemy->IsHidden() || (enemy->GetTasks().size() > 2)) {
@@ -465,6 +468,14 @@ bool CDefendTask::FindTarget()
 			}
 		}
 
+		const float catchP = CatchP(pos, ourSpeed, weaponRange, enemy);
+		if (catchP <= 0.f) {
+			++chase.unreach;
+			if (catchOn) {
+				++chase.refused;
+				continue;
+			}
+		}
 		float sqDist = pos.SqDistance2D(ePos);
 		if (petty) {
 			++pettySkipped;
@@ -481,6 +492,9 @@ bool CDefendTask::FindTarget()
 		if (tv && (edef != nullptr) && (FireAt(fire, edef) > 0.f)) {
 			const float killS = EnemyHp(enemy) / FireAt(fire, edef);
 			score = SQUARE((std::sqrt(sqDist) + killS * ourSpeed) / std::max(TargetWorth(fire, enemy, killS), 1.f));
+		}
+		if (catchOn) {
+			score /= SQUARE(catchP);
 		}
 		if (minSqDist > score) {
 			minSqDist = score;
@@ -510,6 +524,22 @@ bool CDefendTask::FindTarget()
 		leashLogAt = frame + FRAMES_PER_SEC * 30;
 		circuit->LOG("apex: defend-leash t=%i lead=%s n=%u skipped=%i", circuit->GetTeamId(),
 				cdef->GetDef()->GetName(), (unsigned)units.size(), leashSkipped);
+	}
+	{
+		const CCircuitDef* bd = (bestTarget != nullptr) ? bestTarget->GetCircuitDef() : nullptr;
+		chase.picks += (bestTarget != nullptr) ? 1 : 0;
+		if ((bd != nullptr) && (bd->GetSpeed() > ourSpeed)) {
+			++chase.fast;
+			if (chaseFrame >= 0) {
+				chase.sec += float(frame - chaseFrame) / FRAMES_PER_SEC;
+				chase.dist += pos.distance2D(chasePos);
+			}
+			chaseFrame = frame;
+			chasePos = pos;
+		} else {
+			chaseFrame = -1;
+		}
+		ChaseStatLog(circuit, frame);
 	}
 	if (bestTarget != nullptr) {
 		SetTarget(bestTarget);

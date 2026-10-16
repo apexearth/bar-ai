@@ -77,6 +77,8 @@ private:
 	int lastThreat = 0;
 	CCircuitUnit* damagedNow = nullptr;
 	std::map<CCircuitUnit*, int> birthJoined;
+	int chaseFrame = -1;   // apex: chase-stat, the last pick of a target faster than us
+	springai::AIFloat3 chasePos;
 };
 
 } // namespace circuit

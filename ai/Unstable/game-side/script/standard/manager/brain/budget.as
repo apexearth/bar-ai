@@ -49,8 +49,10 @@ void BudgetDecay()
 	if (a > 1.f)
 		a = 1.f;
 	const float k = 1.f - a;
-	for (int i = 0; i < int(CATS); ++i)
+	for (int i = 0; i < int(CATS); ++i) {
 		gSpent[i] *= k;
+		gBdhOrd[i] *= k;
+	}
 	gSpentTotal *= k;
 }
 
@@ -186,6 +188,7 @@ void NoteSpend(CCircuitUnit@ unit, Unit::UseAs usage)
 	gSpentTotal += m;
 	if (cat == ARMY)
 		gBdhArmyM += m;
+	gBdhOrd[cat] = (gBdhOrd[cat] > m) ? (gBdhOrd[cat] - m) : 0.f;
 }
 
 float ShareOf(Cat c)
@@ -243,14 +246,46 @@ bool BudgetHoldOn()
 	return gBdhOn;
 }
 
+// Ordered and unfinished factory metal (apex_open_race): the hold reads it as spent, so it holds
+// from the first order instead of from the first unit to finish.
+array<float> gBdhOrd(CATS, 0.f);
+
+void BudgetHoldNoteOrder(float m, bool hands)
+{
+	BudgetDecay();
+	gBdhOrd[hands ? int(BUILDPOWER) : int(ARMY)] += m;
+}
+
+float BudgetHoldMult(Cat c)
+{
+	if (!Market::OpenRaceOn())
+		return BudgetMult(c);
+	if (ai.GetTunable("apex_budget", TUNE_BUDGET) <= 0.f)
+		return 1.f;
+	const float target = TargetShare(c);
+	if (target <= 0.f)
+		return BUDGET_MIN;
+	BudgetDecay();
+	float tot = gSpentTotal;
+	for (int i = 0; i < int(CATS); ++i)
+		tot += gBdhOrd[i];
+	const float have = (tot > 1.f) ? (gSpent[c] + gBdhOrd[c]) / tot : 0.f;
+	const float mult = target / ((have > 0.001f) ? have : 0.001f);
+	if (mult > BUDGET_MAX)
+		return BUDGET_MAX;
+	if (mult < BUDGET_MIN)
+		return BUDGET_MIN;
+	return mult;
+}
+
 float BudgetHoldKeep(Cat c)
 {
 	if (!BudgetHoldOn() || (c == ARMY))
 		return 1.f;
-	const float a = BudgetMult(ARMY);
+	const float a = BudgetHoldMult(ARMY);
 	if (a <= 1.f)
 		return 1.f;
-	const float m = BudgetMult(c);
+	const float m = BudgetHoldMult(c);
 	return (m < 1.f) ? (m / a) : 1.f;
 }
 
@@ -282,7 +317,8 @@ void BudgetHoldLog()
 	for (int i = 0; i < int(CATS); ++i)
 		rows += " " + names[i] + "=" + formatFloat(ShareOf(Cat(i)), "", 0, 2)
 			+ "/" + formatFloat(TargetShare(Cat(i)), "", 0, 2)
-			+ "k" + formatFloat(BudgetHoldKeep(Cat(i)), "", 0, 2);
+			+ "k" + formatFloat(BudgetHoldKeep(Cat(i)), "", 0, 2)
+			+ ((gBdhOrd[i] > 0.f) ? ("m" + formatFloat(BudgetHoldMult(Cat(i)), "", 0, 2)) : "");
 	string paths = "";
 	for (int p = 0; p < int(BDH_N); ++p) {
 		paths += " " + BDH_NAMES[p] + "=" + gBdhSkip[p] + "/" + gBdhAsk[p];
@@ -292,7 +328,8 @@ void BudgetHoldLog()
 	AiLog(Factory::T() + "apex: budgethold-stat t=" + ai.teamId + " on=" + (BudgetHoldOn() ? 1 : 0)
 		+ rows + " skipped/asked:" + paths
 		+ " facBuilders=" + gBdhFacN + "@" + formatFloat((gBdhFacN > 0) ? gBdhFacKeep / float(gBdhFacN) : 1.f, "", 0, 2)
-		+ " armyM/min=" + int(gBdhArmyM));
+		+ " armyM/min=" + int(gBdhArmyM)
+		+ " ordered=" + int(gBdhOrd[ARMY]) + "/" + int(gBdhOrd[BUILDPOWER]));
 	gBdhFacN = 0;
 	gBdhFacKeep = 0.f;
 	gBdhArmyM = 0.f;
