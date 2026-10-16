@@ -131,6 +131,7 @@ it loses; a number here is his, carried as the default, never as a threshold to 
 - A unit does not engage what kills it in one hit (Janus and Pounders against Pawns and Grunts); the army that can beat it does, and production answers what they field (bots against a vehicle army lose) (his 10-16).
 - Split by matchup: when they field a splash unit (a Janus), the units that survive and beat it (Thugs) fight it while the fast light ones (Pawns, Grunts) go around for their mexes and economy. Grunts are good against plenty, but not against splash (his 10-16).
 - Concentrate, defeat in detail (his 10-16, Napoleon): match their blob with one army, never meet it in pieces; and hit their separated groups one at a time with more than each can answer.
+- Focus fire, enemy damage first (his 10-16): a committed group sets its targets together and kills what deals the damage (the HLLT, the MLT, their riot unit) before anything else; 10-20 grunts that do this take a mex area with an HLLT and MLT in it.
 - Some of the army is always on their half, and we want them chasing us on their side.
 - Default: attack their economy and defend against their army; sometimes seek out their army, destroy it and eat the wrecks.
 - Go in only with enough power in the area, judged on real health; after losses demand better odds and build more army.
