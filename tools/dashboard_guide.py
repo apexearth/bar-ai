@@ -108,6 +108,15 @@ PANELS = [
              "list against a blob. OFF prices splash as nothing. "
              "`apex: aoe-stat` shows their biggest group, how bunched it is, "
              "and our splash units' price with and without this"),
+            ("TUNE_UNSTICK", "ON: a fighting unit that has an order and has not "
+             "moved for 10 seconds (and is not shooting or being shot) is walked "
+             "to the nearest open ground it can reach; if it still cannot move, "
+             "the building of ours penning it is reclaimed, or blown up once what "
+             "it traps has lost more than the building is worth. Builders the "
+             "stuck watch frees get the same walk. Nano turrets and converters "
+             "stop filling a lab's exit lane and stop closing the gaps between "
+             "blocks. OFF: only the slower walled-in watch runs. "
+             "`apex: unstick-stat` each minute counts both, on or off"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "

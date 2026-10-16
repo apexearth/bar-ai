@@ -351,6 +351,7 @@ local NAMES = {
 	"apex_target_value",     -- Attack/DefendTask + SquadTask: targets by worth per second of fire, fire split in lethal doses (0)
 	"apex_birth_defend",     -- MilitaryManager MakeTask + withdraw.as: fighters tasked under fire defend that spot; defenders hold our structures (0)
 	"apex_aoe_vs_blob",      -- production.as + splash.as: ground splash units priced by the enemy their shell catches; splash demand tracks their clumped army (0)
+	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
 	"apex_defend_solo_deep",

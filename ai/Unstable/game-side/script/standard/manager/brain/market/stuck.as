@@ -224,6 +224,8 @@ void UpdateStuckBuilds()
 		// next election does not send the next hand.
 		if ((dSite > reach) && (done <= 0.f))
 			BlockNote(bp);
+		if ((dSite > reach) && (dx * dx + dz * dz <= STUCK_MOVED * STUCK_MOVED))
+			Military::UnstickBuilder(u);
 		freed.insertLast(u);
 		freedTask.insertLast(t);
 		StuckDrop(i);
