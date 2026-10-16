@@ -361,6 +361,7 @@ local NAMES = {
 	"apex_early_ball",       -- earlyball.as + production.as + massing.as + army.as PatrolCensus: short contact prices the cheap fast ball by the base it razes and holds the pool to that ball; field watch per metal; air scouts by the unseen metal their sweep adds (0)
 	"apex_open_race",        -- openrace.as + production.as con floor/e-stall + budget.as hold ledger + DefendTask/GuardTask.cpp catchability: con vs fighter on one clock (0)
 	"apex_com_fight",        -- comfight.as + FighterTask.cpp ScriptMove + RaidTask.cpp committed path: one fight estimate per group, engage or fall back and pool (0)
+	"apex_counter_mix",      -- countermix.as + production.as draw + facqueue.as: production priced by fight value against the army we have seen, raid value where it outruns what it cannot fight (0)
 	"apex_team_air",       -- air/teamair.as + plannet.as rule/PlanSet + production.as gunships + air/state.as + air/update.as HoldsUnit + nnair.as: priced team AIR plan, one rally, joint launch (0)
 	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",
