@@ -151,6 +151,23 @@ PANELS = [
              "changes. `apex: mapshare-stat` each minute shows our spots, "
              "theirs seen, the share, the gap, the army target before and "
              "after, how often the hold was lifted and contest targets taken"),
+            ("TUNE_SMALL_HARD", "ON: on a map where the enemy army can walk "
+             "to us (measured along the real path, not the straight line) "
+             "sooner than it could outbuild our home army, the AI plans its "
+             "army to beat what will be standing there when it arrives: the "
+             "army it has seen, their commanders, and what their extractors "
+             "pay for during the walk. Fast units are worth more for the "
+             "income they can deny, raids and the team attack go for their "
+             "extractors (worth their income for the rest of the game when "
+             "we can hold the ground), the commander helps the factory when "
+             "the army is short and metal is spare, and his trips out and our "
+             "raids allow for their unseen commander at home. Extractor and "
+             "expansion prices are unchanged. On a big map nothing changes. "
+             "`apex: smallhard-stat` each minute shows the path and straight "
+             "walk times, the contact weight, their income and strength at "
+             "arrival, the army floor before and after, units ordered by "
+             "kind, raids and kills on their extractors and the commander's "
+             "jobs"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "

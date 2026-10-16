@@ -187,7 +187,7 @@ void MsFinish()
 	if (foes < 1)
 		foes = seats;
 	gMsFair = float(seats) / float(seats + foes);
-	gMsGap = (gMsFair > gMsShare) ? (gMsFair - gMsShare) : 0.f;
+	gMsGap = (gMsOn && (gMsFair > gMsShare)) ? (gMsFair - gMsShare) : 0.f;   // the sweep also runs for small_hard
 	MsPickTarget();
 }
 
@@ -232,7 +232,7 @@ void MapShareNoteRaid(const AIFloat3& in at)
 
 void MapShareUpdate()
 {
-	if (!MapShareOn())
+	if (!MapShareOn() && !SmallHardOn())
 		return;
 	CacheSpots();
 	if (gAllSpots.length() == 0)
@@ -247,7 +247,7 @@ void MapShareUpdate()
 		if ((sr > 1.f) && (sr <= MapShareMul()))
 			++gMsLeanN;
 	}
-	if (ai.frame < gMsLogAt)
+	if (!gMsOn || (ai.frame < gMsLogAt))
 		return;
 	gMsLogAt = ai.frame + 60 * SECOND;
 	const float before = ArmyTargetBase() * gPressHoldMul;

@@ -1682,6 +1682,16 @@ static float CCircuitAI_GetPathLength(CCircuitAI* circuit, CCircuitUnit* unit, c
 	return circuit->GetPathLength(unit, to);
 }
 
+static int CCircuitAI_WalkMapStart(CCircuitAI* circuit, CCircuitDef* cdef, const AIFloat3& from)
+{
+	return circuit->WalkMapStart(cdef, from);
+}
+
+static float CCircuitAI_WalkMapCost(CCircuitAI* circuit, int handle, const AIFloat3& to, float radius)
+{
+	return circuit->WalkMapCost(handle, to, radius);
+}
+
 static float CCircuitAI_GetTeamMetalIncome(CCircuitAI* circuit, int otherTeamId)
 {
 	return circuit->GetTeamMetalIncome(otherTeamId);
@@ -2238,6 +2248,8 @@ CInitScript::CInitScript(CScriptManager* scr, CCircuitAI* ai)
 	r = engine->RegisterObjectMethod("CCircuitAI", "bool GroundConnected(const AIFloat3& in, const AIFloat3& in)", asFUNCTION(CCircuitAI_GroundConnected), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "array<CCircuitUnit@>@ GetOwnDamagedNear(const AIFloat3& in, float)", asFUNCTION(CCircuitAI_GetOwnDamagedNear), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetPathLength(CCircuitUnit@, const AIFloat3& in)", asFUNCTION(CCircuitAI_GetPathLength), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "int WalkMapStart(CCircuitDef@, const AIFloat3& in)", asFUNCTION(CCircuitAI_WalkMapStart), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
+	r = engine->RegisterObjectMethod("CCircuitAI", "float WalkMapCost(int, const AIFloat3& in, float)", asFUNCTION(CCircuitAI_WalkMapCost), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetEnemyCostAt(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_GetEnemyCostAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float EnemyReachSlack(const AIFloat3& in, float) const", asFUNCTION(CCircuitAI_EnemyReachSlack), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);
 	r = engine->RegisterObjectMethod("CCircuitAI", "float GetBuilderThreatAt(const AIFloat3& in) const", asFUNCTION(CCircuitAI_GetBuilderThreatAt), asCALL_CDECL_OBJFIRST); ASSERT(r >= 0);

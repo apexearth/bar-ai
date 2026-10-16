@@ -784,6 +784,7 @@ void ComDecideTick(CCircuitUnit@ u)
 	if (gComTickAt >= 0)
 		gComEffF[gComDec] += ai.frame - gComTickAt;
 	gComTickAt = ai.frame;
+	SmallHardComTick(u);
 	const bool shipWas = gShip;
 	ComShipAssess(u);
 	const bool hot = gCsThreat || (gComDec != COM_WORK) || gShip;
@@ -1058,6 +1059,24 @@ float ComClaimHpAfter(CCircuitUnit@ u, const AIFloat3& in pos, bool& out heavy)
 		n += gCrN[i];
 		if (gCrSpd[i] > vmax)
 			vmax = gCrSpd[i];
+	}
+	{
+		AIFloat3 cAt;
+		int cDef = 0;
+		const float cw = SmallHardComPrior(cAt, cDef);
+		if (cw > 0.f) {
+			const float dd = cAt.distance2D(pos);
+			const float rg = Catalog::gMaxRange[cDef], cs = Catalog::gSpeed[cDef];
+			const float arr = (cs > 0.f) ? ((dd > rg) ? (dd - rg) / cs : 0.f) : 1e9f;
+			if (arr <= tBack) {
+				fHp += cw * Catalog::gHealth[cDef];
+				fDps += cw * Catalog::gDps[cDef];
+				++n;
+				if (cs > vmax)
+					vmax = cs;
+				SmallHardNoteComPriced();
+			}
+		}
 	}
 	if (n <= 0)
 		return hp;

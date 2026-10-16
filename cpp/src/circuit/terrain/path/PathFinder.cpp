@@ -57,6 +57,7 @@ CPathFinder::CPathFinder(CTerrainData* terrainData, int numThreads)
 	pathMapYSize = terrainData->sectorZSize;
 	moveMapXSize = pathMapXSize + 2;  // +2 for passable edges (blocked border)
 	moveMapYSize = pathMapYSize + 2;  // +2 for passable edges (blocked border)
+	zeroThreat.assign(pathMapXSize * pathMapYSize, 0.f);
 
 	micropathers.reserve(numThreads);
 	for (int i = 0; i < numThreads; ++i) {
@@ -331,6 +332,20 @@ std::shared_ptr<IPathQuery> CPathFinder::CreateLineMapQuery(
 
 	FillMapData(query, unit, threatMap, startPos.y);
 	query->InitQuery(threatMap->GetThreatMapWidth(), threatMap->GetSquareSize());
+
+	return pQuery;
+}
+
+std::shared_ptr<IPathQuery> CPathFinder::CreateWalkMapQuery(const CCircuitDef* cdef, const AIFloat3& startPos)
+{
+	std::shared_ptr<IPathQuery> pQuery = std::make_shared<CQueryCostMap>(*this, MakeQueryId());
+	CQueryCostMap* query = static_cast<CQueryCostMap*>(pQuery.get());
+
+	float* moveArray;
+	CostFunc moveFun = GetMoveFun(GetMoveType(cdef, startPos.y), cdef, moveArray);
+	CostFunc threatFun = [](int index) { return 0.f; };
+	query->Init(moveArray, zeroThreat.data(), std::move(moveFun), std::move(threatFun), nullptr);
+	query->InitQuery(startPos, std::numeric_limits<float>::max());
 
 	return pQuery;
 }

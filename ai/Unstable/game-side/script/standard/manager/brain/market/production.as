@@ -1850,6 +1850,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	// candidate; RoleTarget/RoleValue walk it once each per candidate.
 	const float tPatrolMiss = PatrolMiss();   // the cover and screen terms saturate on this half alone
 	const float tFoeSpeed = FoeSpeedCap();
+	const float tShRaidW = SmallHardRaidW();
 	const bool ecoRoleOn = EcoRoleActive();
 	const bool ecoQuietOn = EcoQuiet();
 	const bool ecoStrictOn = EcoSeatStrict();
@@ -2492,6 +2493,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 			// flat 100 elmos/s: the bar is what may be raiding us, and we
 			// assume they built the fastest thing they could (apexearth).
 			ppc *= 1.f + (Catalog::gSpeed[d] / tFoeSpeed) * tSpeedWorth;
+			// Short contact: their income a fast unit can deny before their army answers (smallhard.as).
+			ppc *= 1.f + tShRaidW * Catalog::gSpeed[d] / tFoeSpeed;
 			// AND COVERAGE: ground patrolled per metal, worth something only
 			// while the fleet is short of the sites it has to watch. This is
 			// what buys pawns early -- cheap and fast is the most coverage per

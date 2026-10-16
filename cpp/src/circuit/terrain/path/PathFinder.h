@@ -74,6 +74,8 @@ public:
 			const springai::AIFloat3& startPos, float maxThreat = std::numeric_limits<float>::max());
 	std::shared_ptr<IPathQuery> CreateLineMapQuery(CCircuitUnit* unit, CThreatMap* threatMap,
 			const springai::AIFloat3& startPos);
+	// Walk distance flood for a def's move type, threat-free: cost = cells walked.
+	std::shared_ptr<IPathQuery> CreateWalkMapQuery(const CCircuitDef* cdef, const springai::AIFloat3& startPos);
 
 	void RunQuery(CScheduler* scheduler, const std::shared_ptr<IPathQuery>& query, PathCallback&& onComplete = nullptr);
 
@@ -135,6 +137,7 @@ private:
 	int moveMapYSize;  // +2 for edges
 	int pathMapXSize;
 	int pathMapYSize;
+	std::vector<float> zeroThreat;  // CQueryCostMap reads a threat array unconditionally
 
 	int queryId;
 
