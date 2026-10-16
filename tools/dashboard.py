@@ -510,7 +510,8 @@ ECODEF_RE = re.compile(
     r"threat=(-?\d+) meet=(-?\d+)")
 ECODEF_KEYS = ["on", "radar", "gOld", "gNew", "djOffer", "djWin", "djNoGain", "djV",
                "fieldDraw", "fieldWin", "covOffer", "covWin", "bfOffer", "bfWin", "covNoPrice",
-               "danger", "threat", "meet"]
+               "danger", "threat", "meet", "sdjFired", "sdjPriced", "sdjAgree"]
+SHADOW_DJ_RE = re.compile(r"apex: shadow-defjoin t=(\d+) .* all=(\d+)/(\d+)/(\d+)")
 
 
 def ecodef(d):
@@ -519,8 +520,14 @@ def ecodef(d):
     if not f.is_file():
         return {"error": "no infolog"}
     teams = {}
+    shadow = {}
     with f.open(encoding="utf-8", errors="replace") as fh:
         for line in fh:
+            if "apex: shadow-defjoin " in line:
+                s = SHADOW_DJ_RE.search(line)
+                if s:
+                    shadow[s.group(1)] = s.groups()[1:]
+                continue
             if "apex: ecodef-stat " not in line:
                 continue
             m = ECODEF_RE.search(line)
@@ -528,9 +535,11 @@ def ecodef(d):
                 continue
             g = m.groups()
             row = {"min": round(int(g[0]) / 1800.0, 1)}
-            for i, k in enumerate(ECODEF_KEYS):
+            for i, k in enumerate(ECODEF_KEYS[:-3]):
                 row[k] = g[2 + i]
             teams[g[1]] = row
+    for t, row in teams.items():
+        row["sdjFired"], row["sdjPriced"], row["sdjAgree"] = shadow.get(t, ("-", "-", "-"))
     return {"keys": ECODEF_KEYS, "teams": teams}
 
 

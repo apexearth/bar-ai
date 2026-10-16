@@ -42,6 +42,47 @@ int gEdBfOffer = 0, gEdBfWin = 0;
 float gEdDangerShare = 1.f, gEdThreat = 0.f, gEdMeet = 0.f;
 int gNextEdLog = 0;
 
+// DefJoinShadow (decide.as), per minute: `apex: shadow-defjoin`
+int gSdjFired = 0, gSdjPriced = 0, gSdjAgree = 0, gSdjNoPrice = 0;
+int gSdjFiredAll = 0, gSdjAgreeAll = 0, gSdjPricedAll = 0;
+float gSdjHoistV = 0.f, gSdjJoinV = 0.f, gSdjShadowV = 0.f;
+array<string> gSdjKinds;
+array<int> gSdjKindN;
+array<string> gSdjEx;
+
+void DefJoinShadowLog()
+{
+	gSdjFiredAll += gSdjFired;
+	gSdjAgreeAll += gSdjAgree;
+	gSdjPricedAll += gSdjPriced;
+	string kinds = "";
+	for (uint i = 0; i < gSdjKinds.length(); ++i)
+		kinds += ((i > 0) ? "," : "") + gSdjKinds[i] + ":" + gSdjKindN[i];
+	string ex = "";
+	for (uint i = 0; i < gSdjEx.length(); ++i)
+		ex += " ex" + i + "=" + gSdjEx[i];
+	const float pn = (gSdjPriced > 0) ? float(gSdjPriced) : 1.f;
+	AiLog(Factory::T() + "apex: shadow-defjoin t=" + ai.teamId
+		+ " fired=" + gSdjFired + " priced=" + gSdjPriced + " noPrice=" + gSdjNoPrice
+		+ " agree=" + gSdjAgree + " disagree=" + (gSdjPriced - gSdjAgree)
+		+ " hoistV=" + formatFloat(gSdjHoistV / pn, "", 0, 2)
+		+ " joinV=" + formatFloat(gSdjJoinV / pn, "", 0, 2)
+		+ " shadowV=" + formatFloat(gSdjShadowV / pn, "", 0, 2)
+		+ " byKind=" + ((kinds == "") ? "-" : kinds)
+		+ " all=" + gSdjFiredAll + "/" + gSdjPricedAll + "/" + gSdjAgreeAll
+		+ ex);
+	gSdjFired = 0;
+	gSdjPriced = 0;
+	gSdjAgree = 0;
+	gSdjNoPrice = 0;
+	gSdjHoistV = 0.f;
+	gSdjJoinV = 0.f;
+	gSdjShadowV = 0.f;
+	gSdjKinds.resize(0);
+	gSdjKindN.resize(0);
+	gSdjEx.resize(0);
+}
+
 // The going rate of each tower def: the gain the defence market last priced it
 // at, at its own best site, if within 10 s (an election can span frames). A
 // cover tower bids at it.
@@ -91,6 +132,7 @@ void EcoDefLog()
 		+ " bfOffer=" + gEdBfOffer + " bfWin=" + gEdBfWin + " covNoPrice=" + gEdCovNoPrice
 		+ " danger=" + formatFloat(gEdDangerShare, "", 0, 2)
 			+ " threat=" + int(gEdThreat) + " meet=" + int(gEdMeet));
+	DefJoinShadowLog();
 }
 
 }  // namespace Market

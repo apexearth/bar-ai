@@ -2717,6 +2717,8 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 			} else {
 				@ua = ProposeUnlockAssist(unit, true);
 				uaWhy = "defjoin";
+				if ((ua !is null) && (ua.kind == WK_ASSIST))
+					DefJoinShadow(unit, ranked, ua);
 			}
 		}
 		if ((ua !is null) && (ua.kind == WK_ASSIST)) {
@@ -3086,6 +3088,23 @@ Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
 	gAssistGuardS = saveS;
 	if ((w is null) || (w.kind != WK_ASSIST) || (boss is null) || (w.def is null))
 		return null;
+	const int priced = DefJoinPrice(unit, ranked, w, boss, bossId);
+	if (priced == 0)
+		++gEdDjNoGain;
+	if (priced <= 0)
+		return null;
+	EdInsertByValue(ranked, w);
+	@gDjTarget = boss;
+	gDjTargetId = bossId;
+	gDjGuardS = bossS;
+	++gEdDjOffer;
+	gEdDjV += w.value * 1000.f;
+	return w;
+}
+
+// Prices the join w in place: 1 priced, 0 the tower's worth is unknown, -1 no build power.
+int DefJoinPrice(CCircuitUnit@ unit, array<Want@>@ ranked, Want@ w, CCircuitUnit@ boss, const Id bossId)
+{
 	const int bi = int(bossId);
 	const int td = int(w.def.id);
 	IUnitTask@ job = null;
@@ -3114,10 +3133,8 @@ Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
 		if (towerG <= 0.f)
 			towerG = anyG;
 	}
-	if (towerG <= 0.f) {
-		++gEdDjNoGain;
-		return null;
-	}
+	if (towerG <= 0.f)
+		return 0;
 	const int uid = int(unit.circuitDef.id);
 	const float b = Catalog::gBuildPower[uid];
 	float crewB = 0.f;
@@ -3133,7 +3150,7 @@ Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
 	if (crewB <= 1.f)
 		crewB = Catalog::gBuildPower[int(boss.circuitDef.id)];
 	if ((b <= 0.f) || (crewB <= 0.f))
-		return null;
+		return -1;
 	const float remSec = Catalog::BuildSecondsAt(td, crewB + b) * (1.f - prog);
 	const float spd = Catalog::gSpeed[uid];
 	const float walkSec = (spd > 1.f) ? (unit.GetPos(ai.frame).distance2D(w.pos) / spd) : 30.f;
@@ -3142,13 +3159,51 @@ Want@ DefJoinOffer(CCircuitUnit@ unit, array<Want@>@ ranked)
 	w.tCost = (walkSec + remSec) * WageOf(unit) + w.gain * walkSec;
 	w.walkSec = walkSec;
 	w.value = w.gain / (w.mCost + w.tCost);
-	EdInsertByValue(ranked, w);
-	@gDjTarget = boss;
-	gDjTargetId = bossId;
-	gDjGuardS = bossS;
-	++gEdDjOffer;
-	gEdDjV += w.value * 1000.f;
-	return w;
+	return 1;
+}
+
+// Shadow of the defjoin hoist: what the election would take were the join priced
+// like DefJoinOffer prices it, against the auction's own best. No behaviour.
+void DefJoinShadow(CCircuitUnit@ unit, array<Want@>@ ranked, Want@ ua)
+{
+	if ((gAssistTarget is null) || (ua.def is null))
+		return;
+	++gSdjFired;
+	Want sw;
+	sw.kind = ua.kind;
+	@sw.def = ua.def;
+	sw.pos = ua.pos;
+	sw.spotId = ua.spotId;
+	if (DefJoinPrice(unit, ranked, sw, gAssistTarget, gAssistTargetId) <= 0) {
+		++gSdjNoPrice;
+		return;
+	}
+	Want@ best = null;
+	for (uint i = 0; i < ranked.length(); ++i)
+		if ((best is null) || (ranked[i].value > best.value))
+			@best = ranked[i];
+	gSdjHoistV += ua.value * 1000.f;
+	gSdjJoinV += sw.value * 1000.f;
+	++gSdjPriced;
+	if ((best is null) || (sw.value >= best.value)) {
+		++gSdjAgree;
+		gSdjShadowV += sw.value * 1000.f;
+		return;
+	}
+	gSdjShadowV += best.value * 1000.f;
+	const string bk = CatName(CategoryOf(best.kind)) + "/" + KindName(best.kind);
+	int ki = gSdjKinds.find(bk);
+	if (ki < 0) {
+		gSdjKinds.insertLast(bk);
+		gSdjKindN.insertLast(0);
+		ki = int(gSdjKinds.length()) - 1;
+	}
+	++gSdjKindN[uint(ki)];
+	if (gSdjEx.length() < 3)
+		gSdjEx.insertLast(unit.circuitDef.GetName() + "#" + unit.id
+			+ " assist:" + ua.def.GetName() + "@" + formatFloat(sw.value * 1000.f, "", 0, 2)
+			+ ">" + bk + ":" + ((best.def !is null) ? best.def.GetName() : "-")
+			+ "@" + formatFloat(best.value * 1000.f, "", 0, 2));
 }
 
 void EdExecNote(Want@ w, Want@ dj, Want@ cov, Want@ bf, bool fieldDraw, int bfSlot)
