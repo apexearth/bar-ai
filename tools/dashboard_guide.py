@@ -100,6 +100,14 @@ PANELS = [
              "now -- their Tzars price our Pawns by what Tzars did to Pawns -- as a moving average "
              "across games (fodder and fighters are never judged). OFF keeps the "
              "record but prices by stats alone. `record` on a run shows it"),
+            ("TUNE_AOE_VS_BLOB", "ON: a ground unit with splash is worth the "
+             "enemy units one shell catches in the ball their army walks in "
+             "(a shell hitting 2 more is worth 3 single-target guns of its cost), "
+             "and the more of their army is bunched, the more splash we keep "
+             "beside it — the Fatboy stops sitting at the bottom of the lab's "
+             "list against a blob. OFF prices splash as nothing. "
+             "`apex: aoe-stat` shows their biggest group, how bunched it is, "
+             "and our splash units' price with and without this"),
             ("TUNE_COVER_WORTH", "buys cheap fast bodies while the army is short "
              "of the ground it has to watch"),
             ("TUNE_RANGE_WORTH", "standing weight on weapon reach when picking "
