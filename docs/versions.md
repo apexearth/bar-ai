@@ -20,3 +20,4 @@ x mexes at the end (`scratchpad/h2hend.py`), else a draw. 12 games per map size:
 | cand-10 | (lane-c9) | cand-9 + spot race (con value = spots we reach first), square-law fighter strength, army contests spots | vs BARb Red Comet: 1W 0D 9L | - | - |
 | cand-11 | `cand-0.2.7-11` | cand-10 + fighter kills only while alive, strength without speed, basic fighter not a scout (Ticks -> Pawns) | vs BARb Red Comet: 1W 1D 8L; 30% of early losses to their commanders | - | - |
 | cand-12 | `cand-0.2.7-12` | cand-11 + fight estimate (TUNE_COM_FIGHT: group vs army+towers+commander, fall back/merge, keep-out rings, split by matchup) | vs BARb Red Comet: 1W 1D 8L; fires (fall 1948, split 1107, rings 705) but 841 engage/fall flips, estimate predicts 3.5x our real losses; deaths still 89% | - | - |
+| (control) | - | cand-11 with apex_target_value, apex_fight_travel, apex_birth_defend OFF | vs BARb Red Comet: 1W 0D 9L, deaths still 88% -- our fight layers are not the cause | - | - |
