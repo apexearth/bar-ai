@@ -33,7 +33,7 @@ bool SqDef(const CCircuitDef@ cd)
 		const bool ok = Catalog::ValidId(d) && !Catalog::gFlyer[d] && !Catalog::gKamikaze[d] && !Catalog::gBuilder[d]
 			&& Catalog::gHitsLand[d] && (Catalog::gDps[d] > 0.f) && (Catalog::gMaxRange[d] > 0.f)
 			&& (!Catalog::gFloater[d] || Catalog::gAmphib[d])
-			&& !cd.IsRoleAny(Unit::Role::SCOUT.mask);
+			&& (Catalog::gRole[d] != int(Unit::Role::SCOUT.type));   // main role: pawn/grunt carry "scout" as an attribute
 		gSqDef[d] = ok ? 1 : -1;
 	}
 	return gSqDef[d] > 0;

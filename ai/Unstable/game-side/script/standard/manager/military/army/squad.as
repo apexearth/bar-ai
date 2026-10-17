@@ -78,13 +78,11 @@ void SqRemoveAt(Squad@ s, uint i)
 	s.ordZ.removeAt(i);
 }
 
-void SqClampToMap(float& x, float& z)
+void SqClampToMap(float x, float z, float &out ox, float &out oz)
 {
 	const float w = float(AiTerrainWidth()) - 8.f, h = float(AiTerrainHeight()) - 8.f;
-	if (x < 8.f) x = 8.f;
-	if (z < 8.f) z = 8.f;
-	if (x > w) x = w;
-	if (z > h) z = h;
+	ox = (x < 8.f) ? 8.f : ((x > w) ? w : x);
+	oz = (z < 8.f) ? 8.f : ((z > h) ? h : z);
 }
 
 // THE ONE ORDER PATH. The C++ bindings refuse an order to a squad-owned unit unless this window is open, and count
@@ -101,7 +99,7 @@ void SqIssue(Squad@ s, uint i, int kind, float x, float z)
 		if (CfDist(s.ordX[i], s.ordZ[i], x, z) <= 0.5f * Catalog::gMaxRange[d])
 			return;
 	}
-	SqClampToMap(x, z);
+	SqClampToMap(x, z, x, z);
 	s.ordK[i] = kind;
 	s.ordX[i] = x;
 	s.ordZ[i] = z;
