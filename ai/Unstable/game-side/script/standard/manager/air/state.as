@@ -825,7 +825,7 @@ float WatchGainFor(int d, float fillSec)
 		return 0.f;
 	array<CCircuitUnit@>@ up = ai.GetOwnUnitsOfDef(Catalog::Def(d), Builder::gHomePos, 0.f);
 	const float n = float((up is null) ? 0 : up.length()) + float(Brain::PendAnyOf(d));
-	return unseen / ((fillSec > 1.f) ? fillSec : 180.f) * Military::ScoutMult() / (1.f + n);
+	return unseen / ((fillSec > 1.f) ? fillSec : 180.f) * Military::ScoutMult() / (1.f + n) * LifeShare(d, (fillSec > 1.f) ? fillSec : 180.f);
 }
 
 float LookGainFor(int d, float fillSec)
@@ -836,7 +836,7 @@ float LookGainFor(int d, float fillSec)
 		return 0.f;
 	if (!LookPays(d))
 		return 0.f;
-	return LookWorth() / ((fillSec > 1.f) ? fillSec : 180.f);
+	return LookWorth() / ((fillSec > 1.f) ? fillSec : 180.f) * LifeShare(d, (fillSec > 1.f) ? fillSec : 180.f);
 }
 
 // The same bar the wing holds its own planes to: the look must return the

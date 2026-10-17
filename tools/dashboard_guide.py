@@ -450,6 +450,9 @@ PANELS = [
              "`apex: airevery-stat` each minute: players with an air plant, the plant's price and what won "
              "instead, its parts, our aircraft by kind, idle ones, why the bombers and gunships went or "
              "stayed, the enemy air seen, our fighter metal, the fighters wanted and ordered, hunts flown"),
+            ("TUNE_UNIT_LIFE", "ON: a scout or radar plane is worth only the scouting it does before it is shot down, "
+             "judged from how long ours have lived so far; nothing changes until we lose some. OFF: each one "
+             "is priced as if it flew the whole window, so a plane that dies in seconds keeps being rebuilt."),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "

@@ -292,6 +292,7 @@ void UnitFinishedInner(CCircuitUnit@ unit, bool produced = true)
 		return;
 	if (produced)
 		Brain::NoteProduced(unit);
+	Air::LifeNoteBorn(unit);
 	Market::NoteFinished(unit);
 	Market::LiftNoteFinished(unit);
 	Market::ComUnitFinished(unit);
@@ -339,6 +340,7 @@ void AiUnitDestroyed(CCircuitUnit@ unit)
 	Market::ComUnitDead(unit);
 	Market::EarlyBallNoteLoss(unit);
 	Air::TairNoteDeath(unit);
+	Air::LifeNoteDead(unit);
 	// The PREVIOUS death's flag is cleared now, so this id can be reused
 	// cleanly, while AiUnitDestroyedBy (which follows this call) still read it.
 	if ((gFinishedClearPending >= 0)

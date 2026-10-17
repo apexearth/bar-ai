@@ -4,6 +4,7 @@
 
 // namespace Air, split across air/. THE ORDER BELOW IS LOAD-BEARING -- see
 // builder.as for why.
+#include "air/life.as"      // how long our units of a def live, from our losses (apex_unit_life)
 #include "air/state.as"     // the assassination plan and everything it counts
 #include "air/election.as"  // resolve the faction's air defs, elect the air player
 #include "air/wing.as"      // wing strength, whether we are armed and massed

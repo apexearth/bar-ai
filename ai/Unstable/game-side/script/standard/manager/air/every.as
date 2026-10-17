@@ -483,6 +483,7 @@ void EveryStat()
 	CCircuitDef@ wf = (gFighter !is null && Have(gPlant2) > 0) ? gFighter : gFighter1;
 	if (wf !is null)
 		ftrWant = EvFighterWantM(int(wf.id)) * EvFighterShare();
+	LifeStat();
 	AiLog(Factory::T() + "apex: airevery-stat t=" + ai.teamId + " on=" + (EveryOn() ? 1 : 0)
 		+ " seats=" + seats + "/" + mates
 		+ " plants=" + Have(gPlant1) + "," + Have(gPlant2)

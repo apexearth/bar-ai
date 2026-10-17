@@ -262,7 +262,7 @@ float EarlyBallScoutGain(int d, float fillS)
 	unseen += (eco > 0.f) ? eco : 0.f;
 	if (unseen <= 0.f)
 		return 0.f;
-	const float sweep = 2.f * Catalog::gLosR[d] * Catalog::gSpeed[d] * h;
+	const float sweep = 2.f * Catalog::gLosR[d] * Catalog::gSpeed[d] * h * Air::LifeShare(d, h);
 	const float have = float(((int(d) < int(gOwnCount.length())) ? gOwnCount[d] : 0) + Brain::PendAnyOf(d));
 	const float r = sweep / gEbFieldA;
 	const float m = EbExp(-have * r) * (1.f - EbExp(-r));

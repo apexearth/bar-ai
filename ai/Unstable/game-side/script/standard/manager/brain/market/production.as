@@ -2183,7 +2183,7 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 					: (Catalog::gRadarR[d] / SupRef(false));
 			const float gainS = (uncov > 0.f)
 					? (uncov * squadM * tIntelRate
-						/ 60.f * roleMul * capW)
+						/ 60.f * roleMul * capW * (Catalog::gFlyer[d] ? Air::LifeShare(d, fillS) : 1.f))
 					: 0.f;
 			if (gainS > 0.f) {
 				const float vS = gainS / Catalog::gCostM[d];
