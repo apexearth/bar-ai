@@ -453,6 +453,9 @@ PANELS = [
             ("TUNE_UNIT_LIFE", "ON: a scout or radar plane is worth only the scouting it does before it is shot down, "
              "judged from how long ours have lived so far; nothing changes until we lose some. OFF: each one "
              "is priced as if it flew the whole window, so a plane that dies in seconds keeps being rebuilt."),
+            ("TUNE_FLOW_E_BILL", "ON: when metal is piling up, a factory still only builds something if it is "
+             "worth the energy it costs; nothing worth it, and the factory waits. OFF: with spare metal a "
+             "factory builds even a near-useless unit rather than sit idle."),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "

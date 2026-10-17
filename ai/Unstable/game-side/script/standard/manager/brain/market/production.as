@@ -3406,6 +3406,19 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
 		return null;
 	}
+	// Spilling metal makes the metal free, not the energy: the order still pays its E bill.
+	if ((FreeMetalFlow() > 0.5f) && (gWantEmaV > 0.f) && (Catalog::gCostE[best] > 0.f)
+		&& (ai.GetTunable("apex_flow_e_bill", TUNE_FLOW_E_BILL) > 0.f)) {
+		const float bp = Catalog::gBuildPower[int(fac.circuitDef.id)];
+		const float bSec = (bp > 0.f) ? (Catalog::gBuildTime[best] / bp) : 30.f;
+		const float eBill = Catalog::gCostE[best] * EPriceCostAt(bSec, Catalog::gCostE[best]);
+		const float vE = (eBill > 0.f) ? (bestGain / eBill) : bestV;
+		if (vE < gWantEmaV * ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)) {
+			gNoOrder = "line-floor-e v=" + formatFloat(vE * 1000.f, "", 0, 2)
+					+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
+			return null;
+		}
+	}
 	AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
 		+ " v=" + formatFloat(bestV * 1000.f, "", 0, 2)
