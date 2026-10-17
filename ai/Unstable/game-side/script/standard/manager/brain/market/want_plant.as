@@ -698,7 +698,7 @@ bool CopyWaived(int d)
 	// No copy while the standing plant's nano block has room. Once it is full,
 	// overflow (or the eco seat, for the advanced air plant within its income
 	// curve) buys the next line.
-	if (!NanoBlockFull(d) || (GantryShort() !is null))
+	if (!NanoBlockFull(d) || GantryShortSite())
 		return false;
 	if (AirPlant(d) && (PlantTier(d) >= 2)) {
 		CCircuitDef@ want = Air::IntelPlantToBuild();

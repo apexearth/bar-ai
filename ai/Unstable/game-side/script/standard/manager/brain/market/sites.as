@@ -1918,6 +1918,48 @@ float NeediestLine(AIFloat3& out at)
 	return worst;
 }
 
+// A T2+ PLANT RISING IS A LINE ALREADY (apex_nano_early, his 2026-10-17): its frame, or its manned
+// order whose site has not moved, takes the nanos the finished plant would, at its own ground.
+int gPlantFramesAt = -1;
+array<AIFloat3> gPlantFramePos;
+array<int> gPlantFrameDef;
+
+bool NanoEarlyOn()
+{
+	return ai.GetTunable("apex_nano_early", TUNE_NANO_EARLY) > 0.f;
+}
+
+void PlantFrames()
+{
+	if (gPlantFramesAt == ai.frame)
+		return;
+	gPlantFramesAt = ai.frame;
+	gPlantFramePos.resize(0);
+	gPlantFrameDef.resize(0);
+	if (!NanoEarlyOn())
+		return;
+	for (uint i = 0; i < ComLen(); ++i) {
+		const int st = gComState[i];
+		if ((st & CS_COMING) == 0)
+			continue;
+		const int d = gComDef[i];
+		if (!Catalog::ValidId(d) || Catalog::gMobile[d] || (Catalog::gBuildsList[d].length() == 0)
+			|| (PlantTier(d) < 2) || (PlantClass(d) == PC_WATER))
+			continue;
+		const AIFloat3 p = gComPos[i];
+		if (!OnMap(p))
+			continue;
+		// An order's site moves when C++ takes the ring search, and the pack walk reads the ledger's.
+		if (st == CS_ORDERED) {
+			IUnitTask@ t = gComTask[i];
+			if ((t is null) || (Requests::Workers(t) == 0) || (t.GetBuildPos().distance2D(p) > 8.f))
+				continue;
+		}
+		gPlantFramePos.insertLast(p);
+		gPlantFrameDef.insertLast(d);
+	}
+}
+
 // A GANTRY TAKES ITS NANOS BEFORE ANYTHING ELSE GETS ONE (apexearth 2026-09-30:
 // "if I have 500 metal income, how many construction do I want nearby?... I
 // want you to do the math"). Enough lathe to spend our income through the
@@ -1937,6 +1979,11 @@ int GantryNanoWant(int gd)
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
 		CCircuitUnit@ f = Factory::gFacUnits[fi];
 		if ((f !is null) && IsGantryDef(int(f.circuitDef.id)))
+			++nG;
+	}
+	PlantFrames();
+	for (uint k = 0; k < gPlantFrameDef.length(); ++k) {
+		if (IsGantryDef(gPlantFrameDef[k]))
 			++nG;
 	}
 	float m = 0.f, bt = 0.f;
@@ -1970,7 +2017,10 @@ int GantryNanoWant(int gd)
 }
 
 int gGantryShortAt = -1;
-CCircuitUnit@ gGantryShort = null;
+bool gGantryShortAny = false;
+CCircuitUnit@ gGantryShort = null;   // null when the short gantry is a frame
+AIFloat3 gGantryShortPos(-1.f, 0.f, -1.f);
+int gGantryShortDef = -1;
 int gGantryShortN = 0;
 int gGantryShortWant = 0;
 int NanosReaching(const AIFloat3& in p)
@@ -1984,11 +2034,14 @@ int NanosReaching(const AIFloat3& in p)
 	}
 	return n;
 }
-CCircuitUnit@ GantryShort()
+// The gantry furthest under its want, finished or (apex_nano_early) rising: gGantryShortPos and
+// gGantryShortDef name it, gGantryShort is its unit when finished.
+bool GantryShortSite()
 {
 	if (gGantryShortAt == ai.frame)
-		return gGantryShort;
+		return gGantryShortAny;
 	gGantryShortAt = ai.frame;
+	gGantryShortAny = false;
 	@gGantryShort = null;
 	int worstGap = 0;
 	for (uint fi = 0; fi < Factory::gFacUnits.length(); ++fi) {
@@ -2005,9 +2058,34 @@ CCircuitUnit@ GantryShort()
 			gGantryShortN = n;
 			gGantryShortWant = want;
 			@gGantryShort = f;
+			gGantryShortPos = fp;
+			gGantryShortDef = int(f.circuitDef.id);
+			gGantryShortAny = true;
 		}
 	}
-	return gGantryShort;
+	PlantFrames();
+	for (uint k = 0; k < gPlantFrameDef.length(); ++k) {
+		const int d = gPlantFrameDef[k];
+		if (!IsGantryDef(d) || NanoBlockFull(d))
+			continue;
+		const int want = GantryNanoWant(d);
+		const int n = NanosReaching(gPlantFramePos[k]);
+		if (want - n > worstGap) {
+			worstGap = want - n;
+			gGantryShortN = n;
+			gGantryShortWant = want;
+			@gGantryShort = null;
+			gGantryShortPos = gPlantFramePos[k];
+			gGantryShortDef = d;
+			gGantryShortAny = true;
+		}
+	}
+	return gGantryShortAny;
+}
+
+bool GantryShortIsFrame()
+{
+	return GantryShortSite() && (gGantryShort is null);
 }
 
 // WHERE the next turret stands: the working army line furthest short of
@@ -2019,11 +2097,10 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 	bool any = false;
 	const float feed = FreeMetalFlow();
 	const float sumCeil = LineCeilSum();
-	CCircuitUnit@ g = GantryShort();
-	if (g !is null) {
-		at = g.GetPos(ai.frame);
+	if (GantryShortSite()) {
+		at = gGantryShortPos;
 		net = (feed > 1.f) ? feed : 1.f;
-		@line = g;
+		@line = gGantryShort;
 		return true;
 	}
 	// The line eating least for its weight: the same pick as the largest
@@ -2060,10 +2137,11 @@ bool LineSiteFor(AIFloat3& out at, float& out net, CCircuitUnit@& out line)
 // line asks for the same turret forever.
 bool AnyLineSite(AIFloat3& out at, float& out lathe)
 {
-	CCircuitUnit@ g = GantryShort();
-	if (g !is null) {
-		at = g.GetPos(ai.frame);
-		lathe = LineEat(g, at);
+	if (GantryShortSite()) {
+		at = gGantryShortPos;
+		// A frame's own arm builds nothing yet: only the ring there eats.
+		lathe = (gGantryShort !is null) ? LineEat(gGantryShort, at)
+				: (RingBPAt(at) * LineDensityOf(gGantryShortDef));
 		return true;
 	}
 	float fewest = -1.f;

@@ -460,6 +460,10 @@ PANELS = [
              "when we can afford it, instead of waiting for theirs to finish. OFF: one big strategic build at a "
              "time (more only while metal overflows), and the gantry waits its turn. `apex: gantry-why` every "
              "30 s while no gantry stands says what held it back"),
+            ("TUNE_NANO_EARLY", "ON: construction turrets go up around a gantry, an advanced lab or an "
+             "advanced air plant while it is still being built, as many as it will want once finished; they "
+             "help finish it and then serve it. `apex: nanowant` shows `gantry=frame:N/M` while the gantry "
+             "still short of turrets is unfinished. OFF: a factory gets turrets only once it is finished."),
             ("TUNE_SQUADS", "ON (needs the stock army switch on too): our own army layer runs the ground army -- "
              "not scouts, not air yet. Every ground fighter belongs to one squad and only that squad orders it. A "
              "squad gathers near home, answers an enemy at our buildings when it beats it, sets out whole when it "
