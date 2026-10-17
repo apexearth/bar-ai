@@ -1,17 +1,21 @@
 namespace Market {
 
 // apex: flowe-stat each minute: the picks the free-metal E bill held and passed, by def.
-dictionary gFlowEHeld;
+array<int> gFlowEHeldDef;
+array<int> gFlowEHeldN;
 int gFlowEPass = 0;
 int gFlowELogAt = 0;
 
 void FlowENote(int d, bool held)
 {
 	if (held) {
-		const string k = Catalog::Def(d).GetName();
-		int n = 0;
-		gFlowEHeld.get(k, n);
-		gFlowEHeld.set(k, n + 1);
+		const int i = gFlowEHeldDef.find(d);
+		if (i < 0) {
+			gFlowEHeldDef.insertLast(d);
+			gFlowEHeldN.insertLast(1);
+		} else {
+			gFlowEHeldN[i]++;
+		}
 	} else {
 		++gFlowEPass;
 	}
@@ -19,15 +23,39 @@ void FlowENote(int d, bool held)
 		return;
 	gFlowELogAt = ai.frame + 60 * SECOND;
 	string s = "";
-	array<string>@ ks = gFlowEHeld.getKeys();
-	for (uint i = 0; i < ks.length(); ++i) {
-		int n = 0;
-		gFlowEHeld.get(ks[i], n);
-		s += " " + ks[i] + ":" + n;
-	}
+	for (uint i = 0; i < gFlowEHeldDef.length(); ++i)
+		s += " " + Catalog::Def(gFlowEHeldDef[i]).GetName() + ":" + gFlowEHeldN[i];
 	AiLog(Factory::T() + "apex: flowe-stat t=" + ai.teamId + " pass=" + gFlowEPass + " held=" + s);
-	gFlowEHeld.deleteAll();
+	gFlowEHeldDef.resize(0);
+	gFlowEHeldN.resize(0);
 	gFlowEPass = 0;
+}
+
+// Spilling metal makes the metal free, not the energy: the order still pays its E bill.
+bool FlowEHeld(CCircuitUnit@ fac, int d, float gain, float v, float &out vE)
+{
+	vE = v;
+	if ((FreeMetalFlow() <= 0.5f) || (gWantEmaV <= 0.f) || (Catalog::gCostE[d] <= 0.f)
+		|| (ai.GetTunable("apex_flow_e_bill", TUNE_FLOW_E_BILL) <= 0.f))
+		return false;
+	const float bp = Catalog::gBuildPower[int(fac.circuitDef.id)];
+	const float bSec = (bp > 0.f) ? (Catalog::gBuildTime[d] / bp) : 30.f;
+	const float eBill = Catalog::gCostE[d] * EPriceCostAt(bSec, Catalog::gCostE[d]);
+	if (eBill > 0.f)
+		vE = gain / eBill;
+	const bool held = vE < gWantEmaV * ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR);
+	FlowENote(d, held);
+	return held;
+}
+
+// The scout's own gain, which falls with every one pending: the redraw reads it again.
+float LookGainNow(int d, float fillS, bool ebOn)
+{
+	const float gainLk = Air::LookGainFor(d, fillS);
+	const float gainW = ebOn ? EarlyBallScoutGain(d, fillS) : Air::WatchGainFor(d, fillS);
+	const float gainTrip = Military::LookBuyGain(d, fillS);
+	float g = (gainLk > gainW) ? gainLk : gainW;
+	return (gainTrip > g) ? gainTrip : g;
 }
 
 // The best power-per-metal a factory can field, tier fades included -- the
@@ -983,6 +1011,9 @@ string gNoOrder = "";
 // per 10 s election, ConOrderFor 16-79 ms a call).
 array<int> gRedrawDef;
 array<float> gRedrawV;
+array<float> gRedrawGain;
+bool gRedrawEb = false;
+array<float> gLookRaw;
 float gRedrawSum = 0.f;
 float gRedrawObsM = 0.f;
 float gRedrawUpM = 0.f;
@@ -1110,13 +1141,31 @@ CCircuitDef@ RedrawFor(CCircuitUnit@ fac, int slot)
 			++gUkNone;
 		return null;
 	}
+	const int pd = gRedrawDef[pick];
+	float pv = gRedrawV[pick];
+	float pg = (pick < gRedrawGain.length()) ? gRedrawGain[pick] : 0.f;
+	if (Air::IsLookDef(pd) && (pg > 0.f)
+		&& (ai.GetTunable("apex_flow_e_bill", TUNE_FLOW_E_BILL) > 0.f)) {
+		const float fillS = ai.GetTunable("apex_army_fill_s", TUNE_ARMY_FILL_S);
+		const float now = LookGainNow(pd, fillS, gRedrawEb);
+		const float then = (pd < int(gLookRaw.length())) ? gLookRaw[pd] : 0.f;
+		if (now <= 0.f)
+			return null;
+		const float k = (then > 0.f) ? (now / then) : 1.f;
+		if (k < 1.f) {
+			pv *= k;
+			pg *= k;
+		}
+	}
 	if ((FreeMetalFlow() <= 0.5f) && (gWantEmaV > 0.f)
-		&& (gRedrawV[pick] < gWantEmaV
+		&& (pv < gWantEmaV
 			* ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR)))
+		return null;
+	float vE;
+	if (FlowEHeld(fac, pd, pg, pv, vE))
 		return null;
 	// The batch refill skips the draw's checks, so the caps are asked again
 	// here: it took a capped fleet to 47/40.
-	const int pd = gRedrawDef[pick];
 	if (Catalog::gMobile[pd] && Catalog::gBuilder[pd]) {
 		const bool advHand = Catalog::gAdvHand[pd] && (ConTierHave(1) > ConTierHave(2));
 		if (Catalog::gRezzer[pd] ? (RezFleetHave() >= RezFleetCap())
@@ -2053,6 +2102,9 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				gainL = gainTrip;
 				why = ":trip(v";
 			}
+			if (int(gLookRaw.length()) <= d)
+				gLookRaw.resize(d + 1);
+			gLookRaw[d] = gainL;
 			gainL *= roleMul;
 			if (gainL > 0.f) {
 				const float vL = gainL / Catalog::gCostM[d];
@@ -3415,6 +3467,8 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 	bestGain = candGain[pick];
 	gRedrawDef = candDef;
 	gRedrawV = candV;
+	gRedrawGain = candGain;
+	gRedrawEb = ebOn;
 	gRedrawSum = sumV;
 	gRedrawFac = int(fac.id);
 	gRedrawAt = ai.frame;
@@ -3436,20 +3490,11 @@ CCircuitDef@ ConOrderFor(CCircuitUnit@ fac, int line, int slot)
 				+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
 		return null;
 	}
-	// Spilling metal makes the metal free, not the energy: the order still pays its E bill.
-	if ((FreeMetalFlow() > 0.5f) && (gWantEmaV > 0.f) && (Catalog::gCostE[best] > 0.f)
-		&& (ai.GetTunable("apex_flow_e_bill", TUNE_FLOW_E_BILL) > 0.f)) {
-		const float bp = Catalog::gBuildPower[int(fac.circuitDef.id)];
-		const float bSec = (bp > 0.f) ? (Catalog::gBuildTime[best] / bp) : 30.f;
-		const float eBill = Catalog::gCostE[best] * EPriceCostAt(bSec, Catalog::gCostE[best]);
-		const float vE = (eBill > 0.f) ? (bestGain / eBill) : bestV;
-		const bool held = vE < gWantEmaV * ai.GetTunable("apex_line_floor", TUNE_LINE_FLOOR);
-		FlowENote(best, held);
-		if (held) {
-			gNoOrder = "line-floor-e v=" + formatFloat(vE * 1000.f, "", 0, 2)
-					+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
-			return null;
-		}
+	float vE;
+	if (FlowEHeld(fac, best, bestGain, bestV, vE)) {
+		gNoOrder = "line-floor-e v=" + formatFloat(vE * 1000.f, "", 0, 2)
+				+ " ema=" + formatFloat(gWantEmaV * 1000.f, "", 0, 2);
+		return null;
 	}
 	AiLog("apex: decide t=" + ai.teamId + " " + fac.circuitDef.GetName() + " #" + fac.id
 		+ " -> produce:" + Catalog::Def(best).GetName()
