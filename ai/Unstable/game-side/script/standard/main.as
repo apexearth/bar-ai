@@ -535,6 +535,7 @@ void AiEnemyDestroyed(CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
 	Air::TairNoteKill(edef, pos);
 	Military::NrNoteEnemyDeath(edef, pos, byUs);
 	Military::CfNoteEnemyDeath(edef, pos, byUs);
+	Military::SqNoteEnemyDeath(edef, pos, byUs);
 	Military::HuntNoteDeath(pos, edef.costM, false, byUs);
 	Military::WindowNoteDeath(int(edef.id), pos, edef.costM, false, byUs);
 	Military::SiegeNoteDeath(pos, edef.costM, false, byUs);

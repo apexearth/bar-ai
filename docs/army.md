@@ -66,10 +66,23 @@ Apexc9 vs BARb hard, 2026-10-16:
 | `com_in_base` | the walking commander dies, all but one bot arrive together, at most one dies alone | PASS: the two LLTs killed it at 35 s and died in its death blast; the 10 bots were away raiding and never came in reach |
 | `flank_mexes` | 3 of 4 flank mexes die and half the pack of 8 lives | PASS: 4/4 mexes by 26 s, no losses (same in an earlier run) |
 
-`apex_squads=1` (on `apex_stock_army=1`; the skeleton in `military/army/`, needs the DLL built and deployed):
-not yet run. Run it as `python tools/scenario.py run all --parallel 2 --ai-option apex_stock_army=1
---ai-option apex_squads=1`; the `apex: squad` lines in the run say why each squad moved. What each scenario should
-show if the skeleton works: `open_blob` -- no launch (the blob reaches every path), the squad gathers at home out of
+`apex_squads=1` (on `apex_stock_army=1`, `military/army/`; `python tools/scenario.py run all --parallel 2
+--ai-option apex_stock_army=1 --ai-option apex_squads=1`), first run 2026-10-16 (6d6706b9):
+
+| scenario | squads | why |
+|---|---|---|
+| `llt_trickle` | PASS, but 9/12 dead, killed 0 | went in together and never turned |
+| `open_blob` | FAIL: 6/8 dead, killed 3 | launched at `them=0/0` (registry half-scanned), then engaged never let go |
+| `com_in_base` | FAIL: trickle 2, alone 1; commander killed | 8 launched; 2 claimed a moment later launched alone |
+| `flank_mexes` | PASS: 4/4 mexes, no losses | |
+
+Never turning: comfight's band with no measured fight is the whole estimate, `|L - K| <= sqrt(L^2 + K^2)`, so
+the hysteresis never crossed; under stock army nothing fed the calibration. Fixed next: the registry is read whole
+each update, the reach counts our own closing as comfight's does, the band is 0 until a fight is measured and each
+squad fight feeds `CfCalAdd` (`apex: squad-fight`), a squad that grew since the last update waits one, and every
+transition after an estimate logs its inputs (`apex: squad-assess`).
+
+What each scenario should show if the skeleton works: `open_blob` -- no launch (the blob reaches every path), the squad gathers at home out of
 its reach; `llt_trickle` -- one launch of all 12 at the Centurion if the estimate wins there, else none;
 `com_in_base` -- the whole squad onto the commander (an army target, or guard-home once it nears our buildings);
 `flank_mexes` -- launch at the best mex, `at-target`, then `fight-over` -> `retarget` mex by mex.

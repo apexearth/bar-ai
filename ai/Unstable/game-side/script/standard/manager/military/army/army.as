@@ -86,6 +86,8 @@ void SqForget(CCircuitUnit@ unit)
 				++gSqDied[s.state];
 				if (s.state == SQ_FALLING)
 					++gSqFbLost;
+				if (s.epOn)
+					s.epLost += Catalog::gCostM[int(unit.circuitDef.id)];
 				SqRemoveAt(s, k);
 				return;
 			}
@@ -299,8 +301,11 @@ void UpdateSquads()
 	for (uint i = 0; i < gSqd.length(); ++i)
 		SqUpdate(gSqd[i]);
 	for (int i = int(gSqd.length()) - 1; i >= 0; --i) {
-		if (gSqd[i].u.length() == 0)
+		if (gSqd[i].u.length() == 0) {
+			if (gSqd[i].epOn)
+				SqEpClose(gSqd[i]);
 			gSqd.removeAt(uint(i));
+		}
 	}
 	const double us = ai.ClockUs() - t0;
 	gSqUs += us;
@@ -329,9 +334,10 @@ void SqStat()
 	AiLog(Factory::T() + "apex: squad-stat t=" + ai.teamId + " squads=" + gSqd.length() + st + " owned=" + owned
 		+ " trans=" + gSqTrans + " launch=" + gSqLaunch + " home=" + gSqHome + " fb=" + gSqFb
 		+ " fbWhole=" + gSqFbWhole + " fbKept=" + gSqFbKept + " fbLost=" + gSqFbLost + " died=[" + died + "]"
-		+ " refused=" + gSqRefused + " orders=" + gSqOrders + " us=" + int(gSqUs) + " maxUs=" + int(gSqMaxUs));
+		+ " refused=" + gSqRefused + " waitGrew=" + gSqWaitGrew + " fights=" + gSqEpN + " cal=" + int(gCfCalT[0])
+		+ " orders=" + gSqOrders + " us=" + int(gSqUs) + " maxUs=" + int(gSqMaxUs));
 	gSqTrans = 0; gSqLaunch = 0; gSqHome = 0; gSqFb = 0; gSqFbWhole = 0; gSqFbKept = 0; gSqFbLost = 0;
-	gSqRefused = 0; gSqOrders = 0; gSqUs = 0.0; gSqMaxUs = 0.0;
+	gSqRefused = 0; gSqOrders = 0; gSqUs = 0.0; gSqMaxUs = 0.0; gSqEpN = 0; gSqWaitGrew = 0;
 }
 
 }  // namespace Military

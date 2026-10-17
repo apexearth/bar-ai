@@ -37,6 +37,10 @@ class Squad {
 	float failX = -1.f, failZ = -1.f;   // the place it last fell back from
 	int fbN0 = 0;                       // members when that fall back began
 	int scanI = 0;                      // target search, resumed across updates
+	int lastJoin = -1;
+	// the fight it is in, for calibration: predicted (raw) and real metal lost and killed
+	bool epOn = false;
+	float epPL = 0.f, epPK = 0.f, epLost = 0.f, epKill = 0.f;
 	SqPool p;
 }
 
@@ -45,7 +49,8 @@ int gSqdNextId = 1;
 
 // per-minute counters
 int gSqTrans = 0, gSqFb = 0, gSqFbWhole = 0, gSqFbKept = 0, gSqFbLost = 0, gSqLaunch = 0, gSqHome = 0;
-int gSqRefused = 0, gSqOrders = 0;
+int gSqRefused = 0, gSqOrders = 0, gSqEpN = 0, gSqWaitGrew = 0;
+int gSqAN = 0, gSqAN0 = 0;   // estimates made, and the count when this squad's update began
 array<int> gSqDied(5, 0);
 
 bool SqOpen(const Squad@ s)
@@ -64,6 +69,7 @@ bool SqJoin(Squad@ s, CCircuitUnit@ un)
 		return false;
 	}
 	s.u.insertLast(un);
+	s.lastJoin = ai.frame;
 	s.ordK.insertLast(SQ_O_NONE);
 	s.ordX.insertLast(0.f);
 	s.ordZ.insertLast(0.f);
@@ -193,6 +199,17 @@ void SqTo(Squad@ s, int to, const string &in why)
 		else
 			++gSqLaunch;
 	}
+	const bool fight = (to == SQ_ENGAGED) || (to == SQ_FALLING);
+	if (s.epOn && !fight)
+		SqEpClose(s);
+	if (!s.epOn && fight) {
+		s.epOn = true;
+		const bool assessed = gSqAN != gSqAN0;
+		s.epPL = assessed ? gSqAL : 0.f;
+		s.epPK = assessed ? gSqAK : 0.f;
+		s.epLost = 0.f;
+		s.epKill = 0.f;
+	}
 	s.state = to;
 	s.since = ai.frame;
 	s.scanI = 0;
@@ -201,6 +218,34 @@ void SqTo(Squad@ s, int to, const string &in why)
 		+ " why=" + why + " n=" + s.u.length() + " m=" + int(s.p.m) + " target=" + SQ_TNAME[s.tKind]
 		+ "@" + int(s.tx) + "," + int(s.tz) + " X=" + int(gSqAX) + " band=" + int(gSqABand)
 		+ " them=" + int(gSqAThemM) + "/" + gSqAThemN + " at=" + int(s.p.x) + "," + int(s.p.z));
+	if (gSqAN != gSqAN0)
+		AiLog(Factory::T() + SqAssessLine(s.p) + " id=" + s.id);
+}
+
+// a fight over: what the paper said against what it cost, into comfight's calibration (the band's measure)
+void SqEpClose(Squad@ s)
+{
+	s.epOn = false;
+	if ((s.epPL + s.epPK) <= 0.f)
+		return;   // no fight on paper (a raid on structures): nothing to calibrate
+	CfCalAdd(s.epPL, s.epLost, s.epPK, s.epKill);
+	++gSqEpN;
+	AiLog(Factory::T() + "apex: squad-fight t=" + ai.teamId + " id=" + s.id + " predL=" + int(s.epPL) + " lost="
+		+ int(s.epLost) + " predK=" + int(s.epPK) + " killed=" + int(s.epKill));
+}
+
+// their unit killed near a squad in a fight
+void SqNoteEnemyDeath(const CCircuitDef@ edef, const AIFloat3& in pos, bool byUs)
+{
+	if (!byUs || (edef is null) || (gSqOn <= 0))
+		return;
+	for (uint i = 0; i < gSqd.length(); ++i) {
+		Squad@ s = gSqd[i];
+		if (s.epOn && (CfDist(s.p.x, s.p.z, pos.x, pos.z) <= s.p.rng + s.p.spr)) {
+			s.epKill += edef.costM;
+			return;
+		}
+	}
 }
 
 // (x, z) is where it fell back from: going there again needs the estimate past its band
@@ -264,6 +309,12 @@ void SqUpdateForming(Squad@ s)
 			SqTo(s, SQ_MOVING, "guard-home");
 			return;
 		}
+		SqGatherAt(s, rx, rz);
+		return;
+	}
+	// a squad that grew since the last update waits one: a batch claimed over several frames launches as one
+	if (ai.frame - s.lastJoin < SECOND) {
+		++gSqWaitGrew;
 		SqGatherAt(s, rx, rz);
 		return;
 	}
@@ -363,6 +414,7 @@ void SqUpdate(Squad@ s)
 	SqRead(s, 0.f, 0.f, 0.f);
 	if (s.p.n <= 0.f)
 		return;
+	gSqAN0 = gSqAN;
 	if (s.state == SQ_FORMING)
 		SqUpdateForming(s);
 	else if (s.state == SQ_MOVING)
