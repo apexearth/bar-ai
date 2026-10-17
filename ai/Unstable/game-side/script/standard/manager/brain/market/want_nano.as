@@ -402,6 +402,14 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	}
 	if (fortNeed > over)
 		over = fortNeed;
+	float labNeed = 0.f;
+	if (LabNanoOn()) {
+		LabNanoScan();
+		if (OnMap(gLnPos))
+			labNeed = gLnNeed;
+	}
+	if (labNeed > over)
+		over = labNeed;
 	// The floor bids the turret's whole drain at the short factory; Decide
 	// hoists a floor-sourced want ahead of the draw.
 	AIFloat3 floorPos;
@@ -456,6 +464,7 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 			+ " waste=" + formatFloat(OverflowM(), "", 0, 1)
 			+ " idle=" + formatFloat(IdleNanoLatheM(), "", 0, 1)
 			+ " fort=" + formatFloat(fortNeed, "", 0, 1)
+			+ " lab=" + formatFloat(labNeed, "", 0, 1)
 			+ " floor=" + floorShort
 			+ " yard(short/loss/assist)=" + gFloorYardShort + "/" + gFloorYardLoss
 				+ "/" + gFloorYardAssist
@@ -481,6 +490,9 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 	if ((floorNeed > 0.f) && OnMap(floorPos)) {
 		site = floorPos;
 		src = NS_FLOOR;
+	} else if ((labNeed > 0.f) && (labNeed >= over)) {
+		site = gLnPos;
+		src = NS_LAB;
 	} else if ((fortNeed >= over) && OnMap(fortPos)) {
 		site = fortPos;
 		src = NS_FORT;
@@ -527,22 +539,27 @@ Want@ ProposeNano(CCircuitUnit@ unit)
 		// batch, at any demand.
 		if (LatheObsoleteFor(unit, d))
 			continue;
-		const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
-		float gainN = (over < drain) ? over : drain;
-		// A lathe pulls energy as well as metal, so it is worth the share of
-		// its ask the energy economy can feed: overflow caused by an e-stall
-		// bought the nanos that deepened it (apexearth, watching: "even our
-		// nano turrets... are stalling because we lack energy").
-		{
-			const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
-			if (askE > 1.f)
-				gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
-		}
-		// ...and no more than the metal feed has left over: while what is asked
-		// already exceeds what income and bank can feed, more lathe adds nothing.
-		if (gainN > nanoFreeM) {
-			gainN = (nanoFreeM > 0.f) ? nanoFreeM : 0.f;
-			++gNanoMetalCut;
+		float gainN = 0.f;
+		if (src == NS_LAB) {
+			gainN = LabNanoGain(d, labNeed);
+		} else {
+			const float drain = Catalog::gBuildPower[d] * (7.f / 80.f);
+			gainN = (over < drain) ? over : drain;
+			// A lathe pulls energy as well as metal, so it is worth the share of
+			// its ask the energy economy can feed: overflow caused by an e-stall
+			// bought the nanos that deepened it (apexearth, watching: "even our
+			// nano turrets... are stalling because we lack energy").
+			{
+				const float askE = Catalog::gBuildPower[d] * LineEnergyDensity() * gainN / drain;
+				if (askE > 1.f)
+					gainN *= (nanoSpareE <= 0.f) ? 0.f : ((nanoSpareE < askE) ? (nanoSpareE / askE) : 1.f);
+			}
+			// ...and no more than the metal feed has left over: while what is asked
+			// already exceeds what income and bank can feed, more lathe adds nothing.
+			if (gainN > nanoFreeM) {
+				gainN = (nanoFreeM > 0.f) ? nanoFreeM : 0.f;
+				++gNanoMetalCut;
+			}
 		}
 		Want c;
 		ValueOf(d, gainN, WalkSecTo(unit, dSite),

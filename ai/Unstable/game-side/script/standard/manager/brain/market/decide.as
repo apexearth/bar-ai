@@ -1829,6 +1829,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 	NnScore(unit, ranked);
 	WalkForgoneStat(unit, ranked);
 	NnTechNote(ranked);
+	LabNanoNoteRanked(ranked);
 	const double _tNeed = Perf::T0();
 	// HOW MUCH CHOICE A HAND ACTUALLY HAS. 22% of decided metal is spent on a
 	// want with no rival, and a price cannot steer a decision with nothing to
@@ -2903,6 +2904,7 @@ IUnitTask@ Decide(CCircuitUnit@ unit)
 		TobPathNote(why, top);
 	}
 	TobPathLog();
+	LabNanoNoteTop(top);
 	ComHomeNoteElection(unit, top);
 	// The decide/exec lines are ~20-term concatenations that run at apex_perf=0
 	// like everything else; nothing said what they cost.

@@ -367,7 +367,8 @@ local NAMES = {
 	"apex_gather",           -- gather.as + nnraid.as + DefendTask.cpp pool join/promote + RaidTask.cpp sealed goal pack, bounded path: raid packs launch whole from the gathered raiders and keep their members (0)
 	"apex_team_air",       -- air/teamair.as + plannet.as rule/PlanSet + production.as gunships + air/state.as + air/update.as HoldsUnit + nnair.as: priced team AIR plan, one rally, joint launch (0)
 	"apex_aa_threat",        -- aathreat.as + protect_senseprice.as AA site/gain + decide.as AA panic/exposure + budget.as AIRDEF row + production.as lab AA/AASplit + hooks.as AA guard: AA where their air hurts us (0)
-	"apex_unstick",          -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
+	"apex_lab_nano",         -- labnano.as + want_nano.as + execute.as NS_LAB: a nano at a lab priced by the army m/s it adds, bounded by income / labs less its ring (0)
+	"apex_unstick",        -- unstick.as + nanopack.as: ordered units that do not move get nudged, pen-tested and their wall priced for self-d; nanos keep door lanes and corridors (0)
 	"apex_defend_engage_margin",
 	"apex_defend_muster",
 	"apex_defend_solo_deep",
